@@ -9,31 +9,28 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-from test_pil_builder_utils import TestParser, Expr
+from test_pil_builder_utils import Expr, TestParser
 
 
 def test_pil_builder_class():
-
     with TestParser():
-
         # ================================================================
         # Part 1: single-op comparisons with each operator
         # ================================================================
 
         @TestParser.test
         def cls_basic():
-
             class Cls:
                 a = Expr.int(20) + Expr.int(30)
                 b = a + Expr.int(20)
                 c = b + a
-            var_a = Cls.a
-            var_b = Cls.b
-            var_c = Cls.c
+
+            _var_a = Cls.a
+            _var_b = Cls.b
+            _var_c = Cls.c
 
         @TestParser.test
         def cls_decorate():
-
             var_e = Expr(0)
 
             @var_e.decorate(1)
@@ -42,14 +39,13 @@ def test_pil_builder_class():
                 a = Expr.int(20) + Expr.int(30)
                 b = a + Expr.int(20)
                 c = b + a
-            var_a = Cls.a
-            var_b = Cls.b
-            var_c = Cls.c
 
+            _var_a = Cls.a
+            _var_b = Cls.b
+            _var_c = Cls.c
 
         @TestParser.test
         def cls_inherit():
-
             var_e = Expr(0)
 
             class Base:
@@ -63,14 +59,14 @@ def test_pil_builder_class():
                 a = Expr.int(20) + Expr.int(30)
                 b = a + Expr.int(20)
                 c = b + a
-            var_a = Cls.a
-            var_b = Cls.b
-            var_c = Cls.c
-            var_d = Cls.d
+
+            _var_a = Cls.a
+            _var_b = Cls.b
+            _var_c = Cls.c
+            _var_d = Cls.d
 
         @TestParser.test
         def cls_inherit_list():
-
             var_e = Expr(0)
 
             class Base:
@@ -87,23 +83,21 @@ def test_pil_builder_class():
                 a = Expr.int(320) + Expr.int(330)
                 b = a + Expr.int(420)
                 c = b + a
-            var_a = Cls.a
-            var_b = Cls.b
-            var_c = Cls.c
-            var_d = Cls.d
+
+            _var_a = Cls.a
+            _var_b = Cls.b
+            _var_c = Cls.c
+            _var_d = Cls.d
 
 
 def test_pil_builder_with():
-
     with TestParser():
-
         # ================================================================
         # Part 1: single-op comparisons with each operator
         # ================================================================
 
         @TestParser.test
         def with_basic():
-
             class Cls:
                 @classmethod
                 def __enter__(cls):
@@ -114,12 +108,10 @@ def test_pil_builder_with():
                     Expr.int(40)
 
             with Cls():
-                var_g = Expr.int(20)
-
+                _var_g = Expr.int(20)
 
         @TestParser.test
         def with_target():
-
             class Cls:
                 @classmethod
                 def __enter__(cls):
@@ -130,12 +122,10 @@ def test_pil_builder_with():
                     Expr.int(40)
 
             with Cls() as var_f:
-                var_g = var_f[0]
-
+                _var_g = var_f[0]
 
         @TestParser.test
         def with_multiple_target():
-
             class Cls:
                 @classmethod
                 def __enter__(cls):
@@ -146,5 +136,5 @@ def test_pil_builder_with():
                     Expr.int(40)
 
             with Cls() as var_f0, Cls() as var_f1:
-                var_g0 = var_f0[0]
-                var_g1 = var_f1[1]
+                _var_g0 = var_f0[0]
+                _var_g1 = var_f1[1]

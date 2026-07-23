@@ -8,14 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""STest 分布式 STest 并性执行.
-"""
+"""STest 分布式 STest 并性执行."""
+
 import argparse
 import datetime
 import logging
 import os
 import subprocess
-from typing import Any, List, Tuple, Dict
+from typing import Any, Dict, List, Tuple
 
 from stest_accelerate import STestAccelerate
 
@@ -39,8 +39,7 @@ class DistributedSTestAccelerate(STestAccelerate):
         先调用父类(STestAccelerate)的参数注册，再添加分布式特有参数
         """
         STestAccelerate.reg_args(parser)
-        parser.add_argument("--rank_size", type=int, required=True,
-                            help="Number of devices per test group")
+        parser.add_argument("--rank_size", type=int, required=True, help="Number of devices per test group")
 
     @staticmethod
     def main() -> bool:
@@ -109,9 +108,9 @@ class DistributedSTestAccelerate(STestAccelerate):
             params.append(param)
         return params
 
-    def _execute_case(self, ctx: STestAccelerate.CaseContext,
-                    param: STestAccelerate.ExecParam,
-                    case_name: str) -> Tuple[subprocess.CompletedProcess, str, datetime.timedelta]:
+    def _execute_case(
+        self, ctx: STestAccelerate.CaseContext, param: STestAccelerate.ExecParam, case_name: str
+    ) -> Tuple[subprocess.CompletedProcess, str, datetime.timedelta]:
         """多卡模式执行 - 重写父类方法"""
         rank_size = param.custom.get("rank_size")
         if rank_size is None:
@@ -121,10 +120,9 @@ class DistributedSTestAccelerate(STestAccelerate):
         device_group = param.custom.get("device_group", [param.cntr_id])
         return self._run_multi_device_case(ctx, device_group, rank_size, case_name)
 
-    def _run_multi_device_case(self, ctx: STestAccelerate.CaseContext,
-                            device_group: List[int],
-                            rank_size: int,
-                            case_name: str) -> Tuple[subprocess.CompletedProcess, str, datetime.timedelta]:
+    def _run_multi_device_case(
+        self, ctx: STestAccelerate.CaseContext, device_group: List[int], rank_size: int, case_name: str
+    ) -> Tuple[subprocess.CompletedProcess, str, datetime.timedelta]:
         """执行多卡分布式测试用例
 
         :param ctx: Case上下文
@@ -136,7 +134,9 @@ class DistributedSTestAccelerate(STestAccelerate):
         env_vars.update(self.exe.envs)
         env_vars.update(ctx.exec_param.get_envs())
         command = [
-            "mpirun", "-n", str(rank_size),
+            "mpirun",
+            "-n",
+            str(rank_size),
             str(self.exe.file),
             f"--gtest_filter={case_name}",
         ]

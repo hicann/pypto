@@ -8,14 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""STest 用例并行执行.
-"""
+"""STest 用例并行执行."""
+
 import argparse
 import logging
 import os
 import re
 import subprocess
-from typing import List, Any, Optional, Dict
+from typing import Any, Dict, List, Optional
 
 from accelerate.tests_accelerate import TestsAccelerate
 
@@ -62,16 +62,21 @@ class STestAccelerate(TestsAccelerate):
         先调用父类(TestsAccelerate)的参数注册, 再添加STest特有参数
         """
         TestsAccelerate.reg_args(parser)
-        parser.add_argument("-d", "--device", nargs="?", type=int, action="append",
-                            help="Specific parallel accelerate device, "
-                                 "If this parameter is not specified, 0 device will be used by default.")
+        parser.add_argument(
+            "-d",
+            "--device",
+            nargs="?",
+            type=int,
+            action="append",
+            help="Specific parallel accelerate device, "
+            "If this parameter is not specified, 0 device will be used by default.",
+        )
 
     @staticmethod
     def main() -> bool:
-        """主处理流程
-        """
+        """主处理流程"""
         # 参数注册
-        parser = argparse.ArgumentParser(description=f"STest Execute Accelerate", epilog="Best Regards!")
+        parser = argparse.ArgumentParser(description="STest Execute Accelerate", epilog="Best Regards!")
         STestAccelerate.reg_args(parser=parser)
         # 流程处理
         args = parser.parse_args()
@@ -105,10 +110,7 @@ class STestAccelerate(TestsAccelerate):
 
         try:
             result = subprocess.run(
-                [binary, '--gtest_list_tests_with_meta'],
-                capture_output=True,
-                text=True,
-                encoding='utf-8'
+                [binary, '--gtest_list_tests_with_meta'], capture_output=True, text=True, encoding='utf-8'
             )
             if result.returncode != 0:
                 logging.warning("Failed to get test costs from binary %s: %s", binary, result.stderr)
@@ -154,8 +156,7 @@ class STestAccelerate(TestsAccelerate):
         cost_cases_sorted = sorted(cost_cases, key=lambda x: cost_map[x], reverse=True)
 
         logging.info(
-            "STest(meta): Found %d tests with cost info, %d tests without.",
-            len(cost_cases_sorted), len(no_cost_cases)
+            "STest(meta): Found %d tests with cost info, %d tests without.", len(cost_cases_sorted), len(no_cost_cases)
         )
         if cost_cases_sorted:
             logging.info("STest(meta): First few cost-aware tests(desc): %s", cost_cases_sorted[:5])
@@ -174,8 +175,6 @@ if __name__ == "__main__":
     logging.basicConfig(
         format='%(asctime)s - %(filename)s:%(lineno)d - PID[%(process)d] - %(levelname)s: %(message)s',
         level=logging.INFO,
-        handlers=[
-            logging.StreamHandler()
-        ]
+        handlers=[logging.StreamHandler()],
     )
     exit(0 if STestAccelerate.main() else 1)

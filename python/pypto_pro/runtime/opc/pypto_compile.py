@@ -35,40 +35,21 @@ codegen output (``kernel.cpp`` + the per-key wrapper ``.cpp``) is kept on disk f
 The json path is recorded via ``op_context.add_build_res("json_file_path", ...)`` so the reused
 ``SingleOpCompile`` picks it up and ``SingleOpPostCompile`` appends ``supportInfo``.
 """
+
 from __future__ import annotations
 
 import copy
 import os
+from pathlib import Path
 import shutil
 import time
-from pathlib import Path
 
-from pypto_pro import DataType
-
-# --- reused asc_op_compile_base backend leaves -------------------------------------------------------
-from asc_op_compile_base.common.utils import log as logger
-from asc_op_compile_base.common.context import op_context
 from asc_op_compile_base.asc_op_compiler.ascendc_common_utility import CommonUtility, CompileInfo
-from asc_op_compile_base.asc_op_compiler.ascendc_constants import (
-    CORE_TYPE_CUBE,
-    CORE_TYPE_MIX,
-    CORE_TYPE_VEC,
-    MIX_CORE_MACRO,
-    TILING_KEY_MACRO,
-    CompileOptionTuple,
-)
 from asc_op_compile_base.asc_op_compiler.ascendc_compile_base import (
-    compile_pre_process, compile_multi_tilingkey, fatbin_objs, link_relocatable
-)
-from asc_op_compile_base.asc_op_compiler.ascendc_compile_v220 import (
-    gen_compile_cmd_v220, get_ktype_section_variable,
-)
-from asc_op_compile_base.asc_op_compiler.compile_op import (
-    _add_op_compile_options_by_customized_json,
-    _json_post_process,
-    _update_compile_option,
-    handle_compile_options,
-    handle_sk_codegen_options,
+    compile_multi_tilingkey,
+    compile_pre_process,
+    fatbin_objs,
+    link_relocatable,
 )
 from asc_op_compile_base.asc_op_compiler.ascendc_compile_dfx import (
     DFXArgInfo,
@@ -80,9 +61,34 @@ from asc_op_compile_base.asc_op_compiler.ascendc_compile_gen_json import (
     _generate_final_json,
 )
 from asc_op_compile_base.asc_op_compiler.ascendc_compile_utils import check_if_gen_placehoder
-from asc_op_compile_base.asc_op_compiler.global_storage import global_var_storage
+from asc_op_compile_base.asc_op_compiler.ascendc_compile_v220 import (
+    gen_compile_cmd_v220,
+    get_ktype_section_variable,
+)
+from asc_op_compile_base.asc_op_compiler.ascendc_constants import (
+    CORE_TYPE_CUBE,
+    CORE_TYPE_MIX,
+    CORE_TYPE_VEC,
+    MIX_CORE_MACRO,
+    TILING_KEY_MACRO,
+    CompileOptionTuple,
+)
+from asc_op_compile_base.asc_op_compiler.compile_op import (
+    _add_op_compile_options_by_customized_json,
+    _json_post_process,
+    _update_compile_option,
+    handle_compile_options,
+    handle_sk_codegen_options,
+)
 from asc_op_compile_base.asc_op_compiler.get_op_tiling import TilingInfo, get_tiling_info_by_tiling
+from asc_op_compile_base.asc_op_compiler.global_storage import global_var_storage
 from asc_op_compile_base.asc_op_compiler.kernel_info_infer import KernelInfoInfer
+from asc_op_compile_base.common.context import op_context
+
+# --- reused asc_op_compile_base backend leaves -------------------------------------------------------
+from asc_op_compile_base.common.utils import log as logger
+
+from pypto_pro import DataType
 
 # (AscendC core channel, kernel symbol/meta suffix, compile-make suffix)
 _MIX_CORE_COMPILE_TARGETS = (
@@ -113,6 +119,7 @@ _ORIG_DTYPE_MACRO_PREFIX = "-DORIG_DTYPE_"
 def _load_kernel(op_path: str, main_func: str | None):
     """Import the PyPTO kernel module and locate the target ``_TileJitKernel``."""
     import importlib.util
+
     from pypto_pro.runtime.jit import _TileJitKernel
 
     spec = importlib.util.spec_from_file_location("_pypto_opc_kernel_mod", op_path)
@@ -162,10 +169,7 @@ def _write_tilingkey_header(schema, cg, output_dir: str) -> None:
         header += "    ASCENDC_TPL_ARGS_SEL(\n"
         for j, field in enumerate(fields):
             jcomma = "," if j < len(fields) - 1 else ""
-            header += (
-                f"        ASCENDC_TPL_UINT_SEL({field.name}, ASCENDC_TPL_UI_LIST, "
-                f"{combo[j]}){jcomma}\n"
-            )
+            header += f"        ASCENDC_TPL_UINT_SEL({field.name}, ASCENDC_TPL_UI_LIST, {combo[j]}){jcomma}\n"
         header += f"    ){comma}\n"
     header += ");\n"
 
@@ -177,7 +181,10 @@ def _write_tilingkey_header(schema, cg, output_dir: str) -> None:
         total_combos *= len(field.values)
     logger.info(
         "tilingkey header '%s': %d valid / %d total combos | %.3fs",
-        tilingkey_path.name, len(valid_combos), total_combos, time.perf_counter() - t_start,
+        tilingkey_path.name,
+        len(valid_combos),
+        total_combos,
+        time.perf_counter() - t_start,
     )
 
 
@@ -196,8 +203,9 @@ def _gen_infer_cpp(cg, tilingkey_header: str, kernel_cpp: str) -> str:
     ws_lines = ""
     if ws_idx is not None:
         ws = names[ws_idx]
-        ws_lines = (f"    AscendC::SetSysWorkspaceForce({ws});\n"
-                    f"    GM_ADDR usrWorkspace = AscendC::GetUserWorkspace({ws});\n")
+        ws_lines = (
+            f"    AscendC::SetSysWorkspaceForce({ws});\n    GM_ADDR usrWorkspace = AscendC::GetUserWorkspace({ws});\n"
+        )
         inner[ws_idx] = "usrWorkspace"
     return (
         '#include "kernel_operator.h"\n'
@@ -214,7 +222,7 @@ def _gen_infer_cpp(cg, tilingkey_header: str, kernel_cpp: str) -> str:
 
 def generate_binary_headers(kernel) -> str:
     """Generate the tiling-data, tilingkey and infer source required by binary delivery."""
-    from pypto_pro.runtime.jit import _TileJitKernel, _codegen, _setup_arch_env
+    from pypto_pro.runtime.jit import _codegen, _setup_arch_env, _TileJitKernel
 
     if not isinstance(kernel, _TileJitKernel):
         raise TypeError("generate_binary_headers() expects a @pl.jit kernel")
@@ -228,22 +236,21 @@ def generate_binary_headers(kernel) -> str:
     schema = kernel.tilingkey_schema
     valid_combos = schema.enumerate_valid()
     if not valid_combos:
-        raise ValueError(
-            f"tiling_key schema '{schema.cls_name}' has no valid tilingkey combination"
-        )
+        raise ValueError(f"tiling_key schema '{schema.cls_name}' has no valid tilingkey combination")
     concrete_key = dict(zip(schema.field_names(), valid_combos[0]))
     packed = schema.pack(concrete_key)
     datatype_schema = kernel.datatype_schema
     datatype_consts = None
     if datatype_schema is not None:
-        datatype_consts = {
-            var_name: DataType.FP16
-            for var_name in set(datatype_schema.values())
-        }
+        datatype_consts = {var_name: DataType.FP16 for var_name in set(datatype_schema.values())}
 
     cg = _codegen(
-        kernel.to_kernel_def(concrete_key, datatype_consts), arch, kernel.timeout, clean_up=False,
-        tilingkey_packed=packed)
+        kernel.to_kernel_def(concrete_key, datatype_consts),
+        arch,
+        kernel.timeout,
+        clean_up=False,
+        tilingkey_packed=packed,
+    )
     if cg is None:
         raise RuntimeError(f"Failed to generate code for kernel '{kernel.__name__}'")
 
@@ -444,13 +451,12 @@ def _gen_meta_sections(kernel_name, packed, tiling_info: TilingInfo, compile_inf
     return "".join(out)
 
 
-def _gen_key_src(kernel_cpp_path, origin_func, impl_name, entry_params, kernel_name, packed,
-                 tiling_info, compile_info):
+def _gen_key_src(kernel_cpp_path, origin_func, impl_name, entry_params, kernel_name, packed, tiling_info, compile_info):
     """The per-key src ``.cpp``: ``kernel_operator.h`` + the codegen'd ``kernel.cpp`` + a concrete
     ``__global__`` entry forwarding to ``<impl>`` (workspace offset like AscendC's gen_kernel_fun) + the
     per-key meta sections. Compiled once with ``-DTILING_KEY_VAR=<packed>``."""
     sig, names = _signature_parts(entry_params)
-    ws_idx = len(names) - 2 if len(names) >= 2 else None
+    _ws_idx = len(names) - 2 if len(names) >= 2 else None
     inner = list(names)
     return (
         '#include "kernel_operator.h"\n'
@@ -463,8 +469,7 @@ def _gen_key_src(kernel_cpp_path, origin_func, impl_name, entry_params, kernel_n
         "{\n"
         f"    KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_MIX_AIC_1_2);\n"
         f"    ascendc_auto_gen_{origin_func}_kernel({', '.join(names)});\n"
-        "}\n"
-        + _gen_meta_sections(kernel_name, packed, tiling_info, compile_info)
+        "}\n" + _gen_meta_sections(kernel_name, packed, tiling_info, compile_info)
     )
 
 
@@ -476,8 +481,7 @@ def _decode_tiling_key(schema, packed: int):
         value_index = (packed >> field.offset) & ((1 << field.bits) - 1)
         if value_index >= len(field.values):
             raise RuntimeError(
-                f"tilingkey field '{field.name}' index {value_index} is out of range "
-                f"for values {list(field.values)}"
+                f"tilingkey field '{field.name}' index {value_index} is out of range for values {list(field.values)}"
             )
         concrete[field.name] = field.values[value_index]
     return concrete
@@ -508,8 +512,15 @@ def _filter_tiling_keys(tiling_key_list, extend_options, ctx, kernel_name):
     return filtered
 
 
-def pypto_compile_op(cce_file, origin_func_name, op_info, compile_options=None, code_channel=-1,
-                     op_compile_option="{}", extend_options=None):
+def pypto_compile_op(
+    cce_file,
+    origin_func_name,
+    op_info,
+    compile_options=None,
+    code_channel=-1,
+    op_compile_option="{}",
+    extend_options=None,
+):
     """PyPTO leaf replacing ``asc_op_compiler.compile_op``. Signature-compatible; ``cce_file`` is the PyPTO
     DSL ``.py``. Writes the flat ``kernel_meta`` artifacts + ``<kernel>.o``/``.json`` and records the json
     path into the op_context for the reused post-compile step. Called inside the reused ``build_config`` +
@@ -565,9 +576,15 @@ def pypto_compile_op(cce_file, origin_func_name, op_info, compile_options=None, 
     tiling_keys = _filter_tiling_keys(infered_info.tiling_key_list, extend_options, ctx, kernel_name)
     compile_info = _build_compile_info(cce_file, kernel_name, origin_func_name, op_info, infered_info, compile_log_path)
     compile_info.tiling_key_list = tiling_keys
-    logger.info("pypto_compile_op: op=%s kernel_name=%s arch=%s keys=%d dtype=%s -> %s",
-                _op_info_get(op_info, "op_type"), kernel_name, arch, len(tiling_keys),
-                dtype_key or "none", kernel_meta_dir)
+    logger.info(
+        "pypto_compile_op: op=%s kernel_name=%s arch=%s keys=%d dtype=%s -> %s",
+        _op_info_get(op_info, "op_type"),
+        kernel_name,
+        arch,
+        len(tiling_keys),
+        dtype_key or "none",
+        kernel_meta_dir,
+    )
 
     op_info = _prepare_dfx(op_info, tiling_info, compile_info)
     obj_files: list[str] = []
@@ -614,17 +631,16 @@ def pypto_compile_op(cce_file, origin_func_name, op_info, compile_options=None, 
             if not os.path.exists(tprint_dst):
                 shutil.copyfile(os.path.join(os.path.dirname(__file__), "_pypto_tprint.h"), tprint_dst)
             impl_content = impl_content.replace(
-                '#include <pto/pto-inst.hpp>\n',
-                '#include <pto/pto-inst.hpp>\n'
-                '#include "_pypto_tprint.h"\n'
+                '#include <pto/pto-inst.hpp>\n', '#include <pto/pto-inst.hpp>\n#include "_pypto_tprint.h"\n'
             )
         with open(impl_dst, "w", encoding="utf-8") as f:
             f.write(impl_content)
         for hdr in (f for f in os.listdir(cg.build_dir) if f.endswith(".h")):
             shutil.copyfile(os.path.join(cg.build_dir, hdr), os.path.join(kernel_meta_dir, hdr))
 
-        src = _gen_key_src(impl_cpp_name, origin_func, impl_name, cg.entry_params, kernel_name, packed,
-                           tiling_info, compile_info)
+        src = _gen_key_src(
+            impl_cpp_name, origin_func, impl_name, cg.entry_params, kernel_name, packed, tiling_info, compile_info
+        )
         src_path = os.path.join(kernel_meta_dir, f"{kernel_name}_{packed}_kernel.cpp")
         _write(src_path, src)
 

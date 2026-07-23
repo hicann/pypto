@@ -27,11 +27,7 @@ Main Functions:
 Example:
     See pg_lightning_indexer_prolog_quant_hif8.py for usage examples.
 """
-import math
-from typing import List
-from dataclasses import dataclass
-import torch
-import torch_npu
+
 import pypto
 
 SHAPE_DIM_2 = 2
@@ -61,7 +57,7 @@ def quant_rms_norm(x: pypto.Tensor, gamma: pypto.Tensor, dim: int, epsilon: floa
         The function performs normalization in FP32 precision to maintain numerical
         stability, then casts back to the original dtype.
     """
-    assert ((dim == len(x.shape) - 1) or (dim == -1))
+    assert (dim == len(x.shape) - 1) or (dim == -1)
     actual_dim = dim + len(x.shape) if dim < 0 else dim
     x_dtype = x.dtype
 
@@ -100,7 +96,7 @@ def quant_rope_2d(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor):
     x_dtype = x.dtype
     t_tile = x.shape[0]
     rope_dim = x.shape[1]
-    assert (len(x.shape) == key_rope_dim and len(cos.shape) == COS_SIN_DIM and len(sin.shape) == COS_SIN_DIM)
+    assert len(x.shape) == key_rope_dim and len(cos.shape) == COS_SIN_DIM and len(sin.shape) == COS_SIN_DIM
 
     pypto.set_vec_tile_shapes(t_tile, rope_dim)
     cast_cos = pypto.cast(cos, pypto.DT_FP32)
@@ -205,7 +201,7 @@ def rope_3d(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor) -> pypto.Tens
     """
     head_num_axis = 1
     head_dim_axis = 2
-    assert (len(x.shape) == SHAPE_DIM_3 and len(cos.shape) == SHAPE_DIM_2 and len(sin.shape) == SHAPE_DIM_2)
+    assert len(x.shape) == SHAPE_DIM_3 and len(cos.shape) == SHAPE_DIM_2 and len(sin.shape) == SHAPE_DIM_2
 
     x_dtype = x.dtype
     t_tile = x.shape[0]
@@ -232,9 +228,7 @@ def rope_3d(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor) -> pypto.Tens
         "vec_nbuffer_setting": {0: 2, 1: 2, 6: 8, -2: 1},
         "cube_l1_reuse_setting": {-1: 8},
     },
-    runtime_options={
-        "device_sched_mode": 1
-    }
+    runtime_options={"device_sched_mode": 1},
 )
 def lightning_indexer_prolog_quant(
     x_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16, format=pypto.TileOpFormat.TILEOP_ND),
@@ -249,21 +243,24 @@ def lightning_indexer_prolog_quant(
     sin_idx_rope_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16, format=pypto.TileOpFormat.TILEOP_ND),
     hadamard_q_in: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16, format=pypto.TileOpFormat.TILEOP_ND),
     hadamard_k_in: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16, format=pypto.TileOpFormat.TILEOP_ND),
-    k_quant_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC],
-        pypto.DT_HF8, format=pypto.TileOpFormat.TILEOP_ND),
-    k_scale_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC],
-        pypto.DT_FP32, format=pypto.TileOpFormat.TILEOP_ND),
+    k_quant_in: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_HF8, format=pypto.TileOpFormat.TILEOP_ND
+    ),
+    k_scale_in: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32, format=pypto.TileOpFormat.TILEOP_ND
+    ),
     k_cache_index_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT64, format=pypto.TileOpFormat.TILEOP_ND),
-    k_scale_cache_index_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC],
-        pypto.DT_INT64, format=pypto.TileOpFormat.TILEOP_ND),
-    q_quant_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC],
-        pypto.DT_HF8, format=pypto.TileOpFormat.TILEOP_ND),
-    q_scale_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC],
-        pypto.DT_FP32, format=pypto.TileOpFormat.TILEOP_ND),
-    k_quant_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC],
-        pypto.DT_HF8, format=pypto.TileOpFormat.TILEOP_ND),
-    k_scale_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC],
-        pypto.DT_FP32, format=pypto.TileOpFormat.TILEOP_ND),
+    k_scale_cache_index_in: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT64, format=pypto.TileOpFormat.TILEOP_ND
+    ),
+    q_quant_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_HF8, format=pypto.TileOpFormat.TILEOP_ND),
+    q_scale_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP32, format=pypto.TileOpFormat.TILEOP_ND),
+    k_quant_out: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_HF8, format=pypto.TileOpFormat.TILEOP_ND
+    ),
+    k_scale_out: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32, format=pypto.TileOpFormat.TILEOP_ND
+    ),
     weights_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16, format=pypto.TileOpFormat.TILEOP_ND),
 ):
     """Compute Lightning Indexer Prolog with quantization.
@@ -330,8 +327,9 @@ def lightning_indexer_prolog_quant(
     rope_head_dim = cos_idx_rope_in.shape[1]
 
     unroll_list = [128, 64, 32, 16, 8, 4, 2, 1]
-    for t_idx, unroll_length in pypto.loop_unroll(0, t, 1, name="IndexerPrologQuantQuantLoop", idx_name="tIdx",
-                                                  unroll_list=unroll_list):
+    for t_idx, unroll_length in pypto.loop_unroll(
+        0, t, 1, name="IndexerPrologQuantQuantLoop", idx_name="tIdx", unroll_list=unroll_list
+    ):
         t_tile = unroll_length
         # 多分档内会将t_tile作为档位，offset无需乘t_tile
         pypto.set_semantic_label("Query-Linear")
@@ -403,6 +401,6 @@ def lightning_indexer_prolog_quant(
         pypto.set_cube_tile_shapes([32, 32], [1024, 1024], [32, 32])
         pypto.set_vec_tile_shapes(128, head_num)
         weights = pypto.cast(pypto.matmul(x, w_proj_in, x_dtype), pypto.DT_FP32)
-        weights = pypto.cast(pypto.cast(weights * (head_num ** -0.5), pypto.DT_BF16), pypto.DT_FP32)
-        weights = pypto.cast(weights * (head_dim ** -0.5), pypto.DT_BF16)
+        weights = pypto.cast(pypto.cast(weights * (head_num**-0.5), pypto.DT_BF16), pypto.DT_FP32)
+        weights = pypto.cast(weights * (head_dim**-0.5), pypto.DT_BF16)
         pypto.assemble(weights, [t_idx, 0], weights_out)

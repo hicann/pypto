@@ -12,31 +12,28 @@
 
 from __future__ import annotations
 
+from collections import ChainMap
+from collections.abc import Mapping
 import ctypes
-from enum import Enum
 import dataclasses
+from enum import Enum
 import functools
 import hashlib
 import inspect
 import json
 import logging
 import os
+from pathlib import Path
 import re
-import ast
 import shutil
 import subprocess
-import textwrap
-from collections import ChainMap
-from collections.abc import Mapping
-from pathlib import Path
 
 import torch
 
-from pypto_pro import DataType
-from pypto_pro.runtime.compile_config import get_jit_compile_config
 from pypto.pypto_impl.codegen import CCECodegen
 from pypto.pypto_impl.ir import ConstInt, PtrType, ScalarType, TensorType, TupleType, Var
-
+from pypto_pro import DataType
+from pypto_pro.runtime.compile_config import get_jit_compile_config
 
 # torch.dtype → pl DataType (used to validate tensor args against kernel signature)
 _TORCH_TO_PL_DTYPE: dict = {}
@@ -234,8 +231,7 @@ def _validate_datatype_schema(datatype) -> dict[str, str] | None:
             raise ValueError(f"datatype param names must be non-empty strings, got {param_name!r}")
         if not isinstance(var_name, str) or not var_name.isidentifier():
             raise ValueError(
-                f"datatype variable for param '{param_name}' must be a valid Python identifier, "
-                f"got {var_name!r}"
+                f"datatype variable for param '{param_name}' must be a valid Python identifier, got {var_name!r}"
             )
     return datatype
 
@@ -246,9 +242,7 @@ def _validate_datatype_schema_context(spec: dict[str, str] | None, func, tilingk
     param_names = set(inspect.signature(func).parameters)
     missing = sorted(set(spec) - param_names)
     if missing:
-        raise ValueError(
-            f"datatype params {missing} do not match kernel function '{func.__name__}' parameters"
-        )
+        raise ValueError(f"datatype params {missing} do not match kernel function '{func.__name__}' parameters")
     var_names = set(spec.values())
     param_conflicts = sorted(var_names & param_names)
     if param_conflicts:
@@ -277,15 +271,10 @@ def _validate_datatype_key(spec: dict[str, str] | None, dtype_key: dict | None) 
     for param_name, var_name in spec.items():
         dtype = dtype_key[param_name]
         if not isinstance(dtype, DataType):
-            raise TypeError(
-                f"datatype['{param_name}'] must be a pypto_pro.DataType, got {type(dtype).__name__}"
-            )
+            raise TypeError(f"datatype['{param_name}'] must be a pypto_pro.DataType, got {type(dtype).__name__}")
         existing = var_to_dtype.get(var_name)
         if existing is not None and existing != dtype:
-            raise ValueError(
-                f"datatype params mapped to variable '{var_name}' disagree: "
-                f"{existing} vs {dtype}"
-            )
+            raise ValueError(f"datatype params mapped to variable '{var_name}' disagree: {existing} vs {dtype}")
         var_to_dtype[var_name] = dtype
     return var_to_dtype
 
@@ -307,10 +296,7 @@ def _datatype_metadata(
             }
             for param_name, var_name in sorted(spec.items())
         },
-        "constants": {
-            var_name: _dtype_record(dtype)
-            for var_name, dtype in sorted(dtype_consts.items())
-        },
+        "constants": {var_name: _dtype_record(dtype) for var_name, dtype in sorted(dtype_consts.items())},
     }
 
 
@@ -426,14 +412,12 @@ def _validate_tensor_arg(i: int, arg, spec: ParamSpec, dyn_var_values: dict[str,
 
     expected_dtype = _pl_dtype_to_torch(spec.dtype)
     if expected_dtype is not None and arg.dtype != expected_dtype:
-        raise TypeError(f"arg[{i}] '{spec.name}': dtype mismatch — " f"expected {expected_dtype}, got {arg.dtype}")
+        raise TypeError(f"arg[{i}] '{spec.name}': dtype mismatch — expected {expected_dtype}, got {arg.dtype}")
     if len(arg.shape) != len(spec.shape):
-        raise TypeError(
-            f"arg[{i}] '{spec.name}': rank mismatch — " f"expected {len(spec.shape)}D, got {len(arg.shape)}D"
-        )
+        raise TypeError(f"arg[{i}] '{spec.name}': rank mismatch — expected {len(spec.shape)}D, got {len(arg.shape)}D")
     for d, (actual, expected) in enumerate(zip(arg.shape, spec.shape)):
         if isinstance(expected, int) and expected not in (-1, actual):
-            raise TypeError(f"arg[{i}] '{spec.name}': dim[{d}] mismatch — " f"expected {expected}, got {actual}")
+            raise TypeError(f"arg[{i}] '{spec.name}': dim[{d}] mismatch — expected {expected}, got {actual}")
         if isinstance(expected, str):
             if expected in dyn_var_values and dyn_var_values[expected] != actual:
                 raise TypeError(
@@ -447,15 +431,11 @@ def _validate_tensor_arg(i: int, arg, spec: ParamSpec, dyn_var_values: dict[str,
 def _validate_scalar_arg(i: int, arg, spec: ParamSpec) -> None:
     """Validate one scalar arg against its ParamSpec."""
     if not isinstance(arg, (int, float, bool)):
-        raise TypeError(
-            f"arg[{i}] '{spec.name}': expected Python scalar (int/float/bool), " f"got {type(arg).__name__}"
-        )
+        raise TypeError(f"arg[{i}] '{spec.name}': expected Python scalar (int/float/bool), got {type(arg).__name__}")
     # bool is a subclass of int: valid for BOOL and integer dtypes only.
     if isinstance(arg, bool):
         if not (spec.dtype == DataType.BOOL or spec.dtype.is_signed_int() or spec.dtype.is_unsigned_int()):
-            raise TypeError(
-                f"arg[{i}] '{spec.name}': bool value passed for non-boolean/non-integer " f"dtype {spec.dtype}"
-            )
+            raise TypeError(f"arg[{i}] '{spec.name}': bool value passed for non-boolean/non-integer dtype {spec.dtype}")
     elif isinstance(arg, float) and not spec.dtype.is_float():
         raise TypeError(f"arg[{i}] '{spec.name}': float value passed for non-float dtype {spec.dtype}")
     elif isinstance(arg, int) and not spec.dtype.is_signed_int() and not spec.dtype.is_unsigned_int():
@@ -644,6 +624,7 @@ def _normalize_arch(arch: str | None) -> str:
         value = os.environ.get("PYPTOPRO_JIT_ARCH", "").strip().lower()
         if not value:
             from pypto_pro.runtime.platform import get_platform_info
+
             info = get_platform_info()
             value = info.arch if info.arch else "a3"
     if value not in {"a2", "a3", "a5"}:
@@ -654,10 +635,7 @@ def _normalize_arch(arch: str | None) -> str:
 def _detect_print_debug_from_cpp(content: str) -> bool:
     """Best-effort detection for device-side debug print usage in generated C++."""
     scrubbed = CPP_LITERAL_PATTERN.sub(" ", content)
-    return bool(
-        TPRINT_CALL_PATTERN.search(scrubbed)
-        or CCE_PRINTF_CALL_PATTERN.search(scrubbed)
-    )
+    return bool(TPRINT_CALL_PATTERN.search(scrubbed) or CCE_PRINTF_CALL_PATTERN.search(scrubbed))
 
 
 def _build_bisheng_flags(
@@ -679,9 +657,9 @@ def _build_bisheng_flags(
 
     if has_cross_sync and not (has_cube and has_vec):
         if has_cube:
-            raise ValueError(f"Contains ffts cross sync but vector code is missing.")
+            raise ValueError("Contains ffts cross sync but vector code is missing.")
         elif has_vec:
-            raise ValueError(f"Contains ffts cross sync but cube code is missing.")
+            raise ValueError("Contains ffts cross sync but cube code is missing.")
     return get_jit_compile_config().build_bisheng_flags(
         toolkit_home=toolkit_home,
         arch=arch,
@@ -742,21 +720,18 @@ def _prepare_codegen_inputs(
                 func_name = kernel_def.func_name
                 safe_name = _sanitize_artifact_component(func_name)
                 readable = (
-                    f"{artifact_prefix}__{safe_name}"
-                    if artifact_prefix and artifact_prefix != safe_name
-                    else safe_name
+                    f"{artifact_prefix}__{safe_name}" if artifact_prefix and artifact_prefix != safe_name else safe_name
                 )
-                dump_dir = os.path.join(
-                    ".", "build", f"{readable}__{arch}{_static_signature_suffix(static_signature)}"
-                )
+                dump_dir = os.path.join(".", "build", f"{readable}__{arch}{_static_signature_suffix(static_signature)}")
                 Path(dump_dir).mkdir(parents=True, exist_ok=True)
                 Path(os.path.join(dump_dir, "pipeline_generated.py")).write_text(
-                    pipeline_generated_source, encoding="utf-8")
+                    pipeline_generated_source, encoding="utf-8"
+                )
 
     if out_dir is None:
         build_dir = _make_artifact_build_dir(
-            prog, arch, test_prefix=artifact_prefix,
-            tilingkey_suffix=_static_signature_suffix(static_signature))
+            prog, arch, test_prefix=artifact_prefix, tilingkey_suffix=_static_signature_suffix(static_signature)
+        )
         if datatype_hash is not None:
             build_dir = os.path.join(build_dir, f"dt_{datatype_hash}")
             write_datatype_metadata(build_dir, datatype_metadata)
@@ -793,12 +768,7 @@ def _make_global_entry(
     sig = ", ".join(decls)
     call_args = ", ".join(args)
 
-    return (
-        f"__global__ AICORE void {kernel_name}({sig})\n"
-        "{\n"
-        f"    {kernel_name}_impl({call_args});\n"
-        "}\n"
-    )
+    return f"__global__ AICORE void {kernel_name}({sig})\n{{\n    {kernel_name}_impl({call_args});\n}}\n"
 
 
 def _codegen_cce(prog, arch: str, build_dir: str, raw_cpp_path: str) -> CodegenResult:
@@ -901,9 +871,7 @@ def _compile_shared_library(
         raise RuntimeError("ASCEND_HOME_PATH is not set")
     link_args = _runtime_link_args(ascend_home_path)
 
-    resolved_enable_print_debug = (
-        generated.needs_print_debug if enable_print_debug is None else enable_print_debug
-    )
+    resolved_enable_print_debug = generated.needs_print_debug if enable_print_debug is None else enable_print_debug
     flags = _build_bisheng_flags(
         pto_lib_path,
         arch,
@@ -947,8 +915,15 @@ def _codegen(
     caller-unique dir when concurrent codegen would otherwise share the default path.
     """
     prog, out_dir = _prepare_codegen_inputs(
-        prog, arch, tilingkey_packed, out_dir, datatype_hash, datatype_metadata,
-        bound_signature=bound_signature, static_signature=static_signature)
+        prog,
+        arch,
+        tilingkey_packed,
+        out_dir,
+        datatype_hash,
+        datatype_metadata,
+        bound_signature=bound_signature,
+        static_signature=static_signature,
+    )
     raw_cpp_path = os.path.join(out_dir, "kernel.cpp")
     cg = _codegen_cce(prog, arch, out_dir, raw_cpp_path)
     if cg is None:
@@ -1016,13 +991,12 @@ def _load_lib(lib_path: str, param_specs: list[ParamSpec], clean_up: bool = Fals
         # Check and log stream capture status (equivalent to C++ GetStreamCaptureInfo)
         try:
             import torch_npu
+
             is_capturing = torch_npu.npu.is_current_stream_capturing()
             if is_capturing:
-                logging.info("Capture status [1], kernel launching in graph capture mode (block_dim=%d)",
-                             block_dim)
+                logging.info("Capture status [1], kernel launching in graph capture mode (block_dim=%d)", block_dim)
             else:
-                logging.debug("Capture status [0], kernel launching in eager mode (block_dim=%d)",
-                              block_dim)
+                logging.debug("Capture status [0], kernel launching in eager mode (block_dim=%d)", block_dim)
         except (ImportError, AttributeError):
             pass
 
@@ -1063,13 +1037,14 @@ def _clamp_block_dim(block_dim: int, is_aiv_only: bool = False) -> int:
     if not isinstance(block_dim, int) or block_dim <= 0:
         return block_dim
     from pypto_pro.runtime.platform import get_platform_info
+
     info = get_platform_info()
     max_cores = info.vector_core_num if is_aiv_only else info.core_num
     if max_cores > 0 and block_dim > max_cores:
         import warnings
+
         warnings.warn(
-            f"Requested block_dim={block_dim} exceeds platform core count={max_cores}, "
-            f"clamping to {max_cores}.",
+            f"Requested block_dim={block_dim} exceeds platform core count={max_cores}, clamping to {max_cores}.",
             stacklevel=3,
         )
         return max_cores
@@ -1082,10 +1057,7 @@ def _validate_tilingkey_no_var_conflict(f, tilingkey_schema, closure_vars):
     param_names = set(f.__code__.co_varnames[:f.__code__.co_argcount])
     conflicts = tilingkey_names & param_names
     if conflicts:
-        raise ValueError(
-            f"TilingKey field name(s) conflict with kernel parameter name(s): "
-            f"{conflicts}"
-        )
+        raise ValueError(f"TilingKey field name(s) conflict with kernel parameter name(s): {conflicts}")
 
     non_builtin_names = set()
     for name, val in closure_vars.items():
@@ -1096,10 +1068,7 @@ def _validate_tilingkey_no_var_conflict(f, tilingkey_schema, closure_vars):
         non_builtin_names.add(name)
     conflicts = tilingkey_names & non_builtin_names
     if conflicts:
-        raise ValueError(
-            f"TilingKey field name(s) conflict with module-level variable name(s): "
-            f"{conflicts}"
-        )
+        raise ValueError(f"TilingKey field name(s) conflict with module-level variable name(s): {conflicts}")
 
 
 def jit(
@@ -1140,12 +1109,12 @@ def jit(
 
         add_kernel[stream, block_dim](x, y, z)
     """
-    from pypto_pro.runtime.kernel import KernelDef, kernel as _kernel_decorator
 
     # Build the tilingkey schema eagerly so malformed schemas fail at decoration time.
     tilingkey_schema = None
     if tiling_key is not None:
         from pypto_pro.runtime.tilingkey import TilingKeySchema
+
         tilingkey_schema = TilingKeySchema(tiling_key)
     datatype_schema = _validate_datatype_schema(datatype)
 
@@ -1207,24 +1176,30 @@ def _is_tile_kernel(func) -> bool:
         return False
 
     # Import type classes for isinstance check
+    tensor_cls = None
+    ptr_cls = None
     try:
-        from pypto_pro.language.typing.tensor import Tensor as PlTensor
+        from pypto_pro.language.typing.tensor import Tensor
+
+        tensor_cls = Tensor
     except ImportError:
-        PlTensor = None
+        pass
 
     try:
-        from pypto_pro.language.typing.ptr import Ptr as PlPtr
+        from pypto_pro.language.typing.ptr import Ptr
+
+        ptr_cls = Ptr
     except ImportError:
-        PlPtr = None
+        pass
 
     for key, val in hints.items():
         if key == "return":
             continue
         # pl.Tensor[[64, 128], pl.DT_FP16] returns a Tensor instance at runtime
-        if PlTensor is not None and (isinstance(val, PlTensor) or val is PlTensor):
+        if tensor_cls is not None and (isinstance(val, tensor_cls) or val is tensor_cls):
             return True
         # pl.Ptr[pl.DT_FP16] returns a Ptr instance at runtime
-        if PlPtr is not None and (isinstance(val, PlPtr) or val is PlPtr):
+        if ptr_cls is not None and (isinstance(val, ptr_cls) or val is ptr_cls):
             return True
         # DT_* values are DataType enum members at runtime.  String annotations
         # are retained when ``from __future__ import annotations`` is active.
@@ -1242,9 +1217,19 @@ class _TileJitKernel:
         kernel(x, y, z)                     — default stream, block_dim=1
     """
 
-    def __init__(self, func, arch, enable_print_debug, timeout,
-                 auto_mutex=False, name=None, closure_vars=None, pipeline=None,
-                 tilingkey_schema=None, datatype_schema=None):
+    def __init__(
+        self,
+        func,
+        arch,
+        enable_print_debug,
+        timeout,
+        auto_mutex=False,
+        name=None,
+        closure_vars=None,
+        pipeline=None,
+        tilingkey_schema=None,
+        datatype_schema=None,
+    ):
         self._func = func
         self._arch = arch
         self._enable_print_debug = enable_print_debug
@@ -1314,8 +1299,9 @@ class _TileJitKernel:
     def datatype_schema(self):
         return self._datatype_schema
 
-    def to_kernel_def(self, concrete_key: dict | None = None, datatype_consts: dict | None = None,
-                      *, bound_signature=None):
+    def to_kernel_def(
+        self, concrete_key: dict | None = None, datatype_consts: dict | None = None, *, bound_signature=None
+    ):
         """Create the KernelDef for one shape specialization and concrete tiling key.
 
         ``concrete_key`` remains the first positional argument for OPC compatibility.
@@ -1326,8 +1312,7 @@ class _TileJitKernel:
         static_signature = bound_signature.static_signature
         tilingkey_identity = None if concrete_key is None else tuple(sorted(concrete_key.items()))
         datatype_identity = (
-            None if datatype_consts is None
-            else tuple(sorted((k, str(v)) for k, v in datatype_consts.items()))
+            None if datatype_consts is None else tuple(sorted((k, str(v)) for k, v in datatype_consts.items()))
         )
         cache_key = (static_signature, tilingkey_identity, datatype_identity)
         cached = self._kernel_def_by_static_signature.get(cache_key)
@@ -1337,12 +1322,11 @@ class _TileJitKernel:
         # Create KernelDef directly with the captured closure_vars
         # (cannot call @kernel decorator here because inspect.currentframe().f_back
         # would point to this method instead of the user's module scope)
-        from pypto_pro.runtime.kernel import KernelDef, extract_func_source_info
         from pypto.pypto_impl import ir
+        from pypto_pro.runtime.kernel import KernelDef, extract_func_source_info
 
         f = self._func
-        (source_file, source_lines, source_lines_raw,
-         line_offset, col_offset, func_def) = extract_func_source_info(f)
+        (source_file, source_lines, source_lines_raw, line_offset, col_offset, func_def) = extract_func_source_info(f)
 
         closure_vars = self._closure_vars or {}
         kernel_def = KernelDef(
@@ -1376,8 +1360,7 @@ class _TileJitKernel:
                 continue
             if not isinstance(arg, torch.Tensor):
                 raise TypeError(
-                    f"Tensor parameter '{tensor_spec.parameter_name}' expected torch.Tensor, "
-                    f"got {type(arg).__name__}"
+                    f"Tensor parameter '{tensor_spec.parameter_name}' expected torch.Tensor, got {type(arg).__name__}"
                 )
             expected_dtype = _pl_dtype_to_torch(tensor_spec.dtype)
             if expected_dtype is not None and arg.dtype != expected_dtype:
@@ -1391,8 +1374,9 @@ class _TileJitKernel:
         """Bind explicit binary-compilation shapes through the shared policy model."""
         return self._shape_signature_spec.bind_static_shapes(static_shapes)
 
-    def _ensure_compiled(self, args: tuple | None = None, concrete_key: dict | None = None,
-                         dtype_key: dict | None = None):
+    def _ensure_compiled(
+        self, args: tuple | None = None, concrete_key: dict | None = None, dtype_key: dict | None = None
+    ):
         """Lazily compile the kernel on first use, cached within this run.
 
         For tilingkey kernels, ``concrete_key`` selects the concrete field values baked into
@@ -1404,9 +1388,7 @@ class _TileJitKernel:
         if isinstance(args, dict) and concrete_key is None:
             concrete_key = args
             args = None
-        bound_signature = (
-            self._bind_runtime_args(args) if args is not None else self._bind_static_shapes(None)
-        )
+        bound_signature = self._bind_runtime_args(args) if args is not None else self._bind_static_shapes(None)
         tilingkey_packed = None
         if concrete_key is not None and self._tilingkey_schema is not None:
             tilingkey_packed = self._tilingkey_schema.pack(concrete_key)
@@ -1453,9 +1435,7 @@ class _TileJitKernel:
         # An aiv-only kernel emits vector code but no cube code; its block_dim
         # is bounded by the vector core count rather than the total core count.
         is_aiv_only = ("__DAV_VEC__" in cg.content) and ("__DAV_CUBE__" not in cg.content)
-        compiled = CompiledKernel(
-            lib_path=lib_path, param_specs=cg.param_specs, is_aiv_only=is_aiv_only
-        )
+        compiled = CompiledKernel(lib_path=lib_path, param_specs=cg.param_specs, is_aiv_only=is_aiv_only)
         self._compiled_by_signature[cache_key] = compiled
         return compiled
 

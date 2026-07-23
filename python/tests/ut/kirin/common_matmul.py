@@ -13,13 +13,12 @@
 Test matmul codegen - common functions for Kirin9030 and KirinX90
 """
 
-import pypto
-import torch
 import numpy as np
 import pytest
+import torch
 
 from kirin.common import compare_cos
-
+import pypto
 
 DTYPE_MAP = {
     torch.float16: pypto.DT_FP16,
@@ -29,12 +28,21 @@ DTYPE_MAP = {
 }
 
 
-def get_matmul_kernel(soc_version, name, in_dtype, out_dtype, cube_tile_shape,
-                     has_bias=False, bias_shape=None, a_trans=False, b_trans=False):
+def get_matmul_kernel(
+    soc_version,
+    name,
+    in_dtype,
+    out_dtype,
+    cube_tile_shape,
+    has_bias=False,
+    bias_shape=None,
+    a_trans=False,
+    b_trans=False,
+):
     if has_bias:
+
         @pypto.frontend.jit(
-            codegen_options={"soc_version": soc_version},
-            runtime_options={"run_mode": pypto.RunMode.SIM}
+            codegen_options={"soc_version": soc_version}, runtime_options={"run_mode": pypto.RunMode.SIM}
         )
         def matmul_kernel(
             a: pypto.Tensor([...], in_dtype),
@@ -47,12 +55,13 @@ def get_matmul_kernel(soc_version, name, in_dtype, out_dtype, cube_tile_shape,
             c[:] = pypto.matmul(
                 a, b, out_dtype, a_trans=a_trans, b_trans=b_trans, c_matrix_nz=False, extend_params=extend_params
             )
+
         matmul_kernel.__name__ = name
         return matmul_kernel
     else:
+
         @pypto.frontend.jit(
-            codegen_options={"soc_version": soc_version},
-            runtime_options={"run_mode": pypto.RunMode.SIM}
+            codegen_options={"soc_version": soc_version}, runtime_options={"run_mode": pypto.RunMode.SIM}
         )
         def matmul_kernel(
             a: pypto.Tensor([...], in_dtype),
@@ -61,6 +70,7 @@ def get_matmul_kernel(soc_version, name, in_dtype, out_dtype, cube_tile_shape,
         ):
             pypto.set_cube_tile_shapes(cube_tile_shape[0], cube_tile_shape[1], cube_tile_shape[2])
             c[:] = pypto.matmul(a, b, out_dtype, a_trans=a_trans, b_trans=b_trans)
+
         matmul_kernel.__name__ = name
         return matmul_kernel
 
@@ -80,76 +90,244 @@ TEST_CASES = [
     # a_trans: whether to transpose a
     # b_trans: whether to transpose b
     # marks: pytest marks
-    pytest.param("matmul_fp16_001", torch.float16, torch.float16,
-                 pypto.DT_FP16, pypto.DT_FP16,
-                 (16, 16), (16, 16), (16, 16),
-                 ([16, 16], [16, 16], [16, 16]),
-                 False, None, False, False, marks=[], id="001"),
-    pytest.param("matmul_fp16_002", torch.float16, torch.float16,
-                 pypto.DT_FP16, pypto.DT_FP16,
-                 (128, 130), (130, 32), (128, 32),
-                 ([16, 16], [32, 32], [16, 16]),
-                 True, (1, 32), False, False, marks=[pytest.mark.skip()], id="002"),
-    pytest.param("matmul_fp16_003", torch.float16, torch.float16,
-                 pypto.DT_FP16, pypto.DT_FP16,
-                 (30, 150), (150, 60), (30, 60),
-                 ([32, 32], [32, 32], [64, 64]),
-                 False, None, False, False, marks=[pytest.mark.skip()], id="003"),
-    pytest.param("matmul_fp16_004", torch.float16, torch.float16,
-                 pypto.DT_FP16, pypto.DT_FP16,
-                 (128, 32), (32, 100), (128, 100),
-                 ([64, 64], [32, 32], [64, 64]),
-                 True, (1, 100), False, False, marks=[pytest.mark.skip()], id="004"),
-    pytest.param("matmul_fp16_005", torch.float16, torch.float16,
-                 pypto.DT_FP16, pypto.DT_FP16,
-                 (40, 130), (40, 64), (130, 64),
-                 ([32, 32], [32, 32], [64, 64]),
-                 False, None, True, False, marks=[pytest.mark.skip()], id="005"),
-    pytest.param("matmul_fp16_006", torch.float16, torch.float16,
-                 pypto.DT_FP16, pypto.DT_FP16,
-                 (5, 80, 64), (5, 64, 1), (5, 80, 1),
-                 ([32, 32], [64, 64], [16, 16]),
-                 False, None, False, False, marks=[pytest.mark.skip()], id="006"),
-    pytest.param("matmul_fp16_007", torch.float16, torch.float16,
-                 pypto.DT_FP16, pypto.DT_FP16,
-                 (16, 1, 64), (16, 64, 64), (16, 1, 64),
-                 ([16, 16], [64, 64], [16, 16]),
-                 False, None, False, True, marks=[pytest.mark.skip()], id="007"),
-    pytest.param("matmul_fp16_008", torch.float16, torch.float16,
-                 pypto.DT_FP16, pypto.DT_FP16,
-                 (2, 16, 129, 64), (2, 16, 64, 35), (2, 16, 129, 35),
-                 ([16, 16], [64, 64], [32, 32]),
-                 False, None, False, False, marks=[pytest.mark.skip()], id="008"),
-    pytest.param("matmul_fp16_009", torch.float16, torch.float16,
-                 pypto.DT_FP16, pypto.DT_FP16,
-                 (2, 8, 80, 160), (2, 8, 160, 30), (2, 8, 80, 30),
-                 ([64, 64], [64, 64], [32, 32]),
-                 False, None, False, False, marks=[pytest.mark.skip()], id="009"),
-    pytest.param("matmul_fp16_010", torch.float16, torch.float16,
-                 pypto.DT_FP16, pypto.DT_FP16,
-                 (1, 4, 60, 80), (1, 4, 32, 60), (1, 4, 80, 32),
-                 ([64, 64], [32, 32], [32, 32]),
-                 False, None, True, True, marks=[pytest.mark.skip()], id="010"),
-    pytest.param("matmul_s8s8_001", torch.int8, torch.int32,
-                 pypto.DT_INT8, pypto.DT_INT32,
-                 (16, 32), (32, 16), (16, 16),
-                 ([32, 32], [32, 32], [32, 32]),
-                 False, None, False, False, marks=[pytest.mark.skip()], id="011"),
-    pytest.param("matmul_s8s8_002", torch.int8, torch.int32,
-                 pypto.DT_INT8, pypto.DT_INT32,
-                 (16, 32), (32, 16), (16, 16),
-                 ([32, 32], [32, 32], [32, 32]),
-                 True, (1, 16), False, False, marks=[pytest.mark.skip()], id="012"),
-    pytest.param("matmul_s8s8_003", torch.int8, torch.int32,
-                 pypto.DT_INT8, pypto.DT_INT32,
-                 (16, 32, 64), (16, 64, 16), (16, 32, 16),
-                 ([32, 32], [64, 64], [32, 32]),
-                 False, None, False, False, marks=[pytest.mark.skip()], id="013"),
-    pytest.param("matmul_s8s8_004", torch.int8, torch.int32,
-                 pypto.DT_INT8, pypto.DT_INT32,
-                 (2, 16, 32, 64), (2, 16, 64, 32), (2, 16, 64, 64),
-                 ([32, 32], [32, 32], [32, 32]),
-                 False, None, True, True, marks=[pytest.mark.skip()], id="014"),
+    pytest.param(
+        "matmul_fp16_001",
+        torch.float16,
+        torch.float16,
+        pypto.DT_FP16,
+        pypto.DT_FP16,
+        (16, 16),
+        (16, 16),
+        (16, 16),
+        ([16, 16], [16, 16], [16, 16]),
+        False,
+        None,
+        False,
+        False,
+        marks=[],
+        id="001",
+    ),
+    pytest.param(
+        "matmul_fp16_002",
+        torch.float16,
+        torch.float16,
+        pypto.DT_FP16,
+        pypto.DT_FP16,
+        (128, 130),
+        (130, 32),
+        (128, 32),
+        ([16, 16], [32, 32], [16, 16]),
+        True,
+        (1, 32),
+        False,
+        False,
+        marks=[pytest.mark.skip()],
+        id="002",
+    ),
+    pytest.param(
+        "matmul_fp16_003",
+        torch.float16,
+        torch.float16,
+        pypto.DT_FP16,
+        pypto.DT_FP16,
+        (30, 150),
+        (150, 60),
+        (30, 60),
+        ([32, 32], [32, 32], [64, 64]),
+        False,
+        None,
+        False,
+        False,
+        marks=[pytest.mark.skip()],
+        id="003",
+    ),
+    pytest.param(
+        "matmul_fp16_004",
+        torch.float16,
+        torch.float16,
+        pypto.DT_FP16,
+        pypto.DT_FP16,
+        (128, 32),
+        (32, 100),
+        (128, 100),
+        ([64, 64], [32, 32], [64, 64]),
+        True,
+        (1, 100),
+        False,
+        False,
+        marks=[pytest.mark.skip()],
+        id="004",
+    ),
+    pytest.param(
+        "matmul_fp16_005",
+        torch.float16,
+        torch.float16,
+        pypto.DT_FP16,
+        pypto.DT_FP16,
+        (40, 130),
+        (40, 64),
+        (130, 64),
+        ([32, 32], [32, 32], [64, 64]),
+        False,
+        None,
+        True,
+        False,
+        marks=[pytest.mark.skip()],
+        id="005",
+    ),
+    pytest.param(
+        "matmul_fp16_006",
+        torch.float16,
+        torch.float16,
+        pypto.DT_FP16,
+        pypto.DT_FP16,
+        (5, 80, 64),
+        (5, 64, 1),
+        (5, 80, 1),
+        ([32, 32], [64, 64], [16, 16]),
+        False,
+        None,
+        False,
+        False,
+        marks=[pytest.mark.skip()],
+        id="006",
+    ),
+    pytest.param(
+        "matmul_fp16_007",
+        torch.float16,
+        torch.float16,
+        pypto.DT_FP16,
+        pypto.DT_FP16,
+        (16, 1, 64),
+        (16, 64, 64),
+        (16, 1, 64),
+        ([16, 16], [64, 64], [16, 16]),
+        False,
+        None,
+        False,
+        True,
+        marks=[pytest.mark.skip()],
+        id="007",
+    ),
+    pytest.param(
+        "matmul_fp16_008",
+        torch.float16,
+        torch.float16,
+        pypto.DT_FP16,
+        pypto.DT_FP16,
+        (2, 16, 129, 64),
+        (2, 16, 64, 35),
+        (2, 16, 129, 35),
+        ([16, 16], [64, 64], [32, 32]),
+        False,
+        None,
+        False,
+        False,
+        marks=[pytest.mark.skip()],
+        id="008",
+    ),
+    pytest.param(
+        "matmul_fp16_009",
+        torch.float16,
+        torch.float16,
+        pypto.DT_FP16,
+        pypto.DT_FP16,
+        (2, 8, 80, 160),
+        (2, 8, 160, 30),
+        (2, 8, 80, 30),
+        ([64, 64], [64, 64], [32, 32]),
+        False,
+        None,
+        False,
+        False,
+        marks=[pytest.mark.skip()],
+        id="009",
+    ),
+    pytest.param(
+        "matmul_fp16_010",
+        torch.float16,
+        torch.float16,
+        pypto.DT_FP16,
+        pypto.DT_FP16,
+        (1, 4, 60, 80),
+        (1, 4, 32, 60),
+        (1, 4, 80, 32),
+        ([64, 64], [32, 32], [32, 32]),
+        False,
+        None,
+        True,
+        True,
+        marks=[pytest.mark.skip()],
+        id="010",
+    ),
+    pytest.param(
+        "matmul_s8s8_001",
+        torch.int8,
+        torch.int32,
+        pypto.DT_INT8,
+        pypto.DT_INT32,
+        (16, 32),
+        (32, 16),
+        (16, 16),
+        ([32, 32], [32, 32], [32, 32]),
+        False,
+        None,
+        False,
+        False,
+        marks=[pytest.mark.skip()],
+        id="011",
+    ),
+    pytest.param(
+        "matmul_s8s8_002",
+        torch.int8,
+        torch.int32,
+        pypto.DT_INT8,
+        pypto.DT_INT32,
+        (16, 32),
+        (32, 16),
+        (16, 16),
+        ([32, 32], [32, 32], [32, 32]),
+        True,
+        (1, 16),
+        False,
+        False,
+        marks=[pytest.mark.skip()],
+        id="012",
+    ),
+    pytest.param(
+        "matmul_s8s8_003",
+        torch.int8,
+        torch.int32,
+        pypto.DT_INT8,
+        pypto.DT_INT32,
+        (16, 32, 64),
+        (16, 64, 16),
+        (16, 32, 16),
+        ([32, 32], [64, 64], [32, 32]),
+        False,
+        None,
+        False,
+        False,
+        marks=[pytest.mark.skip()],
+        id="013",
+    ),
+    pytest.param(
+        "matmul_s8s8_004",
+        torch.int8,
+        torch.int32,
+        pypto.DT_INT8,
+        pypto.DT_INT32,
+        (2, 16, 32, 64),
+        (2, 16, 64, 32),
+        (2, 16, 64, 64),
+        ([32, 32], [32, 32], [32, 32]),
+        False,
+        None,
+        True,
+        True,
+        marks=[pytest.mark.skip()],
+        id="014",
+    ),
 ]
 
 
@@ -229,19 +407,19 @@ def create_test_matmul_module(soc_version):
         p.values[0]: get_matmul_kernel(
             soc_version,
             p.values[0],
-            p.values[3],   # pypto_in_dtype
-            p.values[4],   # pypto_out_dtype
-            p.values[8],   # cube_tile_shape
-            p.values[9],   # has_bias
+            p.values[3],  # pypto_in_dtype
+            p.values[4],  # pypto_out_dtype
+            p.values[8],  # cube_tile_shape
+            p.values[9],  # has_bias
             p.values[10],  # bias_shape
             p.values[11],  # a_trans
             p.values[12],  # b_trans
         )
         for p in TEST_CASES
     }
-    return kernels, lambda: run_matmul_test(kernels, None, None, None, None,
-                                           None, None, None, False, None,
-                                           False, False)
+    return kernels, lambda: run_matmul_test(
+        kernels, None, None, None, None, None, None, None, False, None, False, False
+    )
 
 
 if __name__ == "__main__":

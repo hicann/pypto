@@ -8,10 +8,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import os
 import pathlib
+
 import toml
 
 
@@ -20,7 +21,7 @@ def delete_config(path_to_config):
         return
     with open(file=path_to_config, mode='r') as f:
         line = f.readline()
-        if (line == '// generated from config.toml\n'):
+        if line == '// generated from config.toml\n':
             print('delete', path_to_config)
             if path_to_config.exists():
                 path_to_config.unlink()
@@ -103,8 +104,8 @@ namespace CostModel {{
     Config::dispatcher = {{
 """
     middle = "    };\n"
-    record = f"""
-    Config::recorder = {{
+    record = """
+    Config::recorder = {
 """
     footer = "    };\n}\n}"
 
@@ -131,7 +132,7 @@ def write_h(name, cfgs, dirname):
             if all(isinstance(x, str) for x in v):
                 items = '", "'.join(v)
                 return f'    std::vector<std::string> {k} = {{"{items}"}};\n'
-            return f"    std::vector<uint64_t> {k} = {str(v).replace('[','{').replace(']','}')};\n"
+            return f"    std::vector<uint64_t> {k} = {str(v).replace('[', '{').replace(']', '}')};\n"
         return "error"
 
     header = f"""/**

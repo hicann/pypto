@@ -13,9 +13,8 @@
 Test sub codegen for KirinX90
 """
 
+from kirin.common_sub import TEST_CASES, create_test_sub_module, run_sub_test
 import pytest
-from kirin.common_sub import create_test_sub_module, run_sub_test, TEST_CASES
-
 
 KERNELS, _ = create_test_sub_module("KirinX90")
 

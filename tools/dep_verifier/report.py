@@ -8,10 +8,10 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
+from collections import defaultdict
 import csv
 import logging
 import os
-from collections import defaultdict
 from typing import Dict, Iterable, List, Optional
 
 from .models import CATEGORY_ORDER, CATEGORY_TITLES, Violation
@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 class ViolationReport:
-
     CSV_HEADER = ["category", "rule", "slot", "tensor", "func", "cell", "message"]
 
     def __init__(
@@ -70,15 +69,17 @@ class ViolationReport:
             w = csv.writer(f)
             w.writerow(self.CSV_HEADER)
             for v in self._violations:
-                w.writerow([
-                    v.category,
-                    v.rule_id,
-                    "" if v.slot_idx is None else v.slot_idx,
-                    self._tensor_of(v.slot_idx),
-                    self._func_of(v.slot_idx),
-                    "" if v.cell_idx is None else v.cell_idx,
-                    v.message,
-                ])
+                w.writerow(
+                    [
+                        v.category,
+                        v.rule_id,
+                        "" if v.slot_idx is None else v.slot_idx,
+                        self._tensor_of(v.slot_idx),
+                        self._func_of(v.slot_idx),
+                        "" if v.cell_idx is None else v.cell_idx,
+                        v.message,
+                    ]
+                )
         logger.info("report written to: %s", path)
 
     def _format_subject(self, v: Violation) -> str:

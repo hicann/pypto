@@ -17,11 +17,13 @@ a bug where liveness analysis incorrectly marked variables for deletion after
 inner loop exits, causing NameError when loop_unroll splits the loop into
 multiple blocks.
 """
+
 import os
-import pypto
-import torch
-import numpy as np
+
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def test_loop_unroll_variable_scope():
@@ -38,13 +40,11 @@ def test_loop_unroll_variable_scope():
     bs = 32
     ne = 16
 
-    @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.NPU}
-    )
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
     def loop_unroll_kernel(
         input_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
         bias_input: pypto.Tensor([pypto.STATIC], pypto.DT_FP32),
-        output: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+        output: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     ):
         pypto.set_vec_tile_shapes(16, 16)
         # Define variable outside loop_unroll
@@ -54,10 +54,12 @@ def test_loop_unroll_variable_scope():
         # Use loop_unroll with multiple unroll factors
         # This will split the loop into multiple blocks (e.g., [2, 1] = 2 blocks)
         for bs_idx, tile_batch in pypto.loop_unroll(
-            0, input_tensor.shape[0], 1,
+            0,
+            input_tensor.shape[0],
+            1,
             name="LOOP_UNROLL_TEST",
             idx_name="bs_idx",
-            unroll_list=[2, 1]  # Multiple blocks to test the bugfix
+            unroll_list=[2, 1],  # Multiple blocks to test the bugfix
         ):
             # Use bias_2d in the outer loop (first use)
             tile_input = input_tensor[bs_idx:bs_idx + tile_batch, :]
@@ -86,9 +88,4 @@ def test_loop_unroll_variable_scope():
     loop_unroll_kernel(input_tensor, bias_input, output)
 
     # Verify output
-    assert_allclose(
-        output.cpu().float().numpy(),
-        expected.cpu().float().numpy(),
-        rtol=1e-3,
-        atol=1e-3
-    )
+    assert_allclose(output.cpu().float().numpy(), expected.cpu().float().numpy(), rtol=1e-3, atol=1e-3)

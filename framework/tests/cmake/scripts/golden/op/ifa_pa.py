@@ -14,20 +14,22 @@
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import math
-import sys
+
 import logging
+import math
 from pathlib import Path
+import sys
 from typing import List
 
-import numpy as np
 from ml_dtypes import bfloat16
+import numpy as np
 
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -81,13 +83,13 @@ def gen_data_func_bf16_quant_dynamic_cast_np(attention_out, shape_size, dtype, c
     cast1_path = Path(output, 'cast1.bin')
     w_uv_path = Path(output, 'w_uv.bin')
     w_uv_scale_w_path = Path(output, 'w_uv_scale_w.bin')
-    cast0_out_path = Path(output, 'cast0_out.bin')
-    abs_out_path = Path(output, 'abs_out.bin')
-    mul0_out_path = Path(output, 'mul0_out.bin')
-    rms_out_path = Path(output, 'rms_out.bin')
-    quant1_int8_path = Path(output, 'quant0_int8.bin')
-    quant1_fp32_path = Path(output, 'quant0_fp32.bin')
-    bmm4_int32_path = Path(output, 'bmm4_int32.bin')
+    _cast0_out_path = Path(output, 'cast0_out.bin')
+    _abs_out_path = Path(output, 'abs_out.bin')
+    _mul0_out_path = Path(output, 'mul0_out.bin')
+    _rms_out_path = Path(output, 'rms_out.bin')
+    _quant1_int8_path = Path(output, 'quant0_int8.bin')
+    _quant1_fp32_path = Path(output, 'quant0_fp32.bin')
+    _bmm4_int32_path = Path(output, 'bmm4_int32.bin')
     bmm4_path = Path(output, 'bmm4.bin')
     t3_path = Path(output, 't3.bin')
     r2_path = Path(output, 'r2.bin')
@@ -96,13 +98,22 @@ def gen_data_func_bf16_quant_dynamic_cast_np(attention_out, shape_size, dtype, c
     w_o_scale_w_path = Path(output, 'w_o_scale_w.bin')
     bmm5_path = Path(output, 'bmm5.bin')
     attn_output_path = Path(output, 'attn_output.bin')
-    complete = (params_path.exists() and input_path.exists()
-                and t1_path.exists() and r1_path.exists()
-                and cast1_path.exists() and w_uv_path.exists()
-                and bmm4_path.exists() and t3_path.exists()
-                and r2_path.exists() and w_o_path.exists()
-                and attn_output_path.exists() and bmm5_path.exists()
-                and w_uv_scale_w_path.exists() and w_o_scale_w_path.exists())
+    complete = (
+        params_path.exists()
+        and input_path.exists()
+        and t1_path.exists()
+        and r1_path.exists()
+        and cast1_path.exists()
+        and w_uv_path.exists()
+        and bmm4_path.exists()
+        and t3_path.exists()
+        and r2_path.exists()
+        and w_o_path.exists()
+        and attn_output_path.exists()
+        and bmm5_path.exists()
+        and w_uv_scale_w_path.exists()
+        and w_o_scale_w_path.exists()
+    )
     complete = False
 
     if complete:
@@ -204,9 +215,7 @@ def gen_uniform_data(data_shape, min_value, max_value, dtype):
         return np.zeros(data_shape, dtype=dtype)
     if dtype == np.bool_:
         return np.random.choice([True, False], size=data_shape)
-    return np.random.uniform(low=min_value, high=max_value, size=data_shape).astype(
-        dtype
-    )
+    return np.random.uniform(low=min_value, high=max_value, size=data_shape).astype(dtype)
 
 
 def trans_bnsd_to_bsh(tensor, shape):
@@ -284,26 +293,30 @@ def ifa_pa_func(case_name: str, output: Path) -> bool:
         n_q = 128
         skv = 4096
         block_size = 512
-    elif (case_name == "DynamicPATest.dynamic_pa_low_lantency"
-          or case_name == "DynamicPATest.dynamic_pa_low_lantency_unroll"
-          or case_name == "DynamicPATest.dynamic_pa_low_lantency_manual_unroll"
-          or case_name == "DynamicPATest.dynamic_pa_low_lantency_dyn_valid_shape"):
+    elif (
+        case_name == "DynamicPATest.dynamic_pa_low_lantency"
+        or case_name == "DynamicPATest.dynamic_pa_low_lantency_unroll"
+        or case_name == "DynamicPATest.dynamic_pa_low_lantency_manual_unroll"
+        or case_name == "DynamicPATest.dynamic_pa_low_lantency_dyn_valid_shape"
+    ):
         b = 4
         n_q = 32
         skv = 256
         block_size = 128
         n_tile = 32
-    elif (case_name == "DynamicPATest.dynamic_pa_low_lantency_imm_scalar"):
+    elif case_name == "DynamicPATest.dynamic_pa_low_lantency_imm_scalar":
         b = 1
         n_q = 128
         skv = 256
         block_size = 256
         n_tile = 32
-    elif (case_name == "DynamicPATest.dynamic_pa_high_throughput_dview_large"
-          or case_name == "DynamicPATest.dynamic_pa_high_throughput_only_batch_loop"
-          or case_name == "DynamicPAPOSTTest.dynamic_page_attention_adds_high_throughput_dview_large"
-          or case_name == "DynamicPAPOSTTest.dynamic_page_attention_adds_high_throughput_dview_large_single_out"
-          or case_name == "DynamicPAPOSTTest.dynamic_prolog_post_high_throughput_dview_large"):
+    elif (
+        case_name == "DynamicPATest.dynamic_pa_high_throughput_dview_large"
+        or case_name == "DynamicPATest.dynamic_pa_high_throughput_only_batch_loop"
+        or case_name == "DynamicPAPOSTTest.dynamic_page_attention_adds_high_throughput_dview_large"
+        or case_name == "DynamicPAPOSTTest.dynamic_page_attention_adds_high_throughput_dview_large_single_out"
+        or case_name == "DynamicPAPOSTTest.dynamic_prolog_post_high_throughput_dview_large"
+    ):
         b = 32
         n_q = 128
         skv = 4096
@@ -353,7 +366,7 @@ def ifa_pa_func(case_name: str, output: Path) -> bool:
     d_v = kv_lora_rank
 
     sq = 1
-    scalar = d_q ** -0.5
+    scalar = d_q**-0.5
 
     if isinstance(skv, int):
         actual_seq_len = [skv] * b
@@ -380,7 +393,7 @@ def ifa_pa_func(case_name: str, output: Path) -> bool:
     # gen q k v data
     q_bnsd = gen_uniform_data(shape_q, -1, 1, dtype)
     k_bnsd = gen_uniform_data(shape_k, -1, 1, dtype)
-    v_bnsd = k_bnsd[:, :, :, : kv_lora_rank]
+    v_bnsd = k_bnsd[:, :, :, :kv_lora_rank]
 
     for actual_seq in actual_seq_len:
         block_num_per_batch.append(math.ceil(actual_seq / block_size))
@@ -407,7 +420,7 @@ def ifa_pa_func(case_name: str, output: Path) -> bool:
     block_table_batch_idx = 0
     for idx in block_num_per_batch:
         for j in range(idx):
-            block_table[block_table_batch_idx][j] = (block_idx_list[block_idx])
+            block_table[block_table_batch_idx][j] = block_idx_list[block_idx]
             block_idx += 1
         block_table_batch_idx += 1
     logging.debug("block_table %s", block_table)
@@ -435,11 +448,13 @@ def ifa_pa_func(case_name: str, output: Path) -> bool:
                 continue
             else:
                 k_cache[kv_cache_blk_id, 0:block_size, :] = k_tensor_bsh[
-                                                            b_idx, block_offset:(block_offset + block_size), :]
+                    b_idx, block_offset:(block_offset + block_size), :
+                ]
                 v_cache[kv_cache_blk_id, 0:block_size, :] = v_tensor_bsh[
-                                                            b_idx, block_offset:(block_offset + block_size), :]
+                    b_idx, block_offset:(block_offset + block_size), :
+                ]
 
-    if gen_data_debug_mode == False:
+    if not gen_data_debug_mode:
         # calculate result
         attent_out = np.zeros(atten_out_shape, dtype=np.float32)
         # 处理连续场景：将单个tensor依据B值拆成列表
@@ -472,22 +487,22 @@ def ifa_pa_func(case_name: str, output: Path) -> bool:
         for b_index in range(b):
             matmul_dtype = np.float32
             cur_seq = actual_seq_len[b_index]
-            bn_per_batch =math.ceil(cur_seq / block_size)
-            for n_idx in range(n_loop) :
-                oiUpdate = []
-                liUpdate = []
-                miUpdate = []
+            bn_per_batch = math.ceil(cur_seq / block_size)
+            for n_idx in range(n_loop):
+                oi_update = []
+                li_update = []
+                mi_update = []
 
-                qi = q_bnsd[b_index, n_idx * n_tile: (n_idx + 1) * n_tile, :, :]
+                qi = q_bnsd[b_index, n_idx * n_tile:(n_idx + 1) * n_tile, :, :]
                 qi = qi.reshape(-1, qi.shape[-1])
 
                 for bn in range(block_num_per_batch[b_index]):
                     cur_block_idx = block_table[b_index][bn]
                     s2_tile_cur = min(block_size, cur_seq - bn * block_size)
-                    kj = k_cache[cur_block_idx, 0 : s2_tile_cur, :]
-                    vj = v_cache[cur_block_idx, 0 : s2_tile_cur, :]
+                    kj = k_cache[cur_block_idx, 0:s2_tile_cur, :]
+                    vj = v_cache[cur_block_idx, 0:s2_tile_cur, :]
 
-                    kj = kj.reshape(s2_tile_cur , d_k)
+                    kj = kj.reshape(s2_tile_cur, d_k)
                     vj = vj.reshape(s2_tile_cur, d_v)
 
                     # C1
@@ -499,55 +514,57 @@ def ifa_pa_func(case_name: str, output: Path) -> bool:
                     tilda_lij = tilda_pij.sum(axis=-1, keepdims=True)
 
                     if bn == 0:
-                        oi_Tmp = np.matmul(tilda_pij, vj, dtype=matmul_dtype)
+                        oi_tmp = np.matmul(tilda_pij, vj, dtype=matmul_dtype)
                         if bn_per_batch == 1:
-                            oiUpdate = oi_Tmp / tilda_lij
+                            oi_update = oi_tmp / tilda_lij
                         else:
-                            oiUpdate = oi_Tmp
-                        liUpdate = tilda_lij
-                        miUpdate = tilda_mij
+                            oi_update = oi_tmp
+                        li_update = tilda_lij
+                        mi_update = tilda_mij
                         continue
 
-                    oi = oiUpdate
-                    li = liUpdate
-                    mi = miUpdate
+                    oi = oi_update
+                    li = li_update
+                    mi = mi_update
 
-                    miNew = np.maximum(mi, tilda_mij)
-                    t1 = mi - miNew
+                    mi_new = np.maximum(mi, tilda_mij)
+                    t1 = mi - mi_new
                     t2 = np.exp(t1)
-                    t3 = tilda_mij - miNew
+                    t3 = tilda_mij - mi_new
                     t4 = np.exp(t3)
                     t5 = t4 * tilda_lij
                     t6 = t2 * li
-                    liNew = t6 + t5
+                    li_new = t6 + t5
                     q3 = oi * t2
                     q1 = np.matmul(tilda_pij, vj)
                     q2 = q1 * t4
-                    oi_Tmp = q3 + q2
+                    oi_tmp = q3 + q2
                     if bn == block_num_per_batch[b_index] - 1:
-                        oiUpdate = oi_Tmp / liNew
+                        oi_update = oi_tmp / li_new
                     else:
-                        oiUpdate = oi_Tmp
-                    liUpdate = liNew
-                    miUpdate = miNew
+                        oi_update = oi_tmp
+                    li_update = li_new
+                    mi_update = mi_new
 
-                tiled_out.append(oiUpdate)
+                tiled_out.append(oi_update)
         attent_out = np.concatenate(tiled_out, 0)
 
     # data split to [nope + rope]
-    q_nope = q_bnsd[:, :, :, : kv_lora_rank]
+    q_nope = q_bnsd[:, :, :, :kv_lora_rank]
     q_rope = q_bnsd[:, :, :, kv_lora_rank:]
 
     # BBH split [B B kv_lora_rank]  + [B B rope]
     k_cache_nope_h = kv_lora_rank * n_kv
-    k_cache_nope = k_cache[:, :, : k_cache_nope_h]
+    k_cache_nope = k_cache[:, :, :k_cache_nope_h]
     k_cache_rope = k_cache[:, :, k_cache_nope_h:]
 
     # NZ
-    k_cache_nope_nz = k_cache_nope.reshape(k_cache_nope.shape[0], k_cache_nope.shape[1], k_cache_nope.shape[2] // 16,
-                                           16)
-    k_cache_rope_nz = k_cache_rope.reshape(k_cache_rope.shape[0], k_cache_rope.shape[1], k_cache_rope.shape[2] // 16,
-                                           16)
+    k_cache_nope_nz = k_cache_nope.reshape(
+        k_cache_nope.shape[0], k_cache_nope.shape[1], k_cache_nope.shape[2] // 16, 16
+    )
+    k_cache_rope_nz = k_cache_rope.reshape(
+        k_cache_rope.shape[0], k_cache_rope.shape[1], k_cache_rope.shape[2] // 16, 16
+    )
     v_cache_nz = v_cache.reshape(v_cache.shape[0], v_cache.shape[1], v_cache.shape[2] // 16, 16)
 
     k_cache_nope_nz = np.transpose(k_cache_nope_nz, (0, 2, 1, 3))
@@ -599,9 +616,9 @@ def ifa_pa_func(case_name: str, output: Path) -> bool:
         input_n = n_q
         input_h = 7168
         v_head_dim = 128
-        gen_data_func_bf16_quant_dynamic_cast_np(attent_out,
-                                                 (input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim),
-                                                 dtype, case_name, output)
+        gen_data_func_bf16_quant_dynamic_cast_np(
+            attent_out, (input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim), dtype, case_name, output
+        )
     return True
 
 

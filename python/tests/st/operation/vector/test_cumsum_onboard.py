@@ -9,13 +9,13 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-import os
 import math
-import pypto
-import pytest
+import os
+
 from numpy.testing import assert_allclose
 import torch
-import torch_npu
+
+import pypto
 
 
 def test_cumsum_onboard():
@@ -34,21 +34,24 @@ def test_cumsum_onboard():
 
     with pypto.function("MAIN", input1, output):
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
-            view_tensor_a = pypto.view(input1, view_shape,
-                                        [0, b_idx * view_shape[1]],
-                                        valid_shape=[pypto.symbolic_scalar(view_shape[0]),
-                                            pypto.min(pypto.symbolic_scalar(shape[1]) - b_idx * view_shape[1],
-                                                    pypto.symbolic_scalar(view_shape[1])),
-                                        ],
-                                        )
+            view_tensor_a = pypto.view(
+                input1,
+                view_shape,
+                [0, b_idx * view_shape[1]],
+                valid_shape=[
+                    pypto.symbolic_scalar(view_shape[0]),
+                    pypto.min(
+                        pypto.symbolic_scalar(shape[1]) - b_idx * view_shape[1], pypto.symbolic_scalar(view_shape[1])
+                    ),
+                ],
+            )
             pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
             view_tensor_a.move(pypto.cumsum(view_tensor_a, dim))
             pypto.assemble(view_tensor_a, [0, b_idx * view_shape[1]], output)
             del view_tensor_a
     assert isinstance(output, pypto.tensor)
 
-    a_tensor = torch.randint(
-        low=-10, high=10, size=[shape[0], shape[1]], dtype=torch.int32)
+    a_tensor = torch.randint(low=-10, high=10, size=[shape[0], shape[1]], dtype=torch.int32)
     b_tensor = torch.zeros(shape[0], shape[1], dtype=torch.int64)
 
     pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
@@ -77,13 +80,17 @@ def test_cumprod_onboard():
 
     with pypto.function("MAIN", input1, output):
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
-            view_tensor_a = pypto.view(input1, view_shape,
-                                        [0, b_idx * view_shape[1]],
-                                        valid_shape=[pypto.symbolic_scalar(view_shape[0]),
-                                            pypto.min(pypto.symbolic_scalar(shape[1]) - b_idx * view_shape[1],
-                                                    pypto.symbolic_scalar(view_shape[1])),
-                                        ],
-                                        )
+            view_tensor_a = pypto.view(
+                input1,
+                view_shape,
+                [0, b_idx * view_shape[1]],
+                valid_shape=[
+                    pypto.symbolic_scalar(view_shape[0]),
+                    pypto.min(
+                        pypto.symbolic_scalar(shape[1]) - b_idx * view_shape[1], pypto.symbolic_scalar(view_shape[1])
+                    ),
+                ],
+            )
             pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
             view_tensor_a.move(pypto.cumprod(view_tensor_a, dim))
             pypto.assemble(view_tensor_a, [0, b_idx * view_shape[1]], output)
@@ -101,6 +108,7 @@ def test_cumprod_onboard():
     golden = torch.cumprod(a_tensor, dim)
     assert_allclose(b_tensor.flatten(), golden.flatten(), rtol=3e-3, atol=3e-3)
     pypto.runtime._device_fini()
+
 
 if __name__ == "__main__":
     test_cumprod_onboard()

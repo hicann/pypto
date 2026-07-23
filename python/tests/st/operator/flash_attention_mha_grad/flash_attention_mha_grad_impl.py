@@ -26,6 +26,7 @@ Flash Attention MHA Backward
 """
 
 from dataclasses import dataclass
+
 import pypto
 
 
@@ -49,7 +50,7 @@ class FlashAttentionGradTileShapeConfig:
     pass_options={
         "vec_nbuffer_setting": {-2: 1, -1: 16},
         "cube_l1_reuse_setting": {-1: 16},
-    }
+    },
 )
 def flash_attention_mha_grad_kernel_impl(
     q: pypto.Tensor([pypto.DYN, ...], pypto.DT_BF16),
@@ -78,7 +79,7 @@ def flash_attention_mha_grad_kernel_impl(
     hidden_dim = num_heads * head_dim
     total = q.shape[0]
     b = actual_q.shape[0] - 1
-    scale = 1.0 / (head_dim ** 0.5)
+    scale = 1.0 / (head_dim**0.5)
     pypto.experimental.set_operation_options(combine_axis=True)
 
     # reshape 三维 → 二维, 便于按 [seq, hidden_dim] 切片
@@ -113,7 +114,6 @@ def flash_attention_mha_grad_kernel_impl(
             h_ofs = n_idx * head_dim
             for s1_idx in pypto.loop(s1_loop, name="LOOP_s1_dq", idx_name="s1_idx"):
                 for s2_idx in pypto.loop(s2_loop, name="LOOP_s2_dq", idx_name="s2_idx"):
-
                     if pypto.platform.npuarch == 'DAV_3510':
                         pypto.set_pass_options(sg_set_scope=10001)
                     s1_off = q_start + s1_idx * s1_tile

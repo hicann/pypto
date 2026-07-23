@@ -8,19 +8,19 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""辅助表格.
-"""
+"""辅助表格."""
+
 import copy
-from typing import List, Any, Optional
+from typing import Any, List, Optional
 
 
 class Table:
-    """表格处理, 减少对其他外部库依赖
-    """
+    """表格处理, 减少对其他外部库依赖"""
 
     @staticmethod
-    def table(datas: List[List[Any]], headers: Optional[List[Any]] = None, col_width_max: int = 128,
-              auto_sort: bool = True) -> str:
+    def table(
+        datas: List[List[Any]], headers: Optional[List[Any]] = None, col_width_max: int = 128, auto_sort: bool = True
+    ) -> str:
         """获取格式化的表格字符串
 
         :param datas: 二维表格数据，每个子列表代表一行

@@ -9,14 +9,14 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
+
 import functools
 
 from . import pypto_impl
 from ._element import Element
 from ._utils import clear_source_location, set_source_location
-from .symbolic_scalar import SymbolicScalar
-from .tensor import Tensor, ShmemTensor
 from .error import FeError
+from .tensor import ShmemTensor, Tensor
 
 
 def _to_base(arg):

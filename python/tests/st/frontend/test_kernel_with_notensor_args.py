@@ -11,10 +11,10 @@
 """测试 pypto.frontend.jit 对非 pypto.Tensor 参数的支持。"""
 
 import os
-import pypto
 
 import torch
-import torch_npu
+
+import pypto
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})

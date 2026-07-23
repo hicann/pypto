@@ -9,21 +9,22 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
-from typing import List, Optional, Union, overload, Sequence
+
+from typing import List, Optional, Sequence, Union, overload
 
 from .. import pypto_impl
 from .._element import Element
-from ..enum import DataType
 from .._op_wrapper import op_wrapper
-from ..error import PyptoError
 from .._utils import to_syms
+from ..enum import DataType
+from ..error import PyptoError
 from ..symbolic_scalar import SymbolicScalar
 from ..tensor import Tensor
 
 
 def convert_to_element(value) -> pypto_impl.Element:
     if isinstance(value, (int)):
-        if value >= -(2 ** 31) and value <= 2 ** 31 - 1:
+        if value >= -(2**31) and value <= 2**31 - 1:
             return pypto_impl.Element(pypto_impl.DT_INT32, value)
         else:
             return pypto_impl.Element(pypto_impl.DT_INT64, value)
@@ -98,8 +99,7 @@ def arange(start: Union[int, float], end: Union[int, float]) -> Tensor:
 
 
 @overload
-def arange(start: Union[int, float],
-           end: Union[int, float], step: Union[int, float]) -> Tensor:
+def arange(start: Union[int, float], end: Union[int, float], step: Union[int, float]) -> Tensor:
     """
     Creates a 1-dimensional tensor containing a sequence of values in the range [start, end) with a given step.
 
@@ -189,14 +189,10 @@ def arange(*args: Union[int, float]) -> Tensor:
         )
 
     if len(args) != 3:
-        raise PyptoError(0xF00002, ValueError(
-            f"The length of args should in [1, 2, 3], but got {len(args)}."
-            ))
+        raise PyptoError(0xF00002, ValueError(f"The length of args should in [1, 2, 3], but got {len(args)}."))
 
     start, end, step = args
-    return pypto_impl.Range(
-        convert_to_element(start), convert_to_element(end), convert_to_element(step)
-    )
+    return pypto_impl.Range(convert_to_element(start), convert_to_element(end), convert_to_element(step))
 
 
 _UNSIGNED_INT_DTYPES = {DataType.DT_UINT8, DataType.DT_UINT16, DataType.DT_UINT32, DataType.DT_UINT64}
@@ -214,11 +210,14 @@ def _check_full_fill_value_unsigned(fill_value, dtype: DataType) -> None:
     else:
         return
     if elem_dtype in _UNSIGNED_INT_DTYPES and elem_val < 0:
-        raise PyptoError(0xF00002, ValueError(
-            f"full() does not support negative fill_value for unsigned integer dtype: "
-            f"fill_value is {elem_val} but dtype is {elem_dtype}. "
-            f"Negative values cannot be represented in unsigned integer types."
-        ))
+        raise PyptoError(
+            0xF00002,
+            ValueError(
+                f"full() does not support negative fill_value for unsigned integer dtype: "
+                f"fill_value is {elem_val} but dtype is {elem_dtype}. "
+                f"Negative values cannot be represented in unsigned integer types."
+            ),
+        )
 
 
 @op_wrapper
@@ -227,7 +226,7 @@ def full(
     fill_value: Union[int, float, SymbolicScalar, Element],
     dtype: DataType,
     *,
-    valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None
+    valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None,
 ) -> Tensor:
     """
     Creates a tensor of the specified shape whose every entry equals the scalar elem.
@@ -274,15 +273,11 @@ def full(
     elif isinstance(fill_value, pypto_impl.Element):
         return pypto_impl.Full(fill_value, dtype, size, to_syms(valid_shape))
     else:
-        return pypto_impl.Full(
-            pypto_impl.Element(dtype, fill_value), dtype, size, to_syms(valid_shape)
-        )
+        return pypto_impl.Full(pypto_impl.Element(dtype, fill_value), dtype, size, to_syms(valid_shape))
 
 
 @op_wrapper
-def zeros(
-    *size: Union[int, Sequence[int]],
-    dtype: Optional[DataType] = None) -> Tensor:
+def zeros(*size: Union[int, Sequence[int]], dtype: Optional[DataType] = None) -> Tensor:
     """
     Returns a tensor filled with the scalar value 0, with the shape defined by the variable argument `size`.
 
@@ -316,9 +311,7 @@ def zeros(
 
 
 @op_wrapper
-def ones(
-    *size: Union[int, Sequence[int]],
-    dtype: Optional[DataType] = None) -> Tensor:
+def ones(*size: Union[int, Sequence[int]], dtype: Optional[DataType] = None) -> Tensor:
     """
     Returns a tensor filled with the scalar value 1, with the shape defined by the variable argument `size`.
 

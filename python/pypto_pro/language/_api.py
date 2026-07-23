@@ -25,22 +25,21 @@ matching declaration here and re-export it from the package ``__init__.py``.
 
 from __future__ import annotations
 
-import functools
-import inspect
 import builtins
 from contextlib import contextmanager
+import functools
+import inspect
 from typing import Any, List, Optional, Union
 
 from pypto.ir import (
+    AccPhase,
     AccToVecMode,
     AtomicType,
-    STPhase,
-    AccPhase,
     QuantMode,
     ReluPreMode,
     RoundMode,
+    STPhase,
 )
-
 from pypto_pro.ir.op.block_ops import FillPadMode
 
 # ---------------------------------------------------------------------------
@@ -57,10 +56,7 @@ Offset = Union[List[int], int]
 # API declaration decorator
 # ---------------------------------------------------------------------------
 
-_API_MSG = (
-    "This function is a DSL API declaration and must be used inside "
-    "a PyPTO kernel"
-)
+_API_MSG = "This function is a DSL API declaration and must be used inside a PyPTO kernel"
 
 
 def _api_decl(func):
@@ -79,9 +75,9 @@ def _api_decl(func):
 # Section A: Data-movement block ops
 # ===================================================================
 
+
 @_api_decl
-def load(dst_tile: Tile, src_tensor: Tensor, offsets: Offset, *,
-         order: Optional[List[int]] = None) -> None:
+def load(dst_tile: Tile, src_tensor: Tensor, offsets: Offset, *, order: Optional[List[int]] = None) -> None:
     """Load data from GM Tensor into on-chip Tile by absolute element coordinates.
 
     Args:
@@ -97,8 +93,7 @@ def load(dst_tile: Tile, src_tensor: Tensor, offsets: Offset, *,
 
 
 @_api_decl
-def load_tile(dst_tile: Tile, src_tensor: Tensor, tile_offsets: Offset, *,
-              order: Optional[List[int]] = None) -> None:
+def load_tile(dst_tile: Tile, src_tensor: Tensor, tile_offsets: Offset, *, order: Optional[List[int]] = None) -> None:
     """Load data from GM Tensor into on-chip Tile by tile-block index.
 
     Offsets are in tile-block units, internally multiplied by tile shape.
@@ -118,13 +113,18 @@ def load_tile(dst_tile: Tile, src_tensor: Tensor, tile_offsets: Offset, *,
 
 
 @_api_decl
-def store(dst_tensor: Tensor, src_tile: Tile, offsets: Offset, *,
-          relu_pre_mode: Optional[ReluPreMode] = None,
-          pre_quant_scalar: Optional[int] = None,
-          fp_tile: Optional[Tile] = None,
-          tile_dims: Optional[List[int]] = None,
-          atomic: AtomicType = AtomicType.AtomicNone,
-          phase: Optional[STPhase] = None) -> None:
+def store(
+    dst_tensor: Tensor,
+    src_tile: Tile,
+    offsets: Offset,
+    *,
+    relu_pre_mode: Optional[ReluPreMode] = None,
+    pre_quant_scalar: Optional[int] = None,
+    fp_tile: Optional[Tile] = None,
+    tile_dims: Optional[List[int]] = None,
+    atomic: AtomicType = AtomicType.AtomicNone,
+    phase: Optional[STPhase] = None,
+) -> None:
     """Store on-chip Tile back to GM Tensor by absolute element coordinates.
 
     Args:
@@ -146,13 +146,18 @@ def store(dst_tensor: Tensor, src_tile: Tile, offsets: Offset, *,
 
 
 @_api_decl
-def store_tile(dst_tensor: Tensor, src_tile: Tile, tile_offsets: Offset, *,
-                relu_pre_mode: Optional[ReluPreMode] = None,
-                pre_quant_scalar: Optional[int] = None,
-                fp_tile: Optional[Tile] = None,
-                tile_dims: Optional[List[int]] = None,
-                atomic: AtomicType = AtomicType.AtomicNone,
-                phase: Optional[STPhase] = None) -> None:
+def store_tile(
+    dst_tensor: Tensor,
+    src_tile: Tile,
+    tile_offsets: Offset,
+    *,
+    relu_pre_mode: Optional[ReluPreMode] = None,
+    pre_quant_scalar: Optional[int] = None,
+    fp_tile: Optional[Tile] = None,
+    tile_dims: Optional[List[int]] = None,
+    atomic: AtomicType = AtomicType.AtomicNone,
+    phase: Optional[STPhase] = None,
+) -> None:
     """Store on-chip Tile back to GM Tensor by tile-block index.
 
     Args:
@@ -175,11 +180,16 @@ def store_tile(dst_tensor: Tensor, src_tile: Tile, tile_offsets: Offset, *,
 
 
 @_api_decl
-def move(dst_tile: Tile, src_tile: Tile, offset: Optional[Offset] = None, *,
-         acc_to_vec_mode: Optional[AccToVecMode] = None,
-         relu_pre_mode: Optional[ReluPreMode] = None,
-         pre_quant_scalar: Optional[int] = None,
-         fp_tile: Optional[Tile] = None) -> None:
+def move(
+    dst_tile: Tile,
+    src_tile: Tile,
+    offset: Optional[Offset] = None,
+    *,
+    acc_to_vec_mode: Optional[AccToVecMode] = None,
+    relu_pre_mode: Optional[ReluPreMode] = None,
+    pre_quant_scalar: Optional[int] = None,
+    fp_tile: Optional[Tile] = None,
+) -> None:
     """Move data between on-chip Tiles (tile↔tile, no GM access).
 
     Supported memory-space paths:
@@ -259,6 +269,7 @@ def ssbuf_store(struct_var: Any, offset: int) -> None:
 # - No implicit type promotion: all operands must have the same dtype.
 # - Supported dtypes: FP16, FP32, BF16 (op-dependent; FP8 not supported).
 
+
 @_api_decl
 def add(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
     """Element-wise addition: ``out = lhs + rhs``
@@ -301,6 +312,7 @@ def div(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 # --- B2. Bitwise element-wise (out, lhs, rhs) ---
 
+
 @_api_decl
 def and_(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
     """Element-wise bitwise AND: ``out = lhs & rhs``
@@ -329,6 +341,7 @@ def expands(out: Tile, scalar: Scalar) -> None:
 
 
 # --- B3. Unary element-wise (out, src) ---
+
 
 @_api_decl
 def neg(out: Tile, src: Tile) -> None:
@@ -385,6 +398,7 @@ def fillpad(out: Tile, src: Tile, *, mode: FillPadMode = FillPadMode.NORMAL) -> 
 
 # --- B4. Type conversion ---
 
+
 @_api_decl
 def cast(out: Tile, src: Tile, *, mode: RoundMode = RoundMode.CAST_ROUND) -> None:
     """Cast Tile to a different data type.
@@ -401,24 +415,26 @@ def cast(out: Tile, src: Tile, *, mode: RoundMode = RoundMode.CAST_ROUND) -> Non
 
 
 @_api_decl
-def add_relu_cast(out: Tile, lhs: Tile, rhs: Tile, *,
-                  target_type: DType, mode: RoundMode = RoundMode.CAST_ROUND) -> None:
+def add_relu_cast(
+    out: Tile, lhs: Tile, rhs: Tile, *, target_type: DType, mode: RoundMode = RoundMode.CAST_ROUND
+) -> None:
     """Fused add + ReLU + cast: ``out = cast(relu(lhs + rhs), target_type)``"""
 
 
 @_api_decl
-def sub_relu_cast(out: Tile, lhs: Tile, rhs: Tile, *,
-                  target_type: DType, mode: RoundMode = RoundMode.CAST_ROUND) -> None:
+def sub_relu_cast(
+    out: Tile, lhs: Tile, rhs: Tile, *, target_type: DType, mode: RoundMode = RoundMode.CAST_ROUND
+) -> None:
     """Fused sub + ReLU + cast: ``out = cast(relu(lhs - rhs), target_type)``"""
 
 
 @_api_decl
-def mul_cast(out: Tile, lhs: Tile, rhs: Tile, *,
-             target_type: DType, mode: RoundMode = RoundMode.CAST_ROUND) -> None:
+def mul_cast(out: Tile, lhs: Tile, rhs: Tile, *, target_type: DType, mode: RoundMode = RoundMode.CAST_ROUND) -> None:
     """Fused mul + cast: ``out = cast(lhs * rhs, target_type)``"""
 
 
 # --- B5. Compare / select ---
+
 
 @_api_decl
 def eq(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
@@ -499,6 +515,7 @@ def select(out: Tile, mask: Tile, lhs: Tile, rhs: Union[Tile, Scalar], tmp: Tile
 
 # --- B6. Fused ops ---
 
+
 @_api_decl
 def add_relu(out: Tile, lhs: Tile, rhs: Tile) -> None:
     """Fused add + ReLU: ``out = relu(lhs + rhs)``"""
@@ -547,9 +564,9 @@ def partadd(out: Tile, src0: Tile, src1: Tile) -> None:
 
 # --- B7. Matrix ops ---
 
+
 @_api_decl
-def matmul(dst_tile: Tile, lhs_tile: Tile, rhs_tile: Tile, *,
-           phase: Optional[AccPhase] = None) -> None:
+def matmul(dst_tile: Tile, lhs_tile: Tile, rhs_tile: Tile, *, phase: Optional[AccPhase] = None) -> None:
     """Matrix multiply: ``dst = lhs @ rhs`` (L0A × L0B → L0C).
 
     Args:
@@ -561,8 +578,9 @@ def matmul(dst_tile: Tile, lhs_tile: Tile, rhs_tile: Tile, *,
 
 
 @_api_decl
-def matmul_acc(dst_tile: Tile, acc_tile: Tile, lhs_tile: Tile, rhs_tile: Tile, *,
-               phase: Optional[AccPhase] = None) -> None:
+def matmul_acc(
+    dst_tile: Tile, acc_tile: Tile, lhs_tile: Tile, rhs_tile: Tile, *, phase: Optional[AccPhase] = None
+) -> None:
     """Accumulating matrix multiply: ``dst = acc + lhs @ rhs`` (K-dim block accumulation).
 
     Args:
@@ -582,6 +600,7 @@ def transpose(out: Tile, src: Tile) -> None:
         out: Destination Tile
         src: Source Tile
     """
+
 
 # --- B8. Reductions / expands ---
 #
@@ -697,9 +716,9 @@ def expand_div(out: Tile, src: Tile, scalar: Tile, *, dim: int = 0) -> None:
 
 # --- B9. Gather / scatter / sort ---
 
+
 @_api_decl
-def gather(out: Tile, src: Tile, idx: Tile, tmp: Tile, *,
-           cmp_mode: int = 0, offset: int = 0) -> None:
+def gather(out: Tile, src: Tile, idx: Tile, tmp: Tile, *, cmp_mode: int = 0, offset: int = 0) -> None:
     """Gather elements by index.
 
     Args:
@@ -757,8 +776,7 @@ def mrgsort(dst: Tile, src: Tile, *, block_len: int) -> None:
 
 
 @_api_decl
-def mrgsort2(src0: Tile, src1: Tile, dst: Tile, tmp: Tile, *args,
-             exhausted: bool = False) -> None:
+def mrgsort2(src0: Tile, src1: Tile, dst: Tile, tmp: Tile, *args, exhausted: bool = False) -> None:
     """Two-way (or multi-way) merge sort.
 
     Args:
@@ -800,9 +818,9 @@ def histogram(dst: Tile, src: Tile, idx: Tile, *, is_msb: bool) -> None:
 
 # --- B10. Quantization / index / misc ---
 
+
 @_api_decl
-def quant(out: Tile, src: Tile, scale: Tile, *,
-          mode: QuantMode = QuantMode.SYM, offset: Optional[Tile] = None) -> None:
+def quant(out: Tile, src: Tile, scale: Tile, *, mode: QuantMode = QuantMode.SYM, offset: Optional[Tile] = None) -> None:
     """Quantize Tile (high-precision → low-precision integer).
 
     Args:
@@ -824,7 +842,6 @@ def dequant(out: Tile, src: Tile, scale: Tile, offset: Tile) -> None:
         scale: Scale Tile
         offset: Offset Tile
     """
-
 
 
 @_api_decl
@@ -886,6 +903,7 @@ def fill_index(out: Tile, start: Scalar) -> None:
 # ===================================================================
 # Section C: VF namespace (``pl.vf.*``)
 # ===================================================================
+
 
 class Vf:
     """Vector Function unit operations (A5 architecture).
@@ -2377,14 +2395,14 @@ class Vf:
             mode: ``pl.MergeMode.MERGING`` (default, only supported mode)
         """
 
+
 # ===================================================================
 # Section E: Debug ops
 # ===================================================================
 
 
 @_api_decl
-def pto_assert(condition: bool, format_str: Optional[str] = None,
-               *args, loc: bool = False) -> None:
+def pto_assert(condition: bool, format_str: Optional[str] = None, *args, loc: bool = False) -> None:
     """Runtime assert: abort if condition is false, optionally print error message.
 
     Args:
@@ -2410,10 +2428,14 @@ def printf(format_str: str, *args, loc: bool = False) -> None:
 
 
 @_api_decl
-def dump_data(data: Union[Tensor, Tile], offsets: Optional[List[int]] = None,
-              shapes: Optional[List[int]] = None, *,
-              workspace: Optional[Tensor] = None,
-              loc: bool = False) -> None:
+def dump_data(
+    data: Union[Tensor, Tile],
+    offsets: Optional[List[int]] = None,
+    shapes: Optional[List[int]] = None,
+    *,
+    workspace: Optional[Tensor] = None,
+    loc: bool = False,
+) -> None:
     """Print Tensor or Tile contents for debugging.
 
     Automatically dispatches based on input type:
@@ -2438,6 +2460,7 @@ def trap() -> None:
 # ===================================================================
 # Section F: Scalar ops
 # ===================================================================
+
 
 @_api_decl
 def min(lhs: Scalar, rhs: Scalar) -> Scalar:
@@ -2483,9 +2506,9 @@ def max(lhs: Scalar, rhs: Scalar) -> Scalar:
 #       - ``maximum(out, src, tmp, dim=1)`` -> column-wise max (first axis)
 # ===================================================================
 
+
 @_api_decl
-def minimum(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar], *,
-            dim: Optional[int] = None) -> None:
+def minimum(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar], *, dim: Optional[int] = None) -> None:
     """Element-wise minimum or dimension-wise min reduction.
 
     Without ``dim`` (element-wise): ``out = min(lhs, rhs)``
@@ -2506,8 +2529,7 @@ def minimum(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar], *,
 
 
 @_api_decl
-def maximum(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar], *,
-            dim: Optional[int] = None) -> None:
+def maximum(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar], *, dim: Optional[int] = None) -> None:
     """Element-wise maximum or dimension-wise max reduction.
 
     Without ``dim`` (element-wise): ``out = max(lhs, rhs)``
@@ -2541,6 +2563,7 @@ def const(value: Union[int, float], dtype: DType) -> Scalar:
 # Section G: Control flow
 # ===================================================================
 
+
 def range(start: int, stop: Optional[int] = None, step: int = 1):
     """Loop iterator for ``for`` loops.
 
@@ -2569,6 +2592,7 @@ def section_cube():
 # ===================================================================
 # Section H: Utility / system-level ops
 # ===================================================================
+
 
 @_api_decl
 def get_block_idx() -> int:

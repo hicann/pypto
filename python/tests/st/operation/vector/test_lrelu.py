@@ -8,13 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import pypto
-import torch
+""" """
+
 import numpy as np
 from st.pypto_test import TestBuilder
-import torch.nn.functional as F
+import torch
+import torch.nn.functional as functional
+
+import pypto
 
 
 # pypto op define, need args: params, tensors
@@ -23,16 +24,22 @@ def op_lrelu(params, a, b):
     view_shape, tile_shape = params
     for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_lrelu_L0", idx_name="b_idx"):
         for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_lrelu_L1", idx_name="s_idx"):
-            tile_a = pypto.view(a, view_shape, [b_idx * view_shape[0], s_idx * view_shape[1]], valid_shape=[
-                                 pypto.min(pypto.symbolic_scalar(n) - b_idx * view_shape[0], pypto.symbolic_scalar(n)),
-                                 pypto.min(pypto.symbolic_scalar(m) - s_idx * view_shape[1], pypto.symbolic_scalar(m))])
+            tile_a = pypto.view(
+                a,
+                view_shape,
+                [b_idx * view_shape[0], s_idx * view_shape[1]],
+                valid_shape=[
+                    pypto.min(pypto.symbolic_scalar(n) - b_idx * view_shape[0], pypto.symbolic_scalar(n)),
+                    pypto.min(pypto.symbolic_scalar(m) - s_idx * view_shape[1], pypto.symbolic_scalar(m)),
+                ],
+            )
             pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
             tile_a.move(pypto.lrelu(tile_a, 0.01))
             pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
 
 
 def op_lrelu_golden(param, a, b):
-    return F.leaky_relu(a, 0.01)
+    return functional.leaky_relu(a, 0.01)
 
 
 class LreluTest(TestBuilder):
@@ -44,7 +51,7 @@ class LreluTest(TestBuilder):
         a_tensor = torch.rand(n, m, dtype=torch.float32) * 100
         self.setup_inputs(a_tensor)
         self.set_tol(rtol=3e-3, atol=3e-3)
-        return (a_tensor, )
+        return (a_tensor,)
 
 
 def test():

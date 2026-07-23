@@ -8,18 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import json
-import matplotlib.pyplot as plt
-import os
+""" """
+
 import argparse
+import json
+import os
+
+import matplotlib.pyplot as plt
 
 # Define color mapping
-COLORS = {
-    "ATTN": "blue",
-    "FFN": "green"
-}
+COLORS = {"ATTN": "blue", "FFN": "green"}
 
 
 def read_json(filepath):
@@ -39,7 +37,7 @@ def plot_swim_lane(input_data, out_path):
 
     # Set spacing between blocks
     bar_height = 0.25  # Height of the bar chart
-    spacing = 0.5      # Height of the spacing (white space width: bar width = 1:2)
+    spacing = 0.5  # Height of the spacing (white space width: bar width = 1:2)
 
     # Iterate through each block
     for block in input_data:

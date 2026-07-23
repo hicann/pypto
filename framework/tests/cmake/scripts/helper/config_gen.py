@@ -9,18 +9,18 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-import os
-from pathlib import Path
-import logging
 import abc
 import json
-from typing import Dict, Any
+import logging
+import os
+from pathlib import Path
+from typing import Any, Dict
+
 import numpy as np
 import torch
 
 
 class TestBase(abc.ABC):
-
     def __init__(self):
         super().__init__()
         self.name = "default"
@@ -72,9 +72,7 @@ class TestBase(abc.ABC):
                 setattr(self, name, arg)
                 parameters[name] = arg
             else:
-                raise TypeError(
-                    f"Expected type {dtype}, but parameter {name} is type {type(arg)}."
-                )
+                raise TypeError(f"Expected type {dtype}, but parameter {name} is type {type(arg)}.")
         return parameters
 
     def setup_input_tensors(self, tensors: Dict, op_formats: Dict = None) -> None:
@@ -97,20 +95,10 @@ class TestBase(abc.ABC):
             if name != 'self':
                 if isinstance(value, np.ndarray) and name != 'self':
                     setattr(self, name, value)
-                    self.input_tensors[name] = (
-                        value,
-                        list(value.shape),
-                        value.dtype,
-                        0
-                    )
+                    self.input_tensors[name] = (value, list(value.shape), value.dtype, 0)
                 elif isinstance(value, torch.Tensor) and name != 'self':
                     setattr(self, name, value)
-                    self.input_tensors[name] = (
-                        value,
-                        list(value.shape),
-                        value.dtype,
-                        0
-                    )
+                    self.input_tensors[name] = (value, list(value.shape), value.dtype, 0)
 
             elif value is None:
                 pass
@@ -138,17 +126,9 @@ class TestBase(abc.ABC):
         """
         for name, value in tensors.items():
             if isinstance(value, np.ndarray) and name != 'self':
-                self.golden_outputs[name] = (
-                    value,
-                    list(value.shape),
-                    value.dtype
-                )
+                self.golden_outputs[name] = (value, list(value.shape), value.dtype)
             elif isinstance(value, torch.Tensor) and name != 'self':
-                self.golden_outputs[name] = (
-                    value,
-                    list(value.shape),
-                    value.dtype
-                )
+                self.golden_outputs[name] = (value, list(value.shape), value.dtype)
 
     @abc.abstractmethod
     def define_parameters(self, param_set: tuple) -> Dict[str, Any]:
@@ -222,18 +202,12 @@ class TestBase(abc.ABC):
             root_dir = os.path.dirname(os.path.abspath(__file__))
 
         # process dtype in parameters
-        dtype_keys = [
-            key for key, value in self.parameters.items()
-            if type(value) in [type, torch.dtype]
-        ]
+        dtype_keys = [key for key, value in self.parameters.items() if type(value) in [type, torch.dtype]]
         for key in dtype_keys:
-            if hasattr(self.parameters[key], __name__) or isinstance(
-                    self.parameters[key], type):
-                self.parameters[key] = self.dtype_name(
-                    self.parameters[key].__name__)
+            if hasattr(self.parameters[key], __name__) or isinstance(self.parameters[key], type):
+                self.parameters[key] = self.dtype_name(self.parameters[key].__name__)
             elif isinstance(self.parameters[key], torch.dtype):
-                self.parameters[key] = self.dtype_name(
-                    str(self.parameters[key]))
+                self.parameters[key] = self.dtype_name(str(self.parameters[key]))
             else:
                 self.parameters[key] = str(self.parameters[key])
 
@@ -279,19 +253,13 @@ class TestBase(abc.ABC):
         }
 
         # export input_tensors
-        for name, (tensor, shape, dtype,
-                   op_format) in self.input_tensors.items():
+        for name, (tensor, shape, dtype, op_format) in self.input_tensors.items():
             bin_filename = f"{name}.bin"
             bin_path = os.path.join(self.save_path, bin_filename)
             self.tensor_tofile(tensor, bin_path)
-            entry = {
-                "shape": shape,
-                "dtype": self.dtype_name(str(dtype)),
-                "opFormat": op_format
-            }
+            entry = {"shape": shape, "dtype": self.dtype_name(str(dtype)), "opFormat": op_format}
 
-            dir_idx = max(i for i, name in enumerate(Path(bin_path).parts)
-                          if name == self.name)
+            dir_idx = max(i for i, name in enumerate(Path(bin_path).parts) if name == self.name)
             entry["bin_file"] = str(Path(*Path(bin_path).parts[dir_idx + 1:]))
             combined_data["inputs"][name] = entry
 
@@ -300,16 +268,10 @@ class TestBase(abc.ABC):
             bin_filename = f"{name}.bin"
             bin_path = os.path.join(self.save_path, bin_filename)
             self.tensor_tofile(tensor, bin_path)
-            entry = {
-                "shape": shape,
-                "dtype": self.dtype_name(str(dtype)),
-                "opFormat": 0
-            }
+            entry = {"shape": shape, "dtype": self.dtype_name(str(dtype)), "opFormat": 0}
 
-            dir_idx = max(i for i, name in enumerate(Path(bin_path).parts)
-                         if name == self.name)
-            entry["bin_file"] = str(
-                    Path(*Path(bin_path).parts[dir_idx + 1:]))
+            dir_idx = max(i for i, name in enumerate(Path(bin_path).parts) if name == self.name)
+            entry["bin_file"] = str(Path(*Path(bin_path).parts[dir_idx + 1:]))
             combined_data["golden_outputs"][name] = entry
 
         # export json

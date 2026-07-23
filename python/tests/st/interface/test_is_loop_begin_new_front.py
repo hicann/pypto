@@ -8,15 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import os
-import pypto
 
 import torch
 import torch_npu
-import numpy as np
-from numpy.testing import assert_allclose
+
+import pypto
 
 B = 3
 S = 4
@@ -27,7 +26,7 @@ D = 64
 @pypto.frontend.jit()
 def dyn_loop_with_loop_begin(
     in_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(1, 1, 64, 64)
 
@@ -68,14 +67,13 @@ def test_is_loop_begin():
     output_golden = input_torch.clone().cpu()
     output_golden[0:1, :, :, :] = output_golden[0:1, :, :, :] + 1
 
-
     assert torch.allclose(output_result, output_golden, atol=1e-5)
 
 
 @pypto.frontend.jit()
 def dyn_loop_with_loop_end(
     in_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(1, 1, 64, 64)
 

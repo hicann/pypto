@@ -24,11 +24,8 @@ class CellWriteConflictRule(Rule):
     HARD_LIMIT = 4096
 
     @staticmethod
-    def _all_pairs_ordered(
-            ctx: RuleContext, seq_no: int, writers: List[SlotAccessEvent]) -> bool:
-        desc_list: List[Set[int]] = [
-            ctx.descendants(seq_no, w.task_id) for w in writers
-        ]
+    def _all_pairs_ordered(ctx: RuleContext, seq_no: int, writers: List[SlotAccessEvent]) -> bool:
+        desc_list: List[Set[int]] = [ctx.descendants(seq_no, w.task_id) for w in writers]
         n = len(writers)
         for i in range(n):
             for j in range(i + 1, n):
@@ -41,11 +38,8 @@ class CellWriteConflictRule(Rule):
 
     @staticmethod
     def _is_legal_parallel_outcast(
-            ctx: RuleContext,
-            seq_no: int,
-            slot: int,
-            cell: int,
-            writer_list: List[SlotAccessEvent]) -> bool:
+        ctx: RuleContext, seq_no: int, slot: int, cell: int, writer_list: List[SlotAccessEvent]
+    ) -> bool:
         if ctx.has_xroot_static_reader(slot):
             return False
         readers = ctx.readers_of_cell.get((seq_no, slot, cell), [])
@@ -56,8 +50,7 @@ class CellWriteConflictRule(Rule):
         return True
 
     @staticmethod
-    def _is_total_order_chain(
-            ctx: RuleContext, seq_no: int, writers: List[SlotAccessEvent]) -> bool:
+    def _is_total_order_chain(ctx: RuleContext, seq_no: int, writers: List[SlotAccessEvent]) -> bool:
         if len(writers) <= 1:
             return True
         ordered = sorted(writers, key=lambda w: (w.func_idx, w.op_idx, w.task_id))
@@ -99,14 +92,16 @@ class CellWriteConflictRule(Rule):
             if self._is_total_order_chain(ctx, seq_no, writer_list):
                 continue
 
-            violations.append(Violation(
-                rule_id=self.RULE_ID,
-                slot_idx=slot,
-                cell_idx=cell,
-                message=(
-                    f"{len(writer_list)} producer instances write to the same "
-                    f"region without a determined order, later writes may "
-                    f"overwrite earlier ones"
-                ),
-            ))
+            violations.append(
+                Violation(
+                    rule_id=self.RULE_ID,
+                    slot_idx=slot,
+                    cell_idx=cell,
+                    message=(
+                        f"{len(writer_list)} producer instances write to the same "
+                        f"region without a determined order, later writes may "
+                        f"overwrite earlier ones"
+                    ),
+                )
+            )
         return violations

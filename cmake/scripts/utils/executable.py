@@ -10,7 +10,8 @@
 # -----------------------------------------------------------------------------------------------------------
 """可执行文件执行辅助模块
 
-本模块提供可执行文件(主要是GTest测试程序)的执行, 测试用例列表获取(按耗时预估刷新顺序)功能, 主要用于测试框架的用例管理和执行加速.
+本模块提供可执行文件(主要是GTest测试程序)的执行, 测试用例列表获取(按耗时预估刷新顺序)功能,
+主要用于测试框架的用例管理和执行加速.
 
 主要功能:
 - 可执行文件的封装与执行
@@ -28,17 +29,17 @@
     case_list, case_dict = exec_obj.get_case_name_info(case_duration_json=Path("duration.json"))
     ret, cmd, duration = exec_obj.run(params=["--gtest_filter=TestSuite.TestCase"])
 """
+
+import dataclasses
+from datetime import datetime, timedelta, timezone
+import json
+import logging
 import os
+from pathlib import Path
 import re
 import shlex
 import subprocess
-import dataclasses
-import logging
-from datetime import timedelta, datetime, timezone
-from pathlib import Path
-from typing import Optional, Dict, Tuple, List
-
-import json
+from typing import Dict, List, Optional, Tuple
 
 
 class Exec:
@@ -53,6 +54,7 @@ class Exec:
 
         包含用例名称和预估/实际执行耗时
         """
+
         name: Optional[str] = None
         duration: Optional[float] = None
 
@@ -90,8 +92,9 @@ class Exec:
         ubsan = "ON" if "UBSAN_OPTIONS" in self.envs.keys() else "OFF"
         return f"({self.file.name}) XSAN(ASAN:{asan} UBSAN:{ubsan})"
 
-    def get_case_name_info(self, case_name_list: Optional[List[str]] = None,
-                           duration_json: Optional[Path] = None) -> Tuple[int, List[CaseDesc], Dict[str, CaseDesc]]:
+    def get_case_name_info(
+        self, case_name_list: Optional[List[str]] = None, duration_json: Optional[Path] = None
+    ) -> Tuple[int, List[CaseDesc], Dict[str, CaseDesc]]:
         """获取测试用例信息并排序
 
         根据指定的用例列表或可执行文件获取用例列表, 补充耗时预估信息, 并按耗时预估降序排列.
@@ -116,9 +119,9 @@ class Exec:
 
         # 重排用例
         desc_list = desc_dict.values()
-        desc_list = sorted(desc_list,
-                           key=lambda x: x.duration if x.duration is not None else float('-inf'),
-                           reverse=True)
+        desc_list = sorted(
+            desc_list, key=lambda x: x.duration if x.duration is not None else float('-inf'), reverse=True
+        )
         ordered_cnt = 0
         for desc in desc_list:
             if desc.duration:
@@ -129,8 +132,13 @@ class Exec:
         logging.info("Determine TestCase Order, OrderdCase(%s), NormalCase(%s)", ordered_cnt, normal_cnt)
         return ordered_cnt, desc_list, desc_dict
 
-    def run(self, params: Optional[List[str]] = None, check: bool = False, capture_output: bool = True,
-            envs: Optional[Dict[str, str]] = None) -> Tuple[subprocess.CompletedProcess, str, timedelta]:
+    def run(
+        self,
+        params: Optional[List[str]] = None,
+        check: bool = False,
+        capture_output: bool = True,
+        envs: Optional[Dict[str, str]] = None,
+    ) -> Tuple[subprocess.CompletedProcess, str, timedelta]:
         """执行可执行文件
 
         :param params: 额外配置的命令参数
@@ -152,8 +160,16 @@ class Exec:
         act_env.update(envs)  # 函数调用时指定的环境变量
         cwd = str(self.file.parent)
         ts = datetime.now(tz=timezone.utc)
-        ret = subprocess.run(shlex.split(cmd), env=act_env, cwd=cwd, timeout=self.timeout,
-                             capture_output=capture_output, check=check, text=True, encoding='utf-8')
+        ret = subprocess.run(
+            shlex.split(cmd),
+            env=act_env,
+            cwd=cwd,
+            timeout=self.timeout,
+            capture_output=capture_output,
+            check=check,
+            text=True,
+            encoding='utf-8',
+        )
         return ret, cmd, datetime.now(tz=timezone.utc) - ts
 
     def _get_run_cmd(self, params: Optional[List[str]] = None) -> str:
@@ -175,7 +191,11 @@ class Exec:
         :rtype: List[str]
         """
         case_name_list = []
-        ret, _, _, = self.run(params=["--gtest_list_tests"], check=True)  # GoogleTest 原生参数
+        (
+            ret,
+            _,
+            _,
+        ) = self.run(params=["--gtest_list_tests"], check=True)  # GoogleTest 原生参数
         for line in ret.stdout.split('\n'):
             line = line.rstrip()
             if not line or line.startswith('#') or "GoogleTestVerification" in line:
@@ -196,7 +216,11 @@ class Exec:
         :return: 用例描述列表, 包含用例名和预估耗时
         """
         case_desc_list = []
-        ret, _, _, = self.run(params=["--gtest_list_tests_with_meta"], check=True)
+        (
+            ret,
+            _,
+            _,
+        ) = self.run(params=["--gtest_list_tests_with_meta"], check=True)
         pattern = re.compile(r'^([\w\.]+)\|(\d+\.?\d*)$', re.MULTILINE)
         matches = pattern.findall(ret.stdout)
         for test_name, cost_str in matches:

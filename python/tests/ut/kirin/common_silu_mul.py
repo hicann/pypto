@@ -13,12 +13,12 @@
 Test silu_mul codegen - common functions for Kirin9030 and KirinX90
 """
 
-import pypto
-import torch
 import numpy as np
 import pytest
+import torch
 
 from kirin.common import compare_cos
+import pypto
 
 
 def silu_mul_golden(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:

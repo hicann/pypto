@@ -8,15 +8,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import os
-import sys
-import logging
 import argparse
-import subprocess
+import logging
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import setup_logging, run_command
+from common import run_command, setup_logging
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -66,11 +66,7 @@ class DebugPyptoBuilder:
         logger.info("开始编译DebugDebug版本PyPTO")
         logger.info("=" * 80)
 
-        cmd = [
-            'python3.11', str(self.build_script),
-            '-f', 'python3',
-            '--build_type', 'Debug'
-        ]
+        cmd = ['python3.11', str(self.build_script), '-f', 'python3', '--build_type', 'Debug']
 
         logger.info("编译命令: %s", ' '.join(cmd))
         logger.info("超时时间: %d 秒", timeout)
@@ -129,7 +125,7 @@ class DebugPyptoBuilder:
             'pypto_root': str(self.pypto_root),
             'build_script': str(self.build_script),
             'build_output': str(self.build_output),
-            'wheel_file': None
+            'wheel_file': None,
         }
 
         wheel = self.find_wheel()

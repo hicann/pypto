@@ -11,7 +11,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-
 TASK_ID_OP_BITS = 16
 TASK_ID_OP_MASK = (1 << TASK_ID_OP_BITS) - 1
 
@@ -83,7 +82,7 @@ class DynTask:
 
     @property
     def static_successors(self) -> List[int]:
-        return self.successors[: self.static_succ_count]
+        return self.successors[:self.static_succ_count]
 
 
 @dataclass

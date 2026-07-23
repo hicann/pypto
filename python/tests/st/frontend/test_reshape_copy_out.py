@@ -8,12 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
+""" """
+
 import logging
+import os
+
 import torch
 import torch_npu
+
 import pypto
 
 
@@ -21,13 +23,13 @@ def test_attention_residuals_pypto():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch_npu.npu.set_device(device_id)
     t = 4
-    l = 8
+    l = 8  # noqa: E741
     d = 512
     k = torch.randn((t, l, d), dtype=torch.bfloat16).npu()
     k_out = torch.zeros((t, l, d), dtype=torch.float32).npu()
 
     k_golden = k.to(torch.float32).cpu()
-    k_golden = k_golden ** 2
+    k_golden = k_golden**2
 
     pypto.set_verify_golden_data(goldens=[None, k_golden])
     attention_residuals(k, k_out)
@@ -42,8 +44,9 @@ def test_attention_residuals_pypto():
 @pypto.frontend.jit(debug_options={"compile_debug_mode": 0})
 def attention_residuals(
     k_in: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC]),
-    k_out: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC])):
-    t, l, d = k_in.shape
+    k_out: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC]),
+):
+    t, l, d = k_in.shape  # noqa: E741
     l_max = 32
     unroll_list = [4]
     for t_idx, unroll_length in pypto.loop_unroll(0, t, 1, name="Loop_t", idx_name="tIdx", unroll_list=unroll_list):

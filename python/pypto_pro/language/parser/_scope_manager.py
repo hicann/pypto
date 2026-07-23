@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Scope management and SSA verification for IR parsing."""
+
 from __future__ import annotations
 
 __all__ = ["ScopeManager", "SSAViolationError", "ScopeIsolationError"]

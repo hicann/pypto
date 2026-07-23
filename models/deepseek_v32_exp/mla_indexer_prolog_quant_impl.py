@@ -24,14 +24,11 @@ Example:
 """
 
 import math
-from typing import List
-from dataclasses import dataclass
-import torch
-import torch_npu
-import pypto
-from lightning_indexer_prolog_quant_impl import rope_3d, quant_layer_norm, prolog_quant, quant_rope_2d
-from mla_prolog_quant_impl import pre_compute_2d, rms_norm, rope_3d_v2, rope_v2, MlaQuantInputs, k_nope_quant
 
+from lightning_indexer_prolog_quant_impl import prolog_quant, quant_layer_norm, quant_rope_2d, rope_3d
+from mla_prolog_quant_impl import MlaQuantInputs, k_nope_quant, pre_compute_2d, rms_norm, rope_3d_v2, rope_v2
+
+import pypto
 
 L0M_INDEX = 0
 L1M_INDEX = 1
@@ -46,16 +43,49 @@ VEC_TILE_32 = 32
 
 
 def mla_indexer_prolog_quant_compute(
-    token_x, mla_w_dq, mla_w_uq_qr, mla_dequant_scale, mla_w_uk, mla_w_dkv_kr, mla_gamma_cq,
-    mla_gamma_ckv, cos, sin, cache_index, mla_kv_cache, mla_kr_cache,
-    mla_k_scale_cache, ip_w_qb_in, ip_w_qb_scale_in, ip_wk_in, ip_w_proj_in,
-    ip_ln_gamma_k_in, ip_ln_beta_k_in, ip_hadamard_q_in, ip_hadamard_k_in,
-    ip_k_cache, ip_k_cache_scale, mla_query_nope_out, mla_query_rope_out,
-    mla_q_norm_out, mla_q_norm_scale_out, mla_kv_cache_out, mla_kr_cache_out,
-    mla_k_scale_cache_out, ip_q_int8_out, ip_q_scale_out, ip_k_int8_out,
-    ip_k_scale_out, ip_weights_out, mla_epsilon_cq, mla_epsilon_ckv,
-    mla_cache_mode, mla_tile_config,
-    ip_attrs, ip_configs, rope_cfg
+    token_x,
+    mla_w_dq,
+    mla_w_uq_qr,
+    mla_dequant_scale,
+    mla_w_uk,
+    mla_w_dkv_kr,
+    mla_gamma_cq,
+    mla_gamma_ckv,
+    cos,
+    sin,
+    cache_index,
+    mla_kv_cache,
+    mla_kr_cache,
+    mla_k_scale_cache,
+    ip_w_qb_in,
+    ip_w_qb_scale_in,
+    ip_wk_in,
+    ip_w_proj_in,
+    ip_ln_gamma_k_in,
+    ip_ln_beta_k_in,
+    ip_hadamard_q_in,
+    ip_hadamard_k_in,
+    ip_k_cache,
+    ip_k_cache_scale,
+    mla_query_nope_out,
+    mla_query_rope_out,
+    mla_q_norm_out,
+    mla_q_norm_scale_out,
+    mla_kv_cache_out,
+    mla_kr_cache_out,
+    mla_k_scale_cache_out,
+    ip_q_int8_out,
+    ip_q_scale_out,
+    ip_k_int8_out,
+    ip_k_scale_out,
+    ip_weights_out,
+    mla_epsilon_cq,
+    mla_epsilon_ckv,
+    mla_cache_mode,
+    mla_tile_config,
+    ip_attrs,
+    ip_configs,
+    rope_cfg,
 ):
     dtype = token_x.dtype
     h = token_x.shape[1]
@@ -80,15 +110,22 @@ def mla_indexer_prolog_quant_compute(
         quant_inputs.dequant_scale_w_uq_qr = dequant_scale_wuqr_reshape
 
     unroll_list = mla_tile_config.unroll_list
-    for bs_offset, unroll_length in pypto.loop_unroll(0, t, 1, name="MLA_BS_LOOP", idx_name="bs_offset",
-                                                      unroll_list=unroll_list, ):
+    for bs_offset, unroll_length in pypto.loop_unroll(
+        0,
+        t,
+        1,
+        name="MLA_BS_LOOP",
+        idx_name="bs_offset",
+        unroll_list=unroll_list,
+    ):
         tile_bs = unroll_length
         output_offset = [bs_offset, 0, 0]
 
         pypto.set_vec_tile_shapes(tile_bs, 128)
         x_view = pypto.view(token_x, [tile_bs, h], [bs_offset, 0])
-        q_kv = pre_compute_2d(x_view, mla_w_dq, mla_w_uq_qr, mla_w_dkv_kr, mla_gamma_cq, \
-                            mla_epsilon_cq, quant_inputs, mla_tile_config)
+        q_kv = pre_compute_2d(
+            x_view, mla_w_dq, mla_w_uq_qr, mla_w_dkv_kr, mla_gamma_cq, mla_epsilon_cq, quant_inputs, mla_tile_config
+        )
         q = q_kv[0]
         kv_tmp = q_kv[1]
 
@@ -177,9 +214,11 @@ def mla_indexer_prolog_quant_compute(
         q_hd = ip_configs.q_hd
 
         pypto.set_semantic_label("Query-Linear")
-        pypto.set_cube_tile_shapes([q_linear[L0M_INDEX], q_linear[L1M_INDEX]],
-                                [q_linear[L0K_INDEX], q_linear[L1K_INDEX]],
-                                [q_linear[L0N_INDEX], q_linear[L1N_INDEX]])
+        pypto.set_cube_tile_shapes(
+            [q_linear[L0M_INDEX], q_linear[L1M_INDEX]],
+            [q_linear[L0K_INDEX], q_linear[L1K_INDEX]],
+            [q_linear[L0N_INDEX], q_linear[L1N_INDEX]],
+        )
         q_s32 = pypto.matmul(q_norm, ip_w_qb_in, pypto.DT_INT32)  # (tile_bs, head_num * head_dim)
 
         pypto.set_semantic_label("Query-Dequant")
@@ -192,10 +231,15 @@ def mla_indexer_prolog_quant_compute(
 
         q_bf16 = pypto.reshape(q_cast, [tile_bs, head_num, head_dim], valid_shape=[tile_bs, head_num, head_dim])
         # UB view
-        q_rope = pypto.view(q_bf16, [tile_bs, head_num, qk_rope_head_dim], [0, 0, 0],
-                            valid_shape=[tile_bs, head_num, qk_rope_head_dim])
-        q_nope = pypto.view(q_bf16, [tile_bs, head_num, head_dim - qk_rope_head_dim], [0, 0, qk_rope_head_dim],
-                            valid_shape=[tile_bs, head_num, head_dim - qk_rope_head_dim])
+        q_rope = pypto.view(
+            q_bf16, [tile_bs, head_num, qk_rope_head_dim], [0, 0, 0], valid_shape=[tile_bs, head_num, qk_rope_head_dim]
+        )
+        q_nope = pypto.view(
+            q_bf16,
+            [tile_bs, head_num, head_dim - qk_rope_head_dim],
+            [0, 0, qk_rope_head_dim],
+            valid_shape=[tile_bs, head_num, head_dim - qk_rope_head_dim],
+        )
 
         q_roped = rope_3d(q_rope, cos_2d_view, sin_2d_view, ip_configs)  # [tile_bs, head_num, qk_rope_head_dim]
         pypto.set_vec_tile_shapes(ip_configs.t_sub_tile, head_num // ip_configs.chunk_size, head_dim)
@@ -206,8 +250,9 @@ def mla_indexer_prolog_quant_compute(
         pypto.set_semantic_label("Query-Hadamard")
         cur_max_unroll = 32
         q_hd_m_tile = cur_max_unroll if tile_bs < cur_max_unroll else q_hd[L0M_INDEX]
-        pypto.set_cube_tile_shapes([q_hd_m_tile, q_hd_m_tile], [q_hd[L0K_INDEX], q_hd[L1K_INDEX]],
-                                [q_hd[L0N_INDEX], q_hd[L1N_INDEX]])
+        pypto.set_cube_tile_shapes(
+            [q_hd_m_tile, q_hd_m_tile], [q_hd[L0K_INDEX], q_hd[L1K_INDEX]], [q_hd[L0N_INDEX], q_hd[L1N_INDEX]]
+        )
         q_hadamard = pypto.matmul(q_cat, hadamard_q, dtype)  # (tile_bs, head_num, head_dim)
 
         pypto.set_semantic_label("Query-Quant")
@@ -221,9 +266,11 @@ def mla_indexer_prolog_quant_compute(
         # 获取key计算的各阶段Tile参数
         k_linear = ip_configs.k_linear
         pypto.set_semantic_label("Key-Linear")
-        pypto.set_cube_tile_shapes([k_linear[L0M_INDEX], k_linear[L1M_INDEX]],
-                                [k_linear[L0K_INDEX], k_linear[L1K_INDEX]],
-                                [k_linear[L0N_INDEX], k_linear[L1N_INDEX]])
+        pypto.set_cube_tile_shapes(
+            [k_linear[L0M_INDEX], k_linear[L1M_INDEX]],
+            [k_linear[L0K_INDEX], k_linear[L1K_INDEX]],
+            [k_linear[L0N_INDEX], k_linear[L1N_INDEX]],
+        )
         k = pypto.matmul(x_view, ip_wk_in, pypto.DT_FP32)  # (tile_bs, head_dim)
 
         if tile_bs <= 32:
@@ -233,8 +280,12 @@ def mla_indexer_prolog_quant_compute(
         k_bf16 = pypto.cast(quant_layer_norm(k, gamma_2d, beta_2d, -1, ip_attrs.eps), dtype)
 
         k_rope = pypto.view(k_bf16, [tile_bs, qk_rope_head_dim], [0, 0], valid_shape=[tile_bs, qk_rope_head_dim])
-        k_nope = pypto.view(k_bf16, [tile_bs, head_dim - qk_rope_head_dim], [0, qk_rope_head_dim],
-                            valid_shape=[tile_bs, head_dim - qk_rope_head_dim])
+        k_nope = pypto.view(
+            k_bf16,
+            [tile_bs, head_dim - qk_rope_head_dim],
+            [0, qk_rope_head_dim],
+            valid_shape=[tile_bs, head_dim - qk_rope_head_dim],
+        )
         k_roped = quant_rope_2d(k_rope, cos_2d_view, sin_2d_view)  # (tile_bs, qk_rope_head_dim)
         pypto.set_vec_tile_shapes(tile_bs, head_dim)
         k_nope = pypto.cast(pypto.cast(k_nope, pypto.DT_FP32), k_bf16.dtype)
@@ -244,9 +295,9 @@ def mla_indexer_prolog_quant_compute(
         pypto.set_semantic_label("Key-Quant")
         k_res = prolog_quant(hadamard_k)
         k_cache_4d = pypto.reshape(k_res[0], [tile_bs, 1, 1, head_dim], valid_shape=[tile_bs, 1, 1, head_dim])
-        k_scale_4d = pypto.reshape(pypto.cast(k_res[1], pypto.DT_FP16), [tile_bs, 1, 1, 1],
-                                valid_shape=[tile_bs, 1, 1, 1])
-
+        k_scale_4d = pypto.reshape(
+            pypto.cast(k_res[1], pypto.DT_FP16), [tile_bs, 1, 1, 1], valid_shape=[tile_bs, 1, 1, 1]
+        )
 
         pypto.set_vec_tile_shapes(tile_bs, 1, 1, head_dim)
         ip_k_int8_out.move(pypto.scatter_update(ip_k_cache, SCATTER_DIM, index, k_cache_4d))
@@ -254,9 +305,11 @@ def mla_indexer_prolog_quant_compute(
 
         pypto.set_semantic_label("Weight-Linear")
         w_linear = ip_configs.w_linear
-        pypto.set_cube_tile_shapes([w_linear[L0M_INDEX], w_linear[L1M_INDEX]],
-                                [w_linear[L0K_INDEX], w_linear[L1K_INDEX]],
-                                [w_linear[L0N_INDEX], w_linear[L1N_INDEX]])
+        pypto.set_cube_tile_shapes(
+            [w_linear[L0M_INDEX], w_linear[L1M_INDEX]],
+            [w_linear[L0K_INDEX], w_linear[L1K_INDEX]],
+            [w_linear[L0N_INDEX], w_linear[L1N_INDEX]],
+        )
         pypto.set_vec_tile_shapes(tile_bs, head_num)
         weights = pypto.cast(pypto.matmul(x_view, ip_w_proj_in, dtype), pypto.DT_FP32)
         weights = pypto.mul(weights, 1.0 / (math.sqrt(head_num) * math.sqrt(head_dim)))
@@ -269,8 +322,7 @@ def mla_indexer_prolog_quant_compute(
     pass_options={
         "cube_l1_reuse_setting": {-1: 4},
     },
-    runtime_options={"stitch_function_max_num": 128,
-                    "device_sched_mode": 2}
+    runtime_options={"stitch_function_max_num": 128, "device_sched_mode": 2},
 )
 def mla_indexer_prolog_quant_p(
     token_x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
@@ -297,7 +349,6 @@ def mla_indexer_prolog_quant_p(
     ip_hadamard_k_in: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
     ip_k_cache: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
     ip_k_cache_scale: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
-
     mla_query_nope_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
     mla_query_rope_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
     mla_kv_cache_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
@@ -308,14 +359,13 @@ def mla_indexer_prolog_quant_p(
     ip_k_int8_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
     ip_k_scale_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     ip_weights_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP16),
-
     mla_epsilon_cq,
     mla_epsilon_ckv,
     mla_cache_mode,
     mla_tile_config,
     ip_attrs,
     ip_configs,
-    rope_cfg
+    rope_cfg,
 ):
     """Fused MLA and Indexer Prolog quantization for prefill phase.
 
@@ -380,17 +430,49 @@ def mla_indexer_prolog_quant_p(
     mla_q_norm_out = pypto.Tensor((t, actual_q_lora_rank), pypto.DT_INT8)
     mla_q_norm_scale_out = pypto.Tensor((t, 1), pypto.DT_FP32)
     mla_indexer_prolog_quant_compute(
-        token_x, mla_w_dq, mla_w_uq_qr, mla_dequant_scale, mla_w_uk, mla_w_dkv_kr, mla_gamma_cq,
-        mla_gamma_ckv, cos, sin, cache_index, mla_kv_cache, mla_kr_cache,
-        mla_k_scale_cache, ip_w_qb_in, ip_w_qb_scale_in, ip_wk_in, ip_w_proj_in,
-        ip_ln_gamma_k_in, ip_ln_beta_k_in, ip_hadamard_q_in, ip_hadamard_k_in,
-        ip_k_cache, ip_k_cache_scale, mla_query_nope_out, mla_query_rope_out,
-        mla_q_norm_out, mla_q_norm_scale_out,
-        mla_kv_cache_out, mla_kr_cache_out,
-        mla_k_scale_cache_out, ip_q_int8_out, ip_q_scale_out, ip_k_int8_out,
-        ip_k_scale_out, ip_weights_out, mla_epsilon_cq, mla_epsilon_ckv,
-        mla_cache_mode, mla_tile_config,
-        ip_attrs, ip_configs, rope_cfg
+        token_x,
+        mla_w_dq,
+        mla_w_uq_qr,
+        mla_dequant_scale,
+        mla_w_uk,
+        mla_w_dkv_kr,
+        mla_gamma_cq,
+        mla_gamma_ckv,
+        cos,
+        sin,
+        cache_index,
+        mla_kv_cache,
+        mla_kr_cache,
+        mla_k_scale_cache,
+        ip_w_qb_in,
+        ip_w_qb_scale_in,
+        ip_wk_in,
+        ip_w_proj_in,
+        ip_ln_gamma_k_in,
+        ip_ln_beta_k_in,
+        ip_hadamard_q_in,
+        ip_hadamard_k_in,
+        ip_k_cache,
+        ip_k_cache_scale,
+        mla_query_nope_out,
+        mla_query_rope_out,
+        mla_q_norm_out,
+        mla_q_norm_scale_out,
+        mla_kv_cache_out,
+        mla_kr_cache_out,
+        mla_k_scale_cache_out,
+        ip_q_int8_out,
+        ip_q_scale_out,
+        ip_k_int8_out,
+        ip_k_scale_out,
+        ip_weights_out,
+        mla_epsilon_cq,
+        mla_epsilon_ckv,
+        mla_cache_mode,
+        mla_tile_config,
+        ip_attrs,
+        ip_configs,
+        rope_cfg,
     )
 
 
@@ -399,7 +481,7 @@ def mla_indexer_prolog_quant_p(
         "cube_l1_reuse_setting": {-1: 4, 0: 1, 1: 1, 2: 1},
         "cube_nbuffer_setting": {-1: 6, 0: 1, 1: 1, 2: 1},
     },
-    runtime_options={"device_sched_mode": 2}
+    runtime_options={"device_sched_mode": 2},
 )
 def mla_indexer_prolog_quant_d(
     token_x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
@@ -426,7 +508,6 @@ def mla_indexer_prolog_quant_d(
     ip_hadamard_k_in: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
     ip_k_cache: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
     ip_k_cache_scale: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
-
     mla_query_nope_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
     mla_query_rope_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
     mla_kv_cache_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
@@ -437,14 +518,13 @@ def mla_indexer_prolog_quant_d(
     ip_k_int8_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
     ip_k_scale_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     ip_weights_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP16),
-
     mla_epsilon_cq,
     mla_epsilon_ckv,
     mla_cache_mode,
     mla_tile_config,
     ip_attrs,
     ip_configs,
-    rope_cfg
+    rope_cfg,
 ):
     """Fused MLA and Indexer Prolog quantization for decode phase.
 
@@ -509,15 +589,47 @@ def mla_indexer_prolog_quant_d(
     mla_q_norm_out = pypto.Tensor((t, actual_q_lora_rank), pypto.DT_INT8)
     mla_q_norm_scale_out = pypto.Tensor((t, 1), pypto.DT_FP32)
     mla_indexer_prolog_quant_compute(
-        token_x, mla_w_dq, mla_w_uq_qr, mla_dequant_scale, mla_w_uk, mla_w_dkv_kr, mla_gamma_cq,
-        mla_gamma_ckv, cos, sin, cache_index, mla_kv_cache, mla_kr_cache,
-        mla_k_scale_cache, ip_w_qb_in, ip_w_qb_scale_in, ip_wk_in, ip_w_proj_in,
-        ip_ln_gamma_k_in, ip_ln_beta_k_in, ip_hadamard_q_in, ip_hadamard_k_in,
-        ip_k_cache, ip_k_cache_scale, mla_query_nope_out, mla_query_rope_out,
-        mla_q_norm_out, mla_q_norm_scale_out,
-        mla_kv_cache_out, mla_kr_cache_out,
-        mla_k_scale_cache_out, ip_q_int8_out, ip_q_scale_out, ip_k_int8_out,
-        ip_k_scale_out, ip_weights_out, mla_epsilon_cq, mla_epsilon_ckv,
-        mla_cache_mode, mla_tile_config,
-        ip_attrs, ip_configs, rope_cfg
+        token_x,
+        mla_w_dq,
+        mla_w_uq_qr,
+        mla_dequant_scale,
+        mla_w_uk,
+        mla_w_dkv_kr,
+        mla_gamma_cq,
+        mla_gamma_ckv,
+        cos,
+        sin,
+        cache_index,
+        mla_kv_cache,
+        mla_kr_cache,
+        mla_k_scale_cache,
+        ip_w_qb_in,
+        ip_w_qb_scale_in,
+        ip_wk_in,
+        ip_w_proj_in,
+        ip_ln_gamma_k_in,
+        ip_ln_beta_k_in,
+        ip_hadamard_q_in,
+        ip_hadamard_k_in,
+        ip_k_cache,
+        ip_k_cache_scale,
+        mla_query_nope_out,
+        mla_query_rope_out,
+        mla_q_norm_out,
+        mla_q_norm_scale_out,
+        mla_kv_cache_out,
+        mla_kr_cache_out,
+        mla_k_scale_cache_out,
+        ip_q_int8_out,
+        ip_q_scale_out,
+        ip_k_int8_out,
+        ip_k_scale_out,
+        ip_weights_out,
+        mla_epsilon_cq,
+        mla_epsilon_ckv,
+        mla_cache_mode,
+        mla_tile_config,
+        ip_attrs,
+        ip_configs,
+        rope_cfg,
     )

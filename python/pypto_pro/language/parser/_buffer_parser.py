@@ -25,10 +25,9 @@ from functools import reduce
 
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
-
 from pypto_pro.ir.op._op_registry import op_impl
-from pypto_pro.ir.op.block_ops import make_tile as _ir_make_tile
 from pypto_pro.ir.op.block_ops import TileType as _TileType
+from pypto_pro.ir.op.block_ops import make_tile as _ir_make_tile
 
 from .diagnostics import ParserSyntaxError, ParserTypeError
 
@@ -53,11 +52,7 @@ class BufferParserMixin:
         """Per-tile byte size derived from the TileType static shape and dtype."""
         shape = tile_type.shape
         if isinstance(shape, ir.MakeTuple):
-            shape = tuple(
-                element.value
-                for element in shape.elements
-                if isinstance(element, ir.ConstInt)
-            )
+            shape = tuple(element.value for element in shape.elements if isinstance(element, ir.ConstInt))
             if len(shape) != len(tile_type.shape.elements):
                 raise ParserTypeError("make_tile_group() TileType shape must contain constant integers")
         else:
@@ -75,12 +70,12 @@ class BufferParserMixin:
         span = self.span_tracker.get_span(call)
         if call.args:
             raise ParserSyntaxError(
-                "pl.make_tile_group() takes keyword args only (type=, addrs=, mutex_ids=)", span=span)
+                "pl.make_tile_group() takes keyword args only (type=, addrs=, mutex_ids=)", span=span
+            )
         kw = {k.arg: k for k in call.keywords if k.arg is not None}
         for required in ("type", "addrs", "mutex_ids"):
             if required not in kw:
-                raise ParserTypeError(
-                    f"pl.make_tile_group() missing required keyword '{required}'", span=span)
+                raise ParserTypeError(f"pl.make_tile_group() missing required keyword '{required}'", span=span)
 
         tile_type = self.parse_expression(kw["type"].value)
         if not isinstance(tile_type, _TileType):
@@ -98,8 +93,8 @@ class BufferParserMixin:
             tile_addrs = list(addrs)
             if len(tile_addrs) != num:
                 raise ParserTypeError(
-                    f"make_tile_group() addrs length {len(tile_addrs)} must equal "
-                    f"mutex_ids length {num}", span=span)
+                    f"make_tile_group() addrs length {len(tile_addrs)} must equal mutex_ids length {num}", span=span
+                )
         else:
             tile_addrs = [addrs + i * slot_size for i in range(num)]
 
@@ -121,24 +116,34 @@ class BufferParserMixin:
         tile_vars = []
         for i, addr in enumerate(tile_addrs):
             t = _ir_make_tile(
-                shape=tile_type.shape, dtype=tile_type.dtype,
+                shape=tile_type.shape,
+                dtype=tile_type.dtype,
                 target_memory=tile_type.target_memory,
                 layout=tile_type.layout,
-                fractal=tile_type.fractal, pad=tile_type.pad, compact=tile_type.compact,
+                fractal=tile_type.fractal,
+                pad=tile_type.pad,
+                compact=tile_type.compact,
                 valid_shape=tile_type.valid_shape,
-                addr=addr, size=slot_size)
+                addr=addr,
+                size=slot_size,
+            )
             tile_vars.append(self.builder.let(f"_tg_{var_name}_tiles_{i}", t, span=span))
         tiles_tuple = self.builder.let(f"_tg_{var_name}_tiles", ir.MakeTuple(tile_vars, span), span=span)
         mut_tuple = self.builder.let(
             f"_tg_{var_name}_mutex_ids",
-            ir.MakeTuple([ir.ConstInt(m, DataType.INDEX, span) for m in mutex_ids], span), span=span)
+            ir.MakeTuple([ir.ConstInt(m, DataType.INDEX, span) for m in mutex_ids], span),
+            span=span,
+        )
         if num == 1:
             result = self.make_named_tuple([tiles_tuple, mut_tuple], ["tiles", "mutex_ids"], span)
             self.tile_group_meta[result] = (num, mutex_ids, tile_type.target_memory)
             return result
         cursor_call = ir.create_op_call(
-            "struct.create", [ir.ConstInt(num - 1, DataType.INDEX, span)],
-            {"name": "_TileGroupCursor", "fields": ["cursor"]}, span)
+            "struct.create",
+            [ir.ConstInt(num - 1, DataType.INDEX, span)],
+            {"name": "_TileGroupCursor", "fields": ["cursor"]},
+            span,
+        )
         self.register_struct_fields(cursor_call, ["cursor"])
         cursor = self.builder.let(f"_tg_{var_name}_cursor", cursor_call, span=span)
         result = self.make_named_tuple([tiles_tuple, mut_tuple, cursor], ["tiles", "mutex_ids", "cursor"], span)
@@ -148,8 +153,9 @@ class BufferParserMixin:
     # --- accessors ------------------------------------------------------------
 
     def _emit_cursor_advance(self, cursor_struct, new_val, span: ir.Span) -> None:
-        self.builder.emit(ir.EvalStmt(
-            ir.create_op_call("struct.set", [cursor_struct, new_val], {"field": "cursor"}, span), span))
+        self.builder.emit(
+            ir.EvalStmt(ir.create_op_call("struct.set", [cursor_struct, new_val], {"field": "cursor"}, span), span)
+        )
 
     def _lower_group_accessor(self, group_var, method_name: str, span: ir.Span):
         """Lower group.next()/current()/previous() to a bare tile.

@@ -22,15 +22,14 @@ to build complex computation pipelines. It shows:
 This pattern is useful for building modular neural network components.
 """
 
+import argparse
+from dataclasses import dataclass
 import os
 import sys
-import argparse
-import pypto
+
 import torch
-import numpy as np
-from numpy.testing import assert_allclose
-from dataclasses import dataclass
-from typing import Optional
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -75,6 +74,7 @@ def get_device_id():
 @dataclass
 class ModuleConfig:
     """Configuration for multi-function module."""
+
     hidden_size: int = 128
     intermediate_size: int = 256
     dtype: pypto.DataType = pypto.DT_BF16
@@ -117,11 +117,7 @@ def layernorm_core(x: pypto.Tensor, gamma: pypto.Tensor, beta: pypto.Tensor, eps
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def layer_norm_kernel(
-    x: pypto.Tensor(),
-    gamma: pypto.Tensor(),
-    beta: pypto.Tensor(),
-    out: pypto.Tensor()):
+def layer_norm_kernel(x: pypto.Tensor(), gamma: pypto.Tensor(), beta: pypto.Tensor(), out: pypto.Tensor()):
     """Layer Normalization."""
     pypto.set_vec_tile_shapes(64, 128)
 
@@ -130,11 +126,7 @@ def layer_norm_kernel(
 
 # Function 2: Linear Projection
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def linear_projection_kernel(
-    x: pypto.Tensor(),
-    weight: pypto.Tensor(),
-    out: pypto.Tensor()):
-
+def linear_projection_kernel(x: pypto.Tensor(), weight: pypto.Tensor(), out: pypto.Tensor()):
     bias = None
 
     pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
@@ -147,9 +139,7 @@ def linear_projection_kernel(
 
 # Function 3: GELU Activation
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def gelu_activation_kernel(
-    x: pypto.Tensor(),
-    out: pypto.Tensor()):
+def gelu_activation_kernel(x: pypto.Tensor(), out: pypto.Tensor()):
     # Configure tiling
     tile_shapes = [32] * len(x.shape)
     pypto.set_vec_tile_shapes(*tile_shapes)
@@ -163,21 +153,14 @@ def gelu_activation_kernel(
 
 # Function 4: Residual Connection
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def residual_add_kernel(
-        x: pypto.tensor(),
-        residual: pypto.tensor(),
-        out: pypto.tensor()):
+def residual_add_kernel(x: pypto.tensor(), residual: pypto.tensor(), out: pypto.tensor()):
     pypto.set_vec_tile_shapes(64, 128)
     out[:] = pypto.add(x, residual)
 
 
 # Function 5: Attention (simplified)
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def attention_kernel(
-        q: pypto.tensor(),
-        k: pypto.tensor(),
-        v: pypto.tensor(),
-        out: pypto.tensor()):
+def attention_kernel(q: pypto.tensor(), k: pypto.tensor(), v: pypto.tensor(), out: pypto.tensor()):
     pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
 
     # Q @ K^T
@@ -185,6 +168,7 @@ def attention_kernel(
     scores = pypto.matmul(q, k_t, out_dtype=out.dtype)
 
     # Scale
+    scale = q.shape[-1] ** -0.5
     scores_scaled = pypto.mul(scores, scale)
 
     # Softmax
@@ -373,7 +357,6 @@ def test_function_reuse(device_id: int = None, dynamic: bool = True) -> None:
     if global_run_mode == pypto.RunMode.NPU:
         torch.npu.synchronize()
 
-
     # Verify
     expected1 = layer_norm_golden(x1, gamma, beta, 1e-6)
     expected2 = layer_norm_golden(x2, gamma, beta, 1e-6)
@@ -383,7 +366,7 @@ def test_function_reuse(device_id: int = None, dynamic: bool = True) -> None:
     max_diff2 = (out2 - expected2).abs().max().item()
     max_diff3 = (out3 - expected3).abs().max().item()
 
-    print(f"Function reused 3 times with different inputs")
+    print("Function reused 3 times with different inputs")
     if global_run_mode == pypto.RunMode.NPU:
         print(f"Max diff 1: {max_diff1:.6f}")
         print(f"Max diff 2: {max_diff2:.6f}")
@@ -410,26 +393,14 @@ Examples:
   %(prog)s function_reuse::test_function_reuse
             Run example function_reuse::test_function_reuse
   %(prog)s --list       List all available examples
-        """
+        """,
     )
     parser.add_argument(
-        'example_id',
-        type=str,
-        nargs='?',
-        help='Example ID to run (1-4). If not specified, all examples will run.'
+        'example_id', type=str, nargs='?', help='Example ID to run (1-4). If not specified, all examples will run.'
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default='npu',
-        choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default='npu', choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -440,26 +411,26 @@ Examples:
             'name': 'Sequential Functions',
             'description': 'Using multiple functions in sequence',
             'function': test_sequential_functions,
-            'requires_npu': True
+            'requires_npu': True,
         },
         'residual_connection::test_residual_connection': {
             'name': 'Residual Connection',
             'description': 'Residual connection pattern',
             'function': test_residual_connection,
-            'requires_npu': True
+            'requires_npu': True,
         },
         'transformer_block::test_transformer_block': {
             'name': 'Transformer Block',
             'description': 'Complete transformer block with multiple functions',
             'function': test_transformer_block,
-            'requires_npu': True
+            'requires_npu': True,
         },
         'function_reuse::test_function_reuse': {
             'name': 'Function Reuse',
             'description': 'Reusing the same function with different inputs',
             'function': test_function_reuse,
-            'requires_npu': True
-        }
+            'requires_npu': True,
+        },
     }
 
     # List examples if requested
@@ -500,7 +471,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("(Make sure CANN environment is configured and NPU is available)\n")

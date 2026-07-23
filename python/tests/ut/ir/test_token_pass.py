@@ -7,6 +7,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 """Tests for ir.Pass.token_pass (WAR/WAW token dependency insertion)."""
+
 import pypto
 from pypto import ir, pil
 
@@ -32,13 +33,15 @@ def _assembles(func):
 
 # ---------- Write-After-Write ----------
 
+
 def test_waw_conflict():
     """Two overlapping Assembles into the same output -> WAW token edge."""
+
     def foo(x, y):
         pypto.set_vec_tile_shapes(16, 16)
         a = pypto.view(x, [16, 16], [0, 0])
-        pypto.assemble(a, [0, 0], y)   # write y rows [0, 16)
-        pypto.assemble(a, [8, 0], y)   # write y rows [8, 24) -> overlaps [8, 16)
+        pypto.assemble(a, [0, 0], y)  # write y rows [0, 16)
+        pypto.assemble(a, [8, 0], y)  # write y rows [8, 24) -> overlaps [8, 16)
 
     x = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="x")
     y = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="y")
@@ -52,11 +55,12 @@ def test_waw_conflict():
 
 def test_waw_no_conflict():
     """Two disjoint Assembles -> no WAW token edge."""
+
     def foo(x, y):
         pypto.set_vec_tile_shapes(16, 16)
         a = pypto.view(x, [16, 16], [0, 0])
-        pypto.assemble(a, [0, 0], y)    # write y rows [0, 16)
-        pypto.assemble(a, [16, 0], y)   # write y rows [16, 32) -> disjoint
+        pypto.assemble(a, [0, 0], y)  # write y rows [0, 16)
+        pypto.assemble(a, [16, 0], y)  # write y rows [16, 32) -> disjoint
 
     x = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="x")
     y = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="y")
@@ -70,14 +74,16 @@ def test_waw_no_conflict():
 
 # ---------- Write-After-Read ----------
 
+
 def test_war_conflict():
     """A read of y followed by an overlapping write of y -> WAR token edge."""
+
     def foo(x, y):
         pypto.set_vec_tile_shapes(16, 16)
-        ry = pypto.view(y, [16, 16], [0, 0])   # read y rows [0, 16)
+        ry = pypto.view(y, [16, 16], [0, 0])  # read y rows [0, 16)
         a = pypto.view(x, [16, 16], [0, 0])
-        s = pypto.add(ry, a)                    # live read of ry
-        pypto.assemble(s, [8, 0], y)            # write y rows [8, 24) -> overlaps [8, 16)
+        s = pypto.add(ry, a)  # live read of ry
+        pypto.assemble(s, [8, 0], y)  # write y rows [8, 24) -> overlaps [8, 16)
 
     x = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="x")
     y = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="y")
@@ -91,12 +97,13 @@ def test_war_conflict():
 
 def test_war_no_conflict():
     """A read of y followed by a disjoint write of y -> no WAR token edge."""
+
     def foo(x, y):
         pypto.set_vec_tile_shapes(16, 16)
-        ry = pypto.view(y, [16, 16], [0, 0])   # read y rows [0, 16)
+        ry = pypto.view(y, [16, 16], [0, 0])  # read y rows [0, 16)
         a = pypto.view(x, [16, 16], [0, 0])
-        s = pypto.add(ry, a)                    # live read of ry
-        pypto.assemble(s, [16, 0], y)           # write y rows [16, 32) -> disjoint
+        s = pypto.add(ry, a)  # live read of ry
+        pypto.assemble(s, [16, 0], y)  # write y rows [16, 32) -> disjoint
 
     x = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="x")
     y = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="y")
@@ -109,12 +116,13 @@ def test_war_no_conflict():
 
 def test_scalar_dependency():
     """A read of y followed by a disjoint write of y -> no WAR token edge."""
+
     def foo(x, y):
         pypto.set_vec_tile_shapes(16, 16)
         off = pypto.arange(4)[0]
-        a = pypto.view(x, [16, 16], [off, 0])   # a depends off, should have a token
+        a = pypto.view(x, [16, 16], [off, 0])  # a depends off, should have a token
         s = pypto.add(a, a)
-        pypto.assemble(s, [off, 0], y) # y depends off, should have a token
+        pypto.assemble(s, [off, 0], y)  # y depends off, should have a token
 
     x = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="x")
     y = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="y")
@@ -122,7 +130,7 @@ def test_scalar_dependency():
 
     ops = _assembles(func)
     assert len(ops) == 2
-    assert ops[0].result_token is not None # assemble used generate by get_tensor_data
+    assert ops[0].result_token is not None  # assemble used generate by get_tensor_data
     assert len(ops[1].tokens) == 1
 
 

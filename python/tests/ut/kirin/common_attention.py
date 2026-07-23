@@ -13,13 +13,12 @@
 Test attention codegen - common functions for Kirin9030 and KirinX90
 """
 
-import pypto
-import torch
 import numpy as np
 import pytest
+import torch
 
 from kirin.common import compare_cos
-
+import pypto
 
 TEST_CASES_4INPUT = [
     # kernel_name: name of the kernel
@@ -30,48 +29,94 @@ TEST_CASES_4INPUT = [
     # vec_tile_shape: vector tile shape
     # cube_tile_shapes: cube tile shapes for matmul
     # marks: pytest marks
-    pytest.param("mul_matmul", (16, 16), (16, 16), (16, 16), (16, 16),
-                 (16, 16), ([16, 16], [16, 16], [16, 16]),
-                 marks=[pytest.mark.skip()], id="mul_matmul"),
-    pytest.param("matmul_mul", (16, 16), (16, 16), (16, 16), (16, 16),
-                 (16, 16), ([16, 16], [16, 16], [16, 16]),
-                 marks=[pytest.mark.skip()], id="matmul_mul"),
-    pytest.param("matmul_mul_with_reshape_001",
-                 (1, 1, 1, 256), (1, 1, 256, 128), (1, 1, 1, 128),
-                 (1, 1, 1, 128), (1, 1, 1, 64),
-                 ([16, 16], [64, 128], [64, 128]),
-                 marks=[pytest.mark.skip()],
-                 id="matmul_mul_with_reshape_001"),
-    pytest.param("matmul_mul_with_reshape_002",
-                 (1, 1, 1, 256), (1, 1, 256, 128), (1, 1, 1, 128),
-                 (1, 1, 1, 128), (1, 1, 1, 64),
-                 ([16, 16], [64, 128], [64, 128]),
-                 marks=[pytest.mark.skip()],
-                 id="matmul_mul_with_reshape_002"),
-    pytest.param("matmul_mul_with_reshape_003",
-                 (1, 16, 1, 256), (1, 16, 256, 128), (1, 16, 1, 128),
-                 (1, 16, 1, 128), (1, 1, 1, 64),
-                 ([16, 16], [64, 128], [64, 128]),
-                 marks=[pytest.mark.skip()],
-                 id="matmul_mul_with_reshape_003"),
-    pytest.param("mul_matmul_with_reshape_001",
-                 (1, 1, 16, 16), (1, 1, 16, 16), (1, 1, 16, 16),
-                 (1, 1, 16, 16), (1, 1, 16, 16),
-                 ([16, 16], [16, 16], [16, 16]),
-                 marks=[pytest.mark.skip()],
-                 id="mul_matmul_with_reshape_001"),
-    pytest.param("mul_matmul_with_reshape_002",
-                 (1, 1, 1, 256), (1, 1, 1, 256), (1, 1, 256, 128),
-                 (1, 1, 1, 128), (1, 1, 1, 64),
-                 ([16, 16], [64, 128], [64, 128]),
-                 marks=[pytest.mark.skip()],
-                 id="mul_matmul_with_reshape_002"),
-    pytest.param("mul_matmul_with_reshape_003",
-                 (1, 16, 1, 256), (1, 16, 1, 256), (1, 16, 256, 128),
-                 (1, 16, 1, 128), (1, 1, 1, 64),
-                 ([16, 16], [64, 128], [64, 128]),
-                 marks=[pytest.mark.skip()],
-                 id="mul_matmul_with_reshape_003"),
+    pytest.param(
+        "mul_matmul",
+        (16, 16),
+        (16, 16),
+        (16, 16),
+        (16, 16),
+        (16, 16),
+        ([16, 16], [16, 16], [16, 16]),
+        marks=[pytest.mark.skip()],
+        id="mul_matmul",
+    ),
+    pytest.param(
+        "matmul_mul",
+        (16, 16),
+        (16, 16),
+        (16, 16),
+        (16, 16),
+        (16, 16),
+        ([16, 16], [16, 16], [16, 16]),
+        marks=[pytest.mark.skip()],
+        id="matmul_mul",
+    ),
+    pytest.param(
+        "matmul_mul_with_reshape_001",
+        (1, 1, 1, 256),
+        (1, 1, 256, 128),
+        (1, 1, 1, 128),
+        (1, 1, 1, 128),
+        (1, 1, 1, 64),
+        ([16, 16], [64, 128], [64, 128]),
+        marks=[pytest.mark.skip()],
+        id="matmul_mul_with_reshape_001",
+    ),
+    pytest.param(
+        "matmul_mul_with_reshape_002",
+        (1, 1, 1, 256),
+        (1, 1, 256, 128),
+        (1, 1, 1, 128),
+        (1, 1, 1, 128),
+        (1, 1, 1, 64),
+        ([16, 16], [64, 128], [64, 128]),
+        marks=[pytest.mark.skip()],
+        id="matmul_mul_with_reshape_002",
+    ),
+    pytest.param(
+        "matmul_mul_with_reshape_003",
+        (1, 16, 1, 256),
+        (1, 16, 256, 128),
+        (1, 16, 1, 128),
+        (1, 16, 1, 128),
+        (1, 1, 1, 64),
+        ([16, 16], [64, 128], [64, 128]),
+        marks=[pytest.mark.skip()],
+        id="matmul_mul_with_reshape_003",
+    ),
+    pytest.param(
+        "mul_matmul_with_reshape_001",
+        (1, 1, 16, 16),
+        (1, 1, 16, 16),
+        (1, 1, 16, 16),
+        (1, 1, 16, 16),
+        (1, 1, 16, 16),
+        ([16, 16], [16, 16], [16, 16]),
+        marks=[pytest.mark.skip()],
+        id="mul_matmul_with_reshape_001",
+    ),
+    pytest.param(
+        "mul_matmul_with_reshape_002",
+        (1, 1, 1, 256),
+        (1, 1, 1, 256),
+        (1, 1, 256, 128),
+        (1, 1, 1, 128),
+        (1, 1, 1, 64),
+        ([16, 16], [64, 128], [64, 128]),
+        marks=[pytest.mark.skip()],
+        id="mul_matmul_with_reshape_002",
+    ),
+    pytest.param(
+        "mul_matmul_with_reshape_003",
+        (1, 16, 1, 256),
+        (1, 16, 1, 256),
+        (1, 16, 256, 128),
+        (1, 16, 1, 128),
+        (1, 1, 1, 64),
+        ([16, 16], [64, 128], [64, 128]),
+        marks=[pytest.mark.skip()],
+        id="mul_matmul_with_reshape_003",
+    ),
 ]
 
 TEST_CASES_ATTENTION = [
@@ -84,21 +129,42 @@ TEST_CASES_ATTENTION = [
     # vec_tile_shape: vector tile shape
     # cube_tile_shapes: cube tile shapes for matmul
     # marks: pytest marks
-    pytest.param("attention_mini",
-                 (1, 16, 16, 16), (1, 16, 16, 16), (1, 16, 16, 16),
-                 (1, 1, 16, 16), (1, 16, 16, 16), (1, 1, 16, 16),
-                 ([16, 16], [16, 16], [16, 16]),
-                 marks=[pytest.mark.skip()], id="attention_mini"),
-    pytest.param("attention_prefill",
-                 (1, 16, 64, 128), (1, 16, 2048, 128), (1, 16, 2048, 128),
-                 (1, 1, 64, 2048), (1, 16, 64, 128), (1, 1, 64, 64),
-                 ([64, 64], [64, 128], [64, 128]),
-                 marks=[pytest.mark.skip()], id="attention_prefill"),
-    pytest.param("attention_decoder",
-                 (1, 16, 1, 128), (1, 16, 2048, 128), (1, 16, 2048, 128),
-                 (1, 1, 1, 2048), (1, 16, 1, 128), (1, 1, 1, 64),
-                 ([16, 16], [64, 128], [64, 128]),
-                 marks=[pytest.mark.skip()], id="attention_decoder"),
+    pytest.param(
+        "attention_mini",
+        (1, 16, 16, 16),
+        (1, 16, 16, 16),
+        (1, 16, 16, 16),
+        (1, 1, 16, 16),
+        (1, 16, 16, 16),
+        (1, 1, 16, 16),
+        ([16, 16], [16, 16], [16, 16]),
+        marks=[pytest.mark.skip()],
+        id="attention_mini",
+    ),
+    pytest.param(
+        "attention_prefill",
+        (1, 16, 64, 128),
+        (1, 16, 2048, 128),
+        (1, 16, 2048, 128),
+        (1, 1, 64, 2048),
+        (1, 16, 64, 128),
+        (1, 1, 64, 64),
+        ([64, 64], [64, 128], [64, 128]),
+        marks=[pytest.mark.skip()],
+        id="attention_prefill",
+    ),
+    pytest.param(
+        "attention_decoder",
+        (1, 16, 1, 128),
+        (1, 16, 2048, 128),
+        (1, 16, 2048, 128),
+        (1, 1, 1, 2048),
+        (1, 16, 1, 128),
+        (1, 1, 1, 64),
+        ([16, 16], [64, 128], [64, 128]),
+        marks=[pytest.mark.skip()],
+        id="attention_decoder",
+    ),
 ]
 
 
@@ -106,10 +172,7 @@ def _make_4input_kernel(soc_version, name, a_shape, b_shape, c_shape, out_shape,
     vec_tile = vec_tile_shape if vec_tile_shape is not None else (16, 16)
     cube_tile = cube_tile_shape if cube_tile_shape is not None else ([16, 16], [16, 16], [16, 16])
 
-    @pypto.frontend.jit(
-        codegen_options={"soc_version": soc_version},
-        runtime_options={"run_mode": pypto.RunMode.SIM}
-    )
+    @pypto.frontend.jit(codegen_options={"soc_version": soc_version}, runtime_options={"run_mode": pypto.RunMode.SIM})
     def kernel(
         a: pypto.Tensor(a_shape, pypto.DT_FP16),
         b: pypto.Tensor(b_shape, pypto.DT_FP16),
@@ -126,20 +189,18 @@ def _make_4input_kernel(soc_version, name, a_shape, b_shape, c_shape, out_shape,
             pypto.set_vec_tile_shapes(*vec_tile)
             mul = pypto.matmul(a, b, pypto.DT_FP16, a_trans=False, b_trans=False)
             out[:] = pypto.mul(mul, c)
+
     kernel.__name__ = name
     return kernel
 
 
-def _make_attention_kernel(soc_version, name, q_shape, k_shape, v_shape,
-                          attn_mask_shape, output_shape, vec_tile_shape,
-                          cube_tile_shape):
+def _make_attention_kernel(
+    soc_version, name, q_shape, k_shape, v_shape, attn_mask_shape, output_shape, vec_tile_shape, cube_tile_shape
+):
     vec_tile = vec_tile_shape if vec_tile_shape is not None else (1, 1, 16, 16)
     cube_tile = cube_tile_shape if cube_tile_shape is not None else ([16, 16], [16, 16], [16, 16])
 
-    @pypto.frontend.jit(
-        codegen_options={"soc_version": soc_version},
-        runtime_options={"run_mode": pypto.RunMode.SIM}
-    )
+    @pypto.frontend.jit(codegen_options={"soc_version": soc_version}, runtime_options={"run_mode": pypto.RunMode.SIM})
     def kernel(
         q: pypto.Tensor(q_shape, pypto.DT_FP16),
         k: pypto.Tensor(k_shape, pypto.DT_FP16),
@@ -155,6 +216,7 @@ def _make_attention_kernel(soc_version, name, q_shape, k_shape, v_shape,
         softmax_q_k_t = pypto.softmax(q_k_t_mul_add, dim=-1)
         pypto.set_cube_tile_shapes(*cube_tile)
         output[:] = pypto.matmul(softmax_q_k_t, v, pypto.DT_FP16, a_trans=False, b_trans=False)
+
     kernel.__name__ = name
     return kernel
 
@@ -162,15 +224,23 @@ def _make_attention_kernel(soc_version, name, q_shape, k_shape, v_shape,
 def create_attention_kernels(soc_version):
     kernels_4input = {
         p.values[0]: _make_4input_kernel(
-            soc_version, p.values[0], p.values[1], p.values[2], p.values[3], p.values[4], p.values[5], p.values[6])
+            soc_version, p.values[0], p.values[1], p.values[2], p.values[3], p.values[4], p.values[5], p.values[6]
+        )
         for p in TEST_CASES_4INPUT
     }
 
     kernels_attention = {
         p.values[0]: _make_attention_kernel(
-            soc_version, p.values[0], p.values[1], p.values[2],
-            p.values[3], p.values[4], p.values[5],
-            p.values[6], p.values[7])
+            soc_version,
+            p.values[0],
+            p.values[1],
+            p.values[2],
+            p.values[3],
+            p.values[4],
+            p.values[5],
+            p.values[6],
+            p.values[7],
+        )
         for p in TEST_CASES_ATTENTION
     }
 

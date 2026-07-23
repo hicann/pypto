@@ -15,20 +15,21 @@
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
 
-import math
-import sys
 import logging
+import math
 from pathlib import Path
+import sys
 from typing import List
 
-import numpy as np
 from ml_dtypes import bfloat16
+import numpy as np
 
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -39,13 +40,7 @@ if __name__ == "__main__":
 else:
     from golden_register import GoldenRegister
 
-TYPE_CONVERT = {
-    np.float16: "fp16",
-    bfloat16: "bf16",
-    np.float32: "fp32",
-    np.int32: "int32",
-    np.int64: "int64"
-}
+TYPE_CONVERT = {np.float16: "fp16", bfloat16: "bf16", np.float32: "fp32", np.int32: "int32", np.int64: "int64"}
 
 
 def dump_file(data_pool, data_path, type_str):
@@ -86,8 +81,7 @@ def gen_uniform_data(data_shape, min_value, max_value, dtype):
         return np.zeros(data_shape, dtype=dtype)
     if dtype == np.bool_:
         return np.random.choice([True, False], size=data_shape)
-    return np.random.uniform(low=min_value, high=max_value, size=data_shape).astype(
-        dtype)
+    return np.random.uniform(low=min_value, high=max_value, size=data_shape).astype(dtype)
 
 
 def trans_bnsd_to_bsh(tensor, shape):
@@ -159,7 +153,7 @@ def generate_block_table(block_table_shape, actual_seq_len, block_size):
     block_table_batch_idx = 0
     for idx in block_num_per_block:
         for j in range(idx):
-            block_table[block_table_batch_idx][j] = (block_idx_list[block_idx])
+            block_table[block_table_batch_idx][j] = block_idx_list[block_idx]
             block_idx += 1
         block_table_batch_idx += 1
 
@@ -167,7 +161,7 @@ def generate_block_table(block_table_shape, actual_seq_len, block_size):
 
 
 def generate_query(q_bnsd, kv_lora_rank):
-    q_nope = q_bnsd[:, :, :, : kv_lora_rank]
+    q_nope = q_bnsd[:, :, :, :kv_lora_rank]
     q_rope = q_bnsd[:, :, :, kv_lora_rank:]
     return q_nope, q_rope
 
@@ -188,7 +182,8 @@ def generate_cache(tensor_bnsd, shape, block_table, block_num, block_size, dtype
                 continue
             else:
                 tensor_cache[kv_cache_blk_id, 0:block_size, :] = tensor_bsh[
-                                                                 b_idx, block_offset:(block_offset + block_size), :]
+                    b_idx, block_offset:(block_offset + block_size), :
+                ]
 
     return tensor_cache
 
@@ -278,7 +273,7 @@ def pro_log_post_func(case_name: str, output: Path) -> bool:
 
     k_bnsd = gen_uniform_data(shape_k, -1, 1, dtype)
     k_cache = generate_cache(k_bnsd, shape_k, block_table, block_num, block_size, dtype)
-    k_cache_nope = k_cache[:, :, : kv_lora_rank * n_kv]
+    k_cache_nope = k_cache[:, :, :kv_lora_rank * n_kv]
     k_cache_rope = k_cache[:, :, kv_lora_rank * n_kv:]
 
     v_bnsd = gen_uniform_data(shape_v, -1, 1, dtype)

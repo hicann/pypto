@@ -17,18 +17,16 @@ This file contains:
 - Precision and performance tests
 """
 
-import os
-import sys
-import time
 import argparse
 import logging
-from typing import Optional, Tuple, List, Dict, Any
+import os
+import time
+from typing import Any, Dict, Optional, Tuple
 
-import torch
 from numpy.testing import assert_allclose
 import pytest
-
-from sum_lstm import sum_lstm, LstmConfig
+from sum_lstm import LstmConfig, sum_lstm
+import torch
 
 BATCH_SIZE = 32
 D_GATE = 4096
@@ -156,9 +154,16 @@ def run_precision_test(kernel_func, data: Dict[str, Any]):
 
     # 2. Run Golden
     golden_h, golden_c = sum_lstm_golden(
-        t_in[0], t_in[1], t_in[2],
-        alpha=cfg.alpha, eps_cell=cfg.eps_cell, eps_state=cfg.eps_state,
-        w_cell=t_in[3], b_cell=t_in[4], w_state=t_in[5], b_state=t_in[6]
+        t_in[0],
+        t_in[1],
+        t_in[2],
+        alpha=cfg.alpha,
+        eps_cell=cfg.eps_cell,
+        eps_state=cfg.eps_state,
+        w_cell=t_in[3],
+        b_cell=t_in[4],
+        w_state=t_in[5],
+        b_state=t_in[6],
     )
 
     # 3. Compare
@@ -214,9 +219,16 @@ def run_performance_test(kernel_func, data: Dict[str, Any]):
 
     def run_golden():
         sum_lstm_golden(
-            t_in[0], t_in[1], t_in[2],
-            alpha=cfg.alpha, eps_cell=cfg.eps_cell, eps_state=cfg.eps_state,
-            w_cell=t_in[3], b_cell=t_in[4], w_state=t_in[5], b_state=t_in[6]
+            t_in[0],
+            t_in[1],
+            t_in[2],
+            alpha=cfg.alpha,
+            eps_cell=cfg.eps_cell,
+            eps_state=cfg.eps_state,
+            w_cell=t_in[3],
+            b_cell=t_in[4],
+            w_state=t_in[5],
+            b_state=t_in[6],
         )
 
     # Benchmark
@@ -253,9 +265,13 @@ def get_device_id():
 def main():
     parser = argparse.ArgumentParser(description="Run Arctic LSTM PyPTO Example")
     parser.add_argument('--run_mode', type=str, default="npu", choices=["npu", "sim"])
-    parser.add_argument('--test_type', type=str, default="precision",
-                    choices=["precision", "performance", "all"],
-                    help="Choose test type: check correctness or measure performance.")
+    parser.add_argument(
+        '--test_type',
+        type=str,
+        default="precision",
+        choices=["precision", "performance", "all"],
+        help="Choose test type: check correctness or measure performance.",
+    )
     args = parser.parse_args()
 
     # # Enable debug options for development
@@ -263,7 +279,6 @@ def main():
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
 

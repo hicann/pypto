@@ -12,9 +12,8 @@
 Test index_put_ codegen for KirinX90
 """
 
+from kirin.common_index_put_ import TEST_CASES, create_index_put_kernels, run_index_put_test
 import pytest
-from kirin.common_index_put_ import create_index_put_kernels, run_index_put_test, TEST_CASES
-
 
 KERNELS = create_index_put_kernels("KirinX90")
 
@@ -25,12 +24,31 @@ KERNELS = create_index_put_kernels("KirinX90")
     "vec_tile_shape,accumulate",
     TEST_CASES,
 )
-def test_index_put_(kernel_name, torch_x_dtype, pypto_x_dtype,
-                   torch_indices_dtype, pypto_indices_dtype, shape_x,
-                   shape_indices, shape_values, vec_tile_shape, accumulate):
-    run_index_put_test(KERNELS, kernel_name, torch_x_dtype, pypto_x_dtype,
-                       torch_indices_dtype, pypto_indices_dtype, shape_x,
-                       shape_indices, shape_values, vec_tile_shape, accumulate)
+def test_index_put_(
+    kernel_name,
+    torch_x_dtype,
+    pypto_x_dtype,
+    torch_indices_dtype,
+    pypto_indices_dtype,
+    shape_x,
+    shape_indices,
+    shape_values,
+    vec_tile_shape,
+    accumulate,
+):
+    run_index_put_test(
+        KERNELS,
+        kernel_name,
+        torch_x_dtype,
+        pypto_x_dtype,
+        torch_indices_dtype,
+        pypto_indices_dtype,
+        shape_x,
+        shape_indices,
+        shape_values,
+        vec_tile_shape,
+        accumulate,
+    )
 
 
 if __name__ == "__main__":

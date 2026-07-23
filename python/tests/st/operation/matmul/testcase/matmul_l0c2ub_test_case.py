@@ -16,13 +16,15 @@ pypto MatmulL0C2UB ST测试用例配置
 
 from dataclasses import dataclass
 
-import pypto
 import torch
+
+import pypto
 
 
 @dataclass
 class MatmulL0C2UBConfig:
     """MatmulL0C2UB 配置参数"""
+
     shape: tuple[int, int, int]
     tile_shape: tuple[list, list, list]
     vec_tile_shape: tuple[int, int]
@@ -77,7 +79,9 @@ L0C2UB_TESTS = [
         "id": "L01",
         "name": "fp16_TInsert",
         "desc": "FP16 输入 FP16 输出, L0C_COPY_UB小搬大",
-        "m": 129, "k": 256, "n": 513,
+        "m": 129,
+        "k": 256,
+        "n": 513,
         "a_dtype": "DT_FP16",
         "b_dtype": "DT_FP16",
         "c_dtype": "DT_FP16",
@@ -95,7 +99,9 @@ L0C2UB_TESTS = [
         "id": "L02",
         "name": "bf16_TExtract",
         "desc": "BF16 输入 BF16 输出, L0C_COPY_UB大搬小",
-        "m": 3, "k": 128, "n": 129,
+        "m": 3,
+        "k": 128,
+        "n": 129,
         "a_dtype": "DT_BF16",
         "b_dtype": "DT_BF16",
         "c_dtype": "DT_BF16",
@@ -113,7 +119,9 @@ L0C2UB_TESTS = [
         "id": "L03",
         "name": "fp32_toGM",
         "desc": "不满足L0C_COPY_UB约束用例",
-        "m": 127, "k": 256, "n": 511,
+        "m": 127,
+        "k": 256,
+        "n": 511,
         "a_dtype": "DT_FP32",
         "b_dtype": "DT_FP32",
         "c_dtype": "DT_FP32",

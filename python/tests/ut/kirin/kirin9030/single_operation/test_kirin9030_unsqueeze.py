@@ -12,14 +12,12 @@
 Test unsqueeze codegen for Kirin9030
 """
 
-import pytest
-
 from kirin.common_unsqueeze import (
+    TEST_CASES,
     create_unsqueeze_kernels,
     run_unsqueeze_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_unsqueeze_kernels("Kirin9030")
 
@@ -28,8 +26,7 @@ KERNELS = create_unsqueeze_kernels("Kirin9030")
     "kernel_name,torch_dtype,pypto_dtype,tile_shapes,kernel_shape,test_shape,shape_out,dim",
     TEST_CASES,
 )
-def test_unsqueeze(kernel_name, torch_dtype, pypto_dtype, tile_shapes,
-                   kernel_shape, test_shape, shape_out, dim):
+def test_unsqueeze(kernel_name, torch_dtype, pypto_dtype, tile_shapes, kernel_shape, test_shape, shape_out, dim):
     run_unsqueeze_test(KERNELS, kernel_name, torch_dtype, test_shape, shape_out, dim)
 
 

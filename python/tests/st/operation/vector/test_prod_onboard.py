@@ -12,11 +12,12 @@
 Test Prod block onboard
 """
 
-import os
 import math
-import torch
-import torch_npu
+import os
+
 from numpy.testing import assert_allclose
+import torch
+
 import pypto
 
 
@@ -43,21 +44,14 @@ def test_prod_block_onboard():
                 view_shape,
                 [b_idx * view_shape[0], 0],
                 valid_shape=[
-                    pypto.min(
-                        input_shape[0] - b_idx * view_shape[0],
-                        pypto.symbolic_scalar(view_shape[0])
-                    ),
-                    pypto.symbolic_scalar(view_shape[1])
-                ]
+                    pypto.min(input_shape[0] - b_idx * view_shape[0], pypto.symbolic_scalar(view_shape[0])),
+                    pypto.symbolic_scalar(view_shape[1]),
+                ],
             )
             pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
 
             block_result = pypto.prod(view_tensor, 1)
-            pypto.assemble(
-                block_result,
-                [b_idx * view_shape[0]],
-                dst_tensor
-            )
+            pypto.assemble(block_result, [b_idx * view_shape[0]], dst_tensor)
 
     a_tensor = torch.randn(input_shape, dtype=torch.float32)
     b_tensor = torch.zeros(input_shape[0], dtype=torch.float32)

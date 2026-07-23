@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
+
 import torch
 
 
@@ -31,15 +32,13 @@ def gen_uniform_data(data_shape, min_value, max_value, dtype):
     # 整数类型：[min_value, max_value)
     else:
         # torch.randint的high参数为开区间，直接对应[min_value, max_value)
-        return torch.randint(
-            low=min_value, high=max_value, size=data_shape, dtype=dtype
-        )
+        return torch.randint(low=min_value, high=max_value, size=data_shape, dtype=dtype)
 
 
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
-    x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2 :]
+    x1 = x[..., :x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2:]
     return torch.cat((-x2, x1), dim=-1)
 
 

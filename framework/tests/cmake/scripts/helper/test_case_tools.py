@@ -67,6 +67,7 @@ def str_to_bool(input_str: str):
 def get_dtype_by_name(name: str, is_torch: bool = False, check: bool = True):
     if pkgutil.find_loader("ml_dtypes"):
         from ml_dtypes import bfloat16, float8_e4m3fn, float8_e5m2
+
         fp8_e4m3_np = float8_e4m3fn
         fp8_e5m2_np = float8_e5m2
     else:
@@ -101,12 +102,15 @@ def get_dtype_by_name(name: str, is_torch: bool = False, check: bool = True):
         "bf16": [bfloat16, torch.bfloat16],
         "fp4_e2m1x2": [np.uint8, torch.uint8],
         "fp4_e1m2x2": [np.uint8, torch.uint8],
-        "fp8e4m3": [fp8_e4m3_np if fp8_e4m3_np is not None else np.uint8,
-                     fp8_e4m3_torch if fp8_e4m3_torch is not None else np.uint8],
-        "fp8e5m2": [fp8_e5m2_np if fp8_e5m2_np is not None else np.uint8,
-                     fp8_e5m2_torch if fp8_e5m2_torch is not None else np.uint8],
-        "fp8e8m0": [np.uint8,
-                     fp8_e8m0_torch if fp8_e8m0_torch is not None else np.uint8],
+        "fp8e4m3": [
+            fp8_e4m3_np if fp8_e4m3_np is not None else np.uint8,
+            fp8_e4m3_torch if fp8_e4m3_torch is not None else np.uint8,
+        ],
+        "fp8e5m2": [
+            fp8_e5m2_np if fp8_e5m2_np is not None else np.uint8,
+            fp8_e5m2_torch if fp8_e5m2_torch is not None else np.uint8,
+        ],
+        "fp8e8m0": [np.uint8, fp8_e8m0_torch if fp8_e8m0_torch is not None else np.uint8],
         "hf8": [np.uint8, torch.uint8],
     }
     return str_to_dtype.get(name, [np.float32, torch.float32])[is_torch]
@@ -125,10 +129,7 @@ def parse_dict_str(input_str: str):
     while value_index < len(key_values):
         if ":" in key_values[value_index]:
             key, value = key_values[value_index].split(":")
-            while (
-                value_index + 1 < len(key_values)
-                and ":" not in key_values[value_index + 1]
-            ):
+            while value_index + 1 < len(key_values) and ":" not in key_values[value_index + 1]:
                 value += "," + key_values[value_index + 1]
                 value_index += 1
             res[key] = value

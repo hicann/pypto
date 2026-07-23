@@ -8,14 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import sys
+""" """
+
 import enum
+from functools import wraps
 import logging
 import re
-from typing import List, Tuple, Union, Dict, Optional
-from functools import wraps
+import sys
+from typing import Dict, List, Optional, Tuple, Union
 
 from . import pypto_impl
 from .error import FeError
@@ -51,31 +51,38 @@ def _encode_cube_l1_reuse_side(setting: dict) -> dict:
     for key, val in setting.items():
         if isinstance(val, (tuple, list)):
             if len(val) != 2:
-                raise FeError(ValueError(
-                    f"cube_l1_reuse_setting[{key!r}] tuple must be (count, side), "
-                    f"but got length {len(val)}."
-                ))
+                raise FeError(
+                    ValueError(
+                        f"cube_l1_reuse_setting[{key!r}] tuple must be (count, side), but got length {len(val)}."
+                    )
+                )
             count, side = val
             # count is the merge granularity (>=1; 1 means no merge). Reject <1 here so the
             # user gets a clear message instead of C++'s "Invalid merge count" after decoding.
             if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count < _L1_REUSE_SIDE_BASE:
-                raise FeError(ValueError(
-                    f"cube_l1_reuse_setting[{key!r}] merge count must be an int in [1, {_L1_REUSE_SIDE_BASE}), "
-                    f"but got {count!r}."
-                ))
+                raise FeError(
+                    ValueError(
+                        f"cube_l1_reuse_setting[{key!r}] merge count must be an int in [1, {_L1_REUSE_SIDE_BASE}), "
+                        f"but got {count!r}."
+                    )
+                )
             if not isinstance(side, str) or side.lower() not in _MATRIX_SIDE_TO_CODE:
-                raise FeError(ValueError(
-                    f"cube_l1_reuse_setting[{key!r}] side must be one of "
-                    f"{sorted(_MATRIX_SIDE_TO_CODE)}, but got {side!r}."
-                ))
+                raise FeError(
+                    ValueError(
+                        f"cube_l1_reuse_setting[{key!r}] side must be one of "
+                        f"{sorted(_MATRIX_SIDE_TO_CODE)}, but got {side!r}."
+                    )
+                )
             encoded[key] = _MATRIX_SIDE_TO_CODE[side.lower()] * _L1_REUSE_SIDE_BASE + count
         elif isinstance(val, int) and not isinstance(val, bool):
             encoded[key] = val
         else:
-            raise FeError(TypeError(
-                f"cube_l1_reuse_setting[{key!r}] value must be int or (count, side) tuple, "
-                f"but got {type(val).__name__}."
-            ))
+            raise FeError(
+                TypeError(
+                    f"cube_l1_reuse_setting[{key!r}] value must be int or (count, side) tuple, "
+                    f"but got {type(val).__name__}."
+                )
+            )
     return encoded
 
 
@@ -92,7 +99,11 @@ def _decode_cube_l1_reuse_side(value: int):
         logging.warning(
             "cube_l1_reuse_setting: cannot decode matrix side from packed value %d "
             "(side code %d not in %s); returning merge count %d only.",
-            value, side_code, sorted(_MATRIX_SIDE_FROM_CODE), count)
+            value,
+            side_code,
+            sorted(_MATRIX_SIDE_FROM_CODE),
+            count,
+        )
         return count
     return (count, side)
 
@@ -114,18 +125,19 @@ def _validate_hash_order_setting(setting_dict: Optional[Dict[Union[int, str], in
                 has_func_keys = True
 
     if has_int_keys and has_func_keys:
-        raise FeError(ValueError(
-            f"{param_name} cannot mix integer keys with func/DEFAULT keys. "
-            f"Please use either all integer keys or all func/DEFAULT keys."
-        ))
+        raise FeError(
+            ValueError(
+                f"{param_name} cannot mix integer keys with func/DEFAULT keys. "
+                f"Please use either all integer keys or all func/DEFAULT keys."
+            )
+        )
 
 
 def _validate_scope_id(scope_id: int):
     if scope_id < -1 or scope_id > 2147483647:
-        raise FeError(ValueError(
-            f"Option 'pass.sg_set_scope' scope_id {scope_id} is out of range. "
-            f"Expected -1~2147483647."
-        ))
+        raise FeError(
+            ValueError(f"Option 'pass.sg_set_scope' scope_id {scope_id} is out of range. Expected -1~2147483647.")
+        )
 
 
 def _process_sg_set_scope(sg_set_scope: Union[int, tuple, list]) -> list:
@@ -134,39 +146,47 @@ def _process_sg_set_scope(sg_set_scope: Union[int, tuple, list]) -> list:
         return [sg_set_scope, False, False]
     if isinstance(sg_set_scope, (tuple, list)):
         if len(sg_set_scope) != 3:
-            raise FeError(ValueError(
-                f"Option 'pass.sg_set_scope' has invalid length. "
-                f"Expected 3, but got {len(sg_set_scope)}."
-            ))
+            raise FeError(
+                ValueError(f"Option 'pass.sg_set_scope' has invalid length. Expected 3, but got {len(sg_set_scope)}.")
+            )
         if not isinstance(sg_set_scope[0], int):
-            raise FeError(ValueError(
-                f"Option 'pass.sg_set_scope[0]' has invalid type. "
-                f"Expected int, but got {type(sg_set_scope[0]).__name__}."
-            ))
+            raise FeError(
+                ValueError(
+                    f"Option 'pass.sg_set_scope[0]' has invalid type. "
+                    f"Expected int, but got {type(sg_set_scope[0]).__name__}."
+                )
+            )
         _validate_scope_id(sg_set_scope[0])
         if not isinstance(sg_set_scope[1], bool):
-            raise FeError(ValueError(
-                f"Option 'pass.sg_set_scope[1]' has invalid type. "
-                f"Expected bool, but got {type(sg_set_scope[1]).__name__}."
-            ))
+            raise FeError(
+                ValueError(
+                    f"Option 'pass.sg_set_scope[1]' has invalid type. "
+                    f"Expected bool, but got {type(sg_set_scope[1]).__name__}."
+                )
+            )
         if not isinstance(sg_set_scope[2], bool):
-            raise FeError(ValueError(
-                f"Option 'pass.sg_set_scope[2]' has invalid type. "
-                f"Expected bool, but got {type(sg_set_scope[2]).__name__}."
-            ))
+            raise FeError(
+                ValueError(
+                    f"Option 'pass.sg_set_scope[2]' has invalid type. "
+                    f"Expected bool, but got {type(sg_set_scope[2]).__name__}."
+                )
+            )
         return list(sg_set_scope)
-    raise FeError(TypeError(
-        f"Option 'pass.sg_set_scope' has invalid type. "
-        f"Expected int64 or tuple, but got {type(sg_set_scope).__name__}."
-    ))
+    raise FeError(
+        TypeError(
+            f"Option 'pass.sg_set_scope' has invalid type. "
+            f"Expected int64 or tuple, but got {type(sg_set_scope).__name__}."
+        )
+    )
 
 
-def set_print_options(*,
-                     edgeitems: Optional[int] = 3,
-                     precision: Optional[int] = 4,
-                     threshold: Optional[int] = 10,
-                     linewidth: Optional[int] = 10,
-                     ) -> None:
+def set_print_options(
+    *,
+    edgeitems: Optional[int] = 3,
+    precision: Optional[int] = 4,
+    threshold: Optional[int] = 10,
+    linewidth: Optional[int] = 10,
+) -> None:
     """
     Set tensor print options.
 
@@ -187,17 +207,17 @@ def set_print_options(*,
     pypto_impl.SetPrintOptions(edgeitems, precision, threshold, linewidth)
 
 
-def set_pass_options(*,
-                     vec_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
-                     cube_l1_reuse_setting: Optional[
-                         Dict[Union[int, str], Union[int, Tuple[int, str]]]] = None,
-                     cube_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
-                     sg_set_scope: Optional[Union[int, Tuple[int, bool, bool]]] = None,
-                     sg_set_ooo_scope: Optional[int] = None,
-                     ooo_sched_mode: Optional[str] = None,
-                     auto_mix_partition: Optional[int] = None,
-                     sg_set_tunevf_mode: Optional[int] = None,
-                     ) -> None:
+def set_pass_options(
+    *,
+    vec_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
+    cube_l1_reuse_setting: Optional[Dict[Union[int, str], Union[int, Tuple[int, str]]]] = None,
+    cube_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
+    sg_set_scope: Optional[Union[int, Tuple[int, bool, bool]]] = None,
+    sg_set_ooo_scope: Optional[int] = None,
+    ooo_sched_mode: Optional[str] = None,
+    auto_mix_partition: Optional[int] = None,
+    sg_set_tunevf_mode: Optional[int] = None,
+) -> None:
     """
     Set pass options.
 
@@ -273,20 +293,19 @@ def set_pass_options(*,
         pass_options['auto_mix_partition'] = auto_mix_partition
     if sg_set_tunevf_mode is not None:
         if sg_set_tunevf_mode not in (0, 1, 2):
-            raise ValueError(f"Invalid sg_set_tunevf_mode: '{sg_set_tunevf_mode}'. "
-                            f"Expected 0, 1 or 2.")
+            raise ValueError(f"Invalid sg_set_tunevf_mode: '{sg_set_tunevf_mode}'. Expected 0, 1 or 2.")
         pass_options['sg_set_tunevf_mode'] = sg_set_tunevf_mode
     if sg_set_ooo_scope is not None:
         if sg_set_ooo_scope > 0:
             from pypto._controller import Controller
+
             encoded = sg_set_ooo_scope * 10000 + Controller.get_ooo_scope_iter()
             pass_options['sg_set_ooo_scope'] = [encoded]
         else:
             pass_options['sg_set_ooo_scope'] = [-1]
     if ooo_sched_mode is not None:
         if ooo_sched_mode not in ("", "GAPMIN", "HLF"):
-            raise ValueError(f"Invalid ooo_sched_mode: '{ooo_sched_mode}'. "
-                            f"Expected '', 'GAPMIN' or 'HLF'.")
+            raise ValueError(f"Invalid ooo_sched_mode: '{ooo_sched_mode}'. Expected '', 'GAPMIN' or 'HLF'.")
         pass_options['ooo_sched_mode'] = ooo_sched_mode
 
     if pass_options:
@@ -336,12 +355,14 @@ def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], D
     return result
 
 
-
-def set_host_options(*, compile_stage: Optional[CompStage] = None,
-                     compile_monitor_enable: Optional[int] = None,
-                     compile_timeout: Optional[int] = None,
-                     compile_timeout_stage: Optional[int] = None,
-                     compile_monitor_print_interval: Optional[int] = None) -> None:
+def set_host_options(
+    *,
+    compile_stage: Optional[CompStage] = None,
+    compile_monitor_enable: Optional[int] = None,
+    compile_timeout: Optional[int] = None,
+    compile_timeout_stage: Optional[int] = None,
+    compile_monitor_print_interval: Optional[int] = None,
+) -> None:
     """
     Set host options.
 
@@ -380,11 +401,13 @@ def get_host_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]:
     return scope.get_host_options()
 
 
-def set_codegen_options(*,
-                        support_dynamic_aligned: Optional[bool] = None,
-                        soc_version: Optional[str] = None,
-                        enable_pmu_trace: Optional[bool] = None,
-                        vf_options: Optional[str] = None) -> None:
+def set_codegen_options(
+    *,
+    support_dynamic_aligned: Optional[bool] = None,
+    soc_version: Optional[str] = None,
+    enable_pmu_trace: Optional[bool] = None,
+    vf_options: Optional[str] = None,
+) -> None:
     """
     Set codegen options.
 
@@ -419,16 +442,14 @@ def get_codegen_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]
     return scope.get_codegen_options()
 
 
-
-
-
-def set_verify_options(*,
-                       enable_pass_verify: Optional[bool] = None,
-                       pass_verify_save_tensor: Optional[bool] = None,
-                       pass_verify_save_tensor_dir: Optional[str] = None,
-                       pass_verify_pass_filter: Optional[List[str]] = None,
-                       pass_verify_error_tol: Optional[List[float]] = None,
-                       ) -> None:
+def set_verify_options(
+    *,
+    enable_pass_verify: Optional[bool] = None,
+    pass_verify_save_tensor: Optional[bool] = None,
+    pass_verify_save_tensor_dir: Optional[str] = None,
+    pass_verify_pass_filter: Optional[List[str]] = None,
+    pass_verify_error_tol: Optional[List[float]] = None,
+) -> None:
     """
     Set verify options.
 
@@ -471,11 +492,12 @@ def get_verify_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]
     return scope.get_verify_options()
 
 
-def set_debug_options(*,
-                      compile_debug_mode: Optional[int] = None,
-                      runtime_debug_mode: Optional[int] = None,
-                      dump_pass_graph: Optional[List[str]] = None
-                      ) -> None:
+def set_debug_options(
+    *,
+    compile_debug_mode: Optional[int] = None,
+    runtime_debug_mode: Optional[int] = None,
+    dump_pass_graph: Optional[List[str]] = None,
+) -> None:
     """
     Set debug options.
 
@@ -537,10 +559,12 @@ def set_semantic_label(label: str) -> None:
     # Function-granularity hashOrder pattern: func{magic}_{order}
     _func_hash_order_pattern = re.compile(r'^func\d+_\d+$')
     if _func_hash_order_pattern.match(label):
-        raise FeError(ValueError(
-            f"Semantic label '{label}' conflicts with function-granularity hashOrder format. "
-            f"Please use a different label pattern."
-        ))
+        raise FeError(
+            ValueError(
+                f"Semantic label '{label}' conflicts with function-granularity hashOrder format. "
+                f"Please use a different label pattern."
+            )
+        )
 
     frame = sys._getframe(1)
     pypto_impl.SetSemanticLabel(label, frame.f_code.co_filename, frame.f_lineno)
@@ -548,18 +572,27 @@ def set_semantic_label(label: str) -> None:
 
 def reset_options() -> None:
     """
-        Reset all configuration items to their default values.
+    Reset all configuration items to their default values.
     """
     pypto_impl.ResetOptions()
 
 
 class _Options:
     """Configuration options class, supports context manager and decorator modes"""
+
     INIT_FIELDS = [
-        "name", "codegen_options", "host_options", "pass_options",
-        "runtime_options", "verify_options", "debug_options",
-        "vec_tile_shapes", "cube_tile_shapes", "conv_tile_shapes",
-        "matrix_size", "operation_options"
+        "name",
+        "codegen_options",
+        "host_options",
+        "pass_options",
+        "runtime_options",
+        "verify_options",
+        "debug_options",
+        "vec_tile_shapes",
+        "cube_tile_shapes",
+        "conv_tile_shapes",
+        "matrix_size",
+        "operation_options",
     ]
 
     PREFIX_MAP = {
@@ -569,7 +602,7 @@ class _Options:
         "runtime_options": "runtime.",
         "verify_options": "verify.",
         "debug_options": "debug.",
-        "operation_options": "operation."
+        "operation_options": "operation.",
     }
 
     def __init__(self, **kwargs):
@@ -583,8 +616,7 @@ class _Options:
         for attr, prefix in self.PREFIX_MAP.items():
             value = getattr(self, attr)
             if isinstance(value, dict):
-                opts.update(
-                    {f"{prefix}{k}": v.value if isinstance(v, enum.Enum) else v for k, v in value.items()})
+                opts.update({f"{prefix}{k}": v.value if isinstance(v, enum.Enum) else v for k, v in value.items()})
 
         if self.vec_tile_shapes is not None:
             opts["vec_tile_shapes"] = self.vec_tile_shapes
@@ -594,7 +626,6 @@ class _Options:
                 opts["cube_tile_shapes"] = self.cube_tile_shapes._impl
             else:
                 opts["cube_tile_shapes"] = CubeTile(*self.cube_tile_shapes)._impl
-
 
         if self.conv_tile_shapes is not None:
             if isinstance(self.conv_tile_shapes, ConvTile):
@@ -643,6 +674,7 @@ class _Options:
         def wrapper(*args, **kwargs):
             with self:
                 return func(*args, **kwargs)
+
         return wrapper
 
 
@@ -761,6 +793,7 @@ def get_options_tree():
 
 class CubeTile:
     """CubeTile"""
+
     def __init__(self, m: List[int], k: List[int], n: List[int], enable_split_k: bool = False):
         """
         CubeTile tile for matmul operation, m[0], k[0], n[0] for L0 Cache, m[1], k[1], n[1] for L1 Cache
@@ -812,8 +845,10 @@ class CubeTile:
 
 class ConvTile:
     """ConvTile"""
-    def __init__(self, tile_l1_info: pypto_impl.TileL1Info, tile_l0_info: pypto_impl.TileL0Info,
-                 set_l0_tile: bool = False):
+
+    def __init__(
+        self, tile_l1_info: pypto_impl.TileL1Info, tile_l0_info: pypto_impl.TileL0Info, set_l0_tile: bool = False
+    ):
         """
         ConvTile tile for convolution operation, tile_l1_info for L1 Cache, tile_l0_info for L0 Cache
 
@@ -861,7 +896,6 @@ class ConvTile:
 
 
 class ConfigScope:
-
     def __init__(self, cpp_config_scope=None):
         self._options = {}
 

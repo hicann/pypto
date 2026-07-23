@@ -8,19 +8,21 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import os
-import torch
-import torch_npu
+
+from glm_ffn_common_interface import swiglu, symmetric_quantization_per_token
 import numpy as np
 from numpy.testing import assert_allclose
-from torch._subclasses.fake_tensor import FakeTensor
-from torch._dynamo import allow_in_graph
-import pypto
 import pytest
+import torch
+from torch._dynamo import allow_in_graph
+from torch._subclasses.fake_tensor import FakeTensor
+import torch_npu
 from utils.get_format import get_format
-from glm_ffn_common_interface import symmetric_quantization_per_token, dequant_dynamic, swiglu
+
+import pypto
 
 
 def check_cond(cond, msg):
@@ -42,17 +44,17 @@ def powers_of_2(n: int) -> set[int]:
 
 
 def check_args(
-        gate_weight: torch.Tensor,
-        hidden_states: torch.Tensor,
-        top_k: int,
-        renormalize: bool,
-        topk_group: int,
-        num_expert_group: int,
-        e_score_correction_bias: torch.Tensor,
-        w13,
-        w13_scale,
-        w2,
-        w2_scale
+    gate_weight: torch.Tensor,
+    hidden_states: torch.Tensor,
+    top_k: int,
+    renormalize: bool,
+    topk_group: int,
+    num_expert_group: int,
+    e_score_correction_bias: torch.Tensor,
+    w13,
+    w13_scale,
+    w2,
+    w2_scale,
 ) -> None:
     check_cond(gate_weight.dim() == 2, "invalid gate weight dim.")
     check_cond(gate_weight.shape[0] == 160, "invalid gate weight shape.")
@@ -103,7 +105,7 @@ def gen_quan_per_channel_weight_nz(x):
     y_int8 = torch.trunc(y_round).to(torch.int8)
     # NZ out
     y_int8_nz = torch_npu.npu_format_cast(y_int8, 29)
-    scale_dequant = (1 / scale_quant)
+    scale_dequant = 1 / scale_quant
     return y_int8_nz, scale_dequant
 
 
@@ -112,10 +114,8 @@ NZ = pypto.TileOpFormat.TILEOP_NZ
 
 
 @pypto.frontend.jit(
-    runtime_options={"device_sched_mode": 1,
-                     "stitch_function_max_num": 128},
-    pass_options={"cube_l1_reuse_setting": {-1: 2},
-                  "cube_nbuffer_setting": {2: 2}}
+    runtime_options={"device_sched_mode": 1, "stitch_function_max_num": 128},
+    pass_options={"cube_l1_reuse_setting": {-1: 2}, "cube_nbuffer_setting": {2: 2}},
 )
 def moe_fusion_kernel(
     hidden_states: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16, format=ND),
@@ -154,8 +154,9 @@ def moe_fusion_kernel(
     pypto.set_vec_tile_shapes(hidden_size)
     w2_scale_2d = pypto.reshape(w2_scale, [1, hidden_size], inplace=True)  # (5120) -> (1,5120)
     # 4. 实现kernel逻辑，循环展开BS动态轴
-    for bs_idx, tile_batch in pypto.loop_unroll(0, bs, 1, name="LOOP_MOE_FUSION_L0", idx_name="bs_idx",
-                                                unroll_list=powers_of_2(16)):
+    for bs_idx, tile_batch in pypto.loop_unroll(
+        0, bs, 1, name="LOOP_MOE_FUSION_L0", idx_name="bs_idx", unroll_list=powers_of_2(16)
+    ):
         # 5. 通过view得到tile_logits
         tile_hidden_states = hidden_states[bs_idx:bs_idx + tile_batch, :]
 
@@ -168,8 +169,9 @@ def moe_fusion_kernel(
             pypto.set_vec_tile_shapes(16, 1024)
             tile_mm_weight_fp32 = pypto.cast(mm_weight[tmp_idx * 16:tmp_idx * 16 + 16, :], pypto.DT_FP32)
             pypto.set_cube_tile_shapes([min(tile_batch, 32), min(tile_batch, 32)], [512, 1024], [16, 16])
-            res_tmp = pypto.matmul(tile_hidden_states_fp32, tile_mm_weight_fp32,
-                                   tile_hidden_states_fp32.dtype, b_trans=True)
+            res_tmp = pypto.matmul(
+                tile_hidden_states_fp32, tile_mm_weight_fp32, tile_hidden_states_fp32.dtype, b_trans=True
+            )
             pypto.assemble(res_tmp, [0, tmp_idx * 16], res)
         pypto.set_pass_options(sg_set_scope=-1)
         # gate end
@@ -271,15 +273,18 @@ def moe_fusion_kernel(
             x_mul = pypto.mul(x_fp32[:, ki * k_split_shape:ki * k_split_shape + k_split_shape], x_scale)
             x_int32 = pypto.cast(x_mul, pypto.DT_INT32, pypto.CastMode.CAST_RINT)
             x_fp16 = pypto.cast(x_int32, pypto.DT_FP16, pypto.CastMode.CAST_ROUND)
-            hidden_states_quant = pypto.cast(x_fp16, pypto.DT_INT8,
-                                             pypto.CastMode.CAST_TRUNC, satmode=pypto.SaturationMode.ON)
+            hidden_states_quant = pypto.cast(
+                x_fp16, pypto.DT_INT8, pypto.CastMode.CAST_TRUNC, satmode=pypto.SaturationMode.ON
+            )
             hidden_states_scale_tmp = pypto.div(pypto.full([shape_0, shape_1], 1.0, pypto.DT_FP32), x_scale)
             pypto.assemble(hidden_states_scale_tmp, [0, 0], hidden_states_scale)
             kn = pypto.view(w13, [k_split_shape, intermediate_size * 2], [ki * k_split_shape, 0])
             # up_proj的matmul计算
-            pypto.set_cube_tile_shapes([tile_batch, tile_batch],
-                                    [mm1_cube_tile_shape[1], mm1_cube_tile_shape[1] * 2],
-                                    [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]])
+            pypto.set_cube_tile_shapes(
+                [tile_batch, tile_batch],
+                [mm1_cube_tile_shape[1], mm1_cube_tile_shape[1] * 2],
+                [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]],
+            )
             res_tmp = pypto.matmul(hidden_states_quant, kn, pypto.DT_INT32)
             pypto.set_pass_options(sg_set_scope=-1)
             matmul_res.append(res_tmp)
@@ -301,9 +306,12 @@ def moe_fusion_kernel(
         pypto.set_pass_options(sg_set_scope=-1)
 
         # down_proj
-        pypto.set_cube_tile_shapes([tile_batch, tile_batch],
-                                [mm2_cube_tile_shape[1], mm2_cube_tile_shape[1] * 2],
-                                [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], False)
+        pypto.set_cube_tile_shapes(
+            [tile_batch, tile_batch],
+            [mm2_cube_tile_shape[1], mm2_cube_tile_shape[1] * 2],
+            [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]],
+            False,
+        )
         pypto.set_pass_options(sg_set_scope=(10003, False, True))
         down_proj = pypto.matmul(down_proj_quant, w2, pypto.DT_INT32)
 
@@ -343,23 +351,22 @@ def test_moe_fusion():
     for bs in [16, 16, 16, 16, 16, 16]:
         # 3. 准备测试数据
         hidden_states = torch.rand((bs, hidden_size), dtype=x_dtype, device=f'npu:{device_id}') * 0.05
-        weight_gate_upper_tensor = torch.rand((hidden_size, intermediate_size * 2),
-                                            dtype=x_dtype, device=f'npu:{device_id}') * 0.05
+        weight_gate_upper_tensor = (
+            torch.rand((hidden_size, intermediate_size * 2), dtype=x_dtype, device=f'npu:{device_id}') * 0.05
+        )
         w13, w13_scale = gen_quan_per_channel_weight_nz(weight_gate_upper_tensor)
         w13_scale = w13_scale.reshape(-1).to(x_dtype)
-        weight_down_proj_tensor = torch.rand((intermediate_size, hidden_size),
-                                            dtype=x_dtype, device=f'npu:{device_id}') * 0.05
+        weight_down_proj_tensor = (
+            torch.rand((intermediate_size, hidden_size), dtype=x_dtype, device=f'npu:{device_id}') * 0.05
+        )
         w2, w2_scale = gen_quan_per_channel_weight_nz(weight_down_proj_tensor)
         w2_scale = w2_scale.reshape(-1).to(x_dtype)
         ffn_res = torch.empty((bs, hidden_size), dtype=x_dtype, device=f'npu:{device_id}')
 
         mm_weight = torch.rand((ne, h_num), dtype=torch.float32, device=f'npu:{device_id}')
-        e_score_bias = torch.rand(
-            (ne), dtype=torch.bfloat16, device=f'npu:{device_id}')
-        topk_weights = torch.empty(
-            (bs, top_k), dtype=torch.float32, device=f'npu:{device_id}')
-        topk_ids = torch.empty(
-            (bs, top_k), dtype=torch.int32, device=f'npu:{device_id}')
+        e_score_bias = torch.rand((ne), dtype=torch.bfloat16, device=f'npu:{device_id}')
+        topk_weights = torch.empty((bs, top_k), dtype=torch.float32, device=f'npu:{device_id}')
+        topk_ids = torch.empty((bs, top_k), dtype=torch.int32, device=f'npu:{device_id}')
 
         # 4. 执行kernel并获取结果
         inputs = [
@@ -373,13 +380,9 @@ def test_moe_fusion():
             w13,
             w13_scale,
             w2,
-            w2_scale
+            w2_scale,
         ]
-        outputs = [
-            topk_weights,
-            topk_ids,
-            ffn_res
-        ]
+        outputs = [topk_weights, topk_ids, ffn_res]
 
         if enable_graph:
             g = torch.npu.NPUGraph()
@@ -398,10 +401,7 @@ def test_moe_fusion():
         tw_view = topk_weights_g_add.view(bs, num_expert_group, -1)
         grouped_weights = tw_view.max(dim=-1).values
 
-        topk_group_indices_g = torch.topk(grouped_weights.to(torch.float32),
-                                          k=topk_group,
-                                          dim=-1,
-                                          sorted=False)[1]
+        topk_group_indices_g = torch.topk(grouped_weights.to(torch.float32), k=topk_group, dim=-1, sorted=False)[1]
         topk_group_mask = torch.zeros_like(grouped_weights)
 
         topk_group_mask.scatter_(1, topk_group_indices_g, 1)
@@ -409,8 +409,7 @@ def test_moe_fusion():
         tgm_expand = tgm_unsquee.expand(bs, num_expert_group, ne // num_expert_group)
         topk_weight_mask = tgm_expand.reshape(bs, -1)
         logical_not_tmp = ~topk_weight_mask.bool()
-        topk_weights_fill = topk_weights_g_add.masked_fill(
-            logical_not_tmp, 0.0)
+        topk_weights_fill = topk_weights_g_add.masked_fill(logical_not_tmp, 0.0)
 
         topk_ids_int64 = torch.topk(topk_weights_fill.to(torch.float32), k=top_k, dim=-1, sorted=False)[1]
         topk_ids_int32 = topk_ids_int64.to(torch.int32)
@@ -429,76 +428,90 @@ def test_moe_fusion():
         x_dtype = hidden_states.dtype
         quantized_x, dynamic_scale = torch_npu.npu_dynamic_quant(hidden_states)
         output_w13 = torch_npu.npu_quant_matmul(
-            quantized_x,
-            w13,
-            w13_scale,
-            pertoken_scale=dynamic_scale,
-            bias=None,
-            output_dtype=x_dtype
+            quantized_x, w13, w13_scale, pertoken_scale=dynamic_scale, bias=None, output_dtype=x_dtype
         )
         swiglu_out = torch_npu.npu_swiglu(output_w13)
         quantized_x, x_scale = torch_npu.npu_dynamic_quant(swiglu_out)
         golden = torch_npu.npu_quant_matmul(
-            quantized_x,
-            w2,
-            w2_scale,
-            pertoken_scale=x_scale,
-            bias=None,
-            output_dtype=x_dtype
+            quantized_x, w2, w2_scale, pertoken_scale=x_scale, bias=None, output_dtype=x_dtype
         )
 
         # weight result
-        assert_allclose(np.array(topk_weights.cpu().flatten().tolist()), np.array(topk_weight_2_tensor_list),
-                        rtol=5e-3, atol=5e-3)
+        assert_allclose(
+            np.array(topk_weights.cpu().flatten().tolist()), np.array(topk_weight_2_tensor_list), rtol=5e-3, atol=5e-3
+        )
 
         # idx result
-        assert_allclose(np.array(topk_ids.cpu().flatten().tolist()), np.array(topk_ids_tensor_list),
-                        rtol=5e-3, atol=5e-3)
+        assert_allclose(
+            np.array(topk_ids.cpu().flatten().tolist()), np.array(topk_ids_tensor_list), rtol=5e-3, atol=5e-3
+        )
 
-        assert_allclose(np.array(ffn_res.cpu().flatten().tolist()), np.array(golden.cpu().flatten().tolist()),
-                        rtol=0.0078125, atol=0.0001)
+        assert_allclose(
+            np.array(ffn_res.cpu().flatten().tolist()),
+            np.array(golden.cpu().flatten().tolist()),
+            rtol=0.0078125,
+            atol=0.0001,
+        )
 
         # 获取编译总耗时
         import pypto.pypto_impl as pypto_impl
+
         total_elapsed = pypto_impl.GetCompilerMonitorTotalElapsed()
         check_cond(total_elapsed <= 30, f"glm_moe_fusion compile elapsed timeout {total_elapsed}s > 30s.")
 
 
 @allow_in_graph
 def moe_fusion(
-        gate_weight: torch.Tensor,  # gate matmul weights
-        hidden_states: torch.Tensor,  # Hidden states of shape (num_tokens, hidden_size).
-        top_k: int,  # number of top k experts.
-        renormalize: bool,
-        topk_group: int,
-        num_expert_group: int,
-        e_score_bias: torch.Tensor,
-        w13: torch.Tensor,
-        w13_scale: torch.Tensor,
-        w2: torch.Tensor,
-        w2_scale: torch.Tensor,
-
-        topk_weights: torch.Tensor,
-        topk_ids: torch.Tensor,
-        ffn_res: torch.Tensor
+    gate_weight: torch.Tensor,  # gate matmul weights
+    hidden_states: torch.Tensor,  # Hidden states of shape (num_tokens, hidden_size).
+    top_k: int,  # number of top k experts.
+    renormalize: bool,
+    topk_group: int,
+    num_expert_group: int,
+    e_score_bias: torch.Tensor,
+    w13: torch.Tensor,
+    w13_scale: torch.Tensor,
+    w2: torch.Tensor,
+    w2_scale: torch.Tensor,
+    topk_weights: torch.Tensor,
+    topk_ids: torch.Tensor,
+    ffn_res: torch.Tensor,
 ):
     if isinstance(hidden_states, FakeTensor):
         return
-    check_args(gate_weight, hidden_states, top_k, renormalize, topk_group, num_expert_group,
-                e_score_bias, w13, w13_scale, w2, w2_scale)
+    check_args(
+        gate_weight,
+        hidden_states,
+        top_k,
+        renormalize,
+        topk_group,
+        num_expert_group,
+        e_score_bias,
+        w13,
+        w13_scale,
+        w2,
+        w2_scale,
+    )
 
-    bs = hidden_states.shape[0]
-    hidden_size = hidden_states.shape[1]
-    inputs = [hidden_states, gate_weight, e_score_bias, w13, w13_scale,
-                w2, w2_scale, topk_weights, topk_ids, ffn_res]
+    _bs = hidden_states.shape[0]
+    _hidden_size = hidden_states.shape[1]
+    inputs = [hidden_states, gate_weight, e_score_bias, w13, w13_scale, w2, w2_scale, topk_weights, topk_ids, ffn_res]
 
     moe_fusion_kernel(*inputs, topk_group, num_expert_group)
 
 
-def moe_fusion_pto(gate_layer, hidden_states, share_layer, top_k, renormalize, topk_group=None, num_expert_group=None,
-                   e_score_correction_bias=None):
+def moe_fusion_pto(
+    gate_layer,
+    hidden_states,
+    share_layer,
+    top_k,
+    renormalize,
+    topk_group=None,
+    num_expert_group=None,
+    e_score_correction_bias=None,
+):
     bs = hidden_states.shape[0]
-    ne = gate_layer.weight.shape[0]
+    _ne = gate_layer.weight.shape[0]
     device_info = hidden_states.device
     topk_weights = torch.empty((bs, top_k), dtype=torch.float32, device=device_info)
     topk_ids = torch.empty((bs, top_k), dtype=torch.int32, device=device_info)
@@ -523,16 +536,15 @@ def moe_fusion_pto(gate_layer, hidden_states, share_layer, top_k, renormalize, t
         w2_scale,
         topk_weights,
         topk_ids,
-        ffn_res
+        ffn_res,
     )
     return topk_weights, topk_ids, ffn_res
 
 
 def main():
-    pypto.set_host_options(compile_monitor_enable=1,
-        compile_timeout=10,
-        compile_timeout_stage=5,
-        compile_monitor_print_interval=2)
+    pypto.set_host_options(
+        compile_monitor_enable=1, compile_timeout=10, compile_timeout_stage=5, compile_monitor_print_interval=2
+    )
     test_moe_fusion()
 
 

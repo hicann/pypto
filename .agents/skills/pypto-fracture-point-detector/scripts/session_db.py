@@ -8,13 +8,13 @@ Provides functions to read session data from opencode's SQLite database.
 This allows the fracture-point-detector skill to access child session data.
 """
 
-import sqlite3
-import json
-import os
-import logging
-from pathlib import Path
-from typing import Optional, Dict, List, Any
 from dataclasses import dataclass, field
+import json
+import logging
+import os
+from pathlib import Path
+import sqlite3
+from typing import Any, Dict, List, Optional
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ DB_PATH = Path(os.environ.get("OPENCODE_DB_PATH", str(DEFAULT_DB_PATH)))
 @dataclass
 class ToolCall:
     """Represents a tool call from a session."""
+
     id: str
     tool: str
     call_id: Optional[str]
@@ -48,6 +49,7 @@ class ToolCall:
 @dataclass
 class SessionInfo:
     """Basic session information."""
+
     id: str
     title: str
     parent_id: Optional[str]
@@ -58,6 +60,7 @@ class SessionInfo:
 @dataclass
 class TextPart:
     """Represents a text part (user message or assistant reply)."""
+
     id: str
     text: str
     time_created: int
@@ -67,6 +70,7 @@ class TextPart:
 @dataclass
 class ReasoningPart:
     """Represents assistant's reasoning process."""
+
     id: str
     text: str
     time_created: int
@@ -75,6 +79,7 @@ class ReasoningPart:
 @dataclass
 class SessionParts:
     """All parts from a session."""
+
     session_id: str
     user_messages: List[TextPart] = field(default_factory=list)
     assistant_replies: List[TextPart] = field(default_factory=list)
@@ -121,9 +126,12 @@ def get_session_title(session_id: str) -> Optional[str]:
     """Get session title by ID."""
     try:
         conn = get_connection()
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT title FROM session WHERE id = ?
-        """, (session_id,))
+        """,
+            (session_id,),
+        )
 
         row = cursor.fetchone()
         conn.close()
@@ -137,22 +145,21 @@ def get_child_sessions(parent_id: str) -> List[SessionInfo]:
     """Get all child sessions of a parent session."""
     try:
         conn = get_connection()
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT id, title, parent_id, time_created, time_updated
             FROM session
             WHERE parent_id = ?
             ORDER BY time_created ASC
-        """, (parent_id,))
+        """,
+            (parent_id,),
+        )
 
         sessions = []
         for row in cursor.fetchall():
-            sessions.append(SessionInfo(
-                id=row[0],
-                title=row[1],
-                parent_id=row[2],
-                time_created=row[3],
-                time_updated=row[4]
-            ))
+            sessions.append(
+                SessionInfo(id=row[0], title=row[1], parent_id=row[2], time_created=row[3], time_updated=row[4])
+            )
 
         conn.close()
         return sessions
@@ -172,23 +179,22 @@ def list_recent_root_sessions(limit: int = 10) -> List[SessionInfo]:
     """
     try:
         conn = get_connection()
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT id, title, parent_id, time_created, time_updated
             FROM session
             WHERE parent_id IS NULL
             ORDER BY time_updated DESC
             LIMIT ?
-        """, (limit,))
+        """,
+            (limit,),
+        )
 
         sessions = []
         for row in cursor.fetchall():
-            sessions.append(SessionInfo(
-                id=row[0],
-                title=row[1],
-                parent_id=row[2],
-                time_created=row[3],
-                time_updated=row[4]
-            ))
+            sessions.append(
+                SessionInfo(id=row[0], title=row[1], parent_id=row[2], time_created=row[3], time_updated=row[4])
+            )
 
         conn.close()
         return sessions
@@ -206,21 +212,27 @@ def get_session_parts(session_id: str) -> SessionParts:
         conn = get_connection()
 
         # First, get message roles
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT id, json_extract(data, '$.role') as role
             FROM message
             WHERE session_id = ?
-        """, (session_id,))
+        """,
+            (session_id,),
+        )
 
         message_roles = {row[0]: row[1] for row in cursor.fetchall()}
 
         # Then, get all parts with message_id
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT id, time_created, message_id, data
             FROM part
             WHERE session_id = ?
             ORDER BY time_created ASC
-        """, (session_id,))
+        """,
+            (session_id,),
+        )
 
         parts = SessionParts(session_id=session_id)
 
@@ -240,42 +252,24 @@ def get_session_parts(session_id: str) -> SessionParts:
                     input=data.get("state", {}).get("input", {}),
                     output=data.get("state", {}).get("output"),
                     error=data.get("state", {}).get("error"),
-                    time_created=time_created
+                    time_created=time_created,
                 )
                 parts.tool_calls.append(tool_call)
             elif part_type == "text":
                 text_content = data.get("text", "")
                 role = message_roles.get(message_id)
-                text_part = TextPart(
-                    id=part_id,
-                    text=text_content,
-                    time_created=time_created,
-                    role=role
-                )
+                text_part = TextPart(id=part_id, text=text_content, time_created=time_created, role=role)
                 if role == "user":
                     parts.user_messages.append(text_part)
                 else:
                     parts.assistant_replies.append(text_part)
             elif part_type == "reasoning":
-                reasoning_part = ReasoningPart(
-                    id=part_id,
-                    text=data.get("text", ""),
-                    time_created=time_created
-                )
+                reasoning_part = ReasoningPart(id=part_id, text=data.get("text", ""), time_created=time_created)
                 parts.reasoning.append(reasoning_part)
             elif part_type in ("step-start", "step-finish"):
-                parts.step_markers.append({
-                    "id": part_id,
-                    "time_created": time_created,
-                    "type": part_type
-                })
+                parts.step_markers.append({"id": part_id, "time_created": time_created, "type": part_type})
             else:
-                parts.other_parts.append({
-                    "id": part_id,
-                    "time_created": time_created,
-                    "type": part_type,
-                    "data": data
-                })
+                parts.other_parts.append({"id": part_id, "time_created": time_created, "type": part_type, "data": data})
 
         conn.close()
         return parts

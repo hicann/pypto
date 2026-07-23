@@ -18,12 +18,11 @@ This example demonstrates:
 lstm is the core mechanism in arcitc lstm-based speculators
 """
 
-import os
-import logging
 from dataclasses import dataclass
 
-import pypto
 from torch._dynamo import allow_in_graph
+
+import pypto
 
 BATCH_SIZE = 32
 D_GATE = 4096
@@ -33,6 +32,7 @@ D_GATE_4 = 16384
 @dataclass
 class LstmConfig:
     """Hyperparameters for LSTM."""
+
     alpha: float = 0.1
     eps_cell: float = 1e-6
     eps_state: float = 1e-6
@@ -41,10 +41,11 @@ class LstmConfig:
 @dataclass
 class LstmTileConfig:
     """Tiling configuration for NPU optimization."""
+
     def __init__(self):
-        self.tile_bs = 1          # Batch dimension tile size
-        self.unroll_list = [1, 2, 4]    # Loop unrolling strategy
-        self.h_tile = 4096         # Hidden dimension tile size (aligned to 128 bytes)
+        self.tile_bs = 1  # Batch dimension tile size
+        self.unroll_list = [1, 2, 4]  # Loop unrolling strategy
+        self.h_tile = 4096  # Hidden dimension tile size (aligned to 128 bytes)
 
 
 def rms_norm_pure(x: pypto.Tensor, epsilon: float) -> pypto.Tensor:
@@ -104,8 +105,8 @@ def sum_lstm_compute(
     """Core computation logic for Snowflake Arctic LSTM."""
     # Dimensions
     batch_size = states_4d.shape[0]
-    hidden_dim_4 = states_4d.shape[1] # 4 * H
-    hidden_dim = prev_cell.shape[1]   # H
+    hidden_dim_4 = states_4d.shape[1]  # 4 * H
+    hidden_dim = prev_cell.shape[1]  # H
 
     # Pre-broadcast 1D weights to [1, H] for correct vector multiplication
     if w_cell is not None:
@@ -116,13 +117,9 @@ def sum_lstm_compute(
         w_state_b_half = pypto.reshape(w_state, [1, hidden_dim], inplace=True)
         b_state_b_half = pypto.reshape(b_state, [1, hidden_dim], inplace=True)
 
-
     # Main Loop over Batch Dimension
     for bs_offset, unroll_length in pypto.loop_unroll(
-        0, batch_size, 1,
-        name="LSTM_BATCH_LOOP",
-        idx_name="bs_offset",
-        unroll_list=tile_config.unroll_list
+        0, batch_size, 1, name="LSTM_BATCH_LOOP", idx_name="bs_offset", unroll_list=tile_config.unroll_list
     ):
         current_tile_bs = unroll_length
         output_offset = [bs_offset, 0]
@@ -202,11 +199,10 @@ def sum_lstm_compute(
 
 @allow_in_graph
 def sum_lstm(run_mode: str = "npu"):
-
     if run_mode == "npu":
-        mode = pypto.RunMode.NPU
+        _mode = pypto.RunMode.NPU
     elif run_mode == "sim":
-        mode = pypto.RunMode.SIM
+        _mode = pypto.RunMode.SIM
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
@@ -225,13 +221,8 @@ def sum_lstm(run_mode: str = "npu"):
         c_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP16),
         config: LstmConfig,
     ):
-
         tile_cfg = LstmTileConfig()
 
-        sum_lstm_compute(
-            states_4d, z4_4d, prev_cell,
-            w_cell, b_cell, w_state, b_state,
-            config, tile_cfg,
-            h_out, c_out
-        )
+        sum_lstm_compute(states_4d, z4_4d, prev_cell, w_cell, b_cell, w_state, b_state, config, tile_cfg, h_out, c_out)
+
     return sum_lstm_kernel

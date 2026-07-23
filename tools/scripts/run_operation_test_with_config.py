@@ -9,10 +9,10 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
+
 import logging
 import os
 import sys
-
 
 if __name__ == "__main__":
     import_path = os.getcwd() + "/framework/tests/cmake/scripts/helper/"

@@ -17,9 +17,7 @@ import pathlib
 
 class TestCaseArgsParser:
     def __init__(self):
-        self._parser = argparse.ArgumentParser(
-            description=f"Run operation st test case.", epilog="Best Regards!"
-        )
+        self._parser = argparse.ArgumentParser(description="Run operation st test case.", epilog="Best Regards!")
 
     @staticmethod
     def dump_test_case_args(args):
@@ -126,23 +124,15 @@ class TestCaseArgsParser:
             help="Select npu id.",
         )
 
-        self._parser.add_argument(
-            "--python", action="store_true", help="Test python test case."
-        )
-        self._parser.add_argument(
-            "--model", action="store_true", help="Run test case with model."
-        )
+        self._parser.add_argument("--python", action="store_true", help="Test python test case.")
+        self._parser.add_argument("--model", action="store_true", help="Run test case with model.")
         self._parser.add_argument(
             "--json_only",
             action="store_true",
             help="Convert csv to json only, not run.",
         )
-        self._parser.add_argument(
-            "--save_data", action="store_true", help="Save golden and plog etc."
-        )
-        self._parser.add_argument(
-            "--distributed_op", action="store_true", help="corresponding distributed operator."
-        )
+        self._parser.add_argument("--save_data", action="store_true", help="Save golden and plog etc.")
+        self._parser.add_argument("--distributed_op", action="store_true", help="corresponding distributed operator.")
         self._parser.add_argument(
             "--json_path",
             type=str,

@@ -1,4 +1,4 @@
-#/!/usr/bin/env python3
+# /!/usr/bin/env python3
 # coding: utf-8
 # Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
@@ -8,34 +8,31 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
+""" """
+
 import math
-import logging
+
 import torch
 import torch_npu
-import numpy as np
-from numpy.testing import assert_allclose
-import pypto
-
 
 # 小值域阈值
 small_value_thres_dict = {
-        torch.float16: 2**-11,
-        torch.bfloat16: 2**-8,
-        torch.float32: 2**-14,
-        torch.uint8: 2**-4, torch.float8_e4m3fn: 2**-4
-    }
+    torch.float16: 2**-11,
+    torch.bfloat16: 2**-8,
+    torch.float32: 2**-14,
+    torch.uint8: 2**-4,
+    torch.float8_e4m3fn: 2**-4,
+}
 
 
 # 小值域error指标
 small_value_error_thres_dict = {
-        torch.float16: 2**-16,
-        torch.bfloat16: 2**-16,
-        torch.float32: 2**-30,
-        torch.uint8: 2**-6, torch.float8_e4m3fn: 2**-6
-    }
+    torch.float16: 2**-16,
+    torch.bfloat16: 2**-16,
+    torch.float32: 2**-30,
+    torch.uint8: 2**-6,
+    torch.float8_e4m3fn: 2**-6,
+}
 
 
 def get_split_index(golden_data, dtype):
@@ -121,7 +118,8 @@ def precision_compare_triple(npu_data, bm_data, golden_data, thres=(2, 1.2, 1.2)
     mare_npu, mere_npu, rmse_npu = compute_matrix_large_value(npu_data, golden_data, large_value_idx)
     mare_bm, mere_bm, rmse_bm = compute_matrix_large_value(bm_data, golden_data, large_value_idx)
     mare_matrix, mere_matrix, rmse_matrix = compute_re_triplet_matrix(
-        [mare_npu, mere_npu, rmse_npu], [mare_bm, mere_bm, rmse_bm], small_value_thres)
+        [mare_npu, mere_npu, rmse_npu], [mare_bm, mere_bm, rmse_bm], small_value_thres
+    )
 
     is_mare_acceptable = mare_matrix <= thres[0]
     is_mere_acceptable = mere_matrix <= thres[1]

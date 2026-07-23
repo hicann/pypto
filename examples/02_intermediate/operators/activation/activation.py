@@ -22,15 +22,13 @@ PyPTO operations. It shows:
 These activations are commonly used in modern transformer architectures.
 """
 
+import argparse
 import os
 import sys
-import argparse
-import pypto
+
 import torch
-import numpy as np
-from numpy.testing import assert_allclose
-from dataclasses import dataclass
-from typing import Literal
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -107,9 +105,7 @@ def geglu_golden(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def silu_activation_kernel(
-    x: pypto.Tensor(),
-    out: pypto.Tensor()):
+def silu_activation_kernel(x: pypto.Tensor(), out: pypto.Tensor()):
     """
     SiLU (Swish) activation function: x * sigmoid(x)
 
@@ -150,9 +146,7 @@ def test_silu(device_id: int = None, dynamic: bool = False) -> None:
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def gelu_activation_kernel(
-    x: pypto.Tensor(),
-    out: pypto.Tensor()):
+def gelu_activation_kernel(x: pypto.Tensor(), out: pypto.Tensor()):
     """
     GELU (Gaussian Error Linear Unit) activation function.
 
@@ -195,10 +189,7 @@ def test_gelu(device_id: int = None, dynamic: bool = False) -> None:
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def swiglu_activation_kernel(
-    gate: pypto.Tensor(),
-    up: pypto.Tensor(),
-    out: pypto.Tensor()):
+def swiglu_activation_kernel(gate: pypto.Tensor(), up: pypto.Tensor(), out: pypto.Tensor()):
     """
     SwiGLU activation function: Swish(gate) * up
 
@@ -212,7 +203,6 @@ def swiglu_activation_kernel(
     sigmoid = pypto.sigmoid(gate)
     swish = gate * sigmoid
     out[:] = swish * up
-
 
 
 def test_swiglu(device_id: int = None, dynamic: bool = False) -> None:
@@ -245,10 +235,7 @@ def test_swiglu(device_id: int = None, dynamic: bool = False) -> None:
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def geglu_activation_kernel(
-    gate: pypto.Tensor(),
-    up: pypto.Tensor(),
-    out: pypto.Tensor()):
+def geglu_activation_kernel(gate: pypto.Tensor(), up: pypto.Tensor(), out: pypto.Tensor()):
     """
     GELU (Gaussian Error Linear Unit) activation function.
 
@@ -310,26 +297,14 @@ Examples:
   %(prog)s silu::test_silu
             Run example silu::test_silu
   %(prog)s --list       List all available examples
-        """
+        """,
     )
     parser.add_argument(
-        'example_id',
-        type=str,
-        nargs='?',
-        help='Example ID to run (1-4). If not specified, all examples will run.'
+        'example_id', type=str, nargs='?', help='Example ID to run (1-4). If not specified, all examples will run.'
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default='npu',
-        choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default='npu', choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -355,7 +330,7 @@ Examples:
             'name': 'GeGLU Activation',
             'description': 'GELU-Gated Linear Unit activation',
             'function': test_geglu,
-        }
+        },
     }
 
     # List examples if requested
@@ -396,7 +371,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("(Make sure CANN environment is configured and NPU is available)\n")

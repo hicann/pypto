@@ -11,7 +11,6 @@
 
 """Stage decorator for pipeline functions."""
 
-
 PIPELINE_STAGE_ATTR = "pipeline_stage"
 
 

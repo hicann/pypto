@@ -25,13 +25,13 @@ where viewshape > validshape.
 - batch_size: 批大小 (3D BMM使用)
 - batch_dims: 批维度数量 (2=2D, 3=3D, 4=4D)
 """
-import os
+
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-import pypto
 import torch
-import torch.nn.functional as F
+
+import pypto
 
 
 @dataclass
@@ -40,6 +40,7 @@ class KSplitConfig:
 
     Unified configuration class supporting both regular matmul and ScaledMM operations.
     """
+
     m: int
     k: int
     n: int
@@ -165,12 +166,15 @@ K_SPLIT_2D_TESTS = [
         "id": "KS2D_01",
         "name": "fp16_2d_k_split_basic",
         "desc": "FP16 2D basic k-split with tail (k=200, tail=8)",
-        "m": 64, "k": 192, "n": 64,
+        "m": 64,
+        "k": 192,
+        "n": 64,
         "k_view": 320,
         "a_dtype": "DT_FP16",
         "b_dtype": "DT_FP16",
         "c_dtype": "DT_FP32",
-        "a_trans": False, "b_trans": False,
+        "a_trans": False,
+        "b_trans": False,
         "is_acc": True,
         "cube_tile_shape": [[64, 64], [64, 128], [64, 64]],
         "vec_tile_shape": [64, 64],
@@ -186,12 +190,15 @@ K_SPLIT_3D_TESTS = [
         "name": "fp16_3d_bmm_k_split_basic",
         "desc": "FP16 3D BMM basic k-split with tail (k=200, tail=8)",
         "batch_size": 2,
-        "m": 64, "k": 192, "n": 64,
+        "m": 64,
+        "k": 192,
+        "n": 64,
         "k_view": 320,
         "a_dtype": "DT_FP16",
         "b_dtype": "DT_FP16",
         "c_dtype": "DT_FP32",
-        "a_trans": False, "b_trans": False,
+        "a_trans": False,
+        "b_trans": False,
         "is_acc": True,
         "cube_tile_shape": [[64, 64], [64, 128], [64, 64]],
         "vec_tile_shape": [2, 64, 64],
@@ -206,7 +213,9 @@ SCALED_MM_K_SPLIT_TESTS = [
         "id": "SKS_01",
         "name": "scaled_mm_k_split_basic",
         "desc": "ScaledMM k-split basic with tail (k=200, tail=8)",
-        "m": 128, "k": 192, "n": 64,
+        "m": 128,
+        "k": 192,
+        "n": 64,
         "k_view": 320,
         "m_tile_shape": [64, 64],
         "k_tile_shape": [64, 128],

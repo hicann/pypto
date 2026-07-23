@@ -13,9 +13,8 @@
 Test assemble codegen for Kirin9030
 """
 
+from kirin.common_assemble import TEST_CASES, create_test_assemble_module, run_assemble_test
 import pytest
-from kirin.common_assemble import create_test_assemble_module, run_assemble_test, TEST_CASES
-
 
 KERNELS, _ = create_test_assemble_module("Kirin9030")
 
@@ -24,8 +23,9 @@ KERNELS, _ = create_test_assemble_module("Kirin9030")
     "kernel_name,torch_dtype,pypto_dtype,tile_shapes,input_shape,output_shape,offsets_or_offsets_list",
     TEST_CASES,
 )
-def test_assemble(kernel_name, torch_dtype, pypto_dtype, tile_shapes,
-                  input_shape, output_shape, offsets_or_offsets_list):
+def test_assemble(
+    kernel_name, torch_dtype, pypto_dtype, tile_shapes, input_shape, output_shape, offsets_or_offsets_list
+):
     run_assemble_test(KERNELS, kernel_name, torch_dtype, input_shape, output_shape, offsets_or_offsets_list)
 
 

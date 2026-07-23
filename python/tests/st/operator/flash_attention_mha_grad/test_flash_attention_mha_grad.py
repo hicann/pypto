@@ -22,28 +22,26 @@ from [s1_size, s2_size] to [s1_size, S2_TILE] per iteration.
 dK and dV are accumulated across kv tiles.
 """
 
-
-import sys
 import os
+import sys
+
 _p = os.path.dirname(__file__)
 while not os.path.isdir(os.path.join(_p, 'src')):
     _p = os.path.dirname(_p)
 sys.path.insert(0, os.path.join(_p, 'src'))
 sys.path.insert(0, os.path.join(_p, 'src', 'pypto_gym', 'ops', 'pypto_tile'))
-import collections
-import logging
-from dataclasses import dataclass
+import collections  # noqa: E402
+from dataclasses import dataclass  # noqa: E402
+import logging  # noqa: E402
 
-import numpy as np
-from numpy.testing import assert_allclose
-import pytest
-import torch
-import torch_npu
-
-
-from flash_attention_mha_grad_impl \
-    import flash_attention_mha_grad_kernel_impl, FlashAttentionGradTileShapeConfig
-
+from flash_attention_mha_grad_impl import (  # noqa: E402
+    FlashAttentionGradTileShapeConfig,
+    flash_attention_mha_grad_kernel_impl,
+)
+import numpy as np  # noqa: E402
+from numpy.testing import assert_allclose  # noqa: E402
+import pytest  # noqa: E402
+import torch  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format='%(message)s', force=True)
 
@@ -53,8 +51,9 @@ HEAD_DIM_DEFAULT = 64
 S1_TILE = 512
 S2_TILE = 512
 
-MhaGradInputs = collections.namedtuple("MhaGradInputs", \
-    ["q", "k", "v", "actual_q", "actual_kv", "q_seqlens", "kv_seqlens"])
+MhaGradInputs = collections.namedtuple(
+    "MhaGradInputs", ["q", "k", "v", "actual_q", "actual_kv", "q_seqlens", "kv_seqlens"]
+)
 AttentionBackwardOutput = collections.namedtuple("AttentionBackwardOutput", ["dq", "dk", "dv"])
 
 
@@ -81,11 +80,11 @@ def device():
 @dataclass
 class TileConfig:
     """分块配置结构体，封装 kernel 所需的 tile 参数。"""
+
     s2_tile: int = S2_TILE
 
 
-def create_inputs(batch_size, s1_size, s2_size, num_heads, head_dim, device,
-                   q_seqlens=None, kv_seqlens=None):
+def create_inputs(batch_size, s1_size, s2_size, num_heads, head_dim, device, q_seqlens=None, kv_seqlens=None):
     if q_seqlens is None:
         q_seqlens = [s1_size] * batch_size
     if kv_seqlens is None:
@@ -106,8 +105,9 @@ def create_inputs(batch_size, s1_size, s2_size, num_heads, head_dim, device,
     for skv in kv_seqlens:
         kv_cumsum.append(kv_cumsum[-1] + skv)
     actual_kv = torch.tensor(kv_cumsum, dtype=torch.int32, device=device)
-    return MhaGradInputs(q=q, k=k, v=v, actual_q=actual_q, actual_kv=actual_kv, \
-                         q_seqlens=q_seqlens, kv_seqlens=kv_seqlens)
+    return MhaGradInputs(
+        q=q, k=k, v=v, actual_q=actual_q, actual_kv=actual_kv, q_seqlens=q_seqlens, kv_seqlens=kv_seqlens
+    )
 
 
 def attention_backward_golden(q, k, v, o_input, do_t, scale):
@@ -174,20 +174,18 @@ def _setup_device():
     return f'npu:{device_id}'
 
 
-def _log_case(batch_size, num_heads, s1_size, s2_size, dim, hidden_dim, scale,
-              tile_config, q_seqlens, kv_seqlens):
+def _log_case(batch_size, num_heads, s1_size, s2_size, dim, hidden_dim, scale, tile_config, q_seqlens, kv_seqlens):
     logging.info("=" * 60)
-    logging.info(f"Test Case: batch={batch_size}, heads={num_heads}, "
-                 f"Q:s1_size={s1_size}, KV:s2_size={s2_size}, dim={dim}")
+    logging.info(
+        f"Test Case: batch={batch_size}, heads={num_heads}, Q:s1_size={s1_size}, KV:s2_size={s2_size}, dim={dim}"
+    )
     if q_seqlens is not None or kv_seqlens is not None:
         logging.info(f"  varlen: q_seqlens={q_seqlens}, kv_seqlens={kv_seqlens}")
-    logging.info(f"  hidden_dim={hidden_dim}, scale={scale:.6f}, "
-                 f"s2_tile={tile_config.s2_tile}")
+    logging.info(f"  hidden_dim={hidden_dim}, scale={scale:.6f}, s2_tile={tile_config.s2_tile}")
     logging.info("=" * 60)
 
 
-def _precompute_l_m_o(batch_size, num_heads, q, k, v, q_cumsum, kv_cumsum,
-                       l_out, m_out, o_out, scale):
+def _precompute_l_m_o(batch_size, num_heads, q, k, v, q_cumsum, kv_cumsum, l_out, m_out, o_out, scale):
     for b in range(batch_size):
         q_off = q_cumsum[b]
         kv_off = kv_cumsum[b]
@@ -195,17 +193,16 @@ def _precompute_l_m_o(batch_size, num_heads, q, k, v, q_cumsum, kv_cumsum,
         skv = kv_cumsum[b + 1] - kv_off
         for h in range(num_heads):
             l_h, m_h, o_h = compute_l_m_o(
-                q[q_off: q_off + sq, h, :],
-                k[kv_off: kv_off + skv, h, :],
-                v[kv_off: kv_off + skv, h, :],
-                scale)
-            l_out[q_off: q_off + sq, h, :] = l_h
-            m_out[q_off: q_off + sq, h, :] = m_h
-            o_out[q_off: q_off + sq, h, :] = o_h
+                q[q_off:q_off + sq, h, :], k[kv_off:kv_off + skv, h, :], v[kv_off:kv_off + skv, h, :], scale
+            )
+            l_out[q_off:q_off + sq, h, :] = l_h
+            m_out[q_off:q_off + sq, h, :] = m_h
+            o_out[q_off:q_off + sq, h, :] = o_h
 
 
-def _compute_golden(batch_size, num_heads, dim, q, k, v, o_out, do_t,
-                     q_cumsum, kv_cumsum, total_q, total_kv, device, scale):
+def _compute_golden(
+    batch_size, num_heads, dim, q, k, v, o_out, do_t, q_cumsum, kv_cumsum, total_q, total_kv, device, scale
+):
     dq_golden = torch.empty(total_q, num_heads * dim, dtype=torch.float32, device=device)
     dk_golden = torch.empty(total_kv, num_heads * dim, dtype=torch.float32, device=device)
     dv_golden = torch.empty(total_kv, num_heads * dim, dtype=torch.float32, device=device)
@@ -217,27 +214,27 @@ def _compute_golden(batch_size, num_heads, dim, q, k, v, o_out, do_t,
         for h in range(num_heads):
             h_off = h * dim
             dq_g, dk_g, dv_g = attention_backward_golden(
-                q[q_off: q_off + sq, h, :],
-                k[kv_off: kv_off + skv, h, :],
-                v[kv_off: kv_off + skv, h, :],
-                o_out[q_off: q_off + sq, h, :],
-                do_t[q_off: q_off + sq, h, :],
-                scale)
-            dq_golden[q_off: q_off + sq, h_off: h_off + dim] = dq_g
-            dk_golden[kv_off: kv_off + skv, h_off: h_off + dim] = dk_g
-            dv_golden[kv_off: kv_off + skv, h_off: h_off + dim] = dv_g
+                q[q_off:q_off + sq, h, :],
+                k[kv_off:kv_off + skv, h, :],
+                v[kv_off:kv_off + skv, h, :],
+                o_out[q_off:q_off + sq, h, :],
+                do_t[q_off:q_off + sq, h, :],
+                scale,
+            )
+            dq_golden[q_off:q_off + sq, h_off:h_off + dim] = dq_g
+            dk_golden[kv_off:kv_off + skv, h_off:h_off + dim] = dk_g
+            dv_golden[kv_off:kv_off + skv, h_off:h_off + dim] = dv_g
     return dq_golden, dk_golden, dv_golden
 
 
-def _run_kernel(q, k, v, o_out, do_t, l_out, m_out, dq_out, dk_out, dv_out,
-                actual_q, actual_kv, tile_config):
+def _run_kernel(q, k, v, o_out, do_t, l_out, m_out, dq_out, dk_out, dv_out, actual_q, actual_kv, tile_config):
     logging.info("  Running kernel...")
     import time
+
     start_time = time.time()
     flash_attention_mha_grad_kernel_impl(
-        q, k, v, o_out, do_t, l_out, m_out,
-        dq_out, dk_out, dv_out,
-        actual_q, actual_kv, tile_config)
+        q, k, v, o_out, do_t, l_out, m_out, dq_out, dk_out, dv_out, actual_q, actual_kv, tile_config
+    )
     elapsed = time.time() - start_time
     logging.info(f"  Kernel time: {elapsed * 1000:.2f} ms")
 
@@ -261,26 +258,33 @@ def _verify_precision(dq_out, dk_out, dv_out, dq_golden, dk_golden, dv_golden):
     return passed
 
 
-def run_test(batch_size=None, num_heads=None, s1_size=None,
-             s2_size=None, dim=None, tile_config=None,
-             q_seqlens=None, kv_seqlens=None):
+def run_test(
+    batch_size=None,
+    num_heads=None,
+    s1_size=None,
+    s2_size=None,
+    dim=None,
+    tile_config=None,
+    q_seqlens=None,
+    kv_seqlens=None,
+):
     """运行单个测试用例: 构造输入 → 调用 kernel → 与 golden 对比。"""
     device = _setup_device()
 
-    batch_size, num_heads, s1_size, s2_size, dim, q_seqlens, kv_seqlens = \
-        _resolve_params(batch_size, num_heads, s1_size, s2_size, dim, q_seqlens, kv_seqlens)
+    batch_size, num_heads, s1_size, s2_size, dim, q_seqlens, kv_seqlens = _resolve_params(
+        batch_size, num_heads, s1_size, s2_size, dim, q_seqlens, kv_seqlens
+    )
     if tile_config is None:
         tile_config = _default_tile_config()
 
     hidden_dim = num_heads * dim
-    scale = 1.0 / (dim ** 0.5)
-    _log_case(batch_size, num_heads, s1_size, s2_size, dim, hidden_dim, scale,
-              tile_config, q_seqlens, kv_seqlens)
+    scale = 1.0 / (dim**0.5)
+    _log_case(batch_size, num_heads, s1_size, s2_size, dim, hidden_dim, scale, tile_config, q_seqlens, kv_seqlens)
 
     torch.manual_seed(2026)
     inputs = create_inputs(
-        batch_size, s1_size, s2_size, num_heads, dim, device,
-        q_seqlens=q_seqlens, kv_seqlens=kv_seqlens)
+        batch_size, s1_size, s2_size, num_heads, dim, device, q_seqlens=q_seqlens, kv_seqlens=kv_seqlens
+    )
     q, k, v = inputs.q, inputs.k, inputs.v
     actual_q, actual_kv = inputs.actual_q, inputs.actual_kv
     q_seqlens, kv_seqlens = inputs.q_seqlens, inputs.kv_seqlens
@@ -295,19 +299,17 @@ def run_test(batch_size=None, num_heads=None, s1_size=None,
     m_out = torch.empty(total_q, num_heads, 1, dtype=torch.float32, device=device)
     o_out = torch.empty(total_q, num_heads, dim, dtype=torch.bfloat16, device=device)
 
-    _precompute_l_m_o(batch_size, num_heads, q, k, v, q_cumsum, kv_cumsum,
-                       l_out, m_out, o_out, scale)
+    _precompute_l_m_o(batch_size, num_heads, q, k, v, q_cumsum, kv_cumsum, l_out, m_out, o_out, scale)
 
     dq_out = torch.zeros(total_q, hidden_dim, dtype=torch.float32, device=device)
     dk_out = torch.zeros(total_kv, hidden_dim, dtype=torch.float32, device=device)
     dv_out = torch.zeros(total_kv, hidden_dim, dtype=torch.float32, device=device)
 
     dq_golden, dk_golden, dv_golden = _compute_golden(
-        batch_size, num_heads, dim, q, k, v, o_out, do_t,
-        q_cumsum, kv_cumsum, total_q, total_kv, device, scale)
+        batch_size, num_heads, dim, q, k, v, o_out, do_t, q_cumsum, kv_cumsum, total_q, total_kv, device, scale
+    )
 
-    _run_kernel(q, k, v, o_out, do_t, l_out, m_out, dq_out, dk_out, dv_out,
-                actual_q, actual_kv, tile_config)
+    _run_kernel(q, k, v, o_out, do_t, l_out, m_out, dq_out, dk_out, dv_out, actual_q, actual_kv, tile_config)
     return _verify_precision(dq_out, dk_out, dv_out, dq_golden, dk_golden, dv_golden)
 
 
@@ -318,69 +320,70 @@ def run_test(batch_size=None, num_heads=None, s1_size=None,
 
 @pytest.mark.soc("950")
 def test_01():
-    """ 用例规格信息：batch=8, heads=8, s1=320, s2=320, dim=64"""
+    """用例规格信息：batch=8, heads=8, s1=320, s2=320, dim=64"""
     return run_test(batch_size=8, num_heads=8, s1_size=320, s2_size=320, dim=64)
 
 
 @pytest.mark.skip(reason="large test case")
 def test_02():
-    """ 用例规格信息：batch=1, heads=8, s1=4096, s2=4096, dim=128"""
+    """用例规格信息：batch=1, heads=8, s1=4096, s2=4096, dim=128"""
     return run_test(batch_size=1, num_heads=8, s1_size=4096, s2_size=4096, dim=128)
 
 
 @pytest.mark.soc("950")
 def test_03():
-    """ 用例规格信息：batch=8, heads=16, s1=32, s2=32, dim=32"""
+    """用例规格信息：batch=8, heads=16, s1=32, s2=32, dim=32"""
     return run_test(batch_size=8, num_heads=16, s1_size=32, s2_size=32, dim=32)
 
 
 @pytest.mark.soc("950")
 def test_04():
-    """ 用例规格信息：batch=8, heads=16, s1=64, s2=64, dim=32"""
+    """用例规格信息：batch=8, heads=16, s1=64, s2=64, dim=32"""
     return run_test(batch_size=8, num_heads=16, s1_size=64, s2_size=64, dim=32)
 
 
 @pytest.mark.soc("950")
 def test_05():
-    """ 用例规格信息：batch=8, heads=8, s1=32, s2=32, dim=64"""
+    """用例规格信息：batch=8, heads=8, s1=32, s2=32, dim=64"""
     return run_test(batch_size=8, num_heads=8, s1_size=32, s2_size=32, dim=64)
 
 
 @pytest.mark.skip("950")
 def test_06():
-    """ 用例规格信息：batch=8, heads=4, s1=64, s2=64, dim=128"""
+    """用例规格信息：batch=8, heads=4, s1=64, s2=64, dim=128"""
     return run_test(batch_size=8, num_heads=4, s1_size=64, s2_size=64, dim=128)
 
 
 @pytest.mark.skip(reason="large test case")
 def test_07_varlen_small_seq():
-    """ 用例规格信息：batch=4, heads=8, q_seqlens=[64,128,192,256], kv_seqlens=[64,128,192,256], dim=64 """
-    return run_test(num_heads=8, dim=64,
-                    q_seqlens=[64, 128, 192, 256],
-                    kv_seqlens=[64, 128, 192, 256])
+    """用例规格信息：batch=4, heads=8, q_seqlens=[64,128,192,256], kv_seqlens=[64,128,192,256], dim=64"""
+    return run_test(num_heads=8, dim=64, q_seqlens=[64, 128, 192, 256], kv_seqlens=[64, 128, 192, 256])
 
 
 @pytest.mark.soc("950")
 def test_08_varlen_long_seq():
-    """ 用例规格信息: batch=2, heads=8, q_seqlens=[384,512], kv_seqlens=[384,512], dim=64 """
-    return run_test(num_heads=8, dim=64,
-                    q_seqlens=[384, 512],
-                    kv_seqlens=[384, 512])
+    """用例规格信息: batch=2, heads=8, q_seqlens=[384,512], kv_seqlens=[384,512], dim=64"""
+    return run_test(num_heads=8, dim=64, q_seqlens=[384, 512], kv_seqlens=[384, 512])
 
 
 @pytest.mark.soc("950")
 def test_09_varlen_cross_attn():
-    """ 用例规格信息：batch=3, heads=8, q_seqlens=[128,64,192], kv_seqlens=[96,256,128], dim=64 """
-    return run_test(num_heads=8, dim=64,
-                    q_seqlens=[128, 64, 192],
-                    kv_seqlens=[96, 256, 128])
+    """用例规格信息：batch=3, heads=8, q_seqlens=[128,64,192], kv_seqlens=[96,256,128], dim=64"""
+    return run_test(num_heads=8, dim=64, q_seqlens=[128, 64, 192], kv_seqlens=[96, 256, 128])
 
 
 def main():
     logging.info("Flash Attention Backward (3-loop, KV tiling)")
     test_funcs = [
-        test_01, test_02, test_03, test_04, test_05, test_06,
-        test_07_varlen_small_seq, test_08_varlen_long_seq, test_09_varlen_cross_attn,
+        test_01,
+        test_02,
+        test_03,
+        test_04,
+        test_05,
+        test_06,
+        test_07_varlen_small_seq,
+        test_08_varlen_long_seq,
+        test_09_varlen_cross_attn,
     ]
     results = []
     for fn in test_funcs:
@@ -390,6 +393,7 @@ def main():
         except Exception as e:
             logging.info(f"  ERROR: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((fn.__name__, fn.__doc__, False))
     logging.info("=" * 60)

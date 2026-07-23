@@ -26,15 +26,13 @@ Example:
     See ai_infra_pypto_qat.py for usage examples.
 """
 
-import pypto
 import torch
+
+import pypto
 
 
 @pypto.frontend.jit(
-    runtime_options={
-        "stitch_function_max_num": 64,
-        "max_workspace_kb": 20000
-    },
+    runtime_options={"stitch_function_max_num": 64, "max_workspace_kb": 20000},
     pass_options={"vec_nbuffer_setting": {-1: 2, -2: 1}},
 )
 def ai_infra_qat_asymmetric_per_group_kernel(
@@ -46,7 +44,7 @@ def ai_infra_qat_asymmetric_per_group_kernel(
     n_levels,
     neg_clip_val,
     clip_val,
-    shift
+    shift,
 ):
     pypto.experimental.set_operation_options(combine_axis=True)
     unroll_list = [512, 256]
@@ -55,10 +53,7 @@ def ai_infra_qat_asymmetric_per_group_kernel(
     pypto.set_vec_tile_shapes(128, 128)
 
     for g_offset, unroll_length in pypto.loop_unroll(
-        0, num_groups, 1,
-        name="LOOP_GROUPS",
-        idx_name="g_offset",
-        unroll_list=unroll_list
+        0, num_groups, 1, name="LOOP_GROUPS", idx_name="g_offset", unroll_list=unroll_list
     ):
         tile_groups = unroll_length
 
@@ -93,9 +88,7 @@ def ai_infra_qat_asymmetric_per_group_kernel(
         pypto.assemble(output_tile, [g_offset, 0], output_bf16)
 
 
-def ai_infra_qat_asymmetric_per_group(weight, scale, offset, group_size=128, bit=4,
-                                  eps=1e-4, clip_val=0.99):
-
+def ai_infra_qat_asymmetric_per_group(weight, scale, offset, group_size=128, bit=4, eps=1e-4, clip_val=0.99):
     n_levels = 2 ** (bit - 1)
     shift = 0.5
     neg_clip_val = -clip_val
@@ -104,28 +97,14 @@ def ai_infra_qat_asymmetric_per_group(weight, scale, offset, group_size=128, bit
     weight_grouped = weight.view(-1, group_size)
     output_bf16_grouped = output_bf16.view(-1, group_size)
 
-    inputs = [
-        weight_grouped,
-        scale,
-        offset,
-        output_bf16_grouped,
-        eps,
-        n_levels,
-        neg_clip_val,
-        clip_val,
-        shift
-    ]
+    inputs = [weight_grouped, scale, offset, output_bf16_grouped, eps, n_levels, neg_clip_val, clip_val, shift]
     ai_infra_qat_asymmetric_per_group_kernel(*inputs)
     return output_bf16_grouped.view(weight.shape)
 
 
 @pypto.frontend.jit(
-    pass_options={
-        "vec_nbuffer_setting": {-1: 2, -2: 1}
-        },
-    runtime_options={
-        "stitch_function_max_num": 64
-        },
+    pass_options={"vec_nbuffer_setting": {-1: 2, -2: 1}},
+    runtime_options={"stitch_function_max_num": 64},
 )
 def ai_infra_qat_asymmetric_per_group_backward_kernel(
     grad_output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
@@ -139,7 +118,7 @@ def ai_infra_qat_asymmetric_per_group_backward_kernel(
     n_levels,
     neg_clip_val,
     clip_val,
-    shift
+    shift,
 ):
     group_size = grad_output.shape[1]
     num_groups = scale.shape[0]
@@ -147,10 +126,7 @@ def ai_infra_qat_asymmetric_per_group_backward_kernel(
 
     pypto.experimental.set_operation_options(combine_axis=True)
     for g_offset, unroll_length in pypto.loop_unroll(
-        0, num_groups, 1,
-        name="LOOP_GROUPS",
-        idx_name="g_offset",
-        unroll_list=unroll_list
+        0, num_groups, 1, name="LOOP_GROUPS", idx_name="g_offset", unroll_list=unroll_list
     ):
         tile_groups = unroll_length
         pypto.set_vec_tile_shapes(64, 128)
@@ -227,8 +203,9 @@ def ai_infra_qat_asymmetric_per_group_backward_kernel(
         pypto.assemble(grad_o_bf16, [g_offset, 0], grad_offset_out)
 
 
-def ai_infra_qat_asymmetric_per_group_backward(grad_output, weight_pto, scale_pto, offset_pto,
-                                            group_size=128, bit=4, eps=1e-4, clip_val=0.99):
+def ai_infra_qat_asymmetric_per_group_backward(
+    grad_output, weight_pto, scale_pto, offset_pto, group_size=128, bit=4, eps=1e-4, clip_val=0.99
+):
     n_levels = 2 ** (bit - 1)
     shift = 0.5
     neg_clip_val = -clip_val
@@ -271,7 +248,7 @@ def ai_infra_qat_symmetric_per_channel_kernel(
     output_bf16: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     eps,
     min_v,
-    max_v
+    max_v,
 ):
     pypto.experimental.set_operation_options(combine_axis=True)
     n, m = weight.shape
@@ -279,10 +256,7 @@ def ai_infra_qat_symmetric_per_channel_kernel(
     pypto.set_vec_tile_shapes(32, 512)
 
     for n_offset, unroll_length in pypto.loop_unroll(
-        0, n, 1,
-        name="LOOP_N_UNROLL",
-        idx_name="n_offset",
-        unroll_list=unroll_list
+        0, n, 1, name="LOOP_N_UNROLL", idx_name="n_offset", unroll_list=unroll_list
     ):
         tile_n = unroll_length
 
@@ -304,14 +278,7 @@ def ai_infra_qat_symmetric_per_channel_kernel(
 
 def ai_infra_qat_symmetric_per_channel(weight, scale, eps, min_v, max_v):
     output_pto = torch.empty(weight.shape, dtype=torch.bfloat16, device=weight.device)
-    inputs = [
-        weight,
-        scale,
-        output_pto,
-        eps,
-        min_v,
-        max_v
-    ]
+    inputs = [weight, scale, output_pto, eps, min_v, max_v]
     ai_infra_qat_symmetric_per_channel_kernel(*inputs)
     return output_pto
 
@@ -332,7 +299,6 @@ def ai_infra_qat_symmetric_per_channel_backward_kernel(
     min_v,
     max_v,
 ):
-
     n, m = weight.shape
     unroll_list = [512, 32, 8]
 
@@ -340,10 +306,7 @@ def ai_infra_qat_symmetric_per_channel_backward_kernel(
     pypto.set_vec_tile_shapes(4, tile_shapes_m)
 
     for n_offset, unroll_length in pypto.loop_unroll(
-        0, n, 1,
-        name="BACKWARD_LOOP_N_UNROLL",
-        idx_name="n_offset",
-        unroll_list=unroll_list
+        0, n, 1, name="BACKWARD_LOOP_N_UNROLL", idx_name="n_offset", unroll_list=unroll_list
     ):
         tile_n = unroll_length
 
@@ -380,7 +343,7 @@ def ai_infra_qat_symmetric_per_channel_backward_kernel(
 
         # ================= 计算 grad_scale =================
         # 乘法路径: grad_output * clamped
-        grad_scale_mul_tile = pypto.mul(grad_out_fp32, clamped) # [tile_n, m]
+        grad_scale_mul_tile = pypto.mul(grad_out_fp32, clamped)  # [tile_n, m]
         grad_scale_mul_tile_sum = pypto.sum(grad_scale_mul_tile, dim=1, keepdim=True)
 
         # 除法路径: grad_output * mask * (-weight / protected_scale)
@@ -401,24 +364,13 @@ def ai_infra_qat_symmetric_per_channel_backward_kernel(
 def ai_infra_qat_symmetric_per_channel_backward(grad_output, weight, scale, eps, min_v, max_v):
     grad_weight_out = torch.empty(weight.shape, dtype=weight.dtype, device=weight.device)
     grad_scale_out = torch.empty(scale.shape, dtype=scale.dtype, device=scale.device)
-    inputs = [
-        grad_output,
-        weight,
-        scale,
-        grad_weight_out,
-        grad_scale_out,
-        eps,
-        min_v,
-        max_v
-    ]
+    inputs = [grad_output, weight, scale, grad_weight_out, grad_scale_out, eps, min_v, max_v]
     ai_infra_qat_symmetric_per_channel_backward_kernel(*inputs)
     return grad_weight_out, grad_scale_out
 
 
 @pypto.frontend.jit(
-    runtime_options={
-        "stitch_function_max_num": 64
-    },
+    runtime_options={"stitch_function_max_num": 64},
 )
 def ai_infra_qat_symmetric_per_tensor_kernel(
     weight: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
@@ -426,9 +378,8 @@ def ai_infra_qat_symmetric_per_tensor_kernel(
     output_bf16: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     eps,
     min_v,
-    max_v
+    max_v,
 ):
-
     unroll_list = [512, 32, 8]
     pypto.experimental.set_operation_options(combine_axis=True)
     n, m = weight.shape
@@ -437,10 +388,7 @@ def ai_infra_qat_symmetric_per_tensor_kernel(
     protected_scale = pypto.maximum(scale_fp32, eps)
 
     for n_offset, unroll_length in pypto.loop_unroll(
-        0, n, 1,
-        name="LOOP_N_UNROLL",
-        idx_name="n_offset",
-        unroll_list=unroll_list
+        0, n, 1, name="LOOP_N_UNROLL", idx_name="n_offset", unroll_list=unroll_list
     ):
         tile_n = unroll_length
 
@@ -460,14 +408,7 @@ def ai_infra_qat_symmetric_per_tensor_kernel(
 
 def ai_infra_qat_symmetric_per_tensor(weight, scale, eps, min_v, max_v):
     output_pto = torch.empty(weight.shape, dtype=torch.bfloat16, device=weight.device)
-    inputs = [
-        weight,
-        scale,
-        output_pto,
-        eps,
-        min_v,
-        max_v
-    ]
+    inputs = [weight, scale, output_pto, eps, min_v, max_v]
     ai_infra_qat_symmetric_per_tensor_kernel(*inputs)
     return output_pto
 
@@ -505,10 +446,7 @@ def ai_infra_qat_symmetric_per_tensor_backward_kernel(
     grad_scale_acc = pypto.full([1, 1], 0.0, pypto.DT_FP32)
 
     for n_offset, unroll_length in pypto.loop_unroll(
-        0, n, 1,
-        name="BACKWARD_LOOP_N_UNROLL",
-        idx_name="n_offset",
-        unroll_list=unroll_list
+        0, n, 1, name="BACKWARD_LOOP_N_UNROLL", idx_name="n_offset", unroll_list=unroll_list
     ):
         tile_n = unroll_length
         grad_out_tile = pypto.view(grad_output, [tile_n, m], [n_offset, 0])
@@ -539,7 +477,7 @@ def ai_infra_qat_symmetric_per_tensor_backward_kernel(
 
         # ================= 计算 grad_scale =================
         # 乘法路径: grad_output * clamped
-        grad_scale_mul_tile = pypto.mul(grad_out_fp32, clamped) # [tile_n, m]
+        grad_scale_mul_tile = pypto.mul(grad_out_fp32, clamped)  # [tile_n, m]
         grad_scale_mul_tile_m = pypto.sum(grad_scale_mul_tile, dim=1, keepdim=True)
 
         # 除法路径: grad_output * mask * (-weight / protected_scale)
@@ -567,15 +505,6 @@ def ai_infra_qat_symmetric_per_tensor_backward_kernel(
 def ai_infra_qat_symmetric_per_tensor_backward(grad_output, weight, scale, eps, min_v, max_v):
     grad_weight_out = torch.empty(weight.shape, dtype=weight.dtype, device=weight.device)
     grad_scale_out = torch.empty(scale.shape, dtype=scale.dtype, device=scale.device)
-    inputs = [
-        grad_output,
-        weight,
-        scale,
-        grad_weight_out,
-        grad_scale_out,
-        eps,
-        min_v,
-        max_v
-    ]
+    inputs = [grad_output, weight, scale, grad_weight_out, grad_scale_out, eps, min_v, max_v]
     ai_infra_qat_symmetric_per_tensor_backward_kernel(*inputs)
     return grad_weight_out, grad_scale_out

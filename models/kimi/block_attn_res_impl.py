@@ -23,16 +23,16 @@ Kernels:
     - ai_infra_block_attn_res_backward_kernel: 反向 kernel
 """
 
-import typing
 from typing import List, Optional
-import pypto
+
 import torch
+
+import pypto
 
 
 @pypto.frontend.function
 def ai_infra_block_attn_res_forward_kernel(
-    v_flat, proj_weight, gamma_fp32, h_out, rms_cache, alpha_cache_3d,
-    scale, rms_norm_eps, enable_rmsnorm, l_max
+    v_flat, proj_weight, gamma_fp32, h_out, rms_cache, alpha_cache_3d, scale, rms_norm_eps, enable_rmsnorm, l_max
 ):
     """PyPTO function ai_infra_block_attn_res_forward_kernel
 
@@ -47,7 +47,7 @@ def ai_infra_block_attn_res_forward_kernel(
     enable_rmsnorm: 是否启用 RMSNorm
     l_max:          L分档大小
     """
-    bt, l, d = v_flat.shape
+    bt, l, d = v_flat.shape  # noqa: E741
     dtype = v_flat.dtype
     unroll_list = [1, 64, 128]
     norm_m_tile = 64 * 1024 // (4 * d)
@@ -57,27 +57,28 @@ def ai_infra_block_attn_res_forward_kernel(
         pypto.set_pass_options(
             vec_nbuffer_setting={"DEFAULT": 8},
             cube_nbuffer_setting={"DEFAULT": 8, "func8_0": 16},
-            cube_l1_reuse_setting={"DEFAULT": 2}
+            cube_l1_reuse_setting={"DEFAULT": 2},
         )
     elif d == 1536:
         pypto.set_pass_options(
             vec_nbuffer_setting={"DEFAULT": 8, "func8_2": 48},
             cube_nbuffer_setting={"DEFAULT": 16},
-            cube_l1_reuse_setting={"DEFAULT": 2}
+            cube_l1_reuse_setting={"DEFAULT": 2},
         )
 
     pypto.experimental.set_operation_options(combine_axis=True)
 
     for bt_idx, unroll_length in pypto.loop_unroll(
-        0, bt, 1,
+        0,
+        bt,
+        1,
         name="Block_Attn_Res_T_Loop",
         idx_name="bt_idx",
         unroll_list=unroll_list,
     ):
         tile_bt = unroll_length
 
-        v = pypto.view(v_flat, [tile_bt, l_max, d], [bt_idx, 0, 0],
-                       valid_shape=[tile_bt, l, d])
+        v = pypto.view(v_flat, [tile_bt, l_max, d], [bt_idx, 0, 0], valid_shape=[tile_bt, l, d])
 
         if enable_rmsnorm:
             pypto.set_semantic_label("RmsNorm")
@@ -131,11 +132,7 @@ def ai_infra_block_attn_res_forward_kernel(
 
 
 @pypto.frontend.jit(
-    runtime_options={
-        "stitch_function_max_num": 64,
-        "device_sched_mode": 0,
-        "max_workspace_kb": 300000
-    },
+    runtime_options={"stitch_function_max_num": 64, "device_sched_mode": 0, "max_workspace_kb": 300000},
 )
 def ai_infra_block_attn_res_forward_kernel_l_max_32(
     v_flat: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC]),
@@ -149,8 +146,8 @@ def ai_infra_block_attn_res_forward_kernel_l_max_32(
     enable_rmsnorm: bool,
 ):
     ai_infra_block_attn_res_forward_kernel(
-        v_flat, proj_weight, gamma_fp32, h_out, rms_cache, alpha_cache_3d,
-        scale, rms_norm_eps, enable_rmsnorm, 32)
+        v_flat, proj_weight, gamma_fp32, h_out, rms_cache, alpha_cache_3d, scale, rms_norm_eps, enable_rmsnorm, 32
+    )
 
 
 @pypto.frontend.jit(
@@ -168,8 +165,8 @@ def ai_infra_block_attn_res_forward_kernel_l_max_64(
     enable_rmsnorm: bool,
 ):
     ai_infra_block_attn_res_forward_kernel(
-        v_flat, proj_weight, gamma_fp32, h_out, rms_cache, alpha_cache_3d,
-        scale, rms_norm_eps, enable_rmsnorm, 64)
+        v_flat, proj_weight, gamma_fp32, h_out, rms_cache, alpha_cache_3d, scale, rms_norm_eps, enable_rmsnorm, 64
+    )
 
 
 @pypto.frontend.jit(
@@ -187,8 +184,8 @@ def ai_infra_block_attn_res_forward_kernel_l_max_96(
     enable_rmsnorm: bool,
 ):
     ai_infra_block_attn_res_forward_kernel(
-        v_flat, proj_weight, gamma_fp32, h_out, rms_cache, alpha_cache_3d,
-        scale, rms_norm_eps, enable_rmsnorm, 96)
+        v_flat, proj_weight, gamma_fp32, h_out, rms_cache, alpha_cache_3d, scale, rms_norm_eps, enable_rmsnorm, 96
+    )
 
 
 @pypto.frontend.jit(
@@ -206,8 +203,8 @@ def ai_infra_block_attn_res_forward_kernel_l_max_128(
     enable_rmsnorm: bool,
 ):
     ai_infra_block_attn_res_forward_kernel(
-        v_flat, proj_weight, gamma_fp32, h_out, rms_cache, alpha_cache_3d,
-        scale, rms_norm_eps, enable_rmsnorm, 128)
+        v_flat, proj_weight, gamma_fp32, h_out, rms_cache, alpha_cache_3d, scale, rms_norm_eps, enable_rmsnorm, 128
+    )
 
 
 def _validate_forward_inputs(
@@ -287,10 +284,9 @@ def ai_infra_block_attn_res(
         - (output, alpha_cache [B,T,L]) (仅 alpha_out_flag=True)
         - (output, rms_cache, alpha_cache) (两个 flag 均为 True)
     """
-    _validate_forward_inputs(blocks, proj_weight, partial_block,
-                     rmsnorm_gamma, enable_rmsnorm, rms_out_flag)
+    _validate_forward_inputs(blocks, proj_weight, partial_block, rmsnorm_gamma, enable_rmsnorm, rms_out_flag)
     n = len(blocks)
-    l = n + 1 if partial_block is not None else n
+    l = n + 1 if partial_block is not None else n  # noqa: E741
     b, t, d = blocks[0].shape
     dtype = blocks[0].dtype
     device = blocks[0].device
@@ -304,8 +300,9 @@ def ai_infra_block_attn_res(
 
     v = v.reshape(b * t, l, d)
     q = proj_weight.reshape(1, 1, d).to(torch.float32)
-    gamma_fp32 = (rmsnorm_gamma.reshape(1, 1, d) if rmsnorm_gamma is not None
-                  else torch.ones(1, 1, d, dtype=dtype, device=device))
+    gamma_fp32 = (
+        rmsnorm_gamma.reshape(1, 1, d) if rmsnorm_gamma is not None else torch.ones(1, 1, d, dtype=dtype, device=device)
+    )
     gamma_fp32 = gamma_fp32.to(torch.float32)
 
     h_out = torch.zeros(b * t, 1, d, dtype=dtype, device=device)
@@ -314,20 +311,20 @@ def ai_infra_block_attn_res(
     alpha_cache_flat = torch.zeros(b * t, l, dtype=torch.float32, device=device)
     if l <= 32:
         ai_infra_block_attn_res_forward_kernel_l_max_32(
-            v, q, gamma_fp32, h_out, rms_cache_flat, alpha_cache_flat,
-            scale, rmsnorm_eps, enable_rmsnorm)
+            v, q, gamma_fp32, h_out, rms_cache_flat, alpha_cache_flat, scale, rmsnorm_eps, enable_rmsnorm
+        )
     elif l <= 64:
         ai_infra_block_attn_res_forward_kernel_l_max_64(
-            v, q, gamma_fp32, h_out, rms_cache_flat, alpha_cache_flat,
-            scale, rmsnorm_eps, enable_rmsnorm)
+            v, q, gamma_fp32, h_out, rms_cache_flat, alpha_cache_flat, scale, rmsnorm_eps, enable_rmsnorm
+        )
     elif l <= 96:
         ai_infra_block_attn_res_forward_kernel_l_max_96(
-            v, q, gamma_fp32, h_out, rms_cache_flat, alpha_cache_flat,
-            scale, rmsnorm_eps, enable_rmsnorm)
+            v, q, gamma_fp32, h_out, rms_cache_flat, alpha_cache_flat, scale, rmsnorm_eps, enable_rmsnorm
+        )
     elif l <= 128:
         ai_infra_block_attn_res_forward_kernel_l_max_128(
-            v, q, gamma_fp32, h_out, rms_cache_flat, alpha_cache_flat,
-            scale, rmsnorm_eps, enable_rmsnorm)
+            v, q, gamma_fp32, h_out, rms_cache_flat, alpha_cache_flat, scale, rmsnorm_eps, enable_rmsnorm
+        )
     else:
         raise ValueError(f"Unsupported l={l}, expected l <= 128")
 
@@ -344,13 +341,7 @@ def ai_infra_block_attn_res(
     return tuple(results)
 
 
-@pypto.frontend.jit(
-    runtime_options={
-        "stitch_function_max_num": 32,
-        "device_sched_mode": 1,
-        "max_workspace_kb": 300000
-    }
-)
+@pypto.frontend.jit(runtime_options={"stitch_function_max_num": 32, "device_sched_mode": 1, "max_workspace_kb": 300000})
 def ai_infra_block_attn_res_backward_kernel_l_max_32(
     v_flat: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC]),
     grad_h_3d: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
@@ -365,27 +356,35 @@ def ai_infra_block_attn_res_backward_kernel_l_max_32(
     enable_rmsnorm: bool,
 ):
     l_max = 32
-    bt, l, d = v_flat.shape
+    bt, l, d = v_flat.shape  # noqa: E741
     if d == 512:
         configs = {
             "vec_nbuffer_setting": {"DEFAULT": 16, "func8_7": 2, "func8_1": 8, "func8_0": 32, "func8_8": 32},
-            "cube_nbuffer_setting": {"DEFAULT": 16}
+            "cube_nbuffer_setting": {"DEFAULT": 16},
         }
     elif d == 1536:
         configs = {
             "vec_nbuffer_setting": {"DEFAULT": 16},
             "cube_nbuffer_setting": {"DEFAULT": 16},
         }
-    ai_infra_block_attn_res_backward_kernel(v_flat, grad_h_3d, rms_cache, alpha_cache_3d, proj_weight, gamma_fp32,
-        grad_v_flat, grad_proj_weight, grad_gamma, scale, enable_rmsnorm, l_max, configs)
+    ai_infra_block_attn_res_backward_kernel(
+        v_flat,
+        grad_h_3d,
+        rms_cache,
+        alpha_cache_3d,
+        proj_weight,
+        gamma_fp32,
+        grad_v_flat,
+        grad_proj_weight,
+        grad_gamma,
+        scale,
+        enable_rmsnorm,
+        l_max,
+        configs,
+    )
 
 
-@pypto.frontend.jit(
-    runtime_options={
-        "stitch_function_max_num": 32,
-        "device_sched_mode": 1
-    }
-)
+@pypto.frontend.jit(runtime_options={"stitch_function_max_num": 32, "device_sched_mode": 1})
 def ai_infra_block_attn_res_backward_kernel_l_max_64(
     v_flat: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC]),
     grad_h_3d: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
@@ -400,27 +399,32 @@ def ai_infra_block_attn_res_backward_kernel_l_max_64(
     enable_rmsnorm: bool,
 ):
     l_max = 64
-    bt, l, d = v_flat.shape
+    bt, l, d = v_flat.shape  # noqa: E741
     if d == 512:
-        configs = {
-            "vec_nbuffer_setting": {"DEFAULT": 16},
-            "cube_nbuffer_setting": {"DEFAULT": 16}
-        }
+        configs = {"vec_nbuffer_setting": {"DEFAULT": 16}, "cube_nbuffer_setting": {"DEFAULT": 16}}
     elif d == 1536:
         configs = {
             "vec_nbuffer_setting": {"DEFAULT": 16},
             "cube_nbuffer_setting": {"DEFAULT": 16},
         }
-    ai_infra_block_attn_res_backward_kernel(v_flat, grad_h_3d, rms_cache, alpha_cache_3d, proj_weight, gamma_fp32,
-        grad_v_flat, grad_proj_weight, grad_gamma, scale, enable_rmsnorm, l_max, configs)
+    ai_infra_block_attn_res_backward_kernel(
+        v_flat,
+        grad_h_3d,
+        rms_cache,
+        alpha_cache_3d,
+        proj_weight,
+        gamma_fp32,
+        grad_v_flat,
+        grad_proj_weight,
+        grad_gamma,
+        scale,
+        enable_rmsnorm,
+        l_max,
+        configs,
+    )
 
 
-@pypto.frontend.jit(
-    runtime_options={
-        "stitch_function_max_num": 32,
-        "device_sched_mode": 1
-    }
-)
+@pypto.frontend.jit(runtime_options={"stitch_function_max_num": 32, "device_sched_mode": 1})
 def ai_infra_block_attn_res_backward_kernel_l_max_96(
     v_flat: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC]),
     grad_h_3d: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
@@ -435,27 +439,32 @@ def ai_infra_block_attn_res_backward_kernel_l_max_96(
     enable_rmsnorm: bool,
 ):
     l_max = 96
-    bt, l, d = v_flat.shape
+    bt, l, d = v_flat.shape  # noqa: E741
     if d == 512:
-        configs = {
-            "vec_nbuffer_setting": {"DEFAULT": 16},
-            "cube_nbuffer_setting": {"DEFAULT": 16}
-        }
+        configs = {"vec_nbuffer_setting": {"DEFAULT": 16}, "cube_nbuffer_setting": {"DEFAULT": 16}}
     elif d == 1536:
         configs = {
             "vec_nbuffer_setting": {"DEFAULT": 16},
             "cube_nbuffer_setting": {"DEFAULT": 16},
         }
-    ai_infra_block_attn_res_backward_kernel(v_flat, grad_h_3d, rms_cache, alpha_cache_3d, proj_weight, gamma_fp32,
-        grad_v_flat, grad_proj_weight, grad_gamma, scale, enable_rmsnorm, l_max, configs)
+    ai_infra_block_attn_res_backward_kernel(
+        v_flat,
+        grad_h_3d,
+        rms_cache,
+        alpha_cache_3d,
+        proj_weight,
+        gamma_fp32,
+        grad_v_flat,
+        grad_proj_weight,
+        grad_gamma,
+        scale,
+        enable_rmsnorm,
+        l_max,
+        configs,
+    )
 
 
-@pypto.frontend.jit(
-    runtime_options={
-        "stitch_function_max_num": 32,
-        "device_sched_mode": 1
-    }
-)
+@pypto.frontend.jit(runtime_options={"stitch_function_max_num": 32, "device_sched_mode": 1})
 def ai_infra_block_attn_res_backward_kernel_l_max_128(
     v_flat: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC]),
     grad_h_3d: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
@@ -470,40 +479,63 @@ def ai_infra_block_attn_res_backward_kernel_l_max_128(
     enable_rmsnorm: bool,
 ):
     l_max = 128
-    bt, l, d = v_flat.shape
+    bt, l, d = v_flat.shape  # noqa: E741
     if d == 512:
-        configs = {
-            "vec_nbuffer_setting": {"DEFAULT": 16},
-            "cube_nbuffer_setting": {"DEFAULT": 16}
-        }
+        configs = {"vec_nbuffer_setting": {"DEFAULT": 16}, "cube_nbuffer_setting": {"DEFAULT": 16}}
     elif d == 1536:
         configs = {
             "vec_nbuffer_setting": {"DEFAULT": 16},
             "cube_nbuffer_setting": {"DEFAULT": 16},
         }
-    ai_infra_block_attn_res_backward_kernel(v_flat, grad_h_3d, rms_cache, alpha_cache_3d, proj_weight, gamma_fp32,
-        grad_v_flat, grad_proj_weight, grad_gamma, scale, enable_rmsnorm, l_max, configs)
+    ai_infra_block_attn_res_backward_kernel(
+        v_flat,
+        grad_h_3d,
+        rms_cache,
+        alpha_cache_3d,
+        proj_weight,
+        gamma_fp32,
+        grad_v_flat,
+        grad_proj_weight,
+        grad_gamma,
+        scale,
+        enable_rmsnorm,
+        l_max,
+        configs,
+    )
 
 
 @pypto.frontend.function
-def ai_infra_block_attn_res_backward_kernel(v_flat, grad_h_3d, rms_cache, alpha_cache_3d, proj_weight, gamma_fp32,
-                                    grad_v_flat, grad_proj_weight, grad_gamma, scale, enable_rmsnorm, l_max, configs):
+def ai_infra_block_attn_res_backward_kernel(
+    v_flat,
+    grad_h_3d,
+    rms_cache,
+    alpha_cache_3d,
+    proj_weight,
+    gamma_fp32,
+    grad_v_flat,
+    grad_proj_weight,
+    grad_gamma,
+    scale,
+    enable_rmsnorm,
+    l_max,
+    configs,
+):
     """PyPTO jit ai_infra_block_attn_res_backward_kernel
 
-        v_flat:            [B*T, L, D]    bf16/fp16
-        grad_h_3d:         [B*T, 1, D]    bf16/fp16
-        rms_cache:         [B*T, L, 1]    fp32 (enable_rmsnorm=False 时为空)
-        alpha_cache_3d:    [B*T, 1, L]    fp32
-        proj_weight:       [1, 1, D]      bf16/fp16
-        gamma_fp32:        [1, 1, D]      fp32
-        grad_v_flat:       [B*T, L, D]    bf16/fp16
-        grad_proj_weight:  [1, 1, D]      bf16/fp16
-        grad_gamma:        [1, 1, D]      bf16/fp16
-        scale:          softmax 缩放因子
-        enable_rmsnorm: 是否启用 RMSNorm
-        l_max:          L分档大小
+    v_flat:            [B*T, L, D]    bf16/fp16
+    grad_h_3d:         [B*T, 1, D]    bf16/fp16
+    rms_cache:         [B*T, L, 1]    fp32 (enable_rmsnorm=False 时为空)
+    alpha_cache_3d:    [B*T, 1, L]    fp32
+    proj_weight:       [1, 1, D]      bf16/fp16
+    gamma_fp32:        [1, 1, D]      fp32
+    grad_v_flat:       [B*T, L, D]    bf16/fp16
+    grad_proj_weight:  [1, 1, D]      bf16/fp16
+    grad_gamma:        [1, 1, D]      bf16/fp16
+    scale:          softmax 缩放因子
+    enable_rmsnorm: 是否启用 RMSNorm
+    l_max:          L分档大小
     """
-    bt, l, d = v_flat.shape
+    bt, l, d = v_flat.shape  # noqa: E741
     dtype = v_flat.dtype
     unroll_list = [1, 64]
     l_tile = max(16384 // d, 1)
@@ -524,13 +556,11 @@ def ai_infra_block_attn_res_backward_kernel(v_flat, grad_h_3d, rms_cache, alpha_
         pypto.set_vec_tile_shapes(1, l_tile, d)
         grad_h_tile_3d = pypto.view(grad_h_3d, [tile_bt, 1, d], [bt_idx, 0, 0])
 
-        v_tile = pypto.view(v_flat, [tile_bt, l_max, d], [bt_idx, 0, 0],
-                            valid_shape=[tile_bt, l, d])
+        v_tile = pypto.view(v_flat, [tile_bt, l_max, d], [bt_idx, 0, 0], valid_shape=[tile_bt, l, d])
         pypto.set_cube_tile_shapes([1, 1], [32768 // l_max, 32768 // l_max], [l_max, l_max])
         grad_alpha_fp32 = pypto.matmul(grad_h_tile_3d, v_tile, pypto.DT_FP32, b_trans=True)
 
-        alpha_tile_3d = pypto.view(alpha_cache_3d, [tile_bt, 1, l_max], [bt_idx, 0, 0],
-                                   valid_shape=[tile_bt, 1, l])
+        alpha_tile_3d = pypto.view(alpha_cache_3d, [tile_bt, 1, l_max], [bt_idx, 0, 0], valid_shape=[tile_bt, 1, l])
         pypto.set_cube_tile_shapes([l_max, l_max], [16, 16], [16384 // l_max, 16384 // l_max])
         pypto.set_vec_tile_shapes(l_tile, 1, d)
         grad_h_tile_3d_fp32 = pypto.cast(grad_h_tile_3d, pypto.DT_FP32)
@@ -538,18 +568,15 @@ def ai_infra_block_attn_res_backward_kernel(v_flat, grad_h_3d, rms_cache, alpha_
 
         pypto.set_semantic_label("Attention Softmax Backward")
         pypto.set_vec_tile_shapes(128, 1, 128)
-        grad_alpha_2d_fp32 = pypto.reshape(grad_alpha_fp32, [tile_bt, l_max],
-                                   valid_shape=[tile_bt, l])
-        alpha_2d = pypto.reshape(alpha_tile_3d, [tile_bt, l_max],
-                                 valid_shape=[tile_bt, l])
+        grad_alpha_2d_fp32 = pypto.reshape(grad_alpha_fp32, [tile_bt, l_max], valid_shape=[tile_bt, l])
+        alpha_2d = pypto.reshape(alpha_tile_3d, [tile_bt, l_max], valid_shape=[tile_bt, l])
         pypto.set_vec_tile_shapes(128, 128)
         alpha_fp32_2d = pypto.cast(alpha_2d, pypto.DT_FP32)
 
         dot_fp32 = pypto.sum(grad_alpha_2d_fp32 * alpha_fp32_2d, dim=-1, keepdim=True)
 
         grad_logits_fp32 = alpha_fp32_2d * (grad_alpha_2d_fp32 - dot_fp32)
-        grad_logits_reshaped = pypto.reshape(grad_logits_fp32, [tile_bt, 1, l_max],
-                                             valid_shape=[tile_bt, 1, l])
+        grad_logits_reshaped = pypto.reshape(grad_logits_fp32, [tile_bt, 1, l_max], valid_shape=[tile_bt, 1, l])
 
         pypto.set_semantic_label("Attention Scores Backward")
         pypto.set_vec_tile_shapes(1, l_tile, d)
@@ -559,8 +586,7 @@ def ai_infra_block_attn_res_backward_kernel(v_flat, grad_h_3d, rms_cache, alpha_
         proj_weight_scale_fp32 = proj_weight_scale
         if enable_rmsnorm:
             pypto.set_vec_tile_shapes(1, l_tile, d)
-            rms_tile = pypto.view(rms_cache, [tile_bt, l_max, 1], [bt_idx, 0, 0],
-                                valid_shape=[tile_bt, l, 1])
+            rms_tile = pypto.view(rms_cache, [tile_bt, l_max, 1], [bt_idx, 0, 0], valid_shape=[tile_bt, l, 1])
             rms_tile_fp32 = pypto.cast(rms_tile, pypto.DT_FP32)
             k_tile_fp32 = v_tile_fp32 / rms_tile_fp32 * gamma_fp32
         else:
@@ -570,8 +596,7 @@ def ai_infra_block_attn_res_backward_kernel(v_flat, grad_h_3d, rms_cache, alpha_
         grad_k_fp32 = pypto.matmul(grad_logits_reshaped, proj_weight_scale_fp32, pypto.DT_FP32, a_trans=True)
 
         pypto.set_vec_tile_shapes(1, l_tile, d)
-        grad_logits_reshaped = pypto.reshape(grad_logits_fp32 + 0.0, [tile_bt, l_max, 1],
-                                             valid_shape=[tile_bt, l, 1])
+        grad_logits_reshaped = pypto.reshape(grad_logits_fp32 + 0.0, [tile_bt, l_max, 1], valid_shape=[tile_bt, l, 1])
         grad_proj_weight_tile_fp32 = pypto.mul(grad_logits_reshaped, k_tile_fp32)
         pypto.set_vec_tile_shapes(tile_bt, 1, 16384 // tile_bt)
         grad_proj_weight_tile_fp32 = pypto.sum(grad_proj_weight_tile_fp32, dim=0, keepdim=True)
@@ -632,7 +657,7 @@ def _validate_backward_inputs(
 
     has_partial = partial_block is not None
     b, t, d = blocks[0].shape
-    l = n + 1 if has_partial else n
+    l = n + 1 if has_partial else n  # noqa: E741
     dtype = blocks[0].dtype
     device = blocks[0].device
 
@@ -660,8 +685,7 @@ def _validate_backward_inputs(
         raise ValueError(f"proj_weight shape must be {(d,)}, but got {tuple(proj_weight.shape)}")
     if proj_weight.dtype != dtype or proj_weight.device != device:
         raise ValueError(
-            f"proj_weight dtype/device must be {dtype}/{device}, "
-            f"but got {proj_weight.dtype}/{proj_weight.device}"
+            f"proj_weight dtype/device must be {dtype}/{device}, but got {proj_weight.dtype}/{proj_weight.device}"
         )
 
     if alpha_cache is None:
@@ -715,14 +739,14 @@ def ai_infra_block_attn_res_backward(
         - (grad_blocks, grad_partial_block, grad_proj_weight, grad_rmsnorm_gamma,
                 grad_rmsnorm_gamma) (enable_rmsnorm为True时)
     """
-    _validate_backward_inputs(grad_h, blocks, proj_weight, alpha_cache,
-                              partial_block, rmsnorm_gamma, rms_cache,
-                              enable_rmsnorm)
+    _validate_backward_inputs(
+        grad_h, blocks, proj_weight, alpha_cache, partial_block, rmsnorm_gamma, rms_cache, enable_rmsnorm
+    )
 
     n = len(blocks)
     has_partial = partial_block is not None
     b, t, d = blocks[0].shape
-    l = n + 1 if has_partial else n
+    l = n + 1 if has_partial else n  # noqa: E741
     dtype = blocks[0].dtype
     device = blocks[0].device
 
@@ -750,8 +774,19 @@ def ai_infra_block_attn_res_backward(
     grad_proj_weight_out = torch.zeros(1, 1, d, dtype=dtype, device=device)
     grad_gamma_out = torch.zeros(1, 1, d, dtype=dtype, device=device)
 
-    kernel_args = (v_flat, grad_h_3d, rms_cache_flat, alpha_cache_3d, proj_weight_reshaped, gamma_reshaped,
-        grad_v_flat, grad_proj_weight_out, grad_gamma_out, scale, enable_rmsnorm)
+    kernel_args = (
+        v_flat,
+        grad_h_3d,
+        rms_cache_flat,
+        alpha_cache_3d,
+        proj_weight_reshaped,
+        gamma_reshaped,
+        grad_v_flat,
+        grad_proj_weight_out,
+        grad_gamma_out,
+        scale,
+        enable_rmsnorm,
+    )
 
     if l <= 32:
         ai_infra_block_attn_res_backward_kernel_l_max_32(*kernel_args)
@@ -765,10 +800,7 @@ def ai_infra_block_attn_res_backward(
         raise ValueError(f"Unsupported l={l}, expected l <= 128")
 
     grad_v = grad_v_flat.reshape(b, t, l, d)
-    grad_blocks = [
-        grad_v[:, :, i, :].contiguous()
-        for i in range(n)
-    ]
+    grad_blocks = [grad_v[:, :, i, :].contiguous() for i in range(n)]
 
     if has_partial:
         grad_partial_block = grad_v[:, :, n, :].contiguous()

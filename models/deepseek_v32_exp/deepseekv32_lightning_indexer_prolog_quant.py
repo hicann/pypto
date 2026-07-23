@@ -8,19 +8,22 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import math
+""" """
+
 import logging
-import torch
-import torch_npu
-import pytest
-import pypto
+import math
+import os
 
 from lightning_indexer_prolog_quant_impl import (
-    IndexerPrologQuantInput, IndexerPrologQuantOutput, IndexerPrologQuantAttr, IndexerPrologQuantConfigs,
-    lightning_indexer_prolog_quant)
+    IndexerPrologQuantAttr,
+    IndexerPrologQuantConfigs,
+    IndexerPrologQuantInput,
+    IndexerPrologQuantOutput,
+    lightning_indexer_prolog_quant,
+)
+import pytest
+import torch
+import torch_npu
 from utils.compare import compare
 
 
@@ -92,9 +95,7 @@ def gen_cache_tensor(k_cache_bsnd, block_table, block_num, block_size):
             if cache_block_idx == -1:
                 continue
             else:
-                k_cache[cache_block_idx, :, :, :] = k_cache_raw[
-                    b_idx, block_offset: (block_offset + block_size), :, :
-                ]
+                k_cache[cache_block_idx, :, :, :] = k_cache_raw[b_idx, block_offset:(block_offset + block_size), :, :]
 
     return k_cache
 
@@ -119,7 +120,7 @@ def gen_inputs(dims, dtype=torch.bfloat16, qunat_dtype=torch.int8):
     ln_gamma = torch.ones((d,), dtype=dtype)
     ln_beta = torch.zeros((d,), dtype=dtype)
 
-    random_angles = (torch.rand(b, s, rope_head_dim, dtype=torch.float32) * 2 * torch.pi)
+    random_angles = torch.rand(b, s, rope_head_dim, dtype=torch.float32) * 2 * torch.pi
     cos = torch.cos(random_angles).to(dtype)
     sin = torch.sin(random_angles).to(dtype)
 
@@ -270,49 +271,32 @@ def indexer_prolog(inputs: dict, dims: dict):
     scatter_update_pa_bsnd(k_scale_cache, k_scale.reshape(b, s, 1, 1), cache_index, -2)
 
     # matmul use float32 for arm, arm平台matmul在bfloat16数据类型下表现跟x86不一致，通过升精度保证正确性
-    weights = torch.matmul(x.to(torch.float32), \
-        w_idx_proj.to(torch.float32)).to(x_dtype).to(torch.float32)  # (b, s, n)
-    weights = weights * (n ** -0.5) * (d ** -0.5)
+    weights = torch.matmul(x.to(torch.float32), w_idx_proj.to(torch.float32)).to(x_dtype).to(torch.float32)  # (b, s, n)
+    weights = weights * (n**-0.5) * (d**-0.5)
     weights = weights.to(torch.float16)
 
     # output dtype: int8, fp16, int8, fp16, fp16
-    outputs = {"query": q_int8, "query_scale": q_scale,
-               "idx_k_cache_out": k_cache, "idx_k_scale_cache_out": k_scale_cache,
-               "weights": weights}
+    outputs = {
+        "query": q_int8,
+        "query_scale": q_scale,
+        "idx_k_cache_out": k_cache,
+        "idx_k_scale_cache_out": k_scale_cache,
+        "weights": weights,
+    }
     return outputs
 
 
 def gen_data(case_name):
     if case_name.startswith("QuantLightningIndexerPrologSTest.b4_s1_2_s2_64k"):
-        params = {
-            "b": 4,
-            "s1": 2,
-            "s2": 1024 * 64
-        }
+        params = {"b": 4, "s1": 2, "s2": 1024 * 64}
     elif case_name.startswith("QuantLightningIndexerPrologSTest.b8_s1_2_s2_64k"):
-        params = {
-            "b": 8,
-            "s1": 2,
-            "s2": 1024 * 64
-        }
+        params = {"b": 8, "s1": 2, "s2": 1024 * 64}
     elif case_name.startswith("QuantLightningIndexerPrologSTest.b1_s1_4k_s2_64k"):
-        params = {
-            "b": 1,
-            "s1": 1024 * 4,
-            "s2": 1024 * 64
-        }
+        params = {"b": 1, "s1": 1024 * 4, "s2": 1024 * 64}
     elif case_name.startswith("QuantLightningIndexerPrologSTest.b2_s1_4k_s2_64k"):
-        params = {
-            "b": 2,
-            "s1": 1024 * 4,
-            "s2": 1024 * 64
-        }
+        params = {"b": 2, "s1": 1024 * 4, "s2": 1024 * 64}
     elif case_name.startswith("QuantLightningIndexerPrologSTest.b128_s1_4_s2_8k"):
-        params = {
-            "b": 128,
-            "s1": 4,
-            "s2": 1024 * 8
-        }
+        params = {"b": 128, "s1": 4, "s2": 1024 * 8}
     else:
         raise Exception(f"Can't get func to gen golden, Case({case_name})")
 
@@ -353,8 +337,7 @@ def do_test_lighting_indexer_prolog_quant(case_name, configs):
         w_qb=torch_npu.npu_format_cast(inputs_data["w_idx_qb"].npu().contiguous(), torch_npu.Format.FRACTAL_NZ),
         w_qb_scale=inputs_data["w_idx_qb_scale"].npu(),
         wk=torch_npu.npu_format_cast(inputs_data["w_idx_k"].npu().contiguous(), torch_npu.Format.FRACTAL_NZ),
-        w_proj=torch_npu.npu_format_cast(
-            inputs_data["w_idx_proj"].npu().contiguous(), torch_npu.Format.FRACTAL_NZ),
+        w_proj=torch_npu.npu_format_cast(inputs_data["w_idx_proj"].npu().contiguous(), torch_npu.Format.FRACTAL_NZ),
         ln_gamma_k=inputs_data["layer_norm_gamma"].npu(),
         ln_beta_k=inputs_data["layer_norm_beta"].npu(),
         cos_idx_rope=inputs_data["cos_idx_rope"].npu().reshape(t, rope_head_dim),
@@ -363,7 +346,7 @@ def do_test_lighting_indexer_prolog_quant(case_name, configs):
         hadamard_k=inputs_data["hadamard_k"].npu(),
         k_cache=inputs_data["idx_k_cache"].npu(),
         k_cache_scale=inputs_data["idx_k_scale_cache"].npu(),
-        k_cache_index=inputs_data["idx_k_cache_index"].npu().reshape(t)
+        k_cache_index=inputs_data["idx_k_cache_index"].npu().reshape(t),
     )
 
     q_int8_golden = golden_data["query"].reshape(t, head_num, idx_head_dim)
@@ -377,7 +360,7 @@ def do_test_lighting_indexer_prolog_quant(case_name, configs):
         q_scale=gen_zero_tensor(q_scale_golden),
         k_int8=inputs.k_cache,
         k_scale=inputs.k_cache_scale,
-        weights=gen_zero_tensor(weights_golden)
+        weights=gen_zero_tensor(weights_golden),
     )
 
     # ---- Attrs ----
@@ -387,15 +370,14 @@ def do_test_lighting_indexer_prolog_quant(case_name, configs):
         layerout_key="PA_BSND",
     )
 
-    tensors = [tensor for _, tensor in vars(inputs).items()] + \
-              [tensor for _, tensor in vars(outputs).items()]
+    tensors = [tensor for _, tensor in vars(inputs).items()] + [tensor for _, tensor in vars(outputs).items()]
     lightning_indexer_prolog_quant(*tensors, configs, attrs)
 
     compare(outputs.q_int8.cpu(), q_int8_golden, "q_int8", 1, 0, 0)
     compare(outputs.q_scale.cpu(), q_scale_golden, "q_scale", 0.000025, 0, 0.005)
     compare(outputs.k_int8.cpu(), k_cache_golden, "k_int8", 1, 0, 0)
     compare(outputs.k_scale.cpu(), k_cache_scale_golden, "k_scale", 0.000025, 0, 0)
-    compare(outputs.weights.cpu(), weights_golden, "weights", 0.000025, 0., 0)
+    compare(outputs.weights.cpu(), weights_golden, "weights", 0.000025, 0.0, 0)
 
     print(f"=== {case_name}: PASS ===")
 
@@ -486,8 +468,5 @@ def test_b128_s1_4_s2_8k():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-        level=logging.INFO
-    )
+    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.INFO)
     test_b4_s1_2_s2_64k()

@@ -1,4 +1,3 @@
-
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -13,7 +12,7 @@ __all__ = [
     "Source",
 ]
 
-from .parser import ast2pil, Source
+from .parser import Source, ast2pil
 from .pil2ir import compile
 
 

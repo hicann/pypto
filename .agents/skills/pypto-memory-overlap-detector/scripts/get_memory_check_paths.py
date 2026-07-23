@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 
+import logging
 import os
 import sys
-import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import setup_logging, validate_path, find_trace_log_dir, get_latest_output_subdir
+from common import find_trace_log_dir, get_latest_output_subdir, setup_logging, validate_path
 
 setup_logging()
 

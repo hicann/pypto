@@ -8,18 +8,18 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import json
-import sys
 import logging
+import sys
 
 if __name__ == "__main__":
-
     try:
         import jsonschema
+
         has_jsonschema = True
-    except ImportError as e:
+    except ImportError:
         logging.warning("jsonschema module not found, ignore the schema validation")
         has_jsonschema = False
 

@@ -9,13 +9,11 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-from test_pil_builder_utils import TestParser, Expr
+from test_pil_builder_utils import Expr, TestParser
 
 
 def test_pil_builder_constant():
-
     with TestParser():
-
         # --- constant in binop ---
 
         @TestParser.test
@@ -80,18 +78,18 @@ def test_pil_builder_constant():
 
         @TestParser.test
         def const_call_pos_arg():
-
             def func(x):
                 Expr.str(x)
+
             func(42)
 
         # --- constant as call keyword arg ---
 
         @TestParser.test
         def const_call_kw_arg():
-
             def func(x):
                 Expr.str(x)
+
             func(x=42)
 
         # --- constant in tuple literal ---
@@ -157,7 +155,7 @@ def test_pil_builder_constant():
 
         @TestParser.test
         def const_annotation_no_value():
-            var_x: int
+            _var_x: int
 
         @TestParser.test
         def const_annotation_with_value():
@@ -166,143 +164,139 @@ def test_pil_builder_constant():
 
 
 def test_pil_builder_joined_str():
-
     with TestParser():
-
         # --- 单个插值, 无 conversion, 无 format_spec ---
         # PIL: single-part path, returns the expr directly (no join)
         # Expr.str returns a str, so format(s, '') == s — values match
 
         @TestParser.test
         def fstr_single_expr():
-            var_x = f"{Expr.str(0)}"
+            _var_x = f"{Expr.str(0)}"
 
         # --- 多个部分: 字面量前缀 + 插值 ---
 
         @TestParser.test
         def fstr_prefix_and_expr():
-            var_x = f"prefix_{Expr.str(0)}"
+            _var_x = f"prefix_{Expr.str(0)}"
 
         # --- 多个部分: 插值 + 字面量后缀 ---
 
         @TestParser.test
         def fstr_expr_and_suffix():
-            var_x = f"{Expr.str(0)}_suffix"
+            _var_x = f"{Expr.str(0)}_suffix"
 
         # --- 多个部分: 前缀 + 插值 + 后缀 ---
 
         @TestParser.test
         def fstr_prefix_expr_suffix():
-            var_x = f"prefix_{Expr.str(0)}_suffix"
+            _var_x = f"prefix_{Expr.str(0)}_suffix"
 
         # --- 多个插值, 无字面量 ---
 
         @TestParser.test
         def fstr_two_exprs():
-            var_x = f"{Expr.str(0)}{Expr.str(1)}"
+            _var_x = f"{Expr.str(0)}{Expr.str(1)}"
 
         # --- 多个插值, 中间有字面量 ---
 
         @TestParser.test
         def fstr_expr_sep_expr():
-            var_x = f"{Expr.str(0)}_{Expr.str(1)}"
+            _var_x = f"{Expr.str(0)}_{Expr.str(1)}"
 
         # --- conversion !s ---
 
         @TestParser.test
         def fstr_conversion_s():
-            var_x = f"{Expr.int(0)!s}"
+            _var_x = f"{Expr.int(0)!s}"
 
         # --- conversion !r ---
 
         @TestParser.test
         def fstr_conversion_r():
-            var_x = f"{Expr.int(0)!r}"
+            _var_x = f"{Expr.int(0)!r}"
 
         # --- conversion !a ---
 
         @TestParser.test
         def fstr_conversion_a():
-            var_x = f"{Expr.int(0)!a}"
+            _var_x = f"{Expr.int(0)!a}"
 
         # --- format_spec 是字面量 ---
 
         @TestParser.test
         def fstr_format_spec_const():
-            var_x = f"{Expr.str(0):>10}"
+            _var_x = f"{Expr.str(0):>10}"
 
         # --- format_spec 是变量表达式 ---
 
         @TestParser.test
         def fstr_format_spec_expr():
             var_fmt = '>10'
-            var_x = f"{Expr.str(0):{var_fmt}}"
+            _var_x = f"{Expr.str(0):{var_fmt}}"
 
         # --- conversion + format_spec ---
 
         @TestParser.test
         def fstr_conversion_and_format_spec():
-            var_x = f"{Expr.int(0)!r:>10}"
+            _var_x = f"{Expr.int(0)!r:>10}"
 
         # --- 插值表达式本身是嵌套调用 ---
 
         @TestParser.test
         def fstr_nested_call_expr():
-            var_x = f"{Expr.str(Expr.int(0))}"
+            _var_x = f"{Expr.str(Expr.int(0))}"
 
 
 def test_pil_builder_dict():
-
     with TestParser():
-
         # --- empty dict ---
 
         @TestParser.test
         def dict_empty():
-            var_d = {}
+            _var_d = {}
 
         # --- single pair: constant key, call value ---
 
         @TestParser.test
         def dict_const_key_call_value():
-            var_d = {0: Expr.int(1)}
+            _var_d = {0: Expr.int(1)}
 
         # --- single pair: call key, call value ---
 
         @TestParser.test
         def dict_call_key_call_value():
-            var_d = {Expr.int(0): Expr.int(1)}
+            _var_d = {Expr.int(0): Expr.int(1)}
 
         # --- multiple pairs: all call keys and values (eval order: k0,v0,k1,v1,...) ---
 
         @TestParser.test
         def dict_multiple_pairs():
-            var_d = {Expr.int(0): Expr.int(1), Expr.int(2): Expr.int(3)}
+            _var_d = {Expr.int(0): Expr.int(1), Expr.int(2): Expr.int(3)}
 
         @TestParser.test
         def dict_three_pairs():
-            var_d = {Expr.int(0): Expr.int(1), Expr.int(2): Expr.int(3), Expr.int(4): Expr.int(5)}
+            _var_d = {Expr.int(0): Expr.int(1), Expr.int(2): Expr.int(3), Expr.int(4): Expr.int(5)}
 
         # --- spread: **other (key is None in the AST) ---
 
         @TestParser.test
         def dict_spread_only():
             var_other = {0: Expr.int(0)}
-            var_d = {**var_other}
+            _var_d = {**var_other}
 
         # --- mixed: normal pair then spread ---
 
         @TestParser.test
         def dict_normal_then_spread():
             var_other = {2: Expr.int(2)}
-            var_d = {Expr.int(0): Expr.int(1), **var_other}
+            _var_d = {Expr.int(0): Expr.int(1), **var_other}
 
         # --- spread in the middle ---
 
         @TestParser.test
         def dict_spread_in_middle():
             var_other = {1: Expr.int(2)}
-            var_d = {Expr.int(0): Expr.int(0), **var_other, Expr.int(3): Expr.int(4)}
+            _var_d = {Expr.int(0): Expr.int(0), **var_other, Expr.int(3): Expr.int(4)}
 
         # --- multiple spreads ---
 
@@ -310,304 +304,296 @@ def test_pil_builder_dict():
         def dict_multiple_spreads():
             var_a = {0: Expr.int(0)}
             var_b = {1: Expr.int(1)}
-            var_d = {**var_a, **var_b}
+            _var_d = {**var_a, **var_b}
 
         # --- spread where the source is a function call result ---
 
         @TestParser.test
         def dict_spread_from_func_call():
-
             def make():
                 return {Expr.int(0): Expr.int(1)}
-            var_d = {**make()}
+
+            _var_d = {**make()}
 
         @TestParser.test
         def dict_normal_then_spread_from_call():
-
             def make():
                 return {Expr.int(2): Expr.int(3)}
-            var_d = {Expr.int(0): Expr.int(1), **make()}
+
+            _var_d = {Expr.int(0): Expr.int(1), **make()}
 
         @TestParser.test
         def dict_spread_from_call_then_normal():
-
             def make():
                 return {Expr.int(0): Expr.int(1)}
-            var_d = {**make(), Expr.int(2): Expr.int(3)}
+
+            _var_d = {**make(), Expr.int(2): Expr.int(3)}
 
         @TestParser.test
         def dict_multiple_spreads_from_calls():
-
             def make_a():
                 return {Expr.int(0): Expr.int(1)}
 
             def make_b():
                 return {Expr.int(2): Expr.int(3)}
-            var_d = {**make_a(), **make_b()}
+
+            _var_d = {**make_a(), **make_b()}
 
         # --- nested: value is itself a dict literal ---
 
         @TestParser.test
         def dict_nested_value():
-            var_d = {Expr.int(0): {Expr.int(1): Expr.int(2)}}
+            _var_d = {Expr.int(0): {Expr.int(1): Expr.int(2)}}
 
 
 def test_pil_builder_set():
-
     with TestParser():
-
         # --- single element: constant ---
 
         @TestParser.test
         def set_single_const():
-            var_s = {0}
+            _var_s = {0}
 
         # --- single element: call ---
 
         @TestParser.test
         def set_single_call():
-            var_s = {Expr.int(0)}
+            _var_s = {Expr.int(0)}
 
         # --- multiple elements: all calls (eval order left-to-right) ---
 
         @TestParser.test
         def set_multiple_calls():
-            var_s = {Expr.int(0), Expr.int(1), Expr.int(2)}
+            _var_s = {Expr.int(0), Expr.int(1), Expr.int(2)}
 
         # --- spread: *other where other is a variable ---
 
         @TestParser.test
         def set_spread_only():
             var_other = [Expr.int(0), Expr.int(1)]
-            var_s = {*var_other}
+            _var_s = {*var_other}
 
         # --- spread where source is a function call result ---
 
         @TestParser.test
         def set_spread_from_func_call():
-
             def make():
                 return [Expr.int(0), Expr.int(1)]
-            var_s = {*make()}
+
+            _var_s = {*make()}
 
         # --- normal element then spread ---
 
         @TestParser.test
         def set_normal_then_spread():
-
             def make():
                 return [Expr.int(2), Expr.int(3)]
-            var_s = {Expr.int(0), Expr.int(1), *make()}
+
+            _var_s = {Expr.int(0), Expr.int(1), *make()}
 
         # --- spread then normal element ---
 
         @TestParser.test
         def set_spread_then_normal():
-
             def make():
                 return [Expr.int(0), Expr.int(1)]
-            var_s = {*make(), Expr.int(2), Expr.int(3)}
+
+            _var_s = {*make(), Expr.int(2), Expr.int(3)}
 
         # --- spread in the middle ---
 
         @TestParser.test
         def set_spread_in_middle():
-
             def make():
                 return [Expr.int(1), Expr.int(2)]
-            var_s = {Expr.int(0), *make(), Expr.int(3)}
+
+            _var_s = {Expr.int(0), *make(), Expr.int(3)}
 
         # --- multiple spreads from calls ---
 
         @TestParser.test
         def set_multiple_spreads_from_calls():
-
             def make_a():
                 return [Expr.int(0), Expr.int(1)]
 
             def make_b():
                 return [Expr.int(2), Expr.int(3)]
-            var_s = {*make_a(), *make_b()}
+
+            _var_s = {*make_a(), *make_b()}
 
 
 def test_pil_builder_list():
-
     with TestParser():
-
         # --- empty ---
 
         @TestParser.test
         def list_empty():
-            var_l = []
+            _var_l = []
 
         # --- single element: constant ---
 
         @TestParser.test
         def list_single_const():
-            var_l = [0]
+            _var_l = [0]
 
         # --- single element: call ---
 
         @TestParser.test
         def list_single_call():
-            var_l = [Expr.int(0)]
+            _var_l = [Expr.int(0)]
 
         # --- multiple elements: all calls (eval order left-to-right) ---
 
         @TestParser.test
         def list_multiple_calls():
-            var_l = [Expr.int(0), Expr.int(1), Expr.int(2)]
+            _var_l = [Expr.int(0), Expr.int(1), Expr.int(2)]
 
         # --- starred: *other where other is a variable ---
 
         @TestParser.test
         def list_starred_only():
             var_other = [Expr.int(0), Expr.int(1)]
-            var_l = [*var_other]
+            _var_l = [*var_other]
 
         # --- starred: source is a function call result ---
 
         @TestParser.test
         def list_starred_from_call():
-
             def make():
                 return [Expr.int(0), Expr.int(1)]
-            var_l = [*make()]
+
+            _var_l = [*make()]
 
         # --- normal then starred ---
 
         @TestParser.test
         def list_normal_then_starred():
-
             def make():
                 return [Expr.int(2), Expr.int(3)]
-            var_l = [Expr.int(0), Expr.int(1), *make()]
+
+            _var_l = [Expr.int(0), Expr.int(1), *make()]
 
         # --- starred then normal ---
 
         @TestParser.test
         def list_starred_then_normal():
-
             def make():
                 return [Expr.int(0), Expr.int(1)]
-            var_l = [*make(), Expr.int(2), Expr.int(3)]
+
+            _var_l = [*make(), Expr.int(2), Expr.int(3)]
 
         # --- starred in the middle ---
 
         @TestParser.test
         def list_starred_in_middle():
-
             def make():
                 return [Expr.int(1), Expr.int(2)]
-            var_l = [Expr.int(0), *make(), Expr.int(3)]
+
+            _var_l = [Expr.int(0), *make(), Expr.int(3)]
 
         # --- multiple starred from calls ---
 
         @TestParser.test
         def list_multiple_starred_from_calls():
-
             def make_a():
                 return [Expr.int(0), Expr.int(1)]
 
             def make_b():
                 return [Expr.int(2), Expr.int(3)]
-            var_l = [*make_a(), *make_b()]
+
+            _var_l = [*make_a(), *make_b()]
 
         # --- nested list literal as element ---
 
         @TestParser.test
         def list_nested():
-            var_l = [Expr.int(0), [Expr.int(1), Expr.int(2)]]
+            _var_l = [Expr.int(0), [Expr.int(1), Expr.int(2)]]
 
 
 def test_pil_builder_tuple():
-
     with TestParser():
-
         # --- single element (trailing comma) ---
 
         @TestParser.test
         def tuple_single_const():
-            var_t = (0,)
+            _var_t = (0,)
 
         # --- single element: call ---
 
         @TestParser.test
         def tuple_single_call():
-            var_t = (Expr.int(0),)
+            _var_t = (Expr.int(0),)
 
         # --- multiple elements: all calls (eval order left-to-right) ---
 
         @TestParser.test
         def tuple_multiple_calls():
-            var_t = (Expr.int(0), Expr.int(1), Expr.int(2))
+            _var_t = (Expr.int(0), Expr.int(1), Expr.int(2))
 
         # --- starred: *other where other is a variable ---
 
         @TestParser.test
         def tuple_starred_only():
             var_other = [Expr.int(0), Expr.int(1)]
-            var_t = (*var_other,)
+            _var_t = (*var_other,)
 
         # --- starred: source is a function call result ---
 
         @TestParser.test
         def tuple_starred_from_call():
-
             def make():
                 return [Expr.int(0), Expr.int(1)]
-            var_t = (*make(),)
+
+            _var_t = (*make(),)
 
         # --- normal then starred ---
 
         @TestParser.test
         def tuple_normal_then_starred():
-
             def make():
                 return [Expr.int(2), Expr.int(3)]
-            var_t = (Expr.int(0), Expr.int(1), *make())
+
+            _var_t = (Expr.int(0), Expr.int(1), *make())
 
         # --- starred then normal ---
 
         @TestParser.test
         def tuple_starred_then_normal():
-
             def make():
                 return [Expr.int(0), Expr.int(1)]
-            var_t = (*make(), Expr.int(2), Expr.int(3))
+
+            _var_t = (*make(), Expr.int(2), Expr.int(3))
 
         # --- starred in the middle ---
 
         @TestParser.test
         def tuple_starred_in_middle():
-
             def make():
                 return [Expr.int(1), Expr.int(2)]
-            var_t = (Expr.int(0), *make(), Expr.int(3))
+
+            _var_t = (Expr.int(0), *make(), Expr.int(3))
 
         # --- multiple starred from calls ---
 
         @TestParser.test
         def tuple_multiple_starred_from_calls():
-
             def make_a():
                 return [Expr.int(0), Expr.int(1)]
 
             def make_b():
                 return [Expr.int(2), Expr.int(3)]
-            var_t = (*make_a(), *make_b())
+
+            _var_t = (*make_a(), *make_b())
 
         # --- nested tuple literal as element ---
 
         @TestParser.test
         def tuple_nested():
-            var_t = (Expr.int(0), (Expr.int(1), Expr.int(2)))
+            _var_t = (Expr.int(0), (Expr.int(1), Expr.int(2)))
 
 
 def test_pil_builder_attribute():
-
     with TestParser():
-
         # --- attribute in binop ---
 
         @TestParser.test
@@ -700,9 +686,9 @@ def test_pil_builder_attribute():
 
         @TestParser.test
         def attr_call_kw_arg():
-
             def func(x):
                 Expr.str(x)
+
             var_obj = Expr(0)
             var_obj.val = Expr.int(1)
             func(x=var_obj.val)
@@ -795,7 +781,7 @@ def test_pil_builder_attribute():
 
         @TestParser.test
         def attr_annotation_no_value():
-            var_x: Expr.ContextManager
+            _var_x: Expr.ContextManager
 
         @TestParser.test
         def attr_annotation_with_value():
@@ -804,9 +790,7 @@ def test_pil_builder_attribute():
 
 
 def test_pil_builder_subscript():
-
     with TestParser():
-
         # ================================================================
         # Part 1: subscript result used in various expression contexts
         # ================================================================
@@ -891,9 +875,9 @@ def test_pil_builder_subscript():
 
         @TestParser.test
         def subscript_call_kw_arg():
-
             def func(x):
                 Expr.str(x)
+
             var_l = [Expr.int(0)]
             func(x=var_l[0])
 
@@ -951,7 +935,7 @@ def test_pil_builder_subscript():
 
         @TestParser.test
         def subscript_annotation_no_value():
-            var_x: list[int]
+            _var_x: list[int]
 
         @TestParser.test
         def subscript_annotation_with_value():
@@ -977,9 +961,9 @@ def test_pil_builder_subscript():
 
         @TestParser.test
         def slice_index_call():
-
             def idx():
                 return Expr.int(0)
+
             var_arr = Expr(0)
             var_arr[0] = Expr.int(99)
             var_x = var_arr[idx()]
@@ -1059,12 +1043,12 @@ def test_pil_builder_subscript():
 
         @TestParser.test
         def slice_range_call_bounds():
-
             def lo():
                 return Expr.int(1)
 
             def hi():
                 return Expr.int(3)
+
             var_l = [Expr.int(0), Expr.int(1), Expr.int(2), Expr.int(3)]
             var_s = var_l[lo():hi()]
             Expr.str(var_s[0])
@@ -1074,7 +1058,7 @@ def test_pil_builder_subscript():
         @TestParser.test
         def slice_range_binop_bounds():
             var_l = [Expr.int(0), Expr.int(1), Expr.int(2), Expr.int(3)]
-            var_s = var_l[Expr.int(0) + 1: Expr.int(1) + 2]
+            var_s = var_l[Expr.int(0) + 1:Expr.int(1) + 2]
             Expr.str(var_s[0])
 
         # --- slice range: subscript bounds ---

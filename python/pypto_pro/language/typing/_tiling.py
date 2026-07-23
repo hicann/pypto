@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Tiling class utilities for PyPTO Language DSL."""
+
 from __future__ import annotations
 
 __all__ = [
@@ -25,10 +26,9 @@ __all__ = [
 
 import ast
 import ctypes
+from dataclasses import dataclass, is_dataclass
 import inspect
 import textwrap
-from dataclasses import dataclass
-from dataclasses import is_dataclass
 from typing import Union
 
 from pypto.pypto_impl.ir import DataType
@@ -39,9 +39,7 @@ _PYTHON_TYPE_TO_DTYPE: dict[type, DataType] = {
     bool: DataType.BOOL,
 }
 
-_PYTHON_TYPE_NAME_TO_TYPE: dict[str, type] = {
-    type_.__name__: type_ for type_ in _PYTHON_TYPE_TO_DTYPE
-}
+_PYTHON_TYPE_NAME_TO_TYPE: dict[str, type] = {type_.__name__: type_ for type_ in _PYTHON_TYPE_TO_DTYPE}
 
 
 @dataclass(frozen=True)
@@ -88,11 +86,7 @@ def _parse_field_annotation(annotation: object) -> FieldInfo:
     size_node = expression.slice
     if not isinstance(size_node, ast.Constant):
         raise ValueError("array size must be a positive integer literal")
-    if (
-        not isinstance(size_node.value, int)
-        or isinstance(size_node.value, bool)
-        or size_node.value <= 0
-    ):
+    if not isinstance(size_node.value, int) or isinstance(size_node.value, bool) or size_node.value <= 0:
         raise ValueError("array size must be a positive integer literal")
     size = size_node.value
     if size > 2048:
@@ -181,9 +175,7 @@ def get_tiling_fields(cls: type) -> dict[str, FieldInfo]:
         try:
             result[name] = _parse_field_annotation(annotation)
         except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"Invalid tiling field {name!r} annotation {annotation!r}: {exc}"
-            ) from exc
+            raise ValueError(f"Invalid tiling field {name!r} annotation {annotation!r}: {exc}") from exc
     return result
 
 

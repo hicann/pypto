@@ -11,15 +11,16 @@
 """
 profiling of aicpu pref  test for PyPTO
 """
+
 import json
 import multiprocessing as mp
-from typing import Dict, List
 import os
+from typing import Dict, List
 
-import pypto
-import pytest
 import torch
 import torch_npu
+
+import pypto
 
 
 @pypto.frontend.jit(debug_options=dict(runtime_debug_mode=1))
@@ -32,8 +33,7 @@ def matmul_add(
     tiling = 32
     n, k, m = tiling * 8, tiling * 8, tiling * 8
     pypto.set_vec_tile_shapes(tiling, tiling)
-    pypto.set_cube_tile_shapes(
-        [tiling, tiling], [tiling, tiling], [tiling, tiling])
+    pypto.set_cube_tile_shapes([tiling, tiling], [tiling, tiling], [tiling, tiling])
     for _ in pypto.loop(1, name="s0", idx_name="i"):
         a0 = pypto.view(a, [n, k], [0, 0])
         b0 = pypto.view(b, [k, m], [0, 0])
@@ -64,8 +64,7 @@ def device_run_data_from_device_mix_nodep(queue):
         c_data = c_rawdata.to(dtype=torch.int32, device=f'npu:{device_id}')
         c_data_list.append(c_data)
 
-        d_data = torch.zeros((n, m), dtype=torch.int32,
-                             device=f'npu:{device_id}')
+        d_data = torch.zeros((n, m), dtype=torch.int32, device=f'npu:{device_id}')
         d_data_list.append(d_data)
 
         # def inputs and outputs

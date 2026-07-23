@@ -8,24 +8,23 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-from collections import defaultdict
-import json
+""" """
+
 import argparse
-import sys
-import os
-import time as time_module
+from collections import defaultdict
 from datetime import datetime, timezone
+import json
+import os
+import sys
+import time as time_module
+
 import function_json_convert as fcvt
 import parse_pipe_time_trace as pipe_time
 
 
 class TaskInfo:
     def __init__(self, task_id):
-        self.task_id = (
-            task_id  # task_id is stitchedStatic << 32 + stitchedRootIndex << 20 + opIndex
-        )
+        self.task_id = task_id  # task_id is stitchedStatic << 32 + stitchedRootIndex << 20 + opIndex
         self.root_index = -1
         self.root_hash = 0
         self.opmagic = 0
@@ -76,16 +75,17 @@ class TaskInfo:
         parts = []
         if self.l1_reuse_hash_order is not None:
             parts.append(
-                f"l1ReuseInfo hashOrder: {self.l1_reuse_hash_order}, "
-                f"subGraphCount: {self.l1_reuse_subgraph_count}")
+                f"l1ReuseInfo hashOrder: {self.l1_reuse_hash_order}, subGraphCount: {self.l1_reuse_subgraph_count}"
+            )
         if self.cube_merge_hash_order is not None:
             parts.append(
                 f"cubeMergeInfo hashOrder: {self.cube_merge_hash_order}, "
-                f"subGraphCount: {self.cube_merge_subgraph_count}")
+                f"subGraphCount: {self.cube_merge_subgraph_count}"
+            )
         if self.vec_merge_hash_order is not None:
             parts.append(
-                f"vecMergeInfo hashOrder: {self.vec_merge_hash_order}, "
-                f"subGraphCount: {self.vec_merge_subgraph_count}")
+                f"vecMergeInfo hashOrder: {self.vec_merge_hash_order}, subGraphCount: {self.vec_merge_subgraph_count}"
+            )
         return "\n".join(parts) if parts else ""
 
     def get_task_full_name(self):
@@ -206,7 +206,7 @@ class CoreInfo:
         self.tasks = []
         self.total_time = 0
         self.pipe_exec_cycles = {}
-        self.pipe_exec_time = {} # vector and cube time unchanged. MTE scale proportionally
+        self.pipe_exec_time = {}  # vector and cube time unchanged. MTE scale proportionally
         self.has_overlap = False
         self.last_task_end_time = 0
         self.total_wait_time = 0
@@ -249,7 +249,7 @@ class CoreInfo:
                 if 'MTE' in pipe:
                     real_time = (cycles / freq_convert) * proportion
                 else:
-                    real_time = (cycles / freq_convert)
+                    real_time = cycles / freq_convert
                 self.pipe_exec_time[pipe] = self.pipe_exec_time.get(pipe, 0) + real_time
 
 
@@ -267,12 +267,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Process two JSON files.")
     parser.add_argument("swim_json_file", type=str, help="Path to the first JSON file")
     parser.add_argument("topo_json_file", type=str, help="Path to the second JSON file")
-    parser.add_argument(
-        "func_table_file", type=str, nargs="?", help="Path to the second JSON file"
-    )
-    parser.add_argument(
-        "pipe_exec_time", type=str, nargs="?", help="Path to the second JSON file"
-    )
+    parser.add_argument("func_table_file", type=str, nargs="?", help="Path to the second JSON file")
+    parser.add_argument("pipe_exec_time", type=str, nargs="?", help="Path to the second JSON file")
     parser.add_argument(
         "--time_convert_denominator",
         type=int,
@@ -345,7 +341,7 @@ def get_fake_task_start_end_cycles(fake_task_id):
         tmp_list = []
         for succ in entry.successors:
             succ_entry = total_tasks[succ]
-            if succ_entry.is_fake == True:
+            if succ_entry.is_fake:
                 continue
             tmp_list.append(succ_entry.exec_start)
         if len(tmp_list) > 0:
@@ -358,7 +354,7 @@ def get_fake_task_start_end_cycles(fake_task_id):
     if not find:
         tmp_list = []
         for _, task_entry in total_tasks.items():
-            if task_entry.is_fake == True:
+            if task_entry.is_fake:
                 continue
             for succ in task_entry.successors:
                 if succ == fake_task_id:
@@ -446,7 +442,7 @@ def parse_swim_data(swim_data, label_type):
             process_sync_events(entry.sync_events)
             # 判断task 间是否存在时间交叠
             if (
-                last_valid == True
+                last_valid
                 and entry.exec_start < total_tasks[last_task_id].exec_end
                 and total_tasks[last_task_id].swim_lane_offset == 0
             ):
@@ -456,7 +452,7 @@ def parse_swim_data(swim_data, label_type):
             mininum_start_time = min(mininum_start_time, entry.exec_start)
             max_end_time = max(max_end_time, entry.exec_end)
             # 记录当前Core 的上一次执行的Task
-            last_task_end_time = entry.exec_end
+            _last_task_end_time = entry.exec_end
             last_task_id = task_id
             last_valid = True
 
@@ -720,42 +716,28 @@ def convert_to_chrome_trace_json(out_path, is_dyn):
         pid = machine_view_pid
         tid = core_idx * 2 + machine_view_thread_offset
         res["traceEvents"].append(get_thread_metadata(core_name, pid, tid))
-        if core_entry.has_overlap == True:
+        if core_entry.has_overlap:
             res["traceEvents"].append(get_thread_metadata(core_name, pid, tid + 1))
 
     # 输出每个task 的开始和结束时间
     for _, task_entry in total_tasks.items():
         pid = machine_view_pid
-        tid = (
-            task_entry.core_idx * 2
-            + machine_view_thread_offset
-            + task_entry.swim_lane_offset
-        )
+        tid = task_entry.core_idx * 2 + machine_view_thread_offset + task_entry.swim_lane_offset
         res["traceEvents"].append(task_entry.get_dur_event(event_id, pid, tid))
         event_id += 1
 
     # 输出task 间的依赖
     for _, task_entry in total_tasks.items():
         pid = machine_view_pid
-        src_tid = (
-            task_entry.core_idx * 2
-            + machine_view_thread_offset
-            + task_entry.swim_lane_offset
-        )
+        src_tid = task_entry.core_idx * 2 + machine_view_thread_offset + task_entry.swim_lane_offset
         src_time = task_entry.exec_end - 0.0001
 
         for dst in task_entry.successors:
             if dst not in total_tasks:
-                print(
-                    f"WARNING: successor {dst} of [task:{task_entry.task_id}] is not in LOG INFO\n"
-                )
+                print(f"WARNING: successor {dst} of [task:{task_entry.task_id}] is not in LOG INFO\n")
                 continue
             dst_task_entry = total_tasks[dst]
-            dst_tid = (
-                dst_task_entry.core_idx * 2
-                + machine_view_thread_offset
-                + dst_task_entry.swim_lane_offset
-            )
+            dst_tid = dst_task_entry.core_idx * 2 + machine_view_thread_offset + dst_task_entry.swim_lane_offset
             dst_time = dst_task_entry.exec_start
             res["traceEvents"].append(get_flow_src(event_id, pid, src_tid, src_time))
             res["traceEvents"].append(get_flow_dst(event_id, pid, dst_tid, dst_time))
@@ -850,8 +832,7 @@ def load_dyn_topo(file_path, func_data):
             root_index = get_func_index(root_hash, func_data)
             leaf_index = get_func_index(func_hash, func_data)
             succs = fields[11:]
-            l1_info, cube_info, vec_info = fcvt.get_hash_order_info_for_task(
-                root_index, opmagic, leaf_index, func_data)
+            l1_info, cube_info, vec_info = fcvt.get_hash_order_info_for_task(root_index, opmagic, leaf_index, func_data)
             topo.append(
                 {
                     "taskId": seq_no << 32 | task_id,
@@ -869,21 +850,11 @@ def load_dyn_topo(file_path, func_data):
                     "l1ReuseHashOrderInfo": l1_info,
                     "cubeNBufferHashOrderInfo": cube_info,
                     "vecNBufferHashOrderInfo": vec_info,
-                    "semanticLabel": fcvt.get_sematic(
-                        root_index, opmagic, func_data
-                    ),
-                    "inoperands": fcvt.get_in_out_operand_str(
-                        True, root_index, opmagic, func_data
-                    ),
-                    "outoperands": fcvt.get_in_out_operand_str(
-                        False, root_index, opmagic, func_data
-                    ),
-                    "in_operands": fcvt.get_in_out_operands_data(
-                        True, root_index, opmagic, func_data
-                    ),
-                    "out_operands": fcvt.get_in_out_operands_data(
-                        False, root_index, opmagic, func_data
-                    ),
+                    "semanticLabel": fcvt.get_sematic(root_index, opmagic, func_data),
+                    "inoperands": fcvt.get_in_out_operand_str(True, root_index, opmagic, func_data),
+                    "outoperands": fcvt.get_in_out_operand_str(False, root_index, opmagic, func_data),
+                    "in_operands": fcvt.get_in_out_operands_data(True, root_index, opmagic, func_data),
+                    "out_operands": fcvt.get_in_out_operands_data(False, root_index, opmagic, func_data),
                     "tensors": fcvt.get_tensors(str(func_hash), func_hash_data),
                     "rawtensors": fcvt.get_rawtensors(str(func_hash), func_hash_data),
                 }
@@ -899,9 +870,7 @@ def get_predecessor_ready_time(task_id):
     task_entry.predecessor_ready_time = mininum_start_time
     for pre in task_entry.predecessors_taskid:
         pre_task_entry = total_tasks[pre]
-        task_entry.predecessor_ready_time = max(
-            task_entry.predecessor_ready_time, pre_task_entry.exec_end
-        )
+        task_entry.predecessor_ready_time = max(task_entry.predecessor_ready_time, pre_task_entry.exec_end)
 
 
 def get_predecessors():
@@ -935,42 +904,26 @@ def analysis_wait_cycles(path):
             if task.is_fake:
                 continue
             get_predecessor_ready_time(task.task_id)
-            max_ready_time = max(
-                core_entry.last_task_end_time, task.predecessor_ready_time
-            )
+            max_ready_time = max(core_entry.last_task_end_time, task.predecessor_ready_time)
             task.task_wait_schedule_time = task.exec_start - max_ready_time
             core_entry.core_wait_schedule_time += task.task_wait_schedule_time
-            core_entry.total_wait_time += (
-                task.exec_start - core_entry.last_task_end_time
-            )
+            core_entry.total_wait_time += task.exec_start - core_entry.last_task_end_time
 
             core_entry.last_task_end_time = task.exec_end
-        fake_num = (
-            ", Fake Task: " + str(core_entry.faketask_num)
-            if core_entry.faketask_num > 0
-            else ""
-        )
-        res.append(
-            f"[{core_entry.get_core_name()}] Execute task num:{core_entry.get_execute_task_num()}{fake_num}"
-        )
-        res.append(
-            f"    Core Total Work Time: {core_entry.last_task_end_time - mininum_start_time}"
-        )
+        fake_num = ", Fake Task: " + str(core_entry.faketask_num) if core_entry.faketask_num > 0 else ""
+        res.append(f"[{core_entry.get_core_name()}] Execute task num:{core_entry.get_execute_task_num()}{fake_num}")
+        res.append(f"    Core Total Work Time: {core_entry.last_task_end_time - mininum_start_time}")
         res.append(f"    Total Wait Time: {core_entry.total_wait_time}")
         res.append(f"    Wait Schedule Time: {core_entry.core_wait_schedule_time}")
-        core_entry.core_wait_predecessor_time = (
-            core_entry.total_wait_time - core_entry.core_wait_schedule_time
-        )
-        res.append(
-            f"    Wait Predecessor Time: {core_entry.core_wait_predecessor_time}"
-        )
+        core_entry.core_wait_predecessor_time = core_entry.total_wait_time - core_entry.core_wait_schedule_time
+        res.append(f"    Wait Predecessor Time: {core_entry.core_wait_predecessor_time}")
         sorted_tasks = sorted(
             core_entry.tasks,
             key=lambda s: s.get_task_wait_schedule_time(),
             reverse=True,
         )
         if len(sorted_tasks) > 0:
-            res.append(f"    Top 3 tasks in waiting schedule time")
+            res.append("    Top 3 tasks in waiting schedule time")
             for top_task in sorted_tasks[:3]:
                 if top_task.is_fake:
                     continue
@@ -986,7 +939,7 @@ def analysis_wait_cycles(path):
     )
     top = []
     if len(sorted_tasks) > 0:
-        top.append(f"Top 10 tasks in waiting schedule")
+        top.append("Top 10 tasks in waiting schedule")
         for _, top_task in sorted_tasks[:10]:
             if top_task.is_fake:
                 continue
@@ -1031,7 +984,7 @@ def print_aicore_summary():
             exec_end = task.exec_end
             if exec_end < exec_start:
                 continue
-            total_aicore_time += (exec_end - exec_start)
+            total_aicore_time += exec_end - exec_start
             if global_min_start is None or exec_start < global_min_start:
                 global_min_start = exec_start
             if global_max_end is None or exec_end > global_max_end:
@@ -1088,15 +1041,14 @@ def calculate_pipe_usage(path):
         for pipe, time in value.pipe_exec_time.items():
             total_pipe_use_time[pipe] = total_pipe_use_time.get(pipe, 0) + time
 
-
     sorted_cores = sorted(total_cores.items(), key=lambda x: x[1].core_idx)
 
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"Total Core Num:{aic_num + aiv_num}\n")
         f.write(f"AIC: {aic_num}\n")
         f.write(f"AIV: {aiv_num}\n")
-        f.write(f"Total Pipe Usage\n")
-        f.write(f"Pipe, AverageTime, TotalExecuteTime, AverageUsage\n")
+        f.write("Total Pipe Usage\n")
+        f.write("Pipe, AverageTime, TotalExecuteTime, AverageUsage\n")
         avg_time = total_pipe_use_time.get('CUBE', 0) / aic_num
         f.write(f"CUBE, {avg_time}, {total_execute_time}, {(avg_time / total_execute_time) * 100:.{4}}%\n")
         avg_time = total_pipe_use_time.get('VECTOR_ALU', 0) / aiv_num
@@ -1111,8 +1063,8 @@ def calculate_pipe_usage(path):
         pipe_list = ['MTE_IN', 'MTE1', 'MTE_OUT', 'CUBE', 'VECTOR_ALU']
         formatted_pipe = [f"{x}_Time, {x}_Usage" for x in pipe_list]
         head_str = ", ".join(formatted_pipe)
-        f.write(f"\n\n")
-        f.write(f"AICore Pipe Usage\n")
+        f.write("\n\n")
+        f.write("AICore Pipe Usage\n")
         f.write(f"Core, TotalTime, {head_str}\n")
         for _, value in sorted_cores:
             if value.total_time == 1:

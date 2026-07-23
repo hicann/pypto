@@ -8,13 +8,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import os
-import sys
-import logging
 import argparse
+import logging
+import os
 import subprocess
-from pathlib import Path
-from typing import Dict, List, Optional
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import setup_logging, validate_path
@@ -131,7 +129,9 @@ class ComprehensiveAnalyzer:
             if all_unknown:
                 report.append("## ⚠️ 源码映射提示")
                 report.append("")
-                report.append("所有 C++ 帧的源码位置均为 `??:0`，这通常表示当前安装的 PyPTO 为 **Release 构建**，不包含调试符号。")
+                report.append(
+                    "所有 C++ 帧的源码位置均为 `??:0`，这通常表示当前安装的 PyPTO 为 **Release 构建**，不包含调试符号。"
+                )
                 report.append("")
                 report.append("**解决方案**：")
                 report.append("1. 按步骤 2 编译安装 Debug 版本 PyPTO（包含调试符号），然后重新运行分析")
@@ -166,7 +166,7 @@ class ComprehensiveAnalyzer:
             self.error_info['location'] = {
                 'file': location_match.group(1),
                 'line': location_match.group(2),
-                'function': location_match.group(3)
+                'function': location_match.group(3),
             }
 
         # 提取错误消息
@@ -184,7 +184,7 @@ class ComprehensiveAnalyzer:
                 'index': len(self.python_frames),
                 'file': match.group(1),
                 'line': int(match.group(2)),
-                'function': match.group(3)
+                'function': match.group(3),
             }
             self.python_frames.append(frame)
 
@@ -202,7 +202,7 @@ class ComprehensiveAnalyzer:
                 'binary': match.group(1),
                 'symbol': match.group(2),
                 'offset': match.group(3),
-                'address': '0x' + match.group(4)
+                'address': '0x' + match.group(4),
             }
             self.cpp_frames.append(frame)
 

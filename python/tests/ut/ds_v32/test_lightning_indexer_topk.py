@@ -8,13 +8,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import sys
+""" """
+
 from dataclasses import dataclass, field
-from typing import List, Set, Optional
-import logging
-import pytest
+from typing import List, Optional, Set
+
 import pypto
 
 SHAPE_DIM0 = 0
@@ -103,15 +101,11 @@ class LightningIndexerBuildConfig:
     )
     v1_tile: List[int] = field(default_factory=lambda: [NUM_64, NUM_128])
     topk_tile: List[int] = field(default_factory=lambda: [NUM_1, NUM_4096])
-    adds_tile: List[int] = field(
-        default_factory=lambda: [NUM_1, NUM_1, NUM_1, NUM_4096]
-    )
+    adds_tile: List[int] = field(default_factory=lambda: [NUM_1, NUM_1, NUM_1, NUM_4096])
 
 
 def setup_lightning_indexer_topk_config():
-    pypto.set_pass_options(
-                         cube_l1_reuse_setting={-1: NUM_32},
-                         vec_nbuffer_setting={NUM_NEG1: NUM_16})
+    pypto.set_pass_options(cube_l1_reuse_setting={-1: NUM_32}, vec_nbuffer_setting={NUM_NEG1: NUM_16})
 
 
 def build_lightning_indexer_topk_args(
@@ -248,9 +242,7 @@ def build_lightning_indexer_topk_args(
             "blockTable": [cfg.b, max_block_num],
             "topkRes": [cfg.b, cfg.s1, cfg.n2, cfg.selected_count],
             "qScale": ([cfg.b, cfg.s1, cfg.index_n1, 1] if cfg.is_quant else None),
-            "kScale": (
-                [cfg.block_num, cfg.block_size, cfg.n2, 1] if cfg.is_quant else None
-            ),
+            "kScale": ([cfg.block_num, cfg.block_size, cfg.n2, 1] if cfg.is_quant else None),
         },
         "tiles": {
             "weightTile": tile_cfg.weight_tile,

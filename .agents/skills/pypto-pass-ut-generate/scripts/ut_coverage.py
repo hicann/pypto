@@ -25,36 +25,33 @@ UT 覆盖率分析工具 V3
 - --content <string>: 直接传入 diff 内容
 """
 
-import os
-import re
-import sys
+import argparse
+from dataclasses import dataclass, field
 import json
 import logging
+import os
+import re
 import shutil
-import argparse
+import sys
 import tarfile
 import tempfile
-import urllib.request
+from typing import Dict, List, Optional, Tuple
 import urllib.error
-from typing import Optional, List, Dict, Tuple
-from dataclasses import dataclass, field
+import urllib.request
 
 try:
     from common_utils import safe_extractall
 except ImportError:
     from scripts.common_utils import safe_extractall
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s: %(message)s",
-    stream=sys.stdout
-)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s", stream=sys.stdout)
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class DiffFile:
     """Diff 文件信息"""
+
     path: str
     additions: int = 0
     deletions: int = 0
@@ -66,6 +63,7 @@ class DiffFile:
 @dataclass
 class CoverageFile:
     """覆盖率文件信息"""
+
     name: str
     path: str
     line_coverage: float
@@ -77,6 +75,7 @@ class CoverageFile:
 @dataclass
 class UTDesignItem:
     """需要设计 UT 的项"""
+
     file_path: str
     uncovered_lines: List[int]
     change_type: str
@@ -120,7 +119,7 @@ def analyze_diff_content(diff_content: str) -> Dict:
         'other_files': [],
         'total_files': 0,
         'total_additions': 0,
-        'total_deletions': 0
+        'total_deletions': 0,
     }
 
     if not diff_content or not diff_content.strip():
@@ -133,14 +132,16 @@ def analyze_diff_content(diff_content: str) -> Dict:
     for line in diff_content.split('\n'):
         if line.startswith('diff --git'):
             if current_file:
-                result['files'].append({
-                    'path': current_file.path,
-                    'additions': current_file.additions,
-                    'deletions': current_file.deletions,
-                    'is_pass_file': current_file.is_pass_file,
-                    'is_test_file': current_file.is_test_file,
-                    'changed_lines': current_file.changed_lines
-                })
+                result['files'].append(
+                    {
+                        'path': current_file.path,
+                        'additions': current_file.additions,
+                        'deletions': current_file.deletions,
+                        'is_pass_file': current_file.is_pass_file,
+                        'is_test_file': current_file.is_test_file,
+                        'changed_lines': current_file.changed_lines,
+                    }
+                )
 
                 if current_file.is_pass_file:
                     result['pass_files'].append(current_file.path)
@@ -155,7 +156,7 @@ def analyze_diff_content(diff_content: str) -> Dict:
                 current_file = DiffFile(
                     path=file_path,
                     is_pass_file='passes' in file_path and file_path.endswith('.cpp'),
-                    is_test_file='test' in file_path.lower() and file_path.endswith('.cpp')
+                    is_test_file='test' in file_path.lower() and file_path.endswith('.cpp'),
                 )
 
         elif line.startswith('@@'):
@@ -168,33 +169,31 @@ def analyze_diff_content(diff_content: str) -> Dict:
             if line.startswith('+') and not line.startswith('+++'):
                 current_file.additions += 1
                 result['total_additions'] += 1
-                current_file.changed_lines.append({
-                    'line_num': current_line_num,
-                    'type': 'addition',
-                    'content': line[1:]
-                })
+                current_file.changed_lines.append(
+                    {'line_num': current_line_num, 'type': 'addition', 'content': line[1:]}
+                )
                 current_line_num += 1
             elif line.startswith('-') and not line.startswith('---'):
                 current_file.deletions += 1
                 result['total_deletions'] += 1
-                current_file.changed_lines.append({
-                    'line_num': current_line_num,
-                    'type': 'deletion',
-                    'content': line[1:]
-                })
+                current_file.changed_lines.append(
+                    {'line_num': current_line_num, 'type': 'deletion', 'content': line[1:]}
+                )
                 current_line_num += 1
             elif not line.startswith('\\'):
                 current_line_num += 1
 
     if current_file:
-        result['files'].append({
-            'path': current_file.path,
-            'additions': current_file.additions,
-            'deletions': current_file.deletions,
-            'is_pass_file': current_file.is_pass_file,
-            'is_test_file': current_file.is_test_file,
-            'changed_lines': current_file.changed_lines
-        })
+        result['files'].append(
+            {
+                'path': current_file.path,
+                'additions': current_file.additions,
+                'deletions': current_file.deletions,
+                'is_pass_file': current_file.is_pass_file,
+                'is_test_file': current_file.is_test_file,
+                'changed_lines': current_file.changed_lines,
+            }
+        )
 
         if current_file.is_pass_file:
             result['pass_files'].append(current_file.path)
@@ -246,7 +245,7 @@ def download_coverage_report(url: str, output_dir: Optional[str] = None) -> Tupl
                     if total_size:
                         pass
 
-        logger.info(f"\n✓ 覆盖率报告下载成功")
+        logger.info("\n✓ 覆盖率报告下载成功")
 
         extract_dir = os.path.join(output_dir, 'cov_report')
         os.makedirs(extract_dir, exist_ok=True)
@@ -260,8 +259,8 @@ def download_coverage_report(url: str, output_dir: Optional[str] = None) -> Tupl
 
         html_file = find_html_file(extract_dir)
         if html_file:
-            return True, f"覆盖率报告已解压", html_file
-        return True, f"覆盖率报告已解压", extract_dir
+            return True, "覆盖率报告已解压", html_file
+        return True, "覆盖率报告已解压", extract_dir
 
     except urllib.error.HTTPError as e:
         return False, f"下载失败: HTTP {e.code} - {e.reason}", ""
@@ -350,11 +349,7 @@ def parse_coverage_html(html_content: str) -> Dict:
     Returns:
         包含覆盖率信息的字典
     """
-    result = {
-        'overall_line_coverage': '0%',
-        'overall_function_coverage': '0%',
-        'files': []
-    }
+    result = {'overall_line_coverage': '0%', 'overall_function_coverage': '0%', 'files': []}
 
     line_cov_match = re.search(r'Overall.*?(\d+(?:\.\d+)?)\s*%', html_content, re.DOTALL | re.IGNORECASE)
     if line_cov_match:
@@ -368,19 +363,13 @@ def parse_coverage_html(html_content: str) -> Dict:
     file_matches = re.findall(file_pattern, html_content, re.DOTALL)
 
     for name, line_pct, func_pct in file_matches:
-        result['files'].append({
-            'name': name.strip(),
-            'line_coverage': float(line_pct),
-            'function_coverage': float(func_pct)
-        })
+        result['files'].append(
+            {'name': name.strip(), 'line_coverage': float(line_pct), 'function_coverage': float(func_pct)}
+        )
 
     uncovered_pattern = r'<span[^>]*class="[^"]*uncovered[^"]*"[^>]*>(\d+)</span>'
     for file_info in result['files']:
-        uncovered = re.findall(
-            uncovered_pattern,
-            html_content[html_content.find(file_info['name']):],
-            re.IGNORECASE
-        )
+        uncovered = re.findall(uncovered_pattern, html_content[html_content.find(file_info['name']):], re.IGNORECASE)
         file_info['uncovered_lines'] = [int(n) for n in uncovered[:20]]
 
     return result
@@ -401,14 +390,16 @@ def find_low_coverage_files(coverage_info: Dict, threshold: float = 80.0) -> Lis
 
     for file_info in coverage_info.get('files', []):
         if file_info.get('line_coverage', 0) < threshold:
-            low_coverage.append({
-                'name': file_info.get('name', ''),
-                'path': file_info.get('path', ''),
-                'line_coverage': file_info.get('line_coverage', 0),
-                'function_coverage': file_info.get('function_coverage', 0),
-                'uncovered_lines': file_info.get('uncovered_lines', []),
-                'coverage_value': file_info.get('line_coverage', 0)
-            })
+            low_coverage.append(
+                {
+                    'name': file_info.get('name', ''),
+                    'path': file_info.get('path', ''),
+                    'line_coverage': file_info.get('line_coverage', 0),
+                    'function_coverage': file_info.get('function_coverage', 0),
+                    'uncovered_lines': file_info.get('uncovered_lines', []),
+                    'coverage_value': file_info.get('line_coverage', 0),
+                }
+            )
 
     low_coverage.sort(key=lambda x: x['line_coverage'])
     return low_coverage
@@ -439,7 +430,7 @@ def correlate_coverage_with_diff(diff_info: Dict, coverage_info: Dict) -> List[D
                 break
 
         if file_path:
-            diff_file = changed_files[file_path]
+            _diff_file = changed_files[file_path]
             change_type = 'modified'
         elif any(file_name.endswith(ext) for ext in ['.cpp', '.h']):
             change_type = 'new'
@@ -453,18 +444,14 @@ def correlate_coverage_with_diff(diff_info: Dict, coverage_info: Dict) -> List[D
             'function_coverage': file_info.get('function_coverage', 0),
             'uncovered_lines': file_info.get('uncovered_lines', []),
             'change_type': change_type,
-            'need_ut': file_info.get('line_coverage', 0) < 80.0 and change_type in ['modified', 'new']
+            'need_ut': file_info.get('line_coverage', 0) < 80.0 and change_type in ['modified', 'new'],
         }
         result.append(item)
 
     return result
 
 
-def generate_ut_design_suggestions(
-    diff_info: Dict,
-    coverage_info: Dict,
-    threshold: float = 80.0
-) -> List[UTDesignItem]:
+def generate_ut_design_suggestions(diff_info: Dict, coverage_info: Dict, threshold: float = 80.0) -> List[UTDesignItem]:
     """
     生成 UT 设计建议
 
@@ -513,23 +500,21 @@ def generate_ut_design_suggestions(
         else:
             priority = 'low'
 
-        suggestions.append(UTDesignItem(
-            file_path=file_path,
-            uncovered_lines=uncovered_lines,
-            change_type=change_type,
-            suggestion=suggestion,
-            priority=priority
-        ))
+        suggestions.append(
+            UTDesignItem(
+                file_path=file_path,
+                uncovered_lines=uncovered_lines,
+                change_type=change_type,
+                suggestion=suggestion,
+                priority=priority,
+            )
+        )
 
     suggestions.sort(key=lambda x: 0 if x.priority == 'high' else (1 if x.priority == 'medium' else 2))
     return suggestions
 
 
-def analyze_coverage_for_pr(
-    diff_info: Dict,
-    coverage_url: str,
-    threshold: float = 80.0
-) -> Dict:
+def analyze_coverage_for_pr(diff_info: Dict, coverage_url: str, threshold: float = 80.0) -> Dict:
     """
     综合分析 PR 的 Diff 和覆盖率
 
@@ -547,7 +532,7 @@ def analyze_coverage_for_pr(
         'low_coverage_files': [],
         'ut_design_suggestions': [],
         'success': False,
-        'error': None
+        'error': None,
     }
 
     if not coverage_url:
@@ -569,7 +554,7 @@ def analyze_coverage_for_pr(
             'uncovered_lines': s.uncovered_lines,
             'change_type': s.change_type,
             'suggestion': s.suggestion,
-            'priority': s.priority
+            'priority': s.priority,
         }
         for s in suggestions
     ]
@@ -599,30 +584,19 @@ def main():
 
   # 输出 JSON 格式
   python ut_coverage.py --diff diff.file --report report.html --json
-        """
+        """,
     )
 
-    parser.add_argument('--diff', '-d', type=str,
-                        help='Diff 文件路径')
-    parser.add_argument('--report', '-r', type=str,
-                        help='覆盖率报告文件或 URL 路径')
-    parser.add_argument('--content', '-c', type=str,
-                        help='Diff 内容字符串')
-    parser.add_argument('--json', '-j', action='store_true',
-                        help='输出 JSON 格式')
-    parser.add_argument('--threshold', '-t', type=float, default=80.0,
-                        help='覆盖率阈值 (默认: 80.0)')
-    parser.add_argument('--output', '-o', type=str,
-                        help='输出文件路径')
+    parser.add_argument('--diff', '-d', type=str, help='Diff 文件路径')
+    parser.add_argument('--report', '-r', type=str, help='覆盖率报告文件或 URL 路径')
+    parser.add_argument('--content', '-c', type=str, help='Diff 内容字符串')
+    parser.add_argument('--json', '-j', action='store_true', help='输出 JSON 格式')
+    parser.add_argument('--threshold', '-t', type=float, default=80.0, help='覆盖率阈值 (默认: 80.0)')
+    parser.add_argument('--output', '-o', type=str, help='输出文件路径')
 
     args = parser.parse_args()
 
-    result = {
-        'diff_info': None,
-        'coverage_info': None,
-        'low_coverage_files': [],
-        'ut_design_suggestions': []
-    }
+    result = {'diff_info': None, 'coverage_info': None, 'low_coverage_files': [], 'ut_design_suggestions': []}
 
     logger.info("=" * 60)
     logger.info("UT 覆盖率分析工具 V3")
@@ -635,7 +609,7 @@ def main():
             with open(args.diff, 'r', encoding='utf-8') as f:
                 diff_content = f.read()
         result['diff_info'] = analyze_diff_content(diff_content or args.diff)
-        logger.info(f"  ✓ 解析完成")
+        logger.info("  ✓ 解析完成")
         logger.info(f"    总文件数: {result['diff_info']['total_files']}")
         logger.info(f"    Pass 文件数: {len(result['diff_info']['pass_files'])}")
         logger.info(f"    新增行: {result['diff_info']['total_additions']}")
@@ -643,7 +617,7 @@ def main():
     elif args.content:
         logger.info("\n[1/3] 解析 Diff 内容...")
         result['diff_info'] = analyze_diff_content(args.content)
-        logger.info(f"  ✓ 解析完成")
+        logger.info("  ✓ 解析完成")
 
     if args.report:
         logger.info(f"\n[2/3] 解析覆盖率报告: {args.report[:60]}...")
@@ -651,7 +625,7 @@ def main():
         if 'error' in result['coverage_info']:
             logger.info(f"  ✗ 错误: {result['coverage_info']['error']}")
         else:
-            logger.info(f"  ✓ 解析完成")
+            logger.info("  ✓ 解析完成")
             logger.info(f"    总体行覆盖率: {result['coverage_info'].get('overall_line_coverage', 'N/A')}")
             logger.info(f"    总体函数覆盖率: {result['coverage_info'].get('overall_function_coverage', 'N/A')}")
             logger.info(f"    文件数: {len(result['coverage_info'].get('files', []))}")
@@ -659,15 +633,10 @@ def main():
     if result['diff_info'] and result['coverage_info']:
         logger.info("\n[3/3] 关联分析与建议生成...")
 
-        result['low_coverage_files'] = find_low_coverage_files(
-            result['coverage_info'],
-            threshold=args.threshold
-        )
+        result['low_coverage_files'] = find_low_coverage_files(result['coverage_info'], threshold=args.threshold)
 
         suggestions = generate_ut_design_suggestions(
-            result['diff_info'],
-            result['coverage_info'],
-            threshold=args.threshold
+            result['diff_info'], result['coverage_info'], threshold=args.threshold
         )
         result['ut_design_suggestions'] = [
             {
@@ -675,7 +644,7 @@ def main():
                 'uncovered_lines': s.uncovered_lines,
                 'change_type': s.change_type,
                 'suggestion': s.suggestion,
-                'priority': s.priority
+                'priority': s.priority,
             }
             for s in suggestions
         ]
@@ -720,7 +689,7 @@ def main():
                 logger.info(f"     {sug['suggestion']}")
             if len(result['ut_design_suggestions']) > 3:
                 logger.info(f"  ... 还有 {len(result['ut_design_suggestions']) - 3} 条建议")
-                logger.info(f"\n  使用 --json 选项查看完整建议")
+                logger.info("\n  使用 --json 选项查看完整建议")
 
     return 0
 

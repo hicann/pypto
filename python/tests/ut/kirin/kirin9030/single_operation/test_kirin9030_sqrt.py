@@ -12,14 +12,12 @@
 Test sqrt codegen for Kirin9030
 """
 
-import pytest
-
 from kirin.common_sqrt import (
+    TEST_CASES,
     create_sqrt_kernels,
     run_sqrt_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_sqrt_kernels("Kirin9030")
 

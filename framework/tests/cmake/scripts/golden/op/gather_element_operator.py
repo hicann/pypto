@@ -14,10 +14,11 @@
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import os
-import sys
+
 import logging
+import os
 from pathlib import Path
+import sys
 from typing import List
 
 import torch
@@ -25,8 +26,9 @@ import torch
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -40,9 +42,9 @@ else:
 
 def gen_gather_element_data(s0, s1, d0, d1, axis, dtype, indices_dtype, output_dir: Path):
     shape_params = [s0, s1]
-    shape_indices = [d0, d1]
+    _shape_indices = [d0, d1]
     axis = axis
-    shape_res = [d0, d1]
+    _shape_res = [d0, d1]
 
     params_path = Path(output_dir, 'params.bin')
     indices_path = Path(output_dir, 'indices.bin')

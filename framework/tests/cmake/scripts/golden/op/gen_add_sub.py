@@ -14,9 +14,10 @@
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import sys
+
 import logging
 from pathlib import Path
+import sys
 from typing import List
 
 import numpy as np
@@ -24,8 +25,9 @@ import numpy as np
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -46,7 +48,7 @@ def add_sub_main(case_name: str, output: Path) -> bool:
     row = 64
     col = 64
     shape_i = [row, col]
-    shape_o = [shape_i[0], shape_i[1]]
+    _shape_o = [shape_i[0], shape_i[1]]
 
     dtype = np.float32
 

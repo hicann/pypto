@@ -15,20 +15,19 @@ __all__ = ["function", "inline", "program", "vector_function"]
 
 
 import ast
+from collections.abc import Callable
 import dataclasses
 import inspect
 import linecache
 import logging
 import sys
 import textwrap
-from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import TypeVar
 
 from pypto.pypto_impl import ir
 
 from ._ast_parser import ASTParser
 from .diagnostics import ParserError, ParserSyntaxError
-
 
 logger = logging.getLogger(__name__)
 
@@ -345,7 +344,7 @@ def _find_entity_in_source(
     start_line = node.decorator_list[0].lineno if node.decorator_list else node.lineno
     end_line = node.end_lineno or node.lineno
     # Lines are 1-based in AST
-    source_lines = all_lines[start_line - 1: end_line]
+    source_lines = all_lines[start_line - 1:end_line]
     return source_lines, start_line
 
 

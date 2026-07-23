@@ -10,22 +10,30 @@
 # -----------------------------------------------------------------------------------------------------------
 """ """
 
-from typing import List, Optional
 from functools import wraps
-
-from .error import VerifyError, FeError
+from typing import TYPE_CHECKING, List, Optional
 
 from ._utils import get_torch_npu
 from .enum import DataType, TileOpFormat
+from .error import FeError, VerifyError
 from .tensor import Tensor
+
+if TYPE_CHECKING:
+    import torch
 
 
 def _count_calls(func):
     count = 0
 
     @wraps(func)
-    def wrapper(tensor, name: str = "", *, dynamic_axis: Optional[List[int]] = None,
-                tensor_format: Optional[TileOpFormat] = None, dtype: Optional[DataType] = None):
+    def wrapper(
+        tensor,
+        name: str = "",
+        *,
+        dynamic_axis: Optional[List[int]] = None,
+        tensor_format: Optional[TileOpFormat] = None,
+        dtype: Optional[DataType] = None,
+    ):
         nonlocal count
         count += 1
         if name == "":
@@ -69,8 +77,13 @@ def _set_shape_nz_aligned(tensor, ori_shape):
 
 
 @_count_calls
-def from_torch(tensor, name: str = "", dynamic_axis: Optional[List[int]] = None,
-               tensor_format: Optional[TileOpFormat] = None, dtype: Optional[DataType] = None):
+def from_torch(
+    tensor,
+    name: str = "",
+    dynamic_axis: Optional[List[int]] = None,
+    tensor_format: Optional[TileOpFormat] = None,
+    dtype: Optional[DataType] = None,
+):
     """
     convert the input into a PyPTO Tensor
 
@@ -244,23 +257,29 @@ def _torch_dtype_from(dtype: DataType) -> "torch.dtype":
     torch_dtype = _torch_dtype_dict.get(dtype)
     if torch_dtype is None:
         if dtype == DataType.DT_FP8E8M0:
-            raise VerifyError(ValueError(
-                f"DataType.DT_FP8E8M0 requires 'torch.float8_e8m0fnu', which is NOT available "
-                f"in your current PyTorch version ({torch.__version__}).\n"
-                "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
-            ))
+            raise VerifyError(
+                ValueError(
+                    f"DataType.DT_FP8E8M0 requires 'torch.float8_e8m0fnu', which is NOT available "
+                    f"in your current PyTorch version ({torch.__version__}).\n"
+                    "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
+                )
+            )
         elif dtype == DataType.DT_FP8E4M3:
-            raise VerifyError(ValueError(
-                f"DataType.DT_FP8E4M3 requires 'torch.float8_e4m3fn', which is NOT available "
-                f"in your current PyTorch version ({torch.__version__}).\n"
-                "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
-            ))
+            raise VerifyError(
+                ValueError(
+                    f"DataType.DT_FP8E4M3 requires 'torch.float8_e4m3fn', which is NOT available "
+                    f"in your current PyTorch version ({torch.__version__}).\n"
+                    "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
+                )
+            )
         elif dtype == DataType.DT_FP8E5M2:
-            raise VerifyError(ValueError(
-                f"DataType.DT_FP8E5M2 requires 'torch.float8_e5m2', which is NOT available "
-                f"in your current PyTorch version ({torch.__version__}).\n"
-                "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
-            ))
+            raise VerifyError(
+                ValueError(
+                    f"DataType.DT_FP8E5M2 requires 'torch.float8_e5m2', which is NOT available "
+                    f"in your current PyTorch version ({torch.__version__}).\n"
+                    "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
+                )
+            )
         else:
             raise VerifyError(ValueError(f"Input pypto.DataType is not supported or mapped to None. Got {dtype}"))
     return torch_dtype
@@ -275,13 +294,15 @@ def _gen_pto_tensor(input_tensors):
         torch_dtype = _torch_dtype_from(t.dtype)
         tshape = t.shape if all([isinstance(s, int) for s in t.shape]) else t.ori_shape
         torch_tensor = torch.zeros(tshape, dtype=torch_dtype)
-        pto_tensor = Tensor(shape=tshape,
-                            dtype=t.dtype,
-                            name=t.name,
-                            data_ptr=torch_tensor.data_ptr(),
-                            format=t.format,
-                            device=torch_tensor.device,
-                            ori_shape=tshape)
+        pto_tensor = Tensor(
+            shape=tshape,
+            dtype=t.dtype,
+            name=t.name,
+            data_ptr=torch_tensor.data_ptr(),
+            format=t.format,
+            device=torch_tensor.device,
+            ori_shape=tshape,
+        )
 
         torch_tensors.append(torch_tensor)
         pto_tensors.append(pto_tensor)

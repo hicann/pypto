@@ -15,14 +15,14 @@ Covers three dependency types:
   - RAW (Read After Write):    consumer=READ, producer=NORMAL_WRITE → different types → mutex
   - WAR (Write After Read):    consumer=NORMAL_WRITE, producer=READ → different types → mutex
 """
-import os
-import pypto
-import pytest
-import numpy as np
-import torch
-from numpy.testing import assert_allclose
-import torch_npu
 
+import os
+
+from numpy.testing import assert_allclose
+import pytest
+import torch
+
+import pypto
 
 DTYPE = pypto.DT_FP32
 

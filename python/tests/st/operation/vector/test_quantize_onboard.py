@@ -8,12 +8,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import os
 import math
-import pypto
-import torch
-from numpy.testing import assert_allclose
+import os
 
+from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 TORCH_TO_PTO_TYPES = {
     torch.int8: pypto.DT_INT8,
@@ -83,20 +84,33 @@ def test_quantize_sym_axis_neg1_onboard():
                 offsets = [b_idx * view_shape[0], s_idx * view_shape[1]]
 
                 # View input (2D)
-                view_input = pypto.view(input1, view_shape, offsets,
+                view_input = pypto.view(
+                    input1,
+                    view_shape,
+                    offsets,
                     valid_shape=[
-                        pypto.min(pypto.symbolic_scalar(input_shape[0]) - b_idx * view_shape[0],
-                        pypto.symbolic_scalar(view_shape[0])),
-                        pypto.min(pypto.symbolic_scalar(input_shape[1]) - s_idx * view_shape[1],
-                        pypto.symbolic_scalar(view_shape[1])),
-                    ])
+                        pypto.min(
+                            pypto.symbolic_scalar(input_shape[0]) - b_idx * view_shape[0],
+                            pypto.symbolic_scalar(view_shape[0]),
+                        ),
+                        pypto.min(
+                            pypto.symbolic_scalar(input_shape[1]) - s_idx * view_shape[1],
+                            pypto.symbolic_scalar(view_shape[1]),
+                        ),
+                    ],
+                )
 
                 # View scale (1D) - axis=-1, so scale is per-row, shape=[4], view along axis=0
-                view_scale = pypto.view(scale1, [view_shape[0]], [offsets[0]],
+                view_scale = pypto.view(
+                    scale1,
+                    [view_shape[0]],
+                    [offsets[0]],
                     valid_shape=[
-                        pypto.min(pypto.symbolic_scalar(scale_shape[0]) - offsets[0],
-                                  pypto.symbolic_scalar(view_shape[0])),
-                    ])
+                        pypto.min(
+                            pypto.symbolic_scalar(scale_shape[0]) - offsets[0], pypto.symbolic_scalar(view_shape[0])
+                        ),
+                    ],
+                )
 
                 res = pypto.quantize(view_input, view_scale, output_dtype, axis)
                 pypto.assemble(res, offsets, output)
@@ -145,20 +159,33 @@ def test_quantize_sym_axis_neg1_aligned_onboard():
                 offsets = [b_idx * view_shape[0], s_idx * view_shape[1]]
 
                 # View input (2D)
-                view_input = pypto.view(input1, view_shape, offsets,
+                view_input = pypto.view(
+                    input1,
+                    view_shape,
+                    offsets,
                     valid_shape=[
-                        pypto.min(pypto.symbolic_scalar(input_shape[0]) - b_idx * view_shape[0],
-                                  pypto.symbolic_scalar(view_shape[0])),
-                        pypto.min(pypto.symbolic_scalar(input_shape[1]) - s_idx * view_shape[1],
-                                  pypto.symbolic_scalar(view_shape[1])),
-                    ])
+                        pypto.min(
+                            pypto.symbolic_scalar(input_shape[0]) - b_idx * view_shape[0],
+                            pypto.symbolic_scalar(view_shape[0]),
+                        ),
+                        pypto.min(
+                            pypto.symbolic_scalar(input_shape[1]) - s_idx * view_shape[1],
+                            pypto.symbolic_scalar(view_shape[1]),
+                        ),
+                    ],
+                )
 
                 # View scale (1D)
-                view_scale = pypto.view(scale1, [view_shape[0]], [offsets[0]],
+                view_scale = pypto.view(
+                    scale1,
+                    [view_shape[0]],
+                    [offsets[0]],
                     valid_shape=[
-                        pypto.min(pypto.symbolic_scalar(scale_shape[0]) - offsets[0],
-                                  pypto.symbolic_scalar(view_shape[0])),
-                    ])
+                        pypto.min(
+                            pypto.symbolic_scalar(scale_shape[0]) - offsets[0], pypto.symbolic_scalar(view_shape[0])
+                        ),
+                    ],
+                )
 
                 res = pypto.quantize(view_input, view_scale, output_dtype, axis)
                 pypto.assemble(res, offsets, output)
@@ -210,27 +237,45 @@ def test_quantize_asym_axis_neg1_onboard():
                 offsets = [b_idx * view_shape[0], s_idx * view_shape[1]]
 
                 # View input (2D)
-                view_input = pypto.view(input1, view_shape, offsets,
+                view_input = pypto.view(
+                    input1,
+                    view_shape,
+                    offsets,
                     valid_shape=[
-                        pypto.min(pypto.symbolic_scalar(input_shape[0]) - b_idx * view_shape[0],
-                                  pypto.symbolic_scalar(view_shape[0])),
-                        pypto.min(pypto.symbolic_scalar(input_shape[1]) - s_idx * view_shape[1],
-                                  pypto.symbolic_scalar(view_shape[1])),
-                    ])
+                        pypto.min(
+                            pypto.symbolic_scalar(input_shape[0]) - b_idx * view_shape[0],
+                            pypto.symbolic_scalar(view_shape[0]),
+                        ),
+                        pypto.min(
+                            pypto.symbolic_scalar(input_shape[1]) - s_idx * view_shape[1],
+                            pypto.symbolic_scalar(view_shape[1]),
+                        ),
+                    ],
+                )
 
                 # View scale (1D)
-                view_scale = pypto.view(scale1, [view_shape[0]], [offsets[0]],
+                view_scale = pypto.view(
+                    scale1,
+                    [view_shape[0]],
+                    [offsets[0]],
                     valid_shape=[
-                        pypto.min(pypto.symbolic_scalar(scale_shape[0]) - offsets[0],
-                                  pypto.symbolic_scalar(view_shape[0])),
-                    ])
+                        pypto.min(
+                            pypto.symbolic_scalar(scale_shape[0]) - offsets[0], pypto.symbolic_scalar(view_shape[0])
+                        ),
+                    ],
+                )
 
                 # View zero_points (1D)
-                view_zp = pypto.view(zp1, [view_shape[0]], [offsets[0]],
+                view_zp = pypto.view(
+                    zp1,
+                    [view_shape[0]],
+                    [offsets[0]],
                     valid_shape=[
-                        pypto.min(pypto.symbolic_scalar(scale_shape[0]) - offsets[0],
-                                  pypto.symbolic_scalar(view_shape[0])),
-                    ])
+                        pypto.min(
+                            pypto.symbolic_scalar(scale_shape[0]) - offsets[0], pypto.symbolic_scalar(view_shape[0])
+                        ),
+                    ],
+                )
 
                 res = pypto.quantize(view_input, view_scale, output_dtype, axis, view_zp)
                 pypto.assemble(res, offsets, output)

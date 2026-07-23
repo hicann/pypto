@@ -9,11 +9,12 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
-from typing import Optional, Union, List
+
+from typing import List, Optional, Union
 
 from .. import pypto_impl
-from ..enum import CastMode, DataType, SaturationMode
 from .._op_wrapper import op_wrapper
+from ..enum import CastMode, DataType, SaturationMode
 from ..symbolic_scalar import SymbolicScalar
 from ..tensor import Tensor
 
@@ -148,8 +149,9 @@ def unpack(input: Tensor, dtype: DataType) -> Tensor:
 
 
 @op_wrapper
-def cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
-         satmode: SaturationMode = SaturationMode.OFF) -> Tensor:
+def cast(
+    input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE, satmode: SaturationMode = SaturationMode.OFF
+) -> Tensor:
     """Casting the operand to the specified type.
 
     Parameters
@@ -196,10 +198,7 @@ def cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 
 @op_wrapper
 def expand_clone(
-    input: Tensor,
-    shape: List[int],
-    *,
-    valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None
+    input: Tensor, shape: List[int], *, valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None
 ) -> Tensor:
     """
     Broadcast the input tensor along the axis where it is uniquely to 1 to match shape.A deep copy will be performed,

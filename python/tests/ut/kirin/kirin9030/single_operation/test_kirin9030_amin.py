@@ -13,9 +13,8 @@
 Test amin codegen for Kirin9030
 """
 
+from kirin.common_amin import TEST_CASES, create_test_amin_module, run_amin_test
 import pytest
-from kirin.common_amin import create_test_amin_module, TEST_CASES, run_amin_test
-
 
 KERNELS, _ = create_test_amin_module("Kirin9030")
 

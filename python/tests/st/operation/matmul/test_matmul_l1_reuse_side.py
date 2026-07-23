@@ -32,16 +32,19 @@ How to confirm the merge axis (grep each run's pass log; DEBUG for per-subgraph 
   "L1 reuse: subgraph X merged into subgraph Y on the LEFT(L0A)/RIGHT(L0B) matrix"
   and the summary "L1 reuse matrix-side outcome: N merged on the requested side into M group(s)".
 """
+
 import os
 from typing import List, NamedTuple
 
 import pytest
-import pypto
 import torch
+
+import pypto
 
 
 class _Case(NamedTuple):
     """A matmul-side test case: problem shape (m,k,n), per-dim [L0,L1] tiling, and l1reuse count."""
+
     m: int
     k: int
     n: int
@@ -83,8 +86,9 @@ def _run_side_matmul(side: str, case: _Case):
     out = torch.zeros([m, n], dtype=torch.float16, device=f"npu:{device_id}")
     matmul_kernel(a, b, out)
 
-    assert torch.allclose(out.cpu(), golden.cpu(), atol=1e-2, rtol=1e-2), \
+    assert torch.allclose(out.cpu(), golden.cpu(), atol=1e-2, rtol=1e-2), (
         f"cube_l1_reuse_setting side={side!r} produced wrong matmul result"
+    )
 
 
 def _side_tiling_case(side: str) -> _Case:

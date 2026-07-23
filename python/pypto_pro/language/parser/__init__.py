@@ -21,6 +21,7 @@ Part of the pypto_pro.language package - use via:
     def my_func(...):
         ...
 """
+
 from __future__ import annotations
 
 __all__ = [
@@ -39,5 +40,5 @@ __all__ = [
 
 from ..typing import Scalar, Tensor, Tile
 from .decorator import function, inline, program
-from .diagnostics import ParserError
+from .diagnostics import ParserError  # noqa: F401
 from .text_parser import loads, loads_program, parse, parse_program

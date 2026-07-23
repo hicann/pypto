@@ -11,10 +11,11 @@
 """测试 pypto.frontend.jit 代码块内定义变量的生效情况"""
 
 import os
-import pypto
 
 import torch
 import torch_npu
+
+import pypto
 
 
 def gen_data(shape):
@@ -26,7 +27,8 @@ def gen_data(shape):
 @pypto.frontend.jit()
 def kernel_if(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    result: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)):
+    result: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+):
     pypto.set_vec_tile_shapes(64, 64)
 
     if True:
@@ -38,7 +40,8 @@ def kernel_if(
 @pypto.frontend.jit()
 def kernel_loop(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    result: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)):
+    result: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+):
     pypto.set_vec_tile_shapes(64, 64)
 
     for _ in range(2):

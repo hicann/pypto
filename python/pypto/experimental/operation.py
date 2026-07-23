@@ -9,11 +9,13 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
-from typing import List, Union, Dict, Optional, Tuple
+
+from typing import Dict, List, Optional, Tuple, Union
+
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
-from ..tensor import Tensor
 from ..config import get_current_scope, set_options
+from ..tensor import Tensor
 
 
 @op_wrapper
@@ -56,7 +58,6 @@ def transposed_batchmatmul(tensor_a: Tensor, tensor_b: Tensor, out_dtype) -> Ten
 
 
 def set_operation_options(*, combine_axis: Optional[bool] = None):
-
     """
     Set operation options.
 
@@ -101,7 +102,8 @@ def online_softmax_update(
 ) -> Tuple[Tensor, Tensor, Tensor]:
     """Updates online softmax state for a new block."""
     return pypto_impl.OnlineSoftmaxUpdate(
-        previous_max, previous_sum, previous_output, current_max, current_sum, current_output)
+        previous_max, previous_sum, previous_output, current_max, current_sum, current_output
+    )
 
 
 @op_wrapper

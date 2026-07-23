@@ -12,12 +12,13 @@
 PyPTO 精度检查点文件对比工具
 自动检测检查点并对比 jit 和 golden 的中间结果
 """
-import os
-import sys
-import glob
 import argparse
+import glob
 import logging
+import os
 import re
+import sys
+
 import torch
 
 # PyPTO 数据类型映射
@@ -130,7 +131,7 @@ def read_jit_data(filename):
                     shape = tuple(map(int, shape_str.split('x')))
 
     if dtype is None:
-        logger.warning(f"  警告: 未找到 CSV 文件，无法确定数据类型")
+        logger.warning("  警告: 未找到 CSV 文件，无法确定数据类型")
         return None, None
 
     if dtype not in DTYPE_MAP:
@@ -225,7 +226,7 @@ def compare_with_golden(jit_data, golden_data, name, dtype=None, verbose=True, c
     logger.info(f"  Actual: rtol={actual_rtol:.6f}, atol={actual_atol:.6f}")
 
     if verbose and not match:
-        logger.info(f"  前10个元素对比:")
+        logger.info("  前10个元素对比:")
         jit_flat = jit_data.flatten()
         golden_flat = golden_data.flatten()
         for i in range(min(10, total_count)):
@@ -258,13 +259,13 @@ def analyze_results(results):
 
     if first_fail_idx == 0:
         logger.info(f"✗ 第一个检查点 ({fail_name}) 就不匹配")
-        logger.info(f"→ 问题可能在：输入数据或第一个计算步骤")
-        logger.info(f"→ 建议：检查输入数据是否正确，或在更早的位置插入检查点")
+        logger.info("→ 问题可能在：输入数据或第一个计算步骤")
+        logger.info("→ 建议：检查输入数据是否正确，或在更早的位置插入检查点")
     else:
         prev_name = results[first_fail_idx - 1][0]
         logger.info(f"✗ 检查点 {prev_name} 匹配，但 {fail_name} 不匹配")
         logger.info(f"→ 问题位置：{prev_name} 和 {fail_name} 之间的操作")
-        logger.info(f"→ 建议：在这两个检查点之间插入新的检查点，进一步定位问题")
+        logger.info("→ 建议：在这两个检查点之间插入新的检查点，进一步定位问题")
 
 
 def setup_logging(work_dir, golden_dir):
@@ -303,7 +304,7 @@ def main():
         logging.error("✗ 未找到 output 目录")
         sys.exit(1)
 
-    operator_name = setup_logging(args.work_dir, args.golden_dir)
+    setup_logging(args.work_dir, args.golden_dir)
 
     logger.info("=" * 80)
     logger.info("PyPTO 精度检查点文件对比工具")
@@ -356,7 +357,7 @@ def main():
         jit_file = jit_files[0]
         golden_file = golden_files[0]
 
-        logger.info(f"\n使用文件:")
+        logger.info("\n使用文件:")
         logger.info(f"  jit: {os.path.basename(jit_file)}")
         logger.info(f"  golden: {os.path.basename(golden_file)}")
 

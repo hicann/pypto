@@ -14,12 +14,11 @@ PyPTO IR 文本格式解析器
 本模块提供 IR 文本文件的解析能力，支持解析 .tifwkgr 格式的 IR 文件。
 """
 
-import re
-import os
-from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
-
+import os
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
 ERROR_CODES = {
     "SUCCESS": 0,
@@ -29,13 +28,14 @@ ERROR_CODES = {
     "DUPLICATE_RAWTENSOR": 4,
     "DUPLICATE_OPERATION": 5,
     "SHAPE_MISMATCH": 6,
-    "DATAFLOW_ERROR": 7
+    "DATAFLOW_ERROR": 7,
 }
 
 
 @dataclass
 class RawTensor:
     """RAWTENSOR 信息"""
+
     index: int
     shape: List[int]
     data_type: str
@@ -47,6 +47,7 @@ class RawTensor:
 @dataclass
 class Cast:
     """INCAST/OUTCAST 信息"""
+
     cast_type: str
     index: int
     shape: List[int]
@@ -61,6 +62,7 @@ class Cast:
 @dataclass
 class Operation:
     """操作节点信息"""
+
     op_id: int
     opcode: str
     output_shape: List[int]
@@ -87,6 +89,7 @@ class Operation:
 @dataclass
 class IRHeader:
     """IR 文件头信息"""
+
     function_name: str
     function_magic: int
     hash_value: int
@@ -97,6 +100,7 @@ class IRHeader:
 @dataclass
 class IRFile:
     """IR 文件完整信息"""
+
     header: Optional[IRHeader]
     rawtensors: Dict[int, RawTensor]
     incasts: Dict[int, Cast]
@@ -190,14 +194,7 @@ class IRParser:
         except Exception as e:
             return None, f"Failed to read file: {str(e)}"
 
-        ir_file = IRFile(
-            header=None,
-            rawtensors={},
-            incasts={},
-            outcasts={},
-            operations={},
-            file_path=file_path
-        )
+        ir_file = IRFile(header=None, rawtensors={}, incasts={}, outcasts={}, operations={}, file_path=file_path)
 
         in_function = False
 
@@ -266,7 +263,7 @@ class IRParser:
             function_magic=int(match.group(2)),
             hash_value=int(match.group(3)),
             function_type=match.group(4),
-            graph_type=match.group(5)
+            graph_type=match.group(5),
         ), None
 
     def _parse_rawtensor(self, line: str, line_num: int) -> Tuple[Optional[RawTensor], Optional[str]]:
@@ -284,7 +281,7 @@ class IRParser:
             data_type=data_type,
             raw_id=int(match.group(3)),
             name=match.group(4).strip(),
-            line=line_num
+            line=line_num,
         ), None
 
     def _parse_cast(self, line: str, line_num: int, cast_type: str) -> Tuple[Optional[Cast], Optional[str]]:
@@ -308,7 +305,7 @@ class IRParser:
             raw_tensor_id=int(match.group(5)),
             subgraph_id=int(match.group(6).strip('()')),
             slot=int(match.group(8)),
-            line=line_num
+            line=line_num,
         ), None
 
     def _parse_operation(self, line: str, line_num: int) -> Tuple[Optional[Operation], Optional[str]]:
@@ -345,7 +342,7 @@ class IRParser:
             offset_direction=offset_info.get('offset_direction', ''),
             dynoffset_direction=offset_info.get('dynoffset_direction', ''),
             dynvalidshape_direction=offset_info.get('dynvalidshape_direction', ''),
-line=line_num
+            line=line_num,
         ), None
 
     def _parse_array_from_tokens(self, tokens: List[str], start_idx: int) -> List[int]:
@@ -379,7 +376,7 @@ line=line_num
             'offset_from': False,
             'offset_direction': '',
             'dynoffset_direction': '',
-            'dynvalidshape_direction': ''
+            'dynvalidshape_direction': '',
         }
 
         tokens = params_str.strip().split()
@@ -392,7 +389,7 @@ line=line_num
                     'logic_id': int(token[1:].split('@')[0]),
                     'raw_id': int(token.split('@')[1].split('#')[0]),
                     'subgraph_id': int(token.split('#')[1].strip('()').split(')')[0]),
-                    'mem_type': token.split(')')[1] if ')' in token else ''
+                    'mem_type': token.split(')')[1] if ')' in token else '',
                 }
                 input_tensors.append(tensor_info)
                 i += 1
@@ -433,8 +430,7 @@ line=line_num
 
 
 def create_response(
-    status: str, error_code: int, error_message: str,
-    data: Dict[str, Any], file_path: str = ""
+    status: str, error_code: int, error_message: str, data: Dict[str, Any], file_path: str = ""
 ) -> Dict[str, Any]:
     """创建标准化响应"""
     response = {
@@ -442,10 +438,6 @@ def create_response(
         "error_code": error_code,
         "error_message": error_message,
         "data": data,
-        "metadata": {
-            "file": file_path,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "version": "1.0.0"
-        }
+        "metadata": {"file": file_path, "timestamp": datetime.utcnow().isoformat() + "Z", "version": "1.0.0"},
     }
     return response

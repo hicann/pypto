@@ -9,20 +9,25 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
+
+import logging
+import os
+
+from lightning_indexer_prolog_quant_v4_impl import (
+    IndexerPrologQuantConfig,
+    quant_lightning_indexer_prolog_kernel,
+)
+import pytest
 import torch
 import torch_npu
-import pypto
-import os
-import pytest
-import logging
-from lightning_indexer_prolog_quant_v4_impl import *
-
+from utils.compare import compare
 from utils.golden.common_func import (
     apply_rotary_pos_emb,
     gen_uniform_data,
     quant_golden,
 )
-from utils.compare import compare
+
+import pypto
 
 
 def compute_quant_lightning_indexer_prolog(inputs, params):
@@ -43,9 +48,7 @@ def compute_quant_lightning_indexer_prolog(inputs, params):
     calc_dtype = torch.bfloat16
 
     # q_linear & q_rope
-    q_fp32 = torch.matmul(qr.to(torch.int32), idx_wq_b.to(torch.int32)).to(
-        torch.float32
-    )  # (t, idx_nq * head_dim)
+    q_fp32 = torch.matmul(qr.to(torch.int32), idx_wq_b.to(torch.int32)).to(torch.float32)  # (t, idx_nq * head_dim)
     q_fp32 = q_fp32 * qr_scale
     q_fp32 = q_fp32 * idx_wq_b_scale.reshape(1, idx_nq * head_dim)
     q_re = q_fp32.to(calc_dtype).reshape(t, idx_nq, head_dim)
@@ -56,19 +59,15 @@ def compute_quant_lightning_indexer_prolog(inputs, params):
     # hadamard
     # matmul use float32 for arm, arm平台matmul在bfloat16数据类型下表现跟x86不一致，通过升精度保证正确性
     # (t, idx_nq, head_dim) @ (1, head_dim, head_dim) -> (t, idx_nq, head_dim)
-    q_hadamard = torch.matmul(
-        q.to(torch.float32), hadamard.reshape(1, head_dim, head_dim).to(torch.float32)
-    ).to(calc_dtype)
+    q_hadamard = torch.matmul(q.to(torch.float32), hadamard.reshape(1, head_dim, head_dim).to(torch.float32)).to(
+        calc_dtype
+    )
     # (t, idx_nq, head_dim), (t, idx_nq, 1)
     q_int8, q_scale = quant_golden(q_hadamard)
     q_scale = q_scale.to(torch.float16).reshape(t, idx_nq)
 
     # matmul use float32 for arm, arm平台matmul在bfloat16数据类型下表现跟x86不一致，通过升精度保证正确性
-    weights = (
-        torch.matmul(x.to(torch.float32), weights_proj.to(torch.float32))
-        .to(calc_dtype)
-        .to(torch.float32)
-    )
+    weights = torch.matmul(x.to(torch.float32), weights_proj.to(torch.float32)).to(calc_dtype).to(torch.float32)
     weights = weights * (idx_nq**-0.5) * (head_dim**-0.5)
     weights = weights.to(torch.float16)
 
@@ -108,9 +107,7 @@ def gen_quant_attention_post_golden(params):
         qr_scale,
         idx_wq_b_scale,
     ]
-    q_golden, weights_golden, q_scale_golden = compute_quant_lightning_indexer_prolog(
-        inputs, params
-    )
+    q_golden, weights_golden, q_scale_golden = compute_quant_lightning_indexer_prolog(inputs, params)
     return inputs, q_golden, weights_golden, q_scale_golden
 
 
@@ -218,9 +215,7 @@ def do_indexer_prolog_quant_torch_graph(inputs, golden_list):
     idx_wq_b_nz = torch_npu.npu_format_cast(idx_wq_b, torch_npu.Format.FRACTAL_NZ)
     x = inputs[2].npu()
     weights_proj = inputs[3].npu()
-    weights_proj_nz = torch_npu.npu_format_cast(
-        weights_proj, torch_npu.Format.FRACTAL_NZ
-    )
+    weights_proj_nz = torch_npu.npu_format_cast(weights_proj, torch_npu.Format.FRACTAL_NZ)
     cos = inputs[4].npu()
     sin = inputs[5].npu()
     hadamard = inputs[6].npu()
@@ -278,20 +273,14 @@ def do_indexer_prolog_quant_entry(case_name: str, is_torch_graph: bool = False):
         logging.error("Can't get func to gen golden, Case(%s)", case_name)
         return False
 
-    inputs, q_golden, weights_golden, q_scale_golden = gen_quant_attention_post_golden(
-        params
-    )
+    inputs, q_golden, weights_golden, q_scale_golden = gen_quant_attention_post_golden(params)
 
     if is_torch_graph:
         print("\n =============== torch graph ====================")
-        do_indexer_prolog_quant_torch_graph(
-            inputs, [q_golden, weights_golden, q_scale_golden]
-        )
+        do_indexer_prolog_quant_torch_graph(inputs, [q_golden, weights_golden, q_scale_golden])
     else:
         print("\n =============== st ====================")
-        do_indexer_prolog_quant_func(
-            inputs, params, [q_golden, weights_golden, q_scale_golden]
-        )
+        do_indexer_prolog_quant_func(inputs, params, [q_golden, weights_golden, q_scale_golden])
 
     return True
 
@@ -301,9 +290,7 @@ def test_indexer_prolog_quant_b64_s1():
     """
     lightning_indexer_prolog quant decode mtp=0 case
     """
-    do_indexer_prolog_quant_entry(
-        "test_indexer_prolog_quant_b64_s1", is_torch_graph=False
-    )
+    do_indexer_prolog_quant_entry("test_indexer_prolog_quant_b64_s1", is_torch_graph=False)
 
 
 @pytest.mark.skip(reason="large test case")
@@ -311,9 +298,7 @@ def test_indexer_prolog_quant_b64_s2():
     """
     lightning_indexer_prolog quant decode mtp=1 case
     """
-    do_indexer_prolog_quant_entry(
-        "test_indexer_prolog_quant_b64_s2", is_torch_graph=False
-    )
+    do_indexer_prolog_quant_entry("test_indexer_prolog_quant_b64_s2", is_torch_graph=False)
 
 
 @pytest.mark.skip(reason="large test case")
@@ -321,9 +306,7 @@ def test_indexer_prolog_quant_b64_s4():
     """
     lightning_indexer_prolog quant decode mtp=3 case
     """
-    do_indexer_prolog_quant_entry(
-        "test_indexer_prolog_quant_b64_s4", is_torch_graph=False
-    )
+    do_indexer_prolog_quant_entry("test_indexer_prolog_quant_b64_s4", is_torch_graph=False)
 
 
 @pytest.mark.skip(reason="large test case")
@@ -331,9 +314,7 @@ def test_indexer_prolog_quant_graph():
     """
     lightning_indexer_prolog quant graph typical case
     """
-    do_indexer_prolog_quant_entry(
-        "test_indexer_prolog_quant_graph", is_torch_graph=True
-    )
+    do_indexer_prolog_quant_entry("test_indexer_prolog_quant_graph", is_torch_graph=True)
 
 
 if __name__ == "__main__":

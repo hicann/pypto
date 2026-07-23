@@ -13,9 +13,8 @@
 Test cast codegen for KirinX90
 """
 
+from kirin.common_cast import TEST_CASES, create_test_cast_module, run_cast_test
 import pytest
-from kirin.common_cast import create_test_cast_module, run_cast_test, TEST_CASES
-
 
 KERNELS, _ = create_test_cast_module("KirinX90")
 

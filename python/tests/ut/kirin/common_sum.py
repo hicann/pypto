@@ -13,25 +13,23 @@
 Test sum codegen - common functions for Kirin9030 and KirinX90
 """
 
-import pypto
-import torch
 import numpy as np
 import pytest
+import torch
 
 from kirin.common import compare_cos
+import pypto
 
 
 def make_sum_kernel(soc_version, name, dtype, tile_shapes, dim):
-    @pypto.frontend.jit(
-        codegen_options={"soc_version": soc_version},
-        runtime_options={"run_mode": pypto.RunMode.SIM}
-    )
+    @pypto.frontend.jit(codegen_options={"soc_version": soc_version}, runtime_options={"run_mode": pypto.RunMode.SIM})
     def kernel(
         input_tensor: pypto.Tensor([...], dtype),
         out_tensor: pypto.Tensor([...], dtype),
     ):
         pypto.set_vec_tile_shapes(*tile_shapes)
         out_tensor[:] = pypto.sum(input_tensor, dim)
+
     kernel.__name__ = name
     return kernel
 
@@ -52,58 +50,194 @@ TEST_CASES = [
     # - shape_input: input tensor shape
     # - shape_out: output tensor shape (result of sum along dim)
     # - dim: dimension to sum along (-1, 0, 1, or 2)
-    pytest.param("sum_kernel_fp32_001", torch.float32, pypto.DT_FP32,
-                 (48,), (112,), (1,), -1, marks=[], id="001"),
-    pytest.param("sum_kernel_fp32_002", torch.float32, pypto.DT_FP32,
-                 (96,), (100,), (1,), -1, marks=[pytest.mark.skip()], id="002"),
-    pytest.param("sum_kernel_fp32_003", torch.float32, pypto.DT_FP32,
-                 (2, 32), (4, 128), (4, 1), -1,
-                 marks=[pytest.mark.skip()], id="003"),
-    pytest.param("sum_kernel_fp32_004", torch.float32, pypto.DT_FP32,
-                 (1, 128), (4, 130), (4, 1), -1,
-                 marks=[pytest.mark.skip()], id="004"),
-    pytest.param("sum_kernel_fp32_005", torch.float32, pypto.DT_FP32,
-                 (1, 2, 32), (2, 4, 160), (2, 4, 1), -1,
-                 marks=[pytest.mark.skip()], id="005"),
-    pytest.param("sum_kernel_fp32_006", torch.float32, pypto.DT_FP32,
-                 (1, 2, 128), (2, 4, 140), (2, 4, 1), -1,
-                 marks=[pytest.mark.skip()], id="006"),
-    pytest.param("sum_kernel_fp32_007", torch.float32, pypto.DT_FP32,
-                 (1, 5, 32), (2, 5, 152), (2, 5, 1), -1,
-                 marks=[pytest.mark.skip()], id="007"),
-    pytest.param("sum_kernel_fp32_008", torch.float32, pypto.DT_FP32,
-                 (1, 3, 168), (2, 3, 170), (2, 3, 1), -1,
-                 marks=[pytest.mark.skip()], id="008"),
-    pytest.param("sum_kernel_fp32_009", torch.float32, pypto.DT_FP32,
-                 (2, 1, 2, 16), (5, 2, 4, 176), (5, 2, 4, 1), -1,
-                 marks=[pytest.mark.skip()], id="009"),
-    pytest.param("sum_kernel_fp32_010", torch.float32, pypto.DT_FP32,
-                 (1, 1, 1, 128), (5, 2, 4, 130), (5, 2, 4, 1), -1,
-                 marks=[pytest.mark.skip()], id="010"),
-    pytest.param("sum_kernel_fp32_011", torch.float32, pypto.DT_FP32,
-                 (1, 1, 5, 32), (2, 3, 5, 134), (2, 3, 5, 1), -1,
-                 marks=[pytest.mark.skip()], id="011"),
-    pytest.param("sum_kernel_fp32_012", torch.float32, pypto.DT_FP32,
-                 (2, 2, 3, 32), (4, 2, 6, 135), (4, 2, 6, 1), -1,
-                 marks=[pytest.mark.skip()], id="012"),
-    pytest.param("sum_kernel_fp32_013", torch.float32, pypto.DT_FP32,
-                 (1, 1, 4, 128), (6, 2, 4, 130), (6, 2, 4, 1), -1,
-                 marks=[pytest.mark.skip()], id="013"),
-    pytest.param("sum_kernel_fp32_014", torch.float32, pypto.DT_FP32,
-                 (1, 2, 1, 136), (3, 2, 3, 139), (3, 2, 3, 1), -1,
-                 marks=[pytest.mark.skip()], id="014"),
-    pytest.param("sum_kernel_fp32_015", torch.float32, pypto.DT_FP32,
-                 (3, 3, 5, 32), (6, 3, 5, 141), (6, 3, 5, 1), -1,
-                 marks=[pytest.mark.skip()], id="015"),
-    pytest.param("sum_kernel_fp32_015_dim0", torch.float32, pypto.DT_FP32,
-                 (3, 3, 5, 32), (6, 3, 5, 141), (1, 3, 5, 141), 0,
-                 marks=[pytest.mark.skip()], id="016"),
-    pytest.param("sum_kernel_fp32_015_dim1", torch.float32, pypto.DT_FP32,
-                 (3, 3, 5, 32), (6, 3, 5, 141), (6, 1, 5, 141), 1,
-                 marks=[pytest.mark.skip()], id="017"),
-    pytest.param("sum_kernel_fp32_015_dim2", torch.float32, pypto.DT_FP32,
-                 (3, 3, 5, 32), (6, 3, 5, 141), (6, 3, 1, 141), 2,
-                 marks=[pytest.mark.skip()], id="018"),
+    pytest.param("sum_kernel_fp32_001", torch.float32, pypto.DT_FP32, (48,), (112,), (1,), -1, marks=[], id="001"),
+    pytest.param(
+        "sum_kernel_fp32_002",
+        torch.float32,
+        pypto.DT_FP32,
+        (96,),
+        (100,),
+        (1,),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="002",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_003",
+        torch.float32,
+        pypto.DT_FP32,
+        (2, 32),
+        (4, 128),
+        (4, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="003",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_004",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 128),
+        (4, 130),
+        (4, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="004",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_005",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 2, 32),
+        (2, 4, 160),
+        (2, 4, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="005",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_006",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 2, 128),
+        (2, 4, 140),
+        (2, 4, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="006",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_007",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 5, 32),
+        (2, 5, 152),
+        (2, 5, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="007",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_008",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 3, 168),
+        (2, 3, 170),
+        (2, 3, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="008",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_009",
+        torch.float32,
+        pypto.DT_FP32,
+        (2, 1, 2, 16),
+        (5, 2, 4, 176),
+        (5, 2, 4, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="009",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_010",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 1, 1, 128),
+        (5, 2, 4, 130),
+        (5, 2, 4, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="010",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_011",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 1, 5, 32),
+        (2, 3, 5, 134),
+        (2, 3, 5, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="011",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_012",
+        torch.float32,
+        pypto.DT_FP32,
+        (2, 2, 3, 32),
+        (4, 2, 6, 135),
+        (4, 2, 6, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="012",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_013",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 1, 4, 128),
+        (6, 2, 4, 130),
+        (6, 2, 4, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="013",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_014",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 2, 1, 136),
+        (3, 2, 3, 139),
+        (3, 2, 3, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="014",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_015",
+        torch.float32,
+        pypto.DT_FP32,
+        (3, 3, 5, 32),
+        (6, 3, 5, 141),
+        (6, 3, 5, 1),
+        -1,
+        marks=[pytest.mark.skip()],
+        id="015",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_015_dim0",
+        torch.float32,
+        pypto.DT_FP32,
+        (3, 3, 5, 32),
+        (6, 3, 5, 141),
+        (1, 3, 5, 141),
+        0,
+        marks=[pytest.mark.skip()],
+        id="016",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_015_dim1",
+        torch.float32,
+        pypto.DT_FP32,
+        (3, 3, 5, 32),
+        (6, 3, 5, 141),
+        (6, 1, 5, 141),
+        1,
+        marks=[pytest.mark.skip()],
+        id="017",
+    ),
+    pytest.param(
+        "sum_kernel_fp32_015_dim2",
+        torch.float32,
+        pypto.DT_FP32,
+        (3, 3, 5, 32),
+        (6, 3, 5, 141),
+        (6, 3, 1, 141),
+        2,
+        marks=[pytest.mark.skip()],
+        id="018",
+    ),
 ]
 
 
@@ -129,8 +263,7 @@ def run_sum_test(kernels, kernel_name, dtype, shape_input, shape_out, dim):
 
 def create_sum_kernels(soc_version):
     return {
-        p.values[0]: make_sum_kernel(
-            soc_version, p.values[0], p.values[2], p.values[3], p.values[6])
+        p.values[0]: make_sum_kernel(soc_version, p.values[0], p.values[2], p.values[3], p.values[6])
         for p in TEST_CASES
     }
 

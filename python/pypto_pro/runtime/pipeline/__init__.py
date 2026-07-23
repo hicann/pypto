@@ -13,6 +13,6 @@
 
 __all__ = ["PipelineConfig", "stage", "transform_pipeline"]
 
-from .config import PipelineConfig
 from ._stage import stage
 from ._transformer import transform_pipeline
+from .config import PipelineConfig

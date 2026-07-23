@@ -28,8 +28,10 @@ Main Functions:
 Example:
     See deepseekv32_mla_prolog_quant.py for usage examples.
 """
+
 from dataclasses import dataclass
 from typing import List, Tuple
+
 import pypto
 from pypto import pypto_impl
 from pypto.operation import op_wrapper
@@ -165,7 +167,8 @@ def quant(
     input_tensor: pypto.Tensor,
     is_symmetry: bool = True,
     has_smooth_factor: bool = False,
-    smooth_factor: pypto.Tensor = None) -> Tuple[pypto.Tensor, pypto.Tensor]:
+    smooth_factor: pypto.Tensor = None,
+) -> Tuple[pypto.Tensor, pypto.Tensor]:
     """Quantize input tensor to INT8 with optional symmetry and smooth factor.
 
     Performs quantization to INT8 format with support for:
@@ -208,7 +211,7 @@ def quant(
         max_value = pypto.amax(input_fp32, -1, keepdim=True)
         min_value = pypto.amin(input_fp32, -1, keepdim=True)
         scale_de_quant = max(pypto.div(pypto.sub(max_value, min_value), 255.0), 1e-12)
-        offset = pypto.sub(127.0, pypto.div(max_value, scale_de_quant))
+        _offset = pypto.sub(127.0, pypto.div(max_value, scale_de_quant))
         scale_quant = scalar_div(max_value, 1.0, True)
         out_fp32 = pypto.mul(input_fp32, scale_quant)
         out_int32 = pypto.cast(out_fp32, pypto.DT_INT32, pypto.CastMode.CAST_RINT)
@@ -277,9 +280,7 @@ def rotate_half(input_tensor: pypto.Tensor) -> pypto.Tensor:
     return pypto.concat([x2 * (-1.0), x1 + 0.0], -1)
 
 
-def rope_v2(
-    x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor, tile_config: RopeTileShapeConfig
-) -> pypto.Tensor:
+def rope_v2(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor, tile_config: RopeTileShapeConfig) -> pypto.Tensor:
     """Apply 2D Rotary Position Embedding (RoPE) version 2.
 
     Implements RoPE transformation for 2D tensors with optimized tiling.
@@ -302,7 +303,7 @@ def rope_v2(
     """
     seq_size = x.shape[0]
     d_r = x.shape[1]
-    x_dtype = x.dtype
+    _x_dtype = x.dtype
 
     pypto.set_vec_tile_shapes(tile_config.two_dim[0], tile_config.two_dim[1])
     cast_x = pypto.cast(x, pypto.DT_FP32)
@@ -368,7 +369,7 @@ def pre_compute_2d(
     gamma_cq: pypto.Tensor,
     epsilon_cq: float,
     quant_inputs: MlaQuantInputs,
-    tile_config: MlaTileConfig
+    tile_config: MlaTileConfig,
 ) -> pypto.Tensor:
     """Pre-compute query and key-value projections with optional quantization.
 
@@ -430,8 +431,9 @@ def pre_compute_2d(
 
     if is_quant_a:
         pypto.set_vec_tile_shapes(mv, q_lora_rank)
-        pypto.set_cube_tile_shapes([tile_config.pre_quant_cube_tile[0], tile_config.pre_quant_cube_tile[1]],
-                                   [256, 256], [256, 256])
+        pypto.set_cube_tile_shapes(
+            [tile_config.pre_quant_cube_tile[0], tile_config.pre_quant_cube_tile[1]], [256, 256], [256, 256]
+        )
         pypto.set_semantic_label("Quant_x")
         quant_res = quant(token_x)
         input_quant = quant_res[0]
@@ -441,9 +443,11 @@ def pre_compute_2d(
         pypto.set_semantic_label("Dequant_qa")
         q_a_proj[:] = dequant(dtype, q_a_proj, input_quant_scale, dequant_scale_w_dq)
     else:
-        pypto.set_cube_tile_shapes([tile_config.pre_quant_cube_tile[0], tile_config.pre_quant_cube_tile[1]],
-                                   [tile_config.pre_quant_cube_tile[2], tile_config.pre_quant_cube_tile[3]],
-                                   [tile_config.pre_quant_cube_tile[4], tile_config.pre_quant_cube_tile[5]])
+        pypto.set_cube_tile_shapes(
+            [tile_config.pre_quant_cube_tile[0], tile_config.pre_quant_cube_tile[1]],
+            [tile_config.pre_quant_cube_tile[2], tile_config.pre_quant_cube_tile[3]],
+            [tile_config.pre_quant_cube_tile[4], tile_config.pre_quant_cube_tile[5]],
+        )
         pypto.set_semantic_label("Matmul_qa")
         x_view1 = pypto.view(token_x, [bs, k // 2], [0, 0])
         x_view2 = pypto.view(token_x, [bs, k // 2], [0, k // 2])
@@ -468,16 +472,20 @@ def pre_compute_2d(
         norm_quant = quant_res[0]
         norm_quant_scale = quant_res[1]
         pypto.set_semantic_label("QuantMatmul_qb")
-        pypto.set_cube_tile_shapes([tile_config.cube_qb_tile[0], tile_config.cube_qb_tile[1]],
-                                   [tile_config.cube_qb_tile[2], tile_config.cube_qb_tile[3]],
-                                   [tile_config.cube_qb_tile[4], tile_config.cube_qb_tile[5]])
+        pypto.set_cube_tile_shapes(
+            [tile_config.cube_qb_tile[0], tile_config.cube_qb_tile[1]],
+            [tile_config.cube_qb_tile[2], tile_config.cube_qb_tile[3]],
+            [tile_config.cube_qb_tile[4], tile_config.cube_qb_tile[5]],
+        )
         q_b_proj_tmp = pypto.matmul(norm_quant, w_uq_qr, dtype_quant_b_out)
         pypto.set_semantic_label("Dequant_qb")
         q_b_proj = dequant(dtype, q_b_proj_tmp, norm_quant_scale, dequant_scale_w_uq_qr)
     else:
-        pypto.set_cube_tile_shapes([tile_config.cube_qb_tile[0], tile_config.cube_qb_tile[1]],
-                                   [tile_config.cube_qb_tile[2], tile_config.cube_qb_tile[3]],
-                                   [tile_config.cube_qb_tile[4], tile_config.cube_qb_tile[5]])
+        pypto.set_cube_tile_shapes(
+            [tile_config.cube_qb_tile[0], tile_config.cube_qb_tile[1]],
+            [tile_config.cube_qb_tile[2], tile_config.cube_qb_tile[3]],
+            [tile_config.cube_qb_tile[4], tile_config.cube_qb_tile[5]],
+        )
         pypto.set_semantic_label("Matmul_qb")
         q_b_proj = pypto.matmul(norm_res, w_uq_qr, dtype)
 
@@ -492,9 +500,11 @@ def pre_compute_2d(
         pypto.set_semantic_label("Dequant_kva")
         compressed_kv[:] = dequant(dtype, compressed_kv, input_quant_scale, dequant_scale_w_dkv_kr)
     else:
-        pypto.set_cube_tile_shapes([tile_config.pre_quant_cube_tile[0], tile_config.pre_quant_cube_tile[1]],
-                                   [tile_config.pre_quant_cube_tile[2], tile_config.pre_quant_cube_tile[3]],
-                                   [tile_config.pre_quant_cube_tile[4], tile_config.pre_quant_cube_tile[5]])
+        pypto.set_cube_tile_shapes(
+            [tile_config.pre_quant_cube_tile[0], tile_config.pre_quant_cube_tile[1]],
+            [tile_config.pre_quant_cube_tile[2], tile_config.pre_quant_cube_tile[3]],
+            [tile_config.pre_quant_cube_tile[4], tile_config.pre_quant_cube_tile[5]],
+        )
         pypto.set_semantic_label("Matmul_kva")
         compressed_kv = pypto.matmul(token_x, w_dkv_kr, dtype)
 
@@ -533,7 +543,8 @@ def mla_prolog_quant_compute(
     epsilon_ckv: float,
     cache_mode: str,
     tile_config: MlaTileConfig,
-    rope_cfg: RopeTileShapeConfig):
+    rope_cfg: RopeTileShapeConfig,
+):
     """Compute MLA Prolog with quantization support.
 
     Main computation function for MLA Prolog quantization. Converts hidden states
@@ -615,8 +626,14 @@ def mla_prolog_quant_compute(
         is_quant = True
 
     unroll_list = tile_config.unroll_list
-    for bs_offset, unroll_length in pypto.loop_unroll(0, t, 1, name="MLA_BS_LOOP", idx_name="bs_offset",
-                                                      unroll_list=unroll_list, ):
+    for bs_offset, unroll_length in pypto.loop_unroll(
+        0,
+        t,
+        1,
+        name="MLA_BS_LOOP",
+        idx_name="bs_offset",
+        unroll_list=unroll_list,
+    ):
         tile_bs = unroll_length
         output_offset = [bs_offset, 0, 0]
 
@@ -642,9 +659,11 @@ def mla_prolog_quant_compute(
         q_nope = pypto.view(q_tmp, [tile_bs, n1, qk_nope_head_dim], [0, 0, 0])
         m = tile_config.m_tile
         pypto.set_semantic_label("Matmul_qNope_wUk")
-        pypto.set_cube_tile_shapes([m, m],
-                                   [tile_config.cube_wuk_tile[2], tile_config.cube_wuk_tile[3]],
-                                   [tile_config.cube_wuk_tile[4], tile_config.cube_wuk_tile[5]])
+        pypto.set_cube_tile_shapes(
+            [m, m],
+            [tile_config.cube_wuk_tile[2], tile_config.cube_wuk_tile[3]],
+            [tile_config.cube_wuk_tile[4], tile_config.cube_wuk_tile[5]],
+        )
         q_nope_new_trans = pypto.experimental.transposed_batchmatmul(q_nope, w_uk, dtype)
 
         pypto.set_semantic_label("Assemble_queryOut")
@@ -708,13 +727,11 @@ def mla_prolog_quant_compute(
             kv_cache_out[:] = pypto.scatter_update(kv_cache, -2, index, k_nope_4d)
 
 
-
 def options_list():
     if pypto.platform.npuarch == 'DAV_3510':
         return {
-            "runtime_options": {"device_sched_mode": 3,
-                                "max_workspace_kb": 131072},
-            }
+            "runtime_options": {"device_sched_mode": 3, "max_workspace_kb": 131072},
+        }
     else:
         return {
             "runtime_options": {
@@ -729,9 +746,7 @@ def options_list():
     pass_options={
         "cube_l1_reuse_setting": {-1: 4},
     },
-    runtime_options={
-        "stitch_function_max_num": 128
-    }
+    runtime_options={"stitch_function_max_num": 128},
 )
 def mla_prolog_quant_p(
     token_x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
@@ -755,7 +770,11 @@ def mla_prolog_quant_p(
     kv_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
     kr_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
     k_scale_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    epsilon_cq, epsilon_ckv, cache_mode, tile_config, rope_cfg
+    epsilon_cq,
+    epsilon_ckv,
+    cache_mode,
+    tile_config,
+    rope_cfg,
 ):
     """
     JIT-compiled MLA Prolog quantization for prefill phase.
@@ -794,13 +813,32 @@ def mla_prolog_quant_p(
         Configured for decode phase with optimized memory and latency settings.
     """
     mla_prolog_quant_compute(
-                            token_x, w_dq, w_uq_qr, dequant_scale, w_uk,
-                            w_dkv_kr, gamma_cq, gamma_ckv, cos,
-                            sin, cache_index, kv_cache, kr_cache, k_scale_cache,
-                            q_norm_out, q_norm_scale_out, query_nope_out,
-                            query_rope_out, kv_cache_out,
-                            kr_cache_out, k_scale_cache_out, epsilon_cq,
-                            epsilon_ckv, cache_mode, tile_config, rope_cfg
+        token_x,
+        w_dq,
+        w_uq_qr,
+        dequant_scale,
+        w_uk,
+        w_dkv_kr,
+        gamma_cq,
+        gamma_ckv,
+        cos,
+        sin,
+        cache_index,
+        kv_cache,
+        kr_cache,
+        k_scale_cache,
+        q_norm_out,
+        q_norm_scale_out,
+        query_nope_out,
+        query_rope_out,
+        kv_cache_out,
+        kr_cache_out,
+        k_scale_cache_out,
+        epsilon_cq,
+        epsilon_ckv,
+        cache_mode,
+        tile_config,
+        rope_cfg,
     )
 
 
@@ -829,7 +867,11 @@ def mla_prolog_quant_d(
     kv_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
     kr_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
     k_scale_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
-    epsilon_cq, epsilon_ckv, cache_mode, tile_config, rope_cfg
+    epsilon_cq,
+    epsilon_ckv,
+    cache_mode,
+    tile_config,
+    rope_cfg,
 ):
     """
     JIT-compiled MLA Prolog quantization for decode phase.
@@ -880,11 +922,30 @@ def mla_prolog_quant_d(
         pypto.set_pass_options(cube_nbuffer_setting={-1: 4, 0: 1, 1: 1})
         pypto.set_pass_options(vec_nbuffer_setting={-2: 1, -1: 4})
     mla_prolog_quant_compute(
-                            token_x, w_dq, w_uq_qr, dequant_scale, w_uk,
-                            w_dkv_kr, gamma_cq, gamma_ckv, cos,
-                            sin, cache_index, kv_cache, kr_cache, k_scale_cache,
-                            q_norm_out, q_norm_scale_out, query_nope_out,
-                            query_rope_out, kv_cache_out,
-                            kr_cache_out, k_scale_cache_out, epsilon_cq,
-                            epsilon_ckv, cache_mode, tile_config, rope_cfg
+        token_x,
+        w_dq,
+        w_uq_qr,
+        dequant_scale,
+        w_uk,
+        w_dkv_kr,
+        gamma_cq,
+        gamma_ckv,
+        cos,
+        sin,
+        cache_index,
+        kv_cache,
+        kr_cache,
+        k_scale_cache,
+        q_norm_out,
+        q_norm_scale_out,
+        query_nope_out,
+        query_rope_out,
+        kv_cache_out,
+        kr_cache_out,
+        k_scale_cache_out,
+        epsilon_cq,
+        epsilon_ckv,
+        cache_mode,
+        tile_config,
+        rope_cfg,
     )

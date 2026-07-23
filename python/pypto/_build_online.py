@@ -18,14 +18,15 @@
 - BuildOnlineCalculatorManager: tile_fwk_calculator.so 在线编译
 """
 
-import hashlib
-import importlib.machinery
-import importlib.util
 import ctypes
 import dataclasses
 import fcntl
+import hashlib
+import importlib.machinery
+import importlib.util
 import logging
 import os
+from pathlib import Path
 import re
 import shlex
 import shutil
@@ -35,9 +36,7 @@ import sysconfig
 import tempfile
 import threading
 import time
-from pathlib import Path
-from typing import Optional, Any, Dict, Tuple, Callable
-
+from typing import Any, Callable, Dict, Optional, Tuple
 
 _log = logging.getLogger(__name__)
 
@@ -65,8 +64,13 @@ class _BuildOnlineManager:
                 return self.install_prefix or Path(self.tmp_dir, "install")
 
             def run_cmd(self, cmd: str):
-                ret = subprocess.run(shlex.split(cmd), text=True, encoding='utf-8',
-                                     capture_output=self.capture_output, check=not self.capture_output)
+                ret = subprocess.run(
+                    shlex.split(cmd),
+                    text=True,
+                    encoding='utf-8',
+                    capture_output=self.capture_output,
+                    check=not self.capture_output,
+                )
                 if ret.returncode != 0 and self.capture_output:
                     _log.error("cmd: %s, ret: %s", cmd, ret.returncode)
                     _log.error("stdout:\n%s", ret.stdout)
@@ -86,6 +90,7 @@ class _BuildOnlineManager:
         def _which_cmake(cls) -> Optional[Path]:
             """查找系统级 CMake 可执行文件路径, 委托至 _which_cmake 公共模块."""
             from ._which_cmake import which_cmake
+
             return which_cmake()
 
         def compile(self, ctx: CompileContext) -> Path:
@@ -128,6 +133,7 @@ class _BuildOnlineManager:
             return
         # 路径识别
         from importlib import metadata
+
         cur_dir: Path = Path(__file__).parent
         pkg_dir: Path = Path(str(metadata.distribution("pypto").locate_file("pypto"))).resolve()
         pkg_dir = pkg_dir if pkg_dir == cur_dir else cur_dir  # 适配 edit 模式
@@ -148,7 +154,6 @@ class _BuildOnlineManager:
 
 
 class BuildOnlineCalculatorManager(_BuildOnlineManager):
-
     # 独立于 BuildOnlinePyptoImplManager 的编译锁, 避免二者互相阻塞
     _compile_lock: threading.Lock = threading.Lock()
 
@@ -163,6 +168,7 @@ class BuildOnlineCalculatorManager(_BuildOnlineManager):
             try:
                 os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
                 import torch
+
                 self.torch_version = str(torch.__version__)
                 self.torch_root_dir = str(Path(torch.__file__).parent)
                 self.torch_c_use_cxx11_abi = int(torch._C._GLIBCXX_USE_CXX11_ABI)
@@ -195,7 +201,8 @@ class BuildOnlineCalculatorManager(_BuildOnlineManager):
                 ext += f" -DPY3_MOD_TORCH_ROOT_PATH={torch_ctx.torch_root_dir}"
                 ext += f" -DPY3_MOD_TORCH_C_GLIBCXX_USE_CXX11_ABI={torch_ctx.torch_c_use_cxx11_abi}"
                 compile_ctx = self._CMakeContext.CompileContext(
-                    src_dir=Path(self.pkg_lib_dir, "framework/src/calculator"), tmp_dir=Path(_tmp_dir))
+                    src_dir=Path(self.pkg_lib_dir, "framework/src/calculator"), tmp_dir=Path(_tmp_dir)
+                )
                 compile_ctx.cfg_cmd_ext = ext
                 install_prefix = cmake_ctx.compile(ctx=compile_ctx)
                 # 加载
@@ -207,13 +214,11 @@ class BuildOnlineCalculatorManager(_BuildOnlineManager):
 
 
 class BuildOnlinePyptoImplManager(_BuildOnlineManager):
-
     _FLOCK_TIMEOUT: int = 300  # 多进程等待编译的超时阈值(秒)
     # 独立于 BuildOnlineCalculatorManager 的编译锁, 避免二者互相阻塞
     _compile_lock: threading.Lock = threading.Lock()
 
     class _PythonContext:
-
         _PYBIND11_MIN_VERSION = (2, 13, 6)
 
         def __init__(self):
@@ -228,8 +233,8 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
             python_h = Path(sysconfig.get_path("include")) / "Python.h"
             if not python_h.exists():
                 raise RuntimeError(
-                        f"Python development headers not found (expected {python_h}).\n"
-                        "Hint: install python3-dev (e.g. `apt install python3-dev` or `yum install python3-devel`)."
+                    f"Python development headers not found (expected {python_h}).\n"
+                    "Hint: install python3-dev (e.g. `apt install python3-dev` or `yum install python3-devel`)."
                 )
 
         def _init_minor_version(self):
@@ -246,8 +251,7 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
                 import pybind11
             except ImportError as e:
                 raise RuntimeError(
-                    "pybind11 pip package not found.\n"
-                    "Hint: install it with `pip install pybind11>=2.13.6`."
+                    "pybind11 pip package not found.\nHint: install it with `pip install pybind11>=2.13.6`."
                 ) from e
             _ver_match = re.match(r'(\d+)\.(\d+)\.(\d+)', pybind11.__version__)
             if not _ver_match:
@@ -263,10 +267,7 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
                 )
             pybind11_dir = Path(pybind11.get_cmake_dir()).resolve()
             if not pybind11_dir or not pybind11_dir.exists():
-                raise RuntimeError(
-                    "pybind11 cmake dir empty.\n"
-                    "Hint: install it with `pip install pybind11>=2.13.6`."
-                )
+                raise RuntimeError("pybind11 cmake dir empty.\nHint: install it with `pip install pybind11>=2.13.6`.")
             self.pybind11_cmake_dir = pybind11_dir
 
     def __init__(self):
@@ -357,8 +358,9 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
                     pass
                 lock_fd.close()
 
-    def _poll_until(self, predicate: Callable[[], bool], timeout: Optional[float] = None,
-                    interval: float = 1.0) -> bool:
+    def _poll_until(
+        self, predicate: Callable[[], bool], timeout: Optional[float] = None, interval: float = 1.0
+    ) -> bool:
         """轮询 predicate() 直至返回 True 或超时.
 
         :param predicate: 条件谓词, 返回 True 时停止轮询.
@@ -407,8 +409,7 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
         except BlockingIOError:
             return False
 
-    def _wait_and_compile(self, lock_fd, src_dir: Path, target_dir: Path,
-                          lock_path: Path) -> Optional[Path]:
+    def _wait_and_compile(self, lock_fd, src_dir: Path, target_dir: Path, lock_path: Path) -> Optional[Path]:
         _log.info("Waiting for compilation by another process (lock: %s)...", lock_path)
 
         if self._poll_until(lambda: self._try_acquire_lock(lock_fd)):
@@ -433,8 +434,7 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
             ascend_home = os.environ.get("ASCEND_HOME_PATH", "")
             if ascend_home:
                 ext += f" -DASCEND_CANN_PACKAGE_PATH={ascend_home}"
-            compile_ctx = self._CMakeContext.CompileContext(src_dir=src_dir,
-                                                            tmp_dir=Path(tmp_dir))
+            compile_ctx = self._CMakeContext.CompileContext(src_dir=src_dir, tmp_dir=Path(tmp_dir))
             compile_ctx.cfg_cmd_ext = ext
             compile_ctx.install_prefix = target_dir
             cmake_ctx.compile(ctx=compile_ctx)
@@ -551,6 +551,7 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
 
         # 同时设为父包属性, 确保 `from pypto import pypto_impl` 可达
         import pypto
+
         setattr(pypto, "pypto_impl", module)
 
         spec.loader.exec_module(module)

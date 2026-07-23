@@ -5,10 +5,20 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
-from .pir import Call, Block, Function, Scope, BuildContext, Jump, DoubleStarred
-from .pir import ReturnSignal, BreakSignal, ContinueSignal
-from .op_registry import dispatch
 from .. import pypto_impl
+from .op_registry import dispatch
+from .pir import (
+    Block,
+    BreakSignal,
+    BuildContext,
+    Call,
+    ContinueSignal,
+    DoubleStarred,
+    Function,
+    Jump,
+    ReturnSignal,
+    Scope,
+)
 
 
 def dispatch_call(call: Call, scope: Scope, ctx: BuildContext):

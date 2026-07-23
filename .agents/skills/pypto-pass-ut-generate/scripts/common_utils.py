@@ -20,26 +20,21 @@
 - 日志记录
 """
 
-import os
-import sys
 import json
 import logging
+import os
 import shutil
-import urllib.request
-import urllib.error
+import subprocess
+import sys
 import tarfile
 import tempfile
-import subprocess
-from typing import Optional, Dict, List, Tuple, Any, Union
-
+from typing import Any, Dict, List, Optional, Tuple
+import urllib.error
+import urllib.request
 
 GITCODE_API_BASE = "https://api.gitcode.com/api/v5"
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s: %(message)s",
-    stream=sys.stdout
-)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s", stream=sys.stdout)
 logger = logging.getLogger(__name__)
 
 
@@ -86,11 +81,7 @@ def get_gitcode_token(print_hint: bool = True) -> str:
 
 
 def make_api_request(
-    url: str,
-    token: Optional[str] = None,
-    headers: Optional[Dict] = None,
-    timeout: int = 30,
-    method: str = "GET"
+    url: str, token: Optional[str] = None, headers: Optional[Dict] = None, timeout: int = 30, method: str = "GET"
 ) -> Optional[Any]:
     """
     通用 API 请求函数
@@ -126,11 +117,7 @@ def make_api_request(
         return None
 
 
-def make_gitcode_api_request(
-    endpoint: str,
-    token: Optional[str] = None,
-    timeout: int = 30
-) -> Optional[Any]:
+def make_gitcode_api_request(endpoint: str, token: Optional[str] = None, timeout: int = 30) -> Optional[Any]:
     """GitCode API 请求封装"""
     if not token:
         token = get_gitcode_token()
@@ -146,9 +133,7 @@ def get_pr_info(owner: str, repo: str, pr_number: int) -> Optional[Dict]:
 
 def get_pr_comments(owner: str, repo: str, pr_number: int) -> List[Dict]:
     """获取 PR 评论"""
-    result = make_gitcode_api_request(
-        f"repos/{owner}/{repo}/pulls/{pr_number}/comments?per_page=100"
-    )
+    result = make_gitcode_api_request(f"repos/{owner}/{repo}/pulls/{pr_number}/comments?per_page=100")
     if result is None:
         return []
     if isinstance(result, list):
@@ -170,11 +155,7 @@ def get_pr_diff(owner: str, repo: str, pr_number: int) -> Optional[str]:
     return None
 
 
-def download_file(
-    url: str,
-    output_path: Optional[str] = None,
-    timeout: int = 120
-) -> Tuple[bool, str]:
+def download_file(url: str, output_path: Optional[str] = None, timeout: int = 120) -> Tuple[bool, str]:
     """
     下载文件
 
@@ -264,18 +245,14 @@ def safe_extractall(tar: tarfile.TarFile, extract_dir: str) -> None:
         # 校验 symlink / hardlink 目标也必须位于 extract_dir 之内
         if member.issym() or member.islnk():
             if os.path.isabs(member.linkname):
-                raise ValueError(
-                    f"检测到不安全的 tar 成员（链接指向绝对路径）: {member.name} -> {member.linkname}"
-                )
+                raise ValueError(f"检测到不安全的 tar 成员（链接指向绝对路径）: {member.name} -> {member.linkname}")
             # symlink 目标相对于成员所在目录；hardlink 目标相对于归档根目录
             if member.issym():
                 link_target = os.path.join(os.path.dirname(member_path), member.linkname)
             else:
                 link_target = os.path.join(extract_dir, member.linkname)
             if not _is_within_directory(extract_dir, link_target):
-                raise ValueError(
-                    f"检测到不安全的 tar 成员（链接越界）: {member.name} -> {member.linkname}"
-                )
+                raise ValueError(f"检测到不安全的 tar 成员（链接越界）: {member.name} -> {member.linkname}")
 
     # 只要运行时提供解压过滤器（Python 3.8.17+/3.9.17+/3.10.12+/3.11.4+/3.12+，
     # 以 tarfile.data_filter 是否存在做特性探测，而非版本号判断），就用 'data' 过滤器：
@@ -289,9 +266,7 @@ def safe_extractall(tar: tarfile.TarFile, extract_dir: str) -> None:
     # 故在该回退路径直接拒绝任何链接成员，仅解压普通条目（路径已逐一校验在 extract_dir 内）。
     for member in tar.getmembers():
         if member.issym() or member.islnk():
-            raise ValueError(
-                f"检测到不安全的 tar 成员（当前 Python 不支持解压过滤器，禁止链接成员）: {member.name}"
-            )
+            raise ValueError(f"检测到不安全的 tar 成员（当前 Python 不支持解压过滤器，禁止链接成员）: {member.name}")
     tar.extractall(extract_dir)
 
 
@@ -326,11 +301,7 @@ def extract_tarball(tar_path: str, output_dir: Optional[str] = None) -> Tuple[bo
             shutil.rmtree(created_dir, ignore_errors=True)
 
 
-def run_git_command(
-    args: List[str],
-    cwd: str,
-    timeout: int = 60
-) -> Tuple[int, str, str]:
+def run_git_command(args: List[str], cwd: str, timeout: int = 60) -> Tuple[int, str, str]:
     """
     运行 git 命令
 
@@ -343,13 +314,7 @@ def run_git_command(
         (返回码, stdout, stderr)
     """
     try:
-        result = subprocess.run(
-            ['git'] + args,
-            capture_output=True,
-            text=True,
-            cwd=cwd,
-            timeout=timeout
-        )
+        result = subprocess.run(['git'] + args, capture_output=True, text=True, cwd=cwd, timeout=timeout)
         return result.returncode, result.stdout, result.stderr
     except Exception as e:
         return -1, "", str(e)

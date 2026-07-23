@@ -13,9 +13,8 @@
 Test matmul codegen for KirinX90
 """
 
+from kirin.common_matmul import TEST_CASES, create_test_matmul_module, run_matmul_test
 import pytest
-from kirin.common_matmul import create_test_matmul_module, run_matmul_test, TEST_CASES
-
 
 KERNELS, _ = create_test_matmul_module("KirinX90")
 
@@ -25,11 +24,35 @@ KERNELS, _ = create_test_matmul_module("KirinX90")
     "shape_a,shape_b,shape_c,cube_tile_shape,has_bias,bias_shape,a_trans,b_trans",
     TEST_CASES,
 )
-def test_matmul(kernel_name, torch_in_dtype, torch_out_dtype, pypto_in_dtype, pypto_out_dtype,
-               shape_a, shape_b, shape_c, cube_tile_shape, has_bias, bias_shape, a_trans, b_trans):
-    run_matmul_test(KERNELS, kernel_name, torch_in_dtype, torch_out_dtype,
-                   shape_a, shape_b, shape_c, cube_tile_shape, has_bias,
-                   bias_shape, a_trans, b_trans)
+def test_matmul(
+    kernel_name,
+    torch_in_dtype,
+    torch_out_dtype,
+    pypto_in_dtype,
+    pypto_out_dtype,
+    shape_a,
+    shape_b,
+    shape_c,
+    cube_tile_shape,
+    has_bias,
+    bias_shape,
+    a_trans,
+    b_trans,
+):
+    run_matmul_test(
+        KERNELS,
+        kernel_name,
+        torch_in_dtype,
+        torch_out_dtype,
+        shape_a,
+        shape_b,
+        shape_c,
+        cube_tile_shape,
+        has_bias,
+        bias_shape,
+        a_trans,
+        b_trans,
+    )
 
 
 if __name__ == "__main__":

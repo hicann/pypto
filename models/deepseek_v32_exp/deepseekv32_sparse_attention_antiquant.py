@@ -8,25 +8,25 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
+import logging
 import math
 import os
-import logging
-from dataclasses import dataclass
-import torch
-import torch_npu
+
 import numpy as np
 import pytest
-import pypto
-
 from sparse_attention_antiquant_impl import (
+    SaTileShapeConfig,
     sparse_attention_antiquant_d,
     sparse_attention_antiquant_d_large_batch,
     sparse_attention_antiquant_p,
-    SaTileShapeConfig,
 )
+import torch
+import torch_npu
 from utils.compare import compare
+
+import pypto
 
 
 def gen_uniform_data(data_shape, min_value, max_value, dtype):
@@ -125,11 +125,11 @@ def compute_attention_aq(input_data, params, s2_tile):
                 sij = torch.matmul(qi.to(torch.float32), slc_kv_up.transpose(1, 0).to(torch.float32)).to(torch.float32)
 
                 # V1
-                sij_scale = sij * scalar # (nq, s2_tile)
-                tilda_mij = sij_scale.amax(dim=-1, keepdims=True) # (nq, 1)
-                t_sub = sij_scale - tilda_mij # (nq, s2_tile)
-                tilda_pij = torch.exp(t_sub) # (nq, s2_tile)
-                tilda_lij_reduce = tilda_pij.sum(dim=-1, keepdims=True) # (nq, 1)
+                sij_scale = sij * scalar  # (nq, s2_tile)
+                tilda_mij = sij_scale.amax(dim=-1, keepdims=True)  # (nq, 1)
+                t_sub = sij_scale - tilda_mij  # (nq, s2_tile)
+                tilda_pij = torch.exp(t_sub)  # (nq, s2_tile)
+                tilda_lij_reduce = tilda_pij.sum(dim=-1, keepdims=True)  # (nq, 1)
                 t_softmax = tilda_pij / tilda_lij_reduce
                 tilda_pij_f16 = t_softmax.to(input_dtype)
 
@@ -196,12 +196,12 @@ def gen_gather_select_attention_golden_aq(dtype, bn1n2s1, is_kn_quant, actual_se
     d_q = kv_lora_rank + qk_rope_dim
 
     # k head dim
-    d_k = kv_lora_rank + qk_rope_dim
+    _d_k = kv_lora_rank + qk_rope_dim
 
     # v head dim
-    d_v = kv_lora_rank
+    _d_v = kv_lora_rank
 
-    scalar = d_q ** -0.5
+    scalar = d_q**-0.5
     if isinstance(actual_seq, int):
         actual_seq = [actual_seq] * b
     elif isinstance(actual_seq, list):
@@ -236,7 +236,6 @@ def gen_gather_select_attention_golden_aq(dtype, bn1n2s1, is_kn_quant, actual_se
 
     for b_i in range(b):
         for s_q_i in range(s_q):
-
             if slc_actual_seq[b_i] < topk:
                 topk_indices[b_i, s_q_i, :slc_actual_seq[b_i]] = torch.arange(0, slc_actual_seq[b_i])
             else:
@@ -304,19 +303,19 @@ def do_test_sparse_attention_func_aq(bn1n2s1, actual_seq, input_params, input_da
             s_kv_tile=2048,
             c1_tile_shape=[128, 128, 128, 128, 128, 128],
             v1_tile_shape=[8, 2048],
-            c2_tile_shape=[128, 128, 128, 128, 128, 128], # C1的N轴与C2的K轴一致
-            v2_tile_shape=[64, 128]
+            c2_tile_shape=[128, 128, 128, 128, 128, 128],  # C1的N轴与C2的K轴一致
+            v2_tile_shape=[64, 128],
         )
     else:
         if pypto.platform.npuarch == 'DAV_3510':
             tile_config = SaTileShapeConfig(
-            g_tile=128,
-            s_kv_tile=2048,
-            c1_tile_shape=[128, 128, 128, 128, 64, 64],
-            v1_tile_shape=[8, 2048],
-            c2_tile_shape=[128, 128, 128, 128, 128, 128],
-            v2_tile_shape=[64, 128]
-        )
+                g_tile=128,
+                s_kv_tile=2048,
+                c1_tile_shape=[128, 128, 128, 128, 64, 64],
+                v1_tile_shape=[8, 2048],
+                c2_tile_shape=[128, 128, 128, 128, 128, 128],
+                v2_tile_shape=[64, 128],
+            )
         else:
             tile_config = SaTileShapeConfig(
                 g_tile=128,
@@ -324,11 +323,10 @@ def do_test_sparse_attention_func_aq(bn1n2s1, actual_seq, input_params, input_da
                 c1_tile_shape=[128, 128, 128, 128, 128, 128],
                 v1_tile_shape=[8, 2048],
                 c2_tile_shape=[128, 128, 128, 128, 128, 128],
-                v2_tile_shape=[64, 128]
+                v2_tile_shape=[64, 128],
             )
 
-    b, s1, n_q, n_kv, max_kv_seq, kv_lora_rank, qk_rope_dim, block_num, block_size, topk, \
-        softmax_scale = input_params
+    b, s1, n_q, n_kv, max_kv_seq, kv_lora_rank, qk_rope_dim, block_num, block_size, topk, softmax_scale = input_params
     q_nope, q_rope, nope_cache_2d, topk_indices, block_table, kv_actual_seqs = input_data
     kv_act_seqs = torch.tensor(actual_seq, dtype=torch.int32)
 
@@ -348,17 +346,32 @@ def do_test_sparse_attention_func_aq(bn1n2s1, actual_seq, input_params, input_da
     max_blocknum_perbatch = math.ceil(max_kv_seq / block_size)
 
     if is_p:
-        sparse_attention_antiquant_p(*pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, \
-            max_blocknum_perbatch, tile_config)
+        sparse_attention_antiquant_p(
+            *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, max_blocknum_perbatch, tile_config
+        )
     elif pypto.platform.npuarch == 'DAV_3510' and b >= 64:
         sparse_attention_antiquant_d_large_batch(
-            *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size,
-            max_blocknum_perbatch, tile_config,
+            *pto_inputs,
+            *pto_outputs,
+            n_q,
+            n_kv,
+            softmax_scale,
+            topk,
+            block_size,
+            max_blocknum_perbatch,
+            tile_config,
         )
     else:
         sparse_attention_antiquant_d(
-            *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size,
-            max_blocknum_perbatch, tile_config,
+            *pto_inputs,
+            *pto_outputs,
+            n_q,
+            n_kv,
+            softmax_scale,
+            topk,
+            block_size,
+            max_blocknum_perbatch,
+            tile_config,
         )
     calc_attention_out_npu = calc_attention_out_npu.reshape(b, s1, n_q, kv_lora_rank)
     torch_npu.npu.synchronize()
@@ -368,18 +381,10 @@ def do_test_sparse_attention_func_aq(bn1n2s1, actual_seq, input_params, input_da
 def get_case_config(case_name: str):
     # case参数配置字典，key为case名称，value为对应的参数元组(bn1n2s1, is_kn_quant, actual_seq)
     test_case_config = {
-        "sfa_bf16_b4_s2_seq64K_total_int8_d": (
-            (4, 128, 1, 2), 1, [65536, 16381, 666, 15]
-        ),
-        "sfa_bf16_b4_s2_seq64K_per_int8_d": (
-            (4, 128, 1, 2), 1, [65536] * 4
-        ),
-        "sfa_bf16_b64_s2_seq64K_per_int8_d": (
-            (64, 128, 1, 2), 1, [65536] * 64
-        ),
-        "sfa_bf16_b1_s256_seq64K_int8_p": (
-            (1, 128, 1, 256), 1, [65536]
-        ),
+        "sfa_bf16_b4_s2_seq64K_total_int8_d": ((4, 128, 1, 2), 1, [65536, 16381, 666, 15]),
+        "sfa_bf16_b4_s2_seq64K_per_int8_d": ((4, 128, 1, 2), 1, [65536] * 4),
+        "sfa_bf16_b64_s2_seq64K_per_int8_d": ((64, 128, 1, 2), 1, [65536] * 64),
+        "sfa_bf16_b1_s256_seq64K_int8_p": ((1, 128, 1, 256), 1, [65536]),
     }
     case_config = test_case_config.get(case_name)
     return case_config
@@ -395,9 +400,7 @@ def do_test_sfa_entry(case_name: str, is_p: bool):
     input_params, input_data, atten_out = gen_gather_select_attention_golden_aq(
         torch.bfloat16, bn1n2s1, is_kn_quant, actual_seq
     )
-    do_test_sparse_attention_func_aq(
-        bn1n2s1, actual_seq, input_params, input_data, atten_out, is_p
-    )
+    do_test_sparse_attention_func_aq(bn1n2s1, actual_seq, input_params, input_data, atten_out, is_p)
     return True
 
 
@@ -437,10 +440,7 @@ def test_sfa_bf16_b1_s256_seq64k_int8_p():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-        level=logging.INFO
-    )
+    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.INFO)
     test_sfa_bf16_b4_s2_seq64k_total_int8_d()
     test_sfa_bf16_b4_s2_seq64k_per_int8_d()
     test_sfa_bf16_b1_s256_seq64k_int8_p()

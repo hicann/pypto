@@ -8,15 +8,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import pypto
-import pytest
-import torch
-import numpy as np
-import torch_npu
+""" """
 
+import os
+
+import torch
+
+import pypto
 
 
 def test_view_basic_shape():
@@ -32,6 +30,7 @@ def test_view_basic_shape():
         res = pypto.view(x, view_shape, offset)
 
     assert res.shape == view_shape
+
 
 def test_view_content_equal():
     """Test whether the output content has changed"""
@@ -59,6 +58,7 @@ def test_view_content_equal():
     expected = torch_tensor[0:4, 4:8]
     assert torch.equal(res_tensor.flatten(), expected.flatten())
     pypto.runtime._device_fini()
+
 
 def test_view_content_equal_validshape():
     """Test whether the output content has changed with validshape"""
@@ -88,6 +88,7 @@ def test_view_content_equal_validshape():
     assert torch.equal(res_tensor.flatten()[:2 * 4], expected.flatten())
 
     pypto.runtime._device_fini()
+
 
 def test_tensor_view_content_equal():
     """Test whether the output content has changed"""
@@ -142,10 +143,11 @@ def test_tensor_view_content_validshape_equal():
     pto_output_tensor = pypto.from_torch(res_tensor, "pto_output_tensor")
     pypto.runtime._device_run_once_data_from_host(pto_input_tensor, pto_output_tensor)
 
-    expected = torch_tensor[2: 4, 0: 4]
-    assert torch.equal(res_tensor.flatten()[: 2 * 4], expected.flatten())
+    expected = torch_tensor[2:4, 0:4]
+    assert torch.equal(res_tensor.flatten()[:2 * 4], expected.flatten())
 
     pypto.runtime._device_fini()
+
 
 def test_syntactic_sugar_view_content_equal():
     """Test whether the output content has changed"""

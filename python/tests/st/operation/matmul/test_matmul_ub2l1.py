@@ -13,20 +13,19 @@ Cast+Matmul 融合算子 ST 测试脚本。
 场景：先 Cast 输入到目标 dtype，再执行 Matmul。
 支持 pytest 参数化执行和直接执行两种模式。
 """
+
 import os
-import sys
 
 import pytest
-import pypto
-import torch
-import numpy as np
-
 from testcase.matmul_ub2l1_test_case import (
-    CastMatmulConfig,
-    CAST_RIGHT_MATMUL_TESTS,
-    CAST_LEFT_MATMUL_TESTS,
     CAST_BOTH_MATMUL_TESTS,
+    CAST_LEFT_MATMUL_TESTS,
+    CAST_RIGHT_MATMUL_TESTS,
+    CastMatmulConfig,
 )
+import torch
+
+import pypto
 
 
 @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
@@ -51,9 +50,9 @@ def cast_matmul_pto_kernel(
             if config.matmul_pto_dtype == pypto.DT_INT8:
                 mode = pypto.CastMode.CAST_TRUNC
             if config.a_trans:
-                a_tile = a_tensor[:, m_idx * m_view: m_idx * m_view + m_view]
+                a_tile = a_tensor[:, m_idx * m_view:m_idx * m_view + m_view]
             else:
-                a_tile = a_tensor[m_idx * m_view: m_idx * m_view + m_view, :]
+                a_tile = a_tensor[m_idx * m_view:m_idx * m_view + m_view, :]
 
             if config.a_cast:
                 pypto.set_vec_tile_shapes(*config.a_vec_tile_shape)
@@ -62,9 +61,9 @@ def cast_matmul_pto_kernel(
                 a_compute = a_tile
 
             if config.b_trans:
-                b_tile = b_tensor[n_idx * n_view: n_idx * n_view + n_view, :]
+                b_tile = b_tensor[n_idx * n_view:n_idx * n_view + n_view, :]
             else:
-                b_tile = b_tensor[:, n_idx * n_view: n_idx * n_view + n_view]
+                b_tile = b_tensor[:, n_idx * n_view:n_idx * n_view + n_view]
 
             if config.b_cast:
                 pypto.set_vec_tile_shapes(*config.b_vec_tile_shape)
@@ -81,8 +80,8 @@ def cast_matmul_pto_kernel(
             )
 
             out_tensor[
-                m_idx * m_view: m_idx * m_view + m_view,
-                n_idx * n_view: n_idx * n_view + n_view,
+                m_idx * m_view:m_idx * m_view + m_view,
+                n_idx * n_view:n_idx * n_view + n_view,
             ] = out_view
     # 运行完后设置回-1，关闭mix
     pypto.set_pass_options(sg_set_scope=-1)
@@ -131,22 +130,17 @@ def run_cast_matmul_test(case: dict):
 
     atol, rtol = CastMatmulConfig.get_tolerance(case["out_dtype"])
 
-    assert torch.allclose(
-        c_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol
-    ), f"Test case {case['id']} ({case['name']}) failed"
+    assert torch.allclose(c_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol), (
+        f"Test case {case['id']} ({case['name']}) failed"
+    )
 
 
-ALL_CAST_MATMUL_TESTS = (
-    CAST_RIGHT_MATMUL_TESTS
-    + CAST_LEFT_MATMUL_TESTS
-    + CAST_BOTH_MATMUL_TESTS
+ALL_CAST_MATMUL_TESTS = CAST_RIGHT_MATMUL_TESTS + CAST_LEFT_MATMUL_TESTS + CAST_BOTH_MATMUL_TESTS
+
+
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in ALL_CAST_MATMUL_TESTS]
 )
-
-
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in ALL_CAST_MATMUL_TESTS
-])
 def test_cast_matmul(case: dict):
     run_cast_matmul_test(case)
 
@@ -163,8 +157,7 @@ def run_cast_matmul_demo(run_mode):
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
     @pypto.frontend.jit(
-        debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0},
-        runtime_options={"run_mode": mode}
+        debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, runtime_options={"run_mode": mode}
     )
     def cast_matmul_demo_kernel(
         a: pypto.Tensor([], pypto.DT_FP32),
@@ -178,15 +171,15 @@ def run_cast_matmul_demo(run_mode):
 
         for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
             for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
-                a_tile = a[m_idx * m_view_size: m_idx * m_view_size + m_view_size, :]
+                a_tile = a[m_idx * m_view_size:m_idx * m_view_size + m_view_size, :]
                 pypto.set_vec_tile_shapes(m_view_size, k_size)
                 a_fp16_tile = pypto.cast(a_tile, pypto.DT_FP16)
 
-                b_view = b[:, n_idx * n_view_size: n_idx * n_view_size + n_view_size]
+                b_view = b[:, n_idx * n_view_size:n_idx * n_view_size + n_view_size]
                 out_view = pypto.matmul(a_fp16_tile, b_view, pypto.DT_FP16)
                 out[
-                    m_idx * m_view_size: m_idx * m_view_size + m_view_size,
-                    n_idx * n_view_size: n_idx * n_view_size + n_view_size,
+                    m_idx * m_view_size:m_idx * m_view_size + m_view_size,
+                    n_idx * n_view_size:n_idx * n_view_size + n_view_size,
                 ] = out_view
 
     device = "npu:0" if run_mode == "npu" else "cpu"

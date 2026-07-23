@@ -13,14 +13,14 @@
 
 These ops emit PTO MLIR instructions (pto.addptr, pto.make_tensor_view)
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import Any
 
-from pypto.pypto_impl.ir import DataType
 from pypto.pypto_impl import ir as _ir_core
-from pypto.pypto_impl.ir import Call, Expr, Span
+from pypto.pypto_impl.ir import Call, DataType, Expr, Span
 
 from .._utils import _get_span_or_capture, _normalize_expr, _to_make_tuple
 from ._op_registry import OpSpec, register_table
@@ -64,8 +64,7 @@ def make_tensor(
     kwargs: dict[str, Any] = {}
     if dtype is not None:
         kwargs["dtype"] = dtype
-    return _ir_core.create_op_call(
-        "ptr.make_tensor", [ptr, shape_tuple, stride_tuple], kwargs, actual_span)
+    return _ir_core.create_op_call("ptr.make_tensor", [ptr, shape_tuple, stride_tuple], kwargs, actual_span)
 
 
 def make_ptr(ptr: Expr, dtype: DataType | None = None, span: Span | None = None) -> Call:
@@ -138,8 +137,10 @@ def addptr(ptr: Expr, offset: int | Expr, span: Span | None = None) -> Call:
 # Declarative op registration
 # ---------------------------------------------------------------------------
 
-register_table({
-    "make_tensor": OpSpec(builder=make_tensor),
-    "make_ptr": OpSpec(builder=make_ptr),
-    "addptr": OpSpec(builder=addptr, parse_kwargs=False),
-})
+register_table(
+    {
+        "make_tensor": OpSpec(builder=make_tensor),
+        "make_ptr": OpSpec(builder=make_ptr),
+        "addptr": OpSpec(builder=addptr, parse_kwargs=False),
+    }
+)

@@ -9,26 +9,26 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-""" 相关用例 Golden 生成逻辑.
+"""相关用例 Golden 生成逻辑.
 本脚本有 2 种执行模式:
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调用时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
 
-import math
-import sys
 import logging
 from pathlib import Path
+import sys
 
-import numpy as np
 from ml_dtypes import bfloat16
+import numpy as np
 
 np.set_printoptions(suppress=True, threshold=np.inf)
 
 if __name__ == "__main__":
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -83,10 +83,10 @@ class ShapeConfig:
         self.out_dtype = out_dtype
 
 
-def gen_bmm_data4D(b1, b2, input_config: ShapeConfig, output_dir: Path, is_b_trans=False, is_b_nz=False):
+def gen_bmm_data_4d(b1, b2, input_config: ShapeConfig, output_dir: Path, is_b_trans=False, is_b_nz=False):
     shape_a = [b1[0], b1[1], input_config.m, input_config.k]
     shape_b = [b2[0], b2[1], input_config.k, input_config.n]
-    shape_c = [b1[0], b1[1], input_config.m, input_config.n]
+    _shape_c = [b1[0], b1[1], input_config.m, input_config.n]
 
     a_path = Path(output_dir, 'mat_a.bin')
     b_path = Path(output_dir, 'mat_b.bin')
@@ -116,7 +116,7 @@ def gen_bmm_data4D(b1, b2, input_config: ShapeConfig, output_dir: Path, is_b_tra
 def gen_bmm_data(input_config: ShapeConfig, output_dir: Path, is_b_trans=False, is_b_nz=False):
     shape_a = [input_config.b, input_config.m, input_config.k]
     shape_b = [input_config.b, input_config.k, input_config.n]
-    shape_c = [input_config.b, input_config.m, input_config.n]
+    _shape_c = [input_config.b, input_config.m, input_config.n]
 
     a_path = Path(output_dir, 'mat_a.bin')
     b_path = Path(output_dir, 'mat_b.bin')
@@ -175,11 +175,11 @@ def gen_dynamic_bmm_golden(case_name: str, output: Path) -> bool:
         gen_bmm_data(input_config, output, False, False)
         return True
     if case_name == "DynamicBatchMatmulInterpreterTest.bmm4D_A_B_NZ":
-        b, m, k, n, Input, Onput = 1, 16, 64, 32, 'fp16', 'fp32'
+        b, m, k, n, input, onput = 1, 16, 64, 32, 'fp16', 'fp32'
         b1 = [4, 5]
         b2 = [4, 5]
-        input_config = ShapeConfig(b, m, k, n, Input, Onput)
-        gen_bmm_data4D(b1, b2, input_config, output, False, True)
+        input_config = ShapeConfig(b, m, k, n, input, onput)
+        gen_bmm_data_4d(b1, b2, input_config, output, False, True)
         return True
     else:
         logging.error("Can't get func to gen golden, case(%s)", case_name)

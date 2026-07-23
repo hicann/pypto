@@ -16,12 +16,10 @@ import textwrap
 
 import pypto.frontend.parser.pil as pil
 
-
 LOGGER = logging.getLogger(__name__)
 
 
 class Expr:
-
     trace = []
 
     def __init__(self, value):
@@ -44,9 +42,7 @@ class Expr:
 
     def __eq__(self, other):
         return (
-            self._attr_dict == other._attr_dict
-            and self._item_dict == other._item_dict
-            and self._value == other._value
+            self._attr_dict == other._attr_dict and self._item_dict == other._item_dict and self._value == other._value
         )
 
     @property
@@ -81,7 +77,6 @@ class Expr:
         Expr.trace.append(('int', n))
         return n
 
-
     @staticmethod
     def decorate(n):
         Expr.trace.append(('decorate', n))
@@ -89,11 +84,11 @@ class Expr:
         def wrapper(func):
             Expr.trace.append(('decorate.wrapper', n))
             return func
+
         return wrapper
 
     @staticmethod
     def attr(method_dict, name):
-
         @property
         def field(self):
             Expr.trace.append(('getattr', self.value, name))
@@ -114,10 +109,12 @@ class Expr:
     @staticmethod
     def _normalize_item_key(item):
         if isinstance(item, slice):
-            return ('slice',
-                    Expr._normalize_item_key(item.start),
-                    Expr._normalize_item_key(item.stop),
-                    Expr._normalize_item_key(item.step))
+            return (
+                'slice',
+                Expr._normalize_item_key(item.start),
+                Expr._normalize_item_key(item.stop),
+                Expr._normalize_item_key(item.step),
+            )
         if isinstance(item, tuple):
             return tuple(Expr._normalize_item_key(sub_item) for sub_item in item)
         return item
@@ -125,7 +122,6 @@ class Expr:
     attr.__func__(locals(), 'val')
 
     class ContextManager:
-
         def __init__(self, enter_n=None, exit_n=None, init_n=None):
             self._enter_n = enter_n
             self._exit_n = exit_n
@@ -145,7 +141,6 @@ class Expr:
             return self._enter_n == other._enter_n and self._exit_n == other._exit_n
 
     class ValueError(Exception):
-
         def __init__(self, value):
             super().__init__(value)
             Expr.trace.append(('error', value))
@@ -158,14 +153,13 @@ class Expr:
         def value(self):
             return self._value
 
-
-    class TypeA(ValueError):
+    class TypeA(ValueError):  # noqa: N818
         pass
 
-    class TypeB(ValueError):
+    class TypeB(ValueError):  # noqa: N818
         pass
 
-    class TypeC(ValueError):
+    class TypeC(ValueError):  # noqa: N818
         pass
 
 

@@ -16,16 +16,13 @@
     python3 get_ut_status.py <PR编号>
 """
 
-import sys
-import re
 import logging
+import re
+import sys
+
 from common_utils import get_gitcode_token, make_api_request
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s: %(message)s",
-    stream=sys.stdout
-)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s", stream=sys.stdout)
 logger = logging.getLogger(__name__)
 
 
@@ -49,16 +46,12 @@ def parse_ut_status_from_comments(comments: list) -> dict:
         body = comment.get('body', '')
         if 'UT_Test_report' in body:
             # 提取状态
-            match = re.search(
-                r'<td><strong>UT_Test_report</strong></td>\s*<td>([^<]+)</td>',
-                body
-            )
+            match = re.search(r'<td><strong>UT_Test_report</strong></td>\s*<td>([^<]+)</td>', body)
             status = match.group(1).strip() if match else None
 
             # 提取覆盖率链接 - 优先获取 ut_cov.tar.gz
             cov_match = re.search(
-                r'https://ascend-ci\.obs\.cn-north-4\.myhuaweicloud\.com/[^\"\'<>\s]*ut_cov\.tar\.gz',
-                body
+                r'https://ascend-ci\.obs\.cn-north-4\.myhuaweicloud\.com/[^\"\'<>\s]*ut_cov\.tar\.gz', body
             )
             coverage_url = cov_match.group(0).split('>')[0] if cov_match else None
 
@@ -66,18 +59,13 @@ def parse_ut_status_from_comments(comments: list) -> dict:
             if not coverage_url:
                 for ext in ['whl', 'tar.gz', 'zip']:
                     cov_match = re.search(
-                        rf'https://ascend-ci\.obs\.cn-north-4\.myhuaweicloud\.com/[^\"\'<>\s]*\.{ext}',
-                        body
+                        rf'https://ascend-ci\.obs\.cn-north-4\.myhuaweicloud\.com/[^\"\'<>\s]*\.{ext}', body
                     )
                     if cov_match:
                         coverage_url = cov_match.group(0).split('>')[0]
                         break
 
-            return {
-                'status': status,
-                'coverage_url': coverage_url,
-                'comment_time': comment.get('created_at', '')
-            }
+            return {'status': status, 'coverage_url': coverage_url, 'comment_time': comment.get('created_at', '')}
 
     return None
 
@@ -98,8 +86,7 @@ def get_pr_ut_status(owner: str, repo: str, pr_number: int) -> dict:
     if not token:
         return {'error': '未找到 GitCode Token'}
 
-    url = (f"https://api.gitcode.com/api/v5/repos/{owner}/{repo}/pulls/"
-           f"{pr_number}/comments?per_page=100")
+    url = f"https://api.gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}/comments?per_page=100"
     comments = make_api_request(url, token=token)
 
     if not comments:

@@ -9,13 +9,11 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-from test_pil_builder_utils import TestParser, Expr
+from test_pil_builder_utils import Expr, TestParser
 
 
 def test_pil_builder_raise():
-
     with TestParser():
-
         # --- bare raise (re-raise inside except) ---
 
         @TestParser.test
@@ -121,9 +119,7 @@ def test_pil_builder_raise():
 
 
 def test_pil_builder_try():
-
     with TestParser():
-
         # --- single typed handler, no binding ---
 
         @TestParser.test
@@ -185,7 +181,7 @@ def test_pil_builder_try():
                 raise Expr.TypeA(0)
             except Expr.TypeB:
                 Expr.str(10)
-            except:
+            except Exception:
                 Expr.str(20)
 
         # --- else branch fires when no exception ---
@@ -284,9 +280,7 @@ def test_pil_builder_try():
 
 
 def test_pil_builder_assert():
-
     with TestParser():
-
         # --- assert passes: subscript condition, no message ---
 
         @TestParser.test

@@ -33,16 +33,15 @@ CCE 文件二分定位工具（按文件顺序 + 代码行级二分）。
       --run-dir .
 """
 
+import argparse
+import logging
 import os
+from pathlib import Path
 import re
-import sys
 import shlex
 import shutil
 import subprocess
-import logging
-import argparse
-from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
@@ -239,9 +238,9 @@ def run_line_bisection(cce_path: str, kernel_dir: str, test_cmd: str, run_dir: s
 
     lines = read_file(cce_path)
 
-    logger.info(f"\n{'='*60}")
-    logger.info(f"CCE Line Binary Search")
-    logger.info(f"{'='*60}")
+    logger.info(f"\n{'=' * 60}")
+    logger.info("CCE Line Binary Search")
+    logger.info(f"{'=' * 60}")
     logger.info(f"File: {os.path.basename(cce_path)}")
     logger.info(f"Total operations: {total_ops}")
     logger.info("")
@@ -257,9 +256,9 @@ def run_line_bisection(cce_path: str, kernel_dir: str, test_cmd: str, run_dir: s
         while left < right:
             mid = (left + right) // 2
 
-            logger.info(f"\n{'='*60}")
+            logger.info(f"\n{'=' * 60}")
             logger.info(f"Round {round_num}: left={left}, right={right}, mid={mid}")
-            logger.info(f"{'='*60}")
+            logger.info(f"{'=' * 60}")
             logger.info(f"测试操作 [{left}, {mid}] ({mid - left + 1} ops)")
             logger.info("")
 
@@ -279,11 +278,11 @@ def run_line_bisection(cce_path: str, kernel_dir: str, test_cmd: str, run_dir: s
             logger.info("")
             if passed:
                 logger.info(f"结果: PASS → 问题在已插入部分 [{left}, {mid}]")
-                logger.info(f"      继续在已插入部分二分")
+                logger.info("      继续在已插入部分二分")
                 right = mid
             else:
-                logger.info(f"结果: FAIL → 问题在未插入部分 [{mid+1}, {right}]")
-                logger.info(f"      继续在未插入部分二分")
+                logger.info(f"结果: FAIL → 问题在未插入部分 [{mid + 1}, {right}]")
+                logger.info("      继续在未插入部分二分")
                 left = mid + 1
 
             round_num += 1
@@ -293,9 +292,9 @@ def run_line_bisection(cce_path: str, kernel_dir: str, test_cmd: str, run_dir: s
         problem_line = problem_pos + 1  # 转为 1-based
         problem_code = lines[problem_pos].strip()
 
-        logger.info(f"\n{'='*60}")
-        logger.info(f"LINE BINARY SEARCH COMPLETED!")
-        logger.info(f"{'='*60}")
+        logger.info(f"\n{'=' * 60}")
+        logger.info("LINE BINARY SEARCH COMPLETED!")
+        logger.info(f"{'=' * 60}")
         logger.info(f"Found: operation [{left}]")
         logger.info(f"  Line number: {problem_line}")
         logger.info(f"  Code: {problem_code}")
@@ -332,18 +331,14 @@ def compile_kernel(kernel_dir: str) -> bool:
         makefile_rel_path = os.path.join(kernel_dir_name, os.path.basename(mf))
         logger.info(f"编译: make -f {makefile_rel_path}")
         result = subprocess.run(
-            ['make', '-f', makefile_rel_path],
-            cwd=parent_dir,
-            capture_output=True,
-            text=True,
-            timeout=300
+            ['make', '-f', makefile_rel_path], cwd=parent_dir, capture_output=True, text=True, timeout=300
         )
 
         if result.returncode != 0:
             logger.error(f"  ERROR: {result.stderr}")
             success = False
         else:
-            logger.info(f"  OK")
+            logger.info("  OK")
 
     return success
 
@@ -356,12 +351,7 @@ def test_precision(test_cmd: str, run_dir: str) -> bool:
     """
     logger.info("运行测试...")
     result = subprocess.run(
-        shlex.split(test_cmd),
-        cwd=run_dir,
-        shell=False,
-        capture_output=True,
-        text=True,
-        timeout=600
+        shlex.split(test_cmd), cwd=run_dir, shell=False, capture_output=True, text=True, timeout=600
     )
 
     output = result.stdout + result.stderr
@@ -404,9 +394,9 @@ def show_info(kernel_dir: str):
     """
     cce_files = get_all_cce_files(kernel_dir)
 
-    logger.info(f"\n{'='*60}")
+    logger.info(f"\n{'=' * 60}")
     logger.info(f"All CCE Files ({len(cce_files)} total)")
-    logger.info(f"{'='*60}\n")
+    logger.info(f"{'=' * 60}\n")
 
     for i, f in enumerate(cce_files):
         size = os.path.getsize(f)
@@ -433,9 +423,9 @@ def run_bisection(kernel_dir, test_cmd, run_dir, enable_line_search=True):
         logger.error("没有找到 CCE 文件")
         return None, None
 
-    logger.info(f"\n{'='*60}")
-    logger.info(f"CCE File Binary Search")
-    logger.info(f"{'='*60}")
+    logger.info(f"\n{'=' * 60}")
+    logger.info("CCE File Binary Search")
+    logger.info(f"{'=' * 60}")
     logger.info(f"Total CCE files: {total_files}")
     logger.info("")
 
@@ -446,9 +436,9 @@ def run_bisection(kernel_dir, test_cmd, run_dir, enable_line_search=True):
     while left < right:
         mid = (left + right) // 2
 
-        logger.info(f"\n{'='*60}")
+        logger.info(f"\n{'=' * 60}")
         logger.info(f"Round {round_num}: left={left}, right={right}, mid={mid}")
-        logger.info(f"{'='*60}")
+        logger.info(f"{'=' * 60}")
         logger.info(f"测试文件 [{left}, {mid}] ({mid - left + 1} files)")
         logger.info("")
 
@@ -467,11 +457,11 @@ def run_bisection(kernel_dir, test_cmd, run_dir, enable_line_search=True):
             logger.info("")
             if passed:
                 logger.info(f"结果: PASS → 问题在文件 [{left}, {mid}]")
-                logger.info(f"      继续在前半段二分")
+                logger.info("      继续在前半段二分")
                 right = mid
             else:
-                logger.info(f"结果: FAIL → 问题在文件 [{mid+1}, {right}]")
-                logger.info(f"      去后半段二分")
+                logger.info(f"结果: FAIL → 问题在文件 [{mid + 1}, {right}]")
+                logger.info("      去后半段二分")
                 left = mid + 1
 
             round_num += 1
@@ -481,9 +471,9 @@ def run_bisection(kernel_dir, test_cmd, run_dir, enable_line_search=True):
 
     problem_file = all_cce_files[left]
 
-    logger.info(f"\n{'='*60}")
-    logger.info(f"FILE BINARY SEARCH COMPLETED!")
-    logger.info(f"{'='*60}")
+    logger.info(f"\n{'=' * 60}")
+    logger.info("FILE BINARY SEARCH COMPLETED!")
+    logger.info(f"{'=' * 60}")
     logger.info(f"Found: file [{left}]")
     logger.info(f"  Path: {problem_file}")
     logger.info(f"  Name: {os.path.basename(problem_file)}")
@@ -498,21 +488,13 @@ def run_bisection(kernel_dir, test_cmd, run_dir, enable_line_search=True):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='CCE File Binary Search Tool (file + line level)'
-    )
-    parser.add_argument('--kernel-dir', required=True,
-                        help='kernel_aicore directory')
-    parser.add_argument('--info', action='store_true',
-                        help='Show all CCE files')
-    parser.add_argument('--test-cmd',
-                        help='Test command (required unless --info)')
-    parser.add_argument('--run-dir', default='.',
-                        help='Test run directory')
-    parser.add_argument('--cce-file',
-                        help='Specify CCE file for line-level search only')
-    parser.add_argument('--no-line-search', action='store_true',
-                        help='Skip line-level search after file search')
+    parser = argparse.ArgumentParser(description='CCE File Binary Search Tool (file + line level)')
+    parser.add_argument('--kernel-dir', required=True, help='kernel_aicore directory')
+    parser.add_argument('--info', action='store_true', help='Show all CCE files')
+    parser.add_argument('--test-cmd', help='Test command (required unless --info)')
+    parser.add_argument('--run-dir', default='.', help='Test run directory')
+    parser.add_argument('--cce-file', help='Specify CCE file for line-level search only')
+    parser.add_argument('--no-line-search', action='store_true', help='Skip line-level search after file search')
 
     args = parser.parse_args()
 
@@ -532,29 +514,21 @@ def main():
             parser.error(f"File not found: {args.cce_file}")
 
         logger.info(f"\n仅执行行级二分: {args.cce_file}")
-        problem_line = run_line_bisection(
-            args.cce_file,
-            args.kernel_dir,
-            args.test_cmd,
-            args.run_dir
-        )
+        problem_line = run_line_bisection(args.cce_file, args.kernel_dir, args.test_cmd, args.run_dir)
 
         if problem_line:
-            logger.info(f"\n最终结果:")
+            logger.info("\n最终结果:")
             logger.info(f"  文件: {args.cce_file}")
             logger.info(f"  行号: {problem_line}")
         return
 
     # 文件级二分 + 行级二分模式
     problem_file, problem_line = run_bisection(
-        args.kernel_dir,
-        args.test_cmd,
-        args.run_dir,
-        enable_line_search=not args.no_line_search
+        args.kernel_dir, args.test_cmd, args.run_dir, enable_line_search=not args.no_line_search
     )
 
     if problem_file:
-        logger.info(f"\n最终结果:")
+        logger.info("\n最终结果:")
         logger.info(f"  文件: {problem_file}")
         if problem_line:
             logger.info(f"  行号: {problem_line}")

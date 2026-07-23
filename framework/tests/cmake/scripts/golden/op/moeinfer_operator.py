@@ -8,15 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-""" Moeinfer Operator 相关用例 Golden 生成逻辑.
+"""Moeinfer Operator 相关用例 Golden 生成逻辑.
 
 本脚本有 2 种执行模式:
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import sys
+
 import logging
 from pathlib import Path
+import sys
 from typing import List
 
 import numpy as np
@@ -26,8 +27,9 @@ import torch.nn.functional as functional
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -62,8 +64,7 @@ def quant(input_t, is_pertoken: bool = True):
 
 
 class MoeInferParam:
-    def __init__(self, b, s, h, ffn_weight_n, topk_group=0,
-                 n_group=0, n_routed_experts=0, num_experts_per_topk=0):
+    def __init__(self, b, s, h, ffn_weight_n, topk_group=0, n_group=0, n_routed_experts=0, num_experts_per_topk=0):
         self.b = b
         self.s = s
         self.h = h
@@ -81,8 +82,8 @@ def expert_quant(hidden_states, ffn_weight1, ffn_weight2, ffn_weight3):
     ffn_weight2_quant, ffnweight2_scale = ffn_weight2
     ffn_weight3_quant, ffnweight3_scale = ffn_weight3
 
-    bs = hidden_states.shape[0]
-    h = hidden_states.shape[1]
+    _bs = hidden_states.shape[0]
+    _h = hidden_states.shape[1]
     # 第一步：计算 Tgate
     hidden_states, hidden_states_scale = quant(hidden_states)
     t_gate = torch.matmul(hidden_states.to(torch.int32), ffn_weight_quant.to(torch.int32))
@@ -124,8 +125,8 @@ def expert_quant(hidden_states, ffn_weight1, ffn_weight2, ffn_weight3):
 
 def expert(hidden_states, ffn_weight1, ffn_weight2, ffn_weight3):
     # 假设 hiddenStates 和 ffnWeight 已经定义，这里给出示例形状的随机初始化
-    bs = hidden_states.shape[0]
-    h = hidden_states.shape[1]
+    _bs = hidden_states.shape[0]
+    _h = hidden_states.shape[1]
 
     # 第一步：计算 Tgate
     # Tgate = torch.matmul(hiddenStates, ffnWeight1).to(torch.float32)
@@ -159,7 +160,7 @@ def stable_argsort(x, dim=-1, descending=False):
     return sorted_indices
 
 
-def gen_ffn_data(moe_infer_param, output: Path, do_quant = False, do_nz=False):
+def gen_ffn_data(moe_infer_param, output: Path, do_quant=False, do_nz=False):
     h = moe_infer_param.h
     ffn_weight_n = moe_infer_param.ffn_weight_n
 
@@ -171,18 +172,24 @@ def gen_ffn_data(moe_infer_param, output: Path, do_quant = False, do_nz=False):
     ffn_weight2 = torch.empty(h, ffn_weight_n).uniform_(-0.1, 0.1).to(torch.float16)
     ffn_weight3 = torch.empty(h, ffn_weight_n).uniform_(-0.1, 0.1).to(torch.float16)
 
-    NzFrac = 16
+    nz_frac = 16
 
     if do_quant:
         ffn_weight1, ffn_scale1 = quant(ffn_weight1, False)
         ffn_weight2, ffn_scale2 = quant(ffn_weight2, False)
         ffn_weight3, ffn_scale3 = quant(ffn_weight3)
-        NzFrac = 32
+        nz_frac = 32
 
     if do_nz:
-        ffn_weight1_np = ffn_weight1.numpy().reshape((h // 16, 16, ffn_weight_n // NzFrac, NzFrac)).transpose(2, 0, 1, 3)
-        ffn_weight2_np = ffn_weight2.numpy().reshape((h // 16, 16, ffn_weight_n // NzFrac, NzFrac)).transpose(2, 0, 1, 3)
-        ffn_weight3_np = ffn_weight3.numpy().reshape((h // 16, 16, ffn_weight_n // NzFrac, NzFrac)).transpose(2, 0, 1, 3)
+        ffn_weight1_np = (
+            ffn_weight1.numpy().reshape((h // 16, 16, ffn_weight_n // nz_frac, nz_frac)).transpose(2, 0, 1, 3)
+        )
+        ffn_weight2_np = (
+            ffn_weight2.numpy().reshape((h // 16, 16, ffn_weight_n // nz_frac, nz_frac)).transpose(2, 0, 1, 3)
+        )
+        ffn_weight3_np = (
+            ffn_weight3.numpy().reshape((h // 16, 16, ffn_weight_n // nz_frac, nz_frac)).transpose(2, 0, 1, 3)
+        )
     else:
         ffn_weight1_np = ffn_weight1.numpy()
         ffn_weight2_np = ffn_weight2.numpy()
@@ -219,8 +226,11 @@ def gen_ffn_data_graph(moe_infer_param, output: Path, is_quant=False, is_format_
     else:
         hidden_states.numpy().tofile(hidden_states_path)
     ffn_weight1, ffn_weight2, ffn_weight3 = gen_ffn_data(moe_infer_param, output, is_quant, is_format_nz)
-    expert_out = expert_quant(hidden_states, ffn_weight1, ffn_weight2, ffn_weight3) if is_quant \
+    expert_out = (
+        expert_quant(hidden_states, ffn_weight1, ffn_weight2, ffn_weight3)
+        if is_quant
         else expert(hidden_states, ffn_weight1, ffn_weight2, ffn_weight3)
+    )
     expert_out.numpy().astype(np.float32).tofile(final_out_path)
 
 
@@ -242,7 +252,7 @@ def gen_moeinfer_graph_singlemlp(moe_infer_param, output: Path, is_quant: bool =
     final_out_path = Path(output, 'final_out.bin')
     bs = moe_infer_param.b * moe_infer_param.s
     h = moe_infer_param.h
-    ffn_weight_n = moe_infer_param.ffn_weight_n
+    _ffn_weight_n = moe_infer_param.ffn_weight_n
     topk_group = moe_infer_param.topk_group
     n_group = moe_infer_param.n_group
     n_routed_experts = moe_infer_param.n_routed_experts
@@ -282,9 +292,7 @@ def gen_moeinfer_graph_singlemlp(moe_infer_param, output: Path, is_quant: bool =
     """ part3 group_mask group_idx scores_for_choice <---> tmp_scores """
     group_mask.scatter_(1, group_idx, 1)
     score_mask = (
-        group_mask.unsqueeze(-1)
-        .expand(bs, n_group, n_routed_experts // n_group)
-        .reshape(bs, n_routed_experts)
+        group_mask.unsqueeze(-1).expand(bs, n_group, n_routed_experts // n_group).reshape(bs, n_routed_experts)
     ).type(torch.float32)
     scores_for_choice = scores_for_choice.reshape(bs, n_routed_experts).type(torch.float32)
     tmp_scores = scores_for_choice.masked_fill(~score_mask.bool(), 0)  # -3.4e+38)
@@ -294,9 +302,7 @@ def gen_moeinfer_graph_singlemlp(moe_infer_param, output: Path, is_quant: bool =
     logging.debug("tmp_scores %s", tmp_scores)
 
     """ part4 scores tmp_scores <---> topk_weight """
-    _, topk_idx = torch.topk(
-        tmp_scores, k=num_experts_per_topk, dim=-1, sorted=True
-    )
+    _, topk_idx = torch.topk(tmp_scores, k=num_experts_per_topk, dim=-1, sorted=True)
     topk_weight = scores.gather(1, topk_idx).type(torch.float32)
     denominator = topk_weight.sum(dim=-1, keepdim=True) + 1e-20
     topk_weight = topk_weight / denominator
@@ -342,8 +348,10 @@ def gen_moeinfer_graph_singlemlp(moe_infer_param, output: Path, is_quant: bool =
         # expert = self.experts[i + self.ep_rank * self.experts_per_rank]
         tokens_for_this_expert = sorted_tokens[start_idx:end_idx]
         expert_out = (
-            expert_quant(tokens_for_this_expert, ffn_weight1, ffn_weight2, ffn_weight3)) if is_quant \
+            (expert_quant(tokens_for_this_expert, ffn_weight1, ffn_weight2, ffn_weight3))
+            if is_quant
             else expert(tokens_for_this_expert, ffn_weight1, ffn_weight2, ffn_weight3)
+        )
         logging.debug("====expert_out=== %s", expert_out)
         # expert_out = tokens_for_this_expert
         outputs.append(expert_out)
@@ -367,12 +375,10 @@ def gen_moeinfer_graph_singlemlp(moe_infer_param, output: Path, is_quant: bool =
         "MoeInferOnbroadTest.test_deepseekMoEInfer_singleout_singlemlp_withquant",
     ]
 )
-
 def gen_moeinfer_graph_data(case_name: str, output: Path) -> bool:
-    final_out_path = Path(output, 'final_out.bin')
+    _final_out_path = Path(output, 'final_out.bin')
 
-    if case_name == "DynamicFFNTest.TestOnbroadDynamicFFN" or \
-        case_name == "MlpTest.test_16_7168_tileop":
+    if case_name == "DynamicFFNTest.TestOnbroadDynamicFFN" or case_name == "MlpTest.test_16_7168_tileop":
         moe_infer_param = MoeInferParam(32, 1, 7168, 2048)
         gen_ffn_data_graph(moe_infer_param, output, False, True)
         logging.debug("Case(%s), Golden generated.", case_name)

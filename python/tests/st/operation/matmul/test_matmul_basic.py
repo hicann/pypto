@@ -12,15 +12,16 @@
 Matmul BASIC_TESTS test script.
 Supports both pytest and direct execution modes.
 """
+
 import os
 
 import pytest
-import pypto
-import torch
-import torch_npu
-import torch.nn.functional as F
-
 from testcase.matmul_test_case import BASIC_TESTS, NZ_FORMAT_TESTS, MatmulConfig
+import torch
+import torch.nn.functional as functional
+import torch_npu
+
+import pypto
 
 
 @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
@@ -40,14 +41,14 @@ def matmul_pto_kernel(
     for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
         for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
             if config.a_trans:
-                a_view = a_tensor[:, m_idx * m_view: m_idx * m_view + m_view]
+                a_view = a_tensor[:, m_idx * m_view:m_idx * m_view + m_view]
             else:
-                a_view = a_tensor[m_idx * m_view: m_idx * m_view + m_view, :]
+                a_view = a_tensor[m_idx * m_view:m_idx * m_view + m_view, :]
 
             if config.b_trans:
-                b_view = b_tensor[n_idx * n_view: n_idx * n_view + n_view, :]
+                b_view = b_tensor[n_idx * n_view:n_idx * n_view + n_view, :]
             else:
-                b_view = b_tensor[:, n_idx * n_view: n_idx * n_view + n_view]
+                b_view = b_tensor[:, n_idx * n_view:n_idx * n_view + n_view]
 
             out_view = pypto.matmul(
                 a_view,
@@ -58,8 +59,8 @@ def matmul_pto_kernel(
             )
 
             out_tensor[
-                m_idx * m_view: m_idx * m_view + m_view,
-                n_idx * n_view: n_idx * n_view + n_view,
+                m_idx * m_view:m_idx * m_view + m_view,
+                n_idx * n_view:n_idx * n_view + n_view,
             ] = out_view
 
 
@@ -112,26 +113,22 @@ def run_matmul_test(case: dict):
     # Step 6: 比对
     padding_m = abs(config.out_shape[0] - m)
     padding_n = abs(config.out_shape[1] - n)
-    golden = F.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
+    golden = functional.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
     atol, rtol = MatmulConfig.get_tolerance(case["c_dtype"])
-    assert torch.allclose(
-        c_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol
-    ), f"Test case {case['id']} ({case['name']}) failed"
+    assert torch.allclose(c_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol), (
+        f"Test case {case['id']} ({case['name']}) failed"
+    )
 
 
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in BASIC_TESTS
-])
+@pytest.mark.parametrize("case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in BASIC_TESTS])
 def test_matmul_basic(case: dict):
     run_matmul_test(case)
 
 
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in NZ_FORMAT_TESTS
-])
-def test_matmul_basic(case: dict):
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in NZ_FORMAT_TESTS]
+)
+def test_matmul_basic(case: dict):  # noqa: F811
     run_matmul_test(case)
 
 
@@ -147,8 +144,7 @@ def run_matmul_demo(run_mode):
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
     @pypto.frontend.jit(
-        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1},
-        runtime_options={"run_mode": mode}
+        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1}, runtime_options={"run_mode": mode}
     )
     def matmul_demo_kernel(
         a: pypto.Tensor([], pypto.DT_FP16),
@@ -162,12 +158,12 @@ def run_matmul_demo(run_mode):
 
         for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
             for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
-                a_view = a[m_idx * m_view_size: m_idx * m_view_size + m_view_size, :]
-                b_view = b[:, n_idx * n_view_size: n_idx * n_view_size + n_view_size]
+                a_view = a[m_idx * m_view_size:m_idx * m_view_size + m_view_size, :]
+                b_view = b[:, n_idx * n_view_size:n_idx * n_view_size + n_view_size]
                 out_view = pypto.matmul(a_view, b_view, pypto.DT_FP16)
                 out[
-                    m_idx * m_view_size: m_idx * m_view_size + m_view_size,
-                    n_idx * n_view_size: n_idx * n_view_size + n_view_size,
+                    m_idx * m_view_size:m_idx * m_view_size + m_view_size,
+                    n_idx * n_view_size:n_idx * n_view_size + n_view_size,
                 ] = out_view
 
     device = "npu:0" if run_mode == "npu" else "cpu"

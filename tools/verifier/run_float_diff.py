@@ -9,12 +9,11 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """Data plotting"""
-import os
-import sys
+
 import logging
-import torch
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 class DataDiffAnalyzer:
@@ -22,10 +21,7 @@ class DataDiffAnalyzer:
         logging.basicConfig(
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s",
-            handlers=[
-                logging.StreamHandler(),
-                logging.FileHandler("app.log", encoding="utf-8")
-            ]
+            handlers=[logging.StreamHandler(), logging.FileHandler("app.log", encoding="utf-8")],
         )
 
         self.is_calc_inc = True
@@ -145,10 +141,10 @@ class DataDiffAnalyzer:
 
         # fix input
         st_a_total_aligned = st_a_total_raw
-        st_b_total_aligned = st_b_total_raw
+        _st_b_total_aligned = st_b_total_raw
         if st_a_total_raw > st_b_total_raw:
             b = np.append(b, np.zeros(st_a_total_raw - st_b_total_raw, b_dtype))
-            st_b_total_aligned = st_a_total_raw
+            _st_b_total_aligned = st_a_total_raw
         else:
             a = np.append(a, np.zeros(st_b_total_raw - st_a_total_raw, a_dtype))
             st_a_total_aligned = st_b_total_raw
@@ -209,7 +205,7 @@ class DataDiffAnalyzer:
         st_zabd = (abs(st_zamb) / st_zapb) if st_zapb != 0 else st_zapb
         st_zabd = float(st_zabd)
         st_zambd_info = ' zabd=' + str(st_zabd)
-        st_zbmad_info = st_zambd_info
+        _st_zbmad_info = st_zambd_info
         st_zdp = abs(st_zamb) / st_seg_data_total
         st_zdp_info = ' zdp=' + str(st_zdp)
         st_pdp = abs(st_pamb) / st_seg_data_total
@@ -251,10 +247,12 @@ class DataDiffAnalyzer:
 
         # calc data statistic
         g_aa_avg_s, g_aa_avg_nz_s = self.gen_max_min_avg(g_aa, mode='avg2')
-        g_aa_pos_max_s, g_aa_pos_min_s, g_aa_pos_avg_s, g_aa_pos_max_avg_s, g_aa_pos_min_avg_s = \
-                                            self.gen_max_min_avg(g_aa, mode='pos4')
-        g_aa_neg_max_s, g_aa_neg_min_s, g_aa_neg_avg_s, g_aa_neg_max_avg_s, g_aa_neg_min_avg_s = \
-                                            self.gen_max_min_avg(g_aa, mode='neg4')
+        g_aa_pos_max_s, g_aa_pos_min_s, g_aa_pos_avg_s, g_aa_pos_max_avg_s, g_aa_pos_min_avg_s = self.gen_max_min_avg(
+            g_aa, mode='pos4'
+        )
+        g_aa_neg_max_s, g_aa_neg_min_s, g_aa_neg_avg_s, g_aa_neg_max_avg_s, g_aa_neg_min_avg_s = self.gen_max_min_avg(
+            g_aa, mode='neg4'
+        )
         g_data_a_info = (
             f"pmax={g_aa_pos_max_s:.6e} nmin={g_aa_neg_min_s:.6e} "
             f"avg={g_aa_avg_s:.6e} avgnz={g_aa_avg_nz_s:.6e} "
@@ -266,10 +264,12 @@ class DataDiffAnalyzer:
         logging.info('data_a: ' + g_data_a_info)
 
         g_bb_avg_s, g_bb_avg_nz_s = self.gen_max_min_avg(g_bb, mode='avg2')
-        g_bb_pos_max_s, g_bb_pos_min_s, g_bb_pos_avg_s, g_bb_pos_max_avg_s, g_bb_pos_min_avg_s = \
-                                            self.gen_max_min_avg(g_bb, mode='pos4')
-        g_bb_neg_max_s, g_bb_neg_min_s, g_bb_neg_avg_s, g_bb_neg_max_avg_s, g_bb_neg_min_avg_s = \
-                                            self.gen_max_min_avg(g_bb, mode='neg4')
+        g_bb_pos_max_s, g_bb_pos_min_s, g_bb_pos_avg_s, g_bb_pos_max_avg_s, g_bb_pos_min_avg_s = self.gen_max_min_avg(
+            g_bb, mode='pos4'
+        )
+        g_bb_neg_max_s, g_bb_neg_min_s, g_bb_neg_avg_s, g_bb_neg_max_avg_s, g_bb_neg_min_avg_s = self.gen_max_min_avg(
+            g_bb, mode='neg4'
+        )
         g_data_b_info = (
             f"pmax={g_bb_pos_max_s:.6e} nmin={g_bb_neg_min_s:.6e} "
             f"avg={g_bb_avg_s:.6e} avgnz={g_bb_avg_nz_s:.6e} "
@@ -283,10 +283,12 @@ class DataDiffAnalyzer:
         # calc incremental diff
         if self.is_calc_inc:
             g_diff_inc = g_aa - g_bb
-            g_diff_inc_pos_max_s, g_diff_inc_pos_min_s, g_diff_inc_pos_avg_s = \
-                                            self.gen_max_min_avg(g_diff_inc, mode='pos')
-            g_diff_inc_neg_max_s, g_diff_inc_neg_min_s, g_diff_inc_neg_avg_s = \
-                                            self.gen_max_min_avg(g_diff_inc, mode='neg')
+            g_diff_inc_pos_max_s, g_diff_inc_pos_min_s, g_diff_inc_pos_avg_s = self.gen_max_min_avg(
+                g_diff_inc, mode='pos'
+            )
+            g_diff_inc_neg_max_s, g_diff_inc_neg_min_s, g_diff_inc_neg_avg_s = self.gen_max_min_avg(
+                g_diff_inc, mode='neg'
+            )
             arg_non_zeros = np.argwhere(np.not_equal(g_diff_inc, 0.0))
             diff_inc_diff_num = len(arg_non_zeros)
             g_diff_info = (
@@ -314,12 +316,12 @@ class DataDiffAnalyzer:
             # output figure
             fig_title = f_a_info + '\n' + f_b_info
             fig_avg_linewidth = 0.5
-            fig_thresh_linewidth = 0.05
+            _fig_thresh_linewidth = 0.05
             fig_alpha = 0.5
             fig_markersize_factor = 1
             fig_markersize_a = 1.6 * fig_markersize_factor
             fig_markersize_b = 1.5 * fig_markersize_factor
-            fig_markersize_mod = 1.5 * fig_markersize_factor
+            _fig_markersize_mod = 1.5 * fig_markersize_factor
             fig_markersize = 1.5 * fig_markersize_factor
             fig_legend_fontsize = 'xx-small'
             fig_legend_alpha = 0.6
@@ -350,10 +352,26 @@ class DataDiffAnalyzer:
             ax.axhline(g_bb_neg_avg_s, xmin=0.025, xmax=0.040, color='blue', linewidth=fig_avg_linewidth, marker=None)
             ax.axhline(g_bb_neg_min_s, xmin=0.020, xmax=0.040, color='blue', linewidth=fig_avg_linewidth, marker=None)
             plt.title(fig_title, loc='left', fontdict={'fontsize': 8})
-            plt.plot(g_aa, label='data_a: ' + st_a_info + ' ' + g_data_a_info, linewidth=0, marker='.', \
-                    markersize=fig_markersize_a, markeredgewidth=0, markerfacecolor='red', alpha=fig_alpha)
-            plt.plot(g_bb, label='data_b: ' + st_b_info + ' ' + g_data_b_info, linewidth=0, marker='.', \
-                    markersize=fig_markersize_b, markeredgewidth=0, markerfacecolor='blue', alpha=fig_alpha)
+            plt.plot(
+                g_aa,
+                label='data_a: ' + st_a_info + ' ' + g_data_a_info,
+                linewidth=0,
+                marker='.',
+                markersize=fig_markersize_a,
+                markeredgewidth=0,
+                markerfacecolor='red',
+                alpha=fig_alpha,
+            )
+            plt.plot(
+                g_bb,
+                label='data_b: ' + st_b_info + ' ' + g_data_b_info,
+                linewidth=0,
+                marker='.',
+                markersize=fig_markersize_b,
+                markeredgewidth=0,
+                markerfacecolor='blue',
+                alpha=fig_alpha,
+            )
             leg = plt.legend(loc='upper left', frameon=True, fontsize=fig_legend_fontsize)
             leg.get_frame().set_alpha(fig_legend_alpha)
             plt.setp(leg.get_texts(), color=fig_legend_label_color)
@@ -363,20 +381,34 @@ class DataDiffAnalyzer:
                 v = subg_id_list[subg_id_list_id]
                 ax = plt.subplot(v)
                 ax.xaxis.set_visible(False)
-                ax.axhline(g_diff_inc_pos_max_s, xmin=0.000, xmax=0.020, color='red', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                ax.axhline(g_diff_inc_pos_avg_s, xmin=0.000, xmax=0.015, color='red', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                ax.axhline(g_diff_inc_pos_min_s, xmin=0.000, xmax=0.010, color='red', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                ax.axhline(g_diff_inc_neg_max_s, xmin=0.000, xmax=0.010, color='red', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                ax.axhline(g_diff_inc_neg_avg_s, xmin=0.000, xmax=0.015, color='red', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                ax.axhline(g_diff_inc_neg_min_s, xmin=0.000, xmax=0.020, color='red', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                plt.plot(g_diff_inc, label='diff_inc (=a-b): ' + g_diff_info, linewidth=0, marker='.', \
-                        markersize=fig_markersize, markeredgewidth=0, markerfacecolor='blue', alpha=fig_alpha)
+                ax.axhline(
+                    g_diff_inc_pos_max_s, xmin=0.000, xmax=0.020, color='red', linewidth=fig_avg_linewidth, marker=None
+                )
+                ax.axhline(
+                    g_diff_inc_pos_avg_s, xmin=0.000, xmax=0.015, color='red', linewidth=fig_avg_linewidth, marker=None
+                )
+                ax.axhline(
+                    g_diff_inc_pos_min_s, xmin=0.000, xmax=0.010, color='red', linewidth=fig_avg_linewidth, marker=None
+                )
+                ax.axhline(
+                    g_diff_inc_neg_max_s, xmin=0.000, xmax=0.010, color='red', linewidth=fig_avg_linewidth, marker=None
+                )
+                ax.axhline(
+                    g_diff_inc_neg_avg_s, xmin=0.000, xmax=0.015, color='red', linewidth=fig_avg_linewidth, marker=None
+                )
+                ax.axhline(
+                    g_diff_inc_neg_min_s, xmin=0.000, xmax=0.020, color='red', linewidth=fig_avg_linewidth, marker=None
+                )
+                plt.plot(
+                    g_diff_inc,
+                    label='diff_inc (=a-b): ' + g_diff_info,
+                    linewidth=0,
+                    marker='.',
+                    markersize=fig_markersize,
+                    markeredgewidth=0,
+                    markerfacecolor='blue',
+                    alpha=fig_alpha,
+                )
                 leg = plt.legend(loc='upper left', frameon=True, fontsize=fig_legend_fontsize)
                 leg.get_frame().set_alpha(fig_legend_alpha)
                 plt.setp(leg.get_texts(), color=fig_legend_label_color)
@@ -386,21 +418,34 @@ class DataDiffAnalyzer:
                 v = subg_id_list[subg_id_list_id]
                 ax = plt.subplot(v)
                 ax.xaxis.set_visible(False)
-                ax.axhline(g_diff_rel_max_s, xmin=0.000, xmax=0.020, color='red', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                ax.axhline(g_diff_rel_avg_s, xmin=0.000, xmax=0.015, color='red', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                ax.axhline(g_diff_rel_min_s, xmin=0.000, xmax=0.010, color='red', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                ax.axhline(g_diff_rel_pos_max_s, xmin=0.020, xmax=0.040, color='blue', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                ax.axhline(g_diff_rel_pos_avg_s, xmin=0.025, xmax=0.040, color='blue', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                ax.axhline(g_diff_rel_pos_min_s, xmin=0.030, xmax=0.040, color='blue', \
-                            linewidth=fig_avg_linewidth, marker=None)
-                plt.plot(g_diff_rel, label='diff_rel (=|a-b|/(|a|+|b|)): ' + diff_rel_info, \
-                            linewidth=0, marker='.', markersize=fig_markersize, markeredgewidth=0, \
-                            markerfacecolor='blue', alpha=fig_alpha)
+                ax.axhline(
+                    g_diff_rel_max_s, xmin=0.000, xmax=0.020, color='red', linewidth=fig_avg_linewidth, marker=None
+                )
+                ax.axhline(
+                    g_diff_rel_avg_s, xmin=0.000, xmax=0.015, color='red', linewidth=fig_avg_linewidth, marker=None
+                )
+                ax.axhline(
+                    g_diff_rel_min_s, xmin=0.000, xmax=0.010, color='red', linewidth=fig_avg_linewidth, marker=None
+                )
+                ax.axhline(
+                    g_diff_rel_pos_max_s, xmin=0.020, xmax=0.040, color='blue', linewidth=fig_avg_linewidth, marker=None
+                )
+                ax.axhline(
+                    g_diff_rel_pos_avg_s, xmin=0.025, xmax=0.040, color='blue', linewidth=fig_avg_linewidth, marker=None
+                )
+                ax.axhline(
+                    g_diff_rel_pos_min_s, xmin=0.030, xmax=0.040, color='blue', linewidth=fig_avg_linewidth, marker=None
+                )
+                plt.plot(
+                    g_diff_rel,
+                    label='diff_rel (=|a-b|/(|a|+|b|)): ' + diff_rel_info,
+                    linewidth=0,
+                    marker='.',
+                    markersize=fig_markersize,
+                    markeredgewidth=0,
+                    markerfacecolor='blue',
+                    alpha=fig_alpha,
+                )
                 leg = plt.legend(loc='upper left', frameon=True, fontsize=fig_legend_fontsize)
                 leg.get_frame().set_alpha(fig_legend_alpha)
                 plt.setp(leg.get_texts(), color=fig_legend_label_color)

@@ -10,11 +10,11 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Utility to build pipeline-transformed source files."""
+
 from __future__ import annotations
 
 import ast
 import copy
-from pathlib import Path
 
 
 def build_generated_file_source(

@@ -8,17 +8,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
+""" """
+
 import math
-import copy
-import pytest
-import numpy as np
+import os
+
 import torch
 import torch._prims as prims
+
 import pypto
-import torch_npu
 
 
 class VarParam:
@@ -44,19 +42,24 @@ def var_2dim_tensor_proc(input_shape, dst_shape, param):
     with pypto.function("MAIN", input_tensor, dst_tensor):
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
             for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
-                view_tensor_input = pypto.view(input_tensor, view_shape,
+                view_tensor_input = pypto.view(
+                    input_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
                     valid_shape=[
                         pypto.min(input_shape[0] - b_idx * view_shape[0], pypto.symbolic_scalar(view_shape[0])),
-                        pypto.min(input_shape[1] - s_idx * view_shape[1], pypto.symbolic_scalar(view_shape[1]))
-                    ])
+                        pypto.min(input_shape[1] - s_idx * view_shape[1], pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 if param.is_tensor_func:
                     dst_tensor.move(
-                        view_tensor_input.var(param.dim, correction=param.correction, keepdim=param.keepdim))
+                        view_tensor_input.var(param.dim, correction=param.correction, keepdim=param.keepdim)
+                    )
                 else:
                     dst_tensor.move(
-                        pypto.var(view_tensor_input, param.dim, correction=param.correction, keepdim=param.keepdim))
+                        pypto.var(view_tensor_input, param.dim, correction=param.correction, keepdim=param.keepdim)
+                    )
 
     assert isinstance(dst_tensor, pypto.tensor)
 
@@ -153,12 +156,15 @@ def prims_var_2dim_tensor_proc(input_shape, dst_shape, dim, correction):
     with pypto.function("MAIN", input_tensor, dst_tensor):
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
             for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
-                view_tensor_input = pypto.view(input_tensor, view_shape,
+                view_tensor_input = pypto.view(
+                    input_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
                     valid_shape=[
                         pypto.min(input_shape[0] - b_idx * view_shape[0], pypto.symbolic_scalar(view_shape[0])),
-                        pypto.min(input_shape[1] - s_idx * view_shape[1], pypto.symbolic_scalar(view_shape[1]))
-                    ])
+                        pypto.min(input_shape[1] - s_idx * view_shape[1], pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 dst_tensor.move(pypto.var(view_tensor_input, dim, correction))
 

@@ -14,7 +14,6 @@ from ..models import Category, Violation
 from ..rule_base import Rule, RuleContext
 from ..rule_registry import register_rule
 
-
 _REUSE_KINDS = {"reuse", "Reuse", "REUSE"}
 
 
@@ -31,16 +30,18 @@ class StitchLegalityRule(Rule):
             cons_op = ctx.get_static_op(edge.consumer_func_key, edge.consumer_op_idx)
 
             if prod_op is None or cons_op is None:
-                violations.append(Violation(
-                    rule_id=self.RULE_ID,
-                    slot_idx=edge.slot_idx,
-                    message=(
-                        f"read/write linkage references an undeclared kernel op "
-                        f"(producer funcKey={edge.producer_func_key}/"
-                        f"opIdx={edge.producer_op_idx}, consumer funcKey="
-                        f"{edge.consumer_func_key}/opIdx={edge.consumer_op_idx})"
-                    ),
-                ))
+                violations.append(
+                    Violation(
+                        rule_id=self.RULE_ID,
+                        slot_idx=edge.slot_idx,
+                        message=(
+                            f"read/write linkage references an undeclared kernel op "
+                            f"(producer funcKey={edge.producer_func_key}/"
+                            f"opIdx={edge.producer_op_idx}, consumer funcKey="
+                            f"{edge.consumer_func_key}/opIdx={edge.consumer_op_idx})"
+                        ),
+                    )
+                )
                 continue
 
             if edge.stitch_kind in _REUSE_KINDS:
@@ -64,9 +65,11 @@ class StitchLegalityRule(Rule):
                     f"opIdx={edge.consumer_op_idx} does not declare this tensor "
                     f"as an input"
                 )
-            violations.append(Violation(
-                rule_id=self.RULE_ID,
-                slot_idx=edge.slot_idx,
-                message="; ".join(issue),
-            ))
+            violations.append(
+                Violation(
+                    rule_id=self.RULE_ID,
+                    slot_idx=edge.slot_idx,
+                    message="; ".join(issue),
+                )
+            )
         return violations

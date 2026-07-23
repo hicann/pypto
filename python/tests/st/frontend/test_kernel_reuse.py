@@ -10,27 +10,27 @@
 # -----------------------------------------------------------------------------------------------------------
 """Test pypto.frontend.jit kernel reuse and recompile behavior."""
 
+import logging
 import os
 import time
-import logging
-import pypto
+
 import torch
+
+import pypto
 
 logging.basicConfig(level=logging.INFO, format="", force=True)
 DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 
 
-@pypto.frontend.jit(
-    runtime_options={"run_mode": pypto.RunMode.NPU}
-)
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
 def kernel_with_dynamic(
     a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),
     out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),
 ):
     pypto.set_vec_tile_shapes(16, 16)
     for idx in pypto.loop(a.shape[0], name="LOOP", idx_name="k"):
-        temp = a[idx: idx + 1, :]
-        out[idx: idx + 1, :] = temp + 1
+        temp = a[idx:idx + 1, :]
+        out[idx:idx + 1, :] = temp + 1
 
 
 def test_kernel_reuse():
@@ -55,7 +55,7 @@ def test_kernel_reuse():
     ratio = t2 / t1
     logging.info(f"First: {t1:.4f}s, second: {t2:.4f}s, ratio: {ratio:.2f}")
     assert ratio < 0.1, f"Second not faster ({t2:.4f}s vs {t1:.4f}s)"
-    logging.info(f"✓ Cache reused, speedup {t1/t2:.1f}x")
+    logging.info(f"✓ Cache reused, speedup {t1 / t2:.1f}x")
 
 
 def test_kernel_recompile():

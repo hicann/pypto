@@ -8,16 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
+""" """
+
 import math
-import copy
-import pytest
-import numpy as np
+import os
+
 import torch
+
 import pypto
-import torch_npu
 
 
 class ScatterParamInfo:
@@ -48,20 +46,34 @@ def scatter_2dim_proc(scatter_para, is_inplace):
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
             for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
                 tmp_dst_tensor = pypto.tensor(view_shape, pypto.DT_FP32, "PTO_TENSOR_TMP")
-                view_tensor_src = pypto.view(self_tensor, view_shape,
+                view_tensor_src = pypto.view(
+                    self_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(src_shape[0]) -
-                        b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(src_shape[1]) -
-                        s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
-                view_tensor_index = pypto.view(indices_tensor, view_shape,
+                    valid_shape=[
+                        (pypto.symbolic_scalar(src_shape[0]) - b_idx * view_shape[0]).min(
+                            pypto.symbolic_scalar(view_shape[0])
+                        ),
+                        (pypto.symbolic_scalar(src_shape[1]) - s_idx * view_shape[1]).min(
+                            pypto.symbolic_scalar(view_shape[1])
+                        ),
+                    ],
+                )
+                view_tensor_index = pypto.view(
+                    indices_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(indices_shape[0]) -
-                        b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(indices_shape[1]) -
-                        s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(indices_shape[0]) - b_idx * view_shape[0]).min(
+                            pypto.symbolic_scalar(view_shape[0])
+                        ),
+                        (pypto.symbolic_scalar(indices_shape[1]) - s_idx * view_shape[1]).min(
+                            pypto.symbolic_scalar(view_shape[1])
+                        ),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                if is_inplace == True:
+                if is_inplace:
                     pypto.scatter_(view_tensor_src, scatter_para.axis, view_tensor_index, src)
                     tmp_dst_tensor.move(view_tensor_src)
                 else:
@@ -142,18 +154,32 @@ def test_scatter_add_onboard():
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
             for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
                 tmp_dst_tensor = pypto.tensor(view_shape, pypto.DT_FP32, "PTO_TENSOR_TMP")
-                view_tensor_self = pypto.view(self_tensor, view_shape,
+                view_tensor_self = pypto.view(
+                    self_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(src_shape[0]) -
-                        b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(src_shape[1]) -
-                        s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
-                view_tensor_index = pypto.view(indices_tensor, view_shape,
+                    valid_shape=[
+                        (pypto.symbolic_scalar(src_shape[0]) - b_idx * view_shape[0]).min(
+                            pypto.symbolic_scalar(view_shape[0])
+                        ),
+                        (pypto.symbolic_scalar(src_shape[1]) - s_idx * view_shape[1]).min(
+                            pypto.symbolic_scalar(view_shape[1])
+                        ),
+                    ],
+                )
+                view_tensor_index = pypto.view(
+                    indices_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(indices_shape[0]) -
-                        b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(indices_shape[1]) -
-                        s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(indices_shape[0]) - b_idx * view_shape[0]).min(
+                            pypto.symbolic_scalar(view_shape[0])
+                        ),
+                        (pypto.symbolic_scalar(indices_shape[1]) - s_idx * view_shape[1]).min(
+                            pypto.symbolic_scalar(view_shape[1])
+                        ),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tmp_dst_tensor.move(pypto.scatter(view_tensor_self, axis, view_tensor_index, src, reduce=reduce))
                 pypto.assemble(tmp_dst_tensor, [b_idx * view_shape[0], s_idx * view_shape[1]], dst_tensor)
@@ -200,31 +226,53 @@ def scatter_2dim_tensor_proc(scatter_para, is_inplace):
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
             for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
                 tmp_dst_tensor = pypto.tensor(view_shape, pypto.DT_FP32, "PTO_TENSOR_TMP")
-                view_tensor_self = pypto.view(self_tensor, view_shape,
+                view_tensor_self = pypto.view(
+                    self_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(self_shape[0]) -
-                        b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(self_shape[1]) -
-                        s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
-                view_tensor_index = pypto.view(indices_tensor, view_shape,
+                    valid_shape=[
+                        (pypto.symbolic_scalar(self_shape[0]) - b_idx * view_shape[0]).min(
+                            pypto.symbolic_scalar(view_shape[0])
+                        ),
+                        (pypto.symbolic_scalar(self_shape[1]) - s_idx * view_shape[1]).min(
+                            pypto.symbolic_scalar(view_shape[1])
+                        ),
+                    ],
+                )
+                view_tensor_index = pypto.view(
+                    indices_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(indices_shape[0]) -
-                        b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(indices_shape[1]) -
-                        s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
-                view_tensor_src = pypto.view(src_tensor, view_shape,
+                    valid_shape=[
+                        (pypto.symbolic_scalar(indices_shape[0]) - b_idx * view_shape[0]).min(
+                            pypto.symbolic_scalar(view_shape[0])
+                        ),
+                        (pypto.symbolic_scalar(indices_shape[1]) - s_idx * view_shape[1]).min(
+                            pypto.symbolic_scalar(view_shape[1])
+                        ),
+                    ],
+                )
+                view_tensor_src = pypto.view(
+                    src_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(self_shape[0]) -
-                        b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(self_shape[1]) -
-                        s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(self_shape[0]) - b_idx * view_shape[0]).min(
+                            pypto.symbolic_scalar(view_shape[0])
+                        ),
+                        (pypto.symbolic_scalar(self_shape[1]) - s_idx * view_shape[1]).min(
+                            pypto.symbolic_scalar(view_shape[1])
+                        ),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                if is_inplace == True:
+                if is_inplace:
                     pypto.scatter_(view_tensor_self, scatter_para.axis, view_tensor_index, view_tensor_src)
                     tmp_dst_tensor.move(view_tensor_self)
                 else:
-                    tmp_dst_tensor.move(pypto.scatter(view_tensor_self, scatter_para.axis, view_tensor_index,
-                        view_tensor_src))
+                    tmp_dst_tensor.move(
+                        pypto.scatter(view_tensor_self, scatter_para.axis, view_tensor_index, view_tensor_src)
+                    )
                 pypto.assemble(tmp_dst_tensor, [b_idx * view_shape[0], s_idx * view_shape[1]], dst_tensor)
 
     assert isinstance(dst_tensor, pypto.tensor)
@@ -303,27 +351,49 @@ def test_scatter_tensor_add_onboard():
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
             for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
                 tmp_tensor = pypto.tensor(view_shape, pypto.DT_FP32, "PTO_TENSOR_TMP")
-                view_tensor_self = pypto.view(self_tensor, view_shape,
+                view_tensor_self = pypto.view(
+                    self_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(self_shape[0]) -
-                        b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(self_shape[1]) -
-                        s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
-                view_tensor_index = pypto.view(indices_tensor, view_shape,
+                    valid_shape=[
+                        (pypto.symbolic_scalar(self_shape[0]) - b_idx * view_shape[0]).min(
+                            pypto.symbolic_scalar(view_shape[0])
+                        ),
+                        (pypto.symbolic_scalar(self_shape[1]) - s_idx * view_shape[1]).min(
+                            pypto.symbolic_scalar(view_shape[1])
+                        ),
+                    ],
+                )
+                view_tensor_index = pypto.view(
+                    indices_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(indices_shape[0]) -
-                        b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(indices_shape[1]) -
-                        s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
-                view_tensor_src = pypto.view(src_tensor, view_shape,
+                    valid_shape=[
+                        (pypto.symbolic_scalar(indices_shape[0]) - b_idx * view_shape[0]).min(
+                            pypto.symbolic_scalar(view_shape[0])
+                        ),
+                        (pypto.symbolic_scalar(indices_shape[1]) - s_idx * view_shape[1]).min(
+                            pypto.symbolic_scalar(view_shape[1])
+                        ),
+                    ],
+                )
+                view_tensor_src = pypto.view(
+                    src_tensor,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(self_shape[0]) -
-                        b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(self_shape[1]) -
-                        s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(self_shape[0]) - b_idx * view_shape[0]).min(
+                            pypto.symbolic_scalar(view_shape[0])
+                        ),
+                        (pypto.symbolic_scalar(self_shape[1]) - s_idx * view_shape[1]).min(
+                            pypto.symbolic_scalar(view_shape[1])
+                        ),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                tmp_tensor.move(pypto.scatter(view_tensor_self, axis, view_tensor_index, view_tensor_src,
-                    reduce=reduce))
+                tmp_tensor.move(
+                    pypto.scatter(view_tensor_self, axis, view_tensor_index, view_tensor_src, reduce=reduce)
+                )
                 pypto.assemble(tmp_tensor, [b_idx * view_shape[0], s_idx * view_shape[1]], dst_tensor)
 
     assert isinstance(dst_tensor, pypto.tensor)

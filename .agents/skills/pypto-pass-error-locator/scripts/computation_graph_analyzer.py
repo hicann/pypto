@@ -18,20 +18,20 @@ PyPTO 计算图 JSON 分析工具
 """
 
 import argparse
+from collections import defaultdict
+from dataclasses import dataclass, field
+from enum import Enum
 import json
 import logging
 import os
-import argparse
-from collections import defaultdict
-from typing import Dict, List, Any, Optional, Tuple, Set, Callable
-from dataclasses import dataclass, field
-from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 class GraphType(Enum):
     """计算图类型"""
+
     TENSOR_GRAPH = 1
     TILE_GRAPH = 2
     BLOCK_GRAPH = 3
@@ -43,17 +43,13 @@ class GraphType(Enum):
 
     @classmethod
     def to_string(cls, value: int) -> str:
-        mapping = {
-            1: 'TensorGraph',
-            2: 'TileGraph',
-            3: 'BlockGraph',
-            4: 'ExecuteGraph'
-        }
+        mapping = {1: 'TensorGraph', 2: 'TileGraph', 3: 'BlockGraph', 4: 'ExecuteGraph'}
         return mapping.get(value, 'Unknown')
 
 
 class MemoryType(Enum):
     """内存层级类型"""
+
     MEM_UB = 0
     MEM_L1 = 1
     MEM_L0A = 2
@@ -69,7 +65,7 @@ class MemoryType(Enum):
             2: 'MEM_L0A (L0A Cache)',
             3: 'MEM_L0B (L0B Cache)',
             4: 'MEM_L0C (L0C Cache)',
-            15: 'MEM_DEVICE_DDR (Global Memory)'
+            15: 'MEM_DEVICE_DDR (Global Memory)',
         }
         return mapping.get(value, f'Unknown ({value})')
 
@@ -77,6 +73,7 @@ class MemoryType(Enum):
 @dataclass
 class TensorInfo:
     """Tensor信息"""
+
     magic: int
     shape: List[int]
     validshape: List[int]
@@ -96,8 +93,7 @@ class TensorInfo:
 
     def get_memory_type_str(self) -> Tuple[str, str]:
         """获取内存类型字符串"""
-        return (MemoryType.to_string(self.mem_type_asis),
-                MemoryType.to_string(self.mem_type_tobe))
+        return (MemoryType.to_string(self.mem_type_asis), MemoryType.to_string(self.mem_type_tobe))
 
     def is_input(self) -> bool:
         """是否为输入Tensor"""
@@ -111,6 +107,7 @@ class TensorInfo:
 @dataclass
 class OperationInfo:
     """Operation信息"""
+
     opmagic: int
     opcode: str
     ioperands: List[int]
@@ -137,6 +134,7 @@ class OperationInfo:
 @dataclass
 class RawTensorInfo:
     """RawTensor信息"""
+
     rawmagic: int
     rawshape: List[int]
     ori_rawshape: List[int]
@@ -150,6 +148,7 @@ class RawTensorInfo:
 @dataclass
 class FunctionInfo:
     """Function信息"""
+
     func_magicname: str
     funcmagic: int
     graphtype: int
@@ -184,6 +183,7 @@ class FunctionInfo:
 @dataclass
 class GraphInfo:
     """计算图信息"""
+
     entryhash: str
     version: str
     functions: List[FunctionInfo]
@@ -197,6 +197,7 @@ class GraphInfo:
 @dataclass
 class EdgeInfo:
     """Operation级边信息"""
+
     src_opmagic: int
     dst_opmagic: int
     tensor_magic: int
@@ -207,6 +208,7 @@ class EdgeInfo:
 @dataclass
 class SubgraphEdgeInfo:
     """Subgraph级边信息"""
+
     src_subgraph: int
     dst_subgraph: int
     tensor_magic: int
@@ -217,6 +219,7 @@ class SubgraphEdgeInfo:
 @dataclass
 class CycleDetectionResult:
     """成环检测结果"""
+
     has_cycle: bool
     cycle_paths: List[Dict[str, Any]]
     node_count: int
@@ -265,7 +268,7 @@ class ComputationGraphAnalyzer:
             op_attr=op_data.get('op_attr', {}),
             file=op_data.get('file'),
             line=op_data.get('line'),
-            raw_data=op_data
+            raw_data=op_data,
         )
 
     @staticmethod
@@ -288,7 +291,7 @@ class ComputationGraphAnalyzer:
             subgraph_boundary=tensor_data.get('subgraph_boundary', False),
             life_range=tensor_data.get('life_range', []),
             kind=tensor_data.get('kind', -1),
-            raw_data=tensor_data
+            raw_data=tensor_data,
         )
 
     @staticmethod
@@ -302,7 +305,7 @@ class ComputationGraphAnalyzer:
             format=rt_data.get('format', -1),
             kind=rt_data.get('kind', -1),
             symbol=rt_data.get('symbol'),
-            raw_data=rt_data
+            raw_data=rt_data,
         )
 
     @staticmethod
@@ -390,9 +393,8 @@ class ComputationGraphAnalyzer:
         before_subgraph = before_analyzer.detect_subgraph_cycles(max_cycle_paths=max_cycle_paths)
         after_subgraph = after_analyzer.detect_subgraph_cycles(max_cycle_paths=max_cycle_paths)
 
-        first_cycle_introduced_in_after = (
-            (not before_op.has_cycle and after_op.has_cycle)
-            or (not before_subgraph.has_cycle and after_subgraph.has_cycle)
+        first_cycle_introduced_in_after = (not before_op.has_cycle and after_op.has_cycle) or (
+            not before_subgraph.has_cycle and after_subgraph.has_cycle
         )
         if first_cycle_introduced_in_after:
             root_cause_hint = "cycle first appears in after graph"
@@ -471,7 +473,6 @@ class ComputationGraphAnalyzer:
                 break
 
         return cycle_paths
-
 
     def load_graph(self, json_path: str) -> GraphInfo:
         """加载计算图JSON文件"""
@@ -591,12 +592,8 @@ class ComputationGraphAnalyzer:
                             src_subgraph=src_subgraph,
                             dst_subgraph=dst_subgraph,
                             tensor_magic=tensor_magic,
-                            producer_ops=sorted(
-                                [op.opmagic for op in producers if op.subgraphid == src_subgraph]
-                            ),
-                            consumer_ops=sorted(
-                                [op.opmagic for op in consumers if op.subgraphid == dst_subgraph]
-                            ),
+                            producer_ops=sorted([op.opmagic for op in producers if op.subgraphid == src_subgraph]),
+                            consumer_ops=sorted([op.opmagic for op in consumers if op.subgraphid == dst_subgraph]),
                         )
                     )
         return dict(graph)
@@ -657,10 +654,7 @@ class ComputationGraphAnalyzer:
             functions.append(self._parse_function(func_data))
 
         return GraphInfo(
-            entryhash=data.get('entryhash', ''),
-            version=data.get('version', ''),
-            functions=functions,
-            raw_data=data
+            entryhash=data.get('entryhash', ''), version=data.get('version', ''), functions=functions, raw_data=data
         )
 
     def _parse_function(self, func_data: Dict[str, Any]) -> FunctionInfo:
@@ -690,7 +684,7 @@ class ComputationGraphAnalyzer:
             file=func_data.get('file'),
             line=func_data.get('line'),
             global_tensors=func_data.get('global_tensors', []),
-            raw_data=func_data
+            raw_data=func_data,
         )
 
 
@@ -703,33 +697,45 @@ def _build_summary(analyzer: ComputationGraphAnalyzer, args: argparse.Namespace)
 
     if args.op_magic is not None:
         op = analyzer.find_operation_by_magic(args.op_magic)
-        summary["operation"] = None if op is None else {
-            "opmagic": op.opmagic,
-            "opcode": op.opcode,
-            "ioperands": op.ioperands,
-            "ooperands": op.ooperands,
-            "file": op.file,
-            "line": op.line,
-        }
+        summary["operation"] = (
+            None
+            if op is None
+            else {
+                "opmagic": op.opmagic,
+                "opcode": op.opcode,
+                "ioperands": op.ioperands,
+                "ooperands": op.ooperands,
+                "file": op.file,
+                "line": op.line,
+            }
+        )
 
     if args.tensor_magic is not None:
         tensor = analyzer.find_tensor_by_magic(args.tensor_magic)
-        summary["tensor"] = None if tensor is None else {
-            "magic": tensor.magic,
-            "shape": tensor.shape,
-            "validshape": tensor.validshape,
-            "mem_type": tensor.get_memory_type_str(),
-            "life_range": tensor.life_range,
-        }
+        summary["tensor"] = (
+            None
+            if tensor is None
+            else {
+                "magic": tensor.magic,
+                "shape": tensor.shape,
+                "validshape": tensor.validshape,
+                "mem_type": tensor.get_memory_type_str(),
+                "life_range": tensor.life_range,
+            }
+        )
         if tensor is not None:
             producer = analyzer.find_producer_of_tensor(args.tensor_magic)
             consumers = analyzer.find_consumers_of_tensor(args.tensor_magic)
-            summary["producer"] = None if producer is None else {
-                "opmagic": producer.opmagic,
-                "opcode": producer.opcode,
-                "file": producer.file,
-                "line": producer.line,
-            }
+            summary["producer"] = (
+                None
+                if producer is None
+                else {
+                    "opmagic": producer.opmagic,
+                    "opcode": producer.opcode,
+                    "file": producer.file,
+                    "line": producer.line,
+                }
+            )
             summary["consumers"] = [
                 {
                     "opmagic": consumer.opmagic,

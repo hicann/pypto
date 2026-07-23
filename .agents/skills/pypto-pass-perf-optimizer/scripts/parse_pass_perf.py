@@ -31,14 +31,14 @@ Usage:
 """
 
 import argparse
-import re
-import sys
-import os
-import glob
-import logging
-from datetime import datetime
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime
+import glob
+import logging
+import os
+import re
+import sys
 from typing import Dict, List, Optional, Tuple
 
 
@@ -46,10 +46,7 @@ def setup_logger(log_dir: str = "./perf_logs") -> logging.Logger:
     """Setup logger with file and console handlers."""
     os.makedirs(log_dir, exist_ok=True)
 
-    log_filename = os.path.join(
-        log_dir,
-        f"pass_perf_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log"
-    )
+    log_filename = os.path.join(log_dir, f"pass_perf_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log")
 
     lg = logging.getLogger("PassPerfAnalyzer")
     lg.setLevel(logging.INFO)
@@ -103,6 +100,7 @@ def fmt_dur(seconds: float) -> str:
 @dataclass
 class PassPerfData:
     """Pass performance data with execution count support"""
+
     name: str
     durations: List[int] = field(default_factory=list)
     ops: int = 0
@@ -173,13 +171,9 @@ class PassPerfData:
 class PassPerfAnalyzer:
     """Pass performance analyzer"""
 
-    PASS_TIME_PATTERN = re.compile(
-        r'The Runtime of pass (\S+) for program\s+function \S+ is (\d+) us\.'
-    )
+    PASS_TIME_PATTERN = re.compile(r'The Runtime of pass (\S+) for program\s+function \S+ is (\d+) us\.')
 
-    OP_COUNT_PATTERN = re.compile(
-        r'Function\[([^\]]+)\] operation size is: (\d+) after expansion\.'
-    )
+    OP_COUNT_PATTERN = re.compile(r'Function\[([^\]]+)\] operation size is: (\d+) after expansion\.')
 
     def __init__(self, time_threshold_s: float = 20.0, ops_threshold: int = 200000, quiet_mode: bool = False):
         self.time_threshold_s = time_threshold_s
@@ -291,10 +285,7 @@ class PassPerfAnalyzer:
         for pass_name, durations in pass_times.items():
             durations_before = pass_times_before.get(pass_name, [])
             self.pass_data[pass_name] = PassPerfData(
-                name=pass_name,
-                durations=durations,
-                ops=self.total_ops,
-                durations_before=durations_before
+                name=pass_name, durations=durations, ops=self.total_ops, durations_before=durations_before
             )
 
         total_pass_time = sum(d.duration_us for d in self.pass_data.values())
@@ -343,15 +334,19 @@ class PassPerfAnalyzer:
         has_comparison = any(d.durations_before for d in sorted_data)
 
         if has_comparison:
-            header = (f"{'Pass Name':<30} | {'Count':<5} | {'Avg':<9} | "
-                      f"{'Target(s)':<9} | {'Total':<9} | "
-                      f"{'Time%':<6} | {'Improve%':<8} | {'Status'}")
+            header = (
+                f"{'Pass Name':<30} | {'Count':<5} | {'Avg':<9} | "
+                f"{'Target(s)':<9} | {'Total':<9} | "
+                f"{'Time%':<6} | {'Improve%':<8} | {'Status'}"
+            )
             lg.info(header)
             lg.info("-" * 160)
         else:
-            header = (f"{'Pass Name':<30} | {'Count':<5} | {'Avg':<9} | "
-                      f"{'Target(s)':<9} | {'Total':<9} | "
-                      f"{'Time%':<6} | {'Status'}")
+            header = (
+                f"{'Pass Name':<30} | {'Count':<5} | {'Avg':<9} | "
+                f"{'Target(s)':<9} | {'Total':<9} | "
+                f"{'Time%':<6} | {'Status'}"
+            )
             lg.info(header)
             lg.info("-" * 130)
 
@@ -361,14 +356,18 @@ class PassPerfAnalyzer:
 
             if has_comparison and data.durations_before:
                 improve = f"{data.improvement_percent:+.1f}%"
-                row = (f"{data.name:<30} | {data.count:<5} | {fmt_dur(data.avg_duration_s):<9} | "
-                       f"{dynamic_threshold:<9.2f} | {fmt_dur(data.duration_s):<9} | "
-                       f"{time_percent:<6} | {improve:<8} | {status}")
+                row = (
+                    f"{data.name:<30} | {data.count:<5} | {fmt_dur(data.avg_duration_s):<9} | "
+                    f"{dynamic_threshold:<9.2f} | {fmt_dur(data.duration_s):<9} | "
+                    f"{time_percent:<6} | {improve:<8} | {status}"
+                )
                 lg.info(row)
             else:
-                row = (f"{data.name:<30} | {data.count:<5} | {fmt_dur(data.avg_duration_s):<9} | "
-                       f"{dynamic_threshold:<9.2f} | {fmt_dur(data.duration_s):<9} | "
-                       f"{time_percent:<6} | {status}")
+                row = (
+                    f"{data.name:<30} | {data.count:<5} | {fmt_dur(data.avg_duration_s):<9} | "
+                    f"{dynamic_threshold:<9.2f} | {fmt_dur(data.duration_s):<9} | "
+                    f"{time_percent:<6} | {status}"
+                )
                 lg.info(row)
 
         lg.info("")
@@ -383,9 +382,11 @@ class PassPerfAnalyzer:
             lg.info("=" * 140)
             lg.info("Passes Exceeding Dynamic Threshold:")
             for i, (data, threshold) in enumerate(exceeding, 1):
-                msg = (f"  {i}. {data.name}: avg {fmt_dur(data.avg_duration_s)} > "
-                       f"target {threshold:.1f}s (ops: {data.ops}, count: {data.count}, "
-                       f"time%: {data.time_percent:.1f}%)")
+                msg = (
+                    f"  {i}. {data.name}: avg {fmt_dur(data.avg_duration_s)} > "
+                    f"target {threshold:.1f}s (ops: {data.ops}, count: {data.count}, "
+                    f"time%: {data.time_percent:.1f}%)"
+                )
                 lg.info(msg)
             lg.info("=" * 140)
 
@@ -418,19 +419,21 @@ Examples:
   %(prog)s -l pypto-log-*.log
   %(prog)s -l after.log --compare before.log
   %(prog)s -l run.log --time-threshold 15 --ops-threshold 300000
-        """
+        """,
     )
 
     parser.add_argument('-l', '--log', required=True, help='Path to the log file to analyze')
     parser.add_argument('--compare', help='Path to a previous log file for comparison')
-    parser.add_argument('--time-threshold', type=float, default=20.0,
-                        help='Time threshold in seconds (default: 20)')
-    parser.add_argument('--ops-threshold', type=int, default=200000,
-                        help='Operations threshold for scale reference (default: 200000)')
-    parser.add_argument('-q', '--quiet', action='store_true',
-                        help='Suppress file list output, show only analysis results')
-    parser.add_argument('--log-dir', default='./perf_logs',
-                        help='Directory for output log files (default: ./perf_logs)')
+    parser.add_argument('--time-threshold', type=float, default=20.0, help='Time threshold in seconds (default: 20)')
+    parser.add_argument(
+        '--ops-threshold', type=int, default=200000, help='Operations threshold for scale reference (default: 200000)'
+    )
+    parser.add_argument(
+        '-q', '--quiet', action='store_true', help='Suppress file list output, show only analysis results'
+    )
+    parser.add_argument(
+        '--log-dir', default='./perf_logs', help='Directory for output log files (default: ./perf_logs)'
+    )
 
     args = parser.parse_args()
 
@@ -439,9 +442,7 @@ Examples:
     lg = get_logger()
 
     analyzer = PassPerfAnalyzer(
-        time_threshold_s=args.time_threshold,
-        ops_threshold=args.ops_threshold,
-        quiet_mode=args.quiet
+        time_threshold_s=args.time_threshold, ops_threshold=args.ops_threshold, quiet_mode=args.quiet
     )
 
     try:

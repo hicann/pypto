@@ -450,26 +450,28 @@ def transpose(tensor: Expr, axis1: int, axis2: int, span: Span | None = None) ->
 # Declarative op registration
 # ---------------------------------------------------------------------------
 
-register_table({
-    # args + kwargs -> builder
-    "tensor.cast": OpSpec(builder=cast),
-    "tensor.create_tensor": OpSpec(builder=create),
-    "tensor.view": OpSpec(builder=view),
-    "tensor.assemble": OpSpec(builder=assemble),
-    "tensor.reshape": OpSpec(builder=reshape),
-    "tensor.transpose": OpSpec(builder=transpose),
-    "tensor.matmul": OpSpec(builder=matmul),
-    # fixed positional args, no kwargs
-    "tensor.add": OpSpec(builder=add, parse_kwargs=False),
-    "tensor.add_scalar": OpSpec(builder=add_scalar, parse_kwargs=False),
-    "tensor.mul": OpSpec(builder=mul, parse_kwargs=False),
-    "tensor.mul_scalar": OpSpec(builder=mul_scalar, parse_kwargs=False),
-    "tensor.sub": OpSpec(builder=sub, parse_kwargs=False),
-    "tensor.sub_scalar": OpSpec(builder=sub_scalar, parse_kwargs=False),
-    "tensor.div": OpSpec(builder=div, parse_kwargs=False),
-    "tensor.div_scalar": OpSpec(builder=div_scalar, parse_kwargs=False),
-    "tensor.maximum": OpSpec(builder=maximum, parse_kwargs=False),
-    "tensor.row_max": OpSpec(builder=row_max, parse_kwargs=False),
-    "tensor.row_sum": OpSpec(builder=row_sum, parse_kwargs=False),
-    "tensor.exp": OpSpec(builder=exp, parse_kwargs=False),
-})
+register_table(
+    {
+        # args + kwargs -> builder
+        "tensor.cast": OpSpec(builder=cast),
+        "tensor.create_tensor": OpSpec(builder=create),
+        "tensor.view": OpSpec(builder=view),
+        "tensor.assemble": OpSpec(builder=assemble),
+        "tensor.reshape": OpSpec(builder=reshape),
+        "tensor.transpose": OpSpec(builder=transpose),
+        "tensor.matmul": OpSpec(builder=matmul),
+        # fixed positional args, no kwargs
+        "tensor.add": OpSpec(builder=add, parse_kwargs=False),
+        "tensor.add_scalar": OpSpec(builder=add_scalar, parse_kwargs=False),
+        "tensor.mul": OpSpec(builder=mul, parse_kwargs=False),
+        "tensor.mul_scalar": OpSpec(builder=mul_scalar, parse_kwargs=False),
+        "tensor.sub": OpSpec(builder=sub, parse_kwargs=False),
+        "tensor.sub_scalar": OpSpec(builder=sub_scalar, parse_kwargs=False),
+        "tensor.div": OpSpec(builder=div, parse_kwargs=False),
+        "tensor.div_scalar": OpSpec(builder=div_scalar, parse_kwargs=False),
+        "tensor.maximum": OpSpec(builder=maximum, parse_kwargs=False),
+        "tensor.row_max": OpSpec(builder=row_max, parse_kwargs=False),
+        "tensor.row_sum": OpSpec(builder=row_sum, parse_kwargs=False),
+        "tensor.exp": OpSpec(builder=exp, parse_kwargs=False),
+    }
+)

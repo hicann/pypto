@@ -11,15 +11,17 @@
 """
 PMU Trace codegen 看护：开启 enable_pmu_trace 后，kernel_aicore 生成的 CCE 代码应插入 mark_stamp。
 """
+
 import glob
 import os
-import shutil
 from pathlib import Path
+import shutil
 
 import pytest
-import pypto
 import torch
 import torch_npu
+
+import pypto
 
 
 @pypto.frontend.jit(
@@ -58,10 +60,7 @@ def _assert_mark_stamp_in_cce(log_dir: str):
         if "mark_stamp" in content:
             files_with_stamp.append(cce_path)
 
-    assert files_with_stamp, (
-        f"mark_stamp not found in any CCE file under {log_dir}/kernel_aicore, "
-        f"checked: {cce_files}"
-    )
+    assert files_with_stamp, f"mark_stamp not found in any CCE file under {log_dir}/kernel_aicore, checked: {cce_files}"
 
 
 @pytest.mark.soc("950")

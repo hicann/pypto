@@ -14,9 +14,10 @@
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import sys
+
 import logging
 from pathlib import Path
+import sys
 from typing import List
 
 import numpy as np
@@ -24,8 +25,9 @@ import numpy as np
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -55,8 +57,9 @@ def gen_moe_part1_golden(case_name: str, output: Path) -> bool:
         input_e_score_bias = np.random.uniform(0, 2, [1, n]).astype(dtype=np.float32)
         input_hidden_state = np.random.uniform(0.01, 0.02, [b * s, h]).astype(dtype=np.float16)
         input_weight = np.random.uniform(0.01, 0.02, [n, h]).astype(dtype=np.float16)
-        output_logit = np.matmul(input_hidden_state, input_weight.transpose(1, 0)).reshape([b * s, n]).astype(
-            np.float32)
+        output_logit = (
+            np.matmul(input_hidden_state, input_weight.transpose(1, 0)).reshape([b * s, n]).astype(np.float32)
+        )
         # sigmoid
         output_score = 1 / (1 + np.exp(-output_logit))
         output_score4choice = output_score + input_e_score_bias

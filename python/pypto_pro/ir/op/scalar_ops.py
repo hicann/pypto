@@ -16,17 +16,16 @@ import ast
 from pypto.pypto_impl import ir as _ir_core
 from pypto.pypto_impl.ir import Expr, Span
 
-from ._op_registry import op_impl, OpSpec, register_table
+from ._op_registry import OpSpec, op_impl, register_table
 
 
 @op_impl("min")
 def _parse_min(self, call: ast.Call):
     from pypto_pro.language.parser.diagnostics import InvalidOperationError
+
     call_span = self.span_tracker.get_span(call)
     if call.keywords:
-        raise InvalidOperationError(
-            "Scalar operation 'min' does not accept keyword arguments", span=call_span
-        )
+        raise InvalidOperationError("Scalar operation 'min' does not accept keyword arguments", span=call_span)
     if len(call.args) != 2:
         raise InvalidOperationError(
             f"Scalar binary operation 'min' requires exactly 2 arguments, got {len(call.args)}",
@@ -40,11 +39,10 @@ def _parse_min(self, call: ast.Call):
 @op_impl("max")
 def _parse_max(self, call: ast.Call):
     from pypto_pro.language.parser.diagnostics import InvalidOperationError
+
     call_span = self.span_tracker.get_span(call)
     if call.keywords:
-        raise InvalidOperationError(
-            "Scalar operation 'max' does not accept keyword arguments", span=call_span
-        )
+        raise InvalidOperationError("Scalar operation 'max' does not accept keyword arguments", span=call_span)
     if len(call.args) != 2:
         raise InvalidOperationError(
             f"Scalar binary operation 'max' requires exactly 2 arguments, got {len(call.args)}",
@@ -62,62 +60,70 @@ def _parse_max(self, call: ast.Call):
 # ---------------------------------------------------------------------------
 def _ir_add(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
     from pypto_pro.ir.op.block_ops import _create_tile_scalar_op
+
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="add", scalar_op="adds", span=span, **kwargs)
 
 
 def _ir_sub(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
     from pypto_pro.ir.op.block_ops import _create_tile_scalar_op
+
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="sub", scalar_op="subs", span=span, **kwargs)
 
 
 def _ir_mul(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
     from pypto_pro.ir.op.block_ops import _create_tile_scalar_op
+
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="mul", scalar_op="muls", span=span, **kwargs)
 
 
 def _ir_div(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
     from pypto_pro.ir.op.block_ops import _create_tile_scalar_op
+
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="div", scalar_op="divs", span=span, **kwargs)
 
 
 def _ir_and(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
     from pypto_pro.ir.op.block_ops import _create_tile_scalar_op
+
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="and", scalar_op="ands", span=span, **kwargs)
 
 
 # ---------------------------------------------------------------------------
 # Builders for min/max (element-wise + reduce overload via dim kwarg)
 # ---------------------------------------------------------------------------
-def _ir_minimum(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None,
-                dim: int | None = None, **kwargs) -> Expr:
-    from pypto_pro.ir.op.block_ops import _create_tile_scalar_op, _create_dim_op
+def _ir_minimum(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, dim: int | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _create_dim_op, _create_tile_scalar_op
+
     if dim is not None:
         return _create_dim_op([out, lhs, rhs], row_op="row_min", col_op="col_min", dim=dim, span=span)
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="minimum", scalar_op="mins", span=span, **kwargs)
 
 
-def _ir_maximum(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None,
-                dim: int | None = None, **kwargs) -> Expr:
-    from pypto_pro.ir.op.block_ops import _create_tile_scalar_op, _create_dim_op
+def _ir_maximum(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, dim: int | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _create_dim_op, _create_tile_scalar_op
+
     if dim is not None:
         return _create_dim_op([out, lhs, rhs], row_op="row_max", col_op="col_max", dim=dim, span=span)
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="maximum", scalar_op="maxs", span=span, **kwargs)
 
 
-register_table({
-    "add": OpSpec(builder=_ir_add),
-    "sub": OpSpec(builder=_ir_sub),
-    "mul": OpSpec(builder=_ir_mul),
-    "div": OpSpec(builder=_ir_div),
-    "and_": OpSpec(builder=_ir_and),
-    "minimum": OpSpec(builder=_ir_minimum),
-    "maximum": OpSpec(builder=_ir_maximum),
-})
+register_table(
+    {
+        "add": OpSpec(builder=_ir_add),
+        "sub": OpSpec(builder=_ir_sub),
+        "mul": OpSpec(builder=_ir_mul),
+        "div": OpSpec(builder=_ir_div),
+        "and_": OpSpec(builder=_ir_and),
+        "minimum": OpSpec(builder=_ir_minimum),
+        "maximum": OpSpec(builder=_ir_maximum),
+    }
+)
 
 
 @op_impl("const")
 def _parse_typed_constant(self, call: ast.Call):
     from pypto_pro.language.parser.diagnostics import ParserSyntaxError
+
     span = self.span_tracker.get_span(call)
 
     if len(call.args) != 2:

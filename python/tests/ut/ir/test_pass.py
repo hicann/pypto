@@ -7,10 +7,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 """Comprehensive tests for ir.Pass.aggressive_dce."""
+
 import logging
 
 import pypto
-from pypto import pil, ir
+from pypto import ir, pil
 
 
 def _collect_stmts(stmt, cls):
@@ -59,6 +60,7 @@ def test_dce_tensor_chain_view_adds_assemble():
     The original bug: DCE only propagated liveness through AssignStmts,
     so TensorOpStmt chains were incorrectly treated as dead.
     """
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
@@ -78,11 +80,12 @@ def test_dce_tensor_chain_view_adds_assemble():
 
 def test_dce_dead_tensor_op_removed():
     """An unused TensorOpStmt should be removed by aggressive DCE."""
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
             ta = x[i:i + 32, :]
-            _ = ta + 2   # dead op: result unused
+            _ = ta + 2  # dead op: result unused
             y[i:, :] = ta + 1
 
     x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
@@ -99,12 +102,13 @@ def test_dce_long_tensor_chain():
 
     Tests multi-step propagation through TensorOpStmts.
     """
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
             ta = x[i:i + 32, :]
-            tb = ta + 1   # step 1
-            tc = tb + 1   # step 2
+            tb = ta + 1  # step 1
+            tc = tb + 1  # step 2
             y[i:, :] = tc  # ASSEMBLE
 
     x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
@@ -121,13 +125,14 @@ def test_dce_long_tensor_chain():
 
 def test_dce_branching_tensor_chain():
     """A -> B -> C -> ASSEMBLE and A -> D (dead): only A,B,C,ASSEMBLE kept."""
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
             ta = x[i:i + 32, :]
             tb = ta + 1
             tc = tb + 1
-            _ = ta + 99   # dead branch: result unused
+            _ = ta + 99  # dead branch: result unused
             y[i:, :] = tc
 
     x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
@@ -145,6 +150,7 @@ def test_dce_branching_tensor_chain():
 
 def test_dce_keeps_tensor_op():
     """A TensorOpStmt whose result is used by ContinueStmt must survive."""
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
@@ -160,16 +166,18 @@ def test_dce_keeps_tensor_op():
     opcodes = [op.opcode for op in tensor_ops]
     assert 'VIEW' in opcodes, f"VIEW eliminated but used by continue: {opcodes}"
 
+
 # ---------- Nested control flow ----------
 
 
 def test_dce_nested_for_dead_inner():
     """Dead tensor ops inside a for-loop body should be eliminated."""
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
             ta = x[i:i + 32, :]
-            _ = ta + 99   # dead: result unused
+            _ = ta + 99  # dead: result unused
             y[i:, :] = ta + 1
 
     x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
@@ -184,16 +192,17 @@ def test_dce_nested_for_dead_inner():
 
 def test_dce_if_else_branches():
     """Dead code in if/else branches should be eliminated independently."""
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
             ta = x[i:i + 32, :]
             if i < 2:
-                _ = ta + 99   # dead in then-branch
+                _ = ta + 99  # dead in then-branch
                 tb = ta + 1
                 y[i:, :] = tb
             else:
-                _ = ta + 88   # dead in else-branch
+                _ = ta + 88  # dead in else-branch
                 tb = ta + 2
                 y[i:, :] = tb
 
@@ -213,21 +222,22 @@ def test_dce_if_else_branches():
 
 def test_dce_nested_if_else():
     """Dead code in nested if/else should be eliminated at every level."""
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
             ta = x[i:i + 32, :]
             if i < 2:
-                _ = ta + 99   # dead in then-branch
+                _ = ta + 99  # dead in then-branch
                 if i == 0:
-                    _ = ta + 77   # dead in nested then
+                    _ = ta + 77  # dead in nested then
                     tb = ta + 1
                 else:
-                    _ = ta + 66   # dead in nested else
+                    _ = ta + 66  # dead in nested else
                     tb = ta + 2
                 y[i:, :] = tb
             else:
-                _ = ta + 88   # dead in else-branch
+                _ = ta + 88  # dead in else-branch
                 tb = ta + 3
                 y[i:, :] = tb
 
@@ -244,6 +254,7 @@ def test_dce_nested_if_else():
 
 def test_dce_nested_loop_if_else():
     """Dead code in if/else inside nested loops should be eliminated."""
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
@@ -252,10 +263,10 @@ def test_dce_nested_loop_if_else():
                 pypto.set_vec_tile_shapes(16, 16)
                 tb = ta[j * 16:(j + 1) * 16, :]
                 if j == 0:
-                    _ = tb + 99   # dead in inner then
+                    _ = tb + 99  # dead in inner then
                     tc = tb + 1
                 else:
-                    _ = tb + 88   # dead in inner else
+                    _ = tb + 88  # dead in inner else
                     tc = tb + 2
                 y[i * 32 + j * 16:i * 32 + (j + 1) * 16, :] = tc
 
@@ -270,16 +281,17 @@ def test_dce_nested_loop_if_else():
     assert adds_count == 2, f"Expected 2 ADDS, got {adds_count} in {opcodes}"
 
     """Dead code in if/else branch containing break should be eliminated."""
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
             ta = x[i:i + 32, :]
             if i < 2:
-                _ = ta + 99   # dead
+                _ = ta + 99  # dead
                 tb = ta + 1
                 y[i:, :] = tb
             else:
-                _ = ta + 88   # dead
+                _ = ta + 88  # dead
                 tb = ta + 2
                 y[i:, :] = tb
 
@@ -298,13 +310,14 @@ def test_dce_nested_loop_if_else():
 
 def test_dce_mixed_assign_and_tensor():
     """Dead scalar assignments and dead tensor ops should both be removed."""
+
     def foo(x, y, n):
         for i in pypto.loop(n):
             pypto.set_vec_tile_shapes(32, 32)
             ta = x[i * 32:(i + 1) * 32, :]
-            dead_scalar = i * 42   # dead scalar assign
+            dead_scalar = i * 42  # dead scalar assign
             _ = dead_scalar
-            _ = ta + 99            # dead tensor op
+            _ = ta + 99  # dead tensor op
             tb = ta + 1
             y[i * 32:(i + 1) * 32, :] = tb
 
@@ -320,6 +333,7 @@ def test_dce_mixed_assign_and_tensor():
 
 def test_dce_no_assemble_stmt():
     """Dead scalar assignments and dead tensor ops should both be removed."""
+
     def foo(x, y, n):
         for i in pypto.loop(n):
             pypto.set_vec_tile_shapes(32, 32)
@@ -327,10 +341,10 @@ def test_dce_no_assemble_stmt():
                 ta = x[i * 32:(i + 1) * 32, :]
             else:
                 ta = x[i * 32:(i + 1) * 32, :]
-            dead_scalar = i * 42   # dead scalar assign
+            dead_scalar = i * 42  # dead scalar assign
             _ = dead_scalar
-            _ = ta + 99            # dead tensor op
-            tb = ta + 1
+            _ = ta + 99  # dead tensor op
+            _tb = ta + 1
 
     x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
@@ -356,6 +370,7 @@ def _run_merge(func, *args):
 
 def test_merge_pass1():
     """A loop is a barrier (never duplicated into branches) and the pass recurses into its body."""
+
     def foo(x, y, z):
         pypto.set_vec_tile_shapes(16, 16)
         for i in pypto.loop(2):
@@ -383,14 +398,15 @@ def test_merge_pass1():
 
 def test_merge_pass2():
     """Under `i == 0` the nested `i == 1` is UNSAT, so its branch is pruned (not 2^N leaves)."""
+
     def foo(x, y, z):
         pypto.set_vec_tile_shapes(16, 16)
         xv = pypto.view(x, [16, 16], [0, 0])
         yv = pypto.view(y, [16, 16], [0, 0])
         for i in pypto.loop(2):
             if i == 0:
-                if i == 1:          # impossible under i == 0
-                    t = xv + yv      # DEAD -> must be pruned
+                if i == 1:  # impossible under i == 0
+                    t = xv + yv  # DEAD -> must be pruned
                 else:
                     t = xv - yv
             else:
@@ -410,12 +426,13 @@ def test_merge_pass3():
     """`i + 1 == 0` is impossible for i in {0, 1}: the solver models the loop range (i >= 0),
     proves the then-branch UNSAT, and prunes it -> the if collapses to the surviving else branch.
     """
+
     def foo(x, y, z):
         pypto.set_vec_tile_shapes(16, 16)
         xv = pypto.view(x, [16, 16], [0, 0])
         yv = pypto.view(y, [16, 16], [0, 0])
         for i in pypto.loop(2):
-            if i + 1 == 0:          # UNSAT under the loop range i in {0, 1} -> then-branch pruned
+            if i + 1 == 0:  # UNSAT under the loop range i in {0, 1} -> then-branch pruned
                 t = xv + yv
             else:
                 t = xv - yv
@@ -430,6 +447,7 @@ def test_merge_pass3():
 
 def test_merge_pass4():
     """A loop between two ifs splits the region: each side is tree-built independently, loop stays single."""
+
     def foo(x, y, z):
         pypto.set_vec_tile_shapes(16, 16)
         xv = pypto.view(x, [16, 16], [0, 0])
@@ -439,7 +457,7 @@ def test_merge_pass4():
                 a = xv + yv
             else:
                 a = xv - yv
-            for j in pypto.loop(2):     # inner loop in the middle -> barrier (self-contained)
+            for j in pypto.loop(2):  # inner loop in the middle -> barrier (self-contained)
                 pypto.assemble(a, [j * 16, 0], z)
             if i == 1:
                 c = a + yv
@@ -459,6 +477,7 @@ def test_merge_pass5():
     """An if that yields a value consumed after it: the consumer is sunk into both branches and the
     branch-local def is used in each (SSA preserved via return_vars + yield).
     """
+
     def foo(x, y, z):
         pypto.set_vec_tile_shapes(16, 16)
         xv = pypto.view(x, [16, 16], [0, 0])
@@ -468,7 +487,7 @@ def test_merge_pass5():
                 t = xv + yv
             else:
                 t = xv - yv
-            r = t + xv              # consumer of the if's result `t`
+            r = t + xv  # consumer of the if's result `t`
             pypto.assemble(r, [0, 0], z)
 
     x = pypto.Tensor([32, 32], pypto.DT_FP32, 'x')
@@ -484,6 +503,7 @@ def test_merge_pass5():
 
 def test_merge_pass6():
     """A nested if that exists only under one branch stays nested only under that branch's leaves."""
+
     def foo(x, y, z):
         pypto.set_vec_tile_shapes(16, 16)
         xv = pypto.view(x, [16, 16], [0, 0])
@@ -491,7 +511,7 @@ def test_merge_pass6():
         for i in pypto.loop(2):
             if i == 0:
                 t = xv + yv
-                if i == 1:          # nested only inside the i == 0 branch
+                if i == 1:  # nested only inside the i == 0 branch
                     t = t + yv
             else:
                 t = xv - yv
@@ -508,10 +528,11 @@ def test_merge_pass6():
 
 def test_merge_pass7():
     """A nested if that exists only under one branch stays nested only under that branch's leaves."""
+
     def foo(x, y, z):
         pypto.set_vec_tile_shapes(16, 16)
         xv = pypto.view(x, [16, 16], [0, 0])
-        yv = pypto.view(y, [16, 16], [0, 0])
+        _yv = pypto.view(y, [16, 16], [0, 0])
         for i in pypto.loop(x.shape[0], unroll_list=[4]):
             if i == 0:
                 t = xv + 1
@@ -533,10 +554,11 @@ def test_merge_pass7():
 
 def test_merge_pass8():
     """A nested if that exists only under one branch stays nested only under that branch's leaves."""
+
     def foo(x, y, z):
         pypto.set_vec_tile_shapes(16, 16)
         xv = pypto.view(x, [16, 16], [0, 0])
-        yv = pypto.view(y, [16, 16], [0, 0])
+        _yv = pypto.view(y, [16, 16], [0, 0])
         for i in pypto.loop(x.shape[0], unroll_list=[4]):
             if pypto.is_loop_begin(i):
                 t = xv + 1
@@ -558,6 +580,7 @@ def test_merge_pass8():
 
 def test_forstmt_attrs_and_step_name_preserved():
     """ForStmt attrs and step-based path func naming must survive DCE/canonicalize/TransformStmts."""
+
     def foo(x, z):
         pypto.set_vec_tile_shapes(16, 16)
         for i in pypto.loop(0, 4, name="LOOP_TEST", parallel=True, unroll_list=[2]):

@@ -8,18 +8,17 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""构建产物二进制头文件分析.
-"""
+"""构建产物二进制头文件分析."""
+
 import argparse
+from datetime import datetime, timezone
 import json
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
 
 
 class Analysis:
-
     def __init__(self, args):
         # 参数预处理
         self.source: Path = Path(args.source[0])
@@ -39,7 +38,7 @@ class Analysis:
         self.target_include_illegal: Dict[Path, List[Path]] = {}
 
     def __str__(self) -> str:
-        desc = f"\nBinaryHeaderAnalysis:"
+        desc = "\nBinaryHeaderAnalysis:"
         desc += f"\n    Source          : {self.source}"
         desc += f"\n    Binary          : {self.binary}"
         desc += f"\n    Target          : {self.target_file}"
@@ -69,11 +68,18 @@ class Analysis:
                 for d in lst:
                     logging.info("%s : %-40s dependency %s", self.target_name, self.get_o_sub_path(o=o), d)
                     cnt += 1
-            logging.error("%s has %s illegal header-file dependence, Duration %s secs.", self.target_name, cnt,
-                          (datetime.now(tz=timezone.utc) - ts).seconds)
+            logging.error(
+                "%s has %s illegal header-file dependence, Duration %s secs.",
+                self.target_name,
+                cnt,
+                (datetime.now(tz=timezone.utc) - ts).seconds,
+            )
             return False
-        logging.info("%s header-file dependence check success, Duration %s secs.", self.target_name,
-                     (datetime.now(tz=timezone.utc) - ts).seconds)
+        logging.info(
+            "%s header-file dependence check success, Duration %s secs.",
+            self.target_name,
+            (datetime.now(tz=timezone.utc) - ts).seconds,
+        )
         return True
 
     def analysis_object(self, o: Path) -> bool:
@@ -142,24 +148,33 @@ class Analysis:
 
     @staticmethod
     def main() -> bool:
-        """主处理流程
-        """
+        """主处理流程"""
         # 参数注册
-        parser = argparse.ArgumentParser(description=f"Header-File Analysis.", epilog="Best Regards!")
-        parser.add_argument("-s", "--source", nargs=1, type=Path, required=True,
-                            help="Specific source root path.")
-        parser.add_argument("-b", "--binary", nargs=1, type=Path, required=True,
-                            help="Specific binary root path.")
-        parser.add_argument("-t", "--target", nargs=1, type=str, required=True,
-                            help="Specific target binary file path.")
-        parser.add_argument("--target_binary_dir", nargs=1, type=str, required=True,
-                            help="Specific target binary dir.")
-        parser.add_argument("-o", "--objects", nargs=1, type=str, required=True,
-                            help="Specific target binary objects.")
-        parser.add_argument("-j", "--json", nargs=1, type=Path, required=False,
-                            help="Specific target include filter(file/dir) json file.")
-        parser.add_argument("-f", "--filters", required=False, action='append', nargs='*', type=Path,
-                            help="Specific target include filter(file/dir).")
+        parser = argparse.ArgumentParser(description="Header-File Analysis.", epilog="Best Regards!")
+        parser.add_argument("-s", "--source", nargs=1, type=Path, required=True, help="Specific source root path.")
+        parser.add_argument("-b", "--binary", nargs=1, type=Path, required=True, help="Specific binary root path.")
+        parser.add_argument(
+            "-t", "--target", nargs=1, type=str, required=True, help="Specific target binary file path."
+        )
+        parser.add_argument("--target_binary_dir", nargs=1, type=str, required=True, help="Specific target binary dir.")
+        parser.add_argument("-o", "--objects", nargs=1, type=str, required=True, help="Specific target binary objects.")
+        parser.add_argument(
+            "-j",
+            "--json",
+            nargs=1,
+            type=Path,
+            required=False,
+            help="Specific target include filter(file/dir) json file.",
+        )
+        parser.add_argument(
+            "-f",
+            "--filters",
+            required=False,
+            action='append',
+            nargs='*',
+            type=Path,
+            help="Specific target include filter(file/dir).",
+        )
         # 流程处理
         ctrl = Analysis(args=parser.parse_args())
         return ctrl.analysis()

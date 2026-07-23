@@ -12,11 +12,13 @@
 pypto.scaled_mm ST测试用例配置
 用于System Test自动化测试框架
 """
+
 from dataclasses import dataclass
 from typing import Tuple
 
-import pypto
 import torch
+
+import pypto
 
 
 @dataclass
@@ -82,11 +84,9 @@ class ScaledMMConfig:
         info = cls.TOLERANCE_CONFIG[dtype_str]
         return info["atol"], info["rtol"]
 
-
     @classmethod
     def get_torch_dtype(cls, dtype_str: str) -> torch.dtype:
         return cls.DTYPE_CONFIG[dtype_str]["torch"]
-
 
     @classmethod
     def pto_to_torch(cls, pto_dtype: pypto.DataType) -> torch.dtype:

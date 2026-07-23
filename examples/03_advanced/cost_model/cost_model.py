@@ -13,14 +13,15 @@ This test case verifies that the swimlane diagram generation for the costmodel w
 regardless of whether the CANN is installed in the environment or not.
 """
 
+import argparse
+import json
 import os
 import sys
-import argparse
-import pypto
-import torch
-import json
+
 import numpy as np
-from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 """
 PyPTO Cost Model Simulation Example
@@ -50,6 +51,7 @@ def get_device_id():
         print(f"ERROR: TILE_FWK_DEVICE_ID must be an integer, got: {os.environ['TILE_FWK_DEVICE_ID']}")
         return None
 
+
 def safe_json_load(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
@@ -68,8 +70,7 @@ def safe_json_load(file_path):
 def get_out_put_path():
     out_path = "./output"
     if os.path.exists(out_path):
-        subdirs = [os.path.join(out_path, d) for d in os.listdir(out_path)
-                if os.path.isdir(os.path.join(out_path, d))]
+        subdirs = [os.path.join(out_path, d) for d in os.listdir(out_path) if os.path.isdir(os.path.join(out_path, d))]
         if subdirs:
             latest_dir = max(subdirs, key=os.path.getctime)
             return latest_dir
@@ -84,13 +85,8 @@ def softmax_core(input_tensor: pypto.Tensor) -> pypto.Tensor:
     return pypto.div(exp, esum)
 
 
-@pypto.frontend.jit(
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def softmax(input_tensor: pypto.Tensor(),
-            output_tensor: pypto.Tensor()
-):
-
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
+def softmax(input_tensor: pypto.Tensor(), output_tensor: pypto.Tensor()):
     tensor_shape = input_tensor.shape
     b = tensor_shape[0]  # Dynamic batch size
     n1, n2, dim = tensor_shape[1:]  # Static dimensions
@@ -99,7 +95,6 @@ def softmax(input_tensor: pypto.Tensor(),
 
     # Tiling shape setting for efficient execution
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
-
 
     for idx in pypto.loop(b_loop):
         b_offset = idx * tile_b
@@ -122,7 +117,7 @@ def test_softmax(cost_model_enable=True):
     When cost_model_enable=True, PyPTO generates simulated execution
     outputs (e.g. swimlane JSON) for analysis.
     """
-    cann_is_configed: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
+    _cann_is_configed: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
 
     # Shape for verification: NCHW format, N can be any integer number as it is defined as dynamic axis
     shape = (32, 32, 1, 256)
@@ -139,13 +134,15 @@ def test_softmax(cost_model_enable=True):
     npu_data = output_data.cpu()
     torch_data = torch_softmax.cpu()
 
-    max_diff = np.abs(npu_data.numpy() - torch_data.numpy()).max()
+    _max_diff = np.abs(npu_data.numpy() - torch_data.numpy()).max()
 
     output_path = get_out_put_path()
     assert output_path
 
     if cost_model_enable:
-        merged_swimlane, error = safe_json_load(os.path.join(output_path, 'CostModelSimulationOutput/merged_swimlane.json'))
+        merged_swimlane, error = safe_json_load(
+            os.path.join(output_path, 'CostModelSimulationOutput/merged_swimlane.json')
+        )
         assert not error
 
     print(f"Input shape: {input_data.shape}")
@@ -169,19 +166,12 @@ Examples:
   %(prog)s cost_model::test_add_direct
             Run the cost_model::test_add_direct example
   %(prog)s --list       List all available examples
-        """
+        """,
     )
     parser.add_argument(
-        'example_id',
-        type=str,
-        nargs='?',
-        help='Example ID to run (1). If not specified, the example will run.'
+        'example_id', type=str, nargs='?', help='Example ID to run (1). If not specified, the example will run.'
     )
-    parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
 
     args = parser.parse_args()
 
@@ -190,7 +180,7 @@ Examples:
         "cost_model::test_softmax": {
             'name': 'cost_model',
             'description': 'cost_model example',
-            'function': test_softmax
+            'function': test_softmax,
         }
     }
 
@@ -218,7 +208,7 @@ Examples:
     print("=" * 60 + "\n")
 
     # Get and validate device ID (needed for NPU examples)
-    device_id = None
+    _device_id = None
     examples_to_run = []
 
     if args.example_id is not None:

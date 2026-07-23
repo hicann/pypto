@@ -9,13 +9,14 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-import os
 import math
+import os
 from typing import List
-import pypto
-from pypto.symbolic_scalar import SymInt
+
 import torch
 
+import pypto
+from pypto.symbolic_scalar import SymInt
 
 TORCH_TO_PTO_TYPES = {
     torch.int8: pypto.DT_INT8,
@@ -23,7 +24,7 @@ TORCH_TO_PTO_TYPES = {
     torch.int32: pypto.DT_INT32,
     torch.float16: pypto.DT_FP16,
     torch.float32: pypto.DT_FP32,
-    torch.bfloat16: pypto.DT_BF16
+    torch.bfloat16: pypto.DT_BF16,
 }
 
 
@@ -47,9 +48,15 @@ def build_tri_2d(inputs_tensors, outputs_tensors, args: TriArgs):
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
             for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
                 offsets = [b_idx * view_shape[0], s_idx * view_shape[1]]
-                view_tensor = pypto.view(inputs_tensors[0], view_shape, offsets,
-                                        valid_shape=[pypto.min(shape[0] - b_idx * view_shape[0], view_shape[0]),
-                                            pypto.min(shape[1] - s_idx * view_shape[1], view_shape[1])])
+                view_tensor = pypto.view(
+                    inputs_tensors[0],
+                    view_shape,
+                    offsets,
+                    valid_shape=[
+                        pypto.min(shape[0] - b_idx * view_shape[0], view_shape[0]),
+                        pypto.min(shape[1] - s_idx * view_shape[1], view_shape[1]),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 diagonal = args.diagonal + offsets[0] - offsets[1]
                 res = pypto.triu(view_tensor, diagonal) if is_upper else pypto.tril(view_tensor, diagonal)

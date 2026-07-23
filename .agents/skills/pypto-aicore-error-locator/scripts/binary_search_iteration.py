@@ -2,25 +2,25 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 
-import os
-import sys
-import shutil
 import argparse
-import logging
 from dataclasses import dataclass
+import logging
+import os
+import shutil
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (
-    read_file,
-    write_file,
-    get_commentable_lines,
     comment_lines_by_indices,
-    uncomment_lines_by_indices,
+    get_commentable_lines,
     has_error,
+    print_error_info,
+    read_file,
     run_test,
-    validate_path,
     setup_logging,
-    print_error_info
+    uncomment_lines_by_indices,
+    validate_path,
+    write_file,
 )
 
 setup_logging()
@@ -105,10 +105,8 @@ def main():
     parser.add_argument('run_dir', help="运行测试命令的目录路径")
     parser.add_argument('left', type=int, help="二分查找左边界")
     parser.add_argument('right', type=int, help="二分查找右边界")
-    parser.add_argument('error_in_t', type=lambda x: x.lower() == 'true',
-                        help="错误是否在T操作中 (True/False)")
-    parser.add_argument('--use-pypto-test-framework', action='store_true',
-                        help="使用 Pypto_Test 框架")
+    parser.add_argument('error_in_t', type=lambda x: x.lower() == 'true', help="错误是否在T操作中 (True/False)")
+    parser.add_argument('--use-pypto-test-framework', action='store_true', help="使用 Pypto_Test 框架")
     args = parser.parse_args()
 
     cce_file = os.path.abspath(args.cce_file)

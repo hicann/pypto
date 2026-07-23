@@ -11,12 +11,12 @@ from ._build_online import ensure_pypto_impl
 
 
 def _load_shared_libs():
+    import ctypes
+    from importlib import metadata
     import logging
     import os
-    import ctypes
     from pathlib import Path
-    from importlib import metadata
-    from typing import List, Any, Optional
+    from typing import Any, List, Optional
 
     _log = logging.getLogger(__name__)
 
@@ -50,20 +50,55 @@ def _load_shared_libs():
             return
         ctypes.CDLL(str(_file), mode=ctypes.RTLD_GLOBAL)
 
-    _load_shared_lib(_desc=["libc_sec.so", not use_cann, ])
+    _load_shared_lib(
+        _desc=[
+            "libc_sec.so",
+            not use_cann,
+        ]
+    )
 
     # name, load
     desc_lst: List[List[Any]] = [
-        ["libtile_fwk_utils.so", True, ],
-        ["libtile_fwk_adapter.so", True, ],
-        ["libtile_fwk_cann_host_runtime.so", True, ],
-        ["libtile_fwk_platform.so", True, ],
-        ["libtile_fwk_interface.so", True, ],
-        ["libtile_fwk_codegen.so", True, ],
-        ["libtile_fwk_compiler.so", True, ],
-        ["libtile_fwk_runtime.so", True, ],
-        ["libtile_fwk_simulation.so", True, ],
-        ["libtile_fwk_simulation_pv.so", use_cann, ],
+        [
+            "libtile_fwk_utils.so",
+            True,
+        ],
+        [
+            "libtile_fwk_adapter.so",
+            True,
+        ],
+        [
+            "libtile_fwk_cann_host_runtime.so",
+            True,
+        ],
+        [
+            "libtile_fwk_platform.so",
+            True,
+        ],
+        [
+            "libtile_fwk_interface.so",
+            True,
+        ],
+        [
+            "libtile_fwk_codegen.so",
+            True,
+        ],
+        [
+            "libtile_fwk_compiler.so",
+            True,
+        ],
+        [
+            "libtile_fwk_runtime.so",
+            True,
+        ],
+        [
+            "libtile_fwk_simulation.so",
+            True,
+        ],
+        [
+            "libtile_fwk_simulation_pv.so",
+            use_cann,
+        ],
     ]
     for desc in desc_lst:
         _load_shared_lib(_desc=desc)

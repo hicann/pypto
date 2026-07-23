@@ -8,21 +8,17 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import os
-import sys
 import logging
-import subprocess
-from shutil import which
 from pathlib import Path
-from typing import Optional, List
+from shutil import which
+import subprocess
+from typing import List, Optional
 
 
 def setup_logging(level=logging.INFO):
     """设置日志"""
     logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        level=level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'
     )
 
 

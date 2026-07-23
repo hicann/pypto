@@ -58,9 +58,7 @@ def _validate_positive_int(value: Any, parameter_name: str, axis: int, *, source
             f"got {type(value).__name__}"
         )
     if value <= 0:
-        raise ValueError(
-            f"Tensor parameter '{parameter_name}' axis {axis} {source} must be positive, got {value}"
-        )
+        raise ValueError(f"Tensor parameter '{parameter_name}' axis {axis} {source} must be positive, got {value}")
     return value
 
 
@@ -176,8 +174,7 @@ class TensorShapeSpec:
     ) -> "TensorShapeSpec":
         if not isinstance(shape, (list, tuple)):
             raise TypeError(
-                f"Tensor parameter '{parameter_name}' shape must be a list or tuple, "
-                f"got {type(shape).__name__}"
+                f"Tensor parameter '{parameter_name}' shape must be a list or tuple, got {type(shape).__name__}"
             )
 
         dimensions: list[DimensionSpec] = []
@@ -261,9 +258,7 @@ class TensorShapeSpec:
                 bound.append(BoundDimension(axis, dynamic_name=spec.name))
                 continue
             if actual is None:
-                raise ValueError(
-                    f"static_shapes must provide tensor parameter '{self.parameter_name}' axis {axis}"
-                )
+                raise ValueError(f"static_shapes must provide tensor parameter '{self.parameter_name}' axis {axis}")
             bound.append(BoundDimension(axis, value=actual[axis], is_static=True))
         return BoundTensorShape(self.parameter_name, self.parameter_index, tuple(bound))
 
@@ -352,8 +347,7 @@ class KernelSignatureSpec:
     ) -> BoundKernelSignature:
         if static_shapes is not None and not isinstance(static_shapes, Mapping):
             raise TypeError(
-                f"static_shapes must be a mapping from parameter name to shape, "
-                f"got {type(static_shapes).__name__}"
+                f"static_shapes must be a mapping from parameter name to shape, got {type(static_shapes).__name__}"
             )
         provided = dict(static_shapes or {})
         known_names = {tensor.parameter_name for tensor in self.tensors}

@@ -15,8 +15,8 @@ framework intercepts the call only when at least one SymbolicScalar is present.
 """
 
 import ast
-import pypto
 
+import pypto
 from pypto.frontend.parser.diagnostics import Diagnostics, Source
 from pypto.frontend.parser.evaluator import ExprEvaluator
 
@@ -48,9 +48,7 @@ def _assert_min_result(
         )
 
     if expected_value is not None:
-        assert result == expected_value, (
-            f"Value mismatch: expected {expected_value!r}, got {result!r}"
-        )
+        assert result == expected_value, f"Value mismatch: expected {expected_value!r}, got {result!r}"
 
 
 def test_min_dispatch_expr_evaluator_builtin_cases():

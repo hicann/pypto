@@ -9,14 +9,14 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
+from dataclasses import dataclass
+import json
 import logging
 import os
-import json
 import pathlib
 from typing import Callable, Dict, List, Union
-from dataclasses import dataclass
-import pandas as pd
 
+import pandas as pd
 from test_case_desc import TensorDesc, TestCaseDesc
 from test_case_tools import parse_list_str, str_to_bool
 
@@ -123,9 +123,7 @@ class TestCaseCreator:
         if isinstance(view_shape[0], (list, tuple)) and len(view_shape[0]) > 1:
             view_shape = view_shape[0]
         tile_shape = parse_list_str(row_data.pop("tile_shape"))
-        params = {
-            k: None if pd.isna(v) or pd.isnull(v) else v for k, v in row_data.items()
-        }
+        params = {k: None if pd.isna(v) or pd.isnull(v) else v for k, v in row_data.items()}
         # case_index, case_name, operation not need
         params.pop("case_index")
         params.pop("case_name")
@@ -167,9 +165,7 @@ class TestCaseCreator:
                 with open(json_file, "w", encoding="utf-8") as outfile:
                     json.dump(row_data, outfile, ensure_ascii=False, indent=4)
             except Exception as e:
-                logging.error(
-                    "Exception occur when writing %s, exception is %s.", json_file, e
-                )
+                logging.error("Exception occur when writing %s, exception is %s.", json_file, e)
             test_case["json_file"] = json_file
         return test_case
 
@@ -189,18 +185,13 @@ class FileReader:
             return None
 
         data_frames = (
-            self.load_test_cases_from_csv()
-            if self._file_name.endswith(".csv")
-            else self.load_test_cases_from_excel()
+            self.load_test_cases_from_csv() if self._file_name.endswith(".csv") else self.load_test_cases_from_excel()
         )
 
         if data_frames is None or len(data_frames) == 0:
             return []
 
-        data_frames = [
-            self.test_case_data_cleaning(data_frame, self._op[0])
-            for data_frame in data_frames
-        ]
+        data_frames = [self.test_case_data_cleaning(data_frame, self._op[0]) for data_frame in data_frames]
         return pd.concat(
             data_frames,
             ignore_index=True,
@@ -217,9 +208,7 @@ class FileReader:
     def load_test_cases_from_excel(self) -> list:
         data_frames = []
         file_handler = pd.ExcelFile(self._file_name)
-        sheet_names = (
-            self._op if self._op is not None else list(file_handler.sheet_names)
-        )
+        sheet_names = self._op if self._op is not None else list(file_handler.sheet_names)
         for sheet_name in sheet_names:
             df = pd.read_excel(file_handler, sheet_name=sheet_name)
             if "operation" not in df.columns:
@@ -239,22 +228,16 @@ class FileReader:
             self._start_index = 0
         case_cnt = len(data_frame)
         if self._start_index >= case_cnt:
-            logging.info(
-                f"The start index [{self._start_index}] exceeds the max index[{case_cnt - 1}]."
-            )
+            logging.info(f"The start index [{self._start_index}] exceeds the max index[{case_cnt - 1}].")
             return False
         if self._end_index < 0 or self._end_index >= case_cnt:
             self._end_index = case_cnt
 
         data_frame = data_frame.iloc[self._start_index:self._end_index + 1]
         if "skip" in data_frame.columns:
-            data_frame = data_frame.query(
-                "skip != 1 and skip != '1' and skip != True and skip != 'TRUE'"
-            )
+            data_frame = data_frame.query("skip != 1 and skip != '1' and skip != True and skip != 'TRUE'")
         if "enable" in data_frame.columns:
-            data_frame = data_frame.query(
-                "(enable == 1 or enable == '1' or enable == True or enable == 'TRUE')"
-            )
+            data_frame = data_frame.query("(enable == 1 or enable == '1' or enable == True or enable == 'TRUE')")
         data_frame.query(f"operation == '{op}'")
         return data_frame
 
@@ -289,9 +272,7 @@ class JsonWriter:
 
 
 class TestCaseLoader:
-    def __init__(
-        self, file_path: str, op: str, index_range: list, model: bool, json_path: str
-    ):
+    def __init__(self, file_path: str, op: str, index_range: list, model: bool, json_path: str):
         self._path = file_path
         self._op = op
         self._index_range = index_range

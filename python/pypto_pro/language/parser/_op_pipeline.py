@@ -14,7 +14,6 @@ from __future__ import annotations
 from pypto.pypto_impl.backend import BackendCCE
 from pypto.pypto_impl.ir import MemorySpace, PipeType
 
-
 _BLOCK_OP_ALIASES: dict[str, str] = {
     "and_": "and",
     "eq": "cmp",
@@ -121,7 +120,6 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "move": ["W", "R"],  # move(out, src, ...)
     "move_fp": ["W", "R", "R"],  # move_fp(out, src, fp_tile)
     "insert": ["W", "R"],  # insert(out, src, ...)
-
     # ===== Matmul =====
     "matmul": ["W", "R", "R"],  # matmul(out, lhs, rhs)
     "matmul_acc": ["W", "RW", "R", "R"],  # matmul_acc(out, acc, lhs, rhs)
@@ -129,7 +127,6 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "gemv": ["W", "R", "R"],
     "gemv_acc": ["W", "RW", "R", "R"],
     "gemv_bias": ["W", "R", "R", "R"],
-
     # ===== Binary element-wise =====
     "add": ["W", "R", "R"],
     "sub": ["W", "R", "R"],
@@ -145,7 +142,6 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "shr": ["W", "R", "R"],
     "lrelu": ["W", "R", "R"],
     "prelu": ["W", "R", "R", None],
-
     # ===== Tile-scalar (rhs is scalar, not tile) =====
     "adds": ["W", "R", None],
     "subs": ["W", "R", None],
@@ -159,7 +155,6 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "shrs": ["W", "R", None],
     "maxs": ["W", "R", None],
     "mins": ["W", "R", None],
-
     # ===== Unary =====
     "neg": ["W", "R"],
     "exp": ["W", "R"],
@@ -170,16 +165,13 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "abs": ["W", "R"],
     "relu": ["W", "R"],
     "not_": ["W", "R"],
-
     # ===== Type cast =====
     "cast": ["W", "R"],  # cast(out, src, *, mode)
-
     # ===== Ternary =====
     "addc": ["W", "R", "R", "R"],
     "subc": ["W", "R", "R", "R"],
     "addsc": ["W", "R", None, "R"],
     "subsc": ["W", "R", None, "R"],
-
     # ===== Select / compare =====
     "select": ["W", "R", "R", "R", None],
     "eq": ["W", "R", "R"],
@@ -188,7 +180,6 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "le": ["W", "R", "R"],
     "gt": ["W", "R", "R"],
     "ge": ["W", "R", "R"],
-
     # ===== Reduce (unified: dim=0 → row, dim=1 → col) =====
     "sum": ["W", "R", None],
     "argmax": ["W", "R", None],
@@ -206,12 +197,10 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "row_expand_binop": ["W", "R", "R"],
     "col_expand_binop": ["W", "R", "R"],
     "expands": ["W", None],
-
     # ===== Layout =====
     "reshape": ["W", "R", None],
     "transpose": ["W", "R"],
     "ub_copy": ["W", "R"],
-
     # ===== Fill =====
     "full": ["W", None],
     "fillpad": ["W", "R"],

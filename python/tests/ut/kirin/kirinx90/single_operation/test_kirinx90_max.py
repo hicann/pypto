@@ -13,9 +13,8 @@
 Test max codegen for KirinX90
 """
 
+from kirin.common_max import TEST_CASES, create_test_max_module, run_max_test
 import pytest
-from kirin.common_max import create_test_max_module, run_max_test, TEST_CASES
-
 
 KERNELS, _ = create_test_max_module("KirinX90")
 

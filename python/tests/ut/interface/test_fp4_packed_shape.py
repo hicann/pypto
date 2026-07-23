@@ -12,12 +12,11 @@
 Verify that a packed FP4x2 uint8 input is exposed as DT_FP4_E2M1 with logical K * 2 shape in kernel.
 """
 
-import os
 from contextlib import contextmanager
 
-import pypto
 import torch
 
+import pypto
 
 M = 64
 PACKED_K = 32
@@ -35,8 +34,8 @@ def npuarch(arch: str):
 
 
 @pypto.frontend.jit(
-    runtime_options={"run_mode": pypto.RunMode.SIM},
-    host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH})
+    runtime_options={"run_mode": pypto.RunMode.SIM}, host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
+)
 def fp4_kernel(
     x: pypto.Tensor([], pypto.DT_FP4_E2M1),
     out: pypto.Tensor([], pypto.DT_INT32),
@@ -58,8 +57,8 @@ def test_fp4x2_to_fp4_logical_shape():
 
 
 @pypto.frontend.jit(
-    runtime_options={"run_mode": pypto.RunMode.SIM},
-    host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH})
+    runtime_options={"run_mode": pypto.RunMode.SIM}, host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
+)
 def fp4x2_kernel(
     x: pypto.Tensor([], pypto.DT_FP4_E2M1X2),
     out: pypto.Tensor([], pypto.DT_INT32),

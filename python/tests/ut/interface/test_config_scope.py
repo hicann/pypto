@@ -10,8 +10,9 @@
 # -----------------------------------------------------------------------------------------------------------
 """Test pypto.frontend.jit config scope behavior."""
 
-import pypto
 import torch
+
+import pypto
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": 1})
@@ -24,13 +25,13 @@ def kernel_with_dynamic(
     assert 1 == pypto.get_debug_options().get("compile_debug_mode")
     assert ["RemoveRedundantReshape", "InferMemoryConflict"] == pypto.get_debug_options().get("dump_pass_graph")
 
-    assert True == pypto.get_codegen_options().get("support_dynamic_aligned")
+    assert pypto.get_codegen_options().get("support_dynamic_aligned")
     assert {1: 4} == pypto.get_pass_options().get("cube_l1_reuse_setting")
 
     pypto.set_vec_tile_shapes(16, 16)
     for idx in pypto.loop(a.shape[0], name="LOOP", idx_name="k"):
-        temp = a[idx: idx + 1, :]
-        out[idx: idx + 1, :] = temp + 1
+        temp = a[idx:idx + 1, :]
+        out[idx:idx + 1, :] = temp + 1
 
 
 def test_config_scope():

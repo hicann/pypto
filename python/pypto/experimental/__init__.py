@@ -10,13 +10,13 @@
 # -----------------------------------------------------------------------------------------------------------
 """ """
 
+from .gather import gather_in_l1, gather_in_ub  # noqa: F401
 from .operation import (
-    transposed_batchmatmul,
-    set_operation_options,
-    get_operation_options,
-    online_softmax,
-    online_softmax_update,
-    nop,
+    get_operation_options,  # noqa: F401
+    nop,  # noqa: F401
+    online_softmax,  # noqa: F401
+    online_softmax_update,  # noqa: F401
+    set_operation_options,  # noqa: F401
+    transposed_batchmatmul,  # noqa: F401
 )
-from .gather import gather_in_l1, gather_in_ub
-from .shmem import shmem_store, shmem_load
+from .shmem import shmem_load, shmem_store  # noqa: F401

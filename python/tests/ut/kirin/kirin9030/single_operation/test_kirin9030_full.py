@@ -12,14 +12,12 @@
 Test full codegen for Kirin9030
 """
 
-import pytest
-
 from kirin.common_full import (
+    TEST_CASES,
     create_full_kernels,
     run_full_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_full_kernels("Kirin9030")
 

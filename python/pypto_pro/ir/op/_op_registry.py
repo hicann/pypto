@@ -22,7 +22,6 @@ from __future__ import annotations
 import ast
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
 
 from pypto.pypto_impl import ir as _ir_core
 
@@ -35,11 +34,13 @@ def op_impl(name: str) -> Callable:
     Decorated functions receive ``(self, call: ast.Call) -> ir.Expr`` where
     ``self`` is the ``CallParserMixin`` (i.e. ``ASTParser``) instance.
     """
+
     def decorator(func: Callable) -> Callable:
         if name in _OP_REGISTRY:
             raise ValueError(f"Duplicate op_impl registration: '{name}'")
         _OP_REGISTRY[name] = func
         return func
+
     return decorator
 
 
@@ -56,6 +57,7 @@ class OpSpec:
         pre_hooks: Callables ``(self, call, kwargs) -> None`` invoked on the
             kwargs dict before forwarding to the builder.
     """
+
     builder: Callable | None = None
     ir_name: str | None = None
     parse_args: bool = True
@@ -65,6 +67,7 @@ class OpSpec:
 
 def _make_handler(spec: OpSpec) -> Callable:
     """Generate a unified parse handler from an OpSpec."""
+
     def handler(self, call: ast.Call):
         span = self.span_tracker.get_span(call)
         args = [self.parse_expression(a) for a in call.args] if spec.parse_args else []
@@ -74,6 +77,7 @@ def _make_handler(spec: OpSpec) -> Callable:
         if spec.builder is not None:
             return spec.builder(*args, **kwargs, span=span)
         return _ir_core.create_op_call(spec.ir_name, args, kwargs, span)
+
     return handler
 
 

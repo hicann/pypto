@@ -8,14 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import logging
 from math import ceil, prod
 from pathlib import Path
 import sys
+
 import numpy as np
 import torch
+
 import pypto
 
 helper_path: Path = Path(
@@ -24,9 +26,9 @@ helper_path: Path = Path(
 ).resolve()
 if str(helper_path) not in sys.path:
     sys.path.append(str(helper_path))
-from test_case_desc import TensorDesc
-from test_case_runner import TestCaseRunner
-from test_case_tools import get_dtype_by_name
+from test_case_desc import TensorDesc  # noqa: E402
+from test_case_runner import TestCaseRunner  # noqa: E402
+from test_case_tools import get_dtype_by_name  # noqa: E402
 
 
 def get_pto_dtype_by_name(name: str):
@@ -68,19 +70,15 @@ class PTOTestCaseRunner(TestCaseRunner):
         super().__init__(view_shape, tile_shape, params)
         self._operation = operation
         self._input_tensors = [
-            TensorDesc.from_dict(tensor) if isinstance(tensor, dict) else tensor
-            for tensor in input_tensors
+            TensorDesc.from_dict(tensor) if isinstance(tensor, dict) else tensor for tensor in input_tensors
         ]
         self._output_tensors = [
-            TensorDesc.from_dict(tensor) if isinstance(tensor, dict) else tensor
-            for tensor in output_tensors
+            TensorDesc.from_dict(tensor) if isinstance(tensor, dict) else tensor for tensor in output_tensors
         ]
 
     def gen_loop_range_tuple(self):
         if len(self._input_tensors[0].shape) != len(self._view_shape):
-            raise ValueError(
-                "The lengths of input tensors and view shape are not same."
-            )
+            raise ValueError("The lengths of input tensors and view shape are not same.")
         return tuple(
             [
                 ceil(self._input_tensors[0].shape[index] / self._view_shape[index])
@@ -105,9 +103,9 @@ class PTOTestCaseRunner(TestCaseRunner):
             max_value = input_tensor.data_range.max
             data = None
             if min_value != max_value:
-                data = np.random.uniform(
-                    min_value, max_value, prod(input_tensor.shape)
-                ).astype(get_dtype_by_name(input_tensor.dtype))
+                data = np.random.uniform(min_value, max_value, prod(input_tensor.shape)).astype(
+                    get_dtype_by_name(input_tensor.dtype)
+                )
             else:
                 data = np.full(
                     prod(input_tensor.shape),
@@ -159,37 +157,24 @@ class PTOTestCaseRunner(TestCaseRunner):
         loop_range_len = len(loop_range_tuple)
         prefix = tab * (loop_range_len + 1)
         function += prefix + "input_data = []\n"
-        view_offset = [
-            f"index_{index} * {self._view_shape[index]}"
-            for index, _ in enumerate(loop_range_tuple)
-        ]
+        view_offset = [f"index_{index} * {self._view_shape[index]}" for index, _ in enumerate(loop_range_tuple)]
         for index, tensor in enumerate(input_tensors):
             function += prefix
-            view_shape = [
-                min(dim, view_dim)
-                for dim, view_dim in zip(tensor.shape, self._view_shape)
-            ]
-            view_offset = [
-                "0" if dim == 1 else offset
-                for dim, offset in zip(tensor.shape, view_offset)
-            ]
-            function += (
-                f"input_{index} = pypto.view(input_tensors[{index}], {view_shape}, ["
-            )
+            view_shape = [min(dim, view_dim) for dim, view_dim in zip(tensor.shape, self._view_shape)]
+            view_offset = ["0" if dim == 1 else offset for dim, offset in zip(tensor.shape, view_offset)]
+            function += f"input_{index} = pypto.view(input_tensors[{index}], {view_shape}, ["
             for offset in view_offset:
                 function += offset + ", "
             function += "])\n"
             function += prefix + f"input_data.append(input_{index})\n"
-        function += prefix + f"res = []\n"
-        function += prefix + f"for _ in enumerate(output_tensors):\n"
-        function += prefix + f"    res.append(pypto.tensor())\n"
-        function += prefix + f"if len(res) == 1:\n"
-        function += prefix + f"    res[0].move(op_func(input_data, params))\n"
-        function += prefix + f"else:\n"
-        function += (
-            prefix + f"    for dst_, src_ in zip(res, op_func(input_data, params)):\n"
-        )
-        function += prefix + f"        dst_.move(src_)\n"
+        function += prefix + "res = []\n"
+        function += prefix + "for _ in enumerate(output_tensors):\n"
+        function += prefix + "    res.append(pypto.tensor())\n"
+        function += prefix + "if len(res) == 1:\n"
+        function += prefix + "    res[0].move(op_func(input_data, params))\n"
+        function += prefix + "else:\n"
+        function += prefix + "    for dst_, src_ in zip(res, op_func(input_data, params)):\n"
+        function += prefix + "        dst_.move(src_)\n"
         if self._operation == "Transpose":
             (
                 view_offset[self._params["first_dim"]],
@@ -199,7 +184,7 @@ class PTOTestCaseRunner(TestCaseRunner):
                 view_offset[self._params["first_dim"]],
             )
         function += prefix + "for dst_, src_ in zip(output_tensors, res):\n"
-        function += prefix + f"    pypto.assemble(src_, ["
+        function += prefix + "    pypto.assemble(src_, ["
         for offset in view_offset:
             function += offset + ", "
         function += "], dst_)\n"

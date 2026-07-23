@@ -14,20 +14,23 @@
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import math
-import sys
+
 import logging
+import math
 from pathlib import Path
+import sys
 from typing import List
+
+from ml_dtypes import bfloat16
 import numpy as np
 import torch
-from ml_dtypes import bfloat16
 
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -88,13 +91,13 @@ def gen_post_data(output_dir: Path, params, dtype, pa_out=None, is_quant=True, i
     cast1_path = Path(output_dir, 'cast1.bin')
     w_uv_path = Path(output_dir, 'w_uv.bin')
     w_uv_scale_w_path = Path(output_dir, 'w_uv_scale_w.bin')
-    cast0_out_path = Path(output_dir, 'cast0_out.bin')
-    abs_out_path = Path(output_dir, 'abs_out.bin')
-    mul0_out_path = Path(output_dir, 'mul0_out.bin')
-    rms_out_path = Path(output_dir, 'rms_out.bin')
-    quant1_int8_path = Path(output_dir, 'quant0_int8.bin')
-    quant1_fp32_path = Path(output_dir, 'quant0_fp32.bin')
-    bmm4_int32_path = Path(output_dir, 'bmm4_int32.bin')
+    _cast0_out_path = Path(output_dir, 'cast0_out.bin')
+    _abs_out_path = Path(output_dir, 'abs_out.bin')
+    _mul0_out_path = Path(output_dir, 'mul0_out.bin')
+    _rms_out_path = Path(output_dir, 'rms_out.bin')
+    _quant1_int8_path = Path(output_dir, 'quant0_int8.bin')
+    _quant1_fp32_path = Path(output_dir, 'quant0_fp32.bin')
+    _bmm4_int32_path = Path(output_dir, 'bmm4_int32.bin')
     bmm4_path = Path(output_dir, 'bmm4.bin')
     t3_path = Path(output_dir, 't3.bin')
     r2_path = Path(output_dir, 'r2.bin')
@@ -103,7 +106,7 @@ def gen_post_data(output_dir: Path, params, dtype, pa_out=None, is_quant=True, i
     w_o_scale_w_path = Path(output_dir, 'w_o_scale_w.bin')
     bmm5_path = Path(output_dir, 'bmm5.bin')
     attn_output_path = Path(output_dir, 'attn_output.bin')
-    complete = (params_path.exists() and input_path.exists() and attn_output_path.exists())
+    complete = params_path.exists() and input_path.exists() and attn_output_path.exists()
     complete = False
 
     if complete:
@@ -137,7 +140,7 @@ def gen_post_data(output_dir: Path, params, dtype, pa_out=None, is_quant=True, i
         w_uv_scale_w.tofile(w_uv_scale_w_path)
 
         w_o.tofile(w_o_nd_path)  # ND
-        w_o_nz = np.reshape(w_o, (input_n * v_head_dim, input_h // 32, 32)) # INT8
+        w_o_nz = np.reshape(w_o, (input_n * v_head_dim, input_h // 32, 32))  # INT8
         w_o_nz = np.transpose(w_o_nz, (1, 0, 2))
         w_o_nz.tofile(w_o_path)  # NZ
 
@@ -193,9 +196,7 @@ def gen_pa_uniform_data(data_shape, min_value, max_value, dtype):
         return np.zeros(data_shape, dtype=dtype)
     if dtype == np.bool_:
         return np.random.choice([True, False], size=data_shape)
-    return np.random.uniform(low=min_value, high=max_value, size=data_shape).astype(
-        dtype
-    )
+    return np.random.uniform(low=min_value, high=max_value, size=data_shape).astype(dtype)
 
 
 def trans_pa_bnsd_to_bsh(tensor, shape):
@@ -210,8 +211,18 @@ def trans_pa_bnsd_to_bsh(tensor, shape):
         return tensor
 
 
-def gen_pa_data(output_dir: Path, params, dtype, q_out, q_rope_out, kv_cache_out, kr_cache_out, block_size=4096,
-                n_tile=128, is_nz=False):
+def gen_pa_data(
+    output_dir: Path,
+    params,
+    dtype,
+    q_out,
+    q_rope_out,
+    kv_cache_out,
+    kr_cache_out,
+    block_size=4096,
+    n_tile=128,
+    is_nz=False,
+):
     np.random.seed(0)
 
     # b, n_q, skv, s_q, n_kv, kv_lora_rank, qk_rope_dim = params
@@ -232,7 +243,7 @@ def gen_pa_data(output_dir: Path, params, dtype, q_out, q_rope_out, kv_cache_out
     # v head dim
     d_v = kv_lora_rank
 
-    scalar = d_q ** -0.5
+    scalar = d_q**-0.5
 
     if isinstance(skv, int):
         actual_seq_len = [skv] * b
@@ -301,7 +312,7 @@ def gen_pa_data(output_dir: Path, params, dtype, q_out, q_rope_out, kv_cache_out
     block_table_batch_idx = 0
     for idx in block_num_per_batch:
         for j in range(idx):
-            block_table[block_table_batch_idx][j] = (block_idx_list[block_idx])
+            block_table[block_table_batch_idx][j] = block_idx_list[block_idx]
             block_idx += 1
         block_table_batch_idx += 1
     logging.debug("block_table %s", block_table)
@@ -329,9 +340,11 @@ def gen_pa_data(output_dir: Path, params, dtype, q_out, q_rope_out, kv_cache_out
                 continue
             else:
                 k_cache[kv_cache_blk_id, 0:block_size, :] = k_tensor_bsh[
-                                                            b_idx, block_offset:(block_offset + block_size), :]
+                    b_idx, block_offset:(block_offset + block_size), :
+                ]
                 v_cache[kv_cache_blk_id, 0:block_size, :] = v_tensor_bsh[
-                                                            b_idx, block_offset:(block_offset + block_size), :]
+                    b_idx, block_offset:(block_offset + block_size), :
+                ]
     # calculate result
     attent_out = np.zeros(atten_out_shape, dtype=np.float32)
     # 处理连续场景：将单个tensor依据B值拆成列表
@@ -360,21 +373,22 @@ def gen_pa_data(output_dir: Path, params, dtype, q_out, q_rope_out, kv_cache_out
         attent_out[b_index:(b_index + 1), :, :, :] = bmm2_res
     attent_out = np.reshape(attent_out, (b * n_q * s_q, d_v))
 
-
     # data split to [nope + rope]
-    q_nope = q_bnsd[:, :, :, : kv_lora_rank]
+    q_nope = q_bnsd[:, :, :, :kv_lora_rank]
     q_rope = q_bnsd[:, :, :, kv_lora_rank:]
 
     # BBH split [B B kv_lora_rank]  + [B B rope]
     k_cache_nope_h = kv_lora_rank * n_kv
-    k_cache_nope = k_cache[:, :, : k_cache_nope_h]
+    k_cache_nope = k_cache[:, :, :k_cache_nope_h]
     k_cache_rope = k_cache[:, :, k_cache_nope_h:]
 
     # NZ 支持bf16/fp16的 NZ
-    k_cache_nope_nz = k_cache_nope.reshape(k_cache_nope.shape[0], k_cache_nope.shape[1], k_cache_nope.shape[2] // 16,
-                                           16)
-    k_cache_rope_nz = k_cache_rope.reshape(k_cache_rope.shape[0], k_cache_rope.shape[1], k_cache_rope.shape[2] // 16,
-                                           16)
+    k_cache_nope_nz = k_cache_nope.reshape(
+        k_cache_nope.shape[0], k_cache_nope.shape[1], k_cache_nope.shape[2] // 16, 16
+    )
+    k_cache_rope_nz = k_cache_rope.reshape(
+        k_cache_rope.shape[0], k_cache_rope.shape[1], k_cache_rope.shape[2] // 16, 16
+    )
     v_cache_nz = v_cache.reshape(v_cache.shape[0], v_cache.shape[1], v_cache.shape[2] // 16, 16)
 
     k_cache_nope_nz = np.transpose(k_cache_nope_nz, (0, 2, 1, 3))
@@ -402,13 +416,13 @@ def gen_pa_data(output_dir: Path, params, dtype, q_out, q_rope_out, kv_cache_out
     v_cache.tofile(v_cache_path)
 
     k_cache_nope_nz_path = Path(output_dir, 'k_cache_nope_nz.bin')
-    k_cache_nope_nz.tofile(k_cache_nope_nz_path )
+    k_cache_nope_nz.tofile(k_cache_nope_nz_path)
 
     kv_cache_nope_nz_path = Path(output_dir, 'kv_cache_nope_nz.bin')
     k_cache_nope_nz.tofile(kv_cache_nope_nz_path)
 
     k_cache_rope_nz_path = Path(output_dir, 'k_cache_rope_nz.bin')
-    k_cache_rope_nz.tofile(k_cache_rope_nz_path )
+    k_cache_rope_nz.tofile(k_cache_rope_nz_path)
 
     v_cache_nz_path = Path(output_dir, 'v_cache_nz.bin')
     v_cache_nz.tofile(v_cache_nz_path)
@@ -458,10 +472,20 @@ def gen_data_func_bf16(shape_size, dtype, case_name: str, output: Path):
     w_o_path = Path(output, 'w_o.bin')
     bmm5_path = Path(output, 'bmm5.bin')
     attn_output_path = Path(output, 'attn_output.bin')
-    complete = (params_path.exists() and input_path.exists() and t1_path.exists()
-                and r1_path.exists() and t2_path.exists() and w_uv_path.exists()
-                and bmm4_path.exists() and t3_path.exists() and r2_path.exists()
-                and w_o_path.exists() and attn_output_path.exists() and bmm5_path.exists())
+    complete = (
+        params_path.exists()
+        and input_path.exists()
+        and t1_path.exists()
+        and r1_path.exists()
+        and t2_path.exists()
+        and w_uv_path.exists()
+        and bmm4_path.exists()
+        and t3_path.exists()
+        and r2_path.exists()
+        and w_o_path.exists()
+        and attn_output_path.exists()
+        and bmm5_path.exists()
+    )
     if complete:
         logging.debug("Case(%s), Golden complete.", case_name)
     else:
@@ -472,8 +496,9 @@ def gen_data_func_bf16(shape_size, dtype, case_name: str, output: Path):
             dtype_num = 1
         elif dtype == torch.bfloat16:
             dtype_num = 2
-        params = torch.tensor([input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim, dtype_num],
-                              dtype=torch.int64)
+        params = torch.tensor(
+            [input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim, dtype_num], dtype=torch.int64
+        )
 
         input_t = torch.randn([input_b, input_n, input_s, kv_lora_rank], dtype=dtype)  # [32, 32, 1, 512]
         w_uv = torch.randn([input_n, kv_lora_rank, v_head_dim], dtype=dtype)  # [32, 512, 128]
@@ -554,13 +579,13 @@ def gen_data_func_bf16_quant_dynamic(shape_size, dtype, case_name: str, output: 
     cast1_path = Path(output, 'cast1.bin')
     w_uv_path = Path(output, 'w_uv.bin')
     w_uv_scale_w_path = Path(output, 'w_uv_scale_w.bin')
-    cast0_out_path = Path(output, 'cast0_out.bin')
-    abs_out_path = Path(output, 'abs_out.bin')
-    mul0_out_path = Path(output, 'mul0_out.bin')
-    rms_out_path = Path(output, 'rms_out.bin')
-    quant1_int8_path = Path(output, 'quant0_int8.bin')
-    quant1_fp32_path = Path(output, 'quant0_fp32.bin')
-    bmm4_int32_path = Path(output, 'bmm4_int32.bin')
+    _cast0_out_path = Path(output, 'cast0_out.bin')
+    _abs_out_path = Path(output, 'abs_out.bin')
+    _mul0_out_path = Path(output, 'mul0_out.bin')
+    _rms_out_path = Path(output, 'rms_out.bin')
+    _quant1_int8_path = Path(output, 'quant0_int8.bin')
+    _quant1_fp32_path = Path(output, 'quant0_fp32.bin')
+    _bmm4_int32_path = Path(output, 'bmm4_int32.bin')
     bmm4_path = Path(output, 'bmm4.bin')
     t3_path = Path(output, 't3.bin')
     r2_path = Path(output, 'r2.bin')
@@ -568,10 +593,22 @@ def gen_data_func_bf16_quant_dynamic(shape_size, dtype, case_name: str, output: 
     w_o_scale_w_path = Path(output, 'w_o_scale_w.bin')
     bmm5_path = Path(output, 'bmm5.bin')
     attn_output_path = Path(output, 'attn_output.bin')
-    complete = (params_path.exists() and input_path.exists() and t1_path.exists() and r1_path.exists()
-                and cast1_path.exists() and w_uv_path.exists() and bmm4_path.exists() and t3_path.exists()
-                and r2_path.exists() and w_o_path.exists() and attn_output_path.exists() and bmm5_path.exists()
-                and w_uv_scale_w_path.exists() and w_o_scale_w_path.exists())
+    complete = (
+        params_path.exists()
+        and input_path.exists()
+        and t1_path.exists()
+        and r1_path.exists()
+        and cast1_path.exists()
+        and w_uv_path.exists()
+        and bmm4_path.exists()
+        and t3_path.exists()
+        and r2_path.exists()
+        and w_o_path.exists()
+        and attn_output_path.exists()
+        and bmm5_path.exists()
+        and w_uv_scale_w_path.exists()
+        and w_o_scale_w_path.exists()
+    )
     complete = False
     if complete:
         logging.debug("Case(%s), Golden complete.", case_name)
@@ -583,8 +620,9 @@ def gen_data_func_bf16_quant_dynamic(shape_size, dtype, case_name: str, output: 
             dtype_num = 1
         elif dtype == torch.bfloat16:
             dtype_num = 2
-        params = torch.tensor([input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim, dtype_num],
-                              dtype=torch.int64)
+        params = torch.tensor(
+            [input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim, dtype_num], dtype=torch.int64
+        )
 
         input_t = torch.randn([input_b * input_n * input_s, kv_lora_rank], dtype=torch.float32)
         w_uv = torch.randn([input_n, kv_lora_rank, v_head_dim], dtype=dtype)
@@ -643,13 +681,13 @@ def gen_data_func_bf16_quant_dynamic_cast(shape_size, dtype, case_name: str, out
     cast1_path = Path(output, 'cast1.bin')
     w_uv_path = Path(output, 'w_uv.bin')
     w_uv_scale_w_path = Path(output, 'w_uv_scale_w.bin')
-    cast0_out_path = Path(output, 'cast0_out.bin')
-    abs_out_path = Path(output, 'abs_out.bin')
-    mul0_out_path = Path(output, 'mul0_out.bin')
-    rms_out_path = Path(output, 'rms_out.bin')
-    quant1_int8_path = Path(output, 'quant0_int8.bin')
-    quant1_fp32_path = Path(output, 'quant0_fp32.bin')
-    bmm4_int32_path = Path(output, 'bmm4_int32.bin')
+    _cast0_out_path = Path(output, 'cast0_out.bin')
+    _abs_out_path = Path(output, 'abs_out.bin')
+    _mul0_out_path = Path(output, 'mul0_out.bin')
+    _rms_out_path = Path(output, 'rms_out.bin')
+    _quant1_int8_path = Path(output, 'quant0_int8.bin')
+    _quant1_fp32_path = Path(output, 'quant0_fp32.bin')
+    _bmm4_int32_path = Path(output, 'bmm4_int32.bin')
     bmm4_path = Path(output, 'bmm4.bin')
     t3_path = Path(output, 't3.bin')
     r2_path = Path(output, 'r2.bin')
@@ -658,13 +696,22 @@ def gen_data_func_bf16_quant_dynamic_cast(shape_size, dtype, case_name: str, out
     w_o_scale_w_path = Path(output, 'w_o_scale_w.bin')
     bmm5_path = Path(output, 'bmm5.bin')
     attn_output_path = Path(output, 'attn_output.bin')
-    complete = (params_path.exists() and input_path.exists()
-                and t1_path.exists() and r1_path.exists()
-                and cast1_path.exists() and w_uv_path.exists()
-                and bmm4_path.exists() and t3_path.exists()
-                and r2_path.exists() and w_o_path.exists()
-                and attn_output_path.exists() and bmm5_path.exists()
-                and w_uv_scale_w_path.exists() and w_o_scale_w_path.exists())
+    complete = (
+        params_path.exists()
+        and input_path.exists()
+        and t1_path.exists()
+        and r1_path.exists()
+        and cast1_path.exists()
+        and w_uv_path.exists()
+        and bmm4_path.exists()
+        and t3_path.exists()
+        and r2_path.exists()
+        and w_o_path.exists()
+        and attn_output_path.exists()
+        and bmm5_path.exists()
+        and w_uv_scale_w_path.exists()
+        and w_o_scale_w_path.exists()
+    )
     complete = False
     if complete:
         logging.debug("Case(%s), Golden complete.", case_name)
@@ -676,8 +723,9 @@ def gen_data_func_bf16_quant_dynamic_cast(shape_size, dtype, case_name: str, out
             dtype_num = 1
         elif dtype == torch.bfloat16:
             dtype_num = 2
-        params = torch.tensor([input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim, dtype_num],
-                              dtype=torch.int64)
+        params = torch.tensor(
+            [input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim, dtype_num], dtype=torch.int64
+        )
 
         input_t = torch.randn([input_b * input_n * input_s, kv_lora_rank], dtype=torch.float32)
         w_uv = torch.randn([input_n, kv_lora_rank, v_head_dim], dtype=dtype)
@@ -738,13 +786,13 @@ def gen_data_func_bf16_quant_onlymm5(shape_size, dtype, case_name: str, output: 
     t2_path = Path(output, 't2.bin')
     w_uv_path = Path(output, 'w_uv.bin')
     w_uv_scale_w_path = Path(output, 'w_uv_scale_w.bin')
-    cast0_out_path = Path(output, 'cast0_out.bin')
-    abs_out_path = Path(output, 'abs_out.bin')
-    mul0_out_path = Path(output, 'mul0_out.bin')
-    rms_out_path = Path(output, 'rms_out.bin')
-    quant1_int8_path = Path(output, 'quant0_int8.bin')
-    quant1_fp32_path = Path(output, 'quant0_fp32.bin')
-    bmm4_int32_path = Path(output, 'bmm4_int32.bin')
+    _cast0_out_path = Path(output, 'cast0_out.bin')
+    _abs_out_path = Path(output, 'abs_out.bin')
+    _mul0_out_path = Path(output, 'mul0_out.bin')
+    _rms_out_path = Path(output, 'rms_out.bin')
+    _quant1_int8_path = Path(output, 'quant0_int8.bin')
+    _quant1_fp32_path = Path(output, 'quant0_fp32.bin')
+    _bmm4_int32_path = Path(output, 'bmm4_int32.bin')
     bmm4_path = Path(output, 'bmm4.bin')
     t3_path = Path(output, 't3.bin')
     r2_path = Path(output, 'r2.bin')
@@ -752,10 +800,22 @@ def gen_data_func_bf16_quant_onlymm5(shape_size, dtype, case_name: str, output: 
     w_o_scale_w_path = Path(output, 'w_o_scale_w.bin')
     bmm5_path = Path(output, 'bmm5.bin')
     attn_output_path = Path(output, 'attn_output.bin')
-    complete = (params_path.exists() and input_path.exists() and t1_path.exists() and r1_path.exists()
-                and t2_path.exists() and w_uv_path.exists() and bmm4_path.exists() and t3_path.exists()
-                and r2_path.exists() and w_o_path.exists() and attn_output_path.exists() and bmm5_path.exists()
-                and w_uv_scale_w_path.exists() and w_o_scale_w_path.exists())
+    complete = (
+        params_path.exists()
+        and input_path.exists()
+        and t1_path.exists()
+        and r1_path.exists()
+        and t2_path.exists()
+        and w_uv_path.exists()
+        and bmm4_path.exists()
+        and t3_path.exists()
+        and r2_path.exists()
+        and w_o_path.exists()
+        and attn_output_path.exists()
+        and bmm5_path.exists()
+        and w_uv_scale_w_path.exists()
+        and w_o_scale_w_path.exists()
+    )
     complete = False
     if complete:
         logging.debug("Case(%s), Golden complete.", case_name)
@@ -767,8 +827,9 @@ def gen_data_func_bf16_quant_onlymm5(shape_size, dtype, case_name: str, output: 
             dtype_num = 1
         elif dtype == torch.bfloat16:
             dtype_num = 2
-        params = torch.tensor([input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim, dtype_num],
-                              dtype=torch.int64)
+        params = torch.tensor(
+            [input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim, dtype_num], dtype=torch.int64
+        )
 
         input_t = torch.randn([input_b, input_n, input_s, kv_lora_rank], dtype=dtype)
         w_uv = torch.randn([input_n, kv_lora_rank, v_head_dim], dtype=dtype)
@@ -839,9 +900,11 @@ def attention_post_func_torch_bf16(case_name: str, output: Path):
 
 
 def attention_post_func_torch_mm5(case_name: str, output: Path):
-    if (case_name == "OnBoardCostTest.test_attention_post_bf16_real_quant_n128_onlymm5"
-          or case_name == "OnBoardCostTest.test_attention_post_bf16_real_quant_n128_onlymm5K"
-          or case_name == "OnBoardCostTest.test_attention_post_bf16_real_quant_n128_onlymm5He"):
+    if (
+        case_name == "OnBoardCostTest.test_attention_post_bf16_real_quant_n128_onlymm5"
+        or case_name == "OnBoardCostTest.test_attention_post_bf16_real_quant_n128_onlymm5K"
+        or case_name == "OnBoardCostTest.test_attention_post_bf16_real_quant_n128_onlymm5He"
+    ):
         input_b = 32
         input_s = 1
         input_n = 128
@@ -850,10 +913,13 @@ def attention_post_func_torch_mm5(case_name: str, output: Path):
         v_head_dim = 128
         dtype = torch.bfloat16
         # 原torch.float32 torch.float16   torch.bfloat16
-        gen_data_func_bf16_quant_onlymm5((input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim), dtype,
-                                         case_name, output)
-    elif (case_name == "OnBoardCostTest.test_attention_post_bf16_real_quant_batch4_onlymm5"
-          or case_name == "OnBoardCostTest.test_attention_post_bf16_real_quant_batch4_onlymm5K"):
+        gen_data_func_bf16_quant_onlymm5(
+            (input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim), dtype, case_name, output
+        )
+    elif (
+        case_name == "OnBoardCostTest.test_attention_post_bf16_real_quant_batch4_onlymm5"
+        or case_name == "OnBoardCostTest.test_attention_post_bf16_real_quant_batch4_onlymm5K"
+    ):
         input_b = 4
         input_s = 1
         input_n = 32
@@ -862,38 +928,41 @@ def attention_post_func_torch_mm5(case_name: str, output: Path):
         v_head_dim = 128
         dtype = torch.bfloat16
         # 原torch.float32 torch.float16   torch.bfloat16
-        gen_data_func_bf16_quant_onlymm5((input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim), dtype,
-                                         case_name, output)
+        gen_data_func_bf16_quant_onlymm5(
+            (input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim), dtype, case_name, output
+        )
 
 
 def attention_post_func_numpy_b32(case_name: str, output: Path):
-    if (case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nz_splitk"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nz_normal_unsplitk"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nd_splitk"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_r2"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_t3r2"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_crtb4tr"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_r1"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlyt1"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_t1"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlybmm4_fail"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlybmm4"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_bmm4"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_t3"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_quant"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_crtb4tr_quant_fail"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_crtb4tr_quant"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_crtb4trq_mm5nd"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_crtb4trq_mm5ndk"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_unquant_r3"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlymm5_nd"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlymm5_nz"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlymm5_ndk"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_mm5ndk_unquant_r3"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlymm5_nzk"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nd_unsplitk"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nz_unsplitk"):
+    if (
+        case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nz_splitk"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nz_normal_unsplitk"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nd_splitk"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_r2"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_t3r2"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_crtb4tr"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_r1"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlyt1"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_t1"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlybmm4_fail"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlybmm4"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_bmm4"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_t3"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_quant"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_crtb4tr_quant_fail"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_crtb4tr_quant"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_crtb4trq_mm5nd"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_crtb4trq_mm5ndk"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_unquant_r3"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlymm5_nd"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlymm5_nz"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlymm5_ndk"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_mm5ndk_unquant_r3"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_cast_first_onlymm5_nzk"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nd_unsplitk"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nz_unsplitk"
+    ):
         input_b = 32
         input_s = 1
         input_n = 128
@@ -913,10 +982,12 @@ def attention_post_func_numpy_b32(case_name: str, output: Path):
 
 
 def attention_post_func_numpy_b4(case_name: str, output: Path):
-    if (case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nz_splitk_low"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nd_splitk_low"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nz_unsplitk_low"
-          or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nd_unsplitk_low"):
+    if (
+        case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nz_splitk_low"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nd_splitk_low"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nz_unsplitk_low"
+        or case_name == "DynamicAttentionPostTest.dynamic_pa_post_new_mm5nd_unsplitk_low"
+    ):
         input_b = 4
         input_s = 1
         input_n = 32
@@ -980,8 +1051,6 @@ def attention_post_func_numpy_b4(case_name: str, output: Path):
         "DynamicAttentionPostTest.dynamic_pa_papost_bf16_b48",
     ]
 )
-
-
 def attention_post_func(case_name: str, output: Path) -> bool:
     attention_post_func_torch_bf16(case_name, output)
     attention_post_func_torch_mm5(case_name, output)
@@ -996,9 +1065,10 @@ def attention_post_func(case_name: str, output: Path) -> bool:
         v_head_dim = 128
         dtype = torch.bfloat16
         # 原torch.float32 torch.float16   torch.bfloat16  hehre
-        gen_data_func_bf16_quant_dynamic_cast((input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim),
-                                              dtype, case_name, output)
-    elif (case_name == "DynamicAttentionPostTest.dynamic_pa_papost_bf16_b48"):
+        gen_data_func_bf16_quant_dynamic_cast(
+            (input_b, input_s, input_n, input_h, kv_lora_rank, v_head_dim), dtype, case_name, output
+        )
+    elif case_name == "DynamicAttentionPostTest.dynamic_pa_papost_bf16_b48":
         b = 48
         n_q = 128
         skv = 4096

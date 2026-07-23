@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
+
 from glob import glob
 import json
 import os
@@ -17,7 +18,6 @@ import pkgutil
 import sys
 
 import pytest
-
 from test_case_loader import TestCaseLoader
 from test_case_log_analyzer import TestCaseLogAnalyzer
 from test_case_logger import TestCaseLogger
@@ -41,7 +41,7 @@ class TestCaseLauncher:
         self.plog_cache_path = f"{self.work_path}/plog"
         self.golden_script = Path(config.golden_script).resolve()
         self.json_path = os.path.abspath(config.json_path)
-        self.distributed_op = config.distributed_op   # 通信算子标识
+        self.distributed_op = config.distributed_op  # 通信算子标识
         self.executable_path = config.executable_path
 
     def tear_up(self):
@@ -87,10 +87,8 @@ class TestCaseLauncher:
         if self.python:
             pypto_pkg = f"{self.work_path}/build_out/pypto-*.whl"
             if len(glob(pypto_pkg)) == 0:
-                raise FileNotFoundError(f"Not found pypto install package.")
-            os.system(
-                f"{sys.executable} -m pip install --upgrade --no-deps --force-reinstall {pypto_pkg}"
-            )
+                raise FileNotFoundError("Not found pypto install package.")
+            os.system(f"{sys.executable} -m pip install --upgrade --no-deps --force-reinstall {pypto_pkg}")
 
     def run_test_case(self, test_case_info):
         log_file = f"{self.log_path}/{test_case_info['case_name']}.log"
@@ -116,9 +114,7 @@ class TestCaseLauncher:
         log_path = f"{self.log_path}/{case_op}/{case_index}"
         if not os.path.exists(log_path):
             os.makedirs(log_path, exist_ok=True)
-        analyzer = TestCaseLogAnalyzer(
-            case_index, case_name, case_op, log_file, self.report_file
-        )
+        analyzer = TestCaseLogAnalyzer(case_index, case_name, case_op, log_file, self.report_file)
         is_pass = analyzer.run()
         if not is_pass or self.save_data:
             os.system(f"cp -rf {self.plog_cache_path} {log_path}")
@@ -145,9 +141,7 @@ class TestCaseLauncher:
 
     def run(self):
         self.tear_up()
-        test_case_info_list = TestCaseLoader(
-            self.input_file, self.op, self.index, self.model, self.json_path
-        ).run()
+        test_case_info_list = TestCaseLoader(self.input_file, self.op, self.index, self.model, self.json_path).run()
         if self.json_only:
             return
 
@@ -161,16 +155,10 @@ class TestCaseLauncher:
             self.executable_path = stest_exec_file
         is_exec_ready = not self.python and os.path.exists(self.executable_path)
         if not is_package_ready and not is_exec_ready:
-            raise RuntimeError(
-                "Runtime time is not ready, Not found package pypto or tile_fwk_stest."
-            )
+            raise RuntimeError("Runtime time is not ready, Not found package pypto or tile_fwk_stest.")
         for test_case_info in test_case_info_list:
             # run test
-            (
-                self.run_pto_test_case(test_case_info)
-                if self.python
-                else self.run_test_case(test_case_info)
-            )
+            (self.run_pto_test_case(test_case_info) if self.python else self.run_test_case(test_case_info))
             # generate test report
             self.gen_test_report(test_case_info)
             # clear golden data

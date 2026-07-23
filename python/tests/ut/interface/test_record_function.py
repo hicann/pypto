@@ -8,11 +8,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import pypto
+""" """
+
 import pytest
+
+import pypto
 import pypto._controller as controller
+
 
 def test_record_function():
     dtype = pypto.DT_FP16

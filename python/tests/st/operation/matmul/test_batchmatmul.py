@@ -12,23 +12,25 @@
 BatchMatmul BASIC_TESTS test script.
 Supports both pytest and direct execution modes.
 """
-import os
+
 from dataclasses import dataclass
+import os
 from typing import Tuple
 
 import pytest
-import pypto
-import torch
-import torch_npu
-import torch.nn.functional as F
-
 from testcase.batchmatmul_test_case import BASIC_3D_TESTS, BASIC_4D_TESTS, BatchMatmulConfig
+import torch
+import torch.nn.functional as functional
+import torch_npu
+
+import pypto
 
 
 # ========== 参数封装类 ==========
 @dataclass
 class SliceContext3D:
     """3D 切片与分块参数"""
+
     batch_slice: Tuple[int, int]
     offset: int
     k: int
@@ -38,6 +40,7 @@ class SliceContext3D:
 @dataclass
 class SliceContext4D:
     """4D 切片与分块参数"""
+
     b0_slice: Tuple[int, int]
     b1_slice: Tuple[int, int]
     offset: int
@@ -48,6 +51,7 @@ class SliceContext4D:
 @dataclass
 class TileProcessContext4D:
     """4D tile处理所需的统一参数封装"""
+
     a_tensor: any
     b_tensor: any
     out_tensor: any
@@ -117,22 +121,22 @@ def process_tile_4d(ctx: TileProcessContext4D):
     b0_b_slice = get_batch_slice(ctx.b0_b, ctx.tile_b0, b0_offset, ctx.b0_a)
     b1_b_slice = get_batch_slice(ctx.b1_b, ctx.tile_b1, b1_offset, ctx.b1_a)
 
-    ctx_a = SliceContext4D(b0_slice=b0_a_slice, b1_slice=b1_a_slice,
-                           offset=m_offset, k=ctx.k, tile_size=ctx.tile_m)
-    ctx_b = SliceContext4D(b0_slice=b0_b_slice, b1_slice=b1_b_slice,
-                           offset=n_offset, k=ctx.k, tile_size=ctx.tile_n)
+    ctx_a = SliceContext4D(b0_slice=b0_a_slice, b1_slice=b1_a_slice, offset=m_offset, k=ctx.k, tile_size=ctx.tile_m)
+    ctx_b = SliceContext4D(b0_slice=b0_b_slice, b1_slice=b1_b_slice, offset=n_offset, k=ctx.k, tile_size=ctx.tile_n)
 
     a_view = get_a_view_4d(ctx.a_tensor, ctx.config, ctx_a)
     b_view = get_b_view_4d(ctx.b_tensor, ctx.config, ctx_b)
 
-    out_view = pypto.matmul(a_view, b_view,
-                            out_dtype=ctx.config.out_dtype,
-                            a_trans=ctx.config.a_trans, b_trans=ctx.config.b_trans)
+    out_view = pypto.matmul(
+        a_view, b_view, out_dtype=ctx.config.out_dtype, a_trans=ctx.config.a_trans, b_trans=ctx.config.b_trans
+    )
 
-    ctx.out_tensor[b0_offset:b0_offset + ctx.tile_b0,
-                   b1_offset:b1_offset + ctx.tile_b1,
-                   m_offset:m_offset + ctx.tile_m,
-                   n_offset:n_offset + ctx.tile_n] = out_view
+    ctx.out_tensor[
+        b0_offset:b0_offset + ctx.tile_b0,
+        b1_offset:b1_offset + ctx.tile_b1,
+        m_offset:m_offset + ctx.tile_m,
+        n_offset:n_offset + ctx.tile_n,
+    ] = out_view
 
 
 def process_mn_loops_4d(ctx: TileProcessContext4D):
@@ -184,12 +188,12 @@ def batch_matmul_kernel_3d(
                 a_view = get_a_view_3d(a_tensor, config, a_ctx)
                 b_view = get_b_view_3d(b_tensor, config, b_ctx)
 
-                out_view = pypto.matmul(a_view, b_view,
-                                        out_dtype=config.out_dtype,
-                                        a_trans=config.a_trans, b_trans=config.b_trans)
-                out_tensor[b_offset:b_offset + tile_b,
-                           m_offset:m_offset + tile_m,
-                           n_offset:n_offset + tile_n] = out_view
+                out_view = pypto.matmul(
+                    a_view, b_view, out_dtype=config.out_dtype, a_trans=config.a_trans, b_trans=config.b_trans
+                )
+                out_tensor[b_offset:b_offset + tile_b, m_offset:m_offset + tile_m, n_offset:n_offset + tile_n] = (
+                    out_view
+                )
 
 
 @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
@@ -222,11 +226,23 @@ def batch_matmul_kernel_4d(
     for b0_idx in pypto.loop(0, b0_loop, 1, name="LOOP_L0_b0Idx", idx_name="b0_idx"):
         for b1_idx in pypto.loop(0, b1_loop, 1, name="LOOP_L0_b1Idx", idx_name="b1_idx"):
             ctx = TileProcessContext4D(
-                a_tensor=a_tensor, b_tensor=b_tensor, out_tensor=out_tensor,
-                config=config, b0_idx=b0_idx, b1_idx=b1_idx,
-                tile_b0=tile_b0, tile_b1=tile_b1, tile_m=tile_m, tile_n=tile_n,
-                k=k, b0_a=b0_a, b1_a=b1_a, b0_b=b0_b, b1_b=b1_b,
-                m_loop=m_loop, n_loop=n_loop
+                a_tensor=a_tensor,
+                b_tensor=b_tensor,
+                out_tensor=out_tensor,
+                config=config,
+                b0_idx=b0_idx,
+                b1_idx=b1_idx,
+                tile_b0=tile_b0,
+                tile_b1=tile_b1,
+                tile_m=tile_m,
+                tile_n=tile_n,
+                k=k,
+                b0_a=b0_a,
+                b1_a=b1_a,
+                b0_b=b0_b,
+                b1_b=b1_b,
+                m_loop=m_loop,
+                n_loop=n_loop,
             )
             process_mn_loops_4d(ctx)
 
@@ -253,7 +269,7 @@ def prepare_tensors_3d(config, a_dtype, b_dtype, c_dtype, device_id):
     b_cpu = b_tensor_cpu.transpose(1, 2) if config.b_trans else b_tensor_cpu
     accum_dtype = torch.int32 if a_dtype == torch.int8 else torch.float32
     golden = torch.matmul(a_cpu.to(accum_dtype), b_cpu.to(accum_dtype)).to(c_dtype)
-    golden = F.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
+    golden = functional.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
     a_tensor = a_tensor_cpu.to(f"npu:{device_id}")
     b_tensor = b_tensor_cpu.to(f"npu:{device_id}")
     if config.a_format == "NZ":
@@ -287,7 +303,7 @@ def prepare_tensors_4d(config, a_dtype, b_dtype, c_dtype, device_id):
     b_cpu = b_tensor_cpu.transpose(2, 3) if config.b_trans else b_tensor_cpu
     accum_dtype = torch.int32 if a_dtype == torch.int8 else torch.float32
     golden = torch.matmul(a_cpu.to(accum_dtype), b_cpu.to(accum_dtype)).to(c_dtype)
-    golden = F.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
+    golden = functional.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
     a_tensor = a_tensor_cpu.to(f"npu:{device_id}")
     b_tensor = b_tensor_cpu.to(f"npu:{device_id}")
     c_tensor = torch.zeros(c_shape, dtype=c_dtype, device=f"npu:{device_id}")
@@ -312,23 +328,21 @@ def run_batch_matmul_test(case: dict):
         batch_matmul_kernel_4d(a_tensor, b_tensor, c_tensor, config)
 
     atol, rtol = BatchMatmulConfig.get_tolerance(case["c_dtype"])
-    assert torch.allclose(
-        c_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol
-    ), f"Test case {case['id']} ({case['name']}) failed"
+    assert torch.allclose(c_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol), (
+        f"Test case {case['id']} ({case['name']}) failed"
+    )
 
 
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in BASIC_3D_TESTS
-])
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in BASIC_3D_TESTS]
+)
 def test_batch_matmul_3d_nd(case: dict):
     run_batch_matmul_test(case)
 
 
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in BASIC_4D_TESTS
-])
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in BASIC_4D_TESTS]
+)
 def test_batch_matmul_4d_nd(case: dict):
     run_batch_matmul_test(case)
 
@@ -356,20 +370,20 @@ def run_batch_matmul_demo():
             for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
                 for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L1_nIdx", idx_name="n_idx"):
                     a_view = a[
-                        b_idx * b_view_size: b_idx * b_view_size + b_view_size,
-                        m_idx * m_view_size: m_idx * m_view_size + m_view_size,
+                        b_idx * b_view_size:b_idx * b_view_size + b_view_size,
+                        m_idx * m_view_size:m_idx * m_view_size + m_view_size,
                         :,
                     ]
                     b_view = b[
-                        b_idx * b_view_size: b_idx * b_view_size + b_view_size,
+                        b_idx * b_view_size:b_idx * b_view_size + b_view_size,
                         :,
-                        n_idx * n_view_size: n_idx * n_view_size + n_view_size,
+                        n_idx * n_view_size:n_idx * n_view_size + n_view_size,
                     ]
                     out_view = pypto.matmul(a_view, b_view, pypto.DT_FP32)
                     out[
-                        b_idx * b_view_size: b_idx * b_view_size + b_view_size,
-                        m_idx * m_view_size: m_idx * m_view_size + m_view_size,
-                        n_idx * n_view_size: n_idx * n_view_size + n_view_size,
+                        b_idx * b_view_size:b_idx * b_view_size + b_view_size,
+                        m_idx * m_view_size:m_idx * m_view_size + m_view_size,
+                        n_idx * n_view_size:n_idx * n_view_size + n_view_size,
                     ] = out_view
 
     a = torch.randn([b_size, m_size, k_size], dtype=torch.float16, device="npu:0")

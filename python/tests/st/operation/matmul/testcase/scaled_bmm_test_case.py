@@ -12,11 +12,13 @@
 pypto.scaled_mm 3D/4D ST测试用例配置
 用于System Test自动化测试框架
 """
+
 from dataclasses import dataclass
 from typing import Tuple, Union
 
-import pypto
 import torch
+
+import pypto
 
 
 @dataclass
@@ -215,5 +217,5 @@ SCALED_BMM_TESTS = [
         "relu_type": pypto.ReLuType.RELU,
         "enable_ksplit": False,
         "products": ["950"],
-    }
+    },
 ]

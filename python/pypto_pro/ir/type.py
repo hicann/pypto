@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Type utilities and wrappers for PyPTO IR."""
+
 from __future__ import annotations
 
 __all__ = ["TensorType", "TileType"]
@@ -17,8 +18,7 @@ __all__ = ["TensorType", "TileType"]
 
 from collections.abc import Sequence
 
-from pypto.pypto_impl.ir import DataType
-from pypto.pypto_impl.ir import Expr, HardwareInfo, MemRef, TensorType, TensorView, TileType, TileView
+from pypto.pypto_impl.ir import DataType, Expr, HardwareInfo, MemRef, TensorType, TensorView, TileType, TileView
 
 from ._utils import _normalize_shape
 

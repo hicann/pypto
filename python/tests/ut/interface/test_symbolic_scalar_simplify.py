@@ -11,6 +11,7 @@
 """
 Unit tests for SymbolicScalar.simplify() algebraic simplification.
 """
+
 import pypto
 
 
@@ -25,6 +26,7 @@ def _val(v):
 # ============================================================================
 # Unary rules
 # ============================================================================
+
 
 def test_neg_neg():
     x = _sym("x")
@@ -83,6 +85,7 @@ def test_not_ne():
 # Add rules
 # ============================================================================
 
+
 def test_add_const_reassociate():
     x = _sym("x")
     result = ((x + 3) + 5).simplify()
@@ -118,6 +121,7 @@ def test_add_const_canonicalize():
 # ============================================================================
 # Sub rules
 # ============================================================================
+
 
 def test_sub_self():
     x = _sym("x")
@@ -164,6 +168,7 @@ def test_sub_add_canonicalize():
 # Mul rules
 # ============================================================================
 
+
 def test_mul_const_associativity():
     x = _sym("x")
     result = ((x * 3) * 5).simplify()
@@ -188,6 +193,7 @@ def test_mul_min_max():
 # Div rules
 # ============================================================================
 
+
 def test_div_mul_const():
     x = _sym("x")
     result = ((x * 6) / 3).simplify()
@@ -196,13 +202,14 @@ def test_div_mul_const():
 
 def test_div_nested():
     x = _sym("x")
-    result = (((x / 4) / 2)).simplify()
+    result = ((x / 4) / 2).simplify()
     assert str(result) == "(x/8)"
 
 
 # ============================================================================
 # Mod rules
 # ============================================================================
+
 
 def test_mod_mul_const():
     x = _sym("x")
@@ -219,6 +226,7 @@ def test_mod_add_const():
 # ============================================================================
 # Min rules
 # ============================================================================
+
 
 def test_min_self():
     x = _sym("x")
@@ -252,6 +260,7 @@ def test_min_const():
 # Max rules
 # ============================================================================
 
+
 def test_max_self():
     x = _sym("x")
     result = x.max(x).simplify()
@@ -277,6 +286,7 @@ def test_max_absorption():
 # Clamp composition rules
 # ============================================================================
 
+
 def test_clamp_composition_relu():
     # f(x, y, z) = min(max(x - y, 0), z); nested clamp collapses the inner upper bound.
     a = _sym("a")
@@ -284,6 +294,7 @@ def test_clamp_composition_relu():
 
     def foo(x, y, z):
         return pypto.min(pypto.max(x - y, 0), z)
+
     inner = foo(a, b, 512)
     result = foo(inner, 16, 16).simplify()
     assert str(result) == str(pypto.min(pypto.max(a - b - 16, 0), 16))
@@ -300,6 +311,7 @@ def test_clamp_composition_preserves_inner_bound():
 # ============================================================================
 # Comparison rules
 # ============================================================================
+
 
 def test_eq_self():
     x = _sym("x")
@@ -373,6 +385,7 @@ def test_le_cancel_add():
 # Mixed/complex simplification
 # ============================================================================
 
+
 def test_simplify_preserves_immediate():
     x = _val(10)
     result = x.simplify()
@@ -408,9 +421,10 @@ def test_complex_cancellation():
 # Logical and/or rules
 # ============================================================================
 
+
 def test_and_zero():
     x = _sym("x")
-    y = _sym("y")
+    _y = _sym("y")
     result = (x & 0).simplify()
     assert str(result) == "0"
 

@@ -11,10 +11,11 @@
 """
 This is a subscript of build_ci.py
 """
+
 import os
 from pathlib import Path
-import subprocess
 import shutil
+import subprocess
 
 
 def ini(path, prof, pe):
@@ -45,19 +46,20 @@ def ini(path, prof, pe):
     level = "l2"
     env = {
         "PROFILER_SAMPLECONFIG": "{"
-                                     + f"\"stars_acsq_task\":\"off\","
-                                     + f"\"app\":\"test_dynshape\","
-                                     + f"\"prof_level\":\"{level}\","
-                                     + f"\"taskTime\":\"{level}\","
-                                     + f"\"result_dir\":\"{str(path)}\","
-                                     + f"\"app_dir\":\"{str(path)}\","
-                                     + f"\"ai_core_profiling\":\"off\","
-                                     + f"\"aicpuTrace\":\"on\""
-                                     + "}"
-        }
+        + "\"stars_acsq_task\":\"off\","
+        + "\"app\":\"test_dynshape\","
+        + f"\"prof_level\":\"{level}\","
+        + f"\"taskTime\":\"{level}\","
+        + f"\"result_dir\":\"{str(path)}\","
+        + f"\"app_dir\":\"{str(path)}\","
+        + "\"ai_core_profiling\":\"off\","
+        + "\"aicpuTrace\":\"on\""
+        + "}"
+    }
     if real_pe:
         env["PYPTO_PROF_PMU_EVENT_TYPE"] = str(real_pe)
     return env
+
 
 def find_file_and_get_parent_dirs(target_file, search_dir='.'):
     """
@@ -111,6 +113,6 @@ def work_flow_plot(path, level, pe):
         ]
         print(" ".join(cmd))
         subprocess.run(cmd, shell=False, capture_output=False, check=True, text=True, encoding='utf-8')
-    #删除Prof落盘日志，避免有干扰
+    # 删除Prof落盘日志，避免有干扰
     print(f"cleanup PROF* under {str(base_path)}")
     remove_prof_dirs(base_path)

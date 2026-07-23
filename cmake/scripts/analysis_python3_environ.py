@@ -8,17 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""Python3环境分析.
-"""
+"""Python3环境分析."""
+
 import argparse
 import logging
 import os
-import sys
 from pathlib import Path
+import sys
 
 
 class Analysis:
-
     def __init__(self, args):
         self.output: Path = Path(args.output[0]).resolve()
         self.interpreter_version: str = self._get_interpreter_version()
@@ -32,12 +31,12 @@ class Analysis:
     def __str__(self) -> str:
         ver = sys.version_info
         desc = "\n"
-        desc += f"\nEnviron"
+        desc += "\nEnviron"
         desc += f"\n  Output  : {self.output}"
         desc += f"\n  Python3 : {sys.executable} ({ver.major}.{ver.minor}.{ver.micro})"
-        desc += f"\n    pybind11"
+        desc += "\n    pybind11"
         desc += f"\n      CMake_Dir                 : {self.py_mod_pybind11_cmake_dir}"
-        desc += f"\n    torch"
+        desc += "\n    torch"
         desc += f"\n      Version                   : {self.py_mod_torch_version}"
         desc += f"\n      CMake_Dir                 : {self.py_mod_torch_cmake_dir}"
         desc += f"\n      Root_Dir                  : {self.py_mod_torch_root_dir}"
@@ -46,12 +45,12 @@ class Analysis:
 
     @staticmethod
     def main():
-        """主处理流程
-        """
+        """主处理流程"""
         # 参数注册
-        parser = argparse.ArgumentParser(description=f"Python3-Environ Analysis.", epilog="Best Regards!")
-        parser.add_argument("-o", "--output", nargs=1, type=Path, default=None, required=True,
-                            help="Specify output file path.")
+        parser = argparse.ArgumentParser(description="Python3-Environ Analysis.", epilog="Best Regards!")
+        parser.add_argument(
+            "-o", "--output", nargs=1, type=Path, default=None, required=True, help="Specify output file path."
+        )
         # 流程处理
         ctrl = Analysis(args=parser.parse_args())
         ctrl.analysis()
@@ -74,28 +73,29 @@ class Analysis:
         pybind11_dir = None
         try:
             import pybind11
+
             pybind11_dir = Path(pybind11.get_cmake_dir()).resolve()
-        except (ModuleNotFoundError or ImportError):
+        except ModuleNotFoundError or ImportError:
             pass
         return str(pybind11_dir) if pybind11_dir else ""
 
     def analysis(self):
         lines = [
-            f'\n# Python3 Version',
+            '\n# Python3 Version',
             f'\nset(PYTHON3_VERSION_ID "{self.interpreter_version}")',
             '\nmessage(STATUS "PYTHON3_VERSION_ID=${PYTHON3_VERSION_ID}")',
             '\n',
         ]
         if self.py_mod_pybind11_cmake_dir:
             lines += [
-                f'\n# Python3 module pybind11',
+                '\n# Python3 module pybind11',
                 f'\nget_filename_component(PY3_MOD_PYBIND11_CMAKE_DIR "{self.py_mod_pybind11_cmake_dir}" REALPATH)',
                 '\nmessage(STATUS "PY3_MOD_PYBIND11_CMAKE_DIR=${PY3_MOD_PYBIND11_CMAKE_DIR}")',
                 '\n',
             ]
         if self.py_mod_torch_version:
             lines += [
-                f'\n# Python3 module pybind11',
+                '\n# Python3 module pybind11',
                 f'\nset(PY3_MOD_TORCH_VERSION "{self.py_mod_torch_version}")',
                 f'\nget_filename_component(PY3_MOD_TORCH_ROOT_PATH "{self.py_mod_torch_root_dir}" REALPATH)',
                 f'\nget_filename_component(PY3_MOD_TORCH_CMAKE_DIR "{self.py_mod_torch_cmake_dir}" REALPATH)',
@@ -114,6 +114,7 @@ class Analysis:
         try:
             os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
             import torch
+
             self.py_mod_torch_version = str(torch.__version__)
             self.py_mod_torch_root_dir = str(Path(torch.__file__).parent)
             self.py_mod_torch_cmake_dir = str(Path(torch.utils.cmake_prefix_path).resolve())

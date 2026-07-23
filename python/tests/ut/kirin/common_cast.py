@@ -13,14 +13,13 @@
 Test cast codegen - common functions for Kirin9030 and KirinX90
 """
 
-import pypto
-import torch
 import numpy as np
 import pytest
-from pypto import DataType, CastMode, SaturationMode
+import torch
 
 from kirin.common import compare_cos
-
+import pypto
+from pypto import CastMode, SaturationMode
 
 _all_f16_uint16 = np.arange(0x0000, 0x10000, dtype=np.uint16)
 _all_f16_values = _all_f16_uint16.view(np.float16)
@@ -32,7 +31,7 @@ _all_f16_sorted = np.sort(_all_f16_finite)
 def _round_rint(low, high, dist_low, dist_high, x):
     if dist_low == dist_high:
         low_int = low.view(np.uint16)
-        high_int = high.view(np.uint16)
+        _high_int = high.view(np.uint16)
         return low if (low_int & 1) == 0 else high
     return low if dist_low < dist_high else high
 
@@ -60,7 +59,7 @@ def _round_trunc(low, high, dist_low, dist_high, x):
 def _round_odd(low, high, dist_low, dist_high, x):
     if dist_low == dist_high:
         low_int = low.view(np.uint16)
-        high_int = high.view(np.uint16)
+        _high_int = high.view(np.uint16)
         return low if (low_int & 1) == 1 else high
     return low if dist_low < dist_high else high
 
@@ -249,16 +248,14 @@ def make_cast_kernel(soc_version, name, in_dtype_str, out_dtype_str, tile_shapes
     cast_mode = _CAST_MODE_MAP[cast_mode_str]
     sat_mode = _SAT_MODE_MAP[sat_mode_str]
 
-    @pypto.frontend.jit(
-        codegen_options={"soc_version": soc_version},
-        runtime_options={"run_mode": pypto.RunMode.SIM}
-    )
+    @pypto.frontend.jit(codegen_options={"soc_version": soc_version}, runtime_options={"run_mode": pypto.RunMode.SIM})
     def kernel(
         a: pypto.Tensor([...], in_dtype_pypto),
         out: pypto.Tensor([...], out_dtype_pypto),
     ):
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.cast(a, out_dtype_pypto, cast_mode, sat_mode)
+
     kernel.__name__ = name
     return kernel
 
@@ -272,48 +269,203 @@ TEST_CASES = [
     # cast_mode: rounding mode
     # sat_mode: saturation mode
     # marks: pytest marks
-    pytest.param("cast_kernel_001", "FP16", "FP32", (50,), (112,),
-                 "CAST_NONE", "OFF", marks=[], id="001"),
-    pytest.param("cast_kernel_002", "INT32", "FP32", (100,), (100,),
-                 "CAST_RINT", "ON", marks=[pytest.mark.skip()], id="002"),
-    pytest.param("cast_kernel_003", "INT16", "FP32", (2, 32), (4, 128),
-                 "CAST_ROUND", "ON", marks=[pytest.mark.skip()], id="003"),
-    pytest.param("cast_kernel_004", "FP32", "FP16", (1, 130), (4, 130),
-                 "CAST_ODD", "OFF", marks=[pytest.mark.skip()], id="004"),
-    pytest.param("cast_kernel_005", "INT8", "FP16", (1, 2, 32), (2, 4, 160),
-                 "CAST_CEIL", "OFF", marks=[pytest.mark.skip()], id="005"),
-    pytest.param("cast_kernel_006", "UINT8", "FP16", (1, 2, 140), (2, 4, 140),
-                 "CAST_TRUNC", "OFF", marks=[pytest.mark.skip()], id="006"),
-    pytest.param("cast_kernel_007", "INT16", "FP16", (1, 5, 32), (2, 5, 152),
-                 "CAST_FLOOR", "OFF", marks=[pytest.mark.skip()], id="007"),
-    pytest.param("cast_kernel_008", "FP32", "INT16", (1, 3, 170), (2, 3, 170),
-                 "CAST_NONE", "OFF", marks=[pytest.mark.skip()], id="008"),
-    pytest.param("cast_kernel_009", "FP32", "INT32", (2, 1, 2, 16), (5, 2, 4, 176),
-                 "CAST_NONE", "OFF", marks=[pytest.mark.skip()], id="009"),
-    pytest.param("cast_kernel_010", "FP16", "INT8", (1, 1, 1, 130), (5, 2, 4, 130),
-                 "CAST_NONE", "OFF", marks=[pytest.mark.skip()], id="010"),
-    pytest.param("cast_kernel_011", "FP16", "UINT8", (1, 1, 5, 32), (2, 3, 5, 134),
-                 "CAST_NONE", "OFF", marks=[pytest.mark.skip()], id="011"),
-    pytest.param("cast_kernel_012", "FP16", "INT16", (2, 2, 3, 32), (4, 2, 6, 135),
-                 "CAST_NONE", "OFF", marks=[pytest.mark.skip()], id="012"),
-    pytest.param("cast_kernel_013", "FP16", "INT32", (1, 1, 4, 130), (6, 2, 4, 130),
-                 "CAST_NONE", "OFF", marks=[pytest.mark.skip()], id="013"),
-    pytest.param("cast_kernel_014", "FP16", "FP32", (1, 2, 1, 139), (3, 2, 3, 139),
-                 "CAST_NONE", "OFF", marks=[pytest.mark.skip()], id="014"),
-    pytest.param("cast_kernel_015", "FP16", "FP32", (3, 3, 5, 32), (6, 3, 5, 141),
-                 "CAST_NONE", "OFF", marks=[pytest.mark.skip()], id="015"),
-    pytest.param("cast_kernel_016", "FP32", "INT16", (1, 3, 32), (2, 3, 160),
-                 "CAST_ROUND", "OFF", marks=[pytest.mark.skip()], id="016"),
-    pytest.param("cast_kernel_017", "FP32", "INT16", (2, 2, 64), (3, 4, 128),
-                 "CAST_FLOOR", "OFF", marks=[pytest.mark.skip()], id="017"),
-    pytest.param("cast_kernel_018", "FP32", "INT16", (1, 5, 144), (2, 5, 144),
-                 "CAST_CEIL", "OFF", marks=[pytest.mark.skip()], id="018"),
-    pytest.param("cast_kernel_019", "FP32", "FP16", (1, 2, 160), (2, 4, 160),
-                 "CAST_ROUND", "OFF", marks=[pytest.mark.skip()], id="019"),
-    pytest.param("cast_kernel_020", "FP32", "FP16", (2, 5, 136), (3, 5, 136),
-                 "CAST_CEIL", "OFF", marks=[pytest.mark.skip()], id="020"),
-    pytest.param("cast_kernel_021", "FP32", "FP16", (2, 3, 148), (4, 6, 148),
-                 "CAST_ODD", "OFF", marks=[pytest.mark.skip()], id="021"),
+    pytest.param("cast_kernel_001", "FP16", "FP32", (50,), (112,), "CAST_NONE", "OFF", marks=[], id="001"),
+    pytest.param(
+        "cast_kernel_002", "INT32", "FP32", (100,), (100,), "CAST_RINT", "ON", marks=[pytest.mark.skip()], id="002"
+    ),
+    pytest.param(
+        "cast_kernel_003", "INT16", "FP32", (2, 32), (4, 128), "CAST_ROUND", "ON", marks=[pytest.mark.skip()], id="003"
+    ),
+    pytest.param(
+        "cast_kernel_004", "FP32", "FP16", (1, 130), (4, 130), "CAST_ODD", "OFF", marks=[pytest.mark.skip()], id="004"
+    ),
+    pytest.param(
+        "cast_kernel_005",
+        "INT8",
+        "FP16",
+        (1, 2, 32),
+        (2, 4, 160),
+        "CAST_CEIL",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="005",
+    ),
+    pytest.param(
+        "cast_kernel_006",
+        "UINT8",
+        "FP16",
+        (1, 2, 140),
+        (2, 4, 140),
+        "CAST_TRUNC",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="006",
+    ),
+    pytest.param(
+        "cast_kernel_007",
+        "INT16",
+        "FP16",
+        (1, 5, 32),
+        (2, 5, 152),
+        "CAST_FLOOR",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="007",
+    ),
+    pytest.param(
+        "cast_kernel_008",
+        "FP32",
+        "INT16",
+        (1, 3, 170),
+        (2, 3, 170),
+        "CAST_NONE",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="008",
+    ),
+    pytest.param(
+        "cast_kernel_009",
+        "FP32",
+        "INT32",
+        (2, 1, 2, 16),
+        (5, 2, 4, 176),
+        "CAST_NONE",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="009",
+    ),
+    pytest.param(
+        "cast_kernel_010",
+        "FP16",
+        "INT8",
+        (1, 1, 1, 130),
+        (5, 2, 4, 130),
+        "CAST_NONE",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="010",
+    ),
+    pytest.param(
+        "cast_kernel_011",
+        "FP16",
+        "UINT8",
+        (1, 1, 5, 32),
+        (2, 3, 5, 134),
+        "CAST_NONE",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="011",
+    ),
+    pytest.param(
+        "cast_kernel_012",
+        "FP16",
+        "INT16",
+        (2, 2, 3, 32),
+        (4, 2, 6, 135),
+        "CAST_NONE",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="012",
+    ),
+    pytest.param(
+        "cast_kernel_013",
+        "FP16",
+        "INT32",
+        (1, 1, 4, 130),
+        (6, 2, 4, 130),
+        "CAST_NONE",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="013",
+    ),
+    pytest.param(
+        "cast_kernel_014",
+        "FP16",
+        "FP32",
+        (1, 2, 1, 139),
+        (3, 2, 3, 139),
+        "CAST_NONE",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="014",
+    ),
+    pytest.param(
+        "cast_kernel_015",
+        "FP16",
+        "FP32",
+        (3, 3, 5, 32),
+        (6, 3, 5, 141),
+        "CAST_NONE",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="015",
+    ),
+    pytest.param(
+        "cast_kernel_016",
+        "FP32",
+        "INT16",
+        (1, 3, 32),
+        (2, 3, 160),
+        "CAST_ROUND",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="016",
+    ),
+    pytest.param(
+        "cast_kernel_017",
+        "FP32",
+        "INT16",
+        (2, 2, 64),
+        (3, 4, 128),
+        "CAST_FLOOR",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="017",
+    ),
+    pytest.param(
+        "cast_kernel_018",
+        "FP32",
+        "INT16",
+        (1, 5, 144),
+        (2, 5, 144),
+        "CAST_CEIL",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="018",
+    ),
+    pytest.param(
+        "cast_kernel_019",
+        "FP32",
+        "FP16",
+        (1, 2, 160),
+        (2, 4, 160),
+        "CAST_ROUND",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="019",
+    ),
+    pytest.param(
+        "cast_kernel_020",
+        "FP32",
+        "FP16",
+        (2, 5, 136),
+        (3, 5, 136),
+        "CAST_CEIL",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="020",
+    ),
+    pytest.param(
+        "cast_kernel_021",
+        "FP32",
+        "FP16",
+        (2, 3, 148),
+        (4, 6, 148),
+        "CAST_ODD",
+        "OFF",
+        marks=[pytest.mark.skip()],
+        id="021",
+    ),
 ]
 
 
@@ -344,8 +496,8 @@ def create_test_cast_module(soc_version):
     """Create a test module for cast with specified soc_version."""
     kernels = {
         p.values[0]: make_cast_kernel(
-            soc_version, p.values[0], p.values[1], p.values[2],
-            p.values[3], p.values[5], p.values[6])
+            soc_version, p.values[0], p.values[1], p.values[2], p.values[3], p.values[5], p.values[6]
+        )
         for p in TEST_CASES
     }
     return kernels, lambda: run_cast_test(kernels, None, None, None, None, None, None)

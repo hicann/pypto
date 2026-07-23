@@ -9,21 +9,20 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
-from typing import Optional, Union, List, overload, Sequence, Tuple
+
+from typing import List, Optional, Sequence, Tuple, Union, overload
 
 from . import pypto_impl
-from .enum import DataType, AtomicRMWMode
 from ._op_wrapper import op_wrapper
 from ._utils import to_syms
+from .enum import AtomicRMWMode, DataType
+from .error import FeError
 from .symbolic_scalar import SymbolicScalar
 from .tensor import Tensor
-from .error import FeError
 
 
 @overload
-def assemble(
-    src: Tensor, offsets: List[Union[int, SymbolicScalar]], dst: Tensor
-) -> None:
+def assemble(src: Tensor, offsets: List[Union[int, SymbolicScalar]], dst: Tensor) -> None:
     """
     Assembles a small Tensor into a larger Tensor based on specified offsets.
 
@@ -62,8 +61,7 @@ def assemble(
 
 @overload
 def assemble(
-    srcs: Sequence[Tuple[Tensor, List[Union[int, SymbolicScalar]]]],
-    dst: Tensor, parallel: bool = False
+    srcs: Sequence[Tuple[Tensor, List[Union[int, SymbolicScalar]]]], dst: Tensor, parallel: bool = False
 ) -> None:
     """
     Assembles multiple small Tensors into a larger Tensor based on specified offsets.
@@ -144,11 +142,11 @@ def atomic_add(src: Tensor, offsets: List[Union[int, SymbolicScalar]], dst: Tens
 
 @op_wrapper
 def reshape(
-        input: Tensor,
-        shape: List[int],
-        *,
-        valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None,
-        inplace: bool = False
+    input: Tensor,
+    shape: List[int],
+    *,
+    valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None,
+    inplace: bool = False,
 ) -> Tensor:
     """
     Reshape the input Tensor into a new tensor with the specific shape.
@@ -210,11 +208,13 @@ def reshape(
         out = pypto_impl.Reshape(input, shape, inplace)
     else:
         if not all(isinstance(s, int) for s in shape):
-            raise FeError(TypeError(
-                f"reshape() requires integer shape when using non-inplace reshape, "
-                f"but got [{', '.join(type(s).__name__ for s in shape)}]. "
-                f"Use 'inplace=True' for dynamic shapes."
-            ))
+            raise FeError(
+                TypeError(
+                    f"reshape() requires integer shape when using non-inplace reshape, "
+                    f"but got [{', '.join(type(s).__name__ for s in shape)}]. "
+                    f"Use 'inplace=True' for dynamic shapes."
+                )
+            )
         out = pypto_impl.Reshape(input, shape, [] if valid_shape is None else valid_shape, inplace)
     return out
 
@@ -287,12 +287,12 @@ def unsqueeze(input: Tensor, dim: int) -> Tensor:
 
 @op_wrapper
 def view(
-        input: Tensor,
-        shape: List[int] = None,
-        offsets: List[Union[int, SymbolicScalar]] = None,
-        *,
-        valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None,
-        dtype: DataType = None,
+    input: Tensor,
+    shape: List[int] = None,
+    offsets: List[Union[int, SymbolicScalar]] = None,
+    *,
+    valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None,
+    dtype: DataType = None,
 ) -> Tensor:
     """Extract a partial view from the input tensor for subsequent computations.
        WARNING: view has a very different behavior from torch.view, it is more like slice.

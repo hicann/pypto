@@ -6,14 +6,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 import ast
+from contextlib import contextmanager
 import inspect
 import operator
-from contextlib import contextmanager
-from typing import Callable, Any, Optional, NoReturn, Union
+from typing import Any, Callable, NoReturn, Optional, Union
 
 from pypto import ir
-from .pir import Block, Jump, LoopKind, Call, Operand, Value, Function, Starred, DoubleStarred
-from .pir import in_, not_in
+
+from .pir import Block, Call, DoubleStarred, Function, Jump, LoopKind, Operand, Starred, Value, in_, not_in
 
 
 class Source:
@@ -54,7 +54,6 @@ class Source:
 
 
 class _Context:
-
     def __init__(self, source: Source, entry_point: bool = True):
         self.source = source
         self.entry_point = entry_point
@@ -83,9 +82,7 @@ class _Context:
     @contextmanager
     def span(self, span: Union[ast.AST, ir.Span]):
         old = self.current_span
-        self.current_span = (
-            span if isinstance(span, ir.Span) else self.source.get_span(span)
-        )
+        self.current_span = span if isinstance(span, ir.Span) else self.source.get_span(span)
         try:
             yield
         finally:
@@ -94,9 +91,7 @@ class _Context:
     @contextmanager
     def new_block(self, args: tuple[Operand, ...] = ()):
         self.block_id += 1
-        new_block = Block(
-            id=self.block_id, args=args, calls=[], result=None, span=self.current_span
-        )
+        new_block = Block(id=self.block_id, args=args, calls=[], result=None, span=self.current_span)
         old, self._current_block = self._current_block, new_block
         try:
             yield new_block
@@ -147,7 +142,6 @@ _builtin_ops = {
     ast.Not: operator.not_,
     ast.UAdd: operator.pos,
     ast.USub: operator.neg,
-
     # binary ops
     ast.Add: operator.add,
     ast.Sub: operator.sub,
@@ -162,7 +156,6 @@ _builtin_ops = {
     ast.LShift: operator.lshift,
     ast.RShift: operator.rshift,
     ast.MatMult: operator.matmul,
-
     # cmp ops
     ast.Eq: operator.eq,
     ast.NotEq: operator.ne,
@@ -178,11 +171,13 @@ _builtin_ops = {
 
 
 def _pypto_loop_mode(node: ast.AST) -> Optional[str]:
-    if (isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "pypto"
-            and node.func.attr in ("loop", "loop_unroll")):
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "pypto"
+        and node.func.attr in ("loop", "loop_unroll")
+    ):
         return node.func.attr
     return None
 
@@ -204,31 +199,30 @@ def _parse_params(ctx, func: Union[ast.FunctionDef, ast.Lambda], defaults, kwdef
 
 
 class Parser:
-
     @staticmethod
-    def visit_Name(name: ast.Name, ctx: _Context):
+    def visit_Name(name: ast.Name, ctx: _Context):  # noqa: N802
         if not isinstance(name.ctx, ast.Load):
             ctx.raise_error(name)
         return ctx.load(name.id)
 
     @staticmethod
-    def visit_Constant(node: ast.Constant, ctx: _Context):
+    def visit_Constant(node: ast.Constant, ctx: _Context):  # noqa: N802
         return ctx.call("pil.const", (node.value,))
 
     @staticmethod
-    def visit_Continue(stmt: ast.Continue, ctx: _Context):
+    def visit_Continue(stmt: ast.Continue, ctx: _Context):  # noqa: N802
         if ctx.loop_kinds[-1] is LoopKind.DYNAMIC_FOR:
             ctx.raise_error(stmt, "continue is not supported in pypto.loop")
         ctx.set_jump(Jump.CONTINUE)
 
     @staticmethod
-    def visit_Break(stmt: ast.Break, ctx: _Context):
+    def visit_Break(stmt: ast.Break, ctx: _Context):  # noqa: N802
         if ctx.loop_kinds[-1] is LoopKind.DYNAMIC_FOR:
             ctx.raise_error(stmt, "break is not supported in pypto.loop")
         ctx.set_jump(Jump.BREAK)
 
     # expressions
-    def visit_BoolOp(self, boolop: ast.BoolOp, ctx: _Context):
+    def visit_BoolOp(self, boolop: ast.BoolOp, ctx: _Context):  # noqa: N802
         if len(boolop.values) < 2:
             ctx.raise_error(boolop, "At least two operands are required for boolop")
 
@@ -261,24 +255,23 @@ class Parser:
         else:
             ctx.raise_error(boolop)
 
-    def visit_Call(self, stmt: ast.Call, ctx: _Context):
+    def visit_Call(self, stmt: ast.Call, ctx: _Context):  # noqa: N802
         callee = self.visit(stmt.func, ctx)
         args = tuple(self.visit(arg, ctx) for arg in stmt.args)
         kwargs = tuple(
-            (None, DoubleStarred(self.visit(kw.value, ctx))) if kw.arg is None
-            else (kw.arg, self.visit(kw.value, ctx))
+            (None, DoubleStarred(self.visit(kw.value, ctx))) if kw.arg is None else (kw.arg, self.visit(kw.value, ctx))
             for kw in stmt.keywords
         )
         return ctx.call(callee, args, kwargs)
 
-    def visit_UnaryOp(self, unary: ast.UnaryOp, ctx: _Context):
+    def visit_UnaryOp(self, unary: ast.UnaryOp, ctx: _Context):  # noqa: N802
         ops = _builtin_ops.get(type(unary.op))
         if ops is None:
             ctx.raise_error(unary)
         op0 = self.visit(unary.operand, ctx)
         return ctx.call(ops, (op0,))
 
-    def visit_BinOp(self, bop: ast.BinOp, ctx: _Context):
+    def visit_BinOp(self, bop: ast.BinOp, ctx: _Context):  # noqa: N802
         ops = _builtin_ops.get(type(bop.op))
         if ops is None:
             ctx.raise_error(bop)
@@ -286,7 +279,7 @@ class Parser:
         op1 = self.visit(bop.right, ctx)
         return ctx.call(ops, (op0, op1))
 
-    def visit_Compare(self, cmp: ast.Compare, ctx: _Context):
+    def visit_Compare(self, cmp: ast.Compare, ctx: _Context):  # noqa: N802
         ops = _builtin_ops.get(type(cmp.ops[0]))
         if ops is None:
             ctx.raise_error(cmp)
@@ -311,11 +304,11 @@ class Parser:
 
         return ctx.call("pil.if_else", (cond0, then_block, else_block))
 
-    def visit_Attribute(self, node: ast.Attribute, ctx: _Context):
+    def visit_Attribute(self, node: ast.Attribute, ctx: _Context):  # noqa: N802
         value = self.visit(node.value, ctx)
         return ctx.call(getattr, (value, node.attr))
 
-    def visit_JoinedStr(self, node: ast.JoinedStr, ctx: _Context):
+    def visit_JoinedStr(self, node: ast.JoinedStr, ctx: _Context):  # noqa: N802
         parts = []
         for v in node.values:
             if isinstance(v, ast.Constant):
@@ -328,21 +321,21 @@ class Parser:
                 parts.append((val, v.conversion, spec))
             else:
                 ctx.raise_error(v)
-        return ctx.call("pil.fstring", (parts, ))
+        return ctx.call("pil.fstring", (parts,))
 
-    def visit_Tuple(self, node: ast.Tuple, ctx: _Context):
+    def visit_Tuple(self, node: ast.Tuple, ctx: _Context):  # noqa: N802
         values = tuple(self.visit(v, ctx) for v in node.elts)
         return ctx.call(tuple, (values,))
 
-    def visit_List(self, node: ast.List, ctx: _Context):
+    def visit_List(self, node: ast.List, ctx: _Context):  # noqa: N802
         values = list(self.visit(v, ctx) for v in node.elts)
         return ctx.call(list, (values,))
 
-    def visit_Set(self, node: ast.Set, ctx: _Context):
+    def visit_Set(self, node: ast.Set, ctx: _Context):  # noqa: N802
         values = list(self.visit(v, ctx) for v in node.elts)
         return ctx.call(set, (values,))
 
-    def visit_Dict(self, node: ast.Dict, ctx: _Context):
+    def visit_Dict(self, node: ast.Dict, ctx: _Context):  # noqa: N802
         pairs = []
         for k, v in zip(node.keys, node.values):
             value = self.visit(v, ctx)
@@ -352,18 +345,18 @@ class Parser:
                 pairs.append((self.visit(k, ctx), value))
         return ctx.call(dict, (pairs,))
 
-    def visit_Subscript(self, node: ast.Subscript, ctx: _Context):
+    def visit_Subscript(self, node: ast.Subscript, ctx: _Context):  # noqa: N802
         value = self.visit(node.value, ctx)
         index = self.visit(node.slice, ctx)
         return ctx.call(operator.getitem, (value, index))
 
-    def visit_Slice(self, node: ast.Slice, ctx: _Context):
+    def visit_Slice(self, node: ast.Slice, ctx: _Context):  # noqa: N802
         start = self.visit(node.lower, ctx) if node.lower else None
         stop = self.visit(node.upper, ctx) if node.upper else None
         step = self.visit(node.step, ctx) if node.step else None
         return ctx.call(slice, (start, stop, step))
 
-    def visit_IfExp(self, node: ast.IfExp, ctx: _Context):
+    def visit_IfExp(self, node: ast.IfExp, ctx: _Context):  # noqa: N802
         cond = self.visit(node.test, ctx)
         with ctx.new_block() as then_block:
             value = self.visit(node.body, ctx)
@@ -373,12 +366,12 @@ class Parser:
             ctx.set_jump(Jump.END_BRANCH, value)
         return ctx.call("pil.if_else", (cond, then_block, else_block))
 
-    def visit_Starred(self, node: ast.Starred, ctx: _Context):
+    def visit_Starred(self, node: ast.Starred, ctx: _Context):  # noqa: N802
         if not isinstance(node.ctx, ast.Load):
             ctx.raise_error(node)
         return Starred(self.visit(node.value, ctx))
 
-    def visit_While(self, stmt: ast.While, ctx: _Context):
+    def visit_While(self, stmt: ast.While, ctx: _Context):  # noqa: N802
         if stmt.orelse:
             ctx.raise_error(stmt, "while-else not supported")
 
@@ -398,16 +391,16 @@ class Parser:
 
         ctx.call_void("pil.loop", (body, None))
 
-    def visit_For(self, node: ast.For, ctx: _Context):
+    def visit_For(self, node: ast.For, ctx: _Context):  # noqa: N802
         if node.orelse:
             ctx.raise_error(node, "for-else not supported")
 
         loop_mode = _pypto_loop_mode(node.iter)
         kind = LoopKind.DYNAMIC_FOR if loop_mode else LoopKind.FOR
         if loop_mode == "loop_unroll":
-            if not (isinstance(node.target, (ast.Tuple, ast.List))
-                    and len(node.target.elts) == 2):
-                ctx.raise_error(node,
+            if not (isinstance(node.target, (ast.Tuple, ast.List)) and len(node.target.elts) == 2):
+                ctx.raise_error(
+                    node,
                     "pypto.loop_unroll must unpack exactly two targets (index, count), "
                     "e.g. 'for i, k in pypto.loop_unroll(...)'",
                 )
@@ -424,7 +417,7 @@ class Parser:
 
         ctx.call_void("pil.loop", (body, iter))
 
-    def visit_If(self, stmt: ast.If, ctx: _Context):
+    def visit_If(self, stmt: ast.If, ctx: _Context):  # noqa: N802
         cond = self.visit(stmt.test, ctx)
         with ctx.new_block() as then_block:
             self._stmts(stmt.body, ctx)
@@ -436,7 +429,7 @@ class Parser:
                 ctx.set_jump(Jump.END_BRANCH, None)
         return ctx.call("pil.if_else", (cond, then_block, else_block))
 
-    def visit_Return(self, stmt: ast.Return, ctx: _Context):
+    def visit_Return(self, stmt: ast.Return, ctx: _Context):  # noqa: N802
         for kind in ctx.loop_kinds:
             if kind is LoopKind.DYNAMIC_FOR:
                 ctx.raise_error(stmt, "return is not supported in pypto.loop")
@@ -448,12 +441,12 @@ class Parser:
             ctx.store("$retval", value)
             ctx.set_jump(Jump.RETURN, value)
 
-    def visit_Assign(self, stmt: ast.Assign, ctx: _Context):
+    def visit_Assign(self, stmt: ast.Assign, ctx: _Context):  # noqa: N802
         value = self.visit(stmt.value, ctx)
         for target in reversed(stmt.targets):
             self._do_assign(target, value, ctx)
 
-    def visit_AugAssign(self, aug: ast.AugAssign, ctx: _Context):
+    def visit_AugAssign(self, aug: ast.AugAssign, ctx: _Context):  # noqa: N802
         ops = _builtin_ops.get(type(aug.op))
         if ops is None:
             ctx.raise_error(aug)
@@ -479,18 +472,18 @@ class Parser:
         else:
             ctx.raise_error(aug.target)
 
-    def visit_AnnAssign(self, stmt: ast.AnnAssign, ctx: _Context):
+    def visit_AnnAssign(self, stmt: ast.AnnAssign, ctx: _Context):  # noqa: N802
         if stmt.value is not None:
             value = self.visit(stmt.value, ctx)
             self._do_assign(stmt.target, value, ctx)
 
-    def visit_Expr(self, stmt: ast.Expr, ctx: _Context):
+    def visit_Expr(self, stmt: ast.Expr, ctx: _Context):  # noqa: N802
         return self.visit(stmt.value, ctx)
 
-    def visit_Pass(self, stmt: ast.Pass, ctx: _Context):
+    def visit_Pass(self, stmt: ast.Pass, ctx: _Context):  # noqa: N802
         pass
 
-    def visit_FunctionDef(self, stmt: ast.FunctionDef, ctx: _Context):
+    def visit_FunctionDef(self, stmt: ast.FunctionDef, ctx: _Context):  # noqa: N802
         defaults = []
         for d in stmt.args.defaults:
             defaults.append(self.visit(d, ctx))
@@ -524,7 +517,7 @@ class Parser:
         )
         ctx.store(stmt.name, func)
 
-    def visit_Lambda(self, node: ast.Lambda, ctx: _Context):
+    def visit_Lambda(self, node: ast.Lambda, ctx: _Context):  # noqa: N802
         defaults = []
         for d in node.args.defaults:
             defaults.append(self.visit(d, ctx))
@@ -589,35 +582,35 @@ class Parser:
         )
         return ctx.call(func, ())
 
-    def visit_ListComp(self, node: ast.ListComp, ctx: _Context):
+    def visit_ListComp(self, node: ast.ListComp, ctx: _Context):  # noqa: N802
         acc = "$c_acc"
-        innermost = ast.Expr(ast.Call(
-            func=ast.Attribute(ast.Name(acc, ast.Load()), "append", ast.Load()),
-            args=[node.elt], keywords=[]))
+        innermost = ast.Expr(
+            ast.Call(func=ast.Attribute(ast.Name(acc, ast.Load()), "append", ast.Load()), args=[node.elt], keywords=[])
+        )
         return self.comprehension(node, ctx, ast.List([], ast.Load()), innermost, "<listcomp>")
 
-    def visit_SetComp(self, node: ast.SetComp, ctx: _Context):
+    def visit_SetComp(self, node: ast.SetComp, ctx: _Context):  # noqa: N802
         acc = "$c_acc"
-        innermost = ast.Expr(ast.Call(
-            func=ast.Attribute(ast.Name(acc, ast.Load()), "add", ast.Load()),
-            args=[node.elt], keywords=[]))
-        return self.comprehension(node, ctx, ast.Call(ast.Name("set", ast.Load()),
-                                   [ast.List([], ast.Load())], []), innermost, "<setcomp>")
+        innermost = ast.Expr(
+            ast.Call(func=ast.Attribute(ast.Name(acc, ast.Load()), "add", ast.Load()), args=[node.elt], keywords=[])
+        )
+        return self.comprehension(
+            node, ctx, ast.Call(ast.Name("set", ast.Load()), [ast.List([], ast.Load())], []), innermost, "<setcomp>"
+        )
 
-    def visit_DictComp(self, node: ast.DictComp, ctx: _Context):
+    def visit_DictComp(self, node: ast.DictComp, ctx: _Context):  # noqa: N802
         acc = "$c_acc"
         innermost = ast.Assign(
-            targets=[ast.Subscript(
-                value=ast.Name(acc, ast.Load()), slice=node.key, ctx=ast.Store())],
-            value=node.value)
+            targets=[ast.Subscript(value=ast.Name(acc, ast.Load()), slice=node.key, ctx=ast.Store())], value=node.value
+        )
         return self.comprehension(node, ctx, ast.Dict(keys=[], values=[]), innermost, "<dictcomp>")
 
-    def visit_Assert(self, stmt: ast.Assert, ctx: _Context):
+    def visit_Assert(self, stmt: ast.Assert, ctx: _Context):  # noqa: N802
         cond = self.visit(stmt.test, ctx)
         msg = self.visit(stmt.msg, ctx) if stmt.msg else None
         ctx.call_void("pil.assert", (cond, msg))
 
-    def visit_Raise(self, stmt: ast.Raise, ctx: _Context):
+    def visit_Raise(self, stmt: ast.Raise, ctx: _Context):  # noqa: N802
         if stmt.exc is None:
             ctx.raise_error(stmt, "bare raise is not supported")
 

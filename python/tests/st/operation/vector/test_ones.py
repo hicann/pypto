@@ -8,15 +8,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import os
-import pypto
-import pytest
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
-import torch_npu
+import torch
+
+import pypto
 
 
 def test_vector_operation_ones():
@@ -35,8 +35,7 @@ def test_vector_operation_ones():
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_VEC_DUP_L1", idx_name="s_idx"):
                 tile_a = pypto.tensor()
                 tile_a.move(pypto.ones(view_shape, dtype=dtype))
-                pypto.assemble(
-                    tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], a)
+                pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], a)
                 del tile_a
     a_tensor = torch.zeros(n, m, dtype=torch.float32)
     pto_result_tensor = pypto.from_torch(a_tensor, "output_tensor")
@@ -64,8 +63,7 @@ def test_vector_operation_zeros():
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_VEC_DUP_L1", idx_name="s_idx"):
                 tile_a = pypto.tensor()
                 tile_a.move(pypto.zeros(view_shape[0], view_shape[1], dtype=dtype))
-                pypto.assemble(
-                    tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], a)
+                pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], a)
                 del tile_a
     a_tensor = torch.ones(n, m, dtype=torch.float32)
     pto_result_tensor = pypto.from_torch(a_tensor, "output_tensor")

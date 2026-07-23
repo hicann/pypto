@@ -22,14 +22,15 @@ This example demonstrates:
 Attention is the core mechanism in transformer architectures.
 """
 
-import os
-import sys
 import argparse
 from dataclasses import dataclass
+import os
+import sys
 from typing import Optional
-import torch
-import pypto
 
+import torch
+
+import pypto
 
 BATCH_SIZE = 2
 SEQ_LEN_Q = 16
@@ -82,6 +83,7 @@ def get_device_id():
 @dataclass
 class AttentionConfig:
     """Configuration for attention operations."""
+
     num_heads: int = 8
     head_dim: int = 64
     scale: Optional[float] = None  # If None, uses 1/sqrt(head_dim)
@@ -90,11 +92,7 @@ class AttentionConfig:
 
 
 def scaled_dot_product_attention_golden(
-    q: torch.Tensor,
-    k: torch.Tensor,
-    v: torch.Tensor,
-    scale: float,
-    attn_mask: Optional[torch.Tensor] = None
+    q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, scale: float, attn_mask: Optional[torch.Tensor] = None
 ) -> torch.Tensor:
     """PyTorch reference implementation of scaled dot-product attention."""
     # Compute attention scores: Q @ K^T
@@ -116,8 +114,9 @@ def scaled_dot_product_attention_golden(
     return output
 
 
-def scaled_dot_product_attention_core(q: pypto.Tensor, k: pypto.Tensor, v: pypto.Tensor,
-                                      scale: float, dtype: pypto.DataType) -> pypto.Tensor:
+def scaled_dot_product_attention_core(
+    q: pypto.Tensor, k: pypto.Tensor, v: pypto.Tensor, scale: float, dtype: pypto.DataType
+) -> pypto.Tensor:
     k_t = pypto.transpose(k, 2, 3)
     scores = pypto.matmul(q, k_t, out_dtype=dtype)
     scores_scaled = scores * scale
@@ -131,8 +130,9 @@ def scaled_dot_product_attention_kernel(
     q: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM), pypto.DT_BF16),
     k: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM), pypto.DT_BF16),
     v: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM), pypto.DT_BF16),
-    output: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM), pypto.DT_BF16)):
-    scale = 1.0 / (HEAD_DIM ** 0.5)
+    output: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM), pypto.DT_BF16),
+):
+    scale = 1.0 / (HEAD_DIM**0.5)
     pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
     pypto.set_vec_tile_shapes(1, 8, 16, HEAD_DIM)
     scores = pypto.matmul(q, pypto.transpose(k, 2, 3), out_dtype=pypto.DT_BF16)
@@ -155,7 +155,7 @@ def test_scaled_dot_product_attention(device_id=None, dynamic: bool = False) -> 
     out = torch.empty(BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM, dtype=torch.bfloat16, device=device)
     scaled_dot_product_attention_kernel(q_torch, k_torch, v_torch, out)
 
-    scale = 1.0 / (HEAD_DIM ** 0.5)
+    scale = 1.0 / (HEAD_DIM**0.5)
     golden = scaled_dot_product_attention_golden(q_torch, k_torch, v_torch, scale)
 
     print(f"Input shape: {q_torch.shape}")
@@ -169,9 +169,14 @@ def test_scaled_dot_product_attention(device_id=None, dynamic: bool = False) -> 
     print()
 
 
-def attention_with_projection_core(q_view: pypto.Tensor, k_view: pypto.Tensor,
-                                   v_view: pypto.Tensor, out_weight: pypto.Tensor,
-                                    scale: float, dtype: pypto.DataType) -> pypto.Tensor:
+def attention_with_projection_core(
+    q_view: pypto.Tensor,
+    k_view: pypto.Tensor,
+    v_view: pypto.Tensor,
+    out_weight: pypto.Tensor,
+    scale: float,
+    dtype: pypto.DataType,
+) -> pypto.Tensor:
     batch = q_view.shape[0]
     num_heads = q_view.shape[1]
     seq_len = q_view.shape[2]
@@ -184,8 +189,7 @@ def attention_with_projection_core(q_view: pypto.Tensor, k_view: pypto.Tensor,
     attn_output = pypto.matmul(attn_weights, v_view, out_dtype=dtype)
     # Transpose back and reshape
     attn_output = pypto.transpose(attn_output, 1, 2)
-    attn_output_flat = pypto.reshape(attn_output,
-                                [batch, seq_len, num_heads * head_dim])
+    attn_output_flat = pypto.reshape(attn_output, [batch, seq_len, num_heads * head_dim])
     # Output projection
     res = pypto.matmul(attn_output_flat, out_weight, out_dtype=dtype)
     return res
@@ -198,11 +202,12 @@ def attention_with_projection_kernel(
     k_weight: pypto.Tensor((1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM), pypto.DT_BF16),
     v_weight: pypto.Tensor((1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM), pypto.DT_BF16),
     out_weight: pypto.Tensor((1, NUM_HEADS * HEAD_DIM, HIDDEN_SIZE), pypto.DT_BF16),
-    output_tensor: pypto.Tensor((BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE), pypto.DT_BF16)):
+    output_tensor: pypto.Tensor((BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE), pypto.DT_BF16),
+):
     tile_b = 1
     b_loop = BATCH_SIZE // tile_b
 
-    scale = 1.0 / (HEAD_DIM ** 0.5)
+    scale = 1.0 / (HEAD_DIM**0.5)
     pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
     pypto.set_vec_tile_shapes(1, 16, 8, HEAD_DIM)
 
@@ -243,7 +248,8 @@ def attention_with_projection_golden(
     q_weight: torch.Tensor,
     k_weight: torch.Tensor,
     v_weight: torch.Tensor,
-    out_weight: torch.Tensor) -> torch.Tensor:
+    out_weight: torch.Tensor,
+) -> torch.Tensor:
     num_heads = NUM_HEADS
     head_dim = HEAD_DIM
 
@@ -257,7 +263,7 @@ def attention_with_projection_golden(
     k = k.view(batch_size, seq_len, num_heads, head_dim).transpose(1, 2)
     v = v.view(batch_size, seq_len, num_heads, head_dim).transpose(1, 2)
 
-    scale = 1.0 / (head_dim ** 0.5)
+    scale = 1.0 / (head_dim**0.5)
     scores = torch.matmul(q, k.transpose(-2, -1)) * scale
     attn_weights = torch.softmax(scores, dim=-1)
     context = torch.matmul(attn_weights, v)
@@ -285,9 +291,7 @@ def test_attention_with_projection(device_id=None, dynamic: bool = False) -> Non
     out = torch.empty(BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE, dtype=torch.bfloat16, device=device)
     attention_with_projection_kernel(hidden_states, q_weight, k_weight, v_weight, out_weight, out)
 
-    golden = attention_with_projection_golden(
-        hidden_states, q_weight, k_weight, v_weight, out_weight
-    )
+    golden = attention_with_projection_golden(hidden_states, q_weight, k_weight, v_weight, out_weight)
 
     print(f"Hidden states shape: {hidden_states.shape}")
     print(f"Output shape: {out.shape}")
@@ -316,26 +320,14 @@ Examples:
   %(prog)s attention_with_projection::test_attention_with_projection
             Run example attention_with_projection::test_attention_with_projection
   %(prog)s --list       List all available examples
-        """
+        """,
     )
     parser.add_argument(
-        'example_id',
-        type=str,
-        nargs='?',
-        help='Example ID to run (1-2). If not specified, all examples will run.'
+        'example_id', type=str, nargs='?', help='Example ID to run (1-2). If not specified, all examples will run.'
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default='npu',
-        choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default='npu', choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
     args = parser.parse_args()
 
@@ -344,13 +336,13 @@ Examples:
         'attention_dynamic::test_attention_dynamic': {
             'name': 'Attention Dynamic',
             'description': 'Scaled dot-product attention with dynamic shapes',
-            'function': test_scaled_dot_product_attention
+            'function': test_scaled_dot_product_attention,
         },
         'attention_with_projection::test_attention_with_projection': {
             'name': 'Attention with Projections',
             'description': 'Complete attention with input/output projections',
-            'function': test_attention_with_projection
-        }
+            'function': test_attention_with_projection,
+        },
     }
 
     # List examples if requested
@@ -394,7 +386,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("Make sure CANN environment is configured and NPU is available\n")

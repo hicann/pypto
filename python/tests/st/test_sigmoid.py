@@ -8,16 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import pypto
-import pytest
-import torch
-import numpy as np
-from numpy.testing import assert_allclose
-import torch_npu
+""" """
 
+import os
+
+from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def test_sigmoid_shape_dim():
@@ -30,11 +28,12 @@ def test_sigmoid_shape_dim():
     with pypto.function("SIGMOID_SHAPE", x):
         pypto.set_vec_tile_shapes(4, 4)
         res = pypto.sigmoid(x)
-        torch_case_tensor = torch.randn((4, 4), dtype = torch.float32)
+        torch_case_tensor = torch.randn((4, 4), dtype=torch.float32)
         torch_case_res = torch.sigmoid(torch_case_tensor)
         assert res.shape == list(torch_case_res.shape)
 
-def test_sigmoid_FP32():
+
+def test_sigmoid_fp32():
     """Test whether the output of FP32 is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -61,7 +60,8 @@ def test_sigmoid_FP32():
 
     pypto.runtime._device_fini()
 
-def test_sigmoid_FP16():
+
+def test_sigmoid_fp16():
     """Test whether the output of FP16 shape is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -87,7 +87,8 @@ def test_sigmoid_FP16():
 
     pypto.runtime._device_fini()
 
-def test_tensor_sigmoid_FP32():
+
+def test_tensor_sigmoid_fp32():
     """Test whether the output of FP32 is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

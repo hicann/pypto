@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Parser error exceptions with rich diagnostic information."""
+
 from __future__ import annotations
 
 __all__ = [

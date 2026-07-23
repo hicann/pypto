@@ -9,18 +9,16 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 import os
-import pypto
-import torch
-import numpy as np
+
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
-@pypto.frontend.jit(
-    runtime_options={"run_mode": pypto.RunMode.NPU}
-)
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
 def add_kernel_range(
-    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    c: pypto.Tensor([16, 16], pypto.DT_FP32)
+    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32), c: pypto.Tensor([16, 16], pypto.DT_FP32)
 ):
     pypto.set_vec_tile_shapes(16, 16)
     c.move(b[0:16, 0:16])
@@ -28,12 +26,9 @@ def add_kernel_range(
         c.move(pypto.add(c, b[i * 16:(i + 1) * 16, i * 16:(i + 1) * 16]))
 
 
-@pypto.frontend.jit(
-    runtime_options={"run_mode": pypto.RunMode.NPU}
-)
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
 def add_kernel_list(
-    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    c: pypto.Tensor([16, 16], pypto.DT_FP32)
+    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32), c: pypto.Tensor([16, 16], pypto.DT_FP32)
 ):
     pypto.set_vec_tile_shapes(16, 16)
     c.move(b[0:16, 0:16])

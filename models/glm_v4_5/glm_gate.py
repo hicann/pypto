@@ -19,22 +19,21 @@ Main Functions:
     - gate: Main gate function for expert routing
     - select_experts_mm_kernel: JIT compiled kernel for matrix multiplication
 """
+
 import os
-import torch
-import torch_npu
+
 import numpy as np
 from numpy.testing import assert_allclose
-from torch._subclasses.fake_tensor import FakeTensor
-from torch._dynamo import allow_in_graph
-import pypto
-from utils.get_format import get_format
 import pytest
+import torch
+from torch._dynamo import allow_in_graph
+from torch._subclasses.fake_tensor import FakeTensor
+from utils.get_format import get_format
+
+import pypto
 
 
-def check_args(
-    gate_weight: torch.Tensor,
-    hidden_states: torch.Tensor
-) -> None:
+def check_args(gate_weight: torch.Tensor, hidden_states: torch.Tensor) -> None:
     """
     Validate input arguments for gate operation.
 
@@ -54,14 +53,11 @@ def check_args(
     assert hidden_states.dtype == torch.float32
 
 
-
-@pypto.frontend.jit(
-    runtime_options={}
-)
+@pypto.frontend.jit(runtime_options={})
 def select_experts_mm_kernel(
     hidden_states: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     mm_weight: pypto.Tensor([], pypto.DT_FP32),
-    router_logits_out: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32)
+    router_logits_out: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
 ):
     """
     JIT compiled kernel for gate matrix multiplication.
@@ -80,7 +76,7 @@ def select_experts_mm_kernel(
     """
     # 3. 得到动态tensor的shape
     bs = hidden_states.shape[0]
-    ne = mm_weight.shape[0]
+    _ne = mm_weight.shape[0]
     h_num = hidden_states.shape[1]
 
     view_shape = (32, h_num)
@@ -89,12 +85,13 @@ def select_experts_mm_kernel(
 
     # 4. 实现kernel逻辑，循环展开BS动态轴
     for bs_idx in pypto.loop(bs_loop, name="LOOP_MOE_MM_L0", idx_name="bs_idx"):
-
         # 5. 通过view得到tile_logits
-        tile_hidden_states = pypto.view(hidden_states, view_shape,
-                                        [bs_idx * view_shape[0], 0],
-                                        valid_shape=[(bs - bs_idx * view_shape[0]).min(view_shape[0]),
-                                                        h_num])
+        tile_hidden_states = pypto.view(
+            hidden_states,
+            view_shape,
+            [bs_idx * view_shape[0], 0],
+            valid_shape=[(bs - bs_idx * view_shape[0]).min(view_shape[0]), h_num],
+        )
 
         pypto.set_cube_tile_shapes([32, 32], [512, 1024], [16, 16])
 
@@ -102,8 +99,6 @@ def select_experts_mm_kernel(
 
         # 6. 将结果搬运到输出tensor上
         router_logits_out[bs_idx * view_shape[0]:, 0:] = res
-
-
 
 
 @pytest.mark.soc("950", "910")
@@ -140,16 +135,16 @@ def test_select_experts_mm():
         result_list = result.cpu().flatten().tolist()
 
         # weight result
-        assert_allclose(np.array(router_logits_out.cpu().flatten().tolist()),
-                        np.array(result_list),
-                        rtol=5e-3, atol=5e-3)
+        assert_allclose(
+            np.array(router_logits_out.cpu().flatten().tolist()), np.array(result_list), rtol=5e-3, atol=5e-3
+        )
 
 
 @allow_in_graph
 def gate(
     hidden_states: torch.Tensor,  # Hidden states of shape (num_tokens, hidden_size).
     gate_weight: torch.Tensor,  # gate matmul weights
-    router_logits_out: torch.Tensor
+    router_logits_out: torch.Tensor,
 ):
     """
     Gate operation for expert routing in MoE architecture.

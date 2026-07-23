@@ -42,19 +42,18 @@ __all__ = ["kernel"]
 
 
 import ast
-import sys
 import inspect
+import sys
 import textwrap
 from typing import Any, Callable, Optional
 
 from pypto.pypto_impl import ir
 from pypto_pro.language.parser._ast_parser import ASTParser
 from pypto_pro.language.parser.decorator import (
-    _calculate_col_offset,
-    _parse_ast_tree,
-    _find_ast_node,
     _attach_source_lines_to_error,
-    _extract_function_type_from_decorator,
+    _calculate_col_offset,
+    _find_ast_node,
+    _parse_ast_tree,
 )
 from pypto_pro.language.parser.diagnostics import ParserError, ParserSyntaxError
 
@@ -81,8 +80,7 @@ def extract_func_source_info(f: Callable):
         _attach_source_lines_to_error(e, source_file, source_lines_raw)
         raise
 
-    return (source_file, source_lines, source_lines_raw,
-            line_offset, col_offset, func_def)
+    return (source_file, source_lines, source_lines_raw, line_offset, col_offset, func_def)
 
 
 class KernelDef:
@@ -172,12 +170,16 @@ class KernelDef:
             if self._pipeline is not None:
                 from pypto_pro.runtime.pipeline import transform_pipeline
                 from pypto_pro.runtime.pipeline._dump import build_generated_file_source
-                func_def = transform_pipeline(
-                    func_def, self._closure_vars, self._pipeline)
+
+                func_def = transform_pipeline(func_def, self._closure_vars, self._pipeline)
                 self._pipeline_generated_source = build_generated_file_source(
-                    func_def, self._source_file, self._line_offset,
-                    self._col_offset, self._source_lines_raw,
-                    self._closure_vars)
+                    func_def,
+                    self._source_file,
+                    self._line_offset,
+                    self._col_offset,
+                    self._source_lines_raw,
+                    self._closure_vars,
+                )
 
             # The Program owns one IRDebugInfo; create it here and share it with the parser
             # (and its sub-parsers) so field names land in the table the Program carries.
@@ -210,14 +212,15 @@ class KernelDef:
                 if node is not None:
                     span = parser.span_tracker.get_span(node)
                 if isinstance(e, (AttributeError, TypeError)):
-                    hint = ("an internal type check failed while parsing; an argument may "
-                            "have an unsupported type — check that kernel arguments match "
-                            "the expected Tile/Tensor/scalar types")
+                    hint = (
+                        "an internal type check failed while parsing; an argument may "
+                        "have an unsupported type — check that kernel arguments match "
+                        "the expected Tile/Tensor/scalar types"
+                    )
                 else:
                     hint = "Check your function definition for errors"
                 raise ParserSyntaxError(
-                    f"Failed to parse kernel function '{self._func.__name__}': "
-                    f"{type(e).__name__}: {e}",
+                    f"Failed to parse kernel function '{self._func.__name__}': {type(e).__name__}: {e}",
                     span=span,
                     hint=hint,
                 ) from e
@@ -300,8 +303,7 @@ def kernel(
     closure_vars = {**caller_frame.f_globals, **caller_frame.f_locals}
 
     def _decorator(f: Callable) -> KernelDef:
-        (source_file, source_lines, source_lines_raw,
-         line_offset, col_offset, func_def) = extract_func_source_info(f)
+        (source_file, source_lines, source_lines_raw, line_offset, col_offset, func_def) = extract_func_source_info(f)
 
         return KernelDef(
             func=f,

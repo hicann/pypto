@@ -8,21 +8,20 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import argparse
 import json
 import os
-import sys
+
 import matplotlib
+
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import plotly.graph_objs as go
 import plotly.offline as pyo
-import plotly.express as px
 
 
 class PipeEntryInfo:
@@ -31,8 +30,8 @@ class PipeEntryInfo:
         self.core_idx = 0
         self.core_type = ""
         self.subgraph_id = -1
-        self.exec_start = 0,
-        self.exec_end = 0,
+        self.exec_start = (0,)
+        self.exec_end = (0,)
         self.color_label = ""
         self.func_name = ""
         self.predecessor = 0
@@ -60,27 +59,13 @@ class CoreInfo:
         self.pipes = {}
 
 
-total_pipe_events = {} # key: task_id, value: [TaskInfo]
-total_cores = {} # key: core_idx, value: [CoreInfo]
+total_pipe_events = {}  # key: task_id, value: [TaskInfo]
+total_cores = {}  # key: core_idx, value: [CoreInfo]
 pipe_event_alloc = 0
 max_end_time = 0
 work_data = []
-pipe_name_map = {
-    5: 'PIPE_S',
-    4: 'MTE_IN',
-    3: 'MTE1',
-    2: 'VECTOR_ALU',
-    1: 'CUBE',
-    0: 'MTE_OUT'
-}
-pipe_name_revers_map = {
-    'PIPE_S': 5,
-    'MTE_IN': 4,
-    'MTE1': 3,
-    'VECTOR_ALU': 2,
-    'CUBE': 1,
-    'MTE_OUT': 0
-}
+pipe_name_map = {5: 'PIPE_S', 4: 'MTE_IN', 3: 'MTE1', 2: 'VECTOR_ALU', 1: 'CUBE', 0: 'MTE_OUT'}
+pipe_name_revers_map = {'PIPE_S': 5, 'MTE_IN': 4, 'MTE1': 3, 'VECTOR_ALU': 2, 'CUBE': 1, 'MTE_OUT': 0}
 colors = ['#83639F', '#FAC03D', '#449945', '#1F70A9', '#C22F2F']
 
 
@@ -141,7 +126,7 @@ def sample_work_data():
     sample_interval = args.sample_interval
     num_cores = len(total_cores)
     stages_per_core = len(pipe_name_map)
-    total_time = ((max_end_time // time_convert) // sample_interval) + 1 # 时间轴长度
+    total_time = ((max_end_time // time_convert) // sample_interval) + 1  # 时间轴长度
 
     # 数据准备：生成三维数据矩阵 [core][stage][time]
     work_data = np.zeros((num_cores, stages_per_core, total_time))
@@ -162,7 +147,6 @@ def sample_work_data():
                     start_time += sample_interval
 
 
-
 def draw_pipe_swim_lane_png(path):
     global total_cores
     global total_pipe_events
@@ -174,7 +158,7 @@ def draw_pipe_swim_lane_png(path):
     sample_interval = args.sample_interval
     num_cores = len(total_cores)
     stages_per_core = len(pipe_name_map)
-    total_time = ((max_end_time // time_convert) // sample_interval) + 1 # 时间轴长度
+    total_time = ((max_end_time // time_convert) // sample_interval) + 1  # 时间轴长度
 
     # 创建图表
     width = max(total_time * 0.5 + 1, 18)
@@ -192,14 +176,14 @@ def draw_pipe_swim_lane_png(path):
             for t in range(total_time):
                 if work_data[core_idx, stage, t]:  # 如果该时刻工作
                     rect = plt.Rectangle(
-                        xy=(t, base_stage + stage),   # 左下角坐标(t, y)
-                        width=1,                     # 时间跨度1单位
-                        height=1,                    # 泳道高度1单位
-                        facecolor=current_color,      # 填充颜色
-                        edgecolor='#A0A0A0',         # 边框灰边
-                        linewidth=0.5,               # 边框宽度
+                        xy=(t, base_stage + stage),  # 左下角坐标(t, y)
+                        width=1,  # 时间跨度1单位
+                        height=1,  # 泳道高度1单位
+                        facecolor=current_color,  # 填充颜色
+                        edgecolor='#A0A0A0',  # 边框灰边
+                        linewidth=0.5,  # 边框宽度
                     )
-                    ax.add_patch(rect)               # 添加到图表
+                    ax.add_patch(rect)  # 添加到图表
 
     # 设置坐标系
     ax.set_xlim(0, total_time)
@@ -210,35 +194,23 @@ def draw_pipe_swim_lane_png(path):
         ax.axhline(y=split_line, color='black', linestyle='-', linewidth=0.8)
 
     # 设置Y轴标签
-    core_centers = [(core_id * stages_per_core) + stages_per_core / 2
-                    for core_id in range(num_cores)]
+    core_centers = [(core_id * stages_per_core) + stages_per_core / 2 for core_id in range(num_cores)]
     ax.set_yticks(core_centers)
     ax.set_yticklabels([f'{total_cores[i].core_type}_{i}' for i in sorted(total_cores.keys())])
 
     legend_elements = []
     for i, color in enumerate(colors):
-        legend_element = Patch(
-            facecolor=color,
-            edgecolor='black',
-            label=f"{pipe_name_map[i]}"
-        )
+        legend_element = Patch(facecolor=color, edgecolor='black', label=f"{pipe_name_map[i]}")
         legend_elements.append(legend_element)
 
     # 添加图例和视觉修饰
-    ax.legend(
-        handles=legend_elements,
-        title="Pipe Types",
-        loc='upper center',
-        ncol=15,
-        frameon=False
-    )
-
+    ax.legend(handles=legend_elements, title="Pipe Types", loc='upper center', ncol=15, frameon=False)
 
     # 其他美化设置
     plt.title("Multi-Core Task Scheduling Visualization", pad=20)
     plt.xlabel("Time Units")
     plt.ylabel("AICores")
-    ax.grid(axis='x', alpha=0.3)       # 只显示横向辅助线
+    ax.grid(axis='x', alpha=0.3)  # 只显示横向辅助线
     ax.tick_params(axis='both', which='major', labelsize=8)
     plt.tight_layout()
     plt.savefig(path)
@@ -255,7 +227,7 @@ def draw_pipe_swim_lane_html(path):
     sample_interval = args.sample_interval
     num_cores = len(total_cores)
     stages_per_core = len(pipe_name_map)
-    total_time = ((max_end_time // time_convert) // sample_interval) + 1 # 时间轴长度
+    total_time = ((max_end_time // time_convert) // sample_interval) + 1  # 时间轴长度
 
     # 创建 Plotly 图表
     fig = go.Figure()
@@ -267,16 +239,18 @@ def draw_pipe_swim_lane_html(path):
             # 绘制该阶段的时间序列
             for t in range(total_time):
                 if work_data[core_idx, stage, t]:  # 如果该时刻工作
-                    l = base_stage + stage
-                    fig.add_trace(go.Scatter(
-                        x=[t, t + 1, t + 1, t, t],
-                        y=[l, l, l + 0.9, l + 0.9, l],
-                        fill='toself',
-                        fillcolor=current_color,
-                        mode='lines',
-                        line=dict(color=current_color),
-                        showlegend=False
-                    ))
+                    level = base_stage + stage
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[t, t + 1, t + 1, t, t],
+                            y=[level, level, level + 0.9, level + 0.9, level],
+                            fill='toself',
+                            fillcolor=current_color,
+                            mode='lines',
+                            line=dict(color=current_color),
+                            showlegend=False,
+                        )
+                    )
 
     # 设置布局
     fig.update_layout(
@@ -288,7 +262,7 @@ def draw_pipe_swim_lane_html(path):
             range=[0, num_cores * stages_per_core],
             tickvals=list(range(0, num_cores * stages_per_core, stages_per_core)),
             ticktext=[f'{total_cores[i].core_type}_{i}' for i in sorted(total_cores.keys())],
-            showgrid=False
+            showgrid=False,
         ),
         xaxis=dict(
             tickmode='auto',
@@ -299,12 +273,11 @@ def draw_pipe_swim_lane_html(path):
     # 添加图例
     legend_items = []
     for index in range(len(colors) - 1, -1, -1):
-        legend_items.append(go.Scatter(
-            x=[0], y=[0],
-            mode='markers',
-            marker=dict(color=colors[index], size=10),
-            name=pipe_name_map[index]
-        ))
+        legend_items.append(
+            go.Scatter(
+                x=[0], y=[0], mode='markers', marker=dict(color=colors[index], size=10), name=pipe_name_map[index]
+            )
+        )
 
     fig.add_traces(legend_items)
     pyo.plot(fig, filename=path, auto_open=False)

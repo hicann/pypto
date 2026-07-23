@@ -16,7 +16,7 @@ __all__ = [
     "get_registered_rules",
 ]
 
-from .models import Violation  # noqa: E402
-from .rule_base import Rule, RuleContext  # noqa: E402
-from .rule_registry import get_registered_rules, register_rule  # noqa: E402
-from . import rules as _rules  # noqa: F401, E402
+from . import rules as _rules  # noqa: F401
+from .models import Violation
+from .rule_base import Rule, RuleContext
+from .rule_registry import get_registered_rules, register_rule

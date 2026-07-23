@@ -14,6 +14,7 @@ import logging
 
 import pytest
 import torch
+
 import pypto
 
 logging.basicConfig(level=logging.INFO, format="", force=True)

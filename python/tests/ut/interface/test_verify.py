@@ -8,11 +8,12 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import pypto
+""" """
+
 import pytest
 import torch
+
+import pypto
 
 
 def _to_device_tensor_data(tensor: torch.Tensor, shape=None, dtype=pypto.DT_FP32):
@@ -32,9 +33,7 @@ def test_verify_dynamic_ops_assemble():
     t1_data = torch.ones((n * s, m * s)) * 2
     out_data = torch.zeros((n * s, m * s))
     golden = torch.ones((n * s, m * s)) * 3
-    pypto.set_verify_options(
-        enable_pass_verify=True
-    )
+    pypto.set_verify_options(enable_pass_verify=True)
     pypto.set_verify_golden_data([t0_data, t1_data, out_data], [t0_data, t1_data, golden])
     with pypto.function("main", t0, t1, out):
         pypto.set_vec_tile_shapes(8, 8)

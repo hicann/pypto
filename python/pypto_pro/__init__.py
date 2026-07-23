@@ -40,9 +40,9 @@ __all__ = [
     "DT_HF8",
 ]
 
-from ._bootstrap import DataType, InternalError, codegen
 from . import ir as ir
 from . import language as language
+from ._bootstrap import DataType, InternalError, codegen
 
 DT_BF16 = DataType.BF16
 DT_BOOL = DataType.BOOL

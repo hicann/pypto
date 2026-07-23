@@ -8,15 +8,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import logging
 import os
 
-import pypto
 import torch
 import torch_npu
 
+import pypto
 
 M = 256
 N = 64
@@ -32,10 +32,12 @@ def _reshape_matmul_only_torch(input_tensor_a, input_tensor_b):
 
     for b_idx in range(b_loop):
         for s_idx in range(s_loop):
-            input_a_view = input_tensor_a[:, b_idx * TILE_B: (b_idx + 1) * TILE_B,
-                                        s_idx * TILE_S: (s_idx + 1) * TILE_S]
-            input_b_view = input_tensor_b[b_idx * TILE_B: (b_idx + 1) * TILE_B,
-                                          s_idx * TILE_S: (s_idx + 1) * TILE_S, :]
+            input_a_view = input_tensor_a[
+                :, b_idx * TILE_B:(b_idx + 1) * TILE_B, s_idx * TILE_S:(s_idx + 1) * TILE_S
+            ]
+            input_b_view = input_tensor_b[
+                b_idx * TILE_B:(b_idx + 1) * TILE_B, s_idx * TILE_S:(s_idx + 1) * TILE_S, :
+            ]
             input_a_view_2d = input_a_view.reshape([input_a_view.shape[0], -1])
             input_b_view_2d = input_b_view.reshape([-1, input_b_view.shape[-1]])
             output[b_idx, s_idx, :, :] = torch.matmul(input_a_view_2d, input_b_view_2d)
@@ -82,10 +84,12 @@ def reshape_matmul_only(
             pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
             pypto.set_vec_tile_shapes(32, 32, 32)
 
-            input_a_view = input_tensor_a[:, b_idx * TILE_B: (b_idx + 1) * TILE_B,
-                                        s_idx * TILE_S: (s_idx + 1) * TILE_S]
-            input_b_view = input_tensor_b[b_idx * TILE_B: (b_idx + 1) * TILE_B,
-                                          s_idx * TILE_S: (s_idx + 1) * TILE_S, :]
+            input_a_view = input_tensor_a[
+                :, b_idx * TILE_B:(b_idx + 1) * TILE_B, s_idx * TILE_S:(s_idx + 1) * TILE_S
+            ]
+            input_b_view = input_tensor_b[
+                b_idx * TILE_B:(b_idx + 1) * TILE_B, s_idx * TILE_S:(s_idx + 1) * TILE_S, :
+            ]
             valid_b = pypto.min(TILE_B, input_tensor_b.shape[0] - b_idx * TILE_B)
             valid_s = pypto.min(TILE_S, input_tensor_b.shape[1] - s_idx * TILE_S)
 

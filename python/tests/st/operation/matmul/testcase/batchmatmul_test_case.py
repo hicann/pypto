@@ -12,10 +12,12 @@
 pypto.batchmatmul ST测试用例配置
 用于System Test自动化测试框架
 """
+
 from dataclasses import dataclass
 
-import pypto
 import torch
+
+import pypto
 
 
 @dataclass
@@ -127,7 +129,7 @@ BASIC_3D_TESTS = [
         "viewshape": [3, 128, 396],
         "tileshape": [[64, 64], [32, 160], [32, 224]],
         "products": ["950"],
-    }
+    },
 ]
 
 

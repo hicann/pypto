@@ -8,21 +8,22 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import math
+""" """
+
 import logging
-from dataclasses import dataclass
+import math
+import os
+
+import numpy as np
+import pytest
+from sparse_flash_attention_quant_impl import (
+    SaTileShapeConfig,
+    sparse_flash_attention_quant_d,
+    sparse_flash_attention_quant_d_950,
+    sparse_flash_attention_quant_p,
+)
 import torch
 import torch_npu
-import pytest
-import numpy as np
-import pypto
-
-from sparse_flash_attention_quant_impl \
-    import sparse_flash_attention_quant_d, sparse_flash_attention_quant_p,\
-           sparse_flash_attention_quant_d_950, SaTileShapeConfig
 from utils.compare import compare
 
 
@@ -78,7 +79,7 @@ def compute_attention(input_data, params, s2_tile):
             cur_seq = min(max(cur_k_seq - s1 + 1 + s1_idx, 0), topk)
             bn_per_batch = math.ceil(cur_seq / s2_tile)
 
-            qi = q[b_idx, s1_idx, :, :] # (n1, dk)
+            qi = q[b_idx, s1_idx, :, :]  # (n1, dk)
 
             for s2_idx in range(bn_per_batch):
                 s2_tile_cur = min(s2_tile, cur_seq - s2_idx * s2_tile)
@@ -122,13 +123,13 @@ def compute_attention(input_data, params, s2_tile):
                 # C1
                 sij = torch.matmul(qi.to(torch.float32), kj_view.transpose(1, 0).to(torch.float32)).to(torch.float32)
 
-                sij_scale = sij * scalar # (n1, s2_tile)
-                tilda_mij = sij_scale.amax(dim=-1, keepdims=True) # (n1, 1)
-                t_sub = sij_scale - tilda_mij # (n1, s2_tile)
-                tilda_pij = torch.exp(t_sub) # (n1, s2_tile)
+                sij_scale = sij * scalar  # (n1, s2_tile)
+                tilda_mij = sij_scale.amax(dim=-1, keepdims=True)  # (n1, 1)
+                t_sub = sij_scale - tilda_mij  # (n1, s2_tile)
+                tilda_pij = torch.exp(t_sub)  # (n1, s2_tile)
                 tilda_pij_f16 = tilda_pij.to(input_dtype)
                 q1 = torch.matmul(tilda_pij_f16.to(torch.float32), vj.to(torch.float32)).to(torch.float32)
-                tilda_lij = tilda_pij.sum(dim=-1, keepdims=True) # (n1, 1)
+                tilda_lij = tilda_pij.sum(dim=-1, keepdims=True)  # (n1, 1)
 
                 if s2_idx == 0:
                     oi_tmp = q1
@@ -199,7 +200,7 @@ def compute_attention_no_flash(input_data, params, s2_tile):
             cur_seq = min(max(cur_k_seq - s1 + 1 + s1_idx, 0), topk)
             bn_per_batch = math.ceil(cur_seq / s2_tile)
 
-            qi = q[b_idx, s1_idx, :, :] # (n1, dk)
+            qi = q[b_idx, s1_idx, :, :]  # (n1, dk)
 
             for s2_idx in range(bn_per_batch):
                 s2_tile_cur = min(s2_tile, cur_seq - s2_idx * s2_tile)
@@ -243,11 +244,11 @@ def compute_attention_no_flash(input_data, params, s2_tile):
                 # C1
                 sij = torch.matmul(qi.to(torch.float32), kj_view.transpose(1, 0).to(torch.float32)).to(torch.float32)
 
-                sij_scale = sij * scalar # (n1, s2_tile)
-                tilda_mij = sij_scale.amax(dim=-1, keepdims=True) # (n1, 1)
-                t_sub = sij_scale - tilda_mij # (n1, s2_tile)
-                tilda_pij = torch.exp(t_sub) # (n1, s2_tile)
-                tilda_lij = tilda_pij.sum(dim=-1, keepdims=True)# (n1, 1)
+                sij_scale = sij * scalar  # (n1, s2_tile)
+                tilda_mij = sij_scale.amax(dim=-1, keepdims=True)  # (n1, 1)
+                t_sub = sij_scale - tilda_mij  # (n1, s2_tile)
+                tilda_pij = torch.exp(t_sub)  # (n1, s2_tile)
+                tilda_lij = tilda_pij.sum(dim=-1, keepdims=True)  # (n1, 1)
                 tmp_softmax = (tilda_pij / tilda_lij).to(input_dtype)
                 atten_out_part = torch.matmul(tmp_softmax.to(torch.float32), vj.to(torch.float32)).to(torch.float32)
 
@@ -308,10 +309,10 @@ def gen_gather_select_attention_golden(dtype, bn1n2s1, is_kn_quant, actual_seq):
     # q head dim
     d_q = kv_lora_rank + qk_rope_dim
     # k head dim
-    d_k = kv_lora_rank + qk_rope_dim
+    _d_k = kv_lora_rank + qk_rope_dim
     # v head dim
-    d_v = kv_lora_rank
-    scalar = d_q ** -0.5
+    _d_v = kv_lora_rank
+    scalar = d_q**-0.5
     if isinstance(actual_seq, int):
         actual_seq = [actual_seq] * b
     elif isinstance(actual_seq, list):
@@ -344,7 +345,6 @@ def gen_gather_select_attention_golden(dtype, bn1n2s1, is_kn_quant, actual_seq):
 
     for b_i in range(b):
         for s_q_i in range(s_q):
-
             if slc_actual_seq[b_i] < topk:
                 topk_indices[b_i, s_q_i, :slc_actual_seq[b_i]] = torch.arange(0, slc_actual_seq[b_i])
             else:
@@ -383,8 +383,20 @@ def gen_gather_select_attention_golden(dtype, bn1n2s1, is_kn_quant, actual_seq):
     q_nope = q_nope.reshape(b * s_q * n_q, kv_lora_rank)
     q_rope = q_rope.reshape(b * s_q * n_q, qk_rope_dim)
     # input params
-    input_params = [b, s_q, n_q, n_kv, max_kv_seq, kv_lora_rank, qk_rope_dim, block_num, block_size, topk,
-                    is_kn_quant, scalar]
+    input_params = [
+        b,
+        s_q,
+        n_q,
+        n_kv,
+        max_kv_seq,
+        kv_lora_rank,
+        qk_rope_dim,
+        block_num,
+        block_size,
+        topk,
+        is_kn_quant,
+        scalar,
+    ]
     input_data_map = [q_nope, q_rope, kn, kr, kn_scales, topk_indices, block_table, actual_seq]
 
     return input_params, input_data_map, atten_out
@@ -403,8 +415,8 @@ def do_test_sparse_attention_func(bn1n2s1, actual_seq, input_params, input_data,
             gather_vec_tile_shape=[32, 512],
             c1_tile_shape=[128, 128, 128, 128, 128, 128],
             v1_tile_shape=[8, 2048],
-            c2_tile_shape=[128, 128, 128, 128, 128, 128], # C1的N轴与C2的K轴一致
-            v2_tile_shape=[64, 128]
+            c2_tile_shape=[128, 128, 128, 128, 128, 128],  # C1的N轴与C2的K轴一致
+            v2_tile_shape=[64, 128],
         )
     else:
         tile_config = SaTileShapeConfig(
@@ -414,7 +426,7 @@ def do_test_sparse_attention_func(bn1n2s1, actual_seq, input_params, input_data,
             c1_tile_shape=[128, 128, 128, 128, 128, 128],
             v1_tile_shape=[8, 2048],
             c2_tile_shape=[128, 128, 128, 128, 128, 128],
-            v2_tile_shape=[64, 256]
+            v2_tile_shape=[64, 256],
         )
 
     if is_soc_950:
@@ -425,11 +437,12 @@ def do_test_sparse_attention_func(bn1n2s1, actual_seq, input_params, input_data,
             c1_tile_shape=[128, 128, 128, 128, 64, 64],
             v1_tile_shape=[4, 2048],
             c2_tile_shape=[128, 128, 128, 128, 128, 128],
-            v2_tile_shape=[64, 256]
+            v2_tile_shape=[64, 256],
         )
 
-    b, s1, n_q, n_kv, max_kv_seq, kv_lora_rank, qk_rope_dim, block_num, block_size, topk, \
-        is_kn_quant, softmax_scale = input_params
+    b, s1, n_q, n_kv, max_kv_seq, kv_lora_rank, qk_rope_dim, block_num, block_size, topk, is_kn_quant, softmax_scale = (
+        input_params
+    )
     q_nope, q_rope, kn, kr, kn_scales, topk_indices, block_table, kv_actual_seqs = input_data
     kv_act_seqs = torch.tensor(actual_seq, dtype=torch.int32)
 
@@ -441,8 +454,16 @@ def do_test_sparse_attention_func(bn1n2s1, actual_seq, input_params, input_data,
     topk_indices_npu = topk_indices.npu()
     block_table_npu = block_table.npu()
     kv_act_seqs_npu = kv_act_seqs.npu()
-    pto_inputs = [q_nope_npu, q_rope_npu, kn_npu, kr_npu, kn_scales_npu, topk_indices_npu, block_table_npu,
-                  kv_act_seqs_npu]
+    pto_inputs = [
+        q_nope_npu,
+        q_rope_npu,
+        kn_npu,
+        kr_npu,
+        kn_scales_npu,
+        topk_indices_npu,
+        block_table_npu,
+        kv_act_seqs_npu,
+    ]
 
     calc_attention_out = torch.zeros([b, s1, n_q, kv_lora_rank], dtype=torch.bfloat16)
     calc_attention_out_npu = calc_attention_out.npu()
@@ -451,14 +472,17 @@ def do_test_sparse_attention_func(bn1n2s1, actual_seq, input_params, input_data,
     max_blocknum_perbatch = math.ceil(max_kv_seq / block_size)
 
     if is_p and not is_soc_950:
-        sparse_flash_attention_quant_p(*pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, \
-            max_blocknum_perbatch, tile_config)
+        sparse_flash_attention_quant_p(
+            *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, max_blocknum_perbatch, tile_config
+        )
     elif not is_p and not is_soc_950:
-        sparse_flash_attention_quant_d(*pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, \
-            max_blocknum_perbatch, tile_config)
+        sparse_flash_attention_quant_d(
+            *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, max_blocknum_perbatch, tile_config
+        )
     else:
-        sparse_flash_attention_quant_d_950(*pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, \
-            max_blocknum_perbatch, tile_config)
+        sparse_flash_attention_quant_d_950(
+            *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, max_blocknum_perbatch, tile_config
+        )
     torch_npu.npu.synchronize()
     compare(calc_attention_out_npu.cpu(), atten_out, "atten_out", atol=0.0001, rtol=0.005, max_error_count=100)
 
@@ -466,21 +490,11 @@ def do_test_sparse_attention_func(bn1n2s1, actual_seq, input_params, input_data,
 def get_case_config(case_name: str):
     # case参数配置字典，key为case名称，value为对应的参数元组(bn1n2s1, is_kn_quant, actual_seq)
     test_case_config = {
-        "sfa_bf16_b4_s2_seq64K_total_int8_d": (
-            (4, 128, 1, 2), 1, [65536, 16381, 666, 15], 0
-        ),
-        "sfa_bf16_b4_s2_seq64K_per_int8_d": (
-            (4, 128, 1, 2), 1, [65536] * 4, 0
-        ),
-        "sfa_bf16_b4_s2_seq64K_per_bf16_d": (
-            (4, 128, 1, 2), 0, [65536] * 4, 0
-        ),
-        "sfa_bf16_b1_s256_seq64K_int8_p": (
-            (1, 128, 1, 256), 1, [65536], 0
-        ),
-        "sfa_bf16_b4_s2_seq64K_per_int8_d_950": (
-            (4, 128, 1, 2), 0, [65536] * 4, 1
-        ),
+        "sfa_bf16_b4_s2_seq64K_total_int8_d": ((4, 128, 1, 2), 1, [65536, 16381, 666, 15], 0),
+        "sfa_bf16_b4_s2_seq64K_per_int8_d": ((4, 128, 1, 2), 1, [65536] * 4, 0),
+        "sfa_bf16_b4_s2_seq64K_per_bf16_d": ((4, 128, 1, 2), 0, [65536] * 4, 0),
+        "sfa_bf16_b1_s256_seq64K_int8_p": ((1, 128, 1, 256), 1, [65536], 0),
+        "sfa_bf16_b4_s2_seq64K_per_int8_d_950": ((4, 128, 1, 2), 0, [65536] * 4, 1),
     }
     case_config = test_case_config.get(case_name)
     return case_config
@@ -496,9 +510,7 @@ def do_test_sfa_entry(case_name: str, is_p: bool, is_soc_950: bool):
     input_params, input_data, atten_out = gen_gather_select_attention_golden(
         torch.bfloat16, bn1n2s1, is_kn_quant, actual_seq
     )
-    do_test_sparse_attention_func(
-        bn1n2s1, actual_seq, input_params, input_data, atten_out, is_p, is_soc_950
-    )
+    do_test_sparse_attention_func(bn1n2s1, actual_seq, input_params, input_data, atten_out, is_p, is_soc_950)
     return True
 
 
@@ -544,10 +556,7 @@ def test_sfa_bf16_b1_s256_seq64k_int8_p():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-        level=logging.INFO
-    )
+    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.INFO)
     test_sfa_bf16_b4_s2_seq64k_total_int8_d()
     test_sfa_bf16_b4_s2_seq64k_per_int8_d()
     test_sfa_bf16_b1_s256_seq64k_int8_p()

@@ -21,31 +21,26 @@ Pass UT 生成工具 - PR 处理模块
 支持多种输入方式（PR编号、diff文件、diff内容、离线文件）
 """
 
-import os
-import subprocess
-import re
-import sys
+from dataclasses import dataclass
 import json
 import logging
+import os
+import re
 import shutil
-import urllib.request
-import urllib.error
+import subprocess
+import sys
 import tarfile
 import tempfile
-from typing import Optional, List, Dict, Tuple
-from datetime import datetime
-from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+import urllib.error
+import urllib.request
 
 try:
     from common_utils import safe_extractall
 except ImportError:
     from scripts.common_utils import safe_extractall
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s: %(message)s",
-    stream=sys.stdout
-)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s", stream=sys.stdout)
 logger = logging.getLogger(__name__)
 
 
@@ -150,10 +145,7 @@ def get_pr_diff_via_git_fetch(
     try:
         logger.info(f"通过 git fetch 获取 PR #{pr_number} 的 diff...")
 
-        result = subprocess.run(
-            ['git', 'remote', '-v'],
-            capture_output=True, text=True, cwd=work_dir
-        )
+        result = subprocess.run(['git', 'remote', '-v'], capture_output=True, text=True, cwd=work_dir)
 
         remotes = []
         for line in result.stdout.strip().split('\n'):
@@ -165,15 +157,17 @@ def get_pr_diff_via_git_fetch(
         for remote_name in remotes + ['cann', 'origin', 'bytecode']:
             result = subprocess.run(
                 ['git', 'fetch', remote_name, f'pull/{pr_number}/head:{local_branch}'],
-                capture_output=True, text=True, cwd=work_dir, timeout=60
+                capture_output=True,
+                text=True,
+                cwd=work_dir,
+                timeout=60,
             )
 
             if result.returncode == 0:
                 logger.info("成功从 {remote_name} 获取 PR 分支")
 
                 result = subprocess.run(
-                    ['git', 'log', '-1', '--format=%H', local_branch],
-                    capture_output=True, text=True, cwd=work_dir
+                    ['git', 'log', '-1', '--format=%H', local_branch], capture_output=True, text=True, cwd=work_dir
                 )
 
                 if result.returncode == 0:
@@ -181,8 +175,7 @@ def get_pr_diff_via_git_fetch(
                     base_commit = f"{commit}~1"
 
                     result = subprocess.run(
-                        ['git', 'diff', f'{base_commit}..{commit}'],
-                        capture_output=True, text=True, cwd=work_dir
+                        ['git', 'diff', f'{base_commit}..{commit}'], capture_output=True, text=True, cwd=work_dir
                     )
 
                     if result.returncode == 0:
@@ -211,10 +204,7 @@ def fetch_pr_branch_from_author(config: FetchBranchConfig) -> Tuple[Optional[str
 
         author_remote_name = f"pr_author_{config.author}"
 
-        result = subprocess.run(
-            ['git', 'remote', '-v'],
-            capture_output=True, text=True, cwd=work_dir
-        )
+        result = subprocess.run(['git', 'remote', '-v'], capture_output=True, text=True, cwd=work_dir)
 
         remote_url = None
         for line in result.stdout.strip().split('\n'):
@@ -229,7 +219,9 @@ def fetch_pr_branch_from_author(config: FetchBranchConfig) -> Tuple[Optional[str
             logger.info("添加作者 remote: %s", author_git_url)
             result = subprocess.run(
                 ['git', 'remote', 'add', author_remote_name, author_git_url],
-                capture_output=True, text=True, cwd=work_dir
+                capture_output=True,
+                text=True,
+                cwd=work_dir,
             )
 
             if result.returncode != 0 and 'already exists' not in result.stderr:
@@ -241,7 +233,10 @@ def fetch_pr_branch_from_author(config: FetchBranchConfig) -> Tuple[Optional[str
         logger.info("从 %s fetch 分支 %s...", author_remote_name, config.head_ref)
         result = subprocess.run(
             ['git', 'fetch', author_remote_name, f'heads/{config.head_ref}:{local_branch}'],
-            capture_output=True, text=True, cwd=work_dir, timeout=120
+            capture_output=True,
+            text=True,
+            cwd=work_dir,
+            timeout=120,
         )
 
         if result.returncode != 0:
@@ -250,7 +245,10 @@ def fetch_pr_branch_from_author(config: FetchBranchConfig) -> Tuple[Optional[str
             logger.info("尝试通过 merge request refs 获取...")
             result = subprocess.run(
                 ['git', 'fetch', remote_url, f'+refs/merge-requests/{config.pr_number}/head:{local_branch}'],
-                capture_output=True, text=True, cwd=work_dir, timeout=120
+                capture_output=True,
+                text=True,
+                cwd=work_dir,
+                timeout=120,
             )
 
             if result.returncode != 0:
@@ -258,8 +256,7 @@ def fetch_pr_branch_from_author(config: FetchBranchConfig) -> Tuple[Optional[str
                 return None, None, None
 
         result = subprocess.run(
-            ['git', 'log', '-1', '--format=%H', local_branch],
-            capture_output=True, text=True, cwd=work_dir
+            ['git', 'log', '-1', '--format=%H', local_branch], capture_output=True, text=True, cwd=work_dir
         )
 
         if result.returncode != 0:
@@ -270,8 +267,7 @@ def fetch_pr_branch_from_author(config: FetchBranchConfig) -> Tuple[Optional[str
         base_commit = f"{commit}~1"
 
         result = subprocess.run(
-            ['git', 'diff', f'{base_commit}..{commit}'],
-            capture_output=True, text=True, cwd=work_dir
+            ['git', 'diff', f'{base_commit}..{commit}'], capture_output=True, text=True, cwd=work_dir
         )
 
         if result.returncode == 0:
@@ -287,11 +283,7 @@ def fetch_pr_branch_from_author(config: FetchBranchConfig) -> Tuple[Optional[str
 
 
 def checkout_or_fetch_pr_branch(
-    owner: str,
-    repo: str,
-    pr_number: int,
-    repo_dir: str,
-    pr_info: Optional[Dict] = None
+    owner: str, repo: str, pr_number: int, repo_dir: str, pr_info: Optional[Dict] = None
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
     获取 PR 分支，返回 (分支名, head分支名, diff_content)
@@ -300,16 +292,14 @@ def checkout_or_fetch_pr_branch(
 
     try:
         result = subprocess.run(
-            ['git', 'rev-parse', '--verify', local_branch],
-            capture_output=True, text=True, cwd=repo_dir
+            ['git', 'rev-parse', '--verify', local_branch], capture_output=True, text=True, cwd=repo_dir
         )
 
         if result.returncode == 0:
             logger.info(f"本地分支 {local_branch} 已存在")
 
             result = subprocess.run(
-                ['git', 'log', '-1', '--format=%H', local_branch],
-                capture_output=True, text=True, cwd=repo_dir
+                ['git', 'log', '-1', '--format=%H', local_branch], capture_output=True, text=True, cwd=repo_dir
             )
 
             if result.returncode == 0:
@@ -317,8 +307,7 @@ def checkout_or_fetch_pr_branch(
                 base_commit = f"{commit}~1"
 
                 result = subprocess.run(
-                    ['git', 'diff', f'{base_commit}..{commit}'],
-                    capture_output=True, text=True, cwd=repo_dir
+                    ['git', 'diff', f'{base_commit}..{commit}'], capture_output=True, text=True, cwd=repo_dir
                 )
 
                 if result.returncode == 0 and result.stdout.strip():
@@ -328,10 +317,7 @@ def checkout_or_fetch_pr_branch(
                     subprocess.run(['git', 'branch', '-D', local_branch], capture_output=True, cwd=repo_dir)
 
         remotes_with_urls = {}
-        result = subprocess.run(
-            ['git', 'remote', '-v'],
-            capture_output=True, text=True, cwd=repo_dir
-        )
+        result = subprocess.run(['git', 'remote', '-v'], capture_output=True, text=True, cwd=repo_dir)
         for line in result.stdout.strip().split('\n'):
             if line and 'fetch' in line:
                 parts = line.split()
@@ -342,15 +328,17 @@ def checkout_or_fetch_pr_branch(
             logger.info(f"尝试从 {remote_name} 获取 PR #{pr_number}...")
             result = subprocess.run(
                 ['git', 'fetch', remote_url, f'+refs/merge-requests/{pr_number}/head:{local_branch}'],
-                capture_output=True, text=True, cwd=repo_dir, timeout=60
+                capture_output=True,
+                text=True,
+                cwd=repo_dir,
+                timeout=60,
             )
 
             if result.returncode == 0:
                 logger.info(f"成功从 {remote_name} 获取 PR 分支 {local_branch}")
 
                 result = subprocess.run(
-                    ['git', 'log', '-1', '--format=%H', local_branch],
-                    capture_output=True, text=True, cwd=repo_dir
+                    ['git', 'log', '-1', '--format=%H', local_branch], capture_output=True, text=True, cwd=repo_dir
                 )
 
                 if result.returncode == 0:
@@ -358,8 +346,7 @@ def checkout_or_fetch_pr_branch(
                     base_commit = f"{commit}~1"
 
                     result = subprocess.run(
-                        ['git', 'diff', f'{base_commit}..{commit}'],
-                        capture_output=True, text=True, cwd=repo_dir
+                        ['git', 'diff', f'{base_commit}..{commit}'], capture_output=True, text=True, cwd=repo_dir
                     )
 
                     if result.returncode == 0 and result.stdout.strip():
@@ -381,7 +368,7 @@ def checkout_or_fetch_pr_branch(
                     repo_dir=repo_dir,
                     author=author,
                     author_repo=author_repo,
-                    head_ref=head_ref
+                    head_ref=head_ref,
                 )
                 diff_content, branch, _ = fetch_pr_branch_from_author(config)
                 if diff_content:
@@ -414,7 +401,7 @@ def parse_ut_report_from_comments(comments: List[Dict]) -> Dict:
         'ut_tests': {},
         'coverage_url': '',
         'failed_tests': [],
-        'message': ''
+        'message': '',
     }
 
     latest_pipeline_comment = None
@@ -477,12 +464,7 @@ def download_and_parse_coverage_report(coverage_url: str, pr_number: int) -> Dic
         'message': str
     }
     """
-    result = {
-        'success': False,
-        'uncovered_files': [],
-        'low_coverage_files': [],
-        'message': ''
-    }
+    result = {'success': False, 'uncovered_files': [], 'low_coverage_files': [], 'message': ''}
 
     if not coverage_url:
         result['message'] = '没有覆盖率报告链接'
@@ -571,13 +553,10 @@ def apply_diff_to_repo(diff_file: str, repo_dir: str, auto_stash: bool = True) -
         (是否成功, 消息)
     """
     try:
-        result = subprocess.run(
-            ['git', 'status', '--porcelain'],
-            capture_output=True, text=True, cwd=repo_dir
-        )
+        result = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True, cwd=repo_dir)
 
         uncommitted = [line for line in result.stdout.strip().split('\n') if line]
-        stash_applied = False
+        _stash_applied = False
         stash_message = ""
 
         if uncommitted:
@@ -592,11 +571,13 @@ def apply_diff_to_repo(diff_file: str, repo_dir: str, auto_stash: bool = True) -
                 logger.info("\n自动执行 git stash...")
                 result = subprocess.run(
                     ['git', 'stash', 'push', '-m', 'auto-stash-before-apply-diff'],
-                    capture_output=True, text=True, cwd=repo_dir
+                    capture_output=True,
+                    text=True,
+                    cwd=repo_dir,
                 )
                 if result.returncode == 0:
                     logger.info("✓ stash 成功")
-                    stash_applied = True
+                    _stash_applied = True
                     stash_message = "（已自动 stash 当前更改）"
                 else:
                     logger.warning(f"stash 失败: {result.stderr.strip()}")
@@ -605,15 +586,11 @@ def apply_diff_to_repo(diff_file: str, repo_dir: str, auto_stash: bool = True) -
                 return False, f"工作区有未提交的更改: {len(uncommitted)} 个文件"
 
         result = subprocess.run(
-            ['git', 'apply', '--3way', '--check', diff_file],
-            capture_output=True, text=True, cwd=repo_dir
+            ['git', 'apply', '--3way', '--check', diff_file], capture_output=True, text=True, cwd=repo_dir
         )
 
         if result.returncode == 0:
-            result = subprocess.run(
-                ['git', 'apply', '--3way', diff_file],
-                capture_output=True, text=True, cwd=repo_dir
-            )
+            result = subprocess.run(['git', 'apply', '--3way', diff_file], capture_output=True, text=True, cwd=repo_dir)
 
             if result.returncode == 0:
                 return True, f"Diff 已成功应用到本地仓库 {stash_message}"
@@ -624,35 +601,34 @@ def apply_diff_to_repo(diff_file: str, repo_dir: str, auto_stash: bool = True) -
 
                 conflict_files = []
                 result = subprocess.run(
-                    ['git', 'diff', '--name-only', '--diff-filter=U'],
-                    capture_output=True, text=True, cwd=repo_dir
+                    ['git', 'diff', '--name-only', '--diff-filter=U'], capture_output=True, text=True, cwd=repo_dir
                 )
                 for f in result.stdout.strip().split('\n'):
                     if f:
                         conflict_files.append(f)
                         logger.info(f"  - {f}")
 
-                choice = input("\n请选择操作：\n"
-                              "  1 - 保留本地版本（丢弃 diff 变更）\n"
-                              "  2 - 接受 incoming 版本（应用 diff 变更）\n"
-                              "  3 - 手动解决冲突\n"
-                              "请输入选项 [1/2/3]: ").strip()
+                choice = input(
+                    "\n请选择操作：\n"
+                    "  1 - 保留本地版本（丢弃 diff 变更）\n"
+                    "  2 - 接受 incoming 版本（应用 diff 变更）\n"
+                    "  3 - 手动解决冲突\n"
+                    "请输入选项 [1/2/3]: "
+                ).strip()
 
                 if choice == '1':
                     result = subprocess.run(
-                        ['git', 'checkout', '--ours'] + conflict_files,
-                        capture_output=True, text=True, cwd=repo_dir
+                        ['git', 'checkout', '--ours'] + conflict_files, capture_output=True, text=True, cwd=repo_dir
                     )
                     return True, "已保留本地版本，冲突已解决"
                 elif choice == '2':
                     result = subprocess.run(
-                        ['git', 'checkout', '--theirs'] + conflict_files,
-                        capture_output=True, text=True, cwd=repo_dir
+                        ['git', 'checkout', '--theirs'] + conflict_files, capture_output=True, text=True, cwd=repo_dir
                     )
                     return True, "已接受 incoming 版本，冲突已解决"
                 else:
                     logger.info("请手动解决冲突后，运行以下命令继续：")
-                    logger.info(f"  git add <resolved-files>")
+                    logger.info("  git add <resolved-files>")
                     return False, "请手动解决冲突"
         else:
             conflict_info = result.stderr.strip()
@@ -683,7 +659,10 @@ def check_build_status(repo_dir: str, pass_files: List[str]) -> Tuple[bool, str]
     try:
         result = subprocess.run(
             ['python3', 'build_ci.py', '-c', '-j', '24', '-f', 'cpp'],
-            capture_output=True, text=True, cwd=repo_dir, timeout=600
+            capture_output=True,
+            text=True,
+            cwd=repo_dir,
+            timeout=600,
         )
 
         if result.returncode == 0:
@@ -700,13 +679,7 @@ def check_build_status(repo_dir: str, pass_files: List[str]) -> Tuple[bool, str]
 
 def analyze_changed_files(diff_content: str) -> Dict:
     """分析 diff 内容，返回修改的文件和类型"""
-    result = {
-        'total_files': 0,
-        'pass_files': [],
-        'test_files': [],
-        'other_files': [],
-        'files_detail': []
-    }
+    result = {'total_files': 0, 'pass_files': [], 'test_files': [], 'other_files': [], 'files_detail': []}
 
     if not diff_content:
         return result
@@ -718,11 +691,7 @@ def analyze_changed_files(diff_content: str) -> Dict:
     for line in diff_content.split('\n'):
         if line.startswith('diff --git'):
             if current_file:
-                result['files_detail'].append({
-                    'file': current_file,
-                    'additions': additions,
-                    'deletions': deletions
-                })
+                result['files_detail'].append({'file': current_file, 'additions': additions, 'deletions': deletions})
                 if 'passes' in current_file and current_file.endswith('.cpp'):
                     result['pass_files'].append(current_file)
                 elif 'test' in current_file and current_file.endswith('.cpp'):
@@ -742,11 +711,7 @@ def analyze_changed_files(diff_content: str) -> Dict:
             deletions += 1
 
     if current_file:
-        result['files_detail'].append({
-            'file': current_file,
-            'additions': additions,
-            'deletions': deletions
-        })
+        result['files_detail'].append({'file': current_file, 'additions': additions, 'deletions': deletions})
         result['total_files'] = len(result['files_detail'])
         if 'passes' in current_file and current_file.endswith('.cpp'):
             result['pass_files'].append(current_file)
@@ -785,7 +750,7 @@ def process_pr(config: PRProcessConfig) -> Dict:
         'error': None,
         'method': None,
         'need_design_ut': False,
-        'design_ut_reason': ""
+        'design_ut_reason': "",
     }
 
     try:
@@ -823,7 +788,7 @@ def process_pr(config: PRProcessConfig) -> Dict:
             'ut_tests': {},
             'coverage_url': '',
             'failed_tests': [],
-            'message': '无法获取 UT-REPORT 评论'
+            'message': '无法获取 UT-REPORT 评论',
         }
 
         if config.use_api_for_comments:
@@ -929,9 +894,7 @@ def process_pr(config: PRProcessConfig) -> Dict:
         logger.info("-" * 60)
 
         logger.info(f"自动 stash: {'开启' if config.auto_stash else '关闭'}")
-        apply_success, apply_msg = apply_diff_to_repo(
-            diff_filepath, work_repo_dir, auto_stash=config.auto_stash
-        )
+        apply_success, apply_msg = apply_diff_to_repo(diff_filepath, work_repo_dir, auto_stash=config.auto_stash)
         if apply_success:
             logger.info(f"{apply_msg}")
             result['diff_applied'] = True
@@ -981,7 +944,7 @@ def process_pr(config: PRProcessConfig) -> Dict:
         if analysis['pass_files'] and ut_result['status'] != 'SUCCESS':
             need_design_ut = True
             design_ut_reason += f"\n  修改了 {len(analysis['pass_files'])} 个 Pass 文件，需要设计 UT"
-            logger.info(f"\n⚠️ 修改了 Pass 文件，需要设计 UT 覆盖新代码")
+            logger.info("\n⚠️ 修改了 Pass 文件，需要设计 UT 覆盖新代码")
 
         result['need_design_ut'] = need_design_ut
         result['design_ut_reason'] = design_ut_reason
@@ -996,6 +959,7 @@ def process_pr(config: PRProcessConfig) -> Dict:
         result['error'] = str(e)
         logger.info(f"\n❌ 处理失败: {e}")
         import traceback
+
         traceback.print_exc()
         return result
 
@@ -1010,13 +974,7 @@ def process_offline_diff(diff_file: str) -> Dict:
     Returns:
         包含处理结果的字典
     """
-    result = {
-        'diff_content': None,
-        'analysis': {},
-        'success': False,
-        'error': None,
-        'method': 'offline_file'
-    }
+    result = {'diff_content': None, 'analysis': {}, 'success': False, 'error': None, 'method': 'offline_file'}
 
     try:
         if not os.path.exists(diff_file):
@@ -1063,7 +1021,7 @@ def process_offline_ut_report(report_file: str) -> Dict:
         'low_coverage_files': [],
         'success': False,
         'error': None,
-        'method': 'offline_report'
+        'method': 'offline_report',
     }
 
     try:
@@ -1081,7 +1039,8 @@ def process_offline_ut_report(report_file: str) -> Dict:
         result['report_content'] = report_content
 
         if report_file.endswith('.html') or '<html' in report_content.lower():
-            from scripts.ut_coverage import parse_coverage_html, find_low_coverage_files
+            from scripts.ut_coverage import find_low_coverage_files, parse_coverage_html
+
             result['coverage_info'] = parse_coverage_html(report_content)
             result['low_coverage_files'] = find_low_coverage_files(result['coverage_info'], 80.0)
         else:
@@ -1102,10 +1061,7 @@ def process_offline_ut_report(report_file: str) -> Dict:
         return result
 
 
-def analyze_offline_files(
-    diff_file: Optional[str] = None,
-    report_file: Optional[str] = None
-) -> Dict:
+def analyze_offline_files(diff_file: Optional[str] = None, report_file: Optional[str] = None) -> Dict:
     """
     综合分析离线 diff 和 UT-Report 文件
 
@@ -1121,7 +1077,7 @@ def analyze_offline_files(
         'report_result': None,
         'combined_analysis': {},
         'ut_design_items': [],
-        'success': False
+        'success': False,
     }
 
     logger.info("=" * 60)
@@ -1140,14 +1096,10 @@ def analyze_offline_files(
         if result['report_result'] and result['report_result']['success']:
             logger.info("\n[3] 关联分析...")
 
-            from scripts.ut_coverage import (
-                correlate_coverage_with_diff,
-                generate_ut_design_suggestions
-            )
+            from scripts.ut_coverage import generate_ut_design_suggestions
 
             suggestions = generate_ut_design_suggestions(
-                result['diff_result']['analysis'],
-                result['report_result']['coverage_info']
+                result['diff_result']['analysis'], result['report_result']['coverage_info']
             )
 
             result['ut_design_items'] = [
@@ -1156,7 +1108,7 @@ def analyze_offline_files(
                     'uncovered_lines': s.uncovered_lines,
                     'change_type': s.change_type,
                     'suggestion': s.suggestion,
-                    'priority': s.priority
+                    'priority': s.priority,
                 }
                 for s in suggestions
             ]
@@ -1191,7 +1143,7 @@ def main():
 
   # 输出 JSON
   python pr_utils.py --diff diff.file --json
-        """
+        """,
     )
 
     parser.add_argument('pr_input', nargs='?', help='PR 编号或链接')
@@ -1204,10 +1156,7 @@ def main():
     args = parser.parse_args()
 
     if args.diff_file:
-        result = analyze_offline_files(
-            diff_file=args.diff_file,
-            report_file=args.report_file
-        )
+        result = analyze_offline_files(diff_file=args.diff_file, report_file=args.report_file)
 
         if args.json or args.output:
             output = json.dumps(result, indent=2, ensure_ascii=False)
@@ -1245,7 +1194,7 @@ def main():
         repo_dir=None,
         use_api_for_comments=True,
         auto_stash=True,
-        check_build=True
+        check_build=True,
     )
     result = process_pr(config)
 
@@ -1289,15 +1238,15 @@ def print_summary(result: Dict):
             logger.info(f"失败测试: {', '.join(ut['failed_tests'])}")
 
     if result.get('diff_result'):
-        logger.info(f"\nDiff 分析完成:")
+        logger.info("\nDiff 分析完成:")
         logger.info(f"  Pass 文件数: {len(result['diff_result']['analysis'].get('pass_files', []))}")
 
     if result.get('report_result'):
-        logger.info(f"\nUT-Report 分析完成:")
+        logger.info("\nUT-Report 分析完成:")
         logger.info(f"  低覆盖率文件数: {len(result['report_result'].get('low_coverage_files', []))}")
 
     if result.get('ut_design_items'):
-        logger.info(f"\nUT 设计建议:")
+        logger.info("\nUT 设计建议:")
         for i, item in enumerate(result['ut_design_items'][:3], 1):
             logger.info(f"  {i}. [{item['priority'].upper()}] {item['file_path']}")
         if len(result['ut_design_items']) > 3:
@@ -1309,4 +1258,5 @@ def print_summary(result: Dict):
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

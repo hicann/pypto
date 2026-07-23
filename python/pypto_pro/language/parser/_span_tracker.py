@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Span tracking for preserving source location information during parsing."""
+
 from __future__ import annotations
 
 __all__ = ["SpanTracker"]
@@ -22,9 +23,7 @@ from pypto.pypto_impl import ir
 class SpanTracker:
     """Tracks source locations from AST nodes to IR spans."""
 
-    def __init__(
-        self, source_file: str, source_lines: Sequence[str], line_offset: int = 0, col_offset: int = 0
-    ):
+    def __init__(self, source_file: str, source_lines: Sequence[str], line_offset: int = 0, col_offset: int = 0):
         """Initialize span tracker.
 
         Args:

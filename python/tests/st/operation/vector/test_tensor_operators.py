@@ -13,24 +13,25 @@ Test tensor operator overloads with frontend.jit
 Operators: __neg__, __pos__, __rsub__, __rmul__, __rtruediv__,
            __floordiv__, __mod__, __pow__, __lt__, __le__, __ge__, __eq__, __ne__
 """
-import os
-import logging
-import pypto
 
-import numpy as np
+import logging
+import os
+
+from numpy.testing import assert_allclose
 import torch
 import torch_npu
-from numpy.testing import assert_allclose
 
+import pypto
 
 # =============================================================================
 # Test 1: Unary operators (-, +)
 # =============================================================================
 
+
 @pypto.frontend.jit()
 def neg_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(-x)
@@ -60,7 +61,7 @@ def test_tensor_neg():
 @pypto.frontend.jit()
 def pos_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(+x + 1.0)
@@ -91,10 +92,11 @@ def test_tensor_pos():
 # Test 2: Reverse operators (__rsub__, __rmul__, __rtruediv__)
 # =============================================================================
 
+
 @pypto.frontend.jit()
 def rsub_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(10.0 - x)
@@ -124,7 +126,7 @@ def test_tensor_rsub():
 @pypto.frontend.jit()
 def rmul_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(5.0 * x)
@@ -154,7 +156,7 @@ def test_tensor_rmul():
 @pypto.frontend.jit()
 def rtruediv_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(100.0 / x)
@@ -185,10 +187,11 @@ def test_tensor_rtruediv():
 # Test 3: Other binary operators (__floordiv__, __mod__, __pow__)
 # =============================================================================
 
+
 @pypto.frontend.jit()
 def floordiv_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(x // 3.0)
@@ -218,7 +221,7 @@ def test_tensor_floordiv():
 @pypto.frontend.jit()
 def mod_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(x % 7.0)
@@ -248,10 +251,10 @@ def test_tensor_mod():
 @pypto.frontend.jit()
 def pow_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
-    y.move(x ** 2.0)
+    y.move(x**2.0)
 
 
 def test_tensor_pow():
@@ -279,10 +282,11 @@ def test_tensor_pow():
 # Test 4: Comparison operators (<, <=, >=, ==, !=)
 # =============================================================================
 
+
 @pypto.frontend.jit()
 def lt_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(x < 0.5)
@@ -304,7 +308,7 @@ def test_tensor_lt():
 
     torch_npu.npu.synchronize()
 
-    expected = (x_data.cpu() < 0.5)
+    expected = x_data.cpu() < 0.5
     actual = y_data.cpu()
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
@@ -312,7 +316,7 @@ def test_tensor_lt():
 @pypto.frontend.jit()
 def le_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(x <= 0.5)
@@ -334,7 +338,7 @@ def test_tensor_le():
 
     torch_npu.npu.synchronize()
 
-    expected = (x_data.cpu() <= 0.5)
+    expected = x_data.cpu() <= 0.5
     actual = y_data.cpu()
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
@@ -342,7 +346,7 @@ def test_tensor_le():
 @pypto.frontend.jit()
 def ge_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(x >= 0.5)
@@ -364,7 +368,7 @@ def test_tensor_ge():
 
     torch_npu.npu.synchronize()
 
-    expected = (x_data.cpu() >= 0.5)
+    expected = x_data.cpu() >= 0.5
     actual = y_data.cpu()
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
@@ -372,7 +376,7 @@ def test_tensor_ge():
 @pypto.frontend.jit()
 def eq_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(x == 0.5)
@@ -395,7 +399,7 @@ def test_tensor_eq():
 
     torch_npu.npu.synchronize()
 
-    expected = (x_data.cpu() == 0.5)
+    expected = x_data.cpu() == 0.5
     actual = y_data.cpu()
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
@@ -403,7 +407,7 @@ def test_tensor_eq():
 @pypto.frontend.jit()
 def ne_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(x != 0.5)
@@ -426,7 +430,7 @@ def test_tensor_ne():
 
     torch_npu.npu.synchronize()
 
-    expected = (x_data.cpu() != 0.5)
+    expected = x_data.cpu() != 0.5
     actual = y_data.cpu()
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
@@ -435,10 +439,11 @@ def test_tensor_ne():
 # Test 5: Complex expressions (tanh-like, combined arithmetic)
 # =============================================================================
 
+
 @pypto.frontend.jit()
 def tanh_like_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     exp_pos = pypto.exp(x)
@@ -471,7 +476,7 @@ def test_tanh_like_expression():
 def combined_arithmetic_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     z: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     y.move(2.0 * x - z + (x / 3.0))
@@ -502,10 +507,10 @@ def test_combined_arithmetic():
 @pypto.frontend.jit()
 def complex_expression_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
-    y.move(100.0 - x ** 2.0 % 10.0)
+    y.move(100.0 - x**2.0 % 10.0)
 
 
 def test_complex_expression():
@@ -530,7 +535,6 @@ def test_complex_expression():
 
 
 if __name__ == "__main__":
-
     test_functions = [
         ("test_tensor_neg", test_tensor_neg),
         ("test_tensor_pos", test_tensor_pos),

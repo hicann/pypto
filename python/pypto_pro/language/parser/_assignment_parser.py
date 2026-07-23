@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import ast
-from typing import Any
 
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
@@ -112,7 +111,11 @@ class AssignmentParserMixin:
     _TYPE_CHANGING_OPS = frozenset({"astype", "muls_cast", "pack", "unpack"})
 
     def _parse_vf_assignment(
-        self, target: ast.expr, stmt: ast.Assign, vf_op_name: str, span: ir.Span,
+        self,
+        target: ast.expr,
+        stmt: ast.Assign,
+        vf_op_name: str,
+        span: ir.Span,
     ) -> None:
         """Handle ``reg = vf.xxx(src, ...)`` assignment form.
 
@@ -146,8 +149,7 @@ class AssignmentParserMixin:
         if actual_dst_count == 1:
             if not isinstance(target, ast.Name):
                 raise ParserSyntaxError(
-                    f"vf.{vf_op_name} assignment target must be a variable name, "
-                    f"got {ast.unparse(target)}",
+                    f"vf.{vf_op_name} assignment target must be a variable name, got {ast.unparse(target)}",
                     span=span,
                 )
             dst_names = [target.id]
@@ -155,8 +157,7 @@ class AssignmentParserMixin:
         elif actual_dst_count == 2:
             if not isinstance(target, ast.Tuple) or len(target.elts) != 2:
                 raise ParserSyntaxError(
-                    f"vf.{vf_op_name} produces 2 outputs, use tuple unpacking: "
-                    f"reg0, reg1 = vf.{vf_op_name}(...)",
+                    f"vf.{vf_op_name} produces 2 outputs, use tuple unpacking: reg0, reg1 = vf.{vf_op_name}(...)",
                     span=span,
                 )
             for elt in target.elts:
@@ -336,11 +337,7 @@ class AssignmentParserMixin:
         """
         base = self.parse_expression(target.value)
         field_name = target.attr
-        if (
-            isinstance(base, ir.MakeTuple)
-            and not self._is_struct_array_tuple(base)
-            and self.named_fields(base)
-        ):
+        if isinstance(base, ir.MakeTuple) and not self._is_struct_array_tuple(base) and self.named_fields(base):
             raise ParserSyntaxError(
                 f"Cannot assign to immutable named tuple field '{ast.unparse(target)}'",
                 span=span,
@@ -349,8 +346,7 @@ class AssignmentParserMixin:
         fields = self.named_fields(base)
         if not fields or field_name not in fields:
             raise ParserTypeError(
-                f"Cannot assign to '{ast.unparse(target)}': base is not a named struct/tuple "
-                f"with field '{field_name}'",
+                f"Cannot assign to '{ast.unparse(target)}': base is not a named struct/tuple with field '{field_name}'",
                 span=span,
             )
         value_expr = self.parse_expression(stmt.value, nested=False)
@@ -375,15 +371,16 @@ class AssignmentParserMixin:
         value_expr = self.parse_expression(stmt.value, nested=False)
         if not isinstance(value_expr, ir.Expr):
             raise ParserTypeError(
-                f"Right-hand side of subscript assignment must be an IR expression",
+                "Right-hand side of subscript assignment must be an IR expression",
                 span=span,
             )
         meta = self._tile_mutex_meta.get(container_expr) if self._auto_mutex else None
         from pypto_pro.ir.op.block_ops import _ir_setval
         setval_call = _ir_setval(container_expr, index_expr, value_expr, span=span)
         if meta is not None:
-            from ._op_pipeline import get_op_pipe
             from pypto_pro.ir.op.system_ops import mutex_lock, mutex_unlock
+
+            from ._op_pipeline import get_op_pipe
             pipe = get_op_pipe("setval")
             buf_id_ir, mutex_ids = meta
             self.builder.emit(ir.EvalStmt(

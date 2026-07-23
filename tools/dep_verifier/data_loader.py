@@ -8,9 +8,9 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
+from collections import defaultdict
 import csv
 import logging
-from collections import defaultdict
 from typing import Dict, List, Set, Tuple
 
 from .models import (
@@ -71,6 +71,7 @@ def _make_pick(col: Dict[str, int]):
         if idx is None or idx >= len(row):
             return default
         return row[idx]
+
     return pick
 
 
@@ -99,8 +100,7 @@ def load_static_topo(path: str) -> Dict[int, StaticFunction]:
                 fn = StaticFunction(func_key=func_key, root_hash=op.root_hash, raw_name=op.raw_name)
                 functions[func_key] = fn
             fn.ops[op.op_idx] = op
-    logger.debug("  static function=%d, op=%d", len(functions),
-                sum(len(fn.ops) for fn in functions.values()))
+    logger.debug("  static function=%d, op=%d", len(functions), sum(len(fn.ops) for fn in functions.values()))
     return functions
 
 
@@ -114,20 +114,22 @@ def load_dyn_topo(path: str) -> List[DynTask]:
         for row in reader:
             if not row or not row[0].strip():
                 continue
-            tasks.append(DynTask(
-                seq_no=int(row[col["seqNo"]]),
-                task_id=int(row[col["taskId"]]),
-                root_index=int(row[col["rootIndex"]]),
-                root_hash=row[col["rootHash"]],
-                opmagic=int(row[col["opmagic"]]),
-                leaf_index=int(row[col["leafIndex"]]),
-                leaf_hash=row[col["leafHash"]],
-                core_type=int(row[col["coreType"]]),
-                psg_id=int(row[col["psgId"]]),
-                wrap_id=int(row[col["wrapId"]]),
-                static_succ_count=int(row[col["staticSuccCount"]]),
-                successors=_parse_int_list(row[succ_start:]),
-            ))
+            tasks.append(
+                DynTask(
+                    seq_no=int(row[col["seqNo"]]),
+                    task_id=int(row[col["taskId"]]),
+                    root_index=int(row[col["rootIndex"]]),
+                    root_hash=row[col["rootHash"]],
+                    opmagic=int(row[col["opmagic"]]),
+                    leaf_index=int(row[col["leafIndex"]]),
+                    leaf_hash=row[col["leafHash"]],
+                    core_type=int(row[col["coreType"]]),
+                    psg_id=int(row[col["psgId"]]),
+                    wrap_id=int(row[col["wrapId"]]),
+                    static_succ_count=int(row[col["staticSuccCount"]]),
+                    successors=_parse_int_list(row[succ_start:]),
+                )
+            )
     logger.debug("  dynamic task instances=%d", len(tasks))
     return tasks
 
@@ -142,18 +144,20 @@ def load_dyn_stitch_edges(path: str) -> List[StitchEdge]:
         for row in reader:
             if not row or not row[0].strip():
                 continue
-            edges.append(StitchEdge(
-                stitch_kind=pick(row, "stitchKind"),
-                slot_idx=int(pick(row, "slotIdx")),
-                producer_func_key=int(pick(row, "producerFuncKey")),
-                producer_func_idx=int(pick(row, "producerFuncIdx")),
-                producer_op_idx=int(pick(row, "producerOpIdx")),
-                producer_task_id=int(pick(row, "producerTaskId")),
-                consumer_func_key=int(pick(row, "consumerFuncKey")),
-                consumer_func_idx=int(pick(row, "consumerFuncIdx")),
-                consumer_op_idx=int(pick(row, "consumerOpIdx")),
-                consumer_task_id=int(pick(row, "consumerTaskId")),
-            ))
+            edges.append(
+                StitchEdge(
+                    stitch_kind=pick(row, "stitchKind"),
+                    slot_idx=int(pick(row, "slotIdx")),
+                    producer_func_key=int(pick(row, "producerFuncKey")),
+                    producer_func_idx=int(pick(row, "producerFuncIdx")),
+                    producer_op_idx=int(pick(row, "producerOpIdx")),
+                    producer_task_id=int(pick(row, "producerTaskId")),
+                    consumer_func_key=int(pick(row, "consumerFuncKey")),
+                    consumer_func_idx=int(pick(row, "consumerFuncIdx")),
+                    consumer_op_idx=int(pick(row, "consumerOpIdx")),
+                    consumer_task_id=int(pick(row, "consumerTaskId")),
+                )
+            )
     logger.debug("  stitch edges=%d", len(edges))
     return edges
 
@@ -217,15 +221,17 @@ def load_slot_cell_table(path: str) -> Dict[int, List[CellTableDesc]]:
             if not row or not row[0].strip():
                 continue
             slot_idx = int(pick(row, "slotIdx"))
-            out[slot_idx].append(CellTableDesc(
-                slot_idx=slot_idx,
-                stitch_policy=pick(row, "stitchPolicy", "partial"),
-                root_hash=pick(row, "rootHash", "0"),
-                func_key=int(pick(row, "funcKey", "-1")),
-                cell_shape=_parse_bracket_int_list(pick(row, "cellShape")),
-                cell_count=int(pick(row, "cellCount", "1")),
-                outcast_count=int(pick(row, "outcastCount", "1")),
-            ))
+            out[slot_idx].append(
+                CellTableDesc(
+                    slot_idx=slot_idx,
+                    stitch_policy=pick(row, "stitchPolicy", "partial"),
+                    root_hash=pick(row, "rootHash", "0"),
+                    func_key=int(pick(row, "funcKey", "-1")),
+                    cell_shape=_parse_bracket_int_list(pick(row, "cellShape")),
+                    cell_count=int(pick(row, "cellCount", "1")),
+                    outcast_count=int(pick(row, "outcastCount", "1")),
+                )
+            )
     logger.debug("  slots with cell table=%d", len(out))
     return dict(out)
 
@@ -240,16 +246,18 @@ def load_slot_access(path: str) -> List[SlotAccessEvent]:
         for row in reader:
             if not row or not row[0].strip():
                 continue
-            events.append(SlotAccessEvent(
-                seq_no=int(pick(row, "seqNo")),
-                slot_idx=int(pick(row, "slotIdx")),
-                func_idx=int(pick(row, "funcIdx", "0")),
-                op_idx=int(pick(row, "opIdx", "0")),
-                task_id=int(pick(row, "taskId", "0")),
-                access_type=pick(row, "accessType", "W"),
-                cell_idx_list=_parse_bracket_int_list(pick(row, "cellIdxList")),
-                all_concrete=bool(int(pick(row, "allConcrete", "1"))),
-            ))
+            events.append(
+                SlotAccessEvent(
+                    seq_no=int(pick(row, "seqNo")),
+                    slot_idx=int(pick(row, "slotIdx")),
+                    func_idx=int(pick(row, "funcIdx", "0")),
+                    op_idx=int(pick(row, "opIdx", "0")),
+                    task_id=int(pick(row, "taskId", "0")),
+                    access_type=pick(row, "accessType", "W"),
+                    cell_idx_list=_parse_bracket_int_list(pick(row, "cellIdxList")),
+                    all_concrete=bool(int(pick(row, "allConcrete", "1"))),
+                )
+            )
     logger.debug("  slot access events=%d", len(events))
     return events
 
@@ -259,6 +267,5 @@ def infer_edge_seq_no(edges: List[StitchEdge], tasks: List[DynTask]) -> None:
     for t in tasks:
         tasks_by_seq[t.seq_no].add(t.task_id)
     for e in edges:
-        cands = [seq for seq, ids in tasks_by_seq.items()
-                 if e.producer_task_id in ids and e.consumer_task_id in ids]
+        cands = [seq for seq, ids in tasks_by_seq.items() if e.producer_task_id in ids and e.consumer_task_id in ids]
         e.inferred_seq_no = cands[0] if len(cands) == 1 else None

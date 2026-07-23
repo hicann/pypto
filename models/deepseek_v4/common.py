@@ -17,8 +17,10 @@ Main Functions:
     - interleaved_rope_3d: attention common RoPE computation
     - rotate_half: rotate main function of rope
 """
-import pypto
+
 from typing import Tuple
+
+import pypto
 from pypto import pypto_impl
 from pypto.operation import op_wrapper
 
@@ -47,9 +49,7 @@ def rotate_half(input_tensor: pypto.Tensor) -> pypto.Tensor:
     shape = input_tensor.shape
     shape_size = len(shape)
     assert shape_size >= 1, "rope rotate_half input dim less than 1"
-    assert (
-        shape[shape_size - 1] % ROPE_CHUNK == 0
-    ), "rope rotate_half last dim shape is even"
+    assert shape[shape_size - 1] % ROPE_CHUNK == 0, "rope rotate_half last dim shape is even"
 
     new_shape = list(shape)
     new_shape[shape_size - 1] //= ROPE_CHUNK
@@ -64,15 +64,9 @@ def rotate_half(input_tensor: pypto.Tensor) -> pypto.Tensor:
     return pypto.concat([x2 * (-1.0), x1 + 0.0], -1)
 
 
-def inverse_rope_3d(
-    x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor
-) -> pypto.Tensor:
+def inverse_rope_3d(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor) -> pypto.Tensor:
     """Apply inverse 3D Rotary Position Embedding."""
-    assert (
-        len(x.shape) == ROPE_DIM_3
-        and len(cos.shape) == ROPE_DIM_2
-        and len(sin.shape) == ROPE_DIM_2
-    )
+    assert len(x.shape) == ROPE_DIM_3 and len(cos.shape) == ROPE_DIM_2 and len(sin.shape) == ROPE_DIM_2
     assert x.shape[2] == cos.shape[1] and cos.shape[1] == sin.shape[1]
     t = x.shape[0]
     n_q = x.shape[1]
@@ -97,7 +91,8 @@ def inverse_rope_3d(
 
     # add two extra transpose to avoid last axis unalign transpose
     # origin calc flow: reshape(1,n_q,2,rope_dim // 2)->transpose(1,n_q,rope_dim // 2,2)->reshape(1,n_q,rope_dim)
-    # new calc flow: transpose(1,n_q,rope_dim)->reshape(1,2,rope_dim // 2,n_q)->transpose(1,rope_dim // 2,2,n_q)->reshape(1,rope_dim,n_q)->transpose(1,n_q,rope_dim)
+    # new calc flow: transpose(1,n_q,rope_dim)->reshape(1,2,rope_dim // 2,n_q)->
+    #     transpose(1,rope_dim // 2,2,n_q)->reshape(1,rope_dim,n_q)->transpose(1,n_q,rope_dim)
     x_rotate_trs_1 = pypto.transpose(x_rotate, 1, 2)
     x_rotate_reshape_1 = pypto.reshape(
         x_rotate_trs_1,
@@ -135,9 +130,7 @@ def scalar_div(tensor, other, is_reserve=False):
     Returns:
         Result tensor after scalar division
     """
-    return pypto_impl.ScalarDivS(
-        tensor, pypto_impl.Element(tensor.dtype, other), is_reserve
-    )
+    return pypto_impl.ScalarDivS(tensor, pypto_impl.Element(tensor.dtype, other), is_reserve)
 
 
 def quant(
@@ -185,9 +178,7 @@ def quant(
     else:
         max_value = pypto.amax(input_fp32, -1, keepdim=True)
         min_value = pypto.amin(input_fp32, -1, keepdim=True)
-        scale_de_quant = pypto.max(
-            pypto.div(pypto.sub(max_value, min_value), 255.0), 1e-12
-        )
+        scale_de_quant = pypto.max(pypto.div(pypto.sub(max_value, min_value), 255.0), 1e-12)
         scale_quant = scalar_div(max_value, 1.0, True)
         out_fp32 = pypto.mul(input_fp32, scale_quant)
         out_int32 = pypto.cast(out_fp32, pypto.DT_INT32, pypto.CastMode.CAST_RINT)
@@ -216,9 +207,7 @@ def quant_tensor(x: pypto.Tensor):
         3. Quantize: int8 = round(input * scale)
         4. Return dequantization scale = 1.0 / scale
     """
-    assert (
-        len(pypto.get_vec_tile_shapes()) > 0
-    ), f"expected set vec tile shape before call function, but not set."
+    assert len(pypto.get_vec_tile_shapes()) > 0, "expected set vec tile shape before call function, but not set."
     s8_max_value = 127.0
     s8_one_value = 1.0
     input_fp32 = pypto.cast(x, pypto.DT_FP32, pypto.CastMode.CAST_NONE)

@@ -12,6 +12,7 @@
 atexit cleanup for --forked subprocess: flush NPU device queues + release cached memory
 before the process exits, preventing residual device state from leaking into the next test case.
 """
+
 import atexit
 import logging
 
@@ -25,6 +26,7 @@ def _cleanup_npu_device():
     try:
         import torch
         import torch_npu
+
         # Only meaningful if this process actually used the device (reserved memory).
         # The main pytest process / xdist worker merely query the soc version during
         # collection, which flips torch.npu.is_initialized() True WITHOUT establishing a
@@ -39,6 +41,7 @@ def _cleanup_npu_device():
         logger.warning("NPU synchronize failed: %s", e)
     try:
         import torch
+
         torch.npu.empty_cache()
         cache_emptied_ok = True
     except Exception as e:

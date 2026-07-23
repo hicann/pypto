@@ -10,16 +10,17 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Utility functions for IR construction."""
+
 from __future__ import annotations
 
 __all__ = ["_get_span_or_capture", "_normalize_expr", "_normalize_shape", "_to_make_tuple"]
 
 
-import inspect
 from collections.abc import Sequence
+import inspect
 
-from pypto.pypto_impl.ir import DataType
 from pypto.pypto_impl import ir as _ir
+from pypto.pypto_impl.ir import DataType
 
 
 def _get_span_or_capture(span: _ir.Span | None = None, frame_offset: int = 1) -> _ir.Span:
@@ -133,8 +134,7 @@ def _to_make_tuple(
             ]
             return _ir.MakeTuple(elements, actual_span)
         raise TypeError(
-            f"Cannot convert Expr of type {value_type} to an offset tuple; "
-            "expected a MakeTuple or a tuple-typed value"
+            f"Cannot convert Expr of type {value_type} to an offset tuple; expected a MakeTuple or a tuple-typed value"
         )
     elements = [_normalize_expr(v, actual_span) for v in value]
     return _ir.MakeTuple(elements, actual_span)

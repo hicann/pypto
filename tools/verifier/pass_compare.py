@@ -9,24 +9,24 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """pass data compare"""
-import os
-import sys
+
+import argparse
+from dataclasses import dataclass
 import json
 import logging
-import time
-import ast
-import traceback
-import argparse
-from dataclasses import dataclass, asdict
-from typing import List, Dict, Tuple, Optional, Any
 from multiprocessing import Pool, cpu_count
-import torch
+import os
+import sys
+import time
+import traceback
+from typing import Any, Dict, List, Optional, Tuple
+
 import ml_dtypes
-import pandas as pd
 import numpy as np
-from tensor_diff import TensorComparator, IsCloseConfig, compare_tensors_result_dict, MAX_PRECISION
-from run_float_diff import DataDiffAnalyzer
+import pandas as pd
 from parse_dump_tensors import scan_pass_info_from_path
+from tensor_diff import IsCloseConfig, compare_tensors_result_dict
+import torch
 
 
 @dataclass
@@ -49,14 +49,16 @@ class ProcessLoopBatchArgs:
 class PassComparator:
     """Pass comparator class, which encapsulates all comparison logic."""
 
-    def __init__(self,
-                 output_pass: str = "",
-                 golden_pass: str = "",
-                 verify_path_pass1: str = "",
-                 verify_path_pass2: str = "",
-                 atol: float = 1e-3,
-                 rtol: float = 1e-3,
-                 topk: int = 1000):
+    def __init__(
+        self,
+        output_pass: str = "",
+        golden_pass: str = "",
+        verify_path_pass1: str = "",
+        verify_path_pass2: str = "",
+        atol: float = 1e-3,
+        rtol: float = 1e-3,
+        topk: int = 1000,
+    ):
         """
         Initializing the comparator
         Parameters:
@@ -84,7 +86,7 @@ class PassComparator:
             "INT32": np.int32,
             "INT8": np.int8,
             "INT64": np.int64,
-            "INT16": np.int16
+            "INT16": np.int16,
         }
 
         self.pass_dict = {
@@ -126,7 +128,7 @@ class PassComparator:
             "CopyOutResolve": 34,
             "InsertSync": 35,
             "GlobalMemoryReuse": 36,
-            "CodegenPreproc": 37
+            "CodegenPreproc": 37,
         }
 
         self._update_pass_dict_from_path(verify_path_pass1)
@@ -142,21 +144,32 @@ class PassComparator:
         b_offset = json.loads(b[":offset"])
         a_shape = json.loads(a[":validshape"])
         b_shape = json.loads(b[":validshape"])
-        copy_opcodes = {"ASSEMBLE", "COPY_OUT", "COPY_IN",
-                        "RESHAPE_COPY_OUT", "RESHAPE_COPY_IN", "L0C_RESHAPE_COPY_OUT"}
+        copy_opcodes = {
+            "ASSEMBLE",
+            "COPY_OUT",
+            "COPY_IN",
+            "RESHAPE_COPY_OUT",
+            "RESHAPE_COPY_IN",
+            "L0C_RESHAPE_COPY_OUT",
+        }
         if a[":opcode"] in copy_opcodes:
             if is_leaf and a["ROOT_CALL:opmagic"] is not None:
-                return (a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"]
-                        and a[":opcode"] == b[":opcode"]
-                        and a["ROOT_CALL:opmagic"] == b["ROOT_CALL:opmagic"])
-            elif a["OP_ATTR_ATOMIC"] == True:
-                return (a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"]
-                        and PassComparator.opcode_match(a[":opcode"], b[":opcode"], opcode_dict)
-                        and a["OP_ATTR_ATOMIC"] == b["OP_ATTR_ATOMIC"]
-                        and a[":opmagic"] == b[":opmagic"])
+                return (
+                    a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"]
+                    and a[":opcode"] == b[":opcode"]
+                    and a["ROOT_CALL:opmagic"] == b["ROOT_CALL:opmagic"]
+                )
+            elif a["OP_ATTR_ATOMIC"]:
+                return (
+                    a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"]
+                    and PassComparator.opcode_match(a[":opcode"], b[":opcode"], opcode_dict)
+                    and a["OP_ATTR_ATOMIC"] == b["OP_ATTR_ATOMIC"]
+                    and a[":opmagic"] == b[":opmagic"]
+                )
             else:
-                return (a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"]
-                        and PassComparator.opcode_match(a[":opcode"], b[":opcode"], opcode_dict))
+                return a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"] and PassComparator.opcode_match(
+                    a[":opcode"], b[":opcode"], opcode_dict
+                )
         if key == ":magic" and a_shape == b_shape and not is_leaf:
             return True
         else:
@@ -181,9 +194,9 @@ class PassComparator:
         return False
 
     @staticmethod
-    def add_comparison_record(a: Dict[str, Any],
-                              b: Optional[Dict[str, Any]] = None,
-                              compare_result: Optional[Dict[str, Any]] = None):
+    def add_comparison_record(
+        a: Dict[str, Any], b: Optional[Dict[str, Any]] = None, compare_result: Optional[Dict[str, Any]] = None
+    ):
         """Add the comparison record to the internal list"""
 
         record = {}
@@ -286,14 +299,14 @@ class PassComparator:
                 "INT32": np.int32,
                 "INT8": np.int8,
                 "INT64": np.int64,
-                "INT16": np.int16
+                "INT16": np.int16,
             }
 
             opcode_dict = {
                 "VIEW": ["L1_TO_L0A", "L1_TO_L0B"],
                 "A_MUL_B": ["A_MULACC_B"],
                 "COPY_OUT": ["ASSEMBLE"],
-                "COPY_IN": ["VIEW"]
+                "COPY_IN": ["VIEW"],
             }
 
             for task in loop_tasks:
@@ -313,8 +326,7 @@ class PassComparator:
                         b_records = df_b[df_b[":rawmagic"] == raw_magic].to_dict(orient='records')
                         if ai[":opcode"] == "COPY_IN":
                             b_records = df_b[
-                                (df_b["INPUT:rawmagic"] == str(int(ai[key]))) &
-                                (df_b[":opcode"] == "COPY_IN")
+                                (df_b["INPUT:rawmagic"] == str(int(ai[key]))) & (df_b[":opcode"] == "COPY_IN")
                             ].to_dict(orient='records')
                     else:
                         b_records = df_b[df_b[key] == raw_magic].to_dict(orient='records')
@@ -329,13 +341,23 @@ class PassComparator:
                     for bi in b_records:
                         if PassComparator.should_skip_record(ai, bi):
                             continue
-                        if not PassComparator._compare_not_support_static(ai, bi, key,
-                                            verify_path_pass1, verify_path_pass2, dtype_dict, opcode_dict, is_leaf):
+                        if not PassComparator._compare_not_support_static(
+                            ai, bi, key, verify_path_pass1, verify_path_pass2, dtype_dict, opcode_dict, is_leaf
+                        ):
                             continue
 
                         compare_result = PassComparator._compare_data_static(
-                            ai, bi, verify_path_pass1, verify_path_pass2, atol, rtol, topk,
-                            csv_data_dict, dtype_dict, key, result_file
+                            ai,
+                            bi,
+                            verify_path_pass1,
+                            verify_path_pass2,
+                            atol,
+                            rtol,
+                            topk,
+                            csv_data_dict,
+                            dtype_dict,
+                            key,
+                            result_file,
                         )
                         record = PassComparator.add_comparison_record(a=ai, b=bi, compare_result=compare_result)
                         comparison_records.append(record)
@@ -348,17 +370,29 @@ class PassComparator:
                         comparison_records.append(record)
         except Exception as e:
             stack_trace = traceback.format_exc()
-            logging.error(f"Exception in multiprocessing: error={str(e)}\n"
-                            f"Stack trace:\n{stack_trace}")
+            logging.error(f"Exception in multiprocessing: error={str(e)}\nStack trace:\n{stack_trace}")
             return comparison_records
         return comparison_records
 
     @staticmethod
-    def _compare_not_support_static(a: Dict[str, Any], b: Dict[str, Any], key: str,
-                                    verify_path_pass1: str, verify_path_pass2: str,
-                                    dtype_dict: Dict, opcode_dict: Dict, is_leaf: bool) -> bool:
+    def _compare_not_support_static(
+        a: Dict[str, Any],
+        b: Dict[str, Any],
+        key: str,
+        verify_path_pass1: str,
+        verify_path_pass2: str,
+        dtype_dict: Dict,
+        opcode_dict: Dict,
+        is_leaf: bool,
+    ) -> bool:
         """Static version of compare_not_support for multiprocessing"""
-        if not PassComparator.is_contain(a, b, key, is_leaf, opcode_dict, ):
+        if not PassComparator.is_contain(
+            a,
+            b,
+            key,
+            is_leaf,
+            opcode_dict,
+        ):
             return False
 
         f_a = os.path.join(verify_path_pass1, a["PHASE_NAME"], a["FILENAME"])
@@ -368,8 +402,11 @@ class PassComparator:
 
         opcode_a = a[":opcode"]
         opcode_b = b[":opcode"]
-        if (key == ":rawmagic" and opcode_a != opcode_b and
-            not PassComparator.opcode_match(opcode_a, opcode_b, opcode_dict)):
+        if (
+            key == ":rawmagic"
+            and opcode_a != opcode_b
+            and not PassComparator.opcode_match(opcode_a, opcode_b, opcode_dict)
+        ):
             return False
 
         if a[":datatype"] != b[":datatype"]:
@@ -382,11 +419,19 @@ class PassComparator:
         return True
 
     @staticmethod
-    def _compare_data_static(a: Dict[str, Any], b: Dict[str, Any],
-                             verify_path_pass1: str, verify_path_pass2: str,
-                             atol: float, rtol: float, topk: int,
-                             csv_data_dict: Dict, dtype_dict: Dict,
-                             key: str, result_file: str) -> Dict[str, Any]:
+    def _compare_data_static(
+        a: Dict[str, Any],
+        b: Dict[str, Any],
+        verify_path_pass1: str,
+        verify_path_pass2: str,
+        atol: float,
+        rtol: float,
+        topk: int,
+        csv_data_dict: Dict,
+        dtype_dict: Dict,
+        key: str,
+        result_file: str,
+    ) -> Dict[str, Any]:
         """Static version of compare_data for multiprocessing"""
         data_a, data_b = PassComparator._get_data_slice_static(
             a, b, verify_path_pass1, verify_path_pass2, dtype_dict, csv_data_dict, key
@@ -402,20 +447,22 @@ class PassComparator:
         tensor_b = torch.from_numpy(data_b.astype(np.float64)).to(torch.float64)
 
         config = IsCloseConfig(
-            rtol=rtol, atol=atol,
-            is_detail=True, shape=a_shape,
-            calc_dtype=torch.float64, top_k=topk
+            rtol=rtol, atol=atol, is_detail=True, shape=a_shape, calc_dtype=torch.float64, top_k=topk
         )
-        csv_path = os.path.join(verify_path_pass1,
-                                result_file[:-4] + ".DETAIL",
-                                a["FILENAME"][:-5] + ".csv")
+        csv_path = os.path.join(verify_path_pass1, result_file[:-4] + ".DETAIL", a["FILENAME"][:-5] + ".csv")
         result_dict = compare_tensors_result_dict(tensor_a, tensor_b, csv_path, config=config)
         return result_dict
 
     @staticmethod
-    def _get_data_slice_static(a: Dict[str, Any], b: Dict[str, Any],
-                               verify_path_pass1: str, verify_path_pass2: str,
-                               dtype_dict: Dict, csv_data_dict: Dict, key: str) -> Tuple[np.ndarray, np.ndarray]:
+    def _get_data_slice_static(
+        a: Dict[str, Any],
+        b: Dict[str, Any],
+        verify_path_pass1: str,
+        verify_path_pass2: str,
+        dtype_dict: Dict,
+        csv_data_dict: Dict,
+        key: str,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """Static version of get_data_slice for multiprocessing"""
         f_a = os.path.join(verify_path_pass1, a["PHASE_NAME"], a["FILENAME"])
         f_b = os.path.join(verify_path_pass2, b["PHASE_NAME"], b["FILENAME"])
@@ -448,9 +495,14 @@ class PassComparator:
         return data_a, b_slice
 
     @staticmethod
-    def _get_data_slice_assemble_static(a: Dict[str, Any], b: Dict[str, Any],
-                                        verify_path_pass1: str, verify_path_pass2: str,
-                                        dtype_dict: Dict, csv_data_dict: Dict) -> Tuple[np.ndarray, np.ndarray]:
+    def _get_data_slice_assemble_static(
+        a: Dict[str, Any],
+        b: Dict[str, Any],
+        verify_path_pass1: str,
+        verify_path_pass2: str,
+        dtype_dict: Dict,
+        csv_data_dict: Dict,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """Static version of get_data_slice_assemble for multiprocessing"""
         f_a = os.path.join(verify_path_pass1, a["PHASE_NAME"], a["FILENAME"])
         f_b = os.path.join(verify_path_pass2, b["PHASE_NAME"], b["FILENAME"])
@@ -486,31 +538,33 @@ class PassComparator:
         b_slice = data_b[tuple(slices_b)]
         return a_slice, b_slice
 
-    def pass_compare(self, pass_a: str, pass_b: str,
-                    paths: List[str] = None) -> None:
+    def pass_compare(self, pass_a: str, pass_b: str, paths: List[str] = None) -> None:
         """
         Main comparison function
         """
         csv_path = os.path.join(self.verify_path_pass1, "verify_graph_data_metainfo.csv")
-        df = pd.read_csv(csv_path, encoding="utf-8",
-                        na_values=["", " ", "NaN", "NA"])
+        df = pd.read_csv(csv_path, encoding="utf-8", na_values=["", " ", "NaN", "NA"])
         csv_data_dict = df.to_dict(orient='records')
 
         if self.pass_dict[pass_a] < self.pass_dict[pass_b]:
             pass_a, pass_b = pass_b, pass_a
             self.output_pass, self.golden_pass = self.golden_pass, self.output_pass
             self.verify_path_pass1, self.verify_path_pass2 = self.verify_path_pass2, self.verify_path_pass1
-        self.result_file = f'verify_graph_result_cmp~Pass_{self.pass_dict[self.golden_pass]:02d}_{self.golden_pass}~' \
-                f'Pass_{self.pass_dict[self.output_pass]:02d}_{self.output_pass}~{int(time.time() * 1_000_000)}.csv'
+        self.result_file = (
+            f'verify_graph_result_cmp~Pass_{self.pass_dict[self.golden_pass]:02d}_{self.golden_pass}~'
+            f'Pass_{self.pass_dict[self.output_pass]:02d}_{self.output_pass}~{int(time.time() * 1_000_000)}.csv'
+        )
         infer_param_index = self.pass_dict["InferParamIndex"]
         expand_function = self.pass_dict["ExpandFunction"]
         if self.pass_dict[pass_a] >= expand_function and self.pass_dict[pass_b] >= expand_function:
             self.key = ":magic"
         # 判断是否需要使用 codegen 的特殊逻辑
         is_codegen = False
-        if (self.pass_dict[pass_a] >= infer_param_index and
-            self.pass_dict[pass_b] >= expand_function and
-            self.pass_dict[pass_b] < infer_param_index):
+        if (
+            self.pass_dict[pass_a] >= infer_param_index
+            and self.pass_dict[pass_b] >= expand_function
+            and self.pass_dict[pass_b] < infer_param_index
+        ):
             self.key = "ROOT_CALL:rawmagic"
             is_codegen = True
         is_leaf = False
@@ -518,8 +572,7 @@ class PassComparator:
             is_leaf = True
         logging.info(f"key  : {self.key}")
 
-        df_pass = df[df["PHASE_NAME"].str.contains(f'{pass_a}|{pass_b}',
-                                                 na=False, regex=True)]
+        df_pass = df[df["PHASE_NAME"].str.contains(f'{pass_a}|{pass_b}', na=False, regex=True)]
         if paths == []:
             paths = df_pass["PATH_FUNC:func_magicname"].dropna().unique()
 
@@ -531,11 +584,7 @@ class PassComparator:
 
             for loop_info in loop_info_list:
                 df_loop = df_path[df_path["LOOP_INFO"] == loop_info]
-                loop_tasks.append({
-                    'df_loop': df_loop,
-                    'path': path,
-                    'loop_info': loop_info
-                })
+                loop_tasks.append({'df_loop': df_loop, 'path': path, 'loop_info': loop_info})
 
         # 使用多进程批量处理loop任务
         num_workers = min(min(cpu_count(), len(loop_tasks)), 32)
@@ -552,10 +601,19 @@ class PassComparator:
 
         args_list = [
             ProcessLoopBatchArgs(
-                loop_tasks=batch, pass_a=pass_a, pass_b=pass_b, verify_path_pass1=self.verify_path_pass1,
-                verify_path_pass2=self.verify_path_pass2, atol=self.atol, rtol=self.rtol, topk=self.topk,
-                key=self.key, is_codegen=is_codegen, is_leaf=is_leaf, csv_data_dict=csv_data_dict,
-                result_file=self.result_file
+                loop_tasks=batch,
+                pass_a=pass_a,
+                pass_b=pass_b,
+                verify_path_pass1=self.verify_path_pass1,
+                verify_path_pass2=self.verify_path_pass2,
+                atol=self.atol,
+                rtol=self.rtol,
+                topk=self.topk,
+                key=self.key,
+                is_codegen=is_codegen,
+                is_leaf=is_leaf,
+                csv_data_dict=csv_data_dict,
+                result_file=self.result_file,
             )
             for batch in batches
         ]
@@ -574,8 +632,7 @@ class PassComparator:
                 self.row_num += 1
         except Exception as e:
             stack_trace = traceback.format_exc()
-            logging.error(f"Exception in multiprocessing: error={str(e)}\n"
-                            f"Stack trace:\n{stack_trace}")
+            logging.error(f"Exception in multiprocessing: error={str(e)}\nStack trace:\n{stack_trace}")
             self.save_comparison_results()
         self.save_comparison_results()
 
@@ -602,23 +659,36 @@ def main():
     """Main function: Parse parameters and run the comparison"""
     parser = argparse.ArgumentParser(
         description="Pass Compare",
-        epilog="example:  python3 pass_compare.py --p ExpandFunction RemoveUndrivenView --verify_path ..."
+        epilog="example:  python3 pass_compare.py --p ExpandFunction RemoveUndrivenView --verify_path ...",
     )
 
-    parser.add_argument("--p", nargs='*', type=str, default=[], required=True,
-                       help="Names of the two passes to be compared, separated by a space.\
-                       The second is goldenpass.")
-    parser.add_argument("--func", nargs='*', type=str, default=[],
-                       help="Name of the function to be compared. Functions are separated by spaces.")
-    parser.add_argument("--verify_path", nargs='*', type=str, default=[],
-                       help="Verify the file directory. If two values are provided, they represent \
-                       the paths of two passes respectively.")
-    parser.add_argument("--atol", type=float, default=1e-3,
-                       help="Absolute tolerance")
-    parser.add_argument("--rtol", type=float, default=1e-3,
-                       help="Relative tolerance")
-    parser.add_argument("--topk", type=int, default=1000,
-                       help="Print the number of differing lines")
+    parser.add_argument(
+        "--p",
+        nargs='*',
+        type=str,
+        default=[],
+        required=True,
+        help="Names of the two passes to be compared, separated by a space.\
+                       The second is goldenpass.",
+    )
+    parser.add_argument(
+        "--func",
+        nargs='*',
+        type=str,
+        default=[],
+        help="Name of the function to be compared. Functions are separated by spaces.",
+    )
+    parser.add_argument(
+        "--verify_path",
+        nargs='*',
+        type=str,
+        default=[],
+        help="Verify the file directory. If two values are provided, they represent \
+                       the paths of two passes respectively.",
+    )
+    parser.add_argument("--atol", type=float, default=1e-3, help="Absolute tolerance")
+    parser.add_argument("--rtol", type=float, default=1e-3, help="Relative tolerance")
+    parser.add_argument("--topk", type=int, default=1000, help="Print the number of differing lines")
 
     args = parser.parse_args()
 
@@ -643,7 +713,7 @@ def main():
         verify_path_pass2=verify_path_pass2,
         atol=args.atol,
         rtol=args.rtol,
-        topk=args.topk
+        topk=args.topk,
     )
 
     logging.info(f"pass : {args.p[0]}, {args.p[1]}")
@@ -653,21 +723,14 @@ def main():
     logging.info(f"verify_path_pass1: {verify_path_pass1}")
     logging.info(f"verify_path_pass2: {verify_path_pass2}")
 
-    comparator.pass_compare(
-        pass_a=args.p[0],
-        pass_b=args.p[1],
-        paths=args.func
-    )
+    comparator.pass_compare(pass_a=args.p[0], pass_b=args.p[1], paths=args.func)
 
 
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,  # level：DEBUG < INFO < WARNING < ERROR < CRITICAL
         format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler("app.log", mode='w', encoding="utf-8")
-        ]
+        handlers=[logging.StreamHandler(), logging.FileHandler("app.log", mode='w', encoding="utf-8")],
     )
 
     main()

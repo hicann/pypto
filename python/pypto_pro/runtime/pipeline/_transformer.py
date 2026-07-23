@@ -8,14 +8,15 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Transformer: convert serial kernel AST to preload pipeline AST."""
+
 from __future__ import annotations
 
 import ast
 import copy
 
 from ._analyzer import PipelineInfo, analyze_pipeline
-from .config import PipelineConfig
 from ._cross_core_scanner import AccessRole
+from .config import PipelineConfig
 
 
 def _names_in_expr(node: ast.expr) -> set[str]:
@@ -57,7 +58,8 @@ class _CtxFieldReplacer(ast.NodeTransformer):
             return ast.copy_location(
                 ast.Attribute(
                     value=ast.Name(id=self.ctx_var, ctx=ast.Load()),
-                    attr=node.id, ctx=ast.Load(),
+                    attr=node.id,
+                    ctx=ast.Load(),
                 ),
                 node,
             )
@@ -122,6 +124,7 @@ def _flatten_mix_body(stage, call_expr: ast.Call, info) -> list[ast.stmt]:
     if mix_fd is None:
         # No inner sync needed — fall back to getting the raw func body.
         from ._analyzer import _try_get_funcdef
+
         raw_fn = info.closure_vars.get(stage.func_name)
         mix_fd = _try_get_funcdef(raw_fn)
         if mix_fd is None:
@@ -133,7 +136,6 @@ def _flatten_mix_body(stage, call_expr: ast.Call, info) -> list[ast.stmt]:
     body = copy.deepcopy(mix_fd.body)
     replacer = _ParamReplacer(mapping)
     return [replacer.visit(stmt) for stmt in body]
-
 
 
 def _build_event_id_index(ids_node: ast.expr, slot_count: int, index_expr: ast.expr) -> ast.expr:
@@ -154,25 +156,29 @@ def _build_system_sync_stmt(fn_name: str, pipe_name: str, event_id: ast.expr) ->
     """Build `pl.system.<fn_name>(pipe=pl.PipeType.<pipe>, event_id=<event_id>)`."""
     call = ast.Call(
         func=ast.Attribute(
-            value=ast.Attribute(
-                value=ast.Name(id="pl", ctx=ast.Load()),
-                attr="system", ctx=ast.Load()),
-            attr=fn_name, ctx=ast.Load()),
+            value=ast.Attribute(value=ast.Name(id="pl", ctx=ast.Load()), attr="system", ctx=ast.Load()),
+            attr=fn_name,
+            ctx=ast.Load(),
+        ),
         args=[],
         keywords=[
-            ast.keyword(arg="pipe", value=ast.Attribute(
+            ast.keyword(
+                arg="pipe",
                 value=ast.Attribute(
-                    value=ast.Name(id="pl", ctx=ast.Load()),
-                    attr="PipeType", ctx=ast.Load()),
-                attr=pipe_name, ctx=ast.Load())),
+                    value=ast.Attribute(value=ast.Name(id="pl", ctx=ast.Load()), attr="PipeType", ctx=ast.Load()),
+                    attr=pipe_name,
+                    ctx=ast.Load(),
+                ),
+            ),
             ast.keyword(arg="event_id", value=event_id),
         ],
     )
     return ast.Expr(value=call, lineno=0)
 
 
-def _build_sync_call(fn_name: str, pipe_name: str,
-                     ids_node: ast.expr, slot_count: int, index_expr: ast.expr) -> ast.stmt:
+def _build_sync_call(
+    fn_name: str, pipe_name: str, ids_node: ast.expr, slot_count: int, index_expr: ast.expr
+) -> ast.stmt:
     """Build `pl.system.<fn_name>(pipe=pl.PipeType.<pipe>, event_id=<ids>[idx])`."""
     event_id = _build_event_id_index(ids_node, slot_count, index_expr)
     return _build_system_sync_stmt(fn_name, pipe_name, event_id)
@@ -185,18 +191,22 @@ def _build_cross_core_sync_one(acc, index_expr: ast.expr) -> tuple[list, list]:
     buf = acc.buffer
     if acc.role == AccessRole.WRITE:
         if buf.bwd_ids_node is not None:
-            pre.append(_build_sync_call(
-                "wait_cross_core", acc.first_pipe, buf.bwd_ids_node, buf.bwd_slot_count, index_expr))
+            pre.append(
+                _build_sync_call("wait_cross_core", acc.first_pipe, buf.bwd_ids_node, buf.bwd_slot_count, index_expr)
+            )
         if buf.fwd_ids_node is not None:
-            post.append(_build_sync_call(
-                "set_cross_core", acc.last_pipe, buf.fwd_ids_node, buf.fwd_slot_count, index_expr))
+            post.append(
+                _build_sync_call("set_cross_core", acc.last_pipe, buf.fwd_ids_node, buf.fwd_slot_count, index_expr)
+            )
     else:  # READ
         if buf.fwd_ids_node is not None:
-            pre.append(_build_sync_call(
-                "wait_cross_core", acc.first_pipe, buf.fwd_ids_node, buf.fwd_slot_count, index_expr))
+            pre.append(
+                _build_sync_call("wait_cross_core", acc.first_pipe, buf.fwd_ids_node, buf.fwd_slot_count, index_expr)
+            )
         if buf.bwd_ids_node is not None:
-            post.append(_build_sync_call(
-                "set_cross_core", acc.last_pipe, buf.bwd_ids_node, buf.bwd_slot_count, index_expr))
+            post.append(
+                _build_sync_call("set_cross_core", acc.last_pipe, buf.bwd_ids_node, buf.bwd_slot_count, index_expr)
+            )
     return pre, post
 
 
@@ -228,8 +238,7 @@ def _build_syncs_from_accesses(accesses, index_expr: ast.expr) -> tuple[list, li
     return pre, post
 
 
-def transform_pipeline(func_def: ast.FunctionDef, closure_vars: dict,
-                       config: PipelineConfig) -> ast.FunctionDef:
+def transform_pipeline(func_def: ast.FunctionDef, closure_vars: dict, config: PipelineConfig) -> ast.FunctionDef:
     """Transform a serial kernel function into a preload pipeline version.
 
     Args:
@@ -283,9 +292,8 @@ def _build_mix_synced_func(stage, info: PipelineInfo, closure_vars: dict):
     to insert. Called lazily by _flatten_mix_body (and cached there); the result is
     then flattened (inlined) into the main loop.
     """
-    from ._analyzer import _try_get_funcdef, _is_vf_function, _find_sub_stage_call_args
-    from ._cross_core_scanner import (
-        scan_stage_accesses, scan_kernel_slot_to_buffer, build_binding_map)
+    from ._analyzer import _find_sub_stage_call_args, _is_vf_function, _try_get_funcdef
+    from ._cross_core_scanner import build_binding_map, scan_kernel_slot_to_buffer, scan_stage_accesses
 
     mix_fn = closure_vars.get(stage.func_name)
     mix_fd = _try_get_funcdef(mix_fn)
@@ -305,8 +313,7 @@ def _build_mix_synced_func(stage, info: PipelineInfo, closure_vars: dict):
     # Resolve cross-core buffer bindings via the binding mechanism (formal-name /
     # slot / alias / nesting independent), mirroring the analyzer.
     cross_buffers = info.sync.buffers
-    kernel_slot_map = scan_kernel_slot_to_buffer(info.func_def, cross_buffers) \
-        if info.func_def is not None else {}
+    kernel_slot_map = scan_kernel_slot_to_buffer(info.func_def, cross_buffers) if info.func_def is not None else {}
     stage_func_defs = {}
     for name in stage_names | set(stage.sub_stages):
         sfd = _try_get_funcdef(closure_vars.get(name))
@@ -324,10 +331,16 @@ def _build_mix_synced_func(stage, info: PipelineInfo, closure_vars: dict):
         sub_call_args = _find_sub_stage_call_args(mix_fd, sub_name)
         accesses = []
         scan_stage_accesses(
-            sub_fd, cross_buffers, vf_func_defs, all_mem,
+            sub_fd,
+            cross_buffers,
+            vf_func_defs,
+            all_mem,
             cross_access_out=accesses,
-            call_args=sub_call_args, caller_bindings=mix_bindings,
-            kernel_slot_map=kernel_slot_map, stage_func_defs=stage_func_defs)
+            call_args=sub_call_args,
+            caller_bindings=mix_bindings,
+            kernel_slot_map=kernel_slot_map,
+            stage_func_defs=stage_func_defs,
+        )
         inner_accs = [a for a in accesses if a.buffer_name in stage.inner_buffers]
         if inner_accs:
             sub_sync_info[sub_name] = inner_accs
@@ -346,8 +359,9 @@ def _build_mix_synced_func(stage, info: PipelineInfo, closure_vars: dict):
     return mix_fd
 
 
-def _insert_inner_sync_recursive(stmts: list[ast.stmt], sub_sync_info: dict,
-                                  index_expr: ast.expr, last_sub: str) -> bool:
+def _insert_inner_sync_recursive(
+    stmts: list[ast.stmt], sub_sync_info: dict, index_expr: ast.expr, last_sub: str
+) -> bool:
     """Recursively find section blocks with sub-stage calls, insert sync.
 
     After the last sub-stage's section block (identified by `last_sub`), a
@@ -365,8 +379,7 @@ def _insert_inner_sync_recursive(stmts: list[ast.stmt], sub_sync_info: dict,
                 if isinstance(inner, ast.Expr) and isinstance(inner.value, ast.Call):
                     fname = _get_call_name(inner.value)
                     if fname in sub_sync_info:
-                        pre, post = _build_syncs_from_accesses(
-                            sub_sync_info[fname], index_expr)
+                        pre, post = _build_syncs_from_accesses(sub_sync_info[fname], index_expr)
                         stmt.body[j:j + 1] = pre + [inner] + post
                         found_any = True
                         # If this is the last sub-stage, insert counter incr
@@ -402,8 +415,7 @@ def _build_counter_incr(name: str) -> ast.stmt:
     )
 
 
-def _transform_sync_only(stmts: list[ast.stmt], info: PipelineInfo,
-                         _insert_decls_here: bool = True) -> bool:
+def _transform_sync_only(stmts: list[ast.stmt], info: PipelineInfo, _insert_decls_here: bool = True) -> bool:
     """Validation mode: keep the serial loop structure, only auto-insert
     cross-core sync around each stage, plus a per-iteration `_pl_sync_id`
     counter and a pre-fire block before the OUTERMOST loop.
@@ -446,14 +458,13 @@ def _build_sync_only_decls(info: PipelineInfo) -> list[ast.stmt]:
     decls = []
     decls.extend(_build_lifted_id_decls(info))
     decls.extend(_build_prefire(info))
-    decls.append(ast.Assign(
-        targets=[ast.Name(id="_pl_sync_id", ctx=ast.Store())],
-        value=ast.Constant(value=0), lineno=0))
+    decls.append(
+        ast.Assign(targets=[ast.Name(id="_pl_sync_id", ctx=ast.Store())], value=ast.Constant(value=0), lineno=0)
+    )
     return decls
 
 
-def _insert_sync_into_loop_body(body: list[ast.stmt], stage_by_name: dict,
-                                info: PipelineInfo) -> None:
+def _insert_sync_into_loop_body(body: list[ast.stmt], stage_by_name: dict, info: PipelineInfo) -> None:
     """Insert wait(before)/set(after) cross-core sync around each stage call in
     the loop body. Index base is `_pl_sync_id` (current iteration, no delay).
 
@@ -477,7 +488,7 @@ def _insert_sync_into_loop_body(body: list[ast.stmt], stage_by_name: dict,
             continue
         # Leaf stage: call inside a section block.
         for j, inner in enumerate(stmt.body):
-            if (isinstance(inner, ast.Expr) and isinstance(inner.value, ast.Call)):
+            if isinstance(inner, ast.Expr) and isinstance(inner.value, ast.Call):
                 fname = _get_call_name(inner.value)
                 stage = stage_by_name.get(fname)
                 if stage is not None:
@@ -580,9 +591,14 @@ def _check_pipeline_consistency(info: PipelineInfo) -> None:
             )
 
 
-def _transform_body(stmts: list[ast.stmt], info: PipelineInfo,
-                    depth: int, extra: int, closure_vars: dict,
-                    _insert_decls_here: bool = True) -> bool:
+def _transform_body(
+    stmts: list[ast.stmt],
+    info: PipelineInfo,
+    depth: int,
+    extra: int,
+    closure_vars: dict,
+    _insert_decls_here: bool = True,
+) -> bool:
     """Recursively find and transform the pipeline loop in the statement list.
 
     When _insert_decls_here is True, declarations (_pl_ctx_arr, _pl_task_id) are inserted
@@ -605,15 +621,13 @@ def _transform_body(stmts: list[ast.stmt], info: PipelineInfo,
             else:
                 # Not our target loop - recurse into its body.
                 # Declarations should go BEFORE the OUTERMOST loop, only once.
-                if _transform_body(stmt.body, info, depth, extra, closure_vars,
-                                   _insert_decls_here=False):
+                if _transform_body(stmt.body, info, depth, extra, closure_vars, _insert_decls_here=False):
                     if _insert_decls_here:
                         decls = _build_declarations(info, depth)
                         stmts[i:i] = decls
                     return True
         elif isinstance(stmt, ast.With):
-            if _transform_body(stmt.body, info, depth, extra, closure_vars,
-                               _insert_decls_here):
+            if _transform_body(stmt.body, info, depth, extra, closure_vars, _insert_decls_here):
                 return True
     return False
 
@@ -630,17 +644,21 @@ def _build_lifted_id_decls(info: PipelineInfo) -> list[ast.stmt]:
     """
     stmts = []
     for var_name, literal_node in info.sync.lifted_ids:
-        stmts.append(ast.Assign(
-            targets=[ast.Name(id=var_name, ctx=ast.Store())],
-            value=copy.deepcopy(literal_node),
-            lineno=0,
-        ))
+        stmts.append(
+            ast.Assign(
+                targets=[ast.Name(id=var_name, ctx=ast.Store())],
+                value=copy.deepcopy(literal_node),
+                lineno=0,
+            )
+        )
     if any(s.is_mix and s.inner_buffers for s in info.stages):
-        stmts.append(ast.Assign(
-            targets=[ast.Name(id="_pl_inner_sync_id", ctx=ast.Store())],
-            value=ast.Constant(value=0),
-            lineno=0,
-        ))
+        stmts.append(
+            ast.Assign(
+                targets=[ast.Name(id="_pl_inner_sync_id", ctx=ast.Store())],
+                value=ast.Constant(value=0),
+                lineno=0,
+            )
+        )
     return stmts
 
 
@@ -650,8 +668,7 @@ def _build_declarations(info: PipelineInfo, depth: int) -> list[ast.stmt]:
 
     keywords = [ast.keyword(arg=f, value=ast.Constant(value=0)) for f in info.ctx_fields]
     ctx_call = ast.Call(
-        func=ast.Attribute(value=ast.Name(id="pl", ctx=ast.Load()),
-                           attr="struct_array", ctx=ast.Load()),
+        func=ast.Attribute(value=ast.Name(id="pl", ctx=ast.Load()), attr="struct_array", ctx=ast.Load()),
         args=[ast.Constant(value=depth), ast.Constant(value="PipeCtx")],
         keywords=keywords,
     )
@@ -723,8 +740,7 @@ def _build_prefire(info: PipelineInfo) -> list[ast.stmt]:
         else:
             section_kind, pipe_name = consumer
         for slot in range(buf.bwd_slot_count):
-            by_section.setdefault(section_kind, []).append(
-                (pipe_name, buf.bwd_ids_node, slot))
+            by_section.setdefault(section_kind, []).append((pipe_name, buf.bwd_ids_node, slot))
 
     if not by_section:
         return []
@@ -747,8 +763,7 @@ def _build_prefire(info: PipelineInfo) -> list[ast.stmt]:
     overlap_by_section: dict[str, list] = {}
     for sync in info.sync.overlap_reverse_syncs:
         for slot in range(sync.slot_count):
-            overlap_by_section.setdefault(sync.set_section_kind, []).append(
-                (sync.set_pipe, sync.event_ids_var, slot))
+            overlap_by_section.setdefault(sync.set_section_kind, []).append((sync.set_pipe, sync.event_ids_var, slot))
 
     for section_kind, entries in overlap_by_section.items():
         body = []
@@ -770,8 +785,7 @@ def _inner_consumer_sync_for_buffer(info: PipelineInfo, buffer_name: str):
     return info.sync.inner_consumer_map.get(buffer_name)
 
 
-def _expand_mid_loop_refs(node: ast.expr, mid_loop_assigns: dict,
-                          ctx_field_names: set) -> ast.expr:
+def _expand_mid_loop_refs(node: ast.expr, mid_loop_assigns: dict, ctx_field_names: set) -> ast.expr:
     """Recursively expand references to mid-loop assigned variables in an expression.
 
     If the expression references a variable that is a mid-loop assign (non-self-ref),
@@ -780,6 +794,7 @@ def _expand_mid_loop_refs(node: ast.expr, mid_loop_assigns: dict,
     position (loop vars, outer-scope vars, constants — not mid-loop intermediates
     whose assignment comes later in the loop body).
     """
+
     class _Expander(ast.NodeTransformer):
         def generic_visit(self, node):
             if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id in mid_loop_assigns:
@@ -791,15 +806,14 @@ def _expand_mid_loop_refs(node: ast.expr, mid_loop_assigns: dict,
                     expanded = copy.deepcopy(rhs)
                     return self.visit(expanded)  # recurse in case rhs also needs expansion
             return super().generic_visit(node)
+
     return _Expander().visit(node)
 
 
 def _ctx_field_assign(attr: str, value_node: ast.expr) -> ast.Assign:
     """Build `_pl_ctx_0.<attr> = <value_node>`."""
     return ast.Assign(
-        targets=[ast.Attribute(
-            value=ast.Name(id="_pl_ctx_0", ctx=ast.Load()),
-            attr=attr, ctx=ast.Store())],
+        targets=[ast.Attribute(value=ast.Name(id="_pl_ctx_0", ctx=ast.Load()), attr=attr, ctx=ast.Store())],
         value=value_node,
         lineno=0,
     )
@@ -879,17 +893,14 @@ def _classify_loop_body_stmts(original_for: ast.For, info: PipelineInfo):
         # Simple assignment to a mid-loop var that is NOT ctx-taken:
         # Preserve in original position (it's loop-carried state or a constant).
         is_named_assignment = (
-            isinstance(stmt, ast.Assign)
-            and len(stmt.targets) == 1
-            and isinstance(stmt.targets[0], ast.Name)
+            isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name)
         )
         if is_named_assignment and stmt.targets[0].id in info.mid_loop_assigns:
             ordered_body.append(copy.deepcopy(stmt))
             continue
 
         # Other statement: reject if it references a changing var
-        all_refs = {n.id for n in ast.walk(stmt)
-                    if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+        all_refs = {n.id for n in ast.walk(stmt) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
         if all_refs & changing:
             raise ValueError(
                 f"pipeline: unsupported statement in pipeline loop body that references "
@@ -902,8 +913,7 @@ def _classify_loop_body_stmts(original_for: ast.For, info: PipelineInfo):
     return ordered_body
 
 
-def _build_pipeline_loop(original_for: ast.For, info: PipelineInfo,
-                         depth: int, extra: int) -> list[ast.stmt]:
+def _build_pipeline_loop(original_for: ast.For, info: PipelineInfo, depth: int, extra: int) -> list[ast.stmt]:
     """Build the transformed pipeline for-loop."""
 
     # Modify loop range: pl.range(0, end) -> pl.range(0, end + extra)
@@ -966,19 +976,21 @@ def _extend_loop_range(for_stmt: ast.For, extra: int):
 def _build_ctx_fill(info: PipelineInfo, depth: int) -> list[ast.stmt]:
     """Build statements to fill the current ctx slot: slot lookup, is_valid, fields."""
     stmts = []
-    stmts.append(ast.Assign(
-        targets=[ast.Name(id="_pl_ctx_0", ctx=ast.Store())],
-        value=ast.Subscript(
-            value=ast.Name(id="_pl_ctx_arr", ctx=ast.Load()),
-            slice=ast.BinOp(
-                left=ast.Name(id="_pl_task_id", ctx=ast.Load()),
-                op=ast.Mod(),
-                right=ast.Constant(value=depth),
+    stmts.append(
+        ast.Assign(
+            targets=[ast.Name(id="_pl_ctx_0", ctx=ast.Store())],
+            value=ast.Subscript(
+                value=ast.Name(id="_pl_ctx_arr", ctx=ast.Load()),
+                slice=ast.BinOp(
+                    left=ast.Name(id="_pl_task_id", ctx=ast.Load()),
+                    op=ast.Mod(),
+                    right=ast.Constant(value=depth),
+                ),
+                ctx=ast.Load(),
             ),
-            ctx=ast.Load(),
-        ),
-        lineno=0,
-    ))
+            lineno=0,
+        )
+    )
     stmts.append(_build_is_valid_guard(info))
     stmts.extend(_build_ctx_field_fills(info))
     return stmts
@@ -986,9 +998,11 @@ def _build_ctx_fill(info: PipelineInfo, depth: int) -> list[ast.stmt]:
 
 def _build_is_valid_guard(info: PipelineInfo) -> ast.If:
     """Build `if <loop_var> < <range_end>: _pl_ctx_0.is_valid = 1 else: = 0`."""
-    range_end = (copy.deepcopy(info.inner_loop_range_end)
-                 if info.inner_loop_range_end
-                 else ast.Name(id="skv_tiles", ctx=ast.Load()))
+    range_end = (
+        copy.deepcopy(info.inner_loop_range_end)
+        if info.inner_loop_range_end
+        else ast.Name(id="skv_tiles", ctx=ast.Load())
+    )
     return ast.If(
         test=ast.Compare(
             left=ast.Name(id=info.inner_loop_var, ctx=ast.Load()),
@@ -1029,8 +1043,8 @@ def _build_ctx_field_fills(info: PipelineInfo) -> list[ast.stmt]:
             # Expand any mid-loop-assign references so the expr only depends on
             # variables available at ctx-fill position (loop vars / outer / const).
             value_node = _expand_mid_loop_refs(
-                copy.deepcopy(fill_values[field_name]),
-                info.mid_loop_assigns, ctx_field_names)
+                copy.deepcopy(fill_values[field_name]), info.mid_loop_assigns, ctx_field_names
+            )
         else:
             # Framework field (e.g. _pl_task_id): fill with same-named variable.
             value_node = ast.Name(id=field_name, ctx=ast.Load())
@@ -1071,10 +1085,13 @@ def _build_stage_args(stage, arg_mapping: list, ctx_var: str) -> list[ast.expr]:
     for i, orig_arg in enumerate(stage.args):
         if i < len(arg_mapping) and arg_mapping[i] is not None:
             field_name = arg_mapping[i][0]  # (field_name, fill_expr) tuple
-            new_args.append(ast.Attribute(
-                value=ast.Name(id=ctx_var, ctx=ast.Load()),
-                attr=field_name, ctx=ast.Load(),
-            ))
+            new_args.append(
+                ast.Attribute(
+                    value=ast.Name(id=ctx_var, ctx=ast.Load()),
+                    attr=field_name,
+                    ctx=ast.Load(),
+                )
+            )
         else:
             new_args.append(copy.deepcopy(orig_arg))
     return new_args
@@ -1083,13 +1100,14 @@ def _build_stage_args(stage, arg_mapping: list, ctx_var: str) -> list[ast.expr]:
 def _wrap_in_section(section_kind: str, body: list[ast.stmt]) -> ast.With:
     """Wrap statements in `with pl.section_<kind>():`."""
     section_call = ast.Call(
-        func=ast.Attribute(value=ast.Name(id="pl", ctx=ast.Load()),
-                           attr=f"section_{section_kind}", ctx=ast.Load()),
-        args=[], keywords=[],
+        func=ast.Attribute(value=ast.Name(id="pl", ctx=ast.Load()), attr=f"section_{section_kind}", ctx=ast.Load()),
+        args=[],
+        keywords=[],
     )
     return ast.With(
         items=[ast.withitem(context_expr=section_call, optional_vars=None)],
-        body=body, lineno=0,
+        body=body,
+        lineno=0,
     )
 
 
@@ -1123,7 +1141,8 @@ def _build_guarded_stage_body(stage, call_expr: ast.Call, ctx_var: str, info: Pi
     ctx_field_set = set(f for f in info.ctx_fields if f != "is_valid")
     index_expr = ast.Attribute(
         value=ast.Name(id=ctx_var, ctx=ast.Load()),
-        attr="_pl_task_id", ctx=ast.Load(),
+        attr="_pl_task_id",
+        ctx=ast.Load(),
     )
 
     if stage.is_mix:
@@ -1157,8 +1176,7 @@ def _build_guarded_stage_body(stage, call_expr: ast.Call, ctx_var: str, info: Pi
     return guarded_body
 
 
-def _build_overlap_reverse_sync(stage, info: PipelineInfo,
-                                index_expr: ast.expr) -> tuple[list, list]:
+def _build_overlap_reverse_sync(stage, info: PipelineInfo, index_expr: ast.expr) -> tuple[list, list]:
     """Build (pre, post) sync stmts for address-overlap reverse syncs (scenario 2/3).
 
     - If this stage is a sync's first_stage (earliest user): emit a wait in pre,
@@ -1173,15 +1191,15 @@ def _build_overlap_reverse_sync(stage, info: PipelineInfo,
     for sync in info.sync.overlap_reverse_syncs:
         if sync.first_stage == stage.func_name:
             wait_stmt = _build_overlap_sync_stmt(
-                "wait_cross_core", sync.wait_pipe, sync.event_ids_var,
-                sync.slot_count, index_expr)
+                "wait_cross_core", sync.wait_pipe, sync.event_ids_var, sync.slot_count, index_expr
+            )
             # Guard: only wait after the last_stage has executed at least once.
             # _pl_task_id >= stage_gap means the last_stage has had a chance to set.
             guarded_wait = ast.If(
                 test=ast.Compare(
                     left=ast.Attribute(
-                        value=ast.Name(id="_pl_ctx_0", ctx=ast.Load()),
-                        attr="_pl_task_id", ctx=ast.Load()),
+                        value=ast.Name(id="_pl_ctx_0", ctx=ast.Load()), attr="_pl_task_id", ctx=ast.Load()
+                    ),
                     ops=[ast.GtE()],
                     comparators=[ast.Constant(value=sync.stage_gap)],
                 ),
@@ -1191,14 +1209,17 @@ def _build_overlap_reverse_sync(stage, info: PipelineInfo,
             )
             pre.append(guarded_wait)
         if sync.last_stage == stage.func_name:
-            post.append(_build_overlap_sync_stmt(
-                "set_cross_core", sync.set_pipe, sync.event_ids_var,
-                sync.slot_count, index_expr))
+            post.append(
+                _build_overlap_sync_stmt(
+                    "set_cross_core", sync.set_pipe, sync.event_ids_var, sync.slot_count, index_expr
+                )
+            )
     return pre, post
 
 
-def _build_overlap_sync_stmt(op_name: str, pipe_name: str, ids_var: str,
-                             slot_count: int, index_expr: ast.expr) -> ast.stmt:
+def _build_overlap_sync_stmt(
+    op_name: str, pipe_name: str, ids_var: str, slot_count: int, index_expr: ast.expr
+) -> ast.stmt:
     """Build `pl.<op>(pipe=pl.PipeType.<pipe>, event_id=<ids_var>[<index> % <slot_count>])`."""
     event_id = ast.Subscript(
         value=ast.Name(id=ids_var, ctx=ast.Load()),
@@ -1217,7 +1238,8 @@ def _wrap_stage_section(stage, guarded_body: list[ast.stmt], ctx_var: str) -> as
     guarded_call = ast.If(
         test=ast.Attribute(
             value=ast.Name(id=ctx_var, ctx=ast.Load()),
-            attr="is_valid", ctx=ast.Load(),
+            attr="is_valid",
+            ctx=ast.Load(),
         ),
         body=guarded_body,
         orelse=[],
@@ -1228,9 +1250,9 @@ def _wrap_stage_section(stage, guarded_body: list[ast.stmt], ctx_var: str) -> as
         return guarded_call
     section_attr = f"section_{stage.section_kind}"
     section_call = ast.Call(
-        func=ast.Attribute(value=ast.Name(id="pl", ctx=ast.Load()),
-                           attr=section_attr, ctx=ast.Load()),
-        args=[], keywords=[],
+        func=ast.Attribute(value=ast.Name(id="pl", ctx=ast.Load()), attr=section_attr, ctx=ast.Load()),
+        args=[],
+        keywords=[],
     )
     return ast.With(
         items=[ast.withitem(context_expr=section_call, optional_vars=None)],
@@ -1239,8 +1261,7 @@ def _wrap_stage_section(stage, guarded_body: list[ast.stmt], ctx_var: str) -> as
     )
 
 
-def _build_stage_call(stage, stage_idx: int, info: PipelineInfo,
-                      depth: int) -> list[ast.stmt]:
+def _build_stage_call(stage, stage_idx: int, info: PipelineInfo, depth: int) -> list[ast.stmt]:
     """Build a single stage call with delay, ctx lookup, and is_valid guard.
 
     Preserves pre_stmts (e.g. wait sync) and post_stmts (e.g. set sync)

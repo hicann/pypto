@@ -8,14 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
+""" """
+
 import math
-import pypto
-import pytest
+import os
+
 import torch
-import torch_npu
+
+import pypto
 
 
 def test_slice_neg_index():
@@ -32,7 +32,7 @@ def test_slice_neg_index():
     with pypto.function("SLICE_NEG_INDEX", x, res):
         for _ in pypto.loop(1, name="LOOP_L0", idx_name="a_idx"):
             pypto.set_vec_tile_shapes(4, 8)
-            res[-3:-1, -2:-1] = x # equivalent to a[1:3, 6:7]
+            res[-3:-1, -2:-1] = x  # equivalent to a[1:3, 6:7]
 
     torch_tensor = torch.rand(x_shape, dtype=torch.float32) * 200 - 100
     res_tensor = torch.zeros(res_shape, dtype=torch.float32)
@@ -126,7 +126,7 @@ def test_slice_int_index():
     with pypto.function("SLICE_INT_INDEX", x, res):
         for _ in pypto.loop(1, name="LOOP_L0", idx_name="a_idx"):
             pypto.set_vec_tile_shapes(4, 4, 4, 4, 8)
-            res[-2, -3:8, :, 1:4, 2] = x # reshape x to (1, 3, 8, 3, 1), res[2:, 5:8, 0:8, 1:4, 2:3] = x
+            res[-2, -3:8, :, 1:4, 2] = x  # reshape x to (1, 3, 8, 3, 1), res[2:, 5:8, 0:8, 1:4, 2:3] = x
 
     torch_tensor = torch.rand(x_shape, dtype=torch.float32) * 200 - 100
     res_tensor = torch.zeros(res_shape, dtype=torch.float32)
@@ -182,10 +182,16 @@ def test_slice_ellipsis_index():
 
     pto_x_tensor = [pypto.from_torch(tensor, f"IN_{idx}") for idx, tensor in enumerate(x_tensor)]
     pto_res_tensor = [pypto.from_torch(tensor, f"IN_{idx}") for idx, tensor in enumerate(res_tensor)]
-    pypto.runtime._device_run_once_data_from_host(pto_x_tensor[0], pto_x_tensor[1],
-                                                  pto_x_tensor[2], pto_x_tensor[3],
-                                                  pto_res_tensor[0], pto_res_tensor[1],
-                                                  pto_res_tensor[2], pto_res_tensor[3])
+    pypto.runtime._device_run_once_data_from_host(
+        pto_x_tensor[0],
+        pto_x_tensor[1],
+        pto_x_tensor[2],
+        pto_x_tensor[3],
+        pto_res_tensor[0],
+        pto_res_tensor[1],
+        pto_res_tensor[2],
+        pto_res_tensor[3],
+    )
 
     assert torch.equal(res_tensor[0].flatten(), res0_copy.flatten())
     assert torch.equal(res_tensor[1].flatten(), res1_copy.flatten())

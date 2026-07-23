@@ -8,8 +8,8 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import enum
 
 from . import pypto_impl
@@ -37,8 +37,16 @@ DequantScaleRoundingMode = pypto_impl.DequantScaleRoundingMode
 PrecisionType = pypto_impl.PrecisionType
 
 _ENUM_CLASSES = [
-    DataType, TileOpFormat, CachePolicy, ReduceMode, CastMode,
-    OpType, OutType, TopKAlgo, SaturationMode, DequantScaleRoundingMode,
+    DataType,
+    TileOpFormat,
+    CachePolicy,
+    ReduceMode,
+    CastMode,
+    OpType,
+    OutType,
+    TopKAlgo,
+    SaturationMode,
+    DequantScaleRoundingMode,
 ]
 for cls in _ENUM_CLASSES:
     cls.__repr__ = _enum_repr

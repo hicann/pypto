@@ -20,8 +20,7 @@ def compare_cos(input_1, input_2):
     input_2 = input_2.reshape(-1).astype(np.float64)
     logger.info("max diff: %s", np.max(np.abs(input_1 - input_2)))
     index = np.argmax(np.abs(input_1 - input_2))
-    logger.info("max diff index = %s, intput_1 value: %s, intput_2 value: %s",
-                index, input_1[index], input_2[index])
+    logger.info("max diff index = %s, intput_1 value: %s, intput_2 value: %s", index, input_1[index], input_2[index])
     logger.info("average diff: %s", np.mean(np.abs(input_1 - input_2)))
     ab = np.sum(input_1 * input_2)
     aa = np.sqrt(np.sum(input_1 * input_1))

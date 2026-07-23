@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """PyPTO error codes used by parser diagnostics."""
+
 from __future__ import annotations
 
 __all__ = ["ErrorCode", "get_error_code"]
@@ -18,7 +19,6 @@ __all__ = ["ErrorCode", "get_error_code"]
 from enum import IntEnum
 
 from pypto.pypto_impl import ExternalError
-
 
 _PYPTO_ERROR_CODE_PREFIX = 0xF00000
 

@@ -12,10 +12,12 @@
 pypto.matmul_quant ST测试用例配置
 用于System Test自动化测试框架
 """
+
 from dataclasses import dataclass
 
-import pypto
 import torch
+
+import pypto
 
 
 @dataclass
@@ -73,7 +75,9 @@ PERTENSOR_TESTS = [
         "id": "PERTENSOR01",
         "name": "int8_pertensor_relu_fp16",
         "desc": "int8输入，加上int32的bias后，PerTensor反量化+ReLU输出fp16",
-        "m": 129, "k": 255, "n": 511,
+        "m": 129,
+        "k": 255,
+        "n": 511,
         "a_dtype": "DT_INT8",
         "b_dtype": "DT_INT8",
         "c_dtype": "DT_FP16",
@@ -92,7 +96,9 @@ PERTENSOR_TESTS = [
         "id": "PERTENSOR02",
         "name": "fp16_pertensor_relu_int8",
         "desc": "fp16输入，加上fp16的bias后，PerTensor量化+ReLU输出int8",
-        "m": 125, "k": 677, "n": 603,
+        "m": 125,
+        "k": 677,
+        "n": 603,
         "a_dtype": "DT_FP16",
         "b_dtype": "DT_FP16",
         "c_dtype": "DT_INT8",
@@ -114,7 +120,9 @@ PERCHANNEL_TESTS = [
         "id": "PERCHANNEL01",
         "name": "int8_perchannel_relu_fp16",
         "desc": "int8输入，加上int32的bias后，PerChannel反量化+ReLU输出fp16",
-        "m": 129, "k": 255, "n": 511,
+        "m": 129,
+        "k": 255,
+        "n": 511,
         "a_dtype": "DT_INT8",
         "b_dtype": "DT_INT8",
         "c_dtype": "DT_FP16",
@@ -133,7 +141,9 @@ PERCHANNEL_TESTS = [
         "id": "PERCHANNEL02",
         "name": "bf16_perchannel_relu_int8",
         "desc": "bf16输入，加上fp32的bias后，PerChannel量化+ReLU输出int8",
-        "m": 311, "k": 212, "n": 669,
+        "m": 311,
+        "k": 212,
+        "n": 669,
         "a_dtype": "DT_BF16",
         "b_dtype": "DT_BF16",
         "c_dtype": "DT_INT8",
@@ -152,7 +162,9 @@ PERCHANNEL_TESTS = [
         "id": "PERCHANNEL03",
         "name": "int8_perchannel_relu_int8",
         "desc": "int8输入，加上int32的bias后，PerChannel量化+ReLU输出int8",
-        "m": 896, "k": 128, "n": 160,
+        "m": 896,
+        "k": 128,
+        "n": 160,
         "a_dtype": "DT_INT8",
         "b_dtype": "DT_INT8",
         "c_dtype": "DT_INT8",

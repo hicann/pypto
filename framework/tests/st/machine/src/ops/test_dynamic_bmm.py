@@ -9,26 +9,26 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-""" 相关用例 Golden 生成逻辑.
+"""相关用例 Golden 生成逻辑.
 本脚本有 2 种执行模式:
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调用时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
 
-import math
-import sys
 import logging
 from pathlib import Path
+import sys
 
-import numpy as np
 from ml_dtypes import bfloat16
+import numpy as np
 
 if __name__ == "__main__":
     # 系统 import 路径
     global_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     logging.debug("SrcRoot: %s", global_src_root)
     g_ctrl_path: Path = Path(global_src_root, "tests/cmake/scripts")
     if str(g_ctrl_path) not in sys.path:
@@ -74,8 +74,20 @@ def nd_to_fractal_nz(data: np.ndarray):
 
 
 class ShapeConfigOneBatch:
-    def __init__(self, b: int, m: int, k: int, n: int, in_dtype: np.dtype, out_dtype: np.dtype, trans_a: bool,
-                 trans_b: bool, a_nz_flag: bool, b_nz_flag: bool, c_nz_flag: bool):
+    def __init__(
+        self,
+        b: int,
+        m: int,
+        k: int,
+        n: int,
+        in_dtype: np.dtype,
+        out_dtype: np.dtype,
+        trans_a: bool,
+        trans_b: bool,
+        a_nz_flag: bool,
+        b_nz_flag: bool,
+        c_nz_flag: bool,
+    ):
         self.b = b
         self.m = m
         self.k = k
@@ -90,8 +102,21 @@ class ShapeConfigOneBatch:
 
 
 class ShapeConfigTwoBatch:
-    def __init__(self, b1: int, b2: int, m: int, k: int, n: int, in_dtype: np.dtype, out_dtype: np.dtype, trans_a: bool,
-                 trans_b: bool, a_nz_flag: bool, b_nz_flag: bool, c_nz_flag: bool):
+    def __init__(
+        self,
+        b1: int,
+        b2: int,
+        m: int,
+        k: int,
+        n: int,
+        in_dtype: np.dtype,
+        out_dtype: np.dtype,
+        trans_a: bool,
+        trans_b: bool,
+        a_nz_flag: bool,
+        b_nz_flag: bool,
+        c_nz_flag: bool,
+    ):
         self.b1 = b1
         self.b2 = b2
         self.n = n
@@ -109,7 +134,7 @@ class ShapeConfigTwoBatch:
 def gen_bmm_data(input_config: ShapeConfigOneBatch, output_dir: Path):
     shape_a = [input_config.b, input_config.m, input_config.k]
     shape_b = [input_config.b, input_config.k, input_config.n]
-    shape_c = [input_config.b, input_config.m, input_config.n]
+    _shape_c = [input_config.b, input_config.m, input_config.n]
 
     c_path = Path(output_dir, 'mat_c.bin')
     a_path = Path(output_dir, 'mat_a.bin')
@@ -153,7 +178,7 @@ def gen_bmm_data(input_config: ShapeConfigOneBatch, output_dir: Path):
 def gen_bmm_data_two_batch(input_config: ShapeConfigTwoBatch, output_dir: Path):
     shape_a = [input_config.b1, input_config.b2, input_config.m, input_config.k]
     shape_b = [input_config.b1, input_config.b2, input_config.k, input_config.n]
-    shape_c = [input_config.b1, input_config.b2, input_config.m, input_config.n]
+    _shape_c = [input_config.b1, input_config.b2, input_config.m, input_config.n]
 
     a_path = Path(output_dir, 'mat_a.bin')
     c_path = Path(output_dir, 'mat_c.bin')

@@ -21,12 +21,12 @@ Main Functions:
 Example:
     See deepseekv32_lightning_indexer_quant.py for usage examples.
 """
+
 import sys
-import torch
-from pypto.operation import op_wrapper
-import pypto
-from pypto import pypto_impl
+
 from deepseekv32_lightning_indexer_quant import LightningIndexerConfigs
+
+import pypto
 
 MAX_LI_S1 = 4
 MAX_LI_S2 = 128 * 1024
@@ -46,8 +46,8 @@ def lightning_indexer_decode_compute(
     topk_res: pypto.tensor,
     unroll_list: list,
     configs: LightningIndexerConfigs,
-    selected_count: int):
-
+    selected_count: int,
+):
     """Compute lightning indexer with quantization support.
     It obtains the top-k positions corresponding to each token based on a series of operations.
     Args:
@@ -72,7 +72,7 @@ def lightning_indexer_decode_compute(
     pypto.set_pass_options(cube_l1_reuse_setting=configs.cube_l1_reuse_setting)
 
     # get tile params from configs
-    s1_tile = configs.s1_tile # s1 need to be divided by s1_tile
+    s1_tile = configs.s1_tile  # s1 need to be divided by s1_tile
     topk_tile = configs.topk_tile
     c1_tile = configs.c1_tile
     c2_tile = configs.c2_tile
@@ -89,7 +89,7 @@ def lightning_indexer_decode_compute(
     scale_dtype = idx_query_scale.dtype
     w_dtype = idx_weight.dtype
 
-    s1 = t // b # s1 of each batch is equal in decode process
+    s1 = t // b  # s1 of each batch is equal in decode process
     s1_loop = (s1 + s1_tile - 1) // s1_tile
 
     xdtype = pypto.DT_FP32
@@ -114,42 +114,48 @@ def lightning_indexer_decode_compute(
     for b_idx in pypto.loop(0, b, 1, name="LI_LOOP_BATCH", idx_name="b_idx"):
         cur_seq = act_seq_key[b_idx]
         cur_block = (cur_seq + block_size - 1) // block_size
-        last_seq = cur_seq - (cur_block - 1) * block_size
+        _last_seq = cur_seq - (cur_block - 1) * block_size
         # static tensor for rawShape assemble
         max_tensor = pypto.tensor([MAX_LI_S1, MAX_LI_S2], pypto.DT_FP32, "max_tensor")
         for s1_tile_idx in pypto.loop(0, s1_loop, 1, name="LI_LOOP_S1", idx_name="s1_loop"):
             w_scale = pypto.tensor([s1_tile, 1, idx_n_heads], pypto.DT_FP16, "w_scale")
             pypto.set_vec_tile_shapes(s1_tile, 1, idx_n_heads)
-            cur_qs = pypto.view(q_scale_3d, [s1_tile, 1, idx_n_heads],
-                                [b_idx * s1 + s1_tile * s1_tile_idx, 0, 0])
-            cur_w = pypto.view(weight_3d, [s1_tile, 1, idx_n_heads],
-                                [b_idx * s1 + s1_tile * s1_tile_idx, 0, 0])
-            w_scale = pypto.mul(cur_qs, cur_w) # (s1_tile, 1, idx_n_heads), fp16 * fp16
+            cur_qs = pypto.view(q_scale_3d, [s1_tile, 1, idx_n_heads], [b_idx * s1 + s1_tile * s1_tile_idx, 0, 0])
+            cur_w = pypto.view(weight_3d, [s1_tile, 1, idx_n_heads], [b_idx * s1 + s1_tile * s1_tile_idx, 0, 0])
+            w_scale = pypto.mul(cur_qs, cur_w)  # (s1_tile, 1, idx_n_heads), fp16 * fp16
             q_offset = b_idx * s1 * idx_n_heads + s1_tile_idx * s1_tile * idx_n_heads
             for bn_idx, unroll_loop in pypto.loop_unroll(
-                0, cur_block, 1, name="LOOP_BLOCK_NUM", idx_name="bn_idx", unroll_list=unroll_list,):
+                0,
+                cur_block,
+                1,
+                name="LOOP_BLOCK_NUM",
+                idx_name="bn_idx",
+                unroll_list=unroll_list,
+            ):
                 # static unroll into bigger block to reduce tasks
-                first_mm_collect = pypto.tensor([s1_tile * idx_n_heads, block_size * unroll_loop],
-                                                pypto.DT_FP16, "first_mm_collect")
+                first_mm_collect = pypto.tensor(
+                    [s1_tile * idx_n_heads, block_size * unroll_loop], pypto.DT_FP16, "first_mm_collect"
+                )
                 for sub_bn_idx in range(unroll_loop):
                     idx_in_block = bn_idx + sub_bn_idx
                     cur_block_idx = block_table[b_idx, idx_in_block]
                     tail_seq = pypto.min(block_size, cur_seq - (idx_in_block * block_size))
                     cur_q = pypto.view(query_2d, [s1_tile * idx_n_heads, index_d], [q_offset, 0])
-                    k_block = pypto.view(key_2d, [block_size, index_d], [cur_block_idx * block_size, 0],
-                        valid_shape=[tail_seq, index_d]) # (blockSize, indexD)
-                    pypto.set_cube_tile_shapes([c1_tile[0], c1_tile[1]], [c1_tile[2],
-                                                                          c1_tile[3]], [c1_tile[4], c1_tile[5]])
+                    k_block = pypto.view(
+                        key_2d, [block_size, index_d], [cur_block_idx * block_size, 0], valid_shape=[tail_seq, index_d]
+                    )  # (blockSize, indexD)
+                    pypto.set_cube_tile_shapes(
+                        [c1_tile[0], c1_tile[1]], [c1_tile[2], c1_tile[3]], [c1_tile[4], c1_tile[5]]
+                    )
                     # use fixpipe
-                    qk_dot = pypto.matmul(cur_q, k_block, pypto.DT_FP16, a_trans=False, b_trans=True,
-                                            extend_params=configs.extend_param) # (s1Tile * idxNHeads, blockSize)
+                    qk_dot = pypto.matmul(
+                        cur_q, k_block, pypto.DT_FP16, a_trans=False, b_trans=True, extend_params=configs.extend_param
+                    )  # (s1Tile * idxNHeads, blockSize)
                     pypto.assemble(qk_dot, [0, sub_bn_idx * block_size], first_mm_collect)
 
                 pypto.set_vec_tile_shapes(pypto.min(s1_tile * idx_n_heads, block_size), block_size)
-                qk_3d = pypto.reshape(first_mm_collect, [s1_tile, idx_n_heads, unroll_loop * block_size],
-                                        inplace=True)
-                pypto.set_cube_tile_shapes(
-                    [c2_tile[0], c2_tile[1]], [c2_tile[2], c2_tile[3]], [c2_tile[4], c2_tile[5]])
+                qk_3d = pypto.reshape(first_mm_collect, [s1_tile, idx_n_heads, unroll_loop * block_size], inplace=True)
+                pypto.set_cube_tile_shapes([c2_tile[0], c2_tile[1]], [c2_tile[2], c2_tile[3]], [c2_tile[4], c2_tile[5]])
                 w_qk = pypto.matmul(w_scale, qk_3d, pypto.DT_FP32, a_trans=False, b_trans=False)
                 second_mm = pypto.reshape(w_qk, [s1_tile, unroll_loop * block_size], inplace=True)
 
@@ -158,8 +164,12 @@ def lightning_indexer_decode_compute(
 
                 for idx in range(unroll_loop):
                     cur_block_idx = block_table[b_idx, bn_idx + idx]
-                    k_s_block = pypto.view(k_scale_2d, [1, block_size], [cur_block_idx, 0],
-                            valid_shape=[1, pypto.min(block_size, cur_seq - bn_idx * block_size)])
+                    k_s_block = pypto.view(
+                        k_scale_2d,
+                        [1, block_size],
+                        [cur_block_idx, 0],
+                        valid_shape=[1, pypto.min(block_size, cur_seq - bn_idx * block_size)],
+                    )
                     pypto.assemble(pypto.clone(k_s_block), [0, idx * block_size], ks_assemble)
                     pypto.set_vec_tile_shapes(1, 16 * block_size)
 
@@ -181,8 +191,9 @@ def lightning_indexer_decode_compute(
                 pypto.set_vec_tile_shapes(1, selected_count)
                 eff_in = pypto.view(max_tensor, [1, selected_count], [src_offset, 0], valid_shape=[1, eff_seq])
                 ax = pypto.view(eff_in, [1, selected_count], [0, 0], valid_shape=[1, eff_seq])
-                bx = pypto.full([1, selected_count], pad_value, pypto.DT_FP32,
-                                valid_shape=[1, selected_count - eff_seq])
+                bx = pypto.full(
+                    [1, selected_count], pad_value, pypto.DT_FP32, valid_shape=[1, selected_count - eff_seq]
+                )
                 pypto.assemble(pypto.clone(ax), [0, 0], pad_sc)
                 pypto.assemble(bx, [0, eff_seq], pad_sc)
                 pypto.set_pass_options(sg_set_scope=-1)
@@ -190,8 +201,9 @@ def lightning_indexer_decode_compute(
                 index_valid = pypto.view(res_index, [1, selected_count], [0, 0], valid_shape=[1, eff_seq])
                 pypto.set_vec_tile_shapes(1, 1, selected_count)
                 index_3d = pypto.reshape(index_valid, [1, 1, selected_count], valid_shape=[1, 1, eff_seq])
-                index_pad = pypto.full([1, 1, selected_count], pad_idx_value, dxdtype,
-                            valid_shape=[1, 1, selected_count - eff_seq])
+                index_pad = pypto.full(
+                    [1, 1, selected_count], pad_idx_value, dxdtype, valid_shape=[1, 1, selected_count - eff_seq]
+                )
                 pypto.assemble(pypto.clone(index_3d), [dst_offset, 0, 0], topk_res)
                 pypto.assemble(index_pad, [dst_offset, 0, eff_seq], topk_res)
 
@@ -208,7 +220,7 @@ def lightning_indexer_decode_compute(
     runtime_options={
         "stitch_function_max_num": 128,
         "device_sched_mode": 1,
-        "ready_on_host_tensors": ["act_seq_key", "block_table"]
+        "ready_on_host_tensors": ["act_seq_key", "block_table"],
     }
 )
 def lightning_indexer_decode(
@@ -220,7 +232,9 @@ def lightning_indexer_decode(
     act_seq_key: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
     block_table: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT32),
     topk_res: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
-    unroll_list, configs, selected_count
+    unroll_list,
+    configs,
+    selected_count,
 ):
     """JIT-compiled Lightning Indexer for decode phase.
 
@@ -257,5 +271,5 @@ def lightning_indexer_decode(
         topk_res,
         unroll_list,
         configs,
-        selected_count
+        selected_count,
     )

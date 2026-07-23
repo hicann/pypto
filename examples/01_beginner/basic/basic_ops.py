@@ -12,12 +12,13 @@
 Basic Operations Quick-Start for PyPTO
 """
 
+import argparse
 import os
 import sys
-import argparse
-import pypto
+
 import torch
 
+import pypto
 
 runtime_options = {"run_mode": pypto.RunMode.NPU}
 
@@ -44,9 +45,7 @@ def test_add(device):
 
 
 @pypto.frontend.jit(runtime_options=runtime_options)
-def erfc_kernel(
-    x: pypto.Tensor[[...], pypto.DT_FP32], out: pypto.Tensor[[...], pypto.DT_FP32]
-):
+def erfc_kernel(x: pypto.Tensor[[...], pypto.DT_FP32], out: pypto.Tensor[[...], pypto.DT_FP32]):
     pypto.set_vec_tile_shapes(32, 32)
     out[:] = pypto.erfc(x)
 
@@ -83,15 +82,12 @@ def test_matmul(device):
 
 
 @pypto.frontend.jit(runtime_options=runtime_options)
-def sum_kernel(
-    a: pypto.Tensor[[...], pypto.DT_FP32], out: pypto.Tensor[[...], pypto.DT_FP32]
-):
+def sum_kernel(a: pypto.Tensor[[...], pypto.DT_FP32], out: pypto.Tensor[[...], pypto.DT_FP32]):
     pypto.set_vec_tile_shapes(8, 8)
     out[:] = pypto.sum(a, dim=-1, keepdim=False)
 
 
 def test_sum(device):
-
     a = torch.tensor([[1, 2, 3], [4, 5, 6]], dtype=torch.float32, device=device)
     out = torch.empty((2), dtype=torch.float32, device=device)
 
@@ -128,9 +124,7 @@ def dynamic_add_kernel(
             #
             # `shape` and `valid_shape` are symbolic compile-time values and can be inspected during compilation.
             # eg: `print(tile.shape)`, `print(tile.valid_shape)`
-            tile = pypto.view(
-                x, shape=[block_m, block_n], offsets=[m * block_m, n * block_n]
-            )
+            tile = pypto.view(x, shape=[block_m, block_n], offsets=[m * block_m, n * block_n])
             tile = tile * 2
             pypto.assemble(tile, [m * block_m, n * block_n], output)
 
@@ -156,7 +150,7 @@ def device_init(run_mode):
         return "cpu"
     else:
         try:
-            import torch_npu
+            import torch_npu  # noqa: F401
         except ImportError:
             print("torch_npu is not installed, please install it first")
             sys.exit(1)

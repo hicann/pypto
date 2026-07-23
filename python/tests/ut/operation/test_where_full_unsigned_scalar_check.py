@@ -19,6 +19,7 @@ Covers two scenarios that must be rejected at the Python entry:
    surfaced as a misleading "input/output type inconsistent" error; it should
    instead be reported as an input/other dtype mismatch.
 """
+
 import pytest
 
 import pypto

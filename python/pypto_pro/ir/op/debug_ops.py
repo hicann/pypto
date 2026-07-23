@@ -17,9 +17,8 @@ import ast
 from collections.abc import Sequence
 from typing import Any
 
-from pypto.pypto_impl.ir import DataType
 from pypto.pypto_impl import ir as _ir_core
-from pypto.pypto_impl.ir import Call, ConstBool, ConstInt, Expr, ScalarType, Span, TensorType, TileType
+from pypto.pypto_impl.ir import Call, ConstBool, ConstInt, DataType, Expr, ScalarType, Span, TensorType, TileType
 
 from .._utils import _get_span_or_capture, _normalize_expr, _to_make_tuple
 from ._op_registry import OpSpec, op_impl, register_table
@@ -30,14 +29,10 @@ _FLOAT_CONVERSIONS = {"f"}
 _POINTER_CONVERSIONS = {"p"}
 _SUPPORTED_CONVERSIONS = _INTEGER_CONVERSIONS | _FLOAT_CONVERSIONS | _POINTER_CONVERSIONS
 _INTEGER_DTYPE_NAMES = ("INT8", "INT16", "INT32", "INT64", "UINT8", "UINT16", "UINT32", "UINT64")
-_INTEGER_DTYPES = tuple(
-    getattr(DataType, name) for name in _INTEGER_DTYPE_NAMES if hasattr(DataType, name)
-)
+_INTEGER_DTYPES = tuple(getattr(DataType, name) for name in _INTEGER_DTYPE_NAMES if hasattr(DataType, name))
 
 _SIGNED_INTEGER_DTYPES = tuple(
-    getattr(DataType, dtype_name)
-    for dtype_name in ("INT8", "INT16", "INT32", "INT64")
-    if hasattr(DataType, dtype_name)
+    getattr(DataType, dtype_name) for dtype_name in ("INT8", "INT16", "INT32", "INT64") if hasattr(DataType, dtype_name)
 )
 
 _UNSIGNED_INTEGER_DTYPES = tuple(
@@ -107,7 +102,7 @@ def _scan_printf_format(format_str: str) -> list[str]:
         if conversion not in _SUPPORTED_CONVERSIONS:
             raise ValueError(f"printf does not support conversion '%{conversion}'")
 
-        specs.append(format_str[i: j + 1])
+        specs.append(format_str[i:j + 1])
         i = j + 1
 
     return specs
@@ -234,7 +229,7 @@ def dump_tensor(
                 )
             if last_stride.value != 1:
                 raise ValueError(
-                    "debug.dump_tensor windowed mode requires innermost stride == 1, " f"got {last_stride.value}"
+                    f"debug.dump_tensor windowed mode requires innermost stride == 1, got {last_stride.value}"
                 )
         offsets_tuple = _to_make_tuple(offsets, actual_span)
         shapes_tuple = _to_make_tuple(shapes, actual_span)
@@ -311,9 +306,7 @@ def dump_tile(
     if workspace is not None:
         ws_type = workspace.type
         if not isinstance(ws_type, TensorType):
-            raise TypeError(
-                f"debug.dump_tile workspace must be TensorType, but got {type(ws_type).__name__}"
-            )
+            raise TypeError(f"debug.dump_tile workspace must be TensorType, but got {type(ws_type).__name__}")
 
     rank = len(tile_type.shape)
     if workspace is not None:
@@ -369,9 +362,7 @@ def dump_data(
     elif isinstance(data_type, TileType):
         return dump_tile(data, offsets, shapes, workspace=workspace, loc=loc, span=span)
     else:
-        raise TypeError(
-            f"debug.dump_data requires Tensor or Tile input, but got {type(data_type).__name__}"
-        )
+        raise TypeError(f"debug.dump_data requires Tensor or Tile input, but got {type(data_type).__name__}")
 
 
 def printf(format_str: str, *args: int | float | Expr, loc: bool = False, span: Span | None = None) -> Call:
@@ -404,7 +395,7 @@ def pto_assert(
     elif isinstance(condition, bool):
         condition_expr = ConstBool(condition, actual_span)
     else:
-        raise TypeError("debug.pto_assert requires a scalar bool condition, " f"but got {type(condition).__name__}")
+        raise TypeError(f"debug.pto_assert requires a scalar bool condition, but got {type(condition).__name__}")
 
     condition_type = condition_expr.type
     if not isinstance(condition_type, ScalarType) or condition_type.dtype != DataType.BOOL:
@@ -448,11 +439,13 @@ def trap(*, span: Span | None = None) -> Call:
 # Declarative op registration + special handlers
 # ---------------------------------------------------------------------------
 
-register_table({
-    "printf": OpSpec(builder=printf),
-    "dump_data": OpSpec(builder=dump_data),
-    "trap": OpSpec(builder=trap),
-})
+register_table(
+    {
+        "printf": OpSpec(builder=printf),
+        "dump_data": OpSpec(builder=dump_data),
+        "trap": OpSpec(builder=trap),
+    }
+)
 
 
 @op_impl("pto_assert")

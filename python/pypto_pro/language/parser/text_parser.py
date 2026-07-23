@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Parse DSL functions from text or files without requiring decorator syntax."""
+
 from __future__ import annotations
 
 __all__ = ["parse", "loads", "parse_program", "loads_program"]

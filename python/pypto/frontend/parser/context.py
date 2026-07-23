@@ -121,8 +121,7 @@ class Context:
             values.append(value)
 
     def get(self) -> dict[str, Any]:
-        """Retrieve a dictionary containing the most recent value for each variable.
-        """
+        """Retrieve a dictionary containing the most recent value for each variable."""
         result = {}
         for var, values in self.name2value.items():
             if values:
@@ -130,8 +129,7 @@ class Context:
         return result
 
     def delete(self, var: str) -> None:
-        """Remove a variable from the topmost context frame.
-        """
+        """Remove a variable from the topmost context frame."""
         frame = self.frames[-1]
         if var not in frame.vars:
             raise FeError(NameError(f"Variable '{var}' is not defined in the current scope"))

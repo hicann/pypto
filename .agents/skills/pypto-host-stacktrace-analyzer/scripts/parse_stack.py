@@ -8,14 +8,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
+import argparse
+from dataclasses import dataclass
+import logging
 import os
 import re
 import sys
-import logging
-import argparse
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass
+from typing import List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import setup_logging, validate_path
@@ -27,6 +26,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StackFrame:
     """堆栈帧数据结构"""
+
     index: int
     address: Optional[str] = None
     symbol: Optional[str] = None
@@ -34,7 +34,6 @@ class StackFrame:
     offset: Optional[str] = None
     source_file: Optional[str] = None
     source_line: Optional[int] = None
-
 
 
 class StackParser:
@@ -51,10 +50,7 @@ class StackParser:
 
         for match in re.finditer(pattern, text):
             frame = StackFrame(
-                index=len(frames),
-                source_file=match.group(1),
-                source_line=int(match.group(2)),
-                symbol=match.group(3)
+                index=len(frames), source_file=match.group(1), source_line=int(match.group(2)), symbol=match.group(3)
             )
             frames.append(frame)
 
@@ -73,7 +69,7 @@ class StackParser:
                 address=match.group(2),
                 symbol=match.group(3),
                 source_file=match.group(4),
-                source_line=int(match.group(5)) if match.group(5) else None
+                source_line=int(match.group(5)) if match.group(5) else None,
             )
             frames.append(frame)
 
@@ -86,7 +82,7 @@ class StackParser:
                     address=match.group(1),
                     symbol=match.group(2),
                     offset=match.group(3),
-                    binary=match.group(4)
+                    binary=match.group(4),
                 )
                 frames.append(frame)
 
@@ -101,7 +97,7 @@ class StackParser:
                     binary=match.group(1),
                     symbol=match.group(2),
                     offset=match.group(3),
-                    address=match.group(4)
+                    address=match.group(4),
                 )
                 frames.append(frame)
 
@@ -121,7 +117,7 @@ class StackParser:
                 address=match.group(2),
                 symbol=match.group(3),
                 source_file=match.group(4),
-                source_line=int(match.group(5))
+                source_line=int(match.group(5)),
             )
             frames.append(frame)
 
@@ -138,11 +134,7 @@ class StackParser:
 
         for idx, match in enumerate(re.finditer(pattern, text)):
             frame = StackFrame(
-                index=idx,
-                address=match.group(1),
-                symbol=match.group(2),
-                offset=match.group(3),
-                binary=match.group(4)
+                index=idx, address=match.group(1), symbol=match.group(2), offset=match.group(3), binary=match.group(4)
             )
             frames.append(frame)
 
@@ -234,14 +226,10 @@ def main():
     # 输出结果
     if args.json:
         import json
-        result = {
-            'format': format_type,
-            'frames': []
-        }
+
+        result = {'format': format_type, 'frames': []}
         for frame in frames:
-            frame_dict = {
-                'index': frame.index
-            }
+            frame_dict = {'index': frame.index}
             if frame.address:
                 frame_dict['address'] = frame.address
             if frame.symbol:

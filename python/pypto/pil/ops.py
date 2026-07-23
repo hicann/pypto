@@ -6,19 +6,19 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 import operator
-from typing import Any, Optional, Union
+from typing import Optional
 
 import pypto
-from pypto import ir, SymbolicScalar, SatStatus, pypto_impl
+from pypto import SatStatus, SymbolicScalar, ir, pypto_impl
 
-from .pir import Block, LoopRange, Jump
-from .pir import BuildContext, InsertPoint, Scope, BreakSignal, ContinueSignal, DoubleStarred
 from .dispatcher import dispatch_block
 from .op_registry import impl
+from .pir import Block, BreakSignal, BuildContext, ContinueSignal, DoubleStarred, InsertPoint, Jump, LoopRange, Scope
 
 
 def has_scalar(values: list) -> bool:
     return any(isinstance(v, pypto.pypto_impl.SymbolicScalar) for v in values)
+
 
 # ---- Compile-time ops ----
 
@@ -66,6 +66,7 @@ def unary_impl(ctx, op, x):
 
 # ---- Comparison ----
 
+
 @impl(operator.eq, partial=True)
 @impl(operator.ne, partial=True)
 @impl(operator.lt, partial=True)
@@ -78,12 +79,14 @@ def compare_impl(ctx, op, x, y):
 
 # ---- Attribute / index ----
 
+
 @impl(getattr)
 def getattr_impl(ctx, obj, attr):
     return getattr(obj, attr)
 
 
 # ---- Collection construction ----
+
 
 @impl(list)
 def list_impl(ctx, items):
@@ -147,8 +150,7 @@ def _pypto_loop(batch, *args, **kwargs):
     elif nargs == 3:
         start, stop, step = args
     else:
-        raise TypeError(
-            f"loop() takes 1 to 3 positional arguments but {nargs} were given")
+        raise TypeError(f"loop() takes 1 to 3 positional arguments but {nargs} were given")
 
     unroll_list = kwargs.get("unroll_list", None)
     parallel = kwargs.get("parallel", False)
@@ -284,14 +286,22 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, stop, ctx: BuildContext):
     loop_attrs = {
         "parallel": loop.parallel,
         "submit_before_loop": loop.submit_before_loop,
-        "_loop_conds": loop_conds, # extra loop condition
+        "_loop_conds": loop_conds,  # extra loop condition
         "_config_scope": pypto_impl.CurrentScope(),
-        "unroll_times": factor
+        "unroll_times": factor,
     }
 
-    for_stmt = ctx.create_for_stmt(loop_var.as_var(), ctx.unwrap(loop.start), ctx.unwrap(loop.stop),
-                                   ctx.unwrap(factor * loop.step), iter_args, body_stmt, return_vars, ctx.span,
-                                   loop_attrs)
+    for_stmt = ctx.create_for_stmt(
+        loop_var.as_var(),
+        ctx.unwrap(loop.start),
+        ctx.unwrap(loop.stop),
+        ctx.unwrap(factor * loop.step),
+        iter_args,
+        body_stmt,
+        return_vars,
+        ctx.span,
+        loop_attrs,
+    )
     ctx.emit(for_stmt)
 
 
@@ -308,7 +318,7 @@ def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
             unroll_step = factor * loop.step
             loop.stop = original_start + (original_stop - original_start) // unroll_step * unroll_step
         try:
-            pypto_impl.BeginScope(f"loop", {}, ctx.span.filename, ctx.span.begin_line)
+            pypto_impl.BeginScope("loop", {}, ctx.span.filename, ctx.span.begin_line)
             _loop_unroll(body, loop, factor, original_stop, ctx=ctx)
         finally:
             pypto_impl.EndScope()

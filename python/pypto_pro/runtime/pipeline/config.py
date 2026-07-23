@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Pipeline configuration."""
+
 from dataclasses import dataclass
 
 
@@ -30,5 +31,6 @@ class PipelineConfig:
     The transformed source is always written to the build directory as
     ``pipeline_generated.py`` for inspection.
     """
+
     preload: int = 2
     sync_only: bool = False

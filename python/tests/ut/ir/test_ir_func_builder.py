@@ -10,7 +10,7 @@ Tests targeting RootFunctionBuilder (ir_func_builder.cpp) coverage gaps.
 """
 
 import pypto
-from pypto import pil, ir
+from pypto import ir, pil
 
 
 def _collect_stmts(stmt, cls):
@@ -62,10 +62,10 @@ def _assert_func_counts(prog, expected_hiddenfunc, expected_funcs=None):
     actual_hidden = len(hiddenfunc_names)
     actual_funcs = len(prog.functions)
     assert actual_hidden == expected_hiddenfunc, (
-        f"Expected {expected_hiddenfunc} hidden funcs, got {actual_hidden}.\nProgram:\n{prog_str}"
+        f"Expected {expected_hiddenfunc} hidden funcs, got {actual_hidden}.\nProgram:\n{prog}"
     )
     assert actual_funcs == expected_funcs, (
-        f"Expected {expected_funcs} total functions, got {actual_funcs}.\nProgram:\n{prog_str}"
+        f"Expected {expected_funcs} total functions, got {actual_funcs}.\nProgram:\n{prog}"
     )
 
 
@@ -76,6 +76,7 @@ def test_incast_outcast_correctness():
     ForStmt wrapping a CALL to a path func.  Raw VIEW/ADD/ASSEMBLE
     must NOT leak into the dynFunc body.
     """
+
     def foo(a, b, c):
         pypto.set_vec_tile_shapes(16, 16)
         for i in pypto.loop(2):
@@ -124,6 +125,7 @@ def test_if_without_else():
     Loop body splits into 3 segments: [view] [if-then] [assemble]
     => 3 hidden funcs.
     """
+
     def foo(x, out):
         pypto.set_vec_tile_shapes(16, 16)
         for i in pypto.loop(4):
@@ -146,6 +148,7 @@ def test_intermediate_tensor_cross_path_func():
 
     Pre-loop op segment + loop body segment => 2 hidden funcs.
     """
+
     def foo(a, b, c):
         pypto.set_vec_tile_shapes(16, 16)
         tmp = a + b
@@ -167,6 +170,7 @@ def test_multi_level_nested_loop():
     Outer loop body = [inner ForStmt] -> recurses -> inner body is pure
     => 1 hidden func.
     """
+
     def foo(x, out):
         pypto.set_vec_tile_shapes(16, 16)
         for i in pypto.loop(2):
@@ -191,6 +195,7 @@ def test_func_param_as_assemble_dst():
 
     Single loop body => 1 hidden func.
     """
+
     def foo(x, out):
         pypto.set_vec_tile_shapes(16, 16)
         for i in pypto.loop(2):
@@ -211,6 +216,7 @@ def test_two_segments_separated_by_if():
     [view+add] [if-then] [add+assemble] => 3 hidden funcs.
     The IfStmt must be preserved in the dynFunc body.
     """
+
     def foo(x, out):
         pypto.set_vec_tile_shapes(16, 16)
         for i in pypto.loop(2):
@@ -240,6 +246,7 @@ def test_assemble_dedup_and_param_exclude():
 
     Pre-loop op segment + loop body segment => 2 hidden funcs.
     """
+
     def foo(a, out):
         pypto.set_vec_tile_shapes(16, 16)
         aux = pypto.tensor([16, 16], pypto.DT_FP32, name="aux")
@@ -261,6 +268,7 @@ def test_sequential_loops():
 
     2 loop bodies => 2 hidden funcs.
     """
+
     def foo(x, out):
         pypto.set_vec_tile_shapes(16, 16)
         for i in pypto.loop(2):
@@ -297,6 +305,7 @@ def test_if_else_both_branches():
     Loop body splits into 4 segments:
     [view+view] [if-then] [if-else] [assemble] => 4 hidden funcs.
     """
+
     def foo(x, y, out):
         pypto.set_vec_tile_shapes(16, 16)
         for i in pypto.loop(2):

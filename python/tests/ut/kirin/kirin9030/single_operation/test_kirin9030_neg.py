@@ -13,14 +13,12 @@
 Test neg codegen for Kirin9030
 """
 
-import pytest
-
 from kirin.common_neg import (
+    TEST_CASES,
     create_neg_kernels,
     run_neg_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_neg_kernels("Kirin9030")
 

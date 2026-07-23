@@ -18,13 +18,15 @@ This example demonstrates:
 - Loop with dynamic axis (add_scalar_loop_dyn_axis)
 """
 
+import argparse
 import os
 import sys
-import argparse
-import pypto
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -79,23 +81,18 @@ def _get_mode(run_mode: str):
 # ============================================================================
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def loop_basic_kernel(
-        t0: pypto.Tensor(),
-        t1: pypto.Tensor(),
-        out0: pypto.Tensor(),
-        out1: pypto.Tensor(),
-        s: int,
-        n: int):
+    t0: pypto.Tensor(), t1: pypto.Tensor(), out0: pypto.Tensor(), out1: pypto.Tensor(), s: int, n: int
+):
     pypto.set_vec_tile_shapes(64, 64)
     for bs_idx in pypto.loop(0, n, 1):  # start, stop, step
-        t0s = t0[bs_idx * s: (bs_idx + 1) * s, :]
-        t1s = t1[bs_idx * s: (bs_idx + 1) * s, :]
-        out0[bs_idx * s: (bs_idx + 1) * s, :] = pypto.add(t0s, t1s)
+        t0s = t0[bs_idx * s:(bs_idx + 1) * s, :]
+        t1s = t1[bs_idx * s:(bs_idx + 1) * s, :]
+        out0[bs_idx * s:(bs_idx + 1) * s, :] = pypto.add(t0s, t1s)
     new_step = 2
     for bs_idx in pypto.loop(0, n, new_step):  # start, stop, step
-        t0s = t0[bs_idx * s: (bs_idx + new_step) * s, :]
-        t1s = t1[bs_idx * s: (bs_idx + new_step) * s, :]
-        out1[bs_idx * s: (bs_idx + new_step) * s, :] = pypto.add(t0s, t1s)
-
+        t0s = t0[bs_idx * s:(bs_idx + new_step) * s, :]
+        t1s = t1[bs_idx * s:(bs_idx + new_step) * s, :]
+        out1[bs_idx * s:(bs_idx + new_step) * s, :] = pypto.add(t0s, t1s)
 
 
 def test_loop_basic(device_id: int = None, dynamic: bool = False) -> None:
@@ -130,12 +127,11 @@ def test_loop_basic(device_id: int = None, dynamic: bool = False) -> None:
 # 2. Loop Compile Phase Print
 # ============================================================================
 
+
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def loop_compile_phase_print_kernel(
-    in_t0: pypto.Tensor(),
-    in_t1: pypto.Tensor(),
-    out_t0: pypto.Tensor(),
-    out_t1: pypto.Tensor()):
+    in_t0: pypto.Tensor(), in_t1: pypto.Tensor(), out_t0: pypto.Tensor(), out_t1: pypto.Tensor()
+):
     pypto.set_vec_tile_shapes(64, 64)
     note = '''
     Below are demonstrations of print usage within loops.
@@ -168,7 +164,6 @@ def loop_compile_phase_print_kernel(
             out_t0.move(pypto.add(in_t0, in_t0))
             out_t1.move(pypto.add(in_t1, in_t1))
     print(separator)
-
 
 
 def test_loop_compile_phase_print(device_id: int = None, dynamic: bool = False) -> None:
@@ -207,7 +202,8 @@ def add_kernel(
     input0: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     input1: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    val: int):
+    val: int,
+):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
     b = input0.shape[0]
@@ -222,7 +218,6 @@ def add_kernel(
         t3_sub = t0_sub + t1_sub
         t3_sub = t3_sub + val
         pypto.assemble(t3_sub, [b_offset, 0, 0, 0], output)
-
 
 
 def test_add_scalar_loop(device_id=None, dynamic: bool = True) -> None:
@@ -261,13 +256,13 @@ def add_scalar_loop_dynamic_axis_kernel(
     input0: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     input1: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    val: int):
+    val: int,
+):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
     b, w, n, c = input0.shape
     tile_b = 1
     b_loop = b // tile_b
-
 
     for idx in pypto.loop(b_loop):
         b_offset = idx * tile_b
@@ -314,6 +309,7 @@ def test_add_scalar_loop_dyn_axis(device_id: int = None) -> None:
 # Main
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="PyPTO Loop Feature Examples",
@@ -324,16 +320,12 @@ Examples:
   %(prog)s loop_basic::test_loop_basic                  Run basic loop example
   %(prog)s add_scalar_loop::test_add_scalar_loop        Run scalar loop example
   %(prog)s --list                                       List all available examples
-        """
+        """,
     )
-    parser.add_argument(
-        'example_id', type=str, nargs='?',
-        help='Run a specific case. If omitted, all cases run.'
-    )
+    parser.add_argument('example_id', type=str, nargs='?', help='Run a specific case. If omitted, all cases run.')
     parser.add_argument('--list', action='store_true', help='List available examples')
     parser.add_argument(
-        '--run_mode', type=str, nargs='?', default="npu", choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default="npu", choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -391,7 +383,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
 
     try:

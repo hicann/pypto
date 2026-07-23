@@ -18,19 +18,20 @@ SoC 版本映射数据来源：
   https://github.com/Ascend/pytorch/blob/master/torch_npu/csrc/core/npu/NpuVariables.h
   https://github.com/Ascend/pytorch/blob/master/torch_npu/csrc/core/npu/NpuVariables.cpp
 """
+
 from __future__ import annotations
 
 import argparse
 import ctypes
+from dataclasses import asdict, dataclass, field
 import glob
 import json
 import logging
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
 from typing import Optional
 
 logging.basicConfig(level=logging.INFO)
@@ -51,19 +52,37 @@ KNOWN_NON_NPU_DEVICE_IDS: set[str] = {"0xa250", "0xa251", "0xa255", "0xa256"}
 # SoC 版本号 → 芯片名映射（来源：Ascend/pytorch NpuVariables.h 的 c10_npu::SocVersion 枚举）
 SOC_VERSION_MAP: dict[int, str] = {
     # Ascend 910 (A1)
-    100: "Ascend910PremiumA", 101: "Ascend910ProA", 102: "Ascend910A",
-    103: "Ascend910ProB", 104: "Ascend910B",
+    100: "Ascend910PremiumA",
+    101: "Ascend910ProA",
+    102: "Ascend910A",
+    103: "Ascend910ProB",
+    104: "Ascend910B",
     # Ascend 310P (A1+ 推理)
-    200: "Ascend310P1", 201: "Ascend310P2", 202: "Ascend310P3",
-    203: "Ascend310P4", 204: "Ascend310P5", 206: "Ascend310P7",
+    200: "Ascend310P1",
+    201: "Ascend310P2",
+    202: "Ascend310P3",
+    203: "Ascend310P4",
+    204: "Ascend310P5",
+    206: "Ascend310P7",
     # Ascend 910B (A2 训练)
-    220: "Ascend910B1", 221: "Ascend910B2", 222: "Ascend910B2C",
-    223: "Ascend910B3", 224: "Ascend910B4", 225: "Ascend910B4-1",
+    220: "Ascend910B1",
+    221: "Ascend910B2",
+    222: "Ascend910B2C",
+    223: "Ascend910B3",
+    224: "Ascend910B4",
+    225: "Ascend910B4-1",
     # Ascend 310B (A2 推理)
-    240: "Ascend310B1", 241: "Ascend310B2", 242: "Ascend310B3", 243: "Ascend310B4",
+    240: "Ascend310B1",
+    241: "Ascend310B2",
+    242: "Ascend310B3",
+    243: "Ascend310B4",
     # Ascend 910_93xx (A3)
-    250: "Ascend910_9391", 251: "Ascend910_9392", 252: "Ascend910_9381",
-    253: "Ascend910_9382", 254: "Ascend910_9372", 255: "Ascend910_9362",
+    250: "Ascend910_9391",
+    251: "Ascend910_9392",
+    252: "Ascend910_9381",
+    253: "Ascend910_9382",
+    254: "Ascend910_9372",
+    255: "Ascend910_9362",
     # Ascend 950 (A3+)
     260: "Ascend950",
 }
@@ -92,9 +111,11 @@ KNOWN_PCI_DEVICE_IDS: dict[str, tuple[str, str]] = {
 # Data Classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class NPUDevice:
     """单个 NPU 设备信息。"""
+
     index: int
     chip_name: Optional[str] = None
     soc_version: Optional[int] = None
@@ -106,6 +127,7 @@ class NPUDevice:
 @dataclass
 class NPUDetectionResult:
     """聚合检测结果。"""
+
     npu_present: bool = False
     device_count: int = 0
     chip_name: Optional[str] = None
@@ -163,6 +185,7 @@ class NPUDetectionResult:
 # 检测方法（瀑布序）
 # ---------------------------------------------------------------------------
 
+
 def _classify_chip(chip_name: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """芯片名 → (family, generation, primary_use)。"""
     for pattern, family, gen, use in CHIP_FAMILIES:
@@ -180,7 +203,9 @@ def _detect_lspci(result: NPUDetectionResult) -> None:
     try:
         out = subprocess.run(
             ["/usr/bin/lspci", "-n", "-D"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if out.returncode != 0 or not out.stdout.strip():
             return
@@ -220,11 +245,13 @@ def _detect_lspci(result: NPUDetectionResult) -> None:
 
     # 填充设备列表
     for bus_id, dev_id_hex in npu_lines:
-        result.devices.append(NPUDevice(
-            index=len(result.devices),
-            pci_bus_id=bus_id,
-            pci_device_id=f"0x{dev_id_hex}",
-        ))
+        result.devices.append(
+            NPUDevice(
+                index=len(result.devices),
+                pci_bus_id=bus_id,
+                pci_device_id=f"0x{dev_id_hex}",
+            )
+        )
 
 
 def _detect_pci_sysfs(result: NPUDetectionResult) -> None:
@@ -245,11 +272,13 @@ def _detect_pci_sysfs(result: NPUDetectionResult) -> None:
                 continue
             if device_id in KNOWN_NON_NPU_DEVICE_IDS:
                 continue
-            npu_pci_devices.append({
-                "bus_id": dev_dir.name,
-                "device_id": device_id,
-                "class": pci_class,
-            })
+            npu_pci_devices.append(
+                {
+                    "bus_id": dev_dir.name,
+                    "device_id": device_id,
+                    "class": pci_class,
+                }
+            )
         except (OSError, IOError):
             continue
 
@@ -273,11 +302,13 @@ def _detect_pci_sysfs(result: NPUDetectionResult) -> None:
         existing_bus_ids = {d.pci_bus_id for d in result.devices if d.pci_bus_id}
         for pci_dev in npu_pci_devices:
             if pci_dev["bus_id"] not in existing_bus_ids:
-                result.devices.append(NPUDevice(
-                    index=len(result.devices),
-                    pci_bus_id=pci_dev["bus_id"],
-                    pci_device_id=pci_dev["device_id"],
-                ))
+                result.devices.append(
+                    NPUDevice(
+                        index=len(result.devices),
+                        pci_bus_id=pci_dev["bus_id"],
+                        pci_device_id=pci_dev["device_id"],
+                    )
+                )
 
 
 def _detect_dev_davinci(result: NPUDetectionResult) -> None:
@@ -343,7 +374,11 @@ def _detect_npu_smi(result: NPUDetectionResult) -> None:
     def _run_npu_smi(args: list[str], run_env: dict[str, str]) -> subprocess.CompletedProcess[str] | None:
         try:
             return subprocess.run(
-                args, capture_output=True, text=True, timeout=10, env=run_env,
+                args,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=run_env,
             )
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return None
@@ -555,7 +590,7 @@ def _detect_torch_npu(result: NPUDetectionResult) -> None:
 def _detect_python_acl(result: NPUDetectionResult) -> None:
     """Level 4: 通过 Python acl 包检测。"""
     try:
-        import acl  # type: ignore  # pyright: ignore[reportMissingImports]  # noqa: PLC0415
+        import acl  # type: ignore  # pyright: ignore[reportMissingImports]
     except ImportError:
         return
 
@@ -585,6 +620,7 @@ def _detect_python_acl(result: NPUDetectionResult) -> None:
 # 主检测编排
 # ---------------------------------------------------------------------------
 
+
 def detect_npu() -> NPUDetectionResult:
     """执行全部检测方法（瀑布序）并返回聚合结果。
 
@@ -592,8 +628,8 @@ def detect_npu() -> NPUDetectionResult:
     """
     result = NPUDetectionResult()
 
-    _detect_lspci(result)          # Level 0 最高优先：lspci PCI device ID
-    _detect_pci_sysfs(result)       # Level 0a: PCI sysfs 扫描
+    _detect_lspci(result)  # Level 0 最高优先：lspci PCI device ID
+    _detect_pci_sysfs(result)  # Level 0a: PCI sysfs 扫描
     _detect_dev_davinci(result)
     _detect_driver_version(result)
     _detect_cann_version(result)

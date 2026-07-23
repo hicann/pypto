@@ -8,9 +8,8 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import pypto
+""" """
+
 import pypto._controller as controller
 
 
@@ -25,7 +24,7 @@ def test_init_loop_range_end():
     loop_end = loop.end()
     print("22222")
 
-    assert loop_end.is_concrete() == True
+    assert loop_end.is_concrete()
     print("2222")
     assert loop_end.concrete() == expected_val
     print("4444")
@@ -40,10 +39,10 @@ def test_init_loop_range_begin_end():
     loop_begin = loop.begin()
     loop_end = loop.end()
 
-    assert loop_begin.is_concrete() == True
+    assert loop_begin.is_concrete()
     assert loop_begin.concrete() == expected_begin
 
-    assert loop_end.is_concrete() == True
+    assert loop_end.is_concrete()
     assert loop_end.concrete() == expected_end
 
 
@@ -59,13 +58,13 @@ def test_init_loop_range_begin_end_step():
     loop_end = loop.end()
     loop_step = loop.step()
 
-    assert loop_begin.is_concrete() == True
+    assert loop_begin.is_concrete()
     assert loop_begin.concrete() == expected_begin
 
-    assert loop_end.is_concrete() == True
+    assert loop_end.is_concrete()
     assert loop_end.concrete() == expected_end
 
-    assert loop_step.is_concrete() == True
+    assert loop_step.is_concrete()
     assert loop_step.concrete() == expected_step
 
 
@@ -89,5 +88,5 @@ def test_init_loop_range_end_implicit_conversion_from_int():
 
     loop_end = loop.end()
 
-    assert loop_end.is_concrete() == True
+    assert loop_end.is_concrete()
     assert loop_end.concrete() == expected_val

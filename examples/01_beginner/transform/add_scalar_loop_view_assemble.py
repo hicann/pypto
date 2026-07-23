@@ -19,13 +19,16 @@ This example demonstrates how to implement a add_scalar_loop_view_assemble opera
 
 add_scalar_loop_view_assemble is a fundamental operation in neural networks, especially for attention mechanisms.
 """
+
+import argparse
 import os
 import sys
-import argparse
-import pypto
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -74,7 +77,8 @@ SHAPE = (32, 32, 1, 256)
 def add_scalar_loop_view_assemble_kernel(
     input0: pypto.Tensor(SHAPE, pypto.DT_FP32),
     input1: pypto.Tensor(SHAPE, pypto.DT_FP32),
-    output: pypto.Tensor(SHAPE, pypto.DT_FP32)):
+    output: pypto.Tensor(SHAPE, pypto.DT_FP32),
+):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
     # Calculate the loop parameters
@@ -94,7 +98,7 @@ def test_add_scalar_loop_view_assemble(device_id=None, dynamic: bool = True) -> 
     device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (32, 32, 1, 256)
-    #prepare data
+    # prepare data
     x = torch.rand(shape, dtype=torch.float, device=device)
     y = torch.rand(shape, dtype=torch.float, device=device)
     out = torch.empty(shape, dtype=torch.float, device=device)
@@ -127,26 +131,14 @@ Examples:
   %(prog)s add_scalar_loop_view_assemble::test_add_scalar_loop_view_assemble
             Run the add_scalar_loop_view_assemble::test_add_scalar_loop_view_assemble example
   %(prog)s --list       List all available examples
-        """
+        """,
     )
     parser.add_argument(
-        'example_id',
-        type=str,
-        nargs='?',
-        help='Example ID to run (1). If not specified, the example will run.'
+        'example_id', type=str, nargs='?', help='Example ID to run (1). If not specified, the example will run.'
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default="npu",
-        choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default="npu", choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -156,7 +148,7 @@ Examples:
         "add_scalar_loop_view_assemble::test_add_scalar_loop_view_assemble": {
             'name': 'add_scalar_loop_view_assemble',
             'description': 'add_scalar_loop_view_assemble implementation with dynamic batch size',
-            'function': test_add_scalar_loop_view_assemble
+            'function': test_add_scalar_loop_view_assemble,
         }
     }
 
@@ -201,7 +193,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("(Make sure CANN environment is configured and NPU is available)\n")

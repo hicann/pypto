@@ -23,26 +23,25 @@
 """
 
 import argparse
+import logging
 import os
+import shlex
 import shutil
 import subprocess
 import sys
-import logging
-import shlex
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (
-    read_file,
-    write_file,
-    setup_logging,
-    comment_lines_by_range,
     _PIP_CMD,
     DEFAULT_TIMEOUT,
+    comment_lines_by_range,
+    read_file,
+    setup_logging,
+    write_file,
 )
 
 setup_logging()
 logger = logging.getLogger(__name__)
-
 
 
 def _find_installed_aicore_entry():
@@ -142,14 +141,10 @@ def _run_test(test_cmd, run_dir, use_pypto_test_framework=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='步骤 2: 排除 machine 框架调度问题（合并 2.1-2.4）')
-    parser.add_argument('--test-cmd', required=True,
-                        help='触发 aicore error 的测试命令')
-    parser.add_argument('--run-path', default=os.getcwd(),
-                        help='运行测试的目录路径（默认: 当前目录）')
-    parser.add_argument('--use-pypto-test-framework', action='store_true',
-                        help='使用 Pypto_Test 框架模式')
+    parser = argparse.ArgumentParser(description='步骤 2: 排除 machine 框架调度问题（合并 2.1-2.4）')
+    parser.add_argument('--test-cmd', required=True, help='触发 aicore error 的测试命令')
+    parser.add_argument('--run-path', default=os.getcwd(), help='运行测试的目录路径（默认: 当前目录）')
+    parser.add_argument('--use-pypto-test-framework', action='store_true', help='使用 Pypto_Test 框架模式')
     args = parser.parse_args()
 
     run_path = os.path.abspath(args.run_path)
@@ -176,10 +171,7 @@ def main():
         logger.info("=" * 80)
         sys.exit(2)
 
-    already_commented = all(
-        not lines[i].strip() or lines[i].strip().startswith('//')
-        for i in range(start, end + 1)
-    )
+    already_commented = all(not lines[i].strip() or lines[i].strip().startswith('//') for i in range(start, end + 1))
     did_backup = False
 
     try:
@@ -201,8 +193,7 @@ def main():
 
         logger.info("")
         logger.info("---步骤 2.3: 运行测试验证 — 判断 aicore error 是否消失")
-        has_aicore = _run_test(args.test_cmd, run_path,
-                                  use_pypto_test_framework=args.use_pypto_test_framework)
+        has_aicore = _run_test(args.test_cmd, run_path, use_pypto_test_framework=args.use_pypto_test_framework)
 
     finally:
         if did_backup:

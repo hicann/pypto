@@ -10,17 +10,16 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """ """
+
 from pathlib import Path
 import sys
 
-helper_path: Path = Path(
-    Path(__file__).parent.parent.parent.parent, "cmake/scripts/helper"
-).resolve()
+helper_path: Path = Path(Path(__file__).parent.parent.parent.parent, "cmake/scripts/helper").resolve()
 if str(helper_path) not in sys.path:
     sys.path.append(str(helper_path))
-from test_case import TestCase
-from test_case_shell_actuator import TestCaseShellActuator
-from operation_test_case_runner import OperationTestCaseRunner
+from operation_test_case_runner import OperationTestCaseRunner  # noqa: E402
+from test_case import TestCase  # noqa: E402
+from test_case_shell_actuator import TestCaseShellActuator  # noqa: E402
 
 
 class OperationTestCase(TestCase):
@@ -40,9 +39,7 @@ class OperationTestCase(TestCase):
             OperationTestCaseRunner(test_case_info),
         )
         self._info = test_case_info
-        self._root_path = Path(
-            Path(__file__).parent.parent.parent.parent.parent.parent
-        ).resolve()
+        self._root_path = Path(Path(__file__).parent.parent.parent.parent.parent.parent).resolve()
 
     def run_in_dyn_func(self, _inputs, _params: dict) -> dict:
         return None

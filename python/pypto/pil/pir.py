@@ -5,13 +5,13 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
-import threading
-import enum
-import textwrap
-import inspect
-from typing import Optional, Any, Union
-from dataclasses import dataclass, field
 from contextlib import contextmanager
+from dataclasses import dataclass, field
+import enum
+import inspect
+import textwrap
+import threading
+from typing import Any, Optional, Union
 
 import pypto
 from pypto import ir
@@ -43,8 +43,8 @@ Operand = Union[Value, Any]
 
 @dataclass
 class Starred:
-    """A ``*x`` unpacking marker wrapping an operand within a Call's args.
-    """
+    """A ``*x`` unpacking marker wrapping an operand within a Call's args."""
+
     value: Operand
 
 
@@ -53,6 +53,7 @@ class DoubleStarred:
     """A ``**d`` mapping-unpack marker wrapping an operand within a Call's
     kwargs or a dict literal's items.
     """
+
     value: Operand
 
 
@@ -115,9 +116,7 @@ class Call:
         args_all = [fmt.format(x) for x in self.args] + kw_strs
         args_str = ", ".join(args_all)
         block_str = "".join(textwrap.indent(f"\n{b}", "  ") for b in fmt.blocks)
-        return (
-            f"{result_str}{fmt.format(self.callee)}({args_str}){line_info}{block_str}"
-        )
+        return f"{result_str}{fmt.format(self.callee)}({args_str}){line_info}{block_str}"
 
 
 @dataclass
@@ -187,17 +186,17 @@ class Function:
         raise NotImplementedError("Function should not be called directly")
 
 
-class ReturnSignal(Exception):
+class ReturnSignal(Exception):  # noqa: N818
     def __init__(self, value=None):
         super().__init__()
         self.value = value
 
 
-class BreakSignal(Exception):
+class BreakSignal(Exception):  # noqa: N818
     pass
 
 
-class ContinueSignal(Exception):
+class ContinueSignal(Exception):  # noqa: N818
     pass
 
 
@@ -258,7 +257,7 @@ class BuildContext(ir.IRBuilder):
         elif isinstance(val, pypto.SymbolicScalar):
             return val.as_expr()
         elif isinstance(val, pypto.Tensor):
-            if (val.is_empty()):
+            if val.is_empty():
                 return self.none()
             return val.logical_tensor()
         elif isinstance(val, (list, tuple)):

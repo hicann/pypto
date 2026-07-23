@@ -9,13 +9,15 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
-from typing import List, Union, Optional
+
+from typing import List, Optional, Union
+
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
 from .._utils import to_syms
-from ..tensor import Tensor, ShmemTensor
-from ..symbolic_scalar import SymbolicScalar
 from ..enum import AtomicType, DataType
+from ..symbolic_scalar import SymbolicScalar
+from ..tensor import ShmemTensor, Tensor
 
 
 @op_wrapper

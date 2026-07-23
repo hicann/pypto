@@ -8,15 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-""" topk 相关用例 Golden 生成逻辑.
+"""topk 相关用例 Golden 生成逻辑.
 
 本脚本有 2 种执行模式:
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import sys
+
 import logging
 from pathlib import Path
+import sys
 from typing import List
 
 import numpy as np
@@ -25,8 +26,9 @@ import torch
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -46,14 +48,14 @@ else:
     ]
 )
 def gen_moe_part2_golden(case_name: str, output: Path) -> bool:
-    dtype = np.float32
-    h = 7168
+    _dtype = np.float32
+    _h = 7168
     n_routed_experts = 256
     n_group = 8
     topk_group = 4
-    num_experts_per_topk = 8
-    first_k_dense_replace = 3
-    moe_layer_freq = 1
+    _num_experts_per_topk = 8
+    _first_k_dense_replace = 3
+    _moe_layer_freq = 1
     s = 1
 
     if case_name == "MoEGatePart2OnBoardTest.test_operation_b_2":

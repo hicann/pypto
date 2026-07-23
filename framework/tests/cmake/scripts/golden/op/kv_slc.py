@@ -15,28 +15,32 @@
 CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import math
-import sys
+
 import logging
+import math
 from pathlib import Path
+import sys
 from typing import List
-import numpy as np
+
 from ml_dtypes import bfloat16
+import numpy as np
 
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-    level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
-    g_src_root: Path = Path(Path(file).parent, "../../../../../").resolve()
+    g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
     g_ctrl_path: Path = Path(g_src_root, "cmake/scripts")
     if str(g_ctrl_path) not in sys.path:
         sys.path.append(str(g_ctrl_path))
-    from golden_register import GoldenRegister # 单独调试 import 失败, 需确认上文中 '系统 import 路径' 配置正确
+    from golden_register import GoldenRegister  # 单独调试 import 失败, 需确认上文中 '系统 import 路径' 配置正确
 else:
     from golden_register import GoldenRegister
+
 
 def dump_file(data_pool, data_path, type_str):
     if type_str.lower() == 'fp16':
@@ -70,14 +74,14 @@ def dump_file(data_pool, data_path, type_str):
     elif type_str.lower() == 'bf16':
         np.array(data_pool).astype(bfloat16).tofile(data_path)
 
+
 def gen_uniform_data(data_shape, min_value, max_value, dtype):
     if min_value == 0 and max_value == 0:
         return np.zeros(data_shape, dtype=dtype)
     if dtype == np.bool_:
         return np.random.choice([True, False], size=data_shape)
-    return np.random.uniform(low=min_value, high=max_value, size=data_shape).astype(
-        dtype
-)
+    return np.random.uniform(low=min_value, high=max_value, size=data_shape).astype(dtype)
+
 
 def numpy_topk(input_array, k, axis=-1):
     """
@@ -108,52 +112,75 @@ def numpy_topk(input_array, k, axis=-1):
 
     return final_values, final_indices
 
-def kv_slc_compute(compute_input_params, topk_indecies, topk_tensor_shape, kvNopeCache, krCache, block_table, actual_seq_len):
+
+def kv_slc_compute(
+    compute_input_params,
+    topk_indecies,
+    topk_tensor_shape,
+    kv_nope_cache,
+    kr_cache,
+    block_table,
+    actual_seq_len,
+):
     block_size = compute_input_params[0]
     n2 = compute_input_params[1]
     front = compute_input_params[2]
     near = compute_input_params[3]
-    topK = compute_input_params[4]
+    top_k = compute_input_params[4]
     l_prime = compute_input_params[5]
 
     b = topk_indecies.shape[0]
     s = topk_indecies.shape[1]
-    rope_dim = krCache.shape[1]
-    kv_lora_rank = kvNopeCache.shape[1]
-    kv_cache_axis1 = kvNopeCache.shape[0]
+    rope_dim = kr_cache.shape[1]
+    kv_lora_rank = kv_nope_cache.shape[1]
+    _kv_cache_axis1 = kv_nope_cache.shape[0]
 
-    shape_k_slc_out = [b * n2 * s * topK * l_prime, rope_dim + kv_lora_rank]
-    shape_v_slc_out = [b * n2 * s * topK * l_prime, kv_lora_rank]
+    shape_k_slc_out = [b * n2 * s * top_k * l_prime, rope_dim + kv_lora_rank]
+    shape_v_slc_out = [b * n2 * s * top_k * l_prime, kv_lora_rank]
 
-    k_slc_out = np.zeros(shape_k_slc_out, kvNopeCache.dtype)
-    v_slc_out = np.zeros(shape_v_slc_out, kvNopeCache.dtype)
+    k_slc_out = np.zeros(shape_k_slc_out, kv_nope_cache.dtype)
+    v_slc_out = np.zeros(shape_v_slc_out, kv_nope_cache.dtype)
     kv_slc_actual_seqs = np.zeros([b, s], dtype=np.int32)
 
-    for batchIdx in range(b):
-        for seqIdx in range(s):
-            slcSeqLen = 0
-            s_slc = topk_tensor_shape[batchIdx][seqIdx]
-            for nkvIdx in range(n2):
-                for topKIdx in range(topK):
-                    if topKIdx < front:
-                        position = topKIdx
-                    elif topKIdx > topK - near - front:
-                        position = s_slc - near + (topKIdx - (topK - front - near) - 1)
+    for batch_idx in range(b):
+        for seq_idx in range(s):
+            slc_seq_len = 0
+            s_slc = topk_tensor_shape[batch_idx][seq_idx]
+            for nkv_idx in range(n2):
+                for top_k_idx in range(top_k):
+                    if top_k_idx < front:
+                        position = top_k_idx
+                    elif top_k_idx > top_k - near - front:
+                        position = s_slc - near + (top_k_idx - (top_k - front - near) - 1)
                     else:
-                        position = topk_indecies[batchIdx][seqIdx][topKIdx - front]
+                        position = topk_indecies[batch_idx][seq_idx][top_k_idx - front]
                     block_idx_in_batch = int(position * l_prime / block_size)
                     tail = int(position * l_prime % block_size)
-                    slcBlockIdx = block_table[batchIdx][block_idx_in_batch]
-                    slcSeqLen = slcSeqLen + max(l_prime - max(position * l_prime + l_prime - actual_seq_len[batchIdx], 0), 0)
-                    preIdx_out_base = batchIdx * s * n2 * topK * l_prime + seqIdx * n2 * topK * l_prime + nkvIdx * topK * l_prime + topKIdx * l_prime
-                    preIdx_cache_base = slcBlockIdx * block_size + tail
+                    slc_block_idx = block_table[batch_idx][block_idx_in_batch]
+                    slc_seq_len = slc_seq_len + max(
+                        l_prime - max(position * l_prime + l_prime - actual_seq_len[batch_idx], 0), 0
+                    )
+                    pre_idx_out_base = (
+                        batch_idx * s * n2 * top_k * l_prime
+                        + seq_idx * n2 * top_k * l_prime
+                        + nkv_idx * top_k * l_prime
+                        + top_k_idx * l_prime
+                    )
+                    pre_idx_cache_base = slc_block_idx * block_size + tail
 
-                    k_slc_out[preIdx_out_base : preIdx_out_base + l_prime, 0:kv_lora_rank] = kvNopeCache[preIdx_cache_base : preIdx_cache_base + l_prime, 0:kv_lora_rank]
-                    k_slc_out[preIdx_out_base : preIdx_out_base + l_prime, kv_lora_rank:kv_lora_rank + rope_dim] = krCache[preIdx_cache_base : preIdx_cache_base + l_prime, 0:rope_dim]
-                    v_slc_out[preIdx_out_base : preIdx_out_base + l_prime, 0:kv_lora_rank] = kvNopeCache[preIdx_cache_base : preIdx_cache_base + l_prime, 0:kv_lora_rank]
-            kv_slc_actual_seqs[batchIdx][seqIdx] = slcSeqLen
+                    k_slc_out[pre_idx_out_base:pre_idx_out_base + l_prime, 0:kv_lora_rank] = kv_nope_cache[
+                        pre_idx_cache_base:pre_idx_cache_base + l_prime, 0:kv_lora_rank
+                    ]
+                    k_slc_out[pre_idx_out_base:pre_idx_out_base + l_prime, kv_lora_rank:kv_lora_rank + rope_dim] = (
+                        kr_cache[pre_idx_cache_base:pre_idx_cache_base + l_prime, 0:rope_dim]
+                    )
+                    v_slc_out[pre_idx_out_base:pre_idx_out_base + l_prime, 0:kv_lora_rank] = kv_nope_cache[
+                        pre_idx_cache_base:pre_idx_cache_base + l_prime, 0:kv_lora_rank
+                    ]
+            kv_slc_actual_seqs[batch_idx][seq_idx] = slc_seq_len
 
     return k_slc_out, v_slc_out, kv_slc_actual_seqs
+
 
 def gen_block_table(b, actual_seq_len, block_size, output: Path):
     block_num_per_batch = []
@@ -179,13 +206,14 @@ def gen_block_table(b, actual_seq_len, block_size, output: Path):
     for idx in block_num_per_batch:
         block_idx = 0
         for j in range(idx):
-            block_table[block_table_batch_idx][j] = (block_idx_list[block_idx])
+            block_table[block_table_batch_idx][j] = block_idx_list[block_idx]
             block_idx += 1
         block_table_batch_idx += 1
     logging.debug("block_table %s", block_table)
     block_table_path = Path(output, 'block_table.bin')
     dump_file(block_table, block_table_path, "int32")
     return block_num, block_table
+
 
 def gen_i_o_tensor(input_param, s_slc, s2, dtype, output: Path):
     block_size = input_param[9]
@@ -196,7 +224,7 @@ def gen_i_o_tensor(input_param, s_slc, s2, dtype, output: Path):
     rope_dim = input_param[4]
     front = input_param[5]
     near = input_param[6]
-    topK = input_param[7]
+    top_k = input_param[7]
     l_prime = input_param[8]
 
     actual_seq_len = [s2] * b
@@ -205,18 +233,18 @@ def gen_i_o_tensor(input_param, s_slc, s2, dtype, output: Path):
 
     block_num, block_table = gen_block_table(b, actual_seq_len, block_size, output)
 
-    shape_topk_indecies = [b, s, topK - front - near]
-    shape_kvNopeCache = [block_num * block_size, n2 * kv_lora_rank]
-    shape_krCache = [block_num * block_size, n2 * rope_dim]
+    shape_topk_indecies = [b, s, top_k - front - near]
+    shape_kv_nope_cache = [block_num * block_size, n2 * kv_lora_rank]
+    shape_kr_cache = [block_num * block_size, n2 * rope_dim]
 
     topk_indecies = gen_uniform_data(shape_topk_indecies, 0, s_slc, dtype=np.int32)
     topk_tensor_shape = np.zeros([b, s], dtype=np.int32)
-    for batchIdx in range(b):
-        for seqIdx in range(s):
-            topk_tensor_shape[batchIdx][seqIdx] = s_slc
+    for batch_idx in range(b):
+        for seq_idx in range(s):
+            topk_tensor_shape[batch_idx][seq_idx] = s_slc
 
-    kvNopeCache = gen_uniform_data(shape_kvNopeCache, -1, 1, dtype)
-    krCache = gen_uniform_data(shape_krCache, -1, 1, dtype)
+    kv_nope_cache = gen_uniform_data(shape_kv_nope_cache, -1, 1, dtype)
+    kr_cache = gen_uniform_data(shape_kr_cache, -1, 1, dtype)
 
     kv_slc_actual_seqs = np.zeros([b, s], dtype=np.int32)
 
@@ -226,24 +254,26 @@ def gen_i_o_tensor(input_param, s_slc, s2, dtype, output: Path):
         dump_dtype = "fp16"
 
     topk_tensor_path = Path(output, 'topk_tensor.bin')
-    topk_indecies_path = Path(output, 'topk_tensor.bin')
+    _topk_indecies_path = Path(output, 'topk_tensor.bin')
     kv_nope_cache_path = Path(output, 'kv_nope_cache.bin')
     kr_cache_path = Path(output, 'k_rope_cache.bin')
     topk_tensor_shape_path = Path(output, 'topk_tensor_shape.bin')
 
     dump_file(topk_indecies, topk_tensor_path, "int32")
     dump_file(topk_tensor_shape, topk_tensor_shape_path, "int32")
-    dump_file(kvNopeCache, kv_nope_cache_path, dump_dtype)
-    dump_file(krCache, kr_cache_path, dump_dtype)
+    dump_file(kv_nope_cache, kv_nope_cache_path, dump_dtype)
+    dump_file(kr_cache, kr_cache_path, dump_dtype)
 
-    shape_k_slc_out = [b * n2 * s * topK * l_prime, rope_dim + kv_lora_rank]
-    shape_v_slc_out = [b * n2 * s * topK * l_prime, kv_lora_rank]
+    shape_k_slc_out = [b * n2 * s * top_k * l_prime, rope_dim + kv_lora_rank]
+    shape_v_slc_out = [b * n2 * s * top_k * l_prime, kv_lora_rank]
 
     k_slc_out = np.zeros(shape_k_slc_out, dtype)
     v_slc_out = np.zeros(shape_v_slc_out, dtype)
 
-    compute_input_params = [block_size, n2, front, near, topK, l_prime]
-    k_slc_out, v_slc_out, kv_slc_actual_seqs = kv_slc_compute(compute_input_params, topk_indecies, topk_tensor_shape, kvNopeCache, krCache, block_table, actual_seq_len)
+    compute_input_params = [block_size, n2, front, near, top_k, l_prime]
+    k_slc_out, v_slc_out, kv_slc_actual_seqs = kv_slc_compute(
+        compute_input_params, topk_indecies, topk_tensor_shape, kv_nope_cache, kr_cache, block_table, actual_seq_len
+    )
 
     k_slc_out_path = Path(output, 'k_slc_out.bin')
     v_slc_out_path = Path(output, 'v_slc_out.bin')
@@ -253,6 +283,7 @@ def gen_i_o_tensor(input_param, s_slc, s2, dtype, output: Path):
     dump_file(v_slc_out, v_slc_out_path, dump_dtype)
     dump_file(kv_slc_actual_seqs, kv_slc_actual_seqs_path, "int32")
 
+
 @GoldenRegister.reg_golden_func(
     case_names=[
         # slc
@@ -260,9 +291,8 @@ def gen_i_o_tensor(input_param, s_slc, s2, dtype, output: Path):
         "DynamicSlcTest.dynamic_p_slc_bf16",
     ]
 )
-
 def kv_slc_func(case_name: str, output: Path) -> bool:
-    gen_data_debug_mode = False
+    _gen_data_debug_mode = False
     if case_name.startswith('DynamicSlcTest.dynamic_p_slc_fp16'):
         block_size = 128
         b = 32
@@ -274,9 +304,9 @@ def kv_slc_func(case_name: str, output: Path) -> bool:
         rope_dim = 64
         front = 1
         near = 2
-        topK = 16
+        top_k = 16
         l_prime = 64
-        golden_input_params = [b, s, n2, kv_lora_rank, rope_dim, front, near, topK, l_prime, block_size]
+        golden_input_params = [b, s, n2, kv_lora_rank, rope_dim, front, near, top_k, l_prime, block_size]
         dtype = np.float16
 
     if case_name.startswith('DynamicSlcTest.dynamic_p_slc_bf16'):
@@ -290,14 +320,15 @@ def kv_slc_func(case_name: str, output: Path) -> bool:
         rope_dim = 64
         front = 1
         near = 2
-        topK = 16
+        top_k = 16
         l_prime = 64
-        golden_input_params = [b, s, n2, kv_lora_rank, rope_dim, front, near, topK, l_prime, block_size]
+        golden_input_params = [b, s, n2, kv_lora_rank, rope_dim, front, near, top_k, l_prime, block_size]
         dtype = bfloat16
     input_param_path = Path(output, 'input_param.bin')
     dump_file(golden_input_params, input_param_path, "int32")
     gen_i_o_tensor(golden_input_params, s_slc, s2, dtype, output=output)
     return True
+
 
 def main() -> bool:
     """
@@ -315,6 +346,7 @@ def main() -> bool:
         output.mkdir(parents=True, exist_ok=True)
         ret = kv_slc_func(case_name=cs, output=output)
     return ret
+
 
 if __name__ == "__main__":
     exit(0 if main() else 1)

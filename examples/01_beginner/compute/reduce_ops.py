@@ -23,10 +23,12 @@ Usage:
 import argparse
 import os
 import sys
-import pypto
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -75,7 +77,7 @@ def get_device_id():
 
 def sum_op(a: torch.Tensor, dim: int, keepdim: bool = False) -> torch.Tensor:
     dtype = pypto.DT_FP32
-    shape = a.shape
+    _shape = a.shape
 
     if keepdim:
         out_shape = list(a.shape)
@@ -87,11 +89,11 @@ def sum_op(a: torch.Tensor, dim: int, keepdim: bool = False) -> torch.Tensor:
         out_shape = tuple(out_shape)
 
     @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-    def sum_kernel(a: pypto.Tensor([], dtype),
-                    out: pypto.Tensor([], dtype)):
+    def sum_kernel(a: pypto.Tensor([], dtype), out: pypto.Tensor([], dtype)):
         tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.sum(a, dim=dim, keepdim=keepdim)
+
     out = torch.empty(out_shape, dtype=torch.float32, device=a.device)
     sum_kernel(a, out)
     return out
@@ -140,21 +142,12 @@ def test_sum_different_dimensions(device_id: int = None):
 
     # Test 1: Reduction along the dim=0
     dtype = torch.float32
-    a = torch.tensor([
-            [
-                [10, 20, 30, 40],
-                [15, 25, 35, 45],
-                [12, 22, 32, 42]
-            ],
-            [
-                [5,  28, 33, 41],
-                [18, 21, 36, 44],
-                [11, 29, 31, 43]
-            ]
-        ], dtype=dtype, device=device)
-    expected = torch.tensor([[15, 48, 63, 81],
-                            [33, 46, 71, 89],
-                            [23, 51, 63, 85]], dtype=dtype, device=device)
+    a = torch.tensor(
+        [[[10, 20, 30, 40], [15, 25, 35, 45], [12, 22, 32, 42]], [[5, 28, 33, 41], [18, 21, 36, 44], [11, 29, 31, 43]]],
+        dtype=dtype,
+        device=device,
+    )
+    expected = torch.tensor([[15, 48, 63, 81], [33, 46, 71, 89], [23, 51, 63, 85]], dtype=dtype, device=device)
     dim = 0
     out = sum_op(a, dim, keepdim=False)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -165,8 +158,7 @@ def test_sum_different_dimensions(device_id: int = None):
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
     # Test 2: Reduction along the dim=1
-    expected = torch.tensor([[37, 67, 97, 127],
-                            [34, 78, 100, 128]], dtype=dtype, device=device)
+    expected = torch.tensor([[37, 67, 97, 127], [34, 78, 100, 128]], dtype=dtype, device=device)
     dim = 1
     out = sum_op(a, dim, keepdim=False)
     print(f"Output (dim=1): {out}")
@@ -175,8 +167,7 @@ def test_sum_different_dimensions(device_id: int = None):
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
     # Test 3: Reduction along the dim=2
-    expected = torch.tensor([[100, 120, 108],
-                            [107, 119, 114]], dtype=dtype, device=device)
+    expected = torch.tensor([[100, 120, 108], [107, 119, 114]], dtype=dtype, device=device)
     dim = -1
     out = sum_op(a, dim, keepdim=False)
     print(f"Output (dim=-1): {out}")
@@ -192,7 +183,7 @@ def test_sum_different_dimensions(device_id: int = None):
 # ============================================================================
 def amax_op(a: torch.Tensor, dim: int, keepdim: bool = False) -> torch.Tensor:
     dtype = pypto.DT_FP32
-    shape = a.shape
+    _shape = a.shape
     if keepdim:
         out_shape = list(a.shape)
         out_shape[dim] = 1
@@ -203,11 +194,11 @@ def amax_op(a: torch.Tensor, dim: int, keepdim: bool = False) -> torch.Tensor:
         out_shape = tuple(out_shape)
 
     @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-    def amax_kernel(a: pypto.Tensor([], dtype),
-                    out: pypto.Tensor([], dtype)):
+    def amax_kernel(a: pypto.Tensor([], dtype), out: pypto.Tensor([], dtype)):
         tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.amax(a, dim=dim, keepdim=keepdim)
+
     out = torch.empty(out_shape, dtype=torch.float32, device=a.device)
     amax_kernel(a, out)
     return out
@@ -260,21 +251,12 @@ def test_amax_different_dimensions(device_id: int = None):
 
     # Test 1: Reduction along the dim=0
     dtype = torch.float32
-    a = torch.tensor([
-            [
-                [10, 20, 30, 40],
-                [15, 25, 35, 45],
-                [12, 22, 32, 42]
-            ],
-            [
-                [5,  28, 33, 41],
-                [18, 21, 36, 44],
-                [11, 29, 31, 43]
-            ]
-        ], dtype=dtype, device=device)
-    expected = torch.tensor([[10,  28, 33, 41],
-                            [18, 25, 36, 45],
-                            [12, 29, 32, 43]], dtype=dtype, device=device)
+    a = torch.tensor(
+        [[[10, 20, 30, 40], [15, 25, 35, 45], [12, 22, 32, 42]], [[5, 28, 33, 41], [18, 21, 36, 44], [11, 29, 31, 43]]],
+        dtype=dtype,
+        device=device,
+    )
+    expected = torch.tensor([[10, 28, 33, 41], [18, 25, 36, 45], [12, 29, 32, 43]], dtype=dtype, device=device)
     dim = 0
     out = amax_op(a, dim, keepdim=False)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -285,8 +267,7 @@ def test_amax_different_dimensions(device_id: int = None):
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
     # Test 2: Reduction along the dim=1
-    expected = torch.tensor([[15, 25, 35, 45],
-                            [18,  29, 36, 44]], dtype=dtype, device=device)
+    expected = torch.tensor([[15, 25, 35, 45], [18, 29, 36, 44]], dtype=dtype, device=device)
     dim = 1
     out = amax_op(a, dim, keepdim=False)
     print(f"Output (dim=1): {out}")
@@ -295,8 +276,7 @@ def test_amax_different_dimensions(device_id: int = None):
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
     # Test 3: Reduction along the dim=2
-    expected = torch.tensor([[40, 45, 42],
-                            [41,  44, 43]], dtype=dtype, device=device)
+    expected = torch.tensor([[40, 45, 42], [41, 44, 43]], dtype=dtype, device=device)
     dim = -1
     out = amax_op(a, dim, keepdim=False)
     print(f"Output (dim=-1): {out}")
@@ -312,7 +292,7 @@ def test_amax_different_dimensions(device_id: int = None):
 # ============================================================================
 def amin_op(a: torch.Tensor, dim: int, keepdim: bool = False) -> torch.Tensor:
     dtype = pypto.DT_FP32
-    shape = a.shape
+    _shape = a.shape
     if keepdim:
         out_shape = list(a.shape)
         out_shape[dim] = 1
@@ -323,11 +303,11 @@ def amin_op(a: torch.Tensor, dim: int, keepdim: bool = False) -> torch.Tensor:
         out_shape = tuple(out_shape)
 
     @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-    def amin_kernel(a: pypto.Tensor([], dtype),
-                    out: pypto.Tensor([], dtype)):
+    def amin_kernel(a: pypto.Tensor([], dtype), out: pypto.Tensor([], dtype)):
         tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.amin(a, dim=dim, keepdim=keepdim)
+
     out = torch.empty(out_shape, dtype=torch.float32, device=a.device)
     amin_kernel(a, out)
     return out
@@ -353,7 +333,6 @@ def test_amin_basic(device_id: int = None):
     print(f"Max difference: {max_diff:.6f}")
     if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
-
 
     # Test 2: Basic reduction along the last dimension(keepdim=True)
     dtype = torch.float32
@@ -381,21 +360,12 @@ def test_amin_different_dimensions(device_id: int = None):
 
     # Test 1: Reduction along the dim=0
     dtype = torch.float32
-    a = torch.tensor([
-            [
-                [10, 20, 30, 40],
-                [15, 25, 35, 45],
-                [12, 22, 32, 42]
-            ],
-            [
-                [5,  28, 33, 41],
-                [18, 21, 36, 44],
-                [11, 29, 31, 43]
-            ]
-        ], dtype=dtype, device=device)
-    expected = torch.tensor([[5,  20, 30, 40],
-                            [15, 21, 35, 44],
-                            [11, 22, 31, 42]], dtype=dtype, device=device)
+    a = torch.tensor(
+        [[[10, 20, 30, 40], [15, 25, 35, 45], [12, 22, 32, 42]], [[5, 28, 33, 41], [18, 21, 36, 44], [11, 29, 31, 43]]],
+        dtype=dtype,
+        device=device,
+    )
+    expected = torch.tensor([[5, 20, 30, 40], [15, 21, 35, 44], [11, 22, 31, 42]], dtype=dtype, device=device)
     dim = 0
     out = amin_op(a, dim, keepdim=False)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -406,8 +376,7 @@ def test_amin_different_dimensions(device_id: int = None):
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
     # Test 2: Reduction along the dim=1
-    expected = torch.tensor([[10, 20, 30, 40],
-                            [5,  21, 31, 41]], dtype=dtype, device=device)
+    expected = torch.tensor([[10, 20, 30, 40], [5, 21, 31, 41]], dtype=dtype, device=device)
     dim = 1
     out = amin_op(a, dim, keepdim=False)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -418,8 +387,7 @@ def test_amin_different_dimensions(device_id: int = None):
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
     # Test 3: Reduction along the dim=2
-    expected = torch.tensor([[10, 15, 12],
-                            [5,  18, 11]], dtype=dtype, device=device)
+    expected = torch.tensor([[10, 15, 12], [5, 18, 11]], dtype=dtype, device=device)
     dim = -1
     out = amin_op(a, dim, keepdim=False)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -436,16 +404,18 @@ def test_amin_different_dimensions(device_id: int = None):
 # MAXIMUM Examples
 # ============================================================================
 
+
 def maximum_op(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     dtype = pypto.DT_FP32
     shape1 = a.shape
-    shape2 = b.shape
+    _shape2 = b.shape
 
     @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
     def maximum_kernel(a: pypto.Tensor([], dtype), b: pypto.Tensor([], dtype), out: pypto.Tensor([], dtype)):
         tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.maximum(a, b)
+
     out = torch.empty(shape1, dtype=torch.float32, device=a.device)
     maximum_kernel(a, b, out)
     return out
@@ -461,9 +431,9 @@ def test_maximum_basic(device_id: int = None):
 
     # Test 1: Basic Usage of maximum Function
     dtype = torch.float32
-    a = torch.tensor([0, 2 ,4], dtype=dtype, device=device)
-    b = torch.tensor([3, 1 ,3], dtype=dtype, device=device)
-    expected = torch.tensor([3, 2 ,4], dtype=dtype, device=device)
+    a = torch.tensor([0, 2, 4], dtype=dtype, device=device)
+    b = torch.tensor([3, 1, 3], dtype=dtype, device=device)
+    expected = torch.tensor([3, 2, 4], dtype=dtype, device=device)
 
     out = maximum_op(a, b)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -494,6 +464,7 @@ def test_maximum_basic(device_id: int = None):
 # MINIMUM Examples
 # ============================================================================
 
+
 def minimum_op(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     shape = a.shape
     dtype = pypto.DT_FP32
@@ -503,6 +474,7 @@ def minimum_op(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.minimum(a, b)
+
     out = torch.empty(shape, dtype=torch.float32, device=a.device)
     minimum_kernel(a, b, out)
     return out
@@ -518,9 +490,9 @@ def test_minimum_basic(device_id: int = None):
 
     # Test 1: Basic Usage of minimum Function
     dtype = torch.float32
-    a = torch.tensor([0, 2 ,4], dtype=dtype, device=device)
-    b = torch.tensor([3, 1 ,3], dtype=dtype, device=device)
-    expected = torch.tensor([0, 1 ,3], dtype=dtype, device=device)
+    a = torch.tensor([0, 2, 4], dtype=dtype, device=device)
+    b = torch.tensor([3, 1, 3], dtype=dtype, device=device)
+    expected = torch.tensor([0, 1, 3], dtype=dtype, device=device)
 
     out = minimum_op(a, b)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -551,6 +523,7 @@ def test_minimum_basic(device_id: int = None):
 # Main Function
 # ============================================================================
 
+
 def main():
     """Run reduce operation examples.
 
@@ -567,26 +540,17 @@ Examples:
   %(prog)s                      Run all examples
   %(prog)s --list               List all available examples
   %(prog)s sum::test_sum_basic    Run a specific case
-        """
+        """,
     )
     parser.add_argument(
         'example_id',
         type=str,
         nargs="?",
-        help='Run a specific case (e.g., sum::test_sum_basic). If omitted, all cases run.'
+        help='Run a specific case (e.g., sum::test_sum_basic). If omitted, all cases run.',
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default='npu',
-        choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default='npu', choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -632,7 +596,7 @@ Examples:
             'name': 'Test basic usage of minimum function',
             'description': 'Basic usage of minimum function example',
             'function': test_minimum_basic,
-        }
+        },
     }
 
     # List examples if requested
@@ -667,7 +631,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("(Make sure CANN environment is configured and NPU is available)\n")

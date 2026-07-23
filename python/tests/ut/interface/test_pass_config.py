@@ -8,10 +8,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import pypto
+""" """
+
 import pytest
+
+import pypto
 
 
 def test_pass_config():
@@ -24,11 +25,9 @@ def test_pass_config():
     pypto.set_pass_default_config(pypto.PassConfigKey.KEY_DUMP_GRAPH, False)
 
     pypto.set_pass_config("PVC2_OOO", "ExpandFunction", pypto.PassConfigKey.KEY_DUMP_GRAPH, True)
-    assert pypto.get_pass_config("PVC2_OOO", "ExpandFunction",
-                                 pypto.PassConfigKey.KEY_DUMP_GRAPH, False) is True
+    assert pypto.get_pass_config("PVC2_OOO", "ExpandFunction", pypto.PassConfigKey.KEY_DUMP_GRAPH, False) is True
 
-    assert pypto.get_pass_config("PVC2_OOO", "ExpandFunction",
-                                 pypto.PassConfigKey.KEY_DUMP_GRAPH, False) is True
+    assert pypto.get_pass_config("PVC2_OOO", "ExpandFunction", pypto.PassConfigKey.KEY_DUMP_GRAPH, False) is True
 
     configs = pypto.get_pass_configs("PVC2_OOO", "ExpandFunction")
     assert configs.dumpGraph is True
@@ -41,6 +40,7 @@ def test_pass_config():
 
 def test_pass_option():
     import inspect
+
     test_params = {
         "sg_set_scope": (5, False, False),
         "vec_nbuffer_setting": {1: 2},

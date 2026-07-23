@@ -11,15 +11,16 @@
 """
 DUMP_DEVICE_PERF 落盘与 machine_perf_trace analyze 汇总语义看护。
 """
+
 import json
 import multiprocessing as mp
 import os
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
-import pypto
 import torch
 import torch_npu
 
+import pypto
 
 _MULTI_STITCH_NUM_CHUNKS = 128
 _MULTI_STITCH_CHUNK_SIZE = 64
@@ -27,9 +28,7 @@ _MULTI_STITCH_TOTAL_SIZE = _MULTI_STITCH_NUM_CHUNKS * _MULTI_STITCH_CHUNK_SIZE
 _MULTI_STITCH_RUN_COUNT = 3
 
 
-@pypto.frontend.jit(
-    runtime_options={"stitch_function_max_num": 64}
-)
+@pypto.frontend.jit(runtime_options={"stitch_function_max_num": 64})
 def multi_stitch_kernel(
     x: pypto.Tensor([pypto.STATIC], pypto.DT_FP32),
     out: pypto.Tensor([pypto.STATIC], pypto.DT_FP32),
@@ -113,13 +112,8 @@ def _parse_us_cell(cell: str) -> Optional[float]:
 
 
 def _assert_us_cell_in_range(round_id: int, row_name: str, col_idx: int, value_us: float) -> None:
-    assert value_us >= 0, (
-        f"round={round_id} {row_name} col={col_idx}: negative value {value_us} us"
-    )
-    assert value_us <= _MAX_US, (
-        f"round={round_id} {row_name} col={col_idx}: "
-        f"abnormally large value {value_us} us"
-    )
+    assert value_us >= 0, f"round={round_id} {row_name} col={col_idx}: negative value {value_us} us"
+    assert value_us <= _MAX_US, f"round={round_id} {row_name} col={col_idx}: abnormally large value {value_us} us"
 
 
 def _validate_analyze_row_cells(round_id: int, row: List) -> None:
@@ -144,12 +138,9 @@ def _assert_required_us_cell(
     cell: _RequiredUsCell,
 ) -> None:
     suffix = f" ({cell.hint})" if cell.hint else ""
-    assert value_us is not None, (
-        f"round={round_id} {row_name} col={cell.col_idx} ({cell.metric_name}) is '-'{suffix}"
-    )
+    assert value_us is not None, f"round={round_id} {row_name} col={cell.col_idx} ({cell.metric_name}) is '-'{suffix}"
     assert value_us >= 0, (
-        f"round={round_id} {row_name} col={cell.col_idx} ({cell.metric_name})={value_us} us "
-        f"(expected >= 0)"
+        f"round={round_id} {row_name} col={cell.col_idx} ({cell.metric_name})={value_us} us (expected >= 0)"
     )
 
 
@@ -158,20 +149,20 @@ def _validate_summary_row(round_id: int, row: List, row_kind: str) -> None:
     for col_idx, metric_name, hint, require_positive in _SUMMARY_ROW_REQUIREMENTS[row_kind]:
         value_us = _parse_us_cell(row[col_idx])
         _assert_required_us_cell(
-            round_id, row_name, value_us, _RequiredUsCell(col_idx, metric_name, hint),
+            round_id,
+            row_name,
+            value_us,
+            _RequiredUsCell(col_idx, metric_name, hint),
         )
         if require_positive:
             assert value_us > _MIN_E2E_US, (
-                f"round={round_id} {row_name} col={col_idx} ({metric_name})={value_us} us "
-                f"(expected > {_MIN_E2E_US})"
+                f"round={round_id} {row_name} col={col_idx} ({metric_name})={value_us} us (expected > {_MIN_E2E_US})"
             )
 
     if row_kind == _AICORE_ROW_NAME:
         e2e_us = _parse_us_cell(row[7])
         total_us = _parse_us_cell(row[8])
-        assert e2e_us <= total_us * 1.01, (
-            f"round={round_id}: e2e({e2e_us}) > total({total_us}), aggregate inconsistent"
-        )
+        assert e2e_us <= total_us * 1.01, f"round={round_id}: e2e({e2e_us}) > total({total_us}), aggregate inconsistent"
 
 
 def _validate_round_summary_rows(round_id: int, rows: List[List]) -> None:

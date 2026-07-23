@@ -11,23 +11,23 @@
 """
 Invoke this script in `pypto` project root dir
 """
-from dataclasses import dataclass
-from typing import List, Tuple, Optional
+
 import argparse
+from dataclasses import dataclass
 import os
 import struct
+from typing import List, Optional, Tuple
 
 import numpy as np
+from thread_task_runner import ThreadTaskRunner
 import torch
 
-from thread_task_runner import ThreadTaskRunner
-
 DEFAULT_MAX_WORKERS = 16
-HUGE_TENSOR_THRESHOLD = 1024 * 1024 # numel threshold
+HUGE_TENSOR_THRESHOLD = 1024 * 1024  # numel threshold
 PROPERTY_NUM = 6
 
 
-def parse_task_id(task_id: int) -> Tuple[int, int]: # root id + leaf call id
+def parse_task_id(task_id: int) -> Tuple[int, int]:  # root id + leaf call id
     taskid_task_bits = 16
     return (task_id >> taskid_task_bits, task_id & ((1 << taskid_task_bits) - 1))
 
@@ -108,10 +108,10 @@ def parse_tile_fwk_aicpu_ctrl(filename, inputs, outputs) -> List[RawTensorDesc]:
             if start_recording:
                 splits = stripped_line.strip().split(',')
                 seq_no, task_id, raw_magic, address, dtype, bytes_of_dtype = splits[:PROPERTY_NUM]
-                seq_no, task_id, raw_magic, address, bytes_of_dtype = map(int, (
-                    seq_no, task_id, raw_magic, address, bytes_of_dtype
-                ))
-                shape = tuple(map(lambda x : int(x.strip('()')), splits[PROPERTY_NUM:]))
+                seq_no, task_id, raw_magic, address, bytes_of_dtype = map(
+                    int, (seq_no, task_id, raw_magic, address, bytes_of_dtype)
+                )
+                shape = tuple(map(lambda x: int(x.strip('()')), splits[PROPERTY_NUM:]))
 
                 rt = RawTensorDesc(
                     seq_no=seq_no,
@@ -226,8 +226,12 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Process process_dump_tensor.")
     parser.add_argument("dump_tensor_filename", type=str, help="Path to dump_tensor.txt")
     parser.add_argument("tile_fwk_aicpu_ctrl_filename", type=str, help="Path to tile_fwk_aicpu_ctrl.txt")
-    parser.add_argument("--max_workers", type=int, default=DEFAULT_MAX_WORKERS,
-                        help=f"Maximum number of threading workers, {DEFAULT_MAX_WORKERS} by default")
+    parser.add_argument(
+        "--max_workers",
+        type=int,
+        default=DEFAULT_MAX_WORKERS,
+        help=f"Maximum number of threading workers, {DEFAULT_MAX_WORKERS} by default",
+    )
     return parser.parse_args()
 
 
@@ -256,7 +260,7 @@ def main():
     def dump_raw_tensor(rt: RawTensorDesc):
         dst_file = os.path.join(dump_tensor_dir, seq_no_dir_str(rt.seq_no), f"{rt.name()}.txt")
         if rt.symlink_src is not None:
-            assert rt.symlink_src != rt.name(), f"Invalid symlink to self: {rt.name()}" # No self-symlink
+            assert rt.symlink_src != rt.name(), f"Invalid symlink to self: {rt.name()}"  # No self-symlink
 
             src_seq_no = int(rt.symlink_src.split('-')[0])
             src_file = f"../{seq_no_dir_str(src_seq_no)}/{rt.symlink_src}.txt"
@@ -287,6 +291,7 @@ def main():
     runner.run_batch(raw_tensors, dump_raw_tensor, is_huge_tensor, task_info)
 
     print(f"Output files location: `{dump_tensor_dir}`")
+
 
 if __name__ == "__main__":
     main()

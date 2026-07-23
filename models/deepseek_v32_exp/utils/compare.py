@@ -8,15 +8,9 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import math
-import logging
+""" """
+
 import torch
-import numpy as np
-from numpy.testing import assert_allclose
-import pypto
 
 
 def compare(t: torch.Tensor, t_ref: torch.Tensor, name, atol, rtol, max_error_ratio=0.005, max_error_count=10):
@@ -31,6 +25,7 @@ def compare(t: torch.Tensor, t_ref: torch.Tensor, name, atol, rtol, max_error_ra
         max_error_ratio: 误差点占总元素数的最大比例
         max_error_count: 显示的最大误差点数量（同时也是误差点阈值的上限）
     """
+
     def check_is_nan_inf():
         # ========== 核心新增：检测t中的NaN和Inf并直接报错 ==========
         # 1. 检测NaN
@@ -124,6 +119,7 @@ def compare(t: torch.Tensor, t_ref: torch.Tensor, name, atol, rtol, max_error_ra
         print("=" * 80 + "\n")
 
     # 断言误差点数量不超过阈值
-    assert error_count <= error_count_threshold, \
-        (f"compare fail: {name}, max diff: {max_diff.item():.8f} at {max_pos}, "
-         f"error_count: {error_count}, error_count_threshold: {error_count_threshold}")
+    assert error_count <= error_count_threshold, (
+        f"compare fail: {name}, max diff: {max_diff.item():.8f} at {max_pos}, "
+        f"error_count: {error_count}, error_count_threshold: {error_count_threshold}"
+    )

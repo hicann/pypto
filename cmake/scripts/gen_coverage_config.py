@@ -13,6 +13,7 @@
 由 CMake 在 POST_BUILD 阶段调用, 收集所有 filter 目录并生成 JSON 配置文件.
 生成的配置文件供外部在 Python 用例覆盖率生成时使用.
 """
+
 import argparse
 import json
 import logging
@@ -21,11 +22,11 @@ from typing import List
 
 
 class GenCoverageConfig:
-    """生成 gcov 配置文件的控制器类
-    """
+    """生成 gcov 配置文件的控制器类"""
 
     class FilterPathAction(argparse.Action):
         """自定义 Action: 解析 filter 参数时校验路径并格式化"""
+
         def __call__(self, parser, namespace, values, option_string=None):
             # 获取当前已收集的列表(初始为 None)
             cur_values = getattr(namespace, self.dest, None) or []
@@ -40,32 +41,34 @@ class GenCoverageConfig:
             setattr(namespace, self.dest, cur_values)
 
     def __init__(self, args):
-        """初始化控制器实例
-        """
+        """初始化控制器实例"""
         self.binary_dir: Path = Path(args.binary_dir).resolve()
         self.filter_lst: List[str] = args.filter
 
     def __str__(self) -> str:
-        """返回配置信息字符串
-        """
-        desc = f"\nGenCoverageConfig"
+        """返回配置信息字符串"""
+        desc = "\nGenCoverageConfig"
         desc += f"\n    BinaryDir    : {self.binary_dir}"
         desc += f"\n    FilterDirs   : {self.filter_lst}"
-        desc += f"\n"
+        desc += "\n"
         return desc
 
     @classmethod
     def main(cls):
-        """主入口函数
-        """
+        """主入口函数"""
         # 参数注册
         parser = argparse.ArgumentParser(description="Generate Coverage Config")
-        parser.add_argument("-d", "--binary_dir",
-                            required=True, type=Path,
-                            help="CMake binary directory (PTO_FWK_BIN_ROOT)")
-        parser.add_argument("-f", "--filter",
-                            required=False, action=cls.FilterPathAction, type=str,
-                            help="Specify filter file/dir in coverage info.")
+        parser.add_argument(
+            "-d", "--binary_dir", required=True, type=Path, help="CMake binary directory (PTO_FWK_BIN_ROOT)"
+        )
+        parser.add_argument(
+            "-f",
+            "--filter",
+            required=False,
+            action=cls.FilterPathAction,
+            type=str,
+            help="Specify filter file/dir in coverage info.",
+        )
         # 参数处理
         ctrl = cls(args=parser.parse_args())
         logging.info("%s", ctrl)
@@ -73,8 +76,7 @@ class GenCoverageConfig:
         ctrl.process()
 
     def process(self):
-        """生成配置文件
-        """
+        """生成配置文件"""
         # 构造配置内容
         config = {
             'cmake_binary_dir': str(self.binary_dir),

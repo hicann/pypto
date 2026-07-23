@@ -18,14 +18,11 @@ Main Functions:
     - matmul_allreduce: Main function for fused matmul and all-reduce computation
 """
 
-import logging
-import multiprocessing as mp
-import os
 import json
-import csv
-from typing import List, Optional, Tuple, Dict
-from datetime import datetime, timezone
+import logging
+import os
 import statistics
+from typing import Dict, List, Optional, Tuple
 
 
 class SwimlaneAnalyzer:
@@ -146,18 +143,13 @@ class SwimlaneAnalyzer:
         time_values = [time for _, time in all_times]
 
         if not time_values:
-            return {
-                'avg_time': 0.0,
-                'min_time': 0.0,
-                'max_time': 0.0,
-                'num_ranks': 0
-            }
+            return {'avg_time': 0.0, 'min_time': 0.0, 'max_time': 0.0, 'num_ranks': 0}
 
         return {
             'avg_time': statistics.mean(time_values) if len(time_values) > 1 else time_values[0],
             'min_time': min(time_values),
             'max_time': max(time_values),
-            'num_ranks': len(time_values)
+            'num_ranks': len(time_values),
         }
 
     def check_within_expected(self, world_size: int) -> bool:

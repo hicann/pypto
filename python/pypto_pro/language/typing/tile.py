@@ -13,6 +13,7 @@
 
 Tile represents a block in unified buffer memory, used for block-level programming.
 """
+
 from __future__ import annotations
 
 __all__ = ["Tile"]
@@ -20,8 +21,7 @@ __all__ = ["Tile"]
 
 from collections.abc import Sequence
 
-from pypto.pypto_impl.ir import DataType
-from pypto.pypto_impl.ir import Expr, MemRef
+from pypto.pypto_impl.ir import DataType, Expr, MemRef
 
 
 class Tile:
@@ -77,8 +77,7 @@ class Tile:
             self.valid_shape = None  # (row_expr, col_expr) or None
         else:
             raise ValueError(
-                "Tile must be initialized with either (shape, dtype) for "
-                "annotations or expr for runtime wrapping"
+                "Tile must be initialized with either (shape, dtype) for annotations or expr for runtime wrapping"
             )
 
     @classmethod

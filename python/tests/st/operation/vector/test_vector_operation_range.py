@@ -8,21 +8,20 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import os
-import pypto
-import pytest
-import torch
-import numpy as np
+
 from numpy.testing import assert_allclose
-import torch_npu
+import torch
+
+import pypto
 
 
 def test_vector_operation_range():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
-    dtype = pypto.DT_FP32
+    _dtype = pypto.DT_FP32
     size = 32
     view_shape = (16,)
     tile_shape = (8,)

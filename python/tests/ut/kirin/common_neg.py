@@ -13,25 +13,23 @@
 Test neg codegen - common functions for Kirin9030 and KirinX90
 """
 
-import pypto
-import torch
 import numpy as np
 import pytest
+import torch
 
 from kirin.common import compare_cos
+import pypto
 
 
 def _make_neg_kernel(soc_version, name, dtype, tile_shapes):
-    @pypto.frontend.jit(
-        codegen_options={"soc_version": soc_version},
-        runtime_options={"run_mode": pypto.RunMode.SIM}
-    )
+    @pypto.frontend.jit(codegen_options={"soc_version": soc_version}, runtime_options={"run_mode": pypto.RunMode.SIM})
     def kernel(
         a: pypto.Tensor([...], dtype),
         out: pypto.Tensor([...], dtype),
     ):
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.neg(a)
+
     kernel.__name__ = name
     return kernel
 
@@ -43,43 +41,89 @@ TEST_CASES = [
     # tile_shapes: tile shape for pypto kernel
     # shape: input tensor shape
     # marks: pytest marks
-    pytest.param("neg_kernel_001", torch.float16, pypto.DT_FP16,
-                 (50,), (112,), marks=[], id="001"),
-    pytest.param("neg_kernel_002", torch.float16, pypto.DT_FP16,
-                 (100,), (100,), marks=[pytest.mark.skip()], id="002"),
-    pytest.param("neg_kernel_003", torch.float32, pypto.DT_FP32,
-                 (2, 32), (4, 128), marks=[pytest.mark.skip()], id="003"),
-    pytest.param("neg_kernel_004", torch.float32, pypto.DT_FP32,
-                 (1, 130), (4, 130), marks=[pytest.mark.skip()], id="004"),
-    pytest.param("neg_kernel_005", torch.float16, pypto.DT_FP16,
-                 (1, 2, 32), (2, 4, 160), marks=[pytest.mark.skip()], id="005"),
-    pytest.param("neg_kernel_006", torch.float32, pypto.DT_FP32,
-                 (1, 2, 140), (2, 4, 140), marks=[pytest.mark.skip()], id="006"),
-    pytest.param("neg_kernel_007", torch.float16, pypto.DT_FP16,
-                 (1, 5, 32), (2, 5, 152), marks=[pytest.mark.skip()], id="007"),
-    pytest.param("neg_kernel_008", torch.float32, pypto.DT_FP32,
-                 (1, 3, 170), (2, 3, 170), marks=[pytest.mark.skip()], id="008"),
-    pytest.param("neg_kernel_009", torch.float16, pypto.DT_FP16,
-                 (2, 1, 2, 16), (5, 2, 4, 176),
-                 marks=[pytest.mark.skip()], id="009"),
-    pytest.param("neg_kernel_010", torch.float32, pypto.DT_FP32,
-                 (1, 1, 1, 130), (5, 2, 4, 130),
-                 marks=[pytest.mark.skip()], id="010"),
-    pytest.param("neg_kernel_011", torch.float16, pypto.DT_FP16,
-                 (1, 1, 5, 32), (2, 3, 5, 134),
-                 marks=[pytest.mark.skip()], id="011"),
-    pytest.param("neg_kernel_012", torch.float32, pypto.DT_FP32,
-                 (2, 2, 3, 32), (4, 2, 6, 135),
-                 marks=[pytest.mark.skip()], id="012"),
-    pytest.param("neg_kernel_013", torch.float16, pypto.DT_FP16,
-                 (1, 1, 4, 130), (6, 2, 4, 130),
-                 marks=[pytest.mark.skip()], id="013"),
-    pytest.param("neg_kernel_014", torch.float32, pypto.DT_FP32,
-                 (1, 2, 1, 139), (3, 2, 3, 139),
-                 marks=[pytest.mark.skip()], id="014"),
-    pytest.param("neg_kernel_015", torch.float16, pypto.DT_FP16,
-                 (3, 3, 5, 32), (6, 3, 5, 141),
-                 marks=[pytest.mark.skip()], id="015"),
+    pytest.param("neg_kernel_001", torch.float16, pypto.DT_FP16, (50,), (112,), marks=[], id="001"),
+    pytest.param("neg_kernel_002", torch.float16, pypto.DT_FP16, (100,), (100,), marks=[pytest.mark.skip()], id="002"),
+    pytest.param(
+        "neg_kernel_003", torch.float32, pypto.DT_FP32, (2, 32), (4, 128), marks=[pytest.mark.skip()], id="003"
+    ),
+    pytest.param(
+        "neg_kernel_004", torch.float32, pypto.DT_FP32, (1, 130), (4, 130), marks=[pytest.mark.skip()], id="004"
+    ),
+    pytest.param(
+        "neg_kernel_005", torch.float16, pypto.DT_FP16, (1, 2, 32), (2, 4, 160), marks=[pytest.mark.skip()], id="005"
+    ),
+    pytest.param(
+        "neg_kernel_006", torch.float32, pypto.DT_FP32, (1, 2, 140), (2, 4, 140), marks=[pytest.mark.skip()], id="006"
+    ),
+    pytest.param(
+        "neg_kernel_007", torch.float16, pypto.DT_FP16, (1, 5, 32), (2, 5, 152), marks=[pytest.mark.skip()], id="007"
+    ),
+    pytest.param(
+        "neg_kernel_008", torch.float32, pypto.DT_FP32, (1, 3, 170), (2, 3, 170), marks=[pytest.mark.skip()], id="008"
+    ),
+    pytest.param(
+        "neg_kernel_009",
+        torch.float16,
+        pypto.DT_FP16,
+        (2, 1, 2, 16),
+        (5, 2, 4, 176),
+        marks=[pytest.mark.skip()],
+        id="009",
+    ),
+    pytest.param(
+        "neg_kernel_010",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 1, 1, 130),
+        (5, 2, 4, 130),
+        marks=[pytest.mark.skip()],
+        id="010",
+    ),
+    pytest.param(
+        "neg_kernel_011",
+        torch.float16,
+        pypto.DT_FP16,
+        (1, 1, 5, 32),
+        (2, 3, 5, 134),
+        marks=[pytest.mark.skip()],
+        id="011",
+    ),
+    pytest.param(
+        "neg_kernel_012",
+        torch.float32,
+        pypto.DT_FP32,
+        (2, 2, 3, 32),
+        (4, 2, 6, 135),
+        marks=[pytest.mark.skip()],
+        id="012",
+    ),
+    pytest.param(
+        "neg_kernel_013",
+        torch.float16,
+        pypto.DT_FP16,
+        (1, 1, 4, 130),
+        (6, 2, 4, 130),
+        marks=[pytest.mark.skip()],
+        id="013",
+    ),
+    pytest.param(
+        "neg_kernel_014",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 2, 1, 139),
+        (3, 2, 3, 139),
+        marks=[pytest.mark.skip()],
+        id="014",
+    ),
+    pytest.param(
+        "neg_kernel_015",
+        torch.float16,
+        pypto.DT_FP16,
+        (3, 3, 5, 32),
+        (6, 3, 5, 141),
+        marks=[pytest.mark.skip()],
+        id="015",
+    ),
 ]
 
 
@@ -98,10 +142,7 @@ def run_neg_test(kernels, kernel_name, dtype, shape):
 
 
 def create_neg_kernels(soc_version):
-    return {
-        p.values[0]: _make_neg_kernel(soc_version, p.values[0], p.values[2], p.values[3])
-        for p in TEST_CASES
-    }
+    return {p.values[0]: _make_neg_kernel(soc_version, p.values[0], p.values[2], p.values[3]) for p in TEST_CASES}
 
 
 if __name__ == "__main__":

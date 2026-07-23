@@ -9,12 +9,13 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-import os
 import math
+import os
 from typing import List
-import pypto
+
 import torch
 
+import pypto
 
 TORCH_TO_PTO_TYPES = {
     torch.int8: pypto.DT_INT8,
@@ -22,7 +23,7 @@ TORCH_TO_PTO_TYPES = {
     torch.int32: pypto.DT_INT32,
     torch.float16: pypto.DT_FP16,
     torch.float32: pypto.DT_FP32,
-    torch.bfloat16: pypto.DT_BF16
+    torch.bfloat16: pypto.DT_BF16,
 }
 
 
@@ -48,11 +49,14 @@ def indexadd_2dim_build(inputs: List[pypto.Tensor], args: IndexAddArgs):
             for s_idx in pypto.loop(s_loop_num, name="LOOP_S0", idx_name="s_idx"):
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 offsets = [b_idx * view_shape[0], s_idx * view_shape[1]]
-                src_valid_shape = [pypto.min(src_shape[0] - b_idx * view_shape[0], view_shape[0]),
-                                    pypto.min(src_shape[1] - s_idx * view_shape[1], view_shape[1])]
+                src_valid_shape = [
+                    pypto.min(src_shape[0] - b_idx * view_shape[0], view_shape[0]),
+                    pypto.min(src_shape[1] - s_idx * view_shape[1], view_shape[1]),
+                ]
                 view_src = pypto.view(inputs[1], view_shape, offsets, valid_shape=src_valid_shape)
-                view_index = pypto.view(inputs[2], [view_shape[axis]], [offsets[axis]],
-                                        valid_shape=[src_valid_shape[axis]])
+                view_index = pypto.view(
+                    inputs[2], [view_shape[axis]], [offsets[axis]], valid_shape=[src_valid_shape[axis]]
+                )
 
                 pypto.index_add_(inputs[0], axis, view_index, view_src, alpha=value)
                 del view_src, view_index
@@ -84,9 +88,11 @@ def test_indexadd__onboard():
     tile_shape = [5, 8]
     args = IndexAddArgs(axis, alpha, view_shape, tile_shape)
 
-    inputs = [torch.rand(self_shape, dtype=torch.float32) * 200 - 100,
-            torch.rand(src_shape, dtype=torch.float32) * 200 - 100,
-            torch.randint(0, self_shape[axis], index_shape, dtype=torch.int32)]
+    inputs = [
+        torch.rand(self_shape, dtype=torch.float32) * 200 - 100,
+        torch.rand(src_shape, dtype=torch.float32) * 200 - 100,
+        torch.randint(0, self_shape[axis], index_shape, dtype=torch.int32),
+    ]
     golden = inputs[0].index_add(axis, inputs[2], inputs[1], alpha=alpha)
     run_indexadd(inputs, args)
     pypto_out = inputs[0]

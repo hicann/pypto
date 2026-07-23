@@ -12,6 +12,7 @@
 import logging
 import os
 import re
+
 import pandas as pd
 
 
@@ -76,9 +77,7 @@ class TestCaseResult:
 
 
 class TestCaseLogAnalyzer:
-    def __init__(
-        self, case_index: str, case_name: str, op: str, log_file: str, report_file: str
-    ):
+    def __init__(self, case_index: str, case_name: str, op: str, log_file: str, report_file: str):
         self.case_index = case_index
         self.case_name = case_name
         self.case_op = op
@@ -96,7 +95,7 @@ class TestCaseLogAnalyzer:
 
     @staticmethod
     def get_duration(line: str):
-        pattern = rf"\((?P<value>\d+?) ms total\)"
+        pattern = r"\((?P<value>\d+?) ms total\)"
         return TestCaseLogAnalyzer.get_value_by_pattern(pattern, line)
 
     def parse_log_file(self):
@@ -130,9 +129,7 @@ class TestCaseLogAnalyzer:
                         ignore_index=True,
                     )
 
-        with pd.ExcelWriter(
-            self._report_file, engine="openpyxl", mode="a", if_sheet_exists="replace"
-        ) as writer:
+        with pd.ExcelWriter(self._report_file, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
             data_frame.to_excel(
                 writer,
                 sheet_name=result.op,

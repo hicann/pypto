@@ -8,15 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-""" Moegate Operator 相关用例 Golden 生成逻辑.
+"""Moegate Operator 相关用例 Golden 生成逻辑.
 
 本脚本有 2 种执行模式:
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import sys
+
 import logging
 from pathlib import Path
+import sys
 from typing import List
 
 import numpy as np
@@ -24,8 +25,9 @@ import numpy as np
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -39,7 +41,7 @@ else:
 
 def topk_last_dim_no_sort(arr, k):
     # 获取数组的最后一维大小
-    last_dim_size = arr.shape[-1]
+    _last_dim_size = arr.shape[-1]
 
     # 使用argsort函数按最后一维排序
     sorted_indices = np.argsort(arr, axis=-1)
@@ -91,7 +93,7 @@ def gen_moegate_graph_3(b, s, h, topk_group, n_group, n_routed_experts, output_d
     dtype = np.float32
     indices_dtype = np.int32
     np.set_printoptions(threshold=np.inf)
-    shape_topk_group = [b * s, topk_group]
+    _shape_topk_group = [b * s, topk_group]
     shape_group_mask = [b * s, n_group]
     shape_score_for_choice = [b * s, n_routed_experts]
 
@@ -156,7 +158,7 @@ def gen_moegate_graph_3(b, s, h, topk_group, n_group, n_routed_experts, output_d
 
     # new算法
     # (src * score_mask) + ((~score_mask) * dst)
-    minfp32_val = np.random.uniform(-3.4e+38, -3.4e+38, shape_score_for_choice).astype(dtype)
+    minfp32_val = np.random.uniform(-3.4e38, -3.4e38, shape_score_for_choice).astype(dtype)
     # minfp32_val = np.random.uniform(1, 1, shape_score_for_choice).astype(dtype)
     score_mask_false = (score_mask == 0).astype(dtype)
     tmp_scores = (scores_for_choice * score_mask) + (score_mask_false * minfp32_val)
@@ -171,7 +173,7 @@ def gen_moegate_graph_3_4(b, s, h, topk_group, n_group, n_routed_experts, output
     dtype = np.float32
     indices_dtype = np.int32
     # np.set_printoptions(threshold=np.inf)
-    shape_topk_group = [b * s, topk_group]
+    _shape_topk_group = [b * s, topk_group]
     shape_group_mask = [b * s, n_group]
     shape_score_for_choice = [b * s, n_routed_experts]
     num_experts_per_tok = 8
@@ -238,7 +240,7 @@ def gen_moegate_graph_3_4(b, s, h, topk_group, n_group, n_routed_experts, output
 
     # new算法
     # (src * score_mask) + ((~score_mask) * dst)
-    minfp32_val = np.random.uniform(-3.4e+38, -3.4e+38, shape_score_for_choice).astype(dtype)
+    minfp32_val = np.random.uniform(-3.4e38, -3.4e38, shape_score_for_choice).astype(dtype)
     # minfp32_val = np.random.uniform(1, 1, shape_score_for_choice).astype(dtype)
     score_mask_false = (score_mask == 0).astype(dtype)
     tmp_scores = (scores_for_choice * score_mask) + (score_mask_false * minfp32_val)
@@ -281,14 +283,14 @@ def gen_moegate_graph_3_4(b, s, h, topk_group, n_group, n_routed_experts, output
     ]
 )
 def gen_moegate_graph_date(case_name: str, output: Path) -> bool:
-    dtype = np.float32
-    indices_dtype = np.int32
+    _dtype = np.float32
+    _indices_dtype = np.int32
 
     group_mask_path = Path(output, 'group_mask_zero.bin')
     group_idx_path = Path(output, 'group_idx.bin')
-    scores_for_choice_path = Path(output, 'scores_for_choice.bin')
+    _scores_for_choice_path = Path(output, 'scores_for_choice.bin')
     # indices_path = Path(output, 'indices.bin')
-    z_path = Path(output, 'z_golden.bin')
+    _z_path = Path(output, 'z_golden.bin')
 
     complete = group_mask_path.exists() and group_idx_path.exists()
 

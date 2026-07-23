@@ -8,25 +8,27 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-""" parallel sort 相关用例 Golden 生成逻辑.
+"""parallel sort 相关用例 Golden 生成逻辑.
 
 本脚本有 2 种执行模式:
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import sys
+
 import logging
 from pathlib import Path
+import sys
 from typing import List
 
-import torch
 import numpy as np
+import torch
 
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -73,13 +75,13 @@ def gen_op_compswap_golden(length: int, descending: bool, dtype: torch.dtype, ou
     if descending:
         y0, max_idx = x.max(dim=0, keepdims=True)
         y1, min_idx = x.min(dim=0, keepdims=True)
-        min_idx = 1 - max_idx   # avoid index duplicate due to same value
+        min_idx = 1 - max_idx  # avoid index duplicate due to same value
         yidx0 = torch.gather(idx, 0, max_idx)
         yidx1 = torch.gather(idx, 0, min_idx)
     else:
         y0, min_idx = x.min(dim=0, keepdims=True)
         y1, max_idx = x.max(dim=0, keepdims=True)
-        max_idx = 1 - min_idx   # avoid index duplicate due to same value
+        max_idx = 1 - min_idx  # avoid index duplicate due to same value
         yidx0 = torch.gather(idx, 0, min_idx)
         yidx1 = torch.gather(idx, 0, max_idx)
     x0.numpy().tofile(x0_path)

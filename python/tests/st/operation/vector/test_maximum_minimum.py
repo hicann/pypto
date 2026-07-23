@@ -8,15 +8,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import math
 import os
 from typing import List
 
-import pytest
 import torch
-import torch_npu
 
 import pypto
 
@@ -30,7 +28,7 @@ def pto_dtype_to_torch_dtype(pto_type: pypto.DataType):
         pypto.DT_FP16: torch.float16,
         pypto.DT_FP32: torch.float32,
     }
-    return mapping[pto_type]  # noqa
+    return mapping[pto_type]
 
 
 def test_with_tensor_scalar_minimum(
@@ -59,16 +57,17 @@ def test_with_tensor_scalar_minimum(
         for b_idx in pypto.loop(math.ceil(shape[0] / view_shape[0])):
             for s_idx in pypto.loop(math.ceil(shape[1] / view_shape[1])):
                 tile_tensor_0 = pypto.view(
-                    x, view_shape,
+                    x,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
                     valid_shape=[
                         pypto.min(
                             pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0])
+                            pypto.symbolic_scalar(view_shape[0]),
                         ),
                         pypto.min(
                             pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1])
+                            pypto.symbolic_scalar(view_shape[1]),
                         ),
                     ],
                 )
@@ -87,8 +86,7 @@ def test_with_tensor_scalar_minimum(
     pto_ny_tensor = pypto.from_torch(ny_tensor, "ny_tensor")
     pypto.runtime._device_run_once_data_from_host(pto_nx_tensor, pto_ny_tensor)
 
-    golden_data = torch.minimum(
-        nx_tensor, torch.tensor(scalar, dtype=pto_dtype_to_torch_dtype(data_type)))
+    golden_data = torch.minimum(nx_tensor, torch.tensor(scalar, dtype=pto_dtype_to_torch_dtype(data_type)))
     assert torch.allclose(ny_tensor, golden_data, rtol=1e-9, atol=1e-10)
     pypto.runtime._device_fini()
 
@@ -119,16 +117,17 @@ def test_with_tensor_scalar_maximum(
         for b_idx in pypto.loop(math.ceil(shape[0] / view_shape[0])):
             for s_idx in pypto.loop(math.ceil(shape[1] / view_shape[1])):
                 tile_tensor_0 = pypto.view(
-                    x, view_shape,
+                    x,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
                     valid_shape=[
                         pypto.min(
                             pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0])
+                            pypto.symbolic_scalar(view_shape[0]),
                         ),
                         pypto.min(
                             pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1])
+                            pypto.symbolic_scalar(view_shape[1]),
                         ),
                     ],
                 )
@@ -147,8 +146,7 @@ def test_with_tensor_scalar_maximum(
     pto_ny_tensor = pypto.from_torch(ny_tensor, "ny_tensor")
     pypto.runtime._device_run_once_data_from_host(pto_nx_tensor, pto_ny_tensor)
 
-    golden_data = torch.maximum(
-        nx_tensor, torch.tensor(scalar, dtype=pto_dtype_to_torch_dtype(data_type)))
+    golden_data = torch.maximum(nx_tensor, torch.tensor(scalar, dtype=pto_dtype_to_torch_dtype(data_type)))
     assert torch.allclose(ny_tensor, golden_data, rtol=1e-9, atol=1e-10)
     pypto.runtime._device_fini()
 
@@ -179,30 +177,32 @@ def test_with_tensor_tensor_minimum(
         for b_idx in pypto.loop(math.ceil(shape[0] / view_shape[0])):
             for s_idx in pypto.loop(math.ceil(shape[1] / view_shape[1])):
                 tile_tensor_0 = pypto.view(
-                    x, view_shape,
+                    x,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
                     valid_shape=[
                         pypto.min(
                             pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0])
+                            pypto.symbolic_scalar(view_shape[0]),
                         ),
                         pypto.min(
                             pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1])
+                            pypto.symbolic_scalar(view_shape[1]),
                         ),
                     ],
                 )
                 tile_tensor_1 = pypto.view(
-                    y, view_shape,
+                    y,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
                     valid_shape=[
                         pypto.min(
                             pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0])
+                            pypto.symbolic_scalar(view_shape[0]),
                         ),
                         pypto.min(
                             pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1])
+                            pypto.symbolic_scalar(view_shape[1]),
                         ),
                     ],
                 )
@@ -256,30 +256,32 @@ def test_with_tensor_tensor_maximum(
         for b_idx in pypto.loop(math.ceil(shape[0] / view_shape[0])):
             for s_idx in pypto.loop(math.ceil(shape[1] / view_shape[1])):
                 tile_tensor_0 = pypto.view(
-                    x, view_shape,
+                    x,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
                     valid_shape=[
                         pypto.min(
                             pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0])
+                            pypto.symbolic_scalar(view_shape[0]),
                         ),
                         pypto.min(
                             pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1])
+                            pypto.symbolic_scalar(view_shape[1]),
                         ),
                     ],
                 )
                 tile_tensor_1 = pypto.view(
-                    y, view_shape,
+                    y,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
                     valid_shape=[
                         pypto.min(
                             pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0])
+                            pypto.symbolic_scalar(view_shape[0]),
                         ),
                         pypto.min(
                             pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1])
+                            pypto.symbolic_scalar(view_shape[1]),
                         ),
                     ],
                 )

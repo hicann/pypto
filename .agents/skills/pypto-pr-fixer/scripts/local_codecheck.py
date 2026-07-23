@@ -6,15 +6,15 @@ from __future__ import annotations
 
 import argparse
 import ast
+from collections import Counter
+from dataclasses import dataclass
 import json
 import logging
+from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
-from collections import Counter
-from dataclasses import dataclass
-from pathlib import Path
 from typing import TypedDict, TypeGuard, cast
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -424,11 +424,7 @@ def check_class_method_order(
     class_node: ast.ClassDef,
     file_name: str,
 ) -> list[Violation]:
-    methods = [
-        stmt
-        for stmt in class_node.body
-        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
-    ]
+    methods = [stmt for stmt in class_node.body if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))]
     if len(methods) < 2:
         return []
 
@@ -439,8 +435,7 @@ def check_class_method_order(
         group = classify_method(method)
         if group < max_seen:
             description = (
-                f"Class '{class_node.name}' method '{method.name}' is out of order. "
-                f"Expected order: {order_str}."
+                f"Class '{class_node.name}' method '{method.name}' is out of order. Expected order: {order_str}."
             )
             violations.append(
                 Violation(
@@ -497,10 +492,7 @@ def raise_needs_chaining(
 
 def is_len_call(expr: ast.expr) -> bool:
     return (
-        isinstance(expr, ast.Call)
-        and isinstance(expr.func, ast.Name)
-        and expr.func.id == "len"
-        and len(expr.args) == 1
+        isinstance(expr, ast.Call) and isinstance(expr.func, ast.Name) and expr.func.id == "len" and len(expr.args) == 1
     )
 
 
@@ -577,11 +569,7 @@ def logging_import_insert_offset(
 
 
 def is_print_call(node: ast.AST) -> TypeGuard[ast.Call]:
-    return (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "print"
-    )
+    return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print"
 
 
 def unique_edits(edits: list[TextEdit]) -> list[TextEdit]:

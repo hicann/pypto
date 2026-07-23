@@ -9,19 +9,21 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """Tensor compare utilility."""
+
+import logging
 import os
 import sys
-import logging
-from typing import NamedTuple, Optional, Tuple, Union, Dict, Any
-import torch
+from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
+
 import pandas as pd
-from tabulate import tabulate
+import torch
 
 MAX_PRECISION = sys.float_info.dig + 1
 
 
 class IsCloseConfig(NamedTuple):
     """check_isclose 函数的配置参数"""
+
     rtol: float = 1.0e-2
     atol: float = 1.0e-2
     calc_dtype: torch.dtype = torch.float64
@@ -38,10 +40,7 @@ class TensorComparator:
         logging.basicConfig(
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s",
-            handlers=[
-                logging.StreamHandler(),
-                logging.FileHandler("app.log", encoding="utf-8")
-            ]
+            handlers=[logging.StreamHandler(), logging.FileHandler("app.log", encoding="utf-8")],
         )
 
     @staticmethod
@@ -51,8 +50,9 @@ class TensorComparator:
         num_picked = 0
         file_exists = os.path.isfile(csv_path)
         if num == 0 and not file_exists:
-            pd.DataFrame(columns=["GROUP", "INDEX", "OFFSET", "OFFSET_RAW", "A>data", "B>data", "AB>ae",
-                                    "AB>re", "AB>tol"]).to_csv(csv_path, index=False)
+            pd.DataFrame(
+                columns=["GROUP", "INDEX", "OFFSET", "OFFSET_RAW", "A>data", "B>data", "AB>ae", "AB>re", "AB>tol"]
+            ).to_csv(csv_path, index=False)
             return
         if num > 0:
             num_picked = min(topk, num) if topk and topk >= 0 else num
@@ -72,12 +72,11 @@ class TensorComparator:
                 f"{d_detail[2][i].item():.6g}",
                 f"{d_detail[4][i].item():.6g}",
                 f"{d_detail[5][i].item():.6g}",
-                f"{d_detail[6][i].item():.6g}"
+                f"{d_detail[6][i].item():.6g}",
             ]
             table_data.append(row)
 
-        headers = ["GROUP", "INDEX", "OFFSET", "OFFSET_RAW", "A>data", "B>data", "AB>ae",
-                    "AB>re", "AB>tol"]
+        headers = ["GROUP", "INDEX", "OFFSET", "OFFSET_RAW", "A>data", "B>data", "AB>ae", "AB>re", "AB>tol"]
         df = pd.DataFrame(table_data, columns=headers)
         if file_exists:
             df.to_csv(csv_path, mode='a', index=False, header=False, encoding='utf-8-sig')
@@ -98,12 +97,12 @@ class TensorComparator:
 
         a_abs = a.abs()
         b_abs = b.abs()
-        ab_sub = (a - b)
+        ab_sub = a - b
         ab_sub_abs = ab_sub.abs()
-        ab_abs_add = (a_abs + b_abs)
+        ab_abs_add = a_abs + b_abs
         tol_warn = ab_abs_add * rtol / 2 + atol
         tol_fail = tol_warn * fail_factor
-        mask_bothzero = (ab_abs_add == 0)
+        mask_bothzero = ab_abs_add == 0
         mask_warn = torch.gt(ab_sub_abs, tol_warn)
         mask_infnan = ab_sub_abs.isfinite().logical_not()
         a_infnan_cnt = a.isfinite().logical_not().sum().item()
@@ -118,7 +117,7 @@ class TensorComparator:
         if is_ignore_bothzero:
             cnt_picked = cnt_all - cnt_out_bothzero
             if (cnt_all - cnt_out_bothzero) != (cnt_out_warn + cnt_out_pass):
-                raise ValueError(f'(cnt_all - cnt_out_bothzero) == (cnt_out_warn + cnt_out_pass)')
+                raise ValueError('(cnt_all - cnt_out_bothzero) == (cnt_out_warn + cnt_out_pass)')
         else:
             cnt_picked = cnt_all
         cnt_fail = mask_fail.sum().item()
@@ -150,12 +149,33 @@ class TensorComparator:
             arg_fail_raw = torch.argwhere(mask_fail.reshape(to_shape))
             arg_infnan_raw = torch.argwhere(mask_infnan.reshape(to_shape))
 
-            data_warn_info_list = (arg_warn, arg_warn_raw, aa.take(arg_warn), bb.take(arg_warn),
-                                    ab_ad.take(arg_warn), ab_rd.take(arg_warn), tol_warn.take(arg_warn))
-            data_fail_info_list = (arg_fail, arg_fail_raw, aa.take(arg_fail), bb.take(arg_fail), ab_ad.take(arg_fail),
-                                     ab_rd.take(arg_fail), tol_fail.take(arg_warn))
-            data_infnan_info_list = (arg_infnan, arg_infnan_raw, aa.take(arg_infnan), bb.take(arg_infnan),
-                                        ab_ad.take(arg_infnan), ab_rd.take(arg_infnan), arg_infnan)
+            data_warn_info_list = (
+                arg_warn,
+                arg_warn_raw,
+                aa.take(arg_warn),
+                bb.take(arg_warn),
+                ab_ad.take(arg_warn),
+                ab_rd.take(arg_warn),
+                tol_warn.take(arg_warn),
+            )
+            data_fail_info_list = (
+                arg_fail,
+                arg_fail_raw,
+                aa.take(arg_fail),
+                bb.take(arg_fail),
+                ab_ad.take(arg_fail),
+                ab_rd.take(arg_fail),
+                tol_fail.take(arg_warn),
+            )
+            data_infnan_info_list = (
+                arg_infnan,
+                arg_infnan_raw,
+                aa.take(arg_infnan),
+                bb.take(arg_infnan),
+                ab_ad.take(arg_infnan),
+                ab_rd.take(arg_infnan),
+                arg_infnan,
+            )
             valid_ab_rd = ab_rd[~torch.isnan(ab_rd)]
 
             def safe_topk_mean(tensor, k):
@@ -165,17 +185,33 @@ class TensorComparator:
                 if k == 0:
                     return float('nan')
                 return torch.topk(tensor, k).values.mean().item()
-            data_a_info_list = (a.max().item(), a.min().item(), a.mean().item(), a_abs.mean().item(),
-                                torch.sum(a == 0).item(), a_infnan_cnt)
-            data_b_info_list = (b.max().item(), b.min().item(), b.mean().item(), b_abs.mean().item(),
-                                torch.sum(b == 0).item(), b_infnan_cnt)
-            data_ab_info_list = (ab_sub_abs.mean().item(), safe_topk_mean(ab_sub_abs, 8),
-                                 safe_topk_mean(ab_sub_abs, 100), valid_ab_rd.mean().item(),
-                                 safe_topk_mean(valid_ab_rd, 8), safe_topk_mean(valid_ab_rd, 100))
-            data_breif_info_list = (cnt_all, cnt_out_bothzero, tol_cnt, cnt_out_warn,
-                                    cnt_fail, cnt_infnan)
-            data_diff_info_list = (data_breif_info_list, data_ab_info_list,
-                                    data_a_info_list, data_b_info_list)
+
+            data_a_info_list = (
+                a.max().item(),
+                a.min().item(),
+                a.mean().item(),
+                a_abs.mean().item(),
+                torch.sum(a == 0).item(),
+                a_infnan_cnt,
+            )
+            data_b_info_list = (
+                b.max().item(),
+                b.min().item(),
+                b.mean().item(),
+                b_abs.mean().item(),
+                torch.sum(b == 0).item(),
+                b_infnan_cnt,
+            )
+            data_ab_info_list = (
+                ab_sub_abs.mean().item(),
+                safe_topk_mean(ab_sub_abs, 8),
+                safe_topk_mean(ab_sub_abs, 100),
+                valid_ab_rd.mean().item(),
+                safe_topk_mean(valid_ab_rd, 8),
+                safe_topk_mean(valid_ab_rd, 100),
+            )
+            data_breif_info_list = (cnt_all, cnt_out_bothzero, tol_cnt, cnt_out_warn, cnt_fail, cnt_infnan)
+            data_diff_info_list = (data_breif_info_list, data_ab_info_list, data_a_info_list, data_b_info_list)
 
         # weak/strong warning
         if not is_extra:
@@ -202,16 +238,23 @@ class TensorComparator:
         diff_detail_infnan = data_infnan_info_list
         result_is_close = (cnt_out_warn <= tol_cnt) and (cnt_fail <= 0) and (cnt_infnan <= 0)
         result_reason_str = []
-        if (cnt_out_warn > tol_cnt):
+        if cnt_out_warn > tol_cnt:
             result_reason_str.append(f'cnt_warn(={cnt_out_warn}) > tol_cnt(={tol_cnt})')
-        if (cnt_fail > 0):
+        if cnt_fail > 0:
             result_reason_str.append(f'cnt_fail(={cnt_fail}) > 0)')
-        if (cnt_infnan > 0):
+        if cnt_infnan > 0:
             result_reason_str.append(f'cnt_infnan(={cnt_infnan}) > 0)')
         result_reason_str = ','.join(result_reason_str)
 
-        result_info = (diff_cnt, diff_conf, _diff_extra, diff_detail_warn, diff_detail_fail,
-                        diff_detail_infnan, data_diff_info_list)
+        result_info = (
+            diff_cnt,
+            diff_conf,
+            _diff_extra,
+            diff_detail_warn,
+            diff_detail_fail,
+            diff_detail_infnan,
+            data_diff_info_list,
+        )
 
         return result_is_close, result_reason_str, result_info
 
@@ -221,13 +264,17 @@ class TensorComparator:
         (rtol, atol, fail_factor, tol_cnt) = d_conf
         (cnt_warn_ww, cnt_warn_w, cnt_out_warn, cnt_warn_s, cnt_warn_ss) = _d_extra
         sep = ', '
-        logging.info(f'cnt : {cnt_all}{sep}{cnt_picked}{sep}{cnt_out_bothzero}{sep}{cnt_out_pass}{sep}\
-                    {cnt_out_warn}{sep}{cnt_fail}{sep}{cnt_infnan}\t(all/picked/zero/pass/warn/fail/infnan)')
+        logging.info(
+            f'cnt : {cnt_all}{sep}{cnt_picked}{sep}{cnt_out_bothzero}{sep}{cnt_out_pass}{sep}\
+                    {cnt_out_warn}{sep}{cnt_fail}{sep}{cnt_infnan}\t(all/picked/zero/pass/warn/fail/infnan)'
+        )
         logging.info(f'conf : {rtol:g}{sep}{atol:g}{sep}{fail_factor}{sep}{tol_cnt}\t(rtol/atol/fail_factor/tol_cnt)')
 
         if sum(_d_extra) != _d_extra[2]:
-            logging.info(f'_extra : {cnt_warn_ww}{sep}{cnt_warn_w}{sep}{cnt_out_warn}{sep}\
-                        {cnt_warn_s}{sep}{cnt_warn_ss}\t(ww/w/warn/s/ss)')
+            logging.info(
+                f'_extra : {cnt_warn_ww}{sep}{cnt_warn_w}{sep}{cnt_out_warn}{sep}\
+                        {cnt_warn_s}{sep}{cnt_warn_ss}\t(ww/w/warn/s/ss)'
+            )
         logging.info(f'is_close : {result_is_close}\t({result_reason_str})')
 
         self.save_info_to_csv(d_detail_warn, path, topk, "firstk")
@@ -239,7 +286,7 @@ def compare_tensors_result_dict(
     tensor_b: torch.Tensor,
     path: str,
     config: Optional[IsCloseConfig] = None,
-    max_precision: int = None
+    max_precision: int = None,
 ) -> Dict[str, Any]:
     """
     独立的 tensor 对比函数，返回详细统计 dict。
@@ -268,9 +315,7 @@ def compare_tensors_result_dict(
 
     top_k = config.top_k
     comparator = TensorComparator()
-    result_is_close, result_reason, result_info = comparator.check_isclose(
-        tensor_a, tensor_b, config
-    )
+    result_is_close, result_reason, result_info = comparator.check_isclose(tensor_a, tensor_b, config)
 
     record = {}
     if result_is_close:

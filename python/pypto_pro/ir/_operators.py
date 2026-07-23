@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Operator overloading with automatic span capture and expression normalization."""
+
 from __future__ import annotations
 
 __all__ = ["make_binary", "truediv"]
@@ -38,9 +39,7 @@ def _scalar_dtype(expr: _ir.Expr):
 #     ``/`` would not floor, so a mixed int/float pair must stay a clean error.
 #   * pow lowers to host ``pow()`` (unavailable in aicore scalar code) regardless.
 #   * bitwise/shift require integer operands, exactly like Python.
-_NUMERIC_PROMOTE_OPS = frozenset(
-    {"add", "sub", "mul", "truediv", "eq", "ne", "lt", "le", "gt", "ge"}
-)
+_NUMERIC_PROMOTE_OPS = frozenset({"add", "sub", "mul", "truediv", "eq", "ne", "lt", "le", "gt", "ge"})
 
 
 def _promote_numeric_operands(left: _ir.Expr, right: _ir.Expr, span: _ir.Span):

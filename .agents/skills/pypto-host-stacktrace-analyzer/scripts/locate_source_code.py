@@ -8,15 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import os
-import sys
-import logging
-import subprocess
 import argparse
+import logging
+import os
 from pathlib import Path
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import setup_logging, run_command
+from common import run_command, setup_logging
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -29,6 +28,7 @@ class SourceCodeLocator:
         if binary_path is None:
             # 查找默认的 libtile_fwk_interface.so
             from auto_find_binary import BinaryFinder
+
             finder = BinaryFinder()
             binary_path = finder.find_binary("libtile_fwk_interface.so")
 
@@ -46,10 +46,7 @@ class SourceCodeLocator:
             if result.returncode == 0:
                 lines = result.stdout.strip().split('\n')
                 if len(lines) >= 2:
-                    return {
-                        'function': lines[0],
-                        'location': lines[1]
-                    }
+                    return {'function': lines[0], 'location': lines[1]}
         except Exception as e:
             logger.warning("地址定位失败: %s, 错误: %s", address, e)
 

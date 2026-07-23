@@ -8,16 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import json
-import re
+""" """
+
 import argparse
+import json
 import os
-import shutil
-import unicodedata
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Set, Tuple, Union
+import re
+import shutil
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
+import unicodedata
 
 
 def parse_log_file(log_file_path):
@@ -113,14 +113,11 @@ def convert_to_perfetto_format(input_json: List[Dict]) -> List[Dict]:
     trace_events = []
     thread_id = 0
     trace_events_head = {
-        "args": {
-            "name": "AICPU View",
-            "type": "aicpu"
-        },
+        "args": {"name": "AICPU View", "type": "aicpu"},
         "cat": "__metadata",
         "name": "process_name",
         "ph": "M",
-        "pid": 0
+        "pid": 0,
     }
     trace_events.append(trace_events_head)
     for block in input_json:
@@ -128,15 +125,9 @@ def convert_to_perfetto_format(input_json: List[Dict]) -> List[Dict]:
         core_type = block.get("coreType", "UNKNOWN")
         freq = block.get("freq", 0)
         thread_name = f"{core_type}-{block_idx}"
-        trace_events.append({
-            "name": "thread_name",
-            "ph": "M",
-            "pid": 0,
-            "tid": thread_id,
-            "args": {
-                "name": thread_name
-            }
-        })
+        trace_events.append(
+            {"name": "thread_name", "ph": "M", "pid": 0, "tid": thread_id, "args": {"name": thread_name}}
+        )
 
         tasks = block.get("tasks", [])
         sorted_tasks = sorted(tasks, key=lambda x: x.get("end", 0))
@@ -176,7 +167,7 @@ def convert_to_perfetto_format(input_json: List[Dict]) -> List[Dict]:
                 "dur": dur,
                 "pid": 0,
                 "tid": thread_id,
-                "freq": freq
+                "freq": freq,
             }
             trace_events.append(perfetto_event)
             prev_end = end_time
@@ -197,9 +188,7 @@ def merge_aicpu_aicore_swim_lane(aicpu_perfetto_data, input_kernel_file):
             aicore_perfetto_data = json.load(f)
             # kernel swim lane + aicpu swim lane
             merged_trace_events = aicpu_perfetto_data["traceEvents"] + aicore_perfetto_data["traceEvents"]
-            merged_data = {
-                'traceEvents': merged_trace_events
-            }
+            merged_data = {'traceEvents': merged_trace_events}
         with open(input_kernel_file, 'w', encoding='utf-8') as fw:
             json.dump(merged_data, fw, indent=2)
 
@@ -229,25 +218,35 @@ def gen_perfetto_command(input_file, output_file, input_kernel_file=None):
 
 def gen_perfetto_example():
     sample_data = [
-        {"blockIdx": 0, "coreType": "AICPU-SCHED", "freq": 50, "tasks": [
-            {"name": "BEGIN", "end": 5236903326282},
-            {"name": "ALLOC_THREAD_ID", "end": 5236903326381},
-            {"name": "INIT", "end": 5236903329385},
-            {"name": "HAND_SHAKE", "end": 5236903330212},
-            {"name": "WAIT_ALL_TASK_FIN", "end": 5236903331821},
-            {"name": "SEND_STOP", "end": 5236903332087},
-            {"name": "EXIT", "end": 5236903332854}
-        ]},
-        {"blockIdx": 1, "coreType": "AICPU-SCHED", "freq": 50, "tasks": [
-            {"name": "BEGIN", "end": 5236903326282},
-            {"name": "ALLOC_THREAD_ID", "end": 5236903326383},
-            {"name": "INIT", "end": 5236903329389},
-            {"name": "HAND_SHAKE", "end": 5236903330219},
-            {"name": "WAIT_SEND_FIRST_TASK", "end": 5236903331446},
-            {"name": "WAIT_ALL_TASK_FIN", "end": 5236903331829},
-            {"name": "SEND_STOP", "end": 5236903332102},
-            {"name": "EXIT", "end": 5236903333765}
-        ]}
+        {
+            "blockIdx": 0,
+            "coreType": "AICPU-SCHED",
+            "freq": 50,
+            "tasks": [
+                {"name": "BEGIN", "end": 5236903326282},
+                {"name": "ALLOC_THREAD_ID", "end": 5236903326381},
+                {"name": "INIT", "end": 5236903329385},
+                {"name": "HAND_SHAKE", "end": 5236903330212},
+                {"name": "WAIT_ALL_TASK_FIN", "end": 5236903331821},
+                {"name": "SEND_STOP", "end": 5236903332087},
+                {"name": "EXIT", "end": 5236903332854},
+            ],
+        },
+        {
+            "blockIdx": 1,
+            "coreType": "AICPU-SCHED",
+            "freq": 50,
+            "tasks": [
+                {"name": "BEGIN", "end": 5236903326282},
+                {"name": "ALLOC_THREAD_ID", "end": 5236903326383},
+                {"name": "INIT", "end": 5236903329389},
+                {"name": "HAND_SHAKE", "end": 5236903330219},
+                {"name": "WAIT_SEND_FIRST_TASK", "end": 5236903331446},
+                {"name": "WAIT_ALL_TASK_FIN", "end": 5236903331829},
+                {"name": "SEND_STOP", "end": 5236903332102},
+                {"name": "EXIT", "end": 5236903333765},
+            ],
+        },
     ]
 
     result = convert_to_perfetto_format(sample_data)
@@ -565,9 +564,7 @@ def _collect_aicore_from_sched_core(
         "all_exec_cycle": all_exec_cycle,
         "init_dur": stats.get_event_duration("INIT"),
         "rcv_model_dur": stats.get_event_duration("DEV_TASK_RCV_MODEL"),
-        "wait_first_dur": stats.get_event_duration(
-            "DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK", first_wait_first_idx
-        ),
+        "wait_first_dur": stats.get_event_duration("DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK", first_wait_first_idx),
         "min_end": stats.min_end,
         "max_end": stats.max_end,
     }
@@ -668,14 +665,13 @@ class PerfTraceAnalyzer:
         core_type, block_idx = self._core_key(core)
         return self._stats_cache[(core_type, block_idx, round_id)]
 
-    def collect_aicore_rows(
-        self, round_id: Optional[int]
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    def collect_aicore_rows(self, round_id: Optional[int]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         exec_rows: List[Dict[str, Any]] = []
         core_bounds: List[Dict[str, Any]] = []
         for core in self.cores:
             exec_row, core_bound = _collect_aicore_from_sched_core(
-                core, self.stats_for_core(core, round_id),
+                core,
+                self.stats_for_core(core, round_id),
             )
             if core_bound is not None:
                 core_bounds.append(core_bound)
@@ -695,7 +691,7 @@ class PerfTraceAnalyzer:
         scheds = [x for x in self.cores if str(x.get("coreType")) == "AICPU-SCHED"]
         return [
             _format_sched_row(sched, self.stats_for_core(sched, round_id))
-            for sched in sorted(scheds, key=lambda x: int(x.get("blockIdx", 0)))
+            for sched in sorted(scheds, key=lambda x:int(x.get("blockIdx", 0)))
         ]
 
     def build_aicore_row(self, round_id: Optional[int]) -> List[str]:
@@ -800,13 +796,9 @@ def calc_aicore_timing_summary(
 ) -> Tuple[str, str]:
     if not aicore_exec_rows:
         return "-", "-"
-    freq, min_end, max_end, first_wait_cycle, last_all_exec_cycle = _accumulate_aicore_exec_timing(
-        aicore_exec_rows
-    )
+    freq, min_end, max_end, first_wait_cycle, last_all_exec_cycle = _accumulate_aicore_exec_timing(aicore_exec_rows)
     freq, max_end = _extend_aicore_bounds_max_end(aicore_core_bounds, freq, max_end)
-    return _format_aicore_timing_e2e(
-        freq, first_wait_cycle, last_all_exec_cycle, min_end, max_end
-    )
+    return _format_aicore_timing_e2e(freq, first_wait_cycle, last_all_exec_cycle, min_end, max_end)
 
 
 def build_ctrl_row(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> Optional[List[str]]:
@@ -865,7 +857,7 @@ def main():
     perfetto_parser.add_argument('kernel_file', help='aicore kernel Perfetto JSON file path', default="", nargs='?')
 
     # gen_perfetto_example 子命令
-    example_parser = subparsers.add_parser('gen_perfetto_example', help='Generate example Perfetto data')
+    _example_parser = subparsers.add_parser('gen_perfetto_example', help='Generate example Perfetto data')
     # analyze 子命令
     analyze_parser = subparsers.add_parser('analyze', help='Analyze perf json by output dir or json file path')
     analyze_parser.add_argument(
@@ -885,6 +877,7 @@ def main():
         analyze_output_command(args.output_dir)
     else:
         parser.print_help()
+
 
 if __name__ == "__main__":
     main()

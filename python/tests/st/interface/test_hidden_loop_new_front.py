@@ -10,19 +10,21 @@
 # -----------------------------------------------------------------------------------------------------------
 
 import os
-import pypto
-import numpy as np
+
 import torch
 import torch_npu
+
+import pypto
 
 CONDITION_THRESHOLD = 8
 
 
 @pypto.frontend.jit()
-def cust_hidden_loop_func(t0: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-                          t1: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-                          out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
-                          ):
+def cust_hidden_loop_func(
+    t0: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    t1: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+):
     """
     实现隐藏循环带条件分支的逻辑
     参考C++案例: DynamicBasicTest.HiddenLoopWithIf
@@ -49,7 +51,7 @@ def test_hidden_loop_with_if_jit_function():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
 
-    tiling = 32
+    _tiling = 32
     n, m = 1, 1
     s = 32
     shape = (n * s, m * s)
@@ -82,16 +84,12 @@ def test_hidden_loop_with_if_multiple_shapes():
     all_passed = True
 
     for _, config in enumerate(test_cases):
-        tiling = config["tiling"]
+        _tiling = config["tiling"]
         n, m, s = config["n"], config["m"], config["s"]
         shape = (n * s, m * s)
 
-        t0_data = torch.full(
-            shape, 11.0, dtype=torch.float32, device=f"npu:{device_id}"
-        )
-        t1_data = torch.full(
-            shape, 20.0, dtype=torch.float32, device=f"npu:{device_id}"
-        )
+        t0_data = torch.full(shape, 11.0, dtype=torch.float32, device=f"npu:{device_id}")
+        t1_data = torch.full(shape, 20.0, dtype=torch.float32, device=f"npu:{device_id}")
         out_data = torch.zeros(shape, dtype=torch.float32, device=f"npu:{device_id}")
 
         cust_hidden_loop_func(t0_data, t1_data, out_data)
@@ -107,12 +105,12 @@ def test_hidden_loop_with_if_multiple_shapes():
 
 
 @pypto.frontend.jit()
-def op_hidden_loop_mix_loops(t1: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-                            t2: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-                            t3: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-                            out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
-                            ):
-
+def op_hidden_loop_mix_loops(
+    t1: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    t2: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    t3: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+):
     pypto.set_vec_tile_shapes(32, 32)
 
     k0 = 0
@@ -140,7 +138,7 @@ def test_hidden_loop_mix_loops_jit_function():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
 
-    tiling = 32
+    _tiling = 32
     n, m = 1, 1
     s = 32
     shape = (n * s, m * s)

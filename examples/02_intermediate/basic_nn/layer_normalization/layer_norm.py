@@ -20,13 +20,15 @@ This example demonstrates:
 Layer normalization is a key component in transformer architectures.
 """
 
-import os
-import sys
 import argparse
 from dataclasses import dataclass
+import os
+import sys
 from typing import Literal
-import pypto
+
 import torch
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -71,6 +73,7 @@ def get_device_id():
 @dataclass
 class NormConfig:
     """Configuration for normalization operations."""
+
     norm_type: Literal["layernorm", "rmsnorm"] = "layernorm"
     eps: float = 1e-6
     dtype: pypto.DataType = pypto.DT_BF16
@@ -85,8 +88,9 @@ def layernorm_golden(x: torch.Tensor, gamma: torch.Tensor, beta: torch.Tensor, e
     return normalized * gamma + beta
 
 
-def layernorm_core(x: pypto.Tensor, gamma: pypto.Tensor, beta: pypto.Tensor,
-                   eps: float, hidden_size: int) -> pypto.Tensor:
+def layernorm_core(
+    x: pypto.Tensor, gamma: pypto.Tensor, beta: pypto.Tensor, eps: float, hidden_size: int
+) -> pypto.Tensor:
     # Compute mean
     mean = pypto.sum(x, dim=-1, keepdim=True)
     mean = mean / hidden_size
@@ -107,11 +111,8 @@ def layernorm_core(x: pypto.Tensor, gamma: pypto.Tensor, beta: pypto.Tensor,
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def layer_norm_kernel(
-    x: pypto.Tensor(),
-    gamma: pypto.Tensor(),
-    beta: pypto.Tensor(),
-    output: pypto.Tensor(),
-    config: NormConfig):
+    x: pypto.Tensor(), gamma: pypto.Tensor(), beta: pypto.Tensor(), output: pypto.Tensor(), config: NormConfig
+):
     hidden_size = x.shape[1]
     eps = config.eps
     pypto.set_vec_tile_shapes(64, 128)
@@ -151,7 +152,7 @@ def test_layer_norm(device_id=None, dynamic: bool = False):
 
 def rmsnorm_golden(x: torch.Tensor, gamma: torch.Tensor, eps: float) -> torch.Tensor:
     """PyTorch reference implementation of RMSNorm."""
-    rms = torch.sqrt((x ** 2).mean(dim=-1, keepdim=True) + eps)
+    rms = torch.sqrt((x**2).mean(dim=-1, keepdim=True) + eps)
     return (x / rms) * gamma
 
 
@@ -166,11 +167,7 @@ def rms_norm_core(x: pypto.Tensor, gamma: pypto.Tensor, eps: float, hidden_size:
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def rms_norm_kernel(
-    x: pypto.Tensor(),
-    gamma: pypto.Tensor(),
-    output: pypto.Tensor(),
-    config: NormConfig):
+def rms_norm_kernel(x: pypto.Tensor(), gamma: pypto.Tensor(), output: pypto.Tensor(), config: NormConfig):
     hidden_size = x.shape[1]
     eps = config.eps
     pypto.set_vec_tile_shapes(64, 128)
@@ -225,26 +222,14 @@ Examples:
   %(prog)s layer_norm::test_layer_norm
             Run example layer_norm::test_layer_norm
   %(prog)s --list       List all available examples
-        """
+        """,
     )
     parser.add_argument(
-        'example_id',
-        type=str,
-        nargs='?',
-        help='Example ID to run (1-2). If not specified, all examples will run.'
+        'example_id', type=str, nargs='?', help='Example ID to run (1-2). If not specified, all examples will run.'
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default='npu',
-        choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default='npu', choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -253,13 +238,9 @@ Examples:
         'layer_norm::test_layer_norm': {
             'name': 'LayerNorm',
             'description': 'Standard Layer Normalization',
-            'function': test_layer_norm
+            'function': test_layer_norm,
         },
-        'rms_norm::test_rms_norm': {
-            'name': 'RMSNorm',
-            'description': 'RMS Normalization',
-            'function': test_rms_norm
-        }
+        'rms_norm::test_rms_norm': {'name': 'RMSNorm', 'description': 'RMS Normalization', 'function': test_rms_norm},
     }
 
     if args.list:
@@ -298,7 +279,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("Make sure CANN environment is configured and NPU is available\n")

@@ -13,14 +13,12 @@
 Test rmsnorm codegen for Kirin9030
 """
 
-import pytest
-
 from kirin.common_rmsnorm import (
+    TEST_CASES,
     create_rmsnorm_kernels,
     run_rmsnorm_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_rmsnorm_kernels("Kirin9030")
 

@@ -8,15 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import os
-import pypto
-import pytest
-import torch
-import torch_npu
+
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
+import torch_npu
+
+import pypto
 
 
 @pypto.frontend.jit()
@@ -24,7 +25,7 @@ def cust_dyn_func(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
     c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
-    tiling=32
+    tiling=32,
 ):
     pypto.set_vec_tile_shapes(tiling, tiling)
     for _ in pypto.loop(1, name="s0", idx_name="k"):

@@ -9,11 +9,13 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
+
 from typing import Optional, Tuple, Union
-from .._element import Element
+
 from .. import pypto_impl
-from ..enum import OpType, OutType, TopKAlgo
+from .._element import Element
 from .._op_wrapper import op_wrapper
+from ..enum import OpType, OutType, TopKAlgo
 from ..tensor import Tensor
 
 
@@ -343,9 +345,7 @@ def topk(
 
 
 @op_wrapper
-def argsort(
-    input: Tensor, dim: Optional[int] = None, descending: bool = False
-) -> Tensor:
+def argsort(input: Tensor, dim: Optional[int] = None, descending: bool = False) -> Tensor:
     """
     Returns the indices that sort a tensor along a given dimension.
 
@@ -379,9 +379,7 @@ def argsort(
 
 
 @op_wrapper
-def sort32(
-    input: Tensor, index: Optional[int] = None
-) -> Tensor:
+def sort32(input: Tensor, index: Optional[int] = None) -> Tensor:
     """
     Returns interleaved the values and indices that sort every 32 numbers.
 
@@ -411,9 +409,7 @@ def sort32(
 
 
 @op_wrapper
-def mrgsort(
-    input: Tensor, mergesize: int
-) -> Tensor:
+def mrgsort(input: Tensor, mergesize: int) -> Tensor:
     """
     Returns the tensor that merge sort base on merge size.
 

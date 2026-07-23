@@ -8,10 +8,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import pypto
+""" """
+
 import pytest
+
+import pypto
 
 
 def init_tensors():
@@ -42,7 +43,7 @@ def test_tensor_get_tensor_data():
     a = pypto.tensor((128, 128), pypto.DT_INT32, "a")
     with pypto.function("MAIN", a):
         pypto.set_vec_tile_shapes(16, 16)
-        t = a[0, 0]
+        _t = a[0, 0]
 
 
 def test_slice_neg_index():
@@ -93,10 +94,14 @@ def test_tensor_batch_assemble():
     c = pypto.tensor((64, 64), pypto.DT_FP32, "c")
     with pypto.function("MAIN", a, b, c):
         pypto.set_vec_tile_shapes(32, 32)
-        pypto.assemble([
-            (a, (0, 0)),
-            (b, (0, 32)),
-        ], c, parallel=True)
+        pypto.assemble(
+            [
+                (a, (0, 0)),
+                (b, (0, 32)),
+            ],
+            c,
+            parallel=True,
+        )
 
 
 def test_view_dimension_mismatch_shapes():

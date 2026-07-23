@@ -10,11 +10,12 @@
 # -----------------------------------------------------------------------------------------------------------
 """
 """
-import os
 import math
-import pypto
+import os
+
 import torch
-import torch_npu
+
+import pypto
 
 
 def test_unpack_onboard():

@@ -15,11 +15,11 @@ import ast
 import logging
 from typing import Any
 
+from pypto.pypto_impl import ir
+from pypto.pypto_impl.ir import DataType
 from pypto_pro.ir import op as ir_op
 from pypto_pro.ir._operators import make_binary as _make_binary
 from pypto_pro.ir._utils import _normalize_expr
-from pypto.pypto_impl import ir
-from pypto.pypto_impl.ir import DataType
 
 from .diagnostics import (
     ParserSyntaxError,
@@ -47,7 +47,6 @@ def _scalar_branches_reconcilable(then_type: Any, else_type: Any) -> bool:
 
 
 class ExpressionParserMixin:
-
     """Mixin containing expression, attribute, and subscript parsing."""
 
     @staticmethod
@@ -98,7 +97,7 @@ class ExpressionParserMixin:
                 f"but got a runtime expression: {ast.unparse(test_node)}",
                 span=span,
                 hint="pl.constexpr() only accepts compile-time constants, "
-                     "e.g. 'pl.constexpr(True)' or 'pl.constexpr(False)'",
+                "e.g. 'pl.constexpr(True)' or 'pl.constexpr(False)'",
             )
 
         if is_constexpr and isinstance(condition, ir.ConstBool):
@@ -328,8 +327,7 @@ class ExpressionParserMixin:
             raise UnsupportedFeatureError(
                 f"Unsupported operator '{type(binop.op).__name__}' on a pointer (pl.Ptr)",
                 span=span,
-                hint="Only 'ptr + offset' is supported for pointer arithmetic "
-                "(equivalent to pl.addptr(ptr, offset)).",
+                hint="Only 'ptr + offset' is supported for pointer arithmetic (equivalent to pl.addptr(ptr, offset)).",
             )
 
         # Map AST operators to IR builder names. Everything is routed through
@@ -412,7 +410,7 @@ class ExpressionParserMixin:
                         "'is None' / 'is not None' is only supported on pl.Ptr parameters",
                         span=span,
                         hint="Use pl.Ptr[dtype] for optional pointer inputs; "
-                             "pl.Tensor requires a shape even when the argument is None",
+                        "pl.Tensor requires a shape even when the argument is None",
                     )
                 # Cast pointer to UINT64 for comparison (IR requires ScalarType for eq/ne)
                 left_as_int = ir.cast(left, ir.DataType.UINT64, span)
@@ -515,7 +513,8 @@ class ExpressionParserMixin:
             operand_value = self._const_int_value(operand)
             if result_value is not None and operand_value is not None:
                 result = ir.ConstInt(
-                    int(bool(result_value) and bool(operand_value)) if isinstance(expr.op, ast.And)
+                    int(bool(result_value) and bool(operand_value))
+                    if isinstance(expr.op, ast.And)
                     else int(bool(result_value) or bool(operand_value)),
                     bool_dtype,
                     span,
@@ -532,7 +531,7 @@ class ExpressionParserMixin:
         condition = self._resolve_constexpr_condition(test_node, condition, is_constexpr, span)
 
         if isinstance(condition, (ir.ConstBool, ir.ConstInt)):
-            is_true = (condition.value if isinstance(condition, ir.ConstBool) else condition.value != 0)
+            is_true = condition.value if isinstance(condition, ir.ConstBool) else condition.value != 0
             chosen = expr.body if is_true else expr.orelse
             result = self.parse_expression(chosen, nested=False)
             if not isinstance(result, ir.Expr):
@@ -691,8 +690,7 @@ class ExpressionParserMixin:
         raise UnsupportedFeatureError(
             f"Standalone attribute access not supported: {ast.unparse(attr)}",
             span=span,
-            hint="Attribute access is only supported for tiling parameters (e.g., tiling.x) "
-                         "or within function calls",
+            hint="Attribute access is only supported for tiling parameters (e.g., tiling.x) or within function calls",
         )
 
     def parse_list(self, list_node: ast.List) -> ir.MakeTuple:
@@ -749,8 +747,9 @@ class ExpressionParserMixin:
             from pypto_pro.ir.op.block_ops import _ir_getval
             result = _ir_getval(value_expr, index_expr, span=span)
             if meta is not None:
-                from ._op_pipeline import get_op_pipe
                 from pypto_pro.ir.op.system_ops import mutex_lock, mutex_unlock
+
+                from ._op_pipeline import get_op_pipe
                 pipe = get_op_pipe("getval")
                 buf_id_ir, mutex_ids = meta
                 self.builder.emit(ir.EvalStmt(
@@ -895,15 +894,13 @@ class ExpressionParserMixin:
         lt_stop = _make_binary("lt", left, stop, span)
         result = ir.And(ge_start, lt_stop, DataType.BOOL, span)
         step_is_one = (
-            isinstance(step, ir.ConstInt) and step.value == 1
-            or isinstance(step, ir.ConstFloat) and step.value == 1.0
+            isinstance(step, ir.ConstInt) and step.value == 1 or isinstance(step, ir.ConstFloat) and step.value == 1.0
         )
         if not step_is_one:
             diff = _make_binary("sub", left, start, span)
             mod_val = _make_binary("mod", diff, step, span)
             zero = ir.ConstInt(0, DataType.INDEX, span)
-            result = ir.And(result, _make_binary("eq", mod_val, zero, span),
-                            DataType.BOOL, span)
+            result = ir.And(result, _make_binary("eq", mod_val, zero, span), DataType.BOOL, span)
         return ir.not_(result, span) if is_not_in else result
 
     def _parse_in_operator(self, compare: ast.Compare, span: ir.Span) -> ir.Expr:
@@ -927,8 +924,7 @@ class ExpressionParserMixin:
         success, value = self.expr_evaluator.try_eval_expr(container)
         if success and isinstance(value, (list, tuple)):
             ir_elements = [self.expr_evaluator.python_value_to_ir(v, span) for v in value]
-            return self._desugar_in_literal(
-                left, ir_elements, is_not_in, span, elements_are_ir=True)
+            return self._desugar_in_literal(left, ir_elements, is_not_in, span, elements_are_ir=True)
 
         raise ParserSyntaxError(
             f"'{'not in' if is_not_in else 'in'}' only supports tuple/list literals, "
@@ -1036,7 +1032,7 @@ class ExpressionParserMixin:
             if len(shape) != 1:
                 if self.inline_vf_depth > 0:
                     raise ParserSyntaxError(
-                        f"Tile[x] in VF section is not supported; use `tile + x` for pointer offset",
+                        "Tile[x] in VF section is not supported; use `tile + x` for pointer offset",
                         span=span,
                         hint="Replace `tile[x]` with `tile + x`",
                     )
@@ -1044,7 +1040,7 @@ class ExpressionParserMixin:
                     f"Subscript A[x] requires 1D container, but got rank {len(shape)}; "
                     f"use {len(shape)} indices or add ':' for sub-view (Tile)",
                     span=span,
-                    hint=f"Use A[i, j] for scalar access or A[x:, :] for sub-view",
+                    hint="Use A[i, j] for scalar access or A[x:, :] for sub-view",
                 )
             return self.parse_expression(slice_node)
 

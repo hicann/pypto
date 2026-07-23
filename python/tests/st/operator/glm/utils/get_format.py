@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 import enum
+
 import torch
 
 
@@ -26,6 +27,7 @@ def get_format(tensor):
     tile_op_format = TileOpFormat.ND.value
     if tensor.device.type == "npu":
         import torch_npu
+
         if torch_npu.get_npu_format(tensor) == 29:
             tile_op_format = TileOpFormat.NZ.value
     return tile_op_format

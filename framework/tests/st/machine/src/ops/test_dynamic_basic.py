@@ -9,19 +9,20 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-import sys
 import logging
 from pathlib import Path
+import sys
 from typing import List
 
-import numpy as np
 from ml_dtypes import bfloat16
+import numpy as np
 
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -72,9 +73,7 @@ def gen_uniform_data(data_shape, min_value, max_value, dtype):
         return np.zeros(data_shape, dtype=dtype)
     if dtype == np.bool_:
         return np.random.choice([True, False], size=data_shape)
-    return np.random.uniform(low=min_value, high=max_value, size=data_shape).astype(
-        dtype
-    )
+    return np.random.uniform(low=min_value, high=max_value, size=data_shape).astype(dtype)
 
 
 @GoldenRegister.reg_golden_func(
@@ -82,8 +81,6 @@ def gen_uniform_data(data_shape, min_value, max_value, dtype):
         "DynamicBasicTest.TestInnerLoopOrder",
     ]
 )
-
-
 def gen_dynamic_basic_op_golden(case_name: str, output: Path) -> bool:
     if case_name == "DynamicBasicTest.TestInnerLoopOrder":
         dtype = np.float32
@@ -95,19 +92,17 @@ def gen_dynamic_basic_op_golden(case_name: str, output: Path) -> bool:
         shape_input_b = shape_input_a
         shape_out = [tile_num, vec_len]
 
-
         input_a = gen_uniform_data(shape_input_a, -1, 1, dtype)
         input_b = gen_uniform_data(shape_input_b, -1, 1, dtype)
         out = np.zeros(shape_out).astype(dtype)
 
         for i in range(tile_num):
-            tile_b = input_b[i : i + 1, 0 : vec_len] * 2.0
+            tile_b = input_b[i:i + 1, 0:vec_len] * 2.0
             for k in range(loop_num):
-                tile_a = input_a[k : k + 1, :]
+                tile_a = input_a[k:k + 1, :]
                 tile_b = tile_a + tile_b
             tile_b = tile_b * 3.0
-            out[i : i + 1] = tile_b
-
+            out[i:i + 1] = tile_b
 
         input_a.tofile(Path(output, 'input_a.bin'))
         input_b.tofile(Path(output, 'input_b.bin'))

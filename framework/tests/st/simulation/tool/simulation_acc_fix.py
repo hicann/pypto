@@ -8,23 +8,21 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import subprocess
+""" """
+
 import json
 import os
-import sys
+import subprocess
 
 
 def run_command_and_get_output(command):
-
     # 执行命令并捕获标准输出和错误输出（文本模式）
     result = subprocess.run(
         command,
         shell=True,  # 使用shell解析命令（如需路径扩展或通配符可保留）
         check=True,  # 命令执行失败（非零返回码）时抛出异常
-        text=True,   # 以文本模式返回输出（非字节流）
-        capture_output=True  # 捕获stdout和stderr
+        text=True,  # 以文本模式返回输出（非字节流）
+        capture_output=True,  # 捕获stdout和stderr
     )
 
     # 合并标准输出和错误输出（根据需求选择）
@@ -35,6 +33,7 @@ def run_command_and_get_output(command):
         "输出": output,
     }
 
+
 def execute():
     # 要执行的目标指令
     target_command = "build/output/bin/tile_fwk_utest --gtest_filter=CostModelTest.TestAttentionPostFunctional"
@@ -44,7 +43,7 @@ def execute():
 
     # print(execution_result["输出"])
 
-    lines = []
+    _lines = []
     mp = {}
     for line in execution_result['输出'].split('\n'):
         if 'latency' in line:
@@ -57,22 +56,24 @@ def execute():
 
     return mp
 
+
 def compile():
     # 要执行的目标指令
     target_command = "python3 build_ci.py -c -u --disable_auto_execute"
 
     # 执行并获取结果
-    execution_result = run_command_and_get_output(target_command)
+    _execution_result = run_command_and_get_output(target_command)
 
-def changeAccLevel(new_value):
+
+def change_acc_level(new_value):
     """
     :param file_path: 配置文件路径（如'tile_fwk_config.json'）
     :param key: 要修改的键（支持嵌套，如'log.level'）
     :param new_value: 新值
     :return: 成功状态及提示信息
     """
-    file_path = f"src/configs/tile_fwk_config.json"
-    key = f"global.simulation.ACCURACY_LEVEL"
+    file_path = "src/configs/tile_fwk_config.json"
+    key = "global.simulation.ACCURACY_LEVEL"
     try:
         # 读取原始配置
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -91,10 +92,7 @@ def changeAccLevel(new_value):
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4, ensure_ascii=False)
 
-        return {
-            "success": True,
-            "message": f"配置修改成功！键 '{key}' 已更新为: {new_value}"
-        }
+        return {"success": True, "message": f"配置修改成功！键 '{key}' 已更新为: {new_value}"}
     except FileNotFoundError:
         return {"success": False, "message": f"错误：文件 {file_path} 不存在"}
     except json.JSONDecodeError:
@@ -105,7 +103,7 @@ def changeAccLevel(new_value):
         return {"success": False, "message": f"未知错误：{str(e)}"}
 
 
-def checkoutWorkDir():
+def checkout_work_dir():
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
     target_dir = script_dir
@@ -115,11 +113,11 @@ def checkoutWorkDir():
 
 
 if __name__ == "__main__":
-    checkoutWorkDir()
+    checkout_work_dir()
     compile()
-    changeAccLevel(1)
+    change_acc_level(1)
     res1 = execute()
-    changeAccLevel(2)
+    change_acc_level(2)
     res2 = execute()
 
     for key in res1.keys():

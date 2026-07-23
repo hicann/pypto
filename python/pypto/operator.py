@@ -15,7 +15,7 @@ from pypto import Tensor
 
 
 def sigmoid(input: Tensor) -> Tensor:
-    """ Return a tensor containing the element-wise sigmoid values of input.
+    """Return a tensor containing the element-wise sigmoid values of input.
         The sigmoid function is a common activation function in machine learning,
         defined mathematically as: sigmoid(x) = 1 / (1 + exp(-x))
 
@@ -68,7 +68,7 @@ def sigmoid(input: Tensor) -> Tensor:
 
 
 def softmax(input: Tensor, dim: int) -> Tensor:
-    """ Return a tensor obtained by applying the softmax activation function to the input.
+    """Return a tensor obtained by applying the softmax activation function to the input.
         Mathematically, for an input tensor x along a specified dimension dim,
         the softmax of element x_i is computed as:
         softmax(x_i) = exp(x_i) / sum(exp(x_j) for j in dimension dim

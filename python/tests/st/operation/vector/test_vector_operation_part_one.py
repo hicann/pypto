@@ -8,15 +8,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import os
-import pypto
-import pytest
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
-import torch_npu
+import torch
+
+import pypto
 
 
 def test_vector_operation_add():
@@ -36,16 +36,24 @@ def test_vector_operation_add():
     with pypto.function("ADD", a, b, c):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_ADD_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_ADD_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
-                tile_b = pypto.view(b, view_shape,
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
+                tile_b = pypto.view(
+                    b,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tile_a.move(pypto.add(tile_a, tile_b))
                 pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], c)
@@ -81,16 +89,24 @@ def test_vector_operation_div():
     with pypto.function("DIV", a, b, c):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_DIV_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_DIV_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
-                tile_b = pypto.view(b, view_shape,
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
+                tile_b = pypto.view(
+                    b,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tile_a.move(pypto.div(tile_a, tile_b))
                 pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], c)
@@ -127,16 +143,24 @@ def test_vector_operation_mul():
     with pypto.function("MUL", a, b, c):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_MUL_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_MUL_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
-                tile_b = pypto.view(b, view_shape,
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
+                tile_b = pypto.view(
+                    b,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tile_a.move(pypto.mul(tile_a, tile_b))
                 pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], c)
@@ -173,16 +197,24 @@ def test_vector_operation_sub():
     with pypto.function("SUB", a, b, c):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_SUB_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_SUB_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
-                tile_b = pypto.view(b, view_shape,
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
+                tile_b = pypto.view(
+                    b,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tile_a.move(pypto.sub(tile_a, tile_b))
                 pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], c)
@@ -218,11 +250,15 @@ def test_vector_operation_abs():
     with pypto.function("ABS", a, b):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_ABS_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_ABS_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tile_a.move(pypto.abs(tile_a))
                 pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
@@ -255,11 +291,15 @@ def test_vector_operation_sqrt():
     with pypto.function("SQRT", a, b):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_SQRT_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_SQRT_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tile_a.move(pypto.sqrt(tile_a))
                 pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
@@ -293,11 +333,15 @@ def test_vector_operation_ceil():
     with pypto.function("CEIL", a, b):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_CEIL_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_CEIL_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tile_a.move(pypto.ceil(tile_a))
                 pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
@@ -332,11 +376,15 @@ def test_vector_operation_floor():
     with pypto.function("FLOOR", a, b):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_FLOOR_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_FLOOR_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tile_a.move(pypto.floor(tile_a))
                 pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
@@ -371,11 +419,15 @@ def test_vector_operation_trunc():
     with pypto.function("TRUNC", a, b):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_TRUNC_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_TRUNC_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tile_a.move(pypto.trunc(tile_a))
                 pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
@@ -409,11 +461,15 @@ def test_vector_operation_exp():
     with pypto.function("EXP", a, b):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_SQRT_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_SQRT_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tile_a.move(pypto.exp(tile_a))
                 pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
@@ -446,11 +502,15 @@ def test_vector_operation_neg():
     with pypto.function("NEG", a, b):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_NEG_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_NEG_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tile_a.move(pypto.neg(tile_a))
                 pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
@@ -485,13 +545,22 @@ def test_vector_operation_full():
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_VEC_DUP_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_VEC_DUP_L1", idx_name="s_idx"):
                 tile_a = pypto.tensor()
-                tile_a.move(pypto.full(view_shape, b, dtype,
-                valid_shape=[(pypto.symbolic_scalar(n) -
-                b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                (pypto.symbolic_scalar(m) -
-                s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))]))
-                pypto.assemble(
-                    tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], a)
+                tile_a.move(
+                    pypto.full(
+                        view_shape,
+                        b,
+                        dtype,
+                        valid_shape=[
+                            (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(
+                                pypto.symbolic_scalar(view_shape[0])
+                            ),
+                            (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(
+                                pypto.symbolic_scalar(view_shape[1])
+                            ),
+                        ],
+                    )
+                )
+                pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], a)
 
     a_tensor = torch.zeros(n, m, dtype=torch.float32)
 
@@ -518,11 +587,15 @@ def test_vector_operation_logical_not():
     with pypto.function("LOGICALNOT", a, b):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_LOGICALNOT_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_LOGICALNOT_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, view_shape,
+                tile_a = pypto.view(
+                    a,
+                    view_shape,
                     [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[(pypto.symbolic_scalar(n) -
-                    b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tmp_a = pypto.tensor(view_shape, pypto.DT_BOOL)
                 tmp_a.move(pypto.logical_not(tile_a))
@@ -556,21 +629,32 @@ def test_vector_operation_expand():
     with pypto.function("EXPAND", a, b):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_EXPAND_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_EXPAND_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, [16, 1],
-                                  [b_idx * view_shape[0], 0],
-                                  valid_shape=[(pypto.symbolic_scalar(n) -
-                                                b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                                               1])
+                tile_a = pypto.view(
+                    a,
+                    [16, 1],
+                    [b_idx * view_shape[0], 0],
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        1,
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tmp_a = pypto.tensor()
-                tmp_a.move(pypto.expand_clone(tile_a, view_shape,
-                                            valid_shape=[(pypto.symbolic_scalar(n) - b_idx * view_shape[0]).
-                                                         min(pypto.symbolic_scalar(
-                                                             view_shape[0])),
-                                                         (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).
-                                                         min(pypto.symbolic_scalar(view_shape[1]))]))
-                pypto.assemble(
-                    tmp_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
+                tmp_a.move(
+                    pypto.expand_clone(
+                        tile_a,
+                        view_shape,
+                        valid_shape=[
+                            (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(
+                                pypto.symbolic_scalar(view_shape[0])
+                            ),
+                            (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(
+                                pypto.symbolic_scalar(view_shape[1])
+                            ),
+                        ],
+                    )
+                )
+                pypto.assemble(tmp_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
 
     a_tensor = torch.full((n, 1), -16, dtype=torch.float32)
     b_tensor = torch.zeros(n, m, dtype=torch.float32)
@@ -580,8 +664,7 @@ def test_vector_operation_expand():
     pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_b_tensor)
 
     expected = torch.full((n, m), -16, dtype=torch.float32)
-    assert_allclose(b_tensor.flatten(), expected.flatten(),
-                    rtol=1e-3, atol=1e-3)
+    assert_allclose(b_tensor.flatten(), expected.flatten(), rtol=1e-3, atol=1e-3)
     pypto.runtime._device_fini()
 
 
@@ -602,16 +685,24 @@ def test_vector_operation_concat():
 
     with pypto.function("CONCAT", a, b, c):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_CONCAT_L0", idx_name="b_idx"):
-            tile_a = pypto.view(a, view_shape,
+            tile_a = pypto.view(
+                a,
+                view_shape,
                 [b_idx * view_shape[0], 0],
-                valid_shape=[(pypto.symbolic_scalar(n) -
-                b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                n])
-            tile_b = pypto.view(b, view_shape,
+                valid_shape=[
+                    (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                    n,
+                ],
+            )
+            tile_b = pypto.view(
+                b,
+                view_shape,
                 [b_idx * view_shape[0], 0],
-                valid_shape=[(pypto.symbolic_scalar(n) -
-                b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                n])
+                valid_shape=[
+                    (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                    n,
+                ],
+            )
             pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
             tmp_c = pypto.tensor([16, 64], dtype)
             tmp_c.move(pypto.concat([tile_a, tile_b], -1))
@@ -649,11 +740,15 @@ def test_vector_operation_rowmaxsingle():
 
     with pypto.function("ROWMAXSINGLE", a, b):
         for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_ROWMAXSINGLE_L1", idx_name="s_idx"):
-            tile_a = pypto.view(a, [32, view_shape[1]],
+            tile_a = pypto.view(
+                a,
+                [32, view_shape[1]],
                 [0, s_idx * view_shape[1]],
-                valid_shape=[pypto.symbolic_scalar(n),
-                (pypto.symbolic_scalar(m) -
-                s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                valid_shape=[
+                    pypto.symbolic_scalar(n),
+                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                ],
+            )
             pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
             tmp_a = pypto.tensor([1, view_shape[1]], dtype)
             tmp_a.move(pypto.amax(tile_a, dim, True))
@@ -688,11 +783,15 @@ def test_vector_operation_rowsumsingle():
 
     with pypto.function("ROWSUMSINGLE", a, b):
         for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_ROWSUMSINGLE_L1", idx_name="s_idx"):
-            tile_a = pypto.view(a, [32, view_shape[1]],
+            tile_a = pypto.view(
+                a,
+                [32, view_shape[1]],
                 [0, s_idx * view_shape[1]],
-                valid_shape=[pypto.symbolic_scalar(n),
-                (pypto.symbolic_scalar(m) -
-                s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                valid_shape=[
+                    pypto.symbolic_scalar(n),
+                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                ],
+            )
             pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
             tmp_a = pypto.tensor([1, view_shape[1]], dtype)
             tmp_a.move(pypto.sum(tile_a, dim, True))
@@ -727,11 +826,15 @@ def test_vector_operation_rowminsingle():
 
     with pypto.function("ROWMINSINGLE", a, b):
         for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_ROWMINSINGLE_L1", idx_name="s_idx"):
-            tile_a = pypto.view(a, [32, view_shape[1]],
+            tile_a = pypto.view(
+                a,
+                [32, view_shape[1]],
                 [0, s_idx * view_shape[1]],
-                valid_shape=[pypto.symbolic_scalar(n),
-                (pypto.symbolic_scalar(m) -
-                s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                valid_shape=[
+                    pypto.symbolic_scalar(n),
+                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                ],
+            )
             pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
             tmp_a = pypto.tensor([1, view_shape[1]], dtype)
             tmp_a.move(pypto.amin(tile_a, dim, True))
@@ -766,11 +869,15 @@ def test_vector_operation_rowargmaxsingle():
 
     with pypto.function("ROWARGMAXSINGLE", a, b):
         for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_ROWARGMAXSINGLE_L1", idx_name="s_idx"):
-            tile_a = pypto.view(a, [32, view_shape[1]],
+            tile_a = pypto.view(
+                a,
+                [32, view_shape[1]],
                 [0, s_idx * view_shape[1]],
-                valid_shape=[pypto.symbolic_scalar(n),
-                (pypto.symbolic_scalar(m) -
-                s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                valid_shape=[
+                    pypto.symbolic_scalar(n),
+                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                ],
+            )
             pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
             tmp_a = pypto.tensor([1, view_shape[1]], pypto.DT_INT32)
             tmp_a.move(pypto.argmax(tile_a, dim, True))
@@ -805,11 +912,15 @@ def test_vector_operation_rowargminsingle():
 
     with pypto.function("ROWARGMINSINGLE", a, b):
         for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_ROWARGMINSINGLE_L1", idx_name="s_idx"):
-            tile_a = pypto.view(a, [32, view_shape[1]],
+            tile_a = pypto.view(
+                a,
+                [32, view_shape[1]],
                 [0, s_idx * view_shape[1]],
-                valid_shape=[pypto.symbolic_scalar(n),
-                (pypto.symbolic_scalar(m) -
-                s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
+                valid_shape=[
+                    pypto.symbolic_scalar(n),
+                    (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
+                ],
+            )
             pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
             tmp_a = pypto.tensor([1, view_shape[1]], pypto.DT_INT32)
             tmp_a.move(pypto.argmin(tile_a, dim, True))
@@ -843,21 +954,31 @@ def test_tensor_operation_expand():
     with pypto.function("EXPAND", a, b):
         for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_EXPAND_L0", idx_name="b_idx"):
             for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_EXPAND_L1", idx_name="s_idx"):
-                tile_a = pypto.view(a, [16, 1],
-                                  [b_idx * view_shape[0], 0],
-                                  valid_shape=[(pypto.symbolic_scalar(n) -
-                                                b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                                               1])
+                tile_a = pypto.view(
+                    a,
+                    [16, 1],
+                    [b_idx * view_shape[0], 0],
+                    valid_shape=[
+                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
+                        1,
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 tmp_a = pypto.tensor()
-                tmp_a.move(tile_a.expand_clone(view_shape,
-                                               valid_shape=[(pypto.symbolic_scalar(n) - b_idx * view_shape[0]).
-                                                            min(pypto.symbolic_scalar(
-                                                                view_shape[0])),
-                                                            (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).
-                                                            min(pypto.symbolic_scalar(view_shape[1]))]))
-                pypto.assemble(
-                    tmp_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
+                tmp_a.move(
+                    tile_a.expand_clone(
+                        view_shape,
+                        valid_shape=[
+                            (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(
+                                pypto.symbolic_scalar(view_shape[0])
+                            ),
+                            (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(
+                                pypto.symbolic_scalar(view_shape[1])
+                            ),
+                        ],
+                    )
+                )
+                pypto.assemble(tmp_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
 
     a_tensor = torch.full((n, 1), -16, dtype=torch.float32)
     b_tensor = torch.zeros(n, m, dtype=torch.float32)
@@ -867,6 +988,5 @@ def test_tensor_operation_expand():
     pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_b_tensor)
 
     expected = torch.full((n, m), -16, dtype=torch.float32)
-    assert_allclose(b_tensor.flatten(), expected.flatten(),
-                    rtol=1e-3, atol=1e-3)
+    assert_allclose(b_tensor.flatten(), expected.flatten(), rtol=1e-3, atol=1e-3)
     pypto.runtime._device_fini()

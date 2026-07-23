@@ -9,13 +9,11 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-from test_pil_builder_utils import TestParser, Expr
+from test_pil_builder_utils import Expr, TestParser
 
 
 def test_pil_builder_expr():
-
     with TestParser():
-
         # --- expr statement: binop (result discarded) ---
 
         @TestParser.test
@@ -30,11 +28,8 @@ def test_pil_builder_expr():
             Expr.str(var_a)
 
 
-
 def test_pil_builder_named_expr():
-
     with TestParser():
-
         # --- named expr in binop ---
 
         @TestParser.test
@@ -100,9 +95,9 @@ def test_pil_builder_named_expr():
 
         @TestParser.test
         def named_expr_call_kw_arg():
-
             def func(x):
                 Expr.str(x)
+
             func(x=(var_a := Expr.int(0)))
             Expr.str(var_a)
 
@@ -181,34 +176,32 @@ def test_pil_builder_named_expr():
 
         @TestParser.test
         def named_expr_as_annotation():
-            var_x: (var_ann := Expr.str(0))
+            _var_x: (var_ann := Expr.str(0))
             Expr.str(var_ann)
 
         @TestParser.test
         def named_expr_as_annotation_with_value():
-            var_x: (var_ann := Expr.str(0)) = Expr.int(1)
+            var_x: (var_ann := Expr.str(0)) = Expr.int(1)  # fmt: skip
             Expr.str(var_x)
             Expr.str(var_ann)
 
 
 def test_pil_builder_assign():
-
     with TestParser():
-
         # --- name target ---
 
         @TestParser.test
         def assign_name():
-            var_x = Expr.int(0)
+            _var_x = Expr.int(0)
 
         @TestParser.test
         def assign_name_rhs_call():
-            var_x = Expr.int(0) + Expr.int(1)
+            _var_x = Expr.int(0) + Expr.int(1)
 
         @TestParser.test
         def assign_multi_target():
             # e.g. a = b = expr - both names get the same value
-            var_x = var_y = Expr.int(0)
+            _var_x = _var_y = Expr.int(0)
 
         # --- attribute target ---
 
@@ -303,7 +296,7 @@ def test_pil_builder_assign():
         def assign_subscript_binop_slice():
             # e.g. obj[a+1 : b*2] = rhs - slice bounds are binops
             var_obj = Expr(0)
-            var_obj[Expr.int(0) + 1: Expr.int(1) * 2] = Expr.int(2)
+            var_obj[Expr.int(0) + 1:Expr.int(1) * 2] = Expr.int(2)
 
         # --- nested subscript / attr chains ---
 
@@ -334,19 +327,19 @@ def test_pil_builder_assign():
 
         @TestParser.test
         def assign_tuple_unpack():
-            var_x, var_y = Expr.int(0), Expr.int(1)
+            _var_x, _var_y = Expr.int(0), Expr.int(1)
 
         @TestParser.test
         def assign_list_unpack():
-            [var_x, var_y] = [Expr.int(0), Expr.int(1)]
+            [_var_x, _var_y] = [Expr.int(0), Expr.int(1)]
 
         @TestParser.test
         def assign_starred_unpack():
-            var_x, *var_y, var_z = [Expr.int(0), Expr.int(1), Expr.int(2), Expr.int(3)]
+            _var_x, *_var_y, _var_z = [Expr.int(0), Expr.int(1), Expr.int(2), Expr.int(3)]
 
         @TestParser.test
         def assign_nested_tuple_unpack():
-            (var_x, (var_y, var_z)) = (Expr.int(0), (Expr.int(1), Expr.int(2)))
+            (_var_x, (_var_y, _var_z)) = (Expr.int(0), (Expr.int(1), Expr.int(2)))
 
         @TestParser.test
         def assign_unpack_to_attr_subscript():
@@ -359,25 +352,24 @@ def test_pil_builder_assign():
 
         # --- chained assignment ---
 
-
         @TestParser.test
         def assign_chain_name_name():
             # e.g. x = y = expr - both names bound to same value
-            var_x = var_y = Expr.int(0)
+            _var_x = _var_y = Expr.int(0)
 
         @TestParser.test
         def assign_chain_name_attr():
             # e.g. x = obj.val = expr - name bound to attribute load of object
             var_obj = Expr(0)
             var_obj.val = Expr.int(0)
-            var_x = var_obj.val = Expr.int(1)
+            _var_x = var_obj.val = Expr.int(1)
 
         @TestParser.test
         def assign_chain_name_subscript():
             # e.g. x = obj[k] = expr - name bound to subscript of object
             var_obj = Expr(0)
             var_obj[0] = Expr.int(0)
-            var_x = var_obj[0] = Expr.int(1)
+            _var_x = var_obj[0] = Expr.int(1)
 
         @TestParser.test
         def assign_chain_attr_subscript():
@@ -395,60 +387,56 @@ def test_pil_builder_assign():
             var_obj.val = Expr.int(0)
             var_arr = Expr(1)
             var_arr[0] = Expr.int(0)
-            var_x = var_obj.val = var_arr[0] = Expr.int(1)
+            _var_x = var_obj.val = var_arr[0] = Expr.int(1)
 
         @TestParser.test
         def assign_chain_tuple_name():
             # e.g. (a, b) = x = expr - tuple elements bound to names
-            var_x = var_a, var_b = Expr.int(0), Expr.int(1)
+            _var_x = var_a, var_b = Expr.int(0), Expr.int(1)
 
         @TestParser.test
         def assign_chain_tuple_tuple():
             # e.g. (a, b) = (c, d) = expr - two tuple lhs targets
-            var_a, var_b = var_c, var_d = Expr.int(0), Expr.int(1)
+            _var_a, _var_b = _var_c, _var_d = Expr.int(0), Expr.int(1)
 
         @TestParser.test
         def assign_chain_list_list():
             # e.g. [a, b] = [c, d] = expr: list elements bound to names
-            [var_a, var_b] = [var_c, var_d] = [Expr.int(0), Expr.int(1)]
+            [_var_a, _var_b] = [_var_c, _var_d] = [Expr.int(0), Expr.int(1)]
 
         @TestParser.test
         def assign_chain_tuple_nested_2():
             # e.g. (a, (b, c)) = x = expr - 2-level nested tuple on first target
-            var_x = var_a, (var_b, var_c) = Expr.int(0), (Expr.int(1), Expr.int(2))
+            _var_x = var_a, (var_b, var_c) = Expr.int(0), (Expr.int(1), Expr.int(2))
 
         @TestParser.test
         def assign_chain_tuple_nested_3():
             # e.g. x = (a, (b, (c, d))) = expr - 3-level nested tuple
-            var_x = var_a, (var_b, (var_c, var_d)) = \
-                Expr.int(0), (Expr.int(1), (Expr.int(2), Expr.int(3)))
+            _var_x = var_a, (var_b, (var_c, var_d)) = Expr.int(0), (Expr.int(1), (Expr.int(2), Expr.int(3)))
 
         @TestParser.test
         def assign_chain_list_nested_3():
             # e.g. x = [a, [b, [c, d]]] = expr - 3-level nested list
-            var_x = [var_a, [var_b, [var_c, var_d]]] = \
-                [Expr.int(0), [Expr.int(1), [Expr.int(2), Expr.int(3)]]]
+            _var_x = [var_a, [var_b, [var_c, var_d]]] = [Expr.int(0), [Expr.int(1), [Expr.int(2), Expr.int(3)]]]
 
         @TestParser.test
         def assign_chain_mixed_nested_3():
             # e.g. x = (a, [b, (c, d)]) = expr - mixed tuple/list 3-level
-            var_x = var_a, [var_b, (var_c, var_d)] = \
-                Expr.int(0), [Expr.int(1), (Expr.int(2), Expr.int(3))]
+            _var_x = var_a, [var_b, (var_c, var_d)] = Expr.int(0), [Expr.int(1), (Expr.int(2), Expr.int(3))]
 
         @TestParser.test
         def assign_chain_starred_nested():
             # e.g. (a, *b, c) = x = expr - chained assignment with a starred unpack target
-            var_x = [var_a, var_b, var_c, var_d] = [Expr.int(0), Expr.int(1), Expr.int(2), Expr.int(3)]
-            var_a, *var_rest, var_z = var_x = [Expr.int(0), Expr.int(1), Expr.int(2), Expr.int(3)]
+            _var_x = [var_a, var_b, var_c, var_d] = [Expr.int(0), Expr.int(1), Expr.int(2), Expr.int(3)]
+            var_a, *var_rest, var_z = _var_x = [Expr.int(0), Expr.int(1), Expr.int(2), Expr.int(3)]
 
         @TestParser.test
         def assign_chain_three_nested():
             # e.g. (a, b) = [c, d] = x = expr - three targets, two of them are nested
-            var_x = [var_c, var_d] = var_a, var_b = [Expr.int(0), Expr.int(1)]
+            _var_x = [var_c, var_d] = var_a, var_b = [Expr.int(0), Expr.int(1)]
 
 
 def test_pil_builder_aug_assign():
-
     with TestParser():
 
         @TestParser.test
@@ -532,29 +520,27 @@ def test_pil_builder_aug_assign():
 
 
 def test_pil_builder_ann_assign():
-
     with TestParser():
-
         # --- annotation only (no value): annotation is evaluated for side effects ---
 
         @TestParser.test
         def ann_assign_only_call_annotation():
-            var_x: Expr.str(0)
+            _var_x: Expr.str(0)
 
         @TestParser.test
         def ann_assign_only_const_annotation():
             # constant annotation: no side effect, trace stays empty
-            var_x: int
+            _var_x: int
 
         # --- annotation + name target ---
 
         @TestParser.test
         def ann_assign_name_call_annotation():
-            var_x: Expr.str(0) = Expr.int(1)
+            _var_x: Expr.str(0) = Expr.int(1)
 
         @TestParser.test
         def ann_assign_name_const_annotation():
-            var_x: int = Expr.int(0)
+            _var_x: int = Expr.int(0)
 
         # --- annotation + attribute target ---
 
@@ -574,9 +560,9 @@ def test_pil_builder_ann_assign():
 
         @TestParser.test
         def ann_assign_subscript_target_obj_from_call():
-
             def make():
                 return Expr(0)
+
             make()[0]: Expr.str(0) = Expr.int(1)
 
         # --- annotation + subscript target: slice index comes from a call ---
@@ -590,9 +576,9 @@ def test_pil_builder_ann_assign():
 
         @TestParser.test
         def ann_assign_subscript_target_obj_and_slice_from_calls():
-
             def make():
                 return Expr(0)
+
             make()[Expr.int(0)]: Expr.str(1) = Expr.int(2)
 
         # --- annotation + subscript target: slice is a range (lower:upper from calls) ---
@@ -606,22 +592,20 @@ def test_pil_builder_ann_assign():
 
         @TestParser.test
         def ann_assign_subscript_target_obj_call_slice_range():
-
             def make():
                 return Expr(0)
+
             make()[Expr.int(0):Expr.int(1)]: Expr.str(2) = Expr.int(3)
 
         # --- annotation expression is a complex call (binop result) ---
 
         @TestParser.test
         def ann_assign_binop_annotation():
-            var_x: Expr.int(0) + Expr.int(1) = Expr.int(2)
+            _var_x: Expr.int(0) + Expr.int(1) = Expr.int(2)
 
 
 def test_pil_builder_delete():
-
     with TestParser():
-
         # --- delete name ---
 
         @TestParser.test

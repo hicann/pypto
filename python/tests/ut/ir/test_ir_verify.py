@@ -9,13 +9,13 @@
 import torch
 
 import pypto
+from pypto import ir, pil
 from pypto._build_online import BuildOnlineCalculatorManager
-from pypto import pil, ir
 
-
-verify_options = {"enable_pass_verify": True,
-                  "pass_verify_save_tensor": True,
-                 }
+verify_options = {
+    "enable_pass_verify": True,
+    "pass_verify_save_tensor": True,
+}
 
 
 def _run_dce(func, golden, *args):

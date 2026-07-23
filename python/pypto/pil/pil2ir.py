@@ -6,14 +6,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 import inspect
+
 import pypto
 
-from .parser import ast2pil
-from .pir import Function, BuildContext, InsertPoint, Scope, ReturnSignal
+from ..ir import SeqStmts
+from . import ops  # noqa: F401  side-effect import: registers PIL op handlers
 from .dispatcher import dispatch_block
 from .op_registry import dispatch
-from . import ops
-from ..ir import SeqStmts
+from .parser import ast2pil
+from .pir import BuildContext, Function, InsertPoint, ReturnSignal, Scope
 
 
 def pil2ir(func: Function, args: dict, tensor_args: list[pypto.Tensor]):

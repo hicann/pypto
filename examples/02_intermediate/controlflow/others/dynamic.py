@@ -32,16 +32,17 @@ Usage:
     python dynamic.py dynamic_mul::test_dynamic_mul     # Run a specific case
 """
 
-import os
-import sys
 import argparse
 from dataclasses import dataclass
+import os
+import sys
 from typing import Optional
 
-import pypto
-import torch
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -97,11 +98,13 @@ def get_device_id():
 
 # Module-level dynamic dimension definition
 
+
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def dynamic_mul_kernel(
     x: pypto.Tensor([pypto.DYNAMIC, 128], pypto.DT_FP16),
     output: pypto.Tensor([pypto.DYNAMIC, 128], pypto.DT_FP16),
-    tile_b: int):
+    tile_b: int,
+):
     batch_size_dyn = x.shape[0]
     # Compute loop count: ceil(batch_size / tile_b)
     b_loop = (batch_size_dyn + tile_b - 1) // tile_b
@@ -113,14 +116,12 @@ def dynamic_mul_kernel(
         valid_shape = [b_offset_end - b_offset, 128]
 
         # View a tile from the input
-        x_view = pypto.view(x, [tile_b, 128], [b_offset, 0],
-                            valid_shape=valid_shape)
+        x_view = pypto.view(x, [tile_b, 128], [b_offset, 0], valid_shape=valid_shape)
         pypto.set_vec_tile_shapes(1, 128)
         result = pypto.mul(x_view, 2.0)
 
         # Assemble the result back into the output
         pypto.assemble(result, [b_offset, 0], output)
-
 
 
 def test_dynamic_mul(device_id: int = None):
@@ -137,16 +138,12 @@ def test_dynamic_mul(device_id: int = None):
         result = torch.zeros(bs, 128, dtype=torch.float16, device=device)
         dynamic_mul_kernel(x, result, bs)
 
-
         if global_run_mode == pypto.RunMode.NPU:
             torch.npu.synchronize()
 
         golden = x * 2.0
         if global_run_mode == pypto.RunMode.NPU:
-            assert_allclose(
-                np.array(result.cpu()), np.array(golden.cpu()),
-                rtol=1e-3, atol=1e-3
-            )
+            assert_allclose(np.array(result.cpu()), np.array(golden.cpu()), rtol=1e-3, atol=1e-3)
         print(f"  batch_size={bs}: Input shape {x.shape} -> Output shape {result.shape}")
 
     print("✓ Dynamic mul passed for all batch sizes")
@@ -172,7 +169,8 @@ def softmax_core(input_tensor: pypto.Tensor) -> pypto.Tensor:
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def softmax_kernel(
     input_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    output_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32)):
+    output_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
+):
     tile_b = 1
     bs_dyn, seqlen, head, dim = input_tensor.shape
     b_loop = bs_dyn // tile_b
@@ -186,7 +184,6 @@ def softmax_kernel(
         input_view = input_tensor[b_offset:b_offset_end, :seqlen, :head, :dim]
         softmax_out = softmax_core(input_view)
         output_tensor[b_offset:, ...] = softmax_out
-
 
 
 def test_dynamic_partial(device_id: int = None):
@@ -213,10 +210,7 @@ def test_dynamic_partial(device_id: int = None):
 
         golden = torch.softmax(x, dim=-1)
         if global_run_mode == pypto.RunMode.NPU:
-            assert_allclose(
-                np.array(y.cpu()), np.array(golden.cpu()),
-                rtol=1e-3, atol=1e-3
-            )
+            assert_allclose(np.array(y.cpu()), np.array(golden.cpu()), rtol=1e-3, atol=1e-3)
         print(f"  batch_size={bs}: Input shape {x.shape} -> Output shape {y.shape}")
 
     print("✓ Partial dynamic softmax passed for all batch sizes")
@@ -237,6 +231,7 @@ def test_dynamic_partial(device_id: int = None):
 @dataclass
 class AttentionConfig:
     """Configuration for attention operations."""
+
     num_heads: int = 8
     head_dim: int = 64
     scale: Optional[float] = None
@@ -244,8 +239,7 @@ class AttentionConfig:
 
 
 def scaled_dot_product_attention_golden(
-    q: torch.Tensor, k: torch.Tensor, v: torch.Tensor,
-    scale: float, attn_mask: Optional[torch.Tensor] = None
+    q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, scale: float, attn_mask: Optional[torch.Tensor] = None
 ) -> torch.Tensor:
     """PyTorch reference implementation of scaled dot-product attention."""
     scores = torch.matmul(q, k.transpose(-2, -1))
@@ -258,8 +252,7 @@ def scaled_dot_product_attention_golden(
 
 
 def scaled_dot_product_attention_core(
-    q: pypto.Tensor, k: pypto.Tensor, v: pypto.Tensor,
-    scale: float, dtype: pypto.DataType
+    q: pypto.Tensor, k: pypto.Tensor, v: pypto.Tensor, scale: float, dtype: pypto.DataType
 ) -> pypto.Tensor:
     """Core attention computation in PyPTO."""
     k_t = pypto.transpose(k, 2, 3)
@@ -277,20 +270,17 @@ def attention_kernel(
     v: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     config: AttentionConfig,
-    tile: int):
+    tile: int,
+):
     """Scaled dot-product attention with dynamic batch size."""
     bs_dyn = q.shape[0]
     head = config.num_heads
     dim = config.head_dim
     q_len = q.shape[2]
-    kv_len = k.shape[2] # Tile step equals actual batch size
-    scale = config.scale if config.scale is not None else (1.0 / (dim ** 0.5))
+    kv_len = k.shape[2]  # Tile step equals actual batch size
+    scale = config.scale if config.scale is not None else (1.0 / (dim**0.5))
     cube_tiling = 64
-    pypto.set_cube_tile_shapes(
-        [cube_tiling, cube_tiling],
-        [cube_tiling, cube_tiling],
-        [cube_tiling, cube_tiling])
-
+    pypto.set_cube_tile_shapes([cube_tiling, cube_tiling], [cube_tiling, cube_tiling], [cube_tiling, cube_tiling])
 
     bs_loop = (bs_dyn + tile - 1) // tile
 
@@ -300,25 +290,24 @@ def attention_kernel(
 
         # View tiles along the dynamic batch axis
         q_view = pypto.view(
-            q, [tile, head, q_len, dim], [bs_offset, 0, 0, 0],
-            valid_shape=[bs_offset_end - bs_offset, head, q_len, dim]
+            q, [tile, head, q_len, dim], [bs_offset, 0, 0, 0], valid_shape=[bs_offset_end - bs_offset, head, q_len, dim]
         )
         k_view = pypto.view(
-            k, [tile, head, kv_len, dim], [bs_offset, 0, 0, 0],
-            valid_shape=[bs_offset_end - bs_offset, head, kv_len, dim]
+            k,
+            [tile, head, kv_len, dim],
+            [bs_offset, 0, 0, 0],
+            valid_shape=[bs_offset_end - bs_offset, head, kv_len, dim],
         )
         v_view = pypto.view(
-            v, [tile, head, kv_len, dim], [bs_offset, 0, 0, 0],
-            valid_shape=[bs_offset_end - bs_offset, head, kv_len, dim]
+            v,
+            [tile, head, kv_len, dim],
+            [bs_offset, 0, 0, 0],
+            valid_shape=[bs_offset_end - bs_offset, head, kv_len, dim],
         )
 
         pypto.set_vec_tile_shapes(1, 8, 16, 64)
-        res = scaled_dot_product_attention_core(
-            q_view, k_view, v_view, scale, config.dtype
-        )
+        res = scaled_dot_product_attention_core(q_view, k_view, v_view, scale, config.dtype)
         pypto.assemble(res, [bs_offset, 0, 0, 0], output_tensor)
-
-
 
 
 def test_dynamic_attention(device_id: int = None):
@@ -330,9 +319,7 @@ def test_dynamic_attention(device_id: int = None):
     device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     num_heads, head_dim = 8, 64
-    config = AttentionConfig(
-        num_heads=num_heads, head_dim=head_dim, dtype=pypto.DT_FP32
-    )
+    config = AttentionConfig(num_heads=num_heads, head_dim=head_dim, dtype=pypto.DT_FP32)
 
     test_cases = [
         (2, 16, 16),
@@ -341,28 +328,23 @@ def test_dynamic_attention(device_id: int = None):
     ]
     for batch_size, seq_len_q, seq_len_kv in test_cases:
         dtype = torch.float32
-        q = torch.randn(batch_size, num_heads, seq_len_q, head_dim,
-                         dtype=dtype, device=device)
-        k = torch.randn(batch_size, num_heads, seq_len_kv, head_dim,
-                         dtype=dtype, device=device)
-        v = torch.randn(batch_size, num_heads, seq_len_kv, head_dim,
-                         dtype=dtype, device=device)
+        q = torch.randn(batch_size, num_heads, seq_len_q, head_dim, dtype=dtype, device=device)
+        k = torch.randn(batch_size, num_heads, seq_len_kv, head_dim, dtype=dtype, device=device)
+        v = torch.randn(batch_size, num_heads, seq_len_kv, head_dim, dtype=dtype, device=device)
 
-        out = torch.empty(batch_size, num_heads, seq_len_q, head_dim,
-                          dtype=dtype, device=device)
+        out = torch.empty(batch_size, num_heads, seq_len_q, head_dim, dtype=dtype, device=device)
         attention_kernel(q, k, v, out, config, batch_size)
 
         if global_run_mode == pypto.RunMode.NPU:
             torch.npu.synchronize()
 
-        scale = 1.0 / (head_dim ** 0.5)
+        scale = 1.0 / (head_dim**0.5)
         golden = scaled_dot_product_attention_golden(q, k, v, scale).cpu()
 
         if global_run_mode == pypto.RunMode.NPU:
             out_cpu = out.cpu()
             max_diff = (out_cpu - golden).abs().max().item()
-            print(f"  Batch={batch_size}, SeqQ={seq_len_q}, SeqKV={seq_len_kv}, "
-                  f"Max diff: {max_diff:.6f}")
+            print(f"  Batch={batch_size}, SeqQ={seq_len_q}, SeqKV={seq_len_kv}, Max diff: {max_diff:.6f}")
             assert_allclose(np.array(out_cpu), np.array(golden), rtol=3e-3, atol=3e-3)
         print(f"  Input shape: {q.shape} -> Output shape: {out.shape}")
 
@@ -385,7 +367,8 @@ def dynamic_add_kernel(
     y: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP16),
     output: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP16),
     tile_b: int,
-    tile_h: int):
+    tile_h: int,
+):
     batch_dyn = x.shape[0]
     hidden_dyn = x.shape[1]
     b_loop = (batch_dyn + tile_b - 1) // tile_b
@@ -402,22 +385,12 @@ def dynamic_add_kernel(
             h_offset_end = min(h_offset + tile_h, hidden_dyn)
             valid_h = h_offset_end - h_offset
 
-            x_view = pypto.view(
-                x, [tile_b, tile_h], [b_offset, h_offset],
-                valid_shape=[valid_b, valid_h]
-            )
-            y_view = pypto.view(
-                y, [tile_b, tile_h], [b_offset, h_offset],
-                valid_shape=[valid_b, valid_h]
-            )
+            x_view = pypto.view(x, [tile_b, tile_h], [b_offset, h_offset], valid_shape=[valid_b, valid_h])
+            y_view = pypto.view(y, [tile_b, tile_h], [b_offset, h_offset], valid_shape=[valid_b, valid_h])
 
             pypto.set_vec_tile_shapes(tile_b, tile_h)
             result = pypto.add(x_view, y_view)
             pypto.assemble(result, [b_offset, h_offset], output)
-
-
-
-
 
 
 def test_dynamic_multi_dim(device_id: int = None):
@@ -444,12 +417,8 @@ def test_dynamic_multi_dim(device_id: int = None):
 
         golden = x + y
         if global_run_mode == pypto.RunMode.NPU:
-            assert_allclose(
-                np.array(result.cpu()), np.array(golden.cpu()),
-                rtol=1e-3, atol=1e-3
-            )
-        print(f"  batch={bs}, hidden={hs}: "
-              f"Input shapes {x.shape}, {y.shape} -> Output shape {result.shape}")
+            assert_allclose(np.array(result.cpu()), np.array(golden.cpu()), rtol=1e-3, atol=1e-3)
+        print(f"  batch={bs}, hidden={hs}: Input shapes {x.shape}, {y.shape} -> Output shape {result.shape}")
 
     print("✓ Multiple dynamic dimensions passed for all test cases")
     print()
@@ -458,6 +427,7 @@ def test_dynamic_multi_dim(device_id: int = None):
 # ============================================================================
 # Main Function
 # ============================================================================
+
 
 def main():
     """Run dynamic shape examples.
@@ -475,26 +445,14 @@ Examples:
   %(prog)s                                       Run all examples
   %(prog)s dynamic_mul::test_dynamic_mul         Run a specific case
   %(prog)s --list                                List all available examples
-        """
+        """,
     )
     parser.add_argument(
-        'example_id',
-        type=str,
-        nargs='?',
-        help='Example ID to run. If not specified, all examples will run.'
+        'example_id', type=str, nargs='?', help='Example ID to run. If not specified, all examples will run.'
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default='npu',
-        choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default='npu', choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -559,7 +517,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("(Make sure CANN environment is configured and NPU is available)\n")

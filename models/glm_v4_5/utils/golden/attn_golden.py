@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 import math
+
 import torch
 import torch_npu
 
@@ -104,7 +105,7 @@ def ifa_golden(q, k, v, block_table, actual_seqs, out, is_high_precision=True, i
         s1 = bs // b
         nkv = k.shape[2]
         d = k.shape[3]
-        softmax_scale = d ** -0.5
+        softmax_scale = d**-0.5
         k_cache_bsnd, v_cache_bsnd = kv_cache_concat_bsnd(k, v, block_table, actual_seqs)
 
         for i in range(b):
@@ -177,7 +178,9 @@ def ifa_flash_torch(q, k, v, block_table, kv_act_seqs, out, is_fp32=False):
                     device = q.device
                     dtype = q.dtype
                     oi_upd = torch.zeros((g_tile, d), device=device, dtype=fp32)  # shape: [g_tile, d]
-                    li_upd = torch.zeros(g_tile, device=device, dtype=fp32)  # shape: [g_tile]（原代码维度需匹配max/sum的维度）
+                    li_upd = torch.zeros(
+                        g_tile, device=device, dtype=fp32
+                    )  # shape: [g_tile]（原代码维度需匹配max/sum的维度）
                     mi_upd = torch.zeros(g_tile, device=device, dtype=fp32)  # shape: [g_tile]
 
                     # 遍历每个kv block
@@ -212,7 +215,7 @@ def ifa_flash_torch(q, k, v, block_table, kv_act_seqs, out, is_fp32=False):
                         # 第一步：q @ k.T (g_tile, d) @ (d, actual_s2_tile*n2) → (g_tile, actual_s2_tile*n2)
                         mm1 = matmul_proxy(qi, kj.t()).to(fp32)
                         # 缩放因子：d^-0.5
-                        muls_res = mm1 * (d ** -0.5)
+                        muls_res = mm1 * (d**-0.5)
                         # 第二步：计算max(muls_res) → 按最后一维取max（原代码全局max是错误的），保留维度便于广播
                         tilda_mij, _ = torch.max(muls_res, dim=-1, keepdim=True)  # shape: [g_tile, 1]
 
@@ -231,8 +234,7 @@ def ifa_flash_torch(q, k, v, block_table, kv_act_seqs, out, is_fp32=False):
                         else:
                             # 第三步：exp(muls_res - max) 防止数值溢出
                             mi = mi_upd.unsqueeze(-1)  # 恢复维度便于广播
-                            max_new, _ = torch.max(torch.cat([mi, tilda_mij], dim=-1), dim=-1,
-                                                   keepdim=True)
+                            max_new, _ = torch.max(torch.cat([mi, tilda_mij], dim=-1), dim=-1, keepdim=True)
                             tsub = muls_res - max_new
 
                             tilda_pij = torch.exp(tsub)  # shape: [g_tile, actual_s2_tile*n2]
@@ -320,34 +322,36 @@ def apply_rotary_pos_emb_v2(q, k, cos, sin):
 
 
 def attention_pre_golden(
-        hidden_states,
-        residual,
-        input_layernorm_weight,
-        input_layernorm_bias,
-        qkv_proj_scale,
-        qkv_proj_offset,
-        qkv_proj_weight,
-        qkv_proj_quant_bias,
-        qkv_proj_deq_scale,
-        q_norm_weight,
-        q_norm_bias,
-        k_norm_weight,
-        k_norm_bias,
-        cos,
-        sin,
-        eps
+    hidden_states,
+    residual,
+    input_layernorm_weight,
+    input_layernorm_bias,
+    qkv_proj_scale,
+    qkv_proj_offset,
+    qkv_proj_weight,
+    qkv_proj_quant_bias,
+    qkv_proj_deq_scale,
+    q_norm_weight,
+    q_norm_bias,
+    k_norm_weight,
+    k_norm_bias,
+    cos,
+    sin,
+    eps,
 ):
     bs = hidden_states.shape[0]
     d = q_norm_weight.shape[0]
     rotary_dim = d // 2
     q_size = qkv_proj_weight.shape[1] - 2 * d
-    x_g, residual_g = add_rms_norm_npu_golden(hidden_states, residual, input_layernorm_weight, \
-                                              input_layernorm_bias, eps)
+    x_g, residual_g = add_rms_norm_npu_golden(
+        hidden_states, residual, input_layernorm_weight, input_layernorm_bias, eps
+    )
 
     # matmul
     x_quant = torch_npu.npu_quantize(x_g, qkv_proj_scale, qkv_proj_offset, torch.qint8, -1, False)
-    mm_golden = torch_npu.npu_quant_matmul(x_quant, qkv_proj_weight, qkv_proj_deq_scale, \
-                                           bias=qkv_proj_quant_bias, output_dtype=torch.bfloat16)
+    mm_golden = torch_npu.npu_quant_matmul(
+        x_quant, qkv_proj_weight, qkv_proj_deq_scale, bias=qkv_proj_quant_bias, output_dtype=torch.bfloat16
+    )
 
     # split
     q_g, k_g, v_g = mm_golden.split([q_size, d, d], dim=-1)
@@ -392,29 +396,29 @@ def scatter_golden(k_r, v_g, key_cache, value_cache, slot_mapping):
 
 
 def attention_golden(
-        hidden_states,
-        residual,
-        input_layernorm_weight,
-        input_layernorm_bias,
-        qkv_proj_scale,
-        qkv_proj_offset,
-        qkv_proj_weight,
-        qkv_proj_quant_bias,
-        qkv_proj_deq_scale,
-        q_norm_weight,
-        q_norm_bias,
-        k_norm_weight,
-        k_norm_bias,
-        cos,
-        sin,
-        key_cache,
-        value_cache,
-        block_tables,
-        actual_seq_lens,
-        slot_mapping,
-        eps,
-        enable_residual,
-        num_decode_tokens
+    hidden_states,
+    residual,
+    input_layernorm_weight,
+    input_layernorm_bias,
+    qkv_proj_scale,
+    qkv_proj_offset,
+    qkv_proj_weight,
+    qkv_proj_quant_bias,
+    qkv_proj_deq_scale,
+    q_norm_weight,
+    q_norm_bias,
+    k_norm_weight,
+    k_norm_bias,
+    cos,
+    sin,
+    key_cache,
+    value_cache,
+    block_tables,
+    actual_seq_lens,
+    slot_mapping,
+    eps,
+    enable_residual,
+    num_decode_tokens,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     q_r, k_r, v_g, residual = attention_pre_golden(
         hidden_states=hidden_states,
@@ -432,7 +436,7 @@ def attention_golden(
         k_norm_bias=k_norm_bias,
         cos=cos,
         sin=sin,
-        eps=eps
+        eps=eps,
     )
     scatter_golden(k_r, v_g, key_cache, value_cache, slot_mapping)
     bs = q_r.shape[0]

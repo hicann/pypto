@@ -8,13 +8,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import os
-import pypto
-import pytest
+
 import torch
-import torch_npu
+
+import pypto
 
 
 def test_slice_neg_index():
@@ -99,8 +99,9 @@ def test_slice_ellipsis_index():
     pto_res3_tensor = pypto.from_torch(res3_tensor, "res3_tensor")
     pto_res4_tensor = pypto.from_torch(res4_tensor, "res4_tensor")
 
-    pypto.runtime._device_run_once_data_from_host(pto_tensor,
-                                                pto_res1_tensor, pto_res2_tensor, pto_res3_tensor, pto_res4_tensor)
+    pypto.runtime._device_run_once_data_from_host(
+        pto_tensor, pto_res1_tensor, pto_res2_tensor, pto_res3_tensor, pto_res4_tensor
+    )
     expected1 = torch_tensor[..., 2]
     expected2 = torch_tensor[1:2, :, ..., 3:5]
     expected3 = torch_tensor[2, 3, ...]

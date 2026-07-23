@@ -11,13 +11,14 @@
 """
 Test PReLU operation on board
 """
-import os
+
 import math
-import torch
-import pypto
-import pytest
+import os
+
 from numpy.testing import assert_allclose
-import torch_npu
+import torch
+
+import pypto
 
 
 def test_prelu_onboard():
@@ -42,17 +43,26 @@ def test_prelu_onboard():
                 offset_x = b_idx * view_shape[0]
                 offset_y = s_idx * view_shape[1]
 
-                valid_shape_x = pypto.min(pypto.symbolic_scalar(shape[0]) - offset_x,
-                                          pypto.symbolic_scalar(view_shape[0]))
-                valid_shape_y = pypto.min(pypto.symbolic_scalar(shape[1]) - offset_y,
-                                          pypto.symbolic_scalar(view_shape[1]))
-                view_tensor_a = pypto.view(input1, view_shape,
-                                           [offset_x, offset_y],
-                                           valid_shape=[valid_shape_x, valid_shape_y])
+                valid_shape_x = pypto.min(
+                    pypto.symbolic_scalar(shape[0]) - offset_x, pypto.symbolic_scalar(view_shape[0])
+                )
+                valid_shape_y = pypto.min(
+                    pypto.symbolic_scalar(shape[1]) - offset_y, pypto.symbolic_scalar(view_shape[1])
+                )
+                view_tensor_a = pypto.view(
+                    input1, view_shape, [offset_x, offset_y], valid_shape=[valid_shape_x, valid_shape_y]
+                )
                 weight_valid_shape = valid_shape_y
-                view_tensor_weight = pypto.view(weight, (view_shape[1],),
-                                                [offset_y, ],
-                                                valid_shape=[weight_valid_shape, ])
+                view_tensor_weight = pypto.view(
+                    weight,
+                    (view_shape[1],),
+                    [
+                        offset_y,
+                    ],
+                    valid_shape=[
+                        weight_valid_shape,
+                    ],
+                )
 
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 res = pypto.prelu(view_tensor_a, view_tensor_weight)
@@ -60,7 +70,12 @@ def test_prelu_onboard():
 
     assert isinstance(output, pypto.tensor)
     a_tensor = torch.randn(size=[shape[0], shape[1]], dtype=torch.float32)
-    weight_tensor = torch.randn(size=[shape[1], ], dtype=torch.float32)
+    weight_tensor = torch.randn(
+        size=[
+            shape[1],
+        ],
+        dtype=torch.float32,
+    )
     out_tensor = torch.zeros(shape[0], shape[1], dtype=torch.float32)
 
     pto_a_tensor = pypto.from_torch(a_tensor, "PTO_TENSOR_input1")

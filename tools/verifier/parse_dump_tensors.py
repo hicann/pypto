@@ -8,39 +8,32 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import json
-import copy
-import time
-import struct
+""" """
+
 import argparse
+import copy
+from itertools import groupby
+import json
 import logging
 import multiprocessing
-from itertools import groupby
+import os
+import struct
+import time
 from typing import Dict
+
 import ml_dtypes
 import numpy as np
 import pandas as pd
+from tensor_diff import IsCloseConfig, compare_tensors_result_dict
 import torch
-from tensor_diff import compare_tensors_result_dict, IsCloseConfig
-
 
 # ===================== 核心配置（需和C/C++端一致）=====================
 DEV_SHAPE_DIM_MAX = 6  # 替换为实际值
-BYTE_ORDER = "<"       # 小端：< ；大端：> ；本机字节序：=
+BYTE_ORDER = "<"  # 小端：< ；大端：> ；本机字节序：=
 RESULT_FILE = ""
 
 # 单个字段的字节数定义（无对齐，纯原始字节）
-FIELD_SIZES = {
-    "uint8_t": 1,
-    "uint16_t": 2,
-    "uint32_t": 4,
-    "int32_t": 4,
-    "int64_t": 8,
-    "uint64_t": 8
-}
+FIELD_SIZES = {"uint8_t": 1, "uint16_t": 2, "uint32_t": 4, "int32_t": 4, "int64_t": 8, "uint64_t": 8}
 
 
 logging.basicConfig(
@@ -48,8 +41,8 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",  # 日志格式（含时间、级别、内容）
     handlers=[
         logging.StreamHandler(),  # 输出到控制台
-        logging.FileHandler("app.log", encoding="utf-8")  # 输出到文件（持久化）
-    ]
+        logging.FileHandler("app.log", encoding="utf-8"),  # 输出到文件（持久化）
+    ],
 )
 
 
@@ -63,15 +56,15 @@ _data_type_full_mapping = {
     6: ("FP16", np.float16),
     7: ("FP32", np.float32),
     8: ("BF16", ml_dtypes.bfloat16),
-    9: ("HF4", None),                    # 暂不支持解析
-    10: ("HF8", None),                   # 暂不支持解析
+    9: ("HF4", None),  # 暂不支持解析
+    10: ("HF8", None),  # 暂不支持解析
     11: ("UINT8", np.uint8),
     12: ("UINT16", np.uint16),
     13: ("UINT32", np.uint32),
     14: ("UINT64", np.uint64),
     15: ("BOOL", np.bool_),
     16: ("DOUBLE", np.float64),
-    17: ("BOTTOM", None)
+    17: ("BOTTOM", None),
 }
 
 
@@ -177,7 +170,6 @@ class VerifyRes:
 
     @staticmethod
     def _compare_codegen_tensors(tensor_infos, tensor_infos_new):
-
         for i, tensor_info in enumerate(tensor_infos_new):
             dump_tshape = tensor_info.get("B>:validshape")
             verify_tensor_info = tensor_info["verify_dup_tensor"]
@@ -240,8 +232,7 @@ class VerifyRes:
                 tensor_a = torch.from_numpy(sliced_data.astype(np.float64)).to(torch.float64)
                 tensor_b = torch.from_numpy(sliced_verify.astype(np.float64)).to(torch.float64)
                 file_name = tensor_info["B>FILENAME"].split('/')[-1]
-                csv_path = os.path.join(RESULT_FILE[:-4] + ".DETAIL",
-                                        file_name[:-5] + ".csv")
+                csv_path = os.path.join(RESULT_FILE[:-4] + ".DETAIL", file_name[:-5] + ".csv")
                 cmp_result = compare_tensors_result_dict(tensor_a, tensor_b, csv_path, config=config)
                 for key, value in cmp_result.items():
                     tensor_infos[i][key] = value
@@ -270,7 +261,6 @@ class VerifyRes:
         tensor_graph_filter = df_clean["PHASE_NAME"].str.contains("tensor_graph", na=False)
         self.verify_tensorgraph_op_info_list = df_clean[tensor_graph_filter]
 
-
     def get_verify_res_single(self, tensor_info, op_info_list):
         raw_magic = tensor_info.get("ROOT_CALL:rawmagic")
         ioflag = tensor_info.get("IO_FLAG")
@@ -282,7 +272,7 @@ class VerifyRes:
         loop_info = ""
         dtype = ""
         loop_matched = False
-        op_info_list.sort(key=lambda x: x.get("NO."))      # 按序号排序,序号也是执行顺序
+        op_info_list.sort(key=lambda x: x.get("NO."))  # 按序号排序,序号也是执行顺序
 
         for op_info in op_info_list:
             if callop_magic != op_info.get("ROOT_CALL:opmagic"):
@@ -312,7 +302,7 @@ class VerifyRes:
                 verify_op_offset = json.loads(op_info.get("OP_ATTR_SYM_OFFSET"))
                 verify_op_offset_str = '_'.join(str(item) for item in verify_op_offset)
                 if verify_op_offset_str == tensor_info_offset_str:
-                    verify_dup_tensor = op_info.get("INPUT:FILENAMES")   # COPY_OUT的op只会有一个输入
+                    verify_dup_tensor = op_info.get("INPUT:FILENAMES")  # COPY_OUT的op只会有一个输入
                     valid_shape = json.loads(op_info.get("INPUT:validshape"))
                     loop_info = op_info.get("LOOP_INFO")
                     dtype = next(i for i in op_info_list if i["FILENAME"] == verify_dup_tensor).get(":datatype")
@@ -339,7 +329,8 @@ class VerifyRes:
         tensor_info["loop_info"] = loop_info
         tensor_info["A>:datatype"] = dtype
 
-        # 更新 LOOP_INFO 和 B>loopVarInfos：匹配成功用 verify 的 LOOP_INFO，失败 LOOP_INFO 置空且 B>loopVarInfos 转字符串
+        # 更新 LOOP_INFO 和 B>loopVarInfos：匹配成功用 verify 的 LOOP_INFO，
+        # 失败 LOOP_INFO 置空且 B>loopVarInfos 转字符串
         tensor_loop_dict = tensor_info.get("B>loopVarInfos")
         if isinstance(tensor_loop_dict, dict):
             if loop_matched and loop_info:
@@ -371,7 +362,7 @@ class VerifyRes:
                 res_tensor_infos.extend(tensor_infos)
             return res_tensor_infos
 
-        callop_magic = callop_tensor_infos[0][0].get("ROOT_CALL:opmagic")   # callop
+        callop_magic = callop_tensor_infos[0][0].get("ROOT_CALL:opmagic")  # callop
         op_info_list_callop = self.verify_codegen_op_info_list.copy(deep=True)
         op_info_list_callop = op_info_list_callop[op_info_list_callop["ROOT_CALL:opmagic"] == callop_magic]
         for tensor_infos in callop_tensor_infos:
@@ -445,6 +436,7 @@ class VerifyRes:
 
         return verify_dup_tensor, valid_shape, phase_name, dtype, loop_info_str
 
+
 _verify_res = VerifyRes()
 
 
@@ -476,7 +468,7 @@ class CompactDumpTensorInfoParser:
             ("B>OP_ATTR_SYM_OFFSET", "uint64_t", DEV_SHAPE_DIM_MAX),
             ("B>:rawshape", "uint64_t", DEV_SHAPE_DIM_MAX),
             ("B>tensorAddr", "uint64_t"),
-            ("B>loopVarCount", "uint64_t")
+            ("B>loopVarCount", "uint64_t"),
         ]
         self.raw_tensor_info = {}
         self.task_tensor_info = {}
@@ -486,11 +478,11 @@ class CompactDumpTensorInfoParser:
         """计算无对齐的紧凑总字节数"""
         total = 0
         # 基础字段
-        total += FIELD_SIZES["uint8_t"] * 2   # version ~ rsrv_01
-        total += FIELD_SIZES["uint16_t"]      # headSize
+        total += FIELD_SIZES["uint8_t"] * 2  # version ~ rsrv_01
+        total += FIELD_SIZES["uint16_t"]  # headSize
         total += FIELD_SIZES["uint32_t"] * 5  # rsrv_02 ~ callopMagic
-        total += FIELD_SIZES["int32_t"] * 4   # blockIdx ~ dims
-        total += FIELD_SIZES["int64_t"] * 2   # execStart ~ execEnd
+        total += FIELD_SIZES["int32_t"] * 4  # blockIdx ~ dims
+        total += FIELD_SIZES["int64_t"] * 2  # execStart ~ execEnd
         total += FIELD_SIZES["uint64_t"] * 3  # rootHash ~ timeStamp
         # 数组字段
         array_size = FIELD_SIZES["uint64_t"] * DEV_SHAPE_DIM_MAX
@@ -511,17 +503,12 @@ class CompactDumpTensorInfoParser:
         total_bytes = field_size * array_len
         # 校验数据长度
         if offset + total_bytes > len(bin_data):
-            raise ValueError(f"字段解析失败：偏移{offset}，需要{total_bytes}字节，剩余{len(bin_data)-offset}字节")
+            raise ValueError(f"字段解析失败：偏移{offset}，需要{total_bytes}字节，剩余{len(bin_data) - offset}字节")
 
         # 构建单个元素的格式符
-        fmt_char = {
-            "uint8_t": "B",
-            "uint16_t": "H",
-            "uint32_t": "I",
-            "int32_t": "i",
-            "int64_t": "q",
-            "uint64_t": "Q"
-        }[field_type]
+        fmt_char = {"uint8_t": "B", "uint16_t": "H", "uint32_t": "I", "int32_t": "i", "int64_t": "q", "uint64_t": "Q"}[
+            field_type
+        ]
         # 拼接格式符（字节序 + 元素格式符*数量）
         fmt = BYTE_ORDER + fmt_char * array_len
 
@@ -549,7 +536,7 @@ class CompactDumpTensorInfoParser:
         name_bytes = bin_data[offset:offset + 64]
         name = name_bytes.rstrip(b'\x00').decode('utf-8', errors='replace')
         offset += 64
-        offset += 4     # 跳过exprIdx的值
+        offset += 4  # 跳过exprIdx的值
 
         value = struct.unpack_from(BYTE_ORDER + "i", bin_data, offset)[0]
         offset += 4
@@ -561,8 +548,9 @@ class CompactDumpTensorInfoParser:
 
     @staticmethod
     def _verify_merged_tensor(merge_tensor_info, raw_data):
-        verify_tensor_info, verify_tshape, phase_name, dtype, loop_info_str =  \
-            _verify_res.get_verify_tensor_graph_res(merge_tensor_info)
+        verify_tensor_info, verify_tshape, phase_name, dtype, loop_info_str = _verify_res.get_verify_tensor_graph_res(
+            merge_tensor_info
+        )
         dump_tshape = merge_tensor_info.get("B>:rawshape")
 
         merge_tensor_info["A>:validshape"] = verify_tshape
@@ -580,9 +568,11 @@ class CompactDumpTensorInfoParser:
             if isinstance(loop_var, dict):
                 merge_tensor_info["B>loopVarInfos"] = VerifyRes.loop_dict_to_str(loop_var)
 
-        if os.path.exists(verify_tensor_info) and len(verify_tshape) == len(dump_tshape) and \
-                all(vdim == ddim for vdim, ddim in zip(verify_tshape, dump_tshape)):
-
+        if (
+            os.path.exists(verify_tensor_info)
+            and len(verify_tshape) == len(dump_tshape)
+            and all(vdim == ddim for vdim, ddim in zip(verify_tshape, dump_tshape))
+        ):
             dtype_result = _get_data_type(merge_tensor_info["datatype"])
             dtype = dtype_result[1]
 
@@ -599,8 +589,7 @@ class CompactDumpTensorInfoParser:
             tensor_a = torch.from_numpy(raw_data.astype(np.float64)).to(torch.float64)
             tensor_b = torch.from_numpy(verify_tensor_data.astype(np.float64)).to(torch.float64)
             file_name = merge_tensor_info["B>FILENAME"].split('/')[-1]
-            csv_path = os.path.join(RESULT_FILE[:-4] + ".DETAIL",
-                                    file_name[:-5] + ".csv")
+            csv_path = os.path.join(RESULT_FILE[:-4] + ".DETAIL", file_name[:-5] + ".csv")
             cmp_result = compare_tensors_result_dict(tensor_a, tensor_b, csv_path, config=config)
             for key, value in cmp_result.items():
                 merge_tensor_info[key] = value
@@ -706,10 +695,7 @@ class CompactDumpTensorInfoParser:
             block_idx = block_data.get("blockIdx")
             for task in block_data.get("tasks", []):
                 key = (block_idx, task.get("taskId"), task.get("seqNo"))
-                exec_time_index[key] = {
-                    "execStart": task.get("execStart", 0),
-                    "execEnd": task.get("execEnd", 0)
-                }
+                exec_time_index[key] = {"execStart": task.get("execStart", 0), "execEnd": task.get("execEnd", 0)}
 
         # 批量更新任务执行时间
         for _, tensor_infos in self.task_tensor_info.items():
@@ -732,7 +718,7 @@ class CompactDumpTensorInfoParser:
                     tensor_info["B>EXEC_TIMESTAMP"] = exec_time["execEnd"]
 
     def tensor_compare(self):
-        logging.info(f"Start compare tensors.")
+        logging.info("Start compare tensors.")
         merged_result = []
         if not self.task_tensor_info:
             for _, tensor_infos in self.task_tensor_info.items():
@@ -756,7 +742,7 @@ class CompactDumpTensorInfoParser:
 
             for _, tensor_infos_list in callop_tasks.items():
                 tensor_infos_list.sort(key=lambda x: x[0].get("B>TIMESTAMP"))
-                tasks.append(tensor_infos_list) # 按timeStamp排序
+                tasks.append(tensor_infos_list)  # 按timeStamp排序
 
             try:
                 results = pool.map(_verify_res.get_verify_codegen_res, tasks)
@@ -801,8 +787,10 @@ class CompactDumpTensorInfoParser:
             if parsed_dict:
                 loop_values = [str(v) for v in parsed_dict.values()]
                 loop_suffix = "_" + "_".join(loop_values)
-        file_path = os.path.join(self.dump_tensor_path,
-            f"raw_{raw_magic}_{tensor_infos[0]['B>:datatype']}_{tensor_infos[0]['IO_FLAG']}{loop_suffix}.data")
+        file_path = os.path.join(
+            self.dump_tensor_path,
+            f"raw_{raw_magic}_{tensor_infos[0]['B>:datatype']}_{tensor_infos[0]['IO_FLAG']}{loop_suffix}.data",
+        )
         merge_tensor_info["B>FILENAME"] = file_path
 
         # 按offset排序张量
@@ -902,8 +890,13 @@ def to_json_str(x):
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Parser dump_tensor.")
-    parser.add_argument("--dump_tensor_path", type=str, default=[], required=True,
-                        help="directory like output/output_2026xxxxx/dump_tensor_device_x")
+    parser.add_argument(
+        "--dump_tensor_path",
+        type=str,
+        default=[],
+        required=True,
+        help="directory like output/output_2026xxxxx/dump_tensor_device_x",
+    )
     parser.add_argument("--verify_path", type=str, default="", help="Path to verify_result.csv")
     return parser.parse_args()
 
@@ -947,8 +940,8 @@ def main():
         df.drop("datatype", axis=1, inplace=True)
 
     df.sort_values(
-        by=["B>EXEC_TIMESTAMP", "B>TIMESTAMP", "A>:rawmagic", "B>OP_ATTR_SYM_OFFSET"],
-        ignore_index=True, inplace=True)
+        by=["B>EXEC_TIMESTAMP", "B>TIMESTAMP", "A>:rawmagic", "B>OP_ATTR_SYM_OFFSET"], ignore_index=True, inplace=True
+    )
     df.insert(0, "NO.", range(1, len(df) + 1))
 
     for col in ["B>:validshape", "B>OP_ATTR_SYM_OFFSET", "B>:rawshape", "A>:validshape"]:

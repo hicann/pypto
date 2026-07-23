@@ -1,35 +1,33 @@
- #!/usr/bin/env python3
- # coding: utf-8
- # Copyright (c) 2026 Huawei Technologies Co., Ltd.
- # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
- # CANN Open Software License Agreement Version 2.0 (the "License").
- # Please refer to the License for details. You may not use this file except in compliance with the License.
- # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
- # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
- # See LICENSE in the root of the software repository for the full text of the License.
- # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import re
-import os
-import sys
+#!/usr/bin/env python3
+# coding: utf-8
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# -----------------------------------------------------------------------------------------------------------
+""" """
+
 import argparse
-import json
-import subprocess
-import shutil
-import datetime
 import csv
-
-from pathlib import Path
+import datetime
 from itertools import product
-from scipy.stats import gmean
+import json
+import os
+import re
+import shutil
+import subprocess
 
+from scipy.stats import gmean
 
 
 class Patcher:
     '''
     Modify files according to run_params
     '''
+
     def __init__(self, run_params):
         self.run_params = run_params
         self.backups = []
@@ -123,8 +121,9 @@ class Execution:
         for _ in range(json_config["repeats"]):
             with Patcher(run_params) as patcher:
                 patcher.apply_changes()
-                Execution._save_run_params(self.result_folder,
-                    run_params, self.result_folder + "/combination_params.json")
+                Execution._save_run_params(
+                    self.result_folder, run_params, self.result_folder + "/combination_params.json"
+                )
                 test_result = self._run_test(json_config)
 
             if test_result == 0:
@@ -155,13 +154,7 @@ class Execution:
 
 
 class HeuristicTile:
-    def __init__(self,
-                l1_size=131072,
-                l0a_size=65536,
-                l0b_size=65536,
-                l0c_size=524288,
-                output_dt_bytes=4):
-
+    def __init__(self, l1_size=131072, l0a_size=65536, l0b_size=65536, l0c_size=524288, output_dt_bytes=4):
         self.l1_size = l1_size
         self.l0a_size = l0a_size
         self.l0b_size = l0b_size
@@ -214,7 +207,6 @@ class HeuristicTile:
                 num_of_variants += 1
                 yield [m, m_big, k, k_big, n, 2 * n_big]
 
-
     def get_score_for_tiling(self, tile, mx_shape, input_type_size):
         """
         Estimate score for tiling. The higher the score, the better it is.
@@ -237,26 +229,25 @@ class HeuristicTile:
 
         score = 0
 
-        #If the tiling size = shape size -> the preferred option
+        # If the tiling size = shape size -> the preferred option
         score = (score + whole_m_score) if tile[m_dim] == max(m, min_tile) else score
         score = (score + whole_k_score) if tile[k_dim] == max(k, min_tile) else score
         score = (score + whole_n_score) if tile[n_dim] == max(n, min_tile) else score
 
-        #The more filled L0A, L0B, L0C is better
+        # The more filled L0A, L0B, L0C is better
         utilization_l0a = (tile[m_dim] * tile[k_dim] * input_type_size) / self.l0a_size
         utilization_l0b = (tile[k_dim] * tile[n_dim] * input_type_size) / self.l0b_size
         utilization_l0c = (tile[m_dim] * tile[n_dim] * self.output_dt_bytes) / self.l0c_size
         score += min_tile * gmean([utilization_l0a, utilization_l0b, utilization_l0c])
 
-        #The closer the ratio's is to 1, the better
+        # The closer the ratio's is to 1, the better
         ratio_mk = (m / k) if (m > k) else (k / m)
         ratio_kn = (k / n) if (k > n) else (n / k)
         ratio_mn = (m / n) if (m > n) else (n / m)
 
-        #Penalty for bad balance
+        # Penalty for bad balance
         score -= balance_weight * gmean([ratio_mk, ratio_kn, ratio_mn])
         return score
-
 
     def get_best_k_tiles(self, tiles, shape, dt_bytes, best_k_tiles):
         tiles.sort(key=lambda tile: -self.get_score_for_tiling(tile, shape, dt_bytes))
@@ -274,11 +265,10 @@ class HeuristicTile:
 
         return best_tiles
 
-
     def preproc_line_conf(self, line_conf):
         for key in line_conf.keys():
             if key != "string" and isinstance(line_conf[key], str):
-                #param set like Matmul_int08_32_1536_783
+                # param set like Matmul_int08_32_1536_783
                 operation, datatype, m, k, n = line_conf[key].split("_")
                 m = int(m)
                 k = int(k)
@@ -339,7 +329,7 @@ def run_values_to_run_params(run_values, json_config):
 
         for line in lines_conf:
             if len(line) == 3:
-                #if line with tune parameter
+                # if line with tune parameter
                 run_value = run_values[vec_idx]
                 vec_idx += 1
                 line_no = line["line"]
@@ -372,7 +362,7 @@ class ExhaustiveGenerator:
             del params["string"]
 
             string_param_comb = []
-            #if we have tunable params
+            # if we have tunable params
             if params:
                 for e in product(*params.values()):
                     param_comb = dict(zip(params.keys(), e))
@@ -412,17 +402,18 @@ class ExhaustiveGenerator:
 
 
 def parse_json():
-    parser = argparse.ArgumentParser(description='Iterate through the vector and cube tiles ' \
-        'in the specified test and measure performance \n' \
-        'To specify which tiles and tile values to iterate through, use config.json \n' \
-        'To start the iteration: \n\n' \
+    parser = argparse.ArgumentParser(
+        description='Iterate through the vector and cube tiles '
+        'in the specified test and measure performance \n'
+        'To specify which tiles and tile values to iterate through, use config.json \n'
+        'To start the iteration: \n\n'
         'python tools/scripts/tiling_tool.py --json_path /path/to/config.json',
-        formatter_class=argparse.RawTextHelpFormatter)
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
 
-    parser.add_argument("--json_path",
-                        help="path to config.json where described tiling configs",
-                        type=str,
-                        required=True)
+    parser.add_argument(
+        "--json_path", help="path to config.json where described tiling configs", type=str, required=True
+    )
 
     args = parser.parse_args()
 
@@ -443,7 +434,7 @@ def save_to_csv(path_to_file, res_params):
 
 def sort_results(results):
     def compare_function(x):
-        return 1e6 if x[1] == "Error" else x[1] # set configs of error will be at the end
+        return 1e6 if x[1] == "Error" else x[1]  # set configs of error will be at the end
 
     results_sorted_by_time = dict(sorted(results.items(), key=compare_function))
     return results_sorted_by_time
@@ -493,6 +484,7 @@ def main():
         save_to_csv(result_folder_path + "/config_perf.csv", res_params)
 
         idx += 1
+
 
 if __name__ == "__main__":
     main()

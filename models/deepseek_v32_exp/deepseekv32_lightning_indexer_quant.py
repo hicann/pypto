@@ -8,16 +8,18 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 from dataclasses import dataclass
-import os
 import logging
 import math
+import os
+
+import numpy as np
 import pytest
 import torch
 import torch_npu
-import numpy as np
+
 import pypto
 
 
@@ -27,20 +29,16 @@ class LightningIndexerConfigs:
     # used for copy in merge graph
     mg_copy_in_upper_bound = 2 * 1024 * 1024
     # l1 reuse merge params
-    cube_l1_reuse_setting = {
-        0: 16
-    }
+    cube_l1_reuse_setting = {0: 16}
     # vector graph fuse optimization
     vec_merge_mode = 2
-    vec_nbuffer_setting = {
-        -1: 16
-    }
+    vec_nbuffer_setting = {-1: 16}
     # tile params
     s1_tile = 2
     topk_tile = 8192
     # set the tileshape size in cube computation
-    c1_tile = [64, 64, 128, 128, 128, 128] # (m, M), (k, K), (n, N)
-    c2_tile = [128, 128, 64, 64, 128, 128] # (m, M), (k, K), (n, N)
+    c1_tile = [64, 64, 128, 128, 128, 128]  # (m, M), (k, K), (n, N)
+    c2_tile = [128, 128, 64, 64, 128, 128]  # (m, M), (k, K), (n, N)
     # matmul relu fuse params
     extend_param = {'scale': 1 / 2048.0, 'relu_type': pypto.ReLuType.RELU}
 
@@ -56,11 +54,10 @@ def gen_cache_tensor(k_tensor, block_table, block_num, block_size, b):
     k_tensor_bsh_raw = k_tensor.reshape(b, s, n * d)
 
     # 创建填充后的张量，长度扩展到块对齐
-    k_tensor_bsh = torch.zeros(
-        (b, block_table.shape[1] * block_size, n * d), dtype=dtype)
+    k_tensor_bsh = torch.zeros((b, block_table.shape[1] * block_size, n * d), dtype=dtype)
 
     # 将原始数据填充到新张量的前部
-    k_tensor_bsh[:, : k_tensor_bsh_raw.shape[1], :] = k_tensor_bsh_raw[:, :, :]
+    k_tensor_bsh[:, :k_tensor_bsh_raw.shape[1], :] = k_tensor_bsh_raw[:, :, :]
 
     # 遍历每个样本和块进行缓存填充
     for b_idx in range(b):  # 遍历batch维度
@@ -70,8 +67,7 @@ def gen_cache_tensor(k_tensor, block_table, block_num, block_size, b):
             if cache_block_idx != -1:
                 # 将数据从k_tensor_bsh复制到k_cache的指定块位置
                 # 注意：block_offset到block_offset+block_size的切片对应当前块的数据
-                k_cache[cache_block_idx, :, :] = k_tensor_bsh[b_idx,
-                                                              block_offset: (block_offset + block_size), :]
+                k_cache[cache_block_idx, :, :] = k_tensor_bsh[b_idx, block_offset:(block_offset + block_size), :]
 
     k_cache = k_cache.reshape(block_num, block_size, n, d)
     return k_cache
@@ -150,8 +146,9 @@ def gen_data_for_compute(params, is_quant: bool):
     # 量化处理逻辑
     if is_quant:
         # 计算query的缩放因子（最大值/127，最小1e-3）
-        q_scale = (query.abs().max(dim=-1, keepdim=True).values / 127).\
-                    to(dtype=torch.float16).maximum(torch.tensor(1e-3))
+        q_scale = (
+            (query.abs().max(dim=-1, keepdim=True).values / 127).to(dtype=torch.float16).maximum(torch.tensor(1e-3))
+        )
         # 计算key的缩放因子
         k_scale = (key.abs().max(dim=-1, keepdim=True).values / 127).to(dtype=torch.float16).maximum(torch.tensor(1e-3))
 
@@ -216,22 +213,22 @@ def lightning_indexer_compute(input_data_map, params):
         cur_qs = q_scale[b_idx * s1:(b_idx + 1) * s1, :, :]
         # cur_w的形状为(s1, 1, n1)
         cur_w = weights[b_idx * s1:(b_idx + 1) * s1, :, :]
-        w_scale = cur_qs * cur_w # (s1, 1, n1), fp16
+        w_scale = cur_qs * cur_w  # (s1, 1, n1), fp16
 
         for block_idx in range(cur_block):
             # cur_q的形状为(s1 * n1, d)
-            cur_q = query[b_idx * s1 * n1: (b_idx + 1) * s1 * n1, :]
+            cur_q = query[b_idx * s1 * n1:(b_idx + 1) * s1 * n1, :]
             cur_block_idx = block_table[b_idx][block_idx]
             tail_seq = min(block_size, cur_seq - block_size * block_idx)
             # cur_k形状为(tail_seq, d)
-            cur_k = key[cur_block_idx * block_size: (cur_block_idx * block_size + tail_seq), :]
+            cur_k = key[cur_block_idx * block_size:(cur_block_idx * block_size + tail_seq), :]
             # 使用随路量化计算，qk_dot形状为(s1 * n1, tail_seq)
-            qk_dot = torch.matmul(cur_q.to(torch.int32),
-                                  cur_k.transpose(1, 0).to(torch.int32)).to(torch.float32).relu()
+            qk_dot = torch.matmul(cur_q.to(torch.int32), cur_k.transpose(1, 0).to(torch.int32)).to(torch.float32).relu()
             qk_dot = qk_dot * avoid_fp32_to_fp16_overflow_scale
             qk_dot = qk_dot.to(torch.float16)
-            first_mm[b_idx * s1 * n1:(b_idx + 1) * s1 * n1, block_idx * block_size:(block_idx * \
-                                                                block_size + tail_seq)] = qk_dot
+            first_mm[
+                b_idx * s1 * n1:(b_idx + 1) * s1 * n1, block_idx * block_size:(block_idx * block_size + tail_seq)
+            ] = qk_dot
             qk_dot = qk_dot.reshape(s1, n1, tail_seq)
 
             # cur_ks形状为(1, tail_seq)
@@ -250,17 +247,17 @@ def lightning_indexer_compute(input_data_map, params):
             # 计算当前序列的有效长度 eff_seq
             eff_seq = cur_seq - (s1 - s_idx - 1)
             # 从mm_out中提取当前序列的点积结果topk_in
-            topk_in = mm_out[(b_idx * s1 + s_idx):(b_idx * s1 + s_idx + 1), :eff_seq] # (1, act_seq)
+            topk_in = mm_out[(b_idx * s1 + s_idx):(b_idx * s1 + s_idx + 1), :eff_seq]  # (1, act_seq)
             # 如果有效长度小于 selected_count，则进行Top-k选择，并填充结果
-            if (eff_seq < selected_count):
-                cur_res, cur_idx = torch.topk(topk_in, k=eff_seq, dim=-1) # (1, eff_seq)
+            if eff_seq < selected_count:
+                cur_res, cur_idx = torch.topk(topk_in, k=eff_seq, dim=-1)  # (1, eff_seq)
                 pad_res = torch.full((1, selected_count - eff_seq), float("-inf"), dtype=torch.float32)
                 pad_idx = torch.full((1, selected_count - eff_seq), -1, dtype=torch.int32)
                 cur_res = torch.cat([cur_res, pad_res], dim=1)
                 cur_idx = torch.cat([cur_idx, pad_idx], dim=1)
                 topk_res[(b_idx * s1 + s_idx):(b_idx * s1 + s_idx + 1), :, :] = cur_idx.reshape(1, 1, selected_count)
             else:
-                cur_res, cur_idx = torch.topk(topk_in, k=selected_count, dim=-1) # (1, selected_count)
+                cur_res, cur_idx = torch.topk(topk_in, k=selected_count, dim=-1)  # (1, selected_count)
                 topk_res[(b_idx * s1 + s_idx):(b_idx * s1 + s_idx + 1), :, :] = cur_idx.reshape(1, 1, selected_count)
 
     return topk_res
@@ -279,7 +276,7 @@ def topk_idx_compare(t: torch.Tensor, t_ref: torch.Tensor, name, atol, error_cou
             if part_index not in part_result_dict:
                 part_result_dict[part_index] = {
                     "exp": [],  # 预期索引列表
-                    "act": []   # 实际索引列表
+                    "act": [],  # 实际索引列表
                 }
             part_result_dict[part_index]["exp"].append(exp)
             part_result_dict[part_index]["act"].append(act)
@@ -312,6 +309,7 @@ def topk_idx_compare(t: torch.Tensor, t_ref: torch.Tensor, name, atol, error_cou
 
 def lightning_indexer(case_name: str) -> bool:
     from lightning_indexer_quant_impl import lightning_indexer_decode
+
     # 设置设备ID
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -325,13 +323,13 @@ def lightning_indexer(case_name: str) -> bool:
     # 根据测试用例名称配置参数
     if case_name == "LightningIndexerSTest.lightning_indexer_quant_4_b_2_s1_64k_s2":
         b, s1 = 4, 2  # batch size和query序列长度
-        act_seq = [64 * 1024, 971, 32 * 1024 + 101, 16 * 1024 - 1] # 每个样本的实际序列长度
+        act_seq = [64 * 1024, 971, 32 * 1024 + 101, 16 * 1024 - 1]  # 每个样本的实际序列长度
     elif case_name == "LightningIndexerSTest.lightning_indexer_quant_8_b_2_s1_64k_s2":
         b, s1 = 8, 2
         act_seq = [32767, 32656, 384, 2000, 64 * 1024, 971, 32 * 1024 + 101, 129090]
     elif case_name == "LightningIndexerSTest.lightning_indexer_quant_4_b_2_s1_64k_s2_perf":
         b, s1 = 4, 2  # batch size和query序列长度
-        act_seq = [64 * 1024] * b # 每个样本的实际序列长度
+        act_seq = [64 * 1024] * b  # 每个样本的实际序列长度
     else:
         logging.error("Fail to gen golden for Case(%s)", case_name)
         return False
@@ -354,7 +352,7 @@ def lightning_indexer(case_name: str) -> bool:
         "block_size": block_size,
         "block_num": block_num,
         "max_block_num": max_block_num,
-        "selected_count": selected_count
+        "selected_count": selected_count,
     }
 
     input_data_map = gen_data_for_compute(params, is_quant=True)
@@ -373,9 +371,19 @@ def lightning_indexer(case_name: str) -> bool:
     unroll_list = [128, 64, 32, 16, 8, 4, 1]
     configs = LightningIndexerConfigs()
 
-    lightning_indexer_decode(idx_query_npu, idx_query_scale_npu, idx_key_cache_npu, idx_key_scale_npu,
-                         idx_weight_npu, act_seq_key_npu, block_table_npu, topk_res_npu,
-                         unroll_list, configs, selected_count)
+    lightning_indexer_decode(
+        idx_query_npu,
+        idx_query_scale_npu,
+        idx_key_cache_npu,
+        idx_key_scale_npu,
+        idx_weight_npu,
+        act_seq_key_npu,
+        block_table_npu,
+        topk_res_npu,
+        unroll_list,
+        configs,
+        selected_count,
+    )
 
     torch_npu.npu.synchronize()
 

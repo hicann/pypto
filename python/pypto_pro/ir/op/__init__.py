@@ -27,7 +27,7 @@ __all__ = [
 
 from . import block_ops as block
 from . import debug_ops as debug
-from . import system_ops as system
 from . import ptr_ops as ptr
-from . import tensor_ops as tensor
 from . import scalar_ops as scalar
+from . import system_ops as system
+from . import tensor_ops as tensor

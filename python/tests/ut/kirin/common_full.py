@@ -13,19 +13,16 @@
 Test full codegen - common functions for Kirin9030 and KirinX90
 """
 
-import pypto
-import torch
 import numpy as np
 import pytest
+import torch
 
 from kirin.common import compare_cos
+import pypto
 
 
 def _make_full_kernel(soc_version, name, dtype, tile_shapes):
-    @pypto.frontend.jit(
-        codegen_options={"soc_version": soc_version},
-        runtime_options={"run_mode": pypto.RunMode.SIM}
-    )
+    @pypto.frontend.jit(codegen_options={"soc_version": soc_version}, runtime_options={"run_mode": pypto.RunMode.SIM})
     def kernel(
         output: pypto.Tensor([...], dtype),
         shape: tuple,
@@ -33,6 +30,7 @@ def _make_full_kernel(soc_version, name, dtype, tile_shapes):
     ):
         pypto.set_vec_tile_shapes(*tile_shapes)
         output.move(pypto.full(list(shape), input_, dtype))
+
     kernel.__name__ = name
     return kernel
 
@@ -45,55 +43,136 @@ TEST_CASES = [
     # shape: output tensor shape
     # fill_value: scalar value to fill the output tensor
     # marks: pytest marks
-    pytest.param("full_kernel_001", torch.float16, pypto.DT_FP16,
-                 (120,), (112,), 2.0, marks=[], id="001"),
-    pytest.param("full_kernel_002", torch.float32, pypto.DT_FP32,
-                 (50,), (100,), 2.0, marks=[pytest.mark.skip()], id="002"),
-    pytest.param("full_kernel_003", torch.int8, pypto.DT_INT8,
-                 (136,), (137,), 2, marks=[pytest.mark.skip()], id="003"),
-    pytest.param("full_kernel_004", torch.int16, pypto.DT_INT16,
-                 (8, 256), (4, 128), 2, marks=[pytest.mark.skip()], id="004"),
-    pytest.param("full_kernel_005", torch.int32, pypto.DT_INT32,
-                 (10, 100), (4, 130), 2, marks=[pytest.mark.skip()], id="005"),
-    pytest.param("full_kernel_006", torch.float16, pypto.DT_FP16,
-                 (5, 32), (15, 31), 2.0, marks=[pytest.mark.skip()], id="006"),
-    pytest.param("full_kernel_007", torch.float32, pypto.DT_FP32,
-                 (2, 70), (4, 140), 2.0, marks=[pytest.mark.skip()], id="007"),
-    pytest.param("full_kernel_008", torch.int8, pypto.DT_INT8,
-                 (5, 5, 32), (10, 5, 12), 2, marks=[pytest.mark.skip()], id="008"),
-    pytest.param("full_kernel_009", torch.int16, pypto.DT_INT16,
-                 (5, 5, 100), (7, 3, 170), 2,
-                 marks=[pytest.mark.skip()], id="009"),
-    pytest.param("full_kernel_010", torch.int32, pypto.DT_INT32,
-                 (5, 4, 120), (9, 8, 100), 2,
-                 marks=[pytest.mark.skip()], id="010"),
-    pytest.param("full_kernel_011", torch.float16, pypto.DT_FP16,
-                 (10, 10, 4), (20, 40, 10), 2.0,
-                 marks=[pytest.mark.skip()], id="011"),
-    pytest.param("full_kernel_012", torch.float32, pypto.DT_FP32,
-                 (16, 5, 5, 16), (32, 3, 5, 14), 2.0,
-                 marks=[pytest.mark.skip()], id="012"),
-    pytest.param("full_kernel_013", torch.int8, pypto.DT_INT8,
-                 (2, 10, 9, 8), (8, 10, 6, 16), 2,
-                 marks=[pytest.mark.skip()], id="013"),
-    pytest.param("full_kernel_014", torch.int16, pypto.DT_INT16,
-                 (3, 40, 4, 40), (6, 20, 9, 31), 2,
-                 marks=[pytest.mark.skip()], id="014"),
-    pytest.param("full_kernel_015", torch.int32, pypto.DT_INT32,
-                 (3, 3, 30, 20), (6, 9, 21, 10), 2,
-                 marks=[pytest.mark.skip()], id="015"),
-    pytest.param("full_kernel_016", torch.float16, pypto.DT_FP16,
-                 (5, 10, 5, 5), (6, 9, 21, 10), 2.0,
-                 marks=[pytest.mark.skip()], id="016"),
-    pytest.param("full_kernel_017", torch.float32, pypto.DT_FP32,
-                 (3, 3, 40, 5), (6, 9, 21, 10), 2.0,
-                 marks=[pytest.mark.skip()], id="017"),
-    pytest.param("full_kernel_018", torch.int8, pypto.DT_INT8,
-                 (5, 5, 12, 20), (6, 9, 21, 10), 2,
-                 marks=[pytest.mark.skip()], id="018"),
-    pytest.param("full_kernel_019", torch.int16, pypto.DT_INT16,
-                 (5, 8, 12, 5), (6, 9, 21, 10), 2,
-                 marks=[pytest.mark.skip()], id="019"),
+    pytest.param("full_kernel_001", torch.float16, pypto.DT_FP16, (120,), (112,), 2.0, marks=[], id="001"),
+    pytest.param(
+        "full_kernel_002", torch.float32, pypto.DT_FP32, (50,), (100,), 2.0, marks=[pytest.mark.skip()], id="002"
+    ),
+    pytest.param("full_kernel_003", torch.int8, pypto.DT_INT8, (136,), (137,), 2, marks=[pytest.mark.skip()], id="003"),
+    pytest.param(
+        "full_kernel_004", torch.int16, pypto.DT_INT16, (8, 256), (4, 128), 2, marks=[pytest.mark.skip()], id="004"
+    ),
+    pytest.param(
+        "full_kernel_005", torch.int32, pypto.DT_INT32, (10, 100), (4, 130), 2, marks=[pytest.mark.skip()], id="005"
+    ),
+    pytest.param(
+        "full_kernel_006", torch.float16, pypto.DT_FP16, (5, 32), (15, 31), 2.0, marks=[pytest.mark.skip()], id="006"
+    ),
+    pytest.param(
+        "full_kernel_007", torch.float32, pypto.DT_FP32, (2, 70), (4, 140), 2.0, marks=[pytest.mark.skip()], id="007"
+    ),
+    pytest.param(
+        "full_kernel_008", torch.int8, pypto.DT_INT8, (5, 5, 32), (10, 5, 12), 2, marks=[pytest.mark.skip()], id="008"
+    ),
+    pytest.param(
+        "full_kernel_009",
+        torch.int16,
+        pypto.DT_INT16,
+        (5, 5, 100),
+        (7, 3, 170),
+        2,
+        marks=[pytest.mark.skip()],
+        id="009",
+    ),
+    pytest.param(
+        "full_kernel_010",
+        torch.int32,
+        pypto.DT_INT32,
+        (5, 4, 120),
+        (9, 8, 100),
+        2,
+        marks=[pytest.mark.skip()],
+        id="010",
+    ),
+    pytest.param(
+        "full_kernel_011",
+        torch.float16,
+        pypto.DT_FP16,
+        (10, 10, 4),
+        (20, 40, 10),
+        2.0,
+        marks=[pytest.mark.skip()],
+        id="011",
+    ),
+    pytest.param(
+        "full_kernel_012",
+        torch.float32,
+        pypto.DT_FP32,
+        (16, 5, 5, 16),
+        (32, 3, 5, 14),
+        2.0,
+        marks=[pytest.mark.skip()],
+        id="012",
+    ),
+    pytest.param(
+        "full_kernel_013",
+        torch.int8,
+        pypto.DT_INT8,
+        (2, 10, 9, 8),
+        (8, 10, 6, 16),
+        2,
+        marks=[pytest.mark.skip()],
+        id="013",
+    ),
+    pytest.param(
+        "full_kernel_014",
+        torch.int16,
+        pypto.DT_INT16,
+        (3, 40, 4, 40),
+        (6, 20, 9, 31),
+        2,
+        marks=[pytest.mark.skip()],
+        id="014",
+    ),
+    pytest.param(
+        "full_kernel_015",
+        torch.int32,
+        pypto.DT_INT32,
+        (3, 3, 30, 20),
+        (6, 9, 21, 10),
+        2,
+        marks=[pytest.mark.skip()],
+        id="015",
+    ),
+    pytest.param(
+        "full_kernel_016",
+        torch.float16,
+        pypto.DT_FP16,
+        (5, 10, 5, 5),
+        (6, 9, 21, 10),
+        2.0,
+        marks=[pytest.mark.skip()],
+        id="016",
+    ),
+    pytest.param(
+        "full_kernel_017",
+        torch.float32,
+        pypto.DT_FP32,
+        (3, 3, 40, 5),
+        (6, 9, 21, 10),
+        2.0,
+        marks=[pytest.mark.skip()],
+        id="017",
+    ),
+    pytest.param(
+        "full_kernel_018",
+        torch.int8,
+        pypto.DT_INT8,
+        (5, 5, 12, 20),
+        (6, 9, 21, 10),
+        2,
+        marks=[pytest.mark.skip()],
+        id="018",
+    ),
+    pytest.param(
+        "full_kernel_019",
+        torch.int16,
+        pypto.DT_INT16,
+        (5, 8, 12, 5),
+        (6, 9, 21, 10),
+        2,
+        marks=[pytest.mark.skip()],
+        id="019",
+    ),
 ]
 
 
@@ -107,10 +186,7 @@ def run_full_test(kernels, kernel_name, dtype, shape, input_val):
 
 
 def create_full_kernels(soc_version):
-    return {
-        p.values[0]: _make_full_kernel(soc_version, p.values[0], p.values[2], p.values[3])
-        for p in TEST_CASES
-    }
+    return {p.values[0]: _make_full_kernel(soc_version, p.values[0], p.values[2], p.values[3]) for p in TEST_CASES}
 
 
 if __name__ == "__main__":

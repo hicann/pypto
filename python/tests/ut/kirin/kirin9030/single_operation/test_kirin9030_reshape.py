@@ -13,14 +13,12 @@
 Test reshape codegen for Kirin9030
 """
 
-import pytest
-
 from kirin.common_reshape import (
+    TEST_CASES,
     create_reshape_kernels,
     run_reshape_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_reshape_kernels("Kirin9030")
 
@@ -29,8 +27,7 @@ KERNELS = create_reshape_kernels("Kirin9030")
     "kernel_name,torch_dtype,pypto_dtype,tile_shapes,shape_input,shape_out,is_inplace",
     TEST_CASES,
 )
-def test_reshape(kernel_name, torch_dtype, pypto_dtype, tile_shapes,
-                 shape_input, shape_out, is_inplace):
+def test_reshape(kernel_name, torch_dtype, pypto_dtype, tile_shapes, shape_input, shape_out, is_inplace):
     run_reshape_test(KERNELS, kernel_name, torch_dtype, shape_input, shape_out, is_inplace)
 
 

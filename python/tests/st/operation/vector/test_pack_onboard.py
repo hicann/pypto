@@ -11,9 +11,10 @@
 """
 """
 import os
-import pypto
+
 import torch
-import torch_npu
+
+import pypto
 
 
 def test_pack_onboard():

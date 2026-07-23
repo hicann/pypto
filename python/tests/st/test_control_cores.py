@@ -8,17 +8,17 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
+""" """
+
 import json
-import time
+import os
 from pathlib import Path
+import time
 
 import pytest
-import pypto
 import torch
 import torch_npu
+
 from st.test_swim_line import matmul_add
 
 _OUTPUT_BASE = Path("./output")
@@ -26,6 +26,7 @@ _OUTPUT_BASE = Path("./output")
 
 def setup_function():
     from pypto.frontend.parser.entry import JitCallableWrapper
+
     getattr(JitCallableWrapper, '_kernel_module_cache').clear()
     if hasattr(torch_npu.npu.set_device_limit, 'called'):
         torch_npu.npu.set_device_limit.called = False
@@ -48,9 +49,7 @@ def _wait_for_prof_file(after_ts, timeout=10):
             if fpath.is_file():
                 return str(fpath)
         time.sleep(0.1)
-    raise RuntimeError(
-        f"Prof file not found within {timeout}s after mark_ts={after_ts}"
-    )
+    raise RuntimeError(f"Prof file not found within {timeout}s after mark_ts={after_ts}")
 
 
 def count_core_types(base_dir="./output"):
@@ -102,8 +101,7 @@ def kernel_func(device_id):
         c_data = c_rawdata.to(dtype=torch.int32, device=f'npu:{device_id}')
         c_data_list.append(c_data)
 
-        d_data = torch.zeros((n, m), dtype=torch.int32,
-                             device=f'npu:{device_id}')
+        d_data = torch.zeros((n, m), dtype=torch.int32, device=f'npu:{device_id}')
         d_data_list.append(d_data)
 
         matmul_add(a_data, b_data, c_data, d_data)

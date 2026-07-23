@@ -12,26 +12,24 @@
 from __future__ import annotations
 
 import ast
-import copy
-import logging
 from collections import namedtuple
+import copy
 from dataclasses import dataclass
+import logging
 from typing import Any, Callable
 
 from pypto.pypto_impl import ir
-from pypto_pro.ir import op as ir_op
-from pypto_pro.ir.op.block_ops import block_ir_op
 from pypto_pro.ir.op._op_registry import _OP_REGISTRY
+from pypto_pro.ir.op.block_ops import block_ir_op
 
 from ._span_tracker import SpanTracker
 from .diagnostics import (
-    InvalidOperationError,
+    ParserError,
     ParserSyntaxError,
     ParserTypeError,
     UndefinedVariableError,
     UnsupportedFeatureError,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +59,7 @@ class _InlineLocalRenamer(ast.NodeTransformer):
         if isinstance(node, ast.Name) and node.id in self._rename:
             node.id = self._rename[node.id]
         return super().generic_visit(node)
+
 
 # Builtin function names that map to pl.* ops (syntax sugar).
 _BUILTIN_TO_OP: dict[str, str] = {
@@ -165,59 +164,131 @@ class CallParserMixin:
     # 2 = two dsts at args_[0], args_[1].
     _VF_OP_DST_COUNT: dict[str, int] = {
         # 1 dst
-        "add": 1, "sub": 1, "mul": 1, "div": 1, "max": 1, "min": 1,
-        "and_": 1, "or_": 1, "xor": 1, "abs_sub": 1, "select": 1,
-        "shift_left": 1, "shift_right": 1, "prelu": 1,
-        "ln": 1, "log": 1, "exp": 1, "abs": 1, "not_": 1, "sqrt": 1,
-        "relu": 1, "neg": 1, "copy": 1, "pair_reduce_sum": 1,
-        "squeeze": 1, "truncate": 1, "astype": 1, "log2": 1, "log10": 1,
-        "reduce_sum": 1, "reduce_max": 1, "reduce_min": 1,
-        "muls": 1, "adds": 1, "subs": 1, "mins": 1, "maxs": 1,
-        "leaky_relu": 1, "muls_cast": 1,
-        "axpy": 1, "exp_sub": 1, "mul_add_dst": 1, "mul_dst_add": 1,
-        "pack": 1, "unpack": 1,
-        "arange": 1, "unsqueeze": 1, "full": 1,
-        "load_align": 1, "load": 1, "load_unalign": 1,
+        "add": 1,
+        "sub": 1,
+        "mul": 1,
+        "div": 1,
+        "max": 1,
+        "min": 1,
+        "and_": 1,
+        "or_": 1,
+        "xor": 1,
+        "abs_sub": 1,
+        "select": 1,
+        "shift_left": 1,
+        "shift_right": 1,
+        "prelu": 1,
+        "ln": 1,
+        "log": 1,
+        "exp": 1,
+        "abs": 1,
+        "not_": 1,
+        "sqrt": 1,
+        "relu": 1,
+        "neg": 1,
+        "copy": 1,
+        "pair_reduce_sum": 1,
+        "squeeze": 1,
+        "truncate": 1,
+        "astype": 1,
+        "log2": 1,
+        "log10": 1,
+        "reduce_sum": 1,
+        "reduce_max": 1,
+        "reduce_min": 1,
+        "muls": 1,
+        "adds": 1,
+        "subs": 1,
+        "mins": 1,
+        "maxs": 1,
+        "leaky_relu": 1,
+        "muls_cast": 1,
+        "axpy": 1,
+        "exp_sub": 1,
+        "mul_add_dst": 1,
+        "mul_dst_add": 1,
+        "pack": 1,
+        "unpack": 1,
+        "arange": 1,
+        "unsqueeze": 1,
+        "full": 1,
+        "load_align": 1,
+        "load": 1,
+        "load_unalign": 1,
         "gather": 1,
         "move": 1,
-        "eq": 1, "ne": 1, "lt": 1, "gt": 1, "le": 1, "ge": 1,
+        "eq": 1,
+        "ne": 1,
+        "lt": 1,
+        "gt": 1,
+        "le": 1,
+        "ge": 1,
         "histograms": 1,
         # 2 dsts
-        "interleave": 2, "de_interleave": 2,
+        "interleave": 2,
+        "de_interleave": 2,
         "mull": 2,
-        "addc": 2, "subc": 2,
+        "addc": 2,
+        "subc": 2,
         # 0 dst (no assignment form)
-        "store_align": 0, "store_unalign": 0, "store_unalign_post": 0,
-        "scatter": 0, "store": 0,
-        "mem_bar": 0, "clear_spr": 0,
+        "store_align": 0,
+        "store_unalign": 0,
+        "store_unalign_post": 0,
+        "scatter": 0,
+        "store": 0,
+        "mem_bar": 0,
+        "clear_spr": 0,
         "load_unalign_pre": 0,
-        "store_align_pack": 0, "store_align_intlv": 0,
+        "store_align_pack": 0,
+        "store_align_intlv": 0,
         "store_align_pack_postupdate": 0,
     }
 
     # VF ops whose dst(s) are MaskReg (not RegTensor). The assignment parser
     # declares these via vf.create_mask instead of vf.reg_tensor.
-    _VF_MASK_DST_OPS: frozenset[str] = frozenset({
-        "eq", "ne", "lt", "gt", "le", "ge",
-    })
+    _VF_MASK_DST_OPS: frozenset[str] = frozenset(
+        {
+            "eq",
+            "ne",
+            "lt",
+            "gt",
+            "le",
+            "ge",
+        }
+    )
 
     # Ops that support both RegTensor and MaskReg dsts. When the dst is freshly
     # declared, its register kind is inferred from the source operands: if any
     # source argument is a known MaskReg variable, the dst is declared as
     # MaskReg; otherwise RegTensor.
-    _VF_UNIFIED_OPS: frozenset[str] = frozenset({
-        "move", "and_", "or_", "xor", "not_",
-        "select", "pack", "unpack",
-        "interleave", "de_interleave",
-        "load_align", "store_align", "store_unalign",
-    })
+    _VF_UNIFIED_OPS: frozenset[str] = frozenset(
+        {
+            "move",
+            "and_",
+            "or_",
+            "xor",
+            "not_",
+            "select",
+            "pack",
+            "unpack",
+            "interleave",
+            "de_interleave",
+            "load_align",
+            "store_align",
+            "store_unalign",
+        }
+    )
 
     # VF ops whose return value is a MaskReg (used by _parse_name_assignment to
     # track MaskReg variables for unified-op dst inference).
-    _VF_MASK_PRODUCING_OPS: frozenset[str] = frozenset({
-        "create_mask", "update_mask", "get_mask_spr",
-        "mask_gen_with_reg_tensor",
-    })
+    _VF_MASK_PRODUCING_OPS: frozenset[str] = frozenset(
+        {
+            "create_mask",
+            "update_mask",
+            "get_mask_spr",
+            "mask_gen_with_reg_tensor",
+        }
+    )
 
     @staticmethod
     def _extract_op_name(func: ast.expr) -> str | None:
@@ -244,11 +315,7 @@ class CallParserMixin:
     @staticmethod
     def _is_docstring(stmt: ast.stmt) -> bool:
         """Check if an AST statement is a docstring (string constant expression)."""
-        return (
-            isinstance(stmt, ast.Expr)
-            and isinstance(stmt.value, ast.Constant)
-            and isinstance(stmt.value.value, str)
-        )
+        return isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str)
 
     @staticmethod
     def _infer_implicit_param_types(
@@ -277,9 +344,7 @@ class CallParserMixin:
                 )
             if param.annotation is not None:
                 if sub_parser.type_resolver.annotation_has_shape_policy(param.annotation):
-                    sub_parser.type_resolver.validate_policy_parameter_type(
-                        param.annotation, param.arg, actual
-                    )
+                    sub_parser.type_resolver.validate_policy_parameter_type(param.annotation, param.arg, actual)
                 else:
                     annotated = sub_parser.type_resolver.resolve_param_type(param.annotation)
                     _check_type_compatible(annotated, actual, what="Parameter", name=param.arg, span=span)
@@ -287,13 +352,17 @@ class CallParserMixin:
 
     @staticmethod
     def _parse_implicit_helper(
-        func_name: str, func_def: ast.FunctionDef, sub_parser, span,
+        func_name: str,
+        func_def: ast.FunctionDef,
+        sub_parser,
+        span,
         is_vf: bool = False,
     ) -> ir.Function:
         """Parse an implicit helper, surfacing the underlying failure with its location."""
         try:
             return sub_parser.parse_function(
-                func_def, func_type=ir.FunctionType.Helper,
+                func_def,
+                func_type=ir.FunctionType.Helper,
                 is_vector_function=is_vf,
             )
         except ParserTypeError as e:
@@ -310,8 +379,8 @@ class CallParserMixin:
                 f"Failed to compile helper '{func_name}' called from the kernel{loc}: {e.message}",
                 span=inner_span or span,
                 hint="Helper functions are inlined into the kernel, so every statement must be "
-                     "valid DSL. Fix the statement above, or give the parameters/return value "
-                     f"DSL type annotations (e.g. def {func_name}(x: pl.DT_INT64) -> pl.DT_INT64: ...).",
+                "valid DSL. Fix the statement above, or give the parameters/return value "
+                f"DSL type annotations (e.g. def {func_name}(x: pl.DT_INT64) -> pl.DT_INT64: ...).",
             ) from e
         except ParserError:
             logger.debug("Re-raising ParserError in _parse_implicit_helper", exc_info=True)
@@ -335,10 +404,7 @@ class CallParserMixin:
             return ir_func
         for annotated, actual in zip(list(ir_func.return_types), inferred):
             _check_type_compatible(annotated, actual, what="Return value of", name=func_name, span=span)
-        return ir.Function(
-            ir_func.name,
-            list(ir_func.params),
-            inferred, ir_func.body, ir_func.span, ir_func.func_type)
+        return ir.Function(ir_func.name, list(ir_func.params), inferred, ir_func.body, ir_func.span, ir_func.func_type)
 
     @staticmethod
     def _is_vf_op_call(call_node: ast.expr) -> str | None:
@@ -392,11 +458,7 @@ class CallParserMixin:
             def generic_visit(self, node):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
                     return None
-                if (
-                    isinstance(node, ast.Name)
-                    and isinstance(node.ctx, (ast.Store, ast.Del))
-                    and node.id in param_names
-                ):
+                if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)) and node.id in param_names:
                     assigned.add(node.id)
                     return None
                 return super().generic_visit(node)
@@ -502,7 +564,11 @@ class CallParserMixin:
 
     @classmethod
     def _retrieve_function_source(
-        cls, func_name: str, fn: Callable, span: ir.Span, decorator_hint: str,
+        cls,
+        func_name: str,
+        fn: Callable,
+        span: ir.Span,
+        decorator_hint: str,
     ) -> tuple[str, list[str], int, int, ast.FunctionDef]:
         """Retrieve source, parse AST, and locate FunctionDef for a callable.
 
@@ -553,9 +619,7 @@ class CallParserMixin:
         """Build closure dict from a callable's globals and free variables."""
         fn_closure: dict[str, Any] = {**fn.__globals__}
         if fn.__closure__ and fn.__code__.co_freevars:
-            fn_closure.update(
-                dict(zip(fn.__code__.co_freevars, (c.cell_contents for c in fn.__closure__)))
-            )
+            fn_closure.update(dict(zip(fn.__code__.co_freevars, (c.cell_contents for c in fn.__closure__))))
         return fn_closure
 
     @classmethod
@@ -581,11 +645,26 @@ class CallParserMixin:
         if cls._VF_KWARG_ENUMS:
             return
         from pypto.ir import (
-            BinType, CastLayout, CompareMode, DataCopyMode, DuplicatePos,
-            HistType, IndexOrder, LoadDist, MaskPattern,
-            MaskWidth, MemBarMode, MergeMode, PackPart,
-            ReduceMode, VFRoundMode, SaturateMode, SqueezeMode, StoreDist,
+            BinType,
+            CastLayout,
+            CompareMode,
+            DataCopyMode,
+            DuplicatePos,
+            HistType,
+            IndexOrder,
+            LoadDist,
+            MaskPattern,
+            MaskWidth,
+            MemBarMode,
+            MergeMode,
+            PackPart,
+            ReduceMode,
+            SaturateMode,
+            SqueezeMode,
+            StoreDist,
+            VFRoundMode,
         )
+
         cls._VF_KWARG_ENUMS = {
             "pattern": (MaskPattern,),
             "mode": (MergeMode, MemBarMode),
@@ -671,8 +750,7 @@ class CallParserMixin:
         raise UnsupportedFeatureError(
             f"Unsupported function call: {ast.unparse(call)}",
             span=self.span_tracker.get_span(call),
-            hint="Use pl.* operations, self.method() for cross-function calls, "
-            "or call an inline Python helper by name",
+            hint="Use pl.* operations, self.method() for cross-function calls, or call an inline Python helper by name",
         )
 
     def parse_op_call(self, call: ast.Call) -> ir.Expr:
@@ -703,7 +781,7 @@ class CallParserMixin:
                 "e.g. 'if pl.constexpr(cond):' or 'x = a if pl.constexpr(cond) else b'",
                 span=span,
                 hint="Use 'pl.constexpr(condition):' in an if statement or ternary expression — "
-                     "constexpr is not allowed in for/while/with/break/continue/return or as a standalone statement",
+                "constexpr is not allowed in for/while/with/break/continue/return or as a standalone statement",
             )
 
         if self._auto_mutex and not op_name.startswith("vf."):
@@ -824,9 +902,7 @@ class CallParserMixin:
             return self._parse_vf_op(op_name[3:], call)
         return self._parse_block_default(op_name, call)
 
-    def _parse_external_function_call(
-        self, _local_name: str, ext_func: ir.Function, call: ast.Call
-    ) -> ir.Expr:
+    def _parse_external_function_call(self, _local_name: str, ext_func: ir.Function, call: ast.Call) -> ir.Expr:
         """Parse a call to an externally-defined ir.Function.
 
         Args:
@@ -937,7 +1013,10 @@ class CallParserMixin:
 
         is_vf = is_vector_function(fn)
         source_info = self._retrieve_function_source(
-            func_name, fn, span, "@pl.vector_function" if is_vf else "an annotated Python helper",
+            func_name,
+            fn,
+            span,
+            "@pl.vector_function" if is_vf else "an annotated Python helper",
         )
         template = _InlineFunctionTemplate(
             func_def=source_info[4],
@@ -977,10 +1056,7 @@ class CallParserMixin:
                 span=span,
             )
         argument_nodes = [*call.args, *args.defaults[len(call.args) - required_count:]]
-        bound = {
-            param.arg: (self.parse_expression(arg), arg)
-            for param, arg in zip(params, argument_nodes)
-        }
+        bound = {param.arg: (self.parse_expression(arg), arg) for param, arg in zip(params, argument_nodes)}
         for param in params:
             actual = bound[param.arg][0]
             if param.annotation is None or self.resolve_tiling_class(param.annotation):
@@ -990,7 +1066,11 @@ class CallParserMixin:
             else:
                 annotated = self.type_resolver.resolve_param_type(param.annotation)
                 _check_type_compatible(
-                    annotated, actual.type, what="Parameter", name=param.arg, span=span,
+                    annotated,
+                    actual.type,
+                    what="Parameter",
+                    name=param.arg,
+                    span=span,
                 )
         return bound
 
@@ -1000,7 +1080,8 @@ class CallParserMixin:
         template = self._inline_template(func_name, fn, span)
         if id(fn) in self.inline_call_stack:
             raise ParserSyntaxError(
-                f"Recursive inline function call detected for '{func_name}'", span=span,
+                f"Recursive inline function call detected for '{func_name}'",
+                span=span,
             )
 
         old_closure = self.expr_evaluator.closure_vars
@@ -1113,8 +1194,7 @@ class CallParserMixin:
     def _resolve_list_kwarg(self, value: ast.List) -> Any:
         """Resolve a List kwarg value, trying closure eval first."""
         if any(
-            isinstance(elt, ast.Name)
-            and self.scope_manager.lookup_var_bounded(elt.id) is not None
+            isinstance(elt, ast.Name) and self.scope_manager.lookup_var_bounded(elt.id) is not None
             for elt in value.elts
         ):
             return self.parse_list(value)
@@ -1122,7 +1202,6 @@ class CallParserMixin:
         if success and isinstance(result, list):
             return result
         return self.parse_list(value)
-
 
     def _parse_vf_op(self, op_name: str, call: ast.Call) -> ir.Expr:
         """Parse a VF API operation call: vf.{op_name}(...).
@@ -1194,11 +1273,7 @@ class CallParserMixin:
         buffer; their mutex metadata is propagated onto the GetItemExpr by
         ``parse_subscript``, so the generic ``parse_expression`` path finds it.
         """
-        expr = (
-            self.resolve_single_kwarg(kwarg_name, node)
-            if kwarg_name is not None
-            else self.parse_expression(node)
-        )
+        expr = self.resolve_single_kwarg(kwarg_name, node) if kwarg_name is not None else self.parse_expression(node)
         if not isinstance(expr, ir.Expr):
             return None
         meta = self._tile_mutex_meta.get(expr)
@@ -1227,7 +1302,6 @@ class CallParserMixin:
         between MTE1 finishing the move and cube starting to read
         (verified: device error 507015 on 2026-05-29).
         """
-        from pypto_pro.ir.op.system_ops import mutex_lock
 
         from ._op_pipeline import op_accesses_buffer
 
@@ -1240,11 +1314,7 @@ class CallParserMixin:
         #    then drop Acc tiles when a phase-aware matmul/store carries the
         #    unit_flag (the hardware handshake replaces the software mutex there).
         tilerefs = [self._try_resolve_tileref(arg) for arg in call.args]
-        tilerefs.extend(
-            self._try_resolve_tileref(kw.value, kw.arg)
-            for kw in call.keywords
-            if kw.arg is not None
-        )
+        tilerefs.extend(self._try_resolve_tileref(kw.value, kw.arg) for kw in call.keywords if kw.arg is not None)
         unique_refs = []
         seen = set()
         for tref in tilerefs:
@@ -1264,8 +1334,12 @@ class CallParserMixin:
                         phase = resolved.value
                     break
             # STPhase/AccPhase enum: Partial/Final indicates multi-step accumulation
-            _phase_skip = {ir.STPhase.Partial.value, ir.STPhase.Final.value,
-                           ir.AccPhase.Partial.value, ir.AccPhase.Final.value}
+            _phase_skip = {
+                ir.STPhase.Partial.value,
+                ir.STPhase.Final.value,
+                ir.AccPhase.Partial.value,
+                ir.AccPhase.Final.value,
+            }
             if phase in _phase_skip:
                 unique_refs = [r for r in unique_refs if r.memory != ir.MemorySpace.Acc]
 
@@ -1305,16 +1379,15 @@ class CallParserMixin:
             exprs; the CCE codegen emits runtime if-guards so each unique id is only
             locked/unlocked once (avoids hardware hang from double get_buf).
         """
-        from pypto_pro.ir.op.system_ops import mutex_lock, mutex_unlock, _create_mutex_dedup_op
         from pypto_pro.ir._utils import _normalize_expr
+        from pypto_pro.ir.op.system_ops import _create_mutex_dedup_op, mutex_lock, mutex_unlock
 
         emit_plain = mutex_lock if is_lock else mutex_unlock
         op_name = "system.mutex_lock" if is_lock else "system.mutex_unlock"
 
         for group in groups:
             all_static_equal = (
-                all(isinstance(tref.buf_id, int) for tref in group)
-                and len(set(tref.buf_id for tref in group)) == 1
+                all(isinstance(tref.buf_id, int) for tref in group) and len(set(tref.buf_id for tref in group)) == 1
             )
             if len(group) == 1 or all_static_equal:
                 # Guaranteed a single distinct lock: emit one plain mutex op.
@@ -1325,8 +1398,8 @@ class CallParserMixin:
                 id_exprs = [_normalize_expr(tref.buf_id, span) for tref in group]
                 ids_union = sorted(set().union(*(set(tref.mutex_ids) for tref in group if tref.mutex_ids)))
                 expr = _create_mutex_dedup_op(
-                    op_name, pipe=pipe, mutex_id_exprs=id_exprs,
-                    mutex_ids_union=ids_union, span=span)
+                    op_name, pipe=pipe, mutex_id_exprs=id_exprs, mutex_ids_union=ids_union, span=span
+                )
             self.builder.emit(ir.EvalStmt(expr, span))
 
     def _emit_vf_func_mutex_lock(
@@ -1375,6 +1448,4 @@ class CallParserMixin:
         kwargs = self.parse_op_kwargs(call)
 
         # first arg is out; keep out as first arg to match pto-isa convention
-        return ir.create_op_call(
-            block_ir_op(op_name), args, kwargs, span
-        )
+        return ir.create_op_call(block_ir_op(op_name), args, kwargs, span)

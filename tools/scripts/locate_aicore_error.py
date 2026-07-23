@@ -40,18 +40,18 @@ AICore Error 一键定位脚本
 """
 
 import argparse
-import dataclasses
 from collections.abc import Callable
+import dataclasses
 import json
+import logging
 import os
+from pathlib import Path
 import re
 import shlex
 import shutil
 import subprocess
-import logging
 import threading
 import time
-from pathlib import Path
 
 # ============================================================================
 # Constants
@@ -78,6 +78,7 @@ logger = logging.getLogger(__name__)
 @dataclasses.dataclass
 class _OutputCtx:
     """Groups output-related configuration shared across I/O functions."""
+
     show_output: bool
     indent: str
     source_tag: str = ""
@@ -86,6 +87,7 @@ class _OutputCtx:
 @dataclasses.dataclass
 class _CceOpRef:
     """Groups the CCE operation identification fields for source mapping."""
+
     cce_op_lines: list
     op_index: int
     op_name: str
@@ -95,6 +97,7 @@ class _CceOpRef:
 # ============================================================================
 # Logging Helpers — Major/Minor Step Formatting
 # ============================================================================
+
 
 def _log_major(step_id, description):
     logger.info("=" * 80)
@@ -125,6 +128,7 @@ def _log_minor_result(step_id, fmt, *args):
 # ============================================================================
 # Logging & Command Execution
 # ============================================================================
+
 
 def _log_if_relevant(line, line_num, ctx):
     if not ctx.show_output:
@@ -201,8 +205,9 @@ def _capture_process_output(process, timeout, ctx):
     return process.returncode, ''.join(stderr_lines), start_time
 
 
-def run_command_with_live_output(cmd, *, cwd=None, env=None, timeout=DEFAULT_TIMEOUT,
-                                 show_output=True, indent="", source_tag=""):
+def run_command_with_live_output(
+    cmd, *, cwd=None, env=None, timeout=DEFAULT_TIMEOUT, show_output=True, indent="", source_tag=""
+):
     """Execute a command with live output display.
 
     Returns (returncode, stderr_output). stdout and stderr are read in separate
@@ -219,13 +224,18 @@ def run_command_with_live_output(cmd, *, cwd=None, env=None, timeout=DEFAULT_TIM
 
     try:
         process = subprocess.Popen(
-            cmd_list, cwd=cwd, env=env,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, errors='ignore', bufsize=1,
+            cmd_list,
+            cwd=cwd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors='ignore',
+            bufsize=1,
         )
         returncode, stderr_output, start_time = _capture_process_output(
-            process, timeout,
-            _OutputCtx(show_output, indent, source_tag))
+            process, timeout, _OutputCtx(show_output, indent, source_tag)
+        )
 
         if show_output:
             elapsed = time.time() - start_time
@@ -243,6 +253,7 @@ def run_command_with_live_output(cmd, *, cwd=None, env=None, timeout=DEFAULT_TIM
 # ============================================================================
 # File & Path Utilities
 # ============================================================================
+
 
 def validate_path(path, path_type="路径"):
     if not os.path.exists(path):
@@ -292,6 +303,7 @@ def _try_restore(file_path, backup_suffix, label):
 @dataclasses.dataclass(frozen=True)
 class _ModifyConfig:
     """Configuration for checked file modification operations."""
+
     file_path: str
     backup_suffix: str
     check_already_done: Callable
@@ -350,6 +362,7 @@ def _checked_modify_json_file(config):
 # Build & Install
 # ============================================================================
 
+
 def build_and_install_pypto(pypto_path):
     """Build pypto from source and pip install the resulting wheel.
 
@@ -358,8 +371,12 @@ def build_and_install_pypto(pypto_path):
     logger.info("编译 pypto 包...")
     result = subprocess.run(
         ["python3", "build_ci.py", "-f", "python3", "--disable_auto_execute"],
-        shell=False, capture_output=True, text=True, cwd=pypto_path,
-        timeout=DEFAULT_TIMEOUT)
+        shell=False,
+        capture_output=True,
+        text=True,
+        cwd=pypto_path,
+        timeout=DEFAULT_TIMEOUT,
+    )
     if result.returncode != 0:
         logger.info("编译失败: %s", result.stderr[-500:] if result.stderr else "无输出")
         return False
@@ -376,8 +393,7 @@ def build_and_install_pypto(pypto_path):
     install_cmd = [_PIP_CMD, "install", str(whl_files[0]), "--force", "--no-deps"]
     if target:
         install_cmd += ["--target", target]
-    result = subprocess.run(
-        install_cmd, shell=False, capture_output=True, text=True, timeout=300)
+    result = subprocess.run(install_cmd, shell=False, capture_output=True, text=True, timeout=300)
     if result.returncode != 0:
         logger.info("安装失败: %s", result.stderr[-500:] if result.stderr else "无输出")
         return False
@@ -387,6 +403,7 @@ def build_and_install_pypto(pypto_path):
 # ============================================================================
 # Text Manipulation (CCE code commenting/uncommenting)
 # ============================================================================
+
 
 def comment_special_lines(lines):
     """Comment out set_flag/wait_flag/pipe_barrier lines in-place."""
@@ -514,10 +531,14 @@ def has_error(returncode, stderr_output, use_pypto_test_framework=False):
 # Test Runners
 # ============================================================================
 
+
 def run_test(test_cmd, run_dir, show_output=True, source_tag=""):
     return run_command_with_live_output(
-        test_cmd, cwd=run_dir, timeout=DEFAULT_TIMEOUT,
-        show_output=show_output, source_tag=source_tag,
+        test_cmd,
+        cwd=run_dir,
+        timeout=DEFAULT_TIMEOUT,
+        show_output=show_output,
+        source_tag=source_tag,
     )
 
 
@@ -534,9 +555,9 @@ def backup_and_test(cce_file, test_ctx, modify_func, source_tag=""):
     try:
         write_file(cce_file, modified_lines)
         returncode, stderr_output = run_test(
-            test_ctx.test_cmd, test_ctx.run_dir, show_output=True, source_tag=source_tag)
-        error_exists = has_error(returncode, stderr_output,
-                                 test_ctx.use_pypto_test_framework)
+            test_ctx.test_cmd, test_ctx.run_dir, show_output=True, source_tag=source_tag
+        )
+        error_exists = has_error(returncode, stderr_output, test_ctx.use_pypto_test_framework)
     finally:
         write_file(cce_file, original_lines)
         if os.path.exists(backup_file):
@@ -548,6 +569,7 @@ def backup_and_test(cce_file, test_ctx, modify_func, source_tag=""):
 # ============================================================================
 # Parallel Compile Error Handling
 # ============================================================================
+
 
 def fix_parallel_compile_config():
     installed_config = _find_installed_tile_fwk_config()
@@ -604,6 +626,7 @@ def handle_parallel_compile_error(output):
 # Step 2 Helpers (Exclude Machine Framework Issues)
 # ============================================================================
 
+
 def _find_callsubfunctask_range(lines):
     """Find the range of lines containing CallSubFuncTask."""
     callsub_idx = -1
@@ -644,6 +667,7 @@ def _comment_callsubfunctask(file_path):
 # Step 2: Exclude Machine Framework Scheduling Issues
 # ============================================================================
 
+
 def _find_installed_aicore_entry():
     """Locate aicore_entry.h in the installed pypto package. Returns path or None."""
     _log_minor("2.1", "定位已安装 pypto 中的 aicore_entry.h")
@@ -667,9 +691,7 @@ def _find_installed_aicore_entry():
             _log_minor_result("2.1", "✓ %s", installed_path)
             return installed_path
     _log_minor_result("2.1", "✗ 安装路径下未找到 aicore_entry.h")
-    _log_major_result("2",
-                      "✗ 步骤 2.1 定位 aicore_entry.h 失败："
-                      "安装路径下未找到 aicore_entry.h")
+    _log_major_result("2", "✗ 步骤 2.1 定位 aicore_entry.h 失败：安装路径下未找到 aicore_entry.h")
     return None
 
 
@@ -725,8 +747,7 @@ def exclude_machine_framework_issues(test_ctx):
         _log_minor_result("2.2", "✗ 未找到 CallSubFuncTask")
         _log_major_result("2", "✗ 步骤 2.2 注释 CallSubFuncTask 失败：未找到 CallSubFuncTask")
         return False
-    already_commented = all(not lines[i].strip() or lines[i].strip().startswith('//')
-                            for i in range(start, end + 1))
+    already_commented = all(not lines[i].strip() or lines[i].strip().startswith('//') for i in range(start, end + 1))
     if already_commented:
         logger.info("CallSubFuncTask 已为注释状态，跳过修改")
         did_backup = False
@@ -741,8 +762,8 @@ def exclude_machine_framework_issues(test_ctx):
 
     _log_minor("2.3", "运行测试验证 — 判断 aicore error 是否消失")
     returncode, stderr_output = run_test(
-        test_ctx.test_cmd, test_ctx.run_dir, show_output=True,
-        source_tag="[步骤2-测试用例输出]")
+        test_ctx.test_cmd, test_ctx.run_dir, show_output=True, source_tag="[步骤2-测试用例输出]"
+    )
     has_aicore_error = has_error(returncode, stderr_output, test_ctx.use_pypto_test_framework)
     _log_minor_result("2.3", "aicore error %s", "存在" if has_aicore_error else "已消失")
 
@@ -763,10 +784,10 @@ def exclude_machine_framework_issues(test_ctx):
 # Step 3.1: Enable Trace Logs
 # ============================================================================
 
+
 def _modify_device_switch_config(pypto_path):
     """Modify device_switch.h to enable compile verbose log. Returns True if modified."""
-    switch_path = locate_file(pypto_path, _KNOWN_LOCATIONS['device_switch.h'],
-                              'device_switch.h')
+    switch_path = locate_file(pypto_path, _KNOWN_LOCATIONS['device_switch.h'], 'device_switch.h')
 
     def _switch_has_define(lines):
         return any('#define ENABLE_COMPILE_VERBOSE_LOG' in line for line in lines)
@@ -787,16 +808,17 @@ def _modify_device_switch_config(pypto_path):
         logger.info("警告：device_switch.h 中未找到 ENABLE_COMPILE_VERBOSE_LOG 定义，跳过此文件")
         return False
     return _checked_modify_text_file(
-        _ModifyConfig(switch_path, ".backup", _switch_already_1,
-                       _switch_set_1, "device_switch.h"))
+        _ModifyConfig(switch_path, ".backup", _switch_already_1, _switch_set_1, "device_switch.h")
+    )
 
 
 def _trace_already_set(config):
     if 'global' in config and 'codegen' in config['global']:
-        return (config['global']['codegen'].get('fixed_output_path') is True and
-                config['global']['codegen'].get('force_overwrite') is False)
-    return (config.get('fixed_output_path') is True and
-            config.get('force_overwrite') is False)
+        return (
+            config['global']['codegen'].get('fixed_output_path') is True
+            and config['global']['codegen'].get('force_overwrite') is False
+        )
+    return config.get('fixed_output_path') is True and config.get('force_overwrite') is False
 
 
 def _trace_set(config):
@@ -813,9 +835,7 @@ def enable_trace_logs(pypto_path):
 
     Returns (any_modified, needs_rebuild).
     """
-    _log_minor("3.1",
-              "启用追踪日志 — 修改 device_switch.h，"
-              "使 aicore 内核启动/完成事件被记录到设备日志")
+    _log_minor("3.1", "启用追踪日志 — 修改 device_switch.h，使 aicore 内核启动/完成事件被记录到设备日志")
 
     if _modify_device_switch_config(pypto_path):
         _log_minor_result("3.1", "✓ 已修改追踪日志配置，需要重新编译")
@@ -827,12 +847,11 @@ def enable_trace_logs(pypto_path):
 
 def _apply_tile_fwk_config():
     """Modify installed tile_fwk_config.json after rebuild (no recompilation)."""
-    _log_minor("3.1",
-              "启用追踪日志 — 修改已安装的 tile_fwk_config.json（直接修改，无需重编）")
+    _log_minor("3.1", "启用追踪日志 — 修改已安装的 tile_fwk_config.json（直接修改，无需重编）")
     installed = _find_installed_tile_fwk_config()
     if installed and _checked_modify_json_file(
-        _ModifyConfig(installed, ".backup", _trace_already_set,
-                      _trace_set, "tile_fwk_config.json (已安装)")):
+        _ModifyConfig(installed, ".backup", _trace_already_set, _trace_set, "tile_fwk_config.json (已安装)")
+    ):
         _log_minor_result("3.1", "✓ tile_fwk_config.json 已修改")
     elif not installed:
         _log_minor_result("3.1", "✗ 未找到已安装的 tile_fwk_config.json")
@@ -841,6 +860,7 @@ def _apply_tile_fwk_config():
 # ============================================================================
 # Step 3.2: Rebuild and Install
 # ============================================================================
+
 
 def rebuild_and_install(pypto_path):
     _log_minor("3.2", "重新编译和安装 — 使步骤 3.1 的追踪日志配置生效")
@@ -856,13 +876,11 @@ def rebuild_and_install(pypto_path):
 # ============================================================================
 
 
-
 def _collect_output_subdirs(output_path):
     """Recursively find all output_* subdirectories under output/."""
     subdirs = []
     for root, dirs, _ in os.walk(output_path):
-        subdirs.extend(
-            os.path.join(root, d) for d in dirs if d.startswith('output_'))
+        subdirs.extend(os.path.join(root, d) for d in dirs if d.startswith('output_'))
     return subdirs
 
 
@@ -904,9 +922,7 @@ def _clean_plog_output(run_path):
 
 def clean_and_run_test(test_ctx):
     """Step 3.3: Clean logs and run test. Returns program_json_path or None."""
-    _log_minor("3.3",
-              "清理日志并运行测试 — "
-              "重新运行测试以生成带有 LActStart/LActFinish 事件的设备日志")
+    _log_minor("3.3", "清理日志并运行测试 — 重新运行测试以生成带有 LActStart/LActFinish 事件的设备日志")
 
     device_log_path = test_ctx.device_log_path
     if test_ctx.use_pypto_test_framework:
@@ -934,8 +950,12 @@ def clean_and_run_test(test_ctx):
     env['ASCEND_HOST_LOG_FILE_NUM'] = '1000'
 
     returncode, stderr_output = run_command_with_live_output(
-        test_ctx.test_cmd, cwd=test_ctx.run_dir, env=env, timeout=DEFAULT_TIMEOUT,
-        show_output=True, source_tag="[步骤3-测试用例输出]",
+        test_ctx.test_cmd,
+        cwd=test_ctx.run_dir,
+        env=env,
+        timeout=DEFAULT_TIMEOUT,
+        show_output=True,
+        source_tag="[步骤3-测试用例输出]",
     )
 
     if not has_error(returncode, stderr_output, test_ctx.use_pypto_test_framework):
@@ -949,6 +969,7 @@ def clean_and_run_test(test_ctx):
 # ============================================================================
 # Step 3.5: Analyze Trace Logs and Locate CCE File
 # ============================================================================
+
 
 def parse_luid(luid_str):
     match = re.search(r'LUid\{(\d+),(\d+),(\d+),(\d+),(\d+)\}', luid_str)
@@ -1110,8 +1131,8 @@ def find_cce_file(kernel_aicore_dir, leaf_index):
 
         # Grep func_name in file contents across kernel_aicore_dir
         result = subprocess.run(
-            ["/usr/bin/grep", "-rl", func_name, kernel_aicore_dir],
-            capture_output=True, text=True, timeout=30)
+            ["/usr/bin/grep", "-rl", func_name, kernel_aicore_dir], capture_output=True, text=True, timeout=30
+        )
         matched_files = [Path(p) for p in result.stdout.strip().split('\n') if p]
         logger.info("grep 函数名找到 %d 个匹配文件", len(matched_files))
         for mf in matched_files:
@@ -1130,13 +1151,13 @@ def find_cce_file(kernel_aicore_dir, leaf_index):
 
 
 def find_all_cce_files(kernel_aicore_dir, missing_leaf_indices):
-    return [f for idx in missing_leaf_indices
-            if (f := find_cce_file(kernel_aicore_dir, idx))]
+    return [f for idx in missing_leaf_indices if (f := find_cce_file(kernel_aicore_dir, idx))]
 
 
 @dataclasses.dataclass(frozen=True)
 class _TestContext:
     """Immutable test environment configuration shared across diagnostic steps."""
+
     test_cmd: str
     run_dir: str
     device_log_path: str = './wk'
@@ -1155,6 +1176,7 @@ def _test_with_comment_strategy(params, source_tag=""):
 
     Returns (error_exists, restart_indicator).
     """
+
     def _modify(cce_lines):
         commentable = get_commentable_lines(cce_lines, error_in_t=params.error_in_t)
         if not commentable:
@@ -1162,7 +1184,8 @@ def _test_with_comment_strategy(params, source_tag=""):
         return comment_lines_by_indices(cce_lines.copy(), commentable)
 
     error_exists, stderr_output, original_lines = backup_and_test(
-        params.cce_file, params.test_ctx, _modify, source_tag=source_tag)
+        params.cce_file, params.test_ctx, _modify, source_tag=source_tag
+    )
 
     if original_lines is None:
         return False, None
@@ -1178,8 +1201,8 @@ def test_cce_file(cce_file, test_ctx, source_tag=""):
     logger.info("\n测试 CCE 文件: %s", cce_file)
 
     error_exists, restart = _test_with_comment_strategy(
-        _TestParams(cce_file, test_ctx, error_in_t=False),
-        source_tag=source_tag)
+        _TestParams(cce_file, test_ctx, error_in_t=False), source_tag=source_tag
+    )
     if restart == RESTART:
         return RESTART
 
@@ -1201,9 +1224,7 @@ def _find_kernel_aicore_dir(run_dir):
 
 def _confirm_cce_files(problem_cce_files, test_ctx, source_tag):
     """Test each candidate CCE file to confirm the root cause. Returns cce_file, None, or RESTART."""
-    _log_minor("3.6",
-              "测试验证 CCE 文件 — "
-              "通过注释代码并重测，逐个验证 CCE 文件确认根因")
+    _log_minor("3.6", "测试验证 CCE 文件 — 通过注释代码并重测，逐个验证 CCE 文件确认根因")
 
     for cce_file in problem_cce_files:
         result = test_cce_file(cce_file, test_ctx, source_tag=source_tag)
@@ -1223,9 +1244,7 @@ def analyze_and_locate_cce(test_ctx, source_tag=""):
 
     Returns cce_file, None, or RESTART.
     """
-    _log_minor("3.5",
-              "分析追踪日志并定位 CCE 文件 — "
-              "解析 LActStart/LActFinish 事件找出崩溃 kernel 对应的 CCE 源文件")
+    _log_minor("3.5", "分析追踪日志并定位 CCE 文件 — 解析 LActStart/LActFinish 事件找出崩溃 kernel 对应的 CCE 源文件")
 
     log_file = find_trace_log_file(test_ctx)
     if not log_file:
@@ -1264,13 +1283,14 @@ def analyze_and_locate_cce(test_ctx, source_tag=""):
 # Step 4: Binary Search to Locate Problem Line
 # ============================================================================
 
+
 def determine_error_scope(cce_file, test_ctx, source_tag=""):
     """Check if the error is in T operations. Returns True, False, or RESTART."""
     _log_minor("4.1", "确定错误范围 — 判断 aicore error 是否位于 T 操作中")
 
     error_exists, restart = _test_with_comment_strategy(
-        _TestParams(cce_file, test_ctx, error_in_t=True),
-        source_tag=source_tag)
+        _TestParams(cce_file, test_ctx, error_in_t=True), source_tag=source_tag
+    )
     if restart == RESTART:
         return RESTART
 
@@ -1287,9 +1307,7 @@ def get_commentable_range(cce_file, error_in_t):
 
     Returns (left, right, commentable_lines) or (None, None, None).
     """
-    _log_minor("4.2",
-              "获取可注释行范围 — "
-              "确定 CCE 文件中可安全注释的代码行索引，作为二分搜索空间")
+    _log_minor("4.2", "获取可注释行范围 — 确定 CCE 文件中可安全注释的代码行索引，作为二分搜索空间")
     logger.info("获取可注释行范围...")
     logger.info("error_in_t: %s", error_in_t)
 
@@ -1311,6 +1329,7 @@ def get_commentable_range(cce_file, error_in_t):
 @dataclasses.dataclass
 class _SearchConfig:
     """State for binary search iteration."""
+
     cce_file: str
     test_ctx: _TestContext
     left: int
@@ -1331,8 +1350,7 @@ def binary_search_iteration(config, source_tag=""):
     original_lines = cce_lines.copy()
 
     mid = (config.left + config.right) // 2
-    logger.info("mid = (left + right) // 2 = (%d + %d) // 2 = %d",
-                config.left, config.right, mid)
+    logger.info("mid = (left + right) // 2 = (%d + %d) // 2 = %d", config.left, config.right, mid)
 
     # Build test state: comment everything, then uncomment [0..mid]
     current = comment_lines_by_indices(cce_lines.copy(), config.commentable_lines)
@@ -1340,10 +1358,9 @@ def binary_search_iteration(config, source_tag=""):
 
     write_file(config.cce_file, current)
     returncode, stderr_output = run_test(
-        config.test_ctx.test_cmd, config.test_ctx.run_dir,
-        show_output=True, source_tag=source_tag)
-    error_exists = has_error(returncode, stderr_output,
-                             config.test_ctx.use_pypto_test_framework)
+        config.test_ctx.test_cmd, config.test_ctx.run_dir, show_output=True, source_tag=source_tag
+    )
+    error_exists = has_error(returncode, stderr_output, config.test_ctx.use_pypto_test_framework)
 
     write_file(config.cce_file, original_lines)
     os.remove(backup_file)
@@ -1370,9 +1387,7 @@ def binary_search_problem_line(cce_file, test_ctx, source_tag=""):
 
     Returns problem_line number, None, or RESTART.
     """
-    _log_major("4",
-              "二分查找定位问题代码行 — "
-              "通过迭代注释缩小范围，精确定位到导致 aicore error 的具体代码行")
+    _log_major("4", "二分查找定位问题代码行 — 通过迭代注释缩小范围，精确定位到导致 aicore error 的具体代码行")
 
     error_in_t = determine_error_scope(cce_file, test_ctx, source_tag=source_tag)
     if error_in_t == RESTART:
@@ -1391,13 +1406,11 @@ def binary_search_problem_line(cce_file, test_ctx, source_tag=""):
         logger.info("\n--- 迭代 %d ---", iteration)
 
         new_left, new_right, problem_line = binary_search_iteration(
-            _SearchConfig(cce_file, test_ctx, left, right,
-                          commentable), source_tag=source_tag)
+            _SearchConfig(cce_file, test_ctx, left, right, commentable), source_tag=source_tag
+        )
 
         if problem_line is not None:
-            _log_major_result("4",
-                             "✓ 二分查找完成，共 %d 次迭代，问题行: %d",
-                             iteration, problem_line)
+            _log_major_result("4", "✓ 二分查找完成，共 %d 次迭代，问题行: %d", iteration, problem_line)
             return problem_line
 
         left, right = new_left, new_right
@@ -1410,6 +1423,7 @@ def binary_search_problem_line(cce_file, test_ctx, source_tag=""):
 # ============================================================================
 # Step 5.1: Map to Frontend Source Code
 # ============================================================================
+
 
 def _read_cce_for_mapping(cce_path):
     """Read CCE file and extract funcHash + line-to-code mapping."""
@@ -1433,8 +1447,7 @@ def _get_cce_operations(line_code_map):
     target_ops = {'set_flag', 'wait_flag', 'pipe_barrier', 'SUBKERNEL'}
     cce_op = {}
     for idx, line in line_code_map.items():
-        is_t = line.startswith('T') and (
-            ('<' in line and '>' in line) or ('(' in line and ')' in line))
+        is_t = line.startswith('T') and (('<' in line and '>' in line) or ('(' in line and ')' in line))
         if is_t or any(op in line for op in target_ops):
             cce_op[idx] = line
     return cce_op
@@ -1460,8 +1473,7 @@ def _resolve_from_program_json(json_path, func_hash, op_ref):
     with open(json_path, 'r', encoding='utf-8') as f:
         program_data = json.load(f)
 
-    func_data = next((f for f in program_data.get('functions', [])
-                      if f.get('hash') == func_hash), None)
+    func_data = next((f for f in program_data.get('functions', []) if f.get('hash') == func_hash), None)
     if not func_data:
         logger.info("错误：未找到 hash 为 %s 的函数", func_hash)
         return None
@@ -1518,9 +1530,7 @@ def find_source_location(cce_path, json_path, cce_line_number):
     op_index = cce_op_lines.index(cce_line_number)
     op_name = cce_op_names[op_index]
 
-    return _resolve_from_program_json(
-        json_path, func_hash,
-        _CceOpRef(cce_op_lines, op_index, op_name, cce_line))
+    return _resolve_from_program_json(json_path, func_hash, _CceOpRef(cce_op_lines, op_index, op_name, cce_line))
 
 
 def print_source_code_line(file_path, line_number):
@@ -1546,9 +1556,7 @@ def print_source_code_line(file_path, line_number):
 
 def map_to_source_code(cce_file, program_json_path, problem_line):
     """Step 5.1: Map CCE line to frontend source code."""
-    _log_minor("5.1",
-              "CCE 行映射到前端源文件 — "
-              "通过 funcHash 和 program.json 查找对应的源码位置")
+    _log_minor("5.1", "CCE 行映射到前端源文件 — 通过 funcHash 和 program.json 查找对应的源码位置")
     logger.info("CCE 文件: %s", cce_file)
     logger.info("问题行号: %d", problem_line)
     logger.info("program.json: %s", program_json_path)
@@ -1585,6 +1593,7 @@ def map_to_source_code(cce_file, program_json_path, problem_line):
 # Step 5.2: Print Final Result
 # ============================================================================
 
+
 def print_final_result(cce_file, problem_line, source_result):
     _log_minor("5.2", "输出最终结果")
 
@@ -1615,6 +1624,7 @@ def print_final_result(cce_file, problem_line, source_result):
 # Restore Original State
 # ============================================================================
 
+
 def restore_original_state(pypto_path):
     """Restore all modified files and rebuild pypto to initial state."""
     _log_major("恢复", "恢复初始状态")
@@ -1622,12 +1632,10 @@ def restore_original_state(pypto_path):
     # Restore installed tile_fwk_config.json (if backup exists)
     installed_config = _find_installed_tile_fwk_config()
     if installed_config:
-        _try_restore(installed_config, ".backup",
-                     "tile_fwk_config.json (已安装)")
+        _try_restore(installed_config, ".backup", "tile_fwk_config.json (已安装)")
 
     # Restore source device_switch.h from backup
-    switch_path = locate_file(pypto_path, _KNOWN_LOCATIONS['device_switch.h'],
-                              'device_switch.h') or ""
+    switch_path = locate_file(pypto_path, _KNOWN_LOCATIONS['device_switch.h'], 'device_switch.h') or ""
     source_modified = _try_restore(switch_path, ".backup", "device_switch.h")
 
     if not source_modified:
@@ -1653,13 +1661,13 @@ def restore_original_state(pypto_path):
 # Main Entry Point
 # ============================================================================
 
+
 def _setup_trace_and_rebuild(args, pypto_path):
     """Steps 3.1-3.2: Enable trace logs and rebuild if needed.
 
     Returns trace_modified (bool), or None if compilation failed.
     """
-    _log_major("3",
-              "定位问题 CCE 文件 — 通过追踪日志精确定位出问题的 CCE 源文件")
+    _log_major("3", "定位问题 CCE 文件 — 通过追踪日志精确定位出问题的 CCE 源文件")
     trace_modified, needs_rebuild = enable_trace_logs(pypto_path)
 
     if needs_rebuild and not args.skip_rebuild:
@@ -1681,9 +1689,7 @@ def _setup_trace_and_rebuild(args, pypto_path):
 def _map_and_report(result):
     """Step 5: Map CCE problem line to frontend source code and print result."""
     cce_file, problem_line, program_json_path = result
-    _log_major("5",
-              "问题代码行映射到前端代码 — "
-              "将 CCE 问题行映射回前端源文件，便于开发者定位修复")
+    _log_major("5", "问题代码行映射到前端代码 — 将 CCE 问题行映射回前端源文件，便于开发者定位修复")
     source_result = map_to_source_code(cce_file, program_json_path, problem_line)
     print_final_result(cce_file, problem_line, source_result)
     _log_major_result("5", "✓ 定位完成")
@@ -1697,8 +1703,12 @@ def _run_initial_test(test_ctx):
     env['ASCEND_GLOBAL_LOG_LEVEL'] = '0'
 
     returncode, stderr_output = run_command_with_live_output(
-        test_ctx.test_cmd, cwd=test_ctx.run_dir, env=env, timeout=DEFAULT_TIMEOUT,
-        show_output=True, source_tag="[步骤1-测试用例输出]",
+        test_ctx.test_cmd,
+        cwd=test_ctx.run_dir,
+        env=env,
+        timeout=DEFAULT_TIMEOUT,
+        show_output=True,
+        source_tag="[步骤1-测试用例输出]",
     )
 
     if not has_error(returncode, stderr_output, test_ctx.use_pypto_test_framework):
@@ -1719,16 +1729,20 @@ def _parse_args():
     parser.add_argument('--run-path', default='./', help='运行测试的目录路径（默认: ./）')
     parser.add_argument('--test-cmd', default=None, help='触发 aicore error 的测试命令')
     parser.add_argument('--device-log-path', default='./wk', help='device log 落盘路径（默认: ./wk）')
-    parser.add_argument('--skip-machine-check', action='store_true',
-                        help='跳过 machine 框架调度问题检查')
-    parser.add_argument('--skip-rebuild', action='store_true',
-                        help='跳过重新编译（使用当前安装的 pypto）')
-    parser.add_argument('--use-pypto-test-framework', action='store_true',
-                        help='使用 Pypto_Test 框架（不检查 returncode，适配不同的输出目录结构）')
-    parser.add_argument('--cce-file', default=None,
-                        help='直接指定问题 CCE 文件，跳过步骤 1-3，从二分查找开始')
-    parser.add_argument('--cce-line', type=int, default=None,
-                        help='直接指定 CCE 问题代码行号，与 --cce-file 配合跳过步骤 1-4，直达源码映射')
+    parser.add_argument('--skip-machine-check', action='store_true', help='跳过 machine 框架调度问题检查')
+    parser.add_argument('--skip-rebuild', action='store_true', help='跳过重新编译（使用当前安装的 pypto）')
+    parser.add_argument(
+        '--use-pypto-test-framework',
+        action='store_true',
+        help='使用 Pypto_Test 框架（不检查 returncode，适配不同的输出目录结构）',
+    )
+    parser.add_argument('--cce-file', default=None, help='直接指定问题 CCE 文件，跳过步骤 1-3，从二分查找开始')
+    parser.add_argument(
+        '--cce-line',
+        type=int,
+        default=None,
+        help='直接指定 CCE 问题代码行号，与 --cce-file 配合跳过步骤 1-4，直达源码映射',
+    )
     return parser.parse_args()
 
 
@@ -1788,8 +1802,7 @@ def _run_diagnostic_loop(test_ctx):
             _log_minor_result("3.4", "✓ 已检查 %d 个 kernel 文件", len(kernel_files))
 
         # Steps 3.5-3.6: Analyze trace and locate CCE file
-        cce_file = analyze_and_locate_cce(
-            test_ctx, source_tag="[步骤3-测试用例输出]")
+        cce_file = analyze_and_locate_cce(test_ctx, source_tag="[步骤3-测试用例输出]")
         if cce_file == RESTART:
             logger.info("\n并行编译配置已修复，重新执行定位流程")
             continue
@@ -1799,8 +1812,7 @@ def _run_diagnostic_loop(test_ctx):
 
         # Step 4: Binary search to locate problem line
         _log_major_result("3", "✓ 已定位问题 CCE 文件: %s", cce_file)
-        problem_line = binary_search_problem_line(
-            cce_file, test_ctx, source_tag="[步骤4-测试用例输出]")
+        problem_line = binary_search_problem_line(cce_file, test_ctx, source_tag="[步骤4-测试用例输出]")
         if problem_line == RESTART:
             logger.info("\n并行编译配置已修复，重新执行定位流程")
             _log_major("3", "定位问题 CCE 文件")
@@ -1822,8 +1834,8 @@ def _check_tile_fwk_config():
         return
 
     if _checked_modify_json_file(
-        _ModifyConfig(installed_config, ".backup", _trace_already_set,
-                      _trace_set, "tile_fwk_config.json (已安装)")):
+        _ModifyConfig(installed_config, ".backup", _trace_already_set, _trace_set, "tile_fwk_config.json (已安装)")
+    ):
         logger.info("tile_fwk_config.json: trace 已启用 ✓（已安装目录直接修改，无需重新编译）")
     else:
         logger.info("tile_fwk_config.json: trace 已为目标状态 ✓")
@@ -1850,11 +1862,8 @@ def _run_quick_mode_a(args, test_ctx):
         _log_major_result("4.0", "✓ 已确认 CCE 文件为问题文件")
 
         # Step 4: Binary search
-        _log_major("4",
-                  "二分查找定位问题代码行 — "
-                  "通过迭代注释缩小范围，精确定位到导致 aicore error 的具体代码行")
-        problem_line = binary_search_problem_line(
-            args.cce_file, test_ctx, source_tag="[步骤4-测试用例输出]")
+        _log_major("4", "二分查找定位问题代码行 — 通过迭代注释缩小范围，精确定位到导致 aicore error 的具体代码行")
+        problem_line = binary_search_problem_line(args.cce_file, test_ctx, source_tag="[步骤4-测试用例输出]")
         if problem_line == RESTART:
             logger.info("\n并行编译配置已修复，请重新运行")
             return
@@ -1864,8 +1873,7 @@ def _run_quick_mode_a(args, test_ctx):
         _log_major_result("4", "✓ 二分查找完成，问题行: %d", problem_line)
 
         # Step 5: Map to source code
-        program_json_path = get_latest_program_json(
-            os.path.join(test_ctx.run_dir, "output"))
+        program_json_path = get_latest_program_json(os.path.join(test_ctx.run_dir, "output"))
         if not program_json_path:
             logger.info("错误：未找到 program.json，无法进行源码映射")
             return
@@ -1881,11 +1889,8 @@ def _run_quick_mode_b(args, run_path):
     _check_tile_fwk_config()
 
     try:
-        _log_major("5",
-                  "问题代码行映射到前端代码 — "
-                  "将 CCE 问题行映射回前端源文件，便于开发者定位修复")
-        program_json_path = get_latest_program_json(
-            os.path.join(run_path, "output"))
+        _log_major("5", "问题代码行映射到前端代码 — 将 CCE 问题行映射回前端源文件，便于开发者定位修复")
+        program_json_path = get_latest_program_json(os.path.join(run_path, "output"))
         if not program_json_path:
             logger.info("错误：未找到 program.json，无法进行源码映射")
             return
@@ -1908,9 +1913,11 @@ def main():
     use_pypto_test_framework = args.use_pypto_test_framework
 
     test_ctx = _TestContext(
-        test_cmd=test_cmd or '', run_dir=run_path,
+        test_cmd=test_cmd or '',
+        run_dir=run_path,
         device_log_path=device_log_path,
-        use_pypto_test_framework=use_pypto_test_framework)
+        use_pypto_test_framework=use_pypto_test_framework,
+    )
 
     # Quick mode B: user provides both CCE file and line → mapping only
     if args.cce_file and args.cce_line is not None:

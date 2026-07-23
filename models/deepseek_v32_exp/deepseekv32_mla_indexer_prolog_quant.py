@@ -8,25 +8,24 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import sys
-import math
+""" """
+
 import logging
-from pathlib import Path
+import math
+import os
+
+from mla_prolog_quant_impl import MlaTileConfig
+import pytest
 import torch
 import torch_npu
-import pytest
-import pypto
-from mla_prolog_quant_impl import MlaTileConfig
 from utils.compare import compare
+
+import pypto
 
 PRINT_DEBUG = False
 
 
 def prep_env():
-
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
 
@@ -211,15 +210,21 @@ def gen_cache_tensor(k_cache_bsnd, block_table, block_num, block_size):
             if cache_block_idx == -1:
                 continue
             else:
-                k_cache[cache_block_idx, :, :, :] = k_cache_raw[
-                    b_idx, block_offset: (block_offset + block_size), :, :
-                ]
+                k_cache[cache_block_idx, :, :, :] = k_cache_raw[b_idx, block_offset:(block_offset + block_size), :, :]
 
     return k_cache
 
 
-def gen_mla_prolog_quant_v32_inputs(params, dtypes, actual_seq, is_quant=(False, False),
-                                    is_nz=False, has_smooth=False, block_size=128, cache_mode='BSND'):
+def gen_mla_prolog_quant_v32_inputs(
+    params,
+    dtypes,
+    actual_seq,
+    is_quant=(False, False),
+    is_nz=False,
+    has_smooth=False,
+    block_size=128,
+    cache_mode='BSND',
+):
     dtype, w_dtype = dtypes
     is_quant_a, is_quant_b = is_quant
     b = params.get('b')
@@ -245,7 +250,7 @@ def gen_mla_prolog_quant_v32_inputs(params, dtypes, actual_seq, is_quant=(False,
     cos_shape = [b, s, qk_rope_head_dim]
     kv_bsnd_shape = [b, skv_max, 1, kv_lora_rank + qk_rope_head_dim]
     kv_cache_shape = [block_num, block_size, 1, kv_lora_rank]
-    kr_cache_shape = [block_num, block_size, 1, qk_rope_head_dim]
+    _kr_cache_shape = [block_num, block_size, 1, qk_rope_head_dim]
     kv_quant_scale_cache_shape = [block_num, block_size, 1, 4]
     smooth_cq_shape = [1, q_lora_rank]
 
@@ -309,8 +314,9 @@ def gen_mla_prolog_quant_v32_inputs(params, dtypes, actual_seq, is_quant=(False,
                 continue
             else:
                 k_cache_tensor[kv_cache_blk_id, 0:block_size, :, :] = k_tensor_bsnd[
-                    b_idx, block_offset:(block_offset + block_size), :, :]
-    kv_cache = k_cache_tensor[:, :, :, : kv_lora_rank]
+                    b_idx, block_offset:(block_offset + block_size), :, :
+                ]
+    kv_cache = k_cache_tensor[:, :, :, :kv_lora_rank]
     kr_cache = k_cache_tensor[:, :, :, kv_lora_rank:]
     kv_quant_scale_cache = None
     if is_quant_b:
@@ -444,7 +450,8 @@ def mla_prolog_quant_v32_compute(inputs):
         else:
             q_a_layernorm, q_a_layernorm_scale_dequant = quant(q_a_layernorm, True)  # scale: [b*s,1]
         q_b_proj = torch.matmul(q_a_layernorm.to(torch.int32), w_uqqr.to(torch.int32)).to(
-            q_a_layernorm.device)  # q_b_proj
+            q_a_layernorm.device
+        )  # q_b_proj
 
         """ dequant """
         q_b_proj_fp32 = q_b_proj.to(torch.float32)
@@ -476,8 +483,9 @@ def mla_prolog_quant_v32_compute(inputs):
         kv_a_proj_fp32_dequant = kv_a_proj_fp32 * x_2d_scale_dequant
         kv_a_proj = kv_a_proj_fp32_dequant * w_kva_scale
     else:
-        kv_a_proj = torch.matmul(x_2d.to(torch.float32),
-                                 w_dkvkr.to(torch.float32))  # [b*s, kv_lora_rank + qk_rope_head_dim]
+        kv_a_proj = torch.matmul(
+            x_2d.to(torch.float32), w_dkvkr.to(torch.float32)
+        )  # [b*s, kv_lora_rank + qk_rope_head_dim]
 
     kv_a_proj = kv_a_proj.to(dtype)
     kv_reshape = kv_a_proj.reshape(b, s, kv_lora_rank + qk_rope_head_dim)
@@ -513,13 +521,21 @@ def mla_prolog_quant_v32_compute(inputs):
     if is_quant_b:
         compressed_kv_quant_scale = compressed_kv_quant_scale.reshape(-1, 4)
         kv_quant_scale_cache_tmp = kv_quant_scale_cache.clone()
-        kv_quant_scale_cache_out = \
-            scatter_update_4d(kv_quant_scale_cache_tmp, compressed_kv_quant_scale, cache_index, -2)
+        kv_quant_scale_cache_out = scatter_update_4d(
+            kv_quant_scale_cache_tmp, compressed_kv_quant_scale, cache_index, -2
+        )
     else:
         kv_quant_scale_cache_out = None
 
-    res = [q_nope, q_embed, q_a_layernorm, q_a_layernorm_scale_dequant, kv_cache_out, \
-            kr_cache_out, kv_quant_scale_cache_out]
+    res = [
+        q_nope,
+        q_embed,
+        q_a_layernorm,
+        q_a_layernorm_scale_dequant,
+        kv_cache_out,
+        kr_cache_out,
+        kv_quant_scale_cache_out,
+    ]
     return res
 
 
@@ -579,15 +595,18 @@ def indexer_prolog(inputs: dict, dims: dict):
     scatter_update_2d(k_scale_cache, k_scale.reshape(b, s, 1, 1), cache_index, -2)
 
     # matmul use float32 for arm, arm平台matmul在bfloat16数据类型下表现跟x86不一致，通过升精度保证正确性
-    weights = torch.matmul(x.to(torch.float32), \
-        w_idx_proj.to(torch.float32)).to(x_dtype).to(torch.float32)  # (b, s, n)
-    weights = weights * (n ** -0.5) * (d ** -0.5)
+    weights = torch.matmul(x.to(torch.float32), w_idx_proj.to(torch.float32)).to(x_dtype).to(torch.float32)  # (b, s, n)
+    weights = weights * (n**-0.5) * (d**-0.5)
     weights = weights.to(torch.float16)
 
     # output dtype: int8, fp16, int8, fp16, fp16
-    outputs = {'q_int8': q_int8, 'q_scale': q_scale,
-               'idx_k_cache_out': k_cache, 'idx_k_scale_cache_out': k_scale_cache,
-               'weights': weights}
+    outputs = {
+        'q_int8': q_int8,
+        'q_scale': q_scale,
+        'idx_k_cache_out': k_cache,
+        'idx_k_scale_cache_out': k_scale_cache,
+        'weights': weights,
+    }
     return outputs
 
 
@@ -610,10 +629,25 @@ def gen_test_data(params):
     block_size = params['block_size']
     cache_mode = 'PA_BSND'
 
-    (x, w_dq, w_uqqr, smooth_cq, scale_data, w_dkvkr, w_uk, gamma_cq, gamma_ckv, cos, sin, kv_len, kv_cache,
-     kr_cache, kv_quant_scale_cache, block_num, block_table) = \
-        gen_mla_prolog_quant_v32_inputs(params, dtypes, actual_seq, is_quant, is_nz,
-                                        has_smooth, block_size, cache_mode)
+    (
+        x,
+        w_dq,
+        w_uqqr,
+        smooth_cq,
+        scale_data,
+        w_dkvkr,
+        w_uk,
+        gamma_cq,
+        gamma_ckv,
+        cos,
+        sin,
+        kv_len,
+        kv_cache,
+        kr_cache,
+        kv_quant_scale_cache,
+        block_num,
+        block_table,
+    ) = gen_mla_prolog_quant_v32_inputs(params, dtypes, actual_seq, is_quant, is_nz, has_smooth, block_size, cache_mode)
 
     mla_inputs = {'dtype': dtype, 'is_quant_a': is_quant[0], 'is_quant_b': is_quant[1], 'has_smooth': has_smooth}
     mla_inputs['cache_mode'] = cache_mode
@@ -634,8 +668,7 @@ def gen_test_data(params):
 
     res = mla_prolog_quant_v32_compute(mla_inputs)
 
-    q_nope, q_rope, rms_norm_out, rms_norm_scale_out, kv_cache_out, kr_cache_out, \
-            kv_quant_scale_cache_out = res
+    q_nope, q_rope, rms_norm_out, rms_norm_scale_out, kv_cache_out, kr_cache_out, kv_quant_scale_cache_out = res
 
     mla_goldens = {}
     mla_goldens['q_nope'] = q_nope
@@ -694,8 +727,7 @@ def gen_test_data(params):
     ip_inputs_npu['q_norm_scale'] = ip_inputs_npu['q_norm_scale'].reshape(t, 1).contiguous()
     ip_inputs_npu['w_idx_qb_nz'] = torch_npu.npu_format_cast(ip_inputs_npu['w_idx_qb'], torch_npu.Format.FRACTAL_NZ)
     ip_inputs_npu['w_idx_k_nz'] = torch_npu.npu_format_cast(ip_inputs_npu['w_idx_k'], torch_npu.Format.FRACTAL_NZ)
-    ip_inputs_npu['w_idx_proj_nz'] = torch_npu.npu_format_cast(ip_inputs_npu['w_idx_proj'],
-                                                               torch_npu.Format.FRACTAL_NZ)
+    ip_inputs_npu['w_idx_proj_nz'] = torch_npu.npu_format_cast(ip_inputs_npu['w_idx_proj'], torch_npu.Format.FRACTAL_NZ)
 
     ip_goldens['q_int8'] = ip_goldens['q_int8'].reshape(t, head_num, idx_head_dim).contiguous()
     ip_goldens['q_scale'] = ip_goldens['q_scale'].reshape(t, head_num, 1).contiguous()
@@ -747,7 +779,6 @@ def gen_test_data(params):
         'kv_cache_out': mla_goldens['kv_cache_out'],
         'kr_cache_out': mla_goldens['kr_cache_out'],
         'kv_quant_scale_cache_out': mla_goldens['kv_quant_scale_cache_out'],
-
         'q_int8': ip_goldens['q_int8'].reshape(t, head_num, idx_head_dim),
         'q_scale': ip_goldens['q_scale'].reshape(t, head_num, 1),
         'idx_k_cache_out': ip_goldens['idx_k_cache_out'],
@@ -761,12 +792,11 @@ def gen_test_data(params):
         'kv_cache_out': mla_inputs_npu['kv_cache'],
         'kr_cache_out': mla_inputs_npu['kr_cache'],
         'kv_quant_scale_cache_out': mla_inputs_npu['kv_quant_scale_cache'],
-
         'q_int8': gen_zero_tensor(goldens['q_int8']),
         'q_scale': gen_zero_tensor(goldens['q_scale']),
         'idx_k_cache_out': ip_inputs_npu['idx_k_cache'],
         'idx_k_scale_cache_out': ip_inputs_npu['idx_k_scale_cache'],
-        'weights': gen_zero_tensor(goldens['weights'])
+        'weights': gen_zero_tensor(goldens['weights']),
     }
     return inputs, outputs, goldens
 
@@ -777,13 +807,18 @@ def gen_zero_tensor(t):
 
 def check(case_name, outputs, goldens):
     ########### mla ###########
-    compare(outputs['q_nope'].cpu(), goldens['q_nope'], 'qNope', 0.005, 0.0078125,
-            0.005)
+    compare(outputs['q_nope'].cpu(), goldens['q_nope'], 'qNope', 0.005, 0.0078125, 0.005)
     compare(outputs['q_rope'].cpu(), goldens['q_rope'], 'qRope', 0.005, 0.0078125, 0.005)
     compare(outputs['kv_cache_out'].cpu(), goldens['kv_cache_out'], 'kv', 1, 0, 0)
     compare(outputs['kr_cache_out'].cpu(), goldens['kr_cache_out'], 'kr', 0.0001, 0.0078125, 0.005)
-    compare(outputs['kv_quant_scale_cache_out'].cpu(), goldens['kv_quant_scale_cache_out'], 'kScaleCache', 0.000025,
-            0.005, 0.005)
+    compare(
+        outputs['kv_quant_scale_cache_out'].cpu(),
+        goldens['kv_quant_scale_cache_out'],
+        'kScaleCache',
+        0.000025,
+        0.005,
+        0.005,
+    )
 
     ########### ip ###########
     compare(outputs['q_int8'].cpu(), goldens['q_int8'], 'q_int8', 2, 0, 0)
@@ -808,8 +843,18 @@ def convert_torch_tensor(tensor_dict, dynamic_axis_dict, name_prefix):
     return pypto_tensors
 
 
-def do_test(case_name, params, mla_epsilon_cq, mla_epsilon_ckv, mla_cache_mode, mla_tile_config, ip_attrs,
-            ip_configs, rope_tile_shape, is_prefill=False):
+def do_test(
+    case_name,
+    params,
+    mla_epsilon_cq,
+    mla_epsilon_ckv,
+    mla_cache_mode,
+    mla_tile_config,
+    ip_attrs,
+    ip_configs,
+    rope_tile_shape,
+    is_prefill=False,
+):
     prep_env()
 
     logging.debug(f'=== run test case: {case_name} ===')
@@ -851,17 +896,27 @@ def do_test(case_name, params, mla_epsilon_cq, mla_epsilon_ckv, mla_cache_mode, 
         outputs["q_scale"],
         outputs["idx_k_cache_out"],
         outputs["idx_k_scale_cache_out"],
-        outputs["weights"]
+        outputs["weights"],
     ]
 
     import mla_indexer_prolog_quant_impl as mla_lp_quant
+
     if is_prefill:
         fun = mla_lp_quant.mla_indexer_prolog_quant_p
     else:
         fun = mla_lp_quant.mla_indexer_prolog_quant_d
 
-    fun(*pto_inputs, *pto_outputs, mla_epsilon_cq, mla_epsilon_ckv, mla_cache_mode, mla_tile_config,
-        ip_attrs, ip_configs, rope_tile_shape)
+    fun(
+        *pto_inputs,
+        *pto_outputs,
+        mla_epsilon_cq,
+        mla_epsilon_ckv,
+        mla_cache_mode,
+        mla_tile_config,
+        ip_attrs,
+        ip_configs,
+        rope_tile_shape,
+    )
     torch_npu.npu.synchronize()
     check(case_name, outputs, goldens)
 
@@ -879,7 +934,7 @@ params_base = {
     'rope_head_dim': 64,  # ip
     'kv_lora_rank': 512,
     'block_size': 128,
-    'dtype': torch.bfloat16
+    'dtype': torch.bfloat16,
 }
 
 
@@ -894,14 +949,16 @@ def test_b_4_s1_2_tilebs_8_d():
     s1 = 2
     s2 = 1024
     params = params_base
-    params_base.update({
-        'b': b,
-        's': s1,
-        't': b * s1,
-        's1': s1,
-        's2': s2,
-        'actual_seq': torch.tensor([s2] * b, dtype=torch.int32).unsqueeze(-1),
-    })
+    params_base.update(
+        {
+            'b': b,
+            's': s1,
+            't': b * s1,
+            's1': s1,
+            's2': s2,
+            'actual_seq': torch.tensor([s2] * b, dtype=torch.int32).unsqueeze(-1),
+        }
+    )
 
     mla_tile_config = MlaTileConfig()
     mla_tile_config.tile_bs = 8
@@ -912,6 +969,7 @@ def test_b_4_s1_2_tilebs_8_d():
     mla_tile_config.m_tile = m_tile_value
 
     from mla_prolog_quant_impl import RopeTileShapeConfig
+
     rope_tile_shape = RopeTileShapeConfig(two_dim=[128, 128], three_dim=[128, 128, 128], four_dim=[16, 128, 128, 128])
 
     mla_tile_config.pre_quant_cube_tile = [m_tile_value, m_tile_value, 256, 256, 128, 128]
@@ -927,6 +985,7 @@ def test_b_4_s1_2_tilebs_8_d():
     mla_epsilon_ckv = 1e-5
 
     import lightning_indexer_prolog_quant_impl as ip
+
     # ---- Attrs ----
     ip_attrs = ip.IndexerPrologQuantAttr(
         eps=1e-6,
@@ -947,9 +1006,18 @@ def test_b_4_s1_2_tilebs_8_d():
         vec_nbuffer_setting={-1: 1},
     )
 
-    do_test("mla_prolog_indexer_prolog_quant.test_b_4_s1_2_tilebs_8",
-            params, mla_epsilon_cq, mla_epsilon_ckv,
-            mla_cache_mode, mla_tile_config, ip_attrs, ip_configs, rope_tile_shape, False)
+    do_test(
+        "mla_prolog_indexer_prolog_quant.test_b_4_s1_2_tilebs_8",
+        params,
+        mla_epsilon_cq,
+        mla_epsilon_ckv,
+        mla_cache_mode,
+        mla_tile_config,
+        ip_attrs,
+        ip_configs,
+        rope_tile_shape,
+        False,
+    )
 
 
 @pytest.mark.skip(reason="prefill test cast")
@@ -963,14 +1031,16 @@ def test_t_32_tilebs_16_p():
     s1 = 2
     s2 = 1024
     params = params_base
-    params_base.update({
-        'b': b,
-        's': s1,
-        't': b * s1,
-        's1': s1,
-        's2': s2,
-        'actual_seq': torch.tensor([s2] * b, dtype=torch.int32).unsqueeze(-1),
-    })
+    params_base.update(
+        {
+            'b': b,
+            's': s1,
+            't': b * s1,
+            's1': s1,
+            's2': s2,
+            'actual_seq': torch.tensor([s2] * b, dtype=torch.int32).unsqueeze(-1),
+        }
+    )
 
     mla_tile_config = MlaTileConfig()
     mla_tile_config.tile_bs = 16
@@ -990,21 +1060,21 @@ def test_t_32_tilebs_16_p():
     mla_tile_config.unroll_list = [32, 16, 8, 4, 2, 1]
     mla_tile_config.dynamic_unaligned_enable = True
     from mla_prolog_quant_impl import RopeTileShapeConfig
-    rope_tile_shape = RopeTileShapeConfig(two_dim=[32, 64], three_dim=[32, 32, 128], four_dim=[16, 128, 128, 128])
 
+    rope_tile_shape = RopeTileShapeConfig(two_dim=[32, 64], three_dim=[32, 32, 128], four_dim=[16, 128, 128, 128])
 
     mla_cache_mode = 'PA_BSND'
     mla_epsilon_cq = 1e-5
     mla_epsilon_ckv = 1e-5
 
     import lightning_indexer_prolog_quant_impl as ip
+
     # ---- Attrs ----
     ip_attrs = ip.IndexerPrologQuantAttr(
         eps=1e-6,
         layerout_query='TND',
         layerout_key='PA_BSND',
     )
-
 
     ip_configs = ip.IndexerPrologQuantConfigs(
         q_linear=[16, 16, 512, 512, 128, 128],
@@ -1019,9 +1089,18 @@ def test_t_32_tilebs_16_p():
         vec_nbuffer_setting={-1: 1},
     )
 
-    do_test("mla_prolog_indexer_prolog_prefill.test_t_32_tilebs_16",
-            params, mla_epsilon_cq, mla_epsilon_ckv,
-            mla_cache_mode, mla_tile_config, ip_attrs, ip_configs, rope_tile_shape, True)
+    do_test(
+        "mla_prolog_indexer_prolog_prefill.test_t_32_tilebs_16",
+        params,
+        mla_epsilon_cq,
+        mla_epsilon_ckv,
+        mla_cache_mode,
+        mla_tile_config,
+        ip_attrs,
+        ip_configs,
+        rope_tile_shape,
+        True,
+    )
 
 
 @pytest.mark.skip(reason="large shape")
@@ -1035,19 +1114,21 @@ def test_t_512_tilebs_128_p():
     s1 = 4
     s2 = 1024
     params = params_base
-    params_base.update({
-        'b': b,
-        's': s1,
-        't': b * s1,
-        's1': s1,
-        's2': s2,
-        'actual_seq': torch.tensor([s2] * b, dtype=torch.int32).unsqueeze(-1),
-    })
+    params_base.update(
+        {
+            'b': b,
+            's': s1,
+            't': b * s1,
+            's1': s1,
+            's2': s2,
+            'actual_seq': torch.tensor([s2] * b, dtype=torch.int32).unsqueeze(-1),
+        }
+    )
 
     mla_tile_config = MlaTileConfig()
     mla_tile_config.tile_bs = 128
 
-    #mla算子的tile切分设置
+    # mla算子的tile切分设置
     c0 = 16
     m_tile_value = (min(128, mla_tile_config.tile_bs) + c0 - 1) // c0 * c0
     mv_tile_value = min(8, mla_tile_config.tile_bs)
@@ -1063,6 +1144,7 @@ def test_t_512_tilebs_128_p():
     mla_tile_config.unroll_list = [128, 64, 32, 16, 8, 4, 2, 1]
     mla_tile_config.dynamic_unaligned_enable = True
     from mla_prolog_quant_impl import RopeTileShapeConfig
+
     rope_tile_shape = RopeTileShapeConfig(two_dim=[32, 64], three_dim=[32, 32, 128], four_dim=[16, 128, 128, 128])
 
     mla_cache_mode = 'PA_BSND'
@@ -1070,6 +1152,7 @@ def test_t_512_tilebs_128_p():
     mla_epsilon_ckv = 1e-5
 
     import lightning_indexer_prolog_quant_impl as ip
+
     # ---- Attrs ----
     ip_attrs = ip.IndexerPrologQuantAttr(
         eps=1e-6,
@@ -1090,13 +1173,23 @@ def test_t_512_tilebs_128_p():
         vec_nbuffer_setting={-1: 1},
     )
 
-    do_test("mla_prolog_indexer_prolog_prefill.test_t_512_tilebs_128", params, mla_epsilon_cq, mla_epsilon_ckv,
-            mla_cache_mode, mla_tile_config, ip_attrs, ip_configs, rope_tile_shape, True)
-
+    do_test(
+        "mla_prolog_indexer_prolog_prefill.test_t_512_tilebs_128",
+        params,
+        mla_epsilon_cq,
+        mla_epsilon_ckv,
+        mla_cache_mode,
+        mla_tile_config,
+        ip_attrs,
+        ip_configs,
+        rope_tile_shape,
+        True,
+    )
 
 
 if __name__ == '__main__':
     if PRINT_DEBUG:
-        logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                            level=logging.DEBUG)
+        logging.basicConfig(
+            format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+        )
     test_b_4_s1_2_tilebs_8_d()

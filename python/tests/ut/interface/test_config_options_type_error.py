@@ -13,7 +13,6 @@
 import pytest
 
 import pypto
-from pypto.experimental import set_operation_options
 
 
 def assert_option_type_error(setter, pattern):
@@ -25,58 +24,58 @@ def assert_option_type_error(setter, pattern):
     ("setter", "pattern"),
     [
         (
-            lambda: pypto.set_pass_options(sg_set_scope="aa"),
+            lambda:pypto.set_pass_options(sg_set_scope="aa"),
             "Option 'pass.sg_set_scope' has invalid type. Expected int64 or tuple, but got str.",
         ),
         (
-            lambda: pypto.set_pass_options(sg_set_scope=-2),
+            lambda:pypto.set_pass_options(sg_set_scope=-2),
             r"Option 'pass\.sg_set_scope' scope_id -2 is out of range\. Expected -1~2147483647\.",
         ),
         (
-            lambda: pypto.set_pass_options(sg_set_scope=(2147483648, True, False)),
+            lambda:pypto.set_pass_options(sg_set_scope=(2147483648, True, False)),
             r"Option 'pass\.sg_set_scope' scope_id 2147483648 is out of range\. Expected -1~2147483647\.",
         ),
         (
-            lambda: pypto.set_pass_options(cube_nbuffer_setting=[1, 2]),
+            lambda:pypto.set_pass_options(cube_nbuffer_setting=[1, 2]),
             "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
             "Option 'pass.cube_nbuffer_setting' has invalid type. "
             "Expected dict\\[int64, int64\\], but got list\\[int64\\]",
         ),
         (
-            lambda: pypto.set_host_options(compile_monitor_enable="true"),
+            lambda:pypto.set_host_options(compile_monitor_enable="true"),
             "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
             "Option 'host.compile_monitor_enable' has invalid type. Expected int64, but got string",
         ),
         (
-            lambda: pypto.set_host_options(compile_timeout="100"),
+            lambda:pypto.set_host_options(compile_timeout="100"),
             "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
             "Option 'host.compile_timeout' has invalid type. Expected int64, but got string",
         ),
         (
-            lambda: pypto.set_codegen_options(support_dynamic_aligned="true"),
+            lambda:pypto.set_codegen_options(support_dynamic_aligned="true"),
             "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
             "Option 'codegen.support_dynamic_aligned' has invalid type. Expected bool, but got string",
         ),
         (
-            lambda: pypto.set_verify_options(pass_verify_save_tensor_dir=123),
+            lambda:pypto.set_verify_options(pass_verify_save_tensor_dir=123),
             "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
             "Option 'verify.pass_verify_save_tensor_dir' has invalid type. Expected string, but got int64",
         ),
         (
-            lambda: pypto.set_debug_options(runtime_debug_mode="1"),
+            lambda:pypto.set_debug_options(runtime_debug_mode="1"),
             "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
             "Option 'debug.runtime_debug_mode' has invalid type. Expected int64, but got string",
         ),
         (
-            lambda: pypto.set_debug_options(dump_pass_graph=1),
+            lambda:pypto.set_debug_options(dump_pass_graph=1),
             "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
             "Option 'debug.dump_pass_graph' has invalid type. Expected list\\[string\\], but got int64",
         ),
         (
-            lambda: pypto.set_debug_options(dump_pass_graph="RemoveRedundantReshape"),
+            lambda:pypto.set_debug_options(dump_pass_graph="RemoveRedundantReshape"),
             "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
             "Option 'debug.dump_pass_graph' has invalid type. Expected list\\[string\\], but got string",
-        )
+        ),
     ],
 )
 def test_wrapper_option_type_mismatch_error(setter, pattern):

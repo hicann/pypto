@@ -12,17 +12,17 @@
 Matmul QUANT_TESTS test script.
 Supports both pytest and direct execution modes.
 """
+
 import os
 import struct
 
 import numpy as np
 import pytest
-import pypto
+from testcase.matmul_quant_test_case import PERCHANNEL_TESTS, PERTENSOR_TESTS, MatmulQuantConfig
 import torch
 import torch_npu
-import torch.nn.functional as F
 
-from testcase.matmul_quant_test_case import PERTENSOR_TESTS, PERCHANNEL_TESTS, MatmulQuantConfig
+import pypto
 
 
 def fixpipe_mask_scale(scale_input):
@@ -71,15 +71,15 @@ def matmul_quant_pertensor_kernel(
     for m_idx in pypto.loop(0, m_loop, 1, name="QUANT_LOOP_L0_mIdx", idx_name="quant_m_idx"):
         for n_idx in pypto.loop(0, n_loop, 1, name="QUANT_LOOP_L0_nIdx", idx_name="quant_n_idx"):
             if config.a_trans:
-                a_view = a_tensor[0:k, m_idx * m_view: m_idx * m_view + m_view]
+                a_view = a_tensor[0:k, m_idx * m_view:m_idx * m_view + m_view]
             else:
-                a_view = a_tensor[m_idx * m_view: m_idx * m_view + m_view, 0:k]
+                a_view = a_tensor[m_idx * m_view:m_idx * m_view + m_view, 0:k]
 
             if config.b_trans:
-                b_view = b_tensor[n_idx * n_view: n_idx * n_view + n_view, 0:k]
+                b_view = b_tensor[n_idx * n_view:n_idx * n_view + n_view, 0:k]
             else:
-                b_view = b_tensor[0:k, n_idx * n_view: n_idx * n_view + n_view]
-            bias_view = bias_tensor[0:1, n_idx * n_view: n_idx * n_view + n_view]
+                b_view = b_tensor[0:k, n_idx * n_view:n_idx * n_view + n_view]
+            bias_view = bias_tensor[0:1, n_idx * n_view:n_idx * n_view + n_view]
             out_view = pypto.matmul(
                 a_view,
                 b_view,
@@ -90,8 +90,8 @@ def matmul_quant_pertensor_kernel(
             )
 
             out_tensor[
-                m_idx * m_view: m_idx * m_view + m_view,
-                n_idx * n_view: n_idx * n_view + n_view,
+                m_idx * m_view:m_idx * m_view + m_view,
+                n_idx * n_view:n_idx * n_view + n_view,
             ] = out_view
 
 
@@ -115,18 +115,17 @@ def matmul_quant_perchannel_kernel(
 
     for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
         for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
-
             if config.b_trans:
-                b_view = b_tensor[n_idx * n_view: n_idx * n_view + n_view, 0:k]
+                b_view = b_tensor[n_idx * n_view:n_idx * n_view + n_view, 0:k]
             else:
-                b_view = b_tensor[0:k, n_idx * n_view: n_idx * n_view + n_view]
+                b_view = b_tensor[0:k, n_idx * n_view:n_idx * n_view + n_view]
             if config.a_trans:
-                a_view = a_tensor[0:k, m_idx * m_view: m_idx * m_view + m_view]
+                a_view = a_tensor[0:k, m_idx * m_view:m_idx * m_view + m_view]
             else:
-                a_view = a_tensor[m_idx * m_view: m_idx * m_view + m_view, 0:k]
+                a_view = a_tensor[m_idx * m_view:m_idx * m_view + m_view, 0:k]
 
-            scale_view = scale_tensor[0:1, n_idx * n_view: n_idx * n_view + n_view]
-            bias_view = bias_tensor[0:1, n_idx * n_view: n_idx * n_view + n_view]
+            scale_view = scale_tensor[0:1, n_idx * n_view:n_idx * n_view + n_view]
+            bias_view = bias_tensor[0:1, n_idx * n_view:n_idx * n_view + n_view]
             out_view = pypto.matmul(
                 a_view,
                 b_view,
@@ -137,8 +136,8 @@ def matmul_quant_perchannel_kernel(
             )
 
             out_tensor[
-                m_idx * m_view: m_idx * m_view + m_view,
-                n_idx * n_view: n_idx * n_view + n_view,
+                m_idx * m_view:m_idx * m_view + m_view,
+                n_idx * n_view:n_idx * n_view + n_view,
             ] = out_view
 
 
@@ -216,15 +215,15 @@ def run_matmul_quant_test(case: dict):
         matmul_quant_perchannel_kernel(a_tensor_npu, b_tensor_npu, scale_tensor, bias_tensor_npu, c_tensor, config)
 
     atol, rtol = MatmulQuantConfig.get_tolerance(case["c_dtype"])
-    assert torch.allclose(
-        c_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol
-    ), f"Test case {case['id']} ({case['name']}) failed"
+    assert torch.allclose(c_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol), (
+        f"Test case {case['id']} ({case['name']}) failed"
+    )
 
 
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in PERTENSOR_TESTS + PERCHANNEL_TESTS
-])
+@pytest.mark.parametrize(
+    "case",
+    [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in PERTENSOR_TESTS + PERCHANNEL_TESTS],
+)
 def test_matmul_quant(case: dict):
     run_matmul_quant_test(case)
 
@@ -252,17 +251,14 @@ def run_matmul_quant_pertensor_demo():
 
         for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
             for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
-                a_view = a[m_idx * m_view_size: m_idx * m_view_size + m_view_size, 0:k_size]
-                b_view = b[0:k_size, n_idx * n_view_size: n_idx * n_view_size + n_view_size]
+                a_view = a[m_idx * m_view_size:m_idx * m_view_size + m_view_size, 0:k_size]
+                b_view = b[0:k_size, n_idx * n_view_size:n_idx * n_view_size + n_view_size]
                 out_view = pypto.matmul(
-                    a_view,
-                    b_view,
-                    pypto.DT_FP16,
-                    extend_params={"scale": scale, "relu_type": pypto.ReLuType.NO_RELU}
+                    a_view, b_view, pypto.DT_FP16, extend_params={"scale": scale, "relu_type": pypto.ReLuType.NO_RELU}
                 )
                 out[
-                    m_idx * m_view_size: m_idx * m_view_size + m_view_size,
-                    n_idx * n_view_size: n_idx * n_view_size + n_view_size,
+                    m_idx * m_view_size:m_idx * m_view_size + m_view_size,
+                    n_idx * n_view_size:n_idx * n_view_size + n_view_size,
                 ] = out_view
 
     a = torch.randint(-5, 6, [m_size, k_size], dtype=torch.int8, device="npu:0")
@@ -292,18 +288,18 @@ def run_matmul_quant_perchannel_demo():
 
         for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
             for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
-                b_view = b[0:k_size, n_idx * n_view_size: n_idx * n_view_size + n_view_size]
-                a_view = a[m_idx * m_view_size: m_idx * m_view_size + m_view_size, 0:k_size]
-                scale_view = scale[0:1, n_idx * n_view_size: n_idx * n_view_size + n_view_size]
+                b_view = b[0:k_size, n_idx * n_view_size:n_idx * n_view_size + n_view_size]
+                a_view = a[m_idx * m_view_size:m_idx * m_view_size + m_view_size, 0:k_size]
+                scale_view = scale[0:1, n_idx * n_view_size:n_idx * n_view_size + n_view_size]
                 out_view = pypto.matmul(
                     a_view,
                     b_view,
                     pypto.DT_FP16,
-                    extend_params={"scale_tensor": scale_view, "relu_type": pypto.ReLuType.NO_RELU}
+                    extend_params={"scale_tensor": scale_view, "relu_type": pypto.ReLuType.NO_RELU},
                 )
                 out[
-                    m_idx * m_view_size: m_idx * m_view_size + m_view_size,
-                    n_idx * n_view_size: n_idx * n_view_size + n_view_size,
+                    m_idx * m_view_size:m_idx * m_view_size + m_view_size,
+                    n_idx * n_view_size:n_idx * n_view_size + n_view_size,
                 ] = out_view
 
     a = torch.randint(-5, 6, [m_size, k_size], dtype=torch.int8, device="npu:0")

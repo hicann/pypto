@@ -63,9 +63,10 @@ developer_doc.md : Comprehensive developer documentation
 parser.entry : Entry points and wrapper classes
 parser.parser : Main parser implementation
 """
-from . import parser
-from .parser import jit, function
+
 from ..symbolic_scalar import SymbolicScalar
+from . import parser  # noqa: F401
+from .parser import function, jit  # noqa: F401
 
 
 def dynamic(name: str) -> SymbolicScalar:

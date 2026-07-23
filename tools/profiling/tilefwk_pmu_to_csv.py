@@ -8,14 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
+""" """
+
 import argparse
+import os
 import struct
-import json
-from tabulate import tabulate
+
 import pandas as pd
+from tabulate import tabulate
 
 # MsprofAdditonalInfo: 256 byte
 ADDITIONAL_INFO_FMT = "HHIIIQ"
@@ -31,7 +31,7 @@ MSPROF_REPORT_AICPU_HCCL_OP_INFO = 10
 PROF_DATATYPE_PMU = 3
 
 
-class TileFwkPmuStructBean():
+class TileFwkPmuStructBean:
     def __init__(self: any, raw_bytes: bytes) -> None:
         self._task_list = []
         if len(raw_bytes) < ADDITIONAL_INFO_SIZE + PMU_HEAD_SIZE:
@@ -47,8 +47,8 @@ class TileFwkPmuStructBean():
 
         head = struct.unpack_from(PMU_HEAD_FMT, raw_bytes, ADDITIONAL_INFO_SIZE)
         self._head = head[0]
-        self._core_id = head[1] & 127 # 取后低7位core_id
-        self._data_type = (head[1] >> 10) & 63 # 取高6位data_type
+        self._core_id = head[1] & 127  # 取后低7位core_id
+        self._data_type = (head[1] >> 10) & 63  # 取高6位data_type
         self._task_id = head[2]
         self._stream_id = head[3]
         self._task_count = head[4]
@@ -81,12 +81,14 @@ class TileFwkPmuStructBean():
             if offset + entry_size > len(raw_bytes):
                 break
             values = struct.unpack_from(data_fmt, raw_bytes, offset)
-            self._task_list.append([
-                values[0], # sub graph id (seqNo)
-                values[1], # sub task id (taskId)
-                values[2], # total cycle
-            ] + list(values[3:]))
-
+            self._task_list.append(
+                [
+                    values[0],  # sub graph id (seqNo)
+                    values[1],  # sub task id (taskId)
+                    values[2],  # total cycle
+                ]
+                + list(values[3:])
+            )
 
     @property
     def data(self: any) -> list():
@@ -100,12 +102,7 @@ class TileFwkPmuStructBean():
         print("TileFwk pmu get data type: ", self._data_type)
         print("TileFwk pmu get task count: ", self._task_count)
         print("----------------------------------------------------------")
-        task_head_list = [
-            self._thread_id,
-            self._task_id,
-            self._stream_id,
-            self._core_id
-        ]
+        task_head_list = [self._thread_id, self._task_id, self._stream_id, self._core_id]
         print("task_head_list: ", task_head_list)
         print("task_pmu_list: ", self._task_list)
         for item in self._task_list:
@@ -157,11 +154,13 @@ def main():
 def _parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--path', type=str, help="请输入要解析的绝对路径")
-    parser.add_argument("-pe", "--pmuEvent", nargs="?", type=int, default=2, choices=[1, 2, 4, 5, 6, 7, 8],
-                        help="pmuEvent.")
+    parser.add_argument(
+        "-pe", "--pmuEvent", nargs="?", type=int, default=2, choices=[1, 2, 4, 5, 6, 7, 8], help="pmuEvent."
+    )
     parser.add_argument('--output', default='', help="pmu数据存储路径")
-    parser.add_argument('--arch', default='dav_2201', choices=['dav_2201', 'dav_3510'],
-                        help="指定架构类型, 默认dav_2201")
+    parser.add_argument(
+        '--arch', default='dav_2201', choices=['dav_2201', 'dav_3510'], help="指定架构类型, 默认dav_2201"
+    )
     return parser.parse_args()
 
 
@@ -177,37 +176,107 @@ def _load_task_pmu_list(path):
 
 def _get_pmu_header_maps():
     table_pmu_header_2201 = {
-        1: ["cube_fp16_exec", "cube_int8_exec", "vec_fp32_exec", "vec_fp16_128lane_exec",
-            "vec_fp16_64lane_exec", "vec_int32_exec", "vec_misc_exec"],
-        2: ["vec_busy_cycles", "cube_busy_cycles", "scalar_busy_cycles", "mte1_busy_cycles",
-            "mte2_busy_cycles", "mte3_busy_cycles", "icache_miss", "icache_req"],
-        4: ["ub_read_req", "ub_write_req", "l1_read_req", "l1_write_req", "l2_read_req",
-            "l2_write_req", "main_read_req", "main_write_req"],
+        1: [
+            "cube_fp16_exec",
+            "cube_int8_exec",
+            "vec_fp32_exec",
+            "vec_fp16_128lane_exec",
+            "vec_fp16_64lane_exec",
+            "vec_int32_exec",
+            "vec_misc_exec",
+        ],
+        2: [
+            "vec_busy_cycles",
+            "cube_busy_cycles",
+            "scalar_busy_cycles",
+            "mte1_busy_cycles",
+            "mte2_busy_cycles",
+            "mte3_busy_cycles",
+            "icache_miss",
+            "icache_req",
+        ],
+        4: [
+            "ub_read_req",
+            "ub_write_req",
+            "l1_read_req",
+            "l1_write_req",
+            "l2_read_req",
+            "l2_write_req",
+            "main_read_req",
+            "main_write_req",
+        ],
         5: ["l0a_read_req", "l0a_read_req", "l0b_read_req", "l0b_write_req", "l0c_read_req", "l0c_write_req"],
         6: ["bankgroup_stall_cycles", "bank_stall_cycles", "vec_resc_conflict_cycles"],
-        7: ["ub_read_bw_mte", "l2_write_bw", "main_mem_write_bw", "ub_write_bw_mte",
-            "ub_read_bw_vector", "ub_write_bw_vector", "ub_read_bw_scalar", "ub_write_bw_scalar"],
-        8: ["write_cache_hit", "write_cache_miss_allocate", "r0_read_cache_hit",
-            "r0_read_cache_miss_allocate", "r1_read_cache_hit", "r1_read_cache_miss_allocate"],
+        7: [
+            "ub_read_bw_mte",
+            "l2_write_bw",
+            "main_mem_write_bw",
+            "ub_write_bw_mte",
+            "ub_read_bw_vector",
+            "ub_write_bw_vector",
+            "ub_read_bw_scalar",
+            "ub_write_bw_scalar",
+        ],
+        8: [
+            "write_cache_hit",
+            "write_cache_miss_allocate",
+            "r0_read_cache_hit",
+            "r0_read_cache_miss_allocate",
+            "r1_read_cache_hit",
+            "r1_read_cache_miss_allocate",
+        ],
     }
 
     table_pmu_header_3510 = {
         1: ["cube_fp_instr_busy", "cube_int_instr_busy"],
-        2: ["pmu_idc_aic_vec_busy_o", "cube_instr_busy", "scalar_instr_busy", "mte1_instr_busy",
-            "mte2_instr_busy", "mte3_instr_busy", "icache_req", "icache_miss", "pmu_fix_instr_busy"],
-        4: ["bif_sc_pmu_read_main_instr_core", "bif_sc_pmu_write_main_instr_core", "pmu_aiv_ext_rd_ub_instr",
-            "ub_pmu_vec_rd_ub_acc", "pmu_aiv_ext_wr_ub_instr", "ub_pmu_vec_wr_ub_acc",
-            "pmu_rd_l1_instr", "pmu_wr_l1_instr"],
-        5: ["cube_sc_pmu_read_l0a_instr", "pmu_wr_l0a_instr", "cube_sc_pmu_read_l0b_instr", "pmu_wr_l0b_instr",
-            "fixp_rd_l0c_instr", "cube_sc_pmu_read_l0c_instr", "cube_sc_pmu_write_l0c_instr"],
-        6: ["stu_pmu_wctl_ub_cflt", "ldu_pmu_ib_ub_cflt", "pmu_idc_aic_vec_instr_vf_busy_o",
-            "idu_pmu_ins_iss_cnt"],
-        7: ["pmu_rd_acc_ub_instr_p", "pmu_wr_acc_ub_instr_p", "pmu_fix_wr_ub_instr",
-            "mte_sc_pmu_write_acc_ub_instr_0", "mte_sc_pmu_read_acc_ub_instr_0",
-            "ub_pmu_vec_rd_ub_acc", "ub_pmu_vec_wr_ub_acc"],
-        8: ["bif_sc_pmu_ar_close_l2_hit_core", "bif_sc_pmu_ar_close_l2_miss_core",
-            "bif_sc_pmu_ar_close_l2_victim_core", "bif_sc_pmu_aw_close_l2_hit_core",
-            "bif_sc_pmu_aw_close_l2_miss_core", "bif_sc_pmu_aw_close_l2_victim_core"],
+        2: [
+            "pmu_idc_aic_vec_busy_o",
+            "cube_instr_busy",
+            "scalar_instr_busy",
+            "mte1_instr_busy",
+            "mte2_instr_busy",
+            "mte3_instr_busy",
+            "icache_req",
+            "icache_miss",
+            "pmu_fix_instr_busy",
+        ],
+        4: [
+            "bif_sc_pmu_read_main_instr_core",
+            "bif_sc_pmu_write_main_instr_core",
+            "pmu_aiv_ext_rd_ub_instr",
+            "ub_pmu_vec_rd_ub_acc",
+            "pmu_aiv_ext_wr_ub_instr",
+            "ub_pmu_vec_wr_ub_acc",
+            "pmu_rd_l1_instr",
+            "pmu_wr_l1_instr",
+        ],
+        5: [
+            "cube_sc_pmu_read_l0a_instr",
+            "pmu_wr_l0a_instr",
+            "cube_sc_pmu_read_l0b_instr",
+            "pmu_wr_l0b_instr",
+            "fixp_rd_l0c_instr",
+            "cube_sc_pmu_read_l0c_instr",
+            "cube_sc_pmu_write_l0c_instr",
+        ],
+        6: ["stu_pmu_wctl_ub_cflt", "ldu_pmu_ib_ub_cflt", "pmu_idc_aic_vec_instr_vf_busy_o", "idu_pmu_ins_iss_cnt"],
+        7: [
+            "pmu_rd_acc_ub_instr_p",
+            "pmu_wr_acc_ub_instr_p",
+            "pmu_fix_wr_ub_instr",
+            "mte_sc_pmu_write_acc_ub_instr_0",
+            "mte_sc_pmu_read_acc_ub_instr_0",
+            "ub_pmu_vec_rd_ub_acc",
+            "ub_pmu_vec_wr_ub_acc",
+        ],
+        8: [
+            "bif_sc_pmu_ar_close_l2_hit_core",
+            "bif_sc_pmu_ar_close_l2_miss_core",
+            "bif_sc_pmu_ar_close_l2_victim_core",
+            "bif_sc_pmu_aw_close_l2_hit_core",
+            "bif_sc_pmu_aw_close_l2_miss_core",
+            "bif_sc_pmu_aw_close_l2_victim_core",
+        ],
     }
     return table_pmu_header_2201, table_pmu_header_3510
 

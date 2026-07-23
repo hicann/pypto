@@ -13,9 +13,8 @@
 Test eq codegen for KirinX90
 """
 
+from kirin.common_cmp import TEST_CASES, create_test_eq_module, run_eq_test
 import pytest
-from kirin.common_cmp import create_test_eq_module, run_eq_test, TEST_CASES
-
 
 KERNELS, _ = create_test_eq_module("KirinX90")
 

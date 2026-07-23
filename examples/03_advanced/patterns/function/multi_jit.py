@@ -13,13 +13,16 @@ add_scalar_loop_multi_jit Example for PyPTO
 
 This example demonstrates how to implement a add_scalar_loop_multi_jit operation using PyPTO, including:
 """
+
+import argparse
 import os
 import sys
-import argparse
-import pypto
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -60,6 +63,7 @@ def get_device_id():
         print(f"ERROR: TILE_FWK_DEVICE_ID must be an integer, got: {os.environ['TILE_FWK_DEVICE_ID']}")
         return None
 
+
 SHAPE = (32, 32, 1, 256)
 VAL = 1
 
@@ -80,7 +84,8 @@ def add_kernel(
     input0: pypto.Tensor(SHAPE, pypto.DT_FP32),
     input1: pypto.Tensor(SHAPE, pypto.DT_FP32),
     out: pypto.Tensor(SHAPE, pypto.DT_FP32),
-    add1_flag: bool = True):
+    add1_flag: bool = True,
+):
     out[:] = add_core(input0, input1, add1_flag)
 
 
@@ -88,7 +93,7 @@ def test_add_scalar_loop_multi_jit(device_id=None) -> None:
     device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = SHAPE
-    #prepare data
+    # prepare data
     val = VAL
 
     input_data0 = torch.rand(shape, dtype=torch.float, device=device)
@@ -133,26 +138,14 @@ Examples:
   %(prog)s add_scalar_loop_multi_jit::test_add_scalar_loop_multi_jit
             Run the add_scalar_loop_multi_jit::test_add_scalar_loop_multi_jit example
   %(prog)s --list       List all available examples
-        """
+        """,
     )
     parser.add_argument(
-        'example_id',
-        type=str,
-        nargs='?',
-        help='Example ID to run (1). If not specified, the example will run.'
+        'example_id', type=str, nargs='?', help='Example ID to run (1). If not specified, the example will run.'
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default='npu',
-        choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default='npu', choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -162,7 +155,7 @@ Examples:
         "add_scalar_loop_multi_jit::test_add_scalar_loop_multi_jit": {
             'name': 'add_scalar_loop_multi_jit',
             'description': 'add_scalar_loop_multi_jit implementation',
-            'function': test_add_scalar_loop_multi_jit
+            'function': test_add_scalar_loop_multi_jit,
         }
     }
 
@@ -207,7 +200,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("(Make sure CANN environment is configured and NPU is available)\n")

@@ -8,11 +8,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import os
 import math
-import pypto
+import os
+
 from numpy.testing import assert_allclose
 import torch
+
+import pypto
 
 
 def test_gcd_onboard():
@@ -31,33 +33,43 @@ def test_gcd_onboard():
     with pypto.function("MAIN", input1, input2, output):
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
             for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
-                view_tensor_a = pypto.view(input1, view_shape,
-                                            [b_idx * view_shape[0], s_idx * view_shape[1]],
-                                            valid_shape=[
-                                                pypto.min(pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                                                        pypto.symbolic_scalar(view_shape[0])),
-                                                pypto.min(pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                                                        pypto.symbolic_scalar(view_shape[1])),
-                                            ],
-                                            )
-                view_tensor_b = pypto.view(input2, view_shape,
-                                            [b_idx * view_shape[0], s_idx * view_shape[1]],
-                                            valid_shape=[
-                                                pypto.min(pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                                                        pypto.symbolic_scalar(view_shape[0])),
-                                                pypto.min(pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                                                        pypto.symbolic_scalar(view_shape[1])),
-                                            ],
-                                            )
+                view_tensor_a = pypto.view(
+                    input1,
+                    view_shape,
+                    [b_idx * view_shape[0], s_idx * view_shape[1]],
+                    valid_shape=[
+                        pypto.min(
+                            pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
+                            pypto.symbolic_scalar(view_shape[0]),
+                        ),
+                        pypto.min(
+                            pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
+                            pypto.symbolic_scalar(view_shape[1]),
+                        ),
+                    ],
+                )
+                view_tensor_b = pypto.view(
+                    input2,
+                    view_shape,
+                    [b_idx * view_shape[0], s_idx * view_shape[1]],
+                    valid_shape=[
+                        pypto.min(
+                            pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
+                            pypto.symbolic_scalar(view_shape[0]),
+                        ),
+                        pypto.min(
+                            pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
+                            pypto.symbolic_scalar(view_shape[1]),
+                        ),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 view_tensor_a.move(pypto.gcd(view_tensor_a, view_tensor_b))
                 pypto.assemble(view_tensor_a, [b_idx * view_shape[0], s_idx * view_shape[1]], output)
                 del view_tensor_a
     assert isinstance(output, pypto.tensor)
-    a_tensor = torch.randint(
-        low=-10, high=10, size=[shape[0], shape[1]], dtype=torch.int32)
-    b_tensor = torch.randint(
-        low=-10, high=10, size=[shape[0], shape[1]], dtype=torch.int32)
+    a_tensor = torch.randint(low=-10, high=10, size=[shape[0], shape[1]], dtype=torch.int32)
+    b_tensor = torch.randint(low=-10, high=10, size=[shape[0], shape[1]], dtype=torch.int32)
     out_tensor = torch.zeros(shape[0], shape[1], dtype=torch.int32)
     pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
     pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")

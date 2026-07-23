@@ -14,9 +14,10 @@
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import sys
+
 import logging
 from pathlib import Path
+import sys
 from typing import List
 
 import numpy as np
@@ -24,8 +25,9 @@ import numpy as np
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -177,8 +179,7 @@ def gen_golden_np(output: Path):
     ]
 )
 def fa_main(case_name: str, output: Path) -> bool:
-    q, k, v, dx, drop_mask, y, dq_golden, dk_golden, dv_golden, softmax_res_golden, x_max, x_sum \
-        = gen_golden_np(output)
+    q, k, v, dx, drop_mask, y, dq_golden, dk_golden, dv_golden, softmax_res_golden, x_max, x_sum = gen_golden_np(output)
     q, k, v = q.astype(dtype_f32), k.astype(dtype_f32), v.astype(dtype_f32)
 
     m = np.full([b, n, s, 1], 100000000000000.0, dtype=dtype_f32)
@@ -196,9 +197,8 @@ def fa_main(case_name: str, output: Path) -> bool:
                 data_end = one_loop_size * (j + 1)
                 kj = k[b_idx, n_idx, data_start:data_end, :]
                 vj = v[b_idx, n_idx, data_start:data_end, :]
-                drop_mask_i = drop_mask[b_idx, n_idx, :, data_start:data_end]
+                _drop_mask_i = drop_mask[b_idx, n_idx, :, data_start:data_end]
                 for i in range(i_loop):
-
                     data_start_i = one_loop_size * i
                     data_end_i = one_loop_size * (i + 1)
                     qi = q[b_idx, n_idx, data_start_i:data_end_i, :]
@@ -215,7 +215,6 @@ def fa_main(case_name: str, output: Path) -> bool:
                     tilda_lij = np.sum(tilda_pij, axis=-1, keepdims=True)
 
                     if j == 0:
-
                         q6 = 1 / tilda_lij
                         q1 = np.matmul(tilda_pij, vj)
 
@@ -224,7 +223,6 @@ def fa_main(case_name: str, output: Path) -> bool:
                         m[b_idx, n_idx, data_start_i:data_end_i, :] = tilda_mij
 
                     else:
-
                         mi_new = np.max(np.concatenate((mi, tilda_mij), axis=-1), axis=-1, keepdims=True)  # ->x_max
 
                         t1 = mi - mi_new
@@ -247,7 +245,7 @@ def fa_main(case_name: str, output: Path) -> bool:
                         _l[b_idx, n_idx, data_start_i:data_end_i, :] = li_new
                         m[b_idx, n_idx, data_start_i:data_end_i, :] = mi_new
 
-    error = np.array(y - o)
+    _error = np.array(y - o)
     o.tofile(Path(output, 'res_golden.bin'))
     m.tofile(Path(output, 'max_golden.bin'))
     _l.tofile(Path(output, 'sum_golden.bin'))

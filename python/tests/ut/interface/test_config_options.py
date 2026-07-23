@@ -8,18 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import inspect
+
 import pypto
-from pypto.experimental import set_operation_options, get_operation_options
+from pypto.experimental import get_operation_options, set_operation_options
 
 
 def test_print_options():
-    pypto.set_print_options(edgeitems=1,
-                            precision=2,
-                            threshold=3,
-                            linewidth=4)
+    pypto.set_print_options(edgeitems=1, precision=2, threshold=3, linewidth=4)
 
 
 def test_pass_option():
@@ -70,15 +68,15 @@ def test_reset_option():
 def test_operation_option():
     set_operation_options(combine_axis=True)
     option = get_operation_options()
-    assert option["combine_axis"] == True
+    assert option["combine_axis"]
 
 
 def test_global_option():
     res = pypto.get_global_config("platform.enable_cost_model")
-    assert res == False
+    assert not res
     pypto.set_global_config("platform.enable_cost_model", True)
     res = pypto.get_global_config("platform.enable_cost_model")
-    assert res == True
+    assert res
 
     pypto.set_global_config("codegen.parallel_compile", 10)
     res = pypto.get_global_config("codegen.parallel_compile")

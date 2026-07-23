@@ -12,14 +12,12 @@
 Test view codegen for KirinX90
 """
 
-import pytest
-
 from kirin.common_view import (
+    TEST_CASES,
     create_view_kernels,
     run_view_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_view_kernels("KirinX90")
 
@@ -28,8 +26,7 @@ KERNELS = create_view_kernels("KirinX90")
     "kernel_name,torch_dtype,pypto_dtype,tile_shapes,kernel_shape,test_shape,view_shape,offsets",
     TEST_CASES,
 )
-def test_view(kernel_name, torch_dtype, pypto_dtype, tile_shapes,
-              kernel_shape, test_shape, view_shape, offsets):
+def test_view(kernel_name, torch_dtype, pypto_dtype, tile_shapes, kernel_shape, test_shape, view_shape, offsets):
     run_view_test(KERNELS, kernel_name, torch_dtype, test_shape, view_shape, offsets)
 
 

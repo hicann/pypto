@@ -8,11 +8,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import json
+""" """
+
 import argparse
 from collections import namedtuple
+import json
 
 
 def find_block_with_idx(data, idx):
@@ -70,11 +70,13 @@ def process_time_and_blocks(filename, aic_config, aiv_config, time_config):
                 new_global_idx += 1
 
             if group >= extra_blocks:
-                new_data.append({
-                    "blockIdx": new_global_idx,
-                    "coreType": "AIC",
-                    "tasks": [],
-                })
+                new_data.append(
+                    {
+                        "blockIdx": new_global_idx,
+                        "coreType": "AIC",
+                        "tasks": [],
+                    }
+                )
                 new_global_idx += 1
 
     if aiv_config.block_num is not None and aiv_config.group_num is not None:
@@ -90,11 +92,13 @@ def process_time_and_blocks(filename, aic_config, aiv_config, time_config):
                 new_global_idx += 1
 
             if group >= extra_blocks:
-                new_data.append({
-                    "blockIdx": new_global_idx,
-                    "coreType": "AIV",
-                    "tasks": [],
-                })
+                new_data.append(
+                    {
+                        "blockIdx": new_global_idx,
+                        "coreType": "AIV",
+                        "tasks": [],
+                    }
+                )
                 new_global_idx += 1
 
     new_data.sort(key=lambda x: x['blockIdx'])
@@ -102,7 +106,7 @@ def process_time_and_blocks(filename, aic_config, aiv_config, time_config):
     with open('processed_tilefwk_prof_data.json', 'w') as f:
         json.dump(new_data, f, indent=2)
 
-    print(f"Onboard Json Processed!")
+    print("Onboard Json Processed!")
 
 
 def main():

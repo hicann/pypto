@@ -45,24 +45,26 @@
     # 清理并重新构建
     python build_ci.py -c --build_type Debug
 """
+
 import abc
 import argparse
 import dataclasses
+from datetime import datetime, timedelta, timezone
+from importlib import metadata
 import json
 import logging
 import math
 import multiprocessing
 import os
+from pathlib import Path
 import platform
 import shlex
 import shutil
 import signal
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Optional, List, Dict, Tuple, Any
-from importlib import metadata
+from typing import Any, Dict, List, Optional, Tuple
+
 from packaging import requirements
 
 try:
@@ -161,9 +163,9 @@ class CMakeParam(abc.ABC):
 
 @dataclasses.dataclass
 class Py3Desc:
-    """Python3描述
-    """
-    exe: str    # Interpreter 路径
+    """Python3描述"""
+
+    exe: str  # Interpreter 路径
     minor: int  # Minor 版本
 
 
@@ -173,6 +175,7 @@ class FeatureParam(CMakeParam):
 
     管理构建过程中的特性选项, 包括前端类型, 后端类型和 whl 包编译模式.
     """
+
     whl_name: str = "pypto"
     frontend_type: Optional[str] = None  # 前端类型, 支持 python3, cpp
     backend_type: Optional[str] = None  # 后端类型, 支持 npu, cost_model
@@ -222,7 +225,7 @@ class FeatureParam(CMakeParam):
         :rtype: str
         """
         desc = ""
-        desc += f"\nFeature"
+        desc += "\nFeature"
         desc += f"\n    Frontend                : {self.frontend_type}"
         if self.frontend_type_python3:
             desc += f"\n    JustBuildWhl            : {self.just_build_whl}"
@@ -278,31 +281,70 @@ class FeatureParam(CMakeParam):
         :param ext: 扩展信息, 未使用
         :type ext: Optional[Any]
         """
-        parser.add_argument("-f", "--frontend", nargs="?", type=str, default="python3",
-                            choices=["python3", "cpp"],
-                            help="frontend, such as python3/cpp etc.")
-        parser.add_argument("--py_abi", type=int, default=None,
-                            choices=[37, 38, 39, 310, 311, 312, 313, 314],
-                            help="whl py abi tag numeric part, "
-                                 "e.g. 39 for cp39(Python 3.9), 310 for cp310(Python 3.10)")
-        parser.add_argument("--plat_name", nargs="?", type=str, default="",
-                            choices=["manylinux2014", "manylinux_2_24", "manylinux_2_28"],
-                            help="whl plat_name, such as manylinux2014/manylinux_2_24/manylinux_2_28 etc.")
-        parser.add_argument("--no_isolation", action="store_false", default=True, dest="isolation",
-                            help="Disable building the project(whl) in an isolated virtual environment. "
-                                 "Build dependencies must be installed separately when this option is used.")
-        parser.add_argument("--editable", action="store_true", default=False,
-                            help="Install whl in editable mode (i.e. setuptools \"editable_wheel\")")
-        parser.add_argument("--break_system_packages", action="store_true", default=False,
-                            help="Bypass system Python package protection to force global pip installation.")
-        parser.add_argument("-b", "--backend", nargs="?", type=str, default="npu",
-                            choices=["npu", "cost_model"],
-                            help="backend, such as npu/cost_model etc.")
-        parser.add_argument("--multi_py3_exe", nargs="+", type=str, default=None,
-                            help="Extra Python3 executables for multi-version pypto_impl.so, "
-                                 "e.g. --multi_py3_exe /usr/bin/python3.9 /usr/bin/python3.10")
-        parser.add_argument("--just_build_whl", action="store_true", default=False,
-                            help="Build whl only, without packing into run.")
+        parser.add_argument(
+            "-f",
+            "--frontend",
+            nargs="?",
+            type=str,
+            default="python3",
+            choices=["python3", "cpp"],
+            help="frontend, such as python3/cpp etc.",
+        )
+        parser.add_argument(
+            "--py_abi",
+            type=int,
+            default=None,
+            choices=[37, 38, 39, 310, 311, 312, 313, 314],
+            help="whl py abi tag numeric part, e.g. 39 for cp39(Python 3.9), 310 for cp310(Python 3.10)",
+        )
+        parser.add_argument(
+            "--plat_name",
+            nargs="?",
+            type=str,
+            default="",
+            choices=["manylinux2014", "manylinux_2_24", "manylinux_2_28"],
+            help="whl plat_name, such as manylinux2014/manylinux_2_24/manylinux_2_28 etc.",
+        )
+        parser.add_argument(
+            "--no_isolation",
+            action="store_false",
+            default=True,
+            dest="isolation",
+            help="Disable building the project(whl) in an isolated virtual environment. "
+            "Build dependencies must be installed separately when this option is used.",
+        )
+        parser.add_argument(
+            "--editable",
+            action="store_true",
+            default=False,
+            help="Install whl in editable mode (i.e. setuptools \"editable_wheel\")",
+        )
+        parser.add_argument(
+            "--break_system_packages",
+            action="store_true",
+            default=False,
+            help="Bypass system Python package protection to force global pip installation.",
+        )
+        parser.add_argument(
+            "-b",
+            "--backend",
+            nargs="?",
+            type=str,
+            default="npu",
+            choices=["npu", "cost_model"],
+            help="backend, such as npu/cost_model etc.",
+        )
+        parser.add_argument(
+            "--multi_py3_exe",
+            nargs="+",
+            type=str,
+            default=None,
+            help="Extra Python3 executables for multi-version pypto_impl.so, "
+            "e.g. --multi_py3_exe /usr/bin/python3.9 /usr/bin/python3.10",
+        )
+        parser.add_argument(
+            "--just_build_whl", action="store_true", default=False, help="Build whl only, without packing into run."
+        )
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
         """生成 CMake Configure 命令
@@ -317,8 +359,9 @@ class FeatureParam(CMakeParam):
         cmd = ""
         cmd += self._cfg_require(opt="ENABLE_FEATURE_PYTHON_FRONT_END", ctr=self.frontend_type_python3)
         cmd += self._cfg_require(opt="BUILD_WITH_CANN", ctr=self.backend_type in ["npu"])
-        cmd += self._cfg_require(opt="ENABLE_FEATURE_PYBIND11_IMPL_COMPILE_ONLINE",
-                                 ctr=self.frontend_type_python3 and self.whl_py3_abi)
+        cmd += self._cfg_require(
+            opt="ENABLE_FEATURE_PYBIND11_IMPL_COMPILE_ONLINE", ctr=self.frontend_type_python3 and self.whl_py3_abi
+        )
         return cmd
 
     def _init_multi_py3_cfg(self, multi_py3_exe):
@@ -334,12 +377,19 @@ class FeatureParam(CMakeParam):
         for exe in multi_py3_exe:
             ret = subprocess.run(
                 [exe, "-c", "import sys; print(sys.version_info.minor)"],
-                capture_output=True, check=True, text=True, encoding='utf-8'
+                capture_output=True,
+                check=True,
+                text=True,
+                encoding='utf-8',
             )
             minor = int(ret.stdout.strip())
             if minor == int(sys.version_info.minor):
-                logging.info("Multi-Py3 detected: %s -> Python 3.%d same as call Python3.%d, skip",
-                             exe, minor, sys.version_info.minor)
+                logging.info(
+                    "Multi-Py3 detected: %s -> Python 3.%d same as call Python3.%d, skip",
+                    exe,
+                    minor,
+                    sys.version_info.minor,
+                )
             elif self.whl_py3_abi and int(f"3{minor}") < self.whl_py3_abi:
                 logging.info("Multi-Py3 detected: Python3.%d < py_abi %d, skip", minor, self.whl_py3_abi)
             else:
@@ -356,6 +406,7 @@ class BuildParam(CMakeParam):
 
     管理构建过程的配置选项, 包括 CMake 配置参数和构建执行参数.
     """
+
     # Configure
     generator: Optional[str] = None  # Generator
     build_type: Optional[str] = None  # 构建类型
@@ -395,9 +446,9 @@ class BuildParam(CMakeParam):
         :return: 格式化的构建参数字符串
         :rtype: str
         """
-        desc = f"\nBuild"
-        desc += f"\n    CMake"
-        desc += f"\n        Configure"
+        desc = "\nBuild"
+        desc += "\n    CMake"
+        desc += "\n        Configure"
         desc += f"\n                  Generator : {self.generator}"
         desc += f"\n                  BuildType : {self.build_type}"
         desc += f"\n                       ASan : {self.asan}"
@@ -406,7 +457,7 @@ class BuildParam(CMakeParam):
         desc += f"\n           ClangInstallPath : {self.clang_install_path}"
         desc += f"\n            CompileDepCheck : {self.compile_dependency_check}"
         desc += f"\n  EnableBuildWithCannMobile : {self.enable_build_with_cann_mobile}"
-        desc += f"\n        Build"
+        desc += "\n        Build"
         desc += f"\n                    Targets : {self.targets}"
         desc += f"\n                    Job Num : {self.job_num}"
         return desc
@@ -422,31 +473,52 @@ class BuildParam(CMakeParam):
         :type ext: Optional[Any]
         """
         # Configure
-        parser.add_argument("--generator", nargs="?", type=str, default="",
-                            help="Specify a build system generator.")
-        parser.add_argument("--build_type", "--build-type", nargs="?", type=str, default="Release",
-                            choices=["Debug", "Release", "MinSizeRel", "RelWithDebInfo"],
-                            help="build type.")
-        parser.add_argument("--asan", action="store_true", default=False,
-                            help="Enable AddressSanitizer.")
-        parser.add_argument("--ubsan", action="store_true", default=False,
-                            help="Enable UndefinedBehaviorSanitizer.")
-        parser.add_argument("--gcov", action="store_true", default=False,
-                            help="Enable GNU Coverage Instrumentation Tool.")
-        parser.add_argument("--gcov_increment", action="store_true", default=False,
-                            help="Enable increment coverage calculation based on latest commit.")
-        parser.add_argument("--clang", nargs="?", type=str, default="",
-                            help="Specify clang install path, such as /usr/bin/clang")
-        parser.add_argument("--compile_dependency_check", action="store_true", default=False,
-                            help="Enable compile dependency relation check.")
-        parser.add_argument("--enable_build_with_cann_mobile", action="store_true", default=False,
-                            help="Enable build with CANN mobile.")
+        parser.add_argument("--generator", nargs="?", type=str, default="", help="Specify a build system generator.")
+        parser.add_argument(
+            "--build_type",
+            "--build-type",
+            nargs="?",
+            type=str,
+            default="Release",
+            choices=["Debug", "Release", "MinSizeRel", "RelWithDebInfo"],
+            help="build type.",
+        )
+        parser.add_argument("--asan", action="store_true", default=False, help="Enable AddressSanitizer.")
+        parser.add_argument("--ubsan", action="store_true", default=False, help="Enable UndefinedBehaviorSanitizer.")
+        parser.add_argument(
+            "--gcov", action="store_true", default=False, help="Enable GNU Coverage Instrumentation Tool."
+        )
+        parser.add_argument(
+            "--gcov_increment",
+            action="store_true",
+            default=False,
+            help="Enable increment coverage calculation based on latest commit.",
+        )
+        parser.add_argument(
+            "--clang", nargs="?", type=str, default="", help="Specify clang install path, such as /usr/bin/clang"
+        )
+        parser.add_argument(
+            "--compile_dependency_check",
+            action="store_true",
+            default=False,
+            help="Enable compile dependency relation check.",
+        )
+        parser.add_argument(
+            "--enable_build_with_cann_mobile", action="store_true", default=False, help="Enable build with CANN mobile."
+        )
         # Build
-        parser.add_argument("-t", "--targets", nargs="?", type=str, action="append",
-                            help="targets, specific build targets, "
-                                 "If you specify more than one, all targets within the specified range are built.")
-        parser.add_argument("-j", "--job_num", nargs="?", type=int, default=-1,
-                            help="job num, specific job num of build.")
+        parser.add_argument(
+            "-t",
+            "--targets",
+            nargs="?",
+            type=str,
+            action="append",
+            help="targets, specific build targets, "
+            "If you specify more than one, all targets within the specified range are built.",
+        )
+        parser.add_argument(
+            "-j", "--job_num", nargs="?", type=int, default=-1, help="job num, specific job num of build."
+        )
 
     @staticmethod
     def _get_clang_install_path(opt: Optional[str]) -> Optional[Path]:
@@ -488,7 +560,15 @@ class BuildParam(CMakeParam):
         :rtype: Optional[int]
         """
         def_job_num = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 128)  # 128 为缺省最大核数
-        def_job_num = None if generator and generator.lower() in ["ninja", ] else def_job_num  # ninja 自身决定缺省核数
+        def_job_num = (
+            None
+            if generator
+            and generator.lower()
+            in [
+                "ninja",
+            ]
+            else def_job_num
+        )  # ninja 自身决定缺省核数
         job_num = job_num if job_num and job_num > 0 else def_job_num
         return job_num
 
@@ -517,7 +597,7 @@ class BuildParam(CMakeParam):
         :rtype: str
         """
         inc_build_type = bool(ext) if ext is not None else True
-        cmd = (self._cfg_require(opt="CMAKE_BUILD_TYPE", tv=self.build_type) if inc_build_type else "")
+        cmd = self._cfg_require(opt="CMAKE_BUILD_TYPE", tv=self.build_type) if inc_build_type else ""
         cmd += self._cfg_require(opt="ENABLE_ASAN", ctr=self.asan)
         cmd += self._cfg_require(opt="ENABLE_UBSAN", ctr=self.ubsan)
         cmd += self._cfg_require(opt="ENABLE_GCOV", ctr=self.gcov)
@@ -585,6 +665,7 @@ class TestsExecuteParam(CMakeParam):
 
     管理测试执行的配置选项, 包括自动执行, 并行执行, 超时控制和耗时缓存等.
     """
+
     changed_file: Optional[Path] = None  # 修改文件路径
     auto_execute: bool = False  # 用例自动执行
     auto_execute_parallel: bool = False  # 用例并行执行
@@ -618,12 +699,12 @@ class TestsExecuteParam(CMakeParam):
         :return: 格式化的测试执行参数字符串
         :rtype: str
         """
-        desc = f"\n    Execute"
+        desc = "\n    Execute"
         desc += f"\n               Changed File : {self.changed_file}"
         desc += f"\n                       Auto : {self.auto_execute}"
         desc += f"\n                   Parallel : {self.auto_execute_parallel}"
         desc += f"\n                CaseTimeout : {self.case_execute_timeout}"
-        desc += f"\n        CaseDuration"
+        desc += "\n        CaseDuration"
         desc += f"\n                       Json : {self.dump_case_duration_json}"
         desc += f"\n                     MaxNum : {self.dump_case_duration_max_num}"
         desc += f"\n                     MinSec : {self.dump_case_duration_min_secends}"
@@ -648,21 +729,49 @@ class TestsExecuteParam(CMakeParam):
         :param ext: 扩展信息, 未使用
         :type ext: Optional[Any]
         """
-        parser.add_argument("--changed_files", nargs="?", type=Path, default=None,
-                            help="Specify the file of files changed, "
-                                 "so that the corresponding test cases can be triggered incrementally.")
-        parser.add_argument("--disable_auto_execute", action="store_false", default=True,
-                            help="Disable auto execute STest/Utest with build.")
-        parser.add_argument("--case_execute_timeout", nargs="?", type=int, default=None,
-                            help="Case execute timeout.")
-        parser.add_argument("--cpu_rank_size", nargs="?", type=int, default=None,
-                            help="Specify the rank size for CPU affinity grouping.")
-        parser.add_argument("--dump_case_duration_json", nargs="?", type=Path, default=None,
-                            help="Specify the path to the case duration json cache file.")
-        parser.add_argument("--dump_case_duration_max_num", nargs="?", type=int, default=None,
-                            help="Maximum number of cases to dump to duration json cache.")
-        parser.add_argument("--dump_case_duration_min_secends", nargs="?", type=int, default=None,
-                            help="Minimum duration (in seconds) for cases to dump to duration json cache.")
+        parser.add_argument(
+            "--changed_files",
+            nargs="?",
+            type=Path,
+            default=None,
+            help="Specify the file of files changed, "
+            "so that the corresponding test cases can be triggered incrementally.",
+        )
+        parser.add_argument(
+            "--disable_auto_execute",
+            action="store_false",
+            default=True,
+            help="Disable auto execute STest/Utest with build.",
+        )
+        parser.add_argument("--case_execute_timeout", nargs="?", type=int, default=None, help="Case execute timeout.")
+        parser.add_argument(
+            "--cpu_rank_size",
+            nargs="?",
+            type=int,
+            default=None,
+            help="Specify the rank size for CPU affinity grouping.",
+        )
+        parser.add_argument(
+            "--dump_case_duration_json",
+            nargs="?",
+            type=Path,
+            default=None,
+            help="Specify the path to the case duration json cache file.",
+        )
+        parser.add_argument(
+            "--dump_case_duration_max_num",
+            nargs="?",
+            type=int,
+            default=None,
+            help="Maximum number of cases to dump to duration json cache.",
+        )
+        parser.add_argument(
+            "--dump_case_duration_min_secends",
+            nargs="?",
+            type=int,
+            default=None,
+            help="Minimum duration (in seconds) for cases to dump to duration json cache.",
+        )
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
         """生成 CMake Configure 命令
@@ -687,6 +796,7 @@ class TestsGoldenParam(CMakeParam):
 
     管理系统测试 (STest) 的 Golden 标准数据相关配置.
     """
+
     clean: bool = False  # 清理 Golden 标记
     path: Optional[Path] = None  # 指定 Golden 路径
 
@@ -710,11 +820,24 @@ class TestsGoldenParam(CMakeParam):
         :param ext: 扩展信息, 未使用
         :type ext: Optional[Any]
         """
-        parser.add_argument("--golden_path", "--stest_golden_path", nargs="?", type=str, default="",
-                            help="Specific Tests golden path.", dest="golden_path")
-        parser.add_argument("--golden_clean", "--golden_path_clean", "--stest_golden_path_clean",
-                            action="store_true", default=False,
-                            help="Clean Tests golden.", dest="golden_clean")
+        parser.add_argument(
+            "--golden_path",
+            "--stest_golden_path",
+            nargs="?",
+            type=str,
+            default="",
+            help="Specific Tests golden path.",
+            dest="golden_path",
+        )
+        parser.add_argument(
+            "--golden_clean",
+            "--golden_path_clean",
+            "--stest_golden_path_clean",
+            action="store_true",
+            default=False,
+            help="Clean Tests golden.",
+            dest="golden_clean",
+        )
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
         """生成 CMake Configure 命令
@@ -737,6 +860,7 @@ class TestsFilterParam(CMakeParam):
 
     用于按条件过滤测试用例, 支持多种测试类型和过滤模式.
     """
+
     cmake_option: str = ""
     enable: bool = False
     filter_str: Optional[str] = None
@@ -820,6 +944,7 @@ class STestExecuteParam(CMakeParam):
 
     管理系统测试 (STest) 的执行配置, 包括设备 ID, JSON 导出等.
     """
+
     auto_execute_device_id: str = ""
     interpreter_config: bool = False
     enable_binary_cache: bool = False
@@ -850,12 +975,11 @@ class STestExecuteParam(CMakeParam):
         :param ext: 扩展信息, 未使用
         :type ext: Optional[Any]
         """
-        parser.add_argument("-d", "--device", nargs="?", type=int, action="append",
-                            help="Device ID, default 0.")
-        parser.add_argument("--stest_dump_json", action="store_true", default=False,
-                            help="Dump json files.")
-        parser.add_argument("--enable_interpreter_config", action="store_true", default=False,
-                            help="enable STest Interpreter Config")
+        parser.add_argument("-d", "--device", nargs="?", type=int, action="append", help="Device ID, default 0.")
+        parser.add_argument("--stest_dump_json", action="store_true", default=False, help="Dump json files.")
+        parser.add_argument(
+            "--enable_interpreter_config", action="store_true", default=False, help="enable STest Interpreter Config"
+        )
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
         """生成 CMake Configure 命令
@@ -894,8 +1018,9 @@ class TestsParam(CMakeParam):
         self.stest_exec: STestExecuteParam = STestExecuteParam(args=args, enable_binary_cache=False)
         self.stest: TestsFilterParam = TestsFilterParam(argv=args.stest, opt="ENABLE_STEST")
         self.stest_group: TestsFilterParam = TestsFilterParam(argv=args.stest_group, opt="ENABLE_STEST_GROUP")
-        self.stest_distributed: TestsFilterParam = TestsFilterParam(argv=args.stest_distributed,
-                                                                    opt="ENABLE_STEST_DISTRIBUTED")
+        self.stest_distributed: TestsFilterParam = TestsFilterParam(
+            argv=args.stest_distributed, opt="ENABLE_STEST_DISTRIBUTED"
+        )
         self.models: TestsFilterParam = TestsFilterParam(argv=args.models)
         self.example: TestsFilterParam = TestsFilterParam(argv=args.example)
 
@@ -907,36 +1032,36 @@ class TestsParam(CMakeParam):
         """
         if not self.enable:
             return ""
-        desc = f"\nTests"
+        desc = "\nTests"
         desc += f"{self.exec}"
         if self.utest.enable:
-            desc += f"\n    Utest"
+            desc += "\n    Utest"
             desc += f"\n                     Enable : {self.utest.enable}"
             desc += f"\n                     Filter : {self.utest.filter_str}"
         if self.stest.enable or self.stest_distributed.enable:
-            desc += f"\n    Golden"
+            desc += "\n    Golden"
             desc += f"\n                      Clean : {self.golden.clean}"
             desc += f"\n                       Path : {self.golden.path}"
-            desc += f"\n    Stest Execute"
+            desc += "\n    Stest Execute"
             desc += f"\n                     Device : {self.stest_exec.auto_execute_device_id}"
             desc += f"\n                   DumpJson : {self.stest_exec.dump_json}"
             desc += f"\n         Interpreter Config : {self.stest_exec.interpreter_config}"
             desc += f"\n        Enable Binary Cache : {self.stest_exec.enable_binary_cache}"
         if self.stest.enable:
-            desc += f"\n    Stest"
+            desc += "\n    Stest"
             desc += f"\n                     Enable : {self.stest.enable}"
             desc += f"\n                     Filter : {self.stest.filter_str}"
             desc += f"\n                     Group  : {self.stest_group.filter_str}"
         if self.stest_distributed.enable:
-            desc += f"\n    Stest Distributed"
+            desc += "\n    Stest Distributed"
             desc += f"\n                     Enable : {self.stest_distributed.enable}"
             desc += f"\n                     Filter : {self.stest_distributed.filter_str}"
         if self.models.enable:
-            desc += f"\n    Models"
+            desc += "\n    Models"
             desc += f"\n                     Enable : {self.models.enable}"
             desc += f"\n                     Filter : {self.models.filter_str}"
         if self.example.enable:
-            desc += f"\n    Example"
+            desc += "\n    Example"
             desc += f"\n                     Enable : {self.example.enable}"
             desc += f"\n                     Filter : {self.example.filter_str}"
         return desc
@@ -995,6 +1120,7 @@ class BuildCtrl(CMakeParam):
 
     本类包含由命令行指定或解析出的控制标记/参数, 以控制构建过程执行. 是整个构建流程的入口和控制器, 负责协调整个构建过程.
     """
+
     _PYTHONPATH: str = "PYTHONPATH"
 
     def __init__(self, args):
@@ -1018,11 +1144,12 @@ class BuildCtrl(CMakeParam):
         self.verbose: bool = args.verbose
         self.cmake: Optional[Path] = self.which_cmake()
         if not self.cmake:
-            raise RuntimeError(f"Can't find cmake")
+            raise RuntimeError("Can't find cmake")
         # 表示 pip 版本是否支持传递 --config-setting 这种 pep 标准参数传递方式
         self.pip_dependence_desc: Dict[str, str] = {"pip": ">=22.1"}
-        self.pip_support_config_setting = self.check_pip_dependencies(deps=self.pip_dependence_desc,
-                                                                      raise_err=False, log_err=False)
+        self.pip_support_config_setting = self.check_pip_dependencies(
+            deps=self.pip_dependence_desc, raise_err=False, log_err=False
+        )
         # 用于统一 run 和 whl 的构建时间戳
         timestamp = ""
         self.tag_info: str = os.environ.get('tagInfo')
@@ -1046,24 +1173,24 @@ class BuildCtrl(CMakeParam):
         py3_ver = sys.version_info
         pip_ver = metadata.version("pip")
         desc = ""
-        desc += f"\nEnviron"
+        desc += "\nEnviron"
         desc += f"\n    Python3                 : {sys.executable} ({py3_ver.major}.{py3_ver.minor}.{py3_ver.micro})"
         desc += f"\n    pip3                    : {pip_ver}"
-        desc += f"\nPath"
+        desc += "\nPath"
         desc += f"\n    Source  Dir             : {self.src_root}"
         desc += f"\n    Build   Dir             : {self.build_root}"
         desc += f"\n    Install Dir             : {self.install_root}"
         desc += f"\n    3rd     Dir             : {self.third_party_path}"
-        desc += f"\nFlag"
+        desc += "\nFlag"
         desc += f"\n    Clean                   : {self.clean}"
         desc += f"\n    Verbose                 : {self.verbose}"
-        desc += f"\nOthers"
+        desc += "\nOthers"
         desc += f"\n    Timeout                 : {self.origin_timeout}"
         desc += f"\n    TagInfo                 : {self.tag_info}"
         desc += f"{self.feature}"
         desc += f"{self.build}"
         desc += f"{self.tests}"
-        desc += f"\n"
+        desc += "\n"
         return desc
 
     @staticmethod
@@ -1082,15 +1209,24 @@ class BuildCtrl(CMakeParam):
 
     @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
-        parser.add_argument("-c", "--clean", action="store_true", default=False,
-                            help="clean, clean Build-Tree and Install-Tree before build.")
-        parser.add_argument("--timeout", nargs="?", type=int, default=None,
-                            help="Total timeout.")
-        parser.add_argument("--cann_3rd_lib_path", "--third_party_path",
-                            nargs="?", type=str, default="", dest="third_party_path",
-                            help="Specify 3rd Libraries Path")
-        parser.add_argument("--verbose", action="store_true", default=False,
-                            help="verbose, enable verbose output.")
+        parser.add_argument(
+            "-c",
+            "--clean",
+            action="store_true",
+            default=False,
+            help="clean, clean Build-Tree and Install-Tree before build.",
+        )
+        parser.add_argument("--timeout", nargs="?", type=int, default=None, help="Total timeout.")
+        parser.add_argument(
+            "--cann_3rd_lib_path",
+            "--third_party_path",
+            nargs="?",
+            type=str,
+            default="",
+            dest="third_party_path",
+            help="Specify 3rd Libraries Path",
+        )
+        parser.add_argument("--verbose", action="store_true", default=False, help="verbose, enable verbose output.")
 
     @staticmethod
     def _resolve_ascend_cann_package_path() -> str:
@@ -1159,9 +1295,8 @@ class BuildCtrl(CMakeParam):
 
     @classmethod
     def _main(cls):
-        """主处理流程
-        """
-        parser = argparse.ArgumentParser(description=f"PyPTO Build Ctrl.", epilog="Best Regards!")
+        """主处理流程"""
+        parser = argparse.ArgumentParser(description="PyPTO Build Ctrl.", epilog="Best Regards!")
         sub_parser = parser.add_subparsers()  # 子命令
         # 参数注册
         FeatureParam.reg_args(parser=parser)
@@ -1191,14 +1326,16 @@ class BuildCtrl(CMakeParam):
             ctrl.cmake_configure()
             ctrl.cmake_build()
 
-    def run_build_cmd(self, cmd: str, update_env: Optional[Dict[str, str]] = None,
-                      check: bool = True, pg_desc: str = "CMake") -> Tuple[subprocess.CompletedProcess, str]:
+    def run_build_cmd(
+        self, cmd: str, update_env: Optional[Dict[str, str]] = None, check: bool = True, pg_desc: str = "CMake"
+    ) -> Tuple[subprocess.CompletedProcess, str]:
         """执行具体 build 命令行
 
         因以下原因, 设置本函数, 而非调用原生 subprocess.run
             1. 支持多 target 构建, 各 target 构建时长共享公共 timeout 配置;
             2. UTest/STest 并行执行场景下, 执行时进程调用关系为:
-                   build_ci.py(主进程) -> 进程1(CMake) -> 进程2(CMake Generator, make/ninja) -> 进程3(Python)-> 进程4(exe)
+                   build_ci.py(主进程) -> 进程1(CMake) -> 进程2(CMake Generator, make/ninja)
+                   -> 进程3(Python) -> 进程4(exe)
                此时若 进程1 超时, 需要触发其子/孙进程感知, 进而结束
 
         本函数内支持 timeout 重计算, 仅执行成功时会进行重计算
@@ -1210,8 +1347,7 @@ class BuildCtrl(CMakeParam):
         """
 
         def _stop_pg(_msg: str, _p: subprocess.Popen):
-            """通过 SIGINT 信号通知所有子/孙进程结束, python 并行脚本内会捕获该信号进行结算处理
-            """
+            """通过 SIGINT 信号通知所有子/孙进程结束, python 并行脚本内会捕获该信号进行结算处理"""
             _pgid = os.getpgid(_p.pid)
             logging.info("%s. Send terminate event to %s[%s]", _msg, pg_desc, _pgid)
             os.killpg(_pgid, signal.SIGINT)
@@ -1221,8 +1357,9 @@ class BuildCtrl(CMakeParam):
         stderr = None
         env = os.environ.copy()
         env.update(update_env if update_env else {})
-        with subprocess.Popen(shlex.split(cmd), env=env, text=True, encoding='utf-8',
-                              start_new_session=True) as process:
+        with subprocess.Popen(
+            shlex.split(cmd), env=env, text=True, encoding='utf-8', start_new_session=True
+        ) as process:
             try:
                 stdout, stderr = process.communicate(timeout=self.remain_timeout)
             except subprocess.TimeoutExpired as e:
@@ -1307,8 +1444,9 @@ class BuildCtrl(CMakeParam):
                 env["PYPTO_TESTS_DUMP_CASE_DURATION_MIN_SECONDS"] = str(min_sec)
         return env
 
-    def pip_install(self, whl: Path, dest: Optional[Path] = None, opt: str = "",
-                    update_env: Optional[Dict[str, str]] = None):
+    def pip_install(
+        self, whl: Path, dest: Optional[Path] = None, opt: str = "", update_env: Optional[Dict[str, str]] = None
+    ):
         """安装指定的 whl 包
 
         使用 pip 命令安装指定的 whl 包, 支持自定义安装路径和参数.
@@ -1325,7 +1463,7 @@ class BuildCtrl(CMakeParam):
         edit_str = "-e " if self.feature.whl_editable else ""
         cmd = f"{sys.executable} -m pip install {edit_str}" + f"{whl} {opt}" + (" -vvv " if self.verbose else "")
         cmd += f" --target={dest}" if dest else ""
-        cmd += f" --break-system-packages" if self.feature.whl_break_system_packages else ""
+        cmd += " --break-system-packages" if self.feature.whl_break_system_packages else ""
         logging.info("Install %s, Cmd: %s, Timeout: %s", whl, cmd, self.remain_timeout)
         _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="pip")
         logging.info("Install %s%s success, %s", whl, f" to {dest}" if dest else "", duration)
@@ -1349,7 +1487,7 @@ class BuildCtrl(CMakeParam):
                 shutil.rmtree(p)
         else:
             cmd = f"{sys.executable} -m pip uninstall -v -y {name}"
-            cmd += f" --break-system-packages" if self.feature.whl_break_system_packages else ""
+            cmd += " --break-system-packages" if self.feature.whl_break_system_packages else ""
             logging.info("Uninstall %s package, Cmd: %s, Timeout: %s", name, cmd, self.remain_timeout)
             _, _ = self.run_build_cmd(cmd=cmd, pg_desc="pip")
         logging.info("Uninstall %s package%s success", name, f" from {path}" if path else "")
@@ -1390,7 +1528,7 @@ class BuildCtrl(CMakeParam):
             Path(pkg_src, "lib"),  # edit 模式
             self.build_dir_file,  # Python GCov 场景
         ]
-        so_glob = pkg_src.glob(pattern=f"*.so")
+        so_glob = pkg_src.glob(pattern="*.so")
         so_path = [Path(p) for p in so_glob]
         path_lst.extend(so_path)
         for cache_dir in path_lst:
@@ -1442,7 +1580,7 @@ class BuildCtrl(CMakeParam):
             try:
                 _, duration = self.run_build_cmd(cmd=c, update_env=update_env)
             except subprocess.CalledProcessError as e:
-                logging.info(f"CMake Build(%s/%s) failed, ERROR CODE: %s", i, len(cmd_list), e.returncode)
+                logging.info("CMake Build(%s/%s) failed, ERROR CODE: %s", i, len(cmd_list), e.returncode)
                 raise e
             logging.info("CMake Build(%s/%s) success, %s", i, len(cmd_list), duration)
 
@@ -1459,8 +1597,8 @@ class BuildCtrl(CMakeParam):
         """
         update_env = self.get_cfg_update_env()
         if self._use_pip_install_mode() or self.feature.whl_editable:
-            opt = f" --no-compile --no-deps"
-            opt += f" --no-build-isolation" if not self.feature.whl_isolation else ""
+            opt = " --no-compile --no-deps"
+            opt += " --no-build-isolation" if not self.feature.whl_isolation else ""
 
             cmd_config_setting, env_config_setting = self._get_setuptools_build_ext_config_setting()
             if self.feature.whl_editable:
@@ -1477,11 +1615,11 @@ class BuildCtrl(CMakeParam):
             self.pip_uninstall(name=self.feature.whl_name, path=dist)
             self.pip_install(whl=self.src_root, dest=dist, opt=opt, update_env=update_env)
         else:
-            # 检查 build 包版本是否符合要求, 之所以将其放在此处检查, 是因为 pyproject.toml 中 build-system.requires 的检查功能
-            # 就是 build 包实现的, 所以将其写在 pyproject.toml 中并无法提前检查
+            # 检查 build 包版本是否符合要求, 之所以将其放在此处检查, 是因为 pyproject.toml 中
+            # build-system.requires 的检查功能就是 build 包实现的, 所以将其写在 pyproject.toml 中并无法提前检查
             self.check_pip_dependencies(deps={"build": ">=1.0.3"}, raise_err=True, log_err=True)
             cmd = f"{sys.executable} -m build --outdir={self.install_root}"
-            cmd += f" --no-isolation" if not self.feature.whl_isolation else ""
+            cmd += " --no-isolation" if not self.feature.whl_isolation else ""
             cmd += f" {self._get_setuptools_bdist_wheel_config_setting()}"
             logging.info("Build whl, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
             _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="build")
@@ -1503,13 +1641,14 @@ class BuildCtrl(CMakeParam):
             return
         whl_file = self._find_match_whl(name=self.feature.whl_name, path=self.install_root)
         if not whl_file:
-            raise RuntimeError(f"Can't find {self.feature.whl_name} whl file from {self.install_root}, "
-                               f"please run py_build first.")
+            raise RuntimeError(
+                f"Can't find {self.feature.whl_name} whl file from {self.install_root}, please run py_build first."
+            )
         # 打包 run
         run_build_root = Path(self.build_root, "run")
         run_build_root.mkdir(parents=True, exist_ok=True)
         cmd = f"{self.cmake} -S {self.src_root} -B {run_build_root}"
-        cmd += f" -DENABLE_FEATURE_PACKING_WHL_INTO_RUN=ON"
+        cmd += " -DENABLE_FEATURE_PACKING_WHL_INTO_RUN=ON"
         cmd += f" -DWHL_FILE_PATH={whl_file}"
         cmd += f" -DRUN_OUTPUT_DIR={self.install_root}"
         cmd += f" -DASCEND_CANN_PACKAGE_PATH={self._resolve_ascend_cann_package_path()}"
@@ -1520,7 +1659,7 @@ class BuildCtrl(CMakeParam):
         logging.info("CMake Configure(run) success, %s", duration)
 
         cmd = f"{self.cmake} --build {run_build_root} --target package"
-        cmd += f" --verbose" if self.verbose else ""
+        cmd += " --verbose" if self.verbose else ""
         logging.info("CMake Build(run) package, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
         _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="cmake-build-package")
         logging.info("CMake Build(run) package success, %s", duration)
@@ -1550,16 +1689,19 @@ class BuildCtrl(CMakeParam):
             n_workers = str(self.build.job_num)
         else:
             n_workers = "auto"
-        self.py_tests_run_pytest(dist=dist, params=[(self.tests.utest, "python/tests/ut")],
-                                 ext=f"-n {n_workers} -W ignore::DeprecationWarning")
+        self.py_tests_run_pytest(
+            dist=dist,
+            params=[(self.tests.utest, "python/tests/ut")],
+            ext=f"-n {n_workers} -W ignore::DeprecationWarning",
+        )
 
         # 执行用例, Models/STest, 支持混合执行
         dev_lst = [int(d) for d in self.tests.stest_exec.auto_execute_device_id.split(":")]
         dev_ext = " ".join(f"{d}" for d in dev_lst)
         ext_str = f"-n {len(dev_lst)} --device {dev_ext}"
-        self.py_tests_run_pytest(dist=dist, params=[(self.tests.models, "models"),
-                                                    (self.tests.stest, "python/tests/st")],
-                                 ext=ext_str)
+        self.py_tests_run_pytest(
+            dist=dist, params=[(self.tests.models, "models"), (self.tests.stest, "python/tests/st")], ext=ext_str
+        )
         # 执行多卡用例 通过world_size区分
         for cards_per_case in [4, 16]:
             if cards_per_case <= 1 or cards_per_case > len(dev_lst):
@@ -1570,14 +1712,23 @@ class BuildCtrl(CMakeParam):
             used_dev_lst = dev_lst[:needed_devices]
             used_dev_ext = " ".join(f"{d}" for d in used_dev_lst)
             ext_str = f'-n {n_workers} --device {used_dev_ext} --cards-per-case {cards_per_case} -m "world_size"'
-            self.py_tests_run_pytest(dist=dist, params=[(self.tests.models, "python/tests/st"), ],
-                                     ext=ext_str)
+            self.py_tests_run_pytest(
+                dist=dist,
+                params=[
+                    (self.tests.models, "python/tests/st"),
+                ],
+                ext=ext_str,
+            )
 
         # 执行用例, Examples
         dev_ext_comma = ",".join(f"{d}" for d in dev_lst)
-        self.py_run_examples(dist=dist, tests=self.tests.example,
-                             def_filter=str(Path(self.src_root, "examples")),
-                             dev_ext_comma=dev_ext_comma, n_workers=n_workers)
+        self.py_run_examples(
+            dist=dist,
+            tests=self.tests.example,
+            def_filter=str(Path(self.src_root, "examples")),
+            dev_ext_comma=dev_ext_comma,
+            n_workers=n_workers,
+        )
 
         # 生成覆盖率报告 (如果启用 gcov)
         if self.build.gcov:
@@ -1606,8 +1757,14 @@ class BuildCtrl(CMakeParam):
         # 执行 pytest
         self._py_tests_run_pytest(dist=dist, filter_str=filter_str, ext=ext)
 
-    def py_run_examples(self, dist: Optional[Path], tests: TestsFilterParam, def_filter: str,
-                        dev_ext_comma: str = "0", n_workers: str = "auto"):
+    def py_run_examples(
+        self,
+        dist: Optional[Path],
+        tests: TestsFilterParam,
+        def_filter: str,
+        dev_ext_comma: str = "0",
+        n_workers: str = "auto",
+    ):
         """运行示例测试用例
 
         根据 backend_type 决定执行模式 (NPU 或 SIM) , 支持设备分配和超时控制.
@@ -1773,7 +1930,7 @@ class BuildCtrl(CMakeParam):
         cmd = f"{sys.executable} {gen_cov_py} -s={self.src_root} -d={build_dir} "
         for filter_dir in config.get("filter_dirs", []):
             cmd += f" -f={filter_dir}"
-        cmd += (" -i" if self.build.gcov_incr else "") # 增量覆盖率
+        cmd += " -i" if self.build.gcov_incr else ""  # 增量覆盖率
 
         # 4. 执行覆盖率生成
         logging.info("Generate coverage, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
@@ -1800,7 +1957,7 @@ class BuildCtrl(CMakeParam):
         env_setting += f" --cmake-generator={self.build.generator}" if self.build.generator else ""
         env_setting += f" --cmake-build-type={self.build.build_type}" if self.build.build_type else ""
         env_setting += f" --cmake-options=\"{cmake_args}\"" if cmake_args else ""
-        env_setting += f" --cmake-verbose" if self.verbose else ""
+        env_setting += " --cmake-verbose" if self.verbose else ""
         multi_py3_exe_cfg = self.feature.multi_py3_exe_cfg
         if multi_py3_exe_cfg:
             env_setting += f" --multi-py3-exe={multi_py3_exe_cfg}"

@@ -8,15 +8,12 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-from dataclasses import dataclass, field
-from typing import List, Set
-import logging
-import pytest
-import pypto
-from conftest import duration_estimate
+""" """
 
+from dataclasses import dataclass, field
+from typing import List
+
+import pypto
 
 SHAPE_DIM_2 = 2
 SHAPE_DIM_3 = 3
@@ -110,9 +107,7 @@ class LightningIndexerPrologBuildConfig:
             [NUM_128, NUM_128],
         ]
     )
-    v1_tile: List[int] = field(
-        default_factory=lambda: [NUM_1, NUM_256, NUM_128, NUM_128]
-    )
+    v1_tile: List[int] = field(default_factory=lambda: [NUM_1, NUM_256, NUM_128, NUM_128])
     c2_tile: List[List[int]] = field(
         default_factory=lambda: [
             [NUM_16, NUM_16],
@@ -120,19 +115,13 @@ class LightningIndexerPrologBuildConfig:
             [NUM_128, NUM_128],
         ]
     )
-    v2_tile: List[int] = field(
-        default_factory=lambda: [NUM_1, NUM_128, NUM_128, NUM_128]
-    )
+    v2_tile: List[int] = field(default_factory=lambda: [NUM_1, NUM_128, NUM_128, NUM_128])
     rope_2d: List[int] = field(default_factory=lambda: [NUM_128, NUM_256])
     rope_3d_vals: List[int] = field(default_factory=lambda: [NUM_32, NUM_128, NUM_128])
-    rope_4d: List[int] = field(
-        default_factory=lambda: [NUM_1, NUM_64, NUM_128, NUM_128]
-    )
+    rope_4d: List[int] = field(default_factory=lambda: [NUM_1, NUM_64, NUM_128, NUM_128])
 
 
-def layer_norm(
-    x: pypto.Tensor, weight: pypto.Tensor, bias: pypto.Tensor, dim: int
-) -> pypto.Tensor:
+def layer_norm(x: pypto.Tensor, weight: pypto.Tensor, bias: pypto.Tensor, dim: int) -> pypto.Tensor:
     assert dim == (len(x.shape) - 1) or dim == -1
     assert x.dtype == pypto.DT_FP32
     eps = 1e-6
@@ -186,11 +175,7 @@ def rope_3d(
     sin: pypto.Tensor,
     tile_config: LightningIndexerPrologTileConfig,
 ) -> pypto.Tensor:
-    assert (
-        len(x.shape) == SHAPE_DIM_3
-        and len(cos.shape) == SHAPE_DIM_2
-        and len(sin.shape) == SHAPE_DIM_2
-    )
+    assert len(x.shape) == SHAPE_DIM_3 and len(cos.shape) == SHAPE_DIM_2 and len(sin.shape) == SHAPE_DIM_2
     pypto.set_vec_tile_shapes(NUM_1, NUM_32, NUM_128)
     cast_x = pypto.cast(x, pypto.DT_FP32)
     if x.dtype == pypto.DT_FP32:
@@ -224,11 +209,7 @@ def rope(
     sin: pypto.Tensor,
     tile_config: LightningIndexerPrologTileConfig,
 ) -> pypto.Tensor:
-    assert (
-        len(x.shape) == SHAPE_DIM_2
-        and len(cos.shape) == SHAPE_DIM_2
-        and len(sin.shape) == SHAPE_DIM_2
-    )
+    assert len(x.shape) == SHAPE_DIM_2 and len(cos.shape) == SHAPE_DIM_2 and len(sin.shape) == SHAPE_DIM_2
     seq_size = x.shape[NUM_0]
     d_r = x.shape[NUM_1]
     x_dtype = x.dtype
@@ -259,9 +240,7 @@ def rope(
 
 
 def setup_lightning_indexer_prolog_config():
-    pypto.set_pass_options(
-                         cube_l1_reuse_setting={-1: NUM_4},
-                         cube_nbuffer_setting={NUM_3: NUM_4})
+    pypto.set_pass_options(cube_l1_reuse_setting={-1: NUM_4}, cube_nbuffer_setting={NUM_3: NUM_4})
 
 
 def build_lightning_indexer_prolog_args(

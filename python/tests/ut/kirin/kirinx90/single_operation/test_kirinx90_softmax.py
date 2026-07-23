@@ -12,14 +12,12 @@
 Test softmax codegen for KirinX90
 """
 
-import pytest
-
 from kirin.common_softmax import (
+    TEST_CASES,
     create_softmax_kernels,
     run_softmax_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_softmax_kernels("KirinX90")
 

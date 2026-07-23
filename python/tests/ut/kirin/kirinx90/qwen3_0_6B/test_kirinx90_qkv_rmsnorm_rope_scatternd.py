@@ -13,13 +13,12 @@
 Test qkv_rmsnorm_rope_scatternd codegen for KirinX90
 """
 
-import pytest
-
 from kirin.common_qkv_rmsnorm_rope_scatternd import (
+    TEST_CASES,
     create_fused_qkv_kernels,
     run_qkv_fused_test,
-    TEST_CASES,
 )
+import pytest
 
 
 def create_test_module(soc_version):
@@ -28,13 +27,31 @@ def create_test_module(soc_version):
     @pytest.mark.parametrize(
         "dtype,q_input_shape,k_input_shape,v_input_shape,cos_shape,"
         "sin_shape,past_key_shape,past_value_shape,indices_shape",
-        TEST_CASES)
-    def _test_qkv_fused(dtype, q_input_shape, k_input_shape, v_input_shape,
-                        cos_shape, sin_shape, past_key_shape, past_value_shape,
-                        indices_shape):
-        run_qkv_fused_test(kernels, dtype, q_input_shape, k_input_shape,
-                          v_input_shape, cos_shape, sin_shape, past_key_shape,
-                          past_value_shape, indices_shape)
+        TEST_CASES,
+    )
+    def _test_qkv_fused(
+        dtype,
+        q_input_shape,
+        k_input_shape,
+        v_input_shape,
+        cos_shape,
+        sin_shape,
+        past_key_shape,
+        past_value_shape,
+        indices_shape,
+    ):
+        run_qkv_fused_test(
+            kernels,
+            dtype,
+            q_input_shape,
+            k_input_shape,
+            v_input_shape,
+            cos_shape,
+            sin_shape,
+            past_key_shape,
+            past_value_shape,
+            indices_shape,
+        )
 
     return _test_qkv_fused
 

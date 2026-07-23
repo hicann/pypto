@@ -8,13 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
+from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 from threading import Thread
-from concurrent.futures import ThreadPoolExecutor
-from rich.progress import Progress, TimeElapsedColumn, BarColumn, TextColumn
+
 from rich.markup import escape
+from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
 
 
 class ThreadTaskRunner:
@@ -36,9 +37,7 @@ class ThreadTaskRunner:
 
     def run_batch(self, tasks, run_single_task, is_huge, task_info):
         with self.progress:
-            self.main_task_id = self.progress.add_task(
-                f"Execution progress ({escape(self.title)})", total=len(tasks)
-            )
+            self.main_task_id = self.progress.add_task(f"Execution progress ({escape(self.title)})", total=len(tasks))
             self.success_task_id = self.progress.add_task("[green]Successful tasks[/green]", total=len(tasks))
 
             def handle_messages():

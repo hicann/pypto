@@ -12,13 +12,14 @@
 
 分析修改文件清单, 判断当前测试场景是否需要执行及获取用例执行范围.
 """
+
 import argparse
 import dataclasses
 import fnmatch
 import logging
-import sys
 from pathlib import Path
-from typing import List, Any, Optional, Dict, Tuple
+import sys
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
@@ -76,22 +77,29 @@ class Analysis:
         desc += f"\nType    : {self.type}"
         desc += f"\nGroup   : {self.group}"
         desc += f"\nFile    : {self.file}"
-        desc += f"\n"
+        desc += "\n"
         return desc
 
     @staticmethod
     def main() -> str:
-        parser = argparse.ArgumentParser(description=f"Analysis Changed Files", epilog="Best Regards!")
-        parser.add_argument("-r", "--rule", required=True, nargs=1, type=Path,
-                            help="Specific classify_rule.yaml")
-        parser.add_argument("-t", "--type", nargs=1, type=str, required=True, choices=["utest", "stest"],
-                            help="Specific tests type")
-        parser.add_argument("-g", "--group", nargs='?', type=str, required=False, default="",
-                            help="Specific tests group, multiple group are separated by ','")
-        parser.add_argument("-c", "--changed_files", nargs=1, type=Path, required=False, dest="file",
-                            help="Specific changed_files.txt")
-        parser.add_argument("-d", "--debug", action="store_true", default=False,
-                            help="Enable debug mode")
+        parser = argparse.ArgumentParser(description="Analysis Changed Files", epilog="Best Regards!")
+        parser.add_argument("-r", "--rule", required=True, nargs=1, type=Path, help="Specific classify_rule.yaml")
+        parser.add_argument(
+            "-t", "--type", nargs=1, type=str, required=True, choices=["utest", "stest"], help="Specific tests type"
+        )
+        parser.add_argument(
+            "-g",
+            "--group",
+            nargs='?',
+            type=str,
+            required=False,
+            default="",
+            help="Specific tests group, multiple group are separated by ','",
+        )
+        parser.add_argument(
+            "-c", "--changed_files", nargs=1, type=Path, required=False, dest="file", help="Specific changed_files.txt"
+        )
+        parser.add_argument("-d", "--debug", action="store_true", default=False, help="Enable debug mode")
         args = parser.parse_args()
         # 日志级别注册, 本文件有两种调用场景:
         # 1) 由 CMake 调用, 此时需保证若正常处理无任何额外输出, 需把日志级别调整为 ERROR;
@@ -99,9 +107,7 @@ class Analysis:
         logging.basicConfig(
             format='%(asctime)s - %(filename)s:%(lineno)d - PID[%(process)d] - %(levelname)s: %(message)s',
             level=logging.DEBUG if args.debug else logging.ERROR,
-            handlers=[
-                logging.StreamHandler()
-            ]
+            handlers=[logging.StreamHandler()],
         )
         # 参数解析
         ctrl = Analysis(args=args)
@@ -141,7 +147,7 @@ class Analysis:
         return modules
 
     def _init_get_models(self) -> Dict[str, Module]:
-        yaml_lst = self.rule.glob(pattern=f"classify_rule_*.yaml")
+        yaml_lst = self.rule.glob(pattern="classify_rule_*.yaml")
         modules = {}
         rule_file = self.rule.joinpath(f"classify_rule_{self.type}.yaml")
         with open(rule_file, 'r', encoding='utf-8') as f:
@@ -156,7 +162,7 @@ class Analysis:
         changed = []
         if self.file:
             with open(self.file, 'r', encoding='utf-8') as f:
-                changed = [Path(l.rstrip('\n')) for l in f]
+                changed = [Path(line.rstrip('\n')) for line in f]
         return changed
 
     def _analysis_cases(self) -> List[str]:

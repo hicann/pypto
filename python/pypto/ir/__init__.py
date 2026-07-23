@@ -20,9 +20,7 @@ __all__ = [
     "Function",
     "Program",
     "LogicalTensor",
-
     "Pass",
-
     "UnknownType",
     "ScalarType",
     "TensorType",
@@ -31,7 +29,6 @@ __all__ = [
     "TokenType",
     "LogicalTensorType",
     "DataType",
-
     "FunctionType",
     "TensorLayout",
     "MemorySpace",
@@ -69,14 +66,12 @@ __all__ = [
     "IndexOrder",
     "MemBarMode",
     "ConstInt",
-
     "ConstFloat",
     "ConstBool",
     "Call",
     "MakeTuple",
     "GetItemExpr",
     "TupleGetItem",
-
     # BinaryExpr
     "Add",
     "Sub",
@@ -101,14 +96,12 @@ __all__ = [
     "BitXor",
     "BitShiftLeft",
     "BitShiftRight",
-
     # UnaryExpr
     "Abs",
     "Neg",
     "Not",
     "BitNot",
     "Cast",
-
     # stmt
     "IterArg",
     "AssignStmt",
@@ -122,140 +115,124 @@ __all__ = [
     "BreakStmt",
     "ContinueStmt",
     "TensorOpStmt",
-
     "type_equal",
 ]
 
 # --- Type classes ---
-from ..pypto_impl.ir import (
-    Type,
-    UnknownType,
-    ScalarType,
-    TensorType,
-    TupleType,
-    PtrType,
-    TokenType,
-    LogicalTensorType,
-)
+from ..pypto_impl import LogicalTensor
 
 # --- Data types ---
-from ..pypto_impl.ir import DataType, Span
-
 # --- Enums ---
-from ..pypto_impl.ir import (
-    FunctionType,
-    TensorLayout,
-    MemorySpace,
-    PipeType,
-    CoreType,
-    ReluPreMode,
-    AtomicType,
-    STPhase,
-    AccPhase,
-    AccToVecMode,
-    RoundMode,
-    QuantMode,
-    CrossCoreSyncMode,
-    SyncCoreType,
-    SyncAllMode,
-    CacheLine,
-    DcciDst,
-    MaskPattern,
-    MergeMode,
-    ReduceMode,
-    CompareMode,
-    CmpMode,
-    DuplicatePos,
-    CastLayout,
-    VFRoundMode,
-    SaturateMode,
-    BinType,
-    HistType,
-    SqueezeMode,
-    PackPart,
-    MaskWidth,
-    LoadDist,
-    StoreDist,
-    DataCopyMode,
-    IndexOrder,
-    MemBarMode,
-)
-
-from ..pypto_impl.ir import IRBuilder, InsertPoint
-
 # --- Expression base & leaf classes ---
-from ..pypto_impl.ir import (
-    IRNode,
-    Expr,
-    Stmt,
-    MemRef,
-    Var,
-    ConstInt,
-    ConstFloat,
-    ConstBool,
-    Call,
-    MakeTuple,
-    GetItemExpr,
-)
-
 # --- Binary expression ops ---
-from ..pypto_impl.ir import (
-    Add,
-    Sub,
-    Mul,
-    FloorDiv,
-    FloorMod,
-    FloatDiv,
-    Min,
-    Max,
-    Pow,
-    Eq,
-    Ne,
-    Lt,
-    Le,
-    Gt,
-    Ge,
-    And,
-    Or,
-    Xor,
-    BitAnd,
-    BitOr,
-    BitXor,
-    BitShiftLeft,
-    BitShiftRight,
-)
-
 # --- Unary expression ops ---
+# --- Statement classes ---
+# --- Function / Program ---
 from ..pypto_impl.ir import (
     Abs,
+    AccPhase,
+    AccToVecMode,
+    Add,
+    And,
+    AssignStmt,
+    AtomicType,
+    BinType,
+    BitAnd,
+    BitNot,
+    BitOr,
+    BitShiftLeft,
+    BitShiftRight,
+    BitXor,
+    BreakStmt,
+    CacheLine,
+    Call,
+    Cast,
+    CastLayout,
+    CmpMode,
+    CompareMode,
+    ConstBool,
+    ConstFloat,
+    ConstInt,
+    ContinueStmt,
+    CoreType,
+    CrossCoreSyncMode,
+    DataCopyMode,
+    DataType,
+    DcciDst,
+    DuplicatePos,
+    Eq,
+    EvalStmt,
+    Expr,
+    FloatDiv,
+    FloorDiv,
+    FloorMod,
+    ForStmt,
+    Function,
+    FunctionType,
+    Ge,
+    GetItemExpr,
+    Gt,
+    HistType,
+    IfStmt,
+    IndexOrder,
+    InsertPoint,
+    IRBuilder,
+    IRNode,
+    IterArg,
+    Le,
+    LoadDist,
+    LogicalTensorType,
+    Lt,
+    MakeTuple,
+    MaskPattern,
+    MaskWidth,
+    Max,
+    MemBarMode,
+    MemorySpace,
+    MemRef,
+    MergeMode,
+    Min,
+    Mul,
+    Ne,
     Neg,
     Not,
-    BitNot,
-    Cast,
-)
-
-# --- Statement classes ---
-from ..pypto_impl.ir import (
-    IterArg,
-    AssignStmt,
-    IfStmt,
-    YieldStmt,
+    Or,
+    PackPart,
+    Pass,
+    PipeType,
+    Pow,
+    Program,
+    PtrType,
+    QuantMode,
+    ReduceMode,
+    ReluPreMode,
     ReturnStmt,
-    ForStmt,
-    WhileStmt,
+    RoundMode,
+    SaturateMode,
+    ScalarType,
     SeqStmts,
-    EvalStmt,
-    BreakStmt,
-    ContinueStmt,
+    Span,
+    SqueezeMode,
+    Stmt,
+    StoreDist,
+    STPhase,
+    Sub,
+    SyncAllMode,
+    SyncCoreType,
+    TensorLayout,
     TensorOpStmt,
+    TensorType,
+    TokenType,
+    TupleType,
+    Type,
+    UnknownType,
+    Var,
+    VFRoundMode,
+    WhileStmt,
+    Xor,
+    YieldStmt,
+    type_equal,
 )
-
-# --- Function / Program ---
-from ..pypto_impl.ir import Function, Program, Pass
-
-from ..pypto_impl.ir import type_equal
-
-from ..pypto_impl import LogicalTensor
 
 
 def tuple_get_item(value, index, span):

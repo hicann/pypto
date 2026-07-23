@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Analyzer: extract pipeline structure from serial kernel AST."""
+
 from __future__ import annotations
 
 import ast
@@ -23,17 +24,18 @@ from ._stage import is_pipeline_stage
 @dataclass
 class StageCall:
     """Info about a single stage call in the serial loop body."""
-    func_name: str          # e.g. "compute_qk"
-    section_kind: str       # "cube" or "vector" (for mix: inferred from last sub-stage)
-    args: list              # list of ast.expr nodes (call arguments)
-    delay: int              # derived from call order: 0, 1, 2, ...
-    pre_stmts: list = field(default_factory=list)   # statements before stage call in same section
+
+    func_name: str  # e.g. "compute_qk"
+    section_kind: str  # "cube" or "vector" (for mix: inferred from last sub-stage)
+    args: list  # list of ast.expr nodes (call arguments)
+    delay: int  # derived from call order: 0, 1, 2, ...
+    pre_stmts: list = field(default_factory=list)  # statements before stage call in same section
     post_stmts: list = field(default_factory=list)  # statements after stage call in same section
     cross_access: list = field(default_factory=list)  # list[CrossCoreAccess] for this stage
     # Local (non-cross-core) buffers that address-overlap a cross-core buffer:
     # {buffer_name: (first_pipe, last_pipe)}. Used for scenario 2/3 reverse sync.
     local_access: dict = field(default_factory=dict)
-    is_mix: bool = False    # True if this stage's body calls other @stage functions
+    is_mix: bool = False  # True if this stage's body calls other @stage functions
     sub_stages: list = field(default_factory=list)  # for mix: list of sub-stage func_names in order
     inner_buffers: set = field(default_factory=set)  # for mix: buffer names internal (both W+R inside)
     outer_accesses: list = field(default_factory=list)  # for mix: CrossCoreAccess list for outer buffers
@@ -42,11 +44,12 @@ class StageCall:
 @dataclass
 class PipelineInfo:
     """Extracted pipeline structure from the serial kernel."""
+
     stages: list[StageCall] = field(default_factory=list)
     ctx_fields: list[str] = field(default_factory=list)
     # Maps: stage arg position -> (field_name, fill_expr) | None
     stage_arg_mapping: list[list] = field(default_factory=list)
-    inner_loop_var: str = ""              # inner loop variable (e.g. "ki")
+    inner_loop_var: str = ""  # inner loop variable (e.g. "ki")
     inner_loop_range_end: ast.expr | None = None  # e.g. ast node for "skv_tiles"
     pre_loop_stmts: list = field(default_factory=list)
     # Variables that change across iterations (ctx field candidates)
@@ -147,9 +150,7 @@ def _check_stage_void_return_only(func_name: str, func_def: ast.FunctionDef) -> 
     arguments, so there is no caller-side value target. Bare `return` is allowed
     only as one top-level final statement.
     """
-    return_error = validate_single_tail_return(
-        func_def, f"@pl.pipeline.stage function '{func_name}'"
-    )
+    return_error = validate_single_tail_return(func_def, f"@pl.pipeline.stage function '{func_name}'")
     if return_error is not None:
         _, message, hint = return_error
         raise ValueError(f"pipeline: {message} {hint}")
@@ -178,15 +179,16 @@ def _check_stage_void_return_only(func_name: str, func_def: ast.FunctionDef) -> 
         )
 
 
-def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef,
-                     closure_vars: dict):
+def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef, closure_vars: dict):
     """Scan cross-core buffers + each stage's accesses, store into info."""
     from ._cross_core_scanner import (
-        scan_cross_core_buffers, scan_all_buffer_memory, scan_stage_accesses,
-        scan_buffer_addr_ranges, detect_addr_overlaps,
+        detect_addr_overlaps,
+        scan_all_buffer_memory,
+        scan_buffer_addr_ranges,
+        scan_cross_core_buffers,
+        scan_kernel_slot_to_buffer,
+        scan_stage_accesses,
     )
-
-    from ._cross_core_scanner import scan_kernel_slot_to_buffer
 
     cross_buffers, lifted_ids = scan_cross_core_buffers(func_def, closure_vars)
     info.sync.buffers = cross_buffers
@@ -200,8 +202,7 @@ def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef,
     # Detect address overlaps involving cross-core buffers (for auto-sync of
     # address-reused buffers). Local-local overlaps are ignored.
     info.sync.addr_ranges = scan_buffer_addr_ranges(func_def, closure_vars)
-    info.sync.addr_overlaps = detect_addr_overlaps(
-        info.sync.addr_ranges, set(cross_buffers.keys()))
+    info.sync.addr_overlaps = detect_addr_overlaps(info.sync.addr_ranges, set(cross_buffers.keys()))
 
     vf_func_defs = _collect_vf_func_defs(info, closure_vars)
 
@@ -226,19 +227,27 @@ def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef,
     overlaps = info.sync.addr_overlaps
     for stage in info.stages:
         if stage.is_mix:
-            _scan_mix_stage(stage, info, closure_vars, cross_buffers, vf_func_defs,
-                            all_mem, kernel_slot_to_buffer, stage_func_defs)
+            _scan_mix_stage(
+                stage, info, closure_vars, cross_buffers, vf_func_defs, all_mem, kernel_slot_to_buffer, stage_func_defs
+            )
         else:
             fd = stage_func_defs.get(stage.func_name)
             if fd is not None:
                 stage.cross_access = []
                 stage.local_access = {}
                 scan_stage_accesses(
-                    fd, cross_buffers, vf_func_defs, all_mem, overlaps,
-                    stage.cross_access, stage.local_access,
-                    call_args=stage.args, caller_bindings={},
+                    fd,
+                    cross_buffers,
+                    vf_func_defs,
+                    all_mem,
+                    overlaps,
+                    stage.cross_access,
+                    stage.local_access,
+                    call_args=stage.args,
+                    caller_bindings={},
                     kernel_slot_map=kernel_slot_to_buffer,
-                    stage_func_defs=stage_func_defs)
+                    stage_func_defs=stage_func_defs,
+                )
 
     # Scenario 2/3: build reverse syncs for address-overlapping buffers in different stages
     if overlaps:
@@ -285,38 +294,42 @@ def _build_overlap_reverse_syncs(info: PipelineInfo, closure_vars: dict):
         # slot_count: both sides have the same count (validated earlier)
         slot_count = len(info.sync.addr_ranges[buf_a][1])
 
-        reverse_sync_pairs.append({
-            "first_stage": first_stage.func_name,
-            "last_stage": last_stage.func_name,
-            "wait_pipe": wait_pipe,
-            "set_pipe": set_pipe,
-            "set_section_kind": last_stage.section_kind,
-            "slot_count": slot_count,
-            "stage_gap": last_idx - first_idx,
-        })
+        reverse_sync_pairs.append(
+            {
+                "first_stage": first_stage.func_name,
+                "last_stage": last_stage.func_name,
+                "wait_pipe": wait_pipe,
+                "set_pipe": set_pipe,
+                "set_section_kind": last_stage.section_kind,
+                "slot_count": slot_count,
+                "stage_gap": last_idx - first_idx,
+            }
+        )
 
     # Step 2: allocate event ids for each reverse sync
     _allocate_overlap_event_ids(info, reverse_sync_pairs)
 
     # Step 3: lift event ids to variables and build OverlapReverseSync dataclass objects
     from ._cross_core_scanner import OverlapReverseSync
+
     syncs = []
     for i, p in enumerate(reverse_sync_pairs):
         var_name = f"_pl_overlap_ids_{i}"
-        literal_node = ast.List(
-            elts=[ast.Constant(value=v) for v in p["event_ids"]], ctx=ast.Load())
+        literal_node = ast.List(elts=[ast.Constant(value=v) for v in p["event_ids"]], ctx=ast.Load())
         info.sync.lifted_ids.append((var_name, literal_node))
-        syncs.append(OverlapReverseSync(
-            first_stage=p["first_stage"],
-            last_stage=p["last_stage"],
-            wait_pipe=p["wait_pipe"],
-            set_pipe=p["set_pipe"],
-            set_section_kind=p["set_section_kind"],
-            slot_count=p["slot_count"],
-            stage_gap=p["stage_gap"],
-            event_ids=p["event_ids"],
-            event_ids_var=var_name,
-        ))
+        syncs.append(
+            OverlapReverseSync(
+                first_stage=p["first_stage"],
+                last_stage=p["last_stage"],
+                wait_pipe=p["wait_pipe"],
+                set_pipe=p["set_pipe"],
+                set_section_kind=p["set_section_kind"],
+                slot_count=p["slot_count"],
+                stage_gap=p["stage_gap"],
+                event_ids=p["event_ids"],
+                event_ids_var=var_name,
+            )
+        )
     info.sync.overlap_reverse_syncs = syncs
 
 
@@ -332,8 +345,7 @@ def _build_buffer_usage(info: PipelineInfo) -> dict:
     usage: dict[str, tuple[int, str, int, str]] = {}
     for idx, stage in enumerate(info.stages):
         # cross-core accesses: (buffer_name, first_pipe, last_pipe)
-        touched = [(acc.buffer_name, acc.first_pipe, acc.last_pipe)
-                   for acc in stage.cross_access]
+        touched = [(acc.buffer_name, acc.first_pipe, acc.last_pipe) for acc in stage.cross_access]
         # local overlapping accesses: buffer_name -> (first_pipe, last_pipe)
         touched += [(name, fp, lp) for name, (fp, lp) in stage.local_access.items()]
 
@@ -394,6 +406,7 @@ def _allocate_overlap_event_ids(info: PipelineInfo, reverse_sync_pairs: list):
         idx = order[deg_ptr]
         if wants[idx] > 1:
             import logging
+
             logging.warning(
                 f"pipeline: not enough event ids for address-overlap reverse sync; "
                 f"degrading pair ({reverse_sync_pairs[idx]['first_stage']} -> "
@@ -449,9 +462,16 @@ def _collect_vf_func_defs(info: PipelineInfo, closure_vars: dict) -> dict[str, a
     return vf_func_defs
 
 
-def _scan_mix_stage(stage, info: PipelineInfo, closure_vars: dict,
-                    cross_buffers: dict, vf_func_defs: dict, all_mem: dict,
-                    kernel_slot_to_buffer: dict, stage_func_defs: dict):
+def _scan_mix_stage(
+    stage,
+    info: PipelineInfo,
+    closure_vars: dict,
+    cross_buffers: dict,
+    vf_func_defs: dict,
+    all_mem: dict,
+    kernel_slot_to_buffer: dict,
+    stage_func_defs: dict,
+):
     """Scan a mix stage's sub-stages, classify buffers as inner/outer.
 
     Uses the binding mechanism so cross-core buffers are tracked regardless of
@@ -460,7 +480,7 @@ def _scan_mix_stage(stage, info: PipelineInfo, closure_vars: dict,
       - each sub-stage's bindings: resolved from the sub-stage call inside the
         mix body, using mix_bindings for pass-through params.
     """
-    from ._cross_core_scanner import scan_stage_accesses, build_binding_map
+    from ._cross_core_scanner import build_binding_map, scan_stage_accesses
 
     mix_fn = closure_vars.get(stage.func_name)
     mix_fd = _try_get_funcdef(mix_fn)
@@ -468,8 +488,7 @@ def _scan_mix_stage(stage, info: PipelineInfo, closure_vars: dict,
     # Bindings for the mix stage itself, from its main-loop call site.
     mix_bindings = {}
     if mix_fd is not None:
-        mix_bindings = build_binding_map(
-            mix_fd, stage.args, {}, kernel_slot_to_buffer, cross_buffers)
+        mix_bindings = build_binding_map(mix_fd, stage.args, {}, kernel_slot_to_buffer, cross_buffers)
 
     sub_accesses = {}
     for sub_name in stage.sub_stages:
@@ -480,11 +499,16 @@ def _scan_mix_stage(stage, info: PipelineInfo, closure_vars: dict,
         sub_call_args = _find_sub_stage_call_args(mix_fd, sub_name) if mix_fd else None
         acc_list = []
         scan_stage_accesses(
-            sub_fd, cross_buffers, vf_func_defs, all_mem,
+            sub_fd,
+            cross_buffers,
+            vf_func_defs,
+            all_mem,
             cross_access_out=acc_list,
-            call_args=sub_call_args, caller_bindings=mix_bindings,
+            call_args=sub_call_args,
+            caller_bindings=mix_bindings,
             kernel_slot_map=kernel_slot_to_buffer,
-            stage_func_defs=stage_func_defs)
+            stage_func_defs=stage_func_defs,
+        )
         sub_accesses[sub_name] = acc_list
 
     # Tag each access with the section_kind of the sub-stage it happens in, so
@@ -508,15 +532,15 @@ def _scan_mix_stage(stage, info: PipelineInfo, closure_vars: dict,
     for buf_name, roles in buf_roles.items():
         if AccessRole.WRITE in roles and AccessRole.READ in roles:
             stage.inner_buffers.add(buf_name)
-            _record_inner_consumer(buf_name, buf_access_map.get(buf_name, []),
-                                   sub_accesses, stage, closure_vars, info)
+            _record_inner_consumer(buf_name, buf_access_map.get(buf_name, []), sub_accesses, stage, closure_vars, info)
         else:
             stage.outer_accesses.extend(buf_access_map.get(buf_name, []))
     stage.cross_access = stage.outer_accesses
 
 
-def _record_inner_consumer(buf_name: str, accesses: list, sub_accesses: dict,
-                           stage, closure_vars: dict, info: PipelineInfo):
+def _record_inner_consumer(
+    buf_name: str, accesses: list, sub_accesses: dict, stage, closure_vars: dict, info: PipelineInfo
+):
     """Record inner consumer info (section_kind, pipe) for pre-fire.
 
     Only buffers with backward ids need pre-fire, so skip recording if the buffer
@@ -545,6 +569,7 @@ def _try_get_funcdef(fn) -> ast.FunctionDef | None:
     """Get the ast.FunctionDef for a Python function object, or None."""
     import inspect
     import textwrap
+
     if fn is None:
         return None
     try:
@@ -558,8 +583,7 @@ def _try_get_funcdef(fn) -> ast.FunctionDef | None:
     return None
 
 
-def _record_pipeline_loop_info(stmt: ast.For, stmts: list[ast.stmt],
-                               info: PipelineInfo, all_loop_vars: set) -> None:
+def _record_pipeline_loop_info(stmt: ast.For, stmts: list[ast.stmt], info: PipelineInfo, all_loop_vars: set) -> None:
     """Record loop metadata after the pipeline loop has been found."""
     # L7: loop variable must be a simple Name
     if not isinstance(stmt.target, ast.Name):
@@ -627,9 +651,9 @@ def _nested_search_body(stmt: ast.stmt) -> list[ast.stmt] | None:
     return None
 
 
-def _find_pipeline_loop(stmts: list[ast.stmt], info: PipelineInfo,
-                        stage_func_names: set, closure_vars: dict,
-                        all_loop_vars: set):
+def _find_pipeline_loop(
+    stmts: list[ast.stmt], info: PipelineInfo, stage_func_names: set, closure_vars: dict, all_loop_vars: set
+):
     """Recursively find the innermost for-loop containing stage calls."""
     for stmt in stmts:
         if isinstance(stmt, ast.For):
@@ -639,7 +663,8 @@ def _find_pipeline_loop(stmts: list[ast.stmt], info: PipelineInfo,
                 return True
         nested_body = _nested_search_body(stmt)
         if nested_body is not None and _find_pipeline_loop(
-                nested_body, info, stage_func_names, closure_vars, all_loop_vars):
+            nested_body, info, stage_func_names, closure_vars, all_loop_vars
+        ):
             return True
     return False
 
@@ -665,8 +690,7 @@ def _split_stage_section_body(body: list[ast.stmt], stage_func_names: set):
     return stage_func_name, stage_call, pre_stmts, post_stmts
 
 
-def _extract_stages_from_loop(for_stmt: ast.For, info: PipelineInfo,
-                              stage_func_names: set) -> bool:
+def _extract_stages_from_loop(for_stmt: ast.For, info: PipelineInfo, stage_func_names: set) -> bool:
     """Extract stage calls from a for-loop body (expecting interleaved sections)."""
     found_any = False
 
@@ -675,10 +699,14 @@ def _extract_stages_from_loop(for_stmt: ast.For, info: PipelineInfo,
         if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
             fn = _get_call_func_name(stmt.value)
             if fn in stage_func_names:
-                info.stages.append(StageCall(
-                    func_name=fn, section_kind="",
-                    args=list(stmt.value.args), delay=0,
-                ))
+                info.stages.append(
+                    StageCall(
+                        func_name=fn,
+                        section_kind="",
+                        args=list(stmt.value.args),
+                        delay=0,
+                    )
+                )
                 found_any = True
                 continue
         if isinstance(stmt, ast.With):
@@ -697,9 +725,11 @@ def _extract_stages_from_loop(for_stmt: ast.For, info: PipelineInfo,
 def _check_unsupported_section(stmt: ast.With, stage_func_names: set):
     """C1: raise if an unsupported section type contains a stage call."""
     for body_stmt in stmt.body:
-        if (isinstance(body_stmt, ast.Expr)
-                and isinstance(body_stmt.value, ast.Call)
-                and _get_call_func_name(body_stmt.value) in stage_func_names):
+        if (
+            isinstance(body_stmt, ast.Expr)
+            and isinstance(body_stmt.value, ast.Call)
+            and _get_call_func_name(body_stmt.value) in stage_func_names
+        ):
             raise ValueError(
                 f"pipeline: stage call "
                 f"'{_get_call_func_name(body_stmt.value)}' is inside an "
@@ -708,19 +738,18 @@ def _check_unsupported_section(stmt: ast.With, stage_func_names: set):
             )
 
 
-def _extract_stage_from_section(stmt: ast.With, section_kind: str,
-                                stage_func_names: set) -> StageCall | None:
+def _extract_stage_from_section(stmt: ast.With, section_kind: str, stage_func_names: set) -> StageCall | None:
     """Extract a stage call from a section block, with L2 validation."""
-    stage_func_name, stage_call, pre_stmts, post_stmts = _split_stage_section_body(
-        stmt.body, stage_func_names
-    )
+    stage_func_name, stage_call, pre_stmts, post_stmts = _split_stage_section_body(stmt.body, stage_func_names)
     if stage_call is None:
         return None
     # L2: check for a second stage call in same section
     for body_stmt in post_stmts:
-        if (isinstance(body_stmt, ast.Expr)
-                and isinstance(body_stmt.value, ast.Call)
-                and _get_call_func_name(body_stmt.value) in stage_func_names):
+        if (
+            isinstance(body_stmt, ast.Expr)
+            and isinstance(body_stmt.value, ast.Call)
+            and _get_call_func_name(body_stmt.value) in stage_func_names
+        ):
             raise ValueError(
                 f"pipeline: section block contains multiple stage calls "
                 f"('{stage_func_name}' and "
@@ -990,15 +1019,13 @@ def _find_sub_stage_calls(func_def: ast.FunctionDef, stage_func_names: set) -> l
     """Find all @stage function calls inside a function body (in source order)."""
     found = []
     for node in ast.walk(func_def):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                and node.func.id in stage_func_names):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in stage_func_names:
             if node.func.id not in found:
                 found.append(node.func.id)
     return found
 
 
-def _infer_last_sub_stage_section(func_def: ast.FunctionDef,
-                                   stage_func_names: set) -> str | None:
+def _infer_last_sub_stage_section(func_def: ast.FunctionDef, stage_func_names: set) -> str | None:
     """Find the section_kind of the last sub-stage call in a mix stage body."""
     holder = [None]
     _scan_sections_for_last(func_def.body, stage_func_names, holder)
@@ -1044,8 +1071,7 @@ def _find_sub_stage_call_args(mix_fd: ast.FunctionDef, sub_name: str) -> list | 
     """Find the call-site args (list of AST nodes) of a sub-stage call inside a mix
     func body. Returns None if not found."""
     for node in ast.walk(mix_fd):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                and node.func.id == sub_name):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == sub_name:
             return node.args
     return None
 

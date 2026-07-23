@@ -6,13 +6,13 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import json
 import logging
+from pathlib import Path
 import random
 import re
 import time
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import parse_qs, urlparse
 
@@ -438,7 +438,7 @@ def extract_with_retry(
         try:
             logging.info("Attempt %d/%d...", attempt, max_retries)
             return extract_violations_with_playwright(url=url, config=config, attempt=attempt)
-        except Exception as exc:  # noqa: PERF203
+        except Exception as exc:
             last_error = exc
             if attempt < max_retries:
                 wait_s = (2 ** (attempt - 1)) + random.uniform(0, max(0, jitter_ms) / 1000.0)

@@ -16,8 +16,8 @@ from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from dep_verifier import get_registered_rules  # noqa: E402
-from dep_verifier.data_loader import (  # noqa: E402
+from dep_verifier import get_registered_rules
+from dep_verifier.data_loader import (
     infer_edge_seq_no,
     load_dyn_stitch_edges,
     load_dyn_topo,
@@ -26,9 +26,8 @@ from dep_verifier.data_loader import (  # noqa: E402
     load_slot_mapping,
     load_static_topo,
 )
-from dep_verifier.rule_base import RuleContext  # noqa: E402
-from dep_verifier.report import ViolationReport  # noqa: E402
-
+from dep_verifier.report import ViolationReport
+from dep_verifier.rule_base import RuleContext
 
 DEP_VERIFY_DUMP_SUBDIR = "dep_verify_dump"
 
@@ -84,8 +83,7 @@ def _resolve_required_paths(dump_dir: str) -> Tuple[str, str, str]:
         ("stitch_edges", stitch_edges_path),
     )
     missing = [INPUT_FILES[k] for k, p in required if not p]
-    raise FileNotFoundError(
-        f"missing required files in directory: {', '.join(missing)}")
+    raise FileNotFoundError(f"missing required files in directory: {', '.join(missing)}")
 
 
 def _load_all_inputs(dump_dir: str) -> Tuple[RuleContext, Dict[int, str], Dict[int, str]]:

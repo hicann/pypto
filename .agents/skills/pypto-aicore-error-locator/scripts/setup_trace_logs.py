@@ -57,10 +57,11 @@ def _find_installed_tile_fwk_config():
 
 def _trace_already_set(config):
     if 'global' in config and 'codegen' in config['global']:
-        return (config['global']['codegen'].get('fixed_output_path') is True and
-                config['global']['codegen'].get('force_overwrite') is False)
-    return (config.get('fixed_output_path') is True and
-            config.get('force_overwrite') is False)
+        return (
+            config['global']['codegen'].get('fixed_output_path') is True
+            and config['global']['codegen'].get('force_overwrite') is False
+        )
+    return config.get('fixed_output_path') is True and config.get('force_overwrite') is False
 
 
 def _trace_set(config):

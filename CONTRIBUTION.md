@@ -34,3 +34,62 @@
   如果社区中他人遇到的问题您有合适的解决方法，欢迎您在Issue中发表评论交流，帮助他人解决问题和痛点，共同优化易用性。
 
   如果对应Issue需要进行代码修改，您可以在Issue评论框中输入“/assign”或“/assign @yourself”，将该Issue分配给您，跟踪协助解决问题。
+
+---
+
+## 代码规范与 Pre-commit 检查
+
+本项目使用 [pre-commit](https://pre-commit.com/) 框架在提交前自动执行代码风格检查与格式化，确保所有贡献代码遵循统一的编码规范。开发者在提交代码前**必须**通过 pre-commit 检查。
+
+### 安装
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+安装完成后，每次 `git commit` 都会自动触发检查。如果检查未通过，提交将被拦截。
+
+### 检查项一览
+
+检查配置位于 `.pre-commit-config.yaml`，主要包括：
+
+| 检查项 | 工具 | 说明 |
+|--------|------|------|
+| 尾部空格 / 文件末尾换行 | pre-commit-hooks | 清理行尾空格，确保文件以换行符结尾 |
+| YAML / JSON 合法性 | pre-commit-hooks | 校验配置文件语法 |
+| 大文件 / 私钥 / 合并冲突检测 | pre-commit-hooks | 防止误提交二进制文件和密钥，检查合并冲突标记 |
+| C++ 代码格式化 | clang-format (v18) | 按 `.clang-format` 规则格式化 C/C++/ASC 文件 |
+| Python 代码检查 | ruff check (v0.14) | 静态检查 E/W/F/I/N 规则族，自动修复可修复项 |
+| Python 切片冒号空格 | local 脚本 | 检查切片冒号两侧空格（补充 ruff 覆盖盲区） |
+| 拼写检查 | codespell | 检查常见拼写错误 |
+
+### Python 代码规范（ruff）
+
+ruff 配置位于 `pyproject.toml` 的 `[tool.ruff]` 段，启用的规则族：
+
+- **E / W** — pycodestyle 错误与警告（如 E711 比较运算、E741 歧义变量名）
+- **F** — pyflakes（如 F401 未使用导入、F841 未使用变量、F821 未定义名称）
+- **I** — isort 导入排序
+- **N** — pep8-naming 命名规范（如 N802 函数名、N806 变量名、N818 异常名）
+
+已忽略 `E501`（行长度），行宽上限为 **120** 字符。
+
+### 手动运行检查
+
+```bash
+# 对所有文件运行全部检查
+pre-commit run --all-files
+
+# 仅运行 ruff 检查
+pre-commit run ruff-check --all-files
+
+# 仅运行 C++ 代码格式化检查
+pre-commit run clang-format --all-files
+
+# 仅运行切片冒号空格检查
+pre-commit run slice-colon-spacing --all-files
+
+# 仅运行拼写检查
+pre-commit run codespell --all-files
+```

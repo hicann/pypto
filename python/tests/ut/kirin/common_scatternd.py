@@ -13,12 +13,12 @@
 Test scatternd codegen - common functions for Kirin9030 and KirinX90
 """
 
-import pypto
-import torch
 import numpy as np
 import pytest
+import torch
 
 from kirin.common import compare_cos
+import pypto
 
 
 def get_index_put_kernel(x_dtype, indices_dtype, vec_tile_shape, accumulate, soc_version):
@@ -85,20 +85,27 @@ def get_golden(data, indices, update, accumulate):
     return golden
 
 
-def run_scatter_test(kernels, data_shape, indices_shape, update_shape,
-                    vec_tile_shape, torch_data_dtype, torch_indices_dtype,
-                    pypto_data_dtype, pypto_indices_dtype, accumulate):
+def run_scatter_test(
+    kernels,
+    data_shape,
+    indices_shape,
+    update_shape,
+    vec_tile_shape,
+    torch_data_dtype,
+    torch_indices_dtype,
+    pypto_data_dtype,
+    pypto_indices_dtype,
+    accumulate,
+):
     data = torch.rand(data_shape, dtype=torch_data_dtype, device="cpu")
-    indices = torch.randperm(data_shape[0], device="cpu",
-                            dtype=torch_indices_dtype)[:indices_shape[0]].unsqueeze(1)
+    indices = torch.randperm(data_shape[0], device="cpu", dtype=torch_indices_dtype)[:indices_shape[0]].unsqueeze(1)
     update = torch.rand(update_shape, dtype=torch_data_dtype, device="cpu")
 
     golden = get_golden(data.clone(), indices, update, accumulate)
 
-    kernels["index_put_kernel"](pypto_data_dtype, pypto_indices_dtype,
-                              vec_tile_shape, accumulate)(data,
-                                                        indices.squeeze(1),
-                                                        update)
+    kernels["index_put_kernel"](pypto_data_dtype, pypto_indices_dtype, vec_tile_shape, accumulate)(
+        data, indices.squeeze(1), update
+    )
 
     cos_value = abs(compare_cos(np.array(data.cpu()), np.array(golden.cpu())))
     if cos_value < 0.9999:

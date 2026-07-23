@@ -13,28 +13,29 @@
 在执行 STest 前需要生成用例所需的 Golden 数据并保存在文件中, 以供用例使用. 设计本入口脚本以统一其处理逻辑.
 本脚本在 CMake 中识别需要执行 STest 时, 由 CMake 调用.
 """
+
 import argparse
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from datetime import datetime, timezone
 import importlib
 import json
 import logging
 import math
 import multiprocessing
 import os
+from pathlib import Path
 import shutil
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import List, Any, Tuple
+from typing import Any, List, Tuple
 
-from golden_register import GoldenRegister, GoldenRegInfo
+from golden_register import GoldenRegInfo, GoldenRegister
 from utils.table import Table
 
 
 class GoldenCtrl:
-    """STest Golden 生成逻辑控制.
-    """
+    """STest Golden 生成逻辑控制."""
+
     _MAX_JOB_NUM: int = 16  # 16 控制 Golden 产生时多进程最大并行度
 
     def __init__(self, args):
@@ -78,20 +79,35 @@ class GoldenCtrl:
 
     @staticmethod
     def main() -> bool:
-        """主处理流程
-        """
-        parser = argparse.ArgumentParser(description=f"STest Golden Ctrl", epilog="Best Regards!")
-        parser.add_argument("-c", "--cases", type=str, default="", required=True,
-                            help="STest Cases, multiple test cases are separated by ':'")
+        """主处理流程"""
+        parser = argparse.ArgumentParser(description="STest Golden Ctrl", epilog="Best Regards!")
+        parser.add_argument(
+            "-c",
+            "--cases",
+            type=str,
+            default="",
+            required=True,
+            help="STest Cases, multiple test cases are separated by ':'",
+        )
         parser.add_argument("-o", "--output", type=str, default="golden", help="Golden output path.")
-        parser.add_argument("-p", "--path", nargs="?", type=str, action="append",
-                            help="Golden impl path, relative path to the source root directory.")
-        parser.add_argument("--clean", action="store_true", default=False,
-                            help="clean, clean before generate.")
-        parser.add_argument("-j", "--job_num", nargs="?", type=int,
-                            # Golden 生成不确定是否 CPU Bound, 默认使用 0.8 倍 CPU 数进程
-                            default=int(math.ceil(float(multiprocessing.cpu_count()) * 0.8)),
-                            help="Specific parallel accelerate job num.")
+        parser.add_argument(
+            "-p",
+            "--path",
+            nargs="?",
+            type=str,
+            action="append",
+            help="Golden impl path, relative path to the source root directory.",
+        )
+        parser.add_argument("--clean", action="store_true", default=False, help="clean, clean before generate.")
+        parser.add_argument(
+            "-j",
+            "--job_num",
+            nargs="?",
+            type=int,
+            # Golden 生成不确定是否 CPU Bound, 默认使用 0.8 倍 CPU 数进程
+            default=int(math.ceil(float(multiprocessing.cpu_count()) * 0.8)),
+            help="Specific parallel accelerate job num.",
+        )
         args = parser.parse_args()
         if not args.path:
             base_dir = os.path.join(os.path.dirname(sys.argv[0]), "golden")
@@ -103,8 +119,7 @@ class GoldenCtrl:
         return ret
 
     def prepare(self) -> bool:
-        """执行 Golden 生成任务前准备
-        """
+        """执行 Golden 生成任务前准备"""
         return self.prepare_module()
 
     def prepare_module(self) -> bool:
@@ -131,8 +146,7 @@ class GoldenCtrl:
         return True
 
     def process(self) -> bool:
-        """执行 Golden 生成任务, 生成 Cases 所需 Golden
-        """
+        """执行 Golden 生成任务, 生成 Cases 所需 Golden"""
         # 输出路径处理
         if self.clean and self.output.exists():
             shutil.rmtree(self.output)
@@ -143,8 +157,12 @@ class GoldenCtrl:
             ret = self.run_all_task_single_process()
         else:
             ret = self.run_all_task_multi_process()
-        logging.info("Generate golden finish[%s], Duration %s secs, Return(%s)", len(self.cases),
-                     (datetime.now(tz=timezone.utc) - ts).seconds, ret)
+        logging.info(
+            "Generate golden finish[%s], Duration %s secs, Return(%s)",
+            len(self.cases),
+            (datetime.now(tz=timezone.utc) - ts).seconds,
+            ret,
+        )
         return ret
 
     def run_all_task_multi_process(self) -> bool:
@@ -170,8 +188,7 @@ class GoldenCtrl:
         # 获取 Golden 生成函数
         reg_info, case_idx = GoldenRegister.get_golden_func(case_name=c)
         if reg_info is None:
-            logging.debug("Generate golden failed Idx[%s/%s] Case(%s) Can't find generator.", idx,
-                          len(self.cases), c)
+            logging.debug("Generate golden failed Idx[%s/%s] Case(%s) Can't find generator.", idx, len(self.cases), c)
             return True
 
         # 用例 Golden 路径处理
@@ -190,8 +207,14 @@ class GoldenCtrl:
             self._dump_golden_desc(case_output=case_output, reg_info=reg_info)
 
         msg = "success" if ret else "failed"
-        logging.info("Generate golden %s Idx[%s/%s] Case(%s) Duration %s secs.", msg, idx, len(self.cases), c,
-                     (datetime.now(tz=timezone.utc) - ts).seconds)
+        logging.info(
+            "Generate golden %s Idx[%s/%s] Case(%s) Duration %s secs.",
+            msg,
+            idx,
+            len(self.cases),
+            c,
+            (datetime.now(tz=timezone.utc) - ts).seconds,
+        )
         return ret
 
     def _prepare_output(self, case: str, reg_info: GoldenRegInfo) -> Tuple[Path, bool]:
@@ -211,8 +234,9 @@ class GoldenCtrl:
         need_del_version = reg_info.version > ori_ver
         need_del_time = False if reg_info.timeout is None else int(now_time - ori_time) > reg_info.timeout
         if (need_del_version or need_del_time) and case_output.exists():
-            logging.info("Remove Case(%s)'s golden, VersionFlg(%s), TimeFlag(%s)",
-                         case, need_del_version, need_del_time)
+            logging.info(
+                "Remove Case(%s)'s golden, VersionFlg(%s), TimeFlag(%s)", case, need_del_version, need_del_time
+            )
             shutil.rmtree(case_output)
 
         # 创建 Golden 目录

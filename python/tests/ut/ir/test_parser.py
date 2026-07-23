@@ -7,12 +7,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 import operator
+
 import pytest
 
 import pypto
-from pypto import pil, logging
-from pypto.pil.op_registry import OpRegistry
+from pypto import logging, pil
 from pypto.pil import pir
+from pypto.pil.op_registry import OpRegistry
 
 
 def _parse_func(func, dump=False):
@@ -28,32 +29,43 @@ def _has(blk, callee):
 
 def test_visit_binop():
     def f(x, y):
-        z = x + y
-        z = x - y
-        z = x * y
-        z = x // y
-        z = x / y
-        z = x % y
-        z = x ** y
-        z = x | y
-        z = x ^ y
-        z = x & y
-        z = x << y
-        z = x >> y
+        _z = x + y
+        _z = x - y
+        _z = x * y
+        _z = x // y
+        _z = x / y
+        _z = x % y
+        _z = x**y
+        _z = x | y
+        _z = x ^ y
+        _z = x & y
+        _z = x << y
+        _z = x >> y
 
     blk = _parse_func(f)
-    for op in [operator.add, operator.sub, operator.mul, operator.floordiv,
-               operator.truediv, operator.mod, operator.pow, operator.or_,
-               operator.xor, operator.and_, operator.lshift, operator.rshift]:
+    for op in [
+        operator.add,
+        operator.sub,
+        operator.mul,
+        operator.floordiv,
+        operator.truediv,
+        operator.mod,
+        operator.pow,
+        operator.or_,
+        operator.xor,
+        operator.and_,
+        operator.lshift,
+        operator.rshift,
+    ]:
         assert _has(blk, op), f"Missing binop {op}"
 
 
 def test_visit_unaryop():
     def f(x):
-        y = -x
-        y = +x
-        y = ~x
-        y = not x
+        _y = -x
+        _y = +x
+        _y = ~x
+        _y = not x
 
     blk = _parse_func(f)
     for op in [operator.neg, operator.pos, operator.invert, operator.not_]:
@@ -62,26 +74,34 @@ def test_visit_unaryop():
 
 def test_visit_compare():
     def f(x, y):
-        z = x == y
-        z = x != y
-        z = x < y
-        z = x <= y
-        z = x > y
-        z = x >= y
-        z = x is y
-        z = x is not y
+        _z = x == y
+        _z = x != y
+        _z = x < y
+        _z = x <= y
+        _z = x > y
+        _z = x >= y
+        _z = x is y
+        _z = x is not y
 
     blk = _parse_func(f)
-    for op in [operator.eq, operator.ne, operator.lt, operator.le,
-               operator.gt, operator.ge, operator.is_, operator.is_not]:
+    for op in [
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+        operator.is_,
+        operator.is_not,
+    ]:
         assert _has(blk, op), f"Missing compare {op}"
 
 
 def test_visit_compare_membership():
     def f(x, xs, d):
-        z = x in xs
-        z = x not in xs
-        z = x in d
+        _z = x in xs
+        _z = x not in xs
+        _z = x in d
 
     blk = _parse_func(f)
     assert _has(blk, pir.in_), "Missing membership compare in"
@@ -90,7 +110,7 @@ def test_visit_compare_membership():
 
 def test_visit_compare_chained():
     def f(a, b, c):
-        z = a < b < c
+        _z = a < b < c
 
     blk = _parse_func(f)
     assert _has(blk, "pil.if_else"), "Missing if_else call"
@@ -98,10 +118,10 @@ def test_visit_compare_chained():
 
 def test_visit_boolop():
     def f(a, b, c):
-        z = a and b
-        z = a or b
-        z = a and b and c
-        z = a or b or c
+        _z = a and b
+        _z = a or b
+        _z = a and b and c
+        _z = a or b or c
 
     blk = _parse_func(f)
     assert _has(blk, "pil.if_else"), "Missing if_else call"
@@ -109,7 +129,7 @@ def test_visit_boolop():
 
 def test_visit_ifexp():
     def f(x, y, z):
-        w = x if y else z
+        _w = x if y else z
 
     blk = _parse_func(f)
     assert _has(blk, "pil.if_else"), "Missing if_else call"
@@ -117,7 +137,7 @@ def test_visit_ifexp():
 
 def test_visit_attribute():
     def f(x):
-        y = x.attr
+        _y = x.attr
 
     blk = _parse_func(f)
     assert _has(blk, getattr)
@@ -125,9 +145,9 @@ def test_visit_attribute():
 
 def test_visit_subscript():
     def f(x):
-        y = x[0]
-        y = x[1:2:3]
-        y = x[1:]
+        _y = x[0]
+        _y = x[1:2:3]
+        _y = x[1:]
 
     blk = _parse_func(f)
     assert _has(blk, operator.getitem)
@@ -136,8 +156,8 @@ def test_visit_subscript():
 
 def test_visit_tuple_and_list():
     def f(x, y):
-        z = (x, y)
-        z = [x, y]
+        _z = (x, y)
+        _z = [x, y]
 
     blk = _parse_func(f)
     assert _has(blk, tuple)
@@ -146,9 +166,9 @@ def test_visit_tuple_and_list():
 
 def test_visit_joined_str():
     def f(x):
-        y = f"hello {x}"
-        y = f"{x:.2f}"
-        y = f"a{x}b"
+        _y = f"hello {x}"
+        _y = f"{x:.2f}"
+        _y = f"a{x}b"
 
     blk = _parse_func(f)
     assert len([s for s in blk.calls if isinstance(s, pir.Call) and s.callee == "pil.fstring"]) >= 2
@@ -156,9 +176,10 @@ def test_visit_joined_str():
 
 # ---------- Statements ----------
 
+
 def test_visit_assign():
     def f(x, v):
-        y = x
+        y = x  # noqa: F841
         a, b = x
         [a, b] = x
         x[0] = v
@@ -187,13 +208,13 @@ def test_visit_augassign():
 
 def test_visit_annassign():
     def f(x):
-        y: int = x
+        y: int = x  # noqa: F841
 
     blk = _parse_func(f)
     assert any(s.callee == "pil.store" and "y" in s.args for s in blk.calls if isinstance(s, pir.Call))
 
     def g():
-        x: int
+        x: int  # noqa: F842
 
     assert len([s for s in _parse_func(g).calls if isinstance(s, pir.Call)]) == 0
 
@@ -203,7 +224,7 @@ def test_visit_if():
         if x:
             w = y
         else:
-            w = z
+            w = z  # noqa: F841
 
     blk = _parse_func(f)
     assert _has(blk, "pil.if_else"), "Missing if_else call"
@@ -223,6 +244,7 @@ def test_visit_pass_functiondef_expr():
 
         def g():
             pass
+
         _ = x + 1
 
     blk = _parse_func(f)
@@ -235,10 +257,7 @@ def test_visit_raise():
             raise ValueError(f"bad x: {x}")
 
     blk = _parse_func(f)
-    if_call = next(
-        s for s in blk.calls
-        if isinstance(s, pir.Call) and s.callee == "pil.if_else"
-    )
+    if_call = next(s for s in blk.calls if isinstance(s, pir.Call) and s.callee == "pil.if_else")
     then_block = if_call.args[1]
     assert _has(then_block, "pil.raise")
 
@@ -411,17 +430,18 @@ def test_op_registry():
 
 def test_visit_nested_function_def():
     """A nested `def` lowers to pil.store(name, pir.Function)."""
+
     def f(x):
         def g(a):
             return a + 1
+
         g(x)
 
     body = _parse_func(f)
     stores = [c for c in body.calls if isinstance(c, pir.Call) and c.callee == 'pil.store']
-    assert any(
-        len(c.args) == 2 and c.args[0] == 'g' and isinstance(c.args[1], pir.Function)
-        for c in stores
-    ), "nested def must store a pir.Function under its name"
+    assert any(len(c.args) == 2 and c.args[0] == 'g' and isinstance(c.args[1], pir.Function) for c in stores), (
+        "nested def must store a pir.Function under its name"
+    )
 
     # the stored Function carries its parameter and body
     g_fn = next(c.args[1] for c in stores if c.args[0] == 'g')
@@ -431,14 +451,17 @@ def test_visit_nested_function_def():
 
 def test_visit_nested_function_def_all_arg_kinds():
     """posonlyargs + args + kwonlyargs populate params and aligned defaults."""
+
     def f():
         def g(a, b=2, /, c=3, d=4, *, e, k=9):
             return a + b + c + d + e + k
+
         g(1, 2, 3, 4, e=5)
 
     body = _parse_func(f)
-    g_fn = next(c.args[1] for c in body.calls
-                if isinstance(c, pir.Call) and c.callee == 'pil.store' and c.args[0] == 'g')
+    g_fn = next(
+        c.args[1] for c in body.calls if isinstance(c, pir.Call) and c.callee == 'pil.store' and c.args[0] == 'g'
+    )
     # positional-only + positional-or-keyword + keyword-only, in source order
     assert g_fn.params == ('a', 'b', 'c', 'd', 'e', 'k')
     # innermost function defaults is replaced by the actual values
@@ -447,9 +470,11 @@ def test_visit_nested_function_def_all_arg_kinds():
 
 def test_visit_pil_function():
     """posonlyargs + args + kwonlyargs populate params and aligned defaults."""
+
     @pil.function
     def g(a, b=2, /, c=3, d=4, *, e, k=9):
         return a + b + c + d + e + k
+
     assert g.params == ('a', 'b', 'c', 'd', 'e', 'k')
     assert g.body is not None
     # outermost function defaults is not replaced
@@ -458,7 +483,7 @@ def test_visit_pil_function():
 
 def test_visit_listcomp():
     def f(xs):
-        y = [x + 1 for x in xs]
+        _y = [x + 1 for x in xs]
         _ = [x for x in xs]
         _ = [(i, j) for i in range(2) for j in range(2) if i < j]
 

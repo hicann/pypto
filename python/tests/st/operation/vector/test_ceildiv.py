@@ -8,18 +8,18 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-from typing import List
+""" """
 
 import os
-import pytest
-import pypto
+from typing import List
+
 import torch
 import torch_npu
 
-from pypto import Tensor as PTensor, loop, ceildiv, SymInt
-from pypto.frontend import jit, dynamic
+import pypto
+from pypto import SymInt, ceildiv, loop
+from pypto import Tensor as PTensor
+from pypto.frontend import jit
 
 
 @jit
@@ -39,8 +39,6 @@ def ceil_div_2d(
             result = pypto.ceil_div(tile_x, tile_y)
             pypto.assemble(result, [i * view_shape[0], j * view_shape[1]], out)
             del tile_x, tile_y
-
-
 
 
 def test_ceil_div():

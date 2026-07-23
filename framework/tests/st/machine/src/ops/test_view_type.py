@@ -14,19 +14,14 @@
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import math
-import os
-import sys
+
 import logging
-import torch
-import copy
-
-import numpy as np
-
-from enum import Enum
+import os
 from pathlib import Path
+import sys
 from typing import List
-from ml_dtypes import bfloat16
+
+import torch
 
 project_root = os.path.dirname(os.path.abspath(__file__))  # 当前脚本目录
 golden_parent = os.path.join(project_root, "../../../../")  # 假设 golden 在上级目录
@@ -67,7 +62,9 @@ def tensor_tofile(t: torch.Tensor, output: Path):
         elif t.dtype == torch.int8:
             input_file_bin.write(each.numpy().tobytes())
         else:
-            raise ValueError(f"Unsupported dtype: {t.dtype}, please add in framework/tests/st/operator/src/test_view_type.py")
+            raise ValueError(
+                f"Unsupported dtype: {t.dtype}, please add in framework/tests/st/operator/src/test_view_type.py"
+            )
     input_file_bin.close()
 
 
@@ -143,7 +140,7 @@ def view_type_dequant_test_entry(output_dir: Path):
     selected_count = 2048
     cache_combined = torch.ones((selected_count, n_kv, d_kv + 2 * d_r + 4 * 4), dtype=torch.int8)
     cache_nope_int8 = cache_combined[:, :, :d_kv]
-    cache_rope_int8 = cache_combined[:, :, d_kv: d_kv + 2 * d_r]
+    cache_rope_int8 = cache_combined[:, :, d_kv:d_kv + 2 * d_r]
     cache_scale_int8 = cache_combined[:, :, d_kv + 2 * d_r:]
 
     cache_nope_fp16 = cache_nope_int8.to(torch.float16)
@@ -181,8 +178,6 @@ def view_type_dequant_test_entry(output_dir: Path):
         "ViewType.dequant_test_bf16_2_int8",
     ]
 )
-
-
 def view_type_func(case_name: str, output: Path) -> bool:
     if case_name == "ViewType.int8_2_float32":
         view_type_entry((4, 32, 1024), torch.int8, torch.float32, output)
@@ -222,9 +217,7 @@ def main() -> bool:
     """
     单独调试 入口函数
     """
-    case_name_list: List[str] = [
-
-    ]
+    case_name_list: List[str] = []
 
     for cs in case_name_list:
         output = Path(g_src_root, "build/tests/st/golden", cs).resolve()

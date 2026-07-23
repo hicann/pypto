@@ -8,20 +8,23 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
 
 import torch
+
 import pypto
 
 
 @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.SIM},
-        host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH},
-        pass_options={"vec_nbuffer_setting": {-1: 8}})
-def loop_scope(a: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
-               b: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
-               result: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32]):
+    runtime_options={"run_mode": pypto.RunMode.SIM},
+    host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH},
+    pass_options={"vec_nbuffer_setting": {-1: 8}},
+)
+def loop_scope(
+    a: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
+    b: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
+    result: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
+):
     pypto.set_vec_tile_shapes(64, 64)
 
     for _ in pypto.loop(1, name="s0", idx_name="k"):
@@ -35,12 +38,14 @@ def loop_scope(a: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
 
 
 @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.SIM},
-        host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH},
+    runtime_options={"run_mode": pypto.RunMode.SIM},
+    host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH},
 )
-def loop_scope_1(a: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
-               b: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
-               result: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32]):
+def loop_scope_1(
+    a: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
+    b: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
+    result: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
+):
     pypto.set_vec_tile_shapes(64, 64)
 
     # kernel之间的配置相互隔离

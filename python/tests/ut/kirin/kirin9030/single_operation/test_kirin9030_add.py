@@ -13,9 +13,8 @@
 Test add codegen for Kirin9030
 """
 
+from kirin.common_add import TEST_CASES, create_test_add_module, run_add_test
 import pytest
-from kirin.common_add import create_test_add_module, run_add_test, TEST_CASES
-
 
 KERNELS, _ = create_test_add_module("Kirin9030")
 

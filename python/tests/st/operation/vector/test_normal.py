@@ -8,15 +8,17 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import math
 import os
-import pypto
-import pytest
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
+import pytest
+import torch
+
+import pypto
 
 
 def normal_numpy_golden(shape, key, counter, alg, dtype):
@@ -47,10 +49,7 @@ def normal_numpy_golden(shape, key, counter, alg, dtype):
 
     key_arr = uint64_to_uint32_pair(np.uint64(key[0]))
     # Hardcode counter[0] to 0 to match pypto.normal behavior (aligned with CANN ACLNN)
-    counter_arr = np.concatenate([
-        uint64_to_uint32_pair(np.uint64(0)),
-        uint64_to_uint32_pair(np.uint64(counter[1]))
-    ])
+    counter_arr = np.concatenate([uint64_to_uint32_pair(np.uint64(0)), uint64_to_uint32_pair(np.uint64(counter[1]))])
 
     philox_w32a = 0x9E3779B9
     philox_w32b = 0xBB67AE85
@@ -95,7 +94,7 @@ def normal_numpy_golden(shape, key, counter, alg, dtype):
         return c
 
     def uint32_to_float(uint_val):
-        man = int(uint_val) & 0x7fffff
+        man = int(uint_val) & 0x7FFFFF
         exp = 127
         val = (exp << 23) | man
         result = np.frombuffer(np.array([val], dtype=np.uint32).tobytes(), dtype=np.float32)[0]
@@ -165,7 +164,7 @@ def test_normal_fp32():
     with pypto.function("NORMAL_CONTENT_FP32", output):
         for idx in pypto.loop(loop_num, name="loop0", idx_name="idx"):
             offset = idx * view_shape[0]
-            valid_shape = pypto.min(pypto.symbolic_scalar(shape[0]) - offset, pypto.symbolic_scalar(view_shape[0]))
+            _valid_shape = pypto.min(pypto.symbolic_scalar(shape[0]) - offset, pypto.symbolic_scalar(view_shape[0]))
             pypto.set_vec_tile_shapes(tile_shape[0])
             res = pypto.normal(shape, key, counter, alg, dtype)
             pypto.assemble(res, [offset], output)
@@ -201,7 +200,7 @@ def test_normal_fp16():
     with pypto.function("NORMAL_CONTENT_FP16", output):
         for idx in pypto.loop(loop_num, name="loop0", idx_name="idx"):
             offset = idx * view_shape[0]
-            valid_shape = pypto.min(pypto.symbolic_scalar(shape[0]) - offset, pypto.symbolic_scalar(view_shape[0]))
+            _valid_shape = pypto.min(pypto.symbolic_scalar(shape[0]) - offset, pypto.symbolic_scalar(view_shape[0]))
             pypto.set_vec_tile_shapes(tile_shape[0])
             res = pypto.normal(shape, key, counter, alg, dtype)
             pypto.assemble(res, [offset], output)

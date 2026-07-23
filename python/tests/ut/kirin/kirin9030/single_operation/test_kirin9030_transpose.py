@@ -12,14 +12,12 @@
 Test transpose codegen for Kirin9030
 """
 
-import pytest
-
 from kirin.common_transpose import (
+    TEST_CASES,
     create_transpose_kernels,
     run_transpose_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_transpose_kernels("Kirin9030")
 
@@ -28,8 +26,7 @@ KERNELS = create_transpose_kernels("Kirin9030")
     "kernel_name,torch_dtype,pypto_dtype,tile_shapes,kernel_shape,test_shape,dim0,dim1",
     TEST_CASES,
 )
-def test_transpose(kernel_name, torch_dtype, pypto_dtype, tile_shapes,
-                   kernel_shape, test_shape, dim0, dim1):
+def test_transpose(kernel_name, torch_dtype, pypto_dtype, tile_shapes, kernel_shape, test_shape, dim0, dim1):
     run_transpose_test(KERNELS, kernel_name, torch_dtype, test_shape, dim0, dim1)
 
 

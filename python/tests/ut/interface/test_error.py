@@ -17,11 +17,10 @@ testing error scenarios that trigger different error types through the frontend.
 """
 
 import pytest
-import pypto
 import torch
 
+import pypto
 from pypto.error import ParserError, PyptoError, PyptoGeneralError, _catch_and_wrap_error
-import pypto.config
 
 
 def test_python_error_codes_are_bound_from_cpp():
@@ -39,11 +38,9 @@ def test_python_error_codes_are_bound_from_cpp():
 
 def test_varargs_error():
     """Test that variable-length arguments trigger proper error handling."""
+
     @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-    def varargs_kernel(
-        x: pypto.Tensor([], pypto.DT_FP32),
-        out: pypto.Tensor([], pypto.DT_FP32),
-        *args):
+    def varargs_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32), *args):
         out[:] = x
 
     x = torch.randn(4, 4, dtype=torch.float32)
@@ -55,11 +52,9 @@ def test_varargs_error():
 
 def test_kwargs_error():
     """Test that keyword arguments trigger proper error handling."""
+
     @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-    def kwargs_kernel(
-        x: pypto.Tensor([], pypto.DT_FP32),
-        out: pypto.Tensor([], pypto.DT_FP32),
-        **kwargs):
+    def kwargs_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32), **kwargs):
         out[:] = x
 
     x = torch.randn(4, 4, dtype=torch.float32)
@@ -71,11 +66,9 @@ def test_kwargs_error():
 
 def test_error_message_contains_error_code():
     """Test that error messages contain error codes."""
+
     @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-    def varargs_kernel(
-        x: pypto.Tensor([], pypto.DT_FP32),
-        out: pypto.Tensor([], pypto.DT_FP32),
-        *args):
+    def varargs_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32), *args):
         out[:] = x
 
     x = torch.randn(4, 4, dtype=torch.float32)
@@ -135,9 +128,9 @@ def test_catch_and_wrap_error_preserves_errcode():
 
 def test_error_on_input_tensor_reassign():
     """Test that reassigning input tensor triggers ParserError."""
+
     @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.SIM},
-        host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
+        runtime_options={"run_mode": pypto.RunMode.SIM}, host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
     )
     def error_assign_input(
         a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
@@ -145,7 +138,7 @@ def test_error_on_input_tensor_reassign():
         c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     ):
         pypto.set_vec_tile_shapes(32, 32)
-        c = a + b
+        c = a + b  # noqa: F841
 
     a = torch.rand((32, 32), dtype=torch.float16)
     b = torch.rand((32, 32), dtype=torch.float16)
@@ -157,9 +150,9 @@ def test_error_on_input_tensor_reassign():
 
 def test_error_on_first_input_tensor_reassign():
     """Test that reassigning the first input tensor triggers ParserError."""
+
     @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.SIM},
-        host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
+        runtime_options={"run_mode": pypto.RunMode.SIM}, host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
     )
     def error_assign_first_input(
         a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
@@ -167,7 +160,7 @@ def test_error_on_first_input_tensor_reassign():
         c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     ):
         pypto.set_vec_tile_shapes(32, 32)
-        a = b + c
+        a = b + c  # noqa: F841
 
     a = torch.rand((32, 32), dtype=torch.float16)
     b = torch.rand((32, 32), dtype=torch.float16)
@@ -179,9 +172,9 @@ def test_error_on_first_input_tensor_reassign():
 
 def test_error_location_on_reshape_dynamic_shape(capsys):
     """Test that reshape errors report the exact kernel source location."""
+
     @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.SIM},
-        host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
+        runtime_options={"run_mode": pypto.RunMode.SIM}, host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
     )
     def reshape_dynamic_shape_error(
         a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP16),
@@ -205,6 +198,7 @@ def test_error_location_on_reshape_dynamic_shape(capsys):
     assert f"test_error.py:{expected_lineno}" in diagnostic
     assert "pypto.reshape(a, [a.shape[0] * a.shape[1]])" in diagnostic
     assert "^" in diagnostic
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

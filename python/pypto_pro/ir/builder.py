@@ -15,6 +15,7 @@ IR Builder for incremental IR construction with context management.
 Provides a Pythonic API for building IR using context managers with
 automatic span tracking via the inspect module.
 """
+
 from __future__ import annotations
 
 __all__ = [
@@ -28,9 +29,9 @@ __all__ = [
 
 
 import builtins
-import inspect
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+import inspect
 
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
@@ -195,9 +196,7 @@ class IRBuilder:
             del self._begin_spans[ctx_id]
 
     @contextmanager
-    def while_loop(
-        self, condition: int | ir.Expr, span: ir.Span | None = None
-    ) -> Iterator["WhileLoopBuilder"]:
+    def while_loop(self, condition: int | ir.Expr, span: ir.Span | None = None) -> Iterator["WhileLoopBuilder"]:
         """Context manager for building while loops.
 
         Args:
@@ -231,9 +230,7 @@ class IRBuilder:
             del self._begin_spans[ctx_id]
 
     @contextmanager
-    def if_stmt(
-        self, condition: int | ir.Expr, span: ir.Span | None = None
-    ) -> Iterator["IfStmtBuilder"]:
+    def if_stmt(self, condition: int | ir.Expr, span: ir.Span | None = None) -> Iterator["IfStmtBuilder"]:
         """Context manager for building if statements.
 
         Args:
@@ -737,7 +734,6 @@ class IRBuilder:
         return ir.TileType(shape_exprs, dtype, memref, tile_view)
 
 
-
 class FunctionBuilder:
     """Helper for building functions within a function context."""
 
@@ -942,8 +938,7 @@ class ForLoopBuilder(_LoopBuilderBase):
             raise RuntimeError("For loop not yet complete")
         if index >= len(self.result.return_vars):
             raise IndexError(
-                f"Return variable index {index} out of range "
-                f"(for loop has {len(self.result.return_vars)} return vars)"
+                f"Return variable index {index} out of range (for loop has {len(self.result.return_vars)} return vars)"
             )
         return self.result.return_vars[index]
 

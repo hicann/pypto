@@ -8,15 +8,12 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 from dataclasses import dataclass, field
 from typing import List
-import logging
-import pytest
-import pypto
-from conftest import duration_estimate
 
+import pypto
 
 SHAPE_DIM_0 = 0
 SHAPE_DIM_1 = 1
@@ -65,13 +62,9 @@ class SABuildConfig:
     softmax_scale: float = 1.0 / 24.0
     g_tile: int = 128
     s2_tile: int = 2048
-    c1_tile: List[int] = field(
-        default_factory=lambda: [[128, 128], [64, 64], [256, 256]]
-    )
+    c1_tile: List[int] = field(default_factory=lambda: [[128, 128], [64, 64], [256, 256]])
     v1_tile: List[int] = field(default_factory=lambda: [16, 256])
-    c2_tile: List[int] = field(
-        default_factory=lambda: [[128, 128], [128, 128], [128, 128]]
-    )
+    c2_tile: List[int] = field(default_factory=lambda: [[128, 128], [128, 128], [128, 128]])
     v2_tile: List[int] = field(default_factory=lambda: [64, 128])
 
 

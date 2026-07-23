@@ -5,11 +5,11 @@
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR a PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import pypto
 import pypto._controller as controller
 
@@ -24,9 +24,9 @@ def init_tensors():
 
 
 def parallel_add_single_parallel_func(left: pypto.tensor, right: pypto.tensor, res: pypto.tensor):
-    n0 = left.shape[0]
-    n1 = left.shape[1]
-    n2 = left.shape[2]
+    _n0 = left.shape[0]
+    _n1 = left.shape[1]
+    _n2 = left.shape[2]
     for n0_idx in pypto.loop(0, 2, 1, name="N0_LOOP", idx_name="n0_loop"):
         for n1_idx in pypto.loop(0, 2, 1, name="N1_LOOP", idx_name="n1_loop", parallel=True):
             for n2_idx in pypto.loop(0, 2, 1, name="N2_LOOP", idx_name="n2_loop"):
@@ -92,10 +92,7 @@ def test_pto_loop_unroll_n_submit_before_loop():
     with pypto.function("MAIN", a, b, c):
         pypto.set_vec_tile_shapes(16, 16)
 
-        for k in pypto.loop(
-                1, 10, 2, name="LOOP", submit_before_loop=True
-        ):
-
+        for k in pypto.loop(1, 10, 2, name="LOOP", submit_before_loop=True):
             if pypto.cond(k < 5):
                 b.move(pypto.sub(c, a))
             if pypto.cond(1):
@@ -130,23 +127,23 @@ def test_loop_issue52():
 
 
 def test_if_true():
-    A = pypto.tensor((64, 64), pypto.DT_FP32, "A")
-    B = pypto.tensor((64, 64), pypto.DT_FP32, "B")
+    a = pypto.tensor((64, 64), pypto.DT_FP32, "a")
+    b = pypto.tensor((64, 64), pypto.DT_FP32, "b")
 
     pypto.set_semantic_label("IF_TRUE")
-    with pypto.function("MAIN", A, B):
+    with pypto.function("MAIN", a, b):
         for _ in pypto.loop(1):
             pypto.set_vec_tile_shapes(16, 16)
             if pypto.cond(True):
-                B[:] = A + 2
+                b[:] = a + 2
             else:
-                B[:] = A - 2
+                b[:] = a - 2
 
 
 def test_loop_manual_unroll():
     pypto.runtime._device_init()
-    A = pypto.tensor((-1, 64), pypto.DT_FP32, "A")
-    B = pypto.tensor((-1, 64), pypto.DT_FP32, "B")
+    A = pypto.tensor((-1, 64), pypto.DT_FP32, "A")  # noqa: N806
+    B = pypto.tensor((-1, 64), pypto.DT_FP32, "B")  # noqa: N806
 
     with pypto.function("MAIN", A, B):
         pypto.set_vec_tile_shapes(64, 64)
@@ -159,32 +156,32 @@ def test_loop_manual_unroll():
 
 
 def test_loop_manual_unroll_const():
-    A = pypto.tensor((64, 64), pypto.DT_FP32, "A")
-    B = pypto.tensor((64, 64), pypto.DT_FP32, "B")
+    a = pypto.tensor((64, 64), pypto.DT_FP32, "a")
+    b = pypto.tensor((64, 64), pypto.DT_FP32, "b")
 
     k_list = []
     pypto.runtime._device_init()
-    with pypto.function("MAIN", A, B):
+    with pypto.function("MAIN", a, b):
         pypto.set_vec_tile_shapes(64, 64)
         for _, k in pypto.loop_unroll(1, 8, unroll_list=[1, 2, 4]):
             k_list.append(k)
-            B[:] = A + 1
+            b[:] = a + 1
     assert k_list == [4, 2, 1]
     pypto.runtime._device_fini()
 
 
 def test_pto_auto_unroll():
-    A = pypto.tensor((-1, 64), pypto.DT_FP32, "A")
-    B = pypto.tensor((-1, 64), pypto.DT_FP32, "B")
+    a = pypto.tensor((-1, 64), pypto.DT_FP32, "a")
+    b = pypto.tensor((-1, 64), pypto.DT_FP32, "b")
 
     pypto.runtime._device_init()
-    with pypto.function("MAIN", A, B):
+    with pypto.function("MAIN", a, b):
         pypto.set_vec_tile_shapes(64, 64)
         for idx in pypto.loop(128, unroll_list=[1, 4]):
-            ATile = A[idx * 64:(idx + 1) * 64, :]
+            a_tile = a[idx * 64:(idx + 1) * 64, :]
             if pypto.cond(pypto.is_loop_begin(idx)):
-                ATile = ATile + 1
+                a_tile = a_tile + 1
             elif pypto.cond(pypto.is_loop_end(idx)):
-                ATile = ATile + 2
-            B[idx * 64:, 0:] = ATile + 1
+                a_tile = a_tile + 2
+            b[idx * 64:, 0:] = a_tile + 1
     pypto.runtime._device_fini()

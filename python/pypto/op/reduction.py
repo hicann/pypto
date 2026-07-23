@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
+
 from typing import Union
 
 from .. import pypto_impl
@@ -87,9 +88,7 @@ def amax(input: Tensor, dim: int, keepdim: bool = False) -> Tensor:
 
 
 @op_wrapper
-def maximum(
-    input: Union[Tensor, Element, int, float], other: Union[Tensor, Element, int, float]
-) -> Tensor:
+def maximum(input: Union[Tensor, Element, int, float], other: Union[Tensor, Element, int, float]) -> Tensor:
     """
     Computes the element-wise maximum of input and other.
 
@@ -115,9 +114,7 @@ def maximum(
     Input b:    [3 1 3]
     Output out: [3 2 4]
     """
-    if not isinstance(input, pypto_impl.Tensor) and not isinstance(
-        other, pypto_impl.Tensor
-    ):
+    if not isinstance(input, pypto_impl.Tensor) and not isinstance(other, pypto_impl.Tensor):
         raise PyptoError(0xF00001, TypeError("one of `input` and `other` should be `Tensor`"))
 
     if not isinstance(input, pypto_impl.Tensor) and isinstance(other, pypto_impl.Tensor):
@@ -128,9 +125,7 @@ def maximum(
 
 
 @op_wrapper
-def minimum(
-    input: Union[Tensor, Element, int, float], other: Union[Tensor, Element, int, float]
-) -> Tensor:
+def minimum(input: Union[Tensor, Element, int, float], other: Union[Tensor, Element, int, float]) -> Tensor:
     """
     Computes the element-wise minimum of input and other.
 
@@ -156,9 +151,7 @@ def minimum(
     Input b:    [3 1 3]
     Output out: [0 1 3]
     """
-    if not isinstance(input, pypto_impl.Tensor) and not isinstance(
-        other, pypto_impl.Tensor
-    ):
+    if not isinstance(input, pypto_impl.Tensor) and not isinstance(other, pypto_impl.Tensor):
         raise PyptoError(0xF00001, TypeError("one of `input` and `other` should be `Tensor`"))
 
     if not isinstance(input, pypto_impl.Tensor) and isinstance(other, pypto_impl.Tensor):

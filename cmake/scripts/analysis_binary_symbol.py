@@ -8,19 +8,18 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""构建产物二进制符号分析.
-"""
+"""构建产物二进制符号分析."""
+
 import argparse
+from datetime import datetime, timezone
 import logging
+from pathlib import Path
 import shlex
 import subprocess
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import List
 
 
 class Analysis:
-
     def __init__(self, args):
         self.file: Path = Path(args.file[0])
         self.print_defined_relations: bool = args.print_defined_relations
@@ -34,7 +33,7 @@ class Analysis:
         # 结果
         str_1 = ""
         if self.print_defined_relations:
-            str_1 = f"\nDefined:\n\t"
+            str_1 = "\nDefined:\n\t"
             str_1 += "\n\t".join(self.defined_relations)
         str_2 = ""
         if len(self.undefined_symbols_self) != 0:
@@ -110,30 +109,49 @@ class Analysis:
         cnt2 = len(self.undefined_symbols_pass)
         if self.check_undefined_symbols_self and cnt1 != 0:
             ret = False
-            logging.error("%s has %s undefined symbols self, Duration %s secs.", self.file.name, cnt1,
-                          (datetime.now(tz=timezone.utc) - ts).seconds)
+            logging.error(
+                "%s has %s undefined symbols self, Duration %s secs.",
+                self.file.name,
+                cnt1,
+                (datetime.now(tz=timezone.utc) - ts).seconds,
+            )
         if self.check_undefined_symbols_pass and cnt2 != 0:
             ret = False
-            logging.error("%s has %s undefined symbols pass, Duration %s secs.", self.file.name, cnt2,
-                          (datetime.now(tz=timezone.utc) - ts).seconds)
+            logging.error(
+                "%s has %s undefined symbols pass, Duration %s secs.",
+                self.file.name,
+                cnt2,
+                (datetime.now(tz=timezone.utc) - ts).seconds,
+            )
         if ret:
-            logging.info("%s symbols check success, Duration %s secs.", self.file.name,
-                         (datetime.now(tz=timezone.utc) - ts).seconds)
+            logging.info(
+                "%s symbols check success, Duration %s secs.",
+                self.file.name,
+                (datetime.now(tz=timezone.utc) - ts).seconds,
+            )
         return ret
 
     @staticmethod
     def main():
-        """主处理流程 """
+        """主处理流程"""
         # 参数注册
-        parser = argparse.ArgumentParser(description=f"Symbol Analysis.", epilog="Best Regards!")
-        parser.add_argument("-f", "--file", nargs=1, type=str, required=True,
-                            help="Specific binary file path.")
-        parser.add_argument("--print_defined_relations", action="store_true", default=False,
-                            help="Print defined relations.")
-        parser.add_argument("--ignore_undefined_symbols_self", action="store_true", default=False,
-                            help="Ignore undefined symbols self-contained.")
-        parser.add_argument("--ignore_undefined_symbols_pass", action="store_true", default=False,
-                            help="Ignore undefined symbols passed between binaries.")
+        parser = argparse.ArgumentParser(description="Symbol Analysis.", epilog="Best Regards!")
+        parser.add_argument("-f", "--file", nargs=1, type=str, required=True, help="Specific binary file path.")
+        parser.add_argument(
+            "--print_defined_relations", action="store_true", default=False, help="Print defined relations."
+        )
+        parser.add_argument(
+            "--ignore_undefined_symbols_self",
+            action="store_true",
+            default=False,
+            help="Ignore undefined symbols self-contained.",
+        )
+        parser.add_argument(
+            "--ignore_undefined_symbols_pass",
+            action="store_true",
+            default=False,
+            help="Ignore undefined symbols passed between binaries.",
+        )
         # 流程处理
         ctrl = Analysis(args=parser.parse_args())
         return ctrl.analysis()

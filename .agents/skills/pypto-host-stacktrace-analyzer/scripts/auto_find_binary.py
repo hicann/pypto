@@ -8,15 +8,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import os
-import sys
-import logging
 import argparse
+import logging
+import os
 from pathlib import Path
+import sys
 from typing import List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import setup_logging, validate_path, is_valid_binary
+from common import is_valid_binary, setup_logging
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -47,14 +47,17 @@ class BinaryFinder:
         if conda_prefix:
             conda_prefix_path = Path(conda_prefix).expanduser().resolve()
             if conda_prefix_path.exists():
-                paths.extend([
-                    conda_prefix_path / 'bin',
-                    conda_prefix_path / 'lib',
-                    conda_prefix_path / 'lib64',
-                ])
+                paths.extend(
+                    [
+                        conda_prefix_path / 'bin',
+                        conda_prefix_path / 'lib',
+                        conda_prefix_path / 'lib64',
+                    ]
+                )
 
                 # Conda site-packages（用 glob 展开 python 版本）
                 import glob
+
                 conda_site_patterns = [
                     conda_prefix_path / 'lib' / 'python3.*' / 'site-packages',
                     conda_prefix_path / 'lib' / 'python3.*' / 'site-packages' / 'pypto',
@@ -73,17 +76,20 @@ class BinaryFinder:
 
         # 扩展通配符
         import glob
+
         for pattern in pypto_paths:
             for path in glob.glob(str(pattern)):
                 paths.append(Path(path))
 
         # 常见库路径
-        paths.extend([
-            Path('/usr/lib'),
-            Path('/usr/local/lib'),
-            Path('/lib'),
-            Path('/lib64'),
-        ])
+        paths.extend(
+            [
+                Path('/usr/lib'),
+                Path('/usr/local/lib'),
+                Path('/lib'),
+                Path('/lib64'),
+            ]
+        )
 
         # 去重并过滤不存在的路径
         unique_paths = []
@@ -130,6 +136,7 @@ class BinaryFinder:
             for depth in range(3):
                 pattern = str(search_path / ('*/' * depth) / binary_name)
                 import glob
+
                 matches = glob.glob(pattern)
                 for match in matches:
                     path = Path(match)
@@ -154,6 +161,7 @@ class BinaryFinder:
             for depth in range(3):
                 pattern = str(search_path / ('*/' * depth) / binary_name)
                 import glob
+
                 matches = glob.glob(pattern)
                 for match in matches:
                     path = Path(match)

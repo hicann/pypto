@@ -8,14 +8,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""Args处理辅助
-"""
+"""Args处理辅助"""
+
 import argparse
 
 
 class ArgsEnvDictAction(argparse.Action):
-    """解析命令行参数传入的环境变量字段(env)
-    """
+    """解析命令行参数传入的环境变量字段(env)"""
 
     def __call__(self, parser, namespace, values, option_string=None):
         env_dict = getattr(namespace, self.dest, {}) or {}

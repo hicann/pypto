@@ -8,11 +8,12 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import re
-import os
-import glob
 import argparse
 from dataclasses import dataclass, field
+import glob
+import os
+import re
+import sys
 from typing import Dict, List, Optional
 
 
@@ -34,9 +35,13 @@ def finalize_current_pass(context, output_dir):
         return
 
     if context.target_function_name is None or context.current_function_name == context.target_function_name:
-        save_pass_log(context.current_pass_lines, context.current_pass_name,
-                      context.current_function_name, output_dir,
-                      context.function_index_map)
+        save_pass_log(
+            context.current_pass_lines,
+            context.current_pass_name,
+            context.current_function_name,
+            output_dir,
+            context.function_index_map,
+        )
         context.pass_count += 1
     context.current_pass_lines = []
     context.current_pass_name = None
@@ -54,10 +59,7 @@ def is_runtime_end_line(line, context):
 
     runtime_pass_name = runtime_match.group(1)
     runtime_function_name = runtime_match.group(3)
-    return (
-        runtime_pass_name == context.current_pass_name and
-        runtime_function_name == context.current_function_name
-    )
+    return runtime_pass_name == context.current_pass_name and runtime_function_name == context.current_function_name
 
 
 def process_log_line(line, context, output_dir):
@@ -99,11 +101,10 @@ def extract_pass_logs(log_file_paths, output_dir, target_function_name=None):
 
     pass_pattern = re.compile(r'Apply pass <([^>]+)> on function: ([^.]+)\.')
     runtime_pattern = re.compile(
-        r'The Runtime of pass ([^\s]+) for program\s+([^\s]+)\s+function\s+([^\s]+) is \d+ us\.')
+        r'The Runtime of pass ([^\s]+) for program\s+([^\s]+)\s+function\s+([^\s]+) is \d+ us\.'
+    )
     context = PassContext(
-        pass_pattern=pass_pattern,
-        runtime_pattern=runtime_pattern,
-        target_function_name=target_function_name
+        pass_pattern=pass_pattern, runtime_pattern=runtime_pattern, target_function_name=target_function_name
     )
 
     for log_file_path in log_file_paths:
@@ -159,15 +160,12 @@ def main():
   python extract_pass_logs.py pypto-log-xxx.log -o ./output
   python extract_pass_logs.py log1.log log2.log log3.log -o ./output
   python extract_pass_logs.py 'log*.log' -o ./output
-        """
+        """,
     )
     parser.add_argument('log_files', nargs='+', help='日志文件路径（支持通配符）')
-    parser.add_argument('-o', '--output', default='pass_logs',
-                       help='输出目录（默认：pass_logs）')
-    parser.add_argument('-f', '--function-name', default=None,
-                       help='仅提取指定function_name的日志（默认：提取全部）')
-    parser.add_argument('--silentmode', '--silent-mode', action='store_true',
-                       help='静默模式：不输出任何提示信息')
+    parser.add_argument('-o', '--output', default='pass_logs', help='输出目录（默认：pass_logs）')
+    parser.add_argument('-f', '--function-name', default=None, help='仅提取指定function_name的日志（默认：提取全部）')
+    parser.add_argument('--silentmode', '--silent-mode', action='store_true', help='静默模式：不输出任何提示信息')
 
     args = parser.parse_args()
 

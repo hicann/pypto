@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """AST parsing for converting Python DSL to IR builder calls."""
+
 from __future__ import annotations
 
 __all__ = ["ASTParser"]
@@ -17,26 +18,26 @@ import ast
 from functools import singledispatchmethod
 from typing import Any
 
-from pypto_pro.ir import IRBuilder
 from pypto.pypto_impl import ir
+from pypto_pro.ir import IRBuilder
 
+from ..typing._tiling import ArrayFieldInfo, get_tiling_fields, is_tiling_class
+from ..typing.shape import _ShapePolicy
 from ._assignment_parser import AssignmentParserMixin
 from ._buffer_parser import BufferParserMixin
 from ._call_parser import CallParserMixin, _infer_return_types_from_body
 from ._control_flow_parser import ControlFlowParserMixin, validate_single_tail_return
+from ._expr_evaluator import ExprEvaluator
 from ._expression_parser import ExpressionParserMixin
+from ._scope_manager import ScopeManager
+from ._span_tracker import SpanTracker
 from ._struct_parser import StructParserMixin
+from ._type_resolver import TypeResolver
 from .diagnostics import (
     ParserSyntaxError,
     ParserTypeError,
     UnsupportedFeatureError,
 )
-from ._expr_evaluator import ExprEvaluator
-from ._scope_manager import ScopeManager
-from ._span_tracker import SpanTracker
-from ._type_resolver import TypeResolver
-from ..typing._tiling import ArrayFieldInfo, get_tiling_fields, is_tiling_class
-from ..typing.shape import _ShapePolicy
 
 
 def _snake_visit_name(node: ast.AST) -> str:
@@ -207,8 +208,13 @@ class ASTParser(
         if not isinstance(param_type, ir.TensorType):
             return param_type
         ptr_var = ir.Var(name + "_ptr", ir.PtrType(param_type.dtype), span)
-        tv = ir.TensorView() if param_type.tensor_view is None else ir.TensorView(
-            param_type.tensor_view.valid_shape, param_type.tensor_view.stride, param_type.tensor_view.layout)
+        tv = (
+            ir.TensorView()
+            if param_type.tensor_view is None
+            else ir.TensorView(
+                param_type.tensor_view.valid_shape, param_type.tensor_view.stride, param_type.tensor_view.layout
+            )
+        )
         tv.ptr = ptr_var
         return ir.TensorType(param_type.shape, param_type.dtype, param_type.memref, tv)
 
@@ -276,8 +282,10 @@ class ASTParser(
         func_name = func_def.name
         func_span = self.span_tracker.get_span(func_def)
 
-        if self._void_return_only and func_def.returns is not None and not (
-            isinstance(func_def.returns, ast.Constant) and func_def.returns.value is None
+        if (
+            self._void_return_only
+            and func_def.returns is not None
+            and not (isinstance(func_def.returns, ast.Constant) and func_def.returns.value is None)
         ):
             raise ParserSyntaxError(
                 f"{self._void_return_context} only supports a None return annotation; "
@@ -305,10 +313,7 @@ class ASTParser(
         self.scope_manager.enter_scope("function")
 
         # Collect args to process, filtering out bare 'self'
-        args_to_process = [
-            arg for arg in func_def.args.args
-            if not (arg.arg == "self" and arg.annotation is None)
-        ]
+        args_to_process = [arg for arg in func_def.args.args if not (arg.arg == "self" and arg.annotation is None)]
 
         self._validate_tiling_params(args_to_process, func_def)
 
@@ -320,8 +325,10 @@ class ASTParser(
                 self._parse_function_param(arg, f)
 
             # Parse return type (skip `-> None`)
-            if func_def.returns and not has_policy_return and not (
-                isinstance(func_def.returns, ast.Constant) and func_def.returns.value is None
+            if (
+                func_def.returns
+                and not has_policy_return
+                and not (isinstance(func_def.returns, ast.Constant) and func_def.returns.value is None)
             ):
                 # tuple[...] resolves to a single TupleType, matching a `return a, b`
                 # body (one MakeTuple expr), so a tuple return is one return type.
@@ -471,11 +478,14 @@ class ASTParser(
             self._tile_mutex_meta[var] = mm
 
     def _validate_tiling_params(
-        self, args_to_process: list[ast.arg], func_def: ast.FunctionDef,
+        self,
+        args_to_process: list[ast.arg],
+        func_def: ast.FunctionDef,
     ) -> None:
         """Pre-validate tiling constraints: at most 1 tiling param, must be last."""
         tiling_param_names = [
-            arg.arg for arg in args_to_process
+            arg.arg
+            for arg in args_to_process
             if arg.annotation is not None and self.resolve_tiling_class(arg.annotation) is not None
         ]
         if len(tiling_param_names) > 1:
@@ -510,9 +520,7 @@ class ASTParser(
                     # T[N] -> a nested TupleType of N homogeneous scalars. Its element
                     # name is NOT registered in IRDebugInfo, so codegen distinguishes array
                     # subscript (tiling.opkind[4]) from struct member access by the missing entry.
-                    elem_types.append(
-                        ir.TupleType([ir.ScalarType(field_info.dtype)] * field_info.size)
-                    )
+                    elem_types.append(ir.TupleType([ir.ScalarType(field_info.dtype)] * field_info.size))
                 else:
                     elem_types.append(ir.ScalarType(field_info.dtype))
             # Single struct parameter: the tiling class is lowered to a named TupleType whose

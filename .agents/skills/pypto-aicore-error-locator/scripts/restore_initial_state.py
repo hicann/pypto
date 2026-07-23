@@ -15,19 +15,19 @@
 """
 
 import argparse
+import logging
 import os
 import shutil
 import sys
-import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (
-    setup_logging,
-    validate_path,
     KNOWN_LOCATIONS,
-    locate_file,
     build_and_install,
     find_installed_tile_fwk_config,
+    locate_file,
+    setup_logging,
+    validate_path,
 )
 
 setup_logging()
@@ -50,10 +50,8 @@ def restore_from_backup(base_dir, known_rel_path, filename, label):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='恢复定位过程中修改的配置文件并重新编译安装 pypto')
-    parser.add_argument('--pypto-path', default=os.getcwd(),
-                        help='pypto 项目根目录路径（默认: 当前目录）')
+    parser = argparse.ArgumentParser(description='恢复定位过程中修改的配置文件并重新编译安装 pypto')
+    parser.add_argument('--pypto-path', default=os.getcwd(), help='pypto 项目根目录路径（默认: 当前目录）')
     args = parser.parse_args()
 
     pypto_path = os.path.abspath(args.pypto_path)
@@ -81,8 +79,8 @@ def main():
 
     # Restore source device_switch.h from backup
     switch_restored = restore_from_backup(
-        pypto_path, KNOWN_LOCATIONS['device_switch.h'],
-        'device_switch.h', 'device_switch.h')
+        pypto_path, KNOWN_LOCATIONS['device_switch.h'], 'device_switch.h', 'device_switch.h'
+    )
 
     any_restored = tile_restored or switch_restored
 

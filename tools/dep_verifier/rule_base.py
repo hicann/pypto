@@ -8,10 +8,10 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass, field
+import logging
 from typing import Dict, List, Optional, Set, Tuple
 
 from .models import (
@@ -75,9 +75,8 @@ class RuleContext:
 
     @staticmethod
     def _collect_slot_func_keys(
-            fn: StaticFunction,
-            writers_by_slot: Dict[int, Set[int]],
-            readers_by_slot: Dict[int, Set[int]]) -> None:
+        fn: StaticFunction, writers_by_slot: Dict[int, Set[int]], readers_by_slot: Dict[int, Set[int]]
+    ) -> None:
         func_key = fn.func_key
         for op in fn.ops.values():
             for s in op.outcast_slots:
@@ -164,13 +163,15 @@ class Rule(ABC):
     def run(self, ctx: RuleContext) -> List[Violation]:
         try:
             vs = self.check(ctx) or []
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("rule %s execution failed", self.RULE_ID)
-            return [Violation(
-                rule_id=self.RULE_ID,
-                category=self.CATEGORY,
-                message=f"rule execution failed: {exc}",
-            )]
+            return [
+                Violation(
+                    rule_id=self.RULE_ID,
+                    category=self.CATEGORY,
+                    message=f"rule execution failed: {exc}",
+                )
+            ]
         for v in vs:
             if not v.category:
                 v.category = self.CATEGORY

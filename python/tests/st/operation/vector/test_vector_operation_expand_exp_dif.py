@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
+
 from test_case_class_vector_operations import ExpandExpDifTestCase
 
 
@@ -53,7 +54,7 @@ def test_tensor_expand_exp_dif_0():
     exec_test_tensor_expand_exp_dif(input_shapes, view_shape, tile_shape)
 
 
-def test_tensor_expand_exp_dif_0():
+def test_tensor_expand_exp_dif_0():  # noqa: F811
     input_shapes = [(16, 128), (1, 128)]
     view_shape = (16, 128)
     tile_shape = (16, 32)

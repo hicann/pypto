@@ -11,15 +11,14 @@
 """Test module for deepseekv4_compressor."""
 
 import os
-import sys
-from numpy.testing import assert_allclose
-import torch
-import torch_npu
-import pytest
-import numpy as np
-import torch.nn as nn
-from compressor_impl import compressor_pypto, npu_compressor
 
+from compressor_impl import compressor_pypto, npu_compressor
+import numpy as np
+from numpy.testing import assert_allclose
+import pytest
+import torch
+import torch.nn as nn
+import torch_npu
 
 np.random.seed(0)
 torch.manual_seed(0)
@@ -29,7 +28,7 @@ np.set_printoptions(formatter={"float": "{:.6f}".format})
 def overlap_transform(tensor: torch.Tensor, value: float) -> torch.Tensor:
     # tensor shape: [batch_size, seq_len, ratio, 2*dim]
     b, s, ratio, d = tensor.size()
-    d = d//2
+    d = d // 2
     new_tensor = tensor.new_full((b, s, 2 * ratio, d), value)
     new_tensor[:, :, ratio:] = tensor[:, :, :, d:]
     new_tensor[:, 1:, :ratio] = tensor[:, :-1, :, :d]
@@ -114,24 +113,18 @@ def golden_compress(
             start_pos = start_pos_dy[b_idx]
             should_compress = (start_pos + i + 1) % ratio == 0
             pos = (start_pos + i) % ratio
-            kv = kv_total[b_idx, i : i + 1, :].clone()
-            score = score_total[b_idx, i : i + 1, :].clone()
+            kv = kv_total[b_idx, i:i + 1, :].clone()
+            score = score_total[b_idx, i:i + 1, :].clone()
             score += ape[pos]
             if overlap:
                 kv_block_idx = kv_block_table[b_idx, (start_pos + i) // block_size]
-                score_block_idx = score_block_table[
-                    b_idx, (start_pos + i) // block_size
-                ]
+                score_block_idx = score_block_table[b_idx, (start_pos + i) // block_size]
                 cur_pos = (start_pos + i) % block_size
                 kv_state[kv_block_idx, cur_pos, :] = kv.squeeze(0)
                 score_state[score_block_idx, cur_pos, :] = score.squeeze(0)
                 if should_compress:
-                    pre_kv_block_idx = kv_block_table[
-                        b_idx, (start_pos + i - 2 * ratio + 1) // block_size
-                    ]
-                    pre_score_block_idx = score_block_table[
-                        b_idx, (start_pos + i - 2 * ratio + 1) // block_size
-                    ]
+                    pre_kv_block_idx = kv_block_table[b_idx, (start_pos + i - 2 * ratio + 1) // block_size]
+                    pre_score_block_idx = score_block_table[b_idx, (start_pos + i - 2 * ratio + 1) // block_size]
                     pre_start = (start_pos + i - 2 * ratio + 1) % block_size
                     pre_end = pre_start + ratio
                     cur_start = (start_pos + i - ratio + 1) % block_size
@@ -146,8 +139,7 @@ def golden_compress(
                         )
                         score_state_tmp = torch.cat(
                             [
-                                score_state[pre_score_block_idx, pre_start:pre_end, :d]
-                                - float("inf"),
+                                score_state[pre_score_block_idx, pre_start:pre_end, :d] - float("inf"),
                                 score_state[score_block_idx, cur_start:cur_end, d:],
                             ],
                             dim=0,
@@ -167,22 +159,16 @@ def golden_compress(
                             ],
                             dim=0,
                         )  # 8,d
-                    kv = (kv_state_tmp * score_state_tmp.softmax(dim=0)).sum(
-                        dim=0, keepdim=False
-                    )  # 1,d
+                    kv = (kv_state_tmp * score_state_tmp.softmax(dim=0)).sum(dim=0, keepdim=False)  # 1,d
             else:
                 kv_block_idx = kv_block_table[b_idx, (start_pos + i) // block_size]
-                score_block_idx = score_block_table[
-                    b_idx, (start_pos + i) // block_size
-                ]
+                score_block_idx = score_block_table[b_idx, (start_pos + i) // block_size]
                 cur_pos = (start_pos + i) % block_size
                 kv_state[kv_block_idx, cur_pos, :] = kv.squeeze(0)
                 score_state[score_block_idx, cur_pos, :] = score.squeeze(0)
                 if should_compress:
                     kv_tmp = torch.cat((kv_state[kv_block_idx, :-1, :], kv), dim=0)
-                    score_tmp = torch.cat(
-                        (score_state[score_block_idx, :-1, :], score), dim=0
-                    )
+                    score_tmp = torch.cat((score_state[score_block_idx, :-1, :], score), dim=0)
                     kv = (kv_tmp * score_tmp.softmax(dim=0)).sum(dim=0, keepdim=False)
 
             if should_compress:
@@ -230,12 +216,8 @@ def gen_inputs(
             + 1
             + torch.arange(bsz, dtype=torch.int32, device=device).view(-1, 1) * 2
         )
-    kv_state = torch.zeros(
-        (block_table.max() + 1, 128, coff * d), dtype=torch.float32, device=device
-    )
-    score_state = torch.zeros(
-        (block_table.max() + 1, 128, coff * d), dtype=torch.float32, device=device
-    )
+    kv_state = torch.zeros((block_table.max() + 1, 128, coff * d), dtype=torch.float32, device=device)
+    score_state = torch.zeros((block_table.max() + 1, 128, coff * d), dtype=torch.float32, device=device)
     hadamard = torch.rand((d, d), dtype=torch.bfloat16, device=device) * (d**-0.5)
     return (
         x,
@@ -257,11 +239,42 @@ class Compressor(nn.Module):
         super().__init__()
 
     def forward(
-        self, x, kv_state, score_state, kv_block_table, score_block_table, sin, cos, wkv, wgate,
-        ape, weight, hadamard, st, ra, rope_head_dim, ro
+        self,
+        x,
+        kv_state,
+        score_state,
+        kv_block_table,
+        score_block_table,
+        sin,
+        cos,
+        wkv,
+        wgate,
+        ape,
+        weight,
+        hadamard,
+        st,
+        ra,
+        rope_head_dim,
+        ro,
     ):
-        return compressor_pypto(x, kv_state, score_state, kv_block_table, score_block_table,
-            sin, cos, wkv, wgate, ape, weight, hadamard, st, ra, rope_head_dim, ro)
+        return compressor_pypto(
+            x,
+            kv_state,
+            score_state,
+            kv_block_table,
+            score_block_table,
+            sin,
+            cos,
+            wkv,
+            wgate,
+            ape,
+            weight,
+            hadamard,
+            st,
+            ra,
+            rope_head_dim,
+            ro,
+        )
 
 
 def compile_model(model):
@@ -275,7 +288,7 @@ def compile_model(model):
     return compile_model
 
 
-def test_comp_128(enable_acl_graph = False):
+def test_comp_128(enable_acl_graph=False):
     """Test Compressor"""
     print("=" * 60)
     print("Test: Compressor")
@@ -296,22 +309,71 @@ def test_comp_128(enable_acl_graph = False):
     h = 4096
     d = 512
     rope_head_dim = 64
-    x, sin, cos, wkv, wgate, ape, weight, kv_state, score_state, \
-        block_table, hadamard = gen_inputs(bsz, seq, h, d, rope_head_dim, ra, device)
+    x, sin, cos, wkv, wgate, ape, weight, kv_state, score_state, block_table, hadamard = gen_inputs(
+        bsz, seq, h, d, rope_head_dim, ra, device
+    )
 
     if enable_acl_graph:
         compressor_model = Compressor().npu()
         compressor_model = compile_model(compressor_model)  # 使能aclgraph
 
-        out, kv_state_out, score_state_out = compressor_model(x, kv_state, score_state, block_table, block_table, \
-            sin, cos, wkv, wgate, ape, weight, hadamard, st, ra, rope_head_dim, ro)
+        out, kv_state_out, score_state_out = compressor_model(
+            x,
+            kv_state,
+            score_state,
+            block_table,
+            block_table,
+            sin,
+            cos,
+            wkv,
+            wgate,
+            ape,
+            weight,
+            hadamard,
+            st,
+            ra,
+            rope_head_dim,
+            ro,
+        )
         torch_npu.npu.synchronize()
     else:
-        out, kv_state_out, score_state_out = npu_compressor(x, kv_state, score_state, block_table, block_table, \
-                           sin, cos, wkv, wgate, ape, weight, hadamard, st, ra, rope_head_dim, ro)
+        out, kv_state_out, score_state_out = npu_compressor(
+            x,
+            kv_state,
+            score_state,
+            block_table,
+            block_table,
+            sin,
+            cos,
+            wkv,
+            wgate,
+            ape,
+            weight,
+            hadamard,
+            st,
+            ra,
+            rope_head_dim,
+            ro,
+        )
 
-    kv = golden_compress(x, sin, cos, wkv, wgate, ape, weight, \
-                         kv_state, score_state, block_table, block_table, hadamard, ra, st, rope_head_dim, ro)
+    kv = golden_compress(
+        x,
+        sin,
+        cos,
+        wkv,
+        wgate,
+        ape,
+        weight,
+        kv_state,
+        score_state,
+        block_table,
+        block_table,
+        hadamard,
+        ra,
+        st,
+        rope_head_dim,
+        ro,
+    )
     assert_allclose(kv_state_out.cpu().float().numpy(), kv_state.cpu().float().numpy(), rtol=1e-3, atol=1e-3)
     assert_allclose(score_state_out.cpu().float().numpy(), score_state.cpu().float().numpy(), rtol=1e-3, atol=1e-3)
     if kv is not None:
@@ -326,7 +388,7 @@ def test_comp_128(enable_acl_graph = False):
 
 
 @pytest.mark.skip(reason="large test case")
-def test_comp_4(enable_acl_graph = False):
+def test_comp_4(enable_acl_graph=False):
     """Test Compressor"""
     print("Test: Compressor")
     print("=" * 60)
@@ -354,15 +416,63 @@ def test_comp_4(enable_acl_graph = False):
         compressor_model = Compressor().npu()
         compressor_model = compile_model(compressor_model)  # 使能aclgraph
 
-        out, kv_state_out, score_state_out = compressor_model(x, kv_state, score_state, block_table, block_table, \
-            sin, cos, wkv, wgate, ape, weight, hadamard, st, ra, rope_head_dim, ro)
+        out, kv_state_out, score_state_out = compressor_model(
+            x,
+            kv_state,
+            score_state,
+            block_table,
+            block_table,
+            sin,
+            cos,
+            wkv,
+            wgate,
+            ape,
+            weight,
+            hadamard,
+            st,
+            ra,
+            rope_head_dim,
+            ro,
+        )
         torch_npu.npu.synchronize()
     else:
-        out, kv_state_out, score_state_out = compressor_pypto(x, kv_state, score_state, block_table, block_table, \
-                           sin, cos, wkv, wgate, ape, weight, hadamard, st, ra, rope_head_dim, ro)
+        out, kv_state_out, score_state_out = compressor_pypto(
+            x,
+            kv_state,
+            score_state,
+            block_table,
+            block_table,
+            sin,
+            cos,
+            wkv,
+            wgate,
+            ape,
+            weight,
+            hadamard,
+            st,
+            ra,
+            rope_head_dim,
+            ro,
+        )
 
-    kv = golden_compress(x, sin, cos, wkv, wgate, ape, weight, \
-                         kv_state, score_state, block_table, block_table, hadamard, ra, st, rope_head_dim, ro)
+    kv = golden_compress(
+        x,
+        sin,
+        cos,
+        wkv,
+        wgate,
+        ape,
+        weight,
+        kv_state,
+        score_state,
+        block_table,
+        block_table,
+        hadamard,
+        ra,
+        st,
+        rope_head_dim,
+        ro,
+    )
     assert_allclose(kv_state_out.cpu().float().numpy(), kv_state.cpu().float().numpy(), rtol=1e-3, atol=1e-3)
     assert_allclose(score_state_out.cpu().float().numpy(), score_state.cpu().float().numpy(), rtol=1e-3, atol=1e-3)
     if kv is not None:
@@ -377,7 +487,7 @@ def test_comp_4(enable_acl_graph = False):
 
 
 @pytest.mark.skip(reason="large test case")
-def test_comp_indexer(enable_acl_graph = False):
+def test_comp_indexer(enable_acl_graph=False):
     """Test Compressor"""
     print("=" * 60)
     print("Test: Compressor")
@@ -406,16 +516,62 @@ def test_comp_indexer(enable_acl_graph = False):
         compressor_model = Compressor().npu()
         compressor_model = compile_model(compressor_model)  # 使能aclgraph
 
-        out, kv_state_out, score_state_out = compressor_model(x, kv_state, score_state, block_table, block_table, \
-            sin, cos, wkv, wgate, ape, weight, hadamard, st, ra, rope_head_dim, ro)
+        out, kv_state_out, score_state_out = compressor_model(
+            x,
+            kv_state,
+            score_state,
+            block_table,
+            block_table,
+            sin,
+            cos,
+            wkv,
+            wgate,
+            ape,
+            weight,
+            hadamard,
+            st,
+            ra,
+            rope_head_dim,
+            ro,
+        )
         torch_npu.npu.synchronize()
     else:
-        out, kv_state_out, score_state_out = compressor_pypto(x, kv_state, score_state, block_table, block_table, \
-                           sin, cos, wkv, wgate, ape, weight, hadamard, st, ra, rope_head_dim, ro)
+        out, kv_state_out, score_state_out = compressor_pypto(
+            x,
+            kv_state,
+            score_state,
+            block_table,
+            block_table,
+            sin,
+            cos,
+            wkv,
+            wgate,
+            ape,
+            weight,
+            hadamard,
+            st,
+            ra,
+            rope_head_dim,
+            ro,
+        )
 
     kv = golden_compress(
-        x, sin, cos, wkv, wgate, ape, weight, kv_state, score_state, block_table, block_table,
-        hadamard, ra, st, rope_head_dim, ro
+        x,
+        sin,
+        cos,
+        wkv,
+        wgate,
+        ape,
+        weight,
+        kv_state,
+        score_state,
+        block_table,
+        block_table,
+        hadamard,
+        ra,
+        st,
+        rope_head_dim,
+        ro,
     )
     assert_allclose(
         kv_state_out.cpu().float().numpy(),

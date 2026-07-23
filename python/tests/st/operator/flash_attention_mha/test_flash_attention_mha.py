@@ -22,26 +22,22 @@ attention matrix from [s1_size, s2_size] to [Q_TILE, K_TILE] per iteration.
 O, L, M are accumulated across kv tiles (online softmax algorithm).
 """
 
-
-import sys
 import os
+import sys
+
 _p = os.path.dirname(__file__)
 while not os.path.isdir(os.path.join(_p, 'src')):
     _p = os.path.dirname(_p)
 sys.path.insert(0, os.path.join(_p, 'src'))
 sys.path.insert(0, os.path.join(_p, 'src', 'pypto_gym', 'ops', 'pypto_tile'))
 
-import logging
-from dataclasses import dataclass
+from dataclasses import dataclass  # noqa: E402
+import logging  # noqa: E402
 
-import torch
-import torch_npu
-
-import numpy as np
-import pytest
-
-from flash_attention_mha_impl import flash_attention_varlen_forward_kernel
-
+from flash_attention_mha_impl import flash_attention_varlen_forward_kernel  # noqa: E402
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
+import torch  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format='%(message)s', force=True)
 
@@ -67,6 +63,7 @@ class TileConfig:
         k_tile: KV 序列维度的分块大小 (kernel 中 K_TILE_SIZE,
                  用于将 KV seqlen 切分为多个 tile 迭代)
     """
+
     q_tile: int = Q_TILE
     k_tile: int = K_TILE
 
@@ -178,7 +175,7 @@ def attention_forward_golden(q, k, v, scale):
         for k_tile_idx in range(k_tile_count):
             k_tile_start = k_tile_idx * k_tile
             k_tile_end = min(k_tile_start + k_tile, s2_size)
-            k_tile_len = k_tile_end - k_tile_start
+            _k_tile_len = k_tile_end - k_tile_start
 
             k_tile_view = k_f[k_tile_start:k_tile_end, :]
             v_tile_view = v_f[k_tile_start:k_tile_end, :].to(torch.bfloat16)
@@ -233,8 +230,7 @@ def attention_forward_golden(q, k, v, scale):
     return o_out, m_out, l_out
 
 
-def run_test(batch_size=None, num_heads=None, s1_size=None,
-             s2_size=None, dim=None, tile_config=None):
+def run_test(batch_size=None, num_heads=None, s1_size=None, s2_size=None, dim=None, tile_config=None):
     """
     运行单个测试用例: 构造输入 → 调用 kernel → 与 golden 对比。
 
@@ -289,20 +285,22 @@ def run_test(batch_size=None, num_heads=None, s1_size=None,
         tile_config = TileConfig()
 
     hidden_dim = num_heads * dim
-    scale = 1.0 / (dim ** 0.5)
+    scale = 1.0 / (dim**0.5)
 
     logging.info("=" * 60)
-    logging.info(f"Test Case: batch={batch_size}, heads={num_heads}, "
-                 f"Q:s1_size={s1_size}, KV:s2_size={s2_size}, dim={dim}")
+    logging.info(
+        f"Test Case: batch={batch_size}, heads={num_heads}, Q:s1_size={s1_size}, KV:s2_size={s2_size}, dim={dim}"
+    )
     logging.info(f"  hidden_dim={hidden_dim}, scale={scale:.6f}")
     logging.info("=" * 60)
 
     # 输入tensor（三维）: kernel从shape推导num_heads和head_dim
     q, k, v, cu_seqlens_q, cu_seqlens_k, q_seqlens, kv_seqlens = create_inputs(
-        batch_size, s1_size, s2_size, num_heads, dim, device)
+        batch_size, s1_size, s2_size, num_heads, dim, device
+    )
 
     total_q = batch_size * s1_size
-    total_kv = batch_size * s2_size
+    _total_kv = batch_size * s2_size
 
     # Kernel输出tensor（二维）
     out_npu = torch.empty(total_q, hidden_dim, dtype=torch.bfloat16, device=device)
@@ -336,8 +334,7 @@ def run_test(batch_size=None, num_heads=None, s1_size=None,
 
     # ---- 调用 kernel ----
     logging.info("  Running kernel...")
-    flash_attention_varlen_forward_kernel(
-        q, k, v, out_npu, l_out_npu, m_out_npu, cu_seqlens_q, cu_seqlens_k)
+    flash_attention_varlen_forward_kernel(q, k, v, out_npu, l_out_npu, m_out_npu, cu_seqlens_q, cu_seqlens_k)
 
     # ---- 精度校验: kernel 输出 vs golden 输出 ----
     torch.set_printoptions(precision=6)
@@ -349,9 +346,10 @@ def run_test(batch_size=None, num_heads=None, s1_size=None,
     ]:
         npu_np = npu_tensor.cpu().float().numpy()
         golden_np = golden_tensor.float().numpy()
-        max_diff = np.abs(npu_np - golden_np).max()
+        _max_diff = np.abs(npu_np - golden_np).max()
 
         from models.deepseek_v32_exp.utils.compare import compare
+
         compare(npu_tensor.cpu(), golden_tensor, name, atol=atol, rtol=rtol, max_error_count=10)
 
     logging.info(f"  {'PASSED' if passed else 'FAILED'}")
@@ -415,13 +413,14 @@ def main():
 
     results = []
     for i, fn in enumerate(test_funcs):
-        logging.info(f"[{i+1}/{len(test_funcs)}] {fn.__name__}: {fn.__doc__}")
+        logging.info(f"[{i + 1}/{len(test_funcs)}] {fn.__name__}: {fn.__doc__}")
         try:
             passed = fn()
             results.append((fn.__name__, fn.__doc__, passed))
         except Exception as e:
             logging.info(f"  ERROR: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((fn.__name__, fn.__doc__, False))
             logging.info("")

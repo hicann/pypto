@@ -6,9 +6,10 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
-import pypto
 import pytest
-from pypto import pil, ir, logging
+
+import pypto
+from pypto import ir, logging, pil
 from pypto.pil.ops import has_scalar
 
 # ---------- Ops compile tests ----------
@@ -25,8 +26,8 @@ def _tensor_ops_of(ops):
 def test_tensor_binary_ops():
     def f(x, y):
         pypto.set_vec_tile_shapes(16, 16)
-        z = x / y
-        z = x ** y
+        _z = x / y
+        _z = x**y
 
     x = pypto.Tensor(shape=(4, 4), dtype=pypto.DT_FP32)
     y = pypto.Tensor(shape=(4, 4), dtype=pypto.DT_FP32)
@@ -39,13 +40,13 @@ def test_tensor_binary_ops():
 
 def test_scalar_binary_bitwise_ops():
     def f(x, y):
-        z = x | y
-        z = x ^ y
-        z = x | y
-        z = x ^ y
-        z = x & y
-        z = x << y
-        z = x >> y
+        _z = x | y
+        _z = x ^ y
+        _z = x | y
+        _z = x ^ y
+        _z = x & y
+        _z = x << y
+        _z = x >> y
 
     func = _compile_ops(f, 1, 2)
     ts = _tensor_ops_of(func.body)
@@ -55,7 +56,7 @@ def test_scalar_binary_bitwise_ops():
 def test_tensor_matmul_op():
     def f(x, y):
         pypto.set_cube_tile_shapes([16, 16], [16, 16], [16, 16])
-        z = x @ y
+        _z = x @ y
 
     x = pypto.Tensor(shape=(32, 32), dtype=pypto.DT_FP32)
     y = pypto.Tensor(shape=(32, 32), dtype=pypto.DT_FP32)
@@ -92,8 +93,8 @@ def test_create_func():
 def test_tensor_unary_ops():
     def f(x):
         pypto.set_vec_tile_shapes(16, 16)
-        z = -x
-        z = +x
+        _z = -x
+        _z = +x
 
     x = pypto.Tensor(shape=(4, 4), dtype=pypto.DT_INT32)
     func = _compile_ops(f, x)
@@ -119,7 +120,7 @@ def test_pypto2ir():
 
     x = pypto.Tensor(shape=(-1, 64), dtype=pypto.DT_FP32, name="x")
     y = pypto.Tensor(shape=(-1, 64), dtype=pypto.DT_FP32, name="y")
-    func = pil.compile(f, x, y)
+    _func = pil.compile(f, x, y)
 
 
 def test_ir_range():
@@ -162,7 +163,9 @@ def test_ir_loop():
         for i in pypto.loop(n):
             ans += i
         ans = ans + 10
+
     pil.compile(foo, 10)
+
 
 # ---------- Loop IR tests ----------
 
@@ -177,10 +180,12 @@ def info(x):
 
 def test_ir_loop_basic():
     """Carry variables: ans and loop var i."""
+
     def foo(n):
         ans = 0
         for i in pypto.loop(n):
             ans += i
+
     func = pil.compile(foo, 10)
     for_stmts = _for_ops_of(func.body)
     assert len(for_stmts) == 1
@@ -194,9 +199,11 @@ def test_ir_loop_basic():
 
 def test_ir_loop_no_carry():
     """Loop var i is always carried."""
+
     def foo(n):
         for _ in pypto.loop(n):
             pass
+
     func = pil.compile(foo, 5)
     for_stmts = _for_ops_of(func.body)
     assert len(for_stmts) == 1
@@ -207,12 +214,14 @@ def test_ir_loop_no_carry():
 
 def test_ir_loop_two_carries():
     """Loop carrying ans, count, and loop var i."""
+
     def foo(n):
         ans = 0
         count = 1
         for i in pypto.loop(n):
             ans += i
             count += 1
+
     func = pil.compile(foo, 10)
     for_stmts = _for_ops_of(func.body)
     assert len(for_stmts) == 1
@@ -235,10 +244,12 @@ def test_ir_loop_unroll_supports_local_float_carry():
 
 def test_ir_loop_range_two_args():
     """pypto.loop(start, stop) form."""
+
     def foo():
         ans = 0
         for i in pypto.loop(2, 10):
             ans += i
+
     func = pil.compile(foo)
     for_stmts = _for_ops_of(func.body)
     assert len(for_stmts) == 1
@@ -251,10 +262,12 @@ def test_ir_loop_range_two_args():
 
 def test_ir_loop_range_three_args():
     """pypto.loop(start, stop, step) form."""
+
     def foo():
         ans = 0
         for i in pypto.loop(1, 20, 3):
             ans += i
+
     func = pil.compile(foo)
     for_stmts = _for_ops_of(func.body)
     assert len(for_stmts) == 1
@@ -267,12 +280,14 @@ def test_ir_loop_range_three_args():
 
 def test_ir_loop_sequential():
     """Two sequential loops, both carry ans and their loop var."""
+
     def foo(n):
         ans = 0
         for i in pypto.loop(n):
             ans += i
         for j in pypto.loop(n):
             ans += j
+
     func = pil.compile(foo, 5)
     for_stmts = _for_ops_of(func.body)
     assert len(for_stmts) == 2
@@ -284,6 +299,7 @@ def test_ir_loop_sequential():
 
 def test_ir_loop_nested():
     """Nested loops: inner ForStmt is inside outer's body."""
+
     def foo(n, m):
         ans = 0
         for i in pypto.loop(n):
@@ -293,11 +309,13 @@ def test_ir_loop_nested():
                 else:
                     ans += i - j
             ans += n
+
     pil.compile(foo, 4, 5)
 
 
 def test_ir_loop_nested1():
     """Nested loops: inner ForStmt is inside outer's body."""
+
     def foo(n, m):
         ans = 0
         for i in pypto.loop(n):
@@ -308,17 +326,20 @@ def test_ir_loop_nested1():
                 else:
                     ans += i - j
             ans += n
+
     with pytest.raises(SyntaxError):
         pil.compile(foo, 4, 5)
 
 
 def test_ir_loop_carry_used_after():
     """Carry variable used after the loop produces a scalar op."""
+
     def foo(n):
         ans = 0
         for i in pypto.loop(n):
             ans += i
         ans = ans + 10
+
     func = pil.compile(foo, 10)
     for_stmts = _for_ops_of(func.body)
     assert len(for_stmts) == 1
@@ -327,12 +348,14 @@ def test_ir_loop_carry_used_after():
 
 def test_ir_loop_body_multiple_ops():
     """i, a and ans are all carried."""
+
     def foo(n):
         ans = 0
         for i in pypto.loop(n):
             a = i * 2
             ans += a
         ans = ans + a
+
     func = pil.compile(foo, 10)
     for_stmts = _for_ops_of(func.body)
     assert len(for_stmts) == 1
@@ -351,6 +374,7 @@ def test_ir_deadcode():
 
     with pytest.raises(SyntaxError):
         pil.compile(foo, 10)
+
 
 # ---------- Loop control flow IR tests ----------
 
@@ -373,6 +397,7 @@ def _collect_stmts(stmt, cls):
 
 def test_ir_loop_if_else_both_branches():
     """if/else inside loop compiles both branches."""
+
     def foo(n):
         ans = 0
         for i in pypto.loop(n):
@@ -380,6 +405,7 @@ def test_ir_loop_if_else_both_branches():
                 ans += i
             else:
                 ans += 1
+
     func = pil.compile(foo, 10)
     for_stmts = _for_ops_of(func.body)
     assert len(for_stmts) == 1
@@ -389,6 +415,7 @@ def test_ir_loop_if_else_both_branches():
 
 def test_tensor_add_dyn():
     """Add dynamic tensor should be supported."""
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
@@ -416,16 +443,18 @@ def test_fstring():
         # format specifiers
         assert f"x={x:05d}, y={y:05d}" == "x=00010, y=00020"
         # nested expressions with modulo
-        assert f"mod={x % 3}, pow={x ** 2}" == "mod=1, pow=100"
+        assert f"mod={x % 3}, pow={x**2}" == "mod=1, pow=100"
         # mixed literal and expression parts
         assert f"result: ({x} + {y}) = {x + y}" == "result: (10 + 20) = 30"
         # conversion specifiers
         assert f"{x!r}, {y!s}" == "10, 20"
+
     pil.compile(foo, 10, 20)
 
 
 def test_tensor_loop_unroll():
     """Add dynamic tensor should be supported."""
+
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32, unroll_list=[4]):
             pypto.set_vec_tile_shapes(32, 32)
@@ -443,6 +472,7 @@ def test_tensor_loop_unroll():
 
 def test_tensor_loop_unroll_batch():
     """Add dynamic tensor should be supported."""
+
     def foo(x, y):
         for i, k in pypto.loop_unroll(x.shape[0], unroll_list=[32, 16, 1]):
             pypto.set_vec_tile_shapes(32, 32)
@@ -527,48 +557,62 @@ def _opcode_set(stmt, acc=None):
 
 def test_nested_function_no_args():
     """Nested function with no arguments."""
+
     def foo():
         def bar():
             return 41
+
         info(bar() + 1)
+
     func = pil.compile(foo)
     assert func is not None
 
 
 def test_nested_function_args():
     """Nested function taking positional arguments."""
+
     def foo(x):
         def bar(a, b):
             return a + b
+
         info(bar(x, x))
+
     pil.compile(foo, 5)
 
 
 def test_nested_function_default_args():
     """Nested function with default argument values."""
+
     def foo():
         def bar(a, b=10):
             return a + b
+
         info(bar(5))
+
     pil.compile(foo)
 
 
 def test_nested_function_capture_scalar():
     """Nested function captures a scalar from the enclosing scope."""
+
     def foo(x):
         def bar():
             return x + 1
+
         info(bar() + 1)
+
     pil.compile(foo, 5)
 
 
 def test_nested_function_capture_tensor():
     """Nested function captures a tensor; the captured tensor op inlines."""
+
     def foo(a):
         pypto.set_vec_tile_shapes(16, 16)
 
         def bar():
             return a + a
+
         info(bar())
 
     a = pypto.Tensor((4, 4), dtype=pypto.DT_FP32)
@@ -578,56 +622,72 @@ def test_nested_function_capture_tensor():
 
 def test_nested_function_recursion():
     """Nested function calls itself (base case via early return)."""
+
     def foo(n):
         def fac(k):
             if k <= 1:
                 return 1
             return k * fac(k - 1)
+
         info(fac(n))
+
     pil.compile(foo, 5)
 
 
 def test_nested_function_in_loop():
     """Nested function called inside a loop body."""
+
     def foo(n):
         def sq(x):
             return x * x
+
         total = 0
         for i in range(n):
             total += sq(i)
         info(total)
+
     pil.compile(foo, 4)
 
 
 def test_nested_function_posonly_args():
     """Nested function with positional-only parameters (before ``/``)."""
+
     def foo(x):
         def bar(a, b, /):
             return a + b
+
         info(bar(x, x))
+
     pil.compile(foo, 5)
 
 
 def test_nested_function_kwonly_args():
     """Nested function with keyword-only parameters (after ``*``)."""
+
     def foo(x):
         def bar(a, *, k):
             return a + k
+
         info(bar(x, k=3))
+
     pil.compile(foo, 5)
 
 
 def test_nested_function_kwonly_default_args():
     """Keyword-only parameters with defaults, mixed with positional defaults."""
+
     def foo(x):
         def bar(a, b=2, /, c=3, *, k=10):
             return a + b + c + k
+
         info(bar(x))  # b, c and k all fall back to their defaults
+
     pil.compile(foo, 1)
 
 
 def test_nested_function_return_tensor():
     """Add dynamic tensor should be supported."""
+
     def foo(x, y):
         def add1(a):
             return a + 1
@@ -651,15 +711,16 @@ def test_lambda():
 
     def foo(x):
         # lambda has args
-        add1 = lambda a: a + 1
+        add1 = lambda a: a + 1  # noqa: E731
         ans.append(add1(x))
         # lambda with capture args
-        addx = lambda a: x + a
+        addx = lambda a: x + a  # noqa: E731
         ans.append(addx(1))
         # lambda with default args
-        add_def = lambda a, b=10: a + b
+        add_def = lambda a, b=10: a + b  # noqa: E731
         ans.append(add_def(5))
         ans.append(add_def(5, 15))
+
     pil.compile(foo, 5)
     assert ans == [6, 6, 15, 20]
 
@@ -676,6 +737,7 @@ def test_listcomp():
         ans.extend([(i, j) for i in range(2) for j in range(2)])
         # more complicated case
         ans.extend([(i, j) for i in range(9) for j in range(9) if i < j])
+
     pil.compile(foo, 5)
     real, ans = ans, []
     foo(5)
@@ -692,6 +754,7 @@ def test_setcomp():
         ans.extend(sorted({i for i in range(n) if i % 2 == 0}))
         # set comprehension with multiple for clauses
         ans.extend(sorted({(i, j) for i in range(3) for j in range(3) if i < j}))
+
     pil.compile(foo, 5)
     real, ans = ans, []
     foo(5)
@@ -710,6 +773,7 @@ def test_dictcomp():
         for k in range(n):
             if k in d2:
                 ans.append(d2[k])
+
     pil.compile(foo, 5)
     real, ans = ans, []
     foo(5)
@@ -718,6 +782,7 @@ def test_dictcomp():
 
 def test_pil_function():
     """Add dynamic tensor should be supported."""
+
     @pil.function
     def add1(n, a):
         for _ in pypto.loop(n):
@@ -793,6 +858,7 @@ def test_pil_ifexpr():
     def foo(a, b):
         c = a if a > b else b
         res.append(c)
+
     pil.compile(foo, 1, 2)
     assert res == [2]
 
@@ -803,6 +869,7 @@ def test_pil_multi_and():
     def foo(a, b, c):
         c = a if a and b and c else b
         res.append(c)
+
     pil.compile(foo, 1, 2, 0)
     assert res == [2]
 
@@ -836,7 +903,6 @@ def test_custom_class():
 
 
 def test_tensor_move():
-
     def foo(a, b):
         b[:] = a + 1
 

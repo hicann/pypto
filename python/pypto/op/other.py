@@ -9,15 +9,15 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
-from typing import Union, Sequence, List
+
+from typing import Sequence, Union
 
 from .. import pypto_impl
+from .._element import Element
 from .._op_wrapper import op_wrapper
 from ..enum import DataType
 from ..error import PyptoError
 from ..tensor import Tensor
-from .._element import Element
-
 
 _FLOAT_DTYPES = {DataType.DT_FP32, DataType.DT_FP16, DataType.DT_BF16}
 _UNSIGNED_INT_DTYPES = {DataType.DT_UINT8, DataType.DT_UINT16, DataType.DT_UINT32, DataType.DT_UINT64}
@@ -28,10 +28,13 @@ def _check_pad_value(x: Tensor, value: Union[float, int]) -> None:
         return
     if x.dtype in _FLOAT_DTYPES:
         return
-    raise PyptoError(0xF00002, ValueError(
-        f"value type mismatch: tensor dtype is {repr(x.dtype)} but value is float. "
-        f"Integer tensor requires int value."
-    ))
+    raise PyptoError(
+        0xF00002,
+        ValueError(
+            f"value type mismatch: tensor dtype is {repr(x.dtype)} but value is float. "
+            f"Integer tensor requires int value."
+        ),
+    )
 
 
 def _where_arg_dtype(val):
@@ -50,12 +53,15 @@ def _check_where_dtype_consistency(input_val, other_val):
     if input_dtype is None or other_dtype is None:
         return
     if input_dtype != other_dtype:
-        raise PyptoError(0xF00002, TypeError(
-            f"where() input and other data type inconsistent: "
-            f"input dtype is {input_dtype}, other dtype is {other_dtype}. "
-            f"Please ensure both inputs have the same dtype, or use Element to "
-            f"specify matching dtype."
-        ))
+        raise PyptoError(
+            0xF00002,
+            TypeError(
+                f"where() input and other data type inconsistent: "
+                f"input dtype is {input_dtype}, other dtype is {other_dtype}. "
+                f"Please ensure both inputs have the same dtype, or use Element to "
+                f"specify matching dtype."
+            ),
+        )
 
 
 def _check_where_scalar_unsigned(arg_name: str, scalar_val, tensor_arg, tensor_name: str):
@@ -65,11 +71,14 @@ def _check_where_scalar_unsigned(arg_name: str, scalar_val, tensor_arg, tensor_n
             return
         elem_val = scalar_val._get_signed_data() if not scalar_val._is_float() else scalar_val._get_float_data()
         if elem_val < 0:
-            raise PyptoError(0xF00002, ValueError(
-                f"where() does not support negative scalar for unsigned integer dtype: "
-                f"'{arg_name}' is {elem_val} but Element dtype is {elem_dtype}. "
-                f"Negative values cannot be represented in unsigned integer types."
-            ))
+            raise PyptoError(
+                0xF00002,
+                ValueError(
+                    f"where() does not support negative scalar for unsigned integer dtype: "
+                    f"'{arg_name}' is {elem_val} but Element dtype is {elem_dtype}. "
+                    f"Negative values cannot be represented in unsigned integer types."
+                ),
+            )
         return
     if not isinstance(scalar_val, int) or scalar_val >= 0:
         return
@@ -77,17 +86,18 @@ def _check_where_scalar_unsigned(arg_name: str, scalar_val, tensor_arg, tensor_n
         return
     if tensor_arg.dtype not in _UNSIGNED_INT_DTYPES:
         return
-    raise PyptoError(0xF00002, ValueError(
-        f"where() does not support negative scalar for unsigned integer tensor: "
-        f"'{arg_name}' is {scalar_val} but '{tensor_name}' tensor dtype is {tensor_arg.dtype}. "
-        f"Negative values cannot be represented in unsigned integer types."
-    ))
+    raise PyptoError(
+        0xF00002,
+        ValueError(
+            f"where() does not support negative scalar for unsigned integer tensor: "
+            f"'{arg_name}' is {scalar_val} but '{tensor_name}' tensor dtype is {tensor_arg.dtype}. "
+            f"Negative values cannot be represented in unsigned integer types."
+        ),
+    )
 
 
 @op_wrapper
-def where(
-    condition: Tensor, input: Union[Tensor, float, Element], other: Union[Tensor, float, Element]
-) -> Tensor:
+def where(condition: Tensor, input: Union[Tensor, float, Element], other: Union[Tensor, float, Element]) -> Tensor:
     """
     Return a tensor of elements selected from either `input` or `other`, depending on `condition`.
 
@@ -168,11 +178,14 @@ def where(
     _check_where_scalar_unsigned("other", other, input, "input")
 
     if condition.dtype == DataType.DT_UINT8:
-        raise PyptoError(0xF00002, TypeError(
-            f"where() does not support DT_UINT8 condition from Python API. "
-            f"condition dtype must be DT_BOOL. DT_UINT8 is only supported in the C++ API "
-            f"for packed boolean masks (1 uint8 = 8 bools)."
-        ))
+        raise PyptoError(
+            0xF00002,
+            TypeError(
+                "where() does not support DT_UINT8 condition from Python API. "
+                "condition dtype must be DT_BOOL. DT_UINT8 is only supported in the C++ API "
+                "for packed boolean masks (1 uint8 = 8 bools)."
+            ),
+        )
 
     if isinstance(input, pypto_impl.Tensor) or isinstance(input, pypto_impl.Element):
         input_base = input
@@ -253,13 +266,9 @@ def pad(x: Tensor, padding: Sequence[int], mode: str = "constant", value: Union[
     pad_list = list(padding)
     _check_pad_value(x, value)
     if isinstance(value, int):
-        return pypto_impl.Pad(
-            x, pad_list, mode, pypto_impl.Element(x.dtype, value)
-        )
+        return pypto_impl.Pad(x, pad_list, mode, pypto_impl.Element(x.dtype, value))
     else:
-        return pypto_impl.Pad(
-            x, pad_list, mode, pypto_impl.Element(x.dtype, float(value))
-        )
+        return pypto_impl.Pad(x, pad_list, mode, pypto_impl.Element(x.dtype, float(value)))
 
 
 @op_wrapper
@@ -319,9 +328,7 @@ def fillpad(x: Tensor, mode: str = "constant", value: Union[float, int] = 0) -> 
     if isinstance(value, int):
         return pypto_impl.FillPad(x, mode, pypto_impl.Element(x.dtype, value))
     else:
-        return pypto_impl.FillPad(
-            x, mode, pypto_impl.Element(x.dtype, float(value))
-        )
+        return pypto_impl.FillPad(x, mode, pypto_impl.Element(x.dtype, float(value)))
 
 
 @op_wrapper

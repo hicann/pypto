@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 
+import argparse
 import json
+import logging
 import os
 import re
 import sys
-import argparse
-import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import setup_logging, validate_path
@@ -85,7 +85,7 @@ def find_source_location(cce_path, json_path, cce_line_number):
         return {
             'matched': False,
             'reason': '该代码为框架自动生成代码，非客户前端编写的代码，无源码与之映射',
-            'cce_line_code': cce_line
+            'cce_line_code': cce_line,
         }
 
     cce_op_index = cce_op_line.index(cce_line_number)
@@ -94,8 +94,7 @@ def find_source_location(cce_path, json_path, cce_line_number):
     with open(json_path, 'r', encoding='utf-8') as f:
         program_data = json.load(f)
 
-    func_data = next((func for func in program_data.get('functions', [])
-                      if func.get('hash') == func_hash), None)
+    func_data = next((func for func in program_data.get('functions', []) if func.get('hash') == func_hash), None)
 
     if not func_data:
         logger.info("错误：未找到 hash 为 %s 的函数", func_hash)
@@ -112,11 +111,7 @@ def find_source_location(cce_path, json_path, cce_line_number):
     logger.info("  program.json 中 操作数: %d 个", json_count)
 
     if cce_count != json_count:
-        return {
-            'matched': False,
-            'reason': 'CCE 文件与 program.json 操作数不一致',
-            'cce_line_code': cce_line
-        }
+        return {'matched': False, 'reason': 'CCE 文件与 program.json 操作数不一致', 'cce_line_code': cce_line}
 
     matched_op = program_op[cce_op_index]
 

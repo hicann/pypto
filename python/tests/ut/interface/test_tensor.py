@@ -8,11 +8,12 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import torch
-import pypto
+""" """
+
 import pytest
+import torch
+
+import pypto
 
 
 def test_init_tensor():
@@ -166,6 +167,7 @@ def test_token_depends():
     out = pypto.tensor(shape, pypto.DT_FP32, "out")
 
     with pypto.function("main", a, out):
+
         def inner():
             pypto.set_vec_tile_shapes(32, 32)
             t = pypto.full([64, 64], 1.0, pypto.DT_FP32)
@@ -174,4 +176,5 @@ def test_token_depends():
             t[0:32, 32:64] = a[0:32, 32:64]
             t[32:64, 32:64] = a[32:64, 32:64]
             out[:] = t + 1
+
         inner()

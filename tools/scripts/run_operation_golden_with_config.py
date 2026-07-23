@@ -18,11 +18,10 @@ import argparse
 import csv
 import json
 import logging
+from pathlib import Path
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
-
 
 ROOT_PATH = Path(__file__).resolve().parents[2]
 GOLDEN_CTRL_SCRIPT = ROOT_PATH / "cmake/scripts/golden_ctrl.py"
@@ -74,11 +73,19 @@ def parse_args() -> argparse.Namespace:
 
 def add_case_range_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "-s", "--start_index", nargs="?", type=int, default=0,
+        "-s",
+        "--start_index",
+        nargs="?",
+        type=int,
+        default=0,
         help="The inclusive start index of test cases.",
     )
     parser.add_argument(
-        "-e", "--end_index", nargs="?", type=int, default=-1,
+        "-e",
+        "--end_index",
+        nargs="?",
+        type=int,
+        default=-1,
         help="The inclusive end index of test cases. Negative means until the end.",
     )
 
@@ -86,18 +93,28 @@ def add_case_range_args(parser: argparse.ArgumentParser) -> None:
 def add_golden_path_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json_path", type=str, default=None, help="Path to save the converted JSON files.")
     parser.add_argument(
-        "-o", "--golden_output", type=str, default=str(DEFAULT_GOLDEN_OUTPUT_DIR),
+        "-o",
+        "--golden_output",
+        type=str,
+        default=str(DEFAULT_GOLDEN_OUTPUT_DIR),
         help="Golden output directory. Defaults to build_ci naming path.",
     )
     parser.add_argument(
-        "-p", "--golden_impl_path", action="append", default=None,
+        "-p",
+        "--golden_impl_path",
+        action="append",
+        default=None,
         help="Golden implementation path. Can be specified multiple times.",
     )
 
 
 def add_golden_run_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "-j", "--job_num", nargs="?", type=int, default=1,
+        "-j",
+        "--job_num",
+        nargs="?",
+        type=int,
+        default=1,
         help="Parallel job number passed to golden_ctrl.",
     )
     parser.add_argument(
@@ -148,7 +165,7 @@ def infer_op_from_case_file(case_file: Path) -> str:
     stem = case_file.stem
     if not stem.endswith(CASE_FILE_SUFFIX):
         raise ValueError(f"Unsupported case file name: {case_file.name}")
-    return stem[: -len(CASE_FILE_SUFFIX)]
+    return stem[:-len(CASE_FILE_SUFFIX)]
 
 
 def resolve_json_file(json_path: Path, case_file: Path, total_case_files: int) -> Path:

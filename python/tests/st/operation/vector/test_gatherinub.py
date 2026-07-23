@@ -10,16 +10,15 @@
 # -----------------------------------------------------------------------------------------------------------
 """ """
 
-import os
-import math
-import random
 from dataclasses import dataclass
-from typing import Type, Any, List, Tuple, Union
-import torch
-import pypto
-import pytest
+import os
+from typing import Any, List, Tuple, Union
+
 from numpy.testing import assert_allclose
-import torch_npu
+import torch
+
+import pypto
+
 # ----------------- Config -----------------
 
 TensorLike1D = Union[torch.Tensor, List[Any]]
@@ -36,13 +35,14 @@ class PageAttentionTestConfig:
 
     这里直接存 torch 的 dtype，方便后面建 tensor。
     """
-    topk_count: int          # topk 的 k 值：选出的 token 个数
-    num_logical_blocks: int  # 逻辑块个数（page_table 长度）
-    num_buffer_tokens: int   # buffer 第一维长度：物理 token 容量
-    hidden_dim: int          # buffer 第二维长度：隐藏维度大小
-    block_size: int          # 每个块里有多少个 token
 
-    index_dtype: torch.dtype = torch.int32   # 类似 int32_t
+    topk_count: int  # topk 的 k 值：选出的 token 个数
+    num_logical_blocks: int  # 逻辑块个数（page_table 长度）
+    num_buffer_tokens: int  # buffer 第一维长度：物理 token 容量
+    hidden_dim: int  # buffer 第二维长度：隐藏维度大小
+    block_size: int  # 每个块里有多少个 token
+
+    index_dtype: torch.dtype = torch.int32  # 类似 int32_t
     data_dtype: torch.dtype = torch.float16  # 类似 float16
 
 
@@ -94,8 +94,7 @@ def make_buffer(cfg: PageAttentionTestConfig) -> torch.Tensor:
 
 
 # ----------------- 构造 page_table[1, num_logical_blocks] (torch.Tensor) -----------------
-def make_page_table(cfg: PageAttentionTestConfig,
-                    seed: int = 42) -> torch.Tensor:
+def make_page_table(cfg: PageAttentionTestConfig, seed: int = 42) -> torch.Tensor:
     """
     返回 shape = [1, num_logical_blocks]
     """
@@ -106,7 +105,7 @@ def make_page_table(cfg: PageAttentionTestConfig,
     page_table = torch.randint(
         low=0,
         high=num_physical_blocks,
-        size=(1, cfg.num_logical_blocks),   # 加上 batch 维
+        size=(1, cfg.num_logical_blocks),  # 加上 batch 维
         generator=g,
         dtype=cfg.index_dtype,
     )
@@ -114,8 +113,7 @@ def make_page_table(cfg: PageAttentionTestConfig,
 
 
 # ----------------- 构造 topk_indices[1, topk_count] (torch.Tensor) -----------------
-def make_topk_indices(cfg: PageAttentionTestConfig,
-                      seed: int = 123) -> torch.Tensor:
+def make_topk_indices(cfg: PageAttentionTestConfig, seed: int = 123) -> torch.Tensor:
     """
     返回 shape = [1, topk_count]
     """
@@ -125,11 +123,12 @@ def make_topk_indices(cfg: PageAttentionTestConfig,
     topk_indices = torch.randint(
         low=0,
         high=total_logical_tokens,
-        size=(1, cfg.topk_count),           # 加上 batch 维
+        size=(1, cfg.topk_count),  # 加上 batch 维
         generator=g,
         dtype=cfg.index_dtype,
     )
     return topk_indices
+
 
 # ----------------- 逻辑 index -> 物理 index 的核心函数 -----------------
 
@@ -162,7 +161,6 @@ def gather_golden(
     buffer: torch.Tensor,
     cfg: PageAttentionTestConfig,
 ) -> torch.Tensor:
-
     # 支持输入 [1, k]，自动 flatten
     if topk_indices.dim() == 2:
         assert topk_indices.shape[0] == 1
@@ -184,8 +182,7 @@ def gather_golden(
     if buffer.dim() != 2 or buffer.shape != (cfg.num_buffer_tokens, cfg.hidden_dim):
         raise RuntimeError("buffer shape mismatch")
 
-    result = torch.empty((cfg.topk_count, cfg.hidden_dim),
-                         dtype=cfg.data_dtype)
+    result = torch.empty((cfg.topk_count, cfg.hidden_dim), dtype=cfg.data_dtype)
 
     total_logical_tokens = cfg.num_logical_blocks * cfg.block_size
 
@@ -216,7 +213,7 @@ def test_vector_operator_gatherinub():
         hidden_dim=4,
         block_size=4,
         index_dtype=torch.int32,
-        data_dtype=torch.float16
+        data_dtype=torch.float16,
     )
     ok, err = validate_config(cfg)
     if not ok:
@@ -231,17 +228,14 @@ def test_vector_operator_gatherinub():
     dst_shapes = [cfg.topk_count, cfg.hidden_dim]
     src = pypto.tensor(src_shapes, pypto.DT_FP16, "src")
     offsets = pypto.tensor(offsets_shapes, pypto.DT_INT32, "offsets")
-    pto_page_table = pypto.tensor(
-        page_table_shapes, pypto.DT_INT32, "page_table")
+    pto_page_table = pypto.tensor(page_table_shapes, pypto.DT_INT32, "page_table")
     dst = pypto.tensor(dst_shapes, pypto.DT_FP16, "dst")
     with pypto.function("MAIN", src, offsets, pto_page_table, dst):
         for _ in pypto.loop(1, name="b0", idx_name="bidx"):
             pypto.set_vec_tile_shapes(32, 64)
             dyn_src = pypto.view(src, src_shapes, [0, 0], valid_shape=src_shapes)
-            dyn_offsets = pypto.view(offsets, offsets_shapes, [
-                                     0, 0], valid_shape=offsets_shapes)
-            tmp = pypto.experimental.gather_in_ub(
-                dyn_src, dyn_offsets, pto_page_table, cfg.block_size, -2)
+            dyn_offsets = pypto.view(offsets, offsets_shapes, [0, 0], valid_shape=offsets_shapes)
+            tmp = pypto.experimental.gather_in_ub(dyn_src, dyn_offsets, pto_page_table, cfg.block_size, -2)
             pypto.assemble(tmp, [0, 0], dst)
             del dyn_src, dyn_offsets
     result = torch.zeros(dst_shapes, dtype=torch.float16)
@@ -249,7 +243,6 @@ def test_vector_operator_gatherinub():
     pto_b_tensor = pypto.from_torch(topk_indices, "topk_indices")
     pto_c_tensor = pypto.from_torch(page_table, "page_table")
     pto_d_tensor = pypto.from_torch(result, "result")
-    pypto.runtime._device_run_once_data_from_host(
-        pto_a_tensor, pto_b_tensor, pto_c_tensor, pto_d_tensor)
+    pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_b_tensor, pto_c_tensor, pto_d_tensor)
     assert_allclose(result.flatten(), golden.flatten(), rtol=3e-3, atol=3e-3)
     pypto.runtime._device_fini()

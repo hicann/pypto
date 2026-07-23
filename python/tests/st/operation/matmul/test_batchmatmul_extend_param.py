@@ -12,16 +12,17 @@
 BatchMatmul bias and fixpipe test script.
 Supports both pytest and direct execution modes.
 """
-import os
+
 from dataclasses import dataclass
+import os
 from typing import Optional
 
 import pytest
-import pypto
+from testcase.batchmatmul_extend_param_test_case import BIAS_FIXPIPE_TESTS, BiasFixpipeMatmulConfig
 import torch
 import torch_npu
 
-from testcase.batchmatmul_extend_param_test_case import BIAS_FIXPIPE_TESTS, BiasFixpipeMatmulConfig
+import pypto
 
 
 @dataclass
@@ -57,13 +58,13 @@ def _get_a_view(view_params: TensorViewParams) -> torch.Tensor:
         return view_params.tensor[
             view_params.batch_starts[0]:view_params.batch_ends[0],
             0:view_params.k,
-            view_params.offset:view_params.offset + view_params.tile_size
+            view_params.offset:view_params.offset + view_params.tile_size,
         ]
     else:
         return view_params.tensor[
             view_params.batch_starts[0]:view_params.batch_ends[0],
             view_params.offset:view_params.offset + view_params.tile_size,
-            0:view_params.k
+            0:view_params.k,
         ]
 
 
@@ -73,14 +74,14 @@ def _get_a_view_4d(view_params: TensorViewParams) -> torch.Tensor:
             view_params.batch_starts[0]:view_params.batch_ends[0],
             view_params.batch_starts[1]:view_params.batch_ends[1],
             0:view_params.k,
-            view_params.offset:view_params.offset + view_params.tile_size
+            view_params.offset:view_params.offset + view_params.tile_size,
         ]
     else:
         return view_params.tensor[
             view_params.batch_starts[0]:view_params.batch_ends[0],
             view_params.batch_starts[1]:view_params.batch_ends[1],
             view_params.offset:view_params.offset + view_params.tile_size,
-            0:view_params.k
+            0:view_params.k,
         ]
 
 
@@ -89,13 +90,13 @@ def _get_b_view(view_params: TensorViewParams) -> torch.Tensor:
         return view_params.tensor[
             view_params.batch_starts[0]:view_params.batch_ends[0],
             view_params.offset:view_params.offset + view_params.tile_size,
-            0:view_params.k
+            0:view_params.k,
         ]
     else:
         return view_params.tensor[
             view_params.batch_starts[0]:view_params.batch_ends[0],
             0:view_params.k,
-            view_params.offset:view_params.offset + view_params.tile_size
+            view_params.offset:view_params.offset + view_params.tile_size,
         ]
 
 
@@ -105,14 +106,14 @@ def _get_b_view_4d(view_params: TensorViewParams) -> torch.Tensor:
             view_params.batch_starts[0]:view_params.batch_ends[0],
             view_params.batch_starts[1]:view_params.batch_ends[1],
             view_params.offset:view_params.offset + view_params.tile_size,
-            0:view_params.k
+            0:view_params.k,
         ]
     else:
         return view_params.tensor[
             view_params.batch_starts[0]:view_params.batch_ends[0],
             view_params.batch_starts[1]:view_params.batch_ends[1],
             0:view_params.k,
-            view_params.offset:view_params.offset + view_params.tile_size
+            view_params.offset:view_params.offset + view_params.tile_size,
         ]
 
 
@@ -131,17 +132,18 @@ def _get_bias_view_3d(params: BiasViewParams) -> torch.Tensor:
     if params.bias_tensor.dim == 2:
         return params.bias_tensor[0:1, params.n_offset:params.n_offset + params.tile_n]
     offset_params = BatchOffsetParams(
-        params.batch_sizes[0], params.indices[0], params.tile_sizes[0],
-        params.batch_sizes[0] == 1, params.reference_batch[0]
+        params.batch_sizes[0],
+        params.indices[0],
+        params.tile_sizes[0],
+        params.batch_sizes[0] == 1,
+        params.reference_batch[0],
     )
     bias_start, bias_end = _get_batch_offsets(offset_params)
     return params.bias_tensor[bias_start:bias_end, 0:1, params.n_offset:params.n_offset + params.tile_n]
 
 
 def _get_bias_view_4d(params: BiasViewParams) -> torch.Tensor:
-    return params.bias_tensor[
-        0:1, params.n_offset:params.n_offset + params.tile_n
-    ]
+    return params.bias_tensor[0:1, params.n_offset:params.n_offset + params.tile_n]
 
 
 @dataclass
@@ -155,16 +157,16 @@ class ScaleViewParams:
 
 def _get_scale_view_3d(params: ScaleViewParams) -> torch.Tensor:
     return params.scale_tensor[
-        params.batch_starts[0]:params.batch_ends[0], 0:1,
-        params.n_offset:params.n_offset + params.tile_n
+        params.batch_starts[0]:params.batch_ends[0], 0:1, params.n_offset:params.n_offset + params.tile_n
     ]
 
 
 def _get_scale_view_4d(params: ScaleViewParams) -> torch.Tensor:
     return params.scale_tensor[
         params.batch_starts[0]:params.batch_ends[0],
-        params.batch_starts[1]:params.batch_ends[1], 0:1,
-        params.n_offset:params.n_offset + params.tile_n
+        params.batch_starts[1]:params.batch_ends[1],
+        0:1,
+        params.n_offset:params.n_offset + params.tile_n,
     ]
 
 
@@ -175,7 +177,7 @@ def _compute_matmul_out(a_view, b_view, config: BiasFixpipeMatmulConfig, extend_
         out_dtype=config.get_c_pto_dtype(),
         a_trans=config.a_trans,
         b_trans=config.b_trans,
-        extend_params=extend_params
+        extend_params=extend_params,
     )
 
 
@@ -305,8 +307,13 @@ def _build_extend_params(builder: ExtendParamsBuilder) -> dict:
 
     if builder.config.mode == "bias":
         bias_params = BiasViewParams(
-            builder.bias_tensor, builder.config.bias_shape,
-            builder.indices, builder.tile_batch, builder.n_offset, builder.tile_n, builder.reference_batch
+            builder.bias_tensor,
+            builder.config.bias_shape,
+            builder.indices,
+            builder.tile_batch,
+            builder.n_offset,
+            builder.tile_n,
+            builder.reference_batch,
         )
         if len(builder.indices) == 1:
             extend_params["bias_tensor"] = _get_bias_view_3d(bias_params)
@@ -316,8 +323,11 @@ def _build_extend_params(builder: ExtendParamsBuilder) -> dict:
         extend_params["scale"] = builder.config.scale
     elif builder.config.mode == "perchannel":
         scale_params = ScaleViewParams(
-            builder.scale_tensor, builder.batch_offsets.b_starts,
-            builder.batch_offsets.b_ends, builder.n_offset, builder.tile_n
+            builder.scale_tensor,
+            builder.batch_offsets.b_starts,
+            builder.batch_offsets.b_ends,
+            builder.n_offset,
+            builder.tile_n,
         )
         if len(builder.indices) == 1:
             extend_params["scale_tensor"] = _get_scale_view_3d(scale_params)
@@ -343,14 +353,22 @@ def _process_tile_3d(ctx: MatmulKernelContext, lp: LoopParams, indices: LoopIndi
     b_view = _get_b_view(b_view_params)
 
     builder = ExtendParamsBuilder(
-        ctx.config, ctx.bias_tensor, ctx.scale_tensor,
-        offsets, indices.batch_indices, n_offset, lp.tile_batch, lp.tile_n, lp.batch_sizes[:2]
+        ctx.config,
+        ctx.bias_tensor,
+        ctx.scale_tensor,
+        offsets,
+        indices.batch_indices,
+        n_offset,
+        lp.tile_batch,
+        lp.tile_n,
+        lp.batch_sizes[:2],
     )
     extend_params = _build_extend_params(builder)
 
     out_view = _compute_matmul_out(a_view, b_view, ctx.config, extend_params)
-    write_params = WriteTensorParams(ctx.out_tensor, out_view,
-        [b_offset, m_offset, n_offset], [lp.tile_batch[0], lp.tile_m, lp.tile_n])
+    write_params = WriteTensorParams(
+        ctx.out_tensor, out_view, [b_offset, m_offset, n_offset], [lp.tile_batch[0], lp.tile_m, lp.tile_n]
+    )
     _write_out_tensor_3d(write_params)
 
 
@@ -424,16 +442,30 @@ def _process_tile_4d(ctx: MatmulKernelContext, lp: LoopParams, indices: LoopIndi
     b_view = _get_b_view_4d(b_view_params)
 
     builder = ExtendParamsBuilder(
-        ctx.config, ctx.bias_tensor, ctx.scale_tensor,
-        offsets, indices.batch_indices, n_offset, lp.tile_batch, lp.tile_n,
-        [lp.batch_sizes[0], lp.batch_sizes[1]]
+        ctx.config,
+        ctx.bias_tensor,
+        ctx.scale_tensor,
+        offsets,
+        indices.batch_indices,
+        n_offset,
+        lp.tile_batch,
+        lp.tile_n,
+        [lp.batch_sizes[0], lp.batch_sizes[1]],
     )
     extend_params = _build_extend_params(builder)
 
     out_view = _compute_matmul_out(a_view, b_view, ctx.config, extend_params)
     write_params = WriteTensor4DParams(
-        ctx.out_tensor, out_view, b0_offset, b1_offset,
-        lp.tile_batch[0], lp.tile_batch[1], m_offset, lp.tile_m, n_offset, lp.tile_n
+        ctx.out_tensor,
+        out_view,
+        b0_offset,
+        b1_offset,
+        lp.tile_batch[0],
+        lp.tile_batch[1],
+        m_offset,
+        lp.tile_m,
+        n_offset,
+        lp.tile_n,
     )
     _write_out_tensor_4d(write_params)
 
@@ -546,8 +578,9 @@ def _compute_golden_tensors(a_shape: list, b_shape: list, n: int, config: BiasFi
         flattened = flattened_int64.view(scale_shape)
         golden = (golden * scale_tensor_cpu).to(torch.float16)
 
-    return GoldenComputeResult(a_tensor_cpu, b_tensor_cpu, bias_tensor_cpu,
-            flattened, golden, a_dtype, b_dtype, c_dtype)
+    return GoldenComputeResult(
+        a_tensor_cpu, b_tensor_cpu, bias_tensor_cpu, flattened, golden, a_dtype, b_dtype, c_dtype
+    )
 
 
 def run_fixpipe_bias_test(case: dict):
@@ -595,15 +628,14 @@ def run_fixpipe_bias_test(case: dict):
         batch_matmul_kernel_4d(a_tensor, b_tensor, bias_tensor, dummy_scale, c_tensor, config)
 
     atol, rtol = config.get_tolerance(config.c_dtype)
-    assert torch.allclose(
-        c_tensor.cpu(), golden_result.golden.cpu(), atol=atol, rtol=rtol
-    ), f"Test case {case['id']} ({case['name']}) failed"
+    assert torch.allclose(c_tensor.cpu(), golden_result.golden.cpu(), atol=atol, rtol=rtol), (
+        f"Test case {case['id']} ({case['name']}) failed"
+    )
 
 
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in BIAS_FIXPIPE_TESTS
-])
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in BIAS_FIXPIPE_TESTS]
+)
 def test_fixpipe_bias(case: dict):
     run_fixpipe_bias_test(case)
 
@@ -620,8 +652,7 @@ def run_batch_matmul_demo(run_mode):
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
     @pypto.frontend.jit(
-        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1},
-        runtime_options={"run_mode": mode}
+        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1}, runtime_options={"run_mode": mode}
     )
     def batch_matmul_demo_kernel(
         a: pypto.Tensor([], pypto.DT_INT8),
@@ -639,19 +670,37 @@ def run_batch_matmul_demo(run_mode):
         for b_idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="b_idx"):
             for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
                 for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
-                    a_view = a[b_idx * b_view_size: b_idx * b_view_size + b_view_size,
-                                m_idx * m_view_size: m_idx * m_view_size + m_view_size, :]
-                    b_view = b[b_idx * b_view_size: b_idx * b_view_size + b_view_size,
-                                :, n_idx * n_view_size: n_idx * n_view_size + n_view_size]
-                    bias_view = bias[b_idx * b_view_size: b_idx * b_view_size + b_view_size,
-                                :, n_idx * n_view_size: n_idx * n_view_size + n_view_size]
-                    scale_view = scale[b_idx * b_view_size: b_idx * b_view_size + b_view_size,
-                                :, n_idx * n_view_size: n_idx * n_view_size + n_view_size]
-                    out_view = pypto.matmul(a_view, b_view, pypto.DT_FP16,
-                            extend_params={"bias_tensor": bias_view, "scale_tensor": scale_view})
-                    out[b_idx * b_view_size: b_idx * b_view_size + b_view_size,
-                        m_idx * m_view_size: m_idx * m_view_size + m_view_size,
-                        n_idx * n_view_size: n_idx * n_view_size + n_view_size] = out_view
+                    a_view = a[
+                        b_idx * b_view_size:b_idx * b_view_size + b_view_size,
+                        m_idx * m_view_size:m_idx * m_view_size + m_view_size,
+                        :,
+                    ]
+                    b_view = b[
+                        b_idx * b_view_size:b_idx * b_view_size + b_view_size,
+                        :,
+                        n_idx * n_view_size:n_idx * n_view_size + n_view_size,
+                    ]
+                    bias_view = bias[
+                        b_idx * b_view_size:b_idx * b_view_size + b_view_size,
+                        :,
+                        n_idx * n_view_size:n_idx * n_view_size + n_view_size,
+                    ]
+                    scale_view = scale[
+                        b_idx * b_view_size:b_idx * b_view_size + b_view_size,
+                        :,
+                        n_idx * n_view_size:n_idx * n_view_size + n_view_size,
+                    ]
+                    out_view = pypto.matmul(
+                        a_view,
+                        b_view,
+                        pypto.DT_FP16,
+                        extend_params={"bias_tensor": bias_view, "scale_tensor": scale_view},
+                    )
+                    out[
+                        b_idx * b_view_size:b_idx * b_view_size + b_view_size,
+                        m_idx * m_view_size:m_idx * m_view_size + m_view_size,
+                        n_idx * n_view_size:n_idx * n_view_size + n_view_size,
+                    ] = out_view
 
     device = "npu:0" if run_mode == "npu" else "cpu"
     a = torch.randint(0, 10, [b_size, m_size, k_size], dtype=torch.int8, device=device)

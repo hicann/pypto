@@ -9,12 +9,12 @@
 
 import os
 
-import pypto
 import torch
 
+import pypto
 
-@pypto.frontend.jit(new_ir=True,
-    host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH})
+
+@pypto.frontend.jit(new_ir=True, host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH})
 def assemble_kernel(
     a: pypto.Tensor([pypto.DYN, 128]),
     out: pypto.Tensor([pypto.DYN, 128]),
@@ -40,9 +40,11 @@ def test_assemble_jit_compile():
     assemble_kernel(a_torch, out_torch)
 
 
-@pypto.frontend.jit(new_ir=True,
-                    verify_options={"enable_pass_verify": True, "pass_verify_save_tensor": True},
-                    host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH})
+@pypto.frontend.jit(
+    new_ir=True,
+    verify_options={"enable_pass_verify": True, "pass_verify_save_tensor": True},
+    host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH},
+)
 def foo_kernel(
     x: pypto.Tensor([pypto.DYN, 32]),
     y: pypto.Tensor([pypto.DYN, 32]),

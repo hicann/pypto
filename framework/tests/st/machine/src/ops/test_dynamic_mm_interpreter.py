@@ -13,18 +13,19 @@
 本脚本有 2 种执行模式:
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 """
-import sys
-import math
+
 import logging
 from pathlib import Path
+import sys
 
 from ml_dtypes import bfloat16
 import numpy as np
 
 if __name__ == "__main__":
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -73,8 +74,19 @@ def nd_to_fractal_nz(data: np.ndarray):
 
 
 class ShapeConfig:
-    def __init__(self, m: int, k: int, n: int, in_dtype: np.dtype, out_dtype: np.dtype, trans_a: bool, trans_b: bool,
-    a_nz_flag: bool, b_nz_flag: bool, c_nz_flag: bool):
+    def __init__(
+        self,
+        m: int,
+        k: int,
+        n: int,
+        in_dtype: np.dtype,
+        out_dtype: np.dtype,
+        trans_a: bool,
+        trans_b: bool,
+        a_nz_flag: bool,
+        b_nz_flag: bool,
+        c_nz_flag: bool,
+    ):
         self.m = m
         self.k = k
         self.n = n
@@ -90,7 +102,7 @@ class ShapeConfig:
 def gen_mm_data(input_config: ShapeConfig, output_dir: Path):
     shape_a = [input_config.m, input_config.k]
     shape_b = [input_config.k, input_config.n]
-    shape_c = [input_config.m, input_config.n]
+    _shape_c = [input_config.m, input_config.n]
 
     a_path = Path(output_dir, 'mat_a.bin')
     b_path = Path(output_dir, 'mat_b.bin')
@@ -132,7 +144,7 @@ def gen_mm_data(input_config: ShapeConfig, output_dir: Path):
 
 @GoldenRegister.reg_golden_func(
     case_names=[
-        #matmul
+        # matmul
         "DynamicMatmulInterpreterTest.mm_A_B_ND_bf16",
         "DynamicMatmulInterpreterTest.mm_A_B_NZ_bf16",
         "DynamicMatmulInterpreterTest.mm_A_Bt_ND_fp16",

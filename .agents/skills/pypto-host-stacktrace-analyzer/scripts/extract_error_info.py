@@ -8,13 +8,12 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
+import argparse
+import logging
 import os
 import re
 import sys
-import logging
-import argparse
-from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import setup_logging
@@ -45,11 +44,7 @@ class ErrorInfoExtractor:
         pattern = r'file\s+(\S+),\s+line\s+(\d+),\s+func\s+(\S+)'
         match = re.search(pattern, text)
         if match:
-            return {
-                'file': match.group(1),
-                'line': match.group(2),
-                'function': match.group(3)
-            }
+            return {'file': match.group(1), 'line': match.group(2), 'function': match.group(3)}
         return None
 
     @staticmethod
@@ -126,6 +121,7 @@ def main():
     if args.file:
         try:
             from common import validate_path
+
             path = validate_path(args.input)
             with open(path, 'r', encoding='utf-8') as f:
                 text = f.read()
@@ -146,6 +142,7 @@ def main():
     # 输出结果
     if args.json:
         import json
+
         logger.info("%s", json.dumps(error_info, indent=2))
     else:
         logger.info("%s", extractor.format_error_info(error_info))

@@ -13,9 +13,8 @@
 Test div codegen for Kirin9030
 """
 
+from kirin.common_div import TEST_CASES, create_test_div_module, run_div_test
 import pytest
-from kirin.common_div import create_test_div_module, run_div_test, TEST_CASES
-
 
 KERNELS, _ = create_test_div_module("Kirin9030")
 

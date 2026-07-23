@@ -13,12 +13,12 @@ from numpy.testing import assert_allclose
 
 
 class Colors:
-    RESET = '\033[0m'
+    reset = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
     RED = '\033[91m'
     GREEN = '\033[92m'
-    YELLOW = '\033[93m'
+    yellow = '\033[93m'
     BLUE = '\033[94m'
     PURPLE = '\033[95m'
     CYAN = '\033[96m'
@@ -51,8 +51,8 @@ def detailed_allclose_manual(cpu, npu, name, rtol=1e-3, atol=1e-3, max_prints=50
     print("=" * 80)
 
     # 定义颜色代码
-    YELLOW = '\033[93m'
-    RESET = '\033[0m'
+    yellow = '\033[93m'
+    reset = '\033[0m'
 
     # 将数组展平以便遍历，但记录原始索引
     cpu_flat = cpu.reshape(-1)
@@ -68,7 +68,7 @@ def detailed_allclose_manual(cpu, npu, name, rtol=1e-3, atol=1e-3, max_prints=50
         return tuple(reversed(indices))
 
     # 强制打印前n个元素
-    _print_first_n(cpu_flat, npu_flat, get_multi_index, force_print_first_n, YELLOW, RESET)
+    _print_first_n(cpu_flat, npu_flat, get_multi_index, force_print_first_n, yellow, reset)
 
     # 遍历所有元素查找异常
     for flat_idx in range(total_elements):
@@ -82,7 +82,7 @@ def detailed_allclose_manual(cpu, npu, name, rtol=1e-3, atol=1e-3, max_prints=50
             abnormal_count += 1
             nan_count += 1
             if abnormal_count <= max_prints:
-                _log_nan_error(multi_idx, cpu_val, npu_val, YELLOW, RESET)
+                _log_nan_error(multi_idx, cpu_val, npu_val, yellow, reset)
         # 检查是否超出容差
         elif _is_above_tolerance(cpu_val, npu_val, rtol, atol):
             # CPU 有 NaN 但 NPU 没有，也是异常
@@ -90,12 +90,12 @@ def detailed_allclose_manual(cpu, npu, name, rtol=1e-3, atol=1e-3, max_prints=50
             exceed_tolerance_count += 1
 
             if abnormal_count <= max_prints:
-                _log_tolerance_error(multi_idx, cpu_val, npu_val, rtol, atol, YELLOW, RESET)
+                _log_tolerance_error(multi_idx, cpu_val, npu_val, rtol, atol, yellow, reset)
 
     _print_summary(abnormal_count, nan_count, exceed_tolerance_count, total_elements, name)
 
     # 检查是否通过 allclose 条件
-    is_allclose = (abnormal_count == 0)
+    is_allclose = abnormal_count == 0
     print(f"\nnp.allclose 等价结果: {is_allclose}")
 
     assert_allclose(cpu, npu, rtol, atol)
@@ -119,10 +119,10 @@ def _is_above_tolerance(cpu_val, npu_val, rtol, atol):
     return abs_diff > allowed_diff
 
 
-def _print_first_n(cpu_flat, npu_flat, get_multi_index, n, YELLOW, RESET):
+def _print_first_n(cpu_flat, npu_flat, get_multi_index, n, yellow, reset):
     if n <= 0:
         return
-    print(f"{YELLOW}强制打印前 {n} 个元素:{RESET}")
+    print(f"{yellow}强制打印前 {n} 个元素:{reset}")
     for flat_idx in range(min(n, len(cpu_flat))):
         cpu_val = cpu_flat[flat_idx]
         npu_val = npu_flat[flat_idx]
@@ -131,17 +131,17 @@ def _print_first_n(cpu_flat, npu_flat, get_multi_index, n, YELLOW, RESET):
         cpu_str = "NaN" if np.isnan(cpu_val) else f"{cpu_val:.6e}"
         npu_str = "NaN" if np.isnan(npu_val) else f"{npu_val:.6e}"
         diff_str = "NaN" if np.isnan(cpu_val) or np.isnan(npu_val) else f"{np.abs(cpu_val - npu_val):.6e}"
-        print(f"{YELLOW}索引 {multi_idx}: cpu={cpu_str}, npu={npu_str}, 差值={diff_str}{RESET}")
+        print(f"{yellow}索引 {multi_idx}: cpu={cpu_str}, npu={npu_str}, 差值={diff_str}{reset}")
     print("-" * 80)
 
 
-def _log_nan_error(multi_idx, cpu_val, npu_val, YELLOW, RESET):
+def _log_nan_error(multi_idx, cpu_val, npu_val, yellow, reset):
     cpu_str = "NaN" if np.isnan(cpu_val) else f"{cpu_val:.6e}"
     npu_str = "NaN" if np.isnan(npu_val) else f"{npu_val:.6e}"
     print(f"索引 {multi_idx}: cpu={cpu_str}, npu={npu_str}, 差值=NaN")
 
 
-def _log_tolerance_error(multi_idx, cpu_val, npu_val, rtol, atol, YELLOW, RESET):
+def _log_tolerance_error(multi_idx, cpu_val, npu_val, rtol, atol, yellow, reset):
     abs_diff = np.abs(cpu_val - npu_val)
     allowed_diff = atol + rtol * np.abs(npu_val)
     print(f"索引 {multi_idx}: cpu={cpu_val:.6e}, npu={npu_val:.6e}, 差值={abs_diff:.6e}(超过容差{allowed_diff:.6e})")
@@ -150,7 +150,7 @@ def _log_tolerance_error(multi_idx, cpu_val, npu_val, rtol, atol, YELLOW, RESET)
 def _print_summary(abnormal_count, nan_count, exceed_tolerance_count, total_elements, name):
     # 统计信息
     print("=" * 80)
-    print(f"{Colors.BOLD}{Colors.PURPLE}{name} 比较结果统计:{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.PURPLE}{name} 比较结果统计:{Colors.reset}")
     print(f"总元素数量: {total_elements}")
     print(f"异常元素数量: {abnormal_count}")
     print(f"  - NaN 数量: {nan_count}")

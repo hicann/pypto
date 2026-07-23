@@ -9,8 +9,10 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
+
 from abc import ABC, abstractmethod
 from typing import NoReturn
+
 import torch
 
 
@@ -22,9 +24,7 @@ class TestCaseRunner(ABC):
 
     @classmethod
     def from_dict(cls, params: dict):
-        return cls(
-            params.get("view_shape"), params.get("tile_shape"), params.get("params", {})
-        )
+        return cls(params.get("view_shape"), params.get("tile_shape"), params.get("params", {}))
 
     @abstractmethod
     def input_tensors(self) -> list:
@@ -75,9 +75,7 @@ class TestCaseRunner(ABC):
     def tear_down(self) -> NoReturn:
         pass
 
-    def result_golden_compare(
-        self, golden, result, is_binary: bool = False
-    ) -> NoReturn:
+    def result_golden_compare(self, golden, result, is_binary: bool = False) -> NoReturn:
         if golden is None and result is None:
             return
 
@@ -92,10 +90,7 @@ class TestCaseRunner(ABC):
         self.tear_up()
         input_tensors = self.input_tensors()
         inputs = self.input_data()
-        inputs = [
-            torch.tensor(input).reshape(tensor.shape)
-            for input, tensor in zip(inputs, input_tensors)
-        ]
+        inputs = [torch.tensor(input).reshape(tensor.shape) for input, tensor in zip(inputs, input_tensors)]
         golden = self._golden_func(inputs, self._params)
         output_tensors = self.output_tensors()
         self.exec_dyn_func(input_tensors, output_tensors)

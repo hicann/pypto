@@ -23,10 +23,11 @@ Usage:
 import argparse
 import os
 import sys
-import pypto
-import torch
-import numpy as np
+
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -75,9 +76,8 @@ def get_device_id():
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def matmul_kernel(
-    a: pypto.Tensor([], pypto.DT_FP32),
-    b: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32)):
+    a: pypto.Tensor([], pypto.DT_FP32), b: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32)
+):
     pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
     out[:] = pypto.matmul(a, b, pypto.DT_FP32)
 
@@ -106,9 +106,8 @@ def test_matmul_basic(device_id: int = None):
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def matmul_batch_kernel(
-    a: pypto.Tensor([], pypto.DT_FP32),
-    b: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32)):
+    a: pypto.Tensor([], pypto.DT_FP32), b: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32)
+):
     pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
     out[:] = pypto.matmul(a, b, pypto.DT_FP32)
 
@@ -135,12 +134,10 @@ def test_matmul_batch(device_id: int = None):
     print("✓ Batch matrix multiplication completed successfully")
 
 
-
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def matmul_broadcast_kernel(
-    a: pypto.Tensor([], pypto.DT_FP32),
-    b: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32)):
+    a: pypto.Tensor([], pypto.DT_FP32), b: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32)
+):
     pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
     out[:] = pypto.matmul(a, b, pypto.DT_FP32)
 
@@ -169,18 +166,16 @@ def test_matmul_broadcast(device_id: int = None):
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def matmul_trans_right_kernel(
-    a: pypto.Tensor([], pypto.DT_FP32),
-    b: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32)):
+    a: pypto.Tensor([], pypto.DT_FP32), b: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32)
+):
     pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
     out[:] = pypto.matmul(a, b, pypto.DT_FP32, b_trans=True)
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def matmul_trans_left_kernel(
-    a: pypto.Tensor([], pypto.DT_FP32),
-    b: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32)):
+    a: pypto.Tensor([], pypto.DT_FP32), b: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32)
+):
     pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
     out[:] = pypto.matmul(a, b, pypto.DT_FP32, a_trans=True)
 
@@ -195,13 +190,9 @@ def test_matmul_trans(device_id: int = None):
 
     # Test 1: Basic matrix multiplication
     dtype = torch.float32
-    a = torch.tensor([[1, 2, 3],
-                      [4, 5, 6]], dtype=dtype, device=device)
-    b = torch.tensor([[7, 8],
-                      [9, 10],
-                      [11, 12]], dtype=dtype, device=device)
-    expected = torch.tensor([[58, 64],
-                            [139, 154]], dtype=dtype, device=device)
+    a = torch.tensor([[1, 2, 3], [4, 5, 6]], dtype=dtype, device=device)
+    b = torch.tensor([[7, 8], [9, 10], [11, 12]], dtype=dtype, device=device)
+    expected = torch.tensor([[58, 64], [139, 154]], dtype=dtype, device=device)
 
     out = torch.empty((a.shape[0], b.shape[1]), dtype=dtype, device=device)
     matmul_kernel(a, b, out)
@@ -212,12 +203,9 @@ def test_matmul_trans(device_id: int = None):
 
     # Test 2: Matrix multiplication with the right matrix transposed
     dtype = torch.float32
-    a = torch.tensor([[1, 2, 3],
-                      [4, 5, 6]], dtype=dtype, device=device)
-    b = torch.tensor([[7, 9, 11],
-                      [8, 10, 12]], dtype=dtype, device=device)
-    expected = torch.tensor([[58, 64],
-                            [139, 154]], dtype=dtype, device=device)
+    a = torch.tensor([[1, 2, 3], [4, 5, 6]], dtype=dtype, device=device)
+    b = torch.tensor([[7, 9, 11], [8, 10, 12]], dtype=dtype, device=device)
+    expected = torch.tensor([[58, 64], [139, 154]], dtype=dtype, device=device)
 
     out = torch.empty((a.shape[0], b.shape[0]), dtype=dtype, device=device)
     matmul_trans_right_kernel(a, b, out)
@@ -228,14 +216,9 @@ def test_matmul_trans(device_id: int = None):
 
     # Test 3: Matrix multiplication with the left matrix transposed
     dtype = torch.float32
-    a = torch.tensor([[1, 4],
-                      [2, 5],
-                      [3, 6]], dtype=dtype, device=device)
-    b = torch.tensor([[7, 8],
-                      [9, 10],
-                      [11, 12]], dtype=dtype, device=device)
-    expected = torch.tensor([[58, 64],
-                            [139, 154]], dtype=dtype, device=device)
+    a = torch.tensor([[1, 4], [2, 5], [3, 6]], dtype=dtype, device=device)
+    b = torch.tensor([[7, 8], [9, 10], [11, 12]], dtype=dtype, device=device)
+    expected = torch.tensor([[58, 64], [139, 154]], dtype=dtype, device=device)
 
     out = torch.empty((a.shape[1], b.shape[1]), dtype=dtype, device=device)
     matmul_trans_left_kernel(a, b, out)
@@ -247,13 +230,13 @@ def test_matmul_trans(device_id: int = None):
     print("✓ Matrix multiplication with transposition completed successfully")
 
 
-
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def matmul_bias_kernel(
     a: pypto.Tensor([], pypto.DT_FP32),
     b: pypto.Tensor([], pypto.DT_FP32),
     bias: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32)):
+    out: pypto.Tensor([], pypto.DT_FP32),
+):
     extend_params = {"bias_tensor": bias}
     pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
     out[:] = pypto.matmul(a, b, pypto.DT_FP32, extend_params=extend_params)
@@ -286,6 +269,7 @@ def test_matmul_bias(device_id: int = None):
 # Main Function
 # ============================================================================
 
+
 def main():
     """Run matrix multiplication examples.
 
@@ -302,23 +286,23 @@ Examples:
   %(prog)s                      Run all examples
   %(prog)s --list               List all available examples
   %(prog)s matmul::test_matmul_basic    Run a specific case
-        """
+        """,
     )
     parser.add_argument(
         'example_id',
         type=str,
         nargs="?",
-        help='Run a specific case (e.g., matmul::test_matmul_basic). If omitted, all cases run.'
+        help='Run a specific case (e.g., matmul::test_matmul_basic). If omitted, all cases run.',
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        "--run_mode", "--run-mode",
-        nargs="?", type=str, default="npu", choices=["npu", "sim"],
-        help="Run mode, supports npu and sim."
+        "--run_mode",
+        "--run-mode",
+        nargs="?",
+        type=str,
+        default="npu",
+        choices=["npu", "sim"],
+        help="Run mode, supports npu and sim.",
     )
 
     args = parser.parse_args()
@@ -328,28 +312,28 @@ Examples:
         'matmul::test_matmul_basic': {
             'name': 'Test basic matrix multiplication',
             'description': 'Basic matrix multiplication example',
-            'function': test_matmul_basic
+            'function': test_matmul_basic,
         },
         'matmul::test_matmul_batch': {
             'name': 'Test batch matrix multiplication',
             'description': 'Batch matrix multiplication example',
-            'function': test_matmul_batch
+            'function': test_matmul_batch,
         },
         'matmul::test_matmul_broadcast': {
             'name': 'Test batch matrix multiplication with broadcasting',
             'description': 'Batch matrix multiplication with broadcasting example',
-            'function': test_matmul_broadcast
+            'function': test_matmul_broadcast,
         },
         'matmul::test_matmul_trans': {
             'name': 'Test matrix multiplication with transposition',
             'description': 'Matrix multiplication with transposition example',
-            'function': test_matmul_trans
+            'function': test_matmul_trans,
         },
         'matmul::test_matmul_bias': {
             'name': 'Test matrix multiplication with bias',
             'description': 'Matrix multiplication with bias example',
-            'function': test_matmul_bias
-        }
+            'function': test_matmul_bias,
+        },
     }
 
     # List examples if requested
@@ -384,7 +368,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
 
     try:

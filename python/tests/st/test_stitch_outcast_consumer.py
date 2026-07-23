@@ -11,14 +11,15 @@
 """
 Tests for stitch write-read-write kernel (A@B*(1+scale) + C@D).
 """
+
 from dataclasses import dataclass
 import os
-import pypto
-import pytest
+
 import numpy as np
-import torch
 from numpy.testing import assert_allclose
-import torch_npu
+import torch
+
+import pypto
 
 FP32 = pypto.DT_FP32
 INT32 = pypto.DT_INT32
@@ -47,9 +48,14 @@ def write_read_write_kernel_2(
     d: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
     out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
     scaled_buf: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
-    m: int, k: int, n: int,
-    m_view: int, n_view: int,
-    tile_m: list, tile_k: list, tile_n: list,
+    m: int,
+    k: int,
+    n: int,
+    m_view: int,
+    n_view: int,
+    tile_m: list,
+    tile_k: list,
+    tile_n: list,
     scale: int,
 ):
     pypto.set_cube_tile_shapes(tile_m, tile_k, tile_n, enable_split_k=False)
@@ -60,12 +66,11 @@ def write_read_write_kernel_2(
     # Loop1: A@B → out
     for mi in pypto.loop(0, m_loop, 1, name="LOOP_m", idx_name="mi"):
         for ni in pypto.loop(0, n_loop, 1, name="LOOP_n", idx_name="ni"):
-            a_view = a[mi * m_view: mi * m_view + m_view, :]
-            b_view = b[:, ni * n_view: ni * n_view + n_view]
+            a_view = a[mi * m_view:mi * m_view + m_view, :]
+            b_view = b[:, ni * n_view:ni * n_view + n_view]
             result1 = pypto.matmul(a_view, b_view, out_dtype=INT32)
             pypto.atomic_add(result1, [mi * m_view, ni * n_view], out)
-            read_tile = out[mi * m_view: mi * m_view + m_view,
-                            ni * n_view: ni * n_view + n_view]
+            read_tile = out[mi * m_view:mi * m_view + m_view, ni * n_view:ni * n_view + n_view]
             read_view = pypto.view(read_tile, [m_view, n_view], [0, 0])
             scaled_tile = pypto.mul(read_view, scale)
             pypto.assemble(scaled_tile, [mi * m_view, ni * n_view], scaled_buf)
@@ -73,12 +78,11 @@ def write_read_write_kernel_2(
     # Loop3: scaled_buf → atomic_add → out, then C@D → atomic_add → out
     for mi in pypto.loop(0, m_loop, 1, name="LOOP_m", idx_name="mi"):
         for ni in pypto.loop(0, n_loop, 1, name="LOOP_n", idx_name="ni"):
-            scaled_tile = scaled_buf[mi * m_view: mi * m_view + m_view,
-                                     ni * n_view: ni * n_view + n_view]
+            scaled_tile = scaled_buf[mi * m_view:mi * m_view + m_view, ni * n_view:ni * n_view + n_view]
             scaled_view = pypto.view(scaled_tile, [m_view, n_view], [0, 0])
             pypto.atomic_add(scaled_view, [mi * m_view, ni * n_view], out)
-            c_view = c[mi * m_view: mi * m_view + m_view, :]
-            d_view = d[:, ni * n_view: ni * n_view + n_view]
+            c_view = c[mi * m_view:mi * m_view + m_view, :]
+            d_view = d[:, ni * n_view:ni * n_view + n_view]
             result2 = pypto.matmul(c_view, d_view, out_dtype=INT32)
             pypto.atomic_add(result2, [mi * m_view, ni * n_view], out)
 
@@ -101,15 +105,26 @@ def _run(cfg: StitchConfig):
     out = torch.zeros(cfg.m, cfg.n, dtype=torch.int32, device=device)
     scaled_buf = torch.zeros(cfg.m, cfg.n, dtype=torch.int32, device=device)
     write_read_write_kernel_2(
-        a_cpu.to(device), b_cpu.to(device), c_cpu.to(device), d_cpu.to(device),
-        out, scaled_buf, cfg.m, cfg.k, cfg.n, cfg.m_view, cfg.n_view,
-        cfg.tile_m, cfg.tile_k, cfg.tile_n, cfg.scale,
+        a_cpu.to(device),
+        b_cpu.to(device),
+        c_cpu.to(device),
+        d_cpu.to(device),
+        out,
+        scaled_buf,
+        cfg.m,
+        cfg.k,
+        cfg.n,
+        cfg.m_view,
+        cfg.n_view,
+        cfg.tile_m,
+        cfg.tile_k,
+        cfg.tile_n,
+        cfg.scale,
     )
     return out.cpu().numpy(), golden
 
 
 def test_stitch_outcast_consumer():
-    cfg = StitchConfig(128, 256, 128, 128, 128,
-                       [64, 64], [64, 128], [128, 128])
+    cfg = StitchConfig(128, 256, 128, 128, 128, [64, 64], [64, 128], [128, 128])
     result, golden = _run(cfg)
     assert_allclose(result, golden, atol=0, verbose=True)

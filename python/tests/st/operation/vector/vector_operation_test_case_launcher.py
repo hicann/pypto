@@ -8,14 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import json
-import pytest
+""" """
 
+import json
+
+import pytest
 from test_case_class_vector_operations import (
     AddTestCase,
     CastTestCase,
+    CbrtTestCase,
+    ExpandExpDifTestCase,
     ExpTestCase,
     ScalarAddSTestCase,
     ScalarDivSTestCase,
@@ -24,8 +26,6 @@ from test_case_class_vector_operations import (
     ScalarSubSTestCase,
     TopKTestCase,
     TransposeTestCase,
-    CbrtTestCase,
-    ExpandExpDifTestCase,
 )
 
 _op_to_cls = {

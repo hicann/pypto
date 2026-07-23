@@ -16,31 +16,32 @@
     - 支持自定义 CMake 生成器, 构建类型和选项
     - 支持 CMake 安装文件的自动追踪
 """
+
 import argparse
+import dataclasses
+from datetime import datetime, timedelta, timezone
+import hashlib
 import importlib
+from importlib import metadata
 import json
 import logging
-import hashlib
 import math
 import multiprocessing
 import os
+from pathlib import Path
 import re
 import shlex
+import site
 import subprocess
 import sys
-import site
 import sysconfig
+from typing import Dict, List, Optional, Tuple
 import warnings
-import dataclasses
-from pathlib import Path
-from typing import Optional, List, Tuple, Dict
-from importlib import metadata
-from datetime import datetime, timedelta, timezone
 
-from setuptools import setup, Extension
-from setuptools.command.editable_wheel import editable_wheel
+from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 from setuptools.command.develop import develop
+from setuptools.command.editable_wheel import editable_wheel
 from setuptools.command.egg_info import egg_info
 
 # 从 python/pypto/_which_cmake.py 加载公共模块 (不依赖 sys.path)
@@ -50,7 +51,6 @@ _spec = importlib.util.spec_from_file_location("_which_cmake", _which_cmake_path
 _which_cmake_mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_which_cmake_mod)
 which_cmake = _which_cmake_mod.which_cmake
-
 
 
 def _find_system_cmake() -> Optional[Path]:
@@ -160,7 +160,8 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
         if not record_str:
             return
 
-        # 获取 setuptools 内置的 wheel 包, 避免直接使用 wheel 包, 减少因与 setuptools 内置的 wheel 包版本不一致导致兼容性问题
+        # 获取 setuptools 内置的 wheel 包, 避免直接使用 wheel 包,
+        # 减少因与 setuptools 内置的 wheel 包版本不一致导致兼容性问题
         try:
             vendor_wheel = importlib.import_module('setuptools._vendor.wheel.wheelfile')
             setuptools_wheel = getattr(vendor_wheel, 'WheelFile')
@@ -251,16 +252,16 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
 
 @dataclasses.dataclass
 class Py3Desc:
-    """Python3 描述
-    """
-    exe: str    # Interpreter 路径
+    """Python3 描述"""
+
+    exe: str  # Interpreter 路径
     minor: int  # Minor 版本
 
 
 @dataclasses.dataclass
 class CMakeCmdParams:
-    """CMake 命令参数
-    """
+    """CMake 命令参数"""
+
     src: Path  # 源码根目录
     build_dir: Path  # CMake 构建目录
     cmake_install_prefix: Path  # CMake 安装前缀
@@ -293,6 +294,7 @@ class CMakeUserOption:
         命令行配置优先于环境变量配置.
         --cmake-generator 和 --cmake-build-type 优先于 --cmake-options 中冲突的选项.
     """
+
     # 额外的命令行配置, 格式: 长选项, 短选项, 描述, 默认值
     USER_OPTION = [
         ('cmake-generator=', None, 'CMake Generator', None),
@@ -323,9 +325,9 @@ class CMakeUserOption:
         ver1 = metadata.version("setuptools")
         ver2 = metadata.version("pybind11")
 
-        desc = f"\nEnviron"
+        desc = "\nEnviron"
         desc += f"\n    Python3               : {sys.executable} ({ver.major}.{ver.minor}.{ver.micro})"
-        desc += f"\n        pip"
+        desc += "\n        pip"
         desc += f"\n               setuptools : {ver1}"
         desc += f"\n                 pybind11 : {ver2}"
         desc += f"\n    CMake                 : {self.cmake}"
@@ -335,10 +337,10 @@ class CMakeUserOption:
         desc += f"\n    cmake-options         : {self.cmake_options}"
         desc += f"\n    cmake-verbose         : {self.cmake_verbose}"
         if self.multi_py3_cfg:
-            desc += f"\n    multi_py3_cfg         :"
+            desc += "\n    multi_py3_cfg         :"
             for cfg in self.multi_py3_cfg:
                 desc += f"\n                          3.{cfg.minor} -> {cfg.exe}"
-        desc += f"\n"
+        desc += "\n"
         return desc
 
     @staticmethod
@@ -361,19 +363,20 @@ class CMakeUserOption:
         self.multi_py3_cfg = None
         self.cmake: Optional[Path] = self.which_cmake()
         if not self.cmake:
-            raise RuntimeError(f"Can't find cmake")
+            raise RuntimeError("Can't find cmake")
 
         # 全量源码统一构建: 仅需 cmake --install, 跳过命令行选项解析
         if os.environ.get("PYPTO_UNIFIED_BUILD") == "1":
             return
 
-        # 从环境变量(如有)中获取配置值作为默认值, 后续命令行中如果也设置了对应配置则会覆盖对应值, 达到命令行配置优先生效的效果.
+        # 从环境变量(如有)中获取配置值作为默认值, 后续命令行中如果也设置了对应配置则会覆盖对应值,
+        # 达到命令行配置优先生效的效果.
         env_build_ext_args = os.environ.get("PYPTO_BUILD_EXT_ARGS", "")
         if not env_build_ext_args:
             return
         pattern = r'(?:[^\s\"\']|\"[^\"]*\"|\'[^\']*\')+'
         env_build_ext_args_split = re.findall(pattern, env_build_ext_args)
-        parser = argparse.ArgumentParser(description=f"Setuptools CMakeBuild Ext.", add_help=False)
+        parser = argparse.ArgumentParser(description="Setuptools CMakeBuild Ext.", add_help=False)
         parser.add_argument("--cmake-generator", nargs="?", type=str, default=None, dest="cmake_generator")
         parser.add_argument("--cmake-build-type", nargs="?", type=str, default=None, dest="cmake_build_type")
         parser.add_argument("--cmake-options", nargs="?", type=str, default="", dest="cmake_options")
@@ -410,14 +413,18 @@ class CMakeUserOption:
             for option in cmake_option_lst:
                 if option.startswith("-DCMAKE_GENERATOR="):
                     cmake_option_lst.remove(option)
-                    logging.warning("Configuration via --cmake-generator has higher priority than --cmake-options; "
-                                    "in case of conflict, the former prevails.")
+                    logging.warning(
+                        "Configuration via --cmake-generator has higher priority than --cmake-options; "
+                        "in case of conflict, the former prevails."
+                    )
         if self.cmake_build_type:
             for option in cmake_option_lst:
                 if option.startswith("-DCMAKE_BUILD_TYPE="):
                     cmake_option_lst.remove(option)
-                    logging.warning("Configuration via --cmake-build-type has higher priority than --cmake-options; "
-                                    "in case of conflict, the former prevails.")
+                    logging.warning(
+                        "Configuration via --cmake-build-type has higher priority than --cmake-options; "
+                        "in case of conflict, the former prevails."
+                    )
         self.cmake_options = " ".join(cmake_option_lst) if cmake_option_lst else self.cmake_options
 
     def _init_get_multi_py3_cfg(self):
@@ -430,7 +437,10 @@ class CMakeUserOption:
                 continue
             ret = subprocess.run(
                 [e, "-c", "import sys; print(sys.version_info.minor)"],
-                capture_output=True, check=True, text=True, encoding='utf-8'
+                capture_output=True,
+                check=True,
+                text=True,
+                encoding='utf-8',
             )
             minor = int(ret.stdout.strip())
             if minor == int(sys.version_info.minor):
@@ -458,6 +468,7 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         3. CMake Install: 安装文件到目标目录
         4. 如果是可编辑模式, 传递安装文件清单给 editable_wheel
     """
+
     user_options = build_ext.user_options + CMakeUserOption.USER_OPTION
 
     @staticmethod
@@ -474,7 +485,15 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         :rtype: Optional[int]
         """
         def_job_num = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 128)  # 128 为缺省最大核数
-        def_job_num = None if generator and generator.lower() in ["ninja", ] else def_job_num  # ninja 自身决定缺省核数
+        def_job_num = (
+            None
+            if generator
+            and generator.lower()
+            in [
+                "ninja",
+            ]
+            else def_job_num
+        )  # ninja 自身决定缺省核数
         job_num = job_num if job_num and job_num > 0 else def_job_num
         return job_num
 
@@ -549,8 +568,9 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         # 获取 cmake install prefix
         cmake_install_prefix = self._get_cmake_install_prefix()
 
-        params = CMakeCmdParams(src=src, build_dir=build_dir, cmake_install_prefix=cmake_install_prefix,
-                                py3_exe=sys.executable, env=env)
+        params = CMakeCmdParams(
+            src=src, build_dir=build_dir, cmake_install_prefix=cmake_install_prefix, py3_exe=sys.executable, env=env
+        )
 
         # 主版本构建
         self._run_cmake(params=params)
@@ -561,9 +581,15 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         for py3_cfg in self.multi_py3_cfg or []:
             extra_build_dir = Path(f"{build_dir}_py3{py3_cfg.minor}")
             extra_build_dir.mkdir(parents=True, exist_ok=True)
-            extra_params = CMakeCmdParams(src=src, build_dir=extra_build_dir,
-                                          cmake_install_prefix=cmake_install_prefix, py3_exe=py3_cfg.exe, env=env,
-                                          build_targets=["pypto_impl"], install_components=["pypto_impl_lib"])
+            extra_params = CMakeCmdParams(
+                src=src,
+                build_dir=extra_build_dir,
+                cmake_install_prefix=cmake_install_prefix,
+                py3_exe=py3_cfg.exe,
+                env=env,
+                build_targets=["pypto_impl"],
+                install_components=["pypto_impl_lib"],
+            )
             self._run_cmake(params=extra_params)
 
         if self._edit_mode():
@@ -572,8 +598,10 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
                 # 向 editable_wheel 命令传递
                 editable_wheel_cmd = self.distribution.get_command_obj("editable_wheel")
                 editable_wheel_cmd.pypto_install_manifest_lst = installed_files
-                logging.info("Command build_ext passes %s CMake install files to editable_wheel command",
-                             len(editable_wheel_cmd.pypto_install_manifest_lst))
+                logging.info(
+                    "Command build_ext passes %s CMake install files to editable_wheel command",
+                    len(editable_wheel_cmd.pypto_install_manifest_lst),
+                )
 
     def _run_cmake(self, params: CMakeCmdParams):
         """执行完整的 CMake Configure/Build/Install 流程
@@ -587,18 +615,20 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         cmd += f" -DPython3_EXECUTABLE={params.py3_exe} -DCMAKE_INSTALL_PREFIX={params.cmake_install_prefix}"
         cmd += f" {self.cmake_options}" if self.cmake_options else ""
         logging.info("CMake Configure, Cmd: %s", cmd)
-        ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8',
-                             env=params.env)
+        ret = subprocess.run(
+            shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8', env=params.env
+        )
         ret.check_returncode()
 
         # CMake Build
         job_num = self._get_job_num(job_num=self.parallel, generator=self.cmake_generator)
         cmd = f"{self.cmake} --build {params.build_dir}" + (f" -j {job_num}" if job_num else "")
         cmd += (" --target " + " ".join(params.build_targets)) if params.build_targets else ""
-        cmd += f" --verbose" if self.cmake_verbose else ""
+        cmd += " --verbose" if self.cmake_verbose else ""
         logging.info("CMake Build, Cmd: %s", cmd)
-        ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8',
-                             env=params.env)
+        ret = subprocess.run(
+            shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8', env=params.env
+        )
         ret.check_returncode()
 
         # CMake Install
@@ -767,8 +797,9 @@ class SetupCtrl:
             - editable_wheel: CustomEditableWheel, 处理可编辑安装模式
             - build_ext: CMakeBuild, 调用 CMake 进行构建
         """
-        allow_whl_build = (os.environ.get('PYPTO_ALLOW_WHL_BUILD', '') == '1' or
-                           os.environ.get('PYPTO_UNIFIED_BUILD', '') == '1')
+        allow_whl_build = (
+            os.environ.get('PYPTO_ALLOW_WHL_BUILD', '') == '1' or os.environ.get('PYPTO_UNIFIED_BUILD', '') == '1'
+        )
         if not allow_whl_build:
             # PyPTO 打入 cann-toolkit 后, 会安装在 ${ASCEND_HOME_PATH}/python/site-packages 目录下,
             # 此时若直接执行 pip install . / pip install -e . 会触发卸载该路径 whl 包后重新安装.

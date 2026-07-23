@@ -23,6 +23,7 @@ import multiprocessing as mp
 import os
 import traceback
 
+from distributed_config import DistributedConfig, collect_process_errors
 import numpy as np
 import pytest
 import torch
@@ -30,8 +31,6 @@ from torch._dynamo import allow_in_graph
 from torch._subclasses import fake_tensor
 
 import pypto
-
-from distributed_config import DistributedConfig, collect_process_errors
 
 
 @pypto.frontend.jit()
@@ -52,41 +51,64 @@ def allgather_matmul_kernel(
 
     for bs_idx in pypto.loop(bs_loop, name="LOOP_AG_MM", idx_name="bs_idx"):
         shmem_shape = [view_row_shape * world_size, attn_dim_per_tp_val]
-        shmem_tensor = pypto.distributed.create_shmem_tensor(
-            group_name, world_size, pypto.DT_BF16, shmem_shape)
+        shmem_tensor = pypto.distributed.create_shmem_tensor(group_name, world_size, pypto.DT_BF16, shmem_shape)
         shmem_barrier_signal = pypto.distributed.create_shmem_signal(group_name, world_size)
         my_pe = pypto.distributed.my_symbolic_pe(group_name)
 
         in_tensor_tile = pypto.view(
-            in_tensor, (view_row_shape, in_tensor.shape[1]), [bs_idx * view_row_shape, 0],
-            valid_shape=[(batch_size_per_rank - bs_idx * view_row_shape).min(view_row_shape), in_tensor.shape[1]])
+            in_tensor,
+            (view_row_shape, in_tensor.shape[1]),
+            [bs_idx * view_row_shape, 0],
+            valid_shape=[(batch_size_per_rank - bs_idx * view_row_shape).min(view_row_shape), in_tensor.shape[1]],
+        )
 
         pypto.set_vec_tile_shapes(view_row_shape, attn_dim_per_tp_val)
-        data_clear_out = pypto.distributed.shmem_clear_data(
-            shmem_tensor, shmem_shape, [0, 0], pred=[in_tensor_tile])
-        barrier_out = pypto.distributed.shmem_barrier_all(
-            shmem_barrier_signal, [data_clear_out])
+        data_clear_out = pypto.distributed.shmem_clear_data(shmem_tensor, shmem_shape, [0, 0], pred=[in_tensor_tile])
+        barrier_out = pypto.distributed.shmem_barrier_all(shmem_barrier_signal, [data_clear_out])
 
         gathered_tensor = pypto.tensor([view_row_shape * world_size, attn_dim_per_tp_val], pypto.DT_BF16, "gathered")
 
         pypto.set_vec_tile_shapes(view_row_shape, attn_dim_per_tp_val)
         for dyn_idx in range(world_size):
             put_out = pypto.distributed.shmem_put(
-                in_tensor_tile, [my_pe * view_row_shape, 0], shmem_tensor, dyn_idx,
-                put_op=pypto.AtomicType.SET, pred=[barrier_out])
+                in_tensor_tile,
+                [my_pe * view_row_shape, 0],
+                shmem_tensor,
+                dyn_idx,
+                put_op=pypto.AtomicType.SET,
+                pred=[barrier_out],
+            )
             pypto.distributed.shmem_signal(
-                shmem_tensor, dyn_idx, 1, [view_row_shape, attn_dim_per_tp_val],
-                [my_pe * view_row_shape, 0], target_pe=dyn_idx, sig_op=pypto.AtomicType.ADD, pred=[put_out])
+                shmem_tensor,
+                dyn_idx,
+                1,
+                [view_row_shape, attn_dim_per_tp_val],
+                [my_pe * view_row_shape, 0],
+                target_pe=dyn_idx,
+                sig_op=pypto.AtomicType.ADD,
+                pred=[put_out],
+            )
 
             valid_row = (batch_size_per_rank - bs_idx * view_row_shape).min(view_row_shape)
             wait_until_out = pypto.distributed.shmem_wait_until(
-                shmem_tensor, my_pe, 1, [view_row_shape, attn_dim_per_tp_val],
-                [dyn_idx * view_row_shape, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[in_tensor_tile])
+                shmem_tensor,
+                my_pe,
+                1,
+                [view_row_shape, attn_dim_per_tp_val],
+                [dyn_idx * view_row_shape, 0],
+                cmp=pypto.OpType.EQ,
+                clear_signal=True,
+                pred=[in_tensor_tile],
+            )
             pypto.set_pass_options(sg_set_scope=(1, True, False))
             shmem_get_out = pypto.experimental.shmem_load(
-                shmem_tensor, my_pe, [view_row_shape, attn_dim_per_tp_val],
-                [dyn_idx * view_row_shape, 0], pred=[wait_until_out],
-                valid_shape=[valid_row, attn_dim_per_tp_val])
+                shmem_tensor,
+                my_pe,
+                [view_row_shape, attn_dim_per_tp_val],
+                [dyn_idx * view_row_shape, 0],
+                pred=[wait_until_out],
+                valid_shape=[valid_row, attn_dim_per_tp_val],
+            )
 
             gathered_tensor[dyn_idx * view_row_shape:] = shmem_get_out
             pypto.set_pass_options(sg_set_scope=-1)
@@ -140,7 +162,7 @@ def allgather_matmul_result_golden(batch_size_per_rank, input_datas):
 
 def get_check_threshold(world_size: int, golden_tensor: torch.Tensor):
     scale = np.mean(np.abs(golden_tensor.cpu().flatten().tolist())) + 1e-12
-    eps = 2 ** -7
+    eps = 2**-7
     tolerance_coeff = min((1 + 0.25 * np.log2(world_size)) * 1.5, 3.0)
     rtol = tolerance_coeff * eps * np.sqrt(world_size)
     atol = rtol * scale
@@ -165,8 +187,8 @@ def allgather_matmul_worker(
         golden_out_tensor = output_data[0]
 
         out_tensor = torch.empty(
-            (in_tensor.shape[0] * config.world_size, matmul_weight.shape[0]),
-            dtype=torch.bfloat16, device=device)
+            (in_tensor.shape[0] * config.world_size, matmul_weight.shape[0]), dtype=torch.bfloat16, device=device
+        )
 
         inputs = [in_tensor.to(device), matmul_weight.to(device), out_tensor]
 
@@ -197,8 +219,8 @@ def allgather_matmul(
 
     attn_dim_per_tp = in_tensor.shape[1]
     out_tensor = torch.empty(
-        (in_tensor.shape[0] * world_size, matmul_weight.shape[0]),
-        dtype=torch.bfloat16, device=in_tensor.device)
+        (in_tensor.shape[0] * world_size, matmul_weight.shape[0]), dtype=torch.bfloat16, device=in_tensor.device
+    )
 
     allgather_matmul_kernel(in_tensor, matmul_weight, out_tensor, group_name, world_size, attn_dim_per_tp)
 
@@ -219,7 +241,7 @@ def test_allgather_matmul():
     for i in range(config.world_size):
         p = mp.Process(
             target=allgather_matmul_worker,
-            args=(config, input_datas[i], output_datas[i], i, error_queue, 'normal', attn_dim_per_tp)
+            args=(config, input_datas[i], output_datas[i], i, error_queue, 'normal', attn_dim_per_tp),
         )
         p.start()
         processes.append(p)

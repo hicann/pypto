@@ -42,6 +42,25 @@ repos:
           - "-i"
         exclude: ^build/|tests/third_party/
 
+  # Python 代码检查
+  - repo: https://gitcode.com/gh_mirrors/ru/ruff-pre-commit
+    rev: v0.14.14
+    hooks:
+      - id: ruff-check
+        args: [
+            "--output-format", "github", "--fix", "--target-version", "py39",
+          ]
+        types: [python]
+
+  # Python 切片冒号空格检查（补充 ruff 无法覆盖的复杂切片）
+  - repo: local
+    hooks:
+      - id: slice-colon-spacing
+        name: slice colon spacing
+        entry: python3 scripts/check_slice_spacing.py
+        language: system
+        types: [python]
+
   # 拼写检查
   - repo: https://gitcode.com/gh_mirrors/co/codespell
     rev: v2.4.1

@@ -16,12 +16,13 @@ process to exercise dynamic cell-match metadata pool reuse and resize across lau
 
 Do NOT add ``from __future__ import annotations`` — it breaks @jit parameter parsing.
 """
+
 import os
 
-import pypto
-import torch
-import torch_npu
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 B_STATIC = 1
 H_STATIC = 1
@@ -37,9 +38,7 @@ ATOL = 1e-3
 
 def _golden_d_emb_only(dy: torch.Tensor, x: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
     del x
-    return (dy[:, :, 0, :].reshape(-1, dy.shape[-1]) @ weight[0].T).reshape(
-        dy.shape[0], dy.shape[1], dy.shape[-1]
-    )
+    return (dy[:, :, 0, :].reshape(-1, dy.shape[-1]) @ weight[0].T).reshape(dy.shape[0], dy.shape[1], dy.shape[-1])
 
 
 def _linear_dx_only(dy, x, weight):
@@ -55,7 +54,7 @@ def k_tmp_to_d_emb(
     weight: pypto.Tensor([H_STATIC, D_STATIC, D_STATIC], pypto.DT_FP32),
     d_emb: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, D_STATIC], pypto.DT_FP32),
 ):
-    b, l, _, _ = dy.shape
+    b, l, _, _ = dy.shape  # noqa: E741
     h_idx = 0
     tmp = pypto.tensor([b, l, H_STATIC, D_STATIC], d_emb.dtype, "tmp")
     for l_idx, tile in pypto.loop_unroll(0, l, 1, unroll_list=UNROLL):

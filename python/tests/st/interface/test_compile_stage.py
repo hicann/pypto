@@ -9,8 +9,10 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 import os
-import pypto
+
 import torch
+
+import pypto
 
 
 def test_comipile_stage(host_options=None):

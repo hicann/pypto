@@ -37,27 +37,19 @@ import builtins
 from typing import Any
 
 import pypto
+from pypto.error import FeError, ParserError
 
-from pypto.error import ParserError, FeError
 from .diagnostics import Diagnostics
 
 
 def _min(*args: Any, **kwargs: Any) -> Any:
-    if (
-        len(args) == 2
-        and not kwargs
-        and any(isinstance(arg, pypto.SymbolicScalar) for arg in args)
-    ):
+    if len(args) == 2 and not kwargs and any(isinstance(arg, pypto.SymbolicScalar) for arg in args):
         return pypto.min(args[0], args[1])
     return builtins.min(*args, **kwargs)
 
 
 def _max(*args: Any, **kwargs: Any) -> Any:
-    if (
-        len(args) == 2
-        and not kwargs
-        and any(isinstance(arg, pypto.SymbolicScalar) for arg in args)
-    ):
+    if len(args) == 2 and not kwargs and any(isinstance(arg, pypto.SymbolicScalar) for arg in args):
         return pypto.max(args[0], args[1])
     return builtins.max(*args, **kwargs)
 
@@ -110,13 +102,24 @@ class ExprEvaluator:
     def _is_safe_expression(node: ast.expr) -> bool:
         """Verify that the expression does not contain dangerous operations"""
         dangerous_attrs = {
-            '__class__', '__bases__', '__subclasses__',
-            '__dict__', '__globals__', '__code__',
-            '__builtins__', '__import__', '__loader__',
+            '__class__',
+            '__bases__',
+            '__subclasses__',
+            '__dict__',
+            '__globals__',
+            '__code__',
+            '__builtins__',
+            '__import__',
+            '__loader__',
         }
         dangerous_funcs = {
-            'eval', 'exec', 'compile', '__import__',
-            'open', 'input', 'breakpoint',
+            'eval',
+            'exec',
+            'compile',
+            '__import__',
+            'open',
+            'input',
+            'breakpoint',
         }
 
         for node_item in ast.walk(node):

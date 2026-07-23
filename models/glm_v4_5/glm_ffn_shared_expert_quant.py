@@ -20,26 +20,23 @@ Main Functions:
     - share_expert_moe_main: JIT compiled kernel for shared expert computation
     - expert_infer_base: Base inference function for shared expert computation
 """
+
 import os
-import torch
-import torch_npu
+
+from glm_ffn_common_interface import dequant_dynamic, swiglu, symmetric_quantization_per_token
 import numpy as np
 from numpy.testing import assert_allclose
-from glm_ffn_common_interface import symmetric_quantization_per_token, dequant_dynamic, swiglu
-from torch._subclasses.fake_tensor import FakeTensor
-from torch._dynamo import allow_in_graph
-import pypto
-from utils.get_format import get_format
 import pytest
+import torch
+from torch._dynamo import allow_in_graph
+from torch._subclasses.fake_tensor import FakeTensor
+import torch_npu
+from utils.get_format import get_format
+
+import pypto
 
 
-def check_args(
-    hidden_states,
-    w13,
-    w13_scale,
-    w2,
-    w2_scale
-):
+def check_args(hidden_states, w13, w13_scale, w2, w2_scale):
     assert hidden_states.dim() == 2
     assert hidden_states.shape[1] == 5120
     assert get_format(hidden_states) == 'ND'
@@ -74,7 +71,7 @@ def main():
 
 def ffn_golden_quan_per_token(x):
     # y_int8 : int8  scale_dequant : x.dtype
-    x_dtype = x.dtype
+    _x_dtype = x.dtype
     x_fp32 = x.to(torch.float32)
     max_value = x_fp32.abs().max(dim=1, keepdim=True)[0]
     scale_quant = 127.0 / max_value
@@ -82,13 +79,13 @@ def ffn_golden_quan_per_token(x):
     y_rint = torch.round(y_fp32).to(torch.int32)
     y_round = torch.round(y_rint).to(torch.float16)
     y_int8 = torch.trunc(y_round).to(torch.int8)
-    scale_dequant = (1 / scale_quant)
+    scale_dequant = 1 / scale_quant
     return y_int8, scale_dequant
 
 
 def ffn_golden_quan_per_channel(x):
     # y_int8 : int8  scale_dequant : x.dtype
-    x_dtype = x.dtype
+    _x_dtype = x.dtype
     x_fp32 = x.to(torch.float32)
     max_value = x_fp32.abs().max(dim=0, keepdim=True)[0]
     scale_quant = 127.0 / max_value
@@ -96,7 +93,7 @@ def ffn_golden_quan_per_channel(x):
     y_rint = torch.round(y_fp32).to(torch.int32)
     y_round = torch.round(y_rint).to(torch.float16)
     y_int8 = torch.trunc(y_round).to(torch.int8)
-    scale_dequant = (1 / scale_quant)
+    scale_dequant = 1 / scale_quant
     return y_int8, scale_dequant
 
 
@@ -104,44 +101,41 @@ def moe_torch_npu(hidden_states, w13, w13_scale, w2, w2_scale):
     x_dtype = hidden_states.dtype
     quantized_x, dynamic_scale = torch_npu.npu_dynamic_quant(hidden_states)
     output_w13 = torch_npu.npu_quant_matmul(
-            quantized_x,
-            w13,
-            w13_scale,
-            pertoken_scale=dynamic_scale,
-            bias=None,
-            output_dtype=x_dtype,
-        )
+        quantized_x,
+        w13,
+        w13_scale,
+        pertoken_scale=dynamic_scale,
+        bias=None,
+        output_dtype=x_dtype,
+    )
     swiglu_out = torch_npu.npu_swiglu(output_w13)
     quantized_x, x_scale = torch_npu.npu_dynamic_quant(swiglu_out)
     output = torch_npu.npu_quant_matmul(
-            quantized_x,
-            w2,
-            w2_scale,
-            pertoken_scale=x_scale,
-            bias=None,
-            output_dtype=x_dtype,
-        )
+        quantized_x,
+        w2,
+        w2_scale,
+        pertoken_scale=x_scale,
+        bias=None,
+        output_dtype=x_dtype,
+    )
     return output
 
 
 def gen_input(
-    b: int,
-    s: int,
-    hidden_size: int,
-    intermediate_size: int,
-    dtypes: torch.dtype,
-    device_id: int
+    b: int, s: int, hidden_size: int, intermediate_size: int, dtypes: torch.dtype, device_id: int
 ) -> tuple[torch.Tensor, ...]:
     torch.manual_seed(42)
     hidden_states = torch.randn((b * s, hidden_size), dtype=dtypes, device=f'npu:{device_id}') * 0.01 * 2 - 0.01
 
-    weight_gate_upper_tensor = torch.randn((hidden_size, intermediate_size * 2),
-                                           dtype=dtypes, device=f'npu:{device_id}') * 0.01 * 2 - 0.01
+    weight_gate_upper_tensor = (
+        torch.randn((hidden_size, intermediate_size * 2), dtype=dtypes, device=f'npu:{device_id}') * 0.01 * 2 - 0.01
+    )
     w13, w13_scale = ffn_golden_quan_per_channel(weight_gate_upper_tensor)
     w13_scale = w13_scale.reshape(-1).to(dtypes)
 
-    weight_down_proj_tensor = torch.randn((intermediate_size, hidden_size),
-                                          dtype=dtypes, device=f'npu:{device_id}') * 0.01 * 2 - 0.01
+    weight_down_proj_tensor = (
+        torch.randn((intermediate_size, hidden_size), dtype=dtypes, device=f'npu:{device_id}') * 0.01 * 2 - 0.01
+    )
     w2, w2_scale = ffn_golden_quan_per_channel(weight_down_proj_tensor)
     w2_scale = w2_scale.reshape(-1).to(dtypes)
 
@@ -193,9 +187,12 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
     hidden_states_quant, hidden_states_scale = symmetric_quantization_per_token(hidden_states_actual)
 
     # up_proj的matmul计算
-    pypto.set_cube_tile_shapes([unroll_level, unroll_level],
-                               [mm1_cube_tile_shape[1], mm1_cube_tile_shape[1] * 2],
-                               [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]], True)
+    pypto.set_cube_tile_shapes(
+        [unroll_level, unroll_level],
+        [mm1_cube_tile_shape[1], mm1_cube_tile_shape[1] * 2],
+        [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]],
+        True,
+    )
     up_proj = pypto.matmul(hidden_states_quant, w13, pypto.DT_INT32)
 
     # dequant
@@ -208,9 +205,12 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
     down_proj_quant, down_proj_scale = symmetric_quantization_per_token(swiglu_out)
 
     # down_proj
-    pypto.set_cube_tile_shapes([unroll_level, unroll_level],
-                               [mm2_cube_tile_shape[1], mm2_cube_tile_shape[1] * 2],
-                               [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], False)
+    pypto.set_cube_tile_shapes(
+        [unroll_level, unroll_level],
+        [mm2_cube_tile_shape[1], mm2_cube_tile_shape[1] * 2],
+        [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]],
+        False,
+    )
     down_proj = pypto.matmul(down_proj_quant, w2, pypto.DT_INT32)
 
     # dequant
@@ -230,27 +230,24 @@ def share_expert_moe_main(
     w13_scale: pypto.tensor(),
     w2: pypto.tensor(),
     w2_scale: pypto.tensor(),
-    ffn_res: pypto.tensor([pypto.DYNAMIC, ...], pypto.DT_BF16)
+    ffn_res: pypto.tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
 ):
-
     vec_tile_shape = (4, 5120)
     mm1_cube_tile_shape = (8, 256, 256)
     mm2_cube_tile_shape = (8, 192, 256)
 
     token_nums = hidden_states.shape[0]
     for share_loop_idx, loop_base in pypto.loop_unroll(
-        token_nums,
-        unroll_list=[1, 2, 4, 8, 16, 32, 64, 128],
-        name="share_loop_idx"):
+        token_nums, unroll_list=[1, 2, 4, 8, 16, 32, 64, 128], name="share_loop_idx"
+    ):
         expert_infer_base(
             hidden_states=hidden_states,
             w13_params=[w13, w13_scale],
             w2_params=[w2, w2_scale],
             ffn_res=ffn_res,
             tiling_params=[vec_tile_shape, mm1_cube_tile_shape, mm2_cube_tile_shape],
-            offset_params=[share_loop_idx, loop_base]
-    )
-
+            offset_params=[share_loop_idx, loop_base],
+        )
 
 
 @allow_in_graph
@@ -260,7 +257,7 @@ def ffn_shared_expert_quant(
     w13_scale: torch.Tensor,
     w2: torch.Tensor,
     w2_scale: torch.Tensor,
-    ffn_res: torch.Tensor
+    ffn_res: torch.Tensor,
 ) -> None:
     """
     Quantized FFN computation for shared experts in MoE architecture.
@@ -303,16 +300,21 @@ def test_ffn_share() -> None:
     # Test with different batch sizes
     for b in [1, 2]:
         # hidden_states, w13, w13_scale, w2, w2_scale, ffn_res
-        hidden_states, w13, w13_scale, w2, w2_scale, ffn_res = \
-            gen_input(b, s, hidden_size, intermediate_size, x_dtype, device_id)
+        hidden_states, w13, w13_scale, w2, w2_scale, ffn_res = gen_input(
+            b, s, hidden_size, intermediate_size, x_dtype, device_id
+        )
         w13 = torch_npu.npu_format_cast(w13, 29)
         w2 = torch_npu.npu_format_cast(w2, 29)
         ffn_shared_expert_quant(hidden_states, w13, w13_scale, w2, w2_scale, ffn_res)
 
         # golden
         golden = moe_torch_npu(hidden_states, w13, w13_scale, w2, w2_scale)
-        assert_allclose(np.array(ffn_res.cpu().flatten().tolist()), np.array(golden.cpu().flatten().tolist()),
-                        rtol=0.0078125, atol=0.0001)
+        assert_allclose(
+            np.array(ffn_res.cpu().flatten().tolist()),
+            np.array(golden.cpu().flatten().tolist()),
+            rtol=0.0078125,
+            atol=0.0001,
+        )
 
 
 if __name__ == "__main__":

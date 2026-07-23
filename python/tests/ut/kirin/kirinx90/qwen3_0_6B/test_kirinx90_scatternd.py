@@ -13,13 +13,12 @@
 Test scatternd codegen for KirinX90
 """
 
-import pytest
-
 from kirin.common_scatternd import (
+    TEST_CASES,
     create_scatter_kernels,
     run_scatter_test,
-    TEST_CASES,
 )
+import pytest
 
 
 def create_test_module(soc_version):
@@ -29,14 +28,31 @@ def create_test_module(soc_version):
         "data_shape,indices_shape,update_shape,vec_tile_shape,"
         "torch_data_dtype,torch_indices_dtype,pypto_data_dtype,"
         "pypto_indices_dtype,accumulate",
-        TEST_CASES
+        TEST_CASES,
     )
-    def _test_scatternd(data_shape, indices_shape, update_shape, vec_tile_shape,
-                        torch_data_dtype, torch_indices_dtype, pypto_data_dtype,
-                        pypto_indices_dtype, accumulate):
-        run_scatter_test(kernels, data_shape, indices_shape, update_shape,
-                        vec_tile_shape, torch_data_dtype, torch_indices_dtype,
-                        pypto_data_dtype, pypto_indices_dtype, accumulate)
+    def _test_scatternd(
+        data_shape,
+        indices_shape,
+        update_shape,
+        vec_tile_shape,
+        torch_data_dtype,
+        torch_indices_dtype,
+        pypto_data_dtype,
+        pypto_indices_dtype,
+        accumulate,
+    ):
+        run_scatter_test(
+            kernels,
+            data_shape,
+            indices_shape,
+            update_shape,
+            vec_tile_shape,
+            torch_data_dtype,
+            torch_indices_dtype,
+            pypto_data_dtype,
+            pypto_indices_dtype,
+            accumulate,
+        )
 
     return _test_scatternd
 

@@ -8,16 +8,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import os
-import sys
-import logging
 import argparse
+import logging
+import os
 import re
-from pathlib import Path
-from typing import List, Dict, Optional
+import sys
+from typing import Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import setup_logging, validate_path, check_required_tools, run_command
+from common import check_required_tools, run_command, setup_logging, validate_path
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -82,30 +81,20 @@ class SymbolResolver:
                     return {
                         'symbol': symbol,
                         'section': '.text',  # 简化处理
-                        'offset': hex(target_addr - addr)
+                        'offset': hex(target_addr - addr),
                     }
 
                 # 记录最近的符号
                 distance = abs(addr - target_addr)
                 if distance < best_distance:
                     best_distance = distance
-                    best_match = {
-                        'symbol': symbol,
-                        'section': '.text',
-                        'offset': hex(target_addr - addr)
-                    }
+                    best_match = {'symbol': symbol, 'section': '.text', 'offset': hex(target_addr - addr)}
 
         return best_match
 
     def resolve_symbol(self, binary: str, address: str) -> Dict[str, Optional[str]]:
         """解析单个地址的符号信息"""
-        result = {
-            'address': address,
-            'symbol': None,
-            'section': None,
-            'offset': None,
-            'success': False
-        }
+        result = {'address': address, 'symbol': None, 'section': None, 'offset': None, 'success': False}
 
         try:
             # 使用 objdump 获取符号表

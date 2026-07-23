@@ -8,20 +8,20 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import pypto
+""" """
 
-import numpy as np
+import os
+
 import torch
 import torch_npu
+
+import pypto
 
 
 @pypto.frontend.jit()
 def cust_dyn_func(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
-    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32)
+    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
 
@@ -40,10 +40,7 @@ def test_device_run_data_from_device():
     shape = (n, m)
 
     # prepare data
-    a_rawdata = torch.tensor(
-        [[k * 100 + v for v in range(m)] for k in range(n)],
-        dtype=torch.int32
-    )
+    a_rawdata = torch.tensor([[k * 100 + v for v in range(m)] for k in range(n)], dtype=torch.int32)
     a_data = a_rawdata.to(device=f'npu:{device_id}')
     b_data = torch.zeros(shape, dtype=torch.int32, device=f'npu:{device_id}')
 
@@ -58,10 +55,7 @@ def test_device_run_data_from_device():
     b_data_list = [c for r in b_data_cpu.tolist() for c in r]
     assert b_data_list == [v * 11 for v in a_data_list]
 
-    c_rawdata = torch.tensor(
-        [[k * 1000 + v for v in range(m)] for k in range(n)],
-        dtype=torch.int32
-    )
+    c_rawdata = torch.tensor([[k * 1000 + v for v in range(m)] for k in range(n)], dtype=torch.int32)
     c_data = c_rawdata.to(device=f'npu:{device_id}')
     d_data = torch.zeros(shape, dtype=torch.int32, device=f'npu:{device_id}')
 
@@ -79,7 +73,7 @@ def matmul_add(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
     c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
-    d: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32)
+    d: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
 ):
     pypto.set_vec_tile_shapes(32, 32)
     pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])
@@ -95,7 +89,6 @@ def test_device_run_data_from_device_mix_nodep():
 
     tiling = 32
     n, k, m = tiling * 8, tiling * 8, tiling * 8
-
 
     # prepare data
     d_data_list = []

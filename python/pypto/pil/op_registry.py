@@ -9,7 +9,6 @@ import functools
 
 
 class OpRegistry:
-
     def __init__(self):
         self.ops = {}
         self.partials = {}
@@ -23,6 +22,7 @@ class OpRegistry:
             self.ops[stub] = wrapper
             self.partials[stub] = partial
             return func
+
         return decorator
 
     def dispatch(self, stub, ctx, *args, **kwargs):

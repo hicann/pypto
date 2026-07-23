@@ -14,7 +14,6 @@ import pytest
 
 import pypto
 
-
 pytestmark = pytest.mark.soc("950")
 
 

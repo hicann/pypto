@@ -12,10 +12,12 @@
 pypto.matmul fixpipe bias copy test case configuration
 For System Test automated testing framework
 """
+
 from dataclasses import dataclass
 
-import pypto
 import torch
+
+import pypto
 
 
 @dataclass

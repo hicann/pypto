@@ -1,42 +1,44 @@
- #!/usr/bin/env python3
- # coding: utf-8
- # Copyright (c) 2026 Huawei Technologies Co., Ltd.
- # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
- # CANN Open Software License Agreement Version 2.0 (the "License").
- # Please refer to the License for details. You may not use this file except in compliance with the License.
- # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
- # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
- # See LICENSE in the root of the software repository for the full text of the License.
- # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import csv
-import random
-import datetime
-from scipy import optimize
-import xgboost as xgb
-import numpy as np
-import tuner
+#!/usr/bin/env python3
+# coding: utf-8
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# -----------------------------------------------------------------------------------------------------------
+""" """
 
-#performance time if test crashes
+import csv
+import datetime
+import os
+import random
+
+import numpy as np
+from scipy import optimize
+import tuner
+import xgboost as xgb
+
+# performance time if test crashes
 ERROR_PERFORMANCE = 1000000
 
 random.seed(42)
 np.random.seed(42)
 
 
-class RandomParameterMutator():
+class RandomParameterMutator:
     '''
     Takes the current combination of parameters ->
     selects one parameter ->
     get next value in candidates list or previous.
     '''
+
     def __init__(self, json_config):
         self.json_config = json_config
         self.tune_params = make_flat(json_config)
 
-        #how many possible values have one parameter
+        # how many possible values have one parameter
         self.value_ranges = []
         for param_name in self.tune_params:
             candidates_size = len(self.tune_params[param_name])
@@ -51,7 +53,7 @@ class RandomParameterMutator():
         run_params = []
 
         param_info = flat_line_info(self.json_config)
-        generated_lines_conf = dict()
+        _generated_lines_conf = dict()
 
         vec_idx = 0
 
@@ -94,7 +96,7 @@ def vec_to_run_values(vec, original_run_values):
 
     for run_value in run_values:
         for key in run_value.keys():
-            part = vec[pointer: pointer + len(run_value[key])]
+            part = vec[pointer:pointer + len(run_value[key])]
             run_value[key] = part
             pointer += len(run_value[key])
 
@@ -114,7 +116,6 @@ class MeasurePerf:
 
         self.train_x = []
         self.train_y = []
-
 
     def __call__(self, vector):
         if self.idx % self.real_rate == 0 or len(self.train_x) == 0:
@@ -145,15 +146,15 @@ class Storage:
         self.mutator = param_mutator
 
     def __call__(self, x, f, accept):
-
         comb_vector = self.mutator.prev
         run_params, run_values = self.mutator.comb_vector_to_params(comb_vector)
 
-        result = {"combination": f"combination_{self.iter}",
-                  "time(us)": "Error" if f == ERROR_PERFORMANCE else float(f),
-                  "is_real": self.iter % self.real_rate == 0,
-                  "accepted": accept
-                  }
+        result = {
+            "combination": f"combination_{self.iter}",
+            "time(us)": "Error" if f == ERROR_PERFORMANCE else float(f),
+            "is_real": self.iter % self.real_rate == 0,
+            "accepted": accept,
+        }
 
         for value in run_values:
             result.update(value)
@@ -220,11 +221,7 @@ def flat_line_info(json_config):
     line_info = dict()
     for file_conf in json_config["files"]:
         values = [
-            {
-                "file": filename,
-                "line": line["line"],
-                "string": line["string"]
-            }
+            {"file": filename, "line": line["line"], "string": line["string"]}
             for filename, line_conf in file_conf.items()
             for line in line_conf
         ]
@@ -242,18 +239,16 @@ def flat_line_info(json_config):
     return line_info
 
 
-
 def main():
     json_config = tuner.parse_json()
 
     mutator = RandomParameterMutator(json_config)
-    executor = tuner.Execution("single_run")
+    _executor = tuner.Execution("single_run")
     run_params, run_values = mutator.generate_combinations()
     original_run_values = run_values
 
-
     def dummy_minizer(f, x0, args, **kwargs):
-        #we don't implement any local optimization
+        # we don't implement any local optimization
         dummy_result = optimize.OptimizeResult(
             x=x0,
             fun=f(x0),
@@ -261,7 +256,6 @@ def main():
             message="Dummy local optimization",
         )
         return dummy_result
-
 
     def take_step(vector):
         run_params, run_values = mutator.generate_combinations()
@@ -285,7 +279,8 @@ def main():
         real_rate=real_rate,
         original_run_values=original_run_values,
         result_folder_path=result_folder_path,
-        json_config=json_config)
+        json_config=json_config,
+    )
 
     storage = Storage(result_folder_path, real_rate, mutator)
     temperatures = [10, 5, 1, 0.25]
@@ -301,7 +296,7 @@ def main():
             niter=real_rate * real_perf_limit // len(temperatures),
             minimizer_kwargs={"method": dummy_minizer},
             callback=storage,
-            T=temp
+            T=temp,
         )
         if best_y is None or best_y > result.fun:
             best_y = result.fun
@@ -309,6 +304,7 @@ def main():
 
     print(f"Best result: {best_y:.2f} us")
     print("Parameter values: ", vec_to_run_values(best_x, original_run_values))
+
 
 if __name__ == '__main__':
     main()

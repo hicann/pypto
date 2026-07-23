@@ -40,20 +40,14 @@ class TensorDesc:
         self._name = name
         self._shape = shape
         self._dtype = dtype
-        self._data_range = (
-            None if data_range is None else DataRange(data_range[0], data_range[1])
-        )
+        self._data_range = None if data_range is None else DataRange(data_range[0], data_range[1])
         self._tensor_format = tensor_format
         self._need_trans = need_trans
 
     @classmethod
     def from_dict(cls, params: dict):
         data_range = params.get("data_range", None)
-        data_range = (
-            data_range
-            if not isinstance(data_range, dict)
-            else [data_range.get("min"), data_range.get("max")]
-        )
+        data_range = data_range if not isinstance(data_range, dict) else [data_range.get("min"), data_range.get("max")]
         return cls(
             params.get("name"),
             params.get("shape"),
@@ -116,12 +110,10 @@ class TestCaseDesc:
         self._case_name = case_name
         self._operation = operation
         self._input_tensors = [
-            TensorDesc.from_dict(tensor) if isinstance(tensor, dict) else tensor
-            for tensor in input_tensors
+            TensorDesc.from_dict(tensor) if isinstance(tensor, dict) else tensor for tensor in input_tensors
         ]
         self._output_tensors = [
-            TensorDesc.from_dict(tensor) if isinstance(tensor, dict) else tensor
-            for tensor in output_tensors
+            TensorDesc.from_dict(tensor) if isinstance(tensor, dict) else tensor for tensor in output_tensors
         ]
         self._view_shape = view_shape
         self._tile_shape = tile_shape
@@ -177,12 +169,8 @@ class TestCaseDesc:
             "case_index": self._case_index,
             "case_name": self._case_name,
             "operation": self._operation,
-            "input_tensors": tuple(
-                map(lambda x: x.dump_to_json(), self._input_tensors)
-            ),
-            "output_tensors": tuple(
-                map(lambda x: x.dump_to_json(), self._output_tensors)
-            ),
+            "input_tensors": tuple(map(lambda x: x.dump_to_json(), self._input_tensors)),
+            "output_tensors": tuple(map(lambda x: x.dump_to_json(), self._output_tensors)),
             "view_shape": self._view_shape,
             "tile_shape": self._tile_shape,
             "params": self._params,

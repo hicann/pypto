@@ -18,18 +18,19 @@ Test Components:
     - CoreType consistency: Validates that core types match between dyn_topo.txt and tilefwk JSON
     - Kernel details consistency: Validates kernel metadata matches expected baseline
 """
+
 import csv
+from dataclasses import dataclass
 import json
 import multiprocessing as mp
 import os
 import shutil
-from dataclasses import dataclass
 from typing import Any, Dict, List
 
-import pypto
 import torch
 import torch_npu
 
+import pypto
 
 FP32 = pypto.DT_FP32
 FP16 = pypto.DT_FP16
@@ -47,7 +48,7 @@ KERNEL_DETAILS_BASELINE = [
         "Input Shapes": "\"3,64,64;3,64,64\"",
         "Input Formats": "ND;ND",
         "Output Shapes": "\"3,64,64\"",
-        "Output Formats": "ND"
+        "Output Formats": "ND",
     },
     {
         "Name": "PYPTO_bmm_kernel_with_no_mn_split",
@@ -56,8 +57,8 @@ KERNEL_DETAILS_BASELINE = [
         "Input Shapes": "\"3,64,64;3,64,64\"",
         "Input Formats": "ND;ND",
         "Output Shapes": "\"3,64,64\"",
-        "Output Formats": "ND"
-    }
+        "Output Formats": "ND",
+    },
 ]
 
 CORETYPE_MAP = {"AIV": 0, "AIC": 1}
@@ -81,8 +82,7 @@ class ShapeConfig:
 
 
 @pypto.frontend.jit(
-    debug_options={"runtime_debug_mode": 1},
-    runtime_options={"device_sched_mode": 2, "stitch_function_max_num": 32}
+    debug_options={"runtime_debug_mode": 1}, runtime_options={"device_sched_mode": 2, "stitch_function_max_num": 32}
 )
 def bmm_kernel_with_no_mn_split(
     a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
@@ -90,10 +90,12 @@ def bmm_kernel_with_no_mn_split(
     out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     shape_info: ShapeConfig,
 ):
-    pypto.set_cube_tile_shapes(shape_info.m_tile_shape, shape_info.k_tile_shape, shape_info.n_tile_shape,
-                            enable_split_k=shape_info.gm_acc)
-    result = pypto.matmul(a_tensor, b_tensor, a_trans=shape_info.a_trans, b_trans=shape_info.b_trans,
-                        out_dtype=shape_info.out_dtype)
+    pypto.set_cube_tile_shapes(
+        shape_info.m_tile_shape, shape_info.k_tile_shape, shape_info.n_tile_shape, enable_split_k=shape_info.gm_acc
+    )
+    result = pypto.matmul(
+        a_tensor, b_tensor, a_trans=shape_info.a_trans, b_trans=shape_info.b_trans, out_dtype=shape_info.out_dtype
+    )
     pypto.set_vec_tile_shapes(3, 4, 4)
     add_result = pypto.add(result, result)
     out_tensor.move(add_result)
@@ -109,8 +111,21 @@ def bmm_with_mn_split(queue):
     tile_m = 16
     tile_k = 16
     tile_n = 16
-    shape_info = ShapeConfig([b, m, k, n], [tile_m, tile_m], [tile_k, tile_k], [tile_n, tile_n], [-1, -1], FP16, FP32,
-                                True, False, False, False, False, False)
+    shape_info = ShapeConfig(
+        [b, m, k, n],
+        [tile_m, tile_m],
+        [tile_k, tile_k],
+        [tile_n, tile_n],
+        [-1, -1],
+        FP16,
+        FP32,
+        True,
+        False,
+        False,
+        False,
+        False,
+        False,
+    )
     a1_tensor = torch.rand([b, k, m], dtype=torch.float16, device=f'npu:{device_id}')
     b1_tensor = torch.rand([b, k, n], dtype=torch.float16, device=f'npu:{device_id}')
     c1_tensor = torch.zeros([b, m, n], dtype=torch.float32, device=f'npu:{device_id}')
@@ -124,17 +139,10 @@ def bmm_with_mn_split(queue):
         record_shapes=False,
         profile_memory=True,
         experimental_config=experimental_config,
-        schedule=torch_npu.profiler.schedule(
-            wait=0, warmup=0, active=1, repeat=1, skip_first=0
-        ),
-        on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(
-            profiler_output_dir, analyse_flag=True
-        ),
+        schedule=torch_npu.profiler.schedule(wait=0, warmup=0, active=1, repeat=1, skip_first=0),
+        on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(profiler_output_dir, analyse_flag=True),
     ) as prof:
-        bmm_kernel_with_no_mn_split(
-            a1_tensor, b1_tensor, c1_tensor,
-            shape_info
-        )
+        bmm_kernel_with_no_mn_split(a1_tensor, b1_tensor, c1_tensor, shape_info)
         torch_npu.npu.synchronize()
         prof.step()
 
@@ -200,7 +208,7 @@ def load_dyn_topo_data(dyn_topo_path):
     dyn_topo_data = {}
     with open(dyn_topo_path, 'r') as f:
         reader = csv.reader(f)
-        header = next(reader)
+        _header = next(reader)
 
         for row in reader:
             seq_no = int(row[0])
@@ -236,8 +244,7 @@ def load_and_validate_json_data(json_path):
 
             if missing_fields:
                 missing_field_errors.append(
-                    f"block_idx={block_idx}, task_id={task.get('taskId', 'unknown')}: "
-                    f"missing fields {missing_fields}"
+                    f"block_idx={block_idx}, task_id={task.get('taskId', 'unknown')}: missing fields {missing_fields}"
                 )
                 continue
 
@@ -249,7 +256,7 @@ def load_and_validate_json_data(json_path):
             json_coretype_data[key] = {
                 'core_type_num': core_type_num,
                 'core_type_str': core_type_str,
-                'block_idx': block_idx
+                'block_idx': block_idx,
             }
 
     return json_data, json_coretype_data, missing_field_errors
@@ -267,8 +274,9 @@ def verify_coretype_consistency(dyn_topo_path, json_path):
         seq_no, task_id, leaf_index = key
         json_core_type = json_info['core_type_num']
 
-        assert key in dyn_topo_data, \
+        assert key in dyn_topo_data, (
             f"JSON task (seq_no={seq_no}, task_id={task_id}, leaf_index={leaf_index}) not found in dyn_topo.txt"
+        )
 
         dyn_core_type = dyn_topo_data[key]
         assert dyn_core_type == json_core_type, (
@@ -297,8 +305,15 @@ def normalize_field_value(value: str) -> str:
 
 def extract_kernel_details_baseline(kernel_details_path: str) -> List[Dict[str, Any]]:
     baseline_records = []
-    required_fields = ['Name', 'Type', 'Accelerator Core',
-                      'Input Shapes', 'Input Formats', 'Output Shapes', 'Output Formats']
+    required_fields = [
+        'Name',
+        'Type',
+        'Accelerator Core',
+        'Input Shapes',
+        'Input Formats',
+        'Output Shapes',
+        'Output Formats',
+    ]
 
     with open(kernel_details_path, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
@@ -318,14 +333,15 @@ def verify_kernel_details_consistency(kernel_details_path: str):
     current_records = extract_kernel_details_baseline(kernel_details_path)
 
     normalized_baseline = [
-        {field: normalize_field_value(value) for field, value in rec.items()}
-        for rec in baseline_with_duplicates
+        {field: normalize_field_value(value) for field, value in rec.items()} for rec in baseline_with_duplicates
     ]
 
-    assert len(current_records) == len(normalized_baseline), \
+    assert len(current_records) == len(normalized_baseline), (
         f"Record count mismatch\nexpected: {len(normalized_baseline)}\nactual: {len(current_records)}"
+    )
 
     for idx, (baseline_rec, current_rec) in enumerate(zip(normalized_baseline, current_records)):
         for field in baseline_rec.keys():
-            assert baseline_rec[field] == current_rec[field], \
+            assert baseline_rec[field] == current_rec[field], (
                 f"Record #{idx} field '{field}' mismatch\nexpected: {baseline_rec[field]}\nactual: {current_rec[field]}"
+            )

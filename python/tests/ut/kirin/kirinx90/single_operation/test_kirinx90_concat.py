@@ -12,9 +12,8 @@
 Test concat codegen for KirinX90
 """
 
+from kirin.common_concat import TEST_CASES, create_test_concat_module, run_concat_test
 import pytest
-from kirin.common_concat import create_test_concat_module, run_concat_test, TEST_CASES
-
 
 KERNELS, _ = create_test_concat_module("KirinX90")
 

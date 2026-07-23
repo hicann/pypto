@@ -8,8 +8,8 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 __all__ = [
     "PassConfigs",
     "PassConfigKey",
@@ -17,10 +17,12 @@ __all__ = [
     "set_pass_default_config",
     "get_pass_config",
     "set_pass_config",
-    "get_pass_configs"
+    "get_pass_configs",
 ]
 from enum import Enum
+
 from pypto.error import PassError
+
 from . import pypto_impl
 
 
@@ -42,13 +44,14 @@ class PassConfigs:
         Python side is only for data access. All attributes are read-only and cannot
         be modified from Python.
     """
-    printGraph: bool
-    dumpGraph: bool
-    dumpPassTimeCost: bool
-    preCheck: bool
-    postCheck: bool
-    disablePass: bool
-    healthCheck: bool
+
+    printGraph: bool  # noqa: N815
+    dumpGraph: bool  # noqa: N815
+    dumpPassTimeCost: bool  # noqa: N815
+    preCheck: bool  # noqa: N815
+    postCheck: bool  # noqa: N815
+    disablePass: bool  # noqa: N815
+    healthCheck: bool  # noqa: N815
 
 
 class PassConfigKey(Enum):

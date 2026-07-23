@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Tensor wrapper type for PyPTO Language DSL."""
+
 from __future__ import annotations
 
 __all__ = ["Tensor"]
@@ -15,10 +16,8 @@ __all__ = ["Tensor"]
 
 from collections.abc import Sequence
 
-from pypto.pypto_impl.ir import DataType
-from pypto.pypto_impl.ir import Expr, MemRef, TensorLayout
+from pypto.pypto_impl.ir import DataType, Expr, MemRef, TensorLayout
 from pypto_pro.language.typing.shape import _ShapePolicy
-
 
 EllipsisType = type(Ellipsis)
 
@@ -82,8 +81,7 @@ class Tensor:
             self.expr = None
         else:
             raise ValueError(
-                "Tensor must be initialized with either (shape, dtype) for "
-                "annotations or expr for runtime wrapping"
+                "Tensor must be initialized with either (shape, dtype) for annotations or expr for runtime wrapping"
             )
 
     @classmethod

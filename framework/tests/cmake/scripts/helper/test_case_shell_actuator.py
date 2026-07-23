@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
+
 import logging
 import os
 import signal
@@ -43,7 +44,5 @@ class TestCaseShellActuator:
                 stderr = stderr or ""
             ret_code = process.poll()
             if ret_code:
-                raise subprocess.CalledProcessError(
-                    ret_code, process.args, output=stdout, stderr=stderr
-                )
+                raise subprocess.CalledProcessError(ret_code, process.args, output=stdout, stderr=stderr)
         return subprocess.CompletedProcess(process.args, ret_code, stdout, stderr)

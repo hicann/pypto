@@ -15,13 +15,12 @@ MatmulL0C2UB 融合算子测试脚本
 """
 
 import os
-import sys
 
 import pytest
-import pypto
+from testcase.matmul_l0c2ub_test_case import L0C2UB_TESTS, MatmulL0C2UBConfig
 import torch
 
-from testcase.matmul_l0c2ub_test_case import L0C2UB_TESTS, MatmulL0C2UBConfig
+import pypto
 
 
 @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
@@ -48,14 +47,14 @@ def matmul_l0c2ub_kernel_basic(
     for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
         for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
             if config.a_trans:
-                a_view = a_tensor[:, m_idx * m_view: m_idx * m_view + m_view]
+                a_view = a_tensor[:, m_idx * m_view:m_idx * m_view + m_view]
             else:
-                a_view = a_tensor[m_idx * m_view: m_idx * m_view + m_view, :]
+                a_view = a_tensor[m_idx * m_view:m_idx * m_view + m_view, :]
 
             if config.b_trans:
-                b_view = b_tensor[n_idx * n_view: n_idx * n_view + n_view, :]
+                b_view = b_tensor[n_idx * n_view:n_idx * n_view + n_view, :]
             else:
-                b_view = b_tensor[:, n_idx * n_view: n_idx * n_view + n_view]
+                b_view = b_tensor[:, n_idx * n_view:n_idx * n_view + n_view]
 
             mat_result = pypto.matmul(
                 a_view,
@@ -66,26 +65,21 @@ def matmul_l0c2ub_kernel_basic(
             )
 
             c_view = c_tensor[
-                m_idx * m_view: m_idx * m_view + m_view,
-                n_idx * n_view: n_idx * n_view + n_view,
+                m_idx * m_view:m_idx * m_view + m_view,
+                n_idx * n_view:n_idx * n_view + n_view,
             ]
 
             pypto.set_vec_tile_shapes(*config.vec_tile_shape)
             result = pypto.add(mat_result, c_view)
 
             out_tensor[
-                m_idx * m_view: m_idx * m_view + m_view,
-                n_idx * n_view: n_idx * n_view + n_view,
+                m_idx * m_view:m_idx * m_view + m_view,
+                n_idx * n_view:n_idx * n_view + n_view,
             ] = result
     pypto.set_pass_options(sg_set_scope=-1)
 
 
-def matmul_l0c2ub_golden(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    c: torch.Tensor,
-    config: MatmulL0C2UBConfig
-) -> torch.Tensor:
+def matmul_l0c2ub_golden(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor, config: MatmulL0C2UBConfig) -> torch.Tensor:
     """Golden 参考实现（纯 PyTorch）
 
     Args:
@@ -147,15 +141,14 @@ def run_matmul_l0c2ub_test(case: dict):
     matmul_l0c2ub_kernel_basic(a_tensor, b_tensor, c_tensor, c_out_tensor, config=config)
 
     atol, rtol = MatmulL0C2UBConfig.get_tolerance(case["c_dtype"])
-    assert torch.allclose(
-        c_out_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol
-    ), f"Test case {case['id']} ({case['name']}) failed"
+    assert torch.allclose(c_out_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol), (
+        f"Test case {case['id']} ({case['name']}) failed"
+    )
 
 
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in L0C2UB_TESTS
-])
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in L0C2UB_TESTS]
+)
 def test_matmul_l0c2ub(case: dict):
     """pytest 参数化测试"""
     run_matmul_l0c2ub_test(case)
@@ -182,8 +175,7 @@ def run_l0c2ub_demo(run_mode):
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
     @pypto.frontend.jit(
-            debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1},
-            runtime_options={"run_mode": mode}
+        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1}, runtime_options={"run_mode": mode}
     )
     def l0c2ub_demo_kernel(
         a: pypto.Tensor([], pypto.DT_FP16),
@@ -198,22 +190,22 @@ def run_l0c2ub_demo(run_mode):
 
         for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
             for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
-                a_view = a[m_idx * m_view_size: m_idx * m_view_size + m_view_size, :]
-                b_view = b[:, n_idx * n_view_size: n_idx * n_view_size + n_view_size]
+                a_view = a[m_idx * m_view_size:m_idx * m_view_size + m_view_size, :]
+                b_view = b[:, n_idx * n_view_size:n_idx * n_view_size + n_view_size]
 
                 mat_result = pypto.matmul(a_view, b_view, pypto.DT_FP16)
 
                 c_view = c[
-                    m_idx * m_view_size: m_idx * m_view_size + m_view_size,
-                    n_idx * n_view_size: n_idx * n_view_size + n_view_size,
+                    m_idx * m_view_size:m_idx * m_view_size + m_view_size,
+                    n_idx * n_view_size:n_idx * n_view_size + n_view_size,
                 ]
 
                 pypto.set_vec_tile_shapes(vec_m_tile_size, vec_n_tile_size)
                 result = pypto.add(mat_result, c_view)
 
                 out[
-                    m_idx * m_view_size: m_idx * m_view_size + m_view_size,
-                    n_idx * n_view_size: n_idx * n_view_size + n_view_size,
+                    m_idx * m_view_size:m_idx * m_view_size + m_view_size,
+                    n_idx * n_view_size:n_idx * n_view_size + n_view_size,
                 ] = result
 
     a = torch.randn([m_size, k_size], dtype=torch.float16, device="npu:0")

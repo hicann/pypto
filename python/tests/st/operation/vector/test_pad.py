@@ -11,10 +11,12 @@
 """
 Pad Operator System Test (Fixed map::at error)
 """
-import pypto
-import torch
+
 import numpy as np
 from st.pypto_test import TestBuilder
+import torch
+
+import pypto
 
 
 def op_pad(params, a, b):
@@ -48,7 +50,7 @@ class PadTest(TestBuilder):
         a_tensor = torch.rand(n_in, m_in, dtype=torch.float32) * 10
         self.setup_inputs(a_tensor)
         self.set_tol(rtol=1e-3, atol=1e-3)
-        return (a_tensor, )
+        return (a_tensor,)
 
 
 def test():

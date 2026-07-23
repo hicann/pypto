@@ -8,15 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-from typing import List, overload
+""" """
 
-import pypto
+from typing import List
+
 import torch
 
+import pypto
+
 from . import pypto_impl
-from .converter import _dtype_from, from_torch, _gen_pto_tensor
+from .converter import _gen_pto_tensor
 
 __all__ = [
     "_cost_model_run_once_data_from_host",
@@ -51,14 +52,14 @@ def _host_to_device_tensor_datas(dev_tensors, host_tensors):
 
 
 def _cost_model_run_once_data_from_host(inputs: List[pypto.Tensor], outputs: List[pypto.Tensor]):
-    isDevice = False
+    is_device = False
     for t in inputs:
         if t.device != torch.device("cpu"):
-            isDevice = True
+            is_device = True
             break
 
     host_torch_tensors = []
-    if isDevice:
+    if is_device:
         input_datas, input_host_torch_tensors = _device_to_host_tensor_datas(inputs)
         output_datas, output_host_torch_tensors = _device_to_host_tensor_datas(outputs)
         host_torch_tensors.extend(input_host_torch_tensors)
@@ -69,6 +70,6 @@ def _cost_model_run_once_data_from_host(inputs: List[pypto.Tensor], outputs: Lis
 
     pypto_impl.CostModelRunOnceDataFromHost(input_datas, output_datas)
 
-    if isDevice:
+    if is_device:
         _host_to_device_tensor_datas(inputs, input_datas)
         _host_to_device_tensor_datas(outputs, output_datas)

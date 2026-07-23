@@ -9,8 +9,10 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
-import pypto
+
 from test_base import BaseTest
+
+import pypto
 
 dtype = pypto.DT_FP16
 shape = (64, 64)
@@ -18,7 +20,6 @@ tiles = (32, 32)
 
 
 class TestOperator(BaseTest):
-
     def test_sin(self):
         a = pypto.tensor(shape, dtype, "a")
         c = pypto.tensor(shape, dtype, "c")

@@ -18,10 +18,10 @@ Loop tile block: [64, 64], Vec tile shape: [64, 64]
 import logging
 import os
 
-import pypto
-import torch
-import torch_npu
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -43,7 +43,8 @@ def reshape_add_kernel(
     tile_m: int,
     tile_n: int,
     m_size: int,
-    n_size: int):
+    n_size: int,
+):
     m_dyn = x.shape[0]
     n_dyn = x.shape[1]
 

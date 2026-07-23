@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
+# ruff: noqa
 # Copyright (c) 2025 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -8,8 +9,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""PyPTO
-"""
+"""PyPTO"""
 
 # torch/torch_npu may use cxxabi=0 or cxxabi=1, while pypto only support cxxabi=0
 # if pypto load first, torch/torch_cpu may crash, force load torch first
@@ -22,15 +22,15 @@ except ImportError:
 from . import _loader
 
 from . import experimental
-from .config import *  # noqa
-from ._controller import *  # noqa
+from .config import *
+from ._controller import *
 from .converter import from_torch
-from .enum import *  # noqa
-from .op import *  # noqa
-from .operation import *  # noqa
-from .operator import *  # noqa
-from .pass_config import *  # noqa
-from .cost_model import *  # noqa
+from .enum import *
+from .op import *
+from .operation import *
+from .operator import *
+from .pass_config import *
+from .cost_model import *
 from ._utils import ceildiv, bytes_of
 from .platform import platform
 from .runtime import verify, set_verify_golden_data, RunMode
@@ -38,7 +38,7 @@ from .symbolic_scalar import SymbolicScalar, SatStatus
 from .tensor import Tensor
 from .functions import Function, get_last_function, get_current_function
 from ._element import Element
-from .logging import *  # noqa
+from .logging import *
 
 # Import frontend after all other imports to avoid circular imports
 from . import frontend

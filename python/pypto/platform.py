@@ -8,8 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
 
 from . import pypto_impl
 
@@ -26,5 +25,6 @@ class _Platform:
     def npuarch(self, value):
         """Set the NPU architecture"""
         pypto_impl.SetNPUArch(value)
+
 
 platform = _Platform()

@@ -8,22 +8,22 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import sys
+""" """
+
+from contextlib import contextmanager
 import inspect
 import itertools
 import logging
-from contextlib import contextmanager
-from typing import List, Optional, Tuple, Union, Iterator, overload
+import sys
+from typing import Iterator, List, Optional, Tuple, Union, overload
 
-from .enum import *  # noqa
-from ._utils import to_sym, set_source_location, clear_source_location
+from . import pypto_impl
+from ._utils import clear_source_location, set_source_location, to_sym
+from .config import ConvTile, CubeTile, get_current_scope
+from .enum import *  # noqa: F403
+from .error import FeError, PyptoError
 from .symbolic_scalar import SymbolicScalar, SymInt
 from .tensor import Tensor
-from .config import CubeTile, ConvTile, get_current_scope
-from .error import FeError, PyptoError
-from . import pypto_impl
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -36,7 +36,6 @@ __all__ = [
     "set_conv_tile_shapes",
     "get_conv_tile_shapes",
     "set_matrix_size",
-
     "function",
     "loop",
     "loop_unroll",
@@ -80,7 +79,7 @@ class Controller:
 
 
 def set_vec_tile_shapes(*shapes: int):
-    """ set the tile shapes in vector computation
+    """set the tile shapes in vector computation
 
     This operation sets the value of the tile shapes
     in each dimension in vector computation.
@@ -102,14 +101,12 @@ def set_vec_tile_shapes(*shapes: int):
 
     """
     # implementation
-    concrete_shapes = [
-        it.concrete() if isinstance(it, SymbolicScalar) else it for it in shapes
-    ]
+    concrete_shapes = [it.concrete() if isinstance(it, SymbolicScalar) else it for it in shapes]
     pypto_impl.SetScope({"vec_tile_shapes": concrete_shapes})
 
 
 def get_vec_tile_shapes() -> List[int]:
-    """ get the tile shapes in vector computation
+    """get the tile shapes in vector computation
 
     This operation returns the value of the tile shapes
     in each dimension in vector computation.
@@ -132,7 +129,7 @@ def get_vec_tile_shapes() -> List[int]:
 
 
 def set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_split_k: bool = False):
-    """ set the tile shapes in cube computation
+    """set the tile shapes in cube computation
 
     This operation sets the value of the tile shapes
     in each dimension in cube computation of left and right matrix,
@@ -173,7 +170,7 @@ def set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_split_
 
 
 def get_cube_tile_shapes() -> Tuple[List[int], List[int], List[int], bool]:
-    """ get the tile shapes in cube computation
+    """get the tile shapes in cube computation
 
     This operation gets the value of the tile shapes
     in each dimension in cube computation of left and right matrix,
@@ -199,7 +196,7 @@ def get_cube_tile_shapes() -> Tuple[List[int], List[int], List[int], bool]:
 
 
 def set_conv_tile_shapes(tile_l1_info: pypto_impl.TileL1Info, tile_l0_info: pypto_impl.TileL0Info = None):
-    """ set the tile shapes in conv computation
+    """set the tile shapes in conv computation
 
     This operation sets the value of the tile shapes in each dimension in conv computation,
     together with the cache level (L1/L0).
@@ -248,7 +245,7 @@ def set_conv_tile_shapes(tile_l1_info: pypto_impl.TileL1Info, tile_l0_info: pypt
 
 
 def get_conv_tile_shapes() -> Tuple[pypto_impl.TileL1Info, pypto_impl.TileL0Info, bool]:
-    """ get the tile shapes in conv computation
+    """get the tile shapes in conv computation
 
     This operation gets the value of the tile shapes in each dimension in conv computation,
     together with the cache level (L1/L0) and whether L0 tile setting is enabled.
@@ -295,12 +292,7 @@ def set_build_static(static: bool):
     pypto_impl.SetBuildStatic(static)
 
 
-def begin_function(
-    name: str,
-    graph_type: pypto_impl.GraphType,
-    func_type: pypto_impl.FunctionType,
-    *args
-):
+def begin_function(name: str, graph_type: pypto_impl.GraphType, func_type: pypto_impl.FunctionType, *args):
     args = [arg.base() for arg in args]
     Controller.reset()
     return pypto_impl.BeginFunction(name, graph_type, func_type, *args)
@@ -314,8 +306,7 @@ class LoopRange:
     def __init__(self, start, stop=None, step: Union[int, SymbolicScalar] = 1):
         if stop is None:
             start, stop = 0, start
-        self._base = pypto_impl.LoopRange(
-            to_sym(start), to_sym(stop), to_sym(step))
+        self._base = pypto_impl.LoopRange(to_sym(start), to_sym(stop), to_sym(step))
         self._start = self._base.Begin()
         self._stop = self._base.End()
 
@@ -342,7 +333,7 @@ _loop_range = LoopRange
 
 
 def is_loop_begin(scalar: SymbolicScalar) -> SymbolicScalar:
-    """ Determines if the current iteration is the start of loop
+    """Determines if the current iteration is the start of loop
     This function returns a boolean value which specifys whether
     the current iteration is the beginning of the loop
 
@@ -368,7 +359,7 @@ def is_loop_begin(scalar: SymbolicScalar) -> SymbolicScalar:
 
 
 def is_loop_end(scalar: SymbolicScalar) -> SymbolicScalar:
-    """ Determines if the current iteration is the end of loop
+    """Determines if the current iteration is the end of loop
     This function returns a boolean value which specifys whether
     the current iteration is the end of the loop
 
@@ -403,7 +394,7 @@ def _raise_if_exception(exc: Optional[Exception]):
 
 @contextmanager
 def function(name: str, *args) -> Iterator:
-    """ defining the function
+    """defining the function
 
     This API record the function and dataflow user has defined. A computing
     graph will be built based on the recorded function.
@@ -453,7 +444,7 @@ def function(name: str, *args) -> Iterator:
 
 
 def cond(scalar: SymInt, file: Optional[str] = None, lineno: Optional[int] = None):
-    """ set up a conditional computation. Use as "if" condition in python.
+    """set up a conditional computation. Use as "if" condition in python.
 
     Parameters
     ----------
@@ -494,7 +485,6 @@ def cond(scalar: SymInt, file: Optional[str] = None, lineno: Optional[int] = Non
 
 
 class _LoopFunction:
-
     class Iterator:
         def __init__(self, iter, begin, end):
             self._iter = iter
@@ -511,9 +501,9 @@ class _LoopFunction:
 
     def __init__(self, name, loop_name, loop_range, unroll_list, submit_before_loop, parallel):
         loop_range = loop_range.base()
-        self._base = pypto_impl.RecordLoopFunc(name, pypto_impl.FunctionType.DYNAMIC_LOOP,
-                                             loop_name, loop_range,
-                                             unroll_list, submit_before_loop, parallel)
+        self._base = pypto_impl.RecordLoopFunc(
+            name, pypto_impl.FunctionType.DYNAMIC_LOOP, loop_name, loop_range, unroll_list, submit_before_loop, parallel
+        )
         self._begin = loop_range.Begin()
         self._end = loop_range.End()
 
@@ -539,8 +529,7 @@ def _loop_function(
         set_source_location(level=3)
         frame = sys._getframe(3)
         pypto_impl.BeginScope(name, {}, frame.f_code.co_filename, frame.f_lineno)
-        rlf = _LoopFunction(name, loop_name, loop_range,
-                            unroll_set, submit_before_loop, parallel)
+        rlf = _LoopFunction(name, loop_name, loop_range, unroll_set, submit_before_loop, parallel)
         clear_source_location()
         yield rlf
     finally:
@@ -550,7 +539,7 @@ def _loop_function(
 
 @overload
 def loop(stop: SymInt, /, **kwargs) -> Iterator[SymbolicScalar]:
-    """ Create a symbolic loop ranging from 0 to `stop` (exclusive).
+    """Create a symbolic loop ranging from 0 to `stop` (exclusive).
 
     Parameters
     ----------
@@ -578,7 +567,7 @@ def loop(stop: SymInt, /, **kwargs) -> Iterator[SymbolicScalar]:
 
 @overload
 def loop(start: SymInt, stop: SymInt, step: Optional[SymInt] = 1, /, **kwargs) -> Iterator[SymInt]:
-    """ Create a symbolic loop ranging from `start` to `stop` (exclusive), incrementing by `step`.
+    """Create a symbolic loop ranging from `start` to `stop` (exclusive), incrementing by `step`.
 
     Parameters
     ----------
@@ -616,8 +605,7 @@ def _get_loop_range(*args):
     elif nargs == 3:
         start, stop, step = args
     else:
-        raise FeError(TypeError(
-            f"loop() takes 1 to 3 positional arguments but {nargs} were given"))
+        raise FeError(TypeError(f"loop() takes 1 to 3 positional arguments but {nargs} were given"))
     return start, stop, step
 
 
@@ -625,7 +613,7 @@ def loop(
     *args,
     **kwargs,
 ) -> Iterator[SymInt]:
-    """ set up a loop computation. Use as a for loop in python.
+    """set up a loop computation. Use as a for loop in python.
 
     Parameters
     ----------
@@ -653,8 +641,7 @@ def loop(
     submit_before_loop = kwargs.get("submit_before_loop", False)
     parallel = kwargs.get("parallel", False)
     with _loop_function(
-        name, idx_name, _loop_range(
-            start, stop, step), unroll_list, submit_before_loop, parallel
+        name, idx_name, _loop_range(start, stop, step), unroll_list, submit_before_loop, parallel
     ) as rlf:
         for k in rlf:
             yield k
@@ -718,7 +705,7 @@ def loop_unroll(*args, **kwargs) -> Iterator[Tuple[SymbolicScalar, int]]:
 
 
 def dump() -> str:
-    """ Dump the current program.
+    """Dump the current program.
 
     Returns
     -------
@@ -729,6 +716,5 @@ def dump() -> str:
 
 
 def reset():
-    """ Reset the current program.
-    """
+    """Reset the current program."""
     pypto_impl.Reset()

@@ -8,16 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import pypto
-import pytest
-import numpy as np
-import torch
-from numpy.testing import assert_allclose
-import torch_npu
+""" """
 
+import os
+
+from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 F_1 = 1.0
 SHAPE = [8, 32]

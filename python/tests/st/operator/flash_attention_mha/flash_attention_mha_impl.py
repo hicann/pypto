@@ -24,7 +24,6 @@ O, L, M are accumulated across kv tiles (online softmax algorithm).
 
 import pypto
 
-
 Q_TILE = 320
 K_TILE = 320
 
@@ -109,7 +108,7 @@ def flash_attention_varlen_forward_kernel(
     hidden_dim = num_heads * head_dim
     total_q = q.shape[0]
     total_kv = k.shape[0]
-    scale = 1.0 / (head_dim ** 0.5)
+    scale = 1.0 / (head_dim**0.5)
 
     # reshape inplace: q/k/v [total_seq, N, D] → [total_seq, N*D]
     q_2d = pypto.reshape(q, [total_q, hidden_dim], inplace=True)
@@ -145,7 +144,6 @@ def flash_attention_varlen_forward_kernel(
 
         h_num = num_heads // 2
         for h_idx in pypto.loop(h_num, name="head_loop"):
-
             for q_tile_idx in pypto.loop(q_tile_count, name="q_tile_loop"):
                 # 创建2个head独立的累加器
                 oi_update_0 = pypto.tensor([q_tile, head_dim], pypto.DT_FP32, "oi_update")
@@ -177,16 +175,25 @@ def flash_attention_varlen_forward_kernel(
                             mi_update = mi_update_1
                             oi_update = oi_update_1
 
-                        q_tile_view = pypto.view(q_2d, [q_tile, head_dim],
-                                            [q_start + q_tile_start, h_offset],
-                                            valid_shape=[q_tile_len, head_dim])
+                        q_tile_view = pypto.view(
+                            q_2d,
+                            [q_tile, head_dim],
+                            [q_start + q_tile_start, h_offset],
+                            valid_shape=[q_tile_len, head_dim],
+                        )
 
-                        k_tile_view = pypto.view(k_2d, [k_tile, head_dim],
-                                            [k_start + k_tile_start, h_offset],
-                                            valid_shape=[k_tile_len, head_dim])
-                        v_tile_view = pypto.view(v_2d, [k_tile, head_dim],
-                                            [k_start + k_tile_start, h_offset],
-                                            valid_shape=[k_tile_len, head_dim])
+                        k_tile_view = pypto.view(
+                            k_2d,
+                            [k_tile, head_dim],
+                            [k_start + k_tile_start, h_offset],
+                            valid_shape=[k_tile_len, head_dim],
+                        )
+                        v_tile_view = pypto.view(
+                            v_2d,
+                            [k_tile, head_dim],
+                            [k_start + k_tile_start, h_offset],
+                            valid_shape=[k_tile_len, head_dim],
+                        )
 
                         pypto.set_cube_tile_shapes([64, 512], [64, 64], [512, 512])
 

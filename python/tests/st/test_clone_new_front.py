@@ -8,15 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import os
-import pypto
 
 import torch
 import torch_npu
-import numpy as np
-from numpy.testing import assert_allclose
+
+import pypto
 
 B = 3
 S = 4

@@ -12,11 +12,13 @@
 Hello World Example for PyPTO
 """
 
+import argparse
 import os
 import sys
-import argparse
-import pypto
+
 import torch
+
+import pypto
 
 runtime_options = {}
 
@@ -40,7 +42,7 @@ def device_init(run_mode):
         return "cpu"
     else:
         try:
-            import torch_npu
+            import torch_npu  # noqa: F401
         except ImportError:
             print("torch_npu is not installed, please install it first")
             sys.exit(1)

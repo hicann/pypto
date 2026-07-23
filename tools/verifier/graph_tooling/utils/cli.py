@@ -8,20 +8,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
 
 import argparse
-import inspect
-import importlib.util
-import os
-import sys
-from functools import wraps
-from typing import Dict, List, Callable, Any, Optional
+from typing import Callable, Dict, Optional
 
 
 class Argument:
     """存储单个参数的定义"""
+
     def __init__(self, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
@@ -62,6 +57,7 @@ class Command:
 
 def command(name: Optional[str] = None, help_info: Optional[str] = None):
     """装饰器：标记一个函数为子命令"""
+
     def decorator(func: Callable):
         cmd = Command.get_entry(func)
         cmd_name = name or func.__name__
@@ -69,15 +65,18 @@ def command(name: Optional[str] = None, help_info: Optional[str] = None):
         cmd.set_name_help(cmd_name, cmd_help)
         Command.cmd_dict[cmd_name] = cmd
         return func
+
     return decorator
 
 
 def argument(*args, **kwargs):
     """装饰器：为当前命令添加参数（必须在 @command 之后使用）"""
+
     def decorator(func: Callable):
         cmd = Command.get_entry(func)
         cmd.add_argument(Argument(*args, **kwargs))
         return func
+
     return decorator
 
 

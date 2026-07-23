@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Scalar wrapper type for PyPTO Language DSL."""
+
 from __future__ import annotations
 
 __all__ = ["Scalar"]

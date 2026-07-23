@@ -20,20 +20,20 @@ Main Functions:
 import multiprocessing as mp
 import os
 import traceback
+
+from distributed_config import DistributedConfig, collect_process_errors
 import numpy as np
 import pytest
 import torch
+
 import pypto
-from distributed_config import DistributedConfig, collect_process_errors
 
 
 def _create_shmem_tensors(group_names, world_sizes, shmem_shape):
-    shmem_tensor = pypto.distributed.create_shmem_tensor(
-        group_names[0], world_sizes[0], pypto.DT_FP32, shmem_shape)
+    shmem_tensor = pypto.distributed.create_shmem_tensor(group_names[0], world_sizes[0], pypto.DT_FP32, shmem_shape)
     my_pe = pypto.distributed.my_symbolic_pe(group_names[0])
 
-    shmem_tensor1 = pypto.distributed.create_shmem_tensor(
-        group_names[1], world_sizes[1], pypto.DT_FP32, shmem_shape)
+    shmem_tensor1 = pypto.distributed.create_shmem_tensor(group_names[1], world_sizes[1], pypto.DT_FP32, shmem_shape)
     my_pe1 = pypto.distributed.my_symbolic_pe(group_names[1])
 
     return shmem_tensor, my_pe, shmem_tensor1, my_pe1
@@ -41,8 +41,11 @@ def _create_shmem_tensors(group_names, world_sizes, shmem_shape):
 
 def _get_input_tile(in_tensor, batch_size, bs_idx, view_row_shape, hidden_size):
     in_tensor_tile = pypto.view(
-        in_tensor, (view_row_shape, in_tensor.shape[1]), [bs_idx * view_row_shape, 0],
-        valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), in_tensor.shape[1]])
+        in_tensor,
+        (view_row_shape, in_tensor.shape[1]),
+        [bs_idx * view_row_shape, 0],
+        valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), in_tensor.shape[1]],
+    )
 
     pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
     in_tensor_tile_fp32 = pypto.cast(in_tensor_tile, pypto.DT_FP32)
@@ -59,27 +62,41 @@ def _perform_allreduce(input_tensor, stage_params):
     Returns:
         AllReduce 结果 (BF16)
     """
-    (shmem_tensor, world_size, shmem_shape, my_pe,
-     view_row_shape, hidden_size, batch_size, bs_idx) = stage_params
+    (shmem_tensor, world_size, shmem_shape, my_pe, view_row_shape, hidden_size, batch_size, bs_idx) = stage_params
     pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
 
     for dyn_idx in range(world_size):
         put_out = pypto.distributed.shmem_put(
-            input_tensor, [0, 0], shmem_tensor, dyn_idx,
-            put_op=pypto.AtomicType.ADD, pred=[input_tensor]
+            input_tensor, [0, 0], shmem_tensor, dyn_idx, put_op=pypto.AtomicType.ADD, pred=[input_tensor]
         )
         pypto.distributed.shmem_signal(
-            shmem_tensor, dyn_idx, 1, shmem_shape,
-            [0, 0], target_pe=dyn_idx, sig_op=pypto.AtomicType.ADD, pred=[put_out]
+            shmem_tensor,
+            dyn_idx,
+            1,
+            shmem_shape,
+            [0, 0],
+            target_pe=dyn_idx,
+            sig_op=pypto.AtomicType.ADD,
+            pred=[put_out],
         )
 
     wait_until_out = pypto.distributed.shmem_wait_until(
-        shmem_tensor, my_pe, world_size,
-        shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[input_tensor]
+        shmem_tensor,
+        my_pe,
+        world_size,
+        shmem_shape,
+        [0, 0],
+        cmp=pypto.OpType.EQ,
+        clear_signal=True,
+        pred=[input_tensor],
     )
     all_reduce_out_fp32 = pypto.distributed.shmem_get(
-        shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_out],
-        valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), hidden_size]
+        shmem_tensor,
+        my_pe,
+        shmem_shape,
+        [0, 0],
+        pred=[wait_until_out],
+        valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), hidden_size],
     )
 
     pypto.set_vec_tile_shapes(1, hidden_size)
@@ -103,20 +120,34 @@ def allreduce_cascading_kernel(
     shmem_shape = [view_row_shape, hidden_size]
 
     for bs_idx in pypto.loop(bs_loop, name="LOOP_ALLREDUCE_CASCADING", idx_name="bs_idx"):
-        shmem_tensor, my_pe, shmem_tensor1, my_pe1 = _create_shmem_tensors(
-            group_names, world_sizes, shmem_shape)
+        shmem_tensor, my_pe, shmem_tensor1, my_pe1 = _create_shmem_tensors(group_names, world_sizes, shmem_shape)
 
-        in_tensor_tile_fp32 = _get_input_tile(
-            in_tensor, batch_size, bs_idx, view_row_shape, hidden_size)
+        in_tensor_tile_fp32 = _get_input_tile(in_tensor, batch_size, bs_idx, view_row_shape, hidden_size)
 
         # 第一阶段参数列表
-        stage1_params = [shmem_tensor, world_sizes[0], shmem_shape, my_pe,
-                         view_row_shape, hidden_size, batch_size, bs_idx]
+        stage1_params = [
+            shmem_tensor,
+            world_sizes[0],
+            shmem_shape,
+            my_pe,
+            view_row_shape,
+            hidden_size,
+            batch_size,
+            bs_idx,
+        ]
         all_reduce_out_bf16 = _perform_allreduce(in_tensor_tile_fp32, stage1_params)
 
         # 第二阶段参数列表
-        stage2_params = [shmem_tensor1, world_sizes[1], shmem_shape, my_pe1,
-                         view_row_shape, hidden_size, batch_size, bs_idx]
+        stage2_params = [
+            shmem_tensor1,
+            world_sizes[1],
+            shmem_shape,
+            my_pe1,
+            view_row_shape,
+            hidden_size,
+            batch_size,
+            bs_idx,
+        ]
         all_reduce_out_bf161 = _perform_allreduce(all_reduce_out_bf16, stage2_params)
 
         out_tensor[bs_idx * pypto.symbolic_scalar(view_row_shape):] = all_reduce_out_bf161
@@ -128,7 +159,7 @@ def generate_group_splits(world_size, group_info=None):
     group_info = {
         "even_odd_0": list(range(0, world_size, 2)),  # 偶数组
         "even_odd_1": list(range(1, world_size, 2)),  # 奇数组
-        "half_0": list(range(0, world_size // 2)),    # 前半部分
+        "half_0": list(range(0, world_size // 2)),  # 前半部分
         "half_1": list(range(world_size // 2, world_size)),  # 后半部分
     }
     return group_info
@@ -227,7 +258,7 @@ def test_allreduce_cascading():
     torch.npu.set_device(device_id)
     mp.set_start_method('spawn', force=True)
     config = DistributedConfig(world_size=4)
-    default_group_info = {
+    _default_group_info = {
         "even_odd_0": [0, 2],
         "even_odd_1": [1, 3],
         "half_0": [0, 1],
@@ -240,10 +271,7 @@ def test_allreduce_cascading():
 
     for i in range(config.world_size):
         worker_params = [config, input_datas[i], output_datas[i], i, None]
-        p = mp.Process(
-            target=allreduce_cascading_worker,
-            args=(worker_params, error_queue)
-        )
+        p = mp.Process(target=allreduce_cascading_worker, args=(worker_params, error_queue))
         p.start()
         processes.append(p)
 

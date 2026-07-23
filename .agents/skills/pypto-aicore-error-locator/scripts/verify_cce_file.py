@@ -17,19 +17,19 @@
     1: 此文件不是问题文件，或验证失败
 """
 
-import os
-import sys
 import argparse
 import logging
+import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (
-    get_commentable_lines,
-    comment_lines_by_indices,
-    validate_path,
-    setup_logging,
-    print_error_info,
     backup_and_test,
+    comment_lines_by_indices,
+    get_commentable_lines,
+    print_error_info,
+    setup_logging,
+    validate_path,
 )
 
 setup_logging()
@@ -41,8 +41,7 @@ def main():
     parser.add_argument('cce_file', help="CCE 文件路径")
     parser.add_argument('test_cmd', help="触发 aicore error 的测试命令")
     parser.add_argument('run_path', help="运行测试命令的目录路径")
-    parser.add_argument('--use-pypto-test-framework', action='store_true',
-                        help="使用 Pypto_Test 框架")
+    parser.add_argument('--use-pypto-test-framework', action='store_true', help="使用 Pypto_Test 框架")
     args = parser.parse_args()
 
     cce_file = os.path.abspath(args.cce_file)
@@ -70,8 +69,8 @@ def main():
         return comment_lines_by_indices(lines.copy(), commentable)
 
     error_exists, output, original_lines = backup_and_test(
-        cce_file, test_cmd, run_dir, _modify,
-        use_pypto_test_framework=args.use_pypto_test_framework)
+        cce_file, test_cmd, run_dir, _modify, use_pypto_test_framework=args.use_pypto_test_framework
+    )
 
     if original_lines is None:
         logger.info("错误：无法完成验证")

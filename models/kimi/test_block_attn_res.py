@@ -36,15 +36,13 @@ import math
 import os
 from typing import List, Optional, Tuple
 
-import pytest
-import torch
-import torch_npu
-import torch.nn.functional as F
-
 from block_attn_res_impl import (
     ai_infra_block_attn_res,
     ai_infra_block_attn_res_backward,
 )
+import pytest
+import torch
+import torch.nn.functional as functional
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -135,10 +133,9 @@ def precision_compare_triple(npu_data, bm_data, golden_data, thres=(2, 1.2, 1.2)
     mere_matrix = _compute_re(mere_npu, mere_bm, sv_thres)
     rmse_matrix = _compute_re(rmse_npu, rmse_bm, sv_thres)
 
-    is_pass = (small_value_matrix <= 2
-               and mare_matrix <= thres[0]
-               and mere_matrix <= thres[1]
-               and rmse_matrix <= thres[2])
+    is_pass = (
+        small_value_matrix <= 2 and mare_matrix <= thres[0] and mere_matrix <= thres[1] and rmse_matrix <= thres[2]
+    )
 
     result = "PASS" if is_pass else "FAILED"
     return result, mare_matrix, mere_matrix, rmse_matrix, small_value_matrix
@@ -147,9 +144,7 @@ def precision_compare_triple(npu_data, bm_data, golden_data, thres=(2, 1.2, 1.2)
 def compare(npu_data, bm_data, golden_data, name=""):
     """三方精度对比包装，失败时抛出异常。"""
     result, mare, mere, rmse, sv = precision_compare_triple(npu_data, bm_data, golden_data)
-    logger.info(
-        f"  {name}: MARE={mare:.4f} MERE={mere:.4f} RMSE={rmse:.4f} SmallVal={sv:.4f} [{result}]"
-    )
+    logger.info(f"  {name}: MARE={mare:.4f} MERE={mere:.4f} RMSE={rmse:.4f} SmallVal={sv:.4f} [{result}]")
     if result != "PASS":
         raise Exception(f"fail precision check: {name}")
     return result, mare, mere, rmse, sv
@@ -191,7 +186,7 @@ def block_attn_res_forward_reference(
 
     rms = None
     if enable_rmsnorm:
-        rms = torch.sqrt(torch.mean(v ** 2, dim=-1, keepdim=True) + rmsnorm_eps)
+        rms = torch.sqrt(torch.mean(v**2, dim=-1, keepdim=True) + rmsnorm_eps)
         k = v / rms
         if rmsnorm_gamma is not None:
             k = k * rmsnorm_gamma
@@ -201,7 +196,7 @@ def block_attn_res_forward_reference(
     logits = torch.matmul(k, proj_weight)
     if not math.isclose(scale, 1.0):
         logits = logits * scale
-    alpha = F.softmax(logits, dim=2)
+    alpha = functional.softmax(logits, dim=2)
     h = torch.matmul(alpha.unsqueeze(-2), v).squeeze(-2)
     return h, rms, alpha
 
@@ -227,7 +222,7 @@ def block_attn_res_backward_reference(
         grad_proj_weight:  proj_weight 的梯度
         grad_rmsnorm_gamma: rmsnorm_gamma 的梯度（可选）
     """
-    device = grad_h.device
+    _device = grad_h.device
     dtype = grad_h.dtype
 
     # 正向输入副本（requires_grad=True 使 autograd 可追踪）
@@ -241,7 +236,9 @@ def block_attn_res_backward_reference(
         proj_weight=fw_proj_weight,
         partial_block=fw_partial_block,
         rmsnorm_gamma=fw_rmsnorm_gamma,
-        scale=scale, rmsnorm_eps=rmsnorm_eps, enable_rmsnorm=enable_rmsnorm,
+        scale=scale,
+        rmsnorm_eps=rmsnorm_eps,
+        enable_rmsnorm=enable_rmsnorm,
     )
     h_value = h.detach().to(dtype)  # 保存正向输出，autograd.grad 后释放图
     rms_value = rms.detach()
@@ -252,8 +249,11 @@ def block_attn_res_backward_reference(
         inputs.append(fw_rmsnorm_gamma)
 
     grads = torch.autograd.grad(
-        outputs=h, inputs=inputs,
-        grad_outputs=grad_h, retain_graph=False, create_graph=False,
+        outputs=h,
+        inputs=inputs,
+        grad_outputs=grad_h,
+        retain_graph=False,
+        create_graph=False,
     )
 
     grad_blocks = [g.detach().to(dtype) for g in grads[:len(blocks)]]
@@ -267,6 +267,7 @@ def block_attn_res_backward_reference(
 # ---------------------------------------------------------------------------
 # 测试辅助 — 输入生成
 # ---------------------------------------------------------------------------
+
 
 def _make_inputs(b, t, n, d, dtype, seed=42):
     """在 CPU 上生成测试输入数据。
@@ -290,10 +291,22 @@ def _make_inputs(b, t, n, d, dtype, seed=42):
 # 级联测试执行器
 # ---------------------------------------------------------------------------
 
-def run_cascade_test(case_name, b, t, n, d, dtype_str, device_id=None,
-                     enable_rmsnorm=True, scale=1.0,
-                     has_partial_block=True, rms_out_flag=True, alpha_out_flag=True,
-                     thres=(2, 1.2, 1.2)):
+
+def run_cascade_test(
+    case_name,
+    b,
+    t,
+    n,
+    d,
+    dtype_str,
+    device_id=None,
+    enable_rmsnorm=True,
+    scale=1.0,
+    has_partial_block=True,
+    rms_out_flag=True,
+    alpha_out_flag=True,
+    thres=(2, 1.2, 1.2),
+):
     """执行正反向级联测试。
 
     级联流程：
@@ -313,7 +326,7 @@ def run_cascade_test(case_name, b, t, n, d, dtype_str, device_id=None,
 
     npu_device = f"npu:{device_id}" if device_id is not None else "cpu"
     dtype = torch.bfloat16 if dtype_str == "bf16" else torch.float16
-    l = n + 1 if has_partial_block else n
+    _l = n + 1 if has_partial_block else n
 
     # -- 在 CPU 上生成输入 --
     blocks, partial_block, proj_weight, rmsnorm_gamma, grad_h = _make_inputs(b, t, n, d, dtype)
@@ -324,15 +337,17 @@ def run_cascade_test(case_name, b, t, n, d, dtype_str, device_id=None,
     # Step 1: CPU golden 正向 + 反向 (autograd, 正向 h 一并返回)
     # ----------------------------------------
     partial_for_ref = partial_block if partial_block is not None else torch.zeros(b, t, d)
-    cpu_h, cpu_rms, cpu_alpha, cpu_grad_blocks, cpu_grad_partial, cpu_grad_proj, cpu_grad_gamma = \
+    cpu_h, cpu_rms, cpu_alpha, cpu_grad_blocks, cpu_grad_partial, cpu_grad_proj, cpu_grad_gamma = (
         block_attn_res_backward_reference(
             grad_h.to(torch.float32).cpu(),
             [block.to(torch.float32).cpu() for block in blocks],
             partial_for_ref.to(torch.float32).cpu(),
             proj_weight.to(torch.float32).cpu(),
             rmsnorm_gamma.to(torch.float32).cpu() if enable_rmsnorm else None,
-            scale=scale, enable_rmsnorm=enable_rmsnorm,
+            scale=scale,
+            enable_rmsnorm=enable_rmsnorm,
         )
+    )
 
     # ----------------------------------------
     # Step 2: 转移到 NPU
@@ -346,37 +361,49 @@ def run_cascade_test(case_name, b, t, n, d, dtype_str, device_id=None,
     # ----------------------------------------
     # Step 3: NPU benchmark 正向 + 反向 (autograd, h 一并返回)
     # ----------------------------------------
-    partial_for_bm = partial_blk_npu if partial_blk_npu is not None else torch.zeros(
-        b, t, d, dtype=dtype, device=npu_device)
-    bm_h, bm_rms, bm_alpha, bm_grad_blocks, bm_grad_partial, bm_grad_proj, bm_grad_gamma = \
+    partial_for_bm = (
+        partial_blk_npu if partial_blk_npu is not None else torch.zeros(b, t, d, dtype=dtype, device=npu_device)
+    )
+    bm_h, bm_rms, bm_alpha, bm_grad_blocks, bm_grad_partial, bm_grad_proj, bm_grad_gamma = (
         block_attn_res_backward_reference(
-            grad_h_npu, blocks_npu, partial_for_bm, proj_weight_npu,
+            grad_h_npu,
+            blocks_npu,
+            partial_for_bm,
+            proj_weight_npu,
             rmsnorm_gamma_npu,
-            scale=scale, enable_rmsnorm=enable_rmsnorm,
+            scale=scale,
+            enable_rmsnorm=enable_rmsnorm,
         )
+    )
 
     # ----------------------------------------
     # Step 4: NPU kernel 级联 — 正向产出 cache -> 反向消费 cache
     # ----------------------------------------
     fwd_out = ai_infra_block_attn_res(
-        blocks_npu, proj_weight_npu,
+        blocks_npu,
+        proj_weight_npu,
         partial_block=partial_blk_npu,
-        scale=scale, rmsnorm_eps=1e-6,
+        scale=scale,
+        rmsnorm_eps=1e-6,
         rmsnorm_gamma=rmsnorm_gamma_npu,
         enable_rmsnorm=enable_rmsnorm,
-        rms_out_flag=rms_out_flag, alpha_out_flag=alpha_out_flag,
+        rms_out_flag=rms_out_flag,
+        alpha_out_flag=alpha_out_flag,
     )
     npu_h = fwd_out[0]
     npu_rms_cache = fwd_out[1] if enable_rmsnorm and rms_out_flag else None
     npu_alpha_cache = fwd_out[2] if alpha_out_flag else None
 
     npu_grad = ai_infra_block_attn_res_backward(
-        grad_h_npu, blocks_npu, proj_weight_npu,
+        grad_h_npu,
+        blocks_npu,
+        proj_weight_npu,
         npu_alpha_cache,
         partial_block=partial_blk_npu,
         rmsnorm_gamma=rmsnorm_gamma_npu,
         rms_cache=npu_rms_cache if enable_rmsnorm else None,
-        scale=scale, enable_rmsnorm=enable_rmsnorm,
+        scale=scale,
+        enable_rmsnorm=enable_rmsnorm,
     )
     # 解包 kernel 梯度: (grad_blocks, grad_partial, grad_proj, grad_gamma?)
     npu_grad_blocks = npu_grad[0]
@@ -458,14 +485,13 @@ def run_cascade_test(case_name, b, t, n, d, dtype_str, device_id=None,
 # pytest 测试用例
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     ("b", "t", "n", "d", "dtype_str", "enable_rmsnorm", "scale", "has_partial_block"),
     [
-        pytest.param(2, 4096, 25, 512, "bf16", True, 1.0, True,
-                     id="b2_t4096_n25_d512_bf16"),
-        pytest.param(1, 1023, 32, 512, "bf16", True, 1.0, True,
-                     id="b1_t1023_n32_d512_bf16"),
-    ]
+        pytest.param(2, 4096, 25, 512, "bf16", True, 1.0, True, id="b2_t4096_n25_d512_bf16"),
+        pytest.param(1, 1023, 32, 512, "bf16", True, 1.0, True, id="b1_t1023_n32_d512_bf16"),
+    ],
 )
 def test_block_attn_res(b, t, n, d, dtype_str, enable_rmsnorm, scale, has_partial_block):
     """Block Attention Residuals 正反向级联精度测试。"""
@@ -483,7 +509,11 @@ def test_block_attn_res(b, t, n, d, dtype_str, enable_rmsnorm, scale, has_partia
     try:
         run_cascade_test(
             case_name=case_name,
-            b=b, t=t, n=n, d=d, dtype_str=dtype_str,
+            b=b,
+            t=t,
+            n=n,
+            d=d,
+            dtype_str=dtype_str,
             device_id=device_id,
             enable_rmsnorm=enable_rmsnorm,
             scale=scale,

@@ -23,11 +23,12 @@ Usage:
 import argparse
 import os
 import sys
-import pypto
-import torch
-import numpy as np
-from numpy.testing import assert_allclose
 import time
+
+from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -73,11 +74,11 @@ def get_device_id():
 # Cube Tile Examples
 # ============================================================================
 
+
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def compute_with_cube_tile_shapes_kernel(
-    a: pypto.Tensor([], pypto.DT_FP32),
-    b: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32)):
+    a: pypto.Tensor([], pypto.DT_FP32), b: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32)
+):
     pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
     out.move(pypto.matmul(a, b, a.dtype))
 
@@ -96,7 +97,7 @@ def test_set_cube_tile_shapes_basic(device_id: int = None):
     a = torch.tensor([[1, 2], [3, 4]], dtype=dtype, device=device)
     b = torch.tensor([[5, 6], [7, 8]], dtype=dtype, device=device)
     expected = torch.tensor([[19, 22], [43, 50]], dtype=dtype, device=device)
-    set_shapes = [[32, 32], [64, 64], [64, 64]]
+    _set_shapes = [[32, 32], [64, 64], [64, 64]]
 
     out = torch.empty((a.shape[0], b.shape[1]), dtype=dtype, device=device)
     compute_with_cube_tile_shapes_kernel(a, b, out)
@@ -130,7 +131,8 @@ def create_different_tile_shapes_kernel(run_mode=global_run_mode):
         y: pypto.Tensor((b, k_batch, n_batch), pypto.DT_FP32),
         out1: pypto.Tensor((b, m_batch, n_batch), pypto.DT_FP32),
         out2: pypto.Tensor((b, m_batch, n_batch), pypto.DT_FP32),
-        out3: pypto.Tensor((b, m_batch, n_batch), pypto.DT_FP32)):
+        out3: pypto.Tensor((b, m_batch, n_batch), pypto.DT_FP32),
+    ):
         """Compute matmul with three different tile shapes and return all results"""
         print(f"b: {b}, m_batch: {m_batch}, k_batch: {k_batch}, n_batch: {n_batch}")
 
@@ -146,9 +148,7 @@ def create_different_tile_shapes_kernel(run_mode=global_run_mode):
         print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
         out3[:] = pypto.matmul(x, y, x.dtype)
 
-
     return compute_with_different_tile_shapes
-
 
 
 def test_set_different_tile_shapes_result(device_id: int = None):
@@ -184,7 +184,8 @@ def test_set_different_tile_shapes_result(device_id: int = None):
 def compute_with_tile_32_kernel(
     a: pypto.Tensor((4, 64, 512), pypto.DT_FP32),
     b: pypto.Tensor((4, 128, 512), pypto.DT_FP32),
-    out: pypto.Tensor((4, 64, 128), pypto.DT_FP32)):
+    out: pypto.Tensor((4, 64, 128), pypto.DT_FP32),
+):
     pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])
     out.move(pypto.matmul(a, b, a.dtype, b_trans=True))
 
@@ -193,7 +194,8 @@ def compute_with_tile_32_kernel(
 def compute_with_tile_64_kernel(
     a: pypto.Tensor((4, 64, 512), pypto.DT_FP32),
     b: pypto.Tensor((4, 128, 512), pypto.DT_FP32),
-    out: pypto.Tensor((4, 64, 128), pypto.DT_FP32)):
+    out: pypto.Tensor((4, 64, 128), pypto.DT_FP32),
+):
     pypto.set_cube_tile_shapes([64, 64], [128, 128], [128, 128])
     out.move(pypto.matmul(a, b, a.dtype, b_trans=True))
 
@@ -214,13 +216,13 @@ def test_set_different_tile_shapes_runtime(device_id: int = None):
     out1 = torch.empty((b_rt, m_rt, n_rt), dtype=dtype, device=device)
     out2 = torch.empty((b_rt, m_rt, n_rt), dtype=dtype, device=device)
 
-    TEST_TIME = 1
+    test_time = 1
     start = time.perf_counter()
-    for _ in range(TEST_TIME):
+    for _ in range(test_time):
         compute_with_tile_32_kernel(a, b, out1)
     runtime_1 = time.perf_counter() - start
     start = time.perf_counter()
-    for _ in range(TEST_TIME):
+    for _ in range(test_time):
         compute_with_tile_64_kernel(a, b, out2)
     runtime_2 = time.perf_counter() - start
     print(f"runtime_1(pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])): {runtime_1}")
@@ -232,15 +234,16 @@ def test_set_different_tile_shapes_runtime(device_id: int = None):
 # Vector Tile Examples
 # ============================================================================
 
+
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def compute_with_vec_tile_shapes_kernel(
     a: pypto.Tensor([], pypto.DT_FP32),
     b: pypto.Tensor([], pypto.DT_FP32),
     out: pypto.Tensor([], pypto.DT_FP32),
-    set_shapes: tuple):
+    set_shapes: tuple,
+):
     pypto.set_vec_tile_shapes(*set_shapes)
     out.move(pypto.add(a, b))
-
 
 
 def test_set_vec_tile_shapes_basic(device_id: int = None):
@@ -254,15 +257,14 @@ def test_set_vec_tile_shapes_basic(device_id: int = None):
     # Test 1: Set and verify tile shapes for vector computation
     dtype = torch.float32
     # shape: (1, 2, 3)
-    a = torch.tensor([[[1, 2, 3],
-                       [1, 2, 3]]], dtype=dtype, device=device)
-    b = torch.tensor([[[4, 5, 6],
-                       [4, 5, 6]]], dtype=dtype, device=device)
-    expected = torch.tensor([[[5, 7, 9],
-                            [5, 7, 9]]], dtype=dtype, device=device)
+    a = torch.tensor([[[1, 2, 3], [1, 2, 3]]], dtype=dtype, device=device)
+    b = torch.tensor([[[4, 5, 6], [4, 5, 6]]], dtype=dtype, device=device)
+    expected = torch.tensor([[[5, 7, 9], [5, 7, 9]]], dtype=dtype, device=device)
     set_shapes = (1, 2, 8)
-    print(f"Rule1: len(set_vec_tile_shapes) == len(vec.shape): \
-          {len(set_shapes) == len(a.shape)}")
+    print(
+        f"Rule1: len(set_vec_tile_shapes) == len(vec.shape): \
+          {len(set_shapes) == len(a.shape)}"
+    )
     print("Rule2: valid input dims must in [1, 4]")
 
     out = torch.empty_like(a)
@@ -277,12 +279,9 @@ def test_set_vec_tile_shapes_basic(device_id: int = None):
     # Test 2: Set vec_tile_shapes for vector calculations with different shapes
     dtype = torch.float32
     # shape: (1, 1, 2, 3)
-    a = torch.tensor([[[[1, 2, 3],
-                        [4, 5, 6]]]], dtype=dtype, device=device)
-    b = torch.tensor([[[[7, 8, 9],
-                        [10, 11, 12]]]], dtype=dtype, device=device)
-    expected = torch.tensor([[[[8, 10, 12],
-                            [14, 16, 18]]]], dtype=dtype, device=device)
+    a = torch.tensor([[[[1, 2, 3], [4, 5, 6]]]], dtype=dtype, device=device)
+    b = torch.tensor([[[[7, 8, 9], [10, 11, 12]]]], dtype=dtype, device=device)
+    expected = torch.tensor([[[[8, 10, 12], [14, 16, 18]]]], dtype=dtype, device=device)
     set_shapes = (1, 1, 4, 8)
     out = torch.empty_like(a)
     compute_with_vec_tile_shapes_kernel(a, b, out, set_shapes)
@@ -295,11 +294,8 @@ def test_set_vec_tile_shapes_basic(device_id: int = None):
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def compute_with_vec_different_tile_shapes_kernel(
-    a: pypto.Tensor(),
-    b: pypto.Tensor(),
-    out1: pypto.Tensor(),
-    out2: pypto.Tensor(),
-    out3: pypto.Tensor()):
+    a: pypto.Tensor(), b: pypto.Tensor(), out1: pypto.Tensor(), out2: pypto.Tensor(), out3: pypto.Tensor()
+):
     """Compute add with three different vec tile shapes"""
     pypto.set_vec_tile_shapes(1, 2, 8)
     print(f"pypto.get_vec_tile_shapes(): {pypto.get_vec_tile_shapes()}")
@@ -325,12 +321,9 @@ def test_set_vec_different_tile_shapes_result(device_id: int = None):
     # Test 1: Different Tile Shape Settings on Calculation Results
     dtype = torch.float32
     # shape: (1, 2, 3)
-    a = torch.tensor([[[1, 2, 3],
-                       [1, 2, 3]]], dtype=dtype, device=device)
-    b = torch.tensor([[[4, 5, 6],
-                       [4, 5, 6]]], dtype=dtype, device=device)
-    expected = torch.tensor([[[5, 7, 9],
-                            [5, 7, 9]]], dtype=dtype, device=device)
+    a = torch.tensor([[[1, 2, 3], [1, 2, 3]]], dtype=dtype, device=device)
+    b = torch.tensor([[[4, 5, 6], [4, 5, 6]]], dtype=dtype, device=device)
+    expected = torch.tensor([[[5, 7, 9], [5, 7, 9]]], dtype=dtype, device=device)
 
     out1 = torch.empty((1, 2, 3), dtype=dtype, device=device)
     out2 = torch.empty((1, 2, 3), dtype=dtype, device=device)
@@ -346,15 +339,9 @@ def test_set_vec_different_tile_shapes_result(device_id: int = None):
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def compute_with_vec_tile_kernel(
-    a: pypto.Tensor(),
-    b: pypto.Tensor(),
-    out: pypto.Tensor(),
-    set_shapes: tuple):
+def compute_with_vec_tile_kernel(a: pypto.Tensor(), b: pypto.Tensor(), out: pypto.Tensor(), set_shapes: tuple):
     pypto.set_vec_tile_shapes(*set_shapes)
     out.move(pypto.add(a, b))
-
-
 
 
 def test_set_vec_different_tile_shapes_runtime(device_id: int = None):
@@ -373,13 +360,13 @@ def test_set_vec_different_tile_shapes_runtime(device_id: int = None):
     out1 = torch.empty(vec_rt_shape, dtype=dtype, device=device)
     out2 = torch.empty(vec_rt_shape, dtype=dtype, device=device)
 
-    TEST_TIME = 1
+    test_time = 1
     start = time.perf_counter()
-    for _ in range(TEST_TIME):
+    for _ in range(test_time):
         compute_with_vec_tile_kernel(a, b, out1, (1, 2, 4, 128))
     runtime_1 = time.perf_counter() - start
     start = time.perf_counter()
-    for _ in range(TEST_TIME):
+    for _ in range(test_time):
         compute_with_vec_tile_kernel(a, b, out2, (2, 4, 8, 256))
     runtime_2 = time.perf_counter() - start
     print(f"runtime_1(pypto.set_vec_tile_shapes(1, 2, 4, 128)): {runtime_1}")
@@ -403,26 +390,17 @@ Examples:
   %(prog)s                      Run all examples
   %(prog)s --list               List all available examples
   %(prog)s cube_tile::test_set_cube_tile_shapes_basic    Run a specific case
-        """
+        """,
     )
     parser.add_argument(
         'example_id',
         type=str,
         nargs="?",
-        help='Run a specific case (e.g., cube_tile::test_set_cube_tile_shapes_basic). If omitted, all cases run.'
+        help='Run a specific case (e.g., cube_tile::test_set_cube_tile_shapes_basic). If omitted, all cases run.',
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default='npu',
-        choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default='npu', choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -493,7 +471,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("(Make sure CANN environment is configured and NPU is available)\n")

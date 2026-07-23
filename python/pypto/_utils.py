@@ -8,21 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import sys
-import math
-import ctypes
+""" """
+
 import functools
-from pathlib import Path
-from typing import Sequence, Union, List
+import sys
+from typing import List, Sequence, Union
 
 from . import pypto_impl
 from .enum import DataType
-from .symbolic_scalar import SymbolicScalar, SymInt
 from .error import FeError
-
+from .symbolic_scalar import SymbolicScalar, SymInt
 
 _torch_npu = None
 _torch_npu_checked = False
@@ -36,6 +31,7 @@ def get_torch_npu():
     if not _torch_npu_checked:
         try:
             import torch_npu
+
             _torch_npu = torch_npu
         except ImportError:
             pass
@@ -49,6 +45,7 @@ def get_dtensor_type():
     if not _dtensor_type_checked:
         try:
             from torch.distributed._tensor import DTensor
+
             _dtensor_type = DTensor
         except ImportError:
             pass
@@ -79,6 +76,7 @@ def to_syms(value: Union[Sequence[int], Sequence[SymbolicScalar]]) -> List[pypto
 def ceildiv(a: SymInt, b: SymInt) -> SymInt:
     return (a + b - 1) // b
 
+
 # only outer takes effect void avoid tensor.py hide source_location of user code
 _source_location_depth = 0
 
@@ -108,11 +106,12 @@ def source_location(func):
         out = func(*args, **kwargs)
         clear_source_location()
         return out
+
     return wrapper
 
 
 def bytes_of(dtype: DataType) -> int:
-    """ return the number of bytes of the current datatype
+    """return the number of bytes of the current datatype
 
     Parameters
     ----------

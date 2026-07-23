@@ -35,8 +35,9 @@ logger = logging.getLogger("perf_baseline")
 
 _RegressionList = List[Tuple[str, int, int, int]]
 
-DEFAULT_BASELINE_PATH = os.path.join(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__))), "config", "perf_baseline.json")
+DEFAULT_BASELINE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "perf_baseline.json"
+)
 
 
 def load_metrics(metrics_path: str) -> Optional[Dict]:

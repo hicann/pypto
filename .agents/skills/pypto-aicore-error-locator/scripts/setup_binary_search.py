@@ -18,21 +18,21 @@
     RIGHT=<right>
 """
 
-import os
-import sys
 import argparse
 import logging
+import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (
-    read_file,
-    get_commentable_lines,
+    backup_and_test,
     comment_lines_by_indices,
     comment_special_lines,
-    validate_path,
-    setup_logging,
+    get_commentable_lines,
     print_error_info,
-    backup_and_test,
+    read_file,
+    setup_logging,
+    validate_path,
 )
 
 setup_logging()
@@ -56,10 +56,9 @@ def determine_error_in_t(cce_file, test_cmd, run_dir, use_pypto_test_framework=F
             return None
         return comment_lines_by_indices(lines.copy(), commentable)
 
-
     error_exists, output, original_lines = backup_and_test(
-        cce_file, test_cmd, run_dir, _modify, use_pypto_test_framework=use_pypto_test_framework)
-
+        cce_file, test_cmd, run_dir, _modify, use_pypto_test_framework=use_pypto_test_framework
+    )
 
     if original_lines is None:
         return False
@@ -105,8 +104,7 @@ def main():
     parser.add_argument('cce_file', help="CCE 文件路径")
     parser.add_argument('test_cmd', help="触发 aicore error 的测试命令")
     parser.add_argument('run_path', help="运行测试命令的目录路径")
-    parser.add_argument('--use-pypto-test-framework', action='store_true',
-                        help="使用 Pypto_Test 框架")
+    parser.add_argument('--use-pypto-test-framework', action='store_true', help="使用 Pypto_Test 框架")
     args = parser.parse_args()
 
     cce_file = os.path.abspath(args.cce_file)
@@ -120,8 +118,7 @@ def main():
             logger.info(msg)
             sys.exit(1)
 
-    error_in_t = determine_error_in_t(cce_file, test_cmd, run_dir,
-                                       use_pypto_test_framework=use_pypto)
+    error_in_t = determine_error_in_t(cce_file, test_cmd, run_dir, use_pypto_test_framework=use_pypto)
     if error_in_t is None:
         sys.exit(2)
 

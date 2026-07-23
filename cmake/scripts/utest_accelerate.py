@@ -8,13 +8,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""UTest 用例并行执行.
-"""
+"""UTest 用例并行执行."""
+
 import argparse
 import logging
 import math
-import os
 from multiprocessing import cpu_count
+import os
 from typing import List
 
 from accelerate.tests_accelerate import TestsAccelerate
@@ -32,13 +32,13 @@ class UTestAccelerate(TestsAccelerate):
 
     @staticmethod
     def main() -> bool:
-        """主处理流程
-        """
+        """主处理流程"""
         # 参数注册
-        parser = argparse.ArgumentParser(description=f"UTest Execute Accelerate", epilog="Best Regards!")
+        parser = argparse.ArgumentParser(description="UTest Execute Accelerate", epilog="Best Regards!")
         UTestAccelerate.reg_args(parser=parser)
-        parser.add_argument("-j", "--job_num", nargs="?", type=int, default=None,
-                            help="Specific parallel accelerate job num.")
+        parser.add_argument(
+            "-j", "--job_num", nargs="?", type=int, default=None, help="Specific parallel accelerate job num."
+        )
         # 流程处理
         args = parser.parse_args()
         ctrl = UTestAccelerate(args=args)
@@ -70,8 +70,6 @@ if __name__ == "__main__":
     logging.basicConfig(
         format='%(asctime)s - %(filename)s:%(lineno)d - PID[%(process)d] - %(levelname)s: %(message)s',
         level=logging.INFO,
-        handlers=[
-            logging.StreamHandler()
-        ]
+        handlers=[logging.StreamHandler()],
     )
     exit(0 if UTestAccelerate.main() else 1)

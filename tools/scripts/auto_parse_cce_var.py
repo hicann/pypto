@@ -8,15 +8,12 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import sys
-import re
-import json
-from pprint import pprint
+""" """
+
 import argparse
-import ast
+import json
+import os
+import re
 
 
 def format_list(input_list):
@@ -41,18 +38,21 @@ def extract_func(func_str_list, raw_tensor_addrs):
 
             shape_dim = (len(tensor_info_list) - 1) // 4
             tensor_addr = raw_tensor_addrs[int(tensor_info_list[0])]
-            offset = tensor_info_list[1: 1 + shape_dim]
-            shape = tensor_info_list[1 + shape_dim: 1 + shape_dim * 2]
-            raw_shape = tensor_info_list[1 + shape_dim * 2: 1 + shape_dim * 3]
-            valid_shape = tensor_info_list[1 + shape_dim * 3: 1 + shape_dim * 4]
-            tensor_info.append([tensor_addr,  # tensorAddr
-                                offset,  # offset
-                                shape,  # shape
-                                raw_shape,  # rawShape
-                                valid_shape,  # validShape
-                                ])
+            offset = tensor_info_list[1:1 + shape_dim]
+            shape = tensor_info_list[1 + shape_dim:1 + shape_dim * 2]
+            raw_shape = tensor_info_list[1 + shape_dim * 2:1 + shape_dim * 3]
+            valid_shape = tensor_info_list[1 + shape_dim * 3:1 + shape_dim * 4]
+            tensor_info.append(
+                [
+                    tensor_addr,  # tensorAddr
+                    offset,  # offset
+                    shape,  # shape
+                    raw_shape,  # rawShape
+                    valid_shape,  # validShape
+                ]
+            )
         func_hash_tuple_list.append((func_hash, tensor_info))
-    func_hash_map_json = json.dumps(func_hash_tuple_list, indent=4, ensure_ascii=False)
+    _func_hash_map_json = json.dumps(func_hash_tuple_list, indent=4, ensure_ascii=False)
     return func_hash_tuple_list
 
 
@@ -68,12 +68,12 @@ def extract_kernel_params(kernel_path):
     """
     hash_pattern = re.compile(
         r'// funcHash:\s*(.*?)\n',  # 匹配// funcHash: 这一行的内容
-        re.DOTALL | re.IGNORECASE  # DOTALL允许.匹配换行符,IGNORECASE忽略大小写
+        re.DOTALL | re.IGNORECASE,  # DOTALL允许.匹配换行符,IGNORECASE忽略大小写
     )
 
     var_pattern = re.compile(
         r'(uint64_t sym\s*.*?)\n',  # 匹配// int32_t sym 这一行的内容
-        re.DOTALL | re.IGNORECASE  # DOTALL允许.匹配换行符,IGNORECASE忽略大小写
+        re.DOTALL | re.IGNORECASE,  # DOTALL允许.匹配换行符,IGNORECASE忽略大小写
     )
 
     kernel_params_map_result = {}
@@ -107,7 +107,7 @@ def extract_func_data(file_path):
     """
     pattern = re.compile(
         r'#funcData:\s*\[(.*?)\n\]',  # 匹配#funcData: [ 到 ] 之间的内容(非贪婪模式)
-        re.DOTALL | re.IGNORECASE  # DOTALL允许.匹配换行符,IGNORECASE忽略大小写
+        re.DOTALL | re.IGNORECASE,  # DOTALL允许.匹配换行符,IGNORECASE忽略大小写
     )
 
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -122,8 +122,14 @@ def extract_func_data(file_path):
         func_data_str = re.sub(r'^\s+|\s+$', '', func_data)  # 去除首尾空白
         func_str = func_data_str.split('#rawTensorAddrs:')[0].strip()
 
-        raw_tensor_addrs = func_data_str.replace('\n', '').replace('\r', '') \
-                           .replace(' ', '').split('#rawTensorAddrs:')[1].strip().split(',')
+        raw_tensor_addrs = (
+            func_data_str.replace('\n', '')
+            .replace('\r', '')
+            .replace(' ', '')
+            .split('#rawTensorAddrs:')[1]
+            .strip()
+            .split(',')
+        )
         raw_tensor_addr_list = format_list(raw_tensor_addrs)
 
         func_str_list = func_str.splitlines()
@@ -166,8 +172,9 @@ def parse_cce_var(kernel_params, func_data):
                 valid_shape_dim = var_info[3]
                 var_value = tensor_info[tensor_id][4][valid_shape_dim]
                 tensor_addr = tensor_info[tensor_id][0]
-                new_sym_var_code = \
+                new_sym_var_code = (
                     sym_var.replace(" = GET", f" = {var_value};  // GET") + f"  // tensorAddr: {tensor_addr}"
+                )
                 kernel_var_value.append(new_sym_var_code)
             func_hash_kernel_var_list.append((func_hash, kernel_bin, kernel_var_value))
         func_data_kernel_var_map.setdefault(func_data_key, func_hash_kernel_var_list)

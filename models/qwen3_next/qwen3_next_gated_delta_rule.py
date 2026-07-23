@@ -26,15 +26,13 @@ Example:
 python qwen3_next_gated_delta_rule.py
 """
 
-import os
 import logging
+import os
 
+from gated_delta_rule_impl import chunk_gated_delta_rule, chunk_gated_delta_rule_unaligned
 import pytest
 import torch
-import torch.nn.functional as F
-import torch_npu
-import pypto
-from gated_delta_rule_impl import chunk_gated_delta_rule, chunk_gated_delta_rule_unaligned
+import torch.nn.functional as functional
 
 
 def gen_dims(params):
@@ -56,7 +54,7 @@ def gen_inputs(dims, dtype=torch.float32):
     nqk = dims["Nqk"]
     nv = dims["Nv"]
     d = dims["D"]
-    l = dims["L"]
+    l = dims["L"]  # noqa: E741
 
     # Generate input data
     query = torch.rand([t, nqk, d], dtype=dtype) * (1.3655 + 0.2785) - (1.3655 + 0.2785)
@@ -124,25 +122,75 @@ def golden_chunk_gated_delta_rule(inputs: dict, dims: dict):
 def gen_data(case_name):
     """Generate test data based on case name."""
     if case_name.startswith("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s1k"):
-        params = {"T": 1024 * 4, "B": 2, "Nqk": 8, "Nv": 8, }
+        params = {
+            "T": 1024 * 4,
+            "B": 2,
+            "Nqk": 8,
+            "Nv": 8,
+        }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b2_nqk4_nv8_s4k"):
-        params = {"T": 1024 * 8, "B": 2, "Nqk": 4, "Nv": 8, }
+        params = {
+            "T": 1024 * 8,
+            "B": 2,
+            "Nqk": 4,
+            "Nv": 8,
+        }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s8k"):
-        params = {"T": 1024 * 16, "B": 2, "Nqk": 2, "Nv": 4, }
+        params = {
+            "T": 1024 * 16,
+            "B": 2,
+            "Nqk": 2,
+            "Nv": 4,
+        }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b2_nqk4_nv8_s8k"):
-        params = {"T": 1024 * 16, "B": 2, "Nqk": 4, "Nv": 8, }
+        params = {
+            "T": 1024 * 16,
+            "B": 2,
+            "Nqk": 4,
+            "Nv": 8,
+        }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b1_nqk16_nv32_s32k"):
-        params = {"T": 1024 * 32, "B": 1, "Nqk": 16, "Nv": 32, }
+        params = {
+            "T": 1024 * 32,
+            "B": 1,
+            "Nqk": 16,
+            "Nv": 32,
+        }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s256k"):
-        params = {"T": 1024 * 256, "B": 1, "Nqk": 2, "Nv": 4, }
+        params = {
+            "T": 1024 * 256,
+            "B": 1,
+            "Nqk": 2,
+            "Nv": 4,
+        }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s512k"):
-        params = {"T": 1024 * 512, "B": 1, "Nqk": 2, "Nv": 4, }
+        params = {
+            "T": 1024 * 512,
+            "B": 1,
+            "Nqk": 2,
+            "Nv": 4,
+        }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s1m"):
-        params = {"T": 1024 * 1024, "B": 1, "Nqk": 2, "Nv": 4, }
+        params = {
+            "T": 1024 * 1024,
+            "B": 1,
+            "Nqk": 2,
+            "Nv": 4,
+        }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s1026"):
-        params = {"T": 1026, "B": 1, "Nqk": 2, "Nv": 4, }
+        params = {
+            "T": 1026,
+            "B": 1,
+            "Nqk": 2,
+            "Nv": 4,
+        }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s2059"):
-        params = {"T": 2059, "B": 1, "Nqk": 2, "Nv": 4, }
+        params = {
+            "T": 2059,
+            "B": 1,
+            "Nqk": 2,
+            "Nv": 4,
+        }
     else:
         raise Exception(f"Can't get func to gen golden, Case({case_name})")
 
@@ -165,17 +213,37 @@ def pypto_chunk_gated_delta_rule_dyn(dims, inputs: dict, outputs: dict):
     nqk = dims["Nqk"]
     nv = dims["Nv"]
     d = dims["D"]
-    l = dims["L"]
+    l = dims["L"]  # noqa: E741
     act_seq_len = inputs["act_seq_len"]
 
     if (act_seq_len % l != 0).any():
-        input_data = [inputs["query"], inputs["key"], inputs["value"], inputs["beta"], inputs["gate"], inputs["states"],
-                inputs["mask"], inputs["tril_mask"], inputs["eye_data"], inputs["act_seq_len"]]
+        input_data = [
+            inputs["query"],
+            inputs["key"],
+            inputs["value"],
+            inputs["beta"],
+            inputs["gate"],
+            inputs["states"],
+            inputs["mask"],
+            inputs["tril_mask"],
+            inputs["eye_data"],
+            inputs["act_seq_len"],
+        ]
         output_data = [outputs["core_attn_out"], outputs["final_state"]]
         chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l)(*input_data, *output_data)
     else:
-        input_data = [inputs["query"], inputs["key"], inputs["value"], inputs["beta"], inputs["gate"], inputs["states"],
-                inputs["mask"], inputs["tril_mask"], inputs["eye_data"], inputs["act_seq_len"]]
+        input_data = [
+            inputs["query"],
+            inputs["key"],
+            inputs["value"],
+            inputs["beta"],
+            inputs["gate"],
+            inputs["states"],
+            inputs["mask"],
+            inputs["tril_mask"],
+            inputs["eye_data"],
+            inputs["act_seq_len"],
+        ]
         output_data = [outputs["core_attn_out"], outputs["final_state"]]
         chunk_gated_delta_rule(b, nqk, nv, d, l)(*input_data, *output_data)
 
@@ -216,11 +284,21 @@ def do_test_chunk_gated_delta_rule(case_name):
     pypto_chunk_gated_delta_rule_dyn(dims, inputs, outputs)
 
     # Compare results
-    compare(actual=outputs["core_attn_out"].cpu(), expected=core_attn_out_golden, name="core_attn_out",
-        atol_abs=1e-3, atol_rel=1e-3)
+    compare(
+        actual=outputs["core_attn_out"].cpu(),
+        expected=core_attn_out_golden,
+        name="core_attn_out",
+        atol_abs=1e-3,
+        atol_rel=1e-3,
+    )
 
-    compare(actual=outputs["final_state"].cpu(), expected=final_state_golden, name="final_state",
-        atol_abs=1e-3, atol_rel=1e-3)
+    compare(
+        actual=outputs["final_state"].cpu(),
+        expected=final_state_golden,
+        name="final_state",
+        atol_abs=1e-3,
+        atol_rel=1e-3,
+    )
 
 
 def compare(**kwargs):
@@ -345,8 +423,9 @@ def segs_chunk_gated_delta_rule(**kwargs):
 
     final_state = torch.zeros([batch, n, d, d], dtype=torch.float32, device=query.device)
 
-    query, key, value, beta, g = \
-        [x.transpose(0, 1).contiguous().to(torch.float32) for x in (query, key, value, beta, g)]
+    query, key, value, beta, g = [
+        x.transpose(0, 1).contiguous().to(torch.float32) for x in (query, key, value, beta, g)
+    ]
     final_attn = torch.zeros([t, n, d], dtype=torch.float32, device=query.device)
 
     for b_idx in range(batch):
@@ -355,18 +434,28 @@ def segs_chunk_gated_delta_rule(**kwargs):
         seg_s = 128
         pad_size = (chunk_size - s % chunk_size) % chunk_size
         pad_seq_length = s + pad_size
-        batch_query, batch_key, batch_value = \
-            [F.pad(x[:, b_ofs:b_ofs + s], (0, 0, 0, pad_size)) for x in (query, key, value)]
-        batch_beta, batch_g = [F.pad(x[:, b_ofs:b_ofs + s], (0, pad_size)) for x in (beta, g)]
+        batch_query, batch_key, batch_value = [
+            functional.pad(x[:, b_ofs:b_ofs + s], (0, 0, 0, pad_size)) for x in (query, key, value)
+        ]
+        batch_beta, batch_g = [functional.pad(x[:, b_ofs:b_ofs + s], (0, pad_size)) for x in (beta, g)]
         result_list = []
         recurrent_state = initial_state[b_idx:b_idx + 1, ...]
         for s_idx in range(0, pad_seq_length, seg_s):
-            chunk_query, chunk_key, chunk_value = \
-                [x[:, s_idx:s_idx + seg_s, :].reshape(1, n, seg_s, d) for x in (batch_query, batch_key, batch_value)]
+            chunk_query, chunk_key, chunk_value = [
+                x[:, s_idx:s_idx + seg_s, :].reshape(1, n, seg_s, d) for x in (batch_query, batch_key, batch_value)
+            ]
             chunk_gate, chunk_beta = [x[:, s_idx:s_idx + seg_s].reshape(1, n, seg_s) for x in (batch_g, batch_beta)]
-            cur_attn, cur_state = segs_chunk_gated_delta_rule_sub(query=chunk_query, key=chunk_key, value=chunk_value,
-                g=chunk_gate, beta=chunk_beta, chunk_size=chunk_size, initial_state=recurrent_state,
-                output_final_state=output_final_state, use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,)
+            cur_attn, cur_state = segs_chunk_gated_delta_rule_sub(
+                query=chunk_query,
+                key=chunk_key,
+                value=chunk_value,
+                g=chunk_gate,
+                beta=chunk_beta,
+                chunk_size=chunk_size,
+                initial_state=recurrent_state,
+                output_final_state=output_final_state,
+                use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            )
             result_list.append(cur_attn.squeeze(0))
             recurrent_state = cur_state
         batch_attn = torch.cat(result_list, dim=0)[:s]
@@ -402,8 +491,10 @@ def segs_chunk_gated_delta_rule_sub_cycle(**kwargs):
         attn = (q_index @ k_index.transpose(-1, -2) * decay_mask[:, :, index]).masked_fill_(attn_mask, 0)
         v_new = v_index - (k_cumdecay[:, :, index]) @ last_recurrent_state
         attn_out[:, :, index] = (q_index * g[:, :, index, :, None].exp()) @ last_recurrent_state + attn @ v_new
-        last_recurrent_state = last_recurrent_state * g[:, :, index, -1, None, None].exp() + \
-            (k_index * (g[:, :, index, -1, None] - g[:, :, index]).exp()[..., None]).transpose(-1, -2) @ v_new
+        last_recurrent_state = (
+            last_recurrent_state * g[:, :, index, -1, None, None].exp()
+            + (k_index * (g[:, :, index, -1, None] - g[:, :, index]).exp()[..., None]).transpose(-1, -2) @ v_new
+        )
 
     return attn_out, last_recurrent_state
 
@@ -430,16 +521,15 @@ def segs_chunk_gated_delta_rule_sub(**kwargs):
     batch_size, num_heads, sequence_length, k_head_dim = key.shape
     v_head_dim = value.shape[-1]
     pad_size = (chunk_size - sequence_length % chunk_size) % chunk_size
-    query, key, value = [F.pad(x, (0, 0, 0, pad_size)) for x in (query, key, value)]
-    beta, g = [F.pad(x, (0, pad_size)) for x in (beta, g)]
+    query, key, value = [functional.pad(x, (0, 0, 0, pad_size)) for x in (query, key, value)]
+    beta, g = [functional.pad(x, (0, pad_size)) for x in (beta, g)]
 
     total_sequence_length = sequence_length + pad_size
     query = query * (1 / (query.shape[-1] ** 0.5))
 
     v_beta, k_beta = [x * beta.unsqueeze(-1) for x in (value, key)]
     query, key, value, k_beta, v_beta = [
-        x.reshape(x.shape[0], x.shape[1], -1, chunk_size, x.shape[-1])
-        for x in (query, key, value, k_beta, v_beta)
+        x.reshape(x.shape[0], x.shape[1], -1, chunk_size, x.shape[-1]) for x in (query, key, value, k_beta, v_beta)
     ]
     g = g.reshape(g.shape[0], g.shape[1], -1, chunk_size)
     mask = torch.triu(torch.ones(chunk_size, chunk_size, dtype=torch.bool, device=query.device), diagonal=0)
@@ -459,9 +549,17 @@ def segs_chunk_gated_delta_rule_sub(**kwargs):
     else:
         last_recurrent_state = initial_state.to(value)
 
-    attn_out, last_recurrent_state = segs_chunk_gated_delta_rule_sub_cycle(query=query, key=key, value=value,
-        decay_mask=decay_mask, k_cumdecay=k_cumdecay, g=g, last_recurrent_state=last_recurrent_state,
-        total_sequence_length=total_sequence_length, chunk_size=chunk_size)
+    attn_out, last_recurrent_state = segs_chunk_gated_delta_rule_sub_cycle(
+        query=query,
+        key=key,
+        value=value,
+        decay_mask=decay_mask,
+        k_cumdecay=k_cumdecay,
+        g=g,
+        last_recurrent_state=last_recurrent_state,
+        total_sequence_length=total_sequence_length,
+        chunk_size=chunk_size,
+    )
 
     if not output_final_state:
         last_recurrent_state = None
@@ -475,6 +573,7 @@ def segs_chunk_gated_delta_rule_sub(**kwargs):
 
 # ==================== Test Cases ====================
 # Test case: B:2, Nqk:2, Nv:4, S:4K
+
 
 def test_b2_nqk2_nv4_s1k():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s1k")

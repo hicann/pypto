@@ -2,14 +2,14 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 
+import logging
 import os
-import sys
 import re
 import shutil
-import logging
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import setup_logging, read_file, write_file
+from common import read_file, setup_logging, write_file
 
 setup_logging()
 
@@ -25,10 +25,8 @@ def add_debug_options_to_file(file_path):
         return False, None
 
     patterns = [
-        (r'@pypto\.frontend\.jit\s*\n',
-         '@pypto.frontend.jit(\n    debug_options={"runtime_debug_mode": 1}\n)\n'),
-        (r'@pypto\.frontend\.jit\(\)\s*\n',
-         '@pypto.frontend.jit(\n    debug_options={"runtime_debug_mode": 1}\n)\n'),
+        (r'@pypto\.frontend\.jit\s*\n', '@pypto.frontend.jit(\n    debug_options={"runtime_debug_mode": 1}\n)\n'),
+        (r'@pypto\.frontend\.jit\(\)\s*\n', '@pypto.frontend.jit(\n    debug_options={"runtime_debug_mode": 1}\n)\n'),
     ]
 
     for pattern, replacement in patterns:
@@ -43,9 +41,7 @@ def add_debug_options_to_file(file_path):
             params = match.group(1).strip()
             if '\n' in match.group(1):
                 replacement = (
-                    f'@pypto.frontend.jit(\n'
-                    f'    debug_options={{"runtime_debug_mode": 1}},\n'
-                    f'{match.group(1)})\n'
+                    f'@pypto.frontend.jit(\n    debug_options={{"runtime_debug_mode": 1}},\n{match.group(1)})\n'
                 )
             else:
                 replacement = f'@pypto.frontend.jit(\n    debug_options={{"runtime_debug_mode": 1}},\n    {params}\n)\n'

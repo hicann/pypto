@@ -9,24 +9,21 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
-import pypto
+
 from typing import List
 
+import pypto
+
 from .. import pypto_impl
+from .._op_wrapper import op_wrapper
 from ..enum import DataType
 from ..error import PyptoError
-from .._op_wrapper import op_wrapper
-from ..symbolic_scalar import SymbolicScalar, SymInt
+from ..symbolic_scalar import SymInt
 from ..tensor import Tensor
 
 
 def uniform_impl(
-        key: int,
-        counter0: SymInt,
-        counter1: int,
-        shape: List[int],
-        rounds: int = 10,
-        dtype: "DataType" = None
+    key: int, counter0: SymInt, counter1: int, shape: List[int], rounds: int = 10, dtype: "DataType" = None
 ) -> Tensor:
     """
     Generates uniform random numbers using the Philox algorithm.
@@ -64,22 +61,16 @@ def uniform_impl(
     output = pypto.uniform(key, counter0, counter1, shape, rounds=10)
     """
     if len(shape) != 1:
-        raise PyptoError(0xF00002, ValueError(
-            f"shape must be 1-dimensional, got {len(shape)} dimensions"
-        ))
+        raise PyptoError(0xF00002, ValueError(f"shape must be 1-dimensional, got {len(shape)} dimensions"))
     if rounds not in [7, 10]:
-        raise PyptoError(0xF00002, ValueError(
-            f"rounds must be 7 or 10, got {rounds}"
-        ))
+        raise PyptoError(0xF00002, ValueError(f"rounds must be 7 or 10, got {rounds}"))
 
     if dtype is None:
         dtype = pypto_impl.DataType.DT_FP32
 
     valid_dtypes = [pypto_impl.DataType.DT_FP32, pypto_impl.DataType.DT_FP16, pypto_impl.DataType.DT_BF16]
     if dtype not in valid_dtypes:
-        raise PyptoError(0xF00002, ValueError(
-            f"dtype must be one of DT_FP32, DT_FP16, DT_BF16, got {dtype}"
-        ))
+        raise PyptoError(0xF00002, ValueError(f"dtype must be one of DT_FP32, DT_FP16, DT_BF16, got {dtype}"))
 
     return pypto_impl.Uniform(
         pypto_impl.Element(pypto_impl.DataType.DT_UINT64, key),
@@ -87,7 +78,7 @@ def uniform_impl(
         pypto_impl.Element(pypto_impl.DataType.DT_UINT64, counter1),
         shape,
         pypto_impl.Element(pypto_impl.DataType.DT_UINT16, rounds),
-        dtype
+        dtype,
     )
 
 
@@ -144,7 +135,7 @@ def uniform(shape, key, counter, alg, dtype) -> Tensor:
 
     alg = alg[0]
     if alg != 1 and alg != 3:
-        raise PyptoError(0xF00002, ValueError(f"alg only support Philox."))
+        raise PyptoError(0xF00002, ValueError("alg only support Philox."))
 
     tile_shapes = pypto.get_vec_tile_shapes()
     tile_shape_one_dim = 1
@@ -240,7 +231,7 @@ def normal(shape, key, counter, alg, dtype) -> Tensor:
 
     alg = alg[0]
     if alg != 1 and alg != 3:
-        raise PyptoError(0xF00002, ValueError(f"alg only support Philox."))
+        raise PyptoError(0xF00002, ValueError("alg only support Philox."))
 
     tile_shapes = pypto.get_vec_tile_shapes()
     tile_shape_one_dim = 1
@@ -253,8 +244,9 @@ def normal(shape, key, counter, alg, dtype) -> Tensor:
         shape_one_dim *= dim_num
 
     counter0, counter1 = 0, counter[1]
-    uniform_res = uniform_impl(key[0], counter0, counter1, [(shape_one_dim + 1) // 2 * 2], rounds=10,
-                               dtype=pypto.DT_FP32)
+    uniform_res = uniform_impl(
+        key[0], counter0, counter1, [(shape_one_dim + 1) // 2 * 2], rounds=10, dtype=pypto.DT_FP32
+    )
 
     normal_res = box_muller(uniform_res)
     if shape_one_dim % 2 != 0:

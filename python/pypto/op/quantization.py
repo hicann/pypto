@@ -9,12 +9,13 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
+
 from typing import Optional, Tuple
 
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
-from ..tensor import Tensor
 from ..enum import DataType, DequantScaleRoundingMode
+from ..tensor import Tensor
 
 
 @op_wrapper

@@ -8,15 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-""" topk 相关用例 Golden 生成逻辑.
+"""topk 相关用例 Golden 生成逻辑.
 
 本脚本有 2 种执行模式:
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import sys
+
 import logging
 from pathlib import Path
+import sys
 from typing import List
 
 import numpy as np
@@ -26,8 +27,9 @@ import torch.nn.functional as functional
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -56,8 +58,8 @@ def gen_moe_golden(case_name: str, output: Path) -> bool:
     n_group = 0
     topk_group = 0
     num_experts_per_topk = 0
-    first_k_dense_replace = 0
-    moe_layer_freq = 0
+    _first_k_dense_replace = 0
+    _moe_layer_freq = 0
     s = 0
     b = 0
 
@@ -67,8 +69,8 @@ def gen_moe_golden(case_name: str, output: Path) -> bool:
         n_group = 8
         topk_group = 4
         num_experts_per_topk = 8
-        first_k_dense_replace = 3
-        moe_layer_freq = 1
+        _first_k_dense_replace = 3
+        _moe_layer_freq = 1
         s = 1
         b = 4
     elif case_name == "MoEGateOnBoardTest.test_operation_b_16":
@@ -77,8 +79,8 @@ def gen_moe_golden(case_name: str, output: Path) -> bool:
         n_group = 8
         topk_group = 4
         num_experts_per_topk = 8
-        first_k_dense_replace = 3
-        moe_layer_freq = 1
+        _first_k_dense_replace = 3
+        _moe_layer_freq = 1
         s = 1
         b = 16
     elif case_name == "MoEGateOnBoardTest.test_operation_b_32":
@@ -87,8 +89,8 @@ def gen_moe_golden(case_name: str, output: Path) -> bool:
         n_group = 8
         topk_group = 4
         num_experts_per_topk = 8
-        first_k_dense_replace = 3
-        moe_layer_freq = 1
+        _first_k_dense_replace = 3
+        _moe_layer_freq = 1
         s = 1
         b = 32
     elif case_name == "MoEGateOnBoardTest.test_operation_b_128":
@@ -97,8 +99,8 @@ def gen_moe_golden(case_name: str, output: Path) -> bool:
         n_group = 8
         topk_group = 4
         num_experts_per_topk = 8
-        first_k_dense_replace = 3
-        moe_layer_freq = 1
+        _first_k_dense_replace = 3
+        _moe_layer_freq = 1
         s = 1
         b = 128
     else:
@@ -165,9 +167,7 @@ def gen_moe_golden(case_name: str, output: Path) -> bool:
     group_mask.scatter_(1, group_idx, 1)
     group_mask.numpy().astype(np.float32).tofile(group_mask_path)
     score_mask = (
-        group_mask.unsqueeze(-1)
-        .expand(b * s, n_group, n_routed_experts // n_group)
-        .reshape(b * s, n_routed_experts)
+        group_mask.unsqueeze(-1).expand(b * s, n_group, n_routed_experts // n_group).reshape(b * s, n_routed_experts)
     ).type(torch.float32)
     scores_for_choice = scores_for_choice.reshape(b * s, n_routed_experts).type(torch.float32)
     tmp_scores = scores_for_choice.masked_fill(~score_mask.bool(), 0)  # -3.4e+38)
@@ -177,9 +177,7 @@ def gen_moe_golden(case_name: str, output: Path) -> bool:
     logging.debug("tmp_scores %s", tmp_scores)
 
     # ======= part4 scores tmp_scores <---> topk_weight
-    _, topk_idx = torch.topk(
-        tmp_scores, k=num_experts_per_topk, dim=-1, sorted=True
-    )
+    _, topk_idx = torch.topk(tmp_scores, k=num_experts_per_topk, dim=-1, sorted=True)
     topk_weight = scores.gather(1, topk_idx).type(torch.float32)
     denominator = topk_weight.sum(dim=-1, keepdim=True) + 1e-20
     topk_weight = topk_weight / denominator

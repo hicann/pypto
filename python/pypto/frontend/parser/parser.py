@@ -10,21 +10,23 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """PTO Script Parser."""
-from collections.abc import Iterator
+
 import ast
-import inspect
+from collections.abc import Iterator
 import functools
+import inspect
 import re
-from typing import Any, List, Optional, Union, Callable
+from typing import Any, Callable, Optional, Union
 
 import pypto
-from pypto._utils import set_source_location, clear_source_location
-from pypto.error import ParserError, RenderedParserError, FeError
+from pypto._utils import clear_source_location, set_source_location
+from pypto.error import FeError, ParserError, RenderedParserError
 from pypto.symbolic_scalar import SymbolicScalar, SymInt
+
 from .context import Context
 from .diagnostics import DiagnosticLevel, Diagnostics, Source
 from .evaluator import ExprEvaluator
-from .liveness import ScopeLivenessAnalyzer, LivenessResult
+from .liveness import ScopeLivenessAnalyzer
 
 ParamSpec = tuple[str, bool, Any]
 
@@ -57,8 +59,12 @@ class NestedFunctionMarker:
         """
         # Check the number of input tensors and input tensor definitions
         if len(param_specs) != len(call_args):
-            raise FeError(RuntimeError(f"There are {len(param_specs)} input param(s), \
-                but {len(call_args)} input arg(s)."))
+            raise FeError(
+                RuntimeError(
+                    f"There are {len(param_specs)} input param(s), \
+                but {len(call_args)} input arg(s)."
+                )
+            )
 
         def ordinal(n):
             suffix = ['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]
@@ -81,35 +87,42 @@ class NestedFunctionMarker:
 
             # Skip checking if the input tensor definition is None or（shape len is 0 && shape object is not list）
             if len(input_tensor_def.shape) != 0 or input_tensor_def.status_shape is not None:
-
                 # 根据属性input_tensor_def.status_shape做判断, def的shape len 小于等于 tensor的shape len
-                is_diff_shape = len(arg_value.shape) != len(input_tensor_def.shape) \
-                    if input_tensor_def.status_shape is None \
+                is_diff_shape = (
+                    len(arg_value.shape) != len(input_tensor_def.shape)
+                    if input_tensor_def.status_shape is None
                     else len(arg_value.shape) < len(input_tensor_def.shape)
+                )
 
                 # Check the shape of input tensors and input tensor definitions
                 if is_diff_shape:
-                    raise FeError(ValueError(
-                        f"In nested function '{self._func_name}': "
-                        f"The number of dimensions of {ordinal(idx)} parameter '{param_name}' "
-                        f"({len(arg_value.shape)}) does not match "
-                        f"number of dimensions of parameter definition ({len(input_tensor_def.shape)})."
-                    ))
+                    raise FeError(
+                        ValueError(
+                            f"In nested function '{self._func_name}': "
+                            f"The number of dimensions of {ordinal(idx)} parameter '{param_name}' "
+                            f"({len(arg_value.shape)}) does not match "
+                            f"number of dimensions of parameter definition ({len(input_tensor_def.shape)})."
+                        )
+                    )
                 for i, dim in enumerate(input_tensor_def.shape):
                     if isinstance(dim, int) and arg_value.shape[i] != dim:
-                        raise FeError(ValueError(
-                            f"In nested function '{self._func_name}': "
-                            f"The shape of {ordinal(idx)} parameter '{param_name}' {arg_value.shape} "
-                            f"does not match the shape of parameter definition {input_tensor_def.shape}."
-                    ))
+                        raise FeError(
+                            ValueError(
+                                f"In nested function '{self._func_name}': "
+                                f"The shape of {ordinal(idx)} parameter '{param_name}' {arg_value.shape} "
+                                f"does not match the shape of parameter definition {input_tensor_def.shape}."
+                            )
+                        )
 
             # Check the dtype of input tensors and input tensor definitions
             if input_tensor_def.explicit_dtype is not None and arg_value.dtype != input_tensor_def.dtype:
-                raise FeError(ValueError(
-                    f"In nested function '{self._func_name}': "
-                    f"The dtype of {ordinal(idx)} parameter '{param_name}' ({arg_value.dtype}) "
-                    f"does not match the dtype of parameter definition ({input_tensor_def.dtype})."
-                ))
+                raise FeError(
+                    ValueError(
+                        f"In nested function '{self._func_name}': "
+                        f"The dtype of {ordinal(idx)} parameter '{param_name}' ({arg_value.dtype}) "
+                        f"does not match the dtype of parameter definition ({input_tensor_def.dtype})."
+                    )
+                )
 
 
 DEFAULT_VISIT = {
@@ -228,9 +241,7 @@ class Parser(ast.NodeVisitor):
     # Public API
     # ==========================================================================================
 
-    def __init__(
-        self, source: Source, extra_vars: Optional[dict[str, Any]] = None
-    ) -> None:
+    def __init__(self, source: Source, extra_vars: Optional[dict[str, Any]] = None) -> None:
         self.diag = Diagnostics(source)
         self.context = Context()
         self.delete_after = {}
@@ -272,9 +283,11 @@ class Parser(ast.NodeVisitor):
 
         def _assign_dim_value(dim: pypto.SymbolicScalar, actual_value: int) -> None:
             if dim_value_map.get(str(dim), actual_value) != actual_value:
-                raise FeError(ValueError(
-                    f"Symbolic scalar {dim} has multiple concrete values: {dim_value_map[dim]} and {actual_value}"
-                ))
+                raise FeError(
+                    ValueError(
+                        f"Symbolic scalar {dim} has multiple concrete values: {dim_value_map[dim]} and {actual_value}"
+                    )
+                )
             dim_value_map[str(dim)] = actual_value
 
         # Iterate through both the actual inputs and their definitions
@@ -288,9 +301,7 @@ class Parser(ast.NodeVisitor):
                         if isinstance(actual_value, int):
                             _assign_dim_value(dim, actual_value)
             else:
-                raise FeError(TypeError(
-                    f"Invalid input shape type: {type(actual_input_shape)}, expected list"
-                ))
+                raise FeError(TypeError(f"Invalid input shape type: {type(actual_input_shape)}, expected list"))
         return dim_value_map
 
     def source_name(self):
@@ -317,7 +328,6 @@ class Parser(ast.NodeVisitor):
         # Store for later execution (lazy mode)
         self._parsed_node = node
         return self
-
 
     @_catch_parser_errors
     def bind_dynamic_dims_to_input_tensors(
@@ -361,7 +371,6 @@ class Parser(ast.NodeVisitor):
                     _assign_dim_value(dim, runtime_dim)
 
         self._bound_dim_values = dim_value_map
-
 
     @_catch_parser_errors
     def get_signature(
@@ -422,10 +431,7 @@ class Parser(ast.NodeVisitor):
 
             lowered_input_tensors, lowered_output_tensors = [], []
             for input_tensor in tensor_input_args:
-                shapes = [
-                    -1 if isinstance(dim, pypto.SymbolicScalar) else dim
-                    for dim in input_tensor.shape
-                ]
+                shapes = [-1 if isinstance(dim, pypto.SymbolicScalar) else dim for dim in input_tensor.shape]
                 lowered_input_tensors.append(
                     pypto.Tensor(
                         shapes,
@@ -438,10 +444,7 @@ class Parser(ast.NodeVisitor):
                     )
                 )
             for output_tensor in output_tensors:
-                shapes = [
-                    -1 if isinstance(dim, pypto.SymbolicScalar) else dim
-                    for dim in output_tensor.shape
-                ]
+                shapes = [-1 if isinstance(dim, pypto.SymbolicScalar) else dim for dim in output_tensor.shape]
                 lowered_output_tensors.append(
                     pypto.Tensor(
                         shapes,
@@ -458,11 +461,7 @@ class Parser(ast.NodeVisitor):
                 lowered_input_tensors,
                 lowered_output_tensors,
             )
-            return (
-                self._signature_cache
-                if not lower_symbolic_dims
-                else self._lowered_signature_cache
-            )
+            return self._signature_cache if not lower_symbolic_dims else self._lowered_signature_cache
 
     @_catch_parser_errors
     def execute(self) -> Any:
@@ -537,7 +536,7 @@ class Parser(ast.NodeVisitor):
                 NotImplementedError(
                     f"{name} is not supported by the PTO parser yet. "
                     f"Please check the documentation for supported Python features."
-                )
+                ),
             )
         return func(node)
 
@@ -562,7 +561,6 @@ class Parser(ast.NodeVisitor):
         if hasattr(func, "_original_func"):
             func = func._original_func
         return Source(func).as_ast()
-
 
     def _collect_function_environment(self, func: Any) -> dict[str, Any]:
         """Extract globals and nonlocals referenced by the function."""
@@ -670,7 +668,6 @@ class Parser(ast.NodeVisitor):
                 var_values[k] = v
         return ExprEvaluator.eval(node, var_values, self.diag)
 
-
     def _apply_bound_dim_values_to_context_frame(self) -> None:
         """Replace symbolic scalars in the current frame with bound values.
         This method is called after bind_dynamic_dims_to_input_tensors() or
@@ -700,13 +697,9 @@ class Parser(ast.NodeVisitor):
             current_value = values_stack[-1]
             if isinstance(current_value, tuple):
                 self.context.add(var_name, tuple(get_tuple_runtime_value(current_value)))
-            elif (
-                isinstance(current_value, SymbolicScalar)
-                and str(current_value) in self._bound_dim_values
-            ):
+            elif isinstance(current_value, SymbolicScalar) and str(current_value) in self._bound_dim_values:
                 bound_value = self._bound_dim_values[str(current_value)]
                 self.context.add(var_name, bound_value)
-
 
     def _visit_body(self, node: list[ast.stmt]) -> Any:
         """The general body visiting method.
@@ -769,9 +762,7 @@ class Parser(ast.NodeVisitor):
                 ),
             )
 
-    def _mark_dynamic_dimensions(
-        self, tensors: list[pypto.Tensor]
-    ) -> list[pypto.Tensor]:
+    def _mark_dynamic_dimensions(self, tensors: list[pypto.Tensor]) -> list[pypto.Tensor]:
         """Mark dynamic dimensions for tensors.
 
         Dynamic dimensions are those specified with pypto.dynamic() and represented
@@ -790,17 +781,12 @@ class Parser(ast.NodeVisitor):
         result = []
         for tensor in tensors:
             if isinstance(tensor, pypto.Tensor):
-                shape = [
-                    -1 if isinstance(dim, pypto.SymbolicScalar) else dim
-                    for dim in tensor.shape
-                ]
+                shape = [-1 if isinstance(dim, pypto.SymbolicScalar) else dim for dim in tensor.shape]
                 result.append(pypto.Tensor(shape, tensor.dtype, tensor.name))
             else:
                 raise ParserError(
                     tensor,
-                    TypeError(
-                        f"Tensor must be a pypto.Tensor, but got {type(tensor)}."
-                    ),
+                    TypeError(f"Tensor must be a pypto.Tensor, but got {type(tensor)}."),
                 )
         return result
 
@@ -852,9 +838,7 @@ class Parser(ast.NodeVisitor):
 
         with self.context.with_frame():
             # Step 1: Extract function signature (no return annotation; output_args always [])
-            tensor_input_args, output_args = self.get_signature(
-                lower_symbolic_dims=True
-            )
+            tensor_input_args, output_args = self.get_signature(lower_symbolic_dims=True)
 
             # Step 2: Add arguments to parsing context
             self._add_tensor_args_to_context(tensor_input_args)
@@ -875,9 +859,7 @@ class Parser(ast.NodeVisitor):
 
         return pypto.functions.get_last_function()
 
-    def _visit_arg(
-        self, node: ast.arg, default_value: Any = None
-    ) -> Union[pypto.Tensor, tuple[str, Any]]:
+    def _visit_arg(self, node: ast.arg, default_value: Any = None) -> Union[pypto.Tensor, tuple[str, Any]]:
         """The general arg visiting method.
 
         Parameters
@@ -916,49 +898,40 @@ class Parser(ast.NodeVisitor):
             raise ParserError(
                 node,
                 NotImplementedError(
-                    "Variable-length arguments (*args) are not supported. "
-                    "Please use a fixed number of arguments."
+                    "Variable-length arguments (*args) are not supported. Please use a fixed number of arguments."
                 ),
             )
         if len(node.kwonlyargs) > 0:
             raise ParserError(
                 node,
                 NotImplementedError(
-                    "Keyword-only arguments are not supported. "
-                    "Please use regular positional or keyword arguments."
+                    "Keyword-only arguments are not supported. Please use regular positional or keyword arguments."
                 ),
             )
         if len(node.kw_defaults) > 0:
             raise ParserError(
                 node,
                 NotImplementedError(
-                    "Keyword argument defaults are not supported. "
-                    "All arguments must be explicitly provided."
+                    "Keyword argument defaults are not supported. All arguments must be explicitly provided."
                 ),
             )
         if node.kwarg is not None:
             raise ParserError(
                 node,
                 NotImplementedError(
-                    "Keyword argument packing (**kwargs) is not supported. "
-                    "Please use explicit keyword arguments."
+                    "Keyword argument packing (**kwargs) is not supported. Please use explicit keyword arguments."
                 ),
             )
         n_defaults = len(node.defaults)
         if n_defaults > len(node.args):
             raise ParserError(
                 node,
-                ValueError(
-                    "Number of default values exceeds number of arguments."
-                ),
+                ValueError("Number of default values exceeds number of arguments."),
             )
         if len(node.posonlyargs) > 0:
             raise ParserError(
                 node,
-                NotImplementedError(
-                    "Position-only arguments are not supported. "
-                    "Please use regular arguments."
-                ),
+                NotImplementedError("Position-only arguments are not supported. Please use regular arguments."),
             )
 
     def _build_arg_default_values(self, node: ast.arguments) -> list[Any]:
@@ -988,14 +961,11 @@ class Parser(ast.NodeVisitor):
         raise ParserError(
             arg,
             ValueError(
-                "Default values are only allowed for non-tensor "
-                f"parameters. Parameter '{arg.arg}' is a tensor."
+                f"Default values are only allowed for non-tensor parameters. Parameter '{arg.arg}' is a tensor."
             ),
         )
 
-    def _parse_arguments_with_specs(
-        self, node: ast.arguments
-    ) -> tuple[list[pypto.Tensor], list[ParamSpec]]:
+    def _parse_arguments_with_specs(self, node: ast.arguments) -> tuple[list[pypto.Tensor], list[ParamSpec]]:
         """Parse function arguments into tensor args and param specs.
 
         Returns
@@ -1008,9 +978,7 @@ class Parser(ast.NodeVisitor):
         self._validate_arguments_node(node)
         default_values = self._build_arg_default_values(node)
         n_defaults = len(node.defaults)
-        first_default_idx = (
-            len(node.args) - n_defaults if n_defaults > 0 else len(node.args)
-        )
+        first_default_idx = len(node.args) - n_defaults if n_defaults > 0 else len(node.args)
 
         tensor_args: list[pypto.Tensor] = []
         param_specs: list[ParamSpec] = []
@@ -1057,9 +1025,7 @@ class Parser(ast.NodeVisitor):
         tensor_args, _ = self._parse_arguments_with_specs(node)
         return tensor_args
 
-    def _try_nested_call(
-        self, node: ast.Call, extra_vars: Optional[dict[str, Any]] = None
-    ) -> Optional[Any]:
+    def _try_nested_call(self, node: ast.Call, extra_vars: Optional[dict[str, Any]] = None) -> Optional[Any]:
         """Attempt to inline a nested function call marked with @function decorator.
 
         This method handles inline expansion of functions decorated with
@@ -1145,9 +1111,7 @@ class Parser(ast.NodeVisitor):
             for name, value in env_vars.items():
                 self.context.add(name, value)
 
-            tensor_input_args, param_specs = self._parse_arguments_with_specs(
-                func_def_node.args
-            )
+            tensor_input_args, param_specs = self._parse_arguments_with_specs(func_def_node.args)
 
             # Return annotation not allowed; nested functions use out param and out.move().
             if func_def_node.returns is not None:
@@ -1158,7 +1122,7 @@ class Parser(ast.NodeVisitor):
                         "Use an out parameter and out.move(...) instead."
                     ),
                 )
-            output_args = []
+            _output_args = []
 
         # Evaluate call-site arguments; keyword arguments are not supported yet.
         # Use merged env (locals + globals of callee + caller extras) so symbols referenced
@@ -1167,9 +1131,7 @@ class Parser(ast.NodeVisitor):
         if node.keywords:
             raise ParserError(
                 node,
-                NotImplementedError(
-                    "Keyword arguments in nested function calls are not supported yet."
-                ),
+                NotImplementedError("Keyword arguments in nested function calls are not supported yet."),
             )
 
         # Validate argument count matches the signature.
@@ -1177,10 +1139,7 @@ class Parser(ast.NodeVisitor):
         if len(call_args) != expected_arg_count:
             raise ParserError(
                 node,
-                ValueError(
-                    f"Function {func_name} expects {expected_arg_count} arguments, "
-                    f"but got {len(call_args)}"
-                ),
+                ValueError(f"Function {func_name} expects {expected_arg_count} arguments, but got {len(call_args)}"),
             )
 
         # If callee is a normal function, ensure it is decorated as nested; otherwise, bail out.
@@ -1197,37 +1156,24 @@ class Parser(ast.NodeVisitor):
                 self.context.add(name, value)
 
             # Bind parameters in declared order and validate types.
-            for (param_name, is_tensor, annotation), arg_value in zip(
-                param_specs, call_args
-            ):
+            for (param_name, is_tensor, annotation), arg_value in zip(param_specs, call_args):
                 if is_tensor:
                     if not isinstance(arg_value, pypto.Tensor):
                         raise ParserError(
                             node,
-                            TypeError(
-                                f"Expected tensor argument for {param_name}, "
-                                f"got {type(arg_value)}"
-                            ),
+                            TypeError(f"Expected tensor argument for {param_name}, got {type(arg_value)}"),
                         )
                     self.context.add(param_name, arg_value)
                 else:
-                    if annotation == bool and not isinstance(arg_value, bool):
+                    if annotation is bool and not isinstance(arg_value, bool):
                         raise ParserError(
                             node,
-                            TypeError(
-                                f"Expected bool argument for {param_name}, "
-                                f"got {type(arg_value)}"
-                            ),
+                            TypeError(f"Expected bool argument for {param_name}, got {type(arg_value)}"),
                         )
-                    if annotation == int and not isinstance(
-                        arg_value, (int, pypto.SymbolicScalar)
-                    ):
+                    if annotation is int and not isinstance(arg_value, (int, pypto.SymbolicScalar)):
                         raise ParserError(
                             node,
-                            TypeError(
-                                f"Expected int argument for {param_name}, "
-                                f"got {type(arg_value)}"
-                            ),
+                            TypeError(f"Expected int argument for {param_name}, got {type(arg_value)}"),
                         )
                     self.context.add(param_name, arg_value)
 
@@ -1284,8 +1230,7 @@ class Parser(ast.NodeVisitor):
             raise ParserError(
                 node,
                 NotImplementedError(
-                    "For-else clauses are not supported. "
-                    "Consider using a separate if statement after the loop."
+                    "For-else clauses are not supported. Consider using a separate if statement after the loop."
                 ),
             )
 
@@ -1306,9 +1251,7 @@ class Parser(ast.NodeVisitor):
         else:
             raise ParserError(
                 node.iter,
-                TypeError(
-                    f"Loop iterator must be range  Iterator, or list/tuple, but got {type(iter_expr).__name__}."
-                ),
+                TypeError(f"Loop iterator must be range  Iterator, or list/tuple, but got {type(iter_expr).__name__}."),
             )
 
     def _extract_loop_variables(self, target: ast.expr) -> tuple[bool, str, list[str]]:
@@ -1331,8 +1274,7 @@ class Parser(ast.NodeVisitor):
                     raise ParserError(
                         elt,
                         TypeError(
-                            f"Tuple unpacking in for loop only supports simple names, "
-                            f"but got {type(elt).__name__}."
+                            f"Tuple unpacking in for loop only supports simple names, but got {type(elt).__name__}."
                         ),
                     )
                 target_names.append(elt.id)
@@ -1341,8 +1283,7 @@ class Parser(ast.NodeVisitor):
             raise ParserError(
                 target,
                 TypeError(
-                    f"Loop variable must be a simple name or tuple/list for unpacking, "
-                    f"but got {type(target).__name__}."
+                    f"Loop variable must be a simple name or tuple/list for unpacking, but got {type(target).__name__}."
                 ),
             )
 
@@ -1350,21 +1291,21 @@ class Parser(ast.NodeVisitor):
 
     def _convert_range_iterator(self, node: ast.For, range_expr: range) -> list:
         """Convert range object to list for unified processing."""
-        if isinstance(range_expr.start, SymbolicScalar) or \
-            isinstance(range_expr.stop, SymbolicScalar) or \
-            isinstance(range_expr.step, SymbolicScalar):
+        if (
+            isinstance(range_expr.start, SymbolicScalar)
+            or isinstance(range_expr.stop, SymbolicScalar)
+            or isinstance(range_expr.step, SymbolicScalar)
+        ):
             raise ParserError(
                 node,
-                TypeError(
-                    f"range() not support symbolic scalar yet, "
-                    f"try use pypto.loop"
-                ),
+                TypeError("range() not support symbolic scalar yet, try use pypto.loop"),
             )
 
         return list(range(range_expr.start, range_expr.stop, range_expr.step))
 
-    def _handle_list_tuple_iterator(self, node: ast.For, iter_expr: Union[list, tuple],
-                                   loop_vars: tuple[bool, str, list[str]]) -> None:
+    def _handle_list_tuple_iterator(
+        self, node: ast.For, iter_expr: Union[list, tuple], loop_vars: tuple[bool, str, list[str]]
+    ) -> None:
         """Handle list/tuple iterators by unrolling at compile time."""
         is_tuple_unpack, loop_var_name, target_names = loop_vars
 
@@ -1378,9 +1319,7 @@ class Parser(ast.NodeVisitor):
         if is_tuple_unpack and len(iter_expr) != len(target_names):
             raise ParserError(
                 node.target,
-                ValueError(
-                    f"Cannot unpack {len(iter_expr)} values into {len(target_names)} targets."
-                ),
+                ValueError(f"Cannot unpack {len(iter_expr)} values into {len(target_names)} targets."),
             )
 
         # Unroll the loop at compile time
@@ -1393,8 +1332,7 @@ class Parser(ast.NodeVisitor):
         # Clean up variables after loop based on liveness analysis
         self._auto_cleanup_after_stmt(node)
 
-    def _handle_pto_iterator(self, node: ast.For, iterator: Iterator,
-                            loop_vars: tuple[bool, str, list[str]]) -> None:
+    def _handle_pto_iterator(self, node: ast.For, iterator: Iterator, loop_vars: tuple[bool, str, list[str]]) -> None:
         """Handle PTO iterators with traditional loop processing."""
         is_tuple_unpack, loop_var_name, target_names = loop_vars
 
@@ -1407,24 +1345,21 @@ class Parser(ast.NodeVisitor):
         # Clean up variables after loop based on liveness analysis
         self._auto_cleanup_after_stmt(node)
 
-    def _assign_loop_variable(self, target: ast.expr, value: Any, is_tuple_unpack: bool,
-                             loop_var_name: str, target_names: list[str]) -> None:
+    def _assign_loop_variable(
+        self, target: ast.expr, value: Any, is_tuple_unpack: bool, loop_var_name: str, target_names: list[str]
+    ) -> None:
         """Assign loop variable value to context."""
         if is_tuple_unpack:
             # Tuple unpacking validation and assignment
             if not isinstance(value, (tuple, list)):
                 raise ParserError(
                     target,
-                    TypeError(
-                        f"Expected tuple/list for unpacking, got {type(value).__name__}."
-                    ),
+                    TypeError(f"Expected tuple/list for unpacking, got {type(value).__name__}."),
                 )
             if len(value) != len(target_names):
                 raise ParserError(
                     target,
-                    ValueError(
-                        f"Cannot unpack {len(value)} values into {len(target_names)} targets."
-                    ),
+                    ValueError(f"Cannot unpack {len(value)} values into {len(target_names)} targets."),
                 )
             self._assign_target(target, value)
         else:
@@ -1446,8 +1381,7 @@ class Parser(ast.NodeVisitor):
             values_stack = self.context.name2value.get(target.id, [])
             if values_stack:
                 existing_value = values_stack[-1]
-                if (isinstance(existing_value, pypto.Tensor) and
-                    getattr(existing_value, 'is_input', False)):
+                if isinstance(existing_value, pypto.Tensor) and getattr(existing_value, 'is_input', False):
                     raise ParserError(
                         target,
                         ValueError(
@@ -1470,9 +1404,7 @@ class Parser(ast.NodeVisitor):
             if len(target.elts) != len(expr):
                 raise ParserError(
                     target,
-                    ValueError(
-                        f"Cannot unpack {len(expr)} values into {len(target.elts)} targets"
-                    ),
+                    ValueError(f"Cannot unpack {len(expr)} values into {len(target.elts)} targets"),
                 )
             for t, e in zip(target.elts, expr):
                 self._assign_target(t, e)
@@ -1490,10 +1422,7 @@ class Parser(ast.NodeVisitor):
         else:
             raise ParserError(
                 target,
-                TypeError(
-                    f"Assignment target must be a name, tuple, or subscript, "
-                    f"but got {type(target).__name__}."
-                ),
+                TypeError(f"Assignment target must be a name, tuple, or subscript, but got {type(target).__name__}."),
             )
 
     def _visit_assign(self, node: ast.Assign) -> None:
@@ -1592,9 +1521,7 @@ class Parser(ast.NodeVisitor):
         else:
             raise ParserError(
                 node.target,
-                NotImplementedError(
-                    f"Augmented assignment target type {type(node.target).__name__} is not supported."
-                ),
+                NotImplementedError(f"Augmented assignment target type {type(node.target).__name__} is not supported."),
             )
 
         # Perform the binary operation based on the operator type
@@ -1611,7 +1538,7 @@ class Parser(ast.NodeVisitor):
         elif isinstance(node.op, ast.Mod):
             result = target_value % value_expr
         elif isinstance(node.op, ast.Pow):
-            result = target_value ** value_expr
+            result = target_value**value_expr
         elif isinstance(node.op, ast.LShift):
             result = target_value << value_expr
         elif isinstance(node.op, ast.RShift):
@@ -1627,9 +1554,7 @@ class Parser(ast.NodeVisitor):
         else:
             raise ParserError(
                 node,
-                NotImplementedError(
-                    f"Augmented assignment operator {type(node.op).__name__} is not supported."
-                ),
+                NotImplementedError(f"Augmented assignment operator {type(node.op).__name__} is not supported."),
             )
 
         # Assign the result back to the target
@@ -1676,17 +1601,13 @@ class Parser(ast.NodeVisitor):
         test_expr = self._eval_expr(node.test)
 
         if isinstance(test_expr, pypto.SymbolicScalar):
-            cond = pypto.cond(
-                test_expr, file=self.source_name(), lineno=node.lineno
-            )
+            cond = pypto.cond(test_expr, file=self.source_name(), lineno=node.lineno)
         elif isinstance(test_expr, bool):
             cond = test_expr
         else:
             raise ParserError(
                 node.test,
-                TypeError(
-                    f"Test condition must be a symbolic scalar or boolean, but got {type(test_expr).__name__}."
-                ),
+                TypeError(f"Test condition must be a symbolic scalar or boolean, but got {type(test_expr).__name__}."),
             )
 
         # Execute the if statement using the condition as a context manager
@@ -1703,8 +1624,7 @@ class Parser(ast.NodeVisitor):
         raise ParserError(
             node,
             ValueError(
-                "Return statements are not allowed. Use an out parameter and "
-                "out.move(...) to write results instead."
+                "Return statements are not allowed. Use an out parameter and out.move(...) to write results instead."
             ),
         )
 
@@ -1738,10 +1658,7 @@ class Parser(ast.NodeVisitor):
             else:
                 raise ParserError(
                     target,
-                    TypeError(
-                        f"Delete target must be a name, "
-                        f"but got {type(target).__name__}."
-                    ),
+                    TypeError(f"Delete target must be a name, but got {type(target).__name__}."),
                 )
 
     def _is_tensor_var(self, var_name: str) -> bool:
@@ -1847,9 +1764,5 @@ class Parser(ast.NodeVisitor):
                 raise ParserError(node, f"AssertionError: {error_msg}")
         except (TypeError, ValueError) as e:
             raise ParserError(
-                TypeError(
-                    node,
-                    f"Cannot convert assert condition of type "
-                    f"{type(test_result).__name__} to boolean."
-                ),
+                TypeError(node, f"Cannot convert assert condition of type {type(test_result).__name__} to boolean."),
             ) from e

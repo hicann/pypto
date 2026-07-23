@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
+
 from typing import Optional, Union
 
 from pypto import pypto_impl
@@ -17,7 +18,7 @@ from pypto._op_wrapper import op_wrapper
 from pypto._utils import to_syms
 from pypto.enum import AtomicType, DataType, OpType
 from pypto.symbolic_scalar import SymbolicScalar
-from pypto.tensor import Tensor, ShmemTensor
+from pypto.tensor import ShmemTensor, Tensor
 
 
 @op_wrapper
@@ -391,7 +392,7 @@ def shmem_clear_data(
     shape: list[int] = None,
     offsets: list[Union[int, SymbolicScalar]] = None,
     *,
-    pred: list[Tensor] = None
+    pred: list[Tensor] = None,
 ) -> Tensor:
     """Clear the data of shmem tensor owned by my_pe.
 
@@ -428,11 +429,7 @@ def shmem_clear_data(
 
 
 @op_wrapper
-def shmem_clear_signal(
-    src: ShmemTensor,
-    *,
-    pred: list[Tensor] = None
-) -> Tensor:
+def shmem_clear_signal(src: ShmemTensor, *, pred: list[Tensor] = None) -> Tensor:
     """Clear all the signal value of shmem tensor on my_pe.
 
     Parameters

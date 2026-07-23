@@ -27,8 +27,7 @@ __all__ = [
 from typing import NoReturn, TypeVar
 
 from . import pypto_impl
-from .pypto_impl import LogLevel
-from .pypto_impl import InternalError
+from .pypto_impl import InternalError, LogLevel
 
 T = TypeVar("T")
 

@@ -11,8 +11,7 @@
 import itertools
 
 import pypto
-from pypto import SatStatus
-from pypto import SymbolicScalar
+from pypto import SatStatus, SymbolicScalar
 
 
 def _sym(name: str):
@@ -131,12 +130,12 @@ def test_non_unit_equality():
     x, y = _sym("x y")
 
     # --- Single-symbol pin surfaces a contradiction with a dependent inequality ---
-    assert check([2 * x == 4, x <= 1]) == SatStatus.UNSAT   # x=2 violates x<=1
-    assert check([2 * x == 4, x >= 3]) == SatStatus.UNSAT   # x=2 violates x>=3
-    assert check([3 * x == 6, x <= 1]) == SatStatus.UNSAT   # x=2 violates x<=1
+    assert check([2 * x == 4, x <= 1]) == SatStatus.UNSAT  # x=2 violates x<=1
+    assert check([2 * x == 4, x >= 3]) == SatStatus.UNSAT  # x=2 violates x>=3
+    assert check([3 * x == 6, x <= 1]) == SatStatus.UNSAT  # x=2 violates x<=1
 
     # --- Lone integer-unsatisfiable equality (no ±1 coeff, c ∤ bias) ---
-    assert check([2 * x == 3]) == SatStatus.UNSAT           # no integer x with 2x=3
+    assert check([2 * x == 3]) == SatStatus.UNSAT  # no integer x with 2x=3
 
     # --- Multi-symbol gcd-divisibility: gcd(2,2)=2 does not divide 5 ---
     assert check([2 * x + 2 * y == 5]) == SatStatus.UNSAT
@@ -146,8 +145,8 @@ def test_non_unit_equality():
     assert check([2 * x + y == 1, y == 0]) == SatStatus.UNSAT
 
     # --- Satisfiable conjunctions that must NOT regress to UNSAT ---
-    assert check([2 * x == 4, x <= 3]) != SatStatus.UNSAT   # x=2, 2<=3 holds
-    assert check([2 * x + 3 * y == 5]) != SatStatus.UNSAT   # x=1, y=1 works
+    assert check([2 * x == 4, x <= 3]) != SatStatus.UNSAT  # x=2, 2<=3 holds
+    assert check([2 * x + 3 * y == 5]) != SatStatus.UNSAT  # x=1, y=1 works
     assert check([2 * x + 2 * y == 4, x + y <= 3]) != SatStatus.UNSAT  # x+y=2<=3
 
 
@@ -175,9 +174,9 @@ def test_ne_atom():
     # NE (T_BOP_NE): FoldComparisons folds a substituted NE to false -> UNSAT;
     # a lone NE is undecidable -> UNKNOWN.
     x = pypto.symbolic_scalar("x")
-    assert check([x != x]) == SatStatus.UNSAT             # self-NE folds to 0 != 0
-    assert check([x != 5, x == 5]) == SatStatus.UNSAT     # NE contradicts the equality pin
-    assert check([x != 5]) != SatStatus.UNSAT             # lone NE: undecidable
+    assert check([x != x]) == SatStatus.UNSAT  # self-NE folds to 0 != 0
+    assert check([x != 5, x == 5]) == SatStatus.UNSAT  # NE contradicts the equality pin
+    assert check([x != 5]) != SatStatus.UNSAT  # lone NE: undecidable
 
 
 def test_ground_and_empty():
@@ -203,21 +202,21 @@ def test_inequality_contradictions():
     x, y = _sym("x y")
 
     # Equality pin collapses a 2-symbol row to single-symbol, exposing lo > hi.
-    assert check([y == 5, x + y >= 10, x <= 3]) == SatStatus.UNSAT   # x>=5 vs x<=3
-    assert check([y == 2, x - y >= 5, x <= 3]) == SatStatus.UNSAT   # x>=7 vs x<=3
+    assert check([y == 5, x + y >= 10, x <= 3]) == SatStatus.UNSAT  # x>=5 vs x<=3
+    assert check([y == 2, x - y >= 5, x <= 3]) == SatStatus.UNSAT  # x>=7 vs x<=3
 
     # Negative-coefficient rows: normalization (FlipRel) must preserve the verdict.
-    assert check([-2 * x <= -4, x <= 1]) == SatStatus.UNSAT         # x>=2 vs x<=1
-    assert check([-2 * x >= 4, x >= -1]) == SatStatus.UNSAT         # x<=-2 vs x>=-1
+    assert check([-2 * x <= -4, x <= 1]) == SatStatus.UNSAT  # x>=2 vs x<=1
+    assert check([-2 * x >= 4, x >= -1]) == SatStatus.UNSAT  # x<=-2 vs x>=-1
 
     # Mixed strict / non-strict bounds.
-    assert check([x > 5, x <= 5]) == SatStatus.UNSAT                # x>=6 vs x<=5
-    assert check([x >= 5, x < 5]) == SatStatus.UNSAT                # x>=5 vs x<=4
-    assert check([x > 5, x < 6]) == SatStatus.UNSAT                 # no integer strictly in (5,6)
+    assert check([x > 5, x <= 5]) == SatStatus.UNSAT  # x>=6 vs x<=5
+    assert check([x >= 5, x < 5]) == SatStatus.UNSAT  # x>=5 vs x<=4
+    assert check([x > 5, x < 6]) == SatStatus.UNSAT  # no integer strictly in (5,6)
 
     # Negative-value bounds.
     assert check([x >= -3, x <= -10]) == SatStatus.UNSAT
-    assert check([x >= -10, x <= -3]) != SatStatus.UNSAT            # feasible, e.g. x=-5
+    assert check([x >= -10, x <= -3]) != SatStatus.UNSAT  # feasible, e.g. x=-5
 
 
 def test_substitution_chains():
@@ -225,7 +224,7 @@ def test_substitution_chains():
     a, b, c, x, y = _sym("a b c x y")
 
     # Chain that only contradicts after propagating a ±1 substitution to a fixed point.
-    assert check([a == b, b == c, c == a + 1]) == SatStatus.UNSAT    # a=b=c, but c=a+1
+    assert check([a == b, b == c, c == a + 1]) == SatStatus.UNSAT  # a=b=c, but c=a+1
 
     # Consistent 2-symbol system (unique rational+integer solution x=y=1): not UNSAT.
     assert check([x + y == 2, x - y == 0]) != SatStatus.UNSAT
@@ -256,22 +255,32 @@ def test_gauss_multi_row():
 def test_dependent_row_systems_unsat():
     # row3 == 2*row2 in coefficients, but 30 != 2*14
     x, y, z = _sym("x y z")
-    assert check([
-        2 * x - y + 3 * z == 5,
-        x + 4 * y - z == 2,
-        3 * x + 3 * y + 2 * z == 7,
-        6 * x + 6 * y + 4 * z == 20,
-    ]) == SatStatus.UNSAT
+    assert (
+        check(
+            [
+                2 * x - y + 3 * z == 5,
+                x + 4 * y - z == 2,
+                3 * x + 3 * y + 2 * z == 7,
+                6 * x + 6 * y + 4 * z == 20,
+            ]
+        )
+        == SatStatus.UNSAT
+    )
 
     # row4 == 2*row3 in coefficients, but 30 != 2*12
     w = pypto.symbolic_scalar("w")
-    assert check([
-        x + 2 * y - z + w == 4,
-        3 * x - y + 2 * z - 2 * w == 1,
-        2 * x + y + z + w == 7,
-        5 * x + 3 * y + 4 * z - w == 12,
-        10 * x + 6 * y + 8 * z - 2 * w == 30,
-    ]) == SatStatus.UNSAT
+    assert (
+        check(
+            [
+                x + 2 * y - z + w == 4,
+                3 * x - y + 2 * z - 2 * w == 1,
+                2 * x + y + z + w == 7,
+                5 * x + 3 * y + 4 * z - w == 12,
+                10 * x + 6 * y + 8 * z - 2 * w == 30,
+            ]
+        )
+        == SatStatus.UNSAT
+    )
 
 
 def test_substitution_cascades():
@@ -368,7 +377,7 @@ def test_propagate_bounds_aggregation():
     # Multiple constraints on one symbol: TightenLo takes the max, TightenHi the min.
     x = pypto.symbolic_scalar("x")
 
-    assert check([x >= 2, x >= 5, x <= 4]) == SatStatus.UNSAT   # max(2,5)=5 > 4
+    assert check([x >= 2, x >= 5, x <= 4]) == SatStatus.UNSAT  # max(2,5)=5 > 4
     assert check([x >= 2, x >= 5, x <= 5]) != SatStatus.UNSAT
     assert check([x <= 10, x <= 7, x >= 8]) == SatStatus.UNSAT  # min(10,7)=7 < 8
     assert check([x <= 10, x <= 7, x >= 7]) != SatStatus.UNSAT
@@ -403,10 +412,10 @@ def test_ne_with_substitution():
     # folds to 0!=0 (false) -> UNSAT; one that stays distinct does not.
     x, y = _sym("x y")
 
-    assert check([y == x, y != x]) == SatStatus.UNSAT          # y-x folds to 0; 0!=0
-    assert check([y == x + 1, y != x]) != SatStatus.UNSAT      # folds to 1!=0
-    assert check([x == 5, x != 5]) == SatStatus.UNSAT          # folds to 5!=5
-    assert check([x == 5, x != 6]) != SatStatus.UNSAT          # folds to 5!=6
+    assert check([y == x, y != x]) == SatStatus.UNSAT  # y-x folds to 0; 0!=0
+    assert check([y == x + 1, y != x]) != SatStatus.UNSAT  # folds to 1!=0
+    assert check([x == 5, x != 5]) == SatStatus.UNSAT  # folds to 5!=5
+    assert check([x == 5, x != 6]) != SatStatus.UNSAT  # folds to 5!=6
 
 
 def test_post_subst_ground_fold():
@@ -416,19 +425,19 @@ def test_post_subst_ground_fold():
     x, y = _sym("x y")
 
     # Mod.
-    assert check([x == 6, x % 4 == 2]) == SatStatus.SAT      # 6 % 4 == 2
-    assert check([x == 6, x % 4 == 3]) == SatStatus.UNSAT    # 6 % 4 == 2 != 3
+    assert check([x == 6, x % 4 == 2]) == SatStatus.SAT  # 6 % 4 == 2
+    assert check([x == 6, x % 4 == 3]) == SatStatus.UNSAT  # 6 % 4 == 2 != 3
     # Div (truncated toward zero).
-    assert check([x == 7, x / 2 == 3]) == SatStatus.SAT      # 7 / 2 == 3
-    assert check([x == 8, x / 2 == 3]) == SatStatus.UNSAT    # 8 / 2 == 4
+    assert check([x == 7, x / 2 == 3]) == SatStatus.SAT  # 7 / 2 == 3
+    assert check([x == 8, x / 2 == 3]) == SatStatus.UNSAT  # 8 / 2 == 4
     # Negative mod is truncated, not Euclidean: -6 % 4 == -2.
     assert check([x == -6, x % 4 == -2]) == SatStatus.SAT
 
     # Min / Max.
     assert check([x == 5, y == 8, pypto.min(x, y) == 5]) == SatStatus.SAT
-    assert check([x == 6, y == 8, pypto.min(x, y) == 5]) == SatStatus.UNSAT   # min(6,8)=6
+    assert check([x == 6, y == 8, pypto.min(x, y) == 5]) == SatStatus.UNSAT  # min(6,8)=6
     assert check([x == 5, y == 8, pypto.max(x, y) == 8]) == SatStatus.SAT
-    assert check([x == 5, y == 8, pypto.max(x, y) == 7]) == SatStatus.UNSAT   # max(5,8)=8
+    assert check([x == 5, y == 8, pypto.max(x, y) == 7]) == SatStatus.UNSAT  # max(5,8)=8
 
     # Transitive substitution chain pins a, then folds a % 4.
     a, b = _sym("a b")

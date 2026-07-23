@@ -9,11 +9,10 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-from test_pil_builder_utils import TestParser, Expr
+from test_pil_builder_utils import Expr, TestParser
 
 
 def test_pil_builder_boolop():
-
     with TestParser():
 
         @TestParser.test
@@ -60,28 +59,27 @@ def test_pil_builder_boolop():
 
 
 def test_pil_builder_ifexp():
-
     with TestParser():
 
         @TestParser.test
         def true_test_body_selected():
-            var_x = Expr.str(0) if Expr.true(1) else Expr.str(2)
+            _var_x = Expr.str(0) if Expr.true(1) else Expr.str(2)
 
         @TestParser.test
         def false_test_orelse_selected():
-            var_x = Expr.str(0) if Expr.false(1) else Expr.str(2)
+            _var_x = Expr.str(0) if Expr.false(1) else Expr.str(2)
 
         @TestParser.test
         def nested_ifexp_in_body():
-            var_x = (Expr.str(0) if Expr.true(1) else Expr.str(2)) if Expr.true(3) else Expr.str(4)
+            _var_x = (Expr.str(0) if Expr.true(1) else Expr.str(2)) if Expr.true(3) else Expr.str(4)
 
         @TestParser.test
         def nested_ifexp_in_orelse():
-            var_x = Expr.str(0) if Expr.false(1) else (Expr.str(2) if Expr.true(3) else Expr.str(4))
+            _var_x = Expr.str(0) if Expr.false(1) else (Expr.str(2) if Expr.true(3) else Expr.str(4))
 
         @TestParser.test
         def nested_ifexp_in_orelse_false():
-            var_x = Expr.str(0) if Expr.false(1) else (Expr.str(2) if Expr.false(3) else Expr.str(4))
+            _var_x = Expr.str(0) if Expr.false(1) else (Expr.str(2) if Expr.false(3) else Expr.str(4))
 
         @TestParser.test
         def ifexp_as_if_test():
@@ -92,29 +90,25 @@ def test_pil_builder_ifexp():
 
 
 def test_pil_builder_bin_op():
-
     with TestParser():
 
         @TestParser.test
         def add():
-            var_x = Expr.int(0) + Expr.int(1) * Expr.int(2)
-            var_y = Expr.int(0) - Expr.int(1) // Expr.int(2)
+            _var_x = Expr.int(0) + Expr.int(1) * Expr.int(2)
+            _var_y = Expr.int(0) - Expr.int(1) // Expr.int(2)
 
 
 def test_pil_builder_unary_op():
-
     with TestParser():
 
         @TestParser.test
         def add():
-            var_x = -Expr.int(0) + Expr.int(1) * Expr.int(2)
-            var_y = -Expr.int(0) - Expr.int(1) // Expr.int(2)
+            _var_x = -Expr.int(0) + Expr.int(1) * Expr.int(2)
+            _var_y = -Expr.int(0) - Expr.int(1) // Expr.int(2)
 
 
 def test_pil_builder_compare():
-
     with TestParser():
-
         # ================================================================
         # Part 1: single-op comparisons with each operator
         # ================================================================
@@ -272,9 +266,9 @@ def test_pil_builder_compare():
 
         @TestParser.test
         def cmp_call_kw_arg():
-
             def func(x):
                 Expr.str(x)
+
             func(x=Expr.int(1) == Expr.int(1))
 
         # --- compare result in tuple literal ---

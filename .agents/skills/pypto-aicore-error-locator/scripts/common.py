@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 
+import logging
 import os
+from pathlib import Path
 import shutil
 import subprocess
-import logging
-from pathlib import Path
 
 
 def setup_logging():
@@ -55,10 +55,10 @@ def get_commentable_lines(lines, error_in_t=False):
         if i == tensor_close:
             continue
         should_skip = (
-            not stripped or
-            stripped.startswith('//') or
-            '#' in stripped or
-            any(keyword in stripped for keyword in skip_keywords)
+            not stripped
+            or stripped.startswith('//')
+            or '#' in stripped
+            or any(keyword in stripped for keyword in skip_keywords)
         )
         if '{' in stripped and '[aicore]' in stripped:
             should_skip = True
@@ -131,16 +131,11 @@ def has_error(returncode, output, use_pypto_test_framework=False):
 
 def run_test(test_cmd, run_dir):
     import shlex
+
     if isinstance(test_cmd, str):
         test_cmd = shlex.split(test_cmd)
     result = subprocess.run(
-        test_cmd,
-        cwd=run_dir,
-        capture_output=True,
-        text=True,
-        errors='ignore',
-        timeout=1800,
-        check=False
+        test_cmd, cwd=run_dir, capture_output=True, text=True, errors='ignore', timeout=1800, check=False
     )
     return result.returncode, result.stdout + result.stderr
 
@@ -213,8 +208,12 @@ def find_installed_tile_fwk_config():
 def build_and_install(pypto_path):
     result = subprocess.run(
         ["python3", "build_ci.py", "-f", "python3", "--disable_auto_execute"],
-        shell=False, capture_output=True, text=True, cwd=pypto_path,
-        timeout=DEFAULT_TIMEOUT)
+        shell=False,
+        capture_output=True,
+        text=True,
+        cwd=pypto_path,
+        timeout=DEFAULT_TIMEOUT,
+    )
     if result.returncode != 0:
         return False
 
@@ -238,8 +237,7 @@ def build_and_install(pypto_path):
     install_cmd = [_PIP_CMD, "install", str(whl_files[0]), "--force", "--no-deps"]
     if target:
         install_cmd += ["--target", target]
-    result = subprocess.run(
-        install_cmd, shell=False, capture_output=True, text=True, timeout=300)
+    result = subprocess.run(install_cmd, shell=False, capture_output=True, text=True, timeout=300)
     if result.returncode != 0:
         return False
     return True

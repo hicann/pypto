@@ -10,21 +10,20 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """ """
+
+import logging
 import os
 from pathlib import Path
 import shutil
 import sys
 from typing import NoReturn
-import logging
 
-helper_path: Path = Path(
-    Path(__file__).parent.parent.parent.parent.parent, "cmake/scripts/helper"
-).resolve()
+helper_path: Path = Path(Path(__file__).parent.parent.parent.parent.parent, "cmake/scripts/helper").resolve()
 if str(helper_path) not in sys.path:
     sys.path.append(str(helper_path))
-from test_case_desc import TensorDesc
-from test_case_runner import TestCaseRunner
-from test_case_shell_actuator import TestCaseShellActuator
+from test_case_desc import TensorDesc  # noqa: E402
+from test_case_runner import TestCaseRunner  # noqa: E402
+from test_case_shell_actuator import TestCaseShellActuator  # noqa: E402
 
 
 class OperationTestCaseRunner(TestCaseRunner):
@@ -50,9 +49,7 @@ class OperationTestCaseRunner(TestCaseRunner):
             TensorDesc.from_dict(tensor) if isinstance(tensor, dict) else tensor
             for tensor in test_case_info.get("output_tensors")
         ]
-        self._root_path = Path(
-            Path(__file__).parent.parent.parent.parent.parent.parent.parent
-        ).resolve()
+        self._root_path = Path(Path(__file__).parent.parent.parent.parent.parent.parent.parent).resolve()
         self._log_file = test_case_info.get("log_file")
 
     def input_tensors(self):
@@ -71,9 +68,7 @@ class OperationTestCaseRunner(TestCaseRunner):
         pass
 
     def tear_up(self) -> NoReturn:
-        os.environ["TILE_FWK_STEST_GOLDEN_PATH"] = (
-            f"{str(self._root_path)}/build/output/bin/golden"
-        )
+        os.environ["TILE_FWK_STEST_GOLDEN_PATH"] = f"{str(self._root_path)}/build/output/bin/golden"
         os.chdir(f"{str(self._root_path)}/build/output/bin")
 
     def tear_down(self) -> NoReturn:

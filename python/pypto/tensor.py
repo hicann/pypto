@@ -8,16 +8,24 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import typing
-from typing import Union, List, Optional, Tuple, Sequence
+from typing import List, Optional, Sequence, Tuple, Union
 
 import pypto
 
-from .enum import *  # noqa
-from ._utils import to_syms, to_sym, source_location
-from .symbolic_scalar import SymbolicScalar, SymInt
+from . import pypto_impl
 from ._element import Element
+from ._utils import source_location, to_sym, to_syms
+from .enum import (
+    CachePolicy,
+    DataType,
+    DequantScaleRoundingMode,
+    PrecisionType,
+    TileOpFormat,
+)
 from .error import FeError
+from .symbolic_scalar import SymbolicScalar, SymInt
+
+LogicalTensor = pypto_impl.LogicalTensor
 
 
 class TensorAnnotation:
@@ -27,8 +35,16 @@ class TensorAnnotation:
     supporting the Python-standard syntax: pypto.Tensor[shape, dtype]
     """
 
-    def __init__(self, shape=None, dtype=None, name="", format=TileOpFormat.TILEOP_ND,
-                 data_ptr=None, device=None, ori_shape=None):
+    def __init__(
+        self,
+        shape=None,
+        dtype=None,
+        name="",
+        format=TileOpFormat.TILEOP_ND,
+        data_ptr=None,
+        device=None,
+        ori_shape=None,
+    ):
         self.shape = shape if shape is not None else []
         self.dtype = dtype if dtype is not None else pypto.DT_FP32
         self.name = name
@@ -39,15 +55,20 @@ class TensorAnnotation:
 
     def to_tensor(self, name: str = ""):
         final_name = name if name else self.name
-        return Tensor(self.shape, self.dtype, final_name, self.format,
-                      self.data_ptr, self.device, self.ori_shape)
+        return Tensor(self.shape, self.dtype, final_name, self.format, self.data_ptr, self.device, self.ori_shape)
 
 
 class Tensor:
-
-    def __init__(self, shape=None, dtype: Union[DataType, None] = None,
-            name: str = "", format=None,
-            data_ptr: Optional[int] = None, device=None, ori_shape=None):
+    def __init__(
+        self,
+        shape=None,
+        dtype: Union[DataType, None] = None,
+        name: str = "",
+        format=None,
+        data_ptr: Optional[int] = None,
+        device=None,
+        ori_shape=None,
+    ):
         self.ori_shape = ori_shape
         self.status_shape = None
         # Mark explicit dtype and format configuration
@@ -485,9 +506,11 @@ class Tensor:
             # Case1: last element -> allows enum/int/...
             if is_last:
                 # Check if it's an allowed type
-                if (isinstance(elem, pypto.StatusType) or  # pypto.enum type
-                    isinstance(elem, int) or             # int type
-                    elem is ...):                        # ellipsis
+                if (
+                    isinstance(elem, pypto.StatusType)  # pypto.enum type
+                    or isinstance(elem, int)  # int type
+                    or elem is ...
+                ):  # ellipsis
                     continue
                 else:
                     return False
@@ -521,10 +544,12 @@ class Tensor:
     def _add_one_dim(key, value_shape):
         slices_count = sum(1 for k in key if isinstance(k, slice))
         if slices_count != len(value_shape):
-            raise FeError(ValueError(
-                f"The number of slice in key ({slices_count}) "
-                f"must match the length of input Tensor ({len(value_shape)}). "
-            ))
+            raise FeError(
+                ValueError(
+                    f"The number of slice in key ({slices_count}) "
+                    f"must match the length of input Tensor ({len(value_shape)}). "
+                )
+            )
         new_shape = []
         idx = 0
         for k in key:
@@ -651,18 +676,27 @@ class Tensor:
         return pypto.prelu(self, weight)
 
     @source_location
-    def div(self, other: 'Tensor | int | float',
-            precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> 'Tensor':
+    def div(
+        self,
+        other: 'Tensor | int | float',
+        precision_type: PrecisionType = PrecisionType.HIGH_PRECISION,
+    ) -> 'Tensor':
         return pypto.div(self, other, precision_type)
 
     @source_location
-    def fmod(self, other: 'Tensor | int | float',
-             precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> 'Tensor':
+    def fmod(
+        self,
+        other: 'Tensor | int | float',
+        precision_type: PrecisionType = PrecisionType.HIGH_PRECISION,
+    ) -> 'Tensor':
         return pypto.fmod(self, other, precision_type)
 
     @source_location
-    def remainder(self, other: 'Tensor | int | float',
-                  precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> 'Tensor':
+    def remainder(
+        self,
+        other: 'Tensor | int | float',
+        precision_type: PrecisionType = PrecisionType.HIGH_PRECISION,
+    ) -> 'Tensor':
         return pypto.remainder(self, other, precision_type)
 
     @source_location
@@ -676,14 +710,7 @@ class Tensor:
 
     @source_location
     def matmul(
-            self,
-            mat2,
-            out_dtype,
-            *,
-            a_trans=False,
-            b_trans=False,
-            c_matrix_nz=False,
-            extend_params=None
+        self, mat2, out_dtype, *, a_trans=False, b_trans=False, c_matrix_nz=False, extend_params=None
     ) -> "Tensor":
         return pypto.matmul(
             self,
@@ -692,7 +719,7 @@ class Tensor:
             a_trans=a_trans,
             b_trans=b_trans,
             c_matrix_nz=c_matrix_nz,
-            extend_params=extend_params
+            extend_params=extend_params,
         )
 
     @source_location
@@ -712,8 +739,9 @@ class Tensor:
         pypto.assemble(input, offsets, self)
 
     @source_location
-    def reshape(self, shape: List[int], *, valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None,
-                inplace: bool = False) -> 'Tensor':
+    def reshape(
+        self, shape: List[int], *, valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None, inplace: bool = False
+    ) -> 'Tensor':
         if inplace:
             return pypto.reshape(self, shape, inplace=inplace)
         else:
@@ -724,8 +752,13 @@ class Tensor:
         return pypto.unsqueeze(self, dim)
 
     @source_location
-    def view(self, shape: List[int], offsets: List[Union[int, SymbolicScalar]],
-             *, valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None) -> 'Tensor':
+    def view(
+        self,
+        shape: List[int],
+        offsets: List[Union[int, SymbolicScalar]],
+        *,
+        valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None,
+    ) -> 'Tensor':
         return pypto.view(self, shape, offsets, valid_shape=valid_shape)
 
     @source_location
@@ -770,10 +803,7 @@ class Tensor:
 
     @source_location
     def where(
-        self,
-        condition: 'Tensor',
-        x: Union['Tensor', Element, float],
-        y: Union['Tensor', Element, float]
+        self, condition: 'Tensor', x: Union['Tensor', Element, float], y: Union['Tensor', Element, float]
     ) -> 'Tensor':
         return pypto.where(self, condition, x, y)
 
@@ -919,14 +949,12 @@ class Tensor:
         return pypto.gathermask(self, pattern_mode)
 
     @source_location
-    def index_add_(self, dim: int, index: 'Tensor', source: 'Tensor', *,
-                    alpha: Union[int, float] = 1) -> 'Tensor':
+    def index_add_(self, dim: int, index: 'Tensor', source: 'Tensor', *, alpha: Union[int, float] = 1) -> 'Tensor':
         pypto.index_add_(self, dim, index, source, alpha=alpha)
         return self
 
     @source_location
-    def index_add(self, dim: int, index: 'Tensor', source: 'Tensor', *,
-                    alpha: Union[int, float] = 1) -> 'Tensor':
+    def index_add(self, dim: int, index: 'Tensor', source: 'Tensor', *, alpha: Union[int, float] = 1) -> 'Tensor':
         return pypto.index_add(self, dim, index, source, alpha=alpha)
 
     @source_location
@@ -960,8 +988,9 @@ class Tensor:
         return self
 
     @source_location
-    def expand_clone(self, shape: List[int], *,
-                     valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None) -> 'Tensor':
+    def expand_clone(
+        self, shape: List[int], *, valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None
+    ) -> 'Tensor':
         if valid_shape is None:
             valid_shape = []
         return pypto.expand_clone(self, shape, valid_shape=valid_shape)
@@ -979,18 +1008,21 @@ class Tensor:
         return pypto.scatter_update(self, dim, index, src)
 
     @source_location
-    def scatter_(self, dim: int, index: 'Tensor',
-                 src: Union[float, Element, 'Tensor'], *, reduce: str = None) -> 'Tensor':
+    def scatter_(
+        self, dim: int, index: 'Tensor', src: Union[float, Element, 'Tensor'], *, reduce: str = None
+    ) -> 'Tensor':
         return pypto.scatter_(self, dim, index, src, reduce=reduce)
 
     @source_location
-    def scatter(self, dim: int, index: 'Tensor',
-                src: Union[float, Element, 'Tensor'], *, reduce: str = None) -> 'Tensor':
+    def scatter(
+        self, dim: int, index: 'Tensor', src: Union[float, Element, 'Tensor'], *, reduce: str = None
+    ) -> 'Tensor':
         return pypto.scatter(self, dim, index, src, reduce=reduce)
 
     @source_location
-    def var(self, dim: Union[int, List[int], Tuple[int]] = None, *,
-            correction: float = 1, keepdim: bool = False) -> 'Tensor':
+    def var(
+        self, dim: Union[int, List[int], Tuple[int]] = None, *, correction: float = 1, keepdim: bool = False
+    ) -> 'Tensor':
         return pypto.var(self, dim, correction=correction, keepdim=keepdim)
 
     def _is_empty_slice(self, key):

@@ -71,6 +71,6 @@ y = my_kernel(x)
 For detailed developer documentation, see developer_doc.md in the frontend directory.
 """
 
-from ... import error
-from .entry import jit, function
-from .pil import parse_stmts
+from ... import error  # noqa: F401
+from .entry import function, jit  # noqa: F401
+from .pil import parse_stmts  # noqa: F401

@@ -8,8 +8,8 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import pypto
 
 
@@ -17,11 +17,11 @@ def test_init_symbolic_scalar_value_arg():
     expected_value = 123
     scalar = pypto.symbolic_scalar(expected_value)
 
-    assert scalar.is_concrete() == True
+    assert scalar.is_concrete()
     assert scalar.concrete() == expected_value
 
     scalar = pypto.symbolic_scalar(scalar)
-    assert scalar.is_concrete() == True
+    assert scalar.is_concrete()
     assert scalar.concrete() == expected_value
 
 
@@ -29,7 +29,7 @@ def test_init_symbolic_scalar_name_value_args():
     expected_value = 123
     scalar = pypto.symbolic_scalar("scalar", expected_value)
 
-    assert scalar.is_concrete() == True
+    assert scalar.is_concrete()
     assert scalar.concrete() == expected_value
 
 
@@ -41,32 +41,32 @@ def test_symbolic_scalar_dump():
 
 def test_symbolic_scalar_prop():
     scalar = pypto.symbolic_scalar(10)
-    assert scalar.is_symbol() == False
-    assert scalar.is_expression() == False
-    assert scalar.is_immediate() == True
-    assert scalar.is_concrete() == True
+    assert not scalar.is_symbol()
+    assert not scalar.is_expression()
+    assert scalar.is_immediate()
+    assert scalar.is_concrete()
     assert scalar.concrete() == 10
 
     scalar2 = pypto.symbolic_scalar("s")
-    assert scalar2.is_symbol() == True
-    assert scalar2.is_expression() == False
-    assert scalar.is_immediate() == True
-    assert scalar2.is_concrete() == False
+    assert scalar2.is_symbol()
+    assert not scalar2.is_expression()
+    assert scalar.is_immediate()
+    assert not scalar2.is_concrete()
 
     scalar3 = scalar < 2
     assert isinstance(scalar3, pypto.symbolic_scalar)
-    assert scalar3.is_symbol() == False
-    assert scalar3.is_expression() == False
-    assert scalar3.is_immediate() == True
-    assert scalar3.is_concrete() == True
+    assert not scalar3.is_symbol()
+    assert not scalar3.is_expression()
+    assert scalar3.is_immediate()
+    assert scalar3.is_concrete()
     assert scalar3.concrete() == 0
 
     scalar4 = scalar2 < 2
     assert isinstance(scalar4, pypto.symbolic_scalar)
-    assert scalar4.is_symbol() == False
-    assert scalar4.is_expression() == True
-    assert scalar4.is_immediate() == False
-    assert scalar4.is_concrete() == False
+    assert not scalar4.is_symbol()
+    assert scalar4.is_expression()
+    assert not scalar4.is_immediate()
+    assert not scalar4.is_concrete()
 
 
 def test_symbolic_scalar_uniop():
@@ -116,32 +116,32 @@ def test_binary_ops():
         (y != x, y != c, x != z, c != z, True),
     ]
 
-    for (expr, expr1, expr2, expr3, val) in tests:
+    for expr, expr1, expr2, expr3, val in tests:
         assert isinstance(expr, pypto.symbolic_scalar)
-        assert expr.is_symbol() == False
-        assert expr.is_expression() == True
-        assert expr.is_immediate() == False
-        assert expr.is_concrete() == False
+        assert not expr.is_symbol()
+        assert expr.is_expression()
+        assert not expr.is_immediate()
+        assert not expr.is_concrete()
 
         assert isinstance(expr1, pypto.symbolic_scalar)
-        assert expr1.is_symbol() == False
-        assert expr1.is_expression() == True
-        assert expr1.is_immediate() == False
-        assert expr1.is_concrete() == False
+        assert not expr1.is_symbol()
+        assert expr1.is_expression()
+        assert not expr1.is_immediate()
+        assert not expr1.is_concrete()
 
         assert isinstance(expr2, pypto.symbolic_scalar)
         assert expr2.concrete() == val
-        assert expr2.is_symbol() == False
-        assert expr2.is_expression() == False
-        assert expr2.is_immediate() == True
-        assert expr2.is_concrete() == True
+        assert not expr2.is_symbol()
+        assert not expr2.is_expression()
+        assert expr2.is_immediate()
+        assert expr2.is_concrete()
 
         assert isinstance(expr3, pypto.symbolic_scalar)
         assert expr3.concrete() == val
-        assert expr3.is_symbol() == False
-        assert expr3.is_expression() == False
-        assert expr3.is_immediate() == True
-        assert expr3.is_concrete() == True
+        assert not expr3.is_symbol()
+        assert not expr3.is_expression()
+        assert expr3.is_immediate()
+        assert expr3.is_concrete()
 
 
 def test_symbolic_scalar_add():
@@ -218,7 +218,7 @@ def test_symbolic_scalar_binop_with_int():
     j = b * a
     k = b / a
     k_floor = b // a
-    l = b % a
+    l = b % a  # noqa: E741
 
     for op in [c, d, e, f, f_floor, g, h, i, j, k, k_floor, l]:
         assert isinstance(op, pypto.symbolic_scalar)
@@ -311,13 +311,13 @@ def test_symbolic_scalar_issue36():
 
 def test_symbolic_scalar_logical_ops():
     c = 10
-    x = pypto.symbolic_scalar(10)   # concrete immediate
+    x = pypto.symbolic_scalar(10)  # concrete immediate
     y = pypto.symbolic_scalar('y')  # symbol
-    z = pypto.symbolic_scalar(20)   # concrete immediate
+    z = pypto.symbolic_scalar(20)  # concrete immediate
     zero = pypto.symbolic_scalar(0)
 
     # concrete && concrete / || concrete folds to 0/1
-    assert (x & z).concrete() == 1    # 10 && 20
+    assert (x & z).concrete() == 1  # 10 && 20
     assert (z & x).concrete() == 1
     assert (x | z).concrete() == 1
     assert (zero & x).concrete() == 0  # 0 && 10
@@ -332,8 +332,8 @@ def test_symbolic_scalar_logical_ops():
     # symbol op (symbol or concrete) -> expression
     expr = y & z
     assert isinstance(expr, pypto.symbolic_scalar)
-    assert expr.is_expression() == True
-    assert expr.is_concrete() == False
+    assert expr.is_expression()
+    assert not expr.is_concrete()
     assert str(expr) == '(y&&20)'
 
     assert str(y | x) == '1'

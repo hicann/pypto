@@ -8,15 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import os
-import pypto
-import pytest
+
 import numpy as np
-import torch
 from numpy.testing import assert_allclose
+import torch
 import torch_npu
+
+import pypto
 
 
 @pypto.frontend.jit()
@@ -24,7 +25,7 @@ def reshape_kernel(
     in_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
-    b = 3
+    _b = 3
     n1 = 64
     d = 64
 
@@ -45,7 +46,7 @@ def test_reshape():
     b = 3
     n1 = 64
     d = 64
-    shape = (b, n1, d)
+    _shape = (b, n1, d)
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch.npu.set_device(int(device_id))
     torch.manual_seed(42)
@@ -63,9 +64,7 @@ def test_reshape():
     ## golden
     output_golde = (input_cpu + 1).reshape(b, n1, d)
 
-    assert_allclose(np.array(output_cpu),
-                    np.array(output_golde),
-                    rtol=1e-3, atol=1e-3)
+    assert_allclose(np.array(output_cpu), np.array(output_golde), rtol=1e-3, atol=1e-3)
 
 
 @pypto.frontend.jit()

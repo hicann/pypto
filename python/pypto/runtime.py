@@ -8,17 +8,18 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 from enum import IntEnum
 from typing import List, Sequence
 
-import pypto
 import torch
+
+import pypto
 
 from . import pypto_impl
 from ._build_online import BuildOnlineCalculatorManager
-from .converter import from_torch, _gen_pto_tensor
+from .converter import _gen_pto_tensor, from_torch
 from .error import PyptoRtError
 
 __all__ = [
@@ -27,7 +28,7 @@ __all__ = [
     "_device_run_once_data_from_host",
     "_device_synchronize",
     "verify",
-    "set_verify_data",
+    "set_verify_data",  # noqa: F822
 ]
 
 _device_init = pypto_impl.DeviceInit
@@ -40,7 +41,6 @@ class RunMode(IntEnum):
 
 
 class _CachedVerifyData:
-
     def __init__(self):
         self._data = []
         self._keepalive_data = []
@@ -90,19 +90,25 @@ def _device_run_once_data_from_host(*args):
     for i, t in enumerate(args):
         if not isinstance(t, pypto.Tensor):
             raise PyptoRtError(TypeError(f"Expected a pypto.Tensor at inputs[{i}], but got {type(t).__name__}."))
-    pypto_impl.DeviceRunOnceDataFromHost(
-        _pto_to_tensor_data(args), [])
+    pypto_impl.DeviceRunOnceDataFromHost(_pto_to_tensor_data(args), [])
 
 
 def _device_synchronize():
     pypto_impl.OperatorDeviceSynchronize(_current_stream())
 
 
-def verify(func, inputs, outputs, goldens, *args,
-           codegen_options=None,
-           host_options=None,
-           pass_options=None,
-           verify_options=None, **kwargs):
+def verify(
+    func,
+    inputs,
+    outputs,
+    goldens,
+    *args,
+    codegen_options=None,
+    host_options=None,
+    pass_options=None,
+    verify_options=None,
+    **kwargs,
+):
     """
     Verify the tensor graph of the function.
 
@@ -151,21 +157,27 @@ def _check_tensor_on_cpu(tensor, kind: str, index: int):
     """Raise if tensor (torch.Tensor or pypto.Tensor) is on device; must be CPU-side."""
     if isinstance(tensor, torch.Tensor):
         if tensor.device.type != 'cpu':
-            raise PyptoRtError(ValueError(
-                f"set_verify_golden_data: {kind} must be on CPU, but {kind}[{index}] "
-                f"(torch.Tensor) is on device '{tensor.device}'. Please call .cpu() before passing."
-            ))
+            raise PyptoRtError(
+                ValueError(
+                    f"set_verify_golden_data: {kind} must be on CPU, but {kind}[{index}] "
+                    f"(torch.Tensor) is on device '{tensor.device}'. Please call .cpu() before passing."
+                )
+            )
         return
     if isinstance(tensor, pypto.Tensor) and tensor.device is not None:
         if getattr(tensor.device, 'type', None) != 'cpu':
-            raise PyptoRtError(ValueError(
-                f"set_verify_golden_data: {kind} must be on CPU, but {kind}[{index}] "
-                f"(pypto.Tensor) is on device '{tensor.device}'. Please use CPU data, e.g. pypto.from_torch(t.cpu())."
-            ))
+            raise PyptoRtError(
+                ValueError(
+                    f"set_verify_golden_data: {kind} must be on CPU, but {kind}[{index}] "
+                    f"(pypto.Tensor) is on device '{tensor.device}'. "
+                    f"Please use CPU data, e.g. pypto.from_torch(t.cpu())."
+                )
+            )
 
 
 def set_verify_golden_data(in_out_tensors=None, goldens=None):
     from .enum import DT_FP16
+
     pto_goldens = []
     if goldens:
         for idx, golden in enumerate(goldens):
@@ -191,8 +203,7 @@ def set_verify_golden_data(in_out_tensors=None, goldens=None):
         pto_in_out = []
         for idx, t in enumerate(in_out_tensors):
             _check_tensor_on_cpu(t, "in_out_tensors", idx)
-            pto_in_out.append(t if isinstance(t, pypto.Tensor)
-                              else pypto.from_torch(t))
+            pto_in_out.append(t if isinstance(t, pypto.Tensor) else pypto.from_torch(t))
 
         pypto_impl.SetVerifyData(_pto_to_tensor_data(pto_in_out), [], pto_goldens)
 

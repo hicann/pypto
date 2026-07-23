@@ -8,6 +8,7 @@
 
 
 import pytest
+
 import pypto
 from pypto.ir.compile_pipeline import compile_new_ir
 
@@ -18,8 +19,7 @@ def test_assemble():
         aux_mat = pypto.tensor([129, 128], pypto.DT_FP32, name="aux_mat")
         pypto.assemble(pypto.full([129, 128], 0.0, pypto.DT_FP32), [0, 0], aux_mat)
         pypto.assemble(a, [0, 0], aux_mat)
-        pypto.assemble(aux_mat + a, [0, 0], out) # out[:] = a + aux_mat # 对于outcast，暂不支持[:]赋值
-
+        pypto.assemble(aux_mat + a, [0, 0], out)  # out[:] = a + aux_mat # 对于outcast，暂不支持[:]赋值
 
     a = pypto.Tensor([129, 128], dtype=pypto.DT_FP32, name="a")
     out = pypto.Tensor([129, 128], dtype=pypto.DT_FP32, name="out")
@@ -49,12 +49,13 @@ def test_compile_new_ir_logging(capfd):
 @pytest.mark.skip(reason="FeError::OP_DEPENDENCY_CYCLE")
 def test_war_conflict():
     """A read of y followed by an overlapping write of y -> WAR token edge."""
+
     def foo(x, y):
         pypto.set_vec_tile_shapes(16, 16)
-        ry = pypto.view(y, [16, 16], [0, 0])   # read y rows [0, 16)
+        ry = pypto.view(y, [16, 16], [0, 0])  # read y rows [0, 16)
         a = pypto.view(x, [16, 16], [0, 0])
-        s = pypto.add(ry, a)                    # live read of ry
-        pypto.assemble(s, [8, 0], y)            # write y rows [8, 24) -> overlaps [8, 16)
+        s = pypto.add(ry, a)  # live read of ry
+        pypto.assemble(s, [8, 0], y)  # write y rows [8, 24) -> overlaps [8, 16)
 
     x = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="x")
     y = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="y")

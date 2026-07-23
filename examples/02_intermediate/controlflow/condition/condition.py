@@ -18,13 +18,15 @@ This example demonstrates:
 - Dynamic axis with loop boundary conditions (is_loop_begin / is_loop_end)
 """
 
+import argparse
 import os
 import sys
-import argparse
-import pypto
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -81,7 +83,8 @@ def _get_mode(run_mode: str):
 def nested_loops_with_conditions_kernel(
     a: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
     b: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32)):
+    y: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
+):
     pypto.set_vec_tile_shapes(2, 8)
     for i in pypto.loop(2):
         for j in pypto.loop(2):
@@ -124,6 +127,7 @@ def test_nested_loops_with_conditions(device_id=None, dynamic: bool = True) -> N
 # 2. Dynamic Axis with Static Condition
 # ============================================================================
 
+
 def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int, add1_flag: bool = False):
     tensor_shape = input0.shape
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
@@ -146,11 +150,8 @@ def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, v
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def add_scalar_loop_dyn_axis_static_cond_kernel_static(
-    input0: pypto.Tensor(),
-    input1: pypto.Tensor(),
-    output: pypto.Tensor(),
-    val: int,
-    flag: bool):
+    input0: pypto.Tensor(), input1: pypto.Tensor(), output: pypto.Tensor(), val: int, flag: bool
+):
     add_core(input0, input1, output, val, flag)
 
 
@@ -160,7 +161,8 @@ def add_scalar_loop_dyn_axis_static_cond_kernel_dynamic(
     input1: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     val: int,
-    flag: bool):
+    flag: bool,
+):
     add_core(input0, input1, output, val, flag)
 
 
@@ -208,7 +210,8 @@ def add_scalar_loop_dyn_axis_dyn_cond_kernel(
     input0: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     input1: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    val: int):
+    val: int,
+):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     b = input0.shape[0]
     tile_b = 1
@@ -224,7 +227,6 @@ def add_scalar_loop_dyn_axis_dyn_cond_kernel(
             output[b_offset:b_offset_end, ...] = t3_sub + val
         else:
             output[b_offset:b_offset_end, ...] = t3_sub
-
 
 
 def test_add_scalar_loop_dynamic_axis_dynamic_cond(device_id=None) -> None:
@@ -265,7 +267,8 @@ def add_scalar_loop_dyn_axis_dyn_loop_cond_kernel(
     input0: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     input1: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    val: int):
+    val: int,
+):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     b = input0.shape[0]
     tile_b = 1
@@ -320,6 +323,7 @@ def test_add_scalar_loop_dynamic_axis_dynamic_loop_cond(device_id=None) -> None:
 # Main
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="PyPTO Condition Function Examples",
@@ -330,16 +334,12 @@ Examples:
   %(prog)s nested_loops_with_conditions::test_nested_loops_with_conditions           Run nested loops example
   %(prog)s dyn_axis_static_cond::test_add_scalar_loop_dyn_axis_static_cond          Run static cond example
   %(prog)s --list                                                                   List all examples
-        """
+        """,
     )
-    parser.add_argument(
-        'example_id', type=str, nargs='?',
-        help='Run a specific case. If omitted, all cases run.'
-    )
+    parser.add_argument('example_id', type=str, nargs='?', help='Run a specific case. If omitted, all cases run.')
     parser.add_argument('--list', action='store_true', help='List available examples')
     parser.add_argument(
-        '--run_mode', type=str, nargs='?', default="npu", choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default="npu", choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -397,7 +397,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
 
     try:

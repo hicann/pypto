@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 import pytest
+
 import pypto
 from pypto import ir
 
@@ -78,9 +79,14 @@ def test_dtypes():
         (ir.HF8, 8, False, False, True, "hf8", "unknown"),
     ]
     for dtype, *info in dtypes:
-        assert info == [dtype.bits(), dtype.is_signed(),
-                        dtype.is_unsigned(), dtype.is_float(),
-                        str(dtype), dtype.c_type()]
+        assert info == [
+            dtype.bits(),
+            dtype.is_signed(),
+            dtype.is_unsigned(),
+            dtype.is_float(),
+            str(dtype),
+            dtype.c_type(),
+        ]
 
 
 def test_span():
@@ -125,6 +131,7 @@ def test_logging(capfd):
 
     # Test C++ log functions directly (pypto_impl.log_debug etc.)
     from pypto import pypto_impl
+
     pypto_impl.log_debug("cpp debug msg")
     pypto_impl.log_info("cpp info msg")
     pypto_impl.log_warn("cpp warn msg")
@@ -193,6 +200,7 @@ def test_basic_types():
 
     # Struct debug info
     from pypto import pypto_impl
+
     span = ir.Span("test", 1, 1)
     struct_type = ir.TupleType([ir.ScalarType(ir.INT64), ir.ScalarType(ir.INT32)])
     debug_info = pypto_impl.ir.IRDebugInfo()
@@ -332,26 +340,17 @@ def test_basic_stmt():
     assign_x = ir.AssignStmt(x, val42, span)
     assign_y = ir.AssignStmt(y, val0, span)
     seq = ir.SeqStmts([assign_x, assign_y], span)
-    assert str(seq) == "\n".join([
-        "x: ir.Scalar[ir.INT32] = 42",
-        "y: ir.Scalar[ir.INT32] = 0"
-    ])
+    assert str(seq) == "\n".join(["x: ir.Scalar[ir.INT32] = 42", "y: ir.Scalar[ir.INT32] = 0"])
 
     # IfStmt
     cond = ir.ConstBool(True, span)
     if_stmt = ir.IfStmt(cond, assign_x, None, [], span)
-    assert str(if_stmt) == "\n".join([
-        "if True:",
-        "    x: ir.Scalar[ir.INT32] = 42"
-    ])
+    assert str(if_stmt) == "\n".join(["if True:", "    x: ir.Scalar[ir.INT32] = 42"])
 
     if_else = ir.IfStmt(cond, assign_x, assign_y, [], span)
-    assert str(if_else) == "\n".join([
-        "if True:",
-        "    x: ir.Scalar[ir.INT32] = 42",
-        "else:",
-        "    y: ir.Scalar[ir.INT32] = 0"
-    ])
+    assert str(if_else) == "\n".join(
+        ["if True:", "    x: ir.Scalar[ir.INT32] = 42", "else:", "    y: ir.Scalar[ir.INT32] = 0"]
+    )
 
     # ForStmt
     i = ir.Var("i", st, span)
@@ -361,17 +360,16 @@ def test_basic_stmt():
     body = ir.YieldStmt([val1], span)
     attrs: dict = {"a": True, "parallel": True}
     for_stmt = ir.ForStmt(i, val0, val10, val1, [iter_arg], body, [ret_var], span, attrs)
-    assert str(for_stmt) == "\n".join([
-        "for i, (sum,) in ir.range(0, 10, 1, init_values=(0,), attrs={\"a\": True, \"parallel\": True}):",
-        "    sum_out: ir.Scalar[ir.INT32] = ir.yield_(1)"
-    ])
+    assert str(for_stmt) == "\n".join(
+        [
+            "for i, (sum,) in ir.range(0, 10, 1, init_values=(0,), attrs={\"a\": True, \"parallel\": True}):",
+            "    sum_out: ir.Scalar[ir.INT32] = ir.yield_(1)",
+        ]
+    )
 
     # WhileStmt
     while_stmt = ir.WhileStmt(cond, [], assign_x, [], span)
-    assert str(while_stmt) == "\n".join([
-        "while True:",
-        "    x: ir.Scalar[ir.INT32] = 42"
-    ])
+    assert str(while_stmt) == "\n".join(["while True:", "    x: ir.Scalar[ir.INT32] = 42"])
 
     # SectionStmt
     for section_kind, section_name in [
@@ -380,10 +378,12 @@ def test_basic_stmt():
         (pypto_impl.ir.SectionKind.VF, "section_vf"),
     ]:
         section = pypto_impl.ir.SectionStmt(section_kind, assign_x, span)
-        assert str(section) == "\n".join([
-            f"with ir.{section_name}():",
-            "    x: ir.Scalar[ir.INT32] = 42",
-        ])
+        assert str(section) == "\n".join(
+            [
+                f"with ir.{section_name}():",
+                "    x: ir.Scalar[ir.INT32] = 42",
+            ]
+        )
 
     # YieldStmt and ReturnStmt
     yield_stmt = ir.YieldStmt([val42], span)
@@ -420,30 +420,36 @@ def test_basic_stmt():
 
     # Function
     func = ir.Function("test_func", [x], [st], assign_x, span)
-    assert str(func) == "\n".join([
-        "@ir.function",
-        "def test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
-        "    x: ir.Scalar[ir.INT32] = 42"
-    ])
+    assert str(func) == "\n".join(
+        [
+            "@ir.function",
+            "def test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
+            "    x: ir.Scalar[ir.INT32] = 42",
+        ]
+    )
     helper_func = ir.Function("helper", [x], [st], ir.YieldStmt([x], span), span, ir.FunctionType.Helper)
-    assert str(helper_func) == "\n".join([
-        "@ir.function(type=ir.FunctionType.Helper)",
-        "def helper(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
-        "    return x",
-    ])
+    assert str(helper_func) == "\n".join(
+        [
+            "@ir.function(type=ir.FunctionType.Helper)",
+            "def helper(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
+            "    return x",
+        ]
+    )
 
     # Program
     func2 = ir.Function("test_func2", [x], [st], assign_x, span)
     prog = ir.Program([func, func2], "test_prog", span)
-    assert str(prog) == "\n".join([
-        "# ir.program: test_prog",
-        "@ir.function",
-        "def test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
-        "    x: ir.Scalar[ir.INT32] = 42",
-        "@ir.function",
-        "def test_func2(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
-        "    x: ir.Scalar[ir.INT32] = 42",
-    ])
+    assert str(prog) == "\n".join(
+        [
+            "# ir.program: test_prog",
+            "@ir.function",
+            "def test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
+            "    x: ir.Scalar[ir.INT32] = 42",
+            "@ir.function",
+            "def test_func2(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
+            "    x: ir.Scalar[ir.INT32] = 42",
+        ]
+    )
     assert prog["test_func"] is not None
 
 
@@ -458,11 +464,11 @@ def test_call_kwargs_conversion():
 
     # Normal cases: types that work end-to-end (convert + read back)
     kwargs = {
-        "dtype": ir.FP16,              # DataType
-        "flag": True,                  # bool
-        "axis": 0,                     # int
-        "mode": "fast",                # string
-        "scale": 0.5,                  # float
+        "dtype": ir.FP16,  # DataType
+        "flag": True,  # bool
+        "axis": 0,  # int
+        "mode": "fast",  # string
+        "scale": 0.5,  # float
     }
     call = ir.Call("test_op", [a], kwargs, span)
     assert call.kwargs["dtype"] == ir.FP16

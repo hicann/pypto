@@ -8,33 +8,36 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-from dataclasses import dataclass, field
+""" """
+
 import os
-import multiprocessing as mp
-from typing import Optional
-import numpy as np
+
 import pytest
-from numpy.testing import assert_allclose
 import torch
-import torch_npu
+
 import pypto
 from pypto import pypto_impl
-import torch.nn.functional as F
 
 
-def create_conv_kernel(fmap_shape, weight_shape, bias_shape, out_shape, dtype, tile_l1_info, tile_l0_info, strides,
-    pads, dilations, groups=1):
-    @pypto.frontend.jit(
-        debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}
-    )
-
+def create_conv_kernel(
+    fmap_shape,
+    weight_shape,
+    bias_shape,
+    out_shape,
+    dtype,
+    tile_l1_info,
+    tile_l0_info,
+    strides,
+    pads,
+    dilations,
+    groups=1,
+):
+    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
     def conv_kernel(
         fmap: pypto.Tensor(fmap_shape, dtype),
         weight: pypto.Tensor(weight_shape, dtype),
         bias: pypto.Tensor(bias_shape, dtype),
-        out: pypto.Tensor(out_shape, dtype)
+        out: pypto.Tensor(out_shape, dtype),
     ):
         pypto.set_conv_tile_shapes(tile_l1_info, tile_l0_info)
         extend_params = {'bias_tensor': bias}
@@ -55,21 +58,9 @@ def test_conv2d_fp16_basic_with_bias():
     out_shape = (1, 16, 2, 15)
     dtype = pypto.DT_FP16
     tile_l1_info = pypto_impl.TileL1Info(
-        tileHin=1,
-        tileHout=1,
-        tileWin=32,
-        tileWout=16,
-        tileCinFmap=16,
-        tileCinWeight=16,
-        tileN=16,
-        tileBatch=1
+        tileHin=1, tileHout=1, tileWin=32, tileWout=16, tileCinFmap=16, tileCinWeight=16, tileN=16, tileBatch=1
     )
-    tile_l0_info = pypto_impl.TileL0Info(
-        tileH=1,
-        tileW=16,
-        tileK=16,
-        tileN=16
-    )
+    tile_l0_info = pypto_impl.TileL0Info(tileH=1, tileW=16, tileK=16, tileN=16)
     strides = [2, 2]
     pads = [1, 1, 1, 1]
     dilations = [2, 2]
@@ -79,8 +70,9 @@ def test_conv2d_fp16_basic_with_bias():
     c = torch.rand(bias_shape, dtype=dtype_torch, device='npu')
     d = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
 
-    create_conv_kernel(fmap_shape, weight_shape, bias_shape, out_shape, dtype, tile_l1_info, tile_l0_info,
-        strides, pads, dilations, 2)(a, b, c, d)
+    create_conv_kernel(
+        fmap_shape, weight_shape, bias_shape, out_shape, dtype, tile_l1_info, tile_l0_info, strides, pads, dilations, 2
+    )(a, b, c, d)
     golden = torch.nn.functional.conv2d(a, b, c, stride=(2, 2), padding=(1, 1), dilation=(2, 2), groups=2)
 
     assert torch.allclose(d.cpu().to(dtype_torch), golden.cpu().to(dtype_torch), atol=1e-3, rtol=1e-3)
@@ -97,21 +89,9 @@ def test_conv1d_fp16_basic_with_bias():
     out_shape = (1, 16, 15)
     dtype = pypto.DT_FP16
     tile_l1_info = pypto_impl.TileL1Info(
-        tileHin=1,
-        tileHout=1,
-        tileWin=32,
-        tileWout=16,
-        tileCinFmap=16,
-        tileCinWeight=16,
-        tileN=16,
-        tileBatch=1
+        tileHin=1, tileHout=1, tileWin=32, tileWout=16, tileCinFmap=16, tileCinWeight=16, tileN=16, tileBatch=1
     )
-    tile_l0_info = pypto_impl.TileL0Info(
-        tileH=1,
-        tileW=16,
-        tileK=16,
-        tileN=16
-    )
+    tile_l0_info = pypto_impl.TileL0Info(tileH=1, tileW=16, tileK=16, tileN=16)
     strides = [2]
     pads = [1, 1]
     dilations = [2]
@@ -121,8 +101,9 @@ def test_conv1d_fp16_basic_with_bias():
     c = torch.rand(bias_shape, dtype=dtype_torch, device='npu')
     d = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
 
-    create_conv_kernel(fmap_shape, weight_shape, bias_shape, out_shape, dtype, tile_l1_info, tile_l0_info,
-        strides, pads, dilations, 2)(a, b, c, d)
+    create_conv_kernel(
+        fmap_shape, weight_shape, bias_shape, out_shape, dtype, tile_l1_info, tile_l0_info, strides, pads, dilations, 2
+    )(a, b, c, d)
     golden = torch.nn.functional.conv1d(a, b, c, stride=(2), padding=(1), dilation=(2), groups=2)
 
     assert torch.allclose(d.cpu().to(dtype_torch), golden.cpu().to(dtype_torch), atol=1e-3, rtol=1e-3)
@@ -139,21 +120,9 @@ def test_conv3d_fp16_basic_with_bias():
     out_shape = (1, 16, 2, 2, 15)
     dtype = pypto.DT_FP16
     tile_l1_info = pypto_impl.TileL1Info(
-        tileHin=1,
-        tileHout=1,
-        tileWin=32,
-        tileWout=16,
-        tileCinFmap=16,
-        tileCinWeight=16,
-        tileN=16,
-        tileBatch=1
+        tileHin=1, tileHout=1, tileWin=32, tileWout=16, tileCinFmap=16, tileCinWeight=16, tileN=16, tileBatch=1
     )
-    tile_l0_info = pypto_impl.TileL0Info(
-        tileH=1,
-        tileW=16,
-        tileK=16,
-        tileN=16
-    )
+    tile_l0_info = pypto_impl.TileL0Info(tileH=1, tileW=16, tileK=16, tileN=16)
     strides = [2, 2, 2]
     pads = [1, 1, 1, 1, 1, 1]
     dilations = [2, 2, 2]
@@ -163,8 +132,9 @@ def test_conv3d_fp16_basic_with_bias():
     c = torch.rand(bias_shape, dtype=dtype_torch, device='npu')
     d = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
 
-    create_conv_kernel(fmap_shape, weight_shape, bias_shape, out_shape, dtype, tile_l1_info, tile_l0_info,
-        strides, pads, dilations, 2)(a, b, c, d)
+    create_conv_kernel(
+        fmap_shape, weight_shape, bias_shape, out_shape, dtype, tile_l1_info, tile_l0_info, strides, pads, dilations, 2
+    )(a, b, c, d)
     golden = torch.nn.functional.conv3d(a, b, c, stride=(2, 2, 2), padding=(1, 1, 1), dilation=(2, 2, 2), groups=2)
 
     assert torch.allclose(d.cpu().to(dtype_torch), golden.cpu().to(dtype_torch), atol=1e-3, rtol=1e-3)
@@ -187,28 +157,17 @@ def test_conv1d_dynamic_batch_op():
         input_a: pypto.Tensor([pypto.DYNAMIC, 16, 64]),
         input_b: pypto.Tensor([64, 16, 3]),
         output_c: pypto.Tensor([pypto.DYNAMIC, 64, 64]),
-        params):
+        params,
+    ):
         batch = params["batch"]
         tile_batch = pypto.symbolic_scalar(1)
         batch_loop = (batch + tile_batch - 1) // tile_batch
 
         pypto.set_conv_tile_shapes(
             pypto.pypto_impl.TileL1Info(
-                tileHin=1,
-                tileHout=1,
-                tileWin=64,
-                tileWout=64,
-                tileCinFmap=16,
-                tileCinWeight=16,
-                tileN=64,
-                tileBatch=1
+                tileHin=1, tileHout=1, tileWin=64, tileWout=64, tileCinFmap=16, tileCinWeight=16, tileN=64, tileBatch=1
             ),
-            pypto.pypto_impl.TileL0Info(
-                tileH=1,
-                tileW=64,
-                tileK=48,
-                tileN=64
-            )
+            pypto.pypto_impl.TileL0Info(tileH=1, tileW=64, tileK=48, tileN=64),
         )
 
         pypto.set_vec_tile_shapes(1, 64, 64)
@@ -231,6 +190,7 @@ def test_conv1d_dynamic_batch_op():
 # Dynamic Axis Tests with Dtype Cross and Parameter Variations
 # ============================================================================
 
+
 @pytest.mark.soc("950")
 def test_conv2d_dynamic_batch_stride():
     """Conv2D dynamic batch with stride=2, dilation=2, pad=1, dtype=FP16"""
@@ -252,28 +212,17 @@ def test_conv2d_dynamic_batch_stride():
         input_a: pypto.Tensor([pypto.DYNAMIC, 16, 32, 32]),
         input_b: pypto.Tensor([64, 16, 3, 3]),
         output_c: pypto.Tensor([pypto.DYNAMIC, 64, 15, 15]),
-        params):
+        params,
+    ):
         batch = params["batch"]
         tile_batch = pypto.symbolic_scalar(1)
         batch_loop = (batch + tile_batch - 1) // tile_batch
 
         pypto.set_conv_tile_shapes(
             pypto.pypto_impl.TileL1Info(
-                tileHin=1,
-                tileHout=1,
-                tileWin=16,
-                tileWout=16,
-                tileCinFmap=16,
-                tileCinWeight=16,
-                tileN=64,
-                tileBatch=1
+                tileHin=1, tileHout=1, tileWin=16, tileWout=16, tileCinFmap=16, tileCinWeight=16, tileN=64, tileBatch=1
             ),
-            pypto.pypto_impl.TileL0Info(
-                tileH=1,
-                tileW=16,
-                tileK=144,
-                tileN=64
-            )
+            pypto.pypto_impl.TileL0Info(tileH=1, tileW=16, tileK=144, tileN=64),
         )
         pypto.set_vec_tile_shapes(1, 64, 15, 15)
 
@@ -281,8 +230,14 @@ def test_conv2d_dynamic_batch_stride():
             batch_offset = batch_idx * tile_batch
             input_a_view = pypto.view(input_a, [tile_batch, 16, 32, 32], [batch_offset, 0, 0, 0])
             out = pypto.conv(
-                input_a_view, input_b, dtype, [stride, stride],
-                [pad, pad, pad, pad], [dilation, dilation], extend_params={}, groups=1
+                input_a_view,
+                input_b,
+                dtype,
+                [stride, stride],
+                [pad, pad, pad, pad],
+                [dilation, dilation],
+                extend_params={},
+                groups=1,
             )
             pypto.assemble(out, [batch_offset, 0, 0, 0], output_c)
 
@@ -290,8 +245,7 @@ def test_conv2d_dynamic_batch_stride():
     conv2d_dynamic_batch_stride_kernel(a, b, c_out, params)
 
     golden = torch.nn.functional.conv2d(
-        a, b, stride=(stride, stride), padding=(pad, pad),
-        dilation=(dilation, dilation), groups=1
+        a, b, stride=(stride, stride), padding=(pad, pad), dilation=(dilation, dilation), groups=1
     )
     assert torch.allclose(c_out.cpu().to(dtype_torch), golden.cpu().to(dtype_torch), atol=1e-3, rtol=1e-3)
 
@@ -317,7 +271,8 @@ def test_conv1d_dynamic_wout():
         input_a: pypto.Tensor([1, 16, pypto.DYNAMIC]),
         input_b: pypto.Tensor([64, 16, 3]),
         output_c: pypto.Tensor([1, 64, pypto.DYNAMIC]),
-        params):
+        params,
+    ):
         win = params["win"]
         wo = params["wo"]
         tile_wout = pypto.symbolic_scalar(16)
@@ -333,14 +288,9 @@ def test_conv1d_dynamic_wout():
                 tileCinFmap=16,
                 tileCinWeight=16,
                 tileN=64,
-                tileBatch=1
+                tileBatch=1,
             ),
-            pypto.pypto_impl.TileL0Info(
-                tileH=1,
-                tileW=tile_wout,
-                tileK=48,
-                tileN=64
-            )
+            pypto.pypto_impl.TileL0Info(tileH=1, tileW=tile_wout, tileK=48, tileN=64),
         )
         pypto.set_vec_tile_shapes(1, 64, tile_wout)
 
@@ -348,8 +298,7 @@ def test_conv1d_dynamic_wout():
             wout_offset = wout_idx * tile_wout
             win_offset = wout_idx * tile_wout
             win_current = (win - win_offset).min(tile_win)
-            input_a_view = pypto.view(input_a, [1, 16, tile_win], [0, 0, win_offset],
-                                       valid_shape=[1, 16, win_current])
+            input_a_view = pypto.view(input_a, [1, 16, tile_win], [0, 0, win_offset], valid_shape=[1, 16, win_current])
             out = pypto.conv(input_a_view, input_b, dtype, [stride], [pad, pad], [dilation], extend_params={}, groups=1)
             pypto.assemble(out, [0, 0, wout_offset], output_c)
 
@@ -380,7 +329,8 @@ def test_conv2d_dynamic_hout():
     def conv2d_dynamic_hout_kernel(
         input_a: pypto.Tensor([1, 16, pypto.DYNAMIC, 34]),
         input_b: pypto.Tensor([64, 16, 3, 3]),
-        output_c: pypto.Tensor([1, 64, pypto.DYNAMIC, 32])):
+        output_c: pypto.Tensor([1, 64, pypto.DYNAMIC, 32]),
+    ):
         hin = input_a.shape[2]
         ho = output_c.shape[2]
         tile_hout = 8
@@ -389,21 +339,9 @@ def test_conv2d_dynamic_hout():
 
         pypto.set_conv_tile_shapes(
             pypto.pypto_impl.TileL1Info(
-                tileHin=8,
-                tileHout=8,
-                tileWin=32,
-                tileWout=32,
-                tileCinFmap=16,
-                tileCinWeight=16,
-                tileN=64,
-                tileBatch=1
+                tileHin=8, tileHout=8, tileWin=32, tileWout=32, tileCinFmap=16, tileCinWeight=16, tileN=64, tileBatch=1
             ),
-            pypto.pypto_impl.TileL0Info(
-                tileH=8,
-                tileW=32,
-                tileK=48,
-                tileN=64
-            )
+            pypto.pypto_impl.TileL0Info(tileH=8, tileW=32, tileK=48, tileN=64),
         )
         pypto.set_vec_tile_shapes(1, 64, 8, 32)
 
@@ -411,19 +349,25 @@ def test_conv2d_dynamic_hout():
             hout_offset = hout_idx * tile_hout
             hin_offset = hout_idx * tile_hout
             hin_current = (hin - hin_offset).min(tile_hin)
-            input_a_view = pypto.view(input_a, [1, 16, tile_hin, 34], [0, 0, hin_offset, 0],
-                                       valid_shape=[1, 16, hin_current, 34])
+            input_a_view = pypto.view(
+                input_a, [1, 16, tile_hin, 34], [0, 0, hin_offset, 0], valid_shape=[1, 16, hin_current, 34]
+            )
             out = pypto.conv(
-                input_a_view, input_b, dtype, [stride, stride],
-                [pad, pad, pad, pad], [dilation, dilation], extend_params={}, groups=1
+                input_a_view,
+                input_b,
+                dtype,
+                [stride, stride],
+                [pad, pad, pad, pad],
+                [dilation, dilation],
+                extend_params={},
+                groups=1,
             )
             pypto.assemble(out, [0, 0, hout_offset, 0], output_c)
 
     conv2d_dynamic_hout_kernel(a, b, c_out)
 
     golden = torch.nn.functional.conv2d(
-        a, b, stride=(stride, stride), padding=(pad, pad),
-        dilation=(dilation, dilation), groups=1
+        a, b, stride=(stride, stride), padding=(pad, pad), dilation=(dilation, dilation), groups=1
     )
     assert torch.allclose(c_out.cpu().to(dtype_torch), golden.cpu().to(dtype_torch), atol=1e-3, rtol=1e-3)
 
@@ -448,7 +392,8 @@ def test_conv2d_dynamic_tail():
     def conv2d_dynamic_tail_kernel(
         input_a: pypto.Tensor([1, 16, pypto.DYNAMIC, 18]),
         input_b: pypto.Tensor([pypto.DYNAMIC, 16, 3, 3]),
-        output_c: pypto.Tensor([1, pypto.DYNAMIC, pypto.DYNAMIC, 16])):
+        output_c: pypto.Tensor([1, pypto.DYNAMIC, pypto.DYNAMIC, 16]),
+    ):
         hin = input_a.shape[2]
         ho = output_c.shape[2]
         cout = output_c.shape[1]
@@ -460,21 +405,9 @@ def test_conv2d_dynamic_tail():
 
         pypto.set_conv_tile_shapes(
             pypto.pypto_impl.TileL1Info(
-                tileHin=8,
-                tileHout=8,
-                tileWin=16,
-                tileWout=16,
-                tileCinFmap=16,
-                tileCinWeight=16,
-                tileN=48,
-                tileBatch=1
+                tileHin=8, tileHout=8, tileWin=16, tileWout=16, tileCinFmap=16, tileCinWeight=16, tileN=48, tileBatch=1
             ),
-            pypto.pypto_impl.TileL0Info(
-                tileH=8,
-                tileW=16,
-                tileK=48,
-                tileN=48
-            )
+            pypto.pypto_impl.TileL0Info(tileH=8, tileW=16, tileK=48, tileN=48),
         )
         pypto.set_vec_tile_shapes(1, 48, 8, 16)
 
@@ -485,21 +418,28 @@ def test_conv2d_dynamic_tail():
                 hin_offset = hout_idx * tile_hout
                 hin_current = (hin - hin_offset).min(tile_hin)
                 cout_current = (cout - cout_offset).min(tile_cout)
-                input_a_view = pypto.view(input_a, [1, 16, tile_hin, 18], [0, 0, hin_offset, 0],
-                                        valid_shape=[1, 16, hin_current, 18])
-                input_b_view = pypto.view(input_b, [tile_cout, 16, 3, 3], [cout_offset, 0, 0, 0],
-                                        valid_shape=[cout_current, 16, 3, 3])
+                input_a_view = pypto.view(
+                    input_a, [1, 16, tile_hin, 18], [0, 0, hin_offset, 0], valid_shape=[1, 16, hin_current, 18]
+                )
+                input_b_view = pypto.view(
+                    input_b, [tile_cout, 16, 3, 3], [cout_offset, 0, 0, 0], valid_shape=[cout_current, 16, 3, 3]
+                )
                 out = pypto.conv(
-                    input_a_view, input_b_view, dtype, [stride, stride],
-                    [pad, pad, pad, pad], [dilation, dilation], extend_params={}, groups=1
+                    input_a_view,
+                    input_b_view,
+                    dtype,
+                    [stride, stride],
+                    [pad, pad, pad, pad],
+                    [dilation, dilation],
+                    extend_params={},
+                    groups=1,
                 )
                 pypto.assemble(out, [0, cout_offset, hout_offset, 0], output_c)
 
     conv2d_dynamic_tail_kernel(a, b, c_out)
 
     golden = torch.nn.functional.conv2d(
-        a, b, stride=(stride, stride), padding=(pad, pad),
-        dilation=(dilation, dilation), groups=1
+        a, b, stride=(stride, stride), padding=(pad, pad), dilation=(dilation, dilation), groups=1
     )
     assert torch.allclose(c_out.cpu().to(dtype_torch), golden.cpu().to(dtype_torch), atol=1e-3, rtol=1e-3)
 
@@ -525,7 +465,8 @@ def test_conv1d_dynamic_cout():
         input_a: pypto.Tensor([1, 16, 64]),
         input_b: pypto.Tensor([pypto.DYNAMIC, 16, 3]),
         output_c: pypto.Tensor([1, pypto.DYNAMIC, 64]),
-        params):
+        params,
+    ):
         cout = params["cout"]
         tile_cout = pypto.symbolic_scalar(32)
         cout_loop = (cout + tile_cout - 1) // tile_cout
@@ -539,14 +480,9 @@ def test_conv1d_dynamic_cout():
                 tileCinFmap=16,
                 tileCinWeight=16,
                 tileN=tile_cout,
-                tileBatch=1
+                tileBatch=1,
             ),
-            pypto.pypto_impl.TileL0Info(
-                tileH=1,
-                tileW=64,
-                tileK=48,
-                tileN=tile_cout
-            )
+            pypto.pypto_impl.TileL0Info(tileH=1, tileW=64, tileK=48, tileN=tile_cout),
         )
         pypto.set_vec_tile_shapes(1, tile_cout, 64)
 
@@ -584,7 +520,8 @@ def test_conv3d_dynamic_dout():
         input_a: pypto.Tensor([1, 16, pypto.DYNAMIC, 18, 34]),
         input_b: pypto.Tensor([64, 16, 2, 3, 3]),
         output_c: pypto.Tensor([1, 64, pypto.DYNAMIC, 16, 32]),
-        params):
+        params,
+    ):
         din = params["din"]
         do = params["do"]
         tile_dout = pypto.symbolic_scalar(1)
@@ -593,21 +530,9 @@ def test_conv3d_dynamic_dout():
 
         pypto.set_conv_tile_shapes(
             pypto.pypto_impl.TileL1Info(
-                tileHin=1,
-                tileHout=1,
-                tileWin=34,
-                tileWout=32,
-                tileCinFmap=16,
-                tileCinWeight=16,
-                tileN=64,
-                tileBatch=1
+                tileHin=1, tileHout=1, tileWin=34, tileWout=32, tileCinFmap=16, tileCinWeight=16, tileN=64, tileBatch=1
             ),
-            pypto.pypto_impl.TileL0Info(
-                tileH=1,
-                tileW=32,
-                tileK=144,
-                tileN=64
-            )
+            pypto.pypto_impl.TileL0Info(tileH=1, tileW=32, tileK=144, tileN=64),
         )
         pypto.set_vec_tile_shapes(1, 64, 1, 1, 32)
 
@@ -615,12 +540,18 @@ def test_conv3d_dynamic_dout():
             dout_offset = dout_idx * tile_dout
             din_offset = dout_idx * tile_dout
             din_current = (din - din_offset).min(tile_din)
-            input_a_view = pypto.view(input_a, [1, 16, tile_din, 18, 34], [0, 0, din_offset, 0, 0],
-                                       valid_shape=[1, 16, din_current, 18, 34])
+            input_a_view = pypto.view(
+                input_a, [1, 16, tile_din, 18, 34], [0, 0, din_offset, 0, 0], valid_shape=[1, 16, din_current, 18, 34]
+            )
             out = pypto.conv(
-                input_a_view, input_b, dtype, [stride, stride, stride],
+                input_a_view,
+                input_b,
+                dtype,
+                [stride, stride, stride],
                 [pad, pad, pad, pad, pad, pad],
-                [dilation, dilation, dilation], extend_params={}, groups=1
+                [dilation, dilation, dilation],
+                extend_params={},
+                groups=1,
             )
             pypto.assemble(out, [0, 0, dout_offset, 0, 0], output_c)
 
@@ -628,8 +559,12 @@ def test_conv3d_dynamic_dout():
     conv3d_dynamic_dout_kernel(a, b, c_out, params)
 
     golden = torch.nn.functional.conv3d(
-        a, b, stride=(stride, stride, stride), padding=(pad, pad, pad),
-        dilation=(dilation, dilation, dilation), groups=1
+        a,
+        b,
+        stride=(stride, stride, stride),
+        padding=(pad, pad, pad),
+        dilation=(dilation, dilation, dilation),
+        groups=1,
     )
     assert torch.allclose(c_out.cpu().to(dtype_torch), golden.cpu().to(dtype_torch), atol=1e-3, rtol=1e-3)
 
@@ -655,7 +590,8 @@ def test_conv2d_dynamic_cout_stride():
         input_a: pypto.Tensor([1, 16, 32, 32]),
         input_b: pypto.Tensor([pypto.DYNAMIC, 16, 3, 3]),
         output_c: pypto.Tensor([1, pypto.DYNAMIC, 16, 16]),
-        params):
+        params,
+    ):
         cout = params["cout"]
         tile_cout = pypto.symbolic_scalar(32)
         cout_loop = (cout + tile_cout - 1) // tile_cout
@@ -669,14 +605,9 @@ def test_conv2d_dynamic_cout_stride():
                 tileCinFmap=16,
                 tileCinWeight=16,
                 tileN=tile_cout,
-                tileBatch=1
+                tileBatch=1,
             ),
-            pypto.pypto_impl.TileL0Info(
-                tileH=16,
-                tileW=16,
-                tileK=48,
-                tileN=tile_cout
-            )
+            pypto.pypto_impl.TileL0Info(tileH=16, tileW=16, tileK=48, tileN=tile_cout),
         )
         pypto.set_vec_tile_shapes(1, tile_cout, 16, 16)
 
@@ -684,8 +615,14 @@ def test_conv2d_dynamic_cout_stride():
             cout_offset = cout_idx * tile_cout
             input_b_view = input_b[cout_offset:cout_offset + tile_cout, 0:16, 0:3, 0:3]
             out = pypto.conv(
-                input_a, input_b_view, dtype, [stride, stride],
-                [pad, pad, pad, pad], [dilation, dilation], extend_params={}, groups=1
+                input_a,
+                input_b_view,
+                dtype,
+                [stride, stride],
+                [pad, pad, pad, pad],
+                [dilation, dilation],
+                extend_params={},
+                groups=1,
             )
             pypto.assemble(out, [0, cout_offset, 0, 0], output_c)
 
@@ -693,8 +630,7 @@ def test_conv2d_dynamic_cout_stride():
     conv2d_dynamic_cout_stride_kernel(a, b, c_out, params)
 
     golden = torch.nn.functional.conv2d(
-        a, b, stride=(stride, stride), padding=(pad, pad),
-        dilation=(dilation, dilation), groups=1
+        a, b, stride=(stride, stride), padding=(pad, pad), dilation=(dilation, dilation), groups=1
     )
     assert torch.allclose(c_out.cpu().to(dtype_torch), golden.cpu().to(dtype_torch), atol=1e-3, rtol=1e-3)
 
@@ -720,7 +656,8 @@ def test_conv1d_dynamic_wout_dilation():
         input_a: pypto.Tensor([1, 16, pypto.DYNAMIC]),
         input_b: pypto.Tensor([64, 16, 3]),
         output_c: pypto.Tensor([1, 64, pypto.DYNAMIC]),
-        params):
+        params,
+    ):
         win = params["win"]
         wo = params["wo"]
         tile_wout = pypto.symbolic_scalar(16)
@@ -729,21 +666,9 @@ def test_conv1d_dynamic_wout_dilation():
 
         pypto.set_conv_tile_shapes(
             pypto.pypto_impl.TileL1Info(
-                tileHin=1,
-                tileHout=1,
-                tileWin=18,
-                tileWout=16,
-                tileCinFmap=16,
-                tileCinWeight=16,
-                tileN=64,
-                tileBatch=1
+                tileHin=1, tileHout=1, tileWin=18, tileWout=16, tileCinFmap=16, tileCinWeight=16, tileN=64, tileBatch=1
             ),
-            pypto.pypto_impl.TileL0Info(
-                tileH=1,
-                tileW=16,
-                tileK=48,
-                tileN=32
-            )
+            pypto.pypto_impl.TileL0Info(tileH=1, tileW=16, tileK=48, tileN=32),
         )
         pypto.set_vec_tile_shapes(1, 32, 16)
 
@@ -751,8 +676,7 @@ def test_conv1d_dynamic_wout_dilation():
             wout_offset = wout_idx * tile_wout
             win_offset = wout_idx * tile_wout
             win_current = (win - win_offset).min(tile_win)
-            input_a_view = pypto.view(input_a, [1, 16, tile_win], [0, 0, win_offset],
-                                       valid_shape=[1, 16, win_current])
+            input_a_view = pypto.view(input_a, [1, 16, tile_win], [0, 0, win_offset], valid_shape=[1, 16, win_current])
             out = pypto.conv(input_a_view, input_b, dtype, [stride], [pad, pad], [dilation], extend_params={}, groups=1)
             pypto.assemble(out, [0, 0, wout_offset], output_c)
 

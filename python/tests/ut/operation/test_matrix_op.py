@@ -8,8 +8,8 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import pypto
 
 
@@ -95,7 +95,7 @@ def test_matrix_matmul_with_trans_mode_cast_rint():
     assert c.shape == [64, 64]
 
 
-def test_matrix_matmul_with_trans_mode_cast_rint():
+def test_matrix_matmul_with_trans_mode_cast_rint():  # noqa: F811
     input_dtype = pypto.DT_FP32
     out_dtype = pypto.DT_FP32
     a = pypto.tensor((64, 32), input_dtype, "A")

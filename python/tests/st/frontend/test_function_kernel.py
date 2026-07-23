@@ -11,11 +11,11 @@
 """测试 pypto.frontend.jit 对非 pypto.Tensor 参数的支持。"""
 
 import os
-import pypto
-import pytest
 
+import pytest
 import torch
-import torch_npu
+
+import pypto
 
 
 # =============================================================================
@@ -23,7 +23,6 @@ import torch_npu
 # =============================================================================
 @pytest.mark.skip("Failed for sync")
 def test_add_with_kwargs_run():
-
     @pypto.frontend.function
     def sub_add_kernel(
         a: pypto.Tensor([], pypto.DT_INT32),
@@ -31,20 +30,18 @@ def test_add_with_kwargs_run():
         c: pypto.Tensor([...], pypto.DT_INT32),
         d: pypto.Tensor([pypto.STATIC, 32], pypto.DT_INT32),
         res: pypto.Tensor([32, 32], pypto.DT_INT32),
-        scalar=0
+        scalar=0,
     ):
         res.move(a + b + c + d + scalar)
 
-    @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.NPU}
-        )
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
     def add_kernel(
         a: pypto.Tensor(dtype=pypto.DT_INT32),
         b: pypto.Tensor([], pypto.DT_INT32),
         c: pypto.Tensor([...], pypto.DT_INT32),
         d: pypto.Tensor([pypto.STATIC, 32], pypto.DT_INT32),
         res: pypto.Tensor([32, 32], pypto.DT_INT32),
-        scalar=0
+        scalar=0,
     ):
         pypto.set_vec_tile_shapes(16, 16)
         sub_add_kernel(a, b, c, d, res, scalar)
@@ -65,7 +62,6 @@ def test_add_with_kwargs_run():
 # @fucntion检验场景验证 固定轴
 # =============================================================================
 def test_add_with_kwargs_check_stable():
-
     @pypto.frontend.function
     def sub_add_kernel(
         a: pypto.Tensor([], pypto.DT_INT32),
@@ -73,20 +69,18 @@ def test_add_with_kwargs_check_stable():
         c: pypto.Tensor([...], pypto.DT_INT32),
         d: pypto.Tensor([pypto.STATIC, 32], pypto.DT_INT32),
         res: pypto.Tensor([32, 32], pypto.DT_INT32),
-        scalar=0
+        scalar=0,
     ):
         res.move(a + b + c + d + scalar)
 
-    @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.NPU}
-        )
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
     def add_kernel(
         a: pypto.Tensor(dtype=pypto.DT_INT32),
         b: pypto.Tensor([], pypto.DT_INT32),
         c: pypto.Tensor([...], pypto.DT_INT32),
         d: pypto.Tensor([pypto.STATIC, 32], pypto.DT_INT32),
         res: pypto.Tensor([32, 32], pypto.DT_INT32),
-        scalar=0
+        scalar=0,
     ):
         pypto.set_vec_tile_shapes(16, 16)
         sub_add_kernel(a, b, c, d, res, scalar)
@@ -108,7 +102,6 @@ def test_add_with_kwargs_check_stable():
 # @fucntion检验场景验证 dtype
 # =============================================================================
 def test_add_with_kwargs_check_dtype():
-
     @pypto.frontend.function
     def sub_add_kernel(
         a: pypto.Tensor([], pypto.DT_INT32),
@@ -116,20 +109,18 @@ def test_add_with_kwargs_check_dtype():
         c: pypto.Tensor([...], pypto.DT_INT32),
         d: pypto.Tensor([pypto.STATIC, 32], pypto.DT_INT32),
         res: pypto.Tensor([32, 32], pypto.DT_INT32),
-        scalar=0
+        scalar=0,
     ):
         res.move(a + b + c + d + scalar)
 
-    @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.NPU}
-        )
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
     def add_kernel(
         a: pypto.Tensor(dtype=pypto.DT_INT32),
         b: pypto.Tensor([], pypto.DT_INT32),
         c: pypto.Tensor([...], pypto.DT_INT32),
         d: pypto.Tensor([pypto.STATIC, 32], pypto.DT_INT32),
         res: pypto.Tensor([32, 32], pypto.DT_INT32),
-        scalar=0
+        scalar=0,
     ):
         pypto.set_vec_tile_shapes(16, 16)
         sub_add_kernel(a, b, c, d, res, scalar)

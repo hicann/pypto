@@ -10,13 +10,13 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Ptr wrapper type for PyPTO Language DSL."""
+
 from __future__ import annotations
 
 __all__ = ["Ptr"]
 
 
-from pypto.pypto_impl.ir import DataType
-from pypto.pypto_impl.ir import Expr
+from pypto.pypto_impl.ir import DataType, Expr
 
 
 class Ptr:

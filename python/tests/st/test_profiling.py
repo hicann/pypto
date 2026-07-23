@@ -8,17 +8,19 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
+""" """
+
 import csv
 import glob
+import os
 import shutil
 import subprocess
+
 import pytest
-import pypto
 import torch
 import torch_npu
+
+import pypto
 
 
 def _get_root_dir() -> str:
@@ -58,9 +60,7 @@ def _run_msprof(root_dir: str, script_path: str) -> subprocess.CompletedProcess:
 def _collect_op_summary_files(prof_dirs):
     op_summary_files_found = []
     for prof_dir in prof_dirs:
-        op_summary_pattern = os.path.join(
-            prof_dir, "mindstudio_profiler_output", "op_summary_*.csv"
-        )
+        op_summary_pattern = os.path.join(prof_dir, "mindstudio_profiler_output", "op_summary_*.csv")
         op_summary_files_found.extend(glob.glob(op_summary_pattern))
     return op_summary_files_found
 
@@ -70,9 +70,7 @@ def _csv_contains_pypto(csv_file: str) -> bool:
         with open(csv_file, "r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
             return any(
-                "PYPTO_add_kernel" in row.get("Op Name", "")
-                and "PyPTO" in row.get("OP Type", "")
-                for row in reader
+                "PYPTO_add_kernel" in row.get("Op Name", "") and "PyPTO" in row.get("OP Type", "") for row in reader
             )
     except Exception:
         return False
@@ -87,9 +85,7 @@ def _kernel_details_contains_pypto(csv_file: str) -> bool:
         with open(csv_file, "r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
             return any(
-                "PyPTO" in row.get("Type", "")
-                and "PYPTO_add_direct_kernel" in row.get("Name", "")
-                for row in reader
+                "PyPTO" in row.get("Type", "") and "PYPTO_add_direct_kernel" in row.get("Name", "") for row in reader
             )
     except Exception:
         return False
@@ -99,7 +95,7 @@ def _kernel_details_contains_pypto(csv_file: str) -> bool:
 def add_direct_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    z: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    z: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     z.move(x + y)
@@ -127,12 +123,8 @@ def _run_add_direct_profiler(device_id: int, shape: tuple, profiler_output_dir: 
         record_shapes=False,
         profile_memory=True,
         experimental_config=experimental_config,
-        schedule=torch_npu.profiler.schedule(
-            wait=0, warmup=0, active=1, repeat=1, skip_first=5
-        ),
-        on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(
-            profiler_output_dir, analyse_flag=True
-        ),
+        schedule=torch_npu.profiler.schedule(wait=0, warmup=0, active=1, repeat=1, skip_first=5),
+        on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(profiler_output_dir, analyse_flag=True),
     ) as prof:
         for _ in range(10):
             add_direct_kernel(input_data0, input_data1, output_data)
@@ -158,9 +150,7 @@ def test_msprof_profiling_pypto_op_summary():
     root_dir = _get_root_dir()
     prof_base_dir = _get_prof_base_dir(root_dir)
     _clean_prof_dirs(prof_base_dir)
-    add_direct_script = os.path.join(
-        root_dir, "examples", "00_hello_world", "hello_world.py"
-    )
+    add_direct_script = os.path.join(root_dir, "examples", "00_hello_world", "hello_world.py")
     assert os.path.exists(add_direct_script), f"脚本不存在: {add_direct_script}"
 
     _run_msprof(root_dir, add_direct_script)
@@ -170,8 +160,7 @@ def test_msprof_profiling_pypto_op_summary():
     op_summary_files_found = _collect_op_summary_files(prof_dirs)
     pypto_found = _find_pypto_in_csv(op_summary_files_found)
     assert len(op_summary_files_found) > 0, (
-        f"未在 PROF* 文件夹中找到 mindstudio_profiler_output/op_summary_*.csv 文件。\n"
-        f"已检查的 PROF 目录: {prof_dirs}"
+        f"未在 PROF* 文件夹中找到 mindstudio_profiler_output/op_summary_*.csv 文件。\n已检查的 PROF 目录: {prof_dirs}"
     )
 
     assert pypto_found, (
@@ -202,14 +191,9 @@ def test_torch_npu_profiler_collect_pypto_kernel_details():
     try:
         _run_add_direct_profiler(device_id, shape, profiler_output_dir)
         kernel_detail_files = _collect_kernel_detail_files(profiler_output_dir)
-        assert len(kernel_detail_files) > 0, (
-            f"未在 {profiler_output_dir} 下递归找到 kernel_details.csv"
-        )
+        assert len(kernel_detail_files) > 0, f"未在 {profiler_output_dir} 下递归找到 kernel_details.csv"
 
-        matched = any(
-            _kernel_details_contains_pypto(csv_file)
-            for csv_file in kernel_detail_files
-        )
+        matched = any(_kernel_details_contains_pypto(csv_file) for csv_file in kernel_detail_files)
         assert matched, (
             "在 kernel_details.csv 中未找到 Type 包含 PyPTO 且 "
             "Name 包含 PYPTO_add_direct_kernel 的记录。\n"

@@ -10,14 +10,13 @@
 # -----------------------------------------------------------------------------------------------------------
 
 import dataclasses
+import json
 import logging
 import os
-import sys
-import json
 from pathlib import Path
+import sys
 from typing import List, Tuple
 
-import math
 import numpy as np
 import torch
 
@@ -25,8 +24,7 @@ root_path: Path = Path(Path(__file__).parent, "../../../../../../").resolve()
 scripts_path: Path = Path(root_path, 'cmake/scripts')
 if str(scripts_path) not in sys.path:
     sys.path.append(str(scripts_path))
-from golden_register import GoldenRegister
-
+from golden_register import GoldenRegister  # noqa: E402
 
 np.random.seed(0)
 torch.manual_seed(0)
@@ -125,8 +123,14 @@ def parse_base_case(config: dict) -> BaseCase:
     min_val, max_val = input_tensor['data_range']['min'], input_tensor['data_range']['max']
     tile_shape = tuple(config['tile_shape'])
     value_range = ValueRange(min_val=min_val, max_val=max_val)
-    case = BaseCase(dtype=dtype, shape=shape, valid_shape=valid_shape, world_size=world_size, tile_shape=tile_shape,
-        value_range=value_range)
+    case = BaseCase(
+        dtype=dtype,
+        shape=shape,
+        valid_shape=valid_shape,
+        world_size=world_size,
+        tile_shape=tile_shape,
+        value_range=value_range,
+    )
     return case
 
 
@@ -154,38 +158,27 @@ def save_tensor_list(tensors: List[torch.Tensor], save_dir: Path, filename_prefi
         save_tensor(tensor, save_dir / f'{filename_prefix}_rank_{rank}.bin')
 
 
-def generate_random_tensor(
-    shape: Tuple[int, ...], dtype: torch.dtype, value_range: ValueRange
-) -> torch.Tensor:
-    spec_value_map = {
-        'nan': np.nan,
-        'inf': np.inf,
-        '-inf': -np.inf
-    }
+def generate_random_tensor(shape: Tuple[int, ...], dtype: torch.dtype, value_range: ValueRange) -> torch.Tensor:
+    spec_value_map = {'nan': np.nan, 'inf': np.inf, '-inf': -np.inf}
     if value_range.min_val in spec_value_map:
-        return torch.full(
-            shape,
-            spec_value_map[value_range.min_val],
-            dtype=dtype)
+        return torch.full(shape, spec_value_map[value_range.min_val], dtype=dtype)
     if dtype in (torch.int32, torch.int16, torch.int8):
-        return torch.randint(
-            low=int(value_range.min_val),
-            high=int(value_range.max_val),
-            size=shape,
-            dtype=dtype
-        )
+        return torch.randint(low=int(value_range.min_val), high=int(value_range.max_val), size=shape, dtype=dtype)
     else:
         return torch.randn(shape, dtype=dtype)
 
 
 def generate_random_tensor_list(gen_tensor_case: GenTensorCase) -> List[torch.Tensor]:
-    return [generate_random_tensor(
-        gen_tensor_case.shape, gen_tensor_case.dtype, gen_tensor_case.value_range
-    ) for _ in range(gen_tensor_case.world_size)]
+    return [
+        generate_random_tensor(gen_tensor_case.shape, gen_tensor_case.dtype, gen_tensor_case.value_range)
+        for _ in range(gen_tensor_case.world_size)
+    ]
 
 
 def generate_random_tensor_list_and_save(
-    gen_tensor_case: GenTensorCase, save_dir: Path, filename_prefix: str,
+    gen_tensor_case: GenTensorCase,
+    save_dir: Path,
+    filename_prefix: str,
 ) -> List[torch.Tensor]:
     tensor_list = generate_random_tensor_list(gen_tensor_case)
     save_tensor_list(tensor_list, save_dir, filename_prefix)
@@ -222,12 +215,16 @@ def all_gather_and_save(args: DistributedOpAndSaveArgs) -> torch.Tensor:
 
 
 def reduce_scatter_and_save(
-    inputs: List[torch.Tensor], row: int, world_size: int, save_dir: Path, filename_prefix: str,
+    inputs: List[torch.Tensor],
+    row: int,
+    world_size: int,
+    save_dir: Path,
+    filename_prefix: str,
 ) -> torch.Tensor:
     stacked_output = torch.stack(inputs, dim=0)
     reduced_output = torch.sum(stacked_output, dim=0).to(inputs[0].dtype)
     row_per_rank = row // world_size
-    outputs = [reduced_output[rank * row_per_rank: (rank + 1) * row_per_rank] for rank in range(world_size)]
+    outputs = [reduced_output[rank * row_per_rank:(rank + 1) * row_per_rank] for rank in range(world_size)]
     save_tensor_list(outputs, save_dir, filename_prefix)
     return outputs
 
@@ -258,9 +255,17 @@ def generate_allgather_attn_post_reducescatter_case(config: dict) -> AllGatherAt
     world_size = params['world_size']
     min_val, max_val = input_tensor['data_range']['min'], input_tensor['data_range']['max']
     value_range = ValueRange(min_val=min_val, max_val=max_val)
-    case = AllGatherAttnPostReducescatterCase(dtype=dtype, batch_size=batch_size, seq_len=seq_len,
-        num_heads=num_heads, kv_lora_rank=kv_lora_rank, value_head_dim=value_head_dim,
-        output_hidden_size=output_hidden_size, world_size=world_size, value_range=value_range)
+    case = AllGatherAttnPostReducescatterCase(
+        dtype=dtype,
+        batch_size=batch_size,
+        seq_len=seq_len,
+        num_heads=num_heads,
+        kv_lora_rank=kv_lora_rank,
+        value_head_dim=value_head_dim,
+        output_hidden_size=output_hidden_size,
+        world_size=world_size,
+        value_range=value_range,
+    )
     return case
 
 
@@ -280,7 +285,7 @@ def generate_all_gather_golden(config: dict, output: Path) -> bool:
             shape=case.shape,
             valid_shape=case.valid_shape,
             save_dir=output,
-            filename_prefix='allgather_out'
+            filename_prefix='allgather_out',
         )
     )
     return True
@@ -308,7 +313,7 @@ def gen_2_groups_allgather_golden(config: dict, output: Path) -> bool:
             shape=case.shape,
             valid_shape=case.valid_shape,
             save_dir=output,
-            filename_prefix='output_odd'
+            filename_prefix='output_odd',
         )
     )
     all_gather_and_save(
@@ -318,7 +323,7 @@ def gen_2_groups_allgather_golden(config: dict, output: Path) -> bool:
             shape=case.shape,
             valid_shape=case.valid_shape,
             save_dir=output,
-            filename_prefix='output_even'
+            filename_prefix='output_even',
         )
     )
     return True
@@ -349,8 +354,7 @@ def generate_all_reduce_golden(config: dict, output: Path) -> bool:
     row = case.shape[0]
     if row == 0:
         raise ValueError(
-            'The first dimension of the input tensor must not be zero, '
-            f'got row={row}, world_size={case.world_size}'
+            f'The first dimension of the input tensor must not be zero, got row={row}, world_size={case.world_size}'
         )
     params = config['params']
     use_two_shot = params['use_two_shot']
@@ -367,7 +371,7 @@ def generate_all_reduce_golden(config: dict, output: Path) -> bool:
             shape=case.shape,
             valid_shape=case.valid_shape,
             save_dir=output,
-            filename_prefix='output'
+            filename_prefix='output',
         )
     )
     return True
@@ -389,7 +393,7 @@ def generate_allreduce_add_allreduce_golden(config: dict, output: Path) -> bool:
             shape=case.shape,
             valid_shape=case.valid_shape,
             save_dir=output,
-            filename_prefix='all_reduce_out'
+            filename_prefix='all_reduce_out',
         )
     )
     add_outs = [all_reduce_outs[0] + all_reduce_outs[0] for _ in range(case.world_size)]
@@ -401,7 +405,7 @@ def generate_allreduce_add_allreduce_golden(config: dict, output: Path) -> bool:
             shape=case.shape,
             valid_shape=case.valid_shape,
             save_dir=output,
-            filename_prefix='out'
+            filename_prefix='out',
         )
     )
     return True
@@ -431,8 +435,8 @@ def compute_attention_outputs(attention_input, case, output: Path):
             (case.num_heads, case.kv_lora_rank, case.value_head_dim), case.dtype, case.value_range
         )
         save_tensor(lora_weight, output / f'w_lora_rank_{rank}.bin')
-        attention_output = torch.bmm(
-            attention_input.to(torch.float32), lora_weight.to(torch.float32)).to(dtype=case.dtype
+        attention_output = torch.bmm(attention_input.to(torch.float32), lora_weight.to(torch.float32)).to(
+            dtype=case.dtype
         )
         attention_output = torch.transpose(attention_output, 0, 1)
         attention_output = torch.reshape(
@@ -478,9 +482,9 @@ def get_case_files() -> list[Path]:
         files = list(case_path.glob("*.json"))
         files.sort(key=lambda x: x.name.lower())
         if not files:
-            raise ValueError(f'JSON files found in the directory: %s', case_path)
+            raise ValueError('JSON files found in the directory: %s', case_path)
         return files
-    raise ValueError(f'Invalid path: %s. It must be either a valid file or a directory.', case_path)
+    raise ValueError('Invalid path: %s. It must be either a valid file or a directory.', case_path)
 
 
 def load_all_test_configs(case_files: list[Path]) -> list[dict]:

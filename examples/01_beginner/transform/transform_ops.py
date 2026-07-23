@@ -23,10 +23,12 @@ Usage:
 import argparse
 import os
 import sys
-import pypto
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -72,11 +74,9 @@ def get_device_id():
 # Assemble Examples
 # ============================================================================
 
+
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def assemble_kernel(
-    x: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32),
-    offsets: list):
+def assemble_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32), offsets: list):
     tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*tile_shapes)
     pypto.assemble(x, offsets, out)
@@ -96,10 +96,7 @@ def test_assemble_basic(device_id: int = None):
     expected_shape = (4, 4)
     out = torch.zeros(expected_shape, dtype=dtype, device=device)
     offsets = [0, 0]
-    expected = torch.tensor([[1, 1, 0, 0],
-                             [1, 1, 0, 0],
-                             [0, 0, 0, 0],
-                             [0, 0, 0, 0]], dtype=dtype, device=device)
+    expected = torch.tensor([[1, 1, 0, 0], [1, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], dtype=dtype, device=device)
 
     assemble_kernel(x, out, offsets)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -123,10 +120,7 @@ def test_assemble_different_offsets_shapes(device_id: int = None):
     expected_shape = (4, 4)
     out = torch.zeros(expected_shape, dtype=dtype, device=device)
     offsets = [1, 1]
-    expected = torch.tensor([[0, 0, 0, 0],
-                             [0, 2, 2, 0],
-                             [0, 2, 2, 0],
-                             [0, 0, 0, 0]], dtype=dtype, device=device)
+    expected = torch.tensor([[0, 0, 0, 0], [0, 2, 2, 0], [0, 2, 2, 0], [0, 0, 0, 0]], dtype=dtype, device=device)
 
     assemble_kernel(x, out, offsets)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -142,11 +136,11 @@ def test_assemble_different_offsets_shapes(device_id: int = None):
     expected_shape = (5, 5)
     out = torch.zeros(expected_shape, dtype=dtype, device=device)
     offsets = [1, 1]
-    expected = torch.tensor([[0, 0, 0, 0, 0],
-                             [0, 1, 1, 1, 0],
-                             [0, 1, 1, 1, 0],
-                             [0, 0, 0, 0, 0],
-                             [0, 0, 0, 0, 0]], dtype=dtype, device=device)
+    expected = torch.tensor(
+        [[0, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 1, 1, 1, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
+        dtype=dtype,
+        device=device,
+    )
 
     assemble_kernel(x, out, offsets)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -158,6 +152,7 @@ def test_assemble_different_offsets_shapes(device_id: int = None):
 
     print("✓ Basic usage of assemble function completed successfully")
 
+
 # ============================================================================
 # Gather Examples
 # ============================================================================
@@ -168,7 +163,8 @@ def gather_kernel(
     input_tensor: pypto.Tensor([], pypto.DT_INT32),
     index_tensor: pypto.Tensor([], pypto.DT_INT32),
     out: pypto.Tensor([], pypto.DT_INT32),
-    dim: int):
+    dim: int,
+):
     print(f"input_shape: {input_tensor.shape}")
     print(f"index_shape: {index_tensor.shape}")
     tile_shapes = [8] * len(input_tensor.shape)
@@ -186,16 +182,10 @@ def test_gather_basic(device_id: int = None):
 
     # Test 1: Basic gathering along dimension 0
     dtype = torch.int32
-    input_tensor = torch.tensor([[0, 1, 2, 3, 4],
-                                [5, 6, 7, 8, 9],
-                                [10, 11, 12, 13, 14]], dtype=dtype, device=device)
-    index_tensor = torch.tensor([[0, 1, 2, 0],
-                                [1, 2, 0, 1],
-                                [2, 2, 1, 0]], dtype=dtype, device=device)
+    input_tensor = torch.tensor([[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, 12, 13, 14]], dtype=dtype, device=device)
+    index_tensor = torch.tensor([[0, 1, 2, 0], [1, 2, 0, 1], [2, 2, 1, 0]], dtype=dtype, device=device)
     dim = 0
-    expected = torch.tensor([[0, 6, 12, 3],
-                            [5, 11, 2, 8],
-                            [10, 11, 7, 3]], dtype=dtype, device=device)
+    expected = torch.tensor([[0, 6, 12, 3], [5, 11, 2, 8], [10, 11, 7, 3]], dtype=dtype, device=device)
 
     out = torch.empty(index_tensor.shape, dtype=dtype, device=device)
     gather_kernel(input_tensor, index_tensor, out, dim)
@@ -218,39 +208,18 @@ def test_gather_different_dimensions(device_id: int = None):
 
     # Test: Gatherenating along dimension 2
     dtype = torch.int32
-    input_tensor = torch.tensor([[
-                    [10, 20, 30, 40],
-                    [50, 60, 70, 80],
-                    [90, 100, 110, 120]
-                ],
-                [
-                    [1, 2, 3, 4],
-                    [5, 6, 7, 8],
-                    [9, 10, 11, 12]
-                ]], dtype=dtype, device=device)
-    index_tensor = torch.tensor([
-                        [
-                            [0, 3],
-                            [2, 1],
-                            [3, 3]
-                        ],
-                        [
-                            [1, 2],
-                            [0, 3],
-                            [2, 0]
-                        ]], dtype=dtype, device=device)
+    input_tensor = torch.tensor(
+        [[[10, 20, 30, 40], [50, 60, 70, 80], [90, 100, 110, 120]], [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]],
+        dtype=dtype,
+        device=device,
+    )
+    index_tensor = torch.tensor([[[0, 3], [2, 1], [3, 3]], [[1, 2], [0, 3], [2, 0]]], dtype=dtype, device=device)
     dim = 2
-    expected = torch.tensor([
-                        [
-                            [10., 40.],
-                            [70., 60.],
-                            [120., 120.]
-                        ],
-                        [
-                            [2., 3.],
-                            [5., 8.],
-                            [11., 9.]
-                        ]], dtype=dtype, device=device)
+    expected = torch.tensor(
+        [[[10.0, 40.0], [70.0, 60.0], [120.0, 120.0]], [[2.0, 3.0], [5.0, 8.0], [11.0, 9.0]]],
+        dtype=dtype,
+        device=device,
+    )
 
     out = torch.empty(index_tensor.shape, dtype=dtype, device=device)
     gather_kernel(input_tensor, index_tensor, out, dim)
@@ -273,16 +242,10 @@ def test_gather_negative_indexing(device_id: int = None):
 
     # Test 1: Gatherenating along dimension -1
     dtype = torch.int32
-    input_tensor = torch.tensor([[0, 1, 2, 3, 4],
-                                [5, 6, 7, 8, 9],
-                                [10, 11, 12, 13, 14]], dtype=dtype, device=device)
-    index_tensor = torch.tensor([[0, 1, 2, 0],
-                                [1, 2, 0, 1],
-                                [2, 2, 1, 0]], dtype=dtype, device=device)
+    input_tensor = torch.tensor([[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, 12, 13, 14]], dtype=dtype, device=device)
+    index_tensor = torch.tensor([[0, 1, 2, 0], [1, 2, 0, 1], [2, 2, 1, 0]], dtype=dtype, device=device)
     dim = -1
-    expected = torch.tensor([[0, 1, 2, 0],
-                            [6, 7, 5, 6],
-                            [12, 12, 11, 10]], dtype=dtype, device=device)
+    expected = torch.tensor([[0, 1, 2, 0], [6, 7, 5, 6], [12, 12, 11, 10]], dtype=dtype, device=device)
 
     out = torch.empty(index_tensor.shape, dtype=dtype, device=device)
     gather_kernel(input_tensor, index_tensor, out, dim)
@@ -298,13 +261,15 @@ def test_gather_negative_indexing(device_id: int = None):
 # Scatter Examples
 # ============================================================================
 
+
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def scatter_kernel(
     x: pypto.Tensor([], pypto.DT_FP32),
     y: pypto.Tensor([], pypto.DT_INT64),
     out: pypto.Tensor([], pypto.DT_FP32),
     dim: int,
-    src: float):
+    src: float,
+):
     tensor_shape = x.shape
     vec_tile_shapes = [8 for _ in range(len(tensor_shape))]
     pypto.set_vec_tile_shapes(*vec_tile_shapes)
@@ -321,7 +286,7 @@ def test_scatter(device_id: int = None):
 
     x = torch.rand(3, 5, dtype=torch.float32, device=device)
     dim = 0
-    y = torch.randint(0, 3, x.shape, dtype=torch.int64, device=device) # BUG: The shape of y must be the same as x.
+    y = torch.randint(0, 3, x.shape, dtype=torch.int64, device=device)  # BUG: The shape of y must be the same as x.
     src = 0.5
 
     golden = torch.scatter(x, dim, y, src)
@@ -347,7 +312,8 @@ def scatter_update_kernel(
     y: pypto.Tensor([], pypto.DT_INT64),
     out: pypto.Tensor([], pypto.DT_FP32),
     dim: int,
-    src: float):
+    src: float,
+):
     vec_tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*vec_tile_shapes)
     out[:] = pypto.scatter(x, dim, y, src)
@@ -381,18 +347,17 @@ def test_scatter_update(device_id: int = None) -> None:
 # Concat Examples
 # ============================================================================
 def concat_op(a_shape: tuple, b_shape: tuple, dim: int):
-
     if dim == 0:
         out_shape = (a_shape[0] + b_shape[0], a_shape[1])
     else:
         out_shape = (a_shape[0], a_shape[1] + b_shape[1])
 
     @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-    def concat_kernel(a: pypto.Tensor(a_shape, pypto.DT_FP32),
-                          b: pypto.Tensor(b_shape, pypto.DT_FP32),
-                          out: pypto.Tensor(out_shape, pypto.DT_FP32)
-                        ):
-
+    def concat_kernel(
+        a: pypto.Tensor(a_shape, pypto.DT_FP32),
+        b: pypto.Tensor(b_shape, pypto.DT_FP32),
+        out: pypto.Tensor(out_shape, pypto.DT_FP32),
+    ):
         tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.concat([a, b], dim=dim)
@@ -400,20 +365,19 @@ def concat_op(a_shape: tuple, b_shape: tuple, dim: int):
     return concat_kernel
 
 
-def concat_multiple_op(a_shape: tuple, b_shape: tuple, c_shape: tuple,
-                      dim: int):
-
+def concat_multiple_op(a_shape: tuple, b_shape: tuple, c_shape: tuple, dim: int):
     if dim == 0:
         out_shape = (a_shape[0] + b_shape[0] + c_shape[0], a_shape[1])
     else:
         out_shape = (a_shape[0], a_shape[1] + b_shape[1] + c_shape[1])
 
     @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-    def concat_multiple_kernel(a: pypto.Tensor(a_shape, pypto.DT_FP32),
-                                    b: pypto.Tensor(b_shape, pypto.DT_FP32),
-                                    c: pypto.Tensor(c_shape, pypto.DT_FP32),
-                                    out: pypto.Tensor(out_shape, pypto.DT_FP32)
-                                ):
+    def concat_multiple_kernel(
+        a: pypto.Tensor(a_shape, pypto.DT_FP32),
+        b: pypto.Tensor(b_shape, pypto.DT_FP32),
+        c: pypto.Tensor(c_shape, pypto.DT_FP32),
+        out: pypto.Tensor(out_shape, pypto.DT_FP32),
+    ):
         tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.concat([a, b, c], dim=dim)
@@ -434,8 +398,7 @@ def test_concat_basic(device_id: int = None):
     a = torch.tensor([[1, 1], [1, 1]], dtype=dtype, device=device)
     b = torch.tensor([[0, 0], [0, 0]], dtype=dtype, device=device)
     dim = 0
-    expected = torch.tensor([[1, 1], [1, 1],
-                             [0, 0], [0, 0]], dtype=dtype, device=device)
+    expected = torch.tensor([[1, 1], [1, 1], [0, 0], [0, 0]], dtype=dtype, device=device)
     out = torch.empty(expected.shape, dtype=dtype, device=device)
     concat_op(a.shape, b.shape, dim)(a, b, out)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -460,8 +423,7 @@ def test_concat_different_dimensions(device_id: int = None):
     a = torch.tensor([[1, 1], [1, 1]], dtype=dtype, device=device)
     b = torch.tensor([[0, 0], [0, 0]], dtype=dtype, device=device)
     dim = 1
-    expected = torch.tensor([[1, 1, 0 ,0],
-                             [1, 1, 0 ,0]], dtype=dtype, device=device)
+    expected = torch.tensor([[1, 1, 0, 0], [1, 1, 0, 0]], dtype=dtype, device=device)
     out = torch.empty(expected.shape, dtype=dtype, device=device)
     concat_op(a.shape, b.shape, dim)(a, b, out)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -488,9 +450,7 @@ def test_concat_multiple_tensors(device_id: int = None):
     b = torch.tensor([[0, 0], [0, 0]], dtype=dtype, device=device)
     c = torch.tensor([[2, 2], [2, 2]], dtype=dtype, device=device)
     dim = 0
-    expected = torch.tensor([[1, 1], [1, 1],
-                             [0, 0], [0, 0],
-                             [2, 2], [2, 2]], dtype=dtype, device=device)
+    expected = torch.tensor([[1, 1], [1, 1], [0, 0], [0, 0], [2, 2], [2, 2]], dtype=dtype, device=device)
 
     out = torch.empty(expected.shape, dtype=dtype, device=device)
     concat_multiple_op(a.shape, b.shape, c.shape, dim)(a, b, c, out)
@@ -516,8 +476,7 @@ def test_concat_different_shapes(device_id: int = None):
     a = torch.tensor([[1, 1], [1, 1]], dtype=dtype, device=device)
     b = torch.tensor([[0, 0]], dtype=dtype, device=device)
     dim = 0
-    expected = torch.tensor([[1, 1], [1, 1],
-                             [0, 0]], dtype=dtype, device=device)
+    expected = torch.tensor([[1, 1], [1, 1], [0, 0]], dtype=dtype, device=device)
     out = torch.empty(expected.shape, dtype=dtype, device=device)
     concat_op(a.shape, b.shape, dim)(a, b, out)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -533,12 +492,9 @@ def test_concat_different_shapes(device_id: int = None):
 # View Examples
 # ============================================================================
 
+
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def view_kernel(
-    x: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32),
-    shape: list,
-    offsets: list):
+def view_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32), shape: list, offsets: list):
     tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*tile_shapes)
     out[:] = pypto.view(x, shape, offsets)
@@ -554,17 +510,15 @@ def test_view_basic(device_id: int = None):
 
     # Test 1: Basic usage of view function
     dtype = torch.float32
-    x = torch.tensor([[1, 1, 2, 2, 3, 3, 4, 4],
-                      [1, 1, 2, 2, 3, 3, 4, 4],
-                      [1, 1, 2, 2, 3, 3, 4, 4],
-                      [1, 1, 2, 2, 3, 3, 4, 4]], dtype=dtype, device=device)
+    x = torch.tensor(
+        [[1, 1, 2, 2, 3, 3, 4, 4], [1, 1, 2, 2, 3, 3, 4, 4], [1, 1, 2, 2, 3, 3, 4, 4], [1, 1, 2, 2, 3, 3, 4, 4]],
+        dtype=dtype,
+        device=device,
+    )
     shape = [4, 4]
     offsets = [0, 4]
     out = torch.zeros(shape, dtype=dtype, device=device)
-    expected = torch.tensor([[3, 3, 4, 4],
-                             [3, 3, 4, 4],
-                             [3, 3, 4, 4],
-                             [3, 3, 4, 4]], dtype=dtype, device=device)
+    expected = torch.tensor([[3, 3, 4, 4], [3, 3, 4, 4], [3, 3, 4, 4], [3, 3, 4, 4]], dtype=dtype, device=device)
 
     view_kernel(x, out, shape, offsets)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -582,7 +536,8 @@ def view_with_valid_shape_kernel(
     out: pypto.Tensor([], pypto.DT_FP32),
     shape: list,
     offsets: list,
-    valid_shape: list):
+    valid_shape: list,
+):
     tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*tile_shapes)
     out[:] = pypto.view(x, shape, offsets, valid_shape=valid_shape)
@@ -598,18 +553,16 @@ def test_view_with_valid_shape(device_id: int = None):
 
     # Test 1: Using the valid_shape parameter
     dtype = torch.float32
-    x = torch.tensor([[1, 1, 2, 2, 3, 3, 4, 4],
-                      [1, 1, 2, 2, 3, 3, 4, 4],
-                      [1, 1, 2, 2, 5, 5, 6, 6],
-                      [1, 1, 2, 2, 5, 5, 6, 6]], dtype=dtype, device=device)
+    x = torch.tensor(
+        [[1, 1, 2, 2, 3, 3, 4, 4], [1, 1, 2, 2, 3, 3, 4, 4], [1, 1, 2, 2, 5, 5, 6, 6], [1, 1, 2, 2, 5, 5, 6, 6]],
+        dtype=dtype,
+        device=device,
+    )
     shape = [4, 4]
     offsets = [2, 4]
     valid_shape = [2, 4]
     out = torch.zeros(shape, dtype=dtype, device=device)
-    expected = torch.tensor([[5, 5, 6, 6],
-                             [5, 5, 6, 6],
-                             [0, 0, 0, 0],
-                             [0, 0, 0, 0]], dtype=dtype, device=device)
+    expected = torch.tensor([[5, 5, 6, 6], [5, 5, 6, 6], [0, 0, 0, 0], [0, 0, 0, 0]], dtype=dtype, device=device)
 
     view_with_valid_shape_kernel(x, out, shape, offsets, valid_shape)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
@@ -625,12 +578,9 @@ def test_view_with_valid_shape(device_id: int = None):
 # Transpose Examples
 # ============================================================================
 
+
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def transpose_kernel(
-    x: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32),
-    dim0: int,
-    dim1: int):
+def transpose_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32), dim0: int, dim1: int):
     vec_tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*vec_tile_shapes)
     out[:] = pypto.transpose(x, dim0, dim1)
@@ -645,17 +595,14 @@ def test_transpose(device_id: int = None):
     device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     dtype = torch.float32
-    x = torch.tensor([[1.0028, -0.9893, 0.5809],
-                        [-0.1669, 0.7299, 0.4942]], dtype=dtype, device=device)
+    x = torch.tensor([[1.0028, -0.9893, 0.5809], [-0.1669, 0.7299, 0.4942]], dtype=dtype, device=device)
 
     dim0, dim1 = 0, 1
     out_shape = (x.shape[1], x.shape[0])  # transpose (2,3) -> (3,2)
     out = torch.empty(out_shape, dtype=torch.float32, device=device)
     transpose_kernel(x, out, dim0, dim1)
     y = out.cpu()
-    golden = torch.tensor([[ 1.0028, -0.1669],
-                        [-0.9893, 0.7299],
-                        [ 0.5809, 0.4942]], dtype=dtype, device=f'cpu')
+    golden = torch.tensor([[1.0028, -0.1669], [-0.9893, 0.7299], [0.5809, 0.4942]], dtype=dtype, device='cpu')
 
     max_diff = np.abs(y.numpy() - golden.numpy()).max()
     print(f"Output: {y}")
@@ -670,25 +617,23 @@ def test_transpose(device_id: int = None):
 # Cast Examples
 # ============================================================================
 data_type = {
-    torch.int8:      pypto.DT_INT8,
-    torch.int16:     pypto.DT_INT16,
-    torch.int32:     pypto.DT_INT32,
-    torch.int64:     pypto.DT_INT64,
-    torch.float16:   pypto.DT_FP16,
-    torch.float32:   pypto.DT_FP32,
-    torch.bfloat16:  pypto.DT_BF16,
-    torch.uint8:     pypto.DT_UINT8,
-    torch.uint16:    pypto.DT_UINT16,
-    torch.uint32:    pypto.DT_UINT32,
-    torch.uint64:    pypto.DT_UINT64,
-    torch.bool:      pypto.DT_BOOL,
+    torch.int8: pypto.DT_INT8,
+    torch.int16: pypto.DT_INT16,
+    torch.int32: pypto.DT_INT32,
+    torch.int64: pypto.DT_INT64,
+    torch.float16: pypto.DT_FP16,
+    torch.float32: pypto.DT_FP32,
+    torch.bfloat16: pypto.DT_BF16,
+    torch.uint8: pypto.DT_UINT8,
+    torch.uint16: pypto.DT_UINT16,
+    torch.uint32: pypto.DT_UINT32,
+    torch.uint64: pypto.DT_UINT64,
+    torch.bool: pypto.DT_BOOL,
 }
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def cast_kernel(
-    x: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP16)):
+def cast_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP16)):
     vec_tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*vec_tile_shapes)
     out[:] = pypto.cast(x, pypto.DT_FP16)
@@ -733,26 +678,17 @@ Examples:
   %(prog)s                      Run all examples
   %(prog)s --list               List all available examples
   %(prog)s assemble::test_assemble_basic    Run a specific case
-        """
+        """,
     )
     parser.add_argument(
         'example_id',
         type=str,
         nargs="?",
-        help='Run a specific case (e.g., assemble::test_assemble_basic). If omitted, all cases run.'
+        help='Run a specific case (e.g., assemble::test_assemble_basic). If omitted, all cases run.',
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default='npu',
-        choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default='npu', choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -868,7 +804,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("(Make sure CANN environment is configured and NPU is available)\n")

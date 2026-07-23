@@ -31,11 +31,12 @@ Key Classes:
 The diagnostic system provides rich error messages with source context,
 making it easier for users to identify and fix issues in their PTO scripts.
 """
+
 import ast
-import inspect
 import enum
+import inspect
 import typing
-from typing import NoReturn, Callable, Union
+from typing import Callable, NoReturn, Union
 
 from pypto.error import RenderedParserError
 
@@ -179,24 +180,15 @@ class DiagnosticItem:
             line_text = file_lines[line_idx].rstrip("\n")
 
             # Determine if this line is part of the error span
-            is_span_line = (
-                self.span.line <= current_line_num <= self.span.end_line
-            )
+            is_span_line = self.span.line <= current_line_num <= self.span.end_line
 
             if is_span_line:
                 formatted_line = (
-                    selected_color
-                    + str(current_line_num).rjust(max_line_digits)
-                    + " |"
-                    + color_reset
-                    + " "
-                    + line_text
+                    selected_color + str(current_line_num).rjust(max_line_digits) + " |" + color_reset + " " + line_text
                 )
                 print(formatted_line)
             else:
-                line_display = (
-                    str(current_line_num).rjust(max_line_digits) + " | " + line_text
-                )
+                line_display = str(current_line_num).rjust(max_line_digits) + " | " + line_text
                 print(line_display)
 
             # Add visual indicator for error span lines
@@ -277,9 +269,7 @@ class Diagnostics:
         """Output all diagnostics and perform cleanup."""
         self._render()
 
-    def emit(
-        self, node: ast.AST, message: str, level: DiagnosticLevel = DiagnosticLevel.INFO
-    ) -> None:
+    def emit(self, node: ast.AST, message: str, level: DiagnosticLevel = DiagnosticLevel.INFO) -> None:
         """Generate and record a diagnostic message.
 
         Parameters

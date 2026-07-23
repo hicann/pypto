@@ -465,25 +465,27 @@ def set_mm_layout_transform(*, enabled: bool, span: Span | None = None) -> Call:
 # Declarative op registration + special handlers
 # ---------------------------------------------------------------------------
 
-register_table({
-    # kwargs only
-    "system.sync_src": OpSpec(builder=sync_src, parse_args=False),
-    "system.sync_dst": OpSpec(builder=sync_dst, parse_args=False),
-    "system.set_cross_core": OpSpec(builder=set_cross_core, parse_args=False),
-    "system.wait_cross_core": OpSpec(builder=wait_cross_core, parse_args=False),
-    "system.mutex_lock": OpSpec(builder=mutex_lock, parse_args=False),
-    "system.mutex_unlock": OpSpec(builder=mutex_unlock, parse_args=False),
-    # no args, no kwargs
-    "system.bar_v": OpSpec(builder=bar_v, parse_args=False, parse_kwargs=False),
-    "system.bar_m": OpSpec(builder=bar_m, parse_args=False, parse_kwargs=False),
-    "system.bar_all": OpSpec(builder=bar_all, parse_args=False, parse_kwargs=False),
-    "get_block_idx": OpSpec(ir_name="get_block_idx", parse_args=False, parse_kwargs=False),
-    "get_subblock_idx": OpSpec(ir_name="get_subblock_idx", parse_args=False, parse_kwargs=False),
-    "get_block_num": OpSpec(ir_name="get_block_num", parse_args=False, parse_kwargs=False),
-    "get_spr": OpSpec(ir_name="get_spr", parse_args=False, parse_kwargs=False),
-    # args + kwargs
-    "system.dcci": OpSpec(builder=dcci),
-})
+register_table(
+    {
+        # kwargs only
+        "system.sync_src": OpSpec(builder=sync_src, parse_args=False),
+        "system.sync_dst": OpSpec(builder=sync_dst, parse_args=False),
+        "system.set_cross_core": OpSpec(builder=set_cross_core, parse_args=False),
+        "system.wait_cross_core": OpSpec(builder=wait_cross_core, parse_args=False),
+        "system.mutex_lock": OpSpec(builder=mutex_lock, parse_args=False),
+        "system.mutex_unlock": OpSpec(builder=mutex_unlock, parse_args=False),
+        # no args, no kwargs
+        "system.bar_v": OpSpec(builder=bar_v, parse_args=False, parse_kwargs=False),
+        "system.bar_m": OpSpec(builder=bar_m, parse_args=False, parse_kwargs=False),
+        "system.bar_all": OpSpec(builder=bar_all, parse_args=False, parse_kwargs=False),
+        "get_block_idx": OpSpec(ir_name="get_block_idx", parse_args=False, parse_kwargs=False),
+        "get_subblock_idx": OpSpec(ir_name="get_subblock_idx", parse_args=False, parse_kwargs=False),
+        "get_block_num": OpSpec(ir_name="get_block_num", parse_args=False, parse_kwargs=False),
+        "get_spr": OpSpec(ir_name="get_spr", parse_args=False, parse_kwargs=False),
+        # args + kwargs
+        "system.dcci": OpSpec(builder=dcci),
+    }
+)
 
 
 @op_impl("system.sync_all")
@@ -500,6 +502,7 @@ def _parse_system_set_mm_layout_transform(self, call: ast.Call):
     kwargs = self.parse_op_kwargs(call)
     if "enabled" not in kwargs:
         from pypto_pro.language.parser.diagnostics import ParserSyntaxError
+
         raise ParserSyntaxError(
             "set_mm_layout_transform requires keyword argument 'enabled'",
             span=call_span,

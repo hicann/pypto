@@ -8,15 +8,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import ast
 import os
 import traceback
 
 import pypto
 
-from ..utils.cli import command, argument
+from ..utils.cli import argument, command
 from ..utils.io import print_line
 
 
@@ -40,12 +40,12 @@ def pil_compile(src_filepath, dst_filepath):
 def pil(input_files, output):
     if len(input_files) != 1:
         if output is not None:
-            raise Exception(f'-o is not allowed for multiple inputs')
+            raise Exception('-o is not allowed for multiple inputs')
         for src in input_files:
             dst = f'{src}.pil.py'
             try:
                 pil_compile(src, dst)
-            except Exception as ex:
+            except Exception:
                 traceback.print_exc()
     else:
         if output is None:

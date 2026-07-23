@@ -8,26 +8,23 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
+""" """
+
 import enum
 import math
-from itertools import product
-from typing import List, Optional, Union
+import os
+from typing import List, Optional
 
-import pytest
 import torch
-import torch_npu
-import numpy as np
 
 import pypto
 from pypto import (
-    tensor, view, function,
+    function,
     set_vec_tile_shapes,
+    tensor,
+    view,
 )
 from pypto.symbolic_scalar import SymInt
-
 
 TORCH_TO_PTO_TYPES = {
     torch.int8: pypto.DT_INT8,
@@ -59,8 +56,13 @@ class ClipArgs:
     is_element = False
 
     def __init__(
-        self, tile_shape: List[int], view_shape: List[int], mode: ClipMode,
-        min=None, max=None, is_element: bool = False,
+        self,
+        tile_shape: List[int],
+        view_shape: List[int],
+        mode: ClipMode,
+        min=None,
+        max=None,
+        is_element: bool = False,
     ) -> None:
         self.tile_shape = tile_shape
         self.view_shape = view_shape
@@ -97,11 +99,7 @@ def get_broadcast_offset_ratio(
     return results
 
 
-def get_valid_shape(
-    origin_shapes: List[SymInt],
-    view_shapes: List[int],
-    loop_vars: List[SymInt]
-) -> List[SymInt]:
+def get_valid_shape(origin_shapes: List[SymInt], view_shapes: List[int], loop_vars: List[SymInt]) -> List[SymInt]:
     if len(loop_vars) != len(origin_shapes) or len(origin_shapes) != len(view_shapes):
         raise ValueError("Length of `origin_shapes`/`view_shapes` should be the same as `loop_vars`")
     valid_shapes = []
@@ -127,10 +125,7 @@ def get_offsets(
 
 
 def broadcast_view(
-    need_broadcast: pypto.Tensor,
-    broadcasted: pypto.Tensor,
-    view_shapes: List[int],
-    loop_vars: List[SymInt]
+    need_broadcast: pypto.Tensor, broadcasted: pypto.Tensor, view_shapes: List[int], loop_vars: List[SymInt]
 ) -> pypto.Tensor:
     tile_view_shape = get_broadcast_view_shape(need_broadcast, broadcasted, view_shapes)
     tile_offset_ratio = get_broadcast_offset_ratio(need_broadcast, broadcasted)

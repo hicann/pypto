@@ -24,10 +24,9 @@ Main Functions:
 Example:
     See deepseekv32_sparse_attention_antiquant.py for usage examples.
 """
-import os
-import math
+
 from dataclasses import dataclass
-import numpy as np
+
 import pypto
 from pypto.experimental import gather_in_ub
 
@@ -42,10 +41,23 @@ class SaTileShapeConfig:
     v2_tile_shape: list
 
 
-def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_indices,
-                                            block_table, kv_act_seqs, attention_out,
-                                            nq, n_kv, softmax_scale, topk, block_size,
-                                            max_blocknum_perbatch, tile_config, parallel=False):
+def sparse_attention_antiquant_compute(
+    query_nope,
+    query_rope,
+    nope_cache,
+    topk_indices,
+    block_table,
+    kv_act_seqs,
+    attention_out,
+    nq,
+    n_kv,
+    softmax_scale,
+    topk,
+    block_size,
+    max_blocknum_perbatch,
+    tile_config,
+    parallel=False,
+):
     """Compute sparse flash attention with quantization support.
 
     Performs attention computation on top-k selected key-value pairs from cache.
@@ -110,15 +122,19 @@ def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_
                 for group_idx in pypto.loop(0, g_loop_sym, 1, name="LOOP_L3_g_SA", idx_name="gIdx"):
                     cur_group_tile = group_tile
                     cur_offset = batch_idx * s1_n2_gsym + slc_idx * nq + n_kv_idx * group + group_idx * cur_group_tile
-                    for s2_idx, _ in pypto.loop_unroll(0, bn_per_batch, 1,
-                        name="LOOP_L4_s2_SA", idx_name="s2_idx", unroll_list={1}):
+                    for s2_idx, _ in pypto.loop_unroll(
+                        0, bn_per_batch, 1, name="LOOP_L4_s2_SA", idx_name="s2_idx", unroll_list={1}
+                    ):
                         cur_s2_tile = s2_tile
 
                         pypto.set_pass_options(sg_set_scope=5001)
                         if pypto.platform.npuarch != 'DAV_3510':
-                            cur_topk_indices = pypto.view(topk_indices, [1, cur_s2_tile],
-                                                    [batch_idx * s1_sym + slc_idx, s2_idx * cur_s2_tile],
-                                                    valid_shape=[1, (cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile)])
+                            cur_topk_indices = pypto.view(
+                                topk_indices,
+                                [1, cur_s2_tile],
+                                [batch_idx * s1_sym + slc_idx, s2_idx * cur_s2_tile],
+                                valid_shape=[1, (cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile)],
+                            )
                             cur_block_table = pypto.view(block_table, [1, max_blocknum_perbatch], [batch_idx, 0])
 
                         # V0
@@ -129,20 +145,21 @@ def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_
                         pypto.set_vec_tile_shapes(16, 672)
 
                         # [512:640:656] kv_quant 512*int8, kr 64*bf16, kv_scale 4*fp32
-                        cur_topk_indices = pypto.view(topk_indices, [1, cur_s2_tile],
-                                                  [batch_idx * s1_sym + slc_idx, s2_idx * cur_s2_tile],
-                                                  valid_shape=[1, (cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile)])
+                        cur_topk_indices = pypto.view(
+                            topk_indices,
+                            [1, cur_s2_tile],
+                            [batch_idx * s1_sym + slc_idx, s2_idx * cur_s2_tile],
+                            valid_shape=[1, (cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile)],
+                        )
                         cur_block_table = pypto.view(block_table, [1, max_blocknum_perbatch], [batch_idx, 0])
                         nope_cache_view = pypto.view(
-                            nope_cache,
-                            [nope_cache.shape[0], 672],
-                            [0, 0],
-                            valid_shape=[nope_cache.shape[0], 656]
+                            nope_cache, [nope_cache.shape[0], 672], [0, 0], valid_shape=[nope_cache.shape[0], 656]
                         )
 
                         # ---- gather: GM --> UB  ----  UB非连续：shape [16, 672]， vaildshape：[16, 656]
-                        slc_nope_cache = gather_in_ub(nope_cache_view, cur_topk_indices, cur_block_table,
-                                                      block_size, -2)
+                        slc_nope_cache = gather_in_ub(
+                            nope_cache_view, cur_topk_indices, cur_block_table, block_size, -2
+                        )
 
                         pypto.set_vec_tile_shapes(16, 512)
 
@@ -151,7 +168,7 @@ def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_
                             input=slc_nope_cache,
                             shape=[cur_s2_tile, 512],
                             offsets=[0, 0],
-                            valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), 512]
+                            valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), 512],
                         )
 
                         # ---- cast: UB --> UB  ---- [16, 672]  --view->  [16, 0:512]  -cast-> [16, 512]
@@ -168,7 +185,7 @@ def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_
                             input=slc_nope_cache,
                             shape=[cur_s2_tile, 16 * 2],
                             offsets=[0, dn + dr * 2],
-                            valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), 16]
+                            valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), 16],
                         )
                         kn_scale = pypto.view(input=kn_scale_vint8, dtype=pypto.DT_FP32)
 
@@ -185,7 +202,7 @@ def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_
                             input=kn_fp32_reshape,
                             shape=[cur_s2_tile, dn],
                             offsets=[0, 0],
-                            valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), dn]
+                            valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), dn],
                         )
                         kn = pypto.cast(cur_kn_fp32, dtype)
 
@@ -194,7 +211,7 @@ def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_
                             input=slc_nope_cache,
                             shape=[cur_s2_tile, dr * 2],
                             offsets=[0, dn],
-                            valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), dr * 2]
+                            valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), dr * 2],
                         )
                         kr = pypto.view(input=kr_vint8, dtype=dtype)
 
@@ -203,19 +220,26 @@ def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_
                         pypto.assemble(kn, [0, 0], kj)
                         pypto.assemble(pypto.clone(kr), [0, dn], kj)
                         pypto.set_pass_options(sg_set_scope=-1)
-                        kj_view = pypto.view(kj, [cur_s2_tile, dn + dr], [0, 0],
-                                             valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), dn + dr])
+                        kj_view = pypto.view(
+                            kj,
+                            [cur_s2_tile, dn + dr],
+                            [0, 0],
+                            valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), dn + dr],
+                        )
 
                         # C1
                         pypto.set_semantic_label("Sa_C1")
                         pypto.set_vec_tile_shapes(32, 512)
-                        pypto.set_cube_tile_shapes([c1_tile[0],
-                            c1_tile[1]], [c1_tile[2], c1_tile[3]], [c1_tile[4], c1_tile[5]])
+                        pypto.set_cube_tile_shapes(
+                            [c1_tile[0], c1_tile[1]], [c1_tile[2], c1_tile[3]], [c1_tile[4], c1_tile[5]]
+                        )
 
-                        qn = pypto.view(query_nope, [cur_group_tile, dn], [cur_offset, 0],
-                                        valid_shape=[cur_group_tile, dn])
-                        qr = pypto.view(query_rope, [cur_group_tile, dr], [cur_offset, 0],
-                                        valid_shape=[cur_group_tile, dr])
+                        qn = pypto.view(
+                            query_nope, [cur_group_tile, dn], [cur_offset, 0], valid_shape=[cur_group_tile, dn]
+                        )
+                        qr = pypto.view(
+                            query_rope, [cur_group_tile, dr], [cur_offset, 0], valid_shape=[cur_group_tile, dr]
+                        )
                         qi = pypto.Tensor([cur_group_tile, dn + dr], dtype, "qi")
                         pypto.assemble(qn, [0, 0], qi)
                         pypto.assemble(qr, [0, dn], qi)
@@ -235,12 +259,16 @@ def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_
 
                         # C2
                         pypto.set_semantic_label("Sa_C2")
-                        pypto.set_cube_tile_shapes([c2_tile[0],
-                            c2_tile[1]], [c2_tile[2], c2_tile[3]], [c2_tile[4], c2_tile[5]])
-                        pypto.set_matrix_size([tilda_pij_f16.shape[0],
-                            tilda_pij_f16.shape[1], kn.shape[1]])
-                        vj = pypto.view(kn, [cur_s2_tile, dn], [0, 0],
-                                        valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), dn])
+                        pypto.set_cube_tile_shapes(
+                            [c2_tile[0], c2_tile[1]], [c2_tile[2], c2_tile[3]], [c2_tile[4], c2_tile[5]]
+                        )
+                        pypto.set_matrix_size([tilda_pij_f16.shape[0], tilda_pij_f16.shape[1], kn.shape[1]])
+                        vj = pypto.view(
+                            kn,
+                            [cur_s2_tile, dn],
+                            [0, 0],
+                            valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), dn],
+                        )
                         q1 = pypto.matmul(tilda_pij_f16, vj, dtype)
 
                         pypto.assemble(q1, [cur_offset, 0], attention_out)
@@ -259,7 +287,7 @@ def options_list():
                 "ready_on_host_tensors": ["block_table", "kv_act_seqs"],
                 "max_workspace_kb": 1490944,
             },
-            }
+        }
     else:
         return {
             "pass_options": {
@@ -269,7 +297,7 @@ def options_list():
             "runtime_options": {
                 "stitch_function_max_num": 128,
                 "device_sched_mode": 3,
-                "ready_on_host_tensors": ["block_table", "kv_act_seqs"]
+                "ready_on_host_tensors": ["block_table", "kv_act_seqs"],
             },
         }
 
@@ -286,8 +314,13 @@ def sparse_attention_antiquant_d(
     block_table: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT32),
     kv_act_seqs: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
     attention_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
-
-    nq, n_kv, softmax_scale, topk, block_size, max_blocknum_perbatch, tile_config
+    nq,
+    n_kv,
+    softmax_scale,
+    topk,
+    block_size,
+    max_blocknum_perbatch,
+    tile_config,
 ):
     """JIT-compiled sparse flash attention for decode phase.
 
@@ -319,16 +352,28 @@ def sparse_attention_antiquant_d(
     """
     pypto.experimental.set_operation_options(combine_axis=True)
 
-    sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_indices,
-                                            block_table, kv_act_seqs, attention_out,
-                                            nq, n_kv, softmax_scale, topk, block_size,
-                                            max_blocknum_perbatch, tile_config)
+    sparse_attention_antiquant_compute(
+        query_nope,
+        query_rope,
+        nope_cache,
+        topk_indices,
+        block_table,
+        kv_act_seqs,
+        attention_out,
+        nq,
+        n_kv,
+        softmax_scale,
+        topk,
+        block_size,
+        max_blocknum_perbatch,
+        tile_config,
+    )
 
 
 @pypto.frontend.jit(
     pass_options={
         "vec_nbuffer_setting": {"DEFAULT": 2, "func20_8": 2, "func20_0": 8, "func20_1": 2},
-        "cube_l1_reuse_setting": {"DEFAULT": 4, "func20_1": 1}
+        "cube_l1_reuse_setting": {"DEFAULT": 4, "func20_1": 1},
     },
     runtime_options={
         "stitch_function_max_num": 384,
@@ -345,8 +390,13 @@ def sparse_attention_antiquant_d_large_batch(
     block_table: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT32),
     kv_act_seqs: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
     attention_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
-
-    nq, n_kv, softmax_scale, topk, block_size, max_blocknum_perbatch, tile_config
+    nq,
+    n_kv,
+    softmax_scale,
+    topk,
+    block_size,
+    max_blocknum_perbatch,
+    tile_config,
 ):
     """JIT-compiled sparse flash attention for decode phase.
 
@@ -378,10 +428,23 @@ def sparse_attention_antiquant_d_large_batch(
     """
     pypto.experimental.set_operation_options(combine_axis=True)
 
-    sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_indices,
-                                            block_table, kv_act_seqs, attention_out,
-                                            nq, n_kv, softmax_scale, topk, block_size,
-                                            max_blocknum_perbatch, tile_config, True)
+    sparse_attention_antiquant_compute(
+        query_nope,
+        query_rope,
+        nope_cache,
+        topk_indices,
+        block_table,
+        kv_act_seqs,
+        attention_out,
+        nq,
+        n_kv,
+        softmax_scale,
+        topk,
+        block_size,
+        max_blocknum_perbatch,
+        tile_config,
+        True,
+    )
 
 
 @pypto.frontend.jit(
@@ -389,10 +452,7 @@ def sparse_attention_antiquant_d_large_batch(
         "vec_nbuffer_setting": {-1: 4, 0: 4},
         "cube_l1_reuse_setting": {-1: 4},
     },
-    runtime_options={
-        "stitch_function_max_num": 128,
-        "ready_on_host_tensors": ["block_table", "kv_act_seqs"]
-    }
+    runtime_options={"stitch_function_max_num": 128, "ready_on_host_tensors": ["block_table", "kv_act_seqs"]},
 )
 def sparse_attention_antiquant_p(
     query_nope: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
@@ -402,8 +462,13 @@ def sparse_attention_antiquant_p(
     block_table: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT32),
     kv_act_seqs: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
     attention_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
-
-    nq, n_kv, softmax_scale, topk, block_size, max_blocknum_perbatch, tile_config
+    nq,
+    n_kv,
+    softmax_scale,
+    topk,
+    block_size,
+    max_blocknum_perbatch,
+    tile_config,
 ):
     """JIT-compiled sparse flash attention for prefill phase.
 
@@ -435,7 +500,19 @@ def sparse_attention_antiquant_p(
     """
     pypto.experimental.set_operation_options(combine_axis=True)
 
-    sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_indices,
-                                            block_table, kv_act_seqs, attention_out,
-                                            nq, n_kv, softmax_scale, topk, block_size,
-                                            max_blocknum_perbatch, tile_config)
+    sparse_attention_antiquant_compute(
+        query_nope,
+        query_rope,
+        nope_cache,
+        topk_indices,
+        block_table,
+        kv_act_seqs,
+        attention_out,
+        nq,
+        n_kv,
+        softmax_scale,
+        topk,
+        block_size,
+        max_blocknum_perbatch,
+        tile_config,
+    )

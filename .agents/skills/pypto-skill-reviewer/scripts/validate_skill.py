@@ -20,6 +20,7 @@ Usage:
 
 Requirements: Python 3.8+, pyyaml.
 """
+
 import json
 import logging
 import os
@@ -49,6 +50,7 @@ def set_rule_meta(rules_data):
 # ---------------------------------------------------------------------------
 # Frontmatter parser
 # ---------------------------------------------------------------------------
+
 
 def parse_frontmatter(lines):
     """Parse YAML frontmatter delimited by --- lines.
@@ -84,6 +86,7 @@ def parse_frontmatter(lines):
 # Code-block-aware line classifier
 # ---------------------------------------------------------------------------
 
+
 class CodeBlockTracker:
     """Tracks whether the current line is inside a fenced code block."""
 
@@ -109,14 +112,21 @@ class CodeBlockTracker:
 # Individual rule checkers
 # ---------------------------------------------------------------------------
 
+
 def check_r01(lines, **_):
     """R01: SKILL.md must start with frontmatter delimited by ---"""
     fm, start, end, _ = parse_frontmatter(lines)
     if fm is None:
-        return finding("R01", "S0", "D1", "FAIL",
-                       "SKILL.md 未以有效的 `---` 分隔 YAML frontmatter 块开头",
-                       "SKILL.md", 1,
-                       lines[0].rstrip() if lines else "(empty file)")
+        return finding(
+            "R01",
+            "S0",
+            "D1",
+            "FAIL",
+            "SKILL.md 未以有效的 `---` 分隔 YAML frontmatter 块开头",
+            "SKILL.md",
+            1,
+            lines[0].rstrip() if lines else "(empty file)",
+        )
     return None
 
 
@@ -130,18 +140,14 @@ def check_r02(fm, **_):
     else:
         name = ""
     if not name:
-        return finding("R02", "S0", "D1", "FAIL",
-                       "frontmatter 中 `name` 字段缺失或为空",
-                       "SKILL.md", 1, "")
+        return finding("R02", "S0", "D1", "FAIL", "frontmatter 中 `name` 字段缺失或为空", "SKILL.md", 1, "")
     kebab = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
     if not kebab.match(name):
-        return finding("R02", "S0", "D1", "FAIL",
-                       f"`name` 值 `{name}` 不是合法的 kebab-case 格式",
-                       "SKILL.md", 1, name)
+        return finding("R02", "S0", "D1", "FAIL", f"`name` 值 `{name}` 不是合法的 kebab-case 格式", "SKILL.md", 1, name)
     if len(name) > 64:
-        return finding("R02", "S0", "D1", "FAIL",
-                       f"`name` 值超过 64 个字符（当前 {len(name)} 个字符）",
-                       "SKILL.md", 1, name)
+        return finding(
+            "R02", "S0", "D1", "FAIL", f"`name` 值超过 64 个字符（当前 {len(name)} 个字符）", "SKILL.md", 1, name
+        )
     return None
 
 
@@ -155,9 +161,16 @@ def check_r03(fm, **_):
     else:
         desc = str(desc).strip()
     if len(desc) < 20:
-        return finding("R03", "S0", "D1", "FAIL",
-                       f"`description` 过短（{len(desc)} 个字符，最少 20 个字符）",
-                       "SKILL.md", 1, desc or "(empty)")
+        return finding(
+            "R03",
+            "S0",
+            "D1",
+            "FAIL",
+            f"`description` 过短（{len(desc)} 个字符，最少 20 个字符）",
+            "SKILL.md",
+            1,
+            desc or "(empty)",
+        )
     return None
 
 
@@ -170,9 +183,9 @@ def check_r04(fm, skill_dir, **_):
         name = name.strip().strip("'\"")
     dir_name = os.path.basename(os.path.normpath(skill_dir))
     if name.lower() != dir_name.lower():
-        return finding("R04", "S1", "D1", "FAIL",
-                       f"`name` 值 `{name}` 与目录名 `{dir_name}` 不匹配",
-                       "SKILL.md", 1, name)
+        return finding(
+            "R04", "S1", "D1", "FAIL", f"`name` 值 `{name}` 与目录名 `{dir_name}` 不匹配", "SKILL.md", 1, name
+        )
     return None
 
 
@@ -184,9 +197,16 @@ def check_r05(fm, **_):
     if isinstance(desc, str):
         desc = desc.strip()
     if len(desc) > 1024:
-        return finding("R05", "S2", "D1", "FAIL",
-                       f"`description` 超过 1024 个字符（当前 {len(desc)} 个字符）",
-                       "SKILL.md", 1, desc[:80] + "...")
+        return finding(
+            "R05",
+            "S2",
+            "D1",
+            "FAIL",
+            f"`description` 超过 1024 个字符（当前 {len(desc)} 个字符）",
+            "SKILL.md",
+            1,
+            desc[:80] + "...",
+        )
     return None
 
 
@@ -195,9 +215,16 @@ def check_r06(fm, known_fields, **_):
         return None
     unknown = [k for k in fm.keys() if k not in known_fields]
     if unknown:
-        return finding("R06", "S3", "D1", "FAIL",
-                       f"未知的 frontmatter 字段: {', '.join(unknown)}",
-                       "SKILL.md", 1, ", ".join(unknown))
+        return finding(
+            "R06",
+            "S3",
+            "D1",
+            "FAIL",
+            f"未知的 frontmatter 字段: {', '.join(unknown)}",
+            "SKILL.md",
+            1,
+            ", ".join(unknown),
+        )
     return None
 
 
@@ -210,17 +237,21 @@ def check_r10(fm, **_):
     at = fm.get("allowed-tools")
     if at is not None:
         if not isinstance(at, (str, list)):
-            findings.append(finding("R10", "S2", "D1", "FAIL",
-                                    "`allowed-tools` 必须是字符串（逗号分隔）或数组",
-                                    "SKILL.md", 1, str(at)))
+            findings.append(
+                finding(
+                    "R10", "S2", "D1", "FAIL", "`allowed-tools` 必须是字符串（逗号分隔）或数组", "SKILL.md", 1, str(at)
+                )
+            )
     # Check boolean fields
     for field in ("user-invocable", "intercept"):
         val = fm.get(field)
         if val is not None and not isinstance(val, bool):
             if isinstance(val, str) and val.lower() not in ("true", "false"):
-                findings.append(finding("R10", "S2", "D1", "FAIL",
-                                        f"`{field}` 必须为布尔值，当前为 `{val}`",
-                                        "SKILL.md", 1, str(val)))
+                findings.append(
+                    finding(
+                        "R10", "S2", "D1", "FAIL", f"`{field}` 必须为布尔值，当前为 `{val}`", "SKILL.md", 1, str(val)
+                    )
+                )
     return findings if findings else None
 
 
@@ -228,9 +259,9 @@ def check_r11(lines, **_):
     """R11: SKILL.md must not exceed 600 lines"""
     count = len(lines)
     if count > 600:
-        return finding("R11", "S1", "D2", "FAIL",
-                       f"SKILL.md 共 {count} 行（最大 600 行）",
-                       "SKILL.md", 1, f"{count} lines")
+        return finding(
+            "R11", "S1", "D2", "FAIL", f"SKILL.md 共 {count} 行（最大 600 行）", "SKILL.md", 1, f"{count} lines"
+        )
     return None
 
 
@@ -240,9 +271,16 @@ def check_r12(lines, fm_end_line, **_):
     body = "".join(lines[body_start:])
     word_count = len(body.split())
     if word_count > 6000:
-        return finding("R12", "S2", "D2", "FAIL",
-                       f"SKILL.md 正文共 {word_count} 个词（最大 6000 个词）",
-                       "SKILL.md", body_start + 1, f"{word_count} words")
+        return finding(
+            "R12",
+            "S2",
+            "D2",
+            "FAIL",
+            f"SKILL.md 正文共 {word_count} 个词（最大 6000 个词）",
+            "SKILL.md",
+            body_start + 1,
+            f"{word_count} words",
+        )
     return None
 
 
@@ -262,9 +300,18 @@ def check_r13(lines, fm_end_line, **_):
             continue
         m = pattern.search(line)
         if m:
-            results.append(finding("R13", "S1", "D2", "FAIL",
-                                   f"在代码块外发现 `{m.group(1)}` 占位标记",
-                                   "SKILL.md", i + 1, line.rstrip()))
+            results.append(
+                finding(
+                    "R13",
+                    "S1",
+                    "D2",
+                    "FAIL",
+                    f"在代码块外发现 `{m.group(1)}` 占位标记",
+                    "SKILL.md",
+                    i + 1,
+                    line.rstrip(),
+                )
+            )
     return results if results else None
 
 
@@ -273,13 +320,13 @@ def check_r15(skill_dir, **_):
     dir_name = os.path.basename(os.path.normpath(skill_dir))
     kebab = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
     if not kebab.match(dir_name):
-        return finding("R15", "S2", "D3", "FAIL",
-                       f"目录名 `{dir_name}` 不是合法的 kebab-case 格式",
-                       dir_name, 0, dir_name)
+        return finding(
+            "R15", "S2", "D3", "FAIL", f"目录名 `{dir_name}` 不是合法的 kebab-case 格式", dir_name, 0, dir_name
+        )
     if len(dir_name) > 64:
-        return finding("R15", "S2", "D3", "FAIL",
-                       f"目录名超过 64 个字符（当前 {len(dir_name)} 个字符）",
-                       dir_name, 0, dir_name)
+        return finding(
+            "R15", "S2", "D3", "FAIL", f"目录名超过 64 个字符（当前 {len(dir_name)} 个字符）", dir_name, 0, dir_name
+        )
     return None
 
 
@@ -304,10 +351,16 @@ def check_r16(lines, **_):
             consecutive_non_code = 0
 
     if max_run > 100:
-        return finding("R16", "S2", "D3", "FAIL",
-                       f"发现连续 {max_run} 行内联引用内容（应放在 references/）",
-                       "SKILL.md", max_run_start + 1,
-                       f"Lines {max_run_start + 1}-{max_run_start + max_run}")
+        return finding(
+            "R16",
+            "S2",
+            "D3",
+            "FAIL",
+            f"发现连续 {max_run} 行内联引用内容（应放在 references/）",
+            "SKILL.md",
+            max_run_start + 1,
+            f"Lines {max_run_start + 1}-{max_run_start + max_run}",
+        )
     return None
 
 
@@ -327,9 +380,18 @@ def check_r17(lines, fm_end_line, **_):
             if target.startswith(("http://", "https://", "#", "mailto:")):
                 continue
             if os.path.isabs(target):
-                results.append(finding("R17", "S2", "D3", "FAIL",
-                                       f"链接中包含绝对路径: `{target}` — 请使用相对路径",
-                                       "SKILL.md", i + 1, line.rstrip()))
+                results.append(
+                    finding(
+                        "R17",
+                        "S2",
+                        "D3",
+                        "FAIL",
+                        f"链接中包含绝对路径: `{target}` — 请使用相对路径",
+                        "SKILL.md",
+                        i + 1,
+                        line.rstrip(),
+                    )
+                )
     return results if results else None
 
 
@@ -354,9 +416,11 @@ def check_r18(lines, fm_end_line, skill_dir, **_):
                 continue
             resolved = os.path.normpath(os.path.join(skill_dir, path_part))
             if not os.path.exists(resolved):
-                results.append(finding("R18", "S2", "D3", "FAIL",
-                                       f"引用路径 `{path_part}` 不存在",
-                                       "SKILL.md", i + 1, line.rstrip()))
+                results.append(
+                    finding(
+                        "R18", "S2", "D3", "FAIL", f"引用路径 `{path_part}` 不存在", "SKILL.md", i + 1, line.rstrip()
+                    )
+                )
     return results if results else None
 
 
@@ -383,10 +447,16 @@ def check_r22(lines, **_):
 
     if open_fence is not None:
         unclosed_line = open_line if open_line is not None else 0
-        return finding("R22", "S2", "D4", "FAIL",
-                       f"从第 {unclosed_line + 1} 行开始的代码块未闭合",
-                       "SKILL.md", unclosed_line + 1,
-                       lines[unclosed_line].rstrip() if unclosed_line < len(lines) else "")
+        return finding(
+            "R22",
+            "S2",
+            "D4",
+            "FAIL",
+            f"从第 {unclosed_line + 1} 行开始的代码块未闭合",
+            "SKILL.md",
+            unclosed_line + 1,
+            lines[unclosed_line].rstrip() if unclosed_line < len(lines) else "",
+        )
     return None
 
 
@@ -407,9 +477,18 @@ def check_r34(lines, **_):
             continue
         for pat, label in patterns:
             if pat.search(line):
-                results.append(finding("R34", "S0", "D8", "FAIL",
-                                       f"检测到可能嵌入的密钥信息: {label}",
-                                       "SKILL.md", i + 1, line.rstrip()))
+                results.append(
+                    finding(
+                        "R34",
+                        "S0",
+                        "D8",
+                        "FAIL",
+                        f"检测到可能嵌入的密钥信息: {label}",
+                        "SKILL.md",
+                        i + 1,
+                        line.rstrip(),
+                    )
+                )
                 break
     return results if results else None
 
@@ -425,9 +504,9 @@ def check_r35(lines, **_):
         if in_block:
             continue
         if path_pattern.search(line) and not exclude_pattern.search(line):
-            results.append(finding("R35", "S1", "D8", "FAIL",
-                                   "检测到硬编码的绝对用户路径",
-                                   "SKILL.md", i + 1, line.rstrip()))
+            results.append(
+                finding("R35", "S1", "D8", "FAIL", "检测到硬编码的绝对用户路径", "SKILL.md", i + 1, line.rstrip())
+            )
     return results if results else None
 
 
@@ -451,10 +530,18 @@ def check_r36(lines, **_):
                 block_lines = 0
             else:
                 if block_lang in data_langs and block_lines > 50:
-                    results.append(finding("R36", "S1", "D8", "FAIL",
-                                           f"内联 {block_lang} 数据块过大（{block_lines} 行，最大 50 行）",
-                                           "SKILL.md", block_start + 1,
-                                           f"Lines {block_start + 1}-{i + 1}"))
+                    results.append(
+                        finding(
+                            "R36",
+                            "S1",
+                            "D8",
+                            "FAIL",
+                            f"内联 {block_lang} 数据块过大（{block_lines} 行，最大 50 行）",
+                            "SKILL.md",
+                            block_start + 1,
+                            f"Lines {block_start + 1}-{i + 1}",
+                        )
+                    )
                 in_block = False
                 block_lines = 0
         elif in_block:
@@ -469,9 +556,9 @@ def check_r37(fm_lines, **_):
     xml_pattern = re.compile(r"<[a-zA-Z]")
     for i, line in enumerate(fm_lines):
         if xml_pattern.search(line):
-            return finding("R37", "S1", "D8", "FAIL",
-                           "frontmatter 中发现 XML 标签",
-                           "SKILL.md", i + 2, line.rstrip())  # +2: 1-based + skip opening ---
+            return finding(
+                "R37", "S1", "D8", "FAIL", "frontmatter 中发现 XML 标签", "SKILL.md", i + 2, line.rstrip()
+            )  # +2: 1-based + skip opening ---
     return None
 
 
@@ -485,9 +572,9 @@ def check_r38(lines, **_):
         if in_block:
             continue
         if win_path.search(line):
-            results.append(finding("R38", "S2", "D8", "FAIL",
-                                   "检测到 Windows 风格路径",
-                                   "SKILL.md", i + 1, line.rstrip()))
+            results.append(
+                finding("R38", "S2", "D8", "FAIL", "检测到 Windows 风格路径", "SKILL.md", i + 1, line.rstrip())
+            )
     return results if results else None
 
 
@@ -495,9 +582,16 @@ def check_r39(skill_dir, **_):
     """R39: Python scripts must have valid syntax"""
     scripts_dir = os.path.join(skill_dir, "scripts")
     if not os.path.isdir(scripts_dir):
-        return finding("R39", "S2", "D9", "SKIP",
-                       "不存在 scripts/ 目录，跳过 Python 语法检查",
-                       "scripts/", 0, "(directory not found)")
+        return finding(
+            "R39",
+            "S2",
+            "D9",
+            "SKIP",
+            "不存在 scripts/ 目录，跳过 Python 语法检查",
+            "scripts/",
+            0,
+            "(directory not found)",
+        )
     results = []
     for f in os.listdir(scripts_dir):
         if not f.endswith(".py"):
@@ -507,10 +601,18 @@ def check_r39(skill_dir, **_):
             with tempfile.NamedTemporaryFile(suffix=".pyc", delete=True) as tmp:
                 py_compile.compile(fpath, tmp.name, doraise=True)
         except py_compile.PyCompileError as e:
-            results.append(finding("R39", "S2", "D9", "FAIL",
-                                   f"`{f}` 中存在 Python 语法错误: {e}",
-                                   f"scripts/{f}", getattr(e, "lineno", 0) or 0,
-                                   str(e)))
+            results.append(
+                finding(
+                    "R39",
+                    "S2",
+                    "D9",
+                    "FAIL",
+                    f"`{f}` 中存在 Python 语法错误: {e}",
+                    f"scripts/{f}",
+                    getattr(e, "lineno", 0) or 0,
+                    str(e),
+                )
+            )
     return results if results else None
 
 
@@ -518,9 +620,9 @@ def check_r40(skill_dir, **_):
     """R40: Scripts must include a shebang line"""
     scripts_dir = os.path.join(skill_dir, "scripts")
     if not os.path.isdir(scripts_dir):
-        return finding("R40", "S2", "D9", "SKIP",
-                       "不存在 scripts/ 目录，跳过 shebang 检查",
-                       "scripts/", 0, "(directory not found)")
+        return finding(
+            "R40", "S2", "D9", "SKIP", "不存在 scripts/ 目录，跳过 shebang 检查", "scripts/", 0, "(directory not found)"
+        )
     results = []
     for f in os.listdir(scripts_dir):
         if not any(f.endswith(ext) for ext in (".py", ".sh", ".bash")):
@@ -532,9 +634,11 @@ def check_r40(skill_dir, **_):
             with open(fpath, "r", encoding="utf-8", errors="replace") as fh:
                 first_line = fh.readline()
             if not first_line.startswith("#!"):
-                results.append(finding("R40", "S2", "D9", "FAIL",
-                                       f"脚本 `{f}` 缺少 shebang 行",
-                                       f"scripts/{f}", 1, first_line.rstrip()))
+                results.append(
+                    finding(
+                        "R40", "S2", "D9", "FAIL", f"脚本 `{f}` 缺少 shebang 行", f"scripts/{f}", 1, first_line.rstrip()
+                    )
+                )
         except OSError:
             pass
     return results if results else None
@@ -544,9 +648,16 @@ def check_r41(skill_dir, **_):
     """R41: Script paths must be portable (no hardcoded user paths)"""
     scripts_dir = os.path.join(skill_dir, "scripts")
     if not os.path.isdir(scripts_dir):
-        return finding("R41", "S2", "D9", "SKIP",
-                       "不存在 scripts/ 目录，跳过路径可移植性检查",
-                       "scripts/", 0, "(directory not found)")
+        return finding(
+            "R41",
+            "S2",
+            "D9",
+            "SKIP",
+            "不存在 scripts/ 目录，跳过路径可移植性检查",
+            "scripts/",
+            0,
+            "(directory not found)",
+        )
     path_pattern = re.compile(r"(/home/|/Users/|/root/)\S+")
     exclude_pattern = re.compile(r"(https?://|/usr/bin/env|/dev/null)")
     detection_pattern = re.compile(r"""(re\.compile|compile\(|["'].*(/home/|/Users/|/root/).*["'])""")
@@ -558,12 +669,23 @@ def check_r41(skill_dir, **_):
         try:
             with open(fpath, "r", encoding="utf-8", errors="replace") as fh:
                 for i, line in enumerate(fh, 1):
-                    if (path_pattern.search(line)
-                            and not exclude_pattern.search(line)
-                            and not detection_pattern.search(line)):
-                        results.append(finding("R41", "S2", "D9", "FAIL",
-                                               f"脚本 `{f}` 中存在硬编码绝对路径",
-                                               f"scripts/{f}", i, line.rstrip()))
+                    if (
+                        path_pattern.search(line)
+                        and not exclude_pattern.search(line)
+                        and not detection_pattern.search(line)
+                    ):
+                        results.append(
+                            finding(
+                                "R41",
+                                "S2",
+                                "D9",
+                                "FAIL",
+                                f"脚本 `{f}` 中存在硬编码绝对路径",
+                                f"scripts/{f}",
+                                i,
+                                line.rstrip(),
+                            )
+                        )
         except OSError:
             pass
     return results if results else None
@@ -579,9 +701,18 @@ def check_r43(skill_dir, standard_dirs, **_):
     for entry in entries:
         full = os.path.join(skill_dir, entry)
         if os.path.isdir(full) and entry not in standard_dirs and not entry.startswith("."):
-            results.append(finding("R43", "S3", "D3", "FAIL",
-                                   f"非标准子目录 `{entry}`（期望: {', '.join(standard_dirs)}）",
-                                   entry, 0, entry))
+            results.append(
+                finding(
+                    "R43",
+                    "S3",
+                    "D3",
+                    "FAIL",
+                    f"非标准子目录 `{entry}`（期望: {', '.join(standard_dirs)}）",
+                    entry,
+                    0,
+                    entry,
+                )
+            )
     return results if results else None
 
 
@@ -595,9 +726,16 @@ def check_r44(fm, **_):
     placeholder_re = re.compile(r"<[a-zA-Z][a-zA-Z0-9_-]*>")
     matches = placeholder_re.findall(desc)
     if matches:
-        return finding("R44", "S2", "D1", "FAIL",
-                       f"`description` 包含未替换的占位符: {', '.join(matches)}",
-                       "SKILL.md", 1, desc[:100])
+        return finding(
+            "R44",
+            "S2",
+            "D1",
+            "FAIL",
+            f"`description` 包含未替换的占位符: {', '.join(matches)}",
+            "SKILL.md",
+            1,
+            desc[:100],
+        )
     return None
 
 
@@ -616,9 +754,18 @@ def check_r45(lines, fm_end_line, **_):
         if m:
             text = m.group(2).strip()
             if text in seen:
-                results.append(finding("R45", "S2", "D2", "FAIL",
-                                       f"重复的标题 `{text}`（首次出现在第 {seen[text]} 行）",
-                                       "SKILL.md", i + 1, line.rstrip()))
+                results.append(
+                    finding(
+                        "R45",
+                        "S2",
+                        "D2",
+                        "FAIL",
+                        f"重复的标题 `{text}`（首次出现在第 {seen[text]} 行）",
+                        "SKILL.md",
+                        i + 1,
+                        line.rstrip(),
+                    )
+                )
             else:
                 seen[text] = i + 1
     return results if results else None
@@ -627,6 +774,7 @@ def check_r45(lines, fm_end_line, **_):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def finding(rule_id, *args, suggested_fix=None):
     """Create a standardized finding dict."""
@@ -651,12 +799,8 @@ def finding(rule_id, *args, suggested_fix=None):
         "type": rule_type,
         "status": status,
         "message": message,
-        "evidence": {
-            "file": file,
-            "line": line,
-            "snippet": str(snippet)[:200]
-        },
-        "suggested_fix": suggested_fix or ""
+        "evidence": {"file": file, "line": line, "snippet": str(snippet)[:200]},
+        "suggested_fix": suggested_fix or "",
     }
 
 
@@ -677,14 +821,13 @@ def flatten(results):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def validate(skill_dir):
     """Run all static checks against the given skill directory."""
     skill_md_path = os.path.join(skill_dir, "SKILL.md")
 
     if not os.path.isfile(skill_md_path):
-        return [finding("R01", "S0", "D1", "FAIL",
-                        "技能目录中未找到 SKILL.md",
-                        "SKILL.md", 0, "(file not found)")]
+        return [finding("R01", "S0", "D1", "FAIL", "技能目录中未找到 SKILL.md", "SKILL.md", 0, "(file not found)")]
 
     with open(skill_md_path, "r", encoding="utf-8", errors="replace") as f:
         lines = f.readlines()
@@ -694,11 +837,8 @@ def validate(skill_dir):
     # Extract frontmatter lines (between the --- delimiters) for R37
     fm_lines = lines[1:fm_end - 1] if fm_end and fm_end > 2 else []
 
-    rules_json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                   "..", "references", "rules.json")
-    known_fields = [
-        "name", "description", "license", "compatibility", "metadata"
-    ]
+    rules_json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "references", "rules.json")
+    known_fields = ["name", "description", "license", "compatibility", "metadata"]
     standard_dirs = ["references", "scripts", "templates", "assets", "examples"]
     rules_data = {"rules": []}
     if os.path.isfile(rules_json_path):
@@ -753,10 +893,7 @@ def validate(skill_dir):
 
     findings = flatten(results)
 
-    static_rule_ids = [
-        rule_id for rule_id, meta in rule_meta.items()
-        if meta.get("type") == "static"
-    ]
+    static_rule_ids = [rule_id for rule_id, meta in rule_meta.items() if meta.get("type") == "static"]
     failed_rules = {f["rule_id"] for f in findings}
     for rule_id in static_rule_ids:
         if rule_id not in failed_rules:
@@ -776,9 +913,11 @@ def main():
 
     skill_dir = os.path.abspath(args[0])
     if not os.path.isdir(skill_dir):
-        logging.info(json.dumps([finding("R01", "S0", "D1", "FAIL",
-                                  f"路径不是目录: {skill_dir}",
-                                  skill_dir, 0, "(not a directory)")]))
+        logging.info(
+            json.dumps(
+                [finding("R01", "S0", "D1", "FAIL", f"路径不是目录: {skill_dir}", skill_dir, 0, "(not a directory)")]
+            )
+        )
         sys.exit(1)
 
     findings = validate(skill_dir)

@@ -8,10 +8,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import pypto
+""" """
+
 import pytest
+
+import pypto
 
 
 def init_tensors():
@@ -88,4 +89,4 @@ def test_get_input_shape(dtype):
     with pypto.function("MAIN", a, b):
         pypto.set_vec_tile_shapes(16, 16)
         val = a[0, 0]
-        b[:] = a + a[val: val + 128, :]
+        b[:] = a + a[val:val + 128, :]

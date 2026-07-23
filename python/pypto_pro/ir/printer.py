@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Utilities for printing IR nodes in Python syntax."""
+
 from __future__ import annotations
 
 from pypto.pypto_impl import ir as _ir_core

@@ -33,23 +33,23 @@
 3. 调用 process() 执行测试
 4. 调用 post() 获取执行结果
 """
+
+from abc import ABC
 import argparse
 import dataclasses
+from datetime import datetime, timedelta, timezone
+import json
 import logging
 import multiprocessing
+from multiprocessing import Event, JoinableQueue, Process, Value, cpu_count
 import os
-import re
+from pathlib import Path
 import queue
-import json
 import signal
 import subprocess
 import sys
 import time
-from abc import ABC
-from datetime import datetime, timezone, timedelta
-from multiprocessing import JoinableQueue, Event, Process, Value, cpu_count
-from typing import List, Any, Optional, Tuple, Dict, Callable
-from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from utils.args_action import ArgsEnvDictAction
 from utils.executable import Exec
@@ -57,11 +57,15 @@ from utils.table import Table
 
 
 class ArgsCaseListAction(argparse.Action):
-    """解析命令行参数传入的 cases 字段(适配自定义元信息参数)
-    """
+    """解析命令行参数传入的 cases 字段(适配自定义元信息参数)"""
 
-    def __call__(self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: List[str],
-                 option_string: Optional[str] = None) -> None:
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: List[str],
+        option_string: Optional[str] = None,
+    ) -> None:
         # 解析每个字符串, 按冒号分隔并展平
         case_list = []
         for value in values:
@@ -72,13 +76,12 @@ class ArgsCaseListAction(argparse.Action):
 
 
 class TestsAccelerate(ABC):
-    """Tests 加速
-    """
+    """Tests 加速"""
 
     @dataclasses.dataclass
     class ExecParam:
-        """执行参数
-        """
+        """执行参数"""
+
         cntr_id: Optional[int] = None
         envs_func: Optional[Callable] = None
         custom: Optional[Any] = None
@@ -89,16 +92,15 @@ class TestsAccelerate(ABC):
             self.custom = custom
 
         def get_envs(self) -> Optional[Dict[str, str]]:
-            """获取额外的环境变量配置
-            """
+            """获取额外的环境变量配置"""
             if self.envs_func:
                 return self.envs_func(self)
             return None
 
     @dataclasses.dataclass
     class ExecResult:
-        """执行结果
-        """
+        """执行结果"""
+
         cntr_name: str = "Cntr"
         act_duration: Optional[timedelta] = None  # 实际总耗时
         ori_duration: Optional[timedelta] = None  # 原始总耗时(预估)
@@ -127,9 +129,12 @@ class TestsAccelerate(ABC):
             return desc
 
         @staticmethod
-        def save_case_duration_to_json(sorted_datas: List[List[Any]],
-                                       dump_item_num: int = 100, dump_min_duration: float = 5,
-                                       path: Optional[Path] = None):
+        def save_case_duration_to_json(
+            sorted_datas: List[List[Any]],
+            dump_item_num: int = 100,
+            dump_min_duration: float = 5,
+            path: Optional[Path] = None,
+        ):
             # 路径处理
             if path is None:
                 return
@@ -235,11 +240,14 @@ class TestsAccelerate(ABC):
                 brief += f"\nIdx:{idx}/{len(datas)}\n{data}"
             return f"\n\nCase Exception Brief({len(datas)}):{brief}", len(datas)
 
-        def get_case_exec_duration_info(self, case_dict: Dict[str, Exec.CaseDesc],
-                                        min_print_cnt: Optional[int] = None,
-                                        dump_json_path: Optional[Path] = None,
-                                        dump_item_num: int = 100,
-                                        dump_min_duration: float = 5) -> str:
+        def get_case_exec_duration_info(
+            self,
+            case_dict: Dict[str, Exec.CaseDesc],
+            min_print_cnt: Optional[int] = None,
+            dump_json_path: Optional[Path] = None,
+            dump_item_num: int = 100,
+            dump_min_duration: float = 5,
+        ) -> str:
             """获取 Case 执行耗时统计信息.
 
             :return: Case 执行耗时统计信息.
@@ -259,10 +267,16 @@ class TestsAccelerate(ABC):
                 ratio_cntr = float(case_duration / cntr_duration) * 100
                 ratio_process = float(case_duration / self.act_duration) * 100
                 datas.append(
-                    [cntr_id, case_name, case_duration.total_seconds(), case_estimate,
-                     f"{case_duration.total_seconds():.2f}/{cntr_duration.total_seconds():.2f} {ratio_cntr:.2f}%",
-                     f"{case_duration.total_seconds():.2f}/{self.act_duration.total_seconds():.2f} "
-                     f"{ratio_process:.2f}%"])
+                    [
+                        cntr_id,
+                        case_name,
+                        case_duration.total_seconds(),
+                        case_estimate,
+                        f"{case_duration.total_seconds():.2f}/{cntr_duration.total_seconds():.2f} {ratio_cntr:.2f}%",
+                        f"{case_duration.total_seconds():.2f}/{self.act_duration.total_seconds():.2f} "
+                        f"{ratio_process:.2f}%",
+                    ]
+                )
                 self.case_execution_details.task_done()
             brief = "\nNone"
             add_desc = ""
@@ -273,8 +287,12 @@ class TestsAccelerate(ABC):
                 for item in datas:
                     item[duration_idx] = f"{item[duration_idx]:.2f}"
                 # 结果落盘, 常用于本地重复执行时加速
-                self.save_case_duration_to_json(sorted_datas=datas, path=dump_json_path,
-                                                dump_item_num=dump_item_num, dump_min_duration=dump_min_duration)
+                self.save_case_duration_to_json(
+                    sorted_datas=datas,
+                    path=dump_json_path,
+                    dump_item_num=dump_item_num,
+                    dump_min_duration=dump_min_duration,
+                )
                 # 缩略功能
                 if min_print_cnt:
                     print_cnt = min_print_cnt + 50  # 除已配置预估耗时的用例外, 再额外打印 50 个用例
@@ -291,8 +309,8 @@ class TestsAccelerate(ABC):
 
     @dataclasses.dataclass
     class CntrContext:
-        """Cntr处理上下文
-        """
+        """Cntr处理上下文"""
+
         cntr_id: int = 0
         exec_param: Optional[Any] = None
         success: int = 0
@@ -315,8 +333,8 @@ class TestsAccelerate(ABC):
 
     @dataclasses.dataclass
     class CaseContext:
-        """Case处理上下文
-        """
+        """Case处理上下文"""
+
         cntr_id: int = 0
         exec_param: Optional[Any] = None
         ts: Optional[datetime] = None
@@ -334,8 +352,8 @@ class TestsAccelerate(ABC):
 
     @dataclasses.dataclass
     class MoveContext:
-        """Move进程处理上下文
-        """
+        """Move进程处理上下文"""
+
         ele_count: int
         src_queue: JoinableQueue
         dst_queue: JoinableQueue
@@ -454,31 +472,68 @@ class TestsAccelerate(ABC):
         :param parser: ArgumentParser 外部创建
         """
         # 执行所需参数
-        parser.add_argument("-t", "--target", nargs=1, type=str, required=True,
-                            help="Specific target executable file path.")
-        parser.add_argument("-e", "--env",
-                            nargs="+", action=ArgsEnvDictAction, default={}, dest="envs",
-                            help="Specify additional environment variables to set when executing the target.")
-        parser.add_argument("--timeout", nargs="?", type=int, default=None,
-                            help="Timeout for executing all cases.")
-        parser.add_argument("--timeout_case", nargs="?", type=int, default=None,
-                            help="Timeout for executing single case.")
-        parser.add_argument("--halt_on_error", action="store_true", default=False,
-                            help="If any case failed, subsequent cases are not executed.")
+        parser.add_argument(
+            "-t", "--target", nargs=1, type=str, required=True, help="Specific target executable file path."
+        )
+        parser.add_argument(
+            "-e",
+            "--env",
+            nargs="+",
+            action=ArgsEnvDictAction,
+            default={},
+            dest="envs",
+            help="Specify additional environment variables to set when executing the target.",
+        )
+        parser.add_argument("--timeout", nargs="?", type=int, default=None, help="Timeout for executing all cases.")
+        parser.add_argument(
+            "--timeout_case", nargs="?", type=int, default=None, help="Timeout for executing single case."
+        )
+        parser.add_argument(
+            "--halt_on_error",
+            action="store_true",
+            default=False,
+            help="If any case failed, subsequent cases are not executed.",
+        )
         # 用例参数
-        parser.add_argument("-c", "--cases",
-                            nargs='*', action=ArgsCaseListAction, default=[], required=False,
-                            help="Cases, multiple cases are separated by ':'")
+        parser.add_argument(
+            "-c",
+            "--cases",
+            nargs='*',
+            action=ArgsCaseListAction,
+            default=[],
+            required=False,
+            help="Cases, multiple cases are separated by ':'",
+        )
         # 其他
-        parser.add_argument("--cpu_rank_size", nargs="?", type=int, default=None,
-                            help="Specify the rank size for CPU affinity grouping.")
+        parser.add_argument(
+            "--cpu_rank_size",
+            nargs="?",
+            type=int,
+            default=None,
+            help="Specify the rank size for CPU affinity grouping.",
+        )
         # 用例耗时缓存相关参数
-        parser.add_argument("--dump_case_duration_json", nargs="?", type=Path, default=None,
-                            help="Specify the path to the case duration json cache file.")
-        parser.add_argument("--dump_case_duration_max_num", nargs="?", type=int, default=None,
-                            help="Maximum number of cases to dump to duration json cache.")
-        parser.add_argument("--dump_case_duration_min_secends", nargs="?", type=int, default=None,
-                            help="Minimum duration (in seconds) for cases to dump to duration json cache.")
+        parser.add_argument(
+            "--dump_case_duration_json",
+            nargs="?",
+            type=Path,
+            default=None,
+            help="Specify the path to the case duration json cache file.",
+        )
+        parser.add_argument(
+            "--dump_case_duration_max_num",
+            nargs="?",
+            type=int,
+            default=None,
+            help="Maximum number of cases to dump to duration json cache.",
+        )
+        parser.add_argument(
+            "--dump_case_duration_min_secends",
+            nargs="?",
+            type=int,
+            default=None,
+            help="Minimum duration (in seconds) for cases to dump to duration json cache.",
+        )
 
     @staticmethod
     def _init_get_cpu_rank_size(args) -> Optional[int]:
@@ -563,26 +618,30 @@ class TestsAccelerate(ABC):
     def _set_process_desc():
         try:
             import setproctitle
+
             setproctitle.setproctitle(TestsAccelerate._get_process_desc())
         except ModuleNotFoundError:
             pass
 
     def prepare(self):
-        """执行准备
-        """
+        """执行准备"""
         self.exe_params = self._prepare_get_params()
         if self.cntr_num == 0:
             raise ValueError("ExecParams is empty, won't run any task.")
         if self.cntr_num > self.case_num:
-            logging.info("CaseNum(%s) less than len(ExecParams)=%s, will only start the first %s %s.",
-                         self.case_num, self.cntr_num, self.case_num, self.cntr_name)
+            logging.info(
+                "CaseNum(%s) less than len(ExecParams)=%s, will only start the first %s %s.",
+                self.case_num,
+                self.cntr_num,
+                self.case_num,
+                self.cntr_name,
+            )
             self.exe_params = self.exe_params[:self.case_num]
         # CPU 亲和性设置
         self._prepare_determine_cpu_affinity_policy()
 
     def process(self):
-        """执行任务
-        """
+        """执行任务"""
         logging.info("\n\n%s Accelerate Args:%s", self.mark, Table.table(datas=self.brief))
         # 执行流程
         ts = datetime.now(tz=timezone.utc)
@@ -590,8 +649,7 @@ class TestsAccelerate(ABC):
         self.exe_result.act_duration = datetime.now(tz=timezone.utc) - ts
 
     def post(self) -> bool:
-        """后处理, 获得执行结果汇总
-        """
+        """后处理, 获得执行结果汇总"""
         # Cntr 执行信息收集汇总
         cntr_exec_brief, cntr_revenue_desc = self.exe_result.get_cntr_exec_info()
 
@@ -604,9 +662,14 @@ class TestsAccelerate(ABC):
 
         if case_exec_result:
             logging.info(out)
-            logging.info("Use %s %s | Exec %s case | %s | %s",
-                         self.cntr_num, self.cntr_name, self.case_num,
-                         self.exe_result.revenue_desc, self.exe_result.cntr_latency_desc)
+            logging.info(
+                "Use %s %s | Exec %s case | %s | %s",
+                self.cntr_num,
+                self.cntr_name,
+                self.case_num,
+                self.exe_result.revenue_desc,
+                self.exe_result.cntr_latency_desc,
+            )
         else:
             logging.error(out)
         return case_exec_result
@@ -622,9 +685,14 @@ class TestsAccelerate(ABC):
                 self.cpu_affinity_policy = 1  # 策略1: 均匀分配(每 CPU 组对应 1 个 cntr)
             else:
                 self.cpu_affinity_policy = 2  # 策略2: 循环复用核心组(期望 CPU 数超出 CPU 总数场景)
-        logging.info("Determine CpuAffinity, Policy=%s(%s), CntrNum=%s, CpuNum=%s, CpuRankSize=%s",
-                     self.cpu_affinity_policy_str, self.cpu_affinity_policy,
-                     self.cntr_num, cpu_count(), self.cpu_rank_size)
+        logging.info(
+            "Determine CpuAffinity, Policy=%s(%s), CntrNum=%s, CpuNum=%s, CpuRankSize=%s",
+            self.cpu_affinity_policy_str,
+            self.cpu_affinity_policy,
+            self.cntr_num,
+            cpu_count(),
+            self.cpu_rank_size,
+        )
 
     def _prepare_get_params(self) -> List[ExecParam]:
         return []
@@ -640,9 +708,12 @@ class TestsAccelerate(ABC):
         terminate_brief, terminate_count = self.exe_result.get_case_exec_terminate_info()
         exception_brief, exception_count = self.exe_result.get_case_exec_exception_info()
         duration_brief = self.exe_result.get_case_exec_duration_info(
-            case_dict=self.case_dict, min_print_cnt=self.case_ordered_cnt,
-            dump_json_path=self.case_duration_json, dump_item_num=self.case_duration_max_num,
-            dump_min_duration=self.case_duration_min_sec)
+            case_dict=self.case_dict,
+            min_print_cnt=self.case_ordered_cnt,
+            dump_json_path=self.case_duration_json,
+            dump_item_num=self.case_duration_max_num,
+            dump_min_duration=self.case_duration_min_sec,
+        )
 
         # Case 执行总体情况汇总
         remaining_count = 0
@@ -685,8 +756,7 @@ class TestsAccelerate(ABC):
             self._stop_move_process_grp()
 
     def _push_all_case_sync(self):
-        """以同步方式将待执行用例插入待执行队列, 按 Container 数量插入终止信号
-        """
+        """以同步方式将待执行用例插入待执行队列, 按 Container 数量插入终止信号"""
         for cs in self.case_list:
             self.case_queue.put(cs.name)
         for _ in range(self.cntr_num):
@@ -700,14 +770,20 @@ class TestsAccelerate(ABC):
         move_grp = []
         desc_list = self._get_move_process_grp_desc_list()
         for name, src_queue, dst_queue in desc_list:
-            process = Process(name=f"MoveProcess({name})", target=self._move, args=(src_queue, dst_queue,))
+            process = Process(
+                name=f"MoveProcess({name})",
+                target=self._move,
+                args=(
+                    src_queue,
+                    dst_queue,
+                ),
+            )
             process.start()
             move_grp.append(process)
         return move_grp
 
     def _stop_move_process_grp(self):
-        """停止 Move 进程组
-        """
+        """停止 Move 进程组"""
         desc_list = self._get_move_process_grp_desc_list()
         for _, src_queue, _ in desc_list:
             src_queue.put(None)
@@ -725,13 +801,21 @@ class TestsAccelerate(ABC):
     def _start_cntr_process_grp(self, delay: int = 2) -> List[Process]:
         """启动 Cntr 进程组
 
-        :param delay: 各 Cntr 启动后, 处理具体 Case 前延迟时长, 在多消费者模式下, 各消费者启动时增加一定延迟, 等待所有消费者启动完成
+        :param delay: 各 Cntr 启动后, 处理具体 Case 前延迟时长, 在多消费者模式下, 各消费者启动时增加一定延迟,
+            等待所有消费者启动完成
         :return: Cntr 进程组
         """
         process_group: List[Process] = []
         for exec_param in self.exe_params:
-            process = Process(name=f"{self.cntr_name}Process({self.cntr_name}[{exec_param.cntr_id}])",
-                              target=self._cntr, args=(exec_param.cntr_id, exec_param, delay,))
+            process = Process(
+                name=f"{self.cntr_name}Process({self.cntr_name}[{exec_param.cntr_id}])",
+                target=self._cntr,
+                args=(
+                    exec_param.cntr_id,
+                    exec_param,
+                    delay,
+                ),
+            )
             process_group.append(process)
             process.start()
         return process_group
@@ -788,7 +872,8 @@ class TestsAccelerate(ABC):
         """
         self.cntr_terminate_event.set()  # 停止所有子进程对新任务的处理
         for process in cntr_process_grp:
-            # 当通过 build_ci.py 经 CMake 调用本脚本时, build_ci.py 会向整个进程组(包括 Cntr/Case 子进程)发送 SIGINT 信号.
+            # 当通过 build_ci.py 经 CMake 调用本脚本时, build_ci.py 会向整个进程组(包括 Cntr/Case 子进程)
+            # 发送 SIGINT 信号.
             # 此时优先等待子进程自主退出.
             if process.is_alive():
                 process.join(timeout=timeout)
@@ -827,9 +912,13 @@ class TestsAccelerate(ABC):
         self._put_cntr_execution_info(info=ctx.brief)
         if not ctx.exit_code:
             logging.info("%s Send terminate event upload.", self._get_process_desc())
-        logging.info("%s Exist[%s] %s %s",
-                     self._get_process_desc(), ctx.exit_code,
-                     self._cntr_progress(update=True), self._case_progress(update=False))
+        logging.info(
+            "%s Exist[%s] %s %s",
+            self._get_process_desc(),
+            ctx.exit_code,
+            self._cntr_progress(update=True),
+            self._case_progress(update=False),
+        )
         exit(ctx.exit_code)  # 通过 exit_code 传递 Container 执行结果, 触发上层感知
 
     def _cntr_get_case(self) -> Optional[str]:
@@ -856,15 +945,23 @@ class TestsAccelerate(ABC):
         process = None
         try:
             # 用例进程启动
-            process = Process(name=f"CaseProcess({self.cntr_name}[{ctx.cntr_id}] Case[{case_name}])",
-                              target=self._case, args=(ctx.cntr_id, ctx.exec_param, case_name,))
+            process = Process(
+                name=f"CaseProcess({self.cntr_name}[{ctx.cntr_id}] Case[{case_name}])",
+                target=self._case,
+                args=(
+                    ctx.cntr_id,
+                    ctx.exec_param,
+                    case_name,
+                ),
+            )
             process.start()
             process.join()
         except KeyboardInterrupt:
             if process and process.is_alive():
                 # 用例执行过程中, 强制终止时, 杀停子进程
-                logging.info("%s Recv terminate event download, stop running Case[%s]",
-                             self._get_process_desc(), case_name)
+                logging.info(
+                    "%s Recv terminate event download, stop running Case[%s]", self._get_process_desc(), case_name
+                )
                 os.kill(process.pid, signal.SIGINT)
                 process.join()  # 等待 Case 进程结束
         finally:
@@ -892,8 +989,9 @@ class TestsAccelerate(ABC):
         logging.info("%s Recv Case[%s] upload terminate event.", self._get_process_desc(), case_name)
         return False
 
-    def _execute_case(self, ctx: CaseContext, param: ExecParam,
-                      case_name: str) -> Tuple[subprocess.CompletedProcess, str, timedelta]:
+    def _execute_case(
+        self, ctx: CaseContext, param: ExecParam, case_name: str
+    ) -> Tuple[subprocess.CompletedProcess, str, timedelta]:
         """统一的用例执行入口 - 由子类重写此方法实现不同模式"""
         return self.exe.run(params=[f"--gtest_filter={case_name}"], envs=param.get_envs())
 
@@ -938,23 +1036,30 @@ class TestsAccelerate(ABC):
             logging.info("%s[%s] [BGN] %s", self.cntr_name, cntr_id, run_desc)
             ret, cmd, _ = self._execute_case(ctx, param, case_name)
             if ret.returncode:
-                self._case_exception_exit(cntr_id=cntr_id, cmd=cmd,
-                                          ret_code=ret.returncode, out=ret.stdout, err=ret.stderr)
+                self._case_exception_exit(
+                    cntr_id=cntr_id, cmd=cmd, ret_code=ret.returncode, out=ret.stdout, err=ret.stderr
+                )
             else:
                 msg = f"{ret.stdout}\n{ret.stderr}"
-                logging.info("%s[%s] [END] %s %s Output Below:\n%s",
-                             self.cntr_name, cntr_id, run_desc, self._case_progress(update=True), msg)
+                logging.info(
+                    "%s[%s] [END] %s %s Output Below:\n%s",
+                    self.cntr_name,
+                    cntr_id,
+                    run_desc,
+                    self._case_progress(update=True),
+                    msg,
+                )
                 self._put_case_execution_info(info=ctx.brief)
         except subprocess.TimeoutExpired as e:
             self._put_case_terminate_info(info=ctx.brief)  # 执行超时时, 主动退出执行, 上报已运行时长
-            self._case_exception_exit(cntr_id=cntr_id, cmd=str(e),
-                                      ret_code=1, out=None, err=str(e.output))
+            self._case_exception_exit(cntr_id=cntr_id, cmd=str(e), ret_code=1, out=None, err=str(e.output))
         except KeyboardInterrupt:
             self._put_case_terminate_info(info=ctx.brief)  # 强制终止时, 主动退出执行, 上报已运行时长
             logging.info("%s Recv terminate event download, stop running.", self._get_process_desc())
 
-    def _case_exception_exit(self, cntr_id: int, cmd: str, ret_code: int,
-                             out: Optional[str] = None, err: Optional[str] = None):
+    def _case_exception_exit(
+        self, cntr_id: int, cmd: str, ret_code: int, out: Optional[str] = None, err: Optional[str] = None
+    ):
         """用例执行进程异常退出处理
 
         :param cntr_id: CntrId
@@ -964,11 +1069,7 @@ class TestsAccelerate(ABC):
         :param err: 异常信息
         """
         # 收集错误现场信息并上报
-        msg = (f"{self.cntr_name} : {cntr_id}\n"
-               f"Cmd : {cmd}\n"
-               f"RetCode : {ret_code}\n"
-               f"stdout :\n{out}\n"
-               f"stderr :\n{err}")
+        msg = f"{self.cntr_name} : {cntr_id}\nCmd : {cmd}\nRetCode : {ret_code}\nstdout :\n{out}\nstderr :\n{err}"
         self._put_case_exception_info(info=msg)
         # 异常后处理
         if self.exe_halt_on_error:
@@ -977,8 +1078,7 @@ class TestsAccelerate(ABC):
             exit(ret_code)  # 触发 Container 执行进程感知 Case 执行异常
 
     def _cntr_progress(self, update=True) -> str:
-        """获取 Container 处理进展, 调用本函数前, 由调用方加锁(dfx_output_lock)
-        """
+        """获取 Container 处理进展, 调用本函数前, 由调用方加锁(dfx_output_lock)"""
         if update:
             with self.cntr_exit_count.get_lock():
                 self.cntr_exit_count.value += 1
@@ -987,8 +1087,7 @@ class TestsAccelerate(ABC):
         return f"{self.cntr_name}Progress[{cnt}/{self.cntr_num} {pgs:.2f}%]"
 
     def _case_progress(self, update=True) -> str:
-        """获取 Case 处理进展, 调用本函数前, 由调用方加锁(dfx_output_lock)
-        """
+        """获取 Case 处理进展, 调用本函数前, 由调用方加锁(dfx_output_lock)"""
         if update:
             with self.case_exec_count.get_lock():
                 self.case_exec_count.value += 1

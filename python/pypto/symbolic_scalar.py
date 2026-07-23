@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 from typing import Union
+
 from . import pypto_impl
 
 SymbolicScalar = pypto_impl.SymbolicScalar

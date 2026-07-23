@@ -8,15 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
+import argparse
+import logging
 import os
 import sys
-import logging
-import argparse
-from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import setup_logging, validate_path, check_required_tools, run_command
+from common import check_required_tools, run_command, setup_logging, validate_path
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -56,13 +55,7 @@ class AddressResolver:
 
     def resolve_address(self, binary: str, address: str) -> Dict[str, Optional[str]]:
         """解析单个地址"""
-        result = {
-            'address': address,
-            'function': None,
-            'file': None,
-            'line': None,
-            'success': False
-        }
+        result = {'address': address, 'function': None, 'file': None, 'line': None, 'success': False}
 
         try:
             # 使用 addr2line 解析地址

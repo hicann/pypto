@@ -88,8 +88,7 @@ class StructParserMixin:
                 f"pl.struct_array() size must be a positive integer, got {arr_size}",
                 span=span,
             )
-        if not (len(call.args) >= 2 and isinstance(call.args[1], ast.Constant)
-                and isinstance(call.args[1].value, str)):
+        if not (len(call.args) >= 2 and isinstance(call.args[1], ast.Constant) and isinstance(call.args[1].value, str)):
             raise ParserSyntaxError(
                 'pl.struct_array(N, "Name", ...) requires a string struct name as second arg',
                 span=span,

@@ -8,11 +8,9 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import re
+""" """
+
 import json
-from enum import Enum
 
 
 class LeafFunc:
@@ -41,6 +39,7 @@ def get_leaf_funcs(json_data):
         for pipe, _ in json_data[0]["pipes"].items():
             pipe_list.append(pipe)
     return leaf_funcs, pipe_list
+
 
 if __name__ == "__main__":
     file_path = "_simulate.leafFuncs.executetime.json"

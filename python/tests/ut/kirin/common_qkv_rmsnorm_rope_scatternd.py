@@ -13,12 +13,12 @@
 Test qkv_rmsnorm_rope_scatternd codegen - common functions for Kirin9030 and KirinX90
 """
 
-import pypto
-import torch
 import numpy as np
 import pytest
+import torch
 
 from kirin.common import compare_cos
+import pypto
 
 
 def compute_rmsnorm_golden(input_tensor: torch.Tensor, epsilon: float = 1e-6) -> torch.Tensor:
@@ -191,9 +191,18 @@ TEST_CASES = [
 ]
 
 
-def run_qkv_fused_test(kernels, dtype, q_input_shape, k_input_shape,
-                       v_input_shape, cos_shape, sin_shape, past_key_shape,
-                       past_value_shape, indices_shape):
+def run_qkv_fused_test(
+    kernels,
+    dtype,
+    q_input_shape,
+    k_input_shape,
+    v_input_shape,
+    cos_shape,
+    sin_shape,
+    past_key_shape,
+    past_value_shape,
+    indices_shape,
+):
     """Run a single qkv fused kernel test."""
     device = "cpu"
 

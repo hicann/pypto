@@ -22,47 +22,52 @@ Main Functions:
     - kv_cache_concat_bsnd: Convert paged KV cache to BSND format
 """
 
-from dataclasses import dataclass
 import torch
-import pypto
-from torch._subclasses.fake_tensor import FakeTensor
 from torch._dynamo import allow_in_graph
+from torch._subclasses.fake_tensor import FakeTensor
+
+import pypto
 
 
 def check_args(
-        q,
-        cmp_kv,
-        sinks,
-        cmp_block_table,
-        seqused_kv,
-        ori_kv,
-        ori_block_table,
+    q,
+    cmp_kv,
+    sinks,
+    cmp_block_table,
+    seqused_kv,
+    ori_kv,
+    ori_block_table,
 ):
-    assert q.dim() == 3 and q.size(1) == 64 and q.size(2) == 512, \
+    assert q.dim() == 3 and q.size(1) == 64 and q.size(2) == 512, (
         f"q dim num is {q.dim()}, q axis1 is {q.size(1)}, q axis2 is {q.size(2)}, expected 3, 64, 512"
-    assert cmp_kv.dim() == 4 and cmp_kv.size(1) == 128 and cmp_kv.size(2) == 1 and cmp_kv.size(3) == 512, \
+    )
+    assert cmp_kv.dim() == 4 and cmp_kv.size(1) == 128 and cmp_kv.size(2) == 1 and cmp_kv.size(3) == 512, (
         f"cmp_kv dim num is {cmp_kv.dim()}, cmp_kv axis1 {cmp_kv.size(1)}, cmp_kv axis2 {cmp_kv.size(2)}, \
             cmp_kv axis3 {cmp_kv.size(3)}, expected 4, 128, 1, 512"
-    assert sinks.dim() == 1 and sinks.size(0) == 64, f"sinks dim num {sinks.dim()}, \
+    )
+    assert sinks.dim() == 1 and sinks.size(0) == 64, (
+        f"sinks dim num {sinks.dim()}, \
             sinks axis0 is {sinks.size(0)}, expected 1, 64"
+    )
     assert cmp_block_table.dim() == 2, f"cmp_block_table dim num {cmp_block_table.dim()}, expected 2"
     assert seqused_kv.dim() == 1, f"seqused_kv dim num {seqused_kv.dim()}, expected 1"
-    assert ori_kv.dim() == 4 and ori_kv.size(1) == 128 and ori_kv.size(2) == 1 and ori_kv.size(3) == 512, \
+    assert ori_kv.dim() == 4 and ori_kv.size(1) == 128 and ori_kv.size(2) == 1 and ori_kv.size(3) == 512, (
         f"ori_kv dim num {ori_kv.dim()}, ori_kv axis1 {ori_kv.size(1)}, ori_kv axis2 {ori_kv.size(2)}, \
             ori_kv axis3 {ori_kv.size(3)}, expected 4, 128, 1, 512"
+    )
     assert ori_block_table.dim() == 2, f"ori_block_table dim num {ori_block_table.dim()}, expected 2"
 
 
 @allow_in_graph
 def cfa_attention(
-        q: torch.Tensor,
-        cmp_kv: torch.Tensor,
-        sinks: torch.Tensor,
-        cmp_block_table: torch.Tensor,
-        seqused_kv: torch.Tensor,
-        ori_kv: torch.Tensor,
-        ori_block_table: torch.Tensor,
-        cmp_ratio: int = 128,
+    q: torch.Tensor,
+    cmp_kv: torch.Tensor,
+    sinks: torch.Tensor,
+    cmp_block_table: torch.Tensor,
+    seqused_kv: torch.Tensor,
+    ori_kv: torch.Tensor,
+    ori_block_table: torch.Tensor,
+    cmp_ratio: int = 128,
 ) -> torch.Tensor:
     """
     Main attention function with Attention support.
@@ -107,14 +112,9 @@ def cfa_attention(
 
 
 @pypto.frontend.jit(
-    runtime_options={"stitch_function_max_num": 128,
-                        "device_sched_mode": 1,
-                        "max_workspace_kb": 65536},
-
+    runtime_options={"stitch_function_max_num": 128, "device_sched_mode": 1, "max_workspace_kb": 65536},
     # 当子图大小达到上界不允许与其他子图合并
-    pass_options={"cube_l1_reuse_setting": {-1: 3},
-                    "cube_nbuffer_setting":{-1:2},
-                    "vec_nbuffer_setting": {-1:4}},
+    pass_options={"cube_l1_reuse_setting": {-1: 3}, "cube_nbuffer_setting": {-1: 2}, "vec_nbuffer_setting": {-1: 4}},
 )
 def c128_decode_impl(
     q: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
@@ -125,8 +125,9 @@ def c128_decode_impl(
     win_kv: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
     win_blk_tb: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT32),
     atten_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
-    cmp_ratio, unroll_list):
-
+    cmp_ratio,
+    unroll_list,
+):
     pypto.experimental.set_operation_options(combine_axis=True)
     shape_q = q.shape
     shape_k = cmp_kv.shape
@@ -138,7 +139,7 @@ def c128_decode_impl(
     blk_size = shape_k[1]
     nkv = shape_k[2]
     dn = shape_k[3]
-    softmax_scale = dn ** -0.5
+    softmax_scale = dn**-0.5
     b_scalar = seqused_kv.shape[0]
     dtype = q.dtype
     m_tile = 128
@@ -187,10 +188,12 @@ def c128_decode_impl(
 
         kv_assemble = pypto.tensor([combine_s2_tile, dn], kv_2d.dtype, "kj_assemble")
         kv_assemble[0:blk_size, :] = vld_win_blk
-        for j in range(1,combine_s2_tile//blk_size):
-            blk_idx = cmp_blk_tb[b_idx, j-1]
+        for j in range(1, combine_s2_tile // blk_size):
+            blk_idx = cmp_blk_tb[b_idx, j - 1]
             blk_idx_valid = blk_idx.max(0)
-            kv_assemble[j * blk_size:(j+1) * blk_size, :] = pypto.view(kv_2d, [blk_size, dn], [blk_idx_valid * blk_size, 0])
+            kv_assemble[j * blk_size:(j + 1) * blk_size, :] = pypto.view(
+                kv_2d, [blk_size, dn], [blk_idx_valid * blk_size, 0]
+            )
 
         pypto.set_pass_options(sg_set_scope=-1)
         qi = pypto.view(q_2d, [g_tile, dn], oi_ofs)
@@ -215,8 +218,10 @@ def c128_decode_impl(
 
 
 pyptolib = torch.library.Library("pypto", "FRAGMENT")
-pyptolib.define("npu_cfa_attention(Tensor q, Tensor cmp_kv, Tensor sinks, Tensor cmp_block_table,\
-                Tensor seqused_kv, Tensor ori_kv, Tensor ori_block_table, int cmp_ratio) -> Tensor")
+pyptolib.define(
+    "npu_cfa_attention(Tensor q, Tensor cmp_kv, Tensor sinks, Tensor cmp_block_table,\
+                Tensor seqused_kv, Tensor ori_kv, Tensor ori_block_table, int cmp_ratio) -> Tensor"
+)
 
 
 @torch.library.impl(pyptolib, "npu_cfa_attention", "Meta")
@@ -226,16 +231,18 @@ def npu_cfa_attention(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, ori
 
 
 try:
+
     @torch.library.impl(pyptolib, "npu_cfa_attention", "NPU")
     def npu_cfa_attention(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, ori_block_table, cmp_ratio):
         return cfa_attention(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, ori_block_table, cmp_ratio)
 except Exception as e:
     if "could not parse dispatch key: NPU" in str(e):
-        print(f"Skip: torchair not installed, skip NPU registration for operator 'cfa_attention'")
+        print("Skip: torchair not installed, skip NPU registration for operator 'cfa_attention'")
     else:
         print(f"Skip: Unexpected error : {e}")
 
 
 def cfa_graph(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, ori_block_table, cmp_ratio):
-    return torch.ops.pypto.npu_cfa_attention(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, \
-                                            ori_block_table, cmp_ratio)
+    return torch.ops.pypto.npu_cfa_attention(
+        q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, ori_block_table, cmp_ratio
+    )

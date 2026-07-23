@@ -24,17 +24,17 @@ PyPTO OP 信息查询工具
 - 定位 Pass 修改的 OP 信息
 """
 
-import sys
-import os
+import argparse
 import json
 import logging
-import argparse
-from typing import Dict, List, Any, Optional
+import os
+import sys
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ir_parser import IRParser, create_response, ERROR_CODES
+from ir_parser import IRParser  # noqa: E402
 
 
 class OpInfoExtractor:
@@ -198,11 +198,8 @@ class OpInfoExtractor:
                 "shape": op.output_shape,
                 "valid_shape": op.output_valid_shape,
                 "data_type": self._extract_dtype_from_shape(op.output_shape),
-                "memory_type": {
-                    "read": op.read_mem_type,
-                    "write": op.write_mem_type
-                },
-                "subgraph_id": op.subgraph_id
+                "memory_type": {"read": op.read_mem_type, "write": op.write_mem_type},
+                "subgraph_id": op.subgraph_id,
             },
             "inputs": [],
             "attributes": op.attributes,
@@ -212,12 +209,9 @@ class OpInfoExtractor:
                 "dynvalidshape": op.dynvalidshape,
                 "offset_direction": op.offset_direction,
                 "dynoffset_direction": op.dynoffset_direction,
-                "dynvalidshape_direction": op.dynvalidshape_direction
+                "dynvalidshape_direction": op.dynvalidshape_direction,
             },
-            "context": {
-                "graph_id": op.graph_id,
-                "scope_id": op.scope_id
-            }
+            "context": {"graph_id": op.graph_id, "scope_id": op.scope_id},
         }
 
         for idx, input_tensor in enumerate(op.input_tensors):
@@ -226,7 +220,7 @@ class OpInfoExtractor:
                 "logic_id": input_tensor['logic_id'],
                 "raw_id": input_tensor['raw_id'],
                 "subgraph_id": input_tensor['subgraph_id'],
-                "memory_type": input_tensor.get('mem_type', '')
+                "memory_type": input_tensor.get('mem_type', ''),
             }
 
             tensor_ref = self._find_tensor_info(ir_file, input_tensor['logic_id'])
@@ -259,7 +253,7 @@ class OpInfoExtractor:
                 "opcode": op.opcode,
                 "line": op.line,
                 "input_count": len(op.input_tensors),
-                "output_shape": op.output_shape
+                "output_shape": op.output_shape,
             }
             ops_list.append(op_summary)
 
@@ -269,26 +263,18 @@ class OpInfoExtractor:
         """查找 tensor 信息"""
         for cast in ir_file.incasts.values():
             if cast.logic_tensor_id == logic_id:
-                return {
-                    "shape": cast.shape,
-                    "valid_shape": cast.valid_shape,
-                    "data_type": ""
-                }
+                return {"shape": cast.shape, "valid_shape": cast.valid_shape, "data_type": ""}
 
         for cast in ir_file.outcasts.values():
             if cast.logic_tensor_id == logic_id:
-                return {
-                    "shape": cast.shape,
-                    "valid_shape": cast.valid_shape,
-                    "data_type": ""
-                }
+                return {"shape": cast.shape, "valid_shape": cast.valid_shape, "data_type": ""}
 
         for op in ir_file.operations.values():
             if op.output_logic_id == logic_id:
                 return {
                     "shape": op.output_shape,
                     "valid_shape": op.output_valid_shape,
-                    "data_type": self._extract_dtype_from_shape(op.output_shape)
+                    "data_type": self._extract_dtype_from_shape(op.output_shape),
                 }
 
         return None
@@ -309,7 +295,7 @@ Examples:
   # Query operation with JSON output
   python3 get_op_info.py --ir-file output/output_*/Pass_XX_Name/After_XX_PassName_funcname.tifwkgr \
     --op-magic 10003 --format json
-        """
+        """,
     )
 
     parser.add_argument('--ir-file', required=True, help='Path to IR file')

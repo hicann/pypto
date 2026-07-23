@@ -8,16 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-import os
-import pypto
-import pytest
-import torch
-import numpy as np
-from numpy.testing import assert_allclose
-import torch_npu
+""" """
 
+import os
+
+from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def test_softmax_shape_dim():
@@ -31,11 +29,12 @@ def test_softmax_shape_dim():
     with pypto.function("SOFTMAX_SHAPE", x):
         pypto.set_vec_tile_shapes(32, 32)
         res = pypto.softmax(x, dim)
-        torch_case_tensor = torch.randn((4, 4), dtype = torch.float32)
+        torch_case_tensor = torch.randn((4, 4), dtype=torch.float32)
         torch_case_res = torch.softmax(torch_case_tensor, dim)
         assert res.shape == list(torch_case_res.shape)
 
-def test_softmax_FP32():
+
+def test_softmax_fp32():
     """Test whether the output of FP32 is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -60,7 +59,8 @@ def test_softmax_FP32():
     assert_allclose(res_tensor.flatten(), expected.flatten(), atol=1e-3, verbose=True)
     pypto.runtime._device_fini()
 
-def test_tensor_softmax_FP32():
+
+def test_tensor_softmax_fp32():
     """Test whether the output of FP32 is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

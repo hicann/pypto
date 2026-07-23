@@ -9,20 +9,19 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
+
 from typing import Union
+
 from .. import pypto_impl
-from ..enum import ScatterMode
-from .._op_wrapper import op_wrapper
-from ..error import PyptoError
-from ..tensor import Tensor
 from .._element import Element
+from .._op_wrapper import op_wrapper
+from ..enum import ScatterMode
+from ..error import PyptoError
 from ..tensor import Tensor
 
 
 @op_wrapper
-def index_add_(
-    input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1
-    ) -> Tensor:
+def index_add_(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1) -> Tensor:
     """
     Accumulate the elements of `alpha` times `source` into `input` tensor by
     adding to the indices in the order given in `index`.
@@ -92,9 +91,7 @@ def index_add_(
 
 
 @op_wrapper
-def index_add(
-    input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1
-    ) -> Tensor:
+def index_add(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1) -> Tensor:
     """
     The out-of-place version of index_add_()
     """
@@ -104,9 +101,7 @@ def index_add(
 
 
 @op_wrapper
-def index_add__ub(
-    input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1
-    ) -> Tensor:
+def index_add__ub(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1) -> Tensor:
     """
     The version of index_add_() in ub
     """
@@ -116,9 +111,7 @@ def index_add__ub(
 
 
 @op_wrapper
-def index_add_ub(
-    input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1
-    ) -> Tensor:
+def index_add_ub(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1) -> Tensor:
     """
     The out-of-place version of index_add__ub()
     """
@@ -127,9 +120,7 @@ def index_add_ub(
 
 
 @op_wrapper
-def index_put_(
-    input: Tensor, indices: tuple, values: Tensor, accumulate: bool = False
-    ) -> None:
+def index_put_(input: Tensor, indices: tuple, values: Tensor, accumulate: bool = False) -> None:
     """
     Puts values from the tensor `values` into the tensor `input` using the
     indices specified in `indices`(which is a tuple of Tensors).
@@ -413,9 +404,7 @@ def scatter_update(input: Tensor, dim: int, index: Tensor, src: Tensor) -> Tenso
              ]]
     """
     if dim != -2:
-        raise PyptoError(0xF00002, ValueError(
-            "scatter currection only support the case where dim = -2."
-            ))
+        raise PyptoError(0xF00002, ValueError("scatter currection only support the case where dim = -2."))
     dims = input.Dim()
     if dims == 4:
         chunk_size = input.GetShape()[1]
@@ -435,14 +424,13 @@ def get_scatter_mode(reduce: str):
     elif reduce == 'multiply':
         return ScatterMode.MULTIPLY
     else:
-        raise PyptoError(0xF00002, ValueError(
-            "scatter reduce only support 'add', 'multiply'"
-            ))
+        raise PyptoError(0xF00002, ValueError("scatter reduce only support 'add', 'multiply'"))
 
 
 @op_wrapper
 def scatter_(
-    input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tensor], *, reduce: str = None) -> Tensor:
+    input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tensor], *, reduce: str = None
+) -> Tensor:
     """Write all values from the value 'src' into 'input' at the indices specified in the 'index' tensor.
 
     This function calculates the formula:
@@ -496,9 +484,7 @@ def scatter_(
                 [0   2.0 0 0 0]]
     """
     if index.dtype not in (pypto_impl.DT_INT32, pypto_impl.DT_INT64):
-        raise PyptoError(0xF00001, TypeError(
-            f"index tensor must be of int32 or int64, but got {index.dtype}"
-            ))
+        raise PyptoError(0xF00001, TypeError(f"index tensor must be of int32 or int64, but got {index.dtype}"))
     scatter_mode = get_scatter_mode(reduce)
     if isinstance(src, (int, float)):
         src_float = float(src)
@@ -511,19 +497,18 @@ def scatter_(
         input.Move(pypto_impl.Scatter(input, index, src, dim, scatter_mode))
         return input
     else:
-        raise PyptoError(0xF00001, TypeError(
-            f"Expected src to be int, float, Element, or Tensor, but got {type(src).__name__}"
-            ))
+        raise PyptoError(
+            0xF00001, TypeError(f"Expected src to be int, float, Element, or Tensor, but got {type(src).__name__}")
+        )
 
 
 @op_wrapper
 def scatter(
-    input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tensor], *, reduce: str = None) -> Tensor:
+    input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tensor], *, reduce: str = None
+) -> Tensor:
     """Out-of-place version of 'scatter_'."""
     if index.dtype not in (pypto_impl.DT_INT32, pypto_impl.DT_INT64):
-        raise PyptoError(0xF00001, TypeError(
-            f"index tensor must be of int32 or int64, but got {index.dtype}"
-            ))
+        raise PyptoError(0xF00001, TypeError(f"index tensor must be of int32 or int64, but got {index.dtype}"))
     scatter_mode = get_scatter_mode(reduce)
     if isinstance(src, (int, float)):
         src_float = float(src)
@@ -533,9 +518,9 @@ def scatter(
     elif isinstance(src, pypto_impl.Tensor):
         return pypto_impl.Scatter(input, index, src, dim, scatter_mode)
     else:
-        raise PyptoError(0xF00001, TypeError(
-            f"Expected src to be int, float, Element, or Tensor, but got {type(src).__name__}"
-            ))
+        raise PyptoError(
+            0xF00001, TypeError(f"Expected src to be int, float, Element, or Tensor, but got {type(src).__name__}")
+        )
 
 
 @op_wrapper

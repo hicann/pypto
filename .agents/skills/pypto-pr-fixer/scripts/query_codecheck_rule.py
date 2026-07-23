@@ -5,15 +5,15 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable, Sequence
 import json
 import logging
+from pathlib import Path
 import re
 import sys
 import time
-import urllib.request
-from collections.abc import Iterable, Sequence
-from pathlib import Path
 from typing import Any, TypedDict
+import urllib.request
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXCEL_PATH = SKILL_ROOT / "references" / "rule_ch.xlsx"
@@ -233,15 +233,7 @@ def extract_rule_ids_from_violations_json(obj: object) -> list[str]:
     for v in obj:
         if not isinstance(v, dict):
             continue
-        rid = normalize_rule_id(
-            str(
-                v.get("rule_id")
-                or v.get("ruleId")
-                or v.get("rule")
-                or v.get("rule_code")
-                or ""
-            )
-        )
+        rid = normalize_rule_id(str(v.get("rule_id") or v.get("ruleId") or v.get("rule") or v.get("rule_code") or ""))
         if not rid and isinstance(v.get("detail"), dict):
             detail = v["detail"]
             rid = normalize_rule_id(str(detail.get("rule") or detail.get("rule_id") or ""))
@@ -380,7 +372,7 @@ def main() -> int:
             for r in items:
                 lang = str(r.get("language", ""))
                 rid = str(r.get("id", ""))
-                by_lang.setdefault(lang, []).append(f"{rid} {r.get('title','')}")
+                by_lang.setdefault(lang, []).append(f"{rid} {r.get('title', '')}")
             logging.info(f"# CodeCheck 规则列表\n\n> 官方来源: {args.download_url}\n")
             for lang, xs in by_lang.items():
                 logging.info(f"## {lang}\n")

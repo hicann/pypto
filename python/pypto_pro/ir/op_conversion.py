@@ -16,6 +16,7 @@ Provides:
 - op_conversion: Decorator for registering custom conversion functions
 - register_op_conversion: Simple name mapping registration
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -58,7 +59,6 @@ class ConversionContext:
         self._stmts.append(stmt)
 
 
-
 def register_op_conversion(from_op: str, to_op: str) -> None:
     """Register a simple op name mapping.
 
@@ -88,9 +88,7 @@ def op_conversion(from_op: str) -> Callable:
     """
 
     def decorator(func: Callable) -> Callable:
-        def wrapper(
-            args: list[Expr], kwargs: list[tuple[str, Any]], span: Span
-        ) -> Expr | tuple[list[Stmt], Expr]:
+        def wrapper(args: list[Expr], kwargs: list[tuple[str, Any]], span: Span) -> Expr | tuple[list[Stmt], Expr]:
             ctx = ConversionContext(span)
             result = func(ctx, args, kwargs, span)
             if ctx.stmts:

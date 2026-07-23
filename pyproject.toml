@@ -95,3 +95,16 @@ packages.find.include = [
 include-package-data = true
 package-data = { "pypto" = ["lib/**/*", "include/**/*"] }
 zip-safe = false
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["common", "pypto"]
+force-sort-within-sections = true
+
+[tool.ruff.format]
+quote-style = "preserve"

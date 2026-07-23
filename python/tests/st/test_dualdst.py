@@ -34,31 +34,27 @@ Run:
     pytest python/tests/st/test_dualdst.py -v
 """
 
-import sys
 import os
-import torch
-import torch_npu
-import pypto
-import pytest
+
 from numpy.testing import assert_allclose
+import pytest
+import torch
 
-import numpy as np
-
+import pypto
 
 FP16 = pypto.DT_FP16
 FP32 = pypto.DT_FP32
 
 # 所有 dualdst kernel 共用同一份 jit 配置: 提前固化, 避免每个 kernel 重复 3 行装饰器。
 _DUALDST_JIT = pypto.frontend.jit(
-    debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0},
-    pass_options={"auto_mix_partition": 1}
+    debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, pass_options={"auto_mix_partition": 1}
 )
 
 
 def _matmul_split_n(a_tile, b_tile, half_n):
     """matmul(b_trans=True, FP32 输出) + 沿 N 轴二分; 返回 (upper, lower).
 
-        所有 dualdst kernel 的核心三行模式都用它, 避免每个 kernel 重复 mm + 上下半切片。
+    所有 dualdst kernel 的核心三行模式都用它, 避免每个 kernel 重复 mm + 上下半切片。
     """
     mm = pypto.matmul(a_tile, b_tile, b_trans=True, out_dtype=FP32)
     return mm[:, :half_n], mm[:, half_n:]
@@ -67,8 +63,8 @@ def _matmul_split_n(a_tile, b_tile, half_n):
 def _split_n_prologue_64(a_tensor, b_tensor):
     """3 个 SplitN dualdst kernel 共用的前缀.
 
-        cube tile (64,64,128) -> matmul -> 沿 N 二分 -> 设 vec tile (64,64);
-        返回 (upper, lower) 两份 L0C view。
+    cube tile (64,64,128) -> matmul -> 沿 N 二分 -> 设 vec tile (64,64);
+    返回 (upper, lower) 两份 L0C view。
     """
     pypto.set_cube_tile_shapes([64, 64], [64, 64], [128, 128])
     upper, lower = _matmul_split_n(a_tensor, b_tensor, 64)
@@ -85,8 +81,8 @@ def dual_dst_split_n_kernel(
 ):
     """matmul -> L0C -> N 轴二分 -> 两条独立 add-scalar vector chain.
 
-        单 cube tile 覆盖 M/K/N: 一次 matmul 产出唯一一份 L0C tensor,
-        它的两个 L0C_COPY_UB consumer 才是 dual_dst 候选对。
+    单 cube tile 覆盖 M/K/N: 一次 matmul 产出唯一一份 L0C tensor,
+    它的两个 L0C_COPY_UB consumer 才是 dual_dst 候选对。
     """
     upper, lower = _split_n_prologue_64(a_tensor, b_tensor)
     out0_tensor[:, :] = upper + 1.0
@@ -119,12 +115,14 @@ def test_dual_dst_split_n():
     assert_allclose(
         out0.cpu().to(torch.float32).numpy(),
         golden0.cpu().numpy(),
-        rtol=5e-3, atol=5e-3,
+        rtol=5e-3,
+        atol=5e-3,
     )
     assert_allclose(
         out1.cpu().to(torch.float32).numpy(),
         golden1.cpu().numpy(),
-        rtol=5e-3, atol=5e-3,
+        rtol=5e-3,
+        atol=5e-3,
     )
 
 
@@ -168,10 +166,8 @@ def test_dual_dst_split_m():
     golden0 = mm_golden[:half_m, :] + 1.0
     golden1 = mm_golden[half_m:, :] + 2.0
 
-    assert_allclose(out0.cpu().to(torch.float32).numpy(), golden0.cpu().numpy(),
-                    rtol=5e-3, atol=5e-3)
-    assert_allclose(out1.cpu().to(torch.float32).numpy(), golden1.cpu().numpy(),
-                    rtol=5e-3, atol=5e-3)
+    assert_allclose(out0.cpu().to(torch.float32).numpy(), golden0.cpu().numpy(), rtol=5e-3, atol=5e-3)
+    assert_allclose(out1.cpu().to(torch.float32).numpy(), golden1.cpu().numpy(), rtol=5e-3, atol=5e-3)
 
 
 @_DUALDST_JIT
@@ -183,7 +179,7 @@ def dual_dst_chained_ops_kernel(
 ):
     """SplitN 同形状,但下游每条 chain 由 add+mul 两 vector op 组成.
 
-        验证 dualdst 融合后下游多步依赖链仍正确。
+    验证 dualdst 融合后下游多步依赖链仍正确。
     """
     upper, lower = _split_n_prologue_64(a_tensor, b_tensor)
     tmp0 = upper + 1.0
@@ -216,10 +212,8 @@ def test_dual_dst_chained_ops():
     golden0 = (mm_golden[:, :half_n] + 1.0) * 2.0
     golden1 = (mm_golden[:, half_n:] * 0.5) + 3.0
 
-    assert_allclose(out0.cpu().to(torch.float32).numpy(), golden0.cpu().numpy(),
-                    rtol=5e-3, atol=5e-3)
-    assert_allclose(out1.cpu().to(torch.float32).numpy(), golden1.cpu().numpy(),
-                    rtol=5e-3, atol=5e-3)
+    assert_allclose(out0.cpu().to(torch.float32).numpy(), golden0.cpu().numpy(), rtol=5e-3, atol=5e-3)
+    assert_allclose(out1.cpu().to(torch.float32).numpy(), golden1.cpu().numpy(), rtol=5e-3, atol=5e-3)
 
 
 @_DUALDST_JIT
@@ -231,12 +225,12 @@ def dual_dst_asymmetric_scale_kernel(
 ):
     """SplitN, 两侧 vector chain 用不同 op (add vs mul).
 
-        验证两个 AIV core 实际执行不同语义但共享同一份 L0C 数据。
+    验证两个 AIV core 实际执行不同语义但共享同一份 L0C 数据。
     """
     upper, lower = _split_n_prologue_64(a_tensor, b_tensor)
-    out0_tensor[:, :] = upper + 7.5            # AIV0: add scalar
+    out0_tensor[:, :] = upper + 7.5  # AIV0: add scalar
     pypto.set_vec_tile_shapes(64, 64)
-    out1_tensor[:, :] = lower * 1.25           # AIV1: mul scalar
+    out1_tensor[:, :] = lower * 1.25  # AIV1: mul scalar
 
 
 @pytest.mark.soc("950")
@@ -260,10 +254,8 @@ def test_dual_dst_asymmetric_scale():
     golden0 = mm_golden[:, :half_n] + 7.5
     golden1 = mm_golden[:, half_n:] * 1.25
 
-    assert_allclose(out0.cpu().to(torch.float32).numpy(), golden0.cpu().numpy(),
-                    rtol=5e-3, atol=5e-3)
-    assert_allclose(out1.cpu().to(torch.float32).numpy(), golden1.cpu().numpy(),
-                    rtol=5e-3, atol=5e-3)
+    assert_allclose(out0.cpu().to(torch.float32).numpy(), golden0.cpu().numpy(), rtol=5e-3, atol=5e-3)
+    assert_allclose(out1.cpu().to(torch.float32).numpy(), golden1.cpu().numpy(), rtol=5e-3, atol=5e-3)
 
 
 # ====== 收益放大用例: 单 matmul + 多对相邻 SplitN, 累计 N_PAIRS 对 dualdst pair ======
@@ -293,7 +285,7 @@ N_PAIRS = 8
 GAIN_M = 128
 GAIN_K = 32
 GAIN_HALF_N = 64
-GAIN_N = 2 * GAIN_HALF_N * N_PAIRS   # 1024
+GAIN_N = 2 * GAIN_HALF_N * N_PAIRS  # 1024
 
 
 @_DUALDST_JIT
@@ -304,10 +296,10 @@ def dual_dst_max_gain_kernel(
 ):
     """单次 matmul + N 轴 2*N_PAIRS 等分, 偶/奇下标分别落 AIV0/AIV1, 相邻 (偶,奇) 被 dualdst 合并.
 
-        mm shape: [GAIN_M, GAIN_N]; 每个子块宽 GAIN_HALF_N。
-        偶下标 +1.0 (consumer 落 AIV0), 奇下标 +2.0 (落 AIV1);
-        相邻 (偶,奇) 子块被 dualdst 合并, 累计 N_PAIRS 对融合。
-        所有切片边界都是 python int 常量。
+    mm shape: [GAIN_M, GAIN_N]; 每个子块宽 GAIN_HALF_N。
+    偶下标 +1.0 (consumer 落 AIV0), 奇下标 +2.0 (落 AIV1);
+    相邻 (偶,奇) 子块被 dualdst 合并, 累计 N_PAIRS 对融合。
+    所有切片边界都是 python int 常量。
     """
     pypto.set_cube_tile_shapes([GAIN_M, GAIN_M], [GAIN_K, GAIN_K], [2 * GAIN_HALF_N, 2 * GAIN_HALF_N])
     mm = pypto.matmul(a_tensor, b_tensor, b_trans=True, out_dtype=FP32)
@@ -332,15 +324,14 @@ def test_dual_dst_max_gain():
 
     dual_dst_max_gain_kernel(a, b, out)
 
-    mm_golden = torch.matmul(a.to(torch.float32), b.to(torch.float32).T)   # [GAIN_M, GAIN_N]
+    mm_golden = torch.matmul(a.to(torch.float32), b.to(torch.float32).T)  # [GAIN_M, GAIN_N]
     out_golden = mm_golden.clone()
     for j in range(2 * N_PAIRS):
         lo = j * GAIN_HALF_N
         hi = (j + 1) * GAIN_HALF_N
         out_golden[:, lo:hi] = mm_golden[:, lo:hi] + (1.0 if j % 2 == 0 else 2.0)
 
-    assert_allclose(out.cpu().to(torch.float32).numpy(), out_golden.cpu().numpy(),
-                    rtol=5e-3, atol=5e-3)
+    assert_allclose(out.cpu().to(torch.float32).numpy(), out_golden.cpu().numpy(), rtol=5e-3, atol=5e-3)
 
 
 # ====== 复杂用例: N_MM 个独立 matmul + 长 ADDS 计算链, ≥10 对 dualdst pair ======
@@ -374,11 +365,11 @@ def dual_dst_long_chain_kernel(
 ):
     """python 层展开 N_MM 次独立 matmul + SplitN, 每次产 1 对 dualdst pair.
 
-        每条 chain 跟 ADDS_CHAIN_DEPTH 步 ADDS 形成长依赖链。
+    每条 chain 跟 ADDS_CHAIN_DEPTH 步 ADDS 形成长依赖链。
     """
     pypto.set_cube_tile_shapes([MM_M, MM_M], [MM_K, MM_K], [MM_N, MM_N])
     # 上半 / 下半 chain 各自的 ADDS scalar 序列; sum 用于 golden 累加。
-    upper_scalars = [0.5, 1.0, 1.5, 2.0]   # len == ADDS_CHAIN_DEPTH
+    upper_scalars = [0.5, 1.0, 1.5, 2.0]  # len == ADDS_CHAIN_DEPTH
     lower_scalars = [0.25, 0.75, 1.25, 1.75]
     for i in range(N_MM):
         a_i = a_tensor[i * MM_M:(i + 1) * MM_M, :]
@@ -412,8 +403,8 @@ def test_dual_dst_long_chain():
 
     m_tot = N_MM * MM_M
     n_tot = N_MM * MM_N
-    upper_sum = 0.5 + 1.0 + 1.5 + 2.0          # = 5.0
-    lower_sum = 0.25 + 0.75 + 1.25 + 1.75      # = 4.0
+    upper_sum = 0.5 + 1.0 + 1.5 + 2.0  # = 5.0
+    lower_sum = 0.25 + 0.75 + 1.25 + 1.75  # = 4.0
 
     torch.manual_seed(0)
     a = torch.rand([m_tot, MM_K], dtype=torch.float16, device=f"npu:{device_id}")
@@ -433,10 +424,8 @@ def test_dual_dst_long_chain():
         out1_golden[i * MM_M:(i + 1) * MM_M, :] = mm_i[:, MM_HALF_N:] + lower_sum
 
     # 长 chain + FP16 输入 -> 误差可能略大于 5e-3, 适度放宽
-    assert_allclose(out0.cpu().to(torch.float32).numpy(), out0_golden.numpy(),
-                    rtol=1e-2, atol=1e-2)
-    assert_allclose(out1.cpu().to(torch.float32).numpy(), out1_golden.numpy(),
-                    rtol=1e-2, atol=1e-2)
+    assert_allclose(out0.cpu().to(torch.float32).numpy(), out0_golden.numpy(), rtol=1e-2, atol=1e-2)
+    assert_allclose(out1.cpu().to(torch.float32).numpy(), out1_golden.numpy(), rtol=1e-2, atol=1e-2)
 
 
 # ====== 链式用例: matmul,ADDS,matmul,ADDS... 在一条数据流上串 N_LINK 步 ======
@@ -464,9 +453,9 @@ def test_dual_dst_long_chain():
 # 全静态: 切片边界都是 python int 常量, pypto 视为静态视图。
 N_LINK = 12
 LINK_M = 64
-LINK_K = 32                    # 必须等于 LINK_HALF_N, 让 ws_a 能当下一步 mm A
-LINK_N = 64                    # = 2 * LINK_K, mm 输出
-LINK_HALF_N = LINK_N // 2      # = 32 = LINK_K
+LINK_K = 32  # 必须等于 LINK_HALF_N, 让 ws_a 能当下一步 mm A
+LINK_N = 64  # = 2 * LINK_K, mm 输出
+LINK_HALF_N = LINK_N // 2  # = 32 = LINK_K
 
 
 @_DUALDST_JIT
@@ -478,13 +467,13 @@ def dual_dst_link_chain_kernel(
 ):
     """matmul,ADDS,matmul,ADDS 一条数据流上 N_LINK 步串接, 每步 1 对 dualdst pair.
 
-        全程 FP32 (dualdst op 不支持随路 dtype cast)。
-        中间 N_LINK-1 步的两路 (AIV0 upper / AIV1 lower) 落点用 pypto.tensor() 在
-        kernel 内分配独立 workspace LogicalTensor —— 不暴露成 kernel 参数:
-          - ws_a_i: AIV0 chain (upper + 0.5) 落点, 同时作为下一步 mm 的 A 输入
-          - ws_b_i: AIV1 chain (lower + 0.25) 落点 (side output, 不传播)
-        每个 ws 各自独立, 避开 "同一 GM tensor 多 slice 读写" 的 pypto IR 环路;
-        最后一步直接写 out_a / out_b。
+    全程 FP32 (dualdst op 不支持随路 dtype cast)。
+    中间 N_LINK-1 步的两路 (AIV0 upper / AIV1 lower) 落点用 pypto.tensor() 在
+    kernel 内分配独立 workspace LogicalTensor —— 不暴露成 kernel 参数:
+      - ws_a_i: AIV0 chain (upper + 0.5) 落点, 同时作为下一步 mm 的 A 输入
+      - ws_b_i: AIV1 chain (lower + 0.25) 落点 (side output, 不传播)
+    每个 ws 各自独立, 避开 "同一 GM tensor 多 slice 读写" 的 pypto IR 环路;
+    最后一步直接写 out_a / out_b。
     """
     pypto.set_cube_tile_shapes([LINK_M, LINK_M], [LINK_K, LINK_K], [LINK_N, LINK_N])
     # 中间步 workspace: 每个独立 LogicalTensor, 写一次/读一次, 不与最终 out_a/out_b 共享。
@@ -532,14 +521,15 @@ def test_dual_dst_link_chain():
     last_lower = None
     for i in range(N_LINK):
         b_i = b[i * LINK_N:(i + 1) * LINK_N, :].cpu()
-        mm = torch.matmul(prev, b_i.T)              # [LINK_M, LINK_N]
-        last_upper = mm[:, :LINK_HALF_N] + 0.5      # [LINK_M, LINK_HALF_N=LINK_K]
+        mm = torch.matmul(prev, b_i.T)  # [LINK_M, LINK_N]
+        last_upper = mm[:, :LINK_HALF_N] + 0.5  # [LINK_M, LINK_HALF_N=LINK_K]
         last_lower = mm[:, LINK_HALF_N:] + 0.25
-        prev = last_upper                            # 只传 upper 半边
+        prev = last_upper  # 只传 upper 半边
 
     # 全 FP32 链精度损失小, 容差 1e-3
     assert_allclose(out_a.cpu().numpy(), last_upper.numpy(), rtol=1e-3, atol=1e-3)
     assert_allclose(out_b.cpu().numpy(), last_lower.numpy(), rtol=1e-3, atol=1e-3)
+
 
 """
 Mega-scale ST for OP_L0C_COPY_UB_DUAL_DST fusion:
@@ -589,16 +579,16 @@ Run:
 """
 
 
-MEGA_N_BRANCH = 50        # 默认 50 分支 (500 对); 改 100 -> 1000 对
-MEGA_N_PER_BRANCH = 10    # 单分支内 10 个 mm = 10 对 dualdst (满足 "≥10 对/分支")
+MEGA_N_BRANCH = 50  # 默认 50 分支 (500 对); 改 100 -> 1000 对
+MEGA_N_PER_BRANCH = 10  # 单分支内 10 个 mm = 10 对 dualdst (满足 "≥10 对/分支")
 MEGA_M = 64
 MEGA_K = 64
 MEGA_HALF_N = 64
-MEGA_N = 2 * MEGA_HALF_N                                                  # = 128
-MEGA_TOTAL_MM = MEGA_N_BRANCH * MEGA_N_PER_BRANCH                         # 500 或 1000
-MEGA_A_M = MEGA_TOTAL_MM * MEGA_M                                         # 32000
-MEGA_B_N = MEGA_TOTAL_MM * MEGA_N                                         # 64000
-MEGA_OUT_M = MEGA_TOTAL_MM * MEGA_M                                       # 32000
+MEGA_N = 2 * MEGA_HALF_N  # = 128
+MEGA_TOTAL_MM = MEGA_N_BRANCH * MEGA_N_PER_BRANCH  # 500 或 1000
+MEGA_A_M = MEGA_TOTAL_MM * MEGA_M  # 32000
+MEGA_B_N = MEGA_TOTAL_MM * MEGA_N  # 64000
+MEGA_OUT_M = MEGA_TOTAL_MM * MEGA_M  # 32000
 
 
 @_DUALDST_JIT
@@ -610,13 +600,12 @@ def dual_dst_mega_kernel(
 ):
     """MEGA_N_BRANCH 条独立并行分支, 每条分支内串行 MEGA_N_PER_BRANCH 对 dualdst.
 
-        a_tensor:      [MEGA_TOTAL_MM * MEGA_M, MEGA_K]      所有 mm 的 A 沿 M 轴拼
-        b_tensor:      [MEGA_TOTAL_MM * MEGA_N, MEGA_K]      所有 mm 的 B 沿 N 轴拼
-        out_a_tensor:  [MEGA_TOTAL_MM * MEGA_M, MEGA_HALF_N] AIV0 chain 输出沿 M 拼
-        out_b_tensor:  [MEGA_TOTAL_MM * MEGA_M, MEGA_HALF_N] AIV1 chain 输出沿 M 拼
+    a_tensor:      [MEGA_TOTAL_MM * MEGA_M, MEGA_K]      所有 mm 的 A 沿 M 轴拼
+    b_tensor:      [MEGA_TOTAL_MM * MEGA_N, MEGA_K]      所有 mm 的 B 沿 N 轴拼
+    out_a_tensor:  [MEGA_TOTAL_MM * MEGA_M, MEGA_HALF_N] AIV0 chain 输出沿 M 拼
+    out_b_tensor:  [MEGA_TOTAL_MM * MEGA_M, MEGA_HALF_N] AIV1 chain 输出沿 M 拼
     """
-    pypto.set_cube_tile_shapes(
-        [MEGA_M, MEGA_M], [MEGA_K, MEGA_K], [MEGA_N, MEGA_N])
+    pypto.set_cube_tile_shapes([MEGA_M, MEGA_M], [MEGA_K, MEGA_K], [MEGA_N, MEGA_N])
     # 外循环 s = 并行分支 idx, 内循环 i = 单分支内串行 mm idx;
     # 外内嵌套保证 IR op 顺序上 branch_0 的 10 个 mm 聚在一起 (串行语义), 而
     # 分支之间无数据依赖 (并行语义)。
@@ -639,14 +628,10 @@ def test_dual_dst_mega():
     torch.npu.set_device(device_id)
 
     torch.manual_seed(0)
-    a = torch.rand([MEGA_A_M, MEGA_K], dtype=torch.float32,
-                   device=f"npu:{device_id}")
-    b = torch.rand([MEGA_B_N, MEGA_K], dtype=torch.float32,
-                   device=f"npu:{device_id}")
-    out_a = torch.zeros([MEGA_OUT_M, MEGA_HALF_N], dtype=torch.float32,
-                        device=f"npu:{device_id}")
-    out_b = torch.zeros([MEGA_OUT_M, MEGA_HALF_N], dtype=torch.float32,
-                        device=f"npu:{device_id}")
+    a = torch.rand([MEGA_A_M, MEGA_K], dtype=torch.float32, device=f"npu:{device_id}")
+    b = torch.rand([MEGA_B_N, MEGA_K], dtype=torch.float32, device=f"npu:{device_id}")
+    out_a = torch.zeros([MEGA_OUT_M, MEGA_HALF_N], dtype=torch.float32, device=f"npu:{device_id}")
+    out_b = torch.zeros([MEGA_OUT_M, MEGA_HALF_N], dtype=torch.float32, device=f"npu:{device_id}")
 
     dual_dst_mega_kernel(a, b, out_a, out_b)
 
@@ -660,10 +645,8 @@ def test_dual_dst_mega():
             a_i = a_cpu[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :]
             b_i = b_cpu[global_idx * MEGA_N:(global_idx + 1) * MEGA_N, :]
             mm = torch.matmul(a_i, b_i.T)
-            out_a_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = \
-                mm[:, :MEGA_HALF_N] + 1.0
-            out_b_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = \
-                mm[:, MEGA_HALF_N:] + 2.0
+            out_a_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = mm[:, :MEGA_HALF_N] + 1.0
+            out_b_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = mm[:, MEGA_HALF_N:] + 2.0
 
     assert_allclose(out_a.cpu().numpy(), out_a_golden.numpy(), rtol=1e-3, atol=1e-3)
     assert_allclose(out_b.cpu().numpy(), out_b_golden.numpy(), rtol=1e-3, atol=1e-3)

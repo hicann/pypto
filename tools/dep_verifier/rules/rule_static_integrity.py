@@ -26,17 +26,18 @@ class StaticIntegrityRule(Rule):
         for task in ctx.dyn_tasks:
             op = ctx.get_static_op(task.root_index, task.op_idx)
             if op is None:
-                violations.append(Violation(
-                    rule_id=self.RULE_ID,
-                    message=(
-                        f"runtime kernel op (funcKey={task.root_index}, "
-                        f"opIdx={task.op_idx}) is not declared in the "
-                        f"compile-time graph"
-                    ),
-                ))
+                violations.append(
+                    Violation(
+                        rule_id=self.RULE_ID,
+                        message=(
+                            f"runtime kernel op (funcKey={task.root_index}, "
+                            f"opIdx={task.op_idx}) is not declared in the "
+                            f"compile-time graph"
+                        ),
+                    )
+                )
                 continue
-            expected = {encode_task_id(task.func_idx, o)
-                        for o in op.static_successors_op_idx}
+            expected = {encode_task_id(task.func_idx, o) for o in op.static_successors_op_idx}
             actual = set(task.static_successors)
             if expected == actual:
                 continue
@@ -48,12 +49,14 @@ class StaticIntegrityRule(Rule):
             if extra:
                 parts.append(f"unexpected successor(s) {extra}")
             detail = "; ".join(parts) if parts else "successor mismatch"
-            violations.append(Violation(
-                rule_id=self.RULE_ID,
-                message=(
-                    f"compile-time dependency for kernel funcKey="
-                    f"{task.root_index}, opIdx={task.op_idx} is not preserved "
-                    f"at runtime ({detail})"
-                ),
-            ))
+            violations.append(
+                Violation(
+                    rule_id=self.RULE_ID,
+                    message=(
+                        f"compile-time dependency for kernel funcKey="
+                        f"{task.root_index}, opIdx={task.op_idx} is not preserved "
+                        f"at runtime ({detail})"
+                    ),
+                )
+            )
         return violations

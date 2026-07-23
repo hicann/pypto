@@ -12,14 +12,12 @@
 Test sum codegen for KirinX90
 """
 
-import pytest
-
 from kirin.common_sum import (
+    TEST_CASES,
     create_sum_kernels,
     run_sum_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_sum_kernels("KirinX90")
 

@@ -20,15 +20,18 @@ This example demonstrates how to implement a softmax operation using aclgraph in
 
 Softmax is a fundamental operation in neural networks, especially for attention mechanisms.
 """
+
+import argparse
 import os
 import sys
-import argparse
-import pypto
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
 from torch._dynamo import allow_in_graph
 from torch._subclasses.fake_tensor import FakeTensor
+
+import pypto
 
 
 def get_device_id():
@@ -71,6 +74,7 @@ def softmax_core(x: pypto.Tensor) -> pypto.Tensor:
     esum = pypto.sum(exp, dim=-1, keepdim=True)
     return exp / esum
 
+
 B = pypto.DYNAMIC
 N1, N2, DIM = 32, 1, 256
 
@@ -95,10 +99,9 @@ def softmax_kernel(
     for idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="idx"):
         b_offset = idx * tile_b
         b_offset_end = min((idx + 1) * tile_b, bs)
-        input_view = pypto.view(input_tensor,
-                                [tile_b, N1, N2, DIM],
-                                [b_offset, 0, 0, 0],
-                                valid_shape=[b_offset_end - b_offset, N1, N2, DIM])
+        input_view = pypto.view(
+            input_tensor, [tile_b, N1, N2, DIM], [b_offset, 0, 0, 0], valid_shape=[b_offset_end - b_offset, N1, N2, DIM]
+        )
         softmax_out = softmax_core(input_view)
         output_tensor[b_offset:, ...] = softmax_out
 
@@ -131,12 +134,12 @@ def test_softmax_capture(device_id=None, dynamic: bool = True) -> None:
 
     model = torch.compile(MM(), backend="eager", dynamic=True)
 
-    #graph capture
+    # graph capture
     g = torch.npu.NPUGraph()
     with torch.npu.graph(g):
         y = model(x, dynamic)
 
-    #execute graph
+    # execute graph
     g.replay()
     torch.npu.synchronize()
     golden = torch.softmax(x, dim=-1).cpu()
@@ -162,19 +165,12 @@ def main():
 Examples:
   %(prog)s              Run the example
   %(prog)s --list       List all available examples
-        """
+        """,
     )
     parser.add_argument(
-        'example_id',
-        type=str,
-        nargs='?',
-        help='Example ID to run (1). If not specified, the example will run.'
+        'example_id', type=str, nargs='?', help='Example ID to run (1). If not specified, the example will run.'
     )
-    parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
 
     args = parser.parse_args()
 
@@ -184,7 +180,7 @@ Examples:
             'name': 'Softmax',
             'description': 'Softmax implementation using aclgraph with dynamic batch size',
             'function': test_softmax_capture,
-            'requires_npu': True
+            'requires_npu': True,
         }
     }
 

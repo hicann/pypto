@@ -8,21 +8,22 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
+from dataclasses import dataclass
 import os
 from typing import Optional
-from dataclasses import dataclass
-import numpy as np
-import torch
-import torch_npu
-import pypto
-from torch._subclasses.fake_tensor import FakeTensor
-from torch._dynamo import allow_in_graph
-from utils.np_compare import detailed_allclose_manual as compare
-import utils.golden.attn_golden as attn_golden
-import pytest
 
+import numpy as np
+import pytest
+import torch
+from torch._dynamo import allow_in_graph
+from torch._subclasses.fake_tensor import FakeTensor
+import torch_npu
+import utils.golden.attn_golden as attn_golden
+from utils.np_compare import detailed_allclose_manual as compare
+
+import pypto
 
 np.random.seed(0)
 torch.manual_seed(0)
@@ -106,50 +107,52 @@ def rope_data(x1, x2, cos, sin, tile_shape):
 
 @allow_in_graph
 def attention(
-        hidden_states: torch.Tensor,
-        residual: Optional[torch.Tensor],
-        input_layernorm_weight: torch.Tensor,
-        input_layernorm_bias: torch.Tensor,
-        qkv_proj_scale: torch.Tensor,
-        qkv_proj_offset: torch.Tensor,
-        qkv_proj_weight: torch.Tensor,
-        qkv_proj_quant_bias: torch.Tensor,
-        qkv_proj_deq_scale: torch.Tensor,
-        q_norm_weight: torch.Tensor,
-        q_norm_bias: torch.Tensor,
-        k_norm_weight: torch.Tensor,
-        k_norm_bias: torch.Tensor,
-        cos: torch.Tensor,
-        sin: torch.Tensor,
-        key_cache: torch.Tensor,
-        value_cache: torch.Tensor,
-        block_tables: torch.Tensor,
-        actual_seq_lens: torch.Tensor,
-        slot_mapping: torch.Tensor,
-        enable_residual: bool,
-        eps: float,
-        num_decode_tokens: int
+    hidden_states: torch.Tensor,
+    residual: Optional[torch.Tensor],
+    input_layernorm_weight: torch.Tensor,
+    input_layernorm_bias: torch.Tensor,
+    qkv_proj_scale: torch.Tensor,
+    qkv_proj_offset: torch.Tensor,
+    qkv_proj_weight: torch.Tensor,
+    qkv_proj_quant_bias: torch.Tensor,
+    qkv_proj_deq_scale: torch.Tensor,
+    q_norm_weight: torch.Tensor,
+    q_norm_bias: torch.Tensor,
+    k_norm_weight: torch.Tensor,
+    k_norm_bias: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+    key_cache: torch.Tensor,
+    value_cache: torch.Tensor,
+    block_tables: torch.Tensor,
+    actual_seq_lens: torch.Tensor,
+    slot_mapping: torch.Tensor,
+    enable_residual: bool,
+    eps: float,
+    num_decode_tokens: int,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    for item in [hidden_states,
-                 residual,
-                 input_layernorm_weight,
-                 input_layernorm_bias,
-                 qkv_proj_scale,
-                 qkv_proj_offset,
-                 qkv_proj_weight,
-                 qkv_proj_quant_bias,
-                 qkv_proj_deq_scale,
-                 q_norm_weight,
-                 q_norm_bias,
-                 k_norm_weight,
-                 k_norm_bias,
-                 cos,
-                 sin,
-                 key_cache,
-                 value_cache,
-                 block_tables,
-                 actual_seq_lens,
-                 slot_mapping]:
+    for item in [
+        hidden_states,
+        residual,
+        input_layernorm_weight,
+        input_layernorm_bias,
+        qkv_proj_scale,
+        qkv_proj_offset,
+        qkv_proj_weight,
+        qkv_proj_quant_bias,
+        qkv_proj_deq_scale,
+        q_norm_weight,
+        q_norm_bias,
+        k_norm_weight,
+        k_norm_bias,
+        cos,
+        sin,
+        key_cache,
+        value_cache,
+        block_tables,
+        actual_seq_lens,
+        slot_mapping,
+    ]:
         if isinstance(item, FakeTensor):
             return None, None
 
@@ -170,7 +173,6 @@ def attention(
     unroll_list = []
     if debug_str in ["true", "1", "yes"]:
         unroll_list = [8, 4, 2, 1]
-
 
     inputs = [
         block_tables,
@@ -197,19 +199,15 @@ def attention(
         v_tmp,
         residual_tmp,
         key_cache,
-        value_cache
+        value_cache,
     ]
-
 
     ifa_func_kernel(*inputs, unroll_list, eps)
     return out_torch, residual_tmp
 
 
-
 @pypto.frontend.jit(
-    runtime_options={"stitch_function_max_num": 128,
-                     "ready_on_host_tensors": ["block_table", "kv_act_seqs"]
-                    },
+    runtime_options={"stitch_function_max_num": 128, "ready_on_host_tensors": ["block_table", "kv_act_seqs"]},
 )
 def ifa_func_kernel(
     block_table: pypto.Tensor(),
@@ -331,14 +329,14 @@ def ifa_func_kernel(
         act_bs_tile = (bs - bs_idx * bs_tile).min(bs_tile)
 
         # rms norm
-        x_tile = pypto.view(x, [bs_tile, hidden_size], [bs_idx * bs_tile, 0],
-                                                valid_shape=[act_bs_tile, hidden_size])
+        x_tile = pypto.view(x, [bs_tile, hidden_size], [bs_idx * bs_tile, 0], valid_shape=[act_bs_tile, hidden_size])
         # init
         pypto.set_vec_tile_shapes(1, vec_tile_value)
         x_tile_fp32 = pypto.cast(x_tile, calc_dtype)
         # add
-        residual_input_tile = pypto.view(residual_input, [bs_tile, hidden_size], [bs_idx * bs_tile, 0],
-                                        valid_shape=[act_bs_tile, hidden_size])
+        residual_input_tile = pypto.view(
+            residual_input, [bs_tile, hidden_size], [bs_idx * bs_tile, 0], valid_shape=[act_bs_tile, hidden_size]
+        )
         residual_input_tile_fp32 = pypto.cast(residual_input_tile, calc_dtype)
         x_f32 = pypto.add(residual_input_tile_fp32, x_tile_fp32)  # tile_x
 
@@ -386,56 +384,92 @@ def ifa_func_kernel(
         pypto.set_vec_tile_shapes(bs_tile, tiling_value, head_size)
 
         # split
-        q_tile = pypto.view(mm_3d, [bs_tile, q_num_head, head_size], [0, 0, 0],
-                            valid_shape=[act_bs_tile, q_num_head, head_size])
-        k_tile = pypto.view(mm_3d, [bs_tile, kv_num_head, head_size], [0, q_num_head, 0],
-                            valid_shape=[act_bs_tile, kv_num_head, head_size])
-        v_tile = pypto.view(mm_3d, [bs_tile, kv_num_head, head_size], [0, kv_index, 0],
-                            valid_shape=[act_bs_tile, kv_num_head, head_size])
+        q_tile = pypto.view(
+            mm_3d, [bs_tile, q_num_head, head_size], [0, 0, 0], valid_shape=[act_bs_tile, q_num_head, head_size]
+        )
+        k_tile = pypto.view(
+            mm_3d,
+            [bs_tile, kv_num_head, head_size],
+            [0, q_num_head, 0],
+            valid_shape=[act_bs_tile, kv_num_head, head_size],
+        )
+        v_tile = pypto.view(
+            mm_3d,
+            [bs_tile, kv_num_head, head_size],
+            [0, kv_index, 0],
+            valid_shape=[act_bs_tile, kv_num_head, head_size],
+        )
 
         # rms norm
-        q_norm = rms_norm_bias(q_tile, q_gamma_expand, q_bias_expand, qk_mean_coff, eps,
-                            [q_batch_tile, q_num_head, head_size])
-        k_norm = rms_norm_bias(k_tile, k_gamma_expand, k_bias_expand, qk_mean_coff, eps,
-                            [q_batch_tile, kv_num_head, head_size])
+        q_norm = rms_norm_bias(
+            q_tile, q_gamma_expand, q_bias_expand, qk_mean_coff, eps, [q_batch_tile, q_num_head, head_size]
+        )
+        k_norm = rms_norm_bias(
+            k_tile, k_gamma_expand, k_bias_expand, qk_mean_coff, eps, [q_batch_tile, kv_num_head, head_size]
+        )
 
-        q_rot = pypto.view(q_norm, [bs_tile, q_num_head, rotary_dim], [0, 0, 0],
-                        valid_shape=[act_bs_tile, q_num_head, rotary_dim])
-        q_pass = pypto.view(q_norm, [bs_tile, q_num_head, stay_dim], [0, 0, rotary_dim],
-                            valid_shape=[act_bs_tile, q_num_head, stay_dim])
+        q_rot = pypto.view(
+            q_norm, [bs_tile, q_num_head, rotary_dim], [0, 0, 0], valid_shape=[act_bs_tile, q_num_head, rotary_dim]
+        )
+        q_pass = pypto.view(
+            q_norm, [bs_tile, q_num_head, stay_dim], [0, 0, rotary_dim], valid_shape=[act_bs_tile, q_num_head, stay_dim]
+        )
 
-        k_rot = pypto.view(k_norm, [bs_tile, kv_num_head, rotary_dim], [0, 0, 0],
-                        valid_shape=[act_bs_tile, kv_num_head, rotary_dim])
-        k_pass = pypto.view(k_norm, [bs_tile, kv_num_head, stay_dim], [0, 0, rotary_dim],
-                            valid_shape=[act_bs_tile, kv_num_head, stay_dim])
+        k_rot = pypto.view(
+            k_norm, [bs_tile, kv_num_head, rotary_dim], [0, 0, 0], valid_shape=[act_bs_tile, kv_num_head, rotary_dim]
+        )
+        k_pass = pypto.view(
+            k_norm,
+            [bs_tile, kv_num_head, stay_dim],
+            [0, 0, rotary_dim],
+            valid_shape=[act_bs_tile, kv_num_head, stay_dim],
+        )
 
         # apply rope
         # cast
         pypto.set_vec_tile_shapes(q_batch_tile, q_num_head, head_size)
-        cos_tile = pypto.view(cos, [bs_tile, 1, half_rotary_dim], [bs_idx * bs_tile, 0, 0],
-                            valid_shape=[act_bs_tile, 1, half_rotary_dim])
-        sin_tile = pypto.view(sin, [bs_tile, 1, half_rotary_dim], [bs_idx * bs_tile, 0, 0],
-                            valid_shape=[act_bs_tile, 1, half_rotary_dim])
+        cos_tile = pypto.view(
+            cos, [bs_tile, 1, half_rotary_dim], [bs_idx * bs_tile, 0, 0], valid_shape=[act_bs_tile, 1, half_rotary_dim]
+        )
+        sin_tile = pypto.view(
+            sin, [bs_tile, 1, half_rotary_dim], [bs_idx * bs_tile, 0, 0], valid_shape=[act_bs_tile, 1, half_rotary_dim]
+        )
         q_fp32 = pypto.cast(q_rot, calc_dtype)
         k_fp32 = pypto.cast(k_rot, calc_dtype)
         cos_fp32 = pypto.cast(cos_tile, calc_dtype)
         sin_fp32 = pypto.cast(sin_tile, calc_dtype)
 
         # q split
-        q1 = pypto.view(q_fp32, [bs_tile, q_num_head, half_rotary_dim], [0, 0, 0],
-                        valid_shape=[act_bs_tile, q_num_head, half_rotary_dim])
-        q2 = pypto.view(q_fp32, [bs_tile, q_num_head, half_rotary_dim], [0, 0, half_rotary_dim],
-                        valid_shape=[act_bs_tile, q_num_head, half_rotary_dim])
+        q1 = pypto.view(
+            q_fp32,
+            [bs_tile, q_num_head, half_rotary_dim],
+            [0, 0, 0],
+            valid_shape=[act_bs_tile, q_num_head, half_rotary_dim],
+        )
+        q2 = pypto.view(
+            q_fp32,
+            [bs_tile, q_num_head, half_rotary_dim],
+            [0, 0, half_rotary_dim],
+            valid_shape=[act_bs_tile, q_num_head, half_rotary_dim],
+        )
 
         # rope data
         q_rope = rope_data(q1, q2, cos_fp32, sin_fp32, [q_batch_tile, q_num_head, half_rotary_dim])
         q_cat = pypto.concat([q_rope, q_pass], 2)
 
         # k split
-        k1 = pypto.view(k_fp32, [bs_tile, kv_num_head, half_rotary_dim], [0, 0, 0],
-                        valid_shape=[act_bs_tile, kv_num_head, half_rotary_dim])
-        k2 = pypto.view(k_fp32, [bs_tile, kv_num_head, half_rotary_dim], [0, 0, half_rotary_dim],
-                        valid_shape=[act_bs_tile, kv_num_head, half_rotary_dim])
+        k1 = pypto.view(
+            k_fp32,
+            [bs_tile, kv_num_head, half_rotary_dim],
+            [0, 0, 0],
+            valid_shape=[act_bs_tile, kv_num_head, half_rotary_dim],
+        )
+        k2 = pypto.view(
+            k_fp32,
+            [bs_tile, kv_num_head, half_rotary_dim],
+            [0, 0, half_rotary_dim],
+            valid_shape=[act_bs_tile, kv_num_head, half_rotary_dim],
+        )
 
         # rope data
         k_rope = rope_data(k1, k2, cos_fp32, sin_fp32, [q_batch_tile, q_num_head, half_rotary_dim])
@@ -487,17 +521,16 @@ def ifa_func_kernel(
                         for i in range(block_num):
                             block_idx = block_table[b_idx, idx + i]
                             block_idx_valid = block_idx.max(0)
-                            kj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                pypto.view(key_cache_2d, [block_size, dn], [block_idx_valid * block_size, 0])
+                            kj_assemble[i * block_size:(i + 1) * block_size, 0:] = pypto.view(
+                                key_cache_2d, [block_size, dn], [block_idx_valid * block_size, 0]
+                            )
                         kj_assemble = pypto.view(kj_assemble, [s2_tile, dn], [0, 0], valid_shape=[s2_tile, dn])
 
                         # c1
                         # 6. 下面是flash attention的计算逻辑
                         pypto.set_cube_tile_shapes(c1_tile[0], c1_tile[1], c1_tile[2])
-                        sij = pypto.matmul(qi, kj_assemble, pypto.DT_FP32, a_trans=False,
-                                        b_trans=True)
-                        sij = pypto.view(sij, [g_tile, s2_tile], [0, 0],
-                                        valid_shape=[g_tile, actual_s2_tile])
+                        sij = pypto.matmul(qi, kj_assemble, pypto.DT_FP32, a_trans=False, b_trans=True)
+                        sij = pypto.view(sij, [g_tile, s2_tile], [0, 0], valid_shape=[g_tile, actual_s2_tile])
                         # v1
                         pypto.set_vec_tile_shapes(v1_tile[0], v1_tile[1])
                         if pypto.is_loop_begin(s2_idx):
@@ -517,10 +550,12 @@ def ifa_func_kernel(
                             for i in range(block_num):
                                 block_idx = block_table[b_idx, idx + i]
                                 block_idx_valid = block_idx.max(0)
-                                vj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                    pypto.view(value_cache_2d, [block_size, dn], [block_idx_valid * block_size, 0])
-                            vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
-                                                    [0, 0], valid_shape=[actual_s2_tile, dn])
+                                vj_assemble[i * block_size:(i + 1) * block_size, 0:] = pypto.view(
+                                    value_cache_2d, [block_size, dn], [block_idx_valid * block_size, 0]
+                                )
+                            vj_assemble = pypto.view(
+                                vj_assemble, [s2_tile, dn], [0, 0], valid_shape=[actual_s2_tile, dn]
+                            )
                             pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
                             oi_tmp = pypto.matmul(tilda_pij_fp16, vj_assemble, pypto.DT_FP32)
 
@@ -549,11 +584,12 @@ def ifa_func_kernel(
                             for i in range(block_num):
                                 block_idx = block_table[b_idx, idx + i]
                                 block_idx_valid = block_idx.max(0)
-                                vj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                    pypto.view(value_cache_2d, [block_size, dn],
-                                                [block_idx_valid * block_size, 0])
-                            vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
-                                                    [0, 0], valid_shape=[actual_s2_tile, dn])
+                                vj_assemble[i * block_size:(i + 1) * block_size, 0:] = pypto.view(
+                                    value_cache_2d, [block_size, dn], [block_idx_valid * block_size, 0]
+                                )
+                            vj_assemble = pypto.view(
+                                vj_assemble, [s2_tile, dn], [0, 0], valid_shape=[actual_s2_tile, dn]
+                            )
                             pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
                             oi_tmp = pypto.matmul(tilda_pij_fp16, vj_assemble, pypto.DT_FP32)
 
@@ -563,11 +599,9 @@ def ifa_func_kernel(
                         if pypto.is_loop_end(s2_idx):
                             oi_final = pypto.div(oi_update, sum_update)
                             pypto.set_vec_tile_shapes(16, v2_tile[0], v2_tile[1])
-                            oi_final_3d = pypto.cast(
-                                pypto.reshape(oi_final, [1, g_tile, dn]), dtype)
+                            oi_final_3d = pypto.cast(pypto.reshape(oi_final, [1, g_tile, dn]), dtype)
                             # 7. 将结果搬运到输出tensor上
                             pypto.assemble(oi_final_3d, oi_ofs, atten_out)
-
 
 
 def get_qwen_common_config(device="cpu"):
@@ -578,7 +612,7 @@ def get_qwen_common_config(device="cpu"):
     n1 = 12
     n2 = 1
     kv_layout = "PA_BSND"
-    softmax_scale = q_d ** -0.5
+    softmax_scale = q_d**-0.5
     block_table_batch = b
     block_size = 128
     kv_num_blocks = b * ((s2 + block_size - 1) // block_size)
@@ -588,9 +622,21 @@ def get_qwen_common_config(device="cpu"):
     actual_seq_values = [8, 6, 6, 6, 8, 6, 6, 6, 8, 6, 6, 6, 8, 6, 6, 6, 8, 6, 6, 6, 8, 6, 6, 6]
     actual_seq_values = [s2] * b
     actual_seq_tensor = torch.tensor(actual_seq_values, dtype=torch.int32, device=device)
-    atten_cfg = AttentionConfig(b=b, s1=s1, s2=s2, n1=n1, n2=n2, softmax_scale=softmax_scale, kv_layout=kv_layout,
-                                q_d=q_d, kv_d=q_d, block_table_batch=block_table_batch, kv_num_blocks=kv_num_blocks,
-                                actual_seq=actual_seq_tensor, hidden_size=hidden_size)  # 传入 tensor
+    atten_cfg = AttentionConfig(
+        b=b,
+        s1=s1,
+        s2=s2,
+        n1=n1,
+        n2=n2,
+        softmax_scale=softmax_scale,
+        kv_layout=kv_layout,
+        q_d=q_d,
+        kv_d=q_d,
+        block_table_batch=block_table_batch,
+        kv_num_blocks=kv_num_blocks,
+        actual_seq=actual_seq_tensor,
+        hidden_size=hidden_size,
+    )  # 传入 tensor
     atten_cfg.max_num_blocks_per_query = (s2 + block_size - 1) // block_size
     cube_tile = 128
     vector_tile = 128
@@ -601,7 +647,8 @@ def get_qwen_common_config(device="cpu"):
         [[cube_tile, cube_tile], [cube_tile, cube_tile], [cube_tile, cube_tile]],
         [vector_tile, s2_tile],
         [[cube_tile, cube_tile], [cube_tile, cube_tile], [cube_tile, cube_tile]],
-        [vector_tile, vector_tile])
+        [vector_tile, vector_tile],
+    )
     return atten_cfg, tile_cfg
 
 
@@ -653,8 +700,9 @@ def test_attention():
     qkv_proj_scale = torch.rand(hidden_size, dtype=torch.bfloat16).to(npu)
     qkv_proj_offset = torch.rand(hidden_size, dtype=torch.bfloat16).to(npu)
 
-    qkv_proj_weight = torch.randint(0, 128, size=(hidden_size, total_head_size), dtype=torch.int8,
-                                    device=f'npu:{device_id}')
+    qkv_proj_weight = torch.randint(
+        0, 128, size=(hidden_size, total_head_size), dtype=torch.int8, device=f'npu:{device_id}'
+    )
     qkv_proj_weight = torch_npu.npu_format_cast(qkv_proj_weight, 29)
     qkv_proj_quant_bias = torch.randint(0, 128, size=(total_head_size,), dtype=torch.int32, device=f'npu:{device_id}')
     qkv_proj_deq_scale = torch.rand(total_head_size, dtype=torch.float32).to(npu)
@@ -690,7 +738,7 @@ def test_attention():
             slot_mapping=slot_mapping,
             eps=attn_cfg.eps,
             enable_residual=True,
-            num_decode_tokens=0
+            num_decode_tokens=0,
         )
 
     attention_output, residual_g = attn_golden.attention_golden(
@@ -716,13 +764,23 @@ def test_attention():
         slot_mapping=slot_mapping,
         eps=attn_cfg.eps,
         enable_residual=True,
-        num_decode_tokens=0
+        num_decode_tokens=0,
     )
 
-    compare(np.array(residual_g.cpu().flatten().tolist()), np.array(residual_tmp.flatten().tolist()),
-            "residual_g", rtol=0.001, atol=0.001)
-    compare(np.array(attention_output.flatten().tolist()), np.array(output.flatten().tolist()),
-            "golden vs pypto", rtol=0.003, atol=0.003)
+    compare(
+        np.array(residual_g.cpu().flatten().tolist()),
+        np.array(residual_tmp.flatten().tolist()),
+        "residual_g",
+        rtol=0.001,
+        atol=0.001,
+    )
+    compare(
+        np.array(attention_output.flatten().tolist()),
+        np.array(output.flatten().tolist()),
+        "golden vs pypto",
+        rtol=0.003,
+        atol=0.003,
+    )
 
 
 if __name__ == "__main__":

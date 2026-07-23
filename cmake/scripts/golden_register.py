@@ -8,11 +8,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""STest Golden 处理函数注册管理.
-"""
+"""STest Golden 处理函数注册管理."""
+
 import dataclasses
 import logging
-from typing import Dict, Callable, Union, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 
 @dataclasses.dataclass
@@ -27,8 +27,9 @@ class GoldenRegister:
     _REG_MAP: Dict[str, GoldenRegInfo] = {}
 
     @classmethod
-    def reg_golden_func(cls, case_names: Union[str, List[str]],
-                        version: int = 0, timeout: Optional[int] = None) -> Callable:
+    def reg_golden_func(
+        cls, case_names: Union[str, List[str]], version: int = 0, timeout: Optional[int] = None
+    ) -> Callable:
         """
         注册回调函数, 支持两种函数原型:
             func(case_name: str, output: Path)

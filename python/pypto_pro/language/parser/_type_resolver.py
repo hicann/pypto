@@ -23,12 +23,13 @@ from typing import TYPE_CHECKING, Any
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 
-from .diagnostics import ParserTypeError
 from ._expr_evaluator import ExprEvaluator
+from .diagnostics import ParserTypeError
 
 if TYPE_CHECKING:
+    from pypto_pro.runtime.shape_policy import BoundKernelSignature, TensorShapeSpec
+
     from ._span_tracker import SpanTracker
-    from pypto_pro.runtime.shape_policy import BoundKernelSignature
 
 
 logger = logging.getLogger(__name__)
@@ -59,10 +60,17 @@ class TypeResolver:
         "DT_BOOL": DataType.BOOL,
     }
 
-    _SCALAR_UNSUPPORTED_DTYPE_NAMES: frozenset[str] = frozenset({
-        "DT_FP4", "DT_FP8E4M3FN", "DT_FP8E5M2",
-        "DT_INT4", "DT_UINT4", "DT_HF4", "DT_HF8",
-    })
+    _SCALAR_UNSUPPORTED_DTYPE_NAMES: frozenset[str] = frozenset(
+        {
+            "DT_FP4",
+            "DT_FP8E4M3FN",
+            "DT_FP8E5M2",
+            "DT_INT4",
+            "DT_UINT4",
+            "DT_HF4",
+            "DT_HF8",
+        }
+    )
 
     _LAYOUT_MAP: dict[str, "ir.TensorLayout"] = {
         "ND": ir.TensorLayout.ND,
@@ -119,9 +127,7 @@ class TypeResolver:
 
         explicit_rank = len(shape_spec.dimensions) - (1 if shape_spec.has_ellipsis else 0)
         rank_matches = (
-            len(actual.shape) >= explicit_rank
-            if shape_spec.has_ellipsis
-            else len(actual.shape) == explicit_rank
+            len(actual.shape) >= explicit_rank if shape_spec.has_ellipsis else len(actual.shape) == explicit_rank
         )
         return shape_spec, rank_matches, explicit_rank
 
@@ -304,7 +310,7 @@ class TypeResolver:
             )
 
         from pypto_pro.language.typing.tensor import Tensor
-        from pypto_pro.runtime.shape_policy import FixedDim, TensorShapeSpec
+        from pypto_pro.runtime.shape_policy import FixedDim
 
         for return_index, (expected, actual) in enumerate(zip(expected_items, actual_items)):
             if not isinstance(expected, Tensor):
@@ -320,7 +326,10 @@ class TypeResolver:
                     span=self._get_span(type_node),
                 )
             shape_spec, rank_matches, explicit_rank = self._resolve_shape_spec_and_rank(
-                f"return[{return_index}]", return_index, expected.shape, actual,
+                f"return[{return_index}]",
+                return_index,
+                expected.shape,
+                actual,
                 self._get_span(type_node),
             )
             if not rank_matches:
@@ -328,6 +337,7 @@ class TypeResolver:
                     f"Return value {return_index} rank mismatch for annotation {expected.shape}",
                     span=self._get_span(type_node),
                 )
+            explicit_rank = len(shape_spec.dimensions) - (1 if shape_spec.has_ellipsis else 0)
             for axis, dimension in enumerate(shape_spec.dimensions[:explicit_rank]):
                 if not isinstance(dimension, FixedDim):
                     continue
@@ -352,7 +362,7 @@ class TypeResolver:
                 span=self._get_span(type_node),
             )
         from pypto_pro.language.typing.tensor import Tensor
-        from pypto_pro.runtime.shape_policy import FixedDim, StaticDim, StaticTail, TensorShapeSpec
+        from pypto_pro.runtime.shape_policy import FixedDim, StaticDim, StaticTail
 
         if not isinstance(annotation, Tensor) or not isinstance(actual, ir.TensorType):
             raise ParserTypeError(
@@ -365,13 +375,18 @@ class TypeResolver:
                 span=self._get_span(type_node),
             )
         shape_spec, rank_matches, explicit_rank = self._resolve_shape_spec_and_rank(
-            parameter_name, 0, annotation.shape, actual, self._get_span(type_node),
+            parameter_name,
+            0,
+            annotation.shape,
+            actual,
+            self._get_span(type_node),
         )
         if not rank_matches:
             raise ParserTypeError(
                 f"Helper parameter '{parameter_name}' rank does not match {annotation.shape}",
                 span=self._get_span(type_node),
             )
+        explicit_rank = len(shape_spec.dimensions) - (1 if shape_spec.has_ellipsis else 0)
         for axis, dimension in enumerate(shape_spec.dimensions[:explicit_rank]):
             actual_dim = actual.shape[axis]
             if isinstance(dimension, FixedDim):
@@ -395,7 +410,6 @@ class TypeResolver:
                             "requires a constant caller dimension",
                             span=self._get_span(type_node),
                         )
-
 
     def parse_shape(self, shape_node: ast.expr) -> list[int | ir.Expr]:
         """Parse shape from AST node.
@@ -758,9 +772,7 @@ class TypeResolver:
         if type_name is None:
             raise ParserTypeError(
                 f"Unknown type in subscript: {ast.unparse(value)}",
-                hint=(
-                    "Use pl.Tensor for tensor types, pl.Tile for tile types, or pl.Ptr for pointer types"
-                ),
+                hint=("Use pl.Tensor for tensor types, pl.Tile for tile types, or pl.Ptr for pointer types"),
             )
 
         slice_value = subscript_node.slice
@@ -958,7 +970,7 @@ class TypeResolver:
                     dims.append(self._validate_dim_value(value, ast.unparse(elt), self._get_span(elt)))
                 else:
                     raise ParserTypeError(
-                        f"Dimension must be int literal, variable, or evaluable expression: " f"{ast.unparse(elt)}",
+                        f"Dimension must be int literal, variable, or evaluable expression: {ast.unparse(elt)}",
                         hint="Use integer literals, variables, or expressions for dimensions",
                     )
         return dims

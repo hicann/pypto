@@ -13,14 +13,13 @@ This test case verifies that the swimlane diagram generation for the costmodel w
 regardless of whether the CANN is installed in the environment or not.
 """
 
-import os
-import sys
-import argparse
 import json
-import pypto
+import os
+
 import numpy as np
-from numpy.testing import assert_allclose
 import torch
+
+import pypto
 
 
 def safe_json_load(file_path):
@@ -41,8 +40,7 @@ def safe_json_load(file_path):
 def get_out_put_path():
     out_path = "./output"
     if os.path.exists(out_path):
-        subdirs = [os.path.join(out_path, d) for d in os.listdir(out_path)
-                if os.path.isdir(os.path.join(out_path, d))]
+        subdirs = [os.path.join(out_path, d) for d in os.listdir(out_path) if os.path.isdir(os.path.join(out_path, d))]
         if subdirs:
             latest_dir = max(subdirs, key=os.path.getctime)
             return latest_dir
@@ -78,10 +76,7 @@ def softmax_core(input_tensor: pypto.tensor) -> pypto.tensor:
     return pypto.div(exp, esum)
 
 
-@pypto.frontend.jit(
-    runtime_options={
-    "run_mode": 1}
-)
+@pypto.frontend.jit(runtime_options={"run_mode": 1})
 def softmax(input_tensor: pypto.Tensor(), output_tensor: pypto.Tensor()):
     """
     Softmax implementation with dynamic batch size support.
@@ -129,7 +124,7 @@ def test_softmax():
 
     Tests with shape [batch, n1, n2, dim] where batch is dynamic.
     """
-    cann_is_configed: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
+    _cann_is_configed: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
 
     # Shape for verification: NCHW format, N can be any integer number as it is defined as dynamic axis
     shape = (32, 32, 1, 256)
@@ -145,7 +140,7 @@ def test_softmax():
     npu_data = output_data.cpu()
     torch_data = torch_softmax.cpu()
 
-    max_diff = np.abs(npu_data.numpy() - torch_data.numpy()).max()
+    _max_diff = np.abs(npu_data.numpy() - torch_data.numpy()).max()
 
     output_path = get_out_put_path()
     assert output_path

@@ -10,6 +10,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 import inspect
+
 from .pypto_impl import ir as _ir
 from .pypto_impl.ir import DataType
 

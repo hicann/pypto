@@ -8,20 +8,18 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import math
 import os
+
 import torch
-import pytest
 from win_attention_impl import deepseekv4_win_atten, get_mask, sliding_win_atten_graph
 
 
 class SWA(torch.nn.Module):
-    def forward(self, q, ori_block_table, ori_kv, seqused_kv, sinks, win_size, \
-        mask, cu_seqlens_q):
-        return sliding_win_atten_graph(q, ori_block_table, ori_kv, seqused_kv, \
-            sinks, win_size, mask, cu_seqlens_q)
+    def forward(self, q, ori_block_table, ori_kv, seqused_kv, sinks, win_size, mask, cu_seqlens_q):
+        return sliding_win_atten_graph(q, ori_block_table, ori_kv, seqused_kv, sinks, win_size, mask, cu_seqlens_q)
 
 
 def gen_uniform_data(data_shape, min_value, max_value, dtypes, device_id):
@@ -64,12 +62,13 @@ def gen_win_attn_data_tnd(t, n_q, d_q, n_kv, d_kv, block_size, seqused_kv_list, 
 
     block_table = [-1] * block_table_shape[1]
 
-    block_table = torch.tile(torch.tensor(block_table, device=f'npu:{device_id}').\
-        to(torch.int32), (block_table_shape[0], 1))
+    block_table = torch.tile(
+        torch.tensor(block_table, device=f'npu:{device_id}').to(torch.int32), (block_table_shape[0], 1)
+    )
     block_table_batch_idx = 0
     for idx in block_num_per_batch:
         for j in range(idx):
-            block_table[block_table_batch_idx][j] = (block_idx_list[block_idx])
+            block_table[block_table_batch_idx][j] = block_idx_list[block_idx]
             block_idx += 1
         block_table_batch_idx += 1
 
@@ -81,16 +80,17 @@ def gen_win_attn_data_tnd(t, n_q, d_q, n_kv, d_kv, block_size, seqused_kv_list, 
                 continue
             else:
                 kv_valid = kv_bsnd[b_idx, block_offset:(block_offset + block_size), :, :]
-                kv_cache[kv_cache_blk_id, 0: kv_valid.shape[0], :, :] = \
-                    kv_bsnd[b_idx, block_offset:(block_offset + block_size), :, :]
+                kv_cache[kv_cache_blk_id, 0:kv_valid.shape[0], :, :] = kv_bsnd[
+                    b_idx, block_offset:(block_offset + block_size), :, :
+                ]
 
     atten_out = torch.zeros(atten_out_shape, dtype=new_dtype, device=f'npu:{device_id}')
     return q_tnd, block_table, kv_cache, sinks, atten_out
 
 
-def win_atten_calc_tnd(input_params_win_attn, seqused_kv_list, sinks, q_tnd, \
-    kv_cache, block_table, cu_seqlens_q, device_id):
-
+def win_atten_calc_tnd(
+    input_params_win_attn, seqused_kv_list, sinks, q_tnd, kv_cache, block_table, cu_seqlens_q, device_id
+):
     t = input_params_win_attn[0]
     n_q = input_params_win_attn[2]
     d_q = input_params_win_attn[3]
@@ -105,7 +105,6 @@ def win_atten_calc_tnd(input_params_win_attn, seqused_kv_list, sinks, q_tnd, \
         cur_s_q = cu_seqlens_q[b_index + 1] - cu_seqlens_q[b_index]
 
         for s1_index in range(cur_s_q):
-
             t_index = cu_seqlens_q[b_index] + s1_index
 
             actual_seq = seqused_kv_list[b_index]
@@ -126,7 +125,7 @@ def win_atten_calc_tnd(input_params_win_attn, seqused_kv_list, sinks, q_tnd, \
                 kv_list.append(kv_block)
 
             kv_cur = torch.cat(kv_list, axis=0)
-            kv_cur = kv_cur[start_offset : start_offset + valid_len, :]
+            kv_cur = kv_cur[start_offset:start_offset + valid_len, :]
 
             sum_exp = torch.zeros([n_q, 1], dtype=torch.float32, device=f'npu:{device_id}')
             acc_s = torch.matmul(q_tensor_cur.to(torch.float32), kv_cur.to(torch.float32).transpose(1, 0))
@@ -145,7 +144,6 @@ def win_atten_calc_tnd(input_params_win_attn, seqused_kv_list, sinks, q_tnd, \
 
 
 def test_win_atten_tnd_mask(allow_in_graph=False) -> None:
-
     for b in [64]:
         s_val = 2
         cu_seqlens_q = [i * s_val for i in range(b + 1)]
@@ -158,7 +156,7 @@ def test_win_atten_tnd_mask(allow_in_graph=False) -> None:
         head_dim = 512
         d_q = head_dim
         d_kv = head_dim
-        scalar = d_q ** -0.5
+        scalar = d_q**-0.5
         input_params_win_attn = [t, n_kv, n_q, d_q, win_size, scalar]
 
         device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
@@ -168,13 +166,15 @@ def test_win_atten_tnd_mask(allow_in_graph=False) -> None:
         seqused_kv_list_tensor = torch.tensor(seqused_kv_list, dtype=torch.int32, device=f'npu:{device_id}')
         cu_seqlens_q_tenor = torch.tensor(cu_seqlens_q, dtype=torch.int32, device=f'npu:{device_id}')
 
-        q_tnd, block_table, kv_cache, sinks, _ = gen_win_attn_data_tnd(t, n_q, d_q, n_kv, d_kv, \
-            block_size, seqused_kv_list, dtypes, device_id)
+        q_tnd, block_table, kv_cache, sinks, _ = gen_win_attn_data_tnd(
+            t, n_q, d_q, n_kv, d_kv, block_size, seqused_kv_list, dtypes, device_id
+        )
         mask2 = get_mask(4, n_q, device_id, block_size)
 
         if allow_in_graph:
             import torchair as tng
             from torchair.configs.compiler_config import CompilerConfig
+
             compiler_config = CompilerConfig()
             compiler_config.mode = "reduce-overhead"
             npu_backend = tng.get_npu_backend(compiler_config=compiler_config)
@@ -188,16 +188,34 @@ def test_win_atten_tnd_mask(allow_in_graph=False) -> None:
             mask2_npu = mask2.npu()
             cu_seqlens_q_tenor_npu = cu_seqlens_q_tenor.npu()
 
-            atten_out = model(q_npu, ori_block_table_npu, ori_kv_npu, seqused_kv_list_tensor_npu, \
-                attn_sinks_npu, win_size, mask2_npu, cu_seqlens_q_tenor_npu)
+            atten_out = model(
+                q_npu,
+                ori_block_table_npu,
+                ori_kv_npu,
+                seqused_kv_list_tensor_npu,
+                attn_sinks_npu,
+                win_size,
+                mask2_npu,
+                cu_seqlens_q_tenor_npu,
+            )
 
         else:
-            atten_out = deepseekv4_win_atten(q_tnd, block_table, kv_cache, seqused_kv_list_tensor, \
-                sinks, win_size, mask=mask2, cu_seqlens_q=cu_seqlens_q_tenor)
+            atten_out = deepseekv4_win_atten(
+                q_tnd,
+                block_table,
+                kv_cache,
+                seqused_kv_list_tensor,
+                sinks,
+                win_size,
+                mask=mask2,
+                cu_seqlens_q=cu_seqlens_q_tenor,
+            )
 
-        golden = win_atten_calc_tnd(input_params_win_attn, seqused_kv_list, sinks, q_tnd, \
-            kv_cache, block_table, cu_seqlens_q, device_id)
+        golden = win_atten_calc_tnd(
+            input_params_win_attn, seqused_kv_list, sinks, q_tnd, kv_cache, block_table, cu_seqlens_q, device_id
+        )
         from utils.compare import compare
+
         compare(golden, atten_out, "SWA tnd mask 版本", rtol=0.0078125, atol=0.0001)
 
 

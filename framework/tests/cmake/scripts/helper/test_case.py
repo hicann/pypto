@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 from abc import ABC, abstractmethod
 from typing import NoReturn
+
 from test_case_desc import TestCaseDesc
 
 

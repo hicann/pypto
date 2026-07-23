@@ -23,18 +23,20 @@ filtering) and the PMU trace event-id scheme in bf32be10.
 Uses the proven GLM attention kernel (models/glm_v4_5/glm_attention.py) which
 produces sufficient cross-core sync events for full validation.
 """
+
 import csv
+from dataclasses import dataclass
 import json
 import os
+from pathlib import Path
 import shutil
 import sys
-from dataclasses import dataclass
-from pathlib import Path
 
 import pytest
-import pypto
 import torch
 import torch_npu
+
+import pypto
 
 
 def _load_dyn_topo(path):
@@ -45,13 +47,15 @@ def _load_dyn_topo(path):
         for row in reader:
             if not row or not row[0].strip():
                 continue
-            tasks.append({
-                "seqNo": int(row[col["seqNo"]]),
-                "taskId": int(row[col["taskId"]]),
-                "leafIndex": int(row[col["leafIndex"]]),
-                "leafHash": row[col["leafHash"]].strip(),
-                "coreType": int(row[col["coreType"]]),
-            })
+            tasks.append(
+                {
+                    "seqNo": int(row[col["seqNo"]]),
+                    "taskId": int(row[col["taskId"]]),
+                    "leafIndex": int(row[col["leafIndex"]]),
+                    "leafHash": row[col["leafHash"]].strip(),
+                    "coreType": int(row[col["coreType"]]),
+                }
+            )
     return tasks
 
 
@@ -115,10 +119,7 @@ class _MixSyncMsgCtx:
     msg_idx: int
 
     def prefix(self) -> str:
-        return (
-            f"mix_event: [{self.mix_i}].wrapInfos[{self.wrap_j}]"
-            f".coreTask[{self.task_k}].syncMsg[{self.msg_idx}]"
-        )
+        return f"mix_event: [{self.mix_i}].wrapInfos[{self.wrap_j}].coreTask[{self.task_k}].syncMsg[{self.msg_idx}]"
 
 
 def _validate_mix_sync_msg(errors, ctx: _MixSyncMsgCtx, msg):
@@ -232,7 +233,7 @@ def _run_mix_swimlane_guard_kernel():
     pypto.set_debug_options(runtime_debug_mode=1)
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "models" / "glm_v4_5"))
-    from glm_attention import get_case_config, build_ifa_config, ifa
+    from glm_attention import build_ifa_config, get_case_config, ifa
 
     case_config = get_case_config("ifa_950_b16_s1_1_s2_8k")
     atten_cfg, tile_config = build_ifa_config(case_config)
@@ -293,17 +294,14 @@ def _collect_guard_errors(perf_dir):
     errs, _, mix_total_msgs = _validate_mix_event_structure(mix_data)
     all_errors.extend(f"[mix_event] {e}" for e in errs)
     assert mix_total_msgs > 0, (
-        "mix_event_info.json has 0 syncMsg entries. "
-        "The GLM kernel should produce cross-core sync metadata."
+        "mix_event_info.json has 0 syncMsg entries. The GLM kernel should produce cross-core sync metadata."
     )
 
     _validate_swimlane(swimlane_path)
 
     if not all_errors:
         dyn_lookup = {t["taskId"]: t["leafHash"] for t in dyn_tasks}
-        errs, aligned_count, skipped = _validate_sync_alignment(
-            tilefwk_data, dyn_lookup, _build_mix_lookup(mix_data)
-        )
+        errs, aligned_count, skipped = _validate_sync_alignment(tilefwk_data, dyn_lookup, _build_mix_lookup(mix_data))
         all_errors.extend(f"[alignment] {e}" for e in errs)
         assert aligned_count > 0, (
             f"alignment: {tasks_with_sync} tasks have syncEvents but none could be "
@@ -320,9 +318,6 @@ def test_mix_swimlane_guard():
     try:
         perf_dir, output_dir = _run_mix_swimlane_guard_kernel()
         all_errors = _collect_guard_errors(perf_dir)
-        assert not all_errors, (
-            f"mix swimlane guard failed ({len(all_errors)} issue(s)):\n"
-            + "\n".join(all_errors[:20])
-        )
+        assert not all_errors, f"mix swimlane guard failed ({len(all_errors)} issue(s)):\n" + "\n".join(all_errors[:20])
     finally:
         _cleanup_guard_artifacts(perf_dir, output_dir)

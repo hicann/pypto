@@ -8,8 +8,8 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""Pytest 配置控制
-"""
+"""Pytest 配置控制"""
+
 import os
 from typing import List, Optional
 
@@ -31,16 +31,19 @@ def duration_estimate(seconds: float):
         def test_something():
             ...
     """
+
     def decorator(func):
         # Store the time cost as a public attribute on the function
         func.duration_estimate = seconds
         return func
+
     return decorator
 
 
 def _set_process_desc(desc: str):
     try:
         import setproctitle
+
         setproctitle.setproctitle(desc)
     except ModuleNotFoundError:
         pass
@@ -51,14 +54,13 @@ def pytest_addoption(parser: pytest.Parser):
 
     :param parser: pytest.Parser 类型
     """
-    parser.addoption("--device", nargs="+", type=int,
-                     help="Device ID, default 0")
+    parser.addoption("--device", nargs="+", type=int, help="Device ID, default 0")
+    parser.addoption("--test_case_info", action="store", default="", help="Test case info.")
     parser.addoption(
-        "--test_case_info", action="store", default="", help="Test case info."
-    )
-    parser.addoption(
-        "--cards-per-case", type=int, default=1,
-        help="Number of cards required for each test case. Default is 1 (single-card cases)."
+        "--cards-per-case",
+        type=int,
+        default=1,
+        help="Number of cards required for each test case. Default is 1 (single-card cases).",
     )
 
 
@@ -92,9 +94,7 @@ def pytest_configure_node(node):
         if cards_per_case > 1:
             # 多卡模式
             if len(device_id_lst) % cards_per_case != 0:
-                raise ValueError(
-                    f"Cannot divide {len(device_id_lst)} devices into groups of {cards_per_case}"
-                )
+                raise ValueError(f"Cannot divide {len(device_id_lst)} devices into groups of {cards_per_case}")
 
             # 计算worker应该分配的设备组
             num_groups = len(device_id_lst) // cards_per_case
@@ -114,9 +114,7 @@ def pytest_configure_node(node):
             device_group_str = ",".join(map(str, device_group))
 
             node.gateway.id = f"Devices[{device_group_str}]"
-            node.gateway.remote_exec(
-                f'import os; os.environ["TILE_FWK_DEVICE_ID_LIST"] = "{device_group_str}"'
-            )
+            node.gateway.remote_exec(f'import os; os.environ["TILE_FWK_DEVICE_ID_LIST"] = "{device_group_str}"')
         else:
             # 单卡模式，保持原有逻辑
             worker_idx = int(str(node.gateway.id).lstrip("gw"))
@@ -128,7 +126,7 @@ def pytest_configure_node(node):
             node.gateway.id = f"Device[{device_id}]"  # 体现在回显中
             node.gateway.remote_exec(f'import os; os.environ["TILE_FWK_DEVICE_ID"] = "{device_id}"')
     else:
-        node.gateway.remote_exec(f'import os; os.environ.pop("TILE_FWK_DEVICE_ID", None)')
+        node.gateway.remote_exec('import os; os.environ.pop("TILE_FWK_DEVICE_ID", None)')
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -200,6 +198,7 @@ def _get_soc_version():
     """
     try:
         import torch_npu
+
         soc_version = torch_npu.npu.get_soc_version()
         return soc_version
     except Exception as e:
@@ -253,8 +252,7 @@ def pytest_collection_modifyitems(config, items):
     cards_per_case = config.getoption("--cards-per-case", 1)
 
     # 在收集阶段就过滤掉不匹配的用例
-    card_filtered_items = [item for item in filtered_items
-                          if _is_case_match_cards(item, cards_per_case)]
+    card_filtered_items = [item for item in filtered_items if _is_case_match_cards(item, cards_per_case)]
 
     # 分离有耗时标识和无耗时标识的测试用例
     timed_tests = []

@@ -8,22 +8,25 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
-'''
-'''
+""" """
+
+import logging
 import os
 from pathlib import Path
-import math
+
+from mla_prolog_v4_impl import (
+    MlaPrologV4Attrs,
+    MlaPrologV4Configs,
+    check_input_output_shape_dtype,
+    mla_prolog_pypto,
+    mla_prolog_v4,
+)
 import pytest
 import torch
 import torch_npu
-import pypto
-import logging
-import numpy as np
-from mla_prolog_v4_impl import mla_prolog_pypto, mla_prolog_v4, \
-    MlaPrologV4Attrs, MlaPrologV4Configs, check_input_output_shape_dtype
 from utils.compare import compare
+
+import pypto
 
 torch.manual_seed(5)
 
@@ -72,7 +75,7 @@ def rms_norm(x, gamma, eps=1e-6):
 
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
-    x1 = x[..., : x.shape[-1] // 2]
+    x1 = x[..., :x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2:]
     return torch.concatenate((-x2, x1), dim=-1)
 
@@ -83,12 +86,12 @@ def apply_rotary_pos_emb_v2(q, k, cos, sin, unsqueeze_dim=1):
     k_clone = k.clone()
     t, nq, d = q.shape
     t, nk, d = k.shape
-    q = q.reshape(t, nq, d//2, 2).permute(0, 1, 3, 2).reshape(t, nq, d)
-    k = k.reshape(t, nk, d//2, 2).permute(0, 1, 3, 2).reshape(t, nk, d)
+    q = q.reshape(t, nq, d // 2, 2).permute(0, 1, 3, 2).reshape(t, nq, d)
+    k = k.reshape(t, nk, d // 2, 2).permute(0, 1, 3, 2).reshape(t, nk, d)
     q_t = rotate_half(q)
     k_t = rotate_half(k)
-    q_new = q_t.reshape(t, nq, 2, d//2).permute(0, 1, 3, 2).reshape(t, nq, d)
-    k_new = k_t.reshape(t, nk, 2, d//2).permute(0, 1, 3, 2).reshape(t, nk, d)
+    q_new = q_t.reshape(t, nq, 2, d // 2).permute(0, 1, 3, 2).reshape(t, nq, d)
+    k_new = k_t.reshape(t, nk, 2, d // 2).permute(0, 1, 3, 2).reshape(t, nk, d)
     q_new = q_new.to(torch.float32)
     k_new = k_new.to(torch.float32)
     cos = torch.unsqueeze(cos, dim=unsqueeze_dim)
@@ -112,7 +115,7 @@ def tensor_to_file(t: torch.Tensor, output: Path):
 
 
 def mla_prolog_compute(inputs):
-    dtype = inputs.get("dtype")
+    _dtype = inputs.get("dtype")
     x = inputs.get("x")
     wq_a = inputs.get("wq_a")
     wq_b = inputs.get("wq_b")
@@ -197,8 +200,7 @@ def gen_mla_prolog_input_data(params, dtypes, is_nz=False):
 
 
 def gen_mla_prolog_data(params, dtype, is_nz=False):
-    x, wq_a, wq_b, w_kv, gamma_cq, gamma_ckv, cos, sin = \
-        gen_mla_prolog_input_data(params, dtype, is_nz)
+    x, wq_a, wq_b, w_kv, gamma_cq, gamma_ckv, cos, sin = gen_mla_prolog_input_data(params, dtype, is_nz)
     inputs = dict()
     inputs["x"] = x
     inputs["wq_a"] = wq_a
@@ -234,13 +236,14 @@ def convert_pypto_to_torch_type(pypto_type):
     else:
         raise ValueError(f"Unsupported pypto.DataType: {pypto_type}")
 
-class MLA_MODEL(torch.nn.Module):
+
+class MlaModel(torch.nn.Module):
     def forward(self, token_x, wq_a, wq_b, wkv, rope_cos, rope_sin, gamma_cq, gamma_ckv):
         return mla_prolog_pypto(token_x, wq_a, wq_b, wkv, rope_cos, rope_sin, gamma_cq, gamma_ckv)
 
 
 def mla_prolog(params, input_tensors, golden_tensors, dtype, is_nz):
-    d_type = pypto.DataType.DT_FP16 if dtype == pypto.DataType.DT_FP16 else pypto.DataType.DT_BF16
+    _d_type = pypto.DataType.DT_FP16 if dtype == pypto.DataType.DT_FP16 else pypto.DataType.DT_BF16
     t = params['t']
     n1 = params["num_heads"]
     h = params["h"]
@@ -261,12 +264,15 @@ def mla_prolog(params, input_tensors, golden_tensors, dtype, is_nz):
     qr_out_shape = [t, q_lora_rank]
 
     if is_nz:
-        wq_a_nz = torch_npu.npu_format_cast(input_tensors["wq_a"].reshape(wq_a_shape).npu().contiguous(), \
-                                            torch_npu.Format.FRACTAL_NZ)
-        wq_b_nz = torch_npu.npu_format_cast(input_tensors["wq_b"].reshape(wq_b_shape).npu().contiguous(), \
-                                            torch_npu.Format.FRACTAL_NZ)
-        wkv_nz = torch_npu.npu_format_cast(input_tensors["w_kv"].reshape(wkv_shape).npu().contiguous(), \
-                                            torch_npu.Format.FRACTAL_NZ)
+        wq_a_nz = torch_npu.npu_format_cast(
+            input_tensors["wq_a"].reshape(wq_a_shape).npu().contiguous(), torch_npu.Format.FRACTAL_NZ
+        )
+        wq_b_nz = torch_npu.npu_format_cast(
+            input_tensors["wq_b"].reshape(wq_b_shape).npu().contiguous(), torch_npu.Format.FRACTAL_NZ
+        )
+        wkv_nz = torch_npu.npu_format_cast(
+            input_tensors["w_kv"].reshape(wkv_shape).npu().contiguous(), torch_npu.Format.FRACTAL_NZ
+        )
         input_tensors["wq_a"] = wq_a_nz
         input_tensors["wq_b"] = wq_b_nz
         input_tensors["w_kv"] = wkv_nz
@@ -282,13 +288,15 @@ def mla_prolog(params, input_tensors, golden_tensors, dtype, is_nz):
 
     import torchair as tng
     from torchair.configs.compiler_config import CompilerConfig
+
     compiler_config = CompilerConfig()
     compiler_config.mode = "reduce-overhead"
     npu_backend = tng.get_npu_backend(compiler_config=compiler_config)
-    model = torch.compile(MLA_MODEL(), dynamic=False, fullgraph=True, backend=npu_backend)
+    model = torch.compile(MlaModel(), dynamic=False, fullgraph=True, backend=npu_backend)
 
-    output_q_data, output_kv_data, output_qr_data = model(token_x, wq_a, wq_b, wkv, rope_cos, \
-                                                    rope_sin, gamma_cq, gamma_ckv)
+    output_q_data, output_kv_data, output_qr_data = model(
+        token_x, wq_a, wq_b, wkv, rope_cos, rope_sin, gamma_cq, gamma_ckv
+    )
     pypto.runtime._device_synchronize()
 
     # golden data
@@ -307,7 +315,7 @@ def mla_prolog(params, input_tensors, golden_tensors, dtype, is_nz):
 
 
 def mla_prolog_eager(params, input_tensors, golden_tensors, dtype, is_nz, attrs, configs):
-    d_type = pypto.DataType.DT_FP16 if dtype == pypto.DataType.DT_FP16 else pypto.DataType.DT_BF16
+    _d_type = pypto.DataType.DT_FP16 if dtype == pypto.DataType.DT_FP16 else pypto.DataType.DT_BF16
     t = params['t']
     n1 = params["num_heads"]
     h = params["h"]
@@ -328,12 +336,15 @@ def mla_prolog_eager(params, input_tensors, golden_tensors, dtype, is_nz, attrs,
     qr_out_shape = [t, q_lora_rank]
 
     if is_nz:
-        wq_a_nz = torch_npu.npu_format_cast(input_tensors["wq_a"].reshape(wq_a_shape).npu().contiguous(), \
-                                            torch_npu.Format.FRACTAL_NZ)
-        wq_b_nz = torch_npu.npu_format_cast(input_tensors["wq_b"].reshape(wq_b_shape).npu().contiguous(), \
-                                            torch_npu.Format.FRACTAL_NZ)
-        wkv_nz = torch_npu.npu_format_cast(input_tensors["w_kv"].reshape(wkv_shape).npu().contiguous(), \
-                                            torch_npu.Format.FRACTAL_NZ)
+        wq_a_nz = torch_npu.npu_format_cast(
+            input_tensors["wq_a"].reshape(wq_a_shape).npu().contiguous(), torch_npu.Format.FRACTAL_NZ
+        )
+        wq_b_nz = torch_npu.npu_format_cast(
+            input_tensors["wq_b"].reshape(wq_b_shape).npu().contiguous(), torch_npu.Format.FRACTAL_NZ
+        )
+        wkv_nz = torch_npu.npu_format_cast(
+            input_tensors["w_kv"].reshape(wkv_shape).npu().contiguous(), torch_npu.Format.FRACTAL_NZ
+        )
         input_tensors["wq_a"] = wq_a_nz
         input_tensors["wq_b"] = wq_b_nz
         input_tensors["w_kv"] = wkv_nz
@@ -347,15 +358,30 @@ def mla_prolog_eager(params, input_tensors, golden_tensors, dtype, is_nz, attrs,
     gamma_cq = input_tensors["gamma_cq"].reshape(rmsnorm_gamma_cq_shape).npu()
     gamma_ckv = input_tensors["gamma_ckv"].reshape(rmsnorm_gamma_ckv_shape).npu()
 
-    output_q_data = torch.zeros([token_x.size(0), wq_b.size(1) // gamma_ckv.size(0), gamma_ckv.size(0)], \
-                    dtype=token_x.dtype, device=f'{token_x.device}')
+    output_q_data = torch.zeros(
+        [token_x.size(0), wq_b.size(1) // gamma_ckv.size(0), gamma_ckv.size(0)],
+        dtype=token_x.dtype,
+        device=f'{token_x.device}',
+    )
     output_kv_data = torch.zeros([token_x.size(0), gamma_ckv.size(0)], dtype=token_x.dtype, device=f'{token_x.device}')
     output_qr_data = torch.zeros([token_x.size(0), gamma_cq.size(0)], dtype=token_x.dtype, device=f'{token_x.device}')
 
-    check_input_output_shape_dtype(token_x, wq_a, wq_b, wkv, rope_cos, rope_sin, gamma_cq, gamma_ckv, \
-                output_q_data, output_kv_data, output_qr_data)
-    params_info = [token_x, wq_a, wq_b, wkv, gamma_cq, gamma_ckv, \
-        rope_cos, rope_sin, output_q_data, output_kv_data, output_qr_data]
+    check_input_output_shape_dtype(
+        token_x, wq_a, wq_b, wkv, rope_cos, rope_sin, gamma_cq, gamma_ckv, output_q_data, output_kv_data, output_qr_data
+    )
+    params_info = [
+        token_x,
+        wq_a,
+        wq_b,
+        wkv,
+        gamma_cq,
+        gamma_ckv,
+        rope_cos,
+        rope_sin,
+        output_q_data,
+        output_kv_data,
+        output_qr_data,
+    ]
     mla_prolog_v4(*params_info, attrs, configs)
     pypto.runtime._device_synchronize()
 
@@ -405,20 +431,19 @@ def test_t16_pa_nd_bf16_eager():
     dtype = pypto.DataType.DT_BF16
     is_nz = False
     attrs = MlaPrologV4Attrs(eps=1e-6, layout_query="TND", layout_key="PA_BSND")
-    configs = MlaPrologV4Configs(unroll_list=[128, 64, 32, 16, 1],
-                                cube_l1_reuse_setting={2: 4},
-                                mg_copyin_upper_bound=2 * 1024 * 1024,
-                                pg_upper_bound=8192,
-                                block_size=128,
-                                t_sub_tile=1,
-                                chunk_size=2)
+    configs = MlaPrologV4Configs(
+        unroll_list=[128, 64, 32, 16, 1],
+        cube_l1_reuse_setting={2: 4},
+        mg_copyin_upper_bound=2 * 1024 * 1024,
+        pg_upper_bound=8192,
+        block_size=128,
+        t_sub_tile=1,
+        chunk_size=2,
+    )
     input_tensors, golden_data = gen_mla_prolog_data(params, torch.bfloat16, is_nz)
     mla_prolog_eager(params, input_tensors, golden_data, dtype, is_nz, attrs, configs)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-        level=logging.INFO
-    )
+    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.INFO)
     test_t16_pa_nd_bf16_eager()

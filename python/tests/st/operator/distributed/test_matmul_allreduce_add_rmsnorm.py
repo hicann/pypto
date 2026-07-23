@@ -20,15 +20,16 @@ Main Functions:
 """
 
 import argparse
+import csv
 import logging
 import multiprocessing as mp
 import os
-import csv
+from pathlib import Path
 import statistics
 import time
 import traceback
-from pathlib import Path
 
+from distributed_config import DistributedConfig, collect_process_errors
 import numpy as np
 import pytest
 import torch
@@ -36,8 +37,6 @@ from torch._dynamo import allow_in_graph
 from torch._subclasses import fake_tensor
 
 import pypto
-
-from distributed_config import DistributedConfig, collect_process_errors
 
 logger = logging.getLogger(__name__)
 
@@ -67,40 +66,64 @@ def _matmul_allreduce_add_rmsnorm(
 
     for bs_idx in pypto.loop(bs_loop, name="LOOP_MM_ALLREDUCE_ADD_RMSNORM", idx_name="bs_idx"):
         shmem_shape = [view_row_shape, hidden_size]
-        shmem_tensor = pypto.distributed.create_shmem_tensor(
-            group_name, world_size, pypto.DT_BF16, shmem_shape)
+        shmem_tensor = pypto.distributed.create_shmem_tensor(group_name, world_size, pypto.DT_BF16, shmem_shape)
         shmem_barrier_signal = pypto.distributed.create_shmem_signal(group_name, world_size)
         my_pe = pypto.distributed.my_symbolic_pe(group_name)
         in_tensor_tile = pypto.view(
-            in_tensor, (view_row_shape, in_tensor.shape[1]), [bs_idx * view_row_shape, 0],
-            valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), in_tensor.shape[1]])
+            in_tensor,
+            (view_row_shape, in_tensor.shape[1]),
+            [bs_idx * view_row_shape, 0],
+            valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), in_tensor.shape[1]],
+        )
 
         pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
-        data_clear_out = pypto.distributed.shmem_clear_data(
-            shmem_tensor, shmem_shape, [0, 0], pred=[in_tensor_tile])
-        barrier_out = pypto.distributed.shmem_barrier_all(
-            shmem_barrier_signal, [data_clear_out])
+        data_clear_out = pypto.distributed.shmem_clear_data(shmem_tensor, shmem_shape, [0, 0], pred=[in_tensor_tile])
+        barrier_out = pypto.distributed.shmem_barrier_all(shmem_barrier_signal, [data_clear_out])
 
         pypto.set_cube_tile_shapes([8, 8], [128, 256], [256, 512])
         matmul_result = pypto.matmul(in_tensor_tile, matmul_weight, pypto.DT_BF16, b_trans=True)
 
         pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
         for dyn_idx in range(world_size):
-            put_out = pypto.distributed.shmem_put(matmul_result, [0, 0], shmem_tensor, dyn_idx,
-                put_op=pypto.AtomicType.ADD, pred=[barrier_out])
-            pypto.distributed.shmem_signal(shmem_tensor, dyn_idx, 1, shmem_shape,
-                [0, 0], target_pe=dyn_idx, sig_op=pypto.AtomicType.ADD, pred=[put_out])
-        wait_until_out = pypto.distributed.shmem_wait_until(shmem_tensor, my_pe, world_size,
-            shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[in_tensor_tile])
+            put_out = pypto.distributed.shmem_put(
+                matmul_result, [0, 0], shmem_tensor, dyn_idx, put_op=pypto.AtomicType.ADD, pred=[barrier_out]
+            )
+            pypto.distributed.shmem_signal(
+                shmem_tensor,
+                dyn_idx,
+                1,
+                shmem_shape,
+                [0, 0],
+                target_pe=dyn_idx,
+                sig_op=pypto.AtomicType.ADD,
+                pred=[put_out],
+            )
+        wait_until_out = pypto.distributed.shmem_wait_until(
+            shmem_tensor,
+            my_pe,
+            world_size,
+            shmem_shape,
+            [0, 0],
+            cmp=pypto.OpType.EQ,
+            clear_signal=True,
+            pred=[in_tensor_tile],
+        )
         pypto.set_vec_tile_shapes(1, hidden_size)
         all_reduce_out = pypto.experimental.shmem_load(
-            shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_out],
-            valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), hidden_size]
+            shmem_tensor,
+            my_pe,
+            shmem_shape,
+            [0, 0],
+            pred=[wait_until_out],
+            valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), hidden_size],
         )
 
         residual_tile = pypto.view(
-            residual, (view_row_shape, hidden_size), [bs_idx * view_row_shape, 0],
-            valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), hidden_size])
+            residual,
+            (view_row_shape, hidden_size),
+            [bs_idx * view_row_shape, 0],
+            valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), hidden_size],
+        )
 
         all_reduce_out_fp32 = pypto.cast(all_reduce_out, pypto.DT_FP32)
         residual_tile_fp32 = pypto.cast(residual_tile, pypto.DT_FP32)
@@ -142,8 +165,7 @@ def matmul_allreduce_add_rmsnorm_kernel(
     world_size,
 ):
     _matmul_allreduce_add_rmsnorm(
-        in_tensor, matmul_weight, residual, gamma, bias, out_tensor, residual_out,
-        eps, group_name, world_size
+        in_tensor, matmul_weight, residual, gamma, bias, out_tensor, residual_out, eps, group_name, world_size
     )
 
 
@@ -163,8 +185,7 @@ def matmul_allreduce_add_rmsnorm_perf_kernel(
     world_size,
 ):
     _matmul_allreduce_add_rmsnorm(
-        in_tensor, matmul_weight, residual, gamma, bias, out_tensor, residual_out,
-        eps, group_name, world_size
+        in_tensor, matmul_weight, residual, gamma, bias, out_tensor, residual_out, eps, group_name, world_size
     )
 
 
@@ -223,7 +244,7 @@ def matmul_allreduce_add_rmsnorm_result_golden(batch_size, num, input_datas):
 
 def get_check_threshold(world_size: int, golden_tensor: torch.Tensor):
     scale = np.mean(np.abs(golden_tensor.cpu().flatten().tolist())) + 1e-12
-    eps = 2 ** -7
+    eps = 2**-7
     tolerance_coeff = min((1 + 0.25 * np.log2(world_size)) * 1.5, 3.0)
     rtol = tolerance_coeff * eps * np.sqrt(world_size)
     atol = rtol * scale
@@ -250,8 +271,15 @@ def matmul_allreduce_add_rmsnorm_worker(
         out_tensor = torch.empty(residual.shape, dtype=torch.bfloat16, device=device)
         residual_out = torch.empty(residual.shape, dtype=torch.bfloat16, device=device)
 
-        inputs = [in_tensor.to(device), matmul_weight.to(device), residual.to(device),
-                    gamma.to(device), bias.to(device), out_tensor, residual_out]
+        inputs = [
+            in_tensor.to(device),
+            matmul_weight.to(device),
+            residual.to(device),
+            gamma.to(device),
+            bias.to(device),
+            out_tensor,
+            residual_out,
+        ]
 
         kernel(*inputs, eps, groups[0], config.world_size)
 
@@ -304,6 +332,7 @@ def _get_soc_version():
     """Get SOC version"""
     try:
         import torch_npu
+
         return torch_npu.npu.get_soc_version()
     except Exception:
         return None
@@ -322,8 +351,7 @@ def test_matmul_allreduce_add_rmsnorm():
     processes = []
     for i in range(config.world_size):
         p = mp.Process(
-            target=matmul_allreduce_add_rmsnorm_worker,
-            args=(config, input_datas[i], output_datas[i], i, error_queue)
+            target=matmul_allreduce_add_rmsnorm_worker, args=(config, input_datas[i], output_datas[i], i, error_queue)
         )
         p.start()
         processes.append(p)
@@ -384,7 +412,7 @@ def _run_performance_single_iteration(run_num, config, expected_total_time):
     for i in range(config.world_size):
         p = mp.Process(
             target=matmul_allreduce_add_rmsnorm_worker,
-            args=(config, input_datas[i], output_datas[i], i, error_queue, 'perf')
+            args=(config, input_datas[i], output_datas[i], i, error_queue, 'perf'),
         )
         p.start()
         processes.append(p)
@@ -396,17 +424,22 @@ def _run_performance_single_iteration(run_num, config, expected_total_time):
 
     try:
         from swimlane_analyzer import SwimlaneAnalyzer
+
         analyzer = SwimlaneAnalyzer(output_dir, expected_total_time=expected_total_time)
         stats = analyzer.calculate_stats(config.world_size)
         min_time = stats['min_time']
         is_within = analyzer.check_within_expected(config.world_size)
 
         if not is_within:
-            logger.warning(f"Run {run_num} execution time exceeds expected: "
-                f"actual {min_time:.3f}us > expected {expected_total_time:.3f}us")
+            logger.warning(
+                f"Run {run_num} execution time exceeds expected: "
+                f"actual {min_time:.3f}us > expected {expected_total_time:.3f}us"
+            )
         else:
-            logger.info(f"Run {run_num} execution time within expected: "
-                f"actual {min_time:.3f}us <= expected {expected_total_time:.3f}us")
+            logger.info(
+                f"Run {run_num} execution time within expected: "
+                f"actual {min_time:.3f}us <= expected {expected_total_time:.3f}us"
+            )
 
         return min_time
 
@@ -443,8 +476,7 @@ def _print_performance_statistics(all_min_times, expected_total_time, std_dev):
             logger.info("[PASS] All 10 runs minimum values within expected time")
         else:
             failed_runs = [i + 1 for i, min_time in enumerate(all_min_times) if min_time > expected_total_time]
-            logger.warning(f"[FAIL] {len(failed_runs)} runs exceed expected: "
-                f"runs {', '.join(map(str, failed_runs))}")
+            logger.warning(f"[FAIL] {len(failed_runs)} runs exceed expected: runs {', '.join(map(str, failed_runs))}")
 
     logger.info("=" * 60)
 
@@ -464,15 +496,23 @@ def _save_performance_statistics_to_csv(config, all_min_times, expected_total_ti
         'avg_of_mins_us': round(avg_min_time, 3),
         'max_of_mins_us': round(max_min_time, 3),
         'std_dev_us': round(std_dev, 3) if len(all_min_times) > 1 else 0.0,
-        'num_runs': len(all_min_times)
+        'num_runs': len(all_min_times),
     }
 
     with open(stats_csv_file, 'a', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=[
-            'timestamp', 'world_size', 'expected_time_us',
-            'min_of_mins_us', 'avg_of_mins_us', 'max_of_mins_us',
-            'std_dev_us', 'num_runs'
-        ])
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                'timestamp',
+                'world_size',
+                'expected_time_us',
+                'min_of_mins_us',
+                'avg_of_mins_us',
+                'max_of_mins_us',
+                'std_dev_us',
+                'num_runs',
+            ],
+        )
         if f.tell() == 0:
             writer.writeheader()
         writer.writerow(stats_record)
@@ -480,9 +520,7 @@ def _save_performance_statistics_to_csv(config, all_min_times, expected_total_ti
     logger.info(f"Statistics saved to: {stats_csv_file}")
 
 
-def summarize_performance_results(
-    stats_csv_file: str = "performance_statistics_matmul_allreduce_add_rmsnorm.csv"
-):
+def summarize_performance_results(stats_csv_file: str = "performance_statistics_matmul_allreduce_add_rmsnorm.csv"):
     """Summarize and display statistics"""
     if not os.path.exists(stats_csv_file):
         logger.error(f"Statistics CSV file not found: {stats_csv_file}")
@@ -507,9 +545,11 @@ def _print_summary_table(recent_rows):
     logger.info("=" * 120)
 
     header_format = "{:<5} {:<20} {:<10} {:<12} {:<12} {:<12} {:<12} {:<12} {:<8}"
-    logger.info(header_format.format('No.', 'Time', 'world_size', 'Expected(us)',
-                               'Min(us)', 'Avg(us)', 'Max(us)',
-                               'StdDev(us)', 'Runs'))
+    logger.info(
+        header_format.format(
+            'No.', 'Time', 'world_size', 'Expected(us)', 'Min(us)', 'Avg(us)', 'Max(us)', 'StdDev(us)', 'Runs'
+        )
+    )
     logger.info("-" * 120)
 
     for i, row in enumerate(recent_rows, 1):
@@ -522,10 +562,11 @@ def _print_summary_table(recent_rows):
         std_dev = row.get('std_dev_us', 'N/A')
         num_runs = row.get('num_runs', 'N/A')
 
-        logger.info(header_format.format(
-            i, timestamp, world_size, expected_time,
-            min_of_mins, avg_of_mins, max_of_mins, std_dev, num_runs
-        ))
+        logger.info(
+            header_format.format(
+                i, timestamp, world_size, expected_time, min_of_mins, avg_of_mins, max_of_mins, std_dev, num_runs
+            )
+        )
 
     logger.info("-" * 120)
 
@@ -570,8 +611,7 @@ def _print_stat_category(category_name, values):
 
 def main():
     parser = argparse.ArgumentParser(description='MatMul AllReduce Add RmsNorm Test')
-    parser.add_argument('--perf', action='store_true',
-                       help='Run performance test instead of functional test')
+    parser.add_argument('--perf', action='store_true', help='Run performance test instead of functional test')
     args = parser.parse_args()
 
     if args.perf:

@@ -9,22 +9,23 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
+
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
 from ..tensor import Tensor
 
 
 @op_wrapper
-def gather_in_l1(src: Tensor, indices: Tensor, block_table: Tensor, block_size: int,
-                 size: int, is_b_matrix: bool, is_trans: bool) -> Tensor:
+def gather_in_l1(
+    src: Tensor, indices: Tensor, block_table: Tensor, block_size: int, size: int, is_b_matrix: bool, is_trans: bool
+) -> Tensor:
     """gather_in_l1."""
 
     return pypto_impl.gather_in_l1(src, indices, block_table, block_size, size, is_b_matrix, is_trans)
 
 
 @op_wrapper
-def gather_in_ub(param: Tensor, indices: Tensor, block_table: Tensor,
-                 block_size: int, axis: int) -> Tensor:
+def gather_in_ub(param: Tensor, indices: Tensor, block_table: Tensor, block_size: int, axis: int) -> Tensor:
     """gather_in_ub."""
     """
     Custom Operator for Sparse Attention Mechanism:

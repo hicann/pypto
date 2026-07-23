@@ -16,14 +16,14 @@
     python3 examples/validate_examples.py -t examples/ --run_mode sim -w 4
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import os
+from pathlib import Path
 import queue
 import subprocess
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)

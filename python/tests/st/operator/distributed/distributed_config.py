@@ -11,6 +11,7 @@
 """
 DistributedConfig
 """
+
 from __future__ import annotations
 
 import functools
@@ -19,11 +20,11 @@ import multiprocessing as mp
 import os
 import traceback
 from typing import Callable, TypeVar
-from typing_extensions import ParamSpec
 
 import torch
 import torch.distributed as dist
 import torch_npu
+from typing_extensions import ParamSpec
 
 P = ParamSpec('P')
 R = TypeVar('R')
@@ -155,8 +156,7 @@ class DistributedConfig:
         """
         if logical_rank_id >= len(self.physical_device_ids):
             raise ValueError(
-                f"Logical rank {logical_rank_id} out of range. "
-                f"Available physical devices: {self.physical_device_ids}"
+                f"Logical rank {logical_rank_id} out of range. Available physical devices: {self.physical_device_ids}"
             )
         return self.physical_device_ids[logical_rank_id]
 
@@ -165,9 +165,7 @@ class DistributedConfig:
         device_list_str = os.environ.get("TILE_FWK_DEVICE_ID_LIST", "")
 
         if device_list_str:
-            self.physical_device_ids = [
-                int(d.strip()) for d in device_list_str.split(",") if d.strip()
-            ]
+            self.physical_device_ids = [int(d.strip()) for d in device_list_str.split(",") if d.strip()]
             self.world_size = len(self.physical_device_ids)
         else:
             self.physical_device_ids = list(range(self.world_size))

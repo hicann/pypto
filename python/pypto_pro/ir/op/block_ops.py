@@ -17,13 +17,12 @@ in ``call_parser.parse_op_call``.
 from __future__ import annotations
 
 import ast
-import enum
-import os
 from collections.abc import Sequence
 from dataclasses import dataclass
+import enum
+import os
 from typing import Any, Optional
 
-from pypto_pro.ir._utils import _normalize_expr, _to_make_tuple
 from pypto.pypto_impl import ir as _ir_core
 from pypto.pypto_impl.ir import (
     AccPhase,
@@ -43,6 +42,8 @@ from pypto.pypto_impl.ir import (
     TilePad,
 )
 from pypto.pypto_impl.ir import TileType as _IRTileType  # IR-level TileType (C++ binding);
+from pypto_pro.ir._utils import _normalize_expr, _to_make_tuple
+
 # NOTE: a DSL-descriptor dataclass named ``TileType`` is defined later in this
 # module and shadows this import, so use ``_IRTileType`` for isinstance checks.
 from ._op_registry import OpSpec, op_impl, register_table
@@ -62,6 +63,7 @@ def block_ir_op(op_name: str) -> str:
 
 class FillPadMode(enum.Enum):
     """Fill-pad operating mode (lowered to different IR op names)."""
+
     NORMAL = 0
     EXPAND = 1
     INPLACE = 2
@@ -113,9 +115,7 @@ def _validate_offset_bounds(
         src_val = getattr(src, "value", None)
         if isinstance(off_val, int) and isinstance(src_val, int):
             if off_val >= src_val:
-                raise ValueError(
-                    f"{op_name}: offset[{i}] ({off_val}) exceeds source shape[{i}] ({src_val})"
-                )
+                raise ValueError(f"{op_name}: offset[{i}] ({off_val}) exceeds source shape[{i}] ({src_val})")
 
 
 def _ir_binary_cast(
@@ -152,9 +152,7 @@ def _ir_load(
     tile_ndim = len(out.type.shape)
     tile_dims, is_transpose = _resolve_order(order, tensor_ndim, tile_ndim, op_name)
 
-    tensor_ndim, tile_shape, tile_dims = _validate_load_operands(
-        out, tensor, offsets_tuple, tile_dims, op_name
-    )
+    tensor_ndim, tile_shape, tile_dims = _validate_load_operands(out, tensor, offsets_tuple, tile_dims, op_name)
 
     kwargs: dict[str, Any] = {}
     if is_transpose:
@@ -404,8 +402,7 @@ def _check_move_shape_compat(
     src_type = src.type
     if not isinstance(out_type, _IRTileType) or not isinstance(src_type, _IRTileType):
         raise TypeError(
-            f"pl.move: both dst and src must be Tiles, "
-            f"got dst={type(out_type).__name__}, src={type(src_type).__name__}"
+            f"pl.move: both dst and src must be Tiles, got dst={type(out_type).__name__}, src={type(src_type).__name__}"
         )
     dst_shape = _tile_shape_ints(out_type)
     src_shape = _tile_shape_ints(src_type)
@@ -432,9 +429,7 @@ def _check_move_shape_compat(
         # fractal conversion; see test_fa_perf_tkv_preload_nbuf.py:221
         # (Right[TKV,TD] ← Mat[TD,TKV]) and test_insert_zn_transpose_*.py.
         if dst_shape != src_shape:
-            is_2d_transpose = (
-                len(dst_shape) == 2 and dst_shape == src_shape[::-1]
-            )
+            is_2d_transpose = len(dst_shape) == 2 and dst_shape == src_shape[::-1]
             if not is_2d_transpose:
                 raise ValueError(
                     f"pl.move: dst tile shape {dst_shape} != src tile shape {src_shape} "
@@ -469,8 +464,7 @@ def _ir_move(
         (MemorySpace.Vec, MemorySpace.Vec),
         (MemorySpace.Mat, MemorySpace.Scaling),
     }
-    if (_src_mem is not None and _dst_mem is not None
-            and (_src_mem, _dst_mem) not in _supported_move_paths):
+    if _src_mem is not None and _dst_mem is not None and (_src_mem, _dst_mem) not in _supported_move_paths:
         raise ValueError(
             f"move: unsupported data path src({_src_mem.name})->dst({_dst_mem.name}), "
             f"supported paths: Mat->Left, Mat->Right, Acc->Vec, Vec->Vec"
@@ -539,7 +533,6 @@ def _ir_sels(out: Expr, mask: Expr, src: Expr, tmp: Expr, scalar: Expr, *, span:
     actual_span = span or _span()
     scalar_expr = scalar if isinstance(scalar, Expr) else _normalize_expr(scalar, actual_span)
     return _ir_core.create_op_call(block_ir_op("sels"), [out, mask, src, tmp, scalar_expr], {}, actual_span)
-
 
 
 def _validate_validshape_bounds(
@@ -618,18 +611,30 @@ def _ir_set_stride(
 
 
 _SCALAR_UNSUPPORTED_DTYPES: tuple[DataType, ...] = (
-    DataType.FP4, DataType.FP8E4M3FN, DataType.FP8E5M2,
-    DataType.INT4, DataType.UINT4, DataType.HF4, DataType.HF8,
+    DataType.FP4,
+    DataType.FP8E4M3FN,
+    DataType.FP8E5M2,
+    DataType.INT4,
+    DataType.UINT4,
+    DataType.HF4,
+    DataType.HF8,
 )
 
 _SUPPORTED_DTYPES: tuple[DataType, ...] = (
-    DataType.FP8E4M3FN, DataType.FP8E5M2,
-    DataType.HF8, DataType.INT8,
-    DataType.FP16, DataType.BF16,
-    DataType.INT16, DataType.FP32,
-    DataType.INT32, DataType.INT64,
-    DataType.UINT8, DataType.UINT16,
-    DataType.UINT32, DataType.UINT64,
+    DataType.FP8E4M3FN,
+    DataType.FP8E5M2,
+    DataType.HF8,
+    DataType.INT8,
+    DataType.FP16,
+    DataType.BF16,
+    DataType.INT16,
+    DataType.FP32,
+    DataType.INT32,
+    DataType.INT64,
+    DataType.UINT8,
+    DataType.UINT16,
+    DataType.UINT32,
+    DataType.UINT64,
 )
 
 
@@ -665,9 +670,7 @@ def _validate_load_operands(
         raise ValueError(f"{op_name}: dst must be a Tile, got {type(out.type).__name__}")
     dst_mem = getattr(getattr(out.type, "memref", None), "memory_space", None)
     if dst_mem is not None and dst_mem not in (_ir_core.MemorySpace.Vec, _ir_core.MemorySpace.Mat):
-        raise ValueError(
-            f"{op_name}: dst tile must be in Vec (UB) or Mat (L1) memory, got {dst_mem.name}"
-        )
+        raise ValueError(f"{op_name}: dst tile must be in Vec (UB) or Mat (L1) memory, got {dst_mem.name}")
     _validate_dtype(getattr(out.type, "dtype", None), "dst tile", op_name)
 
     if not isinstance(tensor.type, _ir_core.TensorType):
@@ -712,9 +715,7 @@ def _build_store_kwargs(
 
 def _validate_dtype(dtype: DataType | None, role: str, op_name: str) -> None:
     if dtype is not None and dtype not in _SUPPORTED_DTYPES:
-        raise ValueError(
-            f"{op_name}: unsupported {role} dtype {dtype}, supported: b8/b16/b32/b64"
-        )
+        raise ValueError(f"{op_name}: unsupported {role} dtype {dtype}, supported: b8/b16/b32/b64")
 
 
 def _resolve_order(
@@ -760,21 +761,15 @@ def _validate_offsets(
     for i, off in enumerate(offsets_tuple.elements):
         off_val = _try_get_const_offset(off)
         if off_val is not None and off_val < 0:
-            raise ValueError(
-                f"{op_name}: offsets[{i}] is {off_val}, negative offset is not allowed"
-            )
+            raise ValueError(f"{op_name}: offsets[{i}] is {off_val}, negative offset is not allowed")
         if off_val is not None and i in tile_dims:
             tile_idx = tile_dims.index(i)
             t_size = tile_shape[tile_idx]
             t_dim = tensor_shape[i] if i < len(tensor_shape) else None
             check_val = off_val * t_size.value if use_tile_absolute else off_val
             label = f" (absolute offset {check_val})" if use_tile_absolute else ""
-            if (isinstance(t_size, ConstInt) and isinstance(t_dim, ConstInt)
-                    and check_val >= t_dim.value):
-                raise ValueError(
-                    f"{op_name}: offsets[{i}]={off_val}{label} "
-                    f"exceeds tensor dim {i} size {t_dim.value}"
-                )
+            if isinstance(t_size, ConstInt) and isinstance(t_dim, ConstInt) and check_val >= t_dim.value:
+                raise ValueError(f"{op_name}: offsets[{i}]={off_val}{label} exceeds tensor dim {i} size {t_dim.value}")
 
 
 def _ir_getval(container: Expr, offset: int | Expr, *, span: Span | None = None) -> Expr:
@@ -782,11 +777,12 @@ def _ir_getval(container: Expr, offset: int | Expr, *, span: Span | None = None)
     _ctype = container.type
     if not isinstance(_ctype, (_ir_core.TileType, _ir_core.TensorType)):
         from pypto_pro.language.parser.diagnostics import ParserTypeError
+
         raise ParserTypeError(
             f"getval: 'container' must be a Tile or Tensor, got {type(_ctype).__name__}",
             span=actual_span,
             hint="getval reads a scalar from a Tile/Tensor slot; to access a struct/tiling "
-                 "field, use attribute access (e.g. tiling.axis1) instead.",
+            "field, use attribute access (e.g. tiling.axis1) instead.",
         )
     _check_scalar_supported_dtype("getval", container)
     offset_expr = offset if isinstance(offset, Expr) else _normalize_expr(offset, actual_span, int_dtype=DataType.INDEX)
@@ -798,11 +794,12 @@ def _ir_setval(container: Expr, offset: int | Expr, value: int | float | Expr, *
     _ctype = container.type
     if not isinstance(_ctype, (_ir_core.TileType, _ir_core.TensorType)):
         from pypto_pro.language.parser.diagnostics import ParserTypeError
+
         raise ParserTypeError(
             f"setval: 'container' must be a Tile or Tensor, got {type(_ctype).__name__}",
             span=actual_span,
             hint="setval writes a scalar into a Tile/Tensor slot; to write a struct/tiling "
-                 "field, use attribute assignment (e.g. tiling.axis1 = ...) instead.",
+            "field, use attribute assignment (e.g. tiling.axis1 = ...) instead.",
         )
     _check_scalar_supported_dtype("setval", container)
     offset_expr = offset if isinstance(offset, Expr) else _normalize_expr(offset, actual_span, int_dtype=DataType.INDEX)
@@ -963,6 +960,7 @@ def _ir_ssbuf_load(*args: Expr, span: Span | None = None) -> Expr:
 # ---------------------------------------------------------------------------
 # TileType descriptor and make_tile_expr
 # ---------------------------------------------------------------------------
+
 
 def _get_current_arch() -> str:
     arch = os.environ.get("PYPTOPRO_JIT_ARCH") or os.environ.get("PYPTOPRO_NPU_ARCH") or "a3"
@@ -1129,9 +1127,7 @@ def make_tile(
     actual_span = span or _span()
     shape_tuple = _to_make_tuple(shape, actual_span)
     valid_shape_tuple = (
-        _to_make_tuple(valid_shape, actual_span)
-        if valid_shape is not None
-        else _ir_core.MakeTuple([], actual_span)
+        _to_make_tuple(valid_shape, actual_span) if valid_shape is not None else _ir_core.MakeTuple([], actual_span)
     )
     args = [shape_tuple, valid_shape_tuple]
     blayout: "int | None" = None
@@ -1166,6 +1162,7 @@ def make_tile(
 # ---------------------------------------------------------------------------
 # Parse handlers — registered into _OP_REGISTRY at import time
 # ---------------------------------------------------------------------------
+
 
 @op_impl("TileType")
 def _parse_tile_type_call(self, call: ast.Call):
@@ -1226,9 +1223,9 @@ def _resolve_order_kwarg(self, call: ast.Call, kwargs: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _create_tile_scalar_op(out: Expr, lhs: Expr, rhs: Expr, *,
-                            tile_op: str, scalar_op: str,
-                            span: Span | None = None, **kwargs) -> Expr:
+def _create_tile_scalar_op(
+    out: Expr, lhs: Expr, rhs: Expr, *, tile_op: str, scalar_op: str, span: Span | None = None, **kwargs
+) -> Expr:
     """Dispatch to tile-tile or tile-scalar IR op based on rhs type."""
     if isinstance(getattr(rhs, "type", None), _ir_core.TileType):
         target_op = block_ir_op(tile_op)
@@ -1237,9 +1234,7 @@ def _create_tile_scalar_op(out: Expr, lhs: Expr, rhs: Expr, *,
     return _ir_core.create_op_call(target_op, [out, lhs, rhs], kwargs, span)
 
 
-def _create_dim_op(args: list[Expr], *,
-                   row_op: str, col_op: str,
-                   dim: int = 0, span: Span | None = None) -> Expr:
+def _create_dim_op(args: list[Expr], *, row_op: str, col_op: str, dim: int = 0, span: Span | None = None) -> Expr:
     """Dispatch to row-wise or col-wise IR op based on dim."""
     ir_name = row_op if dim == 0 else col_op
     return _ir_core.create_op_call(block_ir_op(ir_name), args, {}, span)
@@ -1319,51 +1314,53 @@ def _ir_expand_div(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = No
     return _create_dim_op([out, src, scalar], row_op="row_expand_div", col_op="col_expand_div", dim=dim, span=span)
 
 
-register_table({
-    # args + kwargs -> builder
-    "store_fp": OpSpec(builder=_ir_store_fp),
-    "move": OpSpec(builder=_ir_move),
-    "insert": OpSpec(builder=_ir_insert),
-    "getval": OpSpec(builder=_ir_getval),
-    "setval": OpSpec(builder=_ir_setval),
-    "transpose": OpSpec(builder=_ir_transpose),
-    "cast": OpSpec(builder=_ir_cast),
-    "fillpad": OpSpec(builder=_ir_fillpad),
-    "add_relu_cast": OpSpec(builder=_ir_add_relu_cast),
-    "sub_relu_cast": OpSpec(builder=_ir_sub_relu_cast),
-    "mul_cast": OpSpec(builder=_ir_mul_cast),
-    "set_vec_mask": OpSpec(builder=_ir_set_vec_mask),
-    "quant": OpSpec(builder=_ir_quant),
-    "dequant": OpSpec(builder=_ir_dequant),
-    "ssbuf_store": OpSpec(builder=_ir_ssbuf_store),
-    "ssbuf_load": OpSpec(builder=_ir_ssbuf_load),
-    "set_stride": OpSpec(builder=_ir_set_stride),
-    # tile-tile / tile-scalar dispatch
-    "select": OpSpec(builder=_ir_select),
-    "eq": OpSpec(builder=_ir_eq),
-    "ne": OpSpec(builder=_ir_ne),
-    "lt": OpSpec(builder=_ir_lt),
-    "le": OpSpec(builder=_ir_le),
-    "gt": OpSpec(builder=_ir_gt),
-    "ge": OpSpec(builder=_ir_ge),
-    "sum": OpSpec(builder=_ir_sum),
-    "argmax": OpSpec(builder=_ir_argmax),
-    "argmin": OpSpec(builder=_ir_argmin),
-    "expand_max": OpSpec(builder=_ir_expand_max),
-    "expand_min": OpSpec(builder=_ir_expand_min),
-    "expand_mul": OpSpec(builder=_ir_expand_mul),
-    "expand_sub": OpSpec(builder=_ir_expand_sub),
-    "expand_div": OpSpec(builder=_ir_expand_div),
-    # args + kwargs + order hook (load) / tile_dims hook (store)
-    "load": OpSpec(builder=_ir_load, pre_hooks=[_resolve_order_kwarg]),
-    "load_tile": OpSpec(builder=_ir_load_tile, pre_hooks=[_resolve_order_kwarg]),
-    "store": OpSpec(builder=_ir_store, pre_hooks=[_resolve_tile_dims_kwarg]),
-    "store_tile": OpSpec(builder=_ir_store_tile, pre_hooks=[_resolve_tile_dims_kwarg]),
-    # kwargs only
-    "set_mask_count": OpSpec(builder=_ir_set_mask_count, parse_args=False),
-    "set_mask_norm": OpSpec(builder=_ir_set_mask_norm, parse_args=False),
-    "reset_mask": OpSpec(builder=_ir_reset_mask, parse_args=False),
-})
+register_table(
+    {
+        # args + kwargs -> builder
+        "store_fp": OpSpec(builder=_ir_store_fp),
+        "move": OpSpec(builder=_ir_move),
+        "insert": OpSpec(builder=_ir_insert),
+        "getval": OpSpec(builder=_ir_getval),
+        "setval": OpSpec(builder=_ir_setval),
+        "transpose": OpSpec(builder=_ir_transpose),
+        "cast": OpSpec(builder=_ir_cast),
+        "fillpad": OpSpec(builder=_ir_fillpad),
+        "add_relu_cast": OpSpec(builder=_ir_add_relu_cast),
+        "sub_relu_cast": OpSpec(builder=_ir_sub_relu_cast),
+        "mul_cast": OpSpec(builder=_ir_mul_cast),
+        "set_vec_mask": OpSpec(builder=_ir_set_vec_mask),
+        "quant": OpSpec(builder=_ir_quant),
+        "dequant": OpSpec(builder=_ir_dequant),
+        "ssbuf_store": OpSpec(builder=_ir_ssbuf_store),
+        "ssbuf_load": OpSpec(builder=_ir_ssbuf_load),
+        "set_stride": OpSpec(builder=_ir_set_stride),
+        # tile-tile / tile-scalar dispatch
+        "select": OpSpec(builder=_ir_select),
+        "eq": OpSpec(builder=_ir_eq),
+        "ne": OpSpec(builder=_ir_ne),
+        "lt": OpSpec(builder=_ir_lt),
+        "le": OpSpec(builder=_ir_le),
+        "gt": OpSpec(builder=_ir_gt),
+        "ge": OpSpec(builder=_ir_ge),
+        "sum": OpSpec(builder=_ir_sum),
+        "argmax": OpSpec(builder=_ir_argmax),
+        "argmin": OpSpec(builder=_ir_argmin),
+        "expand_max": OpSpec(builder=_ir_expand_max),
+        "expand_min": OpSpec(builder=_ir_expand_min),
+        "expand_mul": OpSpec(builder=_ir_expand_mul),
+        "expand_sub": OpSpec(builder=_ir_expand_sub),
+        "expand_div": OpSpec(builder=_ir_expand_div),
+        # args + kwargs + order hook (load) / tile_dims hook (store)
+        "load": OpSpec(builder=_ir_load, pre_hooks=[_resolve_order_kwarg]),
+        "load_tile": OpSpec(builder=_ir_load_tile, pre_hooks=[_resolve_order_kwarg]),
+        "store": OpSpec(builder=_ir_store, pre_hooks=[_resolve_tile_dims_kwarg]),
+        "store_tile": OpSpec(builder=_ir_store_tile, pre_hooks=[_resolve_tile_dims_kwarg]),
+        # kwargs only
+        "set_mask_count": OpSpec(builder=_ir_set_mask_count, parse_args=False),
+        "set_mask_norm": OpSpec(builder=_ir_set_mask_norm, parse_args=False),
+        "reset_mask": OpSpec(builder=_ir_reset_mask, parse_args=False),
+    }
+)
 
 
 @op_impl("set_validshape")
@@ -1394,18 +1391,15 @@ def _parse_set_validshape(self, call: ast.Call) -> Expr:
     return result
 
 
-def _check_tile_memory_space(op_name: str, operand_name: str, expr: Expr,
-                             expected: MemorySpace, expected_desc: str) -> None:
+def _check_tile_memory_space(
+    op_name: str, operand_name: str, expr: Expr, expected: MemorySpace, expected_desc: str
+) -> None:
     mem = getattr(getattr(getattr(expr, "type", None), "memref", None), "memory_space_", None)
     if mem is not None and mem != expected:
-        raise ValueError(
-            f"{op_name}: {operand_name} must be in {expected_desc}, got {mem.name}"
-        )
+        raise ValueError(f"{op_name}: {operand_name} must be in {expected_desc}, got {mem.name}")
 
 
-def _ir_matmul(dst: Expr, lhs: Expr, rhs: Expr, *,
-               span: Span | None = None,
-               phase: AccPhase | None = None) -> Expr:
+def _ir_matmul(dst: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, phase: AccPhase | None = None) -> Expr:
     actual_span = span or _span()
     _check_tile_memory_space("matmul", "dst_tile", dst, MemorySpace.Acc, "L0C (Acc)")
     _check_tile_memory_space("matmul", "lhs_tile", lhs, MemorySpace.Left, "L0A (Left)")
@@ -1416,9 +1410,9 @@ def _ir_matmul(dst: Expr, lhs: Expr, rhs: Expr, *,
     return _ir_core.create_op_call(block_ir_op("matmul"), [dst, lhs, rhs], kwargs, actual_span)
 
 
-def _ir_matmul_acc(dst: Expr, acc: Expr, lhs: Expr, rhs: Expr, *,
-                   span: Span | None = None,
-                   phase: AccPhase | None = None) -> Expr:
+def _ir_matmul_acc(
+    dst: Expr, acc: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, phase: AccPhase | None = None
+) -> Expr:
     actual_span = span or _span()
     _check_tile_memory_space("matmul_acc", "dst_tile", dst, MemorySpace.Acc, "L0C (Acc)")
     _check_tile_memory_space("matmul_acc", "acc_tile", acc, MemorySpace.Acc, "L0C (Acc)")

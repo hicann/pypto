@@ -10,6 +10,7 @@
 """Helpers for lowering PIL-compiled functions through the new IR pipeline."""
 
 from pypto.runtime import setup_verify_data
+
 from .. import ir, pil
 from ..logging import log_debug
 
@@ -26,9 +27,9 @@ def _build_default_pipeline():
     finalize = ir.Pass.finalize_dynamic_function()
 
     return [
-        ("first_canonicalize_dce", lambda p: dce(canonicalize(p))),
-        ("second_canonicalize_dce", lambda p: dce(canonicalize(p))),
-        ("canonicalize(merge_stmts)", lambda p: canonicalize(merge_stmts(p))),
+        ("first_canonicalize_dce", lambda p:dce(canonicalize(p))),
+        ("second_canonicalize_dce", lambda p:dce(canonicalize(p))),
+        ("canonicalize(merge_stmts)", lambda p:canonicalize(merge_stmts(p))),
         ("create_root_functions", create_root_functions),
         ("finalize", finalize),
     ]

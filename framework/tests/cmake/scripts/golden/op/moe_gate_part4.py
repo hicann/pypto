@@ -8,15 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-""" topk 相关用例 Golden 生成逻辑.
+"""topk 相关用例 Golden 生成逻辑.
 
 本脚本有 2 种执行模式:
 1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
-import sys
+
 import logging
 from pathlib import Path
+import sys
 from typing import List
 
 import numpy as np
@@ -25,8 +26,9 @@ import torch
 if __name__ == "__main__":
     """ 单独调试时配置 """
     # 日志级别
-    logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.DEBUG
+    )
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
@@ -45,8 +47,8 @@ else:
     ]
 )
 def gen_moe_part4_golden(case_name: str, output: Path) -> bool:
-    shape_128_32_i = [128, 32]
-    dtype = np.float32
+    _shape_128_32_i = [128, 32]
+    _dtype = np.float32
     n_routed_experts = 256
     num_experts_per_topk = 8
     s = 1
@@ -60,8 +62,9 @@ def gen_moe_part4_golden(case_name: str, output: Path) -> bool:
             logging.debug("Case(%s), Golden complete.", case_name)
         else:
             source_score = torch.randn(b * s * n_routed_experts, dtype=torch.float32).reshape(b * s, n_routed_experts)
-            tmp_source_score = torch.randn(b * s * n_routed_experts, dtype=torch.float32).reshape(b * s,
-                                                                                                  n_routed_experts)
+            tmp_source_score = torch.randn(b * s * n_routed_experts, dtype=torch.float32).reshape(
+                b * s, n_routed_experts
+            )
             val, idx = source_score.topk(num_experts_per_topk, dim=-1, largest=True, sorted=True)
             topk_weight = torch.empty((b * s, num_experts_per_topk), dtype=torch.float64)
             for b in range(b * s):

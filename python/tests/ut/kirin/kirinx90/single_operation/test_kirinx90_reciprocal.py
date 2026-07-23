@@ -12,14 +12,12 @@
 Test reciprocal codegen for KirinX90
 """
 
-import pytest
-
 from kirin.common_reciprocal import (
+    TEST_CASES,
     create_reciprocal_kernels,
     run_reciprocal_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_reciprocal_kernels("KirinX90")
 

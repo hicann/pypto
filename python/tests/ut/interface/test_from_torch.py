@@ -9,7 +9,9 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
+
 import torch
+
 import pypto
 
 
@@ -17,10 +19,10 @@ def test_from_torch():
     a_rawdata = torch.ones((32, 32)) * 2
     a_data = a_rawdata.to(dtype=torch.int32)
     a_pto_dt16 = pypto.from_torch(a_data, dtype=pypto.DT_INT16)
-    assert (a_pto_dt16.dtype == pypto.DT_INT16)
+    assert a_pto_dt16.dtype == pypto.DT_INT16
 
     a_pto_hf8 = pypto.from_torch(a_data, dtype=pypto.DT_HF8)
-    assert (a_pto_hf8.dtype == pypto.DT_HF8)
+    assert a_pto_hf8.dtype == pypto.DT_HF8
 
     a_pto_default = pypto.from_torch(a_data)
-    assert (a_pto_default.dtype == pypto.DT_INT32)
+    assert a_pto_default.dtype == pypto.DT_INT32

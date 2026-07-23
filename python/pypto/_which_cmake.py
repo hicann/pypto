@@ -11,8 +11,8 @@
 """Shared utility for locating the system-level cmake binary."""
 
 import os
-import shutil
 from pathlib import Path
+import shutil
 from typing import Optional
 
 

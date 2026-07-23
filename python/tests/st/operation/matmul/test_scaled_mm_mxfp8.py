@@ -12,16 +12,17 @@
 ScaledMM ST test script.
 Supports both pytest and direct execution modes.
 """
-import os
+
 from dataclasses import dataclass
+import os
 
 import pytest
-import pypto
-import torch
-import torch_npu
-import torch.nn.functional as F
-
 from testcase.scaled_mm_mxfp8_test_case import SCALED_MM_TESTS, ScaledMMConfig
+import torch
+import torch.nn.functional as functional
+import torch_npu
+
+import pypto
 
 K_BLOCK_SIZE_64 = 64
 K_BLOCK_SIZE_32 = 32
@@ -72,26 +73,37 @@ def scaled_mm_kernel_no_bias(
 
             pypto.set_vec_tile_shapes(config.m_tile_shape[0], config.n_tile_shape[0], 32)
             if config.scale_a_trans:
-                scale_a_view = pypto.view(scale_a_tensor, [scale_k, vm, 2], [0, m_offset, 0],
-                                          valid_shape=[scale_k, min(vm, m - m_offset), 2])
+                scale_a_view = pypto.view(
+                    scale_a_tensor, [scale_k, vm, 2], [0, m_offset, 0], valid_shape=[scale_k, min(vm, m - m_offset), 2]
+                )
             else:
-                scale_a_view = pypto.view(scale_a_tensor, [vm, scale_k, 2], [m_offset, 0, 0],
-                                          valid_shape=[min(vm, m - m_offset), scale_k, 2])
+                scale_a_view = pypto.view(
+                    scale_a_tensor, [vm, scale_k, 2], [m_offset, 0, 0], valid_shape=[min(vm, m - m_offset), scale_k, 2]
+                )
 
             if config.scale_b_trans:
-                scale_b_view = pypto.view(scale_b_tensor, [vn, scale_k, 2], [n_offset, 0, 0],
-                                          valid_shape=[min(vn, n - n_offset), scale_k, 2])
+                scale_b_view = pypto.view(
+                    scale_b_tensor, [vn, scale_k, 2], [n_offset, 0, 0], valid_shape=[min(vn, n - n_offset), scale_k, 2]
+                )
             else:
-                scale_b_view = pypto.view(scale_b_tensor, [scale_k, vn, 2], [0, n_offset, 0],
-                                          valid_shape=[scale_k, min(vn, n - n_offset), 2])
+                scale_b_view = pypto.view(
+                    scale_b_tensor, [scale_k, vn, 2], [0, n_offset, 0], valid_shape=[scale_k, min(vn, n - n_offset), 2]
+                )
 
             tile_shape = (config.m_tile_shape, config.k_tile_shape, config.n_tile_shape)
             pypto.set_cube_tile_shapes(*tile_shape, config.enable_ksplit)
 
             out_view = pypto.scaled_mm(
-                a_view, b_view, config.out_dtype, scale_a_view, scale_b_view, a_trans=config.a_trans,
-                b_trans=config.b_trans, scale_a_trans=config.scale_a_trans, scale_b_trans=config.scale_b_trans,
-                c_matrix_nz=config.c_format == "NZ"
+                a_view,
+                b_view,
+                config.out_dtype,
+                scale_a_view,
+                scale_b_view,
+                a_trans=config.a_trans,
+                b_trans=config.b_trans,
+                scale_a_trans=config.scale_a_trans,
+                scale_b_trans=config.scale_b_trans,
+                c_matrix_nz=config.c_format == "NZ",
             )
             pypto.assemble(out_view, [m_offset, n_offset], out_tensor)
 
@@ -129,31 +141,43 @@ def scaled_mm_kernel_with_bias(
             else:
                 a_view = pypto.view(a_tensor, [vm, k], [m_offset, 0], valid_shape=[min(vm, m - m_offset), k])
 
-            bias_view = bias_tensor[:, n_offset: n_offset + vn]
+            bias_view = bias_tensor[:, n_offset:n_offset + vn]
 
             pypto.set_vec_tile_shapes(config.m_tile_shape[0], config.n_tile_shape[0], 32)
 
             if config.scale_b_trans:
-                scale_b_view = pypto.view(scale_b_tensor, [vn, scale_k, 2], [n_offset, 0, 0],
-                                          valid_shape=[min(vn, n - n_offset), scale_k, 2])
+                scale_b_view = pypto.view(
+                    scale_b_tensor, [vn, scale_k, 2], [n_offset, 0, 0], valid_shape=[min(vn, n - n_offset), scale_k, 2]
+                )
             else:
-                scale_b_view = pypto.view(scale_b_tensor, [scale_k, vn, 2], [0, n_offset, 0],
-                                          valid_shape=[scale_k, min(vn, n - n_offset), 2])
+                scale_b_view = pypto.view(
+                    scale_b_tensor, [scale_k, vn, 2], [0, n_offset, 0], valid_shape=[scale_k, min(vn, n - n_offset), 2]
+                )
             if config.scale_a_trans:
-                scale_a_view = pypto.view(scale_a_tensor, [scale_k, vm, 2], [0, m_offset, 0],
-                                          valid_shape=[scale_k, min(vm, m - m_offset), 2])
+                scale_a_view = pypto.view(
+                    scale_a_tensor, [scale_k, vm, 2], [0, m_offset, 0], valid_shape=[scale_k, min(vm, m - m_offset), 2]
+                )
             else:
-                scale_a_view = pypto.view(scale_a_tensor, [vm, scale_k, 2], [m_offset, 0, 0],
-                                          valid_shape=[min(vm, m - m_offset), scale_k, 2])
+                scale_a_view = pypto.view(
+                    scale_a_tensor, [vm, scale_k, 2], [m_offset, 0, 0], valid_shape=[min(vm, m - m_offset), scale_k, 2]
+                )
 
             extend_params = {'bias_tensor': bias_view}
             tile_shape = (config.m_tile_shape, config.k_tile_shape, config.n_tile_shape)
             pypto.set_cube_tile_shapes(*tile_shape, config.enable_ksplit)
 
             out_view = pypto.scaled_mm(
-                a_view, b_view, config.out_dtype, scale_a_view, scale_b_view, a_trans=config.a_trans,
-                b_trans=config.b_trans, scale_a_trans=config.scale_a_trans, scale_b_trans=config.scale_b_trans,
-                c_matrix_nz=config.c_format == "NZ", extend_params=extend_params
+                a_view,
+                b_view,
+                config.out_dtype,
+                scale_a_view,
+                scale_b_view,
+                a_trans=config.a_trans,
+                b_trans=config.b_trans,
+                scale_a_trans=config.scale_a_trans,
+                scale_b_trans=config.scale_b_trans,
+                c_matrix_nz=config.c_format == "NZ",
+                extend_params=extend_params,
             )
             pypto.assemble(out_view, [m_offset, n_offset], out_tensor)
 
@@ -186,10 +210,8 @@ def prepare_inputs(config: ScaledMMConfig, device_id: int):
 
     scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
     padding_k = scale_k * K_BLOCK_SIZE_64 - k
-    scale_a_shape = ([scale_k, m, SHAPE_DIM_2] if config.scale_a_trans
-                     else [m, scale_k, SHAPE_DIM_2])
-    scale_b_shape = ([n, scale_k, SHAPE_DIM_2] if config.scale_b_trans
-                     else [scale_k, n, SHAPE_DIM_2])
+    scale_a_shape = [scale_k, m, SHAPE_DIM_2] if config.scale_a_trans else [m, scale_k, SHAPE_DIM_2]
+    scale_b_shape = [n, scale_k, SHAPE_DIM_2] if config.scale_b_trans else [scale_k, n, SHAPE_DIM_2]
 
     torch_in_dtype = ScaledMMConfig.pto_to_torch(config.in_dtype)
     mat_a_cpu = torch.rand(a_shape, dtype=torch.float32).uniform_(-3, 3).to(torch_in_dtype)
@@ -201,17 +223,17 @@ def prepare_inputs(config: ScaledMMConfig, device_id: int):
     scale_a_tmp, scale_b_tmp = _process_scale_tensors(scale_a_cpu, scale_b_cpu, config)
 
     mat_b_tmp = mat_b_cpu.to(torch.float32).T if config.b_trans else mat_b_cpu.to(torch.float32)
-    mat_b_tmp = F.pad(mat_b_tmp, ((0, 0, 0, padding_k)), "constant")
+    mat_b_tmp = functional.pad(mat_b_tmp, ((0, 0, 0, padding_k)), "constant")
     mat_b_tmp = scale_b_tmp * mat_b_tmp
 
     mat_a_tmp = mat_a_cpu.to(torch.float32).T if config.a_trans else mat_a_cpu.to(torch.float32)
-    mat_a_tmp = F.pad(mat_a_tmp, ((0, padding_k, 0, 0)), "constant")
+    mat_a_tmp = functional.pad(mat_a_tmp, ((0, padding_k, 0, 0)), "constant")
     mat_a_tmp = mat_a_tmp * scale_a_tmp
 
     golden = torch.matmul(mat_a_tmp, mat_b_tmp)
     padding_m = abs(output_m - m)
     padding_n = abs(output_n - n)
-    golden = F.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
+    golden = functional.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
     if config.has_bias:
         golden = golden + bias_cpu.to(golden.dtype).repeat_interleave(output_m, dim=0)
 
@@ -241,29 +263,27 @@ def run_scaled_mm_test(case: dict):
     config = ScaledMMConfig.from_test_case(case)
     inputs = prepare_inputs(config, device_id)
 
-    m, n = config.ori_shape[0], config.ori_shape[2]
+    _m, _n = config.ori_shape[0], config.ori_shape[2]
     output_m, output_n = config.output_shape
     out_torch_dtype = ScaledMMConfig.pto_to_torch(config.out_dtype)
     out_npu = torch.zeros([output_m, output_n], dtype=out_torch_dtype, device=f"npu:{device_id}")
 
     if config.has_bias:
-        scaled_mm_kernel_with_bias(inputs.a_npu, inputs.b_npu, out_npu,
-                                   inputs.scale_a_npu, inputs.scale_b_npu,
-                                   inputs.bias_npu, config)
+        scaled_mm_kernel_with_bias(
+            inputs.a_npu, inputs.b_npu, out_npu, inputs.scale_a_npu, inputs.scale_b_npu, inputs.bias_npu, config
+        )
     else:
-        scaled_mm_kernel_no_bias(inputs.a_npu, inputs.b_npu, out_npu,
-                                 inputs.scale_a_npu, inputs.scale_b_npu,
-                                 config)
+        scaled_mm_kernel_no_bias(inputs.a_npu, inputs.b_npu, out_npu, inputs.scale_a_npu, inputs.scale_b_npu, config)
 
     atol, rtol = ScaledMMConfig.get_tolerance(case["out_dtype"])
-    assert torch.allclose(out_npu.cpu(), inputs.golden, atol=atol, rtol=rtol), \
+    assert torch.allclose(out_npu.cpu(), inputs.golden, atol=atol, rtol=rtol), (
         f"Test case {case['id']} ({case['name']}) failed"
+    )
 
 
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in SCALED_MM_TESTS
-])
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in SCALED_MM_TESTS]
+)
 def test_scaled_mm(case: dict):
     run_scaled_mm_test(case)
 
@@ -279,8 +299,9 @@ def run_scaled_mm_demo(run_mode):
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
-    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0},
-                        runtime_options={"run_mode": mode})
+    @pypto.frontend.jit(
+        debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, runtime_options={"run_mode": mode}
+    )
     def scaled_mm_demo_kernel(
         a_tensor: pypto.Tensor([], pypto.DT_FP8E4M3),
         b_tensor: pypto.Tensor([], pypto.DT_FP8E4M3),
@@ -299,20 +320,25 @@ def run_scaled_mm_demo(run_mode):
                 m_offset = m_idx * vm_view_size
                 n_offset = n_idx * vn_view_size
 
-                a_view = a_tensor[m_offset: m_offset + vm_view_size, :]
-                b_view = b_tensor[n_offset: n_offset + vn_view_size, :]
+                a_view = a_tensor[m_offset:m_offset + vm_view_size, :]
+                b_view = b_tensor[n_offset:n_offset + vn_view_size, :]
 
-                scale_a_view = scale_a_tensor[m_offset: m_offset + vm_view_size, :, :]
-                scale_b_view = scale_b_tensor[:, n_offset: n_offset + vn_view_size, :]
+                scale_a_view = scale_a_tensor[m_offset:m_offset + vm_view_size, :, :]
+                scale_b_view = scale_b_tensor[:, n_offset:n_offset + vn_view_size, :]
 
                 out_view = pypto.scaled_mm(
-                    a_view, b_view, pypto.DT_FP16, scale_a_view, scale_b_view, a_trans=False,
-                    b_trans=True, scale_a_trans=False, scale_b_trans=False, c_matrix_nz=False
+                    a_view,
+                    b_view,
+                    pypto.DT_FP16,
+                    scale_a_view,
+                    scale_b_view,
+                    a_trans=False,
+                    b_trans=True,
+                    scale_a_trans=False,
+                    scale_b_trans=False,
+                    c_matrix_nz=False,
                 )
-                out_tensor[
-                    m_offset: m_offset + vm_view_size,
-                    n_offset: n_offset + vn_view_size
-                ] = out_view
+                out_tensor[m_offset:m_offset + vm_view_size, n_offset:n_offset + vn_view_size] = out_view
 
     scale_k = k_size // 64
     device = "npu:0" if run_mode == "npu" else "cpu"

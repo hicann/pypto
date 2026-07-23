@@ -12,10 +12,12 @@
 pypto.gather_in_l1 ST测试用例配置
 用于System Test自动化测试框架
 """
+
 from dataclasses import dataclass
 
-import pypto
 import torch
+
+import pypto
 
 
 @dataclass

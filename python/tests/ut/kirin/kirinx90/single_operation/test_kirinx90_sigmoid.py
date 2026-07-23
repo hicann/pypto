@@ -12,14 +12,12 @@
 Test sigmoid codegen for KirinX90
 """
 
-import pytest
-
 from kirin.common_sigmoid import (
+    TEST_CASES,
     create_sigmoid_kernels,
     run_sigmoid_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_sigmoid_kernels("KirinX90")
 

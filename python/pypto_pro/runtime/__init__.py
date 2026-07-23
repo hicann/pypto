@@ -36,11 +36,10 @@ __all__ = [
 ]
 
 
-from pypto.pypto_impl.ir import MemorySpace
-
-from .kernel import KernelDef, kernel
-from .jit import jit
+from pypto.pypto_impl.ir import MemorySpace  # noqa: F401
 
 # Preload pipeline transform — single-point feature, accessed via pl.pipeline.*
 # (e.g. pl.pipeline.PipelineConfig), not exposed as top-level framework API.
-from . import pipeline
+from . import pipeline  # noqa: F401
+from .jit import jit
+from .kernel import KernelDef, kernel

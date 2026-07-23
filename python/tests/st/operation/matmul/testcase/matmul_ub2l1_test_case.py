@@ -13,10 +13,12 @@ pypto cast+matmul ST测试用例配置
 用于System Test自动化测试框架
 测试场景：先将输入进行类型转换（cast），再执行矩阵乘法（matmul）
 """
+
 from dataclasses import dataclass
 
-import pypto
 import torch
+
+import pypto
 
 
 @dataclass
@@ -92,7 +94,9 @@ CAST_RIGHT_MATMUL_TESTS = [
         "id": "CM01",
         "name": "fp32_to_fp16_matmul_out_fp16",
         "desc": "B矩阵FP32输入Cast为FP16后Matmul,FP16输出",
-        "m": 128, "k": 512, "n": 128,
+        "m": 128,
+        "k": 512,
+        "n": 128,
         "a_input_dtype": "DT_FP16",
         "b_input_dtype": "DT_FP32",
         "matmul_dtype": "DT_FP16",
@@ -115,7 +119,9 @@ CAST_LEFT_MATMUL_TESTS = [
         "id": "CM02",
         "name": "fp16_to_int8_matmul_out_int32",
         "desc": "A矩阵FP16输入Cast为INT8后Matmul,INT32输出",
-        "m": 16, "k": 256, "n": 256,
+        "m": 16,
+        "k": 256,
+        "n": 256,
         "a_input_dtype": "DT_FP16",
         "b_input_dtype": "DT_INT8",
         "matmul_dtype": "DT_INT8",
@@ -138,7 +144,9 @@ CAST_BOTH_MATMUL_TESTS = [
         "id": "CM03",
         "name": "both_fp16_to_fp32_matmul_out_fp32",
         "desc": "双输入FP16均Cast为FP32后Matmul,FP32输出",
-        "m": 128, "k": 224, "n": 224,
+        "m": 128,
+        "k": 224,
+        "n": 224,
         "a_input_dtype": "DT_FP16",
         "b_input_dtype": "DT_FP16",
         "matmul_dtype": "DT_FP32",

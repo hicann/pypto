@@ -9,13 +9,11 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-from test_pil_builder_utils import TestParser, Expr
+from test_pil_builder_utils import Expr, TestParser
 
 
 def test_pil_builder_for():
-
     with TestParser():
-
         # --- simple name target, no orelse ---
 
         @TestParser.test
@@ -123,9 +121,7 @@ def test_pil_builder_for():
 
 
 def test_pil_builder_while():
-
     with TestParser():
-
         # --- function condition, loop never enters ---
 
         @TestParser.test
@@ -257,7 +253,6 @@ def test_pil_builder_while():
 
 
 def test_pil_builder_if():
-
     with TestParser():
 
         @TestParser.test
@@ -401,9 +396,7 @@ def test_pil_builder_if():
 
 
 def test_pil_builder_break():
-
     with TestParser():
-
         # --- break in for, first iteration ---
 
         @TestParser.test
@@ -516,9 +509,7 @@ def test_pil_builder_break():
 
 
 def test_pil_builder_continue():
-
     with TestParser():
-
         # --- continue in for, skip remaining body ---
 
         @TestParser.test
@@ -637,9 +628,7 @@ def test_pil_builder_continue():
 
 
 def test_pil_builder_with():
-
     with TestParser():
-
         # --- single item, no as-binding ---
 
         @TestParser.test
@@ -659,9 +648,9 @@ def test_pil_builder_with():
 
         @TestParser.test
         def with_ctx_from_call():
-
             def make_cm():
                 return Expr.ContextManager(init_n=Expr.int(0))
+
             with make_cm():
                 Expr.str(1)
 

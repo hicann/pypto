@@ -9,15 +9,16 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """Verification helpers: conditional print and tensor dump (ToFile)."""
+
 import re
-from typing import Union, List, Tuple
+from typing import List, Tuple, Union
 
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
 from .._utils import to_sym
+from ..error import VerifyError
 from ..symbolic_scalar import SymbolicScalar
 from ..tensor import Tensor
-from ..error import VerifyError
 
 
 @op_wrapper
@@ -76,8 +77,7 @@ def pass_verify_print(*values, cond: Union[int, SymbolicScalar] = 1) -> None:
 
 
 def _parse_format_string(
-    format_str: str,
-    **kwargs: Union[int, SymbolicScalar, pypto_impl.SymbolicScalar]
+    format_str: str, **kwargs: Union[int, SymbolicScalar, pypto_impl.SymbolicScalar]
 ) -> Tuple[str, List[pypto_impl.SymbolicScalar]]:
     from .. import pypto_impl as _impl
     from .._utils import to_sym as _to_sym

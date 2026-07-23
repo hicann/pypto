@@ -30,7 +30,7 @@ Note:
 
 import ast
 from dataclasses import dataclass, field
-from typing import Optional, Set, Dict, List, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from pypto.error import FeError
 
@@ -49,6 +49,7 @@ class Scope:
     - Entry and exit statement IDs for deletion timing
     - Parent-child relationships forming a scope tree
     """
+
     scope_id: int
     scope_type: str
     parent: Optional['Scope'] = None
@@ -116,6 +117,7 @@ class Scope:
 @dataclass
 class VarInfo:
     """Information about a variable for liveness analysis."""
+
     var_name: str
     def_scope_id: int
     def_stmt_id: int
@@ -131,6 +133,7 @@ class VarInfo:
 @dataclass
 class LivenessResult:
     """Structured result from scope-based liveness analysis."""
+
     var_info: Dict[str, VarInfo] = field(default_factory=dict)
     scope_lift_suggestions: List[Tuple[str, int, int]] = field(default_factory=list)
     delete_points: Dict[int, Set[str]] = field(default_factory=dict)
@@ -157,11 +160,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
         self.scope_counter: int = 0
         self.current_stmt_id: Optional[int] = None
 
-    def analyze(
-        self,
-        node: ast.AST,
-        exempt_vars: Optional[Set[str]] = None
-    ) -> LivenessResult:
+    def analyze(self, node: ast.AST, exempt_vars: Optional[Set[str]] = None) -> LivenessResult:
         """Analyze the AST and return structured liveness result.
 
         Parameters
@@ -194,10 +193,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
         for arg in node.args.args:
             self.exempt_vars.add(arg.arg)
 
-        root_scope = self._create_scope(
-            scope_type='root',
-            entry_stmt_id=self._get_node_id(node)
-        )
+        root_scope = self._create_scope(scope_type='root', entry_stmt_id=self._get_node_id(node))
         self.result.scope_tree = root_scope
         self._push_scope(root_scope)
 
@@ -250,11 +246,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
         self.visit(node.iter)
 
-        loop_scope = self._create_scope(
-            scope_type='for',
-            entry_stmt_id=stmt_id,
-            exit_stmt_id=stmt_id
-        )
+        loop_scope = self._create_scope(scope_type='for', entry_stmt_id=stmt_id, exit_stmt_id=stmt_id)
         self._push_scope(loop_scope)
 
         if isinstance(node.target, ast.Name):
@@ -286,11 +278,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
         self.visit(node.test)
 
-        if_scope = self._create_scope(
-            scope_type='if',
-            entry_stmt_id=stmt_id,
-            exit_stmt_id=stmt_id
-        )
+        if_scope = self._create_scope(scope_type='if', entry_stmt_id=stmt_id, exit_stmt_id=stmt_id)
         self._push_scope(if_scope)
 
         if_body_scope = self._create_scope(scope_type='if_body')
@@ -471,10 +459,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
         # Condition 2: Each def scope has use in the same scope
         for def_scope_id in var_info.def_scope_ids:
-            uses_in_this_scope = [
-                stmt_id for sid, stmt_id in var_info.use_points
-                if sid == def_scope_id
-            ]
+            uses_in_this_scope = [stmt_id for sid, stmt_id in var_info.use_points if sid == def_scope_id]
             if not uses_in_this_scope:
                 return False
 
@@ -524,9 +509,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
         Returns True if has nesting, False otherwise.
         """
-        def_scopes = [
-            self.result.scope_map.get(sid) for sid in var_info.def_scope_ids
-        ]
+        def_scopes = [self.result.scope_map.get(sid) for sid in var_info.def_scope_ids]
         def_scopes = [s for s in def_scopes if s]
 
         for i, scope_i in enumerate(def_scopes):
@@ -587,15 +570,12 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
     def _all_def_scopes_are_for_loops(self, var_info: VarInfo) -> bool:
         """Check if all definition scopes are for loop scopes."""
         return all(
-            (scope := self.result.scope_map.get(sid)) and scope.scope_type == 'for'
-            for sid in var_info.def_scope_ids
+            (scope := self.result.scope_map.get(sid)) and scope.scope_type == 'for' for sid in var_info.def_scope_ids
         )
 
     def _get_valid_def_scopes(self, var_info: VarInfo) -> List[Scope]:
         """Get list of valid scope objects from def_scope_ids."""
-        def_scopes = [
-            self.result.scope_map.get(sid) for sid in var_info.def_scope_ids
-        ]
+        def_scopes = [self.result.scope_map.get(sid) for sid in var_info.def_scope_ids]
         return [s for s in def_scopes if s]
 
     def _handle_brother_scope_deletion(self, var_info: VarInfo, def_scopes: List[Scope]) -> bool:
@@ -615,9 +595,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
         var_info.delete_after_scope_exit = True
 
         if common_ancestor.exit_stmt_id:
-            self.result.delete_points.setdefault(
-                common_ancestor.exit_stmt_id, set()
-            ).add(var_info.var_name)
+            self.result.delete_points.setdefault(common_ancestor.exit_stmt_id, set()).add(var_info.var_name)
 
         return True
 
@@ -650,10 +628,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
     def _get_normal_scope_delete_point(self, var_info: VarInfo, def_scope: Scope, def_scope_id: int) -> tuple:
         """Get delete point for normal scope (non-for-loop)."""
-        uses_in_scope = [
-            stmt_id for sid, stmt_id in var_info.use_points
-            if sid == def_scope_id
-        ]
+        uses_in_scope = [stmt_id for sid, stmt_id in var_info.use_points if sid == def_scope_id]
 
         if uses_in_scope:
             last_use = self._find_last_use_in_scope(def_scope, uses_in_scope)
@@ -714,11 +689,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
         self._set_delete_point(var_info, effective_def_scope)
 
-    def _set_delete_point_in_parent_scope(
-        self,
-        var_info: VarInfo,
-        def_scope: Scope
-    ) -> None:
+    def _set_delete_point_in_parent_scope(self, var_info: VarInfo, def_scope: Scope) -> None:
         """Set deletion point in parent scope when def_scope has empty stmt_ids.
 
         This handles cases where def_scope is an 'if' scope (which only contains
@@ -750,11 +721,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
             var_info.delete_scope_id = parent_scope.scope_id
             var_info.delete_after_scope_exit = False
 
-    def _set_delete_point(
-        self,
-        var_info: VarInfo,
-        def_scope: Scope
-    ) -> None:
+    def _set_delete_point(self, var_info: VarInfo, def_scope: Scope) -> None:
         """Set deletion point based on representative scope.
 
         Unified logic for both same-scope and cross-scope usage.
@@ -810,9 +777,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
                 continue
 
             if var_info.delete_after_stmt_id:
-                self.result.delete_points.setdefault(
-                    var_info.delete_after_stmt_id, set()
-                ).add(var_name)
+                self.result.delete_points.setdefault(var_info.delete_after_stmt_id, set()).add(var_name)
 
     def _next_scope_id(self) -> int:
         """Generate next scope ID."""
@@ -824,10 +789,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
         return id(node)
 
     def _create_scope(
-        self,
-        scope_type: str,
-        entry_stmt_id: Optional[int] = None,
-        exit_stmt_id: Optional[int] = None
+        self, scope_type: str, entry_stmt_id: Optional[int] = None, exit_stmt_id: Optional[int] = None
     ) -> Scope:
         """Create a new scope and add to tree."""
         scope = Scope(
@@ -835,7 +797,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
             scope_type=scope_type,
             parent=self.current_scope,
             entry_stmt_id=entry_stmt_id,
-            exit_stmt_id=exit_stmt_id
+            exit_stmt_id=exit_stmt_id,
         )
 
         if self.current_scope:
@@ -878,7 +840,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
                 var_name=var_name,
                 def_scope_id=self.current_scope.scope_id,
                 def_stmt_id=stmt_id,
-                def_scope_ids={self.current_scope.scope_id}
+                def_scope_ids={self.current_scope.scope_id},
             )
         else:
             info = self.result.var_info[var_name]
@@ -900,10 +862,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
         self.result.var_info[var_name].use_points.append((scope_id, stmt_id))
 
     def _visit_assign_target(
-        self,
-        target: ast.expr,
-        value_node: Optional[ast.AST] = None,
-        ann_type: Optional[str] = None
+        self, target: ast.expr, value_node: Optional[ast.AST] = None, ann_type: Optional[str] = None
     ) -> None:
         """Visit assignment target and record variable definitions."""
         if isinstance(target, ast.Name):

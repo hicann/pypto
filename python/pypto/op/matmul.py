@@ -9,28 +9,18 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
-import struct
+
 from typing import Any, Type
 
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
 from ..enum import DataType
-from ..symbolic_scalar import SymbolicScalar
-from ..tensor import Tensor
 from ..error import PyptoError
+from ..tensor import Tensor
 
 
 @op_wrapper
-def matmul(
-    input,
-    mat2,
-    out_dtype,
-    *,
-    a_trans=False,
-    b_trans=False,
-    c_matrix_nz=False,
-    extend_params=None
-) -> Tensor:
+def matmul(input, mat2, out_dtype, *, a_trans=False, b_trans=False, c_matrix_nz=False, extend_params=None) -> Tensor:
     """
     Performs matrix multiplication with support for batched operations, broadcasting, transposition, and extended
     features like bias addition and dequantization.
@@ -141,28 +131,16 @@ def matmul(
     __validate_inputs(input, mat2, out_dtype, [a_trans, b_trans, c_matrix_nz, extend_params])
     if input.Dim() == 2:
         if extend_params is not None:
-            extend_params = pypto_impl.MatmulExtendParam(
-                **__convert_matmul_extend_params(extend_params)
-            )
-            return pypto_impl.Matmul(
-                out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz, extend_params
-            )
+            extend_params = pypto_impl.MatmulExtendParam(**__convert_matmul_extend_params(extend_params))
+            return pypto_impl.Matmul(out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz, extend_params)
         else:
-            return pypto_impl.Matmul(
-                out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz
-            )
+            return pypto_impl.Matmul(out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz)
     else:
         if extend_params is not None:
-            extend_params = pypto_impl.MatmulExtendParam(
-                **__convert_matmul_extend_params(extend_params)
-            )
-            return pypto_impl.BatchMatmul(
-                out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz, extend_params
-            )
+            extend_params = pypto_impl.MatmulExtendParam(**__convert_matmul_extend_params(extend_params))
+            return pypto_impl.BatchMatmul(out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz, extend_params)
         else:
-            return pypto_impl.BatchMatmul(
-                out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz
-            )
+            return pypto_impl.BatchMatmul(out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz)
 
 
 @op_wrapper
@@ -178,7 +156,7 @@ def scaled_mm(
     scale_a_trans=False,
     scale_b_trans=False,
     c_matrix_nz=False,
-    extend_params=None
+    extend_params=None,
 ) -> Tensor:
     """
     Performs matrix multiplication with support for transposition, and extended features like bias addition.
@@ -274,12 +252,19 @@ def scaled_mm(
 
     if mat_a.Dim() == 2:
         if extend_params is not None:
-            extend_params = pypto_impl.MatmulExtendParam(
-                **__convert_matmul_extend_params(extend_params)
-            )
+            extend_params = pypto_impl.MatmulExtendParam(**__convert_matmul_extend_params(extend_params))
             return pypto_impl.MatmulMX(
-                out_dtype, mat_a, scale_a, mat_b, scale_b, a_trans, scale_a_trans, b_trans, scale_b_trans,
-                c_matrix_nz, extend_params
+                out_dtype,
+                mat_a,
+                scale_a,
+                mat_b,
+                scale_b,
+                a_trans,
+                scale_a_trans,
+                b_trans,
+                scale_b_trans,
+                c_matrix_nz,
+                extend_params,
             )
         else:
             return pypto_impl.MatmulMX(
@@ -287,12 +272,19 @@ def scaled_mm(
             )
     else:
         if extend_params is not None:
-            extend_params = pypto_impl.MatmulExtendParam(
-                **__convert_matmul_extend_params(extend_params)
-            )
+            extend_params = pypto_impl.MatmulExtendParam(**__convert_matmul_extend_params(extend_params))
             return pypto_impl.BatchMatmulMX(
-                out_dtype, mat_a, scale_a, mat_b, scale_b, a_trans, scale_a_trans, b_trans, scale_b_trans, c_matrix_nz,
-                extend_params
+                out_dtype,
+                mat_a,
+                scale_a,
+                mat_b,
+                scale_b,
+                a_trans,
+                scale_a_trans,
+                b_trans,
+                scale_b_trans,
+                c_matrix_nz,
+                extend_params,
             )
         else:
             return pypto_impl.BatchMatmulMX(
@@ -304,9 +296,10 @@ def __validate_type(value: Any, expect_type: Type, arg_name: str = "input") -> N
     if value is None:
         return
     if not isinstance(value, expect_type):
-        raise PyptoError(0xF00001, TypeError(
-            f"Argument '{arg_name}' must be of type {expect_type.__name__}, but got {type(value).__name__}."
-        ))
+        raise PyptoError(
+            0xF00001,
+            TypeError(f"Argument '{arg_name}' must be of type {expect_type.__name__}, but got {type(value).__name__}."),
+        )
 
 
 def __get_valid_shape(tensor):
@@ -317,40 +310,59 @@ def __validate_shape(input_tensor1: Tensor, input_tensor2: Tensor, a_trans: bool
     input_dim = input_tensor1.Dim()
     mat2_dim = input_tensor2.Dim()
     if input_dim != mat2_dim or input_dim not in {2, 3, 4}:
-        raise PyptoError(0xF00003, RuntimeError(
-            "Tensor dimension mismatch. Expect input_dim == mat2_dim and both in [2, 3, 4], "
-            f"got input_dim: {input_dim}, mat2_dim: {mat2_dim}."
-        ))
+        raise PyptoError(
+            0xF00003,
+            RuntimeError(
+                "Tensor dimension mismatch. Expect input_dim == mat2_dim and both in [2, 3, 4], "
+                f"got input_dim: {input_dim}, mat2_dim: {mat2_dim}."
+            ),
+        )
 
     input_valid_shape = __get_valid_shape(input_tensor1)
     mat2_valid_shape = __get_valid_shape(input_tensor2)
-    m_dim, ka_dim = (input_valid_shape[-2], input_valid_shape[-1]) if not a_trans else \
-        (input_valid_shape[-1], input_valid_shape[-2])
-    kb_dim, n_dim = (mat2_valid_shape[-2], mat2_valid_shape[-1]) if not b_trans else \
-        (mat2_valid_shape[-1], mat2_valid_shape[-2])
+    m_dim, ka_dim = (
+        (input_valid_shape[-2], input_valid_shape[-1])
+        if not a_trans
+        else (input_valid_shape[-1], input_valid_shape[-2])
+    )
+    kb_dim, n_dim = (
+        (mat2_valid_shape[-2], mat2_valid_shape[-1]) if not b_trans else (mat2_valid_shape[-1], mat2_valid_shape[-2])
+    )
     if ka_dim.is_concrete() and kb_dim.is_concrete() and ka_dim != kb_dim:
-        raise PyptoError(0xF00003, RuntimeError(
-            "K-dimension valid shape mismatch. "
-            f"Got input valid shape: {input_valid_shape}, mat2 valid shape: {mat2_valid_shape}, "
-            f"a_trans: {a_trans}, b_trans: {b_trans}."
-        ))
+        raise PyptoError(
+            0xF00003,
+            RuntimeError(
+                "K-dimension valid shape mismatch. "
+                f"Got input valid shape: {input_valid_shape}, mat2 valid shape: {mat2_valid_shape}, "
+                f"a_trans: {a_trans}, b_trans: {b_trans}."
+            ),
+        )
 
 
 def __validate_bias(input_tensor, extend_params) -> None:
-    if extend_params is not None and "bias_tensor" in extend_params \
-        and isinstance(extend_params["bias_tensor"], Tensor):
+    if (
+        extend_params is not None
+        and "bias_tensor" in extend_params
+        and isinstance(extend_params["bias_tensor"], Tensor)
+    ):
         input_dim = input_tensor.Dim()
         bias_dim = extend_params["bias_tensor"].Dim()
         if input_dim == 3 and bias_dim not in {2, 3}:
-            raise PyptoError(0xF00003, RuntimeError(
-                "Bias tensor dimension mismatch for 3D. Expect bias_dim in [2, 3], "
-                f"got input_dim: {input_dim}, bias_dim: {bias_dim}."
-            ))
+            raise PyptoError(
+                0xF00003,
+                RuntimeError(
+                    "Bias tensor dimension mismatch for 3D. Expect bias_dim in [2, 3], "
+                    f"got input_dim: {input_dim}, bias_dim: {bias_dim}."
+                ),
+            )
         elif input_dim == 4 and bias_dim != 2:
-            raise PyptoError(0xF00003, RuntimeError(
-                "Bias tensor dimension mismatch for 4D. Expect bias_dim equals to 2, "
-                f"got input_dim: {input_dim}, bias_dim: {bias_dim}."
-            ))
+            raise PyptoError(
+                0xF00003,
+                RuntimeError(
+                    "Bias tensor dimension mismatch for 4D. Expect bias_dim equals to 2, "
+                    f"got input_dim: {input_dim}, bias_dim: {bias_dim}."
+                ),
+            )
 
 
 def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -> None:
@@ -371,20 +383,26 @@ def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -
     fp8_dtype = (pypto_impl.DataType.DT_FP8E5M2, pypto_impl.DataType.DT_FP8E4M3)
     if is_out_nz:
         raise PyptoError(0xF00002, ValueError("Output tensor do not support NZ currently."))
-    input1_fp32_valid = input1_dtype == pypto_impl.DataType.DT_FP32 \
-        and input1_format == pypto_impl.TileOpFormat.TILEOP_NZ
-    input2_fp32_valid = input2_dtype == pypto_impl.DataType.DT_FP32 \
-        and input2_format == pypto_impl.TileOpFormat.TILEOP_NZ
-    input1_fp8_valid = input1_dtype == pypto_impl.DataType.DT_FP8E5M2 \
-        and input1_format == pypto_impl.TileOpFormat.TILEOP_NZ
-    input2_fp8_valid = input2_dtype == pypto_impl.DataType.DT_FP8E5M2 \
-        and input2_format == pypto_impl.TileOpFormat.TILEOP_NZ
-    if (input1_fp32_valid or input2_fp32_valid):
-        raise PyptoError(0xF00002, ValueError(
-            "Input tensor with DT_FP32 must use ND format, NZ format is not support currently."))
-    if (input1_fp8_valid or input2_fp8_valid):
-        raise PyptoError(0xF00002, ValueError(
-            "Input tensor with DT_FP8E5M2 must use ND format, NZ format is not support currently."))
+    input1_fp32_valid = (
+        input1_dtype == pypto_impl.DataType.DT_FP32 and input1_format == pypto_impl.TileOpFormat.TILEOP_NZ
+    )
+    input2_fp32_valid = (
+        input2_dtype == pypto_impl.DataType.DT_FP32 and input2_format == pypto_impl.TileOpFormat.TILEOP_NZ
+    )
+    input1_fp8_valid = (
+        input1_dtype == pypto_impl.DataType.DT_FP8E5M2 and input1_format == pypto_impl.TileOpFormat.TILEOP_NZ
+    )
+    input2_fp8_valid = (
+        input2_dtype == pypto_impl.DataType.DT_FP8E5M2 and input2_format == pypto_impl.TileOpFormat.TILEOP_NZ
+    )
+    if input1_fp32_valid or input2_fp32_valid:
+        raise PyptoError(
+            0xF00002, ValueError("Input tensor with DT_FP32 must use ND format, NZ format is not support currently.")
+        )
+    if input1_fp8_valid or input2_fp8_valid:
+        raise PyptoError(
+            0xF00002, ValueError("Input tensor with DT_FP8E5M2 must use ND format, NZ format is not support currently.")
+        )
     if not ((input1_dtype in fp8_dtype and input2_dtype in fp8_dtype) or (input1_dtype == input2_dtype)):
         raise PyptoError(0xF00002, ValueError("Non-FP8 inputs require identical dtypes."))
 
@@ -395,14 +413,16 @@ def __validate_bias_dimension(input_dim, bias_tensor):
     bias_dim = bias_tensor.Dim()
     if input_dim in (2, 4):
         if bias_dim != 2:
-            raise PyptoError(0xF00003, RuntimeError(
-                f"{input_dim}D BatchMatmulMX only supports 2D bias tensor, but got {bias_dim}D bias."
-            ))
+            raise PyptoError(
+                0xF00003,
+                RuntimeError(f"{input_dim}D BatchMatmulMX only supports 2D bias tensor, but got {bias_dim}D bias."),
+            )
     elif input_dim == 3:
         if bias_dim not in (2, 3):
-            raise PyptoError(0xF00003, RuntimeError(
-                f"3D BatchMatmulMX only supports 2D or 3D bias tensor, but got {bias_dim}D bias."
-            ))
+            raise PyptoError(
+                0xF00003,
+                RuntimeError(f"3D BatchMatmulMX only supports 2D or 3D bias tensor, but got {bias_dim}D bias."),
+            )
 
 
 def __validate_scale_dimension(input_dim, scale_tensor):
@@ -410,9 +430,10 @@ def __validate_scale_dimension(input_dim, scale_tensor):
         return
     scale_dim = scale_tensor.Dim()
     if scale_dim != 2:
-        raise PyptoError(0xF00003, RuntimeError(
-            f"{input_dim}D scaled_mm only supports 2D scale tensor, but got {scale_dim}D scale tensor."
-        ))
+        raise PyptoError(
+            0xF00003,
+            RuntimeError(f"{input_dim}D scaled_mm only supports 2D scale tensor, but got {scale_dim}D scale tensor."),
+        )
 
 
 def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_scale2, extend_params) -> None:
@@ -423,28 +444,34 @@ def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_s
     supported_dims = (2, 3, 4)
     shape_dim_3 = 3
 
-    if (input_tensor1.GetDataType() == pypto_impl.DataType.DT_FP4_E1M2
+    if (
+        input_tensor1.GetDataType() == pypto_impl.DataType.DT_FP4_E1M2
         or input_tensor1.GetDataType() == pypto_impl.DataType.DT_FP4_E1M2X2
-        or input_tensor1.GetDataType() == pypto_impl.DataType.DT_FP4_E2M1X2):
-        raise PyptoError(0xF00003, RuntimeError(
-            "scaled_mm fp4 input only supports DT_FP4_E2M1."
-    ))
+        or input_tensor1.GetDataType() == pypto_impl.DataType.DT_FP4_E2M1X2
+    ):
+        raise PyptoError(0xF00003, RuntimeError("scaled_mm fp4 input only supports DT_FP4_E2M1."))
 
     if input_dim not in supported_dims:
-        raise PyptoError(0xF00003, RuntimeError(
-            f"Unsupported tensor dimension for MX Matmul: {input_dim}, "
-            f"only support 2D, 3D or 4D tensor."
-        ))
+        raise PyptoError(
+            0xF00003,
+            RuntimeError(f"Unsupported tensor dimension for MX Matmul: {input_dim}, only support 2D, 3D or 4D tensor."),
+        )
     if input_dim != other_dim:
-        raise PyptoError(0xF00003, RuntimeError(
-            "Tensor dimension mismatch. Expect input_dim == other_dim, "
-            f"got input_dim: {input_dim}, other_dim: {other_dim}."
-        ))
+        raise PyptoError(
+            0xF00003,
+            RuntimeError(
+                "Tensor dimension mismatch. Expect input_dim == other_dim, "
+                f"got input_dim: {input_dim}, other_dim: {other_dim}."
+            ),
+        )
     if scale_a_dim != scale_b_dim or scale_a_dim != shape_dim_3:
-        raise PyptoError(0xF00003, RuntimeError(
-            "Tensor dimension mismatch. Expect scale_a_dim == scale_b_dim and both equal to 3, "
-            f"got scale_a_dim: {scale_a_dim}, scale_b_dim: {scale_b_dim}."
-        ))
+        raise PyptoError(
+            0xF00003,
+            RuntimeError(
+                "Tensor dimension mismatch. Expect scale_a_dim == scale_b_dim and both equal to 3, "
+                f"got scale_a_dim: {scale_a_dim}, scale_b_dim: {scale_b_dim}."
+            ),
+        )
 
     if extend_params is not None:
         __validate_bias_dimension(input_dim, extend_params.get('bias_tensor'))
@@ -457,17 +484,24 @@ def __validate_scaled_shape(input_tensor1, input_tensor2, input_scale1, input_sc
     shape_dim_2 = 2
     input_valid_shape = __get_valid_shape(input_tensor1)
     other_valid_shape = __get_valid_shape(input_tensor2)
-    m_dim, ka_dim = (input_valid_shape[-2], input_valid_shape[-1]) if not a_trans else \
-        (input_valid_shape[-1], input_valid_shape[-2])
+    m_dim, ka_dim = (
+        (input_valid_shape[-2], input_valid_shape[-1])
+        if not a_trans
+        else (input_valid_shape[-1], input_valid_shape[-2])
+    )
     n_dim = (other_valid_shape[-1]) if not b_trans else (other_valid_shape[-2])
     scale1_valid_shape = __get_valid_shape(input_scale1)
     scale2_valid_shape = __get_valid_shape(input_scale2)
-    m_scale_dim, k_a_scale0_dim, k_a_scale1_dim = (scale1_valid_shape[0], scale1_valid_shape[1],
-                                               scale1_valid_shape[shape_dim_2]) \
-    if not a_scale_trans else (scale1_valid_shape[1], scale1_valid_shape[0], scale1_valid_shape[shape_dim_2])
-    k_b_scale0_dim, n_scale_dim, k_b_scale1_dim = (scale2_valid_shape[0], scale2_valid_shape[1],
-                                               scale2_valid_shape[shape_dim_2]) \
-    if not b_scale_trans else (scale2_valid_shape[1], scale2_valid_shape[0], scale2_valid_shape[shape_dim_2])
+    m_scale_dim, k_a_scale0_dim, k_a_scale1_dim = (
+        (scale1_valid_shape[0], scale1_valid_shape[1], scale1_valid_shape[shape_dim_2])
+        if not a_scale_trans
+        else (scale1_valid_shape[1], scale1_valid_shape[0], scale1_valid_shape[shape_dim_2])
+    )
+    k_b_scale0_dim, n_scale_dim, k_b_scale1_dim = (
+        (scale2_valid_shape[0], scale2_valid_shape[1], scale2_valid_shape[shape_dim_2])
+        if not b_scale_trans
+        else (scale2_valid_shape[1], scale2_valid_shape[0], scale2_valid_shape[shape_dim_2])
+    )
 
     __validate_scale_k0_dimensions(k_a_scale0_dim, k_b_scale0_dim)
     __validate_scale_k1_dimensions(k_a_scale1_dim, k_b_scale1_dim, shape_dim_2)
@@ -477,57 +511,72 @@ def __validate_scaled_shape(input_tensor1, input_tensor2, input_scale1, input_sc
 
 
 def __validate_scale_k0_dimensions(k_a_scale0_dim, k_b_scale0_dim):
-    if (k_a_scale0_dim.is_concrete() and k_b_scale0_dim.is_concrete() and k_a_scale0_dim != k_b_scale0_dim):
-        raise PyptoError(0xF00003, RuntimeError(
-            "Scale Matrix Kscale0 dimension mismatch. Expect scale_ka_size == scale_kb_size, "
-            f"got scale_ka_size: {k_a_scale0_dim}, scale_kb_size: {k_b_scale0_dim}."
-        ))
+    if k_a_scale0_dim.is_concrete() and k_b_scale0_dim.is_concrete() and k_a_scale0_dim != k_b_scale0_dim:
+        raise PyptoError(
+            0xF00003,
+            RuntimeError(
+                "Scale Matrix Kscale0 dimension mismatch. Expect scale_ka_size == scale_kb_size, "
+                f"got scale_ka_size: {k_a_scale0_dim}, scale_kb_size: {k_b_scale0_dim}."
+            ),
+        )
 
 
 def __validate_scale_k1_dimensions(k_a_scale1_dim, k_b_scale1_dim, shape_dim_2):
-    is_value_concrete = (k_a_scale1_dim.is_concrete() and k_b_scale1_dim.is_concrete())
+    is_value_concrete = k_a_scale1_dim.is_concrete() and k_b_scale1_dim.is_concrete()
     if is_value_concrete and k_a_scale1_dim != k_b_scale1_dim and k_a_scale1_dim != shape_dim_2:
-        raise PyptoError(0xF00003, RuntimeError(
-            "Scale Matrix Kscale1 dimension mismatch. Expect scale_a_shape[2] == scale_b_shape[2] "
-            f"and both equal to 2, got scale_a_shape[2]: {k_a_scale1_dim}, "
-            f"scale_b_shape[2]: {k_b_scale1_dim}."
-        ))
+        raise PyptoError(
+            0xF00003,
+            RuntimeError(
+                "Scale Matrix Kscale1 dimension mismatch. Expect scale_a_shape[2] == scale_b_shape[2] "
+                f"and both equal to 2, got scale_a_shape[2]: {k_a_scale1_dim}, "
+                f"scale_b_shape[2]: {k_b_scale1_dim}."
+            ),
+        )
 
 
 def __validate_scale_m_dimensions(m_dim, m_scale_dim):
-    if (m_dim.is_concrete() and m_scale_dim.is_concrete() and m_dim != m_scale_dim):
-        raise PyptoError(0xF00003, RuntimeError(
-            "Matrix M dimension mismatch. Expect m_scale_size == m_size, "
-            f"got m_scale_size: {m_scale_dim}, m_size: {m_dim}."
-        ))
+    if m_dim.is_concrete() and m_scale_dim.is_concrete() and m_dim != m_scale_dim:
+        raise PyptoError(
+            0xF00003,
+            RuntimeError(
+                "Matrix M dimension mismatch. Expect m_scale_size == m_size, "
+                f"got m_scale_size: {m_scale_dim}, m_size: {m_dim}."
+            ),
+        )
 
 
 def __validate_scale_n_dimensions(n_dim, n_scale_dim):
-    if (n_dim.is_concrete() and n_scale_dim.is_concrete() and n_dim != n_scale_dim):
-        raise PyptoError(0xF00003, RuntimeError(
-            "Matrix N dimension mismatch. Expect n_scale_size == n_size, "
-            f"got n_scale_size: {n_scale_dim}, n_size: {n_dim}."
-        ))
+    if n_dim.is_concrete() and n_scale_dim.is_concrete() and n_dim != n_scale_dim:
+        raise PyptoError(
+            0xF00003,
+            RuntimeError(
+                "Matrix N dimension mismatch. Expect n_scale_size == n_size, "
+                f"got n_scale_size: {n_scale_dim}, n_size: {n_dim}."
+            ),
+        )
 
 
 def __validate_scale_k_alignment(ka_dim, k_a_scale0_dim, align_64):
-    if (k_a_scale0_dim.is_concrete() and ka_dim.is_concrete() and \
-    k_a_scale0_dim != (ka_dim + align_64 - 1) // align_64):
-        raise PyptoError(0xF00003, RuntimeError(
-            "Input tensor K-dimension does not match expect scale K-dimension size. Scale K != ceil(input K, 64)."
-            f"input tensor K: {ka_dim}, scale K: {k_a_scale0_dim}"
-        ))
+    if k_a_scale0_dim.is_concrete() and ka_dim.is_concrete() and k_a_scale0_dim != (ka_dim + align_64 - 1) // align_64:
+        raise PyptoError(
+            0xF00003,
+            RuntimeError(
+                "Input tensor K-dimension does not match expect scale K-dimension size. Scale K != ceil(input K, 64)."
+                f"input tensor K: {ka_dim}, scale K: {k_a_scale0_dim}"
+            ),
+        )
 
 
 def __validate_trans_mode(mat_a, mat_b, extend_params):
     if extend_params is not None:
-        if (extend_params.get('trans_mode', pypto_impl.TransMode.CAST_NONE) !=
-            pypto_impl.TransMode.CAST_NONE and
-            mat_a.GetDataType() != pypto_impl.DataType.DT_FP32 and
-            mat_b.GetDataType() != pypto_impl.DataType.DT_FP32):
-            raise PyptoError(0xF00003, RuntimeError(
-                "The param of trans_mode is only supported when input data type is DT_FP32"
-            ))
+        if (
+            extend_params.get('trans_mode', pypto_impl.TransMode.CAST_NONE) != pypto_impl.TransMode.CAST_NONE
+            and mat_a.GetDataType() != pypto_impl.DataType.DT_FP32
+            and mat_b.GetDataType() != pypto_impl.DataType.DT_FP32
+        ):
+            raise PyptoError(
+                0xF00003, RuntimeError("The param of trans_mode is only supported when input data type is DT_FP32")
+            )
 
 
 def __convert_matmul_extend_params(extend_params) -> dict:

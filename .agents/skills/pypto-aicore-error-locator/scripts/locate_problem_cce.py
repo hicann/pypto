@@ -28,29 +28,29 @@
 
 import argparse
 import json
+import logging
 import os
+from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
-import logging
-import shlex
-from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (
-    read_file,
-    write_file,
-    setup_logging,
-    validate_path,
-    comment_lines_by_indices,
-    comment_special_lines,
-    get_commentable_lines,
+    _PIP_CMD,
     DEFAULT_TIMEOUT,
     KNOWN_LOCATIONS,
-    _PIP_CMD,
-    locate_file,
+    comment_lines_by_indices,
+    comment_special_lines,
     find_installed_tile_fwk_config,
+    get_commentable_lines,
+    locate_file,
+    read_file,
+    setup_logging,
+    validate_path,
+    write_file,
 )
 
 setup_logging()
@@ -76,9 +76,7 @@ def check_test_result(returncode, output, use_pypto_test_framework=False):
 
 
 def _print_error_lines(stderr_output):
-    error_lines = [
-        l for l in stderr_output.split('\n') if 'error' in l.lower()
-    ]
+    error_lines = [line for line in stderr_output.split('\n') if 'error' in line.lower()]
     if error_lines:
         for line in error_lines[:10]:
             logger.info("  %s", line)
@@ -90,8 +88,13 @@ def run_test_cmd(test_cmd, run_dir):
     else:
         cmd_list = test_cmd
     result = subprocess.run(
-        cmd_list, cwd=run_dir, capture_output=True, text=True,
-        errors='ignore', timeout=DEFAULT_TIMEOUT, check=False,
+        cmd_list,
+        cwd=run_dir,
+        capture_output=True,
+        text=True,
+        errors='ignore',
+        timeout=DEFAULT_TIMEOUT,
+        check=False,
     )
     return result.returncode, result.stdout + result.stderr
 
@@ -128,11 +131,12 @@ def _modify_tile_fwk_config():
     with open(config_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
     if 'global' in config and 'codegen' in config['global']:
-        already_set = (config['global']['codegen'].get('fixed_output_path') is True and
-                       config['global']['codegen'].get('force_overwrite') is False)
+        already_set = (
+            config['global']['codegen'].get('fixed_output_path') is True
+            and config['global']['codegen'].get('force_overwrite') is False
+        )
     else:
-        already_set = (config.get('fixed_output_path') is True and
-                       config.get('force_overwrite') is False)
+        already_set = config.get('fixed_output_path') is True and config.get('force_overwrite') is False
     if already_set:
         logger.info("tile_fwk_config.json: 已为目标状态，无需修改")
         return False, config_path
@@ -151,9 +155,7 @@ def _modify_tile_fwk_config():
 
 
 def _modify_device_switch(pypto_path):
-    switch_path = locate_file(
-        pypto_path, KNOWN_LOCATIONS['device_switch.h'],
-        'device_switch.h')
+    switch_path = locate_file(pypto_path, KNOWN_LOCATIONS['device_switch.h'], 'device_switch.h')
     if not switch_path:
         logger.info("警告：未找到 device_switch.h")
         return False
@@ -207,8 +209,7 @@ def _modify_tile_fwk_config():
         config = json.load(f)
     if 'global' in config and 'codegen' in config['global']:
         codegen = config['global']['codegen']
-        already_set = (codegen.get('fixed_output_path') is True and
-                       codegen.get('force_overwrite') is False)
+        already_set = codegen.get('fixed_output_path') is True and codegen.get('force_overwrite') is False
         if already_set:
             logger.info("tile_fwk_config.json 已为目标状态，无需修改")
             return False
@@ -263,8 +264,14 @@ def clean_and_run_test(device_log_path, run_path, test_cmd, use_pypto_test_frame
         cmd_list = test_cmd
 
     result = subprocess.run(
-        cmd_list, cwd=run_path, env=env, capture_output=True,
-        text=True, errors='ignore', timeout=DEFAULT_TIMEOUT, check=False,
+        cmd_list,
+        cwd=run_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        errors='ignore',
+        timeout=DEFAULT_TIMEOUT,
+        check=False,
     )
     stderr_output = result.stdout + result.stderr
     has_aicore, has_parallel = check_test_result(result.returncode, stderr_output, use_pypto_test_framework)
@@ -308,7 +315,8 @@ def get_latest_program_json(output_path, use_pypto_test_framework=False):
                         subdirs.append(os.path.join(root, d))
     else:
         subdirs = [
-            os.path.join(output_path, d) for d in os.listdir(output_path)
+            os.path.join(output_path, d)
+            for d in os.listdir(output_path)
             if os.path.isdir(os.path.join(output_path, d)) and d.startswith('output_')
         ]
     if not subdirs:
@@ -447,8 +455,8 @@ def find_cce_file(kernel_aicore_dir, leaf_index):
             continue
         logger.info("Function name: %s", func_name)
         result = subprocess.run(
-            ["/usr/bin/grep", "-rl", func_name, kernel_aicore_dir],
-            capture_output=True, text=True, timeout=30)
+            ["/usr/bin/grep", "-rl", func_name, kernel_aicore_dir], capture_output=True, text=True, timeout=30
+        )
         matched_files = [Path(p) for p in result.stdout.strip().split('\n') if p]
         logger.info("grep 函数名找到 %d 个匹配文件", len(matched_files))
         for mf in matched_files:
@@ -465,10 +473,7 @@ def find_cce_file(kernel_aicore_dir, leaf_index):
 
 
 def find_all_cce_files(kernel_aicore_dir, missing_leaf_indices):
-    return [
-        f for idx in missing_leaf_indices
-        if (f := find_cce_file(kernel_aicore_dir, idx))
-    ]
+    return [f for idx in missing_leaf_indices if (f := find_cce_file(kernel_aicore_dir, idx))]
 
 
 def test_single_cce(cce_file, test_cmd, run_dir):
@@ -549,8 +554,12 @@ def _build_and_install_with_lld_handling(pypto_path):
     for _ in range(2):
         result = subprocess.run(
             ["python3", "build_ci.py", "-f", "python3", "--disable_auto_execute"],
-            shell=False, capture_output=True, text=True, cwd=pypto_path,
-            timeout=DEFAULT_TIMEOUT)
+            shell=False,
+            capture_output=True,
+            text=True,
+            cwd=pypto_path,
+            timeout=DEFAULT_TIMEOUT,
+        )
         build_output = result.stdout + result.stderr
         has_lld = "ld.lld: error: undefined" in build_output
 
@@ -575,8 +584,7 @@ def _build_and_install_with_lld_handling(pypto_path):
             install_cmd = [_PIP_CMD, "install", str(whl_files[0]), "--force", "--no-deps"]
             if target:
                 install_cmd += ["--target", target]
-            install_result = subprocess.run(
-                install_cmd, shell=False, capture_output=True, text=True, timeout=300)
+            install_result = subprocess.run(install_cmd, shell=False, capture_output=True, text=True, timeout=300)
             if install_result.returncode != 0:
                 logger.info("安装失败: %s", install_result.stderr[-500:])
                 return False
@@ -596,18 +604,12 @@ def _build_and_install_with_lld_handling(pypto_path):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='步骤 3: 定位问题 CCE 文件（合并 3.1-3.7）')
-    parser.add_argument('--pypto-path', default=os.getcwd(),
-                        help='pypto 项目根目录路径（默认: 当前目录）')
-    parser.add_argument('--test-cmd', required=True,
-                        help='触发 aicore error 的测试命令')
-    parser.add_argument('--run-path', default=os.getcwd(),
-                        help='运行测试的目录路径（默认: 当前目录）')
-    parser.add_argument('--device-log-path', default='./device_log',
-                        help='device log 落盘路径（默认: ./device_log）')
-    parser.add_argument('--use-pypto-test-framework', action='store_true',
-                        help='使用 Pypto_Test 框架模式')
+    parser = argparse.ArgumentParser(description='步骤 3: 定位问题 CCE 文件（合并 3.1-3.7）')
+    parser.add_argument('--pypto-path', default=os.getcwd(), help='pypto 项目根目录路径（默认: 当前目录）')
+    parser.add_argument('--test-cmd', required=True, help='触发 aicore error 的测试命令')
+    parser.add_argument('--run-path', default=os.getcwd(), help='运行测试的目录路径（默认: 当前目录）')
+    parser.add_argument('--device-log-path', default='./device_log', help='device log 落盘路径（默认: ./device_log）')
+    parser.add_argument('--use-pypto-test-framework', action='store_true', help='使用 Pypto_Test 框架模式')
     args = parser.parse_args()
 
     pypto_path = os.path.abspath(args.pypto_path)
@@ -649,7 +651,8 @@ def main():
 
     while True:
         stderr_output, has_parallel = clean_and_run_test(
-            device_log_path, run_path, args.test_cmd, use_pypto_test_framework=use_pypto)
+            device_log_path, run_path, args.test_cmd, use_pypto_test_framework=use_pypto
+        )
         if stderr_output is None:
             logger.info("=" * 80)
             logger.info("步骤 3 结果: 未检测到 aicore error，停止执行")

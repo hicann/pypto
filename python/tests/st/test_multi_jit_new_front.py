@@ -10,24 +10,27 @@
 # -----------------------------------------------------------------------------------------------------------
 
 import os
-import pypto
 
 import torch
 import torch_npu
 
+import pypto
+
 
 @pypto.frontend.jit()
-def cust_dyn_func_add(a: pypto.Tensor[[], pypto.DT_INT32],
-                      b: pypto.Tensor[[], pypto.DT_INT32],
-                      c: pypto.Tensor[[], pypto.DT_INT32]):
+def cust_dyn_func_add(
+    a: pypto.Tensor[[], pypto.DT_INT32], b: pypto.Tensor[[], pypto.DT_INT32], c: pypto.Tensor[[], pypto.DT_INT32]
+):
     pypto.set_vec_tile_shapes(32, 32)
     c.move(a + b)
 
 
 @pypto.frontend.jit()
-def cust_dyn_func_sub(a: pypto.Tensor[[...], pypto.DT_INT32],
-                      b: pypto.Tensor[[...], pypto.DT_INT32],
-                      c: pypto.Tensor[[...], pypto.DT_INT32]):
+def cust_dyn_func_sub(
+    a: pypto.Tensor[[...], pypto.DT_INT32],
+    b: pypto.Tensor[[...], pypto.DT_INT32],
+    c: pypto.Tensor[[...], pypto.DT_INT32],
+):
     pypto.set_vec_tile_shapes(32, 32)
     c.move(a - b)
 
@@ -60,7 +63,6 @@ def device_run(is_run_add):
 
         golden = torch.ones((n, m))
         assert torch.allclose(golden.int(), sub_result.cpu(), atol=1e-5)
-
 
 
 def test_run_multi_jit():

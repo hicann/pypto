@@ -8,14 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
+import argparse
+import logging
 import os
 import sys
-import logging
-import argparse
-from typing import List, Optional
+from typing import List
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import setup_logging, run_command
+from common import run_command, setup_logging
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -54,11 +54,7 @@ class SymbolDemangler:
 
         for symbol in symbols:
             demangled = self.demangle_symbol(symbol)
-            results.append({
-                'mangled': symbol,
-                'demangled': demangled,
-                'changed': symbol != demangled
-            })
+            results.append({'mangled': symbol, 'demangled': demangled, 'changed': symbol != demangled})
 
         return results
 
@@ -77,6 +73,7 @@ def main():
     # 输出结果
     if args.json:
         import json
+
         logger.info("%s", json.dumps(results, indent=2))
     else:
         logger.info("=" * 80)

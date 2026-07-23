@@ -19,13 +19,16 @@ This example demonstrates how to implement a softmax operation using PyPTO, incl
 
 Softmax is a fundamental operation in neural networks, especially for attention mechanisms.
 """
+
+import argparse
 import os
 import sys
-import argparse
-import pypto
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 def _peek_run_mode_from_argv(default: str = "npu") -> str:
@@ -91,7 +94,8 @@ def softmax_core(x: pypto.Tensor) -> pypto.Tensor:
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def softmax_kernel(
     input_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    output_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32)):
+    output_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
+):
     bs, seqlen, head, dim = input_tensor.shape
     tile_b = 1  # Process one batch at a time
     b_loop = bs // tile_b
@@ -114,7 +118,7 @@ def test_softmax(device_id: int = None, dynamic: bool = True) -> None:
     x = torch.rand(shape, dtype=torch.float, device=device)
     y = torch.zeros(shape, dtype=torch.float, device=device)
 
-    softmax_kernel(x, y) # default dim: -1
+    softmax_kernel(x, y)  # default dim: -1
     golden = torch.softmax(x, dim=-1).cpu()
     y = y.cpu()
 
@@ -144,26 +148,14 @@ Examples:
   %(prog)s softmax::test_softmax
             Run the softmax::test_softmax example
   %(prog)s --list       List all available examples
-        """
+        """,
     )
     parser.add_argument(
-        'example_id',
-        type=str,
-        nargs='?',
-        help='Example ID to run (1). If not specified, the example will run.'
+        'example_id', type=str, nargs='?', help='Example ID to run (1). If not specified, the example will run.'
     )
+    parser.add_argument('--list', action='store_true', help='List all available examples and exit')
     parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default='npu',
-        choices=["npu", "sim"],
-        help='Run mode, supports npu and sim.'
+        '--run_mode', type=str, nargs='?', default='npu', choices=["npu", "sim"], help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -173,7 +165,7 @@ Examples:
         "softmax::test_softmax": {
             'name': 'Softmax',
             'description': 'Softmax implementation with dynamic batch size',
-            'function': test_softmax
+            'function': test_softmax,
         }
     }
 
@@ -215,7 +207,6 @@ Examples:
         device_id = get_device_id()
         if device_id is None:
             return
-        import torch_npu
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("(Make sure CANN environment is configured and NPU is available)\n")

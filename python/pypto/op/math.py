@@ -9,20 +9,20 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
-from typing import Optional, Union, List, Tuple, overload
+
+from typing import List, Optional, Tuple, Union, overload
 
 import numpy as np
+
 import pypto
+
 from .. import pypto_impl
 from .._element import Element
 from .._op_wrapper import op_wrapper
+from ..enum import CastMode, DataType, PrecisionType
 from ..error import PyptoError
+from ..symbolic_scalar import SymInt
 from ..tensor import Tensor
-from ..enum import (
-    DataType, CastMode, PrecisionType
-)
-from ..symbolic_scalar import SymbolicScalar, SymInt
-
 
 _FLOAT_DTYPES = {DataType.DT_FP32, DataType.DT_FP16, DataType.DT_BF16}
 
@@ -39,9 +39,13 @@ def _check_scalar_type(op_name, tensor_dtype, other):
     if not isinstance(other, (int, float)):
         return
     if isinstance(other, float) and tensor_dtype not in _FLOAT_DTYPES:
-        raise PyptoError(0xF00001, TypeError(
-            f"{op_name}(): float scalar incompatible with integer tensor dtype {tensor_dtype.name}. "
-            "Use an integer scalar or cast the tensor to float type."))
+        raise PyptoError(
+            0xF00001,
+            TypeError(
+                f"{op_name}(): float scalar incompatible with integer tensor dtype {tensor_dtype.name}. "
+                "Use an integer scalar or cast the tensor to float type."
+            ),
+        )
 
 
 def _clip_scalar_to_dtype(tensor_dtype, value):
@@ -51,9 +55,7 @@ def _clip_scalar_to_dtype(tensor_dtype, value):
 
 
 @op_wrapper
-def add(
-    input_tensor: Tensor, other: Union[Tensor, float, int]
-) -> Tensor:
+def add(input_tensor: Tensor, other: Union[Tensor, float, int]) -> Tensor:
     """Computes the element-wise addition of `input_tensor` and `other`.
 
     This function calculates the formula: `out = input_tensor + other`.
@@ -159,9 +161,7 @@ def axpy_(y: Tensor, x: Tensor, alpha: Union[int, float] = 1.0) -> Tensor:
 
 
 @op_wrapper
-def sub(
-    input_tensor: Tensor, other: Union[Tensor, float, int]
-) -> Tensor:
+def sub(input_tensor: Tensor, other: Union[Tensor, float, int]) -> Tensor:
     """Computes the element-wise subtraction of `input_tensor` and `other`.
 
     This function calculates the formula: `out = input_tensor - other`.
@@ -252,7 +252,8 @@ def mul(input_tensor: Tensor, other: Union[Tensor, float, int]) -> Tensor:
 
 @op_wrapper
 def div(
-    input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> Tensor:
+    input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = PrecisionType.HIGH_PRECISION
+) -> Tensor:
     """Computes the element-wise division of `input` and `other`.
 
     This function calculates the formula: `out = input / other`.
@@ -446,7 +447,7 @@ def lrelu(other: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 def remainder(
     input: Union[Tensor, int, float],
     other: Union[Tensor, int, float],
-    precision_type: PrecisionType = PrecisionType.HIGH_PRECISION
+    precision_type: PrecisionType = PrecisionType.HIGH_PRECISION,
 ) -> Tensor:
     """Computes the element-wise remainder of `input` divided by `other`.
 
@@ -506,9 +507,7 @@ def remainder(
     if isinstance(other, pypto_impl.Tensor):
         if isinstance(input, float) or isinstance(input, int):
             return pypto_impl.Remainder(pypto_impl.Element(other.dtype, input), other, precision_type)
-    raise PyptoError(0xF00001, TypeError(
-        f"Unsupported operand types for remainder: {type(input)} and {type(other)}"
-        ))
+    raise PyptoError(0xF00001, TypeError(f"Unsupported operand types for remainder: {type(input)} and {type(other)}"))
 
 
 @op_wrapper
@@ -549,9 +548,9 @@ def bitwise_and(self: Tensor, other: Union[Tensor, int]) -> Tensor:
         return pypto_impl.BitwiseAnd(self, other)
     else:
         if not isinstance(other, int):
-            raise PyptoError(0xF00001, TypeError(
-                f"Scalar operand for bitwise_and must be an integer, but got {type(other)}."
-                ))
+            raise PyptoError(
+                0xF00001, TypeError(f"Scalar operand for bitwise_and must be an integer, but got {type(other)}.")
+            )
         other = _clip_scalar_to_dtype(self.dtype, other)
         return pypto_impl.BitwiseAnd(self, pypto_impl.Element(self.dtype, other))
 
@@ -594,9 +593,9 @@ def bitwise_or(input1: Tensor, input2: Union[Tensor, int]) -> Tensor:
         return pypto_impl.BitwiseOr(input1, input2)
     else:
         if not isinstance(input2, int):
-            raise PyptoError(0xF00001, TypeError(
-                f"Scalar operand for bitwise_or must be an integer, but got {type(input2)}."
-                ))
+            raise PyptoError(
+                0xF00001, TypeError(f"Scalar operand for bitwise_or must be an integer, but got {type(input2)}.")
+            )
         input2 = _clip_scalar_to_dtype(input1.dtype, input2)
         return pypto_impl.BitwiseOr(input1, pypto_impl.Element(input1.dtype, input2))
 
@@ -639,16 +638,17 @@ def bitwise_xor(first: Tensor, second: Union[Tensor, int]) -> Tensor:
         return pypto_impl.BitwiseXor(first, second)
     else:
         if not isinstance(second, int):
-            raise PyptoError(0xF00001, TypeError(
-                f"Scalar operand for bitwise_xor must be an integer, but got {type(second)}."
-                ))
+            raise PyptoError(
+                0xF00001, TypeError(f"Scalar operand for bitwise_xor must be an integer, but got {type(second)}.")
+            )
         second = _clip_scalar_to_dtype(first.dtype, second)
         return pypto_impl.BitwiseXor(first, pypto_impl.Element(first.dtype, second))
 
 
 @op_wrapper
-def pow(base: Tensor, other: Union[Tensor, int, float],
-    precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> Tensor:
+def pow(
+    base: Tensor, other: Union[Tensor, int, float], precision_type: PrecisionType = PrecisionType.HIGH_PRECISION
+) -> Tensor:
     """Computes the element-wise power of `base` raised to `other`.
 
     This function calculates the formula: `out = base ** other`.
@@ -687,9 +687,7 @@ def pow(base: Tensor, other: Union[Tensor, int, float],
               [-3.0 4.0]]
     """
     if not isinstance(other, (pypto_impl.Tensor, int, float)):
-        raise PyptoError(0xF00001, TypeError(
-            f"other must be Tensor, int or float but got {type(other)}."
-            ))
+        raise PyptoError(0xF00001, TypeError(f"other must be Tensor, int or float but got {type(other)}."))
     if isinstance(other, pypto_impl.Tensor):
         return pypto_impl.Pow(base, other, precision_type)
     if isinstance(other, int):
@@ -1880,7 +1878,7 @@ def tan(x: Tensor) -> Tensor:
 def clip(
     input: Tensor,
     min: Optional[Union[Tensor, Element, float, int]] = None,
-    max: Optional[Union[Tensor, Element, float, int]] = None
+    max: Optional[Union[Tensor, Element, float, int]] = None,
 ):
     """
     Make the values in `input` greater than `min` and less than `max`.
@@ -1914,11 +1912,7 @@ def clip(
 
     element_types = (pypto_impl.Element, int, float)
     is_element_mode = isinstance(min, element_types) or isinstance(max, element_types)
-    default = (
-        pypto_impl.Tensor()
-        if not is_element_mode
-        else pypto_impl.Element(pypto_impl.DataType.DT_BOTTOM, 0)
-    )
+    default = pypto_impl.Tensor() if not is_element_mode else pypto_impl.Element(pypto_impl.DataType.DT_BOTTOM, 0)
     if min is None:
         min = default
     if max is None:
@@ -1934,10 +1928,7 @@ def clip(
 
 
 @op_wrapper
-def cumsum(
-    input: Tensor,
-    dim: int
-) -> Tensor:
+def cumsum(input: Tensor, dim: int) -> Tensor:
     """
     This function returns the cumulative sum over a given axis.
     Parameters
@@ -1962,10 +1953,7 @@ def cumsum(
 
 
 @op_wrapper
-def cumprod(
-    input: Tensor,
-    dim: int
-) -> Tensor:
+def cumprod(input: Tensor, dim: int) -> Tensor:
     """
     This function returns the cumulative prod over a given axis.
     Parameters
@@ -1990,8 +1978,7 @@ def cumprod(
 
 
 @op_wrapper
-def bitwise_right_shift(
-    input: Union[Tensor, int], other: Union[Tensor, int]) -> Tensor:
+def bitwise_right_shift(input: Union[Tensor, int], other: Union[Tensor, int]) -> Tensor:
     """Computes the element-wise bitwise right shift of `input` and `other`.
 
     This function calculates the formula: `out = input >> other`.
@@ -2038,8 +2025,7 @@ def bitwise_right_shift(
 
 
 @op_wrapper
-def bitwise_left_shift(
-    input: Union[Tensor, int], other: Union[Tensor, int]) -> Tensor:
+def bitwise_left_shift(input: Union[Tensor, int], other: Union[Tensor, int]) -> Tensor:
     """Computes the element-wise bitwise left shift of `input` and `other`.
 
     This function calculates the formula: `out = input << other`.
@@ -2116,10 +2102,7 @@ def bitwise_not(self: Tensor) -> Tensor:
 
 
 @op_wrapper
-def triu(
-    input: Tensor,
-    diagonal: SymInt = 0
-) -> Tensor:
+def triu(input: Tensor, diagonal: SymInt = 0) -> Tensor:
     """
     Return the upper traingular part of a matrix or a banch of matrices `input`, the other elements of
     the result are set to 0.
@@ -2147,10 +2130,7 @@ def triu(
 
 
 @op_wrapper
-def tril(
-    input: Tensor,
-    diagonal: SymInt = 0
-) -> Tensor:
+def tril(input: Tensor, diagonal: SymInt = 0) -> Tensor:
     """
     Return the lower traingular part of a matrix or a banch of matrices `input`, the other elements of
     the result are set to 0.
@@ -2290,10 +2270,7 @@ def cbrt(self: Tensor) -> Tensor:
 
 
 @op_wrapper
-def gcd(
-    input: Tensor,
-    other: Union[Tensor, int]
-) -> Tensor:
+def gcd(input: Tensor, other: Union[Tensor, int]) -> Tensor:
     """
     This function returns the greatest common divisor of the corresponding elements of input and other.
     Parameters
@@ -2323,11 +2300,7 @@ def gcd(
 
 
 @overload
-def var(
-    input: Tensor,
-    dim: List[int],
-    correction: float
-) -> Tensor:
+def var(input: Tensor, dim: List[int], correction: float) -> Tensor:
     """
     Computes the variance  of 'input' over the dimensions.
 
@@ -2361,11 +2334,7 @@ def var(
 
 @overload
 def var(
-    input: Tensor,
-    dim: Union[int, List[int], Tuple[int]] = None,
-    *,
-    correction: float = 1,
-    keepdim: bool = False
+    input: Tensor, dim: Union[int, List[int], Tuple[int]] = None, *, correction: float = 1, keepdim: bool = False
 ) -> Tensor:
     """
     Computes the variance  of 'input' over the dimensions.
@@ -2403,10 +2372,7 @@ def var(
 
 @op_wrapper
 def var(
-    input: Tensor,
-    dim: Union[int, List[int], Tuple[int]] = None,
-    correction: float = 1,
-    keepdim: bool = False
+    input: Tensor, dim: Union[int, List[int], Tuple[int]] = None, correction: float = 1, keepdim: bool = False
 ) -> Tensor:
     """
     Computes the variance  of 'input' over the dimensions.
@@ -2447,12 +2413,11 @@ def var(
     elif isinstance(dim, (list, tuple)):
         inner_dim = list(dim)
     else:
-        raise PyptoError(0xF00001, TypeError(
-            f"the type of dim is not supported. 'int' or 'Lise[int]' or 'Tuple[int]' is needed."
-            ))
+        raise PyptoError(
+            0xF00001, TypeError("the type of dim is not supported. 'int' or 'Lise[int]' or 'Tuple[int]' is needed.")
+        )
 
     return pypto_impl.Var(input, inner_dim, correction, keepdim)
-
 
 
 @op_wrapper

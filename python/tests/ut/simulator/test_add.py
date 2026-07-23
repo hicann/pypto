@@ -13,14 +13,11 @@ This test case verifies that the swimlane diagram generation for the costmodel w
 regardless of whether the CANN is installed in the environment or not.
 """
 
-import os
-import sys
-import argparse
-import json
-import pypto
 import numpy as np
 from numpy.testing import assert_allclose
 import torch
+
+import pypto
 
 
 @pypto.frontend.jit(
@@ -61,7 +58,6 @@ def test_add():
     add_kernel(input_data0, input_data1, output_data)
 
     golden = torch.add(input_data0, input_data1)
-    max_diff = np.abs(output_data.numpy() - golden.numpy()).max()
     assert_allclose(np.array(output_data.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
 
 

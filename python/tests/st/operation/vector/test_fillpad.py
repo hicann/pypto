@@ -21,10 +21,11 @@ FillPad 功能说明:
   输入 tensor shape = [32, 32], valid_shape = [16, 16]
   fillpad 后: [0:16, 0:16] 保持原数据, [16:32, :] 和 [:, 16:32] 被填充为 pad_val
 """
-import pypto
-import torch
-import numpy as np
+
 from st.pypto_test import TestBuilder
+import torch
+
+import pypto
 
 
 def op_fillpad(params, a, b):
@@ -49,8 +50,7 @@ def op_fillpad(params, a, b):
             # 创建带 valid_shape 的 view
             # shape = view_shape (pad后总大小)
             # valid_shape = [valid_h, valid_w] (有效数据大小)
-            tile_a = pypto.view(a, view_shape, [offset_x, offset_y],
-                                valid_shape=[valid_h, valid_w])
+            tile_a = pypto.view(a, view_shape, [offset_x, offset_y], valid_shape=[valid_h, valid_w])
 
             pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
 
@@ -93,7 +93,7 @@ class FillPadTest(TestBuilder):
         a_tensor = torch.rand(n_in, m_in, dtype=torch.float32) * 10
         self.setup_inputs(a_tensor)
         self.set_tol(rtol=1e-3, atol=1e-3)
-        return (a_tensor, )
+        return (a_tensor,)
 
 
 def test():

@@ -11,13 +11,14 @@
 import numpy as np
 from numpy.testing import assert_allclose
 
+
 class Colors:
-    RESET = '\033[0m'
+    reset = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
     RED = '\033[91m'
     GREEN = '\033[92m'
-    YELLOW = '\033[93m'
+    yellow = '\033[93m'
     BLUE = '\033[94m'
     PURPLE = '\033[95m'
     CYAN = '\033[96m'
@@ -50,8 +51,8 @@ def detailed_allclose_manual(cpu, npu, name, rtol=1e-3, atol=1e-3, max_prints=50
     print("=" * 80)
 
     # 定义颜色代码
-    YELLOW = '\033[93m'
-    RESET = '\033[0m'
+    yellow = '\033[93m'
+    reset = '\033[0m'
 
     # 将数组展平以便遍历，但记录原始索引
     cpu_flat = cpu.reshape(-1)
@@ -68,7 +69,7 @@ def detailed_allclose_manual(cpu, npu, name, rtol=1e-3, atol=1e-3, max_prints=50
 
     # 强制打印前n个元素
     if force_print_first_n > 0:
-        print(f"{YELLOW}强制打印前 {force_print_first_n} 个元素:{RESET}")
+        print(f"{yellow}强制打印前 {force_print_first_n} 个元素:{reset}")
         for flat_idx in range(min(force_print_first_n, total_elements)):
             cpu_val = cpu_flat[flat_idx]
             npu_val = npu_flat[flat_idx]
@@ -85,7 +86,7 @@ def detailed_allclose_manual(cpu, npu, name, rtol=1e-3, atol=1e-3, max_prints=50
             cpu_str = "NaN" if np.isnan(cpu_val) else f"{cpu_val:.6e}"
             npu_str = "NaN" if np.isnan(npu_val) else f"{npu_val:.6e}"
 
-            print(f"{YELLOW}索引 {multi_idx}: cpu={cpu_str}, npu={npu_str}, 差值={diff_str}{RESET}")
+            print(f"{yellow}索引 {multi_idx}: cpu={cpu_str}, npu={npu_str}, 差值={diff_str}{reset}")
 
         print("-" * 80)
 
@@ -126,12 +127,14 @@ def detailed_allclose_manual(cpu, npu, name, rtol=1e-3, atol=1e-3, max_prints=50
                 exceed_tolerance_count += 1
 
                 if abnormal_count <= max_prints:
-                    print(f"索引 {multi_idx}: cpu={cpu_val:.6e}, npu={npu_val:.6e}, "
-                          f"差值={abs_diff:.6e} (超过容差 {allowed_diff:.6e})")
+                    print(
+                        f"索引 {multi_idx}: cpu={cpu_val:.6e}, npu={npu_val:.6e}, "
+                        f"差值={abs_diff:.6e} (超过容差 {allowed_diff:.6e})"
+                    )
 
     # 统计信息
     print("=" * 80)
-    print(f"{Colors.BOLD}{Colors.PURPLE}{name} 比较结果统计:{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.PURPLE}{name} 比较结果统计:{Colors.reset}")
     print(f"总元素数量: {total_elements}")
     print(f"异常元素数量: {abnormal_count}")
     print(f"  - NaN 数量: {nan_count}")
@@ -139,7 +142,7 @@ def detailed_allclose_manual(cpu, npu, name, rtol=1e-3, atol=1e-3, max_prints=50
     print(f"异常比例: {abnormal_count / total_elements * 100:.4f}%")
 
     # 检查是否通过 allclose 条件
-    is_allclose = (abnormal_count == 0)
+    is_allclose = abnormal_count == 0
     print(f"\nnp.allclose 等价结果: {is_allclose}")
 
     if abnormal_count > max_prints:

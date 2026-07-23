@@ -23,11 +23,11 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 import logging
 import re
 import sys
-from datetime import datetime, timezone
 from typing import Any, Iterable
 
 CODECHECK_URL_RE = re.compile(
@@ -41,9 +41,7 @@ CI_ROW_RE = re.compile(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="从 PR 评论 JSON 中提取最新 codecheck URL（不调用 GitCode API）"
-    )
+    parser = argparse.ArgumentParser(description="从 PR 评论 JSON 中提取最新 codecheck URL（不调用 GitCode API）")
     parser.add_argument(
         "--input",
         help="评论 JSON 文件路径；不传时从 stdin 读取",
@@ -200,27 +198,25 @@ def extract_with_evidence(comments: Iterable[dict[str, Any]]) -> dict[str, Any]:
     # 构建证据链
     evidence_chain = []
     for idx, (created_at_dt, cid_num, created_at_raw, url) in enumerate(matches, start=1):
-        evidence_chain.append({
-            "index": idx,
-            "comment_id": cid_num if cid_num >= 0 else None,
-            "created_at": created_at_raw,
-            "url": url,
-            "is_latest": idx == 1
-        })
+        evidence_chain.append(
+            {
+                "index": idx,
+                "comment_id": cid_num if cid_num >= 0 else None,
+                "created_at": created_at_raw,
+                "url": url,
+                "is_latest": idx == 1,
+            }
+        )
 
     # 提取最新的
     latest_match = matches[0]
     latest = {
         "comment_id": latest_match[1] if latest_match[1] >= 0 else None,
         "created_at": latest_match[2],
-        "url": latest_match[3]
+        "url": latest_match[3],
     }
 
-    return {
-        "total_found": len(matches),
-        "latest": latest,
-        "evidence_chain": evidence_chain
-    }
+    return {"total_found": len(matches), "latest": latest, "evidence_chain": evidence_chain}
 
 
 def _status_is_failed(status: str) -> bool:

@@ -8,11 +8,12 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import os
 import math
+import os
+
 import numpy as np
 import torch
-import torch_npu
+
 import pypto
 
 
@@ -20,9 +21,9 @@ class IndexaPutParamInfo:
     def __init__(self, accumulate, b1, s1, b2, vs, ts):
         self.self_shape = (b1, s1)
         self.values_shape = (b2, s1)
-        self.indices_shape = (b2, )
-        self.view_shape = (vs, )
-        self.tile_shape = (ts, )
+        self.indices_shape = (b2,)
+        self.view_shape = (vs,)
+        self.tile_shape = (ts,)
         self.accumulate = accumulate
 
 
@@ -44,16 +45,30 @@ def indexput_comm_test_body(indexput_para, test_func):
     with pypto.function("INDEXPUT_", self_tensor, indices_tensor0, values_tensor, dst_tensor):
         for b_idx in pypto.loop(b_loop_num, name="LOOP_B0", idx_name="b_idx"):
             pypto.set_vec_tile_shapes(tile_shape[0])
-            view_values = pypto.view(values_tensor, [view_shape[0], values_shape[1]], [b_idx * view_shape[0], 0],
-                                    valid_shape=[
-                                        pypto.min(pypto.symbolic_scalar(values_shape[0]) - b_idx * view_shape[0],
-                                                pypto.symbolic_scalar(view_shape[0])),
-                                                pypto.symbolic_scalar(values_shape[1])])
-            view_indices0 = pypto.view(indices_tensor0, [view_shape[0]], [b_idx * view_shape[0]],
-                                    valid_shape=[
-                                        pypto.min(pypto.symbolic_scalar(indices_shape[0]) - b_idx * view_shape[0],
-                                                pypto.symbolic_scalar(view_shape[0]))])
-            test_func(self_tensor, (view_indices0, ), view_values, accumulate=accumulate)
+            view_values = pypto.view(
+                values_tensor,
+                [view_shape[0], values_shape[1]],
+                [b_idx * view_shape[0], 0],
+                valid_shape=[
+                    pypto.min(
+                        pypto.symbolic_scalar(values_shape[0]) - b_idx * view_shape[0],
+                        pypto.symbolic_scalar(view_shape[0]),
+                    ),
+                    pypto.symbolic_scalar(values_shape[1]),
+                ],
+            )
+            view_indices0 = pypto.view(
+                indices_tensor0,
+                [view_shape[0]],
+                [b_idx * view_shape[0]],
+                valid_shape=[
+                    pypto.min(
+                        pypto.symbolic_scalar(indices_shape[0]) - b_idx * view_shape[0],
+                        pypto.symbolic_scalar(view_shape[0]),
+                    )
+                ],
+            )
+            test_func(self_tensor, (view_indices0,), view_values, accumulate=accumulate)
             del view_values, view_indices0
     assert isinstance(dst_tensor, pypto.tensor)
 
@@ -71,7 +86,7 @@ def indexput_comm_test_body(indexput_para, test_func):
 
     pypto.runtime._device_run_once_data_from_host(pto_x1_tensor, pto_x2_tensor, pto_x3_tensor, pto_res_tensor)
 
-    expect = self_copy.index_put_((indices_input0, ), values_input, accumulate=False)
+    expect = self_copy.index_put_((indices_input0,), values_input, accumulate=False)
     assert torch.allclose(self_input, expect, rtol=1e-4, atol=1e-5)
     pypto.runtime._device_fini
 

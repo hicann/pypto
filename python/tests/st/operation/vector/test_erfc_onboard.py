@@ -11,13 +11,14 @@
 """
 Erfc onboard test
 """
-import os
+
 import math
-import pypto
-import pytest
+import os
+
 from numpy.testing import assert_allclose
 import torch
-import torch_npu
+
+import pypto
 
 
 def test_erfc_onboard():
@@ -36,25 +37,28 @@ def test_erfc_onboard():
     with pypto.function("MAIN", input1, output):
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
             for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
-                view_tensor_a = pypto.view(input1, view_shape,
-                                          [b_idx * view_shape[0],
-                                              s_idx * view_shape[1]],
-                                          valid_shape=[
-                                              pypto.min(pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                                                      pypto.symbolic_scalar(view_shape[0])),
-                                              pypto.min(pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                                                      pypto.symbolic_scalar(view_shape[1])),
-                                          ],
-                                          )
+                view_tensor_a = pypto.view(
+                    input1,
+                    view_shape,
+                    [b_idx * view_shape[0], s_idx * view_shape[1]],
+                    valid_shape=[
+                        pypto.min(
+                            pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
+                            pypto.symbolic_scalar(view_shape[0]),
+                        ),
+                        pypto.min(
+                            pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
+                            pypto.symbolic_scalar(view_shape[1]),
+                        ),
+                    ],
+                )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 view_tensor_a = pypto.erfc(view_tensor_a)
-                pypto.assemble(view_tensor_a, [
-                             b_idx * view_shape[0], s_idx * view_shape[1]], output)
+                pypto.assemble(view_tensor_a, [b_idx * view_shape[0], s_idx * view_shape[1]], output)
 
     assert isinstance(output, pypto.tensor)
 
-    a_tensor = torch.randint(
-        low=-100, high=100, size=[shape[0], shape[1]], dtype=torch.float32)
+    a_tensor = torch.randint(low=-100, high=100, size=[shape[0], shape[1]], dtype=torch.float32)
     b_tensor = torch.zeros(shape[0], shape[1], dtype=torch.float32)
     pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
     pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")

@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2024-2026. All rights reserved.
 """PyPTO/PyTorch/CANN/NPU 环境诊断。输出结构化报告供排查使用。"""
+
 from __future__ import annotations
 
 import argparse
@@ -20,10 +21,10 @@ from typing import Any
 
 # 深度 NPU 检测模块（同目录，作为独立脚本运行时需 sys.path 保证）
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from detect_npu import (  # noqa: E402  # pyright: ignore[reportImplicitRelativeImport, reportMissingImports]
+from detect_npu import (  # pyright: ignore[reportImplicitRelativeImport, reportMissingImports]
     NPUDetectionResult as _NPUDetectionResult,
 )
-from detect_npu import (  # noqa: E402  # pyright: ignore[reportImplicitRelativeImport, reportMissingImports]
+from detect_npu import (  # pyright: ignore[reportImplicitRelativeImport, reportMissingImports]
     detect_npu as _deep_detect_npu,
 )
 
@@ -47,7 +48,7 @@ def _setup_environment_variables() -> None:
                     capture_output=True,
                     text=True,
                     timeout=10,
-                    shell=False
+                    shell=False,
                 )
                 if result.returncode == 0:
                     for line in result.stdout.splitlines():
@@ -72,9 +73,7 @@ def _setup_environment_variables() -> None:
     arch = platform.machine()
     # 3. 设置 PTO_TILE_LIB_CODE_PATH（如果未设置）
     if "PTO_TILE_LIB_CODE_PATH" not in os.environ:
-        ascend_home = os.environ.get("ASCEND_HOME_PATH") or os.environ.get(
-            "ASCEND_TOOLKIT_HOME"
-        )
+        ascend_home = os.environ.get("ASCEND_HOME_PATH") or os.environ.get("ASCEND_TOOLKIT_HOME")
         if ascend_home:
             pto_isa_path = os.path.join(ascend_home, f"{arch}-linux")
             if os.path.isdir(pto_isa_path):
@@ -274,8 +273,10 @@ def _detect_cann(ascend_root: str, cann_hint: str | None = None) -> dict[str, An
         result["ops_exists"] = os.path.isdir(os.path.join(cann_dir, "opp"))
 
     # set_env.sh 候选
-    candidates = sorted(set(glob.glob(os.path.join(ascend_root, "*/set_env.sh")))
-                        | set(glob.glob(os.path.join(ascend_root, "*/*/set_env.sh"))))
+    candidates = sorted(
+        set(glob.glob(os.path.join(ascend_root, "*/set_env.sh")))
+        | set(glob.glob(os.path.join(ascend_root, "*/*/set_env.sh")))
+    )
     result["set_env_candidates"] = candidates[:10]
     return result
 
@@ -293,12 +294,14 @@ def _detect_pypto_repo() -> dict[str, Any]:
 
     # 环境变量 + 常规候选路径
     _ws = os.environ.get("HOME") or os.getcwd()
-    candidates.extend([
-        os.environ.get("PYPTO_REPO", ""),
-        os.path.join(_ws, "pypto"),
-        os.path.join(os.path.expanduser("~"), "pypto"),
-        os.getcwd(),
-    ])
+    candidates.extend(
+        [
+            os.environ.get("PYPTO_REPO", ""),
+            os.path.join(_ws, "pypto"),
+            os.path.join(os.path.expanduser("~"), "pypto"),
+            os.getcwd(),
+        ]
+    )
 
     for p in candidates:
         if not p:
@@ -373,8 +376,10 @@ def _detect_build_tools() -> dict[str, Any]:
 def _detect_third_party_deps(pypto_repo_path: str | None) -> dict[str, Any]:
     """检测第三方编译依赖（源码包）：nlohmann/json v3.11.3、libboundscheck v1.1.16。"""
     json_url = 'https://gitcode.com/cann-src-third-party/json/releases/download/v3.11.3/json-3.11.3.tar.gz'
-    securec_url = 'https://gitcode.com/cann-src-third-party/libboundscheck/releases/' \
-                    'download/v1.1.16/libboundscheck-v1.1.16.tar.gz'
+    securec_url = (
+        'https://gitcode.com/cann-src-third-party/libboundscheck/releases/'
+        'download/v1.1.16/libboundscheck-v1.1.16.tar.gz'
+    )
 
     result: dict[str, Any] = {
         'json': {'found': False, 'version': 'v3.11.3', 'download_url': json_url},
@@ -490,12 +495,14 @@ def _detect_python_deps(pypto_repo_path: str | None) -> dict[str, Any]:
                 status = 'outdated'
                 outdated.append(pkg_name)
 
-        packages.append({
-            'name': pkg_name,
-            'required': required,
-            'installed_version': installed_version,
-            'status': status,
-        })
+        packages.append(
+            {
+                'name': pkg_name,
+                'required': required,
+                'installed_version': installed_version,
+                'status': status,
+            }
+        )
 
     return {
         'requirements_file': requirements_file,
@@ -592,34 +599,59 @@ def _collect_issues(
     for name, min_ver in tool_requirements:
         info = build_tools.get(name, {})
         if not info.get('found'):
-            issues.append({'component': f'build:{name}', 'severity': 'error',
-                           'message': f'{name} 未安装' + (f'（需 >= {min_ver}）' if min_ver else ''),
-                           'fix_hint': 'cd $PYPTO_REPO && bash tools/prepare_env.sh --quiet --type=deps'})
+            issues.append(
+                {
+                    'component': f'build:{name}',
+                    'severity': 'error',
+                    'message': f'{name} 未安装' + (f'（需 >= {min_ver}）' if min_ver else ''),
+                    'fix_hint': 'cd $PYPTO_REPO && bash tools/prepare_env.sh --quiet --type=deps',
+                }
+            )
         elif not info.get('meets_minimum'):
-            issues.append({'component': f'build:{name}', 'severity': 'error',
-                           'message': f"{name} {info.get('version')} 版本过低（需 >= {min_ver}）",
-                           'fix_hint': 'cd $PYPTO_REPO && bash tools/prepare_env.sh --quiet --type=deps'})
+            issues.append(
+                {
+                    'component': f'build:{name}',
+                    'severity': 'error',
+                    'message': f"{name} {info.get('version')} 版本过低（需 >= {min_ver}）",
+                    'fix_hint': 'cd $PYPTO_REPO && bash tools/prepare_env.sh --quiet --type=deps',
+                }
+            )
 
     if pypto_repo.get('valid', False):
         for dep_name, dep_info in third_party_deps.items():
             if not dep_info.get('found'):
-                issues.append({'component': f'third_party:{dep_name}', 'severity': 'warning',
-                               'message': f"{dep_name} {dep_info.get('version', '')} 源码包未找到（编译时可自动下载）",
-                               'fix_hint': 'cd $PYPTO_REPO && bash tools/prepare_env.sh --quiet --type=third_party'})
+                issues.append(
+                    {
+                        'component': f'third_party:{dep_name}',
+                        'severity': 'warning',
+                        'message': f"{dep_name} {dep_info.get('version', '')} 源码包未找到（编译时可自动下载）",
+                        'fix_hint': 'cd $PYPTO_REPO && bash tools/prepare_env.sh --quiet --type=third_party',
+                    }
+                )
 
     for pkg in python_deps.get('packages', []):
         if pkg['status'] == 'missing':
             required = pkg.get('required')
             suffix = f" (requires {required})" if required else ''
-            issues.append({'component': f"python_dep:{pkg['name']}", 'severity': 'warning',
-                           'message': f"Python package {pkg['name']} not installed{suffix}",
-                           'fix_hint': 'pip3 install -r $PYPTO_REPO/python/requirements.txt'})
+            issues.append(
+                {
+                    'component': f"python_dep:{pkg['name']}",
+                    'severity': 'warning',
+                    'message': f"Python package {pkg['name']} not installed{suffix}",
+                    'fix_hint': 'pip3 install -r $PYPTO_REPO/python/requirements.txt',
+                }
+            )
         elif pkg['status'] == 'outdated':
             installed = pkg.get('installed_version', '')
             required = pkg['required']
-            issues.append({'component': f"python_dep:{pkg['name']}", 'severity': 'warning',
-                           'message': f"Python package {pkg['name']} {installed} version too low (requires {required})",
-                           'fix_hint': 'pip3 install -r $PYPTO_REPO/python/requirements.txt'})
+            issues.append(
+                {
+                    'component': f"python_dep:{pkg['name']}",
+                    'severity': 'warning',
+                    'message': f"Python package {pkg['name']} {installed} version too low (requires {required})",
+                    'fix_hint': 'pip3 install -r $PYPTO_REPO/python/requirements.txt',
+                }
+            )
 
     # NPU 环境 + CANN 缺失 → 需要安装 CANN
     if is_npu_env and not cann.get('install_path'):
@@ -629,55 +661,108 @@ def _collect_issues(
             '&& bash tools/prepare_env.sh --quiet --type=cann --device-type=<a2|a3> '
             '--install-path=${ASCEND_INSTALL_PATH:-/usr/local/Ascend} 2>&1 | tee prepare_env.cann.log'
         )
-        issues.append({'component': 'cann', 'severity': 'error',
-                       'message': '检测到 NPU 环境但 CANN 未安装，需分步安装 deps/third_party/cann',
-                       'fix_hint': cann_fix_hint})
+        issues.append(
+            {
+                'component': 'cann',
+                'severity': 'error',
+                'message': '检测到 NPU 环境但 CANN 未安装，需分步安装 deps/third_party/cann',
+                'fix_hint': cann_fix_hint,
+            }
+        )
     elif not cann.get('install_path'):
-        issues.append({'component': 'cann', 'severity': 'warning', 'message': 'CANN 未安装',
-                       'fix_hint': '见 references/prepare_environment.md § "使用 prepare_env.sh 完整安装"'})
+        issues.append(
+            {
+                'component': 'cann',
+                'severity': 'warning',
+                'message': 'CANN 未安装',
+                'fix_hint': '见 references/prepare_environment.md § "使用 prepare_env.sh 完整安装"',
+            }
+        )
     elif not cann.get('set_env_candidates'):
-        issues.append({'component': 'cann', 'severity': 'warning', 'message': 'CANN set_env.sh 未找到',
-                       'fix_hint': 'source ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh'})
+        issues.append(
+            {
+                'component': 'cann',
+                'severity': 'warning',
+                'message': 'CANN set_env.sh 未找到',
+                'fix_hint': 'source ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh',
+            }
+        )
 
     if is_npu_env and not torch_info.get('ok'):
-        issues.append({'component': 'torch', 'severity': 'error',
-                       'message': torch_info.get('error', '无法导入 torch'),
-                       'fix_hint': '见 troubleshooting.md § "torch_npu 导入失败"'})
+        issues.append(
+            {
+                'component': 'torch',
+                'severity': 'error',
+                'message': torch_info.get('error', '无法导入 torch'),
+                'fix_hint': '见 troubleshooting.md § "torch_npu 导入失败"',
+            }
+        )
     if is_npu_env and not torch_npu_info.get('ok'):
-        issues.append({'component': 'torch_npu', 'severity': 'error',
-                       'message': torch_npu_info.get('error', '无法导入 torch_npu'),
-                       'fix_hint': '见 troubleshooting.md § "torch_npu 导入失败"'})
+        issues.append(
+            {
+                'component': 'torch_npu',
+                'severity': 'error',
+                'message': torch_npu_info.get('error', '无法导入 torch_npu'),
+                'fix_hint': '见 troubleshooting.md § "torch_npu 导入失败"',
+            }
+        )
 
     if not pypto_info.get('ok'):
         pypto_fix_hint = (
             'cd $PYPTO_REPO && python3 build_ci.py -f python3 --clean --disable_auto_execute '
             '&& pip install build_out/pypto-*.whl --force-reinstall -q'
         )
-        issues.append({'component': 'pypto', 'severity': 'warning',
-                       'message': pypto_info.get('error', '无法导入 pypto'),
-                       'fix_hint': pypto_fix_hint})
+        issues.append(
+            {
+                'component': 'pypto',
+                'severity': 'warning',
+                'message': pypto_info.get('error', '无法导入 pypto'),
+                'fix_hint': pypto_fix_hint,
+            }
+        )
 
     pto_path = pto_isa.get('path')
     if not pto_path:
-        issues.append({'component': 'pto-isa', 'severity': 'warning',
-                       'message': 'PTO_TILE_LIB_CODE_PATH 未设置',
-                       'fix_hint': (
-                           'export PTO_TILE_LIB_CODE_PATH=$PWD/pto-isa && '
-                           'git clone https://gitcode.com/cann/pto-isa.git '
-                           '$PTO_TILE_LIB_CODE_PATH'
-                       )})
+        issues.append(
+            {
+                'component': 'pto-isa',
+                'severity': 'warning',
+                'message': 'PTO_TILE_LIB_CODE_PATH 未设置',
+                'fix_hint': (
+                    'export PTO_TILE_LIB_CODE_PATH=$PWD/pto-isa && '
+                    'git clone https://gitcode.com/cann/pto-isa.git '
+                    '$PTO_TILE_LIB_CODE_PATH'
+                ),
+            }
+        )
     elif not pto_isa.get('include_pto_exists'):
-        issues.append({'component': 'pto-isa', 'severity': 'warning',
-                       'message': f'PTO_TILE_LIB_CODE_PATH={pto_path} 下缺少 include/pto',
-                       'fix_hint': '见 troubleshooting.md § "pto-isa 版本不匹配"'})
+        issues.append(
+            {
+                'component': 'pto-isa',
+                'severity': 'warning',
+                'message': f'PTO_TILE_LIB_CODE_PATH={pto_path} 下缺少 include/pto',
+                'fix_hint': '见 troubleshooting.md § "pto-isa 版本不匹配"',
+            }
+        )
     elif pto_isa.get('header_count', 0) == 0:
-        issues.append({'component': 'pto-isa', 'severity': 'warning',
-                       'message': f'PTO_TILE_LIB_CODE_PATH={pto_path} 的 include/pto 下无头文件，指令集不完整',
-                       'fix_hint': '重新获取 pto-isa 源码：git clone https://gitcode.com/cann/pto-isa.git'})
+        issues.append(
+            {
+                'component': 'pto-isa',
+                'severity': 'warning',
+                'message': f'PTO_TILE_LIB_CODE_PATH={pto_path} 的 include/pto 下无头文件，指令集不完整',
+                'fix_hint': '重新获取 pto-isa 源码：git clone https://gitcode.com/cann/pto-isa.git',
+            }
+        )
 
     if not pypto_repo.get('valid'):
-        issues.append({'component': 'pypto_repo', 'severity': 'warning', 'message': 'PyPTO 仓库未找到',
-                       'fix_hint': 'git clone https://gitcode.com/cann/pypto.git ./pypto'})
+        issues.append(
+            {
+                'component': 'pypto_repo',
+                'severity': 'warning',
+                'message': 'PyPTO 仓库未找到',
+                'fix_hint': 'git clone https://gitcode.com/cann/pypto.git ./pypto',
+            }
+        )
 
     return issues
 
@@ -1113,9 +1198,7 @@ def main() -> int:
         ok_count = total_pkgs - len(missing_list) - len(outdated_list)
         missing_count = len(missing_list)
         outdated_count = len(outdated_list)
-        logging.info(
-            f"python_deps: {ok_count}/{total_pkgs} ok ({missing_count} missing, {outdated_count} outdated)"
-        )
+        logging.info(f"python_deps: {ok_count}/{total_pkgs} ok ({missing_count} missing, {outdated_count} outdated)")
         if issues:
             logging.info(f"\nissues ({len(issues)}):")
             for i in issues:

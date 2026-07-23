@@ -12,14 +12,12 @@
 Test rsqrt codegen for Kirin9030
 """
 
-import pytest
-
 from kirin.common_rsqrt import (
+    TEST_CASES,
     create_rsqrt_kernels,
     run_rsqrt_test,
-    TEST_CASES,
 )
-
+import pytest
 
 KERNELS = create_rsqrt_kernels("Kirin9030")
 

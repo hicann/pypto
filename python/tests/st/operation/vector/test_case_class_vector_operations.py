@@ -8,14 +8,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 from pathlib import Path
 import sys
-import pypto
-import torch
 
 from pto_test_case_runner import PTOTestCaseRunner, get_pto_dtype_by_name
+import torch
+
+import pypto
 
 helper_path: Path = Path(
     Path(__file__).parent.parent.parent.parent.parent.parent,
@@ -23,8 +24,8 @@ helper_path: Path = Path(
 ).resolve()
 if str(helper_path) not in sys.path:
     sys.path.append(str(helper_path))
-from test_case import TestCase
-from test_case_tools import get_dtype_by_name, parse_list_str
+from test_case import TestCase  # noqa: E402
+from test_case_tools import get_dtype_by_name, parse_list_str  # noqa: E402
 
 
 class AddTestCase(TestCase):
@@ -47,9 +48,7 @@ class AddTestCase(TestCase):
             view_shape,
             tile_shape,
             params,
-            PTOTestCaseRunner(
-                "Add", input_tensors, output_tensors, view_shape, tile_shape, params
-            ),
+            PTOTestCaseRunner("Add", input_tensors, output_tensors, view_shape, tile_shape, params),
         )
 
     def run_in_dyn_func(self, inputs, _params: dict) -> dict:
@@ -82,15 +81,11 @@ class CastTestCase(TestCase):
             view_shape,
             tile_shape,
             params,
-            PTOTestCaseRunner(
-                "Cast", input_tensors, output_tensors, view_shape, tile_shape, params
-            ),
+            PTOTestCaseRunner("Cast", input_tensors, output_tensors, view_shape, tile_shape, params),
         )
 
     def run_in_dyn_func(self, inputs, params: dict) -> dict:
-        return pypto.cast(
-            *inputs, get_pto_dtype_by_name(params["dst_dtype"])
-        )
+        return pypto.cast(*inputs, get_pto_dtype_by_name(params["dst_dtype"]))
 
     def golden_func(self, inputs, params: dict) -> list:
         return [inputs[0].to(get_dtype_by_name(params["dst_dtype"], True))]
@@ -122,9 +117,7 @@ class ExpTestCase(TestCase):
             view_shape,
             tile_shape,
             params,
-            PTOTestCaseRunner(
-                "Exp", input_tensors, output_tensors, view_shape, tile_shape, params
-            ),
+            PTOTestCaseRunner("Exp", input_tensors, output_tensors, view_shape, tile_shape, params),
         )
 
     def run_in_dyn_func(self, inputs, _params: dict) -> dict:
@@ -168,7 +161,7 @@ class ScalarAddSTestCase(TestCase):
         )
 
     def run_in_dyn_func(self, inputs, params: dict) -> dict:
-        scalar = inputs[0]
+        _scalar = inputs[0]
         return pypto.add(*inputs, params.get("scalar"))
 
     def golden_func(self, inputs, params: dict) -> list:
@@ -298,7 +291,6 @@ class ScalarDivSTestCase(TestCase):
         )
 
     def run_in_dyn_func(self, inputs, params: dict) -> dict:
-
         return pypto.div(*inputs, params.get("scalar"))
 
     def golden_func(self, inputs, params: dict) -> list:
@@ -388,9 +380,7 @@ class ScalarMaxSTestCase(TestCase):
         return pypto.scalar_maxs(*inputs, scalar, params.get("reverse"))
 
     def golden_func(self, inputs, params: dict) -> list:
-        scalar = torch.full(
-            inputs[0].shape, params.get("scalar"), dtype=inputs[0].dtype
-        )
+        scalar = torch.full(inputs[0].shape, params.get("scalar"), dtype=inputs[0].dtype)
         return [torch.max(*inputs, scalar)]
 
     def golden_func_params(self) -> dict:
@@ -434,10 +424,7 @@ class TransposeTestCase(TestCase):
         return pypto.transpose(*inputs, params.get("first_dim"), params.get("second_dim"))
 
     def golden_func(self, inputs, params: dict) -> list:
-        return [
-            torch.transpose(*inputs, params.get("first_dim"),
-                            params.get("second_dim"))
-        ]
+        return [torch.transpose(*inputs, params.get("first_dim"), params.get("second_dim"))]
 
     def golden_func_params(self) -> dict:
         return {
@@ -467,9 +454,7 @@ class TopKTestCase(TestCase):
             view_shape,
             tile_shape,
             params,
-            PTOTestCaseRunner(
-                "TopK", input_tensors, output_tensors, view_shape, tile_shape, params
-            ),
+            PTOTestCaseRunner("TopK", input_tensors, output_tensors, view_shape, tile_shape, params),
         )
 
     def run_in_dyn_func(self, inputs, params: dict) -> dict:
@@ -482,9 +467,7 @@ class TopKTestCase(TestCase):
         return {
             "dims": parse_list_str(self._case_desc.params.get("dims"))[0],
             "count": int(self._case_desc.params.get("count")),
-            "islargest": bool(
-                parse_list_str(self._case_desc.params.get("islargest"))[0]
-            ),
+            "islargest": bool(parse_list_str(self._case_desc.params.get("islargest"))[0]),
         }
 
 
@@ -604,11 +587,7 @@ class ExpandExpDifTestCase(TestCase):
     def golden_func(self, inputs, _params: dict) -> list:
         dtype_out = inputs[0].dtype
         dtype_in = torch.float32 if dtype_out == torch.bfloat16 else dtype_out
-        return [
-            torch.exp(torch.sub(inputs[0].to(dtype_in), inputs[1].to(dtype_in))).to(
-                dtype_out
-            )
-        ]
+        return [torch.exp(torch.sub(inputs[0].to(dtype_in), inputs[1].to(dtype_in))).to(dtype_out)]
 
     def golden_func_params(self) -> dict:
         return {}

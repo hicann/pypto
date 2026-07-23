@@ -10,8 +10,8 @@
 # -----------------------------------------------------------------------------------------------------------
 
 import ast
-import sys
-from pypto.frontend.parser.liveness import ScopeLivenessAnalyzer, LivenessResult, Scope, VarInfo
+
+from pypto.frontend.parser.liveness import ScopeLivenessAnalyzer
 
 
 def test_rule2_same_scope():
@@ -48,8 +48,9 @@ def kernel(input_tensor, bias_input, output):
 """
     tree = ast.parse(code)
     analyzer = ScopeLivenessAnalyzer()
-    result = analyzer.analyze(tree, exempt_vars={'input_tensor',
-        'bias_input', 'output', 'bs_idx', 'tile_batch', 'tmp_idx'})
+    result = analyzer.analyze(
+        tree, exempt_vars={'input_tensor', 'bias_input', 'output', 'bs_idx', 'tile_batch', 'tmp_idx'}
+    )
 
     bias_2d_info = result.var_info.get('bias_2d')
     assert bias_2d_info is not None
@@ -74,12 +75,13 @@ def kernel(input_tensor, bias_input, output):
 """
     tree = ast.parse(code)
     analyzer = ScopeLivenessAnalyzer()
-    result = analyzer.analyze(tree, exempt_vars={'input_tensor',
-        'bias_input', 'output', 'bs_idx', 'tile_batch', 'tmp_idx'})
+    result = analyzer.analyze(
+        tree, exempt_vars={'input_tensor', 'bias_input', 'output', 'bs_idx', 'tile_batch', 'tmp_idx'}
+    )
 
     tile_bias_info = result.var_info.get('tile_bias')
     assert tile_bias_info is not None
-    assert tile_bias_info.delete_after_scope_exit == False
+    assert not tile_bias_info.delete_after_scope_exit
 
 
 def test_scope_lift():

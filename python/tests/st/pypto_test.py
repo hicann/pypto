@@ -8,17 +8,19 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import abc
-import os
-import logging
 from collections.abc import Iterable
 import inspect
-import torch
-import torch_npu
+import logging
+import os
+
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
+import torch_npu
+
 import pypto
 
 
@@ -52,7 +54,6 @@ class TestBuilder(abc.ABC):
     def set_tol(self, rtol=1e-3, atol=1e-3):
         self.rtol_value = rtol
         self.atol_value = atol
-
 
     def set_dyn_axes(self, input_dyn_axes, output_dyn_axes):
         self.input_dyn_axes = input_dyn_axes
@@ -119,18 +120,21 @@ class TestBuilder(abc.ABC):
 
         if on_board:
             logging.info("Kernel Launch ...")
-            pto_input_data = [pypto.from_torch(tensor, f"IN_{idx}")
-                                for idx, tensor in enumerate(self.input_data_list)]
-            pto_output_data = [pypto.from_torch(tensor, f"OUT_{idx}")
-                                for idx, tensor in enumerate(self.output_data_list)]
+            pto_input_data = [pypto.from_torch(tensor, f"IN_{idx}") for idx, tensor in enumerate(self.input_data_list)]
+            pto_output_data = [
+                pypto.from_torch(tensor, f"OUT_{idx}") for idx, tensor in enumerate(self.output_data_list)
+            ]
             pypto.runtime._device_run_once_data_from_host(*pto_input_data, *pto_output_data)
             logging.info("Kernel run finish.")
 
             result_len = len(self.golden_output)
             for idx in range(result_len):
-                assert_allclose(self.golden_output[idx].cpu().flatten().tolist(),
-                                self.output_data_list[idx].cpu().flatten().tolist(),
-                                rtol=self.rtol_value, atol=self.atol_value)
+                assert_allclose(
+                    self.golden_output[idx].cpu().flatten().tolist(),
+                    self.output_data_list[idx].cpu().flatten().tolist(),
+                    rtol=self.rtol_value,
+                    atol=self.atol_value,
+                )
 
     def run_pto_jit(self):
         torch.npu.set_device(self.device_id)
@@ -144,14 +148,16 @@ class TestBuilder(abc.ABC):
         torch_npu.npu.synchronize()
         result_len = len(goldens)
         for idx in range(result_len):
-            assert_allclose(np.array(self.output_pto_list[idx].cpu().flatten().tolist()),
-                            np.array(goldens[idx].flatten().tolist()),
-                            rtol=self.rtol_value, atol=self.atol_value)
+            assert_allclose(
+                np.array(self.output_pto_list[idx].cpu().flatten().tolist()),
+                np.array(goldens[idx].flatten().tolist()),
+                rtol=self.rtol_value,
+                atol=self.atol_value,
+            )
 
     def _convert_torch_to_pto(self, tensors, dynamic_axes):
         if len(tensors) == len(dynamic_axes):
-            pto_tensors = [pypto.from_torch(
-                tensor, dynamic_axis=axis) for tensor, axis in zip(tensors, dynamic_axes)]
+            pto_tensors = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in zip(tensors, dynamic_axes)]
         elif len(dynamic_axes) == 0:
             pto_tensors = [pypto.from_torch(tensor) for tensor in tensors]
         else:
@@ -176,7 +182,7 @@ class TestBuilder(abc.ABC):
 
     def torch_convert(self, data_tuple: tuple):
         if not isinstance(data_tuple, tuple):
-            data_tuple = (data_tuple, )
+            data_tuple = (data_tuple,)
 
         def _convert(item):
             if isinstance(item, np.ndarray):

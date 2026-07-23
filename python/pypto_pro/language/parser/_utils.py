@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """Small shared parser utilities."""
+
 from __future__ import annotations
 
 __all__ = ["_const_int_value", "_is_const_int"]

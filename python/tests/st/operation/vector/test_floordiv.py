@@ -11,16 +11,17 @@
 """
 Test floor_div operation on board
 """
-from typing import List
 
 import os
-import pytest
-import pypto
+from typing import List
+
 import torch
 import torch_npu
 
-from pypto import Tensor as PTensor, loop, ceildiv, SymInt
-from pypto.frontend import jit, dynamic
+import pypto
+from pypto import SymInt, ceildiv, loop
+from pypto import Tensor as PTensor
+from pypto.frontend import jit
 
 
 @jit

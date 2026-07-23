@@ -27,23 +27,24 @@ Usage::
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
+import logging
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # NPUArch string → compilation arch mapping
 _ARCH_MAP = {
-    "DAV_1001": "a3",   # 910
-    "DAV_2201": "a3",   # 910B/910C
-    "DAV_3510": "a5",   # 950
+    "DAV_1001": "a3",  # 910
+    "DAV_2201": "a3",  # 910B/910C
+    "DAV_3510": "a5",  # 950
 }
 
 
 @dataclass
 class PlatformInfo:
     """NPU platform hardware information."""
+
     soc_version: str = ""
     core_num: int = 0
     # On architectures where cube (AIC) and vector (AIV) cores are counted
@@ -75,6 +76,7 @@ def _get_npu_arch() -> str:
     """
     try:
         from pypto import pypto_impl
+
         return pypto_impl.GetNPUArch()
     except (ImportError, AttributeError, RuntimeError) as e:
         logger.debug("pypto_impl.GetNPUArch() not available: %s", e)
@@ -89,6 +91,7 @@ def _get_ai_core_num() -> int:
     """
     try:
         from pypto import pypto_impl
+
         return pypto_impl.GetAICoreNum()
     except (ImportError, AttributeError, RuntimeError) as e:
         logger.debug("pypto_impl.GetAICoreNum() not available: %s", e)
@@ -103,6 +106,7 @@ def _get_aic_core_num() -> int:
     """
     try:
         from pypto import pypto_impl
+
         return pypto_impl.GetAICCoreNum()
     except (ImportError, AttributeError, RuntimeError) as e:
         logger.debug("pypto_impl.GetAICCoreNum() not available: %s", e)
@@ -117,6 +121,7 @@ def _get_aiv_core_num() -> int:
     """
     try:
         from pypto import pypto_impl
+
         return pypto_impl.GetAIVCoreNum()
     except (ImportError, AttributeError, RuntimeError) as e:
         logger.debug("pypto_impl.GetAIVCoreNum() not available: %s", e)
@@ -151,9 +156,14 @@ def get_platform_info(force_refresh: bool = False) -> PlatformInfo:
     _cached_info = info
 
     if info.soc_version:
-        logger.info("Platform: %s (arch=%s), core_num=%d, cube_core_num=%d, vector_core_num=%d",
-                    info.soc_version, info.arch, info.core_num,
-                    info.cube_core_num, info.vector_core_num)
+        logger.info(
+            "Platform: %s (arch=%s), core_num=%d, cube_core_num=%d, vector_core_num=%d",
+            info.soc_version,
+            info.arch,
+            info.core_num,
+            info.cube_core_num,
+            info.vector_core_num,
+        )
     else:
         logger.debug("Platform info not available (pypto_impl not loaded)")
 

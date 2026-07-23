@@ -16,16 +16,18 @@ with dynamic shape and nested loop_unroll.
 """
 
 import os
-import pypto
-import torch
+
 import numpy as np
 from numpy.testing import assert_allclose
+import torch
+
+import pypto
 
 
 @pypto.frontend.jit()
 def add_constant_kernel(
     x: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32)
+    y: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
 ):
     """
     Add constant operator: y = x + constant
@@ -59,10 +61,7 @@ def add_constant_kernel(
             actual_tile_m = tile_m * m_unroll_factor
             actual_tile_n = tile_n * n_unroll_factor
 
-            x_view = pypto.view(
-                x, [actual_tile_m, actual_tile_n], [m_offset, n_offset],
-                valid_shape=[valid_m, valid_n]
-            )
+            x_view = pypto.view(x, [actual_tile_m, actual_tile_n], [m_offset, n_offset], valid_shape=[valid_m, valid_n])
 
             pypto.set_vec_tile_shapes(actual_tile_m, actual_tile_n)
             result = pypto.add(x_view, constant)
@@ -75,7 +74,6 @@ if __name__ == "__main__":
     device = f'npu:{device_id}'
     torch.npu.set_device(device_id)
 
-
     m, n = 128, 128
     constant = 0.5
 
@@ -85,7 +83,6 @@ if __name__ == "__main__":
     x_npu = x.npu()
     y_npu = y.npu()
 
-
     add_constant_kernel(x_npu, y_npu)
     torch.npu.synchronize()
 
@@ -93,9 +90,4 @@ if __name__ == "__main__":
 
     golden = x.cpu() + constant
 
-    assert_allclose(
-        np.array(y),
-        np.array(golden.cpu()),
-        rtol=1e-3,
-        atol=1e-3
-    )
+    assert_allclose(np.array(y), np.array(golden.cpu()), rtol=1e-3, atol=1e-3)

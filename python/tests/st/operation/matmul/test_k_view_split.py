@@ -20,22 +20,24 @@ where viewshape > validshape, using atomic_add to accumulate partial results.
 - 所有可配置参数从k_split_test_case.py读取
 - 包含 matmul 和 scaled_mm 两种测试场景
 """
-import os
-import pytest
-import pypto
-import torch
-import torch_npu
-import torch.nn.functional as F
 
+import os
+
+import pytest
 from testcase.k_view_split_test_case import (
+    K_BLOCK_SIZE_64,
     K_SPLIT_2D_TESTS,
     K_SPLIT_3D_TESTS,
     SCALED_MM_K_SPLIT_TESTS,
-    KSplitConfig,
-    K_BLOCK_SIZE_64,
     SHAPE_DIM_2,
+    KSplitConfig,
     _process_scale_tensors,
 )
+import torch
+import torch.nn.functional as functional
+import torch_npu
+
+import pypto
 
 
 # ============================================================================
@@ -155,7 +157,7 @@ def scaled_mm_2d_k_split_kernel(
     Supports transpose via config parameters.
     """
     m_size = config.m
-    k_size = config.k
+    _k_size = config.k
     n_size = config.n
     k_view = config.k_view
     a_trans = config.a_trans
@@ -317,11 +319,11 @@ def run_scaled_mm_k_split_test(case: dict):
     scale_a_tmp, scale_b_tmp = _process_scale_tensors(scale_a_cpu, scale_b_cpu, config)
 
     mat_b_tmp = b_cpu.to(torch.float32).T if config.b_trans else b_cpu.to(torch.float32)
-    mat_b_tmp = F.pad(mat_b_tmp, ((0, 0, 0, padding_k)), "constant")
+    mat_b_tmp = functional.pad(mat_b_tmp, ((0, 0, 0, padding_k)), "constant")
     mat_b_tmp = scale_b_tmp * mat_b_tmp
 
     mat_a_tmp = a_cpu.to(torch.float32).T if config.a_trans else a_cpu.to(torch.float32)
-    mat_a_tmp = F.pad(mat_a_tmp, ((0, padding_k, 0, 0)), "constant")
+    mat_a_tmp = functional.pad(mat_a_tmp, ((0, padding_k, 0, 0)), "constant")
     mat_a_tmp = scale_a_tmp * mat_a_tmp
 
     golden = torch.matmul(mat_a_tmp, mat_b_tmp)
@@ -352,28 +354,25 @@ def run_scaled_mm_k_split_test(case: dict):
 # ============================================================================
 # Pytest Test Functions
 # ============================================================================
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in K_SPLIT_2D_TESTS
-])
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in K_SPLIT_2D_TESTS]
+)
 def test_2d_k_split(case: dict):
     """Test 2D matmul with k-axis split."""
     run_2d_k_split_test(case)
 
 
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in K_SPLIT_3D_TESTS
-])
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in K_SPLIT_3D_TESTS]
+)
 def test_3d_bmm_k_split(case: dict):
     """Test 3D BMM with k-axis split."""
     run_3d_bmm_k_split_test(case)
 
 
-@pytest.mark.parametrize("case", [
-    pytest.param(case, marks=pytest.mark.soc(*case["products"]))
-    for case in SCALED_MM_K_SPLIT_TESTS
-])
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in SCALED_MM_K_SPLIT_TESTS]
+)
 def test_scaled_mm_k_split(case: dict):
     """Test 2D scaled_mm with k-axis split."""
     run_scaled_mm_k_split_test(case)

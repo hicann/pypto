@@ -8,7 +8,6 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-import pytest
 import pypto
 from pypto import ir
 
@@ -84,7 +83,7 @@ def test_builder_function_with_params_and_returns():
 
     b.begin_function("add_func", sp)
     x = b.func_arg("x", st, sp)
-    y = b.func_arg("y", st, sp)
+    _y = b.func_arg("y", st, sp)
     b.return_type(st)
     b.assign(x, ir.ConstInt(42, ir.INT32, sp), sp)
     func = b.end_function(sp)
@@ -547,10 +546,12 @@ def test_builder_section():
 
     assert isinstance(section, pypto_impl.ir.SectionStmt)
     assert str(func.body[0]) == str(section)
-    assert str(section) == "\n".join([
-        "with ir.section_vector():",
-        "    x: ir.Scalar[ir.INT32] = 1",
-    ])
+    assert str(section) == "\n".join(
+        [
+            "with ir.section_vector():",
+            "    x: ir.Scalar[ir.INT32] = 1",
+        ]
+    )
 
 
 # ---------- Program building ----------
@@ -800,8 +801,8 @@ def test_builder_complex_program():
 
 def test_builder_create_scalar_var():
     b = ir.IRBuilder()
-    ss = b.create_scalar_var("n")
-    ss = b.create_const_int(42)
+    _ss = b.create_scalar_var("n")
+    _ss = b.create_const_int(42)
 
 
 # ---------- create_tensor_var ----------
@@ -958,9 +959,7 @@ def test_builder_create_while_stmt():
     assert isinstance(stmt, ir.WhileStmt)
     assert len(stmt.iter_args) == 1
     assert len(stmt.return_vars) == 1
-    assert str(stmt) == str(
-        ir.WhileStmt(cond, [iter_arg], body, [ret_var], sp)
-    )
+    assert str(stmt) == str(ir.WhileStmt(cond, [iter_arg], body, [ret_var], sp))
 
 
 def test_builder_create_break_stmt():

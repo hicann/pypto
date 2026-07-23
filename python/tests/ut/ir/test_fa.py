@@ -77,15 +77,14 @@ def fa_kernel(q, k, v, block_table, kv_act_seqs, atten_out, softmax_scale, tile_
                         for i in range(block_num):
                             block_idx = block_table[b_idx, idx + i]
                             block_idx_valid = block_idx.max(0)
-                            kj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                pypto.view(k_2d, [block_size, dn], [block_idx_valid * block_size, n2_idx * dn])
+                            kj_assemble[i * block_size:(i + 1) * block_size, 0:] = pypto.view(
+                                k_2d, [block_size, dn], [block_idx_valid * block_size, n2_idx * dn]
+                            )
                         kj_assemble = pypto.view(kj_assemble, [s2_tile, dn], [0, 0], valid_shape=[s2_tile, dn])
 
                         pypto.set_cube_tile_shapes(c1_tile[0], c1_tile[1], c1_tile[2])
-                        sij = pypto.matmul(qi, kj_assemble, pypto.DT_FP32, a_trans=False,
-                                           b_trans=True)
-                        sij = pypto.view(sij, [g_tile, s2_tile], [0, 0],
-                                         valid_shape=[g_tile, actual_s2_tile])
+                        sij = pypto.matmul(qi, kj_assemble, pypto.DT_FP32, a_trans=False, b_trans=True)
+                        sij = pypto.view(sij, [g_tile, s2_tile], [0, 0], valid_shape=[g_tile, actual_s2_tile])
                         pypto.set_vec_tile_shapes(v1_tile[0], v1_tile[1])
                         if s2_idx == 0:
                             sij_scale = pypto.mul(sij, softmax_scale)
@@ -101,10 +100,12 @@ def fa_kernel(q, k, v, block_table, kv_act_seqs, atten_out, softmax_scale, tile_
                             for i in range(block_num):
                                 block_idx = block_table[b_idx, idx + i]
                                 block_idx_valid = block_idx.max(0)
-                                vj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                    pypto.view(v_2d, [block_size, dn], [block_idx_valid * block_size, n2_idx * dn])
-                            vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
-                                                     [0, 0], valid_shape=[actual_s2_tile, dn])
+                                vj_assemble[i * block_size:(i + 1) * block_size, 0:] = pypto.view(
+                                    v_2d, [block_size, dn], [block_idx_valid * block_size, n2_idx * dn]
+                                )
+                            vj_assemble = pypto.view(
+                                vj_assemble, [s2_tile, dn], [0, 0], valid_shape=[actual_s2_tile, dn]
+                            )
                             pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
                             oi_tmp = pypto.matmul(tilda_pij_fp16, vj_assemble, pypto.DT_FP32)
 
@@ -132,10 +133,12 @@ def fa_kernel(q, k, v, block_table, kv_act_seqs, atten_out, softmax_scale, tile_
                             for i in range(block_num):
                                 block_idx = block_table[b_idx, idx + i]
                                 block_idx_valid = block_idx.max(0)
-                                vj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                    pypto.view(v_2d, [block_size, dn], [block_idx_valid * block_size, n2_idx * dn])
-                            vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
-                                                     [0, 0], valid_shape=[actual_s2_tile, dn])
+                                vj_assemble[i * block_size:(i + 1) * block_size, 0:] = pypto.view(
+                                    v_2d, [block_size, dn], [block_idx_valid * block_size, n2_idx * dn]
+                                )
+                            vj_assemble = pypto.view(
+                                vj_assemble, [s2_tile, dn], [0, 0], valid_shape=[actual_s2_tile, dn]
+                            )
                             pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
                             oi_tmp = pypto.matmul(tilda_pij_fp16, vj_assemble, pypto.DT_FP32)
 
@@ -144,9 +147,7 @@ def fa_kernel(q, k, v, block_table, kv_act_seqs, atten_out, softmax_scale, tile_
                         if s2_idx == s2_loop - 1:
                             oi_final = pypto.div(oi_update, sum_update, precision_type=pypto.PrecisionType.INTRINSIC)
                             pypto.set_vec_tile_shapes(16, v2_tile[0], v2_tile[1])
-                            oi_final_3d = pypto.cast(
-                                pypto.reshape(oi_final, [1, g_tile, dn]),
-                                dtype)
+                            oi_final_3d = pypto.cast(pypto.reshape(oi_final, [1, g_tile, dn]), dtype)
                             pypto.assemble(oi_final_3d, oi_ofs, atten_out)
 
 
@@ -172,7 +173,7 @@ def test_fa_compile():
     nq = 12
     nkv = 1
     block_size = 128
-    scale = qd ** -0.5
+    scale = qd**-0.5
     num_blocks = (s2 + block_size - 1) // block_size
 
     q = pypto.Tensor([-1, nq, qd], pypto.DT_BF16, "q")
@@ -183,6 +184,7 @@ def test_fa_compile():
     atten_out = pypto.Tensor([-1, nq, qd], pypto.DT_BF16, "atten_out")
 
     _run_dce(fa_kernel, q, k, v, block_table, actual_seq, atten_out, scale, tile_config)
+
 
 if __name__ == "__main__":
     test_fa_compile()

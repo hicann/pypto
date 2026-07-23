@@ -30,13 +30,15 @@ __all__ = [
     "ConversionContext",
     "op_conversion",
     "register_op_conversion",
+    "_operators",
 ]
 
 from pypto.pypto_impl import ir as _core_ir
 from pypto.pypto_impl.ir import PassContext, VerificationLevel, VerificationMode
 
-from . import op as _op, _operators
+from . import _operators
 from . import builder as _builder
+from . import op as _op
 from . import op_conversion as _conversion
 from . import printer as _printer
 from . import type as _types
@@ -46,18 +48,14 @@ globals().update({name: value for name, value in vars(_core_ir).items() if not n
 DataType = _core_ir.DataType
 
 # Overlay the Python extensions after exporting the native IR API.
-globals().update(
-    {
-        "op": _op,
-        "IRBuilder": _builder.IRBuilder,
-        "ConversionContext": _conversion.ConversionContext,
-        "op_conversion": _conversion.op_conversion,
-        "register_op_conversion": _conversion.register_op_conversion,
-        "python_print": _printer.python_print,
-        "TensorType": _types.TensorType,
-        "TileType": _types.TileType,
-    }
-)
+op = _op
+IRBuilder = _builder.IRBuilder
+ConversionContext = _conversion.ConversionContext
+op_conversion = _conversion.op_conversion
+register_op_conversion = _conversion.register_op_conversion
+python_print = _printer.python_print
+TensorType = _types.TensorType
+TileType = _types.TileType
 
 # Export common DataType values for convenience
 FP4 = DataType.FP4
