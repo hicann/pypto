@@ -18,6 +18,8 @@
 #include "interface/machine/host/machine_task.h"
 #include "interface/cache/function_cache.h"
 namespace npu::tile_fwk {
+class ExprBatchGenerator;
+
 MachineTask* GenCode(MachineTask* task, FunctionCache& cache);
 
 struct Linker {
@@ -139,4 +141,23 @@ struct ValDependTensorMeta {
 
 void InsertWaitCoreStart(SymbolicExpressionTable* exprTable, std::ostringstream& controlFlowOss,
                          ValDependTensorMeta& valDependTensorMeta, int indent);
+
+// Functions used by ir_backend.cpp
+void FindAllExpression(FunctionCache& cache, Linker& linker, Function* func);
+void BuildControlFlow(FunctionCache& cache, Linker& linker, const std::string& sectionName, Function* func,
+                      std::unordered_map<int, int>& slotIdxMapping, DyndevFunctionAttribute::FunctionGroup& group,
+                      std::unordered_map<Function*, Function*>& rootTileDict, std::ostringstream& controlFlowOss,
+                      std::ostringstream& expressionOss, std::ostringstream& exprHeaderOss, int indent,
+                      const std::string& expName, std::vector<std::string>& exprSrcFiles,
+                      ValDependTensorMeta& valDependTensorMeta);
+std::vector<Function*> GetCalleeList(FunctionCache& cache, Function* func);
+std::string BuildControlFlowCallee(Function* func, int indent);
+bool NeedCrossDie(Function* func, bool isLoop = false);
+void GetReadyOnHostTensorsSet(std::unordered_set<int>& readyOnHostTensorsSet);
+void BuildControlFlowHeader(ExprBatchGenerator& generator, Linker& linker, Function* func,
+                            const std::string& sectionName, const std::string& expName,
+                            std::ostringstream& controlFlowOss, std::ostringstream& expressionOss,
+                            std::ostringstream& exprHeaderOss, ValDependTensorMeta& valDependTensorMeta);
+void BuildControlFlowFooter(ExprBatchGenerator& generator, std::ostringstream& controlFlowOss,
+                            std::ostringstream& exprHeaderOss, int indent);
 } // namespace npu::tile_fwk

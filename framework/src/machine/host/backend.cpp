@@ -22,6 +22,7 @@
 #include "interface/operation/operation.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/common.h"
+#include "interface/utils/id_gen.h"
 #include "utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
 #include "interface/compiler_monitor/monitor_manager.h"
@@ -34,9 +35,12 @@
 #include "machine/compile/aicore_compiler.h"
 #include "machine/compile/compile_control_bin.h"
 #include "machine/host/expr_generator.h"
+#include "machine/host/ir_backend.h"
 #include "machine/host/dump_host_topo.h"
 #include "machine/host/main_block.h"
 #include "machine/host/mix_info.h"
+#include "ir/scalar_expr.h"
+#include "interface/tensor/irbuilder.h"
 
 using namespace npu::tile_fwk::dynamic;
 namespace npu::tile_fwk {
@@ -78,7 +82,7 @@ extern "C" int32_t Execute(MachineTask* task, FunctionCache& cache)
     return 0;
 }
 
-static std::vector<Function*> GetCalleeList(FunctionCache& cache, Function* func)
+std::vector<Function*> GetCalleeList(FunctionCache& cache, Function* func)
 {
     std::vector<Function*> calleeList;
 
@@ -96,7 +100,7 @@ static std::vector<Function*> GetCalleeList(FunctionCache& cache, Function* func
 }
 
 static void HandleExecuteGraph(FunctionCache& cache, Linker& linker, Function* func);
-static void FindAllExpression(FunctionCache& cache, Linker& linker, Function* func)
+void FindAllExpression(FunctionCache& cache, Linker& linker, Function* func)
 {
     if (func->IsDynloop()) {
         auto dynloopAttr = func->GetDynloopAttribute();
@@ -439,7 +443,7 @@ static void BuildConstructAssembleNeedAllocRuntimeSlots(FunctionCache& cache, Fu
     }
 }
 
-static std::string BuildControlFlowCallee(Function* func, int ident)
+std::string BuildControlFlowCallee(Function* func, int ident)
 {
     std::ostringstream oss;
     auto span = func->GetSpan();
@@ -458,10 +462,6 @@ static ParallelMode GetFunctionParallelMode(Function* func)
         return ParallelMode::PARALLEL;
     }
 
-    if (func->HasParent() && func->Parent().HasParent() && func->Parent().Parent().GetDynloopAttribute() &&
-        func->Parent().Parent().GetDynloopAttribute()->parallel) {
-        return func->Parent().Parent().GetDynloopAttribute()->parallel ? ParallelMode::CHILD : ParallelMode::DEFAULT;
-    }
     return ParallelMode::DEFAULT;
 }
 
@@ -535,7 +535,7 @@ void GetReadyOnHostTensorsSet(std::unordered_set<int>& readyOnHostTensorsSet)
             << "Tensor " << tensorStr << " not found in input list, please check [ready_on_host_tensors] config.";
     }
 }
-static bool NeedCrossDie(Function* func, bool isLoop = false)
+bool NeedCrossDie(Function* func, bool isLoop)
 {
     if ((Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) &&
         (!isLoop || (GetFunctionParallelMode(func) == ParallelMode::PARALLEL))) {
@@ -544,57 +544,68 @@ static bool NeedCrossDie(Function* func, bool isLoop = false)
     return false;
 }
 
-static void BuildControlFlow(FunctionCache& cache, Linker& linker, const std::string& sectionName, Function* func,
-                             std::unordered_map<int, int>& slotIdxMapping,
-                             DyndevFunctionAttribute::FunctionGroup& group,
-                             std::unordered_map<Function*, Function*>& rootTileDict, std::ostringstream& controlFlowOss,
-                             std::ostringstream& expressionOss, std::ostringstream& exprHeaderOss, int indent,
-                             const std::string& expName, std::vector<std::string>& exprSrcFiles,
-                             ValDependTensorMeta& valDependTensorMeta)
+void BuildControlFlowHeader(ExprBatchGenerator& generator, Linker& linker, Function* func,
+                            const std::string& sectionName, const std::string& expName,
+                            std::ostringstream& controlFlowOss, std::ostringstream& expressionOss,
+                            std::ostringstream& exprHeaderOss, ValDependTensorMeta& valDependTensorMeta)
+{
+    controlFlowOss << "#define __TILE_FWK_AICPU__ 1\n"
+                   << "#include <stdint.h>\n"
+                   << "#include \"" << expName << "\"\n"
+                   << "#include \"tilefwk/aikernel_data.h\"\n"
+                   << "#include \"tilefwk/aicpu_runtime.h\"\n"
+                   << "#include \"tilefwk/aicpu_distributed.h\"\n"
+                   << "#include \"control_flow_expr_table.h\"\n";
+    generator.HeaderFileBegin(exprHeaderOss);
+    expressionOss << "\n/* Symbol table list */\n" << linker.GetSymbolTable()->BuildSymbolList();
+    const std::vector<std::string>& inputNameList = Program::GetInstance().GetTensorSlotManager()->GetInputNameList();
+    const std::vector<std::string>& outputNameList = Program::GetInstance().GetTensorSlotManager()->GetOutputNameList();
+    std::unordered_set<int> readyOnHostTensorsSet;
+    GetReadyOnHostTensorsSet(readyOnHostTensorsSet);
+    expressionOss << "\n/* Input tensor list */\n";
+    for (size_t idx = 0; idx < inputNameList.size(); idx++) {
+        const auto inputName = AddArgPrefix(inputNameList[idx]);
+        expressionOss << "#define " << inputName << " " << idx << "\n";
+        valDependTensorMeta.tensorNameToDependCore[inputName] = (readyOnHostTensorsSet.count(idx) == 0);
+    }
+    expressionOss << "\n/* Output tensor list */\n";
+    for (size_t idx = 0; idx < outputNameList.size(); idx++) {
+        expressionOss << "#define " << AddArgPrefix(outputNameList[idx]) << " " << idx + inputNameList.size() << "\n";
+    }
+    controlFlowOss << "#define LOOP(idx, b, e, s) for (int64_t idx = (b), idxEnd = (e), idxStep = (s); idx < "
+                      "idxEnd; idx += idxStep)\n"
+                   << "namespace npu::tile_fwk {\n"
+                   << BuildControlFlowCallee(func, 0) << "__attribute__((section(\"" << sectionName << ".entry"
+                   << "\")))\n"
+                   << "uint64_t ControlFlowEntry(void *ctx, int64_t *symbolTable, RuntimeCallEntryType "
+                      "runtimeCallList[], DevStartArgsBase *startArgs) {\n";
+}
+
+void BuildControlFlowFooter(ExprBatchGenerator& generator, std::ostringstream& controlFlowOss,
+                            std::ostringstream& exprHeaderOss, int indent)
+{
+    controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' '
+                   << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_FINISH); // Notify finish \n";
+    controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' ' << "return 0;\n";
+    controlFlowOss << "}\n";
+    controlFlowOss << "} // namespace npu::tile_fwk\n";
+    generator.HeaderFileEnd(exprHeaderOss);
+}
+
+void BuildControlFlow(FunctionCache& cache, Linker& linker, const std::string& sectionName, Function* func,
+                      std::unordered_map<int, int>& slotIdxMapping, DyndevFunctionAttribute::FunctionGroup& group,
+                      std::unordered_map<Function*, Function*>& rootTileDict, std::ostringstream& controlFlowOss,
+                      std::ostringstream& expressionOss, std::ostringstream& exprHeaderOss, int indent,
+                      const std::string& expName, std::vector<std::string>& exprSrcFiles,
+                      ValDependTensorMeta& valDependTensorMeta)
 {
     bool supportParallelLoop = (config::GetRuntimeOption<uint16_t>(DEVICE_SCHED_PARALLELISM) >
                                 1); // enable by the parallism option
     auto funcType = func->GetFunctionType();
     if (funcType == FunctionType::DYNAMIC) {
-        controlFlowOss << "#define __TILE_FWK_AICPU__ 1\n"
-                       << "#include <stdint.h>\n"
-                       << "#include \"" << expName << "\"\n"
-                       << "#include \"tilefwk/aikernel_data.h\"\n"
-                       << "#include \"tilefwk/aicpu_runtime.h\"\n"
-                       << "#include \"tilefwk/aicpu_distributed.h\"\n"
-                       << "#include \"control_flow_expr_table.h\"\n";
         ExprBatchGenerator generator(config::GetEmitPath("kernel_aicpu"), 0, 0);
-        generator.HeaderFileBegin(exprHeaderOss);
-        expressionOss << "\n/* Symbol table list */\n" << linker.GetSymbolTable()->BuildSymbolList();
-        const std::vector<std::string>&
-            inputNameList = Program::GetInstance().GetTensorSlotManager()->GetInputNameList();
-        const std::vector<std::string>&
-            outputNameList = Program::GetInstance().GetTensorSlotManager()->GetOutputNameList();
-        std::unordered_set<int> readyOnHostTensorsSet;
-        GetReadyOnHostTensorsSet(readyOnHostTensorsSet);
-        expressionOss << "\n/* Input tensor list */\n";
-        for (size_t idx = 0; idx < inputNameList.size(); idx++) {
-            const auto inputName = AddArgPrefix(inputNameList[idx]);
-            expressionOss << "#define " << inputName << " " << idx << "\n";
-            if (readyOnHostTensorsSet.count(idx) == 0) {
-                valDependTensorMeta.tensorNameToDependCore[inputName] = true;
-            } else {
-                valDependTensorMeta.tensorNameToDependCore[inputName] = false;
-            }
-        }
-
-        expressionOss << "\n/* Output tensor list */\n";
-        for (size_t idx = 0; idx < outputNameList.size(); idx++) {
-            expressionOss << "#define " << AddArgPrefix(outputNameList[idx]) << " " << idx + inputNameList.size()
-                          << "\n";
-        }
-        controlFlowOss << "#define LOOP(idx, b, e, s) for (int64_t idx = (b), idxEnd = (e), idxStep = (s); idx < "
-                          "idxEnd; idx += idxStep)\n"
-                       << "namespace npu::tile_fwk {\n"
-                       << BuildControlFlowCallee(func, 0) << "__attribute__((section(\"" << sectionName << ".entry"
-                       << "\")))\n"
-                       << "uint64_t ControlFlowEntry(void *ctx, int64_t *symbolTable, RuntimeCallEntryType "
-                          "runtimeCallList[], DevStartArgsBase *startArgs) {\n";
+        BuildControlFlowHeader(generator, linker, func, sectionName, expName, controlFlowOss, expressionOss,
+                               exprHeaderOss, valDependTensorMeta);
         if (NeedCrossDie(func)) {
             controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_RootGetDieId(" << 0 << ");\n";
         }
@@ -602,12 +613,7 @@ static void BuildControlFlow(FunctionCache& cache, Linker& linker, const std::st
             BuildControlFlow(cache, linker, sectionName, callee, slotIdxMapping, group, rootTileDict, controlFlowOss,
                              expressionOss, exprHeaderOss, indent + 1, expName, exprSrcFiles, valDependTensorMeta);
         }
-        controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' '
-                       << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_FINISH); // Notify finish \n";
-        controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' ' << "return 0;\n";
-        controlFlowOss << "}\n";
-        controlFlowOss << "} // namespace npu::tile_fwk\n";
-        generator.HeaderFileEnd(exprHeaderOss);
+        BuildControlFlowFooter(generator, controlFlowOss, exprHeaderOss, indent);
     } else if (func->IsFunctionTypeAndGraphType(FunctionType::DYNAMIC_LOOP, GraphType::TENSOR_GRAPH)) {
         std::function<void(const std::shared_ptr<DynloopFunctionPathNode>&, int)> condBuilder =
             [&cache, &linker, &sectionName, &slotIdxMapping, &group, &rootTileDict, &controlFlowOss, &expressionOss,
@@ -1056,20 +1062,25 @@ int GetRootFuncNum(std::shared_ptr<DyndevFunctionAttribute> attr)
     return rootFuncNum;
 }
 
-static void RunBuildControlFlowStage(FunctionCache& cache, Linker& linker, Function* function,
-                                     const std::shared_ptr<DyndevFunctionAttribute>& attr, const std::string& expName,
-                                     std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta,
-                                     std::string& controlFlowSource, std::string& expressionSource)
+static void CollectExpressions(IrBackendContext& ctx, FunctionCache& cache, Linker& linker, Function* function,
+                               bool useNewIr)
 {
-    const int hmStep = MonitorManager::Instance().AllocHostMachineStepIndex();
-    MonitorStageScope buildControlFlowScope(STAGE_HOST_MACHINE, hmStep, STAGE_DYNDEV_BUILD_CONTROL_FLOW, 0);
-    FindAllExpression(cache, linker, function);
+    if (useNewIr) {
+        MACHINE_LOGI("BuildControlFlow: using new SCF IR traversal");
+        FindAllExpressionFromIR(ctx, cache, linker, function);
+    } else {
+        FindAllExpression(cache, linker, function);
+    }
+}
 
+static void PrepareSlotAndExpression(FunctionCache& cache, Linker& linker, Function* function,
+                                     const std::shared_ptr<DyndevFunctionAttribute>& attr,
+                                     std::ostringstream& expressionOss, std::unordered_map<int, int>& slotIdxMapping)
+{
     FillL2PrefetchInfo(attr);
     attr->commGroupNames = npu::tile_fwk::Distributed::CommGroupRecorder::GetInstance().Output();
     auto slotManager = Program::GetInstance().GetTensorSlotManager();
     attr->inoutLink = slotManager->BuildIncastOutcastLink(function->GetRawName());
-
     int idx = 0;
     for (auto name : slotManager->GetInputNameList()) {
         attr->inputSymbolDict[AddArgPrefix(name)] = idx++;
@@ -1077,14 +1088,7 @@ static void RunBuildControlFlowStage(FunctionCache& cache, Linker& linker, Funct
     for (auto name : slotManager->GetOutputNameList()) {
         attr->inputSymbolDict[AddArgPrefix(name)] = idx++;
     }
-
-    std::ostringstream controlFlowOss;
-    std::ostringstream expressionOss;
-
-    expressionOss << "#ifndef TILE_FWK_EXPRESSION_H"
-                  << "\n"
-                  << "#define TILE_FWK_EXPRESSION_H"
-                  << "\n";
+    expressionOss << "#ifndef TILE_FWK_EXPRESSION_H\n#define TILE_FWK_EXPRESSION_H\n";
     auto& exprTableGroup = linker.GetExpressionTableDictGroup();
     std::vector<SymbolicExpressionTable*> exprTableList = GetAllExpressionTable(exprTableGroup);
     linker.GetSymbolTable()->NormalizeForSymbol();
@@ -1092,22 +1096,44 @@ static void RunBuildControlFlowStage(FunctionCache& cache, Linker& linker, Funct
         exprTable->NormalizeForSymbolTable(*linker.GetSymbolTable());
         expressionOss << exprTable->BuildExpressionList();
     }
-    std::unordered_map<int, int> slotIdxMapping;
-    std::ostringstream exprHeaderOss;
     attr->rootTileDict.clear();
     CollectRootTileDict(cache, function, attr->rootTileDict);
     BuildConstructAssembleNeedAllocRuntimeSlots(cache, function, attr.get(), slotIdxMapping);
-    BuildControlFlow(cache, linker, ".pypto", function, slotIdxMapping, attr->funcGroup, attr->rootTileDict,
-                     controlFlowOss, expressionOss, exprHeaderOss, 0, expName, exprSrcFiles, valDependTensorMeta);
-    expressionOss << "#endif/*TILE_FWK_EXPRESSION_H*/"
-                  << "\n";
+}
+
+static void RunBuildControlFlowStage(FunctionCache& cache, Linker& linker, Function* function,
+                                     const std::shared_ptr<DyndevFunctionAttribute>& attr, const std::string& expName,
+                                     std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta,
+                                     std::string& controlFlowSource, std::string& expressionSource)
+{
+    const int hmStep = MonitorManager::Instance().AllocHostMachineStepIndex();
+    MonitorStageScope buildControlFlowScope(STAGE_HOST_MACHINE, hmStep, STAGE_DYNDEV_BUILD_CONTROL_FLOW, 0);
+    bool useNewIr = function->body_ != nullptr;
+    IrBackendContext irBackendCtx;
+    CollectExpressions(irBackendCtx, cache, linker, function, useNewIr);
+
+    std::ostringstream controlFlowOss;
+    std::ostringstream expressionOss;
+    std::ostringstream exprHeaderOss;
+    std::unordered_map<int, int> slotIdxMapping;
+    PrepareSlotAndExpression(cache, linker, function, attr, expressionOss, slotIdxMapping);
+
+    if (useNewIr) {
+        BuildControlFlowFromIR(irBackendCtx, cache, linker, ".pypto", function, slotIdxMapping, attr->funcGroup,
+                               attr->rootTileDict, controlFlowOss, expressionOss, exprHeaderOss, 0, expName,
+                               exprSrcFiles, valDependTensorMeta);
+    } else {
+        BuildControlFlow(cache, linker, ".pypto", function, slotIdxMapping, attr->funcGroup, attr->rootTileDict,
+                         controlFlowOss, expressionOss, exprHeaderOss, 0, expName, exprSrcFiles, valDependTensorMeta);
+    }
+    expressionOss << "#endif/*TILE_FWK_EXPRESSION_H*/\n";
     controlFlowSource = controlFlowOss.str();
     expressionSource = expressionOss.str();
     SimplifySlots(attr.get(), slotIdxMapping);
     for (auto slot : slotIdxMapping) {
         MACHINE_LOGD("slotIdx: %d, runtime slotIdx: %d", slot.first, slot.second);
     }
-    topo_dump::DumpSlotMapping(*slotManager, slotIdxMapping, attr->inoutLink);
+    topo_dump::DumpSlotMapping(*Program::GetInstance().GetTensorSlotManager(), slotIdxMapping, attr->inoutLink);
     BuildSlotRootIncastOutcastDict(attr.get());
     BuildRootFuncKeyDict(attr.get());
 }
