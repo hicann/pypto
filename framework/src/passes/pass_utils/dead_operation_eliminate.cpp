@@ -30,7 +30,7 @@ Status DeadOperationEliminator::EliminateDeadOperation(Function& function)
 // Delete Operation without oOperand
 void DeadOperationEliminator::EliminateDeadOperationBackward(Function& function)
 {
-    for (auto& op : function.Operations()) {
+    for (auto& op : function.Operations(false)) {
         op.SetAsNotDeleted();
     }
     EliminateOperation(function);
@@ -59,7 +59,7 @@ void DeadOperationEliminator::EliminateOperation(Function& function, bool useSor
     std::queue<Operation*> q;
     std::unordered_set<Operation*> visited;
     std::unordered_set<std::shared_ptr<LogicalTensor>> visitedOperands;
-    for (auto& op : function.Operations(useSortedOperations)) {
+    for (auto& op : function.Operations(useSortedOperations, SortOperationsMode::LIGHTWEIGHT)) {
         bool dontTouch = op.GetBoolAttribute(OpAttributeKey::dontTouch);
         if (dontTouch) {
             visited.emplace(&op);
@@ -88,11 +88,11 @@ void DeadOperationEliminator::EliminateOperation(Function& function, bool useSor
             q.emplace(producerOp);
         }
     }
-    for (auto& op : function.Operations(useSortedOperations)) {
+    for (auto& op : function.Operations(false)) {
         if (visited.count(&op) == 0) {
             op.SetAsDeleted();
         }
     }
-    function.EraseOperations(false, sortAfterErase);
+    function.EraseOperations(false, sortAfterErase, SortOperationsMode::LIGHTWEIGHT);
 }
 } // namespace npu::tile_fwk

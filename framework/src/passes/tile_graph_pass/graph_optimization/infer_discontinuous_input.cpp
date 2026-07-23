@@ -14,7 +14,6 @@
  */
 
 #include "infer_discontinuous_input.h"
-#include <queue>
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_check/infer_discontinuous_input_checker.h"
@@ -52,8 +51,8 @@ Status InferDiscontinuousInput::RunOnFunction(Function& function)
 
 std::vector<std::pair<LogicalTensorPtr, Operation*>> GetInplacedTileTensors(LogicalTensorPtr targetTensor)
 {
-    std::unordered_set<Opcode> inplaceNodes{Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE,
-                                            Opcode::OP_INDEX_OUTCAST};
+    static const std::unordered_set<Opcode> inplaceNodes{Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE,
+                                                         Opcode::OP_INDEX_OUTCAST};
     std::vector<std::pair<LogicalTensorPtr, Operation*>> inplacedTensor;
     for (auto& producer : targetTensor->GetProducers()) {
         if (inplaceNodes.count(producer->GetOpcode()) == 0) {
@@ -244,44 +243,30 @@ std::vector<std::pair<LogicalTensorPtr, Operation*>> InferDiscontinuousInput::Fi
 
 void InferDiscontinuousInput::Init(Function& function)
 {
-    auto opList = function.Operations().DuplicatedOpList();
-    for (size_t i = 0; i < opList.size(); ++i) {
-        opInputDegree_.emplace(opList[i], opList[i]->ProducerOps().size());
-        for (auto outTensor : opList[i]->GetOOperands()) {
+    auto opList = function.Operations(true, SortOperationsMode::LIGHTWEIGHT).DuplicatedOpList();
+    tensorProducers_.reserve(opList.size());
+    for (auto currOp : opList) {
+        for (auto outTensor : currOp->GetOOperands()) {
             tensorProducers_[outTensor] = outTensor->GetProducers().size();
         }
     }
 }
 
-// 从INCAST出发，按DFS做前向推导
+// 从INCAST出发，按前向推导
 Status InferDiscontinuousInput::InferFromIncast(Function& function)
 {
-    std::queue<Operation*> procOpQueue;
-    for (auto& opInputDegree : opInputDegree_) {
-        if (opInputDegree.second == 0) {
-            procOpQueue.push(opInputDegree.first);
-        }
-    }
-    std::set<Operation*> visitedOps;
-    while (!procOpQueue.empty()) {
-        auto currentOp = procOpQueue.front();
-        procOpQueue.pop();
-        visitedOps.insert(currentOp);
-        for (auto outOp : currentOp->ConsumerOps()) {
-            opInputDegree_[outOp]--;
-            if (opInputDegree_[outOp] == 0) {
-                procOpQueue.push(outOp);
-            }
-        }
-        for (auto& outputTensor : currentOp->GetOOperands()) {
-            tensorProducers_[outputTensor]--;
-            std::vector<std::pair<LogicalTensorPtr, Operation*>> filterdTensor;
-            if (tensorProducers_[outputTensor] != 0) {
+    auto opList = function.Operations(true, SortOperationsMode::LIGHTWEIGHT).DuplicatedOpList();
+    insertCopys_.reserve(opList.size());
+    for (auto currOp : opList) {
+        for (auto& outputTensor : currOp->GetOOperands()) {
+            auto& producerCnt = tensorProducers_[outputTensor];
+            producerCnt--;
+            if (producerCnt != 0) {
                 continue;
             }
             auto inplacedTensor = GetInplacedTileTensors(outputTensor);
-            filterdTensor = FilterCopyScenes(function, inplacedTensor);
-            insertCopys_.emplace(outputTensor, filterdTensor);
+            auto filterdTensor = FilterCopyScenes(function, inplacedTensor);
+            insertCopys_.emplace(outputTensor, std::move(filterdTensor));
         }
     }
     return SUCCESS;
@@ -341,9 +326,11 @@ void InferDiscontinuousInput::InsertCopyOp(Function& function, LogicalTensorPtr 
     InsertViewOp(function, newTensor, oOperand);
 }
 
-inline void DDRTensorAssignUB(Function& function, std::map<LogicalTensorPtr, std::set<Operation*>>& insertedNodes)
+inline void DDRTensorAssignUB(Function& function,
+                              std::unordered_map<LogicalTensorPtr, std::unordered_set<Operation*>>& insertedNodes)
 {
-    auto opList = function.Operations().DuplicatedOpList();
+    auto opList = function.Operations(true, SortOperationsMode::LIGHTWEIGHT).DuplicatedOpList();
+    insertedNodes.reserve(opList.size());
     for (size_t i = 0; i < opList.size(); ++i) {
         Operation* currOp = opList[i];
         if (currOp->GetOpcode() != Opcode::OP_ASSEMBLE) {
@@ -381,18 +368,17 @@ inline void DDRTensorAssignUB(Function& function, std::map<LogicalTensorPtr, std
 }
 Status InferDiscontinuousInput::InsertTensorCopy(Function& function)
 {
-    std::map<LogicalTensorPtr, std::set<Operation*>> insertedNodes;
+    std::unordered_map<LogicalTensorPtr, std::unordered_set<Operation*>> insertedNodes;
     DDRTensorAssignUB(function, insertedNodes);
     for (auto& copyInserts : insertCopys_) {
         auto& inplaceNodes = copyInserts.second;
         for (auto& inplaceNode : inplaceNodes) {
             auto& inputTensor = inplaceNode.first;
-            if (insertedNodes.find(inputTensor) != insertedNodes.end()) {
-                if (insertedNodes[inputTensor].count(inplaceNode.second) != 0U) {
-                    continue;
-                }
+            auto& nodeSet = insertedNodes[inputTensor];
+            if (nodeSet.count(inplaceNode.second) != 0U) {
+                continue;
             }
-            insertedNodes[inputTensor].insert(inplaceNode.second);
+            nodeSet.insert(inplaceNode.second);
             std::shared_ptr<RawTensor> newRawTensor = std::make_shared<RawTensor>(
                 inputTensor->Datatype(), inputTensor->GetShape(), inputTensor->Format());
             Offset newOffset(inputTensor->GetShape().size(), 0);

@@ -86,7 +86,7 @@ Status ProcessAtomic::RunOnFunction(Function& function)
 
 Status ProcessAtomic::CheckAtomicRMWUnsupportedMode(Function& function)
 {
-    for (const auto& op : function.Operations()) {
+    for (const auto& op : function.Operations(true, SortOperationsMode::LIGHTWEIGHT)) {
         if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
             int rmwModeValue = op.GetIntAttribute(OpAttributeKey::rmwMode);
             AtomicRMWMode rmwMode = static_cast<AtomicRMWMode>(rmwModeValue);
@@ -105,7 +105,8 @@ Status ProcessAtomic::CheckAtomicRMWUnsupportedMode(Function& function)
 
 Status ProcessAtomic::EliminateReduceAcc(Function& function)
 {
-    for (auto& op : function.Operations()) {
+    bool anyDeleted = false;
+    for (auto& op : function.Operations(true, SortOperationsMode::LIGHTWEIGHT)) {
         if (op.GetOpcode() == Opcode::OP_REDUCE_ACC) {
             APASS_LOG_INFO_F(Elements::Operation, "ATOMIC_ADD, opmagic: %d", op.GetOpMagic());
             auto reduceOut = op.GetOOperands().front();
@@ -119,15 +120,18 @@ Status ProcessAtomic::EliminateReduceAcc(Function& function)
                 }
             }
             op.SetAsDeleted();
+            anyDeleted = true;
             APASS_LOG_DEBUG_F(Elements::Operation, "%s[%d] will be deleted.", op.GetOpcodeStr().c_str(),
                               op.GetOpMagic());
         }
     }
-    function.EraseOperations(true);
-    if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function,
-                          "Eliminate dead operation failed for ReduceAcc in CommonOperationEliminate.");
-        return FAILED;
+    if (anyDeleted) {
+        function.EraseOperations(true, true, SortOperationsMode::LIGHTWEIGHT);
+        if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function,
+                              "Eliminate dead operation failed for ReduceAcc in CommonOperationEliminate.");
+            return FAILED;
+        }
     }
     return SUCCESS;
 }
@@ -135,14 +139,18 @@ Status ProcessAtomic::EliminateReduceAcc(Function& function)
 Status ProcessAtomic::EliminateAtomicRMW(Function& function)
 {
     std::vector<Operation*> atomicRmwOps;
-    for (auto& op : function.Operations()) {
+    for (auto& op : function.Operations(true, SortOperationsMode::LIGHTWEIGHT)) {
         if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
             atomicRmwOps.emplace_back(&op);
         }
     }
+    if (atomicRmwOps.empty()) {
+        return SUCCESS;
+    }
     if (PrepareAtomicRMWSharedInputs(function, atomicRmwOps) != SUCCESS) {
         return FAILED;
     }
+    bool anyDeleted = false;
     for (auto* op : atomicRmwOps) {
         if (op == nullptr || op->IsDeleted()) {
             continue;
@@ -150,12 +158,15 @@ Status ProcessAtomic::EliminateAtomicRMW(Function& function)
         if (ProcessSingleAtomicRMW(*op) != SUCCESS) {
             return FAILED;
         }
+        anyDeleted = true;
     }
-    function.EraseOperations(true);
-    if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function,
-                          "Eliminate dead operation failed for AtomicRMW in CommonOperationEliminate.");
-        return FAILED;
+    if (anyDeleted) {
+        function.EraseOperations(true, true, SortOperationsMode::LIGHTWEIGHT);
+        if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function,
+                              "Eliminate dead operation failed for AtomicRMW in CommonOperationEliminate.");
+            return FAILED;
+        }
     }
     return SUCCESS;
 }
@@ -736,7 +747,7 @@ Status ProcessAtomic::EliminateVecDupBranch(Function& function, bool& hasReduceA
         return SUCCESS;
     }
     APASS_LOG_INFO_F(Elements::Function, "EliminateVecDupBranch removed VecDup assemble input branch.");
-    function.EraseOperations(true);
+    function.EraseOperations(true, true, SortOperationsMode::LIGHTWEIGHT);
     if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Eliminate dead operation failed for VecDup branch.");
         return FAILED;

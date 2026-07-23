@@ -18,6 +18,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "passes/pass_interface/pass.h"
 #include "interface/inner/tilefwk.h"
@@ -42,9 +43,8 @@ private:
     void Init(Function& function);
     std::vector<std::pair<LogicalTensorPtr, Operation*>> FilterCopyScenes(
         Function& function, const std::vector<std::pair<LogicalTensorPtr, Operation*>>&);
-    std::map<LogicalTensorPtr, std::vector<std::pair<LogicalTensorPtr, Operation*>>> insertCopys_;
-    std::map<Operation*, size_t> opInputDegree_;
-    std::map<LogicalTensorPtr, size_t> tensorProducers_;
+    std::unordered_map<LogicalTensorPtr, std::vector<std::pair<LogicalTensorPtr, Operation*>>> insertCopys_;
+    std::unordered_map<LogicalTensorPtr, size_t> tensorProducers_;
     std::vector<Operation*> newOps;
     IRBuilder irBuilder_;
 };

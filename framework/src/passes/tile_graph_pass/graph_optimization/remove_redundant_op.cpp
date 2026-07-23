@@ -108,6 +108,7 @@ bool RemoveRedundantOp::ProcessRedundantOpWithoutDynShape(Operation& op) const
 
 Status RemoveRedundantOp::RemoveDummyOp(Function& function)
 {
+    bool anyRemoved = false;
     for (auto& op : function.Operations()) {
         bool canRemove = false;
         if (matchOpcodeWithDynshape.find(op.GetOpcode()) != matchOpcodeWithDynshape.end()) {
@@ -117,10 +118,13 @@ Status RemoveRedundantOp::RemoveDummyOp(Function& function)
         }
         if (canRemove) {
             operationUpdated = true;
+            anyRemoved = true;
             function.UpdateOperandBeforeRemoveOp(op, false);
         }
     }
-    DeadOperationEliminator::EliminateDeadOperation(function);
+    if (anyRemoved) {
+        DeadOperationEliminator::EliminateDeadOperation(function);
+    }
     return SUCCESS;
 }
 
@@ -130,6 +134,7 @@ Status RemoveRedundantOp::RunOnFunction(Function& function)
     operationUpdated = true;
     iterTime = 0U;
     newOps_.clear();
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
     while (operationUpdated) {
         operationUpdated = false;
         if (RemoveDummyOps(function) != SUCCESS) {
@@ -188,6 +193,7 @@ Status RemoveRedundantOp::RemoveDummyOps(Function& function)
 Status RemoveRedundantOp::ProcessViewAssemble(Function& function)
 {
     auto opList = function.Operations().DuplicatedOpList();
+    bool anyRemoved = false;
     for (auto& op : opList) {
         auto opcode = op->GetOpcode();
         if (opcode != Opcode::OP_VIEW) {
@@ -224,6 +230,7 @@ Status RemoveRedundantOp::ProcessViewAssemble(Function& function)
                                   "CASE1: Process OP_VIEW[%d]'s input and OP_ASSEMBLE[%d]'s output perfectMatch.",
                                   op->opmagic, consumer->GetOpMagic());
                 ProcessPerfectMatch(function, startTensor, endTensor);
+                anyRemoved = true;
             } else {
                 // 对于输入输出存在动轴的场景无法做级联的冗余删除
                 if ((function.IsFromInCast(startTensor) && CommonUtils::ContainsNegativeOne(startTensor->GetShape())) ||
@@ -238,10 +245,13 @@ Status RemoveRedundantOp::ProcessViewAssemble(Function& function)
                                   "CASE2: Process OP_VIEW[%d]'s input is a part of OP_ASSEMBLE[%d]'s output.",
                                   op->opmagic, consumer->GetOpMagic());
                 GenerateNewView(function, *op, startTensor, endTensor);
+                anyRemoved = true;
             }
         }
     }
-    DeadOperationEliminator::EliminateDeadOperation(function);
+    if (anyRemoved) {
+        DeadOperationEliminator::EliminateDeadOperation(function);
+    }
     return SUCCESS;
 }
 
@@ -463,7 +473,7 @@ void RemoveRedundantOp::GenerateNewView(Function& function, Operation& op, Logic
 
 Status RemoveRedundantOp::ProcessReshape(Function& function)
 {
-    bool canRemove;
+    bool anyRemoved = false;
     for (auto& op : function.Operations()) {
         auto opcode = op.GetOpcode();
         if (opcode != Opcode::OP_RESHAPE) {
@@ -472,7 +482,7 @@ Status RemoveRedundantOp::ProcessReshape(Function& function)
         }
         auto in = op.GetIOperands().front();
         auto out = op.GetOOperands().front();
-        canRemove = false;
+        bool canRemove = false;
         if (in->shape == out->shape && !CommonUtils::ContainsNegativeOne(in->GetShape()) &&
             !CommonUtils::ContainsNegativeOne(out->GetShape())) {
             APASS_LOG_DEBUG_F(Elements::Operation, "op[%d]'s in->shape == out->shape.", op.GetOpMagic());
@@ -493,9 +503,12 @@ Status RemoveRedundantOp::ProcessReshape(Function& function)
         if (canRemove) {
             function.UpdateOperandBeforeRemoveOp(op, false);
             operationUpdated = true;
+            anyRemoved = true;
         }
     }
-    DeadOperationEliminator::EliminateDeadOperation(function);
+    if (anyRemoved) {
+        DeadOperationEliminator::EliminateDeadOperation(function);
+    }
     return SUCCESS;
 }
 } // namespace tile_fwk

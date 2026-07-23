@@ -626,7 +626,7 @@ public:
     FunctionHash ComputeHash();
     void BuildTensorMap();
     std::vector<std::shared_ptr<Operation>> GetSortedOperations() const;
-    OperationsViewer Operations(bool sorted = true);
+    OperationsViewer Operations(bool sorted = true, SortOperationsMode mode = SortOperationsMode::GENERAL);
     OperationsViewer OperationsAfterOOO();
     void RecordOOOSeq();
     // 这个LeafOperations写法破坏封装性，但是是针对LeafFunction特有的，后续在Function按类拆分的时候会将其只放到LeafFunction中
@@ -634,7 +634,8 @@ public:
     void SetProgramOp(const std::vector<OperationPtr>& operations);
     void SortOperations(SortOperationsMode mode = SortOperationsMode::GENERAL);
     void ScheduleBy(const std::vector<Operation*>& newList, bool needRefresh = false);
-    void EraseOperations(bool eraseRelatedTensor = true, bool sorted = true);
+    void EraseOperations(bool eraseRelatedTensor = true, bool sorted = true,
+                         SortOperationsMode mode = SortOperationsMode::GENERAL);
     void EraseOperations(const OperationDeleter& deleter);
     void AddGlobalTensor(std::shared_ptr<LogicalTensor> tensor) { globalTensors_.emplace(tensor); };
     void AddOperationGroup(std::vector<Operation*> operationGroup);
@@ -1092,6 +1093,9 @@ private:
 
     void RefreshOpPosition();
     auto AnnotateOperation();
+    void EraseRelatedTensors(const std::unordered_set<std::shared_ptr<LogicalTensor>>& removeCandidateTensor,
+                             const std::unordered_set<std::shared_ptr<LogicalTensor>>& removeProducerTensor,
+                             const std::unordered_set<LogicalTensorPtr>& inOutCastSet);
 
     void FillOriginInOutCast(std::vector<Operation*>& operationList);
     void SetCallOpSlot();

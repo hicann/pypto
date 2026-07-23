@@ -140,10 +140,13 @@ Status CommonOperationEliminateUtils::EliminateCommonOperation(Function& functio
 
 Status CommonOperationEliminateUtils::Process(Function& function)
 {
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
     std::vector<LogicalTensorPtr> sequence;
-    auto tensorProducerMap = GetTensorProducers(function, sequence);
+    std::unordered_map<LogicalTensorPtr, std::vector<Operation*>> tensorProducerMap;
+    tensorProducerMap = GetTensorProducers(function, sequence);
     mixSubgraphIds_ = GetMixSubgraphIds(function);
     std::unordered_set<Operation*> cacheProducers;
+    bool anyDeleted = false;
     for (auto& orderedTensor : sequence) {
         auto& producerGroup = tensorProducerMap[orderedTensor];
         if (producerGroup.empty() ||
@@ -157,13 +160,16 @@ Status CommonOperationEliminateUtils::Process(Function& function)
             if (!cacheProducers.count(op)) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "Operation[%d] was set as deleted.", op->GetOpMagic());
                 op->SetAsDeleted();
+                anyDeleted = true;
             }
         }
     }
-    function.EraseOperations();
-    if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "Eliminate dead operation failed in CommonOperationEliminateUtils.");
-        return FAILED;
+    if (anyDeleted) {
+        function.EraseOperations(true, false);
+        if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Eliminate dead operation failed in CommonOperationEliminateUtils.");
+            return FAILED;
+        }
     }
     return SUCCESS;
 }

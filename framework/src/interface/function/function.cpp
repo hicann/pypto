@@ -456,11 +456,11 @@ Function::Function(const Program& belongTo, const std::string& funcMagicName, co
     opSeed_ = FUNCTION_MAX_INCASTS;
 }
 
-OperationsViewer Function::Operations(bool sorted)
+OperationsViewer Function::Operations(bool sorted, SortOperationsMode mode)
 {
     if (!sorted_ && sorted) {
         sorted_ = true;
-        SortOperations();
+        SortOperations(mode);
     }
     return OperationsViewer(operations_, opPosition_);
 }
@@ -1637,7 +1637,7 @@ unsigned long Function::ComputeHashOrderless() const
     return result;
 }
 
-void Function::EraseOperations(bool eraseRelatedTensor, bool sorted)
+void Function::EraseOperations(bool eraseRelatedTensor, bool sorted, SortOperationsMode mode)
 {
     std::unordered_set<LogicalTensorPtr> inOutCastSet(inCasts_.begin(), inCasts_.end());
     inOutCastSet.insert(outCasts_.begin(), outCasts_.end());
@@ -1669,24 +1669,31 @@ void Function::EraseOperations(bool eraseRelatedTensor, bool sorted)
     operations_ = operations;
 
     if (eraseRelatedTensor) {
-        for (auto tensorPtr : removeCandidiateTensor) {
-            if (inOutCastSet.count(tensorPtr) != 0) {
-                continue;
-            }
-            if (tensorPtr->GetProducers().empty() && tensorPtr->GetConsumers().empty()) {
-                GetTensorMap().Erase(tensorPtr);
-            } else if (removeProducerTensor.count(tensorPtr) > 0 && tensorPtr->GetProducers().empty()) {
-                GetTensorMap().Erase(tensorPtr);
-                for (auto& consumer : tensorPtr->GetConsumers()) {
-                    if (consumer->BelongTo() == this) {
-                        consumer->EraseInput(tensorPtr);
-                    }
+        EraseRelatedTensors(removeCandidiateTensor, removeProducerTensor, inOutCastSet);
+    }
+    if (sorted) {
+        SortOperations(mode);
+    }
+}
+
+void Function::EraseRelatedTensors(const std::unordered_set<std::shared_ptr<LogicalTensor>>& removeCandidateTensor,
+                                   const std::unordered_set<std::shared_ptr<LogicalTensor>>& removeProducerTensor,
+                                   const std::unordered_set<LogicalTensorPtr>& inOutCastSet)
+{
+    for (auto tensorPtr : removeCandidateTensor) {
+        if (inOutCastSet.count(tensorPtr) != 0) {
+            continue;
+        }
+        if (tensorPtr->GetProducers().empty() && tensorPtr->GetConsumers().empty()) {
+            GetTensorMap().Erase(tensorPtr);
+        } else if (removeProducerTensor.count(tensorPtr) > 0 && tensorPtr->GetProducers().empty()) {
+            GetTensorMap().Erase(tensorPtr);
+            for (auto& consumer : tensorPtr->GetConsumers()) {
+                if (consumer->BelongTo() == this) {
+                    consumer->EraseInput(tensorPtr);
                 }
             }
         }
-    }
-    if (sorted) {
-        SortOperations();
     }
 }
 
