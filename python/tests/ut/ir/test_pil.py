@@ -458,7 +458,7 @@ def test_tensor_loop_unroll_batch():
     info(f"\ncanonical: {prog}")
 
 
-def test_dynamic_loop_unroll_uses_mod_aligned_bounds():
+def test_dynamic_loop_unroll_uses_div_aligned_bounds():
     def foo(x):
         for i in pypto.loop(x.shape[0] // 128, unroll_list=[128, 64, 32, 16, 8, 4, 1]):
             _ = i + 1
@@ -475,14 +475,14 @@ def test_dynamic_loop_unroll_uses_mod_aligned_bounds():
     factor_4_start = expr_text(factor_4_loop.start)
     factor_4_stop = expr_text(factor_4_loop.stop)
     assert str(factor_4_loop.step) == "4"
-    assert "%8" in factor_4_start
-    assert "%4" in factor_4_stop
+    assert "/8)*8" in factor_4_start
+    assert "/4)*4" in factor_4_stop
     assert "/128)*128" not in factor_4_start
     assert "/128)*128" not in factor_4_stop
 
     factor_1_loop = for_stmts[6]
     assert str(factor_1_loop.step) == "1"
-    assert "%4" in expr_text(factor_1_loop.start)
+    assert "/4)*4" in expr_text(factor_1_loop.start)
     assert "%1" not in expr_text(factor_1_loop.stop)
 
 

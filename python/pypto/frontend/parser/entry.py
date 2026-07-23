@@ -31,6 +31,7 @@ from pypto.cost_model import _cost_model_run_once_data_from_host
 from pypto.frontend.parser.diagnostics import Source
 from pypto.frontend.parser.parser import NestedFunctionMarker, Parser
 from pypto.ir.compile_pipeline import compile_new_ir
+from pypto.logging import log_debug
 from pypto.runtime import setup_verify_data, _pto_verify_datas
 from pypto._utils import get_torch_npu, get_npu_tensor_format, get_dtensor_type
 from pypto.error import FeError, _catch_and_wrap_error
@@ -643,12 +644,24 @@ class JitCallableWrapper:
         self._ensure_debug_options()
         self._ensure_host_options()
         key = self._get_compilation_cache_key(non_tensor_values)
+        cache_fields = "source/options/captured locals/non-tensor args"
         if (
             key is not None
             and key in JitCallableWrapper._kernel_module_cache
         ):
+            log_debug(
+                f"JIT cache hit for {self._original_func.__name__}: "
+                "recreate KernelModule=False, recompile=False, "
+                f"cache_fields={cache_fields}, tensor_attrs_checked_by=KernelModule"
+            )
             self.kmodule = JitCallableWrapper._kernel_module_cache[key]
         else:
+            log_debug(
+                f"JIT cache miss for {self._original_func.__name__}: "
+                f"cache_key_available={key is not None}, "
+                "recreate KernelModule=True, recompile=True, "
+                f"cache_fields={cache_fields}, tensor_attrs_checked_by=KernelModule"
+            )
             self.kmodule = pypto_impl.KernelModule(self)
             if key is not None:
                 JitCallableWrapper._kernel_module_cache[key] = self.kmodule

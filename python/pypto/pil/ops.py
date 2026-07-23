@@ -306,8 +306,7 @@ def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
             loop.stop = original_stop
         else:
             unroll_step = factor * loop.step
-            tail = (original_stop - original_start) % unroll_step
-            loop.stop = original_stop - tail
+            loop.stop = original_start + (original_stop - original_start) // unroll_step * unroll_step
         try:
             pypto_impl.BeginScope(f"loop", {}, ctx.span.filename, ctx.span.begin_line)
             _loop_unroll(body, loop, factor, original_stop, ctx=ctx)
