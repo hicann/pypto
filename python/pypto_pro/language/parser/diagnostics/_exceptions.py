@@ -38,6 +38,8 @@ def _normalize_span(span: ir.Span | None) -> dict[str, str | int | None] | None:
     filename = getattr(span, "filename", None)
     begin_line = getattr(span, "begin_line", 0)
     begin_column = getattr(span, "begin_column", 0)
+    end_line = getattr(span, "end_line", 0)
+    end_column = getattr(span, "end_column", 0)
     return {
         "filename": filename,
         "line": begin_line,
@@ -45,6 +47,8 @@ def _normalize_span(span: ir.Span | None) -> dict[str, str | int | None] | None:
         "file": filename,
         "begin_line": begin_line,
         "begin_column": begin_column,
+        "end_line": end_line,
+        "end_column": end_column,
     }
 
 
@@ -87,17 +91,44 @@ class ParserError(PyptoError):
 
     def __str__(self) -> str:
         parts = [super().__str__()]
-        if self.span:
-            filename = self.span.get("filename") or "<unknown>"
-            line = self.span.get("line") or self.span.get("begin_line")
-            column = self.span.get("column") or self.span.get("begin_column")
-            if line:
-                parts.append(f"  --> {filename}:{line}:{column}")
+        self._append_location(parts)
         if self.hint:
             parts.append(f"  hint: {self.hint}")
         if self.note:
             parts.append(f"  note: {self.note}")
         return "\n".join(parts)
+
+    def _append_location(self, parts: list) -> None:
+        if not self.span:
+            return
+        filename = self.span.get("filename") or "<unknown>"
+        line = self.span.get("line") or self.span.get("begin_line")
+        if not line:
+            return
+        column = self.span.get("column") or self.span.get("begin_column")
+        parts.append(f"  --> {filename}:{line}:{column}")
+        self._append_source_preview(parts, line, column)
+
+    def _append_source_preview(self, parts: list, line: int, column: int) -> None:
+        source_line = self._get_source_line(line)
+        if not source_line:
+            return
+        end_column = self.span.get("end_column") or 0
+        parts.append("   |")
+        parts.append(f"{line:3} | {source_line}")
+        if column and end_column and end_column > column:
+            width = end_column - column
+            parts.append(f"   | {' ' * (column - 1)}{'^' * width}")
+        elif column:
+            parts.append(f"   | {' ' * (column - 1)}^")
+
+    def _get_source_line(self, line: int) -> str | None:
+        if not self.source_lines:
+            return None
+        idx = line - 1
+        if 0 <= idx < len(self.source_lines):
+            return self.source_lines[idx].rstrip("\n")
+        return None
 
 
 class ParserSyntaxError(ParserError):

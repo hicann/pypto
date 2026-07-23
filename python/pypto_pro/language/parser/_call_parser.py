@@ -23,6 +23,7 @@ from pypto_pro.ir import op as ir_op
 from pypto_pro.ir.op.block_ops import block_ir_op
 from pypto_pro.ir.op._op_registry import _OP_REGISTRY
 
+from ._span_tracker import SpanTracker
 from .diagnostics import (
     InvalidOperationError,
     ParserSyntaxError,
@@ -46,6 +47,7 @@ class _InlineFunctionTemplate:
     func_def: ast.FunctionDef
     closure_vars: dict[str, Any]
     is_vector_function: bool
+    span_tracker: SpanTracker
 
 
 class _InlineLocalRenamer(ast.NodeTransformer):
@@ -941,6 +943,7 @@ class CallParserMixin:
             func_def=source_info[4],
             closure_vars=self._build_function_closure(fn),
             is_vector_function=is_vf,
+            span_tracker=SpanTracker(source_info[0], source_info[1], source_info[2], source_info[3]),
         )
         self.inline_func_cache[id(fn)] = template
         return template
@@ -1034,6 +1037,10 @@ class CallParserMixin:
                 self.inline_vf_depth += 1
             self.scope_manager.enter_scope("inline")
             self.const_env = dict(self.const_env)
+
+            old_span_tracker = self.span_tracker
+            self.span_tracker = template.span_tracker
+
             try:
                 for param in params:
                     expr, _arg_node = bound[param.arg]
@@ -1066,6 +1073,7 @@ class CallParserMixin:
                     return self.parse_expression(renamed_return.value)
                 return None
             finally:
+                self.span_tracker = old_span_tracker
                 self.scope_manager.exit_scope(leak_vars=False)
                 self.inline_call_stack.pop()
                 if template.is_vector_function:
