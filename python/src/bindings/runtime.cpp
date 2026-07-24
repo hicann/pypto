@@ -471,7 +471,11 @@ public:
         if (attr->devProgBinary.empty() || attr->kernelBinary.empty()) {
             return nullptr;
         }
-        auto kernel = new KernelBinary(Program::GetInstance().GetFunctionSharedPtr(func));
+        std::vector<std::shared_ptr<Function>> pinnedGraph;
+        for (const auto& entry : Program::GetInstance().GetFunctionMap()) {
+            pinnedGraph.push_back(entry.second);
+        }
+        auto kernel = new KernelBinary(Program::GetInstance().GetFunctionSharedPtr(func), std::move(pinnedGraph));
         kernels.push_back(kernel);
         return kernel;
     }
@@ -650,8 +654,9 @@ private:
     {
         HOST_PERF_TRACE(TracePhase::LaunchInit);
         auto kbinary = kmodule->GetKernelBinary(tensors);
-        if (kbinary)
+        if (kbinary) {
             return kbinary;
+        }
 
         jitScopeGuard.emplace("jit_scope", std::map<std::string, std::any>{});
         Program::GetInstance().Reset();

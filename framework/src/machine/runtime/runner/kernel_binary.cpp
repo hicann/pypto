@@ -35,7 +35,8 @@
 
 namespace npu::tile_fwk::dynamic {
 
-KernelBinary::KernelBinary(std::shared_ptr<Function> func) : dynFunc(func)
+KernelBinary::KernelBinary(std::shared_ptr<Function> func, std::vector<std::shared_ptr<Function>> pinnedGraph)
+    : dynFunc(std::move(func)), pinnedGraph_(std::move(pinnedGraph))
 {
     dynAttr = dynFunc->GetDyndevAttribute().get();
     devProg = (DevAscendProgram*)dynAttr->devProgBinary.data();

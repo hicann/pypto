@@ -33,7 +33,7 @@ namespace npu::tile_fwk::dynamic {
 
 class KernelBinary {
 public:
-    KernelBinary(std::shared_ptr<Function> func);
+    KernelBinary(std::shared_ptr<Function> func, std::vector<std::shared_ptr<Function>> pinnedGraph = {});
     ~KernelBinary();
 
     ToSubMachineConfig& GetMachineConfig();
@@ -77,6 +77,7 @@ private:
     void RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes);
 
     std::shared_ptr<Function> dynFunc;
+    std::vector<std::shared_ptr<Function>> pinnedGraph_;
     DyndevFunctionAttribute* dynAttr{nullptr};
     DevAscendProgram* devProg{nullptr};
     void* kernelBin{nullptr};

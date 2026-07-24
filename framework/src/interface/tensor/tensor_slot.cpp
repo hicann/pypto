@@ -557,6 +557,13 @@ void TensorSlotManager::Checkpoint()
     checkpointStack.push_back(std::move(checkpoint));
 }
 
+void TensorSlotManager::UnwindAllCheckpoints()
+{
+    while (!checkpointStack.empty()) {
+        Restore();
+    }
+}
+
 void TensorSlotManager::Restore()
 {
     FE_ASSERT(checkpointStack.size() != 0) << "checkpointStack.size(): " << checkpointStack.size();

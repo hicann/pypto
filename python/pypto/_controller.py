@@ -392,6 +392,19 @@ def _raise_if_exception(exc: Optional[Exception]):
     raise FeError(exc)
 
 
+def _finalize_function_recording(func, first_exc: Optional[Exception]) -> Optional[Exception]:
+    if func is None:
+        return first_exc
+    try:
+        if first_exc is None:
+            func.EndFunction()
+        else:
+            func.AbortRecording()
+    except Exception as e:
+        return first_exc if first_exc is not None else e
+    return first_exc
+
+
 @contextmanager
 def function(name: str, *args) -> Iterator:
     """defining the function
@@ -432,13 +445,7 @@ def function(name: str, *args) -> Iterator:
     except Exception as e:
         first_exc = e
     finally:
-        if func is None:
-            _raise_if_exception(first_exc)
-        try:
-            func.EndFunction()
-        except Exception as e:
-            if first_exc is None:
-                first_exc = e
+        first_exc = _finalize_function_recording(func, first_exc)
         Controller.end_function()
         _raise_if_exception(first_exc)
 

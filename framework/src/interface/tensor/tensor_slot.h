@@ -286,6 +286,8 @@ struct TensorSlotManager {
 
     void Checkpoint();
     void Restore();
+    void UnwindAllCheckpoints();
+    bool HasActiveCheckpoints() const { return !checkpointStack.empty(); }
 
     void UpdateReshapeInplaceSlots(IncastOutcastLink& link);
     void SetSameSlot(const Tensor& operand, const Tensor& dst);
