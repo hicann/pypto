@@ -144,7 +144,7 @@ PyPTO在计算图编译的各Pass阶段拥有完整的中间表示，可翻译�
     | `enable_pass_verify` | bool | False | 总体使能开关，决定所有`pass_verify_*`选项和接口是否生效。必须设置为`True`才能使其他参数生效 |
     | `pass_verify_save_tensor` | bool | False | 是否将模拟计算数据存盘。设置为`True`时会在`{work_path}/output/output_*/`目录下生成`verify_*`目录 |
     | `pass_verify_save_tensor_dir` | str | "{RUNNING_DIR}/output/output_{TS}" | 检测结果及数据的保存路径。可指定绝对路径 |
-    | `pass_verify_pass_filter` | List[str] | 空 | 配置待自检的Pass名称列表。不指定则默认校验特定pass；指定`"all"`则校验所有pass；指定`[]`不校验pass只校验tensor_graph |
+    | `pass_verify_pass_filter` | List[str] | 空 | 配置待自检的Pass名称列表。不指定则默认校验所有pass；指定`"all"`则校验所有pass；指定`[]`不校验pass只校验tensor_graph |
     | `pass_verify_error_tol` | List[float] | [1e-3, 1e-3] | 精度对比的容差配置。第一个值为相对误差容差（rtol），第二个值为绝对误差容差（atol） |
 
 2. 设置golden数据（可选）
