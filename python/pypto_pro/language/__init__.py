@@ -289,8 +289,6 @@ from ._api import (
     expands,
     fill_index,
     fillpad,
-    fillpad_expand,
-    fillpad_inplace,
     fused_mul_add,
     fused_mul_add_relu,
     gather,
