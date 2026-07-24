@@ -311,8 +311,11 @@ void LogWorkspaceEncodeSummary(int kMin, uint32_t stitchNumMax, const DevAscendP
                  devProg.memBudget.metadata.Total(), WorkspaceBytesToKbCeil(maxWorkspaceBytes),
                  static_cast<int>(depthConfig.memoryDrivenWorkspace), devProg.memBudget.tensor.runtimeOutcastPoolSize);
     if (depthConfig.memoryDrivenWorkspace == 0) {
-        EmitWorkspaceUserMessage(BuildNonMemoryDrivenWorkspaceUserMessage(WorkspaceBytesToKbCeil(devProg.workspaceSize),
-                                                                          WorkspaceBytesToKbCeil(workspaceStitchMin)));
+        // No meaningful workspace budget to tune; skip the recommendation tip.
+        if (devProg.workspaceSize > 0) {
+            EmitWorkspaceUserMessage(BuildNonMemoryDrivenWorkspaceUserMessage(
+                WorkspaceBytesToKbCeil(devProg.workspaceSize), WorkspaceBytesToKbCeil(workspaceStitchMin)));
+        }
         return;
     }
     EmitWorkspaceUserMessage(

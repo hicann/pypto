@@ -411,6 +411,7 @@ void DeviceWorkspaceAllocator::MarkAsNewStitchWindow()
 
 void DeviceWorkspaceAllocator::DumpMemoryUsage(const char* hint) const
 {
+    (void)hint;
 #if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
     wsMemDelayedDumper_.DumpStitchWindowMemoryUsage();
 #endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL

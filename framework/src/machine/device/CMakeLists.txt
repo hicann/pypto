@@ -52,6 +52,7 @@ target_compile_options(tile_fwk_server
             -std=gnu++17
             -rdynamic
             -O3
+            -march=armv8-a
             -shared
             -fPIC
             -D__DEVICE__

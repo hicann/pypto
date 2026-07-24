@@ -41,6 +41,7 @@ struct DevAscendProgram {
     uint64_t workspaceSize;
     uint64_t l2CacheOffset;
     uint64_t configKey;
+    // Set at encode (EncodeDevAscendProgram::Init). Must be non-zero: AOT pool uses 0 as empty-entry sentinel.
     uint64_t hashKey;
     uint32_t slotSize;
     uint32_t assembleSlotSize;
@@ -107,6 +108,8 @@ struct DevAscendProgram {
     } memBudget;
     DeviceRuntimeOffset deviceRuntimeOffset;
     const void* controlFlowBinaryAddr{nullptr};
+    // Last AOT pool entry id that held this program's CF binary (hint for EnsureCached).
+    uint8_t aotPoolLastId{0xFF};
     std::atomic<bool> runtimeDataRingBufferInited{false};
     uint32_t stitchFunctionsize{0};
     uint32_t stitchMaxFunctionNum{0};
@@ -407,18 +410,7 @@ struct DevAscendProgram {
         dst.launchSchedSameCluster = params.launchSchedSameCluster;
     }
 
-    void ResetFromLaunch()
-    {
-        DevArgsPreservedParams preservedParams = BackupDevArgsParams(devArgs);
-        memset_s(&devArgs, sizeof(devArgs), 0, sizeof(devArgs));
-        RestoreDevArgsParams(devArgs, preservedParams);
-
-        controlFlowBinaryAddr = nullptr;
-        runtimeDataRingBufferInited = false;
-        workspaceSize = 0;
-        ctrlFlowCacheAnchor = nullptr;
-        RelocProgram(reinterpret_cast<int64_t>(this), 0);
-    }
+    void ResetFromLaunch();
 
     void ResetRerun()
     {
@@ -438,80 +430,7 @@ struct DevAscendProgram {
         uintptr_t end;
     };
 
-    void RuntimeVerify(uintptr_t workspaceBegin, uintptr_t workspaceEnd) const
-    {
-        (void)workspaceBegin, (void)workspaceEnd;
-        DEV_IF_VERBOSE_DEBUG {}
-        else
-        {
-            return;
-        }
-        std::vector<DevRelocRange> rangeList = {
-            symbolTable, // 0
-            symbolTableNameList,
-            expressionTableOffsetList,
-            hostControlFlowBinary,
-            devControlFlowBinary,
-            devEncodeList, // 5
-            devEncodeDataList,
-            cceCodeList,
-            aicpuLeafCodeList,
-            aicpuLeafCodeDataList,
-            startArgsInputTensorSlotIndexList, // 10
-            startArgsOutputTensorSlotIndexList,
-            assembleSlotIndexList,
-            outputInplaceSlotList,
-            partialUpdateList,
-            cellMatchRuntimePartialUpdateTableList, // 15
-            prefetchInfoList,
-            disableL2List,
-            controlFlowCache.inputTensorDataList,
-            controlFlowCache.outputTensorDataList,
-            controlFlowCache.runtimeBackup.workspace.tensorAllocators[0].slottedOutcastsBlockList, // 20
-            controlFlowCache.runtimeBackup.slotContext.slotList,
-            controlFlowCache.runtimeBackup.workspace.runtimeOutcastTensorPool,
-            controlFlowCache.deviceTaskCacheList,
-            controlFlowCache.cacheData,
-        };
-        if ((uintptr_t)data != rangeList[0].begin) {
-            DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,
-                      "#ctrl.program.verify: Assertion failed: data (0x%p) != rangeList[0].begin (0x%p)", data,
-                      (void*)rangeList[0].begin);
-        }
-        DEV_ASSERT(ProgEncodeErr::RANGE_VERIFY_FAILED, (uintptr_t)data == rangeList[0].begin);
-        if (rangeList[0].begin > rangeList[0].end) {
-            DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,
-                      "#ctrl.program.verify: Assertion failed: rangeList[0].begin (0x%p) > rangeList[0].end (0x%p)",
-                      (void*)rangeList[0].begin, (void*)rangeList[0].end);
-        }
-        DEV_ASSERT(ProgEncodeErr::RANGE_VERIFY_FAILED, rangeList[0].begin <= rangeList[0].end);
-        for (size_t k = 1; k < rangeList.size(); k++) {
-            if (rangeList[k - 1].end > rangeList[k].begin) {
-                DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,
-                          "#ctrl.program.verify: Ranges overlap: range[%d].end (0x%p) > range[%d].begin (0x%p)",
-                          (int)(k - 1), (void*)rangeList[k - 1].end, (int)k, (void*)rangeList[k].begin);
-            }
-            if (rangeList[k].begin > rangeList[k].end) {
-                DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,
-                          "#ctrl.program.verify: Invalid range: range[%d].begin (0x%p) > range[%d].end (0x%p)", (int)k,
-                          (void*)rangeList[k].begin, (int)k, (void*)rangeList[k].end);
-            }
-            DEV_ASSERT_MSG(ProgEncodeErr::RANGE_VERIFY_FAILED, rangeList[k - 1].end <= rangeList[k].begin,
-                           "range:%d->%d", (int)(k - 1), (int)(k));
-            DEV_ASSERT_MSG(ProgEncodeErr::RANGE_VERIFY_FAILED, rangeList[k].begin <= rangeList[k].end, "range:%d",
-                           (int)k);
-        }
-        uintptr_t lastEnd = rangeList.back().end;
-        uintptr_t dataEnd = (uintptr_t)(&data[dataSize]);
-        if (lastEnd != dataEnd) {
-            DEV_ERROR(
-                ProgEncodeErr::RANGE_VERIFY_FAILED,
-                "#ctrl.program.verify: Last range end does not match data end: rangeList.back().end (0x%p) != dataEnd "
-                "(0x%p)",
-                (void*)lastEnd, (void*)dataEnd);
-        }
-        DEV_ASSERT(ProgEncodeErr::RANGE_VERIFY_FAILED, lastEnd == dataEnd);
-    }
+    void RuntimeVerify(uintptr_t workspaceBegin, uintptr_t workspaceEnd) const;
 
     uint64_t GetSize() const
     {

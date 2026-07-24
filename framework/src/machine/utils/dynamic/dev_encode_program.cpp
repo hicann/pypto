@@ -14,12 +14,28 @@
  */
 
 #include "machine/utils/dynamic/dev_encode_program.h"
+#include "machine/device/dynamic/aot_binary.h"
 
 namespace npu::tile_fwk::dynamic {
 namespace {
 const size_t WIDTH = 16;
 const int ADDRESS_MIN_WIDTH = 6;
 } // namespace
+
+void DevAscendProgram::ResetFromLaunch()
+{
+    DevArgsPreservedParams preservedParams = BackupDevArgsParams(devArgs);
+    memset_s(&devArgs, sizeof(devArgs), 0, sizeof(devArgs));
+    RestoreDevArgsParams(devArgs, preservedParams);
+
+    controlFlowBinaryAddr = nullptr;
+    aotPoolLastId = AOT_POOL_ENTRY_INVALID;
+    runtimeDataRingBufferInited = false;
+    workspaceSize = 0;
+    ctrlFlowCacheAnchor = nullptr;
+    RelocProgram(reinterpret_cast<int64_t>(this), 0);
+}
+
 void DevAscendProgram::DumpCce(std::ostringstream& oss, int indent) const
 {
     std::string INDENTINNER(indent + IDENT_SIZE, ' ');
@@ -204,5 +220,98 @@ void DevAscendProgram::DumpFile(const std::string& filePath) const
     std::ofstream ofs(filePath);
     ofs << Dump();
     ofs.close();
+}
+
+#if ENABLE_COMPILE_VERBOSE_LOG
+namespace {
+using RelocRange = DevAscendProgram::DevRelocRange;
+
+std::vector<RelocRange> CollectProgramRelocRanges(const DevAscendProgram& prog)
+{
+    return {
+        prog.symbolTable, // 0
+        prog.symbolTableNameList,
+        prog.expressionTableOffsetList,
+        prog.hostControlFlowBinary,
+        prog.devControlFlowBinary,
+        prog.devEncodeList, // 5
+        prog.devEncodeDataList,
+        prog.cceCodeList,
+        prog.aicpuLeafCodeList,
+        prog.aicpuLeafCodeDataList,
+        prog.startArgsInputTensorSlotIndexList, // 10
+        prog.startArgsOutputTensorSlotIndexList,
+        prog.assembleSlotIndexList,
+        prog.outputInplaceSlotList,
+        prog.partialUpdateList,
+        prog.cellMatchRuntimePartialUpdateTableList, // 15
+        prog.prefetchInfoList,
+        prog.disableL2List,
+        prog.controlFlowCache.inputTensorDataList,
+        prog.controlFlowCache.outputTensorDataList,
+        prog.controlFlowCache.runtimeBackup.workspace.tensorAllocators[0].slottedOutcastsBlockList, // 20
+        prog.controlFlowCache.runtimeBackup.slotContext.slotList,
+        prog.controlFlowCache.runtimeBackup.workspace.runtimeOutcastTensorPool,
+        prog.controlFlowCache.deviceTaskCacheList,
+        prog.controlFlowCache.cacheData,
+    };
+}
+
+void VerifySingleRangeValid(size_t idx, const RelocRange& range)
+{
+    if (range.begin > range.end) {
+        DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,
+                  "#ctrl.program.verify: Invalid range: range[%d].begin (0x%p) > range[%d].end (0x%p)", (int)idx,
+                  (void*)range.begin, (int)idx, (void*)range.end);
+    }
+    DEV_ASSERT_MSG(ProgEncodeErr::RANGE_VERIFY_FAILED, range.begin <= range.end, "range:%d", (int)idx);
+}
+
+void VerifyAdjacentRanges(size_t prevIdx, const RelocRange& prev, const RelocRange& curr)
+{
+    if (prev.end > curr.begin) {
+        DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,
+                  "#ctrl.program.verify: Ranges overlap: range[%d].end (0x%p) > range[%d].begin (0x%p)", (int)prevIdx,
+                  (void*)prev.end, (int)(prevIdx + 1), (void*)curr.begin);
+    }
+    DEV_ASSERT_MSG(ProgEncodeErr::RANGE_VERIFY_FAILED, prev.end <= curr.begin, "range:%d->%d", (int)prevIdx,
+                   (int)(prevIdx + 1));
+    VerifySingleRangeValid(prevIdx + 1, curr);
+}
+
+void VerifyProgramDataLayout(const std::vector<RelocRange>& rangeList, uint8_t* data, uint64_t dataSize)
+{
+    if ((uintptr_t)data != rangeList[0].begin) {
+        DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,
+                  "#ctrl.program.verify: Assertion failed: data (0x%p) != rangeList[0].begin (0x%p)", data,
+                  (void*)rangeList[0].begin);
+    }
+    DEV_ASSERT(ProgEncodeErr::RANGE_VERIFY_FAILED, (uintptr_t)data == rangeList[0].begin);
+    VerifySingleRangeValid(0, rangeList[0]);
+    for (size_t k = 1; k < rangeList.size(); k++) {
+        VerifyAdjacentRanges(k - 1, rangeList[k - 1], rangeList[k]);
+    }
+    uintptr_t lastEnd = rangeList.back().end;
+    uintptr_t dataEnd = (uintptr_t)(&data[dataSize]);
+    if (lastEnd != dataEnd) {
+        DEV_ERROR(
+            ProgEncodeErr::RANGE_VERIFY_FAILED,
+            "#ctrl.program.verify: Last range end does not match data end: rangeList.back().end (0x%p) != dataEnd "
+            "(0x%p)",
+            (void*)lastEnd, (void*)dataEnd);
+    }
+    DEV_ASSERT(ProgEncodeErr::RANGE_VERIFY_FAILED, lastEnd == dataEnd);
+}
+} // namespace
+#endif
+
+void DevAscendProgram::RuntimeVerify(uintptr_t workspaceBegin, uintptr_t workspaceEnd) const
+{
+    (void)workspaceBegin;
+    (void)workspaceEnd;
+    // Verbose-only: verify encoded DevRelocVector ranges are contiguous and non-overlapping.
+#if ENABLE_COMPILE_VERBOSE_LOG
+    VerifyProgramDataLayout(CollectProgramRelocRanges(*this), data, dataSize);
+#endif
 }
 } // namespace npu::tile_fwk::dynamic

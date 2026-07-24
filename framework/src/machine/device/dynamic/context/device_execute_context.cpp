@@ -86,10 +86,12 @@ DeviceExecuteContext::DeviceExecuteContext(DevStartArgs* startArgs)
     }
 
     PerfBegin(PERF_EVT_CONTROL_FLOW_MAPEXE);
-    if (startArgs->controlFlowEntry) {
+    // Prefer injected entry (device custom ctrl / host UT stubs).
+    // Production already resolves AOT CF in InitDevProgram and sets controlFlowEntry before constructing.
+    // Do not fall back to AOT here when entry is unset: DevStartArgs.devProg may be null/uninit in host UT.
+    if (startArgs->controlFlowEntry != nullptr && devProg != nullptr) {
         execProg = DeviceExecuteProgram(devProg, reinterpret_cast<AOTBinaryControlFlow::controlFlowEntry>(
                                                      const_cast<void*>(startArgs->controlFlowEntry)));
-        AOTCodePool::GetCodePool().MapExec();
     }
     PerfEnd(PERF_EVT_CONTROL_FLOW_MAPEXE);
     PerfEnd(PERF_EVT_INIT);
@@ -114,7 +116,6 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs* startArgs, PushTaskEn
     this->args = startArgs;
     this->devProg = startArgs->devProg;
     PerfEnd(PERF_EVT_CONTROL_FLOW_INIT);
-    PerfMtTrace(PERF_TRACE_INIT, CTRL_CPU_THREAD_IDX);
     PerfBegin(PERF_EVT_CONTROL_FLOW);
     for (size_t index = 0; index < devProg->ctrlFlowCacheAnchor->deviceTaskCount; index++) {
         DynDeviceTask* dynTask = reinterpret_cast<DynDeviceTask*>(

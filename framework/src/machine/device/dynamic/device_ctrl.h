@@ -232,11 +232,16 @@ public:
         memBarrier();
 
 #ifdef __USE_CUSTOM_CTRLFLOW__
-        DEV_INFO("Use built in ctrl flow func.");
-        devProg->controlFlowBinaryAddr = GetCtrlFlowFunc();
+        if (devProg->controlFlowBinaryAddr == nullptr) {
+            DEV_INFO("Use built in ctrl flow func.");
+            devProg->controlFlowBinaryAddr = GetCtrlFlowFunc();
+        }
 #else
-        auto execProg = DeviceExecuteProgram(devProg, nullptr);
-        devProg->controlFlowBinaryAddr = execProg.GetControlFlowEntry();
+        // Resolve CF by DevProg hash: already in pool and not overwritten -> skip memcpy.
+        {
+            auto execProg = DeviceExecuteProgram(devProg, nullptr);
+            devProg->controlFlowBinaryAddr = execProg.GetControlFlowEntry();
+        }
 #endif
         return firstInit;
     }
