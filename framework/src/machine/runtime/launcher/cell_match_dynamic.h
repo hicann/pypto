@@ -44,6 +44,8 @@ std::vector<DevDynamicCellMatchStridePatch> PrepareHostDynamicCellMatchForLaunch
                                                                                  Evaluator& eval,
                                                                                  DevAscendProgram* hostDevProg);
 
+void ResetRuntimeDynamicCellMatchPoolHost(uint64_t addr, uint64_t capacityBytes, bool isDevice);
+
 template <typename MemoryHelperTy>
 inline void PatchRuntimeDynamicCellMatchMeta(MemoryHelperTy& memoryHelper, DevAscendProgram* hostProg,
                                              DeviceKernelArgs& kArgs)
@@ -65,6 +67,8 @@ inline void PatchRuntimeDynamicCellMatchMeta(MemoryHelperTy& memoryHelper, DevAs
     hostProg->devArgs.dynamicCellMatchCapacity = dynamicCellMatchBytes;
     kArgs.runtimeDynamicCellMatchAddr = dynamicCellMatchAddrU64;
     kArgs.runtimeDynamicCellMatchCapacity = dynamicCellMatchBytes;
+    // AllocDev may return device HBM or host/sim memory depending on MemoryHelperTy.
+    ResetRuntimeDynamicCellMatchPoolHost(dynamicCellMatchAddrU64, dynamicCellMatchBytes, memoryHelper.IsDevice());
 }
 
 } // namespace npu::tile_fwk::dynamic

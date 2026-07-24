@@ -168,6 +168,8 @@ public:
     {
         AutoScopedPerf asp(PERF_EVT_ALLOCATE_WORKSPACE);
 
+        devRootDup.DupDataForDynFuncData()->InitDuppedRuntimeTail();
+
         if (!CanAllocateFunctionMemory(devRootDup)) {
             return false;
         }

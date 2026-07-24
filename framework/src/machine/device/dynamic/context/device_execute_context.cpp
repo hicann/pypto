@@ -101,6 +101,7 @@ void DeviceExecuteContext::PushTask(DynDeviceTask* dynTask)
 {
     pushTask(dynTask, this);
     taskId++;
+    AdvanceCellMatchTagSeq(devProg);
 }
 
 void DeviceExecuteContext::ShowStats()
@@ -584,9 +585,10 @@ void* DeviceExecuteContext::CallRootFunctionStitch(uint64_t rootKey)
     DEV_TRACE_DEBUG(DEvent(taskId, DActStitchStart(GetRuid(rootKey))));
     PROF_STAGE_BEGIN(PERF_EVT_STAGE_STITCH, "stitch.before\n");
     size_t devNextIdx = stitchContext.Size();
-    stitchContext.Stitch(slotContext, currDevRootDup, taskId, devNextIdx);
+    const uint32_t cellMatchTagSeq = devProg->GetCellMatchTagSeq();
+    stitchContext.Stitch(slotContext, currDevRootDup, taskId, devNextIdx, cellMatchTagSeq);
 
-    uint32_t updateErrCode = slotContext.UpdateSlots(currDevRootDup, taskId, devNextIdx);
+    uint32_t updateErrCode = slotContext.UpdateSlots(currDevRootDup, taskId, devNextIdx, cellMatchTagSeq);
     if (updateErrCode == static_cast<uint32_t>(CtrlErr::CELL_MATCH_FILL_OP_NOT_ENOUGH)) {
         DEV_INFO("UpdateSlots stitch cell failed with error code %u, force submit devtask", updateErrCode);
         ret = SubmitToAicoreAndRecycleMemory(false);

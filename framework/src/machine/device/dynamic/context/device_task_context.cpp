@@ -28,6 +28,46 @@ const uint32_t RAW_TENSOR_ADDR_MASK = 8;
 const uint32_t CCE_BINARY_MOD = 8;
 const size_t DUP_PRED_COUNT_LOOP_MAX = 8;
 const size_t DUP_PRED_COUNT_PRE_LOOP_CNT = 4;
+
+inline void CheckAddrAligned(uint64_t addr, uint32_t align, const char* msg)
+{
+    DEV_ASSERT_MSG(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, addr % align == 0, "%s", msg);
+}
+
+inline void FillOneDynFuncData(DynFuncData* dyndata, DevAscendFunctionDupped& dupFunc,
+                               npu::tile_fwk::DevStartArgsBase* startArgs, DeviceWorkspaceAllocator* workspace,
+                               uint64_t& leafFuncDataSize, uint64_t& leafFuncNum)
+{
+    dyndata->opAttrs = reinterpret_cast<uint64_t*>(const_cast<SymInt*>(dupFunc.GetSource()->GetSymoffset(0)));
+    dyndata->opAtrrOffsets = dupFunc.GetSource()->GetOpAttrOffsetAddr();
+    dyndata->exprNum = dupFunc.GetSource()->expressionList.size();
+    dyndata->exprTbl = dupFunc.GetExpressionAddr();
+    dyndata->rawTensorAddr = reinterpret_cast<uint64_t*>(&dupFunc.GetIncastAddress(0));
+    dyndata->rawTensorDesc = dupFunc.GetSource()->GetRawTensorDesc(0);
+    dyndata->startArgs = startArgs;
+    dyndata->workspaceAddr = dupFunc.RuntimeWorkspace();
+    dyndata->stackWorkSpaceSize = workspace->StandardStackWorkspacePerCore();
+    dyndata->stackWorkSpaceAddr = workspace->StackWorkspaceAddr();
+    dyndata->opAttrSize = dupFunc.GetSource()->GetOpAttrSize();
+    dyndata->rawTensorAddrSize = dupFunc.GetSource()->GetIncastSize() + dupFunc.GetSource()->GetOutcastSize();
+    dyndata->rawTensorDescSize = dupFunc.GetSource()->GetRawTensorDescSize();
+
+    CheckAddrAligned(reinterpret_cast<uint64_t>(dyndata->opAttrs), OP_ATTRS_PRE_NUM,
+                     "#ctrl.task.pre.dynfunc.process: opAttrs address is not aligned.");
+    CheckAddrAligned(reinterpret_cast<uint64_t>(dyndata->opAtrrOffsets), OP_ATTRS_OFFSET_PRE_NUM,
+                     "#ctrl.task.pre.dynfunc.process: opAtrrOffsets address is not aligned.");
+    CheckAddrAligned(reinterpret_cast<uint64_t>(dyndata->exprTbl), EXPR_TABLE_PRE_NUM,
+                     "#ctrl.task.pre.dynfunc.process: exprTbl address is not aligned.");
+    CheckAddrAligned(reinterpret_cast<uint64_t>(dyndata->rawTensorAddr), RAW_TENSOR_ADDR_MASK,
+                     "#ctrl.task.pre.dynfunc.process: rawTensorAddr address is not aligned.");
+
+    leafFuncDataSize += dupFunc.GetSource()->GetOpAttrSize() * sizeof(SymInt);
+    leafFuncDataSize += dupFunc.GetSource()->GetOperationSize() * sizeof(int32_t);
+    leafFuncDataSize += dyndata->exprNum * sizeof(int64_t);
+    leafFuncDataSize += dupFunc.GetSource()->GetRawTensorSize() * sizeof(DevRawTensorDesc);
+    leafFuncNum += dupFunc.GetSource()->GetOperationSize();
+    dupFunc.SetFuncData(dyndata);
+}
 } // namespace
 
 void DeviceTaskContext::InitAllocator(DevAscendProgram* devProg, DeviceWorkspaceAllocator& workspace,
@@ -107,7 +147,6 @@ int DeviceTaskContext::InitReadyQueues(DynDeviceTask* dyntask, DevAscendProgram*
             dyntask->devTask.coreFunctionCnt, devProg->stitchFunctionsize);
         return DEVICE_MACHINE_ERROR;
     }
-    DEV_ASSERT(CtrlErr::DEVICE_TASK_BUILD_FAILED, dyntask->devTask.coreFunctionCnt <= devProg->stitchFunctionsize);
 
     for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
         WsAllocation qalloc = ControlFlowAllocateSlab(devProg_, size,
@@ -269,71 +308,16 @@ int DeviceTaskContext::BuildDynFuncData(DynDeviceTask* dyntask, uint32_t taskId,
     auto dyndata = &funcHeader->At(0);
 
     stitchedFuncNum++;
-
     funcHeader->funcSize = headerSize;
     funcHeader->seqNo = taskId;
     funcHeader->funcNum = stitchedSize;
     funcHeader->cceBinary = reinterpret_cast<DynFuncBin*>(const_cast<DevCceBinary*>(dyntask->cceBinary));
-    if (reinterpret_cast<uint64_t>(funcHeader->cceBinary) % CCE_BINARY_MOD != 0) {
-        DEV_ERROR(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR,
-                  "#ctrl.task.pre.task.build: cceBinary address  is not aligned.");
-        return DEVICE_MACHINE_ERROR;
-    }
-    DEV_ASSERT(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR,
-               reinterpret_cast<uint64_t>(funcHeader->cceBinary) % CCE_BINARY_MOD == 0);
+    CheckAddrAligned(reinterpret_cast<uint64_t>(funcHeader->cceBinary), CCE_BINARY_MOD,
+                     "#ctrl.task.pre.task.build: cceBinary address  is not aligned.");
 
     rootFuncNum += stitchedSize;
     for (size_t funcIdx = 0; funcIdx < stitchedSize; ++funcIdx) {
-        auto& dupFunc = stitchedList[funcIdx];
-        dyndata->opAttrs = reinterpret_cast<uint64_t*>(const_cast<SymInt*>(dupFunc.GetSource()->GetSymoffset(0)));
-        dyndata->opAtrrOffsets = dupFunc.GetSource()->GetOpAttrOffsetAddr();
-        dyndata->exprNum = dupFunc.GetSource()->expressionList.size();
-        dyndata->exprTbl = dupFunc.GetExpressionAddr();
-        dyndata->rawTensorAddr = reinterpret_cast<uint64_t*>(&dupFunc.GetIncastAddress(0));
-        dyndata->rawTensorDesc = dupFunc.GetSource()->GetRawTensorDesc(0);
-        dyndata->startArgs = this->startArgs_;
-        dyndata->workspaceAddr = dupFunc.RuntimeWorkspace();
-        dyndata->stackWorkSpaceSize = workspace_->StandardStackWorkspacePerCore();
-        dyndata->stackWorkSpaceAddr = workspace_->StackWorkspaceAddr();
-        dyndata->opAttrSize = dupFunc.GetSource()->GetOpAttrSize();
-        dyndata->rawTensorAddrSize = dupFunc.GetSource()->GetIncastSize() + dupFunc.GetSource()->GetOutcastSize();
-        dyndata->rawTensorDescSize = dupFunc.GetSource()->GetRawTensorDescSize();
-        if (reinterpret_cast<uint64_t>(dyndata->opAttrs) % OP_ATTRS_PRE_NUM != 0) {
-            DEV_ERROR(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR,
-                      "#ctrl.task.pre.dynfunc.process: opAttrs address is not aligned.");
-            return DEVICE_MACHINE_ERROR;
-        }
-        if (reinterpret_cast<uint64_t>(dyndata->opAtrrOffsets) % OP_ATTRS_OFFSET_PRE_NUM != 0) {
-            DEV_ERROR(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR,
-                      "#ctrl.task.pre.dynfunc.process: opAtrrOffsets address is not aligned.");
-            return DEVICE_MACHINE_ERROR;
-        }
-        if (reinterpret_cast<uint64_t>(dyndata->exprTbl) % EXPR_TABLE_PRE_NUM != 0) {
-            DEV_ERROR(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR,
-                      "#ctrl.task.pre.dynfunc.process: exprTbl address is not aligned.");
-            return DEVICE_MACHINE_ERROR;
-        }
-        if (reinterpret_cast<uint64_t>(dyndata->rawTensorAddr) % RAW_TENSOR_ADDR_MASK != 0) {
-            DEV_ERROR(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR,
-                      "#ctrl.task.pre.dynfunc.process: rawTensorAddr address is not aligned.");
-            return DEVICE_MACHINE_ERROR;
-        }
-        DEV_ASSERT(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR,
-                   reinterpret_cast<uint64_t>(dyndata->opAttrs) % OP_ATTRS_PRE_NUM == 0);
-        DEV_ASSERT(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR,
-                   reinterpret_cast<uint64_t>(dyndata->opAtrrOffsets) % OP_ATTRS_OFFSET_PRE_NUM == 0);
-        DEV_ASSERT(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR,
-                   reinterpret_cast<uint64_t>(dyndata->exprTbl) % EXPR_TABLE_PRE_NUM == 0);
-        DEV_ASSERT(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR,
-                   reinterpret_cast<uint64_t>(dyndata->rawTensorAddr) % RAW_TENSOR_ADDR_MASK == 0);
-
-        leafFuncDataSize += dupFunc.GetSource()->GetOpAttrSize() * sizeof(SymInt);     // opAttrs
-        leafFuncDataSize += dupFunc.GetSource()->GetOperationSize() * sizeof(int32_t); // opAttrOffsts;
-        leafFuncDataSize += dyndata->exprNum * sizeof(int64_t);
-        leafFuncDataSize += dupFunc.GetSource()->GetRawTensorSize() * sizeof(DevRawTensorDesc);
-
-        leafFuncNum += dupFunc.GetSource()->GetOperationSize();
-        dupFunc.SetFuncData(dyndata);
+        FillOneDynFuncData(dyndata, stitchedList[funcIdx], startArgs_, workspace_, leafFuncDataSize, leafFuncNum);
         dyndata++;
     }
     dynFuncDataSize += headerSize * sizeof(int64_t);

@@ -62,6 +62,8 @@ public:
     void SetSyncMode(uint8_t syncModel);
     uint8_t GetSyncMode();
 
+    void ResetRuntimeDynamicCellMatchPool(bool useHostMirror) const;
+
     void PatchHostDynamicCellMatchAddr(DevAscendProgram* hostProg);
 
     RtAicpuArgsEx& GetRtAicpuArgs() { return rtAicpuArgs_; }

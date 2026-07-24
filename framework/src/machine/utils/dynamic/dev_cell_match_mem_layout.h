@@ -36,6 +36,7 @@ namespace npu::tile_fwk::dynamic {
 
 #define CELL_MATCH_META_TAGID_SHIFT32 32
 #define CELL_MATCH_META_TAG_SLOT_ALLOC_ITER_ID_SHIFT 22
+#define CELL_MATCH_TAG_SEQ_MAX (1u << CELL_MATCH_META_TAG_SLOT_ALLOC_ITER_ID_SHIFT)
 
 // Operation Type Definitions
 #define CELL_MATCH_OP_TYPE_NONE 0xF
@@ -134,15 +135,17 @@ inline void CellMatchSetPrevMutexOpCount(uint64_t& meta, uint32_t count)
     CELL_MATCH_SET_BITS(meta, CELL_MATCH_BIT_PREV_MUTEX_OPCOUNT_START, CELL_MATCH_BIT_PREV_MUTEX_OPCOUNT_END, count);
 }
 
-inline uint32_t CellMatchBuildTagId(uint32_t slotAllocIterId, uint32_t devTaskId)
+inline uint32_t CellMatchBuildTagId(uint32_t slotAllocIterId, uint32_t cellMatchTagSeq)
 {
-    return (static_cast<uint32_t>(slotAllocIterId) << CELL_MATCH_META_TAG_SLOT_ALLOC_ITER_ID_SHIFT) | devTaskId;
+    return (static_cast<uint32_t>(slotAllocIterId) << CELL_MATCH_META_TAG_SLOT_ALLOC_ITER_ID_SHIFT) | cellMatchTagSeq;
 }
 
-inline uint32_t CellMatchGetDevTaskIdFromTagId(uint32_t tagId)
+inline uint32_t CellMatchGetCellMatchTagSeqFromTagId(uint32_t tagId)
 {
     return (uint32_t)CELL_MATCH_GET_BITS(tagId, 0, CELL_MATCH_META_TAG_SLOT_ALLOC_ITER_ID_SHIFT - 1);
 }
+
+inline uint32_t CellMatchGetDevTaskIdFromTagId(uint32_t tagId) { return CellMatchGetCellMatchTagSeqFromTagId(tagId); }
 
 inline uint64_t CellMatchGetTagId(uint64_t meta)
 {

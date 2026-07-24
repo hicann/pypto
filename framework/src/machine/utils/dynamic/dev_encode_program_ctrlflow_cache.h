@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cinttypes>
+#include <type_traits>
 #include "machine/utils/dynamic/dev_encode_types.h"
 #include "machine/utils/dynamic/dev_encode_function.h"
 #include "machine/utils/dynamic/dev_encode_function_dupped_data.h"
@@ -73,18 +74,23 @@ struct DynFuncDataWorkspaceAddressBackup {
     uint64_t stackWorkspaceAddr;
 };
 
+// POD-like: no NSDMI so DynDeviceTaskBase::dynFuncDataBackupList[MAX_STITCH_FUNC_NUM]
+// default-init is a no-op (avoids ~1024x store loop in MakeDynDeviceTask).
+// Bitmap/predcount/raw addr fields are filled on ctrlflow cache backup paths.
 struct DynFuncDataBackup {
     predcount_t* predCountBackup;
     uint64_t* rawTensorAddrBackup;
-    uint64_t* deadEndHubBitmapBackup{nullptr};
-    uint64_t* tailTaskBitmapBackup{nullptr};
-    size_t bitmapByteSize{0};
+    uint64_t* deadEndHubBitmapBackup;
+    uint64_t* tailTaskBitmapBackup;
+    size_t bitmapByteSize;
 
     DynFuncDataWorkspaceAddressBackup workspaceAddressBackup;
 
     const DynFuncDataBackup& At(size_t index) const { return this[index]; }
     DynFuncDataBackup& At(size_t index) { return this[index]; }
 };
+static_assert(std::is_trivially_default_constructible_v<DynFuncDataBackup>,
+              "DynFuncDataBackup must stay trivially default-constructible for MakeDynDeviceTask hot path");
 
 struct ParallelInfo {
     uint32_t parallelism{1};
@@ -362,12 +368,18 @@ struct DevControlFlowCache {
         auto* devFunc = dynDataCache->devFunc;
         size_t bitmapBytes = devFunc->GetBitmapByteSize();
         if (bitmapBytes == 0) {
+            dynDataBackup->deadEndHubBitmapBackup = nullptr;
+            dynDataBackup->tailTaskBitmapBackup = nullptr;
+            dynDataBackup->bitmapByteSize = 0;
             return;
         }
 
         uint64_t* deadEndBuf = reinterpret_cast<uint64_t*>(AllocateCache(bitmapBytes));
         uint64_t* tailBuf = reinterpret_cast<uint64_t*>(AllocateCache(bitmapBytes));
         if (deadEndBuf == nullptr || tailBuf == nullptr) {
+            dynDataBackup->deadEndHubBitmapBackup = nullptr;
+            dynDataBackup->tailTaskBitmapBackup = nullptr;
+            dynDataBackup->bitmapByteSize = 0;
             return;
         }
 

@@ -50,7 +50,7 @@ struct DeviceStitchContext {
     static void CheckStitch(DynDeviceTask* dyntask);
 
     uint64_t Stitch(DeviceSlotContext& slotContext, DevAscendFunctionDupped& nextDup, size_t devTaskId,
-                    size_t devNextIdx);
+                    size_t devNextIdx, uint32_t cellMatchTagSeq);
 
     void RecycleTensorWorkspace();
 
@@ -136,7 +136,8 @@ public:
     }
 
     uint64_t PartialUpdateStitchConsumer(DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx,
-                                         DeviceExecuteSlot& slot, int slotIdx, DevAscendFunctionIncast& incast);
+                                         DeviceExecuteSlot& slot, int slotIdx, DevAscendFunctionIncast& incast,
+                                         uint32_t cellMatchTagSeq);
 
     uint64_t FullCoverDefaultUpdateStitch(DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx,
                                           DeviceExecuteSlot& slot, int slotIdx, DevAscendFunctionIncast& incast);
@@ -145,18 +146,19 @@ public:
                                    DeviceExecuteSlot& slot, int slotIdx, DevAscendFunctionIncast& incast);
 
     uint64_t PartialUpdateStitchProducer(DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx,
-                                         DeviceExecuteSlot& slot, int slotIdx, DevAscendFunctionOutcast& outcast);
+                                         DeviceExecuteSlot& slot, int slotIdx, DevAscendFunctionOutcast& outcast,
+                                         uint32_t cellMatchTagSeq);
 
     void ReuseStitch(DevAscendFunctionDupped& nextDup, size_t devNextIdx, size_t devTaskId);
 
     uint64_t FastStitchConsumer(DeviceExecuteSlot* slotList, size_t slotSize, DevAscendFunctionDupped& nextDup,
-                                size_t devTaskId, size_t devNextIdx);
+                                size_t devTaskId, size_t devNextIdx, uint32_t cellMatchTagSeq);
 
     uint64_t FastStitchProducer(DeviceExecuteSlot* slotList, size_t slotSize, DevAscendFunctionDupped& nextDup,
-                                size_t devTaskId, size_t devNextIdx);
+                                size_t devTaskId, size_t devNextIdx, uint32_t cellMatchTagSeq);
 
     uint64_t FastStitch(DeviceExecuteSlot* slotList, size_t slotSize, DevAscendFunctionDupped& nextDup,
-                        size_t devTaskId, size_t devNextIdx);
+                        size_t devTaskId, size_t devNextIdx, uint32_t cellMatchTagSeq);
 
     static void DumpStitchInfo(DevAscendFunctionDupped* stitchedList, int stitchedSize);
 

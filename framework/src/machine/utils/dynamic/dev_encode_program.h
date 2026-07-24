@@ -116,6 +116,7 @@ struct DevAscendProgram {
     uint32_t ctrlFlowCacheSize{0};
     uint32_t disableCtrlFlowCache{0};
     uint32_t rootFuncMaxCallOpsize{0};
+    uint32_t cellMatchTagSeq_{0};
     DevRelocVector<DevAscendProgramSymbol> symbolTable;
     DevRelocVector<char> symbolTableNameList;
     uint64_t expressionTableSize;
@@ -174,6 +175,12 @@ struct DevAscendProgram {
     {
         return reinterpret_cast<const RuntimeDataRingBufferHead*>(devArgs.runtimeDataRingBufferAddr);
     }
+
+    uint32_t GetCellMatchTagSeq() const { return cellMatchTagSeq_; }
+
+    void SetCellMatchTagSeq(uint32_t value) { cellMatchTagSeq_ = value; }
+
+    void IncrementCellMatchTagSeq() { cellMatchTagSeq_++; }
 
     template <typename T>
     const T& At(const DevRelocVector<T>& localvec, int index) const
@@ -478,4 +485,40 @@ private:
     void InitControlFlowCache(uintdevptr_t& initOffset, const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr,
                               bool fillContent, uint32_t outcastCacheDepthFallback = 0);
 };
+
+#include <cstddef>
+#include "interface/machine/device/tilefwk/aicpu_common.h"
+#include "machine/utils/dynamic/dev_cell_match_mem_layout.h"
+#include "machine/utils/device_log.h"
+
+inline void FillRuntimeDynamicCellMatchPool(DevAscendProgram* devProg)
+{
+    if (devProg == nullptr) {
+        return;
+    }
+    const uint64_t dynCmCap = devProg->devArgs.dynamicCellMatchCapacity;
+    const uint64_t dynCmAddrU64 = devProg->devArgs.dynamicCellMatchAddr;
+    if (dynCmAddrU64 == 0 || dynCmCap == 0) {
+        return;
+    }
+    DEV_ASSERT_MSG(DevCommonErr::PARAM_INVALID, (dynCmCap % sizeof(uint64_t)) == 0,
+                   "#ctrl.cellmatch.reset: dynamicCellMatch cap not uint64 aligned, cap=%lu", dynCmCap);
+    const size_t numWords = static_cast<size_t>(dynCmCap / sizeof(uint64_t));
+    auto* table = reinterpret_cast<uint64_t*>(dynCmAddrU64);
+    for (size_t i = 0; i < numWords; ++i) {
+        table[i] = AICORE_TASK_INIT;
+    }
+}
+
+inline void AdvanceCellMatchTagSeq(DevAscendProgram* devProg)
+{
+    if (devProg->GetCellMatchTagSeq() + 1 >= CELL_MATCH_TAG_SEQ_MAX) {
+        DEV_INFO("#ctrl.cellmatch.tag: cellMatchTagSeq overflow, reset dynamicCellMatch pool");
+        FillRuntimeDynamicCellMatchPool(devProg);
+        devProg->SetCellMatchTagSeq(0);
+        return;
+    }
+    devProg->IncrementCellMatchTagSeq();
+}
+
 } // namespace npu::tile_fwk::dynamic

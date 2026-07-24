@@ -25,7 +25,8 @@ struct DeviceSlotContext {
 
     void FillInputOutputSlot(DevAscendProgram* devProg, DevStartArgs* args);
 
-    uint32_t UpdateSlots(DevAscendFunctionDupped& devRootDup, uint32_t devTaskId, uint32_t devNextIdx);
+    uint32_t UpdateSlots(DevAscendFunctionDupped& devRootDup, uint32_t devTaskId, uint32_t devNextIdx,
+                         uint32_t cellMatchTagSeq);
 
     DeviceExecuteSlot* GetSlotList() { return slotList_.data(); }
     size_t GetSlotSize() { return slotList_.size(); }

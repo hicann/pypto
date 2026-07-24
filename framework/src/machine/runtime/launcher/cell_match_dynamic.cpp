@@ -15,14 +15,62 @@
 
 #include "machine/runtime/launcher/cell_match_dynamic.h"
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <vector>
 
+#include "adapter/api/runtime_api.h"
+#include "interface/machine/device/tilefwk/aicpu_common.h"
 #include "interface/machine/device/tilefwk/aikernel_data.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
 #include "machine/utils/dynamic/dev_encode_function_stitch.h"
 #include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk::dynamic {
+
+void ResetRuntimeDynamicCellMatchPoolHost(uint64_t addr, uint64_t capacityBytes, bool isDevice)
+{
+    if (addr == 0 || capacityBytes == 0) {
+        return;
+    }
+    // Byte 0xFF memset yields 0xFFFFFFFFFFFFFFFF per uint64, which is NOT AICORE_TASK_INIT
+    // (0x00000000FFFFFFFF). Stitch compares full uint64 opId against AICORE_TASK_INIT.
+    ASSERT((capacityBytes % sizeof(uint64_t)) == 0)
+        << "ResetRuntimeDynamicCellMatchPoolHost: capacity not uint64 aligned, addr=" << addr
+        << " capacity=" << capacityBytes;
+    const size_t numWords = static_cast<size_t>(capacityBytes / sizeof(uint64_t));
+
+    if (!isDevice) {
+        auto* table = reinterpret_cast<uint64_t*>(addr);
+        for (size_t i = 0; i < numWords; ++i) {
+            table[i] = AICORE_TASK_INIT;
+        }
+        return;
+    }
+
+    // RuntimeMemset only fills a byte pattern; stage AICORE_TASK_INIT words then H2D copy.
+    constexpr size_t kChunkWords = 512; // 4 KiB
+    uint64_t chunk[kChunkWords];
+    for (size_t i = 0; i < kChunkWords; ++i) {
+        chunk[i] = AICORE_TASK_INIT;
+    }
+    auto* dst = reinterpret_cast<uint8_t*>(addr);
+    size_t remaining = numWords;
+    size_t byteOffset = 0;
+    while (remaining > 0) {
+        const size_t n = std::min(remaining, kChunkWords);
+        const uint64_t bytes = static_cast<uint64_t>(n * sizeof(uint64_t));
+        auto ret = RuntimeMemcpyDirect(dst + byteOffset, bytes, chunk, bytes, RtMemcpyKind::HOST_TO_DEVICE);
+        if (ret != RT_SUCCESS) {
+            ASSERT(false) << "ResetRuntimeDynamicCellMatchPoolHost device memcpy failed, addr=" << addr
+                          << " capacity=" << capacityBytes << " offset=" << byteOffset << " ret=" << ret;
+            return;
+        }
+        remaining -= n;
+        byteOffset += static_cast<size_t>(bytes);
+    }
+}
 
 namespace {
 

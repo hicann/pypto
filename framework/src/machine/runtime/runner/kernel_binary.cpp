@@ -257,6 +257,25 @@ uint64_t KernelBinary::GetRuntimeDynamicCellMatchAddr() const { return runtimeDy
 
 uint64_t KernelBinary::GetRuntimeDynamicCellMatchCapacity() const { return runtimeDynamicCellMatchCapacity_; }
 
+void KernelBinary::ResetRuntimeDynamicCellMatchPool(bool useHostMirror) const
+{
+    if (runtimeDynamicCellMatchCapacity_ == 0) {
+        return;
+    }
+    if (useHostMirror) {
+        if (runtimeDynamicCellMatchHostAddr_ == 0) {
+            return;
+        }
+        // Host mirror: fill each uint64 with AICORE_TASK_INIT (not byte 0xFF).
+        ResetRuntimeDynamicCellMatchPoolHost(runtimeDynamicCellMatchHostAddr_, runtimeDynamicCellMatchCapacity_, false);
+        return;
+    }
+    if (runtimeDynamicCellMatchAddr_ == 0) {
+        return;
+    }
+    ResetRuntimeDynamicCellMatchPoolHost(runtimeDynamicCellMatchAddr_, runtimeDynamicCellMatchCapacity_, true);
+}
+
 void KernelBinary::SetSyncMode(uint8_t syncModel) { scheSyncModel_ = syncModel; }
 
 uint8_t KernelBinary::GetSyncMode() { return scheSyncModel_; }
@@ -365,6 +384,8 @@ void KernelBinary::RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes)
     runtimeDynamicCellMatchCapacity_ = needBytes;
     runtimeDynamicCellMatchOwned_ = true;
     runtimeDynamicCellMatchHostOwned_ = true;
+    ResetRuntimeDynamicCellMatchPool(true);
+    ResetRuntimeDynamicCellMatchPool(false);
     if (oldOwned && oldAddr != 0) {
         DevMemoryPool::Instance().FreeDevAddr(reinterpret_cast<uint8_t*>(oldAddr));
     }

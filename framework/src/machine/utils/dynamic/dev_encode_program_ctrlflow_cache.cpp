@@ -239,8 +239,10 @@ void DevControlFlowCache::MixTaskDataBackup(DynDeviceTaskBase* base)
                    wrapPtrBackupSize);
     }
 
-    constexpr size_t arrSize = sizeof(uint64_t) * MAX_STITCH_FUNC_NUM;
-    DevMemcpyS(mixTaskDataBackup->opWrapList, arrSize, base->devTask.mixTaskData.opWrapList, arrSize);
+    const size_t arrSize = sizeof(uint64_t) * static_cast<size_t>(base->dynFuncDataCacheListSize);
+    if (arrSize > 0) {
+        DevMemcpyS(mixTaskDataBackup->opWrapList, arrSize, base->devTask.mixTaskData.opWrapList, arrSize);
+    }
 
     if (!BackupOpWrapOffsetList(base, mixTaskDataBackup)) {
         return;
@@ -274,8 +276,10 @@ void DevControlFlowCache::MixTaskDataRestore(DynDeviceTaskBase* base)
                    wrapPtrBackupSize);
     }
 
-    constexpr size_t arrSize = sizeof(uint64_t) * MAX_STITCH_FUNC_NUM;
-    DevMemcpyS(base->devTask.mixTaskData.opWrapList, arrSize, mixTaskDataBackup->opWrapList, arrSize);
+    const size_t arrSize = sizeof(uint64_t) * static_cast<size_t>(base->dynFuncDataCacheListSize);
+    if (arrSize > 0) {
+        DevMemcpyS(base->devTask.mixTaskData.opWrapList, arrSize, mixTaskDataBackup->opWrapList, arrSize);
+    }
 
     for (uint32_t dupIndex = 0; dupIndex < base->dynFuncDataList->funcNum; dupIndex++) {
         auto funcWrapIdNum = base->dynFuncDataCacheList[dupIndex].devFunc->wrapIdNum_;

@@ -130,14 +130,14 @@ static uint32_t UpdateSlotsForOutCastPartialStitch(int slotIdx, DeviceExecuteSlo
 
 static uint32_t UpdateSlotsForOutCastStitch(int slotIdx, DeviceExecuteSlot& slot, DevAscendFunction* devRootSrc,
                                             DevAscendFunctionOutcast& outcast, uint32_t devTaskId, uint32_t devNextIdx,
-                                            uint32_t outcastIndex, uint64_t* expressionList)
+                                            uint32_t outcastIndex, uint64_t* expressionList, uint32_t cellMatchTagSeq)
 {
     slot.stitchDupIdx = devNextIdx;
     slot.stitchOutcastIdx = outcastIndex;
 
     UNUSED(slotIdx);
     topo_dump::DumpProducerCellAccess(devTaskId, slotIdx, devNextIdx, *devRootSrc, outcast, slot, expressionList);
-    uint32_t cellMatchTagId = CellMatchBuildTagId(slot.slotAllocIterId, devTaskId);
+    uint32_t cellMatchTagId = CellMatchBuildTagId(slot.slotAllocIterId, cellMatchTagSeq);
     auto producerList = &devRootSrc->At(outcast.producerConsumerList, 0);
 
     if (slot.isPartialUpdateStitch) {
@@ -158,9 +158,10 @@ static uint32_t UpdateSlotsForOutCastStitch(int slotIdx, DeviceExecuteSlot& slot
 
 static uint32_t UpdateSlotsForIncastStitch(int slotIdx, DeviceExecuteSlot& slot, DevAscendFunction* devRootSrc,
                                            DevAscendFunctionIncast& incast, uint32_t devTaskId, uint32_t devNextIdx,
-                                           uint64_t* expressionList)
+                                           uint64_t* expressionList, uint32_t cellMatchTagSeq)
 {
     UNUSED(slotIdx);
+    UNUSED(devTaskId);
     if (!slot.isPartialUpdateStitch || slot.partialUpdate == nullptr ||
         slot.partialUpdate->cellMatchRuntimePartialUpdateTable.size() == 0 ||
         slot.partialUpdate->cellMatchTableDesc.GetCacheOpMaxCount(CELL_MATCH_OP_TYPE_READ) == 0) {
@@ -169,7 +170,7 @@ static uint32_t UpdateSlotsForIncastStitch(int slotIdx, DeviceExecuteSlot& slot,
 
     auto& cellMatchTableDesc = slot.partialUpdate->cellMatchTableDesc;
     auto tableData = &slot.partialUpdate->cellMatchRuntimePartialUpdateTable[0];
-    uint32_t cellMatchTagId = CellMatchBuildTagId(slot.slotAllocIterId, devTaskId);
+    uint32_t cellMatchTagId = CellMatchBuildTagId(slot.slotAllocIterId, cellMatchTagSeq);
 
     uint32_t errCode = CellMatchFillIncastOutcast<false>(devRootSrc, &devRootSrc->At(incast.consumerList, 0),
                                                          incast.consumerList.size(), expressionList, cellMatchTableDesc,
@@ -210,7 +211,8 @@ static void PrepareRuntimeDynamicPartialUpdateTables(DeviceWorkspaceAllocator* w
 }
 
 static uint32_t UpdateSlotsImpl(DeviceWorkspaceAllocator* workspace, DeviceExecuteSlot* slotList,
-                                DevAscendFunctionDupped& devRootDup, uint32_t devTaskId, uint32_t devNextIdx)
+                                DevAscendFunctionDupped& devRootDup, uint32_t devTaskId, uint32_t devNextIdx,
+                                uint32_t cellMatchTagSeq)
 {
     AutoScopedPerf asp(PERF_EVT_UPDATE_SLOT);
     DevAscendFunction* devRootSrc = devRootDup.GetSource();
@@ -227,7 +229,7 @@ static uint32_t UpdateSlotsImpl(DeviceWorkspaceAllocator* workspace, DeviceExecu
             int slotIdx = devRootSrc->At(outcast.toSlotList, j);
             auto& slot = slotList[slotIdx];
             uint32_t errCode = UpdateSlotsForOutCastStitch(slotIdx, slot, devRootSrc, outcast, devTaskId, devNextIdx, i,
-                                                           expressionList);
+                                                           expressionList, cellMatchTagSeq);
             workspace->RuntimeOutcastTensorAssign(slot.rtOutcastIter, outcastDesc.GetRtOutcastIter());
             DEV_VERBOSE_DEBUG("[UpdateSlots]   Outcast [%3zu] to slot [%3d], address %s, ret = 0x%x.", i, slotIdx,
                               outcastDesc.Dump().c_str(), errCode);
@@ -248,7 +250,7 @@ static uint32_t UpdateSlotsImpl(DeviceWorkspaceAllocator* workspace, DeviceExecu
             auto& slot = slotList[slotIdx];
             DEV_VERBOSE_DEBUG("[UpdateSlots]   Begin update Incast [%3zu] from slot [%3d].", incastIdx, slotIdx);
             uint32_t errCode = UpdateSlotsForIncastStitch(slotIdx, slot, devRootSrc, incast, devTaskId, devNextIdx,
-                                                          expressionList);
+                                                          expressionList, cellMatchTagSeq);
             DEV_VERBOSE_DEBUG("[UpdateSlots]   Incast [%3zu] from slot [%3d], ret = 0x%x.", incastIdx, slotIdx,
                               errCode);
             if (errCode != 0) {
@@ -259,9 +261,10 @@ static uint32_t UpdateSlotsImpl(DeviceWorkspaceAllocator* workspace, DeviceExecu
     return 0;
 }
 
-uint32_t DeviceSlotContext::UpdateSlots(DevAscendFunctionDupped& devRootDup, uint32_t devTaskId, uint32_t devNextIdx)
+uint32_t DeviceSlotContext::UpdateSlots(DevAscendFunctionDupped& devRootDup, uint32_t devTaskId, uint32_t devNextIdx,
+                                        uint32_t cellMatchTagSeq)
 {
-    return UpdateSlotsImpl(workspace_, slotList_.data(), devRootDup, devTaskId, devNextIdx);
+    return UpdateSlotsImpl(workspace_, slotList_.data(), devRootDup, devTaskId, devNextIdx, cellMatchTagSeq);
 }
 
 static void MarkPartialUpdateSlots(DeviceExecuteSlot* slotList, size_t slotSize, DevAscendProgram* devProg)
