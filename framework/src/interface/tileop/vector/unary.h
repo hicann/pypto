@@ -464,12 +464,22 @@ TILEOP void TCeil(T0 dst, T1 src)
 template <typename Ttemp, typename T0, typename T1>
 TILEOP void FloorComputeImpl(T0 dst, T1 src)
 {
-    pto::TCVT(dst, src, pto::RoundMode::CAST_FLOOR);
+    if constexpr (std::is_integral_v<typename T1::DType>) {
+        pto::TMOV(dst, src);
+    } else {
+        pto::TCVT(dst, src, pto::RoundMode::CAST_FLOOR);
+    }
 }
 #define OP_TILE_OP_FLOOR TFLOOR
 template <typename T0, typename T1>
 TILEOP void TFloor(T0 dst, T1 src)
 {
+    if constexpr (std::is_integral_v<typename T1::Type>) {
+        if ((uint64_t)dst.GetAddr() == (uint64_t)src.GetAddr()) {
+            return;
+        }
+    }
+
     if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
         auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data();
@@ -502,12 +512,22 @@ TILEOP void TFloor(T0 dst, T1 src)
 template <typename Ttemp, typename T0, typename T1>
 TILEOP void TruncComputeImpl(T0 dst, T1 src)
 {
-    pto::TCVT(dst, src, pto::RoundMode::CAST_TRUNC);
+    if constexpr (std::is_integral_v<typename T1::DType>) {
+        pto::TMOV(dst, src);
+    } else {
+        pto::TCVT(dst, src, pto::RoundMode::CAST_TRUNC);
+    }
 }
 #define OP_TILE_OP_TRUNC TTRUNC
 template <typename T0, typename T1>
 TILEOP void TTrunc(T0 dst, T1 src)
 {
+    if constexpr (std::is_integral_v<typename T1::Type>) {
+        if ((uint64_t)dst.GetAddr() == (uint64_t)src.GetAddr()) {
+            return;
+        }
+    }
+
     if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
         auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data();
