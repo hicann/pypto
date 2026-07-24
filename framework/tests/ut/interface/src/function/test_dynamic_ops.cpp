@@ -44,7 +44,8 @@ inline SymbolicScalar CeilDivSym(SymbolicScalar a, int64_t b)
     return (a + b - 1) / b;
 }
 
-std::vector<float> ComputeTopkGolden(const std::vector<float>& input, int64_t n, int k)
+void ComputeTopkGolden(const std::vector<float>& input, int64_t n, int k, std::vector<float>& goldenValues,
+                       std::vector<int32_t>& goldenIndices)
 {
     std::vector<std::pair<float, int32_t>> valueIndex(n);
     for (int64_t i = 0; i < n; ++i) {
@@ -57,11 +58,12 @@ std::vector<float> ComputeTopkGolden(const std::vector<float>& input, int64_t n,
                   }
                   return lhs.second < rhs.second;
               });
-    std::vector<float> golden(k);
+    goldenValues.resize(k);
+    goldenIndices.resize(k);
     for (int64_t i = 0; i < k; ++i) {
-        golden[i] = valueIndex[i].first;
+        goldenValues[i] = valueIndex[i].first;
+        goldenIndices[i] = valueIndex[i].second;
     }
-    return golden;
 }
 } // namespace
 
@@ -2140,6 +2142,7 @@ TEST_F(DynamicOpsTest, Topk)
         Tensor outValue(DT_FP32, {b, k}, "outValue");
         Tensor outIndex(DT_INT32, {b, k}, "outIndex");
 
+        // 前半与后半相同，构造同值场景，校验同值时 index 升序
         std::vector<float> inputData = {
             31.0f, 15.0f, 27.0f, 8.0f,  19.0f, 3.0f,  23.0f, 11.0f, 7.0f, 28.0f, 16.0f,
             2.0f,  24.0f, 9.0f,  30.0f, 14.0f, 22.0f, 5.0f,  18.0f, 1.0f, 26.0f, 10.0f,
@@ -2150,8 +2153,10 @@ TEST_F(DynamicOpsTest, Topk)
             29.0f, 13.0f, 6.0f,  20.0f, 12.0f, 25.0f, 4.0f,  21.0f, 0.0f, 17.0f,
         };
 
-        // TopK(k=32, dim=1, largest=true)：按值降序取前 32 个；同值时与 torch::topk_out 一致，按索引升序
-        std::vector<float> goldenValues = ComputeTopkGolden(inputData, n, k);
+        // TopK(k=32, dim=1, largest=true)：按值降序取前 32 个；同值时按索引升序
+        std::vector<float> goldenValues;
+        std::vector<int32_t> goldenIndices;
+        ComputeTopkGolden(inputData, n, k, goldenValues, goldenIndices);
 
         ProgramData::GetInstance().AppendInputs({
             RawTensorData::CreateTensor(self, inputData),
@@ -2162,7 +2167,7 @@ TEST_F(DynamicOpsTest, Topk)
         });
         ProgramData::GetInstance().AppendGoldens({
             RawTensorData::CreateTensor(outValue, goldenValues),
-            RawTensorData::CreateConstantTensor<int32_t>(outIndex, 0),
+            RawTensorData::CreateTensor(outIndex, goldenIndices),
         });
 
         FUNCTION("main", {self}, {outValue, outIndex})
@@ -2172,7 +2177,6 @@ TEST_F(DynamicOpsTest, Topk)
                 (void)i;
                 auto t0 = View(self, {b, n}, {0, 0});
                 std::tie(outValue, outIndex) = TopK(t0, k, 1, true);
-                outIndex = Full(Element(DT_INT32, 0), DT_INT32, {b, k});
             }
         }
     });
