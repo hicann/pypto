@@ -264,7 +264,6 @@ from pypto_pro.runtime import KernelDef, jit, kernel, pipeline
 
 from . import parser
 from ._api import (
-    Vf,
     abs,
     add,
     add_relu,
@@ -355,6 +354,7 @@ from ._api import (
     trap,
     xor,
 )
+from ._vf_api import Vf
 from .parser.decorator import function, inline, program, vector_function
 from .parser.text_parser import loads, loads_program, parse, parse_program
 from .typing import DYNAMIC, STATIC, Ptr, Scalar, Tensor, Tile

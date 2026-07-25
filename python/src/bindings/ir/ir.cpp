@@ -590,7 +590,25 @@ void BindTypeClass(py::module_& ir)
 
     // --- VF (Vector Function) API enumerations ---
 
-    py::enum_<ir::MaskPattern>(ir, "MaskPattern", "Mask pattern for vf.create_mask")
+    py::enum_<ir::MaskPattern>(ir, "MaskPattern", R"pbdoc(
+Mask pattern for vf.create_mask / mask_reg.
+
+Members:
+    ALL           all elements valid
+    ALLF          all elements invalid
+    VL1           lowest 1 element valid
+    VL2           lowest 2 elements valid
+    VL3           lowest 3 elements valid
+    VL4           lowest 4 elements valid
+    VL8           lowest 8 elements valid
+    VL16          lowest 16 elements valid
+    VL32          lowest 32 elements valid
+    VL64          lowest 64 elements valid
+    VL128         lowest 128 elements valid
+    M3            every 3rd element valid
+    M4            every 4th element valid
+    H             lower half valid
+    Q             lower quarter valid)pbdoc")
         .value("ALL", ir::MaskPattern::ALL)
         .value("ALLF", ir::MaskPattern::ALLF)
         .value("VL1", ir::MaskPattern::VL1)
@@ -607,7 +625,12 @@ void BindTypeClass(py::module_& ir)
         .value("H", ir::MaskPattern::H)
         .value("Q", ir::MaskPattern::Q);
 
-    py::enum_<ir::MergeMode>(ir, "MergeMode", "Mask merge mode for VF ops")
+    py::enum_<ir::MergeMode>(ir, "MergeMode", R"pbdoc(
+Mask merge mode for VF ops (handling of mask-inactive elements in dst).
+
+Members:
+    ZEROING       zero masked-out positions
+    MERGING       retain original dst value at masked-out positions)pbdoc")
         .value("ZEROING", ir::MergeMode::ZEROING)
         .value("MERGING", ir::MergeMode::MERGING);
 
@@ -632,17 +655,40 @@ void BindTypeClass(py::module_& ir)
         .value("GT", ir::CmpMode::GT)
         .value("GE", ir::CmpMode::GE);
 
-    py::enum_<ir::DuplicatePos>(ir, "DuplicatePos", "Position for vf.full")
+    py::enum_<ir::DuplicatePos>(ir, "DuplicatePos", R"pbdoc(
+Position selector for vf.full (Tensor/broadcast mode).
+
+Members:
+    LOWEST        broadcast the lowest-indexed element (default)
+    HIGHEST       broadcast the highest-indexed element)pbdoc")
         .value("LOWEST", ir::DuplicatePos::LOWEST)
         .value("HIGHEST", ir::DuplicatePos::HIGHEST);
 
-    py::enum_<ir::CastLayout>(ir, "CastLayout", "Layout for vf.astype")
+    py::enum_<ir::CastLayout>(ir, "CastLayout", R"pbdoc(
+Destination half-select for vf.astype, exp_sub, muls_cast.
+
+Members:
+    ZERO          write result to even half (PART_EVEN)
+    ONE           write result to odd half (PART_ODD)
+    TWO           third half
+    THREE         fourth half)pbdoc")
         .value("ZERO", ir::CastLayout::ZERO)
         .value("ONE", ir::CastLayout::ONE)
         .value("TWO", ir::CastLayout::TWO)
         .value("THREE", ir::CastLayout::THREE);
 
-    py::enum_<ir::VFRoundMode>(ir, "VFRoundMode", "Rounding mode for VF cast/truncate")
+    py::enum_<ir::VFRoundMode>(ir, "VFRoundMode", R"pbdoc(
+Rounding mode for VF type conversion (vcvt).
+
+Members:
+    CAST_ROUND    default rounding
+    CAST_RINT     round to nearest even
+    CAST_FLOOR    round down (floor)
+    CAST_CEIL     round up (ceil)
+    CAST_TRUNC    round toward zero (truncate)
+    CAST_RNA      round to nearest, ties away from zero
+    CAST_ODD      von Neumann rounding (nearest odd)
+    CAST_HYBRID   hybrid rounding (Ascend 950PR/DT only))pbdoc")
         .value("CAST_ROUND", ir::VFRoundMode::CAST_ROUND)
         .value("CAST_RINT", ir::VFRoundMode::CAST_RINT)
         .value("CAST_FLOOR", ir::VFRoundMode::CAST_FLOOR)
@@ -652,31 +698,91 @@ void BindTypeClass(py::module_& ir)
         .value("CAST_ODD", ir::VFRoundMode::CAST_ODD)
         .value("CAST_HYBRID", ir::VFRoundMode::CAST_HYBRID);
 
-    py::enum_<ir::SaturateMode>(ir, "SaturateMode", "Saturation mode for vf.astype")
+    py::enum_<ir::SaturateMode>(ir, "SaturateMode", R"pbdoc(
+Saturation mode for narrowing type conversions.
+
+Members:
+    OFF           no saturation; overflow wraps/truncates (default)
+    ON            saturate: clamp to target type min/max)pbdoc")
         .value("OFF", ir::SaturateMode::OFF)
         .value("ON", ir::SaturateMode::ON);
 
-    py::enum_<ir::BinType>(ir, "BinType", "Histogram bin type")
+    py::enum_<ir::BinType>(ir, "BinType", R"pbdoc(
+Histogram bin range for vf.histograms.
+
+Members:
+    BIN0          lower half bin range (indices [0-127], default)
+    BIN1          upper half bin range (indices [128-255]))pbdoc")
         .value("BIN0", ir::BinType::BIN0)
         .value("BIN1", ir::BinType::BIN1);
 
-    py::enum_<ir::HistType>(ir, "HistType", "Histogram accumulation type")
+    py::enum_<ir::HistType>(ir, "HistType", R"pbdoc(
+Histogram statistical mode for vf.histograms.
+
+Members:
+    ACCUMULATE    accumulate counts onto existing dst values (cumulative, default)
+    FREQUENCY     frequency count (per-bin occurrence count of each exact value))pbdoc")
         .value("ACCUMULATE", ir::HistType::ACCUMULATE)
         .value("FREQUENCY", ir::HistType::FREQUENCY);
 
-    py::enum_<ir::SqueezeMode>(ir, "SqueezeMode", "Squeeze store mode")
+    py::enum_<ir::SqueezeMode>(ir, "SqueezeMode", R"pbdoc(
+Gather mode for vf.squeeze.
+
+Members:
+    NO_STORE_REG  do not store effective element byte count into AR SPR (default)
+    STORE_REG     store total byte count of valid elements into AR SPR)pbdoc")
         .value("STORE_REG", ir::SqueezeMode::STORE_REG)
         .value("NO_STORE_REG", ir::SqueezeMode::NO_STORE_REG);
 
-    py::enum_<ir::PackPart>(ir, "PackPart", "Part selector for vf.pack/unpack")
+    py::enum_<ir::PackPart>(ir, "PackPart", R"pbdoc(
+Half selector for vf.pack / vf.unpack.
+
+Members:
+    LOWER         lower half (default)
+    UPPER         upper half (RegTraitNumTwo supports LOWER only))pbdoc")
         .value("LOWER", ir::PackPart::LOWER)
         .value("UPPER", ir::PackPart::UPPER);
 
-    py::enum_<ir::MaskWidth>(ir, "MaskWidth", "Mask width for vf.get_mask_spr")
+    py::enum_<ir::MaskWidth>(ir, "MaskWidth", R"pbdoc(
+SPR mask bit-width for vf.get_mask_spr.
+
+Members:
+    B32           read 64-bit MASK0, expand each bit to 4 bits (movp_b32, default)
+    B16           read 128-bit {MASK1,MASK0}, expand each bit to 2 bits (movp_b16))pbdoc")
         .value("B32", ir::MaskWidth::B32)
         .value("B16", ir::MaskWidth::B16);
 
-    py::enum_<ir::LoadDist>(ir, "LoadDist", "Load distribution mode for vf.load_align")
+    py::enum_<ir::LoadDist>(ir, "LoadDist", R"pbdoc(
+Data distribution pattern for vf.load_align.
+
+RegTensor dst:
+    NORM          normal element load (default)
+    BRC           broadcast single element to entire register
+    BRC_B8        broadcast by B8 granularity
+    BRC_B16       broadcast by B16 granularity
+    BRC_B32       broadcast by B32 granularity
+    US            upsample (each bit repeated twice)
+    US_B8         upsample by B8 granularity
+    US_B16        upsample by B16 granularity
+    DS            downsample (every other bit discarded)
+    DS_B8         downsample by B8 granularity
+    DS_B16        downsample by B16 granularity
+    UNPK          unpack
+    UNPK_B8       unpack by B8 granularity
+    UNPK_B16      unpack by B16 granularity
+    UNPK_B32      unpack by B32 granularity
+    UNPK4         4-element unpack
+    BLK           block copy
+    E2B           B16->B32 expand
+    E2B_B16       expand by B16 granularity
+    E2B_B32       expand by B32 granularity
+    DINTLV_B8     de-interleave by B8 (split even/odd regs)
+    DINTLV_B16    de-interleave by B16
+    DINTLV_B32    de-interleave by B32
+MaskReg dst:
+    NORM          normal mode, moves VL/8
+    US            upsample
+    DS            downsample)pbdoc")
         .value("NORM", ir::LoadDist::NORM)
         .value("BRC", ir::LoadDist::BRC)
         .value("BRC_B8", ir::LoadDist::BRC_B8)
@@ -701,7 +807,17 @@ void BindTypeClass(py::module_& ir)
         .value("DINTLV_B16", ir::LoadDist::DINTLV_B16)
         .value("DINTLV_B32", ir::LoadDist::DINTLV_B32);
 
-    py::enum_<ir::StoreDist>(ir, "StoreDist", "Store distribution mode for vf.store_align")
+    py::enum_<ir::StoreDist>(ir, "StoreDist", R"pbdoc(
+Data distribution pattern for vf.store_align.
+
+Members:
+    NORM          normal aligned store (default)
+    NORM_B16      normal store with B16 granularity
+    FIRST_ELEMENT store lane 0 only (first element)
+    PACK          compressed store (pack lower bits)
+    PACK4         4-element compressed store
+    INTLV         interleaved store (auto B8/B16/B32 based on dtype)
+    INTLV_B32     interleaved store at B32 granularity)pbdoc")
         .value("NORM", ir::StoreDist::NORM)
         .value("NORM_B16", ir::StoreDist::NORM_B16)
         .value("FIRST_ELEMENT", ir::StoreDist::FIRST_ELEMENT)
@@ -710,16 +826,42 @@ void BindTypeClass(py::module_& ir)
         .value("INTLV", ir::StoreDist::INTLV)
         .value("INTLV_B32", ir::StoreDist::INTLV_B32);
 
-    py::enum_<ir::DataCopyMode>(ir, "DataCopyMode", "Data copy mode for vf.load_align/store_align")
+    py::enum_<ir::DataCopyMode>(ir, "DataCopyMode", R"pbdoc(
+Data copy granularity for vf.load_align / store_align / gather.
+
+Members:
+    NORM              normal element-by-element copy (default)
+    DATA_BLOCK_LOAD   for vf.gather: gather by 32B DataBlock
+    DATA_BLOCK_COPY   non-contiguous DataBlock copy (block_stride-based))pbdoc")
         .value("NORM", ir::DataCopyMode::NORM)
         .value("DATA_BLOCK_LOAD", ir::DataCopyMode::DATA_BLOCK_LOAD)
         .value("DATA_BLOCK_COPY", ir::DataCopyMode::DATA_BLOCK_COPY);
 
-    py::enum_<ir::IndexOrder>(ir, "IndexOrder", "Index generation order for vf.arange")
+    py::enum_<ir::IndexOrder>(ir, "IndexOrder", R"pbdoc(
+Index sequence direction for vf.arange.
+
+Members:
+    INCREASE_ORDER  increasing sequence: dst[i] = start + i (default)
+    DECREASE_ORDER  decreasing sequence: dst[i] = start - i)pbdoc")
         .value("INCREASE_ORDER", ir::IndexOrder::INCREASE_ORDER)
         .value("DECREASE_ORDER", ir::IndexOrder::DECREASE_ORDER);
 
-    py::enum_<ir::MemBarMode>(ir, "MemBarMode", "Memory barrier mode for vf.mem_bar")
+    py::enum_<ir::MemBarMode>(ir, "MemBarMode", R"pbdoc(
+Memory barrier src->dst ordering constraint for vf.mem_bar.
+
+Members:
+    VST_VLD       Vector Store -> Vector Load (RAW, default)
+    VLD_VST       Vector Load -> Vector Store (WAR)
+    VST_VST       Vector Store -> Vector Store (WAW)
+    VST_LD        Vector Store -> Scalar Load
+    VST_ST        Vector Store -> Scalar Store
+    VLD_ST        Vector Load -> Scalar Store
+    ST_VLD        Scalar Store -> Vector Load
+    ST_VST        Scalar Store -> Vector Store
+    LD_VST        Scalar Load -> Vector Store
+    VV_ALL        all Vector <-> all Vector
+    VS_ALL        all Vector <-> all Scalar
+    SV_ALL        all Scalar <-> all Vector)pbdoc")
         .value("VST_VLD", ir::MemBarMode::VST_VLD)
         .value("VLD_VST", ir::MemBarMode::VLD_VST)
         .value("VST_VST", ir::MemBarMode::VST_VST)
