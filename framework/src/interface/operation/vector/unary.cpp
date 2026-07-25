@@ -763,7 +763,7 @@ void AtanhOperationTileFunc(Function& function, const TileShape& tileShape,
     int dim = shape.size();
     auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
     std::vector<int64_t> tmpShape = shape.tile;
-    tmpShape[dim - 1] = AlignUp(tmpShape[dim - 1], alignSize) * NUM_VALUE_4;
+    tmpShape[dim - 1] = AlignUp(tmpShape[dim - 1], alignSize) * NUM_VALUE_5;
     uint64_t intermediateBytes = std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>()) *
                                  BytesOf(DT_FP32);
     return TiledUnaryOperation<UnaryOpType::ATANH>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
