@@ -403,4 +403,35 @@ MemoryBlock* DevMemoryPool::CreateNewBlock(uint64_t alignSize)
     MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "All memory alloc strategies failed");
     return nullptr;
 }
+
+void* DevAlloc(const uint64_t size)
+{
+    uint8_t* devPtr = nullptr;
+    DevMemoryPool::Instance().AllocDevAddr(&devPtr, size);
+    if (devPtr == nullptr) {
+        MACHINE_LOGE(RtErr::RT_MALLOC_FAILED, "Failed to alloc dev addr of size[%lu].", size);
+        return nullptr;
+    }
+    if (RuntimeMemset(devPtr, size, 0, size) != RT_SUCCESS) {
+        DevMemoryPool::Instance().FreeDevAddr(devPtr);
+        MACHINE_LOGE(RtErr::RT_MEMSET_FAILED, "RuntimeMemset failed size=%lu.", size);
+        return nullptr;
+    }
+    return devPtr;
+}
+
+void* CopyDataToDevice(const void* dataPtr, const uint64_t dataSize)
+{
+    void* devAddr = DevAlloc(dataSize);
+    if (devAddr == nullptr) {
+        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to alloc dev memory of size %lu", dataSize);
+        return nullptr;
+    }
+    if (RuntimeMemcpyDirect(devAddr, dataSize, dataPtr, dataSize, RtMemcpyKind::HOST_TO_DEVICE) != RT_SUCCESS) {
+        DevMemoryPool::Instance().FreeDevAddr(devAddr);
+        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to copy data to dev of size %lu", dataSize);
+        return nullptr;
+    }
+    return devAddr;
+}
 } // namespace npu::tile_fwk

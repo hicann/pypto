@@ -63,10 +63,8 @@ private:
     int Init();
     int InitDeviceArgs(DeviceArgs& args);
     static void InitAiCpuSoBin(DeviceArgs& devArgs);
-    static void InitDevDfxArgs(const bool isPerfTrace, DevDfxArgs& devDfxArg);
     static void GetAicoreRegs(const ArchInfo archInfo, std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu);
     static int InitDeviceArgsCore(DeviceArgs& args);
-    static void InitAicpuPerfAddr(DeviceArgs& args);
     static int LaunchAicpuServerInit(int64_t* devArgsAddr);
 
 private:

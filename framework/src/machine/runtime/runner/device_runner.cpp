@@ -34,6 +34,7 @@
 #include "machine/runtime/runner/load_aicpu_op.h"
 #include "machine/runtime/runner/device_error_tracking.h"
 #include "machine/runtime/runner/device_exception_dump.h"
+#include "machine/runtime/runner/device_dfx.h"
 #include "machine/runtime/memory_utils/memory_pool.h"
 #include "machine/host/perf_analysis.h"
 #include "machine/device/dynamic/device_common.h"
@@ -42,8 +43,6 @@
 
 extern "C" {
 __attribute__((weak)) int AdxDataDumpServerUnInit();
-__attribute__((weak)) int dlog_getlevel(int32_t moduled, int32_t* enableEvent);
-__attribute__((weak)) int drvDeviceGetPhyIdByIndex(uint32_t logicDevId, uint32_t* phyDevId);
 }
 namespace npu::tile_fwk {
 namespace {
@@ -52,35 +51,6 @@ constexpr uint32_t HIGHT_BIT = 16;
 constexpr uint32_t SUB_CORE = 3;
 constexpr uint32_t AIV_PER_AICORE = 2;
 constexpr uint32_t AICPU_NUM_OF_RUN_AICPU_TASKS = 1;
-void* DevAlloc(const uint64_t size)
-{
-    uint8_t* devPtr = nullptr;
-    DevMemoryPool::Instance().AllocDevAddr(&devPtr, size);
-    if (devPtr == nullptr) {
-        MACHINE_LOGE(RtErr::RT_MALLOC_FAILED, "Failed to alloc dev addr of size[%lu].", size);
-        return nullptr;
-    }
-    if (RuntimeMemset(devPtr, size, 0, size) != RT_SUCCESS) {
-        DevMemoryPool::Instance().FreeDevAddr(devPtr);
-        MACHINE_LOGE(RtErr::RT_MEMSET_FAILED, "RuntimeMemset failed size=%lu.", size);
-        return nullptr;
-    }
-    return devPtr;
-}
-void* CopyDataToDevice(const void* dataPtr, const uint64_t dataSize)
-{
-    void* devAddr = DevAlloc(dataSize);
-    if (devAddr == nullptr) {
-        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to alloc dev memory of size %lu", dataSize);
-        return nullptr;
-    }
-    if (RuntimeMemcpyDirect(devAddr, dataSize, dataPtr, dataSize, RtMemcpyKind::HOST_TO_DEVICE) != RT_SUCCESS) {
-        DevMemoryPool::Instance().FreeDevAddr(devAddr);
-        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to copy data to dev of size %lu", dataSize);
-        return nullptr;
-    }
-    return devAddr;
-}
 } // namespace
 
 DeviceRunner::~DeviceRunner() {}
@@ -99,30 +69,6 @@ void DeviceRunner::SetHostProfFunction(Function* function,
 }
 
 uint32_t DeviceRunner::GetHostProfType() const { return (hostProf_.GetProfSwitch() & MSPF_TASK_TIME_L2_MASK) != 0; }
-
-void DeviceRunner::InitDevDfxArgs(const bool isPerfTrace, DevDfxArgs& devDfxArg)
-{
-    int logLevel = -1;
-    if (dlog_getlevel != nullptr) {
-        int32_t enableLog = -1;
-        logLevel = dlog_getlevel(PYPTO, &enableLog);
-    }
-    devDfxArg.logLevel = logLevel;
-    uint32_t logicalDevId = GetLogDeviceId();
-    uint32_t phyDevId = 0;
-    if (drvDeviceGetPhyIdByIndex != nullptr) {
-        drvDeviceGetPhyIdByIndex(logicalDevId, &phyDevId);
-    } else {
-        MACHINE_LOGW("Get device Local deviceId failed");
-    }
-    MACHINE_LOGI("Current device info: logical devId: %u, phyDevId: %u", logicalDevId, phyDevId);
-    devDfxArg.deviceId = phyDevId;
-    if (isPerfTrace) {
-        devDfxArg.isOpenPerfTrace = 1;
-    }
-    MACHINE_LOGI("Dfx info: log level is: %d, openPerTrace: %d, deviceId: %u", logLevel, devDfxArg.isOpenPerfTrace,
-                 devDfxArg.deviceId);
-}
 
 void DeviceRunner::ResetPerData() const { devicePerf_.ResetPerData(); }
 
@@ -188,28 +134,10 @@ int DeviceRunner::InitDeviceArgsCore(DeviceArgs& args)
         return -1;
     }
 
-    InitAicpuPerfAddr(args);
-    // dfx info
-    DevDfxArgs dfxArgs;
-    InitDevDfxArgs(args.aicpuPerfAddr != 0, dfxArgs);
-    args.devDfxArgAddr = reinterpret_cast<uint64_t>(CopyDataToDevice(&dfxArgs, sizeof(DevDfxArgs)));
-    if (args.devDfxArgAddr == 0) {
-        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Fail to copy dfx info from host to device.");
+    if (!DeviceDfx::GetInstance().Init(args)) {
         return -1;
     }
     return 0;
-}
-
-void DeviceRunner::InitAicpuPerfAddr(DeviceArgs& args)
-{
-    if (GetEnvVar("DUMP_DEVICE_PERF") == "true") {
-        auto aicpuDevPtr = DevMallocWithAlignSize(MAX_ROUND_NUM * sizeof(MetricPerf), TWO_MB_HUGE_PAGE_FLAGS);
-        if (aicpuDevPtr == nullptr) {
-            MACHINE_LOGW("Aicpu per addr malloc failed");
-        } else {
-            args.aicpuPerfAddr = npu::tile_fwk::dynamic::PtrToValue(aicpuDevPtr);
-        }
-    }
 }
 
 void DeviceRunner::GetAicoreRegs(const ArchInfo archInfo, std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu)
