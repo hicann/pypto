@@ -1,10 +1,10 @@
-# Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
+#Copyright(c) 2026 Huawei Technologies Co., Ltd.
+#This program is free software, you can redistribute it and / or modify it under the terms and conditions of
+#CANN Open Software License Agreement Version 2.0(the "License").
+#Please refer to the License for details.You may not use this file except in compliance with the License.
+#THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+#INCLUDING BUT NOT LIMITED TO NON - INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+#See LICENSE in the root of the software repository for the full text of the License.
 """
 Tests targeting RootFunctionBuilder (ir_func_builder.cpp) coverage gaps.
 """
@@ -328,3 +328,35 @@ def test_if_else_both_branches():
     assert len(for_stmts) >= 1
     if_stmts = _collect_stmts(for_stmts[0].body, ir.IfStmt)
     assert len(if_stmts) >= 1, "Expected IfStmt in loop body"
+
+
+def test_create_tensor():
+
+    def foo(x, y, out):
+        pypto.set_vec_tile_shapes(16, 16)
+        dim0 = x.shape[0]
+        tmp = pypto.tensor([16, 32], pypto.DT_FP32, "max_update")
+
+        for i in pypto.loop(dim0 // 16):
+
+            x_view = pypto.view(x, [16, 32], [i * 16, 0])
+            y_view = pypto.view(y, [16, 32], [i * 16, 0])
+            a = x_view * y_view
+            pypto.assemble(a, [0, 0], tmp)
+            b = tmp * 2
+            pypto.assemble(b, [i * 16, 0], out)
+
+    x = pypto.Tensor([32, 16], pypto.DT_FP32, name="x")
+    y = pypto.Tensor([32, 16], pypto.DT_FP32, name="y")
+    out = pypto.Tensor([32, 16], pypto.DT_FP32, name="out")
+    b = ir.IRBuilder()
+    compiled = pil.compile(foo, x, y, out)
+    prog = b.create_program([compiled], "main", ir.Span.unknown())
+    prog = ir.Pass.canonicalize()(prog)
+    prog = ir.Pass.aggressive_dce()(prog)
+    func = prog.functions[compiled.name]
+
+    assert func.body[0].opcode == "TENSOR_ALLOC"
+
+    prog = ir.Pass.create_root_functions()(prog)
+    _assert_func_counts(prog, 2)

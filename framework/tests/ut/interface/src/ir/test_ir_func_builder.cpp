@@ -72,7 +72,13 @@ struct IrFuncSetup {
 
     LogicalTensorPtr MakeLocal(const std::string& name)
     {
-        return builder.CreateTensorVar(*fwkFunc, DT_FP32, {TILE, TILE}, TileOpFormat::TILEOP_ND, name);
+        auto lt = builder.CreateTensorVar(*fwkFunc, DT_FP32, {TILE, TILE}, TileOpFormat::TILEOP_ND, name);
+        auto stmt = std::make_shared<ir::TensorOpStmt>(
+            std::vector<ir::VarPtr>{std::static_pointer_cast<const ir::Var>(lt)}, nullptr, "TENSOR_ALLOC",
+            std::vector<ir::ExprPtr>{}, std::vector<ir::VarPtr>{}, std::vector<std::pair<std::string, std::any>>{},
+            Sp());
+        stmts.push_back(std::static_pointer_cast<const ir::Stmt>(stmt));
+        return lt;
     }
 
     Operation& AddDassemble(const LogicalTensorPtr& src, const LogicalTensorPtr& dst)
@@ -129,7 +135,7 @@ std::vector<int> CollectConstructAssembleSlots()
 {
     std::vector<int> slots;
     for (auto* func : FindHiddenFuncs()) {
-        auto scope = func->GetSlotScope();
+        auto scope = func->Parent().GetSlotScope();
         if (scope) {
             for (int s : scope->constructAssembleSlotList) {
                 slots.push_back(s);

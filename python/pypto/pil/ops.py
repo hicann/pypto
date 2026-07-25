@@ -85,6 +85,19 @@ def getattr_impl(ctx, obj, attr):
     return getattr(obj, attr)
 
 
+# ---- Tensor construction ----
+
+@impl(pypto.Tensor)
+def create_tensor(ctx, *args, **kwargs):
+    t = pypto.Tensor(*args, **kwargs)
+    lt = t.logical_tensor()
+    stmt = ctx.create_tensor_op_stmt(
+        result=[lt], result_token=None, opcode="TENSOR_ALLOC",
+        args=[], tokens=[], attrs={}, span=ctx.span)
+    ctx.emit(stmt)
+    return t
+
+
 # ---- Collection construction ----
 
 
