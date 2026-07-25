@@ -40,7 +40,7 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 | groups            | 输入      | 分组卷积组数，默认1。<br>取值范围：[1, 65535]。<br>Cin、Cout必须可被groups整除。 |
 | transposed        | 输入      | 是否为转置卷积（反卷积），默认False。<br>当前暂不支持True。 |
 | output_paddings   | 输入      | 转置卷积输出端填充，仅transposed=True时使用。<br>当前暂不支持。 |
-| extend_params     | 输入      | 扩展参数字典，支持bias、scale、relu、scale_tensor：<br>- bias_tensor：可选的偏置张量，形状为(C_out,)，仅支持ND格式，bias的数据类型必须与input_conv一致。不同型号存在额外约束，详细请参见[约束说明](#约束说明)。<br>- scale：浮点型，per-tensor缩放因子。<br>- scale_tensor：uint64类型per-channel缩放Tensor，shape [1, Cout]，仅ND格式。<br>- relu_type：激活类型，支持RELU/NO_RELU等。 |
+| extend_params     | 输入      | 扩展参数字典，支持bias、scale、relu、scale_tensor：<br>- bias_tensor：可选的偏置张量，形状为(C_out,)，仅支持ND格式，不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br>- scale：浮点型，per-tensor缩放因子。<br>- scale_tensor：uint64类型，per-channel缩放Tensor，shape [1, Cout]，仅ND格式。<br>- relu_type：激活类型，支持RELU/NO_RELU等（当前暂不支持，详见功能说明）。 |
 
 ## 返回值说明
 
@@ -150,11 +150,11 @@ out = pypto.conv(input_conv, weight, pypto.DT_FP16,
                    paddings=[0, 0, 0, 0],
                    dilations=[1, 1])
 
-# 2D卷积带bias和ReLu （当前暂不支持ReLu）
+# 2D卷积带bias
 input_conv = pypto.tensor((1, 32, 8, 16), pypto.DT_FP16, "input_conv")
 weight = pypto.tensor((32, 32, 1, 1), pypto.DT_FP16, "weight")
 bias = pypto.tensor((32,), pypto.DT_FP16, "bias")
-extend_params = {'bias_tensor': bias, 'relu_type': pypto.ReLuType.RELU}
+extend_params = {'bias_tensor': bias}
 
 out = pypto.conv(input_conv, weight, pypto.DT_FP16,
                    strides=[1, 1],
