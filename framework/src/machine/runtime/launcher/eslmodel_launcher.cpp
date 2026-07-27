@@ -57,13 +57,16 @@ void EslModelLauncher::CopyInputOutputData()
     }
 }
 
-int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs* kArgs, AclRtStream aicoreStream, void* kernel)
+int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs* kArgs, AclRtStream aicoreStream, void* kernel,
+                                             bool isDeviceData)
 {
     auto* devProg = (dynamic::DevAscendProgram*)(kArgs->cfgdata);
     devProg->devArgs.nrAic = 32;
     devProg->devArgs.nrAiv = 64;
     EslModelLaunchAicore(aicoreStream, kernel, kArgs);
-    CopyInputOutputData();
+    if (!isDeviceData) {
+        CopyInputOutputData();
+    }
     devProg->devArgs.enableEslModel = true;
     size_t shmSize = DEVICE_TASK_CTRL_POOL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
     auto deviceTaskCtrlPoolAddr = devProg->devArgs.runtimeDataRingBufferAddr + sizeof(RuntimeDataRingBufferHead) +
@@ -102,7 +105,7 @@ int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs* kArgs, AclRtStrea
 int EslModelLauncher::EslModelLaunchDeviceTensorData(Function* function, const std::vector<DeviceTensorData>& inputList,
                                                      const std::vector<DeviceTensorData>& outputList,
                                                      RtStream aicpuStream, RtStream aicoreStream, void* kernel,
-                                                     const DeviceLauncherConfig& config)
+                                                     const DeviceLauncherConfig& config, bool isDeviceData)
 {
     MACHINE_LOGI("Kernel Launch");
     bool isCapture = false;
@@ -129,7 +132,7 @@ int EslModelLauncher::EslModelLaunchDeviceTensorData(Function* function, const s
         ExchangeCaptureModeGlobal();
     }
 
-    rc = DynamicKernelLaunchEsl(&kArgs, aicoreStream, kernel);
+    rc = DynamicKernelLaunchEsl(&kArgs, aicoreStream, kernel, isDeviceData);
     if (rc < 0) {
         return rc;
     }
@@ -137,7 +140,8 @@ int EslModelLauncher::EslModelLaunchDeviceTensorData(Function* function, const s
     return rc;
 }
 
-int EslModelLauncher::EslModelRunOnce(void* kernel, const DeviceLauncherConfig& config)
+int EslModelLauncher::EslModelRunOnce(void* kernel, const DeviceLauncherConfig& config, bool isDeviceData,
+                                      const std::vector<DeviceTensorData>& tensors)
 {
     auto& inputDataList = ProgramData::GetInstance().GetInputDataList();
     auto& outputDataList = ProgramData::GetInstance().GetOutputDataList();
@@ -148,12 +152,25 @@ int EslModelLauncher::EslModelRunOnce(void* kernel, const DeviceLauncherConfig& 
     EslModelMemoryUtils devMemoryHugePage(true);
     EslModelMemoryUtils devMemoryNotHugePage(false);
     Function* function = Program::GetInstance().GetLastFunction();
-    std::tie(inputDeviceDataList, outputDeviceDataList) = DeviceLauncher::BuildInputOutputFromHost(
-        devMemoryHugePage, inputDataList, outputDataList);
-    int rc = EslModelLaunchDeviceTensorData(function, inputDeviceDataList, outputDeviceDataList, aicpuStream,
+    int rc = 0;
+    if (!isDeviceData) {
+        std::tie(inputDeviceDataList, outputDeviceDataList) = DeviceLauncher::BuildInputOutputFromHost(
+            devMemoryHugePage, inputDataList, outputDataList);
+        rc = EslModelLaunchDeviceTensorData(function, inputDeviceDataList, outputDeviceDataList, aicpuStream,
                                             aicoreStream, kernel, config);
-    if (HasInplaceArgs(function) || outputDataList.size() == 0) {
-        DeviceLauncher::CopyFromDev(devMemoryNotHugePage, inputDataList);
+        if (HasInplaceArgs(function) || outputDataList.size() == 0) {
+            DeviceLauncher::CopyFromDev(devMemoryNotHugePage, inputDataList);
+        }
+    } else {
+        auto currentStream = GetStreamContext().GetCurrentStream();
+        if (currentStream != nullptr) {
+            RuntimeStreamSynchronize(currentStream);
+        }
+        for (size_t i = 0; i < tensors.size(); i++) {
+            inputDeviceDataList.push_back(tensors[i]);
+        }
+        rc = EslModelLaunchDeviceTensorData(function, inputDeviceDataList, outputDeviceDataList, aicpuStream,
+                                            aicoreStream, kernel, config, true);
     }
     return rc;
 }

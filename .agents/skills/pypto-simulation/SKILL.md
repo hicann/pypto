@@ -52,30 +52,30 @@ pip show pypto
 
 > **执行目录：pypto 仓库主目录**
 
+**前置检查（所有模式执行前必须完成）：**
+
+读取用户示例脚本，确认并修改：
+
+- **tensor 在 CPU 分配**：脚本中所有 torch tensor（`torch.rand`/`torch.empty`/`torch.ones`/`torch.zeros` 等）的 `device` 参数须为 `'cpu'` 或省略；若为 `'npu:x'` 需改为 `'cpu'`
+
 根据用户目的选择模式：
 
 **模式 A：功能仿真（验证功能是否正常）**
 
 ```bash
 cd /path/to/pypto
-cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -o output/
+cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -o output/
 ```
 
 **模式 B：性能仿真（查看流水报告）**
 
-**前置检查（执行前必须完成）：**
+**额外前置检查：**
 
-读取用户示例脚本，确认并修改以下三项：
-
-1. **tensor 在 CPU 分配**：脚本中所有 torch tensor（`torch.rand`/`torch.empty`/`torch.ones`/`torch.zeros` 等）的 `device` 参数须为 `'cpu'` 或省略；若为 `'npu:x'` 需改为 `'cpu'`
-2. **jit run_mode=1**：`@pypto.frontend.jit(runtime_options={"run_mode": ...})` 的 `run_mode` 须为 `1`（即 `pypto.RunMode.SIM`，对应仿真模式）；若为 `0`（`RunMode.NPU`）需改为 `1`
-3. **设置 accuracy_level=2**：在脚本中 jit 调用前添加 `pypto.set_global_config("simulation.accuracy_level", 2)`，用于开启核内流水采集；若缺失会导致无法生成流水报告
-
-> 若脚本已通过命令行参数（如 `--run_mode sim`）参数化控制上述第 1、2 项，传入 `sim` 即满足要求。
+- **设置 accuracy_level=2**：在脚本中 jit 调用前添加 `pypto.set_global_config("simulation.accuracy_level", 2)`，用于开启核内流水采集；若缺失会导致无法生成流水报告
 
 ```bash
 cd /path/to/pypto
-cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -n 0 -g -o output/
+cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -n 0 -g -o output/
 ```
 
 > ⚠️ **核数说明**：上述命令带 `-n 0`，执行后**默认只能查看 0 核**的流水报告。若需查看多核流水，执行时**不要指定 `-n 0`**（去掉该参数），仿真器会对所有核开启日志采集；随后通过步骤 3 的 `--core-id all`（或指定核号如 `--core-id 1,5`）生成对应核的报告。
@@ -116,11 +116,11 @@ $ bash build_out/cann-pypto_*.run --full -q --pylocal
 # 步骤2：执行仿真（必须）
 # 模式A：功能仿真
 $ cd /path/to/pypto
-$ cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -o output/
+$ cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -o output/
 
 # 模式B：性能仿真（脚本中需设置 pypto.set_global_config("simulation.accuracy_level", 2)）
 $ cd /path/to/pypto
-$ cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -n 0 -g -o output/
+$ cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -n 0 -g -o output/
 Json Saved at: .../report/trace_core0.json ✓
 
 # 步骤3：生成全部核报告（可选，需用户确认）
@@ -171,26 +171,13 @@ output/cannsim_*/report/trace_reports/
 
 ---
 
-## 常见问题
+## 参考文档
 
-### Q1：找不到算子文件
+| 文档 | 内容 | 加载时机 |
+|------|------|----------|
+| [references/troubleshooting.md](references/troubleshooting.md) | 仿真失败诊断与修复（checkSqeSupported 断言失败、超时、段错误等） | 遇到仿真失败时按需读取 |
 
-**原因：** 执行目录错误，未在 pypto 主目录下执行
-
-**解决：** 必须在 pypto 主目录下执行所有命令
-```bash
-cd /path/to/pypto
-# 功能仿真
-cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -o output/
-# 性能仿真（脚本中需设置 pypto.set_global_config("simulation.accuracy_level", 2)）
-cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -n 0 -g -o output/
-```
-
-### Q2：报告生成超时
-
-**原因：** 32核日志处理慢
-
-**解决：** 使用 `--core-id 0` 只生成单核报告
+> 遇到仿真失败时，读取 [references/troubleshooting.md](references/troubleshooting.md) 按错误特征定位章节。
 
 ---
 
@@ -198,10 +185,10 @@ cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -
 
 ```bash
 # 功能仿真
-cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -o output/
+cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -o output/
 
 # 性能仿真（脚本中需设置 pypto.set_global_config("simulation.accuracy_level", 2)）
-cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -n 0 -g -o output/
+cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -n 0 -g -o output/
 
 # 生成完整报告（全部核）
 cannsim report -e <cannsim_dir> -o <cannsim_dir>/report --core-id all
