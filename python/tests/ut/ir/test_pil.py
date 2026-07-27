@@ -909,11 +909,30 @@ def test_tensor_move():
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
-
     stmt = func.body[0]
     assert isinstance(stmt, ir.TensorOpStmt)
     assert stmt.opcode == "ADDS"
     assert stmt.result[0].name == 'b_0'
+
+    stmt = func.body[1]
+    assert isinstance(stmt, ir.ReturnStmt)
+    var = stmt.value[1]
+    assert isinstance(var, ir.LogicalTensor)
+    assert var.name == 'b_0'
+
+
+def test_tensor_move1():
+    def foo(a, b):
+        for _ in pypto.loop(10, unroll_list=[4]):
+            b[:] = a + 1
+    x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
+    func = pil.compile(foo, x, y)
+    stmt = func.body[-1]
+    assert isinstance(stmt, ir.ReturnStmt)
+    var = stmt.value[1]
+    assert isinstance(var, ir.LogicalTensor)
+    assert var.name == 'b_12'
 
 
 def test_printer():
@@ -964,3 +983,21 @@ def test_auto_pil_call():
     assert isinstance(func.body[0], ir.ForStmt)
     assert isinstance(func.body[1], ir.ForStmt)
     assert isinstance(func.body[2], ir.ReturnStmt)
+
+
+def test_delete_statement():
+    def foo():
+        a = 1
+        del a
+        b = [1, 2]
+        del b[0]
+        assert b == [2]
+        a = 2
+        del a, b
+        a, b = 2, 1
+        del (a, b)
+        a = {1: 2, 3: 4}
+        del a[1]
+        assert a == {3: 4}
+
+    pil.compile(foo)

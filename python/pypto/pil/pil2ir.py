@@ -35,7 +35,8 @@ def pil2ir(func: Function, args: dict, tensor_args: list[pypto.Tensor]):
             dispatch_block(func.body, True)
         except ReturnSignal:
             pass
-        stmt = ctx.create_return_stmt([ctx.unwrap(t) for t in tensor_args], func.span)
+        outs = [scope[t.name] for t in tensor_args]
+        stmt = ctx.create_return_stmt([ctx.unwrap(t) for t in outs], func.span)
         ctx.emit(stmt)
     return ctx.create_function(func.name, params, [], body, func.span)
 
