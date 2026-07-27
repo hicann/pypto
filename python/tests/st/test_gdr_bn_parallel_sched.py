@@ -303,7 +303,7 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):  # noqa: E741
     core_attn_out_shape = [t, nv, d]
     last_state_data_shape = [b, nv, d, d]
 
-    @pypto.frontend.jit(runtime_options={"stitch_function_max_num": 1, "device_sched_parallelism": 8})
+    @pypto.frontend.jit(new_ir=True, runtime_options={"stitch_function_max_num": 1, "device_sched_parallelism": 8})
     def kernel(
         query: pypto.Tensor(query_shape, pypto.DT_FP32),
         key: pypto.Tensor(key_shape, pypto.DT_FP32),
@@ -535,16 +535,18 @@ def torch_chunk_gated_delta_rule(
     v_beta = value * beta.unsqueeze(-1)
     k_beta = key * beta.unsqueeze(-1)
     # reshape to chunks
+    b, h, n, d = query.shape
     query, key, value, k_beta, v_beta = [
-        x.reshape(x.shape[0], x.shape[1], -1, chunk_size, x.shape[-1]) for x in (query, key, value, k_beta, v_beta)
+        x.reshape(b, h, -1, chunk_size, d)
+        for x in (query, key, value, k_beta, v_beta)
     ]
-    g = g.reshape(g.shape[0], g.shape[1], -1, chunk_size)
-    mask = torch.triu(torch.ones(chunk_size, chunk_size, dtype=torch.bool, device=query.device), diagonal=0)
+    g = g.reshape(b, h, -1, chunk_size)
+    causal = torch.triu(torch.ones(chunk_size, chunk_size, dtype=torch.bool, device=query.device), diagonal=0)
 
     # chunk decay
     g = g.cumsum(dim=-1)  # cal_cumsum
     decay_mask = ((g.unsqueeze(-1) - g.unsqueeze(-2)).tril().exp().float()).tril()  # cal_decay_mask
-    attn = -((k_beta @ key.transpose(-1, -2)) * decay_mask).masked_fill(mask, 0)  # cal_pre_attn
+    attn = -(k_beta @ key.transpose(-1, -2) * decay_mask).masked_fill(causal, 0)  # cal_pre_attn
 
     for i in range(1, chunk_size):
         row = attn[..., i, :i].clone()
@@ -562,12 +564,12 @@ def torch_chunk_gated_delta_rule(
     )
 
     core_attn_out = torch.zeros_like(value).to(query.device)
-    mask = torch.triu(torch.ones(chunk_size, chunk_size, dtype=torch.bool, device=query.device), diagonal=1)
+    causal = torch.ones(chunk_size, chunk_size, dtype=torch.bool, device=query.device).triu(diagonal=1)
 
     # for each chunk
     for i in range(0, total_sequence_length // chunk_size):
         q_i, k_i, v_i = query[:, :, i], key[:, :, i], value[:, :, i]
-        attn = (q_i @ k_i.transpose(-1, -2) * decay_mask[:, :, i]).masked_fill_(mask, 0)
+        attn = (q_i @ k_i.transpose(-1, -2) * decay_mask[:, :, i]).masked_fill_(causal, 0)
         v_prime = (k_cumdecay[:, :, i]) @ last_recurrent_state
         v_new = v_i - v_prime
         attn_inter = (q_i * g[:, :, i, :, None].exp()) @ last_recurrent_state
@@ -579,10 +581,12 @@ def torch_chunk_gated_delta_rule(
 
     if not output_final_state:
         last_recurrent_state = None
-    core_attn_out = core_attn_out.reshape(core_attn_out.shape[0], core_attn_out.shape[1], -1, core_attn_out.shape[-1])
+    bs, hd = core_attn_out.shape[:2]
+    dim = core_attn_out.shape[-1]
+    core_attn_out = core_attn_out.reshape(bs, hd, -1, dim)
     core_attn_out = core_attn_out[:, :, :sequence_length]
     core_attn_out = core_attn_out.transpose(1, 2).contiguous()
-    last_recurrent_state = last_recurrent_state.transpose(3, 2)
+    last_recurrent_state = last_recurrent_state.transpose(-1, -2)
     return core_attn_out, last_recurrent_state
 
 

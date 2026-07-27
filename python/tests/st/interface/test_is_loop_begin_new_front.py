@@ -23,7 +23,7 @@ N1 = 64
 D = 64
 
 
-@pypto.frontend.jit()
+@pypto.frontend.jit(new_ir=True)
 def dyn_loop_with_loop_begin(
     in_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -80,7 +80,7 @@ def dyn_loop_with_loop_end(
     for b_idx in pypto.loop(B, name="b_loop", idx_name="b_idx"):
         for s_idx in pypto.loop(S, name="s_loop", idx_name="s_idx"):
             a0 = pypto.view(in_tensor, [1, 1, N1, D], [b_idx, s_idx, 0, 0])
-            if pypto.is_loop_end(b_idx):
+            if b_idx == B - 1:
                 a1 = pypto.add(a0, 1.0)
                 pypto.assemble(a1, [b_idx, s_idx, 0, 0], out_tensor)
             else:
