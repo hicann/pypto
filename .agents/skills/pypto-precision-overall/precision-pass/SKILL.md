@@ -15,7 +15,7 @@ description: Pass精度校验技能。开启PreCheck/PostCheck进行全链路Pas
        ▼
   最后一个 Pass CodegenPreproc和前置 Pass 是否通过？
        │
-       ├── FAIL ──→ pass_compare 结果存在 Fail Op ──→ 定位到问题 Op，针对该 Op 检查实现
+       ├── FAIL ──→ pass_compare 结果存在 Fail Op ──→ 定位到问题 Op，针对该 Op 检查实现 （CodegenPreproc 通过，前置 Pass 报错记录为精度工具框架问题，上报））
        │
        │ PASS
        │
@@ -114,6 +114,7 @@ def your_kernel(
 python3 -m pip install . --verbose
 python3 your_test_case.py
 ```
+> **注意**: 所有需要重新编译的排查步骤（PreCheck/PostCheck、同步/VF等），均应使用当前 pypto 源码仓重新编译，不应因"需重新编译"而跳过。
 
 输出目录：`./output/output_*`（验证数据）、`$ASCEND_WORK_PATH/log/`（日志）
 
@@ -128,7 +129,12 @@ python3 your_test_case.py
 | `0xB0001U` | VERIFY_NOT_ENABLE | 环境 | 检查 `torch >= 2.1.0` |
 | 其他 | — | 未知 | 联系开发人员 |
 
-> **判断标准**：只看 CodegenPreproc Pass（最后一个 Pass）是否通过。中间 Pass 报错（如 ReplaceTensor、ProcessAtomic 等出现 `VERIFY_RESULT_MISMATCH`）忽略，只要 CodegenPreproc PASS 即表示精度正确。只有 CodegenPreproc FAIL 时才需要用 `pass_compare.py` 进一步定位。
+> **⚠️ 判断标准（关键）**：**只看 CodegenPreproc Pass（最后一个 Pass）是否通过。**
+>
+> - **CodegenPreproc PASS** → 算子精度校验通过。前面任意 Pass（如 ReplaceTensor、ProcessAtomic、InferDynShape 等）出现 `VERIFY_RESULT_MISMATCH` 不影响算子精度判断，但**这些报错需要记录并上报**——它们属于**精度工具框架本身的误报**，应归类为"精度工具框架问题"，不作为算子精度 bug 追踪。
+> - **CodegenPreproc FAIL** → 存在真实的精度差异，需要用 `pass_compare.py` 进一步定位。
+>
+> 如果遇到前述 Pass 报错但 CodegenPreproc 通过的情况，在报告中归类为**"精度工具框架问题（误报）"**，记录报错 Pass 和错误码并上报，不作为算子精度 bug 追踪。
 
 ### FAIL 处理：pass_compare 定位问题 Op
 
@@ -303,12 +309,13 @@ pypto.set_pass_options(auto_mix_partition=0)
 
 ## 注意事项
 
-1. Pass精度判断：只看 CodegenPreproc 是否通过
-2. 动态shape验证/AICORE异常排查：参考 [machine.md](../../../docs/zh/tutorials/appendix/trouble_shooting/machine.md)
-3. 打印配置：`fixed_output_path=true`, `force_overwrite=false`
-4. 打印限制：元素数量 ≤ 80
-5. 配置备份：修改配置前建议备份原文件
-6. 校验完成后移除配置：移除 `verify_options` 参数和 `tile_fwk_config.json` 中的校验开关，重新编译安装
+1. **Pass 精度判断**：只看 CodegenPreproc。前置 Pass 报错不影响算子精度结论，但需记录为框架问题。
+2. **框架误报上报**：CodegenPreproc PASS + 前置 Pass 报错 → 归类为"精度工具框架问题"，记录报错 Pass 名称和错误码，上报。
+3. 动态shape验证/AICORE异常排查：参考 [machine.md](../../../docs/zh/tutorials/appendix/trouble_shooting/machine.md)
+4. 打印配置：`fixed_output_path=true`, `force_overwrite=false`
+5. 打印限制：元素数量 ≤ 80
+6. 配置备份：修改配置前建议备份原文件
+7. 校验完成后移除配置：移除 `verify_options` 参数和 `tile_fwk_config.json` 中的校验开关，重新编译安装
 
 ---
 

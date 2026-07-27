@@ -47,5 +47,6 @@
 | 定位 AICore / Host 错误 | skill `pypto-aicore-error-locator` / `pypto-host-stacktrace-analyzer` |
 | 分析编译期 Pass 模块 | skill `pypto-pass-module-analyzer` / `pypto-pass-workflow-analyzer` |
 | 排查 workspace 内存问题 | skill `pypto-memory-overlap-detector` / `pypto-machine-workspace` |
+| 调试算子精度问题 | skill `pypto-precision-overall` |
 | 安装 / 修复环境 | skill `pypto-environment-setup` |
 | 创建 / 修复 PR、创建 Issue | skill `pypto-pr-creator` / `pypto-pr-fixer` / `pypto-issue-creator` |
