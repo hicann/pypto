@@ -15,9 +15,12 @@
 
 #include "gtest/gtest.h"
 
+#include <cstdlib>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <vector>
 
 #include "ir/scalar_expr.h"
@@ -28,6 +31,7 @@
 #include "interface/tensor/irbuilder.h"
 #include "interface/utils/id_gen.h"
 #include "machine/host/backend.h"
+#include "machine/host/expr_generator.h"
 #include "machine/host/ir_backend.h"
 #include "tilefwk/tilefwk.h"
 
@@ -69,6 +73,17 @@ ir::StmtPtr MakeSeqStmts(std::vector<ir::StmtPtr> stmts)
     return std::static_pointer_cast<const ir::Stmt>(seq);
 }
 
+RawSymbolicScalarPtr SymNode(const std::string& name) { return std::make_shared<RawSymbolicSymbol>(name); }
+
+RawSymbolicScalarPtr ImmNode(int64_t val) { return std::make_shared<RawSymbolicImmediate>(val); }
+
+ir::ExprPtr MakeGetInputShapeDimExpr(const std::string& argName, int64_t dim)
+{
+    return std::make_shared<RawSymbolicExpression>(
+        SymbolicOpcode::T_MOP_CALL,
+        std::vector<RawSymbolicScalarPtr>{SymNode("RUNTIME_GetInputShapeDim"), SymNode(argName), ImmNode(dim)});
+}
+
 struct DynFuncFixture {
     std::shared_ptr<Function> dynFunc;
     std::shared_ptr<DyndevFunctionAttribute> dynAttr;
@@ -99,6 +114,23 @@ struct LinkerFixture {
     std::unique_ptr<Linker> linker;
 
     LinkerFixture() { linker = std::make_unique<Linker>(symbolTable, funcGroup, exprTableDictGroup); }
+};
+
+// Shared GetInputCse fixture for IR control-flow CSE UT (avoids duplicated setup blocks).
+struct GetInputCseTestSetup {
+    ir::ExprPtr shape0;
+    GetInputCse getInputCse;
+    std::string key;
+
+    explicit GetInputCseTestSetup(const std::string& argName = "ARG_x", int64_t dim = 0)
+    {
+        shape0 = MakeGetInputShapeDimExpr(argName, dim);
+        key = SymbolicExpressionTable::BuildExpression(ExprPtrToSymbolicScalar(shape0).Raw());
+        getInputCse.keyToName.emplace(key, "CSE_sd[0]");
+        getInputCse.ordered.emplace_back("CSE_sd[0]", key);
+    }
+
+    void Bind(IrBackendContext& irBackendCtx) { irBackendCtx.getInputCse = &getInputCse; }
 };
 } // namespace
 
@@ -517,4 +549,81 @@ TEST_F(TestSuite_IrBackend, VisitForStmtForControlFlow_AllCases)
         EXPECT_TRUE(output.find("PARALLEL_FOR_BEGIN") == std::string::npos);
         EXPECT_TRUE(output.find("PARALLEL_FOR_END") == std::string::npos);
     }
+}
+
+TEST_F(TestSuite_IrBackend, BuildExpression_GetInputCseFullString)
+{
+    GetInputCseTestSetup cse;
+    const auto* cseMap = &cse.getInputCse.keyToName;
+    auto raw = ExprPtrToSymbolicScalar(cse.shape0).Raw();
+    EXPECT_EQ(SymbolicExpressionTable::BuildExpression(raw), cse.key);
+    EXPECT_EQ(SymbolicExpressionTable::BuildExpression(raw, cseMap), "CSE_sd[0]");
+}
+
+TEST_F(TestSuite_IrBackend, VisitForStmtForControlFlow_GetInputCseRewritesLoopBounds)
+{
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+    GetInputCseTestSetup cse;
+    cse.Bind(ctx.irBackendCtx);
+
+    auto loopVar = IRContext::Get().MakeVar("loop_idx", std::make_shared<ir::ScalarType>(ir::DataType::INT64), Sp());
+    auto forStmt = AsForStmt(
+        MakeForStmt(loopVar, MakeImmediateExpr(0), cse.shape0, MakeImmediateExpr(1), MakeSeqStmts({})));
+    VisitForStmtForControlFlow(ctx.irBackendCtx, ctx.cache, *linkerFixture.linker, ".pypto", forStmt,
+                               dynFixture.dynFunc.get(), ctx.slotIdxMapping, ctx.group, ctx.rootTileDict,
+                               ctx.controlFlowOss, ctx.expressionOss, ctx.exprHeaderOss, 1, "expr", ctx.exprSrcFiles,
+                               ctx.meta);
+    const auto output = ctx.controlFlowOss.str();
+    // Bound expressions must rewrite to CSE name as a whole (not a partial substring match).
+    EXPECT_NE(output.find("LOOP(VAR_loop_idx, 0, CSE_sd[0], 1)"), std::string::npos);
+    EXPECT_EQ(output.find("RUNTIME_GetInputShapeDim"), std::string::npos);
+}
+
+TEST_F(TestSuite_IrBackend, VisitIRStmtForControlFlow_IfStmt_GetInputCse)
+{
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+    GetInputCseTestSetup cse;
+    cse.Bind(ctx.irBackendCtx);
+
+    auto ifStmt = MakeIfStmt(cse.shape0, MakeSeqStmts({}));
+    VisitIRStmtForControlFlow(ctx.irBackendCtx, ctx.cache, *linkerFixture.linker, ".pypto", ifStmt,
+                              dynFixture.dynFunc.get(), ctx.slotIdxMapping, ctx.group, ctx.rootTileDict,
+                              ctx.controlFlowOss, ctx.expressionOss, ctx.exprHeaderOss, 1, "expr", ctx.exprSrcFiles,
+                              ctx.meta);
+    EXPECT_EQ(ctx.controlFlowOss.str(), "  if (CSE_sd[0]) {\n  }\n");
+}
+
+TEST_F(TestSuite_IrBackend, BuildControlFlowFromIR_EmitsGetInputCseStackInits)
+{
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+
+    const std::string workDir = "ir_backend_cse_" + std::to_string(getpid());
+    const std::string emitDir = workDir + "/pypto/kernel_aicpu";
+    ASSERT_EQ(mkdir(workDir.c_str(), 0755), 0);
+    ASSERT_EQ(mkdir((workDir + "/pypto").c_str(), 0755), 0);
+    ASSERT_EQ(mkdir(emitDir.c_str(), 0755), 0);
+    setenv("ASCEND_WORK_PATH", workDir.c_str(), 1);
+    config::SetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, true);
+
+    GetInputCseTestSetup cse;
+    cse.Bind(ctx.irBackendCtx);
+
+    dynFixture.dynFunc->body_ = std::make_shared<ir::SeqStmts>(std::vector<ir::StmtPtr>{}, Sp());
+    BuildControlFlowFromIR(ctx.irBackendCtx, ctx.cache, *linkerFixture.linker, ".pypto", dynFixture.dynFunc.get(),
+                           ctx.slotIdxMapping, ctx.group, ctx.rootTileDict, ctx.controlFlowOss, ctx.expressionOss,
+                           ctx.exprHeaderOss, 0, "expr", ctx.exprSrcFiles, ctx.meta);
+    const auto output = ctx.controlFlowOss.str();
+    const std::string expectedInit = "  int64_t CSE_sd[1];\n  CSE_sd[0] = " + cse.key + ";\n";
+    EXPECT_NE(output.find("ControlFlowEntry"), std::string::npos);
+    EXPECT_NE(output.find(expectedInit), std::string::npos);
+
+    unsetenv("ASCEND_WORK_PATH");
+    std::string rmCmd = "rm -rf " + workDir;
+    ASSERT_EQ(system(rmCmd.c_str()), 0);
 }

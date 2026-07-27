@@ -21,6 +21,7 @@
 #include <sstream>
 
 #include "machine/host/backend.h"
+#include "machine/host/expr_generator.h"
 #include "interface/program/program.h"
 #include "interface/function/function.h"
 #include "interface/configs/config_manager.h"
@@ -32,6 +33,8 @@ namespace npu::tile_fwk {
 
 struct IrBackendContext {
     std::unordered_map<const pypto::ir::ForStmt*, std::shared_ptr<Function>> forStmtLoopFuncMap;
+    // Align with legacy EmitControlFlowSources: launch-level GetInputShapeDim CSE.
+    const GetInputCse* getInputCse{nullptr};
 };
 
 SymbolicScalar ExprPtrToSymbolicScalar(const ir::ExprPtr& expr);

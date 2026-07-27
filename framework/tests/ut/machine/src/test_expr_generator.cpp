@@ -326,5 +326,119 @@ TEST_F(TestExprBatchGenerator, RunBreaksAndMixed)
     EXPECT_EQ(Count(body, "RUNTIME_SetExpr"), 3u);
 }
 
+RawSymbolicScalarPtr CallGetInputShapeDim(const std::string& argName, int64_t dim)
+{
+    return std::make_shared<RawSymbolicExpression>(
+        SymbolicOpcode::T_MOP_CALL,
+        std::vector<RawSymbolicScalarPtr>{SymNode("RUNTIME_GetInputShapeDim"), SymNode(argName), ImmNode(dim)});
+}
+
+RawSymbolicScalarPtr CallGetInputData(const std::string& argName, const std::string& dtype,
+                                      const RawSymbolicScalarPtr& index)
+{
+    return std::make_shared<RawSymbolicExpression>(
+        SymbolicOpcode::T_MOP_CALL,
+        std::vector<RawSymbolicScalarPtr>{SymNode("RUNTIME_GetInputData"), SymNode(argName), SymNode(dtype), index});
+}
+
+// Batch-local CSE: 同一固定入参 GetInputShapeDim 出现 ≥2 次 → 顶部 __get_input_cse_N。
+TEST_F(TestExprBatchGenerator, BatchLocalShapeDimCse)
+{
+    auto shape0 = CallGetInputShapeDim("ARG_x", 0);
+    std::vector<RawSymbolicScalarPtr> exprs = {
+        AddNode(shape0, ImmNode(1)), AddNode(shape0, ImmNode(2)),
+        AddNode(CallGetInputShapeDim("ARG_y", 1), ImmNode(3)), // once only → no local cse
+    };
+    std::string body = RunGen(testDir_, 20, exprs);
+    EXPECT_NE(body.find("int64_t __get_input_cse_0 = "), std::string::npos);
+    EXPECT_NE(body.find("RUNTIME_GetInputShapeDim"), std::string::npos);
+    EXPECT_EQ(Count(body, "__get_input_cse_0"), 3u);        // 1 decl + 2 uses
+    EXPECT_EQ(Count(body, "RUNTIME_GetInputShapeDim"), 2u); // decl RHS + ARG_y once
+}
+
+// Batch-local CSE: 固定入参 GetInputData(ARG_*, RUNTIME_*, imm) 重复 → __get_input_cse_。
+TEST_F(TestExprBatchGenerator, BatchLocalFixedGetInputDataCse)
+{
+    auto data0 = CallGetInputData("ARG_cu", "RUNTIME_int32_t", ImmNode(0));
+    std::vector<RawSymbolicScalarPtr> exprs = {
+        AddNode(data0, ImmNode(1)),
+        AddNode(data0, ImmNode(2)),
+    };
+    std::string body = RunGen(testDir_, 22, exprs);
+    EXPECT_NE(body.find("int64_t __get_input_cse_0 = "), std::string::npos);
+    EXPECT_EQ(Count(body, "__get_input_cse_0"), 3u);
+    EXPECT_EQ(Count(body, "RUNTIME_GetInputData"), 1u);
+}
+
+// 非固定入参（VALUE_* / 嵌套表达式）即使重复也不做 batch CSE。
+TEST_F(TestExprBatchGenerator, BatchLocalSkipsLoopVaryingGetInputData)
+{
+    auto dataLoop = CallGetInputData("ARG_cu", "RUNTIME_int32_t", SymNode("VALUE_loop_idx_2"));
+    auto dataExpr = CallGetInputData("ARG_cu", "RUNTIME_int32_t", AddNode(SymNode("VALUE_loop_idx_2"), ImmNode(1)));
+    std::vector<RawSymbolicScalarPtr> exprs = {
+        AddNode(dataLoop, ImmNode(1)),
+        AddNode(dataLoop, ImmNode(2)),
+        AddNode(dataExpr, ImmNode(3)),
+        AddNode(dataExpr, ImmNode(4)),
+    };
+    std::string body = RunGen(testDir_, 23, exprs);
+    EXPECT_EQ(body.find("int64_t __get_input_cse_"), std::string::npos);
+    EXPECT_EQ(Count(body, "RUNTIME_GetInputData"), 4u);
+}
+
+// Launch CSE: 注入 CSE_sd[i] 后 batch 复用且不再生成本地 __cse。
+TEST_F(TestExprBatchGenerator, GetInputCseReuse)
+{
+    auto shape0 = CallGetInputShapeDim("ARG_x", 0);
+    std::vector<RawSymbolicScalarPtr> exprs = {
+        AddNode(shape0, ImmNode(1)),
+        AddNode(shape0, ImmNode(2)),
+    };
+    SymbolicExpressionTable table;
+    OrderedSet<RawSymbolicScalarPtr> set;
+    for (auto& e : exprs) {
+        set.Insert(e);
+    }
+    GetInputCse getInputCse;
+    const std::string key = SymbolicExpressionTable::BuildExpression(shape0);
+    getInputCse.keyToName.emplace(key, "CSE_sd[0]");
+    getInputCse.ordered.emplace_back("CSE_sd[0]", key);
+    EXPECT_EQ(SymbolicExpressionTable::BuildExpression(shape0, &getInputCse.keyToName), "CSE_sd[0]");
+
+    ExprBatchGenerator gen(testDir_, 21, set.size());
+    std::ostringstream cfOss;
+    std::ostringstream headerOss;
+    std::vector<std::string> srcFiles;
+    gen.GenerateBatchFile(&table, cfOss, headerOss, "test_exp.h", set, srcFiles, 1, 21, &getInputCse);
+    ASSERT_FALSE(srcFiles.empty());
+    std::string body = ReadFile(srcFiles.front());
+    EXPECT_EQ(body.find("int64_t __get_input_cse_"), std::string::npos);
+    EXPECT_EQ(Count(body, "CSE_sd[0]"), 2u);
+    EXPECT_EQ(body.find("RUNTIME_GetInputShapeDim"), std::string::npos);
+    EXPECT_NE(body.find("int64_t *CSE_sd"), std::string::npos);
+}
+
+// CollectGetInputCse：只收集固定入参 ShapeDim；排除 VALUE_ / sym_。
+TEST_F(TestExprBatchGenerator, CollectGetInputCseFiltersNonFixedArgs)
+{
+    auto launchShape = CallGetInputShapeDim("ARG_x", 0);
+    auto loopShape = CallGetInputShapeDim("VALUE_loop_idx", 0);
+    auto symShape = CallGetInputShapeDim("sym_foo", 0);
+
+    SymbolicExpressionTable t0;
+    t0.AddPrimaryExpression(SymbolicScalar(AddNode(launchShape, ImmNode(1))));
+    SymbolicExpressionTable t1;
+    t1.AddPrimaryExpression(SymbolicScalar(AddNode(loopShape, ImmNode(2))));
+    t1.AddPrimaryExpression(SymbolicScalar(AddNode(symShape, ImmNode(3))));
+    t1.AddPrimaryExpression(SymbolicScalar(AddNode(launchShape, ImmNode(4))));
+
+    auto cse = ExprBatchGenerator::CollectGetInputCse({&t0, &t1});
+    ASSERT_EQ(cse.ordered.size(), 1u);
+    EXPECT_EQ(cse.ordered[0].first, "CSE_sd[0]");
+    EXPECT_NE(cse.ordered[0].second.find("ARG_x"), std::string::npos);
+    EXPECT_EQ(cse.ordered[0].second.find("VALUE_loop_idx"), std::string::npos);
+    EXPECT_EQ(cse.ordered[0].second.find("sym_foo"), std::string::npos);
+}
+
 } // namespace test
 } // namespace npu::tile_fwk
