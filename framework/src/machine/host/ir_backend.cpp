@@ -209,8 +209,8 @@ void IrParseValueDependDesc(Function* func, std::initializer_list<ir::ExprPtr> e
     }
 }
 
-void InsertCacheStopForContrlFlow(IrBackendContext& ctx, const ir::ForStmt* forStmt, Function* dynFunc, int indent,
-                                  std::ostringstream& controlFlowOss, ValDependTensorMeta& valDependTensorMeta)
+void InsertCacheStopForContrlFlow(IrBackendContext& ctx, const ir::ForStmt* forStmt, Function* dynFunc,
+                                  ValDependTensorMeta& valDependTensorMeta)
 {
     auto currDynFuncAttr = Program::GetInstance().GetCurrentDynamicFunction()->GetDyndevAttribute();
     if (currDynFuncAttr == nullptr) {
@@ -226,9 +226,7 @@ void InsertCacheStopForContrlFlow(IrBackendContext& ctx, const ir::ForStmt* forS
     }
     auto valueDependDesc = currDynFuncAttr->valueDependDescDict[loopFunc];
     if (valueDependDesc.getInputDataCount + valueDependDesc.getTensorDataCount != 0) {
-        controlFlowOss << std::setw(indent * TABSIZE) << ' '
-                       << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_CACHESTOP); // force stop cache due to value "
-                          "depend in control\n";
+        // Value-depend: disable host ctrl-flow cache only; do not emit CACHESTOP stitch.
         valDependTensorMeta.disableCtrlFlowCache = true;
     }
 }
@@ -335,7 +333,7 @@ void VisitForStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Lin
                        << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_LOOP_BARRIER); // force submit before LOOP \n";
     }
 
-    InsertCacheStopForContrlFlow(ctx, forStmt.get(), dynFunc, indent, controlFlowOss, valDependTensorMeta);
+    InsertCacheStopForContrlFlow(ctx, forStmt.get(), dynFunc, valDependTensorMeta);
     InsertWaitAicoreStartForControlFlow(forStmt.get(), indent, controlFlowOss, valDependTensorMeta);
 
     controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "LOOP(" << iterVar << ", " << iterBegin << ", " << iterEnd

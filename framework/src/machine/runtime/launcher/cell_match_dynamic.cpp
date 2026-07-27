@@ -24,6 +24,7 @@
 #include "interface/machine/device/tilefwk/aicpu_common.h"
 #include "interface/machine/device/tilefwk/aikernel_data.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
+#include "machine/runtime/memory_utils/memory_pool.h"
 #include "machine/utils/dynamic/dev_encode_function_stitch.h"
 #include "tilefwk/error_code.h"
 
@@ -50,6 +51,7 @@ void ResetRuntimeDynamicCellMatchPoolHost(uint64_t addr, uint64_t capacityBytes,
     }
 
     // RuntimeMemset only fills a byte pattern; stage AICORE_TASK_INIT words then H2D copy.
+    // Use NormalizedRtMemcpy so aclgraph capture switches to RELAXED (direct H2D is forbidden).
     constexpr size_t kChunkWords = 512; // 4 KiB
     uint64_t chunk[kChunkWords];
     for (size_t i = 0; i < kChunkWords; ++i) {
@@ -61,7 +63,7 @@ void ResetRuntimeDynamicCellMatchPoolHost(uint64_t addr, uint64_t capacityBytes,
     while (remaining > 0) {
         const size_t n = std::min(remaining, kChunkWords);
         const uint64_t bytes = static_cast<uint64_t>(n * sizeof(uint64_t));
-        auto ret = RuntimeMemcpyDirect(dst + byteOffset, bytes, chunk, bytes, RtMemcpyKind::HOST_TO_DEVICE);
+        auto ret = NormalizedRtMemcpy(dst + byteOffset, bytes, chunk, bytes, RtMemcpyKind::HOST_TO_DEVICE);
         if (ret != RT_SUCCESS) {
             ASSERT(false) << "ResetRuntimeDynamicCellMatchPoolHost device memcpy failed, addr=" << addr
                           << " capacity=" << capacityBytes << " offset=" << byteOffset << " ret=" << ret;

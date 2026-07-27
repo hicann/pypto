@@ -272,19 +272,15 @@ TEST_F(TestSuite_IrBackend, InsertCacheStopForContrlFlow_AllCases)
         IrBackendContext irBackendCtx;
         DynFuncFixture fixture;
         fixture.dynFunc->SetDyndevAttribute(nullptr);
-        std::ostringstream oss;
         ValDependTensorMeta meta;
-        InsertCacheStopForContrlFlow(irBackendCtx, AsForStmt(mkFor()).get(), fixture.dynFunc.get(), 0, oss, meta);
-        EXPECT_TRUE(oss.str().empty());
+        InsertCacheStopForContrlFlow(irBackendCtx, AsForStmt(mkFor()).get(), fixture.dynFunc.get(), meta);
         EXPECT_FALSE(meta.disableCtrlFlowCache);
     }
     {
         IrBackendContext irBackendCtx;
         DynFuncFixture fixture;
-        std::ostringstream oss;
         ValDependTensorMeta meta;
-        InsertCacheStopForContrlFlow(irBackendCtx, AsForStmt(mkFor()).get(), fixture.dynFunc.get(), 0, oss, meta);
-        EXPECT_TRUE(oss.str().empty());
+        InsertCacheStopForContrlFlow(irBackendCtx, AsForStmt(mkFor()).get(), fixture.dynFunc.get(), meta);
         EXPECT_FALSE(meta.disableCtrlFlowCache);
     }
     {
@@ -299,11 +295,8 @@ TEST_F(TestSuite_IrBackend, InsertCacheStopForContrlFlow_AllCases)
         desc.getInputDataCount = 1;
         desc.getTensorDataCount = 0;
 
-        std::ostringstream oss;
         ValDependTensorMeta meta;
-        InsertCacheStopForContrlFlow(irBackendCtx, AsForStmt(forStmt).get(), fixture.dynFunc.get(), 1, oss, meta);
-        EXPECT_FALSE(oss.str().empty());
-        EXPECT_TRUE(oss.str().find("RUNTIME_FUNCKEY_CACHESTOP") != std::string::npos);
+        InsertCacheStopForContrlFlow(irBackendCtx, AsForStmt(forStmt).get(), fixture.dynFunc.get(), meta);
         EXPECT_TRUE(meta.disableCtrlFlowCache);
     }
 }

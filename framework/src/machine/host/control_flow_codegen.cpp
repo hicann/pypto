@@ -166,7 +166,7 @@ void BuildControlFlowFooter(ExprBatchGenerator& generator, std::ostringstream& c
     generator.HeaderFileEnd(exprHeaderOss);
 }
 
-void MarkValueDependDisableCache(ControlFlowEmitCtx& ctx, Function* keyFunc, int indent, const char* valueDependSite)
+void MarkValueDependDisableCache(ControlFlowEmitCtx& ctx, Function* keyFunc)
 {
     auto currDynFuncAttr = Program::GetInstance().GetCurrentDynamicFunction()->GetDyndevAttribute();
     if (currDynFuncAttr->valueDependDescDict.count(keyFunc) == 0) {
@@ -174,16 +174,7 @@ void MarkValueDependDisableCache(ControlFlowEmitCtx& ctx, Function* keyFunc, int
     }
     auto valueDependDesc = currDynFuncAttr->valueDependDescDict[keyFunc];
     if (valueDependDesc.getInputDataCount + valueDependDesc.getTensorDataCount != 0) {
-        // Value-depend: keep both mechanisms.
-        // - CACHESTOP: device-side stitch; stops CF-cache recording mid-graph (needed when Emulation/ST
-        //   still starts recording). No-op when not recording.
-        // - disableCtrlFlowCache: host-side DevAscendProgram flag; launchers skip building/reusing CF
-        //   cache entirely (CtrlFlowCacheManager already honors it; Emulation/Python ST covered by the
-        //   companion skip-host-cf change).
-        ctx.controlFlowOss << std::setw(indent * TABSIZE) << ' '
-                           << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_CACHESTOP); // force stop cache due to value "
-                              "depend in "
-                           << valueDependSite << "\n";
+        // Value-depend: disable host ctrl-flow cache only; do not emit CACHESTOP stitch.
         ctx.valDependTensorMeta.disableCtrlFlowCache = true;
     }
 }
@@ -335,7 +326,7 @@ void EmitDynamicLoopOpen(ControlFlowEmitCtx& ctx, Function* func, const std::sha
         ctx.controlFlowOss << std::setw(indent * TABSIZE) << ' '
                            << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_LOOP_BARRIER); // force submit before LOOP \n";
     }
-    MarkValueDependDisableCache(ctx, func, indent, "control");
+    MarkValueDependDisableCache(ctx, func);
     InsertWaitCoreStartForLoopBounds(attr, ctx.controlFlowOss, ctx.valDependTensorMeta, indent);
 
     const auto* getInputCseMap = GetInputCseMap(ctx);
@@ -421,7 +412,7 @@ void BuildControlFlowExecuteGraph(ControlFlowEmitCtx& ctx, Function* func, int i
     }
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, ctx.rootTileDict.count(func)) << "Function not found in rootTileDict";
     Function* tile = ctx.rootTileDict[func];
-    MarkValueDependDisableCache(ctx, tile, indent, "data");
+    MarkValueDependDisableCache(ctx, tile);
 
     int devRootKey = ctx.group.devRootList.GetIndex(func);
     ctx.controlFlowOss << BuildControlFlowCallee(func, indent * TABSIZE);

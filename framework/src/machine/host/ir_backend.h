@@ -44,8 +44,8 @@ bool IsOpCallStmt(const ir::StmtPtr& stmt);
 
 Function* IrBuildVirtualLoopFunc(IrBackendContext& ctx, const ir::ForStmt* forStmt, Function* dynFunc);
 void IrParseValueDependDesc(Function* func, std::initializer_list<ir::ExprPtr> exprs);
-void InsertCacheStopForContrlFlow(IrBackendContext& ctx, const ir::ForStmt* forStmt, Function* dynFunc, int indent,
-                                  std::ostringstream& controlFlowOss, ValDependTensorMeta& valDependTensorMeta);
+void InsertCacheStopForContrlFlow(IrBackendContext& ctx, const ir::ForStmt* forStmt, Function* dynFunc,
+                                  ValDependTensorMeta& valDependTensorMeta);
 void InsertWaitAicoreStartForControlFlow(const ir::ForStmt* forStmt, int indent, std::ostringstream& controlFlowOss,
                                          ValDependTensorMeta& valDependTensorMeta);
 void VisitForStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Linker& linker,
