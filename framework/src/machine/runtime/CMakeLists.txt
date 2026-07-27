@@ -43,9 +43,5 @@ target_link_libraries(tile_fwk_runtime
             c_sec
 )
 
-if (BUILD_WITH_CANN)
-    add_dependencies(tile_fwk_runtime tile_fwk_server)
-endif ()
-
 PTO_Fwk_AnalysisTargetHeaderFiles(TARGET tile_fwk_runtime)
 PTO_Fwk_AnalysisTargetSymbols(TARGET tile_fwk_runtime)

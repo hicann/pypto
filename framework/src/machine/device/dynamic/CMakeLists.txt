@@ -16,12 +16,6 @@ project(pypto_ctrl_server LANGUAGES C CXX)
 # 基础配置
 ########################################################################################################################
 
-# 缺省编译配置, 编译函数
-if (BUILD_WITH_CANN)
-    set(CMAKE_C_COMPILER "${ASCEND_CANN_PACKAGE_PATH}/toolkit/toolchain/hcc/bin/aarch64-target-linux-gnu-gcc")
-    set(CMAKE_CXX_COMPILER "${ASCEND_CANN_PACKAGE_PATH}/toolkit/toolchain/hcc/bin/aarch64-target-linux-gnu-g++")
-endif ()
-
 message(STATUS "CMAKE_GENERATOR=${CMAKE_GENERATOR}")
 message(STATUS "CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 
@@ -80,5 +74,5 @@ target_link_libraries(pypto_ctrl_server
 set_target_properties(pypto_ctrl_server PROPERTIES OUTPUT_NAME pypto_ctrl_server)
 
 if (NOT ENABLE_FEATURE_PYTHON_FRONT_END)
-    install(TARGETS pypto_ctrl_server ARCHIVE DESTINATION lib OPTIONAL)
+    install(TARGETS pypto_ctrl_server ARCHIVE DESTINATION lib COMPONENT pypto OPTIONAL)
 endif ()

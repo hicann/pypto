@@ -31,6 +31,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import site
 import subprocess
 import sys
@@ -302,6 +303,7 @@ class CMakeUserOption:
         ('cmake-options=', None, 'CMake Options', None),
         ('cmake-verbose', None, 'Enable CMake Verbose Output', None),
         ('multi-py3-exe=', None, 'Extra Python3 executables (comma-separated) for multi-version pypto_impl.so', None),
+        ('backend-type=', None, 'Backend type (npu or cost_model)', None),
     ]
 
     def __init__(self):
@@ -312,6 +314,7 @@ class CMakeUserOption:
         self.cmake_verbose: bool = False
         self.multi_py3_exe: Optional[str] = None
         self.multi_py3_cfg: Optional[List[Py3Desc]] = None
+        self.backend_type: Optional[str] = None
         # 获取 CMake 路径
         self.cmake: Optional[Path] = None
 
@@ -361,6 +364,7 @@ class CMakeUserOption:
         self.cmake_verbose = False
         self.multi_py3_exe = None
         self.multi_py3_cfg = None
+        self.backend_type = None
         self.cmake: Optional[Path] = self.which_cmake()
         if not self.cmake:
             raise RuntimeError("Can't find cmake")
@@ -382,6 +386,7 @@ class CMakeUserOption:
         parser.add_argument("--cmake-options", nargs="?", type=str, default="", dest="cmake_options")
         parser.add_argument("--cmake-verbose", action="store_true", default=False, dest="cmake_verbose")
         parser.add_argument("--multi-py3-exe", nargs="?", type=str, default=None, dest="multi_py3_exe")
+        parser.add_argument("--backend-type", nargs="?", type=str, default=None, dest="backend_type")
         args, _ = parser.parse_known_args(env_build_ext_args_split)
         self.cmake_generator = args.cmake_generator
         self.cmake_build_type = args.cmake_build_type
@@ -389,6 +394,7 @@ class CMakeUserOption:
         self.cmake_verbose = args.cmake_verbose
         self.multi_py3_exe = args.multi_py3_exe
         self.multi_py3_cfg = None
+        self.backend_type = args.backend_type
 
     def finalize_options_cmake(self):
         """处理并修正 CMake 选项
@@ -517,6 +523,25 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
                 installed_files = [line.strip() for line in fh if line.strip()]
         return installed_files
 
+    @staticmethod
+    def _extract_device_package(cmake_install_prefix: Path):
+        """Extract and remove the packaged CANN device artifacts."""
+        device_tar_gz = cmake_install_prefix / "device-pypto.tar.gz"
+        if not device_tar_gz.exists():
+            raise RuntimeError(f"Can't find device package: {device_tar_gz}")
+        device_install_root = cmake_install_prefix / "pypto"
+        device_install_root.mkdir(parents=True, exist_ok=True)
+        tar_path = shutil.which("tar")
+        if not tar_path:
+            raise RuntimeError("Can't find tar executable")
+        subprocess.run(
+            [tar_path, "-zxf", str(device_tar_gz), "-C", str(device_install_root)],
+            capture_output=False,
+            check=True,
+            text=True,
+        )
+        device_tar_gz.unlink()
+
     def initialize_options(self):
         """初始化构建选项
 
@@ -546,16 +571,7 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         """
         # 全量源码统一构建旁路: 二进制已由外层 CMake 编译, 此处仅 cmake --install 到 staging
         if os.environ.get("PYPTO_UNIFIED_BUILD") == "1":
-            logging.info("Unified build mode: cmake is the build driver, install staged artifacts only")
-            src = Path(__file__).parent.resolve()
-            cmake_install_prefix = self._get_cmake_install_prefix()
-            unified_build_dir = os.environ.get("PYPTO_CMAKE_BINARY_DIR")
-            build_dir = Path(unified_build_dir) if unified_build_dir else self._get_cmake_build_prefix()
-            # 组件过滤: Unspecified(whl 文件) + pypto_impl_lib(.so), 排除 share/info/(run 脚本)
-            for comp in ["Unspecified", "pypto_impl_lib"]:
-                cmd = f"{self.cmake} --install {build_dir} --prefix {cmake_install_prefix} --component {comp}"
-                logging.info("CMake Install (component=%s): %s", comp or "Unspecified", cmd)
-                subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
+            self._run_unified_build()
             return
 
         logging.info("%s", self)
@@ -603,12 +619,35 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
                     len(editable_wheel_cmd.pypto_install_manifest_lst),
                 )
 
+    def _run_unified_build(self):
+        """Install artifacts produced by the outer unified CMake build."""
+        logging.info("Unified build mode: cmake is the build driver, install staged artifacts only")
+        cmake_install_prefix = self._get_cmake_install_prefix()
+        unified_build_dir = os.environ.get("PYPTO_CMAKE_BINARY_DIR")
+        build_dir = Path(unified_build_dir) if unified_build_dir else self._get_cmake_build_prefix()
+        install_components = ["Unspecified", "pypto_impl_lib"]
+        unified_backend_type = os.environ.get("PYPTO_BACKEND_TYPE")
+        if unified_backend_type == "npu":
+            install_components.append("pypto")
+        for comp in install_components:
+            cmd = f"{self.cmake} --install {build_dir} --prefix {cmake_install_prefix} --component {comp}"
+            logging.info("CMake Install (component=%s): %s", comp or "Unspecified", cmd)
+            subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
+        if unified_backend_type == "npu":
+            self._extract_device_package(cmake_install_prefix)
+
     def _run_cmake(self, params: CMakeCmdParams):
         """执行完整的 CMake Configure/Build/Install 流程
 
         :param params: CMake 构建参数
         """
-        # CMake Configure
+        self._cmake_configure(params)
+        self._build_cann_device(params)
+        self._cmake_build(params)
+        self._cmake_install(params)
+
+    def _cmake_configure(self, params: CMakeCmdParams):
+        """Configure a CMake build tree."""
         cmd = f"{self.cmake} -S {params.src} -B {params.build_dir}"
         cmd += f" -G {self.cmake_generator}" if self.cmake_generator else ""
         cmd += f" -DCMAKE_BUILD_TYPE={self.cmake_build_type}" if self.cmake_build_type else ""
@@ -620,7 +659,37 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         )
         ret.check_returncode()
 
-        # CMake Build
+    def _build_cann_device(self, params: CMakeCmdParams):
+        """Build the independent CANN device project for the primary NPU build."""
+        # The device project is intentionally independent from host targets. Build it
+        # explicitly for the primary NPU build; multi-repo builds do not register it.
+        if self.backend_type != "npu" or params.build_targets:
+            return
+        target_help = subprocess.run(
+            [str(self.cmake), "--build", str(params.build_dir), "--target", "help"],
+            capture_output=True,
+            check=False,
+            text=True,
+            encoding="utf-8",
+            env=params.env,
+        )
+        if target_help.returncode != 0 or not re.search(
+            r"(?m)(^|[ \t])cann_device(?:[ \t:]|$)", target_help.stdout
+        ):
+            return
+        device_cmd = f"{self.cmake} --build {params.build_dir} --target cann_device"
+        job_num = self._get_job_num(job_num=self.parallel, generator=self.cmake_generator)
+        if job_num:
+            device_cmd += f" -j {job_num}"
+        device_cmd += " --verbose" if self.cmake_verbose else ""
+        logging.info("CMake Device Build, Cmd: %s", device_cmd)
+        ret = subprocess.run(
+            shlex.split(device_cmd), capture_output=False, check=True, text=True, encoding='utf-8', env=params.env
+        )
+        ret.check_returncode()
+
+    def _cmake_build(self, params: CMakeCmdParams):
+        """Build the requested CMake targets."""
         job_num = self._get_job_num(job_num=self.parallel, generator=self.cmake_generator)
         cmd = f"{self.cmake} --build {params.build_dir}" + (f" -j {job_num}" if job_num else "")
         cmd += (" --target " + " ".join(params.build_targets)) if params.build_targets else ""
@@ -631,7 +700,8 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         )
         ret.check_returncode()
 
-        # CMake Install
+    def _cmake_install(self, params: CMakeCmdParams):
+        """Install CMake artifacts and unpack the primary device package."""
         cmd_list = []
         cmd = f"{self.cmake} --install {params.build_dir} --prefix {params.cmake_install_prefix}"
         if params.install_components:
@@ -645,6 +715,8 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
             logging.info("CMake Install, Cmd: %s", cmd)
             ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
             ret.check_returncode()
+        if self.backend_type == "npu" and not params.build_targets:
+            self._extract_device_package(params.cmake_install_prefix)
 
     def _edit_mode(self) -> bool:
         """判断是否为可编辑安装模式

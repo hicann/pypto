@@ -29,12 +29,6 @@ file(GLOB _Device_Utils_Srcs
 
 add_subdirectory(dynamic)
 
-# 缺省编译配置, 编译函数
-if (BUILD_WITH_CANN)
-    set(CMAKE_C_COMPILER "${ASCEND_CANN_PACKAGE_PATH}/toolkit/toolchain/hcc/bin/aarch64-target-linux-gnu-gcc")
-    set(CMAKE_CXX_COMPILER "${ASCEND_CANN_PACKAGE_PATH}/toolkit/toolchain/hcc/bin/aarch64-target-linux-gnu-g++")
-endif ()
-
 ########################################################################################################################
 # 编译流程
 ########################################################################################################################
@@ -97,5 +91,5 @@ target_link_options(tile_fwk_server
 set_target_properties(tile_fwk_server PROPERTIES OUTPUT_NAME tilefwk_backend_server)
 
 if (NOT ENABLE_FEATURE_PYTHON_FRONT_END)
-    install(TARGETS tile_fwk_server LIBRARY DESTINATION lib OPTIONAL)
+    install(TARGETS tile_fwk_server LIBRARY DESTINATION lib COMPONENT pypto OPTIONAL)
 endif ()

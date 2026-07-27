@@ -110,8 +110,8 @@ target_link_directories(pypto_impl
            $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibDir}>
 )
 if (DEFINED PTO_FWK_SRC_ROOT)
-    if (TARGET c_sec_shared)
-        add_dependencies(pypto_impl c_sec_shared)
+    if (TARGET c_sec)
+        add_dependencies(pypto_impl c_sec)
     endif ()
 
     PTO_Fwk_GenerateGCovConfigJson(TARGET pypto_impl)

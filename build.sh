@@ -134,18 +134,20 @@ set_env() {
         DEFAULT_INSTALL_DIR="/usr/local/Ascend/cann"
     fi
 
-    ASCEND_CANN_PACKAGE_PATH=""
-    if [ -n "${CANN_PATH}" ];then
-        ASCEND_CANN_PACKAGE_PATH=${CANN_PATH}
-    elif [ -n "${ASCEND_HOME_PATH}" ];then
-        ASCEND_CANN_PACKAGE_PATH=${ASCEND_HOME_PATH}
-    elif [ -n "${ASCEND_OPP_PATH}" ];then
-        ASCEND_CANN_PACKAGE_PATH=$(dirname ${ASCEND_OPP_PATH})
-    elif [ -d "${DEFAULT_TOOLKIT_INSTALL_DIR}" ];then
-        ASCEND_CANN_PACKAGE_PATH=${DEFAULT_TOOLKIT_INSTALL_DIR}
-    elif [ -d "${DEFAULT_INSTALL_DIR}" ];then
-        ASCEND_CANN_PACKAGE_PATH=${DEFAULT_INSTALL_DIR}
+    ASCEND_CANN_PACKAGE_PATH="${CANN_PATH:-${ASCEND_HOME_PATH:-}}"
+    if [ -z "${ASCEND_CANN_PACKAGE_PATH}" ] && [ -n "${ASCEND_OPP_PATH:-}" ]; then
+        ASCEND_CANN_PACKAGE_PATH=$(dirname -- "${ASCEND_OPP_PATH}")
     fi
+    if [ -n "${ASCEND_CANN_PACKAGE_PATH}" ]; then
+        return
+    fi
+
+    for install_dir in "${DEFAULT_TOOLKIT_INSTALL_DIR}" "${DEFAULT_INSTALL_DIR}"; do
+        if [ -d "${install_dir}" ]; then
+            ASCEND_CANN_PACKAGE_PATH="${install_dir}"
+            break
+        fi
+    done
 }
 set_env
 
@@ -161,9 +163,12 @@ CMAKE_OPTS=(
     -DASCEND_CANN_PACKAGE_PATH="${ASCEND_CANN_PACKAGE_PATH}"
 )
 
-if [ -n "${ASCEND_HOME_PATH:-}" ]; then
-    CMAKE_OPTS+=(-DCUSTOM_ASCEND_CANN_PACKAGE_PATH="${ASCEND_HOME_PATH}")
+if [ -n "${ASCEND_CANN_PACKAGE_PATH}" ]; then
+    BUILD_WITH_CANN=ON
+    CMAKE_OPTS+=(-DBUILD_WITH_CANN=ON)
+    CMAKE_OPTS+=(-DCUSTOM_ASCEND_CANN_PACKAGE_PATH="${ASCEND_CANN_PACKAGE_PATH}")
 else
+    BUILD_WITH_CANN=OFF
     CMAKE_OPTS+=(-DBUILD_WITH_CANN=OFF)
 fi
 
@@ -177,6 +182,16 @@ fi
 
 echo "[build.sh] cmake configure (build_type=${BUILD_TYPE} jobs=${BUILD_JOBS})..."
 cmake "${CMAKE_OPTS[@]}"
+
+if [ "${BUILD_WITH_CANN}" = "ON" ]; then
+    BUILD_TARGETS="$(cmake --build "${BUILD_DIR}" --target help 2>/dev/null || true)"
+    if printf '%s\n' "${BUILD_TARGETS}" | grep -qE '(^|[[:space:]])cann_device([[:space:]:]|$)'; then
+        echo "[build.sh] cmake build --target cann_device -j ${BUILD_JOBS} ..."
+        cmake --build "${BUILD_DIR}" --target cann_device -j "${BUILD_JOBS}"
+    else
+        echo "[build.sh] cann_device target is not registered; device build is delegated to the multi-repo build."
+    fi
+fi
 
 if [ -n "${BUILD_TARGET}" ]; then
     echo "[build.sh] cmake build --target ${BUILD_TARGET} -j ${BUILD_JOBS} ..."
