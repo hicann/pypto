@@ -435,7 +435,7 @@ def fa_bsnd_dn_kernel(
     skv_dim = k.shape[1]
     sq_tiles = (sq_dim + TS - 1) // TS
     skv_tiles = (skv_dim + TKV - 1) // TKV
-    core_id = pl.get_block_idx()
+    core_id = pl.get_block_idx() // pl.get_subblock_num()
     n_dim = q.shape[2]
 
     qk_vec = pl.make_tile(

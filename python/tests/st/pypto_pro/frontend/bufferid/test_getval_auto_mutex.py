@@ -58,6 +58,25 @@ def getval_setval_am_kernel(a: pl.Tensor[[64, 128], pl.DT_FP16]):
         pl.store(a, t, [0, 0])            # MTE3 consumer
 
 
+@pl.jit(arch="a5", auto_mutex=True)
+def getval_while_condition_am_kernel(
+    a: pl.Tensor[[64, 128], pl.DT_FP16],
+    out: pl.Tensor[[1], pl.DT_INT64],
+):
+    """Read a managed tile in the while condition and publish the exit index."""
+    tt = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    a_db = pl.make_tile_group(type=tt, addrs=[0x00000], mutex_ids=[20])
+    with pl.section_vector():
+        t = a_db.next()
+        pl.load(t, a, [0, 0])
+        i: pl.DT_INT64 = 0
+        while t[0, i] > 0:
+            i = i + 1
+            if i >= 8:
+                break
+        out[0] = i
+
+
 def _run_and_measure(a: torch.Tensor):
     """Launch kernel; return (max_abs_diff_vs_golden, details dict)."""
     a_cpu = a.detach().to("cpu", torch.float32)
@@ -97,6 +116,21 @@ def test_getval_setval_auto_mutex():
     assert abs(d["got_t11"] - d["exp_a63"]) < 3e-3, \
         f"stale read: t[1,1]={d['got_t11']} expect exp(a63)={d['exp_a63']}"
     assert max_diff < 3e-3, f"max|diff|={max_diff} too large"
+
+
+@pytest.mark.soc("950")
+def test_getval_while_condition_auto_mutex():
+    device = ST_DEVICE
+    _require_a5(device)
+    torch.manual_seed(0)
+    a = torch.zeros(64, 128, device=device, dtype=torch.float16)
+    a[0, :3] = 1.0
+    out = torch.zeros(1, device=device, dtype=torch.int64)
+
+    getval_while_condition_am_kernel(a, out)
+    torch.npu.synchronize()
+
+    assert out.item() == 3
 
 
 if __name__ == "__main__":

@@ -266,7 +266,7 @@ def apply_diag_mask(
     pl.system.bar_v()
     pl.expands(neg_inf_vec, NEG_INF)
     pl.system.bar_v()
-    pl.select(out=qk_vec, mask=mask_vec_dn, lhs=neg_inf_vec, rhs=qk_vec, tmp=tmp_vec)
+    pl.select(qk_vec, mask_vec_dn, neg_inf_vec, qk_vec, tmp_vec)
     pl.system.bar_v()
 
 
@@ -411,7 +411,7 @@ def fa_causal_bnsd_dn_kernel_v6(
     skv_dim = k.shape[2]
     sq_tiles = (sq_dim + TS - 1) // TS
     skv_tiles = (skv_dim + TKV - 1) // TKV
-    core_id = pl.get_block_idx()
+    core_id = pl.get_block_idx() // pl.get_subblock_num()
     n_dim = q.shape[1]
 
     qk_vec = pl.make_tile(

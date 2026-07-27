@@ -1114,6 +1114,15 @@ def get_block_num() -> int:
 
 
 @_api_decl
+def get_subblock_num() -> int:
+    """Get the sub-block count per AI Core (task ration).
+
+    Returns 1 on AIC binaries, get_subblockdim() on AIV binaries.
+    Matches AscendC GetTaskRation().
+    """
+
+
+@_api_decl
 def get_spr() -> int:
     """Read a special purpose register value (get_ar instruction).
 

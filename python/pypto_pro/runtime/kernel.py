@@ -87,8 +87,7 @@ class KernelDef:
     """Lazy kernel definition — captures source/AST/closure at decoration time,
     defers AST parsing to compile time.
 
-    Call :meth:`parse` to trigger parsing and obtain an ``ir.Program``.
-    The JIT codegen path calls this automatically.
+    The JIT codegen path parses the kernel once for each required target.
 
     Args:
         func: Original Python function.
@@ -138,7 +137,6 @@ class KernelDef:
         self._strict_ssa = strict_ssa
         self._auto_mutex = auto_mutex
         self._pipeline = pipeline
-        self._pipeline_generated_source = None
         self._meta_data = meta_data
         self._tilingkey_consts = tilingkey_consts
         self._datatype_consts = datatype_consts
@@ -155,38 +153,22 @@ class KernelDef:
     def func_name(self) -> str:
         return self._func.__name__
 
-    def parse(self, bound_signature=None) -> ir.Program:
-        """Parse the kernel AST and return an ``ir.Program``.
-
-        Returns:
-            ir.Program containing the parsed kernel function.
-        """
+    def parse_target_program(
+        self,
+        target: ir.SectionKind,
+        bound_signature=None,
+    ) -> tuple[ir.Program, bool]:
+        """Parse a fresh target Program and report whether its target section was matched."""
         program_name = self._name if self._name is not None else self._func.__name__
 
         try:
-            # Pipeline transform: serial AST -> preload pipeline AST (before parsing)
-            func_def = self._func_def
-            self._pipeline_generated_source = None
-            if self._pipeline is not None:
-                from pypto_pro.runtime.pipeline import transform_pipeline
-                from pypto_pro.runtime.pipeline._dump import build_generated_file_source
-
-                func_def = transform_pipeline(func_def, self._closure_vars, self._pipeline)
-                self._pipeline_generated_source = build_generated_file_source(
-                    func_def,
-                    self._source_file,
-                    self._line_offset,
-                    self._col_offset,
-                    self._source_lines_raw,
-                    self._closure_vars,
-                )
-
             # The Program owns one IRDebugInfo; create it here and share it with the parser
-            # (and its sub-parsers) so field names land in the table the Program carries.
+            # so field names land in the table the Program carries.
             debug_info = ir.IRDebugInfo()
             parser = ASTParser(
                 self._source_file,
                 self._source_lines,
+                target,
                 self._line_offset,
                 self._col_offset,
                 strict_ssa=self._strict_ssa,
@@ -203,7 +185,7 @@ class KernelDef:
             )
 
             try:
-                ir_func = parser.parse_function(func_def, func_type=self._func_type)
+                ir_func = parser.parse_function(self._func_def, func_type=self._func_type)
             except ParserError:
                 raise
             except Exception as e:
@@ -228,12 +210,10 @@ class KernelDef:
             external_funcs = list(parser.external_funcs.values())
             starting_line = self._line_offset + 1
             program_span = ir.Span(self._source_file, starting_line, self._col_offset)
-            return ir.Program(
-                external_funcs + [ir_func],
-                program_name,
-                program_span,
-                parser.debug_info,
+            program = ir.Program(
+                external_funcs + [ir_func], program_name, program_span, parser.debug_info
             )
+            return program, parser.matched_target
 
         except ParserError as e:
             _attach_source_lines_to_error(e, self._source_file, self._source_lines_raw)

@@ -37,6 +37,7 @@ namespace {
 
 class TestableCCECodegen : public codegen::CCECodegen {
 public:
+    using codegen::CCECodegen::CCECodegen;
     std::string GetEmittedCode() { return emitter_.GetCode(); }
     void SetCurrentTargetVar(const std::string& var) { current_target_var_ = var; }
 };
@@ -109,7 +110,7 @@ ir::ProgramPtr MakeProgram(const ir::StmtPtr& body, const std::vector<ir::VarPtr
 
 std::string RunCodegen(const std::string& op_name, const ir::CallPtr& call)
 {
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     auto* info = BackendCCE::Instance().GetOpInfo(op_name);
     EXPECT_NE(info, nullptr);
     if (info != nullptr) {
@@ -524,7 +525,7 @@ TEST(BackendCCEBlockOutOps, SetStride)
 
 TEST(BackendCCEBlockOutOps, Load)
 {
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     auto tensor_type = MakeTensorType();
     auto tile_type = MakeTileType();
     auto tensor_var = MakeVar("tensor", tensor_type);
@@ -542,7 +543,7 @@ TEST(BackendCCEBlockOutOps, Load)
 
 TEST(BackendCCEBlockOutOps, Store)
 {
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     auto tensor_type = MakeTensorType();
     auto tile_type = MakeTileType();
     auto tensor_var = MakeVar("tensor", tensor_type);
@@ -575,7 +576,7 @@ TEST(BackendCCEBlockOutOps, GeneratesLoadAndStoreThroughFullCodegen)
                                  std::make_shared<const ir::EvalStmt>(store, ir::Span::Unknown())},
         ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {tensor}), "a5");
 
     EXPECT_CONTAINS(generated, "TASSIGN(tensor_0, tensor_0_ptr + ");
@@ -585,7 +586,7 @@ TEST(BackendCCEBlockOutOps, GeneratesLoadAndStoreThroughFullCodegen)
 
 TEST(BackendCCEBlockOutOps, StoreWithPhase)
 {
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     auto tensor_type = MakeTensorType();
     auto tile_type = MakeTileType();
     codegen.RegisterPointer("tensor", "raw_ptr");
@@ -601,7 +602,7 @@ TEST(BackendCCEBlockOutOps, StoreWithPhase)
 
 TEST(BackendCCEBlockOutOps, StoreWithPreQuant)
 {
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     auto tensor_type = MakeTensorType({32, 32}, ir::DataType::FP16);
     auto tile_type = MakeTileType();
     codegen.RegisterPointer("tensor", "raw_ptr");
@@ -617,7 +618,7 @@ TEST(BackendCCEBlockOutOps, StoreWithPreQuant)
 
 TEST(BackendCCEBlockOutOps, StoreWithPreQuantInt8)
 {
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     auto tensor_type = MakeTensorType({32, 32}, ir::DataType::INT8);
     auto tile_type = MakeTileType();
     codegen.RegisterPointer("tensor", "raw_ptr");
@@ -633,7 +634,7 @@ TEST(BackendCCEBlockOutOps, StoreWithPreQuantInt8)
 
 TEST(BackendCCEBlockOutOps, StoreWithReluPreMode)
 {
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     auto tensor_type = MakeTensorType();
     auto tile_type = MakeTileType();
     codegen.RegisterPointer("tensor", "raw_ptr");
@@ -652,7 +653,7 @@ TEST(BackendCCEBlockOutOps, StoreWithAtomic)
 {
     for (auto dtype : {ir::DataType::FP32, ir::DataType::FP16, ir::DataType::BF16, ir::DataType::INT32,
                        ir::DataType::INT16, ir::DataType::INT8}) {
-        TestableCCECodegen codegen;
+        TestableCCECodegen codegen(ir::SectionKind::Vector);
         auto tensor_type = MakeTensorType({32, 32}, dtype);
         auto tile_type = MakeTileType({16, 16}, dtype);
         codegen.RegisterPointer("tensor", "raw_ptr");
@@ -670,7 +671,7 @@ TEST(BackendCCEBlockOutOps, StoreWithAtomic)
 
 TEST(BackendCCEBlockOutOps, StoreFp)
 {
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     auto acc_memref = MakeMemRef(ir::MemorySpace::Acc);
     auto scaling_memref = MakeMemRef(ir::MemorySpace::Scaling);
     auto tensor_type = MakeTensorType();
@@ -689,7 +690,7 @@ TEST(BackendCCEBlockOutOps, StoreFp)
 
 TEST(BackendCCEBlockOutOps, StoreFpWrongSpace)
 {
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     auto vec_memref = MakeMemRef(ir::MemorySpace::Vec);
     auto scaling_memref = MakeMemRef(ir::MemorySpace::Scaling);
     auto tensor_type = MakeTensorType();
@@ -1081,7 +1082,7 @@ TEST(BackendCCEBlockOutOps, Dequant)
 
 TEST(BackendCCEBlockOutOps, StructCreate)
 {
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     codegen.SetCurrentTargetVar("result");
     auto tile = MakeTileType();
     auto call = MakeCallWithKwargs(
@@ -1112,7 +1113,7 @@ TEST(BackendCCEBlockOutOps, GeneratesStructCreateThroughAssignStmt)
                                                    tuple_type, ir::Span::Unknown());
     auto body = std::make_shared<const ir::AssignStmt>(result, create, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
 
     EXPECT_CONTAINS(generated, "class MyStruct");

@@ -185,6 +185,7 @@ __all__ = [
     "get_block_idx",
     "get_subblock_idx",
     "get_block_num",
+    "get_subblock_num",
     "make_tile_group",
     # Frontend (runtime) aliases
     "kernel",
@@ -297,6 +298,7 @@ from ._api import (
     get_block_idx,
     get_block_num,
     get_subblock_idx,
+    get_subblock_num,
     getval,
     gt,
     histogram,

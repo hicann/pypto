@@ -72,6 +72,15 @@ TEST_F(BlockOpsMemoryTest, GetSubblockIdx_NoArgs_ReturnsIndexScalar)
     EXPECT_EQ(rt->dtype_, DataType::INDEX);
 }
 
+TEST_F(BlockOpsMemoryTest, GetSubblockNum_NoArgs_ReturnsIndexScalar)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto call = reg.Create("get_subblock_num", {}, Sp());
+    auto rt = As<ScalarType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+}
+
 TEST_F(BlockOpsMemoryTest, GetBlockIdx_WithArgs_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
@@ -82,6 +91,13 @@ TEST_F(BlockOpsMemoryTest, GetBlockNum_WithArgs_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
     EXPECT_THROW((void)reg.Create("get_block_num", {MakeScalarVar("x", DataType::INT32)}, Sp()), npu::tile_fwk::Error);
+}
+
+TEST_F(BlockOpsMemoryTest, GetSubblockNum_WithArgs_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    EXPECT_THROW((void)reg.Create("get_subblock_num", {MakeScalarVar("x", DataType::INT32)}, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 // ============================================================================
@@ -251,7 +267,7 @@ TEST_F(BlockOpsMemoryTest, Subview_TilePreservesPhysicalTypeAndMemRef)
 
     auto result_type = As<TileType>(call->GetType());
     ASSERT_NE(result_type, nullptr);
-    EXPECT_NE(result_type.get(), source_type.get());
+    EXPECT_EQ(result_type.get(), source_type.get());
     EXPECT_EQ(result_type->dtype_, source_type->dtype_);
     EXPECT_EQ(result_type->shape_, source_type->shape_);
     EXPECT_EQ(result_type->memref_, source_type->memref_);

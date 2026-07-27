@@ -1026,12 +1026,16 @@ static std::string MakeBlockOutSsbufStoreCodegenCCE(const ir::CallPtr& op, codeg
     std::string struct_name = codegen.GetExprAsCode(op->args_[0]);
     std::string offset = codegen.GetExprAsCode(op->args_[1]);
     CHECK(!struct_name.empty()) << "block.ssbuf_store: empty struct name";
-    codegen.Emit("auto* __ssbuf_store_dst = reinterpret_cast<__ssbuf__ uint32_t*>((uint64_t)(" + offset + "));");
-    codegen.Emit("const auto* __ssbuf_store_src = reinterpret_cast<const uint32_t*>(&" + struct_name + ");");
+    static size_t ssbuf_store_counter = 0;
+    std::string suffix = "_" + std::to_string(ssbuf_store_counter++);
+    std::string dst_name = "__ssbuf_store_dst" + suffix;
+    std::string src_name = "__ssbuf_store_src" + suffix;
+    codegen.Emit("auto* " + dst_name + " = reinterpret_cast<__ssbuf__ uint32_t*>((uint64_t)(" + offset + "));");
+    codegen.Emit("const auto* " + src_name + " = reinterpret_cast<const uint32_t*>(&" + struct_name + ");");
     codegen.Emit("#pragma unroll");
     codegen.Emit("for (uint32_t __ssbuf_i = 0; __ssbuf_i < sizeof(" + struct_name +
                  ") / sizeof(uint32_t); ++__ssbuf_i) {");
-    codegen.Emit("    __ssbuf_store_dst[__ssbuf_i] = __ssbuf_store_src[__ssbuf_i];");
+    codegen.Emit("    " + dst_name + "[__ssbuf_i] = " + src_name + "[__ssbuf_i];");
     codegen.Emit("}");
     return "";
 }
@@ -1043,12 +1047,16 @@ static std::string MakeBlockOutSsbufLoadCodegenCCE(const ir::CallPtr& op, codege
     std::string struct_name = codegen.GetExprAsCode(op->args_[0]);
     std::string offset = codegen.GetExprAsCode(op->args_[1]);
     CHECK(!struct_name.empty()) << "block.ssbuf_load: empty struct name";
-    codegen.Emit("const auto* __ssbuf_load_src = reinterpret_cast<__ssbuf__ uint32_t*>((uint64_t)(" + offset + "));");
-    codegen.Emit("auto* __ssbuf_load_dst = reinterpret_cast<uint32_t*>(&" + struct_name + ");");
+    static size_t ssbuf_load_counter = 0;
+    std::string suffix = "_" + std::to_string(ssbuf_load_counter++);
+    std::string src_name = "__ssbuf_load_src" + suffix;
+    std::string dst_name = "__ssbuf_load_dst" + suffix;
+    codegen.Emit("const auto* " + src_name + " = reinterpret_cast<__ssbuf__ uint32_t*>((uint64_t)(" + offset + "));");
+    codegen.Emit("auto* " + dst_name + " = reinterpret_cast<uint32_t*>(&" + struct_name + ");");
     codegen.Emit("#pragma unroll");
     codegen.Emit("for (uint32_t __ssbuf_i = 0; __ssbuf_i < sizeof(" + struct_name +
                  ") / sizeof(uint32_t); ++__ssbuf_i) {");
-    codegen.Emit("    __ssbuf_load_dst[__ssbuf_i] = __ssbuf_load_src[__ssbuf_i];");
+    codegen.Emit("    " + dst_name + "[__ssbuf_i] = " + src_name + "[__ssbuf_i];");
     codegen.Emit("}");
     return "";
 }

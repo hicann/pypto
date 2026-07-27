@@ -140,7 +140,7 @@ def bar_v_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.gt(mask_vec, mask_fp16, 0.0)
         pl.system.bar_v()
-        pl.select(out=tile_out, mask=mask_vec, lhs=tile_a, rhs=tile_b, tmp=tmp_vec)
+        pl.select(tile_out, mask_vec, tile_a, tile_b, tmp_vec)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, tile_out, [0, 0])

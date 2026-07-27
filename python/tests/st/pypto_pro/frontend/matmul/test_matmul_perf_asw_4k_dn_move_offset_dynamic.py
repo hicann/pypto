@@ -80,7 +80,7 @@ def matmul_perf_asw_4k_dn_move_offset_dynamic_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
 ):
     num_cores = pl.get_block_num()
-    core_id = pl.get_block_idx()
+    core_id = pl.get_block_idx() // pl.get_subblock_num()
 
     m = a.shape[0]
     k = a.shape[1]

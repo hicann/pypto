@@ -600,9 +600,8 @@ class ExpressionParserMixin:
     def named_fields(self, expr) -> list[str]:
         """Field names of a named tuple / struct expr, from the IRDebugInfo side table.
 
-        Single source of truth: the TupleType no longer carries field names. All parsers
-        building one Program share one IRDebugInfo (sub-parsers adopt the parent's), so
-        cross-function field access resolves names registered at the construction site.
+        Single source of truth: the TupleType no longer carries field names. One parser
+        builds each Program and registers field names at the construction site.
         Returns [] for non-tuples or unregistered/positional tuples.
         """
         if self.debug_info is None:
@@ -1098,6 +1097,31 @@ class ExpressionParserMixin:
                 hint="Use pl.load/pl.store with offset lists for tensor access",
             )
 
+        if isinstance(container_type, ir.TileType):
+            memref = getattr(container_type, 'memref', None)
+            mem_space = getattr(memref, 'memory_space', None) if memref is not None else None
+            hw_info = getattr(container_type, 'hardware_info', None)
+            blayout = getattr(hw_info, 'blayout', None) if hw_info is not None else None
+            slayout = getattr(hw_info, 'slayout', None) if hw_info is not None else None
+            is_nd = (
+                blayout is not None
+                and blayout.name == 'row_major'
+                and slayout is not None
+                and slayout.name == 'none_box'
+            )
+            is_dn = (
+                blayout is not None
+                and blayout.name == 'col_major'
+                and slayout is not None
+                and slayout.name == 'none_box'
+            )
+            if mem_space is None or mem_space.name != 'Vec' or not (is_nd or is_dn):
+                raise ParserSyntaxError(
+                    "Tile slice is only supported on UB (Vec) tiles with ND/DN layout",
+                    span=span,
+                    hint="Use pl.load with offset or pl.move with offset for unsupported tiles",
+                )
+
         if self.inline_vf_depth > 0:
             logging.warning(
                 "Tile slice in VF section is lowered to pointer offset only; "
@@ -1121,7 +1145,6 @@ class ExpressionParserMixin:
 
         from pypto_pro.language.parser._utils import _const_int_value
 
-        cols = shape[1]
         # valid_shape for clamping: compile-time (TileType.tile_view) or runtime
         # (set_validshape, tracked by tile var name).
         ct_valid = None
@@ -1194,14 +1217,14 @@ class ExpressionParserMixin:
 
             new_shape_exprs.append(size)
 
-        # Linear offset: row_start * cols + col_start
-        offset = dim_starts[0] * cols + dim_starts[1]
-
+        # Pass [row_start, col_start] as a tuple; codegen computes the byte offset
+        # according to the tile's layout (ND row-major, DN col-major, NZ fractal).
         from pypto_pro.ir.op.block_ops import block_ir_op
         shape_tuple = ir.MakeTuple(new_shape_exprs, span)
+        offset_tuple = ir.MakeTuple([dim_starts[0], dim_starts[1]], span)
         view_expr = ir.create_op_call(
             block_ir_op("subview"),
-            [container_expr, offset, shape_tuple],
+            [container_expr, offset_tuple, shape_tuple],
             {},
             span,
         )
@@ -1218,14 +1241,16 @@ class ExpressionParserMixin:
 
 
     def _materialize_nested_expr(self, result, span: ir.Span):
-        """Materialize nested Calls and anchor nested MakeTuples.
+        """Materialize nested expressions and anchor nested MakeTuples.
 
-        Calls return their temporary Var as before. A MakeTuple instead keeps its
-        expression result: the temporary let is only a CCE backing-array anchor,
-        so callers can continue folding the enclosing expression.
+        Non-trivial expressions return a temporary Var so an enclosing expression
+        does not duplicate their computation. Vars and constants are already
+        atomic and remain inline. A MakeTuple instead keeps its expression result:
+        the temporary let is only a CCE backing-array anchor, so callers can
+        continue folding the enclosing expression.
 
-        Skips Calls with UnknownType to avoid materializing void/sentinel
-        results (e.g. nbuf.advance() void calls).
+        Expressions with UnknownType are skipped to avoid materializing
+        void/sentinel results (e.g. nbuf.advance() void calls).
         """
         if isinstance(result, ir.MakeTuple):
             if result not in self._anchored_make_tuples:
@@ -1234,7 +1259,9 @@ class ExpressionParserMixin:
                 self.builder.let(name, result, span=span)
                 self._mark_make_tuple_anchor(result)
             return result
-        if not isinstance(result, ir.Call):
+        if isinstance(result, (ir.Var, ir.ConstInt, ir.ConstFloat, ir.ConstBool)):
+            return result
+        if not isinstance(result, ir.Expr):
             return result
         if isinstance(result.type, ir.UnknownType):
             return result

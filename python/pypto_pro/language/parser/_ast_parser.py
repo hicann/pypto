@@ -64,6 +64,7 @@ class ASTParser(
         self,
         source_file: str,
         source_lines: list[str],
+        target: ir.SectionKind,
         line_offset: int = 0,
         col_offset: int = 0,
         global_vars: set[str] | None = None,
@@ -98,7 +99,12 @@ class ASTParser(
                 This is intentionally separate from void_return_only: @pl.jit/@pl.kernel
                 are void-only but allow early/multiple returns, while @pl.vector_function
                 and @pl.pipeline.stage are void-only and still require a single tail return.
+            target: Required Cube/Vector target for target-specific parsing.
         """
+        if target not in (ir.SectionKind.Cube, ir.SectionKind.Vector):
+            raise ValueError(f"Unsupported parser target: {target}")
+        self._target = target
+        self.matched_target = False
         self.span_tracker = SpanTracker(source_file, source_lines, line_offset, col_offset)
         self.scope_manager = ScopeManager(strict_ssa=strict_ssa)
         # Concrete tilingkey field values (per launch key) are injected as closure constants
@@ -122,7 +128,7 @@ class ASTParser(
         self.builder = IRBuilder()
         # Tuple/struct field-name side table; owned by the Program being built and passed in
         # by the caller (kernel / decorator). Not created here; may be None for parses that
-        # do not feed a Program. Sub-parsers adopt the parent's (see call_parser).
+        # do not feed a Program.
         self.debug_info = debug_info
         self.global_vars = global_vars or set()  # Track function names for cross-function calls
         self.gvar_to_func = gvar_to_func or {}  # Track parsed functions for type inference
@@ -187,11 +193,6 @@ class ASTParser(
         self._void_return_only = void_return_only
         self._void_return_context = void_return_context
         self._allow_early_return = allow_early_return
-        # Per-section-kind saved variables: allows same-kind sections to share
-        # variables across multiple section blocks (interleaved cube/vector pattern).
-        self._section_saved_vars: dict[str, dict] = {"cube": {}, "vec": {}}
-        self._section_saved_const_env: dict[str, dict[str, ir.Expr]] = {"cube": {}, "vec": {}}
-
         # Current assignment LHS name; set before parse_expression so helpers
         # (_build_tile_group_ir, _parse_struct_array_expr) can name intermediate vars.
         self.current_target_name: str = ""
@@ -202,6 +203,11 @@ class ASTParser(
     def auto_mutex_enabled(self) -> bool:
         """Return whether automatic mutex emission is enabled."""
         return self._auto_mutex
+
+    @property
+    def target(self) -> ir.SectionKind:
+        """Return the immutable Cube/Vector parse target."""
+        return self._target
 
     @staticmethod
     def _attach_ptr_to_tensor_type(name: str, param_type: ir.Type, span: ir.Span) -> ir.Type:
@@ -238,14 +244,6 @@ class ASTParser(
     def set_auto_mutex_enabled(self, enabled: bool) -> None:
         """Set automatic mutex emission for helper parsing."""
         self._auto_mutex = enabled
-
-    def set_inferred_tile_group_meta(self, param_name: str, meta: tuple) -> None:
-        """Attach inferred tile-group metadata to a helper parameter."""
-        self._inferred_tile_group_meta[param_name] = meta
-
-    def set_inferred_tile_mutex_meta(self, param_name: str, meta: tuple) -> None:
-        """Attach inferred tile-mutex metadata to a helper parameter."""
-        self._inferred_tile_mutex_meta[param_name] = meta
 
     def resolve_tiling_class(self, annotation: ast.expr) -> type | None:
         """Return the tiling class if annotation refers to one in closure_vars, else None.

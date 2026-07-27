@@ -441,7 +441,7 @@ def fa_perf_tkv_preload_dn_bsnd_kernel(
     skv_dim = k.shape[1]
     sq_tiles = (sq_dim + (TS - 1)) // TS
     skv_tiles = (skv_dim + (TKV - 1)) // TKV  # noqa: F841
-    core_id = pl.get_block_idx()
+    core_id = pl.get_block_idx() // pl.get_subblock_num()
 
     # ===== Cross-core shared buffers =====
     qk_vec_db = pl.make_tile_group(

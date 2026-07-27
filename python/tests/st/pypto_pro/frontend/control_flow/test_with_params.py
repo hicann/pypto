@@ -134,14 +134,13 @@ def make_for_scalar_step_kernel(dtype, name_suffix=""):
         stop_val: pl.DT_INT32,
         step_val: pl.DT_INT32,
     ):
-        m = x.shape[0]
         n = x.shape[1]
         tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=dtype, target_memory=pl.MemorySpace.Vec)
         a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
         b_db = pl.make_tile_group(type=tile_type, addrs=_addr_b(dtype), mutex_ids=[2, 3])
         c_db = pl.make_tile_group(type=tile_type, addrs=_addr_c(dtype), mutex_ids=[30, 31])
         with pl.section_vector():
-            for i in pl.range(0, m // TILE_M, 1):
+            for i in pl.range(0, stop_val, step_val):
                 for j in pl.range(0, n // TILE_N, 1):
                     tile_a = a_db.next()
                     tile_b = b_db.next()
@@ -252,6 +251,8 @@ def make_for_if_break_scalar_kernel(dtype, name_suffix=""):
         with pl.section_vector():
             for i in pl.range(0, m // TILE_M, 1):
                 for j in pl.range(0, n // TILE_N, 1):
+                    if j >= break_col:
+                        break
                     tile_a = a_db.next()
                     tile_b = b_db.next()
                     tile_c = c_db.next()
@@ -259,7 +260,6 @@ def make_for_if_break_scalar_kernel(dtype, name_suffix=""):
                     pl.load_tile(tile_b, y, [i, j])
                     pl.add(tile_c, tile_a, tile_b)
                     pl.store_tile(z, tile_c, [i, j])
-                    break
     return kernel
 
 
@@ -416,7 +416,7 @@ def test_for_scalar_step():
     for pl_dt, tdt, label, atol, rtol in DTYPES_FP16:
         kernel = make_for_scalar_step_kernel(pl_dt, f"for_scalar_step_{label}")
         x, y, z = _gen(shape, tdt, device)
-        kernel(x, y, z, 128, 64)
+        kernel(x, y, z, shape[0] // TILE_M, 1)
         torch.npu.synchronize()
         z_ref = _ref(tdt, lambda a, b: a + b, x, y)
         torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)

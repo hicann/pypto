@@ -942,11 +942,16 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
     return "";
 }
 
-// Helper function for get_block_idx (returns value expression)
+// Helper function for get_block_idx (returns value expression).
+// Matches AscendC GetBlockIdx(): AIV returns global AIV index, AIC returns AIC index.
 static std::string MakeBlockGetBlockIdxCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
-    (void)codegen_base;
     CHECK(op->args_.size() == 0) << "get_block_idx requires no arguments";
+    auto& cg = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    const auto target = cg.GetTarget();
+    if (target == ir::SectionKind::Vector) {
+        return "(int32_t)(get_block_idx() * get_subblockdim() + get_subblockid())";
+    }
     return "(int32_t)(get_block_idx())";
 }
 
@@ -1015,14 +1020,24 @@ static std::string MakePtrAddPtrCodegenCCE(const ir::CallPtr& op, codegen::Codeg
     return "(" + ptr + " + " + offset + ")";
 }
 
-// Helper for ptr.make_ptr / reinterpreting a raw pointer as a different element type. Emits no
-// statement; returns the reinterpret-cast expression so the result var maps to it (used as a base
-// address by a subsequent ptr.addptr / ptr.make_tensor).
+// Helper for ptr.make_ptr / reinterpreting a raw pointer (or extracting a pointer from a
+// tensor) as a different element type. Emits no statement; returns the expression so the
+// result var maps to it (used as a base address by a subsequent ptr.addptr / ptr.make_tensor).
 static std::string MakePtrMakePtrCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 1) << "ptr.make_ptr requires 1 argument: ptr";
-    std::string ptr = codegen.GetExprAsCode(op->args_[0]);
+    std::string ptr;
+    if (auto ptr_type = ir::As<ir::PtrType>(op->args_[0]->GetType())) {
+        ptr = codegen.GetExprAsCode(op->args_[0]);
+    } else if (ir::As<ir::TensorType>(op->args_[0]->GetType())) {
+        auto src_var = std::dynamic_pointer_cast<const ir::Var>(op->args_[0]);
+        CHECK(src_var != nullptr) << "ptr.make_ptr from a tensor requires the source to be a tensor variable";
+        const std::string src_name = codegen.GetVarName(src_var);
+        ptr = codegen.HasPointer(src_name) ? codegen.GetPointer(src_name) : (src_name + ".data()");
+    } else {
+        CHECK(false) << "ptr.make_ptr source must be a PtrType or TensorType";
+    }
     auto result_ptr_type = ir::As<ir::PtrType>(op->GetType());
     CHECK(result_ptr_type != nullptr) << "ptr.make_ptr result must be a PtrType";
     return "((__gm__ " + result_ptr_type->dtype_.ToCTypeString() + "*)(" + ptr + "))";
@@ -1268,6 +1283,38 @@ REGISTER_BACKEND_OP(BackendCCE, "system.bar_m")
         return "";
     });
 
+REGISTER_BACKEND_OP(BackendCCE, "system.bar_mte1")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
+        (void)op;
+        dynamic_cast<codegen::CCECodegen&>(codegen_base).Emit("pipe_barrier(PIPE_MTE1);");
+        return "";
+    });
+
+REGISTER_BACKEND_OP(BackendCCE, "system.bar_mte2")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
+        (void)op;
+        dynamic_cast<codegen::CCECodegen&>(codegen_base).Emit("pipe_barrier(PIPE_MTE2);");
+        return "";
+    });
+
+REGISTER_BACKEND_OP(BackendCCE, "system.bar_mte3")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
+        (void)op;
+        dynamic_cast<codegen::CCECodegen&>(codegen_base).Emit("pipe_barrier(PIPE_MTE3);");
+        return "";
+    });
+
+REGISTER_BACKEND_OP(BackendCCE, "system.bar_fix")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
+        (void)op;
+        dynamic_cast<codegen::CCECodegen&>(codegen_base).Emit("pipe_barrier(PIPE_FIX);");
+        return "";
+    });
+
 REGISTER_BACKEND_OP(BackendCCE, "system.bar_all")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
@@ -1344,7 +1391,7 @@ static std::string MakeCrossCoreSetCodegenCCE(const ir::CallPtr& op, codegen::Co
         // A5 + INTRA_BLOCK or UNICAST_BLOCK: set_intra_block
         //     CUBE→VEC: INTRA_BLOCK expands to two calls (v0: id, v1: id+16); UNICAST_BLOCK single call
         //     VEC→CUBE: single set
-        if (codegen.IsInCubeSection() && sync_mode == ir::CrossCoreSyncMode::INTRA_BLOCK) {
+        if (codegen.GetTarget() == ir::SectionKind::Cube && sync_mode == ir::CrossCoreSyncMode::INTRA_BLOCK) {
             if (is_dynamic) {
                 std::string event_id = codegen.GetExprAsCode(op->args_[0]);
                 codegen.Emit("set_intra_block(" + pipe_str + ", " + event_id + ");");
@@ -1409,7 +1456,7 @@ static std::string MakeCrossCoreWaitCodegenCCE(const ir::CallPtr& op, codegen::C
         // A5 + INTRA_BLOCK(2) or UNICAST_BLOCK(3): wait_intra_block
         //     CUBE waiting for VEC: INTRA_BLOCK expands to two calls (v0: id, v1: id+16); UNICAST_BLOCK single call
         //     VEC waiting for CUBE: single wait
-        if (codegen.IsInCubeSection() && wait_two_vec_subcores) {
+        if (codegen.GetTarget() == ir::SectionKind::Cube && wait_two_vec_subcores) {
             EmitWaitIntraBlockCCE(codegen, op, pipe_str, is_dynamic);
             EmitWaitIntraBlockCCE(codegen, op, pipe_str, is_dynamic, 16);
         } else {
@@ -1604,6 +1651,19 @@ REGISTER_BACKEND_OP(BackendCCE, "get_subblock_idx")
         return std::string("(int32_t)(get_subblockid())");
     });
 
+REGISTER_BACKEND_OP(BackendCCE, "get_subblock_num")
+    .set_pipe(ir::PipeType::V)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
+        CHECK(op->args_.size() == 0) << "get_subblock_num requires no arguments";
+        // Matches AscendC GetTaskRation(): AIC returns 1, AIV returns get_subblockdim().
+        auto& cg = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+        const auto target = cg.GetTarget();
+        if (target == ir::SectionKind::Vector) {
+            return std::string("(int32_t)(get_subblockdim())");
+        }
+        return std::string("(int32_t)(1)");
+    });
+
 // ============================================================================
 // GetVal/SetVal Operations (unified: tile and tensor)
 // ============================================================================
@@ -1685,17 +1745,38 @@ static std::string MakeBlockSubviewCodegenCCE(const ir::CallPtr& op, codegen::Co
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
 
-    std::string offset = codegen.GetExprAsCode(op->args_[1]);
+    auto tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
+    auto offset_tuple = ir::As<ir::MakeTuple>(op->args_[1]);
+    bool is_tuple = (offset_tuple != nullptr);
 
-    // VF section: pointer arithmetic, no tile descriptor needed.
+    int64_t rows = tile_type->shape_.size() >= 1 ? codegen.GetConstIntValue(tile_type->shape_[0]) : 1;
+    int64_t cols = tile_type->shape_.size() >= 2 ? codegen.GetConstIntValue(tile_type->shape_[1]) : 1;
+    const auto& hw = tile_type->hardwareInfo_.value();
+
+    // Element offset: DN (col-major) col*rows+row; ND (row-major) row*cols+col.
+    std::string elem_off;
+    if (is_tuple) {
+        auto row_expr = codegen.GetExprAsCode(offset_tuple->elements_[0]);
+        auto col_expr = codegen.GetExprAsCode(offset_tuple->elements_[1]);
+        if (hw.blayout == ir::TileLayout::col_major) { // DN
+            elem_off = "(" + col_expr + ")*" + std::to_string(rows) + "+(" + row_expr + ")";
+        } else { // ND
+            elem_off = "(" + row_expr + ")*" + std::to_string(cols) + "+(" + col_expr + ")";
+        }
+    }
+
+    // VF section: pointer arithmetic (element offset), no tile descriptor.
     if (codegen.IsInVFSection()) {
         std::string base_ptr = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/false);
-        return "(" + base_ptr + " + (" + offset + "))";
+        if (!is_tuple) {
+            return "(" + base_ptr + " + (" + codegen.GetExprAsCode(op->args_[1]) + "))";
+        }
+        return "(" + base_ptr + " + " + elem_off + ")";
     }
 
     std::string base_tile = codegen.GetExprAsCode(op->args_[0]);
-    auto tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
     int elem_bytes = std::max(1, static_cast<int>(tile_type->dtype_.GetBit() / 8));
+    std::string byte_offset_expr = "(" + elem_off + ")*" + std::to_string(elem_bytes);
 
     // Resolve base address: tile_addresses_ → .data() → memref addr
     std::string base_addr;
@@ -1726,10 +1807,10 @@ static std::string MakeBlockSubviewCodegenCCE(const ir::CallPtr& op, codegen::Co
     for (const auto& expr : tile_type->shape_) {
         dims.push_back(codegen.GetConstIntValue(expr));
     }
-    int64_t rows = dims.size() >= 1 ? dims[0] : 1;
-    int64_t cols = dims.size() >= 2 ? dims[1] : 1;
-    auto subview_type = std::make_shared<ir::TileType>(tile_type->shape_, tile_type->dtype_, tile_type->memref_);
-    std::string type_str = codegen.GetTypeConverter().ConvertTileType(subview_type, rows, cols);
+    int64_t tile_rows = dims.size() >= 1 ? dims[0] : 1;
+    int64_t tile_cols = dims.size() >= 2 ? dims[1] : 1;
+    auto subview_type = tile_type;
+    std::string type_str = codegen.GetTypeConverter().ConvertTileType(subview_type, tile_rows, tile_cols);
 
     // Sanitize base_tile into a valid C++ identifier prefix
     std::string base_tile_id = base_tile;
@@ -1742,9 +1823,12 @@ static std::string MakeBlockSubviewCodegenCCE(const ir::CallPtr& op, codegen::Co
 
     // Emit: declare tile, TASSIGN offset address, then SetValidShape (must be
     // after TASSIGN — TASSIGN overwrites the constructor's valid_shape).
-    std::string temp_addr = base_addr + " + (" + offset + ") * " + std::to_string(elem_bytes);
-    codegen.Emit(type_str + " " + temp_name + "(" + vs_row + ", " + vs_col + "); TASSIGN(" + temp_name + ", " +
-                 temp_addr + "); " + temp_name + ".SetValidShape(" + vs_row + ", " + vs_col + ");");
+    std::string temp_addr = base_addr + " + " + byte_offset_expr;
+    codegen.Emit(type_str + " " + temp_name + "(" + vs_row + ", " + vs_col +
+                 ");\n    "
+                 "TASSIGN(" +
+                 temp_name + ", " + temp_addr + ");\n    " + temp_name + ".SetValidShape(" + vs_row + ", " + vs_col +
+                 ");");
     codegen.SetTileAddress(temp_name, temp_addr);
     codegen.RegisterTileEmitShape(temp_name, vs_row, vs_col);
 

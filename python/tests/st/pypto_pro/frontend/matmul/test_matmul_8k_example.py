@@ -42,7 +42,7 @@ def matmul_example(
     tiling: OpTiling
 ):
     num_cores = pl.get_block_num()
-    core_id = pl.get_block_idx()
+    core_id = pl.get_block_idx() // pl.get_subblock_num()
     valid_n = 128
     with pl.section_cube():
         a_mat_4_buffer = pl.make_tile_group(

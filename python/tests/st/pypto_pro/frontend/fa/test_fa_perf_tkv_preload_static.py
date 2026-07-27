@@ -447,7 +447,7 @@ def fa_perf_tkv_preload_kernel(
     sq_tiles = (sq_dim + (TS - 1)) // TS
     skv_tiles = (skv_dim + (TKV - 1)) // TKV
     num_cores = pl.get_block_num()
-    core_id = pl.get_block_idx()
+    core_id = pl.get_block_idx() // pl.get_subblock_num()
 
     # Shared between cube and vector sections: p_mat double buffers
     p_mat_type = pl.TileType(

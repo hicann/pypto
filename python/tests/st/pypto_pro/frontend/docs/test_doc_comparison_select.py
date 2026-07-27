@@ -72,7 +72,7 @@ def scalar_gt_select_kernel(
         pl.gt(mask_vec, mask_fp16, 0.0)
         pl.system.bar_v()
         # 谓词为真取 lhs(=a)，否则取 rhs(=b)
-        pl.select(out=tile_out, mask=mask_vec, lhs=tile_a, rhs=tile_b, tmp=tmp_vec)
+        pl.select(tile_out, mask_vec, tile_a, tile_b, tmp_vec)
         pl.store(out, tile_out, [0, 0])
 
 

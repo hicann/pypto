@@ -103,7 +103,7 @@ def matmul_perf_asw_4k_dn_move_offset_kernel(
 ):
 
     num_cores = pl.get_block_num()
-    core_id = pl.get_block_idx()
+    core_id = pl.get_block_idx() // pl.get_subblock_num()
 
     with pl.section_cube():
         # --- A_L1: 4-buffer, wide shape=(256, 128) ---

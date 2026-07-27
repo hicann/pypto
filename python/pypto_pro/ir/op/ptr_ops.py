@@ -68,22 +68,27 @@ def make_tensor(
 
 
 def make_ptr(ptr: Expr, dtype: DataType | None = None, span: Span | None = None) -> Call:
-    """Reinterpret a raw pointer as a different element dtype.
+    """Extract a raw pointer from a tensor, or reinterpret an existing pointer's element dtype.
 
-    Emits ``ptr.make_ptr``. The result is a new pointer to the *same* underlying
-    address but with a (usually different) element type, e.g. turning a
-    ``pl.Ptr[pl.DT_UINT8]`` parameter into a ``pl.Ptr[pl.DT_FP16]`` so it can be sliced
-    with element semantics (``pl.addptr``) or wrapped as a typed tensor view
-    (``pl.make_tensor``).
+    Emits ``ptr.make_ptr``. The result is a raw pointer (PtrType) sharing the source's
+    underlying address:
+
+    - When ``ptr`` is a ``pl.Tensor``, its underlying data pointer is extracted (a tensor
+      address-extraction). Pass ``dtype`` to also reinterpret the element type in one step.
+    - When ``ptr`` is a ``pl.Ptr[dtype]``, this is a pointer reinterpret-cast: same address,
+      (usually) different element type, e.g. turning a ``pl.Ptr[pl.DT_UINT8]`` parameter into
+      a ``pl.Ptr[pl.DT_FP16]`` so it can be sliced with element semantics (``pl.addptr``) or
+      wrapped as a typed tensor view (``pl.make_tensor``).
 
     Args:
-        ptr: Raw pointer expression (must have PtrType)
+        ptr: Source expression — a tensor (TensorType) whose data pointer is extracted, or
+            an existing raw pointer (PtrType) to reinterpret.
         dtype: Target element dtype. If omitted, the source dtype is kept
-            (an identity reinterpret).
+            (an identity reinterpret / same-dtype address extraction).
         span: Optional source span for debugging (auto-captured if not provided)
 
     Returns:
-        Call expression for the reinterpreted pointer (PtrType with ``dtype``)
+        Call expression for the resulting pointer (PtrType with ``dtype``)
     """
     actual_span = _get_span_or_capture(span)
     kwargs: dict[str, Any] = {}

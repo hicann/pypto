@@ -34,6 +34,7 @@ using Kwargs = std::vector<std::pair<std::string, std::any>>;
 
 class CapturingCCECodegen final : public codegen::CCECodegen {
 public:
+    using codegen::CCECodegen::CCECodegen;
     void SetTarget(std::string target) { target_ = std::move(target); }
 
     [[nodiscard]] std::string GetCurrentResultTarget() const override { return target_; }
@@ -228,7 +229,7 @@ TEST(BackendCCEVFOpsTest, RegistersExpectedVectorFunctionOperations)
 
 TEST(BackendCCEVFOpsTest, EmitsDeclarationsMasksBroadcastsAndMoves)
 {
-    CapturingCCECodegen codegen;
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto fp = MakeVar("fp");
     auto s4 = MakeVar("s4", ir::DataType::INT4);
     auto u4 = MakeVar("u4", ir::DataType::UINT4);
@@ -269,7 +270,7 @@ TEST(BackendCCEVFOpsTest, EmitsDeclarationsMasksBroadcastsAndMoves)
 
 TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
 {
-    CapturingCCECodegen codegen;
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto dst = MakeVar("dst");
     auto src0 = MakeVar("src0");
     auto src1 = MakeVar("src1");
@@ -327,7 +328,7 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
 
 TEST(BackendCCEVFOpsTest, EmitsReductionAndPermutationIntrinsics)
 {
-    CapturingCCECodegen codegen;
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto dst = MakeVar("dst");
     auto dst2 = MakeVar("dst2");
     auto src0 = MakeVar("src0");
@@ -363,7 +364,7 @@ TEST(BackendCCEVFOpsTest, EmitsReductionAndPermutationIntrinsics)
 
 TEST(BackendCCEVFOpsTest, EmitsPackAndCastIntrinsics)
 {
-    CapturingCCECodegen codegen;
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto fp32 = MakeVar("fp32", ir::DataType::FP32);
     auto fp16 = MakeVar("fp16", ir::DataType::FP16);
     auto i64 = MakeVar("i64", ir::DataType::INT64);
@@ -404,7 +405,7 @@ TEST(BackendCCEVFOpsTest, EmitsPackAndCastIntrinsics)
 
 TEST(BackendCCEVFOpsTest, EmitsCompareHistogramAndMaskConversions)
 {
-    CapturingCCECodegen codegen;
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto fp32 = MakeVar("fp32", ir::DataType::FP32);
     auto fp16 = MakeVar("fp16", ir::DataType::FP16);
     auto i64 = MakeVar("i64", ir::DataType::INT64);
@@ -440,7 +441,7 @@ TEST(BackendCCEVFOpsTest, EmitsCompareHistogramAndMaskConversions)
 
 TEST(BackendCCEVFOpsTest, EmitsAlignedDataMovement)
 {
-    CapturingCCECodegen codegen;
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto tile = MakeTile("tile", ir::DataType::FP16);
     auto tile8 = MakeTile("tile8", ir::DataType::UINT8);
     auto tile64 = MakeTile("tile64", ir::DataType::INT64);
@@ -479,7 +480,7 @@ TEST(BackendCCEVFOpsTest, EmitsAlignedDataMovement)
 
 TEST(BackendCCEVFOpsTest, EmitsGatherAndUnalignedDataMovement)
 {
-    CapturingCCECodegen codegen;
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto tile = MakeTile("tile", ir::DataType::FP16);
     auto tile8 = MakeTile("tile8", ir::DataType::UINT8);
     auto tile64 = MakeTile("tile64", ir::DataType::INT64);
@@ -517,7 +518,7 @@ TEST(BackendCCEVFOpsTest, EmitsGatherAndUnalignedDataMovement)
 
 TEST(BackendCCEVFOpsTest, EmitsMaskLogicOperations)
 {
-    CapturingCCECodegen codegen;
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto mask0 = MakeVar("mask0", ir::DataType::UINT32);
     auto mask1 = MakeVar("mask1", ir::DataType::UINT32);
     auto mask2 = MakeVar("mask2", ir::DataType::UINT32);
@@ -542,7 +543,7 @@ TEST(BackendCCEVFOpsTest, EmitsMaskLogicOperations)
 
 TEST(BackendCCEVFOpsTest, EmitsMaskMemoryAndSpecialRegisterOperations)
 {
-    CapturingCCECodegen codegen;
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto tile = MakeTile("tile", ir::DataType::UINT32);
     auto reg = MakeVar("reg", ir::DataType::UINT16);
     auto mask0 = MakeVar("mask0", ir::DataType::UINT32);

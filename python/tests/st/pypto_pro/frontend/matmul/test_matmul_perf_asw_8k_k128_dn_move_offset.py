@@ -66,7 +66,7 @@ def matmul_perf_asw_8k_k128_dn_move_offset_kernel(
 ):
 
     num_cores = pl.get_block_num()
-    core_id = pl.get_block_idx()
+    core_id = pl.get_block_idx() // pl.get_subblock_num()
 
     with pl.section_cube():
         a_l1_wide = pl.make_tile_group(

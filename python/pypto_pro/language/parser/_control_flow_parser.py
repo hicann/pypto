@@ -154,8 +154,18 @@ class ControlFlowParserMixin:
 
         Natural while syntax: while condition: body
 
-        This creates a WhileStmt without iter_args (non-SSA form).
-        The C++ ConvertToSSA pass will convert it to SSA form if needed.
+        The condition is lowered into the loop body so any statements emitted
+        while evaluating it (for example getval plus auto-mutex synchronization)
+        execute on every iteration::
+
+            while True:
+                condition = <original condition>
+                if not condition:
+                    break
+                <original body>
+
+        This creates a WhileStmt without iter_args (non-SSA form). The C++
+        ConvertToSSA pass will convert it to SSA form if needed.
 
         Args:
             stmt: While AST node
@@ -163,25 +173,32 @@ class ControlFlowParserMixin:
         entry_env = dict(self.const_env)
         writes = _assignment_writes(stmt.body)
         self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
-        condition = self.parse_expression(stmt.test)
         span = self.span_tracker.get_span(stmt)
 
         prev_loop_builder = self.current_loop_builder
         prev_in_while_loop = self.in_while_loop
         try:
-            with self.builder.while_loop(condition, span) as loop:
+            with self.builder.while_loop(ir.ConstBool(True, span), span) as loop:
                 self.current_loop_builder = loop
                 self.in_while_loop = True
                 self.scope_manager.enter_scope("while")
+
+                break_test = ast.copy_location(
+                    ast.UnaryOp(op=ast.Not(), operand=stmt.test),
+                    stmt.test,
+                )
+                break_condition = self.parse_expression(break_test)
+                with self.builder.if_stmt(break_condition, span):
+                    self.builder.break_stmt(span)
 
                 for body_stmt in stmt.body:
                     self.parse_statement(body_stmt)
 
                 # Variables leak to outer scope (ConvertToSSA will handle)
                 self.scope_manager.exit_scope(leak_vars=True)
-                self.in_while_loop = prev_in_while_loop
-                self.current_loop_builder = prev_loop_builder
         finally:
+            self.in_while_loop = prev_in_while_loop
+            self.current_loop_builder = prev_loop_builder
             self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
 
     def parse_if_statement(self, stmt: ast.If) -> None:
@@ -233,9 +250,7 @@ class ControlFlowParserMixin:
     def parse_with_statement(self, stmt: ast.With) -> None:
         """Parse with statement for scope contexts.
 
-        Currently supports:
-        - with pl.section_vector(): ... (creates SectionStmt with Vector section)
-        - with pl.section_cube(): ... (creates SectionStmt with Cube section)
+        Currently supports target-specific Cube and Vector sections.
 
         Args:
             stmt: With AST node
@@ -254,10 +269,10 @@ class ControlFlowParserMixin:
 
         # Check if this is pl.section_vector() or pl.section_cube()
         if attr == "section_vector":
-            self._parse_section_with_body(stmt.body, ir.SectionKind.Vector, span, "vec")
+            self._parse_target_section(stmt.body, ir.SectionKind.Vector, span)
             return
         if attr == "section_cube":
-            self._parse_section_with_body(stmt.body, ir.SectionKind.Cube, span, "cube")
+            self._parse_target_section(stmt.body, ir.SectionKind.Cube, span)
             return
 
         # Unsupported context manager
@@ -335,35 +350,19 @@ class ControlFlowParserMixin:
         span = self.span_tracker.get_span(stmt)
         self.builder.continue_stmt(span)
 
-    def _parse_section_with_body(
+    def _parse_target_section(
         self,
         body: list[ast.stmt],
         kind: ir.SectionKind,
         span,
-        saved_key: str | None = None,
     ) -> None:
-        """Parse a section body and optionally persist its local variables."""
-        outer_const_env = self.const_env
-        with self.builder.section(kind, span):
-            self.scope_manager.enter_scope("section")
-            if saved_key is not None and self._section_saved_vars.get(saved_key):
-                for name, value in self._section_saved_vars[saved_key].items():
-                    self.scope_manager.define_var(name, value, allow_redef=True)
-            self.const_env = {
-                **outer_const_env,
-                **(self._section_saved_const_env.get(saved_key, {}) if saved_key is not None else {}),
-            }
-            try:
-                for body_stmt in body:
-                    self.parse_statement(body_stmt)
-                saved_vars = self.scope_manager.exit_scope(leak_vars=False)
-                if saved_key is not None:
-                    self._section_saved_vars[saved_key] = saved_vars
-                    self._section_saved_const_env[saved_key] = {
-                        name: self.const_env[name] for name in saved_vars if name in self.const_env
-                    }
-            finally:
-                self.const_env = outer_const_env
+        """Project a Cube/Vector section into the current target Program."""
+        if kind != self.target:
+            return
+
+        self.matched_target = True
+        for body_stmt in body:
+            self.parse_statement(body_stmt)
 
     def _validate_for_loop_iterator(self, stmt: ast.For) -> ast.Call:
         """Validate that for loop uses pl.range().

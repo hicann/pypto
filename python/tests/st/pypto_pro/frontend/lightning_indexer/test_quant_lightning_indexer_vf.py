@@ -513,7 +513,7 @@ def make_quant_lightning_indexer_vf_kernel(
         gs1_tiles = (sq_real * n1 + m_cube_runtime - 1) // m_cube_runtime
         sk_tiles = (sk_real + TS - 1) // TS
         num_cores = pl.get_block_num()
-        core_id = pl.get_block_idx()
+        core_id = pl.get_block_idx() // pl.get_subblock_num()
 
         # Vec reads via full-slot tile group (interleaved pingpong layout)
         mm1_vec_group = pl.make_tile_group(

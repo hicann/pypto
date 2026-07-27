@@ -38,9 +38,10 @@ using Kwargs = std::vector<std::pair<std::string, std::any>>;
 
 class TestableCCECodegen : public codegen::CCECodegen {
 public:
+    using codegen::CCECodegen::CCECodegen;
     std::string GetEmittedCode() const { return emitter_.GetCode(); }
     void SetCurrentResultTarget(std::string target) { current_target_var_ = std::move(target); }
-    void SetCurrentSectionKind(std::optional<ir::SectionKind> kind) { current_section_kind_ = kind; }
+    void SetInVFSection(bool value) { in_vf_section_ = value; }
     void RegisterVarName(const ir::VarPtr& var, const std::string& name) { context_.RegisterVar(var, name); }
 };
 
@@ -94,7 +95,8 @@ ir::TileTypePtr MakeTileType(const std::vector<int64_t>& shape, ir::DataType dty
     if (space.has_value()) {
         memref = std::make_shared<const ir::MemRef>(space.value(), MakeConstInt(0), 1024, 0, ir::Span::Unknown());
     }
-    return std::make_shared<const ir::TileType>(shape, dtype, memref, std::optional<ir::TileView>(std::nullopt));
+    return std::make_shared<const ir::TileType>(shape, dtype, memref, std::optional<ir::TileView>(std::nullopt),
+                                                std::optional<ir::HardwareInfo>(ir::HardwareInfo{}));
 }
 
 std::string RunCodegen(const std::string& op_name, const ir::CallPtr& call, TestableCCECodegen& codegen)
@@ -116,7 +118,7 @@ std::string RunCodegen(const std::string& op_name, const ir::CallPtr& call, Test
 
 std::string RunCodegen(const std::string& op_name, const ir::CallPtr& call)
 {
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     return RunCodegen(op_name, call, codegen);
 }
 
@@ -134,9 +136,21 @@ TEST(BackendCceOpsTest, GetBlockIdx)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::AssignStmt>(result, call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Cube);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("(int32_t)(get_block_idx())"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, GetBlockIdxVectorUsesGlobalAivIndex)
+{
+    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
+    auto call = std::make_shared<const ir::Call>("get_block_idx", std::vector<ir::ExprPtr>{}, int_type,
+                                                 ir::Span::Unknown());
+    const auto* info = BackendCCE::Instance().GetOpInfo("get_block_idx");
+    ASSERT_NE(info, nullptr);
+
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
+    EXPECT_EQ(info->codegen_func(call, codegen), "(int32_t)(get_block_idx() * get_subblockdim() + get_subblockid())");
 }
 
 TEST(BackendCceOpsTest, GetBlockNum)
@@ -147,7 +161,7 @@ TEST(BackendCceOpsTest, GetBlockNum)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::AssignStmt>(result, call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("(int32_t)(get_block_num())"), std::string::npos);
 }
@@ -160,7 +174,7 @@ TEST(BackendCceOpsTest, GetSpr)
     ASSERT_NE(info, nullptr);
     EXPECT_EQ(info->pipe, ir::PipeType::V);
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     EXPECT_EQ(info->codegen_func(call, codegen), "get_ar()");
 }
 
@@ -172,9 +186,25 @@ TEST(BackendCceOpsTest, GetSubBlockIdx)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::AssignStmt>(result, call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("(int32_t)(get_subblockid())"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, GetSubBlockNumIsTargetSpecific)
+{
+    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
+    auto call = std::make_shared<const ir::Call>("get_subblock_num", std::vector<ir::ExprPtr>{}, int_type,
+                                                 ir::Span::Unknown());
+    const auto* info = BackendCCE::Instance().GetOpInfo("get_subblock_num");
+    ASSERT_NE(info, nullptr);
+    EXPECT_EQ(info->pipe, ir::PipeType::V);
+
+    codegen::CCECodegen cube_codegen(ir::SectionKind::Cube);
+    EXPECT_EQ(info->codegen_func(call, cube_codegen), "(int32_t)(1)");
+
+    codegen::CCECodegen vector_codegen(ir::SectionKind::Vector);
+    EXPECT_EQ(info->codegen_func(call, vector_codegen), "(int32_t)(get_subblockdim())");
 }
 
 TEST(BackendCceOpsTest, DebugTrap)
@@ -184,7 +214,7 @@ TEST(BackendCceOpsTest, DebugTrap)
     ASSERT_NE(info, nullptr);
     EXPECT_EQ(info->pipe, ir::PipeType::S);
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     EXPECT_EQ(info->codegen_func(call, codegen), "return");
 }
 
@@ -197,7 +227,7 @@ TEST(BackendCceOpsTest, BarVOnA3)
     auto call = std::make_shared<const ir::Call>("system.bar_v", std::vector<ir::ExprPtr>{}, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("pipe_barrier(PIPE_V);"), std::string::npos);
 }
@@ -207,7 +237,7 @@ TEST(BackendCceOpsTest, BarVOnA5EmitsNothing)
     auto call = std::make_shared<const ir::Call>("system.bar_v", std::vector<ir::ExprPtr>{}, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
     EXPECT_EQ(generated.find("pipe_barrier(PIPE_V);"), std::string::npos);
 }
@@ -217,9 +247,30 @@ TEST(BackendCceOpsTest, BarM)
     auto call = std::make_shared<const ir::Call>("system.bar_m", std::vector<ir::ExprPtr>{}, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("pipe_barrier(PIPE_M);"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, AdditionalPipelineBarriers)
+{
+    const std::vector<std::pair<std::string, std::string>> cases = {
+        {"system.bar_mte1", "pipe_barrier(PIPE_MTE1);"},
+        {"system.bar_mte2", "pipe_barrier(PIPE_MTE2);"},
+        {"system.bar_mte3", "pipe_barrier(PIPE_MTE3);"},
+        {"system.bar_fix", "pipe_barrier(PIPE_FIX);"},
+    };
+
+    for (const auto& [op_name, expected] : cases) {
+        auto call = std::make_shared<const ir::Call>(op_name, std::vector<ir::ExprPtr>{}, ir::Span::Unknown());
+        const auto* info = BackendCCE::Instance().GetOpInfo(op_name);
+        ASSERT_NE(info, nullptr);
+        EXPECT_EQ(info->pipe, ir::PipeType::S);
+
+        TestableCCECodegen codegen(ir::SectionKind::Vector);
+        EXPECT_EQ(info->codegen_func(call, codegen), "");
+        EXPECT_NE(codegen.GetEmittedCode().find(expected), std::string::npos);
+    }
 }
 
 TEST(BackendCceOpsTest, BarAll)
@@ -227,7 +278,7 @@ TEST(BackendCceOpsTest, BarAll)
     auto call = std::make_shared<const ir::Call>("system.bar_all", std::vector<ir::ExprPtr>{}, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("pipe_barrier(PIPE_ALL);"), std::string::npos);
 }
@@ -242,7 +293,7 @@ TEST(BackendCceOpsTest, SetMaskCount)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("set_mask_count();"), std::string::npos);
 }
@@ -253,7 +304,7 @@ TEST(BackendCceOpsTest, SetMaskNorm)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("set_mask_norm();"), std::string::npos);
 }
@@ -263,7 +314,7 @@ TEST(BackendCceOpsTest, ResetMask)
     auto call = std::make_shared<const ir::Call>("system.reset_mask", std::vector<ir::ExprPtr>{}, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("set_vector_mask(static_cast<uint64_t>(-1), static_cast<uint64_t>(-1));"),
               std::string::npos);
@@ -275,7 +326,7 @@ TEST(BackendCceOpsTest, SetVecMask)
         "system.set_vec_mask", std::vector<ir::ExprPtr>{MakeConstInt(255), MakeConstInt(128)}, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("set_vector_mask(255, 128);"), std::string::npos);
 }
@@ -291,7 +342,7 @@ TEST(BackendCceOpsTest, SyncSrc)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("set_flag(PIPE_V, PIPE_S, EVENT_ID3);"), std::string::npos);
 }
@@ -303,7 +354,7 @@ TEST(BackendCceOpsTest, SyncDst)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("wait_flag(PIPE_V, PIPE_S, EVENT_ID3);"), std::string::npos);
 }
@@ -337,7 +388,7 @@ TEST(BackendCceOpsTest, SyncSrcDyn)
                                                  kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("set_flag(PIPE_M, PIPE_V, (event_t)5);"), std::string::npos);
 }
@@ -349,7 +400,7 @@ TEST(BackendCceOpsTest, SyncDstDyn)
                                                  kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("wait_flag(PIPE_M, PIPE_V, (event_t)5);"), std::string::npos);
 }
@@ -365,7 +416,7 @@ TEST(BackendCceOpsTest, SetCrossCoreA3)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("ffts_cross_core_sync(PIPE_V, getFFTSMsg(0, 2));"), std::string::npos);
 }
@@ -377,7 +428,7 @@ TEST(BackendCceOpsTest, WaitCrossCoreA3)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("wait_flag_dev(2);"), std::string::npos);
 }
@@ -389,7 +440,7 @@ TEST(BackendCceOpsTest, SetCrossCoreDynA3)
                                                  kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("ffts_cross_core_sync(PIPE_V, getFFTSMsg(0, 7));"), std::string::npos);
 }
@@ -401,7 +452,7 @@ TEST(BackendCceOpsTest, WaitCrossCoreDynA3)
         "system.wait_cross_core_dyn", std::vector<ir::ExprPtr>{MakeConstInt(7)}, kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("wait_flag_dev(7);"), std::string::npos);
 }
@@ -417,7 +468,7 @@ TEST(BackendCceOpsTest, SetCrossCoreA5InterBlock)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
     EXPECT_NE(generated.find("ffts_cross_core_sync(PIPE_V, getFFTSMsg(0, 2));"), std::string::npos);
 }
@@ -429,7 +480,7 @@ TEST(BackendCceOpsTest, WaitCrossCoreA5InterBlock)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
     EXPECT_NE(generated.find("wait_flag_dev(PIPE_V, 2);"), std::string::npos);
 }
@@ -445,7 +496,7 @@ TEST(BackendCceOpsTest, SetCrossCoreA5IntraBlock)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
     EXPECT_NE(generated.find("set_intra_block(PIPE_V, 3);"), std::string::npos);
 }
@@ -457,7 +508,7 @@ TEST(BackendCceOpsTest, WaitCrossCoreA5IntraBlock)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
     EXPECT_NE(generated.find("wait_intra_block(PIPE_V, 3);"), std::string::npos);
 }
@@ -469,7 +520,7 @@ TEST(BackendCceOpsTest, SetCrossCoreDynA5IntraBlock)
                                                  kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
     EXPECT_NE(generated.find("set_intra_block(PIPE_V, 8);"), std::string::npos);
 }
@@ -481,9 +532,50 @@ TEST(BackendCceOpsTest, WaitCrossCoreDynA5IntraBlock)
         "system.wait_cross_core_dyn", std::vector<ir::ExprPtr>{MakeConstInt(8)}, kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
     EXPECT_NE(generated.find("wait_intra_block(PIPE_V, 8);"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, CubeCrossCoreA5IntraBlockSignalsBothVectorSubcores)
+{
+    Kwargs static_kwargs = {{"pipe", 4}, {"sync_mode", 2}, {"event_id", 3}};
+    auto set_call = std::make_shared<const ir::Call>("system.set_cross_core", std::vector<ir::ExprPtr>{}, static_kwargs,
+                                                     ir::Span::Unknown());
+    auto wait_call = std::make_shared<const ir::Call>("system.wait_cross_core", std::vector<ir::ExprPtr>{},
+                                                      static_kwargs, ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{std::make_shared<const ir::EvalStmt>(set_call, ir::Span::Unknown()),
+                                 std::make_shared<const ir::EvalStmt>(wait_call, ir::Span::Unknown())},
+        ir::Span::Unknown());
+
+    codegen::CCECodegen codegen(ir::SectionKind::Cube);
+    auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
+    EXPECT_NE(generated.find("set_intra_block(PIPE_V, 3);"), std::string::npos);
+    EXPECT_NE(generated.find("set_intra_block(PIPE_V, 19);"), std::string::npos);
+    EXPECT_NE(generated.find("wait_intra_block(PIPE_V, 3);"), std::string::npos);
+    EXPECT_NE(generated.find("wait_intra_block(PIPE_V, 19);"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, CubeCrossCoreDynamicA5IntraBlockSignalsBothVectorSubcores)
+{
+    Kwargs kwargs = {{"pipe", 4}, {"sync_mode", 2}};
+    auto event_id = MakeVar("event_id", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
+    auto set_call = std::make_shared<const ir::Call>("system.set_cross_core_dyn", std::vector<ir::ExprPtr>{event_id},
+                                                     kwargs, ir::Span::Unknown());
+    auto wait_call = std::make_shared<const ir::Call>("system.wait_cross_core_dyn", std::vector<ir::ExprPtr>{event_id},
+                                                      kwargs, ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{std::make_shared<const ir::EvalStmt>(set_call, ir::Span::Unknown()),
+                                 std::make_shared<const ir::EvalStmt>(wait_call, ir::Span::Unknown())},
+        ir::Span::Unknown());
+
+    codegen::CCECodegen codegen(ir::SectionKind::Cube);
+    auto generated = codegen.GenerateSingle(MakeProgram(body, {event_id}), "a5");
+    EXPECT_NE(generated.find("set_intra_block(PIPE_V, event_id_0);"), std::string::npos);
+    EXPECT_NE(generated.find("set_intra_block(PIPE_V, event_id_0 + 16);"), std::string::npos);
+    EXPECT_NE(generated.find("wait_intra_block(PIPE_V, event_id_0);"), std::string::npos);
+    EXPECT_NE(generated.find("wait_intra_block(PIPE_V, event_id_0 + 16);"), std::string::npos);
 }
 
 // ============================================================================
@@ -497,7 +589,7 @@ TEST(BackendCceOpsTest, MutexLock)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("get_buf(PIPE_S, 1, 0);"), std::string::npos);
 }
@@ -509,7 +601,7 @@ TEST(BackendCceOpsTest, MutexUnlock)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("rls_buf(PIPE_S, 1, 0);"), std::string::npos);
 }
@@ -521,7 +613,7 @@ TEST(BackendCceOpsTest, MutexLockDyn)
                                                  kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("get_buf(PIPE_S, 2, 0);"), std::string::npos);
 }
@@ -533,7 +625,7 @@ TEST(BackendCceOpsTest, MutexUnlockDyn)
                                                  kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("rls_buf(PIPE_S, 2, 0);"), std::string::npos);
 }
@@ -549,7 +641,7 @@ TEST(BackendCceOpsTest, SetMmLayoutTransformEnabled)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
     EXPECT_NE(generated.find("set_ctrl(sbitset1(get_ctrl(), 51));"), std::string::npos);
 }
@@ -561,7 +653,7 @@ TEST(BackendCceOpsTest, SetMmLayoutTransformDisabled)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
     EXPECT_NE(generated.find("set_ctrl(sbitset0(get_ctrl(), 51));"), std::string::npos);
 }
@@ -579,7 +671,7 @@ TEST(BackendCceOpsTest, PtrAddPtr)
                                                  ptr_type, ir::Span::Unknown());
     auto body = std::make_shared<const ir::AssignStmt>(result, call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {ptr_var}), "a3");
     EXPECT_NE(generated.find("+ 10)"), std::string::npos);
 }
@@ -593,9 +685,57 @@ TEST(BackendCceOpsTest, PtrMakePtr)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::AssignStmt>(result, call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {ptr_var}), "a3");
     EXPECT_NE(generated.find("__gm__ float*"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, PtrMakePtrExtractsRegisteredTensorPointer)
+{
+    auto tensor = MakeTensorVar("src", {16}, ir::DataType::FP32);
+    auto result_type = std::make_shared<const ir::PtrType>(ir::DataType::FP16);
+    auto call = std::make_shared<const ir::Call>("ptr.make_ptr", std::vector<ir::ExprPtr>{tensor}, result_type,
+                                                 ir::Span::Unknown());
+    const auto* info = BackendCCE::Instance().GetOpInfo("ptr.make_ptr");
+    ASSERT_NE(info, nullptr);
+
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.RegisterVarName(tensor, "src");
+    codegen.RegisterPointer("src", "src_raw_ptr");
+    EXPECT_EQ(info->codegen_func(call, codegen), "((__gm__ half*)(src_raw_ptr))");
+}
+
+TEST(BackendCceOpsTest, PtrMakePtrFallsBackToTensorData)
+{
+    auto tensor = MakeTensorVar("src", {16}, ir::DataType::FP32);
+    auto result_type = std::make_shared<const ir::PtrType>(ir::DataType::FP16);
+    auto call = std::make_shared<const ir::Call>("ptr.make_ptr", std::vector<ir::ExprPtr>{tensor}, result_type,
+                                                 ir::Span::Unknown());
+    const auto* info = BackendCCE::Instance().GetOpInfo("ptr.make_ptr");
+    ASSERT_NE(info, nullptr);
+
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.RegisterVarName(tensor, "src");
+    EXPECT_EQ(info->codegen_func(call, codegen), "((__gm__ half*)(src.data()))");
+}
+
+TEST(BackendCceOpsTest, PtrMakePtrRejectsInvalidSourceAndResultTypes)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
+    auto ptr_type = std::make_shared<const ir::PtrType>(ir::DataType::FP32);
+    auto scalar = MakeVar("scalar", scalar_type);
+    auto ptr = MakeVar("ptr", ptr_type);
+    const auto* info = BackendCCE::Instance().GetOpInfo("ptr.make_ptr");
+    ASSERT_NE(info, nullptr);
+
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
+    auto invalid_source = std::make_shared<const ir::Call>("ptr.make_ptr", std::vector<ir::ExprPtr>{scalar}, ptr_type,
+                                                           ir::Span::Unknown());
+    EXPECT_THROW((void)info->codegen_func(invalid_source, codegen), npu::tile_fwk::Error);
+
+    auto invalid_result = std::make_shared<const ir::Call>("ptr.make_ptr", std::vector<ir::ExprPtr>{ptr}, scalar_type,
+                                                           ir::Span::Unknown());
+    EXPECT_THROW((void)info->codegen_func(invalid_result, codegen), npu::tile_fwk::Error);
 }
 
 // ============================================================================
@@ -617,7 +757,7 @@ TEST(BackendCceOpsTest, BlockMakeTileAndSetValTile)
     auto body = std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{tile_assign, setval_stmt},
                                                      ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find(".SetValue(5, 42);"), std::string::npos);
 }
@@ -639,7 +779,7 @@ TEST(BackendCceOpsTest, BlockGetValTile)
     auto body = std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{tile_assign, getval_assign},
                                                      ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find(".GetValue(3)"), std::string::npos);
 }
@@ -657,7 +797,7 @@ TEST(BackendCceOpsTest, BlockGetValTensor)
                                                  int_type, ir::Span::Unknown());
     auto body = std::make_shared<const ir::AssignStmt>(result, call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {tensor}), "a3");
     EXPECT_NE(generated.find("*((__gm__ float*)"), std::string::npos);
     EXPECT_NE(generated.find("+ 5)"), std::string::npos);
@@ -670,7 +810,7 @@ TEST(BackendCceOpsTest, BlockSetValTensor)
         "block.setval", std::vector<ir::ExprPtr>{tensor, MakeConstInt(5), MakeConstInt(42)}, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {tensor}), "a3");
     EXPECT_NE(generated.find("*((__gm__ float*)"), std::string::npos);
     EXPECT_NE(generated.find("+ 5) = 42;"), std::string::npos);
@@ -685,22 +825,23 @@ TEST(BackendCceOpsTest, BlockSubviewUsesRegisteredAddressAndResultTarget)
     auto tile = MakeVar("tile", MakeTileType({16, 32}, ir::DataType::FP16, ir::MemorySpace::Vec));
     auto call = std::make_shared<const ir::Call>(
         "block.subview",
-        std::vector<ir::ExprPtr>{tile, MakeConstInt(3), MakeTuple({MakeConstInt(8), MakeConstInt(12)})},
+        std::vector<ir::ExprPtr>{tile, MakeTuple({MakeConstInt(3), MakeConstInt(0)}),
+                                 MakeTuple({MakeConstInt(8), MakeConstInt(12)})},
         tile->GetType(), ir::Span::Unknown());
     auto* info = BackendCCE::Instance().GetOpInfo("block.subview");
     ASSERT_NE(info, nullptr);
     EXPECT_EQ(info->pipe, ir::PipeType::MTE2);
 
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     codegen.SetTileAddress("tile", "0x200");
     codegen.SetCurrentResultTarget("view");
     EXPECT_EQ(info->codegen_func(call, codegen), "view");
 
     auto generated = codegen.GetEmittedCode();
-    EXPECT_NE(generated.find("TASSIGN(view, 0x200 + (3) * 2)"), std::string::npos);
+    EXPECT_NE(generated.find("TASSIGN(view, 0x200 + ((3)*32+(0))*2)"), std::string::npos);
     EXPECT_NE(generated.find("view.SetValidShape(8, 12)"), std::string::npos);
     EXPECT_TRUE(codegen.HasTileAddress("view"));
-    EXPECT_EQ(codegen.GetTileAddress("view"), "0x200 + (3) * 2");
+    EXPECT_EQ(codegen.GetTileAddress("view"), "0x200 + ((3)*32+(0))*2");
     auto shape = codegen.LookupTileEmitShape("view");
     ASSERT_TRUE(shape.has_value());
     EXPECT_EQ(shape->first, "8");
@@ -711,18 +852,20 @@ TEST(BackendCceOpsTest, BlockSubviewUsesDynamicTileGroupAddressAndGeneratedName)
 {
     auto tile = MakeVar("tile", MakeTileType({16, 32}, ir::DataType::FP16, ir::MemorySpace::Vec));
     auto call = std::make_shared<const ir::Call>(
-        "block.subview", std::vector<ir::ExprPtr>{tile, MakeConstInt(5), MakeTuple({MakeConstInt(4), MakeConstInt(7)})},
+        "block.subview",
+        std::vector<ir::ExprPtr>{tile, MakeTuple({MakeConstInt(5), MakeConstInt(0)}),
+                                 MakeTuple({MakeConstInt(4), MakeConstInt(7)})},
         tile->GetType(), ir::Span::Unknown());
     auto* info = BackendCCE::Instance().GetOpInfo("block.subview");
     ASSERT_NE(info, nullptr);
 
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     codegen.RegisterVarName(tile, "tiles[index]");
     auto result = info->codegen_func(call, codegen);
 
     EXPECT_EQ(result, "tiles_index__view_0");
     auto generated = codegen.GetEmittedCode();
-    EXPECT_NE(generated.find("TASSIGN(tiles_index__view_0, (uint64_t)tiles[index].data() + (5) * 2)"),
+    EXPECT_NE(generated.find("TASSIGN(tiles_index__view_0, (uint64_t)tiles[index].data() + ((5)*32+(0))*2)"),
               std::string::npos);
     EXPECT_NE(generated.find("tiles_index__view_0.SetValidShape(4, 7)"), std::string::npos);
 }
@@ -731,35 +874,75 @@ TEST(BackendCceOpsTest, BlockSubviewFallsBackToMemRefAddress)
 {
     auto addr = MakeConstInt(0x180, ir::DataType::INDEX);
     auto memref = std::make_shared<const ir::MemRef>(ir::MemorySpace::Vec, addr, 1024, 0, ir::Span::Unknown());
-    auto tile_type = std::make_shared<const ir::TileType>(std::vector<int64_t>{8, 16}, ir::DataType::FP32,
-                                                          std::optional<ir::MemRefPtr>(memref),
-                                                          std::optional<ir::TileView>(std::nullopt));
+    auto tile_type = std::make_shared<const ir::TileType>(
+        std::vector<int64_t>{8, 16}, ir::DataType::FP32, std::optional<ir::MemRefPtr>(memref),
+        std::optional<ir::TileView>(std::nullopt), std::optional<ir::HardwareInfo>(ir::HardwareInfo{}));
     auto tile = MakeVar("tile", tile_type);
     auto call = std::make_shared<const ir::Call>(
-        "block.subview", std::vector<ir::ExprPtr>{tile, MakeConstInt(2), MakeTuple({MakeConstInt(3), MakeConstInt(5)})},
+        "block.subview",
+        std::vector<ir::ExprPtr>{tile, MakeTuple({MakeConstInt(2), MakeConstInt(0)}),
+                                 MakeTuple({MakeConstInt(3), MakeConstInt(5)})},
         tile_type, ir::Span::Unknown());
     auto* info = BackendCCE::Instance().GetOpInfo("block.subview");
     ASSERT_NE(info, nullptr);
 
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     codegen.SetCurrentResultTarget("memref_view");
     EXPECT_EQ(info->codegen_func(call, codegen), "memref_view");
-    EXPECT_NE(codegen.GetEmittedCode().find("TASSIGN(memref_view, 0x180 + (2) * 4)"), std::string::npos);
+    EXPECT_NE(codegen.GetEmittedCode().find("TASSIGN(memref_view, 0x180 + ((2)*16+(0))*4)"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, BlockSubviewInVFSectionReturnsPointerArithmetic)
 {
     auto tile = MakeVar("tile", MakeTileType({16, 32}, ir::DataType::FP16));
     auto call = std::make_shared<const ir::Call>(
-        "block.subview", std::vector<ir::ExprPtr>{tile, MakeConstInt(7), MakeTuple({MakeConstInt(8), MakeConstInt(8)})},
+        "block.subview",
+        std::vector<ir::ExprPtr>{tile, MakeTuple({MakeConstInt(7), MakeConstInt(0)}),
+                                 MakeTuple({MakeConstInt(8), MakeConstInt(8)})},
         tile->GetType(), ir::Span::Unknown());
     auto* info = BackendCCE::Instance().GetOpInfo("block.subview");
     ASSERT_NE(info, nullptr);
 
-    TestableCCECodegen codegen;
-    codegen.SetCurrentSectionKind(ir::SectionKind::VF);
-    EXPECT_EQ(info->codegen_func(call, codegen), "(vf_tile_ptr_0 + (7))");
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.SetInVFSection(true);
+    EXPECT_EQ(info->codegen_func(call, codegen), "(vf_tile_ptr_0 + (7)*32+(0))");
     EXPECT_TRUE(codegen.GetEmittedCode().empty());
+}
+
+TEST(BackendCceOpsTest, BlockSubviewUsesDnElementOffset)
+{
+    ir::HardwareInfo hardware_info(ir::TileLayout::col_major);
+    auto tile_type = std::make_shared<const ir::TileType>(
+        std::vector<int64_t>{16, 32}, ir::DataType::FP16, std::optional<ir::MemRefPtr>(std::nullopt),
+        std::optional<ir::TileView>(std::nullopt), std::optional<ir::HardwareInfo>(hardware_info));
+    auto tile = MakeVar("tile", tile_type);
+    auto call = std::make_shared<const ir::Call>(
+        "block.subview",
+        std::vector<ir::ExprPtr>{tile, MakeTuple({MakeConstInt(3), MakeConstInt(5)}),
+                                 MakeTuple({MakeConstInt(8), MakeConstInt(12)})},
+        tile_type, ir::Span::Unknown());
+    const auto* info = BackendCCE::Instance().GetOpInfo("block.subview");
+    ASSERT_NE(info, nullptr);
+
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.SetTileAddress("tile", "0x200");
+    codegen.SetCurrentResultTarget("view");
+    EXPECT_EQ(info->codegen_func(call, codegen), "view");
+    EXPECT_NE(codegen.GetEmittedCode().find("TASSIGN(view, 0x200 + ((5)*16+(3))*2)"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, BlockSubviewInVFSectionSupportsScalarOffset)
+{
+    auto tile = MakeVar("tile", MakeTileType({16, 32}, ir::DataType::FP16));
+    auto call = std::make_shared<const ir::Call>(
+        "block.subview", std::vector<ir::ExprPtr>{tile, MakeConstInt(7), MakeTuple({MakeConstInt(8), MakeConstInt(8)})},
+        tile->GetType(), ir::Span::Unknown());
+    const auto* info = BackendCCE::Instance().GetOpInfo("block.subview");
+    ASSERT_NE(info, nullptr);
+
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.SetInVFSection(true);
+    EXPECT_EQ(info->codegen_func(call, codegen), "(vf_tile_ptr_0 + (7))");
 }
 
 // ============================================================================
@@ -774,7 +957,7 @@ TEST(BackendCceOpsTest, SyncAllHardMix)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("SYNCALL<SyncCoreType::Mix>();"), std::string::npos);
 }
@@ -787,7 +970,7 @@ TEST(BackendCceOpsTest, SyncAllHardAIVOnly)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("SYNCALL<SyncCoreType::AIVOnly>();"), std::string::npos);
 }
@@ -828,7 +1011,7 @@ TEST(BackendCceOpsTest, DcciTensorDefaultKwargs)
     auto call = std::make_shared<const ir::Call>("system.dcci", std::vector<ir::ExprPtr>{tensor}, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {tensor}), "a3");
     EXPECT_NE(generated.find("dcci("), std::string::npos);
     EXPECT_NE(generated.find("ENTIRE_DATA_CACHE"), std::string::npos);
@@ -843,7 +1026,7 @@ TEST(BackendCceOpsTest, DcciTensorWithOffsetAndKwargs)
                                                  kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {tensor}), "a3");
     EXPECT_NE(generated.find("dcci("), std::string::npos);
     EXPECT_NE(generated.find("SINGLE_CACHE_LINE"), std::string::npos);
@@ -880,7 +1063,7 @@ TEST(BackendCceOpsTest, DcciTileDefaultKwargs)
     auto body = std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{tile_assign, dcci_stmt},
                                                      ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("dcci("), std::string::npos);
     EXPECT_NE(generated.find("__ubuf__ void*"), std::string::npos);
@@ -1024,7 +1207,7 @@ TEST(BackendCceOpsTest, DebugDumpAccTileUsesWorkspace)
                                  MakeTuple({MakeConstInt(8), MakeConstInt(16)}), workspace},
         ir::Span::Unknown());
 
-    TestableCCECodegen codegen;
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
     codegen.RegisterPointer("workspace", "workspace_ptr");
     auto generated = RunCodegen("debug.dump_tile", call, codegen);
     EXPECT_NE(generated.find("copy_matrix_cc_to_gm"), std::string::npos);
@@ -1079,7 +1262,7 @@ TEST(BackendCceOpsTest, DebugPrintf)
                                                  ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("cce::printf"), std::string::npos);
 }
@@ -1091,7 +1274,7 @@ TEST(BackendCceOpsTest, DebugAssert)
                                                  ir::Span("kernel.py", 12, 3));
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("if (!("), std::string::npos);
     EXPECT_NE(generated.find("kernel.py"), std::string::npos);
@@ -1105,7 +1288,7 @@ TEST(BackendCceOpsTest, DebugAssertWithFormatAndArgs)
         "debug.assert", std::vector<ir::ExprPtr>{MakeConstInt(1), MakeConstInt(99)}, kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
-    codegen::CCECodegen codegen;
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("if (!("), std::string::npos);
     EXPECT_NE(generated.find("cce::printf"), std::string::npos);

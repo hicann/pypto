@@ -16,7 +16,6 @@ __all__ = ["function", "inline", "program", "vector_function"]
 
 import ast
 from collections.abc import Callable
-import dataclasses
 import inspect
 import linecache
 import logging
@@ -524,6 +523,7 @@ def function(
             parser = ASTParser(
                 source_file,
                 source_lines,
+                ir.SectionKind.Vector,
                 line_offset,
                 col_offset,
                 strict_ssa=strict_ssa,
@@ -616,16 +616,6 @@ def is_vector_function(fn: Callable) -> bool:
     return getattr(fn, "_pypto_vector_function", False)
 
 
-@dataclasses.dataclass
-class KernelFunction:
-    """Stores a parsed helper ir.Function for internal function-call lowering."""
-
-    name: str
-    ir_function: ir.Function
-    op: ir.Op
-    param_names: list[str]
-
-
 def _collect_program_func_defs(class_def: ast.ClassDef, class_name: str) -> tuple[set[str], list[ast.FunctionDef]]:
     """Collect @pl.function method definitions from a program class."""
     global_vars = set()
@@ -674,6 +664,7 @@ def _parse_one_program_function(
     parser = ASTParser(
         source_file,
         source_lines,
+        ir.SectionKind.Vector,
         line_offset,
         col_offset,
         global_vars=global_vars,

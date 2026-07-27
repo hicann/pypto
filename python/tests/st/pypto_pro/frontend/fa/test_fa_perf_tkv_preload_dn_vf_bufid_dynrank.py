@@ -566,7 +566,7 @@ def flash_attention_score(
     skv_dim = tiling.skv
     sq_tiles = (sq_dim + (TS - 1)) // TS
     skv_tiles = (skv_dim + (TKV - 1)) // TKV
-    core_id = pl.get_block_idx()
+    core_id = pl.get_block_idx() // pl.get_subblock_num()
     num_cores = pl.get_block_num()
     total_work = tiling.b * tiling.n
     work_per_core = (total_work + num_cores - 1) // num_cores

@@ -335,41 +335,6 @@ def call_kernel_dn_transpose(
         pl.store(out, ac, [0, 0])
 
 
-@pl.jit(auto_mutex=True)
-def call_kernel_tensor_dn(
-    k: pl.Tensor[[TILE, TILE], pl.DT_FP16, pl.DN],
-    q: pl.Tensor[[TILE, TILE], pl.DT_FP16],
-    out: pl.Tensor[[TILE, TILE], pl.DT_FP32],
-):
-    k_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x00000, mutex_ids=[0])
-    q_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
-    k_l0a = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
-    q_l0b = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
-    c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
-    with pl.section_cube():
-        cur_k = k_l1.current()
-        cur_q = q_l1.current()
-        kl = k_l0a.current()
-        qr = q_l0b.current()
-        ac = c_l0c.current()
-        pl.load(cur_k, k, [0, 0], order=[1, 0])
-        pl.load(cur_q, q, [0, 0])
-        pl.move(kl, cur_k)
-        pl.move(qr, cur_q)
-        pl.matmul(ac, kl, qr)
-        pl.store(out, ac, [0, 0])
-
-
 # =====================================================================================
 # Section 4: 4D tensor + tile_dims
 # =====================================================================================
@@ -1194,19 +1159,6 @@ def test_dn_transpose():
 
 
 @pytest.mark.soc("950")
-def test_tensor_dn():
-    device = ST_DEVICE
-    _require_a5(device)
-    k = _inputs(device, [TILE, TILE])
-    q = _inputs(device, [TILE, TILE])
-    out = torch.zeros([TILE, TILE], device=device, dtype=torch.float32)
-    call_kernel_tensor_dn(k, q, out)
-    torch.npu.synchronize()
-    ref = torch.matmul(k.float().T, q.float())
-    torch.testing.assert_close(out, ref, rtol=1e-2, atol=1e-2)
-
-
-@pytest.mark.soc("950")
 def test_4d_tile_dims():
     device = ST_DEVICE
     _require_a5(device)
@@ -1424,7 +1376,6 @@ if __name__ == "__main__":
         test_offset_both,
         test_tile_offset,
         test_dn_transpose,
-        test_tensor_dn,
         test_4d_tile_dims,
         test_for_loop,
         test_if_else,

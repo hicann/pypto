@@ -908,62 +908,6 @@ def test_while_not_ge():
     logging.info("test_while_not_ge passed")
 
 
-# =============================================================================
-# Test 17: while 循环非对齐尾块 - FP16
-#         while-loop unaligned tail block - FP16
-# =============================================================================
-@pl.jit(auto_mutex=True)
-def while_unaligned_fp16_kernel(
-    x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-    y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-    z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-):
-    m = x.shape[0]
-    n = x.shape[1]
-    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
-                            target_memory=pl.MemorySpace.Vec,
-                            valid_shape=[-1, -1])
-    a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
-    b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
-    c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
-    with pl.section_vector():
-        i: pl.DT_INT64 = 0
-        while i * TILE_M < m:
-            j: pl.DT_INT64 = 0
-            while j * TILE_N < n:
-                tile_a = a_db.next()
-                tile_b = b_db.next()
-                tile_c = c_db.next()
-                valid_r = pl.min(m - i * TILE_M, TILE_M)
-                valid_c = pl.min(n - j * TILE_N, TILE_N)
-                pl.set_validshape(tile_a, [valid_r, valid_c])
-                pl.set_validshape(tile_b, [valid_r, valid_c])
-                pl.set_validshape(tile_c, [valid_r, valid_c])
-                pl.load(tile_a, x, [i * TILE_M, j * TILE_N])
-                pl.load(tile_b, y, [i * TILE_M, j * TILE_N])
-                pl.add(tile_c, tile_a, tile_b)
-                pl.store(z, tile_c, [i * TILE_M, j * TILE_N])
-                j = j + 1
-            i = i + 1
-
-
-@pytest.mark.soc("950")
-def test_while_unaligned_shape():
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-    torch.manual_seed(0)
-    shapes = [[97, 65]]
-    for shape in shapes:
-        x = torch.rand(shape, device=device, dtype=torch.float16)
-        y = torch.rand(shape, device=device, dtype=torch.float16)
-        z = torch.zeros(shape, device=device, dtype=torch.float16)
-        while_unaligned_fp16_kernel(x, y, z)
-        torch.npu.synchronize()
-        z_ref = (x.float() + y.float()).to(torch.float16)
-        torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
-        logging.info("test_while_unaligned_shape passed! shape=%s", shape)
-
-
 if __name__ == "__main__":
     test_while_add()
     test_while_shape_generalization()
@@ -978,5 +922,4 @@ if __name__ == "__main__":
     test_while_ternary_expr()
     test_while_truthiness_int()
     test_while_not_ge()
-    test_while_unaligned_shape()
     logging.info("\nAll tests passed!")

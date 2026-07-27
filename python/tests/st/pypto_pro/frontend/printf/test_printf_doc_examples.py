@@ -67,7 +67,7 @@ def printf_doc_examples_kernel(
         pl.printf("debug: i=%d\n", i, loc=True)
 
         out[0] = 1
-        core_id = pl.get_block_idx()
+        core_id = pl.get_block_idx() // pl.get_subblock_num()
         if core_id > 0:
             tmp = tiling.valid_size * 100
             if tmp > 10000:

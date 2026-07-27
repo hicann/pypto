@@ -28,10 +28,12 @@ def ssbuf_copy_kernel(x: pl.Tensor[[1], pl.DT_INT32]):
         sub_id = pl.get_subblock_idx()
         if sub_id == 0:
             pl.ssbuf_store(message, 0)
+            pl.ssbuf_store(message, 0)
             pl.system.set_cross_core(pipe=pl.PipeType.S, event_id=15)
 
     with pl.section_cube():
         pl.system.wait_cross_core(pipe=pl.PipeType.S, event_id=15, sync_mode=pl.CrossCoreSyncMode.UNICAST_BLOCK)
+        pl.ssbuf_load(message, 0)
         pl.ssbuf_load(message, 0)
         pl.printf("Get ssbuf mssage: batch=%d, block=%d, offset=%d", message.batch, message.block, message.offset)
 

@@ -381,7 +381,7 @@ def fa_tnd_dn_kernel(
     work_ranges: pl.Tensor[[pl.DYNAMIC, 2], pl.DT_INT32],
 ):
     n_dim = q.shape[1]
-    core_id = pl.get_block_idx()
+    core_id = pl.get_block_idx() // pl.get_subblock_num()
 
     qk_vec = pl.make_tile(
         pl.TileType(shape=[TKV, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA0, size=VB4_KV

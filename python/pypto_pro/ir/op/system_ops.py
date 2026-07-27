@@ -11,7 +11,7 @@
 
 System operations handle hardware synchronization primitives:
 - sync_src / sync_dst: Set/Wait flag-based synchronization between pipes
-- bar_v / bar_m / bar_all: Barrier synchronization for vector, matrix, or all units
+- bar_*: Barrier synchronization for hardware pipelines
 """
 
 from __future__ import annotations
@@ -123,6 +123,26 @@ def bar_v(*, span: Span | None = None) -> Call:
 def bar_m(*, span: Span | None = None) -> Call:
     """Matrix unit barrier."""
     return _create_barrier_op("system.bar_m", span=span)
+
+
+def bar_mte1(*, span: Span | None = None) -> Call:
+    """MTE1 pipeline barrier."""
+    return _create_barrier_op("system.bar_mte1", span=span)
+
+
+def bar_mte2(*, span: Span | None = None) -> Call:
+    """MTE2 pipeline barrier."""
+    return _create_barrier_op("system.bar_mte2", span=span)
+
+
+def bar_mte3(*, span: Span | None = None) -> Call:
+    """MTE3 pipeline barrier."""
+    return _create_barrier_op("system.bar_mte3", span=span)
+
+
+def bar_fix(*, span: Span | None = None) -> Call:
+    """FIX pipeline barrier."""
+    return _create_barrier_op("system.bar_fix", span=span)
 
 
 def bar_all(*, span: Span | None = None) -> Call:
@@ -477,10 +497,15 @@ register_table(
         # no args, no kwargs
         "system.bar_v": OpSpec(builder=bar_v, parse_args=False, parse_kwargs=False),
         "system.bar_m": OpSpec(builder=bar_m, parse_args=False, parse_kwargs=False),
+        "system.bar_mte1": OpSpec(builder=bar_mte1, parse_args=False, parse_kwargs=False),
+        "system.bar_mte2": OpSpec(builder=bar_mte2, parse_args=False, parse_kwargs=False),
+        "system.bar_mte3": OpSpec(builder=bar_mte3, parse_args=False, parse_kwargs=False),
+        "system.bar_fix": OpSpec(builder=bar_fix, parse_args=False, parse_kwargs=False),
         "system.bar_all": OpSpec(builder=bar_all, parse_args=False, parse_kwargs=False),
         "get_block_idx": OpSpec(ir_name="get_block_idx", parse_args=False, parse_kwargs=False),
         "get_subblock_idx": OpSpec(ir_name="get_subblock_idx", parse_args=False, parse_kwargs=False),
         "get_block_num": OpSpec(ir_name="get_block_num", parse_args=False, parse_kwargs=False),
+        "get_subblock_num": OpSpec(ir_name="get_subblock_num", parse_args=False, parse_kwargs=False),
         "get_spr": OpSpec(ir_name="get_spr", parse_args=False, parse_kwargs=False),
         # args + kwargs
         "system.dcci": OpSpec(builder=dcci),
