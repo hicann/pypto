@@ -38,7 +38,7 @@ def gen_data(t=16):
     return x_ori, scale, hc_base_ori, res
 
 
-@pypto.frontend.jit()
+@pypto.frontend.jit(new_ir=True)
 def kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
     scale: pypto.Tensor([3], pypto.DT_FP32),

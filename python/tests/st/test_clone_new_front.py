@@ -23,7 +23,7 @@ N1 = 64
 D = 64
 
 
-@pypto.frontend.jit()
+@pypto.frontend.jit(new_ir=True)
 def clone_kernel_func(
     in_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),

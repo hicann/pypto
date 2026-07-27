@@ -17,7 +17,7 @@ import torch_npu
 import pypto
 
 
-@pypto.frontend.jit()
+@pypto.frontend.jit(new_ir=True)
 def cust_dyn_func_add(
     a: pypto.Tensor[[], pypto.DT_INT32], b: pypto.Tensor[[], pypto.DT_INT32], c: pypto.Tensor[[], pypto.DT_INT32]
 ):
@@ -25,7 +25,7 @@ def cust_dyn_func_add(
     c.move(a + b)
 
 
-@pypto.frontend.jit()
+@pypto.frontend.jit(new_ir=True)
 def cust_dyn_func_sub(
     a: pypto.Tensor[[...], pypto.DT_INT32],
     b: pypto.Tensor[[...], pypto.DT_INT32],

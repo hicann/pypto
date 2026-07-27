@@ -22,7 +22,7 @@ import torch
 import pypto
 
 
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
 def gather_matmul_pto_kernel(
     src: pypto.Tensor(),
     indices: pypto.Tensor(),
@@ -148,8 +148,9 @@ def run_gather_in_l1_demo(run_mode):
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
     @pypto.frontend.jit(
-        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1}, runtime_options={"run_mode": mode}
-    )
+        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1}, runtime_options={"run_mode": mode},
+        new_ir=True,
+)
     def gather_demo_kernel(
         src: pypto.Tensor([], pypto.DT_FP16),
         indices: pypto.Tensor([], pypto.DT_INT32),

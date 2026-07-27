@@ -390,7 +390,7 @@ def _process_batch_3d_inner(params: ProcessBatchParams):
             _process_tile_3d(params.ctx, params.lp, indices, offsets)
 
 
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
 def batch_matmul_kernel_3d(
     a_tensor: pypto.Tensor(),
     b_tensor: pypto.Tensor(),
@@ -480,7 +480,7 @@ def _process_batch_4d_inner(params: ProcessBatchParams):
             _process_tile_4d(params.ctx, params.lp, indices, offsets)
 
 
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
 def batch_matmul_kernel_4d(
     a_tensor: pypto.Tensor(),
     b_tensor: pypto.Tensor(),
@@ -652,8 +652,9 @@ def run_batch_matmul_demo(run_mode):
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
     @pypto.frontend.jit(
-        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1}, runtime_options={"run_mode": mode}
-    )
+        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1}, runtime_options={"run_mode": mode},
+        new_ir=True,
+)
     def batch_matmul_demo_kernel(
         a: pypto.Tensor([], pypto.DT_INT8),
         b: pypto.Tensor([], pypto.DT_INT8),

@@ -20,7 +20,7 @@ import torch_npu
 import pypto
 
 
-@pypto.frontend.jit()
+@pypto.frontend.jit(new_ir=True)
 def cust_dyn_func(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),

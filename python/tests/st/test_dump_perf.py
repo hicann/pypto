@@ -28,7 +28,7 @@ _MULTI_STITCH_TOTAL_SIZE = _MULTI_STITCH_NUM_CHUNKS * _MULTI_STITCH_CHUNK_SIZE
 _MULTI_STITCH_RUN_COUNT = 3
 
 
-@pypto.frontend.jit(runtime_options={"stitch_function_max_num": 64})
+@pypto.frontend.jit(runtime_options={"stitch_function_max_num": 64}, new_ir=True)
 def multi_stitch_kernel(
     x: pypto.Tensor([pypto.STATIC], pypto.DT_FP32),
     out: pypto.Tensor([pypto.STATIC], pypto.DT_FP32),

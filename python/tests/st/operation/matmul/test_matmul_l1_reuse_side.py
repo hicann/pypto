@@ -68,7 +68,8 @@ def _run_side_matmul(side: str, case: _Case):
             "cube_nbuffer_setting": {-1: 1},
         },
         debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0},
-    )
+        new_ir=True,
+)
     def matmul_kernel(
         a: pypto.Tensor([m, k], pypto.DT_FP16),
         b: pypto.Tensor([k, n], pypto.DT_FP16),

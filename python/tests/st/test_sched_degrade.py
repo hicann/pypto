@@ -32,7 +32,9 @@ def test_sched_degrade_launch_aicpu_2():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
 
-    jit_kernel = pypto.frontend.jit(runtime_options={"device_sched_mode": 1, "launch_sched_aicpu_num": 2})(add_kernel)
+    jit_kernel = pypto.frontend.jit(
+        runtime_options={"device_sched_mode": 1, "launch_sched_aicpu_num": 2},
+        new_ir=True)(add_kernel)
 
     tiling = 32
     a_data = torch.ones((tiling * 2, tiling * 2), dtype=torch.int32, device=f'npu:{device_id}') * 5
@@ -50,7 +52,9 @@ def test_sched_degrade_launch_aicpu_3():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
 
-    jit_kernel = pypto.frontend.jit(runtime_options={"device_sched_mode": 0, "launch_sched_aicpu_num": 3})(add_kernel)
+    jit_kernel = pypto.frontend.jit(
+        runtime_options={"device_sched_mode": 0, "launch_sched_aicpu_num": 3},
+        new_ir=True)(add_kernel)
 
     tiling = 32
     a_data = torch.ones((tiling * 2, tiling * 2), dtype=torch.int32, device=f'npu:{device_id}') * 5
@@ -68,7 +72,9 @@ def test_sched_degrade_launch_aicpu_4():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
 
-    jit_kernel = pypto.frontend.jit(runtime_options={"device_sched_mode": 1, "launch_sched_aicpu_num": 4})(add_kernel)
+    jit_kernel = pypto.frontend.jit(
+        runtime_options={"device_sched_mode": 1, "launch_sched_aicpu_num": 4},
+        new_ir=True)(add_kernel)
 
     tiling = 32
     a_data = torch.ones((tiling * 2, tiling * 2), dtype=torch.int32, device=f'npu:{device_id}') * 5
@@ -87,8 +93,9 @@ def test_sched_degrade_disable_early_launch():
     torch.npu.set_device(device_id)
 
     jit_kernel = pypto.frontend.jit(
-        runtime_options={"device_sched_mode": 1, "launch_sched_aicpu_num": 3, "launch_early_mode": 1}
-    )(add_kernel)
+        runtime_options={"device_sched_mode": 1, "launch_sched_aicpu_num": 3, "launch_early_mode": 1},
+        new_ir=True,
+)(add_kernel)
 
     tiling = 32
     a_data = torch.ones((tiling * 2, tiling * 2), dtype=torch.int32, device=f'npu:{device_id}') * 5
@@ -107,8 +114,9 @@ def test_sched_degrade_allow_cross_cluster():
     torch.npu.set_device(device_id)
 
     jit_kernel = pypto.frontend.jit(
-        runtime_options={"device_sched_mode": 1, "launch_sched_aicpu_num": 2, "launch_early_mode": 2}
-    )(add_kernel)
+        runtime_options={"device_sched_mode": 1, "launch_sched_aicpu_num": 2, "launch_early_mode": 2},
+        new_ir=True,
+)(add_kernel)
 
     tiling = 32
     a_data = torch.ones((tiling * 2, tiling * 2), dtype=torch.int32, device=f'npu:{device_id}') * 5

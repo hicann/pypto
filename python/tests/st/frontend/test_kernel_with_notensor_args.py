@@ -17,7 +17,7 @@ import torch
 import pypto
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, new_ir=True)
 def add_kernel(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
@@ -42,7 +42,7 @@ def test_add_with_kwargs():
     assert torch.allclose(r.cpu().float(), torch.ones(32, 32) * 2 + 1)
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, new_ir=True)
 def add_npu_with_tiling(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
