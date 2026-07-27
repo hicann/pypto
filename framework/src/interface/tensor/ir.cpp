@@ -47,20 +47,20 @@ Pass pass::AggressiveDCE()
     return pass::CreateFunctionPass(
         [](const FunctionPtr& func) -> FunctionPtr {
             // Collect RawTensors from function input parameters.
-            auto& irContext = npu::tile_fwk::IRContext::Get();
-            std::unordered_set<std::string> varNames;
+            std::unordered_set<int> memIds;
             for (const auto& param : func->params_) {
                 if (auto type = ir::As<LogicalTensorType>(param->GetType())) {
                     auto lt = std::dynamic_pointer_cast<const LogicalTensor>(param);
-                    varNames.insert(irContext.GetOriginName(lt));
+                    memIds.insert(lt->tensor->memoryId);
                 }
             }
 
-            auto isRemovable = [&varNames, &irContext](const StmtPtr& stmt) -> bool {
+            auto isRemovable = [&memIds](const StmtPtr& stmt) -> bool {
                 // TensorOpStmt: written to input slot cannot be removed
                 if (auto tensorOp = std::dynamic_pointer_cast<const TensorOpStmt>(stmt)) {
                     for (auto arg : tensorOp->result_) {
-                        if (varNames.count(irContext.GetOriginName(arg))) {
+                        auto lt = std::dynamic_pointer_cast<const LogicalTensor>(arg);
+                        if (memIds.count(lt->tensor->memoryId)) {
                             return false;
                         }
                     }

@@ -1422,6 +1422,9 @@ class EvalStmt(Stmt):
 class BreakStmt(Stmt):
     """Break statement: break."""
 
+    value: Final[list[Expr]]
+    """Value to break."""
+
     @overload
     def __init__(self, span: Span) -> None:
         """Create a break statement.
@@ -1442,6 +1445,9 @@ class BreakStmt(Stmt):
 
 class ContinueStmt(Stmt):
     """Continue statement: continue."""
+
+    value: Final[list[Expr]]
+    """Value to continue."""
 
     @overload
     def __init__(self, span: Span) -> None:

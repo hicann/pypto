@@ -627,3 +627,59 @@ def test_tensor_move():
     assert isinstance(add_stmt, ir.TensorOpStmt)
     assert add_stmt.opcode == "ADDS"
     assert add_stmt.result[0].name == 'b_0'
+
+
+def test_dce_reshape_inplace1():
+    def foo(a, b):
+        a1 = pypto.reshape(a, [32, 32], inplace=True)
+        for _ in pypto.loop(1):
+            a1[0:, 0:] = b + 1 # a1 reshaped from input, could not be deleted
+    x = pypto.Tensor((32, 32), pypto.DT_FP32)
+    y = pypto.Tensor((32, 32), pypto.DT_FP32)
+    func = _run_dce(foo, x, y)
+    for_stmt = func.body[1]
+    assert isinstance(for_stmt, ir.ForStmt)
+    stmt = for_stmt.body[1]
+    assert isinstance(stmt, ir.TensorOpStmt)
+    assert stmt.opcode == "ASSEMBLE"
+
+
+def test_dce_reshape_inplace2():
+    def foo(a, b):
+        a1 = pypto.reshape(a, [32, 32], inplace=True)
+        a1[:] = b + 1 # a1 reshaped from input, could not be deleted
+    x = pypto.Tensor((32, 32), pypto.DT_FP32)
+    y = pypto.Tensor((32, 32), pypto.DT_FP32)
+    func = _run_dce(foo, x, y)
+    stmt = func.body[1]
+    assert isinstance(stmt, ir.TensorOpStmt)
+    assert stmt.opcode == "ADDS"
+
+
+def test_dce_reshape_inplace3():
+    def foo(a, b):
+        a1 = a + 1
+        a2 = pypto.reshape(a1, [32, 32], inplace=True)
+        a2[:] = b + 1 # a2 not reshaped from input, could be deleted
+    x = pypto.Tensor((32, 32), pypto.DT_FP32)
+    y = pypto.Tensor((32, 32), pypto.DT_FP32)
+    func = _run_dce(foo, x, y)
+    assert len(func.body) == 1
+
+
+def test_dce_reshape_inplace4():
+    def foo(t0, t1, out):
+        pypto.set_vec_tile_shapes(32, 32)
+        out[:] = pypto.add(t0, t1)
+        for _ in pypto.loop(2, name="L02", idx_name="idx3"):
+            t0[:] = pypto.add(t0, t1)
+            out[:] = pypto.add(t0, out)
+
+    x = pypto.Tensor((32, 32), pypto.DT_FP32)
+    y = pypto.Tensor((32, 32), pypto.DT_FP32)
+    z = pypto.Tensor((32, 32), pypto.DT_FP32)
+    func = _run_dce(foo, x, y, z)
+    for_stmt = func.body[1]
+    stmt3 = for_stmt.body[-1]
+    assert isinstance(stmt3, ir.ContinueStmt)
+    assert len(stmt3.value) == 2 # t0 and out both

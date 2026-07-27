@@ -78,14 +78,14 @@ TEST(DcePassTest, TensorMove)
 {
     IrFuncSetup setup("TensorMove");
     auto a = setup.MakeParam("a");
-    setup.MakeParam("b"); // input b: target of the tensor "move" at body[2]
+    auto b = setup.MakeParam("b"); // input b: target of the tensor "move" at body[2]
 
     auto& builder = setup.builder;
     const auto span = Sp();
     const auto fp32 = a->GetType();
 
     // body[0]: last = pypto.full(a.shape, 1.0, a.dtype)
-    auto last = IRContext::Get().MakeVar("last", fp32, span);
+    auto last = builder.CreateTensorVar(DT_FP32, {32, 32}, TileOpFormat::TILEOP_ND, "last");
     auto fullStmt = builder.CreateTensorOpStmt(std::vector<ir::VarPtr>{last}, nullptr, "FULL",
                                                std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(a)},
                                                std::vector<ir::VarPtr>{},
@@ -106,7 +106,8 @@ TEST(DcePassTest, TensorMove)
     setup.stmts.push_back(forStmt);
 
     // body[2]: b[:] = a + 1  -> ADDS writing into input b (result name "b_0").
-    auto bResult = IRContext::Get().MakeVar("b", fp32, span); // second "b" -> "b_0"
+    auto bResult = builder.CreateTensorVar(DT_FP32, {32, 32}, TileOpFormat::TILEOP_ND, "b_0"); // second "b" -> "b_0"
+    bResult->tensor->memoryId = b->tensor->memoryId;
     auto addStmt = builder.CreateTensorOpStmt(std::vector<ir::VarPtr>{bResult}, nullptr, "ADDS",
                                               std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(a)},
                                               std::vector<ir::VarPtr>{},

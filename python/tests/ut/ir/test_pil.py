@@ -6,6 +6,8 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
+from types import SimpleNamespace
+
 import pytest
 
 import pypto
@@ -999,5 +1001,37 @@ def test_delete_statement():
         a = {1: 2, 3: 4}
         del a[1]
         assert a == {3: 4}
+
+        # nested subscript delete across multiple targets
+        a = [[1, 2, 3], [4, 5, 6, 7]]
+        del a[1][2]
+        assert a == [[1, 2, 3], [4, 5, 7]]
+
+        # attribute then subscript / subscript then attribute / dynamic key
+        m = SimpleNamespace(bcd=[1, 2, 3])
+        n = SimpleNamespace(efg=[4, 5, 6, 7])
+        del m.bcd[2], n.efg[3]
+        assert m.bcd == [1, 2]
+        assert n.efg == [4, 5, 6]
+
+        p = [SimpleNamespace(bc=1), SimpleNamespace(bc=2), SimpleNamespace(bc=3)]
+        q = {0: SimpleNamespace(fff=9), 1: SimpleNamespace(fff=8)}
+        del p[2].bc, q[1].fff
+        assert not hasattr(p[2], "bc")
+        assert not hasattr(q[1], "fff")
+
+        # delete attribute / index of a call result
+        def mk():
+            return SimpleNamespace(c=1)
+
+        def idx():
+            return {39: 0}
+
+        del mk().c
+        del idx()[39]
+
+        # nested tuple targets mixing names and sub-tuples
+        a, b, c, f, g, e = 1, 2, 3, 4, 5, 6
+        del a, (b, c, (f, g)), e
 
     pil.compile(foo)
