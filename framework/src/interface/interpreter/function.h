@@ -1143,7 +1143,7 @@ struct FunctionInterpreter {
                     iOpDataList[index] = AllocateDataView(frame, iop);
                     continue;
                 }
-                if (frame.callop != nullptr) {
+                if (frame.callop != nullptr && IsMixSplitCallOp(frame.callop)) {
                     INTERPRETER_LOGI("ExecuteOperation: iop %zu is null, try to find in mixGlobalTensorDict.", index);
                     iOpDataList[index] = WaitAndGetMixGlobalTensorDataView(frame, iop);
                     if (iOpDataList[index] != nullptr) {
@@ -1172,8 +1172,8 @@ struct FunctionInterpreter {
                         dtype = DataType::DT_FP32;
                     }
                     oOpDataList.push_back(AllocateDataView(frame, oop, dtype));
-                } else if (frame.callop != nullptr && MIX_PATH_OPS.count(op->GetOpcode()) > 0 &&
-                           !isOutCast(frame.func->GetOutcast(), oop)) {
+                } else if (frame.callop != nullptr && IsMixSplitCallOp(frame.callop) &&
+                           MIX_PATH_OPS.count(op->GetOpcode()) > 0 && !isOutCast(frame.func->GetOutcast(), oop)) {
                     auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
                     oOpDataList.push_back(AllocateOrReuseMixGlobalOutputDataView(frame, oop, callopAttr->wrapId));
                 } else {
