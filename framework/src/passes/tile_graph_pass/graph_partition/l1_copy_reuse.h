@@ -21,6 +21,7 @@
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_utils/reschedule_utils.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
+#include "passes/pass_utils/common_operation_eliminate_utils.h"
 #include "passes/pass_interface/pass.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
@@ -145,6 +146,10 @@ private:
     Status RunOnFunction(Function& function) override
     {
         APASS_LOG_INFO_F(Elements::Operation, "===> Start L1CopyInReuseMerge.");
+        if (CommonOperationEliminateUtils::EliminateCommonOperation(function) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Common operation eliminate failed!");
+            return FAILED;
+        }
         if (L1CopyInReuse(function) == FAILED) {
             return FAILED;
         }

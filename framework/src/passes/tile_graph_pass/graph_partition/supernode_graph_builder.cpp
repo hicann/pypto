@@ -15,7 +15,6 @@
 
 #include "supernode_graph_builder.h"
 #include <iostream>
-#include <deque>
 #include <algorithm>
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
@@ -29,19 +28,30 @@ const std::unordered_set<Opcode> nodeScopeSkipCode{Opcode::OP_ASSEMBLE, Opcode::
 
 uint64_t OperationGraphInfo::GetHash(const Operation* op) const
 {
-    std::string hashString;
-    hashString.append(op->GetOpcodeStr());
+    // Numeric hash replaces string concatenation to avoid malloc at 200K+ scale.
+    // Tags distinguish IOperand/OOperand sections (equivalent to original "IOperand-"/"OOperand-" prefixes).
+    // hashCombine follows the boost::hash_combine formula:
+    //   - 0x9e3779b9ULL is the fractional part of the golden ratio (floor(2^32 / phi)),
+    //     used as a constant to ensure well-distributed bit mixing.
+    //   - Shifts 6 (left) and 2 (right) spread high/low bits across the 64-bit word,
+    //     preventing collision patterns when seeds share low-order bits.
+    auto hashCombine = [](uint64_t seed, uint64_t val) -> uint64_t {
+        return seed ^ (val + 0x9e3779b9ULL + (seed << 6) + (seed >> 2));
+    };
+    constexpr uint64_t IOPERAND_TAG = 0x49504F5045524E44ULL;
+    constexpr uint64_t OOPERAND_TAG = 0x4F4F5045524E44ULL;
+    uint64_t hashValue = static_cast<uint64_t>(op->GetOpcode());
+    hashValue = hashCombine(hashValue, IOPERAND_TAG);
     for (const auto& tensor : op->GetIOperands()) {
-        hashString.append("IOperand-");
-        hashString.append(std::to_string(tensor->GetMemoryTypeOriginal()));
-        hashString.append(std::to_string(tensor->tensor->datatype));
+        hashValue = hashCombine(hashValue, static_cast<uint64_t>(tensor->GetMemoryTypeOriginal()));
+        hashValue = hashCombine(hashValue, static_cast<uint64_t>(tensor->tensor->datatype));
     }
+    hashValue = hashCombine(hashValue, OOPERAND_TAG);
     for (const auto& tensor : op->GetOOperands()) {
-        hashString.append("OOperand-");
-        hashString.append(std::to_string(tensor->GetMemoryTypeOriginal()));
-        hashString.append(std::to_string(tensor->tensor->datatype));
+        hashValue = hashCombine(hashValue, static_cast<uint64_t>(tensor->GetMemoryTypeOriginal()));
+        hashValue = hashCombine(hashValue, static_cast<uint64_t>(tensor->tensor->datatype));
     }
-    return std::hash<std::string>{}(hashString);
+    return hashValue;
 }
 
 std::vector<int32_t> OperationGraphInfo::GetSameLevelOpIdx(int32_t opIdx, Opcode opLabel) const
@@ -301,6 +311,9 @@ Status NodeGraphInfo::AvoidLoop(const std::shared_ptr<OperationGraphInfo> operat
         node2Op[nodeIdx].push_back(i);
     }
     for (size_t nodeIdx = 0; nodeIdx < node2Op.size(); nodeIdx++) {
+        if (node2Op[nodeIdx].size() <= 1) {
+            continue; // single-op node: BFS would only find itself
+        }
         std::vector<int32_t> expandNode = NodeInnerExpand(operationGraphInfo, node2Op[nodeIdx]);
         if (expandNode.size() == node2Op[nodeIdx].size() || expandNode.empty()) {
             continue;
@@ -444,9 +457,9 @@ bool NodeGraphInfo::GetNodeMergeable(const std::shared_ptr<OperationGraphInfo> o
 {
     bool isMergeable = !(node2Op_[nodeIdx].size() == 1 &&
                          operationGraphInfo->opList_[node2Op_[nodeIdx][0]]->GetOpcode() == Opcode::OP_RESHAPE &&
-                         ((nodeInGraph_[nodeIdx].size() > 1 && nodeOutGraph_[nodeIdx].size() > 1) ||
-                          (nodeInGraph_[nodeIdx].size() > 1 && nodeOutGraph_[nodeIdx].empty()) ||
-                          (nodeInGraph_[nodeIdx].empty() && nodeOutGraph_[nodeIdx].size() > 1)));
+                         ((nodeInGraphList_[nodeIdx].size() > 1 && nodeOutGraphList_[nodeIdx].size() > 1) ||
+                          (nodeInGraphList_[nodeIdx].size() > 1 && nodeOutGraphList_[nodeIdx].empty()) ||
+                          (nodeInGraphList_[nodeIdx].empty() && nodeOutGraphList_[nodeIdx].size() > 1)));
 
     for (auto opIdx : node2Op_[nodeIdx]) {
         auto& op = operationGraphInfo->opList_[opIdx];
@@ -465,25 +478,31 @@ bool NodeGraphInfo::GetNodeMergeable(const std::shared_ptr<OperationGraphInfo> o
 
 Status NodeGraphInfo::BuildInOutGraph(const std::shared_ptr<OperationGraphInfo> operationGraphInfo)
 {
-    nodeInGraph_.assign(node2Op_.size(), std::set<int32_t>());
-    nodeOutGraph_.assign(node2Op_.size(), std::set<int32_t>());
-    nodeInGraphList_.assign(node2Op_.size(), std::vector<int32_t>());
-    nodeOutGraphList_.assign(node2Op_.size(), std::vector<int32_t>());
-    for (size_t i = 0; i < node2Op_.size(); i++) {
-        std::vector<int32_t>& currNode = node2Op_[i];
-        for (int32_t opIdx : currNode) {
+    size_t numNodes = node2Op_.size();
+    nodeInGraphList_.assign(numNodes, std::vector<int32_t>());
+    nodeOutGraphList_.assign(numNodes, std::vector<int32_t>());
+    // INVALID_NODE_IDX marks unseen neighbour slots during edge deduplication.
+    constexpr int32_t INVALID_NODE_IDX = -1;
+    std::vector<int32_t> inSeen(numNodes, INVALID_NODE_IDX);
+    std::vector<int32_t> outSeen(numNodes, INVALID_NODE_IDX);
+    for (size_t i = 0; i < numNodes; i++) {
+        int32_t iIdx = static_cast<int32_t>(i);
+        for (int32_t opIdx : node2Op_[i]) {
             for (int32_t publisherOpIdx : operationGraphInfo->inGraph_[opIdx]) {
                 int32_t publisherNodeIdx = op2Node_[publisherOpIdx];
-                if (publisherNodeIdx != static_cast<int32_t>(i)) {
-                    nodeInGraph_[i].insert(publisherNodeIdx);
-                    nodeOutGraph_[publisherNodeIdx].insert(i);
+                if (publisherNodeIdx == iIdx) {
+                    continue;
+                }
+                if (inSeen[publisherNodeIdx] != iIdx) {
+                    inSeen[publisherNodeIdx] = iIdx;
+                    nodeInGraphList_[i].push_back(publisherNodeIdx);
+                }
+                if (outSeen[publisherNodeIdx] != iIdx) {
+                    outSeen[publisherNodeIdx] = iIdx;
+                    nodeOutGraphList_[publisherNodeIdx].push_back(iIdx);
                 }
             }
         }
-    }
-    for (size_t i = 0; i < node2Op_.size(); i++) {
-        nodeInGraphList_[i].insert(nodeInGraphList_[i].begin(), nodeInGraph_[i].begin(), nodeInGraph_[i].end());
-        nodeOutGraphList_[i].insert(nodeOutGraphList_[i].begin(), nodeOutGraph_[i].begin(), nodeOutGraph_[i].end());
     }
     return SUCCESS;
 }
@@ -534,23 +553,42 @@ Status SuperNodeGraphBuilder::BuildOpGraph(const std::vector<Operation*>& opList
         return FAILED;
     }
     operationInfo_->opList_ = opList;
-    operationInfo_->inGraph_.resize(opList.size());
-    operationInfo_->outGraph_.resize(opList.size());
     operationInfo_->opHashList_.resize(opList.size());
     operationInfo_->opCoreType_.resize(opList.size());
     operationInfo_->useCVMixPartition_ = useCVMixPartition_;
     for (size_t i = 0; i < opList.size(); i++) {
         operationInfo_->magic2Idx_[opList[i]->GetOpMagic()] = i;
     }
+    // Pre-build tensor → producer op indices map to avoid red-black tree traversal (GetProducers())
+    std::unordered_map<LogicalTensor*, std::vector<int32_t>> tensorToProducers;
+    tensorToProducers.reserve(opList.size());
     for (size_t i = 0; i < opList.size(); i++) {
+        for (const auto& output : opList[i]->GetOOperands()) {
+            tensorToProducers[output.get()].push_back(static_cast<int32_t>(i));
+        }
+    }
+    operationInfo_->inGraph_.resize(opList.size());
+    operationInfo_->outGraph_.resize(opList.size());
+    // INVALID_OP_IDX marks unseen producer/consumer slots during edge deduplication.
+    constexpr int32_t INVALID_OP_IDX = -1;
+    std::vector<int32_t> inSeen(opList.size(), INVALID_OP_IDX);
+    std::vector<int32_t> outSeen(opList.size(), INVALID_OP_IDX);
+    for (size_t i = 0; i < opList.size(); i++) {
+        int32_t iIdx = static_cast<int32_t>(i);
         for (const auto& input : opList[i]->GetIOperands()) {
-            for (const auto& parentOpPtr : input->GetProducers()) {
-                if (operationInfo_->magic2Idx_.count(parentOpPtr->GetOpMagic()) == 0) {
-                    continue;
+            auto it = tensorToProducers.find(input.get());
+            if (it == tensorToProducers.end()) {
+                continue;
+            }
+            for (int32_t operationInIdx : it->second) {
+                if (inSeen[operationInIdx] != iIdx) {
+                    inSeen[operationInIdx] = iIdx;
+                    operationInfo_->inGraph_[i].push_back(operationInIdx);
                 }
-                int32_t operationInIdx = operationInfo_->magic2Idx_[parentOpPtr->GetOpMagic()];
-                operationInfo_->inGraph_[i].insert(operationInIdx);
-                operationInfo_->outGraph_[operationInIdx].insert(i);
+                if (outSeen[operationInIdx] != iIdx) {
+                    outSeen[operationInIdx] = iIdx;
+                    operationInfo_->outGraph_[operationInIdx].push_back(iIdx);
+                }
             }
         }
     }
@@ -788,43 +826,77 @@ bool SuperNodeGraphBuilder::AssembleToCopyoutScene(Operation* op)
     return true;
 }
 
-inline void UpdateConsumerScopeId(Operation* op, Operation::ScopeInfo targetScope)
+inline bool FindScopeFromProducers(Operation* op, Operation::ScopeInfo& foundScope)
 {
-    op->SetScopeInfo(targetScope);
-    for (auto& consumer : op->ConsumerOps()) {
-        if (consumer->GetScopeId() == -1 && consumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
-            UpdateConsumerScopeId(consumer, targetScope);
+    for (auto& input : op->GetIOperands()) {
+        for (auto* producer : input->GetProducers()) {
+            if (producer->BelongTo() != op->BelongTo()) {
+                continue;
+            }
+            if (producer->GetScopeId() != -1) {
+                foundScope = producer->GetScopeInfo();
+                return true;
+            }
         }
     }
+    return false;
 }
 
-inline void UpdateProducerScopeId(Operation* op, Operation::ScopeInfo targetScope)
+inline bool FindScopeFromConsumers(Operation* op, Operation::ScopeInfo& foundScope)
 {
-    op->SetScopeInfo(targetScope);
-    for (auto& producer : op->ProducerOps()) {
-        if (producer->GetScopeId() == -1 && producer->GetOpcode() == Opcode::OP_VIEW) {
-            UpdateProducerScopeId(producer, targetScope);
+    for (auto& output : op->GetOOperands()) {
+        for (auto* consumer : output->GetConsumers()) {
+            if (consumer->BelongTo() != op->BelongTo()) {
+                continue;
+            }
+            if (consumer->GetScopeId() != -1) {
+                foundScope = consumer->GetScopeInfo();
+                return true;
+            }
         }
     }
+    return false;
 }
 
 inline void PropagateScopeInfo(std::vector<Operation*>& opList)
 {
-    for (size_t i = 0; i < opList.size(); i++) {
-        auto targetScope = opList[i]->GetScopeInfo();
-        if (targetScope.scopeId == DEFAULT_SCOPE_ID) {
+    // ASSEMBLE inherits scope from producers, VIEW from consumers.
+    // Pending list is in topological order; reversing deferred before retry
+    // resolves VIEW chains (tail-first) in one additional pass.
+    std::vector<Operation*> pending;
+    for (Operation* op : opList) {
+        if (op->GetOpcode() != Opcode::OP_ASSEMBLE && op->GetOpcode() != Opcode::OP_VIEW) {
             continue;
         }
-        for (auto& consumer : opList[i]->ConsumerOps()) {
-            if (consumer->GetScopeId() != targetScope.scopeId && consumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
-                UpdateConsumerScopeId(consumer, targetScope);
+        if (op->GetScopeId() == -1) {
+            pending.push_back(op);
+            continue;
+        }
+        Operation::ScopeInfo neighbourScope{};
+        bool found = (op->GetOpcode() == Opcode::OP_ASSEMBLE) ? FindScopeFromProducers(op, neighbourScope) :
+                                                                FindScopeFromConsumers(op, neighbourScope);
+        if (found && neighbourScope.scopeId != op->GetScopeId()) {
+            pending.push_back(op);
+        }
+    }
+
+    while (!pending.empty()) {
+        std::vector<Operation*> deferred;
+        for (Operation* op : pending) {
+            Operation::ScopeInfo foundScope{};
+            bool found = (op->GetOpcode() == Opcode::OP_ASSEMBLE) ? FindScopeFromProducers(op, foundScope) :
+                                                                    FindScopeFromConsumers(op, foundScope);
+            if (found && foundScope.scopeId != op->GetScopeId()) {
+                op->SetScopeInfo(foundScope);
+            } else if (!found) {
+                deferred.push_back(op);
             }
         }
-        for (auto& producer : opList[i]->ProducerOps()) {
-            if (producer->GetScopeId() != targetScope.scopeId && producer->GetOpcode() == Opcode::OP_VIEW) {
-                UpdateProducerScopeId(producer, targetScope);
-            }
+        if (deferred.size() == pending.size()) {
+            break; // no progress
         }
+        std::reverse(deferred.begin(), deferred.end());
+        pending = std::move(deferred);
     }
 }
 
@@ -967,7 +1039,7 @@ void SuperNodeGraphBuilder::MergeScopeNodesSequential(const std::vector<int32_t>
 {
     for (int32_t nodeIdx : nodes) {
         int32_t p1 = FindParent(snParent, nodeIdx);
-        for (int32_t outNodeIdx : superNodeInfo_->nodeOutGraph_[nodeIdx]) {
+        for (int32_t outNodeIdx : superNodeInfo_->nodeOutGraphList_[nodeIdx]) {
             if (superNodeInfo_->nodeScope_[outNodeIdx].scopeId == scopeId) {
                 int32_t p2 = FindParent(snParent, outNodeIdx);
                 snParent[p2] = p1;
@@ -1122,7 +1194,7 @@ void SuperNodeGraphBuilder::ComputeDirectionalNodeHash(std::shared_ptr<NodeGraph
                                                        const std::vector<uint64_t>& reduceNodeHashList,
                                                        std::vector<uint64_t>& hashList, bool reverse)
 {
-    const auto& neighbourGraph = reverse ? reduceNodeInfo->nodeOutGraph_ : reduceNodeInfo->nodeInGraph_;
+    const auto& neighbourGraph = reverse ? reduceNodeInfo->nodeOutGraphList_ : reduceNodeInfo->nodeInGraphList_;
     int32_t start = reverse ? static_cast<int32_t>(operationInfo_->opList_.size()) - 1 : 0;
     int32_t end = reverse ? -1 : static_cast<int32_t>(operationInfo_->opList_.size());
     int32_t step = reverse ? -1 : 1;
@@ -1132,15 +1204,18 @@ void SuperNodeGraphBuilder::ComputeDirectionalNodeHash(std::shared_ptr<NodeGraph
             continue;
         }
         hashList[nodeIdx] = reduceNodeHashList[nodeIdx];
-        std::vector<uint64_t> neighbourHashes;
-        neighbourHashes.reserve(neighbourGraph[nodeIdx].size());
+        uint64_t xorHash = 0;
+        uint64_t sumHash = 0;
         for (int32_t j : neighbourGraph[nodeIdx]) {
-            neighbourHashes.push_back(hashList[j]);
+            uint64_t neighbourHash = hashList[j];
+            xorHash ^= neighbourHash;
+            sumHash += neighbourHash;
         }
-        std::sort(neighbourHashes.begin(), neighbourHashes.end());
-        for (uint64_t h : neighbourHashes) {
-            hashList[nodeIdx] = CombineHash(hashList[nodeIdx], h);
-        }
+        // HASH_SUM_MIXER is an odd 64-bit constant from murmur3-style finalizers
+        // that disperses sumHash bits so the XOR with xorHash is order-independent
+        // yet less likely to collide.
+        constexpr uint64_t HASH_SUM_MIXER = 0x9ddfea08eb382d69ULL;
+        hashList[nodeIdx] = CombineHash(hashList[nodeIdx], xorHash ^ (sumHash * HASH_SUM_MIXER));
     }
 }
 

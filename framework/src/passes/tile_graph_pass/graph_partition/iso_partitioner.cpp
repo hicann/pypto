@@ -27,16 +27,21 @@
 
 namespace npu::tile_fwk {
 
-Status IsoPartitioner::PartitionGraph(Function& function)
+bool IsoPartitioner::HandleLiteNPU(Function& function)
 {
-    if (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
-        for (auto& op : function.Operations()) {
-            op.UpdateSubgraphID(0);
-        }
-        function.SetTotalSubGraphCount(1);
-        APASS_LOG_INFO_F(Elements::Operation, "Graph Partition is skipped.");
-        return SUCCESS;
+    if (!IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
+        return false;
     }
+    for (auto& op : function.Operations(false)) {
+        op.UpdateSubgraphID(0);
+    }
+    function.SetTotalSubGraphCount(1);
+    APASS_LOG_INFO_F(Elements::Operation, "Graph Partition is skipped.");
+    return true;
+}
+
+Status IsoPartitioner::RunPartitionSteps(Function& function)
+{
     if (EstimateCycleUB(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Config, "Estimate and refresh cycleUB_ failed.");
         return FAILED;
@@ -79,14 +84,23 @@ Status IsoPartitioner::PartitionGraph(Function& function)
     return SUCCESS;
 }
 
+Status IsoPartitioner::PartitionGraph(Function& function)
+{
+    if (HandleLiteNPU(function)) {
+        return SUCCESS;
+    }
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
+    return RunPartitionSteps(function);
+}
+
 Status IsoPartitioner::BuildIsomorphismGroups()
 {
     std::vector<int32_t> idxInLinkNum;
     std::deque<int32_t> zeroInQueue;
     std::unordered_set<int32_t> currentNodeSet;
-    for (size_t i = 0; i < superNodeInfo_->nodeInGraph_.size(); i++) {
-        idxInLinkNum.push_back(superNodeInfo_->nodeInGraph_[i].size());
-        if (superNodeInfo_->nodeInGraph_[i].size() == 0) {
+    for (size_t i = 0; i < superNodeInfo_->nodeInGraphList_.size(); i++) {
+        idxInLinkNum.push_back(superNodeInfo_->nodeInGraphList_[i].size());
+        if (superNodeInfo_->nodeInGraphList_[i].size() == 0) {
             zeroInQueue.push_front(i);
         }
     }
@@ -160,7 +174,7 @@ Status IsomorphismGraphGroup::BuildGraphGroup(std::shared_ptr<OperationGraphInfo
 Status IsomorphismGraphGroup::InLinkCountDelete(int32_t nodeIdx, std::vector<int32_t>& idxInLinkNum,
                                                 std::deque<int32_t>& zeroInQueue)
 {
-    for (int32_t consumer : superNodeInfo_->nodeOutGraph_[nodeIdx]) {
+    for (int32_t consumer : superNodeInfo_->nodeOutGraphList_[nodeIdx]) {
         if (consumer < 0 || consumer >= static_cast<int32_t>(idxInLinkNum.size())) {
             APASS_LOG_ERROR_F(Elements::Operation, "Consumer index(%d) illegal in InLinkCountDelete.", consumer);
             return FAILED;
@@ -259,7 +273,7 @@ bool IsomorphismGraphGroup::IsLegalIsoGraphExtender(std::vector<int32_t>& expand
         if (currentNodeSet.count(candidate) > 0) {
             return false;
         }
-        for (int32_t fromNode : superNodeInfo_->nodeInGraph_[candidate]) {
+        for (int32_t fromNode : superNodeInfo_->nodeInGraphList_[candidate]) {
             if (subVisitedNodeSet_.count(fromNode) > 0 && !isoGraphs_[i]->HasNode(fromNode)) {
                 return false;
             }
@@ -278,7 +292,7 @@ bool IsomorphismGraphGroup::IsLegalIsoGraphExtender(std::vector<int32_t>& expand
             return false;
         }
     }
-    std::set<int32_t> candSet(expandCandidate.begin(), expandCandidate.end());
+    std::unordered_set<int32_t> candSet(expandCandidate.begin(), expandCandidate.end());
     if (candSet.size() != expandCandidate.size()) {
         return false;
     }
@@ -294,7 +308,7 @@ int32_t SubGraph::GetExpandCandidate(size_t expandNodeIdx, size_t expandLinkIdx,
         res = GraphExtendResult::EXTEND_NODE_EXHAUST;
         return 0;
     }
-    if (expandLinkIdx >= superNodeInfo_->nodeOutGraph_[nodeList_[expandNodeIdx]].size()) {
+    if (expandLinkIdx >= superNodeInfo_->nodeOutGraphList_[nodeList_[expandNodeIdx]].size()) {
         res = GraphExtendResult::EXTEND_LINK_EXHAUST;
         return 0;
     }
@@ -310,17 +324,21 @@ void SubGraph::BuildInOutSet()
     inNodes_.clear();
     outNodes_.clear();
     for (int32_t nodeIdx : nodeList_) {
-        for (int32_t inIdx : superNodeInfo_->nodeInGraph_[nodeIdx]) {
+        for (int32_t inIdx : superNodeInfo_->nodeInGraphList_[nodeIdx]) {
             if (nodeSet_.count(inIdx) == 0) {
-                inNodes_.insert(inIdx);
+                inNodes_.push_back(inIdx);
             }
         }
-        for (int32_t outIdx : superNodeInfo_->nodeOutGraph_[nodeIdx]) {
+        for (int32_t outIdx : superNodeInfo_->nodeOutGraphList_[nodeIdx]) {
             if (nodeSet_.count(outIdx) == 0) {
-                outNodes_.insert(outIdx);
+                outNodes_.push_back(outIdx);
             }
         }
     }
+    std::sort(inNodes_.begin(), inNodes_.end());
+    inNodes_.erase(std::unique(inNodes_.begin(), inNodes_.end()), inNodes_.end());
+    std::sort(outNodes_.begin(), outNodes_.end());
+    outNodes_.erase(std::unique(outNodes_.begin(), outNodes_.end()), outNodes_.end());
 }
 
 std::shared_ptr<SubGraph> IsomorphismGraphGroup::GetSubGraph(int32_t idx)
@@ -350,18 +368,18 @@ void IsomorphismGraphGroup::Clear()
 }
 
 Status IsoPartitioner::IsomorphismGroupMergePrepare(std::vector<std::pair<int32_t, int32_t>>& isoSubIdxs,
-                                                    std::vector<std::set<int32_t>>& isoInGraph,
-                                                    std::vector<std::set<int32_t>>& isoOutGraph,
+                                                    std::vector<std::unordered_set<int32_t>>& isoInGraph,
+                                                    std::vector<std::unordered_set<int32_t>>& isoOutGraph,
                                                     std::vector<std::vector<int32_t>>& isoNodeList,
                                                     std::vector<int32_t>& isoIdx2color)
 {
-    isoSubIdxs.resize(superNodeInfo_->nodeInGraph_.size());
+    isoSubIdxs.resize(superNodeInfo_->nodeInGraphList_.size());
     isoInGraph.resize(isoSubGroups_.size());
     isoOutGraph.resize(isoSubGroups_.size());
     for (size_t i = 0; i < isoSubGroups_.size(); i++) {
         for (size_t j = 0; j < isoSubGroups_[i]->Size(); j++) {
             for (int32_t nodeIdx : isoSubGroups_[i]->GetSubGraph(j)->GetNodeList()) {
-                if (nodeIdx < 0 || nodeIdx >= static_cast<int32_t>(superNodeInfo_->nodeInGraph_.size())) {
+                if (nodeIdx < 0 || static_cast<size_t>(nodeIdx) >= superNodeInfo_->nodeInGraphList_.size()) {
                     APASS_LOG_ERROR_F(Elements::Operation, "NodeIdx illegal in IsomorphismGroupMergePrepare.");
                     return FAILED;
                 }
@@ -374,7 +392,7 @@ Status IsoPartitioner::IsomorphismGroupMergePrepare(std::vector<std::pair<int32_
         for (size_t j = 0; j < isoSubGroups_[i]->Size(); j++) {
             isoSubGroups_[i]->GetSubGraph(j)->mergeHistoryIsoSub_.insert(std::pair<int32_t, int32_t>{i, j});
             for (int32_t nodeIdx : isoSubGroups_[i]->GetSubGraph(j)->inNodes_) {
-                if (nodeIdx < 0 || nodeIdx >= static_cast<int32_t>(superNodeInfo_->nodeInGraph_.size())) {
+                if (nodeIdx < 0 || static_cast<size_t>(nodeIdx) >= superNodeInfo_->nodeInGraphList_.size()) {
                     APASS_LOG_ERROR_F(Elements::Operation, "NodeIdx illegal in IsomorphismGroupMergePrepare.");
                     return FAILED;
                 }
@@ -383,7 +401,7 @@ Status IsoPartitioner::IsomorphismGroupMergePrepare(std::vector<std::pair<int32_
                 }
             }
             for (int32_t nodeIdx : isoSubGroups_[i]->GetSubGraph(j)->outNodes_) {
-                if (nodeIdx < 0 || nodeIdx >= static_cast<int32_t>(superNodeInfo_->nodeInGraph_.size())) {
+                if (nodeIdx < 0 || static_cast<size_t>(nodeIdx) >= superNodeInfo_->nodeInGraphList_.size()) {
                     APASS_LOG_ERROR_F(Elements::Operation, "NodeIdx illegal in IsomorphismGroupMergePrepare.");
                     return FAILED;
                 }
@@ -403,14 +421,14 @@ Status IsoPartitioner::IsomorphismGroupMergePrepare(std::vector<std::pair<int32_
 }
 
 std::vector<int32_t> IsoPartitioner::GetCandidateMergeColors(int32_t currColor,
-                                                             std::vector<std::set<int32_t>>& isoInGraph,
-                                                             std::vector<std::set<int32_t>>& isoOutGraph,
+                                                             std::vector<std::unordered_set<int32_t>>& isoInGraph,
+                                                             std::vector<std::unordered_set<int32_t>>& isoOutGraph,
                                                              std::vector<std::vector<int32_t>>& isoNodeList,
                                                              std::vector<int32_t>& isoIdx2color, bool nonIsoGraphsMerge)
 {
-    std::set<int32_t> inputColors;
-    std::set<int32_t> selfNodes;
-    std::set<int32_t> outputColors;
+    std::unordered_set<int32_t> inputColors;
+    std::unordered_set<int32_t> selfNodes;
+    std::unordered_set<int32_t> outputColors;
     if (!isoSubGroups_[currColor]->mergeable_) {
         return {};
     }
@@ -535,8 +553,8 @@ bool IsoPartitioner::SuitableForMergeCheck(int32_t currColor, int32_t mergeColor
 Status IsoPartitioner::IsomorphismGroupMergeStep(bool nonIsoGraphsMerge)
 {
     std::vector<std::pair<int32_t, int32_t>> isoSubIdxs;
-    std::vector<std::set<int32_t>> isoInGraph;
-    std::vector<std::set<int32_t>> isoOutGraph;
+    std::vector<std::unordered_set<int32_t>> isoInGraph;
+    std::vector<std::unordered_set<int32_t>> isoOutGraph;
     std::vector<std::vector<int32_t>> isoNodeList;
     std::vector<int32_t> isoIdx2color;
     if (IsomorphismGroupMergePrepare(isoSubIdxs, isoInGraph, isoOutGraph, isoNodeList, isoIdx2color) != SUCCESS) {
@@ -624,8 +642,8 @@ bool IsomorphismGraphGroup::IsoGraphMerge(std::shared_ptr<IsomorphismGraphGroup>
     }
     size_t currSize = currGraph->Size();
     size_t mergeSize = mergeGraph->Size();
-    std::vector<std::set<int32_t>> connection(currSize, std::set<int32_t>{});
-    std::map<std::pair<int32_t, int32_t>, int32_t> mergeHistory2MergeIdx;
+    std::vector<std::unordered_set<int32_t>> connection(currSize, std::unordered_set<int32_t>{});
+    std::unordered_map<std::pair<int32_t, int32_t>, int32_t, IntPairHash> mergeHistory2MergeIdx;
     for (size_t j = 0; j < mergeSize; j++) {
         for (const std::pair<int32_t, int32_t>& mHist : mergeGraph->GetSubGraph(j)->mergeHistoryIsoSub_) {
             mergeHistory2MergeIdx[mHist] = j;
@@ -646,7 +664,7 @@ bool IsomorphismGraphGroup::IsoGraphMerge(std::shared_ptr<IsomorphismGraphGroup>
         }
     }
     size_t mergeTimes = 0;
-    std::set<int32_t> mergeSet;
+    std::unordered_set<int32_t> mergeSet;
     for (auto& conn : connection) {
         mergeTimes += conn.size();
         mergeSet.insert(conn.begin(), conn.end());
@@ -676,28 +694,32 @@ void SubGraph::Merge(SubGraph& sg)
     cycle_ += sg.cycle_;
     mergeHistoryIsoSub_.insert(sg.mergeHistoryIsoSub_.begin(), sg.mergeHistoryIsoSub_.end());
 
-    std::unordered_set<int32_t> inNodesTmp;
-    std::unordered_set<int32_t> outNodesTmp;
+    std::vector<int32_t> inNodesTmp;
+    std::vector<int32_t> outNodesTmp;
     for (int32_t nodeIdx : inNodes_) {
         if (nodeSet_.count(nodeIdx) == 0) {
-            inNodesTmp.insert(nodeIdx);
+            inNodesTmp.push_back(nodeIdx);
         }
     }
     for (int32_t nodeIdx : sg.inNodes_) {
         if (nodeSet_.count(nodeIdx) == 0) {
-            inNodesTmp.insert(nodeIdx);
+            inNodesTmp.push_back(nodeIdx);
         }
     }
     for (int32_t nodeIdx : outNodes_) {
         if (nodeSet_.count(nodeIdx) == 0) {
-            outNodesTmp.insert(nodeIdx);
+            outNodesTmp.push_back(nodeIdx);
         }
     }
     for (int32_t nodeIdx : sg.outNodes_) {
         if (nodeSet_.count(nodeIdx) == 0) {
-            outNodesTmp.insert(nodeIdx);
+            outNodesTmp.push_back(nodeIdx);
         }
     }
+    std::sort(inNodesTmp.begin(), inNodesTmp.end());
+    inNodesTmp.erase(std::unique(inNodesTmp.begin(), inNodesTmp.end()), inNodesTmp.end());
+    std::sort(outNodesTmp.begin(), outNodesTmp.end());
+    outNodesTmp.erase(std::unique(outNodesTmp.begin(), outNodesTmp.end()), outNodesTmp.end());
     inNodes_.swap(inNodesTmp);
     outNodes_.swap(outNodesTmp);
 }

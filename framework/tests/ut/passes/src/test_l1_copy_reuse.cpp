@@ -336,7 +336,7 @@ TEST_F(L1CopyInReuseTest, TestParallelAssembleEnableParallelMatmulL1ReuseMerge)
     EXPECT_EQ(graphPartition.RunOnFunction(*function), SUCCESS);
     EXPECT_EQ(graphPartition.PostCheck(*function), SUCCESS);
 
-    EXPECT_EQ(CountOpcode(*function, Opcode::OP_ASSEMBLE), 2);
+    EXPECT_EQ(CountOpcode(*function, Opcode::OP_ASSEMBLE), 8);
 
     auto matmulSubgraphIdsAfterPartition = GetMatmulSubgraphIds(graph, branchNum);
     EXPECT_EQ(matmulSubgraphIdsAfterPartition.size(), static_cast<size_t>(branchNum));

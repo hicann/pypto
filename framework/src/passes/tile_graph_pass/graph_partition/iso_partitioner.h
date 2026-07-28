@@ -15,10 +15,20 @@
 
 #ifndef PASS_ISO_PARTITIONER_H
 #define PASS_ISO_PARTITIONER_H
+#include <unordered_set>
 #include "supernode_graph_builder.h"
 #include "passes/pass_interface/pass.h"
 
 namespace npu::tile_fwk {
+
+struct IntPairHash {
+    std::size_t operator()(const std::pair<int32_t, int32_t>& p) const
+    {
+        auto h1 = std::hash<int32_t>{}(p.first);
+        auto h2 = std::hash<int32_t>{}(p.second);
+        return h1 ^ (h2 << 1);
+    }
+};
 
 constexpr int64_t LATENCY_THRESHOLD_LEVEL1 = 10000000;
 constexpr int64_t LATENCY_THRESHOLD_LEVEL2 = 290000;
@@ -53,9 +63,9 @@ public:
     std::shared_ptr<NodeGraphInfo> superNodeInfo_;
     std::vector<int32_t> nodeList_;
     std::unordered_set<int32_t> nodeSet_;
-    std::unordered_set<int32_t> inNodes_;
-    std::unordered_set<int32_t> outNodes_;
-    std::set<std::pair<int32_t, int32_t>> mergeHistoryIsoSub_;
+    std::vector<int32_t> inNodes_;
+    std::vector<int32_t> outNodes_;
+    std::unordered_set<std::pair<int32_t, int32_t>, IntPairHash> mergeHistoryIsoSub_;
     int32_t cycle_{0};
     OpCoreType coreType_{OpCoreType::ANY};
     bool mergeable_{true};
@@ -101,13 +111,16 @@ private:
     Status IsomorphismGroupMergeProcess(bool nonIsoGraphsMerge);
     Status UpdatePartitionResult(Function& function);
     Status EstimateCycleUB(Function& function);
+    Status RunPartitionSteps(Function& function);
+    bool HandleLiteNPU(Function& function);
     Status IsomorphismGroupMergePrepare(std::vector<std::pair<int32_t, int32_t>>& isoSubIdxs,
-                                        std::vector<std::set<int32_t>>& isoInGraph,
-                                        std::vector<std::set<int32_t>>& isoOutGraph,
+                                        std::vector<std::unordered_set<int32_t>>& isoInGraph,
+                                        std::vector<std::unordered_set<int32_t>>& isoOutGraph,
                                         std::vector<std::vector<int32_t>>& isoNodeList,
                                         std::vector<int32_t>& isoIdx2color);
-    std::vector<int32_t> GetCandidateMergeColors(int32_t currColor, std::vector<std::set<int32_t>>& isoInGraph,
-                                                 std::vector<std::set<int32_t>>& isoOutGraph,
+    std::vector<int32_t> GetCandidateMergeColors(int32_t currColor,
+                                                 std::vector<std::unordered_set<int32_t>>& isoInGraph,
+                                                 std::vector<std::unordered_set<int32_t>>& isoOutGraph,
                                                  std::vector<std::vector<int32_t>>& isoNodeList,
                                                  std::vector<int32_t>& isoIdx2color, bool nonIsoGraphsMerge);
     bool SuitableForMergeCheck(int32_t currColor, int32_t mergeColor, bool nonIsoGraphsMerge) const;

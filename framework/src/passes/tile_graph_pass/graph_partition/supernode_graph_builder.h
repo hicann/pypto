@@ -15,6 +15,7 @@
 
 #ifndef SUPERNODE_GRAPH_BUILDER_H
 #define SUPERNODE_GRAPH_BUILDER_H
+#include <unordered_set>
 #include "interface/function/function.h"
 #include "interface/operation/operation.h"
 #include "tilefwk/tilefwk.h"
@@ -29,8 +30,8 @@ public:
     std::vector<int32_t> GetSameLevelOpIdx(int32_t opIdx, Opcode opLabel) const;
     std::vector<Operation*> opList_;
     std::unordered_map<int32_t, int32_t> magic2Idx_;
-    std::vector<std::set<int32_t>> inGraph_;
-    std::vector<std::set<int32_t>> outGraph_;
+    std::vector<std::vector<int32_t>> inGraph_;
+    std::vector<std::vector<int32_t>> outGraph_;
     std::vector<uint64_t> opHashList_;
     std::vector<OpCoreType> opCoreType_;
     bool useCVMixPartition_ = false;
@@ -55,8 +56,6 @@ public:
     std::vector<std::vector<int32_t>> node2Op_;
     std::vector<Operation::ScopeInfo> nodeScope_;
     std::vector<int32_t> op2Node_;
-    std::vector<std::set<int32_t>> nodeInGraph_;
-    std::vector<std::set<int32_t>> nodeOutGraph_;
     std::vector<std::vector<int32_t>> nodeInGraphList_;
     std::vector<std::vector<int32_t>> nodeOutGraphList_;
     std::vector<OpCoreType> nodeCoreType_;
