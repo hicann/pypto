@@ -16,6 +16,7 @@ import logging
 import os
 
 import pypto_pro.language as pl
+from pypto_pro.language.parser.diagnostics._exceptions import ParserSyntaxError
 import pytest
 import torch
 
@@ -371,7 +372,67 @@ def call_kernel_4d_tile_dims(
         pl.move(al, cur_a)
         pl.move(br, cur_b)
         pl.matmul(ac, al, br)
-        pl.store(out, ac, [0, 0, 0, 0], tile_dims=[2, 3])
+        pl.store(out, ac, [0, 0, 0, 0], order=[2, 3])
+
+
+# =====================================================================================
+# Section 4a: Negative test kernels — store/store_tile with descending order
+# =====================================================================================
+
+@pl.jit(auto_mutex=True)
+def call_kernel_store_descending_order(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+):
+    a_l1 = pl.make_tile_group(
+        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
+        addrs=0x00000, mutex_ids=[0])
+    a_l0a = pl.make_tile_group(
+        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
+        addrs=0x0000, mutex_ids=[1])
+    b_l0b = pl.make_tile_group(
+        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
+        addrs=0x0000, mutex_ids=[2])
+    c_l0c = pl.make_tile_group(
+        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
+        addrs=0x0000, mutex_ids=[3])
+    with pl.section_cube():
+        cur_a = a_l1.current()
+        al = a_l0a.current()
+        br = b_l0b.current()
+        ac = c_l0c.current()
+        pl.load(cur_a, a, [0, 0, 0, 0], order=[2, 3])
+        pl.move(al, cur_a)
+        pl.matmul(ac, al, br)
+        pl.store(out, ac, [0, 0, 0, 0], order=[3, 1])
+
+
+@pl.jit(auto_mutex=True)
+def call_kernel_store_tile_descending_order(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+):
+    a_l1 = pl.make_tile_group(
+        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
+        addrs=0x00000, mutex_ids=[0])
+    a_l0a = pl.make_tile_group(
+        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
+        addrs=0x0000, mutex_ids=[1])
+    b_l0b = pl.make_tile_group(
+        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
+        addrs=0x0000, mutex_ids=[2])
+    c_l0c = pl.make_tile_group(
+        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
+        addrs=0x0000, mutex_ids=[3])
+    with pl.section_cube():
+        cur_a = a_l1.current()
+        al = a_l0a.current()
+        br = b_l0b.current()
+        ac = c_l0c.current()
+        pl.load(cur_a, a, [0, 0, 0, 0], order=[2, 3])
+        pl.move(al, cur_a)
+        pl.matmul(ac, al, br)
+        pl.store_tile(out, ac, [0, 0, 0, 0], order=[3, 1])
 
 
 # =====================================================================================
@@ -1366,6 +1427,26 @@ def test_move_acc_to_vec_tail():
     torch.testing.assert_close(out[:40, :], a.float(), rtol=1e-2, atol=1e-2)
 
 
+@pytest.mark.soc("950")
+def test_store_order_descending():
+    device = ST_DEVICE
+    _require_a5(device)
+    a = _inputs(device, [2, 4, TILE, TILE])
+    out = torch.zeros([2, 4, TILE, TILE], device=device, dtype=torch.float32)
+    with pytest.raises(ParserSyntaxError, match="order must be ascending"):
+        call_kernel_store_descending_order(a, out)
+
+
+@pytest.mark.soc("950")
+def test_store_tile_order_descending():
+    device = ST_DEVICE
+    _require_a5(device)
+    a = _inputs(device, [2, 4, TILE, TILE])
+    out = torch.zeros([2, 4, TILE, TILE], device=device, dtype=torch.float32)
+    with pytest.raises(ParserSyntaxError, match="order must be ascending"):
+        call_kernel_store_tile_descending_order(a, out)
+
+
 if __name__ == "__main__":
     all_tests = [
         test_basic_fp16,
@@ -1393,6 +1474,8 @@ if __name__ == "__main__":
         test_move_acc_to_vec_dual_n,
         test_move_acc_to_vec_relu,
         test_move_acc_to_vec_tail,
+        test_store_order_descending,
+        test_store_tile_order_descending,
     ]
     logging.info("Running integrated API test suite")
     passed = 0

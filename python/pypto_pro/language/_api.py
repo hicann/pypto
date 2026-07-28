@@ -121,7 +121,7 @@ def store(
     relu_pre_mode: Optional[ReluPreMode] = None,
     pre_quant_scalar: Optional[int] = None,
     fp_tile: Optional[Tile] = None,
-    tile_dims: Optional[List[int]] = None,
+    order: Optional[List[int]] = None,
     atomic: AtomicType = AtomicType.AtomicNone,
     phase: Optional[STPhase] = None,
 ) -> None:
@@ -135,9 +135,9 @@ def store(
         pre_quant_scalar: Optional pre-quantization scalar (i64 bit pattern); mutually exclusive with ``fp_tile``
         fp_tile: Optional fixpipe quantization Tile; enables ``store_fp`` path,
             mutually exclusive with ``relu_pre_mode``, ``pre_quant_scalar``, and ``phase``
-        tile_dims: Optional, which axes of the Tensor the Tile dimensions map to.
+        order: Optional, which axes of the Tensor the Tile dimensions map to.
             When the Tensor has more dimensions than the Tile, this specifies the mapping.
-            E.g. ``tile_dims=[0, 2]`` means Tile dim 0 → Tensor axis 0, Tile dim 1 → Tensor axis 2.
+            E.g. ``order=[0, 2]`` means Tile dim 0 → Tensor axis 0, Tile dim 1 → Tensor axis 2.
             Default: last N axes of the Tensor (N = Tile ndim)
         atomic: Atomic write mode — ``pl.AtomicType.AtomicNone`` (overwrite) or
             ``pl.AtomicType.AtomicAdd`` (atomic accumulate)
@@ -154,7 +154,7 @@ def store_tile(
     relu_pre_mode: Optional[ReluPreMode] = None,
     pre_quant_scalar: Optional[int] = None,
     fp_tile: Optional[Tile] = None,
-    tile_dims: Optional[List[int]] = None,
+    order: Optional[List[int]] = None,
     atomic: AtomicType = AtomicType.AtomicNone,
     phase: Optional[STPhase] = None,
 ) -> None:
@@ -169,9 +169,9 @@ def store_tile(
         pre_quant_scalar: Optional pre-quantization scalar (i64 bit pattern); mutually exclusive with ``fp_tile``
         fp_tile: Optional fixpipe quantization Tile; enables ``store_fp`` path,
             mutually exclusive with ``relu_pre_mode``, ``pre_quant_scalar``, and ``phase``
-        tile_dims: Optional, which axes of the Tensor the Tile dimensions map to.
+        order: Optional, which axes of the Tensor the Tile dimensions map to.
             When the Tensor has more dimensions than the Tile, this specifies the mapping.
-            E.g. ``tile_dims=[0, 2]`` means Tile dim 0 → Tensor axis 0, Tile dim 1 → Tensor axis 2.
+            E.g. ``order=[0, 2]`` means Tile dim 0 → Tensor axis 0, Tile dim 1 → Tensor axis 2.
             Default: last N axes of the Tensor (N = Tile ndim)
         atomic: Atomic write mode — ``pl.AtomicType.AtomicNone`` (overwrite) or
             ``pl.AtomicType.AtomicAdd`` (atomic accumulate)

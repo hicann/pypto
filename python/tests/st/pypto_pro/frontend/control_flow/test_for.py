@@ -287,7 +287,7 @@ def for_4d_add_fp16_kernel(
                         pl.load_tile(tile_a, x, [b_idx, h_idx, i, j], order=[2, 3])
                         pl.load_tile(tile_b, y, [b_idx, h_idx, i, j], order=[2, 3])
                         pl.add(tile_c, tile_a, tile_b)
-                        pl.store_tile(z, tile_c, [b_idx, h_idx, i, j], tile_dims=[2, 3])
+                        pl.store_tile(z, tile_c, [b_idx, h_idx, i, j], order=[2, 3])
 
 
 FOR_4D_ADD_KERNELS = {
@@ -326,7 +326,7 @@ def for_4d_add_m23n_fp16_kernel(
                         pl.load_tile(tile_a, x, [i, d1, d2, j], order=[0, 3])
                         pl.load_tile(tile_b, y, [i, d1, d2, j], order=[0, 3])
                         pl.add(tile_c, tile_a, tile_b)
-                        pl.store_tile(z, tile_c, [i, d1, d2, j], tile_dims=[0, 3])
+                        pl.store_tile(z, tile_c, [i, d1, d2, j], order=[0, 3])
 
 
 # =============================================================================
@@ -356,7 +356,7 @@ def for_4d_add_2m3n_fp16_kernel(
                         pl.load_tile(tile_a, x, [d0, i, d2, j], order=[1, 3])
                         pl.load_tile(tile_b, y, [d0, i, d2, j], order=[1, 3])
                         pl.add(tile_c, tile_a, tile_b)
-                        pl.store_tile(z, tile_c, [d0, i, d2, j], tile_dims=[1, 3])
+                        pl.store_tile(z, tile_c, [d0, i, d2, j], order=[1, 3])
 
 
 FOR_4D_LAYOUT_ADD_KERNELS = [
@@ -400,7 +400,7 @@ def for_8d_add_fp16_kernel(
                                         pl.load_tile(tile_a, x, [d0, d1, d2, d3, d4, d5, i, j], order=[6, 7])
                                         pl.load_tile(tile_b, y, [d0, d1, d2, d3, d4, d5, i, j], order=[6, 7])
                                         pl.add(tile_c, tile_a, tile_b)
-                                        pl.store_tile(z, tile_c, [d0, d1, d2, d3, d4, d5, i, j], tile_dims=[6, 7])
+                                        pl.store_tile(z, tile_c, [d0, d1, d2, d3, d4, d5, i, j], order=[6, 7])
 
 
 FOR_HIGH_DIM_ADD_KERNELS = [

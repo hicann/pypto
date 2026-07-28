@@ -395,7 +395,7 @@ def compute_gu(b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_co
                 gsum_gu,
             )
             pl.cast(o_f16_buf, running_o_buf, mode=pl.RoundMode.CAST_ROUND)
-            pl.store_tile(o, o_f16_buf, [b_idx, g_ctx.qi * 2 + sub_id, n_idx, 0], tile_dims=[1, 3])
+            pl.store_tile(o, o_f16_buf, [b_idx, g_ctx.qi * 2 + sub_id, n_idx, 0], order=[1, 3])
     pl.system.set_cross_core(
         pipe=pl.PipeType.V,
         event_id=PV_READY_BARKWARD_IDS[g_ctx.task_id_mod2],
@@ -404,7 +404,7 @@ def compute_gu(b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_co
         if g_ctx.ki == 0:
             last_div_vf(running_o_buf, running_o_buf, gsum_gu)
             pl.cast(o_f16_buf, running_o_buf, mode=pl.RoundMode.CAST_ROUND)
-            pl.store_tile(o, o_f16_buf, [b_idx, g_ctx.qi * 2 + sub_id, n_idx, 0], tile_dims=[1, 3])
+            pl.store_tile(o, o_f16_buf, [b_idx, g_ctx.qi * 2 + sub_id, n_idx, 0], order=[1, 3])
 
 
 @pl.jit(auto_mutex=True, tiling_key=FaTilingKey, timeout=300)

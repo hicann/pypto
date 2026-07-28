@@ -738,7 +738,7 @@ def make_quant_lightning_indexer_vf_kernel(
                         pingpong = loop % 2
 
                         # kscale: load 2048 DT_FP16 every 16 sk_tiles (before cross_core wait,
-                        # overlaps with cube fixpipe). tile_dims=[0,1] → offset is element-level
+                        # overlaps with cube fixpipe). order=[0,1] → offset is element-level
                         # on dim1(Sk) since stride[dim4]=1 in generated code.
                         # kscale: load 2048 DT_FP16 every 16 sk_tiles, before cross_core wait
                         if sk_tile_id % kscale_batch == 0:
@@ -765,7 +765,7 @@ def make_quant_lightning_indexer_vf_kernel(
                                               weight_tile, kscale_f32_tile[:, kscale_off:],
                                               score_slot, g_size_static, wq_col_pad)
 
-                        pl.store(score_gm, score_slot, [core_id, sq_row_base, sk_off], tile_dims=[1, 2])
+                        pl.store(score_gm, score_slot, [core_id, sq_row_base, sk_off], order=[1, 2])
 
                         # Notify cube on V pipe (parallel with MTE3 store): mm1_vec slot consumed
                         if pingpong == 0:

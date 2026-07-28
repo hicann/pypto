@@ -96,7 +96,7 @@ pl.load(q_buf, q, [b_idx, 0, n_idx, 0], order=[1, 3])
 
 Tensor的维度可能有多维，而Tile只有两维，那么Tensor和Tile之间的拷贝需要指定Tile的两维是Tensor中的哪两维。
 
-这由 `pl.load` / `pl.load_tile` 的 `order` 参数（以及 `store` / `store_tile` 的 `tile_dims` 参数）控制：
+这由 `pl.load` / `pl.load_tile` 的 `order` 参数（以及 `store` / `store_tile` 的 `order` 参数）控制：
 
 - **`offsets` 的长度 == Tensor 的维数**：每个 Tensor 轴给一个偏移。
 - **`order`**：一个长度为 2 的列表，元素为 Tensor 绝对轴索引，指出 Tile 的两维分别落在 Tensor 的哪两个轴上。order 中轴索引的顺序决定是否转置：升序不转置，反序转置。
