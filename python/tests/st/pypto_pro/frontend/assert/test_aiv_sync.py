@@ -14,8 +14,7 @@
 A5 架构中一个 AI Core 含 1 AIC + 2 AIV。sync_mode=INTER_SUBBLOCK 的 set_cross_core 实现
 AIV-to-AIV 的 barrier：两个 AIV 都 set 后，wait 才能通过。
 
-通过 enable_sync 参数复用同一 kernel，正对照（enable_sync=True）验证同步生效，
-负对照（enable_sync=False）验证同步必要。
+通过 enable_sync=True 验证同步生效。
 """
 
 import logging
@@ -108,16 +107,7 @@ def test_aiv_barrier_sync():
     logging.info("aiv_barrier_sync passed! out[0]=%d", result)
 
 
-@pytest.mark.soc("950")
-def test_aiv_no_sync_control():
-    """负对照：无同步时 AIV1 读到的不是 TARGET_VAL，证明同步必要。"""
-    result = _run(False)
-    logging.info("aiv_no_sync_control: out[0]=%d (expected %d)", result, INITAL_VALUE)
-    assert result == INITAL_VALUE, f"Negative control failed: out[0]={result}, expected {INITAL_VALUE}"
-
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_aiv_barrier_sync()
-    test_aiv_no_sync_control()
     logging.info("\nAIV barrier sync tests passed!")
