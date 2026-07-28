@@ -140,7 +140,8 @@ public:
                                          uint32_t cellMatchTagSeq);
 
     uint64_t FullCoverDefaultUpdateStitch(DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx,
-                                          DeviceExecuteSlot& slot, int slotIdx, DevAscendFunctionIncast& incast);
+                                          DeviceExecuteSlot& slot, int slotIdx, DevAscendFunctionDupped& prevDup,
+                                          DevAscendFunctionOutcast& outcast, DevAscendFunctionIncast& incast);
 
     uint64_t FullCoverUpdateStitch(DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx,
                                    DeviceExecuteSlot& slot, int slotIdx, DevAscendFunctionIncast& incast);

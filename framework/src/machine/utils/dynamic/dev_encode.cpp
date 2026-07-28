@@ -880,6 +880,19 @@ void DevAscendFunction::FillIncastUseList(
             }
         }
         useSize += attr.useList.size();
+        ONFILLCONTENT
+        {
+            incast.stitchPolicyFullCoverConsumerList.AssignRangeOffsetSize(
+                fillUseList, useSize, attr.stitchPolicyFullCoverConsumerList.size());
+            for (size_t k = 0; k < attr.stitchPolicyFullCoverConsumerList.size(); k++) {
+                At(incast.stitchPolicyFullCoverConsumerList, k) = attr.stitchPolicyFullCoverConsumerList[k];
+                auto it = opIdxToHubOpIdx.find(attr.stitchPolicyFullCoverConsumerList[k].operationIdx);
+                if (it != opIdxToHubOpIdx.end()) {
+                    At(incast.stitchPolicyFullCoverConsumerList, k).wrapTaskHubOpIdx = it->second;
+                }
+            }
+        }
+        useSize += attr.stitchPolicyFullCoverConsumerList.size();
     }
 }
 
@@ -1455,6 +1468,41 @@ struct EncodeDevAscendFunctionInfo {
         }
     }
 
+    void EncodeAnalysisInCastConsumerUse(const std::shared_ptr<LogicalTensor>& index, Operation& op,
+                                         CallOpAttribute* callAttr, size_t iOperandIdx, size_t opIdx, size_t dimSize,
+                                         InoutOperationAttr& incastOpAttr, std::set<uint32_t>& incastUseOpSet)
+    {
+        auto& iOperand = op.GetIOperands()[iOperandIdx];
+        auto coaIndex = op.GetIOpAttrOffset(iOperandIdx) + COA_INDEX_DIM_BASE;
+        if (index->tensor->rawmagic != iOperand->tensor->rawmagic) {
+            return;
+        }
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, iOperand->GetShape().size() == dimSize)
+            << "Shape size mismatch: expected: " << dimSize << ", got " << iOperand->GetShape().size()
+            << " for operand: " << iOperandIdx;
+        std::vector<int64_t> offset = callAttr->GetLinearImmediateArgList(coaIndex, coaIndex + dimSize, true);
+        std::vector<int64_t> shape = callAttr->GetLinearImmediateArgList(coaIndex + dimSize, coaIndex + dimSize * 0x2,
+                                                                         false);
+        if (shape == Shape(shape.size())) { // 跳过全0
+            return;
+        }
+        // fullCover → POLICY list only (skip DEFAULT cell match); partial → DEFAULT useList
+        if (offset == std::vector<int64_t>(dimSize, 0) && shape == index->GetShape()) {
+            incastOpAttr.stitchPolicyFullCoverConsumerList.emplace_back(opIdx, coaIndex, coaIndex + dimSize,
+                                                                        CellMatchOpType::READ);
+            MACHINE_LOGD("FullCover incast consumer: incast %d rawtensor magic %d coaIndex %d op %zu %d shape %s.\n",
+                         index->magic, index->GetRawMagic(), coaIndex, opIdx, op.GetOpMagic(),
+                         IntVecToStr(shape).c_str());
+        } else {
+            incastOpAttr.useList.emplace_back(opIdx, coaIndex, coaIndex + dimSize, CellMatchOpType::READ);
+            UpdateCellMatchShape(incastOpAttr.cellMatchTableDesc, shape);
+            MACHINE_LOGD("Partial incast consumer: incast %d rawtensor magic %d coaIndex %d op %zu %d cellShape %s.\n",
+                         index->magic, index->GetRawMagic(), coaIndex, opIdx, op.GetOpMagic(),
+                         IntVecToStr(ShapeToVector(incastOpAttr.cellMatchTableDesc.cellShape)).c_str());
+        }
+        incastUseOpSet.insert(static_cast<uint32_t>(opIdx));
+    }
+
     void EncodeIncasts(std::set<uint32_t>& allInOutcastUseOpSet)
     {
         for (auto& index : incastList) {
@@ -1470,27 +1518,8 @@ struct EncodeDevAscendFunctionInfo {
             for (size_t j = 0; j < callList.size(); j++) {
                 auto& op = *callList[j];
                 auto callAttr = dynamic_cast<CallOpAttribute*>(op.GetOpAttribute().get());
-                // add icast and oper io's relationship
                 for (size_t k = 0; k < op.GetIOperands().size(); ++k) {
-                    auto& iOperand = op.GetIOperands()[k];
-                    auto coaIndex = op.GetIOpAttrOffset(k) + COA_INDEX_DIM_BASE;
-                    if (index->tensor->rawmagic != iOperand->tensor->rawmagic) {
-                        continue;
-                    }
-                    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, iOperand->GetShape().size() == dimSize)
-                        << "Shape size mismatch: expected: " << dimSize << ", got " << iOperand->GetShape().size()
-                        << " for operand: " << k;
-                    std::vector<int64_t> shape = callAttr->GetLinearImmediateArgList(coaIndex + dimSize,
-                                                                                     coaIndex + dimSize * 0x2, false);
-                    if (shape == Shape(shape.size())) { // 跳过全0
-                        continue;
-                    }
-                    incastOpAttr.useList.emplace_back(j, coaIndex, coaIndex + dimSize, CellMatchOpType::READ);
-                    UpdateCellMatchShape(incastOpAttr.cellMatchTableDesc, shape);
-                    MACHINE_LOGD("Minimal shape for incast %d rawtensor magic %d coaIndex %d op %zu %d is %s.\n",
-                                 index->magic, index->GetRawMagic(), coaIndex, j, op.GetOpMagic(),
-                                 IntVecToStr(ShapeToVector(incastOpAttr.cellMatchTableDesc.cellShape)).c_str());
-                    incastUseOpSet.insert(j);
+                    EncodeAnalysisInCastConsumerUse(index, op, callAttr, k, j, dimSize, incastOpAttr, incastUseOpSet);
                 }
             }
             UpdateCellMatchStrideAndSize(incastOpAttr.cellMatchSize, incastOpAttr.cellMatchTableDesc, index, dimSize);

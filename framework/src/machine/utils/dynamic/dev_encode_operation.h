@@ -76,6 +76,7 @@ struct DevAscendFunctionIncast {
 
     int dim;
     DevLocalVector<DevAscendFunctionCallOperandUse> consumerList;
+    DevLocalVector<DevAscendFunctionCallOperandUse> stitchPolicyFullCoverConsumerList;
 
     DevCellMatchTableDesc cellMatchTableDesc;
 
@@ -106,6 +107,7 @@ struct InoutOperationAttr {
     int cellMatchSize;
 
     std::vector<DevAscendFunctionCallOperandUse> stitchPolicyFullCoverProducerList;
+    std::vector<DevAscendFunctionCallOperandUse> stitchPolicyFullCoverConsumerList;
     int stitchPolicyFullCoverProducerHubOpIdx;
 
     DevCellMatchTableDesc cellMatchTableDesc;

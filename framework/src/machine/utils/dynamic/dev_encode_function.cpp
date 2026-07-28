@@ -141,13 +141,13 @@ std::string DevAscendFunction::DumpIncast(int incastIndex, const std::string& in
     }
     oss << "]\n";
 
-    for (size_t j = 0; j < incast.consumerList.size(); j++) {
-        auto& consumer = At(incast.consumerList, j);
+    auto dumpConsumer = [this, &oss, &indent, &incast, runtimeExpressionList](
+                            const DevAscendFunctionCallOperandUse& consumer, const char* tag) {
         int consumerIdx = consumer.operationIdx;
         int offsetAttrIdx = consumer.offsetAttrIdx;
         int shapeAttrIdx = consumer.shapeAttrIdx;
         oss << indent;
-        oss << " | #consumerIdx:!" << consumerIdx;
+        oss << " | #" << tag << ":!" << consumerIdx;
         oss << " | #offsetAttrIdx:" << offsetAttrIdx;
         oss << " | #shapeAttrIdx:" << shapeAttrIdx;
         oss << " | #offsetAttr:"
@@ -155,6 +155,12 @@ std::string DevAscendFunction::DumpIncast(int incastIndex, const std::string& in
         oss << " | #shapeAttr:"
             << DumpSymIntList(&GetOperationAttr(consumerIdx, shapeAttrIdx), incast.dim, runtimeExpressionList);
         oss << "\n";
+    };
+    for (size_t j = 0; j < incast.consumerList.size(); j++) {
+        dumpConsumer(At(incast.consumerList, j), "partialConsumerIdx");
+    }
+    for (size_t j = 0; j < incast.stitchPolicyFullCoverConsumerList.size(); j++) {
+        dumpConsumer(At(incast.stitchPolicyFullCoverConsumerList, j), "fullCoverConsumerIdx");
     }
     return oss.str();
 }

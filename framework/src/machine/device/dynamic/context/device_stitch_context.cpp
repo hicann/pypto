@@ -45,6 +45,86 @@ struct HandleCellMatchFull {
         return 0;
     }
 };
+
+// Direct stitch: partial producers (producerConsumerList) → fullCover consumers
+// (stitchPolicyFullCoverConsumerList).
+void FullCoverPartialProdToFullConsStitch(DevAscendFunctionDupped& prevDup, DevAscendFunctionDupped& nextDup,
+                                          DevAscendFunction* prevSrc, DevAscendFunction* nextSrc,
+                                          DevAscendFunctionOutcast& outcast, DevAscendFunctionIncast& incast,
+                                          size_t devNextIdx, int slotIdx, size_t devTaskId, uint32_t stitchDupIdx,
+                                          DeviceWorkspaceAllocator* workspace, DevAscendFunctionDupped* stitchedList,
+                                          size_t stitchedListSize)
+{
+    const size_t prodSize = outcast.producerConsumerList.size();
+    const size_t consSize = incast.stitchPolicyFullCoverConsumerList.size();
+    if (prodSize == 0 || consSize == 0) {
+        return;
+    }
+    auto producerList = &prevSrc->At(outcast.producerConsumerList, 0);
+    auto consumerList = &nextSrc->At(incast.stitchPolicyFullCoverConsumerList, 0);
+    for (size_t prodIndex = 0; prodIndex < prodSize; prodIndex++) {
+        auto& producer = producerList[prodIndex];
+        if (producer.opType == CellMatchOpType::READ) {
+            continue;
+        }
+        for (size_t conIndex = 0; conIndex < consSize; conIndex++) {
+            auto& consumer = consumerList[conIndex];
+            int consumerOpIdx = consumer.operationIdx;
+            if (consumer.wrapTaskHubOpIdx != INVALID_WRAP_TASK_HUB_OP_IDX) {
+                consumerOpIdx = consumer.wrapTaskHubOpIdx;
+            }
+            DeviceStitchContext::HandleOneStitch(
+                prevDup, nextDup, stitchDupIdx, producer.operationIdx, devNextIdx, consumerOpIdx, workspace,
+                DeviceStitchContext::StitchKind::StitchFullCover, slotIdx, static_cast<uint64_t>(devTaskId));
+        }
+    }
+    DeviceStitchContext::CheckStitch(stitchedList, static_cast<int>(stitchedListSize), &nextDup);
+}
+
+void PartialUpdateStitchOneConsumerList(DevAscendFunctionDupped& nextDup, DevAscendFunction* nextSrc,
+                                        uint64_t* expressionList, DevCellMatchTableDesc& cellMatchTableDesc,
+                                        uint64_t* partialUpdateTableData, DevAscendFunctionDupped* stitchedList,
+                                        size_t stitchedListSize, DeviceWorkspaceAllocator* workspace,
+                                        size_t cellMatchTagId, size_t devTaskId, size_t devNextIdx, int slotIdx,
+                                        int incastDim, DevLocalVector<DevAscendFunctionCallOperandUse>& consumerListRef,
+                                        uint64_t* matchCount)
+{
+    for (size_t n = 0; n < consumerListRef.size(); n++) {
+        auto& consumer = nextSrc->At(consumerListRef, n);
+        uint64_t consumerOffset[DEV_SHAPE_DIM_MAX];
+        uint64_t consumerValidShape[DEV_SHAPE_DIM_MAX];
+        GetTensorOffsetAndValidShape<false>(nextSrc, consumerOffset, consumerValidShape, expressionList,
+                                            cellMatchTableDesc, incastDim, consumer.operationIdx,
+                                            consumer.offsetAttrIdx);
+
+        DEV_IF_VERBOSE_DEBUG
+        {
+            for (int j = 0; j < cellMatchTableDesc.GetDimensionSize(); j++) {
+                DEV_VERBOSE_DEBUG(
+                    "PartialUpdateStitchConsumer consumer cell match, operation[%d] -> dimension[%d] = (offset:%lu "
+                    ",shape:%lu, "
+                    "cellshape:%d)",
+                    consumer.operationIdx, j, consumerOffset[j], consumerValidShape[j],
+                    cellMatchTableDesc.cellShape.dim[j]);
+            }
+        }
+        topo_dump::DumpConsumerCellAccess(static_cast<uint32_t>(devTaskId), slotIdx, static_cast<uint32_t>(devNextIdx),
+                                          *nextSrc, consumer, cellMatchTableDesc, expressionList);
+
+        int consumerOpIdx = consumer.operationIdx;
+        if (consumer.wrapTaskHubOpIdx != INVALID_WRAP_TASK_HUB_OP_IDX) {
+            DEV_VERBOSE_DEBUG(
+                "[PartialUpdateStitch] devTaskId=%lu devNextIdx=%lu, replace consumerOpIdx[%d] witch wrapHubOpIdx[%d]",
+                (uint64_t)devTaskId, (uint64_t)devNextIdx, consumerOpIdx, consumer.wrapTaskHubOpIdx);
+
+            consumerOpIdx = consumer.wrapTaskHubOpIdx;
+        }
+        CellMatchStitchEnhance(consumerOffset, consumerValidShape, cellMatchTableDesc,
+                               static_cast<uint32_t>(consumer.opType), partialUpdateTableData, stitchedList,
+                               stitchedListSize, &nextDup, cellMatchTagId, static_cast<uint64_t>(devTaskId), devNextIdx,
+                               workspace, consumerOpIdx, slotIdx, matchCount);
+    }
+}
 } // namespace
 void DeviceStitchContext::Init(DevAscendProgram* devProg, DeviceWorkspaceAllocator& workspace)
 {
@@ -311,77 +391,48 @@ uint64_t DeviceStitchContext::PartialUpdateStitchConsumer(DevAscendFunctionDuppe
     auto partialUpdateTableData = &slot.partialUpdate->cellMatchRuntimePartialUpdateTable[0];
     size_t tableSize = slot.partialUpdate->cellMatchRuntimePartialUpdateTable.size();
 
-    DEV_VERBOSE_DEBUG(
-        "[PartialUpdateStitch] enter slotIdx=%d devTaskId=%lu devNextIdx=%lu consumerFuncKey=%d consumerCount=%zu "
-        "tableSize=%zu descDimSize=%d",
-        slotIdx, (uint64_t)devTaskId, (uint64_t)devNextIdx, nextSrc->GetFuncKey(), incast.consumerList.size(),
-        tableSize, cellMatchTableDesc.GetDimensionSize());
+    DEV_VERBOSE_DEBUG("[PartialUpdateStitch] enter slotIdx=%d devTaskId=%lu devNextIdx=%lu consumerFuncKey=%d "
+                      "partialConsumerCount=%zu fullCoverConsumerCount=%zu tableSize=%zu descDimSize=%d",
+                      slotIdx, (uint64_t)devTaskId, (uint64_t)devNextIdx, nextSrc->GetFuncKey(),
+                      incast.consumerList.size(), incast.stitchPolicyFullCoverConsumerList.size(), tableSize,
+                      cellMatchTableDesc.GetDimensionSize());
     size_t cellMatchTagId = CellMatchBuildTagId(slot.slotAllocIterId, cellMatchTagSeq);
 
-    for (size_t n = 0; n < incast.consumerList.size(); n++) {
-        auto& consumer = nextSrc->At(incast.consumerList, n);
-        uint64_t consumerOffset[DEV_SHAPE_DIM_MAX];
-        uint64_t consumerValidShape[DEV_SHAPE_DIM_MAX];
-        GetTensorOffsetAndValidShape<false>(nextSrc, consumerOffset, consumerValidShape, expressionList,
-                                            cellMatchTableDesc, incast.dim, consumer.operationIdx,
-                                            consumer.offsetAttrIdx);
-
-        DEV_IF_VERBOSE_DEBUG
-        {
-            for (int j = 0; j < cellMatchTableDesc.GetDimensionSize(); j++) {
-                DEV_VERBOSE_DEBUG(
-                    "PartialUpdateStitchConsumer consumer cell match, operation[%d] -> dimension[%d] = (offset:%lu "
-                    ",shape:%lu, "
-                    "cellshape:%d)",
-                    consumer.operationIdx, j, consumerOffset[j], consumerValidShape[j],
-                    cellMatchTableDesc.cellShape.dim[j]);
-            }
-        }
-        topo_dump::DumpConsumerCellAccess(static_cast<uint32_t>(devTaskId), slotIdx, static_cast<uint32_t>(devNextIdx),
-                                          *nextSrc, consumer, cellMatchTableDesc, expressionList);
-
-        int consumerOpIdx = consumer.operationIdx;
-        if (consumer.wrapTaskHubOpIdx != INVALID_WRAP_TASK_HUB_OP_IDX) {
-            DEV_VERBOSE_DEBUG(
-                "[PartialUpdateStitch] devTaskId=%lu devNextIdx=%lu, replace consumerOpIdx[%d] witch wrapHubOpIdx[%d]",
-                (uint64_t)devTaskId, (uint64_t)devNextIdx, consumerOpIdx, consumer.wrapTaskHubOpIdx);
-
-            consumerOpIdx = consumer.wrapTaskHubOpIdx;
-        }
-        CellMatchStitchEnhance(consumerOffset, consumerValidShape, cellMatchTableDesc,
-                               static_cast<uint32_t>(consumer.opType), partialUpdateTableData, stitchedList_.data(),
-                               stitchedList_.size(), &nextDup, cellMatchTagId, static_cast<uint64_t>(devTaskId),
-                               devNextIdx, workspace_, consumerOpIdx, slotIdx, &matchCount);
-    }
-
+    PartialUpdateStitchOneConsumerList(nextDup, nextSrc, expressionList, cellMatchTableDesc, partialUpdateTableData,
+                                       stitchedList_.data(), stitchedList_.size(), workspace_, cellMatchTagId,
+                                       devTaskId, devNextIdx, slotIdx, incast.dim, incast.consumerList, &matchCount);
+    PartialUpdateStitchOneConsumerList(nextDup, nextSrc, expressionList, cellMatchTableDesc, partialUpdateTableData,
+                                       stitchedList_.data(), stitchedList_.size(), workspace_, cellMatchTagId,
+                                       devTaskId, devNextIdx, slotIdx, incast.dim,
+                                       incast.stitchPolicyFullCoverConsumerList, &matchCount);
     return matchCount;
 }
 
 uint64_t DeviceStitchContext::FullCoverDefaultUpdateStitch(DevAscendFunctionDupped& nextDup, size_t devTaskId,
                                                            size_t devNextIdx, DeviceExecuteSlot& slot, int slotIdx,
+                                                           DevAscendFunctionDupped& prevDup,
+                                                           DevAscendFunctionOutcast& outcast,
                                                            DevAscendFunctionIncast& incast)
 {
+    const size_t consumerCount = incast.consumerList.size();
+    const size_t tableSize = outcast.cellMatchRuntimeFullUpdateTable.size();
+    if (consumerCount == 0 || tableSize == 0) {
+        return 0;
+    }
     uint64_t matchCount = 0;
-    DevAscendFunctionDupped& prevDup = stitchedList_[slot.stitchDupIdx];
     auto* prevSrc = prevDup.GetSource();
-    auto& outcast = prevSrc->GetOutcast(slot.stitchOutcastIdx);
     auto* nextSrc = nextDup.GetSource();
     auto expressionList = &nextDup.GetExpression(0);
     auto& cellMatchTableDesc = outcast.cellMatchTableDesc;
-    size_t tableSize = outcast.cellMatchRuntimeFullUpdateTable.size();
-    if (tableSize == 0) {
-        return 0;
-    }
     auto fullUpdateTableData = &prevSrc->At(outcast.cellMatchRuntimeFullUpdateTable, 0);
 
     DEV_VERBOSE_DEBUG(
         "[FullCoverDefaultStitch] enter slotIdx=%d devTaskId=%lu devNextIdx=%lu producerFuncKey=%d "
-        "consumerFuncKey=%d stitchDupIdx=%u stitchOutcastIdx=%u consumerCount=%zu tableSize=%zu descDimSize=%d",
+        "consumerFuncKey=%d stitchDupIdx=%u stitchOutcastIdx=%u partialConsumerCount=%zu tableSize=%zu descDimSize=%d",
         slotIdx, (uint64_t)devTaskId, (uint64_t)devNextIdx, prevSrc->GetFuncKey(), nextSrc->GetFuncKey(),
-        slot.stitchDupIdx, slot.stitchOutcastIdx, incast.consumerList.size(), tableSize,
-        cellMatchTableDesc.GetDimensionSize());
+        slot.stitchDupIdx, slot.stitchOutcastIdx, consumerCount, tableSize, cellMatchTableDesc.GetDimensionSize());
 
-    for (size_t n = 0; n < incast.consumerList.size(); n++) {
+    for (size_t n = 0; n < consumerCount; n++) {
         auto& consumer = nextSrc->At(incast.consumerList, n);
         uint64_t fullCoverOffset[DEV_SHAPE_DIM_MAX];
         uint64_t fullCoverValidShape[DEV_SHAPE_DIM_MAX];
@@ -401,8 +452,8 @@ uint64_t DeviceStitchContext::FullCoverDefaultUpdateStitch(DevAscendFunctionDupp
         CellMatchHandle<HandleCellMatchFull>(fullCoverOffset, fullCoverValidShape, cellMatchTableDesc,
                                              fullUpdateTableData, &matchCount, &prevDup, &nextDup, devNextIdx,
                                              consumerOpIdx, workspace_, slotIdx, devTaskId, slot.stitchDupIdx);
-        DeviceStitchContext::CheckStitch(stitchedList_.data(), stitchedList_.size(), &nextDup);
     }
+    DeviceStitchContext::CheckStitch(stitchedList_.data(), stitchedList_.size(), &nextDup);
     return matchCount;
 }
 
@@ -415,8 +466,10 @@ uint64_t DeviceStitchContext::FullCoverUpdateStitch(DevAscendFunctionDupped& nex
     auto& outcast = prevSrc->GetOutcast(slot.stitchOutcastIdx);
     auto* nextSrc = nextDup.GetSource();
     DEV_VERBOSE_DEBUG("outcast %lu fullcover update stitch\n", (unsigned long)slot.stitchOutcastIdx);
-    DEV_VERBOSE_DEBUG("=================FullCoverUpdateStitch %zu %zu===========================\n",
-                      outcast.producerConsumerList.size(), incast.consumerList.size());
+    DEV_VERBOSE_DEBUG("=================FullCoverUpdateStitch partialProducerCount=%zu partialConsumerCount=%zu "
+                      "fullCoverConsumerCount=%zu=================\n",
+                      outcast.producerConsumerList.size(), incast.consumerList.size(),
+                      incast.stitchPolicyFullCoverConsumerList.size());
 
     // stitchPolicyFullCover hub
     auto producerHubOpIdx = outcast.stitchPolicyFullCoverProducerHubOpIdx;
@@ -458,7 +511,12 @@ uint64_t DeviceStitchContext::FullCoverUpdateStitch(DevAscendFunctionDupped& nex
         DeviceStitchContext::CheckStitch(stitchedList_.data(), stitchedList_.size(), &nextDup);
     }
 
-    return FullCoverDefaultUpdateStitch(nextDup, devTaskId, devNextIdx, slot, slotIdx, incast);
+    // partial write → fullCover read (fullCover consumers are no longer in DEFAULT consumerList)
+    FullCoverPartialProdToFullConsStitch(prevDup, nextDup, prevSrc, nextSrc, outcast, incast, devNextIdx, slotIdx,
+                                         devTaskId, slot.stitchDupIdx, workspace_, stitchedList_.data(),
+                                         stitchedList_.size());
+
+    return FullCoverDefaultUpdateStitch(nextDup, devTaskId, devNextIdx, slot, slotIdx, prevDup, outcast, incast);
 }
 
 uint64_t DeviceStitchContext::PartialUpdateStitchProducer(DevAscendFunctionDupped& nextDup, size_t devTaskId,
@@ -507,10 +565,10 @@ uint64_t DeviceStitchContext::PartialUpdateStitchProducer(DevAscendFunctionDuppe
         }
     };
 
-    DEV_VERBOSE_DEBUG("Begin PartialUpdateStitchProducer producer list.");
+    DEV_VERBOSE_DEBUG("Begin PartialUpdateStitchProducer partialProducerList.");
     processProducerList(outcast.producerConsumerList);
 
-    DEV_VERBOSE_DEBUG("Begin PartialUpdateStitchProducer stitchPolicyFullCoverProducerList list.");
+    DEV_VERBOSE_DEBUG("Begin PartialUpdateStitchProducer fullCoverProducerList.");
     processProducerList(outcast.stitchPolicyFullCoverProducerList);
 
     return matchCount;
