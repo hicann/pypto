@@ -543,19 +543,25 @@ void DevControlFlowCache::RuntimeAddrBackup(DeviceExecuteSlot* runtimeSlotList,
     struct Backup {
         static void BackupBlockHeader(WsSlotAllocator::BlockHeader*& ptr, WsSlotAllocator::BlockHeader* base)
         {
+            if (ptr == nullptr) {
+                ptr = reinterpret_cast<WsSlotAllocator::BlockHeader*>(WsSlotAllocator::kNullBlockHeaderIndex);
+                return;
+            }
             ptr = reinterpret_cast<WsSlotAllocator::BlockHeader*>(static_cast<uintptr_t>(ptr - base));
         }
         static void BackupPool(WsSlotAllocator& backupAllocator, WsSlotAllocator& runtimePool,
                                WsSlotAllocator::BlockHeader* checkpointList, uint64_t checkpointOffset)
         {
             backupAllocator = runtimePool;
-            uint64_t slotNum = runtimePool.slotNum_;
-            uint64_t backupBytes = sizeof(WsSlotAllocator::BlockHeader) * slotNum;
+            uint64_t readyCount = runtimePool.initReadyCount_;
+            uint64_t backupBytes = sizeof(WsSlotAllocator::BlockHeader) * readyCount;
             WsSlotAllocator::BlockHeader* runtimeBase = runtimePool.GetBlockHeaderBase();
-            DevMemcpyS(checkpointList + checkpointOffset, backupBytes, runtimeBase, backupBytes);
+            if (backupBytes > 0) {
+                DevMemcpyS(checkpointList + checkpointOffset, backupBytes, runtimeBase, backupBytes);
+            }
             BackupBlockHeader(backupAllocator.freeListHeader_, runtimeBase);
             BackupBlockHeader(backupAllocator.notInUseHeaders_, runtimeBase);
-            for (uint64_t k = 0; k < slotNum; k++) {
+            for (uint64_t k = 0; k < readyCount; k++) {
                 BackupBlockHeader(checkpointList[checkpointOffset + k].listNext, runtimeBase);
             }
         }
@@ -592,6 +598,10 @@ void DevControlFlowCache::RuntimeAddrRestore(DeviceExecuteSlot* runtimeSlotList,
         static void RestoreBlockHeader(WsSlotAllocator::BlockHeader*& ptr, WsSlotAllocator::BlockHeader* base,
                                        WsSlotAllocator::BlockHeader* index)
         {
+            if (index == reinterpret_cast<WsSlotAllocator::BlockHeader*>(WsSlotAllocator::kNullBlockHeaderIndex)) {
+                ptr = nullptr;
+                return;
+            }
             ptr = base + (uintptr_t)index;
         }
         static void RestoreSeqAllocator(SeqWsAllocator& dst, SeqWsAllocator& src)
@@ -603,11 +613,13 @@ void DevControlFlowCache::RuntimeAddrRestore(DeviceExecuteSlot* runtimeSlotList,
                                 WsSlotAllocator::BlockHeader* checkpointList, uint64_t checkpointOffset)
         {
             runtimePool.availableSlots_ = backupAllocator.availableSlots_;
+            runtimePool.initReadyCount_ = backupAllocator.initReadyCount_;
             WsSlotAllocator::BlockHeader* runtimeBase = runtimePool.GetBlockHeaderBase();
             RestoreBlockHeader(runtimePool.freeListHeader_, runtimeBase, backupAllocator.freeListHeader_);
             RestoreBlockHeader(runtimePool.notInUseHeaders_, runtimeBase, backupAllocator.notInUseHeaders_);
-            for (uint64_t k = 0; k < runtimePool.slotNum_; k++) {
+            for (uint64_t k = 0; k < runtimePool.initReadyCount_; k++) {
                 RestoreBlockHeader(runtimeBase[k].listNext, runtimeBase, checkpointList[checkpointOffset + k].listNext);
+                runtimeBase[k].ptr = checkpointList[checkpointOffset + k].ptr;
             }
         }
     };
@@ -656,9 +668,16 @@ void DevControlFlowCache::RuntimeAddrRelocWorkspace(uint64_t srcWorkspace, uint6
         for (uint32_t i = 0; i < parallelism; i++) {
             auto& slottedOutcastsBlockList = runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList;
             WsSlotAllocator::BlockHeader* base = slottedOutcastsBlockList.Data();
-            uint64_t size = slottedOutcastsBlockList.size();
-            for (uint64_t k = 0; k < size; k++) {
+            uint64_t boundaryReady = runtimeBackup.workspace.tensorAllocators[i]
+                                         .devTaskBoundaryOutcasts.initReadyCount_;
+            uint64_t innerReady = runtimeBackup.workspace.tensorAllocators[i]
+                                      .devTaskInnerTemporalOutcasts.initReadyCount_;
+            uint64_t innerOffset = runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.slotNum_;
+            for (uint64_t k = 0; k < boundaryReady; k++) {
                 relocWorkspace.RelocNullable(base[k].ptr);
+            }
+            for (uint64_t k = 0; k < innerReady; k++) {
+                relocWorkspace.RelocNullable(base[innerOffset + k].ptr);
             }
         }
     }

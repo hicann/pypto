@@ -346,7 +346,8 @@ void DeviceStitchContext::HandleOneStitch(DevAscendFunctionDupped& producerDup, 
                       &producerStitchList, producerFuncIndex, static_cast<int>(producerOperationIdx),
                       static_cast<uint32_t>(consumerIdx), static_cast<uint32_t>(consumerOperationIdx));
 
-    if (CheckStitchCacheDuplicate(workspace->StitchCacheAddr(), workspace->RootFuncMaxCallOpsize(), producerFuncIndex,
+    if (CheckStitchCacheDuplicate(workspace->StitchCacheAddr(), workspace->RootFuncMaxCallOpsize(),
+                                  workspace->StitchCacheEpoch(), producerFuncIndex,
                                   static_cast<uint32_t>(producerOperationIdx), static_cast<uint32_t>(consumerIdx),
                                   consumerOperationIdx, devTaskId)) {
         DEV_VERBOSE_DEBUG("Duplicate stitch ignore.");

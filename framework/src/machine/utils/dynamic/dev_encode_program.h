@@ -117,6 +117,9 @@ struct DevAscendProgram {
     uint32_t disableCtrlFlowCache{0};
     uint32_t rootFuncMaxCallOpsize{0};
     uint32_t cellMatchTagSeq_{0};
+    // Seed to UINT32_MAX so the first AdvanceStitchCacheEpoch wraps packed epoch to 0 and memset's virgin cache.
+    // Also advanced when packed taskId (low 16 bits) wraps within a launch.
+    uint32_t stitchCacheEpoch_{0xFFFFFFFF};
     DevRelocVector<DevAscendProgramSymbol> symbolTable;
     DevRelocVector<char> symbolTableNameList;
     uint64_t expressionTableSize;

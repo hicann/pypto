@@ -19,6 +19,7 @@
 #include "ws_metadata_allocator.h"
 
 #include <cinttypes>
+#include <limits>
 
 namespace npu::tile_fwk::dynamic {
 
@@ -31,9 +32,14 @@ public:
         uintdevptr_t ptr;
     };
 
+    // Relative-pointer sentinel used by CF-cache Backup/Restore for nullptr list heads.
+    static constexpr uintptr_t kNullBlockHeaderIndex = std::numeric_limits<uintptr_t>::max();
+
 public:
     // [workspaceAddr, workspaceAddr + workspaceSize)
     // -> [root function internal workspace | slot pool]
+    // Lazy freelist: virgin BlockHeaders are materialized on first Allocate (ItemPool-style),
+    // so Init stays O(1) instead of O(slotNum) list wiring each ExecDyn.
     void InitTensorAllocator(uintdevptr_t workspaceAddr, size_t slotNum, uint64_t slotStandardMemReq,
                              WsMetadataAllocator& allocator)
     {
@@ -42,27 +48,36 @@ public:
         slotStandardMemReq_ = slotStandardMemReq;
 
         availableSlots_ = slotNum_;
+        initReadyCount_ = 0;
+        freeListHeader_ = nullptr;
+        notInUseHeaders_ = nullptr;
 
         allocator_ = &allocator;
         allocation_ = allocator_->Allocate<BlockHeader>(slotNum_, WsMemCategory::WS_SLOT_MEM_BLOCK);
-        BlockHeader* arr = allocation_.As<BlockHeader>();
-        for (size_t i = 0; i < slotNum_; i++) {
-            arr[i].ptr = workspaceAddr_ + i * slotStandardMemReq_;
-            InsertList(arr + i, freeListHeader_);
-        }
     }
 
     BlockHeader* GetBlockHeaderBase() { return allocation_.As<BlockHeader>(); }
+
+    size_t InitReadyCount() const { return initReadyCount_; }
 
     bool IsValidSlotMemRequirement(uint64_t memReq) const { return memReq <= slotStandardMemReq_; }
 
     WsAllocation Allocate()
     {
-        DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, freeListHeader_ != nullptr, "Available slot: %zu/%zu",
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, availableSlots_ > 0, "Available slot: %zu/%zu",
                        availableSlots_, slotNum_);
 
-        BlockHeader* node = freeListHeader_;
-        freeListHeader_ = freeListHeader_->listNext;
+        BlockHeader* node = nullptr;
+        if (freeListHeader_ != nullptr) {
+            node = freeListHeader_;
+            freeListHeader_ = freeListHeader_->listNext;
+        } else {
+            DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, initReadyCount_ < slotNum_,
+                           "Virgin slot overflow: ready=%zu/%zu", initReadyCount_, slotNum_);
+            node = allocation_.As<BlockHeader>() + initReadyCount_;
+            node->ptr = workspaceAddr_ + initReadyCount_ * slotStandardMemReq_;
+            initReadyCount_++;
+        }
 
         WsAllocation allocation;
         allocation.ptr = node->ptr;
@@ -115,6 +130,8 @@ public:
         availableSlots_++;
     }
 
+    void Deallocate(const WsAllocation& allocation) { Deallocate(allocation.ptr); }
+
     size_t AvailableSlots() const { return availableSlots_; }
 
     uint64_t SlotByteSize() const { return slotStandardMemReq_; }
@@ -149,6 +166,7 @@ private:
 
     size_t availableSlots_{0};
     size_t slotNum_{0};
+    size_t initReadyCount_{0};
     uint64_t slotStandardMemReq_{0};
 
     uintdevptr_t workspaceAddr_{0};

@@ -40,17 +40,31 @@ public:
     uintdevptr_t StackWorkspaceAddr() const { return stackWorkspaceBase_; }
     uint64_t StandardStackWorkspacePerCore() const { return standardStackWorkspacePerCore_; }
 
+    // Persist epoch on DevAscendProgram (workspace allocator is stack-local per launch).
+    // Epoch in entry high bits invalidates stale cells; skip full-cache memset on the hot path.
+    // Packed epoch 0 is skipped: memset once then continue with the next non-zero packed value.
+    // Also called when packed taskId (low 16 bits) wraps so old entries cannot false-match.
+    void AdvanceStitchCacheEpoch()
+    {
+        uint32_t nextEpoch = devProg_->stitchCacheEpoch_ + 1U;
+        if (unlikely((nextEpoch & 0xFFFFU) == 0)) {
+            nextEpoch++;
+            if (stitchCacheAddr_ != 0) {
+                (void)memset_s(reinterpret_cast<void*>(stitchCacheAddr_), devProg_->memBudget.metadata.stitchCacheSize,
+                               0, devProg_->memBudget.metadata.stitchCacheSize);
+            }
+        }
+        devProg_->stitchCacheEpoch_ = nextEpoch;
+    }
     void AllocateStitchCache()
     {
         stitchCacheAddr_ = metadataAllocators_.general.Malloc(devProg_->memBudget.metadata.stitchCacheSize).ptr;
         rootFuncMaxCallOpsize_ = devProg_->rootFuncMaxCallOpsize;
-        if (stitchCacheAddr_ != 0) {
-            (void)memset_s(reinterpret_cast<void*>(stitchCacheAddr_), devProg_->memBudget.metadata.stitchCacheSize, 0,
-                           devProg_->memBudget.metadata.stitchCacheSize);
-        }
+        AdvanceStitchCacheEpoch();
     }
     uint64_t* StitchCacheAddr() const { return reinterpret_cast<uint64_t*>(stitchCacheAddr_); }
     uint32_t RootFuncMaxCallOpsize() const { return rootFuncMaxCallOpsize_; }
+    uint16_t StitchCacheEpoch() const { return static_cast<uint16_t>(devProg_->stitchCacheEpoch_ & 0xFFFFU); }
 
 #if DEBUG_INFINITE_LIFETIME
     uintdevptr_t DumpTensorWsBaseAddr() const { return dumpTensorWsAllocator_.MemBaseAddr(); }

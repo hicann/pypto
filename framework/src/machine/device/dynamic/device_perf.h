@@ -192,7 +192,7 @@ struct PerfEvtMgr {
             buf[i] = c;
         }
         buf[count] = '\0';
-        DEV_INFO("%s.", buf);
+        DEV_ERROR(0, "%s.", buf);
     }
 
     void Dump()
@@ -201,7 +201,7 @@ struct PerfEvtMgr {
         static constexpr size_t SHEET_WIDTH = 40 + 3 + 10 + 3 + 10 + 3 + 10;
 
         RepeatPuts('=', SHEET_WIDTH);
-        DEV_INFO("%40s | %10s | %10s | %10s.", "EventType", "Count", "Total(us)", "Avg(us)");
+        DEV_ERROR(0, "%40s | %10s | %10s | %10s.", "EventType", "Count", "Total(us)", "Avg(us)");
         RepeatPuts('-', SHEET_WIDTH);
 
         for (int i = 0; i < PERF_EVT_MAX; i++) {
@@ -209,7 +209,7 @@ struct PerfEvtMgr {
             if (evt.count != 0) {
                 uint64_t total = evt.total * NSEC_PER_SEC / freq / NSEC_PER_USEC;
                 float avg = static_cast<float>(total / evt.count);
-                DEV_INFO("%-40s | %10ld | %10lu | %10.1f.", PerfEventName[i], evt.count, total, avg);
+                DEV_ERROR(0, "%-40s | %10ld | %10lu | %10.1f.", PerfEventName[i], evt.count, total, avg);
             }
         }
 

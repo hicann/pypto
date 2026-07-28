@@ -28,15 +28,21 @@
 
 namespace npu::tile_fwk::dynamic {
 
-inline bool CheckStitchCacheDuplicate(uint64_t* stitchCache, uint32_t rootFuncMaxCallOpsize, uint32_t producerFuncIdx,
-                                      uint32_t producerOpIdx, uint32_t consumerFuncIdx, uint32_t consumerOpIdx,
-                                      uint64_t devTaskId)
+// Entry layout (uint64):
+//   [63:48] epoch | [47:32] devTaskId[15:0] | [31:16] producerFuncIdx | [15:0] consumerFuncIdx
+// Epoch replaces full-cache memset: previous-launch entries never match the current epoch.
+// When monotonic taskId crosses a 16-bit boundary, runtime bumps epoch (AdvanceStitchCacheEpoch)
+// so packing only the low 16 bits remains collision-free within a launch.
+inline bool CheckStitchCacheDuplicate(uint64_t* stitchCache, uint32_t rootFuncMaxCallOpsize, uint16_t stitchCacheEpoch,
+                                      uint32_t producerFuncIdx, uint32_t producerOpIdx, uint32_t consumerFuncIdx,
+                                      uint32_t consumerOpIdx, uint64_t devTaskId)
 {
     if (stitchCache == nullptr || rootFuncMaxCallOpsize == 0) {
         return false;
     }
     uint64_t& entry = stitchCache[consumerOpIdx * rootFuncMaxCallOpsize + producerOpIdx];
-    uint64_t expected = (devTaskId << 32) | (static_cast<uint64_t>(producerFuncIdx) << 16) | consumerFuncIdx;
+    uint64_t expected = (static_cast<uint64_t>(stitchCacheEpoch) << 48) | ((devTaskId & 0xFFFFULL) << 32) |
+                        (static_cast<uint64_t>(producerFuncIdx & 0xFFFFU) << 16) | (consumerFuncIdx & 0xFFFFU);
     if (entry == expected) {
         return true;
     }

@@ -101,6 +101,11 @@ void DeviceExecuteContext::PushTask(DynDeviceTask* dynTask)
 {
     pushTask(dynTask, this);
     taskId++;
+    // Stitch-cache entry packs only taskId[15:0]; bump epoch on wrap so reused low bits cannot
+    // collide with earlier tasks in the same launch (see CheckStitchCacheDuplicate).
+    if (unlikely((taskId & 0xFFFFULL) == 0)) {
+        workspace.AdvanceStitchCacheEpoch();
+    }
     AdvanceCellMatchTagSeq(devProg);
 }
 
