@@ -183,7 +183,7 @@ def softmax_kernel(
         # Use slicing to extract a tile (concrete dims stay as-is)
         input_view = input_tensor[b_offset:b_offset_end, :seqlen, :head, :dim]
         softmax_out = softmax_core(input_view)
-        output_tensor[b_offset:, ...] = softmax_out
+        output_tensor[b_offset:b_offset_end, ...] = softmax_out
 
 
 def test_dynamic_partial(device_id: int = None):

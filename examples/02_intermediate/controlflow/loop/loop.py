@@ -146,7 +146,7 @@ def loop_compile_phase_print_kernel(
     for outside_idx in pypto.loop(5):
         print(f"outside_idx: {outside_idx}")
         for inside_idx in pypto.loop(3):
-            print(f"inside_idx: {outside_idx}")
+            print(f"inside_idx: {inside_idx}")
             res = pypto.add(in_t0, in_t0)
             print(f"res: {res}")
             if outside_idx < 3:

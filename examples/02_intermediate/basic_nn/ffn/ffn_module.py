@@ -126,9 +126,12 @@ def relu_activation_core(x: pypto.tensor) -> pypto.tensor:
 
 def gelu_activation_core(x: pypto.tensor) -> pypto.tensor:
     """
-    GELU activation function: x * 0.5 * (1 + erf(x / sqrt(2)))
+    GELU approximation using sigmoid form:
 
-    Approximated as: x * 0.5 * (1 + tanh(sqrt(2/π) * (x + 0.044715 * x^3)))
+        gelu(x) ≈ x * sigmoid(1.702 * x)
+
+    The computation is promoted to FP32 for better numerical stability,
+    then cast back to BF16 before returning.
 
     Parameters
     ----------
@@ -138,7 +141,7 @@ def gelu_activation_core(x: pypto.tensor) -> pypto.tensor:
     Returns
     -------
     pypto.tensor
-        GELU activated tensor
+        GELU-activated tensor
     """
     pypto.set_vec_tile_shapes(*x.shape[:2] if len(x.shape) >= 2 else (32, 128))
     x_fp32 = pypto.cast(x, pypto.DT_FP32)
@@ -185,7 +188,7 @@ def swiglu_activation_core(gate: pypto.tensor, up: pypto.tensor) -> pypto.tensor
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def dynamic_gelu_activation_core(
     hidden_states: pypto.tensor(),
-    gate_proj_weight: pypto.tensor(),
+    up_proj_weight: pypto.tensor(),
     down_proj_weight: pypto.tensor(),
     output: pypto.tensor(),
     config: FFNConfig,
@@ -213,10 +216,10 @@ def dynamic_gelu_activation_core(
             [batch_offset, 0],
             valid_shape=[(batch_size - batch_offset).min(basic_batch), hidden_size],
         )
-        # Gate projection
-        gate = pypto.matmul(hidden_chunk, gate_proj_weight, config.dtype)
+        # Up projection
+        up = pypto.matmul(hidden_chunk, up_proj_weight, config.dtype)
         pypto.set_vec_tile_shapes(*config.vec_tile_shape)
-        activated = gelu_activation_core(gate)
+        activated = gelu_activation_core(up)
         # Down projection
         pypto.set_cube_tile_shapes(
             [config.cube_tile_shape[0], config.cube_tile_shape[0]],
@@ -246,19 +249,16 @@ def ffn_activation_kernel(
     )
     pypto.set_vec_tile_shapes(*config.vec_tile_shape)
 
-    # Gate projection: [batch_size, hidden_size] @ [hidden_size, intermediate_size]
-    gate = pypto.matmul(hidden_states, gate_proj_weight, config.dtype)
-
     if config.activation == "gelu":
-        # GELU activation
-        activated = gelu_activation_core(gate)
+        up = pypto.matmul(hidden_states, up_proj_weight, config.dtype)
+        activated = gelu_activation_core(up)
     elif config.activation == "swiglu":
-        # SwiGLU activation
-        up_proj_weight[:] = pypto.matmul(hidden_states, up_proj_weight, config.dtype)
-        activated = swiglu_activation_core(gate, up_proj_weight)
+        gate = pypto.matmul(hidden_states, gate_proj_weight, config.dtype)
+        up = pypto.matmul(hidden_states, up_proj_weight, config.dtype)
+        activated = swiglu_activation_core(gate, up)
     elif config.activation == "relu":
-        # ReLU activation
-        activated = relu_activation_core(gate)
+        up = pypto.matmul(hidden_states, up_proj_weight, config.dtype)
+        activated = relu_activation_core(up)
     else:
         raise ValueError(f"Unsupported activation: {config.activation}")
 
@@ -305,9 +305,9 @@ def test_ffn_static_gelu(device_id=None):
     print(f"Gate weight shape: {gate_proj_weight_torch.shape}")
     print(f"up weight shape: {up_proj_weight_torch.shape}")
     print(f"Down weight shape: {down_proj_weight_torch.shape}")
-    gate_torch = torch.matmul(hidden_states_torch, gate_proj_weight_torch)
-    gate_activated_torch = gelu_torch(gate_torch.float()).to(dtype)
-    output_torch_ref = torch.matmul(gate_activated_torch, down_proj_weight_torch)
+    up_torch = torch.matmul(hidden_states_torch, up_proj_weight_torch)
+    up_activated_torch = gelu_torch(up_torch.float()).to(dtype)
+    output_torch_ref = torch.matmul(up_activated_torch, down_proj_weight_torch)
     output = torch.empty(batch_size, hidden_size, dtype=dtype, device=device)
 
     ffn_activation_kernel(
@@ -417,9 +417,9 @@ def test_ffn_dynamic_gelu(device_id: int = None, dynamic: bool = True):
     )
 
     # PyTorch reference computation
-    gate_torch = torch.matmul(hidden_states_torch, gate_proj_weight_torch)
-    gate_activated_torch = gelu_torch(gate_torch.float()).to(dtype)
-    output_torch_ref = torch.matmul(gate_activated_torch, down_proj_weight_torch)
+    up_torch = torch.matmul(hidden_states_torch, up_proj_weight_torch)
+    up_activated_torch = gelu_torch(up_torch.float()).to(dtype)
+    output_torch_ref = torch.matmul(up_activated_torch, down_proj_weight_torch)
 
     print(f"Input shape: {hidden_states_torch.shape} (dynamic batch size: {batch_size})")
     print(f"Basic batch size: {basic_batch}")
@@ -430,7 +430,7 @@ def test_ffn_dynamic_gelu(device_id: int = None, dynamic: bool = True):
     output = torch.empty(batch_size, hidden_size, dtype=dtype, device=device)
     if config.use_dynamic_shape and config.activation == "gelu":
         dynamic_gelu_activation_core(
-            hidden_states_torch, gate_proj_weight_torch, down_proj_weight_torch, output, config
+            hidden_states_torch, up_proj_weight_torch, down_proj_weight_torch, output, config
         )
     else:
         ffn_activation_kernel(
@@ -480,9 +480,9 @@ def test_ffn_static_relu(device_id: int = None):
     )
 
     # PyTorch reference computation
-    gate_torch = torch.matmul(hidden_states_torch, gate_proj_weight_torch)
-    gate_activated_torch = torch.relu(gate_torch)
-    output_torch_ref = torch.matmul(gate_activated_torch, down_proj_weight_torch)
+    up_torch = torch.matmul(hidden_states_torch, up_proj_weight_torch)
+    up_activated_torch = torch.relu(up_torch)
+    output_torch_ref = torch.matmul(up_activated_torch, down_proj_weight_torch)
 
     output = torch.empty(batch_size, hidden_size, dtype=dtype, device=device)
     ffn_activation_kernel(
