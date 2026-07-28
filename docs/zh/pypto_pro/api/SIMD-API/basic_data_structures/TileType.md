@@ -42,7 +42,7 @@ pypto_pro.language.TileType(shape, dtype, target_memory=pypto_pro.language.Memor
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `shape` | 输入 | 编译期常量整数列表，各维大小须为正整数；当前 codegen 最多支持二维 Tile<br>对齐及分形布局约束由使用该 TileType 的具体 API 检查 |
+| `shape` | 输入 | 长度为 2 的编译期常量整数列表，各维大小须为正整数；仅支持二维 Tile<br>对齐及分形布局约束由使用该 TileType 的具体 API 检查 |
 | `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md) 枚举值<br>常用：`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_INT8`、`pypto_pro.language.DT_INT32` |
 | `target_memory` | 输入 | [`pypto_pro.language.MemorySpace`](MemorySpace.md) 枚举值<br>默认 `pypto_pro.language.MemorySpace.Vec`（UB）<br>可选：`Vec`(UB)、`Mat`(L1)、`Left`(L0A)、`Right`(L0B)、`Acc`(L0C)、`Scaling` |
 | `valid_shape` | 输入 | 编译期常量整数列表或 `None`（默认）<br>具体整数（如 `[32, 64]`）：编译期确定有效形状<br>`None`：后端缺省行为等同于 `[-1, -1]`（动态模式）<br>`[-1, -1]`：运行时动态设置有效形状，配合 [`pypto_pro.language.set_validshape`](../operation/memory_vector_computation/transpose_and_element_access/set_validshape.md) 使用 |

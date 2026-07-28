@@ -1,7 +1,9 @@
 # 控制流
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 range
 section_vector_section_cube
+```

@@ -22,7 +22,7 @@ $$dst_i = src\_a_i + src\_b_i$$
 
 同时可以在 carry（MaskReg 寄存器）中标记每次加法是否产生进位，若 src_a、src_b 输入按位相加后最高位有进位，在 MaskReg carry 中对应位置每 4bit 的最低位写 1，否则写 0。
 
-![](../../../../../figures/add带carry示意图.jpg)
+![](../../../../figures/add带carry示意图.jpg)
 
 输出 carry 适用场景请参考 [vf.addc](addc.md#功能说明)。
 

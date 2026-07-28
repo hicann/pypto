@@ -41,7 +41,7 @@ pypto_pro.language.Tile[[shape], dtype]
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `shape` | 输入 | 整数列表，各维大小须为正整数；当前 codegen 最多支持二维 Tile<br>须与 `make_tile` 时使用的 `TileType.shape` 一致 |
+| `shape` | 输入 | 长度为 2 的整数列表，各维大小须为正整数；仅支持二维 Tile<br>须与 `make_tile` 时使用的 `TileType.shape` 一致 |
 | `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md) 枚举值<br>须与 `make_tile` 时使用的 `TileType.dtype` 一致 |
 
 ## 调用示例

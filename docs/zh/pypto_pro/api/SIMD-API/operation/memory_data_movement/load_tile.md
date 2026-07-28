@@ -18,7 +18,7 @@
 
 例如 tile shape 为 `[64, 128]` 时，`tile_offsets=[2, 2]` 等价于 [`pypto_pro.language.load`](load.md) 的绝对偏移 `[128, 256]`。
 
-![load_tile 按块索引从 GM 搬入 Tile](../../../../figures/load_tile-block-offset.jpg "load_tile 按块索引从 GM 搬入 Tile")
+![load_tile 按块索引从 GM 搬入 Tile](../../../figures/load_tile-block-offset.jpg "load_tile 按块索引从 GM 搬入 Tile")
 
 ## 函数原型
 

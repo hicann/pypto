@@ -83,7 +83,7 @@ def histogram_kernel(
         pl.load(cur_idx, idx, [0, 0])
         pl.histogram(cur_dst, cur_src, cur_idx, is_msb=True)
         pl.store(out, cur_dst, [0, 0])
-    ```
+```
 
 实测结果示例如下：
 

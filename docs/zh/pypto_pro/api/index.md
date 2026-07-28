@@ -1,7 +1,9 @@
-# PyPTO-Pro API参考
+# PyPTO Pro API参考
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 SIMD-API/index
 Utils-API/index
+```

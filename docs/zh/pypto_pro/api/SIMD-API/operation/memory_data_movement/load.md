@@ -127,31 +127,6 @@ pl.load_tile(k_mat_buf[buf_idx], k, [b_idx, ki, n_idx, 0], order=[1, 3])
 > `order` 是**编译期常量列表**（它驱动 codegen 的 tensor-view stride），不能是运行时
 > 变量。
 
-### Tensor维度变化
-
-有时 kernel 拿到的 GM 数据布局和你想用的 Tile 布局对不上（维数不同、或想换一种 shape /
-stride 去看同一块内存）。这时**不改动底层数据**，只重建一个新的 Tensor 视图。
-
-- **通过 `pl.Ptr` 重新生成**：kernel 参数声明成裸指针 `pl.Ptr[dtype]`，在函数体里用
-  `pl.make_tensor(ptr, shape, stride)` 按需要的 shape/stride 构造视图。这是"动态 rank"
-  kernel 的基础 —— 维数、shape 都来自运行时的 tiling 数据，而非签名。
-
-```python
-@pl.jit()
-def k(q: pl.Ptr[pl.DT_FP16], tiling: OpTiling):
-    # 行优先 => stride = [n*d, d, 1]；shape/stride 全部来自 tiling
-    tensor_q = pl.make_tensor(q, [tiling.sq, tiling.n, tiling.d],
-                              [tiling.n * tiling.d, tiling.d, 1])
-    # 之后 tensor_q 的用法与 pl.Tensor 参数完全相同
-```
-
-- **也可以从已有的 `pl.Tensor` 重建**：`pl.make_tensor` 的第一个参数可以是一个已存在的
-  `pl.Tensor`，此时新视图复用它的底层指针，只换 shape/stride（可选换 dtype）。这正是下面
-  "合轴场景"用到的能力。
-
-> 重建视图只改变"怎么看这块内存"，不搬运、不拷贝数据。给出的 stride 必须与底层内存的真实
-> 排布一致，否则读到的就是错位的数据。
-
 ### 尾块需要padding场景
 
 当 GM Tensor 的 shape 不能被 Tile 整除时，边界上会出现比 Tile 小的**尾块**。Tile 的
@@ -180,18 +155,6 @@ with pl.section_vector():
 尾块 Tile 文档。
 
 ### Cube侧转置场景
-
-**总结：**
-
-- L0A固定为`shape=[M, K]`、`layout=pl.NZ`；
-- L0B固定为`shape=[K, N]`、`layout=pl.ZN`；
-- L1（`Mat`）的shape与L0A或L0B一致；
-- 如果需要转置，L1（`Mat`）上固定为`pl.ZN`
-  - 如果是 GM->L1，load上固定设置`order=[1, 0]`（反序转置）；
-  - 如果是 UB->L1，无需设置`order`（默认升序不转置）；
-- 如果不需要转置，L1（`Mat`）上固定为`pl.NZ`
-  - 如果是 GM->L1，load上默认`order`升序不转置（可省略）；
-  - 如果是 UB->L1，无需设置`order`（默认升序不转置）；
 
 matmul 的左/右矩阵在从 L1（`Mat`）搬到 L0（`Left`/`Right`）时可能需要转置。下面先说明硬件约束，再给出前端的写法。
 
@@ -287,7 +250,29 @@ pl.move(right, mat_0)                        # Mat[K,N] -> Right[K,N]，同形�
 
 > 约束：`pl.insert` 要求 `tile.dim0 == mat.dim0`（物理行匹配）；分 subcore 带列偏移插入时，被转置的矩阵通常需为方阵（见 FA 场景）。
 
-### GM Tensor合轴场景
+### Tensor 视图重建与合轴
+
+`pl.make_tensor` 可以在不搬运数据的前提下重建 GM Tensor 视图（换 shape/stride 或降维），是处理"维数对不上"和"合轴"两类场景的共同基础。重建视图只改变"怎么看这块内存"，给出的 stride 必须与底层内存的真实排布一致，否则读到的是错位的数据。
+
+有时 kernel 拿到的 GM 数据布局和你想用的 Tile 布局对不上（维数不同、或想换一种 shape /
+stride 去看同一块内存）。这时**不改动底层数据**，只重建一个新的 Tensor 视图。
+
+- **通过 `pl.Ptr` 重新生成**：kernel 参数声明成裸指针 `pl.Ptr[dtype]`，在函数体里用
+  `pl.make_tensor(ptr, shape, stride)` 按需要的 shape/stride 构造视图。这是"动态 rank"
+  kernel 的基础 —— 维数、shape 都来自运行时的 tiling 数据，而非签名。
+
+```python
+@pl.jit()
+def k(q: pl.Ptr[pl.DT_FP16], tiling: OpTiling):
+    # 行优先 => stride = [n*d, d, 1]；shape/stride 全部来自 tiling
+    tensor_q = pl.make_tensor(q, [tiling.sq, tiling.n, tiling.d],
+                              [tiling.n * tiling.d, tiling.d, 1])
+    # 之后 tensor_q 的用法与 pl.Tensor 参数完全相同
+```
+
+- **也可以从已有的 `pl.Tensor` 重建**：`pl.make_tensor` 的第一个参数可以是一个已存在的
+  `pl.Tensor`，此时新视图复用它的底层指针，只换 shape/stride（可选换 dtype）。这正是下面
+  合轴场景用到的能力。
 
 **"合轴"指把 GM Tensor 的两个维度当成一维来处理**（two dimensions treated as one）。
 
@@ -311,7 +296,7 @@ Tensor 的有效维数降下来，从而更自然地对上二维 Tile。典型�
 #### 怎么表达：用 `pl.make_tensor` 重建一个"降维"视图
 
 合轴不是 `load` 的某个开关，而是先用 `pl.make_tensor` 把两维乘到一起、重建一个低一维的
-Tensor 视图（复用同一块底层内存，见上文"Tensor维度变化"），再正常 load。
+Tensor 视图（复用同一块底层内存，见上文），再正常 load。
 
 **例 1：把 `[B, S, D]` 合成 `[B*S, D]`（静态 shape）**
 

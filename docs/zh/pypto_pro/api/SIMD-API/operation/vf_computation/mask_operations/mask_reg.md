@@ -19,7 +19,7 @@ MaskReg（掩码寄存器）用于指示在计算过程中哪些元素参与计�
 如下图所示，当操作数类型为 b8 时，每一个 element 对应 1bit MaskReg；当操作数类型为 b16 时，每一个 element 对应 2bit MaskReg，且仅 2bit 中的最低位是有效的；当操作数类型为 b32 时，每一个 element 对应 4bit MaskReg，且仅 4bit 中的最低位是有效的。
 
 **图 1** MaskReg 计算过程
-![](../../../../../figures/MaskReg计算过程.jpg "MaskReg 计算过程")
+![](../../../../figures/MaskReg计算过程.jpg "MaskReg 计算过程")
 
 mask_reg 由 `vf.create_mask` 或 `vf.update_mask` 产生，作为 `MaskReg` 类型的参数直接传递给矢量计算 API，控制哪些元素参与运算。
 

@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
 MaskReg move（mask 模式）的机制如下图所示：b16 类型读取完整 128bit 的 {MASK1, MASK0}，将每个 bit 复制为 2bit；b32 类型读取 64bit 的 MASK0，并将每个 bit 复制为 4bit。
 
-![](<../../../../../figures/move(mask模式)示意图.jpg>)
+![](<../../../../figures/move(mask模式)示意图.jpg>)
 
 ```python
 import pypto_pro.language as pl

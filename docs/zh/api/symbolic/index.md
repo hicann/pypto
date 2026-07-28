@@ -1,7 +1,7 @@
 # 符号化
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 
 pypto-SymbolicScalar_introduction
 pypto-SymbolicScalar_constructor

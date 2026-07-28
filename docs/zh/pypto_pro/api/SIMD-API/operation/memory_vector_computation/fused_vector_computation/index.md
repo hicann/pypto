@@ -1,7 +1,8 @@
 # 融合矢量计算
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 add_relu
 add_relu_cast
@@ -12,3 +13,4 @@ mul_cast
 partadd
 sub_relu
 sub_relu_cast
+```

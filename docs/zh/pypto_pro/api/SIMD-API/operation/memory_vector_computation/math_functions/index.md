@@ -1,7 +1,8 @@
 # 数学函数
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 argmax
 argmin
@@ -17,3 +18,4 @@ min
 recip
 rsqrt
 sum
+```

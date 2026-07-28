@@ -1,7 +1,7 @@
 # 配置
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 
 pypto-frontend-jit
 pypto-get_codegen_options

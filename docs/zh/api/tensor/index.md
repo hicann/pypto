@@ -1,7 +1,7 @@
 # 张量
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 
 pypto-Tensor_introduction
 pypto-Tensor_constructor

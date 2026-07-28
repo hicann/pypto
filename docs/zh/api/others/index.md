@@ -1,7 +1,7 @@
 # 其他
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 
 pypto-from_torch
 pypto-pass_verify_print

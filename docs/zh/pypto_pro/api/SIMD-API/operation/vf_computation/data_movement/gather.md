@@ -27,7 +27,7 @@
 
 **图 1** Gather 功能说明
 
-![](../../../../../figures/gather功能说明.jpg)
+![](../../../../figures/gather功能说明.jpg)
 
 ### DATA_BLOCK_LOAD 模式（按 DataBlock 收集）
 
@@ -35,7 +35,7 @@
 
 **图 2** block 模式 Gather 功能说明
 
-![](../../../../../figures/block模式gather功能说明.jpg)
+![](../../../../figures/block模式gather功能说明.jpg)
 
 ## 函数原型
 

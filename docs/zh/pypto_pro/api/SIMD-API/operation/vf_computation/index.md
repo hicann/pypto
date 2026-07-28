@@ -1,7 +1,8 @@
 # VF计算
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 reg_tensor
 basic_arithmetic/index
@@ -14,3 +15,4 @@ composite_computation/index
 mask_operations/index
 sorting_and_indexing/index
 advanced_computation/index
+```

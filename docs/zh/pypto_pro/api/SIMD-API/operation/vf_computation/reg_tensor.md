@@ -88,7 +88,7 @@ RegTensor 支持的数据类型由 `dtype` 参数决定，不同 dtype 对应不
 
 **图 1** RegTensor 搬运 complex32
 
-![](../../../../figures/Regtensor搬运complex32.jpg "RegTensor搬运complex32")
+![](../../../figures/Regtensor搬运complex32.jpg "RegTensor搬运complex32")
 
 complex32 是一个包含两个 half（实部 real、虚部 imag）类型的复合类型，通常是连续存储，低位为实部高位为虚部。
 
@@ -102,7 +102,7 @@ complex32 是一个包含两个 half（实部 real、虚部 imag）类型的复�
 
 **图 2** RegTensor 搬运 complex64
 
-![](../../../../figures/regTensor搬运complex64.jpg "RegTensor搬运complex64")
+![](../../../figures/regTensor搬运complex64.jpg "RegTensor搬运complex64")
 
 complex64 是一个包含两个 float（实部 real、虚部 imag）类型的复合类型，通常是连续存储，低位为实部高位为虚部。
 
@@ -116,7 +116,7 @@ complex64 是一个包含两个 float（实部 real、虚部 imag）类型的复
 
 **图 3** RegTensor 搬运 b64
 
-![](../../../../figures/RegTensor搬运b64.jpg "RegTensor搬运b64")
+![](../../../figures/RegTensor搬运b64.jpg "RegTensor搬运b64")
 
 在 RegTraitNumOne 场景下，从 UB（src0Addr）中以 DIST_NORM 模式搬运 VL 数据量。
 

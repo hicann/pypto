@@ -20,7 +20,7 @@
 
 下图展示 `make_tensor` 的核心语义：它使用 shape 和 stride 为已有地址创建 Tensor View，不申请新内存，也不搬运数据。
 
-![make_tensor 从裸指针创建 Tensor View](../../../../figures/make_tensor-view.jpg "make_tensor 从裸指针创建 Tensor View")
+![make_tensor 从裸指针创建 Tensor View](../../../figures/make_tensor-view.jpg "make_tensor 从裸指针创建 Tensor View")
 
 ## 函数原型
 
@@ -53,7 +53,7 @@ pypto_pro.language.make_tensor(ptr, shape, stride, dtype=None) -> Tensor
 
 下面两个场景都是对基础 Tensor View 的进一步使用：左侧通过高轴 stride 表达行间空洞，右侧通过交换 shape 和 stride 表达转置后的逻辑索引。
 
-![make_tensor 的非连续与转置视图](../../../../figures/make_tensor-stride-cases.jpg "make_tensor 的非连续与转置视图")
+![make_tensor 的非连续与转置视图](../../../figures/make_tensor-stride-cases.jpg "make_tensor 的非连续与转置视图")
 
 ### 高轴非连续、尾轴连续
 

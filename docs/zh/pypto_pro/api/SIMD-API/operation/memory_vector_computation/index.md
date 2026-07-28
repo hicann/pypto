@@ -1,7 +1,8 @@
 # Memory矢量计算
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 elementwise/index
 fused_vector_computation/index
@@ -15,3 +16,4 @@ vector_mask/index
 math_functions/index
 sorting/index
 fillpad
+```

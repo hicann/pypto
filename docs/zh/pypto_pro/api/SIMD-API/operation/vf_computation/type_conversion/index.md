@@ -1,7 +1,9 @@
 # 类型转换
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 astype
 truncate
+```

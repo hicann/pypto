@@ -1,7 +1,8 @@
 # 基础数据结构
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 CompactMode
 DataType
@@ -14,3 +15,4 @@ TensorLayout
 Tile
 TilePad
 TileType
+```

@@ -1,7 +1,7 @@
 # 操作
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 
 pypto-abs
 pypto-acos

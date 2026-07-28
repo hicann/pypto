@@ -1,7 +1,8 @@
 # 计算API
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 memory_data_movement/index
 memory_vector_computation/index
@@ -16,3 +17,4 @@ system_variables/index
 atomic_operations/index
 transpose_and_element_access/index
 utilities/index
+```

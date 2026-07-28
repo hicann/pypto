@@ -2,7 +2,11 @@
 
 ```{toctree}
 :maxdepth: 1
+:titlesonly:
 
-getting_started/index
-programming_guide/index
+introduction
+quick_start/index
+programming_paradigm/index
+operator_development/index
+debugging_and_optimization/index
 ```

@@ -1,7 +1,8 @@
 # 数据搬运
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 clear_spr
 create_addr_reg
@@ -21,3 +22,4 @@ store_align
 store_unalign
 store_unalign_post
 unalign_reg_for_store
+```

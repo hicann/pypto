@@ -1,7 +1,8 @@
 # 基础算术
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 abs
 add
@@ -27,3 +28,4 @@ relu
 sqrt
 sub
 subc
+```

@@ -22,7 +22,7 @@ Carry flag（进位标志）用于表示加法进位，若srcReg0，srcReg1，ca
 
 以 int64_t 类型数据计算 -1 + 8 = 7 为例，AddC 接口的适用场景如下图所示：
 
-![](../../../../../figures/Addc接口适用场景示意图.jpg)
+![](../../../../figures/Addc接口适用场景示意图.jpg)
 
 ## 函数原型
 

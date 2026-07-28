@@ -1,7 +1,8 @@
 # 比较与选择
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 eq
 ge
@@ -11,3 +12,4 @@ lt
 ne
 select
 squeeze
+```

@@ -1,7 +1,8 @@
 # Memory数据搬运
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 insert
 load
@@ -12,3 +13,4 @@ ssbuf_store
 store
 store_tile
 subview
+```

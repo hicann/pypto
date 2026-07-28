@@ -1,8 +1,10 @@
 # 掩码操作
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 create_mask
 mask_reg
 update_mask
+```

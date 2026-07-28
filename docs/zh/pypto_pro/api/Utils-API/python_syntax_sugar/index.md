@@ -1,8 +1,10 @@
 # Python语法糖
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
+:titlesonly:
 
 const
 max
 min
+```
