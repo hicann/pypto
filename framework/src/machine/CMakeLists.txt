@@ -9,9 +9,6 @@
 # -----------------------------------------------------------------------------------------------------------
 
 
-if (BUILD_WITH_CANN)
-    add_subdirectory(device)
-endif ()
 add_subdirectory(runtime)
 
 file(GLOB_RECURSE _Compiler_Srcs
@@ -47,9 +44,5 @@ target_link_libraries(tile_fwk_compiler
             dl
             c_sec
 )
-if (BUILD_WITH_CANN)
-    add_dependencies(tile_fwk_compiler pypto_ctrl_server)
-endif ()
-
 PTO_Fwk_AnalysisTargetHeaderFiles(TARGET tile_fwk_compiler)
 PTO_Fwk_AnalysisTargetSymbols(TARGET tile_fwk_compiler)

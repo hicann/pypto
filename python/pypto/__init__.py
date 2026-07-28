@@ -18,6 +18,8 @@ try:
 except ImportError:
     pass
 
+import pydoc as _pydoc
+
 # shared lib should be loaded first
 from . import _loader
 
@@ -47,3 +49,19 @@ jit = frontend.jit
 tensor = Tensor
 element = Element
 symbolic_scalar = SymbolicScalar
+
+
+def _patch_getowndoc(obj):
+    try:
+        doc = obj.__doc__
+        if doc is None:
+            return None
+        if obj is not type:
+            typedoc = type(obj).__doc__
+            if isinstance(typedoc, str) and typedoc == doc:
+                return None
+        return doc
+    except AttributeError:
+        return None
+setattr(_pydoc, '_getowndoc', _patch_getowndoc)
+del _patch_getowndoc

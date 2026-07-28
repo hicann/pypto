@@ -352,6 +352,7 @@ struct DynMachineManager {
     int EntrySplittedStreamCtrl(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
     {
         // ctrl start only one thread
+        PerfMtTrace(PERF_TRACE_BEGIN, 0);
         DEV_INFO("Ctrl enter round=%d", (int)kargs->parameter.globalRound);
         ctrlStartRound_.fetch_add(1, std::memory_order_acq_rel);
         initCtrl_.store(true);
@@ -361,9 +362,9 @@ struct DynMachineManager {
             DeviceTrace::GetInstance().ReportTraceMsg();
             return ret;
         }
+        PerfMtTrace(PERF_TRACE_INIT, CTRL_CPU_THREAD_IDX);
         kargs->taskWastTime = GetCycles();
         ret = RunCtrl(kargs, entry, 0);
-        PerfMtTrace(PERF_TRACE_BEGIN, 0, kargs->taskWastTime);
         PerfMtTrace(PERF_TRACE_EXIT, 0);
         DEV_INFO("Ctrl leave ret=%d", ret);
         if (ret != DEVICE_MACHINE_OK) {

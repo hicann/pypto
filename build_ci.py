@@ -1140,7 +1140,8 @@ class BuildCtrl(CMakeParam):
         self.feature: FeatureParam = FeatureParam(args=args)
         self.build: BuildParam = BuildParam(args=args)
         self.tests: TestsParam = TestsParam(args=args)
-        self.third_party_path: Optional[Path] = Path(args.third_party_path).resolve() if args.third_party_path else None
+        third_party_path = args.third_party_path or os.environ.get("PYPTO_THIRD_PARTY_PATH")
+        self.third_party_path: Optional[Path] = Path(third_party_path).resolve() if third_party_path else None
         self.verbose: bool = args.verbose
         self.cmake: Optional[Path] = self.which_cmake()
         if not self.cmake:
@@ -1573,6 +1574,7 @@ class BuildCtrl(CMakeParam):
         """
         update_env = self.get_cmake_build_update_env()
         update_env["CCACHE_BASEDIR"] = str(self.src_root)
+        self._prepare_cann_device_artifacts(update_env=update_env)
         cmd_list = self.build.get_build_cmd_lst(cmake=self.cmake, binary_path=self.build_root)
         for i, c in enumerate(cmd_list, start=1):
             c += " --verbose" if self.verbose else ""
@@ -1810,6 +1812,41 @@ class BuildCtrl(CMakeParam):
             ret.check_returncode()
             logging.info("examples --run_mode sim, Cmd: %s, Duration %s sec", cmd, duration)
 
+    def _prepare_cann_device_artifacts(self, update_env: Dict[str, str]):
+        """Build the independent device project and stage its runtime files for C++ tests."""
+        if self.feature.backend_type != "npu":
+            return
+
+        target_help = subprocess.run(
+            [str(self.cmake), "--build", str(self.build_root), "--target", "help"],
+            capture_output=True,
+            check=False,
+            text=True,
+            encoding="utf-8",
+            env={**os.environ, **update_env},
+        )
+        has_device_target = target_help.returncode == 0 and any(
+            "cann_device" in line.replace(":", " ").split() for line in target_help.stdout.splitlines()
+        )
+        if not has_device_target:
+            return
+
+        cmd = f"{self.cmake} --build {self.build_root} --target cann_device"
+        cmd += f" -j {self.build.job_num}" if self.build.job_num else ""
+        cmd += " --verbose" if self.verbose else ""
+        logging.info("CMake Device Build, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="cmake-build-device")
+        logging.info("CMake Device Build success, %s", duration)
+
+        device_package = self.build_root / "device_build" / "device-pypto.tar.gz"
+        if not device_package.exists():
+            raise RuntimeError(f"Can't find device package: {device_package}")
+        output_root = self.build_root / "output"
+        output_root.mkdir(parents=True, exist_ok=True)
+        cmd = f"tar -zxf {shlex.quote(str(device_package))} -C {shlex.quote(str(output_root))}"
+        logging.info("Extract device package for tests, Cmd: %s", cmd)
+        self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="extract-device-package")
+
     def _find_match_whl(self, name: str, path: Path) -> Optional[Path]:
         """
         在指定路径下, 查找对应匹配的 whl 包文件
@@ -1957,6 +1994,7 @@ class BuildCtrl(CMakeParam):
         env_setting += f" --cmake-generator={self.build.generator}" if self.build.generator else ""
         env_setting += f" --cmake-build-type={self.build.build_type}" if self.build.build_type else ""
         env_setting += f" --cmake-options=\"{cmake_args}\"" if cmake_args else ""
+        env_setting += f" --backend-type={self.feature.backend_type}"
         env_setting += " --cmake-verbose" if self.verbose else ""
         multi_py3_exe_cfg = self.feature.multi_py3_exe_cfg
         if multi_py3_exe_cfg:

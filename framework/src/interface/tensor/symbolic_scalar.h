@@ -673,6 +673,11 @@ static inline bool CallIsGetInputData(const std::string& name)
     return StringUtils::StartsWith(name, AddRuntimePrefix("GetInputData"));
 }
 
+static inline bool CallIsGetInputShapeDim(const std::string& name)
+{
+    return name == AddRuntimePrefix("GetInputShapeDim") || name == AddRuntimePrefix("GetInputShapeDimSize");
+}
+
 Json ToJson(const SymbolicScalar& sval);
 
 SymbolicScalar LoadSymbolicScalar(const Json& jval);
@@ -963,10 +968,15 @@ struct SymbolicExpressionTable {
         return exprKey + "_" + std::to_string(index) + "_USE";
     }
 
-    static std::string BuildExpressionByRaw(const RawSymbolicScalarPtr& raw,
-                                            const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict);
+    // structuralCse: canonical BuildExpression text -> C identifier (e.g. __cse_0 / CSE_sd_0).
+    // When non-null, matching expression subtrees render as the identifier instead of expanding.
+    static std::string BuildExpressionByRaw(
+        const RawSymbolicScalarPtr& raw, const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict,
+        const std::unordered_map<std::string, std::string>* structuralCse = nullptr);
     static std::string BuildExpression(const SymbolicScalar& ss);
     static std::string BuildExpression(const RawSymbolicScalarPtr& ss);
+    static std::string BuildExpression(const RawSymbolicScalarPtr& ss,
+                                       const std::unordered_map<std::string, std::string>* structuralCse);
 
     // 结构化三路比较，strcmp 语义。
     static int CompareRaw(const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs);
@@ -981,7 +991,8 @@ struct SymbolicExpressionTable {
     // 在 raw 上按一组 (path, placeholderNode) 替换 Immediate 叶子并渲染整个表达式。
     static std::string BuildExpressionWithPlaceholders(
         const RawSymbolicScalarPtr& raw,
-        const std::vector<std::pair<std::vector<int>, RawSymbolicScalarPtr>>& replacements);
+        const std::vector<std::pair<std::vector<int>, RawSymbolicScalarPtr>>& replacements,
+        const std::unordered_map<std::string, std::string>* structuralCse = nullptr);
 
     // 找出 lhs / rhs 之间所有结构对齐、仅在 Immediate 叶子上数值不同的位置。
     // 结构不同（Kind / Opcode / Operand 数 / Symbol 名）返回 false。
@@ -996,9 +1007,11 @@ private:
     static std::string BuildSymbolName(const std::string& name);
     static void BuildExtremaExpressionCode(const RawSymbolicExpPtr& expr,
                                            const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict,
-                                           std::ostringstream& oss);
+                                           std::ostringstream& oss,
+                                           const std::unordered_map<std::string, std::string>* structuralCse);
     static std::string BuildExpressionCode(const RawSymbolicExpPtr& expr,
-                                           const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict);
+                                           const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict,
+                                           const std::unordered_map<std::string, std::string>* structuralCse);
 
     // FindAllImmediateDifferences 的递归实现。
     static bool CollectImmediateDifferences(const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs,

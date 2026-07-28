@@ -28,7 +28,7 @@
 #endif
 
 template <typename Tuple, size_t index, size_t default_value = 1, bool use_default = false>
-__aicore__ inline constexpr size_t GetTupleElement(const Tuple& t)
+__aicore__ inline constexpr size_t GetTupleElementWithDefaultOverride(const Tuple& t)
 {
     static_assert(index < MAX_DIMS, "The index of tuple is out of range.");
     constexpr auto size = Std::tuple_size<Tuple>::value;
@@ -88,14 +88,16 @@ public:
 
     __aicore__ inline PtoGlobal(__gm__ typename T::Type* addr, const Shape& shape, const Stride& stride)
         : data_((__gm__ Dtype*)(addr),
-                pto::Shape(GetTupleElement<Shape, DIM_1ST, 1, need_mask>(shape),
-                           GetTupleElement<Shape, DIM_2ND, 1, need_mask>(shape),
-                           GetTupleElement<Shape, DIM_3RD, 1, need_mask>(shape), GetTupleElement<Shape, DIM_4TH>(shape),
-                           GetTupleElement<Shape, DIM_5TH>(shape)),
-                pto::Stride(GetTupleElement<Stride, DIM_1ST, 0, need_mask>(stride),
-                            GetTupleElement<Stride, DIM_2ND, 0, need_mask>(stride),
-                            GetTupleElement<Stride, DIM_3RD, 0, need_mask>(stride),
-                            GetTupleElement<Stride, DIM_4TH, 0>(stride), GetTupleElement<Stride, DIM_5TH, 0>(stride)))
+                pto::Shape(GetTupleElementWithDefaultOverride<Shape, DIM_1ST, 1, need_mask>(shape),
+                           GetTupleElementWithDefaultOverride<Shape, DIM_2ND, 1, need_mask>(shape),
+                           GetTupleElementWithDefaultOverride<Shape, DIM_3RD, 1, need_mask>(shape),
+                           GetTupleElementWithDefaultOverride<Shape, DIM_4TH>(shape),
+                           GetTupleElementWithDefaultOverride<Shape, DIM_5TH>(shape)),
+                pto::Stride(GetTupleElementWithDefaultOverride<Stride, DIM_1ST, 0, need_mask>(stride),
+                            GetTupleElementWithDefaultOverride<Stride, DIM_2ND, 0, need_mask>(stride),
+                            GetTupleElementWithDefaultOverride<Stride, DIM_3RD, 0, need_mask>(stride),
+                            GetTupleElementWithDefaultOverride<Stride, DIM_4TH, 0>(stride),
+                            GetTupleElementWithDefaultOverride<Stride, DIM_5TH, 0>(stride)))
     {}
 
     __aicore__ inline PtoGlobal(const Shape& shape, const Stride& stride) : PtoGlobal(0x0, shape, stride) {}

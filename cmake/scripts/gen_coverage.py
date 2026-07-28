@@ -402,12 +402,16 @@ class GenCoverage:
             cmd += " --rc geninfo_unexecuted_blocks=1"  # 接受未执行块
             cmd += " --ignore-errors unused,unused"  # 兼容高版本 LCov
             cmd += " --ignore-errors negative"
+            cmd += " --ignore-errors gcov,parallel"  # 容忍并行执行中的 gcov 失败
             cmd += f" -j {self.job_num}"
         if self.lcov_ability.lcov_supported_ignore_mismatch:
             cmd += " --ignore-errors mismatch,mismatch"  # 兼容宏展开等导致的行号不匹配
         cmd += " --ignore-errors source"  # 兼容 pip isolation 模式下临时环境被清理
         ret = subprocess.run(cmd.split(), capture_output=False, check=False, encoding='utf-8')
         self._check_ret(ret=ret, cmd=cmd)
+        ret.check_returncode()
+        if self.full_cov_info_file.stat().st_size == 0:
+            raise RuntimeError(f"lcov produced empty coverage file: {self.full_cov_info_file}")
         logging.info(
             "Generated%s coverage file %s, cmd: %s",
             "" if self.lcov_ability.lcov_supported_exclude else " origin",
@@ -445,6 +449,7 @@ class GenCoverage:
 
         ret = subprocess.run(cmd.split(), capture_output=True, check=False, encoding='utf-8')
         self._check_ret(ret=ret, cmd=cmd)
+        ret.check_returncode()
         logging.info("Generated %s coverage html report in %s, cmd: %s", scene, dest, cmd)
 
     def gen_full_cov_data(self):

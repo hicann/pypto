@@ -24,11 +24,14 @@ namespace npu::tile_fwk::dynamic {
 
 class EslModelLauncher {
 public:
-    static int EslModelRunOnce(void* kernel, const DeviceLauncherConfig& config = DeviceLauncherConfig());
+    static int EslModelRunOnce(void* kernel, const DeviceLauncherConfig& config = DeviceLauncherConfig(),
+                               bool isDeviceData = false, const std::vector<DeviceTensorData>& tensors = {});
     static int EslModelLaunchDeviceTensorData(Function* function, const std::vector<DeviceTensorData>& inputList,
                                               const std::vector<DeviceTensorData>& outputList, RtStream aicpuStream,
-                                              RtStream aicoreStream, void* kernel, const DeviceLauncherConfig& config);
-    static int DynamicKernelLaunchEsl(DeviceKernelArgs* kArgs, AclRtStream aicoreStream, void* kernel);
+                                              RtStream aicoreStream, void* kernel, const DeviceLauncherConfig& config,
+                                              bool isDeviceData = false);
+    static int DynamicKernelLaunchEsl(DeviceKernelArgs* kArgs, AclRtStream aicoreStream, void* kernel,
+                                      bool isDeviceData = false);
     static int EslModelLaunchAicore(AclRtStream aicoreStream, void* kernel, DeviceKernelArgs* kernelArgs);
     static void CopyInputOutputData();
     static int EslModelLiteRunOnce(Function* function, std::vector<DeviceTensorData>& tensors);

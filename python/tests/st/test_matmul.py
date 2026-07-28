@@ -86,7 +86,7 @@ def trans_nd_to_fractal_nz(data: torch.Tensor, keep_m_dim=False):
     return data
 
 
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
 def matmul_kernel_with_mn_split(
     a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     b_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
@@ -118,7 +118,7 @@ def matmul_kernel_with_mn_split(
             out_tensor[m_idx * m_view:m_idx * m_view + m_view, n_idx * n_view:n_idx * n_view + n_view] = out_view
 
 
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
 def bmm_kernel_with_no_mn_split(
     a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     b_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP16),

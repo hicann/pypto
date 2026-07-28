@@ -45,104 +45,12 @@ namespace pypto {
 namespace codegen {
 using ir::DataType;
 
-// Header for single-file mode (no tensor.h needed - uses direct __gm__ pointers)
-const char KERNEL_HEADER_SINGLE[] = R"(
-#include <cstdint>
-#include <pto/pto-inst.hpp>
-
-using namespace pto;
-)";
-
 namespace {
 
 bool IsNZTensorType(const ir::TensorTypePtr& tensor_type)
 {
     return tensor_type && tensor_type->tensor_view_.has_value() &&
            tensor_type->tensor_view_->layout == ir::TensorLayout::NZ;
-}
-
-bool IsIdentStart(char c) { return std::isalpha(static_cast<unsigned char>(c)) || c == '_'; }
-
-bool IsIdentChar(char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; }
-
-std::string TrimCopy(const std::string& s)
-{
-    size_t begin = 0;
-    while (begin < s.size() && std::isspace(static_cast<unsigned char>(s[begin]))) {
-        ++begin;
-    }
-    size_t end = s.size();
-    while (end > begin && std::isspace(static_cast<unsigned char>(s[end - 1]))) {
-        --end;
-    }
-    return s.substr(begin, end - begin);
-}
-
-bool ConsumeIdentifier(const std::string& s, size_t& pos)
-{
-    if (pos >= s.size() || !IsIdentStart(s[pos])) {
-        return false;
-    }
-    while (pos < s.size() && IsIdentChar(s[pos])) {
-        ++pos;
-    }
-    return true;
-}
-
-bool ConsumeBracketIndex(const std::string& s, size_t& pos)
-{
-    if (pos >= s.size() || s[pos] != '[') {
-        return false;
-    }
-    int depth = 1;
-    ++pos;
-    while (pos < s.size() && depth > 0) {
-        if (s[pos] == '[') {
-            ++depth;
-        } else if (s[pos] == ']') {
-            --depth;
-        }
-        ++pos;
-    }
-    return depth == 0;
-}
-
-bool ConsumeMemberAccess(const std::string& s, size_t& pos)
-{
-    if (pos < s.size() && s[pos] == '.') {
-        ++pos;
-        return ConsumeIdentifier(s, pos);
-    }
-    if (pos + 1 < s.size() && s[pos] == '-' && s[pos + 1] == '>') {
-        pos += 2;
-        return ConsumeIdentifier(s, pos);
-    }
-    return false;
-}
-
-bool ConsumeLValueSuffix(const std::string& s, size_t& pos)
-{
-    if (ConsumeMemberAccess(s, pos)) {
-        return true;
-    }
-    return ConsumeBracketIndex(s, pos);
-}
-
-bool IsWritableLValueExpr(const std::string& expr)
-{
-    std::string s = TrimCopy(expr);
-
-    size_t i = 0;
-    if (!ConsumeIdentifier(s, i)) {
-        return false;
-    }
-
-    while (i < s.size()) {
-        if (!ConsumeLValueSuffix(s, i)) {
-            return false;
-        }
-    }
-    return true;
 }
 
 void ValidateStaticNZTensorShape(const ir::TensorTypePtr& tensor_type, const std::vector<int64_t>& logical_dims)
@@ -173,7 +81,11 @@ std::vector<int64_t> BuildNZPhysicalShapeDims(const ir::TensorTypePtr& tensor_ty
 
 } // namespace
 
-CCECodegen::CCECodegen() : backend_(backend::GetBackend()) {}
+CCECodegen::CCECodegen(ir::SectionKind target) : backend_(backend::GetBackend()), target_(target)
+{
+    CHECK(target_ == ir::SectionKind::Cube || target_ == ir::SectionKind::Vector)
+        << "CCE target must be Cube or Vector";
+}
 
 // ============================================================================
 // Helper function inlining
@@ -535,7 +447,7 @@ private:
 } // namespace
 
 // ============================================================================
-// Single-file MIX mode generation (skip ptoas)
+// Single-program CCE generation (skip ptoas)
 // ============================================================================
 
 void CCECodegen::PreScanKernel(const ir::FunctionPtr& kernel_func)
@@ -543,8 +455,7 @@ void CCECodegen::PreScanKernel(const ir::FunctionPtr& kernel_func)
     var_read_names_.clear();
     CollectVarReadNames(kernel_func->body_, var_read_names_);
 
-    cube_mutex_pipes_.clear();
-    vec_mutex_pipes_.clear();
+    mutex_pipes_.clear();
     CollectMutexPipeInfo(kernel_func->body_);
 }
 
@@ -560,6 +471,7 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
     CHECK(program != nullptr) << "Cannot generate code for null program";
 
     arch_ = arch;
+    in_vf_section_ = false;
 
     // Capture the tuple/struct field-name side table from the entry program (may be null).
     // Passes below rebuild the Program (dropping this annotation), but the TupleType pointers
@@ -593,7 +505,11 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
     bool has_cross_sync = DetectCrossCoreSyncOps(kernel_func->body_);
     bool needs_ffts = has_cross_sync && (arch_ != "a5");
 
-    emitter_.EmitLine(KERNEL_HEADER_SINGLE);
+    if (target_ == ir::SectionKind::Cube) {
+        emitter_.EmitLine("#if defined(__DAV_CUBE__)");
+    } else {
+        emitter_.EmitLine("#if defined(__DAV_VEC__)");
+    }
 
     tiling_headers_.clear();
     PreEmitStructTypes(kernel_func->body_);
@@ -611,6 +527,7 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
         }
         throw;
     }
+    emitter_.EmitLine("#endif");
 
     return emitter_.GetCode();
 }
@@ -633,14 +550,6 @@ class MakeTileDefCollector : public ir::IRVisitor {
 public:
     std::vector<TileDef> tile_defs_;
 
-    void VisitStmt_(const ir::SectionStmtPtr& op) override
-    {
-        auto prev = current_section_;
-        current_section_ = op->sectionKind_;
-        ir::IRVisitor::VisitStmt_(op);
-        current_section_ = prev;
-    }
-
     void VisitStmt_(const ir::AssignStmtPtr& op) override
     {
         auto target_var = op->var_;
@@ -650,15 +559,12 @@ public:
             // Direct block.make_tile assignment ->primary collection path.
             if (call->name_ == "block.make_tile") {
                 if (auto tile_type = ir::As<ir::TileType>(call->GetType())) {
-                    tile_defs_.push_back({target_var, tile_type, current_section_});
+                    tile_defs_.push_back({target_var, tile_type});
                 }
             }
             return;
         }
     }
-
-private:
-    std::optional<ir::SectionKind> current_section_;
 };
 
 // Extract valid_shape constructor arguments from a TileType for CCE code generation.
@@ -770,81 +676,6 @@ bool IsOnlyYieldStmts(const ir::StmtPtr& stmt)
     return true;
 }
 
-/// True if `s` contains a BreakStmt/ContinueStmt bound to the current loop level. Descends through
-/// the container statements that can appear in a loop body (Seq/If/Section) but stops at a nested
-/// For/While, whose jumps belong to that inner loop. Used to keep a 0..1 for-loop wrapped so a
-/// native break inside it stays legal C++.
-bool BodyContainsNativeJump(const ir::StmtPtr& s)
-{
-    if (!s) {
-        return false;
-    }
-    if (ir::As<ir::BreakStmt>(s) || ir::As<ir::ContinueStmt>(s) || ir::As<ir::ReturnStmt>(s)) {
-        return true;
-    }
-    if (ir::As<ir::ForStmt>(s) || ir::As<ir::WhileStmt>(s)) {
-        return false; // nested loop barrier
-    }
-    if (auto seq = ir::As<ir::SeqStmts>(s)) {
-        for (const auto& stmt : seq->stmts_) {
-            if (BodyContainsNativeJump(stmt)) {
-                return true;
-            }
-        }
-        return false;
-    }
-    if (auto ifStmt = ir::As<ir::IfStmt>(s)) {
-        return BodyContainsNativeJump(ifStmt->thenBody_) ||
-               (ifStmt->elseBody_.has_value() && BodyContainsNativeJump(*ifStmt->elseBody_));
-    }
-    if (auto section = ir::As<ir::SectionStmt>(s)) {
-        return BodyContainsNativeJump(section->body_);
-    }
-    return false; // leaf statement
-}
-
-// Whether a statement (transitively) issues a vf.create_addr_reg. Its vag_* /
-// AddrReg codegen must sit inside the physical loop it is bound to; bisheng
-// rejects a vag that is "not bound into the correct loop layer". So a loop body
-// containing one must keep its real for-loop wrapper and cannot be collapsed by
-// the single-iteration optimization (mirrors the BodyContainsNativeJump guard).
-// A nested loop is a barrier: an inner vag binds to the inner loop, not this one.
-bool BodyContainsAddrReg(const ir::StmtPtr& s)
-{
-    if (!s) {
-        return false;
-    }
-    auto is_addr_reg_call = [](const ir::ExprPtr& e) {
-        auto call = ir::As<ir::Call>(e);
-        return call && call->name_ == "vf.create_addr_reg";
-    };
-    if (auto assign = ir::As<ir::AssignStmt>(s)) {
-        return is_addr_reg_call(assign->value_);
-    }
-    if (auto eval = ir::As<ir::EvalStmt>(s)) {
-        return is_addr_reg_call(eval->expr_);
-    }
-    if (ir::As<ir::ForStmt>(s) || ir::As<ir::WhileStmt>(s)) {
-        return false; // nested loop barrier
-    }
-    if (auto seq = ir::As<ir::SeqStmts>(s)) {
-        for (const auto& stmt : seq->stmts_) {
-            if (BodyContainsAddrReg(stmt)) {
-                return true;
-            }
-        }
-        return false;
-    }
-    if (auto ifStmt = ir::As<ir::IfStmt>(s)) {
-        return BodyContainsAddrReg(ifStmt->thenBody_) ||
-               (ifStmt->elseBody_.has_value() && BodyContainsAddrReg(*ifStmt->elseBody_));
-    }
-    if (auto section = ir::As<ir::SectionStmt>(s)) {
-        return BodyContainsAddrReg(section->body_);
-    }
-    return false; // leaf statement
-}
-
 } // namespace
 
 // ========================================================================
@@ -860,7 +691,13 @@ void CCECodegen::EmitSingleFunctionSignature(const ir::FunctionPtr& func, bool h
     // forwards to it is generated by the launcher (JIT call_kernel.cpp) or the binary-delivery
     // op cpp. Keeps the body identical while letting the entry layer add adaptation logic later.
     std::ostringstream sig;
-    sig << "__aicore__ inline void " << func->name_ << "_impl(";
+    sig << "__aicore__ inline void " << func->name_ << "_impl";
+    if (target_ == ir::SectionKind::Cube) {
+        sig << "_cube";
+    } else {
+        sig << "_vector";
+    }
+    sig << "(";
     bool first = true;
     for (const auto& param : func->params_) {
         if (!first)
@@ -924,6 +761,10 @@ void CCECodegen::EmitSingleFunctionSignature(const ir::FunctionPtr& func, bool h
     if (has_cross_sync) {
         emitter_.EmitLine("set_ffts_base_addr((unsigned long)ffts_addr);");
     }
+    if (target_ == ir::SectionKind::Vector && arch_ == "a3") {
+        emitter_.EmitLine("set_mask_norm();");
+        emitter_.EmitLine("set_vector_mask(-1, -1);");
+    }
     emitter_.EmitLine("");
 }
 
@@ -944,48 +785,8 @@ void CCECodegen::EmitSingleTensorDeclarations(const ir::FunctionPtr& func)
         }
     }
 
-    EmitSectionAwareTensors(param_defs);
-}
-
-void CCECodegen::EmitSectionAwareTensors(const std::vector<TensorDef>& defs)
-{
-    std::vector<const TensorDef*> shared;
-    std::vector<const TensorDef*> cube;
-    std::vector<const TensorDef*> vec;
-    for (const auto& def : defs) {
-        if (!def.def_section.has_value()) {
-            shared.push_back(&def);
-        } else if (*def.def_section == ir::SectionKind::Cube) {
-            cube.push_back(&def);
-        } else {
-            vec.push_back(&def);
-        }
-    }
-
-    if (!shared.empty()) {
-        for (const auto* def : shared) {
-            GenerateGlobalTensorTypeDeclaration(*def);
-            emitter_.EmitLine("");
-        }
-    }
-
-    if (!cube.empty()) {
-        emitter_.EmitLine("#if defined(__DAV_CUBE__)");
-        for (const auto* def : cube) {
-            GenerateGlobalTensorTypeDeclaration(*def);
-            emitter_.EmitLine("");
-        }
-        emitter_.EmitLine("#endif");
-        emitter_.EmitLine("");
-    }
-
-    if (!vec.empty()) {
-        emitter_.EmitLine("#if defined(__DAV_VEC__)");
-        for (const auto* def : vec) {
-            GenerateGlobalTensorTypeDeclaration(*def);
-            emitter_.EmitLine("");
-        }
-        emitter_.EmitLine("#endif");
+    for (const auto& def : param_defs) {
+        GenerateGlobalTensorTypeDeclaration(def);
         emitter_.EmitLine("");
     }
 }
@@ -1035,75 +836,28 @@ void CCECodegen::EmitSingleTileDeclarations(const ir::FunctionPtr& func)
     }
 
     if (!kept_defs.empty() || !deduped_aliases.empty()) {
-        EmitSectionAwareTiles(kept_defs, deduped_aliases);
+        EmitTileDeclarations(kept_defs, deduped_aliases);
     }
 }
 
-void CCECodegen::EmitDedupedTileAliases(const std::vector<TileDef>& tile_defs,
-                                        const std::vector<std::pair<ir::VarPtr, ir::VarPtr>>& deduped_aliases,
-                                        std::optional<ir::SectionKind> section)
+void CCECodegen::EmitDedupedTileAliases(const std::vector<std::pair<ir::VarPtr, ir::VarPtr>>& deduped_aliases)
 {
     for (const auto& [dup_var, kept_var] : deduped_aliases) {
-        std::optional<ir::SectionKind> kept_section;
-        for (const auto& td : tile_defs) {
-            if (td.var->name_ == kept_var->name_) {
-                kept_section = td.def_section;
-                break;
-            }
-        }
-        if (kept_section == section) {
-            std::string san_dup = context_.SanitizeName(dup_var);
-            std::string san_kept = context_.SanitizeName(kept_var);
-            emitter_.EmitLine("auto& " + san_dup + " = " + san_kept + ";");
-            emitted_tile_aliases_.insert(san_dup);
-        }
+        std::string san_dup = context_.SanitizeName(dup_var);
+        std::string san_kept = context_.SanitizeName(kept_var);
+        emitter_.EmitLine("auto& " + san_dup + " = " + san_kept + ";");
+        emitted_tile_aliases_.insert(san_dup);
     }
 }
 
-void CCECodegen::EmitSectionAwareTiles(const std::vector<TileDef>& tile_defs,
-                                       const std::vector<std::pair<ir::VarPtr, ir::VarPtr>>& deduped_aliases)
+void CCECodegen::EmitTileDeclarations(const std::vector<TileDef>& tile_defs,
+                                      const std::vector<std::pair<ir::VarPtr, ir::VarPtr>>& deduped_aliases)
 {
-    std::vector<std::pair<ir::VarPtr, ir::TileTypePtr>> cube_tiles;
-    std::vector<std::pair<ir::VarPtr, ir::TileTypePtr>> vec_tiles;
-    std::vector<std::pair<ir::VarPtr, ir::TileTypePtr>> shared_tiles;
-
     for (const auto& td : tile_defs) {
-        if (!td.def_section.has_value()) {
-            shared_tiles.emplace_back(td.var, td.tile_type);
-        } else if (*td.def_section == ir::SectionKind::Cube) {
-            cube_tiles.emplace_back(td.var, td.tile_type);
-        } else {
-            vec_tiles.emplace_back(td.var, td.tile_type);
-        }
+        GenerateTileTypeDeclaration(context_.SanitizeName(td.var), td.tile_type);
     }
-
-    if (!shared_tiles.empty()) {
-        for (const auto& [var, tile_type] : shared_tiles) {
-            GenerateTileTypeDeclaration(context_.SanitizeName(var), tile_type);
-        }
-        EmitDedupedTileAliases(tile_defs, deduped_aliases, std::nullopt);
-        emitter_.EmitLine("");
-    }
-
-    if (!cube_tiles.empty()) {
-        emitter_.EmitLine("#if defined(__DAV_CUBE__)");
-        for (const auto& [var, tile_type] : cube_tiles) {
-            GenerateTileTypeDeclaration(context_.SanitizeName(var), tile_type);
-        }
-        EmitDedupedTileAliases(tile_defs, deduped_aliases, ir::SectionKind::Cube);
-        emitter_.EmitLine("#endif");
-        emitter_.EmitLine("");
-    }
-
-    if (!vec_tiles.empty()) {
-        emitter_.EmitLine("#if defined(__DAV_VEC__)");
-        for (const auto& [var, tile_type] : vec_tiles) {
-            GenerateTileTypeDeclaration(context_.SanitizeName(var), tile_type);
-        }
-        EmitDedupedTileAliases(tile_defs, deduped_aliases, ir::SectionKind::Vector);
-        emitter_.EmitLine("#endif");
-        emitter_.EmitLine("");
-    }
+    EmitDedupedTileAliases(deduped_aliases);
+    emitter_.EmitLine("");
 }
 
 void CCECodegen::GenerateSinglePrologue(const ir::FunctionPtr& func, bool has_cross_sync)
@@ -1123,9 +877,7 @@ void CCECodegen::VisitStmt_(const ir::SectionStmtPtr& op)
     // VF section: emit a __VEC_SCOPE__ { ... } block with all tile->ptr base declarations
     // hoisted to just before the scope (section_hoist), so they never sit after a mem_bar.
     if (op->sectionKind_ == ir::SectionKind::VF) {
-        // VF sections are nested inside a Vector section by the parser.
-        INTERNAL_CHECK(current_section_kind_.has_value() && *current_section_kind_ == ir::SectionKind::Vector)
-            << "VF section must be nested inside a Vector section";
+        INTERNAL_CHECK(target_ == ir::SectionKind::Vector) << "VF section is only valid in a Vector target Program";
         // VF sections do not nest, so the hoist buffer must be empty on entry.
         INTERNAL_CHECK(section_hoisted_decls_.empty());
 
@@ -1134,8 +886,8 @@ void CCECodegen::VisitStmt_(const ir::SectionStmtPtr& op)
         emitter_.Clear();
         emitter_.SetIndentLevel(saved_indent);
 
-        auto prev_kind = current_section_kind_;
-        current_section_kind_ = ir::SectionKind::VF;
+        INTERNAL_CHECK(!in_vf_section_) << "Nested VF sections are not supported";
+        in_vf_section_ = true;
         vf_reg_hoisted_decls_.clear();
 
         emitter_.EmitLine("__VEC_SCOPE__ {");
@@ -1166,7 +918,7 @@ void CCECodegen::VisitStmt_(const ir::SectionStmtPtr& op)
 
         emitter_.DecreaseIndent();
         emitter_.EmitLine("}");
-        current_section_kind_ = prev_kind;
+        in_vf_section_ = false;
 
         std::string scope_code = emitter_.GetCode();
         emitter_.Clear();
@@ -1184,29 +936,7 @@ void CCECodegen::VisitStmt_(const ir::SectionStmtPtr& op)
         return;
     }
 
-    // Emit #if defined(__DAV_CUBE__) / #if defined(__DAV_VEC__)
-    if (op->sectionKind_ == ir::SectionKind::Cube) {
-        emitter_.EmitLine("#if defined(__DAV_CUBE__)");
-    } else {
-        emitter_.EmitLine("#if defined(__DAV_VEC__)");
-    }
-
-    // Emit vector mask initialization at the start of Vec section (a3 only)
-    if (op->sectionKind_ == ir::SectionKind::Vector && arch_ == "a3") {
-        emitter_.EmitLine("set_mask_norm();");
-        emitter_.EmitLine("set_vector_mask(-1, -1);");
-        emitter_.EmitLine("");
-    }
-
-    // Visit the body
-    if (op->body_) {
-        auto prev_section = current_section_kind_;
-        current_section_kind_ = op->sectionKind_;
-        VisitStmt(op->body_);
-        current_section_kind_ = prev_section;
-    }
-
-    emitter_.EmitLine("#endif");
+    INTERNAL_CHECK(false) << "Cube/Vector SectionStmt must be projected before CCE CodeGen";
 }
 
 bool CCECodegen::DetectCrossCoreSyncOps(const ir::StmtPtr& stmt)
@@ -1271,34 +1001,6 @@ void CCECodegen::VisitStmt_(const ir::AssignStmtPtr& op)
     auto target_var = op->var_;
     std::string var_name = context_.SanitizeName(target_var);
     context_.RegisterVar(target_var, var_name);
-
-    // Named-struct alias: `ctx_alias = arr[idx]` on a struct-tuple-array RHS.
-    // Emit a real C++ reference `auto& ctx_alias = arr_code[idx_code];` instead of
-    // string-substituting the var name. The reference gives bisheng a hoist barrier
-    // for subsequent field accesses inside VF (vector function) scope, where deeply
-    // nested `_dyn_arr[arr[idx].field]` expressions trigger "must be hoisted".
-    if (auto gi = ir::As<ir::GetItemExpr>(op->value_)) {
-        auto var_tt = ir::As<ir::TupleType>(target_var->GetType());
-        auto outer_tt = ir::As<ir::TupleType>(gi->value_->GetType());
-        ir::TupleTypePtr inner_tt;
-        if (outer_tt && !outer_tt->types_.empty()) {
-            inner_tt = ir::As<ir::TupleType>(outer_tt->types_[0]);
-        }
-        auto is_named_tuple = [this](const ir::TupleTypePtr& tt) {
-            return tt && debug_info_ != nullptr && debug_info_->GetTupleFields(tt.get()) != nullptr;
-        };
-        bool is_struct_tuple_alias = is_named_tuple(var_tt) && is_named_tuple(inner_tt);
-        if (is_struct_tuple_alias) {
-            std::string rhs_code = GetExprAsCode(op->value_);
-            if (!rhs_code.empty()) {
-                Emit("auto& " + var_name + " = " + rhs_code + ";");
-                current_tuple_ = nullptr;
-                current_expr_value_ = "";
-                current_target_var_ = "";
-                return;
-            }
-        }
-    }
 
     current_target_var_ = var_name;
     current_expr_value_ = "";
@@ -1475,7 +1177,7 @@ void CCECodegen::EmitYieldAssignments(const std::vector<ir::VarPtr>& return_vars
 }
 
 // ========================================================================
-// Dynamic tuple array decl: visitExpr-driven resolution + section-aware splice
+// Dynamic tuple array declaration: visitExpr-driven resolution
 // ========================================================================
 
 std::vector<std::string> CCECodegen::CollectTupleElemNames(const ir::ExprPtr& tuple_value)
@@ -1703,7 +1405,6 @@ std::vector<std::string> CCECodegen::RegisterLoopIterArgs(const std::vector<ir::
         return iterArgNames;
     }
 
-    bool anyEmitted = false;
     for (auto& iterArg : iterArgs) {
         const auto& var = iterArg->iterVar_;
         std::string iterArgName = context_.SanitizeName(var);
@@ -1719,35 +1420,15 @@ std::vector<std::string> CCECodegen::RegisterLoopIterArgs(const std::vector<ir::
             RegisterPointer(iterArgName, initPtr);
         }
 
-        std::string resolvedInit = initValue;
-        bool isSimpleVarCopy = (initVar != nullptr) &&
-                               !std::dynamic_pointer_cast<const ir::TensorType>(initVar->GetType()) &&
-                               !std::dynamic_pointer_cast<const ir::TileType>(initVar->GetType()) &&
-                               !std::dynamic_pointer_cast<const ir::TupleType>(initVar->GetType());
-        bool canReuseWritableSlot = isSimpleVarCopy && IsWritableLValueExpr(resolvedInit);
-        if (canReuseWritableSlot && context_.IsAutoRegistered(resolvedInit)) {
-            canReuseWritableSlot = false;
+        context_.RegisterVar(var, iterArgName);
+        iterArgNames.push_back(iterArgName);
+        std::string safeInit = initValue;
+        if (context_.IsAutoRegistered(initValue)) {
+            safeInit = "0";
         }
-
-        if (canReuseWritableSlot) {
-            context_.RegisterVar(var, resolvedInit);
-            iterArgNames.push_back(resolvedInit);
-        } else {
-            context_.RegisterVar(var, iterArgName);
-            iterArgNames.push_back(iterArgName);
-            if (!anyEmitted) {
-                anyEmitted = true;
-            }
-            std::string safeInit = initValue;
-            if (context_.IsAutoRegistered(initValue)) {
-                safeInit = "0";
-            }
-            emitter_.EmitLine("auto " + iterArgName + " = " + safeInit + ";");
-        }
+        emitter_.EmitLine("auto " + iterArgName + " = " + safeInit + ";");
     }
-    if (anyEmitted) {
-        emitter_.EmitLine("");
-    }
+    emitter_.EmitLine("");
     return iterArgNames;
 }
 
@@ -1838,28 +1519,11 @@ void CCECodegen::VisitStmt_(const ir::ForStmtPtr& op)
         << "ForStmt iter_args size (" << op->iterArgs_.size() << ") must equal return_vars size ("
         << op->returnVars_.size() << ")";
 
-    // --- Early single-iteration detection ---
-    auto start_ci = ir::As<ir::ConstInt>(op->start_);
     auto stop_ci = ir::As<ir::ConstInt>(op->stop_);
-    auto step_ci = ir::As<ir::ConstInt>(op->step_);
-    // A native break/continue would be illegal C++ if the body is emitted without a loop wrapper,
-    // so keep the real for-loop when the body contains one bound to this loop.
-    // A vf.create_addr_reg in the body emits a vag_* bound to this loop layer;
-    // collapsing the loop would leave the vag unbound, so keep the real for-loop.
-    bool is_single_iter = (start_ci && stop_ci && step_ci && start_ci->value_ == 0 && stop_ci->value_ == 1 &&
-                           step_ci->value_ == 1) &&
-                          !BodyContainsNativeJump(op->body_) && !BodyContainsAddrReg(op->body_);
 
     // Register loop variable
-    std::string loop_var_name;
-    if (is_single_iter) {
-        // Single-iteration: register loop var as constant "0"
-        loop_var_name = "0";
-        context_.RegisterVar(op->loopVar_, "0");
-    } else {
-        loop_var_name = context_.SanitizeName(op->loopVar_);
-        context_.RegisterVar(op->loopVar_, loop_var_name);
-    }
+    std::string loop_var_name = context_.SanitizeName(op->loopVar_);
+    context_.RegisterVar(op->loopVar_, loop_var_name);
 
     std::vector<std::string> iter_arg_names = RegisterLoopIterArgs(op->iterArgs_);
     PropagateTupleIterArgs(op->iterArgs_, op->returnVars_);
@@ -1876,18 +1540,6 @@ void CCECodegen::VisitStmt_(const ir::ForStmtPtr& op)
     VisitExpr(op->step_);
     std::string step = current_expr_value_;
     current_expr_value_ = "";
-
-    // --- Single-iteration loop unrolling ---
-    if (is_single_iter) {
-        // Visit loop body directly (no loop wrapper)
-        yield_buffer_.clear();
-        VisitStmt(op->body_);
-        yield_buffer_.clear();
-
-        // Register return variables with same names as iter_args
-        RegisterLoopReturnVars(op->returnVars_, iter_arg_names);
-        return;
-    }
 
     // --- Emit for-loop with hoisting ---
     // In __VEC_SCOPE__, bisheng requires uint16_t loop variables AND the bound expression to also
@@ -2129,69 +1781,56 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
     CHECK(ir::As<ir::TupleType>(value_type))
         << "GetItemExpr requires value to have TupleType, got " << value_type->TypeName();
 
-    auto const_idx = ir::As<ir::ConstInt>(op->slice_);
-    if (const_idx != nullptr) {
-        // Static (constant) index: VisitExpr drives current_tuple_, then VisitExpr the element.
-        int idx = static_cast<int>(const_idx->value_);
-        INTERNAL_CHECK(idx >= 0) << "GetItemExpr negative tuple index " << idx;
-
-        current_tuple_ = nullptr;
-        current_expr_value_ = "";
-        VisitExpr(op->value_);
-        if (current_tuple_ == nullptr) {
-            // The base has no underlying MakeTuple to fold into (e.g. a tiling struct
-            // param or its array field). Field names registered in IRDebugInfo mark a
-            // struct -> emit `base.field`; their absence marks an array field (the nested
-            // TupleType of an Array[T, N]) -> emit `base[idx]`.
-            auto tuple_type = ir::As<ir::TupleType>(value_type);
-            const std::vector<std::string>* fields = debug_info_ != nullptr ?
-                                                         debug_info_->GetTupleFields(tuple_type.get()) :
-                                                         nullptr;
-            std::string base_code = GetExprAsCode(op->value_);
-            current_tuple_ = nullptr;
-            if (fields != nullptr) {
-                CHECK(idx < static_cast<int>(fields->size()))
-                    << "GetItemExpr struct field: no field name for tuple index " << idx;
-                current_expr_value_ = base_code + "." + (*fields)[idx];
-            } else {
-                // base_code already carries the array field name (e.g. tiling.opkind),
-                // so appending the constant index yields tiling.opkind[idx].
-                current_expr_value_ = base_code + "[" + std::to_string(idx) + "]";
-            }
-            return;
-        }
-
-        auto arr_it = tuple_backing_arr_.find(current_tuple_.get());
-        if (arr_it != tuple_backing_arr_.end()) {
-            current_tuple_ = nullptr;
-            current_expr_value_ = arr_it->second + "[" + std::to_string(idx) + "]";
-            return;
-        }
-        CHECK(!current_tuple_->elements_.empty()) << "Cannot index an empty tuple at " << op->span_.ToString();
-        INTERNAL_CHECK(idx < static_cast<int>(current_tuple_->elements_.size()))
-            << "GetItemExpr index " << idx << " out of bounds";
-        ir::ExprPtr elem = current_tuple_->elements_[idx];
-
-        current_tuple_ = nullptr;
-        current_expr_value_ = "";
-        VisitExpr(elem); // result lands in current_tuple_ (sub-tuple) or current_expr_value_
-        return;
-    }
-
-    // Dynamic tuple indexing always resolves through the MakeTuple owner's
-    // backing array. Parser anchors every anonymous MakeTuple before use.
     std::string index_code = GetExprAsCode(op->slice_);
     current_tuple_ = nullptr;
     current_expr_value_ = "";
     VisitExpr(op->value_);
-    CHECK(current_tuple_ != nullptr) << "Dynamic tuple GetItem: cannot resolve underlying MakeTuple for "
-                                     << op->value_->TypeName();
 
-    ir::MakeTuplePtr resolved_mt = current_tuple_;
-    auto arr_it = tuple_backing_arr_.find(resolved_mt.get());
-    CHECK(arr_it != tuple_backing_arr_.end())
-        << "Dynamic tuple GetItem has no backing-array owner at " << op->span_.ToString();
-    current_expr_value_ = arr_it->second + "[" + index_code + "]";
+    // Case 1: the value is already a materialized expression. Named TupleTypes
+    // represent structs and require a constant field ordinal. Other TupleTypes
+    // represent indexable expressions such as an array-valued struct field.
+    if (current_tuple_ == nullptr) {
+        std::string base_code = current_expr_value_;
+        auto tuple_type = ir::As<ir::TupleType>(value_type);
+        const std::vector<std::string>* fields = debug_info_ != nullptr ?
+                                                     debug_info_->GetTupleFields(tuple_type.get()) :
+                                                     nullptr;
+        if (fields != nullptr) {
+            auto const_idx = ir::As<ir::ConstInt>(op->slice_);
+            CHECK(const_idx != nullptr) << "GetItemExpr struct field requires a constant index at "
+                                        << op->span_.ToString();
+            int idx = static_cast<int>(const_idx->value_);
+            CHECK(idx >= 0 && idx < static_cast<int>(fields->size()))
+                << "GetItemExpr struct field index " << idx << " out of bounds";
+            current_expr_value_ = base_code + "." + (*fields)[idx];
+        } else {
+            current_expr_value_ = base_code + "[" + index_code + "]";
+        }
+        current_tuple_ = nullptr;
+        return;
+    }
+
+    // Case 2: a homogeneous MakeTuple has a backing C++ array, so both constant
+    // and dynamic indices must be emitted as array accesses.
+    auto arr_it = tuple_backing_arr_.find(current_tuple_.get());
+    if (arr_it != tuple_backing_arr_.end()) {
+        current_tuple_ = nullptr;
+        current_expr_value_ = arr_it->second + "[" + index_code + "]";
+        return;
+    }
+
+    // Case 3: a MakeTuple without a backing array can only be evaluated
+    // statically. Dynamic indexing is valid only for homogeneous tuples, which
+    // must have been materialized as a backing array above.
+    auto const_idx = ir::As<ir::ConstInt>(op->slice_);
+    CHECK(const_idx != nullptr) << "Dynamic GetItemExpr requires a backing array at " << op->span_.ToString();
+    int idx = static_cast<int>(const_idx->value_);
+    CHECK(idx >= 0 && idx < static_cast<int>(current_tuple_->elements_.size()))
+        << "GetItemExpr index " << idx << " out of bounds";
+    ir::ExprPtr elem = current_tuple_->elements_[idx];
+    current_tuple_ = nullptr;
+    current_expr_value_ = "";
+    VisitExpr(elem);
     return;
 }
 
@@ -2573,13 +2212,7 @@ public:
  *
  * Traverses the IR tree to find block.load/block.store calls and aggregates, for
  * each tensor variable (keyed by its cce variable name), the access window shape,
- * defining section, tile_dims and DN flag into a single TensorDef. Mirrors
- * MakeTileDefCollector: one pass, one container, no parallel per-section maps. The
- * name key lets CCECodegen move defs_ straight into tensor_defs_ (no rekeying).
- *
- * A tensor accessed across both Cube and Vector sections collapses to a single
- * TensorDef with def_section == nullopt (shared region, visible to both compilation
- * units), instead of one declaration per section guard.
+ * tile_dims and DN flag into a single TensorDef.
  */
 class TensorDefCollector : public ir::IRVisitor {
     using ir::IRVisitor::VisitExpr_;
@@ -2589,14 +2222,6 @@ public:
     explicit TensorDefCollector(const CodeContext& ctx) : ctx_(ctx) {}
 
     std::map<std::string, TensorDef> defs_; ///< cce var name -> aggregated TensorDef
-
-    void VisitStmt_(const ir::SectionStmtPtr& op) override
-    {
-        auto prev = current_section_;
-        current_section_ = op->sectionKind_;
-        ir::IRVisitor::VisitStmt_(op);
-        current_section_ = prev;
-    }
 
     void VisitStmt_(const ir::AssignStmtPtr& op) override
     {
@@ -2680,9 +2305,6 @@ private:
         TensorDef& def = defs_[ctx_.SanitizeName(var)];
         if (def.var == nullptr) {
             def.var = var;
-            def.def_section = current_section_;
-        } else if (def.def_section != current_section_) {
-            def.def_section = std::nullopt; // accessed across sections -> shared region
         }
         if (def.access_shape.empty()) {
             if (auto shape = ResolveAccessShape(op, indices)) {
@@ -2699,7 +2321,6 @@ private:
 
     const CodeContext& ctx_; ///< for SanitizeName (pure: derives the cce var-name key)
     std::map<const ir::Var*, std::shared_ptr<const ir::Var>> tensor_aliases_;
-    std::optional<ir::SectionKind> current_section_;
 };
 
 } // namespace
@@ -2801,16 +2422,7 @@ public:
     using ir::IRVisitor::VisitExpr_;
     using ir::IRVisitor::VisitStmt_;
 
-    std::map<int, std::set<ir::PipeType>> cube_mutex_pipes;
-    std::map<int, std::set<ir::PipeType>> vec_mutex_pipes;
-
-    void VisitStmt_(const ir::SectionStmtPtr& op) override
-    {
-        auto prev = current_section_;
-        current_section_ = op->sectionKind_;
-        ir::IRVisitor::VisitStmt_(op);
-        current_section_ = prev;
-    }
+    std::map<int, std::set<ir::PipeType>> mutex_pipes;
 
     void VisitExpr_(const ir::CallPtr& op) override
     {
@@ -2839,8 +2451,7 @@ public:
             if (key == "mutex_ids")
                 dyn_bids = std::any_cast<std::vector<int>>(value);
         }
-        auto& target = (current_section_ == ir::SectionKind::Cube) ? cube_mutex_pipes : vec_mutex_pipes;
-        auto record = [&](int bid) { target[bid].insert(pipe); };
+        auto record = [&](int bid) { mutex_pipes[bid].insert(pipe); };
         if (static_bid >= 0)
             record(static_bid);
         for (int bid : dyn_bids)
@@ -2855,9 +2466,6 @@ public:
                 record(i);
         }
     }
-
-private:
-    ir::SectionKind current_section_ = ir::SectionKind::Vector;
 };
 
 } // namespace
@@ -2868,18 +2476,16 @@ void CCECodegen::CollectMutexPipeInfo(const ir::StmtPtr& stmt)
         return;
     MutexPipeCollector collector;
     collector.VisitStmt(stmt);
-    cube_mutex_pipes_ = std::move(collector.cube_mutex_pipes);
-    vec_mutex_pipes_ = std::move(collector.vec_mutex_pipes);
+    mutex_pipes_ = std::move(collector.mutex_pipes);
 }
 
 bool CCECodegen::ShouldSkipVPipeMutex(ir::PipeType pipe, const std::vector<int>& buf_ids) const
 {
     if (pipe != ir::PipeType::V || arch_ != "a5")
         return false;
-    const auto& section_map = (current_section_kind_ == ir::SectionKind::Cube) ? cube_mutex_pipes_ : vec_mutex_pipes_;
     for (int bid : buf_ids) {
-        auto it = section_map.find(bid);
-        if (it == section_map.end())
+        auto it = mutex_pipes_.find(bid);
+        if (it == mutex_pipes_.end())
             continue;
         for (auto p : it->second) {
             if (p != ir::PipeType::V)
@@ -3065,23 +2671,27 @@ void CCECodegen::EmitTilingStructCopy(const ir::FunctionPtr& func)
         std::string name = context_.GetVarName(param);
         const std::string* registered_name = debug_info_->GetTupleName(tuple_type.get());
         const std::string struct_name = registered_name != nullptr ? *registered_name : "Tiling";
-        // Shared local struct (one of __DAV_CUBE__/__DAV_VEC__ is defined per compile).
         emitter_.EmitLine("constexpr uint32_t " + name + "_all_bytes = sizeof(" + struct_name + ");");
         emitter_.EmitLine(struct_name + " " + name + ";");
-        emitter_.EmitLine("#if defined(__DAV_CUBE__)");
-        emitter_.EmitLine("copy_data_align64((uint8_t*)&" + name + ", (__gm__ uint8_t *)" + name + "_ptr, " + name +
-                          "_all_bytes);");
-        emitter_.EmitLine("#endif");
-        emitter_.EmitLine("#if defined(__DAV_VEC__)");
-        emitter_.EmitLine("__ubuf__ uint8_t *" + name + "_in_ub = (__ubuf__ uint8_t *)get_imm(0);");
-        emitter_.EmitLine("constexpr uint32_t " + name + "_len_burst = (" + name + "_all_bytes + 31) / 32;");
-        emitter_.EmitLine("copy_gm_to_ubuf_align_v2((__ubuf__ uint8_t *)" + name + "_in_ub, (__gm__ uint8_t *)" + name +
-                          "_ptr, 0, 1, " + name + "_len_burst * 32, 0, 0, false, 0, 0, 0);");
-        emitter_.EmitLine("set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);");
-        emitter_.EmitLine("wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);");
-        emitter_.EmitLine("copy_data_align64((uint8_t*)&" + name + ", (__ubuf__ uint8_t *)" + name + "_in_ub, " + name +
-                          "_all_bytes);");
-        emitter_.EmitLine("#endif");
+        auto emit_cube_copy = [&]() {
+            emitter_.EmitLine("copy_data_align64((uint8_t*)&" + name + ", (__gm__ uint8_t *)" + name + "_ptr, " + name +
+                              "_all_bytes);");
+        };
+        auto emit_vector_copy = [&]() {
+            emitter_.EmitLine("__ubuf__ uint8_t *" + name + "_in_ub = (__ubuf__ uint8_t *)get_imm(0);");
+            emitter_.EmitLine("constexpr uint32_t " + name + "_len_burst = (" + name + "_all_bytes + 31) / 32;");
+            emitter_.EmitLine("copy_gm_to_ubuf_align_v2((__ubuf__ uint8_t *)" + name + "_in_ub, (__gm__ uint8_t *)" +
+                              name + "_ptr, 0, 1, " + name + "_len_burst * 32, 0, 0, false, 0, 0, 0);");
+            emitter_.EmitLine("set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);");
+            emitter_.EmitLine("wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);");
+            emitter_.EmitLine("copy_data_align64((uint8_t*)&" + name + ", (__ubuf__ uint8_t *)" + name + "_in_ub, " +
+                              name + "_all_bytes);");
+        };
+        if (target_ == ir::SectionKind::Cube) {
+            emit_cube_copy();
+        } else {
+            emit_vector_copy();
+        }
         emitter_.EmitLine("");
     }
 }

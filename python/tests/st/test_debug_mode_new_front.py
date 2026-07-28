@@ -19,7 +19,7 @@ import torch_npu
 import pypto
 
 
-@pypto.frontend.jit(debug_options={"compile_debug_mode": 1, "runtime_debug_mode": 1})
+@pypto.frontend.jit(debug_options={"compile_debug_mode": 1, "runtime_debug_mode": 1}, new_ir=True)
 def add_kernel(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),

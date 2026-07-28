@@ -185,6 +185,7 @@ __all__ = [
     "get_block_idx",
     "get_subblock_idx",
     "get_block_num",
+    "get_subblock_num",
     "make_tile_group",
     # Frontend (runtime) aliases
     "kernel",
@@ -264,7 +265,6 @@ from pypto_pro.runtime import KernelDef, jit, kernel, pipeline
 
 from . import parser
 from ._api import (
-    Vf,
     abs,
     add,
     add_relu,
@@ -289,8 +289,6 @@ from ._api import (
     expands,
     fill_index,
     fillpad,
-    fillpad_expand,
-    fillpad_inplace,
     fused_mul_add,
     fused_mul_add_relu,
     gather,
@@ -300,6 +298,7 @@ from ._api import (
     get_block_idx,
     get_block_num,
     get_subblock_idx,
+    get_subblock_num,
     getval,
     gt,
     histogram,
@@ -357,6 +356,7 @@ from ._api import (
     trap,
     xor,
 )
+from ._vf_api import Vf
 from .parser.decorator import function, inline, program, vector_function
 from .parser.text_parser import loads, loads_program, parse, parse_program
 from .typing import DYNAMIC, STATIC, Ptr, Scalar, Tensor, Tile

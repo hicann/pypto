@@ -95,23 +95,26 @@ REGISTER_OP("ptr.addptr")
 TypePtr DeduceMakePtrType([[maybe_unused]] const std::vector<ExprPtr>& args,
                           [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    // ptr.make_ptr: Reinterpret a pointer as a (usually different) element dtype.
-    // Args: (ptr); kwarg: dtype
+    // ptr.make_ptr: Reinterpret a pointer as a (usually different) element dtype, or extract
+    // a raw pointer from a tensor. Args: (ptr_or_tensor); kwarg: dtype.
     // Returns: a PtrType with the new element dtype, reusing the same underlying address.
     CHECK(args.size() == 1) << "ptr.make_ptr requires exactly 1 argument (ptr), but got " << args.size();
 
     auto ptr_type = As<PtrType>(args[0]->GetType());
-    CHECK(ptr_type) << "ptr.make_ptr requires first argument to be a PtrType, but got "
-                    << args[0]->GetType()->TypeName() << ". Use pl.Ptr[dtype] to annotate pointer parameters.";
+    auto tensor_type = As<TensorType>(args[0]->GetType());
+    CHECK(ptr_type || tensor_type)
+        << "ptr.make_ptr requires first argument to be a PtrType or TensorType, but got "
+        << args[0]->GetType()->TypeName()
+        << ". Use pl.Ptr[dtype] for pointer params or pl.Tensor[[shape], dtype] for tensor params.";
 
     // The new element dtype: explicit 'dtype' kwarg if given, otherwise keep the source dtype
-    // (an identity reinterpret). This is what lets callers turn a pl.Ptr[uint8] into a
-    // pl.Ptr[fp16] without baking the dtype into the pointer parameter.
-    DataType result_dtype = GetOpKwarg<DataType>(kwargs, "dtype", std::optional<DataType>(ptr_type->dtype_));
+    // (an identity reinterpret / address extraction).
+    DataType source_dtype = ptr_type ? ptr_type->dtype_ : tensor_type->dtype_;
+    DataType result_dtype = GetOpKwarg<DataType>(kwargs, "dtype", std::optional<DataType>(source_dtype));
 
-    // Preserve the base_ptr/offset codegen annotations from the source pointer so that a
+    // Preserve the base_ptr/offset codegen annotations from a PtrType source so that a
     // make_ptr derived from an addptr chain still carries its indirect-select metadata.
-    if (ptr_type->base_ptr.has_value() && ptr_type->offset.has_value()) {
+    if (ptr_type && ptr_type->base_ptr.has_value() && ptr_type->offset.has_value()) {
         return std::make_shared<PtrType>(result_dtype, *ptr_type->base_ptr, *ptr_type->offset);
     }
     return std::make_shared<PtrType>(result_dtype);

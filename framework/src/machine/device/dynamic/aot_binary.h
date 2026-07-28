@@ -10,16 +10,27 @@
 
 /*!
  * \file aot_binary.h
- * \brief
+ * \brief Process-global AOT control-flow code pool.
+ *
+ * Policy: each pool entry records the DevProg hash that currently owns it.
+ * EnsureCached(hash) — if that hash is still in the pool, skip memcpy; otherwise
+ * overwrite a free / LRU entry. No refCount / pin / Detach.
+ *
+ * Pool size is small (AOT_CODE_POOL_NUM=16), so metadata uses a flat array +
+ * monotonic LRU clock rather than open-hash / linked lists.
  */
 
 #pragma once
 
 #include <cstdint>
 #include <cstddef>
+#include <climits>
+#include <vector>
+#include <tuple>
 #include "securec.h"
 #include "machine/device/dynamic/device_utils.h"
 #include "machine/device/dynamic/device_perf.h"
+#include "machine/utils/dynamic/dev_encode_program.h"
 #include "tilefwk/aicpu_runtime.h"
 #include "tilefwk/aikernel_data.h"
 
@@ -28,61 +39,77 @@
 #define STR(n) STR_(n)
 #endif
 
+#define AOT_CODE_POOL_NUM 16
 #define AOT_CODE_POOL_CODE_SIZE (4096 * 0x1000)
-extern uint8_t aotCodePoolCode[];
+#define AOT_CODE_POOL_TOTAL_SIZE (AOT_CODE_POOL_NUM * AOT_CODE_POOL_CODE_SIZE)
+#define AOT_POOL_ENTRY_INVALID 0xFFU
+
+// Weak comdat BSS (shared across TUs). Symbol must be at global scope so the
+// C++ reference name matches the unmangled asm label (same pattern as the
+// single-slot aotCodePoolCode pool). Do not put this extern inside a namespace.
+#define AOT_DEFINE_BSS_POOL(name, totalSize)                                                                     \
+    extern uint8_t name[totalSize];                                                                              \
+    asm("\n\t.pushsection .bss." STR(name) ",\"axwG\",@nobits," STR(                                             \
+        name) ",comdat"                                                                                          \
+              "\n\t.p2align 12"                                                                                  \
+              "\n\t.weak " STR(name) "\n\t.type " STR(name) ", @gnu_unique_object"                               \
+                                                            "\n\t.size " STR(name) ", " STR(totalSize) "\n" STR( \
+                                                                name) ":"                                        \
+                                                                      "\n\t.zero " STR(totalSize) "\n\t.popsection")
+
+AOT_DEFINE_BSS_POOL(aotCodePoolCodes, AOT_CODE_POOL_TOTAL_SIZE);
 
 namespace npu::tile_fwk::dynamic {
-asm("\n\t.pushsection .bss." STR(aotCodePoolCode) ",\"axwG\",@nobits," STR(
-    aotCodePoolCode) ",comdat"
-                     "\n\t.p2align 12"
-                     "\n\t.weak " STR(aotCodePoolCode) "\n\t.type " STR(
-                         aotCodePoolCode) ", @gnu_unique_object"
-                                          "\n\t.size " STR(aotCodePoolCode) ", " STR(AOT_CODE_POOL_CODE_SIZE) "\n" STR(
-                                              aotCodePoolCode) ":"
-                                                               "\n\t.zero " STR(
-                                                                   AOT_CODE_POOL_CODE_SIZE) "\n\t.popsection");
 
-const size_t TUBLE_INDEX_2 = 2;
-const size_t TUBLE_INDEX_3 = 3;
+// hashKey is written at encode time in EncodeDevAscendProgram::Init (dev_encode.cpp).
+// 0 is reserved as the empty-entry sentinel for the AOT code pool.
+inline uint64_t GetAOTCacheKey(const DevAscendProgram* prog) { return prog->hashKey; }
 
-struct AOTCodePool {
-    uintptr_t base{0};
-    uintptr_t offset{0};
+// Shared host/device pool (16 entries x 16MiB BSS).
+struct AOTCodePoolManager {
+    uint64_t ownerHashKey_[AOT_CODE_POOL_NUM]{};
+    uint64_t lruSeq_[AOT_CODE_POOL_NUM]{};
+    uint64_t lruClock_{0};
 
-    void MapExec() {}
+    static AOTCodePoolManager& Instance();
 
-    static AOTCodePool& GetCodePool()
+    static uintptr_t EntryCodeBase(int entryId)
     {
-        static AOTCodePool pool = {0};
-        if (pool.base == 0) {
-            pool.base = (uintptr_t)aotCodePoolCode;
-        }
-        return pool;
-    };
+        return reinterpret_cast<uintptr_t>(aotCodePoolCodes) +
+               static_cast<uintptr_t>(entryId) * static_cast<uintptr_t>(AOT_CODE_POOL_CODE_SIZE);
+    }
+
+    // lastId: DevProg hint of the previous pool entry that held this hash.
+    int EnsureCached(uint64_t hashKey, uint8_t& lastId, const void* data, uint64_t size);
+
+private:
+    int FindEntry(uint64_t hashKey, uint8_t lastId) const;
+    int SelectVictimEntry() const;
+    void LoadEntry(int entryId, uint64_t hashKey, const void* data, uint64_t size);
 };
 
 struct AOTBinary {
     AOTBinary() {}
 
-    void InitCodeSize(const void* data, uint64_t size)
+    void InitCodeSizeCached(uint64_t hashKey, uint8_t& lastId, const void* data, uint64_t size)
     {
+        // Empty CF binary must not occupy / evict a pool entry (LoadEntry still writes ownerHashKey_).
+        if (size == 0) {
+            code_ = nullptr;
+            size_ = 0;
+            return;
+        }
         if (size > AOT_CODE_POOL_CODE_SIZE) {
             DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "AOTBinary code size %zu is too large, max %d", size,
                       AOT_CODE_POOL_CODE_SIZE);
             DEV_ASSERT(DevCommonErr::MEMCPY_FAILED, false);
             return;
         }
-        auto& pool = AOTCodePool::GetCodePool();
-        code_ = reinterpret_cast<unsigned char*>(pool.base);
+        const int entryId = AOTCodePoolManager::Instance().EnsureCached(hashKey, lastId, data, size);
+        code_ = reinterpret_cast<unsigned char*>(AOTCodePoolManager::EntryCodeBase(entryId));
         size_ = size;
-        if (size == 0) {
-            return;
-        }
-        PerfBegin(PERF_EVT_CONTROL_FLOW_MAPEXE_MEMCPY);
-        DevMemcpyS(reinterpret_cast<void*>(pool.base), size, data, size);
-        __builtin___clear_cache(reinterpret_cast<char*>(pool.base), reinterpret_cast<char*>(pool.base) + size);
-        PerfEnd(PERF_EVT_CONTROL_FLOW_MAPEXE_MEMCPY);
     }
+
     void InitCode(const void* data) { code_ = reinterpret_cast<const unsigned char*>(data); }
 
     const unsigned char* code_{nullptr};
@@ -98,20 +125,45 @@ struct AOTBinaryControlFlow : AOTBinary {
 
     AOTBinaryControlFlow() = default;
 
-    AOTBinaryControlFlow(const std::tuple<const void*, uint64_t>& code, controlFlowEntry entry = nullptr)
-        : AOTBinaryControlFlow(std::get<0>(code), std::get<1>(code), entry)
+    AOTBinaryControlFlow(const AOTBinaryControlFlow&) = delete;
+    AOTBinaryControlFlow& operator=(const AOTBinaryControlFlow&) = delete;
+
+    AOTBinaryControlFlow(AOTBinaryControlFlow&& other) noexcept
+    {
+        code_ = other.code_;
+        size_ = other.size_;
+        other.code_ = nullptr;
+        other.size_ = 0;
+    }
+
+    AOTBinaryControlFlow& operator=(AOTBinaryControlFlow&& other) noexcept
+    {
+        if (this != &other) {
+            code_ = other.code_;
+            size_ = other.size_;
+            other.code_ = nullptr;
+            other.size_ = 0;
+        }
+        return *this;
+    }
+
+    AOTBinaryControlFlow(const std::tuple<const void*, uint64_t>& code, DevAscendProgram* prog,
+                         AOTBinaryControlFlow::controlFlowEntry entry = nullptr)
+        : AOTBinaryControlFlow(std::get<0>(code), std::get<1>(code), prog, entry)
     {}
 
-    AOTBinaryControlFlow(const std::vector<uint8_t>& code, controlFlowEntry entry = nullptr)
-        : AOTBinaryControlFlow(code.data(), code.size(), entry)
+    AOTBinaryControlFlow(const std::vector<uint8_t>& code, DevAscendProgram* prog,
+                         AOTBinaryControlFlow::controlFlowEntry entry = nullptr)
+        : AOTBinaryControlFlow(code.data(), code.size(), prog, entry)
     {}
 
-    AOTBinaryControlFlow(const void* code, uint64_t codeSize, controlFlowEntry entry = nullptr)
+    AOTBinaryControlFlow(const void* code, uint64_t codeSize, DevAscendProgram* prog,
+                         AOTBinaryControlFlow::controlFlowEntry entry = nullptr)
     {
         if (entry != nullptr) {
             InitCode(reinterpret_cast<void*>(entry));
         } else {
-            InitCodeSize(code, codeSize);
+            InitCodeSizeCached(GetAOTCacheKey(prog), prog->aotPoolLastId, code, codeSize);
         }
     }
 
@@ -123,37 +175,36 @@ struct AOTBinaryControlFlow : AOTBinary {
     }
 };
 
-struct AOTBinaryExpressionTable : AOTBinary {
-    using exprEntry = uint64_t (*)(struct DeviceExecuteContext* ctx, int64_t* symbolTable);
-    AOTBinaryExpressionTable() {}
-    AOTBinaryExpressionTable(const std::tuple<const void*, uint64_t, const uint64_t*, uint64_t>& table)
-        : offsetList(std::get<TUBLE_INDEX_2>(table)), offsetSize(std::get<TUBLE_INDEX_3>(table))
-    {
-        InitCodeSize(std::get<0>(table), std::get<1>(table));
-    }
-
-    uint64_t CallExpr(struct DeviceExecuteContext* ctx, int64_t* symbolTable, uint64_t index)
-    {
-        return (reinterpret_cast<exprEntry>(const_cast<unsigned char*>(code_ + offsetList[index])))(ctx, symbolTable);
-    }
-
-    const uint64_t* offsetList{nullptr};
-    uint64_t offsetSize{0};
-};
-
 struct DeviceExecuteProgram {
     DevAscendProgram* prog{nullptr};
 
     AOTBinaryControlFlow controlFlowBinary;
-    AOTBinaryExpressionTable exprBinary;
 
     DeviceExecuteProgram() {}
     DeviceExecuteProgram(DevAscendProgram* prog_, AOTBinaryControlFlow::controlFlowEntry entry = nullptr)
         : prog(prog_),
           controlFlowBinary(IsDeviceMode() ? prog_->GetDevControlFlowBinary() : prog_->GetHostControlFlowBinary(),
-                            entry),
-          exprBinary(prog_->GetExpressionTableBinary())
+                            prog_, entry)
     {}
+
+    DeviceExecuteProgram(const DeviceExecuteProgram&) = delete;
+    DeviceExecuteProgram& operator=(const DeviceExecuteProgram&) = delete;
+
+    DeviceExecuteProgram(DeviceExecuteProgram&& other) noexcept
+        : prog(other.prog), controlFlowBinary(std::move(other.controlFlowBinary))
+    {
+        other.prog = nullptr;
+    }
+
+    DeviceExecuteProgram& operator=(DeviceExecuteProgram&& other) noexcept
+    {
+        if (this != &other) {
+            prog = other.prog;
+            controlFlowBinary = std::move(other.controlFlowBinary);
+            other.prog = nullptr;
+        }
+        return *this;
+    }
 
     const void* GetControlFlowEntry() { return controlFlowBinary.code_; }
 };

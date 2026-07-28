@@ -19,7 +19,7 @@ Kernel代码生成阶段变量未定义，日志上下文含`UNDEFINED_VAR`关�
    export ASCEND_GLOBAL_LOG_LEVEL=1  # 0:DEBUG, 1:INFO, 2:WARN, 3:ERROR
    ```
 
-2. **并行编译改为串行**：修改`tile_fwk_config.json`中`"parallel_compile": 1`，重编安装。
+2. **并行编译改为串行**：修改`tile_fwk_config.json`中`"parallel_compile"`选项，将值改为1使codegen串行编译生效，然后重新编译并部署。
 
 3. **执行用例，获取日志及kernel代码**：
    - 日志：`{日志路径}/debug/plog/pypto-log*.log`

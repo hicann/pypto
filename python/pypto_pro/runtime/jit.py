@@ -30,10 +30,19 @@ import subprocess
 
 import torch
 
+from pypto.pypto_impl import ir
 from pypto.pypto_impl.codegen import CCECodegen
 from pypto.pypto_impl.ir import ConstInt, PtrType, ScalarType, TensorType, TupleType, Var
 from pypto_pro import DataType
 from pypto_pro.runtime.compile_config import get_jit_compile_config
+
+KERNEL_HEADER_SINGLE = """\
+#include <cstdint>
+#include <pto/pto-inst.hpp>
+
+using namespace pto;
+"""
+
 
 # torch.dtype → pl DataType (used to validate tensor args against kernel signature)
 _TORCH_TO_PL_DTYPE: dict = {}
@@ -124,6 +133,8 @@ class GeneratedKernel:
     content: str
     has_cross_sync: bool
     needs_print_debug: bool
+    has_cube: bool
+    has_vector: bool
 
 
 @dataclasses.dataclass
@@ -150,6 +161,9 @@ class CodegenResult:
     needs_global_entry: bool = False
     # Full impl param list (incl. trailing ffts_addr) used to build the __global__ entry.
     entry_params: list = dataclasses.field(default_factory=list)
+    tiling_headers: dict[str, str] = dataclasses.field(default_factory=dict)
+    has_cube: bool = False
+    has_vector: bool = False
 
 
 # Best-effort debug-print detection only. Launcher ABI metadata is derived from IR,
@@ -200,7 +214,8 @@ def _infer_test_artifact_prefix() -> str | None:
 def _make_artifact_build_dir(prog, arch: str, test_prefix: str | None = None, tilingkey_suffix: str = "") -> str:
     """The per-kernel build dir. All tilingkeys of one kernel share this dir; each concrete
     key gets a ``tk_<packed>`` subdir under it (see :func:`_make_tilingkey_dir`)."""
-    prog_name = prog.name if hasattr(prog, "name") and prog.name else "kernel"
+    prog_name = getattr(prog, "name", None) or getattr(prog, "_name", None)
+    prog_name = prog_name or getattr(prog, "func_name", None) or "kernel"
     safe_name = _sanitize_artifact_component(str(prog_name))
     test_prefix = test_prefix if test_prefix is not None else _infer_test_artifact_prefix()
     readable_prefix = f"{test_prefix}__{safe_name}" if test_prefix and test_prefix != safe_name else safe_name
@@ -641,30 +656,27 @@ def _detect_print_debug_from_cpp(content: str) -> bool:
 def _build_bisheng_flags(
     toolkit_home: str,
     arch: str,
-    cpp_content: str,
+    has_cube: bool,
+    has_vector: bool,
     has_cross_sync: bool,
     enable_print_debug: bool,
 ) -> list[str]:
     """Build bisheng flags for single-command shared-library compilation.
 
-    Determines the npu_arch from the arch ('a2'/'a3'/'a5') and the presence
-    of __DAV_CUBE__ / __DAV_VEC__ macros in the generated C++ source.
+    Determines the npu_arch from the explicit Parser target availability.
     """
     arch = _normalize_arch(arch)
 
-    has_cube = "__DAV_CUBE__" in cpp_content
-    has_vec = "__DAV_VEC__" in cpp_content
-
-    if has_cross_sync and not (has_cube and has_vec):
+    if has_cross_sync and not (has_cube and has_vector):
         if has_cube:
             raise ValueError("Contains ffts cross sync but vector code is missing.")
-        elif has_vec:
+        if has_vector:
             raise ValueError("Contains ffts cross sync but cube code is missing.")
     return get_jit_compile_config().build_bisheng_flags(
         toolkit_home=toolkit_home,
         arch=arch,
         has_cube=has_cube,
-        has_vec=has_vec,
+        has_vec=has_vector,
         enable_print_debug=enable_print_debug,
     )
 
@@ -682,7 +694,7 @@ def _static_signature_suffix(static_signature: tuple[tuple[int, int, int], ...])
 
 
 def _prepare_codegen_inputs(
-    prog,
+    kernel_def,
     arch: str,
     tilingkey_packed: int | None = None,
     out_dir: str | None = None,
@@ -692,52 +704,52 @@ def _prepare_codegen_inputs(
     bound_signature=None,
     static_signature: tuple[tuple[int, int, int], ...] = (),
 ) -> tuple[object, str]:
-    """Parse a KernelDef and create the per-tilingkey output dir.
+    """Transform the KernelDef AST and create its per-tilingkey output directory.
 
     Tilingkey field values are baked into the IR as constants, so each concrete key produces
     its own ``kernel.cpp``. All keys of one kernel share the kernel build dir; this returns
-    the parsed ``ir.Program`` and the per-key subdir ``<build_dir>/tk_<packed>`` where that
+    the KernelDef and the per-key subdir ``<build_dir>/tk_<packed>`` where that
     key's kernel.cpp, tiling headers, launcher and .so all live together.
 
     ``out_dir`` overrides the default ``<build_dir>/tk_<packed>`` location: callers that must
     keep concurrent codegen isolated (e.g. binary compile forks one process per dtype-combo, all
     sharing cwd) pass a caller-unique directory so distinct kernels never share a kernel.cpp.
     """
-    from pypto_pro.runtime.kernel import KernelDef
+    artifact_prefix = _artifact_prefix_from_filename(
+        getattr(kernel_def, "_source_file", None)
+    )
+    if kernel_def._pipeline is not None:
+        from pypto_pro.runtime.pipeline import transform_pipeline
+        from pypto_pro.runtime.pipeline._dump import build_generated_file_source
 
-    pipeline_generated_source = None
-    artifact_prefix = None
-    if isinstance(prog, KernelDef):
-        kernel_def = prog
-        artifact_prefix = _artifact_prefix_from_filename(getattr(kernel_def, "_source_file", None))
-        try:
-            prog = kernel_def.parse(bound_signature=bound_signature)
-        finally:
-            # Dump pipeline_generated.py even if parse() fails, so users can
-            # inspect the transformed code for debugging.
-            pipeline_generated_source = getattr(kernel_def, '_pipeline_generated_source', None)
-            if pipeline_generated_source:
-                func_name = kernel_def.func_name
-                safe_name = _sanitize_artifact_component(func_name)
-                readable = (
-                    f"{artifact_prefix}__{safe_name}" if artifact_prefix and artifact_prefix != safe_name else safe_name
-                )
-                dump_dir = os.path.join(".", "build", f"{readable}__{arch}{_static_signature_suffix(static_signature)}")
-                Path(dump_dir).mkdir(parents=True, exist_ok=True)
-                Path(os.path.join(dump_dir, "pipeline_generated.py")).write_text(
-                    pipeline_generated_source, encoding="utf-8"
-                )
+        kernel_def._func_def = transform_pipeline(
+            kernel_def._func_def,
+            kernel_def._closure_vars,
+            kernel_def._pipeline,
+        )
+        generated_source = build_generated_file_source(
+            kernel_def._func_def,
+            kernel_def._source_file,
+            kernel_def._line_offset,
+            kernel_def._col_offset,
+            kernel_def._source_lines_raw,
+            kernel_def._closure_vars,
+        )
+        kernel_def._pipeline = None
+        _dump_pipeline_generated_source(
+            kernel_def, generated_source, arch, static_signature
+        )
 
     if out_dir is None:
         build_dir = _make_artifact_build_dir(
-            prog, arch, test_prefix=artifact_prefix, tilingkey_suffix=_static_signature_suffix(static_signature)
-        )
+            kernel_def, arch, test_prefix=artifact_prefix,
+            tilingkey_suffix=_static_signature_suffix(static_signature))
         if datatype_hash is not None:
             build_dir = os.path.join(build_dir, f"dt_{datatype_hash}")
             write_datatype_metadata(build_dir, datatype_metadata)
         out_dir = _make_tilingkey_dir(build_dir, tilingkey_packed)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
-    return prog, out_dir
+    return kernel_def, out_dir
 
 
 def _make_jit_paths(out_dir: str) -> CompilePaths:
@@ -771,22 +783,26 @@ def _make_global_entry(
     return f"__global__ AICORE void {kernel_name}({sig})\n{{\n    {kernel_name}_impl({call_args});\n}}\n"
 
 
-def _codegen_cce(prog, arch: str, build_dir: str, raw_cpp_path: str) -> CodegenResult:
-    """CCE codegen: pypto IR → kernel.cpp (+ tiling headers), written under ``build_dir``.
+def _codegen_target_cce(
+    prog,
+    arch: str,
+    build_dir: str,
+    target: ir.SectionKind,
+) -> CodegenResult:
+    """CCE codegen for one target-specific Program.
 
-    Key-independent: produces no launcher. Returns the metadata a launcher build needs.
+    Key-independent: produces no launcher and does not write final artifacts.
     """
-    cce_codegen = CCECodegen()
+    cce_codegen = CCECodegen(target)
     cpp_code = cce_codegen.generate_single(prog, arch)
     if "ffts_cross_core_sync" in cpp_code and arch == "a5":
         extra_headers = "#include <pto/npu/a5/custom/TSyncCVID.hpp>"
-        cpp_code = extra_headers + cpp_code
+        guard = {
+            ir.SectionKind.Cube: "#if defined(__DAV_CUBE__)",
+            ir.SectionKind.Vector: "#if defined(__DAV_VEC__)",
+        }[target]
+        cpp_code = cpp_code.replace(guard, guard + "\n" + extra_headers, 1)
     tiling_headers = dict(cce_codegen.get_tiling_headers())
-
-    # Write kernel.cpp + tiling headers (e.g. "OpTiling_tiling.h", #included by kernel.cpp).
-    Path(raw_cpp_path).write_text(cpp_code, encoding="utf-8")
-    for header_name, header_content in tiling_headers.items():
-        (Path(build_dir) / header_name).write_text(header_content, encoding="utf-8")
 
     # CCE emits the body as `__aicore__ inline void <name>_impl(...)`; derive the launcher ABI
     # from IR metadata instead of parsing generated C++ text, so C++ formatting/decorators can
@@ -812,7 +828,160 @@ def _codegen_cce(prog, arch: str, build_dir: str, raw_cpp_path: str) -> CodegenR
         param_specs=param_specs,
         needs_global_entry=True,
         entry_params=entry_params,
+        tiling_headers=tiling_headers,
+        has_cube=target == ir.SectionKind.Cube,
+        has_vector=target == ir.SectionKind.Vector,
     )
+
+
+def _entry_param_declarations(entry_params: list[tuple[str, str, bool]]) -> str:
+    return ", ".join(
+        f"__gm__ {typ}* {name}" if is_ptr else f"{typ} {name}"
+        for typ, name, is_ptr in entry_params
+    )
+
+
+def _target_call_args(result: CodegenResult) -> str:
+    return ", ".join(name for _, name, _ in result.entry_params)
+
+
+def _assemble_cv_source(
+    cube: CodegenResult | None,
+    vector: CodegenResult | None,
+) -> CodegenResult:
+    """Assemble independently generated target sources behind one impl entry."""
+    results = [result for result in (cube, vector) if result is not None]
+    if not results:
+        raise RuntimeError("Cannot assemble Cube/Vector source without a target")
+
+    reference = results[0]
+    for result in results[1:]:
+        if result.kernel_name != reference.kernel_name:
+            raise RuntimeError("Cube/Vector kernel names do not match")
+        if result.param_specs != reference.param_specs:
+            raise RuntimeError("Cube/Vector kernel parameter specifications do not match")
+        if result.kernel_params != reference.kernel_params:
+            raise RuntimeError("Cube/Vector kernel ABIs do not match")
+        if result.build_dir != reference.build_dir:
+            raise RuntimeError("Cube/Vector build directories do not match")
+        if result.tiling_headers != reference.tiling_headers:
+            raise RuntimeError("Cube and Vector tiling headers must be identical")
+
+    needs_ffts = any(result.caller_cross_core_sync for result in results)
+    entry_params = list(reference.kernel_params)
+    if needs_ffts:
+        entry_params.append(("int64_t", "ffts_addr", True))
+
+    wrapper_lines = [
+        "",
+        f"__aicore__ inline void {reference.kernel_name}_impl("
+        f"{_entry_param_declarations(entry_params)})",
+        "{",
+    ]
+    if cube is not None:
+        wrapper_lines.extend(
+            [
+                "#if defined(__DAV_CUBE__)",
+                f"    {reference.kernel_name}_impl_cube({_target_call_args(cube)});",
+                "#endif",
+            ]
+        )
+    if vector is not None:
+        wrapper_lines.extend(
+            [
+                "#if defined(__DAV_VEC__)",
+                f"    {reference.kernel_name}_impl_vector({_target_call_args(vector)});",
+                "#endif",
+            ]
+        )
+    wrapper_lines.extend(["}", ""])
+
+    return CodegenResult(
+        build_dir=reference.build_dir,
+        content="\n".join([*(result.content for result in results), *wrapper_lines]),
+        kernel_name=reference.kernel_name,
+        kernel_params=list(reference.kernel_params),
+        caller_cross_core_sync=needs_ffts,
+        bisheng_cross_sync=any(result.bisheng_cross_sync for result in results),
+        needs_print_debug=any(result.needs_print_debug for result in results),
+        param_specs=list(reference.param_specs),
+        needs_global_entry=True,
+        entry_params=entry_params,
+        tiling_headers=dict(reference.tiling_headers),
+        has_cube=cube is not None,
+        has_vector=vector is not None,
+    )
+
+
+def _parse_and_codegen_targets(
+    kernel_def,
+    arch: str,
+    build_dir: str,
+    bound_signature=None,
+) -> tuple[CodegenResult | None, CodegenResult | None]:
+    """Parse both targets, treating a sectionless kernel as shared by both."""
+    programs = {}
+    matched = {}
+    for target in (ir.SectionKind.Cube, ir.SectionKind.Vector):
+        programs[target], matched[target] = kernel_def.parse_target_program(
+            target=target,
+            bound_signature=bound_signature,
+        )
+
+    if not any(matched.values()):
+        matched = {
+            ir.SectionKind.Cube: True,
+            ir.SectionKind.Vector: True,
+        }
+
+    results = {
+        target: (
+            _codegen_target_cce(programs.get(target), arch, build_dir, target=target)
+            if matched.get(target)
+            else None
+        )
+        for target in (ir.SectionKind.Cube, ir.SectionKind.Vector)
+    }
+    return results[ir.SectionKind.Cube], results[ir.SectionKind.Vector]
+
+
+def _write_codegen_artifacts(result: CodegenResult) -> None:
+    """Write the final assembled source and shared tiling headers once."""
+    Path(result.build_dir).mkdir(parents=True, exist_ok=True)
+    Path(result.build_dir, "kernel.cpp").write_text(result.content, encoding="utf-8")
+    for header_name, header_content in result.tiling_headers.items():
+        Path(result.build_dir, header_name).write_text(header_content, encoding="utf-8")
+
+
+def _add_kernel_header(result: CodegenResult) -> CodegenResult:
+    """Add the translation-unit header after all target sources are assembled."""
+    return dataclasses.replace(
+        result,
+        content=f"{KERNEL_HEADER_SINGLE}\n{result.content.lstrip()}",
+    )
+
+
+def _dump_pipeline_generated_source(
+    kernel_def,
+    source: str | None,
+    arch: str,
+    static_signature,
+) -> None:
+    """Preserve the existing transformed-pipeline debug artifact."""
+    if not source:
+        return
+    artifact_prefix = _artifact_prefix_from_filename(getattr(kernel_def, "_source_file", None))
+    safe_name = _sanitize_artifact_component(kernel_def.func_name)
+    readable = (
+        f"{artifact_prefix}__{safe_name}"
+        if artifact_prefix and artifact_prefix != safe_name
+        else safe_name
+    )
+    dump_dir = os.path.join(
+        ".", "build", f"{readable}__{arch}{_static_signature_suffix(static_signature)}"
+    )
+    Path(dump_dir).mkdir(parents=True, exist_ok=True)
+    Path(dump_dir, "pipeline_generated.py").write_text(source, encoding="utf-8")
 
 
 def _runtime_include_flags(ascend_home_path: str) -> list[str]:
@@ -875,7 +1044,8 @@ def _compile_shared_library(
     flags = _build_bisheng_flags(
         pto_lib_path,
         arch,
-        generated.content,
+        generated.has_cube,
+        generated.has_vector,
         generated.has_cross_sync,
         enable_print_debug=resolved_enable_print_debug,
     )
@@ -914,22 +1084,26 @@ def _codegen(
     ``out_dir`` overrides that default location (see :func:`_prepare_codegen_inputs`) — pass a
     caller-unique dir when concurrent codegen would otherwise share the default path.
     """
-    prog, out_dir = _prepare_codegen_inputs(
-        prog,
+    from pypto_pro.runtime.kernel import KernelDef
+
+    if not isinstance(prog, KernelDef):
+        raise TypeError("CCE codegen requires a KernelDef with an explicit target section")
+
+    source, out_dir = _prepare_codegen_inputs(
+        prog, arch, tilingkey_packed, out_dir, datatype_hash, datatype_metadata,
+        bound_signature=bound_signature, static_signature=static_signature)
+
+    cube, vector = _parse_and_codegen_targets(
+        source,
         arch,
-        tilingkey_packed,
         out_dir,
-        datatype_hash,
-        datatype_metadata,
-        bound_signature=bound_signature,
-        static_signature=static_signature,
+        bound_signature,
     )
-    raw_cpp_path = os.path.join(out_dir, "kernel.cpp")
-    cg = _codegen_cce(prog, arch, out_dir, raw_cpp_path)
-    if cg is None:
-        return None
-    cg.param_specs = _extract_param_specs(prog)
-    return cg
+    result = _assemble_cv_source(cube, vector)
+
+    result = _add_kernel_header(result)
+    _write_codegen_artifacts(result)
+    return result
 
 
 def _build_jit_so(
@@ -963,6 +1137,8 @@ def _build_jit_so(
         content=cg.content,
         has_cross_sync=cg.bisheng_cross_sync,
         needs_print_debug=cg.needs_print_debug,
+        has_cube=cg.has_cube,
+        has_vector=cg.has_vector,
     )
     return _compile_shared_library(paths, arch, generated, enable_print_debug, timeout, clean_up)
 
@@ -1322,7 +1498,6 @@ class _TileJitKernel:
         # Create KernelDef directly with the captured closure_vars
         # (cannot call @kernel decorator here because inspect.currentframe().f_back
         # would point to this method instead of the user's module scope)
-        from pypto.pypto_impl import ir
         from pypto_pro.runtime.kernel import KernelDef, extract_func_source_info
 
         f = self._func
@@ -1434,8 +1609,10 @@ class _TileJitKernel:
 
         # An aiv-only kernel emits vector code but no cube code; its block_dim
         # is bounded by the vector core count rather than the total core count.
-        is_aiv_only = ("__DAV_VEC__" in cg.content) and ("__DAV_CUBE__" not in cg.content)
-        compiled = CompiledKernel(lib_path=lib_path, param_specs=cg.param_specs, is_aiv_only=is_aiv_only)
+        is_aiv_only = cg.has_vector and not cg.has_cube
+        compiled = CompiledKernel(
+            lib_path=lib_path, param_specs=cg.param_specs, is_aiv_only=is_aiv_only
+        )
         self._compiled_by_signature[cache_key] = compiled
         return compiled
 

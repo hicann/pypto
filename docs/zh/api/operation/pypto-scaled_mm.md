@@ -14,10 +14,10 @@
 
 ## 功能说明
 
-实现mat_a 、mat_b矩阵的mx量化矩阵乘运算，计算公式为：out = (mat_a *scale_a) @ (mat_b* scale_b)
+实现mat_a 、mat_b矩阵的mx量化矩阵乘运算，计算公式为：out = (mat_a \* scale_a) @ (mat_b \* scale_b)
 
-- mat_a 、mat_b 、scale_a 、scale_b为源操作数，mat_a为左矩阵；mat_b为右矩阵；scale_a为左矩阵量化参数；scale_b为右矩阵量化参数
-- out为目的操作数，存放矩阵乘结果的矩阵
+- mat_a 、mat_b 、scale_a 、scale_b为源操作数，mat_a为左矩阵；mat_b为右矩阵；scale_a为左矩阵量化参数；scale_b为右矩阵量化参数。
+- out为目的操作数，存放矩阵乘结果的矩阵。
 
 ## 函数原型
 
@@ -27,11 +27,13 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 
 ## 参数说明
 
+表1：API参数说明
+
 | 参数名            | 输入/输出 | 说明                                                                 |
 |-------------------|-----------|----------------------------------------------------------------------|
 | mat_a             | 输入      | 表示输入左矩阵。不支持输入空Tensor。 <br> **数据类型**：详见表3。 <br> **矩阵维度**：2维、3维、4维。 <br> **Format**：TILEOP_ND, TILEOP_NZ（DT_FP8E5M2输入不支持TILEOP_NZ格式）。<br> **内轴外轴**：当输入矩阵mat_a非转置时，对应数据排布为[M, K]，此时外轴为M，内轴为K；当输入矩阵mat_a转置时，对应数据排布为[K, M]，此时外轴为K，内轴为M。 <br> **对齐要求**：当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。 <br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐，外轴16元素对齐。 <br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐，外轴16元素对齐。 |
 | mat_b              | 输入      | 表示输入右矩阵。不支持输入空Tensor。 <br> **数据类型**：详见表3。 <br> **矩阵维度**：2维、3维、4维。 <br> **Format**：TILEOP_ND, TILEOP_NZ（DT_FP8E5M2输入不支持TILEOP_NZ格式）。<br> **内轴外轴**：当输入矩阵mat_b非转置时，对应数据排布为[K, N]，此时外轴为K，内轴为N；当输入矩阵mat_b转置时，对应数据排布为[N, K]，此时外轴为N，内轴为K。 <br> **对齐要求**：当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。 <br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐，外轴16元素对齐。 <br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐，外轴16元素对齐。 |
-| out_dtype         | 输出      | 表示输出矩阵数据类型，支持DT_FP32，DT_FP16，DT_BF16。 |
+| out_dtype         | 输出      | 表示输出矩阵数据类型。基础场景输出数据类型支持情况详见表3，量化场景输出数据类型支持情况详见表4。|
 | scale_a              | 输入      | 表示输入左矩阵量化参数。不支持输入空Tensor。 <br> **数据类型**：详见表3。 <br> **量化参数维度**：3维。<br> **Format**：TILEOP_ND。<br> **量化参数shape**：当输入量化参数非转置时，对应输入shape为[M, CeilAlign(K, 64)/64, 2]；当输入量化参数转置时，对应输入shape为[CeilAlign(K, 64)/64, M, 2]。其中M和K值等于输入矩阵mat_a的M、K维度的形状值。|
 | scale_b              | 输入      | 表示输入右矩阵量化参数。不支持输入空Tensor。 <br> **数据类型**：详见表3。 <br> **量化参数维度**：3维。<br> **Format**：TILEOP_ND。<br> **量化参数shape**：当输入量化参数非转置时，对应输入shape为[CeilAlign(K, 64)/64, N, 2]；当输入量化参数转置时，对应输入shape为[N, CeilAlign(K, 64)/64, 2]。其中N和K值等于输入矩阵mat_b的N、K维度的形状值。|
 | a_trans           | 输入      | 参数a_trans表示输入左矩阵是否转置，默认为False。 |
@@ -53,7 +55,7 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 | bias_tensor       | 表示偏置矩阵。 <br> 输入为Tensor类型。 <br> Bias矩阵数据类型可选DT_FP16、DT_BF16和DT_FP32。 <br> bias_tensor只支持ND格式。<br> 仅支持矩阵维度为2/3/4维场景。 <br> 当输入矩阵为3维时，Bias维度可以为[B, 1, N]或[1, N]，且N维度需要与mat_b矩阵的N维度相等。<br> 当输入矩阵为4维时，Bias维度只能为[1, N]，且N维度需要与mat_b矩阵的N维度相等。<br> 不支持叠加多核切K功能。|
 | relu_type         | 表示输出矩阵是否进行ReLu操作。 <br> 输入为[ReLuType](../datatype/ReLuType.md)类型。 <br> 支持RELU和NO_RELU两种模式。<br> 不支持叠加多核切k功能。 |
 
-表3： scaled_mm支持的数据类型
+表3： scaled_mm基础场景支持的数据类型
 
 | mat_a | mat_b | out_dtype | scale_a | scale_b | bias_tensor |
 |:------|:------|:----------|:--------|:--------|:------------|
@@ -61,7 +63,7 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 | DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16/DT_BF16/DT_FP32 |
 | DT_FP4_E2M1 | DT_FP4_E2M1 | DT_FP16/DT_BF16/DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16/DT_BF16/DT_FP32 |
 
-表4：量化支持的数据类型
+表4：scaled_mm量化场景支持的数据类型
 
 | mat_a | mat_b | out_dtype |
 |:------|:-----|:----------|
@@ -76,7 +78,7 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 ## 约束说明
 
 - 当输入为DT_FP4_E2M1量化场景时，需保证内轴为偶数。
-- 调用scaled_mm接口前需要通过pypto.set\_cube\_tile\_shapes设置M、N、K轴上的切分大小。
+- 调用scaled_mm接口前需要通过pypto.set\_cube\_tile\_shapes设置M、K、N轴上的切分大小。
 - 调用scaled_mm接口的输入为调用pypto.reshape后的NZ格式时，需要调用pypto.set\_matrix\_size接口设置pypto.reshape前的输入到matmul的原始Shape的m,k,n值。
 
 ## 调用示例

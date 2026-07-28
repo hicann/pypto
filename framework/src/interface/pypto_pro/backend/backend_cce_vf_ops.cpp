@@ -2898,8 +2898,7 @@ static std::string EmitVFCreateAddrReg(const ir::CallPtr& op, codegen::CodegenBa
     // statement (bisheng rejects a separate declaration + assignment). Emit the
     // declaration and vag_* initializer together, matching AscendC's
     // `AddrReg x = CreateAddrReg<T>(...)` usage. The vag_* must sit inside the
-    // physical loop it is bound to (HardwareLoop); the single-iteration
-    // optimization must not collapse that loop — see BodyContainsAddrReg.
+    // physical loop it is bound to (HardwareLoop).
     codegen.Emit("AddrReg " + reg_name + " = " + vag_fn + "(" + stride_args + ");");
     codegen.RegisterAddrRegVar(reg_name);
     return "";

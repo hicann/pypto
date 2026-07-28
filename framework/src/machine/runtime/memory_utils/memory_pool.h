@@ -40,6 +40,9 @@ struct MemoryBlock {
 
 RtError NormalizedRtMemcpy(void* dst, uint64_t destMax, const void* src, uint64_t cnt, RtMemcpyKind kind);
 
+void* DevAlloc(uint64_t size);
+void* CopyDataToDevice(const void* dataPtr, uint64_t dataSize);
+
 class DevMemoryPool {
 public:
     static DevMemoryPool& Instance();

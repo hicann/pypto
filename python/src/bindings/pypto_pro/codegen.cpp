@@ -59,15 +59,16 @@ void BindCodegen(py::module_& m)
     // CCECodegen - CCE/pto-isa C++ code generator (unified in codegen module)
     py::class_<CCECodegen>(codegen_module, "CCECodegen",
                            "CCE code generator for converting PyPTO IR to pto-isa C++ code")
-        .def(py::init<>(), "Create a CCE code generator (backend is always CCE)")
+        .def(py::init<SectionKind>(), py::arg("target"),
+             "Create a CCE code generator for one fixed Cube or Vector target")
         .def(
             "generate_single",
             [](CCECodegen& self, const ProgramPtr& program, const std::string& arch) {
                 return self.GenerateSingle(program, arch);
             },
-            py::arg("program"), py::arg("arch") = "a3",
-            "Generate a single C++ file from a PyPTO IR Program (MIX mode). "
-            "Runs IR passes, generates __global__ AICORE kernel with section guards, "
+            py::arg("program"), py::arg("arch"),
+            "Generate a single C++ file from a target-specific PyPTO IR Program. "
+            "Runs IR passes and generates an AICORE function with its target guard, "
             "constexpr scalars, and FFTS support. Returns C++ code as a single string.")
         .def(
             "get_tiling_headers", [](const CCECodegen& self) { return self.GetTilingHeaders(); },

@@ -2477,6 +2477,38 @@ static void ReduceAcc(const TensorData& out, const std::vector<TensorData>& tdat
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
+// Reorder topk outputs so that equal values keep ascending index order
+// (smaller index first). Uses secondary-then-primary stable multi-key sort.
+static void StabilizeTopKTieIndices(torch::Tensor& values, torch::Tensor& indices, int64_t axis, bool descending)
+{
+    torch::Tensor orderByIdx;
+    std::tie(std::ignore, orderByIdx) = indices.sort(/*stable=*/true, axis, /*descending=*/false);
+    values = values.gather(axis, orderByIdx);
+    indices = indices.gather(axis, orderByIdx);
+
+    torch::Tensor orderByVal;
+    std::tie(std::ignore, orderByVal) = values.sort(/*stable=*/true, axis, descending);
+    values = values.gather(axis, orderByVal);
+    indices = indices.gather(axis, orderByVal);
+}
+
+// grouped last dim is [value, index]; sort by value with ascending-index tie-break
+static torch::Tensor StableSortValueIndexPairs(torch::Tensor grouped, int64_t sortAxis, bool valueDescending)
+{
+    constexpr int kPairSize = 2;
+    torch::Tensor orderByIdx;
+    std::tie(std::ignore, orderByIdx) = grouped.select(-1, 1).sort(/*stable=*/true, sortAxis, /*descending=*/false);
+    auto indexShape = orderByIdx.sizes().vec();
+    indexShape.push_back(kPairSize);
+    auto expandIdx = orderByIdx.unsqueeze(-1).expand(torch::IntArrayRef(indexShape));
+    grouped = grouped.gather(sortAxis, expandIdx);
+
+    torch::Tensor orderByVal;
+    std::tie(std::ignore, orderByVal) = grouped.select(-1, 0).sort(/*stable=*/true, sortAxis, valueDescending);
+    expandIdx = orderByVal.unsqueeze(-1).expand(torch::IntArrayRef(indexShape));
+    return grouped.gather(sortAxis, expandIdx);
+}
+
 /**
  * @brief Perform a bitwise sort of 32 elements on the input tensor according to the specified dimension
  *        and return the output tensor
@@ -2531,13 +2563,7 @@ static void BitSort(const TensorData& out, const TensorData& self, int64_t axis,
     }
     groupedShape.push_back(DIM_SIZE_TWO);
     auto grouped = combined.reshape(torch::IntArrayRef(groupedShape));
-    torch::Tensor sortIndices;
-    std::tie(std::ignore, sortIndices) = grouped.select(-1, 0).sort(axis + 1, true);
-
-    std::vector<int64_t> expandDims(sortIndices.unsqueeze(-1).dim(), -1);
-    expandDims.back() = DIM_SIZE_TWO;
-    auto expandIndices = sortIndices.unsqueeze(-1).expand(torch::IntArrayRef(expandDims));
-    auto sortedGroups = grouped.gather(axis + 1, expandIndices);
+    auto sortedGroups = StableSortValueIndexPairs(grouped, axis + 1, /*valueDescending=*/true);
 
     std::vector<int64_t> dstShape;
     for (int64_t i = 0; i < sortedGroups.dim(); ++i) {
@@ -2620,12 +2646,7 @@ static torch::Tensor SortGroupedValueIndexPairs(const torch::Tensor& packed, int
         }
     }
     auto grouped = packed.reshape(torch::IntArrayRef(newShape));
-    torch::Tensor sortedIndices;
-    std::tie(std::ignore, sortedIndices) = grouped.select(-1, 0).sort(axis, true);
-    std::vector<int64_t> indexShape = sortedIndices.sizes().vec();
-    indexShape.push_back(kPairSize);
-    auto expandedIndices = sortedIndices.unsqueeze(-1).expand(torch::IntArrayRef(indexShape));
-    return grouped.gather(axis, expandedIndices);
+    return StableSortValueIndexPairs(grouped, axis, /*valueDescending=*/true);
 }
 
 static torch::Tensor PadSelectTopKGroups(torch::Tensor sortedGroups, int64_t axis, int64_t k)
@@ -2718,8 +2739,10 @@ static void TopK(const TensorData& outValue, const TensorData& outIndex, const T
     axis = axis < 0 ? (axis + tself.second.dim()) : axis;
     torch::Tensor tempIdxInt64 = torch::zeros(toutValue.second.sizes().vec(), torch::kInt64);
     torch::topk_out(toutValue.second, tempIdxInt64, tself.second, k, axis, descending);
-    auto tempIdxInt32 = tempIdxInt64.to(torch::kInt32);
-    toutIndex.second.copy_(tempIdxInt32);
+    torch::Tensor values = toutValue.second;
+    StabilizeTopKTieIndices(values, tempIdxInt64, axis, descending);
+    toutValue.second.copy_(values);
+    toutIndex.second.copy_(tempIdxInt64.to(torch::kInt32));
     ToOperand(toutValue.second, toutValue.first, outValue.dtype);
     ToOperand(toutIndex.second, toutIndex.first, outIndex.dtype);
 }
@@ -2769,9 +2792,7 @@ static void TopkSort(const TensorData& outValue, const TensorData& outTemp, cons
     auto valsGrouped = valuesAlign.reshape(torch::IntArrayRef(groupShape));
     auto idxsGrouped = indicesAlign.reshape(torch::IntArrayRef(groupShape));
 
-    torch::Tensor sortIdx;
-    std::tie(valsGrouped, sortIdx) = valsGrouped.sort(axis + 1, true); // Descending
-    idxsGrouped = idxsGrouped.gather(axis + 1, sortIdx);
+    StabilizeTopKTieIndices(valsGrouped, idxsGrouped, axis + 1, /*descending=*/true);
 
     // 4. Flatten
     valsGrouped = valsGrouped.flatten(axis, axis + 1);
@@ -2803,22 +2824,18 @@ static void TopkMerge(const TensorData& out, const TensorData& self, int mergeSi
     // Note: Current implementation uses global sort for simplicity (sufficient for precision verification)
     (void)mergeSize; // Suppress unused parameter warning
 
-    // Extract all values (even positions)
+    // Extract all values (even positions) and indices (odd positions)
     auto evenIndices = torch::arange(0, tself.second.size(axis), 2, torch::dtype(torch::kLong));
+    auto oddIndices = torch::arange(1, tself.second.size(axis), 2, torch::dtype(torch::kLong));
     auto values = tself.second.index_select(axis, evenIndices);
+    auto indices = tself.second.index_select(axis, oddIndices);
 
-    // Global sort to get pack order
-    torch::Tensor sortIndices;
-    std::tie(std::ignore, sortIndices) = values.sort(axis, true); // Descending
+    // Equal values: smaller index first, then value descending
+    StabilizeTopKTieIndices(values, indices, axis, /*descending=*/true);
 
-    // Build actual element indices (each pack occupies 2 positions)
-    auto packIdx0 = sortIndices * 0x2; // value position
-    auto packIdx1 = packIdx0 + 1;      // index position
-    // Stack and flatten to 1D vector for index_select
-    auto allIndices = torch::stack({packIdx0.flatten(), packIdx1.flatten()}, 1).flatten();
-
-    // Rearrange packs
-    auto sorted = tself.second.index_select(axis, allIndices);
+    // Rebuild pack: [v0, i0, v1, i1, ...]
+    auto stacked = torch::stack({values, indices}, -1);
+    auto sorted = stacked.flatten(axis, -1);
 
     torch::Tensor outView = View(tout.second, sorted.sizes().vec(), {0, 0});
     outView.copy_(sorted);

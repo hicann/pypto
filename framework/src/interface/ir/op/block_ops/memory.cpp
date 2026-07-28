@@ -212,6 +212,15 @@ REGISTER_OP("get_subblock_idx")
         return DeduceBlockGetBlockIdxType(args, kwargs, "get_subblock_idx");
     });
 
+REGISTER_OP("get_subblock_num")
+    .set_op_category("LanguageOp")
+    .set_description("Get the subblock count per AI Core (task ration)")
+    .no_argument()
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceBlockGetBlockIdxType(args, kwargs, "get_subblock_num");
+    });
+
 REGISTER_OP("get_spr")
     .set_op_category("LanguageOp")
     .set_description("Read special purpose register value (get_ar instruction). "
@@ -280,7 +289,7 @@ TypePtr DeduceSubViewType([[maybe_unused]] const std::vector<ExprPtr>& args,
     auto container_type = args[0]->GetType();
 
     if (auto tile_type = As<TileType>(container_type)) {
-        return std::make_shared<TileType>(tile_type->shape_, tile_type->dtype_, tile_type->memref_);
+        return tile_type;
     }
 
     CHECK(false) << "block.subview requires first argument to be TileType, but got " << container_type->TypeName();

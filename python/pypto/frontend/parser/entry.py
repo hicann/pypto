@@ -636,6 +636,9 @@ class JitCallableWrapper:
         tensor_defs: list,
     ) -> None:
         """Run kernel on NPU or CPU (SIM)."""
+        cannsim_is_configed: bool = bool(os.environ.get("CAMODEL_LOG_PATH"))
+        if cannsim_is_configed:
+            self._runtime_options["run_mode"] = RunMode.SIM
         if self._runtime_options.get("run_mode", None) == RunMode.NPU:
             pypto_impl.LaunchKernelTorch(self, _current_stream(), torch_tensors, tensor_defs)
         else:

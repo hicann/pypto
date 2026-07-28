@@ -75,6 +75,15 @@ static std::vector<std::string> SplitExtraCflags(const std::string& extraCflag)
     return result;
 }
 
+static bool IsArmCrossCompiler(const std::string& compiler) { return compiler.find("aarch64") != std::string::npos; }
+
+static void AppendArmMarchFlag(std::vector<std::string>& args, const std::string& compiler)
+{
+    if (IsArmCrossCompiler(compiler)) {
+        args.push_back("-march=armv8-a");
+    }
+}
+
 std::string CompileSourceCode(const std::string& sourceFilePath, const std::string& gcc, const std::string& extraCflag)
 {
     std::string assembleFilePath = sourceFilePath + ".s";
@@ -83,6 +92,7 @@ std::string CompileSourceCode(const std::string& sourceFilePath, const std::stri
     std::string macro = extraCflag.empty() ? "-D__DEVICE__" : "";
 
     std::vector<std::string> argsGcc = {gcc, "-fPIC", "-fno-stack-protector", "-O2"};
+    AppendArmMarchFlag(argsGcc, gcc);
     auto extraFlags = SplitExtraCflags(extraCflag);
     argsGcc.insert(argsGcc.end(), extraFlags.begin(), extraFlags.end());
     if (!macro.empty()) {
@@ -92,16 +102,17 @@ std::string CompileSourceCode(const std::string& sourceFilePath, const std::stri
                                    "-I" + includePath + "/tilefwk", "-S", sourceFilePath, "-o", assembleFilePath});
 
     FE_LOGI(
-        "[RunCmd] %s",
+        "[RunCmd] %s.",
         std::accumulate(argsGcc.begin(), argsGcc.end(), std::string(), [](const std::string& a, const std::string& b) {
             return a.empty() ? b : a + " " + b;
         }).c_str());
     FE_ASSERT(SafeExecCommand(argsGcc) == 0);
 
-    std::vector<std::string> argsAs = {gcc,  "-fno-stack-protector", "-O2", "-c", assembleFilePath,
-                                       "-o", objectFilePath};
+    std::vector<std::string> argsAs = {gcc, "-fno-stack-protector", "-O2"};
+    AppendArmMarchFlag(argsAs, gcc);
+    argsAs.insert(argsAs.end(), {"-c", assembleFilePath, "-o", objectFilePath});
     FE_LOGI(
-        "[RunCmd] %s",
+        "[RunCmd] %s.",
         std::accumulate(argsAs.begin(), argsAs.end(), std::string(), [](const std::string& a, const std::string& b) {
             return a.empty() ? b : a + " " + b;
         }).c_str());
@@ -216,8 +227,13 @@ std::string SymbolicExpressionTable::BuildExpression(const SymbolicScalar& ss) {
 
 std::string SymbolicExpressionTable::BuildExpression(const RawSymbolicScalarPtr& ss)
 {
-    std::string expr = BuildExpressionByRaw(ss, {});
-    return expr;
+    return BuildExpressionByRaw(ss, {});
+}
+
+std::string SymbolicExpressionTable::BuildExpression(const RawSymbolicScalarPtr& ss,
+                                                     const std::unordered_map<std::string, std::string>* structuralCse)
+{
+    return BuildExpressionByRaw(ss, {}, structuralCse);
 }
 
 int SymbolicExpressionTable::CompareRaw(const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs)
@@ -311,11 +327,12 @@ RawSymbolicScalarPtr CloneAlongPathsWithReplacements(
 } // namespace
 
 std::string SymbolicExpressionTable::BuildExpressionWithPlaceholders(
-    const RawSymbolicScalarPtr& raw, const std::vector<std::pair<std::vector<int>, RawSymbolicScalarPtr>>& replacements)
+    const RawSymbolicScalarPtr& raw, const std::vector<std::pair<std::vector<int>, RawSymbolicScalarPtr>>& replacements,
+    const std::unordered_map<std::string, std::string>* structuralCse)
 {
     FE_ASSERT(!replacements.empty()) << "BuildExpressionWithPlaceholders requires at least one replacement";
     auto patched = CloneAlongPathsWithReplacements(raw, 0, replacements);
-    return BuildExpressionByRaw(patched, {});
+    return BuildExpressionByRaw(patched, {}, structuralCse);
 }
 
 bool SymbolicExpressionTable::FindAllImmediateDifferences(const RawSymbolicScalarPtr& lhs,
@@ -389,11 +406,21 @@ std::string SymbolicExpressionTable::BuildSymbolName(const std::string& name)
 }
 
 std::string SymbolicExpressionTable::BuildExpressionByRaw(
-    const RawSymbolicScalarPtr& raw, const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict)
+    const RawSymbolicScalarPtr& raw, const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict,
+    const std::unordered_map<std::string, std::string>* structuralCse)
 {
     auto it = exprDict.find(raw);
     if (it != exprDict.end()) {
         return it->second;
+    }
+
+    if (structuralCse != nullptr && raw->IsExpression()) {
+        // Key is the fully expanded form without structural CSE.
+        const std::string key = BuildExpressionByRaw(raw, exprDict, nullptr);
+        auto sit = structuralCse->find(key);
+        if (sit != structuralCse->end()) {
+            return sit->second;
+        }
     }
 
     switch (raw->Kind()) {
@@ -407,7 +434,7 @@ std::string SymbolicExpressionTable::BuildExpressionByRaw(
         }
         case SymbolicScalarKind::T_SCALAR_SYMBOLIC_EXPRESSION: {
             auto expr = std::dynamic_pointer_cast<RawSymbolicExpression>(raw);
-            return BuildExpressionCode(expr, exprDict);
+            return BuildExpressionCode(expr, exprDict, structuralCse);
         }
         default:
             FE_ASSERT(false) << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior";
@@ -417,7 +444,7 @@ std::string SymbolicExpressionTable::BuildExpressionByRaw(
 
 void SymbolicExpressionTable::BuildExtremaExpressionCode(
     const RawSymbolicExpPtr& expr, const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict,
-    std::ostringstream& oss)
+    std::ostringstream& oss, const std::unordered_map<std::string, std::string>* structuralCse)
 {
     const auto& operands = expr->OperandList();
     FE_ASSERT(FeError::INVALID_VAL, operands.size() >= MIN_EXTREMA_OPERANDS)
@@ -427,12 +454,12 @@ void SymbolicExpressionTable::BuildExtremaExpressionCode(
 
     // 写前operandSize-2层: fn(op_i,
     for (size_t i = 0; i < operandSize - 2; ++i) {
-        oss << funcName << "(" << BuildExpressionByRaw(operands[i], exprDict) << ", ";
+        oss << funcName << "(" << BuildExpressionByRaw(operands[i], exprDict, structuralCse) << ", ";
     }
 
     // 最内层: fn(op_{operandSize-2}, op_{operandSize-1})
-    oss << funcName << "(" << BuildExpressionByRaw(operands[operandSize - 2], exprDict) << ", "
-        << BuildExpressionByRaw(operands[operandSize - 1], exprDict) << ")";
+    oss << funcName << "(" << BuildExpressionByRaw(operands[operandSize - 2], exprDict, structuralCse) << ", "
+        << BuildExpressionByRaw(operands[operandSize - 1], exprDict, structuralCse) << ")";
 
     // 补齐右括号
     for (size_t i = 0; i < operandSize - 0x2; ++i) {
@@ -441,24 +468,25 @@ void SymbolicExpressionTable::BuildExtremaExpressionCode(
 }
 
 std::string SymbolicExpressionTable::BuildExpressionCode(
-    const RawSymbolicExpPtr& expr, const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict)
+    const RawSymbolicExpPtr& expr, const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict,
+    const std::unordered_map<std::string, std::string>* structuralCse)
 {
     std::ostringstream oss;
     oss << "(";
     if (SymbolicOpcode::T_UOP_BEGIN <= expr->Opcode() && expr->Opcode() < SymbolicOpcode::T_UOP_END) {
         oss << RawSymbolicExpression::GetSymbolicCalcOpcode(expr->Opcode());
-        oss << BuildExpressionByRaw(expr->OperandList()[0], exprDict);
+        oss << BuildExpressionByRaw(expr->OperandList()[0], exprDict, structuralCse);
     } else if (RawSymbolicExpression::IsBinaryCalcOpcode(expr->Opcode())) {
         for (size_t idx = 0; idx < expr->OperandList().size(); idx++) {
             if (idx != 0) {
                 oss << " " + RawSymbolicExpression::GetSymbolicCalcOpcode(expr->Opcode()) + " ";
             }
-            oss << BuildExpressionByRaw(expr->OperandList()[idx], exprDict);
+            oss << BuildExpressionByRaw(expr->OperandList()[idx], exprDict, structuralCse);
         }
     } else if (expr->Opcode() == SymbolicOpcode::T_MOP_MAX || expr->Opcode() == SymbolicOpcode::T_MOP_MIN) {
-        BuildExtremaExpressionCode(expr, exprDict, oss);
+        BuildExtremaExpressionCode(expr, exprDict, oss, structuralCse);
     } else if (expr->Opcode() == SymbolicOpcode::T_MOP_CALL) {
-        std::string callee = BuildExpressionByRaw(expr->OperandList()[0], exprDict);
+        std::string callee = BuildExpressionByRaw(expr->OperandList()[0], exprDict, structuralCse);
         if (CheckRuntimePrefix(callee)) {
             oss << callee;
         } else {
@@ -467,7 +495,7 @@ std::string SymbolicExpressionTable::BuildExpressionCode(
         oss << "(";
         for (size_t idx = 1; idx < expr->OperandList().size(); idx++) {
             oss << (idx == 1 ? "" : ", ");
-            oss << BuildExpressionByRaw(expr->OperandList()[idx], exprDict);
+            oss << BuildExpressionByRaw(expr->OperandList()[idx], exprDict, structuralCse);
         }
         oss << ")";
     }

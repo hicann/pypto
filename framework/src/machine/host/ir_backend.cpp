@@ -21,10 +21,19 @@
 #include "tilefwk/platform.h"
 #include "interface/utils/id_gen.h"
 #include "machine/host/expr_generator.h"
+#include "machine/host/control_flow_codegen.h"
 
 namespace npu::tile_fwk {
 
 namespace {
+
+const std::unordered_map<std::string, std::string>* ResolveGetInputCseMap(const IrBackendContext& ctx)
+{
+    if (ctx.getInputCse != nullptr && !ctx.getInputCse->keyToName.empty()) {
+        return &ctx.getInputCse->keyToName;
+    }
+    return nullptr;
+}
 
 void FindExprFromForStmt(IrBackendContext& ctx, FunctionCache& cache, Linker& linker, const ir::ForStmtPtr& forStmt,
                          Function* dynFunc)
@@ -75,7 +84,9 @@ void VisitIfStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Link
                                std::ostringstream& exprHeaderOss, int indent, const std::string& expName,
                                std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta)
 {
-    auto cond = SymbolicExpressionTable::BuildExpression(ExprPtrToSymbolicScalar(ifStmt->condition_));
+    const auto* getInputCseMap = ResolveGetInputCseMap(ctx);
+    auto cond = SymbolicExpressionTable::BuildExpression(ExprPtrToSymbolicScalar(ifStmt->condition_).Raw(),
+                                                         getInputCseMap);
     controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "if (" << cond << ") {\n";
     VisitIRStmtForControlFlow(ctx, cache, linker, sectionName, ifStmt->thenBody_, dynFunc, slotIdxMapping, group,
                               rootTileDict, controlFlowOss, expressionOss, exprHeaderOss, indent + 1, expName,
@@ -198,8 +209,8 @@ void IrParseValueDependDesc(Function* func, std::initializer_list<ir::ExprPtr> e
     }
 }
 
-void InsertCacheStopForContrlFlow(IrBackendContext& ctx, const ir::ForStmt* forStmt, Function* dynFunc, int indent,
-                                  std::ostringstream& controlFlowOss, ValDependTensorMeta& valDependTensorMeta)
+void InsertCacheStopForContrlFlow(IrBackendContext& ctx, const ir::ForStmt* forStmt, Function* dynFunc,
+                                  ValDependTensorMeta& valDependTensorMeta)
 {
     auto currDynFuncAttr = Program::GetInstance().GetCurrentDynamicFunction()->GetDyndevAttribute();
     if (currDynFuncAttr == nullptr) {
@@ -215,9 +226,7 @@ void InsertCacheStopForContrlFlow(IrBackendContext& ctx, const ir::ForStmt* forS
     }
     auto valueDependDesc = currDynFuncAttr->valueDependDescDict[loopFunc];
     if (valueDependDesc.getInputDataCount + valueDependDesc.getTensorDataCount != 0) {
-        controlFlowOss << std::setw(indent * TABSIZE) << ' '
-                       << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_CACHESTOP); // force stop cache due to value "
-                          "depend in control\n";
+        // Value-depend: disable host ctrl-flow cache only; do not emit CACHESTOP stitch.
         valDependTensorMeta.disableCtrlFlowCache = true;
     }
 }
@@ -301,9 +310,13 @@ void VisitForStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Lin
                                 std::ostringstream& exprHeaderOss, int indent, const std::string& expName,
                                 std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta)
 {
-    auto iterBegin = SymbolicExpressionTable::BuildExpression(ExprPtrToSymbolicScalar(forStmt->start_));
-    auto iterEnd = SymbolicExpressionTable::BuildExpression(ExprPtrToSymbolicScalar(forStmt->stop_));
-    auto iterStep = SymbolicExpressionTable::BuildExpression(ExprPtrToSymbolicScalar(forStmt->step_));
+    const auto* getInputCseMap = ResolveGetInputCseMap(ctx);
+    auto iterBegin = SymbolicExpressionTable::BuildExpression(ExprPtrToSymbolicScalar(forStmt->start_).Raw(),
+                                                              getInputCseMap);
+    auto iterEnd = SymbolicExpressionTable::BuildExpression(ExprPtrToSymbolicScalar(forStmt->stop_).Raw(),
+                                                            getInputCseMap);
+    auto iterStep = SymbolicExpressionTable::BuildExpression(ExprPtrToSymbolicScalar(forStmt->step_).Raw(),
+                                                             getInputCseMap);
     auto iterSymbolName = GetLoopVarOriginName(forStmt->loopVar_);
     auto iterVar = "VAR_" + iterSymbolName;
 
@@ -320,7 +333,7 @@ void VisitForStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Lin
                        << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_LOOP_BARRIER); // force submit before LOOP \n";
     }
 
-    InsertCacheStopForContrlFlow(ctx, forStmt.get(), dynFunc, indent, controlFlowOss, valDependTensorMeta);
+    InsertCacheStopForContrlFlow(ctx, forStmt.get(), dynFunc, valDependTensorMeta);
     InsertWaitAicoreStartForControlFlow(forStmt.get(), indent, controlFlowOss, valDependTensorMeta);
 
     controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "LOOP(" << iterVar << ", " << iterBegin << ", " << iterEnd
@@ -398,8 +411,11 @@ void VisitIRStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Link
             if (pathFunc == nullptr) {
                 return;
             }
-            BuildControlFlow(cache, linker, sectionName, pathFunc, slotIdxMapping, group, rootTileDict, controlFlowOss,
-                             expressionOss, exprHeaderOss, indent, expName, exprSrcFiles, valDependTensorMeta);
+            ControlFlowEmitCtx cfCtx{cache,          linker,       sectionName,    slotIdxMapping,
+                                     group,          rootTileDict, controlFlowOss, expressionOss,
+                                     exprHeaderOss,  expName,      exprSrcFiles,   valDependTensorMeta,
+                                     ctx.getInputCse};
+            BuildControlFlow(cfCtx, pathFunc, indent);
             break;
         }
         default:
@@ -418,6 +434,9 @@ void BuildControlFlowFromIR(IrBackendContext& ctx, FunctionCache& cache, Linker&
     ExprBatchGenerator generator(config::GetEmitPath("kernel_aicpu"), 0, 0);
     BuildControlFlowHeader(generator, linker, func, sectionName, expName, controlFlowOss, expressionOss, exprHeaderOss,
                            valDependTensorMeta);
+    if (ctx.getInputCse != nullptr) {
+        ExprBatchGenerator::EmitGetInputCseStackInits(controlFlowOss, *ctx.getInputCse, indent + 1);
+    }
     if (NeedCrossDie(func)) {
         controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_RootGetDieId(" << 0 << ");\n";
     }

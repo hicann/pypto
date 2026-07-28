@@ -50,6 +50,7 @@ TILEOP void TAtanh(T0 dst, T1 src, T2 tmp)
     DataTileDefine tmp0Tile(dstShape3, dstShape4);
     DataTileDefine tmp1Tile(dstShape3, dstShape4);
     DataTileDefine tmp2Tile(dstShape3, dstShape4);
+    DataTileDefine tmp3Tile(dstShape3, dstShape4);
     MaskTileDefine tmpMaskTile(dstShape3, dstShape4);
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
@@ -64,19 +65,20 @@ TILEOP void TAtanh(T0 dst, T1 src, T2 tmp)
                 pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + dstOffset * dstTypeSize));
                 pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize));
                 pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize));
-                pto::TASSIGN(tmpMaskTile, (uint64_t)(tmp.GetAddr() + (dstOffset + 3 * tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 3 * tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmpMaskTile, (uint64_t)(tmp.GetAddr() + (dstOffset + 4 * tileShapeSize) * dstTypeSize));
 
                 // atanh(x) = 0.5 * ln((1 + x) / (1 - x))
-                pto::TABS(tmp2Tile, srcTile);
+                pto::TABS(tmp3Tile, srcTile);
                 SyncV();
 
-                pto::TMULS(tmp1Tile, tmp2Tile, -1.0f);
+                pto::TMULS(tmp1Tile, tmp3Tile, -1.0f);
                 SyncV();
 
                 pto::TADDS(tmp1Tile, tmp1Tile, 1.0f);
                 SyncV();
 
-                pto::TDIV(tmp2Tile, tmp2Tile, tmp1Tile);
+                pto::TDIV(tmp2Tile, tmp3Tile, tmp1Tile);
                 SyncV();
 
                 pto::TMULS(tmp1Tile, tmp2Tile, 2.0f);
@@ -100,13 +102,10 @@ TILEOP void TAtanh(T0 dst, T1 src, T2 tmp)
                 pto::TDIV(tmp2Tile, dstTile, tmp1Tile);
                 SyncV();
 
-                pto::TABS(dstTile, srcTile);
-                SyncV();
-
                 // Handle x = 0 case
                 pto::TCMPS(tmpMaskTile, tmp0Tile, 1.0f, pto::CmpMode::EQ);
                 SyncV();
-                pto::TSEL(tmp1Tile, tmpMaskTile, dstTile, tmp2Tile, tmp0Tile);
+                pto::TSEL(tmp1Tile, tmpMaskTile, tmp3Tile, tmp2Tile, tmp0Tile);
                 SyncV();
 
                 // Handle sign: atanh(-x) = -atanh(x)

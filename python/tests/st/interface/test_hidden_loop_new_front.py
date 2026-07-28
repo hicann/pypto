@@ -104,7 +104,7 @@ def test_hidden_loop_with_if_multiple_shapes():
     return all_passed
 
 
-@pypto.frontend.jit()
+@pypto.frontend.jit(new_ir=True)
 def op_hidden_loop_mix_loops(
     t1: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     t2: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),

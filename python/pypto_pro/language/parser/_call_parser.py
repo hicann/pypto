@@ -24,7 +24,6 @@ from pypto_pro.ir.op.block_ops import block_ir_op
 
 from ._span_tracker import SpanTracker
 from .diagnostics import (
-    ParserError,
     ParserSyntaxError,
     ParserTypeError,
     UndefinedVariableError,
@@ -316,95 +315,6 @@ class CallParserMixin:
     def _is_docstring(stmt: ast.stmt) -> bool:
         """Check if an AST statement is a docstring (string constant expression)."""
         return isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str)
-
-    @staticmethod
-    def _infer_implicit_param_types(
-        func_name: str,
-        func_params: list[ast.arg],
-        arg_exprs: list[ir.Expr],
-        sub_parser,
-        span,
-    ) -> None:
-        """Infer helper param types from parsed call-site args and validate annotations."""
-        for i, param in enumerate(func_params):
-            if param.annotation is not None and sub_parser.resolve_tiling_class(param.annotation):
-                continue
-            if i >= len(arg_exprs):
-                raise ParserTypeError(
-                    f"'{func_name}' missing argument for parameter '{param.arg}'",
-                    span=span,
-                    hint=f"Parameters: {[p.arg for p in func_params]}",
-                )
-            actual = getattr(arg_exprs[i], "type", None)
-            if actual is None or isinstance(actual, ir.UnknownType):
-                raise ParserTypeError(
-                    f"Cannot infer type of argument for parameter '{param.arg}' of '{func_name}'",
-                    span=span,
-                    hint="The argument expression must have a resolved DSL type.",
-                )
-            if param.annotation is not None:
-                if sub_parser.type_resolver.annotation_has_shape_policy(param.annotation):
-                    sub_parser.type_resolver.validate_policy_parameter_type(param.annotation, param.arg, actual)
-                else:
-                    annotated = sub_parser.type_resolver.resolve_param_type(param.annotation)
-                    _check_type_compatible(annotated, actual, what="Parameter", name=param.arg, span=span)
-            sub_parser.inferred_param_types[param.arg] = actual
-
-    @staticmethod
-    def _parse_implicit_helper(
-        func_name: str,
-        func_def: ast.FunctionDef,
-        sub_parser,
-        span,
-        is_vf: bool = False,
-    ) -> ir.Function:
-        """Parse an implicit helper, surfacing the underlying failure with its location."""
-        try:
-            return sub_parser.parse_function(
-                func_def,
-                func_type=ir.FunctionType.Helper,
-                is_vector_function=is_vf,
-            )
-        except ParserTypeError as e:
-            # Report where in the helper the compile failed. e.span is a normalized dict
-            # ({'filename', 'line', ...}); use it for the marker if available.
-            inner_span = getattr(e, "span", None)
-            loc = ""
-            if isinstance(inner_span, dict):
-                fname = inner_span.get("filename") or inner_span.get("file")
-                line = inner_span.get("line") or inner_span.get("begin_line")
-                if line:
-                    loc = f" at {fname}:{line}" if fname else f" at line {line}"
-            raise UnsupportedFeatureError(
-                f"Failed to compile helper '{func_name}' called from the kernel{loc}: {e.message}",
-                span=inner_span or span,
-                hint="Helper functions are inlined into the kernel, so every statement must be "
-                "valid DSL. Fix the statement above, or give the parameters/return value "
-                f"DSL type annotations (e.g. def {func_name}(x: pl.DT_INT64) -> pl.DT_INT64: ...).",
-            ) from e
-        except ParserError:
-            logger.debug("Re-raising ParserError in _parse_implicit_helper", exc_info=True)
-            raise
-        except Exception as e:
-            inner_span = None
-            inner_node = getattr(sub_parser, '_current_node', None)
-            if inner_node is not None:
-                inner_span = sub_parser.span_tracker.get_span(inner_node)
-            raise ParserSyntaxError(
-                str(e),
-                span=inner_span or span,
-                hint="Check your function definition for errors",
-            ) from e
-
-    @staticmethod
-    def _validate_implicit_returns(func_name: str, ir_func: ir.Function, span) -> ir.Function:
-        """Replace annotated helper return types with inferred body return types after validation."""
-        inferred = _infer_return_types_from_body(ir_func.body) if ir_func.body else None
-        if inferred is None:
-            return ir_func
-        for annotated, actual in zip(list(ir_func.return_types), inferred):
-            _check_type_compatible(annotated, actual, what="Return value of", name=func_name, span=span)
-        return ir.Function(ir_func.name, list(ir_func.params), inferred, ir_func.body, ir_func.span, ir_func.func_type)
 
     @staticmethod
     def _is_vf_op_call(call_node: ast.expr) -> str | None:
@@ -813,16 +723,6 @@ class CallParserMixin:
             result = self._resolve_list_kwarg(value)
         else:
             result = self.parse_expression(value)
-
-        # If this kwarg expects a VF enum and the resolved value is an enum
-        # instance, return it directly — ConvertKwargsDict extracts .value (int).
-        # If a raw string is passed for a mapped kwarg, raise an error.
-        if not self._VF_KWARG_ENUMS:
-            self._init_vf_kwarg_enums()
-        enum_classes = self._VF_KWARG_ENUMS.get(key)
-        if enum_classes is not None:
-            if isinstance(result, enum_classes):
-                return result
         return result
 
     def resolve_const_int_list_kwarg(self, call: ast.Call, key: str) -> "list[int] | None":
@@ -935,75 +835,6 @@ class CallParserMixin:
         args = [self.parse_expression(arg) for arg in call.args]
         op = ir.Op(func_name)
         return self._make_call_with_return_type(op, args, ext_func.return_types, span)
-
-    def _make_implicit_sub_parser(self, fn: Callable, source_info: tuple):
-        """Create a sub-parser for an implicit helper function."""
-        from ._ast_parser import ASTParser
-
-        source_file, source_lines, line_offset, col_offset, _ = source_info
-        fn_closure = self._build_function_closure(fn)
-        merged_closure = {**fn_closure, **self.expr_evaluator.closure_vars}
-        sub_parser = ASTParser(
-            source_file,
-            source_lines,
-            line_offset,
-            col_offset,
-            closure_vars=merged_closure,
-        )
-        # Share cache so nested implicit calls are deduplicated.
-        sub_parser.implicit_func_cache = self.implicit_func_cache
-        sub_parser.kfunc_vf_used_params = self.kfunc_vf_used_params
-        # One Program keeps a single IRDebugInfo: the sub-parser registers tuple/struct
-        # field names into the parent's side table, so cross-function field access resolves names.
-        sub_parser.debug_info = self.debug_info
-        return sub_parser
-
-    def _transfer_implicit_tile_metadata(
-        self,
-        func_params: list[ast.arg],
-        arg_exprs: list[ir.Expr],
-        sub_parser,
-    ) -> None:
-        """Transfer tile-group and tile-mutex metadata into an implicit helper parser."""
-        for i, param in enumerate(func_params):
-            if i >= len(arg_exprs):
-                continue
-            group_meta = self.tile_group_meta.get(arg_exprs[i])
-            if group_meta is not None:
-                sub_parser.set_inferred_tile_group_meta(param.arg, group_meta)
-            tile_meta = self._tile_mutex_meta.get(arg_exprs[i])
-            if tile_meta is not None:
-                sub_parser.set_inferred_tile_mutex_meta(param.arg, tile_meta)
-        sub_parser.set_auto_mutex_enabled(self.auto_mutex_enabled)
-
-    def _register_implicit_kernel_function(
-        self,
-        fn: Callable,
-        func_def: ast.FunctionDef,
-        ir_func: ir.Function,
-        sub_parser,
-        is_vf: bool = False,
-    ):
-        """Create and register the KernelFunction for an implicit helper."""
-        from .decorator import KernelFunction
-
-        param_names = [a.arg for a in func_def.args.args if a.arg != "self"]
-        kfunc = KernelFunction(
-            name=fn.__name__,
-            ir_function=ir_func,
-            op=ir.Op(fn.__name__),
-            param_names=param_names,
-        )
-        self.implicit_func_cache[id(fn)] = kfunc
-        if is_vf:
-            # @pl.vector_function: the entire body is a VF section, so every
-            # tile-valued param needs mutex_lock/unlock(V) around the func.call.
-            self.kfunc_vf_used_params[id(kfunc)] = set(param_names)
-        else:
-            self.kfunc_vf_used_params[id(kfunc)] = None
-        self.external_funcs.update(sub_parser.external_funcs)
-        self.external_funcs[fn.__name__] = ir_func
-        return kfunc
 
     def _inline_template(self, func_name: str, fn: Callable, span) -> _InlineFunctionTemplate:
         template = self.inline_func_cache.get(id(fn))
@@ -1261,19 +1092,18 @@ class CallParserMixin:
 
     # --- auto_mutex helpers ---------------------------------------------------
 
-    def _try_resolve_tileref(self, node: ast.expr, kwarg_name: str | None = None):
+    def _try_resolve_tileref(self, node: ast.expr):
         """Resolve a tile argument to a mutex ref.
 
         Returns _MutexRef(buf_id, mutex_ids, memory, tile_id) when ``node``
         carries tile-group mutex metadata; otherwise None.
 
-        ``kwarg_name`` distinguishes positional vs keyword args (keyword args
-        use ``resolve_single_kwarg``, positional args use ``parse_expression``).
-        Subscript arguments (``tile[off]``, ``buf[idx]``) alias the base's
+        Only positional arguments are scanned by auto-mutex. Subscript
+        arguments (``tile[off]``, ``buf[idx]``) alias the base's
         buffer; their mutex metadata is propagated onto the GetItemExpr by
         ``parse_subscript``, so the generic ``parse_expression`` path finds it.
         """
-        expr = self.resolve_single_kwarg(kwarg_name, node) if kwarg_name is not None else self.parse_expression(node)
+        expr = self.parse_expression(node)
         if not isinstance(expr, ir.Expr):
             return None
         meta = self._tile_mutex_meta.get(expr)
@@ -1286,8 +1116,8 @@ class CallParserMixin:
     def _emit_auto_mutex(self, op_name: str, call: ast.Call, span: ir.Span):
         """Emit mutex_lock before and mutex_unlock after a block DSL op.
 
-        Scans positional and keyword arguments for tile-group tiles, determines the op
-        pipe, and emits lock/unlock per unique slot.
+        Scans positional arguments for tile-group tiles, determines the op pipe,
+        and emits lock/unlock per unique slot.
         Returns None -the caller still parses the op normally.
 
         Phase-aware skip on Acc tiles: when matmul/matmul_acc/store carries
@@ -1314,7 +1144,6 @@ class CallParserMixin:
         #    then drop Acc tiles when a phase-aware matmul/store carries the
         #    unit_flag (the hardware handshake replaces the software mutex there).
         tilerefs = [self._try_resolve_tileref(arg) for arg in call.args]
-        tilerefs.extend(self._try_resolve_tileref(kw.value, kw.arg) for kw in call.keywords if kw.arg is not None)
         unique_refs = []
         seen = set()
         for tref in tilerefs:

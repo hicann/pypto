@@ -1217,7 +1217,9 @@ void TiledViewTypeOperation(Function& function, const TileShape& tileShape, cons
     float factor = (float)BytesOf(operand->tensor->datatype) / (float)BytesOf(result->tensor->datatype);
     // 检查TileShape是否符合要求
     if (factor < 1) {
-        auto vecTile = tileShape.GetVecTile();
+        auto& vecTile = tileShape.GetVecTile();
+        CHECK_OP(vecTile.valid()) << "OP_VIEW_TYPE tile shape is empty or invalid, please call set_vec_tile_shapes "
+                                  << "before creating the view op. operand: " << operand->Dump();
         auto lastDim = vecTile[vecTile.size() - 1];
         FE_ASSERT(isInteger(lastDim * factor)) << "TileShape lastDim * factor must be int";
     }

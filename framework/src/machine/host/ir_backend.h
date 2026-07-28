@@ -21,6 +21,7 @@
 #include <sstream>
 
 #include "machine/host/backend.h"
+#include "machine/host/expr_generator.h"
 #include "interface/program/program.h"
 #include "interface/function/function.h"
 #include "interface/configs/config_manager.h"
@@ -32,6 +33,8 @@ namespace npu::tile_fwk {
 
 struct IrBackendContext {
     std::unordered_map<const pypto::ir::ForStmt*, std::shared_ptr<Function>> forStmtLoopFuncMap;
+    // Align with legacy EmitControlFlowSources: launch-level GetInputShapeDim CSE.
+    const GetInputCse* getInputCse{nullptr};
 };
 
 SymbolicScalar ExprPtrToSymbolicScalar(const ir::ExprPtr& expr);
@@ -41,8 +44,8 @@ bool IsOpCallStmt(const ir::StmtPtr& stmt);
 
 Function* IrBuildVirtualLoopFunc(IrBackendContext& ctx, const ir::ForStmt* forStmt, Function* dynFunc);
 void IrParseValueDependDesc(Function* func, std::initializer_list<ir::ExprPtr> exprs);
-void InsertCacheStopForContrlFlow(IrBackendContext& ctx, const ir::ForStmt* forStmt, Function* dynFunc, int indent,
-                                  std::ostringstream& controlFlowOss, ValDependTensorMeta& valDependTensorMeta);
+void InsertCacheStopForContrlFlow(IrBackendContext& ctx, const ir::ForStmt* forStmt, Function* dynFunc,
+                                  ValDependTensorMeta& valDependTensorMeta);
 void InsertWaitAicoreStartForControlFlow(const ir::ForStmt* forStmt, int indent, std::ostringstream& controlFlowOss,
                                          ValDependTensorMeta& valDependTensorMeta);
 void VisitForStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Linker& linker,

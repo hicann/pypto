@@ -231,6 +231,11 @@ Tensor Floor(const Tensor& self)
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "Floor");
 
+    if (self.GetDataType() == DataType::DT_INT16 || self.GetDataType() == DataType::DT_INT32) {
+        RETURN_CALL(UnaryOperation<UnaryOpType::FLOOR>, *Program::GetInstance().GetCurrentFunction(),
+                    self.GetStorage());
+    }
+
     auto castSelf = self.GetStorage();
     if (self.GetDataType() != DataType::DT_FP32) {
         castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
@@ -252,6 +257,11 @@ Tensor Trunc(const Tensor& self)
 
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "Trunc");
+
+    if (self.GetDataType() == DataType::DT_INT16 || self.GetDataType() == DataType::DT_INT32) {
+        RETURN_CALL(UnaryOperation<UnaryOpType::TRUNC>, *Program::GetInstance().GetCurrentFunction(),
+                    self.GetStorage());
+    }
 
     auto castSelf = self.GetStorage();
     if (self.GetDataType() != DataType::DT_FP32) {
@@ -753,7 +763,7 @@ void AtanhOperationTileFunc(Function& function, const TileShape& tileShape,
     int dim = shape.size();
     auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
     std::vector<int64_t> tmpShape = shape.tile;
-    tmpShape[dim - 1] = AlignUp(tmpShape[dim - 1], alignSize) * NUM_VALUE_4;
+    tmpShape[dim - 1] = AlignUp(tmpShape[dim - 1], alignSize) * NUM_VALUE_5;
     uint64_t intermediateBytes = std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>()) *
                                  BytesOf(DT_FP32);
     return TiledUnaryOperation<UnaryOpType::ATANH>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);

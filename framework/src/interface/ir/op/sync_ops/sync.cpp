@@ -193,6 +193,38 @@ REGISTER_OP("system.bar_m")
     .no_argument()
     .f_deduce_type(DeduceUnknownType);
 
+// Register system.bar_mte1 (MTE1 Barrier)
+// Attributes: None
+REGISTER_OP("system.bar_mte1")
+    .set_description("MTE1 pipeline barrier")
+    .set_op_category("SyncOp")
+    .no_argument()
+    .f_deduce_type(DeduceUnknownType);
+
+// Register system.bar_mte2 (MTE2 Barrier)
+// Attributes: None
+REGISTER_OP("system.bar_mte2")
+    .set_description("MTE2 pipeline barrier")
+    .set_op_category("SyncOp")
+    .no_argument()
+    .f_deduce_type(DeduceUnknownType);
+
+// Register system.bar_mte3 (MTE3 Barrier)
+// Attributes: None
+REGISTER_OP("system.bar_mte3")
+    .set_description("MTE3 pipeline barrier")
+    .set_op_category("SyncOp")
+    .no_argument()
+    .f_deduce_type(DeduceUnknownType);
+
+// Register system.bar_fix (FIX Barrier)
+// Attributes: None
+REGISTER_OP("system.bar_fix")
+    .set_description("FIX pipeline barrier")
+    .set_op_category("SyncOp")
+    .no_argument()
+    .f_deduce_type(DeduceUnknownType);
+
 // Register system.bar_all (Global Barrier)
 // Attributes: None
 REGISTER_OP("system.bar_all")

@@ -12,6 +12,7 @@
 | [`pypto-host-stacktrace-analyzer`](skills/pypto-host-stacktrace-analyzer/SKILL.md) | host 端 Python/C++ 堆栈的地址—源码映射与符号解析 |
 | [`pypto-memory-overlap-detector`](skills/pypto-memory-overlap-detector/SKILL.md) | MACHINE workspace 内存重叠与管理问题的检测与修复 |
 | [`pypto-machine-workspace`](skills/pypto-machine-workspace/SKILL.md) | workspace 内存异常偏大的诊断；逐层拆解内存预算 |
+| [`pypto-precision-overall`](skills/pypto-precision-overall/SKILL.md) | 算子精度问题场景路由式排查：用例剪枝 → tensor-graph → pass → 上板二分 |
 
 ### Pass 模块（编译期）
 

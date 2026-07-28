@@ -188,7 +188,7 @@ __aicore__ inline void TTransDataNCHW2Fractal_Z(DST dst, TYPEC coordinate, TMP t
     const auto dstStride2 = gmLayout.template GetStrideDim<DIM_3RD, 4>();
 
     auto DstAddr = (__gm__ typename DST::Type*)((uint64_t)(dst.GetAddr()));
-    DstAddr = DstAddr + groupIndex * N * C * H * W;
+    DstAddr = DstAddr + static_cast<int64_t>(groupIndex) * N * C * H * W;
     size_t gmOffset = static_cast<size_t>(gmLayout.template GetGmOffset<TYPEC, 5>(coordinate));
     auto inputN = inputLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto inputC = inputLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
@@ -288,7 +288,10 @@ __aicore__ inline void TTransDataNC1HWC02NCHW(DST dst, TYPEC coordinate, TMP tmp
     using GlobalData = pto::GlobalTensor<typename DST::Type, pto::Shape<-1, -1, -1, -1, -1>,
                                          pto::Stride<-1, -1, -1, -1, -1>>;
     TileDefine tmpDstTile(1, inputW);
-    auto cValidLen = inputC1 * C0 - padSize;
+    if (padSize < 0 || static_cast<size_t>(padSize) >= inputC1 * C0) {
+        return;
+    }
+    auto cValidLen = inputC1 * C0 - static_cast<size_t>(padSize);
 
     // 处理尾部数据
     if (tileW % C0 != 0) {
@@ -480,7 +483,10 @@ __aicore__ inline void TTransDataNDC1HWC02NCDHW(DST dst, TYPEC coordinate, TMP t
     using GlobalData = pto::GlobalTensor<typename DST::Type, pto::Shape<-1, -1, -1, -1, -1>,
                                          pto::Stride<-1, -1, -1, -1, -1>>;
     TileDefine tmpDstTile(1, inputW);
-    auto cValidLen = inputC1 * C0 - padSize;
+    if (padSize < 0 || static_cast<size_t>(padSize) >= inputC1 * C0) {
+        return;
+    }
+    auto cValidLen = inputC1 * C0 - static_cast<size_t>(padSize);
 
     // 处理尾部数据
     if (tileW % C0 != 0) {
@@ -575,7 +581,7 @@ __aicore__ inline void TTransDataNCDHW2FRACTAL_Z_3D(DST dst, TYPEC coordinate, T
     const auto dstStride2 = gmLayout.template GetStrideDim<DIM_3RD, 4>();
 
     auto DstAddr = (__gm__ typename DST::Type*)((uint64_t)(dst.GetAddr()));
-    DstAddr = DstAddr + groupIdx * N * C * D * H * W;
+    DstAddr = DstAddr + static_cast<int64_t>(groupIdx) * N * C * D * H * W;
     size_t gmOffset = static_cast<size_t>(gmLayout.template GetGmOffset<TYPEC, 5>(coordinate));
     auto inputN = inputLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto inputC = inputLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();

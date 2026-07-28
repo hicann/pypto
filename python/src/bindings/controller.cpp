@@ -151,6 +151,7 @@ void BindControllerFunction(py::module_& m)
                           std::pair<std::reference_wrapper<const Tensor>, std::reference_wrapper<const Tensor>>>&>(),
              py::arg("name"), py::arg("inputs"), py::arg("outputs"), py::arg("in_place_args"))
         .def("EndFunction", &RecordFunc::EndFunction)
+        .def("AbortRecording", &RecordFunc::AbortRecording)
         .def("__iter__", [](RecordFunc& c) {
             // Return Python iterator from C++ begin/end
             return py::make_iterator(c.begin(), c.end());

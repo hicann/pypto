@@ -443,19 +443,18 @@ std::vector<int> TensorSlotManager::LookupSlotIndexConst(
     return indexList;
 }
 
-Tensor& TensorSlotManager::GetSlotTensor(LogicalTensorPtr lt)
+std::shared_ptr<Tensor> TensorSlotManager::GetSlotTensor(LogicalTensorPtr lt)
 {
     auto it = slotTensorDict.find(lt);
     if (it == slotTensorDict.end()) {
         it = slotTensorDict.emplace(lt, std::make_shared<Tensor>(lt)).first;
     }
-    return *it->second;
+    return it->second;
 }
 
 void TensorSlotManager::SetSameSlot(const LogicalTensorPtr& src, const LogicalTensorPtr& dst)
 {
-    (void)GetSlotTensor(src);
-    slotTensorDict[dst] = slotTensorDict[src];
+    slotTensorDict[dst] = GetSlotTensor(src);
 }
 
 void TensorSlotManager::MarkInput(const Tensor& tensor)
@@ -555,6 +554,13 @@ void TensorSlotManager::Checkpoint()
         checkpoint.consumerDict[tensor] = tensor->GetConsumers();
     }
     checkpointStack.push_back(std::move(checkpoint));
+}
+
+void TensorSlotManager::UnwindAllCheckpoints()
+{
+    while (!checkpointStack.empty()) {
+        Restore();
+    }
 }
 
 void TensorSlotManager::Restore()

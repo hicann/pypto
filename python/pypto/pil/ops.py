@@ -80,9 +80,23 @@ def compare_impl(ctx, op, x, y):
 # ---- Attribute / index ----
 
 
-@impl(getattr)
-def getattr_impl(ctx, obj, attr):
-    return getattr(obj, attr)
+@impl(getattr, partial=True)
+@impl(delattr, partial=True)
+def getattr_impl(ctx, op, obj, attr):
+    return op(obj, attr)
+
+
+# ---- Tensor construction ----
+
+@impl(pypto.Tensor)
+def create_tensor(ctx, *args, **kwargs):
+    t = pypto.Tensor(*args, **kwargs)
+    lt = t.logical_tensor()
+    stmt = ctx.create_tensor_op_stmt(
+        result=[lt], result_token=None, opcode="TENSOR_ALLOC",
+        args=[], tokens=[], attrs={}, span=ctx.span)
+    ctx.emit(stmt)
+    return t
 
 
 # ---- Collection construction ----
@@ -125,6 +139,16 @@ def raise_impl(ctx, exc, cause):
 @impl(operator.getitem)
 def getitem_impl(ctx, obj, key):
     return obj[key]
+
+
+@impl(operator.delitem)
+def delitem_impl(ctx, obj, key):
+    del obj[key]
+
+
+@impl(operator.setitem)
+def setitem_impl(ctx, obj, key, value):
+    obj[key] = value
 
 
 @impl(min)

@@ -189,6 +189,17 @@ struct DevAscendFunctionDuppedData {
         }
         return schema::ExpressionTable(expressionList);
     }
+
+    // Initialize runtime tail fields that DuplicateRoot no longer zeroes via memset.
+    // incast/outcast addresses are assigned in TryAllocateFunctionMemory;
+    // expression table is filled by AOT SetExprBatch before stitch.
+    void InitDuppedRuntimeTail()
+    {
+        for (uint32_t i = 0; i < operationList_.stitchCount; ++i) {
+            GetStitch(i).Head() = nullptr;
+        }
+    }
+
     std::string Dump(int indent = 0) const;
 };
 
@@ -202,9 +213,6 @@ struct DevAscendFunctionDupped {
         DevAscendFunctionDuppedData* sourceData = func->GetDuppedData();
         (void)memcpy_s(reinterpret_cast<uint8_t*>(dupData), func->GetDuppedDataCopySize(), sourceData,
                        func->GetDuppedDataCopySize());
-        (void)memset_s(reinterpret_cast<uint8_t*>(dupData) + func->GetDuppedDataCopySize(),
-                       func->GetDuppedDataAllocSize() - func->GetDuppedDataCopySize(), 0,
-                       func->GetDuppedDataAllocSize() - func->GetDuppedDataCopySize());
         dupData->GetSource() = func;
 
         DevAscendFunctionDupped dup(tinyAlloc);

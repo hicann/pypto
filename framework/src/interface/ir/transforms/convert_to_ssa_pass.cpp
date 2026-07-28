@@ -230,10 +230,10 @@ protected:
                                         return_vars, op->span_);
     }
 
-    // Override SectionStmt to isolate variable scope
-    // Variables defined inside a section (cube/vector) must not leak to sibling sections.
     StmtPtr VisitStmt_(const SectionStmtPtr& op) override
     {
+        INTERNAL_CHECK(op->sectionKind_ == SectionKind::VF)
+            << "Cube/Vector SectionStmt must be projected before ConvertToSSA";
         EnterScope();
         auto new_body = VisitStmt(op->body_);
         ExitScope();

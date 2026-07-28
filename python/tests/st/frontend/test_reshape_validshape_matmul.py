@@ -69,7 +69,9 @@ def test_reshape_validshape_matmul_pypto():
     assert torch.allclose(output_cpu, golden, rtol=1e-3, atol=1e-3)
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, debug_options={"compile_debug_mode": 0})
+@pypto.frontend.jit(
+    runtime_options={"run_mode": pypto.RunMode.NPU}, debug_options={"compile_debug_mode": 0},
+    new_ir=True)
 def reshape_matmul_only(
     input_tensor_a: pypto.Tensor([pypto.STATIC, pypto.DYNAMIC, pypto.DYNAMIC]),
     input_tensor_b: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC]),

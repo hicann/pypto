@@ -33,6 +33,8 @@ public: // public api for torch
 
     static Program& GetInstance();
     void Reset();
+    void AbandonIncompleteRecording();
+    bool HasIncompleteRecordingState() const;
     bool BeginFunction(const std::string& funcName, const FunctionType funcType = FunctionType::STATIC,
                        const GraphType graphType = GraphType::TENSOR_GRAPH,
                        const std::vector<std::reference_wrapper<const Tensor>>& explicitOpArgs = {},

@@ -16,7 +16,7 @@ import torch
 import pypto
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, new_ir=True)
 def add_kernel_range(
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32), c: pypto.Tensor([16, 16], pypto.DT_FP32)
 ):
@@ -26,7 +26,7 @@ def add_kernel_range(
         c.move(pypto.add(c, b[i * 16:(i + 1) * 16, i * 16:(i + 1) * 16]))
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, new_ir=True)
 def add_kernel_list(
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32), c: pypto.Tensor([16, 16], pypto.DT_FP32)
 ):

@@ -70,7 +70,13 @@ def safe_json_load(file_path):
 def get_out_put_path():
     out_path = "./output"
     if os.path.exists(out_path):
-        subdirs = [os.path.join(out_path, d) for d in os.listdir(out_path) if os.path.isdir(os.path.join(out_path, d))]
+        # Filter by current process PID to avoid selecting other parallel examples' output dirs.
+        current_pid = str(os.getpid())
+        subdirs = [
+            os.path.join(out_path, d)
+            for d in os.listdir(out_path)
+            if os.path.isdir(os.path.join(out_path, d)) and current_pid in d
+        ]
         if subdirs:
             latest_dir = max(subdirs, key=os.path.getctime)
             return latest_dir

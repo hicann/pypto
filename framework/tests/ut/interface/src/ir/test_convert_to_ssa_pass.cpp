@@ -302,29 +302,27 @@ TEST_F(ConvertToSSAPassTest, TestIfMergesPhiValuesWithExistingBranchYields)
     EXPECT_NE(existing_value->name_.find("z_"), std::string::npos);
 }
 
-TEST_F(ConvertToSSAPassTest, TestSectionScopeDoesNotLeakInnerVersion)
+TEST_F(ConvertToSSAPassTest, TestRejectsUnprojectedVectorSection)
 {
     auto x = MakeVar("x");
-    auto y = MakeVar("y");
     auto section_assign = std::make_shared<AssignStmt>(x, Int(1), Sp());
     auto section = std::make_shared<SectionStmt>(SectionKind::Vector, section_assign, Sp());
-    auto after_section = std::make_shared<AssignStmt>(y, x, Sp());
-    auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{section, after_section}, Sp());
 
-    auto result_func = RunOnFunc(MakeFunc("f", {x}, body));
+    EXPECT_THROW(RunOnFunc(MakeFunc("f", {x}, section)), InternalError);
+}
+
+TEST_F(ConvertToSSAPassTest, TestPreservesVFSectionScope)
+{
+    auto x = MakeVar("x");
+    auto section_assign = std::make_shared<AssignStmt>(x, Int(1), Sp());
+    auto section = std::make_shared<SectionStmt>(SectionKind::VF, section_assign, Sp());
+
+    auto result_func = RunOnFunc(MakeFunc("f", {x}, section));
     ASSERT_NE(result_func, nullptr);
-    ASSERT_EQ(result_func->body_->stmts_.size(), 2u);
     auto result_section = std::dynamic_pointer_cast<const SectionStmt>(result_func->body_->stmts_[0]);
-    auto result_after = std::dynamic_pointer_cast<const AssignStmt>(result_func->body_->stmts_[1]);
     ASSERT_NE(result_section, nullptr);
-    ASSERT_NE(result_after, nullptr);
+    EXPECT_EQ(result_section->sectionKind_, SectionKind::VF);
     ASSERT_FALSE(result_section->body_->stmts_.empty());
-    auto inner_assign = std::dynamic_pointer_cast<const AssignStmt>(result_section->body_->stmts_[0]);
-    auto rhs = std::dynamic_pointer_cast<const Var>(result_after->value_);
-    ASSERT_NE(inner_assign, nullptr);
-    ASSERT_NE(rhs, nullptr);
-    EXPECT_EQ(rhs->name_, result_func->params_[0]->name_);
-    EXPECT_NE(rhs->name_, inner_assign->var_->name_);
 }
 
 TEST_F(ConvertToSSAPassTest, TestForLoopSkipsExistingIterArgAndPreservesReturnVar)

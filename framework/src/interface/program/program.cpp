@@ -33,9 +33,22 @@
 #include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/utils/error.h"
 #include "passes/pass_mgr/pass_manager.h"
+#include "tilefwk/tile_shape.h"
 
 namespace npu::tile_fwk {
 const std::string PROGRAM_ENTRY_FUNCTION_NAME = "PROGRAM_ENTRY";
+
+namespace {
+// Incomplete loop-path graphs must not be destroyed (~Function corrupts the heap).
+// Pools are swapped out and intentionally leaked on successful compile.
+std::vector<std::shared_ptr<Function>>& AbandonedGraphPool()
+{
+    static std::vector<std::shared_ptr<Function>>* pool = new std::vector<std::shared_ptr<Function>>();
+    return *pool;
+}
+
+void LeakFunctionGraph(std::shared_ptr<Function> func) { AbandonedGraphPool().push_back(std::move(func)); }
+} // namespace
 void GetEnv(const char* const envName, std::string& envValue)
 {
     const size_t envValueMaxLen = 1024UL * 1024UL;
@@ -61,6 +74,10 @@ Program::~Program()
         tensorSlotManager_->ClearSlotTensors();
     }
     HostMachine::GetInstance().Destroy();
+    for (auto it = functionmap_.begin(); it != functionmap_.end();) {
+        LeakFunctionGraph(std::move(it->second));
+        it = functionmap_.erase(it);
+    }
 }
 
 Program& Program::GetInstance()
@@ -73,10 +90,8 @@ void Program::Reset()
 {
     name_.clear();
     IRContext::Get().Reset();
-    if (tensorSlotManager_) {
-        tensorSlotManager_->ClearSlotTensors();
-    }
-    tensorSlotManager_ = nullptr;
+    ResetTensorSlotManager();
+    // KernelBinary::pinnedGraph_ holds shared_ptr refs; clearing the map must not ~Function.
     functionmap_.clear();
     functionMagicNameStack_.clear();
     currentFunctionMagicName_ = PROGRAM_ENTRY_FUNCTION_NAME;
@@ -85,9 +100,69 @@ void Program::Reset()
     aliveTensors_.clear();
     functionCache_.Reset();
     functionSequence_.clear();
+    lastFunc_ = nullptr;
+    currentDynamicFunctionPtr_ = nullptr;
+    loopStack_.clear();
+    TileShape::Current().Reset();
+    Function::EnableMagicLookupRecord(false, nullptr);
+    HostMachine::GetInstance().ClearStashFuncQueue();
     CreateInitFunction();
     currentFunctionPtr_ = functionmap_[currentFunctionMagicName_].get();
     HostMachine::GetInstance().ResetAllPasses();
+    ProgramData::GetInstance().Reset();
+}
+
+bool Program::HasIncompleteRecordingState() const
+{
+    if (!loopStack_.empty() || currentDynamicFunctionPtr_ != nullptr || !functionMagicNameStack_.empty()) {
+        return true;
+    }
+    if (tensorSlotManager_ != nullptr && tensorSlotManager_->HasActiveCheckpoints()) {
+        return true;
+    }
+    for (const auto& entry : functionmap_) {
+        if (entry.first != PROGRAM_ENTRY_FUNCTION_NAME) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Program::AbandonIncompleteRecording()
+{
+    if (!HasIncompleteRecordingState()) {
+        return;
+    }
+    HostMachine::GetInstance().ClearStashFuncQueue();
+    loopStack_.clear();
+    lastFunc_ = nullptr;
+    currentDynamicFunctionPtr_ = nullptr;
+    functionMagicNameStack_.clear();
+    functionSequence_.clear();
+    aliveTensors_.clear();
+    IRContext::Get().Reset();
+    if (tensorSlotManager_ != nullptr) {
+        tensorSlotManager_->UnwindAllCheckpoints();
+    }
+    ResetTensorSlotManager();
+    functionCache_.Reset();
+    TileShape::Current().Reset();
+    Function::EnableMagicLookupRecord(false, nullptr);
+
+    for (auto it = functionmap_.begin(); it != functionmap_.end();) {
+        if (it->first == PROGRAM_ENTRY_FUNCTION_NAME) {
+            ++it;
+            continue;
+        }
+        LeakFunctionGraph(std::move(it->second));
+        it = functionmap_.erase(it);
+    }
+
+    if (functionmap_.find(PROGRAM_ENTRY_FUNCTION_NAME) == functionmap_.end()) {
+        CreateInitFunction();
+    }
+    currentFunctionMagicName_ = PROGRAM_ENTRY_FUNCTION_NAME;
+    currentFunctionPtr_ = functionmap_[currentFunctionMagicName_].get();
 }
 
 Function* Program::GetFunctionByRawName(const std::string& rawName) const

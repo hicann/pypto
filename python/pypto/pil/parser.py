@@ -9,6 +9,7 @@ import ast
 from contextlib import contextmanager
 import inspect
 import operator
+import re
 from typing import Any, Callable, NoReturn, Optional, Union
 
 from pypto import ir
@@ -200,29 +201,29 @@ def _parse_params(ctx, func: Union[ast.FunctionDef, ast.Lambda], defaults, kwdef
 
 class Parser:
     @staticmethod
-    def visit_Name(name: ast.Name, ctx: _Context):  # noqa: N802
+    def visit_name(name: ast.Name, ctx: _Context):
         if not isinstance(name.ctx, ast.Load):
             ctx.raise_error(name)
         return ctx.load(name.id)
 
     @staticmethod
-    def visit_Constant(node: ast.Constant, ctx: _Context):  # noqa: N802
+    def visit_constant(node: ast.Constant, ctx: _Context):
         return ctx.call("pil.const", (node.value,))
 
     @staticmethod
-    def visit_Continue(stmt: ast.Continue, ctx: _Context):  # noqa: N802
+    def visit_continue(stmt: ast.Continue, ctx: _Context):
         if ctx.loop_kinds[-1] is LoopKind.DYNAMIC_FOR:
             ctx.raise_error(stmt, "continue is not supported in pypto.loop")
         ctx.set_jump(Jump.CONTINUE)
 
     @staticmethod
-    def visit_Break(stmt: ast.Break, ctx: _Context):  # noqa: N802
+    def visit_break(stmt: ast.Break, ctx: _Context):
         if ctx.loop_kinds[-1] is LoopKind.DYNAMIC_FOR:
             ctx.raise_error(stmt, "break is not supported in pypto.loop")
         ctx.set_jump(Jump.BREAK)
 
     # expressions
-    def visit_BoolOp(self, boolop: ast.BoolOp, ctx: _Context):  # noqa: N802
+    def visit_bool_op(self, boolop: ast.BoolOp, ctx: _Context):
         if len(boolop.values) < 2:
             ctx.raise_error(boolop, "At least two operands are required for boolop")
 
@@ -232,7 +233,7 @@ class Parser:
             with ctx.new_block() as then_block:
                 if len(rest) > 1:
                     sub = ast.BoolOp(op=boolop.op, values=rest)
-                    cond1 = self.visit_BoolOp(sub, ctx)
+                    cond1 = self.visit_bool_op(sub, ctx)
                 else:
                     cond1 = self.visit(rest[0], ctx)
                 ctx.set_jump(Jump.END_BRANCH, cond1)
@@ -246,7 +247,7 @@ class Parser:
             with ctx.new_block() as else_block:
                 if len(rest) > 1:
                     sub = ast.BoolOp(op=boolop.op, values=rest)
-                    cond1 = self.visit_BoolOp(sub, ctx)
+                    cond1 = self.visit_bool_op(sub, ctx)
                 else:
                     cond1 = self.visit(rest[0], ctx)
                 ctx.set_jump(Jump.END_BRANCH, cond1)
@@ -255,7 +256,7 @@ class Parser:
         else:
             ctx.raise_error(boolop)
 
-    def visit_Call(self, stmt: ast.Call, ctx: _Context):  # noqa: N802
+    def visit_call(self, stmt: ast.Call, ctx: _Context):
         callee = self.visit(stmt.func, ctx)
         args = tuple(self.visit(arg, ctx) for arg in stmt.args)
         kwargs = tuple(
@@ -264,14 +265,14 @@ class Parser:
         )
         return ctx.call(callee, args, kwargs)
 
-    def visit_UnaryOp(self, unary: ast.UnaryOp, ctx: _Context):  # noqa: N802
+    def visit_unary_op(self, unary: ast.UnaryOp, ctx: _Context):
         ops = _builtin_ops.get(type(unary.op))
         if ops is None:
             ctx.raise_error(unary)
         op0 = self.visit(unary.operand, ctx)
         return ctx.call(ops, (op0,))
 
-    def visit_BinOp(self, bop: ast.BinOp, ctx: _Context):  # noqa: N802
+    def visit_bin_op(self, bop: ast.BinOp, ctx: _Context):
         ops = _builtin_ops.get(type(bop.op))
         if ops is None:
             ctx.raise_error(bop)
@@ -279,7 +280,7 @@ class Parser:
         op1 = self.visit(bop.right, ctx)
         return ctx.call(ops, (op0, op1))
 
-    def visit_Compare(self, cmp: ast.Compare, ctx: _Context):  # noqa: N802
+    def visit_compare(self, cmp: ast.Compare, ctx: _Context):
         ops = _builtin_ops.get(type(cmp.ops[0]))
         if ops is None:
             ctx.raise_error(cmp)
@@ -296,7 +297,7 @@ class Parser:
                 ops=cmp.ops[1:],
                 comparators=cmp.comparators[1:],
             )
-            cond1 = self.visit_Compare(sub, ctx)
+            cond1 = self.visit_compare(sub, ctx)
             ctx.set_jump(Jump.END_BRANCH, cond1)
 
         with ctx.new_block() as else_block:
@@ -304,11 +305,11 @@ class Parser:
 
         return ctx.call("pil.if_else", (cond0, then_block, else_block))
 
-    def visit_Attribute(self, node: ast.Attribute, ctx: _Context):  # noqa: N802
+    def visit_attribute(self, node: ast.Attribute, ctx: _Context):
         value = self.visit(node.value, ctx)
         return ctx.call(getattr, (value, node.attr))
 
-    def visit_JoinedStr(self, node: ast.JoinedStr, ctx: _Context):  # noqa: N802
+    def visit_joined_str(self, node: ast.JoinedStr, ctx: _Context):
         parts = []
         for v in node.values:
             if isinstance(v, ast.Constant):
@@ -323,19 +324,19 @@ class Parser:
                 ctx.raise_error(v)
         return ctx.call("pil.fstring", (parts,))
 
-    def visit_Tuple(self, node: ast.Tuple, ctx: _Context):  # noqa: N802
+    def visit_tuple(self, node: ast.Tuple, ctx: _Context):
         values = tuple(self.visit(v, ctx) for v in node.elts)
         return ctx.call(tuple, (values,))
 
-    def visit_List(self, node: ast.List, ctx: _Context):  # noqa: N802
+    def visit_list(self, node: ast.List, ctx: _Context):
         values = list(self.visit(v, ctx) for v in node.elts)
         return ctx.call(list, (values,))
 
-    def visit_Set(self, node: ast.Set, ctx: _Context):  # noqa: N802
+    def visit_set(self, node: ast.Set, ctx: _Context):
         values = list(self.visit(v, ctx) for v in node.elts)
         return ctx.call(set, (values,))
 
-    def visit_Dict(self, node: ast.Dict, ctx: _Context):  # noqa: N802
+    def visit_dict(self, node: ast.Dict, ctx: _Context):
         pairs = []
         for k, v in zip(node.keys, node.values):
             value = self.visit(v, ctx)
@@ -345,18 +346,18 @@ class Parser:
                 pairs.append((self.visit(k, ctx), value))
         return ctx.call(dict, (pairs,))
 
-    def visit_Subscript(self, node: ast.Subscript, ctx: _Context):  # noqa: N802
+    def visit_subscript(self, node: ast.Subscript, ctx: _Context):
         value = self.visit(node.value, ctx)
         index = self.visit(node.slice, ctx)
         return ctx.call(operator.getitem, (value, index))
 
-    def visit_Slice(self, node: ast.Slice, ctx: _Context):  # noqa: N802
+    def visit_slice(self, node: ast.Slice, ctx: _Context):
         start = self.visit(node.lower, ctx) if node.lower else None
         stop = self.visit(node.upper, ctx) if node.upper else None
         step = self.visit(node.step, ctx) if node.step else None
         return ctx.call(slice, (start, stop, step))
 
-    def visit_IfExp(self, node: ast.IfExp, ctx: _Context):  # noqa: N802
+    def visit_if_exp(self, node: ast.IfExp, ctx: _Context):
         cond = self.visit(node.test, ctx)
         with ctx.new_block() as then_block:
             value = self.visit(node.body, ctx)
@@ -366,12 +367,12 @@ class Parser:
             ctx.set_jump(Jump.END_BRANCH, value)
         return ctx.call("pil.if_else", (cond, then_block, else_block))
 
-    def visit_Starred(self, node: ast.Starred, ctx: _Context):  # noqa: N802
+    def visit_starred(self, node: ast.Starred, ctx: _Context):
         if not isinstance(node.ctx, ast.Load):
             ctx.raise_error(node)
         return Starred(self.visit(node.value, ctx))
 
-    def visit_While(self, stmt: ast.While, ctx: _Context):  # noqa: N802
+    def visit_while(self, stmt: ast.While, ctx: _Context):
         if stmt.orelse:
             ctx.raise_error(stmt, "while-else not supported")
 
@@ -391,7 +392,7 @@ class Parser:
 
         ctx.call_void("pil.loop", (body, None))
 
-    def visit_For(self, node: ast.For, ctx: _Context):  # noqa: N802
+    def visit_for(self, node: ast.For, ctx: _Context):
         if node.orelse:
             ctx.raise_error(node, "for-else not supported")
 
@@ -417,7 +418,7 @@ class Parser:
 
         ctx.call_void("pil.loop", (body, iter))
 
-    def visit_If(self, stmt: ast.If, ctx: _Context):  # noqa: N802
+    def visit_if(self, stmt: ast.If, ctx: _Context):
         cond = self.visit(stmt.test, ctx)
         with ctx.new_block() as then_block:
             self._stmts(stmt.body, ctx)
@@ -429,7 +430,7 @@ class Parser:
                 ctx.set_jump(Jump.END_BRANCH, None)
         return ctx.call("pil.if_else", (cond, then_block, else_block))
 
-    def visit_Return(self, stmt: ast.Return, ctx: _Context):  # noqa: N802
+    def visit_return(self, stmt: ast.Return, ctx: _Context):
         for kind in ctx.loop_kinds:
             if kind is LoopKind.DYNAMIC_FOR:
                 ctx.raise_error(stmt, "return is not supported in pypto.loop")
@@ -441,12 +442,12 @@ class Parser:
             ctx.store("$retval", value)
             ctx.set_jump(Jump.RETURN, value)
 
-    def visit_Assign(self, stmt: ast.Assign, ctx: _Context):  # noqa: N802
+    def visit_assign(self, stmt: ast.Assign, ctx: _Context):
         value = self.visit(stmt.value, ctx)
         for target in reversed(stmt.targets):
             self._do_assign(target, value, ctx)
 
-    def visit_AugAssign(self, aug: ast.AugAssign, ctx: _Context):  # noqa: N802
+    def visit_aug_assign(self, aug: ast.AugAssign, ctx: _Context):
         ops = _builtin_ops.get(type(aug.op))
         if ops is None:
             ctx.raise_error(aug)
@@ -472,18 +473,22 @@ class Parser:
         else:
             ctx.raise_error(aug.target)
 
-    def visit_AnnAssign(self, stmt: ast.AnnAssign, ctx: _Context):  # noqa: N802
+    def visit_ann_assign(self, stmt: ast.AnnAssign, ctx: _Context):
         if stmt.value is not None:
             value = self.visit(stmt.value, ctx)
             self._do_assign(stmt.target, value, ctx)
 
-    def visit_Expr(self, stmt: ast.Expr, ctx: _Context):  # noqa: N802
+    def visit_expr(self, stmt: ast.Expr, ctx: _Context):
         return self.visit(stmt.value, ctx)
 
-    def visit_Pass(self, stmt: ast.Pass, ctx: _Context):  # noqa: N802
+    def visit_pass(self, stmt: ast.Pass, ctx: _Context):
         pass
 
-    def visit_FunctionDef(self, stmt: ast.FunctionDef, ctx: _Context):  # noqa: N802
+    def visit_delete(self, stmt: ast.Delete, ctx: _Context):
+        for target in stmt.targets:
+            self._do_delete(target, ctx)
+
+    def visit_function_def(self, stmt: ast.FunctionDef, ctx: _Context):
         defaults = []
         for d in stmt.args.defaults:
             defaults.append(self.visit(d, ctx))
@@ -517,7 +522,7 @@ class Parser:
         )
         ctx.store(stmt.name, func)
 
-    def visit_Lambda(self, node: ast.Lambda, ctx: _Context):  # noqa: N802
+    def visit_lambda(self, node: ast.Lambda, ctx: _Context):
         defaults = []
         for d in node.args.defaults:
             defaults.append(self.visit(d, ctx))
@@ -582,14 +587,14 @@ class Parser:
         )
         return ctx.call(func, ())
 
-    def visit_ListComp(self, node: ast.ListComp, ctx: _Context):  # noqa: N802
+    def visit_list_comp(self, node: ast.ListComp, ctx: _Context):
         acc = "$c_acc"
         innermost = ast.Expr(
             ast.Call(func=ast.Attribute(ast.Name(acc, ast.Load()), "append", ast.Load()), args=[node.elt], keywords=[])
         )
         return self.comprehension(node, ctx, ast.List([], ast.Load()), innermost, "<listcomp>")
 
-    def visit_SetComp(self, node: ast.SetComp, ctx: _Context):  # noqa: N802
+    def visit_set_comp(self, node: ast.SetComp, ctx: _Context):
         acc = "$c_acc"
         innermost = ast.Expr(
             ast.Call(func=ast.Attribute(ast.Name(acc, ast.Load()), "add", ast.Load()), args=[node.elt], keywords=[])
@@ -598,19 +603,19 @@ class Parser:
             node, ctx, ast.Call(ast.Name("set", ast.Load()), [ast.List([], ast.Load())], []), innermost, "<setcomp>"
         )
 
-    def visit_DictComp(self, node: ast.DictComp, ctx: _Context):  # noqa: N802
+    def visit_dict_comp(self, node: ast.DictComp, ctx: _Context):
         acc = "$c_acc"
         innermost = ast.Assign(
             targets=[ast.Subscript(value=ast.Name(acc, ast.Load()), slice=node.key, ctx=ast.Store())], value=node.value
         )
         return self.comprehension(node, ctx, ast.Dict(keys=[], values=[]), innermost, "<dictcomp>")
 
-    def visit_Assert(self, stmt: ast.Assert, ctx: _Context):  # noqa: N802
+    def visit_assert(self, stmt: ast.Assert, ctx: _Context):
         cond = self.visit(stmt.test, ctx)
         msg = self.visit(stmt.msg, ctx) if stmt.msg else None
         ctx.call_void("pil.assert", (cond, msg))
 
-    def visit_Raise(self, stmt: ast.Raise, ctx: _Context):  # noqa: N802
+    def visit_raise(self, stmt: ast.Raise, ctx: _Context):
         if stmt.exc is None:
             ctx.raise_error(stmt, "bare raise is not supported")
 
@@ -619,8 +624,9 @@ class Parser:
         ctx.call_void("pil.raise", (exc, cause))
 
     def visit(self, node: ast.AST, ctx: _Context):
-        method = "visit_" + node.__class__.__name__
-        visitor = getattr(self, method)
+        # CamelCase -> snake_case
+        name = re.sub(r"(?<!^)(?=[A-Z])", "_", node.__class__.__name__).lower()
+        visitor = getattr(self, "visit_" + name)
         if visitor is None:
             ctx.raise_error(node)
         return visitor(node, ctx)
@@ -653,6 +659,23 @@ class Parser:
             elif isinstance(target, ast.Attribute):
                 obj = self.visit(target.value, ctx)
                 ctx.call_void(setattr, (obj, target.attr, value))
+            else:
+                ctx.raise_error(target)
+
+    def _do_delete(self, target, ctx: _Context):
+        with ctx.span(target):
+            if isinstance(target, ast.Name):
+                self._do_assign(target, None, ctx)
+            elif isinstance(target, (ast.Tuple, ast.List)):
+                for elt in target.elts:
+                    self._do_delete(elt, ctx)
+            elif isinstance(target, ast.Subscript):
+                obj = self.visit(target.value, ctx)
+                key = self.visit(target.slice, ctx)
+                ctx.call_void(operator.delitem, (obj, key))
+            elif isinstance(target, ast.Attribute):
+                obj = self.visit(target.value, ctx)
+                ctx.call_void(delattr, (obj, target.attr))
             else:
                 ctx.raise_error(target)
 

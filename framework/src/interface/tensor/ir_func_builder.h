@@ -20,6 +20,7 @@
 #include "ir/function.h"
 #include "ir/stmt.h"
 #include "ir/transforms/base/mutator.h"
+#include "interface/tensor/tensor_slot.h"
 
 using namespace pypto;
 
@@ -51,6 +52,7 @@ private:
     std::unordered_set<LogicalTensorPtr> consumedTensors_;
     std::unordered_set<LogicalTensorPtr> paramTensors_;
     std::unordered_map<std::string, int> loopNameCounters_;
+    std::unordered_map<TensorSlot, Function*> tensorSlotDefineFunc_;
 
     void InitDynFunc(const ir::FunctionPtr& irFunc);
     void FinalizeDynFunc(const ir::FunctionPtr& irFunc);
@@ -64,7 +66,7 @@ private:
     ir::StmtPtr FinalizePathFunc(const ir::StmtPtr& placeholder);
 
     std::shared_ptr<Function> CreateHiddenFunc(const ir::SeqStmtsPtr& seq, const std::string& loopVarName);
-    void FinalizeHiddenFunc(Function* hiddenFunc, const ir::StmtPtr& placeholder);
+    std::pair<LogicalTensors, LogicalTensors> FinalizeHiddenFunc(Function* hiddenFunc, const ir::StmtPtr& placeholder);
     void AddHiddenFuncValueDepend(Function* hiddenFunc);
     void CreateAndFinalizePathFunc(Function* pathFunc, Function* hiddenFunc, const LogicalTensors& hiddenInArgs,
                                    const LogicalTensors& hiddenOutArgs, const ir::StmtPtr& placeholder);
@@ -74,17 +76,17 @@ private:
                                 std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs);
     void ComputeIncast(Function& pathFunc, const std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
                        const std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs);
-    void ComputeOutcast(Function& pathFunc, const std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs);
+    void ComputeOutcast(Function& pathFunc);
 
     void BuildDynSlotScope();
     void BuildPathFuncSlotScope(Function* pathFunc, const std::shared_ptr<TensorSlotScope>& scope,
                                 const LogicalTensors& originalIncasts, const LogicalTensors& originalOutcasts);
+    void FlushConstructAssembleSlots();
 
     bool IsPureTensorOpSeq(const ir::SeqStmtsPtr& seq);
     std::vector<std::vector<ir::StmtPtr>> SplitIntoTensorOpSegments(const ir::SeqStmtsPtr& seq);
     bool IsPlaceholderCallStmt(const ir::StmtPtr& stmt);
     std::string GetPlaceholderFuncname(const ir::StmtPtr& stmt);
-    std::unordered_set<std::shared_ptr<LogicalTensor>> CollectAllOutputs(Function& pathFunc);
     void DumpFunctionGraph(Function* func);
 };
 

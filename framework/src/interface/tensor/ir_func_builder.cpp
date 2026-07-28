@@ -185,6 +185,8 @@ void RootFunctionBuilder::FinalizeDynFunc(const ir::FunctionPtr& irFunc)
     }
     dynFunc_->ComputeHash();
     program_.SetParamConfig(dynFunc_.get(), ConfigManagerNg::CurrentScope());
+
+    FlushConstructAssembleSlots();
     BuildDynSlotScope(); // CleanRedundantOutCast 会过滤 outCasts_ 中的中间输出
 }
 
@@ -231,6 +233,19 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathF
         return stmt;
     }
     auto tensorOpStmt = std::static_pointer_cast<const ir::TensorOpStmt>(stmt);
+
+    if (tensorOpStmt->opcode_ == "TENSOR_ALLOC") {
+        auto slotManager = program_.GetTensorSlotManager();
+        for (auto& result : tensorOpStmt->result_) {
+            if (!result) {
+                continue;
+            }
+            auto lt = std::const_pointer_cast<LogicalTensor>(std::static_pointer_cast<const LogicalTensor>(result));
+            auto tensor = slotManager->GetSlotTensor(lt);
+            tensorSlotDefineFunc_[TensorSlot::CreateTensor(*tensor)] = pathFunc.get();
+        }
+        return stmt;
+    }
 
     LogicalTensors iOperands;
     for (auto& arg : tensorOpStmt->args_) {
@@ -294,17 +309,26 @@ void RootFunctionBuilder::ComputeIncast(Function& pathFunc,
     }
 }
 
-void RootFunctionBuilder::ComputeOutcast(Function& pathFunc,
-                                         const std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs)
+void RootFunctionBuilder::ComputeOutcast(Function& pathFunc)
 {
-    std::unordered_set<std::shared_ptr<LogicalTensor>> outcastPtrs;
-    for (auto& output : allOutputs) {
-        if (outcastPtrs.find(output) == outcastPtrs.end()) {
-            bool neededByConsumer = consumedTensors_.count(output) > 0;
-            bool isFuncOutput = paramTensors_.count(output) > 0;
+    auto slotManager = program_.GetTensorSlotManager();
+    for (auto& op : pathFunc.Operations()) {
+        bool isAssembleLike = (op.GetOpcode() == Opcode::OP_ASSEMBLE && op.HasAttr("dassemble")) ||
+                              op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op.GetOpcode() == Opcode::OP_ATOMIC_RMW;
+        for (auto& oOperand : op.GetOOperands()) {
+            bool neededByConsumer = consumedTensors_.count(oOperand) > 0;
+            bool isFuncOutput = paramTensors_.count(oOperand) > 0;
             if (neededByConsumer || isFuncOutput) {
-                outcastPtrs.insert(output);
-                pathFunc.AddOriginOutcast(output);
+                pathFunc.AddOriginOutcast(oOperand);
+                continue;
+            }
+            if (isAssembleLike) {
+                auto tensor = slotManager->GetSlotTensor(oOperand);
+                auto slot = TensorSlot::CreateTensor(*tensor);
+                auto it = tensorSlotDefineFunc_.find(slot);
+                if (it == tensorSlotDefineFunc_.end() || it->second != &pathFunc) {
+                    pathFunc.AddOriginOutcast(oOperand);
+                }
             }
         }
     }
@@ -345,28 +369,28 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
 
     scope->ioslot.incastSlot.resize(originalIncasts.size());
     for (size_t idx = 0; idx < originalIncasts.size(); idx++) {
-        auto& tensor = slotManager->GetSlotTensor(originalIncasts[idx]);
-        scope->ioslot.incastSlot[idx] = {tensor.Id()};
+        auto tensor = slotManager->GetSlotTensor(originalIncasts[idx]);
+        scope->ioslot.incastSlot[idx] = {tensor->Id()};
     }
 
     scope->ioslot.outcastSlot.resize(originalOutcasts.size());
     for (size_t idx = 0; idx < originalOutcasts.size(); idx++) {
-        auto& tensor = slotManager->GetSlotTensor(originalOutcasts[idx]);
-        scope->ioslot.outcastSlot[idx] = {tensor.Id()};
+        auto tensor = slotManager->GetSlotTensor(originalOutcasts[idx]);
+        scope->ioslot.outcastSlot[idx] = {tensor->Id()};
     }
 
-    std::unordered_set<int> addedSlots;
     for (auto& op : pathFunc->Operations()) {
         if ((op.GetOpcode() == Opcode::OP_ASSEMBLE && op.HasAttr("dassemble")) ||
             op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
             for (auto& oOperand : op.GetOOperands()) {
-                auto& tensor = slotManager->GetSlotTensor(oOperand);
-                slotManager->TensorWrite(tensor, SlotProperty::ASSEMBLE_DST);
+                auto tensor = slotManager->GetSlotTensor(oOperand);
+                slotManager->TensorWrite(*tensor, SlotProperty::ASSEMBLE_DST);
                 if (paramTensors_.count(oOperand) != 0) {
                     continue;
                 }
-                if (addedSlots.insert(tensor.Id()).second) {
-                    scope->constructAssembleSlotList.push_back(tensor.Id());
+                auto slot = TensorSlot::CreateTensor(*tensor);
+                if (!tensorSlotDefineFunc_.count(slot)) {
+                    tensorSlotDefineFunc_[slot] = pathFunc;
                 }
             }
         }
@@ -381,15 +405,23 @@ void RootFunctionBuilder::BuildDynSlotScope()
     auto slotManager = program_.GetTensorSlotManager();
     auto& dynScope = dynFunc_->GetSlotScope();
 
-    dynScope->ioslot.incastSlot = dynScope->originalIocastsSlot.incastSlot;
-    dynScope->ioslot.outcastSlot = dynScope->originalIocastsSlot.outcastSlot;
+    dynScope->ioslot.incastSlot.resize(dynFunc_->GetIncast().size());
+    for (size_t idx = 0; idx < dynFunc_->GetIncast().size(); idx++) {
+        auto tensor = slotManager->GetSlotTensor(dynFunc_->GetIncast()[idx]);
+        dynScope->ioslot.incastSlot[idx] = {tensor->Id()};
+    }
+    dynScope->ioslot.outcastSlot.resize(dynFunc_->GetOutcast().size());
+    for (size_t idx = 0; idx < dynFunc_->GetOutcast().size(); idx++) {
+        auto tensor = slotManager->GetSlotTensor(dynFunc_->GetOutcast()[idx]);
+        dynScope->ioslot.outcastSlot[idx] = {tensor->Id()};
+    }
 
     attr->startArgsInputLogicalTensorList.resize(logicalParams_.size());
     for (size_t idx = 0; idx < logicalParams_.size(); idx++) {
-        auto& tensor = slotManager->GetSlotTensor(logicalParams_[idx]);
-        attr->startArgsInputTensorList.emplace_back(tensor);
+        auto tensor = slotManager->GetSlotTensor(logicalParams_[idx]);
+        attr->startArgsInputTensorList.emplace_back(*tensor);
         attr->startArgsInputLogicalTensorList[idx] = attr->startArgsInputTensorList.back().get().GetStorage(false);
-        slotManager->MarkInput(tensor);
+        slotManager->MarkInput(*tensor);
     }
 
     dynFunc_->CleanRedundantOutCast();
@@ -422,17 +454,6 @@ std::string RootFunctionBuilder::GetPlaceholderFuncname(const ir::StmtPtr& stmt)
         }
     }
     return "";
-}
-
-std::unordered_set<std::shared_ptr<LogicalTensor>> RootFunctionBuilder::CollectAllOutputs(Function& pathFunc)
-{
-    std::unordered_set<std::shared_ptr<LogicalTensor>> allOutputs;
-    for (auto& op : pathFunc.Operations()) {
-        for (auto& oOperand : op.GetOOperands()) {
-            allOutputs.insert(oOperand);
-        }
-    }
-    return allOutputs;
 }
 
 ir::StmtPtr RootFunctionBuilder::CreatePathFuncAndPlaceholder(const ir::SeqStmtsPtr& seq,
@@ -513,7 +534,8 @@ void RootFunctionBuilder::CreateAndFinalizePathFunc(Function* pathFunc, Function
     program_.GetFunctionCache().Insert(pathFunc->GetFunctionHash(), *pathFunc);
 }
 
-void RootFunctionBuilder::FinalizeHiddenFunc(Function* hiddenFunc, const ir::StmtPtr& placeholder)
+std::pair<LogicalTensors, LogicalTensors> RootFunctionBuilder::FinalizeHiddenFunc(Function* hiddenFunc,
+                                                                                  const ir::StmtPtr& placeholder)
 {
     auto hiddenScope = std::make_shared<TensorSlotScope>(hiddenFunc);
     hiddenFunc->SetSlotScope(hiddenScope);
@@ -542,6 +564,7 @@ void RootFunctionBuilder::FinalizeHiddenFunc(Function* hiddenFunc, const ir::Stm
     hiddenFunc->ComputeHash();
     program_.GetFunctionCache().Insert(hiddenFunc->GetFunctionHash(), *hiddenFunc);
     DumpFunctionGraph(hiddenFunc);
+    return {hiddenInArgs, hiddenOutArgs};
 }
 
 ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder)
@@ -565,16 +588,22 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
     hiddenFunc->SetHiddenFunction(true);
     hiddenFunc->SetParent(pathFunc.get());
 
-    // 3. hiddenFunc 处理（MakeIncasts 的 Parent() = pathFunc
-    auto allOutputs = CollectAllOutputs(*hiddenFunc);
-    ComputeOutcast(*hiddenFunc, allOutputs);
+    // 3. hiddenFunc 处理（MakeIncasts 的 Parent() = pathFunc）
+
+    ComputeOutcast(*hiddenFunc);
     auto originalIncasts = hiddenFunc->GetOriginIncast();
     auto originalOutcasts = hiddenFunc->GetOriginOutcast();
-    FinalizeHiddenFunc(hiddenFunc, placeholder);
+    auto hiddenFuncArgs = FinalizeHiddenFunc(hiddenFunc, placeholder);
 
     // 4. pathFunc 处理（独立函数）
-    CreateAndFinalizePathFunc(pathFunc.get(), hiddenFunc, originalIncasts, originalOutcasts, placeholder);
-    pathFunc->GetSlotScope()->constructAssembleSlotList = hiddenFunc->GetSlotScope()->constructAssembleSlotList;
+    auto slotManager = program_.GetTensorSlotManager();
+    for (size_t i = 0; i < originalIncasts.size(); i++) {
+        slotManager->SetSameSlot(originalIncasts[i], hiddenFuncArgs.first[i]);
+    }
+    for (size_t i = 0; i < originalOutcasts.size(); i++) {
+        slotManager->SetSameSlot(originalOutcasts[i], hiddenFuncArgs.second[i]);
+    }
+    CreateAndFinalizePathFunc(pathFunc.get(), hiddenFunc, hiddenFuncArgs.first, hiddenFuncArgs.second, placeholder);
 
     // 5. dynFunc 的 CALL op
     auto& callOperation = dynFunc_->AddRawOperation(Opcode::OP_CALL, originalIncasts, originalOutcasts,
@@ -582,6 +611,12 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
     callOperation.SetOpAttribute(pathFunc->CreateCallOpAttribute({}, {}));
     dynFunc_->AppendCalleeMagicName(pathFunc->GetMagicName());
     callOperation.attrs_.emplace_back("callee", pathFunc->GetMagicName());
+    for (auto& input : originalIncasts) {
+        input->RemoveConsumer(&callOperation);
+    }
+    for (auto& output : originalOutcasts) {
+        output->RemoveProducer(&callOperation);
+    }
 
     return std::static_pointer_cast<const ir::Stmt>(callOperation.shared_from_this());
 }
@@ -726,6 +761,30 @@ void RootFunctionBuilder::DumpFunctionGraph(Function* func)
     std::string baseName = func->GetRawName();
     func->DumpJsonFile(dumpDir + "/" + baseName + ".json");
     func->DumpFile(dumpDir + "/" + baseName + ".tifwkgr");
+}
+
+void RootFunctionBuilder::FlushConstructAssembleSlots()
+{
+    auto slotManager = program_.GetTensorSlotManager();
+    std::unordered_set<Function*> affectedPathFuncs;
+    for (auto& [slot, func] : tensorSlotDefineFunc_) {
+        if (slotManager->assembleSlotSet.count(slot) == 0) {
+            continue;
+        }
+        if (!func->HasParent()) {
+            continue;
+        }
+        auto& pathFunc = func->Parent();
+        auto scope = pathFunc.GetSlotScope();
+        if (scope) {
+            scope->constructAssembleSlotList.push_back(slot.GetId());
+            affectedPathFuncs.insert(&pathFunc);
+        }
+    }
+    for (auto* pathFunc : affectedPathFuncs) {
+        auto scope = pathFunc->GetSlotScope();
+        std::sort(scope->constructAssembleSlotList.begin(), scope->constructAssembleSlotList.end());
+    }
 }
 
 } // namespace npu::tile_fwk

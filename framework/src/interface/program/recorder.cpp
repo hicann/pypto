@@ -178,6 +178,19 @@ void RecordFunc::EndFunction()
     }
 }
 
+void RecordFunc::AbortRecording()
+{
+    if (isEnd_) {
+        return;
+    }
+    isEnd_ = true;
+    if (recordLoopFunc_) {
+        recordLoopFunc_.reset();
+    }
+    dynFunc_ = nullptr;
+    Program::GetInstance().AbandonIncompleteRecording();
+}
+
 RecordFunc::Iterator RecordFunc::begin()
 {
     if (recordLoopFunc_) {
@@ -240,7 +253,15 @@ RecordLoopFunc::RecordLoopFunc(const std::string& name, FunctionType funcType, c
     span_ = ir::Span::Current();
 }
 
-RecordLoopFunc::~RecordLoopFunc() { Program::GetInstance().GetLoopStack().pop_back(); }
+RecordLoopFunc::~RecordLoopFunc()
+{
+    // Recording may abort mid-loop; traceback/atexit can then destroy the same
+    // RecordLoopFunc again after loopStack_ was already cleared — pop only if still top.
+    auto& stack = Program::GetInstance().GetLoopStack();
+    if (!stack.empty() && &stack.back().get() == this) {
+        stack.pop_back();
+    }
+}
 
 bool RecordLoopFunc::IterationEnd()
 {

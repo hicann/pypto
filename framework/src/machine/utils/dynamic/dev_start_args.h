@@ -52,9 +52,9 @@ struct DevScheState {
 };
 
 struct DevStartArgs : DevStartArgsBase {
-    uint64_t contextWorkspaceAddr;
-    uint64_t contextWorkspaceSize;
-    DevAscendProgram* devProg;
+    uint64_t contextWorkspaceAddr{0};
+    uint64_t contextWorkspaceSize{0};
+    DevAscendProgram* devProg{nullptr};
 
     DevInputSymbol* inputSymbolList;
     uint64_t inputSymbolSize;

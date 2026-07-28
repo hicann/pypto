@@ -2904,6 +2904,9 @@ struct EncodeDevAscendProgramInfo {
         devProg->devArgs.enableVFFusion = GetEnableVFFusion();
         devProg->devArgs.hasAicpuTask = HasAicpuTask();
         devProg->devArgs.all1c2vMixTask = CheckAll1c2vMixTask(dyndevAttr->cceCodeInfo);
+        devProg->hashKey = func->ComputeHash().GetHash();
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, devProg->hashKey != 0)
+            << "Function hash must be non-zero: AOT code pool uses 0 as empty-entry sentinel";
         devProg->slotSize = dyndevAttr->inoutLink.totalSlot;
         devProg->assembleSlotSize = dyndevAttr->inoutLink.assembleSlotIndexList.size();
         devProg->InitSymbolTable(initOffset, &dyndevAttr->symbolTable, fillContent);

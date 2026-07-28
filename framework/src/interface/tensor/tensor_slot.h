@@ -281,11 +281,13 @@ struct TensorSlotManager {
     int GetInputIndex(const Tensor& tensor);
     int GetOutputIndex(const Tensor& tensor);
     int GetSlotIndex(const Tensor& tensor);
-    Tensor& GetSlotTensor(std::shared_ptr<LogicalTensor> lt);
+    std::shared_ptr<Tensor> GetSlotTensor(std::shared_ptr<LogicalTensor> lt);
     void ClearSlotTensors() { slotTensorDict.clear(); }
 
     void Checkpoint();
     void Restore();
+    void UnwindAllCheckpoints();
+    bool HasActiveCheckpoints() const { return !checkpointStack.empty(); }
 
     void UpdateReshapeInplaceSlots(IncastOutcastLink& link);
     void SetSameSlot(const Tensor& operand, const Tensor& dst);

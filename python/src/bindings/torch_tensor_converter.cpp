@@ -171,9 +171,6 @@ TensorDeviceInfo ConvertSingleTensor(const py::object& torchTensor, const py::ob
 int ValidateDeviceAndReturnIndex(const TensorDeviceInfo& deviceInfo)
 {
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
-        if (deviceInfo.type != "cpu") {
-            throw std::runtime_error("Not cpu device");
-        }
         return 0;
     }
     if (deviceInfo.type != "npu") {

@@ -270,6 +270,7 @@ public:
                    inplaceArgs = {});
 
     void EndFunction();
+    void AbortRecording();
 
     ~RecordFunc()
     {

@@ -29,9 +29,6 @@
 #include "machine/device/dynamic/perf_event_sampler.h"
 #include "machine/device/dynamic/aicore_prof.h"
 #include "device_trace.h"
-#ifdef __DEVICE__
-#include "log_types.h"
-#endif
 
 #ifdef __USE_CUSTOM_CTRLFLOW__
 extern "C" __attribute__((visibility("default"))) void* GetCtrlFlowFunc();
@@ -228,15 +225,18 @@ public:
             devProg->runtimeDataRingBufferInited = true;
             firstInit = true;
         }
-
         memBarrier();
-
 #ifdef __USE_CUSTOM_CTRLFLOW__
-        DEV_INFO("Use built in ctrl flow func.");
-        devProg->controlFlowBinaryAddr = GetCtrlFlowFunc();
+        if (devProg->controlFlowBinaryAddr == nullptr) {
+            DEV_INFO("Use built in ctrl flow func.");
+            devProg->controlFlowBinaryAddr = GetCtrlFlowFunc();
+        }
 #else
-        auto execProg = DeviceExecuteProgram(devProg, nullptr);
-        devProg->controlFlowBinaryAddr = execProg.GetControlFlowEntry();
+        // Resolve CF by DevProg hash: already in pool and not overwritten -> skip memcpy.
+        {
+            auto execProg = DeviceExecuteProgram(devProg, nullptr);
+            devProg->controlFlowBinaryAddr = execProg.GetControlFlowEntry();
+        }
 #endif
         return firstInit;
     }
@@ -263,20 +263,6 @@ public:
         }
         PerfBegin(PERF_EVT_INIT);
         bool firstInit = InitDevProgram(devProg);
-        // dynamicCellMatchAddr: device-visible pool VA (host/runtime uses AllocDev / workspace; dev_workspace treats it
-        // as device base). InitDyn runs on AICPU and fills that device memory in place, not a host malloc staging
-        // buffer.
-        const uint64_t dynCmCap = devProg->devArgs.dynamicCellMatchCapacity;
-        const uint64_t dynCmAddrU64 = devProg->devArgs.dynamicCellMatchAddr;
-        if (dynCmAddrU64 != 0 && dynCmCap != 0) {
-            DEV_ASSERT_MSG(DevCommonErr::PARAM_INVALID, (dynCmCap % sizeof(uint64_t)) == 0,
-                           "#ctrl.initdyn: dynamicCellMatch cap not uint64 aligned, cap=%lu", dynCmCap);
-            const size_t numWords = static_cast<size_t>(dynCmCap / sizeof(uint64_t));
-            auto* table = reinterpret_cast<uint64_t*>(dynCmAddrU64);
-            for (size_t i = 0; i < numWords; ++i) {
-                table[i] = AICORE_TASK_INIT;
-            }
-        }
         PerfEnd(PERF_EVT_INIT);
 
         RuntimeDataRingBufferHead* ringBufferHead = devProg->GetRuntimeDataList();
@@ -374,22 +360,8 @@ public:
         return ret;
     }
 
-    void SetModuleLogLevel([[maybe_unused]] DeviceKernelArgs* kargs)
-    {
-#ifdef __DEVICE__
-        DeviceArgs* devArgs = reinterpret_cast<DeviceArgs*>(kargs->cfgdata);
-        if (devArgs->devDfxArgAddr != 0) {
-            DevDfxArgs* devDfxArgs = reinterpret_cast<DevDfxArgs*>(devArgs->devDfxArgAddr);
-            if (devDfxArgs->logLevel != -1 && dlog_setlevel != nullptr) {
-                (void)dlog_setlevel(LOG_MOD_ID, devDfxArgs->logLevel, 1);
-            }
-        }
-#endif
-    }
-
     int EntryInit(DeviceKernelArgs* kargs)
     {
-        SetModuleLogLevel(kargs);
         PerfBegin(PERF_EVT_DEVICE_MACHINE_INIT_DYN);
         if (kargs == nullptr) {
             return -1;

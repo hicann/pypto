@@ -15,6 +15,7 @@
 
 #pragma once
 #include <sstream>
+#include <unordered_set>
 #include "interface/machine/host/machine_task.h"
 #include "interface/cache/function_cache.h"
 namespace npu::tile_fwk {
@@ -142,7 +143,7 @@ struct ValDependTensorMeta {
 void InsertWaitCoreStart(SymbolicExpressionTable* exprTable, std::ostringstream& controlFlowOss,
                          ValDependTensorMeta& valDependTensorMeta, int indent);
 
-// Functions used by ir_backend.cpp
+// Functions used by ir_backend.cpp / control_flow_codegen.cpp
 void FindAllExpression(FunctionCache& cache, Linker& linker, Function* func);
 void BuildControlFlow(FunctionCache& cache, Linker& linker, const std::string& sectionName, Function* func,
                       std::unordered_map<int, int>& slotIdxMapping, DyndevFunctionAttribute::FunctionGroup& group,

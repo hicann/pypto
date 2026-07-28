@@ -471,7 +471,11 @@ public:
         if (attr->devProgBinary.empty() || attr->kernelBinary.empty()) {
             return nullptr;
         }
-        auto kernel = new KernelBinary(Program::GetInstance().GetFunctionSharedPtr(func));
+        std::vector<std::shared_ptr<Function>> pinnedGraph;
+        for (const auto& entry : Program::GetInstance().GetFunctionMap()) {
+            pinnedGraph.push_back(entry.second);
+        }
+        auto kernel = new KernelBinary(Program::GetInstance().GetFunctionSharedPtr(func), std::move(pinnedGraph));
         kernels.push_back(kernel);
         return kernel;
     }
@@ -520,15 +524,25 @@ public:
 
     bool IsAicoreModelMode() const { return launchMode_ == LaunchMode::AICORE_MODEL; }
 
-    void EslModelLaunch(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors)
+    void EslModelLaunch(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors, py::sequence& torchTensors)
     {
+        bool isDeviceData = false;
+        if (!tensors.empty() && py::len(torchTensors) > 0) {
+            py::object device = torchTensors[py::int_(0)].attr("device");
+            isDeviceData = py::getattr(device, "type").cast<std::string>() == "npu";
+        }
+
         DeviceLauncherConfig config;
         ProgramData::GetInstance().Reset();
-        InitializeInputOutputData(tensors, {});
-        int ret = EslModelLauncher::EslModelRunOnce(kernel->GetKernelBin(), config);
-        for (size_t i = 0; i < tensors.size(); i++) {
-            auto input = ProgramData::GetInstance().GetInputData(i);
-            StringUtils::DataCopy(tensors[i].GetAddr(), input->GetDataSize(), input->data(), input->GetDataSize());
+        if (!isDeviceData) {
+            InitializeInputOutputData(tensors, {});
+        }
+        int ret = EslModelLauncher::EslModelRunOnce(kernel->GetKernelBin(), config, isDeviceData, tensors);
+        if (!isDeviceData) {
+            for (size_t i = 0; i < tensors.size(); i++) {
+                auto input = ProgramData::GetInstance().GetInputData(i);
+                StringUtils::DataCopy(tensors[i].GetAddr(), input->GetDataSize(), input->data(), input->GetDataSize());
+            }
         }
         SIM_ASSERT(ret == RT_SUCCESS) << "EslModelLaunch run failed: " << ret;
     }
@@ -650,8 +664,9 @@ private:
     {
         HOST_PERF_TRACE(TracePhase::LaunchInit);
         auto kbinary = kmodule->GetKernelBinary(tensors);
-        if (kbinary)
+        if (kbinary) {
             return kbinary;
+        }
 
         jitScopeGuard.emplace("jit_scope", std::map<std::string, std::any>{});
         Program::GetInstance().Reset();
@@ -666,7 +681,7 @@ private:
             if (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
                 kmodule->EslModelLiteLaunch(kbinary, tensors);
             } else {
-                kmodule->EslModelLaunch(kbinary, tensors);
+                kmodule->EslModelLaunch(kbinary, tensors, torchTensors);
             }
             return;
         }

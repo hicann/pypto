@@ -507,6 +507,22 @@ TEST_F(TorchAdaptorTest, BitSortAscending)
     ASSERT_ALLCLOSE(out->View({2, 64}, {0, 0}), golden);
 }
 
+TEST_F(TorchAdaptorTest, TopKTieIndices)
+{
+    // Equal values: smaller index first
+    std::vector<float> sdata = {5.0f, 4.0f, 5.0f, 3.0f, 5.0f, 2.0f};
+    std::vector<float> gvalues = {5.0f, 5.0f, 5.0f};
+    std::vector<int32_t> gindices = {0, 2, 4};
+    auto self = makeTensorData(DT_FP32, {1, 6}, sdata);
+    auto outValue = makeTensorData(DT_FP32, {1, 3}, 0.0f);
+    auto outIndex = makeTensorData(DT_INT32, {1, 3}, 0);
+    auto goldenValue = makeTensorData(DT_FP32, {1, 3}, gvalues);
+    auto goldenIndex = makeTensorData(DT_INT32, {1, 3}, gindices);
+    calc::TopK(outValue, outIndex, self, 3, -1, true);
+    ASSERT_ALLCLOSE(outValue, goldenValue);
+    ASSERT_ALLCLOSE(outIndex, goldenIndex);
+}
+
 TEST_F(TorchAdaptorTest, TopkDescending)
 {
     // 降序

@@ -295,7 +295,7 @@ def indexer_prolog(inputs_initial: dict, dims: dict, platform: str = "cpu"):
     q_norm = inputs["q_norm"]  # (b, s, q_lora_rank), mxfp8e4m3
     q_norm_scale = inputs["q_norm_scale"]  # (b, s, q_lora_rank//32), e8m0
     w_idx_qb = inputs["w_idx_qb"]  # (q_lora_rank, n * d), mxfp8e4m3
-    w_idx_qb_scale = inputs["w_idx_qb_scale"]  # (q_lora_rank//32, n * d), e8m0
+    w_idx_qb_scale = inputs["w_idx_qb_scale"]  # (q_lora_rank // 64, n * d, 2), e8m0
     w_idx_k = inputs["w_idx_k"]  # (h, d)
     w_idx_proj = inputs["w_idx_proj"]  # (h, n)
     rms_norm_gamma = inputs["rms_norm_gamma"]  # (d,)
@@ -317,8 +317,8 @@ def indexer_prolog(inputs_initial: dict, dims: dict, platform: str = "cpu"):
         q_matmul = torch.matmul(q_norm * q_norm_scale_expand, w_idx_qb * w_idx_qb_scale_expand).to(x_dtype)
     elif platform == "npu":
         q_matmul = torch_npu.npu_quant_matmul(
-            q_norm.view(1, b * s, q_lora_rank),
-            w_idx_qb.view(1, q_lora_rank, n * d),
+            q_norm.view(b * s, q_lora_rank),
+            w_idx_qb.view(q_lora_rank, n * d),
             w_idx_qb_scale,
             pertoken_scale=q_norm_scale.view(b * s, q_lora_rank // 64, 2),
             x1_dtype=torch.float8_e4m3fn,

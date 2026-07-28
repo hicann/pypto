@@ -43,10 +43,33 @@ struct DynDeviceTask : DynDeviceTaskBase {
 
     DynDeviceTask(DeviceWorkspaceAllocator& allocator)
     {
-        memset_s(&devTask, sizeof(devTask), 0, sizeof(devTask));
+        InitDevTaskShell(devTask);
         stitchedList.InitAllocator(allocator);
     }
 
+private:
+    // Zero only fields read before explicit assignment; skip opWrapList/opWrapOffsetList bulk arrays
+    // (filled per-func in MoveTo / InitWrapOffsetList; cache backup copies dynFuncDataCacheListSize entries).
+    static void InitDevTaskShell(DeviceTask& task)
+    {
+        task.coreFunctionCnt = 0;
+        task.coreFunctionReadyStateAddr = 0;
+        task.readyAicCoreFunctionQue = 0;
+        task.readyAivCoreFunctionQue = 0;
+        task.readyAicpuFunctionQue = 0;
+        task.dieReadyFunctionQue = DieReadyQueueData{};
+        task.mixTaskData.readyWrapCoreFunctionQue = 0;
+        task.mixTaskData.wrapIdNum = 0;
+        for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; ++i) {
+            task.mixTaskData.wrapQueueForThread[i] = 0;
+        }
+        task.coreFuncData = CoreFunctionData{};
+        task.l2Info = L2PreInfo{};
+        task.costModelData = 0;
+        task.aicoreModel = 0;
+    }
+
+public:
     predcount_t& GetOperationCurrPredCount(uint32_t id)
     {
         return stitchedList[FuncID(id)].GetOperationCurrPredCount(TaskID(id));

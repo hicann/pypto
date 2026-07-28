@@ -1,11 +1,35 @@
 ---
 name: pypto-precision-overall
-description: PyPTO 算子精度问题调试技能。提供场景路由式排查：根据用户问题自动选择排查路径，支持前端校验、Pass校验、特定问题排查、上板二分的自由组合。当需要调试 PyPTO 算子精度、定位精度差异来源时使用此技能。
+description: PyPTO 算子精度问题调试技能。提供场景路由式排查：根据用户问题自动选择排查路径，支持用例剪枝、前端校验、Pass校验、特定问题排查、上板二分的自由组合。当需要调试 PyPTO 算子精度、定位精度差异来源时使用此技能。
 ---
 
 # PyPTO 算子精度调试技能
 
 提供场景路由式排查流程，根据用户问题自动选择排查路径，支持各阶段的自由组合。
+
+## 前置环境检查
+
+执行任何步骤前，先验证环境。环境问题会导致算子执行报错而非精度差异，不应进入精度调试流程。
+
+```bash
+# 1. CANN 包是否已 source（ASCEND_HOME_PATH 必须存在）
+echo $ASCEND_HOME_PATH
+
+# 2. 设备 ID 是否已设置
+echo $TILE_FWK_DEVICE_ID
+
+# 3. PTO 库路径是否已配置
+echo $PTO_TILE_LIB_CODE_PATH
+```
+
+**三项任一为空 → 退出，提示用户先配置环境。** 环境问题不是精度问题。
+
+```bash
+source /path/to/Ascend/ascend-toolkit/set_env.sh
+arch=$(uname -m)
+export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH}/${arch}-linux
+export TILE_FWK_DEVICE_ID=0
+```
 
 ## 场景路由
 
@@ -17,11 +41,12 @@ description: PyPTO 算子精度问题调试技能。提供场景路由式排查�
 ```
 请选择排查场景：
 1. 全自动排查 — 从前端到上板逐层排查
-2. 只怀疑前端问题 — 只做 tensor_graph 校验
-3. 验证VF/同步/合轴 — 直接验证开关配置问题
-4. 前端校验后排查特定问题 — tensor_graph 校验后直接查VF/同步/合轴
-5. 只跑Pass对比 — 只做 Pass 层校验
-6. 直接上板二分 — 直接添加检查点二分定位
+2. 用例剪枝 — 化简用例减少循环次数再调试
+3. 只怀疑前端问题 — 只做 tensor_graph 校验
+4. 验证VF/同步/合轴 — 直接验证开关配置问题
+5. 前端校验后排查特定问题 — tensor_graph 校验后直接查VF/同步/合轴
+6. 只跑Pass对比 — 只做 Pass 层校验
+7. 直接上板二分 — 直接添加检查点二分定位
 ```
 
 ### 路由表
@@ -29,6 +54,7 @@ description: PyPTO 算子精度问题调试技能。提供场景路由式排查�
 | 场景 | 触发关键词 | 路由链 |
 |------|-----------|--------|
 | 全自动排查 | 精度问题、精度调试、精度不对 | tensor-graph → pass校验 → 特定排查 → 二分 |
+| 用例剪枝 | 用例剪枝、剪枝、化简用例、缩减循环、pruning | pruning → 进入选中的调试流程 |
 | 只怀疑前端问题 | 前端校验、tensor_graph、构图问题 | tensor-graph → 结束 |
 | 验证VF/同步/合轴 | VF融合、同步问题、合轴、开关验证 | 特定问题排查 → 结束 |
 | 前端校验后排查特定问题 | 先查前端再用配置定界、先查构图再查开关、tensor_graph后查特定问题 | tensor-graph → 特定问题排查 |
@@ -71,6 +97,22 @@ description: PyPTO 算子精度问题调试技能。提供场景路由式排查�
 5. 若 Pass 校验全部通过 → 进入 [precision-pass/SKILL.md](precision-pass/SKILL.md) 的"二、特定问题排查"
 6. 若特定问题定位到 → 结束
 7. 若仍未定位 → 进入 [precision-binary-search/SKILL.md](precision-binary-search/SKILL.md)
+
+### 用例剪枝
+
+```
+[precision-pruning]  分析并缩减循环次数（保留尾块非对齐路径）
+       │
+       ├── 循环次数已最小 → 无需剪枝 → 进入主调试流程
+       │
+       └── shape 需要修改 → 修改 shape → 验证精度仍可复现 → 进入主调试流程
+```
+
+> 用例剪枝建议在 tensor-graph 校验之前执行，最大化后续步骤收益。
+
+执行步骤：
+1. 进入 [precision-pruning/SKILL.md](precision-pruning/SKILL.md) 执行完整流程
+2. 剪枝完成后，返回主流程继续调试
 
 ### 只怀疑前端问题
 
@@ -148,12 +190,12 @@ description: PyPTO 算子精度问题调试技能。提供场景路由式排查�
 
 ## 方法对比
 
-| 特性 | precision-tensor-graph | precision-pass | precision-binary-search |
-|------|------------------------|----------------|-------------------------|
-| **定位目标** | 前端构图错误 / 首个计算不同的 op | 引入偏差的 Pass 和 Op / 开关配置问题 | 上板执行阶段首个出错 op |
-| **实现方式** | `pass_verify_save()` + `torch.save()` 对比 | PreCheck/PostCheck + `pass_compare` + 开关验证 | 检查点 tensor 作为输入参数对比 |
-| **代码修改** | 添加 `pass_verify_save()` 调用 | 配置 `verify_options` + `tile_fwk_config.json` | 修改 kernel 函数签名，添加检查点参数 |
-| **使用难度** | 简单 | 中等 | 较复杂 |
+| 特性 | precision-tensor-graph | precision-pass | precision-binary-search | precision-pruning |
+|------|------------------------|----------------|-------------------------|-------------------|
+| **定位目标** | 前端构图错误 / 首个计算不同的 op | 引入偏差的 Pass 和 Op / 开关配置问题 | 上板执行阶段首个出错 op | 缩减用例规模，加速调试 |
+| **实现方式** | `pass_verify_save()` + `torch.save()` 对比 | PreCheck/PostCheck + `pass_compare` + 开关验证 | 检查点 tensor 作为输入参数对比 | 缩减 shape 减少 tile 循环次数 |
+| **代码修改** | 添加 `pass_verify_save()` 调用 | 配置 `verify_options` + `tile_fwk_config.json` | 修改 kernel 函数签名，添加检查点参数 | 修改测试入口的 shape 参数 |
+| **使用难度** | 简单 | 中等 | 较复杂 | 简单 |
 
 ## 参考资料
 

@@ -20,7 +20,7 @@ project(PTO_Framework
         LANGUAGES C CXX
         VERSION 1.0.0
 )
-init_cann_project()
+init_cann_project(PREPEND_MODULE_PATH)
 if (ENABLE_FEATURE_PACKING_WHL_INTO_RUN)
     # run 包 名称
     #    统一用于 COMPONENT / share/info 路径 / scripts/package 路径
@@ -84,8 +84,9 @@ include(CMakePackageConfigHelpers)
 include(cmake/func.cmake)
 include(cmake/config.cmake)
 include(cmake/intf.cmake)
+include(cmake/device_project.cmake)
+find_cann_package(securec REQUIRED)
 add_cann_third_party(json)
-include(cmake/third_party/libboundscheck/libboundscheck.cmake)
 if (ENABLE_TESTS)
     add_cann_third_party(gtest)
 endif()
@@ -121,12 +122,8 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
             tile_fwk_simulation
             tile_fwk_simulation_pv
     )
-    if (BUILD_WITH_CANN)
-        install(TARGETS tile_fwk_server LIBRARY DESTINATION "${PyPTO_WhlName}/lib")
-        install(TARGETS pypto_ctrl_server ARCHIVE DESTINATION "${PyPTO_WhlName}/lib")
-    endif ()
-    # 不判断 c_sec_shared 存在, 不存在时属异常场景, 应在构建阶段发现
-    get_target_property(cSecSharedFile c_sec_shared IMPORTED_LOCATION)
+    # 不判断 c_sec 存在, 不存在时属异常场景, 应在构建阶段发现
+    get_target_property(cSecSharedFile c_sec IMPORTED_LOCATION)
     install(FILES ${cSecSharedFile}
             DESTINATION "${PyPTO_WhlName}/lib"
             PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
@@ -203,7 +200,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     #     2) 在线编译 calculator 场景, 仅安装必需的头文件;
     # 2.4 framework/src/ 路径
     #     1) 仅在线编译 pypto_impl 场景需要
-    get_target_property(_cSecIncludeDir c_sec_include INTERFACE_INCLUDE_DIRECTORIES)
+    get_target_property(_cSecIncludeDir c_sec INTERFACE_INCLUDE_DIRECTORIES)
     install(FILES
                 ${_cSecIncludeDir}/securec.h
                 ${_cSecIncludeDir}/securectype.h
@@ -456,6 +453,14 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     endif ()
 endif ()
 
+if (BUILD_WITH_CANN)
+    add_pypto_device_project(pypto)
+    if (TARGET cann_device)
+        # Host and device are built independently by their respective entry scripts.
+        set_property(TARGET cann_device PROPERTY EXCLUDE_FROM_ALL TRUE)
+    endif ()
+endif ()
+
 
 ########################################################################################################################
 # 全量源码统一构建(E)
@@ -492,8 +497,9 @@ if (ENABLE_UNIFIED_BUILD AND ENABLE_FEATURE_PYTHON_FRONT_END)
     # ── pypto_wheel: 编译 → install 到 staging → 反调 setuptools 出 whl ──
     #   GE 风格: add_custom_command(OUTPUT ...) — .so 不变则跳过 whl 构建(增量)
     set(_UnifiedDeps version_${PyPTO_PkgName}_info ${InstallTargets} pypto_impl)
+    set(_UnifiedBackendType "cost_model")
     if (BUILD_WITH_CANN)
-        list(APPEND _UnifiedDeps tile_fwk_server pypto_ctrl_server)
+        set(_UnifiedBackendType "npu")
     endif ()
     set(_WhlStamp "${PYPTO_WHEEL_DIST}/.pypto_wheel_built")
     add_custom_command(
@@ -502,6 +508,7 @@ if (ENABLE_UNIFIED_BUILD AND ENABLE_FEATURE_PYTHON_FRONT_END)
         COMMAND ${CMAKE_COMMAND} -E env
             PYPTO_UNIFIED_BUILD=1
             PYPTO_ALLOW_WHL_BUILD=1
+            PYPTO_BACKEND_TYPE=${_UnifiedBackendType}
             PYPTO_CMAKE_BINARY_DIR="${PTO_FWK_BIN_ROOT}"
             ${Python3_EXECUTABLE} "${PTO_FWK_SRC_ROOT}/setup.py" bdist_wheel
             --dist-dir "${PYPTO_WHEEL_DIST}"

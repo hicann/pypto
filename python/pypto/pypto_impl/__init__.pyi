@@ -12,7 +12,7 @@ import enum
 from types import UnionType
 from typing import Any, Iterator, overload, Union, List, Dict, Tuple, Optional, NoReturn
 
-from . import ir
+from . import codegen, ir
 
 
 class InternalError(Exception):
