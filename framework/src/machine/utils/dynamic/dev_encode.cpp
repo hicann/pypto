@@ -298,7 +298,7 @@ static void EncodeRawShape(const SymbolicExpressionTable* expressionTable, DevAs
     }
 
     int64_t nelm = GetShapeSizeSafe(rawTensor->rawshape);
-    encoded->maxStaticMemReq = AlignUp(nelm * BytesOf(rawTensor->GetDataType()), TENSOR_ADDR_ALIGNMENT);
+    encoded->maxStaticMemReq = AlignUp(DataSizeOf(nelm, rawTensor->GetDataType()), TENSOR_ADDR_ALIGNMENT);
     if (nelm > MAX_SHAPE_WARN_THRESHOLE) {
         MACHINE_LOGW(
             "[workspaceSize] Root=[%s], symbol=[%s],rawmagic=[%d]: staticMemReq=[%lu] is too larger, which might "

@@ -172,6 +172,7 @@ inline const char* DataType2String(DataType t, bool brief = false)
     return brief ? (ret + 0x3) : ret; // brief skip "DT_"
 }
 
+// Returns the byte width used to represent one element. Do not use it to calculate packed tensor data size.
 inline size_t BytesOf(DataType t)
 {
     switch (t) {
@@ -197,6 +198,9 @@ inline int64_t BitsOf(DataType t)
             throw std::invalid_argument("Unknown DataType");
     }
 }
+
+// The caller must ensure that the total number of bits is byte aligned.
+inline int64_t DataSizeOf(int64_t numel, DataType t) { return numel * BitsOf(t) / 0x8; }
 
 inline const char* DataType2CCEStr(DataType t)
 {

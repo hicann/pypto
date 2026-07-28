@@ -64,3 +64,15 @@ TEST_F(TestLogicalTensor, ViewShapeOutOfBounds)
 
     EXPECT_THROW(storage->View(*Program::GetInstance().GetCurrentFunction(), newShape, newOffset), std::exception);
 }
+
+TEST_F(TestLogicalTensor, PackedDataSize)
+{
+    Tensor input(DT_FP4_E2M1, {2, 4}, "input");
+
+    auto storage = input.GetStorage(false);
+    storage->SetMemoryTypeToBe(MEM_L2);
+
+    EXPECT_EQ(storage->GetDataSize(), 4);
+    EXPECT_EQ(storage->GetRawTensor()->GetRawDataSize(), 4);
+    EXPECT_EQ(storage->MemorySize(), 4);
+}

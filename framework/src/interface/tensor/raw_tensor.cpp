@@ -123,7 +123,7 @@ int64_t RawTensor::GetRawDataSize() const
         FE_LOGD("Raw tensor shape has negative. It has dynamic axis.");
         return INT64_MAX;
     }
-    return GetRawShapeSize() * BytesOf(datatype);
+    return DataSizeOf(GetRawShapeSize(), datatype);
 }
 
 int64_t RawTensor::GetRawShapeSize() const

@@ -17,6 +17,7 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/operation/operation.h"
+#include "machine/runtime/launcher/device_launcher_types.h"
 #include "tilefwk/data_type.h"
 
 TEST(TestMemoryAttribute, MemorySizeTest)
@@ -29,12 +30,23 @@ TEST(TestMemoryAttribute, MemorySizeTest)
         npu::tile_fwk::DT_HF8,  npu::tile_fwk::DT_HF4};
     for (auto& tshape : tshapes) {
         for (auto dt : dtypes) {
+            auto numel = tshape[0] * tshape[1];
+            if (numel * BitsOf(dt) % 0x8 != 0) {
+                continue;
+            }
             npu::tile_fwk::Tensor A(dt, tshape, "A_" + std::string(DataType2String(dt)));
             A.GetStorage()->SetMemoryTypeToBe(npu::tile_fwk::MEM_UB);
-            EXPECT_EQ(A.GetStorage()->MemorySize(), (tshape[0] * tshape[1] * BytesOf(dt) + 31) / 32 * 32);
+            auto dataSize = DataSizeOf(numel, dt);
+            EXPECT_EQ(A.GetStorage()->MemorySize(), (dataSize + 31) / 32 * 32);
 
             A.GetStorage()->SetMemoryTypeToBe(npu::tile_fwk::MEM_L2);
-            EXPECT_EQ(A.GetStorage()->MemorySize(), tshape[0] * tshape[1] * BytesOf(dt));
+            EXPECT_EQ(A.GetStorage()->MemorySize(), dataSize);
         }
     }
+}
+
+TEST(TestMemoryAttribute, DeviceTensorPackedDataSize)
+{
+    npu::tile_fwk::dynamic::DeviceTensorData tensor(npu::tile_fwk::DT_FP4_E2M1, nullptr, {2, 4});
+    EXPECT_EQ(tensor.GetDataSize(), 4);
 }

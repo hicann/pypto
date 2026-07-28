@@ -441,11 +441,12 @@ static SymbolicScalar GetDynRawTensorSize(Function* dynFunc, int funcKey, int id
     auto rawTensor = devRoot->GetOutcast()[idx]->GetRawTensor();
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, !rawTensor->GetDynRawShape().empty()) << "Not dynamic shape tensor";
 
-    SymbolicScalar size = BytesOf(rawTensor->GetDataType());
+    SymbolicScalar size = BitsOf(rawTensor->GetDataType());
     for (auto x : rawTensor->GetDynRawShape()) {
         size = size * x;
     }
-    return size;
+    // The total number of bits must be byte aligned.
+    return size / 0x8;
 }
 
 static void ProcessAssembleOutcast(Function* func, DevAscendFunction* devFunc, size_t outIdx,

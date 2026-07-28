@@ -464,10 +464,8 @@ size_t LogicalTensor::MemorySize() const
         return 0;
     }
 
-    size_t baseMemorySize = BytesOf(Datatype());
-    for (auto n : shape) {
-        baseMemorySize *= n;
-    }
+    int64_t numel = std::accumulate(shape.begin(), shape.end(), 1LL, std::multiplies<>());
+    size_t baseMemorySize = static_cast<size_t>(DataSizeOf(numel, Datatype()));
 
     switch (GetMemoryTypeToBe()) {
         case MemoryType::MEM_UB: // 32B align
@@ -505,8 +503,8 @@ int64_t LogicalTensor::GetDataSize() const
         FE_LOGD("Logical tensor shape has negative. It has dynamic axis.");
         return INT64_MAX;
     }
-    int64_t shapeSize = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>());
-    return shapeSize * BytesOf(tensor->GetDataType());
+    int64_t shapeSize = std::accumulate(shape.begin(), shape.end(), 1LL, std::multiplies<>());
+    return DataSizeOf(shapeSize, tensor->GetDataType());
 }
 
 bool LogicalTensor::CompareOp::operator()(const Operation* a, const Operation* b) const

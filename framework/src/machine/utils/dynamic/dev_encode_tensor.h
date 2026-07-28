@@ -216,11 +216,11 @@ struct DevAscendRawTensor {
     {
         if (memoryRequirement != 0)
             return memoryRequirement;
-        uint64_t memReq = BytesOf(dataType);
+        int64_t numel = 1;
         for (int i = 0; i < GetDim(); i++) {
-            memReq *= shape.At(i, exprTbl);
+            numel *= shape.At(i, exprTbl);
         }
-        return memReq;
+        return static_cast<uint64_t>(DataSizeOf(numel, dataType));
     }
 
     std::string DumpType() const

@@ -43,7 +43,7 @@ public:
     int64_t GetDataSize() const
     {
         int64_t numel = std::accumulate(shape_.begin(), shape_.end(), 1LL, std::multiplies<>());
-        return numel * BitsOf(dtype_) / 8;
+        return DataSizeOf(numel, dtype_);
     }
 
 private:
