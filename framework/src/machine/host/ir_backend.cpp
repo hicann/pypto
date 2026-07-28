@@ -38,8 +38,7 @@ const std::unordered_map<std::string, std::string>* ResolveGetInputCseMap(const 
 void FindExprFromForStmt(IrBackendContext& ctx, FunctionCache& cache, Linker& linker, const ir::ForStmtPtr& forStmt,
                          Function* dynFunc)
 {
-    auto iterName = GetLoopVarOriginName(forStmt->loopVar_);
-    SymbolicScalar iterSymbol(iterName);
+    SymbolicScalar iterSymbol(forStmt->loopVar_->name_);
     linker.AddSymbol(iterSymbol);
     Function* loopFunc = IrBuildVirtualLoopFunc(ctx, forStmt.get(), dynFunc);
     linker.AddPrimaryExpressionForLoopBes(loopFunc, ExprPtrToSymbolicScalar(forStmt->start_));
@@ -113,13 +112,6 @@ SymbolicScalar ExprPtrToSymbolicScalar(const ir::ExprPtr& expr)
     return SymbolicScalar(std::const_pointer_cast<RawSymbolicScalar>(rawScalar));
 }
 
-std::string GetLoopVarOriginName(const ir::VarPtr& loopVar)
-{
-    auto& ctx = IRContext::Get();
-    auto originName = ctx.GetOriginName(loopVar);
-    return originName.empty() ? loopVar->name_ : originName;
-}
-
 Function* ResolveCalleeFromOpCall(const ir::StmtPtr& stmt)
 {
     auto tensorOp = ir::As<ir::TensorOpStmt>(stmt);
@@ -161,7 +153,7 @@ Function* IrBuildVirtualLoopFunc(IrBackendContext& ctx, const ir::ForStmt* forSt
         return it->second.get();
     }
     auto loopFuncId = IdGen<IdType::FUNCTION>::Inst().NewId();
-    auto iterName = GetLoopVarOriginName(forStmt->loopVar_);
+    auto iterName = forStmt->loopVar_->name_;
     auto loopFuncMagic = dynFunc->GetRawName() + "_loop_" + iterName + "_" + std::to_string(loopFuncId);
     auto loopFuncName = dynFunc->GetRawName() + "_loop_" + iterName + "_" + std::to_string(loopFuncId);
     auto virtualLoopFunc = std::make_shared<Function>(Program::GetInstance(), loopFuncMagic, loopFuncName, dynFunc);
@@ -317,7 +309,7 @@ void VisitForStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Lin
                                                             getInputCseMap);
     auto iterStep = SymbolicExpressionTable::BuildExpression(ExprPtrToSymbolicScalar(forStmt->step_).Raw(),
                                                              getInputCseMap);
-    auto iterSymbolName = GetLoopVarOriginName(forStmt->loopVar_);
+    auto iterSymbolName = forStmt->loopVar_->name_;
     auto iterVar = "VAR_" + iterSymbolName;
 
     Function* loopFunc = IrBuildVirtualLoopFunc(ctx, forStmt.get(), dynFunc);

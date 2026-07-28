@@ -171,15 +171,6 @@ TEST_F(TestSuite_IrBackend, ExprPtrToSymbolicScalar_AllCases)
     EXPECT_THROW(ExprPtrToSymbolicScalar(MakeVar("plain_var")), npu::tile_fwk::Error);
 }
 
-TEST_F(TestSuite_IrBackend, GetLoopVarOriginName_AllCases)
-{
-    auto irVar = IRContext::Get().MakeVar("loop_idx", std::make_shared<ir::ScalarType>(ir::DataType::INT64), Sp());
-    EXPECT_EQ(GetLoopVarOriginName(irVar), "loop_idx");
-
-    auto dupVar = IRContext::Get().MakeVar("loop_idx", std::make_shared<ir::ScalarType>(ir::DataType::INT64), Sp());
-    EXPECT_EQ(GetLoopVarOriginName(dupVar), "loop_idx");
-}
-
 TEST_F(TestSuite_IrBackend, IsOpCallStmt_AllCases)
 {
     EXPECT_FALSE(IsOpCallStmt(MakeSeqStmts({})));

@@ -783,16 +783,16 @@ static void FinalizeControlFlowSlotMapping(const std::shared_ptr<DyndevFunctionA
     BuildRootFuncKeyDict(attr.get());
 }
 
-static void RunBuildControlFlowStage(FunctionCache& cache, Linker& linker, Function* function,
-                                     const std::shared_ptr<DyndevFunctionAttribute>& attr, const std::string& expName,
-                                     std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta,
-                                     std::string& controlFlowSource, std::string& expressionSource)
+static void RunBuildControlFlowStage(IrBackendContext& irBackendCtx, FunctionCache& cache, Linker& linker,
+                                     Function* function, const std::shared_ptr<DyndevFunctionAttribute>& attr,
+                                     const std::string& expName, std::vector<std::string>& exprSrcFiles,
+                                     ValDependTensorMeta& valDependTensorMeta, std::string& controlFlowSource,
+                                     std::string& expressionSource)
 {
     // Host-machine compile sub-step index for monitor progress (1-based when enabled, -1 when disabled).
     const int hmStep = MonitorManager::Instance().AllocHostMachineStepIndex();
     MonitorStageScope buildControlFlowScope(STAGE_HOST_MACHINE, hmStep, STAGE_DYNDEV_BUILD_CONTROL_FLOW, 0);
     bool useNewIr = function->body_ != nullptr;
-    IrBackendContext irBackendCtx;
     CollectExpressions(irBackendCtx, cache, linker, function, useNewIr);
     PrepareDyndevAttrForControlFlow(function, attr);
 
@@ -1011,8 +1011,9 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     ValDependTensorMeta valDependTensorMeta;
     std::string controlFlowSource;
     std::string expressionSource;
+    IrBackendContext irBackendCtx;
 
-    RunBuildControlFlowStage(cache, linker, function, attr, expName, exprSrcFiles, valDependTensorMeta,
+    RunBuildControlFlowStage(irBackendCtx, cache, linker, function, attr, expName, exprSrcFiles, valDependTensorMeta,
                              controlFlowSource, expressionSource);
 
     std::string expressionFilePath = aicpuDirPath + "/" + expName;

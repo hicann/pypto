@@ -38,7 +38,6 @@ struct IrBackendContext {
 };
 
 SymbolicScalar ExprPtrToSymbolicScalar(const ir::ExprPtr& expr);
-std::string GetLoopVarOriginName(const ir::VarPtr& loopVar);
 Function* ResolveCalleeFromOpCall(const ir::StmtPtr& stmt);
 bool IsOpCallStmt(const ir::StmtPtr& stmt);
 
