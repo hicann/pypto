@@ -22,7 +22,7 @@ from pypto import Tensor as PTensor
 from pypto.frontend import jit
 
 
-@jit
+@jit(new_ir=True)
 def isnan_2d_fp32(
     x: PTensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
     out: PTensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_BOOL),

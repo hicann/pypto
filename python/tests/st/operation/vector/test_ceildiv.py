@@ -22,7 +22,7 @@ from pypto import Tensor as PTensor
 from pypto.frontend import jit
 
 
-@jit
+@jit(new_ir=True)
 def ceil_div_2d(
     x: PTensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_INT32),
     y: PTensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_INT32),

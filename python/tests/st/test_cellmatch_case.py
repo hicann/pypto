@@ -36,21 +36,18 @@ RTOL = 1e-3
 ATOL = 1e-3
 
 
-def _golden_d_emb_only(dy: torch.Tensor, x: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
-    del x
+def _golden_d_emb_only(dy: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
     return (dy[:, :, 0, :].reshape(-1, dy.shape[-1]) @ weight[0].T).reshape(dy.shape[0], dy.shape[1], dy.shape[-1])
 
 
-def _linear_dx_only(dy, x, weight):
-    del x
+def _linear_dx_only(dy, weight):
     pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
     return pypto.matmul(dy, weight, pypto.DT_FP32, b_trans=True)
 
 
-@pypto.frontend.jit()
+@pypto.frontend.jit(new_ir=True)
 def k_tmp_to_d_emb(
     dy: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, H_STATIC, D_STATIC], pypto.DT_FP32),
-    x: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, D_STATIC], pypto.DT_FP32),
     weight: pypto.Tensor([H_STATIC, D_STATIC, D_STATIC], pypto.DT_FP32),
     d_emb: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, D_STATIC], pypto.DT_FP32),
 ):
@@ -60,8 +57,7 @@ def k_tmp_to_d_emb(
     for l_idx, tile in pypto.loop_unroll(0, l, 1, unroll_list=UNROLL):
         pypto.set_vec_tile_shapes(1, 64, 1, 256)
         dy_v = dy[0, l_idx:l_idx + tile, h_idx]
-        x_v = x[0, l_idx:l_idx + tile]
-        dx = _linear_dx_only(dy_v, x_v, weight[h_idx])
+        dx = _linear_dx_only(dy_v, weight[h_idx])
         pypto.set_vec_tile_shapes(1, 64, 1, 512)
         tmp[0, l_idx:l_idx + tile, h_idx] = dx
     for b_idx in pypto.loop(0, b, 1, name="b_loop_1"):
@@ -73,12 +69,12 @@ def k_tmp_to_d_emb(
 def _run_case(l_static: int, device: str, seed: int = 44) -> tuple[torch.Tensor, torch.Tensor]:
     torch.manual_seed(seed + l_static)
     dy = torch.randn(B_STATIC, l_static, H_STATIC, D_STATIC, dtype=torch.float32, device=device)
-    x = torch.randn(B_STATIC, l_static, D_STATIC, dtype=torch.float32, device=device)
+    # x = torch.randn(B_STATIC, l_static, D_STATIC, dtype=torch.float32, device=device)
     weight = torch.randn(H_STATIC, D_STATIC, D_STATIC, dtype=torch.float32, device=device)
 
-    ref_emb = _golden_d_emb_only(dy, x, weight)
+    ref_emb = _golden_d_emb_only(dy, weight)
     d_emb = torch.zeros(B_STATIC, l_static, D_STATIC, dtype=torch.float32, device=device)
-    k_tmp_to_d_emb(dy, x, weight, d_emb)
+    k_tmp_to_d_emb(dy, weight, d_emb)
     torch.npu.synchronize()
     return d_emb, ref_emb
 

@@ -22,7 +22,7 @@ from pypto import Tensor as PTensor
 from pypto.frontend import jit
 
 
-@jit
+@jit(new_ir=True)
 def isfinite_2d(
     x: PTensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP16),
     out: PTensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_BOOL),

@@ -66,7 +66,9 @@ def test_verify_dyn():
     assert torch.allclose(output_data, golden)
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, verify_options=verify_options)
+@pypto.frontend.jit(new_ir=True,
+    runtime_options={"run_mode": pypto.RunMode.NPU}, verify_options=verify_options
+)
 def cmp_where_kenrel(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -95,7 +97,7 @@ def test_verify_where():
     assert torch.allclose(outputs[0].cpu(), golden)
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
+@pypto.frontend.jit(new_ir=True, runtime_options={"run_mode": pypto.RunMode.NPU})
 def cmp_where_kenrel2(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
