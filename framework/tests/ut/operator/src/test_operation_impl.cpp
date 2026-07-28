@@ -1253,12 +1253,42 @@ TEST_F(OperationImplTest, Test_Amax)
     FUNCTION("TestAmax") { result = Amax(operand, -1, true); }
 }
 
+TEST_F(OperationImplTest, Test_Amax_NegativeAxisOutOfRange)
+{
+    Tensor operand(DT_INT16, {4, 5120}, "operand");
+    Tensor result;
+    auto runAmax = [&]() {
+        FUNCTION("TestAmaxNegativeAxisOutOfRange")
+        {
+            auto viewTensor = View(operand, {4, 138}, {4, 138}, {0, 0});
+            TileShape::Current().SetVecTile(4, 16);
+            result = Amax(viewTensor, -3, true);
+        }
+    };
+    EXPECT_THROW(runAmax(), Error);
+}
+
 TEST_F(OperationImplTest, Test_Amin)
 {
     TileShape::Current().SetVecTile(8, 8);
     Tensor operand(DT_FP32, {16, 16}, "operand");
     Tensor result;
     FUNCTION("TestAmin") { result = Amin(operand, -1, true); }
+}
+
+TEST_F(OperationImplTest, Test_Amin_NegativeAxisOutOfRange)
+{
+    Tensor operand(DT_INT16, {4, 5120}, "operand");
+    Tensor result;
+    auto runAmin = [&]() {
+        FUNCTION("TestAminNegativeAxisOutOfRange")
+        {
+            auto viewTensor = View(operand, {4, 138}, {4, 138}, {0, 0});
+            TileShape::Current().SetVecTile(4, 16);
+            result = Amin(viewTensor, -3, true);
+        }
+    };
+    EXPECT_THROW(runAmin(), Error);
 }
 
 TEST_F(OperationImplTest, test_Atan)

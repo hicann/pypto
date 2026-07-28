@@ -398,11 +398,12 @@ void TiledReduceSingle(Function& function, const TileShape& tileShape, const std
     return result;
 }
 
-static void ValidateReductionAxis(const Tensor& self, int axis)
+static int NormalizeAndValidateReductionAxis(const Tensor& self, int axis)
 {
     CheckAxisRange(self, axis);
     auto vecTile = TileShape::Current().GetVecTile();
     CHECK(VectorErrorCode::ERR_CONFIG_TILE, vecTile.valid()) << "TileShape is no set for reduce op";
+    return axis;
 }
 
 static Tensor ProcessResultShape(const Tensor& result, const Tensor& self, int axis, bool keepDim)
@@ -438,8 +439,7 @@ Tensor Amax(const Tensor& self, int axis, bool keepDim)
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMAX");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "AMAX");
     CheckTensorShapeSize(self.GetStorage(), "AMAX");
-    axis = axis < 0 ? self.GetShape().size() + axis : axis;
-    ValidateReductionAxis(self, axis);
+    axis = NormalizeAndValidateReductionAxis(self, axis);
 
     auto resultShape = self.GetShape();
     resultShape[axis] = 1;
@@ -459,8 +459,7 @@ Tensor ArgMax(const Tensor& self, int axis, bool keepDim)
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ARGMAX");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "ARGMAX");
     CheckTensorShapeSize(self.GetStorage(), "ARGMAX");
-    axis = axis < 0 ? self.GetShape().size() + axis : axis;
-    ValidateReductionAxis(self, axis);
+    axis = NormalizeAndValidateReductionAxis(self, axis);
 
     auto resultShape = self.GetShape();
     auto vecTile = TileShape::Current().GetVecTile();
@@ -487,8 +486,7 @@ Tensor ArgMin(const Tensor& self, int axis, bool keepDim)
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ARGMIN");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "ARGMIN");
     CheckTensorShapeSize(self.GetStorage(), "ARGMIN");
-    axis = axis < 0 ? self.GetShape().size() + axis : axis;
-    ValidateReductionAxis(self, axis);
+    axis = NormalizeAndValidateReductionAxis(self, axis);
 
     auto resultShape = self.GetShape();
     auto vecTile = TileShape::Current().GetVecTile();
@@ -520,8 +518,7 @@ Tensor Amin(const Tensor& self, int axis, bool keepDim)
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMIN");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "AMIN");
     CheckTensorShapeSize(self.GetStorage(), "AMIN");
-    axis = axis < 0 ? self.GetShape().size() + axis : axis;
-    ValidateReductionAxis(self, axis);
+    axis = NormalizeAndValidateReductionAxis(self, axis);
 
     auto resultShape = self.GetShape();
     resultShape[axis] = 1;
@@ -541,8 +538,7 @@ Tensor Sum(const Tensor& self, int axis, bool keepDim)
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SUM");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "SUM");
     CheckTensorShapeSize(self.GetStorage(), "SUM");
-    axis = axis < 0 ? self.GetShape().size() + axis : axis;
-    ValidateReductionAxis(self, axis);
+    axis = NormalizeAndValidateReductionAxis(self, axis);
 
     auto resultShape = self.GetShape();
     resultShape[axis] = 1;
@@ -563,8 +559,7 @@ Tensor Prod(const Tensor& self, int axis, bool keepDim)
     CheckTensorDimRange(self.GetStorage(), 1, 4, "PROD");
     CheckTensorShapeSize(self.GetStorage(), "PROD");
 
-    axis = axis < 0 ? self.GetShape().size() + axis : axis;
-    ValidateReductionAxis(self, axis);
+    axis = NormalizeAndValidateReductionAxis(self, axis);
 
     auto resultShape = self.GetShape();
     resultShape[axis] = 1;
