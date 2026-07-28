@@ -51,7 +51,7 @@ max(self, other: 'SymbolicScalar | int') -> 'SymbolicScalar'
 
 ## 返回值说明
 
-返回两个值中的最大值，类型为SymbolicScalar。
+返回两个值中的最大值。若均为具体值则返回常量，否则返回SymbolicScalar类型的符号表达式。
 
 ## 约束说明
 

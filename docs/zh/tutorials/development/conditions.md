@@ -53,7 +53,7 @@ def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, v
             output[b_offset:b_offset_end, ...] = t3_sub
 ```
 
-该用例在add\_kernel函数中增加了一个可选参数add1\_flag，并使用该参数进行不同的处理。如果add1\_flag为True，则在输出结果上加1；反之，则直接输出前一个处理的结果。
+该用例在add\_kernel函数中增加了一个可选参数add1\_flag，并使用该参数进行不同的处理。如果add1\_flag为True，则在输出结果上加上参数val；反之，则直接输出前一个处理的结果。
 
 完整样例请参考：[condition.py](../../../../examples/02_intermediate/controlflow/condition/condition.py)。
 

@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-def __init__(self, dtype, data) : ...
+def __init__(self, dtype, value) : ...
 ```
 
 ## 参数说明
