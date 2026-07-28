@@ -22,11 +22,11 @@
 
 **图 1** b16 到 b32 类型转换过程
 
-![](../../../../figures/astype_b16到b32类型转换过程.jpg)
+![](../../../../figures/astype_b16_to_b32_conversion.jpg)
 
 **图 2** b32 到 b16 类型转换过程
 
-![](../../../../figures/astype_b32到b16类型转换过程.jpg)
+![](../../../../figures/astype_b32_to_b16_conversion.jpg)
 
 ## 函数原型
 
@@ -94,10 +94,10 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_tile, 0)
-    # FP32→FP16，layout=pl.CastLayout.ZERO 放偶数半区
-    reg_f16 = vf.astype(reg_a, preg, dtype=pl.DT_FP16, layout=pl.CastLayout.ZERO)
-    # FP16→FP32，widen back for store
-    reg_f32 = vf.astype(reg_f16, preg, dtype=pl.DT_FP32)
+    # FP32→BF16，layout=pl.CastLayout.ZERO 放偶数半区
+    reg_bf16 = vf.astype(reg_a, preg, dtype=pl.DT_BF16, layout=pl.CastLayout.ZERO)
+    # BF16→FP32，widen back for store
+    reg_f32 = vf.astype(reg_bf16, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f32, preg)
 
 
@@ -127,11 +127,122 @@ def test_example():
     out = torch.empty([1, 64], device=device, dtype=torch.float32)
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
-    torch.testing.assert_close(out, a.to(torch.float16).to(torch.float32), rtol=1e-3, atol=1e-3)
+    torch.testing.assert_close(out, a.to(torch.bfloat16).to(torch.float32), rtol=1e-3, atol=1e-3)
 
 
 if __name__ == "__main__":
     test_example()
+    print("PASSED")
+```
+
+FP16 转 FP32（扩展转换，无需指定 `layout`）：
+
+```python
+import pypto_pro.language as pl
+import torch
+import torch_npu
+
+
+@pl.vector_function
+def example_vf_fp16_to_fp32(src_tile, dst_tile):
+    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP16)
+    reg_a = vf.load_align(src_tile, 0)
+    # FP16→FP32，扩展转换，无需指定 layout
+    reg_f32 = vf.astype(reg_a, preg, dtype=pl.DT_FP32)
+    # FP32→FP16，缩窄转换，layout=pl.CastLayout.ZERO 放偶数半区
+    reg_f16 = vf.astype(reg_f32, preg, dtype=pl.DT_FP16, layout=pl.CastLayout.ZERO)
+    vf.store_align(dst_tile, reg_f16, preg)
+
+
+@pl.jit()
+def example_kernel_fp16_to_fp32(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+):
+    tf = pl.TileType(shape=[1, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    in_a = pl.make_tile(tf, addr=0, size=256)
+    t_out = pl.make_tile(tf, addr=256, size=256)
+    with pl.section_vector():
+        pl.load(in_a, a, [0, 0])
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        example_vf_fp16_to_fp32(in_a, t_out)
+        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.store(out, t_out, [0, 0])
+
+
+def test_example_fp16_to_fp32():
+    device = "npu:0"
+    core_nums = 1
+    torch.npu.set_device(device)
+    # 输入 128 个 FP16 填满一个 RegTensor（256B）。
+    # 跨位宽转换以位宽大者为准：FP16→FP32 取偶数索引 64 个 FP16，得到 64 个 FP32；
+    # FP32→FP16 缩窄放偶数索引位置（layout=ZERO，PART_EVEN），store 搬出 128 个 FP16，
+    # 其中偶数索引位置（0,2,4,...,126）为有效往返结果，奇数索引位置未定义。
+    a = torch.randn([1, 128], device=device, dtype=torch.float16)
+    out = torch.empty([1, 128], device=device, dtype=torch.float16)
+    example_kernel_fp16_to_fp32[None, core_nums](a, out)
+    torch.npu.synchronize()
+    # 仅校验偶数索引位置的元素（FP16→FP32→FP16 无损往返）
+    torch.testing.assert_close(out[:, ::2], a[:, ::2], rtol=1e-3, atol=1e-3)
+
+
+if __name__ == "__main__":
+    test_example_fp16_to_fp32()
+    print("PASSED")
+```
+
+FP32 转 FP16（缩窄转换，需指定 `layout` 控制结果半区）：
+
+```python
+import pypto_pro.language as pl
+import torch
+import torch_npu
+
+
+@pl.vector_function
+def example_vf_fp32_to_fp16(src_tile, dst_tile):
+    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
+    reg_a = vf.load_align(src_tile, 0)
+    # FP32→FP16，缩窄转换，layout=pl.CastLayout.ZERO 放偶数半区
+    reg_f16 = vf.astype(reg_a, preg, dtype=pl.DT_FP16, layout=pl.CastLayout.ZERO)
+    # FP16→FP32，扩展回 FP32 用于搬出
+    reg_f32 = vf.astype(reg_f16, preg, dtype=pl.DT_FP32)
+    vf.store_align(dst_tile, reg_f32, preg)
+
+
+@pl.jit()
+def example_kernel_fp32_to_fp16(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+):
+    tf = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    in_a = pl.make_tile(tf, addr=0, size=256)
+    t_out = pl.make_tile(tf, addr=256, size=256)
+    with pl.section_vector():
+        pl.load(in_a, a, [0, 0])
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        example_vf_fp32_to_fp16(in_a, t_out)
+        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.store(out, t_out, [0, 0])
+
+
+def test_example_fp32_to_fp16():
+    device = "npu:0"
+    core_nums = 1
+    torch.npu.set_device(device)
+    a = torch.randn([1, 64], device=device, dtype=torch.float32)
+    out = torch.empty([1, 64], device=device, dtype=torch.float32)
+    example_kernel_fp32_to_fp16[None, core_nums](a, out)
+    torch.npu.synchronize()
+    torch.testing.assert_close(out, a.to(torch.float16).to(torch.float32), rtol=1e-3, atol=1e-3)
+
+
+if __name__ == "__main__":
+    test_example_fp32_to_fp16()
     print("PASSED")
 ```
 

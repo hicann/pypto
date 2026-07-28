@@ -14,7 +14,11 @@
 
 ## 功能说明
 
-将传入的src中被pred选择的有效元素依次复制到dst中，有效元素在dst中从低到高连续排列，剩余位置元素置为0。
+将传入的src中被preg选择的有效元素依次复制到dst中，有效元素在dst中从低到高连续排列，剩余位置元素置为0，如下图所示。
+
+**图 1** Squeeze 计算示意图
+
+![Squeeze计算示意图](../../../../figures/squeeze_calculation.jpg)
 
 特别地，当gather_mode取值为`"STORE_REG"`时，`squeeze`会将有效元素的总字节数存入AR特殊寄存器。此时配合使用连续非对齐搬出接口（无需显式传入偏移量），`store_unalign`会自动从AR寄存器读取有效字节数作为地址偏移。
 

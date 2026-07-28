@@ -10,8 +10,8 @@
 """UT for doc examples — misc ops.
 
 Verifies kernel examples from:
-  docs/zh/pypto_pro/api/SIMD-API/计算API/转置与元素读写/fill_index.md
-  docs/zh/pypto_pro/api/SIMD-API/计算API/Tensor操作/setval.md
+  docs/zh/pypto_pro/api/SIMD-API/operation/transpose_and_element_access/fill_index.md
+  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/transpose_and_element_access/setval.md
 """
 
 import logging

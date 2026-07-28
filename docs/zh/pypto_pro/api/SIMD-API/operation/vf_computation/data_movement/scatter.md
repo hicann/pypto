@@ -14,7 +14,11 @@
 
 ## 功能说明
 
-该指令会根据索引值 index 将源操作数 srcReg 中的元素分散到目的操作数 UB 中。
+该指令会根据索引值 index 将源操作数 srcReg 中的元素分散到目的操作数 UB 中。分散过程如下图所示：
+
+**图 1** Scatter 功能说明
+
+![Scatter功能说明](../../../../figures/scatter_function.jpg)
 
 ## 函数原型
 

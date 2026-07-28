@@ -10,9 +10,9 @@
 """UT for doc examples — sort ops.
 
 Verifies kernel examples from:
-  docs/zh/pypto_pro/api/SIMD-API/计算API/排序/mrgsort.md
-  docs/zh/pypto_pro/api/SIMD-API/计算API/排序/mrgsort2.md
-  docs/zh/pypto_pro/api/SIMD-API/计算API/排序/sort32.md
+  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/sorting/mrgsort.md
+  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/sorting/mrgsort2.md
+  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/sorting/sort32.md
 """
 
 import logging

@@ -19,7 +19,7 @@ MaskReg（掩码寄存器）用于指示在计算过程中哪些元素参与计�
 如下图所示，当操作数类型为 b8 时，每一个 element 对应 1bit MaskReg；当操作数类型为 b16 时，每一个 element 对应 2bit MaskReg，且仅 2bit 中的最低位是有效的；当操作数类型为 b32 时，每一个 element 对应 4bit MaskReg，且仅 4bit 中的最低位是有效的。
 
 **图 1** MaskReg 计算过程
-![](../../../../figures/MaskReg计算过程.jpg "MaskReg 计算过程")
+![](../../../../figures/mask_reg_calculation.jpg "MaskReg 计算过程")
 
 mask_reg 由 `vf.create_mask` 或 `vf.update_mask` 产生，作为 `MaskReg` 类型的参数直接传递给矢量计算 API，控制哪些元素参与运算。
 
@@ -83,6 +83,30 @@ MaskReg 支持的数据类型为：b8、b16、b32、b64（即 `pl.DT_UINT8`/`pl.
 ## 约束说明
 
 - MaskReg 寄存器数量上限为 8。超出限制上限的寄存器数据会写入预留的 8K UB 内存中，可能会引起性能劣化。编译器会自动复用生命周期结束的寄存器和预留内存，若寄存器与预留内存均存在可用空间，将优先复用寄存器。
+
+## 关键特性
+
+### astype 精度转换中的 MaskReg
+
+不同数据类型下元素对应的 mask 位宽不一致，在 astype 进行类型转换时，MaskReg 根据输入的源操作数进行有效元素筛选。
+
+下图展示了 MaskReg 和 RegLayout 同时作用时 b16 和 b32 进行类型转换的过程：
+
+**图 2** b16 到 b32 类型转换过程
+
+![maskReg-b16到b32类型转换过程](../../../../figures/mask_reg_b16_to_b32_conversion.jpg)
+
+**图 3** b32 到 b16 类型转换过程
+
+![MaskReg-b32到b16类型转换过程](../../../../figures/mask_reg_b32_to_b16_conversion.jpg)
+
+### UpdateMask 掩码生成
+
+UpdateMask 根据当前 scalarValue 的值生成对应长度的有效位掩码，并自动将 scalarValue 减去当前向量长度以更新剩余待处理元素数量。以 b16 数据类型为例，掩码生成过程如下图所示：
+
+**图 4** b16 数据类型下 UpdateMask 接口基于 scalarValue 的掩码生成
+
+![maskreg-b16数据类型下UpdateMask接口基于scalerValue的掩码生成](../../../../figures/maskreg_b16_update_mask_gen.jpg)
 
 ## Mask 设置方式
 

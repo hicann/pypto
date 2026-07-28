@@ -20,7 +20,21 @@
 
 **图 1** 连续对齐搬入分布模式图示
 
-![](../../../../figures/连续对齐搬入模式.jpg)
+![](../../../../figures/contiguous_aligned_load.jpg)
+
+MaskReg 目标支持三种分布模式：NORM（正常模式）、US（上采样模式，每 bit 重复两次）、DS（下采样模式，每间隔 1bit 舍弃）。各模式示意如下：
+
+**图 2** LoadDist NORM 模式
+
+![LoadDist-NORM模式](../../../../figures/load_dist_norm_mode.jpg)
+
+**图 3** LoadDist US 模式
+
+![LoadDist-US模式](../../../../figures/load_dist_us_mode.jpg)
+
+**图 4** LoadDist DS 模式
+
+![LoadDist-DS模式](../../../../figures/load_dist_ds_mode.jpg)
 
 ## 函数原型
 

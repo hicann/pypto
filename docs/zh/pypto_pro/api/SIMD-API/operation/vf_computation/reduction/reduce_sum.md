@@ -53,6 +53,18 @@ dst = vf.reduce_sum(src, preg, *, datablock=False, merge_mode=pl.MergeMode.ZEROI
 - 本接口操作数为寄存器，不涉及地址对齐。
 - 本接口不修改全局寄存器的值。
 - 源操作数与目标操作数的数据类型需要保持一致。
+- 当所有元素均不参与计算时（mask 为空），将目的操作数数据类型的 0 写入 dstReg。
+- 指令内累加顺序采用二叉树累加方式。
+
+## 关键特性
+
+**ReduceSum 累加顺序**
+
+以二叉树累加的方式计算源操作数 srcReg 内有效元素的数据总和。以 half 类型的数据求和为例，在 srcReg 内有 128 个数，通过二叉树的方式，两两相加，最终得到目的操作数为 1 个 half 类型的数据 sum，计算过程如下图所示：
+
+**图 1** ReduceSum 累加顺序
+
+![ReduceSum累加顺序](../../../../figures/reduce_sum_accum_order.jpg)
 
 ## 调用示例
 

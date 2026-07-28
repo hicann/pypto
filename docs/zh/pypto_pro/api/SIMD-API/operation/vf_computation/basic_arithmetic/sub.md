@@ -22,7 +22,7 @@ $$dst_i = src\_a_i - src\_b_i$$
 
 同时可以在 carry（MaskReg 寄存器）中标记每次减法是否产生借位，若 src_a、src_b 输入按位相减最高位有借位，在 MaskReg carry 中对应位置每 4bit 的最低位写 0，否则写 1。
 
-![](../../../../figures/Sub带carry示意图.jpg)
+![](../../../../figures/sub_with_carry.jpg)
 
 ## 函数原型
 

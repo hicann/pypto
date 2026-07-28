@@ -20,7 +20,7 @@
 
 下图展示了 `TileType`、`addr` 和 `size` 如何共同确定 Tile 绑定的片上地址范围。
 
-![make_tile 创建 Tile 并绑定片上地址](../../../figures/make_tile-allocation.jpg "make_tile 创建 Tile 并绑定片上地址")
+![make_tile 创建 Tile 并绑定片上地址](../../../figures/make_tile_allocation.jpg "make_tile 创建 Tile 并绑定片上地址")
 
 ## 函数原型
 

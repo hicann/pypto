@@ -9,7 +9,7 @@
 
 """Dynamic shape syntax in Tensor type declarations.
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/基础数据结构/Tensor.md
+Doc: docs/zh/pypto_pro/api/SIMD-API/basic_data_structures/Tensor.md
 
 Verifies pl.DYNAMIC tensor declarations compile and run correctly
 (single-tile scenario).

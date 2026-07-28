@@ -16,6 +16,12 @@
 
 从标量值更新掩码寄存器。标量值的比特位定义新的掩码模式。
 
+UpdateMask 根据当前 scalarValue 的值生成对应长度的有效位掩码，并自动将 scalarValue 减去当前向量长度以更新剩余待处理元素数量：`scalarValue = (scalarValue < VL_T) ? 0 : (scalarValue - VL_T)`。以 b16 数据类型为例，掩码生成过程如下图所示：
+
+**图 1** b16 数据类型下 UpdateMask 接口基于 scalarValue 的掩码生成
+
+![maskreg-b16数据类型下UpdateMask接口基于scalerValue的掩码生成](../../../../figures/maskreg_b16_update_mask_gen.jpg)
+
 ## 函数原型
 
 ```python

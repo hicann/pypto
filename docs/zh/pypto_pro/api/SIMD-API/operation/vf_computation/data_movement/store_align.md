@@ -20,7 +20,7 @@
 
 **图 1** 连续对齐搬出分布模式图示
 
-![](../../../../figures/连续对齐搬出模式.jpg)
+![](../../../../figures/contiguous_aligned_store.jpg)
 
 ## 函数原型
 

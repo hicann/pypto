@@ -16,7 +16,7 @@
 
 给定源操作数寄存器 src0 和 src1，将 src0 和 src1 中的元素解交织存入结果操作数 dst0 和 dst1 中。解交织排列方式如下图所示，其中每个方格代表一个元素：
 
-![](../../../../figures/de_interleave数据交织方式.jpg)
+![](../../../../figures/de_interleave_data_layout.jpg)
 
 ## 函数原型
 

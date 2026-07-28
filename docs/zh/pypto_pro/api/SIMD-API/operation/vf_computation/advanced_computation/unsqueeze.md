@@ -16,6 +16,12 @@
 
 将掩码寄存器的每个 bit 扩展到目标向量寄存器的对应 lane：mask bit 为 1 时对应 lane 填 1，mask bit 为 0 时对应 lane 填 0。
 
+具体算法如下图所示，dstReg 的首位为 0，后续 mask[i] 对应 mask 值为 1 时，dst[i] 的值为 dst[i-1] + 1；mask[i] 对应 mask 值为 0 时，dst[i] 的值为 dst[i-1]。mask 最高位被忽略不参与统计。
+
+**图 1** Unsqueeze 示意图
+
+![Unsqueeze示意图](../../../../figures/unsqueeze_diagram.jpg)
+
 ## 函数原型
 
 ```python

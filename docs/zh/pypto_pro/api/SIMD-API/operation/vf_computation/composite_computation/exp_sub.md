@@ -31,7 +31,12 @@ $$
 ## 函数原型
 
 ```python
+# float 源 → float 结果（默认）
 dst = vf.exp_sub(src0, src1, preg)
+
+# half 源 → float 结果（低精度转高精度，精度提升）
+dst = vf.exp_sub(src0, src1, preg, dtype=pl.DT_FP32)
+
 # 指定结果半区（half 源）
 dst = vf.exp_sub(src0, src1, preg, layout=pl.CastLayout.ONE)
 ```
@@ -45,6 +50,7 @@ dst = vf.exp_sub(src0, src1, preg, layout=pl.CastLayout.ONE)
 | `src1` | 输入 | 源操作数 1 |
 | `preg` | 输入 | 掩码寄存器 |
 | `layout` | 输入 | 可选，结果放置半区：`pl.CastLayout.ZERO`（偶数半区，默认，PART_EVEN）或 `pl.CastLayout.ONE`（奇数半区，PART_ODD）。用于 half 结果 |
+| `dtype` | 输入 | 可选，目标寄存器数据类型。当 src 为 half 时，指定 `dtype=pl.DT_FP32` 可将源操作数提升精度到 float 再进行计算，产生 float 结果。默认与源操作数类型一致 |
 
 ## 数据类型
 
@@ -62,9 +68,13 @@ dst = vf.exp_sub(src0, src1, preg, layout=pl.CastLayout.ONE)
 - 源操作数数据类型为float时，支持寄存器全部重叠；源操作数数据类型为half时，仅支持源操作数寄存器重叠。
 - 本接口操作数为寄存器，不涉及地址对齐。
 - 本接口不修改全局寄存器的值。
-- 源操作数类型为half时，Vector计算单元一次计算只处理最多64个元素，mask的有效情况以输入数据类型为准，只有偶数位有效，有效位共128bit。
+- 源操作数类型为half时，Vector计算单元一次计算只处理最多64个元素，mask的有效情况以输入数据类型为准，只有偶数位有效，有效位共128bit。如下图所示：
+
+![ExpSub高精度示意图](../../../../figures/exp_sub_high_precision.jpg)
 
 ## 调用示例
+
+### float 源 → float 结果
 
 ```python
 import pypto_pro.language as pl
@@ -116,5 +126,64 @@ def test_example():
 
 if __name__ == "__main__":
     test_example()
+    print("PASSED")
+```
+
+### half 源 → float 结果（低精度转高精度）
+
+当源操作数为 half、目的操作数为 float 时，寄存器中 128 个 half 元素按相邻两两分组，`layout` 决定每组中参与计算的元素位置：`pl.CastLayout.ZERO`（默认）取偶数位（第 0 个），`pl.CastLayout.ONE` 取奇数位（第 1 个）。最终输出 64 个 float 元素。以下示例使用默认的 `layout=ZERO`，即取每组偶数位元素参与计算。
+
+```python
+import pypto_pro.language as pl
+import torch
+import torch_npu
+
+
+@pl.vector_function
+def example_vf_half_to_float(src_a, src_b, dst_tile):
+    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP16)
+    reg_a = vf.load_align(src_a, 0)
+    reg_b = vf.load_align(src_b, 0)
+    reg_out = vf.exp_sub(reg_a, reg_b, preg, dtype=pl.DT_FP32)
+    vf.store_align(dst_tile, reg_out, preg)
+
+
+@pl.jit()
+def example_kernel_half_to_float(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+):
+    tf_in = pl.TileType(shape=[1, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    tf_out = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    in_a = pl.make_tile(tf_in, addr=0, size=256)
+    in_b = pl.make_tile(tf_in, addr=256, size=256)
+    t_out = pl.make_tile(tf_out, addr=512, size=256)
+    with pl.section_vector():
+        pl.load(in_a, a, [0, 0])
+        pl.load(in_b, b, [0, 0])
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        example_vf_half_to_float(in_a, in_b, t_out)
+        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.store(out, t_out, [0, 0])
+
+
+def test_example_half_to_float():
+    device = "npu:0"
+    core_nums = 1
+    torch.npu.set_device(device)
+    a = torch.randn([1, 128], device=device, dtype=torch.float16)
+    b = torch.randn([1, 128], device=device, dtype=torch.float16)
+    out = torch.empty([1, 64], device=device, dtype=torch.float32)
+    example_kernel_half_to_float[None, core_nums](a, b, out)
+    torch.npu.synchronize()
+    # layout=ZERO 取偶数位（第0、2、4...个）half 元素参与计算，输出 64 个 float
+    torch.testing.assert_close(out, torch.exp(a[:, 0::2].float() - b[:, 0::2].float()), rtol=1e-3, atol=1e-3)
+
+
+if __name__ == "__main__":
+    test_example_half_to_float()
     print("PASSED")
 ```

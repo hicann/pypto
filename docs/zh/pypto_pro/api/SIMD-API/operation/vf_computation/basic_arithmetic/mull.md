@@ -22,7 +22,7 @@ $$dstReg1_i = \lfloor (srcReg0_i \times srcReg1_i) / 2^{bit} \rfloor$$
 
 其中，bit表示操作数的位宽bit数。
 
-![](../../../../figures/Mull示意图.jpg)
+![](../../../../figures/mull_diagram.jpg)
 
 ## 函数原型
 

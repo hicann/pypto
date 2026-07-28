@@ -53,6 +53,22 @@ dst = vf.reduce_min(src, preg, *, datablock=False, merge_mode=pl.MergeMode.ZEROI
 - 本接口操作数为寄存器，不涉及地址对齐。
 - 本接口不修改全局寄存器的值。
 - 源操作数与目标操作数的数据类型需要保持一致。
+- 当所有元素均不参与计算时（mask 为空），将该数据类型的最大值写入 dstReg。
+- 当存在多个最小值时，会将第一个最小值的索引保存在 dstReg 中。
+- min(-0, +0) = -0。
+- 如果输入数据存在 nan，将该数据类型的 nan 写入 dstReg，并将第一个 nan 的索引保存在 dstReg 中。
+
+## 关键特性
+
+**索引值需要强制类型转换**
+
+dstReg 的最小值索引按照 dstReg 的数据类型存储，比如 dstReg 为 half 类型时，索引按照 half 类型存储，因此读取索引需要使用 reinterpret_cast 方法转换到整数类型。若数据类型是 half，需要使用 reinterpret_cast<uint16_t*>；若数据类型是 float，需要使用 reinterpret_cast<uint32_t*>。
+
+归约求最小值的计算过程及索引保存方式如下图所示：
+
+**图 1** ReduceMin 归约索引示意图
+
+![reg_reduce_index示意图](../../../../figures/reg_reduce_index.jpg)
 
 ## 调用示例
 

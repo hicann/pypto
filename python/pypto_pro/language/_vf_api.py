@@ -85,11 +85,17 @@ class Vf:
     def update_mask(scalar, dtype: Optional[DType] = None):
         """Update a VF mask register from a scalar value.
 
+        Sets the mask register bits according to the scalar value.  The scalar
+        value's bits define the new mask pattern.
+
         Args:
             scalar: Scalar value whose bits define the new mask pattern
 
         Kwargs:
             dtype: Data type for mask width selection (default FP32 -> b32)
+
+        Returns:
+            Updated mask register (``MaskReg``).
         """
 
     @staticmethod
@@ -115,8 +121,12 @@ class Vf:
             dtype: Required for Scalar mode (cannot infer from scalar). Auto-inferred
                 for Tensor mode from the source register.
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
-            pos: ``pl.DuplicatePos.LOWEST`` (default) or ``pl.DuplicatePos.HIGHEST`` ---
+            pos: ``pl.DuplicatePos.LOWEST`` (default) or ``pl.DuplicatePos.HIGHEST``
                 selects which element to broadcast in Tensor mode
+
+        Returns:
+            Destination register (``RegTensor``) with all lanes set to the
+            broadcast value.
         """
 
     @staticmethod
@@ -127,7 +137,9 @@ class Vf:
                    block_stride=None, post_update: bool = False):
         """Load aligned data from a UB Tile into a VF register (vlds instruction).
 
-        Assignment form (the destination register is declared implicitly):
+        Loads contiguous data from the source UB Tile at the given element
+        offset into the destination register.  Assignment form (the
+        destination register is declared implicitly)::
 
             dst = vf.load_align(src, offset)
 
@@ -144,6 +156,9 @@ class Vf:
                 ``DATA_BLOCK_LOAD`` is accepted as an equivalent legacy alias.
             block_stride: Datablock stride in bytes for the datablock-copy mode
             post_update: ``True`` for post-increment addressing
+
+        Returns:
+            Destination register (``RegTensor``) with loaded data.
         """
 
     @staticmethod
@@ -228,11 +243,13 @@ class Vf:
         """Insert a VF memory barrier (maps to AscendC ``LocalMemBar<src,dst>``).
 
         Orders memory ops of the ``src`` kind before those of the ``dst`` kind.
+        Statement form only --- no return value.
+
         Select the pair via the ``mode`` kwarg (default ``VST_VLD``)::
 
             vf.mem_bar(mode=pl.MemBarMode.VST_VLD)   # vector store -> vector load
             vf.mem_bar(mode=pl.MemBarMode.VST_VST)   # vector store -> vector store (WAW)
-            vf.mem_bar(mode=pl.MemBarMode.VV_ALL)    # all vector <-> all vector
+            vf.mem_bar(mode=pl.MemBarMode.VV_ALL)    # all vector -> all vector
 
         Supported modes (12, matching AscendC's legal MemType combinations):
             VST_VLD, VLD_VST, VST_VST, VST_LD, VST_ST, VLD_ST,
@@ -246,7 +263,13 @@ class Vf:
     @staticmethod
     @_api_decl
     def max(src0, src1, mask, mode: Optional[MergeMode] = None):
-        """Element-wise maximum: ``dst[i] = max(src0[i], src1[i])``
+        r"""Element-wise maximum of two source registers.
+
+        For each lane ``i`` where ``mask[i]`` is active, compares the
+        corresponding elements of ``src0`` and ``src1`` and writes the larger
+        value to ``dst[i]``.
+
+        .. math:: dstReg_i = \max(srcReg0_i,\; srcReg1_i)
 
         Args:
             src0: First source register
@@ -255,14 +278,24 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the element-wise
+            maximum of ``src0`` and ``src1`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def add(src0, src1, mask, mode: Optional[MergeMode] = None):
-        """Element-wise addition: ``dst[i] = src0[i] + src1[i]``
+        r"""Element-wise addition of two source registers.
 
-        Assignment form (the destination register is declared implicitly):
+        For each lane ``i`` where ``mask[i]`` is active, computes the sum of
+        the corresponding elements in ``src0`` and ``src1`` and writes the
+        result to ``dst[i]``.
+
+        .. math:: dstReg_i = srcReg0_i + srcReg1_i
+
+        Assignment form (the destination register is declared implicitly)::
 
             dst = vf.add(src0, src1, pred)
 
@@ -273,26 +306,45 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the element-wise
+            sum ``src0 + src1`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def sub(src0, src1, mask, mode: Optional[MergeMode] = None):
-        """Element-wise subtraction: ``dst[i] = src0[i] - src1[i]``
+        r"""Element-wise subtraction of two source registers.
+
+        For each lane ``i`` where ``mask[i]`` is active, subtracts ``src1[i]``
+        from ``src0[i]`` and writes the result to ``dst[i]``.
+
+        .. math:: dstReg_i = srcReg0_i - srcReg1_i
 
         Args:
-            src0: First source register
-            src1: Second source register
+            src0: First source register (minuend)
+            src1: Second source register (subtrahend)
             mask: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the element-wise
+            difference ``src0 - src1`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def mul(src0, src1, mask, mode: Optional[MergeMode] = None):
-        """Element-wise multiplication: ``dst[i] = src0[i] * src1[i]``
+        r"""Element-wise multiplication of two source registers.
+
+        For each lane ``i`` where ``mask[i]`` is active, computes the product
+        of the corresponding elements in ``src0`` and ``src1`` and writes the
+        result to ``dst[i]``.
+
+        .. math:: dstReg_i = srcReg0_i \times srcReg1_i
 
         Args:
             src0: First source register
@@ -301,12 +353,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the element-wise
+            product ``src0 * src1`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def div(src0, src1, mask, mode: Optional[MergeMode] = None):
-        """Element-wise division: ``dst[i] = src0[i] / src1[i]``
+        r"""Element-wise division of two source registers.
+
+        For each lane ``i`` where ``mask[i]`` is active, divides ``src0[i]``
+        by ``src1[i]`` and writes the result to ``dst[i]``.
+
+        .. math:: dstReg_i = srcReg0_i \div srcReg1_i
 
         Args:
             src0: Numerator register
@@ -315,12 +376,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the element-wise
+            quotient ``src0 / src1`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def muls(src, scalar, mask, mode: Optional[MergeMode] = None):
-        """Multiply all elements by a scalar: ``dst[i] = src[i] * scalar``
+        r"""Multiply all elements by a scalar.
+
+        For each lane ``i`` where ``mask[i]`` is active, multiplies ``src[i]``
+        by the scalar value and writes the result to ``dst[i]``.
+
+        .. math:: dstReg_i = srcReg_i \times scalar
 
         Args:
             src: Source register
@@ -330,6 +400,10 @@ class Vf:
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
 
+        Returns:
+            Destination register (``RegTensor``) holding ``src * scalar``
+            for each active lane.
+
         Note:
             Does not support UINT8/INT8 types directly. For 1-byte types,
             the backend automatically expands to vdup+vmul.
@@ -338,10 +412,15 @@ class Vf:
     @staticmethod
     @_api_decl
     def mul_add_dst(src0, src1, mask, mode: Optional[MergeMode] = None):
-        """Fused multiply-add into destination: ``dst = src0 * src1 + dst``
+        r"""Fused multiply-add into destination.
 
-        The destination register is both read (as addend) and written.
-        Maps to hardware ``vmula`` instruction.
+        For each lane ``i`` where ``mask[i]`` is active, multiplies ``src0[i]``
+        by ``src1[i]``, adds the product to the current value of ``dst[i]``,
+        and writes the sum back to ``dst[i]``.  The destination register is
+        both read (as addend) and written.  Maps to hardware ``vmula``
+        instruction.
+
+        .. math:: dstReg_i = srcReg0_i \times srcReg1_i + dstReg_i
 
         Args:
             src0: First multiplicand register
@@ -350,12 +429,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``), updated in-place.
         """
 
     @staticmethod
     @_api_decl
     def and_(src0, src1, mask, mode: Optional[MergeMode] = None):
-        """Element-wise bitwise AND: ``dst[i] = src0[i] & src1[i]``
+        r"""Element-wise bitwise AND of two source registers.
+
+        For each lane ``i`` where ``mask[i]`` is active, computes the bitwise
+        AND of ``src0[i]`` and ``src1[i]`` and writes the result to
+        ``dst[i]``.
+
+        .. math:: dstReg_i = srcReg0_i \;\&\; srcReg1_i
 
         Args:
             src0: First source register
@@ -364,12 +452,22 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the element-wise
+            bitwise AND of ``src0`` and ``src1``.
         """
 
     @staticmethod
     @_api_decl
     def or_(src0, src1, mask, mode: Optional[MergeMode] = None):
-        """Element-wise bitwise OR: ``dst[i] = src0[i] | src1[i]``
+        r"""Element-wise bitwise OR of two source registers.
+
+        For each lane ``i`` where ``mask[i]`` is active, computes the bitwise
+        OR of ``src0[i]`` and ``src1[i]`` and writes the result to
+        ``dst[i]``.
+
+        .. math:: dstReg_i = srcReg0_i \;|\; srcReg1_i
 
         Args:
             src0: First source register
@@ -378,13 +476,23 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the element-wise
+            bitwise OR of ``src0`` and ``src1``.
         """
 
     @staticmethod
     @_api_decl
     def xor(src0, src1, mask, mode: Optional[MergeMode] = None,
             dtype: Optional[DType] = None):
-        """Element-wise bitwise XOR: ``dst[i] = src0[i] ^ src1[i]``
+        r"""Element-wise bitwise XOR of two source registers.
+
+        For each lane ``i`` where ``mask[i]`` is active, computes the bitwise
+        XOR of ``src0[i]`` and ``src1[i]`` and writes the result to
+        ``dst[i]``.
+
+        .. math:: dstReg_i = srcReg0_i \;\oplus\; srcReg1_i
 
         Args:
             src0: First source register
@@ -394,16 +502,22 @@ class Vf:
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
             dtype: Data type for type-specific variants (e.g. ``pl.DT_UINT16``)
+
+        Returns:
+            Destination register (``RegTensor``) holding the element-wise
+            bitwise XOR of ``src0`` and ``src1``.
         """
 
     @staticmethod
     @_api_decl
     def reduce_sum(src, mask, datablock: bool = False,
                    merge_mode: Optional[MergeMode] = None):
-        """In-register sum reduction across all lanes (vcadd / vcgadd).
+        r"""In-register sum reduction across all lanes (vcadd / vcgadd).
 
         Reduces all active lanes of the source register into the first element
-        of the destination register.
+        of the destination register.  The remaining lanes are zeroed.
+
+        .. math:: dstReg_0 = \sum_{i \in \text{active}} srcReg_i
 
         Args:
             src: Source register
@@ -412,16 +526,22 @@ class Vf:
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgadd)
             merge_mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) with the reduction result in
+            lane 0.
         """
 
     @staticmethod
     @_api_decl
     def reduce_max(src, mask, datablock: bool = False,
                    merge_mode: Optional[MergeMode] = None):
-        """In-register max reduction across all lanes (vcmax / vcgmax).
+        r"""In-register max reduction across all lanes (vcmax / vcgmax).
 
         Reduces all active lanes of the source register into the first element
-        of the destination register.
+        of the destination register.  The remaining lanes are zeroed.
+
+        .. math:: dstReg_0 = \max_{i \in \text{active}} srcReg_i
 
         Args:
             src: Source register
@@ -430,16 +550,22 @@ class Vf:
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgmax)
             merge_mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) with the reduction result in
+            lane 0.
         """
 
     @staticmethod
     @_api_decl
     def reduce_min(src, mask, datablock: bool = False,
                    merge_mode: Optional[MergeMode] = None):
-        """In-register min reduction across all lanes (vcmin / vcgmin).
+        r"""In-register min reduction across all lanes (vcmin / vcgmin).
 
         Reduces all active lanes of the source register into the first element
-        of the destination register.
+        of the destination register.  The remaining lanes are zeroed.
+
+        .. math:: dstReg_0 = \min_{i \in \text{active}} srcReg_i
 
         Args:
             src: Source register
@@ -448,15 +574,24 @@ class Vf:
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgmin)
             merge_mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) with the reduction result in
+            lane 0.
         """
 
     @staticmethod
     @_api_decl
     def ln(src, mask, mode: Optional[MergeMode] = None,
            precision: Optional[str] = None):
-        """Natural logarithm: ``dst[i] = ln(src[i])``
+        r"""Natural logarithm of each element.
 
-        Maps to hardware ``vln`` instruction.
+        For each lane ``i`` where ``mask[i]`` is active, computes the natural
+        logarithm of ``src[i]`` and writes the result to ``dst[i]``.  The
+        source must be positive; non-positive values produce undefined
+        results.  Maps to hardware ``vln`` instruction.
+
+        .. math:: dstReg_i = \ln(srcReg_i)
 
         Args:
             src: Source register (must be positive)
@@ -464,17 +599,23 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
-            precision: ``"HIGH"`` to enable subnormal-input compensation
-                       (prescale + vln + offset correction)
+
+        Returns:
+            Destination register (``RegTensor``) holding the natural
+            logarithm ``ln(src)`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def exp_sub(src, max_val, mask, layout: Optional[CastLayout] = None):
-        """Fused exp-subtract: ``dst[i] = exp(src[i] - max[i])``
+        r"""Fused exp-subtract for numerical stability.
 
-        Commonly used in softmax computation. Subtracts max for numerical
-        stability before applying exp.
+        For each lane ``i`` where ``mask[i]`` is active, subtracts ``max_val[i]``
+        from ``src[i]`` for numerical stability, then computes the exponential
+        of the difference and writes the result to ``dst[i]``.  Commonly used
+        in softmax computation.
+
+        .. math:: dstReg_i = e^{\,srcReg_i - maxVal_i}
 
         Args:
             src: Source register
@@ -484,6 +625,10 @@ class Vf:
         Kwargs:
             layout: ``pl.CastLayout.ZERO`` (even half, default) or
                 ``pl.CastLayout.ONE`` (odd half) --- for half-width results
+
+        Returns:
+            Destination register (``RegTensor``) holding ``e^(src - max_val)``
+            for each active lane.
         """
 
     @staticmethod
@@ -492,10 +637,15 @@ class Vf:
                layout: Optional[CastLayout] = None,
                round_mode: Optional[VFRoundMode] = None,
                saturate: Optional[SaturateMode] = None):
-        """Type conversion between register types (vcvt instruction).
+        r"""Type conversion between register types (vcvt instruction).
 
-        Supports same-width and cross-width conversions: float<->int, int->int
-        narrowing/widening, float precision changes.
+        Converts each element of ``src`` to the destination data type.  For
+        each lane ``i`` where ``mask[i]`` is active, the converted value is
+        written to ``dst[i]``.  Supports same-width and cross-width
+        conversions: float->int, int->int narrowing/widening, float precision
+        changes.
+
+        .. math:: dstReg_i = \text{cast}_{dtype}(srcReg_i)
 
         Args:
             src: Source register (source type)
@@ -507,15 +657,27 @@ class Vf:
                 ``CAST_FLOOR`` / ``CAST_CEIL`` / ``CAST_TRUNC`` / ``CAST_RNA`` /
                 ``CAST_ODD`` / ``CAST_HYBRID``
             saturate: ``pl.SaturateMode.OFF`` (default) or ``pl.SaturateMode.ON``
+
+        Returns:
+            Destination register (``RegTensor``) with the converted type.
         """
 
     @staticmethod
     @_api_decl
     def de_interleave(src0, src1, dtype: Optional[DType] = None):
-        """De-interleave: split even/odd elements into two registers.
+        r"""De-interleave: split even/odd elements into two registers.
 
-        ``dst0 = src[0], src[2], src[4], ...`` (even elements)
-        ``dst1 = src[1], src[3], src[5], ...`` (odd elements)
+        Given two interleaved source registers, extracts the even-indexed
+        elements into ``dst0`` and the odd-indexed elements into ``dst1``.
+
+        .. math::
+            dstReg0_i = srcReg_{2i}     \quad \text{(even elements)}
+            dstReg1_i = srcReg_{2i+1}   \quad \text{(odd elements)}
+
+        Tuple assignment form (the destination registers are declared
+        implicitly)::
+
+            dst0, dst1 = vf.de_interleave(src0, src1)
 
         Args:
             src0: First source register
@@ -524,12 +686,24 @@ class Vf:
         Kwargs:
             dtype: When src operands are MaskReg, specifies the interleave bit-width
                 (selects ``pdintlv_b8``/``b16``/``b32``). Inferred from src0 if omitted.
+
+        Returns:
+            Tuple of ``(dst0, dst1)``: two ``RegTensor`` registers containing
+            even and odd elements respectively.
         """
 
     @staticmethod
     @_api_decl
     def select(src_true, src_false, mask, mode: Optional[MergeMode] = None):
-        """Conditional select: ``dst[i] = src_true[i] if mask[i] else src_false[i]``
+        r"""Conditional select between two source registers.
+
+        For each lane ``i``, selects ``src_true[i]`` when ``mask[i]`` is active
+        and ``src_false[i]`` when ``mask[i]`` is inactive, writing the selected
+        value to ``dst[i]``.
+
+        .. math::
+            dstReg_i = \begin{cases} srcTrueReg_i & \text{if } mask_i = 1 \\
+            srcFalseReg_i & \text{if } mask_i = 0 \end{cases}
 
         Args:
             src_true: Register selected when mask bit is 1
@@ -538,6 +712,10 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the selected
+            elements based on mask polarity.
         """
 
     @staticmethod
@@ -716,7 +894,9 @@ class Vf:
         """Squeeze mask to index register (vsqz instruction).
 
         Converts active mask bits into a packed index sequence in the
-        destination register.
+        destination register.  For each active lane in ``mask``, the
+        corresponding element of ``src`` is compressed (squeezed) into a
+        contiguous region at the start of ``dst``.
 
         Args:
             src: Source register
@@ -725,23 +905,28 @@ class Vf:
         Kwargs:
             gather_mode: ``pl.SqueezeMode.STORE_REG`` or ``pl.SqueezeMode.NO_STORE_REG``
             dtype: Data type for the destination register (e.g. ``pl.DT_UINT32``)
+
+        Returns:
+            Destination register (``RegTensor``) with packed/squeezed elements.
         """
 
     @staticmethod
     @_api_decl
     def arange(start, dtype: Optional[DType] = None,
                index_order: Optional[IndexOrder] = None):
-        """Generate an index sequence starting from ``start`` (vci instruction).
+        r"""Generate an index sequence starting from ``start`` (vci instruction).
 
-        Fills each lane with a sequential value. ``index_order`` selects the
-        direction::
+        Fills each lane with a sequential value.  The per-lane step is fixed
+        at +/-1 (a hardware property of vci); use a following ``vf.muls`` to
+        scale the step if needed.  ``index_order`` selects the direction::
 
             dst = vf.arange(start)                                          # dst[i] = start + i (INC)
             dst = vf.arange(start, index_order=pl.IndexOrder.INCREASE_ORDER)  # same as default
             dst = vf.arange(start, index_order=pl.IndexOrder.DECREASE_ORDER)  # dst[i] = start - i (DEC)
 
-        The per-lane step is fixed at +/-1 (a hardware property of vci); use a
-        following ``vf.muls`` to scale the step if needed.
+        .. math::
+            dstReg_i = start + i \quad (\text{INC, default})
+            dstReg_i = start - i \quad (\text{DEC})
 
         Args:
             start: Starting value (scalar)
@@ -749,16 +934,25 @@ class Vf:
         Kwargs:
             index_order: ``pl.IndexOrder.INCREASE_ORDER`` (default, dst[i]=start+i)
                 or ``pl.IndexOrder.DECREASE_ORDER`` (dst[i]=start-i)
+
+        Returns:
+            Destination register (``RegTensor``) with sequential values.
         """
 
     @staticmethod
     @_api_decl
     def gather(src_ub, indices, mask,
                data_copy_mode: Optional[DataCopyMode] = None):
-        """Gather elements by index from UB memory.
+        r"""Gather elements by index from UB memory.
 
-        Reads elements from non-contiguous UB locations specified by an index register.
-        The ``data_copy_mode`` kwarg selects the gather granularity:
+        Reads elements from non-contiguous UB locations specified by an index
+        register and writes them to the destination register.  For each active
+        lane ``i``, loads the element at ``src_ub[indices[i]]`` into
+        ``dst[i]``.
+
+        .. math:: dstReg_i = srcUb[\text{indices}_i]
+
+        The ``data_copy_mode`` kwarg selects the gather granularity::
 
             dst = vf.gather(src_ub, indices, mask)                                    # per-element (vgather2)
             dst = vf.gather(src_ub, indices, mask,
@@ -775,6 +969,9 @@ class Vf:
         Kwargs:
             data_copy_mode: ``pl.DataCopyMode.NORM`` (default, per-element via vgather2)
                 or ``pl.DataCopyMode.DATA_BLOCK_LOAD`` (per 32B datablock via vgatherb)
+
+        Returns:
+            Destination register (``RegTensor``) with gathered elements.
         """
 
     @staticmethod
@@ -783,15 +980,20 @@ class Vf:
         """Clear special purpose register (AR register).
 
         Resets the accumulator register used by certain VF instructions.
+        Statement form only --- no return value.
         """
 
     @staticmethod
     @_api_decl
     def log(src, mask, mode: Optional[MergeMode] = None,
             precision: Optional[str] = None):
-        """Natural logarithm (alias for ln): ``dst[i] = ln(src[i])``
+        r"""Natural logarithm (alias for :func:`vf.ln`).
 
-        Identical to ``vf.ln()``. Both map to the hardware ``vln`` instruction.
+        Convenience wrapper that maps to the same ``vln`` hardware instruction
+        as :func:`vf.ln`.  Accepts identical arguments; see :func:`vf.ln` for
+        the full parameter and type details.
+
+        .. math:: dstReg_i = \log(srcReg_i)
 
         Args:
             src: Source register (must be positive)
@@ -799,13 +1001,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
-            precision: ``"HIGH"`` for subnormal compensation
+
+        Returns:
+            Destination register (``RegTensor``) with ``ln(src)`` per lane.
         """
 
     @staticmethod
     @_api_decl
     def min(src0, src1, mask, mode: Optional[MergeMode] = None):
-        """Element-wise minimum: ``dst[i] = min(src0[i], src1[i])``
+        r"""Element-wise minimum of two source registers.
+
+        For each lane ``i`` where ``mask[i]`` is active, compares the
+        corresponding elements of ``src0`` and ``src1`` and writes the smaller
+        value to ``dst[i]``.
+
+        .. math:: dstReg_i = \min(srcReg0_i,\; srcReg1_i)
 
         Args:
             src0: First source register
@@ -814,15 +1024,23 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the element-wise
+            minimum of ``src0`` and ``src1`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def exp(src, mask, mode: Optional[MergeMode] = None,
             precision: Optional[str] = None):
-        """Exponential function: ``dst[i] = exp(src[i])``
+        r"""Exponential function of each element.
 
-        Maps to hardware ``vexp`` instruction.
+        For each lane ``i`` where ``mask[i]`` is active, computes ``e``
+        raised to the power of ``src[i]`` and writes the result to
+        ``dst[i]``.  Maps to hardware ``vexp`` instruction.
+
+        .. math:: dstReg_i = e^{srcReg_i}
 
         Args:
             src: Source register
@@ -830,14 +1048,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
-            precision: ``"HIGH"`` to detect subnormal results and apply
-                       exp(x+ln2)*0.5 correction
+
+        Returns:
+            Destination register (``RegTensor``) holding ``e^src``
+            for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def abs(src, mask, mode: Optional[MergeMode] = None):
-        """Element-wise absolute value: ``dst[i] = |src[i]|``
+        r"""Element-wise absolute value.
+
+        For each lane ``i`` where ``mask[i]`` is active, computes the absolute
+        value of ``src[i]`` and writes the result to ``dst[i]``.
+
+        .. math:: dstReg_i = |srcReg_i|
 
         Args:
             src: Source register
@@ -845,12 +1070,22 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the absolute
+            value ``|src|`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def not_(src, mask, mode: Optional[MergeMode] = None):
-        """Element-wise bitwise NOT: ``dst[i] = ~src[i]``
+        r"""Element-wise bitwise NOT.
+
+        For each lane ``i`` where ``mask[i]`` is active, computes the bitwise
+        NOT (one's complement) of ``src[i]`` and writes the result to
+        ``dst[i]``.
+
+        .. math:: dstReg_i = \sim srcReg_i
 
         Args:
             src: Source register
@@ -858,15 +1093,24 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the bitwise
+            NOT ``~src`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def sqrt(src, mask, mode: Optional[MergeMode] = None,
              precision: Optional[str] = None):
-        """Square root: ``dst[i] = sqrt(src[i])``
+        r"""Square root of each element.
 
+        For each lane ``i`` where ``mask[i]`` is active, computes the square
+        root of ``src[i]`` and writes the result to ``dst[i]``.  The source
+        must be non-negative; negative values produce undefined results.
         Maps to hardware ``vsqrt`` instruction.
+
+        .. math:: dstReg_i = \sqrt{srcReg_i}
 
         Args:
             src: Source register (must be non-negative)
@@ -874,14 +1118,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
-            precision: ``"HIGH"`` for FP16 subnormal precision path
-                       (prescale x2^10, vsqrt, then x2^-5)
+
+        Returns:
+            Destination register (``RegTensor``) holding the square
+            root ``sqrt(src)`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def relu(src, mask, mode: Optional[MergeMode] = None):
-        """ReLU activation: ``dst[i] = max(0, src[i])``
+        r"""ReLU activation.
+
+        For each lane ``i`` where ``mask[i]`` is active, writes ``src[i]`` to
+        ``dst[i]`` if ``src[i] >= 0``, otherwise writes 0.
+
+        .. math:: dstReg_i = \max(0,\; srcReg_i)
 
         Args:
             src: Source register
@@ -889,12 +1140,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding ``max(0, src)``
+            for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def neg(src, mask, mode: Optional[MergeMode] = None):
-        """Negation: ``dst[i] = -src[i]``
+        r"""Element-wise negation.
+
+        For each lane ``i`` where ``mask[i]`` is active, computes the
+        arithmetic negation of ``src[i]`` and writes the result to ``dst[i]``.
+
+        .. math:: dstReg_i = -srcReg_i
 
         Args:
             src: Source register
@@ -902,12 +1162,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the negated
+            value ``-src`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def adds(src, scalar, mask, mode: Optional[MergeMode] = None):
-        """Add scalar to each element: ``dst[i] = src[i] + scalar``
+        r"""Add scalar to each element.
+
+        For each lane ``i`` where ``mask[i]`` is active, adds the scalar value
+        to ``src[i]`` and writes the result to ``dst[i]``.
+
+        .. math:: dstReg_i = srcReg_i + scalar
 
         Args:
             src: Source register
@@ -916,14 +1185,22 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding ``src + scalar``
+            for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def subs(src, scalar, mask, mode: Optional[MergeMode] = None):
-        """Subtract scalar from each element: ``dst[i] = src[i] - scalar``
+        r"""Subtract scalar from each element.
 
-        Implemented as ``vadds(dst, src, -scalar, ...)``.
+        For each lane ``i`` where ``mask[i]`` is active, subtracts the scalar
+        value from ``src[i]`` and writes the result to ``dst[i]``.  Implemented
+        as ``vadds(dst, src, -scalar, ...)``.
+
+        .. math:: dstReg_i = srcReg_i - scalar
 
         Args:
             src: Source register
@@ -932,12 +1209,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding ``src - scalar``
+            for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def mins(src, scalar, mask, mode: Optional[MergeMode] = None):
-        """Element-wise minimum with scalar: ``dst[i] = min(src[i], scalar)``
+        r"""Element-wise minimum with scalar.
+
+        For each lane ``i`` where ``mask[i]`` is active, compares ``src[i]``
+        with the scalar value and writes the smaller one to ``dst[i]``.
+
+        .. math:: dstReg_i = \min(srcReg_i,\; scalar)
 
         Args:
             src: Source register
@@ -946,12 +1232,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the element-wise
+            minimum of ``src`` and ``scalar`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def maxs(src, scalar, mask, mode: Optional[MergeMode] = None):
-        """Element-wise maximum with scalar: ``dst[i] = max(src[i], scalar)``
+        r"""Element-wise maximum with scalar.
+
+        For each lane ``i`` where ``mask[i]`` is active, compares ``src[i]``
+        with the scalar value and writes the larger one to ``dst[i]``.
+
+        .. math:: dstReg_i = \max(srcReg_i,\; scalar)
 
         Args:
             src: Source register
@@ -960,12 +1255,23 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the element-wise
+            maximum of ``src`` and ``scalar`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def leaky_relu(src, alpha, mask, mode: Optional[MergeMode] = None):
-        """Leaky ReLU: ``dst[i] = src[i] if src[i] >= 0 else alpha * src[i]``
+        r"""Leaky ReLU activation.
+
+        For each lane ``i`` where ``mask[i]`` is active, writes ``src[i]`` to
+        ``dst[i]`` if ``src[i] >= 0``, otherwise writes ``alpha * src[i]``.
+
+        .. math::
+            dstReg_i = \begin{cases} srcReg_i & \text{if } srcReg_i \geq 0 \\
+            \alpha \times srcReg_i & \text{if } srcReg_i < 0 \end{cases}
 
         Args:
             src: Source register
@@ -974,17 +1280,27 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the Leaky
+            ReLU result for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def interleave(src0, src1, dtype: Optional[DType] = None):
-        """Interleave two registers: combine even/odd elements.
+        r"""Interleave two registers: combine even/odd elements.
 
-        ``dst0 = src0[0], src1[0], src0[1], src1[1], ...``
-        ``dst1 = src0[N/2], src1[N/2], ...``
+        Interleaves elements from ``src0`` and ``src1`` so that ``src0``
+        elements occupy even positions and ``src1`` elements occupy odd
+        positions in the output.
 
-        Tuple assignment form (the destination registers are declared implicitly):
+        .. math::
+            dstReg0_{2i}   = srcReg0_i
+            dstReg0_{2i+1} = srcReg1_i
+
+        Tuple assignment form (the destination registers are declared
+        implicitly)::
 
             dst0, dst1 = vf.interleave(src0, src1)
 
@@ -995,14 +1311,21 @@ class Vf:
         Kwargs:
             dtype: When src operands are MaskReg, specifies the interleave bit-width
                 (selects ``pintlv_b8``/``b16``/``b32``). Inferred from src0 if omitted.
+
+        Returns:
+            Tuple of ``(dst0, dst1)``: two ``RegTensor`` registers containing
+            interleaved elements.
         """
 
     @staticmethod
     @_api_decl
     def pair_reduce_sum(src, mask, mode: Optional[MergeMode] = None):
-        """Pairwise reduction sum: ``dst[i] = src[2i] + src[2i+1]``
+        r"""Pairwise reduction sum.
 
-        Adds adjacent pairs of elements. Maps to hardware ``vcpadd`` instruction.
+        For each pair of adjacent elements, adds them together and writes the
+        result to ``dst[i]``.  Maps to hardware ``vcpadd`` instruction.
+
+        .. math:: dstReg_i = srcReg_{2i} + srcReg_{2i+1}
 
         Args:
             src: Source register
@@ -1010,14 +1333,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) with pairwise sums.
         """
 
     @staticmethod
     @_api_decl
     def abs_sub(src0, src1, mask, mode: Optional[MergeMode] = None):
-        """Absolute difference: ``dst[i] = |src0[i] - src1[i]|``
+        r"""Absolute difference of two source registers.
 
-        Maps to hardware ``vabsdif`` instruction.
+        For each lane ``i`` where ``mask[i]`` is active, computes the absolute
+        value of the difference between ``src0[i]`` and ``src1[i]`` and writes
+        the result to ``dst[i]``.  Maps to hardware ``vabsdif`` instruction.
+
+        .. math:: dstReg_i = |srcReg0_i - srcReg1_i|
 
         Args:
             src0: First source register
@@ -1026,15 +1356,24 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding the absolute
+            difference ``|src0 - src1|`` for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def axpy(src, scalar, mask, mode: Optional[MergeMode] = None):
-        """Fused AXPY: ``dst = src * scalar + dst``
+        r"""Fused AXPY: multiply src by scalar and add to dst.
 
-        The destination register is both read (as addend) and written.
-        Maps to hardware ``vaxpy`` instruction.
+        For each lane ``i`` where ``mask[i]`` is active, multiplies ``src[i]``
+        by the scalar, adds the product to the current value of ``dst[i]``,
+        and writes the sum back to ``dst[i]``.  The destination register is
+        both read (as addend) and written.  Maps to hardware ``vaxpy``
+        instruction.
+
+        .. math:: dstReg_i = srcReg_i \times scalar + dstReg_i
 
         Args:
             src: Source register
@@ -1043,30 +1382,45 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``), updated in-place.
         """
 
     @staticmethod
     @_api_decl
     def copy(src, mask, mode: Optional[MergeMode] = None):
-        """Register copy: ``dst[i] = src[i]`` where mask is active.
+        r"""Register copy.
 
-        Maps to hardware ``vmov`` instruction with MODE_MERGING.
+        For each lane ``i`` where ``mask[i]`` is active, copies ``src[i]`` to
+        ``dst[i]``.  Maps to hardware ``vmov`` instruction with MODE_MERGING.
+
+        .. math:: dstReg_i = srcReg_i
 
         Args:
             src: Source register
             mask: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.MERGING`` (default, only supported mode)
+
+        Returns:
+            Destination register (``RegTensor``) holding the copied
+            elements from ``src``.
         """
 
     @staticmethod
     @_api_decl
     def mul_dst_add(src0, src1, mask, mode: Optional[MergeMode] = None):
-        """Multiply-dst-add: ``dst = dst * src0 + src1`` (vmadd)
+        r"""Multiply-dst-add: multiply dst by src0, then add src1.
 
-        The destination register is both read (as multiplicand) and written.
-        Maps to hardware ``vmadd`` instruction (AscendC MulDstAdd).
+        For each lane ``i`` where ``mask[i]`` is active, multiplies ``dst[i]``
+        by ``src0[i]``, adds ``src1[i]`` to the product, and writes the sum
+        back to ``dst[i]``.  The destination register is both read (as
+        multiplicand) and written.  Maps to hardware ``vmadd`` instruction
+        (AscendC MulDstAdd).
+
+        .. math:: dstReg_i = dstReg_i \times srcReg0_i + srcReg1_i
 
         Args:
             src0: First multiplicand register
@@ -1075,15 +1429,21 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``), updated in-place.
         """
 
     @staticmethod
     @_api_decl
     def pack(src, dtype: Optional[DType] = None,
              part: Optional[PackPart] = None):
-        """Pack/narrow data type (e.g. u32->u16, u16->u8).
+        r"""Pack/narrow data type (e.g. u32->u16, u16->u8).
 
-        Selects upper or lower half of each wider element.
+        For each element of ``src``, selects the upper or lower half of the
+        wider element and writes it to ``dst`` as a narrower type.
+
+        .. math:: dstReg_i = \text{narrow}_{part}(srcReg_i)
 
         Args:
             src: Source register (wider type)
@@ -1091,6 +1451,9 @@ class Vf:
         Kwargs:
             dtype: Destination data type (e.g. ``pl.DT_UINT16``)
             part: ``pl.PackPart.LOWER`` (default) or ``pl.PackPart.UPPER``
+
+        Returns:
+            Destination register (``RegTensor``) with the narrowed type.
         """
 
     @staticmethod
@@ -1297,9 +1660,18 @@ class Vf:
     @staticmethod
     @_api_decl
     def mla(dst, src0, src1, src2, mask):
-        """Multiply-add (3 source): ``dst[i] = src0[i] * src1[i] + src2[i]``
+        r"""Multiply-add (3 source).
 
-        Unlike mul_dst_add which accumulates into dst, mla takes a separate addend register.
+        For each lane ``i`` where ``mask[i]`` is active, multiplies ``src0[i]``
+        by ``src1[i]``, adds ``src2[i]`` to the product, and writes the sum to
+        ``dst[i]``.  Unlike :func:`vf.mul_dst_add` which accumulates into dst,
+        mla takes a separate addend register.
+
+        .. math:: dstReg_i = srcReg0_i \times srcReg1_i + srcReg2_i
+
+        Statement form (dst is an explicit parameter)::
+
+            vf.mla(dst, src0, src1, src2, pred)
 
         Args:
             dst: Destination register
@@ -1312,7 +1684,16 @@ class Vf:
     @staticmethod
     @_api_decl
     def avg(dst, src0, src1, mask):
-        """Element-wise average: ``dst[i] = (src0[i] + src1[i]) / 2``
+        r"""Element-wise average.
+
+        For each lane ``i`` where ``mask[i]`` is active, computes the average
+        of ``src0[i]`` and ``src1[i]`` and writes the result to ``dst[i]``.
+
+        .. math:: dstReg_i = \frac{srcReg0_i + srcReg1_i}{2}
+
+        Statement form (dst is an explicit parameter)::
+
+            vf.avg(dst, src0, src1, pred)
 
         Args:
             dst: Destination register
@@ -1324,7 +1705,17 @@ class Vf:
     @staticmethod
     @_api_decl
     def add3(dst, src0, src1, src2, mask):
-        """Three-operand add: ``dst[i] = src0[i] + src1[i] + src2[i]``
+        r"""Three-operand add.
+
+        For each lane ``i`` where ``mask[i]`` is active, adds ``src0[i]``,
+        ``src1[i]``, and ``src2[i]`` together and writes the sum to
+        ``dst[i]``.
+
+        .. math:: dstReg_i = srcReg0_i + srcReg1_i + srcReg2_i
+
+        Statement form (dst is an explicit parameter)::
+
+            vf.add3(dst, src0, src1, src2, pred)
 
         Args:
             dst: Destination register
@@ -1337,9 +1728,17 @@ class Vf:
     @staticmethod
     @_api_decl
     def gather2(dst, src_ub, index, mask):
-        """Gather with two-element stride (vgather2 instruction).
+        r"""Gather with two-element stride (vgather2 instruction).
 
-        Gathers pairs of elements from UB memory.
+        Gathers pairs of elements from UB memory at non-contiguous locations
+        specified by an index register.  For each active lane ``i``, loads a
+        pair of elements starting at ``src_ub[index[i]]`` into ``dst``.
+
+        .. math:: dstReg_{2i},\; dstReg_{2i+1} = srcUb[\text{index}_i],\; srcUb[\text{index}_i + 1]
+
+        Statement form (dst is an explicit parameter)::
+
+            vf.gather2(dst, src_ub, index, pred)
 
         Args:
             dst: Destination register
@@ -1351,25 +1750,23 @@ class Vf:
     @staticmethod
     @_api_decl
     def select_r(src_true, src_false, mask, mode: Optional[MergeMode] = None):
-        """Select by register (reversed select): ``dst[i] = src_false[i] if mask[i] else src_true[i]``
+        """Deprecated --- not implemented.
 
-        Reversed polarity compared to ``select``.
-
-        Args:
-            src_true: Register selected when mask bit is 0
-            src_false: Register selected when mask bit is 1
-            mask: Predicate mask register
-
-        Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+        Use :func:`vf.select` with swapped arguments, or :func:`vf.gather`
+        for mask-based element selection. This name has no backend
+        implementation and is retained only as a migration pointer.
         """
 
     @staticmethod
     @_api_decl
     def log2(src, mask, mode: Optional[MergeMode] = None):
-        """Base-2 logarithm: ``dst[i] = log2(src[i])``
+        r"""Base-2 logarithm of each element.
 
+        For each lane ``i`` where ``mask[i]`` is active, computes the base-2
+        logarithm of ``src[i]`` and writes the result to ``dst[i]``.
         Synthesized as ``vln(src) * (1/ln(2))``.
+
+        .. math:: dstReg_i = \log_2(srcReg_i) = \frac{\ln(srcReg_i)}{\ln 2}
 
         Args:
             src: Source register (must be positive)
@@ -1377,14 +1774,22 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding ``log2(src)``
+            for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def log10(src, mask, mode: Optional[MergeMode] = None):
-        """Base-10 logarithm: ``dst[i] = log10(src[i])``
+        r"""Base-10 logarithm of each element.
 
+        For each lane ``i`` where ``mask[i]`` is active, computes the base-10
+        logarithm of ``src[i]`` and writes the result to ``dst[i]``.
         Synthesized as ``vln(src) * (1/ln(10))``.
+
+        .. math:: dstReg_i = \log_{10}(srcReg_i) = \frac{\ln(srcReg_i)}{\ln 10}
 
         Args:
             src: Source register (must be positive)
@@ -1392,15 +1797,23 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+
+        Returns:
+            Destination register (``RegTensor``) holding ``log10(src)``
+            for each active lane.
         """
 
     @staticmethod
     @_api_decl
     def muls_cast(src, scalar, mask, dtype: Optional[DType] = None,
                   layout: Optional[CastLayout] = None):
-        """Multiply by scalar then cast: ``dst(fp16) = cast(src(fp32) * scalar)``
+        r"""Multiply by scalar then cast.
 
-        Fused operation combining vmuls and vcvt.
+        For each lane ``i`` where ``mask[i]`` is active, multiplies ``src[i]``
+        by the scalar and casts the result to the destination data type.  Fused
+        operation combining vmuls and vcvt.
+
+        .. math:: dstReg_i = \text{cast}_{dtype}(srcReg_i \times scalar)
 
         Args:
             src: Source register (fp32)
@@ -1411,6 +1824,9 @@ class Vf:
             dtype: Destination data type (e.g. ``pl.DT_FP16``)
             layout: ``pl.CastLayout.ZERO`` (even half, default) or
                 ``pl.CastLayout.ONE`` (odd half) for the half-width result
+
+        Returns:
+            Destination register (``RegTensor``) with the cast type.
         """
 
     @staticmethod
@@ -1520,13 +1936,15 @@ class Vf:
     @staticmethod
     @_api_decl
     def move(src, mask=None, mode: Optional[MergeMode] = None):
-        """Move/copy register elements (vmov for RegTensor, pmov for MaskReg).
+        r"""Move/copy register elements (vmov for RegTensor, pmov for MaskReg).
 
         For RegTensor: copies valid elements from src to dst; masked-out
         positions retain dst's original value (MODE_MERGING).
 
         For MaskReg: copies src bits to dst; with mask, only masked bits
         are copied.
+
+        .. math:: dstReg_i = srcReg_i
 
         Usage::
 
@@ -1545,4 +1963,8 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.MERGING`` (default, only supported mode)
+
+        Returns:
+            Destination register (``RegTensor`` or ``MaskReg``, matching the
+            source type).
         """

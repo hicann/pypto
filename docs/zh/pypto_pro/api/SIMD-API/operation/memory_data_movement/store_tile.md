@@ -20,7 +20,7 @@
 
 下图以 UB 源 Tile 为例展示按块索引写回 GM Tensor 的过程。块索引先换算为元素偏移，再确定目标块的落点；L0C 源 Tile 使用 FIX 流水。
 
-![store_tile 按块索引把 Tile 写回 GM](../../../figures/store_tile-block-offset.jpg "store_tile 按块索引把 Tile 写回 GM")
+![store_tile 按块索引把 Tile 写回 GM](../../../figures/store_tile_block_offset.jpg "store_tile 按块索引把 Tile 写回 GM")
 
 ## 函数原型
 

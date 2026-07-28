@@ -18,7 +18,7 @@
 
 **图 1** Pack 示意图
 
-![Pack](../../../../figures/pack示意图.jpg)
+![Pack](../../../../figures/pack_diagram.jpg)
 
 ## 函数原型
 
