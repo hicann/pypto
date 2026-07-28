@@ -14,10 +14,13 @@
 #define PYPTO_IR_TRANSFORMS_UTILS_STMT_UTILS_H_
 
 #include <memory>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "ir/stmt.h"
+#include "ir/transforms/base/mutator.h"
+#include "ir/transforms/base/visitor.h"
 
 namespace pypto {
 namespace ir {
@@ -42,6 +45,97 @@ bool StmtsEqual(const std::vector<StmtPtr>& a, const std::vector<StmtPtr>& b);
 
 /// Build a SeqStmts from a vector of stmts.
 SeqStmtsPtr MakeSeqBody(const std::vector<StmtPtr>& stmts, const Span& span);
+
+/// Map from a Var to the expression that should replace it.
+using VarExprMap = std::unordered_map<VarPtr, ExprPtr>;
+
+/// IRMutator that replaces every Var leaf equal to a key in `varMap` with the mapped expression.
+/// Copy-on-write: subtrees with no substituted leaf are returned unchanged.
+class VarSubstitutor : public IRMutator {
+    using IRMutator::VisitExpr_;
+
+public:
+    explicit VarSubstitutor(const VarExprMap& varMap) : varMap_(varMap) {}
+
+protected:
+    ExprPtr VisitExpr_(const VarPtr& op) override
+    {
+        auto it = varMap_.find(op);
+        return it != varMap_.end() ? it->second : op;
+    }
+
+private:
+    const VarExprMap& varMap_;
+};
+
+/// Deep-substitute variables in a statement tree per `varMap`: every Var leaf equal to a key is
+/// replaced by the mapped expression. Copy-on-write (unchanged subtrees returned as-is); no-op
+/// when `stmt` is null or `varMap` is empty.
+inline StmtPtr SubstituteVars(StmtPtr stmt, const VarExprMap& varMap)
+{
+    if (!stmt || varMap.empty()) {
+        return stmt;
+    }
+    VarSubstitutor mutator(varMap);
+    return mutator.VisitStmt(stmt);
+}
+
+class DefVarCollector : public IRVisitor {
+public:
+    using IRVisitor::VisitStmt_;
+
+    std::unordered_set<VarPtr> defs;
+
+    void VisitStmt_(const TensorOpStmtPtr& op) override
+    {
+        for (auto& v : op->result_) {
+            defs.insert(v);
+        }
+        if (op->result_token_) {
+            defs.insert(op->result_token_);
+        }
+        IRVisitor::VisitStmt_(op);
+    }
+
+    void VisitStmt_(const IfStmtPtr& op) override
+    {
+        for (auto& v : op->returnVars_) {
+            defs.insert(v);
+        }
+        IRVisitor::VisitStmt_(op);
+    }
+
+    void VisitStmt_(const ForStmtPtr& op) override
+    {
+        for (auto& v : op->returnVars_) {
+            defs.insert(v);
+        }
+        IRVisitor::VisitStmt_(op);
+    }
+
+    void VisitStmt_(const WhileStmtPtr& op) override
+    {
+        for (auto& v : op->returnVars_) {
+            defs.insert(v);
+        }
+        IRVisitor::VisitStmt_(op);
+    }
+
+    void VisitStmt_(const AssignStmtPtr& op) override
+    {
+        defs.insert(op->var_);
+        IRVisitor::VisitStmt_(op);
+    }
+};
+
+inline std::unordered_set<VarPtr> CollectDefinedVars(StmtPtr stmt)
+{
+    DefVarCollector collector;
+    if (stmt) {
+        collector.VisitStmt(stmt);
+    }
+    return std::move(collector.defs);
+}
 
 } // namespace utils
 } // namespace ir

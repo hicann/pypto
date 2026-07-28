@@ -5,15 +5,31 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
+from contextlib import contextmanager
 import operator
 from typing import Optional
 
 import pypto
 from pypto import SatStatus, SymbolicScalar, ir, pypto_impl
 
-from .dispatcher import dispatch_block
+from .dispatcher import Collector, dispatch_block
 from .op_registry import impl
 from .pir import Block, BreakSignal, BuildContext, ContinueSignal, DoubleStarred, InsertPoint, Jump, LoopRange, Scope
+
+
+@contextmanager
+def apply_patches():
+    orig_move = pypto.Tensor.move
+
+    def move(self, other):
+        Collector.mark_store(self)
+        orig_move(self, other)
+
+    pypto.Tensor.move = move
+    try:
+        yield
+    finally:
+        pypto.Tensor.move = orig_move
 
 
 def has_scalar(values: list) -> bool:

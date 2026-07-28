@@ -9,11 +9,14 @@
  */
 #include "ir/transforms/merge_stmts_pass.h"
 
+#include "ir/transforms/utils/stmt_utils.h"
+
 #include <algorithm>
 #include <unordered_set>
 
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
+#include "ir/transforms/base/visitor.h"
 
 #include "interface/tensor/ir_tensor_op_rebuild.h"
 #include "interface/tensor/logical_tensor.h"
@@ -27,6 +30,8 @@ namespace pypto::ir {
 namespace {
 
 using npu::tile_fwk::LogicalTensor;
+using utils::SubstituteVars;
+using utils::VarExprMap;
 
 struct IfStmtResult {
     IfStmtPtr ifStmt;
@@ -107,8 +112,6 @@ VarExprMap BuildYieldVarMapForForStmt(ForStmtPtr forStmt)
 }
 
 StmtPtr SubstituteReturnVarUses(StmtPtr stmt, const VarExprMap& varMap);
-StmtPtr SubstituteVars(StmtPtr stmt, const VarExprMap& varMap);
-void CollectDefinedVars(StmtPtr stmt, std::unordered_set<VarPtr>& defs);
 SeqStmtsPtr MergeStmtsIntoIfStmtImpl(SeqStmtsPtr seq, const std::vector<std::string>& externalVarNames,
                                      const std::vector<SymbolicScalar>& path);
 
@@ -197,220 +200,12 @@ StmtPtr SubstituteReturnVarUses(StmtPtr stmt, const VarExprMap& varMap)
     return stmt;
 }
 
-StmtPtr SubstituteVars(TensorOpStmtPtr t, const VarExprMap& varMap)
-{
-    std::vector<VarPtr> newResult;
-    for (auto& v : t->result_) {
-        newResult.push_back(LookupVarDef(v, varMap));
-    }
-    std::vector<ExprPtr> newArgs;
-    for (auto& a : t->args_) {
-        newArgs.push_back(LookupVarInExpr(a, varMap));
-    }
-    std::vector<VarPtr> newTokens;
-    for (auto& tok : t->tokens_) {
-        newTokens.push_back(LookupVarDef(tok, varMap));
-    }
-    return npu::tile_fwk::RebuildTensorOpStmt(t, newResult, LookupVarDef(t->result_token_, varMap), newArgs, newTokens,
-                                              t->span_);
-}
-
-StmtPtr SubstituteVars(IfStmtPtr ifStmt, const VarExprMap& varMap)
-{
-    std::vector<StmtPtr> newThenStmts;
-    for (auto& s : ifStmt->thenBody_->stmts_) {
-        newThenStmts.push_back(SubstituteVars(s, varMap));
-    }
-    auto newThenBody = std::make_shared<SeqStmts>(newThenStmts, ifStmt->span_);
-    std::optional<SeqStmtsPtr> newElseBody;
-    if (ifStmt->elseBody_) {
-        std::vector<StmtPtr> newElseStmts;
-        for (auto& s : ifStmt->elseBody_.value()->stmts_) {
-            newElseStmts.push_back(SubstituteVars(s, varMap));
-        }
-        newElseBody = std::make_shared<SeqStmts>(newElseStmts, ifStmt->span_);
-    }
-    std::vector<VarPtr> newReturnVars;
-    for (auto& v : ifStmt->returnVars_) {
-        newReturnVars.push_back(LookupVarDef(v, varMap));
-    }
-    return std::make_shared<IfStmt>(ifStmt->condition_, newThenBody, newElseBody, newReturnVars, ifStmt->span_);
-}
-
-StmtPtr SubstituteVars(ForStmtPtr f, const VarExprMap& varMap)
-{
-    std::vector<StmtPtr> newBodyStmts;
-    for (auto& s : f->body_->stmts_) {
-        newBodyStmts.push_back(SubstituteVars(s, varMap));
-    }
-    auto newBody = std::make_shared<SeqStmts>(newBodyStmts, f->span_);
-    std::vector<VarPtr> newReturnVars;
-    for (auto& v : f->returnVars_) {
-        newReturnVars.push_back(LookupVarDef(v, varMap));
-    }
-    return std::make_shared<ForStmt>(f->loopVar_, f->start_, f->stop_, f->step_, f->iterArgs_, newBody, newReturnVars,
-                                     f->span_, f->attrs_);
-}
-
-StmtPtr SubstituteVars(WhileStmtPtr w, const VarExprMap& varMap)
-{
-    std::vector<StmtPtr> newBodyStmts;
-    for (auto& s : w->body_->stmts_) {
-        newBodyStmts.push_back(SubstituteVars(s, varMap));
-    }
-    auto newBody = std::make_shared<SeqStmts>(newBodyStmts, w->span_);
-    std::vector<VarPtr> newReturnVars;
-    for (auto& v : w->returnVars_) {
-        newReturnVars.push_back(LookupVarDef(v, varMap));
-    }
-    return std::make_shared<WhileStmt>(w->condition_, w->iterArgs_, newBody, newReturnVars, w->span_);
-}
-
-StmtPtr SubstituteVars(YieldStmtPtr y, const VarExprMap& varMap)
-{
-    std::vector<ExprPtr> newValues;
-    for (auto& v : y->value_) {
-        newValues.push_back(LookupVarInExpr(v, varMap));
-    }
-    return std::make_shared<YieldStmt>(newValues, y->span_);
-}
-
-StmtPtr SubstituteVars(ContinueStmtPtr c, const VarExprMap& varMap)
-{
-    std::vector<ExprPtr> newValues;
-    for (auto& v : c->value_) {
-        newValues.push_back(LookupVarInExpr(v, varMap));
-    }
-    return std::make_shared<ContinueStmt>(newValues, c->span_);
-}
-
-StmtPtr SubstituteVars(StmtPtr stmt, const VarExprMap& varMap)
-{
-    if (!stmt || varMap.empty()) {
-        return stmt;
-    }
-    if (auto t = As<TensorOpStmt>(stmt)) {
-        return SubstituteVars(t, varMap);
-    }
-    if (auto i = As<IfStmt>(stmt)) {
-        return SubstituteVars(i, varMap);
-    }
-    if (auto f = As<ForStmt>(stmt)) {
-        return SubstituteVars(f, varMap);
-    }
-    if (auto w = As<WhileStmt>(stmt)) {
-        return SubstituteVars(w, varMap);
-    }
-    if (auto seq = As<SeqStmts>(stmt)) {
-        std::vector<StmtPtr> newStmts;
-        for (auto& s : seq->stmts_) {
-            newStmts.push_back(SubstituteVars(s, varMap));
-        }
-        return std::make_shared<SeqStmts>(newStmts, seq->span_);
-    }
-    if (auto y = As<YieldStmt>(stmt)) {
-        return SubstituteVars(y, varMap);
-    }
-    if (auto c = As<ContinueStmt>(stmt)) {
-        return SubstituteVars(c, varMap);
-    }
-    return stmt;
-}
-
-void CollectDefinedVars(TensorOpStmtPtr t, std::unordered_set<VarPtr>& defs)
-{
-    for (auto& v : t->result_) {
-        if (v) {
-            defs.insert(v);
-        }
-    }
-    if (t->result_token_) {
-        defs.insert(t->result_token_);
-    }
-}
-
-void CollectDefinedVars(IfStmtPtr ifStmt, std::unordered_set<VarPtr>& defs)
-{
-    for (auto& v : ifStmt->returnVars_) {
-        if (v) {
-            defs.insert(v);
-        }
-    }
-    for (auto& s : ifStmt->thenBody_->stmts_) {
-        CollectDefinedVars(s, defs);
-    }
-    if (ifStmt->elseBody_) {
-        for (auto& s : ifStmt->elseBody_.value()->stmts_) {
-            CollectDefinedVars(s, defs);
-        }
-    }
-}
-
-void CollectDefinedVars(ForStmtPtr f, std::unordered_set<VarPtr>& defs)
-{
-    for (auto& v : f->returnVars_) {
-        if (v) {
-            defs.insert(v);
-        }
-    }
-    for (auto& s : f->body_->stmts_) {
-        CollectDefinedVars(s, defs);
-    }
-}
-
-void CollectDefinedVars(WhileStmtPtr w, std::unordered_set<VarPtr>& defs)
-{
-    for (auto& v : w->returnVars_) {
-        if (v) {
-            defs.insert(v);
-        }
-    }
-    for (auto& s : w->body_->stmts_) {
-        CollectDefinedVars(s, defs);
-    }
-}
-
-void CollectDefinedVars(StmtPtr stmt, std::unordered_set<VarPtr>& defs)
-{
-    if (!stmt) {
-        return;
-    }
-    if (auto t = As<TensorOpStmt>(stmt)) {
-        CollectDefinedVars(t, defs);
-        return;
-    }
-    if (auto i = As<IfStmt>(stmt)) {
-        CollectDefinedVars(i, defs);
-        return;
-    }
-    if (auto f = As<ForStmt>(stmt)) {
-        CollectDefinedVars(f, defs);
-        return;
-    }
-    if (auto w = As<WhileStmt>(stmt)) {
-        CollectDefinedVars(w, defs);
-        return;
-    }
-}
-
-std::unordered_set<VarPtr> CollectDefinedVarsFromBody(SeqStmtsPtr body)
-{
-    std::unordered_set<VarPtr> defs;
-    if (!body) {
-        return defs;
-    }
-    for (auto& s : body->stmts_) {
-        CollectDefinedVars(s, defs);
-    }
-    return defs;
-}
-
 std::pair<SeqStmtsPtr, std::optional<SeqStmtsPtr>> ResolveBranchConflicts(
     SeqStmtsPtr processedThen, std::optional<SeqStmtsPtr> processedElse,
     const std::vector<std::string>& externalVarNames)
 {
-    auto thenDefs = CollectDefinedVarsFromBody(processedThen);
-    auto elseDefs = CollectDefinedVarsFromBody(processedElse ? processedElse.value() : nullptr);
+    auto thenDefs = utils::CollectDefinedVars(processedThen);
+    auto elseDefs = utils::CollectDefinedVars(processedElse ? processedElse.value() : nullptr);
 
     std::unordered_set<int> elseRawMagics;
     for (auto& elseVar : elseDefs) {
@@ -424,7 +219,7 @@ std::pair<SeqStmtsPtr, std::optional<SeqStmtsPtr>> ResolveBranchConflicts(
     for (auto& v : thenDefs) {
         if (elseDefs.count(v) && !IsExternalVar(v->name_, externalVarNames)) {
             auto lt = std::dynamic_pointer_cast<const LogicalTensor>(v);
-            bool sharesRawTensor = lt && elseRawMagics.count(lt->GetRawMagic()) > 0;
+            bool sharesRawTensor = lt && elseRawMagics.find(lt->GetRawMagic()) != elseRawMagics.end();
             if (lt) {
                 cloneMap[v] = lt->Clone(sharesRawTensor);
             } else {
@@ -446,36 +241,28 @@ std::pair<SeqStmtsPtr, std::optional<SeqStmtsPtr>> ResolveBranchConflicts(
     return {processedThen, resolvedElse};
 }
 
-std::vector<VarPtr> CollectOutputVars(const std::vector<StmtPtr>& stmts)
+static std::vector<VarPtr> CollectOutputVars(const std::vector<StmtPtr>& stmts)
 {
     std::vector<VarPtr> outputs;
     for (auto& stmt : stmts) {
         if (auto t = As<TensorOpStmt>(stmt)) {
             for (auto& var : t->result_) {
-                if (var) {
-                    outputs.push_back(var);
-                }
+                outputs.push_back(var);
             }
             if (t->result_token_) {
                 outputs.push_back(t->result_token_);
             }
         } else if (auto i = As<IfStmt>(stmt)) {
             for (auto& var : i->returnVars_) {
-                if (var) {
-                    outputs.push_back(var);
-                }
+                outputs.push_back(var);
             }
         } else if (auto f = As<ForStmt>(stmt)) {
             for (auto& var : f->returnVars_) {
-                if (var) {
-                    outputs.push_back(var);
-                }
+                outputs.push_back(var);
             }
         } else if (auto w = As<WhileStmt>(stmt)) {
             for (auto& var : w->returnVars_) {
-                if (var) {
-                    outputs.push_back(var);
-                }
+                outputs.push_back(var);
             }
         }
     }

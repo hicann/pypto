@@ -111,6 +111,20 @@ protected:
     /// Default: visits operand, reconstructs if changed (copy-on-write).
     virtual ExprPtr VisitUnaryExpr_(const UnaryExprPtr& op);
 
+    /// Visit every expression in `exprs`, returning the new vector if any element changed.
+    std::pair<std::vector<ExprPtr>, bool> VisitExprList(const std::vector<ExprPtr>& exprs);
+
+    /// Visit every Var in `vars` (via VisitExpr, cast back to VarPtr), returning the new vector
+    /// if any element changed.
+    std::pair<std::vector<VarPtr>, bool> VisitVarList(const std::vector<VarPtr>& vars);
+
+    /// Visit every IterArg's initValue_ (via VisitExpr), rebuilding the IterArg when it changed,
+    /// and register old->new iterVar mappings in var_remap_ so the following condition/body visits
+    /// substitute references. Returns the new vector and whether any IterArg changed. The caller
+    /// must erase the registered mappings after visiting the body (IterArg iterVar_ is reused, so
+    /// the mappings are currently inert, but kept for correctness).
+    std::pair<std::vector<IterArgPtr>, bool> VisitIterArgList(const std::vector<IterArgPtr>& iterArgs);
+
     /// Pointer remapping for variables whose definitions changed during mutation.
     /// Used to keep body references consistent with new definition pointers
     /// (e.g., when IterArg's initValue_ changes, creating a new IterArg object).

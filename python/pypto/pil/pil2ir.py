@@ -11,22 +11,35 @@ import pypto
 
 from ..ir import SeqStmts
 from . import ops  # noqa: F401  side-effect import: registers PIL op handlers
-from .dispatcher import dispatch_block
+from .dispatcher import collect, dispatch_block
 from .op_registry import dispatch
 from .parser import ast2pil
-from .pir import BuildContext, Function, InsertPoint, ReturnSignal, Scope
+from .pir import BuildContext, CollectContext, Function, InsertPoint, ReturnSignal, Scope
+
+
+def _init_scope(func):
+    root = Scope(list(func.global_vars))
+    for name, val in zip(func.global_vars, func.global_values):
+        root[name] = val
+    return Scope(list(func.load_vars), parent=root)
+
+
+def _init_arguments(args):
+    all_args = {}
+    tensor_args = []
+    for key, val in args.items():
+        if isinstance(val, pypto.Tensor):
+            val = val.copy(name=key)
+            tensor_args.append(val)
+        all_args[key] = val
+    return all_args, tensor_args
 
 
 def pil2ir(func: Function, args: dict, tensor_args: list[pypto.Tensor]):
-    # make global scope
-    root = Scope(list(func.global_vars))
-
-    for name, val in zip(func.global_vars, func.global_values):
-        root[name] = val
-
-    scope = Scope(list(func.load_vars), parent=root)
+    scope = _init_scope(func)
     params = [x.logical_tensor() for x in tensor_args]
     body = SeqStmts(func.span)
+
     with BuildContext(func.span) as ctx, InsertPoint(body), scope.make_current():
         # Store function arguments
         for key, val in args.items():
@@ -38,12 +51,29 @@ def pil2ir(func: Function, args: dict, tensor_args: list[pypto.Tensor]):
         outs = [scope[t.name] for t in tensor_args]
         stmt = ctx.create_return_stmt([ctx.unwrap(t) for t in outs], func.span)
         ctx.emit(stmt)
+
     return ctx.create_function(func.name, params, [], body, func.span)
 
 
-def compile(pyfunc, *args, **kwargs):
-    pypto.pypto_impl.Reset()
+def collect_store_names(func: Function, all_args: dict):
+    scope = _init_scope(func)
+    body = SeqStmts(func.span)
 
+    with CollectContext(func.span) as ctx, InsertPoint(body), scope.make_current():
+        with pypto.options(), ops.apply_patches():
+            for key, val in all_args.items():
+                dispatch('pil.store', ctx, key, val)
+            try:
+                collect(func.body)
+            except ReturnSignal:
+                pass
+
+
+def compile(pyfunc, *args, **kwargs):
+    # `has_move=True` if Tensor.move or relative fill_/triu_/tril_ are used
+    # we need a pre-pass to collect store names, as move is not treated as store
+    # in python, otherwise we could skip it
+    has_move = kwargs.pop("has_move", True)
     sig = inspect.signature(pyfunc)
     bound = sig.bind(*args, **kwargs)
     bound.apply_defaults()
@@ -51,14 +81,16 @@ def compile(pyfunc, *args, **kwargs):
     # c++ addOperation still depends on function
     func = ast2pil(pyfunc)
 
-    all_args = {}
-    tensor_args = []
-    for key, val in bound.arguments.items():
-        if isinstance(val, pypto.Tensor):
-            val = val.copy(name=key)
-            tensor_args.append(val)
-        all_args[key] = val
+    # collect store names first
+    if has_move:
+        pypto.pypto_impl.Reset()
+        all_args, tensor_args = _init_arguments(bound.arguments)
+        with pypto.function("__entry__", *tensor_args):
+            collect_store_names(func, all_args)
 
+    pypto.pypto_impl.Reset()
+    # arguments maybe changed during `collect_store_names`, reinit it
+    all_args, tensor_args = _init_arguments(bound.arguments)
     with pypto.function("__entry__", *tensor_args):
         func_def = pil2ir(func, all_args, tensor_args)
         # funtion input args still need to be valid, it'll be used later by tensor slot

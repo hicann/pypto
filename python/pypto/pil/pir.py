@@ -154,7 +154,7 @@ class Function:
     # Function body
     body: Block
 
-    # Store variables
+    # Load variables
     load_vars: tuple[str, ...]
 
     # Store variables
@@ -281,6 +281,17 @@ class BuildContext(ir.IRBuilder):
         return val
 
 
+class CollectContext(BuildContext):
+    def wrap(self, val: ir.Expr) -> Any:
+        return val
+
+    def unwrap(self, val: Any) -> ir.Expr:
+        return val
+
+    def emit(self, stmt: ir.Stmt) -> None:
+        pass
+
+
 class InsertPoint:
     ctx: BuildContext
 
@@ -352,6 +363,7 @@ class Scope:
 class _Current(threading.local):
     scope: Optional[Scope] = None
     build_context: Optional[BuildContext] = None
+    collector_block: Optional["Block"] = None
 
 
 _current = _Current()

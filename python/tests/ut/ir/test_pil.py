@@ -6,6 +6,7 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
+from dataclasses import dataclass
 from types import SimpleNamespace
 
 import pytest
@@ -155,7 +156,7 @@ def test_ir_range():
 
     foo(10)
     expected, results = results, []
-    pil.compile(foo, 10)
+    pil.compile(foo, 10, has_move=False)
     assert results == expected
 
 
@@ -713,17 +714,17 @@ def test_lambda():
 
     def foo(x):
         # lambda has args
-        add1 = lambda a: a + 1  # noqa: E731
+        def add1(a): return a + 1  # noqa: E731
         ans.append(add1(x))
         # lambda with capture args
-        addx = lambda a: x + a  # noqa: E731
+        def addx(a): return x + a  # noqa: E731
         ans.append(addx(1))
         # lambda with default args
-        add_def = lambda a, b=10: a + b  # noqa: E731
+        def add_def(a, b=10): return a + b  # noqa: E731
         ans.append(add_def(5))
         ans.append(add_def(5, 15))
 
-    pil.compile(foo, 5)
+    pil.compile(foo, 5, has_move=False)
     assert ans == [6, 6, 15, 20]
 
 
@@ -740,7 +741,7 @@ def test_listcomp():
         # more complicated case
         ans.extend([(i, j) for i in range(9) for j in range(9) if i < j])
 
-    pil.compile(foo, 5)
+    pil.compile(foo, 5, has_move=False)
     real, ans = ans, []
     foo(5)
     assert ans == real
@@ -757,7 +758,7 @@ def test_setcomp():
         # set comprehension with multiple for clauses
         ans.extend(sorted({(i, j) for i in range(3) for j in range(3) if i < j}))
 
-    pil.compile(foo, 5)
+    pil.compile(foo, 5, has_move=False)
     real, ans = ans, []
     foo(5)
     assert ans == real
@@ -776,7 +777,7 @@ def test_dictcomp():
             if k in d2:
                 ans.append(d2[k])
 
-    pil.compile(foo, 5)
+    pil.compile(foo, 5, has_move=False)
     real, ans = ans, []
     foo(5)
     assert ans == real
@@ -861,7 +862,7 @@ def test_pil_ifexpr():
         c = a if a > b else b
         res.append(c)
 
-    pil.compile(foo, 1, 2)
+    pil.compile(foo, 1, 2, has_move=False)
     assert res == [2]
 
 
@@ -872,7 +873,7 @@ def test_pil_multi_and():
         c = a if a and b and c else b
         res.append(c)
 
-    pil.compile(foo, 1, 2, 0)
+    pil.compile(foo, 1, 2, 0, has_move=False)
     assert res == [2]
 
 
@@ -1035,3 +1036,37 @@ def test_delete_statement():
         del a, (b, c, (f, g)), e
 
     pil.compile(foo)
+
+
+def test_reshape():
+    """Test reshape operation."""
+
+    def foo(a, b, c):
+        t1 = b[0:1, 0:1]
+        t1 = t1.reshape([1, 1, 1])
+        a[:] = b + 1
+        a = 1 if c == 1 else 2
+        assert a == 2
+
+    x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
+    pil.compile(foo, x, y, 2)
+
+
+def test_function_call():
+
+    @dataclass
+    class Data:
+        data: list
+
+    def bar(p: Data):
+        t1, t2 = p.data
+        assert t1 == 1
+        assert t2 == 2
+
+    def foo(a, b):
+        t1 = a
+        t2 = b
+        for _ in pypto.loop(1):
+            bar(Data(data=[t1, t2]))
+    pil.compile(foo, 1, 2)

@@ -9,7 +9,6 @@
  */
 #pragma once
 
-#include <unordered_map>
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -17,8 +16,6 @@
 #include "ir/stmt.h"
 
 namespace pypto::ir {
-
-using VarExprMap = std::unordered_map<VarPtr, ExprPtr>;
 
 SeqStmtsPtr MergeStmtsIntoIfStmt(SeqStmtsPtr seq, const std::vector<std::string>& externalVarNames = {});
 

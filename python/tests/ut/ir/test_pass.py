@@ -629,11 +629,46 @@ def test_tensor_move():
     assert add_stmt.result[0].name == 'b_0'
 
 
+def test_tensor_move2():
+
+    def foo(a, b):
+        last = pypto.full(a.shape, 1.0, a.dtype)
+        for _ in pypto.loop(10):
+            a = last + 1
+            last.move(a + 1)
+            b[0:, 0:] = last
+        b.move(last + 1)
+
+    x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
+    func = _run_dce(foo, x, y)
+    print(func)
+    for_stmt = func.body[1]
+    assert isinstance(for_stmt, ir.ForStmt)
+    add_stmt = func.body[2]
+    assert isinstance(add_stmt, ir.TensorOpStmt)
+    assert add_stmt.opcode == "ADDS"
+    assert add_stmt.result[0].name == 'b_0'
+
+
+def test_tensor_move3():
+
+    def bar(a):
+        a.fill_(1.0)
+
+    def foo(a):
+        bar(a)
+
+    x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
+    func = _run_dce(foo, x)
+    assert len(func.body) == 2  # VEC_DUP + RETURN
+
+
 def test_dce_reshape_inplace1():
     def foo(a, b):
         a1 = pypto.reshape(a, [32, 32], inplace=True)
         for _ in pypto.loop(1):
-            a1[0:, 0:] = b + 1 # a1 reshaped from input, could not be deleted
+            a1[0:, 0:] = b + 1  # a1 reshaped from input, could not be deleted
     x = pypto.Tensor((32, 32), pypto.DT_FP32)
     y = pypto.Tensor((32, 32), pypto.DT_FP32)
     func = _run_dce(foo, x, y)
@@ -647,7 +682,7 @@ def test_dce_reshape_inplace1():
 def test_dce_reshape_inplace2():
     def foo(a, b):
         a1 = pypto.reshape(a, [32, 32], inplace=True)
-        a1[:] = b + 1 # a1 reshaped from input, could not be deleted
+        a1[:] = b + 1  # a1 reshaped from input, could not be deleted
     x = pypto.Tensor((32, 32), pypto.DT_FP32)
     y = pypto.Tensor((32, 32), pypto.DT_FP32)
     func = _run_dce(foo, x, y)
@@ -660,7 +695,7 @@ def test_dce_reshape_inplace3():
     def foo(a, b):
         a1 = a + 1
         a2 = pypto.reshape(a1, [32, 32], inplace=True)
-        a2[:] = b + 1 # a2 not reshaped from input, could be deleted
+        a2[:] = b + 1  # a2 not reshaped from input, could be deleted
     x = pypto.Tensor((32, 32), pypto.DT_FP32)
     y = pypto.Tensor((32, 32), pypto.DT_FP32)
     func = _run_dce(foo, x, y)
@@ -682,4 +717,4 @@ def test_dce_reshape_inplace4():
     for_stmt = func.body[1]
     stmt3 = for_stmt.body[-1]
     assert isinstance(stmt3, ir.ContinueStmt)
-    assert len(stmt3.value) == 2 # t0 and out both
+    assert len(stmt3.value) == 2  # t0 and out both
