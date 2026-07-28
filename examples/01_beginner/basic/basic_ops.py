@@ -198,6 +198,7 @@ def main():
     for name, test in selected.items():
         print(f"Running test_{name} ...")
         test(device)
+        print(f"✓ Test {name} completed successfully")
 
 
 if __name__ == "__main__":

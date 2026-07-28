@@ -13,7 +13,6 @@
 from contextlib import contextmanager
 import inspect
 import itertools
-import logging
 import sys
 from typing import Iterator, List, Optional, Tuple, Union, overload
 
@@ -24,9 +23,6 @@ from .enum import *  # noqa: F403
 from .error import FeError, PyptoError
 from .symbolic_scalar import SymbolicScalar, SymInt
 from .tensor import Tensor
-
-logging.basicConfig(level=logging.DEBUG)
-
 
 __all__ = [
     "set_vec_tile_shapes",

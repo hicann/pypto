@@ -20,7 +20,7 @@ import torch
 
 import pypto
 
-runtime_options = {}
+runtime_options = {"run_mode": pypto.RunMode.NPU}
 
 
 @pypto.jit(runtime_options=runtime_options)
@@ -75,6 +75,7 @@ def main():
     add_kernel(x, y, out)
 
     torch.testing.assert_close(x + y, out, atol=1e-3, rtol=1e-3)
+    print("✓ Test add_kernel completed successfully")
 
 
 if __name__ == "__main__":
