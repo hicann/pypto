@@ -158,3 +158,22 @@ TEST_F(OperationOpsTest, DumpAttr_PrintsInplaceInfoMap)
         EXPECT_EQ(opAttrJson["0"], 0);
     }
 }
+
+TEST_F(OperationOpsTest, Axpy_UnsupportedSelfDim)
+{
+    std::vector<int64_t> shape5d = {2, 4, 8, 16, 32};
+    Tensor self(DT_FP32, shape5d);
+    Tensor other(DT_FP32, shape5d);
+
+    FUNCTION("AxpyUnsupportedSelfDim", {self, other}) { EXPECT_THROW(Axpy(self, other, 1.0f), std::exception); }
+}
+
+TEST_F(OperationOpsTest, Axpy_UnsupportedOtherDim)
+{
+    std::vector<int64_t> shape4d = {4, 8, 16, 32};
+    std::vector<int64_t> shape5d = {2, 4, 8, 16, 32};
+    Tensor self(DT_FP32, shape4d);
+    Tensor other(DT_FP32, shape5d);
+
+    FUNCTION("AxpyUnsupportedOtherDim", {self, other}) { EXPECT_THROW(Axpy(self, other, 1.0f), std::exception); }
+}

@@ -633,6 +633,12 @@ TILEOP void TExp2(T0 dst, T1 tmp, T2 tmp2, T3 src)
 template <typename Scalar, typename T0, typename T1, typename T2>
 TILEOP void TRound(T0 dst, T1 tmp, T2 src, Scalar powDecimals)
 {
+    if constexpr (std::is_integral_v<typename T2::Type>) {
+        if ((uint64_t)dst.GetAddr() == (uint64_t)src.GetAddr() && powDecimals >= 1.0f) {
+            return;
+        }
+    }
+
     const auto dstLayout = dst.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
@@ -648,6 +654,13 @@ TILEOP void TRound(T0 dst, T1 tmp, T2 src, Scalar powDecimals)
                 dstTile.Assign(dst, tileOffsets);
                 tmpTile.Assign(tmp, tileOffsets);
                 srcTile.Assign(src, tileOffsets);
+
+                if constexpr (std::is_integral_v<typename T2::Type>) {
+                    if (powDecimals >= 1.0f) {
+                        pto::TMOV(dstTile.Data(), srcTile.Data());
+                        continue;
+                    }
+                }
 
                 if constexpr (std::is_same_v<typename T2::Type, float>) {
                     pto::TMULS(srcTile.Data(), srcTile.Data(), powDecimals);

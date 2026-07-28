@@ -1050,9 +1050,12 @@ def gen_round_op_golden(case_name: str, output: Path, case_index: int = None) ->
     def golden_func(inputs: list, config: dict):
         params = config.get("params")
         decimals = 0 if not params.get("decimals") else params["decimals"]
-        x = safe_tensor_conversion(inputs[0])
         input_dtype = inputs[0].dtype
         tensor_dtype = get_dtype_by_name(input_dtype, True)
+        if np.issubdtype(input_dtype, np.integer):
+            y = np.around(inputs[0], decimals=decimals)
+            return [np.array(y)]
+        x = safe_tensor_conversion(inputs[0])
         x = x.to(torch.float32)
         y = torch.round(x, decimals=decimals)
         if input_dtype == bfloat16:

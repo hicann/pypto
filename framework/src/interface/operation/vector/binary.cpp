@@ -1686,6 +1686,8 @@ Tensor Axpy(const Tensor& self, const Tensor& other, float alpha)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Axpy");
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Axpy");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "AXPY");
+    CheckTensorDimRange(other.GetStorage(), 1, 4, "AXPY");
 
     auto selfDtype = self.GetDataType();
     auto otherDtype = other.GetDataType();
