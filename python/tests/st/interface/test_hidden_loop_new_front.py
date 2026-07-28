@@ -118,17 +118,17 @@ def op_hidden_loop_mix_loops(
         t0_temp = pypto.add(t1, t1)
     else:
         t0_temp = pypto.add(t2, t2)
-    t0_temp.move(pypto.add(t0_temp, 1.0))
+    t0_temp[:] = pypto.add(t0_temp, 1.0)
 
     for _ in pypto.loop(2, name="L02", idx_name="k"):
-        t3.move(pypto.mul(t3, t2))
+        t3[:] = pypto.mul(t3, t2)
 
-    out.move(pypto.sub(t3, t0_temp))
+    out[:] = pypto.sub(t3, t0_temp)
 
     for _ in pypto.loop(2, name="L04", idx_name="h"):
-        t0_temp.move(pypto.mul(t0_temp, t2))
+        t0_temp[:] = pypto.mul(t0_temp, t2)
 
-    out.move(pypto.add(out, t0_temp))
+    out[:] = pypto.add(out, t0_temp)
 
 
 def test_hidden_loop_mix_loops_jit_function():

@@ -118,6 +118,47 @@ struct IrFuncSetup {
         stmts.push_back(forStmt);
         return forStmt;
     }
+
+    ir::ForStmtPtr WrapStmtsInForLoopWithIterArgs(const std::string& loopVarName,
+                                                  const std::vector<LogicalTensorPtr>& initValues,
+                                                  const std::vector<LogicalTensorPtr>& continueValues,
+                                                  const std::vector<ir::VarPtr>& returnVars,
+                                                  std::vector<std::pair<std::string, std::any>> attrs = {})
+    {
+        std::vector<ir::ExprPtr> continueExprs;
+        for (auto& v : continueValues) {
+            continueExprs.push_back(std::static_pointer_cast<const ir::Expr>(v));
+        }
+        auto continueStmt = std::make_shared<ir::ContinueStmt>(continueExprs, Sp());
+        stmts.push_back(continueStmt);
+        auto body = std::make_shared<ir::SeqStmts>(stmts, Sp());
+        stmts.clear();
+
+        std::vector<ir::IterArgPtr> iterArgs;
+        for (size_t i = 0; i < initValues.size(); i++) {
+            auto iterVar = builder.CreateTensorVar(*fwkFunc, DT_FP32, {TILE, TILE}, TileOpFormat::TILEOP_ND,
+                                                   loopVarName + "_iter" + std::to_string(i));
+            iterArgs.push_back(std::make_shared<ir::IterArg>(std::static_pointer_cast<const ir::Var>(iterVar),
+                                                             std::static_pointer_cast<const ir::Expr>(initValues[i])));
+        }
+
+        auto intType = std::make_shared<ir::ScalarType>(ir::DataType::INT64);
+        auto loopVar = IRContext::Get().MakeVar(loopVarName, intType, Sp());
+        auto zero = std::make_shared<ir::ConstInt>(0, ir::DataType::INT64, Sp());
+        auto ten = std::make_shared<ir::ConstInt>(10, ir::DataType::INT64, Sp());
+        auto one = std::make_shared<ir::ConstInt>(1, ir::DataType::INT64, Sp());
+        attrs.emplace_back("_config_scope", ConfigManagerNg::CurrentScope());
+        auto forStmt = std::make_shared<ir::ForStmt>(loopVar, zero, ten, one, iterArgs, body, returnVars, Sp(),
+                                                     std::move(attrs));
+        stmts.push_back(forStmt);
+        return forStmt;
+    }
+
+    ir::VarPtr MakeReturnVar(const std::string& name)
+    {
+        auto lt = builder.CreateTensorVar(*fwkFunc, DT_FP32, {TILE, TILE}, TileOpFormat::TILEOP_ND, name);
+        return std::static_pointer_cast<const ir::Var>(lt);
+    }
 };
 
 std::vector<npu::tile_fwk::Function*> FindHiddenFuncs()
@@ -515,4 +556,160 @@ TEST_F(IrFuncBuilderTest, TestTransformStmts_InnerConfigOverride)
     }
     EXPECT_TRUE(foundOuter);
     EXPECT_TRUE(foundInner);
+}
+
+TEST_F(IrFuncBuilderTest, TestLinkIfStmtSlots_YieldToReturnVar)
+{
+    IrFuncSetup setup("LinkIfStmtSlots");
+
+    auto out = setup.MakeParam("out");
+
+    // thenBody: TENSOR_ALLOC then_val + ASSEMBLE out→then_val + YieldStmt [then_val]
+    auto thenVal = setup.MakeLocal("then_val");
+    setup.AddDassemble(out, thenVal);
+    auto thenYield = std::make_shared<ir::YieldStmt>(std::vector<ir::ExprPtr>{thenVal}, Sp());
+    setup.stmts.push_back(thenYield);
+    auto thenBody = std::make_shared<ir::SeqStmts>(setup.stmts, Sp());
+    setup.stmts.clear();
+
+    // elseBody: TENSOR_ALLOC else_val + ASSEMBLE out→else_val + YieldStmt [else_val]
+    auto elseVal = setup.MakeLocal("else_val");
+    setup.AddDassemble(out, elseVal);
+    auto elseYield = std::make_shared<ir::YieldStmt>(std::vector<ir::ExprPtr>{elseVal}, Sp());
+    setup.stmts.push_back(elseYield);
+    auto elseBody = std::make_shared<ir::SeqStmts>(setup.stmts, Sp());
+    setup.stmts.clear();
+
+    // returnVar
+    auto returnVar = setup.builder.CreateTensorVar(*setup.fwkFunc, DT_FP32, {TILE, TILE}, TileOpFormat::TILEOP_ND,
+                                                   "out_var");
+
+    // IfStmt
+    auto cond = std::make_shared<ir::ConstInt>(1, ir::DataType::INT64, Sp());
+    auto ifStmt = std::make_shared<ir::IfStmt>(
+        cond, thenBody, std::optional<ir::SeqStmtsPtr>{elseBody},
+        std::vector<ir::VarPtr>{std::static_pointer_cast<const ir::Var>(returnVar)}, Sp());
+    setup.stmts.push_back(ifStmt);
+
+    // ReturnStmt [returnVar] — matches logicalParams_[0] = out by position
+    auto returnStmt = std::make_shared<ir::ReturnStmt>(std::vector<ir::ExprPtr>{returnVar}, Sp());
+    setup.stmts.push_back(returnStmt);
+
+    // Build + Run pass
+    auto irFunc = setup.BuildIrFunction("LinkIfStmtSlots");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    // LinkIfStmtSlots: SetSameSlot(elseVal, returnVar) → returnVar slot = elseVal slot
+    // LinkReturnSlots: SetSameSlot(returnVar, out) → out slot = returnVar slot = elseVal slot
+    auto slotManager = Program::GetInstance().GetTensorSlotManager();
+    auto elseTensor = slotManager->GetSlotTensor(elseVal);
+    auto returnTensor = slotManager->GetSlotTensor(returnVar);
+    auto outTensor = slotManager->GetSlotTensor(out);
+
+    EXPECT_EQ(elseTensor->Id(), returnTensor->Id());
+    EXPECT_EQ(elseTensor->Id(), outTensor->Id());
+}
+
+// ============================================================================
+// LinkControlFlowSlots: ForStmt with iterArgs + ContinueStmt + returnVars.
+//   Verifies slot chain: param → returnVar → continueValue → iterVar → initValue
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestLinkControlFlowSlots_ForLoop)
+{
+    IrFuncSetup setup("LinkControlFlowSlots_ForLoop");
+
+    auto out = setup.MakeParam("out");
+
+    // Loop body: TENSOR_ALLOC loop_val + ASSEMBLE out→loop_val + ContinueStmt [loop_val]
+    auto loopVal = setup.MakeLocal("loop_val");
+    setup.AddDassemble(out, loopVal);
+
+    auto returnVar = setup.MakeReturnVar("for_returnVar");
+    setup.WrapStmtsInForLoopWithIterArgs("i", {out}, {loopVal}, {returnVar});
+
+    // ReturnStmt [returnVar] — matches logicalParams_[0] = out by position
+    auto returnStmt = std::make_shared<ir::ReturnStmt>(
+        std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(returnVar)}, Sp());
+    setup.stmts.push_back(returnStmt);
+
+    auto irFunc = setup.BuildIrFunction("LinkControlFlowSlots_ForLoop");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    // Slot chain: out → returnVar → loop_val → iterVar → initValue(out)
+    auto slotManager = Program::GetInstance().GetTensorSlotManager();
+    auto outId = slotManager->GetSlotTensor(out)->Id();
+    auto returnVarLt = std::const_pointer_cast<LogicalTensor>(
+        std::dynamic_pointer_cast<const LogicalTensor>(returnVar));
+    EXPECT_EQ(slotManager->GetSlotTensor(returnVarLt)->Id(), outId);
+    EXPECT_EQ(slotManager->GetSlotTensor(loopVal)->Id(), outId);
+}
+
+// ============================================================================
+// LinkControlFlowSlots: ForStmt containing IfStmt (for + if nesting).
+//   Verifies slot chain propagates through both for and if:
+//   param → for_returnVar → if_returnVar → yield_value
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestLinkControlFlowSlots_ForLoopWithIfStmt)
+{
+    IrFuncSetup setup("LinkControlFlowSlots_ForLoopWithIfStmt");
+
+    auto out = setup.MakeParam("out");
+
+    // IfStmt thenBody: TENSOR_ALLOC then_val + ASSEMBLE out→then_val + YieldStmt [then_val]
+    auto thenVal = setup.MakeLocal("then_val");
+    setup.AddDassemble(out, thenVal);
+    auto thenYield = std::make_shared<ir::YieldStmt>(
+        std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(thenVal)}, Sp());
+    setup.stmts.push_back(thenYield);
+    auto thenBody = std::make_shared<ir::SeqStmts>(setup.stmts, Sp());
+    setup.stmts.clear();
+
+    // IfStmt elseBody: TENSOR_ALLOC else_val + ASSEMBLE out→else_val + YieldStmt [else_val]
+    auto elseVal = setup.MakeLocal("else_val");
+    setup.AddDassemble(out, elseVal);
+    auto elseYield = std::make_shared<ir::YieldStmt>(
+        std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(elseVal)}, Sp());
+    setup.stmts.push_back(elseYield);
+    auto elseBody = std::make_shared<ir::SeqStmts>(setup.stmts, Sp());
+    setup.stmts.clear();
+
+    // IfStmt with returnVar
+    auto ifReturnVar = setup.MakeReturnVar("if_returnVar");
+    auto cond = std::make_shared<ir::ConstInt>(1, ir::DataType::INT64, Sp());
+    auto ifStmt = std::make_shared<ir::IfStmt>(cond, thenBody, std::optional<ir::SeqStmtsPtr>{elseBody},
+                                               std::vector<ir::VarPtr>{ifReturnVar}, Sp());
+    setup.stmts.push_back(ifStmt);
+
+    // ForStmt wraps the IfStmt: ContinueStmt [if_returnVar]
+    auto forReturnVar = setup.MakeReturnVar("for_returnVar");
+    setup.WrapStmtsInForLoopWithIterArgs(
+        "i", {out},
+        {std::const_pointer_cast<LogicalTensor>(std::dynamic_pointer_cast<const LogicalTensor>(ifReturnVar))},
+        {forReturnVar});
+
+    // ReturnStmt [for_returnVar] — matches logicalParams_[0] = out by position
+    auto returnStmt = std::make_shared<ir::ReturnStmt>(
+        std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(forReturnVar)}, Sp());
+    setup.stmts.push_back(returnStmt);
+
+    auto irFunc = setup.BuildIrFunction("LinkControlFlowSlots_ForLoopWithIfStmt");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    // Slot chain: out → for_returnVar → if_returnVar → then_val / else_val
+    auto slotManager = Program::GetInstance().GetTensorSlotManager();
+    auto outId = slotManager->GetSlotTensor(out)->Id();
+    auto forReturnLt = std::const_pointer_cast<LogicalTensor>(
+        std::dynamic_pointer_cast<const LogicalTensor>(forReturnVar));
+    auto ifReturnLt = std::const_pointer_cast<LogicalTensor>(
+        std::dynamic_pointer_cast<const LogicalTensor>(ifReturnVar));
+    EXPECT_EQ(slotManager->GetSlotTensor(forReturnLt)->Id(), outId);
+    EXPECT_EQ(slotManager->GetSlotTensor(ifReturnLt)->Id(), outId);
+    EXPECT_EQ(slotManager->GetSlotTensor(thenVal)->Id(), outId);
+    EXPECT_EQ(slotManager->GetSlotTensor(elseVal)->Id(), outId);
 }

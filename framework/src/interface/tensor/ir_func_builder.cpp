@@ -33,6 +33,13 @@ using namespace pypto;
 
 namespace npu::tile_fwk {
 
+namespace {
+inline LogicalTensorPtr AsLogicalTensor(const ir::ExprPtr& expr)
+{
+    return std::const_pointer_cast<LogicalTensor>(std::dynamic_pointer_cast<const LogicalTensor>(expr));
+}
+} // namespace
+
 class StmtTransformer : public ir::IRMutator {
 public:
     using IRMutator::VisitExpr_;
@@ -57,9 +64,9 @@ private:
             if (!value) {
                 continue;
             }
-            auto lt = std::dynamic_pointer_cast<const LogicalTensor>(value);
+            auto lt = AsLogicalTensor(value);
             if (lt != nullptr) {
-                builder_.consumedTensors_.insert(std::const_pointer_cast<LogicalTensor>(lt));
+                builder_.consumedTensors_.insert(lt);
             }
         }
     }
@@ -87,9 +94,9 @@ private:
     {
         for (auto& iterArg : forStmt->iterArgs_) {
             if (iterArg && iterArg->initValue_) {
-                auto lt = std::dynamic_pointer_cast<const LogicalTensor>(iterArg->initValue_);
+                auto lt = AsLogicalTensor(iterArg->initValue_);
                 if (lt != nullptr) {
-                    builder_.consumedTensors_.insert(std::const_pointer_cast<LogicalTensor>(lt));
+                    builder_.consumedTensors_.insert(lt);
                 }
             }
         }
@@ -111,6 +118,12 @@ private:
     }
 
     ir::StmtPtr VisitStmt_(const ir::ContinueStmtPtr& op) override
+    {
+        CollectConsumedTensors(op->value_);
+        return op;
+    }
+
+    ir::StmtPtr VisitStmt_(const ir::YieldStmtPtr& op) override
     {
         CollectConsumedTensors(op->value_);
         return op;
@@ -145,9 +158,8 @@ std::shared_ptr<Function> RootFunctionBuilder::Build(const ir::FunctionPtr& irFu
 void RootFunctionBuilder::InitDynFunc(const ir::FunctionPtr& irFunc)
 {
     for (const auto& param : irFunc->params_) {
-        auto constLT = std::dynamic_pointer_cast<const LogicalTensor>(param);
-        ASSERT(constLT) << "RootFunctionBuilder: param is not a LogicalTensor: " << param->name_;
-        auto lt = std::const_pointer_cast<LogicalTensor>(constLT);
+        auto lt = AsLogicalTensor(param);
+        ASSERT(lt) << "RootFunctionBuilder: param is not a LogicalTensor: " << param->name_;
         logicalParams_.push_back(lt);
     }
 
@@ -160,6 +172,31 @@ void RootFunctionBuilder::InitDynFunc(const ir::FunctionPtr& irFunc)
     program_.SetCurrentDynamicFunction(dynFunc_.get());
 }
 
+void RootFunctionBuilder::CollectInOutCastFromReturn()
+{
+    auto slotManager = program_.GetTensorSlotManager();
+
+    std::unordered_set<LogicalTensorPtr> callInputTensors;
+    std::unordered_set<int> callOutputSlots;
+    for (auto& op : dynFunc_->Operations(false).DuplicatedOpList()) {
+        for (auto& iOperand : op->iOperand) {
+            callInputTensors.insert(iOperand);
+        }
+        for (auto& oOperand : op->oOperand) {
+            callOutputSlots.insert(slotManager->GetSlotTensor(oOperand)->Id());
+        }
+    }
+
+    for (auto& param : logicalParams_) {
+        if (callInputTensors.count(param) > 0) {
+            dynFunc_->AddOriginIncast(param);
+        }
+        if (callOutputSlots.count(slotManager->GetSlotTensor(param)->Id()) > 0) {
+            dynFunc_->AddOriginOutcast(param);
+        }
+    }
+}
+
 void RootFunctionBuilder::FinalizeDynFunc(const ir::FunctionPtr& irFunc)
 {
     dynFunc_->name_ = irFunc->name_;
@@ -169,9 +206,7 @@ void RootFunctionBuilder::FinalizeDynFunc(const ir::FunctionPtr& irFunc)
     dynFunc_->SetSlotScope(dynScope);
     program_.GetTensorSlotManager()->scopeList.push_back(dynScope);
 
-    auto operationList = dynFunc_->Operations(false).DuplicatedOpList();
-    dynFunc_->FillOriginInOutCast(operationList);
-    dynFunc_->SetCallOpSlot();
+    CollectInOutCastFromReturn();
 
     for (auto& incast : dynFunc_->GetOriginIncast()) {
         dynFunc_->AppendIncast(incast, 0, 0);
@@ -187,7 +222,7 @@ void RootFunctionBuilder::FinalizeDynFunc(const ir::FunctionPtr& irFunc)
     program_.SetParamConfig(dynFunc_.get(), ConfigManagerNg::CurrentScope());
 
     FlushConstructAssembleSlots();
-    BuildDynSlotScope(); // CleanRedundantOutCast 会过滤 outCasts_ 中的中间输出
+    BuildDynSlotScope();
 }
 
 bool RootFunctionBuilder::IsPureTensorOpSeq(const ir::SeqStmtsPtr& seq)
@@ -240,7 +275,7 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathF
             if (!result) {
                 continue;
             }
-            auto lt = std::const_pointer_cast<LogicalTensor>(std::static_pointer_cast<const LogicalTensor>(result));
+            auto lt = AsLogicalTensor(result);
             auto tensor = slotManager->GetSlotTensor(lt);
             tensorSlotDefineFunc_[TensorSlot::CreateTensor(*tensor)] = pathFunc.get();
         }
@@ -252,7 +287,7 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathF
         if (!arg) {
             continue;
         }
-        iOperands.push_back(std::const_pointer_cast<LogicalTensor>(std::static_pointer_cast<const LogicalTensor>(arg)));
+        iOperands.push_back(AsLogicalTensor(arg));
     }
 
     LogicalTensors oOperands;
@@ -260,7 +295,7 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathF
         if (!result) {
             continue;
         }
-        auto lt = std::const_pointer_cast<LogicalTensor>(std::static_pointer_cast<const LogicalTensor>(result));
+        auto lt = AsLogicalTensor(result);
         oOperands.push_back(lt);
     }
 
@@ -424,7 +459,6 @@ void RootFunctionBuilder::BuildDynSlotScope()
         slotManager->MarkInput(*tensor);
     }
 
-    dynFunc_->CleanRedundantOutCast();
     dynFunc_->InferParamDirection();
 }
 
@@ -636,8 +670,7 @@ void RootFunctionBuilder::LinkReturnSlots(const ir::StmtPtr& stmt)
         if (!returnStmt->value_[i]) {
             continue;
         }
-        auto returnLt = std::const_pointer_cast<LogicalTensor>(
-            std::dynamic_pointer_cast<const LogicalTensor>(returnStmt->value_[i]));
+        auto returnLt = AsLogicalTensor(returnStmt->value_[i]);
         if (returnLt != nullptr) {
             slotManager->SetSameSlot(logicalParams_[i], returnLt);
         }
@@ -662,34 +695,91 @@ void RootFunctionBuilder::LinkForStmtSlots(const ir::ForStmt& forStmt)
     auto slotManager = program_.GetTensorSlotManager();
     for (size_t i = 0; i < forStmt.iterArgs_.size(); i++) {
         auto& iterArg = forStmt.iterArgs_[i];
-        auto initLt = std::const_pointer_cast<LogicalTensor>(
-            std::dynamic_pointer_cast<const LogicalTensor>(iterArg->initValue_));
+        auto initLt = AsLogicalTensor(iterArg->initValue_);
         if (initLt == nullptr) {
             continue;
         }
-        auto iterLt = std::const_pointer_cast<LogicalTensor>(
-            std::dynamic_pointer_cast<const LogicalTensor>(iterArg->iterVar_));
+        auto iterLt = AsLogicalTensor(iterArg->iterVar_);
         if (iterLt == nullptr) {
             continue;
         }
-        // initValue_ -> iterVar_：iterVar_ 复用 initValue_ 的 slot
-        slotManager->SetSameSlot(initLt, iterLt);
         if (continueStmt == nullptr) {
             continue;
         }
-        // iterVar_ -> value_：value_ 复用 iterVar_ 的 slot（传递性链回 initValue_）
-        auto valueLt = std::const_pointer_cast<LogicalTensor>(
-            std::dynamic_pointer_cast<const LogicalTensor>(continueStmt->value_[i]));
+        auto valueLt = AsLogicalTensor(continueStmt->value_[i]);
         if (valueLt == nullptr) {
             continue;
         }
-        slotManager->SetSameSlot(iterLt, valueLt);
-        // value_ -> returnVars_：returnVar 复用 continue value 的 slot
-        auto returnVarLt = std::const_pointer_cast<LogicalTensor>(
-            std::dynamic_pointer_cast<const LogicalTensor>(forStmt.returnVars_[i]));
-        if (returnVarLt != nullptr) {
-            slotManager->SetSameSlot(valueLt, returnVarLt);
+        auto returnVarLt = AsLogicalTensor(forStmt.returnVars_[i]);
+        if (returnVarLt == nullptr) {
+            continue;
         }
+        // returnVar -> value -> iterVar -> initValue：child 复用 parent 的 slot
+        slotManager->SetSameSlot(returnVarLt, valueLt);
+        slotManager->SetSameSlot(valueLt, iterLt);
+        slotManager->SetSameSlot(iterLt, initLt);
+    }
+}
+
+void RootFunctionBuilder::LinkIfStmtSlots(const ir::IfStmt& ifStmt)
+{
+    auto slotManager = program_.GetTensorSlotManager();
+    auto linkYieldSlots = [&](const ir::SeqStmtsPtr& body) {
+        if (body == nullptr || body->stmts_.empty()) {
+            return;
+        }
+        auto yieldStmt = std::dynamic_pointer_cast<const ir::YieldStmt>(body->stmts_.back());
+        if (yieldStmt == nullptr) {
+            return;
+        }
+        for (size_t i = 0; i < yieldStmt->value_.size() && i < ifStmt.returnVars_.size(); i++) {
+            auto yieldLt = AsLogicalTensor(yieldStmt->value_[i]);
+            auto returnLt = AsLogicalTensor(ifStmt.returnVars_[i]);
+            if (yieldLt != nullptr && returnLt != nullptr) {
+                slotManager->SetSameSlot(returnLt, yieldLt);
+            }
+        }
+    };
+    linkYieldSlots(ifStmt.thenBody_);
+    if (ifStmt.elseBody_) {
+        linkYieldSlots(ifStmt.elseBody_.value());
+    }
+}
+
+void RootFunctionBuilder::LinkControlFlowSlots(const ir::StmtPtr& stmt)
+{
+    if (!stmt) {
+        return;
+    }
+    switch (stmt->GetKind()) {
+        case ir::ObjectKind::SeqStmts: {
+            auto seq = std::dynamic_pointer_cast<const ir::SeqStmts>(stmt);
+            if (seq) {
+                for (auto& child : seq->stmts_) {
+                    LinkControlFlowSlots(child);
+                }
+            }
+            break;
+        }
+        case ir::ObjectKind::ForStmt: {
+            auto forStmt = std::static_pointer_cast<const ir::ForStmt>(stmt);
+            auto config = forStmt->GetAttr<std::shared_ptr<ConfigScope>>("_config_scope");
+            ConfigManagerNg::ScopedRestore scoped(config);
+            LinkForStmtSlots(*forStmt);
+            LinkControlFlowSlots(forStmt->body_);
+            break;
+        }
+        case ir::ObjectKind::IfStmt: {
+            auto ifStmt = std::static_pointer_cast<const ir::IfStmt>(stmt);
+            LinkIfStmtSlots(*ifStmt);
+            LinkControlFlowSlots(ifStmt->thenBody_);
+            if (ifStmt->elseBody_) {
+                LinkControlFlowSlots(ifStmt->elseBody_.value());
+            }
+            break;
+        }
+        default:
+            break;
     }
 }
 
@@ -715,7 +805,6 @@ void RootFunctionBuilder::ReplacePlaceholders(ir::StmtPtr stmt)
             auto forStmt = std::static_pointer_cast<const ir::ForStmt>(stmt);
             auto config = forStmt->GetAttr<std::shared_ptr<ConfigScope>>("_config_scope");
             ConfigManagerNg::ScopedRestore scoped(config);
-            LinkForStmtSlots(*forStmt);
             ReplacePlaceholders(forStmt->body_);
             break;
         }
@@ -747,6 +836,7 @@ ir::StmtPtr RootFunctionBuilder::TransformBody(ir::StmtPtr stmt)
 
     auto irTree = StmtTransformer(*this).Apply(stmt, "");
     LinkReturnSlots(irTree);
+    LinkControlFlowSlots(irTree);
     ReplacePlaceholders(irTree);
 
     return irTree;

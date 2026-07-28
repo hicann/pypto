@@ -56,11 +56,14 @@ private:
 
     void InitDynFunc(const ir::FunctionPtr& irFunc);
     void FinalizeDynFunc(const ir::FunctionPtr& irFunc);
+    void CollectInOutCastFromReturn();
 
     ir::StmtPtr TransformBody(ir::StmtPtr stmt);
     void ReplacePlaceholders(ir::StmtPtr stmt);
     void LinkReturnSlots(const ir::StmtPtr& stmt);
+    void LinkControlFlowSlots(const ir::StmtPtr& stmt);
     void LinkForStmtSlots(const ir::ForStmt& forStmt);
+    void LinkIfStmtSlots(const ir::IfStmt& ifStmt);
 
     ir::StmtPtr CreatePathFuncAndPlaceholder(const ir::SeqStmtsPtr& seq, const std::string& loopVarName);
     ir::StmtPtr FinalizePathFunc(const ir::StmtPtr& placeholder);
