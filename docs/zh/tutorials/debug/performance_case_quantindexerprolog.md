@@ -45,7 +45,7 @@
 QuantIndexerProlog算子在典型场景（Batch=4，MTP1，Kv Cache长度64k），可以运行如下实例脚本执行：
 
 ```bash
-python3 models/deepseek_v32_exp/testdsv32_lightning_indexer_prolog_quant.py
+python3 models/deepseek_v32_exp/deepseekv32_lightning_indexer_prolog_quant.py
 ```
 
 该脚本提供了丰富的测试用例，对于不同场景，用户可以根据需要修改脚本执行不同的用例。
