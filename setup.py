@@ -252,14 +252,6 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
 
 
 @dataclasses.dataclass
-class Py3Desc:
-    """Python3 描述"""
-
-    exe: str  # Interpreter 路径
-    minor: int  # Minor 版本
-
-
-@dataclasses.dataclass
 class CMakeCmdParams:
     """CMake 命令参数"""
 
@@ -285,7 +277,6 @@ class CMakeUserOption:
         - cmake-build-type: 构建类型 (如 "Debug" 或 "Release")
         - cmake-options: 额外的 CMake 选项
         - cmake-verbose: 是否启用 CMake 详细输出
-        - multi-py3-exe: 额外 Python3 可执行文件路径列表, 用于多版本 pypto_impl.so 编译
 
     配置来源:
         1. 命令行参数
@@ -302,7 +293,6 @@ class CMakeUserOption:
         ('cmake-build-type=', None, 'CMake Build Type', None),
         ('cmake-options=', None, 'CMake Options', None),
         ('cmake-verbose', None, 'Enable CMake Verbose Output', None),
-        ('multi-py3-exe=', None, 'Extra Python3 executables (comma-separated) for multi-version pypto_impl.so', None),
         ('backend-type=', None, 'Backend type (npu or cost_model)', None),
     ]
 
@@ -312,8 +302,6 @@ class CMakeUserOption:
         self.cmake_build_type: Optional[str] = None
         self.cmake_options: Optional[str] = None
         self.cmake_verbose: bool = False
-        self.multi_py3_exe: Optional[str] = None
-        self.multi_py3_cfg: Optional[List[Py3Desc]] = None
         self.backend_type: Optional[str] = None
         # 获取 CMake 路径
         self.cmake: Optional[Path] = None
@@ -339,10 +327,6 @@ class CMakeUserOption:
         desc += f"\n    cmake_build_type      : {self.cmake_build_type}"
         desc += f"\n    cmake-options         : {self.cmake_options}"
         desc += f"\n    cmake-verbose         : {self.cmake_verbose}"
-        if self.multi_py3_cfg:
-            desc += "\n    multi_py3_cfg         :"
-            for cfg in self.multi_py3_cfg:
-                desc += f"\n                          3.{cfg.minor} -> {cfg.exe}"
         desc += "\n"
         return desc
 
@@ -362,8 +346,6 @@ class CMakeUserOption:
         self.cmake_build_type = None
         self.cmake_options = None
         self.cmake_verbose = False
-        self.multi_py3_exe = None
-        self.multi_py3_cfg = None
         self.backend_type = None
         self.cmake: Optional[Path] = self.which_cmake()
         if not self.cmake:
@@ -385,15 +367,12 @@ class CMakeUserOption:
         parser.add_argument("--cmake-build-type", nargs="?", type=str, default=None, dest="cmake_build_type")
         parser.add_argument("--cmake-options", nargs="?", type=str, default="", dest="cmake_options")
         parser.add_argument("--cmake-verbose", action="store_true", default=False, dest="cmake_verbose")
-        parser.add_argument("--multi-py3-exe", nargs="?", type=str, default=None, dest="multi_py3_exe")
         parser.add_argument("--backend-type", nargs="?", type=str, default=None, dest="backend_type")
         args, _ = parser.parse_known_args(env_build_ext_args_split)
         self.cmake_generator = args.cmake_generator
         self.cmake_build_type = args.cmake_build_type
         self.cmake_options = args.cmake_options
         self.cmake_verbose = args.cmake_verbose
-        self.multi_py3_exe = args.multi_py3_exe
-        self.multi_py3_cfg = None
         self.backend_type = args.backend_type
 
     def finalize_options_cmake(self):
@@ -411,8 +390,6 @@ class CMakeUserOption:
         self.cmake_build_type = None if not self.cmake_build_type else self.cmake_build_type
         self.cmake_options = self.cmake_options.replace("'", "").replace('"', "") if self.cmake_options else None
         self.cmake_verbose = True if self.cmake_verbose else False
-        self.multi_py3_exe = self.multi_py3_exe.strip() if self.multi_py3_exe else None
-        self.multi_py3_cfg = self._init_get_multi_py3_cfg()
         # CMake Options 修正
         cmake_option_lst = [o.replace(" ", "") for o in (self.cmake_options.split(" ") if self.cmake_options else [])]
         if self.cmake_generator:
@@ -432,29 +409,6 @@ class CMakeUserOption:
                         "in case of conflict, the former prevails."
                     )
         self.cmake_options = " ".join(cmake_option_lst) if cmake_option_lst else self.cmake_options
-
-    def _init_get_multi_py3_cfg(self):
-        cfg_list = []
-        if not self.multi_py3_exe:
-            return cfg_list
-        for e in self.multi_py3_exe.replace(",", ":").split(":"):
-            e = e.strip()
-            if not e:
-                continue
-            ret = subprocess.run(
-                [e, "-c", "import sys; print(sys.version_info.minor)"],
-                capture_output=True,
-                check=True,
-                text=True,
-                encoding='utf-8',
-            )
-            minor = int(ret.stdout.strip())
-            if minor == int(sys.version_info.minor):
-                continue
-            cfg_list.append(Py3Desc(exe=e, minor=minor))
-        if cfg_list:
-            logging.info("Multi-Py3 pre-build is EXPERIMENTAL")
-        return cfg_list
 
 
 class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
@@ -565,9 +519,7 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
 
         执行完整的 CMake 构建流程:
         1. 主版本 CMake Configure/Build/Install (使用当前 Python)
-        2. 对每个额外 Python 版本, 独立 CMake Configure/Build/Install(pypto_impl_lib component)
-           将对应版本的 pypto_impl.so 安装到主版本的 staging 目录
-        3. 如果是可编辑模式, 传递安装文件清单给 editable_wheel
+        2. 如果是可编辑模式, 传递安装文件清单给 editable_wheel
         """
         # 全量源码统一构建旁路: 二进制已由外层 CMake 编译, 此处仅 cmake --install 到 staging
         if os.environ.get("PYPTO_UNIFIED_BUILD") == "1":
@@ -592,21 +544,6 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         self._run_cmake(params=params)
         # 写入 build_dir 标记文件 (供覆盖率生成使用)
         self._write_build_dir_marker(src_root=params.src, build_dir=params.build_dir)
-
-        # 额外 Python 版本构建
-        for py3_cfg in self.multi_py3_cfg or []:
-            extra_build_dir = Path(f"{build_dir}_py3{py3_cfg.minor}")
-            extra_build_dir.mkdir(parents=True, exist_ok=True)
-            extra_params = CMakeCmdParams(
-                src=src,
-                build_dir=extra_build_dir,
-                cmake_install_prefix=cmake_install_prefix,
-                py3_exe=py3_cfg.exe,
-                env=env,
-                build_targets=["pypto_impl"],
-                install_components=["pypto_impl_lib"],
-            )
-            self._run_cmake(params=extra_params)
 
         if self._edit_mode():
             installed_files = self._get_cmake_install_manifest(build_dir=build_dir)

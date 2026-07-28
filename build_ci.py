@@ -162,14 +162,6 @@ class CMakeParam(abc.ABC):
 
 
 @dataclasses.dataclass
-class Py3Desc:
-    """Python3描述"""
-
-    exe: str  # Interpreter 路径
-    minor: int  # Minor 版本
-
-
-@dataclasses.dataclass
 class FeatureParam(CMakeParam):
     """特性控制相关参数
 
@@ -180,13 +172,11 @@ class FeatureParam(CMakeParam):
     frontend_type: Optional[str] = None  # 前端类型, 支持 python3, cpp
     backend_type: Optional[str] = None  # 后端类型, 支持 npu, cost_model
     # whl 包 py_abi_tag 数字部分 (如 39/310), 由 --py_abi 显式指定;
-    # 同时指定 --multi_py3_exe 时, 低于此值的额外 Python 版本将被过滤
     whl_py3_abi: Optional[int] = None
     whl_plat_name: Optional[str] = None  # python3 whl 包 plat-name
     whl_isolation: bool = False  # 以 isolation 模式编译 whl 包
     whl_editable: bool = False  # 以 editable 模式编译 whl 包
     whl_break_system_packages: bool = False
-    multi_py3_cfg: Optional[List[Py3Desc]] = None  # 额外 Python3 executable 属性列表, 用于多版本 pypto_impl.so 编译
     just_build_whl: bool = False  # 只构建 whl 包，不打包进入 run
 
     def __init__(self, args):
@@ -214,9 +204,6 @@ class FeatureParam(CMakeParam):
         self.whl_isolation = args.isolation
         self.whl_editable = args.editable
         self.whl_break_system_packages = args.break_system_packages
-        self.multi_py3_cfg = None
-        if args.multi_py3_exe:
-            self._init_multi_py3_cfg(multi_py3_exe=args.multi_py3_exe)
 
     def __str__(self) -> str:
         """返回特性参数的字符串表示
@@ -236,8 +223,6 @@ class FeatureParam(CMakeParam):
             desc += f"\n    Isolation               : {self.whl_isolation}"
             desc += f"\n    Editable                : {self.whl_editable}"
             desc += f"\n    BreakSystemPackages     : {self.whl_break_system_packages}"
-            if self.multi_py3_cfg:
-                desc += f"\n    MultiPy3                : {[f'{c.exe}(3.{c.minor})' for c in self.multi_py3_cfg]}"
         desc += f"\n    Backend                 : {self.backend_type}"
         return desc
 
@@ -254,22 +239,11 @@ class FeatureParam(CMakeParam):
     def whl_py3_abi_tag(self) -> Optional[str]:
         """whl 包 python abi tag 数字部分, 用于 --py-limited-api 参数构造 (如 "39" 对应 cp39).
 
-        优先级: --py_abi 显式指定 > 从 --multi_py3_cfg 中最低 minor 版本推导; 两者均未指定时返回 None.
+        优先级: --py_abi 显式指定 , 否则返回 None.
         """
         if self.whl_py3_abi:
             return str(self.whl_py3_abi)
-        minor_list = [c.minor for c in (self.multi_py3_cfg or [])]
-        if minor_list:
-            return f"3{min(minor_list)}"
-        else:
-            return None
-
-    @property
-    def multi_py3_exe_cfg(self) -> str:
-        if not self.multi_py3_cfg:
-            return ""
-        cfg_list = [f"{cfg.exe}" for cfg in self.multi_py3_cfg]
-        return ":".join(cfg_list)
+        return None
 
     @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
@@ -335,14 +309,6 @@ class FeatureParam(CMakeParam):
             help="backend, such as npu/cost_model etc.",
         )
         parser.add_argument(
-            "--multi_py3_exe",
-            nargs="+",
-            type=str,
-            default=None,
-            help="Extra Python3 executables for multi-version pypto_impl.so, "
-            "e.g. --multi_py3_exe /usr/bin/python3.9 /usr/bin/python3.10",
-        )
-        parser.add_argument(
             "--just_build_whl", action="store_true", default=False, help="Build whl only, without packing into run."
         )
 
@@ -363,41 +329,6 @@ class FeatureParam(CMakeParam):
             opt="ENABLE_FEATURE_PYBIND11_IMPL_COMPILE_ONLINE", ctr=self.frontend_type_python3 and self.whl_py3_abi
         )
         return cmd
-
-    def _init_multi_py3_cfg(self, multi_py3_exe):
-        """初始化 multi_py3 配置列表
-
-        对每个额外 Python3 executable 路径, 调用其获取 minor 版本号,
-        构建 Py3Desc 列表存入 self.multi_py3_cfg.
-
-        :param multi_py3_exe: 额外 Python3 executable 路径列表
-        :type multi_py3_exe: List[str]
-        """
-        cfg_lst = []
-        for exe in multi_py3_exe:
-            ret = subprocess.run(
-                [exe, "-c", "import sys; print(sys.version_info.minor)"],
-                capture_output=True,
-                check=True,
-                text=True,
-                encoding='utf-8',
-            )
-            minor = int(ret.stdout.strip())
-            if minor == int(sys.version_info.minor):
-                logging.info(
-                    "Multi-Py3 detected: %s -> Python 3.%d same as call Python3.%d, skip",
-                    exe,
-                    minor,
-                    sys.version_info.minor,
-                )
-            elif self.whl_py3_abi and int(f"3{minor}") < self.whl_py3_abi:
-                logging.info("Multi-Py3 detected: Python3.%d < py_abi %d, skip", minor, self.whl_py3_abi)
-            else:
-                cfg_lst.append(Py3Desc(exe=exe, minor=minor))
-                logging.info("Multi-Py3 detected: %s -> Python 3.%d", exe, minor)
-        if cfg_lst:
-            logging.info("Multi-Py3 pre-build (--multi_py3_exe) is EXPERIMENTAL")
-        self.multi_py3_cfg = cfg_lst
 
 
 @dataclasses.dataclass
@@ -1996,9 +1927,6 @@ class BuildCtrl(CMakeParam):
         env_setting += f" --cmake-options=\"{cmake_args}\"" if cmake_args else ""
         env_setting += f" --backend-type={self.feature.backend_type}"
         env_setting += " --cmake-verbose" if self.verbose else ""
-        multi_py3_exe_cfg = self.feature.multi_py3_exe_cfg
-        if multi_py3_exe_cfg:
-            env_setting += f" --multi-py3-exe={multi_py3_exe_cfg}"
         cmd_setting = ""
         if env_setting:
             cmd_setting = f" --config-setting=--build-option='build_ext {env_setting}'"
