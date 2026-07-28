@@ -1,0 +1,201 @@
+# 昇腾 AICPU 侧高性能编码指南
+
+> 本文件为 skill `pypto-aicpu-perf-coding` 的详细原则（progressive disclosure）。
+> 面向 PyPTO（CANN）动态图 **AICPU 调度 / Control-Flow / Schedule** 热路径。
+
+---
+
+## 1. 适用范围与目标
+
+覆盖 `framework/src/machine/` 中在设备侧反复执行的路径，包括但不限于：
+
+- Control-Flow：task 分配、stitch、slot、CF cache、AOT 映射、表达式求值
+- **Schedule**：`device_sche*`、ready 队列、wrap、核间调度与提交
+
+不含：AICore kernel 算法本身；纯 Host encode / UT 冷路径（但 Host 仍须遵守下文「Host 侧约束」）。
+
+**目标**：少做无用功、少碰堆、少不可预测分支、少整结构清零、少跨 Host/Device 额外拷贝。
+
+**核心检验句**：这段代码在最热循环里，是否「做了但结果当下用不上」？
+
+---
+
+## 2. 高性能编码原则
+
+### 2.1 禁止在 AICPU 热路径使用 STL 容器与通用堆分配
+
+| 禁止 | 原因 |
+|---|---|
+| `std::vector` / `std::deque` / `std::list` | 隐式堆分配、扩容、异常路径 |
+| `std::map` / `std::unordered_map` / `std::set` | 节点分配、缓存不友好 |
+| `std::string` 动态拼接 | 分配 + 拷贝 |
+| `new` / `delete` / `malloc` / `free`（业务热路径） | 与 workspace/slab 生命周期冲突 |
+| 带锁容器 / 共享指针链路 | 抖动与优先级反转 |
+
+| 替代 | 场景 |
+|---|---|
+| 定长数组 `T buf[N]` / `std::array` | 上限已知的小表、LRU 槽、backup |
+| 自定义 `Vector<T, WsMemCategory, Allocator>` | 变长且内存走 workspace/slab |
+| `ItemPool<T>` | 高频同构对象创建/销毁 |
+| `SPSCQueue` | 真单生产者单消费者提交/回收 |
+| 栈缓冲 / 引用参数 | 临时量、避免二次分配 |
+
+原则：**内存从哪来、何时还，由 DeviceWorkspace / slab / ItemPool 说了算。**
+
+---
+
+### 2.2 类型系统：地址必须用显式指针类型
+
+新增 / 改热路径代码时：
+
+| 禁止 | 要求 |
+|---|---|
+| 用 `uint64_t` / `uintdevptr_t` 冒充「随便什么地址」长期传递 | **显式指针类型**（如 `uint8_t*`、`T*`、`DevXxx*`）表达对象身份 |
+| 无注释的整型 ↔ 指针来回 cast 链条 | 在边界一次性转换，内部保持类型 |
+
+`uintdevptr_t` 仅用于 **ABI / 序列化 / 与 AICore 约定的整型地址槽**；业务逻辑层优先指针，需要整型时在接口边界转换。
+
+---
+
+### 2.3 参数传递：局部对象优先按引用，避免取址传递
+
+- 调用热路径函数时，**局部变量优先 `T&` / `const T&`**，避免 `&local` 再以指针传入（易悬空、妨碍优化、语义不清）。
+- 需要可空语义再用指针，并在接口上写清 lifetime。
+- 出参优先返回值或引用出参，避免「指针指向调用方栈对象」的隐式约定。
+
+---
+
+### 2.4 结构体：平凡默构 + 布局纪律
+
+#### 2.4.1 平凡默构（trivial default constructible）
+
+热路径对象常经 placement-new / 池化 Create。非平凡默构（尤其大数组 NSDMI）会在 `MakeDynDeviceTask` 等路径放大成上千次无用写。
+
+1. 尽量 **POD / trivially_default_constructible**；
+2. `static_assert(std::is_trivially_default_constructible_v<T>)` 钉死契约；
+3. 初值用 **显式 Init / Fill / Shell**，只写会读字段。
+
+#### 2.4.2 布局（layout）
+
+| 要求 | 说明 |
+|---|---|
+| 访问时间相近的字段放一起 | 提高 cache 局部性 |
+| 避免不必要的 padding 洞 | 合理排布成员，兼顾对齐 |
+| 尽量减小热点结构体体积 | 少载入、少拷贝 |
+| 冷热分离 | 不常用字段不要塞进最热结构体；可拆旁路/冷路径结构 |
+
+---
+
+### 2.5 禁止整结构 / 整池「为了安心」的初始化
+
+| 反模式 | 正确做法 |
+|---|---|
+| `memset(整个 DeviceTask, 0, sizeof(...))` | `InitDevTaskShell`：只清会读壳字段 |
+| ItemPool 创建时整池串 freelist | virgin bump；freelist 只服务回收 |
+| `memset(表, 0xFF, n)` 冒充多字 sentinel | 按 word 写约定常量（如 `AICORE_TASK_INIT`） |
+| 按 `MAX_*` 盲拷 | 按 `usedSize` 拷贝 |
+
+---
+
+### 2.6 惰性与按需激活（Lazy / Bump）
+
+未用到的槽、路径、AOT entry：不构造、不拷贝、不扫描。
+池化：高水位 bump + 回收 freelist 分离。
+路径：encode 期旗标，runtime `if (!flag) return`。
+
+---
+
+### 2.7 小固定池 + Flat 数据
+
+优先：`定长数组 + 下标 + 单调时钟/序号`。
+忌：热路径 `map` / `list` / 复杂 refcount 图。
+命中路径：**禁止**再 `memcpy` / 无条件 clear icache。
+
+---
+
+### 2.8 Hit / 快路径零多余工作
+
+| 场景 | 要求 |
+|---|---|
+| Hash / 缓存命中 | 禁止再次拷贝、禁止无条件 cache clear |
+| Backup / 列表拷贝 | 长度 = 实际使用量 |
+| 策略上不该做的事 | Host 提前 return，禁止 Device 中途补丁挽救 |
+
+---
+
+### 2.9 分支与「以存代算」：能 Host 判断的不要放到 AICPU
+
+- **能在 Host encode / 构图期算清的 if**，不要拖到 AICPU 热循环里反复判断。
+- 典型手法：**以存代算**——把结果写成 flag、表项、预计算字段，AICPU 只读。
+- 例：有无值依赖、有无 partial/incast、是否需要某条 stitch 路径 → encode 置位，runtime 分支变常量/早退。
+
+运行时功能 **感知不到** Host codegen 的 CSE 之类优化细节；AICPU 侧评审应看「是否少算、少分支」，而不是要求手写 CSE。
+
+---
+
+### 2.10 循环：边界与循环不变量外提
+
+1. `for (i = 0; i < B; ++i)` 中若 `B` 含计算，**先算到局部再进循环**。
+2. 循环体内与 `i` 无关的计算、加载、条件，**提到循环外**。
+3. 与 Host codegen 的区分：
+   - **AICPU / Schedule 运行时**：手写循环外提（本条）。
+   - **Control-Flow 代码生成**：循环不变量 `GetInput*` 等由 Host 生成 `CSE_sd[]`（仅 codegen 关注；**不是** AICPU 运行时 API）。
+
+---
+
+### 2.11 Host 侧严禁随意新增 rtMemcpy
+
+Host 启动 / capture（含 **aclgraph**）路径：
+
+| 禁止 | 要求 |
+|---|---|
+| 随意新增 `rtMemcpy` / `RuntimeMemcpyDirect`（尤其 H2D） | 尽量避免；若必须，走 **`NormalizedRtMemcpy`**（capture 下自动 RELAXED）或显式 `AclModeGuard(RELAXED)` |
+| 在 capture 禁止 H2D 的模式下直拷 | 先切 RELAXED，再拷 |
+
+Device 侧核内拷贝另论；本条约束的是 **Host runtime / launcher** 新增拷贝。
+
+---
+
+### 2.12 Sentinel 语义正确
+
+禁止用 `memset(0xFF)` 冒充多字 sentinel。按约定字面量写，Host/Device 共用同一 `Fill*`。
+
+---
+
+### 2.13 AICPU 加载与内存模型
+
+- 生成的 CF 代码：公共量放栈 / 参数；勿依赖不可靠 namespace 全局 `.bss`。
+- 元数据走 workspace / slab / ItemPool，与 task stage 回收绑定。
+- 队列空 ≠ 内存已全部可再切页。
+
+---
+
+### 2.14 DFX / 日志与热路径隔离
+
+热头文件少拉日志；dump 默认关；性能计数与业务解耦。
+
+---
+
+### 2.15 无锁仅用于真 SPSC
+
+`SPSCQueue` 仅单生产者单消费者；并行回收注意队头 `canFree` 语义。
+
+---
+
+## 3. 原则速查（Do / Don't）
+
+| Do | Don't |
+|---|---|
+| 定长数组 / 自研 Vector·ItemPool·SPSC | STL 容器、热路径 `new` |
+| 显式指针类型表达地址 | 长期用 `uint64_t` 当万能地址 |
+| 局部对象按引用传递 | 无必要 `&local` 指针传参 |
+| trivial 默构 + 热冷分离布局 | 默构清大数组、热点结构塞冷字段 |
+| `InitShell` / bump / 按 `usedSize` 拷 | 整结构 memset、`MAX_*` 盲拷 |
+| Host 预计算 flag / 表（以存代算） | 把本可 Host 完成的 if 丢到 AICPU |
+| 循环边界与不变量外提 | 循环条件里重复算 `B`、体内重复加载 |
+| Host 慎拷；必须时 `NormalizedRtMemcpy` | Host 随意新增直连 `rtMemcpy` H2D |
+| Schedule + CF 一并审视 | 只优化 stitch、忽略 `device_sche*` |
+
+---
+
+*违反 §2.1–§2.5、§2.9、§2.11：即使功能正确，也视为热路径 / Host 启动路径回归。*
