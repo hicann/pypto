@@ -319,6 +319,7 @@ stages:
     jobs:
       PreSmoke_A3:
         name: PreSmoke_A3
+        timeout-minutes: 30
         steps:
           -
             name: Checkout
@@ -395,7 +396,7 @@ stages:
               action: CRUSH
               repo: ${{ steps.process_checkout.outputs.path }}
               file_path: ${{ steps.process_checkout.outputs.path }}/ci/smoke-conf/smoke-A3-with-shm.yaml
-        if: "${{ default() }}"
+        if: ${{ env.TARGET_BRANCH == 'master' }}
         runs-on: ['self-hosted','arch=arm','smoke=301']
     pre:
     - type: auto
