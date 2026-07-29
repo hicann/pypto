@@ -52,7 +52,7 @@ private:
     std::unordered_set<LogicalTensorPtr> consumedTensors_;
     std::unordered_set<LogicalTensorPtr> paramTensors_;
     std::unordered_map<std::string, int> loopNameCounters_;
-    std::unordered_map<TensorSlot, Function*> tensorSlotDefineFunc_;
+    std::unordered_map<LogicalTensorPtr, Function*> tensorDefineFunc_;
 
     void InitDynFunc(const ir::FunctionPtr& irFunc);
     void FinalizeDynFunc(const ir::FunctionPtr& irFunc);
@@ -75,8 +75,12 @@ private:
                                    const LogicalTensors& hiddenOutArgs, const ir::StmtPtr& placeholder);
     ir::StmtPtr ProcessTensorOp(std::shared_ptr<Function> pathFunc, const ir::StmtPtr& stmt,
                                 std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
-                                std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs,
                                 std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs);
+    void RecordDefinedTensors(const ir::TensorOpStmtPtr& tensorOpStmt, Function* pathFunc);
+    void MigrateInplaceLinks(const std::shared_ptr<const Operation>& sourceOp, const LogicalTensors& oOperands,
+                             Function* pathFunc);
+    void CollectAssembleConsumed(const std::shared_ptr<const Operation>& sourceOp, const LogicalTensors& oOperands,
+                                 Function* pathFunc);
     void ComputeIncast(Function& pathFunc, const std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
                        const std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs);
     void ComputeOutcast(Function& pathFunc);

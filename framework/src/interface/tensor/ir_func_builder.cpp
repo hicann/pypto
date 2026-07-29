@@ -259,26 +259,64 @@ std::vector<std::vector<ir::StmtPtr>> RootFunctionBuilder::SplitIntoTensorOpSegm
     return segments;
 }
 
+void RootFunctionBuilder::RecordDefinedTensors(const ir::TensorOpStmtPtr& tensorOpStmt, Function* pathFunc)
+{
+    for (auto& result : tensorOpStmt->result_) {
+        if (!result) {
+            continue;
+        }
+        auto lt = AsLogicalTensor(result);
+        if (tensorDefineFunc_.find(lt) == tensorDefineFunc_.end()) {
+            tensorDefineFunc_[lt] = pathFunc;
+        }
+    }
+}
+
+void RootFunctionBuilder::MigrateInplaceLinks(const std::shared_ptr<const Operation>& sourceOp,
+                                              const LogicalTensors& oOperands, Function* pathFunc)
+{
+    if (sourceOp == nullptr || sourceOp->BelongTo() == nullptr) {
+        return;
+    }
+    const auto& sourceLinkMap = sourceOp->BelongTo()->outIncastLinkMap;
+    for (const auto& output : oOperands) {
+        auto link = sourceLinkMap.find(output->GetRawTensor());
+        if (link != sourceLinkMap.end()) {
+            pathFunc->outIncastLinkMap[link->first] = link->second;
+        }
+    }
+}
+
+void RootFunctionBuilder::CollectAssembleConsumed(const std::shared_ptr<const Operation>& sourceOp,
+                                                  const LogicalTensors& oOperands, Function* pathFunc)
+{
+    if (sourceOp == nullptr) {
+        return;
+    }
+    bool isAssembleLike = (sourceOp->GetOpcode() == Opcode::OP_ASSEMBLE && sourceOp->HasAttr("dassemble")) ||
+                          sourceOp->GetOpcode() == Opcode::OP_ASSEMBLE_SSA ||
+                          sourceOp->GetOpcode() == Opcode::OP_ATOMIC_RMW;
+    if (isAssembleLike) {
+        for (auto& op : oOperands) {
+            auto it = tensorDefineFunc_.find(op);
+            if (it == tensorDefineFunc_.end() || it->second != pathFunc) {
+                consumedTensors_.insert(op);
+            }
+        }
+    }
+}
+
 ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathFunc, const ir::StmtPtr& stmt,
                                                  std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
-                                                 std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs,
                                                  std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs)
 {
-    if (stmt->GetKind() != ir::ObjectKind::TensorOpStmt) {
+    auto tensorOpStmt = std::dynamic_pointer_cast<const ir::TensorOpStmt>(stmt);
+    if (!tensorOpStmt) {
         return stmt;
     }
-    auto tensorOpStmt = std::static_pointer_cast<const ir::TensorOpStmt>(stmt);
 
+    RecordDefinedTensors(tensorOpStmt, pathFunc.get());
     if (tensorOpStmt->opcode_ == "TENSOR_ALLOC") {
-        auto slotManager = program_.GetTensorSlotManager();
-        for (auto& result : tensorOpStmt->result_) {
-            if (!result) {
-                continue;
-            }
-            auto lt = AsLogicalTensor(result);
-            auto tensor = slotManager->GetSlotTensor(lt);
-            tensorSlotDefineFunc_[TensorSlot::CreateTensor(*tensor)] = pathFunc.get();
-        }
         return stmt;
     }
 
@@ -287,7 +325,9 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathF
         if (!arg) {
             continue;
         }
-        iOperands.push_back(AsLogicalTensor(arg));
+        auto lt = AsLogicalTensor(arg);
+        iOperands.push_back(lt);
+        allInputs.insert(lt);
     }
 
     LogicalTensors oOperands;
@@ -297,27 +337,12 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathF
         }
         auto lt = AsLogicalTensor(result);
         oOperands.push_back(lt);
+        definedOutputs.insert(lt);
     }
 
-    for (auto& op : iOperands) {
-        allInputs.insert(op);
-    }
-    for (auto& op : oOperands) {
-        allOutputs.insert(op);
-        definedOutputs.insert(op);
-    }
-
-    // Function-level inplace links are not part of the operation metadata cloned below.
     auto sourceOp = std::dynamic_pointer_cast<const Operation>(tensorOpStmt);
-    if (sourceOp != nullptr && sourceOp->BelongTo() != nullptr) {
-        const auto& sourceLinkMap = sourceOp->BelongTo()->outIncastLinkMap;
-        for (const auto& output : oOperands) {
-            auto link = sourceLinkMap.find(output->GetRawTensor());
-            if (link != sourceLinkMap.end()) {
-                pathFunc->outIncastLinkMap[link->first] = link->second;
-            }
-        }
-    }
+    MigrateInplaceLinks(sourceOp, oOperands, pathFunc.get());
+    CollectAssembleConsumed(sourceOp, oOperands, pathFunc.get());
 
     ir::StmtPtr opStmt = RebuildTensorOpStmt(tensorOpStmt, tensorOpStmt->result_, tensorOpStmt->result_token_,
                                              tensorOpStmt->args_, tensorOpStmt->tokens_, tensorOpStmt->span_,
@@ -346,24 +371,12 @@ void RootFunctionBuilder::ComputeIncast(Function& pathFunc,
 
 void RootFunctionBuilder::ComputeOutcast(Function& pathFunc)
 {
-    auto slotManager = program_.GetTensorSlotManager();
     for (auto& op : pathFunc.Operations()) {
-        bool isAssembleLike = (op.GetOpcode() == Opcode::OP_ASSEMBLE && op.HasAttr("dassemble")) ||
-                              op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op.GetOpcode() == Opcode::OP_ATOMIC_RMW;
         for (auto& oOperand : op.GetOOperands()) {
             bool neededByConsumer = consumedTensors_.count(oOperand) > 0;
             bool isFuncOutput = paramTensors_.count(oOperand) > 0;
             if (neededByConsumer || isFuncOutput) {
                 pathFunc.AddOriginOutcast(oOperand);
-                continue;
-            }
-            if (isAssembleLike) {
-                auto tensor = slotManager->GetSlotTensor(oOperand);
-                auto slot = TensorSlot::CreateTensor(*tensor);
-                auto it = tensorSlotDefineFunc_.find(slot);
-                if (it == tensorSlotDefineFunc_.end() || it->second != &pathFunc) {
-                    pathFunc.AddOriginOutcast(oOperand);
-                }
             }
         }
     }
@@ -386,9 +399,8 @@ std::shared_ptr<Function> RootFunctionBuilder::CreateHiddenFunc(const ir::SeqStm
 
     std::unordered_set<std::shared_ptr<LogicalTensor>> definedOutputs;
     std::unordered_set<std::shared_ptr<LogicalTensor>> allInputs;
-    std::unordered_set<std::shared_ptr<LogicalTensor>> allOutputs;
     for (auto& stmt : seq->stmts_) {
-        (void)ProcessTensorOp(hiddenFunc, stmt, allInputs, allOutputs, definedOutputs);
+        (void)ProcessTensorOp(hiddenFunc, stmt, allInputs, definedOutputs);
     }
     ComputeIncast(*hiddenFunc, allInputs, definedOutputs);
     hiddenFunc->name_ = hiddenMagicName;
@@ -401,6 +413,14 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
                                                  const LogicalTensors& originalOutcasts)
 {
     auto slotManager = program_.GetTensorSlotManager();
+
+    for (auto& incast : originalIncasts) {
+        for (auto& outcast : originalOutcasts) {
+            if (incast->GetRawTensor()->memoryId == outcast->GetRawTensor()->memoryId) {
+                slotManager->SetSameSlot(incast, outcast);
+            }
+        }
+    }
 
     scope->ioslot.incastSlot.resize(originalIncasts.size());
     for (size_t idx = 0; idx < originalIncasts.size(); idx++) {
@@ -420,13 +440,6 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
             for (auto& oOperand : op.GetOOperands()) {
                 auto tensor = slotManager->GetSlotTensor(oOperand);
                 slotManager->TensorWrite(*tensor, SlotProperty::ASSEMBLE_DST);
-                if (paramTensors_.count(oOperand) != 0) {
-                    continue;
-                }
-                auto slot = TensorSlot::CreateTensor(*tensor);
-                if (!tensorSlotDefineFunc_.count(slot)) {
-                    tensorSlotDefineFunc_[slot] = pathFunc;
-                }
             }
         }
     }
@@ -856,9 +869,21 @@ void RootFunctionBuilder::DumpFunctionGraph(Function* func)
 void RootFunctionBuilder::FlushConstructAssembleSlots()
 {
     auto slotManager = program_.GetTensorSlotManager();
+
+    std::unordered_set<int> paramSlotIds;
+    for (auto& param : logicalParams_) {
+        auto tensor = slotManager->GetSlotTensor(param);
+        paramSlotIds.insert(tensor->Id());
+    }
+
     std::unordered_set<Function*> affectedPathFuncs;
-    for (auto& [slot, func] : tensorSlotDefineFunc_) {
+    for (auto& [lt, func] : tensorDefineFunc_) {
+        auto tensor = slotManager->GetSlotTensor(lt);
+        auto slot = TensorSlot::CreateTensor(*tensor);
         if (slotManager->assembleSlotSet.count(slot) == 0) {
+            continue;
+        }
+        if (paramSlotIds.count(tensor->Id()) > 0) {
             continue;
         }
         if (!func->HasParent()) {
