@@ -7,28 +7,10 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-"""pl.struct NPU 泛化测试 — 覆盖多种控制流和字段操作场景。
+"""NPU coverage for active ``pl.struct`` field and control-flow scenarios.
 
-参考文献:
-  docs/zh/api/SIMD-API/计算API/工具函数/struct.md
-
-测试覆盖场景:
-  1. 基础赋值 + 字段读回写输出
-  2. 单字段边界
-  3. 多字段算术表达式
-  4. for 循环内字段累加
-  5. for 循环 + if/else 条件分支
-  6. 两个不同类型 struct 协同使用
-  7. 字段自引用（ctx.val = ctx.val + ...）
-  8. for + break 循环中断
-  9. section_cube + for 循环 + pl.max 改值
-  10. 多控制流 (for + if/else) + 字段传入 pl.max 改值
-  11. struct 变量赋值别名 + for 循环
-  12. struct 变量赋值别名 + if/else 分支
-  13. 多变量嵌套循环交叉赋值
-  14. 多重别名 + 分支常量赋值
-  15. 引用传递——链式别名 holder→ref1→ref2，远端修改同步原始变量
-  16. 函数入参传引用——真实函数 struct_increase/struct_scale_and_shift 接收 struct 参数并修改
+Covers basic field access, loop accumulation, conditional updates, aliasing,
+nested cross-assignment, and reference passing.
 """
 
 import logging
@@ -76,57 +58,7 @@ def test_struct_basic():
 
 
 # =============================================================================
-# Test 2: 单字段边界 — 最小合法 struct
-# =============================================================================
-@pl.jit()
-def struct_single_field_kernel(
-    out: pl.Tensor[[1], pl.DT_INT32],
-):
-    solo = pl.struct("Solo", v=0)
-    with pl.section_vector():
-        solo.v = 42
-        pl.setval(out, 0, solo.v)
-
-
-@pytest.mark.skip(reason="redundant: single_field variant")
-@pytest.mark.soc("950")
-def test_struct_single_field():
-    _check_npu()
-    out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
-    struct_single_field_kernel(out)
-    torch.npu.synchronize()
-    expected = torch.tensor([42], device=ST_DEVICE, dtype=torch.int32)
-    assert torch.equal(out, expected), f"got {out.tolist()}, expected {expected.tolist()}"
-
-
-# =============================================================================
-# Test 3: 多字段算术表达式 (a * b + c)
-# =============================================================================
-@pl.jit()
-def struct_multi_arith_kernel(
-    out: pl.Tensor[[1], pl.DT_INT32],
-):
-    t = pl.struct("Triple", a=0, b=0, c=0)
-    with pl.section_vector():
-        t.a = 10
-        t.b = 20
-        t.c = 30
-        pl.setval(out, 0, t.a * t.b + t.c)
-
-
-@pytest.mark.skip(reason="redundant: multi_arith variant")
-@pytest.mark.soc("950")
-def test_struct_multi_arith():
-    _check_npu()
-    out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
-    struct_multi_arith_kernel(out)
-    torch.npu.synchronize()
-    expected = torch.tensor([230], device=ST_DEVICE, dtype=torch.int32)
-    assert torch.equal(out, expected), f"got {out.tolist()}, expected {expected.tolist()}"
-
-
-# =============================================================================
-# Test 4: for 循环内字段累加 — total = sum(1..5) = 15
+# Test 2: for 循环内字段累加 — total = sum(1..5) = 15
 # =============================================================================
 @pl.jit()
 def struct_for_accum_kernel(
@@ -150,7 +82,7 @@ def test_struct_for_accum():
 
 
 # =============================================================================
-# Test 5: for 循环 + if/else 条件分支 — 字段按条件分流
+# Test 3: for 循环 + if/else 条件分支 — 字段按条件分流
 # =============================================================================
 @pl.jit()
 def struct_conditional_kernel(
@@ -177,147 +109,7 @@ def test_struct_conditional():
 
 
 # =============================================================================
-# Test 6: 两个不同类型 struct 协同 — 字段跨结构体引用
-# =============================================================================
-@pl.jit()
-def struct_multi_types_kernel(
-    out: pl.Tensor[[2], pl.DT_INT32],
-):
-    s1 = pl.struct("Alpha", val=10, scale=2)
-    s2 = pl.struct("Beta", offset=5, base=100)
-    with pl.section_vector():
-        s1.val = s1.val + s2.offset
-        s2.base = s2.base - s1.scale * 10
-        pl.setval(out, 0, s1.val)
-        pl.setval(out, 1, s2.base)
-
-
-@pytest.mark.skip(reason="redundant: multi_types variant")
-@pytest.mark.soc("950")
-def test_struct_multi_types():
-    _check_npu()
-    out = torch.zeros(2, device=ST_DEVICE, dtype=torch.int32)
-    struct_multi_types_kernel(out)
-    torch.npu.synchronize()
-    expected = torch.tensor([15, 80], device=ST_DEVICE, dtype=torch.int32)
-    assert torch.equal(out, expected), f"got {out.tolist()}, expected {expected.tolist()}"
-
-
-# =============================================================================
-# Test 7: 字段自引用累加 — acc = 0+1+...+7 = 28, cnt=8
-# =============================================================================
-@pl.jit()
-def struct_self_ref_kernel(
-    out: pl.Tensor[[2], pl.DT_INT32],
-):
-    tr = pl.struct("Tracker", acc=0, cnt=0)
-    with pl.section_vector():
-        for i in pl.range(0, 8):
-            tr.acc = tr.acc + i
-            tr.cnt = tr.cnt + 1
-        pl.setval(out, 0, tr.acc)
-        pl.setval(out, 1, tr.cnt)
-
-
-@pytest.mark.skip(reason="redundant: self_ref variant")
-@pytest.mark.soc("950")
-def test_struct_self_ref():
-    _check_npu()
-    out = torch.zeros(2, device=ST_DEVICE, dtype=torch.int32)
-    struct_self_ref_kernel(out)
-    torch.npu.synchronize()
-    expected = torch.tensor([28, 8], device=ST_DEVICE, dtype=torch.int32)
-    assert torch.equal(out, expected), f"got {out.tolist()}, expected {expected.tolist()}"
-
-
-# =============================================================================
-# Test 8: for + break — struct 捕获循环中断点
-# =============================================================================
-@pl.jit()
-def struct_break_kernel(
-    out: pl.Tensor[[2], pl.DT_INT32],
-):
-    fd = pl.struct("Finder", found=0, iter=0)
-    with pl.section_vector():
-        for i in pl.range(0, 100):
-            fd.found = i
-            fd.iter = fd.iter + 1
-            if i >= 7:
-                break
-        pl.setval(out, 0, fd.found)
-        pl.setval(out, 1, fd.iter)
-
-
-@pytest.mark.skip(reason="redundant: break variant")
-@pytest.mark.soc("950")
-def test_struct_break():
-    _check_npu()
-    out = torch.zeros(2, device=ST_DEVICE, dtype=torch.int32)
-    struct_break_kernel(out)
-    torch.npu.synchronize()
-    # i=0..7: found=7 (last value at break trigger), iter=8 (0..7 inclusive)
-    expected = torch.tensor([7, 8], device=ST_DEVICE, dtype=torch.int32)
-    assert torch.equal(out, expected), f"got {out.tolist()}, expected {expected.tolist()}"
-
-
-# =============================================================================
-# Test 9: struct + section_cube + for 循环 + pl.max 改值
-# =============================================================================
-@pl.jit()
-def struct_cube_ctrlflow_kernel(
-    out: pl.Tensor[[2], pl.DT_INT32],
-):
-    st = pl.struct("CubeCtrl", mx=0, sm=0)
-    with pl.section_cube():
-        for i in pl.range(0, 5):
-            st.mx = pl.max(st.mx, i * 3 - 4)
-            st.sm = st.sm + i
-        pl.setval(out, 0, st.mx)
-        pl.setval(out, 1, st.sm)
-
-
-@pytest.mark.skip(reason="redundant: cube_ctrlflow variant")
-@pytest.mark.soc("950")
-def test_struct_cube_ctrlflow():
-    _check_npu()
-    out = torch.zeros(2, device=ST_DEVICE, dtype=torch.int32)
-    struct_cube_ctrlflow_kernel(out)
-    torch.npu.synchronize()
-    expected = torch.tensor([8, 10], device=ST_DEVICE, dtype=torch.int32)
-    assert torch.equal(out, expected), f"got {out.tolist()}, expected {expected.tolist()}"
-
-
-# =============================================================================
-# Test 10: struct 多控制流 (for + if/else) + 字段传入 pl.max 改值
-# =============================================================================
-@pl.jit()
-def struct_func_modify_kernel(
-    out: pl.Tensor[[2], pl.DT_INT32],
-):
-    ctx = pl.struct("Mod", lo=0, hi=0)
-    with pl.section_vector():
-        for i in pl.range(0, 6):
-            if i < 3:
-                ctx.lo = pl.max(ctx.lo, i * 2)
-            else:
-                ctx.hi = pl.max(ctx.hi, i * 3 - 5)
-        pl.setval(out, 0, ctx.lo)
-        pl.setval(out, 1, ctx.hi)
-
-
-@pytest.mark.skip(reason="redundant: func_modify variant")
-@pytest.mark.soc("950")
-def test_struct_func_modify():
-    _check_npu()
-    out = torch.zeros(2, device=ST_DEVICE, dtype=torch.int32)
-    struct_func_modify_kernel(out)
-    torch.npu.synchronize()
-    expected = torch.tensor([4, 10], device=ST_DEVICE, dtype=torch.int32)
-    assert torch.equal(out, expected), f"got {out.tolist()}, expected {expected.tolist()}"
-
-
-# =============================================================================
-# Test 11: struct 变量赋值别名 + for 循环 — 通过别名修改，原变量可见
+# Test 4: struct 变量赋值别名 + for 循环 — 通过别名修改，原变量可见
 # =============================================================================
 @pl.jit()
 def struct_alias_for_kernel(
@@ -344,37 +136,7 @@ def test_struct_alias_for():
 
 
 # =============================================================================
-# Test 12: struct 变量赋值别名 + if/else — 原变量与别名分别在不同分支修改
-# =============================================================================
-@pl.jit()
-def struct_alias_ifelse_kernel(
-    out: pl.Tensor[[2], pl.DT_INT32],
-):
-    s = pl.struct("AliasB", x=0, y=0)
-    t = s
-    with pl.section_vector():
-        for i in pl.range(0, 6):
-            if i < 3:
-                s.x = s.x + i
-            else:
-                t.y = t.y + i * 10
-        pl.setval(out, 0, s.x)
-        pl.setval(out, 1, t.y)
-
-
-@pytest.mark.skip(reason="redundant: alias_ifelse variant")
-@pytest.mark.soc("950")
-def test_struct_alias_ifelse():
-    _check_npu()
-    out = torch.zeros(2, device=ST_DEVICE, dtype=torch.int32)
-    struct_alias_ifelse_kernel(out)
-    torch.npu.synchronize()
-    expected = torch.tensor([3, 120], device=ST_DEVICE, dtype=torch.int32)
-    assert torch.equal(out, expected), f"got {out.tolist()}, expected {expected.tolist()}"
-
-
-# =============================================================================
-# Test 13: 多变量嵌套循环交叉赋值
+# Test 5: 多变量嵌套循环交叉赋值
 #   accumulator/source/snapshot/recorder 四个 struct，外层 for (0..3) + 内层 for (0..2)
 #   嵌套，内层 if/else 条件分支，accumulator.v←accumulator.v+source.v 自增、
 #   snapshot.sum 分支改值、外层每轮用 snapshot.sum 更新 source.v、
@@ -418,7 +180,7 @@ def test_struct_multi_cross_nested():
 
 
 # =============================================================================
-# Test 14: 多重别名 + 分支常量赋值 + 条件嵌套循环
+# Test 6: 多重别名 + 分支常量赋值 + 条件嵌套循环
 #   primary / primary_alias 别名对、secondary / secondary_alias 别名对、
 #   constants 用作常量 struct (c1=100, c2=200)、aggregator 累计;
 #   外层 for (0..4) + if/elif/else 三分支，分支内各 struct 交叉赋值，
@@ -468,7 +230,7 @@ def test_struct_multi_alias_const():
 
 
 # =============================================================================
-# Test 15: 引用传递——链式别名 holder→ref1→ref2
+# Test 7: 引用传递——链式别名 holder→ref1→ref2
 #   别名链: ref2→ref1→holder，通过最远端 ref2 修改字段，再通过
 #   原始变量 holder 读出，验证引用链路完整传播
 #   最终 out: [holder.val, holder.flag] = [3, 70]
@@ -499,7 +261,7 @@ def test_struct_chain_alias():
     expected = torch.tensor([3, 70], device=ST_DEVICE, dtype=torch.int32)
     assert torch.equal(out, expected), f"got {out.tolist()}, expected {expected.tolist()}"
 # =============================================================================
-# Test 16: 函数入参传引用
+# Test 8: 函数入参传引用
 #   真实函数 struct_increase(entry,offset) 和 struct_scale_and_shift(entry,mul,add)
 #   接收 struct 参数，在函数体内直接修改字段。循环中按分支调用不同函数，
 #   验证 struct 以引用传递——函数内修改立即反映到原始变量。
@@ -552,17 +314,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     tests = [
         test_struct_basic,
-        test_struct_single_field,
-        test_struct_multi_arith,
         test_struct_for_accum,
         test_struct_conditional,
-        test_struct_multi_types,
-        test_struct_self_ref,
-        test_struct_break,
-        test_struct_cube_ctrlflow,
-        test_struct_func_modify,
         test_struct_alias_for,
-        test_struct_alias_ifelse,
         test_struct_multi_cross_nested,
         test_struct_multi_alias_const,
         test_struct_chain_alias,

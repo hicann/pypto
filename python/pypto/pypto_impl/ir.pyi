@@ -48,12 +48,12 @@ class DataType:
             The size in bits of the data type
         """
 
-    def c_type(self) -> str:
+    def to_c_type_string(self) -> str:
         """
-        Get the C type name for this data type.
+        Get the C-style type string.
 
         Returns:
-            The C type name as a string
+            The C-style type string
         """
 
     def is_float(self) -> bool:

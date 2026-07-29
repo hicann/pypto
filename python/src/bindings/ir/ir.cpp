@@ -54,15 +54,6 @@ namespace pypto {
 namespace ir {
 using pypto::ir::DataType;
 
-// DataType helper: BF16 special handling for C type string
-std::string ToPythonCTypeString(const DataType& dtype)
-{
-    if (dtype == DataType::BF16) {
-        return "bfloat16";
-    }
-    return dtype.ToCTypeString();
-}
-
 // Helper from pypto_impl: get outer-IR compatibility pointer type (INT8-based)
 std::shared_ptr<PtrType> GetOuterCompatPtrType()
 {
@@ -283,7 +274,6 @@ void BindDType(py::module_& ir)
         .def("code", &DataType::Code, "Get the underlying type code.")
         // Aliases from pypto_impl for backward compatibility
         .def("bits", &DataType::GetBit, "Get the size in bits (alias for get_bit).")
-        .def("c_type", &ToPythonCTypeString, "Get C style type string with BF16 handling.")
         .def("is_signed", &DataType::IsSignedInt, "Check if signed integer (alias for is_signed_int).")
         .def("is_unsigned", &DataType::IsUnsignedInt, "Check if unsigned integer (alias for is_unsigned_int).")
         .def("__int__", &DataType::Code, "Get the underlying type code as int.")

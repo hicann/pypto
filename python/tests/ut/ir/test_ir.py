@@ -55,7 +55,7 @@ def test_assert_structural_equal_raises_runtime_error_with_fe_code():
 
 def test_dtypes():
     dtypes = [
-        # bits, is_signed, is_unsigned, is_float, name, c_type
+        # bits, is_signed, is_unsigned, is_float, name, c_type_string
         (ir.BOOL, 8, False, False, False, "bool", "bool"),
         (ir.INT4, 4, True, False, False, "int4", "unknown"),
         (ir.INT8, 8, True, False, False, "int8", "int8_t"),
@@ -74,7 +74,7 @@ def test_dtypes():
         (ir.FP16, 16, False, False, True, "fp16", "half"),
         (ir.FP32, 32, False, False, True, "fp32", "float"),
         (ir.FP64, 64, False, False, True, "fp64", "double"),
-        (ir.BF16, 16, False, False, True, "bfloat16", "bfloat16"),
+        (ir.BF16, 16, False, False, True, "bfloat16", "bfloat16_t"),
         (ir.HF4, 4, False, False, True, "hf4", "unknown"),
         (ir.HF8, 8, False, False, True, "hf8", "unknown"),
     ]
@@ -85,7 +85,7 @@ def test_dtypes():
             dtype.is_unsigned(),
             dtype.is_float(),
             str(dtype),
-            dtype.c_type(),
+            dtype.to_c_type_string(),
         ]
 
 

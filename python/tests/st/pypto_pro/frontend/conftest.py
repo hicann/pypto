@@ -127,22 +127,19 @@ def pytest_runtestloop(session):
             jobs = min(len(records), os.cpu_count() or 4)
         info(f"phase 2/3: compiling {len(records)} kernel(s) with {jobs} worker(s)...")
 
-        failures = []
-
         def build(record):
             kernel, args, key, dtype_key = record
             try:
                 # Real _ensure_compiled performs codegen + compile once and populates the
                 # kernel cache for the serial launch phase.
                 orig_ensure_compiled(kernel, args, concrete_key=key, dtype_key=dtype_key)
-            except Exception as exc:  # noqa: BLE001 - fall back to lazy compile in phase 3
-                failures.append((getattr(kernel, "__name__", "?"), repr(exc)))
+            except Exception:  # noqa: BLE001 - phase 3 owns test error reporting
+                # Pre-compilation is best-effort. The normal test phase retries the kernel
+                # and either handles an expected error or reports an unexpected one.
+                pass
 
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
             list(pool.map(build, records))
-
-        for name, err in failures:
-            info(f"  compile failed (will retry lazily during launch): {name}: {err}")
     else:
         info("phase 2/3: no JIT kernels discovered; nothing to pre-compile.")
 

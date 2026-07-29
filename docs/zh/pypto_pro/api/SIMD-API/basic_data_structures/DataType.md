@@ -52,7 +52,7 @@
 | `dtype.is_signed_int()` / `dtype.is_signed()` | 是否有符号整型 |
 | `dtype.is_unsigned_int()` / `dtype.is_unsigned()` | 是否无符号整型 |
 | `dtype.to_string()` / `str(dtype)` | 人类可读名称（如 `"fp16"`） |
-| `dtype.to_c_type_string()` / `dtype.c_type()` | C 类型字符串（如 `"half"`） |
+| `dtype.to_c_type_string()` | C 类型字符串（如 `"half"`） |
 
 **默认类型常量**：裸整数常量（如 `42`）默认为 `pypto_pro.language.DT_INT64`，裸浮点常量（如 `3.14`）默认为 `pypto_pro.language.DT_FP32`。
 
