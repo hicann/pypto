@@ -1074,8 +1074,6 @@ TILEOP void ErfComputeP(T0 dst, T1 tmp0, T2 tmp1)
     constexpr float SCALAR_P4 = 0.75517016694e1;
     constexpr float SCALAR_P5 = 0.053443748819;
     // x^2
-    pto::TMUL(tmp0, dst, dst);
-    SyncV();
     pto::TMULS(tmp1, tmp0, SCALAR_P5);
     SyncV();
     pto::TADDS(tmp1, tmp1, SCALAR_P4);
@@ -1097,7 +1095,6 @@ TILEOP void ErfComputeP(T0 dst, T1 tmp0, T2 tmp1)
     pto::TADDS(tmp1, tmp1, SCALAR_P0);
     SyncV();
     pto::TMUL(tmp1, dst, tmp1);
-    SyncV();
     return;
 }
 // Q(x) = ((((x^2+0.31212858877e2)x^2+0.39856963806e3)x^2+0.30231248150e4)x^2+0.13243365831e5)x^2+0.26267224157e5
@@ -1127,7 +1124,6 @@ TILEOP void ErfComputeQ(T0 tmp0, T1 tmp2)
     pto::TMUL(tmp2, tmp0, tmp2);
     SyncV();
     pto::TADDS(tmp2, tmp2, SCALAR_Q0);
-    SyncV();
     return;
 }
 // Erf(x) = P(x) / Q(x)
@@ -1205,9 +1201,9 @@ TILEOP void ErfSubsectionLargeCompute(T0 dst, T1 tmp0, T2 tmp1, T3 src)
     pto::TADD(dst, dst, tmp1);
 
     pto::TEXPANDS(tmp1, LOG2_VALUE);
-    pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp1, tmp1);
+    pto::TLOG<pto::LogAlgorithm::DEFAULT>(tmp1, tmp1);
     pto::TMUL(dst, tmp1, dst);
-    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(dst, dst);
+    pto::TEXP<pto::ExpAlgorithm::DEFAULT>(dst, dst);
     pto::TEXPANDS(tmp1, FloatIntUnion{0x3F800000}.f);
     pto::TSUB(dst, tmp1, dst);
     pto::TCMPS(tmp0, src, ZERO_VALUE, pto::CmpMode::GE);
