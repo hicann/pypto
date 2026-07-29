@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-沿最后一个维度进行根均方层归一化（Root Mean Square LayerNorm, RMSNorm）。如果提供了gamma，则在最后一个维度上应用逐元素缩放。
+沿最后一个维度进行根均方层归一化（Root Mean Square LayerNorm，RMSNorm）。如果提供了gamma，则在最后一个维度上应用逐元素缩放。
 
 ## 函数原型
 
@@ -26,14 +26,13 @@ rms_norm(input: Tensor, gamma: Tensor = None, epsilon: float = 1e-6) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的数据类型为：PyPto支持的数据类型。 <br> 可以是任意Shape的Tensor[..., C]，最后一个维度C通常表示通道数或特征数。 |
+| input   | 输入      | 源操作数。<br>支持的数据类型为：PyPto支持的数据类型。<br>可以是任意Shape的Tensor[..., C]，最后一个维度C通常表示通道数或特征数。 |
 | gamma   | 输入      | 可选的缩放参数，Shape应为 [C]。 |
 | epsilon | 输入      | 数值稳定性常数，默认值为1e-6。 |
 
 ## 返回值说明
 
 归一化后的Tensor，Shape与输入Tensor input相同，输出Tensor将被转换回输入Tensor的原始数据类型。
-
 
 ## 调用示例
 

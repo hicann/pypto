@@ -30,9 +30,9 @@ clip(
 
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
-| input  | 输入      | 源操作数。 <br> 支持的类型为Tensor类型。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 不支持空Tensor，数据维度大小仅支持1-4维，元素个数不超过INT32_MAX。 |
-| min    | 输入      | 源操作数。 <br> 支持的类型为int\float\Element以及Tensor类型，数据类型必须与输入input的数据类型一致。 <br> 当为int或者float类型时会自动转换为Element类型，且数据类型与输入input的数据类型一致。当需要使用其他数据类型时，可以通过Element构建。 <br> Tensor和Element支持的数据类型为：DT_FP32, DT_FP16, DT_INT32, DT_INT16。 <br> 不支持空Tensor，数据维度大小仅支持1-4维，元素个数不超过INT32_MAX。 <br> 可缺省，默认值为-INF。 <br> NaN，INF，-INF仅在浮点数运算时有定义，即只在数据类型为DT_FP16/DT_FP32时生效；当数据类型为DT_INT16和DT_INT32时，会跳过默认值的比较逻辑。 |
-| max    | 输入      | 源操作数。 <br> 支持的类型为int\float\Element以及Tensor类型，数据类型必须与输入input的数据类型一致。 <br> 当为int或者float类型时会自动转换为Element类型，且数据类型与输入input的数据类型一致。当需要使用其他数据类型时，可以通过Element构建。 <br> Tensor和Element支持的数据类型为：DT_FP32, DT_FP16, DT_INT32, DT_INT16。 <br> 不支持空Tensor，数据维度大小仅支持1-4维，元素个数不超过INT32_MAX。 <br> 可缺省，默认值为INF。 <br> NaN，INF，-INF仅在浮点数运算时有定义，即只在数据类型为DT_FP16/DT_FP32时生效；当数据类型为DT_INT16和DT_INT32时，会跳过默认值的比较逻辑。 |
+| input  | 输入      | 源操作数。<br>支持的类型为Tensor类型。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。<br>不支持空Tensor，数据维度大小仅支持1-4维，元素个数不超过INT32_MAX。 |
+| min    | 输入      | 源操作数。<br>支持的类型为int\float\Element以及Tensor类型，数据类型必须与输入input的数据类型一致。<br>当为int或者float类型时会自动转换为Element类型，且数据类型与输入input的数据类型一致。当需要使用其他数据类型时，可以通过Element构建。<br>Tensor和Element支持的数据类型为：DT_FP32，DT_FP16，DT_INT32，DT_INT16。<br>不支持空Tensor，数据维度大小仅支持1-4维，元素个数不超过INT32_MAX。<br>可缺省，默认值为-INF。<br>NaN，INF，-INF仅在浮点数运算时有定义，即只在数据类型为DT_FP16/DT_FP32时生效；当数据类型为DT_INT16和DT_INT32时，会跳过默认值的比较逻辑。 |
+| max    | 输入      | 源操作数。<br>支持的类型为int\float\Element以及Tensor类型，数据类型必须与输入input的数据类型一致。<br>当为int或者float类型时会自动转换为Element类型，且数据类型与输入input的数据类型一致。当需要使用其他数据类型时，可以通过Element构建。<br>Tensor和Element支持的数据类型为：DT_FP32，DT_FP16，DT_INT32，DT_INT16。<br>不支持空Tensor，数据维度大小仅支持1-4维，元素个数不超过INT32_MAX。<br>可缺省，默认值为INF。<br>NaN，INF，-INF仅在浮点数运算时有定义，即只在数据类型为DT_FP16/DT_FP32时生效；当数据类型为DT_INT16和DT_INT32时，会跳过默认值的比较逻辑。 |
 
 ## 返回值说明
 
@@ -61,8 +61,6 @@ $$
 3. min和max支持同时缺省，返回原值。
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -71,9 +69,9 @@ $$
 
 TileShape维度应和输出一致。
 
-如非广播场景，输入input shape为[m, n]，max和min为[m, n]，输出为[m, n]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
+如非广播场景，输入input shape为[m, n]，max和min为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
-广播场景，输入input shape为[m, n]，max和min为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
+广播场景，输入input shape为[m, n]，max和min为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

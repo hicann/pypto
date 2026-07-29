@@ -26,7 +26,7 @@ permute(input: Tensor, perm: list[int]) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-5维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br>不支持空Tensor；Shape仅支持1-5维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | perm    | 输入      | 维度顺序列表。必须是一个包含所有维度索引的排列，长度与输入张量的维度数相同。每个维度索引在0到ShapeSize-1范围内且不重复。 |
 
 ## 返回值说明
@@ -52,7 +52,6 @@ permute(input: Tensor, perm: list[int]) -> Tensor
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BOOL
    <!-- end id6 -->
 5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
-
 
 ## 调用示例
 

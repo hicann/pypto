@@ -26,10 +26,10 @@ index_put_(input: Tensor, indices: tuple, values: Tensor, accumulate: bool = Fal
 
 |   参数名   | 输入/输出 | 说明                                                                  |
 |------------|-----------|----------------------------------------------------------------------|
-|   input    |    输入   | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BF16，DT_FP16，DT_FP32。 <br> 不支持空Tensor，Shape仅支持1-4维，Shape Size不大于2147483647（即INT32_MAX）。 |
-|  indices   |   输入    | Tensor类型的元组，每个Tensor表示一个维度的索引。 <br> 支持的类型为：tuple\[Tensor\],每个Tensor均为一维，且维度相同。 <br> Tensor支持的数据类型为：DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64。 <br> 不支持空Tensor，tuple中Tensor的个数不大于input的维数。 |
-|   values   |   输入    | 待更新到input中的值。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BF16，DT_FP16，DT_FP32。 <br> 不支持空Tensor，维数不大于input的维数。 |
-| accumulate |   输入（可选）    | 累加参数，默认为False。 <br> 支持的类型为：bool。 |
+|   input    |    输入   | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BF16，DT_FP16，DT_FP32。<br>不支持空Tensor，Shape仅支持1-4维，Shape Size不大于2147483647（即INT32_MAX）。 |
+|  indices   |   输入    | Tensor类型的元组，每个Tensor表示一个维度的索引。<br>支持的类型为：tuple\[Tensor\]，每个Tensor均为一维，且维度相同。<br>Tensor支持的数据类型为：DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64。<br>不支持空Tensor，tuple中Tensor的个数不大于input的维数。 |
+|   values   |   输入    | 待更新到input中的值。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BF16，DT_FP16，DT_FP32。<br>不支持空Tensor，维数不大于input的维数。 |
+| accumulate |   输入（可选）    | 累加参数，默认为False。<br>支持的类型为：bool。 |
 
 ## 返回值说明
 
@@ -53,7 +53,6 @@ index_put_(input: Tensor, indices: tuple, values: Tensor, accumulate: bool = Fal
 
 8. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -62,11 +61,11 @@ index_put_(input: Tensor, indices: tuple, values: Tensor, accumulate: bool = Fal
 
 TileShape的维度不超过values的维度，若TileShape的维度小于values的维度，则TileShape在切分时会自动补全后续维度与values的shape一致。
 
-如输入input为[m, n, p]，输入indices为([t])，输入values为[t, n, p], TileShape设置为[t1, n1, p1]，则t1用于切分t轴，n1用于切分n轴，p1用于切分p轴，m轴不切。
+如输入input为[m, n, p]，输入indices为([t])，输入values为[t, n, p]，TileShape设置为[t1, n1, p1]，则t1用于切分t轴，n1用于切分n轴，p1用于切分p轴，m轴不切。
 
-如输入input为[m, n, p]，输入indices为([t])，输入values为[t, n, p], TileShape设置为[t1, n1]，则TileShape会自动补全为[t1, n1, p]，t1用于切分t轴，n1用于切分n轴，m轴和p轴不切。
+如输入input为[m, n, p]，输入indices为([t])，输入values为[t, n, p]，TileShape设置为[t1, n1]，则TileShape会自动补全为[t1, n1, p]，t1用于切分t轴，n1用于切分n轴，m轴和p轴不切。
 
-如输入input为[m, n, p]，输入indices为([t], [t])，输入values为[t, p], TileShape设置为[t1, p1],则t1用于切分t轴，p1用于切分p轴，m轴和n轴不切。
+如输入input为[m, n, p]，输入indices为([t], [t])，输入values为[t, p]，TileShape设置为[t1, p1]，则t1用于切分t轴，p1用于切分p轴，m轴和n轴不切。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

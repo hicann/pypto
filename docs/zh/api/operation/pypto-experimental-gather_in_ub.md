@@ -29,11 +29,11 @@ gather_in_ub(param: Tensor, indices: Tensor, block_table: Tensor,
 
 | 参数名       | 输入/输出 | 说明                                                                 |
 |--------------|-----------|----------------------------------------------------------------------|
-| param        | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP32, DT_FP16。 <br> 不支持空Tensor，支持两维。 <br> 在实际使用中表示kv cache，形状为[token_size,hidden_dim]。 |
-| indices      | 输入      | 源操作数。 <br> 支持的数据类型为DT_INT32。 <br> 不支持空Tensor，支持两维。 <br> 在实际使用中表示为topk输出结果，形状为[1,k]。 |
-| block_table  | 输入      | 源操作数。 <br> 支持的数据类型为DT_INT32。 <br> 不支持空Tensor，支持两维。 <br> 在实际使用中表示为Page Attention中的页表，形状为[1,block_table_size]，其中block_table_size表示页表的长度。 |
-| block_size   | 输入      | 源操作数。 <br> int类型。 <br> 表示Page Attention中一个块可以放多少个token。 |
-| axis         | 输入      | 源操作数。 <br> int类型。 <br> 只支持-2轴。 |
+| param        | 输入      | 源操作数。<br>支持的数据类型为：DT_FP32，DT_FP16。<br>不支持空Tensor，支持两维。<br>在实际使用中表示kv cache，形状为[token_size,hidden_dim]。 |
+| indices      | 输入      | 源操作数。<br>支持的数据类型为DT_INT32。<br>不支持空Tensor，支持两维。<br>在实际使用中表示为topk输出结果，形状为[1,k]。 |
+| block_table  | 输入      | 源操作数。<br>支持的数据类型为DT_INT32。<br>不支持空Tensor，支持两维。<br>在实际使用中表示为Page Attention中的页表，形状为[1,block_table_size]，其中block_table_size表示页表的长度。 |
+| block_size   | 输入      | 源操作数。<br>int类型。<br>表示Page Attention中一个块可以放多少个token。 |
+| axis         | 输入      | 源操作数。<br>int类型。<br>只支持-2轴。 |
 
 ## 返回值说明
 

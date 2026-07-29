@@ -24,7 +24,7 @@ isnan(self: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| self   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32。 <br> 不支持空Tensor；形状大小支持1-4维；形状大小中对应元素的个数不大于2147483647（即INT32_MAX）。 |
+| self   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32。<br>不支持空Tensor；形状大小支持1-4维；形状大小中对应元素的个数不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
@@ -36,8 +36,6 @@ isnan(self: Tensor) -> Tensor
 2. TileShape以及ViewShape的尾轴必须按照输出张量的类型32B对齐，由于输出张量为布尔类型，因此TileShape以及ViewShape的尾轴必须是32的倍数。
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -46,7 +44,7 @@ isnan(self: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 32)

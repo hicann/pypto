@@ -26,9 +26,9 @@ arange(start: Union[int, float] = 0, end: Union[int, float], step: Union[int, fl
 
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
-| start  | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。 <br> 默认值为0。 |
-| end    | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。 <br> 该参数不能省略。 |
-| step   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。 <br> 默认值为1。 |
+| start  | 输入      | 源操作数。<br>支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。<br>默认值为0。 |
+| end    | 输入      | 源操作数。<br>支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。<br>该参数不能省略。 |
+| step   | 输入      | 源操作数。<br>支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。<br>默认值为1。 |
 
 ## 返回值说明
 
@@ -40,8 +40,7 @@ arange(start: Union[int, float] = 0, end: Union[int, float], step: Union[int, fl
 
 2. \(end-start\)/step需大于0；
 
-3. 如果start, end, step均为int输入，则三者均不能超出int32范围
-
+3. 如果start，end，step均为int输入，则三者均不能超出int32范围
 
 ## 调用示例
 
@@ -51,7 +50,7 @@ arange(start: Union[int, float] = 0, end: Union[int, float], step: Union[int, fl
 
 TileShape和输出output维度一致，均为一维。
 
-如输入start为m，end为n, step为p,输出shape为[q], TileShape设置为[q1],则q1分别用于切分q轴。
+如输入start为m，end为n，step为p，输出shape为[q]，TileShape设置为[q1]，则q1分别用于切分q轴。
 
 ```python
 pypto.set_vec_tile_shapes(16)

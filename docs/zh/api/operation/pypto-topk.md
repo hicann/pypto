@@ -30,11 +30,11 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：<br> - MERGE_SORT: DT_FP32。<br> - RADIX_SELECT: DT_BF16，DT_FP16，DT_FP32，DT_INT32，DT_UINT32，DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| k       | 输入      | 返回元素的数量。<br> k的大小应该满足：1 <= k <= input.shape[dim]。 |
-| dim     | 输入      | 指定排序的维度。<br> 目前仅支持按最后一个维度排序，即dim= -1或dim= input.shape.size() - 1。 |
+| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：<br>- MERGE_SORT： DT_FP32。<br>- RADIX_SELECT： DT_BF16，DT_FP16，DT_FP32，DT_INT32，DT_UINT32，DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| k       | 输入      | 返回元素的数量。<br>k的大小应该满足：1 <= k <= input.shape[dim]。 |
+| dim     | 输入      | 指定排序的维度。<br>目前仅支持按最后一个维度排序，即dim= -1或dim= input.shape.size() - 1。 |
 | largest | 输入      | 如果为True，返回最大元素。如果为False，返回最小元素。 |
-| algo    | 输入      | 算法枚举类型，用以控制TopK计算的流程，具体定义为：[TopKAlgo](../datatype/TopKAlgo.md)。<br> 默认为MERGE_SORT（归并排序算法）。 |
+| algo    | 输入      | 算法枚举类型，用以控制TopK计算的流程，具体定义为：[TopKAlgo](../datatype/TopKAlgo.md)。<br>默认为MERGE_SORT（归并排序算法）。 |
 
 ## 返回值说明
 
@@ -59,7 +59,6 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
    <!-- end id6 -->
 7. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -68,7 +67,7 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 
 TileShape维度应和输入input一致。
 
-示例1：输入input shape为[m, n, p]，dim为2，largest为True，输出为[m, n, k], TileShape设置为[m1, n1, p1],则m1, n1, p1分别用于切分m, n, p轴。p1必须大于等于k，k轴不支持切分，必须保证全载。
+示例1：输入input shape为[m, n, p]，dim为2，largest为True，输出为[m, n, k]，TileShape设置为[m1, n1, p1]，则m1，n1，p1分别用于切分m，n，p轴。p1必须大于等于k，k轴不支持切分，必须保证全载。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

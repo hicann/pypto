@@ -32,7 +32,7 @@ tanh(input: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP16、DT_FP32、DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。<br>支持的数据类型为：DT_FP16、DT_FP32、DT_BF16。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
@@ -50,7 +50,6 @@ tanh(input: Tensor) -> Tensor
     `input_size + output_size + 4 * (W_align8) * H * sizeof(float) + (W_align8 / 8) * H + 32 bytes < UB`
     （FP16/BF16：input + output + 4个float temp tile + 1个compare mask tile + 32 bytes对齐）
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
-
 
 ## 调用示例
 

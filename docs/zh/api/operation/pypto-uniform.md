@@ -29,18 +29,17 @@ uniform(shape: List[int], key: List[int], counter: List[int], alg: List[int], dt
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|--------------------------------------------------------------------|
-| shape   | 输入      | 输出Tensor的形状。 <br> 长度支持1-4维。                                        |
-| key     | 输入      | 随机数生成器的seed。 <br> 长度仅支持为1。                                         |
-| counter | 输入      | 随机数生成器的计数器。 <br> 长度仅支持为2。                                          |
-| alg     | 输入      | 随机数生成算法，当前仅支持值1（Philox算法），3（auto_select，选择Philox算法）。 <br> 长度仅支持为1。 |
-| dtype   | 输入      | 输出Tensor的数据类型。 <br> 支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。            |
+| shape   | 输入      | 输出Tensor的形状。<br>长度支持1-4维。                                        |
+| key     | 输入      | 随机数生成器的seed。<br>长度仅支持为1。                                         |
+| counter | 输入      | 随机数生成器的计数器。<br>长度仅支持为2。                                          |
+| alg     | 输入      | 随机数生成算法，当前仅支持值1（Philox算法），3（auto_select，选择Philox算法）。<br>长度仅支持为1。 |
+| dtype   | 输入      | 输出Tensor的数据类型。<br>支持的数据类型为：DT_FP32，DT_FP16，DT_BF16。            |
 
 ## 约束说明
 
 - 不支持shape切分多个view shape，view shape必须和输入的shape一致。
 - tile shape尾轴必须是4的倍数。
 - `counter[0]`在内部被硬编码为0。虽然接口接受长度为2的counter列表，但`counter[0]`的值会被忽略，实际使用的Philox计数器为`[0, counter[1]]`。
-
 
 ## 返回值说明
 
@@ -54,7 +53,7 @@ uniform(shape: List[int], key: List[int], counter: List[int], alg: List[int], dt
 
 TileShape维度应和输入一致。
 
-如输入shape为[m, n]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
+如输入shape为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 4)

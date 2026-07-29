@@ -26,7 +26,7 @@ atan(self: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| self    | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| self    | 输入      | 源操作数。<br>支持的数据类型为：DT_FP32，DT_FP16，DT_BF16。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
@@ -37,8 +37,6 @@ atan(self: Tensor) -> Tensor
 1. 由于存在临时内存使用，TileShape大小需满足：若TileShape为\[a,b,c,d\]，那么5\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
 2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -47,7 +45,7 @@ atan(self: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-如输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1, n1分别用于切分m, n轴。
+如输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

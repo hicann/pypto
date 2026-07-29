@@ -34,32 +34,30 @@ gathermask(self: Tensor, pattern_mode: int) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| self   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT16，DT_UINT16，DT_INT32, DT_UINT32，DT_FP16，DT_BF16, DT_FP32。 <br> 不支持空Tensor，Shape支持1-4维，且shape size不大于2147483647（即INT32_MAX）。 |
-| pattern_mode | 输入      | 源操作数。 <br> int类型，取值范围为：1~7。 |
+| self   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_FP16，DT_BF16，DT_FP32。<br>不支持空Tensor，Shape支持1-4维，且shape size不大于2147483647（即INT32_MAX）。 |
+| pattern_mode | 输入      | 源操作数。<br>int类型，取值范围为：1~7。 |
 
 ## 返回值说明
 
 返回输出Tensor，输出Tensor数据类型与self数据类型一致，输出Tensor的Shape如下：
 
 - pattern_mode <= 2，输出shape尾轴=self.shape尾轴/2，其它轴和输入shape一致；
-- 2 < pattern_mode < 7,输出shape尾轴=self.shape尾轴/4，其它轴和输入shape一致；
-- pattern_mode = 7,输出shape=输入shape
+- 2 < pattern_mode < 7，输出shape尾轴=self.shape尾轴/4，其它轴和输入shape一致；
+- pattern_mode = 7，输出shape=输入shape
 
 ## 约束说明
 
-1. 当1 <= pattern_mode <= 2时:
+1. 当1 <= pattern_mode <= 2时：
    - self.shape尾轴必须能被2整除
    - tileshape尾轴必须是2的整倍数
    - viewshape尾轴必须是2的整倍数
    - self.shape尾轴不做view切分
-2. 当3 <= pattern_mode <= 6时:
+2. 当3 <= pattern_mode <= 6时：
    - self.shape尾轴必须是4的整倍数
    - tileshape尾轴必须是4的整倍数
    - viewshape尾轴必须是4的整倍数
    - self.shape尾轴不做view切分
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
-
-
 
 ## 调用示例
 
@@ -69,7 +67,7 @@ gathermask(self: Tensor, pattern_mode: int) -> Tensor
 
 TileShape维度应和输出一致。
 
-如输入self为[x, y, z]，pattern_mode为1，输出为[x, y, z/2]，TileShape设置为[x1, y1, 2*z1]，则x1, y1, 2\*z1分别用于切分x, y, z轴。
+如输入self为[x, y, z]，pattern_mode为1，输出为[x, y, z/2]，TileShape设置为[x1, y1, 2*z1]，则x1，y1，2\*z1分别用于切分x，y，z轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

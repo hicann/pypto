@@ -15,7 +15,7 @@
 ## 功能说明
 
 将src的值写入input中。写入位置由index指定。3维计算公式如下，其他维度以此类推：
- <br> src为固定标量时：
+ <br>src为固定标量时：
 $$
 \begin{cases}
 input\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[j\right]\left[k\right] = src & \text{if } dim = 0 \\
@@ -23,7 +23,7 @@ input\left[i\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right
 input\left[i\right]\left[j\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right] = src & \text{if } dim = 2
 \end{cases}
 $$
- <br> src为Tensor时：
+ <br>src为Tensor时：
 $$
 \begin{cases}
 input\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[j\right]\left[k\right] = src\left[i\right]\left[j\right]\left[k\right] & \text{if } dim = 0 \\
@@ -42,10 +42,10 @@ scatter_(input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tens
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32、DT_FP16、DT_BF16、DT_INT8、DT_UINT8、DT_INT16、DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| dim     | 输入      | 指定用于索引的维度，支持input的维度范围内的任意维度。 <br> 合法的维度索引，范围为：-input.dim到input.dim - 1。 |
-| index   | 输入      | input的一组索引。 <br> 支持的数据类型为：Tensor。 <br> Tensor支持的数据类型为：INT64、INT32。 <br> 支持的维度：和input保持一致 <br> 对于所有d != dim的维度，需满足要求：index.size(d) <= input.size(d) <br> 当src为Tensor时，所有维度都需满足：index.size(d) <= src.size(d) <br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX） |
-| src     | 输入      | src是更新的标量或Tensor。 <br> src为Element时，支持的数据类型为：DT_FP32、DT_FP16、DT_BF16、DT_INT8、DT_UINT8、DT_INT16、DT_INT32，不支持输入INF/NAN <br> src为Tensor时，支持的数据类型为：DT_FP32、DT_FP16、DT_BF16、DT_INT8、DT_UINT8、DT_INT16、DT_INT32，数据类型和input保持一致。 <br> |
+| input   | 输入      | 支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32、DT_FP16、DT_BF16、DT_INT8、DT_UINT8、DT_INT16、DT_INT32。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| dim     | 输入      | 指定用于索引的维度，支持input的维度范围内的任意维度。<br>合法的维度索引，范围为：-input.dim到input.dim - 1。 |
+| index   | 输入      | input的一组索引。<br>支持的数据类型为：Tensor。<br>Tensor支持的数据类型为：INT64、INT32。<br>支持的维度：和input保持一致<br>对于所有d != dim的维度，需满足要求：index.size(d) <= input.size(d)<br>当src为Tensor时，所有维度都需满足：index.size(d) <= src.size(d)<br>不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX） |
+| src     | 输入      | src是更新的标量或Tensor。<br>src为Element时，支持的数据类型为：DT_FP32、DT_FP16、DT_BF16、DT_INT8、DT_UINT8、DT_INT16、DT_INT32，不支持输入INF/NAN<br>src为Tensor时，支持的数据类型为：DT_FP32、DT_FP16、DT_BF16、DT_INT8、DT_UINT8、DT_INT16、DT_INT32，数据类型和input保持一致。<br> |
 | reduce  | 输入      | 要应用的归约操作，支持'add'或'multiply'，不传参时默认为直接替换 |
 
 ## 返回值说明
@@ -64,7 +64,6 @@ scatter_(input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tens
 
 5. src为Tensor，reduce为None，且当index中存在指向相同位置的不唯一索引时，行为是不确定的，将从src中任意选择一个值写入。
 
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -73,7 +72,7 @@ scatter_(input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tens
 
 TileShape维度应和输出一致。
 
-如输入input shape为[a, b, c]，dim为1，index为[m, t, p](其中m<=a, p<=c)，src为[x, y, z](其中x>=m, y>=t, z>=p)，输出为[a, b, c], TileShape设置为[m1, t1, p1]。则m1, p1分别用于切分m, p轴。t1必须大于等于b和t，dim对应轴不可切，必须保证b轴和t轴全载。
+如输入input shape为[a, b, c]，dim为1，index为[m, t, p](其中m<=a, p<=c)，src为[x, y, z](其中x>=m, y>=t, z>=p)，输出为[a, b, c]，TileShape设置为[m1, t1, p1]。则m1，p1分别用于切分m，p轴。t1必须大于等于b和t，dim对应轴不可切，必须保证b轴和t轴全载。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

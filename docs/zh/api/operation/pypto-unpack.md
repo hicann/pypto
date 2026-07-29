@@ -20,8 +20,8 @@ unpack(self: Tensor, dstDataType: DataType) -> Tensor
 
 | 参数名       | 输入/输出 | 说明                                                                 |
 |--------------|-----------|----------------------------------------------------------------------|
-| self         | 输入      | 源操作数。 <br> 支持的数据类型为：DT_UINT8。 <br> 不支持空Tensor；Shape仅支持1维；支持数据格式：ND。 |
-| dstDataType  | 输入      | 指定输出数据类型。 <br> 支持的数据类型为：DT_UINT8，DT_INT8，DT_UINT16，DT_INT16，DT_UINT32，DT_INT32，DT_UINT64，DT_INT64，DT_BF16，DT_FP16，DT_FP32。 |
+| self         | 输入      | 源操作数。<br>支持的数据类型为：DT_UINT8。<br>不支持空Tensor；Shape仅支持1维；支持数据格式：ND。 |
+| dstDataType  | 输入      | 指定输出数据类型。<br>支持的数据类型为：DT_UINT8，DT_INT8，DT_UINT16，DT_INT16，DT_UINT32，DT_INT32，DT_UINT64，DT_INT64，DT_BF16，DT_FP16，DT_FP32。 |
 
 ## 返回值说明
 

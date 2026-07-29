@@ -37,12 +37,12 @@ online_softmax_update(
 
 | 参数名 | 输入/输出 | 说明 |
 |--------|-----------|------|
-| previous_max | 输入 | 历史块的列最大值。 <br> 支持的数据类型为：DT_FP32。 <br> 不支持空Tensor，支持两维。 <br> Shape为[1, q_len]。 |
-| previous_sum | 输入 | 历史块的列指数和。 <br> 支持的数据类型为：DT_FP32。 <br> 不支持空Tensor，支持两维。 <br> Shape为[1, q_len]。 |
-| previous_output | 输入 | 历史块累计的未归一化输出。 <br> 支持的数据类型为：DT_FP32。 <br> 不支持空Tensor，支持两维。 <br> Shape为[head_dim, q_len]。 |
-| current_max | 输入 | 当前块的列最大值，通常来自`pypto.experimental.online_softmax`。 <br> 支持的数据类型为：DT_FP32。 <br> Shape为[1, q_len]。 |
-| current_sum | 输入 | 当前块的列指数和，通常来自`pypto.experimental.online_softmax`。 <br> 支持的数据类型为：DT_FP32。 <br> Shape为[1, q_len]。 |
-| current_output | 输入 | 当前块的未归一化输出。 <br> 支持的数据类型为：DT_FP32。 <br> Shape为[head_dim, q_len]，需要与previous_output形状一致。 |
+| previous_max | 输入 | 历史块的列最大值。<br>支持的数据类型为：DT_FP32。<br>不支持空Tensor，支持两维。<br>Shape为[1, q_len]。 |
+| previous_sum | 输入 | 历史块的列指数和。<br>支持的数据类型为：DT_FP32。<br>不支持空Tensor，支持两维。<br>Shape为[1, q_len]。 |
+| previous_output | 输入 | 历史块累计的未归一化输出。<br>支持的数据类型为：DT_FP32。<br>不支持空Tensor，支持两维。<br>Shape为[head_dim, q_len]。 |
+| current_max | 输入 | 当前块的列最大值，通常来自`pypto.experimental.online_softmax`。<br>支持的数据类型为：DT_FP32。<br>Shape为[1, q_len]。 |
+| current_sum | 输入 | 当前块的列指数和，通常来自`pypto.experimental.online_softmax`。<br>支持的数据类型为：DT_FP32。<br>Shape为[1, q_len]。 |
+| current_output | 输入 | 当前块的未归一化输出。<br>支持的数据类型为：DT_FP32。<br>Shape为[head_dim, q_len]，需要与previous_output形状一致。 |
 
 ## 返回值说明
 

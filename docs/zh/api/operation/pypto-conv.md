@@ -115,15 +115,15 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 
 <!-- npu="A3" id7 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：
-  - 对于1D卷积，设置vec_tile_shapes为：{n, c, w}，其中, n为16整数倍，c为C0整数倍，C0 = ALIGN_SIZE_32 / sizeof(dtype)，ALIGN_SIZE_32 = 32，w为32B对齐。
-  - 对于2D卷积，设置vec_tile_shapes为：{n, c, h, w}，其中, n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
-  - 对于3D卷积，设置vec_tile_shapes为：{n, c, d, h, w}，其中, n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
+  - 对于1D卷积，设置vec_tile_shapes为：{n, c, w}，其中，n为16整数倍，c为C0整数倍，C0 = ALIGN_SIZE_32 / sizeof(dtype)，ALIGN_SIZE_32 = 32，w为32B对齐。
+  - 对于2D卷积，设置vec_tile_shapes为：{n, c, h, w}，其中，n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
+  - 对于3D卷积，设置vec_tile_shapes为：{n, c, d, h, w}，其中，n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
 <!-- end id7 -->
 <!-- npu="910b" id8 -->
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：
-  - 对于1D 卷积，设置vec_tile_shapes为：{n, c, w}，其中, n为16整数倍，c为C0整数倍，C0 = ALIGN_SIZE_32 / sizeof(dtype)，ALIGN_SIZE_32 = 32，w为32B对齐。
-  - 对于2D卷积，设置vec_tile_shapes为：{n, c, h, w}，其中, n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
-  - 对于3D卷积，设置vec_tile_shapes为：{n, c, d, h, w}，其中, n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
+  - 对于1D 卷积，设置vec_tile_shapes为：{n, c, w}，其中，n为16整数倍，c为C0整数倍，C0 = ALIGN_SIZE_32 / sizeof(dtype)，ALIGN_SIZE_32 = 32，w为32B对齐。
+  - 对于2D卷积，设置vec_tile_shapes为：{n, c, h, w}，其中，n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
+  - 对于3D卷积，设置vec_tile_shapes为：{n, c, d, h, w}，其中，n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
 <!-- end id8 -->
 
 ### 6. 数据类型约束

@@ -45,17 +45,17 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 | a_trans           | 输入      | 参数a_trans表示输入左矩阵是否转置，默认为False。 |
 | b_trans           | 输入      | 参数b_trans表示输入右矩阵是否转置，默认为False。 |
 | c_matrix_nz       | 输入      | 参数c_matrix_nz表示输出矩阵的Format是否采用NZ格式，默认为False，当前仅支持设置False，即输出矩阵仅支持ND格式。 |
-| extend_params     | 输入      | 支持bias、fixpipe量化和反量化及TF32舍入模式功能，详见表2。<br> bias、fixpipe量化和反量化输入输出数据类型支持情况详见表3，表4，表5。 <br> - 数据类型为字典格式。 <br>  - 此参数与其内部参数均为可选参数。|
+| extend_params     | 输入      | 支持bias、fixpipe量化和反量化及TF32舍入模式功能，详见表2。<br>bias、fixpipe量化和反量化输入输出数据类型支持情况详见表3，表4，表5。<br>- 数据类型为字典格式。<br>- 此参数与其内部参数均为可选参数。|
 
 表2：extend_params参数说明
 
 | 参数名            | 说明                                                                 |
 |-------------------|----------------------------------------------------------------------|
-| scale             | 表示per-tensor量化场景（使用同一个缩放因子将高精度数映射到低精度数）输出矩阵反量化的参数。 <br> 输入为float类型，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4，表5。 <br> 不支持叠加多核切k功能。|
-| scale_tensor      | 表示per-channel量化场景（对每一个输出通道独立计算一套量化参数）输出矩阵反量化的矩阵。 <br> scale_tensor输入固定为uint64_t或int64_t的Tensor。计算时会转换64位bit为float类型的低32位bit后，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4，表5。 <br> scale_tensor的倒数第二维度的形状必须置1，且N维度需要与mat2矩阵的N维度相等。 <br> scale_tensor只支持ND格式。 <br> 不支持叠加多核切k功能。 <br> 量化输出类型为DT_INT8场景时，需要提前调用torch_npu.npu_trans_quant_param并传入float32类型的torch.tensor来获取int64数据类型的scale_tensor。|
-| bias_tensor       | 表示偏置矩阵。<br> 输入为Tensor类型。<br> 输入输出数据类型支持情况详见表3。<br> bias_tensor只支持ND格式。<br> bias_tensor的倒数第二维度的形状应置1，且N维度需要与mat2矩阵的N维度相等。<br> 矩阵维度为4维场景下，bias仅允许2维输入。<br> 不支持叠加多核切k功能。 |
-| relu_type         | 表示输出矩阵是否进行ReLu操作。 <br> 输入为[ReLuType](../datatype/ReLuType.md)类型。 <br> 支持RELU和NO_RELU两种模式。 <br> 不支持叠加多核切k功能。|
-| trans_mode        | 表示是否使能TF32计算及TF32舍入模式。 <br> 输入为[TransMode](../datatype/TransMode.md)类型，支持以下三种模式：<br>     • CAST_NONE：不使能float数据类型转换为TF32数据类型。<br>     • CAST_RINT：使能float数据类型转换为TF32数据类型，舍入规则：舍入到最近整数，中间值时舍入到偶数。<br>     • CAST_ROUND：使能float数据类型转换为TF32数据类型，舍入规则：舍入到最近整数，中间值时远离零舍入。<br> 仅支持输入左右矩阵和输出矩阵数据类型均为DT_FP32时设置。 |
+| scale             | 表示per-tensor量化场景（使用同一个缩放因子将高精度数映射到低精度数）输出矩阵反量化的参数。<br>输入为float类型，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br>输入输出数据类型支持情况详见表4，表5。<br>不支持叠加多核切k功能。|
+| scale_tensor      | 表示per-channel量化场景（对每一个输出通道独立计算一套量化参数）输出矩阵反量化的矩阵。<br>scale_tensor输入固定为uint64_t或int64_t的Tensor。计算时会转换64位bit为float类型的低32位bit后，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br>输入输出数据类型支持情况详见表4、表5。<br>scale_tensor的倒数第二维度的形状必须置1，且N维度需要与mat2矩阵的N维度相等。<br>scale_tensor只支持ND格式。<br>不支持叠加多核切k功能。<br>量化输出类型为DT_INT8场景时，需要提前调用torch_npu.npu_trans_quant_param并传入float32类型的torch.tensor来获取int64数据类型的scale_tensor。|
+| bias_tensor       | 表示偏置矩阵。<br>输入为Tensor类型。<br>输入输出数据类型支持情况详见表3。<br>bias_tensor只支持ND格式。<br>bias_tensor的倒数第二维度的形状应置1，且N维度需要与mat2矩阵的N维度相等。<br>矩阵维度为4维场景下，bias仅允许2维输入。<br>不支持叠加多核切k功能。 |
+| relu_type         | 表示输出矩阵是否进行ReLu操作。<br>输入为[ReLuType](../datatype/ReLuType.md)类型。<br>支持RELU和NO_RELU两种模式。<br>不支持叠加多核切k功能。|
+| trans_mode        | 表示是否使能TF32计算及TF32舍入模式。<br>输入为[TransMode](../datatype/TransMode.md)类型，支持以下三种模式：<br>• CAST_NONE：不使能float数据类型转换为TF32数据类型。<br>• CAST_RINT：使能float数据类型转换为TF32数据类型，舍入规则：舍入到最近整数，中间值时舍入到偶数。<br>• CAST_ROUND：使能float数据类型转换为TF32数据类型，舍入规则：舍入到最近整数，中间值时远离零舍入。<br>仅支持输入左右矩阵和输出矩阵数据类型均为DT_FP32时设置。 |
 
 表3： Matmul基础场景支持的数据类型
 
@@ -101,8 +101,8 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 <!-- end id5 -->
 - 调用matmul接口前需要通过pypto.set\_cube\_tile\_shapes设置M、K、N轴上的切分大小
 - 当矩阵维度为3维或者4维时，需要调用pypto.set\_vec\_tile\_shapes接口设置vector的TileShape切分，如未设置，接口内部会设置2维的vec\_tile\_shape，其值为128，128。
-- 调用matmul接口的输入为调用pypto.reshape后的NZ格式时，需要调用pypto.set\_matrix\_size接口设置pypto.reshape前的输入到matmul的原始Shape的m,k,n值。
-- 调用matmul接口的输入矩阵维度为3维/4维并且数据格式为NZ格式时，需要调用pypto.set\_matrix\_size接口设置输入到matmul的原始Shape的m,k,n值。
+- 调用matmul接口的输入为调用pypto.reshape后的NZ格式时，需要调用pypto.set\_matrix\_size接口设置pypto.reshape前的输入到matmul的原始Shape的m，k，n值。
+- 调用matmul接口的输入矩阵维度为3维/4维并且数据格式为NZ格式时，需要调用pypto.set\_matrix\_size接口设置输入到matmul的原始Shape的m，k，n值。
 
 ## 调用示例
 

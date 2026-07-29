@@ -30,8 +30,8 @@ mul(input: Tensor, other: Union[Tensor, float, int]) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT32，DT_FP32，DT_INT16，DT_FP16，DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other   | 输入      | 源操作数。 <br> 支持的类型为float、int以及Tensor类型。 <br> Tensor支持的数据类型为：DT_INT32，DT_FP32，DT_INT16，DT_FP16，DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_INT32，DT_FP32，DT_INT16，DT_FP16，DT_BF16。<br>不支持空Tensor；Shape仅支持1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other   | 输入      | 源操作数。<br>支持的类型为float、int以及Tensor类型。<br>Tensor支持的数据类型为：DT_INT32，DT_FP32，DT_INT16，DT_FP16，DT_BF16。<br>不支持空Tensor；Shape仅支持1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
@@ -43,7 +43,6 @@ mul(input: Tensor, other: Union[Tensor, float, int]) -> Tensor
 2. other为scalar时，若input为浮点类型，则scalar支持整型（自动转为浮点）；若input为整型，则scalar不支持浮点类型（会报错）。
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -52,9 +51,9 @@ mul(input: Tensor, other: Union[Tensor, float, int]) -> Tensor
 
 TileShape维度应和输出一致。
 
-如非广播场景，输入input shape为[m, n]，other为[m, n]，输出为[m, n]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
+如非广播场景，输入input shape为[m, n]，other为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
-广播场景，输入input shape为[m, n]，other为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
+广播场景，输入input shape为[m, n]，other为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

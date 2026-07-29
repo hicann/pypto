@@ -26,7 +26,7 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br> 支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-5维；Shape Size不大于2147483647（即INT32_MAX）。<br> 算子对不同Shape支持不同，详见约束说明。 |
+| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br>不支持空Tensor；Shape仅支持1-5维；Shape Size不大于2147483647（即INT32_MAX）。<br>算子对不同Shape支持不同，详见约束说明。 |
 | dim0    | 输入      | 源操作数，要交换的第一个维度的索引，从0开始计数。 |
 | dim1    | 输入      | 源操作数，要交换的第二个维度的索引，从0开始计数。 |
 
@@ -44,7 +44,7 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 
 - 2维：任意轴
 - 3维：任意轴
-- 4维：支持：0轴和2轴，1轴和3轴，2轴和3轴, 1轴和2轴,不支持：0轴和3轴,  0轴和1轴
+- 4维：支持：0轴和2轴，1轴和3轴，2轴和3轴，1轴和2轴，不支持：0轴和3轴，0轴和1轴
 - 5维：支持：3轴和4轴，其他不支持
 - 无需实际转置的场景直接支持：当dim0和dim1相同，或dim0和dim1对应的输入shape维度均为1时，transpose结果与输入等价，不受前述4维/5维轴组合约束限制。
 
@@ -56,26 +56,25 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 
     示例：
 
-    input : \[a, b, c, d\]  TileShape为\[t0, t1, t2, t3\] 数据类型为DT\_FP32
+    input： \[a, b, c, d\]  TileShape为\[t0, t1, t2, t3\] 数据类型为DT\_FP32
 
     dim0: 2
 
     dim1: 3
 
-    预留的临时空间为：t0 \* t1 \* align\(t2, 16\) \* align\(t3, 32 / sizeof\(DT\_FP32\)\)
+    预留的临时空间为：t0 \* t1 \* align\(t2,16\) \* align\(t3,32 / sizeof\(DT\_FP32\)\)
 
 6. Tensor数据类型说明：
    <!-- npu="950" id4 -->
    - Ascend 950PR/Ascend 950DT：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32, DT_HF8, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_FP32，DT_INT32，DT_UINT32
    <!-- end id5 -->
    <!-- npu="910b" id6 -->
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_FP32，DT_INT32，DT_UINT32
    <!-- end id6 -->
 7. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
-
 
 ## 调用示例
 
@@ -85,7 +84,7 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 
 TileShape维度应和输入input一致。
 
-示例1：输入input shape为[m, n, p]，dim0为1，dim1为2，输出为[m, p, n], TileShape设置为[m1, n1, p1],则m1, n1, p1分别用于切分m, n, p轴。
+示例1：输入input shape为[m, n, p]，dim0为1，dim1为2，输出为[m, p, n]，TileShape设置为[m1, n1, p1]，则m1，n1，p1分别用于切分m，n，p轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

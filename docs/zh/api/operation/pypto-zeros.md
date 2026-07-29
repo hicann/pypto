@@ -31,8 +31,8 @@ zeros(*size: Union[int, Sequence[int]], dtype: Optional[DataType] = None) -> Ten
 
 | 参数名       | 输入/输出 | 说明                                                                 |
 |--------------|-----------|----------------------------------------------------------------------|
-| *size        | 输入      | 源操作数，用于定义输出Tensor的Shape。<br> 支持可变长参数（多个int）或单一的序列（如List[int] 或Tuple[int]）。 |
-| dtype        | 输入      | 源操作数，可选参数，用于定义输出Tensor的数据类型。<br> 支持的数据类型为：`DT_FP32`，`DT_INT32`，`DT_INT16`，`DT_FP16`，`DT_BF16`。<br> 默认值为`pypto.DT_FP32`。 |
+| *size        | 输入      | 源操作数，用于定义输出Tensor的Shape。<br>支持可变长参数（多个int）或单一的序列（如List[int] 或Tuple[int]）。 |
+| dtype        | 输入      | 源操作数，可选参数，用于定义输出Tensor的数据类型。<br>支持的数据类型为：`DT_FP32`，`DT_INT32`，`DT_INT16`，`DT_FP16`，`DT_BF16`。<br>默认值为`pypto.DT_FP32`。 |
 
 ## 返回值说明
 
@@ -42,13 +42,12 @@ zeros(*size: Union[int, Sequence[int]], dtype: Optional[DataType] = None) -> Ten
 
 1. `tileshape`的维度需要与输出result维度相同，用于切分result。
 
-
 ## 调用示例
 
 ### TileShape设置示例
 
 调用该operation接口前，应通过`set_vec_tile_shapes`设置TileShape。TileShape维度应和输出一致。
-如输入size为`[m, n]`，输出为`[m, n]`，TileShape设置为`[m1, n1]`，则`m1`, `n1`分别用于切分`m`, `n`轴。
+如输入size为`[m, n]`，输出为`[m, n]`，TileShape设置为`[m1, n1]`，则`m1`，`n1`分别用于切分`m`，`n`轴。
 
 ```python
 pypto.set_vec_tile_shapes(2, 3)
