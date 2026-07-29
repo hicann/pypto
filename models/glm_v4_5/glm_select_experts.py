@@ -190,7 +190,7 @@ def process_main_loop_interation(
     ids_k[bs_idx * view_shape[0]:, 0:] = topk_ids
 
 
-@pypto.frontend.jit(runtime_options={"stitch_function_max_num": 128})
+@pypto.frontend.jit(new_ir=True, runtime_options={"stitch_function_max_num": 128})
 def select_experts_kernel(
     logits: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     e_score_bias_input: pypto.Tensor([], pypto.DT_BF16),

@@ -1033,6 +1033,7 @@ std::shared_ptr<Operation> Operation::CloneTensorOpStmt(const LogicalTensors& iO
 
     FE_ASSERT(BelongTo() != nullptr);
     auto clone = std::make_shared<Operation>(*BelongTo(), opcode_, iOperandList, oOperandList);
+    clone->UnlinkFromLogicalTensors();
     applyCloneMetadata(*clone);
     return clone;
 }

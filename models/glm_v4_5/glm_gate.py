@@ -53,7 +53,7 @@ def check_args(gate_weight: torch.Tensor, hidden_states: torch.Tensor) -> None:
     assert hidden_states.dtype == torch.float32
 
 
-@pypto.frontend.jit(runtime_options={})
+@pypto.frontend.jit(new_ir=True, runtime_options={})
 def select_experts_mm_kernel(
     hidden_states: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     mm_weight: pypto.Tensor([], pypto.DT_FP32),

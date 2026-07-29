@@ -222,6 +222,7 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
 
 
 @pypto.frontend.jit(
+    new_ir=True,
     runtime_options={"device_sched_mode": 1},
 )
 def share_expert_moe_main(

@@ -119,17 +119,23 @@ def create_tensor(ctx, *args, **kwargs):
 
 
 @impl(list)
-def list_impl(ctx, items):
+def list_impl(ctx, items=None):
+    if items is None:
+        return []
     return Scope.current().resolve(items)
 
 
 @impl(tuple)
-def tuple_impl(ctx, items):
+def tuple_impl(ctx, items=None):
+    if items is None:
+        return ()
     return tuple(Scope.current().resolve(items))
 
 
 @impl(set)
-def set_impl(ctx, items):
+def set_impl(ctx, items=None):
+    if items is None:
+        return set()
     return set(Scope.current().resolve(items))
 
 

@@ -113,6 +113,7 @@ NZ = pypto.TileOpFormat.TILEOP_NZ
 
 
 @pypto.frontend.jit(
+    new_ir=True,
     runtime_options={"device_sched_mode": 1, "stitch_function_max_num": 128},
     pass_options={"cube_l1_reuse_setting": {-1: 2}},
 )

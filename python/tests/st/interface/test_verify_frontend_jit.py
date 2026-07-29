@@ -23,7 +23,10 @@ verify_options = {
 }
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, verify_options=verify_options)
+@pypto.frontend.jit(new_ir=True,
+    runtime_options={"run_mode": pypto.RunMode.NPU},
+    verify_options=verify_options
+)
 def add_dyn_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
