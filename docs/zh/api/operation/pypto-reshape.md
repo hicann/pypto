@@ -26,8 +26,8 @@ reshape(input: Tensor,shape: List[int],*,valid_shape: Optional[List[Union[int, S
 
 | 参数名      | 输入/输出 | 说明                                                                 |
 |-------------|-----------|----------------------------------------------------------------------|
-| input       | 输入      | 源操作数。 <br> 支持的数据类型为：PyPTO支持的数据类型 <br> 不支持空Tensor，Shape Size不大于INT32_MAX。 |
-| shape       | 输入      | 目标Shape。 <br> Shape Size不大于INT32_MAX。<br> - **静态shape**：支持使用`-1`自动推导一个维度。<br> - **动态shape**：不支持`-1`，必须显式指定所有维度值。维度值可以是具体整数或SymbolicScalar（从动态轴获取）。 |
+| input       | 输入      | 源操作数。<br>支持的数据类型为：PyPTO支持的数据类型<br>不支持空Tensor，Shape Size不大于INT32_MAX。 |
+| shape       | 输入      | 目标Shape。<br>Shape Size不大于INT32_MAX。<br>- **静态shape**：支持使用`-1`自动推导一个维度。<br>- **动态shape**：不支持`-1`，必须显式指定所有维度值。维度值可以是具体整数或SymbolicScalar（从动态轴获取）。 |
 | valid_shape | 输入      | 输出Tensor的有效数据的Shape，且valid_shape Size不大于INT32_MAX。 |
 | inplace     | 输入      | 是否为inplace，默认为False；参数为True时，不会为输出申请新地址； |
 
@@ -41,7 +41,6 @@ reshape(input: Tensor,shape: List[int],*,valid_shape: Optional[List[Union[int, S
 2. inplace为True时，reshape通常需单独置于loop (1)中，无其他类型的operation并列时，可省略loop (1)，框架自动补齐，见示例2。
 3. inplace为True的输出，不可作为函数最终输出。
 4. inplace=False仅适配静态shape；inplace=True兼容静态shape和动态shape。
-
 
 ## 调用示例
 

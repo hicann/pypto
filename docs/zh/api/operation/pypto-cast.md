@@ -27,10 +27,10 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 
 | 参数名     | 输入/输出 | 说明                                                                 |
 |------------|-----------|----------------------------------------------------------------------|
-| input      | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64，DT_INT4，DT_FP8E4M3，DT_FP8E5M2，DT_HF8。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| dtype      | 输入      | 精度转换后的数据类型。 <br> 支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64，DT_INT4，DT_FP8E4M3，DT_FP8E5M2，DT_HF8。 |
-| CastMode   | 输入      | 源操作数枚举类型，用以控制精度转换处理模式，具体定义为：[CastMode](../datatype/CastMode.md)。<br> 默认为CAST_NONE，常见类型之间的转换，框架会自动转换，与torch对齐，详见约束说明。 |
-| SaturationMode    | 输入      | 饱和模式枚举类型，用以控制浮点数转整数时的溢出处理方式，具体定义为：[SaturationMode](../datatype/SaturationMode.md)。<br> 默认为OFF（截断模式），当设置为ON时，超出目标类型范围的数值会被截断到最大值或最小值（饱和截断），详见约束说明。 |
+| input      | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64，DT_INT4，DT_FP8E4M3，DT_FP8E5M2，DT_HF8。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| dtype      | 输入      | 精度转换后的数据类型。<br>支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64，DT_INT4，DT_FP8E4M3，DT_FP8E5M2，DT_HF8。 |
+| CastMode   | 输入      | 源操作数枚举类型，用以控制精度转换处理模式，具体定义为：[CastMode](../datatype/CastMode.md)。<br>默认为CAST_NONE，常见类型之间的转换，框架会自动转换，与torch对齐，详见约束说明。 |
+| SaturationMode    | 输入      | 饱和模式枚举类型，用以控制浮点数转整数时的溢出处理方式，具体定义为：[SaturationMode](../datatype/SaturationMode.md)。<br>默认为OFF（截断模式），当设置为ON时，超出目标类型范围的数值会被截断到最大值或最小值（饱和截断），详见约束说明。 |
 
 ## 返回值说明
 
@@ -47,17 +47,17 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 | 源类型 | 目标类型 | 支持的CastMode | 默认CastMode | 特殊说明 |
 |--------|----------|----------------|--------------|----------|
 | DT_FP32 | DT_FP16 | RINT, ROUND, FLOOR, CEIL, TRUNC, ODD | CAST_RINT | - |
-| DT_FP32 | DT_FP32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | 同类型舍入 |
+| DT_FP32 | DT_FP32 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_RINT | 同类型舍入 |
 | DT_FP32 | DT_BF16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
 | DT_FP32 | DT_INT64 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
 | DT_FP32 | DT_INT32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
-| DT_FP32 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
+| DT_FP32 | DT_INT16 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
 | DT_FP16 | DT_FP32 | 不支持舍入模式 | - | 类型扩展 |
 | DT_FP16 | DT_INT32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
-| DT_FP16 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
-| DT_FP16 | DT_INT8 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
+| DT_FP16 | DT_INT16 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
+| DT_FP16 | DT_INT8 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
 | DT_FP16 | DT_UINT8 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
-| DT_FP16 | DT_INT4 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 打包类型，每字节包含2个元素 |
+| DT_FP16 | DT_INT4 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_TRUNC | 打包类型，每字节包含2个元素 |
 | DT_BF16 | DT_FP32 | 不支持舍入模式 | - | 类型扩展 |
 | DT_BF16 | DT_INT32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
 | DT_INT32 | DT_FP32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
@@ -80,35 +80,35 @@ Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `Rou
 
 | 源类型 | 目标类型 | 支持的CastMode | 默认CastMode | 特殊说明 |
 |--------|----------|----------------|--------------|----------|
-| DT_FP32 | DT_FP32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | 同类型舍入（vtrc指令） |
+| DT_FP32 | DT_FP32 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_RINT | 同类型舍入（vtrc指令） |
 | DT_FP32 | DT_FP16 | RINT, ROUND, FLOOR, CEIL, TRUNC, ODD | CAST_RINT | - |
 | DT_FP32 | DT_BF16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
 | DT_FP32 | DT_INT64 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
 | DT_FP32 | DT_INT32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
-| DT_FP32 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
+| DT_FP32 | DT_INT16 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
 | DT_FP32 | DT_FP8E4M3 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
 | DT_FP32 | DT_FP8E5M2 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
 | DT_FP32 | DT_HF8 | **仅支持ROUND** | CAST_ROUND | H8必须使用ROUND_A，不支持其他模式 |
 | DT_FP16 | DT_FP32 | 不支持舍入模式 | - | 类型扩展（PART_EVEN） |
-| DT_FP16 | DT_INT32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | ROUND_PART模式 |
-| DT_FP16 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况，ROUND_SAT模式 |
-| DT_FP16 | DT_INT8 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况，ROUND_SAT_PART模式 |
-| DT_FP16 | DT_UINT8 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | ROUND_SAT_PART模式 |
+| DT_FP16 | DT_INT32 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_TRUNC | ROUND_PART模式 |
+| DT_FP16 | DT_INT16 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况，ROUND_SAT模式 |
+| DT_FP16 | DT_INT8 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况，ROUND_SAT_PART模式 |
+| DT_FP16 | DT_UINT8 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_TRUNC | ROUND_SAT_PART模式 |
 | DT_FP16 | DT_HF8 | **仅支持ROUND** | CAST_ROUND | H8必须使用ROUND_A，不支持其他模式 |
 | DT_BF16 | DT_FP32 | 不支持舍入模式 | - | 类型扩展（PART_EVEN） |
-| DT_BF16 | DT_INT32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | ROUND_SAT_PART模式 |
-| DT_BF16 | DT_FP16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | SAT_ROUND模式（先饱和后舍入） |
+| DT_BF16 | DT_INT32 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_TRUNC | ROUND_SAT_PART模式 |
+| DT_BF16 | DT_FP16 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_RINT | SAT_ROUND模式（先饱和后舍入） |
 | DT_UINT8 | DT_FP16 | 不支持舍入模式 | - | 类型扩展 |
 | DT_UINT8 | DT_UINT16 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT8 | DT_FP16 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT8 | DT_INT16 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT8 | DT_INT32 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT16 | DT_UINT8 | 不支持舍入模式 | - | SAT_PART模式 |
-| DT_INT16 | DT_FP16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | ROUND模式 |
+| DT_INT16 | DT_FP16 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_RINT | ROUND模式 |
 | DT_INT16 | DT_FP32 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT16 | DT_UINT32 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT16 | DT_INT32 | 不支持舍入模式 | - | 类型扩展 |
-| DT_INT32 | DT_FP32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | ROUND模式 |
+| DT_INT32 | DT_FP32 | RINT，ROUND，FLOOR，CEIL，TRUNC | CAST_RINT | ROUND模式 |
 | DT_INT32 | DT_INT16 | 不支持舍入模式 | - | 仅饱和控制 |
 | DT_INT32 | DT_UINT16 | 不支持舍入模式 | - | 仅饱和控制 |
 | DT_INT32 | DT_INT64 | 不支持舍入模式 | - | 类型扩展 |
@@ -156,7 +156,6 @@ Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `Rou
 5. **deq模式说明**：INT32→FP16转换使用deq模式，需要通过`set_deqscale`设置缩放因子，默认值为1.0。
 6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -165,7 +164,7 @@ Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `Rou
 
 TileShape维度应和输出一致。
 
-如输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1, n1分别用于切分m, n轴。
+如输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

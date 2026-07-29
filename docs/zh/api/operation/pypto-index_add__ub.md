@@ -26,11 +26,11 @@ index_add__ub(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: 
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT16，DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-5维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| dim     | 输入      | int类型，加法作用到input的维度； <br> 支持任意不超过input维数的值，详见约束说明。 |
-| index   | 输入      | 源操作数，值代表input所在dim轴的索引； <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT32，DT_INT64； <br> 不支持空Tensor，Shape只支持1维，索引与source的dim轴索引一一对应，Shape大小与source所在dim轴的Shape大小相同。 |
-| source  | 输入      | 需要加到input的源操作数； <br> 支持的类型为：Tensor。 <br> Tensor的数据类型与input相同。 <br> Shape支持1-5维，所在dim轴的Shape大小与index相同，其他维度的Shape大小与input相同。 |
-| alpha   | 输入      | 标量，关键字参数； <br> 表示累加时的缩放因子，默认为1。 |
+| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT16，DT_INT32。<br>不支持空Tensor；Shape仅支持1-5维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| dim     | 输入      | int类型，加法作用到input的维度；<br>支持任意不超过input维数的值，详见约束说明。 |
+| index   | 输入      | 源操作数，值代表input所在dim轴的索引；<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_INT32，DT_INT64；<br>不支持空Tensor，Shape只支持1维，索引与source的dim轴索引一一对应，Shape大小与source所在dim轴的Shape大小相同。 |
+| source  | 输入      | 需要加到input的源操作数；<br>支持的类型为：Tensor。<br>Tensor的数据类型与input相同。<br>Shape支持1-5维，所在dim轴的Shape大小与index相同，其他维度的Shape大小与input相同。 |
+| alpha   | 输入      | 标量，关键字参数；<br>表示累加时的缩放因子，默认为1。 |
 
 ## 返回值说明
 
@@ -46,15 +46,14 @@ index_add__ub(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: 
 
 4. input.shape和source.shape的dim轴viewshape不可切，要求 $viewshape[dim]\geq\max (input.shape[dim], source.shape[dim])$，其余维度的Shape大小不做限制；
 
-5. TileShape的维度与input相同，input, source的dim轴以及index均不可切，所有输入和输出的TileShape大小总和不能超过UB内存的大小。
-
+5. TileShape的维度与input相同，input，source的dim轴以及index均不可切，所有输入和输出的TileShape大小总和不能超过UB内存的大小。
 
 ## 调用示例
 
 ### TileShape设置示例
 
 调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
-如输入input为[m, n, p]，dim为1，输入source为[m, t, p]，输入index为[t]，输出为[m, n, p]，TileShape设置为[m1, t1, p1]，则m1, p1分别用于切分m, p轴。 n轴，t轴不可切，必须保证n轴t轴全载。
+如输入input为[m, n, p]，dim为1，输入source为[m, t, p]，输入index为[t]，输出为[m, n, p]，TileShape设置为[m1, t1, p1]，则m1，p1分别用于切分m，p轴。 n轴，t轴不可切，必须保证n轴t轴全载。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

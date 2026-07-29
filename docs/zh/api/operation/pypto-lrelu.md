@@ -45,8 +45,6 @@ lrelu(input: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 4. 不支持in-place操作（即输出不能与输入共享内存）。
 5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -55,7 +53,7 @@ lrelu(input: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 
 TileShape维度应和输出一致。
 
-示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

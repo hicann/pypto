@@ -35,8 +35,6 @@ input为DT_FP16，DT_BF16，DT_FP32等类型时，输出数据类型和输入inp
 3. TileShape的维度与input相同，所有输入和输出的TileShape大小总和不能超过UB内存的大小。
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -45,7 +43,7 @@ input为DT_FP16，DT_BF16，DT_FP32等类型时，输出数据类型和输入inp
 
 TileShape维度应和输出一致。
 
-如输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1, n1分别用于切分m, n轴。
+如输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

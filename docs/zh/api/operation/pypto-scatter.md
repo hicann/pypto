@@ -14,7 +14,6 @@ scatter(input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tenso
 
 scatter\_的non-inplace版本，可参考  [pypto.scatter\_](pypto-scatter_.md)
 
-
 ## 参数说明
 
 请参考[pypto.scatter_](pypto-scatter_.md)的参数说明。

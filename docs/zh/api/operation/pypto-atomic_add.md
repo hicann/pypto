@@ -27,7 +27,7 @@ atomic_add(src: Tensor, offsets: List[Union[int, SymbolicScalar]], dst: Tensor) 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | src     | 输入      | 源操作数，类型为Tensor。|
-| offsets | 输入      | src写入dst时各维度的起始偏移量, 元素类型为int或SymbolicScalar。 |
+| offsets | 输入      | src写入dst时各维度的起始偏移量，元素类型为int或SymbolicScalar。 |
 | dst     | 输出      | 目标操作数，类型为Tensor。 |
 
 ## 返回值说明

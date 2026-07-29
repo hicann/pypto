@@ -23,9 +23,9 @@ var(input: Tensor, dim: Union[int, List[int], Tuple[int]] = None, *, correction:
 
 | 参数名      | 输入/输出 | 说明                                                                 |
 |------------|---------- |----------------------------------------------------------------------|
-| input      | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| dim        | 输入      | 指定进行归约的维度。 <br> 支持任意单轴或多轴。 <br> 默认为None，即全轴。 |
-| correction | 输入      | 源操作数。 <br> 样本大小与样本自由度之间的差值。 <br> 默认为贝塞尔校正，即correction=1。 |
+| input      | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| dim        | 输入      | 指定进行归约的维度。<br>支持任意单轴或多轴。<br>默认为None，即全轴。 |
+| correction | 输入      | 源操作数。<br>样本大小与样本自由度之间的差值。<br>默认为贝塞尔校正，即correction=1。 |
 | keepdim    | 输入      | 归约后是否保留被归约的维度，默认False。 |
 
 ## 返回值说明
@@ -40,8 +40,6 @@ keepdim为True时，对应dim的shape规约为1，其他轴的shape不变；keep
 2. dim中不支持重复值，且len(dim) <= input.dim
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -50,7 +48,7 @@ keepdim为True时，对应dim的shape规约为1，其他轴的shape不变；keep
 
 TileShape维度应和输入input一致。
 
-示例1：输入input shape为[m, n]，输出为[m, 1]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, 1]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

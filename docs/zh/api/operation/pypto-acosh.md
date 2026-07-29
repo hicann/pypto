@@ -24,7 +24,7 @@ acosh(input: Tensor) -> Tensor
 
 | 参数名 | 输入/输出 | 说明 |
 |--------|-----------|------|
-| input  | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。<br>数学定义域要求输入元素大于等于1。 |
+| input  | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。<br>数学定义域要求输入元素大于等于1。 |
 
 ## 返回值说明
 
@@ -32,14 +32,12 @@ acosh(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1. 考虑输入、输出及临时空间占用，TileShape大小有额外约束。假设TileShape为\[a,b,c,d\]，记$d_{align}=CeilAlign(d, 8)$,则总的UB空间占用为：
+1. 考虑输入、输出及临时空间占用，TileShape大小有额外约束。假设TileShape为\[a,b,c,d\]，记$d_{align}=CeilAlign(d, 8)$，则总的UB空间占用为：
 
    $$
    5*a*b*c*d_{align}*sizeof(DT\_FP32) <= UB
    $$
 2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
-
-
 
 ## 调用示例
 

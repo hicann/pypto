@@ -22,8 +22,8 @@ online_softmax(scores: Tensor, scale: float) -> Tuple[Tensor, Tensor, Tensor]
 
 | 参数名 | 输入/输出 | 说明 |
 |--------|-----------|------|
-| scores | 输入 | 源操作数。 <br> 支持的数据类型为：DT_FP32。 <br> 不支持空Tensor，支持两维。 <br> 形状为[k_len, q_len]。 |
-| scale | 输入 | float类型。 <br> 对scores进行缩放的标量，常用取值为`1.0 / sqrt(head_dim)`。 |
+| scores | 输入 | 源操作数。<br>支持的数据类型为：DT_FP32。<br>不支持空Tensor，支持两维。<br>形状为[k_len, q_len]。 |
+| scale | 输入 | float类型。<br>对scores进行缩放的标量，常用取值为`1.0 / sqrt(head_dim)`。 |
 
 ## 返回值说明
 

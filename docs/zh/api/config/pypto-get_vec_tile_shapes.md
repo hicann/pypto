@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-设置vector计算中的TileShape大小。
+获取vector计算中的TileShape大小。
 
 ## 函数原型
 

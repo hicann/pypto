@@ -28,9 +28,9 @@ remainder(
 
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
-| input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor、int、float。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other  | 输入      | 源操作数。 <br> 支持的类型为：Tensor、int、float。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| precision_type | 输入      | 精度模式枚举类型，用以控制取余计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md)。<br> 默认为HIGH_PRECISION（高精度模式）。 |
+| input  | 输入      | 源操作数。<br>支持的类型为：Tensor、int、float。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。<br>不支持空Tensor；Shape仅支持1-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other  | 输入      | 源操作数。<br>支持的类型为：Tensor、int、float。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。<br>不支持空Tensor；Shape仅支持1-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| precision_type | 输入      | 精度模式枚举类型，用以控制取余计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md)。<br>默认为HIGH_PRECISION（高精度模式）。 |
 
 ## 返回值说明
 
@@ -38,12 +38,11 @@ remainder(
 
 ## 约束说明
 
-1. 当前不支持混合精度类型输入，即输入都是Tensor时数据类型都相同，输入有一个是标量时，Tenosr的数据类型必须是对应的整数类型（DT_INT32或DT_INT16）或浮点数类型（DT_FP32、DT_FP16、DT_BF16）；
-2. 当input为整型数据类型时， **other不能含0**，整数取余的结果由芯片类型决定，可能为0或-1。
+1. 当前不支持混合精度类型输入，即输入都是Tensor时数据类型都相同，输入有一个是标量时，Tensor的数据类型必须是对应的整数类型（DT_INT32或DT_INT16）或浮点数类型（DT_FP32、DT_FP16、DT_BF16）；
+2. 当input为整型数据类型时，**other不能含0**，整数取余的结果由芯片类型决定，可能为0或-1。
 3. 若输入Tensor的数据类型为DT_INT32，数据范围超过\[-2^24, 2^24\]范围时不保证精度；
 4. 高精度模式当前仅在Ascend 950PR/Ascend 950DT上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
 5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
-
 
 ## 调用示例
 
@@ -53,9 +52,9 @@ remainder(
 
 TileShape维度应和输出一致。
 
-如非广播场景，输入input shape为[m, n]，other为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1, n1分别用于切分m, n轴。
+如非广播场景，输入input shape为[m, n]，other为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
-广播场景，输入input shape为[m, n]，other为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1]，则m1, n1分别用于切分m, n轴。
+广播场景，输入input shape为[m, n]，other为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

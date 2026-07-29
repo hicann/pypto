@@ -28,9 +28,9 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32、DT_FP16、DT_BF16、DT_INT32、DT_INT16。 <br> 不支持空Tensor，Shape支持1-4维，且shape size不大于2147483647（即INT32_MAX）。 |
-| dim     | 输入      | 指定索引的维度。 <br> 支持任意合法的维度索引，范围为：-input.dim到input.dim - 1。 |
-| index   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT32，DT_INT64。 <br> 不支持空Tensor，Shape支持1-4维，需保证index所有轴上的Shape大小不超过input的对应Shape大小，且值为合法索引，即不超过input在dim轴上的Shape大小。 |
+| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32、DT_FP16、DT_BF16、DT_INT32、DT_INT16。<br>不支持空Tensor，Shape支持1-4维，且shape size不大于2147483647（即INT32_MAX）。 |
+| dim     | 输入      | 指定索引的维度。<br>支持任意合法的维度索引，范围为：-input.dim到input.dim - 1。 |
+| index   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_INT32，DT_INT64。<br>不支持空Tensor，Shape支持1-4维，需保证index所有轴上的Shape大小不超过input的对应Shape大小，且值为合法索引，即不超过input在dim轴上的Shape大小。 |
 
 ## 返回值说明
 
@@ -48,7 +48,6 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -57,7 +56,7 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-如输入input为[x, y, z]，dim为1，输入index为[m, t, p]，输出为[m, t, p]，其中m <= x，p <= z，TileShape设置为[m1, t1, p1]，则m1, t1, p1分别用于切分m, t, p轴。 y轴不可切，必须保证y轴全载。
+如输入input为[x, y, z]，dim为1，输入index为[m, t, p]，输出为[m, t, p]，其中m <= x，p <= z，TileShape设置为[m1, t1, p1]，则m1，t1，p1分别用于切分m，t，p轴。 y轴不可切，必须保证y轴全载。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

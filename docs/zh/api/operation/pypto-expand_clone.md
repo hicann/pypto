@@ -25,9 +25,9 @@ expand_clone(
 
 | 参数名      | 输入/输出 | 说明                                                                 |
 |-------------|-----------|----------------------------------------------------------------------|
-| input       | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_BF16，DT_FP32，DT_FP16，DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_BOOL。 <br> 不支持空Tensor；Shape仅支持1-4维，被广播的轴的Shape大小要为1；Shape Size不大于2147483647（即INT32_MAX）。 |
-| shape       | 输入      | 源操作数，目标Shape。 <br> 支持的数据类型为：List[int]。 <br> Shape Size不大于INT32_MAX；Shape的维度需要与输入的一致，除被广播的轴外其他轴大小须与input的Shape对应相等。 |
-| valid_shape | 输入      | 关键字参数。 <br> 源操作数，用于定义输出Tensor的动态Shape，关键字参数，用于动态图，静态图可以省略。 <br> 支持的类型为List[SymbolicScalar], List[int]。 |
+| input       | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_BF16，DT_FP32，DT_FP16，DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_BOOL。<br>不支持空Tensor；Shape仅支持1-4维，被广播的轴的Shape大小要为1；Shape Size不大于2147483647（即INT32_MAX）。 |
+| shape       | 输入      | 源操作数，目标Shape。<br>支持的数据类型为：List[int]。<br>Shape Size不大于INT32_MAX；Shape的维度需要与输入的一致，除被广播的轴外其他轴大小须与input的Shape对应相等。 |
+| valid_shape | 输入      | 关键字参数。<br>源操作数，用于定义输出Tensor的动态Shape，关键字参数，用于动态图，静态图可以省略。<br>支持的类型为List[SymbolicScalar]，List[int]。 |
 
 ## 返回值说明
 
@@ -36,7 +36,7 @@ expand_clone(
 ## 约束说明
 
 1. 支持多维广播，输入Tensor被广播的轴的Shape大小要为1。
-2. input的viewshape与input维度相同，viewshape\[dim\]=1，input\[dim\]=1,其中dim为被拓展轴，其余维度不做限制。举例如下：
+2. input的viewshape与input维度相同，viewshape\[dim\]=1，input\[dim\]=1，其中dim为被拓展轴，其余维度不做限制。举例如下：
     1. \[a,1\] 拓展到\[a,5\]，其中dim=1，表示在dim 1上进行拓展。
     2. len\(viewshape\)=2并且viewshape\[dim\]=1
 
@@ -53,7 +53,6 @@ expand_clone(
 4. tileshape的维度与result维度相同，用于切分result。
 5. tileshape的大小形状无额外约束，只需保证不超过ub size。
 
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -62,7 +61,7 @@ expand_clone(
 
 TileShape维度应和输出一致。
 
-如输入input shape为[m, 1]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
+如输入input shape为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

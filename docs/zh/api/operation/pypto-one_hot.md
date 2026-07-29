@@ -20,8 +20,8 @@ one_hot(input: Tensor, num_classes: int) -> Tensor
 
 | 参数名      | 输入/输出 | 说明                                                                 |
 |-------------|-----------|----------------------------------------------------------------------|
-| input       | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT8, DT_INT16, DT_INT32, DT_INT64。 <br> 支持维度1-3维 <br> 内部元素需为非负数。 <br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
-| num_classes | 输入      | one-hot编码长度。 <br> 需大于input中最大元素。 |
+| input       | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_INT8，DT_INT16，DT_INT32，DT_INT64。<br>支持维度1-3维<br>内部元素需为非负数。<br>不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
+| num_classes | 输入      | one-hot编码长度。<br>需大于input中最大元素。 |
 
 ## 返回值说明
 
@@ -33,7 +33,6 @@ TileShape对输出切分，TileShape的维度与输出一致，TileShape的尾�
 
 Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例
@@ -42,7 +41,7 @@ Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 TileShape维度应和输出一致。
 
-示例1：输入input shape为[m, n]，输出为[m, n, t],其中t=num_classes，TileShape设置为[m1, n1, t1],则m1, n1分别用于切分m, n轴。t1必须等于num_classes, t轴不可切，必须保证t轴全载。
+示例1：输入input shape为[m, n]，输出为[m, n, t]，其中t=num_classes，TileShape设置为[m1, n1, t1]，则m1，n1分别用于切分m，n轴。t1必须等于num_classes，t轴不可切，必须保证t轴全载。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

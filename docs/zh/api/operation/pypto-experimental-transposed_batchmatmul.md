@@ -26,14 +26,13 @@ transposed_batchmatmul(tensor_a: Tensor, tensor_b: Tensor, out_dtype: dtype) -> 
 
 | 参数名    | 输入/输出 | 说明                                                                 |
 |-----------|-----------|----------------------------------------------------------------------|
-| tensor_a  | 输入      | 左侧输入张量。 <br> 支持的数据类型为：DT_FP16, DT_BF16。 <br> 不支持空Tensor，支持三维。 <br> 形状必须为(M, B, K)。 |
-| tensor_b  | 输入      | 右侧输入张量。 <br> 支持的数据类型为：DT_FP16, DT_BF16。 <br> 不支持空Tensor，支持三维。 <br> 形状必须为(B, K, N)。 |
-| out_dtype | 输入      | 输出张量的数据类型。 <br> 支持的数据类型为：DT_FP16, DT_BF16。 |
+| tensor_a  | 输入      | 左侧输入张量。<br>支持的数据类型为：DT_FP16，DT_BF16。<br>不支持空Tensor，支持三维。<br>形状必须为(M, B, K)。 |
+| tensor_b  | 输入      | 右侧输入张量。<br>支持的数据类型为：DT_FP16，DT_BF16。<br>不支持空Tensor，支持三维。<br>形状必须为(B, K, N)。 |
+| out_dtype | 输入      | 输出张量的数据类型。<br>支持的数据类型为：DT_FP16，DT_BF16。 |
 
 ## 返回值说明
 
 返回输出Tensor，Tensor的数据类型由`out_dtype`指定，形状为(M, B, N)。
-
 
 ## 调用示例
 

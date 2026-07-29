@@ -29,11 +29,11 @@ quantize(input: Tensor, scale: Tensor, otype: DataType, axis: int, zero_points: 
 
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
-| input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。<br> shape记为 [..., row, col] |
-| scale  | 输入      | 缩放因子。 <br> 支持的类型为：Tensor。 <br> Tensor数据类型与input一致，支持：DT_FP32; <br> 不支持空Tensor；<br> Shape比input少一维，仅支持1-3维；<br> Shape Size不大于2147483647（即INT32_MAX）;<br> axis = -1或input.shape.size() -1时， shape = [..., row] <br> axis = -2或input.shape.size() -2时， shape = [..., col]|
-| otype  | 输入      | 返回值的数值类型 <br> 目前支持int8和uint8，分别对应对称量化和非对称量化。|
-| axis  | 输入      | 指定量化压缩的轴 <br> 目前支持末尾两轴，即 -1/-2或者input.shape.size() -1/input.shape.size()-2<br> **当input为1D时，仅支持-1** |
-| zero_points  | 输入      | 可选的非对称量化的偏移因子 <br> 支持的类型为：Tensor。 <br> Tensor数据类型与input一致，支持：DT_FP32; <br> 支持空Tensor；<br> Shape比input少一维，仅支持1-3维；<br>Shape Size不大于2147483647（即INT32_MAX）;<br> axis = -1或input.shape.size() -1时， shape = [..., row] <br> axis = -2或input.shape.size() -2时， shape = [..., col] |
+| input  | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。<br>shape记为 [..., row, col] |
+| scale  | 输入      | 缩放因子。<br>支持的类型为：Tensor。<br>Tensor数据类型与input一致，支持：DT_FP32;<br>不支持空Tensor；<br>Shape比input少一维，仅支持1-3维；<br>Shape Size不大于2147483647（即INT32_MAX）;<br>axis = -1或input.shape.size() -1时，shape = [..., row]<br>axis = -2或input.shape.size() -2时，shape = [..., col]|
+| otype  | 输入      | 返回值的数值类型<br>目前支持int8和uint8，分别对应对称量化和非对称量化。|
+| axis  | 输入      | 指定量化压缩的轴<br>目前支持末尾两轴，即 -1/-2或者input.shape.size() -1/input.shape.size()-2<br>**当input为1D时，仅支持-1** |
+| zero_points  | 输入      | 可选的非对称量化的偏移因子<br>支持的类型为：Tensor。<br>Tensor数据类型与input一致，支持：DT_FP32;<br>支持空Tensor；<br>Shape比input少一维，仅支持1-3维；<br>Shape Size不大于2147483647（即INT32_MAX）;<br>axis = -1或input.shape.size() -1时，shape = [..., row]<br>axis = -2或input.shape.size() -2时，shape = [..., col] |
 
 ## 返回值说明
 
@@ -52,7 +52,7 @@ quantize(input: Tensor, scale: Tensor, otype: DataType, axis: int, zero_points: 
 
 TileShape维度应和输出一致。
 
-示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)
