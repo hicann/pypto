@@ -128,6 +128,25 @@ def _get_aiv_core_num() -> int:
         return 0
 
 
+def get_memory_limit(mem_type: int) -> int:
+    """Query on-chip buffer capacity (bytes) via pypto_impl binding.
+
+    Args:
+        mem_type: C++ MemoryType enum value (0=MEM_UB, 1=MEM_L1,
+                  2=MEM_L0A, 3=MEM_L0B, 4=MEM_L0C).
+
+    Returns:
+        Buffer capacity in bytes, or 0 if unavailable.
+    """
+    try:
+        from pypto import pypto_impl
+
+        return pypto_impl.GetMemoryLimit(mem_type)
+    except (ImportError, AttributeError, RuntimeError) as e:
+        logger.debug("pypto_impl.GetMemoryLimit() not available: %s", e)
+        return 0
+
+
 def get_platform_info(force_refresh: bool = False) -> PlatformInfo:
     """Get NPU platform information.
 

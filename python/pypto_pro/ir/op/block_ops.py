@@ -1091,6 +1091,14 @@ _MEMORY_ALIGNMENT: dict[MemorySpace, int] = {
     MemorySpace.Acc: 64,
 }
 
+# MemorySpace -> C++ MemoryType enum value (data_type.h).
+_MEMORY_SPACE_TO_MEM_TYPE: dict[MemorySpace, int] = {
+    MemorySpace.Vec: 0,    # MEM_UB
+    MemorySpace.Mat: 1,    # MEM_L1
+    MemorySpace.Left: 2,   # MEM_L0A
+    MemorySpace.Right: 3,  # MEM_L0B
+    MemorySpace.Acc: 4,    # MEM_L0C
+}
 
 def _validate_tile_addr_alignment(
     addr: int,
@@ -1111,6 +1119,66 @@ def _validate_tile_addr_alignment(
             f"Tile address 0x{addr:05X} ({addr}) is not {required}-byte aligned "
             f"for memory space {mem_name}{span_info}. "
             f"Address must be a multiple of {required}."
+        )
+
+
+def _get_memory_capacity(target_memory: MemorySpace) -> int:
+    """On-chip buffer capacity (bytes) for ``target_memory``.
+
+    Queries the runtime platform (``pypto_impl.GetMemoryLimit``) as the single
+    source of truth. Raises if the binding is unavailable, so capacity
+    validation never silently skips.
+    """
+    mem_type = _MEMORY_SPACE_TO_MEM_TYPE.get(target_memory)
+    if mem_type is None:
+        return 0
+    from pypto_pro.runtime.platform import get_memory_limit
+
+    cap = get_memory_limit(mem_type)
+    if cap <= 0:
+        raise RuntimeError(
+            f"Cannot determine capacity for {target_memory}: "
+            f"pypto_impl.GetMemoryLimit returned {cap}. "
+            f"Ensure pypto_impl is loaded and platform info is initialized."
+        )
+    return cap
+
+
+def _validate_tile_addr_capacity(
+    addr: int,
+    size: int,
+    target_memory: MemorySpace,
+    span: "Span | None" = None,
+) -> None:
+    """Validate that addr + size does not exceed the buffer capacity.
+
+    Mirrors SA-0353 in ``tassign_check.hpp`` (``end_addr <= capacity``).
+    Also rejects negative addresses and non-positive sizes, which are
+    nonsensical for on-chip buffer allocation and would silently bypass
+    the capacity check (negative addr wraps to a large uint at runtime).
+    Without this check, an out-of-bounds tile address silently passes
+    compilation and triggers an AICore hardware trap (error 507015) at runtime.
+    """
+    mem_name = str(target_memory).replace("MemorySpace.", "")
+    span_info = f" at {span}" if span else ""
+    if addr < 0:
+        raise ValueError(
+            f"Tile addr {addr} is negative for memory space {mem_name}{span_info}. "
+            f"Address must be a non-negative integer."
+        )
+    if size <= 0:
+        raise ValueError(
+            f"Tile size {size} must be positive for memory space {mem_name}{span_info}."
+        )
+    capacity = _get_memory_capacity(target_memory)
+    if capacity <= 0:
+        return
+    end_addr = addr + size
+    if end_addr > capacity:
+        raise ValueError(
+            f"Tile addr 0x{addr:X} + size {size} (0x{end_addr:X}) exceeds "
+            f"{mem_name} capacity 0x{capacity:X} ({capacity} bytes){span_info}. "
+            f"Use a smaller address so that addr + tile_size <= {capacity}."
         )
 
 
@@ -1155,6 +1223,8 @@ def make_tile(
             raise ValueError("When specifying addr for make_tile, size must also be provided.")
         if isinstance(addr, int):
             _validate_tile_addr_alignment(addr, target_memory, actual_span)
+            if isinstance(size, int):
+                _validate_tile_addr_capacity(addr, size, target_memory, actual_span)
         global mem_id
         mem_id += 1
         kwargs["memref_addr"] = addr

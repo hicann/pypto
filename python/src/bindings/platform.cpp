@@ -32,5 +32,9 @@ void BindPlatform(py::module_& m)
     m.def("GetAICCoreNum", []() -> size_t { return Platform::Instance().GetSoc().GetAICCoreNum(); });
 
     m.def("GetAIVCoreNum", []() -> size_t { return Platform::Instance().GetSoc().GetAIVCoreNum(); });
+
+    m.def("GetMemoryLimit", [](size_t memType) -> size_t {
+        return Platform::Instance().GetDie().GetMemoryLimit(static_cast<MemoryType>(memType));
+    });
 }
 } // namespace pypto
