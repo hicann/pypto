@@ -36,7 +36,7 @@ le(input: Tensor, other: Union[Tensor, float, Element]) -> Tensor
 ## 约束说明
 
 1. input和other类型须保持一致。
-2. 支持一维广播。
+2. 支持多维度广播到相同形状。
 3. Tensor和Element数据类型说明：
    <!-- npu="950" id4 -->
    - Ascend 950PR/Ascend 950DT：DT_FP16, DT_FP32, DT_INT16
