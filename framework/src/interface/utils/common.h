@@ -22,6 +22,7 @@
 #include <string>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <functional>
 #include <cstdint>
 #include <set>
@@ -349,21 +350,22 @@ struct OrderedSet : std::unordered_map<T, int> {
     }
     int GetIndex(const T& data) const { return this->find(data)->second; }
 
+    // 保证order的确定性
     void Remove(const std::vector<T>& items)
     {
+        std::unordered_set<T> toRemove(items.begin(), items.end());
+        std::vector<T> newOrder;
         bool removed = false;
-        for (size_t i = 0; i < items.size(); i++) {
-            if (this->count(items[i])) {
-                this->erase(items[i]);
+        for (auto& x : order) {
+            if (toRemove.count(x) != 0) {
+                this->erase(x);
                 removed = true;
+            } else {
+                this->at(x) = newOrder.size();
+                newOrder.push_back(x);
             }
         }
         if (removed) {
-            std::vector<T> newOrder;
-            for (auto& [key, val] : dynamic_cast<std::unordered_map<T, int>&>(*this)) {
-                val = newOrder.size();
-                newOrder.push_back(key);
-            }
             order = std::move(newOrder);
         }
     }

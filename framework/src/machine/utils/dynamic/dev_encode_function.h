@@ -608,6 +608,6 @@ private:
     void FillOutcastUseList(DevLocalVector<DevAscendFunctionCallOperandUse>& useList, uint64_t& useSize,
                             const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
                             const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict,
-                            bool fillContent);
+                            bool fillContent, const std::unordered_map<int, int>& opIdxToHubOpIdx);
 };
 } // namespace npu::tile_fwk::dynamic

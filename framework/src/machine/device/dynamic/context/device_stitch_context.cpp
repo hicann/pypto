@@ -559,10 +559,18 @@ uint64_t DeviceStitchContext::PartialUpdateStitchProducer(DevAscendFunctionDuppe
                 }
             }
 
+            int producerOpIdx = producer.operationIdx;
+            if (producer.wrapTaskHubOpIdx != INVALID_WRAP_TASK_HUB_OP_IDX) {
+                DEV_VERBOSE_DEBUG(
+                    "[PartialUpdateStitchProducer] devTaskId=%lu devNextIdx=%lu, replace producerOpIdx[%d] with "
+                    "wrapHubOpIdx[%d]",
+                    (uint64_t)devTaskId, (uint64_t)devNextIdx, producerOpIdx, producer.wrapTaskHubOpIdx);
+                producerOpIdx = producer.wrapTaskHubOpIdx;
+            }
             CellMatchStitchEnhance(producerOffset, producerValidShape, cellMatchTableDesc,
                                    static_cast<uint32_t>(producer.opType), partialUpdateTableData, stitchedList_.data(),
                                    stitchedList_.size(), &nextDup, cellMatchTagId, static_cast<uint64_t>(devTaskId),
-                                   devNextIdx, workspace_, producer.operationIdx, slotIdx, &matchCount);
+                                   devNextIdx, workspace_, producerOpIdx, slotIdx, &matchCount);
         }
     };
 

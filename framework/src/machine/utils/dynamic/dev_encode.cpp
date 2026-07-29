@@ -899,7 +899,8 @@ void DevAscendFunction::FillIncastUseList(
 void DevAscendFunction::FillOutcastUseList(
     DevLocalVector<DevAscendFunctionCallOperandUse>& fillUseList, uint64_t& useSize,
     const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
-    const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict, bool fillContent)
+    const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict, bool fillContent,
+    const std::unordered_map<int, int>& opIdxToHubOpIdx)
 {
     for (size_t index = 0; index < tensorList.size(); index++) {
         auto& attr = attrDict.at(tensorList[index]);
@@ -909,6 +910,10 @@ void DevAscendFunction::FillOutcastUseList(
             outcast.producerConsumerList.AssignRangeOffsetSize(fillUseList, useSize, attr.useList.size());
             for (size_t k = 0; k < attr.useList.size(); k++) {
                 At(outcast.producerConsumerList, k) = attr.useList[k];
+                auto it = opIdxToHubOpIdx.find(attr.useList[k].operationIdx);
+                if (it != opIdxToHubOpIdx.end()) {
+                    At(outcast.producerConsumerList, k).wrapTaskHubOpIdx = it->second;
+                }
             }
         }
         useSize += attr.useList.size();
@@ -994,7 +999,7 @@ void DevAscendFunction::InitIncastOutcast(
         useList.HostInitDataSizeOffset(initOffset, 0);
         uint64_t useSize = 0;
         FillIncastUseList(useList, useSize, incastTensorList, incastOpAttrDict, fillContent, opIdxToHubOpIdx);
-        FillOutcastUseList(useList, useSize, outcastTensorList, outcastOpAttrDict, fillContent);
+        FillOutcastUseList(useList, useSize, outcastTensorList, outcastOpAttrDict, fillContent, opIdxToHubOpIdx);
         useList.HostInitDataSizeOffset(initOffset, useSize);
     }
     {
@@ -1031,6 +1036,10 @@ void DevAscendFunction::InitIncastOutcast(
                     outAttr.stitchPolicyFullCoverProducerList.size());
                 for (size_t k = 0; k < outAttr.stitchPolicyFullCoverProducerList.size(); k++) {
                     At(outcast.stitchPolicyFullCoverProducerList, k) = outAttr.stitchPolicyFullCoverProducerList[k];
+                    auto it = opIdxToHubOpIdx.find(outAttr.stitchPolicyFullCoverProducerList[k].operationIdx);
+                    if (it != opIdxToHubOpIdx.end()) {
+                        At(outcast.stitchPolicyFullCoverProducerList, k).wrapTaskHubOpIdx = it->second;
+                    }
                 };
             }
             fullCoverTotal += outAttr.stitchPolicyFullCoverProducerList.size();
@@ -1735,138 +1744,45 @@ struct EncodeDevAscendFunctionInfo {
         }
     }
 
-    std::map<int, std::set<int>> ComputeWrapIdToConsumerOpIdxSetMap(std::vector<Operation*>& callopList) const
+    // 为单个 wrapId 分组插入 HUB_MIX，重接依赖图：
+    //   pred -> [callop...]   变为   pred -> hubMix -> [callop...]
+    // - 汇聚分组内所有 op 的公共前驱 predSet；
+    // - 前驱的后继由原 callop 改指 HUB_MIX；HUB_MIX 后继指向全部 callop，callop 前驱数置 1；
+    // - 记录 callop -> hubMix 到 opToHubOp。
+    void InsertHubMixForWrapGroup(std::vector<Operation*>& callopList, const std::vector<Operation*>& callops,
+                                  const std::unordered_map<Operation*, std::vector<Operation*>>& predListDict,
+                                  std::unordered_map<Operation*, Operation*>& opToHubOp)
     {
-        std::unordered_set<int> incastRawmagics;
-        for (auto& incast : incastList) {
-            incastRawmagics.insert(incast->tensor->rawmagic);
-        }
-        std::map<int, std::set<int>> result;
-        for (int j = 0; j < static_cast<int>(callopList.size()); j++) {
-            auto& op = *callopList[j];
-            auto callAttr = dynamic_cast<CallOpAttribute*>(op.GetOpAttribute().get());
-            if (!callAttr || callAttr->wrapId == INVALID_WRAPID) {
-                continue;
-            }
-            for (size_t k = 0; k < op.GetIOperands().size(); ++k) {
-                auto& iOperand = op.GetIOperands()[k];
-                if (incastRawmagics.count(iOperand->tensor->rawmagic) == 0) {
-                    continue;
-                }
-                result[callAttr->wrapId].insert(j);
-                break;
-            }
-        }
-        for (int j = 0; j < static_cast<int>(callopList.size()); j++) {
-            auto& op = *callopList[j];
-            auto callAttr = dynamic_cast<CallOpAttribute*>(op.GetOpAttribute().get());
-            if (!callAttr || callAttr->wrapId == INVALID_WRAPID) {
-                continue;
-            }
-            auto it = result.find(callAttr->wrapId);
-            if (it == result.end() || it->second.empty()) {
-                continue;
-            }
-            it->second.insert(j);
-        }
-        return result;
-    }
-
-    std::unordered_map<Operation*, Operation*> AddHubMixForIncastMixOp(
-        std::vector<Operation*>& callopList, const std::map<int, std::set<int>>& wrapIdToConsumerSet,
-        std::unordered_map<Operation*, std::vector<Operation*>>& predListDict)
-    {
-        std::unordered_map<Operation*, Operation*> opToHubOp;
-        for (auto& [wrapId, consumerIdxSet] : wrapIdToConsumerSet) {
-            (void)wrapId;
-            std::vector<Operation*> callops;
-            for (auto opIdx : consumerIdxSet) {
-                callops.push_back(callopList[opIdx]);
-            }
-            std::unordered_set<Operation*> predSet;
-            for (auto* callOp : callops) {
-                auto it = predListDict.find(callOp);
-                if (it != predListDict.end()) {
-                    for (auto* pred : it->second) {
-                        predSet.insert(pred);
-                    }
-                }
-            }
-
-            auto* hubMixOp = MakeDummyCallHubMix();
-            callopList.push_back(hubMixOp);
-
-            for (auto* pred : predSet) {
-                callOpSuccDict[pred].Remove(callops);
-                callOpSuccDict[pred].Insert(hubMixOp);
-            }
-            callOpPredDict[hubMixOp] = static_cast<uint64_t>(predSet.size());
-
-            for (auto* callOp : callops) {
-                callOpSuccDict[hubMixOp].Insert(callOp);
-                callOpPredDict[callOp] = 1;
-                opToHubOp[callOp] = hubMixOp;
-            }
-        }
-        return opToHubOp;
-    }
-
-    void AddHubMixForInnerMixOp(std::vector<Operation*>& callopList, const std::unordered_set<int>& incastWrapIds,
-                                std::unordered_map<Operation*, std::vector<Operation*>>& predListDict)
-    {
-        size_t originalSize = callopList.size();
-        std::map<int, std::vector<Operation*>> wrapIdToCallops;
-        for (size_t i = 0; i < originalSize; i++) {
-            Operation* op = callopList[i];
-            auto callAttr = dynamic_cast<CallOpAttribute*>(op->GetOpAttribute().get());
-            if (callAttr == nullptr || callAttr->wrapId == INVALID_WRAPID) {
-                continue;
-            }
-            if (incastWrapIds.count(callAttr->wrapId) != 0) {
-                continue;
-            }
+        std::unordered_set<Operation*> predSet;
+        for (auto* op : callops) {
             auto it = predListDict.find(op);
-            if (it == predListDict.end() || it->second.empty()) {
-                continue;
-            }
-            wrapIdToCallops[callAttr->wrapId].push_back(op);
-        }
-
-        for (auto& [wrapId, callops] : wrapIdToCallops) {
-            (void)wrapId;
-            std::unordered_set<Operation*> predSet;
-            for (auto* op : callops) {
-                auto it = predListDict.find(op);
-                if (it != predListDict.end()) {
-                    for (auto* pred : it->second) {
-                        predSet.insert(pred);
-                    }
+            if (it != predListDict.end()) {
+                for (auto* pred : it->second) {
+                    predSet.insert(pred);
                 }
             }
-            if (predSet.empty()) {
-                continue;
-            }
+        }
 
-            Operation* hubMixOp = MakeDummyCallHubMix();
-            callopList.push_back(hubMixOp);
+        auto* hubMixOp = MakeDummyCallHubMix();
+        callopList.push_back(hubMixOp);
 
-            for (auto* pred : predSet) {
-                callOpSuccDict[pred].Remove(callops);
-                callOpSuccDict[pred].Insert(hubMixOp);
-            }
-            callOpPredDict[hubMixOp] = static_cast<uint64_t>(predSet.size());
+        for (auto* pred : predSet) {
+            callOpSuccDict[pred].Remove(callops);
+            callOpSuccDict[pred].Insert(hubMixOp);
+        }
+        callOpPredDict[hubMixOp] = static_cast<uint64_t>(predSet.size());
 
-            for (auto* op : callops) {
-                callOpSuccDict[hubMixOp].Insert(op);
-                callOpPredDict[op] = 1;
-            }
+        for (auto* callOp : callops) {
+            callOpSuccDict[hubMixOp].Insert(callOp);
+            callOpPredDict[callOp] = 1;
+            opToHubOp[callOp] = hubMixOp;
         }
     }
 
+    // 为所有 mix 任务按 wrapId 统一插入 HUB_MIX 同步节点（含无前驱的，作为零前驱同步屏障）；
+    // opToHubOp（→opIdxToHubOpIdx_）收集所有 wrap 的映射，供 incast/outcast 消费者查表替换为 HUB_MIX。
     std::unordered_map<Operation*, Operation*> AddHubMixForWrapTask(std::vector<Operation*>& callopList)
     {
-        auto wrapIdToConsumerSet = ComputeWrapIdToConsumerOpIdxSetMap(callopList);
-
         std::unordered_map<Operation*, std::vector<Operation*>> predListDict;
         for (auto& [producer, succSet] : callOpSuccDict) {
             for (auto& succ : succSet) {
@@ -1874,17 +1790,20 @@ struct EncodeDevAscendFunctionInfo {
             }
         }
 
-        std::unordered_set<int> incastWrapIds;
-        for (auto& [wrapId, consumerSet] : wrapIdToConsumerSet) {
-            (void)consumerSet;
-            incastWrapIds.insert(wrapId);
+        std::map<int, std::vector<Operation*>> wrapIdToCallops;
+        for (auto* op : callopList) {
+            auto callAttr = dynamic_cast<CallOpAttribute*>(op->GetOpAttribute().get());
+            if (callAttr == nullptr || callAttr->wrapId == INVALID_WRAPID) {
+                continue;
+            }
+            wrapIdToCallops[callAttr->wrapId].push_back(op);
         }
 
-        // 为没有跨RootFunction的有依赖的mix任务插入HUB_MIX节点
-        AddHubMixForInnerMixOp(callopList, incastWrapIds, predListDict);
-
-        // 为跨RootFunction的有依赖的mix任务插入HUB_MIX节点
-        auto opToHubOp = AddHubMixForIncastMixOp(callopList, wrapIdToConsumerSet, predListDict);
+        std::unordered_map<Operation*, Operation*> opToHubOp;
+        for (auto& [wrapId, callops] : wrapIdToCallops) {
+            (void)wrapId;
+            InsertHubMixForWrapGroup(callopList, callops, predListDict, opToHubOp);
+        }
         return opToHubOp;
     }
 
