@@ -343,3 +343,36 @@ TEST_F(InferTensorFormatTest, FakeTransUnsupportedFormatConversionFails)
 
     EXPECT_EQ(RunInferTensorFormat(G.GetFunction()), FAILED);
 }
+
+// =============================================================================
+// 场景 j5: 零输入 op (VEC_DUP) 输出驱动 FAKE_TRANS 链路
+//   图: VEC_DUP(零输入) → dup_out → FAKE_TRANS(NC1HWC0→ND) → fake_out → NEG → neg_out(outcast)
+//   预期: 无 incast 时 worklist 完全依赖零输入 op 种子循环;
+//         VEC_DUP 输出被 seed 后, FAKE_TRANS 被替换为 TransData 对 (NCHW2NC1HWC0 + NC1HWC02NCHW),
+//         NEG 输入重连到输出侧 TransData 结果, fake_out 被隔离
+// =============================================================================
+TEST_F(InferTensorFormatTest, ZeroInputOpOutputFeedsFakeTrans)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape4d{2, 32, 14, 14};
+    TileShape::Current().SetVecTile({16, 16, 2, 16});
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d, {"dup_out", "fake_out", "neg_out"}));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_VEC_DUP, {}, {"dup_out"}, "vec_dup"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"dup_out"}, {"fake_out"}, "fake_trans"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_NEG, {"fake_out"}, {"neg_out"}, "neg"));
+    ASSERT_TRUE(G.SetOutCast({"neg_out"}));
+    SetFakeTransFormat(G, "fake_trans", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
+
+    Function* func = G.GetFunction();
+    ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
+
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_FAKE_TRANS), 0);
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2NC1HWC0), 1);
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NC1HWC02NCHW), 1);
+    auto* neg = G.GetOp("neg");
+    ASSERT_NE(neg, nullptr);
+    EXPECT_NE(neg->GetIOperands()[0], G.GetTensor("fake_out"));
+    EXPECT_EQ(neg->GetIOperands()[0]->Format(), TileOpFormat::TILEOP_ND);
+    EXPECT_TRUE(G.GetTensor("fake_out")->GetProducers().empty());
+    EXPECT_TRUE(G.GetTensor("fake_out")->GetConsumers().empty());
+}

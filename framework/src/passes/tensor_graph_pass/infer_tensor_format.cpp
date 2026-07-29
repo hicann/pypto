@@ -458,7 +458,16 @@ Status InferTensorFormat::DeriveFormats(Function& function)
     std::unordered_set<int> assembledOutputs; // 已被首个 assemble 初始化的输出 tensor
 
     EnqueueFunctionInputs(function, visitedTensors, worklist);
-    APASS_LOG_DEBUG_F(Elements::Tensor, "Initial worklist size: %zu (incast tensors).", worklist.size());
+
+    for (auto& op : function.Operations()) {
+        if (op.IsDeleted() || op.GetInputOperandSize() != 0) {
+            continue;
+        }
+        DetermineOutputFormat(function, op, arch, visitedTensors, worklist);
+    }
+
+    APASS_LOG_DEBUG_F(Elements::Tensor, "Initial worklist size: %zu (incast + zero-input op outputs).",
+                      worklist.size());
 
     while (!worklist.empty()) {
         auto tensor = worklist.front();
