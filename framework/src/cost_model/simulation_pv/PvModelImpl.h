@@ -225,6 +225,37 @@ public:
         std::transform(archTypeStr.begin(), archTypeStr.end(), archTypeStr.begin(), ::tolower);
         std::string soPath = std::string(ascendHome) + "/toolkit/tools/simulator/" + archTypeStr +
                              (archType == NPUArch::DAV_3510 ? "/camodel/libpem_davinci.so" : "/lib/libpem_davinci.so");
+        if (archType == NPUArch::DAV_3510) {
+            std::string camodelDir = std::string(ascendHome) + "/toolkit/tools/simulator/" + archTypeStr + "/camodel";
+            std::string lib64Dir = std::string(ascendHome) + "/lib64";
+            std::string loaderC = dir_ + "/camodel_loader.c";
+            std::string loaderSo = dir_ + "/camodel_loader.so";
+            std::ofstream ofs(loaderC);
+            ofs << "int pypto_camodel_loader_marker = 0;\n";
+            ofs.close();
+            constexpr int loaderCmdLen = 4096;
+            char loaderCmd[loaderCmdLen];
+            int ret = snprintf_s(loaderCmd, sizeof(loaderCmd), sizeof(loaderCmd) - 1,
+                                 "cc -shared -fPIC -o %s %s -Wl,--disable-new-dtags -Wl,-rpath,%s:%s "
+                                 "-Wl,--no-as-needed -L%s -lnpu_drv_camodel -Wl,--as-needed",
+                                 loaderSo.c_str(), loaderC.c_str(), camodelDir.c_str(), lib64Dir.c_str(),
+                                 camodelDir.c_str());
+            if (ret < 0 || ret >= static_cast<int>(sizeof(loaderCmd))) {
+                throw std::runtime_error("failed to build camodel loader command");
+            }
+            auto loaderArgs = SplitString(loaderCmd);
+            ret = SafeExecCommand(loaderArgs);
+            if (ret != 0) {
+                SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CMD_ERROR, "cmd error: %s", loaderCmd);
+                throw std::runtime_error("failed to compile camodel loader");
+            }
+            void* loader = dlopen(loaderSo.c_str(), RTLD_LAZY | RTLD_GLOBAL);
+            if (!loader) {
+                SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::NO_SO_EXISTS, "can not load library: %s",
+                                loaderSo.c_str());
+                throw std::runtime_error("can not load camodel loader: " + loaderSo);
+            }
+        }
         void* handle = dlopen((soPath.c_str()), RTLD_LAZY);
         if (!handle) {
             SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::NO_SO_EXISTS, "can not load library: %s",

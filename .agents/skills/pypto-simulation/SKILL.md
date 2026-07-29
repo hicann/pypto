@@ -60,14 +60,14 @@ pip show pypto
 
 根据用户目的选择模式：
 
-**模式 A：功能仿真（验证功能是否正常）**
+**模式 A：任务级仿真（粒度较粗、速度快但性能仿真准确度较低）**
 
 ```bash
 cd /path/to/pypto
-cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -o output/
+python3 examples/00_hello_world/hello_world.py --run_mode sim
 ```
 
-**模式 B：性能仿真（查看流水报告）**
+**模式 B：指令级仿真（粒度较细、性能仿真准确度高但速度慢，查看流水报告）**
 
 **额外前置检查：**
 
@@ -75,7 +75,7 @@ cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -o 
 
 ```bash
 cd /path/to/pypto
-cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -n 0 -g -o output/
+cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -n 0 -g -o output/
 ```
 
 > ⚠️ **核数说明**：上述命令带 `-n 0`，执行后**默认只能查看 0 核**的流水报告。若需查看多核流水，执行时**不要指定 `-n 0`**（去掉该参数），仿真器会对所有核开启日志采集；随后通过步骤 3 的 `--core-id all`（或指定核号如 `--core-id 1,5`）生成对应核的报告。
@@ -114,13 +114,13 @@ $ python3 build_ci.py --clean --no_isolation
 $ bash build_out/cann-pypto_*.run --full -q --pylocal
 
 # 步骤2：执行仿真（必须）
-# 模式A：功能仿真
+# 模式A：任务级仿真
 $ cd /path/to/pypto
-$ cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -o output/
+$ python3 examples/00_hello_world/hello_world.py --run_mode sim
 
-# 模式B：性能仿真（脚本中需设置 pypto.set_global_config("simulation.accuracy_level", 2)）
+# 模式B：指令级仿真（脚本中需设置 pypto.set_global_config("simulation.accuracy_level", 2)）
 $ cd /path/to/pypto
-$ cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -n 0 -g -o output/
+$ cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -n 0 -g -o output/
 Json Saved at: .../report/trace_core0.json ✓
 
 # 步骤3：生成全部核报告（可选，需用户确认）
@@ -184,11 +184,11 @@ output/cannsim_*/report/trace_reports/
 ## 命令速查
 
 ```bash
-# 功能仿真
-cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -o output/
+# 任务级仿真
+python3 examples/00_hello_world/hello_world.py --run_mode sim
 
-# 性能仿真（脚本中需设置 pypto.set_global_config("simulation.accuracy_level", 2)）
-cannsim record 'python3 examples/00_hello_world/hello_world.py' -s Ascend950 -n 0 -g -o output/
+# 指令级仿真（脚本中需设置 pypto.set_global_config("simulation.accuracy_level", 2)）
+cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -n 0 -g -o output/
 
 # 生成完整报告（全部核）
 cannsim report -e <cannsim_dir> -o <cannsim_dir>/report --core-id all
@@ -204,7 +204,7 @@ ls output/cannsim_*/report/
 
 ## 触发词
 
-- Soc CAModel 仿真、核内流水、流水报告、性能仿真
+- Soc CAModel 仿真、核内流水、流水报告、任务级仿真、指令级仿真
 
 ---
 

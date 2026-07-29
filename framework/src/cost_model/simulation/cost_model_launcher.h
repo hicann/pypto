@@ -268,15 +268,6 @@ private:
             return;
         }
 
-        auto archType = npu::tile_fwk::Platform::Instance().GetSoc().GetNPUArch();
-        if (archType == NPUArch::DAV_3510) {
-            if (std::getenv("CAMODEL_LOG_PATH") == nullptr) {
-                SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CANNSIM_FAILED,
-                                "cannsim not used to start, precision simulation unavailable.");
-                return;
-            }
-        }
-
         try {
             pv_ = CostModel::PvModelFactory::CreateDyn();
             pv_->InitPv();
