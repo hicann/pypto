@@ -311,15 +311,18 @@ void CheckTileTiling(DataType outType, const Tensor& inputTensor, const Tensor& 
     int64_t cOut = weightTensor.GetShape()[NCHW_N_IDX];
     int64_t hin = attrParam.isConv1D ? 1 : inputTensor.GetShape()[indexH];
     int64_t win = inputTensor.GetShape()[indexW];
+    int64_t k0 = ALIGN_SIZE_32 / BytesOf(outType);
+    int64_t cinWeight = weightTensor.GetShape()[NCHW_C_IDX];
 
     CheckValueRange(tileHin, "tileHin", NUM1, hin);
     CheckValueRange(tileBatch, "tileBatch", NUM1, NUM1);
     CheckValueRange(tileWin, "tileWin", NUM1, win);
+    CheckValueRange(tileCinFmap, "tileCinFmap", k0, ConvAlignB(cinWeight, k0));
+    CheckValueRange(tileCinWeight, "tileCinWeight", k0, ConvAlignB(cinWeight, k0));
     CheckValueRange(tileN, "tileL1Info.tileN", NUM1, ConvAlignB(cOut / groups, MKN_N_VALUE));
     CheckAlignment(tileN, MKN_N_VALUE, "tileL1Info.tileN");
 
     CheckHowoTile(inputTensor, weightTensor, attrParam);
-    int64_t k0 = ALIGN_SIZE_32 / BytesOf(outType);
     CheckAlignment(tileCinFmap, k0, "tileCinFmap");
     CheckAlignment(tileCinWeight, k0, "tileCinWeight");
     if (convTile.setL0Tile) {

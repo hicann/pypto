@@ -53,11 +53,11 @@ TileShape需要满足以下约束条件：
 
         - 1 <= tileWout <= CeilAlign(Wout, 16)（Wout为输出特征图实际宽度），tileWout需满足16元素对齐，即`tileWout % 16 == 0`
 
-        - 1 <= tileCinFmap <= Cin（Cin为输入特征图实际通道数）
+        - C0 <= tileCinFmap <= CeilAlign(Cin, C0)（Cin为输入特征图实际通道数）
 
         - tileCinFmap * sizeof(dtype) % 32 == 0
 
-        - 1 <= tileCinWeight <= Cin（Cin为权重输入通道实际数量）
+        - C0 <= tileCinWeight <= CeilAlign(Cin, C0)（Cin为权重输入通道实际数量）
 
         - tileCinWeight * sizeof(dtype) % 32 == 0
 
@@ -132,7 +132,7 @@ TileShape需要满足以下约束条件：
     - L1空间约束：
 
         ```txt
-        CeilAlign(hinL1 * winL1 * kAL1 * sizeof(dtype), ALIGN_SIZE_32) + CeilAlign(nL1 * kBL1 * sizeof(dtype), ALIGN_SIZE_32) + CeilAlign(tileN * sizeof(dtype), ALIGN_SIZE_32) <= L1_size
+        CeilAlign(hinL1 * winL1 * tileCinFmap * sizeof(dtype), ALIGN_SIZE_32) + CeilAlign(nL1 * kBL1 * sizeof(dtype), ALIGN_SIZE_32) + CeilAlign(tileN * sizeof(dtype), ALIGN_SIZE_32) <= L1_size
         ```
 
         其中：
