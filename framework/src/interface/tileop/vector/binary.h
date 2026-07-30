@@ -255,22 +255,6 @@ TILEOP void TBitwiseOr(T0 dst, T1 src0, T2 src1)
     BinaryCompute<BinaryOp::BITWISEOR, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
-TILEOP int gcd(int a, int b)
-{
-    if (a < 0) {
-        a = 0 - a;
-    }
-    if (b < 0) {
-        b = 0 - b;
-    }
-    while (a % b != 0) {
-        int c = a % b;
-        a = b;
-        b = c;
-    }
-    return b;
-}
-
 #define OP_TILE_OP_GCD TGcd
 template <int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TGcd(T0 dst, T1 src0, T2 src1)
@@ -285,11 +269,10 @@ TILEOP void TGcd(T0 dst, T1 src0, T2 src1)
     auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
     auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
     auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
     auto src0Addr = (__ubuf__ typename T1::Type*)((uint64_t)(src0.GetAddr()));
     auto src1Addr = (__ubuf__ typename T2::Type*)((uint64_t)(src1.GetAddr()));
     auto dstAddr = (__ubuf__ typename T0::Type*)((uint64_t)(dst.GetAddr()));
+    using inputType = typename T1::Type;
 
     set_flag(PIPE_V, PIPE_S, EVENT_ID0);
     wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
@@ -299,7 +282,24 @@ TILEOP void TGcd(T0 dst, T1 src0, T2 src1)
                 for (LoopVar m = 0; m < shape3; m++) {
                     for (LoopVar i = 0; i < shape4; i++) {
                         int tmpStride = n * dstStride0 + j * dstStride1 + k * dstStride2 + m * dstStride3 + i;
-                        dstAddr[tmpStride] = gcd(src0Addr[tmpStride], src1Addr[tmpStride]);
+                        inputType a = src0Addr[tmpStride];
+                        inputType b = src1Addr[tmpStride];
+                        if (a < 0) {
+                            a = 0 - a;
+                        }
+                        if (b < 0) {
+                            b = 0 - b;
+                        }
+                        if (b == 0) {
+                            dstAddr[tmpStride] = a;
+                            continue;
+                        }
+                        while (a % b != 0) {
+                            inputType c = a % b;
+                            a = b;
+                            b = c;
+                        }
+                        dstAddr[tmpStride] = b;
                     }
                 }
             }
