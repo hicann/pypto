@@ -42,7 +42,7 @@ Tensor是PyPTO中的基本数据结构，用于表示将在计算图中使用并
         return tensor
 
     def main_function():
-         sub_tensor = sub_function()
+        sub_tensor = sub_function()
     ```
 
 - PyTorch的Tensor转换为PyPTO的Tensor
