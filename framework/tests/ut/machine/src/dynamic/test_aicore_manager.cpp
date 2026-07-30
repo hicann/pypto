@@ -433,7 +433,11 @@ TEST(AicoreManagerTest, CheckIsTailBatch_SingleCpu)
 {
     MgrTestEnv env;
     env.mgr->aicpuNum_ = 1;
+    auto dynTask = std::make_unique<DynDeviceTaskBase>();
+    DeviceTaskCtrl taskCtrl{};
+    taskCtrl.devTask = &dynTask->devTask;
     SchDeviceTaskContext devTaskCtx{};
+    devTaskCtx.BindTaskCtrl(&taskCtrl);
     uint64_t remaining = 0;
     EXPECT_FALSE(env.mgr->CheckIsTailBatch(&devTaskCtx, CoreType::AIC, remaining));
 }
