@@ -85,6 +85,10 @@ include(cmake/func.cmake)
 include(cmake/config.cmake)
 include(cmake/intf.cmake)
 include(cmake/device_project.cmake)
+find_cann_package(acl_rt REQUIRED)
+find_cann_package(ascend_hal REQUIRED)
+find_cann_package(hcomm REQUIRED)
+find_cann_package(runtime REQUIRED)
 find_cann_package(securec REQUIRED)
 add_cann_third_party(json)
 if (ENABLE_TESTS)
@@ -122,9 +126,8 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
             tile_fwk_simulation
             tile_fwk_simulation_pv
     )
-    # 不判断 c_sec 存在, 不存在时属异常场景, 应在构建阶段发现
-    get_target_property(cSecSharedFile c_sec IMPORTED_LOCATION)
-    install(FILES ${cSecSharedFile}
+    # 判断 c_sec 存在, 不存在时属异常场景, 应在构建阶段发现
+    install(FILES $<TARGET_FILE:c_sec>
             DESTINATION "${PyPTO_WhlName}/lib"
             PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
     )
@@ -200,7 +203,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     #     2) 在线编译 calculator 场景, 仅安装必需的头文件;
     # 2.4 framework/src/ 路径
     #     1) 仅在线编译 pypto_impl 场景需要
-    get_target_property(_cSecIncludeDir c_sec INTERFACE_INCLUDE_DIRECTORIES)
+    set(_cSecIncludeDir $<TARGET_PROPERTY:c_sec_headers,INTERFACE_INCLUDE_DIRECTORIES>)
     install(FILES
                 ${_cSecIncludeDir}/securec.h
                 ${_cSecIncludeDir}/securectype.h

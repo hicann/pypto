@@ -19,7 +19,10 @@ get_filename_component(PYPTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 set(PTO_FWK_SRC_ROOT ${PYPTO_DIR})
 set(BUILD_WITH_CANN ON)
 
+find_cann_package(ascend_hal REQUIRED)
+find_cann_package(atrace REQUIRED)
 find_cann_package(securec REQUIRED)
+find_cann_package(slog REQUIRED)
 add_subdirectory(${PYPTO_DIR}/framework/src/machine/device ${CMAKE_BINARY_DIR}/framework/src/machine/device)
 
 set_cann_subprj_package()

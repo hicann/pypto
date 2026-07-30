@@ -35,19 +35,10 @@ target_include_directories(slog_stub
             ${PTO_FWK_SRC_ROOT}/framework/src/include
             ${PTO_FWK_SRC_ROOT}/framework/include
             ${PTO_FWK_SRC_ROOT}/framework/src/cost_model
-        PRIVATE
-            $<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/include>
-            $<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/include/toolchain>
-            $<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/base>
-)
-target_link_directories(slog_stub
-        PRIVATE
-            $<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/devlib/linux/aarch64/>
-            $<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/devlib/device/>
-            $<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/lib64>
 )
 target_link_libraries(slog_stub
         PRIVATE
+            $<BUILD_INTERFACE:slog_headers>
             -Wl,--no-as-needed
             c_sec
             -ldl

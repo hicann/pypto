@@ -9,4 +9,6 @@
 # -----------------------------------------------------------------------------------------------------------
 
 set_cann_package(pypto VERSION "9.1.0")
+set_cann_build_dependencies(runtime "CUR_MAJOR_MINOR_VER")
+set_cann_build_dependencies(hcomm "CUR_MAJOR_MINOR_VER")
 set_cann_run_dependencies(driver ">=25.5.0")

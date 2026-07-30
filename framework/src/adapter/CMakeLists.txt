@@ -16,12 +16,6 @@ file(GLOB_RECURSE _Adapter_Srcs
 add_library(tile_fwk_adapter SHARED)
 target_sources(tile_fwk_adapter PRIVATE ${_Adapter_Srcs})
 target_include_directories(tile_fwk_adapter
-        PUBLIC  # 使用 CANN 场景依赖
-            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc>>
-            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/profiling>>
-            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/runtime>>
-            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/runtime/runtime>>
-            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/include/experiment/runtime>>
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}
 )
@@ -30,14 +24,12 @@ target_compile_definitions(tile_fwk_adapter
             $<BUILD_INTERFACE:$<$<AND:$<BOOL:${BUILD_WITH_CANN}>,$<NOT:$<BOOL:${ENABLE_UTEST}>>>:BUILD_WITH_CANN>>
             $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN_MOBILE}>:BUILD_WITH_CANN_MOBILE>>
 )
-target_link_directories(tile_fwk_adapter
-        PUBLIC
-            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/lib64>>
-            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:/usr/local/Ascend/driver/lib64/driver>>
-            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/devlib>>
-)
 target_link_libraries(tile_fwk_adapter
         PRIVATE
+            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:acl_rt_headers>>
+            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:ascend_hal_headers>>
+            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:hcomm_headers>>
+            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:runtime_headers>>
             $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_utils>
             intf_pub_cxx17
             tile_fwk_intf_pub
