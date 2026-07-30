@@ -65,9 +65,6 @@ inline void EstablishDependenciesWithType(uint64_t cellMemBase, uint64_t* cellMa
             auto opIdx = TaskID(static_cast<uint32_t>(opId));
 
             if (funcIdx >= static_cast<uint32_t>(stitchingSize)) {
-                DEV_ERROR(CtrlErr::CELL_MATCH_OP_ID_INVALID,
-                          "Cell match cache opid is invalid maybe dirty data, opid=(%u!%u), stitchListSize=%d.",
-                          funcIdx, opIdx, stitchingSize);
                 continue;
             }
 
