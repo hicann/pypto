@@ -25,11 +25,11 @@
 
 1. 进入开源项目，单击"`CANNLab`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
 
-![创建云开发环境](../tutorials/figures/webide1.png)
+   ![创建云开发环境](../tutorials/figures/webide1.png)
 
 2. 根据页面提示信息创建并启动云开发环境，单击"`连接 > WebIDE`"进入一站式开发平台。
 
-![启动并连接WebIDE](../tutorials/figures/webide2.png)
+   ![启动并连接WebIDE](../tutorials/figures/webide2.png)
 
 ### 方式2：Docker部署
 
