@@ -133,33 +133,31 @@ INLINE uint32_t GetRegHighValue(__gm__ KernelArgs* args, uint32_t lastHighRegVal
     return highRegVal;
 }
 
-constexpr uint16_t SYNC_MODE_SHIFT_VALUE = 4;
-constexpr uint16_t SYNC_FLAG_SHIFT_VALUE = 8;
+constexpr uint8_t EVENT_ID15 = 15;
+constexpr uint8_t EVENT_NUMS_PER_AIV = 16;
 enum class MixResourceType { MIX_UNKNOWN = 0, MIX_1C1V = 1, MIX_1C2V = 2 };
 
-__aicore__ inline uint16_t GetffstMsg(uint16_t mode, uint16_t flagId)
-{
-    return (0x1 + ((mode & 0x3) << SYNC_MODE_SHIFT_VALUE) + ((flagId & 0xf) << SYNC_FLAG_SHIFT_VALUE));
-}
-
-#ifdef __ENABLE_MIX_PENDING
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
 INLINE void PipeSyncPre(uint8_t mixResourceType, uint8_t lastMixResourceType)
 {
-    // only lastTask is mix should insert sync
-    if (lastMixResourceType == static_cast<uint8_t>(MixResourceType::MIX_UNKNOWN) ||
-        mixResourceType != static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
+    // only lastTask and curTask are mix should insert sync
+    (void)lastMixResourceType;
+    if (mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_UNKNOWN)) {
         return;
     }
 #if defined(__AIV__)
-    wait_flag_dev(PIPE_S, EVENT_ID7);
-    ffts_cross_core_sync(
-        PIPE_MTE3,
-        GetffstMsg(2, EVENT_ID7)); // 模式2:Block内CV之间的同步，插在callop开始，这里pipe不重要，前面流水必然已执行完
+    set_intra_block(PIPE_S, EVENT_ID15);  // 插在callop开始，这里pipe不重要，前面流水必然已执行完
+    wait_intra_block(PIPE_S, EVENT_ID15); // PIPE_S阻塞后续指令下发，避免与后续的CCE指令EventId冲突
 #else
-    ffts_cross_core_sync(
-        PIPE_FIX,
-        GetffstMsg(2, EVENT_ID7)); // 模式2:Block内CV之间的同步，插在callop开始，这里pipe不重要，前面流水必然已执行完
-    wait_flag_dev(PIPE_S, EVENT_ID7);
+    if (mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
+        set_intra_block(PIPE_S, EVENT_ID15);                       // 作用于Vec0
+        set_intra_block(PIPE_S, EVENT_ID15 + EVENT_NUMS_PER_AIV);  // 作用与Vec1
+        wait_intra_block(PIPE_S, EVENT_ID15);                      // 等待Vec0
+        wait_intra_block(PIPE_S, EVENT_ID15 + EVENT_NUMS_PER_AIV); // 等待Vec1
+    } else {
+        set_intra_block(PIPE_S, EVENT_ID15);  // 作用于Vec0
+        wait_intra_block(PIPE_S, EVENT_ID15); // 等待Vec0
+    }
 #endif
 }
 #endif
@@ -268,7 +266,7 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
     __gm__ TaskStat* taskStat = nullptr;
     taskStat = InitTaskStat(ctx);
 
-#ifdef __ENABLE_MIX_PENDING
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
     PipeSyncPre(mixResourceType, lastMixResourceType);
     lastMixResourceType = mixResourceType;
 #else

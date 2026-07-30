@@ -169,7 +169,6 @@ struct DeviceArgs {
     bool enableVFFusion = false;
     bool enableEslModel = false;
     bool hasAicpuTask = false;
-    bool all1c2vMixTask = false;
     ArchInfo archInfo{ArchInfo::DAV_2201};
     ToSubMachineConfig toSubMachineConfig;
 };

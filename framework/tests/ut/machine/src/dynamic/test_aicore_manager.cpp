@@ -48,7 +48,6 @@ struct MgrTestEnv {
         mgr->archInfo_ = ArchInfo::DAV_2201;
         mgr->enableEslModel_ = false;
         mgr->hasAicpuTask_ = false;
-        mgr->isMixPending_ = false;
         mgr->enableFairSch_ = false;
         mgr->enableL2CacheSch_ = false;
         mgr->validGetPgMask_ = false;
@@ -83,15 +82,14 @@ struct MgrTestEnv {
         }
 
         auto& ctx = *ctxPtr;
-        ctx.coreRunReadyCnt_[0] = 0;
-        ctx.coreRunReadyCnt_[1] = 0;
-        ctx.corePendReadyCnt_[0] = 0;
-        ctx.corePendReadyCnt_[1] = 0;
-        ctx.waitTaskCnt[0] = 0;
-        ctx.waitTaskCnt[1] = 0;
+        ctx.coreStatusMgr.coreRunReadyCnt_[0] = 0;
+        ctx.coreStatusMgr.coreRunReadyCnt_[1] = 0;
+        ctx.coreStatusMgr.corePendReadyCnt_[0] = 0;
+        ctx.coreStatusMgr.corePendReadyCnt_[1] = 0;
+        ctx.coreStatusMgr.waitTaskCnt[0] = 0;
+        ctx.coreStatusMgr.waitTaskCnt[1] = 0;
         for (uint32_t i = 0; i < MAX_AICORE_NUM; i++) {
-            ctx.coreIdxPosition_[i] = INVALID_COREIDX_POSITION;
-            ctx.wrapCoreAvail_[i] = true;
+            ctx.coreStatusMgr.coreIdxPosition_[i] = INVALID_COREIDX_POSITION;
         }
     }
 
@@ -112,25 +110,25 @@ TEST(AicoreManagerTest, AddAndRemoveRunReadyCoreIdx)
     MgrTestEnv env;
     int type = static_cast<int>(CoreType::AIC);
 
-    env.mgr->AddReadyCoreIdx(0, type);
-    EXPECT_EQ(env.ctx().coreRunReadyCnt_[type], 1u);
-    EXPECT_EQ(env.ctx().runReadyCoreIdx_[type][0], 0u);
+    env.ctx().coreStatusMgr.AddRunReadyCoreIdx(0, type);
+    EXPECT_EQ(env.ctx().coreStatusMgr.coreRunReadyCnt_[type], 1u);
+    EXPECT_EQ(env.ctx().coreStatusMgr.runReadyCoreIdx_[type][0], 0u);
 
-    env.mgr->AddReadyCoreIdx(1, type);
-    EXPECT_EQ(env.ctx().coreRunReadyCnt_[type], 2u);
+    env.ctx().coreStatusMgr.AddRunReadyCoreIdx(1, type);
+    EXPECT_EQ(env.ctx().coreStatusMgr.coreRunReadyCnt_[type], 2u);
 
-    env.mgr->RemoveRunReadyCoreIdx(0, type);
-    EXPECT_EQ(env.ctx().coreRunReadyCnt_[type], 1u);
-    EXPECT_EQ(env.ctx().coreIdxPosition_[0], INVALID_COREIDX_POSITION);
+    env.ctx().coreStatusMgr.RemoveRunReadyCoreIdx(0, type);
+    EXPECT_EQ(env.ctx().coreStatusMgr.coreRunReadyCnt_[type], 1u);
+    EXPECT_EQ(env.ctx().coreStatusMgr.coreIdxPosition_[0], INVALID_COREIDX_POSITION);
 }
 
 TEST(AicoreManagerTest, RemoveRunReadyCoreIdx_InvalidPos)
 {
     MgrTestEnv env;
     int type = static_cast<int>(CoreType::AIC);
-    env.ctx().coreIdxPosition_[0] = INVALID_COREIDX_POSITION;
-    env.mgr->RemoveRunReadyCoreIdx(0, type);
-    EXPECT_EQ(env.ctx().coreRunReadyCnt_[type], 0u);
+    env.ctx().coreStatusMgr.coreIdxPosition_[0] = INVALID_COREIDX_POSITION;
+    env.ctx().coreStatusMgr.RemoveRunReadyCoreIdx(0, type);
+    EXPECT_EQ(env.ctx().coreStatusMgr.coreRunReadyCnt_[type], 0u);
 }
 
 TEST(AicoreManagerTest, RemoveReadyCoreIdxTail)
@@ -138,21 +136,21 @@ TEST(AicoreManagerTest, RemoveReadyCoreIdxTail)
     MgrTestEnv env;
     int type = static_cast<int>(CoreType::AIC);
 
-    env.mgr->AddReadyCoreIdx(0, type);
-    env.mgr->AddReadyCoreIdx(1, type);
-    EXPECT_EQ(env.ctx().coreRunReadyCnt_[type], 2u);
+    env.ctx().coreStatusMgr.AddRunReadyCoreIdx(0, type);
+    env.ctx().coreStatusMgr.AddRunReadyCoreIdx(1, type);
+    EXPECT_EQ(env.ctx().coreStatusMgr.coreRunReadyCnt_[type], 2u);
 
-    env.mgr->RemoveReadyCoreIdxTail(1, type);
-    EXPECT_EQ(env.ctx().coreRunReadyCnt_[type], 1u);
-    EXPECT_EQ(env.ctx().coreIdxPosition_[1], INVALID_COREIDX_POSITION);
+    env.ctx().coreStatusMgr.RemoveReadyCoreIdxTail(1, type);
+    EXPECT_EQ(env.ctx().coreStatusMgr.coreRunReadyCnt_[type], 1u);
+    EXPECT_EQ(env.ctx().coreStatusMgr.coreIdxPosition_[1], INVALID_COREIDX_POSITION);
 }
 
 TEST(AicoreManagerTest, RemoveReadyCoreIdxTail_InvalidPos)
 {
     MgrTestEnv env;
     int type = static_cast<int>(CoreType::AIC);
-    env.ctx().coreIdxPosition_[0] = INVALID_COREIDX_POSITION;
-    env.mgr->RemoveReadyCoreIdxTail(0, type);
+    env.ctx().coreStatusMgr.coreIdxPosition_[0] = INVALID_COREIDX_POSITION;
+    env.ctx().coreStatusMgr.RemoveReadyCoreIdxTail(0, type);
 }
 
 TEST(AicoreManagerTest, AicpuIsBusyAndIdle)
@@ -418,14 +416,14 @@ TEST(AicoreManagerTest, MarkCoreStoped)
 TEST(AicoreManagerTest, GetRunReadyCoreNum)
 {
     MgrTestEnv env;
-    env.ctx().coreRunReadyCnt_[static_cast<int>(CoreType::AIC)] = 3;
+    env.ctx().coreStatusMgr.coreRunReadyCnt_[static_cast<int>(CoreType::AIC)] = 3;
     EXPECT_EQ(env.mgr->GetRunReadyCoreNum(CoreType::AIC), 3u);
 }
 
 TEST(AicoreManagerTest, GetReadyCoreNum_NoTail)
 {
     MgrTestEnv env;
-    env.ctx().corePendReadyCnt_[static_cast<int>(CoreType::AIC)] = 2;
+    env.ctx().coreStatusMgr.corePendReadyCnt_[static_cast<int>(CoreType::AIC)] = 2;
     EXPECT_EQ(env.mgr->GetReadyCoreNum(CoreType::AIC, false), 2u);
 }
 
@@ -456,12 +454,12 @@ TEST(AicoreManagerTest, HandShakeCorrectReadyCore)
     int type = static_cast<int>(CoreType::AIC);
     env.mgr->adjAicEnd_ = 1;
     env.mgr->aicEnd_ = 2;
-    env.mgr->AddReadyCoreIdx(0, type);
-    env.mgr->AddReadyCoreIdx(1, type);
-    env.ctx().corePendReadyCnt_[type] = 2;
+    env.ctx().coreStatusMgr.AddRunReadyCoreIdx(0, type);
+    env.ctx().coreStatusMgr.AddRunReadyCoreIdx(1, type);
+    env.ctx().coreStatusMgr.corePendReadyCnt_[type] = 2;
 
     env.mgr->HandShakeCorrectReadyCore(CoreType::AIC);
-    EXPECT_EQ(env.ctx().corePendReadyCnt_[type], 1);
+    EXPECT_EQ(env.ctx().coreStatusMgr.corePendReadyCnt_[type], 1);
 }
 
 TEST(AicoreManagerTest, CalcAdjAicoreEnd_NonDeviceNonEsl)
@@ -517,7 +515,7 @@ TEST(AicoreManagerTest, ReleaseCoreByRegValByAsyncMode_PendingFinished)
     uint32_t taskId = 0x100;
     env.mgr->pendingIds_[coreIdx] = taskId;
     env.mgr->runningIds_[coreIdx] = AICORE_TASK_INIT;
-    env.ctx().corePendReadyCnt_[type] = 0;
+    env.ctx().coreStatusMgr.corePendReadyCnt_[type] = 0;
 
     ResolveTaskContext ctx[MAX_RESOLVE_TASK_NUM];
     uint32_t finishCnt = 0;
@@ -558,7 +556,6 @@ TEST(AicoreManagerTest, ReleaseCoreByRegValByAsyncMode_PendingAck)
     uint32_t taskId = 0x300;
     env.mgr->pendingIds_[coreIdx] = taskId;
     env.mgr->runningIds_[coreIdx] = AICORE_TASK_INIT;
-    env.ctx().wrapCoreAvail_[coreIdx] = true;
 
     ResolveTaskContext ctx[MAX_RESOLVE_TASK_NUM];
     uint32_t finishCnt = 0;

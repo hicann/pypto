@@ -19,10 +19,11 @@
 #include <cstdlib>
 #include "machine/utils/dynamic/dev_workspace.h"
 #include "machine/utils/dynamic/device_task.h"
-#include "wrap_manager.h"
 #include "aicpu_task_manager.h"
 #include "tilefwk/aicpu_common.h"
 #include "aicore_constants.h"
+#include "core_status_manager.h"
+#include "wrap_manager.h"
 
 namespace npu::tile_fwk::dynamic {
 const uint32_t READY_ID_FIX_CACHE_NUM = 256;
@@ -223,32 +224,9 @@ struct ParallelSchDeviceTaskContext {
 };
 
 struct SchduleContext {
-    uint32_t waitTaskCnt[AICORE_TYPE_NUM]{0, 0};
-    uint8_t corePendReadyCnt_[AICORE_TYPE_NUM]{0, 0};
-    uint8_t coreRunReadyCnt_[AICORE_TYPE_NUM]{0, 0};
-    uint8_t runReadyCoreIdx_[AICORE_TYPE_NUM][MAX_MANAGER_AIV_NUM];
-    uint8_t lastPendReadyCoreIdx_[AICORE_TYPE_NUM]{0, 0};
-
-    uint8_t coreIdxPosition_[MAX_AICORE_NUM]{
-        INVALID_COREIDX_POSITION};             // used to record core's position in runReadyCoreIdx_
-    bool wrapCoreAvail_[MAX_AICORE_NUM]{true}; // used to check coreIdx is used by wrap_manager
-
+    CoreStatusManager coreStatusMgr;
     SchDeviceTaskContext* curSchDevTaskCtx;
     ParallelSchDeviceTaskContext schParallelDevTaskCtx;
-
-    SchduleContext()
-    {
-        auto size = sizeof(wrapCoreAvail_);
-        auto ret = memset_s(wrapCoreAvail_, size, 1, size);
-        if (ret != 0) {
-            DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "#sche.init: wrapCoreAvail_ init failed: %d", ret);
-        }
-        size_t positionSize = sizeof(coreIdxPosition_);
-        ret = memset_s(coreIdxPosition_, positionSize, INVALID_COREIDX_POSITION, positionSize);
-        if (ret != 0) {
-            DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "#sche.init: coreIdxPosition_ init failed: %d", ret);
-        }
-    }
 
     void Init(DeviceArgs* deviceArgs, int schedIdx) { schParallelDevTaskCtx.Init(deviceArgs, schedIdx); }
 
@@ -256,6 +234,7 @@ struct SchduleContext {
     {
         return schParallelDevTaskCtx.Element(parallelIdx);
     }
+
     void UpdateParallelVersion() { schParallelDevTaskCtx.UpdateVersion(); }
     uint32_t PrallelVersion() { return schParallelDevTaskCtx.Version(); }
 
