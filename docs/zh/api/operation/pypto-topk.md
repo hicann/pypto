@@ -30,7 +30,7 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：<br>- MERGE_SORT： DT_FP32。<br>- RADIX_SELECT： DT_BF16，DT_FP16，DT_FP32，DT_INT32，DT_UINT32，DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：<br>- MERGE_SORT：DT_FP32。<br>- RADIX_SELECT：DT_BF16，DT_FP16，DT_FP32，DT_INT32，DT_UINT32，DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | k       | 输入      | 返回元素的数量。<br>k的大小应该满足：1 <= k <= input.shape[dim]。 |
 | dim     | 输入      | 指定排序的维度。<br>目前仅支持按最后一个维度排序，即dim= -1或dim= input.shape.size() - 1。 |
 | largest | 输入      | 如果为True，返回最大元素。如果为False，返回最小元素。 |

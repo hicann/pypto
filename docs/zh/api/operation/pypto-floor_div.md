@@ -31,7 +31,7 @@ def floor_div(input: Tensor, other: Union[Tensor, int, float]) -> Tensor
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
 | input  | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32、DT_INT32、DT_INT8、DT_UINT8。<br>不支持空Tensor；Shape仅支持1-4维，支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other  | 输入     | 源操作数。<br>支持的类型为： Tensor、int、float。<br>Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32、DT_INT32、DT_INT8、DT_UINT8。<br>不支持空Tensor；Shape仅支持1-4维，支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other  | 输入     | 源操作数。<br>支持的类型为：Tensor、int、float。<br>Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32、DT_INT32、DT_INT8、DT_UINT8。<br>不支持空Tensor；Shape仅支持1-4维，支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 

@@ -15,7 +15,7 @@
 ## 功能说明
 
 将src的值写入input中。写入位置由index指定。3维计算公式如下，其他维度以此类推：
- <br>src为固定标量时：
+<br>src为固定标量时：
 $$
 \begin{cases}
 input\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[j\right]\left[k\right] = src & \text{if } dim = 0 \\
@@ -23,7 +23,7 @@ input\left[i\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right
 input\left[i\right]\left[j\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right] = src & \text{if } dim = 2
 \end{cases}
 $$
- <br>src为Tensor时：
+<br>src为Tensor时：
 $$
 \begin{cases}
 input\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[j\right]\left[k\right] = src\left[i\right]\left[j\right]\left[k\right] & \text{if } dim = 0 \\

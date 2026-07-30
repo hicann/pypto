@@ -17,7 +17,7 @@
 
 ## 注意事项
 
-- **不支持SymbolicScalar参数**：如果需要对SymbolicScalar进行比较，请使用 [SymbolicScalar.max()](../symbolic/pypto-SymbolicScalar-max.md)方法
+- **不支持SymbolicScalar参数**：如果需要对SymbolicScalar进行比较，请使用[SymbolicScalar.max()](../symbolic/pypto-SymbolicScalar-max.md)方法
 - 两个参数中至少一个为Tensor类型
 
 ## 函数原型

@@ -39,8 +39,8 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 | 参数名            | 输入/输出 | 说明                                                                 |
 |-------------------|-----------|----------------------------------------------------------------------|
-| input             | 输入      | 表示输入左矩阵，不支持输入空Tensor。<br> **数据类型**：详见表3。<br> **矩阵维度**：2维、3维、4维，且左右矩阵维度需保持一致。<br> **Format**：TILEOP_ND，TILEOP_NZ（DT_FP32，DT_FP8E5M2，DT_HF8输入不支持TILEOP_NZ格式）。<br> **内轴外轴**：当输入矩阵input非转置时，对应数据排布为[M, K]，此时外轴为M，内轴为K；当输入矩阵input转置时，对应数据排布为[K, M]，此时外轴为K，内轴为M； <br> **对齐要求**：当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。<br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐，外轴16元素对齐。 <br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐，外轴16元素对齐。|
-| mat2              | 输入      | 表示输入右矩阵，不支持输入空Tensor。<br> **数据类型**：详见表3。<br> **矩阵维度**：2维、3维、4维，且左右矩阵维度需保持一致。<br> **Format**：：TILEOP_ND，TILEOP_NZ（DT_FP32，DT_FP8E5M2，DT_HF8输入不支持TILEOP_NZ格式）。<br> **内轴外轴**：当输入矩阵mat2非转置时，对应数据排布为[K, N]，此时外轴为K，内轴为N；当输入矩阵mat2转置时，对应数据排布为[N, K]，此时外轴为N，内轴为K；<br> **对齐要求**：当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。<br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐，外轴16元素对齐。 <br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐，外轴16元素对齐。 |
+| input             | 输入      | 表示输入左矩阵，不支持输入空Tensor。<br> **数据类型**：详见表3。<br> **矩阵维度**：2维、3维、4维，且左右矩阵维度需保持一致。<br> **Format**：TILEOP_ND，TILEOP_NZ（DT_FP32，DT_FP8E5M2，DT_HF8输入不支持TILEOP_NZ格式）。<br> **内轴外轴**：当输入矩阵input非转置时，对应数据排布为[M, K]，此时外轴为M，内轴为K；当输入矩阵input转置时，对应数据排布为[K, M]，此时外轴为K，内轴为M；<br> **对齐要求**：当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。<br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐，外轴16元素对齐。<br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐，外轴16元素对齐。|
+| mat2              | 输入      | 表示输入右矩阵，不支持输入空Tensor。<br> **数据类型**：详见表3。<br> **矩阵维度**：2维、3维、4维，且左右矩阵维度需保持一致。<br> **Format**：TILEOP_ND，TILEOP_NZ（DT_FP32，DT_FP8E5M2，DT_HF8输入不支持TILEOP_NZ格式）。<br> **内轴外轴**：当输入矩阵mat2非转置时，对应数据排布为[K, N]，此时外轴为K，内轴为N；当输入矩阵mat2转置时，对应数据排布为[N, K]，此时外轴为N，内轴为K；<br> **对齐要求**：当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。<br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐，外轴16元素对齐。<br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐，外轴16元素对齐。 |
 | out_dtype         | 输出      | 表示输出矩阵数据类型。基础场景输出数据类型支持情况详见表3，反量化及量化场景输出数据类型支持情况详见表4，表5。|
 | a_trans           | 输入      | 参数a_trans表示输入左矩阵是否转置，默认为False。 |
 | b_trans           | 输入      | 参数b_trans表示输入右矩阵是否转置，默认为False。 |
@@ -57,7 +57,7 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 | relu_type         | 表示输出矩阵是否进行ReLu操作。<br>输入为[ReLuType](../datatype/ReLuType.md)类型。<br>支持RELU和NO_RELU两种模式。<br>不支持叠加多核切k功能。|
 | trans_mode        | 表示是否使能TF32计算及TF32舍入模式。<br>输入为[TransMode](../datatype/TransMode.md)类型，支持以下三种模式：<br>• CAST_NONE：不使能float数据类型转换为TF32数据类型。<br>• CAST_RINT：使能float数据类型转换为TF32数据类型，舍入规则：舍入到最近整数，中间值时舍入到偶数。<br>• CAST_ROUND：使能float数据类型转换为TF32数据类型，舍入规则：舍入到最近整数，中间值时远离零舍入。<br>仅支持输入左右矩阵和输出矩阵数据类型均为DT_FP32时设置。 |
 
-表3： Matmul基础场景支持的数据类型
+表3：Matmul基础场景支持的数据类型
 
 | input | mat2 | out_dtype | bias_tensor |
 |:------|:-----|:----------|:------------|

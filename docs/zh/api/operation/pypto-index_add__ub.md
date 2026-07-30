@@ -59,7 +59,7 @@ index_add__ub(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: 
 ### TileShape设置示例
 
 调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
-如输入input为[m, n, p]，dim为1，输入source为[m, t, p]，输入index为[t]，输出为[m, n, p]，TileShape设置为[m1, t1, p1]，则m1，p1分别用于切分m，p轴。 n轴，t轴不可切，必须保证n轴t轴全载。
+如输入input为[m, n, p]，dim为1，输入source为[m, t, p]，输入index为[t]，输出为[m, n, p]，TileShape设置为[m1, t1, p1]，则m1，p1分别用于切分m，p轴。n轴，t轴不可切，必须保证n轴t轴全载。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

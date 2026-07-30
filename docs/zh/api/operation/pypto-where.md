@@ -24,7 +24,7 @@ other_{i} & \text{if } condition_{i}==False
 \end{cases}
 $$
 
-condition须为Tensor，input和other可以为Tensor、 float以及Element，广播规则如下（只支持单轴广播）：
+condition须为Tensor，input和other可以为Tensor、float以及Element，广播规则如下（只支持单轴广播）：
 
 1. input，other，condition均为Tensor，result的Shape由三者广播得到。
 
@@ -68,7 +68,7 @@ result ：Tensor，Shape由输入的广播得到，详细广播场景可看上�
 2. condition、input（如果是tensor）、other（如果是tensor）的维度必须相同。例如condition：[64]，input：[2, 64]，other：[2, 64]这种情况非法，应当设置为condition：[1, 64]，input：[2, 64]，other：[2, 64]。
 3. input和other的Tensor、Element数据类型说明：
    <!-- npu="950" id4 -->
-   - Ascend 950PR/Ascend 950DT：DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16, DT_UINT8, DT_INT8
+   - Ascend 950PR/Ascend 950DT：DT_INT32，DT_FP32，DT_INT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16

@@ -65,5 +65,5 @@ out = pypto.relu(input_tensor)
 
 ```python
 输入数据input：[[-2.0 0.0 3.0]]
-输出数据out：  [[ 0.0 0.0 3.0]]
+输出数据out：[[ 0.0 0.0 3.0]]
 ```

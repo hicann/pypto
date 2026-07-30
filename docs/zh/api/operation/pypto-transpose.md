@@ -56,7 +56,7 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 
     示例：
 
-    input： \[a, b, c, d\]  TileShape为\[t0, t1, t2, t3\] 数据类型为DT\_FP32
+    input：\[a, b, c, d\]  TileShape为\[t0, t1, t2, t3\] 数据类型为DT\_FP32
 
     dim0: 2
 
@@ -66,7 +66,7 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 
 6. Tensor数据类型说明：
    <!-- npu="950" id4 -->
-   - Ascend 950PR/Ascend 950DT：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32, DT_HF8, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0
+   - Ascend 950PR/Ascend 950DT：DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_FP32，DT_INT32，DT_UINT32，DT_HF8，DT_FP8E4M3，DT_FP8E5M2，DT_FP8E8M0
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_FP32，DT_INT32，DT_UINT32

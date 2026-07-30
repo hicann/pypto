@@ -56,7 +56,7 @@ ViewShape约束：2维场景下ViewShape为\[viewB \* s, d\]，4维场景下View
 TileShape约束：2维场景下TileShape为\[tileS, d\]，4维场景下TileShape为\[tileB, tileS, 1, d\]。尾轴d不做切分。2维场景下，TileShape针对src做切分，\[1,tileS\]针对index做切分，tileBS是输入index的第1维s的约数，如src为\[12, 64\]，index为\[3, 4\]，TileShape为\[TileS, 64\]，其中，TileS可以是1、2、4。4维场景下，TileShape针对src做切分，并且，\[tileB, tileS\]针对index做切分。由于TileShape的切分针对src和index，切块大小之和应小于UB限制。
 
 二维示例：
-input：[16, 8]，index：[5, 2]，src：[10, 8]，viewShape： [viewB \* s, 8]，viewB需要是整数，即第0维是s的倍数，tileShape：[tileS, 8]，tileS需要是s的约数即1或者2。
+input：[16, 8]，index：[5, 2]，src：[10, 8]，viewShape：[viewB \* s, 8]，viewB需要是整数，即第0维是s的倍数，tileShape：[tileS, 8]，tileS需要是s的约数即1或者2。
 
 ## 调用示例
 

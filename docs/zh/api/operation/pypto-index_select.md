@@ -44,7 +44,7 @@ index_select(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 ## 返回值说明
 
-返回输出Tensor，输出Tensor数据类型与input数据类型保持一致；输出Tensor的Shape有input、 dim以及index共同确定，详见功能说明。
+返回输出Tensor，输出Tensor数据类型与input数据类型保持一致；输出Tensor的Shape由input、dim以及index共同确定，详见功能说明。
 
 ## 约束说明
 
@@ -56,7 +56,7 @@ index_select(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 4. Tensor数据类型说明：
    <!-- npu="950" id4 -->
-   - Ascend 950PR/Ascend 950DT：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16, DT_BOOL, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0
+   - Ascend 950PR/Ascend 950DT：DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_FP16，DT_FP32，DT_BF16，DT_BOOL，DT_FP8E4M3，DT_FP8E5M2，DT_FP8E8M0
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_FP16，DT_FP32，DT_BF16
@@ -64,7 +64,7 @@ index_select(input: Tensor, dim: int, index: Tensor) -> Tensor
    <!-- npu="910b" id6 -->
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_FP16，DT_FP32，DT_BF16
    <!-- end id6 -->
-5. TileShape的维度与result相同，用于切分result。TileShape设置需保证result不超过UB大小，具体用法详见 [TileShape设置示例](#tileshape设置示例)。
+5. TileShape的维度与result相同，用于切分result。TileShape设置需保证result不超过UB大小，具体用法详见[TileShape设置示例](#tileshape设置示例)。
 
 ## 调用示例
 
@@ -89,12 +89,12 @@ out2 = pypto.index_select(x, 1, indices)
 
 ```python
 输入x:        [[ 0.1427,  0.0231, -0.5414, -1.0009],
-                [-0.4664,  0.2647, -0.1228, -1.1068],
-                [-1.1734, -0.6571,  0.7230, -0.6004]]
+               [-0.4664,  0.2647, -0.1228, -1.1068],
+               [-1.1734, -0.6571,  0.7230, -0.6004]]
 输入index:    [0, 2]
-输出out1 :    [[ 0.1427,  0.0231, -0.5414, -1.0009],
-                [-1.1734, -0.6571,  0.7230, -0.6004]]
-输出out2 :    [[ 0.1427, -0.5414],
-                [-0.4664, -0.1228],
-                [-1.1734,  0.7230]]
+输出out1:     [[ 0.1427,  0.0231, -0.5414, -1.0009],
+               [-1.1734, -0.6571,  0.7230, -0.6004]]
+输出out2:     [[ 0.1427, -0.5414],
+               [-0.4664, -0.1228],
+               [-1.1734,  0.7230]]
 ```
