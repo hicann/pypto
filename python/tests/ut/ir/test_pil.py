@@ -938,6 +938,22 @@ def test_tensor_move1():
     assert var.name == 'b_12'
 
 
+def test_tensor_move2():
+    def foo(a, b):
+        for i in pypto.loop(10):
+            amax_ij = a + 1
+            if i == 0:
+                b[:] = amax_ij
+            else:
+                a[:] = amax_ij + b
+
+    x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
+    func = pil.compile(foo, x, y)
+    print(func)
+    assert isinstance(func.body[0], ir.ForStmt)
+
+
 def test_printer():
     def foo(a, b):
         for i in pypto.loop(a.shape[0]):

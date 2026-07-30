@@ -228,6 +228,10 @@ public:
     void ClearTensorDataDescList() { irContext_.ClearTensorDataDescList(); }
     std::shared_ptr<Tensor> GetTensorDataDesc(int index) const { return irContext_.GetTensorDataDesc(index); }
 
+    void Checkpoint();
+
+    void Restore();
+
     void EmitTensorStmts();
 
     ir::ExprPtr None();

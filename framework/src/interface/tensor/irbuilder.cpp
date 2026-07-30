@@ -279,4 +279,8 @@ void IRBuilder::EmitTensorStmts()
     }
     func->ResetOperations();
 }
+
+void IRBuilder::Checkpoint() { Program::GetInstance().GetTensorSlotManager()->Checkpoint(); }
+
+void IRBuilder::Restore() { Program::GetInstance().GetTensorSlotManager()->Restore(); }
 } // namespace npu::tile_fwk

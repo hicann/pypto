@@ -70,11 +70,13 @@ StmtPtr CanonicalizeLoopImpl(const T& stmt, const std::unordered_set<const Var*>
             keptIndices.push_back(i);
         }
     }
-    if (keptIndices.size() == stmt->iterArgs_.size()) {
+
+    // always rebuild the body as yield may carry dead return vars / yield args at deeper levels.
+    auto body = CanonicalizeSeqStmts(stmt->body_, keptIndices);
+    if (keptIndices.size() == stmt->iterArgs_.size() && body == stmt->body_) {
         return stmt;
     }
 
-    auto body = CanonicalizeSeqStmts(stmt->body_, keptIndices);
     std::vector<IterArgPtr> iterArgs;
     std::vector<VarPtr> returnVars;
     for (size_t i : keptIndices) {

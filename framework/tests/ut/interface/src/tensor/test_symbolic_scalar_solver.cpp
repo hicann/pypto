@@ -33,8 +33,8 @@ TEST(TestAffineForm, InvalidWhenNonlinearOrNonAffine)
     EXPECT_TRUE(AffineForm((x + y).Raw()).ok);
     EXPECT_TRUE(AffineForm((x * 3 - y).Raw()).ok);
     EXPECT_FALSE(AffineForm((x * y).Raw()).ok); // symbol * symbol
-    EXPECT_FALSE(AffineForm((x / y).Raw()).ok); // Div not affine
-    EXPECT_FALSE(AffineForm((x % y).Raw()).ok); // Mod not affine
+    EXPECT_TRUE(AffineForm((x / y).Raw()).ok);  // treate a symbol
+    EXPECT_TRUE(AffineForm((x % y).Raw()).ok);  // treate a symbol
 }
 
 TEST(TestGaussCheck, EmptySystemIsConsistent)

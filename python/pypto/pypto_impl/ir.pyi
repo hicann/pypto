@@ -2279,6 +2279,20 @@ class IRBuilder:
             None
         """
 
+    def checkpoint(self):
+        """Create a checkpoint.
+
+        Returns:
+            None
+        """
+
+    def restore(self):
+        """Restore the last checkpoint.
+
+        Returns:
+            None
+        """
+
     def none(self) -> Expr:
         """Get the None value.
 

@@ -58,10 +58,8 @@ public:
         const auto& ops = e->OperandList();
         switch (e->Opcode()) {
             case SymbolicOpcode::T_MOP_CALL:
-                // A runtime call (e.g. RUNTIME_GetInputShapeDim) is an opaque free
-                // integer at compile time: treat it as a distinct symbol keyed by its
-                // Dump() string so the affine passes can reason about it. Otherwise the
-                // whole equality row is dropped (ok=false) and contradictions are missed.
+            case SymbolicOpcode::T_BOP_DIV:
+            case SymbolicOpcode::T_BOP_MOD:
                 coeffs[n->Dump()] = 1;
                 ok = true;
                 return;

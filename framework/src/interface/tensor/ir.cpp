@@ -39,7 +39,7 @@ std::string DumpTensorVar(const VarPtr& var)
 {
     auto t = std::dynamic_pointer_cast<const LogicalTensor>(var);
     ASSERT(t) << "not a logical tensor";
-    return var->name_ + ": " + t->DumpType();
+    return var->name_ + "@" + std::to_string(t->tensor->memoryId);
 }
 
 Pass pass::AggressiveDCE()

@@ -45,10 +45,11 @@ def find_feasible_paths(conds, pre_conds):
 
 
 def test_find_feasible_paths():
-    unroll = 4
+    unroll = 32
     x = pypto.symbolic_scalar('x')  # loop var
     n = pypto.symbolic_scalar('n')  # loop end
     s = pypto.symbolic_scalar('s')  # loop start
+    n = (n + 8 - 1) // 8
     pre_cond = [x >= s, x + unroll <= n]
     conds = [x + k == s for k in range(unroll)] + [x + k == n - 1 for k in range(unroll)]
     choices = find_feasible_paths(conds, pre_cond)

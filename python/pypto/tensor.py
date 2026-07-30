@@ -651,6 +651,9 @@ class Tensor:
     def logical_tensor(self) -> 'LogicalTensor':
         return self._base.LogicalTensor()
 
+    def set_logical_tensor(self, logical_tensor: 'LogicalTensor') -> None:
+        self._base.Move(pypto_impl.Tensor(logical_tensor))
+
     @source_location
     def add(self, other: 'Tensor | int | float') -> 'Tensor':
         return pypto.add(self, other)

@@ -1073,8 +1073,8 @@ void IRPrinter::VisitFunction(const FunctionPtr& func)
         if (i > 0)
             stream_ << ", ";
         const auto& var = func->params_[i];
-        stream_ << var->name_ << ": ";
-        stream_ << Print(var->GetType());
+        VisitExpr(var);
+        stream_ << ": " << Print(var->GetType());
     }
 
     stream_ << ")";

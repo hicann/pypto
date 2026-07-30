@@ -523,7 +523,7 @@ void MergeIfStmts(IfStmtPtr ifStmt, std::vector<StmtPtr>& result, VarExprMap& su
     };
 
     bool thenDead = IsEmptyBody(ifStmt->thenBody_);
-    if (!thenDead && SymbolicScalar::Check(thenConds) == SatStatus::kUnsat) {
+    if (thenDead || SymbolicScalar::Check(thenConds) == SatStatus::kUnsat) {
         // then dead
         if (ifStmt->elseBody_) {
             spliceSurvivor(ifStmt->elseBody_.value(), elseConds);
@@ -532,7 +532,7 @@ void MergeIfStmts(IfStmtPtr ifStmt, std::vector<StmtPtr>& result, VarExprMap& su
     }
 
     bool elseDead = !ifStmt->elseBody_ || IsEmptyBody(*ifStmt->elseBody_);
-    if (!elseDead && SymbolicScalar::Check(elseConds) == SatStatus::kUnsat) {
+    if (elseDead || SymbolicScalar::Check(elseConds) == SatStatus::kUnsat) {
         // else dead
         spliceSurvivor(ifStmt->thenBody_, thenConds);
         return;

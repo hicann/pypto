@@ -642,7 +642,6 @@ def test_tensor_move2():
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = _run_dce(foo, x, y)
-    print(func)
     for_stmt = func.body[1]
     assert isinstance(for_stmt, ir.ForStmt)
     add_stmt = func.body[2]
@@ -718,3 +717,29 @@ def test_dce_reshape_inplace4():
     stmt3 = for_stmt.body[-1]
     assert isinstance(stmt3, ir.ContinueStmt)
     assert len(stmt3.value) == 2  # t0 and out both
+
+
+def test_unroll_list():
+
+    def foo(a, b, c):
+        m, n = a.shape[0], a.shape[1]
+        for x in pypto.loop(10):
+            for y in pypto.loop(10):
+                for z in pypto.loop(n):
+                    cur_seq = m - (n - 1 - z)
+                    k = (cur_seq + 8 - 1) // 8
+                    for i in pypto.loop(k, unroll_list=[8]):
+                        t = c + 1
+                        if i == 0:
+                            t = t + 1
+                        else:
+                            t = t + 2
+                        if i == k - 1:
+                            t = t + 3
+                        else:
+                            t = t + 4
+                        b[:] = t
+    x = pypto.Tensor((-1, -1), pypto.DT_FP32)
+    y = pypto.Tensor((32, 32), pypto.DT_FP32)
+    z = pypto.Tensor((32, 32), pypto.DT_FP32)
+    _run_merge(foo, x, y, z)

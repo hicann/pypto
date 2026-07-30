@@ -578,7 +578,9 @@ void BindIRBuilder(py::module_& m)
              "Returns:\n"
              "    None")
 
-        .def("clear_insert_point", &IRBuilder::ClearInsertPoint, "Clear insert point.\n\n");
+        .def("clear_insert_point", &IRBuilder::ClearInsertPoint, "Clear insert point.\n\n")
+        .def("checkpoint", &IRBuilder::Checkpoint, "Create a checkpoint.\n\n")
+        .def("restore", &IRBuilder::Restore, "Restore the last checkpoint.\n\n");
 
     py::class_<ir::InsertPoint, std::shared_ptr<ir::InsertPoint>>(ir, "InsertPoint").def(py::init<ir::SeqStmtsPtr>());
 

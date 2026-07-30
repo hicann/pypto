@@ -139,6 +139,16 @@ class Block:
         stmt_str = textwrap.indent(stmt_str, "    ")
         return f"^{self.id}({arg_str}):{stmt_str}"
 
+    @classmethod
+    def mark_store(cls, tensor):
+        block = _current.collector_block
+        if block is None:
+            return
+        s = Scope.current()
+        for name, val in s.locals.items():
+            if val is tensor:
+                block.store_names.add(name)
+
 
 @dataclass
 class Function:
@@ -282,14 +292,7 @@ class BuildContext(ir.IRBuilder):
 
 
 class CollectContext(BuildContext):
-    def wrap(self, val: ir.Expr) -> Any:
-        return val
-
-    def unwrap(self, val: Any) -> ir.Expr:
-        return val
-
-    def emit(self, stmt: ir.Stmt) -> None:
-        pass
+    pass
 
 
 class InsertPoint:

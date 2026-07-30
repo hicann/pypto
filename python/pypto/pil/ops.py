@@ -12,24 +12,24 @@ from typing import Optional
 import pypto
 from pypto import SatStatus, SymbolicScalar, ir, pypto_impl
 
-from .dispatcher import Collector, dispatch_block
+from .dispatcher import dispatch_block
 from .op_registry import impl
 from .pir import Block, BreakSignal, BuildContext, ContinueSignal, DoubleStarred, InsertPoint, Jump, LoopRange, Scope
+
+_orig_move = pypto.Tensor.move
 
 
 @contextmanager
 def apply_patches():
-    orig_move = pypto.Tensor.move
-
     def move(self, other):
-        Collector.mark_store(self)
-        orig_move(self, other)
+        Block.mark_store(self)
+        _orig_move(self, other)
 
     pypto.Tensor.move = move
     try:
         yield
     finally:
-        pypto.Tensor.move = orig_move
+        pypto.Tensor.move = _orig_move
 
 
 def has_scalar(values: list) -> bool:
@@ -390,20 +390,28 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
     saved = dict(scope.locals)
     yield_var_names = sorted(then_block.store_names | else_block.store_names)
 
-    then_body = ir.SeqStmts(then_block.span)
-    with InsertPoint(then_body), ctx.change_span(then_block.span):
-        dispatch_block(then_block, False)
-        then_yield_vars = [ctx.unwrap(scope[name]) for name in yield_var_names]
-        _add_jump_stmt(ctx, then_block.jump, list(then_yield_vars))
+    try:
+        ctx.checkpoint()
+        then_body = ir.SeqStmts(then_block.span)
+        with InsertPoint(then_body), ctx.change_span(then_block.span):
+            dispatch_block(then_block, False)
+            then_yield_vars = [ctx.unwrap(scope[name]) for name in yield_var_names]
+            _add_jump_stmt(ctx, then_block.jump, list(then_yield_vars))
+    finally:
+        ctx.restore()
+        scope.locals = saved
 
-    scope.locals = dict(saved)
-    else_body = ir.SeqStmts(else_block.span)
-    with InsertPoint(else_body), ctx.change_span(else_block.span):
-        dispatch_block(else_block, False)
-        else_yield_vars = [ctx.unwrap(scope[name]) for name in yield_var_names]
-        _add_jump_stmt(ctx, else_block.jump, list(else_yield_vars))
+    try:
+        ctx.checkpoint()
+        else_body = ir.SeqStmts(else_block.span)
+        with InsertPoint(else_body), ctx.change_span(else_block.span):
+            dispatch_block(else_block, False)
+            else_yield_vars = [ctx.unwrap(scope[name]) for name in yield_var_names]
+            _add_jump_stmt(ctx, else_block.jump, list(else_yield_vars))
+    finally:
+        ctx.restore()
+        scope.locals = saved
 
-    scope.locals = dict(saved)
     yield_vars = []
     for i, name in enumerate(yield_var_names):
         if ir.type_equal(then_yield_vars[i], else_yield_vars[i]):

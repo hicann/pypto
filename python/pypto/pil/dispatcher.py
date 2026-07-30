@@ -26,7 +26,6 @@ from .pir import (
     DoubleStarred,
     Function,
     Jump,
-    LoopRange,
     ReturnSignal,
     Scope,
     _current,
@@ -146,128 +145,41 @@ def block_jump(scope, ctx, block: Block):
         return scope.resolve(block.result)
 
 
+def _collect_block_access(ctx, block, call):
+    if isinstance(ctx, CollectContext):
+        if call.callee == "pil.store":
+            name = typing.cast(str, call.args[0])
+            block.store_names.add(name)
+        elif call.callee == "pil.load":
+            name = typing.cast(str, call.args[0])
+            block.load_names.add(name)
+
+
+def _propagate_block_access(ctx, prev_block, block):
+    if prev_block and isinstance(ctx, CollectContext):
+        prev_block.store_names.update(block.store_names)
+        prev_block.load_names.update(block.load_names)
+
+
 def dispatch_block(block: Block, is_static: bool):
     scope = Scope.current()
     ctx = BuildContext.current()
 
-    for call in block.calls:
-        with ctx.change_span(call.span):
-            dispatch_call(call, scope, ctx)
+    prev_block = _current.collector_block
+    _current.collector_block = block
+    try:
+        for call in block.calls:
+            with ctx.change_span(call.span):
+                dispatch_call(call, scope, ctx)
+                _collect_block_access(ctx, block, call)
+    finally:
+        _propagate_block_access(ctx, prev_block, block)
+        _current.collector_block = prev_block
 
-    return block_jump(scope, ctx, block) if is_static else None
+    if is_static:
+        return block_jump(scope, ctx, block)
 
-
-class Collector:
-    def __init__(self):
-        self.scope = Scope.current()
-        self.ctx = BuildContext.current()
-
-    def visit_call(self, call: Call, block: Block):
-        callee = call.callee
-        if callee == "pil.loop":
-            dispatch_call(call, self.scope, self.ctx, self.visit_for)
-        elif callee == "pil.if_else":
-            dispatch_call(call, self.scope, self.ctx, self.visit_if)
-        else:
-            dispatch_call(call, self.scope, self.ctx)
-            if callee == "pil.store":
-                name = typing.cast(str, call.args[0])
-                block.store_names.add(name)
-            elif callee == "pil.load":
-                name = typing.cast(str, call.args[0])
-                block.load_names.add(name)
-
-    def visit(self, block: Block, is_static: bool = True):
-        prev_block = _current.collector_block
-        _current.collector_block = block
-
-        try:
-            for call in block.calls:
-                self.visit_call(call, block)
-        finally:
-            _current.collector_block = prev_block
-
-        if prev_block:
-            prev_block.store_names.update(block.store_names)
-            prev_block.load_names.update(block.load_names)
-
-        return block_jump(self.scope, self.ctx, block) if is_static else None
-
-    def _visit_for(self, body: Block, iterator):
-        scope = Scope.current()
-        loop_var = body.args[0]
-        for item in iterator:
-            scope.varmap[loop_var.id] = item
-            try:
-                self.visit(body)
-            except BreakSignal:
-                break
-            except ContinueSignal:
-                continue
-
-    def _visit_while(self, body: Block):
-        while True:
-            try:
-                self.visit(body)
-            except BreakSignal:
-                break
-            except ContinueSignal:
-                continue
-
-    def _visit_dyn_for(self, body: Block, loop: LoopRange):
-        scope = Scope.current()
-        scope["_loop_begin"] = loop.start
-        scope["_loop_end"] = loop.stop
-
-        loop_val = body.args[0]
-        loop_var = self.ctx.create_scalar_var("idx")
-
-        if loop.batch:
-            start, stop = loop.start, loop.stop
-            for factor in loop.unroll_list:
-                if factor == 1:
-                    loop.stop = stop
-                else:
-                    step = factor * loop.step
-                    loop.stop = start + (stop - start) // step * step
-                    scope.varmap[loop_val.id] = (loop_var, step)
-                    self.visit(body, is_static=False)
-                    loop.start = loop.stop
-        else:
-            scope.varmap[loop_val.id] = loop_var
-            self.visit(body, is_static=False)
-
-    def visit_for(self, body: Block, loop):
-        if isinstance(loop, LoopRange):
-            self._visit_dyn_for(body, loop)
-        elif loop is not None:
-            self._visit_for(body, loop)
-        else:
-            self._visit_while(body)
-
-    def visit_if(self, cond, then_body, else_body):
-        if isinstance(cond, pypto_impl.SymbolicScalar):
-            cond = cond.simplify()
-            if cond.is_concrete():
-                body = then_body if cond.concrete() else else_body
-                return self.visit(body)
-            else:
-                self.visit(then_body, is_static=False)
-                self.visit(else_body, is_static=False)
-                return None
-        else:
-            body = then_body if cond else else_body
-            return self.visit(body)
-
-    @classmethod
-    def mark_store(cls, tensor):
-        block = _current.collector_block
-        if block is None:
-            return
-        s = Scope.current()
-        for name, val in s.locals.items():
-            if val is tensor:
-                block.store_names.add(name)
+    return None
 
 
 def collect(block: Block):
@@ -277,7 +189,6 @@ def collect(block: Block):
     prev_block = _current.collector_block
     _current.collector_block = None
     try:
-        collector = Collector()
-        collector.visit(block)
+        dispatch_block(block, True)
     finally:
         _current.collector_block = prev_block
