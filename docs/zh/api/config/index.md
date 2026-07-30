@@ -5,6 +5,7 @@
 
 pypto-frontend-jit
 pypto-get_codegen_options
+pypto-get_conv_tile_shapes
 pypto-get_cube_tile_shapes
 pypto-get_debug_options
 pypto-get_host_options
@@ -16,6 +17,7 @@ pypto-get_vec_tile_shapes
 pypto-get_verify_options
 pypto-reset_options
 pypto-set_codegen_options
+pypto-set_conv_tile_shapes
 pypto-set_cube_tile_shapes
 pypto-set_debug_options
 pypto-set_host_options
