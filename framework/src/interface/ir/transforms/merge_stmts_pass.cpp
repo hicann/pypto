@@ -547,6 +547,15 @@ void MergeIfStmts(IfStmtPtr ifStmt, std::vector<StmtPtr>& result, VarExprMap& su
     auto [resolvedThen, resolvedElse] = ResolveBranchConflicts(thenBody, elseBody, exVarNames);
     result.push_back(
         std::make_shared<IfStmt>(ifStmt->condition_, resolvedThen, resolvedElse, ifStmt->returnVars_, ifStmt->span_));
+
+    // Map branch-internal yield values to IfStmt returnVars so subsequent statements
+    // reference the IfStmt's output interface rather than branch-internal variables.
+    auto thenYieldMap = BuildYieldVarMap(ifStmt, resolvedThen);
+    for (auto& [returnVar, yieldValue] : thenYieldMap) {
+        if (auto yieldVar = std::dynamic_pointer_cast<const Var>(yieldValue)) {
+            subst[yieldVar] = returnVar;
+        }
+    }
 }
 
 std::vector<StmtPtr> RebuildMergedStmtsRecursively(const std::vector<StmtPtr>& merged,
@@ -616,13 +625,23 @@ SeqStmtsPtr MergeStmtsIntoIfStmtImpl(SeqStmtsPtr seq, const std::vector<std::str
         accumulatedCloneMap[k] = v;
     }
 
-    if (!accumulatedCloneMap.empty() && !merged.empty() && IsA<YieldStmt>(merged.back())) {
-        auto yieldStmt = As<YieldStmt>(merged.back());
-        std::vector<ExprPtr> newValues;
-        for (auto& v : yieldStmt->value_) {
-            newValues.push_back(LookupVarInExpr(v, accumulatedCloneMap));
+    if (!accumulatedCloneMap.empty() && !merged.empty()) {
+        auto& last = merged.back();
+        if (IsA<YieldStmt>(last)) {
+            auto yieldStmt = As<YieldStmt>(last);
+            std::vector<ExprPtr> newValues;
+            for (auto& v : yieldStmt->value_) {
+                newValues.push_back(LookupVarInExpr(v, accumulatedCloneMap));
+            }
+            merged.back() = std::make_shared<YieldStmt>(newValues, yieldStmt->span_);
+        } else if (IsA<ContinueStmt>(last)) {
+            auto contStmt = As<ContinueStmt>(last);
+            std::vector<ExprPtr> newValues;
+            for (auto& v : contStmt->value_) {
+                newValues.push_back(LookupVarInExpr(v, accumulatedCloneMap));
+            }
+            merged.back() = std::make_shared<ContinueStmt>(newValues, contStmt->span_);
         }
-        merged.back() = std::make_shared<YieldStmt>(newValues, yieldStmt->span_);
     }
 
     auto finalResult = RebuildMergedStmtsRecursively(merged, externalVarNames, condPath);
