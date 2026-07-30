@@ -167,7 +167,7 @@ Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `Rou
     - 打包类型，每字节包含2个FP4元素（4-bit nibble）
     - 仅支持与DT_BF16的相互转换
 
-3. **DT_HF8 (hifloat8)特殊说明**：
+4. **DT_HF8 (hifloat8)特殊说明**：
     <!-- npu="950" id9 -->
     - Ascend 950PR/Ascend 950DT：支持
     <!-- end id9 -->
@@ -180,14 +180,14 @@ Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `Rou
     - 必须使用CAST_ROUND舍入模式（对应硬件的ROUND_A）
     - 如果指定其他CastMode，会自动回退到CAST_ROUND
 
-4. **不支持的CastMode处理**：
+5. **不支持的CastMode处理**：
     - 当用户为某个转换指定了硬件不支持的CastMode时，框架不会报错
     - 框架会自动采用该转换的默认CastMode：
       - 浮点→整数：采用CAST_TRUNC
       - 其他场景：采用CAST_RINT
 
-5. **deq模式说明**：INT32→FP16转换使用deq模式，需要通过`set_deqscale`设置缩放因子，默认值为1.0。
-6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+6. **deq模式说明**：INT32→FP16转换使用deq模式，需要通过`set_deqscale`设置缩放因子，默认值为1.0。
+7. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 ## 调用示例
 

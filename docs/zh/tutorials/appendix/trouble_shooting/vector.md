@@ -1,6 +1,5 @@
 # FC0XXX-FC2XXX
 
-
 ## FC0000 ERR_PARAM_INVALID
 
 **错误描述**
@@ -29,14 +28,15 @@ Vector入参非法错误，如参数取值、维度、格式等不满足约束�
 **处理方式**
 
 1. 查阅对应算子文档（如[pypto.add](../../../api/operation/pypto-add.md)、[pypto.sin](../../../api/operation/pypto-sin.md)、[pypto.cast](../../../api/operation/pypto-cast.md)、[pypto.amax](../../../api/operation/pypto-amax.md)）确认输入输出Shape、维度等满足要求。
+
    ```python
    # 正确示例-输入为2维Tensor
    a = pypto.tensor([4, 4], pypto.DT_FP16)
    b = pypto.tensor([4, 4], pypto.DT_FP16)
    out = pypto.add(a, b)
    ```
-2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
+2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
 ## FC0001 ERR_PARAM_DTYPE_UNSUPPORTED
 
@@ -66,13 +66,14 @@ Vector入参数据类型不支持：使用了当前算子或硬件不支持的dt
 **处理方式**
 
 1. 查阅对应算子文档（如[pypto.add](../../../api/operation/pypto-add.md)、[pypto.sin](../../../api/operation/pypto-sin.md)、[pypto.cast](../../../api/operation/pypto-cast.md)）确认输入输出数据类型满足要求，切换为兼容的数据类型重试。
+
    ```python
    # 正确示例-sin使用支持的DT_FP32
    x = pypto.tensor([4], pypto.DT_FP32)
    out = pypto.sin(x)
    ```
-2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
+2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
 ## FC0002 ERR_PARAM_SHAPE_DIM_UNSUPPORTED
 
@@ -103,14 +104,15 @@ Vector入参Shape维度不支持：输入输出Tensor的维度数不在算子支
 **处理方式**
 
 1. 查阅对应算子文档（如[pypto.pow](../../../api/operation/pypto-pow.md)、[pypto.gcd](../../../api/operation/pypto-gcd.md)、[pypto.amax](../../../api/operation/pypto-amax.md)）确认支持的维度范围，并保证各输入Tensor维度数一致且在范围内。
+
    ```python
    # 正确示例-输入为2维Tensor且维度数一致
    a = pypto.tensor([4, 4], pypto.DT_FP16)
    b = pypto.tensor([4, 4], pypto.DT_FP16)
    out = pypto.pow(a, b)
    ```
-2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
+2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
 ## FC0003 ERR_PARAM_COUNT_INVALID
 
@@ -126,7 +128,6 @@ Vector入参操作数（operand）个数非法：算子在执行或输出shape�
 
 1. 对照打屏日志中的操作数期望个数，查阅对应算子文档（如[pypto.scatter_](../../../api/operation/pypto-scatter_.md)、[pypto.concat](../../../api/operation/pypto-concat.md)、[pypto.where](../../../api/operation/pypto-where.md)）确认输入输出个数与调用方式匹配。
 2. 若调用方式正确仍报此错（疑似框架内部接线问题），请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
-
 
 ## FC1000 ERR_CONFIG_TILE
 
@@ -175,6 +176,7 @@ Vector切分（Tile）配置非法。
 1. 查阅[pypto.set_vec_tile_shapes](../../../api/config/pypto-set_vec_tile_shapes.md)及对应算子文档确认TileShape取值满足要求。
 
 2. 调用[pypto.set_vec_tile_shapes](../../../api/config/pypto-set_vec_tile_shapes.md)前确认各维度均为正数、维度数不超过4，且与输出维度一致。
+
    ```python
    # 正确示例-TileShape各维度为正且与输入维度一致
    pypto.set_vec_tile_shapes(4, 16)
@@ -183,14 +185,15 @@ Vector切分（Tile）配置非法。
    ```
 
 3. 通过[pypto.get_vec_tile_shapes](../../../api/config/pypto-get_vec_tile_shapes.md)回读实际生效的TileShape，核对是否符合切分约束：
+
    ```python
    pypto.set_vec_tile_shapes(4, 16)
    tile_shape_info = pypto.get_vec_tile_shapes()
    print(tile_shape_info)
    # 输出：[4, 16]
    ```
-4. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
+4. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
 ## FC1001 ERR_CONFIG_ALIGNMENT
 
@@ -212,14 +215,15 @@ Vector对齐约束不满足：地址或shape未按硬件要求对齐。
 **处理方式**
 
 1. 查阅对应算子文档（如[pypto.amax](../../../api/operation/pypto-amax.md)）及[pypto.set_vec_tile_shapes](../../../api/config/pypto-set_vec_tile_shapes.md)确认对齐要求。关注reshape/view、交换维度（转置）等是否改变内轴对齐要求，必要时调整Tensor形状或TileShape取值。
+
    ```python
    # 正确示例-amax尾轴32字节对齐（FP16下16元素）
    pypto.set_vec_tile_shapes(4, 16)
    x = pypto.tensor([4, 16], pypto.DT_FP16)
    out = pypto.amax(x, -1, True)
    ```
-2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
+2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
 ## FC2000 ERR_RUNTIME_NULLPTR
 
@@ -234,14 +238,15 @@ NA
 **处理方式**
 
 1. 确认传入Vector接口的输入输出Tensor均非空且已完成地址分配，确认是否存在nullptr。
+
    ```python
    # 正确示例-输入Tensor均已分配数据
    a = pypto.tensor([16, 32], pypto.DT_FP16, "a")
    b = pypto.tensor([16, 32], pypto.DT_FP16, "b")
    out = pypto.add(a, b)
    ```
-2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
+2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
 ## FC2001 ERR_RUNTIME_LOGIC
 

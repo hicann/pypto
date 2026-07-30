@@ -45,10 +45,6 @@
 
     2. 若无法确认，则分析后续发现的问题点时，需额外分析是否为用户侧引入。
 
-## 规避已知问题
-
-精度调试前，应确保已规避当前软件存在的已知问题，详细请参见[已知问题](../appendix/issue.md)。
-
 ## 缩小问题规模
 
 缩小问题规模通常是一个可选步骤，旨在简化问题，提高复现和定位的效率。
@@ -344,7 +340,7 @@ def kernel(...):
 
 ### Dump数据输出路径
 
-```
+```txt
 output/output_*/dump_tensor_*/device_{deviceId}/
 └── {taskId}_{seqNo}_{callopMagic}_{rootHash}_{funcHash}_{rawMagic}_{timeStamp}_{dataType}_{input/output}{index}.tdump
 ```
@@ -381,7 +377,7 @@ python3 tools/verifier/parse_dump_tensors.py \
 
 **输出文件：**
 
-```
+```txt
 output/output_*/dump_tensor_*/device_0/
 ├── *.data                                       # 提取的tensor数据文件
 ├── raw_{rawMagic}_{dataType}_{ioflag}.data      # 合并后的raw tensor（如有分片）
@@ -696,7 +692,7 @@ torch.npu.set_dump("acl.json")
 
 数据输出路径就是acl.json里面配置的dump_path，在该路径下会生成如下文件：
 
-```
+```txt
 /your/path
 └── 20260415084134/0
     └── TENSOR_batchmatmul_3d_kernel.TENSOR_batchmatmul_3d_kernel.29.46.1776242496294291
@@ -712,7 +708,7 @@ python3 msaccucmp.py convert -d /your/path/20260415084134/0 -out /your/path/2026
 
 解析后生成如下npy文件：
 
-```
+```txt
 /your/path
 └── 20260415084134/0
     ├── out/

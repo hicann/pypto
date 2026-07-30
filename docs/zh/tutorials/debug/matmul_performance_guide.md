@@ -34,7 +34,7 @@ $$
 
 记切分大小为：
 
-```
+```python
 pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kL1], [nL0, nL1], enable_split_k=False)
 ```
 
@@ -44,7 +44,7 @@ pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kL1], [nL0, nL1], enable_split_k=Fa
 
 以Atlas A3 训练系列产品/Atlas A3 推理系列产品和Atlas A2 训练系列产品/Atlas A2 推理系列产品为例，对于A、B矩阵均为FP16类型的场景，满足Buffer空间约束的推荐Tile配置为：
 
-```
+```python
 pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256], enable_split_k=False)
 pypto.set_cube_tile_shapes([256, 256], [64, 256], [128, 128], enable_split_k=False)
 pypto.set_cube_tile_shapes([128, 128], [128, 512], [128, 128], enable_split_k=False)
@@ -85,7 +85,7 @@ $$
 为了避免B矩阵的MTE2重复载入，一种较好的切分方式是设置mL1 = M = 96；另外，为了分满核，推荐设置nL1 = N / coreNum = 128。在此基础上，进一步考虑MTE2、MTE1的流水并行以及MTE2带宽利用率，设置kL1 = 4kL0。
 综上，一个较好的Tile配置是：
 
-```
+```python
 pypto.set_cube_tile_shapes([96, 96], [64, 256], [128, 128], enable_split_k=False)
 ```
 
@@ -95,13 +95,13 @@ MTE2\_LOAD\_SIZE = M \cdot K \cdot aByte + K \cdot N \cdot bByte
 $$
 这样可以完全消除MTE2重复载入，进一步优化整体性能。此时的Tile配置如下：
 
-```
+```python
 pypto.set_cube_tile_shapes([96, 96], [64, 1536, 256], [128, 128], enable_split_k=False)
 ```
 
 这里使用了一个相对高级的Tile配置用法，即独立设置kAL1与kBL1，形式如下：
 
-```
+```python
 pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kAL1, kBL1], [nL0, nL1], enable_split_k=False)
 ```
 
@@ -148,7 +148,7 @@ def matmul_demo_kernel(
 
 对于快速验证场景，可以通过`enable_split_k=True`快速使能K轴分核：
 
-```
+```python
 pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256], enable_split_k=True)
 ```
 

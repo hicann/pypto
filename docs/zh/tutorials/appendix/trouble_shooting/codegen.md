@@ -29,20 +29,23 @@ Kernel代码生成阶段变量未定义，日志上下文含`UNDEFINED_VAR`关�
    - F60XXX / F61XXX类错误 → 一般为上游数据异常，结合PASS日志分析。
    - 其他类型 → 结合上下文分析。
 
-
 > **示例**：以kernel代码中TileOp调用参数不符合预期为例。
 
 1. 按上述步骤收集日志。
 2. 找到不符合预期的TileOp调用，如：
+
    ```c++
    TAdd<LastUse3Dim<0, 1, 1>>(ubTensor_0, ubTensor_0, ubTensor_2);
    ```
+
 3. 以上述代码为关键字搜索日志。
 4. 往上找第一个`Op CodeGenNPU Start`，即该TileOp生成起点，向后逐行检查。
 5. 若怀疑PASS数据问题，搜索`Gen OP IS`获取Operation Dump信息：
+
    ```log
    Gen OP IS: <2 x 2 x 16 x 16 x DT_FP32> %152@5#(0)MEM_UB = !10010 TILE_ADD(...) ...
    ```
+
    其中`!10010`为该OP唯一标识码，可在PASS图或日志中搜索。PASS定位详见 [pass.md](pass.md)。
 
 ## F63001 COMPILE_CODE_FAILED
@@ -68,7 +71,6 @@ Kernel代码编译失败。
    - 确认Block子图是否纯Vector或纯Cube（CodeGen不得混用）。
    - 确认PASS对`Function::IsCube()`的设置是否正确。
 4. 变量未定义：联合PASS排查`Function::GetDynParamTable`返回的变量集合是否存在遗漏。
-
 
 ## 编译时长统计
 

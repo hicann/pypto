@@ -15,7 +15,6 @@ NA
 1. 查阅[pypto.matmul](../../../api/operation/pypto-matmul.md)、[pypto.scaled_mm](../../../api/operation/pypto-scaled_mm.md)文档确认输入输出满足要求。
 2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
-
 ## FC3001 ERR_PARAM_MISMATCH
 
 **错误描述**
@@ -30,7 +29,6 @@ NA
 
 1. 查阅[pypto.matmul](../../../api/operation/pypto-matmul.md)、[pypto.scaled_mm](../../../api/operation/pypto-scaled_mm.md)文档确认输入输出满足要求。
 2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
-
 
 ## FC3002 ERR_PARAM_UNSUPPORTED
 
@@ -47,7 +45,6 @@ Matmul内部入参不支持：框架内部使用了不支持的参数组合。
 1. 查阅[pypto.matmul](../../../api/operation/pypto-matmul.md)、[pypto.scaled_mm](../../../api/operation/pypto-scaled_mm.md)文档确认输入输出满足要求。
 2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
-
 ## FC5000 ERR_RUNTIME_NULLPTR
 
 **错误描述**
@@ -61,14 +58,15 @@ NA
 **处理方式**
 
 1. 确认传入matmul接口的输入输出Tensor均非空且已完成地址分配，确认是否存在nullptr。
+
    ```python
    # 正确示例-输入Tensor均已分配数据
    a = pypto.tensor([16, 32], pypto.DT_FP16, "a")
    b = pypto.tensor([32, 64], pypto.DT_FP16, "b")
    out = pypto.matmul(a, b, pypto.DT_FP16)
    ```
-2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
+2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
 ## FC5002 ERR_RUNTIME_LOGIC
 

@@ -45,7 +45,7 @@
 - 该工具最多支持200轮数据采集和打屏，超出部分将被截断。
 - 当前只支持采集20次devTask构建的数据。当devTask构建次数（与`stitch_function_max_num`配置相关，每次stitch对应一次devTask构建）超过20次时，超出部分的perf数据将被截断，并在日志中出现如下告警提示：
 
-    ```
+    ```txt
     Dev task num larger than: 20, the excess part will not be recorded
     ```
 
@@ -141,6 +141,7 @@ python tools/profiling/tilefwk_pmu_to_csv.py -p PROF_xxx/device_x/data -pe=$PYPT
 PMU Trace用于核内流水分析，是算子深度性能调优的重要工具。开启该能力后，开发者可以直观地观察kernel在AI Core上执行时，各硬件流水线（如MTE2、MTE3、Vector、Cube等）的时序排布与重叠情况。通过分析流水排布，可以识别搬运与计算之间的空闲等待、判断各流水线的利用率是否充分，从而有针对性地调整Tiling配置或计算编排策略，提升算子性能。
 
 **限制说明**：
+
 - 产品支持情况：
   <!-- npu="950" id1 -->
   - Ascend 950PR/Ascend 950DT：支持
@@ -171,7 +172,6 @@ PMU ID由`CodeGenCloudNPU::GenPMUId()`生成（`codegen_cloudnpu.cpp`），用�
 
 **约束**：bisheng编译器stamp值上限为4096。为区分主块与尾块，当前仅使用funcHash后三位；子图数量超过约1000时，跨kernel的PMU ID可能重复。
 
-
 支持两种配置方式：
 
 **方式一：在`@pypto.frontend.jit`装饰器中配置**
@@ -197,13 +197,13 @@ msprof --instr-profiling=on [--output=<数据存放路径>] python xxx.py
 ```
 
 其中：
+
 - `--instr-profiling=on`：开启指令级Profiling采集
 - `--output`：手动指定落盘路径，默认落盘在当前工作目录下
 
 #### 采集结果
 
 采集完成后，数据文件落盘在`PROF_*/mindstudio_profiler_output/msprof_*.json`中。开发者可在PyPTO Toolkit中加载该文件，进行核内流水分析。在PyPTO Toolkit的核内流水视图中，每对`mark_stamp`会显示为流水线上的尖峰标记，NOP填充使其在时间轴上形成可辨识的间隔。开发者通过匹配相同的 PMU ID，即可将时间轴上的流水片段定位到对应的leaf function，从而分析该计算阶段内各流水线（MTE2、MTE3、Vector、Cube等）的时序排布与利用率。
-
 
 ## 开箱性能调优
 
@@ -250,7 +250,7 @@ pypto.loop方法会按当前轴循环展开成不同的root function。因此静
 
 检查算子代码是否有可以合并的loop块，应当将其合并以增大root function。例如下面的两个loop就可以合并，进而提升Operation1和Operation2运算合并的可能，以减少y的冗余搬运。
 
-```
+```python
 bsz = x1.shape[0]
 for b_idx in pypto.loop(bsz, name="LOOP_1", idx_name="b_idx"):
        out_1 = Operation1(x1[b_idx, :], y)

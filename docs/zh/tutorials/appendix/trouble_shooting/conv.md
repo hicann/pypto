@@ -84,7 +84,7 @@ Tile图切分阶段，Conv Operation的原始fmap/weight shape属性（`CONV_ORI
 
 - 在NZ2NZ模式下使用Conv，但Operation构造流程未正确设置原始fmap/weight shape属性。
 
-   ```
+   ```txt
    # 错误示例-在NZ2NZ模式下，Conv Operation缺少ori_fmap_shape属性
    # 报错日志示例：
    # Conv ori fmapshape should be set when InOut Tensor NZ mode.
@@ -143,7 +143,7 @@ Tile图切分阶段，Conv Operation的输入操作数数量与预期不匹配�
 
 - Conv Operation的操作数在图传递过程中被异常增减，如自定义Pass错误地添加或删除了Conv的输入边。
 
-   ```
+   ```txt
    # 错误示例-Conv Operation的操作数数量与hasBias标记不一致
    # 报错日志示例：
    # Operand vector size mismatch: Expected size: 3, actual size: 2, Conv Common Input: 2, hasBias: True
@@ -182,7 +182,7 @@ Codegen代码生成阶段，获取Conv TileOp的CopyInMode或CopyOutMode属性�
 
 - Tile图展开阶段未正确设置CopyInMode/CopyOutMode属性，通常由Tile图展开流程异常导致。
 
-   ```
+   ```txt
    # 错误示例-Codegen阶段读取CopyInMode属性时返回失败
    # 报错日志示例：
    # GenMemL1CopyInConv get CopyInMode failed.
@@ -208,7 +208,7 @@ Codegen代码生成阶段，Conv TileOp的CopyInMode/CopyOutMode属性值不在�
 
 - CopyInMode值不在`[ND2NZ, DN2NZ]`范围内。
 
-   ```
+   ```txt
    # 错误示例-CopyInMode/CopyOutMode属性值非法或cutW为0
    # 报错日志示例：
    # GenMemL1CopyInConv CopyInMode is invalid: -1
@@ -236,7 +236,7 @@ Codegen代码生成阶段，Conv TileOp的src shape或offset维度与预期不�
 
 - Tile图展开阶段生成的tensor shape维度与卷积类型不一致，如2D conv的fmap shape被错误地生成为5维。
 
-   ```
+   ```txt
    # 错误示例-shape/offset维度与卷积类型不匹配
    # 报错日志示例：
    # GenMemL1CopyInConv shape should be 4-dim!（2D conv期望4维，实际非4维）
@@ -265,7 +265,7 @@ TileOp阶段，tensor硬件FORMAT校验失败。Conv的Load操作要求src为GM�
 
 - Tile图展开阶段为tensor分配了错误的内存层级，如Load操作的dst被分配到L0C而非L1。
 
-   ```
+   ```txt
    # 错误示例-Load/Store操作的src/dst硬件格式不匹配
    # 报错日志示例（编译期static_assert）：
    # [TLoadConv Error]: Src format should be GM and Dst format should be L1
@@ -291,7 +291,7 @@ TileOp阶段，L0C tensor的shape size校验失败。Store操作要求L0C的shap
 
 - Tile图展开阶段为L0C tensor构造了非2维的shape，可能由Conv的MMAD节点输出shape推导异常导致。
 
-   ```
+   ```txt
    # 错误示例-L0C tensor shape不是2维
    # 报错日志示例（编译期static_assert）：
    # L0C shape size should be 2 Dim
@@ -316,7 +316,7 @@ TileOp阶段，static shape（编译期常量shape）校验非法。Conv TileOp�
 
 - TileShape配置中部分维度需要为编译期常量但被设置为动态值，导致`std::tuple_element`无法在编译期提取。
 
-   ```
+   ```txt
    # 错误示例-TileShape的静态维度配置异常，如tileCinFmap或tileN配置为0，导致bufferSize = 0
    ```
 
@@ -339,7 +339,7 @@ TileOp阶段，获取shape/stride的index校验非法。Conv TileOp的shape/stri
 
 - Tile图展开阶段尝试访问tensor shape/stride的第5维及以上（index >= 5），可能由tensor shape维度推导异常导致。
 
-   ```
+   ```txt
    # 错误示例-shape/stride访问index >= 5
    # 报错日志示例（编译期static_assert）：
    # Idx should be less than 5

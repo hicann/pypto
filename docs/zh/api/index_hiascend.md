@@ -106,7 +106,6 @@
   - [pypto.clone](operation/pypto-clone.md)
   - [pypto.concat](operation/pypto-concat.md)
   - [pypto.conv](operation/pypto-conv.md)
-  - [pypto.copysign](operation/pypto-copysign.md)
   - [pypto.cos](operation/pypto-cos.md)
   - [pypto.cosh](operation/pypto-cosh.md)
   - [pypto.cumprod](operation/pypto-cumprod.md)
