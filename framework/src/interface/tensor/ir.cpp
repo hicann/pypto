@@ -58,6 +58,11 @@ Pass pass::AggressiveDCE()
             auto isRemovable = [&memIds](const StmtPtr& stmt) -> bool {
                 // TensorOpStmt: written to input slot cannot be removed
                 if (auto tensorOp = std::dynamic_pointer_cast<const TensorOpStmt>(stmt)) {
+                    // pass_verify_print / pass_verify_save (OP_PRINT, IR opcode "OP_DUMP") have no
+                    // result tensors but are side-effect ops and must survive DCE.
+                    if (tensorOp->opcode_ == "OP_DUMP") {
+                        return false;
+                    }
                     for (auto arg : tensorOp->result_) {
                         auto lt = std::dynamic_pointer_cast<const LogicalTensor>(arg);
                         if (memIds.count(lt->tensor->memoryId)) {

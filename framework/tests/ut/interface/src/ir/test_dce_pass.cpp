@@ -140,3 +140,38 @@ TEST(DcePassTest, TensorMove)
     ASSERT_EQ(addOut->result_.size(), 1u);
     EXPECT_EQ(addOut->result_[0]->name_, "b_0");
 }
+
+TEST(DcePassTest, OpDumpSurvivesAggressiveDce)
+{
+    IrFuncSetup setup("OpDumpSurvives");
+    auto a = setup.MakeParam("a");
+
+    auto& builder = setup.builder;
+    const auto span = Sp();
+
+    // Dead ADD with no consumers: should be removed by DCE.
+    auto dead = builder.CreateTensorVar(DT_FP32, {TILE, TILE}, TileOpFormat::TILEOP_ND, "dead");
+    auto deadAdd = builder.CreateTensorOpStmt(std::vector<ir::VarPtr>{dead}, nullptr, "ADDS",
+                                              std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(a)},
+                                              std::vector<ir::VarPtr>{},
+                                              std::vector<std::pair<std::string, std::any>>{}, span);
+    setup.stmts.push_back(deadAdd);
+
+    // pass_verify_print / pass_verify_save: OP_PRINT emitted as "OP_DUMP", no results.
+    auto dumpStmt = builder.CreateTensorOpStmt(std::vector<ir::VarPtr>{}, nullptr, "OP_DUMP",
+                                               std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(a)},
+                                               std::vector<ir::VarPtr>{},
+                                               std::vector<std::pair<std::string, std::any>>{}, span);
+    setup.stmts.push_back(dumpStmt);
+
+    auto irFunc = setup.BuildIrFunction("OpDumpSurvives");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+
+    auto outProg = pypto::ir::pass::AggressiveDCE()(irProg);
+    auto& outFunc = outProg->functions_.at("OpDumpSurvives");
+
+    ASSERT_EQ(outFunc->body_->stmts_.size(), 1u) << "Only OP_DUMP should survive DCE";
+    auto dumpOut = std::dynamic_pointer_cast<const ir::TensorOpStmt>(outFunc->body_->stmts_[0]);
+    ASSERT_NE(dumpOut, nullptr);
+    EXPECT_EQ(dumpOut->opcode_, "OP_DUMP");
+}
