@@ -41,6 +41,7 @@ target_link_libraries(tile_fwk_runtime
             tile_fwk_intf_pub
             dl
             c_sec
+            $<$<AND:$<BOOL:${BUILD_WITH_CANN}>,$<NOT:$<BOOL:${ENABLE_UTEST}>>>:ascend_dump>
 )
 
 PTO_Fwk_AnalysisTargetHeaderFiles(TARGET tile_fwk_runtime)

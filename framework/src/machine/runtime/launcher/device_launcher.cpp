@@ -228,7 +228,7 @@ void DeviceLauncher::DataDumpInit()
 {
     if (IsPtoDataDumpEnabled()) {
         if (!AdxDataDumpServerInit) {
-            MACHINE_LOGW("AdxDataDumpServerInit function not found.");
+            MACHINE_LOGE(DevCommonErr::NULLPTR, "AdxDataDumpServerInit function not found (weak symbol is null).");
             return;
         }
         MACHINE_LOGD("DataDumpServerInit is called \n");
@@ -243,7 +243,7 @@ void DeviceLauncher::DataDumpUnInit()
 {
     if (IsPtoDataDumpEnabled()) {
         if (!AdxDataDumpServerUnInit) {
-            MACHINE_LOGW("AdxDataDumpServerUnInit function not found.");
+            MACHINE_LOGE(DevCommonErr::NULLPTR, "AdxDataDumpServerUnInit function not found (weak symbol is null).");
             return;
         }
         MACHINE_LOGD("DataDumpServerUnInit is called \n");

@@ -195,8 +195,12 @@ int DeviceRunner::DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlSt
         rcCtrl = RuntimeStreamSynchronize(ctrlStream);
     }
     if (IsPtoDataDumpEnabled()) {
-        MACHINE_LOGD("DataDumpServerInit is called \n");
-        AdxDataDumpServerUnInit();
+        if (!AdxDataDumpServerUnInit) {
+            MACHINE_LOGE(DevCommonErr::NULLPTR, "AdxDataDumpServerUnInit function not found (weak symbol is null).");
+        } else {
+            MACHINE_LOGD("DataDumpServerInit is called \n");
+            AdxDataDumpServerUnInit();
+        }
     }
     if (rcAicore != 0 || rcAicpu != 0 || rcCtrl != 0) {
         MACHINE_LOGW("sync stream failed aicpu:%d aicore:%d ctrl cpu:%d", rcAicpu, rcAicore, rcCtrl);
