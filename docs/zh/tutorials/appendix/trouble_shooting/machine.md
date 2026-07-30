@@ -17,7 +17,6 @@ AICore kernel编译阶段失败。
 1. 检查日志中的CCE编译命令和错误输出。
 2. 若出现`ld.lld: error: undefined symbol`，修改`tile_fwk_config.json`中`"parallel_compile": 1`改为串行编译。
 
-
 ## F71004 LAUNCH_AICORE_FAILED
 
 **错误描述**
@@ -32,7 +31,6 @@ NA
 
 1. 检查编译产物`kernel_aicore/*.o`是否生成成功。
 2. 确认环境变量`ASCEND_HOME_PATH`是否正确。
-
 
 ## F71005 RANGE_VERIFY_FAILED
 
@@ -54,7 +52,6 @@ encode阶段`InitRawTensorAndMemoryRequirement`断言：`Shape size mismatch`或
    - 用例写法不满足API约束（inplace、valid_shape一致性等）→ 调整用例。
    - 用例正确 → 联系pass同事排查actualRawmagic传递遗漏。
 
-
 ## F71008 MAP_REG_ADDR_FAILED
 
 **错误描述**
@@ -74,7 +71,6 @@ Host侧映射寄存器地址失败：`Map reg addr fail, maybe others are using 
 3. 在容器/多进程场景下，确保`ASCEND_DEVICE_ID`或`DEVICE_ID`环境变量设置正确且不冲突。
 4. 若问题持续，尝试重启NPU驱动或切换空闲设备。
 
-
 ## F7100B SYNC_FAILED
 
 **错误描述**
@@ -82,17 +78,16 @@ Host侧映射寄存器地址失败：`Map reg addr fail, maybe others are using 
 Host侧stream同步失败：`LaunchAicoreKernel`中`DynamicLaunchSynchronize`返回非0，schedule stream与aicore stream之间同步异常。
 
 **可能原因**
+
 - AICore执行异常后stream同步失败。
 - Debug模式下profiling数据同步后stream同步失败。
 - 底层Runtime stream同步超时或状态异常。
-
 
 **处理方式**
 
 1. 检查是否开启了`runtime_debug_mode`或手动调用了`torch.npu.synchronize()`，暂时关闭以排除同步时机引入的问题。
 2. 查看device log中同步失败时刻前后的异常信息（timeout、task abort、stream abort等）。
 3. 若为整网场景，检查是否与其他组件存在stream依赖冲突。
-
 
 ## F72002 HANDSHAKE_TIMEOUT
 
@@ -113,7 +108,6 @@ Schedule AICPU与AICore握手超时，调度线程无法正常启动。
 3. 查看日志上下文（如`Schedule run init succ`之后、AbnormalStop相关），区分首次握手失败或运行中异常。
 4. 使用关联Skill[pypto-environment-setup](../../../../../.agents/skills/pypto-environment-setup/SKILL.md)。
 
-
 ## F73001 CTRL_FLOW_EXEC_FAILED
 
 **错误描述**
@@ -131,21 +125,25 @@ Ctrl AICPU控制流执行失败（devTask构建、stitch处理异常）。
 1. 检查device log确认具体失败节点（`DEV_TASK_BUILD` / `ROOT_STITCH`）。
 2. 查看Ctrl AICPU日志上下文，确认是否有`CELL_MATCH`相关异常。
 3. 若伴随stitch依赖异常（精度问题、怀疑依赖边丢失），启用`runtime_debug_mode=3`进行运行时依赖校验：
+
    ```python
    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 3})
    ```
+
    执行用例后在输出目录运行：
+
    ```bash
    python tools/verify_dep_correctness.py <dump_dir>
    ```
+
    校验规则：
+
    | 规则 | 内容 |
    |---|---|
    | `rule_static_integrity` | 编译期声明的静态后继在运行时是否保留 |
    | `rule_stitch_legality` | stitch边引用的producer/consumer是否合法 |
    | `rule_cell_write_conflict` | 同一cell是否存在并发写冲突 |
    无问题输出`PASS`，有问题输出分类摘要及`dep_check_report.csv`详细定位。
-
 
 ## F73008 CTRL_ALLOC_TIMEOUT
 
@@ -162,7 +160,6 @@ Ctrl AICPU运行超时或整网环境中AICPU执行超时。
 
 1. 整网场景下，设置`PYPTO_LAUNCH_SCHED_SAME_CLUSTER=false`，并通过`launch_sched_aicpu_num`配置可用AICPU数量。
 2. 注意：同Cluster分配开启时`launch_sched_aicpu_num`不生效。
-
 
 ## F7400B WORKSPACE_CAPACITY_INSUFFICIENT
 
@@ -190,7 +187,6 @@ Ctrl AICPU运行超时或整网环境中AICPU执行超时。
    - `unroll_list` / `max_unroll` → 控制展开次数。
 5. **关联Skill**：[pypto-machine-workspace](../../../../../.agents/skills/pypto-machine-workspace/SKILL.md)。
 
-
 ## F7400X Workspace内存重叠 / 精度问题
 
 **错误描述**
@@ -204,8 +200,10 @@ Ctrl AICPU运行超时或整网环境中AICPU执行超时。
 3. **扩大workspace**：在`python/pypto/frontend/parser/entry.py`中将`workspace_tensor`扩大10倍，若问题消失则说明workspace容量估算偏小。
 4. **workspace内部自管理**：修改`framework/src/machine/runtime/device_launcher.cpp`的`PrepareDevProgArgs`，禁用外部workspace传入，改为内部`AllocDev`。
 5. **Leaf粒度内存重叠检测**：开启`ENABLE_DUMP_OPERATION=1` + `runtime_debug_mode=1`，运行后执行：
+
    ```bash
    python3 tools/schema/schema_memory_check.py -d <device_log_dir> -t <dyn_topo.txt_path>
    ```
+
 6. **关闭复杂特性缩小范围**：使用 [pypto-precision-debug](https://gitcode.com/cann/pypto-gym/blob/master/.agents/skills/pypto-precision-debug/SKILL.md)关闭unroll_list、合轴特性、设置`submit_before_loop=True`。
 7. **关联Skill**：[pypto-memory-overlap-detector](../../../../../.agents/skills/pypto-memory-overlap-detector/SKILL.md)。

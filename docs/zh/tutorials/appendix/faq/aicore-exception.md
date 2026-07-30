@@ -3,6 +3,7 @@
 ## 问题现象描述
 
 AICore kernel执行期间发生异常（硬件trap、执行超时、core挂死）。
+
 ```bash
 [Error]: aicore exception, device_id: 6, stream_id: 47, task_id: 2, retcode: 507015, kernelName: PyPTO_matmul_add_0_mix_aic
         Rectify the fault based on the error information in the ascend log.
@@ -17,19 +18,25 @@ PyPTO error: PyPTO Inner Error. Please rectify the fault based on the error info
 - MACHINE调度框架自身问题。
 
 ## 处理方式
+
 1. export ASCEND_WORK_PATH=./wk，详细介绍请参考《[环境变量参考](https://www.hiascend.com/document/redirect/CannCommunityEnvRef)》。
 2. 固定cce编译模式
+
     ```python
     #调用示例
     @pypto.frontend.jit（debug_options={"compile_debug_mode": 2}）
     def pypto_kernel（）:
     ```
+
 3. 开启singlecommit，每条指令单步跑
+
     ```bash
     /usr/local/Ascend/driver/tools/msnpureport config --set --singlecommit 1 -d device-id
     ```
+
 4. 重新执行用例
 5. plog日志里搜kernel_symbol_locator.cpp
+
     ```bash
         #示例
         grep -rn "kernel_symbol_locator.cpp" wk/log/debug/plog/plog-2341095_20260707170139095.log
@@ -44,11 +51,11 @@ PyPTO error: PyPTO Inner Error. Please rectify the fault based on the error info
         #如果symbol=TENSOR_s0_Unroll1_PATH0_hiddenfunc0_8_0_4294967296，即表示挂在该cce文件，如果symbol=PyPTO_matmul_add_0_mix_aic，即表示挂在框架aicore处理源码处。
     ```
 
-
 7. llvm-symbolizer --obj=${aicore_kernel_bin_file_path} fixedPCOffset
     - llvm-symbolizer通过apt install llvm或yum install llvm安装
     - 触发aicore exception后，aicore_kernel_bin_fil会在${ASCEND_WORK_PATH}/extra-info/data-dump/device-id/目录下自动落盘。
     - fixedPCOffset，即65行中的0xd8，即core的cce指令基于aicore_kernel_bin_file基地址的偏移量。
+
     ```bash
         #示例
         llvm-symbolizer --obj=wk/extra-info/data-dump/5/PyPTO_matmul_add_0_host.o 0xd8
@@ -66,6 +73,7 @@ PyPTO error: PyPTO Inner Error. Please rectify the fault based on the error info
 
         /data/m00794585/pypto/wk/pypto/kernel_aicore/TENSOR_s0_Unroll1_PATH0_hiddenfunc0_8_7936091181990093848_0_aic.cpp:45:1
     ```
+
 8. 基于上述信息，即表示core在TENSOR_s0_Unroll1_PATH0_hiddenfunc0_8_7936091181990093848_0_aic.cpp:45处TMatmul操作。
 9. 找到挂的位置后，可以通过`aicore print`打印问题cce指令涉及的参数，以便定位问题。
 

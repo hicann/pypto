@@ -39,8 +39,6 @@ logical_not(input: Tensor) -> Tensor
 3. 当输入数据类型为DT\_INT16、DT\_UINT16、DT\_INT32、DT\_UINT32时，走整数计算路径，临时内存占用与输入数据类型相关：DT\_INT16/DT\_UINT16需4KB，DT\_INT32/DT\_UINT32需8KB。TileShape大小约束为：a\*b\*c\*d\*sizeof\(self\) + a\*b\*c\*d\*sizeof\(BOOL\) + sizeof\(self\)\*2KB<UB。
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例

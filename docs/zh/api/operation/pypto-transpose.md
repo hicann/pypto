@@ -42,11 +42,11 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 
 3. 当前Transpose实现存在约束，只能支持以下场景转置：
 
-- 2维：任意轴
-- 3维：任意轴
-- 4维：支持：0轴和2轴，1轴和3轴，2轴和3轴, 1轴和2轴,不支持：0轴和3轴,  0轴和1轴
-- 5维：支持：3轴和4轴，其他不支持
-- 无需实际转置的场景直接支持：当dim0和dim1相同，或dim0和dim1对应的输入shape维度均为1时，transpose结果与输入等价，不受前述4维/5维轴组合约束限制。
+   - 2维：任意轴
+   - 3维：任意轴
+   - 4维：支持：0轴和2轴，1轴和3轴，2轴和3轴, 1轴和2轴,不支持：0轴和3轴,  0轴和1轴
+   - 5维：支持：3轴和4轴，其他不支持
+   - 无需实际转置的场景直接支持：当dim0和dim1相同，或dim0和dim1对应的输入shape维度均为1时，transpose结果与输入等价，不受前述4维/5维轴组合约束限制。
 
 4. TileShape尾轴32字节对齐约束（仅无需实际转置的场景）：当transpose判定为无需实际转置、直接返回输入Tensor时（即dim0==dim1，或两轴shape均为1），TileShape的最后一维的字节数必须对齐到32字节（BLOCK_SIZE）。即：`TileShape最后一维元素数 × sizeof(数据类型) % 32 == 0`。
 
@@ -75,7 +75,6 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32
    <!-- end id6 -->
 7. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
-
 
 ## 调用示例
 

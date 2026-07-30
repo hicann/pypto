@@ -51,8 +51,6 @@ lrelu(input: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 4. 不支持in-place操作（即输出不能与输入共享内存）。
 5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例

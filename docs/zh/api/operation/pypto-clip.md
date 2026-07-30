@@ -61,8 +61,6 @@ $$
 3. min和max支持同时缺省，返回原值。
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例

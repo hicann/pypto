@@ -33,7 +33,6 @@ unsqueeze(input: Tensor, dim: int) -> Tensor
 
 返回在指定维度dim处新增大小为1的维度的输出Tensor，与输入Tensor共享数据且属性一致。
 
-
 ## 调用示例
 
 ```python

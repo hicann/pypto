@@ -43,8 +43,6 @@ argsort(input: Tensor, dim: Optional[int]=None, descending: bool=True) -> Tensor
 5. 排序时遇到相同值时，采用稳定排序返回对应的索引。
 6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例

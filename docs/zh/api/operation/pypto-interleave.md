@@ -55,7 +55,6 @@ interleave(input: Tensor, other: Tensor) -> Tuple[Tensor, Tensor]
 5. 当 TileShape 有效配置时，TileShape 维度应与输入 Tensor 维度一致，且最后一维必须与输入 Tensor 的 Shape 最后一维相等；其他维可按切分需求设置。
 6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape 设置示例

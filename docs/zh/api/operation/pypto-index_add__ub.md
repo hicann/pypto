@@ -54,7 +54,6 @@ index_add__ub(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: 
 
 5. TileShape的维度与input相同，input, source的dim轴以及index均不可切，所有输入和输出的TileShape大小总和不能超过UB内存的大小。
 
-
 ## 调用示例
 
 ### TileShape设置示例

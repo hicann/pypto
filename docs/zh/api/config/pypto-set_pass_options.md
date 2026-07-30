@@ -44,7 +44,6 @@ set_pass_options(*,
 | ooo_sched_mode            | 输入      | 含义：控制MIX子图内的OoO调度。<br> 说明：设置MIX子图内ooo_task的流水调度模式。 <br> 类型：`str` <br> 默认值："" <br> 取值范围：{"", "GAPMIN", "HLF"} <br> 影响Pass范围：OoOSchedule <br> 配置说明：取值为""（默认）时使用基于拓扑序遍历和局部搜索的调度（GapMin调度 + local-search）；取值为"GAPMIN"时仅执行GapMin调度，跳过local-search; 取值为"HLF"时使用Highest Level First调度（按任务到汇点最长路径降序排列后做EFT插入调度）。|
 | sg_set_tunevf_mode           | 输入      | 含义：控制VF（Vector Fusion）调优Pass的行为模式。<br> 说明：用于控制TuneTileOpSeqForVF和TuneSyncForVF两个Pass的执行行为。<br> 类型：`int` <br> 默认值：0 <br> 取值范围：{0, 1, 2} <br> - 0：均衡模式，在OoO Pass输出的op序列的基础上自动完成op顺序的调整，自动平衡Pipeline流水与VF融合的整体性能收益。<br> - 1：指令流水优先模式，不改变OoO排好的op执行序。<br> - 2：vf融合优先模式，不考虑性能建模的收益评估，尽量调整op顺序以保证更大范围的VF融合。该模式仅影响TuneSyncForVF中的NeedAdjustOpSeq判断，不影响TuneTileOpSeqForVF。<br> 影响Pass范围：TuneTileOpSeqForVF, TuneSyncForVF |
 
-
 ## 返回值说明
 
 无。
@@ -301,6 +300,7 @@ pypto.set_pass_options(sg_set_ooo_scope=-1)
 #### 典型场景：控制 Operation 的执行顺序
 
 如下面示例，通过将 mul 和 exp 包在相同的 ooo_scope，可以使得 OoO 的调度结果中 exp 在 add 之前执行
+
 ```python
 # 因为需要在 MIX 子图内使能 ooo_scope，所以使用 sg_set_scope 构造 MIX 子图
 pypto.set_pass_options(sg_set_scope=1)

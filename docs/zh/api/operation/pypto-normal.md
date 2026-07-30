@@ -42,7 +42,6 @@ normal(shape: List[int], key: List[int], counter: List[int], alg: List[int], dty
 - tile shape尾轴必须是4的倍数。
 - `counter[0]`在内部被硬编码为0。虽然接口接受长度为2的counter列表，但`counter[0]`的值会被忽略，实际使用的Philox计数器为`[0, counter[1]]`。
 
-
 ## 返回值说明
 
 返回一个指定shape、数据类型为dtype的Tensor，其元素服从均值为0，方差为1的正态分布。

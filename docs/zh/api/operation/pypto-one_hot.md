@@ -39,7 +39,6 @@ TileShape对输出切分，TileShape的维度与输出一致，TileShape的尾�
 
 Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例

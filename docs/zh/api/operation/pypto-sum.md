@@ -52,7 +52,6 @@ sum(input: Tensor, dim: int, keepdim: bool = False) -> Tensor
 
 2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例

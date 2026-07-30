@@ -42,7 +42,6 @@ zeros(*size: Union[int, Sequence[int]], dtype: Optional[DataType] = None) -> Ten
 
 1. `tileshape`的维度需要与输出result维度相同，用于切分result。
 
-
 ## 调用示例
 
 ### TileShape设置示例

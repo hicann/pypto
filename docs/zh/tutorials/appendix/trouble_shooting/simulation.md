@@ -1,5 +1,7 @@
 # F9XXXX
+
 ## F91001 INVALID_CONFIG
+
 **错误描述**
 
 传入的配置参数不符合仿真器要求，包括配置字符串格式不匹配`key=value`规范、配置名称缺少`.`层级分隔符、AICPU核心数量不等于AIC与AIV之和。
@@ -49,8 +51,8 @@
    Model.vecMachineNumberPerAICPU=8
    ```
 
-
 ## F91002 INVALID_CONFIG_NAME
+
 **错误描述**
 
 配置名称格式正确（含`.`分隔符），但在仿真配置分发器（dispatcher）中找不到对应的处理器，即配置名不在已注册列表中。
@@ -77,9 +79,8 @@
 2. 参考`framework/src/cost_model/simulation/config/xxx.h`中dispatcher注册的合法配置项列表。
 3. 如需新增配置项，在对应配置头文件的dispatcher函数中注册新的配置名称。
 
-
-
 ## F91003 FILE_FORMAT_ERROR
+
 **错误描述**
 
 JSON文件解析失败，内容不符合JSON语法规范。
@@ -117,9 +118,8 @@ JSON文件解析失败，内容不符合JSON语法规范。
    }
    ```
 
-
-
 ## F91004 FILE_CONTENT_ERROR
+
 **错误描述**
 
 文件能够打开和解析，但内容不符合约定的字段要求，如配置行缺少`=`分隔符、数值字段超出合法范围。
@@ -151,9 +151,8 @@ JSON文件解析失败，内容不符合JSON语法规范。
 
 2. 检查数值字段是否在合法范围内（如`uint64_t`不超过2^64-1）。
 
-
-
 ## F91005 INVALID_PATH
+
 **错误描述**
 
 仿真所需的中间产物文件、Python绘图脚本或精度仿真目标文件（`.o`）路径不存在。
@@ -195,9 +194,8 @@ JSON文件解析失败，内容不符合JSON语法规范。
 3. 确认Python绘图脚本在预期路径下，必要时从源码目录复制到输出目录。
 4. 确认精度仿真相关组件已编译完成。
 
-
-
 ## F91006 FILE_OPEN_FAILED
+
 **错误描述**
 
 无法打开指定文件，常见于JSON配置文件、日历文件、拓扑文件等。
@@ -235,9 +233,8 @@ JSON文件解析失败，内容不符合JSON语法规范。
 
 3. 尝试用相应工具打开文件验证其完整性。
 
-
-
 ## F91007 PYTHON_CMD_ERROR
+
 **错误描述**
 
 仿真过程中执行Python脚本（如泳道图绘制脚本`draw_pipe_swim_lane.py`、`print_swim_lane.py`、`draw_swim_lane.py`）返回非零退出码。
@@ -290,9 +287,8 @@ JSON文件解析失败，内容不符合JSON语法规范。
 
 3. 手动执行报错的Python命令，查看详细错误输出，根据提示修复。
 
-
-
 ## F92006 INVALID_PIPE_TYPE
+
 **错误描述**
 
 仿真中遇到未识别的pipeline类型：`SCHED_CORE_PIPE_TYPE`中缺少对应opcode的映射，或对非cache类型调用了`GetAddress()` / `GetSize()`。
@@ -307,9 +303,8 @@ JSON文件解析失败，内容不符合JSON语法规范。
 1. 在`framework/src/cost_model/simulation/common/ISA.h`的`SCHED_CORE_PIPE_TYPE`数据结构中添加新opcode对应的pipe类型映射。
 2. 确保`GetAddress()` / `GetSize()`仅对cache类型调用。
 
-
-
 ## F92007 SHAPE_INVALID
+
 **错误描述**
 
 传入的Tensor shape为空或第一维为空，仿真无法执行。
@@ -334,9 +329,8 @@ JSON文件解析失败，内容不符合JSON语法规范。
 
 2. 对于动态shape场景，确认shape推导逻辑正确。
 
-
-
 ## F92010 DEAD_LOCK
+
 **错误描述**
 
 仿真运行中检测到死锁，某个Machine在某个cycle无法继续推进调度。
@@ -350,6 +344,7 @@ JSON文件解析失败，内容不符合JSON语法规范。
    [ReportDeadlock] Machine 0 is deadlock at cycle 12345
    Simulation is deadlock at cycle 12345 !!!!!!!!!
    ```
+
 + 任务调度逻辑存在缺陷。
 
 **处理方式**
@@ -364,9 +359,8 @@ JSON文件解析失败，内容不符合JSON语法规范。
 3. 检查任务依赖图中是否存在循环依赖或资源竞争。
 4. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
-
-
 ## F94001 NO_SO_EXISTS
+
 **错误描述**
 
 精度仿真所需的共享库文件（如`libpem_davinci.so`）加载失败，文件不存在或路径不正确。
@@ -397,9 +391,8 @@ JSON文件解析失败，内容不符合JSON语法规范。
    ls -l /path/to/libpem_davinci.so
    ```
 
-
-
 ## F94002 CANN_LOAD_FAILED
+
 **错误描述**
 
 CANN环境未正确加载，`ASCEND_HOME_PATH`环境变量未设置，精度仿真不可用。
@@ -431,9 +424,8 @@ CANN环境未正确加载，`ASCEND_HOME_PATH`环境变量未设置，精度仿�
    /usr/local/Ascend/ascend-toolkit/latest
    ```
 
-
-
 ## F94003 CMD_ERROR
+
 **错误描述**
 
 精度仿真中执行外部命令失败，如命令字符串格式化截断导致`snprintf_s`失败，或`llvm-objcopy`返回非零退出码。
@@ -467,9 +459,8 @@ CANN环境未正确加载，`ASCEND_HOME_PATH`环境变量未设置，精度仿�
 
 3. 在终端中手动执行日志中的命令，查看具体错误输出。
 
-
-
 ## F94005 CANNSIM_FAILED
+
 **错误描述**
 
 未通过`cannsim`方式启动精度仿真，导致精度仿真不可用。
@@ -492,9 +483,8 @@ CANN环境未正确加载，`ASCEND_HOME_PATH`环境变量未设置，精度仿�
    cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950
    ```
 
-
-
 ## F9FFFF SIM_INNER_ERROR
+
 **错误描述**
 
 NA

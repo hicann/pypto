@@ -1,4 +1,4 @@
-﻿# 环境部署
+# 环境部署
 
 在使用PyPTO开发或运行之前，请您先参考下面步骤完成基础环境搭建和编译安装，确保已安装NPU驱动、固件和CANN软件（`Ascend-cann-toolkit`和`Ascend-cann-ops`）等。
 
@@ -25,11 +25,11 @@
 
 1. 进入开源项目，单击"`CANNLab`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
 
-![创建云开发环境](../tutorials/figures/webide1.png)
+   ![创建云开发环境](../tutorials/figures/webide1.png)
 
 2. 根据页面提示信息创建并启动云开发环境，单击"`连接 > WebIDE`"进入一站式开发平台。
 
-![启动并连接WebIDE](../tutorials/figures/webide2.png)
+   ![启动并连接WebIDE](../tutorials/figures/webide2.png)
 
 ### 方式2：Docker部署
 
@@ -179,6 +179,7 @@
     # 查看CANN toolkit包及ops包版本信息（默认路径安装），CANNLab场景下将/usr/local替换为/home/developer
     cat /usr/local/Ascend/cann/${arch}-linux/ascend*install.info
     ```
+
     其中\${arch}可通过`uname -m`查询当前架构，如aarch64、x86_64。
 
 环境准备完成后，请参考[PyPTO安装](./build_and_install.md)文档完成PyPTO的安装。

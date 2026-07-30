@@ -58,8 +58,6 @@ TileShape约束：2维场景下TileShape为\[tileS, d\]，4维场景下TileShape
 二维示例：
 input：[15, 8]，index：[5, 2]，src:[10, 8], viewShape: [viewB \* s, 8], viewB需要是整数，即第0维是s的倍数，tileShape:[tileS, 8], tileS需要是s的约数即1或者2。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例

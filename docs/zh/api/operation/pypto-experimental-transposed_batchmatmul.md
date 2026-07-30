@@ -40,7 +40,6 @@ transposed_batchmatmul(tensor_a: Tensor, tensor_b: Tensor, out_dtype: dtype) -> 
 
 返回输出Tensor，Tensor的数据类型由`out_dtype`指定，形状为(M, B, N)。
 
-
 ## 调用示例
 
 ```python

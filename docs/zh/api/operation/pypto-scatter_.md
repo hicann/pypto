@@ -64,7 +64,6 @@ scatter_(input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tens
 
 5. src为Tensor，reduce为None，且当index中存在指向相同位置的不唯一索引时，行为是不确定的，将从src中任意选择一个值写入。
 
-
 ## 调用示例
 
 ### TileShape设置示例

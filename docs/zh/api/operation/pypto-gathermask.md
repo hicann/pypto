@@ -59,8 +59,6 @@ gathermask(self: Tensor, pattern_mode: int) -> Tensor
    - self.shape尾轴不做view切分
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例

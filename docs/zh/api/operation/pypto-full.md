@@ -49,7 +49,6 @@ full(size: List[int], fill_value: Union[int, float, Element], dtype: DataType, *
 
 3. size的维度范围为1维到4维，即size的长度范围为\[1, 4\]。
 
-
 ## 调用示例
 
 ### TileShape设置示例

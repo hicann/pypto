@@ -37,7 +37,6 @@ softmax(input: Tensor, dim: int) -> Tensor
 
 返回Tensor类型。其Shape、数据类型与输入Tensor一致，dim指定维度上的元素之和为1。
 
-
 ## 调用示例
 
 ```python

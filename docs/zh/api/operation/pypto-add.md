@@ -53,7 +53,6 @@ add(input: Tensor, other: Union[Tensor, float, int]) -> Tensor
    <!-- end id6 -->
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例

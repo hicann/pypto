@@ -46,8 +46,6 @@ keepdim为True时，对应dim的shape规约为1，其他轴的shape不变；keep
 2. dim中不支持重复值，且len(dim) <= input.dim
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例

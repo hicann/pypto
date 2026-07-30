@@ -51,7 +51,6 @@ tanh(input: Tensor) -> Tensor
     （FP16/BF16：input + output + 4个float temp tile + 1个compare mask tile + 32 bytes对齐）
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ```python

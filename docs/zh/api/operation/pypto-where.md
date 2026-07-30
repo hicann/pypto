@@ -78,7 +78,6 @@ result ：Tensor，Shape由输入的广播得到，详细广播场景可看上�
    <!-- end id6 -->
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例

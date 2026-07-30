@@ -52,7 +52,6 @@ bitwise_or(input: Tensor, other: Union[Tensor, int]) -> Tensor
    <!-- end id6 -->
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例

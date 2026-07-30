@@ -59,7 +59,6 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
    <!-- end id6 -->
 7. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例

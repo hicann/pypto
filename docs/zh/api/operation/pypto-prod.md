@@ -44,7 +44,6 @@ prod(input: Tensor, dim: int, keepdim: bool = False) -> Tensor
 
 2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## TileShape设置示例
 
 TileShape维度应和输入input一致。

@@ -48,7 +48,6 @@ reshape(input: Tensor,shape: List[int],*,valid_shape: Optional[List[Union[int, S
 3. inplace为True的输出，不可作为函数最终输出。
 4. inplace=False仅适配静态shape；inplace=True兼容静态shape和动态shape。
 
-
 ## 调用示例
 
 示例1：

@@ -33,8 +33,6 @@ cos(input: Tensor) -> Tensor
 3. input支持的输入范围为[-65504.0,65504.0]。
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例

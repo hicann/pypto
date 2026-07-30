@@ -41,8 +41,6 @@ tan(input: Tensor) -> Tensor
 1. 输入Tensor和输出Tensor类型应该相同。
 2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
-
 ## 调用示例
 
 ### TileShape设置示例

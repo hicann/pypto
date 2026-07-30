@@ -43,7 +43,6 @@ def floor_div(input: Tensor, other: Union[Tensor, int, float]) -> Tensor
 2. 只支持单轴广播。
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
-
 ## 调用示例
 
 ### TileShape设置示例
