@@ -7,20 +7,16 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "ir/transforms/merge_stmts_pass.h"
-
-#include "ir/transforms/utils/stmt_utils.h"
-
 #include <algorithm>
 #include <unordered_set>
 
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
-#include "ir/transforms/base/visitor.h"
+#include "ir/transforms/merge_stmts_pass.h"
+#include "ir/transforms/utils/stmt_utils.h"
 
-#include "interface/tensor/ir_tensor_op_rebuild.h"
-#include "interface/tensor/logical_tensor.h"
 #include "tilefwk/symbolic_scalar.h"
+#include "interface/tensor/logical_tensor.h"
 
 using npu::tile_fwk::SatStatus;
 using npu::tile_fwk::SymbolicScalar;
@@ -33,38 +29,17 @@ using npu::tile_fwk::LogicalTensor;
 using utils::SubstituteVars;
 using utils::VarExprMap;
 
-struct IfStmtResult {
-    IfStmtPtr ifStmt;
-    VarExprMap outputCloneMap;
+constexpr char kLoopCondsAttr[] = "_loop_conds";
+
+struct BranchClassification {
+    bool thenDead;
+    bool elseDead;
+    std::vector<SymbolicScalar> thenConds;
+    std::vector<SymbolicScalar> elseConds;
 };
-
-struct MergeSegmentResult {
-    std::vector<StmtPtr> stmts;
-    VarExprMap outputCloneMap;
-};
-
-bool IsExternalVar(const std::string& name, const std::vector<std::string>& externalVarNames)
-{
-    return std::find(externalVarNames.begin(), externalVarNames.end(), name) != externalVarNames.end();
-}
-
-VarPtr LookupVarDef(VarPtr var, const VarExprMap& varMap)
-{
-    if (!var) {
-        return var;
-    }
-    auto it = varMap.find(var);
-    if (it != varMap.end()) {
-        return std::static_pointer_cast<const Var>(it->second);
-    }
-    return var;
-}
 
 ExprPtr LookupVarInExpr(ExprPtr expr, const VarExprMap& varMap)
 {
-    if (!expr || varMap.empty()) {
-        return expr;
-    }
     auto var = std::dynamic_pointer_cast<const Var>(expr);
     auto it = varMap.find(var);
     if (it != varMap.end()) {
@@ -73,172 +48,35 @@ ExprPtr LookupVarInExpr(ExprPtr expr, const VarExprMap& varMap)
     return expr;
 }
 
-VarExprMap BuildYieldVarMap(IfStmtPtr ifStmt, SeqStmtsPtr body)
+void BuildYieldVarMap(IfStmtPtr ifStmt, SeqStmtsPtr body, VarExprMap& varMap)
 {
-    VarExprMap varMap;
-    if (!body || body->stmts_.empty() || ifStmt->returnVars_.empty()) {
-        return varMap;
+    if (body->stmts_.empty() || ifStmt->returnVars_.empty()) {
+        return;
     }
     auto& lastStmt = body->stmts_.back();
-    if (!IsA<YieldStmt>(lastStmt)) {
-        return varMap;
+    if (auto yieldStmt = As<YieldStmt>(lastStmt)) {
+        for (size_t i = 0; i < ifStmt->returnVars_.size() && i < yieldStmt->value_.size(); ++i) {
+            varMap[ifStmt->returnVars_[i]] = yieldStmt->value_[i];
+        }
     }
-    auto yieldStmt = As<YieldStmt>(lastStmt);
-    for (size_t i = 0; i < ifStmt->returnVars_.size() && i < yieldStmt->value_.size(); ++i) {
-        varMap[ifStmt->returnVars_[i]] = yieldStmt->value_[i];
-    }
-    return varMap;
 }
 
-VarExprMap BuildYieldVarMapForForStmt(ForStmtPtr forStmt)
+void BuildYieldVarMap(ForStmtPtr forStmt, VarExprMap& varMap)
 {
-    VarExprMap varMap;
-    if (!forStmt->body_ || forStmt->body_->stmts_.empty() || forStmt->returnVars_.empty()) {
-        return varMap;
+    if (forStmt->body_->stmts_.empty() || forStmt->returnVars_.empty()) {
+        return;
     }
     auto& lastStmt = forStmt->body_->stmts_.back();
-    std::vector<ExprPtr> yieldValues;
     if (auto c = As<ContinueStmt>(lastStmt)) {
-        yieldValues = c->value_;
-    } else if (auto y = As<YieldStmt>(lastStmt)) {
-        yieldValues = y->value_;
-    } else {
-        return varMap;
-    }
-    for (size_t i = 0; i < forStmt->returnVars_.size() && i < yieldValues.size(); ++i) {
-        varMap[forStmt->returnVars_[i]] = yieldValues[i];
-    }
-    return varMap;
-}
-
-StmtPtr SubstituteReturnVarUses(StmtPtr stmt, const VarExprMap& varMap);
-SeqStmtsPtr MergeStmtsIntoIfStmtImpl(SeqStmtsPtr seq, const std::vector<std::string>& externalVarNames,
-                                     const std::vector<SymbolicScalar>& path);
-
-StmtPtr SubstituteReturnVarUses(TensorOpStmtPtr tensorOp, const VarExprMap& varMap)
-{
-    std::vector<ExprPtr> newArgs;
-    for (auto& arg : tensorOp->args_) {
-        newArgs.push_back(LookupVarInExpr(arg, varMap));
-    }
-    std::vector<VarPtr> newTokens;
-    for (auto& tok : tensorOp->tokens_) {
-        newTokens.push_back(LookupVarDef(tok, varMap));
-    }
-    return npu::tile_fwk::RebuildTensorOpStmt(tensorOp, tensorOp->result_, tensorOp->result_token_, newArgs, newTokens,
-                                              tensorOp->span_);
-}
-
-StmtPtr SubstituteReturnVarUses(IfStmtPtr ifStmt, const VarExprMap& varMap)
-{
-    std::vector<StmtPtr> newThenStmts;
-    for (auto& s : ifStmt->thenBody_->stmts_) {
-        newThenStmts.push_back(SubstituteReturnVarUses(s, varMap));
-    }
-    auto newThenBody = std::make_shared<SeqStmts>(newThenStmts, ifStmt->span_);
-    std::optional<SeqStmtsPtr> newElseBody;
-    if (ifStmt->elseBody_) {
-        std::vector<StmtPtr> newElseStmts;
-        for (auto& s : ifStmt->elseBody_.value()->stmts_) {
-            newElseStmts.push_back(SubstituteReturnVarUses(s, varMap));
-        }
-        newElseBody = std::make_shared<SeqStmts>(newElseStmts, ifStmt->span_);
-    }
-    return std::make_shared<IfStmt>(ifStmt->condition_, newThenBody, newElseBody, ifStmt->returnVars_, ifStmt->span_);
-}
-
-StmtPtr SubstituteReturnVarUses(ForStmtPtr f, const VarExprMap& varMap)
-{
-    std::vector<StmtPtr> newBodyStmts;
-    for (auto& s : f->body_->stmts_) {
-        newBodyStmts.push_back(SubstituteReturnVarUses(s, varMap));
-    }
-    auto newBody = std::make_shared<SeqStmts>(newBodyStmts, f->span_);
-    std::vector<IterArgPtr> newIterArgs;
-    for (auto& arg : f->iterArgs_) {
-        newIterArgs.push_back(std::make_shared<IterArg>(arg->iterVar_, LookupVarInExpr(arg->initValue_, varMap)));
-    }
-    ExprPtr newStart = LookupVarInExpr(f->start_, varMap);
-    ExprPtr newStop = LookupVarInExpr(f->stop_, varMap);
-    ExprPtr newStep = LookupVarInExpr(f->step_, varMap);
-    return std::make_shared<ForStmt>(f->loopVar_, newStart, newStop, newStep, newIterArgs, newBody, f->returnVars_,
-                                     f->span_, f->attrs_);
-}
-
-StmtPtr SubstituteReturnVarUses(WhileStmtPtr w, const VarExprMap& varMap)
-{
-    std::vector<StmtPtr> newBodyStmts;
-    for (auto& s : w->body_->stmts_) {
-        newBodyStmts.push_back(SubstituteReturnVarUses(s, varMap));
-    }
-    auto newBody = std::make_shared<SeqStmts>(newBodyStmts, w->span_);
-    std::vector<IterArgPtr> newIterArgs;
-    for (auto& arg : w->iterArgs_) {
-        newIterArgs.push_back(std::make_shared<IterArg>(arg->iterVar_, LookupVarInExpr(arg->initValue_, varMap)));
-    }
-    ExprPtr newCond = LookupVarInExpr(w->condition_, varMap);
-    return std::make_shared<WhileStmt>(newCond, newIterArgs, newBody, w->returnVars_, w->span_);
-}
-
-StmtPtr SubstituteReturnVarUses(StmtPtr stmt, const VarExprMap& varMap)
-{
-    if (!stmt || varMap.empty()) {
-        return stmt;
-    }
-    if (auto t = As<TensorOpStmt>(stmt)) {
-        return SubstituteReturnVarUses(t, varMap);
-    }
-    if (auto i = As<IfStmt>(stmt)) {
-        return SubstituteReturnVarUses(i, varMap);
-    }
-    if (auto f = As<ForStmt>(stmt)) {
-        return SubstituteReturnVarUses(f, varMap);
-    }
-    if (auto w = As<WhileStmt>(stmt)) {
-        return SubstituteReturnVarUses(w, varMap);
-    }
-    return stmt;
-}
-
-std::pair<SeqStmtsPtr, std::optional<SeqStmtsPtr>> ResolveBranchConflicts(
-    SeqStmtsPtr processedThen, std::optional<SeqStmtsPtr> processedElse,
-    const std::vector<std::string>& externalVarNames)
-{
-    auto thenDefs = utils::CollectDefinedVars(processedThen);
-    auto elseDefs = utils::CollectDefinedVars(processedElse ? processedElse.value() : nullptr);
-
-    std::unordered_set<int> elseRawMagics;
-    for (auto& elseVar : elseDefs) {
-        auto lt = std::dynamic_pointer_cast<const LogicalTensor>(elseVar);
-        if (lt) {
-            elseRawMagics.insert(lt->GetRawMagic());
+        for (size_t i = 0; i < forStmt->returnVars_.size() && i < c->value_.size(); ++i) {
+            varMap[forStmt->returnVars_[i]] = c->value_[i];
         }
     }
-
-    VarExprMap cloneMap;
-    for (auto& v : thenDefs) {
-        if (elseDefs.count(v) && !IsExternalVar(v->name_, externalVarNames)) {
-            auto lt = std::dynamic_pointer_cast<const LogicalTensor>(v);
-            bool sharesRawTensor = lt && elseRawMagics.find(lt->GetRawMagic()) != elseRawMagics.end();
-            if (lt) {
-                cloneMap[v] = lt->Clone(sharesRawTensor);
-            } else {
-                cloneMap[v] = v->Clone();
-            }
+    if (auto y = As<YieldStmt>(lastStmt)) {
+        for (size_t i = 0; i < forStmt->returnVars_.size() && i < y->value_.size(); ++i) {
+            varMap[forStmt->returnVars_[i]] = y->value_[i];
         }
     }
-
-    std::optional<SeqStmtsPtr> resolvedElse;
-    if (processedElse) {
-        auto elseBody = processedElse.value();
-        std::vector<StmtPtr> newElseStmts;
-        for (auto& s : elseBody->stmts_) {
-            newElseStmts.push_back(SubstituteVars(s, cloneMap));
-        }
-        resolvedElse = std::make_shared<SeqStmts>(newElseStmts, elseBody->span_);
-    }
-
-    return {processedThen, resolvedElse};
 }
 
 static std::vector<VarPtr> CollectOutputVars(const std::vector<StmtPtr>& stmts)
@@ -281,35 +119,13 @@ std::vector<StmtPtr> RemoveLastYieldStmt(const std::vector<StmtPtr>& stmts)
     return result;
 }
 
-SeqStmtsPtr BuildAppendedBranch(SeqStmtsPtr branchBody, const std::vector<StmtPtr>& stmts, const VarExprMap& yieldMap,
-                                const std::vector<VarPtr>& newOutputVars,
-                                const std::vector<ExprPtr>& originalYieldValues, Span span)
+void ExtendYieldMap(const StmtPtr& s, VarExprMap& yieldMap)
 {
-    std::vector<StmtPtr> stmtsWithoutYield;
-    if (branchBody) {
-        stmtsWithoutYield = RemoveLastYieldStmt(branchBody->stmts_);
+    if (auto ifStmt = As<IfStmt>(s)) {
+        BuildYieldVarMap(ifStmt, ifStmt->thenBody_, yieldMap);
+    } else if (auto forStmt = As<ForStmt>(s)) {
+        BuildYieldVarMap(forStmt, yieldMap);
     }
-    VarExprMap extendedYieldMap = yieldMap;
-    for (auto& s : stmts) {
-        stmtsWithoutYield.push_back(SubstituteReturnVarUses(s, extendedYieldMap));
-        if (auto ifStmt = As<IfStmt>(s)) {
-            auto ifYieldMap = BuildYieldVarMap(ifStmt, ifStmt->thenBody_);
-            for (auto& [k, v] : ifYieldMap) {
-                extendedYieldMap[k] = v;
-            }
-        } else if (auto forStmt = As<ForStmt>(s)) {
-            auto forYieldMap = BuildYieldVarMapForForStmt(forStmt);
-            for (auto& [k, v] : forYieldMap) {
-                extendedYieldMap[k] = v;
-            }
-        }
-    }
-    std::vector<ExprPtr> yieldValues = originalYieldValues;
-    for (auto& var : newOutputVars) {
-        yieldValues.push_back(var);
-    }
-    stmtsWithoutYield.push_back(std::make_shared<YieldStmt>(yieldValues, span));
-    return std::make_shared<SeqStmts>(stmtsWithoutYield, span);
 }
 
 std::vector<ExprPtr> ExtractYieldValues(SeqStmtsPtr body)
@@ -325,180 +141,58 @@ std::vector<ExprPtr> ExtractYieldValues(SeqStmtsPtr body)
     return yieldStmt->value_;
 }
 
-std::pair<std::vector<VarPtr>, VarExprMap> ComputeCloneableReturnVars(const std::vector<VarPtr>& vars,
-                                                                      const std::vector<std::string>& externalVarNames)
+// Append `stmts` onto one branch body: substitute each through the running yield-map (seeded from
+// this branch's own yield), extend the map as new return vars appear, then re-emit the trailing
+// yield with `newVars` appended. A null `branch` (missing else) starts from an empty body.
+SeqStmtsPtr BuildAppendedBranch(IfStmtPtr ifStmt, SeqStmtsPtr branch, const std::vector<StmtPtr>& stmts,
+                                const std::vector<VarPtr>& newVars, Span span)
 {
-    std::vector<VarPtr> result;
-    VarExprMap cloneMap;
-    for (auto& var : vars) {
-        if (IsExternalVar(var->name_, externalVarNames)) {
-            result.push_back(var);
-        } else {
-            auto cloned = var->Clone();
-            cloneMap[var] = cloned;
-            result.push_back(cloned);
-        }
+    std::vector<StmtPtr> out;
+    VarExprMap yieldMap;
+    if (branch) {
+        out = RemoveLastYieldStmt(branch->stmts_);
+        BuildYieldVarMap(ifStmt, branch, yieldMap);
     }
-    return {result, cloneMap};
+    for (auto& s : stmts) {
+        out.push_back(SubstituteVars(s, yieldMap));
+        ExtendYieldMap(s, yieldMap);
+    }
+    auto values = ExtractYieldValues(branch);
+    for (auto& v : newVars) {
+        values.push_back(v);
+    }
+    out.push_back(std::make_shared<YieldStmt>(values, span));
+    return std::make_shared<SeqStmts>(out, span);
 }
 
-IfStmtResult AppendIntoIfStmt(IfStmtPtr ifStmt, const std::vector<StmtPtr>& stmts,
-                              const std::vector<std::string>& externalVarNames)
+// Prepend `stmts` ahead of one branch body: emit each (substituted through the running yield-map,
+// extended as new return vars appear), then the original branch stmts minus their trailing yield,
+// then a fresh trailing yield with `newVars` followed by the branch's own yield values. A
+// disengaged `branch` (missing else) omits the original-body part.
+SeqStmtsPtr BuildPrependedBranch(const std::vector<StmtPtr>& stmts, std::optional<SeqStmtsPtr> branch,
+                                 const std::vector<VarPtr>& newVars, Span span)
 {
-    auto thenYieldMap = BuildYieldVarMap(ifStmt, ifStmt->thenBody_);
-    auto elseYieldMap = BuildYieldVarMap(ifStmt, ifStmt->elseBody_ ? ifStmt->elseBody_.value() : nullptr);
-    auto newOutputVars = CollectOutputVars(stmts);
-    auto [returnVarsToAdd, outputCloneMap] = ComputeCloneableReturnVars(newOutputVars, externalVarNames);
-
-    auto thenOriginalValues = ExtractYieldValues(ifStmt->thenBody_);
-    auto elseOriginalValues = ExtractYieldValues(ifStmt->elseBody_ ? ifStmt->elseBody_.value() : nullptr);
-
-    auto newThenBody = BuildAppendedBranch(ifStmt->thenBody_, stmts, thenYieldMap, newOutputVars, thenOriginalValues,
-                                           ifStmt->span_);
-    auto newElseBody = BuildAppendedBranch(ifStmt->elseBody_ ? ifStmt->elseBody_.value() : nullptr, stmts, elseYieldMap,
-                                           newOutputVars, elseOriginalValues, ifStmt->span_);
-
-    std::vector<VarPtr> newReturnVars = ifStmt->returnVars_;
-    for (auto& var : returnVarsToAdd) {
-        newReturnVars.push_back(var);
+    std::vector<StmtPtr> out;
+    VarExprMap yieldMap;
+    for (auto& s : stmts) {
+        out.push_back(SubstituteVars(s, yieldMap));
+        ExtendYieldMap(s, yieldMap);
     }
-
-    auto resultIfStmt = std::make_shared<IfStmt>(ifStmt->condition_, newThenBody, newElseBody, newReturnVars,
-                                                 ifStmt->span_);
-    return IfStmtResult{resultIfStmt, outputCloneMap};
+    if (branch) {
+        for (auto& s : RemoveLastYieldStmt(branch.value()->stmts_)) {
+            out.push_back(SubstituteVars(s, yieldMap));
+        }
+    }
+    std::vector<ExprPtr> values(newVars.begin(), newVars.end());
+    auto orig = ExtractYieldValues(branch.value_or(nullptr));
+    values.insert(values.end(), orig.begin(), orig.end());
+    out.push_back(std::make_shared<YieldStmt>(values, span));
+    return std::make_shared<SeqStmts>(out, span);
 }
 
-SeqStmtsPtr BuildPrependedBranchBody(const std::vector<StmtPtr>& prependStmts,
-                                     std::optional<SeqStmtsPtr> originalBranch,
-                                     const std::vector<VarPtr>& newOutputVars,
-                                     const std::vector<ExprPtr>& originalYieldValues, Span span)
-{
-    std::vector<StmtPtr> stmts;
-    VarExprMap accumulatedYieldMap;
-    for (auto& s : prependStmts) {
-        stmts.push_back(SubstituteReturnVarUses(s, accumulatedYieldMap));
-        if (auto ifStmt = As<IfStmt>(s)) {
-            auto ifYieldMap = BuildYieldVarMap(ifStmt, ifStmt->thenBody_);
-            for (auto& [k, v] : ifYieldMap) {
-                accumulatedYieldMap[k] = v;
-            }
-        } else if (auto forStmt = As<ForStmt>(s)) {
-            auto forYieldMap = BuildYieldVarMapForForStmt(forStmt);
-            for (auto& [k, v] : forYieldMap) {
-                accumulatedYieldMap[k] = v;
-            }
-        }
-    }
-    if (originalBranch) {
-        for (auto& s : RemoveLastYieldStmt(originalBranch.value()->stmts_)) {
-            stmts.push_back(SubstituteReturnVarUses(s, accumulatedYieldMap));
-        }
-    }
-    std::vector<ExprPtr> yieldValues;
-    for (auto& var : newOutputVars) {
-        yieldValues.push_back(var);
-    }
-    for (auto& v : originalYieldValues) {
-        yieldValues.push_back(v);
-    }
-    stmts.push_back(std::make_shared<YieldStmt>(yieldValues, span));
-    return std::make_shared<SeqStmts>(stmts, span);
-}
-
-IfStmtResult PrependIntoIfStmt(IfStmtPtr ifStmt, const std::vector<StmtPtr>& stmts,
-                               const std::vector<std::string>& externalVarNames)
-{
-    auto newOutputVars = CollectOutputVars(stmts);
-    auto existingVars = std::unordered_set<VarPtr>(ifStmt->returnVars_.begin(), ifStmt->returnVars_.end());
-    std::vector<VarPtr> nonExistingVars;
-    for (auto& var : newOutputVars) {
-        if (!existingVars.count(var)) {
-            nonExistingVars.push_back(var);
-        }
-    }
-    auto [prependVars, prependCloneMap] = ComputeCloneableReturnVars(nonExistingVars, externalVarNames);
-
-    auto thenValues = ExtractYieldValues(ifStmt->thenBody_);
-    auto elseValues = ExtractYieldValues(ifStmt->elseBody_ ? ifStmt->elseBody_.value() : nullptr);
-    auto newThenBody = BuildPrependedBranchBody(stmts, ifStmt->thenBody_, newOutputVars, thenValues, ifStmt->span_);
-    auto newElseBody = std::make_optional(
-        BuildPrependedBranchBody(stmts, ifStmt->elseBody_, newOutputVars, elseValues, ifStmt->span_));
-
-    std::vector<VarPtr> newReturnVars;
-    for (auto& v : prependVars) {
-        newReturnVars.push_back(v);
-    }
-    for (auto& v : ifStmt->returnVars_) {
-        newReturnVars.push_back(v);
-    }
-
-    auto resultIfStmt = std::make_shared<IfStmt>(ifStmt->condition_, newThenBody, newElseBody, newReturnVars,
-                                                 ifStmt->span_);
-    return IfStmtResult{resultIfStmt, prependCloneMap};
-}
-
-MergeSegmentResult MergeSegment(const std::vector<StmtPtr>& segment, const std::vector<std::string>& externalVarNames)
-{
-    std::vector<StmtPtr> collectedStmts;
-    VarExprMap accumulatedCloneMap;
-
-    for (size_t i = segment.size(); i > 0; --i) {
-        auto& stmt = segment[i - 1];
-        if (auto ifStmt = As<IfStmt>(stmt)) {
-            std::reverse(collectedStmts.begin(), collectedStmts.end());
-            auto appendResult = AppendIntoIfStmt(ifStmt, collectedStmts, externalVarNames);
-            for (auto& [k, v] : appendResult.outputCloneMap) {
-                accumulatedCloneMap[k] = v;
-            }
-            collectedStmts.clear();
-            collectedStmts.push_back(appendResult.ifStmt);
-        } else {
-            collectedStmts.push_back(stmt);
-        }
-    }
-
-    std::reverse(collectedStmts.begin(), collectedStmts.end());
-
-    if (!collectedStmts.empty() && IsA<IfStmt>(collectedStmts.back())) {
-        auto ifStmt = As<IfStmt>(collectedStmts.back());
-        std::vector<StmtPtr> beforeStmts(collectedStmts.begin(), collectedStmts.end() - 1);
-        std::vector<StmtPtr> nonForStmts;
-        std::vector<StmtPtr> resultStmts;
-        for (auto& s : beforeStmts) {
-            if (IsA<ForStmt>(s)) {
-                resultStmts.insert(resultStmts.end(), nonForStmts.begin(), nonForStmts.end());
-                resultStmts.push_back(s);
-                nonForStmts.clear();
-            } else {
-                nonForStmts.push_back(s);
-            }
-        }
-        if (!nonForStmts.empty()) {
-            auto prependResult = PrependIntoIfStmt(ifStmt, nonForStmts, externalVarNames);
-            for (auto& [k, v] : prependResult.outputCloneMap) {
-                accumulatedCloneMap[k] = v;
-            }
-            resultStmts.push_back(prependResult.ifStmt);
-        } else {
-            resultStmts.push_back(ifStmt);
-        }
-        return MergeSegmentResult{resultStmts, accumulatedCloneMap};
-    }
-
-    return MergeSegmentResult{collectedStmts, accumulatedCloneMap};
-}
-
-bool IsEmptyBody(const SeqStmtsPtr& body)
-{
-    if (!body || body->stmts_.empty())
-        return true;
-    if (body->stmts_.size() == 1 && IsA<YieldStmt>(body->stmts_[0]))
-        return true;
-    return false;
-}
-
-void MergeIfStmts(IfStmtPtr ifStmt, std::vector<StmtPtr>& result, VarExprMap& subst,
-                  const std::vector<std::string>& exVarNames, const std::vector<SymbolicScalar>& condPath)
+// Classify each branch as dead under the accumulated condition path: an empty body, or a branch
+// whose conditions (path + cond / !cond) are SAT-unsatisfiable.
+BranchClassification ClassifyIfBranches(IfStmtPtr ifStmt, const std::vector<SymbolicScalar>& condPath)
 {
     auto cond = SymbolicScalar::FromExpr(ifStmt->condition_);
 
@@ -509,151 +203,312 @@ void MergeIfStmts(IfStmtPtr ifStmt, std::vector<StmtPtr>& result, VarExprMap& su
         elseConds.push_back(!cond);
     }
 
-    auto spliceSurvivor = [&](auto body, auto conds) {
-        auto survivor = MergeStmtsIntoIfStmtImpl(body, exVarNames, conds);
-        if (survivor) {
-            auto yieldMap = BuildYieldVarMap(ifStmt, survivor);
-            for (auto& s : RemoveLastYieldStmt(survivor->stmts_)) {
-                result.push_back(s);
-            }
-            for (auto& [k, v] : yieldMap) {
-                subst[k] = v;
-            }
+    bool thenDead = SymbolicScalar::Check(thenConds) == SatStatus::kUnsat;
+    bool elseDead = SymbolicScalar::Check(elseConds) == SatStatus::kUnsat;
+    return BranchClassification{thenDead, elseDead, std::move(thenConds), std::move(elseConds)};
+}
+
+StmtPtr RewriteTerminatorValues(StmtPtr stmt, const VarExprMap& varMap)
+{
+    std::vector<ExprPtr> newValues;
+    auto remapped = [&](const std::vector<ExprPtr>& values) {
+        newValues.clear();
+        for (auto& v : values) {
+            newValues.push_back(LookupVarInExpr(v, varMap));
         }
     };
-
-    bool thenDead = IsEmptyBody(ifStmt->thenBody_);
-    if (thenDead || SymbolicScalar::Check(thenConds) == SatStatus::kUnsat) {
-        // then dead
-        if (ifStmt->elseBody_) {
-            spliceSurvivor(ifStmt->elseBody_.value(), elseConds);
-        }
-        return;
+    if (auto yieldStmt = As<YieldStmt>(stmt)) {
+        remapped(yieldStmt->value_);
+        return std::make_shared<YieldStmt>(newValues, yieldStmt->span_);
     }
-
-    bool elseDead = !ifStmt->elseBody_ || IsEmptyBody(*ifStmt->elseBody_);
-    if (elseDead || SymbolicScalar::Check(elseConds) == SatStatus::kUnsat) {
-        // else dead
-        spliceSurvivor(ifStmt->thenBody_, thenConds);
-        return;
+    if (auto contStmt = As<ContinueStmt>(stmt)) {
+        remapped(contStmt->value_);
+        return std::make_shared<ContinueStmt>(newValues, contStmt->span_);
     }
-
-    // Neither proven dead: merge both branches, resolve conflicts, rebuild.
-    auto thenBody = MergeStmtsIntoIfStmtImpl(ifStmt->thenBody_, exVarNames, thenConds);
-    std::optional<SeqStmtsPtr> elseBody;
-    if (ifStmt->elseBody_) {
-        elseBody = MergeStmtsIntoIfStmtImpl(ifStmt->elseBody_.value(), exVarNames, elseConds);
+    if (auto breakStmt = As<BreakStmt>(stmt)) {
+        remapped(breakStmt->value_);
+        return std::make_shared<BreakStmt>(newValues, breakStmt->span_);
     }
-    auto [resolvedThen, resolvedElse] = ResolveBranchConflicts(thenBody, elseBody, exVarNames);
-    result.push_back(
-        std::make_shared<IfStmt>(ifStmt->condition_, resolvedThen, resolvedElse, ifStmt->returnVars_, ifStmt->span_));
-
-    // Map branch-internal yield values to IfStmt returnVars so subsequent statements
-    // reference the IfStmt's output interface rather than branch-internal variables.
-    auto thenYieldMap = BuildYieldVarMap(ifStmt, resolvedThen);
-    for (auto& [returnVar, yieldValue] : thenYieldMap) {
-        if (auto yieldVar = std::dynamic_pointer_cast<const Var>(yieldValue)) {
-            subst[yieldVar] = returnVar;
-        }
-    }
+    return stmt;
 }
 
-std::vector<StmtPtr> RebuildMergedStmtsRecursively(const std::vector<StmtPtr>& merged,
-                                                   const std::vector<std::string>& exVarNames,
-                                                   const std::vector<SymbolicScalar>& condPath)
-{
-    std::vector<StmtPtr> result;
-    VarExprMap subst;
-    for (auto& stmt : merged) {
-        auto cur = SubstituteVars(stmt, subst); // no-op when subst is empty
-        if (auto ifStmt = AsMut<IfStmt>(cur)) {
-            MergeIfStmts(ifStmt, result, subst, exVarNames, condPath);
-        } else if (auto forStmt = As<ForStmt>(cur)) {
-            auto conds = condPath;
-            if (forStmt->HasAttr("_loop_conds")) {
-                auto loopConds = forStmt->GetAttr<std::vector<SymbolicScalar>>("_loop_conds");
+class MergeStmtImpl {
+public:
+    explicit MergeStmtImpl(const std::vector<std::string>& extVarNames) : extVarNames_(extVarNames) {}
+
+    SeqStmtsPtr Process(SeqStmtsPtr seq) const
+    {
+        std::vector<SymbolicScalar> condPath;
+        return Process(seq, condPath);
+    }
+
+private:
+    bool IsExternalVar(const std::string& name) const
+    {
+        return std::find(extVarNames_.begin(), extVarNames_.end(), name) != extVarNames_.end();
+    }
+
+    std::pair<std::vector<VarPtr>, VarExprMap> CloneOrKeepReturnVars(const std::vector<VarPtr>& vars) const
+    {
+        std::vector<VarPtr> result;
+        VarExprMap cloneMap;
+        for (auto& var : vars) {
+            if (IsExternalVar(var->name_)) {
+                result.push_back(var);
+            } else {
+                auto cloned = var->Clone();
+                cloneMap[var] = cloned;
+                result.push_back(cloned);
+            }
+        }
+        return {result, cloneMap};
+    }
+
+    std::vector<StmtPtr> MergeIfStmts(IfStmtPtr ifStmt, const std::vector<SymbolicScalar>& condPath,
+                                      VarExprMap& subst) const
+    {
+        auto cls = ClassifyIfBranches(ifStmt, condPath);
+        if (cls.thenDead) {
+            if (ifStmt->elseBody_) {
+                return SpliceSurvivor(ifStmt, ifStmt->elseBody_.value(), cls.elseConds, subst);
+            }
+            return {};
+        }
+        if (cls.elseDead) {
+            return SpliceSurvivor(ifStmt, ifStmt->thenBody_, cls.thenConds, subst);
+        }
+
+        // Neither proven dead: merge both branches, clone shared defs in else, rebuild.
+        auto thenBody = Process(ifStmt->thenBody_, cls.thenConds);
+        auto elseBody = Process(ifStmt->elseBody_.value(), cls.elseConds);
+        auto newElseBody = ResolveDuplicateVars(thenBody, elseBody);
+        return {
+            std::make_shared<IfStmt>(ifStmt->condition_, thenBody, newElseBody, ifStmt->returnVars_, ifStmt->span_)};
+    }
+
+    std::optional<SeqStmtsPtr> ResolveDuplicateVars(SeqStmtsPtr thenBody, std::optional<SeqStmtsPtr> optElse) const
+    {
+        auto& elseBody = *optElse;
+        auto thenDefs = utils::CollectDefinedVars(thenBody);
+        auto elseDefs = utils::CollectDefinedVars(elseBody);
+
+        VarExprMap cloneMap;
+        for (auto& v : thenDefs) {
+            if (elseDefs.count(v) && !IsExternalVar(v->name_)) {
+                if (auto lt = std::dynamic_pointer_cast<const LogicalTensor>(v)) {
+                    cloneMap[v] = lt->Clone(true); // shared raw tensor, distinct LogicalTensor identity
+                } else {
+                    cloneMap[v] = v->Clone();
+                }
+            }
+        }
+
+        std::vector<StmtPtr> newElseStmts;
+        for (auto& s : elseBody->stmts_) {
+            newElseStmts.push_back(SubstituteVars(s, cloneMap));
+        }
+        return std::make_shared<SeqStmts>(newElseStmts, elseBody->span_);
+    }
+
+    std::vector<StmtPtr> SpliceSurvivor(IfStmtPtr ifStmt, SeqStmtsPtr body, const std::vector<SymbolicScalar>& conds,
+                                        VarExprMap& yieldMap) const
+    {
+        auto survivor = Process(body, conds);
+        if (!survivor) {
+            return {};
+        }
+        BuildYieldVarMap(ifStmt, survivor, yieldMap);
+        return RemoveLastYieldStmt(survivor->stmts_);
+    }
+
+    // Sink `stmts` (which followed `ifStmt` in source order) into the tail of both branches; their
+    // outputs become new if return vars (cloned for non-external vars, recorded in `cloneMap`).
+    IfStmtPtr AppendIntoIfStmt(IfStmtPtr ifStmt, const std::vector<StmtPtr>& stmts, VarExprMap& cloneMap) const
+    {
+        auto newVars = CollectOutputVars(stmts);
+        auto [addVars, newClones] = CloneOrKeepReturnVars(newVars);
+        for (auto& [k, v] : newClones) {
+            cloneMap[k] = v;
+        }
+
+        auto newThen = BuildAppendedBranch(ifStmt, ifStmt->thenBody_, stmts, newVars, ifStmt->span_);
+        auto newElse = BuildAppendedBranch(ifStmt, ifStmt->elseBody_.value_or(nullptr), stmts, newVars, ifStmt->span_);
+
+        auto retVars = ifStmt->returnVars_;
+        retVars.insert(retVars.end(), addVars.begin(), addVars.end());
+        return std::make_shared<IfStmt>(ifStmt->condition_, newThen, newElse, retVars, ifStmt->span_);
+    }
+
+    // Hoist `stmts` (which preceded `ifStmt`) into the head of both branches, ahead of each branch's
+    // own body. New outputs become prepended return vars (clones recorded in `cloneMap`).
+    IfStmtPtr PrependIntoIfStmt(IfStmtPtr ifStmt, const std::vector<StmtPtr>& stmts, VarExprMap& cloneMap) const
+    {
+        auto newVars = CollectOutputVars(stmts);
+        auto existing = std::unordered_set<VarPtr>(ifStmt->returnVars_.begin(), ifStmt->returnVars_.end());
+        std::vector<VarPtr> toAdd;
+        for (auto& var : newVars) {
+            if (!existing.count(var)) {
+                toAdd.push_back(var);
+            }
+        }
+        auto [prependVars, newClones] = CloneOrKeepReturnVars(toAdd);
+        for (auto& [k, v] : newClones) {
+            cloneMap[k] = v;
+        }
+
+        auto newThen = BuildPrependedBranch(stmts, ifStmt->thenBody_, newVars, ifStmt->span_);
+        auto newElse = BuildPrependedBranch(stmts, ifStmt->elseBody_, newVars, ifStmt->span_);
+
+        auto retVars = prependVars;
+        retVars.insert(retVars.end(), ifStmt->returnVars_.begin(), ifStmt->returnVars_.end());
+        return std::make_shared<IfStmt>(ifStmt->condition_, newThen, newElse, retVars, ifStmt->span_);
+    }
+
+    std::vector<StmtPtr> FoldLeadingStmts(std::vector<StmtPtr> stmts, VarExprMap& cloneMap) const
+    {
+        if (stmts.empty() || !IsA<IfStmt>(stmts.back())) {
+            return stmts;
+        }
+        auto ifStmt = As<IfStmt>(stmts.back());
+        size_t ifIdx = stmts.size() - 1;
+
+        // A ForStmt is a barrier: only the trailing run of non-For stmts immediately before the if
+        // is hoisted into it. Find where that run starts (just past the last For in the prefix);
+        // everything before it stays. Collapse the run + old if in place into the rebuilt if.
+        size_t hoist = ifIdx;
+        while (hoist > 0 && !IsA<ForStmt>(stmts[hoist - 1])) {
+            --hoist;
+        }
+        if (hoist < ifIdx) {
+            std::vector<StmtPtr> toHoist(stmts.begin() + hoist, stmts.begin() + ifIdx);
+            auto newIf = PrependIntoIfStmt(ifStmt, std::move(toHoist), cloneMap);
+            stmts.resize(hoist);
+            stmts.push_back(std::move(newIf));
+        }
+        return stmts;
+    }
+
+    // Right-to-left fold over one barrier-free segment. A live IfStmt absorbs the stmts to its right
+    // into both branches (AppendIntoIfStmt); a SAT-proven-dead branch is spliced out (SpliceSurvivor).
+    // Results fold into the running `merged`/`cloneMap`/`subst` accumulators.
+    void MergeSegment(const std::vector<StmtPtr>& segment, const std::vector<SymbolicScalar>& condPath,
+                      std::vector<StmtPtr>& merged, VarExprMap& cloneMap, VarExprMap& subst) const
+    {
+        std::vector<StmtPtr> collected;
+
+        // reverse source order, avoid O(n^2) front-insertion.
+        auto prepend = [&](const std::vector<StmtPtr>& ops) {
+            for (auto rit = ops.rbegin(); rit != ops.rend(); ++rit) {
+                collected.push_back(*rit);
+            }
+        };
+
+        for (size_t i = segment.size(); i > 0; --i) {
+            auto& stmt = segment[i - 1];
+            if (auto ifStmt = As<IfStmt>(stmt)) {
+                auto cls = ClassifyIfBranches(ifStmt, condPath);
+                if (cls.thenDead) {
+                    if (ifStmt->elseBody_) {
+                        auto ops = SpliceSurvivor(ifStmt, *ifStmt->elseBody_, cls.elseConds, subst);
+                        prepend(ops);
+                    }
+                    continue;
+                }
+                if (cls.elseDead) {
+                    auto ops = SpliceSurvivor(ifStmt, ifStmt->thenBody_, cls.thenConds, subst);
+                    prepend(ops);
+                    continue;
+                }
+                std::reverse(collected.begin(), collected.end());
+                auto newIf = AppendIntoIfStmt(ifStmt, collected, cloneMap);
+                collected.clear();
+                collected.push_back(newIf);
+            } else {
+                collected.push_back(stmt); // O(1) prepend under reverse storage
+            }
+        }
+
+        std::reverse(collected.begin(), collected.end());
+        auto stmts = FoldLeadingStmts(std::move(collected), cloneMap);
+        merged.insert(merged.end(), stmts.begin(), stmts.end());
+    }
+
+    // Second pass over a merged list: descend into the compound stmts that segment-merge treated as
+    // barriers. For/While bodies are re-Processed under strengthened conditions; each IfStmt is
+    // finalized via MergeIfStmts, which may add splice substitutions to `subst` for later stmts.
+    std::vector<StmtPtr> RebuildMergedStmts(const std::vector<StmtPtr>& merged,
+                                            const std::vector<SymbolicScalar>& condPath) const
+    {
+        std::vector<StmtPtr> result;
+        VarExprMap subst;
+        for (auto& stmt : merged) {
+            auto cur = SubstituteVars(stmt, subst); // no-op when subst is empty
+            if (auto ifStmt = AsMut<IfStmt>(cur)) {
+                auto stmts = MergeIfStmts(ifStmt, condPath, subst);
+                result.insert(result.end(), stmts.begin(), stmts.end());
+            } else if (auto forStmt = As<ForStmt>(cur)) {
+                auto conds = condPath;
+                auto loopConds = forStmt->GetAttr<std::vector<SymbolicScalar>>(kLoopCondsAttr);
                 conds.insert(conds.end(), loopConds.begin(), loopConds.end());
+                auto body = Process(forStmt->body_, conds);
+                result.push_back(std::make_shared<ForStmt>(forStmt->loopVar_, forStmt->start_, forStmt->stop_,
+                                                           forStmt->step_, forStmt->iterArgs_, body,
+                                                           forStmt->returnVars_, forStmt->span_, forStmt->attrs_));
+            } else if (auto whileStmt = As<WhileStmt>(cur)) {
+                auto body = Process(whileStmt->body_, condPath);
+                result.push_back(std::make_shared<WhileStmt>(whileStmt->condition_, whileStmt->iterArgs_, body,
+                                                             whileStmt->returnVars_, whileStmt->span_));
+            } else {
+                result.push_back(cur);
             }
-            auto body = MergeStmtsIntoIfStmtImpl(forStmt->body_, exVarNames, conds);
-            result.push_back(std::make_shared<ForStmt>(forStmt->loopVar_, forStmt->start_, forStmt->stop_,
-                                                       forStmt->step_, forStmt->iterArgs_, body, forStmt->returnVars_,
-                                                       forStmt->span_, forStmt->attrs_));
-        } else if (auto whileStmt = As<WhileStmt>(cur)) {
-            auto body = MergeStmtsIntoIfStmtImpl(whileStmt->body_, exVarNames, condPath);
-            result.push_back(std::make_shared<WhileStmt>(whileStmt->condition_, whileStmt->iterArgs_, body,
-                                                         whileStmt->returnVars_, whileStmt->span_));
-        } else {
-            result.push_back(cur);
         }
+        return result;
     }
-    return result;
-}
 
-SeqStmtsPtr MergeStmtsIntoIfStmtImpl(SeqStmtsPtr seq, const std::vector<std::string>& externalVarNames,
-                                     const std::vector<SymbolicScalar>& condPath)
-{
-    if (!seq) {
-        return nullptr;
-    }
-    std::vector<StmtPtr> currentSegment;
-    std::vector<StmtPtr> merged;
-    VarExprMap accumulatedCloneMap;
+    // Driver: split `seq` into barrier-free segments at Yield/Continue/For/While, segment-merge each,
+    // rewrite the trailing terminator's cloned refs and apply survivor substitutions, then rebuild
+    // compound stmts recursively (RebuildMergedStmts). For/While are barriers; their bodies merge
+    // when RebuildMergedStmts recurses into them.
+    SeqStmtsPtr Process(SeqStmtsPtr seq, const std::vector<SymbolicScalar>& condPath) const
+    {
+        std::vector<StmtPtr> segment;
+        std::vector<StmtPtr> merged;
+        VarExprMap cloneMap;
+        VarExprMap substMap;
 
-    for (auto& stmt : seq->stmts_) {
-        // For/While are barriers: they terminate the current segment so a loop is never pushed into an
-        // if. Its body is still transformed when RebuildMergedStmtsRecursively recurses into it below.
-        if (IsA<YieldStmt>(stmt) || IsA<ContinueStmt>(stmt) || IsA<ForStmt>(stmt) || IsA<WhileStmt>(stmt)) {
-            auto segResult = MergeSegment(currentSegment, externalVarNames);
-            for (auto& s : segResult.stmts) {
-                merged.push_back(s);
+        for (auto& stmt : seq->stmts_) {
+            // yield/continue are block terminators. while/for is dynamic loop could not be merged also
+            if (IsA<YieldStmt>(stmt) || IsA<ContinueStmt>(stmt) || IsA<ForStmt>(stmt) || IsA<WhileStmt>(stmt)) {
+                MergeSegment(segment, condPath, merged, cloneMap, substMap);
+                merged.push_back(stmt);
+                segment.clear();
+            } else {
+                segment.push_back(stmt);
             }
-            for (auto& [k, v] : segResult.outputCloneMap) {
-                accumulatedCloneMap[k] = v;
-            }
-            merged.push_back(stmt);
-            currentSegment.clear();
-        } else {
-            currentSegment.push_back(stmt);
         }
-    }
 
-    auto segResult = MergeSegment(currentSegment, externalVarNames);
-    for (auto& s : segResult.stmts) {
-        merged.push_back(s);
-    }
-    for (auto& [k, v] : segResult.outputCloneMap) {
-        accumulatedCloneMap[k] = v;
-    }
+        MergeSegment(segment, condPath, merged, cloneMap, substMap);
 
-    if (!accumulatedCloneMap.empty() && !merged.empty()) {
-        auto& last = merged.back();
-        if (IsA<YieldStmt>(last)) {
-            auto yieldStmt = As<YieldStmt>(last);
-            std::vector<ExprPtr> newValues;
-            for (auto& v : yieldStmt->value_) {
-                newValues.push_back(LookupVarInExpr(v, accumulatedCloneMap));
-            }
-            merged.back() = std::make_shared<YieldStmt>(newValues, yieldStmt->span_);
-        } else if (IsA<ContinueStmt>(last)) {
-            auto contStmt = As<ContinueStmt>(last);
-            std::vector<ExprPtr> newValues;
-            for (auto& v : contStmt->value_) {
-                newValues.push_back(LookupVarInExpr(v, accumulatedCloneMap));
-            }
-            merged.back() = std::make_shared<ContinueStmt>(newValues, contStmt->span_);
+        if (!cloneMap.empty() && !merged.empty()) {
+            merged.back() = RewriteTerminatorValues(merged.back(), cloneMap);
         }
+
+        if (!substMap.empty()) {
+            for (auto& s : merged) {
+                s = SubstituteVars(s, substMap);
+            }
+        }
+        auto finalResult = RebuildMergedStmts(merged, condPath);
+        return std::make_shared<SeqStmts>(finalResult, seq->span_);
     }
 
-    auto finalResult = RebuildMergedStmtsRecursively(merged, externalVarNames, condPath);
-    return std::make_shared<SeqStmts>(finalResult, seq->span_);
-}
-
+    const std::vector<std::string>& extVarNames_;
+};
 } // namespace
 
-SeqStmtsPtr MergeStmtsIntoIfStmt(SeqStmtsPtr seq, const std::vector<std::string>& externalVarNames)
+SeqStmtsPtr MergeStmtsIntoIfStmt(SeqStmtsPtr seq, const std::vector<std::string>& extVarNames)
 {
-    std::vector<SymbolicScalar> condPath;
-    return MergeStmtsIntoIfStmtImpl(seq, externalVarNames, condPath);
+    return MergeStmtImpl(extVarNames).Process(seq);
 }
 
 } // namespace pypto::ir

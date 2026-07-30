@@ -237,14 +237,14 @@ Pass MergeStmtsIntoIf()
         [](const FunctionPtr& func) -> FunctionPtr {
             if (!func || !func->body_)
                 return func;
-            std::vector<std::string> externalVarNames;
+            std::vector<std::string> extVarNames;
             for (const auto& param : func->params_) {
                 if (param) {
-                    externalVarNames.push_back(param->name_);
+                    extVarNames.push_back(param->name_);
                 }
             }
             auto seq = SeqStmts::AsMut(func->body_);
-            auto mergedBody = MergeStmtsIntoIfStmt(seq, externalVarNames);
+            auto mergedBody = MergeStmtsIntoIfStmt(seq, extVarNames);
             if (mergedBody == func->body_)
                 return func;
             return std::make_shared<const Function>(func->name_, func->params_, func->returnTypes_, mergedBody,
