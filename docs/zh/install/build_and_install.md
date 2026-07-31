@@ -47,7 +47,6 @@ python3 build_ci.py --clean --no_isolation
 | `--just_build_whl` | 只构建whl包，不打包进入run安装包。 |
 | `--py_abi` | 指定whl包的Python ABI tag数字部分，例如`37`对应`cp37`（`--just_build_whl`时有效）。 |
 | `--plat_name` | 指定whl包的平台标签，例如`manylinux2014`（`--just_build_whl`时有效）。 |
-| `--enable_build_with_cann_mobile` | 用于构建PyPTO时传递BUILD_WITH_CANN_MOBILE参数(kirin专用)。 |
 
 ### 安装
 

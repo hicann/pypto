@@ -49,11 +49,7 @@ enum class RuntimeFunc {
     GetExceptionRegInfo,
     Bottom
 };
-#if defined(BUILD_WITH_CANN_MOBILE)
-const std::string kRuntimeLibName = "libruntime_camodel.so";
-#else
 const std::string kRuntimeLibName = "libruntime.so";
-#endif
 const std::map<RuntimeFunc, std::string> kRuntimeFuncStrMap{
     {RuntimeFunc::Malloc, "rtMalloc"},
     {RuntimeFunc::rtMemset, "rtMemset"},

@@ -22,7 +22,6 @@ target_include_directories(tile_fwk_adapter
 target_compile_definitions(tile_fwk_adapter
         PUBLIC
             $<BUILD_INTERFACE:$<$<AND:$<BOOL:${BUILD_WITH_CANN}>,$<NOT:$<BOOL:${ENABLE_UTEST}>>>:BUILD_WITH_CANN>>
-            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN_MOBILE}>:BUILD_WITH_CANN_MOBILE>>
 )
 target_link_libraries(tile_fwk_adapter
         PRIVATE

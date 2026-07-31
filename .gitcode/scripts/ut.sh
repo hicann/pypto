@@ -86,11 +86,11 @@ case "${GE_ST_RT2}" in
         check_ret "PyPTO(cpp) UTest failed"
         ;;
     kirinx90)
-        python3 build_ci.py --utest=python/tests/ut/kirin/kirinx90 --enable_build_with_cann_mobile --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16
+        python3 build_ci.py --utest=python/tests/ut/kirin/kirinx90 --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16
         check_ret "kirinx90 UTest failed"
         ;;
     kirin9030)
-        python3 build_ci.py --utest=python/tests/ut/kirin/kirin9030 --enable_build_with_cann_mobile --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16
+        python3 build_ci.py --utest=python/tests/ut/kirin/kirin9030 --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16
         check_ret "kirin9030 UTest failed"
         ;;
     *)

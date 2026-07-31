@@ -15,7 +15,7 @@
 
 #include "adapter/api/hcomm_api.h"
 
-#if defined(BUILD_WITH_CANN) && !defined(BUILD_WITH_CANN_MOBILE)
+#if defined(BUILD_WITH_CANN)
 #include "adapter/manager/adapter_manager.h"
 #include "hccl/hccl_types.h"
 #include "hccl/hccl_rank_graph.h"
@@ -25,7 +25,7 @@
 namespace npu::tile_fwk {
 HcommResult HcommGetCommName(HcommHandle comm, char* commName)
 {
-#if defined(BUILD_WITH_CANN) && !defined(BUILD_WITH_CANN_MOBILE)
+#if defined(BUILD_WITH_CANN)
     void* func = AdapterManager::Instance().GetHcclAdapter().GetFunction(HcclFunc::GetCommName);
     if (func != nullptr) {
         HcclResult (*hcommFunc)(HcclComm, char*) = reinterpret_cast<HcclResult (*)(HcclComm, char*)>(func);
@@ -37,7 +37,7 @@ HcommResult HcommGetCommName(HcommHandle comm, char* commName)
 
 HcommResult HcommGetL0TopoTypeEx(const char* group, HCommTopo* topoType, uint32_t flag)
 {
-#if defined(BUILD_WITH_CANN) && !defined(BUILD_WITH_CANN_MOBILE)
+#if defined(BUILD_WITH_CANN)
     void* func = AdapterManager::Instance().GetHcclAdapter().GetFunction(HcclFunc::GetL0TopoTypeEx);
     if (func != nullptr) {
         HcclResult (*hcommFunc)(const char*, CommTopo*,
@@ -50,7 +50,7 @@ HcommResult HcommGetL0TopoTypeEx(const char* group, HCommTopo* topoType, uint32_
 
 HcommResult HcommGetCommHandleByGroup(const char* group, HcommHandle* commHandle)
 {
-#if defined(BUILD_WITH_CANN) && !defined(BUILD_WITH_CANN_MOBILE)
+#if defined(BUILD_WITH_CANN)
     void* func = AdapterManager::Instance().GetHcclAdapter().GetFunction(HcclFunc::GetCommHandleByGroup);
     if (func != nullptr) {
         HcclResult (*hcommFunc)(const char*,
@@ -63,7 +63,7 @@ HcommResult HcommGetCommHandleByGroup(const char* group, HcommHandle* commHandle
 
 HcommResult HcommGetRootInfo(HcommRootInfo* rootInfo)
 {
-#if defined(BUILD_WITH_CANN) && !defined(BUILD_WITH_CANN_MOBILE)
+#if defined(BUILD_WITH_CANN)
     void* func = AdapterManager::Instance().GetHcclAdapter().GetFunction(HcclFunc::GetRootInfo);
     if (func != nullptr) {
         HcclResult (*hcommFunc)(HcclRootInfo*) = reinterpret_cast<HcclResult (*)(HcclRootInfo*)>(func);
@@ -75,7 +75,7 @@ HcommResult HcommGetRootInfo(HcommRootInfo* rootInfo)
 
 HcommResult HcommCommInitRootInfo(uint32_t nRanks, const HcommRootInfo* rootInfo, uint32_t rank, HcommHandle* comm)
 {
-#if defined(BUILD_WITH_CANN) && !defined(BUILD_WITH_CANN_MOBILE)
+#if defined(BUILD_WITH_CANN)
     void* func = AdapterManager::Instance().GetHcclAdapter().GetFunction(HcclFunc::CommInitRootInfo);
     if (func != nullptr) {
         HcclResult (*hcommFunc)(
@@ -89,7 +89,7 @@ HcommResult HcommCommInitRootInfo(uint32_t nRanks, const HcommRootInfo* rootInfo
 
 HcommResult HcommCommDestroy(HcommHandle comm)
 {
-#if defined(BUILD_WITH_CANN) && !defined(BUILD_WITH_CANN_MOBILE)
+#if defined(BUILD_WITH_CANN)
     void* func = AdapterManager::Instance().GetHcclAdapter().GetFunction(HcclFunc::CommDestroy);
     if (func != nullptr) {
         HcclResult (*hcommFunc)(HcclComm) = reinterpret_cast<HcclResult (*)(HcclComm)>(func);
@@ -101,7 +101,7 @@ HcommResult HcommCommDestroy(HcommHandle comm)
 
 HcommResult HcommAllocComResourceByTiling(HcommHandle comm, void* stream, void* Mc2Tiling, void** commContext)
 {
-#if defined(BUILD_WITH_CANN) && !defined(BUILD_WITH_CANN_MOBILE)
+#if defined(BUILD_WITH_CANN)
     void* func = AdapterManager::Instance().GetHcclAdapter().GetFunction(HcclFunc::AllocComResourceByTiling);
     if (func != nullptr) {
         HcclResult (*hcommFunc)(HcclComm, void*, void*,
@@ -111,7 +111,7 @@ HcommResult HcommAllocComResourceByTiling(HcommHandle comm, void* stream, void* 
 #endif
     return StubAllocComResourceByTiling(comm, stream, Mc2Tiling, commContext);
 }
-#if defined(BUILD_WITH_CANN) && !defined(BUILD_WITH_CANN_MOBILE)
+#if defined(BUILD_WITH_CANN)
 static_assert(static_cast<int32_t>(HCOMM_SUCCESS) == static_cast<int32_t>(HCCL_SUCCESS));
 static_assert(sizeof(HcommResult) == sizeof(HcclResult));
 static_assert(sizeof(HCommTopo) == sizeof(CommTopo));

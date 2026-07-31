@@ -557,9 +557,15 @@ private:
     void InitConfigOptions(py::object& module)
     {
         if (!module.attr("_runtime_options").is_none()) {
-            auto rutimeOptions = module.attr("_runtime_options").cast<py::dict>();
-            if (rutimeOptions.contains("launch_early_mode")) {
-                launchEarlyMode_ = rutimeOptions["launch_early_mode"].cast<int>();
+            auto runtimeOptions = module.attr("_runtime_options").cast<py::dict>();
+            auto run_mode = runtimeOptions.contains("run_mode") ? runtimeOptions["run_mode"].cast<int>() :
+                                                                  CFG_RUN_MODE_SIM;
+            if (run_mode == CFG_RUN_MODE_SIM) { // sim mode do not need early launch
+                launchEarlyMode_ = 0;
+            } else {
+                if (runtimeOptions.contains("launch_early_mode")) {
+                    launchEarlyMode_ = runtimeOptions["launch_early_mode"].cast<int>();
+                }
             }
         }
 
