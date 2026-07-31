@@ -48,7 +48,8 @@ private:
     static int GetOpGroupValue(Operation* op);
     static int GetTransDataGroupValue(const std::shared_ptr<LogicalTensor>& srcTensor,
                                       const std::shared_ptr<LogicalTensor>& fakeDstTensor, Operation* relatedOp);
-    static void ApplyTransDataVecTile(const std::shared_ptr<LogicalTensor>& srcTensor, TileOpFormat targetFormat);
+    static void ApplyTransDataVecTile(const std::shared_ptr<LogicalTensor>& srcTensor, TileOpFormat targetFormat,
+                                      Operation* relatedOp);
 
     // ---- 图操作 ----
     static bool IsFunctionOutcast(const Function& function, const std::shared_ptr<LogicalTensor>& tensor);

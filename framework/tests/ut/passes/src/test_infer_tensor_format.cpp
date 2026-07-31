@@ -120,7 +120,6 @@ TEST_F(InferTensorFormatTest, Conv2DWithTransDataInsertion)
     ComputationalGraphBuilder G;
     std::vector<int64_t> shape4d{2, 32, 14, 14};
     std::vector<int64_t> shape5d{2, 2, 14, 14, 16};
-    TileShape::Current().SetVecTile({16, 16, 2, 16});
     ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d,
                              {"incast0", "incast1", "incast2", "incast3", "incast4", "v0_out", "a0_out", "v1_out",
                               "a1_out", "v2_out", "a2_out", "conv_nd", "sub_out", "asm_out", "outcast"}));
@@ -144,6 +143,8 @@ TEST_F(InferTensorFormatTest, Conv2DWithTransDataInsertion)
     UpdateDynValidShapes(G, {"incast0", "incast1", "incast2", "incast3", "incast4", "v0_out", "a0_out", "v1_out",
                              "a1_out", "v2_out", "a2_out", "conv_out", "conv_nd"});
 
+    G.GetOp("conv")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
+    G.GetOp("conv_to_nd")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
     Function* func = G.GetFunction();
     ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
 
@@ -182,7 +183,6 @@ TEST_F(InferTensorFormatTest, SharedInputsConv2DAndMatmul)
     ComputationalGraphBuilder G;
     std::vector<int64_t> shape4d{2, 32, 14, 14};
     std::vector<int64_t> shape5d{2, 2, 14, 14, 16};
-    TileShape::Current().SetVecTile({16, 16, 2, 16});
     ASSERT_TRUE(
         G.AddTensors(DataType::DT_FP16, shape4d,
                      {"incast0", "incast1", "incast2", "t0", "t1", "t2", "conv_nd", "mm_out", "asm_out", "outcast"}));
@@ -202,6 +202,8 @@ TEST_F(InferTensorFormatTest, SharedInputsConv2DAndMatmul)
 
     UpdateDynValidShapes(G, {"incast0", "incast1", "incast2", "t0", "t1", "t2", "conv_out", "conv_nd", "mm_out"});
 
+    G.GetOp("conv")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
+    G.GetOp("conv_to_nd")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
     Function* func = G.GetFunction();
     ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
 
@@ -244,7 +246,6 @@ TEST_F(InferTensorFormatTest, AssembleToOutcastRequiresND)
     ComputationalGraphBuilder G;
     std::vector<int64_t> shape4d{2, 32, 14, 14};
     std::vector<int64_t> shape5d{2, 2, 14, 14, 16};
-    TileShape::Current().SetVecTile({16, 16, 2, 16});
     ASSERT_TRUE(G.AddTensor(DataType::DT_FP16, shape5d, "incast0"));
     ASSERT_TRUE(
         G.AddTensors(DataType::DT_FP16, shape4d, {"incast1", "incast2", "v0_nd", "v1_out", "v2_out", "outcast"}));
@@ -259,6 +260,7 @@ TEST_F(InferTensorFormatTest, AssembleToOutcastRequiresND)
     G.GetTensor("incast0")->GetRawTensor()->format = TileOpFormat::TILEOP_NC1HWC0;
     SetFakeTransFormat(G, "v0_to_nd", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
 
+    G.GetOp("v0_to_nd")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
     Function* func = G.GetFunction();
     ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
 
@@ -284,7 +286,6 @@ TEST_F(InferTensorFormatTest, FakeTransInsertsRequiredInputAndOutputTransDataThe
 {
     ComputationalGraphBuilder G;
     std::vector<int64_t> shape4d{2, 32, 14, 14};
-    TileShape::Current().SetVecTile({16, 16, 2, 16});
     ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d, {"incast", "fake_out", "abs_out"}));
     ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"incast"}, {"fake_out"}, "fake_trans"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_ABS, {"fake_out"}, {"abs_out"}, "abs"));
@@ -297,6 +298,7 @@ TEST_F(InferTensorFormatTest, FakeTransInsertsRequiredInputAndOutputTransDataThe
     fakeTrans->SetAttribute(FAKE_TRANS_IN_FORMAT_ATTR, static_cast<int64_t>(TileOpFormat::TILEOP_NC1HWC0));
     fakeTrans->SetAttribute(FAKE_TRANS_OUT_FORMAT_ATTR, static_cast<int64_t>(TileOpFormat::TILEOP_ND));
 
+    fakeTrans->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
     Function* func = G.GetFunction();
     ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
 
@@ -315,7 +317,6 @@ TEST_F(InferTensorFormatTest, FakeTransMissingFormatAttrFails)
 {
     ComputationalGraphBuilder G;
     std::vector<int64_t> shape4d{2, 32, 14, 14};
-    TileShape::Current().SetVecTile({16, 16, 2, 16});
     ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d, {"incast", "fake_out"}));
     ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"incast"}, {"fake_out"}, "fake_trans"));
     ASSERT_TRUE(G.SetInCast({"incast"}));
@@ -331,7 +332,6 @@ TEST_F(InferTensorFormatTest, FakeTransUnsupportedFormatConversionFails)
 {
     ComputationalGraphBuilder G;
     std::vector<int64_t> shape4d{2, 32, 14, 14};
-    TileShape::Current().SetVecTile({16, 16, 2, 16});
     ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d, {"incast", "fake_out"}));
     ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"incast"}, {"fake_out"}, "fake_trans"));
     ASSERT_TRUE(G.SetInCast({"incast"}));
@@ -341,6 +341,7 @@ TEST_F(InferTensorFormatTest, FakeTransUnsupportedFormatConversionFails)
     fakeTrans->SetAttribute(FAKE_TRANS_IN_FORMAT_ATTR, static_cast<int64_t>(TileOpFormat::TILEOP_FRACTAL_Z));
     fakeTrans->SetAttribute(FAKE_TRANS_OUT_FORMAT_ATTR, static_cast<int64_t>(TileOpFormat::TILEOP_ND));
 
+    fakeTrans->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
     EXPECT_EQ(RunInferTensorFormat(G.GetFunction()), FAILED);
 }
 
@@ -362,6 +363,10 @@ TEST_F(InferTensorFormatTest, ZeroInputOpOutputFeedsFakeTrans)
     ASSERT_TRUE(G.AddOp(Opcode::OP_NEG, {"fake_out"}, {"neg_out"}, "neg"));
     ASSERT_TRUE(G.SetOutCast({"neg_out"}));
     SetFakeTransFormat(G, "fake_trans", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
+
+    auto* fakeTrans = G.GetOp("fake_trans");
+    ASSERT_NE(fakeTrans, nullptr);
+    fakeTrans->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
 
     Function* func = G.GetFunction();
     ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);

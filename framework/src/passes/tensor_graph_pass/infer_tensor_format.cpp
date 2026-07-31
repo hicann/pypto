@@ -147,24 +147,29 @@ int InferTensorFormat::FindInputPosition(const Operation& op, const std::shared_
 }
 
 void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTensor>& srcTensor,
-                                              TileOpFormat targetFormat)
+                                              TileOpFormat targetFormat, Operation* relatedOp)
 {
+    ASSERT(OperationErr::OP_NULL_POINTER, relatedOp != nullptr)
+        << "Null relatedOp when applying TransData vec tile for src tensor [" << srcTensor->GetMagic()
+        << "], target format " << static_cast<int>(targetFormat) << ".";
     int64_t c0 = srcTensor->Datatype() == DataType::DT_FP32 ? 8 : 16;
     TileOpFormat srcFormat = srcTensor->GetRawTensor()->format;
-    VecTile oriVectile = TileShape::Current().GetVecTile();
+    VecTile oriVectile = relatedOp->GetTileShape().GetVecTile();
     ASSERT(DistributedErrorCode::INVALID_TILE_SHAPE, oriVectile.tile.back() % c0 == 0)
         << "The last dimension of `tile_shape` should be 32-byte aligned.";
     if (oriVectile.tile.size() == NUM3) {
         oriVectile.tile.insert(oriVectile.tile.begin() + NUM2, 1);
-        TileShape::Current().SetVecTile(oriVectile);
+        TileShape opTileShape = relatedOp->GetTileShape();
+        opTileShape.SetVecTile(oriVectile);
+        relatedOp->UpdateTileShape(opTileShape);
     }
     if (srcFormat == TileOpFormat::TILEOP_NC1HWC0 && targetFormat == TileOpFormat::TILEOP_ND) {
-        VecTile tmpVectile = TileShape::Current().GetVecTile();
+        VecTile tmpVectile = relatedOp->GetTileShape().GetVecTile();
         tmpVectile.tile[1] = tmpVectile.tile[1] / c0;
         tmpVectile.tile.emplace_back(c0);
         TileShape::Current().SetVecTile(tmpVectile);
     } else if (srcFormat == TileOpFormat::TILEOP_NDC1HWC0 && targetFormat == TileOpFormat::TILEOP_ND) {
-        VecTile tmpVectile = TileShape::Current().GetVecTile();
+        VecTile tmpVectile = relatedOp->GetTileShape().GetVecTile();
         tmpVectile.tile[0] = 1;
         std::swap(tmpVectile.tile[1], tmpVectile.tile[2]);
         tmpVectile.tile[2] = tmpVectile.tile[2] / c0;
@@ -172,6 +177,8 @@ void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTenso
         tmpVectile.tile[1] *= NUM4;
         tmpVectile.tile[3] *= NUM4;
         TileShape::Current().SetVecTile(tmpVectile);
+    } else {
+        TileShape::Current().SetVecTile(oriVectile);
     }
 }
 
@@ -181,7 +188,7 @@ std::shared_ptr<LogicalTensor> InferTensorFormat::InsertTransDataOp(Function& fu
                                                                     Operation* relatedOp, TileOpFormat targetFormat)
 {
     int group_value = GetTransDataGroupValue(srcTensor, fakeDstTensor, relatedOp);
-    ApplyTransDataVecTile(srcTensor, targetFormat);
+    ApplyTransDataVecTile(srcTensor, targetFormat, relatedOp);
     auto result = TransData(function, srcTensor, fakeDstTensor, targetFormat, group_value);
     result->GetRawTensor()->format = targetFormat;
     return result;
