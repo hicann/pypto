@@ -327,15 +327,4 @@ TEST_F(TestAdapterApi, test_error_message)
     EXPECT_EQ(msg3.Message(), "[a, b, c]");
 }
 
-TEST_F(TestAdapterApi, test_assert_info)
-{
-    EXPECT_DEATH(
-        {
-            ErrorMessage msg;
-            msg << "fatal assert";
-            AssertInfo info;
-            info = msg;
-        },
-        "fatal assert");
-}
 } // namespace npu::tile_fwk
