@@ -84,7 +84,6 @@ include(CMakePackageConfigHelpers)
 include(cmake/func.cmake)
 include(cmake/config.cmake)
 include(cmake/intf.cmake)
-include(cmake/device_project.cmake)
 find_cann_package(acl_rt REQUIRED)
 find_cann_package(ascend_hal REQUIRED)
 find_cann_package(hcomm REQUIRED)
@@ -130,13 +129,14 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     install(FILES $<TARGET_FILE:c_sec>
             DESTINATION "${PyPTO_WhlName}/lib"
             PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
+            COMPONENT pypto
     )
     PTO_Fwk_InstallBinaries(
             EXPORT      ${InstallExport}
             WHL_NAME    ${PyPTO_WhlName}
             TARGETS     ${InstallTargets}
     )
-    install(TARGETS pypto_impl LIBRARY DESTINATION "${PyPTO_WhlName}" COMPONENT pypto_impl_lib)
+    install(TARGETS pypto_impl LIBRARY DESTINATION "${PyPTO_WhlName}" COMPONENT pypto)
 
     # 安装 配置文件
     install(FILES
@@ -152,6 +152,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                 framework/src/platform/parser/simulation_platform/platform_config/Kirin9030.ini
                 framework/src/platform/parser/simulation_platform/platform_config/KirinX90.ini
             DESTINATION ${PyPTO_WhlName}/lib/configs
+            COMPONENT pypto
     )
 
     # 安装 脚本文件
@@ -166,6 +167,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                 tools/scripts/extract_pass_log.py
                 tools/scripts/debug_aicore_error.py
             DESTINATION ${PyPTO_WhlName}/lib/scripts
+            COMPONENT pypto
     )
 
     # 安装 头文件(运行时)
@@ -174,6 +176,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     # 上述目录均为运行时编译 aicpu/aicore 所需二进制依赖
     install(DIRECTORY framework/src/interface/tileop/
             DESTINATION ${PyPTO_WhlName}/lib/include/tileop
+            COMPONENT pypto
             PATTERN "*.h"
             PATTERN "*.hpp"
             PATTERN ".svn" EXCLUDE
@@ -181,6 +184,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     )
     install(DIRECTORY framework/src/interface/machine/device/tilefwk/
             DESTINATION ${PyPTO_WhlName}/lib/include/tilefwk
+            COMPONENT pypto
             PATTERN "*.h"
             PATTERN "*.hpp"
             PATTERN ".svn" EXCLUDE
@@ -194,6 +198,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     install(FILES
                 cmake/intf.cmake
             DESTINATION ${PyPTO_WhlName}/lib/framework/cmake
+            COMPONENT pypto
     )
 
     # 2. 头文件
@@ -209,11 +214,13 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                 ${_cSecIncludeDir}/securec.h
                 ${_cSecIncludeDir}/securectype.h
             DESTINATION ${PyPTO_WhlName}/lib/framework/3rd/include
+            COMPONENT pypto
     )
     if (ENABLE_FEATURE_PYBIND11_IMPL_COMPILE_ONLINE)
         get_target_property(_JsonIncludeDir json INTERFACE_INCLUDE_DIRECTORIES)
         install(DIRECTORY ${_JsonIncludeDir}/nlohmann/
                 DESTINATION ${PyPTO_WhlName}/lib/framework/3rd/include/nlohmann
+                COMPONENT pypto
                 PATTERN "*.h"
                 PATTERN "*.hpp"
                 PATTERN ".svn" EXCLUDE
@@ -221,6 +228,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
         )
         install(DIRECTORY framework/include/
                 DESTINATION ${PyPTO_WhlName}/lib/framework/include
+                COMPONENT pypto
                 PATTERN "*.h"
                 PATTERN "*.hpp"
                 PATTERN ".svn" EXCLUDE
@@ -236,6 +244,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/include/tilefwk/lazy.h
                     framework/include/tilefwk/element.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/include/tilefwk
+                COMPONENT pypto
         )
     endif ()
     if (ENABLE_FEATURE_PYBIND11_IMPL_COMPILE_ONLINE)
@@ -247,9 +256,11 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/adapter/api/runtime_capture_context.h
                     framework/src/adapter/api/runtime_define.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/adapter/api
+                COMPONENT pypto
         )
         install(DIRECTORY framework/src/cost_model/simulation/
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/cost_model/simulation
+                COMPONENT pypto
                 PATTERN "*.h"
                 PATTERN "*.hpp"
                 PATTERN ".svn" EXCLUDE
@@ -259,21 +270,25 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/interface/cache/function_cache.h
                     framework/src/interface/cache/hash.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/cache
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/compiler_monitor/monitor_manager.h
                     framework/src/interface/compiler_monitor/monitor_stage_scope.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/compiler_monitor
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/configs/config_manager_ng.h
                     framework/src/interface/configs/config_manager.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/configs
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/function/function.h
                     framework/src/interface/function/rebuildable_attribute.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/function
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/inner/element.h
@@ -282,17 +297,20 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/interface/inner/pre_def.h
                     framework/src/interface/inner/tilefwk.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/inner
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/interpreter/calc.h
                     framework/src/interface/interpreter/interpreter_log.h
                     framework/src/interface/interpreter/raw_tensor_data.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/interpreter
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/interpreter/calculator/calc_api.h
                     framework/src/interface/interpreter/calculator/dtype_utils.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/interpreter/calculator
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/machine/device/tilefwk/aicpu_common.h
@@ -301,10 +319,12 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/interface/machine/device/tilefwk/aikernel_define.h
                     framework/src/interface/machine/device/tilefwk/core_func_data.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/machine/device/tilefwk
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/machine/host/perf_analysis.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/machine/host
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/operation/attr_holder.h
@@ -313,10 +333,12 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/interface/operation/operation_common.h
                     framework/src/interface/operation/operation.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/operation
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/program/program.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/program
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/schema/schema_base.h
@@ -326,6 +348,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/interface/schema/schema_parser.h
                     framework/src/interface/schema/schema.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/schema
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/tensor/float.h
@@ -341,10 +364,12 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/interface/tensor/tensor_slot.h
                     framework/src/interface/tensor/tensormap.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/tensor
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/tileop/distributed/comm_context.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/tileop/distributed
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/interface/utils/common.h
@@ -354,12 +379,14 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/interface/utils/enum_flags.h
                     framework/src/interface/utils/entry_registrar.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/utils
+                COMPONENT pypto
         )
 
         install(FILES
                     framework/src/machine/device/distributed/common.h
                     framework/src/machine/device/distributed/shmem_wait_until.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/device/distributed
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/machine/device/dynamic/aicore_constants.h
@@ -370,15 +397,18 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/machine/device/dynamic/device_trace.h
                     framework/src/machine/device/dynamic/device_utils.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/device/dynamic
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/machine/runtime/context/stream_context.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/context
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/machine/runtime/distributed/distributed_context.h
                     framework/src/machine/runtime/distributed/hccl_context.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/distributed
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/machine/runtime/launcher/aicore_model_launcher.h
@@ -391,6 +421,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/machine/runtime/launcher/launcher_router.h
                     framework/src/machine/runtime/launcher/ctrl_flow_cache_manager.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/launcher
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/machine/runtime/memory_utils/device_memory_utils.h
@@ -398,6 +429,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/machine/runtime/memory_utils/eslmodel_memory_utils.h
                     framework/src/machine/runtime/memory_utils/memory_pool.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/memory_utils
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/machine/runtime/runner/device_perf.h
@@ -407,6 +439,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/machine/runtime/runner/runtime_utils.h
                     framework/src/machine/runtime/runner/kernel_binary.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/runner
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/machine/utils/device_log.h
@@ -415,9 +448,11 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/machine/utils/queues.h
                     framework/src/machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/utils
+                COMPONENT pypto
         )
         install(DIRECTORY framework/src/machine/utils/dynamic/
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/utils/dynamic
+                COMPONENT pypto
                 PATTERN "*.h"
                 PATTERN "*.in"
                 PATTERN ".svn" EXCLUDE
@@ -426,10 +461,12 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
         install(FILES
                     framework/src/passes/pass_utils/subfunc_utils.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/passes/pass_utils
+                COMPONENT pypto
         )
         install(FILES
                     framework/src/utils/file_utils.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/utils
+                COMPONENT pypto
         )
     endif ()
 
@@ -438,6 +475,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     # 3.2 在线编译 pypto_impl 二进制必需源文件, CMakeLists.txt 文件;
     install(DIRECTORY framework/src/interface/interpreter/calculator/
             DESTINATION ${PyPTO_WhlName}/lib/framework/src/calculator
+            COMPONENT pypto
             PATTERN "*.h"
             PATTERN "*.cpp"
             PATTERN "CMakeLists.txt"
@@ -448,6 +486,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     if (ENABLE_FEATURE_PYBIND11_IMPL_COMPILE_ONLINE)
         install(DIRECTORY python/src/
                 DESTINATION ${PyPTO_WhlName}/lib/pypto_impl/src
+                COMPONENT pypto
                 PATTERN "*.h"
                 PATTERN "*.cpp"
                 PATTERN "CMakeLists.txt"
@@ -458,11 +497,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
 endif ()
 
 if (BUILD_WITH_CANN)
-    add_pypto_device_project(pypto)
-    if (TARGET cann_device)
-        # Host and device are built independently by their respective entry scripts.
-        set_property(TARGET cann_device PROPERTY EXCLUDE_FROM_ALL TRUE)
-    endif ()
+    add_cann_device_project(pypto)
 endif ()
 
 
@@ -473,87 +508,10 @@ endif ()
 ########################################################################################################################
 
 if (ENABLE_UNIFIED_BUILD AND ENABLE_FEATURE_PYTHON_FRONT_END)
-    # 全量源码统一构建独立模式: 注册 pypto 组件到 CANN_PACKAGES, 使 set_cann_cpack_config 生效
-    if (NOT CANN_PACKAGES OR NOT "pypto" IN_LIST CANN_PACKAGES)
-        list(APPEND CANN_PACKAGES "pypto")
-    endif ()
     set(PyPTO_PkgName "pypto")
-    set(PYPTO_WHEEL_DIST "${PTO_FWK_BIN_ROOT}/dist")
     include(version.cmake)
     add_cann_version_info_targets()
 
-    # 预建 whl 产物目录, 以便 CPack install(DIRECTORY ...) 在 configure 时能找到
-    file(MAKE_DIRECTORY "${PYPTO_WHEEL_DIST}")
-
-    # 计算 setuptools bdist_wheel 暂存目录名, 用于构建后清理
-    #   build_lib: lib.{platform_tag}, 其中 platform_tag 来自 sysconfig.get_platform()
-    #     eg: lib.linux-aarch64-cpython-311 (cpythonNN 后缀为 setuptools 内部拼接)
-    #   bdist: bdist.{platform_tag} (无 cpython 后缀)
-    execute_process(
-        COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_platform())"
-        OUTPUT_VARIABLE _PyPlatformTag
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    string(REPLACE "." "" _PyVerShort "${PYTHON3_VERSION_ID}")
-    set(_SetuptoolsBuildLib "${PTO_FWK_BIN_ROOT}/lib.${_PyPlatformTag}-cpython-${_PyVerShort}")
-    set(_SetuptoolsBdistDir "${PTO_FWK_BIN_ROOT}/bdist.${_PyPlatformTag}")
-
-    # ── pypto_wheel: 编译 → install 到 staging → 反调 setuptools 出 whl ──
-    #   GE 风格: add_custom_command(OUTPUT ...) — .so 不变则跳过 whl 构建(增量)
-    set(_UnifiedDeps version_${PyPTO_PkgName}_info ${InstallTargets} pypto_impl)
-    set(_UnifiedBackendType "cost_model")
-    if (BUILD_WITH_CANN)
-        set(_UnifiedBackendType "npu")
-    endif ()
-    set(_WhlStamp "${PYPTO_WHEEL_DIST}/.pypto_wheel_built")
-    add_custom_command(
-        OUTPUT "${_WhlStamp}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${PYPTO_WHEEL_DIST}"
-        COMMAND ${CMAKE_COMMAND} -E env
-            PYPTO_UNIFIED_BUILD=1
-            PYPTO_ALLOW_WHL_BUILD=1
-            PYPTO_BACKEND_TYPE=${_UnifiedBackendType}
-            PYPTO_CMAKE_BINARY_DIR="${PTO_FWK_BIN_ROOT}"
-            ${Python3_EXECUTABLE} "${PTO_FWK_SRC_ROOT}/setup.py" bdist_wheel
-            --dist-dir "${PYPTO_WHEEL_DIST}"
-        # 清理 setuptools 中间暂存目录(~37M), whl 已产出到 dist/ 后无需保留
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${_SetuptoolsBuildLib}"
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${_SetuptoolsBdistDir}"
-        COMMAND ${CMAKE_COMMAND} -E touch "${_WhlStamp}"
-        WORKING_DIRECTORY "${PTO_FWK_SRC_ROOT}"
-        DEPENDS ${_UnifiedDeps}
-        COMMENT "Building pypto wheel (GE-style incremental, depends on ${_UnifiedDeps})"
-    )
-    add_custom_target(pypto_wheel DEPENDS "${_WhlStamp}")
-
-    # ── run 包: 委托 cann-cmake ──
     include(cmake/package.cmake)
-    set_cann_cpack_config(${PyPTO_PkgName} OUTPUT "${PYPTO_WHEEL_DIST}")
-    # cann-cmake 在 unified 模式下将 CPACK_CMAKE_INSTALL_PREFIX 硬编码为
-    # CANN_CMAKE_DIR/build_out, 忽略 OUTPUT 参数. 此处用 REGEX 匹配任意路径末尾
-    # 的 /build_out 并替换为 build/dist/, 使 .run 与 .whl 落到同一目录.
-    file(READ "${CMAKE_BINARY_DIR}/CPackConfig.cmake" _pypto_cpack_cfg)
-    if(NOT _pypto_cpack_cfg MATCHES "set\\(CPACK_CMAKE_INSTALL_PREFIX \"[^\"]+/build_out\"\\)"
-       AND _pypto_cpack_cfg MATCHES "set\\(CPACK_CMAKE_INSTALL_PREFIX \"[^\"]+/dist\"\\)")
-        # 已为正确路径, 无需 patch
-    elseif(NOT _pypto_cpack_cfg MATCHES "set\\(CPACK_CMAKE_INSTALL_PREFIX \"[^\"]+/build_out\"\\)")
-        message(WARNING "CPackConfig.cmake does not contain expected build_out path. "
-                        "Run package output may not go to build/dist/. "
-                        "Please check cann-cmake version compatibility.")
-    else()
-        string(REGEX REPLACE
-            "set\\(CPACK_CMAKE_INSTALL_PREFIX \"[^\"]+/build_out\"\\)"
-            "set(CPACK_CMAKE_INSTALL_PREFIX \"${PYPTO_WHEEL_DIST}\")"
-            _pypto_cpack_cfg "${_pypto_cpack_cfg}")
-        file(WRITE "${CMAKE_BINARY_DIR}/CPackConfig.cmake" "${_pypto_cpack_cfg}")
-    endif()
-    unset(_pypto_cpack_cfg)
-    # 切断 install → all 的依赖链, 避免 pypto_package(ALL) → CPack → cmake --install → preinstall → all → pypto_package 递归循环
-    set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
-    # package(CPack) 不直接支持 add_dependencies, 创建 wrapper target 保证 whl 先于 run 产出
-    add_custom_target(pypto_package ALL
-        DEPENDS pypto_wheel
-        COMMAND ${CMAKE_CPACK_COMMAND} --config ${CMAKE_BINARY_DIR}/CPackConfig.cmake
-        COMMENT "Packaging pypto run (depends on pypto_wheel)"
-    )
+    set_cann_cpack_config(pypto PRE_PKG ${CMAKE_CURRENT_SOURCE_DIR}/cmake/pre_package.cmake)
 endif ()

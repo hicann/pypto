@@ -82,6 +82,4 @@ target_link_options(tile_fwk_server
 )
 set_target_properties(tile_fwk_server PROPERTIES OUTPUT_NAME tilefwk_backend_server)
 
-if (NOT ENABLE_FEATURE_PYTHON_FRONT_END)
-    install(TARGETS tile_fwk_server LIBRARY DESTINATION lib COMPONENT pypto OPTIONAL)
-endif ()
+install(TARGETS tile_fwk_server LIBRARY DESTINATION lib COMPONENT pypto)

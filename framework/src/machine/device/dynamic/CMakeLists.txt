@@ -64,6 +64,4 @@ target_link_libraries(pypto_ctrl_server
 )
 set_target_properties(pypto_ctrl_server PROPERTIES OUTPUT_NAME pypto_ctrl_server)
 
-if (NOT ENABLE_FEATURE_PYTHON_FRONT_END)
-    install(TARGETS pypto_ctrl_server ARCHIVE DESTINATION lib COMPONENT pypto OPTIONAL)
-endif ()
+install(TARGETS pypto_ctrl_server ARCHIVE DESTINATION lib COMPONENT pypto)

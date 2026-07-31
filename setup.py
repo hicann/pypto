@@ -558,20 +558,23 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
 
     def _run_unified_build(self):
         """Install artifacts produced by the outer unified CMake build."""
-        logging.info("Unified build mode: cmake is the build driver, install staged artifacts only")
+        staging_dir = os.environ.get("PYPTO_STAGING_DIR")
+        if not staging_dir:
+            raise RuntimeError("PYPTO_STAGING_DIR must be specified in unified build.")
+
         cmake_install_prefix = self._get_cmake_install_prefix()
-        unified_build_dir = os.environ.get("PYPTO_CMAKE_BINARY_DIR")
-        build_dir = Path(unified_build_dir) if unified_build_dir else self._get_cmake_build_prefix()
-        install_components = ["Unspecified", "pypto_impl_lib"]
-        unified_backend_type = os.environ.get("PYPTO_BACKEND_TYPE")
-        if unified_backend_type == "npu":
-            install_components.append("pypto")
-        for comp in install_components:
-            cmd = f"{self.cmake} --install {build_dir} --prefix {cmake_install_prefix} --component {comp}"
-            logging.info("CMake Install (component=%s): %s", comp or "Unspecified", cmd)
-            subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
-        if unified_backend_type == "npu":
-            self._extract_device_package(cmake_install_prefix)
+        subprocess.run(
+            ["cp", "-rf", os.path.join(staging_dir, "pypto"), str(cmake_install_prefix)],
+            capture_output=False,
+            check=True,
+            text=True,
+        )
+        subprocess.run(
+            ["cp", "-rf", os.path.join(staging_dir, "lib"), str(cmake_install_prefix / "pypto")],
+            capture_output=False,
+            check=True,
+            text=True,
+        )
 
     def _run_cmake(self, params: CMakeCmdParams):
         """执行完整的 CMake Configure/Build/Install 流程

@@ -208,9 +208,9 @@ function(PTO_Fwk_InstallBinaries)
     # 安装 二进制文件
     install(TARGETS ${ARG_TARGETS}
             EXPORT ${ARG_EXPORT}
-            RUNTIME DESTINATION ${_InstallBinDir}
-            LIBRARY DESTINATION ${_InstallLibDir}
-            ARCHIVE DESTINATION ${_InstallLibDir}
+            RUNTIME DESTINATION ${_InstallBinDir} COMPONENT pypto
+            LIBRARY DESTINATION ${_InstallLibDir} COMPONENT pypto
+            ARCHIVE DESTINATION ${_InstallLibDir} COMPONENT pypto
     )
 endfunction()
 
