@@ -853,10 +853,6 @@ Status PipeSync::UpdateSyncArriveStatus(int eventId, const PipeCore& setPipe, co
     syncArriveStatus[currPipeRealEx].insert(eventResource);
     syncArriveStatus[currPipeRealEx].insert(syncArriveStatus[setPipeRealEx].begin(),
                                             syncArriveStatus[setPipeRealEx].end());
-    if (RecycleCrossCoreEventIds(currPipeRealEx) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateSyncArriveStatus failed at function RecycleCrossCoreEventIds.");
-        return FAILED;
-    }
     return SUCCESS;
 }
 
