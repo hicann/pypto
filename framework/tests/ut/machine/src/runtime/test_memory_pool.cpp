@@ -18,99 +18,30 @@
 
 using namespace npu::tile_fwk;
 
-TEST(MemoryBlockTest, NonHuge_FirstAllocation_ReturnsBaseAddr)
+TEST(MemoryBlockTest, FirstAllocation_ReturnsBaseAddr)
 {
     uint8_t buf[1024];
-    MemoryBlock block(buf, 1024, false);
+    MemoryBlock block(buf, 1024);
     void* ptr = block.Allocate(512);
     EXPECT_EQ(ptr, static_cast<void*>(buf));
     EXPECT_EQ(block.usedSize, 1024u);
 }
 
-TEST(MemoryBlockTest, NonHuge_SecondAllocation_ReturnsNull)
+TEST(MemoryBlockTest, SecondAllocation_ReturnsNull)
 {
     uint8_t buf[1024];
-    MemoryBlock block(buf, 1024, false);
+    MemoryBlock block(buf, 1024);
     block.Allocate(512);
     void* ptr = block.Allocate(512);
     EXPECT_EQ(ptr, nullptr);
 }
 
-TEST(MemoryBlockTest, NonHuge_AlignExceedsBlockSize_ReturnsNull)
+TEST(MemoryBlockTest, AlignExceedsBlockSize_ReturnsNull)
 {
     uint8_t buf[256];
-    MemoryBlock block(buf, 256, false);
+    MemoryBlock block(buf, 256);
     void* ptr = block.Allocate(512);
     EXPECT_EQ(ptr, nullptr);
-}
-
-TEST(MemoryBlockTest, NonHuge_Free_ThrowsError)
-{
-    uint8_t buf[1024];
-    MemoryBlock block(buf, 1024, false);
-    EXPECT_THROW(block.Free(buf, 512), std::exception);
-}
-
-TEST(MemoryBlockTest, Huge_FirstAllocation_ReturnsBaseAddr)
-{
-    uintptr_t base = 0x1000;
-    MemoryBlock block(reinterpret_cast<void*>(base), 4096, true);
-    void* ptr = block.Allocate(512);
-    EXPECT_EQ(ptr, reinterpret_cast<void*>(base));
-}
-
-TEST(MemoryBlockTest, Huge_SecondAllocation_ReturnsNextChunk)
-{
-    uintptr_t base = 0x1000;
-    MemoryBlock block(reinterpret_cast<void*>(base), 4096, true);
-    void* ptr1 = block.Allocate(512);
-    void* ptr2 = block.Allocate(512);
-    EXPECT_EQ(ptr1, reinterpret_cast<void*>(base));
-    EXPECT_EQ(ptr2, reinterpret_cast<void*>(base + 512));
-}
-
-TEST(MemoryBlockTest, Huge_AllocationExceedsFreeSpace_ReturnsNull)
-{
-    uintptr_t base = 0x1000;
-    MemoryBlock block(reinterpret_cast<void*>(base), 512, true);
-    block.Allocate(512);
-    void* ptr = block.Allocate(512);
-    EXPECT_EQ(ptr, nullptr);
-}
-
-TEST(MemoryBlockTest, Huge_FreeAndReallocate)
-{
-    uintptr_t base = 0x1000;
-    MemoryBlock block(reinterpret_cast<void*>(base), 4096, true);
-    void* ptr1 = block.Allocate(1024);
-    block.Free(ptr1, 1024);
-    void* ptr2 = block.Allocate(1024);
-    EXPECT_EQ(ptr2, reinterpret_cast<void*>(base));
-}
-
-TEST(MemoryBlockTest, Huge_FreeMergesAdjacentChunks)
-{
-    uintptr_t base = 0x1000;
-    MemoryBlock block(reinterpret_cast<void*>(base), 4096, true);
-    void* ptr1 = block.Allocate(1024);
-    void* ptr2 = block.Allocate(1024);
-    block.Free(ptr1, 1024);
-    block.Free(ptr2, 1024);
-    void* ptr3 = block.Allocate(4096);
-    EXPECT_NE(ptr3, nullptr);
-}
-
-TEST(MemoryBlockTest, Huge_FreeNonAdjacentChunks_NoMerge)
-{
-    uintptr_t base = 0x1000;
-    MemoryBlock block(reinterpret_cast<void*>(base), 4096, true);
-    void* ptr1 = block.Allocate(1024);
-    void* ptr2 = block.Allocate(1024);
-    void* ptr3 = block.Allocate(1024);
-    (void)ptr2;
-    block.Free(ptr1, 1024);
-    block.Free(ptr3, 1024);
-    EXPECT_EQ(block.freeMap.size(), 2u);
 }
 
 // ===== DevMemoryPool tests =====

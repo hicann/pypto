@@ -21,7 +21,6 @@
 namespace npu::tile_fwk {
 namespace {
 inline constexpr int RTMALLOC_SUCCESS = 0;
-inline constexpr size_t ONT_GB_SIZE = 1024 * 1024 * 1024;
 inline constexpr uint64_t SENTINEL_VALUE = 0xDEADBEEFDEADBEEF;
 inline constexpr uint32_t SENTINEL_NUM = 64;
 inline constexpr uint32_t SENTINEL_MEM_SIZE = 512;
@@ -41,84 +40,15 @@ RtError NormalizedRtMemcpy(void* dst, uint64_t destMax, const void* src, uint64_
     return RuntimeMemcpyDirect(dst, destMax, src, cnt, kind);
 }
 
-MemoryBlock::MemoryBlock(void* addr, size_t size, bool isHuge)
-    : baseAddr(addr), blockSize(size), usedSize(0), isHuge1G(isHuge)
-{
-    Init();
-}
-
-void MemoryBlock::Init()
-{
-    if (isHuge1G) {
-        freeMap[reinterpret_cast<uintptr_t>(baseAddr)] = blockSize;
-    } else {
-        freeMap.clear();
-    }
-}
+MemoryBlock::MemoryBlock(void* addr, size_t size) : baseAddr(addr), blockSize(size), usedSize(0) {}
 
 void* MemoryBlock::Allocate(uint64_t alignSize)
 {
-    if (!isHuge1G) {
-        if (usedSize == 0 && blockSize >= alignSize) {
-            usedSize = blockSize;
-            return baseAddr;
-        }
-        return nullptr;
-    }
-
-    for (auto it = freeMap.begin(); it != freeMap.end(); ++it) {
-        uintptr_t chunkAddr = it->first;
-        size_t chunkSize = it->second;
-
-        if (chunkSize >= alignSize) {
-            void* usePtr = reinterpret_cast<void*>(chunkAddr);
-            size_t remaining = chunkSize - alignSize;
-
-            freeMap.erase(it);
-
-            if (remaining > 0) {
-                freeMap[chunkAddr + alignSize] = remaining;
-            }
-
-            usedSize += alignSize;
-            MACHINE_LOGI("Allocate in 1GB block: ptr=%p, chunkSize=%zu, alignSize=%lu.", usePtr, chunkSize, alignSize);
-            return usePtr;
-        }
+    if (usedSize == 0 && blockSize >= alignSize) {
+        usedSize = blockSize;
+        return baseAddr;
     }
     return nullptr;
-}
-
-void MemoryBlock::Free(void* ptr, size_t size)
-{
-    if (!isHuge1G) {
-        MACHINE_LOGE(DevCommonErr::FREE_FAILED, "Logic Error: 2MB block should not call Free()");
-        return;
-    }
-
-    uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
-
-    freeMap[addr] = size;
-    usedSize -= size;
-
-    auto it = freeMap.find(addr);
-    if (it == freeMap.end())
-        return;
-
-    auto nextIt = std::next(it);
-    if (nextIt != freeMap.end()) {
-        if (it->first + it->second == nextIt->first) {
-            it->second += nextIt->second;
-            freeMap.erase(nextIt);
-        }
-    }
-
-    if (it != freeMap.begin()) {
-        auto prevIt = std::prev(it);
-        if (prevIt->first + prevIt->second == it->first) {
-            prevIt->second += it->second;
-            freeMap.erase(it);
-        }
-    }
 }
 
 DevMemoryPool& DevMemoryPool::Instance()
@@ -165,7 +95,7 @@ bool DevMemoryPool::AllocDevAddrInPool(uint8_t** devAddr, const uint64_t size)
         void* ptr = block->Allocate(alignSize);
         if (ptr != nullptr) {
             *devAddr = static_cast<uint8_t*>(ptr);
-            RecordAllocation(ptr, block, alignSize);
+            RecordAllocation(ptr, block);
             PutSentinelAddr(*devAddr, size);
             return true;
         }
@@ -176,7 +106,7 @@ bool DevMemoryPool::AllocDevAddrInPool(uint8_t** devAddr, const uint64_t size)
         void* ptr = newBlock->Allocate(alignSize);
         if (ptr != nullptr) {
             *devAddr = static_cast<uint8_t*>(ptr);
-            RecordAllocation(ptr, newBlock, alignSize);
+            RecordAllocation(ptr, newBlock);
             PutSentinelAddr(*devAddr, size);
             return true;
         }
@@ -201,23 +131,17 @@ void DevMemoryPool::FreeDevAddr(void* ptr)
     }
 
     MemoryBlock* block = it->second;
-    size_t size = allocSizes_[ptr];
 
-    if (block->isHuge1G) {
-        block->Free(ptr, size);
-    } else {
-        MACHINE_LOGI("Directly freeing 2MB block: addr=%p.", block->baseAddr);
-        FreeMemBlock(block);
-        for (auto vecIt = memoryBlocks_.begin(); vecIt != memoryBlocks_.end(); ++vecIt) {
-            if (*vecIt == block) {
-                memoryBlocks_.erase(vecIt);
-                break;
-            }
+    MACHINE_LOGI("Directly freeing 2MB block: addr=%p.", block->baseAddr);
+    FreeMemBlock(block);
+    for (auto vecIt = memoryBlocks_.begin(); vecIt != memoryBlocks_.end(); ++vecIt) {
+        if (*vecIt == block) {
+            memoryBlocks_.erase(vecIt);
+            break;
         }
     }
 
     addrToBlock_.erase(it);
-    allocSizes_.erase(ptr);
 }
 
 void DevMemoryPool::PutSentinelAddr(uint8_t* baseAddr, uint64_t baseSize)
@@ -335,31 +259,23 @@ void DevMemoryPool::DestroyPool()
     }
     memoryBlocks_.clear();
     addrToBlock_.clear();
-    allocSizes_.clear();
     MACHINE_LOGI("MemPool destroyed, all memory freed");
 }
 
 void DevMemoryPool::PrintPoolStatus() const
 {
-    size_t cnt1G = 0;
-    size_t cnt2M = 0;
     size_t total = 0;
     size_t used = 0;
     MACHINE_LOGI("========== [Memory Pool Status] ==========");
     for (size_t i = 0; i < memoryBlocks_.size(); ++i) {
         auto* blk = memoryBlocks_[i];
-        if (blk->isHuge1G)
-            cnt1G++;
-        else
-            cnt2M++;
         total += blk->blockSize;
         used += blk->usedSize;
 
         double rate = blk->blockSize ? (double)blk->usedSize * 100.0 / blk->blockSize : 0;
-        MACHINE_LOGI("Block[%lu] %s | Addr: %p | Used: %.1f%% | Fragments: %lu", i, blk->isHuge1G ? "1G" : "2M",
-                     blk->baseAddr, rate, blk->freeMap.size());
+        MACHINE_LOGI("Block[%lu] | Addr: %p | Used: %.1f%%", i, blk->baseAddr, rate);
     }
-    MACHINE_LOGI("Summary: 1G x %lu, 2M x %lu | Used/Total: %lu/%lu MB", cnt1G, cnt2M, used >> 20, total >> 20);
+    MACHINE_LOGI("Summary: Blocks: %lu | Used/Total: %lu/%lu MB", memoryBlocks_.size(), used >> 20, total >> 20);
 }
 
 void DevMemoryPool::FreeMemBlock(MemoryBlock* block)
@@ -377,25 +293,14 @@ void DevMemoryPool::FreeMemBlock(MemoryBlock* block)
     block = nullptr;
 }
 
-void DevMemoryPool::RecordAllocation(void* ptr, MemoryBlock* block, size_t size)
-{
-    addrToBlock_[ptr] = block;
-    allocSizes_[ptr] = size;
-}
+void DevMemoryPool::RecordAllocation(void* ptr, MemoryBlock* block) { addrToBlock_[ptr] = block; }
 
 MemoryBlock* DevMemoryPool::CreateNewBlock(uint64_t alignSize)
 {
     uint8_t* devAddr = nullptr;
-    size_t size1G = ((alignSize - 1) / ONT_GB_SIZE + 1) * ONT_GB_SIZE;
-
-    if (RuntimeMalloc((void**)&devAddr, size1G, ONG_GB_HUGE_PAGE_FLAGS, 0) == RTMALLOC_SUCCESS) {
-        MemoryBlock* block = new MemoryBlock(devAddr, size1G, true);
-        memoryBlocks_.push_back(block);
-        return block;
-    }
 
     if (RuntimeMalloc((void**)&devAddr, alignSize, TWO_MB_HUGE_PAGE_FLAGS, 0) == RTMALLOC_SUCCESS) {
-        MemoryBlock* block = new MemoryBlock(devAddr, alignSize, false);
+        MemoryBlock* block = new MemoryBlock(devAddr, alignSize);
         memoryBlocks_.push_back(block);
         return block;
     }

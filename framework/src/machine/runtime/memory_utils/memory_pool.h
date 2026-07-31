@@ -15,27 +15,20 @@
 
 #pragma once
 
-#include <map>
 #include <unordered_map>
 #include <vector>
 #include "adapter/api/runtime_define.h"
 
 namespace npu::tile_fwk {
-inline constexpr uint32_t ONG_GB_HUGE_PAGE_FLAGS = RT_MEMORY_HBM | RT_MEMORY_POLICY_HUGE1G_PAGE_ONLY;
 inline constexpr uint32_t TWO_MB_HUGE_PAGE_FLAGS = RT_MEMORY_HBM | RT_MEMORY_POLICY_HUGE_PAGE_FIRST;
 
 struct MemoryBlock {
     void* baseAddr;
     size_t blockSize;
     size_t usedSize;
-    bool isHuge1G;
 
-    std::map<uintptr_t, size_t> freeMap;
-
-    MemoryBlock(void* addr, size_t size, bool isHuge);
-    void Init();
+    MemoryBlock(void* addr, size_t size);
     void* Allocate(uint64_t alignSize);
-    void Free(void* ptr, size_t size);
 };
 
 RtError NormalizedRtMemcpy(void* dst, uint64_t destMax, const void* src, uint64_t cnt, RtMemcpyKind kind);
@@ -59,14 +52,13 @@ private:
     static void PrintSentinelVal(std::vector<uint64_t>& sentinelVal, uint8_t* sentinelAddr);
     void PutSentinelAddr(uint8_t* baseAddr, uint64_t baseSize);
     bool CheckSentinel(uint8_t* baseAddr, bool remove = true);
-    void RecordAllocation(void* ptr, MemoryBlock* block, size_t size);
+    void RecordAllocation(void* ptr, MemoryBlock* block);
     MemoryBlock* CreateNewBlock(uint64_t alignSize);
     void DynamicRecycle();
     void PrintPoolStatus() const;
 
     std::vector<MemoryBlock*> memoryBlocks_;
     std::unordered_map<void*, MemoryBlock*> addrToBlock_;
-    std::unordered_map<void*, size_t> allocSizes_;
 
     bool needMemCheck_{false};
     std::vector<uint64_t> sentinelVec_;
