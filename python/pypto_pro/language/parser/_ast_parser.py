@@ -474,6 +474,8 @@ class ASTParser(
         mm = self._tile_mutex_meta.get(value_expr)
         if mm is not None:
             self._tile_mutex_meta[var] = mm
+            if isinstance(var, ir.Var):
+                self._coemit_tile_mutexid_companion(var, mm)
 
     def _validate_tiling_params(
         self,

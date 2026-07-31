@@ -225,6 +225,7 @@ class ControlFlowParserMixin:
         entry_env = dict(self.const_env)
         writes = _assignment_writes([*stmt.body, *stmt.orelse])
 
+        outer_in_if_stmt = self.in_if_stmt
         with self.builder.if_stmt(condition, span) as if_builder:
             self.current_if_builder = if_builder
             self.in_if_stmt = True
@@ -244,7 +245,9 @@ class ControlFlowParserMixin:
                 self.scope_manager.exit_scope(leak_vars=True)
 
         self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
-        self.in_if_stmt = False
+        # Restore the enclosing value (not hard-False) so a nested if exiting doesn't clear
+        # the outer if's flag.
+        self.in_if_stmt = outer_in_if_stmt
         self.current_if_builder = None
 
     def parse_with_statement(self, stmt: ast.With) -> None:

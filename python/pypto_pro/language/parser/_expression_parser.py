@@ -566,8 +566,16 @@ class ExpressionParserMixin:
                     span=span,
                     hint="Ensure the 'then' branch of the ternary expression is a valid expression",
                 )
+            # auto_mutex: for a tile ternary, yield the chosen tile's mutex id alongside the
+            # tile so ConvertToSSA phi-merges the id in lockstep with the pointer (arbitrary
+            # nesting). Probe each branch's id expr; both must be tiles-with-meta to add it.
+            then_mutexid, then_ids = self._ternary_branch_mutexid(then_value)
             if_builder.return_var(tmp_name, then_value.type, span)
-            self.builder.emit(ir.YieldStmt([then_value], span))
+            if then_mutexid is not None:
+                if_builder.return_var(f"{tmp_name}__mutexid", ir.ScalarType(DataType.INDEX), span)
+                self.builder.emit(ir.YieldStmt([then_value, then_mutexid], span))
+            else:
+                self.builder.emit(ir.YieldStmt([then_value], span))
 
             if_builder.else_(span)
             else_value = self.parse_expression(expr.orelse, nested=False)
@@ -589,12 +597,47 @@ class ExpressionParserMixin:
                 )
             # Same-category scalar branches with differing dtypes (e.g. INT32 vs INDEX)
             # are promoted to a common dtype when the if statement is finalized.
-            self.builder.emit(ir.YieldStmt([else_value], span))
+            else_mutexid, else_ids = self._ternary_branch_mutexid(else_value)
+            # The 2nd return_var (mutexid) is declared in the then branch based only on
+            # then_mutexid; both branches must then yield the same arity. If one branch is a
+            # tile-with-mutex and the other is not, we cannot honor that -> reject explicitly
+            # rather than emit an ill-formed if (mismatched yield count).
+            if (then_mutexid is None) != (else_mutexid is None):
+                raise ParserTypeError(
+                    "Ternary selecting a tile must have both branches carry a mutex id; "
+                    "one branch has no tile mutex metadata",
+                    span=span,
+                    hint="Ensure both branches are tiles from a tile_group (auto_mutex), "
+                         "or neither is",
+                )
+            if then_mutexid is not None and else_mutexid is not None:
+                self.builder.emit(ir.YieldStmt([else_value, else_mutexid], span))
+            else:
+                self.builder.emit(ir.YieldStmt([else_value], span))
 
         return_var = if_builder.output(0)
-
         self.scope_manager.define_var(tmp_name, return_var, span=span)
+
+        # The 2nd output is the mutex-id phi. Record it on the result exactly like a plain
+        # tile's mutex meta, so the use site (and any enclosing ternary) reads it through the
+        # single _tile_mutex_meta path -- buf_id is the runtime-chosen id var.
+        if then_mutexid is not None and else_mutexid is not None:
+            mutexid_var = if_builder.output(1)
+            union_ids = list(dict.fromkeys(list(then_ids) + list(else_ids)))
+            self._tile_mutex_meta[return_var] = (mutexid_var, union_ids)
+
         return return_var
+
+    def _ternary_branch_mutexid(self, branch_value):
+        """Return ``(buf_id, mutex_ids)`` for a ternary branch, or ``(None, None)``.
+
+        Both a plain tile and a nested ternary result carry their id in _tile_mutex_meta
+        (buf_id is always an ir.Expr now — ConstInt / slot GetItemExpr / companion var), so
+        the meta tuple can be returned as-is; nesting chains through the same lookup.
+        """
+        if not self._auto_mutex:
+            return None, None
+        return self._tile_mutex_meta.get(branch_value) or (None, None)
 
     def make_named_tuple(self, elements: list, field_names, span: ir.Span) -> ir.Expr:
         """Build a named ``MakeTuple`` and record its type's field names.

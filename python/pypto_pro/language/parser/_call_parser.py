@@ -1216,12 +1216,14 @@ class CallParserMixin:
 
         for group in groups:
             all_static_equal = (
-                all(isinstance(tref.buf_id, int) for tref in group) and len(set(tref.buf_id for tref in group)) == 1
+                all(isinstance(tref.buf_id, ir.ConstInt) for tref in group)
+                    and len({tref.buf_id.value for tref in group}) == 1
             )
             if len(group) == 1 or all_static_equal:
                 # Guaranteed a single distinct lock: emit one plain mutex op.
                 tref = group[0]
-                expr = emit_plain(pipe=pipe, mutex_id=tref.buf_id, mutex_ids=tref.mutex_ids, span=span)
+                mutex_id = tref.buf_id.value if isinstance(tref.buf_id, ir.ConstInt) else tref.buf_id
+                expr = emit_plain(pipe=pipe, mutex_id=mutex_id, mutex_ids=tref.mutex_ids, span=span)
             else:
                 # Dynamic ids: emit dedup op with runtime if-guards.
                 id_exprs = [_normalize_expr(tref.buf_id, span) for tref in group]

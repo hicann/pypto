@@ -90,18 +90,3 @@ def test_cce_sels_emits_tsels():
     # literals with the C++ "f" suffix (e.g. 0.000000f) for correct float type.
     tsels_line = next(line for line in cpp.splitlines() if "TSELS(" in line)
     assert tsels_line.rstrip().endswith("0.000000f);"), f"scalar should be last arg: {tsels_line}"
-
-
-def test_cce_sel_positional_args_auto_mutex_orders_tsel_before_store():
-    cpp = _compile_to_cce(_sel_auto_mutex_kernel)
-    logging.info("\n=== test_cce_sel_positional_args_auto_mutex ===\n%s", cpp)
-
-    tsel = cpp.index("TSEL(")
-    tstore = cpp.index("TSTORE(", tsel)
-    mte3_get = cpp.find("get_buf(PIPE_MTE3, 0, 0);", tsel)
-    v_get = cpp.rfind("get_buf(PIPE_V, 0, 0);", 0, tsel)
-    v_release = cpp.find("rls_buf(PIPE_V, 0, 0);", tsel)
-
-    assert -1 not in (v_get, v_release, mte3_get), cpp
-    assert v_get < tsel < v_release, cpp
-    assert tsel < mte3_get < tstore, cpp

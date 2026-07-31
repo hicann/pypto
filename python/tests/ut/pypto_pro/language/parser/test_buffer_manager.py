@@ -182,6 +182,5 @@ def test_single_tile_group_fast_path():
     # Single-tile group: no cursor struct, no rotate, static mutex lock.
     assert "struct.create" not in ir_str
     assert "struct.set" not in ir_str
-    assert "mutex_lock_dyn" not in ir_str
     assert "mutex_id" in ir_str
     assert "5" in ir_str

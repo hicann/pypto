@@ -170,9 +170,9 @@ class BufferParserMixin:
         tiles = self.lower_attr_access(group_var, "tiles", span)
         if n_slots == 1:
             # Single tile: no cursor, no modulo. Select tiles[0] with a const index
-            # (resolved by parser-side constant propagation) and lock the lone mutex id statically.
+            # (resolved by parser-side constant propagation). Store buf_id as an IR ConstInt
             tile_ir = ir.GetItemExpr(tiles, ir.ConstInt(0, DataType.INDEX, span), span)
-            self._tile_mutex_meta[tile_ir] = (mutex_values[0], mutex_values)
+            self._tile_mutex_meta[tile_ir] = (ir.ConstInt(mutex_values[0], DataType.INDEX, span), mutex_values)
             return tile_ir
         n_const = ir.ConstInt(n_slots, DataType.INDEX, span)
         mut = self.lower_attr_access(group_var, "mutex_ids", span)
