@@ -385,4 +385,42 @@ void ScheduleState::InsertOrdered(Operation* insertOp)
     }
 }
 
+CoreLocationType ScheduleState::ResolveCoreForFree(int memId)
+{
+    auto overrideIt = dualDstMemIdCoreOverride.find(memId);
+    if (overrideIt != dualDstMemIdCoreOverride.end()) {
+        return overrideIt->second;
+    }
+
+    auto allocIt = tensorAllocMap.find(memId);
+    if (allocIt == tensorAllocMap.end() || allocIt->second == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "ResolveCoreForFree cannot find alloc op for tensor[%d].", memId);
+        return CoreLocationType::UNKNOWN;
+    }
+    auto schedIt = schedInfoMap.find(allocIt->second);
+    if (schedIt == schedInfoMap.end()) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ResolveCoreForFree cannot find schedule info for %s.",
+                          GetOpInfo(allocIt->second).c_str());
+        return CoreLocationType::UNKNOWN;
+    }
+    return schedIt->second.coreLocation;
+}
+
+bool ScheduleState::IsDualDstAlloc(Operation* allocOp)
+{
+    if (!enableDualDst)
+        return false;
+    if (allocOp == nullptr)
+        return false;
+    auto it = schedInfoMap.find(allocOp);
+    if (it == schedInfoMap.end() || !it->second.isAlloc)
+        return false;
+    for (auto* succ : depManager.GetSuccessors(allocOp)) {
+        if (succ != nullptr && succ->GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace npu::tile_fwk

@@ -14,6 +14,8 @@
  */
 
 #include <gtest/gtest.h>
+#include <algorithm>
+#include <string>
 #include <vector>
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
@@ -28,6 +30,7 @@
 #include "passes/block_graph_pass/schedule_ooo/schedule_ooo.h"
 #include "passes/block_graph_pass/schedule_ooo/pre_schedule/core_assign.h"
 #include "passes/block_graph_pass/schedule_ooo/post_schedule/buffer_rearrange.h"
+#include "passes/block_graph_pass/schedule_ooo/common/iso_matcher.h"
 #include "passes/block_graph_pass/schedule_ooo/pre_schedule/memory_aware_topo_sort.h"
 #include "passes/tile_graph_pass/graph_constraint/infer_dyn_shape.h"
 #include "computational_graph_builder.h"
@@ -3540,12 +3543,66 @@ DualDstGraph BuildDualDstGraph(const std::vector<int64_t>& l0cShape, const std::
     return g;
 }
 
-// �?OoOScheduler 预填 schedInfoMap_:
-//   - add0->AIV0 / add1->AIV1, �?dualdst identify 阶段�?ConsumerCore 校验�?
-//     split (AIV0 + AIV1)�?
-//   - dualdst ResolveDualDstAllocCtx 现已改用 "�?dual_dst op �?ub output tensor �?
-//     consumer (add op) 反推 core", 不再依赖 tensorAllocCoreMap (该成员已随主线移�?,
-//     所以只�?add0/add1 �?schedInfoMap_ 正确就足够�?
+DualDstGraph BuildDualDstGraph_2(const std::vector<int64_t>& l0cShape, const std::vector<int64_t>& tileShape,
+                                 const std::vector<int64_t>& fromOff0, const std::vector<int64_t>& fromOff1)
+{
+    DualDstGraph g;
+    g.builder = std::make_shared<ComputationalGraphBuilder>();
+    EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, l0cShape, MemoryType::MEM_L0C, "t_l0c"), true);
+    EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, tileShape, MemoryType::MEM_UB, "t_ub0"), true);
+    EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, tileShape, MemoryType::MEM_UB, "t_ub1"), true);
+    for (int side = 0; side < 2; ++side) {
+        for (int idx = 0; idx < 5; ++idx) {
+            EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, tileShape, MemoryType::MEM_UB,
+                                           "t_softmax" + std::to_string(side) + "_out" + std::to_string(idx)),
+                      true);
+        }
+    }
+
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_L0C_ALLOC, {}, {"t_l0c"}, "alloc_l0c"), true);
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_UB_ALLOC, {}, {"t_ub0"}, "alloc_ub0"), true);
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_UB_ALLOC, {}, {"t_ub1"}, "alloc_ub1"), true);
+    for (int side = 0; side < 2; ++side) {
+        for (int idx = 0; idx < 5; ++idx) {
+            EXPECT_EQ(g.builder->AddOp(Opcode::OP_UB_ALLOC, {},
+                                       {"t_softmax" + std::to_string(side) + "_out" + std::to_string(idx)},
+                                       "alloc_softmax" + std::to_string(side) + "_out" + std::to_string(idx)),
+                      true);
+        }
+    }
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_L0C_COPY_UB, {"t_l0c"}, {"t_ub0"}, "copy0"), true);
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_L0C_COPY_UB, {"t_l0c"}, {"t_ub1"}, "copy1"), true);
+    EXPECT_EQ(g.builder->AddOp(
+                  Opcode::OP_ONLINE_SOFTMAX, {"t_ub0"},
+                  {"t_softmax0_out0", "t_softmax0_out1", "t_softmax0_out2", "t_softmax0_out3", "t_softmax0_out4"},
+                  "softmax0"),
+              true);
+    EXPECT_EQ(g.builder->AddOp(
+                  Opcode::OP_ONLINE_SOFTMAX, {"t_ub1"},
+                  {"t_softmax1_out0", "t_softmax1_out1", "t_softmax1_out2", "t_softmax1_out3", "t_softmax1_out4"},
+                  "softmax1"),
+              true);
+
+    g.func = g.builder->GetFunction();
+    g.allocL0c = g.builder->GetOp("alloc_l0c");
+    g.allocUb0 = g.builder->GetOp("alloc_ub0");
+    g.allocUb1 = g.builder->GetOp("alloc_ub1");
+    g.allocOut0 = g.builder->GetOp("alloc_softmax0_out0");
+    g.allocOut1 = g.builder->GetOp("alloc_softmax1_out0");
+    g.copy0 = g.builder->GetOp("copy0");
+    g.copy1 = g.builder->GetOp("copy1");
+    g.add0 = g.builder->GetOp("softmax0");
+    g.add1 = g.builder->GetOp("softmax1");
+
+    SetCopyL0cToUbAttr(*g.copy0, fromOff0, tileShape);
+    SetCopyL0cToUbAttr(*g.copy1, fromOff1, tileShape);
+    return g;
+}
+
+// 为 OoOScheduler 预填 schedInfoMap：
+//   - add0->AIV0 / add1->AIV1，用于 dualdst identify 阶段的 ConsumerCore 校验；
+//   - ResolveDualDstAllocCtx 现在通过 dual_dst op 的 UB 输出 tensor consumer 反推 core，
+//     因此保证 add0/add1 的 schedInfoMap 正确即可。
 void InjectCoreMap(OoOScheduler& s, const DualDstGraph& g, bool sameCoreForAdds = false)
 {
     s.state_.schedInfoMap[g.copy0].coreLocation = CoreLocationType::AIC;
@@ -3559,6 +3616,103 @@ void InjectCoreMap(OoOScheduler& s, const DualDstGraph& g, bool sameCoreForAdds 
     s.state_.schedInfoMap[g.allocOut1].coreLocation = CoreLocationType::AIV1;
 }
 
+void UpdateCopyDynValidShape(DualDstGraph& g)
+{
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape({SymbolicScalar(TILE_M), SymbolicScalar(TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape({SymbolicScalar(TILE_M), SymbolicScalar(TILE_N)});
+}
+
+DualDstGraph BuildOnlineSoftmaxDualDstGraph()
+{
+    auto g = BuildDualDstGraph_2({TILE_M, TILE_N * 2}, {TILE_M, TILE_N}, {0, 0}, {0, TILE_N});
+    UpdateCopyDynValidShape(g);
+    return g;
+}
+
+Status InitDualDstScheduler(OoOScheduler& s, const DualDstGraph& g, bool enableGuard = false)
+{
+    Status st = s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO);
+    if (st != SUCCESS)
+        return st;
+    InjectCoreMap(s, g);
+    s.SetEnableDualDst(true);
+    if (enableGuard)
+        s.SetEnableDualDstAllocGuard(true);
+    return SUCCESS;
+}
+
+bool HasAiv0AndAiv1Tasks(TaskSplitter& splitter)
+{
+    bool hasAiv0Task = false;
+    bool hasAiv1Task = false;
+    for (const auto& task : splitter.GetTaskGraph().tasks) {
+        hasAiv0Task = hasAiv0Task || task.targetCoreType == TargetCoreType::AIV0;
+        hasAiv1Task = hasAiv1Task || task.targetCoreType == TargetCoreType::AIV1;
+    }
+    return hasAiv0Task && hasAiv1Task;
+}
+
+bool HasIsoAllocPair(const std::unordered_map<Operation*, Operation*>& pairs, Operation* lhs, Operation* rhs)
+{
+    auto lhsIt = pairs.find(lhs);
+    if (lhsIt != pairs.end() && lhsIt->second == rhs)
+        return true;
+    auto rhsIt = pairs.find(rhs);
+    return rhsIt != pairs.end() && rhsIt->second == lhs;
+}
+
+Operation* FindDualDstOp(Function& func)
+{
+    for (auto& op : func.Operations()) {
+        if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST)
+            return &op;
+    }
+    return nullptr;
+}
+
+bool HasDualDstOp(const std::vector<Operation*>& ops)
+{
+    return std::any_of(ops.begin(), ops.end(), [](Operation* op) {
+        return op != nullptr && op->GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST;
+    });
+}
+
+Operation* FindUbAllocPred(OoOScheduler& s, Operation* op)
+{
+    for (auto* pred : s.state_.depManager.GetPredecessors(op)) {
+        if (pred != nullptr && pred->GetOpcodeStr().find("UB_ALLOC") != std::string::npos)
+            return pred;
+    }
+    return nullptr;
+}
+
+Operation* AddGuardedUbAlloc(Function& func, OoOScheduler& s, int memId, CoreLocationType core, int64_t execOrder)
+{
+    auto tensor = CreateTensor(DataType::DT_FP32, {TILE_M, TILE_N}, MemoryType::MEM_UB, memId);
+    Operation* alloc = &PassOperationUtils::AddOperation(func, Opcode::OP_UB_ALLOC, {}, LogicalTensors({tensor}));
+    s.state_.schedInfoMap[alloc].isAlloc = true;
+    s.state_.schedInfoMap[alloc].isRetired = false;
+    s.state_.schedInfoMap[alloc].coreLocation = core;
+    s.state_.schedInfoMap[alloc].execOrder = execOrder;
+    s.state_.SetOpMemIds(alloc, {tensor->memoryrange.memId});
+    return alloc;
+}
+
+Status FillAivPoolsWithPlaceholderBuffers(OoOScheduler& s, const DualDstGraph& g, size_t needSize, int memIdA,
+                                          int memIdB)
+{
+    auto& poolA = s.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
+    auto& poolB = s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
+    if (poolA.GetMemSize() < needSize || poolB.GetMemSize() < needSize)
+        return FAILED;
+    auto bufHolderA = std::make_shared<LocalBuffer>(memIdA, needSize, MemoryType::MEM_UB);
+    auto bufHolderB = std::make_shared<LocalBuffer>(memIdB, needSize, MemoryType::MEM_UB);
+    if (poolA.AllocateAtOffset(bufHolderA, 0) != SUCCESS || poolB.AllocateAtOffset(bufHolderB, 0) != SUCCESS)
+        return FAILED;
+    s.state_.tensorOccupyMap[memIdA] = g.add0;
+    s.state_.tensorOccupyMap[memIdB] = g.add1;
+    return SUCCESS;
+}
 } // namespace dualdst_ut
 
 // --- DynShapeEq 三条分支 (�?IdentifyDualDstPairs 间接驱动) -----------------
@@ -3665,7 +3819,36 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_SplitN_HappyPath)
     EXPECT_NE(pairs[0].allocLate, nullptr);
 }
 
-// --- IdentifyDualDstPairs: SplitM 命中 ---------------------------------------
+// --- ShouldEnableDualDst: ONLINE_SOFTMAX 双 AIV task 命中 ---------------------
+TEST_F(ScheduleOoOTest, DualDst_ShouldEnableDualDst_WithOnlineSoftmaxTasks)
+{
+    auto g = dualdst_ut::BuildOnlineSoftmaxDualDstGraph();
+    auto opList = g.func->Operations().DuplicatedOpList();
+    TaskSplitter splitter;
+    splitter.SplitGraph(opList);
+    OoOSchedule oooSchedule;
+    ASSERT_EQ(oooSchedule.EstimateTaskLatencyAndSchedule(splitter, opList), SUCCESS);
+
+    EXPECT_TRUE(dualdst_ut::HasAiv0AndAiv1Tasks(splitter));
+    ASSERT_TRUE(oooSchedule.ShouldEnableDualDst(splitter));
+    ASSERT_FALSE(oooSchedule.dualDstPairs_.empty());
+    EXPECT_TRUE(dualdst_ut::HasIsoAllocPair(oooSchedule.dualDstPairs_, g.allocUb0, g.allocUb1) ||
+                dualdst_ut::HasIsoAllocPair(oooSchedule.dualDstPairs_, g.allocOut0, g.allocOut1));
+
+    OoOScheduler scheduler(*g.func);
+    ASSERT_EQ(dualdst_ut::InitDualDstScheduler(scheduler, g), SUCCESS);
+    scheduler.SetDualDstPairs(oooSchedule.dualDstPairs_);
+    std::vector<DualDstPair> pairs;
+    EXPECT_EQ(scheduler.dualDstEngine_.IdentifyDualDstPairs(pairs), SUCCESS);
+    ASSERT_TRUE(scheduler.state_.enableDualDst);
+    ASSERT_EQ(pairs.size(), 1u);
+    EXPECT_EQ(pairs[0].opEarly, g.copy0);
+    EXPECT_EQ(pairs[0].opLate, g.copy1);
+    EXPECT_EQ(scheduler.dualDstEngine_.RealignAllocByIso(scheduler.state_.orderedOps), SUCCESS);
+    EXPECT_EQ(scheduler.dualDstEngine_.RunDualDstFuse(), SUCCESS);
+    EXPECT_TRUE(dualdst_ut::HasDualDstOp(scheduler.state_.orderedOps));
+}
+
 TEST_F(ScheduleOoOTest, DualDst_Identify_SplitM_HappyPath)
 {
     // M-axis adjacent: l0cShape M = 2*TILE_M; fromOff �?M 轴相�?TILE_M
@@ -3730,7 +3913,7 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_SameConsumerCore_NoPair)
 }
 
 // --- RunDualDstFuse 三个出口分支 ---------------------------------------------
-// 分支 1: enableDualDst_ false -> 直接 SUCCESS, 不动�?
+// 分支 1: state_.enableDualDst false -> 直接 SUCCESS, 不动�?
 TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_DisabledIsNoOp)
 {
     auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
@@ -3744,7 +3927,7 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_DisabledIsNoOp)
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
-    s.dualDstEngine_.enableDualDst_ = false;
+    s.SetEnableDualDst(false);
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
 }
 
@@ -3762,7 +3945,7 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_SingleAivPoolEarlyExit)
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_ONE), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
-    s.dualDstEngine_.enableDualDst_ = true;
+    s.SetEnableDualDst(true);
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
 }
 
@@ -3783,7 +3966,7 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_ActuallyFusesAndMutatesFunction)
     dualdst_ut::InjectCoreMap(s, g);
 
     size_t opsBefore = g.func->Operations().size();
-    s.dualDstEngine_.enableDualDst_ = true;
+    s.SetEnableDualDst(true);
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
 
     // EraseOperations(false, true) 移除�?copy0 / copy1 / 一个被剔的 alloc,
@@ -3816,7 +3999,7 @@ TEST_F(ScheduleOoOTest, DualDst_AllocQueryHelpers_AfterFuse)
     OoOScheduler s(*g.func);
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
-    s.dualDstEngine_.enableDualDst_ = true;
+    s.SetEnableDualDst(true);
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
 
     // 找到 fuse 出来�?dualdst op 和它依赖�?(唯一保留) UB alloc
@@ -3838,21 +4021,119 @@ TEST_F(ScheduleOoOTest, DualDst_AllocQueryHelpers_AfterFuse)
     }
     ASSERT_NE(survivingUbAlloc, nullptr);
 
-    EXPECT_TRUE(s.dualDstEngine_.IsDualDstAlloc(survivingUbAlloc));
+    EXPECT_TRUE(s.state_.IsDualDstAlloc(survivingUbAlloc));
     EXPECT_EQ(s.dualDstEngine_.GetDualDstCopyOpFor(survivingUbAlloc), dual);
     int paired = s.dualDstEngine_.GetDualDstPairedMemId(survivingUbAlloc);
     EXPECT_NE(paired, -1);
     EXPECT_NE(paired, survivingUbAlloc->GetOutputOperand(0)->memoryrange.memId);
 
     // �?dualdst alloc 应返�?false / nullptr / -1
-    EXPECT_FALSE(s.dualDstEngine_.IsDualDstAlloc(g.allocL0c));
+    EXPECT_FALSE(s.state_.IsDualDstAlloc(g.allocL0c));
     EXPECT_EQ(s.dualDstEngine_.GetDualDstCopyOpFor(g.allocL0c), nullptr);
     EXPECT_EQ(s.dualDstEngine_.GetDualDstPairedMemId(nullptr), -1);
 }
 
 // --- AllocateDualDstAtCurrent: ResolveCtx + Commit 成功路径 ----------------
-// (Full 分支�?OoOScheduler::FindCommonFreeOffset 返回 nullopt 触发, 单测构造代�?
-//  较大, 通过 spill 路径集成测试覆盖; 这里只验�?happy path �?ResolveCtx OK�?
+// (Full 分支由 OoOScheduler::FindCommonFreeOffset 返回 nullopt 触发, 单测构造代价
+//  较大, 通过 spill 路径集成测试覆盖; 这里只验证 happy path 与 ResolveCtx OK。)
+TEST_F(ScheduleOoOTest, DualDst_AllocGuardBlocksAiv0UntilAiv1DualDstAllocRetires)
+{
+    auto g = dualdst_ut::BuildOnlineSoftmaxDualDstGraph();
+    OoOScheduler s(*g.func);
+    ASSERT_EQ(dualdst_ut::InitDualDstScheduler(s, g, true), SUCCESS);
+    s.state_.schedInfoMap[g.allocUb1].execOrder = -1;
+    s.state_.schedInfoMap[g.allocUb0].execOrder = 1;
+    EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
+
+    Operation* dual = dualdst_ut::FindDualDstOp(*g.func);
+    ASSERT_NE(dual, nullptr);
+    Operation* aiv1DualDstAlloc = dualdst_ut::FindUbAllocPred(s, dual);
+    ASSERT_NE(aiv1DualDstAlloc, nullptr);
+    EXPECT_EQ(s.state_.schedInfoMap[aiv1DualDstAlloc].coreLocation, CoreLocationType::AIV1);
+    ASSERT_TRUE(s.state_.IsDualDstAlloc(aiv1DualDstAlloc));
+
+    Operation* aiv0GuardedAlloc = dualdst_ut::AddGuardedUbAlloc(*g.func, s, 91001, CoreLocationType::AIV0, 0);
+    Operation* aiv1GuardedAlloc = dualdst_ut::AddGuardedUbAlloc(*g.func, s, 91002, CoreLocationType::AIV1, 0);
+    Operation* aiv0LaterGuardedAlloc = dualdst_ut::AddGuardedUbAlloc(*g.func, s, 91003, CoreLocationType::AIV0, 1);
+    s.state_.depManager.AddAllocDependency(aiv0GuardedAlloc, g.add0);
+    s.state_.depManager.AddAllocDependency(aiv0LaterGuardedAlloc, g.add0);
+    s.state_.depManager.AddAllocDependency(aiv1GuardedAlloc, g.add1);
+
+    EXPECT_EQ(s.dualDstEngine_.BuildDualDstAllocGuards(), SUCCESS);
+    EXPECT_FALSE(s.dualDstEngine_.IsDualDstAllocGuardSatisfied(aiv0GuardedAlloc));
+    auto guardAllocs = s.dualDstEngine_.GetUnretiredGuardAllocs(aiv0GuardedAlloc);
+    ASSERT_EQ(guardAllocs.size(), 1u);
+    EXPECT_EQ(guardAllocs[0], aiv1DualDstAlloc);
+    EXPECT_TRUE(s.dualDstEngine_.IsDualDstAllocGuardSatisfied(aiv0LaterGuardedAlloc));
+
+    EXPECT_FALSE(s.dualDstEngine_.IsDualDstAllocGuardSatisfied(aiv1GuardedAlloc));
+    guardAllocs = s.dualDstEngine_.GetUnretiredGuardAllocs(aiv1GuardedAlloc);
+    ASSERT_EQ(guardAllocs.size(), 1u);
+    EXPECT_EQ(guardAllocs[0], aiv1DualDstAlloc);
+
+    s.state_.schedInfoMap[aiv1DualDstAlloc].isRetired = true;
+    EXPECT_TRUE(s.dualDstEngine_.IsDualDstAllocGuardSatisfied(aiv0GuardedAlloc));
+    EXPECT_TRUE(s.dualDstEngine_.GetUnretiredGuardAllocs(aiv0GuardedAlloc).empty());
+}
+
+TEST_F(ScheduleOoOTest, DualDst_AivUbAllocUsesMatchedPeerOffset)
+{
+    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    s.SetEnableDualDst(true);
+    s.SetEnableDualDstAllocGuard(true);
+
+    constexpr int kAiv0MemId = 92001;
+    constexpr int kAiv1MemId = 92002;
+    constexpr int kPlaceholderMemId = 92003;
+    constexpr uint64_t kAllocSize = 256;
+    constexpr uint64_t kPlaceholderSize = 128;
+    constexpr uint64_t kPoolSize = 2048;
+
+    s.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB] = BufferPool(MemoryType::MEM_UB, kPoolSize);
+    s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB] = BufferPool(MemoryType::MEM_UB, kPoolSize);
+    auto& aiv0Pool = s.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
+    auto& aiv1Pool = s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
+    auto placeholder = std::make_shared<LocalBuffer>(kPlaceholderMemId, kPlaceholderSize, MemoryType::MEM_UB);
+    ASSERT_EQ(aiv0Pool.AllocateAtOffset(placeholder, 0), SUCCESS);
+
+    auto addAivAlloc = [&](int memId, CoreLocationType core) {
+        auto tensor = CreateTensor(DataType::DT_FP32, {8, 8}, MemoryType::MEM_UB, memId);
+        Operation* alloc = &PassOperationUtils::AddOperation(*g.func, Opcode::OP_UB_ALLOC, {},
+                                                             LogicalTensors({tensor}));
+        s.state_.schedInfoMap[alloc].isAlloc = true;
+        s.state_.schedInfoMap[alloc].isRetired = false;
+        s.state_.schedInfoMap[alloc].coreLocation = core;
+        s.state_.SetOpMemIds(alloc, {memId});
+        s.state_.localBufferMap[memId] = std::make_shared<LocalBuffer>(memId, kAllocSize, MemoryType::MEM_UB);
+        s.state_.bufRefCount[memId] = 2;
+        return alloc;
+    };
+
+    Operation* aiv0Alloc = addAivAlloc(kAiv0MemId, CoreLocationType::AIV0);
+    Operation* aiv1Alloc = addAivAlloc(kAiv1MemId, CoreLocationType::AIV1);
+    s.dualDstEngine_.guardedAllocToDualDstAllocs_[aiv1Alloc].push_back(aiv0Alloc);
+
+    uint64_t commitCnt = 0;
+    bool allocated = false;
+    EXPECT_EQ(s.TryRegularAllocOnce(aiv0Alloc, MemoryType::MEM_UB, CoreLocationType::AIV0,
+                                    s.state_.GetOpMemIds(aiv0Alloc), commitCnt, allocated),
+              SUCCESS);
+    ASSERT_TRUE(allocated);
+    ASSERT_EQ(aiv0Pool.GetBufferOffset(kAiv0MemId), kPlaceholderSize);
+
+    allocated = false;
+    EXPECT_EQ(s.TryRegularAllocOnce(aiv1Alloc, MemoryType::MEM_UB, CoreLocationType::AIV1,
+                                    s.state_.GetOpMemIds(aiv1Alloc), commitCnt, allocated),
+              SUCCESS);
+    ASSERT_TRUE(allocated);
+    EXPECT_EQ(aiv1Pool.GetBufferOffset(kAiv1MemId), kPlaceholderSize);
+    EXPECT_NE(aiv1Pool.GetBufferOffset(kAiv1MemId), 0u);
+}
+
 TEST_F(ScheduleOoOTest, DualDst_AllocateDualDstAtCurrent_HappyPath)
 {
     auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
@@ -3865,7 +4146,7 @@ TEST_F(ScheduleOoOTest, DualDst_AllocateDualDstAtCurrent_HappyPath)
     OoOScheduler s(*g.func);
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
-    s.dualDstEngine_.enableDualDst_ = true;
+    s.SetEnableDualDst(true);
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
 
     Operation* dual = nullptr;
@@ -3915,57 +4196,28 @@ TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_PicksMatchingGroupAcrossAivPo
 {
     auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
                                            {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
-    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
-        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
-    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
-        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    dualdst_ut::UpdateCopyDynValidShape(g);
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
-    dualdst_ut::InjectCoreMap(s, g);
-    s.dualDstEngine_.enableDualDst_ = true;
+    ASSERT_EQ(dualdst_ut::InitDualDstScheduler(s, g), SUCCESS);
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
 
-    Operation* dual = nullptr;
-    for (auto& op : g.func->Operations()) {
-        if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) {
-            dual = &op;
-            break;
-        }
-    }
+    Operation* dual = dualdst_ut::FindDualDstOp(*g.func);
     ASSERT_NE(dual, nullptr);
-    Operation* survivingUbAlloc = nullptr;
-    for (auto* pred : s.state_.depManager.GetPredecessors(dual)) {
-        if (pred != nullptr && pred->GetOpcodeStr().find("UB_ALLOC") != std::string::npos) {
-            survivingUbAlloc = pred;
-            break;
-        }
-    }
+    Operation* survivingUbAlloc = dualdst_ut::FindUbAllocPred(s, dual);
     ASSERT_NE(survivingUbAlloc, nullptr);
-    ASSERT_TRUE(s.dualDstEngine_.IsDualDstAlloc(survivingUbAlloc));
+    ASSERT_TRUE(s.state_.IsDualDstAlloc(survivingUbAlloc));
 
     int memIdA = survivingUbAlloc->GetOutputOperand(0)->memoryrange.memId;
     ASSERT_NE(s.state_.localBufferMap.find(memIdA), s.state_.localBufferMap.end());
     size_t needSize = s.state_.localBufferMap[memIdA]->size;
 
-    // �?AIV0 / AIV1 两池 offset 0 各放一个占�?buf, size = needSize
-    // -> spill �?freedRange = [0, poolMem) 双侧完全一�?
-    auto& poolA = s.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
-    auto& poolB = s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
-    ASSERT_GE(poolA.GetMemSize(), needSize);
-    ASSERT_GE(poolB.GetMemSize(), needSize);
-
-    constexpr int kPlaceholderMemIdA = 90001; // �?core 全局唯一 (不与 graph builder 冲突)
+    constexpr int kPlaceholderMemIdA = 90001;
     constexpr int kPlaceholderMemIdB = 90002;
-    auto bufHolderA = std::make_shared<LocalBuffer>(kPlaceholderMemIdA, needSize, MemoryType::MEM_UB);
-    auto bufHolderB = std::make_shared<LocalBuffer>(kPlaceholderMemIdB, needSize, MemoryType::MEM_UB);
-    ASSERT_EQ(poolA.AllocateAtOffset(bufHolderA, 0), SUCCESS);
-    ASSERT_EQ(poolB.AllocateAtOffset(bufHolderB, 0), SUCCESS);
+    ASSERT_EQ(dualdst_ut::FillAivPoolsWithPlaceholderBuffers(s, g, needSize, kPlaceholderMemIdA, kPlaceholderMemIdB),
+              SUCCESS);
 
-    // 直接�?SelectSpillBuffers 验证 dualdst 选组分支
     auto spillGroup = s.SelectSpillBuffers(survivingUbAlloc);
-
-    // 期待: 双池各贡�?1 �?placeholder memId, 合计 2 �?
     ASSERT_EQ(spillGroup.size(), 2u);
     EXPECT_NE(std::find(spillGroup.begin(), spillGroup.end(), kPlaceholderMemIdA), spillGroup.end());
     EXPECT_NE(std::find(spillGroup.begin(), spillGroup.end(), kPlaceholderMemIdB), spillGroup.end());
@@ -3985,7 +4237,7 @@ TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_EmptyPoolsReturnEmpty)
     OoOScheduler s(*g.func);
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
-    s.dualDstEngine_.enableDualDst_ = true;
+    s.SetEnableDualDst(true);
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
 
     Operation* dual = nullptr;
@@ -4004,7 +4256,7 @@ TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_EmptyPoolsReturnEmpty)
         }
     }
     ASSERT_NE(survivingUbAlloc, nullptr);
-    ASSERT_TRUE(s.dualDstEngine_.IsDualDstAlloc(survivingUbAlloc));
+    ASSERT_TRUE(s.state_.IsDualDstAlloc(survivingUbAlloc));
 
     // 不预填任何占�?buf -> AIV0/AIV1 两池 allocatedBufs 都空
     // -> GetSpillGroup 返回�?-> SelectSpillBuffers 返回�?
@@ -4132,4 +4384,30 @@ TEST_F(ScheduleOoOTest, DualDst_GetNewOperations_DedupePreservesFirstOccurrence)
     EXPECT_EQ(uniq[0], g.copy0);
     EXPECT_EQ(uniq[1], g.copy1);
 }
+
+// --- IsoMatchChains: root 签名不匹配返回 false (正常路径已由 ShouldEnableDualDst 覆盖) ---
+TEST_F(ScheduleOoOTest, IsoMatch_IsoMatchChains_RootSignatureMismatch)
+{
+    auto builder = std::make_shared<ComputationalGraphBuilder>();
+    EXPECT_EQ(builder->AddTensor(DataType::DT_FP32, {4, 4}, MemoryType::MEM_UB, "ta0"), true);
+    EXPECT_EQ(builder->AddTensor(DataType::DT_FP32, {4, 4}, MemoryType::MEM_UB, "tb0"), true);
+    EXPECT_EQ(builder->AddTensor(DataType::DT_FP32, {4, 4}, MemoryType::MEM_UB, "ta_out"), true);
+    EXPECT_EQ(builder->AddTensor(DataType::DT_FP32, {4, 4}, MemoryType::MEM_UB, "tb_out"), true);
+    EXPECT_EQ(builder->AddOp(Opcode::OP_UB_ALLOC, {}, {"ta0"}, "alloc_a0"), true);
+    EXPECT_EQ(builder->AddOp(Opcode::OP_UB_ALLOC, {}, {"tb0"}, "alloc_b0"), true);
+    EXPECT_EQ(builder->AddOp(Opcode::OP_ADD, {"ta0", "ta0"}, {"ta_out"}, "add_a0"), true);
+    EXPECT_EQ(builder->AddOp(Opcode::OP_SUB, {"tb0", "tb0"}, {"tb_out"}, "sub_b0"), true);
+
+    std::vector<Operation*> opsA = {builder->GetOp("alloc_a0"), builder->GetOp("add_a0")};
+    std::vector<Operation*> opsB = {builder->GetOp("alloc_b0"), builder->GetOp("sub_b0")};
+    std::unordered_set<Operation*> setA(opsA.begin(), opsA.end());
+    std::unordered_set<Operation*> setB(opsB.begin(), opsB.end());
+
+    auto rootsA = FindTaskEntryOps(opsA, setA);
+    auto rootsB = FindTaskEntryOps(opsB, setB);
+    auto res = IsoMatchChains(rootsA, rootsB, setA, setB);
+    EXPECT_FALSE(res.rootIsomorphic);
+    EXPECT_EQ(res.pairs.size(), 0u);
+}
+
 } // namespace npu::tile_fwk

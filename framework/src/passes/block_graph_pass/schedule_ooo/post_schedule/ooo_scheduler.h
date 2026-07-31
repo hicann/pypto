@@ -50,9 +50,10 @@ public:
     void AddObserver(ScheduleObserver* observer) { state_.observers_.push_back(observer); }
     std::vector<Operation*> GetNewOperations();
 
-    // === DualDst 开关 ===
-    // OoOSchedule 在调用 Schedule() 之前设置(默认 false 保持原行为)。
-    void SetEnableDualDst(bool v) { dualDstEngine_.SetEnableDualDst(v); }
+    // DualDst switch is configured by OoOSchedule before Schedule().
+    void SetEnableDualDst(bool v) { state_.enableDualDst = v; }
+    void SetEnableDualDstAllocGuard(bool v) { dualDstEngine_.SetEnableDualDstAllocGuard(v); }
+    void SetDualDstPairs(std::unordered_map<Operation*, Operation*> pairs) { state_.dualDstPairs = std::move(pairs); }
 
 private:
     Function& function_;
@@ -66,6 +67,7 @@ private:
 
     IRBuilder irBuilder_;
     std::unordered_map<int, DDRBufferKind> ddrKindMap_;
+    std::vector<Operation*> guardBlockedAllocs_;
 
     void NotifyOpLaunch(Operation* op, int cycleEnd);
     void NotifyOpRetire(Operation* op, const std::vector<int>& freedMemIds);
@@ -98,8 +100,11 @@ private:
     void InitIssueQueuesAndBufferManager();
 
     void AllocWorkspaceGM(const std::vector<Operation*>& opList);
+    void UpdateDualDstL0MXRange();
+    Status FinalizeScheduleResult(const std::vector<Operation*>& opList);
     Status SeqSchedule();
     Status ExecuteAllocIssue(Operation* op, size_t& pcIdx);
+    Status AllocateAfterSpill(Operation* op, LocalBufferPtr allocBuffer, CoreLocationType coreLocation, bool isDualDst);
     Status RetireIssue(Operation* op);
     Status ScheduleMainLoop();
     void LaunchReadyIssue();
@@ -124,6 +129,14 @@ private:
     bool HasEnoughBuffer(Operation* allocOp, MemoryType memType);
     Status RearrangeBuffer(Operation* allocOp, MemoryType memType);
     Status GenBufferSpill(Operation* allocOp, SpillContext& ctx);
+    bool CollectClearableWindowGroup(const std::vector<std::tuple<int, size_t, size_t>>* pools[2], uint64_t winStart,
+                                     uint64_t winEnd, Operation* allocOp, std::unordered_map<int, bool>& spillableCache,
+                                     std::unordered_map<int, long long>& nextUseCache, std::vector<int>& group,
+                                     long long& winScore);
+    std::vector<std::vector<int>> GetCommonOffsetClearGroup(BufferPool& poolA, BufferPool& poolB, size_t sizeNeedSpill,
+                                                            Operation* allocOp);
+    std::vector<int> SelectDualDstSpillBuffers(Operation* allocOp, LocalBufferPtr allocBuffer, bool isDualDst,
+                                               CoreLocationType allocCore);
     std::vector<int> SelectSpillBuffers(Operation* allocOp);
     Status ApplySpillContext(SpillContext& ctx, Operation* allocOp);
     Status PrintSpillFailedInfo(Operation* allocOp);
@@ -133,6 +146,8 @@ private:
                                std::unordered_map<int, size_t>& nextUseTimeCache);
 
     Status SpillOnBlock();
+    Status SpillOnGuardBlock();
+    bool IsOpInQueue(Operation* op, const OpQueue& pipe) const;
     Status SpillOnCoreBlock(std::pair<CoreLocationType, MemoryType> coreLocation);
     Status FindFirstOrder(std::pair<CoreLocationType, MemoryType>& orderFirstPair);
     Status FindCoreLocationMemoryType(CoreLocationType coreLocation, MemoryType& spillMemType);

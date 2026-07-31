@@ -84,7 +84,11 @@ size_t BufferPool::UpdateIdx(size_t& i, size_t sizeNeedSpill, size_t startAddr,
     if (j < allocatedBufs.size()) {
         endAddr = std::get<1>(allocatedBufs[j]);
     }
-    while (i < (j - 1) && (endAddr - std::get<START_ADDR_IDX>(allocatedBufs[i])) >= sizeNeedSpill) {
+    // 必须写成 i + 1 < j: 原先的 i < (j - 1) 在 j == 0 (没有 allocatedBufs 的 end addr
+    // 落在 spill 窗口内, 首个 while 不推进) 时, j - 1 size_t 下溢成 SIZE_MAX, 本 while
+    // 失控把 i 一路推过 allocatedBufs.size() (越界访问 + 让上游 GetDualSpillGroup 的
+    // (jA - iA) 再次下溢, reserve 抛 length_error "vector::reserve").
+    while (i + 1 < j && (endAddr - std::get<START_ADDR_IDX>(allocatedBufs[i])) >= sizeNeedSpill) {
         i += 1;
     }
     return j;

@@ -206,6 +206,15 @@ public:
     std::vector<Operation*> newOperations;
     std::unordered_set<CoreLocationType> coreInitConfigs;
     std::unordered_map<int, CoreLocationType> dualDstMemIdCoreOverride;
+    // DualDst 活动 pair 的 memId 互相索引: dualDstPairedMemId[memIdA] = memIdB,
+    // dualDstPairedMemId[memIdB] = memIdA。CommitDualDstAlloc 写入两个方向;
+    // FreeBuffer 任一侧 free 时同时擦掉两个 key。Spill 选 group 时优先用此表挑活动
+    // pair 配对 spill, 两池同 offset 同时释放, 维持池对称, 切断 "spill 加剧错位
+    // -> alloc 失败更多 -> spill 更多" 的正反馈环。
+    std::unordered_map<int, int> dualDstPairedMemId;
+    // DualDst 总开关 (OoOScheduler 在 Schedule() 前设置)。各引擎共享。
+    bool enableDualDst{false};
+    std::unordered_map<Operation*, Operation*> dualDstPairs; // AIV0 alloc -> AIV1 alloc
     int64_t workspaceOffset{0};
     std::unordered_map<PipeType, int> pipeEndTime;
     int workspaceMemId{SYMBOL_STACK_BASE};
@@ -248,6 +257,12 @@ public:
     bool IsOpAllocInSchedInfo(Operation* op) const;
     bool IsOpRetired(Operation* op) const;
     void InsertOrdered(Operation* insertOp);
+    // 给定 memId 求它该在哪个核 free: 优先查 dualDstMemIdCoreOverride (dualdst 跨核池),
+    // 未命中则回退到 tensorAllocMap[memId] 的归核 (原行为)。
+    CoreLocationType ResolveCoreForFree(int memId);
+    // 判断 allocOp 是否为 DualDst alloc (有 OP_L0C_COPY_UB_DUAL_DST 后继)。enableDualDst
+    // 关闭时直接返回 false。纯 state 查询, 供 DualDstEngine / SpillEngine / OoOScheduler 共用。
+    bool IsDualDstAlloc(Operation* allocOp);
 };
 
 CoreLocation ToCoreLocation(CoreLocationType c);

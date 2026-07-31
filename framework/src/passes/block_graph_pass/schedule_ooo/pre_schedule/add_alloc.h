@@ -38,6 +38,7 @@ struct TensorAllocMsg {
     bool isAllocated{false};
     MemoryType memType;
     int memId;
+    size_t firstOperandIdx{0};
 };
 
 class AddAlloc : public Pass {

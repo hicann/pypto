@@ -10,12 +10,13 @@
 
 /*!
  * \file dualdst_engine.cpp
- * \brief DualDstEngine 实现 — OP_L0C_COPY_UB → OP_L0C_COPY_UB_DUAL_DST 融合的识别与改图,
- *        以及 UB 联合分配。从 OoOScheduler 提取为独立引擎。
+ * \brief DualDstEngine 实现：OP_L0C_COPY_UB 到 OP_L0C_COPY_UB_DUAL_DST 的融合识别、图改写和 UB 双池分配。
  */
 
 #include "dualdst_engine.h"
 #include "interface/operation/attribute.h"
+#include <sstream>
+#include <string>
 
 #ifdef MODULE_NAME
 #undef MODULE_NAME
@@ -43,6 +44,19 @@ bool DynShapeEq(const std::vector<SymbolicScalar>& a, const std::vector<Symbolic
     }
     return true;
 }
+
+bool IsOpcode(Operation* op, const std::string& opcode) { return op != nullptr && op->GetOpcodeStr() == opcode; }
+
+bool IsOnlineSoftmax(Operation* op) { return IsOpcode(op, "ONLINE_SOFTMAX"); }
+
+bool IsOnlineSoftmaxUpdate(Operation* op) { return IsOpcode(op, "ONLINE_SOFTMAX_UPDATE"); }
+
+bool IsL0cCopyBoundary(Operation* op)
+{
+    return op != nullptr && (op->GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST || IsOpcode(op, "L0C_COPY_UB"));
+}
+
+bool IsCopyIn(Operation* op) { return op != nullptr && op->GetOpcodeStr().find("COPY_IN") != std::string::npos; }
 
 } // namespace
 
@@ -110,6 +124,56 @@ bool DualDstEngine::LoadGeometries(const std::vector<Operation*>& copyUbs, std::
             okCnt++;
     }
     return okCnt >= kMinDualDstPairCount;
+}
+
+// ===== 调度后诊断：DUAL_DST 同 offset 不变量校验 =====
+// 如果最终 offset 不等，跨 AIV 读取可能拿到错误语义的张量。
+Status DualDstEngine::VerifyDualDstSameOffset()
+{
+    if (!state_.enableDualDst)
+        return SUCCESS;
+    int total = 0;
+    int matched = 0;
+    int mismatched = 0;
+    for (auto* op : state_.newOperations) {
+        if (op == nullptr)
+            continue;
+        if (op->GetOpcode() != Opcode::OP_L0C_COPY_UB_DUAL_DST)
+            continue;
+        const auto& outs = op->GetOOperands();
+        if (outs.size() != 2)
+            continue;
+        if (outs[0] == nullptr || outs[1] == nullptr)
+            continue;
+        int memIdA = outs[0]->memoryrange.memId;
+        int memIdB = outs[1]->memoryrange.memId;
+        auto itA = state_.localBufferMap.find(memIdA);
+        auto itB = state_.localBufferMap.find(memIdB);
+        if (itA == state_.localBufferMap.end() || itB == state_.localBufferMap.end())
+            continue;
+        if (itA->second == nullptr || itB->second == nullptr)
+            continue;
+        size_t offA = itA->second->start;
+        size_t offB = itB->second->start;
+        size_t sizeA = itA->second->size;
+        size_t sizeB = itB->second->size;
+        total++;
+        if (offA == offB) {
+            matched++;
+        } else {
+            mismatched++;
+            CoreLocationType coreA = state_.ResolveCoreForFree(memIdA);
+            CoreLocationType coreB = state_.ResolveCoreForFree(memIdB);
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "[dualdst-verify] mismatch op=%d | memIdA=%d coreA=%d off=%zu size=%zu | "
+                              "memIdB=%d coreB=%d off=%zu size=%zu",
+                              op->GetOpMagic(), memIdA, static_cast<int>(coreA), offA, sizeA, memIdB,
+                              static_cast<int>(coreB), offB, sizeB);
+        }
+    }
+    APASS_LOG_DEBUG_F(Elements::Operation, "[dualdst-verify] DUAL_DST total=%d matched=%d mismatched=%d", total,
+                      matched, mismatched);
+    return (mismatched > 0) ? FAILED : SUCCESS;
 }
 
 void DualDstEngine::GreedyNonOverlapPick(std::vector<CandidatePair>& cands, std::vector<CandidatePair>& picked)
@@ -233,23 +297,6 @@ void DualDstEngine::PickAllocOrder(Operation* a1, Operation* a2, Operation*& ear
     }
 }
 
-bool DualDstEngine::IsDualDstAlloc(Operation* allocOp)
-{
-    if (!enableDualDst_)
-        return false;
-    if (allocOp == nullptr)
-        return false;
-    auto it = state_.schedInfoMap.find(allocOp);
-    if (it == state_.schedInfoMap.end() || !it->second.isAlloc)
-        return false;
-    for (auto* succ : state_.depManager.GetSuccessors(allocOp)) {
-        if (succ != nullptr && succ->GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) {
-            return true;
-        }
-    }
-    return false;
-}
-
 Operation* DualDstEngine::GetDualDstCopyOpFor(Operation* allocOp)
 {
     if (allocOp == nullptr)
@@ -280,6 +327,320 @@ int DualDstEngine::GetDualDstPairedMemId(Operation* allocOp)
     return -1;
 }
 
+void DualDstEngine::ClearDualDstAllocGuards() { guardedAllocToDualDstAllocs_.clear(); }
+
+bool DualDstEngine::IsDualDstAllocGuardSatisfied(Operation* allocOp) const
+{
+    if (!enableDualDstAllocGuard_) {
+        return true;
+    }
+    auto it = guardedAllocToDualDstAllocs_.find(allocOp);
+    if (it == guardedAllocToDualDstAllocs_.end()) {
+        return true;
+    }
+    for (auto* guardAlloc : it->second) {
+        auto schedIt = state_.schedInfoMap.find(guardAlloc);
+        if (schedIt == state_.schedInfoMap.end() || !schedIt->second.isRetired) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::vector<Operation*> DualDstEngine::GetUnretiredGuardAllocs(Operation* allocOp) const
+{
+    std::vector<Operation*> unretiredGuardAllocs;
+    if (!enableDualDstAllocGuard_) {
+        return unretiredGuardAllocs;
+    }
+    auto it = guardedAllocToDualDstAllocs_.find(allocOp);
+    if (it == guardedAllocToDualDstAllocs_.end()) {
+        return unretiredGuardAllocs;
+    }
+    for (auto* guardAlloc : it->second) {
+        auto schedIt = state_.schedInfoMap.find(guardAlloc);
+        if (schedIt == state_.schedInfoMap.end() || !schedIt->second.isRetired) {
+            unretiredGuardAllocs.push_back(guardAlloc);
+        }
+    }
+    return unretiredGuardAllocs;
+}
+
+bool DualDstEngine::IsAivUbAllocAlignmentCheckEnabled() const
+{
+    return state_.enableDualDst && enableDualDstAllocGuard_ &&
+           state_.coreInitConfigs.find(CoreLocationType::AIV1) != state_.coreInitConfigs.end() &&
+           !guardedAllocToDualDstAllocs_.empty();
+}
+
+Status DualDstEngine::ResolveAivUbAllocRecordInput(Operation* allocOp, bool& shouldCheck,
+                                                   CoreLocationType& coreLocation, int& memId, LocalBufferPtr& buf)
+{
+    shouldCheck = false;
+    memId = -1;
+    buf = nullptr;
+    if (!IsAivUbAllocAlignmentCheckEnabled()) {
+        return SUCCESS;
+    }
+    if (allocOp == nullptr || state_.IsDualDstAlloc(allocOp)) {
+        return SUCCESS;
+    }
+    auto schedIt = state_.schedInfoMap.find(allocOp);
+    if (schedIt == state_.schedInfoMap.end() || !schedIt->second.isAlloc) {
+        return SUCCESS;
+    }
+    coreLocation = schedIt->second.coreLocation;
+    if (coreLocation != CoreLocationType::AIV0 && coreLocation != CoreLocationType::AIV1) {
+        return SUCCESS;
+    }
+
+    auto& memIds = state_.GetOpMemIds(allocOp);
+    if (memIds.empty()) {
+        APASS_LOG_ERROR_F(Elements::Operation, "AIV UB alloc alignment check cannot find memId for alloc %s.",
+                          state_.GetOpInfo(allocOp).c_str());
+        return FAILED;
+    }
+    memId = memIds[0];
+    auto bufIt = state_.localBufferMap.find(memId);
+    if (bufIt == state_.localBufferMap.end() || bufIt->second == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "AIV UB alloc alignment check cannot find local buffer for alloc %s, memId[%d].",
+                          state_.GetOpInfo(allocOp).c_str(), memId);
+        return FAILED;
+    }
+    buf = bufIt->second;
+    if (buf->memType != MemoryType::MEM_UB) {
+        return SUCCESS;
+    }
+    shouldCheck = true;
+    return SUCCESS;
+}
+
+std::string DualDstEngine::FormatAivUbAllocRecord(const AivUbAllocRecord& record) const
+{
+    std::ostringstream oss;
+    oss << "op: " << (record.op == nullptr ? "null" : state_.GetOpInfo(record.op)) << ", memId: " << record.memId
+        << ", offset: " << record.offset << ", size: " << record.size;
+    return oss.str();
+}
+
+Status DualDstEngine::TryCancelAivUbAllocRecords()
+{
+    // 对称 AIV alloc 必须按下发顺序一一匹配，这里不重排也不跳过记录。
+    while (!aiv0UbAllocRecords_.empty() && !aiv1UbAllocRecords_.empty()) {
+        const auto& aiv0Record = aiv0UbAllocRecords_.front();
+        const auto& aiv1Record = aiv1UbAllocRecords_.front();
+        if (aiv0Record.offset != aiv1Record.offset || aiv0Record.size != aiv1Record.size) {
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "AIV UB alloc alignment violated at clock[%d]. AIV0 {%s}; AIV1 {%s}; "
+                              "queue sizes: aiv0=%zu, aiv1=%zu.",
+                              state_.clock, FormatAivUbAllocRecord(aiv0Record).c_str(),
+                              FormatAivUbAllocRecord(aiv1Record).c_str(), aiv0UbAllocRecords_.size(),
+                              aiv1UbAllocRecords_.size());
+            return FAILED;
+        }
+        aiv0UbAllocRecords_.pop_front();
+        aiv1UbAllocRecords_.pop_front();
+    }
+    return SUCCESS;
+}
+
+Status DualDstEngine::RecordAivUbAlloc(Operation* allocOp)
+{
+    bool check = false;
+    CoreLocationType coreLocation = CoreLocationType::UNKNOWN;
+    int memId = -1;
+    LocalBufferPtr buf = nullptr;
+    if (ResolveAivUbAllocRecordInput(allocOp, check, coreLocation, memId, buf) != SUCCESS) {
+        return FAILED;
+    }
+    if (!check) {
+        return SUCCESS;
+    }
+
+    AivUbAllocRecord record{allocOp, memId, static_cast<uint64_t>(buf->start), static_cast<uint64_t>(buf->size)};
+    if (coreLocation == CoreLocationType::AIV0) {
+        aiv0UbAllocRecords_.push_back(record);
+    } else {
+        aiv1UbAllocRecords_.push_back(record);
+    }
+    return TryCancelAivUbAllocRecords();
+}
+
+Status DualDstEngine::GetMatchedAivUbAllocOffset(Operation* allocOp, bool& hasMatchedOffset, uint64_t& matchedOffset)
+{
+    hasMatchedOffset = false;
+    matchedOffset = 0;
+    bool shouldCheck = false;
+    CoreLocationType coreLocation = CoreLocationType::UNKNOWN;
+    int memId = -1;
+    LocalBufferPtr buf = nullptr;
+    if (ResolveAivUbAllocRecordInput(allocOp, shouldCheck, coreLocation, memId, buf) != SUCCESS) {
+        return FAILED;
+    }
+    if (!shouldCheck) {
+        return SUCCESS;
+    }
+
+    auto& peerRecords = (coreLocation == CoreLocationType::AIV0) ? aiv1UbAllocRecords_ : aiv0UbAllocRecords_;
+    if (peerRecords.empty()) {
+        return SUCCESS;
+    }
+    const auto& peerRecord = peerRecords.front();
+    if (peerRecord.size != static_cast<uint64_t>(buf->size)) {
+        APASS_LOG_ERROR_F(
+            Elements::Operation,
+            "AIV UB alloc alignment size mismatch before alloc %s. Current memId: %d, size: %lu; peer {%s}.",
+            state_.GetOpInfo(allocOp).c_str(), memId, buf->size, FormatAivUbAllocRecord(peerRecord).c_str());
+        return FAILED;
+    }
+    hasMatchedOffset = true;
+    matchedOffset = peerRecord.offset;
+    return SUCCESS;
+}
+
+Status DualDstEngine::CheckAivUbAllocAlignmentAfterDualDst(Operation* dualDstAllocOp)
+{
+    if (!IsAivUbAllocAlignmentCheckEnabled()) {
+        return SUCCESS;
+    }
+    if (TryCancelAivUbAllocRecords() != SUCCESS) {
+        return FAILED;
+    }
+    if (!aiv0UbAllocRecords_.empty() || !aiv1UbAllocRecords_.empty()) {
+        std::string aiv0Front = aiv0UbAllocRecords_.empty() ? "empty" :
+                                                              FormatAivUbAllocRecord(aiv0UbAllocRecords_.front());
+        std::string aiv1Front = aiv1UbAllocRecords_.empty() ? "empty" :
+                                                              FormatAivUbAllocRecord(aiv1UbAllocRecords_.front());
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "AIV UB alloc alignment check keeps unmatched records after dual_dst alloc %s at clock[%d]. "
+                          "aiv0 queue size: %zu, front: {%s}; aiv1 queue size: %zu, front: {%s}.",
+                          dualDstAllocOp == nullptr ? "null" : state_.GetOpInfo(dualDstAllocOp).c_str(), state_.clock,
+                          aiv0UbAllocRecords_.size(), aiv0Front.c_str(), aiv1UbAllocRecords_.size(), aiv1Front.c_str());
+    }
+    return SUCCESS;
+}
+
+void DualDstEngine::CollectSoftmaxOrUpdateGuardedAllocs(Operation* root,
+                                                        std::set<Operation*, Operation::OperationComparator>& allocs)
+{
+    auto rootIt = state_.schedInfoMap.find(root);
+    if (rootIt == state_.schedInfoMap.end()) {
+        return;
+    }
+    const auto rootCore = rootIt->second.coreLocation;
+    std::vector<Operation*> stack;
+    auto rootPredecessors = state_.depManager.GetPredecessors(root);
+    stack.insert(stack.end(), rootPredecessors.begin(), rootPredecessors.end());
+    std::set<Operation*, Operation::OperationComparator> visited;
+    while (!stack.empty()) {
+        Operation* op = stack.back();
+        stack.pop_back();
+        if (op == nullptr || visited.count(op) != 0) {
+            continue;
+        }
+        visited.insert(op);
+        if (IsL0cCopyBoundary(op) || IsOnlineSoftmax(op) || IsOnlineSoftmaxUpdate(op)) {
+            continue;
+        }
+        auto it = state_.schedInfoMap.find(op);
+        if (it == state_.schedInfoMap.end()) {
+            continue;
+        }
+        if (it->second.isAlloc) {
+            if (it->second.coreLocation == rootCore) {
+                allocs.insert(op);
+            }
+            continue;
+        }
+        if (!IsCopyIn(op) && it->second.coreLocation != rootCore) {
+            continue;
+        }
+        auto predecessors = state_.depManager.GetPredecessors(op);
+        stack.insert(stack.end(), predecessors.begin(), predecessors.end());
+    }
+}
+
+void DualDstEngine::CollectDualDstGuardedAllocs(Operation* root,
+                                                std::set<Operation*, Operation::OperationComparator>& allocs)
+{
+    if (!IsOnlineSoftmax(root) && !IsOnlineSoftmaxUpdate(root)) {
+        return;
+    }
+    CollectSoftmaxOrUpdateGuardedAllocs(root, allocs);
+}
+
+Status DualDstEngine::CollectDualDstGuardRoots(Operation* dualOp,
+                                               std::set<Operation*, Operation::OperationComparator>& roots)
+{
+    for (auto* succ : state_.depManager.GetSuccessors(dualOp)) {
+        if (IsOnlineSoftmax(succ) || IsOnlineSoftmaxUpdate(succ)) {
+            roots.insert(succ);
+        }
+    }
+    for (auto& out : dualOp->GetOOperands()) {
+        if (out == nullptr) {
+            continue;
+        }
+        for (auto* consumer : out->GetConsumers()) {
+            if (IsOnlineSoftmax(consumer) || IsOnlineSoftmaxUpdate(consumer)) {
+                roots.insert(consumer);
+                continue;
+            }
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "dual_dst 后 op 不为 OnlineSoftmax/OnlineSoftmaxUpdate，暂时不支持该情况的 dual_dst。"
+                              " dualDstOp=%s, consumer=%s.",
+                              state_.GetOpInfo(dualOp).c_str(), state_.GetOpInfo(consumer).c_str());
+            return FAILED;
+        }
+    }
+    return SUCCESS;
+}
+
+Status DualDstEngine::BuildDualDstAllocGuards()
+{
+    ClearDualDstAllocGuards();
+    aiv0UbAllocRecords_.clear();
+    aiv1UbAllocRecords_.clear();
+    if (!state_.enableDualDst || !enableDualDstAllocGuard_) {
+        return SUCCESS;
+    }
+    for (auto* allocOp : state_.orderedOps) {
+        if (!state_.IsDualDstAlloc(allocOp)) {
+            continue;
+        }
+        Operation* dualOp = GetDualDstCopyOpFor(allocOp);
+        if (dualOp == nullptr) {
+            APASS_LOG_ERROR_F(Elements::Operation, "DualDst alloc[%d] has no dual copy op.", allocOp->GetOpMagic());
+            return FAILED;
+        }
+        std::set<Operation*, Operation::OperationComparator> roots;
+        if (CollectDualDstGuardRoots(dualOp, roots) != SUCCESS) {
+            return FAILED;
+        }
+        for (auto* root : roots) {
+            std::set<Operation*, Operation::OperationComparator> guardedAllocs;
+            CollectDualDstGuardedAllocs(root, guardedAllocs);
+            Operation* earliestAlloc = nullptr;
+            for (auto* guardedAlloc : guardedAllocs) {
+                if (guardedAlloc == allocOp) {
+                    continue;
+                }
+                if (earliestAlloc == nullptr ||
+                    state_.schedInfoMap[guardedAlloc].execOrder < state_.schedInfoMap[earliestAlloc].execOrder) {
+                    earliestAlloc = guardedAlloc;
+                }
+            }
+            if (earliestAlloc != nullptr) {
+                guardedAllocToDualDstAllocs_[earliestAlloc].push_back(allocOp);
+                APASS_LOG_DEBUG_F(Elements::Operation, "DualDst guard: %s waits for %s.",
+                                  state_.GetOpInfo(earliestAlloc).c_str(), state_.GetOpInfo(allocOp).c_str());
+            }
+        }
+    }
+    return SUCCESS;
+}
+
 void DualDstEngine::EraseFromOrderedOps(Operation* op)
 {
     if (op == nullptr)
@@ -293,6 +654,61 @@ void DualDstEngine::EraseFromOrderedOps(Operation* op)
     state_.inOutOperandsCache.erase(op);
 }
 
+bool DualDstEngine::IsSupportedDualDstDtype(DataType dtype)
+{
+    return dtype == DataType::DT_FP32 || dtype == DataType::DT_INT32;
+}
+
+bool DualDstEngine::CheckDualDstDtype(LogicalTensorPtr l0cTensor, const std::vector<Operation*>& copyUbs)
+{
+    if (l0cTensor == nullptr) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "DualDst condition failed: l0c tensor is null.");
+        return false;
+    }
+
+    auto l0cDtype = l0cTensor->Datatype();
+    for (auto* copyUb : copyUbs) {
+        if (copyUb == nullptr || copyUb->GetOOperands().empty() || copyUb->GetOutputOperand(0) == nullptr) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "DualDst condition failed: copyUb output tensor is invalid, copyUb=%s.",
+                              state_.GetOpInfo(copyUb).c_str());
+            return false;
+        }
+
+        auto ubTensor = copyUb->GetOutputOperand(0);
+        auto ubDtype = ubTensor->Datatype();
+        if (l0cDtype != ubDtype || !IsSupportedDualDstDtype(l0cDtype)) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "DualDst condition failed: l0c/ub dtype unsupported or mismatched, "
+                              "l0cTensor[%d], l0cDtype=%d, copyUb=%s, ubTensor[%d], ubDtype=%d.",
+                              l0cTensor->GetMagic(), static_cast<int>(l0cDtype), state_.GetOpInfo(copyUb).c_str(),
+                              ubTensor->GetMagic(), static_cast<int>(ubDtype));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void DualDstEngine::AppendDualDstPairs(const std::vector<CandidatePair>& chosen, std::vector<DualDstPair>& pairs)
+{
+    for (auto& cp : chosen) {
+        DualDstPair pair;
+        pair.opEarly = cp.opEarly;
+        pair.opLate = cp.opLate;
+        pair.tensorEarly = cp.opEarly->GetOutputOperand(0);
+        pair.tensorLate = cp.opLate->GetOutputOperand(0);
+        pair.allocEarly = FindAllocPred(cp.opEarly);
+        pair.allocLate = FindAllocPred(cp.opLate);
+        if (pair.allocEarly == nullptr || pair.allocLate == nullptr) {
+            APASS_LOG_WARN_F(Elements::Operation, "DualDst skip pair: cannot find alloc preds for op[%d]/op[%d]",
+                             cp.opEarly->GetOpMagic(), cp.opLate->GetOpMagic());
+            continue;
+        }
+        pairs.push_back(pair);
+    }
+}
+
 void DualDstEngine::IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor, const std::vector<Operation*>& copyUbs,
                                            std::vector<DualDstPair>& pairs)
 {
@@ -302,6 +718,8 @@ void DualDstEngine::IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor, const std
     if (l0cTensor->GetShape().size() != kCopyUbGeometryDimCount)
         return;
     if (copyUbs.size() < kMinDualDstPairCount)
+        return;
+    if (!CheckDualDstDtype(l0cTensor, copyUbs))
         return;
 
     std::vector<CopyUbGeometry> geos;
@@ -325,21 +743,7 @@ void DualDstEngine::IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor, const std
     APASS_LOG_INFO_F(Elements::Operation, "DualDst pick direction: %s (M=%zu, N=%zu) for L0C tensor[%d]",
                      chooseM ? "SplitM" : "SplitN", pickedM.size(), pickedN.size(), l0cTensor->GetMagic());
 
-    for (auto& cp : chosen) {
-        DualDstPair pair;
-        pair.opEarly = cp.opEarly;
-        pair.opLate = cp.opLate;
-        pair.tensorEarly = cp.opEarly->GetOutputOperand(0);
-        pair.tensorLate = cp.opLate->GetOutputOperand(0);
-        pair.allocEarly = FindAllocPred(cp.opEarly);
-        pair.allocLate = FindAllocPred(cp.opLate);
-        if (pair.allocEarly == nullptr || pair.allocLate == nullptr) {
-            APASS_LOG_WARN_F(Elements::Operation, "DualDst skip pair: cannot find alloc preds for op[%d]/op[%d]",
-                             cp.opEarly->GetOpMagic(), cp.opLate->GetOpMagic());
-            continue;
-        }
-        pairs.push_back(pair);
-    }
+    AppendDualDstPairs(chosen, pairs);
 }
 
 Status DualDstEngine::IdentifyDualDstPairs(std::vector<DualDstPair>& pairs)
@@ -364,7 +768,6 @@ Status DualDstEngine::IdentifyDualDstPairs(std::vector<DualDstPair>& pairs)
     APASS_LOG_INFO_F(Elements::Operation, "DualDst identify done: %zu pairs.", pairs.size());
     return SUCCESS;
 }
-
 Status DualDstEngine::FuseDualDstPairs(const std::vector<DualDstPair>& pairs)
 {
     if (pairs.empty())
@@ -396,6 +799,8 @@ Operation* DualDstEngine::CreateDualDstFusedOp(const DualDstPair& p, LogicalTens
 void DualDstEngine::SetDualDstCopyAttr(Operation* C, LogicalTensorPtr l0cIn, const DualDstPair& p,
                                        std::shared_ptr<CopyOpAttribute> attrE, std::shared_ptr<CopyOpAttribute> attrL)
 {
+    // realShape = 沿 SplitMN 轴对 opEarly/opLate 各自 shape 求和。
+    // 其余字段沿用 attrE，dstValidShape 由 realShape 派生。
     auto eShapeImms = attrE->GetShape();
     auto lShapeImms = attrL->GetShape();
     if (eShapeImms.size() != kCopyUbGeometryDimCount || lShapeImms.size() != kCopyUbGeometryDimCount) {
@@ -414,7 +819,6 @@ void DualDstEngine::SetDualDstCopyAttr(Operation* C, LogicalTensorPtr l0cIn, con
     int64_t direction = dualDstL0CDirection_.count(l0cIn) ? dualDstL0CDirection_[l0cIn] : 0;
     std::vector<int64_t> realShape = (direction == 0) ? std::vector<int64_t>{eM + lM, eN} :
                                                         std::vector<int64_t>{eM, eN + lN};
-
     std::vector<SymbolicScalar> validShape;
     validShape.reserve(realShape.size());
     for (auto dim : realShape)
@@ -550,6 +954,11 @@ Status DualDstEngine::FuseOnePair(const DualDstPair& p)
     DetachOldOpsFromTensors(p, l0cIn, B);
 
     int earlyOrder = state_.schedInfoMap.count(p.opEarly) ? state_.schedInfoMap[p.opEarly].execOrder : 0;
+    // B is dropped and will be erased, so detach memId from B before deletion.
+    if (!B->GetOOperands().empty() && B->GetOutputOperand(0) != nullptr) {
+        int memIdB = B->GetOutputOperand(0)->memoryrange.memId;
+        state_.tensorAllocMap[memIdB] = nullptr;
+    }
     SyncBufRefCountForFuse(p, B, C);
     p.opEarly->SetAsDeleted();
     p.opLate->SetAsDeleted();
@@ -636,10 +1045,19 @@ Status DualDstEngine::ResolveDualDstAllocCtx(Operation* allocOp, DualDstAllocCtx
 
 void DualDstEngine::CommitDualDstAlloc(Operation* allocA, const DualDstAllocCtx& ctx, uint64_t off)
 {
+    // 记录双池分配的 memId 占用和 core override 信息。
+    // 将 tensorOccupyMap 拍平成 memId -> 占用该内存的 op。
     state_.tensorOccupyMap[ctx.memIdA] = allocA;
     state_.tensorOccupyMap[ctx.memIdB] = allocA;
+    // 记录每个 memId 实际所在的 UB 池核。
+    // FreeBuffer 会优先查这张表，避免去错误的 UB 池释放。
     state_.dualDstMemIdCoreOverride[ctx.memIdA] = ctx.coreA;
     state_.dualDstMemIdCoreOverride[ctx.memIdB] = ctx.coreB;
+
+    // 双向记录 memId 配对关系，spill 选 group 时可按 pair 找候选。
+    state_.dualDstPairedMemId[ctx.memIdA] = ctx.memIdB;
+    state_.dualDstPairedMemId[ctx.memIdB] = ctx.memIdA;
+
     ctx.bufA->startCycle = state_.clock;
     ctx.bufB->startCycle = state_.clock;
     APASS_LOG_DEBUG_F(Elements::Operation, "DualDst alloc[%d]: placed memId[%d]/[%d] at offset %lu (size %lu).",
@@ -682,6 +1100,20 @@ Status DualDstEngine::AllocateDualDstAtCurrent(Operation* allocA, bool& allocate
 
     auto off = FindCommonFreeOffset(poolForA, poolForB, ctx.bufA->size);
     if (!off.has_value()) {
+        // 两个 UB 池不存在共同连续空闲段，交给调用方触发常规 spill。
+        auto freeA = poolForA.GetSortedFreeIntervals();
+        auto freeB = poolForB.GetSortedFreeIntervals();
+        std::string sA, sB;
+        for (auto& [s, e] : freeA) {
+            sA += "[" + std::to_string(s) + "," + std::to_string(e) + ") ";
+        }
+        for (auto& [s, e] : freeB) {
+            sB += "[" + std::to_string(s) + "," + std::to_string(e) + ") ";
+        }
+        APASS_LOG_DEBUG_F(
+            Elements::Tensor,
+            "[dualdst-debug] DualDst alloc[%d] FindCommonFreeOffset miss: size=%lu, poolA free=%s, poolB free=%s",
+            allocA->GetOpMagic(), ctx.bufA->size, sA.c_str(), sB.c_str());
         return SUCCESS;
     }
     if (poolForA.AllocateAtOffset(ctx.bufA, *off) != SUCCESS) {
@@ -696,24 +1128,25 @@ Status DualDstEngine::AllocateDualDstAtCurrent(Operation* allocA, bool& allocate
         (void)poolForA.Free(ctx.memIdA);
         return FAILED;
     }
+    // dualdst 会同时在两个 UB 池分配，两侧各打一条事件。
+    APASS_LOG_DEBUG_F(Elements::Operation, "[pool-evt] alloc clock=%llu core=%d mt=0 memId=%d size=%llu dualdst=A",
+                      (unsigned long long)state_.clock, static_cast<int>(ctx.coreA), ctx.memIdA,
+                      (unsigned long long)ctx.bufA->size);
+    APASS_LOG_DEBUG_F(Elements::Operation, "[pool-evt] alloc clock=%llu core=%d mt=0 memId=%d size=%llu dualdst=B",
+                      (unsigned long long)state_.clock, static_cast<int>(ctx.coreB), ctx.memIdB,
+                      (unsigned long long)ctx.bufB->size);
     CommitDualDstAlloc(allocA, ctx, *off);
     allocated = true;
     return SUCCESS;
 }
 
-CoreLocationType DualDstEngine::ResolveCoreForFree(int memId)
-{
-    auto overrideIt = state_.dualDstMemIdCoreOverride.find(memId);
-    if (overrideIt != state_.dualDstMemIdCoreOverride.end()) {
-        return overrideIt->second;
-    }
-    return state_.schedInfoMap[state_.tensorAllocMap[memId]].coreLocation;
-}
+// ===== 核心 Override 查询 =====
 
 Status DualDstEngine::RunDualDstFuse()
 {
-    if (!enableDualDst_)
+    if (!state_.enableDualDst) {
         return SUCCESS;
+    }
     if (state_.coreInitConfigs.find(CoreLocationType::AIV1) == state_.coreInitConfigs.end()) {
         return SUCCESS;
     }
@@ -723,8 +1156,10 @@ Status DualDstEngine::RunDualDstFuse()
         APASS_LOG_ERROR_F(Elements::Operation, "IdentifyDualDstPairs failed.");
         return FAILED;
     }
-    if (pairs.empty())
+    if (pairs.empty()) {
+        state_.enableDualDst = false;
         return SUCCESS;
+    }
     if (FuseDualDstPairs(pairs) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "FuseDualDstPairs failed.");
         return FAILED;
@@ -732,4 +1167,80 @@ Status DualDstEngine::RunDualDstFuse()
     return SUCCESS;
 }
 
+Status DualDstEngine::ReorderAiv1AllocToAiv0Order(std::vector<Operation*>& opList,
+                                                  const std::unordered_map<Operation*, Operation*>& allocPairs)
+{
+    if (allocPairs.empty())
+        return SUCCESS;
+
+    // 位置表。
+    std::unordered_map<Operation*, size_t> pos;
+    pos.reserve(opList.size());
+    for (size_t i = 0; i < opList.size(); ++i) {
+        if (opList[i] != nullptr)
+            pos[opList[i]] = i;
+    }
+
+    // 按 AIV0 侧 alloc 原始位置排序，保持 AIV0 原序。
+    for (const auto& p : allocPairs) {
+        if (pos.find(p.first) == pos.end() || pos.find(p.second) == pos.end()) {
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "DualDst iso reorder: alloc pair not in orderedOps, AIV0 alloc[%d], AIV1 alloc[%d].",
+                              p.first->GetOpMagic(), p.second->GetOpMagic());
+            return FAILED;
+        }
+    }
+
+    std::vector<std::pair<Operation*, Operation*>> ordered(allocPairs.begin(), allocPairs.end());
+    std::sort(ordered.begin(), ordered.end(),
+              [&](const auto& x, const auto& y) { return pos.at(x.first) < pos.at(y.first); });
+
+    std::vector<size_t> bPositions;
+    for (const auto& p : ordered) {
+        bPositions.push_back(pos.at(p.second));
+    }
+    std::sort(bPositions.begin(), bPositions.end());
+
+    // 依赖安全：AIV1 侧 alloc 之间不能存在依赖。
+    // 任意一对存在依赖时，保守跳过本次重排。
+    for (size_t i = 0; i < ordered.size(); ++i) {
+        for (size_t j = i + 1; j < ordered.size(); ++j) {
+            Operation* bi = ordered[i].second;
+            Operation* bj = ordered[j].second;
+            if (state_.depManager.GetSuccessors(bi).count(bj) > 0 ||
+                state_.depManager.GetSuccessors(bj).count(bi) > 0) {
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "DualDst iso reorder skip (dep between AIV1 allocs): b[%d] b[%d]", bi->GetOpMagic(),
+                                  bj->GetOpMagic());
+                return SUCCESS;
+            }
+        }
+    }
+
+    // 按 AIV0 顺序把 AIV1 侧 alloc 写回 bPositions。
+    // ordered[k].second 写回到 orderedOps[bPositions[k]]。
+    // 结果是 AIV1 alloc 在 orderedOps 中的顺序与 AIV0 原始顺序一致。
+    // 上面已按 AIV0 顺序写回，这里不再额外重排 AIV0。
+    for (size_t k = 0; k < ordered.size(); ++k) {
+        opList[bPositions[k]] = ordered[k].second;
+    }
+
+    APASS_LOG_DEBUG_F(Elements::Operation, "DualDst iso reorder: aligned %zu AIV1 allocs to AIV0 order.",
+                      ordered.size());
+    return SUCCESS;
+}
+
+Status DualDstEngine::RealignAllocByIso(std::vector<Operation*>& opList)
+{
+    if (!state_.enableDualDst)
+        return SUCCESS;
+    if (state_.dualDstPairs.empty())
+        return SUCCESS;
+    if (ReorderAiv1AllocToAiv0Order(opList, state_.dualDstPairs) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "DualDst iso: ReorderAiv1AllocToAiv0Order failed.");
+        return FAILED;
+    }
+    APASS_LOG_INFO_F(Elements::Operation, "DualDst iso realign: %zu alloc pairs aligned.", state_.dualDstPairs.size());
+    return SUCCESS;
+}
 } // namespace npu::tile_fwk

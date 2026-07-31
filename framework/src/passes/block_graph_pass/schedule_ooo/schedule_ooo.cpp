@@ -16,6 +16,8 @@
 #include "schedule_ooo.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
+#include "passes/block_graph_pass/schedule_ooo/common/iso_matcher.h"
+#include <sstream>
 
 #ifndef MODULE_NAME
 #define MODULE_NAME "OoOSchedule"
@@ -23,7 +25,8 @@
 
 namespace npu::tile_fwk {
 
-static constexpr bool kTempEnableDualDst = false;
+// 当前仅适配FA的task划分
+static constexpr bool kTempEnableDualDstAllocGuard = true;
 
 bool OoOSchedule::IsAicpuProgram(std::vector<Operation*> opList)
 {
@@ -97,7 +100,7 @@ Status OoOSchedule::NonMixSchedule(std::vector<Operation*>& opList, Function& fu
         return FAILED;
     }
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
-    // dualdst fuse 在 FuseDualDstPairs 内部以 EraseOperations(false, true) 刷新 opPosition_,
+    // dualdst fuse 在 FuseDualDstPairs 内部以 EraseOperations(false, true) 刷新 opPosition_。
     // 因此这里走默认 needRefresh=false 即可。
     program.second->ScheduleBy(oooSchedule.GetNewOperations());
     program.second->RecordOOOSeq();
@@ -221,8 +224,9 @@ std::vector<ScheduleUnit> OoOSchedule::BuildScheduleUnits(const std::vector<Task
         }
     }
 
-    std::sort(scheduleUnits.begin(), scheduleUnits.end(),
-              [](const ScheduleUnit& a, const ScheduleUnit& b) { return a.earliestStartTime < b.earliestStartTime; });
+    std::stable_sort(scheduleUnits.begin(), scheduleUnits.end(), [](const ScheduleUnit& a, const ScheduleUnit& b) {
+        return a.earliestStartTime < b.earliestStartTime;
+    });
 
     return scheduleUnits;
 }
@@ -234,32 +238,111 @@ std::string GetOpInfo(Operation* op)
     return op->GetOpcodeStr() + "[" + std::to_string(op->GetOpMagic()) + "]";
 }
 
-Status OoOSchedule::MixSchedule(std::vector<Operation*>& opList, Function& function,
-                                std::pair<uint64_t, Function*>& program, int64_t& maxWorkeSpaceSize)
+void OoOSchedule::CollectAivTasksByStart(const std::vector<TaskNode>& tasks,
+                                         std::unordered_map<int, std::vector<const TaskNode*>>& aiv0ByStart,
+                                         std::unordered_map<int, std::vector<const TaskNode*>>& aiv1ByStart)
 {
-    APASS_LOG_INFO_F(Elements::Operation, "=============== START MixSchedule ===============");
-    TaskSplitter splitter;
-    // 对 taskNode.opList_ 进行排序，并返回预估 latency，随后完成 core schedule 与子图合并。
-    if (EstimateTaskLatencyAndSchedule(splitter, opList, program.second->paramConfigs_.oooSchedMode) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "EstimateTaskLatencyAndSchedule failed.");
-        return FAILED;
+    for (const auto& t : tasks) {
+        if (t.opList_.empty())
+            continue;
+        if (t.targetCoreType == TargetCoreType::AIV0) {
+            aiv0ByStart[t.startTime].push_back(&t);
+        } else if (t.targetCoreType == TargetCoreType::AIV1) {
+            aiv1ByStart[t.startTime].push_back(&t);
+        }
     }
-    std::unordered_map<Operation*, CoreLocationType> opCoreMap;
-    // 传入 taskNode 序列，对全部 opList 重新拼装并构建 opCoreMap。
-    if (BuildMixedScheduleOps(splitter, opList, opCoreMap) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "BuildMixedScheduleOps failed.");
-        return FAILED;
+}
+
+size_t OoOSchedule::CountNonAllocOps(const std::vector<Operation*>& ops)
+{
+    size_t count = 0;
+    for (auto* op : ops) {
+        if (op != nullptr && !IsAllocOpCode(op->GetOpcode()))
+            count++;
     }
-    if (ModifyAllocOrder(opList) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "ModifyAllocOrder failed.");
-        return FAILED;
+    return count;
+}
+
+bool OoOSchedule::CheckAndRecordDualDstPair(int start, const TaskNode* ta, const TaskNode* tb)
+{
+    std::unordered_set<Operation*> opsA(ta->opList_.begin(), ta->opList_.end());
+    std::unordered_set<Operation*> opsB(tb->opList_.begin(), tb->opList_.end());
+
+    auto entriesA = FindTaskEntryOps(ta->opList_, opsA);
+    auto entriesB = FindTaskEntryOps(tb->opList_, opsB);
+    auto res = IsoMatchChains(entriesA, entriesB, opsA, opsB);
+    size_t nonAllocA = CountNonAllocOps(ta->opList_);
+    size_t nonAllocB = CountNonAllocOps(tb->opList_);
+    if (!res.rootIsomorphic || res.pairs.size() != nonAllocA || res.pairs.size() != nonAllocB) {
+        APASS_LOG_INFO_F(Elements::Operation,
+                         "DualDst disabled by isomorphism check: startTime=%d, rootIsomorphic=%d, "
+                         "truncated=%zu, matchedNonAlloc=%zu, nonAllocA=%zu, nonAllocB=%zu.",
+                         start, static_cast<int>(res.rootIsomorphic), res.truncatedCount, res.pairs.size(), nonAllocA,
+                         nonAllocB);
+        return false;
     }
-    APASS_LOG_DEBUG_F(Elements::Operation, "+++ complete oplist");
-    for (size_t i = 0; i < opList.size(); i++) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "%zu    op : %s", i, GetOpInfo(opList[i]).c_str());
+    APASS_LOG_INFO_F(Elements::Operation,
+                     "DualDst isomorphism check passed: startTime=%d, matchedNonAlloc=%zu, allocPairs=%zu.", start,
+                     res.pairs.size(), res.allocPairs.size());
+    for (const auto& p : res.allocPairs) {
+        auto pairIt = dualDstPairs_.find(p.opA);
+        if (pairIt != dualDstPairs_.end()) {
+            if (pairIt->second != p.opB) {
+                APASS_LOG_INFO_F(Elements::Operation,
+                                 "DualDst disabled: duplicated AIV0 alloc maps to different AIV1 alloc, "
+                                 "aiv0Alloc=%s, oldAiv1Alloc=%s, newAiv1Alloc=%s.",
+                                 GetOpInfo(p.opA).c_str(), GetOpInfo(pairIt->second).c_str(), GetOpInfo(p.opB).c_str());
+                return false;
+            }
+            continue;
+        }
+        dualDstPairs_[p.opA] = p.opB;
     }
+    return true;
+}
+
+bool OoOSchedule::ShouldEnableDualDst(TaskSplitter& splitter)
+{
+    dualDstPairs_.clear();
+    const auto& tasks = splitter.GetTaskGraph().tasks;
+    std::unordered_map<int, std::vector<const TaskNode*>> aiv0ByStart;
+    std::unordered_map<int, std::vector<const TaskNode*>> aiv1ByStart;
+    CollectAivTasksByStart(tasks, aiv0ByStart, aiv1ByStart);
+    bool hasPair = false;
+    for (const auto& [start, aiv0Tasks] : aiv0ByStart) {
+        auto it = aiv1ByStart.find(start);
+        if (it == aiv1ByStart.end())
+            continue;
+        hasPair = true;
+        for (const TaskNode* ta : aiv0Tasks) {
+            for (const TaskNode* tb : it->second) {
+                if (!CheckAndRecordDualDstPair(start, ta, tb)) {
+                    return false;
+                }
+            }
+        }
+    }
+    if (hasPair) {
+        APASS_LOG_INFO_F(Elements::Operation,
+                         "DualDst enabled: all same-startTime AIV0/AIV1 task pairs fully isomorphic.");
+    } else {
+        dualDstPairs_.clear();
+    }
+    return hasPair;
+}
+
+Status OoOSchedule::RunMixedScheduler(std::vector<Operation*>& opList, Function& function,
+                                      std::pair<uint64_t, Function*>& program,
+                                      const std::unordered_map<Operation*, CoreLocationType>& opCoreMap,
+                                      TaskSplitter& splitter)
+{
     OoOScheduler oooSchedule(*program.second);
-    oooSchedule.SetEnableDualDst(kTempEnableDualDst);
+    bool enableDualDst = ShouldEnableDualDst(splitter);
+    oooSchedule.SetEnableDualDst(enableDualDst);
+    if (enableDualDst) {
+        oooSchedule.SetDualDstPairs(std::move(dualDstPairs_));
+        oooSchedule.SetEnableDualDstAllocGuard(kTempEnableDualDstAllocGuard);
+    }
     OoOScheduleStatistic oooHealthCheck;
     MemoryTracer oooMemoryTrace;
     if (passDfxconfigs_.healthCheck) {
@@ -280,11 +363,33 @@ Status OoOSchedule::MixSchedule(std::vector<Operation*>& opList, Function& funct
         CollectMemoryTrace(oooMemoryTrace, function, program);
     }
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
-    // dualdst fuse 在 FuseDualDstPairs 内部以 EraseOperations(false, true) 刷新 opPosition_,
-    // 因此这里走默认 needRefresh=false 即可。
     program.second->ScheduleBy(oooSchedule.GetNewOperations());
     program.second->RecordOOOSeq();
     RescheduleUtils::UpdateTensorConsProd(program.second);
+    return SUCCESS;
+}
+
+Status OoOSchedule::MixSchedule(std::vector<Operation*>& opList, Function& function,
+                                std::pair<uint64_t, Function*>& program, int64_t& maxWorkeSpaceSize)
+{
+    APASS_LOG_INFO_F(Elements::Operation, "=============== START MixSchedule ===============");
+    TaskSplitter splitter;
+    if (EstimateTaskLatencyAndSchedule(splitter, opList, program.second->paramConfigs_.oooSchedMode) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "EstimateTaskLatencyAndSchedule failed.");
+        return FAILED;
+    }
+    std::unordered_map<Operation*, CoreLocationType> opCoreMap;
+    if (BuildMixedScheduleOps(splitter, opList, opCoreMap) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "BuildMixedScheduleOps failed.");
+        return FAILED;
+    }
+    if (ModifyAllocOrder(opList) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ModifyAllocOrder failed.");
+        return FAILED;
+    }
+    if (RunMixedScheduler(opList, function, program, opCoreMap, splitter) != SUCCESS) {
+        return FAILED;
+    }
     maxWorkeSpaceSize = std::max(maxWorkeSpaceSize, (*program.second).GetStackWorkespaceSize());
     function.SetStackWorkespaceSize(maxWorkeSpaceSize);
     return SUCCESS;
@@ -330,8 +435,8 @@ Status OoOSchedule::BuildMixedScheduleOps(TaskSplitter& splitter, std::vector<Op
                                                                                 {TargetCoreType::AIV1, "AIV1"},
                                                                                 {TargetCoreType::UNKNOWN, "UNKNOWN"}};
     auto taskNodeList = splitter.GetTaskGraph().tasks;
-    std::sort(taskNodeList.begin(), taskNodeList.end(),
-              [](const TaskNode& a, const TaskNode& b) { return a.startTime < b.startTime; });
+    std::stable_sort(taskNodeList.begin(), taskNodeList.end(),
+                     [](const TaskNode& a, const TaskNode& b) { return a.startTime < b.startTime; });
     APASS_LOG_DEBUG_F(Elements::Operation, "============>after sort BuildMixedScheduleOps");
     for (size_t i = 0; i < taskNodeList.size(); i++) {
         APASS_LOG_DEBUG_F(Elements::Operation, "i: %zu task %d on %s: starttime %d - %d.", i, taskNodeList[i].idx,
@@ -347,7 +452,7 @@ Status OoOSchedule::BuildMixedScheduleOps(TaskSplitter& splitter, std::vector<Op
             return FAILED;
         }
     }
-    // 成环的 TaskNode
+    // 成环的 TaskNode。
     auto cyclePairs = splitter.GetCycledTaskNodePairs();
     auto scheduleUnits = BuildScheduleUnits(taskNodeList, cyclePairs, opList);
     std::vector<Operation*> operations;
@@ -402,7 +507,7 @@ Status OoOSchedule::RunOnFunction(Function& function)
             APASS_LOG_ERROR_F(Elements::Operation, "Global sortOps failed");
             return FAILED;
         }
-        // 全局排序的序列
+        // 全局排序的序列。
         opList = optimizeSort.operations;
         std::pair<uint64_t, Function*> programRef;
         programRef.first = program.first;
@@ -460,7 +565,7 @@ void OoOSchedule::CollectMemoryTrace(MemoryTracer& tracer, Function& function, s
     tracerMap_.emplace(program.first, std::move(tracer));
 }
 
-// PostRun is skipped on FAILED — flush trace inline; mirror dump if dumpGraph is on.
+// PostRun 失败时不再执行，这里直接 flush trace；dumpGraph 打开时同步输出。
 void OoOSchedule::FlushMemoryTraceOnFailure(MemoryTracer& tracer, Function& function,
                                             std::pair<uint64_t, Function*>& program)
 {

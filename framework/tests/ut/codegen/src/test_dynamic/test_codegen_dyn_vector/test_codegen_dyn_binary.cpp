@@ -156,7 +156,7 @@ TEST_F(TestCodegenDynBinary, TestGatherEle)
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        R"!!!(TileOp::DynTgatherElement<float, int32_t, 1, 2, 256, 1, 2, 8, 1, 2, 8, 3>((__ubuf__ float*)UB_S2112_E2176, (__ubuf__ float*)UB_S0_E2048, (__ubuf__ int32_t*)UB_S2048_E2112, 1, 1, sym_59_dim_0, sym_59_dim_1);)!!!";
+        R"!!!(TileOp::DynTgatherElement<float, int32_t, 1, 2, 256, 1, 2, 8, 1, 2, 8, 3>((__ubuf__ float*)UB_S2176_E2240, (__ubuf__ float*)UB_S0_E2048, (__ubuf__ int32_t*)UB_S2048_E2112, 1, 1, sym_59_dim_0, sym_59_dim_1);)!!!";
     CheckStringExist(expect, res);
 }
 

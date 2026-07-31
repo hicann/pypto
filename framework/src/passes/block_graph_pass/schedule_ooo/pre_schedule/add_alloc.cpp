@@ -39,7 +39,17 @@ Status AddAlloc::GenAllocNode(Function& function)
         APASS_LOG_ERROR_F(Elements::Tensor, "GenTensorAllocMsgMap failed.");
         return FAILED;
     }
-    for (auto& tensorAllocMsg : tensorAllocMsgMap) {
+    std::vector<std::pair<int, TensorAllocMsg>> sortedAllocs(tensorAllocMsgMap.begin(), tensorAllocMsgMap.end());
+    std::stable_sort(sortedAllocs.begin(), sortedAllocs.end(), [](const auto& a, const auto& b) {
+        int magicA = a.second.producer[0].get().GetOpMagic();
+        int magicB = b.second.producer[0].get().GetOpMagic();
+        if (magicA == magicB) {
+            return a.second.firstOperandIdx < b.second.firstOperandIdx;
+        }
+        return magicA < magicB;
+    });
+
+    for (auto& tensorAllocMsg : sortedAllocs) {
         if (tensorAllocMsg.second.isAllocated == false) {
             APASS_LOG_DEBUG_F(Elements::Tensor, "Create alloc node for tensor [%d]", tensorAllocMsg.first);
             CreateAllocNode(tensorAllocMsg.second, function);
@@ -72,6 +82,7 @@ TensorAllocMsg AddAlloc::ConstructTensorAllocMsg(Operation& op, size_t i, int me
     tensorAllocMsg.producer.push_back(std::ref(op));
     tensorAllocMsg.memType = op.GetOutputOperand(i)->GetMemoryTypeOriginal();
     tensorAllocMsg.memId = memId;
+    tensorAllocMsg.firstOperandIdx = i;
     return tensorAllocMsg;
 }
 

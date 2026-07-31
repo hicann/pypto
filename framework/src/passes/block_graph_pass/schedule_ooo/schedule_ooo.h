@@ -61,6 +61,9 @@ private:
                           int64_t& maxWorkeSpaceSize);
     Status MixSchedule(std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
                        int64_t& maxWorkeSpaceSize);
+    Status RunMixedScheduler(std::vector<Operation*>& opList, Function& function,
+                             std::pair<uint64_t, Function*>& program,
+                             const std::unordered_map<Operation*, CoreLocationType>& opCoreMap, TaskSplitter& splitter);
     Status EstimateTaskLatencyAndSchedule(TaskSplitter& splitter, std::vector<Operation*>& opList,
                                           const std::string& schedMode = "");
     Status BuildMixedScheduleOps(TaskSplitter& splitter, std::vector<Operation*>& opList,
@@ -74,6 +77,13 @@ private:
     std::vector<ScheduleUnit> BuildScheduleUnits(const std::vector<TaskNode>& taskNodeList,
                                                  const std::vector<std::pair<int, int>>& cyclePairs,
                                                  std::vector<Operation*>& opList);
+    void CollectAivTasksByStart(const std::vector<TaskNode>& tasks,
+                                std::unordered_map<int, std::vector<const TaskNode*>>& aiv0ByStart,
+                                std::unordered_map<int, std::vector<const TaskNode*>>& aiv1ByStart);
+    size_t CountNonAllocOps(const std::vector<Operation*>& ops);
+    bool CheckAndRecordDualDstPair(int start, const TaskNode* ta, const TaskNode* tb);
+    bool ShouldEnableDualDst(TaskSplitter& splitter);
+    std::unordered_map<Operation*, Operation*> dualDstPairs_; // AIV0 alloc -> AIV1 alloc
     std::vector<Function*> oriFunctions;
     std::map<uint64_t, OoOScheduleStatistic> statisticMap_;
     // Per-program tracers, populated on SUCCESS only; failure path flushes inline.

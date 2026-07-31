@@ -21,6 +21,7 @@
 #define PASS_SPILL_ENGINE_H
 
 #include <optional>
+#include <unordered_set>
 #include "passes/block_graph_pass/schedule_ooo/common/schedule_state.h"
 #include "passes/statistics/schedule_observer.h"
 
@@ -150,6 +151,8 @@ private:
                                      std::vector<SymbolicScalar>& fromDynValidShape) const;
 
     Operation* SkipViewChain(Operation* start, bool followProducers);
+    void UpdateScheduleStatusForDualDst(const std::vector<std::pair<Operation*, std::vector<int>>>& opMemidMap,
+                                        int memId, Operation* spillAllocOp, Operation* spillOp);
 };
 
 } // namespace npu::tile_fwk
