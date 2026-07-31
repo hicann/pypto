@@ -42,9 +42,10 @@ def _run_merge(func, *args):
     dce = ir.Pass.aggressive_dce()
     canonical = ir.Pass.canonicalize()
     merge = ir.Pass.merge_stmts_into_if()
+    verifier = ir.IRVerifier.create_default()
     prog = dce(canonical(prog))
     prog = canonical(merge(prog))
-    ir.Pass.run_verifier()(prog)
+    verifier.verify_or_throw(prog)
     logging.info("\nmerged:\n%s" % prog.functions[func.name].body)
     return prog.functions[func.name]
 
@@ -282,4 +283,26 @@ def test_unroll_list():
     x = pypto.Tensor((-1, -1), pypto.DT_FP32)
     y = pypto.Tensor((32, 32), pypto.DT_FP32)
     z = pypto.Tensor((32, 32), pypto.DT_FP32)
-    _run_merge(foo, x, y, z)
+    func = _run_merge(foo, x, y, z)
+    ifops = _collect_stmts(func.body, ir.IfStmt)
+    assert len(ifops) == 6  # each unroll function has 3 if statements
+
+
+def test_oi_update():
+
+    def foo(a, b):
+        n = pypto.symbolic_scalar("n")
+        for x in pypto.loop(10):
+            for y in pypto.loop(10):
+                oi_update = pypto.tensor([32, 32], pypto.DT_FP32, "oi_update")
+                for i in pypto.loop(n, unroll_list=[2]):
+                    if i == 0:
+                        oi_update[:] = a + 1
+                    else:
+                        oi_update[:] = oi_update - 1
+                    if i == n - 1:
+                        b[:] = oi_update // 2
+
+    y = pypto.Tensor((32, 32), pypto.DT_FP32)
+    z = pypto.Tensor((32, 32), pypto.DT_FP32)
+    _run_merge(foo, y, z)

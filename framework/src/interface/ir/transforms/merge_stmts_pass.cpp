@@ -489,14 +489,14 @@ private:
 
         MergeSegment(segment, condPath, merged, cloneMap, substMap);
 
-        if (!cloneMap.empty() && !merged.empty()) {
-            merged.back() = RewriteTerminatorValues(merged.back(), cloneMap);
-        }
-
         if (!substMap.empty()) {
             for (auto& s : merged) {
                 s = SubstituteVars(s, substMap);
             }
+        }
+
+        if (!cloneMap.empty() && !merged.empty()) {
+            merged.back() = RewriteTerminatorValues(merged.back(), cloneMap);
         }
         auto finalResult = RebuildMergedStmts(merged, condPath);
         return std::make_shared<SeqStmts>(finalResult, seq->span_);

@@ -27,7 +27,9 @@ namespace ssa {
 enum class ErrorType : int {
     MULTIPLE_ASSIGNMENT = 1, // Variable assigned more than once
     NAME_SHADOWING = 2,      // Variable name shadows outer scope variable
-    MISSING_YIELD = 3        // ForStmt or IfStmt missing required YieldStmt
+    MISSING_YIELD = 3,       // ForStmt or IfStmt missing required YieldStmt
+    USE_BEFORE_DEF = 4,      // LogicalTensor used before its dominating definition (out of scope)
+    ARITY_MISMATCH = 5       // iter_args/return_vars/yield-or-continue value counts disagree
 };
 
 /**

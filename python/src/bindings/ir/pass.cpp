@@ -137,7 +137,11 @@ void BindPasses(py::module_& m)
     py::enum_<ssa::ErrorType>(m, "SSAErrorType", "SSA verification error types")
         .value("MULTIPLE_ASSIGNMENT", ssa::ErrorType::MULTIPLE_ASSIGNMENT, "Variable assigned more than once")
         .value("NAME_SHADOWING", ssa::ErrorType::NAME_SHADOWING, "Variable name shadows outer scope variable")
-        .value("MISSING_YIELD", ssa::ErrorType::MISSING_YIELD, "ForStmt or IfStmt missing required YieldStmt");
+        .value("MISSING_YIELD", ssa::ErrorType::MISSING_YIELD, "ForStmt or IfStmt missing required YieldStmt")
+        .value("USE_BEFORE_DEF", ssa::ErrorType::USE_BEFORE_DEF,
+               "LogicalTensor used before its dominating definition (out of scope)")
+        .value("ARITY_MISMATCH", ssa::ErrorType::ARITY_MISMATCH,
+               "iter_args/return_vars/yield-or-continue value counts disagree");
 
     py::enum_<typecheck::ErrorType>(m, "TypeCheckErrorType", "Type checking error types")
         .value("TYPE_KIND_MISMATCH", typecheck::ErrorType::TYPE_KIND_MISMATCH, "Type kind mismatch")
