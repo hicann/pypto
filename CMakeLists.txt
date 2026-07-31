@@ -164,6 +164,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                 tools/profiling/parse_pipe_time_trace.py
                 tools/scripts/machine_perf_trace.py
                 tools/scripts/extract_pass_log.py
+                tools/scripts/debug_aicore_error.py
             DESTINATION ${PyPTO_WhlName}/lib/scripts
     )
 
