@@ -114,9 +114,6 @@ TEST(CCECodegenHeaderTest, CoversHeaderOnlyStateAccessors)
     codegen.SetTileAddress("tile_0", "0x100");
     EXPECT_TRUE(codegen.HasTileAddress("tile_0"));
     EXPECT_EQ(codegen.GetTileAddress("tile_0"), "0x100");
-
-    codegen.RecordStructVarType("ctx", "ContextType");
-    EXPECT_EQ(codegen.GetTensorDef("not_prescanned"), nullptr);
 }
 
 TEST(CCECodegenHeaderTest, RejectsNonCubeOrVectorTarget)

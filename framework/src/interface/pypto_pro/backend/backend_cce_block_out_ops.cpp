@@ -1023,6 +1023,7 @@ static std::string MakeBlockOutSsbufStoreCodegenCCE(const ir::CallPtr& op, codeg
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 2) << "block.ssbuf_store: expected 2 args (struct_var, offset)";
+    codegen.MarkStructVolatile(op->args_[0]->GetType());
     std::string struct_name = codegen.GetExprAsCode(op->args_[0]);
     std::string offset = codegen.GetExprAsCode(op->args_[1]);
     CHECK(!struct_name.empty()) << "block.ssbuf_store: empty struct name";
@@ -1044,6 +1045,7 @@ static std::string MakeBlockOutSsbufLoadCodegenCCE(const ir::CallPtr& op, codege
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 2) << "block.ssbuf_load: expected 2 args (struct_var, offset)";
+    codegen.MarkStructVolatile(op->args_[0]->GetType());
     std::string struct_name = codegen.GetExprAsCode(op->args_[0]);
     std::string offset = codegen.GetExprAsCode(op->args_[1]);
     CHECK(!struct_name.empty()) << "block.ssbuf_load: empty struct name";
@@ -2126,7 +2128,7 @@ REGISTER_BACKEND_OP(BackendCCE, "block.scatter")
 // into a C++ struct instance. When this Call appears as the RHS of an
 // AssignStmt(var, struct.create(v0, v1, ..., name=Name, fields=[f0, f1, ...]))
 // the CCE codegen emits `Name var = {.f0=v0, .f1=v1, ...};`. The struct type
-// definition itself is emitted earlier by CCECodegen::PreEmitStructTypes.
+// definition itself is emitted after body traversal from CCECodegen's definition registry.
 REGISTER_BACKEND_OP(BackendCCE, "struct.create")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
@@ -2134,6 +2136,9 @@ REGISTER_BACKEND_OP(BackendCCE, "struct.create")
         std::string struct_name = op->GetKwarg<std::string>("name");
         std::vector<std::string> fields = op->GetKwarg<std::vector<std::string>>("fields");
         CHECK(op->args_.size() == fields.size()) << "struct.declare codegen: args/fields size mismatch";
+        auto tuple_type = ir::As<ir::TupleType>(op->GetType());
+        CHECK(tuple_type != nullptr) << "struct.create codegen requires a TupleType result";
+        codegen.RegisterStructDefinition(tuple_type, struct_name, fields, false);
 
         std::string target_var = codegen.GetCurrentResultTarget();
         CHECK(!target_var.empty()) << "struct.declare must be the RHS of an AssignStmt bound to a Var; got no target";
@@ -2146,9 +2151,6 @@ REGISTER_BACKEND_OP(BackendCCE, "struct.create")
         }
         init += "};";
         codegen.Emit(init);
-        // Record `target_var -> struct_name` so dynamic GetItemExpr over a
-        // struct-tuple-array can declare the hoisted array with the right type.
-        codegen.RecordStructVarType(target_var, struct_name);
         return std::string("");
     });
 

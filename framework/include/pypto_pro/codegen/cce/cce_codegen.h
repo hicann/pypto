@@ -57,6 +57,15 @@ struct TensorDef {
     bool is_transpose = false;                 ///< loaded with is_transpose=true (needs Layout::DN)
 };
 
+/// Definition of one user-visible C++ class materialized from a TupleType.
+struct StructDefinition {
+    std::string name;
+    std::vector<std::string> fields;
+    std::vector<ir::TypePtr> types;
+    bool is_tiling = false;
+    bool requires_volatile = false;
+};
+
 /**
  * \brief CCE code generator for converting PyPTO IR to pto-isa C++ code
  *
@@ -222,16 +231,15 @@ public:
     [[nodiscard]] bool HasTileAddress(const std::string& tile_name) const;
 
     /**
-     * \brief Record that the named C++ variable holds a value of the given
-     * struct type (e.g. "CubeCtx_slot_0" ->"CubeCtx"). Used so dynamic
-     * GetItem on a struct-tuple-array can declare the hoisted array with
-     * the correct C++ struct element type without resorting to decltype.
+     * \brief Register a named TupleType definition for deferred class emission.
      */
-    void RecordStructVarType(const std::string& var_name, const std::string& type_name)
-    {
-        if (!var_name.empty() && !type_name.empty())
-            struct_var_to_type_name_[var_name] = type_name;
-    }
+    void RegisterStructDefinition(const ir::TupleTypePtr& tuple_type, const std::string& type_name,
+                                  const std::vector<std::string>& fields, bool is_tiling);
+
+    /**
+     * \brief Mark a registered TupleType as requiring volatile member declarations.
+     */
+    void MarkStructVolatile(const ir::TypePtr& type);
 
     /**
      * \brief Check whether a PIPE_V mutex lock/unlock should be skipped.
@@ -404,21 +412,14 @@ private:
     std::string FormatAddressHex(int64_t addr);
 
     /**
-     * \brief Emit one C++ `struct` definition per unique struct.create type name found in body.
-     *
-     * Deduplicates by struct type name (one definition per name).
+     * \brief Register each tiling TupleType parameter for deferred header emission.
      */
-    void PreEmitStructTypes(const ir::StmtPtr& body);
+    void RegisterTilingStructTypes(const ir::FunctionPtr& func);
 
     /**
-     * \brief Emit `#include "<ClassName>_tiling.h"` for each tiling (TupleType) parameter
-     *        and stash the corresponding `struct <ClassName> { ... };` header into
-     *        tiling_headers_ for the caller to write out.
-     *
-     * Tiling params are lowered to a named TupleType whose field names + class name live
-     * in the IRDebugInfo side table. Member types come from CppTypeForField.
+     * \brief Emit all registered class definitions and materialize tiling headers.
      */
-    void EmitTilingStructTypes(const ir::FunctionPtr& func);
+    void EmitStructTypes();
 
     /**
      * \brief Emit the kernel-entry copy from the `<name>_ptr` GM pointer into the local
@@ -578,7 +579,10 @@ private:
     ir::MakeTuplePtr current_tuple_;              ///< OUTPUT: underlying MakeTuple for tuple-typed expressions
     std::vector<std::string> yield_buffer_;       ///< Temporary storage for yielded values from loops
     const ir::IRDebugInfo* debug_info_ = nullptr; ///< Tuple/struct field names, captured at GenerateSingle entry
-    std::map<std::string, std::string> tiling_headers_; ///< Tiling struct headers (filename -> content)
+    std::map<std::string, std::string> tiling_headers_;          ///< Tiling struct headers (filename -> content)
+    std::map<std::string, StructDefinition> struct_definitions_; ///< Struct type name ->definition
+    std::unordered_map<const ir::TupleType*, std::string>
+        tuple_type_to_struct_name_; ///< TupleType identity ->struct type name
 
     CodeEmitter emitter_;                                            ///< Code emitter for structured output
     CodeContext context_;                                            ///< Context for variable tracking
@@ -635,12 +639,6 @@ private:
 
     // Tile type dedup: maps tile_type_str ->alias name already emitted
     std::map<std::string, std::string> emitted_tile_types_;
-
-    /// Named-tuple struct: maps sanitized Var name (C++ symbol bound to a
-    /// struct.create call) ->user-defined struct type name (e.g. "CubeCtx").
-    /// Lets dynamic GetItem on a struct-tuple-array deduce the C++ element
-    /// type without relying on decltype (codegen target is C-like, not real C++).
-    std::map<std::string, std::string> struct_var_to_type_name_;
 
     /// Track emitted tile reference aliases to avoid C++ redefinition errors
     std::set<std::string> emitted_tile_aliases_;

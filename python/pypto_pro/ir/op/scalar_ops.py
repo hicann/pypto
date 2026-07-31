@@ -33,7 +33,9 @@ def _parse_min(self, call: ast.Call):
         )
     lhs = self.parse_expression(call.args[0])
     rhs = self.parse_expression(call.args[1])
-    return _ir_core.min_(lhs, rhs, call_span)
+    operation = _ir_core.min_(lhs, rhs, call_span)
+    folded = self._fold_const_binop("min", operation, call_span)
+    return folded if folded is not None else operation
 
 
 @op_impl("max")
@@ -50,7 +52,9 @@ def _parse_max(self, call: ast.Call):
         )
     lhs = self.parse_expression(call.args[0])
     rhs = self.parse_expression(call.args[1])
-    return _ir_core.max_(lhs, rhs, call_span)
+    operation = _ir_core.max_(lhs, rhs, call_span)
+    folded = self._fold_const_binop("max", operation, call_span)
+    return folded if folded is not None else operation
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +156,8 @@ def _parse_typed_constant(self, call: ast.Call):
 
     dtype = self.resolve_dtype_expr(call.args[1])
 
-    if isinstance(value, float):
-        return _ir_core.ConstFloat(value, dtype, span)
-    return _ir_core.ConstInt(value, dtype, span)
+    if dtype == _ir_core.DataType.BOOL:
+        return _ir_core.ConstBool(bool(value), span)
+    if dtype.is_float():
+        return _ir_core.ConstFloat(float(value), dtype, span)
+    return _ir_core.ConstInt(int(value), dtype, span)

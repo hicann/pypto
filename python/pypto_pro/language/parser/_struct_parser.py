@@ -119,5 +119,5 @@ class StructParserMixin:
             slot_var = self.builder.let(f"{var_name}_{i}", slot_call, span=span)
             slot_vars.append(slot_var)
         result = ir.MakeTuple(slot_vars, span)
-        self._struct_array_tuple_ids.add(id(result))
+        self._struct_array_tuples.add(result)
         return result

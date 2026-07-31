@@ -23,50 +23,9 @@ from pypto.pypto_impl import ir as _ir
 from ._utils import _normalize_expr
 
 
-def _scalar_dtype(expr: _ir.Expr):
-    """Return the scalar dtype of ``expr`` or ``None`` if it is not a scalar."""
-    expr_type = getattr(expr, "type", None)
-    if isinstance(expr_type, _ir.ScalarType):
-        return expr_type.dtype
-    return None
-
-
-# Binary ops that follow Python-style numeric promotion: when one operand is float
-# and the other is int, the int operand is promoted to the float operand's dtype.
-# Restricted to ops whose CCE lowering is valid on floats: ``+ - * /`` and the six
-# comparisons. Excluded on purpose:
-#   * floordiv/mod lower to C++ ``/`` and ``%`` — ``%`` does not compile on floats and
-#     ``/`` would not floor, so a mixed int/float pair must stay a clean error.
-#   * pow lowers to host ``pow()`` (unavailable in aicore scalar code) regardless.
-#   * bitwise/shift require integer operands, exactly like Python.
-_NUMERIC_PROMOTE_OPS = frozenset({"add", "sub", "mul", "truediv", "eq", "ne", "lt", "le", "gt", "ge"})
-
-
-def _promote_numeric_operands(left: _ir.Expr, right: _ir.Expr, span: _ir.Span):
-    """Promote a mixed int/float scalar pair so both operands share the float dtype."""
-    left_dtype = _scalar_dtype(left)
-    right_dtype = _scalar_dtype(right)
-    if left_dtype is not None and right_dtype is not None:
-        if left_dtype.is_float() and right_dtype.is_int():
-            right = _ir.cast(right, left_dtype, span)
-        elif right_dtype.is_float() and left_dtype.is_int():
-            left = _ir.cast(left, right_dtype, span)
-    return left, right
-
-
 def make_binary(op_name: str, left: _ir.Expr, right: _ir.Expr, span: _ir.Span | None = None) -> _ir.Expr:
-    """Build a binary scalar expression with Python-consistent type promotion.
-
-    The underlying IR builders require both operands to share the same numeric
-    category (both int or both float). Python instead promotes a mixed int/float
-    pair to float (e.g. ``1.0 / G`` or ``1.0 + G`` where ``G`` is an ``index`` Var),
-    so promote the integer operand before building the node for the arithmetic and
-    comparison ops in ``_NUMERIC_PROMOTE_OPS``. Bitwise/shift ops fall through
-    unchanged and keep their integer-only requirement.
-    """
+    """Build a binary scalar expression through the C++ promotion rules."""
     actual_span = span if span is not None else _ir.Span.unknown()
-    if op_name in _NUMERIC_PROMOTE_OPS:
-        left, right = _promote_numeric_operands(left, right, actual_span)
     return getattr(_ir, op_name)(left, right, actual_span)
 
 

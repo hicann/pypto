@@ -107,8 +107,8 @@ def add_dynamic(
     with pl.section_vector():
         num_cores = pl.get_block_num()
         core_id = pl.get_block_idx()
-        m_tile_num = x.shape[0] / TILE_M
-        n_tile_num = x.shape[1] / TILE_N
+        m_tile_num = x.shape[0] // TILE_M
+        n_tile_num = x.shape[1] // TILE_N
 
         for i in pl.range(core_id, m_tile_num, num_cores):
             for j in pl.range(0, n_tile_num, 1):
@@ -149,8 +149,8 @@ def add_static(
     with pl.section_vector():
         num_cores = pl.get_block_num()
         core_id = pl.get_block_idx()
-        m_tile_num = x.shape[0] / TILE_M
-        n_tile_num = x.shape[1] / TILE_N
+        m_tile_num = x.shape[0] // TILE_M
+        n_tile_num = x.shape[1] // TILE_N
 
         for i in pl.range(core_id, m_tile_num, num_cores):
             for j in pl.range(0, n_tile_num, 1):
@@ -191,8 +191,8 @@ def add_mixed(
     with pl.section_vector():
         num_cores = pl.get_block_num()
         core_id = pl.get_block_idx()
-        m_tile_num = x.shape[0] / TILE_M
-        n_tile_num = x.shape[1] / TILE_N
+        m_tile_num = x.shape[0] // TILE_M
+        n_tile_num = x.shape[1] // TILE_N
 
         for i in pl.range(core_id, m_tile_num, num_cores):
             for j in pl.range(0, n_tile_num, 1):
@@ -238,8 +238,8 @@ def add_ellipsis(
     with pl.section_vector():
         num_cores = pl.get_block_num()
         core_id = pl.get_block_idx()
-        m_tile_num = x.shape[0] / TILE_M
-        n_tile_num = x.shape[1] / TILE_N
+        m_tile_num = x.shape[0] // TILE_M
+        n_tile_num = x.shape[1] // TILE_N
 
         for i in pl.range(core_id, m_tile_num, num_cores):
             for j in pl.range(0, n_tile_num, 1):
@@ -283,8 +283,8 @@ def add_ellipsis_3d(
         num_cores = pl.get_block_num()
         core_id = pl.get_block_idx()
         batch_num = x.shape[0]
-        m_tile_num = x.shape[1] / TILE_M
-        n_tile_num = x.shape[2] / TILE_N
+        m_tile_num = x.shape[1] // TILE_M
+        n_tile_num = x.shape[2] // TILE_N
 
         for b in pl.range(0, batch_num, 1):
             for i in pl.range(core_id, m_tile_num, num_cores):

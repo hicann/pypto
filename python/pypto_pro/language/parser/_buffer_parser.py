@@ -111,7 +111,7 @@ class BufferParserMixin:
         returned expression; ``_transfer_tile_sync_metadata`` re-keys it to
         the assigned variable after builder.let.
         """
-        var_name = self.current_target_name or "g"
+        var_name = self.current_target_name
         num = len(mutex_ids)
         tile_vars = []
         for i, addr in enumerate(tile_addrs):

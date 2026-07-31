@@ -119,6 +119,27 @@ std::string RunCodegen(const std::string& op_name, const ir::CallPtr& call)
     return codegen.GetEmittedCode();
 }
 
+std::string RunSsbufCodegen(const std::string& op_name)
+{
+    auto scalar = MakeScalarType();
+    auto tuple_type = std::make_shared<const ir::TupleType>(std::vector<ir::TypePtr>{scalar});
+    auto struct_var = MakeVar("struct_var", tuple_type);
+    auto create = std::make_shared<const ir::Call>("struct.create", std::vector<ir::ExprPtr>{MakeVar("value", scalar)},
+                                                   std::vector<std::pair<std::string, std::any>>{
+                                                       {"name", std::string("SsbufStruct")},
+                                                       {"fields", std::vector<std::string>{"value"}},
+                                                   },
+                                                   tuple_type, ir::Span::Unknown());
+    auto create_stmt = std::make_shared<const ir::AssignStmt>(struct_var, create, ir::Span::Unknown());
+    auto ssbuf = MakeCall(op_name, {struct_var, MakeConstInt(0)});
+    auto body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{create_stmt, std::make_shared<const ir::EvalStmt>(ssbuf, ir::Span::Unknown())},
+        ir::Span::Unknown());
+
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
+    return codegen.GenerateSingle(MakeProgram(body), "a5");
+}
+
 #define EXPECT_CONTAINS(haystack, needle)                                                                          \
     do {                                                                                                           \
         const auto& haystack_value = (haystack);                                                                   \
@@ -839,20 +860,20 @@ TEST(BackendCCEBlockOutOps, UbCopy)
 
 TEST(BackendCCEBlockOutOps, SsbufStore)
 {
-    auto scal = MakeScalarType();
-    auto call = MakeCall("block.ssbuf_store", {MakeVar("struct_var", scal), MakeConstInt(0)});
-    auto code = RunCodegen("block.ssbuf_store", call);
-    EXPECT_CONTAINS(code, "reinterpret_cast<__ssbuf__");
-    EXPECT_CONTAINS(code, "uint32_t");
+    auto code = RunSsbufCodegen("block.ssbuf_store");
+    EXPECT_CONTAINS(code, "class SsbufStruct {\npublic:\n    volatile int32_t value;");
+    EXPECT_CONTAINS(code, "reinterpret_cast<__ssbuf__ uint32_t*>((uint64_t)(0))");
+    EXPECT_CONTAINS(code, "reinterpret_cast<const uint32_t*>(&struct_var_0)");
+    EXPECT_CONTAINS(code, "sizeof(struct_var_0) / sizeof(uint32_t)");
 }
 
 TEST(BackendCCEBlockOutOps, SsbufLoad)
 {
-    auto scal = MakeScalarType();
-    auto call = MakeCall("block.ssbuf_load", {MakeVar("struct_var", scal), MakeConstInt(0)});
-    auto code = RunCodegen("block.ssbuf_load", call);
-    EXPECT_CONTAINS(code, "reinterpret_cast<");
-    EXPECT_CONTAINS(code, "uint32_t");
+    auto code = RunSsbufCodegen("block.ssbuf_load");
+    EXPECT_CONTAINS(code, "class SsbufStruct {\npublic:\n    volatile int32_t value;");
+    EXPECT_CONTAINS(code, "reinterpret_cast<__ssbuf__ uint32_t*>((uint64_t)(0))");
+    EXPECT_CONTAINS(code, "reinterpret_cast<uint32_t*>(&struct_var_0)");
+    EXPECT_CONTAINS(code, "sizeof(struct_var_0) / sizeof(uint32_t)");
 }
 
 TEST(BackendCCEBlockOutOps, Fillpad)
@@ -1085,9 +1106,14 @@ TEST(BackendCCEBlockOutOps, StructCreate)
     TestableCCECodegen codegen(ir::SectionKind::Vector);
     codegen.SetCurrentTargetVar("result");
     auto tile = MakeTileType();
-    auto call = MakeCallWithKwargs(
-        "struct.create", {MakeVar("v0", tile), MakeVar("v1", tile)},
-        {{"name", std::string("MyStruct")}, {"fields", std::vector<std::string>{"f0", "f1"}}});
+    auto tuple_type = std::make_shared<const ir::TupleType>(std::vector<ir::TypePtr>{tile, tile});
+    auto call = std::make_shared<const ir::Call>("struct.create",
+                                                 std::vector<ir::ExprPtr>{MakeVar("v0", tile), MakeVar("v1", tile)},
+                                                 std::vector<std::pair<std::string, std::any>>{
+                                                     {"name", std::string("MyStruct")},
+                                                     {"fields", std::vector<std::string>{"f0", "f1"}},
+                                                 },
+                                                 tuple_type, ir::Span::Unknown());
     auto* info = BackendCCE::Instance().GetOpInfo("struct.create");
     ASSERT_NE(info, nullptr);
     info->codegen_func(call, codegen);

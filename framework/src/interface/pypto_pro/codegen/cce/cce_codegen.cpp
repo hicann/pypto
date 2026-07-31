@@ -498,6 +498,9 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
     emitter_.Clear();
     context_.Clear();
     tensor_to_pointer_.clear();
+    tiling_headers_.clear();
+    struct_definitions_.clear();
+    tuple_type_to_struct_name_.clear();
 
     PreScanKernel(kernel_func);
 
@@ -505,16 +508,7 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
     bool has_cross_sync = DetectCrossCoreSyncOps(kernel_func->body_);
     bool needs_ffts = has_cross_sync && (arch_ != "a5");
 
-    if (target_ == ir::SectionKind::Cube) {
-        emitter_.EmitLine("#if defined(__DAV_CUBE__)");
-    } else {
-        emitter_.EmitLine("#if defined(__DAV_VEC__)");
-    }
-
-    tiling_headers_.clear();
-    PreEmitStructTypes(kernel_func->body_);
-    EmitTilingStructTypes(kernel_func);
-
+    RegisterTilingStructTypes(kernel_func);
     GenerateSinglePrologue(kernel_func, needs_ffts);
     PrepareBodyGeneration();
     try {
@@ -527,6 +521,16 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
         }
         throw;
     }
+
+    std::string function_code = emitter_.GetCode();
+    emitter_.Clear();
+    if (target_ == ir::SectionKind::Cube) {
+        emitter_.EmitLine("#if defined(__DAV_CUBE__)");
+    } else {
+        emitter_.EmitLine("#if defined(__DAV_VEC__)");
+    }
+    EmitStructTypes();
+    emitter_.EmitRaw(function_code);
     emitter_.EmitLine("#endif");
 
     return emitter_.GetCode();
@@ -1230,8 +1234,8 @@ std::string CCECodegen::BuildDynamicTupleArrayDecl(const ir::TypePtr& elem_type,
     } else {
         auto inner_tt = ir::As<ir::TupleType>(elem_type);
         if (inner_tt && debug_info_ != nullptr && debug_info_->GetTupleFields(inner_tt.get()) != nullptr) {
-            auto type_it = struct_var_to_type_name_.find(elem_names[0]);
-            if (type_it != struct_var_to_type_name_.end()) {
+            auto type_it = tuple_type_to_struct_name_.find(inner_tt.get());
+            if (type_it != tuple_type_to_struct_name_.end()) {
                 elem_cpp_type = type_it->second;
             }
         }
@@ -2566,77 +2570,67 @@ std::string CppTypeForField(const ir::TypePtr& t)
 // its field names, and per-field IR types. A TupleType field (Array[T, N]) becomes an
 // array member `<T> name[N];`.
 std::string BuildStructTypeDef(const std::string& name, const std::vector<std::string>& fields,
-                               const std::vector<ir::TypePtr>& types)
+                               const std::vector<ir::TypePtr>& types, bool requires_volatile)
 {
     std::string def = "class " + name + " {\npublic:\n    ";
+    const std::string qualifier = requires_volatile ? "volatile " : "";
     for (size_t i = 0; i < fields.size(); ++i) {
         const auto& ft = types[i];
         if (auto arr = ir::As<ir::TupleType>(ft)) {
-            def += CppTypeForField(arr->types_[0]) + " " + fields[i] + "[" + std::to_string(arr->types_.size()) + "]; ";
+            def += qualifier + CppTypeForField(arr->types_[0]) + " " + fields[i] + "[" +
+                   std::to_string(arr->types_.size()) + "]; ";
         } else {
-            def += CppTypeForField(ft) + " " + fields[i] + "; ";
+            def += qualifier + CppTypeForField(ft) + " " + fields[i] + "; ";
         }
     }
     def += "\n};";
     return def;
 }
 
-struct StructDeclInfo {
-    std::string struct_name; // user-provided C++ type name
-    std::vector<std::string> fields;
-    std::vector<ir::TypePtr> types;
-};
-
-// Scan IR for struct.create Call sites and collect each unique struct type's
-// materialization info so PreEmitStructTypes can emit one C++ struct definition
-// per (name, signature).
-void CollectStructDeclares(const ir::StmtPtr& stmt, std::vector<StructDeclInfo>& out)
+std::string StructFieldTypeSignature(const ir::TypePtr& type)
 {
-    if (!stmt)
-        return;
-    if (auto seq = ir::As<ir::SeqStmts>(stmt)) {
-        for (const auto& s : seq->stmts_)
-            CollectStructDeclares(s, out);
-    } else if (auto assign = ir::As<ir::AssignStmt>(stmt)) {
-        if (auto call = ir::As<ir::Call>(assign->value_)) {
-            if (call->name_ == "struct.create" && call->HasKwarg("name")) {
-                StructDeclInfo info;
-                info.struct_name = call->GetKwarg<std::string>("name");
-                info.fields = call->GetKwarg<std::vector<std::string>>("fields");
-                info.types.reserve(call->args_.size());
-                for (const auto& a : call->args_) {
-                    info.types.push_back(a->GetType());
-                }
-                out.push_back(std::move(info));
-            }
-        }
-    } else if (auto for_stmt = ir::As<ir::ForStmt>(stmt)) {
-        CollectStructDeclares(for_stmt->body_, out);
-    } else if (auto if_stmt = ir::As<ir::IfStmt>(stmt)) {
-        CollectStructDeclares(if_stmt->thenBody_, out);
-        if (if_stmt->elseBody_)
-            CollectStructDeclares(*if_stmt->elseBody_, out);
-    } else if (auto section = ir::As<ir::SectionStmt>(stmt)) {
-        CollectStructDeclares(section->body_, out);
+    if (auto array_type = ir::As<ir::TupleType>(type)) {
+        CHECK(!array_type->types_.empty()) << "Struct array field type must not be empty";
+        return CppTypeForField(array_type->types_[0]) + "[" + std::to_string(array_type->types_.size()) + "]";
     }
+    return CppTypeForField(type);
 }
 
 } // namespace
 
-void CCECodegen::PreEmitStructTypes(const ir::StmtPtr& body)
+void CCECodegen::RegisterStructDefinition(const ir::TupleTypePtr& tuple_type, const std::string& type_name,
+                                          const std::vector<std::string>& fields, bool is_tiling)
 {
-    std::vector<StructDeclInfo> declares;
-    CollectStructDeclares(body, declares);
+    CHECK(tuple_type != nullptr) << "Cannot register a null TupleType for struct '" << type_name << "'";
+    CHECK(fields.size() == tuple_type->types_.size()) << "Struct field count mismatch for type '" << type_name << "'";
 
-    std::set<std::string> emitted_names;
-    for (const auto& info : declares) {
-        if (!emitted_names.insert(info.struct_name).second)
-            continue; // dedup by struct type name
-        emitter_.EmitLine(BuildStructTypeDef(info.struct_name, info.fields, info.types));
+    auto [it, inserted] = struct_definitions_.try_emplace(
+        type_name, StructDefinition{type_name, fields, tuple_type->types_, is_tiling, false});
+    if (!inserted) {
+        const auto& existing = it->second;
+        CHECK(existing.is_tiling == is_tiling)
+            << "Struct type '" << type_name << "' cannot be both tiling and non-tiling";
+        CHECK(existing.fields == fields && existing.types.size() == tuple_type->types_.size())
+            << "Conflicting definitions for struct type '" << type_name << "'";
+        for (size_t i = 0; i < existing.types.size(); ++i) {
+            CHECK(StructFieldTypeSignature(existing.types[i]) == StructFieldTypeSignature(tuple_type->types_[i]))
+                << "Conflicting type for field '" << fields[i] << "' in struct '" << type_name << "'";
+        }
     }
+    tuple_type_to_struct_name_[tuple_type.get()] = type_name;
 }
 
-void CCECodegen::EmitTilingStructTypes(const ir::FunctionPtr& func)
+void CCECodegen::MarkStructVolatile(const ir::TypePtr& type)
+{
+    auto tuple_type = ir::As<ir::TupleType>(type);
+    CHECK(tuple_type != nullptr) << "ssbuf_load/store requires a struct TupleType argument";
+    auto type_it = tuple_type_to_struct_name_.find(tuple_type.get());
+    CHECK(type_it != tuple_type_to_struct_name_.end())
+        << "ssbuf_load/store struct type is not registered for CCE codegen";
+    struct_definitions_.at(type_it->second).requires_volatile = true;
+}
+
+void CCECodegen::RegisterTilingStructTypes(const ir::FunctionPtr& func)
 {
     for (const auto& param : func->params_) {
         auto tuple_type = ir::As<ir::TupleType>(param->GetType());
@@ -2651,14 +2645,21 @@ void CCECodegen::EmitTilingStructTypes(const ir::FunctionPtr& func)
             << "Tiling struct field count mismatch for param '" << param->name_ << "'";
         const std::string* registered_name = debug_info_->GetTupleName(tuple_type.get());
         const std::string struct_name = registered_name != nullptr ? *registered_name : "Tiling";
-        const std::string header_name = struct_name + "_tiling.h";
-        // Emit the include into kernel.cpp once per struct; the header content (deduped via
-        // tiling_headers_ keyed by filename) is written next to kernel.cpp by the caller.
-        if (tiling_headers_.count(header_name) == 0) {
-            std::string def = BuildStructTypeDef(struct_name, *fields, tuple_type->types_);
-            tiling_headers_[header_name] = "#pragma once\n" + def + "\n";
-            emitter_.EmitLine("#include \"" + header_name + "\"");
+        RegisterStructDefinition(tuple_type, struct_name, *fields, true);
+    }
+}
+
+void CCECodegen::EmitStructTypes()
+{
+    for (const auto& [type_name, info] : struct_definitions_) {
+        std::string def = BuildStructTypeDef(type_name, info.fields, info.types, info.requires_volatile);
+        if (!info.is_tiling) {
+            emitter_.EmitLine(def);
+            continue;
         }
+        const std::string header_name = type_name + "_tiling.h";
+        tiling_headers_[header_name] = "#pragma once\n" + def + "\n";
+        emitter_.EmitLine("#include \"" + header_name + "\"");
     }
 }
 

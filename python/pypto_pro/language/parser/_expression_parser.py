@@ -50,16 +50,37 @@ class ExpressionParserMixin:
     """Mixin containing expression, attribute, and subscript parsing."""
 
     @staticmethod
-    def _const_int_value(expr: ir.Expr) -> int | None:
-        if isinstance(expr, ir.ConstInt):
+    def _const_scalar_value(expr: ir.Expr) -> bool | int | float | None:
+        """Return a scalar constant's value, including the effect of constant casts."""
+        if isinstance(expr, (ir.ConstBool, ir.ConstInt, ir.ConstFloat)):
             return expr.value
-        if isinstance(expr, ir.ConstBool):
-            return 1 if expr.value else 0
-        return None
+        if not isinstance(expr, ir.Cast):
+            return None
+
+        value = ExpressionParserMixin._const_scalar_value(expr.operand)
+        if value is None:
+            return None
+        dtype = expr.type.dtype
+        if dtype == DataType.BOOL:
+            return bool(value)
+        if dtype.is_int():
+            return int(value)
+        if dtype.is_float():
+            return float(value)
+        raise TypeError(f"Unsupported scalar constant dtype: {dtype}")
 
     @staticmethod
-    def _const_dtype(expr: ir.Expr) -> DataType:
-        return expr.type.dtype if isinstance(expr.type, ir.ScalarType) else DataType.INDEX
+    def _const_truth(expr: ir.Expr) -> bool | None:
+        value = ExpressionParserMixin._const_scalar_value(expr)
+        return None if value is None else bool(value)
+
+    @staticmethod
+    def _make_scalar_constant(value: bool | int | float, dtype: DataType, span: ir.Span) -> ir.Expr:
+        if dtype == DataType.BOOL:
+            return ir.ConstBool(bool(value), span)
+        if dtype.is_float():
+            return ir.ConstFloat(float(value), dtype, span)
+        return ir.ConstInt(int(value), dtype, span)
 
     @staticmethod
     def _check_uniform_tuple_types(value_type: ir.TupleType, span: ir.Span) -> None:
@@ -356,8 +377,9 @@ class ExpressionParserMixin:
             )
 
         op_name = op_map[op_type]
-        folded = self._fold_const_binop(op_name, left, right, span)
-        return folded if folded is not None else _make_binary(op_name, left, right, span)
+        operation = _make_binary(op_name, left, right, span)
+        folded = self._fold_const_binop(op_name, operation, span)
+        return folded if folded is not None else operation
 
     def parse_compare(self, compare: ast.Compare) -> ir.Expr:
         """Parse comparison operation.
@@ -447,8 +469,9 @@ class ExpressionParserMixin:
             )
 
         op_name = op_map[op_type]
-        folded = self._fold_const_binop(op_name, left, right, span)
-        return folded if folded is not None else _make_binary(op_name, left, right, span)
+        operation = _make_binary(op_name, left, right, span)
+        folded = self._fold_const_binop(op_name, operation, span)
+        return folded if folded is not None else operation
 
     def parse_unaryop(self, unary: ast.UnaryOp) -> ir.Expr:
         """Parse unary operation.
@@ -463,31 +486,23 @@ class ExpressionParserMixin:
         operand = self.parse_expression(unary.operand)
 
         op_map = {
-            ast.USub: ir.neg,
-            ast.Not: ir.not_,
-            ast.Invert: ir.bit_not,  # ``~x`` bitwise NOT (integer operands)
-            ast.UAdd: lambda operand, _span: operand,  # ``+x`` is the identity
+            ast.USub: ("neg", ir.neg),
+            ast.Not: ("not", ir.not_),
+            ast.Invert: ("invert", ir.bit_not),
+            ast.UAdd: ("pos", lambda value, _span: value),
         }
-
         op_type = type(unary.op)
         if op_type not in op_map:
             raise UnsupportedFeatureError(
                 f"Unsupported unary operator: {op_type.__name__}",
                 span=self.span_tracker.get_span(unary),
-                hint="Use supported unary operators: -, not",
+                hint="Use supported unary operators: +, -, not, ~",
             )
 
-        value = self._const_int_value(operand)
-        if value is not None:
-            if op_type is ast.USub:
-                return ir.ConstInt(-value, self._const_dtype(operand), span)
-            if op_type is ast.Not:
-                return ir.ConstInt(int(not value), DataType.BOOL, span)
-            if op_type is ast.Invert:
-                return ir.ConstInt(~value, self._const_dtype(operand), span)
-            if op_type is ast.UAdd:
-                return operand
-        return op_map[op_type](operand, span)
+        op_name, make_operation = op_map[op_type]
+        operation = make_operation(operand, span)
+        folded = self._fold_const_unaryop(op_name, operation, span)
+        return folded if folded is not None else operation
 
     def parse_boolop(self, expr: ast.BoolOp) -> ir.Expr:
         span = self.span_tracker.get_span(expr)
@@ -504,21 +519,20 @@ class ExpressionParserMixin:
 
         result = self.parse_expression(expr.values[0])
         for value_node in expr.values[1:]:
-            result_value = self._const_int_value(result)
-            if isinstance(expr.op, ast.And) and result_value == 0:
-                return ir.ConstInt(0, bool_dtype, span)
-            if isinstance(expr.op, ast.Or) and result_value is not None and result_value != 0:
-                return ir.ConstInt(1, bool_dtype, span)
+            result_truth = self._const_truth(result)
+            if isinstance(expr.op, ast.And) and result_truth is False:
+                return ir.ConstBool(False, span)
+            if isinstance(expr.op, ast.Or) and result_truth is True:
+                return ir.ConstBool(True, span)
             operand = self.parse_expression(value_node)
-            operand_value = self._const_int_value(operand)
-            if result_value is not None and operand_value is not None:
-                result = ir.ConstInt(
-                    int(bool(result_value) and bool(operand_value))
+            operand_truth = self._const_truth(operand)
+            if result_truth is not None and operand_truth is not None:
+                value = (
+                    result_truth and operand_truth
                     if isinstance(expr.op, ast.And)
-                    else int(bool(result_value) or bool(operand_value)),
-                    bool_dtype,
-                    span,
+                    else result_truth or operand_truth
                 )
+                result = ir.ConstBool(value, span)
             else:
                 result = fold_fn(result, operand, bool_dtype, span)
         return result
@@ -815,7 +829,7 @@ class ExpressionParserMixin:
         return isinstance(expr, ir.MakeTuple) and not self._is_struct_array_tuple(expr)
 
     def _is_struct_array_tuple(self, tuple_value: ir.MakeTuple) -> bool:
-        return id(tuple_value) in self._struct_array_tuple_ids
+        return tuple_value in self._struct_array_tuples
 
     def _update_const_env(self, name: str, value: Any) -> None:
         if isinstance(value, ir.Expr) and self._is_const_expr(value):
@@ -823,17 +837,18 @@ class ExpressionParserMixin:
         else:
             self.const_env.pop(name, None)
 
-    def _fold_const_binop(self, op_name: str, left: ir.Expr, right: ir.Expr, span: ir.Span) -> ir.Expr | None:
-        """Fold integer scalar operations without bypassing parser type checks."""
-        left_value = self._const_int_value(left)
-        right_value = self._const_int_value(right)
+    def _fold_const_binop(self, op_name: str, operation: ir.BinaryExpr, span: ir.Span) -> ir.Expr | None:
+        """Fold a validated binary scalar operation using its promoted operands."""
+        left_value = self._const_scalar_value(operation.left)
+        right_value = self._const_scalar_value(operation.right)
         if left_value is None or right_value is None:
             return None
-        dtype = self._const_dtype(left)
+        dtype = operation.type.dtype
         binary_ops = {
             "add": lambda: left_value + right_value,
             "sub": lambda: left_value - right_value,
             "mul": lambda: left_value * right_value,
+            "truediv": lambda: left_value / right_value,
             "floordiv": lambda: left_value // right_value,
             "mod": lambda: left_value % right_value,
             "bit_and": lambda: left_value & right_value,
@@ -841,23 +856,40 @@ class ExpressionParserMixin:
             "bit_xor": lambda: left_value ^ right_value,
             "bit_shift_left": lambda: left_value << right_value,
             "bit_shift_right": lambda: left_value >> right_value,
+            "min": lambda: min(left_value, right_value),
+            "max": lambda: max(left_value, right_value),
         }
         if op_name in binary_ops:
             try:
-                return ir.ConstInt(binary_ops[op_name](), dtype, span)
-            except ZeroDivisionError:
+                value = binary_ops[op_name]()
+            except (ArithmeticError, ValueError):
                 return None
+            return self._make_scalar_constant(value, dtype, span)
         comparisons = {
-            "eq": left_value == right_value,
-            "ne": left_value != right_value,
-            "lt": left_value < right_value,
-            "le": left_value <= right_value,
-            "gt": left_value > right_value,
-            "ge": left_value >= right_value,
+            "eq": lambda: left_value == right_value,
+            "ne": lambda: left_value != right_value,
+            "lt": lambda: left_value < right_value,
+            "le": lambda: left_value <= right_value,
+            "gt": lambda: left_value > right_value,
+            "ge": lambda: left_value >= right_value,
         }
         if op_name in comparisons:
-            return ir.ConstInt(int(comparisons[op_name]), DataType.BOOL, span)
-        return None
+            return ir.ConstBool(comparisons[op_name](), span)
+        raise KeyError(f"Unsupported constant-folding binary operator: {op_name}")
+
+    def _fold_const_unaryop(self, op_name: str, operation: ir.Expr, span: ir.Span) -> ir.Expr | None:
+        """Fold a validated unary scalar operation using its operand and result dtype."""
+        operand = operation.operand if isinstance(operation, ir.UnaryExpr) else operation
+        value = self._const_scalar_value(operand)
+        if value is None:
+            return None
+        unary_ops = {
+            "neg": lambda: -value,
+            "not": lambda: not value,
+            "invert": lambda: ~value,
+            "pos": lambda: value,
+        }
+        return self._make_scalar_constant(unary_ops[op_name](), operation.type.dtype, span)
 
     def _desugar_in_literal(self, left, elements, is_not_in, span, elements_are_ir=False):
         """Desugar x in (a,b,c) -> Or-chain of eq; x not in -> And-chain of ne."""

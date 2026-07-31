@@ -46,8 +46,8 @@ def add_kernel(
     with pl.section_vector():
         num_cores = pl.get_block_num()
         core_id = pl.get_block_idx()
-        m_tile_num = x.shape[0] / TILE_M
-        n_tile_num = x.shape[1] / TILE_N
+        m_tile_num = x.shape[0] // TILE_M
+        n_tile_num = x.shape[1] // TILE_N
 
         for i in pl.range(core_id, m_tile_num, num_cores):
             for j in pl.range(0, n_tile_num, 1):

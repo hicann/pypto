@@ -168,7 +168,7 @@ class ASTParser(
         self.const_env: dict[str, ir.Expr] = {}
         # struct_array is the sole mutable tuple container and must retain
         # GetItemExpr alias semantics; every other MakeTuple is immutable.
-        self._struct_array_tuple_ids: set[int] = set()
+        self._struct_array_tuples: set[ir.MakeTuple] = set()
 
         # Maps tile expr id -> [row_expr, col_expr] for tiles that had
         # set_validshape called on them at parse time. Consumed by
