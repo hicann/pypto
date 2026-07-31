@@ -114,4 +114,5 @@ def test_matmul_perf_asw_8k_k128_dn_move_offset():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     run_perf_test()

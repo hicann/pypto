@@ -171,5 +171,6 @@ def test_gather_cmp():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_gather_cmp()
     logging.info("\nAll tests passed!")

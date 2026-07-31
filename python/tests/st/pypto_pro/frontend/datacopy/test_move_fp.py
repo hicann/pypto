@@ -173,5 +173,6 @@ def test_move_fp_cce():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_move_fp_cce()
     logging.info("\nAll tests passed!")

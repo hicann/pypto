@@ -577,6 +577,7 @@ def test_fa_perf():
         logging.info("  PASS (deterministic, max|diff|=%.6f)", prev_diff)
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     logging.info("FA perf DN: double-buffer + QK pre-compute (QK_PRELOAD=%s, FIFO=%s)", QK_PRELOAD, FIFO_SIZE)
     logging.info("%s", '=' * 60)
     test_fa_perf()

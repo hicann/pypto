@@ -473,6 +473,7 @@ DOC_OUTPUT_CASES = {
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     for fn in [test_col_min, test_col_max, test_col_sum, test_row_max, test_row_sum, test_row_min,
                test_col_expand_sub, test_col_expand_mul, test_col_expand_div,
                test_row_expand_sub, test_row_expand_mul,

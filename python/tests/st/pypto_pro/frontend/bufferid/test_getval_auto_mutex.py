@@ -134,6 +134,7 @@ def test_getval_while_condition_auto_mutex():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     torch.npu.set_device(ST_DEVICE)
     torch.manual_seed(0)
     a = torch.rand(64, 128, device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0

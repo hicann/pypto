@@ -285,3 +285,5 @@ def fa_exp_relu_ref(q, k, v, d):
     exp_out = torch.exp(fa_out.float()).half()
     relu_out = torch.relu(exp_out.float()).half()
     return relu_out
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")

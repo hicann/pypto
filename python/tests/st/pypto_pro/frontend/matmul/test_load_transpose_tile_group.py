@@ -270,6 +270,7 @@ def test_group_tt(_ab):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
     a = torch.randn([M, K], device=ST_DEVICE, dtype=torch.float16)

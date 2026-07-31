@@ -96,6 +96,7 @@ def test_set_validshape():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_dcci()
     test_set_validshape()
     logging.info("\nAll dcci/validshape examples passed!")

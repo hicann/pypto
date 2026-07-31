@@ -600,6 +600,7 @@ def test_with_cube_then_vf():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_with_section_cube()
     test_with_section_cube_shape_generalization()
     test_with_section_vf_min_exp()

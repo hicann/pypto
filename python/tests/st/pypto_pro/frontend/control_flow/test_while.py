@@ -909,6 +909,7 @@ def test_while_not_ge():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_while_add()
     test_while_shape_generalization()
     test_while_sub()

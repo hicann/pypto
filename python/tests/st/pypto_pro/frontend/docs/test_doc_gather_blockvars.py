@@ -181,6 +181,7 @@ DOC_OUTPUT_CASES = {"gather": _doc_gather}
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_gather()
     test_multicore_block_vars()
     test_subblock_idx()

@@ -205,6 +205,7 @@ def test_ternary_promote_used_size():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_ternary_promote_nested_int()
     test_ternary_promote_nested_float()
     test_ternary_promote_used_size()

@@ -199,3 +199,5 @@ def test_tile_alias_after_source_rebind():
     ref = torch.matmul(a.float(), b.float())
     torch.testing.assert_close(out, ref, rtol=1e-2, atol=1e-2)
     logging.info("test_tile_alias_after_source_rebind passed")
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")

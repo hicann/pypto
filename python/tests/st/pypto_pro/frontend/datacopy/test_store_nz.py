@@ -156,5 +156,6 @@ def test_store_nz_cce():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_store_nz_cce()
     logging.info("\nAll tests passed!")

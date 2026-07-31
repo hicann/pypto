@@ -1437,6 +1437,7 @@ def test_if_not_in_operator():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_if_else()
     test_if_constexpr()
     test_if_elif_else()

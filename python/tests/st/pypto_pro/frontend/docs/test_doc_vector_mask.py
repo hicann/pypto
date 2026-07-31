@@ -156,6 +156,7 @@ def test_mask_count_norm():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_reset_mask()
     test_set_vec_mask()
     test_mask_count_norm()

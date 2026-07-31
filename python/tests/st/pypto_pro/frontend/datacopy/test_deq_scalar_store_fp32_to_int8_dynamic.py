@@ -138,5 +138,6 @@ def test_deq_scalar_dynamic_cce():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_deq_scalar_dynamic_cce()
     logging.info("\nAll tests passed!")

@@ -158,3 +158,5 @@ def test_matmul_tilingkey(dtype_key, tile_key, torch_dtype, rtol, atol):
         max_diff,
     )
     torch.testing.assert_close(out, golden, rtol=rtol, atol=atol)
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")

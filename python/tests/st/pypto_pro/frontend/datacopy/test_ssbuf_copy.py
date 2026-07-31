@@ -53,3 +53,5 @@ def test_ssbuf_kernel():
 
     x = torch.tensor([3], dtype=torch.int32).to(device)
     ssbuf_copy_kernel(x)
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")

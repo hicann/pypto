@@ -253,6 +253,7 @@ DOC_OUTPUT_CASES = {
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     for fn in [test_quant, test_dequant, test_cast, test_scatter]:
         fn()
     logging.info("\nAll batch-3 quant/cast/scatter examples passed!")

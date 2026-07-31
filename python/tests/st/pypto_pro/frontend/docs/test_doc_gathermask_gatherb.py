@@ -213,6 +213,7 @@ DOC_OUTPUT_CASES = {
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_gathermask_p1()
     test_gathermask_p2()
     test_gathermask_p7()

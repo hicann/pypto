@@ -146,6 +146,7 @@ DOC_OUTPUT_CASES = {
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_gt_select()
     test_axpy()
     logging.info("\nAll comparison/axpy examples passed!")

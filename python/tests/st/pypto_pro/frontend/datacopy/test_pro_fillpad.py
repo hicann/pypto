@@ -203,6 +203,7 @@ def test_fillpad_expand_dynamic_cce():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     cases = [test_fillpad_dynamic_cce, test_fillpad_inplace_dynamic_cce, test_fillpad_expand_dynamic_cce]
     for case in cases:
         case()

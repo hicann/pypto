@@ -74,5 +74,6 @@ def test_dynamic_tensor():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_dynamic_tensor()
     logging.info("\nDynamic shape syntax test passed!")

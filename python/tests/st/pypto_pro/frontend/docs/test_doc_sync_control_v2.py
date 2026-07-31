@@ -255,6 +255,7 @@ def test_set_cross_core_wait_cross_core():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_bar_m()
     test_set_mm_layout_transform()
     test_set_cross_core_wait_cross_core()

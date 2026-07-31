@@ -155,3 +155,5 @@ def test_tiled_matmul_add_db_npu():
     out_ref = torch.matmul(a.float(), b.float()) + x
     torch.testing.assert_close(out, out_ref, rtol=1e-2, atol=1e-2)
     logging.info("result equal!")
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")

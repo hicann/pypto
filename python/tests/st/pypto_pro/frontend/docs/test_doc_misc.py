@@ -114,6 +114,7 @@ def test_tuple_in_loop():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     cases = [test_fill_index, test_tuple_scalar, test_tuple_in_loop]
     for case in cases:
         case()

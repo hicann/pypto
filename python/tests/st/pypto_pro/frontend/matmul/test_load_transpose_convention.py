@@ -283,6 +283,7 @@ def test_load_tt(_ab):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     device = ST_DEVICE
     _require_a5(device)
     torch.manual_seed(0)

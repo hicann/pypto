@@ -104,5 +104,6 @@ DOC_OUTPUT_CASES = {"histogram": _doc_histogram}
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_histogram()
     logging.info("\nAll histogram doc examples passed!")

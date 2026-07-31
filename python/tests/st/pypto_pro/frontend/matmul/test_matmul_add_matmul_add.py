@@ -198,5 +198,6 @@ def test_matmul_add_matmul_add():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_matmul_add_matmul_add()
     logging.info("\nAll tests passed!")

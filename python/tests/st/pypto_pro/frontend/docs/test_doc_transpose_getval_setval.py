@@ -198,6 +198,7 @@ DOC_OUTPUT_CASES = {"transpose": _doc_transpose}
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_getval_setval()
     test_tensor_getval_setval()
     test_transpose()

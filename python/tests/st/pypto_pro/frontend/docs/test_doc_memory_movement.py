@@ -338,6 +338,7 @@ def test_ssbuf_copy_kernel():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_add_kernel()
     test_load_tile_kernel()
     test_store_tile_kernel()

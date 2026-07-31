@@ -164,6 +164,7 @@ def test_bar_v():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_sync_src_dst()
     test_bar_all()
     test_bar_v()

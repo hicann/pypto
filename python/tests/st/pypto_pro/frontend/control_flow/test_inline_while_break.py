@@ -119,4 +119,5 @@ def test_advance_block_traversal():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_advance_block_traversal()

@@ -409,5 +409,6 @@ def test_softmax_dn():
     logging.info("Softmax DN VF API (full version) test PASSED!")
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_softmax_dn()
     logging.info("\nAll tests passed!")

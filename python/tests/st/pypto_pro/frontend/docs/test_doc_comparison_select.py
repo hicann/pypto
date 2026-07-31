@@ -113,5 +113,6 @@ DOC_OUTPUT_CASES = {
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_scalar_gt_select()
     logging.info("\nAll comparison/select examples passed!")

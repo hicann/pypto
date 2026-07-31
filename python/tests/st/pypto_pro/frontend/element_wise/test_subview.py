@@ -180,6 +180,7 @@ def test_tile_subview_vf():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_tile_subview()
     test_tile_subview_valid_shape()
     test_tile_subview_vf()

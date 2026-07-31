@@ -162,6 +162,7 @@ def test_softmax_tile_group_vf():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     logging.info("Softmax make_tile_group tile-op Test (dynamic rows + dynamic cols, multicore)")
     logging.info("%s", "=" * 60)
     test_softmax_tile_group_vf()

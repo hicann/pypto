@@ -202,6 +202,7 @@ DOC_OUTPUT_CASES = {
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     cases = [test_mul_add_dst, test_fused_mul_add_relu, test_partadd]
     for case in cases:
         case()

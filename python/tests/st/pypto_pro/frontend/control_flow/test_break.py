@@ -633,6 +633,7 @@ def test_break_unaligned_shape():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_for_break()
     test_while_break()
     test_for_if_break_inner()

@@ -176,6 +176,7 @@ def test_matmul_acc_kernel():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_matmul_kernel()
     test_matmul_acc_kernel()
     logging.info("\nAll matrix-computation doc examples passed!")

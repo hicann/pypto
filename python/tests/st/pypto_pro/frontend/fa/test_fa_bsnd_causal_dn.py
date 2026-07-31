@@ -716,6 +716,7 @@ def test_fa_causal_bs_a5():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     logging.info("FA BSND causal DN on A5 CCE")
     logging.info("%s", '=' * 60)
     test_fa_causal_bs_a5()

@@ -239,5 +239,6 @@ def test_add_dynamic_rank():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_add_dynamic_rank()
     logging.info("\nAll tests passed!")

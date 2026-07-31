@@ -494,6 +494,7 @@ DOC_OUTPUT_CASES = {
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     cases = [
         test_row_reduce_sum, test_row_reduce_max,
         test_row_argmax, test_row_argmin,

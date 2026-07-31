@@ -1139,6 +1139,7 @@ def test_for_range_two_arg():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_for_add()
     test_for_range_step_ge_span()
     test_for_4d_add()

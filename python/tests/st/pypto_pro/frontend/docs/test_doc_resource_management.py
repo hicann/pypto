@@ -250,6 +250,7 @@ def test_workspace_kernel():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_make_tile_add_kernel()
     test_tile_group_matmul_kernel()
     test_tile_group_4buf_matmul_kernel()

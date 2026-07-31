@@ -126,4 +126,5 @@ def test_insert_zn_right_kernel():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_insert_zn_right_kernel()

@@ -325,6 +325,7 @@ def test_insert_group_transpose_right():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_insert_group_left()
     test_insert_group_right()
     test_insert_group_transpose_left()

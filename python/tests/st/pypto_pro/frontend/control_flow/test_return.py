@@ -987,6 +987,7 @@ def test_return_tile_group_kernel():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_return_early()
     test_return_in_if()
     test_plain_def_return_helpers()

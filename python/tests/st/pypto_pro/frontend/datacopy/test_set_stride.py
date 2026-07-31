@@ -142,6 +142,7 @@ def test_gather_64_lines_with_set_stride():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_set_stride_basic()
     test_gather_64_lines_with_set_stride()
     logging.info("\nAll set_stride tests passed!")

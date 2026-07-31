@@ -1383,6 +1383,7 @@ def test_fa_perf_nbuf():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     torch.npu.set_device(ST_DEVICE)
     logging.info("FlexAttention with NBuffer + auto_mutex (QK_PRELOAD=%s, FIFO=%s)", QK_PRELOAD, FIFO_SIZE)
     logging.info("%s", '=' * 60)

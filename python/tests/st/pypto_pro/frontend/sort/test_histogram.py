@@ -464,6 +464,7 @@ def test_histogram_uint32_byte3():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     logging.info("%s", "=" * 60)
     logging.info("histogram tests (radix sort preprocessing)")
     logging.info("%s", "=" * 60)

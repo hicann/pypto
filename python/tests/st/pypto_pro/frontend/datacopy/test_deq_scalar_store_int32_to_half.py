@@ -139,5 +139,6 @@ def test_deq_scalar_store_int32_to_half():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_deq_scalar_store_int32_to_half()
     logging.info("\nAll tests passed!")

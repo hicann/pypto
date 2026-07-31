@@ -85,5 +85,6 @@ def test_add():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_add()
     logging.info("\nAll tests passed!")

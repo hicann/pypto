@@ -148,5 +148,6 @@ def test_deq_scalar_store_fp32_to_int8():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_deq_scalar_store_fp32_to_int8()
     logging.info("\nAll tests passed!")

@@ -150,6 +150,7 @@ def test_fillpad_inplace():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     for fn in [test_fillpad, test_fillpad_expand, test_fillpad_inplace]:
         fn()
     logging.info("\nAll fillpad doc examples passed!")

@@ -192,6 +192,7 @@ def test_sort32_tail():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     cases = [test_mrgsort, test_mrgsort2, test_sort32, test_sort32_tail]
     for case in cases:
         case()

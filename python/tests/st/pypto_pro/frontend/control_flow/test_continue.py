@@ -611,6 +611,7 @@ def test_while_continue_mid():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_for_continue()
     test_while_continue()
     test_for_while_continue()

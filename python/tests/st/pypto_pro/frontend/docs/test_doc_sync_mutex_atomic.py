@@ -163,6 +163,7 @@ def test_store_atomic():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_sync_all()
     test_mutex_lock_unlock()
     test_store_atomic()

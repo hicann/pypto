@@ -538,6 +538,7 @@ def test_if_func_bool_expr():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_for_scalar_stop()
     test_for_scalar_step()
     test_if_scalar_flag()

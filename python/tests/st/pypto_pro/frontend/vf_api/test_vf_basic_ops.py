@@ -4007,4 +4007,5 @@ def test_vf_basic_ops():
     logging.info("All VF basic ops tests PASSED!")
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_vf_basic_ops()
