@@ -124,6 +124,31 @@ static std::string DtypeToPtrType(DataType dt)
     return dt.ToCTypeString();
 }
 
+// Resolve an offset argument to a C++ code string.
+// If the argument is a 2-element MakeTuple [row, col], compute the linear
+// offset `row * cols + col` using the tile's shape[1] (number of columns).
+// Otherwise, emit the expression directly (integer offset, AddrReg, etc.).
+// Returns empty string if the argument is not an offset (caller should skip).
+static std::string ResolveOffsetArg(codegen::CCECodegen& codegen, const ir::ExprPtr& offset_expr,
+                                    const ir::ExprPtr& tile_expr)
+{
+    if (auto tuple = ir::As<ir::MakeTuple>(offset_expr)) {
+        if (tuple->elements_.size() == 2) {
+            std::string row_str = codegen.GetExprAsCode(tuple->elements_[0]);
+            std::string col_str = codegen.GetExprAsCode(tuple->elements_[1]);
+            // Get cols from tile shape[1]
+            std::string cols_str = "1";
+            if (auto tile_type = ir::As<ir::TileType>(tile_expr->GetType())) {
+                if (tile_type->shape_.size() >= 2) {
+                    cols_str = codegen.GetExprAsCode(tile_type->shape_[1]);
+                }
+            }
+            return "((" + row_str + ") * (" + cols_str + ") + (" + col_str + "))";
+        }
+    }
+    return codegen.GetExprAsCode(offset_expr);
+}
+
 // ============================================================================
 // CreateMask — declares MaskReg + emits VF init instruction
 // ============================================================================
@@ -292,7 +317,7 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
     if (op->args_.size() == 4) {
         std::string dst0 = codegen.GetExprAsCode(op->args_[0]);
         std::string dst1 = codegen.GetExprAsCode(op->args_[1]);
-        std::string offset_str = codegen.GetExprAsCode(op->args_[3]);
+        std::string offset_str = ResolveOffsetArg(codegen, op->args_[3], op->args_[2]);
         DataType dst_dt = GetExprDtype(op->args_[0]);
         std::string ptr_type = DtypeToPtrType(dst_dt);
         std::string ub_ptr = GetUBufPtr(codegen, op->args_[2], ptr_type);
@@ -344,7 +369,7 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
     CHECK(op->args_.size() == 3)
         << "vf.load_align requires 2, 3, or 4 args (dst, src_ptr[, offset]) or (dst0, dst1, src_ptr, offset)";
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
-    std::string offset_str = codegen.GetExprAsCode(op->args_[2]);
+    std::string offset_str = ResolveOffsetArg(codegen, op->args_[2], op->args_[1]);
     DataType dst_dt = GetExprDtype(op->args_[0]);
     std::string ptr_type = DtypeToPtrType(dst_dt);
     // Is the destination a MaskReg? (routes to pld/plds instead of vld/vlds)
@@ -672,7 +697,14 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
     } else {
         std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
         std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], ptr_type);
-        codegen.Emit("vsts(" + src_reg + ", " + dst_ptr + ", 0, " + dist + ", " + mask_reg + ");");
+        // When a 4th positional arg is present and is not an AddrReg, it is an
+        // element offset. Resolve [row, col] MakeTuple to linear offset, then
+        // pass directly to vsts as the offset argument.
+        std::string offset_str = "0";
+        if (op->args_.size() >= 4) {
+            offset_str = ResolveOffsetArg(codegen, op->args_[3], op->args_[0]);
+        }
+        codegen.Emit("vsts(" + src_reg + ", " + dst_ptr + ", " + offset_str + ", " + dist + ", " + mask_reg + ");");
     }
     return "";
 }

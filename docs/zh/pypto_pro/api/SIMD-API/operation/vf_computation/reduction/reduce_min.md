@@ -14,7 +14,9 @@
 
 ## 功能说明
 
-向量寄存器最小值归约：将源寄存器中的所有有效元素求最小值，结果写入目标寄存器的第一个元素。
+向量寄存器最小值归约：将源寄存器中的所有有效元素（mask 选中的元素）求最小值，结果写入目标寄存器的第一个元素 `dst[0]`，第一个最小值所在索引写入 `dst[1]`，其余元素置零（`ZEROING` 模式）或保留原值（`MERGING` 模式）。对应硬件 `vcmin` 指令（AscendC ReduceMin）。
+
+当 `datablock=True` 时，启用 datablock 粒度归约（对应 `vcgmin` 指令，AscendC ReduceMinDatablock），每个 datablock 独立归约：b32 类型每 16 个元素为一个 datablock，b16 类型每 32 个元素为一个 datablock，各 datablock 分别求最小值并将结果写入各自 datablock 的第一个元素。
 
 必须在 `@pl.vector_function` 函数内使用。
 
@@ -28,47 +30,56 @@ dst = vf.reduce_min(src, preg, *, datablock=False, merge_mode=pl.MergeMode.ZEROI
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器，归约结果写入第一个元素 |
+| `dst` | 输出 | 目标向量寄存器，归约结果写入第一个元素 `dst[0]`，索引写入 `dst[1]` |
 | `src` | 输入 | 源向量寄存器 |
 | `preg` | 输入 | 掩码寄存器 |
-| `datablock` | 输入 | 可选，``True`` 时按 datablock 粒度归约，默认 ``False`` |
+| `datablock` | 输入 | 可选，``True`` 时按 datablock 粒度归约（对应 `vcgmin` 指令），默认 ``False`` |
 | `merge_mode` | 输入 | 可选，合并模式：``pl.MergeMode.ZEROING``（默认）或 ``pl.MergeMode.MERGING`` |
 
 ## 数据类型
+
+**普通归约（`datablock=False`，对应 `vcmin`）**：
 
 | src | dst |
 |---|---|
 | FP16 | FP16 |
 | FP32 | FP32 |
-| BF16 | BF16 |
+| INT16 | INT16 |
+| UINT16 | UINT16 |
+| INT32 | INT32 |
+| UINT32 | UINT32 |
+| INT8 | INT8 |
+| UINT8 | UINT8 |
+
+**Datablock 归约（`datablock=True`，对应 `vcgmin`）**：
+
+| src | dst |
+|---|---|
+| FP16 | FP16 |
+| FP32 | FP32 |
 | INT32 | INT32 |
 | UINT32 | UINT32 |
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor` 类型）。最小值存储在 `dst[0]`，第一个最小值元素的索引存储在 `dst[1]`，其余元素根据 `merge_mode` 置零或保留原值。
 
 ## 约束说明
 
 - 本接口操作数为寄存器，不涉及地址对齐。
 - 本接口不修改全局寄存器的值。
 - 源操作数与目标操作数的数据类型需要保持一致。
-- 当所有元素均不参与计算时（mask 为空），将该数据类型的最大值写入 dstReg。
-- 当存在多个最小值时，会将第一个最小值的索引保存在 dstReg 中。
-- min(-0, +0) = -0。
-- 如果输入数据存在 nan，将该数据类型的 nan 写入 dstReg，并将第一个 nan 的索引保存在 dstReg 中。
+- 当所有元素均不参与计算时（mask 为空），将该数据类型的最大值写入 `dst[0]`。
+- 当存在多个最小值时，将第一个最小值的索引保存在 `dst[1]` 中。
+- `min(-0, +0) = -0`。
+- 如果输入数据存在 nan，将该数据类型的 nan 写入 `dst[0]`，并将第一个 nan 的索引保存在 `dst[1]` 中。
+- datablock 归约模式（`datablock=True`）仅支持 b16/b32 宽度的数据类型（FP16/FP32/INT32/UINT32），不支持 b8 类型。
 
 ## 关键特性
 
 **索引值需要强制类型转换**
 
 dstReg 的最小值索引按照 dstReg 的数据类型存储，比如 dstReg 为 half 类型时，索引按照 half 类型存储，因此读取索引需要使用 reinterpret_cast 方法转换到整数类型。若数据类型是 half，需要使用 reinterpret_cast<uint16_t*>；若数据类型是 float，需要使用 reinterpret_cast<uint32_t*>。
-
-归约求最小值的计算过程及索引保存方式如下图所示：
-
-**图 1** ReduceMin 归约索引示意图
-
-![reg_reduce_index示意图](../../../../figures/reg_reduce_index.jpg)
 
 ## 调用示例
 

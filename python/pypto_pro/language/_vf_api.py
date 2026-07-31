@@ -143,9 +143,18 @@ class Vf:
 
             dst = vf.load_align(src, offset)
 
+        The ``offset`` may be an integer, an AddrReg, or a 2-element list
+        ``[row, col]`` where ``row`` is the row offset (unit = number of
+        columns, i.e. ``shape[1]``) and ``col`` is the element offset within
+        the row. Both ``row`` and ``col`` may be expressions::
+
+            dst = vf.load_align(src, [i, 0])          # row i, col 0
+            dst = vf.load_align(src, [i, j + k])      # expression offsets
+
         Args:
             src: Source UB Tile pointer
-            offset: Element offset into the tile (or post-update stride)
+            offset: Element offset into the tile, an AddrReg, or ``[row, col]``
+                list/tuple (linear offset = ``row * shape[1] + col``)
 
         Kwargs:
             dtype: Data type for type-specific variants (e.g. ``pl.DT_UINT32``)
@@ -173,10 +182,20 @@ class Vf:
 
             vf.store_align(dst_tile, src, mask)
 
+        An optional offset may be appended as the last positional argument.
+        It may be an integer, an AddrReg, or a 2-element list ``[row, col]``
+        where ``row`` is the row offset (unit = number of columns, i.e.
+        ``shape[1]``) and ``col`` is the element offset within the row::
+
+            vf.store_align(dst_tile, src, mask, [i, j])   # list offset
+            vf.store_align(dst_tile, src, mask, addr_reg)  # AddrReg offset
+
         Args:
             dst: Destination UB Tile pointer
             src: Source register
             mask: Predicate mask register (omitted when src is a MaskReg)
+            offset: Optional trailing positional arg — integer, AddrReg, or
+                ``[row, col]`` list/tuple (linear offset = ``row * shape[1] + col``)
 
         Kwargs:
             dist: ``pl.StoreDist.NORM`` (default), ``pl.StoreDist.NORM_B16``,

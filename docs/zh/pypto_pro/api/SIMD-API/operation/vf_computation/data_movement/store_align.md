@@ -50,6 +50,12 @@ vf.store_align(tile, src, preg, block_stride, repeat_stride, *, data_copy_mode=p
 # AddrReg 偏移存储（第 4 个参数传入 AddrReg）
 vf.store_align(tile, src, preg, addr_reg)
 
+# 列表偏移存储（末尾参数传入 [row, col] 列表，线性偏移 = row * shape[1] + col）
+#   row 单位为 tile 的列数（即 set_validshape[m, n] 的 n），col 单位为元素个数
+#   row 和 col 均支持表达式
+vf.store_align(tile, src, preg, [row, col])
+vf.store_align(tile, src, preg, [i, j + k])              # 表达式偏移
+
 # MaskReg 存储（src 为 MaskReg 时自动分派，无需谓词 mask）
 vf.store_align(tile, mask_reg)                                       # 固定偏移
 vf.store_align(tile, mask_reg, *, dist=pl.StoreDist.PACK)            # 压缩模式
@@ -67,6 +73,7 @@ vf.store_align(tile, mask_reg, offset, *, post_update=True)          # post-upda
 | `src_even` / `src_odd` | 输入 | Interleaved 模式下的偶数/奇数源寄存器，类型需一致 |
 | `preg` | 输入 | 谓词掩码寄存器，指定写入的元素范围。MaskReg 源时无需传入 |
 | `addr_reg` | 输入 | 可选，由 `vf.create_addr_reg` 创建的地址偏移寄存器 |
+| `offset` | 输入 | 可选，末尾位置参数，偏移量（元素数量）；也可传入 `[row, col]` 列表或元组，线性偏移为 `row * shape[1] + col`，其中 `row` 单位为 tile 的列数（即 `set_validshape[m, n]` 的 `n`），`col` 单位为元素个数，两者均支持表达式 |
 | `stride` | 输入 | 可选，post-update 模式下的地址累进步长（元素数），作为第 4 个位置参数传入。默认 0。B64 类型自动翻倍 |
 | `dist` | 输入 | 可选，数据分布模式：<br>RegTensor 源：``pl.StoreDist.NORM``（普通对齐，默认）、``pl.StoreDist.NORM_B16``、``pl.StoreDist.FIRST_ELEMENT``（仅存储 lane 0）、``pl.StoreDist.PACK``（压缩存储）、``pl.StoreDist.PACK4``（4 元素压缩）、``pl.StoreDist.INTLV``（交错存储，自动按 dtype 选择 B8/B16/B32）、``pl.StoreDist.INTLV_B32``（B32 粒度交错存储）<br>MaskReg 源：``pl.StoreDist.NORM``（正常模式，搬运 VL/8）、``pl.StoreDist.PACK``（压缩模式） |
 | `post_update` | 输入 | 可选，`True` 时搬运后目标地址自动累进，默认 `False`。适用于循环内连续存储 |
@@ -203,6 +210,118 @@ def test_example_2():
 
 if __name__ == "__main__":
     test_example_2()
+    print("PASSED")
+```
+
+## 列表偏移存储示例
+
+`store_align` 支持在末尾位置参数传入 `[row, col]` 列表（或元组）作为偏移量，编译器自动计算线性偏移 `row * shape[1] + col`。其中 `row` 的单位为 tile 的列数（即 `set_validshape[m, n]` 配置的 `n` 值），`col` 的单位为元素个数。`row` 和 `col` 均支持表达式（如循环变量运算）。
+
+该写法替代了旧版 `tile[a:a+1, b:b+1]` 切片语法，语义完全一致：`a` 对应 `row`，`b` 对应 `col`。`load_align` 和 `store_align` 的 `[row, col]` 偏移可配合使用，实现按行偏移的加载-计算-存储。
+
+```python
+import pypto_pro.language as pl
+import torch
+import torch_npu
+
+
+@pl.vector_function
+def example_vf(src_tile, dst_tile):
+    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
+    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
+    # 使用 [row, col] 列表偏移：从 src 第 0 行加载，存储到 dst 第 1 行
+    reg = vf.load_align(src_tile, [0, 0])
+    vf.store_align(dst_tile, reg, preg, [1, 0])
+
+
+@pl.jit()
+def example_kernel(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+):
+    tf = pl.TileType(shape=[2, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    in_a = pl.make_tile(tf, addr=0, size=512)
+    t_out = pl.make_tile(tf, addr=512, size=512)
+    with pl.section_vector():
+        pl.load(in_a, a, [0, 0])
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        example_vf(in_a, t_out)
+        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.store(out, t_out, [0, 0])
+
+
+def test_example_6():
+    device = "npu:0"
+    core_nums = 1
+    torch.npu.set_device(device)
+    a = torch.randn([2, 64], device=device, dtype=torch.float32)
+    out = torch.zeros([2, 64], device=device, dtype=torch.float32)
+    example_kernel[None, core_nums](a, out)
+    torch.npu.synchronize()
+    # dst 第 1 行被写入 src 第 0 行的数据，第 0 行保持 0
+    expected = torch.zeros([2, 64], device=device, dtype=torch.float32)
+    expected[1, :] = a[0, :]
+    torch.testing.assert_close(out, expected, rtol=1e-5, atol=1e-5)
+
+
+if __name__ == "__main__":
+    test_example_6()
+    print("PASSED")
+```
+
+`row` 和 `col` 也支持表达式，适合在循环中按行偏移加载和存储：
+
+```python
+import pypto_pro.language as pl
+import torch
+import torch_npu
+
+
+@pl.vector_function
+def example_vf(src_tile, dst_tile, n_rows):
+    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
+    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
+    for i in pl.range(n_rows):
+        # [i, 0]：row = i，col = 0，线性偏移 = i * 64
+        # load_align 和 store_align 均使用 [row, col] 表达式偏移
+        reg = vf.load_align(src_tile, [i, 0])
+        vf.store_align(dst_tile, reg, preg, [i, 0])
+
+
+@pl.jit()
+def example_kernel(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+):
+    tf = pl.TileType(shape=[2, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    in_a = pl.make_tile(tf, addr=0, size=512)
+    t_out = pl.make_tile(tf, addr=512, size=512)
+    with pl.section_vector():
+        pl.load(in_a, a, [0, 0])
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        example_vf(in_a, t_out, 2)
+        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.store(out, t_out, [0, 0])
+
+
+def test_example_7():
+    device = "npu:0"
+    core_nums = 1
+    torch.npu.set_device(device)
+    a = torch.randn([2, 64], device=device, dtype=torch.float32)
+    out = torch.empty([2, 64], device=device, dtype=torch.float32)
+    example_kernel[None, core_nums](a, out)
+    torch.npu.synchronize()
+    # 循环按行加载 src 并存入 dst 对应行，结果等于完整拷贝
+    torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
+
+
+if __name__ == "__main__":
+    test_example_7()
     print("PASSED")
 ```
 

@@ -99,7 +99,8 @@ def test_example():
     out = torch.empty([1, 128], device=device, dtype=torch.int16)
     example_kernel[None, core_nums](a, b, out)
     torch.npu.synchronize()
-    assert out.dtype == torch.int16
+    expected = torch.bitwise_xor(a, b)
+    torch.testing.assert_close(out, expected, rtol=0, atol=0)
 
 
 if __name__ == "__main__":

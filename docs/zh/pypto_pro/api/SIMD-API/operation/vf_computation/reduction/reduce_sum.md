@@ -14,7 +14,9 @@
 
 ## 功能说明
 
-向量寄存器求和归约：将源寄存器中的所有有效元素求和，结果写入目标寄存器的第一个元素。
+向量寄存器求和归约：将源寄存器中的所有有效元素（mask 选中的元素）求和，结果写入目标寄存器的第一个元素（`dst[0]`），其余元素置零（`ZEROING` 模式）或保留原值（`MERGING` 模式）。对应硬件 `vcadd` 指令（AscendC ReduceSum）。
+
+当 `datablock=True` 时，启用 datablock 粒度归约（对应 `vcgadd` 指令，AscendC ReduceSumDatablock），每个 datablock 独立归约：b32 类型每 16 个元素为一个 datablock，b16 类型每 32 个元素为一个 datablock，各 datablock 分别求和并将结果写入各自 datablock 的第一个元素。
 
 必须在 `@pl.vector_function` 函数内使用。
 
@@ -31,22 +33,36 @@ dst = vf.reduce_sum(src, preg, *, datablock=False, merge_mode=pl.MergeMode.ZEROI
 | `dst` | 输出 | 目标向量寄存器，归约结果写入第一个元素 |
 | `src` | 输入 | 源向量寄存器 |
 | `preg` | 输入 | 掩码寄存器 |
-| `datablock` | 输入 | 可选，``True`` 时按 datablock 粒度归约，默认 ``False`` |
+| `datablock` | 输入 | 可选，``True`` 时按 datablock 粒度归约（对应 `vcgadd` 指令），默认 ``False`` |
 | `merge_mode` | 输入 | 可选，合并模式：``pl.MergeMode.ZEROING``（默认）或 ``pl.MergeMode.MERGING`` |
 
 ## 数据类型
+
+**普通归约（`datablock=False`，对应 `vcadd`）**：
 
 | src | dst |
 |---|---|
 | FP16 | FP16 |
 | FP32 | FP32 |
-| BF16 | BF16 |
+| INT16 | INT16 |
+| UINT16 | UINT16 |
+| INT32 | INT32 |
+| UINT32 | UINT32 |
+| INT8 | INT8 |
+| UINT8 | UINT8 |
+
+**Datablock 归约（`datablock=True`，对应 `vcgadd`）**：
+
+| src | dst |
+|---|---|
+| FP16 | FP16 |
+| FP32 | FP32 |
 | INT32 | INT32 |
 | UINT32 | UINT32 |
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor` 类型），归约结果存储在第一个元素 `dst[0]` 中，其余元素根据 `merge_mode` 置零或保留原值。
 
 ## 约束说明
 
@@ -54,7 +70,9 @@ dst = vf.reduce_sum(src, preg, *, datablock=False, merge_mode=pl.MergeMode.ZEROI
 - 本接口不修改全局寄存器的值。
 - 源操作数与目标操作数的数据类型需要保持一致。
 - 当所有元素均不参与计算时（mask 为空），将目的操作数数据类型的 0 写入 dstReg。
-- 指令内累加顺序采用二叉树累加方式。
+- 指令内累加顺序采用二叉树累加方式，结果具有确定性。
+- 当源操作数数据类型为 FP16 时，中间累加过程在 FP32 精度下进行，最终结果再舍入为 FP16，因此精度高于先逐对 `vf.add` 再手动归约的写法。
+- datablock 归约模式（`datablock=True`）仅支持 b16/b32 宽度的数据类型（FP16/FP32/INT32/UINT32），不支持 b8 类型。
 
 ## 关键特性
 

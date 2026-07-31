@@ -37,7 +37,6 @@ dst = vf.div(src_a, src_b, preg)
 |---|---|
 | FP16 | FP16 |
 | FP32 | FP32 |
-| BF16 | BF16 |
 | INT32 | INT32 |
 | UINT32 | UINT32 |
 

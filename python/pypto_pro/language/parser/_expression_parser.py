@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import ast
-import logging
 from typing import Any
 
 from pypto.pypto_impl import ir
@@ -1129,6 +1128,16 @@ class ExpressionParserMixin:
                 hint="Use pl.load/pl.store with offset lists for tensor access",
             )
 
+        # VF section: tile slice 'tile[a:b, c:d]' is not supported.
+        # Use load_align(tile, [row, col]) / store_align(tile, ..., [row, col]) instead.
+        if self.inline_vf_depth > 0:
+            raise ParserSyntaxError(
+                "Tile slice 'tile[a:b, c:d]' is not supported in VF section; "
+                "use load_align(tile, [row, col]) or store_align(tile, reg, mask, [row, col]) instead",
+                span=span,
+                hint="Replace `tile[a:a+1, b:b+1]` with `tile, [a, b]` in load_align/store_align",
+            )
+
         if isinstance(container_type, ir.TileType):
             memref = getattr(container_type, 'memref', None)
             mem_space = getattr(memref, 'memory_space', None) if memref is not None else None
@@ -1153,12 +1162,6 @@ class ExpressionParserMixin:
                     span=span,
                     hint="Use pl.load with offset or pl.move with offset for unsupported tiles",
                 )
-
-        if self.inline_vf_depth > 0:
-            logging.warning(
-                "Tile slice in VF section is lowered to pointer offset only; "
-                "shape/valid_shape are ignored. Consider using `tile + offset` instead."
-            )
 
         if not isinstance(slice_node, ast.Tuple):
             raise ParserSyntaxError(
@@ -1264,7 +1267,6 @@ class ExpressionParserMixin:
         # Propagate tile mutex metadata for auto_mutex
         self._transfer_tile_sync_metadata(view_expr, container_expr)
         return view_expr
-
 
     def _mark_make_tuple_anchor(self, result) -> None:
         """Record that a MakeTuple already has an emitted assignment anchor."""
