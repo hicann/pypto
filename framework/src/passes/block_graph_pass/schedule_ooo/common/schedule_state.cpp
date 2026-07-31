@@ -183,7 +183,7 @@ Status ScheduleState::CalcBufferSize(LogicalTensors tensors, std::map<MemoryType
             continue;
         }
         const auto& shape = tensor->tensor->GetRawShape();
-        if (std::any_of(shape.begin(), shape.end(), [](int64_t d) { return d <= 0; })) {
+        if (std::any_of(shape.begin(), shape.end(), [](int64_t d) { return d < 0; })) {
             APASS_LOG_ERROR_F(Elements::Tensor,
                               "Dynamic axis detected in %s, "
                               "OoOSchedule requires static rawShape!",
