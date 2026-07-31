@@ -1086,3 +1086,36 @@ def test_function_call():
         for _ in pypto.loop(1):
             bar(Data(data=[t1, t2]))
     pil.compile(foo, 1, 2)
+
+
+def test_getattr_and_delattr():
+    """Cover getattr and delattr compiled in one function."""
+
+    res = []
+
+    def foo():
+        # getattr 2-arg: returns the attribute value
+        res.append(getattr(pypto, "DT_FP32"))
+        # getattr 3-arg, attribute exists: returns the attribute (not the default)
+        res.append(getattr(pypto, "DT_FP32", pypto.DT_UINT8))
+        # getattr 3-arg, attribute missing: returns the default
+        res.append(getattr(pypto, "DT_NOT_EXIST", pypto.DT_UINT8))
+        # getattr 3-arg inside a dict literal (mirrors get_pypto_dtype usage)
+        res.append({
+            "present": getattr(pypto, "DT_FP32", pypto.DT_UINT8),
+            "missing": getattr(pypto, "DT_NOT_EXIST", pypto.DT_UINT8),
+        })
+        # delattr 2-arg: removes the attribute from the object
+        obj = SimpleNamespace(a=1, b=2)
+        delattr(obj, "a")
+        res.append(not hasattr(obj, "a"))
+        res.append(obj.b)
+
+    pil.compile(foo, has_move=False)
+    assert res[0] == pypto.DT_FP32
+    assert res[1] == pypto.DT_FP32
+    assert res[2] == pypto.DT_UINT8
+    assert res[3]["present"] == pypto.DT_FP32
+    assert res[3]["missing"] == pypto.DT_UINT8
+    assert res[4] is True
+    assert res[5] == 2

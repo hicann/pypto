@@ -97,8 +97,12 @@ def compare_impl(ctx, op, x, y):
 
 
 @impl(getattr, partial=True)
+def getattr_impl(ctx, op, obj, attr, *args):
+    return op(obj, attr, *args)
+
+
 @impl(delattr, partial=True)
-def getattr_impl(ctx, op, obj, attr):
+def delattr_impl(ctx, op, obj, attr):
     return op(obj, attr)
 
 
