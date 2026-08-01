@@ -398,6 +398,7 @@ def softmax(x, is_fp16=False):
 @pypto.frontend.jit(
     runtime_options={"stitch_function_max_num": 1024, "ready_on_host_tensors": ["block_table", "kv_act_seqs"]},
     pass_options={"cube_l1_reuse_setting": {0: 8}, "cube_nbuffer_setting": {-1: 8}},
+    new_ir=True
 )
 def ifa_func_kernel(
     q: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
@@ -552,6 +553,7 @@ def ifa_func_kernel(
         "vec_nbuffer_setting": {-2: 1, 0: 1, 1: 1},
     },
     host_options={"compile_monitor_enable": 0},
+    new_ir=True
 )
 def ifa_func_kernel_for_910_high_performance(
     q: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),

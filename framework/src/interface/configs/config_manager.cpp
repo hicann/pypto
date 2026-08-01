@@ -197,6 +197,7 @@ void ConfigManager::ResetLog(const std::string& path)
         newLogFile = path + "/run.log";
     }
     globalConfigs_.logFile = std::move(newLogFile);
+    globalConfigs_.logTensorGraphFolder.clear();
 }
 
 PassConfigs ConfigManager::GetPassConfigs(const std::string& strategy, const std::string& identifier) const

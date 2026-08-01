@@ -9,14 +9,21 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 """Helpers for lowering PIL-compiled functions through the new IR pipeline."""
 
+import os
+
 from pypto.runtime import setup_verify_data
 
-from .. import ir, pil
-from ..logging import log_debug
+from .. import ir, pil, pypto_impl
 
 
 def _dump_program(name, program):
-    log_debug(f"=========================={name}=========================\n{program}")
+    if not pypto_impl.GetPassDefaultConfig(pypto_impl.KEY_PRINT_GRAPH, False):
+        return
+    dump_dir = pypto_impl.LogTopFolder() + "/TensorGraph/IR"
+    os.makedirs(dump_dir, exist_ok=True)
+    safe_name = name.replace(" ", "_")
+    with open(os.path.join(dump_dir, f"ir_dump_{safe_name}.txt"), "w") as f:
+        f.write(str(program))
 
 
 def _build_default_pipeline():
