@@ -9,7 +9,7 @@
 from dataclasses import dataclass
 
 import pypto
-from pypto.ir.compile_pipeline import compile_new_ir
+from pypto.pil.compile_pipeline import compile_new_ir
 
 
 @dataclass

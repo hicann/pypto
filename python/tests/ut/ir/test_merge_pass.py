@@ -8,7 +8,10 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 """Comprehensive tests for ir.Pass.merge_stmts_into_if."""
 
+import difflib
+import inspect
 import logging
+import os
 
 import pypto
 from pypto import ir, pil
@@ -33,6 +36,39 @@ def _collect_stmts(stmt, cls):
     return result
 
 
+def _check_snapshot(test_name, func):
+    module_name = os.path.splitext(os.path.basename(__file__))[0]
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot",
+                        "%s.%s.pir" % (module_name, test_name))
+
+    def normalize(x):
+        return x.rstrip("\n") + "\n"
+
+    with open(path) as f:
+        golden = normalize(f.read())
+
+    actual = str(func) + "\n"
+    actual = normalize(actual)
+    if golden != actual:
+        diff = "".join(
+            difflib.unified_diff(
+                golden.splitlines(keepends=True),
+                actual.splitlines(keepends=True),
+                fromfile="%s (golden)" % path,
+                tofile="%s (actual)" % path,
+            )
+        )
+        raise AssertionError("IR snapshot mismatch in %s:\n%s" % (test_name, diff))
+
+
+def _ssa_verify(verifier, prog):
+    diagnostic = verifier.verify(prog)
+    if diagnostic:
+        print(prog)
+        print(ir.IRVerifier.generate_report(diagnostic))
+        raise
+
+
 def _run_merge(func, *args):
     """Compile a kernel and run canonicalize + dce + merge_stmts_into_if, stopping before lowering
     so the resulting if-tree (func.body) is inspectable. Mirrors compile_new_ir's first half."""
@@ -43,11 +79,15 @@ def _run_merge(func, *args):
     canonical = ir.Pass.canonicalize()
     merge = ir.Pass.merge_stmts_into_if()
     verifier = ir.IRVerifier.create_default()
+    _ssa_verify(verifier, prog)
     prog = dce(canonical(prog))
+    _ssa_verify(verifier, prog)
     prog = canonical(merge(prog))
-    verifier.verify_or_throw(prog)
-    logging.info("\nmerged:\n%s" % prog.functions[func.name].body)
-    return prog.functions[func.name]
+    _ssa_verify(verifier, prog)
+    func = prog.functions[func.name]
+    logging.info("\nmerged:\n%s" % func.body)
+    _check_snapshot(inspect.stack()[1].function, func)
+    return func
 
 
 def test_merge_pass1():
@@ -300,7 +340,7 @@ def test_oi_update():
                         oi_update[:] = a + 1
                     else:
                         oi_update[:] = oi_update - 1
-                    if i == n - 1:
+                    if i + 1 >= n:
                         b[:] = oi_update // 2
 
     y = pypto.Tensor((32, 32), pypto.DT_FP32)

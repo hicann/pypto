@@ -65,6 +65,13 @@ public:
         std::string origin = name;
         if (origin.empty()) {
             origin = "$" + std::to_string(temp_counter_++);
+        } else {
+            // Propagate: if `name` is an existing unique var name, carry its origin forward
+            // so clones/substitutes share the source var's base name.
+            auto it = all_vars_.find(origin);
+            if (it != all_vars_.end()) {
+                origin = it->second;
+            }
         }
 
         auto var_name = origin;

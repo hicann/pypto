@@ -10,7 +10,7 @@
 import pytest
 
 import pypto
-from pypto.ir.compile_pipeline import compile_new_ir
+from pypto.pil.compile_pipeline import compile_new_ir
 
 
 def test_assemble():

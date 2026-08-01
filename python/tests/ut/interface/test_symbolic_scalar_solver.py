@@ -43,15 +43,36 @@ def find_feasible_paths(conds, pre_conds):
     dfs(0, pre_conds)
     return ans
 
+# origin fa pattern
+#
+# for (i = 0; i < n; i += step, unroll_list=[4, 1]) {
+#     if (i == 0) { do something0 } else { do something1 }
+#     if (i + step >= n) { do something2 } else { do something3 }
+#
 
+# unrolled from origin fa pattern
+# for (i = 0; i + step * 4 <= n; i += step * 4) {
+#   if (i == 0) { do something0 } else { do something1 }
+#   if (i + step >= n) { do something2 } else { do something3 }
+#   if (i == step) { do something0 } else { do something1 }
+#   if (i + step *2 >= n) { do something2 } else { do something3 }
+#   if (i == step *2) { do something0 } else { do something1 }
+#   if (i + step *3 >= n) { do something2 } else { do something3 }
+#   if (i == step *3) { do something0 } else { do something1 }
+#   if (i + step *4 >= n) { do something2 } else { do something3 }
 def test_find_feasible_paths():
-    unroll = 32
+    unroll, step = 32, 10
     x = pypto.symbolic_scalar('x')  # loop var
     n = pypto.symbolic_scalar('n')  # loop end
     s = pypto.symbolic_scalar('s')  # loop start
     n = (n + 8 - 1) // 8
-    pre_cond = [x >= s, x + unroll <= n]
-    conds = [x + k == s for k in range(unroll)] + [x + k == n - 1 for k in range(unroll)]
+
+    # simulate loop unroll, [0, unroll)
+    pre_cond = [x >= s, x + unroll * step <= n]
+    # x + k == s simulate is loop begin
+    conds = [x + k * step == s for k in range(unroll)]
+    # x + k * step >= n simulate is loop end (inequality)
+    conds += [x + (k + 1) * step >= n for k in range(unroll)]
     choices = find_feasible_paths(conds, pre_cond)
     assert len(choices) == 4
 
@@ -115,14 +136,42 @@ def test_linear_feasibility():
     assert check([x > 10, x < 10]) == SatStatus.UNSAT
 
     # --- Satisfiable conjunctions that must NOT regress to UNSAT ---
-    # Multi-symbol inequalities are skipped (not decidable per-symbol).
-    assert check([x + y >= 0, x + y <= -1]) != SatStatus.UNSAT
+    # Multi-symbol inequalities sharing one symbolic part are now compared,
+    # so this lo(0) > hi(-1) contradiction on (x + y) is detected.
+    assert check([x + y >= 0, x + y <= -1]) == SatStatus.UNSAT
     # Equality pin collapses an inequality to single-symbol, with a feasible range.
     assert check([y == -1, x + y >= 0, x <= 5]) != SatStatus.UNSAT
     # Negative-coefficient bound that is satisfiable: -2*x <= -4  =>  x >= 2.
     assert check([-2 * x <= -4, x <= 10]) != SatStatus.UNSAT
     # After subst the comparison folds to ground true (0 >= 0); not UNSAT.
     assert check([y == x, x - y >= 0]) != SatStatus.UNSAT
+
+
+def test_multisymbol_inequality_bounds():
+    x, y, n = _sym("x y n")
+
+    # --- Strict atoms with |coeff| > 1: must stay satisfiable (no false UNSAT).
+    # The strict->non-strict fold must happen BEFORE dividing by the gcd, or
+    # 2*x > 5 would tighten to x >= 4 instead of x >= 3.
+    assert check([2 * x > 5, x <= 3]) != SatStatus.UNSAT            # x = 3
+    assert check([2 * x < 5, x >= 2]) != SatStatus.UNSAT            # x = 2
+    assert check([-2 * x > 5, x >= -3]) != SatStatus.UNSAT          # x = -3
+    assert check([2 * x + 2 * y > 5, x + y <= 3]) != SatStatus.UNSAT  # x + y = 3
+
+    # --- Multi-symbol contradictions sharing a symbolic part -> UNSAT ---
+    assert check([x + 2 >= n, x + 8 <= n]) == SatStatus.UNSAT       # lo 8 > hi 2 on n - x
+    assert check([2 * x + 2 * y >= 6, x + y <= 2]) == SatStatus.UNSAT  # gcd(2, 2) = 2
+
+    # --- Non-strict |coeff| > 1, incl. Euclidean rounding on negatives ---
+    assert check([2 * x >= 5, x <= 2]) == SatStatus.UNSAT           # x >= 3
+    assert check([2 * x >= -5, x <= -3]) == SatStatus.UNSAT         # x >= -2
+    assert check([2 * x >= -5, x <= -2]) != SatStatus.UNSAT         # x = -2
+
+    # --- A single-point bound (lo == hi) must NOT be UNSAT ---
+    assert check([x + 8 >= n, x + 8 <= n]) != SatStatus.UNSAT       # n - x == 8
+
+    # --- Canonicalization: n - 2 <= x is the same hi bound as x + 2 >= n ---
+    assert check([n - 2 <= x, x + 8 <= n]) == SatStatus.UNSAT
 
 
 def test_non_unit_equality():

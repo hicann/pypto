@@ -235,8 +235,10 @@ def is_loop_begin_impl(ctx: BuildContext, scalar: SymbolicScalar):
 @impl(pypto.is_loop_end)
 def is_loop_end_impl(ctx: BuildContext, scalar: SymbolicScalar):
     end = Scope.current()["_loop_end"]
+    step = Scope.current()["_loop_step"]
     assert isinstance(end, (SymbolicScalar, int)), "is_loop_end() must be called in a pypto.loop"
-    return scalar == (end - 1)
+    assert isinstance(step, (SymbolicScalar, int)), "is_loop_end() must be called in a pypto.loop"
+    return scalar + step >= end
 
 
 def _add_jump_stmt(ctx: BuildContext, jump, operands: Optional[list[ir.Expr]] = None):
@@ -293,9 +295,8 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, stop, ctx: BuildContext):
     loop_var = ctx.create_scalar_var(loop_var_name)
     scope.varmap[loop_val.id] = loop_var
 
-    # Save initial values as iterArgs, convert to Vars in scope
     iter_args, return_var_names = [], []
-    for name in body.store_names:
+    for name in sorted(body.store_names):
         val = scope.locals.get(name)
         var = ctx.create_var_like(name, ctx.unwrap(val))
         iter_arg = ctx.create_iter_arg(var, initValue=ctx.unwrap(val))
@@ -381,6 +382,7 @@ def loop_impl(ctx, body: Block, loop):
         scope = Scope.current()
         scope["_loop_begin"] = loop.start
         scope["_loop_end"] = loop.stop
+        scope["_loop_step"] = loop.step
         _dyn_for(body, loop, ctx)
     elif loop is not None:
         _static_for(body, loop)

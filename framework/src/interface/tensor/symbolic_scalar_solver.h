@@ -17,8 +17,9 @@
  *   - Only LT/LE/GT/GE/EQ/NE atoms; callers should pre-simplify Not/Or
  *     (e.g. ~(x>=0) -> x<0).
  *   - int64 arithmetic, unguarded against overflow.
- *   - Returns kUnknown for non-affine atoms (Div/Mod/Min/Max/Call), nonlinear
- *     terms (x*y), and multi-symbol inequality contradictions (x+y>=0 && x+y<=-1).
+ *   - Returns kUnknown for non-affine atoms (Div/Mod/Min/Max/Call) and nonlinear
+ *     terms (x*y). Multi-symbol affine inequalities ARE compared when they share
+ *     one symbolic part (x+2>=n && x+8<=n).
  */
 #pragma once
 
@@ -646,6 +647,10 @@ private:
         return std::nullopt;
     }
 
+    // Detect lo > hi contradictions. Bounds are keyed on a canonical affine
+    // signature (gcd-reduced, sign-fixed) so that inequalities sharing one
+    // symbolic part -- including multi-symbol ones such as x+2>=n and x+8<=n,
+    // both "n - x" -- are compared against each other.
     bool PropagateBounds() const
     {
         std::map<std::string, IntBound> bounds;
@@ -659,33 +664,19 @@ private:
                 continue; // handled by the equality path
             }
             auto la = AffineForm::Sub(ce->OperandList()[0], ce->OperandList()[1]); // coeffs*s + bias OP 0
-            if (!la.ok || !la.ApplySubst(subst_) || la.coeffs.size() != 1) {
-                continue; // non-affine, subst cycle, or multi-symbol: undecidable here
+            if (!la.ok || !la.ApplySubst(subst_) || la.coeffs.empty()) {
+                continue; // non-affine, subst cycle, or ground (handled elsewhere)
             }
-            const auto& row = *la.coeffs.begin();
-            int64_t coef = row.second;
-            if (coef == 0) {
+            int64_t thr = 0;
+            std::string key;
+            if (!NormalizeAtom(la, op, thr, key)) {
                 continue;
             }
-            int64_t t = -la.bias; // coef*s OP t
-            if (coef < 0) {       // normalize to coef > 0
-                coef = -coef;
-                t = -t;
-                op = FlipRel(op);
-            }
-            // Strict -> non-strict on t (integers): a > t  <=>  a >= t+1;  a < t  <=>  a <= t-1.
-            if (op == SymbolicOpcode::T_BOP_GT) {
-                op = SymbolicOpcode::T_BOP_GE;
-                ++t;
-            } else if (op == SymbolicOpcode::T_BOP_LT) {
-                op = SymbolicOpcode::T_BOP_LE;
-                --t;
-            }
-            IntBound& bd = bounds[row.first];
+            IntBound& bd = bounds[key];
             if (op == SymbolicOpcode::T_BOP_GE) {
-                bd.TightenLo(CeilDiv(t, coef));
-            } else { // LE
-                bd.TightenHi(FloorDiv(t, coef));
+                bd.TightenLo(thr); // D >= thr
+            } else {               // LE
+                bd.TightenHi(thr); // D <= thr
             }
         }
         for (const auto& kv : bounds) {
@@ -694,6 +685,47 @@ private:
             }
         }
         return false;
+    }
+
+    // Reduce `la OP 0` to an inclusive integer bound on D = sum (coeff/g)*s,
+    // where g = gcd(coeffs) and the sign is fixed so the lexicographically
+    // smallest coefficient is positive. Emits thr (D >= thr for GE, D <= thr
+    // for LE) and a delimiter-safe canonical signature key. Strict comparisons
+    // are folded to non-strict BEFORE dividing by g (over the integers),
+    // matching the single-symbol path; dividing first would over-tighten atoms
+    // such as 2*x > 5 and yield a false UNSAT. Returns false if la is ground.
+    static bool NormalizeAtom(AffineForm la, SymbolicOpcode& op, int64_t& thr, std::string& key)
+    {
+        int64_t g = 0;
+        for (const auto& kv : la.coeffs) {
+            g = std::gcd(g, kv.second); // std::gcd is non-negative; gcd(0, x) = |x|
+        }
+        if (g <= 0) {
+            return false;
+        }
+        if (la.coeffs.begin()->second < 0) { // canonical sign: first key positive
+            for (auto& kv : la.coeffs) {
+                kv.second = -kv.second;
+            }
+            la.bias = -la.bias;
+            op = FlipRel(op);
+        }
+        int64_t t = -la.bias;                 // g * D OP t
+        if (op == SymbolicOpcode::T_BOP_GT) { // strict -> non-strict in the g*D space
+            op = SymbolicOpcode::T_BOP_GE;
+            ++t;
+        } else if (op == SymbolicOpcode::T_BOP_LT) {
+            op = SymbolicOpcode::T_BOP_LE;
+            --t;
+        }
+        thr = (op == SymbolicOpcode::T_BOP_GE) ? CeilDiv(t, g) : FloorDiv(t, g);
+        for (const auto& kv : la.coeffs) {
+            key += kv.first;
+            key += '=';
+            key += std::to_string(kv.second / g);
+            key += ';';
+        }
+        return true;
     }
 
     struct IntBound {

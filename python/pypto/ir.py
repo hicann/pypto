@@ -120,7 +120,7 @@ __all__ = [
 ]
 
 # --- Type classes ---
-from ..pypto_impl import LogicalTensor
+from .pypto_impl import LogicalTensor
 
 # --- Data types ---
 # --- Enums ---
@@ -129,7 +129,7 @@ from ..pypto_impl import LogicalTensor
 # --- Unary expression ops ---
 # --- Statement classes ---
 # --- Function / Program ---
-from ..pypto_impl.ir import (
+from .pypto_impl.ir import (
     Abs,
     AccPhase,
     AccToVecMode,

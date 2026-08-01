@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "core/error.h"
-#include "interface/tensor/logical_tensor.h"
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
 #include "ir/program.h"
@@ -50,8 +49,6 @@ std::string ErrorTypeToString(ErrorType type)
 } // namespace ssa
 
 namespace {
-
-using npu::tile_fwk::LogicalTensor;
 
 StmtPtr GetLastStmtFromSeq(const StmtPtr& stmt)
 {
@@ -177,9 +174,6 @@ private:
 
 void SSAVerifier::CheckVariableAssignment(const VarPtr& var)
 {
-    if (!var)
-        return;
-
     const Var* key = var.get();
     var_assignment_count_[key]++;
 
@@ -198,9 +192,6 @@ void SSAVerifier::RecordError(ssa::ErrorType type, const std::string& message, c
 
 void SSAVerifier::RecordUseBeforeDef(const VarPtr& var)
 {
-    if (!var) {
-        return;
-    }
     std::ostringstream msg;
     msg << "Variable '" << var->name_
         << "' is used before its dominating definition (out of scope), violating SSA dominance";
@@ -211,9 +202,6 @@ StmtPtr SSAVerifier::GetLastStmt(const StmtPtr& stmt) { return GetLastStmtFromSe
 
 void SSAVerifier::VerifyForStmt(const ForStmtPtr& for_stmt)
 {
-    if (!for_stmt)
-        return;
-
     // iter_args and return_vars correspond one-to-one.
     if (for_stmt->iterArgs_.size() != for_stmt->returnVars_.size()) {
         RecordError(ssa::ErrorType::ARITY_MISMATCH, "ForStmt iter_args count must equal return_vars count",
@@ -236,9 +224,6 @@ void SSAVerifier::VerifyForStmt(const ForStmtPtr& for_stmt)
 
 void SSAVerifier::VerifyWhileStmt(const WhileStmtPtr& while_stmt)
 {
-    if (!while_stmt)
-        return;
-
     // iter_args and return_vars correspond one-to-one.
     if (while_stmt->iterArgs_.size() != while_stmt->returnVars_.size()) {
         RecordError(ssa::ErrorType::ARITY_MISMATCH, "WhileStmt iter_args count must equal return_vars count",
@@ -261,9 +246,6 @@ void SSAVerifier::VerifyWhileStmt(const WhileStmtPtr& while_stmt)
 
 void SSAVerifier::VerifyIfStmt(const IfStmtPtr& if_stmt)
 {
-    if (!if_stmt)
-        return;
-
     // Check only if return_vars is not empty
     if (if_stmt->returnVars_.empty()) {
         return;
@@ -305,40 +287,36 @@ void SSAVerifier::VisitExpr_(const VarPtr& op)
     // Scalar/symbolic vars (symbolic scalars, shape-dim vars) have no explicit def site in the IR and
     // are intentionally skipped to avoid false positives. Shape dims are not recursed into for the
     // same reason (IRVisitor::VisitExpr_ is deliberately not called).
-    if (op && std::dynamic_pointer_cast<const LogicalTensor>(op) && !IsDefined(op.get())) {
+    if (op && ir::IsA<LogicalTensorType>(op->GetType()) && !IsDefined(op.get())) {
         RecordUseBeforeDef(op);
     }
 }
 
 void SSAVerifier::VisitStmt_(const TensorOpStmtPtr& op)
 {
-    if (!op) {
-        return;
-    }
     // Operands/tokens are uses; results are defs and must not be visited as uses.
     for (const auto& arg : op->args_) {
-        if (arg) {
-            VisitExpr(arg);
-        }
+        VisitExpr(ir::As<Var>(arg));
     }
     for (const auto& token : op->tokens_) {
-        if (token) {
-            VisitExpr(token);
-        }
+        VisitExpr(ir::As<Var>(token));
     }
+
     for (const auto& result : op->result_) {
+        if (op->opcode_ != "ASSEMBLE") {
+            // ASSEMBLE currently not generare new variable now
+            CheckVariableAssignment(result);
+        }
         Define(result);
     }
     if (op->result_token_) {
+        CheckVariableAssignment(op->result_token_);
         Define(op->result_token_);
     }
 }
 
 void SSAVerifier::VisitStmt_(const AssignStmtPtr& op)
 {
-    if (!op || !op->var_)
-        return;
-
     // value_ is a use; var_ is a def (defined here, not visited as a use).
     if (op->value_) {
         VisitExpr(op->value_);
@@ -351,9 +329,6 @@ void SSAVerifier::VisitStmt_(const AssignStmtPtr& op)
 
 void SSAVerifier::VisitStmt_(const ForStmtPtr& op)
 {
-    if (!op)
-        return;
-
     // Check return_vars for multiple assignments
     for (const auto& return_var : op->returnVars_) {
         if (return_var) {
@@ -399,9 +374,6 @@ void SSAVerifier::VisitStmt_(const ForStmtPtr& op)
 
 void SSAVerifier::VisitStmt_(const WhileStmtPtr& op)
 {
-    if (!op)
-        return;
-
     // Check return_vars for multiple assignments
     for (const auto& return_var : op->returnVars_) {
         if (return_var) {
@@ -443,9 +415,6 @@ void SSAVerifier::VisitStmt_(const WhileStmtPtr& op)
 
 void SSAVerifier::VisitStmt_(const IfStmtPtr& op)
 {
-    if (!op)
-        return;
-
     // Check return_vars for multiple assignments
     for (const auto& return_var : op->returnVars_) {
         if (return_var) {

@@ -293,13 +293,20 @@ private:
         auto elseDefs = utils::CollectDefinedVars(elseBody);
 
         VarExprMap cloneMap;
+        std::vector<VarPtr> varList;
         for (auto& v : thenDefs) {
             if (elseDefs.count(v) && !IsExternalVar(v->name_)) {
-                if (auto lt = std::dynamic_pointer_cast<const LogicalTensor>(v)) {
-                    cloneMap[v] = lt->Clone(true); // shared raw tensor, distinct LogicalTensor identity
-                } else {
-                    cloneMap[v] = v->Clone();
-                }
+                varList.push_back(v);
+            }
+        }
+
+        // use varList to ensure clone order and naming is deterministic
+        std::sort(varList.begin(), varList.end(), [](auto& a, auto& b) { return a->name_ < b->name_; });
+        for (auto& v : varList) {
+            if (auto lt = std::dynamic_pointer_cast<const LogicalTensor>(v)) {
+                cloneMap[v] = lt->Clone(true); // shared raw tensor, distinct LogicalTensor identity
+            } else {
+                cloneMap[v] = v->Clone();
             }
         }
 

@@ -30,8 +30,8 @@ from pypto.cost_model import _cost_model_run_once_data_from_host
 from pypto.error import FeError, _catch_and_wrap_error
 from pypto.frontend.parser.diagnostics import Source
 from pypto.frontend.parser.parser import NestedFunctionMarker, Parser
-from pypto.ir.compile_pipeline import compile_new_ir
 from pypto.logging import log_debug
+from pypto.pil.compile_pipeline import compile_new_ir
 from pypto.runtime import _pto_verify_datas, setup_verify_data
 
 
