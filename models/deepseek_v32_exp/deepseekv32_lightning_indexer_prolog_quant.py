@@ -300,7 +300,7 @@ def gen_data(case_name):
     else:
         raise Exception(f"Can't get func to gen golden, Case({case_name})")
 
-    seed = 0
+    seed = 7
     # PyTorch 随机数生成器
     torch.manual_seed(seed)
     dims = gen_dims(params)
