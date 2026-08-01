@@ -24,7 +24,7 @@
 
 ```python
 pypto_pro.language.store(dst_tensor, src_tile, offsets, *, relu_pre_mode=None, pre_quant_scalar=None,
-         fp_tile=None, tile_dims=None, atomic=pl.AtomicType.AtomicNone, phase=None)
+         fp_tile=None, order=None, atomic=pl.AtomicType.AtomicNone, phase=None)
 ```
 
 ## 参数类型
@@ -37,7 +37,7 @@ pypto_pro.language.store(dst_tensor, src_tile, offsets, *, relu_pre_mode=None, p
 | `relu_pre_mode` | 输入 | 可选，写出前融合 ReLU |
 | `pre_quant_scalar` | 输入 | 可选，写出前预量化标量 |
 | `fp_tile` | 输入 | 可选，fixpipe 量化参数 tile |
-| `tile_dims` | 输入 | 可选，Tile 维度在目标 tensor 维度中对应哪几根轴 |
+| `order` | 输入 | 可选，Tile 维度在目标 tensor 维度中对应哪几根轴 |
 | `atomic` | 输入 | 原子写模式 |
 | `phase` | 输入 | 可选，matmul 累加链路的 fixpipe 写回 GM 阶段 |
 
@@ -51,7 +51,7 @@ pypto_pro.language.store(dst_tensor, src_tile, offsets, *, relu_pre_mode=None, p
 | `relu_pre_mode` | 输入 | 默认 `None`（不融合 ReLU）；可取 `pl.ReluPreMode.NormalRelu`；与 `fp_tile` 互斥 |
 | `pre_quant_scalar` | 输入 | 整数，以 i64 位模式编码；与 `fp_tile` 互斥 |
 | `fp_tile` | 输入 | 提供时改走 `store_fp` 路径，与 `relu_pre_mode`、`pre_quant_scalar`、`phase` 均互斥 |
-| `tile_dims` | 输入 | 只支持配置 tensor 维度范围内的 dim，只支持二维数组配置，其余配置报错 |
+| `order` | 输入 | 只支持配置 tensor 维度范围内的 dim，只支持二维数组配置，其余配置报错 |
 | `atomic` | 输入 | `pl.AtomicType.AtomicNone`（默认，覆盖写）或 `pl.AtomicType.AtomicAdd`（原子累加，硬件对每个目的地址做元素级加法） |
 | `phase` | 输入 | `pl.STPhase.Unspecified`/`pl.STPhase.Partial`（中间累加步）/`pl.STPhase.Final`（最终步）；用硬件 unit_flag 接管 cube/fixp 间的握手，仅在 matmul 多步累加写回 GM 时使用；与 `fp_tile` 互斥 |
 

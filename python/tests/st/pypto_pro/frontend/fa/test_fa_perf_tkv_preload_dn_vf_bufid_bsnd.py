@@ -20,7 +20,7 @@ pipeline — but extends the inputs from 2D ``[Sq, D]`` to 4D BSND
 ``(b_idx, n_idx, qi)``. The QK_PRELOAD pipeline runs continuously across the
 whole flattened space (drained once at the very end), so the lagging
 compute_pv / compute_gu read their ``(b_idx, n_idx, qi)`` from the carried ctx.
-Only the tensor load/store indexing differs (4D index + ``tile_dims=[1, 3]``).
+Only the tensor load/store indexing differs (4D index + ``order=[1, 3]``).
 
 BSND indexing follows test_fa_bsnd_dn.py.
 
@@ -410,7 +410,7 @@ def compute_gu(b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_co
                 gsum_gu,
             )
             pl.cast(o_f16_buf, running_o_buf, mode=pl.RoundMode.CAST_ROUND)
-            pl.store_tile(o, o_f16_buf, [b_idx, g_ctx.qi * 2 + sub_id, n_idx, 0], tile_dims=[1, 3])
+            pl.store_tile(o, o_f16_buf, [b_idx, g_ctx.qi * 2 + sub_id, n_idx, 0], order=[1, 3])
     pl.system.set_cross_core(
         pipe=pl.PipeType.V,
         event_id=PV_READY_BARKWARD_IDS[g_ctx.task_id_mod2],
@@ -419,7 +419,7 @@ def compute_gu(b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_co
         if g_ctx.ki == 0:
             last_div_vf(running_o_buf, running_o_buf, gsum_gu)
             pl.cast(o_f16_buf, running_o_buf, mode=pl.RoundMode.CAST_ROUND)
-            pl.store_tile(o, o_f16_buf, [b_idx, g_ctx.qi * 2 + sub_id, n_idx, 0], tile_dims=[1, 3])
+            pl.store_tile(o, o_f16_buf, [b_idx, g_ctx.qi * 2 + sub_id, n_idx, 0], order=[1, 3])
 
 
 # ================================================================

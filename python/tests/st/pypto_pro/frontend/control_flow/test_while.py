@@ -401,7 +401,7 @@ def while_4d_add_fp16_kernel(
                         pl.load_tile(tile_a, x, [b0, b1, i, j], order=[2, 3])
                         pl.load_tile(tile_b, y, [b0, b1, i, j], order=[2, 3])
                         pl.add(tile_c, tile_a, tile_b)
-                        pl.store_tile(z, tile_c, [b0, b1, i, j], tile_dims=[2, 3])
+                        pl.store_tile(z, tile_c, [b0, b1, i, j], order=[2, 3])
                         j = j + 1
                     i = i + 1
                 b1 = b1 + 1
@@ -446,7 +446,7 @@ def while_4d_add_m23n_fp16_kernel(
                         pl.load_tile(tile_a, x, [i, d1, d2, j], order=[0, 3])
                         pl.load_tile(tile_b, y, [i, d1, d2, j], order=[0, 3])
                         pl.add(tile_c, tile_a, tile_b)
-                        pl.store_tile(z, tile_c, [i, d1, d2, j], tile_dims=[0, 3])
+                        pl.store_tile(z, tile_c, [i, d1, d2, j], order=[0, 3])
                         j = j + 1
             i = i + 1
 
@@ -480,7 +480,7 @@ def while_4d_add_2m3n_fp16_kernel(
                         pl.load_tile(tile_a, x, [d0, i, d2, j], order=[1, 3])
                         pl.load_tile(tile_b, y, [d0, i, d2, j], order=[1, 3])
                         pl.add(tile_c, tile_a, tile_b)
-                        pl.store_tile(z, tile_c, [d0, i, d2, j], tile_dims=[1, 3])
+                        pl.store_tile(z, tile_c, [d0, i, d2, j], order=[1, 3])
                         j = j + 1
                 i = i + 1
 
@@ -528,7 +528,7 @@ def while_8d_add_fp16_kernel(
                                         pl.load_tile(tile_a, x, [d0, d1, d2, d3, d4, d5, i, j], order=[6, 7])
                                         pl.load_tile(tile_b, y, [d0, d1, d2, d3, d4, d5, i, j], order=[6, 7])
                                         pl.add(tile_c, tile_a, tile_b)
-                                        pl.store_tile(z, tile_c, [d0, d1, d2, d3, d4, d5, i, j], tile_dims=[6, 7])
+                                        pl.store_tile(z, tile_c, [d0, d1, d2, d3, d4, d5, i, j], order=[6, 7])
                                         j = j + 1
                                     i = i + 1
 

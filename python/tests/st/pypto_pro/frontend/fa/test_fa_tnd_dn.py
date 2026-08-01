@@ -367,7 +367,7 @@ def compute_gu(
         pl.cast(o_f16, running_o, mode=pl.RoundMode.CAST_ROUND)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
-        pl.store_tile(o, o_f16, [q_offset_half + qi * 2 + sub_id, n_idx, 0], tile_dims=[0, 2])
+        pl.store_tile(o, o_f16, [q_offset_half + qi * 2 + sub_id, n_idx, 0], order=[0, 2])
 
 
 @pl.jit()

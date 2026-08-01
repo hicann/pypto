@@ -295,7 +295,7 @@ def add_ellipsis_3d(
                     pl.load_tile(tile_a, x, [b, i, j], order=[1, 2])
                     pl.load_tile(tile_b, y, [b, i, j], order=[1, 2])
                     pl.add(tile_c, tile_a, tile_b)
-                    pl.store_tile(z, tile_c, [b, i, j], tile_dims=[1, 2])
+                    pl.store_tile(z, tile_c, [b, i, j], order=[1, 2])
 
 
 @pytest.mark.soc("950")

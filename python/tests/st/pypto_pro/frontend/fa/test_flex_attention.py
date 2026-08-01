@@ -706,7 +706,7 @@ def compute_gu(ctx_gu, pv_vec_db, exp_corr_db, global_sum_buf, running_o, o_f16,
             flash_update_last_basic_vf(running_o, pv_slot, running_o, exp_corr_gu, gsum_gu, ctx_gu.half_s1, has_tail)
             pl.set_validshape(o_f16, [ctx_gu.half_s1, TD])
             pl.cast(o_f16, running_o, mode=pl.RoundMode.CAST_ROUND)
-            pl.store(o, o_f16, [ctx_gu.q_off + row_offset, ctx_gu.n_idx, 0], tile_dims=[0, 2])
+            pl.store(o, o_f16, [ctx_gu.q_off + row_offset, ctx_gu.n_idx, 0], order=[0, 2])
 
     pl.system.set_cross_core(pipe=pl.PipeType.V, event_id=PV_READY_BARKWARD_IDS[ctx_gu.task_id % 2])
     if ctx_gu.ki == ctx_gu.kv_loop - 1:
@@ -714,7 +714,7 @@ def compute_gu(ctx_gu, pv_vec_db, exp_corr_db, global_sum_buf, running_o, o_f16,
             last_div_vf(running_o, running_o, gsum_gu, ctx_gu.half_s1, has_tail)
             pl.set_validshape(o_f16, [ctx_gu.half_s1, TD])
             pl.cast(o_f16, running_o, mode=pl.RoundMode.CAST_ROUND)
-            pl.store(o, o_f16, [ctx_gu.q_off + row_offset, ctx_gu.n_idx, 0], tile_dims=[0, 2])
+            pl.store(o, o_f16, [ctx_gu.q_off + row_offset, ctx_gu.n_idx, 0], order=[0, 2])
 
 
 # ================================================================

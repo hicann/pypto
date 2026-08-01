@@ -25,7 +25,7 @@
 ## 函数原型
 
 ```python
-pypto_pro.language.store_tile(dst_tensor, src_tile, tile_offsets, *, relu_pre_mode=None, pre_quant_scalar=None, fp_tile=None, tile_dims=None, atomic=pl.AtomicType.AtomicNone, phase=None)
+pypto_pro.language.store_tile(dst_tensor, src_tile, tile_offsets, *, relu_pre_mode=None, pre_quant_scalar=None, fp_tile=None, order=None, atomic=pl.AtomicType.AtomicNone, phase=None)
 ```
 
 ## 参数类型
@@ -38,7 +38,7 @@ pypto_pro.language.store_tile(dst_tensor, src_tile, tile_offsets, *, relu_pre_mo
 | `relu_pre_mode` | 输入 | 可选，写回前融合 ReLU |
 | `pre_quant_scalar` | 输入 | 可选，写回前量化标量 |
 | `fp_tile` | 输入 | 可选，fixpipe 量化 tile |
-| `tile_dims` | 输入 | 可选，Tile 维度在目标 tensor 维度中对应哪几根轴 |
+| `order` | 输入 | 可选，Tile 维度在目标 tensor 维度中对应哪几根轴 |
 | `atomic` | 输入 | 可选，原子写模式，默认 `pl.AtomicType.AtomicNone` |
 | `phase` | 输入 | 可选，fixpipe 分阶段写回模式 |
 
@@ -48,11 +48,11 @@ pypto_pro.language.store_tile(dst_tensor, src_tile, tile_offsets, *, relu_pre_mo
 |---|---|---|
 | `dst_tensor` | 输出 | 数据类型：b8、b16、b32、b64<br>layout：支持 `ND`、`DN`、`NZ`<br>换算后的写入范围不得越过对应维度 shape |
 | `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>内存空间：只支持 `Vec`(UB) 和 `Acc`(L0C)；UB 源通过 MTE3 写回，L0C 源通过 FIX 写回<br>地址对齐：UB 为 32 字节，L0C 为 64 字节 |
-| `tile_offsets` | 输入 | 单位为 tile 块索引，支持运行时 `Expr`，换算后的绝对偏移不超过对应维度的 shape，不支持负数索引<br>被切分的维度（由 `tile_dims` 指定）按 `块索引 × tile 该维大小` 换算；其余维度的取值按绝对偏移直接使用 |
+| `tile_offsets` | 输入 | 单位为 tile 块索引，支持运行时 `Expr`，换算后的绝对偏移不超过对应维度的 shape，不支持负数索引<br>被切分的维度（由 `order` 指定）按 `块索引 × tile 该维大小` 换算；其余维度的取值按绝对偏移直接使用 |
 | `relu_pre_mode` | 输入 | 可选，支持 `pl.ReluPreMode.NormalRelu`；与 `fp_tile` 互斥 |
 | `pre_quant_scalar` | 输入 | 可选，预量化标量（i64 bit pattern）；与 `fp_tile` 互斥 |
 | `fp_tile` | 输入 | 可选，启用 `store_fp` 路径的量化 tile；与 `relu_pre_mode`、`pre_quant_scalar`、`phase` 互斥 |
-| `tile_dims` | 输入 | 只支持配置 tensor 维度范围内的 dim，只支持二维数组配置，其余配置报错<br>用于高维 tensor 中指定 tile 对应哪几个维度；不配置时默认取 tensor 的最后两维 |
+| `order` | 输入 | 只支持配置 tensor 维度范围内的 dim，只支持二维数组配置，其余配置报错<br>用于高维 tensor 中指定 tile 对应哪几个维度；不配置时默认取 tensor 的最后两维 |
 | `atomic` | 输入 | 支持 `pl.AtomicType.AtomicNone`（覆盖写）或 `pl.AtomicType.AtomicAdd`（原子累加） |
 | `phase` | 输入 | 可选，支持 `pl.STPhase.Partial` 或 `pl.STPhase.Final`；与 `fp_tile` 互斥 |
 
@@ -87,5 +87,5 @@ def store_tile_kernel(
 
 ```python
 # 4D BSND tensor：tile 对应第 1、3 维，其余维按绝对偏移
-pl.store_tile(p_buf, p_f16, [b_idx, qi * 2 + sub_id, n_idx, ki], tile_dims=[1, 3])
+pl.store_tile(p_buf, p_f16, [b_idx, qi * 2 + sub_id, n_idx, ki], order=[1, 3])
 ```

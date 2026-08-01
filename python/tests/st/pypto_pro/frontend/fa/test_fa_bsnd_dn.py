@@ -350,7 +350,7 @@ def softmax_body(
         pl.insert(p_mat_buf1, tile_nz, [0, TS_HALF * sub_id])
     else:
         pl.insert(p_mat_buf2, tile_nz, [0, TS_HALF * sub_id])
-    pl.store_tile(p_buf, p_f16_store, [b_idx, qi * 2 + sub_id, n_idx, ki], tile_dims=[1, 3])
+    pl.store_tile(p_buf, p_f16_store, [b_idx, qi * 2 + sub_id, n_idx, ki], order=[1, 3])
 
 
 def compute_p(
@@ -418,7 +418,7 @@ def compute_gu(
         pl.cast(o_f16, running_o, mode=pl.RoundMode.CAST_ROUND)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
-        pl.store_tile(o, o_f16, [b_idx, qi * 2 + sub_id, n_idx, 0], tile_dims=[1, 3])
+        pl.store_tile(o, o_f16, [b_idx, qi * 2 + sub_id, n_idx, 0], order=[1, 3])
 
 
 @pl.jit()

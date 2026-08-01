@@ -555,7 +555,7 @@ def for_4layer_if_return_kernel(
                         pl.load_tile(tile_a, x, [k, l_idx, i, j], order=[2, 3])
                         pl.load_tile(tile_b, y, [k, l_idx, i, j], order=[2, 3])
                         pl.add(tile_c, tile_a, tile_b)
-                        pl.store_tile(z, tile_c, [k, l_idx, i, j], tile_dims=[2, 3])
+                        pl.store_tile(z, tile_c, [k, l_idx, i, j], order=[2, 3])
                     if k >= 1:
                         return
 
@@ -767,7 +767,7 @@ def for_3layer_direct_return_kernel(
                     pl.load_tile(tile_a, x, [k, i, j], order=[1, 2])
                     pl.load_tile(tile_b, y, [k, i, j], order=[1, 2])
                     pl.add(tile_c, tile_a, tile_b)
-                    pl.store_tile(z, tile_c, [k, i, j], tile_dims=[1, 2])
+                    pl.store_tile(z, tile_c, [k, i, j], order=[1, 2])
                 return
 
 

@@ -213,7 +213,7 @@ def _ir_store(
     relu_pre_mode: ReluPreMode | None = None,
     pre_quant_scalar: int | Expr | None = None,
     fp_tile: Expr | None = None,
-    tile_dims: list[int] | None = None,
+    order: list[int] | None = None,
     atomic: AtomicType = AtomicType.AtomicNone,
     phase: STPhase | None = None,
 ) -> Expr:
@@ -240,7 +240,9 @@ def _ir_store(
     tensor_ndim = len(out.type.shape)
     tile_shape = list(tile.type.shape)
     tile_ndim = len(tile_shape)
-    tile_dims = _validate_tile_dims(tile_dims, tensor_ndim, tile_ndim, op_name)
+    tile_dims = _validate_tile_dims(order, tensor_ndim, tile_ndim, op_name)
+    if order is not None and order != sorted(order):
+        raise ValueError(f"{op_name}: order must be ascending, got {order}")
     _validate_offsets(offsets_tuple, tile_dims, tile_shape, out.type.shape, op_name)
 
     # Validate offset bounds at Python frontend level
@@ -302,7 +304,7 @@ def _ir_store_tile(
     relu_pre_mode: ReluPreMode | None = None,
     pre_quant_scalar: int | Expr | None = None,
     fp_tile: Expr | None = None,
-    tile_dims: list[int] | None = None,
+    order: list[int] | None = None,
     atomic: AtomicType = AtomicType.AtomicNone,
     phase: STPhase | None = None,
 ) -> Expr:
@@ -324,7 +326,9 @@ def _ir_store_tile(
     tensor_ndim = len(out.type.shape)
     tile_shape = list(tile.type.shape)
     tile_ndim = len(tile_shape)
-    tile_dims = _validate_tile_dims(tile_dims, tensor_ndim, tile_ndim, op_name)
+    tile_dims = _validate_tile_dims(order, tensor_ndim, tile_ndim, op_name)
+    if order is not None and order != sorted(order):
+        raise ValueError(f"{op_name}: order must be ascending, got {order}")
     _validate_offsets(offsets_tuple, tile_dims, tile_shape, out.type.shape, op_name, use_tile_absolute=True)
 
     abs_offsets = _compute_absolute_offsets(offsets_tuple, tile_shape, tile_dims, actual_span)
@@ -1206,11 +1210,6 @@ def _parse_make_tile(self, call: ast.Call) -> Expr:
     return make_tile(*args, **kwargs, span=span)
 
 
-def _resolve_tile_dims_kwarg(self, call: ast.Call, kwargs: dict) -> None:
-    tile_dims = self.resolve_const_int_list_kwarg(call, "tile_dims")
-    if tile_dims is not None:
-        kwargs["tile_dims"] = tile_dims
-
 
 def _resolve_order_kwarg(self, call: ast.Call, kwargs: dict) -> None:
     order = self.resolve_const_int_list_kwarg(call, "order")
@@ -1350,11 +1349,11 @@ register_table(
         "expand_mul": OpSpec(builder=_ir_expand_mul),
         "expand_sub": OpSpec(builder=_ir_expand_sub),
         "expand_div": OpSpec(builder=_ir_expand_div),
-        # args + kwargs + order hook (load) / tile_dims hook (store)
-        "load": OpSpec(builder=_ir_load, pre_hooks=[_resolve_order_kwarg]),
-        "load_tile": OpSpec(builder=_ir_load_tile, pre_hooks=[_resolve_order_kwarg]),
-        "store": OpSpec(builder=_ir_store, pre_hooks=[_resolve_tile_dims_kwarg]),
-        "store_tile": OpSpec(builder=_ir_store_tile, pre_hooks=[_resolve_tile_dims_kwarg]),
+    # args + kwargs + order hook (load) / order hook (store)
+    "load": OpSpec(builder=_ir_load, pre_hooks=[_resolve_order_kwarg]),
+    "load_tile": OpSpec(builder=_ir_load_tile, pre_hooks=[_resolve_order_kwarg]),
+    "store": OpSpec(builder=_ir_store, pre_hooks=[_resolve_order_kwarg]),
+    "store_tile": OpSpec(builder=_ir_store_tile, pre_hooks=[_resolve_order_kwarg]),
         # kwargs only
         "set_mask_count": OpSpec(builder=_ir_set_mask_count, parse_args=False),
         "set_mask_norm": OpSpec(builder=_ir_set_mask_norm, parse_args=False),
