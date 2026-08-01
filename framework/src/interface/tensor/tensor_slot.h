@@ -281,7 +281,7 @@ struct TensorSlotManager {
     int GetInputIndex(const Tensor& tensor);
     int GetOutputIndex(const Tensor& tensor);
     int GetSlotIndex(const Tensor& tensor);
-    std::shared_ptr<Tensor> GetSlotTensor(std::shared_ptr<LogicalTensor> lt);
+    std::shared_ptr<Tensor> GetSlotTensor(std::shared_ptr<LogicalTensor> lt, bool createIfMissing = true);
     void ClearSlotTensors() { slotTensorDict.clear(); }
 
     void Checkpoint();

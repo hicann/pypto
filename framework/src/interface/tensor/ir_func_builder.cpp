@@ -371,7 +371,7 @@ void RootFunctionBuilder::ComputeIncast(Function& pathFunc,
 
 void RootFunctionBuilder::ComputeOutcast(Function& pathFunc)
 {
-    for (auto& op : pathFunc.Operations()) {
+    for (auto& op : pathFunc.Operations(false)) {
         for (auto& oOperand : op.GetOOperands()) {
             bool neededByConsumer = consumedTensors_.count(oOperand) > 0;
             bool isFuncOutput = paramTensors_.count(oOperand) > 0;
@@ -434,7 +434,7 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
         scope->ioslot.outcastSlot[idx] = {tensor->Id()};
     }
 
-    for (auto& op : pathFunc->Operations()) {
+    for (auto& op : pathFunc->Operations(false)) {
         if ((op.GetOpcode() == Opcode::OP_ASSEMBLE && op.HasAttr("dassemble")) ||
             op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
             for (auto& oOperand : op.GetOOperands()) {
@@ -685,7 +685,7 @@ void RootFunctionBuilder::LinkReturnSlots(const ir::StmtPtr& stmt)
         }
         auto returnLt = AsLogicalTensor(returnStmt->value_[i]);
         if (returnLt != nullptr) {
-            slotManager->SetSameSlot(logicalParams_[i], returnLt);
+            slotManager->SetSameSlot(returnLt, logicalParams_[i]);
         }
     }
 }
@@ -727,10 +727,10 @@ void RootFunctionBuilder::LinkForStmtSlots(const ir::ForStmt& forStmt)
         if (returnVarLt == nullptr) {
             continue;
         }
-        // returnVar -> value -> iterVar -> initValue：child 复用 parent 的 slot
-        slotManager->SetSameSlot(returnVarLt, valueLt);
-        slotManager->SetSameSlot(valueLt, iterLt);
-        slotManager->SetSameSlot(iterLt, initLt);
+        // initValue -> iterVar -> value -> returnVar：child 继承 parent 的 slot
+        slotManager->SetSameSlot(initLt, iterLt);
+        slotManager->SetSameSlot(iterLt, valueLt);
+        slotManager->SetSameSlot(valueLt, returnVarLt);
     }
 }
 
@@ -848,8 +848,8 @@ ir::StmtPtr RootFunctionBuilder::TransformBody(ir::StmtPtr stmt)
     consumedTensors_.clear();
 
     auto irTree = StmtTransformer(*this).Apply(stmt, "");
-    LinkReturnSlots(irTree);
     LinkControlFlowSlots(irTree);
+    LinkReturnSlots(irTree);
     ReplacePlaceholders(irTree);
 
     return irTree;
@@ -878,7 +878,10 @@ void RootFunctionBuilder::FlushConstructAssembleSlots()
 
     std::unordered_set<Function*> affectedPathFuncs;
     for (auto& [lt, func] : tensorDefineFunc_) {
-        auto tensor = slotManager->GetSlotTensor(lt);
+        auto tensor = slotManager->GetSlotTensor(lt, false);
+        if (tensor == nullptr) {
+            continue;
+        }
         auto slot = TensorSlot::CreateTensor(*tensor);
         if (slotManager->assembleSlotSet.count(slot) == 0) {
             continue;

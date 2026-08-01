@@ -713,3 +713,101 @@ TEST_F(IrFuncBuilderTest, TestLinkControlFlowSlots_ForLoopWithIfStmt)
     EXPECT_EQ(slotManager->GetSlotTensor(thenVal)->Id(), outId);
     EXPECT_EQ(slotManager->GetSlotTensor(elseVal)->Id(), outId);
 }
+
+// ============================================================================
+// LinkControlFlowSlots: Two chained ForStmts.
+//   ForStmt2's initValue = ForStmt1's returnVar.
+//   Verifies slot chain does not break across ForStmt boundaries:
+//   param → for1_returnVar → for2_returnVar → loopVal2
+//   (regression test: previously SetSameSlot overwrote returnVar1's slot)
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestLinkControlFlowSlots_ChainedForLoops)
+{
+    IrFuncSetup setup("LinkControlFlowSlots_ChainedForLoops");
+
+    auto out = setup.MakeParam("out");
+
+    // ForStmt1: body has loopVal1 + ASSEMBLE out→loopVal1 + ContinueStmt [loopVal1]
+    auto loopVal1 = setup.MakeLocal("loop_val1");
+    setup.AddDassemble(out, loopVal1);
+    auto returnVar1 = setup.MakeReturnVar("for_returnVar1");
+    setup.WrapStmtsInForLoopWithIterArgs("i1", {out}, {loopVal1}, {returnVar1});
+    // Save ForStmt1, clear stmts to build ForStmt2 independently (parallel, not nested)
+    auto forStmt1 = setup.stmts[0];
+    setup.stmts.clear();
+
+    // ForStmt2: body has loopVal2 + ASSEMBLE returnVar1→loopVal2 + ContinueStmt [loopVal2]
+    auto loopVal2 = setup.MakeLocal("loop_val2");
+    auto returnVar1Lt = std::const_pointer_cast<LogicalTensor>(
+        std::dynamic_pointer_cast<const LogicalTensor>(returnVar1));
+    setup.AddDassemble(returnVar1Lt, loopVal2);
+    auto returnVar2 = setup.MakeReturnVar("for_returnVar2");
+    setup.WrapStmtsInForLoopWithIterArgs("i2", {returnVar1Lt}, {loopVal2}, {returnVar2});
+    // Put ForStmt1 before ForStmt2 to form parallel structure
+    setup.stmts.insert(setup.stmts.begin(), forStmt1);
+
+    // ReturnStmt [returnVar2] — matches logicalParams_[0] = out by position
+    auto returnStmt = std::make_shared<ir::ReturnStmt>(
+        std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(returnVar2)}, Sp());
+    setup.stmts.push_back(returnStmt);
+
+    auto irFunc = setup.BuildIrFunction("LinkControlFlowSlots_ChainedForLoops");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    // All vars must share the same slot as out.
+    auto slotManager = Program::GetInstance().GetTensorSlotManager();
+    auto outId = slotManager->GetSlotTensor(out)->Id();
+    auto rv1Lt = std::const_pointer_cast<LogicalTensor>(std::dynamic_pointer_cast<const LogicalTensor>(returnVar1));
+    auto rv2Lt = std::const_pointer_cast<LogicalTensor>(std::dynamic_pointer_cast<const LogicalTensor>(returnVar2));
+    EXPECT_EQ(slotManager->GetSlotTensor(rv1Lt)->Id(), outId);
+    EXPECT_EQ(slotManager->GetSlotTensor(loopVal1)->Id(), outId);
+    EXPECT_EQ(slotManager->GetSlotTensor(rv2Lt)->Id(), outId);
+    EXPECT_EQ(slotManager->GetSlotTensor(loopVal2)->Id(), outId);
+}
+
+// ============================================================================
+// LinkControlFlowSlots: Nested ForStmts (outer wraps inner).
+//   Verifies slot chain does not break when inner returnVar is outer continueValue:
+//   param → outer_init → outer_iter → inner_returnVar → inner_iter → loopVal
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestLinkControlFlowSlots_NestedForLoops)
+{
+    IrFuncSetup setup("LinkControlFlowSlots_NestedForLoops");
+
+    auto out = setup.MakeParam("out");
+
+    // Inner ForStmt: body has loopVal + ASSEMBLE out→loopVal + ContinueStmt [loopVal]
+    auto loopVal = setup.MakeLocal("loop_val");
+    setup.AddDassemble(out, loopVal);
+    auto innerReturnVar = setup.MakeReturnVar("inner_returnVar");
+    setup.WrapStmtsInForLoopWithIterArgs("i_inner", {out}, {loopVal}, {innerReturnVar});
+
+    // Outer ForStmt: wraps inner, initValue=out, continueValue=innerReturnVar
+    auto outerReturnVar = setup.MakeReturnVar("outer_returnVar");
+    auto innerReturnLt = std::const_pointer_cast<LogicalTensor>(
+        std::dynamic_pointer_cast<const LogicalTensor>(innerReturnVar));
+    setup.WrapStmtsInForLoopWithIterArgs("i_outer", {out}, {innerReturnLt}, {outerReturnVar});
+
+    // ReturnStmt [outerReturnVar] — matches logicalParams_[0] = out by position
+    auto returnStmt = std::make_shared<ir::ReturnStmt>(
+        std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(outerReturnVar)}, Sp());
+    setup.stmts.push_back(returnStmt);
+
+    auto irFunc = setup.BuildIrFunction("LinkControlFlowSlots_NestedForLoops");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    // All vars must share the same slot as out.
+    auto slotManager = Program::GetInstance().GetTensorSlotManager();
+    auto outId = slotManager->GetSlotTensor(out)->Id();
+    auto innerRvLt = std::const_pointer_cast<LogicalTensor>(
+        std::dynamic_pointer_cast<const LogicalTensor>(innerReturnVar));
+    auto outerRvLt = std::const_pointer_cast<LogicalTensor>(
+        std::dynamic_pointer_cast<const LogicalTensor>(outerReturnVar));
+    EXPECT_EQ(slotManager->GetSlotTensor(innerRvLt)->Id(), outId);
+    EXPECT_EQ(slotManager->GetSlotTensor(outerRvLt)->Id(), outId);
+    EXPECT_EQ(slotManager->GetSlotTensor(loopVal)->Id(), outId);
+}

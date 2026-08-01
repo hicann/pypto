@@ -443,10 +443,13 @@ std::vector<int> TensorSlotManager::LookupSlotIndexConst(
     return indexList;
 }
 
-std::shared_ptr<Tensor> TensorSlotManager::GetSlotTensor(LogicalTensorPtr lt)
+std::shared_ptr<Tensor> TensorSlotManager::GetSlotTensor(LogicalTensorPtr lt, bool createIfMissing)
 {
     auto it = slotTensorDict.find(lt);
     if (it == slotTensorDict.end()) {
+        if (!createIfMissing) {
+            return nullptr;
+        }
         it = slotTensorDict.emplace(lt, std::make_shared<Tensor>(lt)).first;
     }
     return it->second;
@@ -454,7 +457,23 @@ std::shared_ptr<Tensor> TensorSlotManager::GetSlotTensor(LogicalTensorPtr lt)
 
 void TensorSlotManager::SetSameSlot(const LogicalTensorPtr& src, const LogicalTensorPtr& dst)
 {
-    slotTensorDict[dst] = GetSlotTensor(src);
+    auto srcTensor = GetSlotTensor(src);
+    auto dstTensor = GetSlotTensor(dst, false);
+    if (dstTensor == nullptr) {
+        slotTensorDict[dst] = srcTensor;
+        return;
+    }
+    if (srcTensor->Id() == dstTensor->Id()) {
+        return;
+    }
+    // Migrate all tensors pointing to dst's old slot to src's slot, so no prior
+    // links are lost regardless of link order or direction.
+    for (auto& [lt, tensor] : slotTensorDict) {
+        (void)lt;
+        if (tensor->Id() == dstTensor->Id()) {
+            tensor = srcTensor;
+        }
+    }
 }
 
 void TensorSlotManager::MarkInput(const Tensor& tensor)
