@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file test_expand_function.cpp
- * \brief Unit test for ExpandFunction pass.
+ * \file test_remove_redundant_reshape.cpp
+ * \brief Unit test for RemoveRedundantReshape pass.
  */
 
 #include <gtest/gtest.h>
@@ -22,9 +22,9 @@
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
 #include "ut_json/ut_json_tool.h"
-
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/pass_operation_utils.h"
+#include "computational_graph_builder.h"
 #define private public
 #include "passes/tensor_graph_pass/remove_redundant_reshape.h"
 
@@ -49,9 +49,7 @@ static const uint16_t kNumExpSeven = 128u;
 class TestRemoveRedundantReshapePass : public ::testing::Test {
 public:
     static void SetUpTestCase() {}
-
     static void TearDownTestCase() {}
-
     void SetUp() override
     {
         Program::GetInstance().Reset();
@@ -61,6 +59,61 @@ public:
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
     void TearDown() override {}
+
+private:
+    Function* BuildComplexGraphForSTest1()
+    {
+        std::vector<int64_t> shape1 = {kNumExpSix, kNumExpSix};
+        std::vector<int64_t> shape2 = {kNumExpFive, kNumExpSeven};
+        std::vector<int64_t> shape3 = {kNumExpSeven, kNumExpFive};
+
+        ComputationalGraphBuilder subGraph;
+
+        std::vector<MemoryType> memTypes1(2, MemoryType::MEM_DEVICE_DDR);
+        std::vector<MemoryType> memTypes2(8, MemoryType::MEM_DEVICE_DDR);
+        std::vector<MemoryType> memTypes3(6, MemoryType::MEM_DEVICE_DDR);
+
+        EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape1, memTypes1, {"input", "view_out"}, 0), true);
+        EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape2, memTypes2,
+                                      {"reshape1", "reshape3", "exp2", "output2_pre", "assemble_out1", "assemble_out4",
+                                       "assemble_out6", "output2"},
+                                      0),
+                  true);
+        EXPECT_EQ(
+            subGraph.AddTensors(DT_FP32, shape3, memTypes3,
+                                {"reshape2", "exp1", "output1_pre", "assemble_out2", "assemble_out3", "output1"}, 0),
+            true);
+
+        std::vector<Opcode> opCodes = {
+            Opcode::OP_VIEW,     Opcode::OP_RESHAPE,  Opcode::OP_RESHAPE,  Opcode::OP_EXP,      Opcode::OP_RESHAPE,
+            Opcode::OP_RESHAPE,  Opcode::OP_EXP,      Opcode::OP_RESHAPE,  Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE,
+            Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE};
+
+        std::vector<std::vector<std::string>> ioperands = {{"input"},       {"view_out"}, {"reshape1"},   {"reshape2"},
+                                                           {"exp1"},        {"reshape3"}, {"reshape1"},   {"exp2"},
+                                                           {"reshape1"},    {"reshape2"}, {"exp1"},       {"reshape3"},
+                                                           {"output1_pre"}, {"exp2"},     {"output2_pre"}};
+
+        std::vector<std::vector<std::string>> ooperands = {
+            {"view_out"},      {"reshape1"},      {"reshape2"},    {"exp1"},          {"reshape3"},
+            {"output1_pre"},   {"exp2"},          {"output2_pre"}, {"assemble_out1"}, {"assemble_out2"},
+            {"assemble_out3"}, {"assemble_out4"}, {"output1"},     {"assemble_out6"}, {"output2"}};
+
+        std::vector<std::string> opNames = {"view",      "reshape1",  "reshape2",  "exp1",      "reshape3",
+                                            "reshape4",  "exp2",      "reshape5",  "assemble1", "assemble2",
+                                            "assemble3", "assemble4", "assemble5", "assemble6", "assemble7"};
+
+        EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+
+        EXPECT_EQ(subGraph.SetInCast({"input"}), true);
+        EXPECT_EQ(subGraph.SetOutCast({"assemble_out1", "assemble_out2", "assemble_out3", "assemble_out4", "output1",
+                                       "assemble_out6", "output2"}),
+                  true);
+
+        TileShape::Current().SetVecTile({64, 64});
+
+        return subGraph.GetFunction();
+    }
 };
 
 /*
@@ -70,43 +123,50 @@ inCast{8,16}->reshape->ubTensor2{32,4}->sqrt->outCast{32,4}
 */
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest1)
 {
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
-                                                      "TestRemoveRedundantReshape", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-
-    // Prepare the graph
+    ComputationalGraphBuilder subGraph;
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumExpFour, kNumEight};
     std::vector<int64_t> shape3 = {kNumExpFive, kNumFour};
-    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
-    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
-    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
-    auto& reshape1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
-    auto& reshape2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    auto& sqrt = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor2}, {outCast});
+    std::vector<MemoryType> memTypes1(1, MemoryType::MEM_DEVICE_DDR);
+    std::vector<MemoryType> memTypes2(1, MemoryType::MEM_DEVICE_DDR);
+    std::vector<MemoryType> memTypes3(2, MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape1, memTypes1, {"inCast"}, 0), true);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape2, memTypes2, {"ubTensor1"}, 0), true);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape3, memTypes3, {"ubTensor2", "outCast"}, 0), true);
 
-    currFunctionPtr->inCasts_.push_back(inCast);
-    currFunctionPtr->outCasts_.push_back(outCast);
+    std::vector<Opcode> opCodes = {Opcode::OP_RESHAPE, Opcode::OP_RESHAPE, Opcode::OP_SQRT};
+    std::vector<std::vector<std::string>> ioperands = {{"inCast"}, {"ubTensor1"}, {"ubTensor2"}};
+    std::vector<std::vector<std::string>> ooperands = {{"ubTensor1"}, {"ubTensor2"}, {"outCast"}};
+    std::vector<std::string> opNames = {"reshape1", "reshape2", "sqrt"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
 
-    RemoveRedundantReshape removeredundantpass;
-    EXPECT_EQ(removeredundantpass.RunOnFunction(*currFunctionPtr), SUCCESS);
-    EXPECT_EQ(removeredundantpass.PostCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(subGraph.SetInCast({"inCast"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"outCast"}), true);
 
-    const auto& operations = currFunctionPtr->Operations();
+    Function* function = subGraph.GetFunction();
+    auto reshape2Magic = subGraph.GetOp("reshape2")->GetOpMagic();
+
+    RemoveRedundantReshape pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(pass.PostCheck(*function), SUCCESS);
+
+    const auto& operations = function->Operations();
     uint32_t reshape_num = kNumZero;
+    auto* reshape2Op = subGraph.GetOp("reshape2");
+    auto* sqrtOp = subGraph.GetOp("sqrt");
+    auto inCastTensor = subGraph.GetTensor("inCast");
+    auto ubTensor2Tensor = subGraph.GetTensor("ubTensor2");
     for (auto& op : operations) {
         if (op.GetOpcode() == Opcode::OP_RESHAPE) {
-            EXPECT_EQ(reshape2.GetOpMagic(), op.GetOpMagic());
-            EXPECT_EQ(reshape2.GetInputOperand(kSizeZero), inCast);
+            EXPECT_EQ(reshape2Magic, op.GetOpMagic());
+            EXPECT_EQ(reshape2Op->GetInputOperand(kSizeZero), inCastTensor);
             ++reshape_num;
         } else if (op.GetOpcode() == Opcode::OP_SQRT) {
-            EXPECT_EQ(sqrt.GetInputOperandSize(), kSizeOne);
-            EXPECT_EQ(sqrt.GetInputOperand(kSizeZero), ubTensor2);
+            EXPECT_EQ(sqrtOp->GetInputOperandSize(), kSizeOne);
+            EXPECT_EQ(sqrtOp->GetInputOperand(kSizeZero), ubTensor2Tensor);
         }
     }
-    EXPECT_EQ(operations.Contains(reshape1), false);
     EXPECT_EQ(reshape_num, kNumOne);
 }
 
@@ -117,33 +177,34 @@ inCast{8,16}->sqrt->outCast{8,16}
 */
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest2)
 {
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
-                                                      "TestRemoveRedundantReshape", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-
-    // Prepare the graph
+    ComputationalGraphBuilder subGraph;
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
-    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::vector<MemoryType> memTypes(3, MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape, memTypes, {"inCast", "ubTensor", "outCast"}, 0), true);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor});
-    auto& sqrt = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor}, {outCast});
+    std::vector<Opcode> opCodes = {Opcode::OP_RESHAPE, Opcode::OP_SQRT};
+    std::vector<std::vector<std::string>> ioperands = {{"inCast"}, {"ubTensor"}};
+    std::vector<std::vector<std::string>> ooperands = {{"ubTensor"}, {"outCast"}};
+    std::vector<std::string> opNames = {"reshape", "sqrt"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
 
-    currFunctionPtr->inCasts_.push_back(inCast);
-    currFunctionPtr->outCasts_.push_back(outCast);
+    EXPECT_EQ(subGraph.SetInCast({"inCast"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"outCast"}), true);
 
-    RemoveRedundantReshape removeredundantpass;
-    auto status = removeredundantpass.RunOnFunction(*currFunctionPtr);
-    EXPECT_EQ(status, SUCCESS);
+    Function* function = subGraph.GetFunction();
+
+    RemoveRedundantReshape pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
 
     uint32_t reshape_num = kNumZero;
-    for (auto& op : currFunctionPtr->Operations()) {
+    auto* sqrtOp = subGraph.GetOp("sqrt");
+    auto inCastTensor = subGraph.GetTensor("inCast");
+    for (auto& op : function->Operations()) {
         if (op.GetOpcode() == Opcode::OP_RESHAPE) {
             ++reshape_num;
         } else if (op.GetOpcode() == Opcode::OP_SQRT) {
-            EXPECT_EQ(sqrt.GetInputOperandSize(), kSizeOne);
-            EXPECT_EQ(sqrt.GetInputOperand(kSizeZero), inCast);
+            EXPECT_EQ(sqrtOp->GetInputOperandSize(), kSizeOne);
+            EXPECT_EQ(sqrtOp->GetInputOperand(kSizeZero), inCastTensor);
         }
     }
     EXPECT_EQ(reshape_num, kNumZero);
@@ -159,45 +220,45 @@ inCast{8,16}->sqrt->outCast1{8,16}
 */
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest3)
 {
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
-                                                      "TestRemoveRedundantReshape", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-
-    // Prepare the graph
+    ComputationalGraphBuilder subGraph;
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumExpFour, kNumEight};
-    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
-    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
-    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
-    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
-    auto outCast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor});
-    auto& sqrt = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor}, {outCast1});
-    auto& exp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor}, {outCast2});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor}, {outCast3});
+    std::vector<MemoryType> memTypes1(4, MemoryType::MEM_DEVICE_DDR);
+    std::vector<MemoryType> memTypes2(1, MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape1, memTypes1, {"inCast", "ubTensor", "outCast1", "outCast2"}, 0), true);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape2, memTypes2, {"outCast3"}, 0), true);
 
-    currFunctionPtr->inCasts_.push_back(inCast);
-    currFunctionPtr->outCasts_.push_back(outCast1);
-    currFunctionPtr->outCasts_.push_back(outCast2);
-    currFunctionPtr->outCasts_.push_back(outCast3);
+    std::vector<Opcode> opCodes = {Opcode::OP_RESHAPE, Opcode::OP_SQRT, Opcode::OP_EXP, Opcode::OP_RESHAPE};
+    std::vector<std::vector<std::string>> ioperands = {{"inCast"}, {"ubTensor"}, {"ubTensor"}, {"ubTensor"}};
+    std::vector<std::vector<std::string>> ooperands = {{"ubTensor"}, {"outCast1"}, {"outCast2"}, {"outCast3"}};
+    std::vector<std::string> opNames = {"reshape1", "sqrt", "exp", "reshape2"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
 
-    RemoveRedundantReshape removeredundantpass;
-    EXPECT_EQ(removeredundantpass.DefaultEnabledPreCheck(*currFunctionPtr), SUCCESS);
-    EXPECT_NE(removeredundantpass.PreCheck(*currFunctionPtr), SUCCESS);
-    EXPECT_EQ(removeredundantpass.RunOnFunction(*currFunctionPtr), SUCCESS);
-    EXPECT_EQ(removeredundantpass.PostCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(subGraph.SetInCast({"inCast"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"outCast1", "outCast2", "outCast3"}), true);
+
+    Function* function = subGraph.GetFunction();
+
+    RemoveRedundantReshape pass;
+    EXPECT_EQ(pass.DefaultEnabledPreCheck(*function), SUCCESS);
+    EXPECT_NE(pass.PreCheck(*function), SUCCESS);
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(pass.PostCheck(*function), SUCCESS);
 
     uint32_t reshape_num = kNumZero;
-    for (auto& op : currFunctionPtr->Operations()) {
+    auto* sqrtOp = subGraph.GetOp("sqrt");
+    auto* expOp = subGraph.GetOp("exp");
+    auto inCastTensor = subGraph.GetTensor("inCast");
+    for (auto& op : function->Operations()) {
         if (op.GetOpcode() == Opcode::OP_RESHAPE) {
             ++reshape_num;
         } else if (op.GetOpcode() == Opcode::OP_SQRT) {
-            EXPECT_EQ(sqrt.GetInputOperandSize(), kSizeOne);
-            EXPECT_EQ(sqrt.GetInputOperand(kSizeZero), inCast);
+            EXPECT_EQ(sqrtOp->GetInputOperandSize(), kSizeOne);
+            EXPECT_EQ(sqrtOp->GetInputOperand(kSizeZero), inCastTensor);
         } else if (op.GetOpcode() == Opcode::OP_EXP) {
-            EXPECT_EQ(exp.GetInputOperandSize(), kSizeOne);
-            EXPECT_EQ(exp.GetInputOperand(kSizeZero), inCast);
+            EXPECT_EQ(expOp->GetInputOperandSize(), kSizeOne);
+            EXPECT_EQ(expOp->GetInputOperand(kSizeZero), inCastTensor);
         }
     }
     EXPECT_EQ(reshape_num, kNumOne);
@@ -212,41 +273,43 @@ inCast{8,16}->reshape->ubTensor1{16,8}->exp->outCast1{16,8}
 */
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest4)
 {
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
-                                                      "TestRemoveRedundantReshape", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-
-    // Prepare the graph
+    ComputationalGraphBuilder subGraph;
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumExpFour, kNumEight};
     std::vector<int64_t> shape3 = {kNumExpFive, kNumFour};
-    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
-    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
-    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
-    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
-    auto& reshape1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor1}, {outCast1});
-    auto& reshape2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor2}, {outCast2});
+    std::vector<MemoryType> memTypes1(1, MemoryType::MEM_DEVICE_DDR);
+    std::vector<MemoryType> memTypes2(2, MemoryType::MEM_DEVICE_DDR);
+    std::vector<MemoryType> memTypes3(2, MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape1, memTypes1, {"inCast"}, 0), true);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape2, memTypes2, {"ubTensor1", "outCast1"}, 0), true);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape3, memTypes3, {"ubTensor2", "outCast2"}, 0), true);
 
-    currFunctionPtr->inCasts_.push_back(inCast);
-    currFunctionPtr->outCasts_.push_back(outCast1);
-    currFunctionPtr->outCasts_.push_back(outCast2);
+    std::vector<Opcode> opCodes = {Opcode::OP_RESHAPE, Opcode::OP_EXP, Opcode::OP_RESHAPE, Opcode::OP_SQRT};
+    std::vector<std::vector<std::string>> ioperands = {{"inCast"}, {"ubTensor1"}, {"ubTensor1"}, {"ubTensor2"}};
+    std::vector<std::vector<std::string>> ooperands = {{"ubTensor1"}, {"outCast1"}, {"ubTensor2"}, {"outCast2"}};
+    std::vector<std::string> opNames = {"reshape1", "exp", "reshape2", "sqrt"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
 
-    RemoveRedundantReshape removeredundantpass;
-    auto status = removeredundantpass.RunOnFunction(*currFunctionPtr);
-    EXPECT_EQ(status, SUCCESS);
+    EXPECT_EQ(subGraph.SetInCast({"inCast"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"outCast1", "outCast2"}), true);
+
+    Function* function = subGraph.GetFunction();
+    auto inCastTensor = subGraph.GetTensor("inCast");
+
+    RemoveRedundantReshape pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
 
     uint32_t reshape_num = kNumZero;
-    for (auto& op : currFunctionPtr->Operations()) {
+    auto* reshape1Op = subGraph.GetOp("reshape1");
+    auto* reshape2Op = subGraph.GetOp("reshape2");
+    for (auto& op : function->Operations()) {
         if (op.GetOpcode() == Opcode::OP_RESHAPE) {
             ++reshape_num;
         }
     }
-    EXPECT_EQ(reshape1.GetInputOperand(kSizeZero), inCast);
-    EXPECT_EQ(reshape2.GetInputOperand(kSizeZero), inCast);
+    EXPECT_EQ(reshape1Op->GetInputOperand(kSizeZero), inCastTensor);
+    EXPECT_EQ(reshape2Op->GetInputOperand(kSizeZero), inCastTensor);
     EXPECT_EQ(reshape_num, kNumTwo);
 }
 
@@ -266,46 +329,12 @@ view->reshape  ->exp        ->reshape   ->assemble
 */
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeSTest1)
 {
-    // Define the shape of the Tensors
-    std::vector<int64_t> shape1 = {kNumExpSix, kNumExpSix};
-    std::vector<int64_t> shape2 = {kNumExpFive, kNumExpSeven};
-    std::vector<int64_t> shape3 = {kNumExpSeven, kNumExpFive};
+    Function* function = BuildComplexGraphForSTest1();
 
-    PassManager& passManager = PassManager::Instance();
+    RemoveRedundantReshape pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
 
-    Tensor input(DT_FP32, shape1, "input");
-    Tensor reshape1(DT_FP32, shape2, "reshape1");
-    Tensor reshape2(DT_FP32, shape3, "reshape2");
-    Tensor reshape3(DT_FP32, shape2, "reshape3");
-    Tensor output1(DT_FP32, shape3, "output1");
-    Tensor exp1(DT_FP32, shape3, "exp1");
-    Tensor exp2(DT_FP32, shape2, "exp2");
-    Tensor output2(DT_FP32, shape2, "output");
-
-    FUNCTION("STCase1")
-    {
-        reshape1 = Reshape(input, shape2);
-        reshape2 = Reshape(reshape1, shape3);
-        TileShape::Current().SetVecTile({64, 64});
-        exp1 = Exp(reshape2);
-        reshape3 = Reshape(exp1, shape2);
-        output1 = Reshape(reshape3, shape3);
-        exp2 = Exp(reshape1);
-        output2 = Reshape(exp2, shape2);
-    }
-
-    Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_STCase1");
-    EXPECT_EQ(func->Operations().size(), kSizeFifteen);
-
-    passManager.RegisterStrategy("RemoveRedundantReshapeTestStrategy",
-                                 {
-                                     {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                                 });
-    EXPECT_EQ(passManager.RunPass(Program::GetInstance(), *func, "RemoveRedundantReshapeTestStrategy"), SUCCESS);
-
-    // ================== Verify the effect of the Pass ==================
-    auto updated_operations = func->Operations();
-
+    auto updated_operations = function->Operations();
     int reshape_num = kNumZero;
     EXPECT_EQ(updated_operations.size(), kSizeThirteen);
     for (const auto& op : updated_operations) {
@@ -318,30 +347,32 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeSTest1)
 
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest5)
 {
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
-                                                      "TestRemoveRedundantReshape", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-
-    // Prepare the graph
+    ComputationalGraphBuilder subGraph;
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumExpFour, kNumEight};
     std::vector<int64_t> shape3 = {kNumExpFive, kNumFour};
-    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
-    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
-    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor2}, {outCast});
+    std::vector<MemoryType> memTypes1(1, MemoryType::MEM_DEVICE_DDR);
+    std::vector<MemoryType> memTypes2(1, MemoryType::MEM_DEVICE_DDR);
+    std::vector<MemoryType> memTypes3(2, MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape1, memTypes1, {"inCast"}, 0), true);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape2, memTypes2, {"ubTensor1"}, 0), true);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape3, memTypes3, {"ubTensor2", "outCast"}, 0), true);
 
-    currFunctionPtr->inCasts_.push_back(inCast);
-    currFunctionPtr->outCasts_.push_back(outCast);
+    std::vector<Opcode> opCodes = {Opcode::OP_RESHAPE, Opcode::OP_RESHAPE, Opcode::OP_SQRT};
+    std::vector<std::vector<std::string>> ioperands = {{"inCast"}, {"ubTensor1"}, {"ubTensor2"}};
+    std::vector<std::vector<std::string>> ooperands = {{"ubTensor1"}, {"ubTensor2"}, {"outCast"}};
+    std::vector<std::string> opNames = {"reshape1", "reshape2", "sqrt"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
 
-    RemoveRedundantReshape removeredundantpass;
-    auto status = removeredundantpass.RunOnFunction(*currFunctionPtr);
-    EXPECT_EQ(status, SUCCESS);
-    EXPECT_EQ(removeredundantpass.PostCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(subGraph.SetInCast({"inCast"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"outCast"}), true);
+
+    Function* function = subGraph.GetFunction();
+
+    RemoveRedundantReshape pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(pass.PostCheck(*function), SUCCESS);
 }
 
 /*
@@ -351,28 +382,28 @@ inCast->reShape->ubTensor1->reShape->outCast
 */
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeContainNegativeOne)
 {
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
-                                                      "TestRemoveRedundantReshape", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
+    ComputationalGraphBuilder subGraph;
     int64_t kSizeNegativeOne = -1;
-    // Prepare the graph
     std::vector<int64_t> shape = {kSizeNegativeOne, kNumEight};
-    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::vector<MemoryType> memTypes(3, MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape, memTypes, {"inCast", "ubTensor1", "outCast"}, 0), true);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {outCast});
+    std::vector<Opcode> opCodes = {Opcode::OP_RESHAPE, Opcode::OP_RESHAPE};
+    std::vector<std::vector<std::string>> ioperands = {{"inCast"}, {"ubTensor1"}};
+    std::vector<std::vector<std::string>> ooperands = {{"ubTensor1"}, {"outCast"}};
+    std::vector<std::string> opNames = {"reshape1", "reshape2"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
 
-    currFunctionPtr->inCasts_.push_back(inCast);
-    currFunctionPtr->outCasts_.push_back(outCast);
+    EXPECT_EQ(subGraph.SetInCast({"inCast"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"outCast"}), true);
 
-    RemoveRedundantReshape removeRedundantPass;
+    Function* function = subGraph.GetFunction();
 
-    auto status = removeRedundantPass.RunOnFunction(*currFunctionPtr);
+    RemoveRedundantReshape pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
     int reshapeNum = kNumZero;
-    EXPECT_EQ(status, SUCCESS);
-    for (auto& op : currFunctionPtr->Operations()) {
+    for (auto& op : function->Operations()) {
         if (op.GetOpcode() == Opcode::OP_RESHAPE) {
             ++reshapeNum;
         }
@@ -382,19 +413,26 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeContainNegativeOne)
 
 TEST_F(TestRemoveRedundantReshapePass, ReshapeNoConsumer)
 {
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeNoConsumer",
-                                                      "TestReshapeNoConsumer", nullptr);
-    ASSERT_NE(currFunctionPtr, nullptr);
+    ComputationalGraphBuilder subGraph;
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
-    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {outCast});
-    currFunctionPtr->inCasts_.push_back(inCast);
-    currFunctionPtr->outCasts_.push_back(outCast);
-    RemoveRedundantReshape pass;
+    std::vector<MemoryType> memTypes(2, MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(subGraph.AddTensors(DT_FP32, shape, memTypes, {"inCast", "outCast"}, 0), true);
 
-    Status ret = pass.PreCheck(*currFunctionPtr);
+    std::vector<Opcode> opCodes = {Opcode::OP_RESHAPE};
+    std::vector<std::vector<std::string>> ioperands = {{"inCast"}};
+    std::vector<std::vector<std::string>> ooperands = {{"outCast"}};
+    std::vector<std::string> opNames = {"reshape"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+
+    EXPECT_EQ(subGraph.SetInCast({"inCast"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"outCast"}), true);
+
+    Function* function = subGraph.GetFunction();
+
+    RemoveRedundantReshape pass;
+    Status ret = pass.PreCheck(*function);
     EXPECT_EQ(ret, FAILED);
 }
+
 } // namespace tile_fwk
 } // namespace npu
