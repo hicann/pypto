@@ -40,7 +40,7 @@
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "interface/tensor/irbuilder.h"
-
+#include "ir/transforms/printer.h"
 using namespace npu::tile_fwk;
 
 namespace {
@@ -1620,6 +1620,9 @@ unsigned long Function::ComputeHashOrderless() const
     // temporary avoidance, switch SUPPORT_DYNAMIC_ALIGNED has an unexpected effect on dynamic binary reuse
     if (functionType_ == FunctionType::DYNAMIC) {
         ss << "dynamic unaligned:" << config::GetCodeGenOption<bool>(SUPPORT_DYNAMIC_ALIGNED);
+        if (body_ != nullptr) {
+            ss << "body:" << ir::PythonPrint(std::static_pointer_cast<const ir::IRNode>(body_));
+        }
     }
     if (leafFuncAttr_ != nullptr) {
         // mixId标识同一次Mix拆出来的leafFunction组
