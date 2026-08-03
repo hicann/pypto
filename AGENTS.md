@@ -48,6 +48,7 @@
 | 分析编译期 Pass 模块 | skill `pypto-pass-module-analyzer` / `pypto-pass-workflow-analyzer` |
 | 排查 workspace 内存问题 | skill `pypto-memory-overlap-detector` / `pypto-machine-workspace` |
 | 调试算子精度问题 | skill `pypto-precision-overall` |
-| AICPU / CF 热路径高性能编码与评审 | skill `pypto-aicpu-perf-coding` |
+| AICPU / CF 热路径高性能编码与评审 | skill `pypto-machine-code-review` |
 | 安装 / 修复环境 | skill `pypto-environment-setup` |
 | 创建 / 修复 PR、创建 Issue | skill `pypto-pr-creator` / `pypto-pr-fixer` / `pypto-issue-creator` |
+| 检视 machine 侧代码、提交行级 review 意见 | skill `pypto-machine-code-review` |

@@ -174,6 +174,28 @@ Device 侧核内拷贝另论；本条约束的是 **Host runtime / launcher** �
 
 热头文件少拉日志；dump 默认关；性能计数与业务解耦。
 
+#### 2.14.1 耗时 debug 操作的宏隔离
+
+新增耗时 debug 操作（dump 文件、遍历 op/tensor 写 CSV、`std::ofstream`/`std::mutex`/`std::string` 等）时，必须根据其运行场景选择正确的宏隔离：
+
+| 场景 | 宏 | 效果 | 典型用法 |
+|---|---|---|---|
+| 仅 Host 仿真运行（不需要 device 侧编译） | `DEV_IF_NONDEVICE` | device 侧编译期排除整个代码块，零开销 | `DEV_IF_NONDEVICE { DumpRootMemory(...); }` |
+| 需要在 device 侧运行但仅 debug 模式生效 | `DEV_IF_DEBUG` | release 模式编译期排除，debug 模式保留 | `DEV_IF_DEBUG { DumpTensorRange(...); }` |
+
+**判定流程**：
+1. 该 debug 操作是否需要在 device 侧（AICPU 运行时）执行？
+   - **否**（仅 Host 仿真/编译期 dump）→ 用 `DEV_IF_NONDEVICE` 隔离
+   - **是**（device 运行时也需要 dump）→ 进入步骤 2
+2. 该操作是否耗时（文件 IO、STL 容器、遍历 op/tensor）？
+   - **是** → 用 `DEV_IF_DEBUG` 隔离，确保 release 模式不执行
+   - **否**（仅读一个 flag/计数器）→ 可不加宏，但须有 `if (!enabled) return` 运行时守卫
+
+**禁止**：
+- 在 device 侧也会编译的函数中直接调用 debug 函数而不加任何宏隔离（即使被调函数有 `#else` 空实现，调用本身仍生成无用开销）
+- 用 `#ifndef __DEVICE__` 替代 `DEV_IF_NONDEVICE`（`DEV_IF_NONDEVICE` 是框架标准分流宏，语义更清晰且可能附带额外检查）
+- debug 操作只加运行时 `if (!DumpEnabled()) return` 守卫但不加编译期宏隔离（release 模式下仍编译 STL/文件 IO 代码，增加二进制体积和 icache 压力）
+
 ---
 
 ### 2.15 无锁仅用于真 SPSC
@@ -195,6 +217,7 @@ Device 侧核内拷贝另论；本条约束的是 **Host runtime / launcher** �
 | 循环边界与不变量外提 | 循环条件里重复算 `B`、体内重复加载 |
 | Host 慎拷；必须时 `NormalizedRtMemcpy` | Host 随意新增直连 `rtMemcpy` H2D |
 | Schedule + CF 一并审视 | 只优化 stitch、忽略 `device_sche*` |
+| debug 操作按场景加 `DEV_IF_NONDEVICE`/`DEV_IF_DEBUG` 宏隔离 | device 侧函数中裸调 debug 函数仅靠 `#else` 空实现 |
 
 ---
 
