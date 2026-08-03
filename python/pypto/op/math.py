@@ -411,18 +411,26 @@ def lrelu(other: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
     y = x if x >= 0
     y = negative_slope * x if x < 0
 
+    For fp16/bf16 inputs, the computation is performed in fp32 internally and the result is cast back,
+    to align with torch_npu's F.leaky_relu precision behavior.
+
     Parameters
     ----------
     a : Tensor
         The input tensor.
     negative_slope : float, optional
         Controls the angle of the negative slope (default is 0.0 impending small positive value, typically 0.01).
-        Must be non-negative.
+        Internally always treated as fp32. Must be non-negative, and must not be NaN or inf.
 
     Returns
     -------
     Tensor
         A new tensor containing the element-wise LReLU result.
+
+    Raises
+    ------
+    ValueError
+        If negative_slope is negative, NaN, or inf.
 
     Examples
     --------
@@ -437,9 +445,32 @@ def lrelu(other: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
     Output y2: [-0.1, 2.0, 0.0, -0.05]
     """
     if isinstance(negative_slope, pypto_impl.Element):
-        negative_slope_base = negative_slope
+        if negative_slope._is_float():
+            slope_val = negative_slope._get_float_data()
+        else:
+            slope_val = negative_slope._get_signed_data()
     else:
-        negative_slope_base = pypto_impl.Element(pypto_impl.DT_FP32, negative_slope)
+        slope_val = negative_slope
+
+    if isinstance(slope_val, float):
+        if np.isnan(slope_val):
+            raise PyptoError(0xF00002, ValueError("lrelu(): negative_slope must not be NaN."))
+        if np.isinf(slope_val):
+            raise PyptoError(0xF00002, ValueError("lrelu(): negative_slope must not be inf."))
+    if isinstance(slope_val, (int, float)) and slope_val < 0:
+        raise PyptoError(0xF00002, ValueError(
+            f"lrelu(): negative_slope must be non-negative, but got {slope_val}."))
+
+    negative_slope_base = pypto_impl.Element(pypto_impl.DT_FP32, slope_val)
+
+    orig_dtype = other.dtype
+    if orig_dtype in (DataType.DT_FP16, DataType.DT_BF16):
+        fp32_input = pypto_impl.Cast(other, DataType.DT_FP32, CastMode.CAST_NONE,
+                                     pypto_impl.SaturationMode.OFF)
+        fp32_result = pypto_impl.LReLU(fp32_input, negative_slope_base)
+        return pypto_impl.Cast(fp32_result, orig_dtype, CastMode.CAST_NONE,
+                               pypto_impl.SaturationMode.OFF)
+
     return pypto_impl.LReLU(other, negative_slope_base)
 
 
