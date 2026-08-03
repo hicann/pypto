@@ -48,8 +48,7 @@ struct DynDeviceTask : DynDeviceTaskBase {
     }
 
 private:
-    // Zero only fields read before explicit assignment; skip opWrapList/opWrapOffsetList bulk arrays
-    // (filled per-func in MoveTo / InitWrapOffsetList; cache backup copies dynFuncDataCacheListSize entries).
+    // Zero only fields read before explicit assignment; opWrapList is filled per-func in MoveTo.
     static void InitDevTaskShell(DeviceTask& task)
     {
         task.coreFunctionCnt = 0;
@@ -60,9 +59,6 @@ private:
         task.dieReadyFunctionQue = DieReadyQueueData{};
         task.mixTaskData.readyWrapCoreFunctionQue = 0;
         task.mixTaskData.wrapIdNum = 0;
-        for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; ++i) {
-            task.mixTaskData.wrapQueueForThread[i] = 0;
-        }
         task.coreFuncData = CoreFunctionData{};
         task.l2Info = L2PreInfo{};
         task.costModelData = 0;

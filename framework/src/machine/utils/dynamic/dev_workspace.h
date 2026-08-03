@@ -391,10 +391,6 @@ private:
 
     uint32_t WrapQueSlabMemObjSize();
 
-    uint32_t WrapQueForThreadSlabMemObjSize();
-
-    uint32_t WrapOffsetListSlabMemObjSize();
-
     uint32_t (DeviceWorkspaceAllocator::*slabMemObjSizeFunc[ToUnderlying(WsAicpuSlabMemType::SLAB_MEM_TYPE_BUTT)])() = {
         &DeviceWorkspaceAllocator::DevFunctionDuppedSlabMemObjSize,
         &DeviceWorkspaceAllocator::DynFuncDataSlabMemObjSize,
@@ -405,8 +401,6 @@ private:
         &DeviceWorkspaceAllocator::ReadyQueSlabMemObjSize,
         &DeviceWorkspaceAllocator::DieReadyQueSlabMemObjSize,
         &DeviceWorkspaceAllocator::WrapQueSlabMemObjSize,
-        &DeviceWorkspaceAllocator::WrapQueForThreadSlabMemObjSize,
-        &DeviceWorkspaceAllocator::WrapOffsetListSlabMemObjSize,
         &DeviceWorkspaceAllocator::DuppedStitchSlabMemObjSize,
     };
 

@@ -53,17 +53,17 @@ inline uint32_t GetTaskNumByMixResType(uint8_t mixType)
     }
 }
 
-inline bool IsMixTaskFinish(WrapInfo* wrapInfo)
+inline bool IsWrapTaskReady(const WrapInfo* wrapInfo)
 {
     switch (wrapInfo->mixResourceType) {
         case static_cast<uint8_t>(MixResourceType::MIX_1C1V):
-            return wrapInfo->tasklist[0] == AICORE_TASK_STOP && wrapInfo->tasklist[1] == AICORE_TASK_STOP;
+            return wrapInfo->tasklist[WRAP_IDX_AIC] != AICORE_TASK_INIT &&
+                   wrapInfo->tasklist[WRAP_IDX_AIV0] != AICORE_TASK_INIT;
         case static_cast<uint8_t>(MixResourceType::MIX_1C2V):
-            return wrapInfo->tasklist[0] == AICORE_TASK_STOP && wrapInfo->tasklist[1] == AICORE_TASK_STOP &&
-                   wrapInfo->tasklist[2] == AICORE_TASK_STOP;
+            return wrapInfo->tasklist[WRAP_IDX_AIC] != AICORE_TASK_INIT &&
+                   wrapInfo->tasklist[WRAP_IDX_AIV0] != AICORE_TASK_INIT &&
+                   wrapInfo->tasklist[WRAP_IDX_AIV1] != AICORE_TASK_INIT;
         default:
-            DEV_ERROR(DevCommonErr::PARAM_INVALID, "#sche.wrap.invalid_mode: illegal mixType: %hhu\n",
-                      wrapInfo->mixResourceType);
             return false;
     }
 }
@@ -73,14 +73,18 @@ inline bool IsMixTaskFinish(WrapInfo* wrapInfo)
         if (!(val))             \
             return;             \
     } while (0)
-#define RETURN_RET_IF_NOT(val, ret) \
-    do {                            \
-        if (!(val))                 \
-            return (ret);           \
-    } while (0)
 
 class WrapManager {
 public:
+    static constexpr uint32_t MAX_DISPATCH_TASK_CNT = 8u;
+
+    struct WrapCoreCandidates {
+        uint32_t core1c1vIdx[MAX_DISPATCH_TASK_CNT];
+        uint32_t core1c2vIdx[MAX_DISPATCH_TASK_CNT];
+        uint32_t core1c1vCnt{0};
+        uint32_t core1c2vCnt{0};
+    };
+
     ~WrapManager() {}
     WrapManager() {}
 
@@ -98,8 +102,6 @@ public:
     DieId dieId_{DieId::DIE_MIX};
 
     WrapInfoQueue* readyWrapCoreFunctionQue_{nullptr};
-    // Queue managed by each thread, elem is wrapInfo's addr
-    StaticReadyCoreFunctionQueue* wrapQueueForThread_{nullptr};
     SendTaskToAiCoreFunc SendTaskToAiCore;
     bool isOpenMixSche{false};
     ArchInfo archInfo;
@@ -168,8 +170,6 @@ public:
         aicValidNum_ = aicValidNum;
         SendTaskToAiCore = func;
         readyWrapCoreFunctionQue_ = reinterpret_cast<WrapInfoQueue*>(curDevTask_->mixTaskData.readyWrapCoreFunctionQue);
-        wrapQueueForThread_ = reinterpret_cast<StaticReadyCoreFunctionQueue*>(
-            curDevTask_->mixTaskData.wrapQueueForThread[schedIdx_]);
 
         SetDieReadyQueue(curDevTask->dieReadyFunctionQue);
 
@@ -179,7 +179,7 @@ public:
             CoreType::AIV, reinterpret_cast<ReadyCoreFunctionQueue*>(curDevTask->readyAivCoreFunctionQue));
     }
 
-    inline bool GetIsMixarch() { return archInfo == ArchInfo::DAV_3510; }
+    inline bool IsMixArch() { return archInfo == ArchInfo::DAV_3510; }
 
     inline bool GetAvailableWrapCoreIdx(uint8_t mixResourceType, uint32_t aicReadyCnt, uint32_t& coreIdx,
                                         uint32_t& v0Idx)
@@ -210,10 +210,10 @@ public:
         return false;
     }
 
-    inline uint32_t GetAvailableWrapCoreCnt(uint32_t& core1c1vCnt, uint32_t& core1c2vCnt, uint32_t maxCoreCnt)
+    inline uint32_t GetWrapCoreRunningCnt(WrapCoreCandidates& candidates, uint32_t& core1c1vCnt, uint32_t& core1c2vCnt)
     {
         uint32_t aicReadyCnt = coreStatusMgr_->GetCoreRunReadyCnt(CORE_IDX_AIC);
-        for (uint32_t idx = 0; idx < aicReadyCnt && core1c2vCnt < maxCoreCnt; idx++) {
+        for (uint32_t idx = 0; idx < aicReadyCnt && core1c2vCnt < MAX_DISPATCH_TASK_CNT; idx++) {
             uint32_t aicIdx = coreStatusMgr_->GetRunReadyCoreIdx(CORE_IDX_AIC, idx);
             uint32_t aivIdx0 = GetWrapAiv0CoreIdx(aicIdx);
             uint32_t aivIdx1 = GetWrapAiv1CoreIdx(aivIdx0);
@@ -222,28 +222,36 @@ public:
                 CheckCoreIdxInitStatus(aivIdx0);
                 if (coreStatusMgr_->GetCoreIdxPosition(aivIdx1) != INVALID_COREIDX_POSITION) {
                     CheckCoreIdxInitStatus(aivIdx1);
+                    candidates.core1c2vIdx[core1c2vCnt] = aicIdx;
                     core1c2vCnt++;
-                } else {
+                } else if (core1c1vCnt < MAX_DISPATCH_TASK_CNT) {
+                    candidates.core1c1vIdx[core1c1vCnt] = aicIdx;
                     core1c1vCnt++;
                 }
             }
         }
+        candidates.core1c1vCnt = core1c1vCnt;
+        candidates.core1c2vCnt = core1c2vCnt;
         return core1c2vCnt + core1c1vCnt;
     }
 
-    inline uint32_t GetWrapCorePendingCnt(uint32_t& core1c1vCnt, uint32_t& core1c2vCnt)
+    inline uint32_t GetWrapCorePendingCnt(WrapCoreCandidates& candidates, uint32_t& core1c1vCnt, uint32_t& core1c2vCnt)
     {
-        for (uint32_t idx = aicStart_; idx < aicEnd_; idx++) {
+        for (uint32_t idx = aicStart_; idx < aicEnd_ && core1c2vCnt < MAX_DISPATCH_TASK_CNT; idx++) {
             uint32_t aivIdx0 = GetWrapAiv0CoreIdx(idx);
             uint32_t aivIdx1 = GetWrapAiv1CoreIdx(aivIdx0);
             if (pendingIds_[idx] == AICORE_TASK_INIT && pendingIds_[aivIdx0] == AICORE_TASK_INIT) {
                 if (pendingIds_[aivIdx1] == AICORE_TASK_INIT) {
+                    candidates.core1c2vIdx[core1c2vCnt] = idx;
                     core1c2vCnt++;
-                } else {
+                } else if (core1c1vCnt < MAX_DISPATCH_TASK_CNT) {
+                    candidates.core1c1vIdx[core1c1vCnt] = idx;
                     core1c1vCnt++;
                 }
             }
         }
+        candidates.core1c1vCnt = core1c1vCnt;
+        candidates.core1c2vCnt = core1c2vCnt;
         return core1c1vCnt + core1c2vCnt;
     }
 
@@ -256,48 +264,33 @@ public:
     inline uint16_t GetWrapAiv0CoreIdx(uint16_t aicIdx) { return aicIdx * AIV_NUM_PER_AI_CORE + aicValidNum_; }
     inline uint16_t GetWrapAiv1CoreIdx(uint16_t aiv0Idx) { return aiv0Idx + 1; }
 
-    inline void UpdateWrapQueueAndRmvCoreIdx(WrapInfo* wrap1c2vTasks[], uint32_t task1c2vCnt, WrapInfo* wrap1c1vTasks[],
-                                             uint32_t task1c1vCnt)
+    inline void SendMixTasksToCore(const uint32_t* taskIds, uint8_t mixResourceType, uint32_t aicIdx, uint32_t aivIdx0)
     {
-        uint32_t idx = 0;
-        for (uint32_t taskIdx = 0; taskIdx < task1c2vCnt; taskIdx++) {
-            WrapInfo* wrapInfo = wrap1c2vTasks[taskIdx];
-            wrapQueueForThread_->elem[wrapQueueForThread_->tail++] = reinterpret_cast<uint64_t>(wrapInfo);
-            while (idx < coreStatusMgr_->GetCoreRunReadyCnt(CORE_IDX_AIC)) {
-                uint32_t aicIdx = coreStatusMgr_->GetRunReadyCoreIdx(CORE_IDX_AIC, idx);
-                uint32_t aivIdx0 = GetWrapAiv0CoreIdx(aicIdx);
-                uint32_t aivIdx1 = GetWrapAiv1CoreIdx(aivIdx0);
-
-                if (coreStatusMgr_->GetCoreIdxPosition(aivIdx0) != INVALID_COREIDX_POSITION &&
-                    coreStatusMgr_->GetCoreIdxPosition(aivIdx1) != INVALID_COREIDX_POSITION) {
-                    wrapInfo->aicCoreIdx = aicIdx;
-                    coreStatusMgr_->RemoveRunAndPendCoreIdx(aicIdx, CORE_IDX_AIC);
-                    coreStatusMgr_->RemoveRunAndPendCoreIdx(aivIdx0, CORE_IDX_AIV);
-                    coreStatusMgr_->RemoveRunAndPendCoreIdx(aivIdx1, CORE_IDX_AIV);
-                    break;
-                } else {
-                    idx++;
-                }
+        DEV_IF_VERBOSE_DEBUG
+        {
+            uint32_t wrapId = static_cast<uint32_t>(GetWrapId(taskIds[WRAP_IDX_AIC]));
+            DEV_VERBOSE_DEBUG("try to send wrapId[%u]'s wrapAicoreIdx[%u] taskId[%u]", wrapId,
+                              static_cast<uint32_t>(WRAP_IDX_AIC), taskIds[WRAP_IDX_AIC]);
+            DEV_VERBOSE_DEBUG("try to send wrapId[%u]'s wrapAicoreIdx[%u] taskId[%u]", wrapId,
+                              static_cast<uint32_t>(WRAP_IDX_AIV0), taskIds[WRAP_IDX_AIV0]);
+            if (mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
+                DEV_VERBOSE_DEBUG("try to send wrapId[%u]'s wrapAicoreIdx[%u] taskId[%u]", wrapId,
+                                  static_cast<uint32_t>(WRAP_IDX_AIV1), taskIds[WRAP_IDX_AIV1]);
             }
         }
+        SendTaskToAiCore(schDevTaskCtx, CoreType::AIC, aicIdx, taskIds[WRAP_IDX_AIC]);
+        SendTaskToAiCore(schDevTaskCtx, CoreType::AIV, aivIdx0, taskIds[WRAP_IDX_AIV0]);
+        if (mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
+            SendTaskToAiCore(schDevTaskCtx, CoreType::AIV, aivIdx0 + 1, taskIds[WRAP_IDX_AIV1]);
+        }
+    }
 
-        idx = 0;
-        for (uint32_t taskIdx = 0; taskIdx < task1c1vCnt; taskIdx++) {
-            WrapInfo* wrapInfo = wrap1c1vTasks[taskIdx];
-            wrapQueueForThread_->elem[wrapQueueForThread_->tail++] = reinterpret_cast<uint64_t>(wrapInfo);
-            while (idx < coreStatusMgr_->GetCoreRunReadyCnt(CORE_IDX_AIC)) {
-                uint32_t aicIdx = coreStatusMgr_->GetRunReadyCoreIdx(CORE_IDX_AIC, idx);
-                uint32_t aivIdx0 = GetWrapAiv0CoreIdx(aicIdx);
-
-                if (coreStatusMgr_->GetCoreIdxPosition(aivIdx0) != INVALID_COREIDX_POSITION) {
-                    wrapInfo->aicCoreIdx = aicIdx;
-                    coreStatusMgr_->RemoveRunAndPendCoreIdx(aicIdx, CORE_IDX_AIC);
-                    coreStatusMgr_->RemoveRunAndPendCoreIdx(aivIdx0, CORE_IDX_AIV);
-                    break;
-                } else {
-                    idx++;
-                }
-            }
+    inline void RemoveMixRunAndPendCoreIdx(uint8_t mixResourceType, uint32_t aicIdx, uint32_t aivIdx0)
+    {
+        coreStatusMgr_->RemoveRunAndPendCoreIdx(aicIdx, CORE_IDX_AIC);
+        coreStatusMgr_->RemoveRunAndPendCoreIdx(aivIdx0, CORE_IDX_AIV);
+        if (mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
+            coreStatusMgr_->RemoveRunAndPendCoreIdx(aivIdx0 + 1, CORE_IDX_AIV);
         }
     }
 
@@ -310,52 +303,56 @@ public:
         }
     }
 
-    inline void UpdateWrapQueueForThreadByPending(WrapInfo* wrap1c2vTasks[], uint32_t task1c2vCnt,
-                                                  WrapInfo* wrap1c1vTasks[], uint32_t task1c1vCnt)
+    inline void TryRemoveMixCoreIdxFromPending(uint8_t mixResourceType, uint32_t aicIdx, uint32_t aivIdx0)
     {
-        uint32_t idx = aicStart_;
+        TryRemoveCoreIdxFromPending(aicIdx, CORE_IDX_AIC);
+        TryRemoveCoreIdxFromPending(aivIdx0, CORE_IDX_AIV);
+        if (mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
+            TryRemoveCoreIdxFromPending(aivIdx0 + 1, CORE_IDX_AIV);
+        }
+    }
+
+    template <typename RemoveMixCoreIdxFunc>
+    inline void DispatchWrapTasksImpl(WrapCoreCandidates& candidates, WrapInfo* wrap1c2vTasks[], uint32_t task1c2vCnt,
+                                      WrapInfo* wrap1c1vTasks[], uint32_t task1c1vCnt,
+                                      RemoveMixCoreIdxFunc removeMixCoreIdx)
+    {
         for (uint32_t taskIdx = 0; taskIdx < task1c2vCnt; taskIdx++) {
             WrapInfo* wrapInfo = wrap1c2vTasks[taskIdx];
-            wrapQueueForThread_->elem[wrapQueueForThread_->tail++] = reinterpret_cast<uint64_t>(wrapInfo);
-            for (; idx < aicEnd_; idx++) {
-                uint32_t aicIdx = idx;
-                uint32_t aivIdx0 = GetWrapAiv0CoreIdx(aicIdx);
-                uint32_t aivIdx1 = GetWrapAiv1CoreIdx(aivIdx0);
-
-                if (pendingIds_[aicIdx] == AICORE_TASK_INIT && pendingIds_[aivIdx0] == AICORE_TASK_INIT &&
-                    pendingIds_[aivIdx1] == AICORE_TASK_INIT) {
-                    wrapInfo->aicCoreIdx = aicIdx;
-                    CheckAndSendTask(wrapInfo, WRAP_IDX_AIC, CoreType::AIC, aicIdx);
-                    CheckAndSendTask(wrapInfo, WRAP_IDX_AIV0, CoreType::AIV, aivIdx0);
-                    CheckAndSendTask(wrapInfo, WRAP_IDX_AIV1, CoreType::AIV, aivIdx1);
-                    TryRemoveCoreIdxFromPending(aicIdx, CORE_IDX_AIC);
-                    TryRemoveCoreIdxFromPending(aivIdx0, CORE_IDX_AIV);
-                    TryRemoveCoreIdxFromPending(aivIdx1, CORE_IDX_AIV);
-                    idx++;
-                    break;
-                }
-            }
+            uint32_t aicIdx = candidates.core1c2vIdx[taskIdx];
+            uint32_t aivIdx0 = GetWrapAiv0CoreIdx(aicIdx);
+            SendMixTasksToCore(wrapInfo->tasklist, wrapInfo->mixResourceType, aicIdx, aivIdx0);
+            removeMixCoreIdx(wrapInfo->mixResourceType, aicIdx, aivIdx0);
         }
 
-        idx = aicStart_;
+        uint32_t core1c2vIdx = task1c2vCnt;
+        uint32_t core1c1vIdx = 0;
         for (uint32_t taskIdx = 0; taskIdx < task1c1vCnt; taskIdx++) {
             WrapInfo* wrapInfo = wrap1c1vTasks[taskIdx];
-            wrapQueueForThread_->elem[wrapQueueForThread_->tail++] = reinterpret_cast<uint64_t>(wrapInfo);
-            for (; idx < aicEnd_; idx++) {
-                uint32_t aicIdx = idx;
-                uint32_t aivIdx0 = GetWrapAiv0CoreIdx(aicIdx);
-
-                if (pendingIds_[aicIdx] == AICORE_TASK_INIT && pendingIds_[aivIdx0] == AICORE_TASK_INIT) {
-                    wrapInfo->aicCoreIdx = aicIdx;
-                    CheckAndSendTask(wrapInfo, WRAP_IDX_AIC, CoreType::AIC, aicIdx);
-                    CheckAndSendTask(wrapInfo, WRAP_IDX_AIV0, CoreType::AIV, aivIdx0);
-                    TryRemoveCoreIdxFromPending(aicIdx, CORE_IDX_AIC);
-                    TryRemoveCoreIdxFromPending(aivIdx0, CORE_IDX_AIV);
-                    idx++;
-                    break;
-                }
-            }
+            uint32_t aicIdx = core1c2vIdx < candidates.core1c2vCnt ? candidates.core1c2vIdx[core1c2vIdx++] :
+                                                                     candidates.core1c1vIdx[core1c1vIdx++];
+            uint32_t aivIdx0 = GetWrapAiv0CoreIdx(aicIdx);
+            SendMixTasksToCore(wrapInfo->tasklist, wrapInfo->mixResourceType, aicIdx, aivIdx0);
+            removeMixCoreIdx(wrapInfo->mixResourceType, aicIdx, aivIdx0);
         }
+    }
+
+    inline void DispatchWrapTasksFromReadyCore(WrapCoreCandidates& candidates, WrapInfo* wrap1c2vTasks[],
+                                               uint32_t task1c2vCnt, WrapInfo* wrap1c1vTasks[], uint32_t task1c1vCnt)
+    {
+        DispatchWrapTasksImpl(candidates, wrap1c2vTasks, task1c2vCnt, wrap1c1vTasks, task1c1vCnt,
+                              [this](uint8_t mixResourceType, uint32_t aicIdx, uint32_t aivIdx0) {
+                                  RemoveMixRunAndPendCoreIdx(mixResourceType, aicIdx, aivIdx0);
+                              });
+    }
+
+    inline void DispatchWrapTasksFromPendingCore(WrapCoreCandidates& candidates, WrapInfo* wrap1c2vTasks[],
+                                                 uint32_t task1c2vCnt, WrapInfo* wrap1c1vTasks[], uint32_t task1c1vCnt)
+    {
+        DispatchWrapTasksImpl(candidates, wrap1c2vTasks, task1c2vCnt, wrap1c1vTasks, task1c1vCnt,
+                              [this](uint8_t mixResourceType, uint32_t aicIdx, uint32_t aivIdx0) {
+                                  TryRemoveMixCoreIdxFromPending(mixResourceType, aicIdx, aivIdx0);
+                              });
     }
 
     inline void CheckCoreIdxInitStatus(uint32_t coreIdx)
@@ -370,46 +367,6 @@ public:
         }
     }
 
-    inline void SwapWrapAndSyncOffset(uint32_t i, uint32_t j)
-    {
-        auto& a = readyWrapCoreFunctionQue_->elem[i];
-        auto& b = readyWrapCoreFunctionQue_->elem[j];
-        if (&a == &b)
-            return;
-        uint32_t wA = b.wrapId;
-        uint32_t wB = a.wrapId;
-        std::swap(a, b);
-        auto dyntask = reinterpret_cast<DynDeviceTask*>(curDevTask_);
-        if (dyntask == nullptr)
-            return;
-        uint32_t fA = FuncID(wA), fB = FuncID(wB);
-        uint32_t oA = GetOpWrapID(wA), oB = GetOpWrapID(wB);
-        auto& offA = dyntask->devTask.mixTaskData.opWrapOffsetList[fA];
-        auto& offB = dyntask->devTask.mixTaskData.opWrapOffsetList[fB];
-        if (offA != nullptr && offB != nullptr) {
-            std::swap(offA[oA], offB[oB]);
-        }
-    }
-
-    inline uint32_t CalculateTaskCountInSync()
-    {
-        uint32_t taskCount = 0;
-        uint32_t head = readyWrapCoreFunctionQue_->head;
-        for (uint32_t i = head; i < readyWrapCoreFunctionQue_->tail; i++) {
-            WrapInfo* info = &readyWrapCoreFunctionQue_->elem[i];
-            bool isC1V1Ready = (info->mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C1V) &&
-                                info->tasklist[0] != AICORE_TASK_INIT && info->tasklist[1] != AICORE_TASK_INIT);
-            bool isC1V2Ready = (info->mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C2V) &&
-                                info->tasklist[0] != AICORE_TASK_INIT && info->tasklist[1] != AICORE_TASK_INIT &&
-                                info->tasklist[2] != AICORE_TASK_INIT); // 2:v1 index
-            if (isC1V1Ready || isC1V2Ready) {
-                SwapWrapAndSyncOffset(i, head + taskCount);
-                taskCount++;
-            }
-        }
-        return taskCount;
-    }
-
     template <typename GetCoreCntFunc, typename PostProcessFunc>
     inline bool DispatchReadyTasksImpl(GetCoreCntFunc getCoreCnt, PostProcessFunc postProcess)
     {
@@ -420,29 +377,29 @@ public:
         }
         uint32_t core1c1vCnt = 0;
         uint32_t core1c2vCnt = 0;
-        constexpr uint32_t maxTaskCnt = 8u;
         uint32_t wrapCoreCnt = getCoreCnt(core1c1vCnt, core1c2vCnt);
         if (wrapCoreCnt == 0)
             return true;
 
         WrapInfoQueueLock(readyWrapCoreFunctionQue_);
         head = readyWrapCoreFunctionQue_->head;
-#ifdef NO_EARLY_SEND_TASK
-        uint32_t taskCount = CalculateTaskCountInSync();
-#else
         uint32_t taskCount = readyWrapCoreFunctionQue_->tail - head;
-#endif
         if (unlikely(taskCount == 0)) {
             DEV_VERBOSE_DEBUG("mixcore taskCount is zero.");
             WrapInfoQueueUnLock(readyWrapCoreFunctionQue_);
             return false;
         }
-        WrapInfo* localTasks[maxTaskCnt];
-        uint32_t maxReadyCnt = taskCount > maxTaskCnt ? maxTaskCnt : taskCount;
+        WrapInfo* localTasks[MAX_DISPATCH_TASK_CNT];
+        uint32_t maxReadyCnt = taskCount > MAX_DISPATCH_TASK_CNT ? MAX_DISPATCH_TASK_CNT : taskCount;
         maxReadyCnt = maxReadyCnt > wrapCoreCnt ? wrapCoreCnt : maxReadyCnt;
         uint32_t taskHead = 0, taskTail = maxReadyCnt;
         while (taskHead < taskTail) {
             WrapInfo* info = &readyWrapCoreFunctionQue_->elem[head++];
+            DEV_IF_VERBOSE_DEBUG
+            {
+                DEV_ASSERT_MSG(CtrlErr::TASK_STATS_ABNORMAL, IsWrapTaskReady(info),
+                               "#sche.task.wrap.not_ready: wrapId=%u has unresolved task", info->wrapId);
+            }
             if (info->mixResourceType == static_cast<uint32_t>(MixResourceType::MIX_1C2V)) {
                 if (core1c2vCnt == 0)
                     break;
@@ -462,66 +419,36 @@ public:
         return taskCount > maxReadyCnt;
     }
 
-    inline bool UpdateWrapQueueForThread()
+    inline bool TryAllocRunningCoreAndSend()
     {
+        WrapCoreCandidates candidates;
         return DispatchReadyTasksImpl(
-            [this](uint32_t& c1c1v, uint32_t& c1c2v) { return GetAvailableWrapCoreCnt(c1c1v, c1c2v, 8u); },
-            [this](WrapInfo* a[], uint32_t b, WrapInfo* c[], uint32_t d) { UpdateWrapQueueAndRmvCoreIdx(a, b, c, d); });
+            [this, &candidates](uint32_t& c1c1v, uint32_t& c1c2v) {
+                return GetWrapCoreRunningCnt(candidates, c1c1v, c1c2v);
+            },
+            [this, &candidates](WrapInfo* a[], uint32_t b, WrapInfo* c[], uint32_t d) {
+                DispatchWrapTasksFromReadyCore(candidates, a, b, c, d);
+            });
     }
 
-    inline void CheckAndSendTask(WrapInfo* wrapInfo, uint32_t wrapAicoreIdx, CoreType coreType, uint16_t coreIdx)
+    inline void TryAllocPendingCoreAndSend()
     {
-        uint32_t taskId = wrapInfo->tasklist[wrapAicoreIdx];
-        // 此处可能一个Task准备下发，另一个还没初始化。另一个准备下发时，前面一个已经结束
-        // AICORE_TASK_SUBMITTED、AICORE_TASK_INIT、taskId == AICORE_TASK_STOP最高位是1，正常taskId的最高位是0
-        if (taskId & AICORE_FIN_MASK)
-            return;
-        DEV_VERBOSE_DEBUG("try to send wrapId[%u]'s wrapAicoreIdx[%u] taskId[%u]", wrapInfo->wrapId, wrapAicoreIdx,
-                          taskId);
-        SendTaskToAiCore(schDevTaskCtx, coreType, coreIdx, taskId);
-        wrapInfo->tasklist[wrapAicoreIdx] = AICORE_TASK_SUBMITTED;
-    }
-
-    inline void TryAlloPendingCoreAndSend()
-    {
-        DispatchReadyTasksImpl([this](uint32_t& c1c1v, uint32_t& c1c2v) { return GetWrapCorePendingCnt(c1c1v, c1c2v); },
-                               [this](WrapInfo* a[], uint32_t b, WrapInfo* c[], uint32_t d) {
-                                   UpdateWrapQueueForThreadByPending(a, b, c, d);
-                               });
-    }
-
-    inline void SendMixCoreTasksInRange(uint32_t head, uint32_t tail)
-    {
-        for (uint32_t idx = head; idx < tail; idx++) {
-            WrapInfo* wrapInfo = reinterpret_cast<WrapInfo*>(wrapQueueForThread_->elem[idx]);
-            switch (wrapInfo->mixResourceType) {
-                case static_cast<uint8_t>(MixResourceType::MIX_1C1V): {
-                    CheckAndSendTask(wrapInfo, WRAP_IDX_AIC, CoreType::AIC, wrapInfo->aicCoreIdx);
-                    CheckAndSendTask(wrapInfo, WRAP_IDX_AIV0, CoreType::AIV, GetWrapAiv0CoreIdx(wrapInfo->aicCoreIdx));
-                    break;
-                }
-                case static_cast<uint8_t>(MixResourceType::MIX_1C2V): {
-                    CheckAndSendTask(wrapInfo, WRAP_IDX_AIC, CoreType::AIC, wrapInfo->aicCoreIdx);
-                    uint16_t aiv0CoreIdx = GetWrapAiv0CoreIdx(wrapInfo->aicCoreIdx);
-                    CheckAndSendTask(wrapInfo, WRAP_IDX_AIV0, CoreType::AIV, aiv0CoreIdx);
-                    CheckAndSendTask(wrapInfo, WRAP_IDX_AIV1, CoreType::AIV, GetWrapAiv1CoreIdx(aiv0CoreIdx));
-                    break;
-                }
-                default:
-                    DEV_ERROR(DevCommonErr::PARAM_INVALID, "#sche.wrap.invalid_mode: illegal mixType: %hhu\n",
-                              wrapInfo->mixResourceType);
-                    break;
-            }
-        }
+        WrapCoreCandidates candidates;
+        DispatchReadyTasksImpl(
+            [this, &candidates](uint32_t& c1c1v, uint32_t& c1c2v) {
+                return GetWrapCorePendingCnt(candidates, c1c1v, c1c2v);
+            },
+            [this, &candidates](WrapInfo* a[], uint32_t b, WrapInfo* c[], uint32_t d) {
+                DispatchWrapTasksFromPendingCore(candidates, a, b, c, d);
+            });
     }
 
     inline void DispatchMixCoreTask()
     {
         RETURN_NULL_IF_NOT(isOpenMixSche);
-        bool hasAvailTask = UpdateWrapQueueForThread();
-        SendMixCoreTasksInRange(wrapQueueForThread_->head, wrapQueueForThread_->tail);
+        bool hasAvailTask = TryAllocRunningCoreAndSend();
         if (hasAvailTask) {
-            TryAlloPendingCoreAndSend();
+            TryAllocPendingCoreAndSend();
         }
     }
 
@@ -538,36 +465,6 @@ public:
         }
     }
 
-    int32_t GetWrapVecId(uint32_t taskId)
-    {
-        auto dyntask = reinterpret_cast<DynDeviceTask*>(curDevTask_);
-        auto funcId = FuncID(taskId);
-        auto opIndex = TaskID(taskId);
-        auto cceBinary = dyntask->cceBinary;
-        auto callList = dyntask->dynFuncDataCacheList[funcId].calleeList;
-        return cceBinary[callList[opIndex]].wrapVecId;
-    }
-
-    CoreType GetCoreType(uint32_t taskId)
-    {
-        auto dyntask = reinterpret_cast<DynDeviceTask*>(curDevTask_);
-        auto funcId = FuncID(taskId);
-        auto opIndex = TaskID(taskId);
-        auto cceBinary = dyntask->cceBinary;
-        auto callList = dyntask->dynFuncDataCacheList[funcId].calleeList;
-        return static_cast<CoreType>(cceBinary[callList[opIndex]].coreType);
-    }
-
-    uint8_t GetMixResourceType(uint32_t taskId)
-    {
-        auto dyntask = reinterpret_cast<DynDeviceTask*>(curDevTask_);
-        auto funcId = FuncID(taskId);
-        auto opIndex = TaskID(taskId);
-        auto cceBinary = dyntask->cceBinary;
-        auto callList = dyntask->dynFuncDataCacheList[funcId].calleeList;
-        return cceBinary[callList[opIndex]].mixResourceType;
-    }
-
     inline static int32_t GetWrapAicoreIdx(uint32_t coreType, int32_t wrapVecId)
     {
         if (coreType == static_cast<uint32_t>(CoreType::AIC)) {
@@ -577,104 +474,9 @@ public:
         }
     }
 
-    inline int32_t GetWrapAicoreIdx(uint32_t taskId)
-    {
-        auto dyntask = reinterpret_cast<DynDeviceTask*>(curDevTask_);
-        auto funcId = FuncID(taskId);
-        auto opIndex = TaskID(taskId);
-        auto cceBinary = dyntask->cceBinary;
-        auto callList = dyntask->dynFuncDataCacheList[funcId].calleeList;
-        auto coreType = cceBinary[callList[opIndex]].coreType;
-        auto wrapVecId = cceBinary[callList[opIndex]].wrapVecId;
-        return GetWrapAicoreIdx(coreType, wrapVecId);
-    }
-
-    bool IsBindedWrapId(uint32_t taskId, uint32_t& wrapId)
-    {
-        RETURN_RET_IF_NOT(isOpenMixSche, false);
-        int id = GetWrapId(taskId);
-        if (id == -1)
-            return false;
-        wrapId = id;
-        return true;
-    }
-
-    inline void PushTaskToTasklist(uint32_t wrapId, uint32_t taskId, uint32_t wrapAicoreIdx, uint8_t mixResourceType)
-    {
-        auto funcId = FuncID(taskId);
-        auto opWrapId = GetOpWrapID(wrapId);
-        auto dyntask = reinterpret_cast<DynDeviceTask*>(curDevTask_);
-        auto opWrapOffsetList = dyntask->devTask.mixTaskData.opWrapOffsetList[funcId];
-        if (unlikely(opWrapOffsetList == nullptr)) {
-            DEV_ERROR(DevCommonErr::NULLPTR, "#sche.resolve.wrap: the funcIndex:%u have wrapId but not found: %u!",
-                      funcId, wrapId);
-            return;
-        }
-        uint16_t offset = opWrapOffsetList[opWrapId];
-        if (offset != INVALID_UINT16_IDX) {
-            WrapInfo* wrapInfo = &readyWrapCoreFunctionQue_->elem[offset];
-            wrapInfo->tasklist[wrapAicoreIdx] = taskId;
-            return;
-        }
-
-        WrapInfoQueueLock(readyWrapCoreFunctionQue_);
-        offset = opWrapOffsetList[opWrapId];
-        if (unlikely(offset != INVALID_UINT16_IDX)) {
-            WrapInfoQueueUnLock(readyWrapCoreFunctionQue_);
-            WrapInfo* wrapInfo = &readyWrapCoreFunctionQue_->elem[offset];
-            wrapInfo->tasklist[wrapAicoreIdx] = taskId;
-            return;
-        }
-
-        // add a new wrapinfo
-        opWrapOffsetList[opWrapId] = readyWrapCoreFunctionQue_->tail;
-        WrapInfo* wrapInfo = &readyWrapCoreFunctionQue_->elem[readyWrapCoreFunctionQue_->tail++];
-        wrapInfo->mixResourceType = mixResourceType; // 需在锁释放前赋值，锁释放其它线程就能立即绑核、下发
-        wrapInfo->tasklist[WRAP_IDX_AIC] = AICORE_TASK_INIT;
-        wrapInfo->tasklist[WRAP_IDX_AIV0] = AICORE_TASK_INIT;
-        wrapInfo->tasklist[WRAP_IDX_AIV1] = AICORE_TASK_INIT;
-        wrapInfo->tasklist[wrapAicoreIdx] = taskId;
-        WrapInfoQueueUnLock(readyWrapCoreFunctionQue_);
-
-        wrapInfo->wrapId = wrapId;
-    }
-
-    inline void ResolveDepForMixCore(uint32_t taskId, uint32_t wrapId, const DevCceBinary* cceBinary)
-    {
-        // resolve dep, if has available core, send task directly, else call PushTaskToTasklist, try to send task in
-        // next loop
-        DEV_VERBOSE_DEBUG("taskId = %u, wrapId = %u", taskId, wrapId);
-        int32_t wrapAicoreIdx = GetWrapAicoreIdx(cceBinary->coreType, cceBinary->wrapVecId);
-        PushTaskToTasklist(wrapId, taskId, wrapAicoreIdx, cceBinary->mixResourceType);
-        return;
-    }
-
-    inline void SendMixTasksToCore(const uint32_t* taskIds, uint8_t mixResourceType, uint32_t aicIdx, uint32_t aivIdx0)
-    {
-        SendTaskToAiCore(schDevTaskCtx, CoreType::AIC, aicIdx, taskIds[WRAP_IDX_AIC]);
-        SendTaskToAiCore(schDevTaskCtx, CoreType::AIV, aivIdx0, taskIds[WRAP_IDX_AIV0]);
-        coreStatusMgr_->RemoveRunAndPendCoreIdx(aicIdx, CORE_IDX_AIC);
-        coreStatusMgr_->RemoveRunAndPendCoreIdx(aivIdx0, CORE_IDX_AIV);
-        if (mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
-            uint32_t aivIdx1 = aivIdx0 + 1;
-            SendTaskToAiCore(schDevTaskCtx, CoreType::AIV, aivIdx1, taskIds[WRAP_IDX_AIV1]);
-            coreStatusMgr_->RemoveRunAndPendCoreIdx(aivIdx1, CORE_IDX_AIV);
-        }
-    }
-
     inline void PushMixToReadyQueue(const uint32_t* taskIds, uint8_t mixResourceType, uint32_t wrapId)
     {
-        auto funcId = FuncID(taskIds[WRAP_IDX_AIC]);
-        auto opWrapId = GetOpWrapID(wrapId);
-        auto dyntask = reinterpret_cast<DynDeviceTask*>(curDevTask_);
-        auto opWrapOffsetList = dyntask->devTask.mixTaskData.opWrapOffsetList[funcId];
-        if (unlikely(opWrapOffsetList == nullptr)) {
-            DEV_ERROR(DevCommonErr::NULLPTR, "#sche.resolve.wrap: the funcIndex:%u have wrapId but not found: %u!",
-                      funcId, wrapId);
-            return;
-        }
         WrapInfoQueueLock(readyWrapCoreFunctionQue_);
-        opWrapOffsetList[opWrapId] = readyWrapCoreFunctionQue_->tail;
         WrapInfo* wrapInfo = &readyWrapCoreFunctionQue_->elem[readyWrapCoreFunctionQue_->tail++];
         wrapInfo->mixResourceType = mixResourceType;
         wrapInfo->tasklist[WRAP_IDX_AIC] = taskIds[WRAP_IDX_AIC];
@@ -688,15 +490,28 @@ public:
     {
         uint32_t aicIdx = GetWrapAicCoreIdx(coreIdx);
         uint32_t aivIdx0 = aicIdx * AIV_NUM_PER_AI_CORE + aicValidNum_;
-
-        bool coreAvailable = (mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C1V)) ?
-                                 (coreStatusMgr_->GetCoreIdxPosition(aicIdx) != INVALID_COREIDX_POSITION &&
-                                  coreStatusMgr_->GetCoreIdxPosition(aivIdx0) != INVALID_COREIDX_POSITION) :
-                                 (coreStatusMgr_->GetCoreIdxPosition(aicIdx) != INVALID_COREIDX_POSITION &&
-                                  coreStatusMgr_->GetCoreIdxPosition(aivIdx0) != INVALID_COREIDX_POSITION &&
-                                  coreStatusMgr_->GetCoreIdxPosition(aivIdx0 + 1) != INVALID_COREIDX_POSITION);
+        bool is1c1v = mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C1V);
+        bool coreAvailable = coreStatusMgr_->GetCoreIdxPosition(aicIdx) != INVALID_COREIDX_POSITION &&
+                             coreStatusMgr_->GetCoreIdxPosition(aivIdx0) != INVALID_COREIDX_POSITION;
+        // 1C2V additionally requires the second AIV core.
+        if (!is1c1v) {
+            coreAvailable = coreAvailable &&
+                            coreStatusMgr_->GetCoreIdxPosition(aivIdx0 + 1) != INVALID_COREIDX_POSITION;
+        }
 
         if (unlikely(!coreAvailable)) {
+            bool pendingCoreAvailable = pendingIds_[aicIdx] == AICORE_TASK_INIT &&
+                                        pendingIds_[aivIdx0] == AICORE_TASK_INIT;
+            if (!is1c1v) {
+                pendingCoreAvailable = pendingCoreAvailable && pendingIds_[aivIdx0 + 1] == AICORE_TASK_INIT;
+            }
+            // Dispatch directly when all required pending cores are available.
+            if (pendingCoreAvailable) {
+                SendMixTasksToCore(taskIds, mixResourceType, aicIdx, aivIdx0);
+                TryRemoveMixCoreIdxFromPending(mixResourceType, aicIdx, aivIdx0);
+                return;
+            }
+
             uint32_t aicReadyCnt = coreStatusMgr_->GetCoreRunReadyCnt(CORE_IDX_AIC);
             if (!GetAvailableWrapCoreIdx(mixResourceType, aicReadyCnt, aicIdx, aivIdx0)) {
                 auto wrapId = static_cast<uint32_t>(GetWrapId(taskIds[WRAP_IDX_AIC]));
@@ -706,40 +521,7 @@ public:
         }
 
         SendMixTasksToCore(taskIds, mixResourceType, aicIdx, aivIdx0);
-    }
-
-    inline void UpdateFinishIdForMixCore(uint32_t finishId, CoreType coreType, uint32_t coreIdx)
-    {
-        RETURN_NULL_IF_NOT(isOpenMixSche);
-        (void)coreType;
-        (void)coreIdx;
-        int32_t id = GetWrapId(finishId);
-        if (id == -1)
-            return;
-        uint32_t wrapId = id;
-        auto funcId = FuncID(finishId);
-        auto opWrapId = GetOpWrapID(wrapId);
-        auto dyntask = reinterpret_cast<DynDeviceTask*>(curDevTask_);
-        auto opWrapOffsetList = dyntask->devTask.mixTaskData.opWrapOffsetList[funcId];
-        uint16_t offset = opWrapOffsetList[opWrapId];
-        if (offset == INVALID_UINT16_IDX) { // 碰到直接下发的任务，不会入readyWrapCoreFunctionQue_
-            return;
-        }
-        WrapInfo* wrapInfo = &readyWrapCoreFunctionQue_->elem[offset];
-
-        int32_t wrapAicoreIdx = GetWrapAicoreIdx(finishId);
-        wrapInfo->tasklist[wrapAicoreIdx] = AICORE_TASK_STOP;
-
-        if (IsMixTaskFinish(wrapInfo)) { // all tasks for this wrap finish
-            for (uint32_t idx = wrapQueueForThread_->head; idx < wrapQueueForThread_->tail; idx++) {
-                auto tmpInfo = reinterpret_cast<WrapInfo*>(wrapQueueForThread_->elem[idx]);
-                if (tmpInfo->wrapId == wrapId) {
-                    DEV_VERBOSE_DEBUG("wrapId %u 's all tasks finish, release wrapcore", wrapId);
-                    std::swap(wrapQueueForThread_->elem[idx], wrapQueueForThread_->elem[--wrapQueueForThread_->tail]);
-                    return;
-                }
-            }
-        }
+        RemoveMixRunAndPendCoreIdx(mixResourceType, aicIdx, aivIdx0);
     }
 
     // for die-to-die schedule
@@ -755,7 +537,7 @@ public:
 
     inline ReadyCoreFunctionQueue* GetDieReadyQueue(CoreType type, ReadyCoreFunctionQueue* defaultReadyQue)
     {
-        if (!GetIsMixarch() || dieId_ == DieId::DIE_MIX || dieId_ == DieId::DIE_UNKNOWN) {
+        if (!IsMixArch() || dieId_ == DieId::DIE_MIX || dieId_ == DieId::DIE_UNKNOWN) {
             return defaultReadyQue;
         }
         size_t dieIndex = static_cast<size_t>(dieId_);

@@ -30,7 +30,6 @@ enum class MachineStatus { START = 0, FINISH = 1, STOP = 2 };
 #define WRAP_IDX_AIC 0
 #define WRAP_IDX_AIV0 1
 #define WRAP_IDX_AIV1 2
-static constexpr uint16_t INVALID_UINT16_IDX = 0xffff;
 
 struct StaticReadyCoreFunctionQueue {
     uint32_t head;
@@ -41,7 +40,6 @@ struct StaticReadyCoreFunctionQueue {
 struct WrapInfo {
     uint32_t wrapId;
     uint32_t tasklist[MAX_WRAP_TASK_NUM]; // 顺序C、V1、V2
-    uint16_t aicCoreIdx;                  // 只记录aic，aivCoreIdx通过计算得到
     uint8_t mixResourceType;
 };
 

@@ -53,8 +53,6 @@ struct MixTaskDataCache {
     WrapInfoQueue queue;
     uint64_t wrapIdNum;
     uint64_t opWrapList[MAX_STITCH_FUNC_NUM];
-    uint16_t* opWrapOffsetList[MAX_STITCH_FUNC_NUM];
-    StaticReadyCoreFunctionQueue wrapQueueForThread[MAX_SCHEDULE_AICPU_NUM];
 };
 
 struct DynFuncDataCache {
@@ -409,8 +407,6 @@ struct DevControlFlowCache {
     void DieReadyQueueDataBackup(DynDeviceTaskBase* base);
 
     void DieReadyQueueDataRestore(DynDeviceTaskBase* base);
-
-    bool BackupOpWrapOffsetList(DynDeviceTaskBase* base, MixTaskDataCache* mixTaskDataBackup);
 
     void MixTaskDataBackup(DynDeviceTaskBase* base);
 

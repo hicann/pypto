@@ -975,7 +975,7 @@ private:
             }
         }
         auto& wrapManager = devTaskCtx->GetWrapManager();
-        if (wrapManager.GetIsMixarch()) {
+        if (wrapManager.IsMixArch()) {
             ReadyCoreFunctionQueue* dieReadyQue = (type == CoreType::AIC) ? wrapManager.GetDieReadyAicQue() :
                                                                             wrapManager.GetDieReadyAivQue();
             if (dieReadyQue != readyQue) {
@@ -1101,18 +1101,7 @@ private:
         pendingResolveIndexList_[coreIdx] = 0;
         devTaskCtx->sendCnt[static_cast<int>(type)]++;
 
-        DEV_IF_VERBOSE_DEBUG
-        {
-            uint32_t wrapId = 0;
-            sendTask_[coreIdx].push_back(TaskInfo(coreIdx, encodeTaskId, devTaskCtx->TaskId()));
-            if (devTaskCtx->GetWrapManager().IsBindedWrapId(newTask, wrapId)) {
-                DEV_WARN("newTask[%lu][%lx] is mix task, but core[%d] is available!", newTask, newTask, coreIdx);
-            }
-            if (!devTaskCtx->GetWrapManager().IsBindedWrapId(newTask, wrapId)) {
-                DEV_WARN("newTask[%lu][%lx] is not mix task, but core[%d] is not available!", newTask, newTask,
-                         coreIdx);
-            }
-        }
+        DEV_IF_VERBOSE_DEBUG { sendTask_[coreIdx].push_back(TaskInfo(coreIdx, encodeTaskId, devTaskCtx->TaskId())); }
         DEV_VERBOSE_DEBUG("Send task %lx, origin taskid %lx, at core %d ,type:%d.", encodeTaskId, newTask, coreIdx,
                           static_cast<int>(type));
     }
@@ -1157,7 +1146,7 @@ private:
             // send task to available core
             ReadyCoreFunctionQueue* readyQue = (type == CoreType::AIC) ? devTaskCtx->readyAicCoreFunctionQue :
                                                                          devTaskCtx->readyAivCoreFunctionQue;
-            if (devTaskCtx->GetWrapManager().GetIsMixarch()) {
+            if (devTaskCtx->GetWrapManager().IsMixArch()) {
                 ReadyCoreFunctionQueue* dieReadyQue = (type == CoreType::AIC) ?
                                                           devTaskCtx->GetWrapManager().GetDieReadyAicQue() :
                                                           devTaskCtx->GetWrapManager().GetDieReadyAivQue();
@@ -1223,7 +1212,7 @@ private:
                               aicIndex);
             if (devTaskCtx->readyCount[aicIndex] > 0) {
                 ReadyCoreFunctionQueue* targetReadyQue = devTaskCtx->readyAicCoreFunctionQue;
-                if (devTaskCtx->GetWrapManager().GetIsMixarch() &&
+                if (devTaskCtx->GetWrapManager().IsMixArch() &&
                     EnableDieScheduling(devTaskCtx, CoreType::AIC, devTaskCtx->readyIds[aicIndex][0])) {
                     targetReadyQue = devTaskCtx->GetWrapManager().GetDieReadyAicQue();
                 }
@@ -1246,7 +1235,7 @@ private:
                               aivIndex);
             if (devTaskCtx->readyCount[aivIndex] > 0) {
                 ReadyCoreFunctionQueue* targetReadyQue = devTaskCtx->readyAivCoreFunctionQue;
-                if (devTaskCtx->GetWrapManager().GetIsMixarch() &&
+                if (devTaskCtx->GetWrapManager().IsMixArch() &&
                     EnableDieScheduling(devTaskCtx, CoreType::AIV, devTaskCtx->readyIds[aivIndex][0])) {
                     targetReadyQue = devTaskCtx->GetWrapManager().GetDieReadyAivQue();
                 }
@@ -1287,9 +1276,6 @@ private:
             pendingIds_[coreIdx] = AICORE_TASK_INIT;
             pendingResolveIndexList_[coreIdx] = 0;
             context_->coreStatusMgr.AddRunAndPendCoreIdx(coreIdx, static_cast<int>(type));
-
-            SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(finTaskId));
-            deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(finTaskId, type, coreIdx);
         }
         return ret;
     }
@@ -1352,15 +1338,8 @@ private:
             context_->coreStatusMgr.AddRunAndPendCoreIdx(coreIdx, static_cast<int>(type));
             if (runningIdValue != AICORE_TASK_INIT) {
                 RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValue, runningResolveIndexBaseValue);
-                if (archInfo_ == ArchInfo::DAV_3510) { // only mix can in this way
-                    SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(
-                        ParallelIndex(runningIdValue));
-                    deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValue, type, coreIdx);
-                }
             }
             RecordResolveTask(ctx, finishCnt, coreIdx, pendingIdValue, pendingResolveIndexBaseValue);
-            SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(finTaskId));
-            deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(finTaskId, type, coreIdx);
         } else if (unlikely(finTaskId == pendingIdRef && aicpuCallCode != 0)) {
             // pending task is copyout, reolve both running and pending task.
             DEV_VERBOSE_DEBUG("Pending Copyout: core:%d pending:%x,%d running:%x,%d", coreIdx, pendingIdRef,
@@ -1377,11 +1356,6 @@ private:
             context_->coreStatusMgr.AddPendReadyCoreIdx(static_cast<int>(type));
             if (runningIdValueCopyout != AICORE_TASK_INIT) {
                 RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValueCopyout, runningResolveIndexBaseValueCopyout);
-                if (archInfo_ == ArchInfo::DAV_3510) { // only mix can in this way
-                    SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(
-                        ParallelIndex(runningIdValueCopyout));
-                    deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValueCopyout, type, coreIdx);
-                }
             }
             ret = ResolveCopyOutDepDyn(copyOutResolveCounter, pendingIdValue, pendingResolveIndexBaseValue,
                                        resloveParallelIdx);
@@ -1402,11 +1376,6 @@ private:
             context_->coreStatusMgr.AddPendReadyCoreIdx(static_cast<int>(type));
             if (runningIdValueAck != AICORE_TASK_INIT) {
                 RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValueAck, runningResolveIndexBaseValueAck);
-                if (archInfo_ == ArchInfo::DAV_3510) { // only mix can in this way
-                    SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(
-                        ParallelIndex(runningIdValueAck));
-                    deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValueAck, type, coreIdx);
-                }
             }
         } else if (finTaskId == runningIdRef && finTaskState == TASK_FIN_STATE) {
             // running task is finished, resolve running task. Pending task is unmodified
@@ -1420,10 +1389,6 @@ private:
                 context_->coreStatusMgr.AddRunReadyCoreIdx(coreIdx, static_cast<int>(type));
             }
             RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValue, runningResolveIndexBaseValue);
-            if (archInfo_ == ArchInfo::DAV_3510) { // only mix can in this way
-                SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(runningIdValue));
-                deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValue, type, coreIdx);
-            }
         } else if (unlikely(finTaskId == runningIdRef && aicpuCallCode != 0)) {
             // running task is copyout, resolve running task. Pending task is unmodified
             DEV_VERBOSE_DEBUG("Running copyout: core:%d pending:%x,%d running:%x,%d", coreIdx, pendingIdRef,
@@ -1516,7 +1481,7 @@ private:
                                                    devTaskCtx->readyAicCoreFunctionQue :
                                                    devTaskCtx->readyAivCoreFunctionQue;
             auto& wrapManager = devTaskCtx->GetWrapManager();
-            if (wrapManager.GetIsMixarch() &&
+            if (wrapManager.IsMixArch() &&
                 EnableDieScheduling(devTaskCtx, static_cast<CoreType>(coreType), devTaskCtx->readyIds[coreType][0])) {
                 readyQue = coreType == static_cast<int>(CoreType::AIC) ? wrapManager.GetDieReadyAicQue() :
                                                                          wrapManager.GetDieReadyAivQue();
@@ -1561,9 +1526,6 @@ private:
         auto& duppedData = dyntask->GetDynFuncDataCacheList()[origfunc].duppedData;
         auto& stitchList = duppedData->GetOperationStitch(origop);
         auto cceBinary = dyntask->cceBinary;
-        auto& wrapManager = deviceTaskCtx->GetWrapManager();
-        uint32_t wrapId = 0;
-
         for (auto* node = stitchList.Head(); node != nullptr; node = node->Next()) {
             uint32_t listSize = node->Size();
             for (uint32_t i = 0; i < listSize; i++) {
@@ -1590,8 +1552,6 @@ private:
                     deviceTaskCtx->resolveHubCnt++;
                 } else if (coreType == static_cast<int>(MachineType::AICPU)) {
                     PushAicpuTaskQueue(deviceTaskCtx, id);
-                } else if (wrapManager.IsBindedWrapId(id, wrapId)) {
-                    wrapManager.ResolveDepForMixCore(id, wrapId, &cceBinary[callList[opIndex]]);
                 } else {
                     ret = PushReadyTask(deviceTaskCtx, static_cast<int>(coreType), id);
                     if (unlikely(ret != DEVICE_MACHINE_OK)) {
@@ -1689,7 +1649,6 @@ private:
         auto dyntask = reinterpret_cast<DynDeviceTask*>(deviceTaskCtx->GetDeviceTask());
         auto funcId = FuncID(finishId);
         auto opIndex = TaskID(finishId);
-        auto& wrapManager = deviceTaskCtx->GetWrapManager();
 
         auto cceBinary = dyntask->cceBinary;
         auto func = dyntask->dynFuncDataCacheList[funcId].devFunc;
@@ -1703,7 +1662,6 @@ private:
         const int* succIndexList = func->GetOperationDepGraphCopyOutResolveSuccIndexAddr(opIndex, succIndexSize);
         size_t succSize;
         auto succList = func->GetOperationDepGraphSuccAddr(opIndex, succSize);
-        uint32_t wrapId = 0;
         for (size_t i = succIndexList[resolveIndexBase]; i < succSize; i++) {
             auto succIdx = succList[i];
             if (predCounts[succIdx] == 1 || __atomic_sub_fetch(&predCounts[succIdx], 1, __ATOMIC_RELAXED) == 0) {
@@ -1722,8 +1680,6 @@ private:
                     deviceTaskCtx->resolveHubCnt++;
                 } else if (unlikely(coreType == static_cast<int>(MachineType::AICPU))) {
                     PushAicpuTaskQueue(deviceTaskCtx, id);
-                } else if (wrapManager.IsBindedWrapId(id, wrapId)) {
-                    wrapManager.ResolveDepForMixCore(id, wrapId, &cceBinary[callList[succIdx]]);
                 } else {
                     ret = PushReadyTask(deviceTaskCtx, static_cast<int>(coreType), id);
                     if (unlikely(ret != DEVICE_MACHINE_OK)) {
@@ -1748,7 +1704,6 @@ private:
         auto dyntask = reinterpret_cast<DynDeviceTask*>(deviceTaskCtx->GetDeviceTask());
         auto funcId = FuncID(taskId);
         auto opIndex = TaskID(taskId);
-        auto& wrapManager = deviceTaskCtx->GetWrapManager();
 
         auto cceBinary = dyntask->cceBinary;
         auto func = dyntask->dynFuncDataCacheList[funcId].devFunc;
@@ -1759,7 +1714,6 @@ private:
         const int* succIndexList = func->GetOperationDepGraphCopyOutResolveSuccIndexAddr(opIndex, succIndexSize);
         size_t succSize;
         const int* succList = func->GetOperationDepGraphSuccAddr(opIndex, succSize);
-        uint32_t wrapId = 0;
         // here we don't use resolveIndexBase + 1, because at the beginning, resolveIndexBase is 0. And we resolve from
         // 0.
         for (int i = succIndexList[resolveIndexBase]; i < succIndexList[currResolveIndex + 1]; i++) {
@@ -1776,8 +1730,6 @@ private:
                 } else if (unlikely(coreType == static_cast<int>(CoreType::HUB_MIX))) {
                     ResolveHubMixDepDyn(deviceTaskCtx, id);
                     deviceTaskCtx->resolveHubCnt++;
-                } else if (wrapManager.IsBindedWrapId(id, wrapId)) {
-                    wrapManager.ResolveDepForMixCore(id, wrapId, &cceBinary[callList[succIdx]]);
                 } else if (unlikely(coreType == static_cast<int>(MachineType::AICPU))) {
                     PushAicpuTaskQueue(deviceTaskCtx, id);
                 } else {

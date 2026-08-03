@@ -52,21 +52,11 @@ void DeviceTaskContext::ProcessWrapQueue(DynDeviceTask* dyntask, uint32_t wrapId
     info->wrapId = wrapId;
     info->mixResourceType = wrapLeaf->mixResourceType;
 
-    auto opWrapOffsetList = reinterpret_cast<uint16_t*>(dyntask->devTask.mixTaskData.opWrapOffsetList[funcIndex]);
-    if (unlikely(opWrapOffsetList == nullptr)) {
-        DEV_ERROR(DevCommonErr::NULLPTR, "#ctrl.earlydep.resolve.wrap: the funcIndex:%d have wrapId but not found: %u!",
-                  funcIndex, wrapId);
-        return;
-    }
-    auto opWrapId = GetOpWrapID(wrapId);
-    opWrapOffsetList[opWrapId] = wrapQueue->tail;
-
     uint32_t wrapAicoreIdx = GetWrapAicoreIdx(wrapLeaf->coreType, wrapLeaf->wrapVecId);
     info->tasklist[WRAP_IDX_AIC] = AICORE_TASK_INIT;
     info->tasklist[WRAP_IDX_AIV0] = AICORE_TASK_INIT;
     info->tasklist[WRAP_IDX_AIV1] = AICORE_TASK_INIT;
     info->tasklist[wrapAicoreIdx] = MakeTaskID(funcIndex, opIndex);
-    info->aicCoreIdx = INVALID_UINT16_IDX;
     wrapQueue->tail++;
 }
 
@@ -82,37 +72,6 @@ WrapInfoQueue* DeviceTaskContext::AllocWrapQueue(DynDeviceTask* dyntask)
     q->capacity = dyntask->devTask.mixTaskData.wrapIdNum;
     q->elem = reinterpret_cast<WrapInfo*>(q + 1);
     return q;
-}
-
-void DeviceTaskContext::InitWrapQueueForThread(DynDeviceTask* dyntask)
-{
-    uint32_t size = sizeof(StaticReadyCoreFunctionQueue) + dyntask->devTask.mixTaskData.wrapIdNum * sizeof(uint64_t);
-    for (size_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; i++) {
-        WsAllocation qalloc = ControlFlowAllocateSlab(
-            devProg_, size, workspace_->SlabAlloc(size, WsAicpuSlabMemType::WRAP_QUEUE_FOR_THREAD));
-        StaticReadyCoreFunctionQueue* q = qalloc.As<StaticReadyCoreFunctionQueue>();
-        q->head = 0;
-        q->tail = 0;
-        q->elem = reinterpret_cast<uint64_t*>(q + 1);
-        dyntask->devTask.mixTaskData.wrapQueueForThread[i] = PtrToValue(q);
-    }
-}
-
-void DeviceTaskContext::InitWrapOffsetList(DynDeviceTask* dyntask)
-{
-    for (size_t i = 0; i < dyntask->dynFuncDataCacheListSize; i++) {
-        uint32_t funcWrapIdNum = dyntask->dynFuncDataCacheList[i].devFunc->wrapIdNum_;
-        if (funcWrapIdNum == 0) {
-            dyntask->devTask.mixTaskData.opWrapOffsetList[i] = nullptr;
-            continue;
-        }
-        uint32_t size = dyntask->dynFuncDataCacheList[i].devFunc->wrapIdNum_ * sizeof(uint16_t);
-        WsAllocation qalloc = ControlFlowAllocateSlab(
-            devProg_, size, workspace_->SlabAlloc(size, WsAicpuSlabMemType::WRAP_OFFSET_LIST));
-        uint16_t* q = qalloc.As<uint16_t>();
-        dyntask->devTask.mixTaskData.opWrapOffsetList[i] = q;
-        memset_s(q, size, INVALID_UINT16_IDX, size);
-    }
 }
 
 bool DeviceTaskContext::IsMixArch(DevAscendProgram* devProg) { return devProg->devArgs.archInfo == ArchInfo::DAV_3510; }

@@ -819,30 +819,6 @@ uint32_t DeviceWorkspaceAllocator::WrapQueSlabMemObjSize()
     }
 }
 
-uint32_t DeviceWorkspaceAllocator::WrapQueForThreadSlabMemObjSize()
-{
-    if (devProg_->devArgs.archInfo == ArchInfo::DAV_3510) {
-        uint32_t size = sizeof(StaticReadyCoreFunctionQueue) + devProg_->stitchFunctionsize * sizeof(uint64_t);
-        return size;
-    } else {
-        return 0;
-    }
-}
-
-uint32_t DeviceWorkspaceAllocator::WrapOffsetListSlabMemObjSize()
-{
-    if (devProg_->devArgs.archInfo == ArchInfo::DAV_3510) {
-        uint32_t maxWrapIdNum = 0;
-        for (uint32_t i = 0; i < devProg_->GetFunctionSize(); i++) {
-            maxWrapIdNum = std::max<uint32_t>(maxWrapIdNum,
-                                              static_cast<uint32_t>(devProg_->GetFunction(i)->wrapIdNum_));
-        }
-        return maxWrapIdNum * sizeof(uint16_t);
-    } else {
-        return 0;
-    }
-}
-
 /* 根据当前算子的业务模型分析计算出slab 管理内存页大小, 基于当前可评估的所有内存类型的最大值评估 */
 uint32_t DeviceWorkspaceAllocator::CalcAicpuMetaSlabAlloctorSlabMemObjmaxSize()
 {
