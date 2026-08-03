@@ -18,6 +18,7 @@
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "interface/utils/common.h"
 #include <iostream>
 #include <vector>
 #include <numeric>
@@ -28,25 +29,10 @@
 #include <unordered_set>
 #include <queue>
 #include <tuple>
-#include <sstream>
 
 #define MODULE_NAME "ReduceCopy"
 
 namespace npu::tile_fwk {
-
-static std::string IntVecToString(const std::vector<int>& vec)
-{
-    std::ostringstream ss;
-    ss << "[";
-    for (size_t idx = 0; idx < vec.size(); idx++) {
-        ss << vec[idx];
-        if (idx != vec.size() - 1) {
-            ss << ", ";
-        }
-    }
-    ss << "]";
-    return ss.str();
-}
 
 static bool IsValidMergeGroup(const std::vector<int>& mergeGroup, const std::unordered_set<int>& noMergeSubgraph)
 {
@@ -60,6 +46,9 @@ static bool IsValidMergeGroup(const std::vector<int>& mergeGroup, const std::uno
 
 Status ReduceCopyMerge::RunOnFunction(Function& function)
 {
+    APASS_LOG_DEBUG_F(Elements::Operation,
+                      "***************************** ReduceCopy Pass start, graph: %s *****************************",
+                      function.GetMagicName().c_str());
     if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
         APASS_LOG_INFO_F(Elements::Operation, "Platform not support CV mix graph, skip ReduceCopy Pass.");
         return SUCCESS;
@@ -97,6 +86,9 @@ Status ReduceCopyMerge::RunOnFunction(Function& function)
         APASS_LOG_WARN_F(Elements::Operation, "CV mix merging was not performed, since fusion would degrade "
                                               "performance or may cause loop on this computation graph.");
     }
+    APASS_LOG_INFO_F(Elements::Operation, "ReduceCopy result: graph=%s autoMix=%s before=%zu after=%zu",
+                     function.GetMagicName().c_str(), enableAutoMix ? "True" : "False", subgraphNumBefore,
+                     function.GetTotalSubGraphCount());
     return SUCCESS;
 }
 
@@ -134,7 +126,7 @@ void ReduceCopyMerge::CombineForkSubgraph(Function& function, MergeInput& mergeI
             mergeInput.mergeGroup[i].insert(mergeInput.mergeGroup[i].end(), combinedGroup.begin(), combinedGroup.end());
             mergeInput.isValidMergeGroup[i] = IsValidMergeGroup(mergeInput.mergeGroup[i], noMergeSubgraph);
             APASS_LOG_DEBUG_F(Elements::Operation, "merge group %d after combine fork: %s, isEnforce: %s, isValid: %s.",
-                              i, IntVecToString(mergeInput.mergeGroup[i]).c_str(),
+                              i, IntVecToStr(mergeInput.mergeGroup[i]).c_str(),
                               mergeInput.isEnforceMergeGroup[i] ? "True" : "False",
                               mergeInput.isValidMergeGroup[i] ? "True" : "False");
         }
@@ -300,6 +292,8 @@ void ReduceCopyMerge::RecordBoundaryTensorInfo(LogicalTensorPtr& tensor, MergeIn
 {
     BoundaryTensorInfo tensorInfo;
     tensorInfo.tensorMagic = tensor->GetMagic();
+    tensorInfo.isDDR = tensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR ||
+                       tensor->GetMemoryTypeToBe() == MemoryType::MEM_DEVICE_DDR;
     std::set<int> producerSubgraphs;
     std::set<int> consumerSubgraphs;
     for (auto& op : tensor->GetProducers()) {
@@ -340,7 +334,7 @@ void ReduceCopyMerge::UpdateConnectRecord(Function& function, MergeInput& mergeI
         std::vector<int> mergeGroup(connectGraphs.begin(), connectGraphs.end());
         tensorToMergeGroup[tensorMagic] = mergeGroup;
         APASS_LOG_DEBUG_F(Elements::Operation, "Found boundary tensor %d of subgraphs %s.", tensor->GetMagic(),
-                          IntVecToString(mergeGroup).c_str());
+                          IntVecToStr(mergeGroup).c_str());
         mergeGroupToPriority[mergeGroup] += tensorSize;
         if (IsEnforceMergeBoundary(tensor)) {
             APASS_LOG_DEBUG_F(Elements::Operation, "----boundary tensor %d is marked as enforced.", tensor->GetMagic());
@@ -408,7 +402,7 @@ void ReduceCopyMerge::UpdateMergeInput(MergeInput& mergeInput, std::multimap<int
         mergeInput.isEnforceMergeGroup.push_back(isEnforce);
         mergeInput.isValidMergeGroup.push_back(IsValidMergeGroup(it->second, noMergeSubgraph));
         APASS_LOG_DEBUG_F(Elements::Operation, "merge group %d: %s, isEnforce: %s.", groupIdx,
-                          IntVecToString(it->second).c_str(), isEnforce ? "True" : "False");
+                          IntVecToStr(it->second).c_str(), isEnforce ? "True" : "False");
         groupIdx++;
     }
 }
@@ -461,14 +455,6 @@ void MixGraphMerger::Initialize(const MergeInput& input)
     for (int i = 0; i < input.numSubgraph; ++i) {
         mOutput.subgraphIdUpdated[i] = i;
     }
-    estimateInput.execTime.resize(input.numSubgraph);
-    estimateInput.isCube.resize(input.numSubgraph);
-    estimateInput.outGraph = input.subGraphOutGraph;
-    estimateInput.inGraph = input.subGraphInGraph;
-    for (int i = 0; i < input.numSubgraph; ++i) {
-        estimateInput.execTime[i] = input.subgraphAICLatency[i] + input.subgraphAIVLatency[i];
-        estimateInput.isCube[i] = (input.subgraphAICLatency[i] > 0 ? true : false);
-    }
     InitBoundaryTensorIndex();
 }
 
@@ -481,6 +467,21 @@ void MixGraphMerger::InitBoundaryTensorIndex()
         return;
     }
     mRootToBoundaryTensorIds = mInput.subgraphToBoundaryTensorIds;
+    // 出度0 sink: 不作为任何 boundary tensor 的 producer 的子图 (即最终输出端点)
+    std::vector<bool> isProducer(mInput.numSubgraph, false);
+    for (const auto& bt : mInput.boundaryTensors) {
+        for (int s : bt.producerSubgraphs) {
+            if (s >= 0 && s < mInput.numSubgraph) {
+                isProducer[s] = true;
+            }
+        }
+    }
+    mGlobalOutputSinks.clear();
+    for (int i = 0; i < mInput.numSubgraph; ++i) {
+        if (!isProducer[i]) {
+            mGlobalOutputSinks.insert(i);
+        }
+    }
 }
 
 int MixGraphMerger::FindParent(int x)
@@ -637,43 +638,12 @@ bool MixGraphMerger::CheckLatencyConstraint(const std::vector<int>& actualGroup)
     return true;
 }
 
-bool MixGraphMerger::CheckMergeBenefit(const std::vector<int>& actualGroup)
-{
-    std::unordered_set<int> mergedRoot(actualGroup.begin(), actualGroup.end());
-    std::vector<std::set<int>> originalGroup;
-    std::vector<std::set<int>> mergedGroup;
-    std::unordered_map<int, std::set<int>> rootToNodes;
-    for (size_t i = 0; i < mParent.size(); i++) {
-        int root = FindParent(i);
-        rootToNodes[root].insert(i);
-    }
-    mergedGroup.push_back({});
-    for (auto& pr : rootToNodes) {
-        originalGroup.push_back(pr.second);
-        if (mergedRoot.count(pr.first) > 0) {
-            mergedGroup[0].insert(pr.second.begin(), pr.second.end());
-        } else {
-            mergedGroup.push_back(pr.second);
-        }
-    }
-    EstimateExecTime originalTimeEstimator;
-    int originalTime = originalTimeEstimator.Estimate(estimateInput, originalGroup);
-    EstimateExecTime mergedTimeEstimator;
-    int mergedTime = mergedTimeEstimator.Estimate(estimateInput, mergedGroup);
-
-    APASS_LOG_DEBUG_F(Elements::Operation, "Estimate exec time before merge: %d, after merge: %d.", originalTime,
-                      mergedTime);
-
-    if (mergedTime > originalTime) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Merge skipped: estimate merged exec time > original exec time.");
-        return false;
-    }
-    return true;
-}
-
 bool MixGraphMerger::IsInvalidMergedInnerTensor(int tensorId, const std::unordered_set<int>& mergedRoots)
 {
     const auto& tensorInfo = mInput.boundaryTensors[tensorId];
+    if (!tensorInfo.isDDR) {
+        return false;
+    }
     bool hasProducerInMix = false;
     bool hasConsumerInMix = false;
     bool hasExternalEndpoint = false;
@@ -717,6 +687,138 @@ bool MixGraphMerger::CheckNoExternalUseOfMergedInnerTensor(const std::vector<int
     return true;
 }
 
+bool MixGraphMerger::CheckMergeBenefitByStructuralPattern(const std::vector<int>& actualGroup)
+{
+    // 两层结构 benefit 判定(不依赖 latency):
+    // tensor 层: 分侧统计 prodRoots/consRoots, 仅 prodRoots>1 && consRoots>1 拒绝为 N:M tensor;
+    //            1:1/1:N/N:1 均视为简单 tensor edge, 建 root 级方向边。
+    // root 图层: 用 rootPreds/rootSuccs 识别整体 N:M 并拒绝; 1:1/N:1/1:N 均通过。
+    // sink 保护: actualGroup 内不产出 boundary tensor 的 root,
+    //            统计其当前所有 producer root, >1 才拒绝; 全部归一 root 时放行(不再损失并行分支)。
+    const int multiBranchThreshold = 2; // 2+ 个 root/branch 视为多分支(fan-in/fan-out)
+    std::unordered_set<int> mergedRoot(actualGroup.begin(), actualGroup.end());
+    ++mVisitStamp;
+    std::set<int> allProdRoots;
+    std::unordered_map<int, std::set<int>> rootPreds;
+    std::unordered_map<int, std::set<int>> rootSuccs;
+    bool hasSimpleTensorEdge = false;
+    for (int root : actualGroup) {
+        for (int tensorId : mRootToBoundaryTensorIds[root]) {
+            if (mTensorVisitStamp[tensorId] == mVisitStamp) {
+                continue;
+            }
+            mTensorVisitStamp[tensorId] = mVisitStamp;
+            const auto& info = mInput.boundaryTensors[tensorId];
+            // 分侧收集 in-group producer/consumer 当前 root
+            std::set<int> prodRoots;
+            std::set<int> consRoots;
+            for (int s : info.producerSubgraphs) {
+                int parent = FindParent(s);
+                if (mergedRoot.count(parent) > 0) {
+                    prodRoots.insert(parent);
+                    allProdRoots.insert(parent);
+                }
+            }
+            for (int s : info.consumerSubgraphs) {
+                int parent = FindParent(s);
+                if (mergedRoot.count(parent) > 0) {
+                    consRoots.insert(parent);
+                }
+            }
+            if (prodRoots.empty() || consRoots.empty()) {
+                continue;
+            }
+            // N:M tensor: 双侧均多 root
+            if (prodRoots.size() >= multiBranchThreshold && consRoots.size() >= multiBranchThreshold) {
+                APASS_LOG_DEBUG_F(Elements::Operation, "Structural merge skipped: N:M tensor %d (prod=%zu, cons=%zu).",
+                                  info.tensorMagic, prodRoots.size(), consRoots.size());
+                return false;
+            }
+            // 建 root 级方向边 (prodRoot -> consRoot), 跳过 self-loop
+            for (int prodRoot : prodRoots) {
+                for (int consRoot : consRoots) {
+                    if (prodRoot == consRoot) {
+                        continue;
+                    }
+                    hasSimpleTensorEdge = true;
+                    rootPreds[consRoot].insert(prodRoot);
+                    rootSuccs[prodRoot].insert(consRoot);
+                }
+            }
+        }
+    }
+    // sink 保护: 不产出 boundary tensor 的 root, 当前 producer root 数 > 1 才拒绝。
+    // 若所有 producer 已经归到同一个 root，合入 sink 不再减少并行分支。
+    // 输出级 consolidate 旁路: 全图 ≥2 个出度0 sink 且本候选含其全部时,
+    // 视为合并并行输出级(下游无并行可损失), 跳过 sink 保护。
+    bool skipSinkProtection = false;
+    if (mGlobalOutputSinks.size() >= multiBranchThreshold) {
+        skipSinkProtection = true;
+        for (int sinkSg : mGlobalOutputSinks) {
+            if (mergedRoot.count(FindParent(sinkSg)) == 0) {
+                skipSinkProtection = false;
+                break;
+            }
+        }
+        if (skipSinkProtection) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Structural merge allowed: candidate consolidates all %zu output sinks.",
+                              mGlobalOutputSinks.size());
+        }
+    }
+    if (!skipSinkProtection) {
+        for (int root : actualGroup) {
+            if (allProdRoots.count(root) > 0) {
+                continue;
+            }
+
+            std::set<int> incomingRoots;
+            for (int tensorId : mRootToBoundaryTensorIds[root]) {
+                const auto& info = mInput.boundaryTensors[tensorId];
+                for (int s : info.producerSubgraphs) {
+                    int predRoot = FindParent(s);
+                    if (predRoot != root) {
+                        incomingRoots.insert(predRoot);
+                    }
+                }
+            }
+
+            if (incomingRoots.size() >= multiBranchThreshold) {
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "Structural merge skipped: convergence sink at root %d (rootInDeg=%zu).", root,
+                                  incomingRoots.size());
+                return false;
+            }
+        }
+    }
+    // N:M 保护: 整体 root 图同时存在 N:1 和 1:N 则拒绝
+    bool hasNto1 = false;
+    bool has1toN = false;
+    for (const auto& pair : rootPreds) {
+        if (pair.second.size() >= multiBranchThreshold) {
+            hasNto1 = true;
+            break;
+        }
+    }
+    for (const auto& pair : rootSuccs) {
+        if (pair.second.size() >= multiBranchThreshold) {
+            has1toN = true;
+            break;
+        }
+    }
+    if (hasNto1 && has1toN) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Structural merge skipped: N:M root pattern.");
+        return false;
+    }
+    // 通过条件: 至少存在一个简单 tensor edge
+    if (!hasSimpleTensorEdge) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Structural merge skipped: no simple tensor edge benefit.");
+        return false;
+    }
+    APASS_LOG_DEBUG_F(Elements::Operation, "Structural merge allowed: has simple tensor edge benefit.");
+    return true;
+}
+
 bool MixGraphMerger::CanMergeWithConstraints(const std::vector<int>& actualGroup)
 {
     if (actualGroup.size() <= 1) {
@@ -732,10 +834,7 @@ bool MixGraphMerger::CanMergeWithConstraints(const std::vector<int>& actualGroup
     if (!CheckLatencyConstraint(actualGroup)) {
         return false;
     }
-    if (!CheckMergeBenefit(actualGroup)) {
-        return false;
-    }
-    return true;
+    return CheckMergeBenefitByStructuralPattern(actualGroup);
 }
 
 void MixGraphMerger::UpdateBoundaryTensorIndex(const std::vector<int>& actualGroup)
@@ -821,7 +920,8 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
             if ((input.isEnforceMergeGroup[i] && CanMergeWithoutCycle(actualGroup)) ||
                 (enableAutoMix && mergeLoopStep != 0 && input.isValidMergeGroup[i] &&
                  CanMergeWithConstraints(actualGroup))) {
-                APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu succeeded", i);
+                APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu succeeded: actualGroup=%s.", i,
+                                  IntVecToStr(actualGroup).c_str());
                 PerformMerge(actualGroup);
                 hasUpdated = true;
             } else if (input.isEnforceMergeGroup[i] || mergeLoopStep != 0) {
@@ -837,176 +937,6 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
         APASS_LOG_DEBUG_F(Elements::Operation, "Invalid output detected");
     }
     return mOutput;
-}
-
-void EstimateExecTime::InitMixData(MixScheduleContext& ctx, const std::vector<std::set<int>>& estimateCandidate)
-{
-    ctx.numMix = static_cast<int>(estimateCandidate.size());
-    ctx.numSubgraph = static_cast<int>(ctx.subgraphToMix.size());
-    for (int mixId = 0; mixId < ctx.numMix; ++mixId) {
-        for (int idx : estimateCandidate[mixId]) {
-            ctx.candidateSet.insert(idx);
-            ctx.subgraphToMix[idx] = mixId;
-        }
-    }
-}
-
-void EstimateExecTime::BuildMixDeps(MixScheduleContext& ctx, const EstimateInput& input)
-{
-    for (int idx : ctx.candidateSet) {
-        int mixId = ctx.subgraphToMix[idx];
-        for (int pred : input.inGraph[idx]) {
-            if (ctx.candidateSet.count(pred) > 0) {
-                int predMixId = ctx.subgraphToMix[pred];
-                if (predMixId != mixId) {
-                    ctx.mixDeps[mixId].insert(predMixId);
-                }
-            }
-        }
-    }
-}
-
-void EstimateExecTime::InitMixTopology(MixScheduleContext& ctx)
-{
-    for (int mixId = 0; mixId < ctx.numMix; ++mixId) {
-        ctx.mixInDegree[mixId] = static_cast<int>(ctx.mixDeps[mixId].size());
-        if (ctx.mixInDegree[mixId] == 0) {
-            ctx.mixReadyQueue.push(mixId);
-        }
-    }
-}
-
-int EstimateExecTime::CalcMixStartTime(int mixId, const MixScheduleContext& ctx, int scheduleTime)
-{
-    int startTime = 0;
-    for (int predMixId : ctx.mixDeps[mixId]) {
-        int predFinish = ctx.mixFinishTime[predMixId] + scheduleTime;
-        startTime = std::max(startTime, predFinish);
-    }
-    return startTime;
-}
-
-void EstimateExecTime::InitSubgraphContext(SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
-                                           const EstimateInput& input)
-{
-    subCtx.numSubgraph = ctx.numSubgraph;
-    subCtx.finishTime.resize(ctx.numSubgraph, 0);
-    subCtx.inDegree.resize(ctx.numSubgraph, 0);
-    subCtx.coreState = {subCtx.mixStartTime, subCtx.mixStartTime, subCtx.mixStartTime};
-    for (int idx : ctx.candidateSet) {
-        if (ctx.subgraphToMix[idx] != subCtx.mixId) {
-            continue;
-        }
-        int degree = 0;
-        for (int pred : input.inGraph[idx]) {
-            if (ctx.candidateSet.count(pred) > 0 && ctx.subgraphToMix[pred] == subCtx.mixId) {
-                degree++;
-            }
-        }
-        subCtx.inDegree[idx] = degree;
-        if (degree == 0) {
-            subCtx.readyQueue.push(idx);
-        }
-    }
-}
-
-void EstimateExecTime::ScheduleOneSubgraph(int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
-                                           const EstimateInput& input)
-{
-    int earliestStart = subCtx.mixStartTime;
-    for (int pred : input.inGraph[current]) {
-        if (ctx.candidateSet.count(pred) > 0 && ctx.subgraphToMix[pred] == subCtx.mixId) {
-            earliestStart = std::max(earliestStart, subCtx.finishTime[pred]);
-        }
-    }
-    bool isAic = input.isCube[current];
-    int startTime = isAic ? std::max(earliestStart, subCtx.coreState.aic) :
-                            std::max(earliestStart, std::min(subCtx.coreState.aiv0, subCtx.coreState.aiv1));
-    subCtx.finishTime[current] = startTime + input.execTime[current];
-    if (isAic) {
-        subCtx.coreState.aic = subCtx.finishTime[current];
-    } else if (subCtx.coreState.aiv0 <= subCtx.coreState.aiv1) {
-        subCtx.coreState.aiv0 = subCtx.finishTime[current];
-    } else {
-        subCtx.coreState.aiv1 = subCtx.finishTime[current];
-    }
-}
-
-void EstimateExecTime::ProcessSubgraphConsumers(int current, SubgraphScheduleContext& subCtx,
-                                                const MixScheduleContext& ctx, const EstimateInput& input)
-{
-    for (int consumer : input.outGraph[current]) {
-        if (ctx.candidateSet.count(consumer) > 0 && ctx.subgraphToMix[consumer] == subCtx.mixId) {
-            subCtx.inDegree[consumer]--;
-            if (subCtx.inDegree[consumer] == 0) {
-                subCtx.readyQueue.push(consumer);
-            }
-        }
-    }
-}
-
-int EstimateExecTime::GetMixFinishTime(const SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx)
-{
-    int mixFinish = 0;
-    for (int idx : ctx.candidateSet) {
-        if (ctx.subgraphToMix[idx] == subCtx.mixId) {
-            mixFinish = std::max(mixFinish, subCtx.finishTime[idx]);
-        }
-    }
-    return mixFinish;
-}
-
-void EstimateExecTime::ProcessMixConsumers(int mixId, MixScheduleContext& ctx)
-{
-    for (int consumerMix = 0; consumerMix < ctx.numMix; ++consumerMix) {
-        if (ctx.mixDeps[consumerMix].count(mixId) > 0) {
-            ctx.mixInDegree[consumerMix]--;
-            if (ctx.mixInDegree[consumerMix] == 0) {
-                ctx.mixReadyQueue.push(consumerMix);
-            }
-        }
-    }
-}
-
-int EstimateExecTime::Estimate(const EstimateInput& input, const std::vector<std::set<int>>& estimateCandidate)
-{
-    if (estimateCandidate.empty()) {
-        return 0;
-    }
-    MixScheduleContext ctx;
-    ctx.subgraphToMix.resize(input.outGraph.size(), -1);
-    ctx.mixDeps.resize(estimateCandidate.size());
-    ctx.mixStartTime.resize(estimateCandidate.size(), 0);
-    ctx.mixFinishTime.resize(estimateCandidate.size(), 0);
-    ctx.mixInDegree.resize(estimateCandidate.size(), 0);
-    InitMixData(ctx, estimateCandidate);
-    if (ctx.candidateSet.empty()) {
-        return 0;
-    }
-    BuildMixDeps(ctx, input);
-    InitMixTopology(ctx);
-    while (!ctx.mixReadyQueue.empty()) {
-        int mixId = ctx.mixReadyQueue.front();
-        ctx.mixReadyQueue.pop();
-        ctx.mixStartTime[mixId] = CalcMixStartTime(mixId, ctx, input.betweenSubgraphScheduleTime);
-        SubgraphScheduleContext subCtx;
-        subCtx.mixId = mixId;
-        subCtx.mixStartTime = ctx.mixStartTime[mixId];
-        InitSubgraphContext(subCtx, ctx, input);
-        while (!subCtx.readyQueue.empty()) {
-            int current = subCtx.readyQueue.front();
-            subCtx.readyQueue.pop();
-            ScheduleOneSubgraph(current, subCtx, ctx, input);
-            ProcessSubgraphConsumers(current, subCtx, ctx, input);
-        }
-        ctx.mixFinishTime[mixId] = GetMixFinishTime(subCtx, ctx);
-        ProcessMixConsumers(mixId, ctx);
-    }
-    int result = 0;
-    for (int mixId = 0; mixId < ctx.numMix; ++mixId) {
-        result = std::max(result, ctx.mixFinishTime[mixId]);
-    }
-    return result;
 }
 
 } // namespace npu::tile_fwk

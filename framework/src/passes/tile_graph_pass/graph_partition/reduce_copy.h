@@ -29,65 +29,11 @@
 #include <utility>
 
 namespace npu::tile_fwk {
-struct EstimateInput {
-    std::vector<int> execTime;
-    std::vector<bool> isCube;
-    std::vector<std::set<int>> outGraph;
-    std::vector<std::set<int>> inGraph;
-    int betweenSubgraphScheduleTime{1500}; // estimated task issuance time
-};
-
-struct EstimateCoreState {
-    int aic;
-    int aiv0;
-    int aiv1;
-};
-
-struct MixScheduleContext {
-    std::vector<int> subgraphToMix;
-    std::unordered_set<int> candidateSet;
-    std::vector<std::set<int>> mixDeps;
-    std::vector<int> mixStartTime;
-    std::vector<int> mixFinishTime;
-    std::vector<int> mixInDegree;
-    std::queue<int> mixReadyQueue;
-    int numMix;
-    int numSubgraph;
-};
-
-struct SubgraphScheduleContext {
-    std::vector<int> finishTime;
-    std::vector<int> inDegree;
-    std::queue<int> readyQueue;
-    EstimateCoreState coreState;
-    int mixStartTime;
-    int mixId;
-    int numSubgraph;
-};
-
 struct BoundaryTensorInfo {
     int tensorMagic;
     std::vector<int> producerSubgraphs;
     std::vector<int> consumerSubgraphs;
-};
-
-class EstimateExecTime {
-public:
-    int Estimate(const EstimateInput& input, const std::vector<std::set<int>>& estimateCandidate);
-
-private:
-    void InitMixData(MixScheduleContext& ctx, const std::vector<std::set<int>>& estimateCandidate);
-    void BuildMixDeps(MixScheduleContext& ctx, const EstimateInput& input);
-    void InitMixTopology(MixScheduleContext& ctx);
-    int CalcMixStartTime(int mixId, const MixScheduleContext& ctx, int scheduleTime);
-    void InitSubgraphContext(SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
-                             const EstimateInput& input);
-    void ScheduleOneSubgraph(int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
-                             const EstimateInput& input);
-    void ProcessSubgraphConsumers(int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
-                                  const EstimateInput& input);
-    int GetMixFinishTime(const SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx);
-    void ProcessMixConsumers(int mixId, MixScheduleContext& ctx);
+    bool isDDR{false}; // 目的: 仅 DDR tensor 参与 inner-external-use 检查
 };
 
 struct MergeInput {
@@ -120,12 +66,12 @@ public:
 private:
     MergeInput mInput;
     MergeOutput mOutput;
-    EstimateInput estimateInput;
     std::vector<int> mParent;
     std::vector<int> mRank;
     std::vector<std::vector<int>> mRootToBoundaryTensorIds;
     std::vector<int> mTensorVisitStamp;
     int mVisitStamp{0};
+    std::unordered_set<int> mGlobalOutputSinks; // 出度0子图: 不作为任何 boundary tensor producer, 即最终输出端点
 
     void Initialize(const MergeInput& input);
     void InitBoundaryTensorIndex();
@@ -137,7 +83,7 @@ private:
     void UpdateBoundaryTensorIndex(const std::vector<int>& actualGroup);
     void UpdateOutput();
     bool CheckLatencyConstraint(const std::vector<int>& actualGroup);
-    bool CheckMergeBenefit(const std::vector<int>& actualGroup);
+    bool CheckMergeBenefitByStructuralPattern(const std::vector<int>& actualGroup);
     bool CheckNoExternalUseOfMergedInnerTensor(const std::vector<int>& actualGroup);
     bool IsInvalidMergedInnerTensor(int tensorId, const std::unordered_set<int>& mergedRoots);
     std::vector<int> GetActualGroup(const std::vector<int>& group);

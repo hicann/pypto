@@ -270,5 +270,161 @@ TEST_F(ReduceCopyTest, TestCase3)
     EXPECT_EQ(function->GetTotalSubGraphCount(), Num4);
 }
 
+// ============================================================================
+// ST: automix sink 保护与输出级旁路 (简化自 glm / gqa / mha 调试用例)
+static std::string AddCubeMatmulFrom(ComputationalGraphBuilder& G, int sg, const std::string& inA,
+                                     const std::string& inB);
+static std::string AddCubeMatmulSG(ComputationalGraphBuilder& G, int sg, std::vector<std::string>& incasts)
+{
+    std::vector<int64_t> sh{16, 16};
+    std::string b = std::to_string(sg);
+    std::string inA = "tRA" + b;
+    std::string inB = "tRB" + b;
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, sh, {inA, inB}), true);
+    incasts.push_back(inA);
+    incasts.push_back(inB);
+    return AddCubeMatmulFrom(G, sg, inA, inB);
+}
+
+static std::string AddIncast(ComputationalGraphBuilder& G, const std::string& name, std::vector<std::string>& incasts)
+{
+    std::vector<int64_t> sh{16, 16};
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, sh, name), true);
+    incasts.push_back(name);
+    return name;
+}
+
+static std::string AddCubeMatmulFrom(ComputationalGraphBuilder& G, int sg, const std::string& inA,
+                                     const std::string& inB)
+{
+    std::vector<int64_t> sh{16, 16};
+    std::string b = std::to_string(sg);
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, sh, {"tVA" + b, "tVB" + b, "tL0A" + b, "tL0B" + b, "tC" + b}), true);
+    EXPECT_EQ(
+        G.AddOps({Opcode::OP_VIEW, Opcode::OP_VIEW, Opcode::OP_L1_TO_L0A, Opcode::OP_L1_TO_L0B, Opcode::OP_A_MUL_B},
+                 {{inA}, {inB}, {"tVA" + b}, {"tVB" + b}, {"tL0A" + b, "tL0B" + b}},
+                 {{"tVA" + b}, {"tVB" + b}, {"tL0A" + b}, {"tL0B" + b}, {"tC" + b}},
+                 {"viewA" + b, "viewB" + b, "toA" + b, "toB" + b, "mm" + b}, true),
+        true);
+    const int Num50 = 50;
+    for (auto& n : std::vector<std::string>{"viewA" + b, "viewB" + b, "toA" + b, "toB" + b, "mm" + b}) {
+        G.GetOp(n)->UpdateSubgraphID(sg);
+        G.GetOp(n)->UpdateLatency(Num50);
+        G.GetOp(n)->SetAttr(OpAttributeKey::isCube, true);
+    }
+    return "tC" + b;
+}
+
+static std::string AddVecSG(ComputationalGraphBuilder& G, int sg, const std::string& in, const std::string& out)
+{
+    std::vector<int64_t> sh{16, 16};
+    std::string b = std::to_string(sg);
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, sh, {"vAdd" + b, out}), true);
+    std::string addsName = "vadds" + b;
+    std::string asmName = "vasm" + b;
+    EXPECT_EQ(G.AddOps({Opcode::OP_ADDS, Opcode::OP_ASSEMBLE}, {{in}, {"vAdd" + b}}, {{"vAdd" + b}, {out}},
+                       {addsName, asmName}, true),
+              true);
+    const int Num50 = 50;
+    for (auto& n : std::vector<std::string>{addsName, asmName}) {
+        G.GetOp(n)->UpdateSubgraphID(sg);
+        G.GetOp(n)->UpdateLatency(Num50);
+        G.GetOp(n)->SetAttr(OpAttributeKey::isCube, false);
+    }
+    return out;
+}
+
+static void AddVecSinkSG(ComputationalGraphBuilder& G, int sg, const std::vector<std::string>& inputs,
+                         const std::string& outName, std::vector<std::string>& outcasts)
+{
+    std::vector<int64_t> sh{16, 16};
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, sh, outName), true);
+    const int Num50 = 50;
+    std::vector<std::string> addOuts;
+    for (size_t i = 0; i < inputs.size(); i++) {
+        std::string b = std::to_string(sg) + "_" + std::to_string(i);
+        std::string tName = "sinkadd" + b;
+        std::string opName = "vadds" + b;
+        EXPECT_EQ(G.AddTensor(DataType::DT_FP32, sh, tName), true);
+        EXPECT_EQ(G.AddOp(Opcode::OP_ADDS, {inputs[i]}, {tName}, opName, true), true);
+        G.GetOp(opName)->UpdateSubgraphID(sg);
+        G.GetOp(opName)->UpdateLatency(Num50);
+        G.GetOp(opName)->SetAttr(OpAttributeKey::isCube, false);
+        addOuts.push_back(tName);
+    }
+    std::string asmName = "vasm" + std::to_string(sg);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, addOuts, {outName}, asmName, true), true);
+    G.GetOp(asmName)->UpdateSubgraphID(sg);
+    G.GetOp(asmName)->UpdateLatency(Num50);
+    G.GetOp(asmName)->SetAttr(OpAttributeKey::isCube, false);
+    outcasts.push_back(outName);
+}
+
+// glm 场景: 两条 attention 分支 (C1->V1->C2) 汇入单个 sink, 两 C2 root 不归一 -> sink rootInDeg=2 被保护。
+TEST_F(ReduceCopyTest, SinkProtectedWhenMultiProducerRoots)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    AddCubeMatmulFrom(G, 0, AddIncast(G, "QA0", incasts), AddIncast(G, "QB0", incasts));
+    AddVecSG(G, 1, "tC0", "v1a");
+    std::string c2a = AddCubeMatmulFrom(G, 2, "v1a", AddIncast(G, "VA0", incasts));
+    AddCubeMatmulFrom(G, 3, AddIncast(G, "QA1", incasts), AddIncast(G, "QB1", incasts));
+    AddVecSG(G, 4, "tC3", "v1b");
+    std::string c2b = AddCubeMatmulFrom(G, 5, "v1b", AddIncast(G, "VA1", incasts));
+    AddVecSinkSG(G, 6, {c2a, c2b}, "sinkGlmOut", outcasts);
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(7);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    const int Num3 = 3;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num3);
+}
+
+// gqa 场景: 一个 cube fan-out 到两个 vec 再汇入 sink, vec 先并入 cube 归一 -> sink rootInDeg=1 放行。
+TEST_F(ReduceCopyTest, SinkMergesWhenProducersCollapse)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    std::string c = AddCubeMatmulSG(G, 0, incasts);
+    std::string v1 = AddVecSG(G, 1, c, "v1");
+    std::string v2 = AddVecSG(G, 2, c, "v2");
+    AddVecSinkSG(G, 3, {v1, v2}, "sinkGqaOut", outcasts);
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(4);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    const int Num1 = 1;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num1);
+}
+
+// mha 场景: 两个 cube 各 fan-out 到两个 sink (2:2 完全二分), 2 个出度0 sink -> 输出级旁路放行。
+TEST_F(ReduceCopyTest, OutputStageBypassMergesAllSinks)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    std::string c0 = AddCubeMatmulSG(G, 0, incasts);
+    std::string c1 = AddCubeMatmulSG(G, 1, incasts);
+    AddVecSinkSG(G, 2, {c0, c1}, "sinkA", outcasts);
+    AddVecSinkSG(G, 3, {c0, c1}, "sinkB", outcasts);
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(4);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    const int Num1 = 1;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num1);
+}
+
 } // namespace tile_fwk
 } // namespace npu
