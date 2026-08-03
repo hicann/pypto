@@ -75,7 +75,7 @@
 
 关于采集结果文件的详细说明和IDE参数含义解释，请参阅Machine的Troubleshooting（故障诊断）手册：
 
-- [output目录产物说明及IDE参数含义解释](../../trouble_shooting/machine.md#output-目录产物说明)
+- [output目录产物说明及IDE参数含义解释](../appendix/faq/swimlane-issue.md#output目录产物说明)
 
 ### 查看泳道图数据
 
