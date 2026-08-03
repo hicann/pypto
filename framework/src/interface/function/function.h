@@ -501,6 +501,8 @@ struct ParamConfigs {
     int autoMixPartition{0};
     bool enableMemoryAwareSort{false};
     std::string oooSchedMode;
+    std::string oooSortModeAic;
+    std::string oooSortModeAiv;
 };
 
 struct FunctionParamInfo {

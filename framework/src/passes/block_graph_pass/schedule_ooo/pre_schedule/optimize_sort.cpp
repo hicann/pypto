@@ -14,292 +14,14 @@
  */
 
 #include "optimize_sort.h"
+#include "prior_dfs_sort.h"
+#include "memory_aware_sort.h"
 #include "memory_aware_topo_sort.h"
 #include <queue>
 #include "passes/pass_log/pass_log.h"
 
 namespace npu::tile_fwk {
 static constexpr size_t invalidIndex = std::numeric_limits<size_t>::max();
-
-enum class PromotePriority {
-    Assemble = 0,
-    View = 1,
-    DdrCopyOut = 2,
-    Normal = 3,
-};
-
-void OptimizeSort::UpdatePreNodeQueue(std::unordered_set<Operation*>& curr,
-                                      std::unordered_set<Operation*>& preNodeTotal, std::map<Operation*, bool>& visited)
-{
-    std::unordered_set<Operation*> next;
-    for (auto& curOp : curr) {
-        for (auto& preOp : state_.depManager.GetPredecessors(curOp)) {
-            if (!visited[preOp] && preNodeTotal.find(preOp) == preNodeTotal.end()) {
-                next.insert(preOp);
-            }
-        }
-    }
-    for (auto& nextOp : next) {
-        preNodeTotal.insert(nextOp);
-    }
-    curr.swap(next);
-}
-
-int OptimizeSort::GetNumUnvisitPreNode(Operation* op, std::map<Operation*, bool>& visited)
-{
-    std::unordered_set<Operation*> preNodeTotal;
-    std::unordered_set<Operation*> curr;
-    for (auto& preOp : state_.depManager.GetPredecessors(op)) {
-        if (!visited[preOp]) {
-            curr.insert(preOp);
-            preNodeTotal.insert(preOp);
-        }
-    }
-    while (!curr.empty()) {
-        UpdatePreNodeQueue(curr, preNodeTotal, visited);
-    }
-    return preNodeTotal.size();
-}
-
-Operation* OptimizeSort::FindNodeMinNumUnvisitedPreNode(std::map<Operation*, bool> visited,
-                                                        std::vector<Operation*> outNodeQueue)
-{
-    Operation* res = nullptr;
-    int minUnvisitedNode = INT_MAX;
-    for (auto& outNode : outNodeQueue) {
-        if (visited[outNode]) {
-            continue;
-        }
-        int curUnvisitedNode = GetNumUnvisitPreNode(outNode, visited);
-        if (curUnvisitedNode < minUnvisitedNode) {
-            res = outNode;
-            minUnvisitedNode = curUnvisitedNode;
-        }
-    }
-    return res;
-}
-
-int OptimizeSort::GetNodePriority(std::unordered_map<Opcode, int> preNodePriority, Operation* op)
-{
-    int prior = 10;
-    if (preNodePriority.find(op->GetOpcode()) != preNodePriority.end()) {
-        prior = preNodePriority[op->GetOpcode()];
-    }
-    return prior;
-}
-
-int OptimizeSort::GetMaxDepthSimple(Operation* op)
-{
-    auto it = depthCache_.find(op);
-    if (it != depthCache_.end()) {
-        return it->second;
-    }
-
-    int maxDepth = 0;
-    for (const auto& pre : state_.depManager.GetPredecessors(op)) {
-        maxDepth = std::max(maxDepth, GetMaxDepthSimple(pre));
-    }
-
-    int depth = maxDepth + 1;
-    depthCache_[op] = depth;
-    return depth;
-}
-
-void OptimizeSort::QueueNotReadyPreNode(Operation* curOp, std::map<Operation*, bool>& visited,
-                                        std::unordered_map<Opcode, int> preNodePriority, std::deque<Operation*>& queue)
-{
-    std::vector<Operation*> notReadyPreNode;
-    for (auto& preOp : state_.depManager.GetPredecessors(curOp)) {
-        if (!visited[preOp]) {
-            notReadyPreNode.push_back(preOp);
-        }
-    }
-    std::sort(notReadyPreNode.begin(), notReadyPreNode.end(), [&](Operation* a, Operation* b) {
-        int priorA = GetNodePriority(preNodePriority, a);
-        int priorB = GetNodePriority(preNodePriority, b);
-        if (priorA != priorB) {
-            return priorA < priorB;
-        } else {
-            int depA = GetMaxDepthSimple(a);
-            int depB = GetMaxDepthSimple(b);
-            if (depA == depB) {
-                int aIdx = std::find(operations.begin(), operations.end(), a) - operations.begin();
-                int bIdx = std::find(operations.begin(), operations.end(), b) - operations.begin();
-                return aIdx < bIdx;
-            }
-            return depA < depB;
-        }
-    });
-    for (auto& preOp : notReadyPreNode) {
-        queue.push_front(preOp);
-    }
-}
-
-void OptimizeSort::ForwardDfs(Operation* curOp, std::vector<Operation*>& newOpList, std::map<Operation*, bool>& visited,
-                              std::unordered_map<Opcode, int> preNodePriority, std::deque<Operation*>& queue)
-{
-    bool ready = true;
-    for (auto& preOp : state_.depManager.GetPredecessors(curOp)) {
-        if (!visited[preOp]) {
-            ready = false;
-            break;
-        }
-    }
-
-    if (ready) {
-        visited[curOp] = true;
-        queue.pop_front();
-        newOpList.push_back(curOp);
-    } else {
-        QueueNotReadyPreNode(curOp, visited, preNodePriority, queue);
-    }
-}
-
-void OptimizeSort::DFSFromSingleNode(Operation* op, std::map<Operation*, bool>& visited,
-                                     std::vector<Operation*>& newOpList,
-                                     std::unordered_map<Opcode, int> preNodePriority)
-{
-    if (visited[op]) {
-        return;
-    }
-
-    std::deque<Operation*> queue = {op};
-    while (!queue.empty()) {
-        auto curOp = queue.front();
-        if (visited[curOp]) {
-            queue.pop_front();
-            continue;
-        }
-
-        ForwardDfs(curOp, newOpList, visited, preNodePriority, queue);
-    }
-}
-
-Status OptimizeSort::DFSFromOutNode(std::vector<Operation*> outNodeQueue,
-                                    std::unordered_map<Opcode, int> preNodePriority,
-                                    std::map<Operation*, bool>& visited)
-{
-    std::vector<Operation*> newOpList;
-    if (outNodeQueue.size() != 0) {
-        DFSFromSingleNode(outNodeQueue[0], visited, newOpList, preNodePriority);
-    } else {
-        APASS_LOG_ERROR_F(Elements::Operation, "Subgraph must have operation with outdegree 0.");
-        return FAILED;
-    }
-
-    for (size_t i = 1; i < outNodeQueue.size(); i++) {
-        while (!visited[outNodeQueue[i]]) {
-            auto node = FindNodeMinNumUnvisitedPreNode(visited, outNodeQueue);
-            if (node == nullptr) {
-                APASS_LOG_ERROR_F(Elements::Operation, "FindNodeMinNumUnvisitedPreNode failed.");
-                return FAILED;
-            }
-            DFSFromSingleNode(node, visited, newOpList, preNodePriority);
-        }
-    }
-    operations = newOpList;
-    return SUCCESS;
-}
-
-PromotePriority OptimizeSort::ClassifyPromoteOp(Operation* op) const
-{
-    if (!op) {
-        return PromotePriority::Normal;
-    }
-    if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
-        return PromotePriority::Assemble;
-    }
-    if (IsViewOp(*op)) {
-        return PromotePriority::View;
-    }
-    if (OpcodeManager::Inst().IsCopyOut(op->GetOpcode()) &&
-        op->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
-        return PromotePriority::DdrCopyOut;
-    }
-    return PromotePriority::Normal;
-}
-
-struct PromoteCmp {
-    const std::unordered_map<Operation*, size_t>& pos;
-    const std::unordered_map<Operation*, PromotePriority>& cls;
-
-    bool operator()(Operation* a, Operation* b) const
-    {
-        if (cls.at(a) != cls.at(b))
-            return cls.at(a) > cls.at(b);
-
-        return pos.at(a) > pos.at(b);
-    }
-};
-
-void OptimizeSort::PromoteOps()
-{
-    if (operations.empty())
-        return;
-
-    std::unordered_map<Operation*, int> indegree;
-    std::unordered_map<Operation*, size_t> pos;
-    std::unordered_map<Operation*, PromotePriority> cls;
-
-    indegree.reserve(operations.size());
-    pos.reserve(operations.size());
-    cls.reserve(operations.size());
-
-    for (size_t i = 0; i < operations.size(); ++i) {
-        auto* op = operations[i];
-        pos[op] = i;
-        cls[op] = ClassifyPromoteOp(op);
-        indegree[op] = state_.depManager.HasOp(op) ? state_.depManager.GetPredecessors(op).size() : 0;
-    }
-
-    std::priority_queue<Operation*, std::vector<Operation*>, PromoteCmp> ready(PromoteCmp{pos, cls});
-
-    for (auto* op : operations) {
-        if (indegree[op] == 0)
-            ready.push(op);
-    }
-
-    std::vector<Operation*> reordered;
-    reordered.reserve(operations.size());
-
-    while (!ready.empty()) {
-        auto* cur = ready.top();
-        ready.pop();
-        reordered.push_back(cur);
-        if (!state_.depManager.HasOp(cur))
-            continue;
-
-        for (auto* succ : state_.depManager.GetSuccessors(cur)) {
-            if (--indegree[succ] == 0)
-                ready.push(succ);
-        }
-    }
-
-    if (reordered.size() == operations.size())
-        operations.swap(reordered);
-}
-
-Status OptimizeSort::PriorDFS(std::unordered_map<Opcode, int> preNodePriority)
-{
-    std::map<Operation*, bool> visited;
-    std::vector<Operation*> outNodeQueue;
-    depthCache_.clear();
-    for (size_t i = 0; i < operations.size(); i++) {
-        visited[operations[i]] = false;
-        if (state_.depManager.GetSuccessors(operations[i]).empty()) {
-            outNodeQueue.emplace_back(operations[i]);
-        }
-    }
-    std::stable_sort(outNodeQueue.begin(), outNodeQueue.end(),
-                     [&](Operation* a, Operation* b) { return GetMaxDepthSimple(a) > GetMaxDepthSimple(b); });
-
-    if (DFSFromOutNode(outNodeQueue, preNodePriority, visited) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "DFSFromOutNode failed.");
-        return FAILED;
-    }
-    PromoteOps();
-    return SUCCESS;
-}
 
 bool OptimizeSort::HasDependency(Operation* rollBackOp, Operation* backOp)
 {
@@ -823,88 +545,65 @@ void OptimizeSort::AllocAhead()
     operations = newOperations;
 }
 
-Status OptimizeSort::SortOpsMemoryAware()
+const std::unordered_map<std::string, OptimizeSort::Factory> OptimizeSort::SORT_ALGOS = {
+    {"PriorDFS", [](std::vector<Operation*> ops, Function& f) { return std::make_unique<PriorDFSSort>(ops, f); }},
+    {"MemoryAware", [](std::vector<Operation*> ops, Function& f) { return std::make_unique<MemoryAwareSort>(ops, f); }},
+};
+
+std::string OptimizeSort::ResolveOooSortMode(const std::vector<Operation*>& ops, const ParamConfigs& pc)
 {
-    APASS_LOG_INFO_F(Elements::Operation, "Using MemoryAwareTopoSort for scheduling.");
-    MemoryAwareTopoSort sorter(operations, function_);
-    if (sorter.SortOps() != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "MemoryAwareTopoSort failed.");
-        return FAILED;
+    bool hasAic = false;
+    bool hasAiv = false;
+    for (auto* op : ops) {
+        auto coreType = OpcodeManager::Inst().GetCoreType(op->GetOpcode());
+        if (coreType == OpCoreType::AIC) {
+            hasAic = true;
+        } else if (coreType == OpCoreType::AIV) {
+            hasAiv = true;
+        }
     }
-    operations = sorter.operations;
-    return SUCCESS;
+    if (hasAic && !hasAiv) {
+        return pc.oooSortModeAic.empty() ? "PriorDFS" : pc.oooSortModeAic;
+    }
+    if (hasAiv && !hasAic) {
+        return pc.oooSortModeAiv.empty() ? "PriorDFS" : pc.oooSortModeAiv;
+    }
+    return "PriorDFS";
 }
 
-Status OptimizeSort::SortOpsPriorDFS()
+std::unique_ptr<OptimizeSort> OptimizeSort::Create(std::vector<Operation*> ops, Function& func, const std::string& mode)
 {
-    AllocAhead();
-    std::unordered_map<Opcode, int> preNodePriority = {
-        {Opcode::OP_UB_ALLOC, 0},
-        {Opcode::OP_L1_ALLOC, 0},
-        {Opcode::OP_L0A_ALLOC, 0},
-        {Opcode::OP_L0B_ALLOC, 0},
-        {Opcode::OP_L0C_ALLOC, 0},
-        {Opcode::OP_BT_ALLOC, 0},
-        {Opcode::OP_FIX_ALLOC, 0},
-        {Opcode::OP_L1_TO_L0A, 1},
-        {Opcode::OP_L1_TO_L0B, 1},
-        {Opcode::OP_L1_TO_L0_AT, 1},
-        {Opcode::OP_L1_TO_L0_BT, 1},
-        {Opcode::OP_L1_TO_FIX, 1},
-        {Opcode::OP_L1_TO_FIX_QUANT_PRE, 1},
-        {Opcode::OP_L1_TO_FIX_RELU_PRE, 1},
-        {Opcode::OP_L1_TO_FIX_RELU_POST, 1},
-        {Opcode::OP_L1_TO_FIX_QUANT_POST, 1},
-        {Opcode::OP_L1_TO_FIX_ELT_ANTIQ, 1},
-        {Opcode::OP_L1_TO_FIX_MTE2_ANTIQ, 1},
-        {Opcode::OP_L1_TO_BT, 1},
-        {Opcode::OP_COPY_IN, 2},
-        {Opcode::OP_UB_COPY_IN, 2},
-        {Opcode::OP_L1_COPY_IN, 2},
-        {Opcode::OP_L1_COPY_IN_FRACTAL_Z, 2},
-        {Opcode::OP_L1_COPY_UB, 2},
-        {Opcode::OP_L0C_COPY_UB, 2},
-        {Opcode::OP_UB_COPY_L1, 2},
-    };
-    if (PriorDFS(preNodePriority) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "PriorDFS failed.");
-        return FAILED;
+    auto it = SORT_ALGOS.find(mode);
+    if (it == SORT_ALGOS.end()) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Unknown sort mode: %s.", mode.c_str());
+        return nullptr;
     }
-    if (ExecuteOp() != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "ExecuteOp failed.");
-        return FAILED;
-    }
-    return SUCCESS;
+    return it->second(ops, func);
 }
 
 Status OptimizeSort::SortOps()
 {
+    auto mode = ResolveOooSortMode(operations, function_.paramConfigs_);
+    auto sorter = Create(operations, function_, mode);
+    if (sorter == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Failed to create sorter for mode: %s.", mode.c_str());
+        return FAILED;
+    }
     LOG_SCOPE_BEGIN(tSortOps, Elements::Function, "SortOps");
-    state_.Init(operations);
-    if (state_.CheckAllocOp(operations) != SUCCESS) {
+    sorter->state_.Init(sorter->operations);
+    if (sorter->state_.CheckAllocOp(sorter->operations) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "CheckAllocOp failed!");
         return FAILED;
     }
-    if (operations.empty()) {
+    if (sorter->operations.empty()) {
         return SUCCESS;
     }
-
-    bool enableMemoryAwareSort = function_.paramConfigs_.enableMemoryAwareSort;
-    if (enableMemoryAwareSort) {
-        Status result = SortOpsMemoryAware();
-        LOG_SCOPE_END(tSortOps);
-        return result;
+    Status result = sorter->DoSortOps();
+    LOG_SCOPE_END(tSortOps);
+    if (result == SUCCESS) {
+        operations = sorter->GetOperations();
     }
-
-    std::string sortMethodStr = function_.paramConfigs_.OoOPreScheduleMethod;
-    if (sortMethodStr == "PriorDFS") {
-        Status result = SortOpsPriorDFS();
-        LOG_SCOPE_END(tSortOps);
-        return result;
-    } else {
-        APASS_LOG_ERROR_F(Elements::Operation, "PreSchedule method not recognized.");
-        return FAILED;
-    }
+    return result;
 }
 
 } // namespace npu::tile_fwk

@@ -11,6 +11,8 @@
         "sg_set_scope": [-1, 0, 0],
         "sg_set_ooo_scope": [-1],
         "ooo_sched_mode": "",
+        "ooo_sort_mode_aic": "",
+        "ooo_sort_mode_aiv": "",
         "cube_l1_reuse_setting": [],
         "cube_l1_reuse_setting_by_func": {},
         "cube_nbuffer_setting": [[-1, 1]],

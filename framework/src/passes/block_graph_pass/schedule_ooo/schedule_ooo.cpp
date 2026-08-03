@@ -507,8 +507,8 @@ Status OoOSchedule::RunOnFunction(Function& function)
             APASS_LOG_ERROR_F(Elements::Operation, "Global sortOps failed");
             return FAILED;
         }
-        // 全局排序的序列。
-        opList = optimizeSort.operations;
+        // 全局排序的序列
+        opList = optimizeSort.GetOperations();
         std::pair<uint64_t, Function*> programRef;
         programRef.first = program.first;
         programRef.second = program.second;

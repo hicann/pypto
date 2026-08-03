@@ -272,6 +272,8 @@ void SetBasicParamConfig(ParamConfigs& paramConfigs, const std::shared_ptr<Confi
     paramConfigs.vecNBufferSetting = configScope->GetPassConfig<std::map<int64_t, int64_t>>(VEC_NBUFFER_SETTING);
     paramConfigs.autoMixPartition = configScope->GetPassConfig<int>(AUTO_MIX_PARTITION);
     paramConfigs.oooSchedMode = configScope->GetPassConfig<std::string>(OOO_SCHED_MODE);
+    paramConfigs.oooSortModeAic = configScope->GetPassConfig<std::string>(OOO_SORT_MODE_AIC);
+    paramConfigs.oooSortModeAiv = configScope->GetPassConfig<std::string>(OOO_SORT_MODE_AIV);
     paramConfigs.mgVecParallelLb = configScope->GetPassConfig<int>(MG_VEC_PARALLEL_LB);
     paramConfigs.copyOutResolveCoalescing = configScope->GetPassConfig<int>(COPYOUT_RESOLVE_COALESCING);
     paramConfigs.combineAxis = configScope->GetOperationConfig<bool>(KEY_COMBINE_AXIS);

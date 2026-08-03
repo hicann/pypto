@@ -10,7 +10,8 @@
 
 /*!
  * \file optimize_sort.h
- * \brief
+ * \brief Base class for OoO sort algorithms. Uses strategy pattern with factory registration.
+ *        Each algorithm inherits OptimizeSort and implements DoSortOps().
  */
 
 #ifndef PASS_OPTIMIZE_SORT_H
@@ -18,20 +19,32 @@
 
 #include "passes/block_graph_pass/schedule_ooo/common/schedule_state.h"
 #include <functional>
+#include <memory>
+#include <unordered_map>
 #include <vector>
 #include <set>
+#include <string>
 
 namespace npu::tile_fwk {
-enum class PromotePriority;
 
 class OptimizeSort {
 public:
-    ScheduleState state_;
+    using Factory = std::function<std::unique_ptr<OptimizeSort>(std::vector<Operation*>, Function&)>;
 
     OptimizeSort(std::vector<Operation*> opList, Function& function) : operations(opList), function_(function) {}
+    virtual ~OptimizeSort() = default;
 
+    Status SortOps();
+
+    std::vector<Operation*> GetOperations() { return operations; }
     std::vector<Operation*> operations;
+
+protected:
+    void AllocAhead();
+    Status ExecuteOp();
+
     Function& function_;
+    ScheduleState state_;
 
     bool opFinish_{false};
     std::unordered_map<int, int> initBufRefCountCache_;
@@ -42,34 +55,11 @@ public:
     std::map<Operation*, bool> visitedOp_;
     std::map<Operation*, std::unordered_map<int, int>> recordBufRefCount_;
 
-    // 回溯点位置,当前执行op的全部信息,用于后期回退
     Operation* backTraceOp_{nullptr};
     std::map<Operation*, std::map<MemoryType, int64_t>> backTraceBufferAllocate_;
     std::map<Operation*, std::pair<size_t, std::shared_ptr<std::vector<Operation*>>>> backTraceOpList_;
     std::map<Operation*, std::unordered_map<int, int>> backTraceBufRefCount_;
-    // 回退点,防止死循环
     Operation* rollBackNodeOp_{nullptr};
-    std::unordered_map<Operation*, int> depthCache_;
-
-    void opListInit();
-    Status SortOps();
-    Status PriorDFS(std::unordered_map<Opcode, int> preNodePriority);
-    Status DFSFromOutNode(std::vector<Operation*> outNodeQueue, std::unordered_map<Opcode, int> preNodePriority,
-                          std::map<Operation*, bool>& visited);
-    PromotePriority ClassifyPromoteOp(Operation* op) const;
-    void PromoteOps();
-    void DFSFromSingleNode(Operation* op, std::map<Operation*, bool>& visited, std::vector<Operation*>& newOpList,
-                           std::unordered_map<Opcode, int> preNodePriority);
-    void ForwardDfs(Operation* curOp, std::vector<Operation*>& newOpList, std::map<Operation*, bool>& visited,
-                    std::unordered_map<Opcode, int> preNodePriority, std::deque<Operation*>& queue);
-    void QueueNotReadyPreNode(Operation* curOp, std::map<Operation*, bool>& visited,
-                              std::unordered_map<Opcode, int> preNodePriority, std::deque<Operation*>& queue);
-    int GetMaxDepthSimple(Operation* op);
-    int GetNodePriority(std::unordered_map<Opcode, int> preNodePriority, Operation* op);
-    Operation* FindNodeMinNumUnvisitedPreNode(std::map<Operation*, bool> visited, std::vector<Operation*> outNodeQueue);
-    int GetNumUnvisitPreNode(Operation* op, std::map<Operation*, bool>& visited);
-    void UpdatePreNodeQueue(std::unordered_set<Operation*>& curr, std::unordered_set<Operation*>& preNodeTotal,
-                            std::map<Operation*, bool>& visited);
 
     std::shared_ptr<std::vector<Operation*>> ReorderOp(std::vector<size_t>& preIdx,
                                                        std::shared_ptr<std::vector<Operation*>> curOpList,
@@ -96,13 +86,6 @@ public:
                         std::map<MemoryType, int64_t>& curMemoryMap, size_t& startIndex, bool& isContinue);
     Status OpListExecute(std::shared_ptr<std::vector<Operation*>>& curOpList,
                          std::map<MemoryType, int64_t>& curMemoryMap, size_t& startIndex);
-    Status ExecuteOp();
-    void AllocAhead();
-
-private:
-    Status SortOpsMemoryAware();
-    Status SortOpsPriorDFS();
-
     std::shared_ptr<std::vector<Operation*>> ReplaceIndex(std::shared_ptr<std::vector<Operation*>> curOpList,
                                                           std::set<size_t>& advanceIndexList, size_t rollBackIndex);
     bool HasDependency(Operation* rollBackOp, Operation* backOp);
@@ -112,6 +95,14 @@ private:
                           std::shared_ptr<std::vector<Operation*>> curOpList, std::set<size_t>& advanceIndexList);
     Status RollBack(size_t& startIndex, std::shared_ptr<std::vector<Operation*>>& curOpList,
                     std::map<MemoryType, int64_t>& curMemoryMap);
+
+private:
+    static std::string ResolveOooSortMode(const std::vector<Operation*>& ops, const ParamConfigs& pc);
+    static std::unique_ptr<OptimizeSort> Create(std::vector<Operation*> ops, Function& func, const std::string& mode);
+
+    virtual Status DoSortOps() { return FAILED; }
+
+    static const std::unordered_map<std::string, Factory> SORT_ALGOS;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_OPTIMIZE_SORT_H
