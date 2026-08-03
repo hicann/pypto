@@ -124,14 +124,30 @@ def call_function(func: Function, args: tuple, kwargs: dict, ctx: BuildContext):
         for name, defval in zip(func.params, func.param_defaults):
             if name not in supplied and defval is not None:
                 scope[name] = caller.resolve(defval)
+        orig_vals = {name: scope.locals.get(name) for name in func.params}
+
         try:
             if isinstance(ctx, CollectContext):
                 collect(func.body)
             else:
                 dispatch_block(func.body, True)
         except ReturnSignal as sig:
-            return sig.value
-    return None
+            retval = sig.value
+        else:
+            retval = None
+
+    if not isinstance(ctx, CollectContext):
+        for name in func.params:
+            orig_val = orig_vals.get(name)
+            current_val = scope.locals.get(name)
+            if current_val is None or current_val is orig_val:
+                continue
+            for caller_name, caller_val in caller.locals.items():
+                if caller_val is orig_val:
+                    caller[caller_name] = current_val
+                    break
+
+    return retval
 
 
 def block_jump(scope, ctx, block: Block):

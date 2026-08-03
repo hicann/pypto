@@ -491,3 +491,78 @@ def test_dce_reshape_inplace4():
     stmt3 = for_stmt.body[-1]
     assert isinstance(stmt3, ir.ContinueStmt)
     assert len(stmt3.value) == 2  # t0 and out both
+
+
+# ---------- Standalone helper carry propagation ----------
+def _store_carry_helper(a, out):
+    for i in pypto.loop(a.shape[0] // 32):
+        pypto.set_vec_tile_shapes(32, 32)
+        tile = a[i * 32:(i + 1) * 32, :]
+        out[:] = tile + 1
+
+
+def _store_carry_helper1(a, out):
+    _store_carry_helper(a, out)
+
+
+def test_canonicalize_keeps_helper_returnvar():
+    """Ensure helper modified tensor return vars survive canonicalize."""
+
+    def foo(a, out):
+        _store_carry_helper(a, out)
+
+    a = pypto.Tensor((64, 32), pypto.DT_FP32, 'a')
+    out = pypto.Tensor((32, 32), pypto.DT_FP32, 'out')
+
+    b = ir.IRBuilder()
+    func = pil.compile(foo, a, out)
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    prog = ir.Pass.canonicalize()(prog)
+
+    main_func = prog.functions[func.name]
+    for_stmts = _collect_stmts(main_func.body, ir.ForStmt)
+    assert len(for_stmts) == 1
+    assert len(for_stmts[0].return_vars) > 0, \
+        "carry return_vars removed by canonicalize — scope propagation missing"
+
+
+def test_canonicalize_keeps_helper_returnvar2():
+    """Carry must propagate through a chain of standalone helper calls."""
+
+    def foo(a, out):
+        _store_carry_helper1(a, out)
+
+    a = pypto.Tensor((64, 32), pypto.DT_FP32, 'a')
+    out = pypto.Tensor((32, 32), pypto.DT_FP32, 'out')
+
+    b = ir.IRBuilder()
+    func = pil.compile(foo, a, out)
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    prog = ir.Pass.canonicalize()(prog)
+
+    main_func = prog.functions[func.name]
+    for_stmts = _collect_stmts(main_func.body, ir.ForStmt)
+    assert len(for_stmts) == 1
+    assert len(for_stmts[0].return_vars) > 0, \
+        "carry return_vars removed by canonicalize — nested propagation missing"
+
+
+def test_canonicalize_keeps_helper_returnvar3():
+    """Carry must propagate when caller variable names differ from helper params."""
+
+    def foo(x, y):
+        _store_carry_helper(x, y)
+
+    x = pypto.Tensor((64, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
+
+    b = ir.IRBuilder()
+    func = pil.compile(foo, x, y)
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    prog = ir.Pass.canonicalize()(prog)
+
+    main_func = prog.functions[func.name]
+    for_stmts = _collect_stmts(main_func.body, ir.ForStmt)
+    assert len(for_stmts) == 1
+    assert len(for_stmts[0].return_vars) > 0, \
+        "carry return_vars removed by canonicalize — non-same-name propagation missing"
