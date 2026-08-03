@@ -138,21 +138,24 @@ def quant_mx(
     tuple
         A tuple of `(quantized, scale)` where:
         - `quantized` has the same shape as `input` and dtype `quant_dtype`
-        - `scale` has shape `[*input.shape[:-1], ceil(input.shape[-1] / 64), 2]`
-          and dtype `DT_FP8E8M0`
-        - in performance mode, the internal TQuant scale buffer uses a grouped layout with
-          the last two input dimensions collapsed before it is reshaped to the public `scale` shape
+        - when `axis=-1`, `scale` has shape
+          `[*input.shape[:-1], ceil(input.shape[-1] / 64), 2]` and dtype `DT_FP8E8M0`
+        - when `axis=-2`, internal raw exp has shape
+          `[*input.shape[:-2], input.shape[-2] / 64, input.shape[-1] * 2]` and is returned as
+          public `scale` with shape `[*input.shape[:-2], input.shape[-2] / 64, input.shape[-1], 2]`
 
     Notes
     -----
-    `axis` may be specified as the last dimension using either a positive or negative index.
-    `mode` defaults to `ROUND_DOWN`, the OCP-standard mode currently implemented by QuantMX.
-    `performance_mode` uses a performance-oriented internal TQuant layout and is currently the
-    only supported QuantMX mode. The quantization-axis tile and view width must still be
-    256-byte aligned, and ST coverage should choose runtime
-    last-dimension sizes whose possible view widths can be tiled without a tail tile. In practice
-    this means the runtime last dimension should be a multiple of the tail-axis tile width
-    (for example, multiples of 64 for FP32 or 128 for FP16/BF16 when using 256-byte-aligned tiles).
+    `axis` may be the last or second-last dimension using either a positive or negative index.
+    `mode` defaults to `ROUND_DOWN` (OCP); `ROUND_UP` selects the NV scale algorithm.
+    For `axis=-1`, the quantization-axis tile and view width must be 256-byte aligned.
+    For `axis=-2`, the input must have at least two dimensions. The second-last dimension of
+    the current input tensor/view shape, runtime valid shape, and tile shape must be a positive
+    multiple of 64, with no tail block on that axis. Quantization still uses groups of 32; the
+    final scale dimension stores the two consecutive group exponents in each 64-element block.
+    FP8 does not require 256-byte alignment on the last dimension. FP4 requires the view and
+    tile last dimensions to be multiples of 64 so each packed row is 32-byte aligned.
+    `performance_mode` is accepted for compatibility and does not change the DN layout.
     """
 
     return pypto_impl.QuantMX(input, quant_dtype, mode, axis, performance_mode)

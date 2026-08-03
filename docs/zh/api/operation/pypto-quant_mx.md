@@ -19,13 +19,14 @@
 - 输入Tensor支持DT_FP16、DT_BF16、DT_FP32。
 - 输出量化Tensor支持DT_FP8E4M3、DT_FP4_E2M1X2。其中DT_FP4_E2M1X2仅支持DT_FP16、DT_BF16输入。
 - scale Tensor的数据类型固定为DT_FP8E8M0。
-- 当前仅支持对尾轴进行量化，支持ROUND_DOWN（OCP）和ROUND_UP（NV）模式。
-- 支持性能模式和非性能模式。性能模式要求view shape尾轴能整切实际shape尾轴，且TileShape尾轴与view shape尾轴相同；非性能模式支持更灵活的 viewshape 和 Tileshape 设置，进行更好的算子融合，单算子性能有些下降。
+- 支持对尾轴（`axis=-1`）或次尾轴（`axis=-2`）进行量化，支持ROUND_DOWN（OCP）和ROUND_UP（NV）模式。
+- `axis=-1`支持性能模式和非性能模式。非性能模式支持更灵活的view shape和TileShape设置，有利于算子融合，但单算子性能有所下降。
 
 若输入shape记为 $[d_0, d_1, ..., d_{n-1}]$，则：
 
 - 量化结果`quantized`的shape与`input`相同。
-- scale的shape为 $[d_0, d_1, ..., d_{n-2}, \lceil d_{n-1} / 64 \rceil, 2]$。
+- `axis=-1`时，scale的shape为 $[d_0, d_1, ..., d_{n-2}, \lceil d_{n-1} / 64 \rceil, 2]$。
+- `axis=-2`时，量化粒度仍为32，即每32个次尾轴元素共享一个指数；每两个连续分组组成一个64元素块。内部raw exp shape为 $[d_0, d_1, ..., d_{n-3}, d_{n-2}/64, d_{n-1}*2]$，对外返回的scale shape为 $[d_0, d_1, ..., d_{n-3}, d_{n-2}/64, d_{n-1}, 2]$，最后一维依次保存两个32元素分组的指数。
 
 ## 函数原型
 
@@ -43,22 +44,29 @@ quant_mx(
 
 | 参数名 | 输入/输出 | 说明 |
 |--------|-----------|------|
-| input | 输入 | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。<br>仅支持TILEOP_ND格式；Shape仅支持1-4维。<br>当前仅支持最后一维参与量化，且最后一维按字节数需满足256字节对齐。对于DT_FP32，通常要求最后一维长度是64的倍数；对于DT_FP16/DT_BF16，通常要求最后一维长度是128的倍数。 |
+| input | 输入 | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。<br>仅支持TILEOP_ND格式；Shape仅支持1-4维。 |
 | quant_dtype | 输入 | 量化后输出Tensor的数据类型。<br>支持：DT_FP8E4M3、DT_FP4_E2M1X2。DT_FP4_E2M1X2仅支持DT_FP16、DT_BF16输入。 |
 | mode | 输入 | 量化时共享指数的舍入模式。<br>支持：ROUND_DOWN（OCP）、ROUND_UP（NV）。 |
-| axis | 输入 | 指定量化轴。<br>当前仅支持最后一维，即`-1`或`input.shape.size() - 1`。 |
-| performance_mode | 输入 | 是否启用性能模式。<br>默认值为`True`。<br>启用该模式时，实际shape尾轴长度必须能被view shape尾轴长度整切，即无尾块；若已设置TileShape，则TileShape维度数必须与输入一致，且TileShape最后一维必须等于view shape最后一维；同时view shape最后一维需要满足256字节对齐。<br>关闭该模式时，不要求TileShape最后一维等于view shape最后一维，也不要求TileShape最后一维满足256字节对齐，但输入最后一维仍必须是64的倍数。 |
+| axis | 输入 | 指定量化轴。<br>支持最后一维（`-1`或`input.shape.size() - 1`）和次尾轴（`-2`或`input.shape.size() - 2`）。 |
+| performance_mode | 输入 | 是否启用性能模式。<br>默认值为`True`。 |
 
 ## 返回值说明
 
 返回一个二元组`(quantized, scale)`：
 
 - `quantized`：量化后的Tensor，数据类型由`quant_dtype`指定，Shape与`input`相同。
-- `scale`：共享指数Tensor，数据类型固定为DT_FP8E8M0，Shape为`[*input.shape[:-1], ceil(input.shape[-1] / 64), 2]`。
+- `scale`：共享指数Tensor，数据类型固定为DT_FP8E8M0。`axis=-1`时Shape为`[*input.shape[:-1], ceil(input.shape[-1] / 64), 2]`；`axis=-2`时Shape为`[*input.shape[:-2], input.shape[-2] / 64, input.shape[-1], 2]`。
 
 ## 约束说明
 
 1. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+2. 若设置TileShape，其维度必须与输入一致。
+3. `axis=-1`且`performance_mode=True`时，view shape尾轴必须满足256字节对齐并能整切运行时shape尾轴，且TileShape尾轴必须等于view shape尾轴。
+4. `axis=-1`且`performance_mode=False`时，输入尾轴必须是64的倍数；TileShape尾轴只需为正数，无需等于view shape尾轴或满足256字节对齐。
+5. `axis=-2`要求输入至少为二维。view shape、运行时有效shape和TileShape的次尾轴必须为正数且是64的倍数，不支持次尾轴尾块。
+6. `axis=-2`且`quant_dtype=DT_FP8E4M3`时，view shape和TileShape的尾轴只需为正数，不要求256字节对齐，且TileShape尾轴无需等于view shape尾轴。
+7. `axis=-2`且`quant_dtype=DT_FP4_E2M1X2`时，view shape和TileShape的尾轴必须为64的倍数，即打包后每行满足32字节对齐。
+8. `axis=-2`时，`performance_mode=True`和`performance_mode=False`的约束相同。
 
 ## 调用示例
 
@@ -66,15 +74,15 @@ quant_mx(
 
 说明：调用该operation接口前，应通过`set_vec_tile_shapes`设置TileShape。
 
-TileShape维度应和输入一致。若`performance_mode=True`，则view shape尾轴需要整切实际shape尾轴，TileShape最后一维应与view shape最后一维相同；同时view shape最后一维需要满足256字节对齐。若`performance_mode=False`，则TileShape最后一维只要求为正数，输入最后一维仍必须是64的倍数。
+TileShape的具体取值要求参见[约束说明](#约束说明)。
 
-示例1：性能模式下，输入view shape为`[m, n]`，输出`quantized` shape为`[m, n]`，`scale` shape为`[m, ceil(n / 64), 2]`；实际shape尾轴需能被`n`整切，TileShape可设置为`[m1, n]`，其中`n`需满足256字节对齐。
+示例1：`axis=-1`且`performance_mode=True`时，输入view shape为`[m, n]`，TileShape可设置为`[m1, n]`。
 
 ```python
 pypto.set_vec_tile_shapes(4, 64)
 ```
 
-示例2：非性能模式下，输入`input` shape为`[m, n]`，`n`需为64的倍数；TileShape可设置为`[m1, n1]`，其中`n1`为正数。
+示例2：`axis=-1`且`performance_mode=False`时，输入shape为`[m, n]`，TileShape可设置为`[m1, n1]`。
 
 ```python
 pypto.set_vec_tile_shapes(2, 128)
@@ -115,6 +123,18 @@ quantized_general, scale_general = pypto.quant_mx(
     -1,
     False,
 )
+
+# 对次尾轴进行量化
+x_axis2 = pypto.tensor([128, 96], pypto.DT_FP16)
+pypto.set_vec_tile_shapes(64, 96)
+quantized_axis2, scale_axis2 = pypto.quant_mx(
+    x_axis2,
+    pypto.DT_FP8E4M3,
+    pypto.ROUND_DOWN,
+    -2,
+    False,
+)
+# quantized_axis2.shape为[128, 96]，scale_axis2.shape为[2, 96, 2]
 ```
 
 结果示例如下：

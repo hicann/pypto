@@ -3770,6 +3770,7 @@ def _generate_quantmx_input(input_tensor: dict, config: dict) -> np.ndarray:
 def params_quantmx_func(params: dict):
     params["mode"] = params.get("mode") or "ROUND_DOWN"
     assert params["mode"] in ("ROUND_UP", "ROUND_DOWN"), "mode must be ROUND_UP or ROUND_DOWN"
+    params["axis"] = int(params.get("axis", -1))
     params["performance_mode"] = str_to_bool(params.get("performance_mode"))
     params["use_exp_range"] = str_to_bool(params.get("use_exp_range"))
     params["exp_range"] = _quantmx_parse_int_list(params.get("exp_range")) if params["use_exp_range"] else None
@@ -3782,13 +3783,24 @@ def params_quantmx_func(params: dict):
 def _quantmx_parse_golden_config(config: dict):
     params = config.get("params", {}) or {}
     mode = params.get("mode", "ROUND_DOWN")
+    axis = int(params.get("axis", -1))
     output_dtype = config.get("output_tensors", [{}])[0].get("dtype", "fp8e4m3")
     if output_dtype not in _QUANTMX_OUTPUT_TO_DTYPE:
         raise ValueError(f"QuantMX golden does not support output dtype: {output_dtype}.")
     if mode not in _QUANTMX_SUPPORTED_MODES:
         raise ValueError(f"QuantMX golden does not support scale mode: {mode}.")
     quant_dtype = _QUANTMX_OUTPUT_TO_DTYPE[output_dtype]
-    return mode, quant_dtype, _MX_DTYPE_PARAMS[quant_dtype], _MX_DTYPE_IMPLS[quant_dtype]
+    return mode, axis, quant_dtype, _MX_DTYPE_PARAMS[quant_dtype], _MX_DTYPE_IMPLS[quant_dtype]
+
+
+def _quantmx_normalize_axis(axis: int, rank: int) -> int:
+    if axis < 0:
+        axis += rank
+    if axis < 0 or axis >= rank:
+        raise ValueError(f"QuantMX axis is out of range. axis={axis}, rank={rank}")
+    if axis != rank - 1 and not (rank >= 2 and axis == rank - 2):
+        raise ValueError(f"QuantMX golden only supports axis=-1 and axis=-2. axis={axis}, rank={rank}")
+    return axis
 
 
 class _QuantMXGroupedInput(NamedTuple):
@@ -3874,6 +3886,62 @@ def _quantmx_build_exp(x_shape: tuple, rows: int, scale_group_cols: int, group_c
     return exp
 
 
+def _quantmx_axis_last_golden(
+    x: np.ndarray, src_dtype_name: str, is_fp4_e2m1: bool, is_nv: bool, use_plain_fp8_max_abs: bool, dp: dict,
+    impl: dict
+):
+    group_size = 32
+    grouped = _quantmx_group_input(x, group_size)
+    max_source = _quantmx_golden_max_source(
+        grouped.x_grouped, src_dtype_name, is_fp4_e2m1, is_nv, use_plain_fp8_max_abs
+    )
+    max_abs = np.max(max_source, axis=2).astype(np.float32)
+    e8m0, group_scaling = _quantmx_compute_exp_scaling(max_abs, dp, is_fp4_e2m1, is_nv)
+    scaled = _quantmx_scale_grouped(grouped.x_grouped, group_scaling, src_dtype_name, is_fp4_e2m1, is_nv)
+    quant_grouped = impl["encode"](scaled)
+
+    quant_flat = quant_grouped.reshape(grouped.rows, grouped.padded_cols)[:, :grouped.cols]
+    quant = quant_flat.reshape(x.shape)
+    quant = impl["pack"](quant)
+    return [quant, _quantmx_build_exp(x.shape, grouped.rows, grouped.scale_group_cols, grouped.group_cols, e8m0)]
+
+
+def _quantmx_axis_dn_golden(
+    x: np.ndarray, src_dtype_name: str, is_fp4_e2m1: bool, is_nv: bool, use_plain_fp8_max_abs: bool, dp: dict,
+    impl: dict
+):
+    group_size = 32
+    m_dim = x.shape[-2]
+    n_dim = x.shape[-1]
+    if m_dim % 64 != 0:
+        raise ValueError(f"QuantMX axis=-2 golden requires second-last dim 64-aligned. Current dim: {m_dim}")
+
+    prefix_shape = x.shape[:-2]
+    prefix_rows = int(np.prod(prefix_shape)) if prefix_shape else 1
+    group_rows = m_dim // group_size
+    scale_rows = m_dim // 64
+    x_3d = x.reshape(prefix_rows, m_dim, n_dim)
+    x_grouped = x_3d.reshape(prefix_rows, group_rows, group_size, n_dim)
+    x_grouped = x_grouped.transpose(0, 3, 1, 2).reshape(prefix_rows * n_dim, group_rows, group_size)
+
+    max_source = _quantmx_golden_max_source(
+        x_grouped, src_dtype_name, is_fp4_e2m1, is_nv, use_plain_fp8_max_abs
+    )
+    max_abs = np.max(max_source, axis=2).astype(np.float32)
+    e8m0, group_scaling = _quantmx_compute_exp_scaling(max_abs, dp, is_fp4_e2m1, is_nv)
+    scaled = _quantmx_scale_grouped(x_grouped, group_scaling, src_dtype_name, is_fp4_e2m1, is_nv)
+    quant_grouped = impl["encode"](scaled)
+
+    quant = quant_grouped.reshape(prefix_rows, n_dim, group_rows, group_size)
+    quant = quant.transpose(0, 2, 3, 1).reshape(prefix_rows, m_dim, n_dim).reshape(x.shape)
+    quant = impl["pack"](quant)
+
+    exp_pairs = e8m0.reshape(prefix_rows, n_dim, group_rows).transpose(0, 2, 1)
+    exp_pairs = exp_pairs.reshape(prefix_rows, scale_rows, 2, n_dim).transpose(0, 1, 3, 2)
+    exp_public = exp_pairs.reshape(tuple(prefix_shape) + (scale_rows, n_dim, 2)).astype(np.uint8, copy=False)
+    return [quant, exp_public]
+
+
 @GoldenRegister.reg_golden_func(
     case_names=[
         "TestQuantMX/QuantMXOperationTest.TestQuantMX",
@@ -3881,8 +3949,7 @@ def _quantmx_build_exp(x_shape: tuple, rows: int, scale_group_cols: int, group_c
 )
 def gen_quantmx_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
     def golden_func(inputs: list, _config: dict):
-        mode, quant_dtype, dp, impl = _quantmx_parse_golden_config(_config)
-        group_size = 32
+        mode, axis, quant_dtype, dp, impl = _quantmx_parse_golden_config(_config)
         input_tensor_desc = _config.get("input_tensors", [{}])[0]
         src_dtype_name = input_tensor_desc.get("dtype", "")
         is_fp4_e2m1 = quant_dtype == "fp4_e2m1x2"
@@ -3893,19 +3960,12 @@ def gen_quantmx_op_golden(case_name: str, output: Path, case_index: int = None) 
         if x.ndim < 1 or x.ndim > 4:
             raise ValueError("QuantMX golden only supports 1D to 4D input.")
 
-        grouped = _quantmx_group_input(x, group_size)
-        max_source = _quantmx_golden_max_source(
-            grouped.x_grouped, src_dtype_name, is_fp4_e2m1, is_nv, use_plain_fp8_max_abs
-        )
-        max_abs = np.max(max_source, axis=2).astype(np.float32)
-        e8m0, group_scaling = _quantmx_compute_exp_scaling(max_abs, dp, is_fp4_e2m1, is_nv)
-        scaled = _quantmx_scale_grouped(grouped.x_grouped, group_scaling, src_dtype_name, is_fp4_e2m1, is_nv)
-        quant_grouped = impl["encode"](scaled)
-
-        quant_flat = quant_grouped.reshape(grouped.rows, grouped.padded_cols)[:, :grouped.cols]
-        quant = quant_flat.reshape(x.shape)
-        quant = impl["pack"](quant)
-        return [quant, _quantmx_build_exp(x.shape, grouped.rows, grouped.scale_group_cols, grouped.group_cols, e8m0)]
+        normalized_axis = _quantmx_normalize_axis(axis, x.ndim)
+        if normalized_axis == x.ndim - 2:
+            return _quantmx_axis_dn_golden(
+                x, src_dtype_name, is_fp4_e2m1, is_nv, use_plain_fp8_max_abs, dp, impl
+            )
+        return _quantmx_axis_last_golden(x, src_dtype_name, is_fp4_e2m1, is_nv, use_plain_fp8_max_abs, dp, impl)
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("QuantMX", golden_func, output, case_index)

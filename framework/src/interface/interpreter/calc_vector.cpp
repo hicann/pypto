@@ -888,10 +888,11 @@ void ExecuteOpQuantMX(ExecuteOperationContext* ctx)
     const auto normalizedAxis = axis < 0 ? axis + srcRank : axis;
     ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, normalizedAxis >= 0 && normalizedAxis < srcRank)
         << "QuantMX axis is out of range. Current axis: " << axis << ", input rank: " << srcRank;
-    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, normalizedAxis == srcRank - 1)
-        << "QuantMX interpreter currently only supports the last axis. Current axis: " << axis
+    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION,
+           normalizedAxis == srcRank - 1 || (srcRank >= 2 && normalizedAxis == srcRank - 2))
+        << "QuantMX interpreter currently only supports the last axis and second-last axis. Current axis: " << axis
         << ", input rank: " << srcRank;
-    calc::QuantMX(out, exp, max, scaling, src, performanceMode != 0, mode);
+    calc::QuantMX(out, exp, max, scaling, src, performanceMode != 0, mode, normalizedAxis);
 }
 REGISTER_CALC_OP(OP_QUANT_MX, Opcode::OP_QUANT_MX, ExecuteOpQuantMX);
 

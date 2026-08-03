@@ -202,9 +202,10 @@ inline void LogicalAnd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Logi
     GetCalcOps()->LogicalAnd(Trans(out), Trans(self), Trans(other));
 }
 inline void QuantMX(LogicalTensorDataPtr out, LogicalTensorDataPtr exp, LogicalTensorDataPtr max,
-                    LogicalTensorDataPtr scaling, LogicalTensorDataPtr self, bool performanceMode, int64_t mode = 1)
+                    LogicalTensorDataPtr scaling, LogicalTensorDataPtr self, bool performanceMode, int64_t mode = 1,
+                    int64_t axis = -1)
 {
-    GetCalcOps()->QuantMX(Trans(out), Trans(exp), Trans(max), Trans(scaling), Trans(self), performanceMode, mode);
+    GetCalcOps()->QuantMX(Trans(out), Trans(exp), Trans(max), Trans(scaling), Trans(self), performanceMode, mode, axis);
 }
 
 inline void Interleave(LogicalTensorDataPtr out0, LogicalTensorDataPtr out1, LogicalTensorDataPtr self,

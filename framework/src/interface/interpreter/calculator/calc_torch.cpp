@@ -3204,12 +3204,65 @@ struct QuantMXShapes {
     std::vector<int64_t> performanceGroupedShape;
     std::vector<int64_t> performanceScalingShape;
     std::vector<int64_t> scalingShape;
+    bool isDnAxis;
     int64_t rows;
     int64_t cols;
     int64_t groupCols;
     int64_t expCols;
     int64_t quantCols;
+    int64_t prefixRows;
+    int64_t mDim;
+    int64_t nDim;
 };
+
+static void StoreQuantMXDnValue(uint8_t* quantPtr, int64_t row, int64_t nDim, int64_t quantCols, int64_t col,
+                                float srcValue, float groupScaling, const QuantMXContext& ctx)
+{
+    const float scaled = ScaleQuantMXValue(srcValue, groupScaling, ctx);
+    if (ctx.isFp4E2M1) {
+        const uint8_t encoded = EncodeE2M1Magic(scaled);
+        uint8_t& packed = quantPtr[row * quantCols + col / 2];
+        packed = (col & 1) == 0 ? static_cast<uint8_t>((packed & 0xF0u) | encoded) :
+                                  static_cast<uint8_t>((packed & 0x0Fu) | (encoded << 0x4));
+        return;
+    }
+    quantPtr[row * nDim + col] = EncodeE4M3Fn(scaled);
+}
+
+static void FillQuantMXDn(const float* inputPtr, uint8_t* quantPtr, uint8_t* expPtr, float* scalingPtr, float* maxPtr,
+                          const QuantMXShapes& shapes, DataType srcDtype, DataType quantDtype, int64_t mode)
+{
+    const QuantMXContext ctx = MakeQuantMXContext(srcDtype, quantDtype, false, mode);
+    for (int64_t prefix = 0; prefix < shapes.prefixRows; ++prefix) {
+        for (int64_t group = 0; group < shapes.groupCols; ++group) {
+            for (int64_t col = 0; col < shapes.nDim; ++col) {
+                float maxAbsValue = 0.0f;
+                bool hasNaN = false;
+                for (int64_t inner = 0; inner < MX_QUANT_TILE_BLOCK; ++inner) {
+                    const int64_t row = group * MX_QUANT_TILE_BLOCK + inner;
+                    const int64_t inputOffset = (prefix * shapes.mDim + row) * shapes.nDim + col;
+                    const float val = NormalizeQuantMXMaxValue(inputPtr[inputOffset], ctx);
+                    hasNaN = hasNaN || std::isnan(val);
+                    maxAbsValue = std::isnan(val) ? maxAbsValue : std::max(maxAbsValue, val);
+                }
+                maxAbsValue = hasNaN ? std::numeric_limits<float>::quiet_NaN() : maxAbsValue;
+                const auto exponentAndScaling = ComputeQuantMXExponentAndScaling(maxAbsValue, ctx);
+                const int64_t scratchOffset = (prefix * shapes.groupCols + group) * shapes.nDim + col;
+                const int64_t expOffset = (prefix * (shapes.groupCols / 2) + group / 2) * (shapes.nDim * 2) + col * 2 +
+                                          group % 2;
+                expPtr[expOffset] = exponentAndScaling.first;
+                maxPtr[scratchOffset] = maxAbsValue;
+                scalingPtr[scratchOffset] = exponentAndScaling.second;
+                for (int64_t inner = 0; inner < MX_QUANT_TILE_BLOCK; ++inner) {
+                    const int64_t row = group * MX_QUANT_TILE_BLOCK + inner;
+                    const int64_t flatRow = prefix * shapes.mDim + row;
+                    StoreQuantMXDnValue(quantPtr, flatRow, shapes.nDim, shapes.quantCols, col,
+                                        inputPtr[flatRow * shapes.nDim + col], exponentAndScaling.second, ctx);
+                }
+            }
+        }
+    }
+}
 
 static std::vector<int64_t> BuildQuantMXPerformanceGroupedShape(const std::vector<int64_t>& inputShape,
                                                                 int64_t groupCols)
@@ -3225,10 +3278,39 @@ static std::vector<int64_t> BuildQuantMXPerformanceGroupedShape(const std::vecto
 }
 
 static QuantMXShapes BuildQuantMXShapes(const torch::Tensor& input, DataType srcDtype, DataType quantDtype,
-                                        bool performanceMode)
+                                        bool performanceMode, int64_t axis)
 {
     QuantMXShapes shapes;
     shapes.quantShape = input.sizes().vec();
+    const int64_t rank = static_cast<int64_t>(shapes.quantShape.size());
+    const int64_t normalizedAxis = axis < 0 ? axis + rank : axis;
+    shapes.isDnAxis = rank >= 2 && normalizedAxis == rank - 2;
+    if (shapes.isDnAxis) {
+        shapes.mDim = shapes.quantShape[rank - 2];
+        shapes.nDim = shapes.quantShape.back();
+        ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, shapes.mDim % 64 == 0)
+            << "QuantMX axis=-2 interpreter requires the second-last dimension to be 64-aligned.";
+        ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, shapes.nDim != 0)
+            << "QuantMX input last dimension must not be zero.";
+        if (quantDtype == DT_FP4_E2M1X2) {
+            shapes.quantShape.back() = LastDimPackedCount(shapes.nDim, quantDtype);
+        }
+        shapes.groupedShape = input.sizes().vec();
+        shapes.groupedShape[rank - 2] = shapes.mDim / MX_QUANT_TILE_BLOCK;
+        shapes.expShape = input.sizes().vec();
+        shapes.expShape[rank - 2] = shapes.mDim / 64;
+        shapes.expShape.back() = shapes.nDim * 2;
+        shapes.performanceGroupedShape = shapes.expShape;
+        shapes.performanceScalingShape = shapes.groupedShape;
+        shapes.scalingShape = shapes.groupedShape;
+        shapes.rows = input.numel() / shapes.nDim;
+        shapes.cols = shapes.nDim;
+        shapes.groupCols = shapes.mDim / MX_QUANT_TILE_BLOCK;
+        shapes.expCols = shapes.nDim * 2;
+        shapes.quantCols = shapes.quantShape.back();
+        shapes.prefixRows = input.numel() / (shapes.mDim * shapes.nDim);
+        return shapes;
+    }
     shapes.groupedShape = shapes.quantShape;
     shapes.cols = shapes.groupedShape.back();
     ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, shapes.cols != 0)
@@ -3256,6 +3338,9 @@ static QuantMXShapes BuildQuantMXShapes(const torch::Tensor& input, DataType src
     shapes.groupCols = shapes.groupedShape.back();
     shapes.expCols = shapes.expShape.back();
     shapes.quantCols = shapes.quantShape.back();
+    shapes.prefixRows = 0;
+    shapes.mDim = 0;
+    shapes.nDim = 0;
     return shapes;
 }
 
@@ -3279,13 +3364,14 @@ static void CopyQuantMXOutputs(const std::pair<torch::Tensor, torch::Tensor>& to
                                const torch::Tensor& scalingTemp, const QuantMXShapes& shapes, bool performanceMode)
 {
     tout.first.copy_(quantRaw);
-    texp.first.copy_(performanceMode ? expRaw.reshape(shapes.performanceGroupedShape) : expRaw);
-    tmax.second.copy_(maxTemp.reshape(shapes.performanceGroupedShape));
+    const bool tailPerformanceMode = performanceMode && !shapes.isDnAxis;
+    texp.first.copy_(tailPerformanceMode ? expRaw.reshape(shapes.performanceGroupedShape) : expRaw);
+    tmax.second.copy_(tailPerformanceMode ? maxTemp.reshape(shapes.performanceGroupedShape) : maxTemp);
     tscaling.second.copy_(scalingTemp);
 }
 
 static void QuantMX(const TensorData& out, const TensorData& exp, const TensorData& max, const TensorData& scaling,
-                    const TensorData& self, bool performanceMode, int64_t mode)
+                    const TensorData& self, bool performanceMode, int64_t mode, int64_t axis)
 {
     auto tout = From(out);
     auto texp = From(exp);
@@ -3297,11 +3383,19 @@ static void QuantMX(const TensorData& out, const TensorData& exp, const TensorDa
     ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, input.dim() >= 1 && input.dim() <= 0x4)
         << "QuantMX interpreter only supports 1D to 4D input.";
 
-    const QuantMXShapes shapes = BuildQuantMXShapes(input, self.dtype, out.dtype, performanceMode);
+    const QuantMXShapes shapes = BuildQuantMXShapes(input, self.dtype, out.dtype, performanceMode, axis);
     auto quantRaw = CreateQuantMXQuantRaw(shapes.quantShape, out.dtype);
     auto expRaw = torch::zeros(shapes.expShape, torch::TensorOptions().dtype(torch::kUInt8));
     auto scalingTemp = CreateQuantMXScalingTemp(shapes.scalingShape, out.dtype);
     auto maxTemp = torch::zeros(shapes.groupedShape, torch::TensorOptions().dtype(torch::kFloat32));
+    if (shapes.isDnAxis) {
+        auto inputFlat = input.view({shapes.prefixRows, shapes.mDim, shapes.nDim});
+        auto inputContiguous = inputFlat.contiguous();
+        FillQuantMXDn(inputContiguous.data_ptr<float>(), quantRaw.data_ptr<uint8_t>(), expRaw.data_ptr<uint8_t>(),
+                      scalingTemp.data_ptr<float>(), maxTemp.data_ptr<float>(), shapes, self.dtype, out.dtype, mode);
+        CopyQuantMXOutputs(tout, texp, tmax, tscaling, quantRaw, expRaw, maxTemp, scalingTemp, shapes, performanceMode);
+        return;
+    }
     auto inputFlat = input.view({shapes.rows, shapes.cols});
     auto quantFlat = quantRaw.view({shapes.rows, shapes.quantCols});
     auto expFlat = expRaw.view({shapes.rows, shapes.expCols});

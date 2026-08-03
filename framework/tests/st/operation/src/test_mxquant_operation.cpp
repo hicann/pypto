@@ -21,11 +21,12 @@ constexpr int64_t QUANT_MX_SCALE_GROUP_COLS = 64;
 
 struct QuantMXOpFuncArgs : public OpFuncArgs {
     QuantMXOpFuncArgs(const std::vector<int64_t>& viewShape, const std::vector<int64_t>& tileShape, DataType quantDtype,
-                      DequantScaleRoundingMode mode, bool performanceMode)
+                      DequantScaleRoundingMode mode, int64_t axis, bool performanceMode)
         : viewShape_(viewShape),
           tileShape_(tileShape),
           quantDtype_(quantDtype),
           mode_(mode),
+          axis_(axis),
           performanceMode_(performanceMode)
     {}
 
@@ -33,6 +34,7 @@ struct QuantMXOpFuncArgs : public OpFuncArgs {
     std::vector<int64_t> tileShape_;
     DataType quantDtype_;
     DequantScaleRoundingMode mode_;
+    int64_t axis_;
     bool performanceMode_;
 };
 
@@ -44,6 +46,23 @@ struct QuantMXOpMetaData {
     OpFunc opFunc_;
     nlohmann::json test_data_;
 };
+
+std::vector<SymbolicScalar> BuildQuantMXScaleOffset(const std::vector<SymbolicScalar>& offset, int64_t axis)
+{
+    const auto rank = offset.size();
+    int64_t normalizedAxis = axis;
+    if (normalizedAxis < 0) {
+        normalizedAxis += static_cast<int64_t>(rank);
+    }
+    auto scaleOffset = offset;
+    if (rank >= 2 && normalizedAxis == static_cast<int64_t>(rank) - 2) {
+        scaleOffset[rank - 2] = scaleOffset[rank - 2] / QUANT_MX_SCALE_GROUP_COLS;
+    } else {
+        scaleOffset.back() = scaleOffset.back() / QUANT_MX_SCALE_GROUP_COLS;
+    }
+    scaleOffset.push_back(0);
+    return scaleOffset;
+}
 
 static void QuantMXOperationExeFunc1D(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
                                       const OpFuncArgs* opArgs)
@@ -61,8 +80,8 @@ static void QuantMXOperationExeFunc1D(const std::vector<Tensor>& inputs, std::ve
             auto viewTensor = View(inputs[0], args->viewShape_,
                                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape)}, offset);
             TileShape::Current().SetVecTile(args->tileShape_);
-            auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, -1, args->performanceMode_);
-            std::vector<SymbolicScalar> scaleOffset = {offset[0] / QUANT_MX_SCALE_GROUP_COLS, 0};
+            auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, args->axis_, args->performanceMode_);
+            auto scaleOffset = BuildQuantMXScaleOffset(offset, args->axis_);
             Assemble(std::get<0>(res), offset, outputs[0]);
             Assemble(std::get<1>(res), scaleOffset, outputs[1]);
         }
@@ -92,8 +111,8 @@ static void QuantMXOperationExeFunc2D(const std::vector<Tensor>& inputs, std::ve
                                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
                                        offset);
                 TileShape::Current().SetVecTile(args->tileShape_);
-                auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, -1, args->performanceMode_);
-                std::vector<SymbolicScalar> scaleOffset = {offset[0], offset[1] / QUANT_MX_SCALE_GROUP_COLS, 0};
+                auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, args->axis_, args->performanceMode_);
+                auto scaleOffset = BuildQuantMXScaleOffset(offset, args->axis_);
                 Assemble(std::get<0>(res), offset, outputs[0]);
                 Assemble(std::get<1>(res), scaleOffset, outputs[1]);
             }
@@ -131,9 +150,8 @@ static void QuantMXOperationExeFunc3D(const std::vector<Tensor>& inputs, std::ve
                                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
                                            offset);
                     TileShape::Current().SetVecTile(args->tileShape_);
-                    auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, -1, args->performanceMode_);
-                    std::vector<SymbolicScalar> scaleOffset = {offset[0], offset[1],
-                                                               offset[2] / QUANT_MX_SCALE_GROUP_COLS, 0};
+                    auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, args->axis_, args->performanceMode_);
+                    auto scaleOffset = BuildQuantMXScaleOffset(offset, args->axis_);
                     Assemble(std::get<0>(res), offset, outputs[0]);
                     Assemble(std::get<1>(res), scaleOffset, outputs[1]);
                 }
@@ -178,9 +196,9 @@ static void QuantMXOperationExeFunc4D(const std::vector<Tensor>& inputs, std::ve
                                                 std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
                                                offset);
                         TileShape::Current().SetVecTile(args->tileShape_);
-                        auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, -1, args->performanceMode_);
-                        std::vector<SymbolicScalar> scaleOffset = {offset[0], offset[1], offset[2],
-                                                                   offset[3] / QUANT_MX_SCALE_GROUP_COLS, 0};
+                        auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, args->axis_,
+                                           args->performanceMode_);
+                        auto scaleOffset = BuildQuantMXScaleOffset(offset, args->axis_);
                         Assemble(std::get<0>(res), offset, outputs[0]);
                         Assemble(std::get<1>(res), scaleOffset, outputs[1]);
                     }
@@ -215,7 +233,12 @@ TEST_P(QuantMXOperationTest, TestQuantMX)
     if (test_data.at("params").contains("performance_mode")) {
         performanceMode = GetValueByName<bool>(test_data, "performance_mode");
     }
-    auto args = QuantMXOpFuncArgs(GetViewShape(test_data), GetTileShape(test_data), quantDtype, mode, performanceMode);
+    int64_t axis = -1;
+    if (test_data.at("params").contains("axis")) {
+        axis = GetValueByName<int64_t>(test_data, "axis");
+    }
+    auto args = QuantMXOpFuncArgs(GetViewShape(test_data), GetTileShape(test_data), quantDtype, mode, axis,
+                                  performanceMode);
     auto testCase = CreateTestCaseDesc<QuantMXOpMetaData>(GetParam(), &args);
     TestExecutor::runTest(testCase);
 }
