@@ -33,24 +33,17 @@ loop_unroll：`effective_tile = tile × max_unroll`，套用同上公式，tail 
 
 ### 2. 计算
 
-```
-effective_tile = tile × max_unroll          (普通 loop: max_unroll=1)
-unroll_iters   = ⌈dim / effective_tile⌉
+agent 读代码提取 `dim`/`tile`/`max_unroll`，传入脚本：
 
-if unroll_iters <= 1 → dim 已是最小，跳过
-tail = dim % effective_tile
-new_dim = effective_tile + tail            (tail=0 时即 effective_tile)
-if new_dim == dim → 已是最小，跳过
+```python
+from scripts.pruning_utils import (
+    compute_pruned_dim,              # new_dim (普通 loop / loop_unroll 通用)
+    compute_loop_count,              # 原始循环轮数
+    compute_hardcoded_loop_count,    # 硬编码 loop 剪枝后的 N
+)
 ```
 
-对于 `loop_unroll(m_loop, unroll_list=[4,2,1])`：提取最大的 unroll 值作为 `max_unroll`，套同上公式。`effective_tile = tile × max_unroll`，tail 是元素级余数，保证不会膨胀。
-
-对于硬编码 `pypto.loop(N, ...)`：shape 同上公式，loop 字面量 `N` 改为：
-```
-dim <= tile           → 1
-dim > tile 且无尾块    → 1
-dim > tile 且有尾块    → 2
-```
+loop_unroll 的 `max_unroll` 取 `unroll_list` 最大值。硬编码循环额外调用 `compute_hardcoded_loop_count(dim, tile)` 得新 `N`。
 
 ### 3. 修改
 
@@ -79,8 +72,8 @@ dim > tile 且有尾块    → 2
 | 模式 | kernel 写法 | 剪枝要点 |
 |------|------------|----------|
 | tile 循环 | `m_loop = (m + tile - 1) // tile` | 改 shape，kernel 不动 |
-| loop_unroll | `pypto.loop_unroll(N, unroll_list=[...])` | `effective_tile = tile × max_unroll` |
-| 硬编码 | `pypto.loop(2, name="B", ...)` | 改 shape + 改 loop 字面量 |
+| loop_unroll | `pypto.loop_unroll(N, unroll_list=[...])` | `compute_pruned_dim(dim, tile, max_unroll)` |
+| 硬编码 | `pypto.loop(2, name="B", ...)` | 改 shape + `compute_hardcoded_loop_count(dim, tile)` |
 | 非 tile | `for i in range(32)` | 跳过，无法剪枝 |
 
 ## 常见问题

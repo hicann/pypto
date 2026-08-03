@@ -46,7 +46,8 @@ export TILE_FWK_DEVICE_ID=0
 4. 验证VF/同步/合轴 — 直接验证开关配置问题
 5. 前端校验后排查特定问题 — tensor_graph 校验后直接查VF/同步/合轴
 6. 只跑Pass对比 — 只做 Pass 层校验
-7. 直接上板二分 — 直接添加检查点二分定位
+7. machine校验 — 怀疑内存重叠时检测 workspace 是否有问题
+8. 直接上板二分 — 直接添加检查点二分定位
 ```
 
 ### 路由表
@@ -59,6 +60,7 @@ export TILE_FWK_DEVICE_ID=0
 | 验证VF/同步/合轴 | VF融合、同步问题、合轴、开关验证 | 特定问题排查 → 结束 |
 | 前端校验后排查特定问题 | 先查前端再用配置定界、先查构图再查开关、tensor_graph后查特定问题 | tensor-graph → 特定问题排查 |
 | 只跑Pass对比 | pass校验、pass_compare、Pass层 | pass校验 → 结束 |
+| machine校验 | 内存重叠、workspace问题、内存管理异常、内存复用错误 | memory-overlap-detector → 结束 |
 | 直接上板二分 | 二分、上板二分、检查点tensor | 二分 → 结束 |
 
 ## 路由链详情
@@ -176,6 +178,21 @@ export TILE_FWK_DEVICE_ID=0
 执行步骤：
 1. 直接进入 [precision-pass/SKILL.md](precision-pass/SKILL.md) 的"一、Pass 校验"章节
 2. Pass 校验完成后结束，不进入特定问题排查
+
+### machine校验
+
+> 当用户明确提到内存重叠，或全自动排查各阶段均无果但仍存在精度差异时，作为补充检测。
+
+```
+[pypto-memory-overlap-detector]  检测 workspace 内存重叠与管理异常
+       │
+       ├── 检测到内存重叠 → 修复 → 重新验证精度 → 结束
+       │
+       └── 无内存重叠 → 结束
+```
+
+执行步骤：
+1. 进入 [../pypto-memory-overlap-detector/SKILL.md](../pypto-memory-overlap-detector/SKILL.md) 执行完整流程
 
 ### 直接上板二分
 

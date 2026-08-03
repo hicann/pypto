@@ -29,7 +29,7 @@ def write_file(file_path, content):
 def find_trace_log_dir(log_base_path):
     for root, _, files in os.walk(log_base_path):
         for file in files:
-            if file.startswith('device') and file.endswith('.log'):
+            if (file.startswith('device') or file.startswith('pypto-simulation')) and file.endswith('.log'):
                 log_file = os.path.join(root, file)
                 with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
                     if '#trace' in f.read():

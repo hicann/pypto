@@ -618,6 +618,7 @@ class TraceDeviceTask:
     def _build_reach_dict(self, graph, depend_index, visit_dict):
         if visit_dict[depend_index]:
             return
+        visit_dict[depend_index] = True
         leaf_task = graph.leaf_task_list[depend_index]
         depend_index_dict = graph.leaf_task_depend_index_dict
         reach_dict = graph.reach_dict
@@ -631,7 +632,6 @@ class TraceDeviceTask:
                 if reach_dict[succ_depend_index][i] != INVALID_TRACE_TASK_DEPEND_INDEX:
                     reach_dict[depend_index][i] = succ_depend_index
             reach_dict[depend_index][succ_depend_index] = succ_depend_index
-        visit_dict[depend_index] = True
 
 
 class SchemaNode(list):
@@ -1185,6 +1185,7 @@ class LoadTraceLog:
     @staticmethod
     def _clean_trace_content(line: str, trace_pos: int, strip_whitespace: bool) -> str:
         trace_content = line[trace_pos:].replace('"', '').replace('#trace:  ', '#trace:')
+        trace_content = trace_content.replace('DEV_TRACE_PREFIX ', '#trace:')
         if strip_whitespace:
             trace_content = trace_content.strip()
         return trace_content
@@ -1210,6 +1211,8 @@ class LoadTraceLog:
     def _parse_trace_lines(self, file_handler, strip_whitespace: bool) -> None:
         for _, line in enumerate(file_handler, 1):
             trace_pos = line.find('#trace')
+            if trace_pos == -1:
+                trace_pos = line.find('DEV_TRACE_PREFIX')
             if trace_pos != -1:
                 trace_content = self._clean_trace_content(line, trace_pos, strip_whitespace)
                 self.trace_content_list.append(trace_content)
