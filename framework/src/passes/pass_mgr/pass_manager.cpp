@@ -328,7 +328,9 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
                    [](const PassEntry& elem) { return elem.identifier; });
     ConfigManager::Instance().PassConfigsDebugInfo(strategy, identifiers);
     const auto dumpPassGraph = config::GetDebugOption<std::vector<std::string>>(CFG_DUMP_PASS_GRAPH);
-    WarnUnmatchedDumpPassGraph(strategy, dumpPassGraph, identifiers);
+    if (strategy == config::GetPassStrategy()) {
+        WarnUnmatchedDumpPassGraph(strategy, dumpPassGraph, identifiers);
+    }
     for (size_t i = startIdx; i < strategyPasses.size(); i++) {
         const auto& identifier = strategyPasses[i].identifier;
         if (ShouldTerminateAtStage(identifier)) {
