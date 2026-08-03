@@ -32,7 +32,7 @@ std::unordered_set<const Var*> CollectVarUses(const ExprPtr& expr);
 std::unordered_set<const Var*> CollectStmtVarRefs(const StmtPtr& stmt);
 
 /// Collect all Var references from a list of stmts.
-/// If skip_iter_updates, skip YieldStmt/BreakStmt/ContinueStmt
+/// If skip_iter_updates, recursively skip YieldStmt/BreakStmt/ContinueStmt
 /// (their values are iter_arg updates, not uses).
 std::unordered_set<const Var*> CollectStmtVarRefs(const std::vector<StmtPtr>& stmts, bool skip_iter_updates = false);
 

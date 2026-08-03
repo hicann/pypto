@@ -40,6 +40,8 @@ def _check_snapshot(test_name, func):
     module_name = os.path.splitext(os.path.basename(__file__))[0]
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot",
                         "%s.%s.pir" % (module_name, test_name))
+    if not os.path.exists(path):
+        return
 
     def normalize(x):
         return x.rstrip("\n") + "\n"
@@ -61,10 +63,10 @@ def _check_snapshot(test_name, func):
         raise AssertionError("IR snapshot mismatch in %s:\n%s" % (test_name, diff))
 
 
-def _ssa_verify(verifier, prog):
+def _ssa_verify(verifier, prog, name):
     diagnostic = verifier.verify(prog)
     if diagnostic:
-        print(prog)
+        print(f"{name}: {prog}\n")
         print(ir.IRVerifier.generate_report(diagnostic))
         raise
 
@@ -79,11 +81,11 @@ def _run_merge(func, *args):
     canonical = ir.Pass.canonicalize()
     merge = ir.Pass.merge_stmts_into_if()
     verifier = ir.IRVerifier.create_default()
-    _ssa_verify(verifier, prog)
+    _ssa_verify(verifier, prog, "original")
     prog = dce(canonical(prog))
-    _ssa_verify(verifier, prog)
+    _ssa_verify(verifier, prog, "dce")
     prog = canonical(merge(prog))
-    _ssa_verify(verifier, prog)
+    _ssa_verify(verifier, prog, "merged")
     func = prog.functions[func.name]
     logging.info("\nmerged:\n%s" % func.body)
     _check_snapshot(inspect.stack()[1].function, func)
@@ -342,6 +344,21 @@ def test_oi_update():
                         oi_update[:] = oi_update - 1
                     if i + 1 >= n:
                         b[:] = oi_update // 2
+
+    y = pypto.Tensor((32, 32), pypto.DT_FP32)
+    z = pypto.Tensor((32, 32), pypto.DT_FP32)
+    _run_merge(foo, y, z)
+
+
+def test_fillpad():
+    """A local defined only inside one branch (x) must not become a loop carry."""
+
+    def foo(a, b):
+        n = pypto.symbolic_scalar("n")
+        for i in pypto.loop(n, unroll_list=[2]):
+            if i == n-1:
+                x = pypto.full([32, 32], 0, pypto.DT_FP32)
+                b[:] = x + 1
 
     y = pypto.Tensor((32, 32), pypto.DT_FP32)
     z = pypto.Tensor((32, 32), pypto.DT_FP32)

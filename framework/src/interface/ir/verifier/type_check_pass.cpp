@@ -404,6 +404,9 @@ void TypeChecker::CheckIfReturnYieldTypeAt(const IfStmtPtr& op, const YieldStmtP
     if (!then_type || !else_type)
         return;
 
+    if (IsA<UnknownType>(then_type) || IsA<UnknownType>(else_type))
+        return;
+
     CheckTypeEquality(then_type, else_type, "IfStmt", "then yield value[" + std::to_string(index) + "]",
                       "else yield value[" + std::to_string(index) + "]", op->span_);
 }

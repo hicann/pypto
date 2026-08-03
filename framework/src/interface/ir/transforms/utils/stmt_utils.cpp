@@ -29,8 +29,14 @@ class VarUseCollector : public IRVisitor {
 public:
     std::unordered_set<const Var*> var_uses;
 
+    // When set, skip Yield/Break/Continue statements (and their carried-value
+    // expressions) at any nesting depth: a terminator only forwards loop
+    // carries, it is not a real use of the carried variable.
+    explicit VarUseCollector(bool skip_iter_updates = false) : skip_iter_updates_(skip_iter_updates) {}
+
 private:
     using IRVisitor::VisitExpr_;
+    using IRVisitor::VisitStmt_;
     void VisitExpr_(const VarPtr& op) override
     {
         var_uses.insert(op.get());
@@ -41,6 +47,26 @@ private:
         var_uses.insert(op.get());
         IRVisitor::VisitExpr_(op);
     }
+    void VisitStmt_(const YieldStmtPtr& op) override
+    {
+        if (!skip_iter_updates_) {
+            IRVisitor::VisitStmt_(op);
+        }
+    }
+    void VisitStmt_(const BreakStmtPtr& op) override
+    {
+        if (!skip_iter_updates_) {
+            IRVisitor::VisitStmt_(op);
+        }
+    }
+    void VisitStmt_(const ContinueStmtPtr& op) override
+    {
+        if (!skip_iter_updates_) {
+            IRVisitor::VisitStmt_(op);
+        }
+    }
+
+    bool skip_iter_updates_;
 };
 
 } // namespace
@@ -62,12 +88,8 @@ std::unordered_set<const Var*> CollectStmtVarRefs(const StmtPtr& stmt)
 
 std::unordered_set<const Var*> CollectStmtVarRefs(const std::vector<StmtPtr>& stmts, bool skip_iter_updates)
 {
-    VarUseCollector collector;
+    VarUseCollector collector(skip_iter_updates);
     for (const auto& s : stmts) {
-        if (skip_iter_updates &&
-            (std::dynamic_pointer_cast<const YieldStmt>(s) || std::dynamic_pointer_cast<const BreakStmt>(s) ||
-             std::dynamic_pointer_cast<const ContinueStmt>(s)))
-            continue;
         collector.VisitStmt(s);
     }
     return std::move(collector.var_uses);
