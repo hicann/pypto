@@ -190,8 +190,7 @@ private:
                                const std::vector<int64_t>& toOffset, std::vector<SymbolicScalar>& dynValidShape);
     Status GetReshapeDynShape(const std::shared_ptr<ReshapeOp>& op, std::vector<SymbolicScalar>& dynValidShape);
     Status GroupReshapeOffset(const std::shared_ptr<ReshapeOp>& isAddReshapeop, const std::vector<int64_t>& offset);
-    Status UpdateDynShape(const std::shared_ptr<ReshapeOp>& reshapeOp, const std::vector<int64_t>& offset,
-                          const std::vector<SymbolicScalar>& dynShape);
+    Status UpdateDynShape(const std::shared_ptr<ReshapeOp>& reshapeOp);
     Status ObtainChangingAxis(std::vector<int64_t> alignedShape, std::vector<int64_t> input,
                               std::vector<bool>& ChangingAxis);
     Status CheckDynStatus(std::vector<int64_t> alignedShape, std::vector<int64_t> input, std::vector<int64_t> output,

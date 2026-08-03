@@ -17,6 +17,7 @@
 
 #include "interface/operation/operation.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_utils.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/tensor.h"
 #include "tilefwk/tilefwk_op.h"
@@ -495,6 +496,8 @@ Status InferTensorFormat::DeriveFormats(Function& function)
 Status InferTensorFormat::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "Start InferTensorFormat for function [%s].", function.GetRawName().c_str());
+    // 兜底告警前端输入中存在dynValidShape的tensor经过assemble后未手动view有效数据的情况，预警可能导致的精度问题。
+    FunctionUtils::WarnAssembleDynValidShapeRisk(function);
 
     Status status = DeriveFormats(function);
     if (status != SUCCESS) {

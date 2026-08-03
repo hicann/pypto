@@ -56,6 +56,10 @@ public:
     static NodeType GetNodeType(const LogicalTensor& tensor, const Function& function);
 
     static Status InferOutcastWriteConflict(Function& function);
+
+    /// Warns when assemble outputs may lose non-immediate dynValidShape propagation.
+    /// This scans assemble ops in the function and only emits warnings; it does not modify the graph.
+    static void WarnAssembleDynValidShapeRisk(Function& function);
 };
 
 class CommonUtils {

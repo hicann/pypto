@@ -16,6 +16,7 @@
 #include "graph_utils.h"
 #include "pass_utils.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/pass_attr_defs.h"
 #include "passes/pass_utils/pass_operation_utils.h"
 
 namespace npu {
@@ -69,11 +70,11 @@ Operation& GraphUtils::AddReshapeOperation(Function& function, const LogicalTens
     if (outDynShape.empty()) {
         InferShapeRegistry::GetInstance().CallInferShapeFunc(&newOp);
         std::vector<SymbolicScalar> validShape;
-        if (!newOp.GetAttr(OP_ATTR_PREFIX + "validShape", validShape) || validShape.empty()) {
-            newOp.SetAttribute(OP_ATTR_PREFIX + "validShape", oOperand->GetDynValidShape());
+        if (!newOp.GetAttr(OP_ATTR_VALID_SHAPE, validShape) || validShape.empty()) {
+            newOp.SetAttribute(OP_ATTR_VALID_SHAPE, oOperand->GetDynValidShape());
         }
     } else {
-        newOp.SetAttribute(OP_ATTR_PREFIX + "validShape", outDynShape);
+        newOp.SetAttribute(OP_ATTR_VALID_SHAPE, outDynShape);
         oOperand->UpdateDynValidShape(outDynShape);
     }
     return newOp;

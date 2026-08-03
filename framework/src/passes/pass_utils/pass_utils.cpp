@@ -15,11 +15,17 @@
 
 #include "pass_utils.h"
 
+#include <algorithm>
 #include <climits>
+#include <sstream>
+#include <unordered_map>
 #include "interface/operation/attribute.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_log/pass_log.h"
 #include "tilefwk/error.h"
 #include "tilefwk/platform.h"
+
+#define MODULE_NAME "FunctionUtils"
 
 namespace npu::tile_fwk {
 
@@ -66,6 +72,67 @@ int CalculateVolume(const LogicalTensor& tensor)
     }
     return volume;
 }
+
+namespace {
+bool HasNonImmediateDynValidShape(const std::vector<SymbolicScalar>& dynValidShape)
+{
+    return std::any_of(dynValidShape.begin(), dynValidShape.end(),
+                       [](const SymbolicScalar& dim) { return !dim.IsImmediate(); });
+}
+
+bool IsViewWithNonImmediateDynValidShape(Operation* op)
+{
+    if (op->GetOpcode() != Opcode::OP_VIEW || op->GetOOperands().empty()) {
+        return false;
+    }
+    auto output = op->GetOOperands().front();
+    if (output != nullptr && HasNonImmediateDynValidShape(output->GetDynValidShape())) {
+        return true;
+    }
+    auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op->GetOpAttribute());
+    return viewAttr != nullptr && HasNonImmediateDynValidShape(viewAttr->GetToDynValidShape());
+}
+
+bool HasOnlyDirectViewConsumersWithNonImmediateDynValidShape(const LogicalTensorPtr& tensor)
+{
+    if (tensor == nullptr) {
+        return false;
+    }
+    if (tensor->GetConsumers().empty()) {
+        return false;
+    }
+    for (auto* consumer : tensor->GetConsumers()) {
+        if (!IsViewWithNonImmediateDynValidShape(consumer)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::string JoinOpMagics(const std::vector<Operation*>& ops)
+{
+    std::ostringstream oss;
+    for (size_t idx = 0; idx < ops.size(); ++idx) {
+        if (idx > 0) {
+            oss << ",";
+        }
+        oss << (ops[idx] == nullptr ? -1 : ops[idx]->GetOpMagic());
+    }
+    return oss.str();
+}
+
+std::string JoinTensorMagics(const std::vector<LogicalTensorPtr>& tensors)
+{
+    std::ostringstream oss;
+    for (size_t idx = 0; idx < tensors.size(); ++idx) {
+        if (idx > 0) {
+            oss << ",";
+        }
+        oss << (tensors[idx] == nullptr ? -1 : tensors[idx]->GetMagic());
+    }
+    return oss.str();
+}
+} // namespace
 
 // 判断一组 LogicalTensor 是否可以拼接成一个大矩形
 bool FunctionUtils::IsContinuous(const std::vector<std::shared_ptr<LogicalTensor>>& tensors)
@@ -253,6 +320,63 @@ Status FunctionUtils::InferOutcastWriteConflict(Function& function)
         }
     }
     return SUCCESS;
+}
+
+void FunctionUtils::WarnAssembleDynValidShapeRisk(Function& function)
+{
+    struct AssembleOutputInfo {
+        LogicalTensorPtr output;
+        std::vector<Operation*> producers;
+        std::vector<LogicalTensorPtr> inputsWithDynValidShape;
+    };
+
+    std::unordered_map<int, AssembleOutputInfo> outputInfoMap;
+    for (auto& op : function.Operations(false)) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE || op.GetIOperands().empty() || op.GetOOperands().empty()) {
+            continue;
+        }
+        bool hasInputDynValidShape = false;
+        std::vector<LogicalTensorPtr> inputsWithDynValidShape;
+        for (const auto& input : op.GetIOperands()) {
+            if (input != nullptr && HasNonImmediateDynValidShape(input->GetDynValidShape())) {
+                hasInputDynValidShape = true;
+                inputsWithDynValidShape.emplace_back(input);
+            }
+        }
+        if (!hasInputDynValidShape) {
+            continue;
+        }
+        for (const auto& output : op.GetOOperands()) {
+            if (output == nullptr) {
+                continue;
+            }
+            auto& info = outputInfoMap[output->GetMagic()];
+            info.output = output;
+            info.producers.emplace_back(&op);
+            info.inputsWithDynValidShape.insert(info.inputsWithDynValidShape.end(), inputsWithDynValidShape.begin(),
+                                                inputsWithDynValidShape.end());
+        }
+    }
+
+    std::vector<int> outputMagics;
+    outputMagics.reserve(outputInfoMap.size());
+    for (const auto& outputInfo : outputInfoMap) {
+        outputMagics.emplace_back(outputInfo.first);
+    }
+    std::sort(outputMagics.begin(), outputMagics.end());
+
+    for (const auto tensorMagic : outputMagics) {
+        const auto& info = outputInfoMap.at(tensorMagic);
+        if ((info.output != nullptr && HasNonImmediateDynValidShape(info.output->GetDynValidShape())) ||
+            HasOnlyDirectViewConsumersWithNonImmediateDynValidShape(info.output)) {
+            continue;
+        }
+        APASS_LOG_WARN_F(Elements::Tensor,
+                         "Assemble output tensor[%d] may miss dynValidShape handling and cause precision issues. "
+                         "Assemble opmagic(s): [%s], input tensor(s) with non-immediate dynValidShape: [%s].",
+                         tensorMagic, JoinOpMagics(info.producers).c_str(),
+                         JoinTensorMagics(info.inputsWithDynValidShape).c_str());
+    }
 }
 
 } // namespace npu::tile_fwk

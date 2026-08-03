@@ -16,6 +16,7 @@
 #include "split_reshape.h"
 #include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
+#include "passes/pass_utils/pass_attr_defs.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_log/pass_log.h"
@@ -232,29 +233,42 @@ std::shared_ptr<ReshapeOp> SplitReshape::ReshapeOperationExist(const std::shared
 }
 
 // 更新reshapeOp输出的dynShape信息
-// 如果dynShape为空，则不去考虑reshape输出的dynShape
-// dynShape的计算逻辑：按维度逐项计算view节点的offset + dynShape
-// 因为要按reshapeOp对view节点进行偏移，因此暂存所有view节点在每个维度的offset + dynShape信息
+// 新增reshape的输出validShape应由拆分前reshape输出的validShape和新增输出tensor的offset/shape推导。
+// dynValidShapes中暂存的是原reshape输出坐标系下的有效终点，GetReshapeDynShape中再减去新输出tensor的offset。
 // SUCCESS: 正确地更新了节点的dynValidShapes
-// FAILED: curOffset与dynShape维度不同，一般情况下不会出现
-Status SplitReshape::UpdateDynShape(const std::shared_ptr<ReshapeOp>& reshapeOp, const std::vector<int64_t>& offset,
-                                    const std::vector<SymbolicScalar>& dynShape)
+// FAILED: validShape与输出tensor维度不同，一般情况下不会出现
+Status SplitReshape::UpdateDynShape(const std::shared_ptr<ReshapeOp>& reshapeOp)
 {
+    std::vector<SymbolicScalar> dynShape;
+    if (reshapeOp->originOpPtr == nullptr) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Skip updating dynValidShape because origin reshape op is null.");
+        return SUCCESS;
+    }
+    if (!reshapeOp->originOpPtr->GetAttr(OP_ATTR_VALID_SHAPE, dynShape)) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Skip updating dynValidShape because reshape op[%d] has no validShape.",
+                          reshapeOp->originOpPtr->GetOpMagic());
+        return SUCCESS;
+    }
     if (dynShape.empty()) {
         return SUCCESS;
     }
-    std::vector<int64_t> curOffset(dynShape.size(), 0);
-    if (!offset.empty()) {
-        curOffset = offset;
-    }
-    if (curOffset.size() != dynShape.size()) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "The dim of curOffset %s does not equal to dynShape %s.",
-                          GetStr(curOffset).c_str(), GetStr(dynShape).c_str());
+    auto output = reshapeOp->output;
+    if (output == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "The output of reshape op is nullptr.");
         return FAILED;
     }
+    const auto& outputOffset = output->GetOffset();
+    if (outputOffset.size() != dynShape.size() || output->shape.size() != dynShape.size()) {
+        APASS_LOG_ERROR_F(Elements::Tensor,
+                          "The dim of output offset %s or output shape %s does not equal to dynShape %s.",
+                          GetStr(outputOffset).c_str(), GetStr(output->shape).c_str(), GetStr(dynShape).c_str());
+        return FAILED;
+    }
+    // GetViewValidShape returns the valid size in the new output coordinates; add offset back to get the original end.
+    auto outputDynShape = GetViewValidShape(dynShape, outputOffset, {}, output->shape);
     std::vector<SymbolicScalar> curDynShape;
-    for (size_t i = 0U; i < dynShape.size(); i++) {
-        curDynShape.emplace_back((dynShape[i] + curOffset[i]) * (dynShape[i] != 0));
+    for (size_t i = 0; i < outputDynShape.size(); i++) {
+        curDynShape.emplace_back((outputDynShape[i] + outputOffset[i]) * (outputDynShape[i] != 0));
     }
     reshapeOp->dynValidShapes.emplace_back(curDynShape);
     return SUCCESS;
@@ -379,7 +393,7 @@ Status SplitReshape::CollectReshapeInfo(const Operation& op)
         return FAILED;
     }
     std::vector<SymbolicScalar> dynOutput;
-    if (op.GetAttr(OP_ATTR_PREFIX + "validShape", dynOutput)) {
+    if (op.GetAttr(OP_ATTR_VALID_SHAPE, dynOutput)) {
         reshapeDynOutput_[output->GetRawTensor()->GetRawMagic()] = dynOutput;
     }
     reshapeSources_[output->GetRawTensor()->GetRawMagic()] = input;
@@ -798,8 +812,7 @@ Status SplitReshape::ProcessPerfectlyMatch(Function& function, Operation& op, co
         op.ReplaceInput(existOp->output, input);
         viewOpAttribute->SetFromOffset(existOp->output->offset);
         GraphUtils::UpdateViewAttr(function, op);
-        if (UpdateDynShape(existOp, existOp->output->offset, para.viewDynShape) != SUCCESS ||
-            GroupReshapeOffset(existOp, existOp->output->offset) != SUCCESS) {
+        if (UpdateDynShape(existOp) != SUCCESS || GroupReshapeOffset(existOp, existOp->output->offset) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "UpdateDynShape or GroupReshapeOffset failed. %s",
                               GetFormatBacktrace(op).c_str());
             return FAILED;
@@ -814,7 +827,7 @@ Status SplitReshape::ProcessPerfectlyMatch(Function& function, Operation& op, co
     op.ReplaceInput(reshapeOutput, input);
     viewOpAttribute->SetFromOffset(reshapeOutput->offset);
     GraphUtils::UpdateViewAttr(function, op);
-    if (UpdateDynShape(isAddReshapeOp, reshapeOutput->offset, para.viewDynShape) != SUCCESS ||
+    if (UpdateDynShape(isAddReshapeOp) != SUCCESS ||
         GroupReshapeOffset(isAddReshapeOp, reshapeOutput->offset) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateDynShape or GroupReshapeOffset failed. %s",
                           GetFormatBacktrace(op).c_str());
@@ -892,8 +905,7 @@ Status SplitReshape::ProcessBeCovered(Function& function, Operation& op, const B
     GraphUtils::UpdateViewAttr(function, op);
     if (existOp != nullptr) {
         op.ReplaceInput(existOp->output, input);
-        if (UpdateDynShape(existOp, newOffset, para.viewDynShape) != SUCCESS ||
-            GroupReshapeOffset(existOp, newOffset) != SUCCESS) {
+        if (UpdateDynShape(existOp) != SUCCESS || GroupReshapeOffset(existOp, newOffset) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "UpdateDynShape or GroupReshapeOffset failed. %s",
                               GetFormatBacktrace(op).c_str());
             return FAILED;
@@ -906,8 +918,7 @@ Status SplitReshape::ProcessBeCovered(Function& function, Operation& op, const B
         return FAILED;
     }
     op.ReplaceInput(reshapeOutput, input);
-    if (UpdateDynShape(isAddReshapeOp, newOffset, para.viewDynShape) != SUCCESS ||
-        GroupReshapeOffset(isAddReshapeOp, newOffset) != SUCCESS) {
+    if (UpdateDynShape(isAddReshapeOp) != SUCCESS || GroupReshapeOffset(isAddReshapeOp, newOffset) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateDynShape or GroupReshapeOffset failed. %s",
                           GetFormatBacktrace(op).c_str());
         return FAILED;
@@ -1005,8 +1016,7 @@ Status SplitReshape::ProcessPerfectlyMatchWithAll(Function& function, Operation&
     }
     auto existOp = ReshapeOperationExist(isAddReshapeOp);
     if (existOp != nullptr) {
-        if (UpdateDynShape(existOp, existOp->output->offset, para.viewDynShape) != SUCCESS ||
-            GroupReshapeOffset(existOp, existOp->output->offset) != SUCCESS) {
+        if (UpdateDynShape(existOp) != SUCCESS || GroupReshapeOffset(existOp, existOp->output->offset) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "Failed to UpdateDynShape or GroupReshapeOffset for existOp. %s",
                               GetFormatBacktrace(op).c_str());
             return FAILED;
@@ -1019,7 +1029,7 @@ Status SplitReshape::ProcessPerfectlyMatchWithAll(Function& function, Operation&
     op.ReplaceInput(reshapeOutput, input);
     viewOpAttribute->SetFromOffset(reshapeOutput->offset);
     GraphUtils::UpdateViewAttr(function, op);
-    if (UpdateDynShape(isAddReshapeOp, reshapeOutput->offset, para.viewDynShape) != SUCCESS ||
+    if (UpdateDynShape(isAddReshapeOp) != SUCCESS ||
         GroupReshapeOffset(isAddReshapeOp, reshapeOutput->offset) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Failed to UpdateDynShape or GroupReshapeOffset for isAddReshapeOp. %s",
                           GetFormatBacktrace(op).c_str());
@@ -1178,6 +1188,25 @@ Status SplitReshape::CheckReshapeSkip(const LogicalTensorPtr& input, const Logic
             "Skip splitreshape because one assemble input is produced by ReduceAcc, assemble op magic is %d.",
             assembleOpMagic);
         return WARNING;
+    }
+    size_t assembleProducerCount = 0;
+    for (const auto& producer : checkOutputParam.reshapeSource->GetProducers()) {
+        if (producer != nullptr && producer->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleProducerCount;
+        }
+    }
+    if (assembleProducerCount <= 1) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Skip splitreshape because reshape source has only one assemble producer.");
+        return WARNING;
+    }
+    for (const auto& consumer : input->GetConsumers()) {
+        if (consumer == nullptr) {
+            continue;
+        }
+        if (consumer->GetOpcode() != Opcode::OP_VIEW) {
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Skip splitreshape because reshape output has non-view consumers.");
+            return WARNING;
+        }
     }
     const auto& reshapeInputShape = checkOutputParam.reshapeSource->GetRawTensor()->GetRawShape();
     const auto& reshapeOutputShape = input->GetRawTensor()->GetRawShape();

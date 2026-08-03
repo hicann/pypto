@@ -20,6 +20,7 @@
 #include <string>
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/pass_attr_defs.h"
 #include "passes/pass_utils/pass_operation_utils.h"
 #include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk.h"
@@ -39,8 +40,10 @@ static const uint32_t kNumThree = 3u;
 static const uint32_t kNumFour = 4u;
 static const uint32_t kNumSix = 6u;
 static const uint32_t kNumEight = 8u;
+static const uint32_t kNumTen = 10u;
 static const uint32_t kNumTwelve = 12u;
 static const uint32_t kExpFour = 16u;
+static const uint32_t kNumTwentyFour = 24u;
 static const uint32_t kExpFive = 32u;
 static const uint32_t kExpSix = 64u;
 static const uint32_t kNumNineSix = 96u;
@@ -135,7 +138,7 @@ void BuildGraphForCollectCopyOut(std::shared_ptr<Function>& func, std::shared_pt
 
     validShape = {CreateTestScalarVar("a"), kNumEight};
     auto& reshape_op = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ubTensor}, {output});
-    reshape_op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
+    reshape_op.SetAttribute(OP_ATTR_VALID_SHAPE, validShape);
 }
 
 TEST_F(TestSplitReshapePass, TestCollectCopyOut)
@@ -736,7 +739,8 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForPerfectlyMatch)
     auto& assemble_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input}, {ubTensor1});
     auto assemble_Attr = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset);
     assemble_op.SetOpAttribute(assemble_Attr);
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& reshape_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    reshape_op.SetAttribute(OP_ATTR_VALID_SHAPE, validShape);
     auto& view_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {output});
     auto view_Attr = std::make_shared<ViewOpAttribute>(view_offset);
     view_op.SetOpAttribute(view_Attr);
@@ -915,7 +919,8 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForBeCovered)
     auto& assemble_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input}, {ubTensor1});
     auto assemble_Attr = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op.SetOpAttribute(assemble_Attr);
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& reshape_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    reshape_op.SetAttribute(OP_ATTR_VALID_SHAPE, validShape);
     auto& view_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {output1});
     auto view_Attr1 = std::make_shared<ViewOpAttribute>(view_offset1);
     view_op1.SetOpAttribute(view_Attr1);
@@ -963,7 +968,7 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForBeCovered)
     EXPECT_EQ(newReshape->dynValidShapes[0].size(), kSizeTwo);
     EXPECT_EQ(newReshape->dynValidShapes[1].size(), kSizeTwo);
     std::vector<std::string> expectValidShape1 = {
-        "(RUNTIME_Min(RUNTIME_Max(a, 0), 2)*(RUNTIME_Min(RUNTIME_Max(a, 0), 2)!=0))", "2"};
+        "(RUNTIME_Min(RUNTIME_Max(a, 0), 2)*(RUNTIME_Min(RUNTIME_Max(a, 0), 2)!=0))", "4"};
     for (size_t i = 0; i < kSizeTwo; ++i) {
         EXPECT_EQ(newReshape->dynValidShapes[0][i].Dump(), expectValidShape1[i]);
     }
@@ -1100,6 +1105,8 @@ static void BuildDynUpdatePerfectlyMatchGraph(std::shared_ptr<Function>& currFun
     std::vector<int64_t> view_offset;
     BuildBasePerfectlyMatchGraph(currFunctionPtr, input1, input2, ubTensor1, ubTensor2, output, viewOpOut, view_offset);
     validShapeOut = {CreateTestScalarVar("a"), kNumTwo, kNumTwo};
+    auto reshapeOp = *ubTensor2->GetProducers().begin();
+    reshapeOp->SetAttribute(OP_ATTR_VALID_SHAPE, validShapeOut);
     std::vector<int64_t> shape3 = {kNumTwo, kNumTwo, kNumTwo};
 
     para.alignedShape = {kNumTwo, kNumTwo, kNumTwo};
@@ -1411,7 +1418,7 @@ void CheckNewAssembles(std::unordered_map<LogicalTensorPtr, Operation*>& newAsse
         reshapeOutputs.emplace_back(reshapeOutput);
         std::vector<SymbolicScalar> reshapeAttrValidShape;
         std::vector<SymbolicScalar> reshapeDynOutput = reshapeOutput->GetDynValidShape();
-        EXPECT_TRUE(reshape->GetAttr(OP_ATTR_PREFIX + "validShape", reshapeAttrValidShape));
+        EXPECT_TRUE(reshape->GetAttr(OP_ATTR_VALID_SHAPE, reshapeAttrValidShape));
         EXPECT_EQ(reshapeDynOutput.size(), reshapeOutputSize);
         EXPECT_EQ(reshapeAttrValidShape.size(), reshapeOutputSize);
         for (size_t i = 0; i < reshapeOutputSize; ++i) {
@@ -1458,7 +1465,7 @@ LogicalTensors BuildDynPerfectlyMatchFunc(std::shared_ptr<Function> func)
     auto assemble_Attr2 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset2);
     assemble_op2.SetOpAttribute(assemble_Attr2);
     auto& reshape_op = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    reshape_op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
+    reshape_op.SetAttribute(OP_ATTR_VALID_SHAPE, validShape);
     auto& view_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output1});
     auto view_Attr1 = std::make_shared<ViewOpAttribute>(viewOffset1);
     view_op1.SetOpAttribute(view_Attr1);
@@ -1565,7 +1572,7 @@ LogicalTensors BuildDynBeCoveredFunc(std::shared_ptr<Function> func)
     auto& assemble_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
     assemble_op2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset2));
     auto& reshape_op = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    reshape_op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
+    reshape_op.SetAttribute(OP_ATTR_VALID_SHAPE, validShape);
     auto& view_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(viewOffset1));
     auto& view_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output2});
@@ -1687,7 +1694,7 @@ LogicalTensors BuildDynPerfectlyMatchWithAllFunc(std::shared_ptr<Function> func)
     auto& assemble_op4 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input4}, {ubTensor1});
     assemble_op4.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset4));
     auto& reshape_op = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    reshape_op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
+    reshape_op.SetAttribute(OP_ATTR_VALID_SHAPE, validShape);
     auto& view_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(viewOffset1));
     auto& view_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output2});
@@ -2015,7 +2022,7 @@ TEST_F(TestSplitReshapePass, TestExceptionCase4)
     output2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     auto& reshape_op = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    reshape_op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
+    reshape_op.SetAttribute(OP_ATTR_VALID_SHAPE, validShape);
     auto& view_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(viewOffset1));
     auto& view_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output2});
@@ -2251,7 +2258,7 @@ TEST_F(TestSplitReshapePass, TestCollectCopyOutWithCopyOutProducer)
     auto& reshapeOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ddrTensor2},
                                                        {reshapeOutput});
     std::vector<SymbolicScalar> validShape = {kNumTwo, kNumTwo, kNumTwo};
-    reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
+    reshapeOp.SetAttribute(OP_ATTR_VALID_SHAPE, validShape);
 
     SplitReshape pass;
     EXPECT_EQ(pass.CollectCopyOut(*currFunctionPtr), SUCCESS);
@@ -2311,7 +2318,7 @@ void BuildMultipleParallelCopyOutAssembleGraph(std::shared_ptr<Function>& func,
                                                                  CreateTestConstIntVector(shapes.reshapeShape));
     ddrReshape->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto& reshapeOp = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ddrBigTensor}, {ddrReshape});
-    reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", std::vector<SymbolicScalar>{kNumThree, kNumEight});
+    reshapeOp.SetAttribute(OP_ATTR_VALID_SHAPE, std::vector<SymbolicScalar>{kNumThree, kNumEight});
     for (size_t i = 0; i < kNumThree; i++) {
         auto ubOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape,
                                                                 CreateTestConstIntVector(shapes.viewOutShape));
@@ -2377,7 +2384,7 @@ void BuildReduceAccAssembleInputGraph(std::shared_ptr<Function>& func,
                                                                  CreateTestConstIntVector(shapes.reshapeShape));
     ddrReshape->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto& reshapeOp = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ddrBigTensor}, {ddrReshape});
-    reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", std::vector<SymbolicScalar>{kNumThree, kNumEight});
+    reshapeOp.SetAttribute(OP_ATTR_VALID_SHAPE, std::vector<SymbolicScalar>{kNumThree, kNumEight});
     for (size_t i = 0; i < kNumThree; i++) {
         auto ubOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape,
                                                                 CreateTestConstIntVector(shapes.viewOutShape));
@@ -2438,7 +2445,7 @@ std::shared_ptr<LogicalTensor> BuildLargeScaleAssembleAndReshape(
                                                                  CreateTestConstIntVector(reshapeShape));
     ddrReshape->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto& reshapeOp = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ddrBigTensor}, {ddrReshape});
-    reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", std::vector<SymbolicScalar>{reshapeRows, reshapeCols});
+    reshapeOp.SetAttribute(OP_ATTR_VALID_SHAPE, std::vector<SymbolicScalar>{reshapeRows, reshapeCols});
     return ddrReshape;
 }
 
@@ -2568,6 +2575,119 @@ TEST_F(TestSplitReshapePass, TestSkipSplitReshapeWhenAssembleInputProducedByRedu
     }
     EXPECT_TRUE(hasReduceAccAssembleInput);
     EXPECT_EQ(reshapeOpCount, kNumOne);
+}
+
+void CheckReshapeOutputValidShape(Function* func, const std::vector<int64_t>& originValidShape)
+{
+    ASSERT_NE(func, nullptr);
+    int reshapeOpCount = 0;
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_RESHAPE) {
+            continue;
+        }
+        auto reshapeOutput = op.GetOutputOperand(kSizeZero);
+        ASSERT_NE(reshapeOutput, nullptr);
+        auto outputOffset = reshapeOutput->GetOffset();
+        ASSERT_EQ(originValidShape.size(), reshapeOutput->shape.size());
+        ASSERT_EQ(originValidShape.size(), outputOffset.size());
+
+        std::vector<SymbolicScalar> attrValidShape;
+        EXPECT_TRUE(op.GetAttr(OP_ATTR_VALID_SHAPE, attrValidShape));
+        auto tensorValidShape = reshapeOutput->GetDynValidShape();
+        ASSERT_EQ(attrValidShape.size(), reshapeOutput->shape.size());
+        ASSERT_EQ(tensorValidShape.size(), reshapeOutput->shape.size());
+        for (size_t i = 0; i < reshapeOutput->shape.size(); ++i) {
+            auto expectedDim = std::min(std::max(originValidShape[i] - outputOffset[i], static_cast<int64_t>(0)),
+                                        reshapeOutput->shape[i]);
+            EXPECT_EQ(attrValidShape[i].Dump(), std::to_string(expectedDim));
+            EXPECT_EQ(tensorValidShape[i].Dump(), std::to_string(expectedDim));
+        }
+        reshapeOpCount++;
+    }
+    EXPECT_GT(reshapeOpCount, 0);
+}
+
+int CountReshapeOps(Function* func)
+{
+    if (func == nullptr) {
+        return 0;
+    }
+    int reshapeOpCount = 0;
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            reshapeOpCount++;
+        }
+    }
+    return reshapeOpCount;
+}
+
+/*
+exp -> {1,16} -> assemble -> {1,64} -> reshape -> {1,1,64}  -> view -> {1,1,10} -> exp -> {1,1,10}
+exp -> {1,16} -> assemble                                   -> view -> {1,1,10} -> exp -> {1,1,10}
+exp -> {1,16} -> assemble                                   -> view -> {1,1,10} -> exp -> {1,1,10}
+exp -> {1,16} -> assemble                                   -> view -> {1,1,10} -> exp -> {1,1,10}
+                                                            -> view -> {1,1,10} -> exp -> {1,1,10}
+                                                            -> view -> {1,1,10} -> exp -> {1,1,10}
+                                                            -> view -> {1,1,4} -> exp -> {1,1,4}
+*/
+TEST_F(TestSplitReshapePass, TestSplitReshapeWithTail)
+{
+    // Define the shape of the Tensors
+    std::vector<int64_t> origShape = {kNumOne, kExpSix};
+    std::vector<int64_t> reshapeShape = {kNumOne, kNumOne, kExpSix};
+    std::vector<int64_t> tiledShape1 = {kNumOne, kExpFour};
+    std::vector<int64_t> tiledShape2 = {kNumTwo, kNumOne, kNumTen};
+
+    Tensor input(DT_FP32, origShape, "input");
+    Tensor output(DT_FP32, reshapeShape, "output");
+
+    FUNCTION("TestSplitReshapeWithTail")
+    {
+        TileShape::Current().SetVecTile(tiledShape1);
+        Tensor exp = Exp(input);
+        Tensor reshape = Reshape(exp, reshapeShape);
+        TileShape::Current().SetVecTile(tiledShape2);
+        output = Exp(reshape);
+    }
+
+    Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_TestSplitReshapeWithTail");
+
+    RunPassStra(*func, PassName::EXPAND_FUNCTION);
+    RunPassStra(*func, PassName::SPLIT_RESHAPE);
+    EXPECT_GT(CountReshapeOps(func), 1);
+    CheckReshapeOutputValidShape(func, reshapeShape);
+}
+
+TEST_F(TestSplitReshapePass, TestSplitReshapeWithValidShapeTail)
+{
+    std::vector<int64_t> origShape = {kNumOne, kExpSix};
+    std::vector<int64_t> reshapeShape = {kNumOne, kNumOne, kExpSix};
+    std::vector<int64_t> reshapeValidShape = {kNumOne, kNumOne, kNumTwentyFour};
+    std::vector<SymbolicScalar> reshapeDynValidShape = {kNumOne, kNumOne, kNumTwentyFour};
+    std::vector<int64_t> tiledShape1 = {kNumOne, kExpFour};
+    std::vector<int64_t> tiledShape2 = {kNumTwo, kNumOne, kNumTen};
+    std::vector<SymbolicScalar> inputValidShape = {kNumOne, kNumTwentyFour};
+    std::vector<SymbolicScalar> inputOffset = {kNumZero, kNumZero};
+
+    Tensor input(DT_FP32, origShape, "input");
+    Tensor output(DT_FP32, reshapeShape, "output");
+
+    FUNCTION("TestSplitReshapeWithValidShapeTail")
+    {
+        Tensor validInput = View(input, origShape, inputValidShape, inputOffset);
+        TileShape::Current().SetVecTile(tiledShape1);
+        Tensor exp = Exp(validInput);
+        Tensor reshape = Reshape(exp, reshapeShape, reshapeDynValidShape);
+        TileShape::Current().SetVecTile(tiledShape2);
+        output = Exp(reshape);
+    }
+
+    Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_TestSplitReshapeWithValidShapeTail");
+
+    RunPassStra(*func, PassName::EXPAND_FUNCTION);
+    RunPassStra(*func, PassName::SPLIT_RESHAPE);
+    EXPECT_GT(CountReshapeOps(func), 1);
+    CheckReshapeOutputValidShape(func, reshapeValidShape);
 }
 
 TEST_F(TestSplitReshapePass, TestSplitReshapeLargeScaleRunTimeLimit)
