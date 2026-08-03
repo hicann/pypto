@@ -1327,8 +1327,8 @@ class BuildCtrl(CMakeParam):
         :rtype: Dict[str, str]
         """
         env = {}
-        third_party = self.third_party_path or str(self.src_root / "third_party_path")
-        env.update({"PYPTO_THIRD_PARTY_PATH": third_party})
+        if self.third_party_path:
+            env.update({"PYPTO_THIRD_PARTY_PATH": str(self.third_party_path)})
         # 通过 tag_info 环境变量统一 run 和 whl 内的 build_timestamp
         env.update({"tagInfo": self.tag_info})
         # 通过 PYPTO_ALLOW_WHL_BUILD 环境变量实现阻止直接 pip install . 覆盖 cann 包内已有 PyPTO

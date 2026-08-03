@@ -16,19 +16,14 @@ if (PYPTO_THIRD_PARTY_PATH)
     get_filename_component(PYPTO_THIRD_PARTY_PATH "${PYPTO_THIRD_PARTY_PATH}" REALPATH)
 elseif (DEFINED ENV{PYPTO_THIRD_PARTY_PATH})
     get_filename_component(PYPTO_THIRD_PARTY_PATH "$ENV{PYPTO_THIRD_PARTY_PATH}" REALPATH)
-else ()
-    get_filename_component(PYPTO_THIRD_PARTY_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party_path" REALPATH)
-    set(_Msg
-            "PYPTO_THIRD_PARTY_PATH is not specified, ${PYPTO_THIRD_PARTY_PATH} will be used as its default value. "
-            "It is necessary to confirm that the relevant software already exists in this path or that the network "
-            "can be accessed normally so that CMake can automatically download the corresponding software."
-    )
-    string(REPLACE ";" "" _Msg "${_Msg}")
-    message(WARNING "${_Msg}")
 endif ()
 message(STATUS "PYPTO_THIRD_PARTY_PATH=${PYPTO_THIRD_PARTY_PATH}")
 
-# cann/cmake 内部函数依赖该变量（superbuild 可覆盖，独立构建回退到 PYPTO_THIRD_PARTY_PATH）
-if (NOT DEFINED CANN_3RD_LIB_PATH)
-    set(CANN_3RD_LIB_PATH "${PYPTO_THIRD_PARTY_PATH}")
+# cann/cmake 内部函数依赖该变量；未显式配置时将缓存放入构建树，由 --clean 统一清理。
+if (NOT CANN_3RD_LIB_PATH)
+    if (PYPTO_THIRD_PARTY_PATH)
+        set(CANN_3RD_LIB_PATH "${PYPTO_THIRD_PARTY_PATH}")
+    else()
+        set(CANN_3RD_LIB_PATH "${CMAKE_BINARY_DIR}/third_party")
+    endif()
 endif()
