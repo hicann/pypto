@@ -24,8 +24,8 @@ PyPTO error: PyPTO Inner Error. Please rectify the fault based on the error info
 
     ```python
     #调用示例
-    @pypto.frontend.jit（debug_options={"compile_debug_mode": 2}）
-    def pypto_kernel（）:
+    @pypto.frontend.jit(debug_options={"compile_debug_mode": 2})
+    def pypto_kernel():
     ```
 
 3. 开启singlecommit，每条指令单步跑

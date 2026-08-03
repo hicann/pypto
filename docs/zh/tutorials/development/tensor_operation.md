@@ -156,7 +156,7 @@ bias = pypto.tensor([1, N], pypto.DT_BF16, "bias")
 result = pypto.matmul(A, B, out_dtype=pypto.DT_BF16, extend_params={'bias_tensor': bias})
 
 # 用转置，其中A: [M, K], B: [N, K],输出为NZ格式
-result = pypto.matmul(A, B, out_dtype=pypto.DT_BF16, a_trans=False, b_trans=True， c_matrix_nz=True)
+result = pypto.matmul(A, B, out_dtype=pypto.DT_BF16, a_trans=False, b_trans=True, c_matrix_nz=True)
 ```
 
 矩阵乘法参数：
