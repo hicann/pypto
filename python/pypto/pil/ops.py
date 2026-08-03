@@ -36,6 +36,13 @@ def has_scalar(values: list) -> bool:
     return any(isinstance(v, pypto.pypto_impl.SymbolicScalar) for v in values)
 
 
+# Opaque Python values (dataclass instances, ...) are compile-time only:
+# leave them in scope (the body's own stores keep them current) and skip
+# them from the IR loop-carried / branch-carried yield state
+def is_opaque_value(val) -> bool:
+    return not (val is None or isinstance(val, (bool, int, float, pypto.SymbolicScalar, pypto.Tensor, list, tuple)))
+
+
 # ---- Compile-time ops ----
 
 
@@ -298,6 +305,8 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, stop, ctx: BuildContext):
     iter_args, return_var_names = [], []
     for name in sorted(body.store_names):
         val = scope.locals.get(name)
+        if is_opaque_value(val):
+            continue
         var = ctx.create_var_like(name, ctx.unwrap(val))
         iter_arg = ctx.create_iter_arg(var, initValue=ctx.unwrap(val))
         scope.store(name, ctx.wrap(var))
@@ -394,7 +403,11 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
     scope = Scope.current()
 
     saved = dict(scope.locals)
-    yield_var_names = sorted(then_block.store_names | else_block.store_names)
+    yield_var_names = [
+        name
+        for name in sorted(then_block.store_names | else_block.store_names)
+        if not is_opaque_value(scope.locals.get(name))
+    ]
 
     try:
         ctx.checkpoint()

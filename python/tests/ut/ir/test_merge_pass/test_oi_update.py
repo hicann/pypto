@@ -1,3 +1,17 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+
+import pypto
+
+from ..test_common import check_snapshot, run_merge_pass
+
+ir = """
 @ir.function
 def foo(a@0: ir.Tensor, b@1: ir.Tensor):
     for loop_idx_10, (b_1,) in ir.range(0, 10, 1, init_values=(b@1,), attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
@@ -54,3 +68,25 @@ def foo(a@0: ir.Tensor, b@1: ir.Tensor):
             b_22 = continue b_20@1
         b_24 = continue b_22@1
     return a@0, b_24@1
+"""  # noqa: E501
+
+
+def test_oi_update():
+
+    def foo(a, b):
+        n = pypto.symbolic_scalar("n")
+        for x in pypto.loop(10):
+            for y in pypto.loop(10):
+                oi_update = pypto.tensor([32, 32], pypto.DT_FP32, "oi_update")
+                for i in pypto.loop(n, unroll_list=[2]):
+                    if i == 0:
+                        oi_update[:] = a + 1
+                    else:
+                        oi_update[:] = oi_update - 1
+                    if i + 1 >= n:
+                        b[:] = oi_update // 2
+
+    y = pypto.Tensor((32, 32), pypto.DT_FP32)
+    z = pypto.Tensor((32, 32), pypto.DT_FP32)
+    func = run_merge_pass(foo, y, z)
+    check_snapshot(func, ir)

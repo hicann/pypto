@@ -6,7 +6,7 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import SimpleNamespace
 
 import pytest
@@ -714,13 +714,21 @@ def test_lambda():
 
     def foo(x):
         # lambda has args
-        def add1(a): return a + 1  # noqa: E731
+        def add1(a):
+            return a + 1  # noqa: E731
+
         ans.append(add1(x))
+
         # lambda with capture args
-        def addx(a): return x + a  # noqa: E731
+        def addx(a):
+            return x + a  # noqa: E731
+
         ans.append(addx(1))
+
         # lambda with default args
-        def add_def(a, b=10): return a + b  # noqa: E731
+        def add_def(a, b=10):
+            return a + b  # noqa: E731
+
         ans.append(add_def(5))
         ans.append(add_def(5, 15))
 
@@ -928,6 +936,7 @@ def test_tensor_move1():
     def foo(a, b):
         for _ in pypto.loop(10, unroll_list=[4]):
             b[:] = a + 1
+
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
@@ -1085,6 +1094,7 @@ def test_function_call():
         t2 = b
         for _ in pypto.loop(1):
             bar(Data(data=[t1, t2]))
+
     pil.compile(foo, 1, 2)
 
 
@@ -1101,10 +1111,12 @@ def test_getattr_and_delattr():
         # getattr 3-arg, attribute missing: returns the default
         res.append(getattr(pypto, "DT_NOT_EXIST", pypto.DT_UINT8))
         # getattr 3-arg inside a dict literal (mirrors get_pypto_dtype usage)
-        res.append({
-            "present": getattr(pypto, "DT_FP32", pypto.DT_UINT8),
-            "missing": getattr(pypto, "DT_NOT_EXIST", pypto.DT_UINT8),
-        })
+        res.append(
+            {
+                "present": getattr(pypto, "DT_FP32", pypto.DT_UINT8),
+                "missing": getattr(pypto, "DT_NOT_EXIST", pypto.DT_UINT8),
+            }
+        )
         # delattr 2-arg: removes the attribute from the object
         obj = SimpleNamespace(a=1, b=2)
         delattr(obj, "a")
@@ -1119,3 +1131,34 @@ def test_getattr_and_delattr():
     assert res[3]["missing"] == pypto.DT_UINT8
     assert res[4] is True
     assert res[5] == 2
+
+
+@dataclass
+class Context:
+    data: int
+
+
+def test_replace_in_loop():
+
+    def foo():
+        ctx = Context(data=1)
+        for _ in pypto.loop(1):
+            ctx = replace(ctx, data=2)
+            assert ctx.data == 2
+
+    pil.compile(foo, has_move=False)
+
+
+def test_replace_in_if_else():
+
+    def foo(n):
+        ctx = Context(data=1)
+        for i in pypto.loop(n):
+            if i:
+                ctx = replace(ctx, data=2)
+            else:
+                ctx = replace(ctx, data=3)
+            # used after the symbolic if/else; both branches keep data > 0
+            assert ctx.data > 0
+
+    pil.compile(foo, 10)
