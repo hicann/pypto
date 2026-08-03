@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-逐元素计算自然指数 e^x。支持 in-place 写法。
+逐元素计算自然指数e^x。支持in-place写法。
 
 ## 函数原型
 
@@ -26,15 +26,15 @@ pypto_pro.language.exp(out, src)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，存放逐元素自然指数结果 |
-| `src` | 输入 | 源 tile |
+| `out` | 输出 | 目标tile，存放逐元素自然指数结果 |
+| `src` | 输入 | 源tile |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b16、b32<br>shape 须与 `src` 一致<br>支持与 `src` 为同一 tile，实现 in-place exp |
-| `src` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
+| `out` | 输出 | 数据类型：FP16、FP32<br>shape须与`src`一致<br>支持与`src`为同一tile，实现in-place exp |
+| `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 
 ## 流水类型
 
@@ -42,7 +42,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：把 FP32 源 tile 逐元素计算自然指数后写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：把FP32源tile逐元素计算自然指数后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

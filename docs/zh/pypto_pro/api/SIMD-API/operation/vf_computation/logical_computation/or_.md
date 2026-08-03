@@ -22,15 +22,15 @@
 dst = vf.or_(src0, src1, preg)
 ```
 
-> 本接口为统一接口，同时支持 RegTensor 和 MaskReg 输入。当源操作数为 MaskReg 时，目标寄存器自动推断为 MaskReg。
+> 本接口为统一接口，同时支持RegTensor和MaskReg输入。当源操作数为MaskReg时，目标寄存器自动推断为MaskReg。
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `dst` | 输出 | 目标向量寄存器 |
-| `src0` | 输入 | 源操作数 0 |
-| `src1` | 输入 | 源操作数 1 |
+| `src0` | 输入 | 源操作数0 |
+| `src1` | 输入 | 源操作数1 |
 | `preg` | 输入 | 掩码寄存器 |
 
 ## 数据类型
@@ -39,7 +39,7 @@ dst = vf.or_(src0, src1, preg)
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+源操作数为RegTensor时返回`RegTensor`；源操作数为MaskReg时返回`MaskReg`。
 
 ## 约束说明
 
@@ -48,6 +48,7 @@ dst = vf.or_(src0, src1, preg)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -84,15 +85,16 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
-    a = torch.randint(0, 256, [1, 128], device=device, dtype=torch.int16)
-    b = torch.randint(0, 256, [1, 128], device=device, dtype=torch.int16)
-    out = torch.empty([1, 128], device=device, dtype=torch.int16)
+    a = torch.randint(0, 256, [1, 128], device=device, dtype=torch.int16).to(torch.uint16)
+    b = torch.randint(0, 256, [1, 128], device=device, dtype=torch.int16).to(torch.uint16)
+    out = torch.empty([1, 128], device=device, dtype=torch.int16).to(torch.uint16)
     example_kernel[None, core_nums](a, b, out)
     torch.npu.synchronize()
-    assert out.dtype == torch.int16
+    assert out.dtype == torch.uint16
 
 
 if __name__ == "__main__":
@@ -100,11 +102,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## MaskReg 调用示例
+## MaskReg调用示例
 
-当源操作数为 MaskReg 时，`vf.or_` 对两个掩码按位或。
+当源操作数为MaskReg时，`vf.or_`对两个掩码按位或。
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -143,7 +146,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

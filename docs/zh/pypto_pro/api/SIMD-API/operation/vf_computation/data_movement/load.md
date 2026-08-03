@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-数据搬运接口，从 UB 加载数据到 RegTensor，对应 AscendC `Load` 接口。支持 post-update 模式，在搬运后自动累进源地址，实现连续数据搬运。
+数据搬运接口，从UB加载数据到RegTensor，对应AscendC `Load`接口。支持post-update模式，在搬运后自动累进源地址，实现连续数据搬运。
 
 ## 函数原型
 
@@ -37,27 +37,28 @@ dst = vf.load(tile, stride, *, post_update=True, repeat_stride=0, count=N)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `dst` | 输出 | 目的操作数，向量寄存器 |
-| `tile` | 输入 | 源 UB tile，起始地址不需要 32 字节对齐 |
-| `stride` | 输入 | 可选，post-update 步长，触发 POST_UPDATE 模式 |
-| `post_update` | 输入 | 可选，`True` 时搬运后地址自动累进，默认 `False` |
-| `repeat_stride` | 输入 | 可选，重复加载时的步长，默认 `0` |
-| `count` | 输入 | 可选，搬运数据量，默认为 256B / sizeof(T) |
+| `tile` | 输入 | 源UB tile，起始地址不需要32字节对齐 |
+| `stride` | 输入 | 可选，post-update步长，触发POST_UPDATE模式 |
+| `post_update` | 输入 | 可选，`True`时搬运后地址自动累进，默认`False` |
+| `repeat_stride` | 输入 | 可选，重复加载时的步长，默认`0` |
+| `count` | 输入 | 可选，搬运数据量，默认为256B / sizeof(T) |
 
 ## 数据类型
 
 目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：INT8、UINT8、INT16、UINT16、FP16、BF16、INT32、UINT32、FP32、INT64、UINT64。
 
-赋值形式 `dst = vf.load(...)` 返回目标向量寄存器。
+赋值形式`dst = vf.load(...)`返回目标向量寄存器。
 
 ## 约束说明
 
-- dst 不支持 RegTraitNumTwo。
-- 接口内部定义了一个 UnalignRegForLoad，该寄存器数量上限为 4。
-- `post_update=True` 时，源地址会在每次搬运后自动累进 `stride` 指定的步长，无需用户手动更新 offset。
+- dst不支持RegTraitNumTwo。
+- 接口内部定义了一个UnalignRegForLoad，该寄存器数量上限为4。
+- `post_update=True`时，源地址会在每次搬运后自动累进`stride`指定的步长，无需用户手动更新offset。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -91,7 +92,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -106,9 +108,10 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## post-update 连续加载示例
+## post-update连续加载示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -142,7 +145,8 @@ def example_kernel(
 
 
 def test_example_2():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

@@ -15,70 +15,120 @@ Cube矩阵计算的基本步骤为：数据搬入 → 数据加载 → 计算 �
 
 对应的数据流和硬件流水如下：
 
-**图1** Cube矩阵计算的数据流和硬件流水
+**图1**Cube矩阵计算的数据流和硬件流水
 
 ![Cube矩阵计算的数据流和硬件流水](../../figures/cube_matrix_computation_data_flow.png)
 
 ## 矩阵计算内存管理
 
-### 矩阵计算内存申请
+### Cube侧Tile分配
 
 Cube矩阵计算主要通过L0A/L0B/L0C Buffer进行计算，并经L1 Buffer中转。开发者需将输入数据从GM搬入L1 Buffer（`pl.MemorySpace.Mat`），再从L1 Buffer搬入L0A（`pl.MemorySpace.Left`）/L0B（`pl.MemorySpace.Right`），最后通过`pl.matmul`完成计算，结果写入L0C（`pl.MemorySpace.Acc`）。
 
-PyPTO Pro通过`TileType`描述Tile的shape、dtype和target_memory，再通过`make_tile_group`分配片上Buffer：
+PyPTO Pro通过`TileType`描述Tile的shape、dtype和target_memory。`TileType`本身不分配片上Buffer，需要将其传给`pl.make_tile`或`pl.make_tile_group`。
 
-```python
-TILE_M = 128
-TILE_K = 128
-TILE_N = 128
-
-@pl.jit(auto_mutex=True)
-def matmul_kernel(a: pl.Tensor[[pl.DYNAMIC, TILE_K], pl.DT_FP16],
-                  b: pl.Tensor[[TILE_K, pl.DYNAMIC], pl.DT_FP16],
-                  out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32]):
-    # L1 Buffer（Mat）：GM到L0之间的矩阵暂存
-    a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_M, TILE_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
-    b_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_K, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[1])
-    # L0A / L0B Buffer：matmul的操作数
-    a_left = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_M, TILE_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
-    b_right = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_K, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
-    # L0C Buffer（Acc）：matmul累加结果
-    acc = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
-```
+本节代码仅展示Tile分配和同步方式，省略了完整Kernel的计算、调用及结果验证代码；整体代码结构及调用方式请参考本文末尾的[完整示例](#完整示例)。
 
 各内存空间的典型角色如下：
 
-| `pl.MemorySpace` | 物理 Buffer | 典型角色 |
+| `pl.MemorySpace` | 物理Buffer | 典型角色 |
 |:---|:---|:---|
 | `Mat` | L1 Buffer | GM与L0A/L0B之间的矩阵暂存 |
 | `Left` | L0A Buffer | `matmul`左操作数 |
 | `Right` | L0B Buffer | `matmul`右操作数 |
 | `Acc` | L0C Buffer | `matmul`累加结果（通常为FP32/INT32） |
 
+#### 使用make_tile分配单个Tile
+
+`pl.make_tile`分配一块固定的片上Buffer。指定`addr`时需要同时指定`size`，其中`size`为Buffer的字节数。`make_tile`不附带跨Pipe同步，使用这种方式时需要开发者手工插入`sync_src`/`sync_dst`。
+
+```python
+TILE_M = 128
+TILE_K = 128
+TILE_N = 128
+
+a_l1_type = pl.TileType(
+    shape=[TILE_M, TILE_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+b_l1_type = pl.TileType(
+    shape=[TILE_K, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+a_left_type = pl.TileType(
+    shape=[TILE_M, TILE_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left)
+b_right_type = pl.TileType(
+    shape=[TILE_K, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right)
+acc_type = pl.TileType(
+    shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc)
+
+a_l1 = pl.make_tile(a_l1_type, addr=0x00000, size=32768)
+b_l1 = pl.make_tile(b_l1_type, addr=0x08000, size=32768)
+a_left = pl.make_tile(a_left_type, addr=0x0000, size=32768)
+b_right = pl.make_tile(b_right_type, addr=0x0000, size=32768)
+acc = pl.make_tile(acc_type, addr=0x0000, size=65536)
+```
+
+#### 使用make_tile_group分配轮转Tile
+
+`pl.make_tile_group`分配一组轮转的Tile。`mutex_ids`的长度就是组内Tile数量，可通过`next()`、`current()`和`previous()`选择Tile。配合`@pl.jit(auto_mutex=True)`时，框架根据每个Tile的`mutex_id`自动插入跨Pipe同步。单缓冲也可以使用长度为1的`mutex_ids`，从而复用自动同步机制。
+
+```python
+@pl.jit(auto_mutex=True)
+def matmul_kernel(a: pl.Tensor[[pl.DYNAMIC, TILE_K], pl.DT_FP16],
+                  b: pl.Tensor[[TILE_K, pl.DYNAMIC], pl.DT_FP16],
+                  out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32]):
+    # L1使用双缓冲。
+    a_l1 = pl.make_tile_group(
+        type=pl.TileType(
+            shape=[TILE_M, TILE_K], dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Mat),
+        addrs=0x00000, mutex_ids=[0, 1])
+    b_l1 = pl.make_tile_group(
+        type=pl.TileType(
+            shape=[TILE_K, TILE_N], dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Mat),
+        addrs=0x10000, mutex_ids=[2, 3])
+
+    # L0A、L0B和L0C使用单缓冲，并由auto_mutex管理同步。
+    a_left = pl.make_tile_group(
+        type=pl.TileType(
+            shape=[TILE_M, TILE_K], dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Left),
+        addrs=0x0000, mutex_ids=[4])
+    b_right = pl.make_tile_group(
+        type=pl.TileType(
+            shape=[TILE_K, TILE_N], dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Right),
+        addrs=0x0000, mutex_ids=[5])
+    acc = pl.make_tile_group(
+        type=pl.TileType(
+            shape=[TILE_M, TILE_N], dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Acc),
+        addrs=0x0000, mutex_ids=[6])
+```
+
+两种分配方式的区别如下：
+
+| 方面 | `make_tile` | `make_tile_group` |
+|:---|:---|:---|
+| Buffer组织 | 单块固定Buffer，使用`addr`和`size` | 一组轮转Buffer，使用`addrs`和`mutex_ids` |
+| Buffer选择 | 直接使用Tile变量 | 通过`next()`、`current()`、`previous()`选择 |
+| 跨Pipe同步 | 手工插入`sync_src`/`sync_dst` | 配合`auto_mutex=True`自动插入 |
+| 适用场景 | 需要精确控制同步时序 | 单缓冲、双缓冲及N缓冲等常规场景 |
+
+新Kernel优先使用`make_tile_group`配合`auto_mutex=True`。仅在需要精确控制同步事件和插入位置时，使用`make_tile`配合显式同步。
+
 ### 矩阵计算内存布局
 
-Cube计算单元采用分块计算逻辑，硬件最小计算粒度为分形块（Fractal）。对于half数据类型，分形形状为16×16（即32B/sizeof(half)=16）；对于int8类型，分形形状为16×32或32×16。传统线性存储布局下，读取一个分形块需要访问多个不连续的内存地址，导致访存效率下降。
+Cube计算单元采用分块计算逻辑，硬件最小计算粒度为分形块（Fractal）。对于half数据类型，分形形状为16×16（即32B/sizeof(half) = 16）；对于int8类型，分形形状为16×32或32×16。传统线性存储布局下，读取一个分形块需要访问多个不连续的内存地址，导致访存效率下降。
 
 为解决该问题，昇腾引入矩阵分形存储格式，使每个分形块在物理内存中连续存放，硬件单次读取即可加载整块数据，大幅提升数据吞吐能力。
 
-PyPTO Pro通过`TileType`的`layout`参数指定分形布局。采用"大Y小x"命名法：
+PyPTO Pro通过`TileType`的`layout`参数指定分形布局。采用“大Y小x”命名法：
 
 - 大Y（Z/N）：表示分形矩阵之间的排列顺序（Z为行主序，N为列主序）。
 - 小x（z/n）：表示分形矩阵内部元素的排列顺序（z为行主序，n为列主序）。
 
-对于矩阵乘法 C = A × B，Ascend 950PR/Ascend 950DT要求：左矩阵A使用Nz格式，右矩阵B使用Zn格式，结果矩阵C使用Nz格式。
+对于矩阵乘法C = A × B，Ascend 950PR/Ascend 950DT要求：左矩阵A使用Nz格式，右矩阵B使用Zn格式，结果矩阵C使用Nz格式。
 
-各内存空间的默认layout如下（Ascend 950PR/Ascend 950DT）：
+各内存空间的默认layout如下：
 
 | 内存空间 | 默认layout | 说明 |
 |:---|:---|:---|
@@ -90,9 +140,53 @@ PyPTO Pro通过`TileType`的`layout`参数指定分形布局。采用"大Y小x"�
 > [!NOTE]说明
 > 在同一款硬件上，如果`target_memory`确定了，`layout`和`fractal`是确定的，可以不填。仅转置搬入等特殊场景需要显式指定`layout`。
 
+### Cube侧同步
+
+Cube矩阵计算的四个步骤分别对应MTE2、MTE1、M、FIX四条流水线。各流水线异步执行，当一条流水线生产的数据被另一条流水线消费时，需要插入同步以保证数据依赖。
+
+| 流水线 | 含义 | 典型操作 |
+|:---|:---|:---|
+| MTE2 | GM→L1搬运 | `pl.load`/`pl.load_tile` |
+| MTE1 | L1→L0A/L0B搬运 | `pl.move` |
+| M | 矩阵计算 | `pl.matmul`/`pl.matmul_acc` |
+| FIX | L0C→GM搬运 | `pl.store`/`pl.store_tile` |
+
+使用`make_tile_group`并通过`@pl.jit(auto_mutex=True)`启用自动同步时，框架会根据Tile的使用关系和`mutex_id`插入`mutex_lock`/`mutex_unlock`，开发者无需手工判断Pipe类型和分配event id。
+
+使用`make_tile`时，框架不会自动插入跨Pipe同步，需要在生产操作之后、消费操作之前插入配对的`pl.system.sync_src`和`pl.system.sync_dst`。下面展示一次完整矩阵计算中的前向数据依赖：
+
+```python
+with pl.section_cube():
+    pl.load(a_l1, a, [0, 0])
+    pl.load(b_l1, b, [0, 0])
+    pl.system.sync_src(
+        set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
+    pl.system.sync_dst(
+        set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
+
+    pl.move(a_left, a_l1)
+    pl.move(b_right, b_l1)
+    pl.system.sync_src(
+        set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=1)
+    pl.system.sync_dst(
+        set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=1)
+
+    pl.matmul(acc, a_left, b_right)
+    pl.system.sync_src(
+        set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=2)
+    pl.system.sync_dst(
+        set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=2)
+    pl.store(out, acc, [0, 0])
+```
+
+`sync_src`由生产流水线SET flag，`sync_dst`由消费流水线WAIT flag；两者的`set_pipe`、`wait_pipe`和`event_id`必须一致。同一个event id只能在上一次同步已经消费后复用。循环复用Tile时，除上述前向依赖外，还需要处理消费完成后才能覆盖Buffer的反向依赖，因此常规流水化场景建议使用`make_tile_group`和自动同步。
+
+> [!NOTE]说明
+> 当`matmul`/`matmul_acc`使用了`phase`参数时，M流水与FIX流水之间的同步由硬件unit_flag完成，框架不会自动插入该段同步。
+
 ## 矩阵数据搬入
 
-矩阵搬入分为两跳：GM → L1（`pl.load`）和 L1 → L0A/L0B（`pl.move`）。
+矩阵搬入分为两跳：GM → L1（`pl.load`）和L1 → L0A/L0B（`pl.move`）。
 
 ### GM → L1搬运
 
@@ -180,7 +274,7 @@ def kernel(...,
 
 `pl.matmul`是PyPTO Pro封装NPU硬件计算能力的矩阵乘法核心接口，实现`dst_tile = lhs_tile × rhs_tile`，数据通路为L0A(Left) × L0B(Right) → L0C(Acc)。
 
-**表 矩阵乘计算A、B、C矩阵说明（Ascend 950PR/Ascend 950DT）**
+**表：矩阵乘计算A、B、C矩阵说明**
 
 | 矩阵 | 存储位置 | 维度 | 数据格式 | 数据类型 |
 |:---|:---|:---|:---|:---|
@@ -251,22 +345,6 @@ def matmul_acc_kernel(
 > [!NOTE]说明
 > `phase`参数控制Cube（M流水）与FixPipe（FIX流水）之间的硬件unit_flag握手。`phase`配对使用时，框架不自动插入M与FIX之间的软件同步，由硬件unit_flag保证顺序。使用不当会导致精度问题或设备卡死。详见[`phase`使用约束](../../../api/SIMD-API/operation/matrix_computation/phase.md)。
 
-## 同步机制
-
-Cube矩阵计算的四个步骤分别对应MTE2、MTE1、M、FIX四条流水线，各流水线异步并行执行，读写同一存储资源时存在数据依赖。
-
-PyPTO Pro推荐使用`pl.make_tile_group`配合`@pl.jit(auto_mutex=True)`，由框架根据Tile的`mutex_id`自动插入跨Pipe同步，开发者无需手写`sync_src`/`sync_dst`。使用单个`pl.make_tile`并需要手工控制依赖时，可调用`pl.system.sync_src`/`pl.system.sync_dst`。
-
-| 流水线 | 含义 | 典型操作 |
-|:---|:---|:---|
-| MTE2 | GM→L1/UB搬运 | `pl.load`/`pl.load_tile` |
-| MTE1 | L1→L0A/L0B搬运 | `pl.move` |
-| M | 矩阵计算 | `pl.matmul`/`pl.matmul_acc` |
-| FIX | L0C→GM搬运 | `pl.store`/`pl.store_tile` |
-
-> [!NOTE]说明
-> 当`matmul`/`matmul_acc`使用了`phase`参数时，M流水与FIX流水之间的同步由硬件unit_flag完成，框架不会自动插入该段同步。
-
 ## 尾块处理
 
 当GM Tensor的shape不能被Tile shape整除时，边界上会出现比Tile小的尾块。Cube场景的尾块处理通过`valid_shape=[-1, -1]`配合`pl.set_validshape`和`compact=1`完成：
@@ -301,6 +379,7 @@ pl.set_validshape(cur_acc, [valid_m, valid_n])
 以下是一个完整的Matmul Kernel，计算`C[M, N] = A[M, K] @ B[K, N]`，使用`make_tile_group` + `auto_mutex=True`管理L1/L0A/L0B/L0C缓冲，L1用双缓冲（`next()`轮转）让搬运与计算重叠：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -352,13 +431,14 @@ def matmul_kernel(
                 pl.move(cur_a_left, cur_a)
                 pl.move(cur_b_right, cur_b)
 
-                acc_tile = acc.next()
+                acc_tile = acc.current()
                 pl.matmul(acc_tile, cur_a_left, cur_b_right)
                 pl.store_tile(out, acc_tile, [i, j])
 
 
 # Host端调用
-device = "npu:0"
+device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+device = f"npu:{device_id}"
 torch.npu.set_device(device)
 torch.manual_seed(42)
 M_SIZE, K_SIZE, N_SIZE = 8192, 128, 8192

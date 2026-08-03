@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-基于 buffer-id 的互斥加锁 / 解锁，用于 A5 架构上多 pipe 共享缓冲区的安全访问。
+基于buffer-id的互斥加锁 / 解锁，用于A5架构上多pipe共享缓冲区的安全访问。
 
 ## 函数原型
 
@@ -27,29 +27,29 @@ pypto_pro.language.system.mutex_unlock(*, pipe, mutex_id, mode=0, max_mutex_id=2
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `pipe` | 输入 | 加 / 解锁所在的 pipe |
+| `pipe` | 输入 | 加 / 解锁所在的pipe |
 | `mutex_id` | 输入 | MutexID |
 | `mode` | 输入 | 模式属性 |
-| `max_mutex_id` | 输入 | 动态 id 时展开上界 |
-| `mutex_ids` | 输入 | 动态 id 时 if-chain 的比较目标列表 |
+| `max_mutex_id` | 输入 | 动态id时展开上界 |
+| `mutex_ids` | 输入 | 动态id时if-chain的比较目标列表 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `pipe` | 输入 | `pypto_pro.language.PipeType.MTE1` / `pypto_pro.language.PipeType.MTE2` / `pypto_pro.language.PipeType.MTE3` 等<br>加锁与解锁须在同一 pipe |
-| `mutex_id` | 输入 | 整型常量，取值 0~31<br>同一 pipe 内不同 mutex_id 互不干扰 |
-| `mode` | 输入 | 默认 0<br>高级用法，一般场景无需修改 |
-| `max_mutex_id` | 输入 | 默认 2<br>仅动态 mutex_id 时生效，静态 id 时忽略 |
-| `mutex_ids` | 输入 | 整数列表<br>仅动态 mutex_id 时生效，静态 id 时忽略 |
+| `pipe` | 输入 | `pypto_pro.language.PipeType.MTE1` / `pypto_pro.language.PipeType.MTE2` / `pypto_pro.language.PipeType.MTE3`等<br>加锁与解锁须在同一pipe |
+| `mutex_id` | 输入 | 整型常量，取值0 ~ 31<br>同一pipe内不同mutex_id互不干扰 |
+| `mode` | 输入 | 默认0<br>高级用法，一般场景无需修改 |
+| `max_mutex_id` | 输入 | 默认2<br>仅动态mutex_id时生效，静态id时忽略 |
+| `mutex_ids` | 输入 | 整数列表<br>仅动态mutex_id时生效，静态id时忽略 |
 
 ## 使用说明
 
-手动 `mutex_lock`/`mutex_unlock` 用于 `auto_mutex=False` 场景下手动管理缓冲区互斥。推荐使用 `auto_mutex=True`（配合 `make_tile_group`），由框架自动插入锁，无需手动调用。
+手动`mutex_lock`/`mutex_unlock`用于`auto_mutex=False`场景下手动管理缓冲区互斥。推荐使用`auto_mutex=True`（配合`make_tile_group`），由框架自动插入锁，无需手动调用。
 
 ## 调用示例
 
-下面是一个完整 kernel：用手动 `mutex_lock`/`mutex_unlock` 保护 load 和 store 的缓冲区访问，替代 `auto_mutex`。mutex 设计用于 `make_tile_group` 缓冲区，每个 buffer 用独立的 mutex_id 加锁。纯 vector kernel，同步用 `sync_src`/`sync_dst` 手写。
+下面是一个完整kernel：用手动`mutex_lock`/`mutex_unlock`保护load和store的缓冲区访问，替代`auto_mutex`。mutex设计用于`make_tile_group`缓冲区，每个buffer用独立的mutex_id加锁。纯vector kernel，同步用`sync_src`/`sync_dst`手写。
 
 ```python
 import pypto_pro.language as pl

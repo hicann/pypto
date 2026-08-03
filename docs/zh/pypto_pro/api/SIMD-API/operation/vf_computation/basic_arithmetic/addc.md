@@ -20,7 +20,7 @@ $$\{carry_i, dstReg_i\} = srcReg0_i + srcReg1_i + carrySrc_i$$
 
 Carry flag（进位标志）用于表示加法进位，若srcReg0，srcReg1，carrySrc输入按位相加后最高位有进位，在carry（存放进位的MaskReg寄存器）中对应位置每4bit设置1，否则写0。
 
-以 int64_t 类型数据计算 -1 + 8 = 7 为例，AddC 接口的适用场景如下图所示：
+以int64_t类型数据计算 -1 + 8 = 7为例，AddC接口的适用场景如下图所示：
 
 ![](../../../../figures/addc_scenario.jpg)
 
@@ -34,12 +34,12 @@ carry, dst = vf.addc(src0, src1, carry_src, preg)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `carry` | 输出 | 目标操作数，输出进位值，类型为 `MaskReg` |
+| `carry` | 输出 | 目标操作数，输出进位值，类型为`MaskReg` |
 | `dst` | 输出 | 目标向量寄存器，向量寄存器 |
 | `src0` | 输入 | 源操作数，向量寄存器 |
 | `src1` | 输入 | 源操作数，向量寄存器 |
-| `carry_src` | 输入 | 输入进位寄存器，类型为 `MaskReg` |
-| `preg` | 输入 | 掩码寄存器，类型为 `MaskReg` |
+| `carry_src` | 输入 | 输入进位寄存器，类型为`MaskReg` |
+| `preg` | 输入 | 掩码寄存器，类型为`MaskReg` |
 
 ## 数据类型
 
@@ -47,7 +47,7 @@ carry, dst = vf.addc(src0, src1, carry_src, preg)
 
 ## 返回值说明
 
-返回元组 `(carry, dst)`：`carry` 为 `MaskReg` 类型的进位标志寄存器，`dst` 为 `RegTensor` 类型的求和寄存器。
+返回元组`(carry, dst)`：`carry`为`MaskReg`类型的进位标志寄存器，`dst`为`RegTensor`类型的求和寄存器。
 
 ## 约束说明
 
@@ -56,6 +56,7 @@ carry, dst = vf.addc(src0, src1, carry_src, preg)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -94,7 +95,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(0, 50, [1, 64], device=device, dtype=torch.int32)

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-数据搬运接口，从 RegTensor 搬出至 UB 地址 dstAddr，对应 AscendC `Store` 接口。支持 post-update 模式，在搬运后自动累进目标地址，实现连续数据搬运。
+数据搬运接口，从RegTensor搬出至UB地址dstAddr，对应AscendC `Store`接口。支持post-update模式，在搬运后自动累进目标地址，实现连续数据搬运。
 
 ## 函数原型
 
@@ -33,11 +33,11 @@ vf.store(tile, src, count, *, post_update=True, repeat_stride=0)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输出 | 目标 UB tile，起始地址不需要 32 字节对齐 |
+| `tile` | 输出 | 目标UB tile，起始地址不需要32字节对齐 |
 | `src` | 输入 | 源操作数，向量寄存器 |
-| `count` | 输入 | 可选，搬运数据量（元素个数）。默认为 256B / sizeof(T) |
-| `post_update` | 输入 | 可选，`True` 时搬运后地址自动累进，默认 `False` |
-| `repeat_stride` | 输入 | 可选，重复存储时的步长，默认 `0` |
+| `count` | 输入 | 可选，搬运数据量（元素个数）。默认为256B / sizeof(T) |
+| `post_update` | 输入 | 可选，`True`时搬运后地址自动累进，默认`False` |
+| `repeat_stride` | 输入 | 可选，重复存储时的步长，默认`0` |
 
 ## 数据类型
 
@@ -49,13 +49,14 @@ vf.store(tile, src, count, *, post_update=True, repeat_stride=0)
 
 ## 约束说明
 
-- `count` 不能大于一个 RegTensor 能存储的数据个数，即 count <= 256B / sizeof(T)。
-- 接口内部定义了一个 UnalignRegForStore，该寄存器数量上限为 4。
-- `post_update=True` 时，目标地址会在每次搬运后自动累进，无需用户手动更新地址。
+- `count`不能大于一个RegTensor能存储的数据个数，即count <= 256B / sizeof(T)。
+- 接口内部定义了一个UnalignRegForStore，该寄存器数量上限为4。
+- `post_update=True`时，目标地址会在每次搬运后自动累进，无需用户手动更新地址。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -88,7 +89,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -103,9 +105,10 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## post-update 连续存储示例
+## post-update连续存储示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -138,7 +141,8 @@ def example_kernel(
 
 
 def test_example_2():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

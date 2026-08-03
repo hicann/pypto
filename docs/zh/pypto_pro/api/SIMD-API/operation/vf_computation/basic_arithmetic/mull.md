@@ -42,7 +42,7 @@ vf.mull(dst_lo, dst_hi, src0, src1, preg)
 | `dst_hi` | 输出 | 目标向量寄存器（乘法结果高位），向量寄存器 |
 | `src0` | 输入 | 源操作数，向量寄存器 |
 | `src1` | 输入 | 源操作数，向量寄存器 |
-| `preg` | 输入 | 掩码寄存器，类型为 `MaskReg` |
+| `preg` | 输入 | 掩码寄存器，类型为`MaskReg` |
 
 ## 数据类型
 
@@ -50,7 +50,7 @@ vf.mull(dst_lo, dst_hi, src0, src1, preg)
 
 ## 返回值说明
 
-返回元组 `(dst_lo, dst_hi)`：`dst_lo` 为乘法结果低 32 位的 `RegTensor` 寄存器，`dst_hi` 为乘法结果高 32 位的 `RegTensor` 寄存器。
+返回元组`(dst_lo, dst_hi)`：`dst_lo`为乘法结果低32位的`RegTensor`寄存器，`dst_hi`为乘法结果高32位的`RegTensor`寄存器。
 
 ## 约束说明
 
@@ -59,6 +59,7 @@ vf.mull(dst_lo, dst_hi, src0, src1, preg)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -101,7 +102,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(1, 1000, [1, 64], device=device, dtype=torch.int32)

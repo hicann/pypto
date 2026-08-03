@@ -3,7 +3,7 @@
 本文档介绍PyPTO Pro编程里的**多核切分（tiling）**：如何把一份数据切开、分配到多个
 AI Core上并行处理。内容包括：
 
-- 在kernel里用`pl.get_block_idx()` / `pl.get_block_num()`拿到"我是第几个核 / 一共几个核"；
+- 在kernel里用`pl.get_block_idx()` / `pl.get_block_num()`拿到“我是第几个核 / 一共几个核”；
 - 在launch时用方括号语法设置核数（`block_dim`）；
 - host与device之间怎么传tiling数据（标量参数 / TilingData结构体 / 动态shape）；
 - 参考Ascend C tiling设计方法论，用PyPTO Pro写出**负载均衡**的切分。
@@ -38,11 +38,11 @@ import pypto_pro.language as pl
 
 ## 心智模型：block == AI Core
 
-在PyPTO Pro / Ascend术语里，一个 **block** 就是一个 **AI Core**。启动一个kernel时，
+在PyPTO Pro / Ascend术语里，一个**block**就是一个**AI Core**。启动一个kernel时，
 **同一份kernel代码**会在`block_dim`个核上各跑一遍（SPMD模型）。每个核靠自己的
 **核编号**去认领整份工作里的一小块：
 
-- `pl.get_block_num()` → 本次一共有几个核（== launch时传的`block_dim`）。
+- `pl.get_block_num()` → 本次一共有几个核（即launch时传入的`block_dim`）。
 - `pl.get_block_idx()` → 当前核的编号，取值`0 .. block_num - 1`。
 - `pl.get_subblock_idx()` → 核内子块编号（`0`或`1`，用于Vector双子核；一般
   只在需要区分子核时才用）。
@@ -98,7 +98,7 @@ with pl.section_vector():
         ...
 ```
 
-为什么用跨步而不是"连续分段"（第k个核拿`[k*chunk : (k+1)*chunk]`）？
+为什么用跨步而不是“连续分段”（第k个核拿`[k*chunk : (k+1)*chunk]`）？
 
 - **天然均衡**：若`total_tiles`不能被`num_cores`整除，跨步写法让前
   `total_tiles % num_cores`个核各多做1个tile，最多相差1 —— 无需手写首/尾核逻辑。
@@ -113,19 +113,19 @@ with pl.section_vector():
 
 设`total_tiles = 100`、`num_cores = 32`。`100 = 3 * 32 + 4`，跨步分配的结果是：
 
-- 核`0..3`（共4个）各处理 **4** 个tile：如核0拿`{0, 32, 64, 96}`；
-- 核`4..31`（共28个）各处理 **3** 个tile：如核4拿`{4, 36, 68}`。
+- 核`0..3`（共4个）各处理**4**个tile：如核0拿`{0, 32, 64, 96}`；
+- 核`4..31`（共28个）各处理**3**个tile：如核4拿`{4, 36, 68}`。
 
-最忙的核和最闲的核只差 **1** 个tile —— 这就是"负载均衡"。而且你**没写任何**首/尾核分支
-代码，`pl.range(core_id, 100, 32)`一行就做到了。对比"连续分段"，如果写成核k拿
+最忙的核和最闲的核只差**1**个tile —— 这就是“负载均衡”。而且你**没写任何**首/尾核分支
+代码，`pl.range(core_id, 100, 32)`一行就做到了。对比“连续分段”，如果写成核k拿
 `[k*4 : k*4+4]`，前25个核各4个、后7个核0个 —— 严重不均。
 
 ### 二维切vs扁平切
 
 | 方式        | 循环写法                                                   | 适用                         |
 |-------------|------------------------------------------------------------|------------------------------|
-| **扁平切**  | `for idx in pl.range(core_id, m_tiles*n_tiles, num_cores)` | tile总数多、想要最细粒度均衡 |
-| **二维切**  | 外`range(core_id, m_tiles, num_cores)` + 内`range(0, n_tiles, 1)` | 每核处理整行、数据更连续 |
+| **扁平切** | `for idx in pl.range(core_id, m_tiles*n_tiles, num_cores)` | tile总数多、想要最细粒度均衡 |
+| **二维切** | 外`range(core_id, m_tiles, num_cores)` + 内`range(0, n_tiles, 1)` | 每核处理整行、数据更连续 |
 
 扁平切把`idx`还原成`(i, j)`：`i = idx // n_tiles`、`j = idx % n_tiles`。二维切让同一
 核处理连续的若干整行，GM访问更连续，但当`m_tiles < num_cores`时会有核空转（此时应改
@@ -144,7 +144,7 @@ kernel(x, y, z)                       # 默认 stream，block_dim=1
 ```
 
 - `stream` —— NPU stream；传`None`用默认stream。
-- `block_dim` —— **核数**，也就是kernel里`get_block_num()`会返回的值。
+- `block_dim` ——**核数**，也就是kernel里`get_block_num()`会返回的值。
 
 ```python
 # 例：用 32 个核跑
@@ -156,7 +156,7 @@ torch.npu.synchronize()
 
 不要写死一个可能超过硬件核数的值。两种做法：
 
-**(a) 查询平台核数**（`platform.py`）：
+**(a)查询平台核数**（`platform.py`）：
 
 ```python
 from pypto_pro.runtime.platform import get_platform_info
@@ -167,7 +167,7 @@ print(info.core_num)      # 例如 20 / 32 ...
 kernel[None, info.core_num](q, k, v, o)
 ```
 
-**(b) 按任务量取下界**，避免核多于tile（多出来的核会空转）：
+**(b)按任务量取下界**，避免核多于tile（多出来的核会空转）：
 
 ```python
 num_cores = min(info.core_num, total_tiles)
@@ -175,14 +175,14 @@ kernel[None, num_cores](x, y, z)
 ```
 
 此外，运行时还有一层保护：`_clamp_block_dim`（`jit.py`）会把超过平台核数的
-`block_dim` **截断**到硬件上限并打印告警。但**依赖它兜底不是好习惯**——请在host侧就
-按`min(core_num, 任务 tile 数)`算好。
+`block_dim`**截断**到硬件上限并打印告警。但**依赖它兜底不是好习惯**——请在host侧就
+按`min(core_num, 任务tile数)`算好。
 
 ---
 
 ## host ↔ device传tiling数据
 
-kernel需要知道"数据多大、切多少块、循环几次、用哪个算子"等运行时信息。PyPTO Pro有三条
+kernel需要知道“数据多大、切多少块、循环几次、用哪个算子”等运行时信息。PyPTO Pro有三条
 互补的通道把这些从host传到device：
 
 ### 动态shape（`pl.DYNAMIC`）—— 从tensor自动解析
@@ -230,7 +230,7 @@ scaled_kernel(a, out, scale_bits)      # 直接传 int
 
 ### TilingData结构体 —— 传一整包tiling参数
 
-参数一多，就把它们打包进一个`@dataclass`的 **TilingData** 类（字段为
+参数一多，就把它们打包进一个`@dataclass`的**TilingData**类（字段为
 `int`/`float`/`bool`或定长数组`T[N]`）。框架会把它序列化成一段C struct字节、放进一个
 device上的`uint8` buffer，kernel入口再拷进来（`jit.py:_pack_tiling_arg`、
 `_tiling.py:tiling_instance_to_bytes`）。
@@ -271,7 +271,7 @@ TilingData的完整规则（字段类型、数组、序列化、字段顺序即�
 
 ### tiling_key —— 编译期特化（而非运行时传值）
 
-前三条都是**运行时**通道（一份kernel处理所有取值）。若某个"模式开关"会让整段代码走
+前三条都是**运行时**通道（一份kernel处理所有取值）。若某个“模式开关”会让整段代码走
 不同分支，且你希望**每种模式各编一份专用kernel**（消除死分支、拿到最优指令），用
 `tiling_key`：声明一个字段类，launch时用方括号第三位传具体key，parser把字段折叠成
 编译期常量（`python/pypto_pro/runtime/tilingkey.py`）。
@@ -316,7 +316,7 @@ fa_kernel[None, num_cores, {"NeedAttnMask": 0}](q, k, v, o, tiling)   # full，�
 
 ## 用PyPTO Pro写出均衡的tiling
 
-上面讲了"怎么把tile分给核"的机制。这一节讲"**每个核该分多少、tile该多大**"的
+上面讲了“怎么把tile分给核”的机制。这一节讲“**每个核该分多少、tile该多大**”的
 方法论。设计Tiling时，需要综合考虑多核负载、片上存储容量、数据对齐和尾块处理，下面
 介绍这些因素在PyPTO Pro里的落地方式。
 
@@ -335,7 +335,7 @@ core_by_load = (numel + MIN_ELEMS_PER_CORE - 1) // MIN_ELEMS_PER_CORE
 num_cores = min(core_by_load, info.core_num)
 ```
 
-在PyPTO Pro里，"每核任务量相等"由第2节的**跨步循环**自动保证 —— 不必像Ascend C
+在PyPTO Pro里，“每核任务量相等”由第2节的**跨步循环**自动保证 —— 不必像Ascend C
 那样手写`blockFormer` / `blockTail` / 首尾核分支。你只需：
 
 1. host侧算出总tile数`total_tiles`和要用的`num_cores`；
@@ -345,10 +345,10 @@ num_cores = min(core_by_load, info.core_num)
 
 ### UB（片上buffer）切分：单次处理多少
 
-UB切分的要点是：**受UB容量限制（Ascend 950PR/Ascend 950DT为248KB），
-单次处理量要对齐到Vector指令友好的粒度（如256B）。**
+UB切分的要点是：**受UB容量限制，单次处理量要对齐到Vector指令友好的粒度
+（如256B）。**
 
-在PyPTO Pro里，"UB切分"就是**选tile的shape**：一个`[TILE_M, TILE_N]`的tile就是
+在PyPTO Pro里，“UB切分”就是**选tile的shape**：一个`[TILE_M, TILE_N]`的tile就是
 一次处理的数据块。选tile尺寸时：
 
 - **不超UB**：所有并存tile的字节和（含双缓冲的多份）不能超过UB。每份
@@ -366,7 +366,7 @@ m_tiles = (M + TILE_M - 1) // TILE_M           # 向上取整覆盖尾块
 n_tiles = (N + TILE_N - 1) // TILE_N
 ```
 
-**UB预算的一个具体算例。** 逐元素加法`c = a + b`，FP16，三个操作数各双缓冲：
+**UB预算的一个具体算例。**逐元素加法`c = a + b`，FP16，三个操作数各双缓冲：
 
 ```text
 单份 tile 字节 = TILE_M * TILE_N * sizeof(FP16) = 128 * 128 * 2 = 32 KB
@@ -374,16 +374,16 @@ buffer 份数    = 3 个操作数(a,b,c) x 2(双缓冲) = 6 份
 总占用         = 6 * 32 KB = 192 KB
 ```
 
-Ascend 950PR/Ascend 950DT的UB是248KB，192KB放得下。若换成FP32（单份64KB），`6 * 64 = 384KB`
-> 248KB就**超了** —— 这时要么把tile缩小（如`128 x 64`），要么减少缓冲份数。选tile
-尺寸本质上就是在解这道"所有并存buffer字节和 ≤ UB容量"的不等式。
+当前支持平台的UB容量为248KB，因此192KB可以放下。若换成FP32（单份64KB），
+`6 * 64 = 384KB`，会**超出UB容量**——这时要么把tile缩小（如`128 x 64`），要么减少缓冲份数。选tile
+尺寸本质上就是在解这道“所有并存buffer字节和 ≤ UB容量”的不等式。
 
 ### Buffer规划：双缓冲重叠
 
 指南（§3）要点：**规划输入/输出/中间buffer，并用Double Buffer让搬运与计算重叠。**
 
 在PyPTO Pro里用`pl.make_tile_group` + `auto_mutex=True`实现双 / N缓冲，框架自动插入
-同步（细节见 [Tensor、Tile与TileGroup](Python_programming_overview.md)）：
+同步（细节见[Tensor、Tile与TileGroup](Python_programming_overview.md)）：
 
 ```python
 a_db = pl.make_tile_group(type=tile_type, addrs=0x0000,  mutex_ids=[0, 1])   # 双缓冲
@@ -393,7 +393,7 @@ c_db = pl.make_tile_group(type=tile_type, addrs=0x20000, mutex_ids=[30, 31])
 
 ### 分支场景覆盖
 
-指南（§4）要点：**覆盖dtype / shape大小 / 对齐 / 边界等不同场景。** 在PyPTO Pro里：
+指南（§4）要点：**覆盖dtype / shape大小 / 对齐 / 边界等不同场景。**在PyPTO Pro里：
 
 - **dtype / 模式分支**：用TilingData的字段在kernel里`if`分支（如`opkind[4]`），或
   用`tiling_key`做**编译期特化**（每个key编成一份专用kernel，见
@@ -409,6 +409,7 @@ c_db = pl.make_tile_group(type=tile_type, addrs=0x20000, mutex_ids=[30, 31])
 `[M, N]`按`128 × 128`切块，外层按行跨步分核。
 
 ```python
+import os
 import torch
 import pypto_pro.language as pl
 
@@ -447,7 +448,8 @@ def add_kernel(
 
 
 def test_add():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     torch.npu.set_device(device)
     M_SIZE, N_SIZE = 8192, 4096
     num_cores = M_SIZE // TILE_M           # 每个核一行 tile；此处能整除
@@ -519,9 +521,9 @@ def matmul_example(
                 pl.store_tile(out, acc_t, [i, j])                 # L0C -> GM
 ```
 
-> 上面为简洁只切了K=128的单步；真实matmul还要在K方向累加（`pl.matmul_acc`）。这里的
+> 上面为简洁只切了K = 128的单步；真实matmul还要在K方向累加（`pl.matmul_acc`）。这里的
 > 重点是**多核切分与Vec完全一致**：`for i in pl.range(core_id, M//128, num_cores)`。矩阵
-> 乘、L1/L0摆放的细节见 [Tensor、Tile与TileGroup](Python_programming_overview.md)。
+> 乘、L1/L0摆放的细节见[Tensor、Tile与TileGroup](Python_programming_overview.md)。
 
 想看**多核 + TilingData + 尾块**三者结合的完整例子，见
 `test_eltwise_dynamic_rank.py`（也在[尾块Tile文档](tail_block_handling.md) §6详解）。
@@ -532,16 +534,16 @@ def matmul_example(
 
 ## 常见坑
 
-- **`block_dim`超过硬件核数。** 虽然`_clamp_block_dim`会截断并告警，但请在host侧就用
+- **`block_dim`超过硬件核数。**虽然`_clamp_block_dim`会截断并告警，但请在host侧就用
   `min(get_platform_info().core_num, total_tiles)`算好，别依赖兜底。
-- **核数多于tile数。** 多出来的核在`pl.range(core_id, total_tiles, num_cores)`里一次都
+- **核数多于tile数。**多出来的核在`pl.range(core_id, total_tiles, num_cores)`里一次都
   不进循环，纯空转。用`num_cores = min(core_num, total_tiles)`。
-- **连续分段导致不均衡。** 手写`[k*chunk:(k+1)*chunk]`且不处理余数时，最后一个核可能显
+- **连续分段导致不均衡。**手写`[k*chunk:(k+1)*chunk]`且不处理余数时，最后一个核可能显
   著多做或少做。优先用跨步`pl.range(core_id, total, num_cores)`。
-- **把TilingData字段当编译期常量用。** tiling字段是运行时值，不能用在需要编译期
+- **把TilingData字段当编译期常量用。**tiling字段是运行时值，不能用在需要编译期
   `int`的地方（例如`TileType`的静态`shape`）；用在`pl.range`、`make_tensor`的
   shape/stride、算术、`if`条件里。
-- **TilingData必须是最后一个参数。** `_pack_tiling_arg`只识别args的最后一个元素是否为
+- **TilingData必须是最后一个参数。**`_pack_tiling_arg`只识别args的最后一个元素是否为
   tiling实例。
 
 ---

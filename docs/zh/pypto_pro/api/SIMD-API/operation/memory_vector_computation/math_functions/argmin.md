@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-沿指定维度查找 `src` tile 的最小元素索引并写入 `out`。`dim=0` 沿最后一维查找每行最小元素的列索引；`dim=1` 沿第一维查找每列最小元素的行索引。
+沿指定维度查找`src` tile的最小元素索引并写入`out`。`dim=0`沿最后一维查找每行最小元素的列索引；`dim=1`沿第一维查找每列最小元素的行索引。
 
 ## 函数原型
 
@@ -26,19 +26,19 @@ pypto_pro.language.argmin(out, src, tmp, *, dim=0)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，存放每行最小元素的列索引 |
-| `src` | 输入 | 源 tile |
-| `tmp` | 输入 | 临时 tile（硬件中间计算用） |
+| `out` | 输出 | 目标tile，存放每行最小元素的列索引 |
+| `src` | 输入 | 源tile |
+| `tmp` | 输入 | 临时tile（硬件中间计算用） |
 | `dim` | 输入 | 查找维度 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：`pypto_pro.language.DT_INT32`<br>`dim=0` 时 shape 为 `[行数, 1]`；`dim=1` 时 shape 为 `[1, 列数]` |
+| `out` | 输出 | 数据类型：`pypto_pro.language.DT_INT32`<br>`dim=0`时shape为`[行数, 1]`；`dim=1`时shape为`[1, 列数]` |
 | `src` | 输入 | 数据类型：b16、b32<br>shape：任意二维 |
-| `tmp` | 输入 | 数据类型：与 `src` 一致<br>shape：与 `src` 一致 |
-| `dim` | 输入 | `0`：返回每行最小元素的列索引；`1`：返回每列最小元素的行索引。默认值为 `0` |
+| `tmp` | 输入 | 数据类型：与`src`一致<br>shape：与`src`一致 |
+| `dim` | 输入 | `0`：返回每行最小元素的列索引；`1`：返回每列最小元素的行索引。默认值为`0` |
 
 ## 流水类型
 
@@ -46,9 +46,9 @@ V（向量计算流水）。
 
 ## 调用示例
 
-### dim=0
+### dim = 0
 
-下面是一个完整 kernel：对 64×128 FP16 源 tile 做行向取最小值索引，输出 `[64, 1]` INT32。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：对64×128 FP16源tile做行向取最小值索引，输出`[64, 1]` INT32。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -88,9 +88,9 @@ def row_argmin_kernel(
 ```
 <!-- pypto-doc-output:row_argmin:end -->
 
-### dim=1
+### dim = 1
 
-下面的 kernel 对 64×128 FP16 源 tile 做列向查找，输出 `[1, 128]` INT32。
+下面的kernel对64×128 FP16源tile做列向查找，输出`[1, 128]` INT32。
 
 ```python
 M, N = 64, 128

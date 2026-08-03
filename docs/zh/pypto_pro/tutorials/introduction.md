@@ -4,6 +4,21 @@
 
 PyPTO Pro是一种面向Ascend 950PR/Ascend 950DT、以Python为前端的DSL（Domain-Specific Language，领域特定语言）。它采用SPMD（Single Program Multiple Data，单程序多数据）执行模型，并以二维Tile作为Tile API中Cube、Vector计算和数据搬运的主要载体；对于需要寄存器级编程的场景，还提供基于RegTensor和MaskReg的Reg API。PyPTO Pro通过Tile等抽象，在保留硬件控制能力的同时简化算子开发，并可在经过合理的Tiling切分和流水设计后获得较好的性能。
 
+## PyPTO Pro总体架构
+
+PyPTO Pro提供Tile API、Reg API和Utils API，并通过JIT编译与执行链将Python Kernel编译为可在AI Core上运行的二进制。
+
+**图1 PyPTO Pro总体架构**
+
+![PyPTO Pro总体架构](figures/architecture_pypto_pro.png)
+
+PyPTO Pro的编译与执行链包括以下阶段：
+
+1. **前端解析与优化**：`@pl.jit`标记的Python Kernel由前端解析并构建为PyPTO IR，再通过IR Pass完成优化。
+2. **代码生成**：CCE CodeGen根据优化后的IR生成Device侧`kernel.cpp`及Tiling相关头文件。
+3. **编译与链接**：生成的Device侧代码与Host封装代码`call_kernel.cpp`经毕昇编译器编译、链接，生成JIT产物`call_kernel.so`。
+4. **加载与执行**：运行时加载`call_kernel.so`并下发Kernel任务，最终由AI Core执行。
+
 ## 适用场景
 
 PyPTO Pro适用于开发高性能深度学习算子，可以较为快速地实现各种神经网络算子，尤其是Cube和Vector都涉及的融合算子，并达到较为理想的性能。

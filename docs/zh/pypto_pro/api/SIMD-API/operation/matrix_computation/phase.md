@@ -1,4 +1,4 @@
-# phase 使用约束（AccPhase / STPhase）
+# phase使用约束（AccPhase / STPhase）
 
 ## 产品支持情况
 
@@ -14,55 +14,55 @@
 
 ## 功能说明
 
-`matmul` / `matmul_acc` 的 `phase` 参数（`pl.AccPhase`）与 `store` / `store_tile` 的 `phase` 参数（`pl.STPhase`）共同控制 Cube（矩阵乘）与 FixPipe（L0C→GM 搬运）之间的 **unit_flag 硬件握手**。正确使用 phase 可以省去软件同步、提升流水并行度；使用不当则会导致精度问题或设备卡死。
+`matmul` / `matmul_acc`的`phase`参数（`pl.AccPhase`）与`store` / `store_tile`的`phase`参数（`pl.STPhase`）共同控制Cube（矩阵乘）与FixPipe（L0C→GM搬运）之间的**unit_flag硬件握手**。正确使用phase可以省去软件同步、提升流水并行度；使用不当则会导致精度问题或设备卡死。
 
-## 硬件 unit_flag 机制
+## 硬件unit_flag机制
 
 ### matmul / matmul_acc（AccPhase）
 
-`phase=pl.AccPhase.Partial` 或 `phase=pl.AccPhase.Final` 均会使能硬件的 unitFlag 功能：
+`phase=pl.AccPhase.Partial`或`phase=pl.AccPhase.Final`均会使能硬件的unitFlag功能：
 
-- **unit_flag = 0**：硬件直接写入 Acc（L0C）。
-- **unit_flag = 1**：硬件写入 Acc 的操作会被暂停，直到 unit_flag 被设置回 0。
+- **unit_flag = 0**：硬件直接写入Acc（L0C）。
+- **unit_flag = 1**：硬件写入Acc的操作会被暂停，直到unit_flag被设置回0。
 
 两者的区别：
 
-| 模式 | 检查 unit_flag | 设置 unit_flag |
+| 模式 | 检查unit_flag | 设置unit_flag |
 |---|---|---|
-| `Partial` | 是（等待 unit_flag=0 才写入） | 否（不改变 unit_flag） |
-| `Final` | 是（等待 unit_flag=0 才写入） | 是（写入后将 unit_flag 置为 1） |
+| `Partial` | 是（等待unit_flag = 0才写入） | 否（不改变unit_flag） |
+| `Final` | 是（等待unit_flag = 0才写入） | 是（写入后将unit_flag置为1） |
 
 ### store / store_tile（STPhase）
 
-`phase=pl.STPhase.Partial` 或 `phase=pl.STPhase.Final` 均会使能硬件的 unitFlag 功能：
+`phase=pl.STPhase.Partial`或`phase=pl.STPhase.Final`均会使能硬件的unitFlag功能：
 
-- **unit_flag = 1**：硬件直接读 Acc（L0C）。
-- **unit_flag = 0**：硬件读 Acc 的操作会被暂停，直到 unit_flag 被设置为 1。
+- **unit_flag = 1**：硬件直接读Acc（L0C）。
+- **unit_flag = 0**：硬件读Acc的操作会被暂停，直到unit_flag被设置为1。
 
 两者的区别：
 
-| 模式 | 检查 unit_flag | 设置 unit_flag |
+| 模式 | 检查unit_flag | 设置unit_flag |
 |---|---|---|
-| `Partial` | 是（等待 unit_flag=1 才读取） | 否（不改变 unit_flag） |
-| `Final` | 是（等待 unit_flag=1 才读取） | 是（读取后将 unit_flag 置为 0） |
+| `Partial` | 是（等待unit_flag = 1才读取） | 否（不改变unit_flag） |
+| `Final` | 是（等待unit_flag = 1才读取） | 是（读取后将unit_flag置为0） |
 
-## phase 与自动同步的关系
+## phase与自动同步的关系
 
 | 配置 | 自动同步 | 同步机制 |
 |---|---|---|
-| 配置了 phase | **不自动插入同步** | 靠硬件 unit_flag 实现 Matmul（M 流水）与 FixPipe 之间的同步 |
-| 未配置 phase | **自动插入同步** | 框架自动插入 M 流水与 FixPipe 流水的软件同步 |
+| 配置了phase |**不自动插入同步** | 靠硬件unit_flag实现Matmul（M流水）与FixPipe之间的同步 |
+| 未配置phase |**自动插入同步** | 框架自动插入M流水与FixPipe流水的软件同步 |
 
 ## 使用约束
 
-如果 phase 使用不当，可能会导致精度问题或者卡死现象。使用时必须保证：
+如果phase使用不当，可能会导致精度问题或者卡死现象。使用时必须保证：
 
-1. **配对使用**：如果 `matmul` 或 `matmul_acc` 使用了 phase，对应的 `store` 或 `store_tile` 也需要使用 phase。
-2. **Final 收尾**：对于同一块 L0C，`matmul` 或 `matmul_acc` 的最后一轮写操作，以及 `store` 或 `store_tile` 的最后一轮读操作，必须使用 `Final` 模式。
+1. **配对使用**：如果`matmul`或`matmul_acc`使用了phase，对应的`store`或`store_tile`也需要使用phase。
+2. **Final收尾**：对于同一块L0C，`matmul`或`matmul_acc`的最后一轮写操作，以及`store`或`store_tile`的最后一轮读操作，必须使用`Final`模式。
 
 ## 错误案例
 
-### 错误案例一：matmul 无 Final 导致卡死
+### 错误案例一：matmul无Final导致卡死
 
 ```python
 pl.matmul(ac, al, br, phase=pl.AccPhase.Partial)
@@ -71,9 +71,9 @@ pl.store(out, ac, [0, 0], phase=pl.STPhase.Final)
 
 **现象**：卡死。
 
-**原因**：`matmul` 使用 `Partial` 只检查 unit_flag 不会设置 unit_flag，unit_flag 始终为 0。`store` 使用 `Final` 等待 unit_flag 被设置成 1 才能读取，但 unit_flag 永远不会被置 1，FixPipe 一直等待 → 卡死。
+**原因**：`matmul`使用`Partial`只检查unit_flag不会设置unit_flag，unit_flag始终为0。`store`使用`Final`等待unit_flag被设置成1才能读取，但unit_flag永远不会被置1，FixPipe一直等待 → 卡死。
 
-### 错误案例二：store 未配置 phase 导致精度问题
+### 错误案例二：store未配置phase导致精度问题
 
 ```python
 for ki in pl.range(0, K_SQ, TILE_SQ):
@@ -89,12 +89,12 @@ pl.store(out, ac, [0, 0])
 
 **原因**：
 
-- **软件同步角度**：`store` 未配置 phase，框架会自动插入 FixPipe 流水同步；但 `matmul` 配置了 phase，不会自动插入 M 流水同步。两种同步机制不匹配。
-- **硬件 unit_flag 角度**：`store` 未配置 phase，不受硬件 unit_flag 值影响，FixPipe 不会等待 unit_flag。
+- **软件同步角度**：`store`未配置phase，框架会自动插入FixPipe流水同步；但`matmul`配置了phase，不会自动插入M流水同步。两种同步机制不匹配。
+- **硬件unit_flag角度**：`store`未配置phase，不受硬件unit_flag值影响，FixPipe不会等待unit_flag。
 
-上述两种情况，FixPipe 搬运 L0C 数据都不会严格等待 Matmul 计算完成，导致读到未完成的数据。
+上述两种情况，FixPipe搬运L0C数据都不会严格等待Matmul计算完成，导致读到未完成的数据。
 
-### 错误案例三：循环内 store(Final) 后 matmul 卡死
+### 错误案例三：循环内store(Final)后matmul卡死
 
 ```python
 for ki in pl.range(0, K_SQ, TILE_SQ):
@@ -107,23 +107,23 @@ for ki in pl.range(0, K_SQ, TILE_SQ):
 
 **原因**：
 
-- 第一轮循环：`matmul(Final)` 将 unit_flag 设置成 1，`store(Partial)` 能将 L0C 数据搬运出去，但未改变 unit_flag 的值（仍为 1）。
-- 第二轮循环：由于共用同一块 L0C 内存，`matmul` 等待 unit_flag 变更为 0，但 unit_flag 始终为 1 → 卡死。
+- 第一轮循环：`matmul(Final)`将unit_flag设置成1，`store(Partial)`能将L0C数据搬运出去，但未改变unit_flag的值（仍为1）。
+- 第二轮循环：由于共用同一块L0C内存，`matmul`等待unit_flag变更为0，但unit_flag始终为1 → 卡死。
 
 ## 正确用法示例
 
-### 单次 matmul（无 K 维累加）
+### 单次matmul（无K维累加）
 
-不传 phase，框架自动插入同步：
+不传phase，框架自动插入同步：
 
 ```python
 pl.matmul(ac, al, br)
 pl.store(out, ac, [0, 0])
 ```
 
-### K 维分块累加（多块）
+### K维分块累加（多块）
 
-首块 `Partial`，中间块 `Partial`，末块 `Final`，store 用 `STPhase.Final`：
+首块`Partial`，中间块`Partial`，末块`Final`，store用`STPhase.Final`：
 
 ```python
 with pl.section_cube():

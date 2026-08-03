@@ -4,7 +4,7 @@
 
 ## Matmul+Softmax融合算子
 
-**功能介绍**：该融合算子将矩阵乘法与Softmax激活融合到一个Kernel中，数学表达式为 $out = \text{Softmax}(A \times B)$。其中矩阵乘法 $S = A \times B$ 在Cube流水线上执行，Softmax按行归一化在Vector流水线上执行，中间结果通过Global Memory的workspace中转，Cube与Vector之间通过`set_cross_core`/`wait_cross_core`进行流水线同步。
+**功能介绍**：该融合算子将矩阵乘法与Softmax激活融合到一个Kernel中，数学表达式为$out = \text{Softmax}(A \times B)$。其中矩阵乘法$S = A \times B$在Cube流水线上执行，Softmax按行归一化在Vector流水线上执行，中间结果通过Global Memory的workspace中转，Cube与Vector之间通过`set_cross_core`/`wait_cross_core`进行流水线同步。
 
 - Softmax按行归一化的数学表达式为：
 
@@ -12,7 +12,7 @@
   out_{i,j} = \frac{e^{S_{i,j} - m_i}}{\sum_{j} e^{S_{i,j} - m_i}}, \qquad m_i = \max_{j} S_{i,j}
   $$
 
-- 矩阵维度：$A \in \mathbb{R}^{M \times 128}$，$B \in \mathbb{R}^{128 \times N}$，$S = A \times B \in \mathbb{R}^{M \times N}$。M/N使用运行时动态维度（`pl.DYNAMIC`）；本入门示例在一个Cube Tile内处理M，支持`1 <= M <= 64`。K固定为128，每次Matmul完整计算K轴；N轴按64分块，N可以包含多个分块，例如1024或4096。Cube直接计算S并写入形状为 $[M,N]$ 的workspace，Vector以 $[M半块,N块]$ 视图沿N方向分块完成Softmax。
+- 矩阵维度：$A \in \mathbb{R}^{M \times 128}$，$B \in \mathbb{R}^{128 \times N}$，$S = A \times B \in \mathbb{R}^{M \times N}$。M/N使用运行时动态维度（`pl.DYNAMIC`）；本入门示例在一个Cube Tile内处理M，支持`1 <= M <= 64`。K固定为128，每次Matmul完整计算K轴；N轴按64分块，N可以包含多个分块，例如1024或4096。Cube直接计算S并写入形状为$[M,N]$的workspace，Vector以$[M半块,N块]$视图沿N方向分块完成Softmax。
 
 ## 算子设计
 
@@ -20,7 +20,7 @@
 |:---|:---|
 | Kernel函数定义 | 通过`@pl.jit(auto_mutex=True)`声明JIT编译目标，开启Tile mutex自动管理；M/N为`pl.DYNAMIC`、K固定为128，本示例限定M不超过64行 |
 | Cube Tile定义 | 使用`pl.TileType`定义Mat/Left/Right/Acc上的Tile，FP16输入、FP32累加；Cube直接按$A\times B$计算S；Left/Right/Acc设置`compact=1`以处理M/N尾块 |
-| N轴分块 | N分 $\lceil N/64 \rceil$ 块写入workspace；每个N块使用完整的K=128输入执行一次`pl.matmul` |
+| N轴分块 | N分$\lceil N/64 \rceil$块写入workspace；每个N块使用完整的K = 128输入执行一次`pl.matmul` |
 | 流水线同步 | Cube段由FIX流水通过`set_cross_core`发出跨核信号，Vector段由MTE2流水通过`wait_cross_core`等待信号后执行load |
 | Vector Tile定义 | Vec Tile形状为`[32, 64]`；两个AIV subblock分别处理最多32个M行，并用`set_validshape`设置当前M半块和N块的有效区域；归约结果使用`[M半块, 1]`的DN视图广播，并通过同一UB地址上的`[1, M半块]`行主序视图完成逐元素合并 |
 | Vector计算 | 第一遍用`maximum(..., dim=0)`计算各N块的行最大值，再用逐元素`maximum`合并块间结果；第二遍用`exp`和`sum(..., dim=0)`计算各块的指数和，再用逐元素`add`累加完整分母；第三遍用`expand_div(..., dim=0)`完成归一化 |
@@ -31,6 +31,7 @@
 ### Tile API版本
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -182,7 +183,8 @@ def matmul_softmax_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
 
 
 # Host端调用
-device = "npu:0"
+device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+device = f"npu:{device_id}"
 torch.npu.set_device(device)
 torch.manual_seed(0)
 M, N = 48, 1024
@@ -205,7 +207,7 @@ print("Matmul-Softmax kernel passed!")
 >
 > - 该融合算子在同一个Kernel内同时使用`section_cube()`和`section_vector()`，Cube流水执行矩阵乘法，Vector流水执行Softmax，体现了AI Core多流水线协同计算的能力。
 > - M/N为`pl.DYNAMIC`，GM维度在运行时通过`a.shape[0]`和`b.shape[1]`获取；K固定为128。本示例在一个Cube Tile内处理M，支持`1 <= M <= 64`；N按64分块，循环次数由运行时N计算，因此同一Kernel可处理1024、4096等不同N值。
-> - Cube段沿N轴分块。每个N块完整载入K=128的A/B子块并执行一次`pl.matmul`；L0C在矩阵乘前设置`valid_shape([valid_m, valid_n])`，使M/N尾块使用当前有效尺寸。
+> - Cube段沿N轴分块。每个N块完整载入K = 128的A/B子块并执行一次`pl.matmul`；L0C在矩阵乘前设置`valid_shape([valid_m, valid_n])`，使M/N尾块使用当前有效尺寸。
 > - `valid_shape=[-1, -1]`在`TileType`中声明tile的有效区域为运行时动态，后续通过`pl.set_validshape`在运行时设置。Left/Right/Acc上的`compact=1`使L1到L0的分形重排和L0C到GM的存储按当前有效尺寸使用紧凑步长，用于处理M/N不整除tile尺寸的尾块。
 > - Cube直接计算$A\times B$，workspace与输出保持相同的`[M, N]`形状。Cube与Vector之间通过`set_cross_core`/`wait_cross_core`同步，确保workspace写入完成后Vector才开始读取。
 > - Vector段通过`pl.get_subblock_idx()`获取AIV subblock编号：subblock 0处理M轴前32行，subblock 1处理后32行；M尾块通过`set_validshape([valid_rows, valid_n])`收窄。
@@ -230,6 +232,7 @@ VF（Vector Function，向量函数）是PyPTO Pro中用于描述寄存器级向
 | VF内存顺序 | `vf.store_align`写入的状态会被后续`vf.load_align`读取，使用`vf.mem_bar(mode=pl.MemBarMode.VST_VLD)`保证VF store到后续vector load的顺序；MTE与Vector之间的依赖仍由Tile mutex管理 |
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -421,7 +424,8 @@ def matmul_softmax_vf_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
 
 
 # Host端调用
-device = "npu:0"
+device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+device = f"npu:{device_id}"
 torch.npu.set_device(device)
 torch.manual_seed(0)
 M, N = 48, 1024

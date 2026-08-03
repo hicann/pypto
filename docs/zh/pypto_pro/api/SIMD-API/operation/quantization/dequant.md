@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-把低精度整型 tile 反量化回高精度浮点。计算公式：`out = (src - offset) * scale`。
+把低精度整型tile反量化回高精度浮点。计算公式：`out = (src - offset) * scale`。
 
 ## 函数原型
 
@@ -26,19 +26,19 @@ pypto_pro.language.dequant(out, src, scale, offset)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 反量化结果 tile（高精度浮点） |
-| `src` | 输入 | 源 tile（低精度整型） |
-| `scale` | 输入 | 缩放系数 tile |
-| `offset` | 输入 | 零点偏移 tile |
+| `out` | 输出 | 反量化结果tile（高精度浮点） |
+| `src` | 输入 | 源tile（低精度整型） |
+| `scale` | 输入 | 缩放系数tile |
+| `offset` | 输入 | 零点偏移tile |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape 须与 `src` 一致 |
-| `src` | 输入 | 数据类型：`pypto_pro.language.DT_INT8` 或 `pypto_pro.language.DT_UINT8`<br>shape：与 `out` 一致 |
-| `scale` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：通常为 per-row `[行数, 1]`，也可为 `[1, 1]`（全局 scale） |
-| `offset` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：与 `scale` 一致<br>对称量化场景可传全零 tile |
+| `out` | 输出 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape须与`src`一致 |
+| `src` | 输入 | 数据类型：`pypto_pro.language.DT_INT8`或`pypto_pro.language.DT_UINT8`<br>shape：与`out`一致 |
+| `scale` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：通常为per-row `[行数, 1]`，也可为`[1, 1]`（全局scale） |
+| `offset` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：与`scale`一致<br>对称量化场景可传全零tile |
 
 ## 流水类型
 
@@ -46,7 +46,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：从 GM 载入 INT8 源 tile、per-row scale 和 offset，用 `pypto_pro.language.dequant` 反量化为 FP32 再写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：从GM载入INT8源tile、per-row scale和offset，用`pypto_pro.language.dequant`反量化为FP32再写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

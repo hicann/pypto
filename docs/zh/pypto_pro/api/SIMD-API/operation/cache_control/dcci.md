@@ -26,7 +26,7 @@ pypto_pro.language.system.dcci(target, offset=None, *, cache_line=pl.CacheLine.E
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `target` | 输入 | GM Tensor 或 Vec Tile，指定缓存失效的目标 |
+| `target` | 输入 | GM Tensor或Vec Tile，指定缓存失效的目标 |
 | `offset` | 输入 | 可选的元素偏移 |
 | `cache_line` | 输入 | 缓存行范围 |
 | `dst` | 输入 | 缓存目标 |
@@ -35,14 +35,14 @@ pypto_pro.language.system.dcci(target, offset=None, *, cache_line=pl.CacheLine.E
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `target` | 输入 | GM Tensor（`pypto_pro.language.Tensor`）或位于 `MemorySpace.Vec` 的 Tile（`pypto_pro.language.Tile`） |
-| `offset` | 输入 | 单位为元素<br>GM Tensor 支持各维偏移列表/元组，也支持整型常量或整型标量 Expr 表示的线性偏移；Vec Tile 仅支持整型常量或整型标量 Expr 表示的线性偏移<br>缺省时使用目标的起始地址 |
+| `target` | 输入 | GM Tensor（`pypto_pro.language.Tensor`）或位于`MemorySpace.Vec`的Tile（`pypto_pro.language.Tile`） |
+| `offset` | 输入 | 单位为元素<br>GM Tensor支持各维偏移列表/元组，也支持整型常量或整型标量Expr表示的线性偏移；Vec Tile仅支持整型常量或整型标量Expr表示的线性偏移<br>缺省时使用目标的起始地址 |
 | `cache_line` | 输入 | `pl.CacheLine.ENTIRE_DATA_CACHE`（默认，全数据缓存失效）/ `pl.CacheLine.SINGLE_CACHE_LINE`（单缓存行失效）<br>全缓存失效性能开销较大，仅在大范围数据不一致时使用 |
-| `dst` | 输入 | `pl.DcciDst.AUTO`（默认，自动选择）/ `pl.DcciDst.CACHELINE_OUT` / `pl.DcciDst.CACHELINE_UB` / `pl.DcciDst.CACHELINE_ALL` / `pl.DcciDst.CACHELINE_ATOMIC`<br>一般场景使用 `pl.DcciDst.AUTO` 即可 |
+| `dst` | 输入 | `pl.DcciDst.AUTO`（默认，自动选择）/ `pl.DcciDst.CACHELINE_OUT` / `pl.DcciDst.CACHELINE_UB` / `pl.DcciDst.CACHELINE_ALL` / `pl.DcciDst.CACHELINE_ATOMIC`<br>一般场景使用`pl.DcciDst.AUTO`即可 |
 
 ## 调用示例
 
-以下为 GM Tensor 的调用片段。`inp` 为二维 GM Tensor，`offset=[0, 0]` 表示从其起始地址执行单缓存行操作：
+以下为GM Tensor的调用片段。`inp`为二维GM Tensor，`offset=[0, 0]`表示从其起始地址执行单缓存行操作：
 
 ```python
 pl.system.dcci(

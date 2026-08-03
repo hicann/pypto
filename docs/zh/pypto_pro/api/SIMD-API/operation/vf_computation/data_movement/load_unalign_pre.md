@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-非对齐搬入初始化接口。在读非对齐地址前，应该先通过 `vf.load_unalign_pre` 进行初始化，保存非 32 字节对齐的数据，然后再调用 `vf.load_unalign` 进行数据搬入。
+非对齐搬入初始化接口。在读非对齐地址前，应该先通过`vf.load_unalign_pre`进行初始化，保存非32字节对齐的数据，然后再调用`vf.load_unalign`进行数据搬入。
 
-连续非对齐搬入时，`vf.load_unalign` 会将后续未对齐的数据缓存至 ureg，所以下一次搬入不需要再次调用 `vf.load_unalign_pre`，只需在迭代开始前调用一次 `vf.load_unalign_pre`，从而实现非对齐搬入的性能优化。
+连续非对齐搬入时，`vf.load_unalign`会将后续未对齐的数据缓存至ureg，所以下一次搬入不需要再次调用`vf.load_unalign_pre`，只需在迭代开始前调用一次`vf.load_unalign_pre`，从而实现非对齐搬入的性能优化。
 
 ## 函数原型
 
@@ -28,8 +28,8 @@ vf.load_unalign_pre(align_reg, tile)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `align_reg` | 输入/输出 | 非对齐寄存器，UnalignRegForLoad 类型，用于缓存非 32 字节对齐的数据（由 `vf.load_unalign_init()` 创建） |
-| `tile` | 输入 | 源 UB tile，起始地址不需要 32 字节对齐 |
+| `align_reg` | 输入/输出 | 非对齐寄存器，UnalignRegForLoad类型，用于缓存非32字节对齐的数据（由`vf.load_unalign_init()`创建） |
+| `tile` | 输入 | 源UB tile，起始地址不需要32字节对齐 |
 
 ## 数据类型
 
@@ -41,12 +41,13 @@ vf.load_unalign_pre(align_reg, tile)
 
 ## 约束说明
 
-- `vf.load_unalign_pre` 与 `vf.load_unalign` 接口需要组合使用。
-- 连续非对齐搬入时，只需在迭代开始前调用一次 `vf.load_unalign_pre`。
+- `vf.load_unalign_pre`与`vf.load_unalign`接口需要组合使用。
+- 连续非对齐搬入时，只需在迭代开始前调用一次`vf.load_unalign_pre`。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -84,7 +85,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

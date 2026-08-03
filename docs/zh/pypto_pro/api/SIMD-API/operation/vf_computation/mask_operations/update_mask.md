@@ -16,9 +16,9 @@
 
 从标量值更新掩码寄存器。标量值的比特位定义新的掩码模式。
 
-UpdateMask 根据当前 scalarValue 的值生成对应长度的有效位掩码，并自动将 scalarValue 减去当前向量长度以更新剩余待处理元素数量：`scalarValue = (scalarValue < VL_T) ? 0 : (scalarValue - VL_T)`。以 b16 数据类型为例，掩码生成过程如下图所示：
+UpdateMask根据当前scalarValue的值生成对应长度的有效位掩码，并自动将scalarValue减去当前向量长度以更新剩余待处理元素数量：`scalarValue = (scalarValue < VL_T) ? 0 : (scalarValue - VL_T)`。以b16数据类型为例，掩码生成过程如下图所示：
 
-**图 1** b16 数据类型下 UpdateMask 接口基于 scalarValue 的掩码生成
+**图1**b16数据类型下UpdateMask接口基于scalarValue的掩码生成
 
 ![maskreg-b16数据类型下UpdateMask接口基于scalerValue的掩码生成](../../../../figures/maskreg_b16_update_mask_gen.jpg)
 
@@ -33,7 +33,7 @@ preg = vf.update_mask(scalar, *, dtype=pl.DT_FP32)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `scalar` | 输入 | 标量值，其比特位定义新的掩码模式 |
-| `dtype` | 输入 | 掩码对应的数据类型，决定掩码宽度（默认 `pl.DT_FP32`） |
+| `dtype` | 输入 | 掩码对应的数据类型，决定掩码宽度（默认`pl.DT_FP32`） |
 
 ## 数据类型
 
@@ -43,7 +43,7 @@ preg = vf.update_mask(scalar, *, dtype=pl.DT_FP32)
 
 ## 返回值说明
 
-返回一个 `MaskReg` 类型的掩码寄存器，其比特模式由输入标量值决定。
+返回一个`MaskReg`类型的掩码寄存器，其比特模式由输入标量值决定。
 
 ## 约束说明
 
@@ -53,6 +53,7 @@ preg = vf.update_mask(scalar, *, dtype=pl.DT_FP32)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -86,7 +87,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 128], device=device, dtype=torch.float16)

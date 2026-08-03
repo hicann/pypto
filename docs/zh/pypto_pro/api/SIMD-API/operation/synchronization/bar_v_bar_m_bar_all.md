@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-Barrier 同步：分别对向量、矩阵、全局做屏障，等待前序操作完成。
+Barrier同步：分别对向量、矩阵、全局做屏障，等待前序操作完成。
 
 ## 函数原型
 
@@ -30,15 +30,15 @@ pypto_pro.language.system.bar_all()
 
 | API | 同步范围 |
 |---|---|
-| `bar_v()` | 向量（V）流水线内 barrier，等待前序所有向量操作完成 |
-| `bar_m()` | 矩阵（M）流水线内 barrier，等待前序所有矩阵操作完成 |
-| `bar_all()` | 全局 barrier，等待所有流水线（V/M/MTE1/MTE2/MTE3/FIX）前序操作完成 |
+| `bar_v()` | 向量（V）流水线内barrier，等待前序所有向量操作完成 |
+| `bar_m()` | 矩阵（M）流水线内barrier，等待前序所有矩阵操作完成 |
+| `bar_all()` | 全局barrier，等待所有流水线（V/M/MTE1/MTE2/MTE3/FIX）前序操作完成 |
 
 ## 调用示例
 
-### bar_all —— 循环体顶部全局 barrier
+### bar_all —— 循环体顶部全局barrier
 
-在循环内 load 前插入 `bar_all()`，确保上一轮 store 完成后再搬运新数据。
+在循环内load前插入`bar_all()`，确保上一轮store完成后再搬运新数据。
 
 ```python
 import pypto_pro.language as pl
@@ -64,9 +64,9 @@ def bar_all_kernel(
             pl.store(out, tile_out, [i, 0])
 ```
 
-### bar_m —— cube（矩阵）流水线内 barrier
+### bar_m —— cube（矩阵）流水线内barrier
 
-在 `section_cube()` 中，两次 matmul 之间用 `bar_m()` 同步，确保前一次矩阵乘完成后再开始下一次。下面是一个完整 kernel：两次 matmul 之间插入 `bar_m()`，第二次覆盖 acc，最终 `out = a @ b`。
+在`section_cube()`中，两次matmul之间用`bar_m()`同步，确保前一次矩阵乘完成后再开始下一次。下面是一个完整kernel：两次matmul之间插入`bar_m()`，第二次覆盖acc，最终`out = a @ b`。
 
 ```python
 import pypto_pro.language as pl
@@ -112,9 +112,9 @@ def bar_m_kernel(
         pl.store(out, ac, [0, 0])
 ```
 
-### bar_v —— vector 流水线内 barrier
+### bar_v —— vector流水线内barrier
 
-`gt` 与 `select` 之间用 `bar_v()` 同步，确保掩码生成完成后再选择。
+`gt`与`select`之间用`bar_v()`同步，确保掩码生成完成后再选择。
 
 ```python
 import pypto_pro.language as pl

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-该接口用于根据mask对输入数据srcReg进行求以2为底的对数操作，将结果写入dstReg。通过自然对数乘以 1/ln(2) 合成实现。
+该接口用于根据mask对输入数据srcReg进行求以2为底的对数操作，将结果写入dstReg。通过自然对数乘以1/ln(2)合成实现。
 
 计算公式如下：
 
@@ -32,7 +32,7 @@ dst = vf.log2(src, preg)
 |---|---|---|
 | `dst` | 输出 | 目标向量寄存器，向量寄存器 |
 | `src` | 输入 | 源操作数，向量寄存器，必须为正数 |
-| `preg` | 输入 | 掩码寄存器，类型为 `MaskReg` |
+| `preg` | 输入 | 掩码寄存器，类型为`MaskReg` |
 
 ## 数据类型
 
@@ -40,7 +40,7 @@ dst = vf.log2(src, preg)
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
@@ -49,6 +49,7 @@ dst = vf.log2(src, preg)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -82,7 +83,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.abs(torch.randn([1, 64], device=device, dtype=torch.float32)) + 0.1

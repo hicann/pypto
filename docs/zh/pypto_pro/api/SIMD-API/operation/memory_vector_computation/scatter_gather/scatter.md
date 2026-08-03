@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-按索引分散写入：根据索引 tile 中的扁平元素偏移，将源 tile 的元素分散写入目标 tile 的对应位置。即 `dst_flat[indices[i,j]] = src[i,j]`。
+按索引分散写入：根据索引tile中的扁平元素偏移，将源tile的元素分散写入目标tile的对应位置。即`dst_flat[indices[i,j]] = src[i,j]`。
 
 ## 函数原型
 
@@ -26,27 +26,27 @@ pypto_pro.language.scatter(out, src, idx)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，按索引分散写入 |
-| `src` | 输入 | 源 tile |
-| `idx` | 输入 | 索引 tile（扁平元素偏移），指定每个源元素的写入位置 |
+| `out` | 输出 | 目标tile，按索引分散写入 |
+| `src` | 输入 | 源tile |
+| `idx` | 输入 | 索引tile（扁平元素偏移），指定每个源元素的写入位置 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape 须与 `src`、`idx` 一致 |
-| `src` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `idx` | 输入 | 数据类型：`pypto_pro.language.DT_INT16` 或 `pypto_pro.language.DT_INT32`（见类型约束表）<br>shape：与 `out` 一致<br>值须为合法的扁平元素偏移（0 ≤ idx < 总元素数），越界行为不确定<br>索引值须不重复（无写冲突），否则结果不确定 |
+| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`src`、`idx`一致 |
+| `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `idx` | 输入 | 数据类型：`pypto_pro.language.DT_INT16`或`pypto_pro.language.DT_INT32`（见类型约束表）<br>shape：与`out`一致<br>值须为合法的扁平元素偏移（0 ≤ idx < 总元素数），越界行为不确定<br>索引值须不重复（无写冲突），否则结果不确定 |
 
 ## 类型约束
 
-A5 硬件 `TSCATTER` 指令仅支持以下数据类型与索引类型的组合：
+A5硬件`TSCATTER`指令仅支持以下数据类型与索引类型的组合：
 
 | 数据类型 | 索引类型 | 说明 |
 |---|---|---|
 | FP32 | INT32 | 推荐，走标量回退路径，行为可预期 |
-| FP16 | INT16 | A5 走硬件 vscatter 路径，索引重复时不保证计算时序 |
-| INT8 | INT16 | A5 走硬件 vscatter 路径 |
+| FP16 | INT16 | A5走硬件vscatter路径，索引重复时不保证计算时序 |
+| INT8 | INT16 | A5走硬件vscatter路径 |
 
 ## 流水类型
 
@@ -54,7 +54,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：把 FP32 源 tile 的元素按 INT32 索引分散写入 FP32 目标 tile。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：把FP32源tile的元素按INT32索引分散写入FP32目标tile。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

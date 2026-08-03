@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-该指令会根据索引值 index 将源操作数 srcReg 中的元素分散到目的操作数 UB 中。分散过程如下图所示：
+该指令会根据索引值index将源操作数srcReg中的元素分散到目的操作数UB中。分散过程如下图所示：
 
-**图 1** Scatter 功能说明
+**图1**Scatter功能说明
 
 ![Scatter功能说明](../../../../figures/scatter_function.jpg)
 
@@ -30,10 +30,10 @@ vf.scatter(tile, src, index, preg)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输出 | 目的操作数，UB 中的基地址，需要 32 字节对齐 |
+| `tile` | 输出 | 目的操作数，UB中的基地址，需要32字节对齐 |
 | `src` | 输入 | 源操作数，向量寄存器 |
-| `index` | 输入 | 索引值，src 中的每个元素在 UB 中相对于 baseAddr 的位置，单位：元素个数。向量寄存器。index 中的值必须唯一，若存在重复的 index 值，系统仅保留其中一个对应的数据 |
-| `preg` | 输入 | 掩码寄存器，类型为 `MaskReg` |
+| `index` | 输入 | 索引值，src中的每个元素在UB中相对于baseAddr的位置，单位：元素个数。向量寄存器。index中的值必须唯一，若存在重复的index值，系统仅保留其中一个对应的数据 |
+| `preg` | 输入 | 掩码寄存器，类型为`MaskReg` |
 
 ## 数据类型
 
@@ -59,13 +59,14 @@ vf.scatter(tile, src, index, preg)
 
 ## 约束说明
 
-- 位于 Unified Buffer 的首地址必须 32 字节对齐。
-- 当 T 为 INT8 或者 UINT8 数据类型时，源操作数中仅偶数位元素有效。即 src 中的偶数位置 [0, 2, 4, ..., 252, 254] 的数据会被分散存储到目的操作数中。
-- index 中的值必须唯一。若存在重复的 index 值，系统仅保留其中一个对应的数据，其余将被忽略。无法确定具体保留哪一个，因此必须确保 index 值不重复。
+- 位于Unified Buffer的首地址必须32字节对齐。
+- 当T为INT8或者UINT8数据类型时，源操作数中仅偶数位元素有效。即src中的偶数位置[0, 2, 4, ..., 252, 254]的数据会被分散存储到目的操作数中。
+- index中的值必须唯一。若存在重复的index值，系统仅保留其中一个对应的数据，其余将被忽略。无法确定具体保留哪一个，因此必须确保index值不重复。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -104,7 +105,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

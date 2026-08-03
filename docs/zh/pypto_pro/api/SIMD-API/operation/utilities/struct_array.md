@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-结构体数组，N 个相同的 struct 按索引存取。用于流水线 / FIFO 场景中按槽位索引存取上下文。
+结构体数组，N个相同的struct按索引存取。用于流水线 / FIFO场景中按槽位索引存取上下文。
 
 ## 函数原型
 
@@ -34,10 +34,10 @@ pypto_pro.language.struct_array(size, "TypeName", field1=default1, ...)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `size` | 输入 | 必须是编译时常量正整数（`size >= 1`）<br>非常量或非正整数报 `ParserSyntaxError` |
-| `"TypeName"` | 输入 | 必须是字符串字面量，作为第二个位置参数<br>缺失或非字符串报 `ParserSyntaxError` |
-| `field=value` | 输入 | 至少一个关键字参数<br>字段名须为合法标识符<br>不支持 `**kwargs` 展开 |
-| `index`（存取时） | 输入 | 整数常量或运行时 Expr（如 `task_id % size`、循环变量 `i`）<br>不支持负数索引、切片、`for slot in ctx_arr:` 遍历、`len(ctx_arr)`<br>越界访问编译期检查，越界报 `GetItemExpr index N out of bounds for tuple with M elements` |
+| `size` | 输入 | 必须是编译时常量正整数（`size >= 1`）<br>非常量或非正整数报`ParserSyntaxError` |
+| `"TypeName"` | 输入 | 必须是字符串字面量，作为第二个位置参数<br>缺失或非字符串报`ParserSyntaxError` |
+| `field=value` | 输入 | 至少一个关键字参数<br>字段名须为合法标识符<br>不支持`**kwargs`展开 |
+| `index`（存取时） | 输入 | 整数常量或运行时Expr（如`task_id % size`、循环变量`i`）<br>不支持负数索引、切片、`for slot in ctx_arr:`遍历、`len(ctx_arr)`<br>越界访问编译期检查，越界报`GetItemExpr index N out of bounds for tuple with M elements` |
 
 ## 调用示例
 

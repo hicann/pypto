@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-按掩码在两个 tile 中逐元素选择，掩码为真取 lhs，为假取 rhs。常与 `pypto_pro.language.eq/ne/lt/le/gt/ge` 配合使用。
+按掩码在两个tile中逐元素选择，掩码为真取lhs，为假取rhs。常与`pypto_pro.language.eq/ne/lt/le/gt/ge`配合使用。
 
 ## 函数原型
 
@@ -22,27 +22,27 @@
 pypto_pro.language.select(out, mask, lhs, rhs, tmp)
 ```
 
-> 5 个参数均按函数原型中的顺序以位置参数传入。
+> 5个参数均按函数原型中的顺序以位置参数传入。
 
 ## 参数类型
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 选择结果 tile |
-| `mask` | 输入 | 掩码 tile（由 `eq`/`ne`/`lt`/`le`/`gt`/`ge` 产生的 bit-packed UINT8） |
-| `lhs` | 输入 | mask 为真时取的源 tile |
-| `rhs` | 输入 | mask 为假时取的源 tile |
-| `tmp` | 输入 | 临时 tile（中间计算用） |
+| `out` | 输出 | 选择结果tile |
+| `mask` | 输入 | 掩码tile（由`eq`/`ne`/`lt`/`le`/`gt`/`ge`产生的bit-packed UINT8） |
+| `lhs` | 输入 | mask为真时取的源tile |
+| `rhs` | 输入 | mask为假时取的源tile |
+| `tmp` | 输入 | 临时tile（中间计算用） |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape 须与 `lhs`、`rhs` 一致 |
-| `mask` | 输入 | 数据类型：UINT8（bit-packed 掩码）<br>shape：与 `lhs` 一致<br>须由 `pypto_pro.language.eq/ne/lt/le/gt/ge` 产生，不能手动构造 |
-| `lhs` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `rhs` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `tmp` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致<br>硬件中间计算用，不可与 `out`/`lhs`/`rhs` 重叠 |
+| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`lhs`、`rhs`一致 |
+| `mask` | 输入 | 数据类型：UINT8（bit-packed掩码）<br>shape：与`lhs`一致<br>须由`pypto_pro.language.eq/ne/lt/le/gt/ge`产生，不能手动构造 |
+| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `tmp` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致<br>硬件中间计算用，不可与`out`/`lhs`/`rhs`重叠 |
 
 ## 流水类型
 
@@ -50,7 +50,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：用 `pypto_pro.language.gt` 生成 bit-packed 谓词后，`pypto_pro.language.select` 按谓词选择两个 FP32 tile 中的一个写回 GM。掩码为真取 `lhs`，为假取 `rhs`。纯 vector kernel 使用 `make_tile_group` 管理 Tile 资源，并通过 `auto_mutex` 完成流水同步；`gt` 与 `select` 之间仍使用 `bar_v()` 完成 AIV subcore 间同步。
+下面是一个完整kernel：用`pypto_pro.language.gt`生成bit-packed谓词后，`pypto_pro.language.select`按谓词选择两个FP32 tile中的一个写回GM。掩码为真取`lhs`，为假取`rhs`。纯vector kernel使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成流水同步；`gt`与`select`之间仍使用`bar_v()`完成AIV subcore间同步。
 
 ```python
 import pypto_pro.language as pl

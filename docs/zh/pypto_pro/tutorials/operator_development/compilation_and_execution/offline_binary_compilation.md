@@ -51,8 +51,8 @@ Kernel文件放置在`op_kernel/${op_file}.py`。`${op_file}`不包含`.py`后�
 - 定义TilingKey，并通过`@pl.jit(tiling_key=...)`绑定到Kernel。
 - 使用Python `@dataclass`定义TilingData，并将其作为Kernel参数。
 - Kernel函数名与算子Kernel入口名称保持一致。
-- Kernel的Tensor、指针参数顺序与算子原型及Host侧下发顺序保持一致。
-- 在所有业务输入输出参数之后声明`workspace`参数，并将TilingData作为最后一个参数，即参数结尾固定为`workspace, tiling`。
+- Kernel的业务输入输出参数名称、顺序必须与算子原型保持一致；参数结尾固定为`workspace, tiling`，其中`workspace`为倒数第二个参数，TilingData参数`tiling`为最后一个参数。
+- Kernel需要获取哪些输入或输出参数的数据类型，就在`@pl.jit(datatype=...)`字典中声明哪些参数。字典的key必须与算子原型中的参数名称一致，value为自定义的变量名；变量名必须是合法的Python标识符，且不能与Kernel参数名或TilingKey字段名冲突。该变量可在Kernel中像TilingKey变量一样直接使用。
 
 下面以`add_example`为例展示代码结构，省略具体计算逻辑：
 
@@ -73,14 +73,25 @@ class AddExampleTilingKey:
     sch_mode = TilingKeyField(bits=1, values=[0, 1])
 
 
-@pl.jit(tiling_key=AddExampleTilingKey)
+@pl.jit(
+    tiling_key=AddExampleTilingKey,
+    datatype={
+        "x": "data_dtype",
+        "y": "data_dtype",
+        "z": "data_dtype",
+    },
+)
 def add_example(
-    x: pl.Ptr[pl.DT_FP16],
-    y: pl.Ptr[pl.DT_FP16],
-    z: pl.Ptr[pl.DT_FP16],
+    x: pl.Ptr[pl.DT_UINT8],
+    y: pl.Ptr[pl.DT_UINT8],
+    z: pl.Ptr[pl.DT_UINT8],
     workspace: pl.Ptr[pl.DT_UINT8],
     tiling: AddExampleTilingData,
 ):
+    # data_dtype可直接用于构造Tensor、TileType等。
+    x_tensor = pl.make_tensor(x, [tiling.total_length], [1], dtype=data_dtype)
+    y_tensor = pl.make_tensor(y, [tiling.total_length], [1], dtype=data_dtype)
+    z_tensor = pl.make_tensor(z, [tiling.total_length], [1], dtype=data_dtype)
     # 使用tiling.total_length、tiling.tile_num等字段实现Kernel逻辑。
     ...
 ```
@@ -89,7 +100,7 @@ TilingData字段支持`int`、`float`、`bool`及对应的定长数组类型。�
 
 TilingKey用于描述需要生成独立Kernel实例的编译期配置。每个字段通过`TilingKeyField`声明位宽和候选值，构建系统会为合法的TilingKey组合生成对应的算子二进制。
 
-上述示例固定使用FP16。如果同一算子需要支持多种输入数据类型，应结合`@pl.jit(datatype=...)`声明数据类型特化，并确保算子原型支持的数据类型、Kernel的datatype schema以及离线编译时传入的原始数据类型保持一致。
+`datatype`是一个描述Kernel所需参数数据类型的字典。key对应算子原型中的输入或输出参数名称，value是用户自定义的dtype变量名。只需添加Kernel计算过程中需要获取数据类型的参数；不依赖某个参数的数据类型时，无需将其加入字典。多个参数的数据类型相同时，可以像示例中的`x`、`y`和`z`一样映射到同一个变量，此时这些参数在编译时传入的实际数据类型必须一致；需要分别使用各参数的数据类型时，则映射到不同的变量。声明后的变量可直接用于`pl.make_tensor`、`pl.TileType`以及其他需要指定`dtype`的位置。
 
 ## 配置CMakeLists.txt
 
@@ -127,9 +138,6 @@ PyPTO Pro根据Kernel侧Python `@dataclass`自动生成Host侧使用的C++ Tilin
 Kernel侧定义`AddExampleTilingData`后，Host侧Tiling函数可直接使用同名类型：
 
 ```cpp
-// 系统Workspace大小由算子工程根据CANN版本确定，此处设置为16 MiB。
-constexpr size_t WS_SYS_SIZE = 16U * 1024U * 1024U;
-
 static ge::graphStatus TilingFunc(gert::TilingContext *context)
 {
     AddExampleTilingData *tiling =
@@ -148,7 +156,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext *context)
     size_t *workspace_size = context->GetWorkspaceSizes(1);
     OP_CHECK_NULL_WITH_CONTEXT(context, workspace_size);
     size_t user_workspace_bytes = 0; // 根据Kernel实际需要设置。
-    workspace_size[0] = WS_SYS_SIZE + user_workspace_bytes;
+    workspace_size[0] = user_workspace_bytes;
     return ge::GRAPH_SUCCESS;
 }
 ```
@@ -163,7 +171,7 @@ Host侧Tiling实现需要保证：
 - 传给`GET_TPL_TILING_KEY(...)`的字段值和顺序与Kernel侧TilingKey定义一致，并且属于合法组合。
 - BlockDim与Kernel的多核切分方式一致。
 - Kernel签名中的`workspace`参数位于TilingData之前。
-- Workspace大小满足系统Workspace和用户Workspace的总需求。没有用户Workspace时，用户Workspace大小为`0`，但仍需保留算子工程要求的系统Workspace；系统Workspace大小以当前算子工程模板和CANN版本要求为准。
+- Workspace大小满足Kernel的实际需求；不需要Workspace时设置为`0`。
 
 ## 编译算子二进制
 

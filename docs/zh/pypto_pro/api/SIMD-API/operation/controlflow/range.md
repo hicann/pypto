@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-在 kernel 中定义 `for` 循环范围，参数形式与 Python `range` 一致。`pl.range` 是 kernel 内 `for` 循环唯一的合法迭代器，循环变量作为运行时标量参与索引和运算。
+在kernel中定义`for`循环范围，参数形式与Python `range`一致。`pl.range`是kernel内`for`循环唯一的合法迭代器，循环变量作为运行时标量参与索引和运算。
 
 ## 函数原型
 
@@ -27,19 +27,19 @@ pypto_pro.language.range(start, stop, step=1)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `start` | 输入 | 起始值（单参数形式下省略，默认 `0`） |
+| `start` | 输入 | 起始值（单参数形式下省略，默认`0`） |
 | `stop` | 输入 | 终止值（不包含） |
-| `step` | 输入 | 步长，默认 `1` |
+| `step` | 输入 | 步长，默认`1` |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `start` / `stop` / `step` | 输入 | 整型常量、运行时标量或标量表达式（如 `M // TILE_M`）<br>不支持关键字传参，须以位置参数形式给出 |
+| `start` / `stop` / `step` | 输入 | 整型常量、运行时标量或标量表达式（如`M // TILE_M`）<br>不支持关键字传参，须以位置参数形式给出 |
 
 ## 调用示例
 
-下面是一个完整 kernel：用双层 `pl.range` 循环遍历 `[M, N]` 的 GM Tensor，按 `[TILE_M, TILE_N]` 分块 load 两个输入，逐元素相加后 store 回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：用双层`pl.range`循环遍历`[M, N]`的GM Tensor，按`[TILE_M, TILE_N]`分块load两个输入，逐元素相加后store回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -72,7 +72,7 @@ def for_add_fp16_kernel(
                 pl.store_tile(z, tile_c, [i, j])
 ```
 
-单参数形式等价于 `range(0, stop, 1)`：
+单参数形式等价于`range(0, stop, 1)`：
 
 ```python
 for i in pl.range(10):

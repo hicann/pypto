@@ -16,15 +16,15 @@
 
 两个向量寄存器逐元素加法。
 
-根据 mask，对源操作数 src_a、src_b 进行按元素求和操作，将结果写入目的操作数 dst，计算公式如下：
+根据mask，对源操作数src_a、src_b进行按元素求和操作，将结果写入目的操作数dst，计算公式如下：
 
 $$dst_i = src\_a_i + src\_b_i$$
 
-同时可以在 carry（MaskReg 寄存器）中标记每次加法是否产生进位，若 src_a、src_b 输入按位相加后最高位有进位，在 MaskReg carry 中对应位置每 4bit 的最低位写 1，否则写 0。
+同时可以在carry（MaskReg寄存器）中标记每次加法是否产生进位，若src_a、src_b输入按位相加后最高位有进位，在MaskReg carry中对应位置每4bit的最低位写1，否则写0。
 
 ![](../../../../figures/add_with_carry.jpg)
 
-输出 carry 适用场景请参考 [vf.addc](addc.md#功能说明)。
+输出carry适用场景请参考[vf.addc](addc.md#功能说明)。
 
 ## 函数原型
 
@@ -37,8 +37,8 @@ dst = vf.add(src_a, src_b, preg)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `dst` | 输出 | 目标向量寄存器 |
-| `src_a` | 输入 | 源操作数 A |
-| `src_b` | 输入 | 源操作数 B |
+| `src_a` | 输入 | 源操作数A |
+| `src_b` | 输入 | 源操作数B |
 | `preg` | 输入 | 掩码寄存器 |
 
 ## 数据类型
@@ -53,7 +53,7 @@ dst = vf.add(src_a, src_b, preg)
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
@@ -64,6 +64,7 @@ dst = vf.add(src_a, src_b, preg)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -101,7 +102,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

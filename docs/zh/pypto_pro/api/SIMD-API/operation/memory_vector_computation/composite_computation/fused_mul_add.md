@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-融合乘加：`out = lhs * out + rhs`。将 `lhs` 与 `out` 逐元素相乘，再加上 `rhs`，结果写回 `out`。`out` 同时作为乘数输入和累加输出。
+融合乘加：`out = lhs * out + rhs`。将`lhs`与`out`逐元素相乘，再加上`rhs`，结果写回`out`。`out`同时作为乘数输入和累加输出。
 
 ## 函数原型
 
@@ -26,17 +26,17 @@ pypto_pro.language.fused_mul_add(out, lhs, rhs)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 目标 tile，同时作为乘数输入和累加输出 |
-| `lhs` | 输入 | 左操作数 tile，与 `out` 逐元素相乘 |
-| `rhs` | 输入 | 右操作数 tile，乘积再加上 `rhs` 写回 `out` |
+| `out` | 输入/输出 | 目标tile，同时作为乘数输入和累加输出 |
+| `lhs` | 输入 | 左操作数tile，与`out`逐元素相乘 |
+| `rhs` | 输入 | 右操作数tile，乘积再加上`rhs`写回`out` |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 数据类型：b16、b32<br>shape 须与 `lhs`、`rhs` 一致<br>该 tile 在运算前须已载入有效数据（作为乘数），运算后被覆盖为结果 |
-| `lhs` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `rhs` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
+| `out` | 输入/输出 | 数据类型：b16、b32<br>shape须与`lhs`、`rhs`一致<br>该tile在运算前须已载入有效数据（作为乘数），运算后被覆盖为结果 |
+| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 
 ## 流水类型
 
@@ -44,7 +44,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：载入三个 tile，用 `pypto_pro.language.fused_mul_add` 做 `c = a * c + b` 融合乘加。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：载入三个tile，用`pypto_pro.language.fused_mul_add`做`c = a * c + b`融合乘加。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

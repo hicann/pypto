@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-重置向量掩码寄存器为默认状态（全 1），使后续矢量计算的所有元素均参与运算。
+重置向量掩码寄存器为默认状态（全1），使后续矢量计算的所有元素均参与运算。
 
-等价于 `pypto_pro.language.set_vec_mask(-1, -1)`，即 128 位掩码全部置 1。
+等价于`pypto_pro.language.set_vec_mask(-1, -1)`，即128位掩码全部置1。
 
 ## 函数原型
 
@@ -28,9 +28,10 @@ pypto_pro.language.reset_mask()
 
 ## 补充说明
 
-向量掩码控制后续矢量计算中哪些元素参与运算。默认情况下（`section_vector()` 开头），掩码为全 1（所有元素活跃）。如果在计算过程中通过 [`pypto_pro.language.set_vec_mask`](set_vec_mask.md) 修改了掩码，需要在下一轮计算前调用 `reset_mask()` 恢复。
+向量掩码控制后续矢量计算中哪些元素参与运算。默认情况下（`section_vector()`开头），掩码为全1（所有元素活跃）。如果在计算过程中通过[`pypto_pro.language.set_vec_mask`](set_vec_mask.md)修改了掩码，需要在下一轮计算前调用`reset_mask()`恢复。
 
-**注意**：tile 级操作（如 `pypto_pro.language.add`、`pypto_pro.language.mul`）内部会自动管理掩码，用户通过 `pypto_pro.language.set_vec_mask` 设置的掩码会被覆盖。这些 API 主要用于自定义操作或底层控制场景。
+> [!CAUTION]注意
+> tile级操作（如`pypto_pro.language.add`、`pypto_pro.language.mul`）内部会自动管理掩码，用户通过`pypto_pro.language.set_vec_mask`设置的掩码会被覆盖。这些API主要用于自定义操作或底层控制场景。
 
 ## 流水类型
 
@@ -38,7 +39,7 @@ S（标量流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：在 `pypto_pro.language.add` 前调用 `pypto_pro.language.reset_mask()` 恢复全元素掩码，验证掩码状态未损坏。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：在`pypto_pro.language.add`前调用`pypto_pro.language.reset_mask()`恢复全元素掩码，验证掩码状态未损坏。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

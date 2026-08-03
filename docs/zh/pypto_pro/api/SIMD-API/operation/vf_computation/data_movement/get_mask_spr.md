@@ -14,12 +14,12 @@
 
 ## 功能说明
 
-从 SetVectorMask 设置的掩码寄存器 {MASK1, MASK0} 中读取 Mask 值，并按数据类型对应的格式转换后写入返回值 MaskReg。
+从SetVectorMask设置的掩码寄存器 {MASK1, MASK0} 中读取Mask值，并按数据类型对应的格式转换后写入返回值MaskReg。
 
-本接口对应 AscendC `MoveMask<T>` 接口。具体转换方式：
+本接口对应AscendC `MoveMask<T>`接口。具体转换方式：
 
-- **b32 类型**：读取 64bit 的 MASK0 数据，将每个 bit 复制为 4bit，写入 MaskReg。
-- **b16 类型**：读取完整 128bit 的 {MASK1, MASK0} 数据，将每个 bit 复制为 2bit，写入 MaskReg。
+- **b32类型**：读取64bit的MASK0数据，将每个bit复制为4bit，写入MaskReg。
+- **b16类型**：读取完整128bit的 {MASK1, MASK0} 数据，将每个bit复制为2bit，写入MaskReg。
 
 ## 函数原型
 
@@ -35,8 +35,8 @@ mask_reg = vf.get_mask_spr(width=pl.MaskWidth.B16)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `mask_reg` | 输出 | 返回的 MaskReg，从 SPR {MASK1, MASK0} 读取并转换 |
-| `width` | 输入 | 掩码宽度，决定读取的 SPR 位宽及扩展方式。`pl.MaskWidth.B32`（默认）：读取 64bit MASK0，每 bit 扩展为 4bit，对应 `movp_b32()` 指令；`pl.MaskWidth.B16`：读取 128bit {MASK1, MASK0}，每 bit 扩展为 2bit，对应 `movp_b16()` 指令 |
+| `mask_reg` | 输出 | 返回的MaskReg，从SPR {MASK1, MASK0} 读取并转换 |
+| `width` | 输入 | 掩码宽度，决定读取的SPR位宽及扩展方式。`pl.MaskWidth.B32`（默认）：读取64bit MASK0，每bit扩展为4bit，对应`movp_b32()`指令；`pl.MaskWidth.B16`：读取128bit {MASK1, MASK0}，每bit扩展为2bit，对应`movp_b16()`指令 |
 
 ## 数据类型
 
@@ -47,18 +47,19 @@ mask_reg = vf.get_mask_spr(width=pl.MaskWidth.B16)
 
 ## 返回值说明
 
-返回 MaskReg 类型
+返回MaskReg类型
 
 ## 约束说明
 
-- 本接口为兼容性接口，建议优先采用 `vf.create_mask` 和 `vf.update_mask` 进行 MaskReg 计算。
-- 使用前需要先调用 `pl.set_mask_count`/`pl.set_mask_norm` 设置 mask 模式，并调用 `pl.set_vec_mask` 设置掩码寄存器 SPR {MASK1, MASK0}。
+- 本接口为兼容性接口，建议优先采用`vf.create_mask`和`vf.update_mask`进行MaskReg计算。
+- 使用前需选择与掩码含义一致的模式，并通过`pl.set_vec_mask`或产生掩码的VF指令设置SPR {MASK1, MASK0}。按位掩码使用norm模式；元素计数使用count模式。
 
 ## 调用示例
 
-先用 `pl.set_vec_mask` 设置 SPR {MASK1, MASK0}，再用 `vf.get_mask_spr` 读取到 MaskReg，最后用该 MaskReg 控制计算：
+先用`pl.set_vec_mask`设置SPR {MASK1, MASK0}，再用`vf.get_mask_spr`读取到MaskReg，最后用该MaskReg控制计算：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -88,6 +89,7 @@ def example_kernel(
         pl.load(in_a, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        pl.set_mask_norm()
         pl.set_vec_mask(0, 0xFFFFFFFF)
         example_vf(in_a, t_out)
         pl.reset_mask()
@@ -97,7 +99,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

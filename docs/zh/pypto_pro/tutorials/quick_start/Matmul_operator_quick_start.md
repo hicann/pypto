@@ -6,7 +6,7 @@
 
 ## 算子设计规格
 
-**表1** Matmul算子设计规格
+**表1**Matmul算子设计规格
 
 |    name     |  shape   | data type | format |
 | :---------: | :------: | :-------: | :----: |
@@ -21,9 +21,9 @@
   A \in \mathbb{R}^{M \times K}, \qquad B \in \mathbb{R}^{K \times N}, \qquad C = A B \in \mathbb{R}^{M \times N}
   $$
 
-  每个C矩阵中的输出元素是***A***矩阵第 *i* 行和***B***矩阵第 *j* 列的点积:
+	  每个C矩阵中的输出元素是***A***矩阵第*i*行和***B***矩阵第*j*列的点积：
   $$
-  C_{i,j} = \sum_{k=0}^{K-1} A_{i,k} \, B_{k,j}
+  C_{i,j} = \sum_{k = 0}^{K-1} A_{i,k} \, B_{k,j}
   \qquad \text{for } 0 \le i < M, \; 0 \le j < N
   $$
 
@@ -117,8 +117,10 @@ def matmul_example(a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16], b: pl.Tensor[[12
 为了验证Matmul算子的正确性，编写一个测试用例，该测试用例使用PyTorch Tensor作为输入，通过PyPTO Pro Kernel进行计算，并与PyTorch内置的Matmul函数进行结果比对，在开始执行PyPTO和PyTorch的相关代码之前，需要指定对应的Device ID，或者通过torch.npu接口获取当前的Device ID。
 
 ```python
+import os
 def run_perf_test():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     torch.npu.set_device(device)
     torch.manual_seed(42)
     M_SIZE = 8192

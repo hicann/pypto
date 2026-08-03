@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-按索引聚合：根据索引 tile 中的扁平元素偏移，从源 tile 中 gather 元素到目标 tile。即 `dst_flat[i] = src_flat[idx[i]]`。与 [`pypto_pro.language.scatter`](scatter.md) 互为反向操作。
+按索引聚合：根据索引tile中的扁平元素偏移，从源tile中gather元素到目标tile。即`dst_flat[i] = src_flat[idx[i]]`。与[`pypto_pro.language.scatter`](scatter.md)互为反向操作。
 
 ## 函数原型
 
@@ -26,23 +26,23 @@ pypto_pro.language.gather(out, src, idx, tmp, *, cmp_mode=0, offset=0)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，按索引聚合结果 |
-| `src` | 输入 | 源 tile |
-| `idx` | 输入 | 索引 tile（扁平元素偏移），指定每个目标元素从源中读取的位置 |
-| `tmp` | 输入 | 临时 tile（中间计算用） |
-| `cmp_mode` | 输入 | 可选，比较模式（默认 0，不比较） |
-| `offset` | 输入 | 可选，索引偏移（默认 0） |
+| `out` | 输出 | 目标tile，按索引聚合结果 |
+| `src` | 输入 | 源tile |
+| `idx` | 输入 | 索引tile（扁平元素偏移），指定每个目标元素从源中读取的位置 |
+| `tmp` | 输入 | 临时tile（中间计算用） |
+| `cmp_mode` | 输入 | 可选，比较模式（默认0，不比较） |
+| `offset` | 输入 | 可选，索引偏移（默认0） |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape 须与 `src`、`idx` 一致 |
-| `src` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `idx` | 输入 | 数据类型：`pypto_pro.language.DT_INT32`<br>shape：与 `out` 一致<br>值须为合法的扁平元素偏移（0 ≤ idx < 总元素数），越界行为不确定 |
-| `tmp` | 输入 | 数据类型：`pypto_pro.language.DT_INT32`（与 `idx` 一致）<br>shape：与 `idx` 一致<br>硬件中间计算用，不可与 `out`/`src`/`idx` 重叠 |
-| `cmp_mode` | 输入 | 整数，比较模式。默认 `0` 表示不比较；非 0 模式为硬件扩展模式，按实际 kernel 需求配置 |
-| `offset` | 输入 | 整数，对 `idx` 中的索引值施加偏移（默认 0） |
+| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`src`、`idx`一致 |
+| `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `idx` | 输入 | 数据类型：`pypto_pro.language.DT_INT32`<br>shape：与`out`一致<br>值须为合法的扁平元素偏移（0 ≤ idx < 总元素数），越界行为不确定 |
+| `tmp` | 输入 | 数据类型：`pypto_pro.language.DT_INT32`（与`idx`一致）<br>shape：与`idx`一致<br>硬件中间计算用，不可与`out`/`src`/`idx`重叠 |
+| `cmp_mode` | 输入 | 整数，比较模式。默认`0`表示不比较；非0模式为硬件扩展模式，按实际kernel需求配置 |
+| `offset` | 输入 | 整数，对`idx`中的索引值施加偏移（默认0） |
 
 ## 流水类型
 
@@ -50,7 +50,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：把 FP16 源 tile 按 INT32 索引 gather 到 FP16 目标 tile。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：把FP16源tile按INT32索引gather到FP16目标tile。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -89,7 +89,7 @@ def gather_kernel(
 ```
 <!-- pypto-doc-output:gather:end -->
 
-带偏移的 gather：
+带偏移的gather：
 
 ```python
 # offset 会在 gather 时参与索引计算

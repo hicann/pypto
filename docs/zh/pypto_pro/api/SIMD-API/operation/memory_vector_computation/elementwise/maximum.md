@@ -14,11 +14,11 @@
 
 ## 功能说明
 
-`maximum` 同时支持逐元素取较大值和按维度取最大值归约。是否传入 `dim` 决定调用模式。
+`maximum`同时支持逐元素取较大值和按维度取最大值归约。是否传入`dim`决定调用模式。
 
-- **tile-tile 模式**：`maximum(out, lhs, rhs)` -> `out[i] = max(lhs[i], rhs[i])`
-- **tile-scalar 模式**：`maximum(out, lhs, scalar)` -> `out[i] = max(lhs[i], scalar)`
-- **归约模式**：`maximum(out, src, tmp, dim=0/1)`，`dim=0` 沿最后一维归约，`dim=1` 沿第一维归约
+- **tile-tile模式**：`maximum(out, lhs, rhs)` -> `out[i] = max(lhs[i], rhs[i])`
+- **tile-scalar模式**：`maximum(out, lhs, scalar)` -> `out[i] = max(lhs[i], scalar)`
+- **归约模式**：`maximum(out, src, tmp, dim=0/1)`，`dim=0`沿最后一维归约，`dim=1`沿第一维归约
 
 ## 函数原型
 
@@ -30,19 +30,19 @@ pypto_pro.language.maximum(out, lhs, rhs, *, dim=None)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，存放逐元素结果或归约结果 |
-| `lhs` | 输入 | 逐元素模式下为左操作数 tile；归约模式下为源 tile |
-| `rhs` | 输入 | 逐元素模式下为右操作数（tile 或 scalar）；归约模式下为临时 tile |
-| `dim` | 输入 | `None` 表示逐元素模式；`0` 或 `1` 表示归约模式 |
+| `out` | 输出 | 目标tile，存放逐元素结果或归约结果 |
+| `lhs` | 输入 | 逐元素模式下为左操作数tile；归约模式下为源tile |
+| `rhs` | 输入 | 逐元素模式下为右操作数（tile或scalar）；归约模式下为临时tile |
+| `dim` | 输入 | `None`表示逐元素模式；`0`或`1`表示归约模式 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 逐元素模式：数据类型支持 b8、b16、b32、b64，shape 与 `lhs` 一致，支持与 `lhs` 或 `rhs` 为同一 tile<br>归约模式：数据类型与 `lhs` 一致；`dim=0` 时 shape 为 `[行数, 1]`，`dim=1` 时 shape 为 `[1, 列数]` |
-| `lhs` | 输入 | 逐元素模式：数据类型和 shape 均与 `out` 一致<br>归约模式：数据类型支持 b16、b32，shape 为任意二维 |
-| `rhs` | 输入 | tile-tile 模式：数据类型与 `out` 一致，shape 与 `out` 一致<br>tile-scalar 模式：scalar 值（int/float/Scalar）<br>归约模式：数据类型和 shape 均与 `lhs` 一致的临时 tile |
-| `dim` | 输入 | `None`：逐元素取较大值；`0`：沿最后一维取每行最大值；`1`：沿第一维取每列最大值。默认值为 `None` |
+| `out` | 输出 | 逐元素模式：数据类型支持b8、b16、b32、b64，shape与`lhs`一致，支持与`lhs`或`rhs`为同一tile<br>归约模式：数据类型与`lhs`一致；`dim=0`时shape为`[行数, 1]`，`dim=1`时shape为`[1, 列数]` |
+| `lhs` | 输入 | 逐元素模式：数据类型和shape均与`out`一致<br>归约模式：数据类型支持b16、b32，shape为任意二维 |
+| `rhs` | 输入 | tile-tile模式：数据类型与`out`一致，shape与`out`一致<br>tile-scalar模式：scalar值（int/float/Scalar）<br>归约模式：数据类型和shape均与`lhs`一致的临时tile |
+| `dim` | 输入 | `None`：逐元素取较大值；`0`：沿最后一维取每行最大值；`1`：沿第一维取每列最大值。默认值为`None` |
 
 ## 流水类型
 
@@ -50,9 +50,9 @@ V（向量计算流水）。
 
 ## 调用示例
 
-### tile-tile 模式
+### tile-tile模式
 
-下面是一个完整 kernel：从 GM 载入两个 FP32 输入到 UB，用 `pypto_pro.language.maximum` 逐元素取较大值后写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：从GM载入两个FP32输入到UB，用`pypto_pro.language.maximum`逐元素取较大值后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -85,7 +85,7 @@ def maximum_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl
 ```
 <!-- pypto-doc-output:maximum:end -->
 
-### tile-scalar 模式
+### tile-scalar模式
 
 ```python
 # tile 每个元素与 scalar 值取较大值
@@ -99,7 +99,7 @@ pl.maximum(row_out, src, tmp, dim=0)  # row_out shape：[行数, 1]
 pl.maximum(col_out, src, tmp, dim=1)  # col_out shape：[1, 列数]
 ```
 
-#### dim=0 实测结果
+#### dim = 0实测结果
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -127,7 +127,7 @@ def row_max_kernel(a: pl.Tensor[[64, 128], pl.DT_FP32],
 ```
 <!-- pypto-doc-output:row_max:end -->
 
-#### dim=1 实测结果
+#### dim = 1实测结果
 
 ```python
 @pl.jit(auto_mutex=True)

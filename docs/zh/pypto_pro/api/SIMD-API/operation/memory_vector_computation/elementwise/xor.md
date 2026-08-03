@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-逐元素按位异或：`out = lhs ^ rhs`。需要临时 tile 用于中间计算。
+逐元素按位异或：`out = lhs ^ rhs`。需要临时tile用于中间计算。
 
 ## 函数原型
 
@@ -26,19 +26,19 @@ pypto_pro.language.xor(out, lhs, rhs, tmp)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，存放按位异或结果 |
-| `lhs` | 输入 | 左操作数 tile |
-| `rhs` | 输入 | 右操作数 tile |
-| `tmp` | 输入 | 临时 tile（中间计算用） |
+| `out` | 输出 | 目标tile，存放按位异或结果 |
+| `lhs` | 输入 | 左操作数tile |
+| `rhs` | 输入 | 右操作数tile |
+| `tmp` | 输入 | 临时tile（中间计算用） |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape 须与 `lhs`、`rhs` 一致 |
-| `lhs` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `rhs` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `tmp` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致<br>硬件中间计算用，不可与 `out`/`lhs`/`rhs` 重叠 |
+| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`lhs`、`rhs`一致 |
+| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `tmp` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致<br>硬件中间计算用，不可与`out`/`lhs`/`rhs`重叠 |
 
 ## 流水类型
 
@@ -46,7 +46,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：从 GM 载入两个 INT32 输入到 UB，逐元素按位异或后写回 GM。`tmp` 为异或计算所需的临时 tile。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：从GM载入两个INT32输入到UB，逐元素按位异或后写回GM。`tmp`为异或计算所需的临时tile。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

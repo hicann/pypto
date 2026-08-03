@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-归并排序：对 src tile 中的元素按块进行归并排序，结果写入 dst tile。输入数据为 val-idx 对格式（每个元素包含值和索引），排序后保持索引与值的对应关系。
+归并排序：对src tile中的元素按块进行归并排序，结果写入dst tile。输入数据为val-idx对格式（每个元素包含值和索引），排序后保持索引与值的对应关系。
 
-典型场景：TopK 排序的预处理步骤，先对每个块内部排序，再用 [`pypto_pro.language.mrgsort2`](mrgsort2.md) 多路归并。
+典型场景：TopK排序的预处理步骤，先对每个块内部排序，再用[`pypto_pro.language.mrgsort2`](mrgsort2.md)多路归并。
 
 ## 函数原型
 
@@ -28,16 +28,16 @@ pypto_pro.language.mrgsort(dst, src, *, block_len)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标 tile，存放排序结果 |
-| `src` | 输入 | 源 tile，val-idx 对格式 |
+| `dst` | 输出 | 目标tile，存放排序结果 |
+| `src` | 输入 | 源tile，val-idx对格式 |
 | `block_len` | 输入 | 归并块长度 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 数据类型：与 `src` 一致<br>shape：与 `src` 一致 |
-| `src` | 输入 | 数据类型：b16、b32<br>shape：行数为 1<br>数据格式：val-idx 对（每个元素含值和原始索引） |
+| `dst` | 输出 | 数据类型：与`src`一致<br>shape：与`src`一致 |
+| `src` | 输入 | 数据类型：b16、b32<br>shape：行数为1<br>数据格式：val-idx对（每个元素含值和原始索引） |
 | `block_len` | 输入 | 正整数，指定每个归并块的元素数 |
 
 ## 流水类型
@@ -46,7 +46,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：用 `pypto_pro.language.mrgsort` 对 UB 上的 val-idx 对数据做归并排序。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：用`pypto_pro.language.mrgsort`对UB上的val-idx对数据做归并排序。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

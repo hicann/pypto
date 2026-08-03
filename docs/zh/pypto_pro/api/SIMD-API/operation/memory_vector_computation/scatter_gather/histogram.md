@@ -14,12 +14,12 @@
 
 ## 功能说明
 
-直方图统计：对源 tile 中的元素按字节值进行计数，结果写入目标 tile。用于基数排序（radix sort）中统计每个桶的元素个数。
+直方图统计：对源tile中的元素按字节值进行计数，结果写入目标tile。用于基数排序（radix sort）中统计每个桶的元素个数。
 
-通过 `is_msb` 参数控制统计高字节还是低字节：
+通过`is_msb`参数控制统计高字节还是低字节：
 
 - `is_msb=True`：统计每个元素的高字节（bits 15-8）
-- `is_msb=False`：统计每个元素的低字节（bits 7-0），仅统计高字节与 `idx` tile 中对应行值匹配的元素
+- `is_msb=False`：统计每个元素的低字节（bits 7-0）；仅纳入高字节与`idx` tile中对应行值匹配的元素
 
 ## 函数原型
 
@@ -31,19 +31,19 @@ pypto_pro.language.histogram(dst, src, idx, *, is_msb)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标 tile，存放直方图统计结果 |
-| `src` | 输入 | 源 tile，待统计的元素 |
-| `idx` | 输入 | 索引 tile，`is_msb=False` 时用于过滤 |
+| `dst` | 输出 | 目标tile，存放直方图统计结果 |
+| `src` | 输入 | 源tile，待统计的元素 |
+| `idx` | 输入 | 索引tile，`is_msb=False`时用于过滤 |
 | `is_msb` | 输入 | 是否统计高字节 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 数据类型：`pypto_pro.language.DT_UINT32`<br>shape：行数与 `src` 一致，列数 ≥ 256（覆盖所有可能的字节值）<br>布局：row_major + none_box（`layout=pl.ND`） |
+| `dst` | 输出 | 数据类型：`pypto_pro.language.DT_UINT32`<br>shape：行数与`src`一致，列数 ≥ 256（覆盖所有可能的字节值）<br>布局：row_major + none_box（`layout=pl.ND`） |
 | `src` | 输入 | 数据类型：`pypto_pro.language.DT_UINT16`<br>shape：任意<br>布局：row_major + none_box（`layout=pl.ND`） |
-| `idx` | 输入 | 数据类型：`pypto_pro.language.DT_UINT8`<br>shape：行数与 `src` 一致，列数为 1<br>布局：col_major + none_box（DN 布局，`layout=pl.DN`） |
-| `is_msb` | 输入 | `True` 或 `False` |
+| `idx` | 输入 | 数据类型：`pypto_pro.language.DT_UINT8`<br>shape：行数与`src`一致，列数为1<br>布局：col_major + none_box（DN布局，`layout=pl.DN`） |
+| `is_msb` | 输入 | `True`或`False` |
 
 ## 流水类型
 

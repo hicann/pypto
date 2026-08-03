@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-逐元素计算倒数：`out = 1 / src`。支持 in-place 写法。
+逐元素计算倒数：`out = 1 / src`。支持in-place写法。
 
 ## 函数原型
 
@@ -26,15 +26,15 @@ pypto_pro.language.recip(out, src)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，存放逐元素倒数结果 |
-| `src` | 输入 | 源 tile |
+| `out` | 输出 | 目标tile，存放逐元素倒数结果 |
+| `src` | 输入 | 源tile |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：`DT_FP16`、`DT_FP32`，须与 `src` 一致<br>内存空间：`MemorySpace.Vec`（UB）<br>layout：RowMajor（`pl.ND`）<br>shape 和 `valid_shape` 须与 `src` 一致<br>A5 支持与 `src` 为同一 tile，实现 in-place recip；A3 要求源、目的使用不同存储 |
-| `src` | 输入 | 数据类型、内存空间、layout、shape 和 `valid_shape`：与 `out` 一致<br>元素值不能为 0；除零行为由目标平台决定，CPU 模拟器在 debug 模式下会触发断言 |
+| `out` | 输出 | 数据类型：`DT_FP16`、`DT_FP32`，须与`src`一致<br>内存空间：`MemorySpace.Vec`（UB）<br>layout：RowMajor（`pl.ND`）<br>shape和`valid_shape`须与`src`一致<br>A5支持与`src`为同一tile，实现in-place recip；A3要求源、目的使用不同存储 |
+| `src` | 输入 | 数据类型、内存空间、layout、shape和`valid_shape`：与`out`一致<br>元素值不能为0；除零行为由目标平台决定，CPU模拟器在debug模式下会触发断言 |
 
 ## 流水类型
 
@@ -42,7 +42,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：把 FP32 源 tile 逐元素计算倒数后写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：把FP32源tile逐元素计算倒数后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-把 tile 中的元素转成另一种数据类型，支持多种舍入模式来控制精度损失。
+把tile中的元素转成另一种数据类型，支持多种舍入模式来控制精度损失。
 
 ## 函数原型
 
@@ -26,17 +26,17 @@ pypto_pro.language.cast(out, src, *, mode=pl.RoundMode.CAST_ROUND)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，存放类型转换后的结果 |
-| `src` | 输入 | 源 tile |
-| `mode` | 输入 | 舍入模式，默认 `pl.RoundMode.CAST_ROUND` |
+| `out` | 输出 | 目标tile，存放类型转换后的结果 |
+| `src` | 输入 | 源tile |
+| `mode` | 输入 | 舍入模式，默认`pl.RoundMode.CAST_ROUND` |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：目标数据类型由 `out` tile 的 dtype 决定<br>shape 须与 `src` 一致 |
-| `src` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：与 `out` 一致 |
-| `mode` | 输入 | 舍入模式：`pl.RoundMode.CAST_NONE` / `pl.RoundMode.CAST_RINT` / `pl.RoundMode.CAST_ROUND` / `pl.RoundMode.CAST_FLOOR` / `pl.RoundMode.CAST_CEIL` / `pl.RoundMode.CAST_TRUNC` / `pl.RoundMode.CAST_ODD`<br>缩窄转换（如 FP32→FP16）时生效，扩展转换（如 FP16→FP32）时忽略 |
+| `out` | 输出 | 数据类型：目标数据类型由`out` tile的dtype决定<br>shape须与`src`一致 |
+| `src` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：与`out`一致 |
+| `mode` | 输入 | 舍入模式：`pl.RoundMode.CAST_NONE` / `pl.RoundMode.CAST_RINT` / `pl.RoundMode.CAST_ROUND` / `pl.RoundMode.CAST_FLOOR` / `pl.RoundMode.CAST_CEIL` / `pl.RoundMode.CAST_TRUNC` / `pl.RoundMode.CAST_ODD`<br>缩窄转换（如FP32→FP16）时生效，扩展转换（如FP16→FP32）时忽略 |
 
 ## 流水类型
 
@@ -44,7 +44,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：把 FP16 源 tile 转为 FP32 写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：把FP16源tile转为FP32写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

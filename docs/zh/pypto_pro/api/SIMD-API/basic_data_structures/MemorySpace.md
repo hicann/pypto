@@ -14,34 +14,34 @@
 
 ## 功能说明
 
-内存空间枚举，用于标记 Tile 所在的物理存储位置，是 [`pypto_pro.language.TileType`](TileType.md) 的关键属性。
+内存空间枚举，用于标记Tile所在的物理存储位置，是[`pypto_pro.language.TileType`](TileType.md)的关键属性。
 
-不同内存空间对应昇腾芯片上不同的物理存储区域，决定了 Tile 能参与哪些计算、需要哪条流水搬运。
+不同内存空间对应昇腾芯片上不同的物理存储区域，决定了Tile能参与哪些计算、需要哪条流水搬运。
 
 ## 取值
 
 | 取值 | 物理位置 | 说明 | 典型用途 |
 |---|---|---|---|
-| `pypto_pro.language.MemorySpace.DDR` | 片外 DDR | 全局内存，Tensor 所在 | GM 张量存储 |
-| `pypto_pro.language.MemorySpace.Vec` | 片上 UB | 向量/统一缓冲区 | 向量计算（element-wise、reduce 等）的输入输出 |
-| `pypto_pro.language.MemorySpace.Mat` | 片上 L1 | 矩阵缓冲区 | matmul 的 L1 暂存（GM→L1→L0A/L0B 两跳的中间站） |
-| `pypto_pro.language.MemorySpace.Left` | 片上 L0A | 左操作数缓冲区 | matmul 左矩阵输入 |
-| `pypto_pro.language.MemorySpace.Right` | 片上 L0B | 右操作数缓冲区 | matmul 右矩阵输入 |
-| `pypto_pro.language.MemorySpace.Acc` | 片上 L0C | 累加器缓冲区 | matmul 累加器输出 |
+| `pypto_pro.language.MemorySpace.DDR` | 片外DDR | 全局内存，Tensor所在 | GM张量存储 |
+| `pypto_pro.language.MemorySpace.Vec` | 片上UB | 向量/统一缓冲区 | 向量计算（element-wise、reduce等）的输入输出 |
+| `pypto_pro.language.MemorySpace.Mat` | 片上L1 | 矩阵缓冲区 | matmul的L1暂存（GM→L1→L0A/L0B两跳的中间站） |
+| `pypto_pro.language.MemorySpace.Left` | 片上L0A | 左操作数缓冲区 | matmul左矩阵输入 |
+| `pypto_pro.language.MemorySpace.Right` | 片上L0B | 右操作数缓冲区 | matmul右矩阵输入 |
+| `pypto_pro.language.MemorySpace.Acc` | 片上L0C | 累加器缓冲区 | matmul累加器输出 |
 | `pypto_pro.language.MemorySpace.Scaling` | 片上 | 缩放/量化参数缓冲区 | quantization/反量化参数 |
-| `pypto_pro.language.MemorySpace.Bias` | Bias Buffer | 底层偏置缓冲区标识 | 当前 CCE Tile codegen 未实现该内存空间映射，不能用于 `make_tile` 或 `make_tile_group` 创建 Tile |
+| `pypto_pro.language.MemorySpace.Bias` | Bias Buffer | 底层偏置缓冲区标识 | 当前CCE Tile codegen未实现该内存空间映射，不能用于`make_tile`或`make_tile_group`创建Tile |
 
 ## 补充说明
 
-不同内存空间的 tile 在构造 [`pypto_pro.language.TileType`](TileType.md) 时有不同的默认 `layout`：
+不同内存空间的tile在构造[`pypto_pro.language.TileType`](TileType.md)时有不同的默认`layout`：
 
-| 内存空间 | A3 默认 `layout` | A5 默认 `layout` | 额外允许 |
+| 内存空间 | A3默认`layout` | A5默认`layout` | 额外允许 |
 |---|---|---|---|
 | `Vec` | 无约束 | 无约束 | — |
-| `Mat` | `pl.NZ` | `pl.NZ` | `pl.ZN` 转置分形布局；UINT64/INT64 还允许 `pl.ND` |
-| `Left` | `pl.ZZ` | `pl.NZ` | 同时允许 `pl.ZZ` 和 `pl.NZ` |
+| `Mat` | `pl.NZ` | `pl.NZ` | `pl.ZN`转置分形布局；UINT64/INT64还允许`pl.ND` |
+| `Left` | `pl.ZZ` | `pl.NZ` | 同时允许`pl.ZZ`和`pl.NZ` |
 | `Right` | `pl.ZN` | `pl.ZN` | — |
-| `Acc` | `pl.NZ` | `pl.NZ` | FP32/INT32 自动 `fractal=1024` |
+| `Acc` | `pl.NZ` | `pl.NZ` | FP32/INT32自动`fractal=1024` |
 | `Scaling` | `pl.ND` | `pl.ND` | — |
 
 ## 调用示例

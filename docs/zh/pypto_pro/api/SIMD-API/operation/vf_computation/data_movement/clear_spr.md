@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-清除特殊寄存器（AR 寄存器），重置某些 VF 指令使用的累加寄存器。通常在 @pl.vector_function 函数的开头或结尾调用。
+清除特殊寄存器（AR寄存器），重置某些VF指令使用的累加寄存器。通常在 @pl.vector_function函数的开头或结尾调用。
 
 ## 函数原型
 
@@ -41,6 +41,7 @@ vf.clear_spr()
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -75,7 +76,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

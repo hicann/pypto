@@ -14,12 +14,12 @@
 
 ## 功能说明
 
-`section_vector` 创建 Vector 区域，`section_cube` 创建 Cube 区域。区域中的操作分别下沉到向量核或矩阵核执行。
+`section_vector`创建Vector区域，`section_cube`创建Cube区域。区域中的操作分别下沉到向量核或矩阵核执行。
 
-- **`section_vector`**：用于 UB（`MemorySpace.Vec`）tile 上的向量计算，包括 GM↔UB 搬运（`load`/`store`）、逐元素运算、归约、转置等。
-- **`section_cube`**：用于 L1/L0A/L0B/L0C tile 上的矩阵计算，包括 GM→L1 搬运（`load`）、L1→L0A/L0B 搬运（`move`）、矩阵乘（`matmul`）、L0C→GM 回写（`store`）。
+- **`section_vector`**：用于UB（`MemorySpace.Vec`）tile上的向量计算，包括GM↔UB搬运（`load`/`store`）、逐元素运算、归约、转置等。
+- **`section_cube`**：用于L1/L0A/L0B/L0C tile上的矩阵计算，包括GM→L1搬运（`load`）、L1→L0A/L0B搬运（`move`）、矩阵乘（`matmul`）、L0C→GM回写（`store`）。
 
-同一 kernel 中可先后使用多个 `section_vector` / `section_cube`，例如先在 Cube 区域完成 matmul，再在 Vector 区域对结果做逐元素激活。
+同一kernel中可先后使用多个`section_vector` / `section_cube`，例如先在Cube区域完成matmul，再在Vector区域对结果做逐元素激活。
 
 ## 函数原型
 
@@ -28,13 +28,13 @@ pypto_pro.language.section_vector()
 pypto_pro.language.section_cube()
 ```
 
-两者均为 context manager，通过 `with` 语句使用，不接受参数。
+两者均为context manager，通过`with`语句使用，不接受参数。
 
 ## 调用示例
 
-### section_cube 矩阵乘
+### section_cube矩阵乘
 
-下面是一个完整 kernel：在 `section_cube` 区域中从 GM 载入 FP16 输入到 L1，move 到 L0A/L0B，用 `matmul` 完成矩阵乘后从 L0C 写回 GM。本例启用 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：在`section_cube`区域中从GM载入FP16输入到L1，move到L0A/L0B，用`matmul`完成矩阵乘后从L0C写回GM。本例启用`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -75,7 +75,7 @@ def with_section_cube_fp16_kernel(
         pl.store(z, ac, [0, 0])
 ```
 
-### section_vector 逐元素计算
+### section_vector逐元素计算
 
 ```python
 import pypto_pro.language as pl
@@ -97,9 +97,9 @@ def with_section_vector_kernel(
         pl.store(out, cur_out, [0, 0])
 ```
 
-### Cube 与 Vector 串联
+### Cube与Vector串联
 
-同一 kernel 中可先 Cube 后 Vector，常用于 matmul 后接逐元素计算。Cube 结果先写回 GM，再由 Vector 区域读取时，须使用跨核同步保证先写后读：
+同一kernel中可先Cube后Vector，常用于matmul后接逐元素计算。Cube结果先写回GM，再由Vector区域读取时，须使用跨核同步保证先写后读：
 
 ```python
 with pl.section_cube():

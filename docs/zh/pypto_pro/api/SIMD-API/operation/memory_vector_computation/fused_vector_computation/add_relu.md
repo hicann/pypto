@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-先对两个 tile 做逐元素加法，再对结果施加 ReLU 激活（负值置零）。与 `pypto_pro.language.add_relu_cast` 的区别是不做类型转换。
+先对两个tile做逐元素加法，再对结果施加ReLU激活（负值置零）。与`pypto_pro.language.add_relu_cast`的区别是不做类型转换。
 
 ## 函数原型
 
@@ -26,17 +26,17 @@ pypto_pro.language.add_relu(out, lhs, rhs)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，存放先加后 ReLU 的结果 |
-| `lhs` | 输入 | 左操作数 tile |
-| `rhs` | 输入 | 右操作数 tile |
+| `out` | 输出 | 目标tile，存放先加后ReLU的结果 |
+| `lhs` | 输入 | 左操作数tile |
+| `rhs` | 输入 | 右操作数tile |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape 须与 `lhs`、`rhs` 一致<br>支持与 `lhs` 或 `rhs` 为同一 tile，实现 in-place |
-| `lhs` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `rhs` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
+| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`lhs`、`rhs`一致<br>支持与`lhs`或`rhs`为同一tile，实现in-place |
+| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 
 ## 流水类型
 
@@ -44,7 +44,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：从 GM 载入两个 FP32 输入，用 `pypto_pro.language.add_relu` 先加后 ReLU 再写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：从GM载入两个FP32输入，用`pypto_pro.language.add_relu`先加后ReLU再写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

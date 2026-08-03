@@ -14,6 +14,7 @@ JIT编译的流程如下：
 ## 基本用法
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -39,7 +40,8 @@ def add_kernel(
         pl.store(out, cur_out, [0, 0])
 
 # 首次调用触发JIT编译
-device = "npu:0"
+device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+device = f"npu:{device_id}"
 torch.npu.set_device(device)
 a = torch.rand(64, 64, device=device, dtype=torch.float16)
 b = torch.rand(64, 64, device=device, dtype=torch.float16)
@@ -98,7 +100,7 @@ def kernel_auto(x, out):
 
 | arch值 | 对应产品 |
 |:---|:---|
-| "a5" | Ascend 950PR/Ascend 950DT |
+| “a5” | Ascend 950PR/Ascend 950DT |
 | None | 自动检测当前受支持设备的架构 |
 
 ## 编译产物

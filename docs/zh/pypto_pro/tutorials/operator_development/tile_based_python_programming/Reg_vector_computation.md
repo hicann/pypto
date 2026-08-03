@@ -102,7 +102,7 @@ def add_kernel(
         pl.store(out, tile_out, [0, 0])
 ```
 
-完整可运行示例和寄存器生命周期说明参见 [`vf.reg_tensor`](../../../api/SIMD-API/operation/vf_computation/reg_tensor.md)。
+完整可运行示例和寄存器生命周期说明参见[`vf.reg_tensor`](../../../api/SIMD-API/operation/vf_computation/reg_tensor.md)。
 
 ## 同步与依赖
 
@@ -119,4 +119,4 @@ def add_kernel(
 3. Tile/Membase实现中存在明显的中间结果UB往返。
 4. 经过性能分析确认寄存器方案能带来收益。
 
-普通向量计算仍建议先使用 [Tile矢量计算](Tile_vector_computation.md) 完成正确实现，再针对热点替换为VF计算。
+普通向量计算仍建议先使用[Tile矢量计算](Tile_vector_computation.md)完成正确实现，再针对热点替换为VF计算。

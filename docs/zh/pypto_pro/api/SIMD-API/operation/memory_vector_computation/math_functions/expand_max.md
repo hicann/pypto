@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-将指定维度的单元素 tile 广播到 `src` 的 shape 后逐元素取较大值。`dim=0` 广播 `[行数, 1]` tile；`dim=1` 广播 `[1, 列数]` tile。
+将指定维度的单列或单行tile广播到`src`的shape后逐元素取较大值。`dim=0`广播`[行数, 1]` tile；`dim=1`广播`[1, 列数]` tile。
 
 ## 函数原型
 
@@ -26,8 +26,8 @@ pypto_pro.language.expand_max(out, src, scalar, *, dim=0)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile |
-| `src` | 输入 | 源 tile |
+| `out` | 输出 | 目标tile |
+| `src` | 输入 | 源tile |
 | `scalar` | 输入 | `[行数, 1]` tile，广播到每列 |
 | `dim` | 输入 | 展开方向 |
 
@@ -35,10 +35,10 @@ pypto_pro.language.expand_max(out, src, scalar, *, dim=0)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：与 `src` 一致<br>shape：与 `src` 一致 |
+| `out` | 输出 | 数据类型：与`src`一致<br>shape：与`src`一致 |
 | `src` | 输入 | 数据类型：b16、b32<br>shape：任意二维 |
-| `scalar` | 输入 | 数据类型：与 `src` 一致<br>`dim=0` 时 shape 为 `[行数, 1]`；`dim=1` 时 shape 为 `[1, 列数]` |
-| `dim` | 输入 | `0`：广播 `[行数, 1]` tile；`1`：广播 `[1, 列数]` tile。默认值为 `0` |
+| `scalar` | 输入 | 数据类型：与`src`一致<br>`dim=0`时shape为`[行数, 1]`；`dim=1`时shape为`[1, 列数]` |
+| `dim` | 输入 | `0`：广播`[行数, 1]` tile；`1`：广播`[1, 列数]` tile。默认值为`0` |
 
 ## 流水类型
 
@@ -46,9 +46,9 @@ V（向量计算流水）。
 
 ## 调用示例
 
-### dim=0
+### dim = 0
 
-下面是一个完整 kernel：对 64×128 FP16 源 tile 与 `[64, 1]` 行向量做行向最大值展开，输出 `[64, 128]`。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：对64×128 FP16源tile与`[64, 1]`行向量做行向最大值展开，输出`[64, 128]`。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -91,7 +91,7 @@ def row_expand_max_kernel(
 ```
 <!-- pypto-doc-output:row_expand_max:end -->
 
-### dim=1
+### dim = 1
 
 ```python
 import pypto_pro.language as pl

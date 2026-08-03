@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-沿指定维度对 `src` tile 求和。`dim=0` 沿最后一维对每行求和，输出 `[行数, 1]`；`dim=1` 沿第一维对每列求和，输出 `[1, 列数]`。
+沿指定维度对`src` tile求和。`dim=0`沿最后一维对每行求和，输出`[行数, 1]`；`dim=1`沿第一维对每列求和，输出`[1, 列数]`。
 
 ## 函数原型
 
@@ -26,19 +26,19 @@ pypto_pro.language.sum(out, src, tmp, *, dim=0)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 规约结果 tile |
-| `src` | 输入 | 源 tile |
-| `tmp` | 输入 | 临时 tile（中间计算用） |
+| `out` | 输出 | 规约结果tile |
+| `src` | 输入 | 源tile |
+| `tmp` | 输入 | 临时tile（中间计算用） |
 | `dim` | 输入 | 归约方向 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：与 `src` 一致<br>`dim=0` 时 shape 为 `[行数, 1]`，须设 `layout=pl.DN`；`dim=1` 时 shape 为 `[1, 列数]` |
+| `out` | 输出 | 数据类型：与`src`一致<br>`dim=0`时shape为`[行数, 1]`，须设`layout=pl.DN`；`dim=1`时shape为`[1, 列数]` |
 | `src` | 输入 | 数据类型：b16、b32<br>shape：`[行数, 列数]` |
-| `tmp` | 输入 | 数据类型：与 `src` 一致<br>shape：与 `src` 一致<br>硬件中间计算用，不可与 `out`/`src` 重叠 |
-| `dim` | 输入 | `0`：沿最后一维做行向归约；`1`：沿第一维做列向归约。默认值为 `0` |
+| `tmp` | 输入 | 数据类型：与`src`一致<br>shape：与`src`一致<br>硬件中间计算用，不可与`out`/`src`重叠 |
+| `dim` | 输入 | `0`：沿最后一维做行向归约；`1`：沿第一维做列向归约。默认值为`0` |
 
 ## 流水类型
 
@@ -46,9 +46,9 @@ V（向量计算流水）。
 
 ## 调用示例
 
-### dim=0
+### dim = 0
 
-下面是一个完整 kernel：对 64×128 FP32 源 tile 做行向求和，输出 `[64, 1]`。注意输出 tile 需设 `layout=pl.DN`。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：对64×128 FP32源tile做行向求和，输出`[64, 1]`。注意输出tile需设`layout=pl.DN`。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -81,9 +81,9 @@ def row_sum_kernel(a: pl.Tensor[[64, 128], pl.DT_FP32],
 ```
 <!-- pypto-doc-output:row_sum:end -->
 
-### dim=1
+### dim = 1
 
-下面的 kernel 对 64×128 FP32 源 tile 做列向求和，输出 `[1, 128]`。
+下面的kernel对64×128 FP32源tile做列向求和，输出`[1, 128]`。
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -112,11 +112,11 @@ def col_sum_kernel(a: pl.Tensor[[64, 128], pl.DT_FP32],
 ```
 <!-- pypto-doc-output:col_sum:end -->
 
-### FP16 精度说明
+### FP16精度说明
 
-FP16 归约受有限精度和硬件累加顺序影响。输入规模较大或数值较大时，实测结果可能与按实数精度手算的结果不同。AscendC 的 `ReduceSum` 同样保留设备输出，并说明同一 repeat 内采用二叉树累加、不同 repeat 按顺序或二叉树累加。
+FP16归约会受到输入量化、有限精度累加及输出舍入的影响。输入规模较大或数值较大时，设备计算结果可能与高精度参考结果存在差异。归约指令采用的累加顺序也可能影响最终结果。
 
-以下为同一 `sum(..., dim=1)` 接口使用 FP16 输入时的实测结果：
+以下为`sum(..., dim=1)`使用FP16输入时的设备实测结果：
 
 <!-- pypto-doc-output:col_reduce_sum:start -->
 ```bash

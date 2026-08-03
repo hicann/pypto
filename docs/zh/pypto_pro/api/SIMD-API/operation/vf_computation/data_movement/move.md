@@ -14,10 +14,10 @@
 
 ## 功能说明
 
-将源寄存器中的元素复制到目标寄存器的对应位置。支持 RegTensor 和 MaskReg 两种寄存器类型：
+将源寄存器中的元素复制到目标寄存器的对应位置。支持RegTensor和MaskReg两种寄存器类型：
 
-- **RegTensor**：对 src 中的有效元素逐个复制写入 dst 中对应位置，无效位置保留 dst 原值（MERGING 模式）。
-- **MaskReg**：将 src 中的 bit 复制到 dst 中对应位置。如有输入 mask，则仅复制被 mask 选定的有效 bit，无效位置填 0。
+- **RegTensor**：对src中的有效元素逐个复制写入dst中对应位置，无效位置保留dst原值（MERGING模式）。
+- **MaskReg**：将src中的bit复制到dst中对应位置。如有输入mask，则仅复制被mask选定的有效bit，无效位置填0。
 
 ## 函数原型
 
@@ -35,14 +35,14 @@ dst = vf.move(src, mask)
 dst = vf.move(src)
 ```
 
-> 本接口为统一接口，同时支持 RegTensor 和 MaskReg 输入。当源操作数为 MaskReg 时，目标寄存器自动推断为 MaskReg。
+> 本接口为统一接口，同时支持RegTensor和MaskReg输入。当源操作数为MaskReg时，目标寄存器自动推断为MaskReg。
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源寄存器，RegTensor 或 MaskReg 类型 |
-| `mask` | 输入 | 可选，掩码寄存器。RegTensor 时控制哪些元素参与复制；MaskReg 时控制哪些 bit 有效 |
+| `src` | 输入 | 源寄存器，RegTensor或MaskReg类型 |
+| `mask` | 输入 | 可选，掩码寄存器。RegTensor时控制哪些元素参与复制；MaskReg时控制哪些bit有效 |
 | `mode` | 输入 | 可选，`pl.MergeMode.MERGING`（默认，仅支持的模式） |
 
 ## 数据类型
@@ -63,16 +63,17 @@ dst = vf.move(src)
 
 ## 返回值说明
 
-返回目标寄存器（`RegTensor` 或 `MaskReg` 类型，与源操作数类型一致）。
+返回目标寄存器（`RegTensor`或`MaskReg`类型，与源操作数类型一致）。
 
 ## 约束说明
 
-- RegTensor 的 move 仅支持 `MERGING` 模式（被 mask 筛选掉的元素保留 dst 原值），不支持 `ZEROING` 模式。
+- RegTensor的move仅支持`MERGING`模式（被mask筛选掉的元素保留dst原值），不支持`ZEROING`模式。
 - 目标操作数与源操作数的数据类型需要保持一致。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -110,7 +111,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -125,15 +127,16 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## MaskReg 调用示例
+## MaskReg调用示例
 
-当源操作数为 MaskReg 时，`vf.move` 将掩码的 bit 复制到目标 MaskReg，对应 `pmov` 指令。
+当源操作数为MaskReg时，`vf.move`将掩码的bit复制到目标MaskReg，对应`pmov`指令。
 
-MaskReg move（mask 模式）的机制如下图所示：b16 类型读取完整 128bit 的 {MASK1, MASK0}，将每个 bit 复制为 2bit；b32 类型读取 64bit 的 MASK0，并将每个 bit 复制为 4bit。
+MaskReg move（mask模式）的机制如下图所示：b16类型读取完整128bit的 {MASK1, MASK0}，将每个bit复制为2bit；b32类型读取64bit的MASK0，并将每个bit复制为4bit。
 
 ![](../../../../figures/move_mask_mode.jpg)
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -171,7 +174,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

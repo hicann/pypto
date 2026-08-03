@@ -18,7 +18,7 @@
 
 $$\{borrow_i, dstReg_i\} = srcReg0_i - srcReg1_i - borrowSrc_i$$
 
-Borrow flag（借位标志）用于表示减法借位，减法运算在硬件底层通过补码加法实现，若srcReg0，~srcReg1，borrowSrc输入按位相加后最高位无进位（即不够减），在borrow（存放借位的MaskReg寄存器）中对应位置每4bit设置1，否则写0。
+Borrow flag（借位标志）用于表示减法借位，减法运算在硬件底层通过补码加法实现。若srcReg0、srcReg1的按位取反结果与borrowSrc输入按位相加后最高位无进位（即不够减），则在borrow（存放借位的MaskReg寄存器）中对应位置每4bit设置1，否则写0。
 
 ## 函数原型
 
@@ -30,12 +30,12 @@ borrow, dst = vf.subc(src0, src1, borrow_src, preg)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `borrow` | 输出 | 目标操作数，输出借位值，类型为 `MaskReg` |
+| `borrow` | 输出 | 目标操作数，输出借位值，类型为`MaskReg` |
 | `dst` | 输出 | 目标向量寄存器，向量寄存器 |
 | `src0` | 输入 | 源操作数，向量寄存器 |
 | `src1` | 输入 | 源操作数，向量寄存器 |
-| `borrow_src` | 输入 | 输入借位值，类型为 `MaskReg` |
-| `preg` | 输入 | 掩码寄存器，类型为 `MaskReg` |
+| `borrow_src` | 输入 | 输入借位值，类型为`MaskReg` |
+| `preg` | 输入 | 掩码寄存器，类型为`MaskReg` |
 
 ## 数据类型
 
@@ -43,7 +43,7 @@ borrow, dst = vf.subc(src0, src1, borrow_src, preg)
 
 ## 返回值说明
 
-返回元组 `(borrow, dst)`：`borrow` 为 `MaskReg` 类型的借位标志寄存器，`dst` 为 `RegTensor` 类型的差值寄存器。
+返回元组`(borrow, dst)`：`borrow`为`MaskReg`类型的借位标志寄存器，`dst`为`RegTensor`类型的差值寄存器。
 
 ## 约束说明
 
@@ -52,6 +52,7 @@ borrow, dst = vf.subc(src0, src1, borrow_src, preg)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -91,7 +92,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(0, 50, [1, 64], device=device, dtype=torch.int32)

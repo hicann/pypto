@@ -4,7 +4,7 @@
 
 ## Add算子
 
-**功能介绍**：Add算子的数学表达式为 $z = x + y$，计算逻辑为逐元素完成两个张量的加法。
+**功能介绍**：Add算子的数学表达式为$z = x + y$，计算逻辑为逐元素完成两个张量的加法。
 
 ## 算子设计
 
@@ -20,6 +20,7 @@
 ## 算子代码实现
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -43,7 +44,8 @@ def add_kernel(a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 64], pl.DT_
 
 
 # Host端调用
-device = "npu:0"
+device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+device = f"npu:{device_id}"
 torch.npu.set_device(device)
 torch.manual_seed(0)
 a = torch.rand(64, 64, device=device, dtype=torch.float16)

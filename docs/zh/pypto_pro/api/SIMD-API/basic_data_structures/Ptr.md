@@ -14,14 +14,14 @@
 
 ## 功能说明
 
-指向某种元素类型的全局内存裸指针类型标注，对应 PTO MLIR 的 `!pto.ptr<dtype>`。
+指向某种元素类型的全局内存裸指针类型标注，对应PTO MLIR的`!pto.ptr<dtype>`。
 
-`pypto_pro.language.Ptr` 主要用于：
+`pypto_pro.language.Ptr`主要用于：
 
-1. kernel 函数签名中声明 GM 裸指针参数
-2. 配合 [`pypto_pro.language.make_ptr`](../operation/resource_management/make_ptr.md) 创建不同元素类型的指针视图
-3. 配合 [`pypto_pro.language.addptr`](../operation/resource_management/addptr.md) 做指针偏移
-4. 配合 [`pypto_pro.language.make_tensor`](../operation/resource_management/make_tensor.md) 从裸指针构造 tensor view
+1. kernel函数签名中声明GM裸指针参数
+2. 配合[`pypto_pro.language.make_ptr`](../operation/resource_management/make_ptr.md)创建不同元素类型的指针视图
+3. 配合[`pypto_pro.language.addptr`](../operation/resource_management/addptr.md)做指针偏移
+4. 配合[`pypto_pro.language.make_tensor`](../operation/resource_management/make_tensor.md)从裸指针构造tensor view
 
 ## 函数原型
 
@@ -39,11 +39,11 @@ pypto_pro.language.Ptr[dtype]
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md) 枚举值<br>常用：`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_INT8` |
+| `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md)枚举值<br>常用：`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_INT8` |
 
 ## 调用示例
 
-下面是一个完整 kernel：在 kernel 签名中用 `pypto_pro.language.Ptr` 声明 workspace 裸指针参数，配合 `addptr` 偏移到后半段、`make_tensor` 包装成 tensor view，完成 `a*2` 写回 `out`。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：在kernel签名中用`pypto_pro.language.Ptr`声明workspace裸指针参数，配合`addptr`偏移到后半段、`make_tensor`包装成tensor view，完成`a*2`写回`out`。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

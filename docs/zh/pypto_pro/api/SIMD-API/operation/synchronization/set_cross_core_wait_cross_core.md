@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-跨核同步：跨 AI Core 的发信号 / 等信号。
+跨核同步：跨AI Core的发信号 / 等信号。
 
 ## 函数原型
 
@@ -27,21 +27,21 @@ pypto_pro.language.system.wait_cross_core(*, pipe, event_id, sync_mode=pl.CrossC
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `pipe` | 输入 | 发信号 / 等信号所在的 pipe |
-| `event_id` | 输入 | 事件 id |
-| `sync_mode` | 输入 | 同步模式，set / wait 两侧须一致 |
+| `pipe` | 输入 | 发信号 / 等信号所在的pipe |
+| `event_id` | 输入 | 事件id |
+| `sync_mode` | 输入 | 同步模式，set / wait两侧须一致 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `pipe` | 输入 | 发信号 / 等信号所在硬件 pipe，取值：<br>`pypto_pro.language.PipeType.MTE1` / `MTE2` / `MTE3` / `V` / `S` / `FIX`<br>set 侧 pipe 为**发送核**执行 set 的 pipe，wait 侧 pipe 为**接收核**执行 wait 的 pipe，两者分属不同核的不同 pipe，无需相同。<br>典型组合：Cube→V 通信用 set(`FIX`) + wait(`V`)；V→Cube 通信用 set(`MTE3`/`V`) + wait(`MTE1`/`FIX`)。 |
-| `event_id` | 输入 | 整型常量（静态）或运行时 Expr（动态）<br>取值范围 `[0, max_event_id)` |
-| `sync_mode` | 输入 | 同步模式，set 侧和 wait 侧须使用相同的 sync_mode，取值：<br>- `pl.CrossCoreSyncMode.INTER_BLOCK`（mode 0）：AI Core 核间同步。AIC 场景同步所有 AIC 核，AIV 场景同步所有 AIV 核。<br>- `pl.CrossCoreSyncMode.INTER_SUBBLOCK`（mode 1）：AI Core 内部 AIV 核间同步。<br>- `pl.CrossCoreSyncMode.INTRA_BLOCK`（mode 2， 默认）：AI Core 内部 AIC 与 AIV 之间同步。<br>- `pl.CrossCoreSyncMode.UNICAST_BLOCK`（mode 3）：AI Core 内部 AIC 与 AIV 之间同步，AIV0 与 AIV1 可单独触发 AIC 等待。 |
+| `pipe` | 输入 | 发信号 / 等信号所在硬件pipe，取值：<br>`pypto_pro.language.PipeType.MTE1` / `MTE2` / `MTE3` / `V` / `S` / `FIX`<br>set侧pipe为**发送核**执行set的pipe，wait侧pipe为**接收核**执行wait的pipe，两者分属不同核的不同pipe，无需相同。<br>典型组合：Cube→V通信用set(`FIX`) + wait(`V`)；V→Cube通信用set(`MTE3`/`V`) + wait(`MTE1`/`FIX`)。 |
+| `event_id` | 输入 | 整型常量（静态）或运行时Expr（动态）<br>取值范围`[0, max_event_id)` |
+| `sync_mode` | 输入 | 同步模式，set侧和wait侧须使用相同的sync_mode，取值：<br>- `pl.CrossCoreSyncMode.INTER_BLOCK`（mode 0）：AI Core核间同步。AIC场景同步所有AIC核，AIV场景同步所有AIV核。<br>- `pl.CrossCoreSyncMode.INTER_SUBBLOCK`（mode 1）：AI Core内部AIV核间同步。<br>- `pl.CrossCoreSyncMode.INTRA_BLOCK`（mode 2，默认）：AI Core内部AIC与AIV之间同步。<br>- `pl.CrossCoreSyncMode.UNICAST_BLOCK`（mode 3）：AI Core内部AIC与AIV之间同步，AIV0与AIV1可单独触发AIC等待。 |
 
 ## 调用示例
 
-`set_cross_core` / `wait_cross_core` 用于 vector 侧与 cube 侧的跨核通信。下面是一个完整 kernel：vector 侧计算 `x + y` 并通过 `insert` 拼入 L1 NZ 缓冲，`set_cross_core` 通知 cube 侧；cube 侧 `wait_cross_core` 后读取并做 matmul，计算 `out = (x + y) @ rhs`。
+`set_cross_core` / `wait_cross_core`用于vector侧与cube侧的跨核通信。下面是一个完整kernel：vector侧计算`x + y`并通过`insert`拼入L1 NZ缓冲，`set_cross_core`通知cube侧；cube侧`wait_cross_core`后读取并做matmul，计算`out = (x + y) @ rhs`。
 
 ```python
 import pypto_pro.language as pl

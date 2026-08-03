@@ -16,8 +16,8 @@
 
 将标量值或源寄存器的最低/最高位元素广播到目标向量寄存器的各个元素。支持两种模式：
 
-- **Scalar 模式**：将标量值广播到寄存器各元素。
-- **Tensor 模式**：将源寄存器的最低位或最高位元素广播到目标寄存器各元素。Tensor 模式必须带掩码。
+- **Scalar模式**：将标量值广播到寄存器各元素。
+- **Tensor模式**：将源寄存器的最低位或最高位元素广播到目标寄存器各元素。Tensor模式必须带掩码。
 
 ## 函数原型
 
@@ -41,27 +41,27 @@ dst = vf.full(src_reg, preg, *, pos=pl.DuplicatePos.HIGHEST)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `dst` | 输出 | 目标向量寄存器 |
-| `scalar_value` | 输入 | Scalar 模式：标量值（整型或浮点型），广播到寄存器各元素 |
-| `src_reg` | 输入 | Tensor 模式：源向量寄存器，广播其最低位或最高位元素 |
-| `preg` | 输入 | 掩码寄存器。Tensor 模式必选；Scalar 模式可选 |
-| `dtype` | 输入 | Scalar 模式必选，指定目标寄存器的数据类型。Tensor 模式由源寄存器自动推断，无需指定 |
-| `pos` | 输入 | 可选，Tensor 模式下选择广播源寄存器的哪个元素：`pl.DuplicatePos.LOWEST`（默认）或 `pl.DuplicatePos.HIGHEST` |
-| `mode` | 输入 | 可选，`pl.MergeMode.ZEROING`（默认）或 `pl.MergeMode.MERGING` |
+| `scalar_value` | 输入 | Scalar模式：标量值（整型或浮点型），广播到寄存器各元素 |
+| `src_reg` | 输入 | Tensor模式：源向量寄存器，广播其最低位或最高位元素 |
+| `preg` | 输入 | 掩码寄存器。Tensor模式必选；Scalar模式可选 |
+| `dtype` | 输入 | Scalar模式必选，指定目标寄存器的数据类型。Tensor模式由源寄存器自动推断，无需指定 |
+| `pos` | 输入 | 可选，Tensor模式下选择广播源寄存器的哪个元素：`pl.DuplicatePos.LOWEST`（默认）或`pl.DuplicatePos.HIGHEST` |
+| `mode` | 输入 | 可选，`pl.MergeMode.ZEROING`（默认）或`pl.MergeMode.MERGING` |
 
-## dtype 说明
+## dtype说明
 
-Scalar 模式下，源操作数为标量值，无法从中推断目标寄存器的数据类型，因此必须通过 `dtype` 参数显式指定。Tensor 模式下，dtype 由源寄存器自动推断，无需指定。
+Scalar模式下，源操作数为标量值，无法从中推断目标寄存器的数据类型，因此必须通过`dtype`参数显式指定。Tensor模式下，dtype由源寄存器自动推断，无需指定。
 
 ## 数据类型
 
 | 模式 | src | dst |
 |---|---|---|
-| Scalar | scalar_value（标量） | 与 dtype 参数一致 |
-| Tensor | src_reg | 与 src_reg 一致 |
+| Scalar | scalar_value（标量） | 与dtype参数一致 |
+| Tensor | src_reg | 与src_reg一致 |
 
 支持的数据类型：INT8 / UINT8 / INT16 / UINT16 / FP16 / BF16 / INT32 / UINT32 / FP32 / INT64 / UINT64
 
-赋值形式 `dst = vf.full(...)` 返回目标向量寄存器。
+赋值形式`dst = vf.full(...)`返回目标向量寄存器。
 
 ## 约束说明
 
@@ -69,9 +69,10 @@ Scalar 模式下，源操作数为标量值，无法从中推断目标寄存器�
 
 ## 调用示例
 
-### 示例一：Scalar 模式
+### 示例一：Scalar模式
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -101,7 +102,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     out = torch.empty([1, 64], device=device, dtype=torch.float32)
@@ -115,9 +117,10 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-### 示例二：Tensor 模式（reg-to-reg 广播）
+### 示例二：Tensor模式（reg-to-reg广播）
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -154,7 +157,8 @@ def example_kernel(
 
 
 def test_example_2():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

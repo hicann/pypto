@@ -30,10 +30,12 @@ def hello_world_kernel(out: pl.Tensor[[1], pl.DT_INT32]):
 Host端通过PyTorch张量准备输入输出数据，直接调用Kernel函数完成计算。
 
 ```python
+import os
 import torch
 import torch_npu
 
-device = "npu:0"
+device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+device = f"npu:{device_id}"
 torch.npu.set_device(device)
 
 out = torch.zeros(1, device=device, dtype=torch.int32)

@@ -14,11 +14,11 @@
 
 ## 功能说明
 
-将向量寄存器或掩码寄存器（MaskReg）数据对齐存储到 UB tile。支持普通存储、带 dist 存储、interleaved 存储、post-update 连续存储、DataBlock 拷贝模式存储和 MaskReg 存储模式。当源寄存器为 MaskReg 时，后端自动分派 MaskReg 存储路径，此时无需传入谓词 mask 参数。
+将向量寄存器或掩码寄存器（MaskReg）数据对齐存储到UB tile。支持普通存储、带dist存储、interleaved存储、post-update连续存储、DataBlock拷贝模式存储和MaskReg存储模式。当源寄存器为MaskReg时，后端自动分派MaskReg存储路径，此时无需传入谓词mask参数。
 
-数据搬出时，可以通过 `dist` 关键字参数配置搬运的数据分布模式，能够实现压缩、只搬出第一个元素等功能。下图展示了 DIST_NORM、DIST_FIRST_ELEMENT_B16、DIST_PACK_B32 等分布模式的搬出示意：
+数据搬出时，可以通过`dist`关键字参数配置搬运的数据分布模式，能够实现压缩、只搬出第一个元素等功能。下图展示了DIST_NORM、DIST_FIRST_ELEMENT_B16、DIST_PACK_B32等分布模式的搬出示意：
 
-**图 1** 连续对齐搬出分布模式图示
+**图1**连续对齐搬出分布模式图示
 
 ![](../../../../figures/contiguous_aligned_store.jpg)
 
@@ -68,18 +68,18 @@ vf.store_align(tile, mask_reg, offset, *, post_update=True)          # post-upda
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输出 | 目标 UB tile |
+| `tile` | 输出 | 目标UB tile |
 | `src` | 输入 | 源向量寄存器 |
-| `src_even` / `src_odd` | 输入 | Interleaved 模式下的偶数/奇数源寄存器，类型需一致 |
-| `preg` | 输入 | 谓词掩码寄存器，指定写入的元素范围。MaskReg 源时无需传入 |
-| `addr_reg` | 输入 | 可选，由 `vf.create_addr_reg` 创建的地址偏移寄存器 |
-| `offset` | 输入 | 可选，末尾位置参数，偏移量（元素数量）；也可传入 `[row, col]` 列表或元组，线性偏移为 `row * shape[1] + col`，其中 `row` 单位为 tile 的列数（即 `set_validshape[m, n]` 的 `n`），`col` 单位为元素个数，两者均支持表达式 |
-| `stride` | 输入 | 可选，post-update 模式下的地址累进步长（元素数），作为第 4 个位置参数传入。默认 0。B64 类型自动翻倍 |
-| `dist` | 输入 | 可选，数据分布模式：<br>RegTensor 源：``pl.StoreDist.NORM``（普通对齐，默认）、``pl.StoreDist.NORM_B16``、``pl.StoreDist.FIRST_ELEMENT``（仅存储 lane 0）、``pl.StoreDist.PACK``（压缩存储）、``pl.StoreDist.PACK4``（4 元素压缩）、``pl.StoreDist.INTLV``（交错存储，自动按 dtype 选择 B8/B16/B32）、``pl.StoreDist.INTLV_B32``（B32 粒度交错存储）<br>MaskReg 源：``pl.StoreDist.NORM``（正常模式，搬运 VL/8）、``pl.StoreDist.PACK``（压缩模式） |
-| `post_update` | 输入 | 可选，`True` 时搬运后目标地址自动累进，默认 `False`。适用于循环内连续存储 |
-| `data_copy_mode` | 输入 | 可选，数据拷贝模式：``pl.DataCopyMode.NORM``（默认）或 ``pl.DataCopyMode.DATA_BLOCK_COPY``（非连续 DataBlock 存储） |
-| `block_stride` | 输入 | 可选，DataBlock 拷贝模式下的块步长，可作位置参数（第 4 个）或关键字参数传入 |
-| `repeat_stride` | 输入 | 可选，DataBlock 拷贝模式下的重复步长，可作位置参数（第 5 个）或关键字参数传入 |
+| `src_even` / `src_odd` | 输入 | Interleaved模式下的偶数/奇数源寄存器，类型需一致 |
+| `preg` | 输入 | 谓词掩码寄存器，指定写入的元素范围。MaskReg源时无需传入 |
+| `addr_reg` | 输入 | 可选，由`vf.create_addr_reg`创建的地址偏移寄存器 |
+| `offset` | 输入 | 可选，末尾位置参数，偏移量（元素数量）；也可传入`[row, col]`列表或元组，此时线性偏移为`row * shape[1] + col`，`row`单位为tile的列数（即`set_validshape[m, n]`的`n`），`col`单位为元素个数，两者均支持表达式 |
+| `stride` | 输入 | 可选，post-update模式下的地址累进步长（元素数），作为第4个位置参数传入。默认0。B64类型自动翻倍 |
+| `dist` | 输入 | 可选，数据分布模式：<br>RegTensor源：``pl.StoreDist.NORM``（普通对齐，默认）、``pl.StoreDist.NORM_B16``、``pl.StoreDist.FIRST_ELEMENT``（仅存储lane 0）、``pl.StoreDist.PACK``（压缩存储）、``pl.StoreDist.PACK4``（4元素压缩）、``pl.StoreDist.INTLV``（交错存储，自动按dtype选择B8/B16/B32）、``pl.StoreDist.INTLV_B32``（B32粒度交错存储）<br>MaskReg源：``pl.StoreDist.NORM``（正常模式，搬运VL/8）、``pl.StoreDist.PACK``（压缩模式） |
+| `post_update` | 输入 | 可选，`True`时搬运后目标地址自动累进，默认`False`。适用于循环内连续存储 |
+| `data_copy_mode` | 输入 | 可选，数据拷贝模式：``pl.DataCopyMode.NORM``（默认）或``pl.DataCopyMode.DATA_BLOCK_COPY``（非连续DataBlock存储） |
+| `block_stride` | 输入 | 可选，DataBlock拷贝模式下的块步长，可作位置参数（第4个）或关键字参数传入 |
+| `repeat_stride` | 输入 | 可选，DataBlock拷贝模式下的重复步长，可作位置参数（第5个）或关键字参数传入 |
 
 ## 数据类型
 
@@ -103,14 +103,15 @@ vf.store_align(tile, mask_reg, offset, *, post_update=True)          # post-upda
 
 ## 约束说明
 
-- 目标地址需要 32 字节对齐。
-- Interleaved 存储模式（`dist=pl.StoreDist.INTLV` / `INTLV_B32`）需要传入两个源寄存器（`src_even`、`src_odd`），两者类型需一致。
-- MaskReg 源存储无需传入谓词 mask 参数，后端自动分派 MaskReg 存储路径。
-- 使用 AddrReg 偏移时，按源类型自动分派：RegTensor 源走对齐存储，MaskReg 源走 MaskReg 存储。
+- 目标地址需要32字节对齐。
+- Interleaved存储模式（`dist=pl.StoreDist.INTLV` / `INTLV_B32`）需要传入两个源寄存器（`src_even`、`src_odd`），两者类型需一致。
+- MaskReg源存储无需传入谓词mask参数，后端自动分派MaskReg存储路径。
+- 使用AddrReg偏移时，按源类型自动分派：RegTensor源走对齐存储，MaskReg源走MaskReg存储。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -144,7 +145,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -159,11 +161,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## Interleaved 存储示例
+## Interleaved存储示例
 
-使用 `dist=pl.StoreDist.INTLV_B32` 将偶数/奇数寄存器交错写入 UB：
+使用`dist=pl.StoreDist.INTLV_B32`将偶数/奇数寄存器交错写入UB：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -198,7 +201,8 @@ def example_kernel(
 
 
 def test_example_2():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -215,9 +219,9 @@ if __name__ == "__main__":
 
 ## 列表偏移存储示例
 
-`store_align` 支持在末尾位置参数传入 `[row, col]` 列表（或元组）作为偏移量，编译器自动计算线性偏移 `row * shape[1] + col`。其中 `row` 的单位为 tile 的列数（即 `set_validshape[m, n]` 配置的 `n` 值），`col` 的单位为元素个数。`row` 和 `col` 均支持表达式（如循环变量运算）。
+`store_align`支持在末尾位置参数传入`[row, col]`列表（或元组）作为偏移量，编译器自动计算线性偏移`row * shape[1] + col`。其中`row`的单位为tile的列数（即`set_validshape[m, n]`配置的`n`值），`col`的单位为元素个数。`row`和`col`均支持表达式（如循环变量运算）。
 
-该写法替代了旧版 `tile[a:a+1, b:b+1]` 切片语法，语义完全一致：`a` 对应 `row`，`b` 对应 `col`。`load_align` 和 `store_align` 的 `[row, col]` 偏移可配合使用，实现按行偏移的加载-计算-存储。
+该写法替代了旧版`tile[a:a+1, b:b+1]`切片语法，语义完全一致：`a`对应`row`，`b`对应`col`。`load_align`和`store_align`的`[row, col]`偏移可配合使用，实现按行偏移的加载-计算-存储。
 
 ```python
 import pypto_pro.language as pl
@@ -271,7 +275,7 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-`row` 和 `col` 也支持表达式，适合在循环中按行偏移加载和存储：
+`row`和`col`也支持表达式，适合在循环中按行偏移加载和存储：
 
 ```python
 import pypto_pro.language as pl
@@ -325,11 +329,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## AddrReg 偏移存储示例
+## AddrReg偏移存储示例
 
-使用 `vf.create_addr_reg` 创建地址偏移寄存器，在循环中同步偏移 load 和 store 地址：
+使用`vf.create_addr_reg`创建地址偏移寄存器，在循环中同步偏移load和store地址：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -367,7 +372,8 @@ def example_kernel(
 
 
 def test_example_3():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 128], device=device, dtype=torch.float32)
@@ -382,11 +388,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## MaskReg 存储示例
+## MaskReg存储示例
 
-当 `src` 为 MaskReg 时，`vf.store_align` 自动分派 MaskReg 存储路径，无需传入谓词 mask 参数：
+当`src`为MaskReg时，`vf.store_align`自动分派MaskReg存储路径，无需传入谓词mask参数：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -432,7 +439,8 @@ def example_kernel(
 
 
 def test_example_4():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -448,11 +456,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## Post-update 连续存储示例
+## Post-update连续存储示例
 
-使用 `post_update=True` 在循环中连续存储，目标地址自动累进，无需手动计算偏移：
+使用`post_update=True`在循环中连续存储，目标地址自动累进，无需手动计算偏移：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -489,7 +498,8 @@ def example_kernel(
 
 
 def test_example_5():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 128], device=device, dtype=torch.float32)

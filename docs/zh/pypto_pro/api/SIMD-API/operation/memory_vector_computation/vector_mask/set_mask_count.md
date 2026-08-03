@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-将向量掩码寄存器切换为 **counter（计数）模式**。在该模式下，掩码寄存器的低 64 位被解释为"参与运算的元素个数"，而非逐位掩码。
+将向量掩码寄存器切换为**counter（计数）模式**。在该模式下，掩码寄存器的低64位被解释为“参与运算的元素个数”，而非逐位掩码。
 
-与 [`pypto_pro.language.set_vec_mask`](set_vec_mask.md) 配合使用：先切换到 count 模式，再设置元素个数，即可精确控制尾块计算的有效元素数。
+与[`pypto_pro.language.set_vec_mask`](set_vec_mask.md)配合使用：先切换到count模式，再设置元素个数，即可精确控制尾块计算的有效元素数。
 
 ## 函数原型
 
@@ -28,9 +28,10 @@ pypto_pro.language.set_mask_count()
 
 ## 补充说明
 
-count 模式下，[`pypto_pro.language.set_vec_mask`](set_vec_mask.md) 的 `mask_low` 参数被解释为元素个数（而非位掩码）。用于处理尾块（最后一块 tile 的有效列数小于 tile 列数）场景。
+count模式下，[`pypto_pro.language.set_vec_mask`](set_vec_mask.md)的`mask_low`参数被解释为元素个数（而非位掩码）。用于处理尾块（最后一块tile的有效列数小于tile列数）场景。
 
-**注意**：tile 级操作（如 `pypto_pro.language.add`、`pypto_pro.language.mul`）内部会自动管理掩码，用户通过 `pypto_pro.language.set_vec_mask` 设置的掩码会被覆盖。这些 API 主要用于自定义操作或底层控制场景。
+> [!CAUTION]注意
+> tile级操作（如`pypto_pro.language.add`、`pypto_pro.language.mul`）内部会自动管理掩码，用户通过`pypto_pro.language.set_vec_mask`设置的掩码会被覆盖。这些API主要用于自定义操作或底层控制场景。
 
 ## 流水类型
 
@@ -38,7 +39,7 @@ S（标量流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：演示 `set_mask_count` + `set_vec_mask` + `set_mask_norm` 的模式切换流程，最终恢复 norm 模式后做 `pypto_pro.language.add`。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：演示`set_mask_count` + `set_vec_mask` + `set_mask_norm`的模式切换流程，最终恢复norm模式后做`pypto_pro.language.add`。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

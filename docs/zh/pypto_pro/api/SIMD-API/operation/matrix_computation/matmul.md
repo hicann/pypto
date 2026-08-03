@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-完成一次矩阵乘法 `dst_tile = lhs_tile × rhs_tile`，数据通路为 L0A(Left) × L0B(Right) → L0C(Acc)。输入矩阵需先搬运到 L0A/L0B 内存空间（一般经 GM → L1 → L0A/L0B 两跳），结果写入 L0C 累加器。
+完成一次矩阵乘法`dst_tile = lhs_tile × rhs_tile`，数据通路为L0A(Left) × L0B(Right) → L0C(Acc)。输入矩阵需先搬运到L0A/L0B内存空间（一般经GM → L1 → L0A/L0B两跳），结果写入L0C累加器。
 
-如果要在已有累加结果上继续累加（K 维分块的非首块），使用 [`pypto_pro.language.matmul_acc`](matmul_acc.md)。
+如果要在已有累加结果上继续累加（K维分块的非首块），使用[`pypto_pro.language.matmul_acc`](matmul_acc.md)。
 
 ## 函数原型
 
@@ -37,18 +37,18 @@ pypto_pro.language.matmul(dst_tile, lhs_tile, rhs_tile, *, phase=None)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_tile` | 输出 | 数据类型：FP16、BF16、FP32、INT32（累加器精度通常高于输入，如 FP16 输入对应 FP32 累加）<br>shape：`[M, N]`<br>地址配置：<br>• 只能是 Acc/L0C 内存空间，其他空间报错<br>• `layout=pl.NZ`；FP32/INT32 累加器需设 `fractal`（FP32 默认 1024）<br>• 支持通过 `valid_shape=[-1, -1]` + `set_validshape` 设置尾块有效大小 |
-| `lhs_tile` | 输入 | 数据类型：FP16、BF16、FP32、INT8<br>shape：`[M, K]`<br>地址配置：<br>• 只能是 L0A/Left 内存空间，其他空间报错<br>• A3 默认 `layout=pl.ZZ`；A5 默认 `layout=pl.NZ` |
-| `rhs_tile` | 输入 | 数据类型：与 `lhs_tile` 一致<br>shape：`[K, N]`，K 维需与 `lhs_tile` 的 K 一致<br>地址配置：<br>• 只能是 L0B/Right 内存空间，其他空间报错<br>• `layout=pl.ZN` |
-| `phase` | 输入 | 可选，K 维分块累加时控制 fixpipe 写回 GM 的 unit_flag：<br>• 不传（默认）：单次乘法，无分块累加<br>• `pl.AccPhase.Partial`：中间累加步，表示后续还有 K 块<br>• `pl.AccPhase.Final`：最终步，表示 K 累加结束、可写回 GM<br>详见 [`matmul_acc`](matmul_acc.md) 的分块累加用法 |
+| `dst_tile` | 输出 | 数据类型：FP16、BF16、FP32、INT32（累加器精度通常高于输入，如FP16输入对应FP32累加）<br>shape：`[M, N]`<br>地址配置：<br>• 只能是Acc/L0C内存空间，其他空间报错<br>• `layout=pl.NZ`；FP32/INT32累加器需设`fractal`（FP32默认1024）<br>• 支持通过`valid_shape=[-1, -1]` + `set_validshape`设置尾块有效大小 |
+| `lhs_tile` | 输入 | 数据类型：FP16、BF16、FP32、INT8<br>shape：`[M, K]`<br>地址配置：<br>• 只能是L0A/Left内存空间，其他空间报错<br>• A3默认`layout=pl.ZZ`；A5默认`layout=pl.NZ` |
+| `rhs_tile` | 输入 | 数据类型：与`lhs_tile`一致<br>shape：`[K, N]`，K维需与`lhs_tile`的K一致<br>地址配置：<br>• 只能是L0B/Right内存空间，其他空间报错<br>• `layout=pl.ZN` |
+| `phase` | 输入 | 可选，K维分块累加时控制fixpipe写回GM的unit_flag：<br>• 不传（默认）：单次乘法，无分块累加<br>• `pl.AccPhase.Partial`：中间累加步，表示后续还有K块<br>• `pl.AccPhase.Final`：最终步，表示K累加结束、可写回GM<br>详见[`matmul_acc`](matmul_acc.md)的分块累加用法 |
 
 ## 调用示例
 
-完整 kernel 计算 `C[M,N] = A[M,K] @ B[K,N]`，用 `make_tile_group` + `auto_mutex` 管理 L1/L0A/L0B/L0C 缓冲。L1 暂存用 `next()` 轮转开 ping-pong 双缓冲，L0A/L0B/L0C 用单 mutex_id 的 group 配 `current()`。开启 `auto_mutex=True` 后，相邻搬运与计算间的同步由框架按 tile 的 mutex 自动插入，无需手写 `sync_src`/`sync_dst`。
+完整kernel计算`C[M,N] = A[M,K] @ B[K,N]`，用`make_tile_group` + `auto_mutex`管理L1/L0A/L0B/L0C缓冲。L1暂存用`next()`轮转开ping-pong双缓冲，L0A/L0B/L0C用单mutex_id的group配`current()`。开启`auto_mutex=True`后，相邻搬运与计算间的同步由框架按tile的mutex自动插入，无需手写`sync_src`/`sync_dst`。
 
-下面是 K 恰好为一个 tile（128）的单次 matmul：每个 `[i, j]` 块一次 `matmul` 直接写回 GM，不涉及 K 维累加，因此不需要 `phase` / `fractal`。
+下面是K恰好为一个tile（128）的单次matmul：每个`[i, j]`块一次`matmul`直接写回GM，不涉及K维累加，因此不需要`phase` / `fractal`。
 
-> K 维分块累加（`phase` + `fractal` + `set_mm_layout_transform`）见 [`pypto_pro.language.matmul_acc`](matmul_acc.md) 的调用示例。
+> K维分块累加（`phase` + `fractal` + `set_mm_layout_transform`）见[`pypto_pro.language.matmul_acc`](matmul_acc.md)的调用示例。
 
 ```python
 import pypto_pro.language as pl

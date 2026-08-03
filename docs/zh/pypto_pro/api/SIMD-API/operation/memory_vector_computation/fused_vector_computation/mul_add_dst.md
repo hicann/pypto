@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-融合乘加到目标：`out = lhs * rhs + out`。先计算 lhs 和 rhs 的逐元素乘积，再累加到 out 的现有值上。
+融合乘加到目标：`out = lhs * rhs + out`。先计算lhs和rhs的逐元素乘积，再累加到out的现有值上。
 
 ## 函数原型
 
@@ -26,17 +26,17 @@ pypto_pro.language.mul_add_dst(out, lhs, rhs)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 目标 tile，既提供累加初值也存放结果 |
-| `lhs` | 输入 | 左操作数 tile |
-| `rhs` | 输入 | 右操作数 tile |
+| `out` | 输入/输出 | 目标tile，既提供累加初值也存放结果 |
+| `lhs` | 输入 | 左操作数tile |
+| `rhs` | 输入 | 右操作数tile |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 数据类型：b16、b32<br>shape：与 `lhs`、`rhs` 一致 |
-| `lhs` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `rhs` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
+| `out` | 输入/输出 | 数据类型：b16、b32<br>shape：与`lhs`、`rhs`一致 |
+| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 
 ## 流水类型
 
@@ -44,7 +44,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：从 GM 载入三个 FP16 输入，用 `pypto_pro.language.mul_add_dst` 完成 `out = lhs * rhs + out` 的就地融合乘加再写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：从GM载入三个FP16输入，用`pypto_pro.language.mul_add_dst`完成`out = lhs * rhs + out`的就地融合乘加再写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

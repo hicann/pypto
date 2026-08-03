@@ -60,11 +60,11 @@ c_db = pl.make_tile_group(type=tile_type, addrs=0x20000, mutex_ids=[30, 31])
 | `g.current()` | 不变 | 当前索引处的tile |
 | `g.previous()` | 不变 | 前一个tile（`(cur-1) % N`） |
 
-`next()`是主力：每次循环迭代调用一次以取"下一块buffer"，游标按N取模回绕。`current()`在同一迭代中多个算子共享同一块buffer时使用。`previous()`在不扰动游标的情况下窥视前一块buffer。
+`next()`是主力：每次循环迭代调用一次以取“下一块buffer”，游标按N取模回绕。`current()`在同一迭代中多个算子共享同一块buffer时使用。`previous()`在不扰动游标的情况下窥视前一块buffer。
 
 ### addrs的两种写法
 
-- **单个基地址** → tile连续排布：`base + i * slot_size`
+- **单个基地址**→ tile连续排布：`base + i * slot_size`
 - **地址列表**（长度 == `len(mutex_ids)`）→ 每个tile一个显式的、可不连续的地址
 
 ```python
@@ -96,11 +96,12 @@ pl.load(tile_a, x, [i, j])
 pl.store(z, tile_c, [i, j])
 ```
 
-`load_tile`/`store_tile`会自动把每个tile坐标乘以tile的shape，因此按"tile"来索引，无需手动计算字节/元素偏移。
+`load_tile`/`store_tile`会自动把每个tile坐标乘以tile的shape，因此按“tile”来索引，无需手动计算字节/元素偏移。
 
 ## 完整示例 —— 逐元素加法（双缓冲）
 
 ```python
+import os
 import torch
 import pypto_pro.language as pl
 
@@ -138,7 +139,8 @@ def add_kernel(
 
 
 def test_add():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     torch.npu.set_device(device)
     M_SIZE, N_SIZE = 8192, 4096
     num_cores = M_SIZE // TILE_M
@@ -163,7 +165,7 @@ def test_add():
 
 ## 尾块处理
 
-当GM上的`pl.Tensor`的shape不能被tile shape整除时，边界上会出现比tile小的"不完整块"。尾块处理涉及`valid_shape`、`set_validshape`、`pad`、`fillpad`和`compact`等参数的协同，详细说明请参考[尾块处理](tail_block_handling.md)。
+当GM上的`pl.Tensor`的shape不能被tile shape整除时，边界上会出现比tile小的“不完整块”。尾块处理涉及`valid_shape`、`set_validshape`、`pad`、`fillpad`和`compact`等参数的协同，详细说明请参考[尾块处理](tail_block_handling.md)。
 
 ## N缓冲（循环）用法
 
@@ -189,7 +191,7 @@ for t in pl.range(0, num_tiles, 1):
 |:---|:---|:---|
 | 分配 | 一块固定buffer（`addr`+`size`） | N块轮转buffer（`addrs`+`mutex_ids`） |
 | buffer选择 | 手动（你持有变量） | `next()/current()/previous()`游标 |
-| 跨pipe同步 | **手动**`sync_src`/`sync_dst`对 | 配合`auto_mutex=True`**自动** |
+| 跨pipe同步 |**手动**`sync_src`/`sync_dst`对 | 配合`auto_mutex=True`**自动** |
 | 双/N缓冲 | 手工（多个tile + 乒乓同步） | 内建（`mutex_ids`的长度） |
 | 适用场景 | 紧凑、手工调优的单趟流水线 | 大多数kernel；流水化/重叠的循环 |
 

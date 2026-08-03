@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-按掩码在两个输入间逐元素选择。掩码为真处取 `src_a`，为假处取 `src_b`。
+按掩码在两个输入间逐元素选择。掩码为真处取`src_a`，为假处取`src_b`。
 
 ## 函数原型
 
@@ -22,7 +22,7 @@
 dst = vf.select(src_a, src_b, preg)
 ```
 
-> 本接口为统一接口，同时支持 RegTensor 和 MaskReg 输入。当源操作数为 MaskReg 时，目标寄存器自动推断为 MaskReg。
+> 本接口为统一接口，同时支持RegTensor和MaskReg输入。当源操作数为MaskReg时，目标寄存器自动推断为MaskReg。
 
 ## 参数说明
 
@@ -31,7 +31,7 @@ dst = vf.select(src_a, src_b, preg)
 | `dst` | 输出 | 目标向量寄存器 |
 | `src_a` | 输入 | 掩码为真时取值的源操作数 |
 | `src_b` | 输入 | 掩码为假时取值的源操作数 |
-| `preg` | 输入 | 掩码寄存器（通常由 `vf.eq`/`vf.ne`/`vf.lt`/`vf.gt`/`vf.le`/`vf.ge` 等比较算子产生） |
+| `preg` | 输入 | 掩码寄存器（通常由`vf.eq`/`vf.ne`/`vf.lt`/`vf.gt`/`vf.le`/`vf.ge`等比较算子产生） |
 
 ## 数据类型
 
@@ -44,17 +44,18 @@ dst = vf.select(src_a, src_b, preg)
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
-- src_a、src_b 与 dst 数据类型需一致。
+- src_a、src_b与dst数据类型需一致。
 - 本接口操作数为寄存器，不涉及地址对齐。
 - 本接口不修改全局寄存器的值。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -92,7 +93,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -108,11 +110,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## MaskReg 调用示例
+## MaskReg调用示例
 
-当源操作数为 MaskReg 时，`vf.select` 根据 preg 的比特位在两个 MaskReg 间选取。
+当源操作数为MaskReg时，`vf.select`根据preg的比特位在两个MaskReg间选取。
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -151,7 +154,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

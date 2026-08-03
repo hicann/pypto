@@ -14,11 +14,11 @@
 
 ## 功能说明
 
-将掩码寄存器的每个 bit 扩展到目标向量寄存器的对应 lane：mask bit 为 1 时对应 lane 填 1，mask bit 为 0 时对应 lane 填 0。
+将掩码寄存器的每个bit扩展到目标向量寄存器的对应lane：mask bit为1时对应lane填1，mask bit为0时对应lane填0。
 
-具体算法如下图所示，dstReg 的首位为 0，后续 mask[i] 对应 mask 值为 1 时，dst[i] 的值为 dst[i-1] + 1；mask[i] 对应 mask 值为 0 时，dst[i] 的值为 dst[i-1]。mask 最高位被忽略不参与统计。
+具体算法如下图所示，dstReg的首位为0，后续mask[i]对应mask值为1时，dst[i]的值为dst[i-1] + 1；mask[i]对应mask值为0时，dst[i]的值为dst[i-1]。mask最高位被忽略不参与统计。
 
-**图 1** Unsqueeze 示意图
+**图1**Unsqueeze示意图
 
 ![Unsqueeze示意图](../../../../figures/unsqueeze_diagram.jpg)
 
@@ -33,7 +33,7 @@ dst = vf.unsqueeze(preg)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `dst` | 输出 | 目标操作数，向量寄存器，存放扩展结果 |
-| `preg` | 输入 | 掩码寄存器，类型为 `MaskReg`（由 `vf.create_mask` 或 `vf.update_mask` 产生） |
+| `preg` | 输入 | 掩码寄存器，类型为`MaskReg`（由`vf.create_mask`或`vf.update_mask`产生） |
 
 ## 数据类型
 
@@ -50,6 +50,7 @@ dst = vf.unsqueeze(preg)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -82,7 +83,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(0, 100, [1, 64], device=device, dtype=torch.int32)

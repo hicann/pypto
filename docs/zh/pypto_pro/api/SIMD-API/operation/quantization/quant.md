@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-把高精度 tile 量化为低精度整型（支持对称/非对称）。对称模式：`out = clamp(round(src * scale), -128, 127)`；非对称模式：`out = clamp(round(src * scale) + offset, 0, 255)`。
+把高精度tile量化为低精度整型（支持对称/非对称）。对称模式：`out = clamp(round(src * scale), -128, 127)`；非对称模式：`out = clamp(round(src * scale) + offset, 0, 255)`。
 
 ## 函数原型
 
@@ -26,21 +26,21 @@ pypto_pro.language.quant(out, src, scale, *, mode=pl.QuantMode.SYM, offset=None)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 量化结果 tile（低精度整型） |
-| `src` | 输入 | 源 tile（高精度浮点） |
-| `scale` | 输入 | 量化缩放系数 tile |
-| `mode` | 输入 | 量化模式，默认 `pl.QuantMode.SYM` |
-| `offset` | 输入 | 非对称模式下的零点偏移 tile |
+| `out` | 输出 | 量化结果tile（低精度整型） |
+| `src` | 输入 | 源tile（高精度浮点） |
+| `scale` | 输入 | 量化缩放系数tile |
+| `mode` | 输入 | 量化模式，默认`pl.QuantMode.SYM` |
+| `offset` | 输入 | 非对称模式下的零点偏移tile |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：`pypto_pro.language.DT_INT8`（对称模式，范围 [-128, 127]）或 `pypto_pro.language.DT_UINT8`（非对称模式，范围 [0, 255]）<br>shape 须与 `src` 一致 |
-| `src` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：与 `out` 一致 |
-| `scale` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：per-row `[src 行数, 1]` |
-| `mode` | 输入 | `pl.QuantMode.SYM`（对称，默认）或 `pl.QuantMode.ASYM`（非对称）<br>非对称模式时 `offset` 必填 |
-| `offset` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：与 `scale` 一致<br>仅 `pl.QuantMode.ASYM` 模式需要，`pl.QuantMode.SYM` 模式忽略 |
+| `out` | 输出 | 数据类型：`pypto_pro.language.DT_INT8`（对称模式，范围[-128, 127]）或`pypto_pro.language.DT_UINT8`（非对称模式，范围[0, 255]）<br>shape须与`src`一致 |
+| `src` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：与`out`一致 |
+| `scale` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：per-row `[src行数, 1]` |
+| `mode` | 输入 | `pl.QuantMode.SYM`（对称，默认）或`pl.QuantMode.ASYM`（非对称）<br>非对称模式时`offset`必填 |
+| `offset` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：与`scale`一致<br>仅`pl.QuantMode.ASYM`模式需要，`pl.QuantMode.SYM`模式忽略 |
 
 ## 流水类型
 
@@ -48,7 +48,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：从 GM 载入 FP32 源 tile 和 per-row scale，用 `pypto_pro.language.quant` 对称量化为 INT8 再写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：从GM载入FP32源tile和per-row scale，用`pypto_pro.language.quant`对称量化为INT8再写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-切换 matmul 的 fixpipe 结果读出方向，开启后 fixpipe 沿 N 方向（列优先）从 L0C 读数据。
+切换matmul的fixpipe结果读出方向，开启后fixpipe沿N方向（列优先）从L0C读数据。
 
 ## 函数原型
 
@@ -32,11 +32,11 @@ pypto_pro.language.system.set_mm_layout_transform(*, enabled)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `enabled` | 输入 | `True`：开启 N 方向读出（fixpipe 沿列优先从 L0C 读数据）<br>`False`：恢复 M 方向读出（默认，fixpipe 沿行优先）<br>仅在 matmul K 维分块累加场景中使用，须成对出现：K 循环前 `enabled=True`，写回 GM 后 `enabled=False`<br>非 K 累加场景（单次 matmul）不需要此开关 |
+| `enabled` | 输入 | `True`：开启N方向读出（fixpipe沿列优先从L0C读数据）<br>`False`：恢复M方向读出（默认，fixpipe沿行优先）<br>仅在matmul K维分块累加场景中使用，须成对出现：K循环前`enabled=True`，写回GM后`enabled=False`<br>非K累加场景（单次matmul）不需要此开关 |
 
 ## 调用示例
 
-`set_mm_layout_transform` 仅在 matmul K 维分块累加场景中使用。下面是一个完整 kernel：计算 `C[128,128] = A[128,256] @ B[256,128]`，K 维按 128 分块累加。K 循环前 `enabled=True`，写回 GM 后 `enabled=False`。
+`set_mm_layout_transform`仅在matmul K维分块累加场景中使用。下面是一个完整kernel：计算`C[128,128] = A[128,256] @ B[256,128]`，K维按128分块累加。K循环前`enabled=True`，写回GM后`enabled=False`。
 
 ```python
 import pypto_pro.language as pl

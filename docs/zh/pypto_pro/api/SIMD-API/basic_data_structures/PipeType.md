@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-硬件执行单元（流水）的类型枚举，标记某个操作运行在哪条流水上。是同步控制（[`sync_src`/`sync_dst`](../operation/synchronization/sync_src_sync_dst.md)、[`mutex_lock`](../operation/synchronization/mutex_lock_mutex_unlock.md) 等）里 `set_pipe`/`wait_pipe`/`pipe` 参数的取值来源。
+硬件执行单元（流水）的类型枚举，标记某个操作运行在哪条流水上。是同步控制（[`sync_src`/`sync_dst`](../operation/synchronization/sync_src_sync_dst.md)、[`mutex_lock`](../operation/synchronization/mutex_lock_mutex_unlock.md)等）里`set_pipe`/`wait_pipe`/`pipe`参数的取值来源。
 
 昇腾芯片内部有多条并行流水，各自负责不同阶段的数据搬运和计算。正确理解每条流水的职责是写好同步控制的基础。
 
@@ -22,18 +22,18 @@
 
 | 取值 | 说明 | 硬件角色 |
 |---|---|---|
-| `pypto_pro.language.PipeType.MTE1` | 搬运流水 1 | L1 → L0A/L0B/Scaling（矩阵操作数与量化参数搬运） |
-| `pypto_pro.language.PipeType.MTE2` | 搬运流水 2 | GM → L1/UB（load 搬入） |
-| `pypto_pro.language.PipeType.MTE3` | 搬运流水 3 | UB → GM（store 搬出）、UB → L1（move 搬运） |
-| `pypto_pro.language.PipeType.M` | 矩阵计算流水 | Cube/MAD（matmul 计算） |
-| `pypto_pro.language.PipeType.V` | 向量计算流水 | element-wise、reduce、cast 等向量操作 |
-| `pypto_pro.language.PipeType.S` | 标量流水 | getval/setval 等标量操作 |
-| `pypto_pro.language.PipeType.FIX` | fixpipe 流水 | 累加器结果读出（L0C → UB/GM/L1）、L1 → UB/L0C 搬运、quantization/反量化等 |
+| `pypto_pro.language.PipeType.MTE1` | 搬运流水1 | L1 → L0A/L0B/Scaling（矩阵操作数与量化参数搬运） |
+| `pypto_pro.language.PipeType.MTE2` | 搬运流水2 | GM → L1/UB（load搬入） |
+| `pypto_pro.language.PipeType.MTE3` | 搬运流水3 | UB → GM（store搬出）、UB → L1（move搬运） |
+| `pypto_pro.language.PipeType.M` | 矩阵计算流水 | Cube/MAD（matmul计算） |
+| `pypto_pro.language.PipeType.V` | 向量计算流水 | element-wise、reduce、cast等向量操作 |
+| `pypto_pro.language.PipeType.S` | 标量流水 | getval/setval等标量操作 |
+| `pypto_pro.language.PipeType.FIX` | fixpipe流水 | 累加器结果读出（L0C → UB/GM/L1）、L1 → UB/L0C搬运、quantization/反量化等 |
 | `pypto_pro.language.PipeType.ALL` | 全部流水 | 用于全局同步（bar_all） |
 
 ## 补充说明
 
-[`load`](../operation/memory_data_movement/load.md)、[`move`](../operation/memory_data_movement/move.md) 和 [`store`](../operation/memory_data_movement/store.md) 的流水由源/目的内存空间自动决定：
+[`load`](../operation/memory_data_movement/load.md)、[`move`](../operation/memory_data_movement/move.md)和[`store`](../operation/memory_data_movement/store.md)的流水由源/目的内存空间自动决定：
 
 | 操作 | 源 → 目的 | 流水 |
 |---|---|---|
@@ -53,12 +53,12 @@
 
 | 场景 | set_pipe | wait_pipe | 说明 |
 |---|---|---|---|
-| load 后 V 才能计算 | MTE2 | V | 确保 GM→UB 搬运完成 |
-| 计算后 MTE3 才能 store | V | MTE3 | 确保向量计算完成 |
-| store 后 MTE2 才能 load | MTE3 | MTE2 | 确保 UB→GM 搬出完成再搬入新数据 |
-| L1→L0A 搬运后 M 才能计算 | MTE1 | M | 确保矩阵操作数就位 |
-| matmul 后 FIX 才能读出结果 | M | FIX | 确保矩阵计算完成 |
-| 标量读写 | MTE2/MTE3 | S | getval/setval 走标量流水 |
+| load后V才能计算 | MTE2 | V | 确保GM→UB搬运完成 |
+| 计算后MTE3才能store | V | MTE3 | 确保向量计算完成 |
+| store后MTE2才能load | MTE3 | MTE2 | 确保UB→GM搬出完成再搬入新数据 |
+| L1→L0A搬运后M才能计算 | MTE1 | M | 确保矩阵操作数就位 |
+| matmul后FIX才能读出结果 | M | FIX | 确保矩阵计算完成 |
+| 标量读写 | MTE2/MTE3 | S | getval/setval走标量流水 |
 
 ## 调用示例
 

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-全核同步：hard 模式用 FFTS 硬件信号无需 workspace；soft 模式用 GM 轮询需要 workspace。
+全核同步：hard模式用FFTS硬件信号无需workspace；soft模式用GM轮询需要workspace。
 
 ## 函数原型
 
@@ -26,7 +26,7 @@ pypto_pro.language.system.sync_all(workspaces=None, *, core_type=pl.SyncCoreType
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `workspaces` | 输入 | 仅 soft 模式需要的 workspace 列表 |
+| `workspaces` | 输入 | 仅soft模式需要的workspace列表 |
 | `core_type` | 输入 | 同步涉及的核类型 |
 | `mode` | 输入 | 同步模式 |
 
@@ -34,15 +34,16 @@ pypto_pro.language.system.sync_all(workspaces=None, *, core_type=pl.SyncCoreType
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `workspaces` | 输入 | hard 模式时传 `None`（默认），无需 workspace<br>soft 模式时传 workspace 列表，可包含 GM tensor、UB tile、L1 tile 等<br>列表长度不限，每个元素须为合法的 tensor 或 tile |
-| `core_type` | 输入 | `pl.SyncCoreType.MIX`（默认，AIV + AIC 全部核）/ `pl.SyncCoreType.AIV_ONLY`（仅 AIV 核）/ `pl.SyncCoreType.AIC_ONLY`（仅 AIC 核） |
-| `mode` | 输入 | `pl.SyncAllMode.HARD`（默认，用 FFTS 硬件信号，无需 workspace）/ `pl.SyncAllMode.SOFT`（用 GM 轮询，需要 workspace）<br>hard 模式性能更优，推荐优先使用 |
+| `workspaces` | 输入 | hard模式时传`None`（默认），无需workspace<br>soft模式时传workspace列表，可包含GM tensor、UB tile、L1 tile等<br>列表长度不限，每个元素须为合法的tensor或tile |
+| `core_type` | 输入 | `pl.SyncCoreType.MIX`（默认，AIV + AIC全部核）/ `pl.SyncCoreType.AIV_ONLY`（仅AIV核）/ `pl.SyncCoreType.AIC_ONLY`（仅AIC核） |
+| `mode` | 输入 | `pl.SyncAllMode.HARD`（默认，用FFTS硬件信号，无需workspace）/ `pl.SyncAllMode.SOFT`（用GM轮询，需要workspace）<br>hard模式性能更优，推荐优先使用 |
 
 ## 调用示例
 
-下面是一个完整 kernel：用 `pypto_pro.language.system.sync_all(core_type=pl.SyncCoreType.AIV_ONLY)` 替代 `sync_src`/`sync_dst` 做全流水同步。`sync_all()` 会等待所有流水线（MTE1/MTE2/MTE3/V/M/FIX）前序操作完成，写法更简洁但同步粒度更粗。
+下面是一个完整kernel：用`pypto_pro.language.system.sync_all(core_type=pl.SyncCoreType.AIV_ONLY)`替代`sync_src`/`sync_dst`做全流水同步。`sync_all()`会等待所有流水线（MTE1/MTE2/MTE3/V/M/FIX）前序操作完成，写法更简洁但同步粒度更粗。
 
-> **注意**：纯 vector kernel 须指定 `core_type=pl.SyncCoreType.AIV_ONLY`，避免同步不存在的 cube 核导致设备错误。默认 `core_type=pl.SyncCoreType.MIX` 适用于同时包含 vector 和 cube 的 kernel。
+> [!CAUTION]注意
+> 纯vector kernel须指定`core_type=pl.SyncCoreType.AIV_ONLY`，避免同步不存在的cube核导致设备错误。默认`core_type=pl.SyncCoreType.MIX`适用于同时包含vector和cube的kernel。
 
 ```python
 import pypto_pro.language as pl
@@ -67,7 +68,7 @@ def sync_all_kernel(
         pl.store(out, tile_out, [0, 0])
 ```
 
-soft 模式需要传入 workspace 列表：
+soft模式需要传入workspace列表：
 
 ```python
 pl.system.sync_all([sync_gm, sync_ub], mode=pl.SyncAllMode.SOFT, core_type=pl.SyncCoreType.AIV_ONLY)

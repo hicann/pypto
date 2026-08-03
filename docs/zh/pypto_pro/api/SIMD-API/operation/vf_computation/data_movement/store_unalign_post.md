@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-非对齐存储后处理，flush alignment tracker 中剩余的未对齐字节。须在 `vf.store_unalign` 之后调用。
+非对齐存储后处理，flush alignment tracker中剩余的未对齐字节。须在`vf.store_unalign`之后调用。
 
 ## 函数原型
 
@@ -30,10 +30,10 @@ vf.store_unalign_post(tile, align_reg, stride, *, post_update=False)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输出 | 目标 UB tile |
-| `align_reg` | 输入 | alignment tracker 寄存器（由 `vf.unalign_reg_for_store()` 创建） |
-| `stride` | 输入 | 可选，存储元素个数，post_update=True 时同时作为地址更新步长（整型标量） |
-| `post_update` | 输入 | 可选，`True` 时 tracker 自动累进，默认 `False` |
+| `tile` | 输出 | 目标UB tile |
+| `align_reg` | 输入 | alignment tracker寄存器（由`vf.unalign_reg_for_store()`创建） |
+| `stride` | 输入 | 可选，存储元素个数，post_update = True时同时作为地址更新步长（整型标量） |
+| `post_update` | 输入 | 可选，`True`时tracker自动累进，默认`False` |
 
 ## 数据类型
 
@@ -58,12 +58,13 @@ vf.store_unalign_post(tile, align_reg, stride, *, post_update=False)
 ## 约束说明
 
 - 本接口操作数为寄存器，不涉及地址对齐。
-- 必须在 `vf.store_unalign` 之后调用。
-- 2 参数形式（legacy）在当前硬件上可能导致挂死，推荐使用 3 参数形式（带步长）。
+- 必须在`vf.store_unalign`之后调用。
+- 2参数形式（legacy）在当前硬件上可能导致挂死，推荐使用3参数形式（带步长）。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -99,7 +100,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

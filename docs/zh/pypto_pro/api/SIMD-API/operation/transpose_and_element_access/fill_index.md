@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-向目标 tile 填充从 `start` 开始的连续整数序列：`out[j] = start + j`。
+向目标tile填充从`start`开始的连续整数序列：`out[j] = start + j`。
 
-典型场景：生成位置编码、初始化索引 tile 用于排序或 gather 操作。
+典型场景：生成位置编码、初始化索引tile用于排序或gather操作。
 
 ## 函数原型
 
@@ -28,14 +28,14 @@ pypto_pro.language.fill_index(out, start)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，存放生成的索引序列 |
+| `out` | 输出 | 目标tile，存放生成的索引序列 |
 | `start` | 输入 | 起始值 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：`pypto_pro.language.DT_INT32`<br>shape：行数为 1，列数为索引个数 |
+| `out` | 输出 | 数据类型：`pypto_pro.language.DT_INT32`<br>shape：行数为1，列数为索引个数 |
 | `start` | 输入 | 整数或标量表达式 |
 
 ## 流水类型
@@ -44,7 +44,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：用 `pypto_pro.language.fill_index` 向 `[1, 64]` 的 INT32 tile 填充从 `START` 开始的连续整数序列，按动态 shape 循环 store 回 GM。
+下面是一个完整kernel：用`pypto_pro.language.fill_index`向`[1, 64]`的INT32 tile填充从`START`开始的连续整数序列，按动态shape循环store回GM。
 
 ```python
 import pypto_pro.language as pl

@@ -22,7 +22,7 @@
 dst = vf.not_(src, preg)
 ```
 
-> 本接口为统一接口，同时支持 RegTensor 和 MaskReg 输入。当源操作数为 MaskReg 时，目标寄存器自动推断为 MaskReg。
+> 本接口为统一接口，同时支持RegTensor和MaskReg输入。当源操作数为MaskReg时，目标寄存器自动推断为MaskReg。
 
 ## 参数说明
 
@@ -38,7 +38,7 @@ dst = vf.not_(src, preg)
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+源操作数为RegTensor时返回`RegTensor`；源操作数为MaskReg时返回`MaskReg`。
 
 ## 约束说明
 
@@ -47,6 +47,7 @@ dst = vf.not_(src, preg)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -79,7 +80,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(0, 256, [1, 128], device=device, dtype=torch.int16)
@@ -94,11 +96,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## MaskReg 调用示例
+## MaskReg调用示例
 
-当源操作数为 MaskReg 时，`vf.not_` 对掩码按位取反。
+当源操作数为MaskReg时，`vf.not_`对掩码按位取反。
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -136,7 +139,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

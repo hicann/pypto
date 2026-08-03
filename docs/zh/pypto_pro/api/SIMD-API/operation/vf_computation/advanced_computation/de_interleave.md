@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-给定源操作数寄存器 src0 和 src1，将 src0 和 src1 中的元素解交织存入结果操作数 dst0 和 dst1 中。解交织排列方式如下图所示，其中每个方格代表一个元素：
+给定源操作数寄存器src0和src1，将src0和src1中的元素解交织存入结果操作数dst0和dst1中。解交织排列方式如下图所示，其中每个方格代表一个元素：
 
 ![](../../../../figures/de_interleave_data_layout.jpg)
 
@@ -28,7 +28,7 @@ dst0, dst1 = vf.de_interleave(src0, src1)
 vf.de_interleave(dst0, dst1, src0, src1)
 ```
 
-> 本接口为统一接口，同时支持 RegTensor 和 MaskReg 输入。当源操作数为 MaskReg 时，目标寄存器自动推断为 MaskReg。
+> 本接口为统一接口，同时支持RegTensor和MaskReg输入。当源操作数为MaskReg时，目标寄存器自动推断为MaskReg。
 
 ## 参数说明
 
@@ -45,15 +45,16 @@ vf.de_interleave(dst0, dst1, src0, src1)
 
 ## 返回值说明
 
-返回元组 `(dst0, dst1)`：`dst0` 为偶数元素寄存器，`dst1` 为奇数元素寄存器，均为 `RegTensor` 类型。
+返回元组`(dst0, dst1)`：`dst0`为偶数元素寄存器，`dst1`为奇数元素寄存器，均为`RegTensor`类型。
 
 ## 约束说明
 
-- 数据类型为 b64 时，仅支持 RegTraitNumTwo。
+- 数据类型为b64时，仅支持RegTraitNumTwo。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -90,7 +91,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 128], device=device, dtype=torch.float16)
@@ -106,11 +108,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## MaskReg 调用示例
+## MaskReg调用示例
 
-当源操作数为 MaskReg 时，`vf.de_interleave` 按位解交织两个掩码寄存器。解交织位宽由 MaskReg 的数据类型决定。
+当源操作数为MaskReg时，`vf.de_interleave`按位解交织两个掩码寄存器。解交织位宽由MaskReg的数据类型决定。
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -149,7 +152,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

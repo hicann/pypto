@@ -14,10 +14,10 @@
 
 ## 功能说明
 
-两个操作数对应位置逐元素做减法。支持 tile-tile 和 tile-scalar（scalar 指标量）两种模式，支持 in-place 写法（`out` 与 `lhs`/`rhs` 为同一 tile）。
+两个操作数对应位置逐元素做减法。支持tile-tile和tile-scalar（scalar指标量）两种模式，支持in-place写法（`out`与`lhs`/`rhs`为同一tile）。
 
-- **tile-tile 模式**：`sub(out, lhs, rhs)` -> `out[i] = lhs[i] - rhs[i]`
-- **tile-scalar 模式**：`sub(out, lhs, scalar)` -> `out[i] = lhs[i] - scalar`
+- **tile-tile模式**：`sub(out, lhs, rhs)` -> `out[i] = lhs[i] - rhs[i]`
+- **tile-scalar模式**：`sub(out, lhs, scalar)` -> `out[i] = lhs[i] - scalar`
 
 ## 函数原型
 
@@ -29,17 +29,17 @@ pypto_pro.language.sub(out, lhs, rhs)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，存放逐元素减法结果 |
-| `lhs` | 输入 | 左操作数 tile（被减数） |
-| `rhs` | 输入 | 右操作数（tile 或 scalar，减数） |
+| `out` | 输出 | 目标tile，存放逐元素减法结果 |
+| `lhs` | 输入 | 左操作数tile（被减数） |
+| `rhs` | 输入 | 右操作数（tile或scalar，减数） |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape 须与 `lhs` 一致<br>支持与 `lhs` 或 `rhs` 为同一 tile，实现 in-place 减法 |
-| `lhs` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `rhs` | 输入 | tile-tile 模式：数据类型与 `out` 一致，shape 与 `out` 一致<br>tile-scalar 模式：scalar 值（int/float/Scalar） |
+| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`lhs`一致<br>支持与`lhs`或`rhs`为同一tile，实现in-place减法 |
+| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `rhs` | 输入 | tile-tile模式：数据类型与`out`一致，shape与`out`一致<br>tile-scalar模式：scalar值（int/float/Scalar） |
 
 ## 流水类型
 
@@ -47,9 +47,9 @@ V（向量计算流水）。
 
 ## 调用示例
 
-### tile-tile 模式
+### tile-tile模式
 
-下面是一个完整 kernel：从 GM 载入两个 FP32 输入到 UB，用 `pypto_pro.language.sub` 逐元素相减后写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：从GM载入两个FP32输入到UB，用`pypto_pro.language.sub`逐元素相减后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -82,7 +82,7 @@ def sub_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_
 ```
 <!-- pypto-doc-output:sub:end -->
 
-### tile-scalar 模式
+### tile-scalar模式
 
 ```python
 # tile 每个元素减去 scalar 值

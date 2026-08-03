@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-融合乘加 ReLU（就地）：`out = relu(out * a + b)`。先将 out 与 a 逐元素相乘，再加上 b，最后对结果施加 ReLU 激活（负值置零）。
+融合乘加ReLU（就地）：`out = relu(out * a + b)`。先将out与a逐元素相乘，再加上b，最后对结果施加ReLU激活（负值置零）。
 
-注意：out 同时作为乘数和累加目标，运算后 out 的原始值被覆盖。
+注意：out同时作为乘数和累加目标，运算后out的原始值被覆盖。
 
 ## 函数原型
 
@@ -28,17 +28,17 @@ pypto_pro.language.fused_mul_add_relu(out, a, b)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 目标 tile，既作为乘数也存放结果 |
-| `a` | 输入 | 乘数 tile |
-| `b` | 输入 | 加数 tile |
+| `out` | 输入/输出 | 目标tile，既作为乘数也存放结果 |
+| `a` | 输入 | 乘数tile |
+| `b` | 输入 | 加数tile |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 数据类型：b16、b32<br>shape：与 `a`、`b` 一致 |
-| `a` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `b` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
+| `out` | 输入/输出 | 数据类型：b16、b32<br>shape：与`a`、`b`一致 |
+| `a` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `b` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 
 ## 流水类型
 
@@ -46,7 +46,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：从 GM 载入三个 FP16 输入，用 `pypto_pro.language.fused_mul_add_relu` 完成 `out = relu(out * a + b)` 的就地融合乘加 ReLU 再写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：从GM载入三个FP16输入，用`pypto_pro.language.fused_mul_add_relu`完成`out = relu(out * a + b)`的就地融合乘加ReLU再写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

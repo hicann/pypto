@@ -14,63 +14,64 @@
 
 ## 功能说明
 
-对已加载到 UB 的 tile 执行二维切片，生成一个带偏移和有效 shape 的子 tile（sub-view）。子 tile 共享原 tile 的 UB 缓冲区，不分配新内存。
+对已加载到UB的tile执行二维切片，生成一个带偏移和有效shape的子tile（sub-view）。子tile共享原tile的UB缓冲区，不分配新内存。
 
 使用方式分两种：
 
-- **Cube/Vector section**：使用切片语法 `tile[r:r2, c:c2]`，生成 new Tile，自动设置偏移和 `SetValidShape`。
-- **vector_function**：使用指针偏移 `tile + offset`，仅做 UB 指针运算，不生成 tile 描述符。
+- **Cube/Vector section**：使用切片语法`tile[r:r2, c:c2]`，生成new Tile，自动设置偏移和`SetValidShape`。
+- **vector_function**：使用指针偏移`tile + offset`，仅做UB指针运算，不生成tile描述符。
 
-> **注意**：Tensor 不支持切片语法，请使用 `pl.load`/`pl.store` 配合 offset 列表访问。
+> [!CAUTION]注意
+> Tensor不支持切片语法，请使用`pl.load`/`pl.store`配合offset列表访问。
 
 ## 语法
 
-### 子Tile 切片
+### 子Tile切片
 
 ```python
 sub = tile[row_start:row_stop, col_start:col_stop]
 ```
 
-切片遵循 Python 半开区间语义：`[row_start, row_stop)`、`[col_start, col_stop)`。
+切片遵循Python半开区间语义：`[row_start, row_stop)`、`[col_start, col_stop)`。
 
-- 缺省 `row_stop` / `col_stop` 时取到 tile shape 对应维度末尾。
-- 子 tile 保留原 tile 的物理 shape（row_stride 不变），通过 `SetValidShape` 设置有效数据范围。
-- 若原 tile 设置了 `valid_shape`（编译期或运行时 `pl.set_validshape`），切片会与之求交集 clamp。
+- 缺省`row_stop` / `col_stop`时取到tile shape对应维度末尾。
+- 子tile保留原tile的物理shape（row_stride不变），通过`SetValidShape`设置有效数据范围。
+- 若原tile设置了`valid_shape`（编译期或运行时`pl.set_validshape`），切片会与之求交集clamp。
 
-### VF 指针偏移
+### VF指针偏移
 
 ```python
 ptr = tile + offset    # offset 为线性元素偏移
 ```
 
-VF 段内 `tile + offset` 退化为纯指针偏移 `(vf_tile_ptr_N + offset)`，shape / valid_shape 信息被忽略。适用于 `vf.load_align` / `vf.store_align` 等基于指针的 VF 操作。
+VF段内`tile + offset`退化为纯指针偏移`(vf_tile_ptr_N + offset)`，shape / valid_shape信息被忽略。适用于`vf.load_align` / `vf.store_align`等基于指针的VF操作。
 
-> **VF 段不建议使用切片语法** `tile[r:r2, c:c2]`。虽然技术上可用（会 warning 并退化为指针偏移），但 `tile + offset` 语义更直接。
+> **VF段不建议使用切片语法**`tile[r:r2, c:c2]`。虽然技术上可用（会warning并退化为指针偏移），但`tile + offset`语义更直接。
 
 ## 参数说明
 
-### 子Tile切片 `tile[row_start:row_stop, col_start:col_stop]`
+### 子Tile切片`tile[row_start:row_stop, col_start:col_stop]`
 
 | 参数                 | 输入/输出 | 说明                                       |
 | -------------------- | --------- | ------------------------------------------ |
-| `tile`               | 输入      | 源 tile，须为 2D TileType                  |
-| `row_start:row_stop` | 输入      | 行切片，半开区间，整型常量或运行时 Expr    |
-| `col_start:col_stop` | 输入      | 列切片，半开区间，整型常量或运行时 Expr    |
-| 返回值               | 输出      | 子 tile（TileType），共享原 tile UB 缓冲区 |
+| `tile`               | 输入      | 源tile，须为2D TileType                  |
+| `row_start:row_stop` | 输入      | 行切片，半开区间，整型常量或运行时Expr    |
+| `col_start:col_stop` | 输入      | 列切片，半开区间，整型常量或运行时Expr    |
+| 返回值               | 输出      | 子tile（TileType），共享原tile UB缓冲区 |
 
-### VF 段偏移 `tile + offset`
+### VF段偏移`tile + offset`
 
 | 参数     | 输入/输出 | 说明                                                          |
 | -------- | --------- | ------------------------------------------------------------- |
-| `tile`   | 输入      | 源 tile，须为 TileType                                        |
-| `offset` | 输入      | 线性元素偏移（整型常量或运行时 Expr）                         |
-| 返回值   | 输出      | 偏移后的指针表达式，供`vf.load_align` / `vf.store_align` 使用 |
+| `tile`   | 输入      | 源tile，须为TileType                                        |
+| `offset` | 输入      | 线性元素偏移（整型常量或运行时Expr）                         |
+| 返回值   | 输出      | 偏移后的指针表达式，供`vf.load_align` / `vf.store_align`使用 |
 
 ## 调用示例
 
 ### 基本切片
 
-从 `[8, 64]` 的 tile 中取 `[2:6, 16:50]` 子块（4 行 × 34 列），直接 store 到 GM。子 tile 的 row_stride 仍为 64（原 tile 列数），store 时按 valid_shape `[4, 34]` 搬运。
+从`[8, 64]`的tile中取`[2:6, 16:50]`子块（4行 × 34列），直接store到GM。子tile的row_stride仍为64（原tile列数），store时按valid_shape `[4, 34]`搬运。
 
 ```python
 import pypto_pro.language as pl
@@ -92,9 +93,9 @@ def tile_subview_kernel(
         pl.store(out, sub, [0, 0])
 ```
 
-### 与 set_validshape 交集
+### 与set_validshape交集
 
-tile shape `[8, 64]`，运行时设置 `valid_shape=[6, 40]`，切片 `[2:6, 16:50]` 会被 clamp 到 `[4, 24]`（`min(4, 6-2)` × `min(34, 40-16)`）。
+tile shape `[8, 64]`，运行时设置`valid_shape=[6, 40]`，切片`[2:6, 16:50]`会被clamp到`[4, 24]`（`min(4, 6-2)` × `min(34, 40-16)`）。
 
 ```python
 import pypto_pro.language as pl
@@ -112,15 +113,15 @@ def tile_subview_vshape_kernel(
     )
     with pl.section_vector():
         tile = tile_group.next()
-        pl.load(tile, a, [0, 0])
         pl.set_validshape(tile, [6, 40])
+        pl.load(tile, a, [0, 0])
         sub1 = tile[2:6, 16:50]
         pl.store(out1, sub1, [0, 0])
 ```
 
-### VF 段：指针偏移搬运
+### VF段：指针偏移搬运
 
-在 `@pl.vector_function` 内部，使用 `tile + offset` 做指针偏移，配合 `vf.load_align` / `vf.store_align` 逐行搬运子矩阵。
+在`@pl.vector_function`内部，使用`tile + offset`做指针偏移，配合`vf.load_align` / `vf.store_align`逐行搬运子矩阵。
 
 ```python
 import pypto_pro.language as pl
@@ -156,4 +157,5 @@ def tile_subview_vf_kernel(
         pl.store(vf_out, vf_dst, [0, 0])
 ```
 
-> **说明**：`vf_src[1:4, 16:48]` 在 block 段（`section_vector` 内、VF 函数外）使用切片语法，生成带偏移的子 tile。传入 VF 函数后，VF 段通过 `tile + offset` 形式做指针偏移搬运。VF 函数内部的 `dst_tile + r * n_cols` 是 VF 段指针偏移。
+> [!NOTE]说明
+> `vf_src[1:4, 16:48]`在block段（`section_vector`内、VF函数外）使用切片语法，生成带偏移的子tile。传入VF函数后，VF段通过`tile + offset`形式做指针偏移搬运。VF函数内部的`dst_tile + r * n_cols`是VF段指针偏移。

@@ -14,17 +14,17 @@
 
 ## 功能说明
 
-向量元素数据类型转换（如 FP32→FP16）。`layout` 参数控制结果放置在偶数半区（``pl.CastLayout.ZERO``）还是奇数半区（``pl.CastLayout.ONE``）；`round_mode` 控制浮点转换的舍入方式；`saturate` 控制窄化转换的饱和处理。
+向量元素数据类型转换（如FP32→FP16）。`layout`参数控制结果放置在偶数半区（``pl.CastLayout.ZERO``）还是奇数半区（``pl.CastLayout.ONE``）；`round_mode`控制浮点转换的舍入方式；`saturate`控制窄化转换的饱和处理。
 
-不同数据类型下元素对应的 mask 位宽不一致，在类型转换时，MaskReg 根据输入的源操作数进行有效元素筛选。当源操作数和目的操作数位宽不同时，单条指令计算量以位宽更大的数据类型为准，layout 用于控制位宽小的元素在寄存器中的排布方式。
+不同数据类型下元素对应的mask位宽不一致，在类型转换时，MaskReg根据输入的源操作数进行有效元素筛选。当源操作数和目的操作数位宽不同时，单条指令计算量以位宽更大的数据类型为准，layout用于控制位宽小的元素在寄存器中的排布方式。
 
-下图展示了 MaskReg 和 layout 同时作用时 b16 和 b32 进行类型转换的过程：
+下图展示了MaskReg和layout同时作用时b16和b32进行类型转换的过程：
 
-**图 1** b16 到 b32 类型转换过程
+**图1**b16到b32类型转换过程
 
 ![](../../../../figures/astype_b16_to_b32_conversion.jpg)
 
-**图 2** b32 到 b16 类型转换过程
+**图2**b32到b16类型转换过程
 
 ![](../../../../figures/astype_b32_to_b16_conversion.jpg)
 
@@ -42,12 +42,12 @@ dst = vf.astype(src, preg, *, dtype=pl.DT_FP16, layout=pl.CastLayout.ZERO,
 | `dst` | 输出 | 目标向量寄存器 |
 | `src` | 输入 | 源向量寄存器 |
 | `preg` | 输入 | 掩码寄存器 |
-| `dtype` | 输入 | 必选，指定目标寄存器的数据类型（如 `pl.DT_FP16`、`pl.DT_INT32` 等）。由于类型转换后目标类型与源类型不同，必须显式指定 |
-| `layout` | 输入 | ``pl.CastLayout.ZERO``（偶数半区）或 ``pl.CastLayout.ONE``（奇数半区） |
-| `round_mode` | 输入 | 可选，浮点舍入模式，`pl.VFRoundMode` 枚举（见下表）。默认按最近舍入 |
-| `saturate` | 输入 | 可选，`pl.SaturateMode.OFF`（默认）或 `pl.SaturateMode.ON`，窄化转换时是否饱和 |
+| `dtype` | 输入 | 必选，指定目标寄存器的数据类型（如`pl.DT_FP16`、`pl.DT_INT32`等）。由于类型转换后目标类型与源类型不同，必须显式指定 |
+| `layout` | 输入 | ``pl.CastLayout.ZERO``（偶数半区）或``pl.CastLayout.ONE``（奇数半区） |
+| `round_mode` | 输入 | 可选，浮点舍入模式，`pl.VFRoundMode`枚举（见下表）。默认按最近舍入 |
+| `saturate` | 输入 | 可选，`pl.SaturateMode.OFF`（默认）或`pl.SaturateMode.ON`，窄化转换时是否饱和 |
 
-### round_mode 取值
+### round_mode取值
 
 | pl.VFRoundMode | 舍入方式 |
 |---|---|
@@ -56,8 +56,8 @@ dst = vf.astype(src, preg, *, dtype=pl.DT_FP16, layout=pl.CastLayout.ZERO,
 | `CAST_CEIL` | 向上取整 |
 | `CAST_TRUNC` | 向零截断 |
 | `CAST_RNA` | 舍入到最近、远离零 |
-| `CAST_ODD` | Von Neumann 舍入（舍入到最近奇数） |
-| `CAST_HYBRID` | 混合舍入（仅 Ascend 950PR/DT 支持） |
+| `CAST_ODD` | Von Neumann舍入（舍入到最近奇数） |
+| `CAST_HYBRID` | 混合舍入（仅Ascend 950PR/DT支持） |
 | `CAST_ROUND` | 默认舍入 |
 
 ## 数据类型
@@ -69,13 +69,13 @@ dst = vf.astype(src, preg, *, dtype=pl.DT_FP16, layout=pl.CastLayout.ZERO,
 | FP16 | FP32 |
 | INT32 | FP32 |
 
-## dtype 说明
+## dtype说明
 
-`vf.astype` 是类型转换算子，目标寄存器的数据类型与源寄存器不同，无法从源操作数推断目标类型。因此必须通过 `dtype` 参数显式指定目标数据类型。例如 FP32→FP16 转换时指定 `dtype=pl.DT_FP16`，FP32→INT32 转换时指定 `dtype=pl.DT_INT32`。
+`vf.astype`是类型转换算子，目标寄存器的数据类型与源寄存器不同，无法从源操作数推断目标类型。因此必须通过`dtype`参数显式指定目标数据类型。例如FP32→FP16转换时指定`dtype=pl.DT_FP16`，FP32→INT32转换时指定`dtype=pl.DT_INT32`。
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
@@ -85,6 +85,7 @@ dst = vf.astype(src, preg, *, dtype=pl.DT_FP16, layout=pl.CastLayout.ZERO,
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -120,7 +121,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -135,9 +137,10 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-FP16 转 FP32（扩展转换，无需指定 `layout`）：
+FP16转FP32（扩展转换，无需指定`layout`）：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -173,7 +176,8 @@ def example_kernel_fp16_to_fp32(
 
 
 def test_example_fp16_to_fp32():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     # 输入 128 个 FP16 填满一个 RegTensor（256B）。
@@ -193,9 +197,10 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-FP32 转 FP16（缩窄转换，需指定 `layout` 控制结果半区）：
+FP32转FP16（缩窄转换，需指定`layout`控制结果半区）：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -231,7 +236,8 @@ def example_kernel_fp32_to_fp16(
 
 
 def test_example_fp32_to_fp16():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -246,9 +252,10 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-指定舍入模式（FP32→INT32，Von Neumann 舍入）：
+指定舍入模式（FP32→INT32，Von Neumann舍入）：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -283,7 +290,8 @@ def example_kernel_round(
 
 
 def test_example_2():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

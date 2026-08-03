@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-获取当前 AI Core 的 block 索引。返回值可直接参与偏移计算。
+获取当前AI Core的block索引。返回值可直接参与偏移计算。
 
 ## 函数原型
 
@@ -26,11 +26,11 @@ val = pypto_pro.language.get_block_idx()
 
 ## 返回值说明
 
-返回当前 AI Core 的 block 索引，类型为整型 Expr，可直接参与坐标计算。
+返回当前AI Core的block索引，类型为整型Expr，可直接参与坐标计算。
 
 ## 调用示例
 
-下面是一个完整多核 kernel：用 `kernel[None, NUM_CORES](...)` 启动 2 核，每核用 `pypto_pro.language.get_block_idx()` 获取当前核号算行偏移，各处理 64 行做 element-wise 加法。
+下面是一个完整多核kernel：用`kernel[None, NUM_CORES](...)`启动2核，每核用`pypto_pro.language.get_block_idx()`获取当前核号算行偏移，各处理64行做element-wise加法。
 
 ```python
 import pypto_pro.language as pl

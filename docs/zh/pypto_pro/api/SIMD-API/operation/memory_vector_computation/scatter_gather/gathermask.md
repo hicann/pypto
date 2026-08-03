@@ -14,15 +14,15 @@
 
 ## 功能说明
 
-按位模式从源 tile 中抽取列到目标 tile。
+按位模式从源tile中抽取列到目标tile。
 
-`pattern_mode` 取值：
+`pattern_mode`取值：
 
 | 取值 | 含义 |
 |---|---|
-| 1 | 取偶数列 `src[:, 0::2]` |
-| 2 | 取奇数列 `src[:, 1::2]` |
-| 7 | 全取（等价于 copy） |
+| 1 | 取偶数列`src[:, 0::2]` |
+| 2 | 取奇数列`src[:, 1::2]` |
+| 7 | 全取（等价于copy） |
 
 ## 函数原型
 
@@ -34,17 +34,17 @@ pypto_pro.language.gathermask(out, src, *, pattern_mode)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，存放按位模式抽取的列 |
-| `src` | 输入 | 源 tile |
+| `out` | 输出 | 目标tile，存放按位模式抽取的列 |
+| `src` | 输入 | 源tile |
 | `pattern_mode` | 输入 | 位模式（常量整数），决定抽取哪些列 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：与 `src` 一致<br>shape：行数与 `src` 一致，列数由 `pattern_mode` 决定 |
-| `src` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：列数须为 `out` 列数的整数倍（如 `out` 为 `[64, 64]` 时 `src` 为 `[64, 128]`） |
-| `pattern_mode` | 输入 | 常量整数，取值 1-7<br>1：取偶数列 `src[:, 0::2]`<br>2：取奇数列 `src[:, 1::2]`<br>7：全取（等价于 copy）<br>其余值行为不确定 |
+| `out` | 输出 | 数据类型：与`src`一致<br>shape：行数与`src`一致，列数由`pattern_mode`决定 |
+| `src` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：列数须为`out`列数的整数倍（如`out`为`[64, 64]`时`src`为`[64, 128]`） |
+| `pattern_mode` | 输入 | 常量整数，取值1-7<br>1：取偶数列`src[:, 0::2]`<br>2：取奇数列`src[:, 1::2]`<br>7：全取（等价于copy）<br>其余值行为不确定 |
 
 ## 流水类型
 
@@ -52,7 +52,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：用 `pypto_pro.language.gathermask` 从 64×128 FP16 源 tile 中抽取偶数列（`pattern_mode=1`），输出 64×64 FP16 tile。纯 vector kernel 使用 `make_tile_group` 管理 Tile 资源，并通过 `auto_mutex` 完成流水同步。
+下面是一个完整kernel：用`pypto_pro.language.gathermask`从64×128 FP16源tile中抽取偶数列（`pattern_mode=1`），输出64×64 FP16 tile。纯vector kernel使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成流水同步。
 
 ```python
 import pypto_pro.language as pl

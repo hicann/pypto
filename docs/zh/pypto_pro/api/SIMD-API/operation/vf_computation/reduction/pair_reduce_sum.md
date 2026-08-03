@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-将传入的 srcReg 中相邻两个数值相加，并将产生的结果保存在 dstReg 中的低位位置。
+将传入的srcReg中相邻两个数值相加，并将产生的结果保存在dstReg中的低位位置。
 
 ## 函数原型
 
@@ -28,7 +28,7 @@ dst = vf.pair_reduce_sum(src, preg)
 |---|---|---|
 | `dst` | 输出 | 目的操作数，向量寄存器 |
 | `src` | 输入 | 源操作数，向量寄存器 |
-| `preg` | 输入 | 掩码寄存器，类型为 `MaskReg`，mask 未筛选的元素在 dst 中置零 |
+| `preg` | 输入 | 掩码寄存器，类型为`MaskReg`，mask未筛选的元素在dst中置零 |
 
 ## 数据类型
 
@@ -36,7 +36,7 @@ dst = vf.pair_reduce_sum(src, preg)
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
@@ -45,6 +45,7 @@ dst = vf.pair_reduce_sum(src, preg)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -77,7 +78,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

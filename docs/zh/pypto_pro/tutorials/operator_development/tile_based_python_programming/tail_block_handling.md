@@ -1,7 +1,7 @@
 # 尾块处理：valid_shape、set_validshape、pad与compact
 
 本文档介绍PyPTO Pro编程里的**尾块（tail tile）**处理：当GM上的`pl.Tensor`
-的shape **不能被tile shape整除**时，边界上会出现比tile小的"不完整块"。本文讲清
+的shape**不能被tile shape整除**时，边界上会出现比tile小的“不完整块”。本文讲清
 下面这几个参数是如何**协同**工作的：
 
 | 参数 / API                    | 位置                          | 作用                                                   |
@@ -51,8 +51,8 @@ import pypto_pro.language as pl
 - `pl.Tensor` shape = `[129, 129]`
 - tile shape = `[64, 64]`
 
-`129 = 2 * 64 + 1`，所以每个轴被切成 **3段**：`[0:64]`、`[64:128]`、`[128:129]`（最后
-一段只有1个元素）。于是整张tensor被切成一个 **3 × 3的tile网格**，其中会出现
+`129 = 2 * 64 + 1`，所以每个轴被切成**3段**：`[0:64]`、`[64:128]`、`[128:129]`（最后
+一段只有1个元素）。于是整张tensor被切成一个**3 × 3的tile网格**，其中会出现
 **4种不同的有效形状**：
 
 ```text
@@ -94,17 +94,18 @@ class TileType:
     compact: Optional[int] = None
 ```
 
-- **`shape`** 决定片上占用（`prod(shape) * dtype_bytes`字节）。它必须是**编译期常量**，
+- **`shape`**决定片上占用（`prod(shape) * dtype_bytes`字节）。它必须是**编译期常量**，
   始终按满块（如`[64, 64]`）分配 —— 这样一个buffer可以复用来处理满块和各种尾块。
-- **`valid_shape`** 描述"里面实际有多少有效数据"。它有三种取值形态：
+- **`valid_shape`**描述“里面实际有多少有效数据”。它有三种取值形态：
 
 | `valid_shape`写法 | 含义                                          | 谁来给最终值                     |
 |--------------------|-----------------------------------------------|----------------------------------|
-| **不给（None）**   | 有效区域 == 物理`shape`（永远满块）。       | 编译期，取`shape`。            |
+| **不给（None）** | 有效区域 == 物理`shape`（永远满块）。       | 编译期，取`shape`。            |
 | **静态整数**，如`[64, 32]` | 每个tile有效区固定为该子矩形。      | 编译期常量。                    |
 | **`-1`哨兵**，如`[-1, -1]` | 有效行/列是**运行时**的，随尾块变化。 | 运行时`set_validshape`决定。 |
 
-> **注意**：`valid_shape`里**不能**直接写运行时标量变量（例如kernel的`rows`
+> [!CAUTION]注意
+> `valid_shape`里**不能**直接写运行时标量变量（例如kernel的`rows`
 > 参数）。`TileType`的shape/valid_shape会被提升到生成C++ 的函数序言处、声明tile
 > 的位置，运行时变量在那里尚未定义。因此parser会拒绝它
 > （`block_ops.py:_parse_tile_type_call`），要用运行时有效形状，请写`-1` + 后续调用
@@ -124,7 +125,7 @@ tile_type = pl.TileType(
 
 ### `-1`在codegen里发生了什么
 
-`-1`是"模板占位"的意思。CCE codegen的`ExtractValidShapeInfo`
+`-1`是“模板占位”的意思。CCE codegen的`ExtractValidShapeInfo`
 （`cce_codegen.cpp`）对每个valid_shape维度这样处理：
 
 | valid_shape元素   | 生成的Tile模板参数 | 是否需要构造参数         |
@@ -133,7 +134,7 @@ tile_type = pl.TileType(
 | `ConstInt(N > 0)`  | `N`（静态）          | 不需要                    |
 | 运行时`Var`       | `-1`                 | 需要 —— 用变量名做构造参数 |
 
-也就是说：写`-1`会生成一个"有效形状可在运行时设置"的Tile类型；`set_validshape`
+也就是说：写`-1`会生成一个“有效形状可在运行时设置”的Tile类型；`set_validshape`
 再把真实值填进这个Tile对象（生成`tile.SetValidShape(row, col);`）。
 
 ### 三种写法对照生成的C++
@@ -157,7 +158,7 @@ pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec,
 # 之后每次 set_validshape 生成：tile.SetValidShape(rows, cols);
 ```
 
-判断"要不要构造参数"的逻辑就是`ExtractValidShapeInfo`里的`needs_ctor`：只要某个维度
+判断“要不要构造参数”的逻辑就是`ExtractValidShapeInfo`里的`needs_ctor`：只要某个维度
 是`-1`或运行时`Var`，该维就走构造参数 / `SetValidShape`；纯静态整数则完全编进模板。
 
 ---
@@ -187,10 +188,10 @@ def validshape_kernel(
                             valid_shape=[-1, -1])          # 两轴都动态
     tile = pl.make_tile(tile_type, addr=0x0000, size=32768)
     with pl.section_vector():
+        pl.set_validshape(tile, [rows, cols])             # 先写有效形状，load 按此裁剪 GM 搬运
         pl.load(tile, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.set_validshape(tile, [rows, cols])             # 运行时写有效形状
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, tile, [0, 0])
@@ -198,7 +199,7 @@ def validshape_kernel(
 
 ### 有效形状如何裁剪GM搬运（这是尾块正确性的核心）
 
-`load` / `store`在GM一侧要告诉硬件DMA "搬多少行、多少列"。当tile有`set_validshape`
+`load` / `store`在GM一侧要告诉硬件DMA “搬多少行、多少列”。当tile有`set_validshape`
 时，后端**不是**用tile的物理shape，而是回读tile的运行时有效形状
 （`GetValidRow()` / `GetValidCol()`）来生成GM的`SetShape<DIM_3, DIM_4>(...)`，见
 `EmitSetShapeIfDynamic`（`backend_cce_block_out_ops.cpp`）：
@@ -215,13 +216,13 @@ tensor.SetShape<DIM_3, DIM_4>(
    tensor只有129行，读第128行的尾块也不会碰到第129～191行的非法地址。
 2. **不会污染**：store尾块时只把有效区写回GM，padding区里的垃圾值不会写出去。
 
-> 因为后端是**回读tile的运行时有效形状**而不是缓存"最后一次set_validshape的表达
-> 式字符串"，所以`set_validshape`无论写在直线代码里、还是在`if/else`各分支里各写一
+> 因为后端是**回读tile的运行时有效形状**而不是缓存“最后一次set_validshape的表达
+> 式字符串”，所以`set_validshape`无论写在直线代码里、还是在`if/else`各分支里各写一
 > 次，都能得到正确的DMA尺寸。
 
 ### 静态子块：编译期就知道有效区
 
-不是所有"部分块"都要用`-1` + `set_validshape`。如果有效区在**编译期**就固定（例如你
+不是所有“部分块”都要用`-1` + `set_validshape`。如果有效区在**编译期**就固定（例如你
 永远只用一个`[64, 64]` buffer的左上`[64, 32]`），直接写静态`valid_shape`：
 
 ```python
@@ -248,9 +249,9 @@ pl.load(tile, a, [0, 0])       # 直接按 64x32 搬运
 
 ## `pad`与`fillpad` —— 填充区如何取值
 
-有效形状只是"逻辑边界"，物理buffer里有效区**之外**仍然是上一次遗留的垃圾值。对于
-**逐元素**算子这无所谓（我们只store有效区）。但对**归约 / matmul** 这类"会把整块读进
-去参与计算"的算子，垃圾值会污染结果 —— 比如对一个尾块做`maximum(dim=0)`，padding里的大数
+有效形状只是“逻辑边界”，物理buffer里有效区**之外**仍然是上一次遗留的垃圾值。对于
+**逐元素**算子这无所谓（我们只store有效区）。但对**归约 / matmul**这类“会把整块读进
+去参与计算”的算子，垃圾值会污染结果 —— 比如对一个尾块做`maximum(dim=0)`，padding里的大数
 会顶掉真正的最大值。
 
 `TileType.pad`声明填充区**应该**取什么值：
@@ -280,9 +281,9 @@ src = pl.make_tile(src_type, addr=0x0000, size=256)
 dst = pl.make_tile(dst_type, addr=0x0100, size=256)
 
 with pl.section_vector():
+    pl.set_validshape(src, [5, 7])   # 有效区 5x7，其余 3 行/1 列是 padding
     pl.load(src, x, [0, 0])
     # ... 同步 ...
-    pl.set_validshape(src, [5, 7])   # 有效区 5x7，其余 3 行/1 列是 padding
     pl.fillpad(dst, src)             # dst 的 padding 区按 pad=zero 清零
     # ... store dst ...
 ```
@@ -292,7 +293,7 @@ with pl.section_vector():
 | API | dst / src关系 | 用途 |
 | --- | --- | --- |
 | `pl.fillpad(dst, src)` | 不同址 | 默认模式，把`src`拷到`dst`并按`dst.pad`填充边界。 |
-| `pl.fillpad(dst, src, mode=pl.FillPadMode.INPLACE)` | **同址**（`addr`相同） | 原地填充，省一块buffer。 |
+| `pl.fillpad(dst, src, mode=pl.FillPadMode.INPLACE)` |**同址**（`addr`相同） | 原地填充，省一块buffer。 |
 | `pl.fillpad(dst, src, mode=pl.FillPadMode.EXPAND)` | dst列数 > src | 列方向**展开**并填充（如`[8,8]` → `[8,16]`）。 |
 
 `EXPAND`模式例子（`test_pro_fillpad.py`）：`src`有效区`[5, 7]`，`dst`是`[8, 16]`且
@@ -306,9 +307,9 @@ dst_type = pl.TileType(shape=[8, 16], dtype=pl.DT_INT32,       # 更宽
 src = pl.make_tile(src_type, addr=0x0000, size=256)
 dst = pl.make_tile(dst_type, addr=0x0100, size=512)
 with pl.section_vector():
+    pl.set_validshape(src, [5, 7])
     pl.load(src, x, [0, 0])
     # ... 同步 ...
-    pl.set_validshape(src, [5, 7])
     pl.fillpad(dst, src, mode=pl.FillPadMode.EXPAND)  # [8,8] 有效 5x7 -> [8,16] 其余清零
     pl.store(z, dst, [0, 0])
 ```
@@ -316,7 +317,7 @@ with pl.section_vector():
 ### 为什么归约 / matmul尾块必须fillpad
 
 设想对一个`[64, 64]` tile的尾块（有效区`[3, 64]`）做`maximum(dim=0)`（每行取最大）。归约会把
-**整块** 64行都读进去；第3～63行是上一轮遗留的垃圾值，可能比真实最大值还大，结果就
+**整块**64行都读进去；第3～63行是上一轮遗留的垃圾值，可能比真实最大值还大，结果就
 错了。正确做法是`pad=min` + `fillpad`，把无效行填成dtype最小值，这样它们不会顶替真正
 的最大值：
 
@@ -330,8 +331,8 @@ out = pl.make_tile(pl.TileType(shape=[64, 1], dtype=pl.DT_FP16,
 tmp = pl.make_tile(pl.TileType(shape=[64, 64], dtype=pl.DT_FP16,
                                target_memory=pl.MemorySpace.Vec), addr=0x2080, size=64*64*2)
 with pl.section_vector():
+    pl.set_validshape(src, [rows, 64])   # 只有 rows 行有效，先设置再搬入
     pl.load(src, a, [0, 0])
-    pl.set_validshape(src, [rows, 64])   # 只有 rows 行有效
     pl.fillpad(src, src, mode=pl.FillPadMode.INPLACE)  # 无效行填 min（pad=min）
     pl.maximum(out, src, tmp, dim=0)      # 现在整块归约安全
 ```
@@ -366,7 +367,7 @@ Python Kernel中应直接使用整数值，不使用`pl.CompactMode`。
 
 ### 与尾块 / matmul的关系
 
-`compact`常和`valid_shape=[-1, -1]`一起出现在 **matmul操作数**（Mat / Left / Right）
+`compact`常和`valid_shape=[-1, -1]`一起出现在**matmul操作数**（Mat / Left / Right）
 上。原因是：matmul的L1 / L0 buffer按满块shape分配，但一个尾块只有效一部分；开
 `compact`让硬件按**有效行**紧凑摆放，减少L1/L0占用、提升带宽利用。真实例子
 （`fa/test_fa_perf_tkv_preload_dn_tile.py`）：
@@ -386,7 +387,7 @@ left_type  = pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16,
 
 `compact`是较进阶的布局参数，只在特定算子对片上摆放有特殊要求时才设置；纯逐元素的尾块
 场景用默认`null`即可。它与`valid_shape`/`pad`正交：`compact`影响的是buffer内部
-排布，不改变"哪块数据有效"，也不改变填充值。
+排布，不改变“哪块数据有效”，也不改变填充值。
 
 ---
 
@@ -520,7 +521,7 @@ buffer            (运行时行/列)          (归约/matmul 前)       store(�
 ```
 
 - **`shape`**：定物理buffer（永远满块，可复用）。
-- **`valid_shape=[-1,-1]`**：声明"有效边界运行时定"。
+- **`valid_shape=[-1,-1]`**：声明“有效边界运行时定”。
 - **`set_validshape`**：每个tile填真实有效行/列；load/store据此裁剪GM搬运，天然
   防越界、防污染。
 - **`pad` + `fillpad`**：只有当算子会读到有效区之外（归约 / matmul）时才需要；把
@@ -532,9 +533,9 @@ buffer            (运行时行/列)          (归约/matmul 前)       store(�
 | 场景                                        | `valid_shape`      | `pad`  | `fillpad` | `compact` |
 |---------------------------------------------|--------------------|--------|-----------|-----------|
 | Vec逐元素、shape整除tile                 | 不给               | 默认   | 否        | 默认      |
-| Vec逐元素、shape **不整除**（尾块）        | `[-1, -1]`         | 默认   | 否        | 默认      |
-| Vec归约（`maximum(dim=0)`/softmax）尾块           | `[-1, -1]`         | `min`  | **是**    | 默认      |
-| Vec归约（`sum(dim=0)`）尾块                   | `[-1, -1]`         | `zero` | **是**    | 默认      |
+| Vec逐元素、shape**不整除**（尾块）        | `[-1, -1]`         | 默认   | 否        | 默认      |
+| Vec归约（`maximum(dim=0)`/softmax）尾块           | `[-1, -1]`         | `min`  |**是** | 默认      |
+| Vec归约（`sum(dim=0)`）尾块                   | `[-1, -1]`         | `zero` |**是** | 默认      |
 | matmul操作数（Mat/Left/Right）尾块         | `[-1, -1]`         | 默认   | 否        | `1`（normal） |
 | 有效区编译期固定                            | `[R, C]`静态      | 默认   | 否        | 默认      |
 
@@ -547,19 +548,19 @@ buffer            (运行时行/列)          (归约/matmul 前)       store(�
 
 ## 常见坑
 
-- **把运行时变量写进`valid_shape`。** `TileType(valid_shape=[rows, cols])`里
+- **把运行时变量写进`valid_shape`。**`TileType(valid_shape=[rows, cols])`里
   `rows/cols`是kernel参数时会被parser拒绝（tile声明被提升到函数序言，变量在那儿
   还没定义）。写`valid_shape=[-1, -1]`，再用`pl.set_validshape`给运行时值。
-- **忘了`fillpad`而直接对尾块做归约 / matmul。** `valid_shape`只裁剪GM搬运，不清
+- **忘了`fillpad`而直接对尾块做归约 / matmul。**`valid_shape`只裁剪GM搬运，不清
   理片上padding。做`maximum(dim=0)` / `sum(dim=0)` / matmul前，用`pad=min/max/zero` +
   `fillpad`把padding填成单位元，否则垃圾值污染结果。
-- **`size`按有效形状而不是物理shape算。** `make_tile(addr=..., size=...)`的`size`
-  是**物理** buffer字节数（`prod(shape)*dtype_bytes`），跟`valid_shape`无关。
-- **tile数用了`//`而不是ceildiv。** 覆盖尾块必须向上取整：
+- **`size`按有效形状而不是物理shape算。**`make_tile(addr=..., size=...)`的`size`
+  是**物理**buffer字节数（`prod(shape)*dtype_bytes`），跟`valid_shape`无关。
+- **tile数用了`//`而不是ceildiv。**覆盖尾块必须向上取整：
   `n_tiles = (N + TILE_N - 1) // TILE_N`。用`N // TILE_N`会漏掉尾块。
-- **多tile复用同一buffer却漏设`set_validshape`。** tile的有效形状是**有状态**的：
+- **多tile复用同一buffer却漏设`set_validshape`。**tile的有效形状是**有状态**的：
   上一轮设过`[1, 64]`，这一轮若是满块却忘了重设，就会仍按`[1, 64]`搬运。每轮都要
-  为当轮形状显式`set_validshape`（或走"统一计算一次"的写法）。
+  为当轮形状显式`set_validshape`（或走“统一计算一次”的写法）。
 
 ---
 

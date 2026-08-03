@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-从共享标量缓冲区（SSBUF）按字节地址偏移读取数据，填入一个具名 struct，用于在不同 pipe / 不同核之间接收少量元数据（如批次号、块号、地址偏移等）。
+从共享标量缓冲区（SSBUF）按字节地址偏移读取数据，填入一个具名struct，用于在不同pipe / 不同核之间接收少量元数据（如批次号、块号、地址偏移等）。
 
-SSBUF 是核内的标量便签缓冲区，按字节寻址，不是 tile 内存、不经硬件数据搬运通路，而是由标量（S）流水逐字拷贝。常用于跨核通信：一个核用 [`pypto_pro.language.ssbuf_store`](ssbuf_store.md) 写入，另一些核在 [`wait_cross_core`](../synchronization/set_cross_core_wait_cross_core.md) 之后读取。
+SSBUF是核内的共享标量缓冲区，按字节寻址，不是tile内存、不经硬件数据搬运通路，而是由标量（S）流水逐字拷贝。常用于跨核通信：一个核用[`pypto_pro.language.ssbuf_store`](ssbuf_store.md)写入，另一些核在[`wait_cross_core`](../synchronization/set_cross_core_wait_cross_core.md)之后读取。
 
 ## 函数原型
 
@@ -28,15 +28,15 @@ pypto_pro.language.ssbuf_load(struct_var, offset)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `struct_var` | 输出 | 接收数据的具名 struct（由 `pypto_pro.language.struct` 创建） |
-| `offset` | 输入 | SSBUF 字节地址偏移 |
+| `struct_var` | 输出 | 接收数据的具名struct（由`pypto_pro.language.struct`创建） |
+| `offset` | 输入 | SSBUF字节地址偏移 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `struct_var` | 输出 | 须为布局确定的 POD 具名 struct，且与写入时的 struct 布局一致；按 `sizeof(struct)` 逐 u32 字拷贝 |
-| `offset` | 输入 | 单位为字节（int 或 Expr），须与写入时使用的偏移一致，并落在本核 SSBUF 分区内 |
+| `struct_var` | 输出 | 须为布局确定的POD具名struct，且与写入时的struct布局一致；按`sizeof(struct)`逐u32字拷贝 |
+| `offset` | 输入 | 单位为字节（int或Expr），须与写入时使用的偏移一致，并落在本核SSBUF分区内 |
 
 ## 流水类型
 
@@ -44,7 +44,7 @@ S（标量/系统流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：vector 侧把元数据写入 SSBUF 并发跨核事件，cube 侧等待后用 `pypto_pro.language.ssbuf_load` 读取。
+下面是一个完整kernel：vector侧把元数据写入SSBUF并发跨核事件，cube侧等待后用`pypto_pro.language.ssbuf_load`读取。
 
 ```python
 import pypto_pro.language as pl

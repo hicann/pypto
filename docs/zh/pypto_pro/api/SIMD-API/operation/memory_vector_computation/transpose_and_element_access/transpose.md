@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-交换二维 tile 的两个轴，实现矩阵转置。
+交换二维tile的两个轴，实现矩阵转置。
 
 ## 函数原型
 
@@ -26,15 +26,15 @@ pypto_pro.language.transpose(out, src)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 转置结果 tile |
-| `src` | 输入 | 源 tile |
+| `out` | 输出 | 转置结果tile |
+| `src` | 输入 | 源tile |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：与 `src` 一致<br>shape：为 `src` 转置后的结果（如 `src` 为 `[64, 128]` 时 `out` 为 `[128, 64]`）<br>不可与 `src` 为同一 tile |
-| `src` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：二维 tile |
+| `out` | 输出 | 数据类型：与`src`一致<br>shape：为`src`转置后的结果（如`src`为`[64, 128]`时`out`为`[128, 64]`）<br>不可与`src`为同一tile |
+| `src` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：二维tile |
 
 ## 流水类型
 
@@ -42,7 +42,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：把 64×64 FP16 源 tile 转置后写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：把64×64 FP16源tile转置后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

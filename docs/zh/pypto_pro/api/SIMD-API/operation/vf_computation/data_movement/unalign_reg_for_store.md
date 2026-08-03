@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-为非对齐存储分配 alignment tracker 寄存器。该寄存器贯穿后续的 `vf.store_unalign` / `vf.store_unalign_post` 调用链，用于追踪未对齐字节的累积状态。
+为非对齐存储分配alignment tracker寄存器。该寄存器贯穿后续的`vf.store_unalign` / `vf.store_unalign_post`调用链，用于追踪未对齐字节的累积状态。
 
 ## 函数原型
 
@@ -32,16 +32,17 @@ align_reg = vf.unalign_reg_for_store()
 
 ## 返回值说明
 
-返回 UnalignReg 类型，供 `vf.store_unalign` 和 `vf.store_unalign_post` 使用。
+返回UnalignReg类型，供`vf.store_unalign`和`vf.store_unalign_post`使用。
 
 ## 约束说明
 
 - 本接口操作数为寄存器，不涉及地址对齐。
-- 后续 `vf.store_unalign` 和 `vf.store_unalign_post` 必须使用带步长形式（4 参数 / 3 参数），无步长 legacy 形式在当前硬件上可能导致挂死。
+- 后续`vf.store_unalign`和`vf.store_unalign_post`必须使用带步长形式（4参数 / 3参数），无步长legacy形式在当前硬件上可能导致挂死。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -79,7 +80,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

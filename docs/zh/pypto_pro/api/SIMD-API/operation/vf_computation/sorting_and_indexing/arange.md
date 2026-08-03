@@ -14,13 +14,13 @@
 
 ## 功能说明
 
-从起始值 `start` 生成索引序列，用于构造索引向量。通过 `index_order` 选择生成方向：
+从起始值`start`生成索引序列，用于构造索引向量。通过`index_order`选择生成方向：
 
 - `pl.IndexOrder.INCREASE_ORDER`（默认）：递增，`dst[i] = start + i`。
 - `pl.IndexOrder.DECREASE_ORDER`：递减，`dst[i] = start - i`。
 
-> 说明：每一步的步长固定为 ±1，这是硬件特性。如需非 1 步长（如 `start + i*step`），
-> 可在 `vf.arange` 之后追加一条 `vf.muls` 对结果整体缩放。
+> 说明：每一步的步长固定为 ±1，这是硬件特性。如需非1步长（如`start + i*step`），
+> 可在`vf.arange`之后追加一条`vf.muls`对结果整体缩放。
 
 ## 函数原型
 
@@ -38,32 +38,33 @@ dst = vf.arange(start, index_order=pl.IndexOrder.DECREASE_ORDER, dtype=pl.DT_UIN
 |---|---|---|
 | `dst` | 输出 | 目标向量寄存器，存放生成的序列 |
 | `start` | 输入 | 序列起始值（整型标量或表达式） |
-| `index_order` | 输入 | 可选关键字参数，生成方向。`pl.IndexOrder.INCREASE_ORDER`（默认，递增）或 `pl.IndexOrder.DECREASE_ORDER`（递减） |
-| `dtype` | 输入 | 必选，指定目标寄存器的数据类型（如 `pl.DT_UINT32`、`pl.DT_INT32` 等）。由于标量源无法推断寄存器数据类型，必须显式指定 |
+| `index_order` | 输入 | 可选关键字参数，生成方向。`pl.IndexOrder.INCREASE_ORDER`（默认，递增）或`pl.IndexOrder.DECREASE_ORDER`（递减） |
+| `dtype` | 输入 | 必选，指定目标寄存器的数据类型（如`pl.DT_UINT32`、`pl.DT_INT32`等）。由于标量源无法推断寄存器数据类型，必须显式指定 |
 
 ## 数据类型
 
-支持的 dst 数据类型：INT8、UINT8、INT16、UINT16、INT32、UINT32、FP16、FP32、INT64、UINT64。
+支持的dst数据类型：INT8、UINT8、INT16、UINT16、INT32、UINT32、FP16、FP32、INT64、UINT64。
 
-> 说明：INT64/UINT64（b64）由于单条指令不支持 8 字节元素，底层走两寄存器序列（高 32 位置 0 + 低 32 位 int32 索引 + 整体加起始值合并），生成结果与 int32 索引等价但为 64 位宽。
+> 说明：INT64/UINT64（b64）由于单条指令不支持8字节元素，底层走两寄存器序列（高32位置0 + 低32位int32索引 + 整体加起始值合并），生成结果与int32索引等价但为64位宽。
 
-## dtype 说明
+## dtype说明
 
-`vf.arange` 的源操作数为标量值，无法从中推断目标寄存器的数据类型，因此必须通过 `dtype` 参数显式指定。通常用于生成整型索引序列，默认使用 `pl.DT_UINT32`。
+`vf.arange`的源操作数为标量值，无法从中推断目标寄存器的数据类型，因此必须通过`dtype`参数显式指定。通常用于生成整型索引序列，默认使用`pl.DT_UINT32`。
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
-- 每一步步长固定为 ±1（硬件特性），`index_order` 只改变方向，不改变步长绝对值。
+- 每一步步长固定为 ±1（硬件特性），`index_order`只改变方向，不改变步长绝对值。
 
 ## 调用示例
 
 递增序列：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -92,7 +93,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     out = torch.empty([1, 64], device=device, dtype=torch.int32)
@@ -110,6 +112,7 @@ if __name__ == "__main__":
 递减序列：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -138,7 +141,8 @@ def example_kernel_dec(
 
 
 def test_example_2():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     out = torch.empty([1, 64], device=device, dtype=torch.int32)

@@ -102,8 +102,8 @@ def tile_subview_vshape_kernel(
     )
     with pl.section_vector():
         tile = tile_group.next()
-        pl.load(tile, a, [0, 0])
         pl.set_validshape(tile, [6, 40])
+        pl.load(tile, a, [0, 0])
         sub1 = tile[2:6, 16:50]
         pl.store(out1, sub1, [0, 0])
 

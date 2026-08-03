@@ -1,6 +1,6 @@
 # TilingKey
 
-本文档介绍 **TilingKey**：用有限个编译期配置为同一份PyPTO Pro kernel源码生成多个专用
+本文档介绍**TilingKey**：用有限个编译期配置为同一份PyPTO Pro kernel源码生成多个专用
 实例，并在launch时选择其中一个实例。它用于会改变代码路径、tile模板或数据布局的少数
 模式。
 
@@ -147,7 +147,7 @@ key = {"HasAtten": 1, "BlockM": 128}
 attention_kernel[None, num_cores, key](q, k, out)
 ```
 
-dict的字段必须与schema **完全一致**：
+dict的字段必须与schema**完全一致**：
 
 - 每个字段都必须出现，且不能有额外字段；
 - 值必须属于该字段的`values`；

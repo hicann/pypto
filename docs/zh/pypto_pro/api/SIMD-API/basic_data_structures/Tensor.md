@@ -14,13 +14,13 @@
 
 ## 功能说明
 
-全局内存（GM）中的多维张量类型标注，是 kernel 的输入/输出参数类型。
+全局内存（GM）中的多维张量类型标注，是kernel的输入/输出参数类型。
 
-`pypto_pro.language.Tensor` 主要用于：
+`pypto_pro.language.Tensor`主要用于：
 
-1. kernel 函数签名中声明 GM 张量参数
-2. 配合 [`pypto_pro.language.load`](../operation/memory_data_movement/load.md)/[`pypto_pro.language.store`](../operation/memory_data_movement/store.md) 做 GM↔UB 搬运
-3. 通过 `=` 赋值创建别名，与原变量共享同一段 GM 内存；支持链式别名，创建别名后重新绑定原变量不会改变已有别名的指向
+1. kernel函数签名中声明GM张量参数
+2. 配合[`pypto_pro.language.load`](../operation/memory_data_movement/load.md)/[`pypto_pro.language.store`](../operation/memory_data_movement/store.md)做GM↔UB搬运
+3. 通过`=`赋值创建别名，与原变量共享同一段GM内存；支持链式别名，创建别名后重新绑定原变量不会改变已有别名的指向
 
 ## 函数原型
 
@@ -41,20 +41,20 @@ pypto_pro.language.Tensor[[shape], dtype, layout]
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `shape` | 输入 | 维度列表<br>固定维度：正整数，如 `[64, 128]`<br>动态维度：`pypto_pro.language.DYNAMIC`<br>编译期特化维度：`pypto_pro.language.STATIC`<br>末尾 `...`：其余维度均按 `STATIC` 处理<br>不同策略可混用，如 `[64, pl.DYNAMIC, pl.STATIC]` |
-| `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md) 枚举值<br>常用：`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_INT8`、`pypto_pro.language.DT_INT32` |
-| `layout` | 输入 | [`pypto_pro.language.TensorLayout`](TensorLayout.md) 枚举值或 `None`（默认）<br>`pypto_pro.language.ND`（非分形行主序）/ `pypto_pro.language.DN`（非分形 DN 布局标记）/ `pypto_pro.language.NZ`（NZ 分形布局）<br>不指定时为 `None`（后端按 `pypto_pro.language.ND` 处理） |
+| `shape` | 输入 | 维度列表<br>固定维度：正整数，如`[64, 128]`<br>动态维度：`pypto_pro.language.DYNAMIC`<br>编译期特化维度：`pypto_pro.language.STATIC`<br>末尾`...`：其余维度均按`STATIC`处理<br>不同策略可混用，如`[64, pl.DYNAMIC, pl.STATIC]` |
+| `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md)枚举值<br>常用：`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_INT8`、`pypto_pro.language.DT_INT32` |
+| `layout` | 输入 | [`pypto_pro.language.TensorLayout`](TensorLayout.md)枚举值或`None`（默认）<br>`pypto_pro.language.ND`（非分形行主序）/ `pypto_pro.language.DN`（非分形DN布局标记）/ `pypto_pro.language.NZ`（NZ分形布局）<br>不指定时为`None`（后端按`pypto_pro.language.ND`处理） |
 
-## shape 维度策略
+## shape维度策略
 
-| shape 写法 | 维度来源 | 编译行为 |
+| shape写法 | 维度来源 | 编译行为 |
 |---|---|---|
-| 正整数，如 `128` | 类型标注中固定 | 调用时对应维度须等于该整数 |
+| 正整数，如`128` | 类型标注中固定 | 调用时对应维度须等于该整数 |
 | `pl.DYNAMIC` | 调用时读取实际维度 | 维度值不参与编译缓存键，不同取值复用同一编译变体 |
 | `pl.STATIC` | 调用时读取实际维度 | 维度值固化到当前编译变体；取值变化时生成新的编译变体 |
-| 末尾 `...` | 调用时展开剩余维度 | 展开的各维均按 `pl.STATIC` 处理 |
+| 末尾`...` | 调用时展开剩余维度 | 展开的各维均按`pl.STATIC`处理 |
 
-kernel 内可通过 `tensor.shape[i]` 读取对应维度。固定整数和绑定后的 `pl.STATIC` 在当前编译变体中是编译期常量，`pl.DYNAMIC` 保留为运行时维度。
+kernel内可通过`tensor.shape[i]`读取对应维度。固定整数和绑定后的`pl.STATIC`在当前编译变体中是编译期常量，`pl.DYNAMIC`保留为运行时维度。
 
 ## 调用示例
 
@@ -73,9 +73,9 @@ y: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]
 dynamic_tensor: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32]
 ```
 
-### Tensor 别名
+### Tensor别名
 
-Tensor 别名使用普通赋值创建。赋值不会复制数据，别名可用于 `load`、`store` 等接收 Tensor 的操作。以下代码为 kernel 函数体内的使用片段，其中 `input_tensor`、`replacement_tensor` 为 Tensor 参数，`input_tile`、`replacement_tile` 为已创建的 Tile：
+Tensor别名使用普通赋值创建。赋值不会复制数据，别名可用于`load`、`store`等接收Tensor的操作。以下代码为kernel函数体内的使用片段，其中`input_tensor`、`replacement_tensor`为Tensor参数，`input_tile`、`replacement_tile`为已创建的Tile：
 
 ```python
 # 一级别名和链式别名均指向首次传入的 input_tensor
@@ -91,9 +91,9 @@ pl.load(input_tile, original_input_alias, [0, 0])  # 仍从首次传入的 input
 pl.load(replacement_tile, input_tensor, [0, 0])     # 从 replacement_tensor 读取
 ```
 
-### DYNAMIC 动态维度
+### DYNAMIC动态维度
 
-以下完整 kernel 使用动态维度完成单 tile 加法。
+以下完整kernel使用动态维度完成单tile加法。
 
 ```python
 import pypto_pro.language as pl
@@ -118,9 +118,9 @@ def dynamic_tensor_kernel(
         pl.store(out, tile_out, [0, 0])
 ```
 
-### STATIC 编译期特化维度
+### STATIC编译期特化维度
 
-`pl.STATIC` 维度会按调用时的实际值进行编译期特化。首次出现一组新的 `pl.STATIC` 维度值时生成编译变体；后续调用的 `pl.STATIC` 维度值相同时复用已有变体，任一取值变化时生成新的变体。
+`pl.STATIC`维度会按调用时的实际值进行编译期特化。首次出现一组新的`pl.STATIC`维度值时生成编译变体；后续调用的`pl.STATIC`维度值相同时复用已有变体，任一取值变化时生成新的变体。
 
 ```python
 import pypto_pro.language as pl

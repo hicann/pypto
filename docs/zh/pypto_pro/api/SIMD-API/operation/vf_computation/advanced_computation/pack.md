@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-将源操作数 src 中的元素选取低 8 位（对于 b16 类型）、低 16 位（对于 b32 类型）、低 32 位（对于 b64 类型）写入 dst 的低半部分或高半部分。用于将宽类型数据压缩为窄类型数据。
+将源操作数src中的元素选取低8位（对于b16类型）、低16位（对于b32类型）、低32位（对于b64类型）写入dst的低半部分或高半部分。用于将宽类型数据压缩为窄类型数据。
 
-**图 1** Pack 示意图
+**图1**Pack示意图
 
 ![Pack](../../../../figures/pack_diagram.jpg)
 
@@ -26,7 +26,7 @@
 dst = vf.pack(src, part=pl.PackPart.LOWER, *, dtype=pl.DT_UINT8)
 ```
 
-> 本接口为统一接口，同时支持 RegTensor 和 MaskReg 输入。当源操作数为 MaskReg 时，目标寄存器自动推断为 MaskReg。
+> 本接口为统一接口，同时支持RegTensor和MaskReg输入。当源操作数为MaskReg时，目标寄存器自动推断为MaskReg。
 
 ## 参数说明
 
@@ -34,18 +34,18 @@ dst = vf.pack(src, part=pl.PackPart.LOWER, *, dtype=pl.DT_UINT8)
 |---|---|---|
 | `dst` | 输出 | 目的操作数，向量寄存器。数据类型为压缩后的窄类型 |
 | `src` | 输入 | 源操作数，向量寄存器。数据类型为压缩前的宽类型 |
-| `part` | 输入 | 枚举类型，用于控制写入 dst 的低半部分还是高半部分。``pl.PackPart.LOWER``：低位模式，写入 dst 的低半部分；``pl.PackPart.UPPER``：高位模式，写入 dst 的高半部分。默认 ``pl.PackPart.LOWER``。注：RegTraitNumTwo 只支持 ``pl.PackPart.LOWER`` 模式 |
-| `dtype` | 输入 | 必选，指定目标寄存器的数据类型（如 `pl.DT_UINT8`、`pl.DT_UINT16` 等）。由于压缩后目标类型与源类型不同，必须显式指定 |
+| `part` | 输入 | 枚举类型，用于控制写入dst的低半部分还是高半部分。``pl.PackPart.LOWER``：低位模式，写入dst的低半部分；``pl.PackPart.UPPER``：高位模式，写入dst的高半部分。默认``pl.PackPart.LOWER``。注：RegTraitNumTwo只支持``pl.PackPart.LOWER``模式 |
+| `dtype` | 输入 | RegTensor模式必选，指定目标寄存器的数据类型（如`pl.DT_UINT8`、`pl.DT_UINT16`等）；MaskReg模式保持寄存器类型，可省略 |
 
-## dtype 说明
+## dtype说明
 
-`vf.pack` 是类型压缩算子，将宽类型压缩为窄类型（如 UINT16→UINT8），目标寄存器的数据类型与源寄存器不同，无法从源操作数推断目标类型。因此必须通过 `dtype` 参数显式指定目标数据类型。
+RegTensor模式下，`vf.pack`将宽类型压缩为窄类型（如UINT16→UINT8），目标寄存器的数据类型与源寄存器不同，无法从源操作数推断，因此必须通过`dtype`参数显式指定目标数据类型。MaskReg模式不改变寄存器类型，可以省略`dtype`。
 
 ## 数据类型
 
 **源操作数和目的操作数的数据类型对应表**
 
-| dst 数据类型 | src 数据类型 |
+| dst数据类型 | src数据类型 |
 |---|---|
 | UINT8 | INT16 |
 | UINT8 | UINT16 |
@@ -56,7 +56,7 @@ dst = vf.pack(src, part=pl.PackPart.LOWER, *, dtype=pl.DT_UINT8)
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
@@ -65,6 +65,7 @@ dst = vf.pack(src, part=pl.PackPart.LOWER, *, dtype=pl.DT_UINT8)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -98,7 +99,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(0, 256, [1, 128], device=device, dtype=torch.int16)
@@ -113,11 +115,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## MaskReg 调用示例
+## MaskReg调用示例
 
-当源操作数为 MaskReg 时，`vf.pack` 提取掩码的偶数位 bit 到低半部分或高半部分。MaskReg 变体与 RegTensor 变体共用 `part=` 参数指定模式。
+当源操作数为MaskReg时，`vf.pack`提取掩码的偶数位bit到低半部分或高半部分。MaskReg变体与RegTensor变体共用`part=`参数指定模式。
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -156,7 +159,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

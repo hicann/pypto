@@ -68,11 +68,11 @@ dst = vf.shift_right(src, shift_reg, preg)
 | INT64 | INT64 | INT64 |
 | UINT64 | UINT64 | INT64 |
 
-`shift`为标量时，src/dst 支持 INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64，移位量为标量整型。
+`shift`为标量时，src/dst支持INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64，移位量为标量整型。
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
@@ -85,6 +85,7 @@ dst = vf.shift_right(src, shift_reg, preg)
 标量移位（所有元素统一右移）：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -117,7 +118,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(0, 2**31 - 1, [1, 64], device=device, dtype=torch.int32)
@@ -135,6 +137,7 @@ if __name__ == "__main__":
 向量移位（逐元素右移）：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -172,7 +175,8 @@ def example_kernel_vector(
 
 
 def test_example_2():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(0, 2**31 - 1, [1, 64], device=device, dtype=torch.int32)

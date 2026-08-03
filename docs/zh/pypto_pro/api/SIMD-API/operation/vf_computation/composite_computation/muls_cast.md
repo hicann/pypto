@@ -36,12 +36,12 @@ dst = vf.muls_cast(src, scalar, preg, dtype=pl.DT_FP16, layout=pl.CastLayout.ONE
 | `src` | 输入 | 源操作数（FP32） |
 | `scalar` | 输入 | 标量源操作数 |
 | `preg` | 输入 | 掩码寄存器 |
-| `dtype` | 输入 | 必选，指定目标寄存器的数据类型。由于乘法后进行类型转换（FP32→FP16），目标类型与源类型不同，必须显式指定，通常为 `pl.DT_FP16` |
-| `layout` | 输入 | 可选，结果放置半区：`pl.CastLayout.ZERO`（偶数半区，默认，PART_EVEN）或 `pl.CastLayout.ONE`（奇数半区，PART_ODD） |
+| `dtype` | 输入 | 必选，指定目标寄存器的数据类型。由于乘法后进行类型转换（FP32→FP16），目标类型与源类型不同，必须显式指定，通常为`pl.DT_FP16` |
+| `layout` | 输入 | 可选，结果放置半区：`pl.CastLayout.ZERO`（偶数半区，默认，PART_EVEN）或`pl.CastLayout.ONE`（奇数半区，PART_ODD） |
 
-## dtype 说明
+## dtype说明
 
-`vf.muls_cast` 先将 FP32 源操作数与标量相乘，再转换为 FP16 类型写入目标寄存器。目标寄存器的数据类型与源寄存器不同（FP32→FP16），无法从源操作数推断目标类型，因此必须通过 `dtype` 参数显式指定。
+`vf.muls_cast`先将FP32源操作数与标量相乘，再转换为FP16类型写入目标寄存器。目标寄存器的数据类型与源寄存器不同（FP32→FP16），无法从源操作数推断目标类型，因此必须通过`dtype`参数显式指定。
 
 ## 数据类型
 
@@ -51,7 +51,7 @@ dst = vf.muls_cast(src, scalar, preg, dtype=pl.DT_FP16, layout=pl.CastLayout.ONE
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
@@ -63,6 +63,7 @@ dst = vf.muls_cast(src, scalar, preg, dtype=pl.DT_FP16, layout=pl.CastLayout.ONE
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -96,7 +97,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

@@ -14,26 +14,26 @@
 
 ## 功能说明
 
-该指令会根据索引值 index 将源操作数收集到目的操作数 dstReg 中。通过 `data_copy_mode` 选择收集粒度：
+该指令会根据索引值index将源操作数收集到目的操作数dstReg中。通过`data_copy_mode`选择收集粒度：
 
-- `pl.DataCopyMode.NORM`（默认）：按元素收集，index 单位为元素。
-- `pl.DataCopyMode.DATA_BLOCK_LOAD`：按 DataBlock（32B）收集，index 单位为字节且需 32B 对齐。
+- `pl.DataCopyMode.NORM`（默认）：按元素收集，index单位为元素。
+- `pl.DataCopyMode.DATA_BLOCK_LOAD`：按DataBlock（32B）收集，index单位为字节且需32B对齐。
 
-> 说明：原独立接口 `vf.gatherb` 已合并进 `vf.gather`，等价于 `vf.gather(..., data_copy_mode=pl.DataCopyMode.DATA_BLOCK_LOAD)`。
+> 说明：原独立接口`vf.gatherb`已合并进`vf.gather`，等价于`vf.gather(..., data_copy_mode=pl.DataCopyMode.DATA_BLOCK_LOAD)`。
 
-### NORM 模式（按元素收集）
+### NORM模式（按元素收集）
 
-根据索引值 indexReg 将源操作数 srcReg 按元素收集到目的操作数 dstReg 中。收集过程如下图所示：
+根据索引值indexReg将源操作数srcReg按元素收集到目的操作数dstReg中。收集过程如下图所示：
 
-**图 1** Gather 功能说明
+**图1**Gather功能说明
 
 ![](../../../../figures/gather_function.jpg)
 
-### DATA_BLOCK_LOAD 模式（按 DataBlock 收集）
+### DATA_BLOCK_LOAD模式（按DataBlock收集）
 
-根据索引值 index 将源操作数按 DataBlock（32B）收集到目的操作数 dstReg 中。收集过程如下图所示：
+根据索引值index将源操作数按DataBlock（32B）收集到目的操作数dstReg中。收集过程如下图所示：
 
-**图 2** block 模式 Gather 功能说明
+**图2**block模式Gather功能说明
 
 ![](../../../../figures/block_mode_gather.jpg)
 
@@ -52,14 +52,14 @@ dst = vf.gather(tile, index, preg, data_copy_mode=pl.DataCopyMode.DATA_BLOCK_LOA
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `dst` | 输出 | 目的操作数，向量寄存器 |
-| `tile` | 输入 | 源操作数，UB 中的基地址，需要 32 字节对齐 |
-| `index` | 输入 | 索引值，向量寄存器，index 中的值可以重复。NORM 模式下为 dst 中每个元素相对于 baseAddr 的位置，单位：元素；DATA_BLOCK_LOAD 模式下为每个 DataBlock 相对于 baseAddr 的位置，单位：字节，且必须 32B 对齐 |
-| `preg` | 输入 | 掩码寄存器，类型为 `MaskReg` |
-| `data_copy_mode` | 输入 | 可选关键字参数，收集粒度。`pl.DataCopyMode.NORM`（默认，按元素）或 `pl.DataCopyMode.DATA_BLOCK_LOAD`（按 32B DataBlock） |
+| `tile` | 输入 | 源操作数，UB中的基地址，需要32字节对齐 |
+| `index` | 输入 | 索引值，向量寄存器，index中的值可以重复。NORM模式下为dst中每个元素相对于baseAddr的位置，单位：元素；DATA_BLOCK_LOAD模式下为每个DataBlock相对于baseAddr的位置，单位：字节，且必须32B对齐 |
+| `preg` | 输入 | 掩码寄存器，类型为`MaskReg` |
+| `data_copy_mode` | 输入 | 可选关键字参数，收集粒度。`pl.DataCopyMode.NORM`（默认，按元素）或`pl.DataCopyMode.DATA_BLOCK_LOAD`（按32B DataBlock） |
 
 ## 数据类型
 
-### NORM 模式（按元素）
+### NORM模式（按元素）
 
 | dst（T0） | baseAddr（T1） | index（T2） |
 |---|---|---|
@@ -77,23 +77,24 @@ dst = vf.gather(tile, index, preg, data_copy_mode=pl.DataCopyMode.DATA_BLOCK_LOA
 | UINT64 | UINT64 | UINT32 |
 | UINT64 | UINT64 | UINT64 |
 
-### DATA_BLOCK_LOAD 模式（按 32B DataBlock）
+### DATA_BLOCK_LOAD模式（按32B DataBlock）
 
 目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：INT8、UINT8、INT16、UINT16、FP16、BF16、INT32、UINT32、FP32、INT64、UINT64。
 
 索引值支持的数据类型为：UINT32。
 
-赋值形式 `dst = vf.gather(...)` 返回目标向量寄存器。
+赋值形式`dst = vf.gather(...)`返回目标向量寄存器。
 
 ## 约束说明
 
-- index 索引值对应的数据必须在 UB 有效地址范围内。
-- NORM 模式下，当 dst 为 b16 类型，baseAddr 为 b8 数据类型时，目的操作数的低 8 位与源操作数相同，高 8 位自动补 0。
-- DATA_BLOCK_LOAD 模式下，源操作数和目的操作数数据类型必须相同；index 索引值必须 32 字节对齐，即一个索引值对应 1 个 DataBlock。
+- index索引值对应的数据必须在UB有效地址范围内。
+- NORM模式下，当dst为b16类型，baseAddr为b8数据类型时，目的操作数的低8位与源操作数相同，高8位自动补0。
+- DATA_BLOCK_LOAD模式下，源操作数和目的操作数数据类型必须相同；index索引值必须32字节对齐，即一个索引值对应1个DataBlock。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -133,7 +134,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -149,9 +151,10 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-按 DataBlock（32B）收集（原 `vf.gatherb` 用法）：
+按DataBlock（32B）收集（原`vf.gatherb`用法）：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -191,7 +194,8 @@ def example_kernel(
 
 
 def test_example_2():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

@@ -1,6 +1,6 @@
 # TilingData
 
-本文档介绍 **TilingData**（亦称 *tiling类* / *tiling结构体*）：如何声明、如何传入
+本文档介绍**TilingData**（亦称*tiling类*/*tiling结构体*）：如何声明、如何传入
 kernel、如何在kernel体内读取其字段，以及如何使用数组字段。TilingData是把
 **运行时参数**——shape、stride、循环边界、算子选择器、缩放系数等——喂给已编译kernel
 的方式，而无需把它们固化进kernel签名。
@@ -34,7 +34,7 @@ source /usr/local/Ascend/ascend-toolkit/set_env.sh; python3 test_case.py
 
 ---
 
-## 什么是TilingData类？
+## TilingData类简介
 
 TilingData类是一个普通的Python `@dataclass`，其字段**全部**为以下之一：
 
@@ -72,9 +72,9 @@ class OpTiling:
 
 ## 声明接收TilingData的kernel
 
-加入一个用你的tiling类标注的参数。它**不是** tensor —— 而是运行时参数结构体。一种
+加入一个用你的tiling类标注的参数。它**不是**tensor —— 而是运行时参数结构体。一种
 常见而强大的模式是把它与裸指针输入（`pl.Ptr[dtype]`）结合，从tiling的shape重建
-tensor视图（即 "动态rank" kernel）：
+tensor视图（即 “动态rank” kernel）：
 
 ```python
 @dataclass
@@ -213,6 +213,8 @@ TilingData包含两个定长数组：`shape`用于把Rank为2～4的输入重建
 ```python
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass
 
 import logging
@@ -313,7 +315,8 @@ def ceildiv(a, b):
 
 
 def _run_case(shape, opkind, ref_fn, op_name):
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     torch.npu.set_device(device)
     torch.manual_seed(0)
     dtype = torch.float16
@@ -431,16 +434,16 @@ copy_kernel[None, 1](x, z, tiling)
 
 ## 常见坑
 
-- **不符合规范的字段类型。** 每个字段必须是`int`/`float`/`bool`或`T[N]`。
+- **不符合规范的字段类型。**每个字段必须是`int`/`float`/`bool`或`T[N]`。
   任何其他标注都会使该类无法通过`is_tiling_class()`，从而不会被当作TilingData。
-- **数组长度错误。** 赋给`int[8]`字段的序列必须恰好包含8个元素；长度不符会在
+- **数组长度错误。**赋给`int[8]`字段的序列必须恰好包含8个元素；长度不符会在
   JIT启动序列化时抛出`ValueError`。
-- **数组声明过大。** `T[N]`中的`N`必须是正整数字面量，且不能超过2048。
-- **TilingData不是最后一个参数。** 当前JIT只检查最后一个调用实参；应将TilingData
+- **数组声明过大。**`T[N]`中的`N`必须是正整数字面量，且不能超过2048。
+- **TilingData不是最后一个参数。**当前JIT只检查最后一个调用实参；应将TilingData
   放在Kernel形参和launch实参的末尾。
-- **字段顺序 / 布局不匹配。** dataclass的字段顺序*就是* struct布局。如果你的设备侧
+- **字段顺序 / 布局不匹配。**dataclass的字段顺序*就是* struct布局。如果你的设备侧
   struct期望某种填充或顺序，请精确镜像它。
-- **忘了它是运行时数据。** tiling字段是运行时值，而非parser能看作字面量的Python
+- **忘了它是运行时数据。**tiling字段是运行时值，而非parser能看作字面量的Python
   常量；请在`pl.range`、`pl.make_tensor`、算术与`if`条件中使用它们，而不要用在需要
   编译期Python `int`的地方（例如`TileType`的静态`shape`）。
 

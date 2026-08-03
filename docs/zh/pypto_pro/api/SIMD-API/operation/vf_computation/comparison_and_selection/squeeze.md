@@ -16,7 +16,7 @@
 
 将传入的src中被preg选择的有效元素依次复制到dst中，有效元素在dst中从低到高连续排列，剩余位置元素置为0，如下图所示。
 
-**图 1** Squeeze 计算示意图
+**图1**Squeeze计算示意图
 
 ![Squeeze计算示意图](../../../../figures/squeeze_calculation.jpg)
 
@@ -43,7 +43,7 @@ dst = vf.squeeze(src, preg, gather_mode=pl.SqueezeMode.NO_STORE_REG)
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
@@ -53,6 +53,7 @@ dst = vf.squeeze(src, preg, gather_mode=pl.SqueezeMode.NO_STORE_REG)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -85,7 +86,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(0, 100, [1, 64], device=device, dtype=torch.int32)

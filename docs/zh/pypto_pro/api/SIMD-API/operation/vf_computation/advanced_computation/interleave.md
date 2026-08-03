@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-给定源操作数寄存器 src0 和 src1，将 src0 和 src1 中的元素交织存入结果操作数 dst0 和 dst1 中。交织排列方式如下图所示，其中每个方格代表一个元素：
+给定源操作数寄存器src0和src1，将src0和src1中的元素交织存入结果操作数dst0和dst1中。交织排列方式如下图所示，其中每个方格代表一个元素：
 
 ![](../../../../figures/interleave_data_layout.jpg)
 
@@ -28,7 +28,7 @@ dst0, dst1 = vf.interleave(src0, src1)
 vf.interleave(dst0, dst1, src0, src1)
 ```
 
-> 本接口为统一接口，同时支持 RegTensor 和 MaskReg 输入。当源操作数为 MaskReg 时，目标寄存器自动推断为 MaskReg。
+> 本接口为统一接口，同时支持RegTensor和MaskReg输入。当源操作数为MaskReg时，目标寄存器自动推断为MaskReg。
 
 ## 参数说明
 
@@ -49,15 +49,16 @@ vf.interleave(dst0, dst1, src0, src1)
 
 ## 约束说明
 
-- src0、src1、dst0、dst1 的数据类型需要保持一致。
-- src0 和 src1 可以为同一个 `vf.reg_tensor`。
-- dst0 和 dst1 不能为同一个 `vf.reg_tensor`。
-- 允许源操作数和目的操作数为同一个 `vf.reg_tensor`，例如 `vf.interleave(src0, src1, src0, src1)`。
-- b64 数据类型下仅支持 RegTraitNumTwo。
+- src0、src1、dst0、dst1的数据类型需要保持一致。
+- src0和src1可以为同一个`vf.reg_tensor`。
+- dst0和dst1不能为同一个`vf.reg_tensor`。
+- 允许源操作数和目的操作数为同一个`vf.reg_tensor`，例如`vf.interleave(src0, src1, src0, src1)`。
+- b64数据类型下仅支持RegTraitNumTwo。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -94,7 +95,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 128], device=device, dtype=torch.float16)
@@ -110,11 +112,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## MaskReg 调用示例
+## MaskReg调用示例
 
-当源操作数为 MaskReg 时，`vf.interleave` 按位交织两个掩码寄存器。交织位宽由 MaskReg 的数据类型决定。
+当源操作数为MaskReg时，`vf.interleave`按位交织两个掩码寄存器。交织位宽由MaskReg的数据类型决定。
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -153,7 +156,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

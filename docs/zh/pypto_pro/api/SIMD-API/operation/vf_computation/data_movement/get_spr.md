@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-读取指定特殊寄存器的值，返回标量值。当前仅支持 AR 寄存器（`get_ar` 指令）。
+读取指定特殊寄存器的值，返回标量值。当前仅支持AR寄存器（`get_ar`指令）。
 
-AR 寄存器是一个特殊的地址寄存器，通常配合 `vf.squeeze` 使用——`vf.squeeze` 会将有效元素的总字节数存储到 AR 寄存器中，随后可通过 `pl.get_spr` 读取该值。
+AR寄存器是一个特殊的地址寄存器，通常配合`vf.squeeze`使用——`vf.squeeze`会将有效元素的总字节数存储到AR寄存器中，随后可通过`pl.get_spr`读取该值。
 
 ## 函数原型
 
@@ -26,25 +26,26 @@ ar_value = pl.get_spr()
 
 ## 参数说明
 
-无参数。当前仅支持读取 AR 寄存器。
+无参数。当前仅支持读取AR寄存器。
 
 ## 数据类型
 
-返回 int64_t 类型的标量值。
+返回int64_t类型的标量值。
 
 ## 返回值说明
 
-返回 `int64_t` 类型的标量值，为 AR 寄存器中的数值。
+返回`int64_t`类型的标量值，为AR寄存器中的数值。
 
 ## 约束说明
 
-- 当前仅支持读取 AR 寄存器，不支持其他特殊寄存器。
-- AR 寄存器的值由 `vf.squeeze` 写入，需在调用 `pl.get_spr` 之前先执行 `vf.squeeze`。
-- `get_ar()` 为 `__aicore__` 指令，不能在 `@pl.vector_function` 函数体内使用。应在 `@pl.jit` kernel 的非 VF 区域调用。
+- 当前仅支持读取AR寄存器，不支持其他特殊寄存器。
+- AR寄存器的值由`vf.squeeze`写入，需在调用`pl.get_spr`之前先执行`vf.squeeze`。
+- `get_ar()`为`__aicore__`指令，不能在`@pl.vector_function`函数体内使用。应在`@pl.jit` kernel的非VF区域调用。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -80,7 +81,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

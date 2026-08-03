@@ -77,8 +77,8 @@ def validshape_kernel(
     tile_group = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0])
     with pl.section_vector():
         tile = tile_group.current()
-        pl.load(tile, a, [0, 0])
         pl.set_validshape(tile, [rows, cols])
+        pl.load(tile, a, [0, 0])
         pl.store(out, tile, [0, 0])
 
 
@@ -87,11 +87,14 @@ def test_set_validshape():
     device = ST_DEVICE
     _require_a5(device)
     torch.manual_seed(0)
+    rows, cols = 37, 91
     a = torch.randn(64, 128, device=device, dtype=torch.float32)
     out = torch.zeros(64, 128, device=device, dtype=torch.float32)
-    validshape_kernel(a, 64, 128, out)
+    validshape_kernel(a, rows, cols, out)
     torch.npu.synchronize()
-    torch.testing.assert_close(out, a, rtol=1e-2, atol=1e-2)
+    expected = torch.zeros_like(a)
+    expected[:rows, :cols] = a[:rows, :cols]
+    torch.testing.assert_close(out, expected, rtol=1e-2, atol=1e-2)
     logging.info("set_validshape result equal!")
 
 

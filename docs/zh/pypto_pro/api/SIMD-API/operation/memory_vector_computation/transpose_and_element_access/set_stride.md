@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-更新 GM Tensor 的各维 stride。后续 `load` 和 `store` 按更新后的元素步长访问该 Tensor。
+更新GM Tensor的各维stride。后续`load`和`store`按更新后的元素步长访问该Tensor。
 
-常用于从 GM 中按非连续行间距聚集读取数据：通过将行 stride 设置为运行时传入的步长值，单次 `load` 即可把 GM 中间隔排列的若干行搬入同一块 UB tile。
+常用于从GM中按非连续行间距聚集读取数据：通过将行stride设置为运行时传入的步长值，单次`load`即可把GM中间隔排列的若干行搬入同一块UB tile。
 
 ## 函数原型
 
@@ -28,23 +28,23 @@ pypto_pro.language.set_stride(tensor, stride)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tensor` | 输入/输出 | 要更新 stride 的 GM Tensor |
+| `tensor` | 输入/输出 | 要更新stride的GM Tensor |
 | `stride` | 输入 | 各维元素步长序列 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tensor` | 输入/输出 | kernel 参数中的 GM Tensor；stride 在原 Tensor 上就地更新 |
-| `stride` | 输入 | 长度为 2 的列表 `[row_stride, col_stride]`，单位为 Tensor 元素<br>元素可为整型常量或运行时标量（如通过 `getval` 或 Tensor 下标从 GM 读取）<br>`col_stride` 通常为 `1`（行内连续）；`row_stride` 大于等于列数时实现跨行聚集 |
+| `tensor` | 输入/输出 | kernel参数中的GM Tensor；stride在原Tensor上就地更新 |
+| `stride` | 输入 | 长度为2的列表`[row_stride, col_stride]`，单位为Tensor元素<br>元素可为整型常量或运行时标量（如通过`getval`或Tensor下标从GM读取）<br>`col_stride`通常为`1`（行内连续）；`row_stride`大于等于列数时实现跨行聚集 |
 
 ## 流水类型
 
-S（标量流水）。该接口仅更新 Tensor 的 stride 描述符，不读写 Tile 缓冲区数据，不需要 buffer mutex 或跨流水同步。
+S（标量流水）。该接口仅更新Tensor的stride描述符，不读写Tile缓冲区数据，不需要buffer mutex或跨流水同步。
 
 ## 调用示例
 
-下面是一个完整 kernel：GM Tensor `x` 形状为 `[N_LINES, LINE]`，运行时从 `strides` 中读取行步长 `s`，用 `pypto_pro.language.set_stride` 将 `x` 的行 stride 更新为 `s`，随后单次 `load` 把第 0 行和第 `s/LINE` 行聚集搬入一块 `[2, LINE]` 的 UB tile。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：GM Tensor `x`形状为`[N_LINES, LINE]`，运行时从`strides`中读取行步长`s`，用`pypto_pro.language.set_stride`将`x`的行stride更新为`s`，随后单次`load`把第0行和第`s/LINE`行聚集搬入一块`[2, LINE]`的UB tile。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -73,6 +73,7 @@ def set_stride_basic_kernel(
 配合循环可批量聚集多组行：
 
 ```python
+# 此批量形式要求 strides 的 shape 为 [1, N_PAIRS]
 with pl.section_vector():
     for i in pl.range(0, N_PAIRS, 1):
         s = strides[0, i]

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-flag 式流水同步：置位/等待 flag，必须成对使用，约束 pipe 之间的执行顺序。
+flag式流水同步：置位/等待flag，必须成对使用，约束pipe之间的执行顺序。
 
 ## 函数原型
 
@@ -27,29 +27,29 @@ pypto_pro.language.system.sync_dst(*, set_pipe, wait_pipe, event_id)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `set_pipe` | 输入 | 置位 flag 的 pipe |
-| `wait_pipe` | 输入 | 等待 flag 的 pipe |
-| `event_id` | 输入 | 事件 id |
+| `set_pipe` | 输入 | 置位flag的pipe |
+| `wait_pipe` | 输入 | 等待flag的pipe |
+| `event_id` | 输入 | 事件id |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `set_pipe` | 输入 | `pypto_pro.language.PipeType.MTE2`（GM→UB 搬入）/ `pypto_pro.language.PipeType.V`（向量计算）/ `pypto_pro.language.PipeType.MTE3`（UB→GM 搬出）/ `pypto_pro.language.PipeType.S`（标量流水）/ `pypto_pro.language.PipeType.MTE1`（L1→L0 搬运）/ `pypto_pro.language.PipeType.M`（矩阵计算）/ `pypto_pro.language.PipeType.FIX`（fixpipe） |
-| `wait_pipe` | 输入 | 取值同 `set_pipe`<br>须与 `set_pipe` 不同，否则无意义 |
-| `event_id` | 输入 | 整型常量（静态）或运行时 Expr（动态）<br>同一对 pipe 之间不同 event_id 互不干扰，可用于区分多步同步 |
+| `set_pipe` | 输入 | `pypto_pro.language.PipeType.MTE2`（GM→UB搬入）/ `pypto_pro.language.PipeType.V`（向量计算）/ `pypto_pro.language.PipeType.MTE3`（UB→GM搬出）/ `pypto_pro.language.PipeType.S`（标量流水）/ `pypto_pro.language.PipeType.MTE1`（L1→L0搬运）/ `pypto_pro.language.PipeType.M`（矩阵计算）/ `pypto_pro.language.PipeType.FIX`（fixpipe） |
+| `wait_pipe` | 输入 | 取值同`set_pipe`<br>须与`set_pipe`不同，否则无意义 |
+| `event_id` | 输入 | 整型常量（静态）或运行时Expr（动态）<br>同一对pipe之间不同event_id互不干扰，可用于区分多步同步 |
 
 ## 典型同步模式
 
 | 场景 | set_pipe | wait_pipe | 说明 |
 |---|---|---|---|
-| load 后 V 才能计算 | MTE2 | V | 确保 GM→UB 搬运完成 |
-| 计算后 MTE3 才能 store | V | MTE3 | 确保向量计算完成 |
-| store 后 MTE2 才能 load | MTE3 | MTE2 | 确保 UB→GM 搬出完成再搬入新数据 |
+| load后V才能计算 | MTE2 | V | 确保GM→UB搬运完成 |
+| 计算后MTE3才能store | V | MTE3 | 确保向量计算完成 |
+| store后MTE2才能load | MTE3 | MTE2 | 确保UB→GM搬出完成再搬入新数据 |
 
 ## 调用示例
 
-下面是一个完整 kernel：从 GM 载入两个 FP32 输入，用 `sync_src`/`sync_dst` 约束 MTE2（load）→ V（计算）→ MTE3（store）的执行顺序。纯 vector kernel，同步用 `sync_src`/`sync_dst` 手写。
+下面是一个完整kernel：从GM载入两个FP32输入，用`sync_src`/`sync_dst`约束MTE2（load）→ V（计算）→ MTE3（store）的执行顺序。纯vector kernel，同步用`sync_src`/`sync_dst`手写。
 
 ```python
 import pypto_pro.language as pl

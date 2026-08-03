@@ -22,6 +22,8 @@
 
 ```python
 dst_mask = vf.le(a, b, preg)
+# 可选：向量比较时显式指定比较位宽
+dst_mask = vf.le(a, b, preg, cmp_dtype=pl.DT_UINT8)
 ```
 
 ## 参数说明
@@ -32,11 +34,11 @@ dst_mask = vf.le(a, b, preg)
 | `a` | 输入 | 源操作数 |
 | `b` | 输入 | 比较操作数，可以是标量或RegTensor |
 | `preg` | 输入 | 掩码寄存器，指定参与比较的元素范围 |
-| `cmp_dtype` | 输入 | 向量比较时指定比较位宽的数据类型。若未传入，则根据 `a` 的 dtype 自动推断。例如将 UINT16 寄存器按 UINT8 宽度比较时，传入 `cmp_dtype=pl.DT_UINT8` |
+| `cmp_dtype` | 输入 | 向量比较时指定比较位宽的数据类型。若未传入，则根据`a`的dtype自动推断。例如将UINT16寄存器按UINT8宽度比较时，传入`cmp_dtype=pl.DT_UINT8` |
 
 ## 数据类型
 
-| a、b 数据类型 | dst_mask 数据类型 |
+| a、b数据类型 | dst_mask数据类型 |
 |---|---|
 | INT8 | MaskReg |
 | UINT8 | MaskReg |
@@ -52,7 +54,7 @@ dst_mask = vf.le(a, b, preg)
 
 ## 返回值说明
 
-返回 `MaskReg` 类型的掩码寄存器，存放比较结果。
+返回`MaskReg`类型的掩码寄存器，存放比较结果。
 
 ## 约束说明
 
@@ -62,6 +64,7 @@ dst_mask = vf.le(a, b, preg)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -101,7 +104,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

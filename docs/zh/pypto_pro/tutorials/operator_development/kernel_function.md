@@ -90,13 +90,16 @@ with pl.section_vector():
 
 ## 核函数的调用
 
-PyPTO Pro中核函数通过 **bracket-launch** 语法发起，方括号内指定stream和block_dim（启动核数）：
+PyPTO Pro中核函数通过**bracket-launch**语法发起，方括号内指定stream和block_dim（启动核数）：
 
 ```python
+import os
 # 准备输入数据
-a = torch.rand(64, 64, device="npu:0", dtype=torch.float16)
-b = torch.rand(64, 64, device="npu:0", dtype=torch.float16)
-out = torch.empty(64, 64, device="npu:0", dtype=torch.float16)
+device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+device = f"npu:{device_id}"
+a = torch.rand(64, 64, device=device, dtype=torch.float16)
+b = torch.rand(64, 64, device=device, dtype=torch.float16)
+out = torch.empty(64, 64, device=device, dtype=torch.float16)
 
 # bracket-launch：[stream, block_dim]
 # None 表示默认 stream，num_cores 指定启动的核数
@@ -140,7 +143,7 @@ my_kernel[None, num_cores, {"NeedAttnMask": 0}](x, out)
 
 | 选项 | 说明 | 默认值 |
 |:---|:---|:---|
-| arch | 目标架构，当前可选"a5"；None为自动检测当前受支持设备的架构 | None |
+| arch | 目标架构，当前可选“a5”；None为自动检测当前受支持设备的架构 | None |
 | auto_mutex | 是否启用自动互斥锁插入 | False |
 | enable_print_debug | 是否启用设备侧调试打印 | None |
 | timeout | 编译超时时间（秒） | 60 |

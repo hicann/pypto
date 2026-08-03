@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-部分加法：将 src1 的有效区域（由 `valid_shape` 控制）加到 src0 上，结果写入 dst。src1 有效区域之外的部分不参与运算，dst 对应位置保持 src0 的值。
+部分加法：将src1的有效区域（由`valid_shape`控制）加到src0上，结果写入dst。src1有效区域之外的部分不参与运算，dst对应位置保持src0的值。
 
-典型场景：尾块处理——当 src1 的行数或列数小于 dst 时，只对重叠区域做加法，其余区域直接复制 src0。
+典型场景：尾块处理——当src1的行数或列数小于dst时，只对重叠区域做加法，其余区域直接复制src0。
 
 ## 函数原型
 
@@ -28,17 +28,17 @@ pypto_pro.language.partadd(out, src0, src1)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile |
-| `src0` | 输入 | 源 tile 0（基底值） |
-| `src1` | 输入 | 源 tile 1（部分加数） |
+| `out` | 输出 | 目标tile |
+| `src0` | 输入 | 源tile 0（基底值） |
+| `src1` | 输入 | 源tile 1（部分加数） |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：与 `src0` 一致<br>shape：与 `src0` 一致 |
+| `out` | 输出 | 数据类型：与`src0`一致<br>shape：与`src0`一致 |
 | `src0` | 输入 | 数据类型：b16、b32<br>shape：任意二维 |
-| `src1` | 输入 | 数据类型：与 `src0` 一致<br>shape：行数/列数 ≤ `src0`<br>须通过 `set_validshape` 设置有效形状 |
+| `src1` | 输入 | 数据类型：与`src0`一致<br>shape：行数/列数 ≤ `src0`<br>须通过`set_validshape`设置有效形状 |
 
 ## 流水类型
 
@@ -46,7 +46,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：src1（`cur_b`）仅前 32 行有效，用 `partadd` 把它加到 src0（`cur_a`）上，后 32 行保持 src0 不变。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：src1（`cur_b`）仅前32行有效，用`partadd`把它加到src0（`cur_a`）上，后32行保持src0不变。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -89,4 +89,4 @@ def partadd_kernel(
 ```
 <!-- pypto-doc-output:partadd:end -->
 
-第 0、1、30、31 行位于 `src1` 的有效区域，输出为 `x+y`；第 32、33 行位于有效区域之外，输出保持为 `x`。
+第0、1、30、31行位于`src1`的有效区域，输出为`x+y`；第32、33行位于有效区域之外，输出保持为`x`。

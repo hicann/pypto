@@ -14,25 +14,25 @@
 
 ## 功能说明
 
-从 UB tile 对齐加载数据到向量寄存器或掩码寄存器（MaskReg）。支持普通加载、广播加载、de-interleave 加载、post-update 连续加载和 MaskReg 加载模式。当目标变量已通过 `vf.create_mask` 预声明为 MaskReg 时，后端自动分派 MaskReg 加载路径。
+从UB tile对齐加载数据到向量寄存器或掩码寄存器（MaskReg）。支持普通加载、广播加载、de-interleave加载、post-update连续加载和MaskReg加载模式。当目标变量已通过`vf.create_mask`预声明为MaskReg时，后端自动分派MaskReg加载路径。
 
-数据搬入时，可以通过 `dist` 关键字参数配置搬运的数据分布模式，能够实现 broadcast、上采样、下采样、解压缩等功能。下图展示了 DIST_NORM、DIST_BRC_B16、DIST_UNPACK_B16 等分布模式的搬入示意：
+数据搬入时，可以通过`dist`关键字参数配置搬运的数据分布模式，能够实现broadcast、上采样、下采样、解压缩等功能。下图展示了DIST_NORM、DIST_BRC_B16、DIST_UNPACK_B16等分布模式的搬入示意：
 
-**图 1** 连续对齐搬入分布模式图示
+**图1**连续对齐搬入分布模式图示
 
 ![](../../../../figures/contiguous_aligned_load.jpg)
 
-MaskReg 目标支持三种分布模式：NORM（正常模式）、US（上采样模式，每 bit 重复两次）、DS（下采样模式，每间隔 1bit 舍弃）。各模式示意如下：
+MaskReg目标支持三种分布模式：NORM（正常模式）、US（上采样模式，每bit重复两次）、DS（下采样模式，每间隔1bit舍弃）。各模式示意如下：
 
-**图 2** LoadDist NORM 模式
+**图2**LoadDist NORM模式
 
 ![LoadDist-NORM模式](../../../../figures/load_dist_norm_mode.jpg)
 
-**图 3** LoadDist US 模式
+**图3**LoadDist US模式
 
 ![LoadDist-US模式](../../../../figures/load_dist_us_mode.jpg)
 
-**图 4** LoadDist DS 模式
+**图4**LoadDist DS模式
 
 ![LoadDist-DS模式](../../../../figures/load_dist_ds_mode.jpg)
 
@@ -41,9 +41,6 @@ MaskReg 目标支持三种分布模式：NORM（正常模式）、US（上采样
 ```python
 # 普通对齐加载（赋值形式）
 dst = vf.load_align(tile, offset)
-
-# 普通对齐加载（语句形式，dst 需预声明）
-vf.load_align(dst, tile, offset)
 
 # 广播加载
 dst = vf.load_align(tile, offset, *, dist=pl.LoadDist.BRC_B32)
@@ -82,21 +79,21 @@ mask = vf.load_align(tile, addr_reg, dist=pl.LoadDist.NORM)  # AddrReg 偏移
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `dst` | 输出 | 目标向量寄存器 |
-| `dst_even` / `dst_odd` | 输出 | De-interleave 模式下的偶数/奇数目标寄存器 |
-| `tile` | 输入 | 源 UB tile |
-| `offset` | 输入 | 偏移量（元素数量）；也可传入由 `vf.create_addr_reg` 创建的 AddrReg 作为地址偏移寄存器；还支持传入 `[row, col]` 列表或元组，线性偏移为 `row * shape[1] + col`，其中 `row` 单位为 tile 的列数（即 `set_validshape[m, n]` 的 `n`），`col` 单位为元素个数，两者均支持表达式 |
-| `dist` | 输入 | 可选，数据分布模式：<br>RegTensor 目标：``pl.LoadDist.BRC_B32``（广播单个 B32 元素到整寄存器）、``pl.LoadDist.DINTLV_B8``（de-interleave 拆分为 B8 偶奇寄存器）、``pl.LoadDist.DINTLV_B32``（de-interleave 拆分为 B32 偶奇寄存器）<br>MaskReg 目标：``pl.LoadDist.NORM``（正常模式，搬运 VL/8）、``pl.LoadDist.US``（上采样模式，每 bit 重复两次）、``pl.LoadDist.DS``（下采样模式，每间隔 1bit 舍弃）。目标为 MaskReg 时需先用 ``vf.create_mask`` 预声明 |
-| `dtype` | 输入 | 可选，指定目标寄存器的数据类型。当源 tile 的数据类型与期望的寄存器数据类型不一致时需要指定（例如源 tile 为 FP32 但需要按 UINT32 位重解释加载到寄存器）。默认从源 tile 的数据类型推断 |
-| `post_update` | 输入 | 可选，`True` 时搬运后源地址自动累进，默认 `False`。适用于循环内连续加载，避免手动更新 offset |
-| `block_stride` | 输入 | 可选，DataBlock 加载模式下的块步长 |
-| `repeat_stride` | 输入 | 可选，DataBlock 加载模式下的重复步长 |
-| `data_copy_mode` | 输入 | 可选，数据拷贝模式：``pl.DataCopyMode.NORM``（默认）或 ``pl.DataCopyMode.DATA_BLOCK_COPY``（非连续 DataBlock 加载）。``DATA_BLOCK_LOAD`` 作为等价旧别名保留 |
+| `dst_even` / `dst_odd` | 输出 | De-interleave模式下的偶数/奇数目标寄存器 |
+| `tile` | 输入 | 源UB tile |
+| `offset` | 输入 | 普通加载时为偏移量（元素数量），也可传入由`vf.create_addr_reg`创建的AddrReg，或传入`[row, col]`列表或元组，此时线性偏移为`row * shape[1] + col`，`row`单位为tile的列数（即`set_validshape[m, n]`的`n`），`col`单位为元素个数，两者均支持表达式；DataBlock加载模式下，该位置改为传入控制有效元素的MaskReg |
+| `dist` | 输入 | 可选，数据分布模式：<br>RegTensor目标：``pl.LoadDist.BRC_B32``（广播单个B32元素到整寄存器）、``pl.LoadDist.DINTLV_B8``（de-interleave拆分为B8偶奇寄存器）、``pl.LoadDist.DINTLV_B32``（de-interleave拆分为B32偶奇寄存器）<br>MaskReg目标：``pl.LoadDist.NORM``（正常模式，搬运VL/8）、``pl.LoadDist.US``（上采样模式，每bit重复两次）、``pl.LoadDist.DS``（下采样模式，每间隔1bit舍弃）。目标为MaskReg时需先用``vf.create_mask``预声明 |
+| `dtype` | 输入 | 可选，指定目标寄存器的数据类型。当源tile的数据类型与期望的寄存器数据类型不一致时需要指定（例如源tile为FP32但需要按UINT32位重解释加载到寄存器）。默认从源tile的数据类型推断 |
+| `post_update` | 输入 | 可选，`True`时搬运后源地址自动累进，默认`False`。适用于循环内连续加载，避免手动更新offset |
+| `block_stride` | 输入 | 可选，DataBlock加载模式下的块步长 |
+| `repeat_stride` | 输入 | 可选，DataBlock加载且启用`post_update`时的重复步长，默认`0` |
+| `data_copy_mode` | 输入 | 可选，数据拷贝模式：``pl.DataCopyMode.NORM``（默认）或``pl.DataCopyMode.DATA_BLOCK_COPY``（非连续DataBlock加载）。``DATA_BLOCK_LOAD``作为等价旧别名保留 |
 
-## dtype 说明
+## dtype说明
 
-采用赋值形式（`dst = vf.load_align(...)`）时，目标寄存器的数据类型默认从源 tile 推断。当需要将 FP32 tile 的比特位按整型（如 UINT32、UINT16）解释加载时，必须通过 `dtype` 参数显式指定目标寄存器的数据类型。
+采用赋值形式（`dst = vf.load_align(...)`）时，目标寄存器的数据类型默认从源tile推断。当需要将FP32 tile的比特位按整型（如UINT32、UINT16）解释加载时，必须通过`dtype`参数显式指定目标寄存器的数据类型。
 
-例如：源 tile 的数据类型为 `pl.DT_FP32`，但需要将其比特位按 `pl.DT_UINT32` 加载到寄存器进行位运算（如移位、与、或等），此时需要指定 `dtype=pl.DT_UINT32`。
+例如：源tile的数据类型为`pl.DT_FP32`，但需要将其比特位按`pl.DT_UINT32`加载到寄存器进行位运算（如移位、与、或等），此时需要指定`dtype=pl.DT_UINT32`。
 
 ## 数据类型
 
@@ -116,16 +113,17 @@ mask = vf.load_align(tile, addr_reg, dist=pl.LoadDist.NORM)  # AddrReg 偏移
 
 ## 返回值说明
 
-赋值形式 `dst = vf.load_align(...)` 返回目标向量寄存器。语句形式 `vf.load_align(dst, ...)` 无返回值。
+赋值形式`dst = vf.load_align(...)`返回目标向量寄存器。语句形式`vf.load_align(dst, ...)`无返回值。
 
 ## 约束说明
 
-- 源地址需要 32 字节对齐。
-- 使用 AddrReg 偏移时，按目标类型自动分派：目标为向量寄存器走对齐加载，目标为 MaskReg 走 MaskReg 加载（指针按 uint32_t 处理）。
+- 源地址需要32字节对齐。
+- 使用AddrReg偏移时，按目标类型自动分派：目标为向量寄存器走对齐加载，目标为MaskReg走MaskReg加载（指针按uint32_t处理）。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -162,7 +160,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -177,11 +176,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## De-interleave 加载示例
+## De-interleave加载示例
 
-使用 `dist=pl.LoadDist.DINTLV_B32` 将连续数据拆分为偶数/奇数两个寄存器：
+使用`dist=pl.LoadDist.DINTLV_B32`将连续数据拆分为偶数/奇数两个寄存器：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -216,7 +216,8 @@ def example_kernel(
 
 
 def test_example_2():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -236,9 +237,9 @@ if __name__ == "__main__":
 
 ## 列表偏移加载示例
 
-`offset` 参数支持传入 `[row, col]` 列表（或元组），编译器自动计算线性偏移 `row * shape[1] + col`。其中 `row` 的单位为 tile 的列数（即 `set_validshape[m, n]` 配置的 `n` 值），`col` 的单位为元素个数。`row` 和 `col` 均支持表达式（如循环变量运算）。
+`offset`参数支持传入`[row, col]`列表（或元组），编译器自动计算线性偏移`row * shape[1] + col`。其中`row`的单位为tile的列数（即`set_validshape[m, n]`配置的`n`值），`col`的单位为元素个数。`row`和`col`均支持表达式（如循环变量运算）。
 
-该写法替代了旧版 `tile[a:a+1, b:b+1]` 切片语法，语义完全一致：`a` 对应 `row`，`b` 对应 `col`。
+该写法替代了旧版`tile[a:a+1, b:b+1]`切片语法，语义完全一致：`a`对应`row`，`b`对应`col`。
 
 ```python
 import pypto_pro.language as pl
@@ -291,7 +292,7 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-`row` 和 `col` 也支持表达式，适合在循环中按行偏移加载：
+`row`和`col`也支持表达式，适合在循环中按行偏移加载：
 
 ```python
 import pypto_pro.language as pl
@@ -345,11 +346,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## AddrReg 偏移加载示例（RegTensor 模式）
+## AddrReg偏移加载示例（RegTensor模式）
 
-使用 `vf.create_addr_reg` 创建地址偏移寄存器，在循环中自动累进地址：
+使用`vf.create_addr_reg`创建地址偏移寄存器，在循环中自动累进地址：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -387,7 +389,8 @@ def example_kernel(
 
 
 def test_example_3():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 128], device=device, dtype=torch.float32)
@@ -402,11 +405,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## MaskReg 加载示例
+## MaskReg加载示例
 
-通过 `vf.create_mask` 预声明 MaskReg 后，使用 `dist` 关键字参数指定分布模式，将 UB 中的掩码数据加载到 MaskReg：
+通过`vf.create_mask`预声明MaskReg后，使用`dist`关键字参数指定分布模式，将UB中的掩码数据加载到MaskReg：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -452,7 +456,8 @@ def example_kernel(
 
 
 def test_example_4():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

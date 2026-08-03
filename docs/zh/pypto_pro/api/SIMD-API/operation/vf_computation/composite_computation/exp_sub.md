@@ -46,11 +46,11 @@ dst = vf.exp_sub(src0, src1, preg, layout=pl.CastLayout.ONE)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `dst` | 输出 | 目标向量寄存器 |
-| `src0` | 输入 | 源操作数 0 |
-| `src1` | 输入 | 源操作数 1 |
+| `src0` | 输入 | 源操作数0 |
+| `src1` | 输入 | 源操作数1 |
 | `preg` | 输入 | 掩码寄存器 |
-| `layout` | 输入 | 可选，结果放置半区：`pl.CastLayout.ZERO`（偶数半区，默认，PART_EVEN）或 `pl.CastLayout.ONE`（奇数半区，PART_ODD）。用于 half 结果 |
-| `dtype` | 输入 | 可选，目标寄存器数据类型。当 src 为 half 时，指定 `dtype=pl.DT_FP32` 可将源操作数提升精度到 float 再进行计算，产生 float 结果。默认与源操作数类型一致 |
+| `layout` | 输入 | 可选，结果放置半区：`pl.CastLayout.ZERO`（偶数半区，默认，PART_EVEN）或`pl.CastLayout.ONE`（奇数半区，PART_ODD）。用于half结果 |
+| `dtype` | 输入 | 可选，目标寄存器数据类型。当src为half时，指定`dtype=pl.DT_FP32`可将源操作数提升精度到float再进行计算，产生float结果。默认与源操作数类型一致 |
 
 ## 数据类型
 
@@ -61,7 +61,7 @@ dst = vf.exp_sub(src0, src1, preg, layout=pl.CastLayout.ONE)
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
@@ -74,9 +74,10 @@ dst = vf.exp_sub(src0, src1, preg, layout=pl.CastLayout.ONE)
 
 ## 调用示例
 
-### float 源 → float 结果
+### float源 → float结果
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -113,7 +114,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
@@ -129,11 +131,12 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-### half 源 → float 结果（低精度转高精度）
+### half源 → float结果（低精度转高精度）
 
-当源操作数为 half、目的操作数为 float 时，寄存器中 128 个 half 元素按相邻两两分组，`layout` 决定每组中参与计算的元素位置：`pl.CastLayout.ZERO`（默认）取偶数位（第 0 个），`pl.CastLayout.ONE` 取奇数位（第 1 个）。最终输出 64 个 float 元素。以下示例使用默认的 `layout=ZERO`，即取每组偶数位元素参与计算。
+当源操作数为half、目的操作数为float时，寄存器中128个half元素按相邻两两分组，`layout`决定每组中参与计算的元素位置：`pl.CastLayout.ZERO`（默认）取偶数位（第0个），`pl.CastLayout.ONE`取奇数位（第1个）。最终输出64个float元素。以下示例使用默认的`layout=ZERO`，即取每组偶数位元素参与计算。
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -171,7 +174,8 @@ def example_kernel_half_to_float(
 
 
 def test_example_half_to_float():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 128], device=device, dtype=torch.float16)

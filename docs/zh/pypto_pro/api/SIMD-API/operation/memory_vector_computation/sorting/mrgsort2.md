@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-多路归并排序：将 2 到 4 个已排序的源 tile 归并为一个有序输出。每个源 tile 内部已按降序排列（val-idx 对格式），`mrgsort2` 从中选取最大值依次写入 dst。
+多路归并排序：将2到4个已排序的源tile归并为一个有序输出。每个源tile内部已按降序排列（val-idx对格式），`mrgsort2`从中选取最大值依次写入dst。
 
-`exhausted` 参数标记某个源是否已耗尽，用于多步归并中处理长度不一致的源。
+`exhausted`参数标记某个源是否已耗尽，用于多步归并中处理长度不一致的源。
 
 ## 函数原型
 
@@ -28,22 +28,22 @@ pypto_pro.language.mrgsort2(src0, src1, dst, tmp, *args, exhausted=False)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 第一个已排序源 tile |
-| `src1` | 输入 | 第二个已排序源 tile |
-| `dst` | 输出 | 目标 tile，存放归并结果 |
-| `tmp` | 输入 | 临时 tile（硬件中间计算用） |
-| `*extra_srcs` | 输入 | 可选，额外的已排序源 tile（支持 3 路或 4 路归并） |
+| `src0` | 输入 | 第一个已排序源tile |
+| `src1` | 输入 | 第二个已排序源tile |
+| `dst` | 输出 | 目标tile，存放归并结果 |
+| `tmp` | 输入 | 临时tile（硬件中间计算用） |
+| `*extra_srcs` | 输入 | 可选，额外的已排序源tile（支持3路或4路归并） |
 | `exhausted` | 输入 | 是否有源已耗尽 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0`, `src1` | 输入 | 数据类型：b32（FP32 val-idx 对）<br>shape：行数为 1<br>内部已按降序排列 |
+| `src0`, `src1` | 输入 | 数据类型：b32（FP32 val-idx对）<br>shape：行数为1<br>内部已按降序排列 |
 | `dst` | 输出 | 数据类型：与源一致<br>shape：与源一致 |
 | `tmp` | 输入 | 数据类型：与源一致<br>shape：与源一致 |
-| `*extra_srcs` | 输入 | 可选的第 3、4 个源 tile，格式同上 |
-| `exhausted` | 输入 | `True` 或 `False`（默认） |
+| `*extra_srcs` | 输入 | 可选的第3、4个源tile，格式同上 |
+| `exhausted` | 输入 | `True`或`False`（默认） |
 
 ## 流水类型
 
@@ -51,7 +51,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：用 `pypto_pro.language.mrgsort2` 把两个已排序的源 tile 归并为一个有序输出。纯 vector kernel 使用 `make_tile_group` 管理 Tile 资源，并通过 `auto_mutex` 完成流水同步。
+下面是一个完整kernel：用`pypto_pro.language.mrgsort2`把两个已排序的源tile归并为一个有序输出。纯vector kernel使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成流水同步。
 
 ```python
 import pypto_pro.language as pl

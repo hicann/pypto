@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-将 `lhs` 与 `rhs` 逐元素比较，生成 bit-packed 掩码。`rhs` 既可以是 tile，也可以是标量，两种形式共用 `eq`、`ne`、`lt`、`le`、`gt`、`ge` 六个公开接口，比较关系由函数名表示。
+将`lhs`与`rhs`逐元素比较，生成bit-packed掩码。`rhs`既可以是tile，也可以是标量，两种形式共用`eq`、`ne`、`lt`、`le`、`gt`、`ge`六个公开接口，比较关系由函数名表示。
 
-掩码输出为 UINT8 类型，不能直接 store 为 FP32，需配合 [`pypto_pro.language.select`](../selection/select.md) 使用：先比较生成掩码，再按掩码选择两个 tile 中的元素。
+掩码输出为UINT8类型，不能直接store为FP32，需配合[`pypto_pro.language.select`](../selection/select.md)使用：先比较生成掩码，再按掩码选择两个tile中的元素。
 
 ## 函数原型
 
@@ -33,9 +33,9 @@ pypto_pro.language.ge(out, lhs, rhs)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 掩码 tile，存放 bit-packed 比较结果 |
-| `lhs` | 输入 | 左操作数 tile |
-| `rhs` | 输入 | 右操作数 tile 或标量 |
+| `out` | 输出 | 掩码tile，存放bit-packed比较结果 |
+| `lhs` | 输入 | 左操作数tile |
+| `rhs` | 输入 | 右操作数tile或标量 |
 
 比较接口对应关系：
 
@@ -52,9 +52,9 @@ pypto_pro.language.ge(out, lhs, rhs)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：UINT8（bit-packed 掩码）<br>shape 须与 `lhs` 一致<br>输出为 bit-packed 格式，不能直接 store 为 FP32，需配合 `pypto_pro.language.select` 使用 |
-| `lhs` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：与 `out` 一致 |
-| `rhs` | 输入 | tile：数据类型和 shape 须与 `lhs` 一致<br>标量：支持与 `lhs` 元素类型兼容的整型或浮点型常量，或运行时 Expr |
+| `out` | 输出 | 数据类型：UINT8（bit-packed掩码）<br>shape须与`lhs`一致<br>输出为bit-packed格式，不能直接store为FP32，需配合`pypto_pro.language.select`使用 |
+| `lhs` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：与`out`一致 |
+| `rhs` | 输入 | tile：数据类型和shape须与`lhs`一致<br>标量：支持与`lhs`元素类型兼容的整型或浮点型常量，或运行时Expr |
 
 ## 流水类型
 
@@ -62,9 +62,9 @@ V（向量计算流水）。
 
 ## 调用示例
 
-### Tile-Tile 比较
+### Tile-Tile比较
 
-`pypto_pro.language.gt` 输出 bit-packed mask，需配合 `pypto_pro.language.select` 使用。下面是一个完整 kernel：两 tile 逐元素比较（`>`），掩码为真取 `lhs`，为假取 `rhs`，等价于 `out = max(a, b)`。纯 vector kernel 使用 `make_tile_group` 管理 Tile 资源，并通过 `auto_mutex` 完成流水同步；`gt` 与 `select` 之间仍使用 `bar_v()` 完成 AIV subcore 间同步。
+`pypto_pro.language.gt`输出bit-packed mask，需配合`pypto_pro.language.select`使用。下面是一个完整kernel：两tile逐元素比较（`>`），掩码为真取`lhs`，为假取`rhs`，等价于`out = max(a, b)`。纯vector kernel使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成流水同步；`gt`与`select`之间仍使用`bar_v()`完成AIV subcore间同步。
 
 ```python
 import pypto_pro.language as pl
@@ -108,9 +108,9 @@ def gt_select_kernel(
 ```
 <!-- pypto-doc-output:comparison_tile:end -->
 
-### Tile-Scalar 比较
+### Tile-Scalar比较
 
-下面是一个完整 kernel：用 `pypto_pro.language.gt` 把 FP16 mask 与标量 `0.0` 比较生成 bit-packed 谓词，再用 `pypto_pro.language.select` 按谓词选择两个 FP32 tile 中的一个写回 GM。纯 vector kernel 使用 `make_tile_group` 管理 Tile 资源，并通过 `auto_mutex` 完成流水同步；`gt` 与 `select` 之间仍使用 `bar_v()` 完成 AIV subcore 间同步。
+下面是一个完整kernel：用`pypto_pro.language.gt`把FP16 mask与标量`0.0`比较生成bit-packed谓词，再用`pypto_pro.language.select`按谓词选择两个FP32 tile中的一个写回GM。纯vector kernel使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成流水同步；`gt`与`select`之间仍使用`bar_v()`完成AIV subcore间同步。
 
 ```python
 import pypto_pro.language as pl

@@ -16,7 +16,7 @@
 
 将源操作数中的浮点数元素截断为整数值（保留原数据类型），并存入目的操作数。
 
-如下图所示，浮点数 3.7 和 -2.3 经截断后分别变为 3.0 和 -2.0，即丢弃小数部分仅保留整数部分，数据类型保持不变：
+如下图所示，浮点数3.7和 -2.3经截断后分别变为3.0和 -2.0，即丢弃小数部分仅保留整数部分，数据类型保持不变：
 
 ![](../../../../figures/truncate_function.jpg)
 
@@ -32,7 +32,7 @@ dst = vf.truncate(src, preg)
 |---|---|---|
 | `dst` | 输出 | 目的操作数，向量寄存器 |
 | `src` | 输入 | 源操作数，向量寄存器 |
-| `preg` | 输入 | 掩码寄存器，类型为 `MaskReg`，mask 未筛选的元素在 dst 中置零 |
+| `preg` | 输入 | 掩码寄存器，类型为`MaskReg`，mask未筛选的元素在dst中置零 |
 
 ## 数据类型
 
@@ -40,15 +40,16 @@ dst = vf.truncate(src, preg)
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
-- FP32 类型只支持不饱和模式。
+- FP32类型只支持不饱和模式。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -81,7 +82,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

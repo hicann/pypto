@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-`vf.create_addr_reg` 用于创建地址偏移量寄存器（AddrReg），在多维循环中逐层累加地址偏移。AddrReg 可作为 `vf.load_align` 和 `vf.store_align` 的地址偏移参数，替代直接传入整数偏移量。
+`vf.create_addr_reg`用于创建地址偏移量寄存器（AddrReg），在多维循环中逐层累加地址偏移。AddrReg可作为`vf.load_align`和`vf.store_align`的地址偏移参数，替代直接传入整数偏移量。
 
-偏移量计算公式为 `offset = index0 * stride0 + index1 * stride1 + ...`，支持 1-4 层循环轴。在循环中，index 每次递增 1，AddrReg 的偏移量自动增加对应的 stride。
+偏移量计算公式为`offset = index0 * stride0 + index1 * stride1 + ...`，支持1-4层循环轴。在循环中，index每次递增1，AddrReg的偏移量自动增加对应的stride。
 
 ## 函数原型
 
@@ -38,7 +38,7 @@ a_reg = vf.create_addr_reg(index0, stride0, index1, stride1, index2, stride2, in
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `a_reg` | 输出 | AddrReg 地址偏移量寄存器 |
+| `a_reg` | 输出 | AddrReg地址偏移量寄存器 |
 | `index0` | 输入 | 最外层循环轴索引（循环变量） |
 | `stride0` | 输入 | 最外层循环轴对应的地址偏移量，单位为元素个数 |
 | `index1` | 输入 | 可选，第二层循环轴索引 |
@@ -47,31 +47,32 @@ a_reg = vf.create_addr_reg(index0, stride0, index1, stride1, index2, stride2, in
 | `stride2` | 输入 | 可选，第三层循环轴对应的地址偏移量 |
 | `index3` | 输入 | 可选，第四层循环轴索引 |
 | `stride3` | 输入 | 可选，第四层循环轴对应的地址偏移量 |
-| `dtype` | 输入 | 可选，模板参数对应的数据类型（默认 `pl.DT_FP32`）。决定元素宽度：b8/b16/b32/b64 |
+| `dtype` | 输入 | 可选，模板参数对应的数据类型（默认`pl.DT_FP32`）。决定元素宽度：b8/b16/b32/b64 |
 
 ## 数据类型
 
 | dtype | 元素宽度 |
 |---|---|
-| b8 | 1 字节 |
-| b16 | 2 字节 |
-| b32 | 4 字节 |
-| b64 | 8 字节 |
+| b8 | 1字节 |
+| b16 | 2字节 |
+| b32 | 4字节 |
+| b64 | 8字节 |
 
 ## 返回值说明
 
-返回 AddrReg 类型
+返回AddrReg类型
 
 ## 约束说明
 
-- AddrReg 数量上限为 8。
-- 由于硬件循环（HardwareLoop）限制，AddrReg 最多支持 4 层循环轴。
-- AddrReg 仅支持 `vf.load_align` 和 `vf.store_align` 搬运指令使用。
-- 通过 AddrReg 设置地址偏移进行搬运时，需要满足对应搬运指令的地址对齐约束。
+- AddrReg数量上限为8。
+- 由于硬件循环（HardwareLoop）限制，AddrReg最多支持4层循环轴。
+- AddrReg仅支持`vf.load_align`和`vf.store_align`搬运指令使用。
+- 通过AddrReg设置地址偏移进行搬运时，需要满足对应搬运指令的地址对齐约束。
 
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -109,7 +110,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 128], device=device, dtype=torch.float32)

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-将指定维度的单元素 tile 广播到 `src` 的 shape 后执行逐元素乘法。`dim=0` 广播 `[行数, 1]` tile；`dim=1` 广播 `[1, 列数]` tile。
+将指定维度的单元素tile广播到`src`的shape后执行逐元素乘法。`dim=0`广播`[行数, 1]` tile；`dim=1`广播`[1, 列数]` tile。
 
 ## 函数原型
 
@@ -26,8 +26,8 @@ pypto_pro.language.expand_mul(out, src, scalar, *, dim=0)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 结果 tile，与 `src` 同 shape |
-| `src` | 输入 | 源 tile |
+| `out` | 输出 | 结果tile，与`src`同shape |
+| `src` | 输入 | 源tile |
 | `scalar` | 输入 | `[行数, 1]` tile，广播到每列做逐元素乘法 |
 | `dim` | 输入 | 展开方向 |
 
@@ -35,10 +35,10 @@ pypto_pro.language.expand_mul(out, src, scalar, *, dim=0)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：与 `src` 一致<br>shape：与 `src` 一致<br>支持与 `src` 为同一 tile，实现 in-place |
+| `out` | 输出 | 数据类型：与`src`一致<br>shape：与`src`一致<br>支持与`src`为同一tile，实现in-place |
 | `src` | 输入 | 数据类型：b16、b32<br>shape：`[行数, 列数]` |
-| `scalar` | 输入 | 数据类型：与 `src` 一致<br>`dim=0` 时 shape 为 `[行数, 1]`，须设 `layout=pl.DN`；`dim=1` 时 shape 为 `[1, 列数]` |
-| `dim` | 输入 | `0`：广播 `[行数, 1]` tile；`1`：广播 `[1, 列数]` tile。默认值为 `0` |
+| `scalar` | 输入 | 数据类型：与`src`一致<br>`dim=0`时shape为`[行数, 1]`，须设`layout=pl.DN`；`dim=1`时shape为`[1, 列数]` |
+| `dim` | 输入 | `0`：广播`[行数, 1]` tile；`1`：广播`[1, 列数]` tile。默认值为`0` |
 
 ## 流水类型
 
@@ -46,9 +46,9 @@ V（向量计算流水）。
 
 ## 调用示例
 
-### dim=0
+### dim = 0
 
-下面是一个完整 kernel：把 `[64, 1]` 行向量广播到每列，与 64×128 源 tile 逐元素相乘。注意行向量 tile 需设 `layout=pl.DN`。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：把`[64, 1]`行向量广播到每列，与64×128源tile逐元素相乘。注意行向量tile需设`layout=pl.DN`。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -83,7 +83,7 @@ def row_expand_mul_kernel(a: pl.Tensor[[64, 128], pl.DT_FP32], v: pl.Tensor[[64,
 ```
 <!-- pypto-doc-output:row_expand_mul:end -->
 
-### dim=1
+### dim = 1
 
 ```python
 import pypto_pro.language as pl

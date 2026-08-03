@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-先对两个 tile 做逐元素加法，再对结果施加 ReLU 激活（负值置零），最后做数据类型转换。三步操作融合为一条硬件指令。
+先对两个tile做逐元素加法，再对结果施加ReLU激活（负值置零），最后做数据类型转换。三步操作融合为一条硬件指令。
 
 ## 函数原型
 
@@ -26,21 +26,21 @@ pypto_pro.language.add_relu_cast(out, lhs, rhs, *, target_type, mode=pl.RoundMod
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标 tile，存放先加后 ReLU 再类型转换的结果 |
-| `lhs` | 输入 | 左操作数 tile |
-| `rhs` | 输入 | 右操作数 tile |
-| `target_type` | 输入 | 输出数据类型，如 `pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_FP16` |
-| `mode` | 输入 | 舍入模式，默认 `pl.RoundMode.CAST_ROUND` |
+| `out` | 输出 | 目标tile，存放先加后ReLU再类型转换的结果 |
+| `lhs` | 输入 | 左操作数tile |
+| `rhs` | 输入 | 右操作数tile |
+| `target_type` | 输入 | 输出数据类型，如`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_FP16` |
+| `mode` | 输入 | 舍入模式，默认`pl.RoundMode.CAST_ROUND` |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：由 `target_type` 指定<br>shape 须与 `lhs`、`rhs` 一致 |
-| `lhs` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：与 `out` 一致 |
-| `rhs` | 输入 | 数据类型：与 `lhs` 一致<br>shape：与 `out` 一致 |
-| `target_type` | 输入 | 支持 `pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_FP32` 等<br>可与输入类型相同（仅做 ReLU）或不同（融合类型转换） |
-| `mode` | 输入 | 舍入模式：`pl.RoundMode.CAST_NONE` / `pl.RoundMode.CAST_RINT` / `pl.RoundMode.CAST_ROUND` / `pl.RoundMode.CAST_FLOOR` / `pl.RoundMode.CAST_CEIL` / `pl.RoundMode.CAST_TRUNC` / `pl.RoundMode.CAST_ODD`<br>缩窄转换（如 FP32→FP16）时生效，扩展转换时忽略 |
+| `out` | 输出 | 数据类型：由`target_type`指定<br>shape须与`lhs`、`rhs`一致 |
+| `lhs` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：与`out`一致 |
+| `rhs` | 输入 | 数据类型：与`lhs`一致<br>shape：与`out`一致 |
+| `target_type` | 输入 | 支持`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_FP32`等<br>可与输入类型相同（仅做ReLU）或不同（融合类型转换） |
+| `mode` | 输入 | 舍入模式：`pl.RoundMode.CAST_NONE` / `pl.RoundMode.CAST_RINT` / `pl.RoundMode.CAST_ROUND` / `pl.RoundMode.CAST_FLOOR` / `pl.RoundMode.CAST_CEIL` / `pl.RoundMode.CAST_TRUNC` / `pl.RoundMode.CAST_ODD`<br>缩窄转换（如FP32→FP16）时生效，扩展转换时忽略 |
 
 ## 流水类型
 
@@ -48,7 +48,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：从 GM 载入两个 FP16 输入，用 `pypto_pro.language.add_relu_cast` 先加后 ReLU 再转 FP32 写回 GM。vector kernel 开 `auto_mutex`，同步由 `make_tile_group` 自动管理。
+下面是一个完整kernel：从GM载入两个FP16输入，用`pypto_pro.language.add_relu_cast`先加后ReLU再转FP32写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

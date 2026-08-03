@@ -28,7 +28,7 @@
   逻辑左移会将二进制数整体向左移动指定的位数，最高位被丢弃，最低位用0填充。例如，二进制数1010101010101010（UINT16类型）逻辑左移1位后，结果为0101010101010100。
 - **数据类型为有符号类型：执行算术左移。**
 
-  算术左移会将二进制数整体向左移动指定的位数，次高位被丢弃，最低位用0填充。例如，二进制数1010101010101010（INT16类型）算术左移1位后，结果为1101010101010100；算术左移3位后，结果为1101010101010000。
+  算术左移与逻辑左移一样，将超出数据类型位宽的最高位丢弃，并在最低位补0；区别只体现在结果按有符号类型解释。例如，二进制数1010101010101010（INT16类型）左移1位后，位模式为0101010101010100；左移3位后，位模式为0101010101010000。
 
 $$
 dst_i = src_i \ll shift_i
@@ -68,11 +68,11 @@ dst = vf.shift_left(src, shift_reg, preg)
 | INT64 | INT64 | INT64 |
 | UINT64 | UINT64 | INT64 |
 
-`shift`为标量时，src/dst 支持 INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64，移位量为标量整型。
+`shift`为标量时，src/dst支持INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64，移位量为标量整型。
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
@@ -85,6 +85,7 @@ dst = vf.shift_left(src, shift_reg, preg)
 标量移位（所有元素统一左移）：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -117,7 +118,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(0, 100, [1, 64], device=device, dtype=torch.int32)
@@ -135,6 +137,7 @@ if __name__ == "__main__":
 向量移位（逐元素左移）：
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -172,7 +175,8 @@ def example_kernel_vector(
 
 
 def test_example_2():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(0, 100, [1, 64], device=device, dtype=torch.int32)

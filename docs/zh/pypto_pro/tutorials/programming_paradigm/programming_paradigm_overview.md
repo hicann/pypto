@@ -8,7 +8,7 @@ PyPTO Pro面向昇腾NPU的AI Core算子开发，采用外层多核SPMD并行与
 
 基于昇腾的PyPTO Pro应用程序通常包含两部分：一部分运行在Host CPU上，使用Python（PyTorch）编程；另一部分运行在NPU上，使用PyPTO Pro编写[核函数Kernel](../operator_development/kernel_function.md)。Host端通过PyTorch张量在Device Memory上准备输入输出数据，调用Kernel函数触发JIT编译并下发NPU任务，通过`torch.npu.synchronize()`等待核函数执行完成。Host代码与Kernel可写在同一个`.py`文件中。
 
-**图1**  Kernel调度示意图
+**图1**Kernel调度示意图
 
 ![Kernel调度示意图](../figures/kernel_scheduling_diagram.png)
 
@@ -58,7 +58,7 @@ SIMD主要适用于数据密集、操作规整、无分支或分支较少的计�
 
 - **矢量类算子**：主要使用Vector计算单元完成元素级、逻辑类和数据重组类计算，在PyPTO Pro中通过`pl.section_vector()`标记执行域。
 - **矩阵类算子**：主要使用Cube计算单元完成矩阵乘、张量卷积等计算，在PyPTO Pro中通过`pl.section_cube()`标记执行域。
-- **融合类算子**：联动Cube与Vector计算单元协同计算，通过stage机制描述Cube和Vector代码段，框架自动插入核间同步并完成Preload核间流水编排。
+- **融合类算子**：联动Cube与Vector计算单元协同计算。开发者可以手工插入核间同步并编排流水；在支持自动Pipeline变换的场景中，也可以使用`@pl.pipeline.stage`标记计算阶段，由框架自动插入核间同步并完成Preload核间流水编排。
 
 AI Core中Scalar、Vector、Cube、存储和搬运单元的详细说明，请参考[抽象硬件架构](abstract_hardware_architecture.md)。
 
@@ -98,7 +98,31 @@ PyPTO Pro使用二维Tile描述核内Buffer。开发者只需表达Tile在Global
 
 ### 自动核间流水编排
 
-对于Cube、Vector融合算子，开发者通过stage机制描述计算代码段，框架识别后自动插入核间同步，并完成Preload核间流水编排。
+对于支持自动Pipeline变换的Cube、Vector融合算子，stage是流水编排的基本单位。开发者使用`@pl.pipeline.stage`装饰器标记一个计算函数，再在Kernel循环的`pl.section_cube()`或`pl.section_vector()`执行域中调用该函数。`section_cube`和`section_vector`用于指定代码运行在哪类计算单元上，stage则用于划分编译器可以分析和重排的流水阶段。下面仅展示代码组织结构，省略Tensor和Tile声明：
+
+```python
+@pl.pipeline.stage
+def cube_stage(cube_input, intermediate):
+    # Cube阶段
+    ...
+
+
+@pl.pipeline.stage
+def vector_stage(intermediate, output):
+    # Vector阶段
+    ...
+
+
+@pl.jit(pipeline=pl.pipeline.PipelineConfig(preload=2))
+def fused_kernel(cube_input, intermediate, output):
+    for i in pl.range(0, NUM_TILES):
+        with pl.section_cube():
+            cube_stage(cube_input, intermediate)
+        with pl.section_vector():
+            vector_stage(intermediate, output)
+```
+
+`@pl.pipeline.stage`本身只为函数添加stage标记，不改变函数行为。设置`pipeline=pl.pipeline.PipelineConfig(...)`后，编译器识别循环中的stage调用，分析各阶段对Tile的读写依赖，自动插入Cube与Vector之间的核间同步，并将串行阶段转换为Preload流水，使不同迭代的Cube和Vector阶段可以重叠执行。`preload`用于配置稳态流水开始前首个阶段的预执行次数。未启用Pipeline变换的融合Kernel仍可直接使用`pl.system.set_cross_core`和`pl.system.wait_cross_core`手工管理核间同步。
 
 关于Tile和TileGroup的详细使用方法，请参考[基于Tile的Python编程](../operator_development/tile_based_python_programming/Python_programming_overview.md)。
 

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-向量标量乘加：`out[i] = alpha * src[i] + out[i]`。将源 tile 每个元素乘以标量 alpha 后累加到目标 tile。
+向量标量乘加：`out[i] = alpha * src[i] + out[i]`。将源tile每个元素乘以标量alpha后累加到目标tile。
 
 ## 函数原型
 
@@ -26,17 +26,17 @@ pypto_pro.language.axpy(out, src, alpha)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 目标 tile，同时作为累加器输入和输出 |
-| `src` | 输入 | 源 tile，乘以 `alpha` 后累加到 `out` |
+| `out` | 输入/输出 | 目标tile，同时作为累加器输入和输出 |
+| `src` | 输入 | 源tile，乘以`alpha`后累加到`out` |
 | `alpha` | 输入 | 标量乘数 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 数据类型：b16、b32<br>shape 须与 `src` 一致<br>该 tile 在运算前须已载入有效数据（作为累加器初值），运算后被覆盖为结果 |
-| `src` | 输入 | 数据类型：与 `out` 一致<br>shape：与 `out` 一致 |
-| `alpha` | 输入 | 整型或浮点型常量，或运行时 Expr<br>类型须与 `src` 元素类型兼容 |
+| `out` | 输入/输出 | 数据类型：b16、b32<br>shape须与`src`一致<br>该tile在运算前须已载入有效数据（作为累加器初值），运算后被覆盖为结果 |
+| `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `alpha` | 输入 | 整型或浮点型常量，或运行时Expr<br>类型须与`src`元素类型兼容 |
 
 ## 流水类型
 
@@ -44,7 +44,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整 kernel：载入两个 FP32 tile，用 `pypto_pro.language.axpy` 做 `y = 2.0 * x + y` 融合标量乘加。纯 vector kernel 使用 `make_tile_group` 管理 Tile 资源，并通过 `auto_mutex` 完成流水同步。
+下面是一个完整kernel：载入两个FP32 tile，用`pypto_pro.language.axpy`做`y = 2.0 * x + y`融合标量乘加。纯vector kernel使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成流水同步。
 
 ```python
 import pypto_pro.language as pl

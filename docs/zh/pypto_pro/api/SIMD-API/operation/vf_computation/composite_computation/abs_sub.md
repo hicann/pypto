@@ -33,8 +33,8 @@ dst = vf.abs_sub(src0, src1, preg)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `dst` | 输出 | 目标向量寄存器 |
-| `src0` | 输入 | 源操作数 0 |
-| `src1` | 输入 | 源操作数 1 |
+| `src0` | 输入 | 源操作数0 |
+| `src1` | 输入 | 源操作数1 |
 | `preg` | 输入 | 掩码寄存器 |
 
 ## 数据类型
@@ -47,7 +47,7 @@ dst = vf.abs_sub(src0, src1, preg)
 
 ## 返回值说明
 
-返回目标向量寄存器（`RegTensor` 类型）。
+返回目标向量寄存器（`RegTensor`类型）。
 
 ## 约束说明
 
@@ -56,6 +56,7 @@ dst = vf.abs_sub(src0, src1, preg)
 ## 调用示例
 
 ```python
+import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
@@ -92,7 +93,8 @@ def example_kernel(
 
 
 def test_example():
-    device = "npu:0"
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)

@@ -62,8 +62,8 @@ def fillpad_kernel(
     with pl.section_vector():
         cur_src = src.current()
         cur_dst = dst.current()
-        pl.load(cur_src, x, [0, 0])
         pl.set_validshape(cur_src, [5, 7])
+        pl.load(cur_src, x, [0, 0])
         pl.fillpad(cur_dst, cur_src)
         pl.store(z, cur_dst, [0, 0])
 
@@ -96,8 +96,8 @@ def fillpad_expand_kernel(
     with pl.section_vector():
         cur_src = src.current()
         cur_dst = dst.current()
-        pl.load(cur_src, x, [0, 0])
         pl.set_validshape(cur_src, [5, 7])
+        pl.load(cur_src, x, [0, 0])
         pl.fillpad(cur_dst, cur_src, mode=pl.FillPadMode.EXPAND)
         pl.store(z, cur_dst, [0, 0])
 
@@ -132,8 +132,8 @@ def fillpad_inplace_kernel(
     with pl.section_vector():
         cur_src = src.current()
         cur_dst = dst.current()
-        pl.load(cur_src, x, [0, 0])
         pl.set_validshape(cur_src, [5, 7])
+        pl.load(cur_src, x, [0, 0])
         pl.fillpad(cur_dst, cur_src, mode=pl.FillPadMode.INPLACE)
         pl.store(z, cur_dst, [0, 0])
 
