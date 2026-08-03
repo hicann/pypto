@@ -93,7 +93,7 @@
 
     右键单击Before\_004\_ExpandFunction\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
-    ![](../figures/zh-cn_image_0000002499728650.png)
+    ![](../figures/debug_5.png)
 
     右上角可以看到计算图类型为Tensor Graph，Tensor Graph由Tensor和Operation组成，图中的Tensor Shape和代码定义一致，且没有经过Tile展开。
 
@@ -101,7 +101,7 @@
 
     右键单击Before\_026\_SubgraphToFunction\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
-    ![](../figures/zh-cn_image_0000002499888764.png)
+    ![](../figures/debug_6.png)
 
     右上角可以看到计算图类型为Tile Graph，相比于Tile展开前，Tile Graph中增加了很多节点，这是因为原Shape为\(-1, 32, 1, 256\)的Tensor经过Tile展开，切分成Shape为\(1, 4 ,1, 64\)的Tile。同时，为Tile分配内存层级（对应图中asis-原地址，tobe-目的地址），并自动插入内存搬运节点（对应图中TILE\_COPY\_IN和TILE\_COPY\_OUT）。
 
@@ -109,7 +109,7 @@
 
     右键单击After\_036\_CodegenPreproc\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8\_LEAF\_program\_id\_00\_15536366383870408930.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
-    ![](../figures/zh-cn_image_0000002531608703.png)
+    ![](../figures/debug_7.png)
 
     右上角可以看到计算图类型为Block Graph，在Block Graph阶段，Tile Graph被切成若干子图，每一个子图对应一个Block Graph，因此相比Tile Graph，Block Graph的规模大量减少。
 
@@ -119,7 +119,7 @@
 
     右键单击After\_036\_CodegenPreproc\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8\_ROOT.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
-    ![](../figures/zh-cn_image_0000002499728842.png)
+    ![](../figures/debug_8.png)
 
     右上角可以看到计算图类型为Execute Graph，Execute Graph中包含Tensor节点和调用节点（带有fx标识，表示对Block Graph进行一次调用），双击调用节点，可以查看对应的Block Graph子图信息，了解具体的执行过程。
 
@@ -162,11 +162,11 @@
 
 3. 性能仿真执行成功后，在output目录下，生成以下文件信息。
 
-    ![](../figures/zh-cn_image_0000002527468273.png)
+    ![](../figures/debug_0.png)
 
 4. 右键单击merged\_swimlane.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
-    ![](../figures/zh-cn_image_0000002495188648.png)
+    ![](../figures/debug_1.png)
 
     泳道图展示每个核内任务调试情况，包含执行耗时、空闲间隔等，可根据具体情况对算子进行调优，如调整张量的分块形状。
 
@@ -197,11 +197,11 @@ Ascend 950PR/Ascend 950DT 支持以下两种仿真模式，均通过`cannsim rec
 
 2. 性能仿真执行成功后，在output目录下，生成以下文件信息。
 
-    ![](../figures/zh-cn_image_0000002527468273.png)
+    ![](../figures/debug_0.png)
 
 3. 右键单击merged\_swimlane.json文件，在弹出的菜单中选择"使用PyPTO Toolkit打开"。
 
-    ![](../figures/zh-cn_image_0000002495188648.png)
+    ![](../figures/debug_1.png)
 
     泳道图展示每个核内任务调试情况，包含执行耗时、空闲间隔等，可根据具体情况对算子进行调优，如调整张量的分块形状。
 
@@ -229,7 +229,7 @@ Ascend 950PR/Ascend 950DT 支持以下两种仿真模式，均通过`cannsim rec
 
 3. 性能仿真执行成功后，在output/cannsim_*/目录下，生成以下文件信息。
 
-    ![](../figures/zh-cn_image_0000002527468274.png)
+    ![](../figures/debug_2.png)
 
 4. 执行生成报告命令。
 
@@ -239,11 +239,11 @@ Ascend 950PR/Ascend 950DT 支持以下两种仿真模式，均通过`cannsim rec
 
 5. 执行生成报告命令后，在output/cannsim_*/report目录下，生成以下文件信息。
 
-    ![](../figures/zh-cn_image_0000002527468275.png)
+    ![](../figures/debug_3.png)
 
     把图中如trace_core0.json放入chrome://tracing/中，即可得到流水报告。
 
-    ![](../figures/zh-cn_image_0000002527468276.png)
+    ![](../figures/debug_4.png)
 
     流水报告展示每个核内指令的执行情况，包含执行耗时、空闲间隔等，可根据具体情况对算子进行调优，如调整张量的分块形状。
 

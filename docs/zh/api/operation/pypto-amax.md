@@ -19,10 +19,10 @@
 定义指定计算的维度（Reduce轴）为R轴，非指定维度（Normal轴）为A轴。如下图所示，对Shape为\(2, 3\)的二维矩阵进行运算，指定在第一维求最大值，输出结果为\[4, 5, 6\]；指定在第二维求最大值，输出结果为\[3, 6\]。
 
 **图1**  amax按第一个维度计算示例
-![](../figures/pypto.amax_1.png)
+![](../figures/amax_1.png)
 
 **图2**  amax按最后一个维度计算示例
-![](../figures/pypto.amax_2.png)
+![](../figures/amax_2.png)
 
 ## 函数原型
 

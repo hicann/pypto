@@ -9,7 +9,7 @@
 
 ## 整体流程
 
-![](../figures/zh-cn_image_0000002532402113.png)
+![](../figures/precision_1.png)
 
 ## 确认问题合法性
 

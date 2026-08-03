@@ -143,6 +143,7 @@ Ctrl AICPU控制流执行失败（devTask构建、stitch处理异常）。
    | `rule_static_integrity` | 编译期声明的静态后继在运行时是否保留 |
    | `rule_stitch_legality` | stitch边引用的producer/consumer是否合法 |
    | `rule_cell_write_conflict` | 同一cell是否存在并发写冲突 |
+
    无问题输出`PASS`，有问题输出分类摘要及`dep_check_report.csv`详细定位。
 
 ## F73008 CTRL_ALLOC_TIMEOUT

@@ -141,21 +141,21 @@ PyPTO程序在编译过程中，会自动生成由Tensor和Operation组合而成
 
     program.json文件包含了Execute Graph和Block Graph的汇总信息，图中的关键信息为：左右两边的卡片为Tensor节点（代表输入/输出数据）、中间卡片为调用节点（带有fx标识，单击可以实现信息钻取）。
 
-    ![](../figures/zh-cn_image_0000002499877218.png)
+    ![](../figures/graph_1.png)
 
 2. 双击中间卡片逐层钻取到下图所示的Execute Graph。
 
-    ![](../figures/zh-cn_image_0000002531853385.png)
+    ![](../figures/graph_2.png)
 
     图中不同的色块（CALL:TENSOR\_xx）分别代表一个调用节点，表示该计算图被划分成不同的Block Graph子图。
 
 3. 双击上图的调用节点，可以看到Block Graph子图信息，标识着任务的具体执行过程。
 
-    ![](../figures/zh-cn_image_0000002531638777.png)
+    ![](../figures/graph_3.png)
 
     放大后可以看到图中具体的Tensor和Operation节点信息和连接关系：
 
-    ![](../figures/zh-cn_image_0000002499719036.png)
+    ![](../figures/graph_4.png)
 
 ## 查看泳道图
 

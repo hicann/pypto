@@ -60,7 +60,7 @@ TileShape的维度设置须与输出张量保持一致，用于控制输出Tile�
 
 ### 接口调用示例
 
-![](../figures/zh-cn_image_0000002524825989.png)
+![](../figures/gather_in_ub.png)
 
 考虑以上场景，indices为topk结果，block\_table为Page Attention的页表，param为kv cache，block\_size为2。最终的结果是将token的kv cache收集起来。
 

@@ -49,11 +49,11 @@ libtile_fwk_interface.so(npu::tile_fwk::RecordLoopFunc::Iterator::operator!=(npu
 
 这是由于数据从`a`中读取又写回`a`导致的。由于PyPTO描述的是一个图表达，在读取和写入的时候，当前认为`a`是一个整体，因此创建的连接关系会形成一个环路，即`a → b → b.exp() → a`，而PyPTO不允许构造出的图内存在环路，必须为DAG（有向无环图），所以才有这个报错。
 
-![](../../figures/zh-cn_image_0000002499301464.png)
+![](../../figures/view_assemble_cycle_1.png)
 
 ## 解决措施
 
 - 当前需要将读取和写入`a`的逻辑拆分成两个图去定义，避免一个图内存在环路。
 - 后续等Assemble的SSA语义上线后使用该写法不会有问题。
 
-![](../../figures/zh-cn_image_0000002530981685.png)
+![](../../figures/view_assemble_cycle_2.png)
