@@ -86,6 +86,7 @@ void CheckTensorDimRange(const LogicalTensorPtr& tensor, size_t minDim, size_t m
 void CheckDstShapeDimRange(const std::vector<int64_t>& shape, size_t minDim, size_t maxDim, const std::string& opName);
 void CheckTensorsDimConsistency(const std::vector<LogicalTensorPtr>& tensors, const std::string& opName);
 void CheckTensorShapeSize(const LogicalTensorPtr& tensor, const std::string& opName);
+void CheckTensorNonEmpty(const LogicalTensorPtr& tensor, const std::string& opName);
 void CheckDstShapeSize(const std::vector<int64_t>& shape, const std::string& opName);
 void CheckTensorsShapeConsistencyOrBroadcast(const std::vector<LogicalTensorPtr>& tensors, const std::string& opName);
 void CheckTensorDataType(const LogicalTensorPtr& tensor, const std::unordered_set<DataType>& supportedTypes,

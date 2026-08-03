@@ -149,6 +149,16 @@ void CheckTensorShapeSize(const LogicalTensorPtr& tensor, const std::string& opN
     }
 }
 
+void CheckTensorNonEmpty(const LogicalTensorPtr& tensor, const std::string& opName)
+{
+    CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensor != nullptr) << opName << ": tensor is nullptr.";
+    auto shape = tensor->shape;
+    for (size_t i = 0; i < shape.size(); ++i) {
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, shape[i] > 0)
+            << "Empty tensor is not supported for op: " << opName << ", dimension[" << i << "] has shape value 0.";
+    }
+}
+
 void CheckDstShapeSize(const std::vector<int64_t>& shape, const std::string& opName)
 {
     int64_t shapeSize = 1;

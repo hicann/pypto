@@ -309,6 +309,8 @@ Tensor Compare(const Tensor& self, const Tensor& other, OpType op, OutType mode)
     static const std::unordered_set<DataType> CMP_A5_TYPES = {DT_FP16, DT_FP32, DT_INT16};
     const auto& supportedTypes = GetSupportedDataTypesByArch(CMP_A2A3_TYPES, CMP_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "COMPARE");
+    CheckTensorNonEmpty(self.GetStorage(), "COMPARE");
+    CheckTensorNonEmpty(other.GetStorage(), "COMPARE");
     CheckBinaryInputTensors(self.GetStorage(), other.GetStorage(), "COMPARE");
     RETURN_CALL(CompareOperation, *Program::GetInstance().GetCurrentFunction(), self, other, op, mode);
 }
@@ -324,6 +326,7 @@ Tensor Compare(const Tensor& self, const Element& other, OpType op, OutType mode
     CheckTensorDataType(self.GetStorage(), supportedTypes, "COMPARE");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "COMPARE");
     CheckTensorShapeSize(self.GetStorage(), "COMPARE");
+    CheckTensorNonEmpty(self.GetStorage(), "COMPARE");
     RETURN_CALL(CompareOperationScalar, *Program::GetInstance().GetCurrentFunction(), self, other, op, mode);
 }
 
@@ -338,6 +341,7 @@ Tensor Compare(const Element& self, const Tensor& other, OpType op, OutType mode
     CheckTensorDataType(other.GetStorage(), supportedTypes, "COMPARE");
     CheckTensorDimRange(other.GetStorage(), 1, 4, "COMPARE");
     CheckTensorShapeSize(other.GetStorage(), "COMPARE");
+    CheckTensorNonEmpty(other.GetStorage(), "COMPARE");
     RETURN_CALL(CompareOperationScalar, *Program::GetInstance().GetCurrentFunction(), self, other, op, mode);
 }
 
