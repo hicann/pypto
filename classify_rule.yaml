@@ -211,4 +211,11 @@ machine@pypto:
       - framework/src/machine/utils/
       - framework/src/utils/
       - python/src/bindings/runtime.cpp
-    unrelease: null
+    unrelease:
+      - python/src/bindings/runtime.cpp
+      - framework/src/machine/runtime/launcher/eslmodel_launcher.h
+      - framework/src/machine/runtime/launcher/eslmodel_launcher.cpp
+      - framework/src/machine/runtime/memory_utils/eslmodel_memory_utils.h
+      - framework/src/machine/device/dynamic/eslmodel_aicore_hal.h
+      - framework/src/machine/device/dynamic/eslmodel_manager.h
+      - framework/src/machine/runtime/launcher/aicore_model_launcher.cpp
