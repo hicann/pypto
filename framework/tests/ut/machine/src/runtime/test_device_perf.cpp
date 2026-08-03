@@ -45,3 +45,100 @@ TEST(DevicePerfTest, AllPerfOps_NoCrash)
     perf.StartMachinePerfTraceDumpThread();
     EXPECT_FALSE(perf.dumpThread_.joinable());
 }
+
+TEST(DevicePerfTest, ResetMetrics_EmptyPerfData)
+{
+    DevicePerf perf;
+    perf.ResetMetrics(0);
+}
+
+TEST(DevicePerfTest, ResetMetrics_IndexOutOfRange)
+{
+    DevicePerf perf;
+    perf.perfData_.push_back(nullptr);
+    perf.ResetMetrics(5);
+}
+
+TEST(DevicePerfTest, SyncProfData_DebugDisabled)
+{
+    DevicePerf perf;
+    perf.SyncProfData(false);
+}
+
+TEST(DevicePerfTest, ReleasePerfData_NullPtrs)
+{
+    DevicePerf perf;
+    perf.perfData_.push_back(nullptr);
+    perf.perfData_.push_back(nullptr);
+    perf.ReleasePerfData();
+    EXPECT_TRUE(perf.perfData_.empty());
+}
+
+TEST(DevicePerfTest, GetPerfDataSize_Default)
+{
+    DevicePerf perf;
+    DeviceArgs args{};
+    args.nrAic = 0;
+    args.nrAiv = 0;
+    perf.args_ = args;
+    EXPECT_EQ(perf.GetPerfDataSize(), 1u);
+}
+
+TEST(DevicePerfTest, StartMachinePerfTraceDumpThread_ZeroAddr)
+{
+    DevicePerf perf;
+    perf.args_.aicpuPerfAddr = 0;
+    perf.StartMachinePerfTraceDumpThread();
+    EXPECT_FALSE(perf.dumpThread_.joinable());
+}
+
+TEST(DevicePerfTest, ResetPerData_WithPerfData)
+{
+    DevicePerf perf;
+    DeviceArgs args{};
+    args.nrAic = 1;
+    args.nrAiv = 0;
+    perf.args_ = args;
+    perf.perfData_.push_back(nullptr);
+    perf.perfData_.push_back(nullptr);
+    perf.ResetPerData();
+}
+
+TEST(DevicePerfTest, RunPrepare_DebugMode)
+{
+    DevicePerf perf;
+    DeviceArgs args{};
+    args.nrAic = 1;
+    args.nrAiv = 0;
+    args.sharedBuffer = 0x1000;
+    perf.args_ = args;
+    perf.perfData_.push_back(nullptr);
+    bool result = perf.RunPrepare();
+    EXPECT_TRUE(result);
+}
+
+TEST(DevicePerfTest, ResetMetrics_WithAicpuPerfAddr)
+{
+    DevicePerf perf;
+    DeviceArgs args{};
+    args.nrAic = 1;
+    args.nrAiv = 0;
+    args.aicpuPerfAddr = 0x2000;
+    perf.args_ = args;
+    perf.perfData_.push_back(nullptr);
+    perf.ResetMetrics(0);
+    EXPECT_TRUE(perf.isPerfDataInited_);
+}
+
+TEST(DevicePerfTest, ResetMetrics_WithAicpuPerfAddr_AlreadyInited)
+{
+    DevicePerf perf;
+    DeviceArgs args{};
+    args.nrAic = 1;
+    args.nrAiv = 0;
+    args.aicpuPerfAddr = 0x2000;
+    perf.args_ = args;
+    perf.perfData_.push_back(nullptr);
+    perf.isPerfDataInited_ = true;
+    perf.ResetMetrics(0);
+}

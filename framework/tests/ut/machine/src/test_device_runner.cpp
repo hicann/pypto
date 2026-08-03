@@ -163,3 +163,103 @@ TEST_F(TestDeviceRunner, test_create_proflevel)
     ToSubMachineConfig config7;
     EXPECT_EQ(config7.profConfig.value, ProfConfig::OFF);
 }
+
+TEST_F(TestDeviceRunner, KernelLaunchInfo_Constructor)
+{
+    KernelLaunchInfo info(nullptr, nullptr, nullptr, 24, 6);
+    EXPECT_EQ(info.schedStream, nullptr);
+    EXPECT_EQ(info.ctrlStream, nullptr);
+    EXPECT_EQ(info.aicoreStream, nullptr);
+    EXPECT_EQ(info.blockDim, 24u);
+    EXPECT_EQ(info.aicpuNum, 6u);
+    EXPECT_EQ(info.binHandle, nullptr);
+    EXPECT_FALSE(info.isCaptureActivate);
+}
+
+TEST_F(TestDeviceRunner, DeviceRunner_InitMetaData)
+{
+    DeviceArgs srcArgs{};
+    srcArgs.runtimeDataRingBufferAddr = 0x1000;
+    srcArgs.sharedBuffer = 0x2000;
+    srcArgs.coreRegAddr = 0x3000;
+    srcArgs.nrAic = 24;
+    srcArgs.nrAiv = 48;
+    srcArgs.corePmuRegAddr = 0x4000;
+    srcArgs.corePmuAddr = 0x5000;
+    srcArgs.taskWastTime = 0x6000;
+    srcArgs.pmuEventAddr = 0x7000;
+    srcArgs.aicpuPerfAddr = 0x8000;
+    srcArgs.devDfxArgAddr = 0x9000;
+
+    DeviceRunner runner;
+    runner.args_ = srcArgs;
+
+    DeviceArgs dstArgs{};
+    runner.InitMetaData(dstArgs);
+
+    EXPECT_EQ(dstArgs.runtimeDataRingBufferAddr, 0x1000u);
+    EXPECT_EQ(dstArgs.sharedBuffer, 0x2000u);
+    EXPECT_EQ(dstArgs.coreRegAddr, 0x3000u);
+    EXPECT_EQ(dstArgs.nrAic, 24u);
+    EXPECT_EQ(dstArgs.nrAiv, 48u);
+    EXPECT_EQ(dstArgs.corePmuRegAddr, 0x4000u);
+    EXPECT_EQ(dstArgs.corePmuAddr, 0x5000u);
+    EXPECT_EQ(dstArgs.taskWastTime, 0x6000u);
+    EXPECT_EQ(dstArgs.pmuEventAddr, 0x7000u);
+    EXPECT_EQ(dstArgs.aicpuPerfAddr, 0x8000u);
+    EXPECT_EQ(dstArgs.devDfxArgAddr, 0x9000u);
+}
+
+TEST_F(TestDeviceRunner, DeviceRunner_GetHostProfType_Default)
+{
+    DeviceRunner runner;
+    EXPECT_EQ(runner.GetHostProfType(), 0u);
+}
+
+TEST_F(TestDeviceRunner, DeviceRunner_SetHostProfFunction_Null)
+{
+    DeviceRunner runner;
+    runner.SetHostProfFunction(nullptr);
+}
+
+TEST_F(TestDeviceRunner, DeviceRunner_SetDebugEnable)
+{
+    DeviceRunner runner;
+    runner.SetDebugEnable();
+}
+
+TEST_F(TestDeviceRunner, DeviceRunner_ReportHostProfInfo_NoProf)
+{
+    DeviceRunner runner;
+    runner.ReportHostProfInfo(nullptr, 100, 24, 1, false);
+}
+
+TEST_F(TestDeviceRunner, DeviceRunner_ReportHostProfInfo_WithProf)
+{
+    DeviceRunner runner;
+    HostProf::profSwitch_ = MSPF_TASK_TIME_L1_MASK | MSPF_TASK_TIME_L2_MASK;
+    HostProf::profType_ = MSPF_COMMANDHANDLE_TYPE_START;
+    runner.ReportHostProfInfo(nullptr, 100, 24, 1, false);
+    HostProf::profSwitch_ = 0;
+    HostProf::profType_ = 0;
+}
+
+TEST_F(TestDeviceRunner, DeviceRunner_ReportHostProfInfo_WithCore)
+{
+    DeviceRunner runner;
+    HostProf::profSwitch_ = MSPF_TASK_TIME_L1_MASK | MSPF_TASK_TIME_L2_MASK;
+    HostProf::profType_ = MSPF_COMMANDHANDLE_TYPE_START;
+    runner.ReportHostProfInfo(nullptr, 100, 24, 1, true);
+    HostProf::profSwitch_ = 0;
+    HostProf::profType_ = 0;
+}
+
+TEST_F(TestDeviceRunner, DeviceRunner_ReportHostProfInfo_MixAic)
+{
+    DeviceRunner runner;
+    HostProf::profSwitch_ = MSPF_TASK_TIME_L1_MASK | MSPF_TASK_TIME_L2_MASK;
+    HostProf::profType_ = MSPF_COMMANDHANDLE_TYPE_START;
+    runner.ReportHostProfInfo(nullptr, 100, 24, MSPF_GE_TASK_TYPE_MIX_AIC, false);
+    HostProf::profSwitch_ = 0;
+    HostProf::profType_ = 0;
+}

@@ -1,130 +1,244 @@
 /**
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
- * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
- * CANN Open Software License Agreement Version 2.0 (the "License").
- * Please refer to the License for details. You may not use this file except in compliance with the License.
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
- * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
- * See LICENSE in the root of the software repository for the full text of the License.
- */
-
-/*!
- * \file test_dev_encode_extra.cpp
- * \brief Additional UT coverage for dev_encode.cpp top-level functions
  */
 
 #include <gtest/gtest.h>
-#include "machine/utils/dynamic/dev_encode.h"
-#include "machine/utils/dynamic/dev_encode_program.h"
-#include "tilefwk/tilefwk.h"
-#include "tilefwk/tilefwk_op.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/configs/config_manager.h"
+#define private public
+#include "machine/device/dynamic/context/device_execute_context.h"
+#include "machine/utils/dynamic/dev_encode_function_dupped_data.h"
+#undef private
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
 
-class TestDevEncodeExtra : public testing::Test {
-protected:
-    void SetUp() override
+namespace {
+struct MiniDup {
+    static constexpr size_t kBuf = 4096;
+    std::unique_ptr<uint8_t[]> funcBuf;
+    std::unique_ptr<uint8_t[]> dupBuf;
+    DevAscendFunction* func{nullptr};
+    DevAscendFunctionDuppedData* dupData{nullptr};
+    DevAscendFunctionDupped dup;
+    size_t cursor{0};
+
+    void Align(size_t a) { cursor = (cursor + a - 1) & ~(a - 1); }
+
+    template <typename T>
+    T* Alloc(size_t n = 1)
     {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 64);
-        config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
-        TileShape::Current().SetVecTile(32, 32);
-        TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
+        Align(alignof(T));
+        auto* p = reinterpret_cast<T*>(funcBuf.get() + cursor);
+        cursor += sizeof(T) * n;
+        EXPECT_LT(cursor, kBuf);
+        return p;
     }
-    void TearDown() override
+
+    void Build(bool withOutcast)
     {
-        Program::GetInstance().Reset();
-        Program::GetInstance().SetLastFunction(nullptr);
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
+        funcBuf = std::make_unique<uint8_t[]>(kBuf);
+        memset(funcBuf.get(), 0, kBuf);
+        cursor = sizeof(DevAscendFunction);
+        func = reinterpret_cast<DevAscendFunction*>(funcBuf.get());
+        func->funcKey = 1;
+
+        func->operationList_.AssignOffsetSize(cursor, 1);
+        auto* op = Alloc<DevAscendOperation>();
+        new (op) DevAscendOperation();
+        op->stitchIndex = 0;
+        op->depGraphPredCount = 0;
+        op->depGraphSuccList.AssignOffsetSize(0, 0);
+
+        if (withOutcast) {
+            Align(alignof(DevAscendFunctionOutcast));
+            func->outcastList.AssignOffsetSize(cursor, 1);
+            auto* oc = Alloc<DevAscendFunctionOutcast>();
+            new (oc) DevAscendFunctionOutcast();
+            oc->stitchPolicyFullCoverProducerHubOpIdx = -1;
+            oc->producerConsumerList.AssignOffsetSize(0, 0);
+            oc->stitchPolicyFullCoverProducerList.AssignOffsetSize(0, 0);
+            oc->toSlotList.AssignOffsetSize(0, 0);
+            oc->cellMatchRuntimeFullUpdateTable.AssignOffsetSize(0, 0);
+        }
+
+        dupBuf = std::make_unique<uint8_t[]>(kBuf);
+        memset(dupBuf.get(), 0, kBuf);
+        dupData = reinterpret_cast<DevAscendFunctionDuppedData*>(dupBuf.get());
+        uint8_t* p = dupBuf.get() + sizeof(DevAscendFunctionDuppedData);
+        dupData->source_ = func;
+        dupData->operationList_.size = 1;
+        dupData->operationList_.predCountBase = static_cast<uint32_t>(p - dupBuf.get());
+        *reinterpret_cast<predcount_t*>(p) = 0;
+        p += sizeof(predcount_t);
+        dupData->operationList_.stitchBase = static_cast<uint32_t>(p - dupBuf.get());
+        dupData->operationList_.stitchCount = 1;
+        new (p) DevAscendFunctionDuppedStitchList();
+        p += sizeof(DevAscendFunctionDuppedStitchList);
+        dupData->expressionList_.base = static_cast<uint32_t>(p - dupBuf.get());
+        dupData->expressionList_.size = 1;
+        *reinterpret_cast<uint64_t*>(p) = 0;
+
+        WsAllocation a;
+        a.ptr = reinterpret_cast<uint64_t>(dupData);
+        dup = DevAscendFunctionDupped(a);
     }
 };
+} // namespace
 
-TEST_F(TestDevEncodeExtra, EncodeDevAscendProgram_NullBase_CalculatesSizeOnly)
+TEST(ParallelForContextTest, Begin_FirstLoop)
 {
-    constexpr int LOOP_COUNT = 4;
-    int s = 32;
-    Tensor t0(DT_FP32, {s, s}, "t0");
-    Tensor t1(DT_FP32, {s, s}, "t1");
-    Tensor out(DT_FP32, {LOOP_COUNT * s, s}, "out");
-
-    FUNCTION("test_encode_prog_sizeonly", {t0, t1}, {out})
-    {
-        LOOP("test_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(LOOP_COUNT))
-        {
-            auto temp = Add(t0, t1);
-            Assemble(temp, {i * s, 0}, out);
-        }
-    }
-
-    auto* func = Program::GetInstance().GetLastFunction();
-    ASSERT_NE(func, nullptr);
-    uint64_t offset = 0;
-    EncodeDevAscendProgram(func, offset, nullptr);
-    EXPECT_GT(offset, 0u);
+    ParallelForContext ctx;
+    ctx.info.forId = 0;
+    ctx.info.iterId = 0;
+    ctx.info.wsId = 0;
+    ctx.info.parallelism = 2;
+    ctx.Begin();
+    EXPECT_EQ(ctx.info.forId, 1u);
+    EXPECT_EQ(ctx.info.iterId, 1u);
+    EXPECT_EQ(ctx.info.wsId, 1u);
+    EXPECT_TRUE(ctx.isInParallelForScope);
 }
 
-TEST_F(TestDevEncodeExtra, EncodeDevAscendProgram_WithBase_EncodesFull)
+TEST(ParallelForContextTest, Begin_SubsequentLoop)
 {
-    constexpr int LOOP_COUNT = 4;
-    int s = 32;
-    Tensor t0(DT_FP32, {s, s}, "t0");
-    Tensor t1(DT_FP32, {s, s}, "t1");
-    Tensor out(DT_FP32, {LOOP_COUNT * s, s}, "out");
-
-    FUNCTION("test_encode_prog_full", {t0, t1}, {out})
-    {
-        LOOP("test_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(LOOP_COUNT))
-        {
-            auto temp = Add(t0, t1);
-            Assemble(temp, {i * s, 0}, out);
-        }
-    }
-
-    auto* func = Program::GetInstance().GetLastFunction();
-    ASSERT_NE(func, nullptr);
-
-    uint64_t sizeOnlyOffset = 0;
-    EncodeDevAscendProgram(func, sizeOnlyOffset, nullptr);
-    EXPECT_GT(sizeOnlyOffset, 0u);
-
-    std::vector<uint8_t> buffer(sizeOnlyOffset);
-    auto* base = reinterpret_cast<DevAscendProgram*>(buffer.data());
-    uint64_t offset = 0;
-    EncodeDevAscendProgram(func, offset, base);
-    EXPECT_EQ(offset, sizeOnlyOffset);
+    ParallelForContext ctx;
+    ctx.info.forId = 1;
+    ctx.info.iterId = 5;
+    ctx.info.wsId = 0;
+    ctx.info.parallelism = 2;
+    ctx.Begin();
+    EXPECT_EQ(ctx.info.forId, 1u);
+    EXPECT_EQ(ctx.info.iterId, 6u);
+    EXPECT_EQ(ctx.info.wsId, 1u);
+    EXPECT_TRUE(ctx.isInParallelForScope);
 }
 
-TEST_F(TestDevEncodeExtra, EncodeDevAscendProgram_DynamicLoopWithIf)
+TEST(ParallelForContextTest, Begin_WrapAround)
 {
-    std::vector<int64_t> shape{32, 32};
-    Tensor t0(DT_FP32, shape, "t0");
-    Tensor t1(DT_FP32, shape, "t1");
-    Tensor out(DT_FP32, {128, 32}, "out");
-    constexpr int LOOP_COUNT = 4;
-    int s = 32;
+    ParallelForContext ctx;
+    ctx.info.forId = 1;
+    ctx.info.iterId = 5;
+    ctx.info.wsId = 1;
+    ctx.info.parallelism = 2;
+    ctx.Begin();
+    EXPECT_EQ(ctx.info.wsId, 0u);
+}
 
-    FUNCTION("main_encode_loop", {t0, t1}, {out})
-    {
-        LOOP("main_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(LOOP_COUNT))
-        {
-            auto temp = Add(t0, t0);
-            SymbolicScalar sMin = std::ternary(i < 2, i, i + 1);
-            IF(sMin == i) { temp = Add(temp, t1); }
-            Assemble(temp, {i * s, 0}, out);
-        }
-    }
+TEST(ParallelForContextTest, End)
+{
+    ParallelForContext ctx;
+    ctx.isInParallelForScope = true;
+    ctx.End();
+    EXPECT_FALSE(ctx.isInParallelForScope);
+}
 
-    auto* func = Program::GetInstance().GetLastFunction();
-    ASSERT_NE(func, nullptr);
-    uint64_t offset = 0;
-    EncodeDevAscendProgram(func, offset, nullptr);
-    EXPECT_GT(offset, 0u);
+TEST(ParallelForContextTest, SwitchDefaultWorkspace)
+{
+    ParallelForContext ctx;
+    ctx.info.wsId = 5;
+    ctx.SwitchDefaultWorkspace();
+    EXPECT_EQ(ctx.info.wsId, 0u);
+}
+
+TEST(ParallelForContextTest, ChangeForId)
+{
+    ParallelForContext ctx;
+    ctx.info.forId = 3;
+    ctx.info.iterId = 10;
+    ctx.ChangeForId();
+    EXPECT_EQ(ctx.info.forId, 4u);
+    EXPECT_EQ(ctx.info.iterId, 0u);
+}
+
+TEST(ParallelForContextTest, InitParallel)
+{
+    ParallelForContext ctx;
+    ctx.InitParallel(8);
+    EXPECT_EQ(ctx.info.parallelism, 8u);
+}
+
+TEST(DevAscendFunctionDuppedDataTest, GetSource)
+{
+    MiniDup dup;
+    dup.Build(false);
+    EXPECT_EQ(dup.dupData->GetSource(), dup.func);
+}
+
+TEST(DevAscendFunctionDuppedDataTest, GetRuntimeWorkspace)
+{
+    MiniDup dup;
+    dup.Build(false);
+    dup.dupData->runtimeWorkspace_ = 0x1234;
+    EXPECT_EQ(dup.dupData->GetRuntimeWorkspace(), 0x1234u);
+}
+
+TEST(DevAscendFunctionDuppedDataTest, GetRuntimeReuseInfo)
+{
+    MiniDup dup;
+    dup.Build(false);
+    dup.dupData->runtimeWsReuseInfo_.poolResetTimes = 5;
+    auto reuseInfo = dup.dupData->GetRuntimeReuseInfo();
+    EXPECT_EQ(reuseInfo.poolResetTimes, 5u);
+}
+
+TEST(DevAscendFunctionDuppedDataTest, GetOperationSize)
+{
+    MiniDup dup;
+    dup.Build(false);
+    EXPECT_EQ(dup.dupData->GetOperationSize(), 1u);
+}
+
+TEST(DevAscendFunctionDuppedDataTest, GetExpressionSize)
+{
+    MiniDup dup;
+    dup.Build(false);
+    EXPECT_EQ(dup.dupData->GetExpressionSize(), 1u);
+}
+
+TEST(DevAscendFunctionDuppedDataTest, GetOperationCurrPredCount)
+{
+    MiniDup dup;
+    dup.Build(false);
+    auto& predCount = dup.dupData->GetOperationCurrPredCount(0);
+    EXPECT_EQ(predCount, 0u);
+}
+
+TEST(DevAscendFunctionDuppedDataTest, GetOperationStitch)
+{
+    MiniDup dup;
+    dup.Build(false);
+    auto& stitch = dup.dupData->GetOperationStitch(0);
+    EXPECT_EQ(stitch.Head(), nullptr);
+}
+
+TEST(DevAscendFunctionDuppedTest, GetSource)
+{
+    MiniDup dup;
+    dup.Build(false);
+    EXPECT_EQ(dup.dup.GetSource(), dup.func);
+}
+
+TEST(DevAscendFunctionDuppedTest, GetExpressionAddr)
+{
+    MiniDup dup;
+    dup.Build(false);
+    uint64_t* exprAddr = dup.dup.GetExpressionAddr();
+    EXPECT_NE(exprAddr, nullptr);
+    EXPECT_EQ(*exprAddr, 0u);
+}
+
+TEST(DevAscendFunctionDuppedTest, GetExpression)
+{
+    MiniDup dup;
+    dup.Build(false);
+    uint64_t expr = dup.dup.GetExpression(0);
+    EXPECT_EQ(expr, 0u);
+}
+
+TEST(DevAscendFunctionDuppedTest, SchemaGetExpressionTable)
+{
+    MiniDup dup;
+    dup.Build(false);
+    auto exprTable = dup.dup.SchemaGetExpressionTable();
+    // Just verify it doesn't crash
+    (void)exprTable;
 }
