@@ -503,7 +503,7 @@ def compute_gu(b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_co
         "value": "io_dtype",
         "attention_out": "io_dtype",
     },
-    timeout=300,
+    compile_timeout=300,
 )
 
 

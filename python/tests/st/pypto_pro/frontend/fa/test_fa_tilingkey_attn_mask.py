@@ -407,7 +407,7 @@ def compute_gu(b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_co
             pl.store_tile(o, o_f16_buf, [b_idx, g_ctx.qi * 2 + sub_id, n_idx, 0], order=[1, 3])
 
 
-@pl.jit(auto_mutex=True, tiling_key=FaTilingKey, timeout=300)
+@pl.jit(auto_mutex=True, tiling_key=FaTilingKey, compile_timeout=300)
 def fa_tilingkey_attn_mask_kernel(
     q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],

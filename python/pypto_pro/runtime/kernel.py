@@ -119,7 +119,7 @@ class KernelDef:
         func_type: ir.FunctionType,
         strict_ssa: bool,
         meta_data: Any,
-        auto_mutex: bool = False,
+        auto_mutex: bool = True,
         pipeline=None,
         tilingkey_consts: dict[str, int] | None = None,
         datatype_consts: dict[str, Any] | None = None,
@@ -249,7 +249,7 @@ def kernel(
     name: Optional[str] = None,
     func_type: ir.FunctionType = ir.FunctionType.Opaque,
     strict_ssa: bool = False,
-    auto_mutex: bool = False,
+    auto_mutex: bool = True,
     pipeline=None,
 ) -> "KernelDef":
     """Decorator that captures a DSL function for deferred compilation.

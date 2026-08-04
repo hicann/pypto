@@ -51,7 +51,7 @@ def _require_a5(device):
         pytest.skip("not A5")
 
 
-@pl.jit(auto_mutex=True, tiling_key=MatmulTilingKey, timeout=300)
+@pl.jit(auto_mutex=True, tiling_key=MatmulTilingKey, compile_timeout=300)
 def matmul_tilingkey(
     a_ptr: pl.Ptr[pl.DT_UINT8],
     b_ptr: pl.Ptr[pl.DT_UINT8],

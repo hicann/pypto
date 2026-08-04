@@ -55,7 +55,7 @@ pypto_pro.language.system.mutex_unlock(*, pipe, mutex_id, mode=0, max_mutex_id=2
 import pypto_pro.language as pl
 
 
-@pl.jit()
+@pl.jit(auto_mutex=False)
 def mutex_kernel(
     a: pl.Tensor[[64, 64], pl.DT_FP32],
     b: pl.Tensor[[64, 64], pl.DT_FP32],

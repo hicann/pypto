@@ -4,7 +4,7 @@ PyPTO Pro采用SPMD执行模型，同一份Kernel代码在`block_dim`个AI Core�
 
 PyPTO Pro直接编译并下发Kernel，不包含AI CPU侧的Execute Graph调度。因此，图节点Dump、图执行泳道以及面向Execute Graph的Pass Verify等调试方式不适用于PyPTO Pro。PyPTO Pro提供`pl.printf`、`pl.dump_data`、`pl.pto_assert`和`pl.trap`等Kernel级调试接口。
 
-PyPTO Pro的`@pl.jit`使用`enable_print_debug`控制设备侧调试打印，不使用`debug_options`、`verify_options`或`runtime_options`，也不通过`RunMode.SIM`切换仿真执行。调试代码应使用PyPTO Pro提供的JIT参数和Kernel级接口。
+PyPTO Pro的`@pl.jit`在Kernel包含`pl.printf`或`pl.dump_data`时自动开启设备侧调试打印，不使用`debug_options`、`verify_options`或`runtime_options`，也不通过`RunMode.SIM`切换仿真执行。调试代码应使用PyPTO Pro提供的JIT参数和Kernel级接口。
 
 ## 调试流程
 
@@ -67,13 +67,13 @@ torch.npu.synchronize()
 
 ### 打印标量信息
 
-使用`pl.printf`打印Core编号、循环变量、偏移、Shape和分支标志等标量信息。包含设备侧打印的Kernel建议显式设置`enable_print_debug=True`：
+使用`pl.printf`打印Core编号、循环变量、偏移、Shape和分支标志等标量信息。当Kernel包含`pl.printf`或`pl.dump_data`时，框架自动开启设备侧调试打印，无需手动设置：
 
 ```python
 import pypto_pro.language as pl
 
 
-@pl.jit(enable_print_debug=True)
+@pl.jit()
 def debug_kernel(out: pl.Tensor[[16], pl.DT_INT32]):
     core_id = pl.get_block_idx()
     block_num = pl.get_block_num()

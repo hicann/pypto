@@ -247,7 +247,6 @@ def generate_binary_headers(kernel) -> str:
     cg = _codegen(
         kernel.to_kernel_def(concrete_key, datatype_consts),
         arch,
-        kernel.timeout,
         clean_up=False,
         tilingkey_packed=packed,
     )
@@ -602,7 +601,6 @@ def pypto_compile_op(
         cg = _codegen(
             kernel.to_kernel_def(concrete, dtype_consts),
             arch,
-            int(extend_options.get("timeout") or 300),
             clean_up=False,
             tilingkey_packed=packed,
             out_dir=cg_dir,

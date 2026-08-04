@@ -144,16 +144,15 @@ my_kernel[None, num_cores, {"NeedAttnMask": 0}](x, out)
 | 选项 | 说明 | 默认值 |
 |:---|:---|:---|
 | arch | 目标架构，当前可选“a5”；None为自动检测当前受支持设备的架构 | None |
-| auto_mutex | 是否启用自动互斥锁插入 | False |
-| enable_print_debug | 是否启用设备侧调试打印 | None |
-| timeout | 编译超时时间（秒） | 60 |
+| auto_mutex | 是否启用自动互斥锁插入 | True |
+| compile_timeout | 编译超时时间（秒） | 600 |
 | name | 自定义Kernel名称，用于构建产物路径隔离 | None |
 | tiling_key | Tiling键类型，用于Tiling参数化 | None |
 | pipeline | PipelineConfig，用于自动预取流水变换 | None |
 | datatype | 数据类型特化，用于同一Kernel支持多种数据类型 | None |
 
 ```python
-@pl.jit(arch="a5", auto_mutex=True, timeout=200)
+@pl.jit(arch="a5", auto_mutex=True, compile_timeout=200)
 def my_kernel(x: pl.Tensor[[64, 64], pl.DT_FP16],
               out: pl.Tensor[[64, 64], pl.DT_FP16]):
     ...

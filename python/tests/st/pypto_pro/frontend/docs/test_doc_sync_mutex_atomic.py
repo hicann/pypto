@@ -40,7 +40,7 @@ def _require_a5(device):
 # sync_all —— 全流水同步替代 sync_src/sync_dst
 #   纯 vector kernel 用 core_type="aiv_only"，避免同步不存在的 cube 核。
 # ===========================================================================
-@pl.jit()
+@pl.jit(auto_mutex=False)
 def sync_all_kernel(
     a: pl.Tensor[[64, 64], pl.DT_FP32],
     b: pl.Tensor[[64, 64], pl.DT_FP32],
@@ -77,7 +77,7 @@ def test_sync_all():
 # mutex_lock / mutex_unlock —— 手动互斥锁保护 load/store
 #   mutex 设计用于 make_tile_group 缓冲区，单 buffer 也可手动加锁。
 # ===========================================================================
-@pl.jit()
+@pl.jit(auto_mutex=False)
 def mutex_kernel(
     a: pl.Tensor[[64, 64], pl.DT_FP32],
     b: pl.Tensor[[64, 64], pl.DT_FP32],
@@ -135,7 +135,7 @@ def test_mutex_lock_unlock():
 D = 128
 
 
-@pl.jit(auto_mutex=True)
+@pl.jit()
 def atomic_add_kernel(
     a: pl.Tensor[[64, D], pl.DT_FP32],
     out: pl.Tensor[[64, D], pl.DT_FP32],

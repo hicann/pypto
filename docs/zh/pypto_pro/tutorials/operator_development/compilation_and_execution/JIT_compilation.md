@@ -103,6 +103,16 @@ def kernel_auto(x, out):
 | “a5” | Ascend 950PR/Ascend 950DT |
 | None | 自动检测当前受支持设备的架构 |
 
+## 全局配置
+
+除了通过`@pl.jit()`参数为单个Kernel配置编译选项外，还可以在`tile_fwk_config.json`中设置全局默认值。该文件位于`framework/src/interface/configs/tile_fwk_config.json`，修改后需重新编译安装生效。pypto_pro相关的配置项如下：
+
+| 配置项 | 所在段 | 默认值 | 说明 |
+|:---|:---|:---|:---|
+| `compile_timeout` | `host` | 600 | 编译超时时间（秒），与`@pl.jit(compile_timeout=...)`等价 |
+
+`@pl.jit()`参数优先级高于全局配置：若同时在`tile_fwk_config.json`和`@pl.jit()`中设置了同一参数，以`@pl.jit()`中的值为准。
+
 ## 编译产物
 
 JIT编译完成后，编译产物默认缓存在`./build/<kernel_name>__<arch>/`目录下（`<arch>`为目标架构，如`a5`）。每个编译实例均使用独立的TilingKey子目录：使用TilingKey时为`tk_<packed>/`，其中`<packed>`为Key的十六进制打包值；未使用TilingKey时为`tk_none/`。使用datatype特化时，TilingKey子目录位于`dt_<hash>/`下；使用静态签名特化时，基础目录名称还会包含对应的签名后缀。主要产物位于当前编译实例的`tk_<packed>/`或`tk_none/`目录下，包括：
@@ -110,6 +120,7 @@ JIT编译完成后，编译产物默认缓存在`./build/<kernel_name>__<arch>/`
 - **kernel.cpp**：CodeGen生成的Device侧C++源码，包含Kernel的计算逻辑实现。
 - **call_kernel.cpp / call_kernel.so**：Host侧Launcher源码及其编译后的共享库，负责参数打包和Kernel下发。
 - **tiling头文件**（`*_tiling.h`）：当Kernel包含TilingData参数时生成，描述tiling结构体的C布局。
+- **kernel.cce.i**：在编译目录下手动执行`bisheng -xcce -DREGISTER_BASE -E -I$ASCEND_TOOLKIT_HOME/include -I$ASCEND_HOME_PATH --cce-aicore-arch=dav-c310 kernel.cpp > kernel.cce.i`生成的宏展开CCE源码，便于调试宏展开问题。
 
 > [!NOTE]说明
 > 默认情况下，编译成功后`kernel.cpp`和`call_kernel.cpp`等中间源文件会保留在产物目录中，便于调试。若需查看Device侧生成的代码，可直接阅读`kernel.cpp`。

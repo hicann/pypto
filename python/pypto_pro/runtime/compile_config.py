@@ -69,9 +69,10 @@ class JitCompileConfig:
 
     def build_llvm_args(self, arch: str) -> list[str]:
         arch = arch.strip().lower()
-        arch_args = self.llvm_arch_args.get(arch)
+        arch_key = self._resolve_arch_key(arch)
+        arch_args = self.llvm_arch_args.get(arch_key)
         if arch_args is None:
-            raise RuntimeError(f"JIT compile config does not define llvm_arch_args.{arch}")
+            raise RuntimeError(f"JIT compile config does not define llvm_arch_args.{arch_key}")
         return [*self.llvm_common_args, *arch_args]
 
     def runtime_include_flags(self, ascend_home_path: str) -> list[str]:
@@ -88,32 +89,32 @@ class JitCompileConfig:
         return link_args
 
     def _resolve_npu_arch(self, arch: str, has_cube: bool, has_vec: bool) -> str:
-        arch_config = self.npu_arch.get(arch)
+        arch_key = self._resolve_arch_key(arch)
+        arch_config = self.npu_arch.get(arch_key)
         if arch_config is None:
             raise RuntimeError(f"JIT compile config does not define npu_arch for arch '{arch}'")
         variant = "cube_vec" if has_cube and has_vec else "cube" if has_cube else "vec" if has_vec else "default"
         npu_arch = arch_config.get(variant)
         if npu_arch is None:
-            raise RuntimeError(f"JIT compile config does not define npu_arch.{arch}.{variant}")
+            raise RuntimeError(f"JIT compile config does not define npu_arch.{arch_key}.{variant}")
         return npu_arch
 
     def _resolve_memory_arch_flag(self, arch: str) -> str:
-        mem_arch = self.memory_arch_flags.get(arch)
+        arch_key = self._resolve_arch_key(arch)
+        mem_arch = self.memory_arch_flags.get(arch_key)
         if mem_arch is None:
-            raise RuntimeError(f"JIT compile config does not define memory_arch_flags.{arch}")
+            raise RuntimeError(f"JIT compile config does not define memory_arch_flags for arch '{arch}'")
         return mem_arch
+
+    @staticmethod
+    def _resolve_arch_key(arch: str) -> str:
+        return {"a2": "a2a3", "a3": "a2a3"}.get(arch, arch)
 
 
 _DEFAULT_CCE_JIT_COMPILE_CONFIG = JitCompileConfig(
     backend=CCE_BACKEND,
     npu_arch={
-        "a2": {
-            "cube_vec": "dav-c220",
-            "cube": "dav-c220-cube",
-            "vec": "dav-c220-vec",
-            "default": "dav-c220",
-        },
-        "a3": {
+        "a2a3": {
             "cube_vec": "dav-c220",
             "cube": "dav-c220-cube",
             "vec": "dav-c220-vec",
@@ -127,8 +128,7 @@ _DEFAULT_CCE_JIT_COMPILE_CONFIG = JitCompileConfig(
         },
     },
     memory_arch_flags={
-        "a2": "-DMEMORY_BASE",
-        "a3": "-DMEMORY_BASE",
+        "a2a3": "-DMEMORY_BASE",
         "a5": "-DREGISTER_BASE",
     },
     arch_flags=("--cce-aicore-arch={npu_arch}",),
@@ -162,15 +162,7 @@ _DEFAULT_CCE_JIT_COMPILE_CONFIG = JitCompileConfig(
         "--cce-auto-sync=off",
     ),
     llvm_arch_args={
-        "a2": (
-            "-O3",
-            "--cce-disable-kernel-global-attr-check",
-            "-Wno-parentheses-equality",
-            "-Wno-unused-command-line-argument",
-            "-Werror",
-            "-Wno-cce-compat",
-        ),
-        "a3": (
+        "a2a3": (
             "-O3",
             "--cce-disable-kernel-global-attr-check",
             "-Wno-parentheses-equality",
