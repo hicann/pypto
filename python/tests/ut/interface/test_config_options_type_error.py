@@ -76,6 +76,11 @@ def assert_option_type_error(setter, pattern):
             "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
             "Option 'debug.dump_pass_graph' has invalid type. Expected list\\[string\\], but got string",
         ),
+        (
+            lambda:pypto.set_debug_options(dump_pass_graph=["RemoveRedundantReshape", 1]),
+            "Option 'debug.dump_pass_graph' has invalid list element type at index 1. "
+            "Expected str, but got int",
+        ),
     ],
 )
 def test_wrapper_option_type_mismatch_error(setter, pattern):
@@ -109,6 +114,11 @@ def test_wrapper_option_type_mismatch_error(setter, pattern):
             {"verify_options": {"pass_verify_error_tol": "0.1,0.1"}},
             "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
             "Option 'verify.pass_verify_error_tol' has invalid type. Expected list\\[double\\], but got string",
+        ),
+        (
+            {"runtime_options": {"ready_on_host_tensors": ["x", 1, "y"]}},
+            "Option 'runtime.ready_on_host_tensors' has invalid list element type at index 1. "
+            "Expected str, but got int",
         ),
     ],
 )

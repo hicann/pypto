@@ -204,18 +204,48 @@ void BindControllerUtils(py::module_& m)
 std::any ConvertPyList(const std::string& key, const py::list& lst)
 {
     if (lst.size() == 0) {
+        const auto& expectedType = ConfigManagerNg::GetInstance().Type(key);
+        if (expectedType == typeid(std::vector<std::string>)) {
+            return std::vector<std::string>();
+        }
+        if (expectedType == typeid(std::vector<double>)) {
+            return std::vector<double>();
+        }
         return std::vector<int64_t>();
     }
+    auto getElemTypeName = [](const py::handle& elem) {
+        return py::str(py::type::handle_of(elem).attr("__name__")).cast<std::string>();
+    };
     if (py::isinstance<py::int_>(lst[0])) {
         std::vector<int64_t> intVec;
-        for (auto elem : lst) {
-            intVec.push_back(py::cast<int64_t>(elem));
+        for (size_t i = 0; i < lst.size(); ++i) {
+            if (!py::isinstance<py::int_>(lst[i])) {
+                throw py::type_error("Option '" + key + "' has invalid list element type at index " +
+                                     std::to_string(i) + ". Expected int, but got " + getElemTypeName(lst[i]));
+            }
+            intVec.push_back(py::cast<int64_t>(lst[i]));
         }
         return intVec;
     } else if (py::isinstance<py::str>(lst[0])) {
-        return py::cast<std::vector<std::string>>(lst);
+        std::vector<std::string> strVec;
+        for (size_t i = 0; i < lst.size(); ++i) {
+            if (!py::isinstance<py::str>(lst[i])) {
+                throw py::type_error("Option '" + key + "' has invalid list element type at index " +
+                                     std::to_string(i) + ". Expected str, but got " + getElemTypeName(lst[i]));
+            }
+            strVec.push_back(py::cast<std::string>(lst[i]));
+        }
+        return strVec;
     } else if (py::isinstance<py::float_>(lst[0])) {
-        return py::cast<std::vector<double>>(lst);
+        std::vector<double> doubleVec;
+        for (size_t i = 0; i < lst.size(); ++i) {
+            if (!py::isinstance<py::float_>(lst[i])) {
+                throw py::type_error("Option '" + key + "' has invalid list element type at index " +
+                                     std::to_string(i) + ". Expected float, but got " + getElemTypeName(lst[i]));
+            }
+            doubleVec.push_back(py::cast<double>(lst[i]));
+        }
+        return doubleVec;
     }
     throw py::type_error("Unsupported list element type for key: " + key);
 }
