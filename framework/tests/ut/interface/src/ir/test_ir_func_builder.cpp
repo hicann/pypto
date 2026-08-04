@@ -159,6 +159,42 @@ struct IrFuncSetup {
         auto lt = builder.CreateTensorVar(*fwkFunc, DT_FP32, {TILE, TILE}, TileOpFormat::TILEOP_ND, name);
         return std::static_pointer_cast<const ir::Var>(lt);
     }
+
+    // Construct a "None" expr (UnknownType Var), matching production ir.range(init_values=(None,...))
+    // where Python ctx.unwrap(None) returns an UnknownType Var — not a null ExprPtr.
+    ir::ExprPtr MakeNoneExpr() { return IRContext::Get().MakeVar("None", ir::GetUnknownType(), Sp()); }
+
+    // Overload accepting ir::ExprPtr for initValues/continueValues (supports None exprs).
+    ir::ForStmtPtr WrapStmtsInForLoopWithIterArgsExpr(const std::string& loopVarName,
+                                                      const std::vector<ir::ExprPtr>& initValues,
+                                                      const std::vector<ir::ExprPtr>& continueValues,
+                                                      const std::vector<ir::VarPtr>& returnVars,
+                                                      std::vector<std::pair<std::string, std::any>> attrs = {})
+    {
+        auto continueStmt = std::make_shared<ir::ContinueStmt>(continueValues, Sp());
+        stmts.push_back(continueStmt);
+        auto body = std::make_shared<ir::SeqStmts>(stmts, Sp());
+        stmts.clear();
+
+        std::vector<ir::IterArgPtr> iterArgs;
+        for (size_t i = 0; i < initValues.size(); i++) {
+            auto iterVar = builder.CreateTensorVar(*fwkFunc, DT_FP32, {TILE, TILE}, TileOpFormat::TILEOP_ND,
+                                                   loopVarName + "_iter" + std::to_string(i));
+            iterArgs.push_back(
+                std::make_shared<ir::IterArg>(std::static_pointer_cast<const ir::Var>(iterVar), initValues[i]));
+        }
+
+        auto intType = std::make_shared<ir::ScalarType>(ir::DataType::INT64);
+        auto loopVar = IRContext::Get().MakeVar(loopVarName, intType, Sp());
+        auto zero = std::make_shared<ir::ConstInt>(0, ir::DataType::INT64, Sp());
+        auto ten = std::make_shared<ir::ConstInt>(10, ir::DataType::INT64, Sp());
+        auto one = std::make_shared<ir::ConstInt>(1, ir::DataType::INT64, Sp());
+        attrs.emplace_back("_config_scope", ConfigManagerNg::CurrentScope());
+        auto forStmt = std::make_shared<ir::ForStmt>(loopVar, zero, ten, one, iterArgs, body, returnVars, Sp(),
+                                                     std::move(attrs));
+        stmts.push_back(forStmt);
+        return forStmt;
+    }
 };
 
 std::vector<npu::tile_fwk::Function*> FindHiddenFuncs()
@@ -810,4 +846,79 @@ TEST_F(IrFuncBuilderTest, TestLinkControlFlowSlots_NestedForLoops)
     EXPECT_EQ(slotManager->GetSlotTensor(innerRvLt)->Id(), outId);
     EXPECT_EQ(slotManager->GetSlotTensor(outerRvLt)->Id(), outId);
     EXPECT_EQ(slotManager->GetSlotTensor(loopVal)->Id(), outId);
+}
+
+// ============================================================================
+// LinkControlFlowSlots: ForStmt with null initValue (init_values=(None, ...)).
+//   Verifies iterVar→value→returnVar are still connected when initValue is None
+//   (initLt skipped, remaining nodes chained).
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestLinkControlFlowSlots_ForLoopNullInit)
+{
+    IrFuncSetup setup("LinkControlFlowSlots_ForLoopNullInit");
+
+    auto out = setup.MakeParam("out");
+
+    auto loopVal = setup.MakeLocal("loop_val");
+    setup.AddDassemble(out, loopVal);
+
+    auto returnVar = setup.MakeReturnVar("for_returnVar");
+    // initValues = {None} → simulates init_values=(None, ...)
+    auto forStmt = setup.WrapStmtsInForLoopWithIterArgsExpr(
+        "i", {setup.MakeNoneExpr()}, {std::static_pointer_cast<const ir::Expr>(loopVal)}, {returnVar});
+
+    auto returnStmt = std::make_shared<ir::ReturnStmt>(
+        std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(returnVar)}, Sp());
+    setup.stmts.push_back(returnStmt);
+
+    auto irFunc = setup.BuildIrFunction("LinkControlFlowSlots_ForLoopNullInit");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    // initValue is None → initLt skipped; iterVar → loopVal → returnVar chained.
+    auto slotManager = Program::GetInstance().GetTensorSlotManager();
+    auto iterVarLt = std::const_pointer_cast<LogicalTensor>(
+        std::dynamic_pointer_cast<const LogicalTensor>(forStmt->iterArgs_[0]->iterVar_));
+    auto iterId = slotManager->GetSlotTensor(iterVarLt)->Id();
+    auto returnVarLt = std::const_pointer_cast<LogicalTensor>(
+        std::dynamic_pointer_cast<const LogicalTensor>(returnVar));
+    EXPECT_EQ(slotManager->GetSlotTensor(loopVal)->Id(), iterId);
+    EXPECT_EQ(slotManager->GetSlotTensor(returnVarLt)->Id(), iterId);
+}
+
+// ============================================================================
+// LinkControlFlowSlots: ForStmt with null continueValue.
+//   Verifies initLt->iterLt and iterLt->returnVarLt are still built when
+//   continueValue is None (valueLt skipped, iterLt connects directly to returnVarLt).
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestLinkControlFlowSlots_ForLoopNullContinueValue)
+{
+    IrFuncSetup setup("LinkControlFlowSlots_ForLoopNullContinueValue");
+
+    auto out = setup.MakeParam("out");
+
+    auto returnVar = setup.MakeReturnVar("for_returnVar");
+    // continueValues = {None} → ContinueStmt value is UnknownType
+    auto forStmt = setup.WrapStmtsInForLoopWithIterArgsExpr("i", {std::static_pointer_cast<const ir::Expr>(out)},
+                                                            {setup.MakeNoneExpr()}, {returnVar});
+
+    auto returnStmt = std::make_shared<ir::ReturnStmt>(
+        std::vector<ir::ExprPtr>{std::static_pointer_cast<const ir::Expr>(returnVar)}, Sp());
+    setup.stmts.push_back(returnStmt);
+
+    auto irFunc = setup.BuildIrFunction("LinkControlFlowSlots_ForLoopNullContinueValue");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    // continueValue is None → valueLt skipped; out -> iterVar -> returnVar connected.
+    auto slotManager = Program::GetInstance().GetTensorSlotManager();
+    auto outId = slotManager->GetSlotTensor(out)->Id();
+    auto iterVarLt = std::const_pointer_cast<LogicalTensor>(
+        std::dynamic_pointer_cast<const LogicalTensor>(forStmt->iterArgs_[0]->iterVar_));
+    auto returnVarLt = std::const_pointer_cast<LogicalTensor>(
+        std::dynamic_pointer_cast<const LogicalTensor>(returnVar));
+    EXPECT_EQ(slotManager->GetSlotTensor(iterVarLt)->Id(), outId);
+    EXPECT_EQ(slotManager->GetSlotTensor(returnVarLt)->Id(), outId);
 }

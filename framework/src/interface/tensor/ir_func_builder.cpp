@@ -709,28 +709,26 @@ void RootFunctionBuilder::LinkForStmtSlots(const ir::ForStmt& forStmt)
     for (size_t i = 0; i < forStmt.iterArgs_.size(); i++) {
         auto& iterArg = forStmt.iterArgs_[i];
         auto initLt = AsLogicalTensor(iterArg->initValue_);
-        if (initLt == nullptr) {
-            continue;
-        }
         auto iterLt = AsLogicalTensor(iterArg->iterVar_);
-        if (iterLt == nullptr) {
-            continue;
+
+        LogicalTensorPtr valueLt;
+        LogicalTensorPtr returnVarLt;
+        if (continueStmt != nullptr) {
+            valueLt = AsLogicalTensor(continueStmt->value_[i]);
+            returnVarLt = AsLogicalTensor(forStmt.returnVars_[i]);
         }
-        if (continueStmt == nullptr) {
-            continue;
+
+        // initLt -> iterLt -> valueLt -> returnVarLt
+        LogicalTensorPtr prev;
+        for (auto& cur : {initLt, iterLt, valueLt, returnVarLt}) {
+            if (cur == nullptr) {
+                continue;
+            }
+            if (prev != nullptr) {
+                slotManager->SetSameSlot(prev, cur);
+            }
+            prev = cur;
         }
-        auto valueLt = AsLogicalTensor(continueStmt->value_[i]);
-        if (valueLt == nullptr) {
-            continue;
-        }
-        auto returnVarLt = AsLogicalTensor(forStmt.returnVars_[i]);
-        if (returnVarLt == nullptr) {
-            continue;
-        }
-        // initValue -> iterVar -> value -> returnVar：child 继承 parent 的 slot
-        slotManager->SetSameSlot(initLt, iterLt);
-        slotManager->SetSameSlot(iterLt, valueLt);
-        slotManager->SetSameSlot(valueLt, returnVarLt);
     }
 }
 
