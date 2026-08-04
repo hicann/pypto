@@ -133,8 +133,8 @@ TEST(AicoreHalTest, GetAicoreStatusAndLastWord)
     HalTestEnv env;
     int coreIdx = 0;
     volatile KernelArgs* args = env.GetArgs(coreIdx);
-    args->shakeBuffer[2] = 0xDEADBEEF;
-    args->shakeBuffer[3] = 0xCAFEBABE;
+    args->dfxBuffer[2] = 0xDEADBEEF;
+    args->dfxBuffer[3] = 0xCAFEBABE;
 
     EXPECT_EQ(env.hal.GetAicoreStatus(coreIdx), 0xDEADBEEFu);
     EXPECT_EQ(env.hal.GetAicoreStatusLastWord(coreIdx), 0xCAFEBABEu);

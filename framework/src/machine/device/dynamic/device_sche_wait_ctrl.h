@@ -31,11 +31,7 @@ static inline uint64_t CalcWaitTimeout(bool isOnlyOneSche = false, bool isWaitCt
         waitTimeout = isWaitCtrlLevel ? TIMEOUT_A2A3_10SEC : TIMEOUT_A2A3_1SEC;
         return waitTimeout;
     }
-    DEV_IF_INFO
-    {
-        waitTimeout = isWaitCtrlLevel ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_2MS;
-        ;
-    }
+    DEV_IF_INFO { waitTimeout = isWaitCtrlLevel ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_2MS; }
     DEV_IF_DEBUG { waitTimeout = isWaitCtrlLevel ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_3MS; }
     // 避免 OS 节流导致 aicpu 拉起时间较长，超时报错
     if (isOnlyOneSche && !isWaitCtrlLevel) {

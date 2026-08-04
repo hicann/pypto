@@ -279,7 +279,7 @@ void VerifyAdjacentRanges(size_t prevIdx, const RelocRange& prev, const RelocRan
     VerifySingleRangeValid(prevIdx + 1, curr);
 }
 
-void VerifyProgramDataLayout(const std::vector<RelocRange>& rangeList, uint8_t* data, uint64_t dataSize)
+void VerifyProgramDataLayout(const std::vector<RelocRange>& rangeList, const uint8_t* data, uint64_t dataSize)
 {
     if ((uintptr_t)data != rangeList[0].begin) {
         DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,

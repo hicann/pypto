@@ -339,7 +339,7 @@ public:
 
     inline int ProcessTaskLoop(SchDeviceTaskContext* deviceTaskCtx, bool& isFinish)
     {
-        TIMEOUT_CHECK_INIT(archInfo_, TIMEOUT_10SEC);
+        TIMEOUT_CHECK_INIT(archInfo_, TIMEOUT_DISPATCH);
         while (!deviceTaskCtx->IsCoreTaskSendFinish()) {
             int32_t ret = RunCoreTask<true>(deviceTaskCtx);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
@@ -376,17 +376,19 @@ public:
         uint64_t status = aicoreHal_.GetAicoreStatus(coreIdx);
         if (pendingIds_[coreIdx] != AICORE_TASK_INIT) {
             DEV_ERROR(SchedErr::ABNOMAL_LAST_WORD,
-                      "coreid=%d status=%lu, lastwordstatus=%lu,"
+                      "coreid=%d status=%lu, warningstatus=%lu ,lastwordstatus=%lu,"
                       "pending taskid=%x, parallelIdx=%u, coreVer=%u",
-                      coreIdx, status, aicoreHal_.GetAicoreStatusLastWord(coreIdx), pendingIds_[coreIdx],
+                      coreIdx, status, aicoreHal_.GetAicoreWarningStatus(coreIdx),
+                      aicoreHal_.GetAicoreStatusLastWord(coreIdx), pendingIds_[coreIdx],
                       npu::tile_fwk::ParallelIndex(pendingIds_[coreIdx]),
                       aicoreHal_.ParallelDevTaskCtxVersion(coreIdx));
         }
         if (runningIds_[coreIdx] != AICORE_TASK_INIT) {
             DEV_ERROR(SchedErr::ABNOMAL_LAST_WORD,
-                      "coreid=%d, status=%lu, lastwordstatus=%lu,"
+                      "coreid=%d, status=%lu, warningstatus=%lu, lastwordstatus=%lu,"
                       "running taskid=%x, parallelIdx=%u, coreVer=%u",
-                      coreIdx, status, aicoreHal_.GetAicoreStatusLastWord(coreIdx), runningIds_[coreIdx],
+                      coreIdx, status, aicoreHal_.GetAicoreWarningStatus(coreIdx),
+                      aicoreHal_.GetAicoreStatusLastWord(coreIdx), runningIds_[coreIdx],
                       npu::tile_fwk::ParallelIndex(runningIds_[coreIdx]),
                       aicoreHal_.ParallelDevTaskCtxVersion(coreIdx));
         }
@@ -487,7 +489,7 @@ public:
         DEV_DEBUG("Schedule run start succ");
         uint64_t lastDevTaskFinCycle = 0;
         PROF_STAGE_BEGIN_MTSAFE(PERF_EVT_STAGE_SCHEDULE, threadIdx, "dispatch.before\n");
-        TIMEOUT_CHECK_INIT(archInfo_, TIMEOUT_10SEC);
+        TIMEOUT_CHECK_INIT(archInfo_, TIMEOUT_DISPATCH);
         uint32_t lastParallelVer = context_->PrallelVersion();
         while (ret == 0) {
             FillParallelDevtaskCtx();
@@ -515,10 +517,7 @@ public:
             {
                 __PYPTO_TIMEOUT_CHECK_EXIT_ONLY(
                     SchedErr::SCH_PARALLEL_DEVTASK_TIMEOUT,
-                    {
-                        ret = ToUnderlying(SchedErr::SCH_PARALLEL_DEVTASK_TIMEOUT);
-                        break;
-                    },
+                    { ret = ToUnderlying(SchedErr::SCH_PARALLEL_DEVTASK_TIMEOUT); },
                     "#sche.parallel.devtask: Schedule parallel devtask, dequeueFinish=%d.", taskCtrlDequeFinish);
             }
             DEV_IF_NONDEVICE
@@ -526,10 +525,7 @@ public:
                 if (aicoreHal_.IsHostSimMode() && !enableEslModel_) {
                     __PYPTO_TIMEOUT_CHECK_EXIT_ONLY(
                         SchedErr::SCH_PARALLEL_DEVTASK_TIMEOUT,
-                        {
-                            ret = ToUnderlying(SchedErr::SCH_PARALLEL_DEVTASK_TIMEOUT);
-                            break;
-                        },
+                        { ret = ToUnderlying(SchedErr::SCH_PARALLEL_DEVTASK_TIMEOUT); },
                         "#sche.parallel.devtask: Schedule parallel devtask, dequeueFinish=%d.", taskCtrlDequeFinish);
                 }
             }
@@ -727,9 +723,9 @@ private:
                 DEV_ERROR(
                     SchedErr::TASK_WAIT_TIMEOUT,
                     "#sche.task.end.sync.timeout: left aic core %d not stop, pending:%x, rungning:%x, regfinishid: %lx,"
-                    "core last status:%lu lastword status:%lu",
+                    "core last status:%lu, warning status:%lu, lastword status:%lu",
                     i, pendingIds_[i], runningIds_[i], aicoreHal_.GetFinishedTask(i), aicoreHal_.GetAicoreStatus(i),
-                    aicoreHal_.GetAicoreStatusLastWord(i));
+                    aicoreHal_.GetAicoreWarningStatus(i), aicoreHal_.GetAicoreStatusLastWord(i));
             }
         }
 
@@ -738,9 +734,9 @@ private:
                 DEV_ERROR(
                     SchedErr::TASK_WAIT_TIMEOUT,
                     "#sche.task.end.sync.timeout: left aiv core %d not stop, pending:%x, rungning:%x, regfinishid: %lx,"
-                    "core last status:%lu lastword status:%lu",
+                    "core last status:%lu, warning status:%lu, lastword status:%lu",
                     i, pendingIds_[i], runningIds_[i], aicoreHal_.GetFinishedTask(i), aicoreHal_.GetAicoreStatus(i),
-                    aicoreHal_.GetAicoreStatusLastWord(i));
+                    aicoreHal_.GetAicoreWarningStatus(i), aicoreHal_.GetAicoreStatusLastWord(i));
             }
         }
     }
@@ -772,7 +768,7 @@ private:
             isSendStop = true;
         }
 
-        TIMEOUT_CHECK_INIT(archInfo_, TIMEOUT_10SEC);
+        TIMEOUT_CHECK_INIT(archInfo_, TIMEOUT_DISPATCH);
         uint32_t resloveParallelIdx = 0;
         while (devTaskCtx->coreFinishedNum < mngCoreNum) {
             bool curIterAicAllStop = true;

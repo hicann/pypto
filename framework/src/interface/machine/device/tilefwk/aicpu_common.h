@@ -38,6 +38,10 @@ constexpr int REG_LOW_TASK_PING = 0;
 constexpr int REG_LOW_TASK_PONG = 1;
 constexpr int MAX_DFX_TASK_NUM_PER_CORE = 10000;
 
+// AICPU dispatch/sync 阶段超时时间
+#define AICPU_DISPATCH_TIMEOUT_A2A3 50000000ULL * 10
+#define AICPU_DISPATCH_TIMEOUT_A5 1000000000ULL * 10
+
 constexpr int SHAK_BUF_PRINT_BUFFER_INDEX = 5;
 constexpr int SHAK_BUF_COREFUNC_DATA_INDEX = 6;
 constexpr int SHAK_BUF_DFX_DATA_INDEX = 7;
@@ -302,6 +306,7 @@ struct KernelArgs {
     int64_t shakeBuffer[8];
     int64_t shakeBufferCpuToCore[8];
     int64_t waveBufferCpuToCore[8];
+    int64_t dfxBuffer[8];
     struct ParallelDevTask parallelDevTask;
     TaskEntry taskEntry;
 };

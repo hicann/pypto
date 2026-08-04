@@ -73,16 +73,23 @@ INLINE void SetStatus(__gm__ KernelArgs* args, int64_t val)
 {
     if (!IS_AICORE || DEBUG_SWITCH) {
         Barrier();
-        args->shakeBuffer[2] = val;
-        dcci(args->shakeBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
+        args->dfxBuffer[2] = val;
+        dcci(args->dfxBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
     }
 }
 
 INLINE void SetLastWordStatus(__gm__ KernelArgs* args, int64_t val)
 {
     Barrier();
-    args->shakeBuffer[3] = val;
-    dcci(args->shakeBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
+    args->dfxBuffer[3] = val;
+    dcci(args->dfxBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
+}
+
+INLINE void SetWarningStatus(__gm__ KernelArgs* args, int64_t val)
+{
+    Barrier();
+    args->dfxBuffer[6] = val;
+    dcci(args->dfxBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
 }
 
 INLINE void PerfTraceRecord(uint32_t devTaskId, __gm__ AicoreMetric* metric, AicorePerfTrace type, uint64_t cycle = 0)

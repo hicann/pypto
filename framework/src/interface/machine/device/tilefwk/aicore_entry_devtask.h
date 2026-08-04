@@ -24,15 +24,16 @@ INLINE void UpdateCacheDevTask(ExecuteContext* ctx, uint32_t parallelIdx, int64_
     ctx->cachedDevTasks[parallelIdx].cceBinary = (__gm__ npu::tile_fwk::DynFuncBin*)(header->cceBinary);
 }
 
-INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext* ctx, __gm__ KernelArgs* args)
+INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext* ctx)
 {
+    __gm__ KernelArgs* args = ctx->args;
     AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
     // kernel start , init prallelDevtask
     volatile __gm__ ParallelDevTask* parallelDevTask = &args->parallelDevTask;
     while (true) {
         if (parallelDevTask->rear - parallelDevTask->front == 0) {
             dcci(parallelDevTask, SINGLE_CACHE_LINE, CACHELINE_OUT);
-            AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_DEVICE_TASK_WAIT_TIME_OUT,
+            AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_DEVICE_TASK_WAIT_TIMEOUT,
                                         STAGE_GET_PARALLEL_DEVTASK_TIMEOUT, nullptr);
 
             // The aicore received the task stop notification before receiving the leaftask.
@@ -49,7 +50,7 @@ INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext* ctx,
             uint32_t idx = i % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM;
             int64_t elemPtr = 0;
             do {
-                AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_DEVICE_TASK_WAIT_TIME_OUT,
+                AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_DEVICE_TASK_WAIT_TIMEOUT,
                                             STAGE_GET_PARALLEL_DEVTASK_TIMEOUT, nullptr);
 
                 // The aicore received the task stop notification before receiving the leaftask.
@@ -71,8 +72,9 @@ INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext* ctx,
     return nullptr;
 }
 
-INLINE uint32_t RefreshParallelDevTaskByModifyFlag(__gm__ KernelArgs* args, ExecuteContext* ctx, uint32_t highRegValue)
+INLINE uint32_t RefreshParallelDevTaskByModifyFlag(ExecuteContext* ctx, uint32_t highRegValue)
 {
+    __gm__ KernelArgs* args = ctx->args;
     uint32_t curLeafDevTaskId = npu::tile_fwk::DevTaskId(highRegValue);
     uint32_t mask = npu::tile_fwk::ParallelDevTaskModifyFlag(highRegValue);
     int32_t modifyCnt = __builtin_popcount(mask);
@@ -119,15 +121,14 @@ INLINE uint32_t RefreshParallelDevTaskByModifyFlag(__gm__ KernelArgs* args, Exec
     return 0;
 }
 
-INLINE uint32_t RefreshParallelDevTask(__gm__ KernelArgs* args, ExecuteContext* ctx, __gm__ Metrics* metric,
-                                       uint32_t& lastRegHighVal)
+INLINE uint32_t RefreshParallelDevTask(ExecuteContext* ctx, __gm__ Metrics* metric, uint32_t& lastRegHighVal)
 {
-    uint32_t newRegHighVal = GetRegHighValue(args, lastRegHighVal);
+    uint32_t newRegHighVal = GetRegHighValue(ctx->args, lastRegHighVal);
     if (newRegHighVal == 0) {
         return AICORE_TASK_ABNORMAL_STOP;
     }
 
-    uint32_t ret = RefreshParallelDevTaskByModifyFlag(args, ctx, newRegHighVal);
+    uint32_t ret = RefreshParallelDevTaskByModifyFlag(ctx, newRegHighVal);
     if (ret == AICORE_TASK_ABNORMAL_STOP) {
         return AICORE_TASK_ABNORMAL_STOP;
     }

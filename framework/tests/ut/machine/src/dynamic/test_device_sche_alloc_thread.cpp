@@ -183,14 +183,11 @@ TEST_F(ArbitrationTest, AllocThreadIdByArbitrationLevel_NonOptimalAlwaysIncremen
 TEST_F(ArbitrationTest, GetArbitTimeOutVal_DispatchesByArch)
 {
     // 非 __DEVICE__ 环境下 DEV_IF_DEBUG / DEV_IF_INFO 均为 if(true)，
-    // DAV_3510：两个宏都覆盖为 TIMEOUT_A5_20MIN
-    // 其他 arch：DEV_IF_DEBUG 最后执行并覆盖 → isLast ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_2MS
-    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_3510, true), TIMEOUT_A5_20MIN);
-    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_3510, false), TIMEOUT_A5_20MIN);
-    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_2201, true), TIMEOUT_A2A3_1SEC);
-    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_2201, false), TIMEOUT_A2A3_2MS);
-    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_UNKNOWN, true), TIMEOUT_A2A3_1SEC);
-    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_UNKNOWN, false), TIMEOUT_A2A3_2MS);
+    // DAV_3510：两个宏都覆盖为 TIMEOUT_A5_5SEC
+    // 其他 arch：DEV_IF_DEBUG 最后执行并覆盖 → TIMEOUT_A2A3_2MS
+    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_3510), TIMEOUT_A5_5SEC);
+    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_2201), TIMEOUT_A2A3_2MS);
+    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_UNKNOWN), TIMEOUT_A2A3_2MS);
 }
 
 // ---------------------------------------------------------------------------
@@ -215,7 +212,7 @@ TEST_F(ArbitrationTest, WaitForCpuMaskReady_arbitrationCpumask_ReturnsOk)
     std::atomic<uint64_t> cpumask{0b111};
     std::atomic<uint64_t> arbitrationCpumask{0};
 
-    EXPECT_EQ(WaitForCpuMaskReadyForArbitration(ArchInfo::DAV_3510, 2, cpumask, false, &arbitrationCpumask),
+    EXPECT_EQ(WaitForCpuMaskReadyForArbitration(ArchInfo::DAV_3510, 2, cpumask, &arbitrationCpumask),
               DEVICE_MACHINE_OK);
     EXPECT_EQ(arbitrationCpumask.load(), 0b111u);
 }
@@ -225,7 +222,7 @@ TEST_F(ArbitrationTest, WaitForCpuMaskReady_arbitrationCpumaskConsistent)
     std::atomic<uint64_t> cpumask{(1ULL << 4) | (1ULL << 5) | (1ULL << 6)}; // die0 cluster: bit 4,5,6
     std::atomic<uint64_t> arbitrationCpumask{0};
 
-    EXPECT_EQ(WaitForCpuMaskReadyForArbitration(ArchInfo::DAV_3510, 2, cpumask, false, &arbitrationCpumask),
+    EXPECT_EQ(WaitForCpuMaskReadyForArbitration(ArchInfo::DAV_3510, 2, cpumask, &arbitrationCpumask),
               DEVICE_MACHINE_OK);
     EXPECT_EQ(arbitrationCpumask.load(), cpumask.load());
 }

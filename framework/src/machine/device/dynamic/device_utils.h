@@ -58,42 +58,39 @@ constexpr int32_t DEVICE_MACHINE_TIMEOUT_CORETASK = PYPTO_DEVICE_ERROR_TASK_TIME
 constexpr int32_t DEVICE_MACHINE_ERROR = PYPTO_DEVICE_ERROR_INTERNAL_ERROR;
 constexpr int32_t DEVICE_MACHINE_OK = PYPTO_DEVICE_SUCCESS;
 
-constexpr int32_t TIME_OUT_THRESHOLD = 1000000;      // 超时阈值 1s
-constexpr int32_t DFX_TIME_OUT_THRESHOLD = 50000000; // 超时阈值 50s
 constexpr uint32_t CTRL_CPU_THREAD_IDX = 0;
 constexpr int32_t START_AICPU_NUM = 3;
 constexpr uint64_t NUM_FIFTY = 50;
 constexpr uint64_t US_PER_SEC = 1000000;
 constexpr uint64_t NSEC_PER_USEC = 1000;
 constexpr uint64_t NSEC_PER_SEC = 1000000000;
-constexpr uint64_t HAND_SHAKE_TIMEOUT_A2A3_CYCLES = 48000000000ULL; // 48G cycles, 16分钟 @50MHz
-constexpr uint64_t HAND_SHAKE_TIMEOUT_A5_CYCLES = 960000000000ULL;  // 960G cycles, 16分钟 @1000MHz
-constexpr uint64_t TIMEOUT_A5_50US = 50000ULL;                      // 50μs @1000MHz (1000 cycles per μs)
 constexpr int32_t MAX_MNG_AICORE_AVG_NUM = 8;
 constexpr uint32_t CORE_IDX_AIV = 0;
 constexpr uint32_t CORE_IDX_AIC = 1;
 const uint32_t AIV_NUM_PER_AI_CORE = 2;
 const int INVALID_CORE_IDX = 0xFF;
 
-// A2/A3 架构超时常量 (基于 50MHz aicpu 频率，周期数直接定义，避免运行时乘法)
-constexpr uint64_t TIMEOUT_A2A3_20US = 1000ULL;         // 1000 cycles
-constexpr uint64_t TIMEOUT_A2A3_50US = 2500ULL;         // 2500 cycles
-constexpr uint64_t TIMEOUT_A2A3_100US = 5000ULL;        // 5000 cycles
-constexpr uint64_t TIMEOUT_A2A3_200US = 10000ULL;       // 10000 cycles
-constexpr uint64_t TIMEOUT_A2A3_1MS = 50000ULL;         // 50000 cycles
-constexpr uint64_t TIMEOUT_A2A3_2MS = 100000ULL;        // 100000 cycles
-constexpr uint64_t TIMEOUT_A2A3_3MS = 150000ULL;        // 150000 cycles
-constexpr uint64_t TIMEOUT_A2A3_55MS = 2750000ULL;      // 2750000 cycles
-constexpr uint64_t TIMEOUT_A2A3_1SEC = 50000000ULL;     // 50M cycles
-constexpr uint64_t TIMEOUT_A2A3_10SEC = 500000000ULL;   // 500M cycles
-constexpr uint64_t TIMEOUT_A2A3_1MIN = 3000000000ULL;   // 3G cycles
-constexpr uint64_t TIMEOUT_A2A3_20MIN = 60000000000ULL; // 60G cycles
-
-// A5 架构超时常量 (基于 1000MHz，是 A2A3 的 20 倍)
-constexpr uint64_t TIMEOUT_A5_1SEC = 1000000000ULL;     // 1G cycles
-constexpr uint64_t TIMEOUT_A5_10SEC = 10000000000ULL;   // 10G cycles
-constexpr uint64_t TIMEOUT_A5_1MIN = 60000000000ULL;    // 60G cycles
-constexpr uint64_t TIMEOUT_A5_20MIN = 1200000000000ULL; // 1200G cycles
+// ============================================================
+// AICPU 超时常量
+// ============================================================
+constexpr uint64_t TIMEOUT_A2A3_50US = 2500ULL;                     // 50us
+constexpr uint64_t TIMEOUT_A2A3_100US = 5000ULL;                    // 100us
+constexpr uint64_t TIMEOUT_A2A3_1MS = 50000ULL;                     // 1ms
+constexpr uint64_t TIMEOUT_A2A3_2MS = 100000ULL;                    // 2ms
+constexpr uint64_t TIMEOUT_A2A3_3MS = 150000ULL;                    // 3ms
+constexpr uint64_t TIMEOUT_A2A3_55MS = 2750000ULL;                  // 55ms
+constexpr uint64_t TIMEOUT_A2A3_1SEC = 50000000ULL;                 // 1s
+constexpr uint64_t TIMEOUT_A2A3_10SEC = 500000000;                  // 10s
+constexpr uint64_t TIMEOUT_A2A3_1MIN = 3000000000ULL;               // 1min
+constexpr uint64_t TIMEOUT_A2A3_20MIN = 60000000000ULL;             // 20min
+constexpr uint64_t TIMEOUT_A5_50US = 50000ULL;                      // 50us
+constexpr uint64_t TIMEOUT_A5_1SEC = 1000000000ULL;                 // 1s
+constexpr uint64_t TIMEOUT_A5_5SEC = 5000000000ULL;                 // 5s
+constexpr uint64_t TIMEOUT_A5_10SEC = 10000000000;                  // 10s
+constexpr uint64_t TIMEOUT_A5_1MIN = 60000000000ULL;                // 1min
+constexpr uint64_t TIMEOUT_A5_20MIN = 1200000000000ULL;             // 20min
+constexpr uint64_t HAND_SHAKE_TIMEOUT_A2A3_CYCLES = 48000000000ULL; // 16min
+constexpr uint64_t HAND_SHAKE_TIMEOUT_A5_CYCLES = 960000000000ULL;  // 16min
 
 #define PERF_LEVEL 0
 #define PERF_AICORE_THREAD_START 100
@@ -266,47 +263,10 @@ inline uint64_t CurrentTime()
     return mono / NSEC_PER_USEC;
 }
 
-inline int CheckTimeOut(const uint64_t& tStart, uint64_t& tCnt, uint64_t& tCur, const std::string& opString)
-{
-    tCnt++;
-    if (tCnt % 50 == 0) { // 50 is loop count to check whether timeout occurs
-        tCur = CurrentTime();
-        DEV_IF_VERBOSE_DEBUG
-        {
-            if (tCur - tStart > DFX_TIME_OUT_THRESHOLD) {
-                DEV_ERROR(SchedErr::TASK_WAIT_TIMEOUT,
-                          "#sche.task.run.sync.timeout: %s dfx_timeout, aicpu force exit, ttl=%lu.", opString.c_str(),
-                          tCnt);
-                return DEVICE_MACHINE_ERROR;
-            }
-        }
-        else
-        {
-            if (tCur - tStart > TIME_OUT_THRESHOLD) {
-                DEV_ERROR(SchedErr::TASK_WAIT_TIMEOUT,
-                          "#sche.task.run.sync.timeout: %s timeout, aicpu force exit, ttl=%lu.", opString.c_str(),
-                          tCnt);
-                return DEVICE_MACHINE_ERROR;
-            }
-        }
-    }
-    return DEVICE_MACHINE_OK;
-}
-
-struct TimeCheck {
-    uint64_t startTime = CurrentTime();
-    uint64_t curTime = 0;
-    uint64_t count = 0;
-};
-
-inline int CheckTimeOut(const std::string& operation, TimeCheck& timeCheck)
-{
-    return CheckTimeOut(timeCheck.startTime, timeCheck.count, timeCheck.curTime, operation);
-}
-
 // Timeout check macros
 // TIMEOUT_CHECK_INIT(arch, timeout_cycles_val) - initializes timeout_map, start, timeout_cycles, warn_interval(1/10)
 // TIMEOUT_CHECK_INIT_WARN_ONLY(arch) - for infinite wait scenarios (no timeout, warn_interval = 1MIN)
+
 #define TIMEOUT_CHECK_INIT(arch, timeout_cycles_val)                                                \
     const uint64_t* timeout_map = (arch == ArchInfo::DAV_3510) ? TIMEOUT_MAP_A5 : TIMEOUT_MAP_A2A3; \
     uint64_t start = GetCycles();                                                                   \
@@ -324,17 +284,22 @@ constexpr uint64_t TIMEOUT_INDEX_10SEC = 2;
 constexpr uint64_t TIMEOUT_INDEX_1MIN = 3;
 constexpr uint64_t TIMEOUT_INDEX_20MIN = 4;
 constexpr uint64_t TIMEOUT_INDEX_HAND_SHAKE = 5;
+constexpr uint64_t TIMEOUT_INDEX_DISPATCH = 6;
 
-static constexpr uint64_t TIMEOUT_MAP_A2A3[7] = {TIMEOUT_A2A3_50US, TIMEOUT_A2A3_1SEC,  TIMEOUT_A2A3_10SEC,
-                                                 TIMEOUT_A2A3_1MIN, TIMEOUT_A2A3_20MIN, HAND_SHAKE_TIMEOUT_A2A3_CYCLES};
+static constexpr uint64_t TIMEOUT_MAP_A2A3[7] = {TIMEOUT_A2A3_50US,          TIMEOUT_A2A3_1SEC,
+                                                 TIMEOUT_A2A3_10SEC,         TIMEOUT_A2A3_1MIN,
+                                                 TIMEOUT_A2A3_20MIN,         HAND_SHAKE_TIMEOUT_A2A3_CYCLES,
+                                                 AICPU_DISPATCH_TIMEOUT_A2A3};
 
-static constexpr uint64_t TIMEOUT_MAP_A5[7] = {TIMEOUT_A5_50US, TIMEOUT_A5_1SEC,  TIMEOUT_A5_10SEC,
-                                               TIMEOUT_A5_1MIN, TIMEOUT_A5_20MIN, HAND_SHAKE_TIMEOUT_A5_CYCLES};
+static constexpr uint64_t TIMEOUT_MAP_A5[7] = {TIMEOUT_A5_50US,          TIMEOUT_A5_1SEC,  TIMEOUT_A5_10SEC,
+                                               TIMEOUT_A5_1MIN,          TIMEOUT_A5_20MIN, HAND_SHAKE_TIMEOUT_A5_CYCLES,
+                                               AICPU_DISPATCH_TIMEOUT_A5};
 
 #define TIMEOUT_10SEC (timeout_map[TIMEOUT_INDEX_10SEC])
 #define TIMEOUT_1MIN (timeout_map[TIMEOUT_INDEX_1MIN])
 #define TIMEOUT_20MIN (timeout_map[TIMEOUT_INDEX_20MIN])
 #define TIMEOUT_HAND_SHAKE (timeout_map[TIMEOUT_INDEX_HAND_SHAKE])
+#define TIMEOUT_DISPATCH (timeout_map[TIMEOUT_INDEX_DISPATCH])
 
 // Only warning, never exit - for infinite wait scenarios (uses warn_interval from TIMEOUT_CHECK_INIT_WARN_ONLY)
 #define __PYPTO_TIMEOUT_CHECK_WARN_ONLY(fmt, ...)           \

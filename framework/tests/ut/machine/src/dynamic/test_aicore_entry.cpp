@@ -38,7 +38,7 @@ TEST_F(AicoreTest, InitGoodbye)
 
     KernelEntry(0, 0, 0, 0, 0, (uint64_t)(uintptr_t)&devArgs);
     // Use AICORE_SAY_GOODBYE to exit
-    EXPECT_EQ(args->shakeBuffer[3], STAGE_GET_PARALLEL_DEVTASK_TIMEOUT);
+    EXPECT_EQ(args->dfxBuffer[3], STAGE_GET_PARALLEL_DEVTASK_TIMEOUT);
 }
 
 class MemoryEmulation {
@@ -215,7 +215,7 @@ TEST_F(AicoreTest, MultipleCore)
     KernelSharedBuffer* buffer = memory->GetSharedBuffer();
     for (int i = 0; i < memory->GetAicCount() + memory->GetAivCount(); i++) {
         // normal exit
-        EXPECT_EQ(buffer[i].args.shakeBuffer[2], STAGE_CORE_EXIT);
+        EXPECT_EQ(buffer[i].args.dfxBuffer[2], STAGE_CORE_EXIT);
     }
 
     AicoreEmulationManager::GetInstance().Reset();

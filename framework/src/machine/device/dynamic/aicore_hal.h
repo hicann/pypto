@@ -252,7 +252,7 @@ public:
             return nullptr;
         }
 
-        TIMEOUT_CHECK_INIT(archInfo_, TIMEOUT_10SEC);
+        TIMEOUT_CHECK_INIT(archInfo_, TIMEOUT_DISPATCH);
         volatile int stopFlag = metric->isMetricStop;
         while (stopFlag != 1) {
             __PYPTO_TIMEOUT_CHECK_EXIT_ONLY(DevCommonErr::NULLPTR, return nullptr,
@@ -298,24 +298,31 @@ public:
         volatile KernelArgs* arg = reinterpret_cast<KernelArgs*>(sharedBuffer_ + coreIdx * SHARED_BUFFER_SIZE);
         DEV_ERROR(SchedErr::ABNOMAL_LAST_WORD,
                   "!!***********************aicore %d last status **************************!!", coreIdx);
-        DEV_ERROR(SchedErr::ABNOMAL_LAST_WORD, "hello status %ld.", arg->shakeBuffer[0]);
+        DEV_ERROR(SchedErr::ABNOMAL_LAST_WORD, "hello status %ld.", arg->dfxBuffer[0]);
         DEV_ERROR(SchedErr::ABNOMAL_LAST_WORD, "last_taskId %ld task status [%ld, %ld, %ld, %ld].",
-                  arg->shakeBuffer[NUM_ONE], arg->shakeBuffer[NUM_TWO], arg->shakeBuffer[NUM_THREE],
-                  arg->shakeBuffer[NUM_FOUR], arg->shakeBuffer[NUM_FIVE]);
+                  arg->dfxBuffer[NUM_ONE], arg->dfxBuffer[NUM_TWO], arg->dfxBuffer[NUM_THREE], arg->dfxBuffer[NUM_FOUR],
+                  arg->dfxBuffer[NUM_FIVE]);
     }
 
     uint64_t GetAicoreStatus(int coreIdx) const
     {
         int aicoreStatusIndex = 2;
         volatile KernelArgs* arg = reinterpret_cast<KernelArgs*>(sharedBuffer_ + coreIdx * SHARED_BUFFER_SIZE);
-        return arg->shakeBuffer[aicoreStatusIndex];
+        return arg->dfxBuffer[aicoreStatusIndex];
     }
 
     uint64_t GetAicoreStatusLastWord(int coreIdx) const
     {
         int aicoreStatusIndex = 3;
         volatile KernelArgs* arg = reinterpret_cast<KernelArgs*>(sharedBuffer_ + coreIdx * SHARED_BUFFER_SIZE);
-        return arg->shakeBuffer[aicoreStatusIndex];
+        return arg->dfxBuffer[aicoreStatusIndex];
+    }
+
+    uint64_t GetAicoreWarningStatus(int coreIdx) const
+    {
+        int aicoreWarningIndex = 6;
+        volatile KernelArgs* arg = reinterpret_cast<KernelArgs*>(sharedBuffer_ + coreIdx * SHARED_BUFFER_SIZE);
+        return arg->dfxBuffer[aicoreWarningIndex];
     }
 
     bool TryHandShakeByGm(int coreIdx, int64_t dotStatus)
@@ -378,7 +385,7 @@ public:
             }
 #if ENABLE_AICORE_PRINT
             volatile KernelArgs* arg = args_[coreIdx];
-            arg->shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = buffer;
+            arg->dfxBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = buffer;
             __sync_synchronize();
 #endif
         } else {

@@ -51,32 +51,45 @@ INLINE void Trap()
 #endif
 }
 
+// AICore timeout must exceed AICPU dispatch timeout. Warning is set at 80% of AICPU dispatch timeout.
 #ifdef __DAV_V310
-#define AICORE_DEVICE_TASK_WAIT_TIME_OUT 250000000LL * 20
-#define AICORE_LEAF_TASK_RUN_TIMEOUT 6000000000LL * 20
-#define AICORE_LEAF_TASK_WAIT_TIMEOUT 6000000000LL * 20
-#define AICORE_GM_DCCI_TIMEOUT 50000000LL * 10
-#define AICORE_WAVEFLAG_WAIT_TIMEOUT 350000000LL * 20
-#define AICORE_GET_LEAF_HIGHREG_TIMEOUT 400000000LL * 20
+// A5: 1000MHz, AICPU dispatch 超时 10s
+#define AICORE_WARNING_CYCLES (AICPU_DISPATCH_TIMEOUT_A5 * 8ULL / 10ULL)
+#define AICORE_GM_DCCI_TIMEOUT 13000000000ULL          // 13s
+#define AICORE_DEVICE_TASK_WAIT_TIMEOUT 14000000000ULL // 14s
+#define AICORE_WAVEFLAG_WAIT_TIMEOUT 15000000000ULL    // 15s
+#define AICORE_GET_LEAF_HIGHREG_TIMEOUT 16000000000ULL // 16s
+#define AICORE_LEAF_TASK_WAIT_TIMEOUT 120000000000ULL  // 120s
+#define AICORE_LEAF_TASK_RUN_TIMEOUT 120000000000ULL   // 120s
 #else
-#define AICORE_DEVICE_TASK_WAIT_TIME_OUT 250000000
-#define AICORE_LEAF_TASK_RUN_TIMEOUT 6000000000
-#define AICORE_LEAF_TASK_WAIT_TIMEOUT 6000000000
-#define AICORE_GM_DCCI_TIMEOUT 50000000
-#define AICORE_WAVEFLAG_WAIT_TIMEOUT 350000000
-#define AICORE_GET_LEAF_HIGHREG_TIMEOUT 400000000
+// A2A3: 50MHz, AICPU dispatch 超时 10s
+#define AICORE_WARNING_CYCLES (AICPU_DISPATCH_TIMEOUT_A2A3 * 8ULL / 10ULL)
+#define AICORE_GM_DCCI_TIMEOUT 650000000ULL          // 13s
+#define AICORE_DEVICE_TASK_WAIT_TIMEOUT 700000000ULL // 14s
+#define AICORE_WAVEFLAG_WAIT_TIMEOUT 750000000ULL    // 15s
+#define AICORE_GET_LEAF_HIGHREG_TIMEOUT 800000000ULL // 16s
+#define AICORE_LEAF_TASK_WAIT_TIMEOUT 6000000000ULL  // 120s
+#define AICORE_LEAF_TASK_RUN_TIMEOUT 6000000000ULL   // 120s
 #endif
 
 #define AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count) \
     uint64_t t0 = get_sys_cnt();                   \
-    uint64_t loop_count = 0;
+    uint64_t loop_count = 0;                       \
+    bool warningSet = false;
 
 #define AICORE_TIMEOUT_CHECK_IMPL(t0, loop_count, timelen, lastStatus, action) \
     ++loop_count;                                                              \
-    if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > timelen)) {          \
-        SetLastWordStatus(args, lastStatus);                                   \
-        Trap();                                                                \
-        action;                                                                \
+    if ((loop_count % 1000 == 0)) {                                            \
+        uint64_t elapsed = get_sys_cnt() - t0;                                 \
+        if (!warningSet && elapsed > AICORE_WARNING_CYCLES) {                  \
+            SetWarningStatus(args, lastStatus);                                \
+            warningSet = true;                                                 \
+        }                                                                      \
+        if (elapsed > (timelen)) {                                             \
+            SetLastWordStatus(args, lastStatus);                               \
+            Trap();                                                            \
+            action;                                                            \
+        }                                                                      \
     }
 
 #define AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, timelen, lastStatus, retval) \
@@ -104,17 +117,14 @@ INLINE uint64_t GetDataMainBase()
 
 INLINE uint32_t GetLeafTaskId() { return ((GetDataMainBase() & 0xFFFFFFFF) - 1); }
 
-INLINE uint32_t GetNextLeafTask(uint32_t lastTaskIdx)
+INLINE uint32_t GetNextLeafTask(uint32_t lastTaskIdx, __gm__ KernelArgs* args)
 {
     uint32_t nextLowIdx = 0;
-    uint64_t t0 = get_sys_cnt();
-    uint64_t loop_count = 0;
+    AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
     do {
         nextLowIdx = GetLeafTaskId();
-        ++loop_count;
-        if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > AICORE_LEAF_TASK_WAIT_TIMEOUT)) {
-            return AICORE_TASK_ABNORMAL_STOP;
-        }
+        AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_LEAF_TASK_WAIT_TIMEOUT, STAGE_GET_NEXT_TASK_TIMEOUT,
+                                    AICORE_TASK_ABNORMAL_STOP);
     } while (nextLowIdx == lastTaskIdx);
 
     return nextLowIdx;
@@ -293,7 +303,7 @@ INLINE void InitCtx(ExecuteContext* ctx, __gm__ Metrics* metric, volatile __gm__
     ctx->lastTaskFinishCycle = 0;
     ctx->parallelDevTask = prallelDevTask;
 #if ENABLE_AICORE_PRINT
-    auto buffer = reinterpret_cast<__gm__ uint8_t*>(ctx->args->shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX]);
+    auto buffer = reinterpret_cast<__gm__ uint8_t*>(ctx->args->dfxBuffer[SHAK_BUF_PRINT_BUFFER_INDEX]);
     if (buffer != 0 && ctx->logger.GetBuffer() != buffer) {
         ctx->logger.Init(buffer, PRINT_BUFFER_SIZE);
     }
@@ -369,7 +379,7 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs, int64_t outputs, int6
 
     PerfTraceRecord(INVALID_DEV_TASK_ID, ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_INIT);
 
-    volatile __gm__ ParallelDevTask* parallelDevTask = GetCoreFunctionData(&ctx, args);
+    volatile __gm__ ParallelDevTask* parallelDevTask = GetCoreFunctionData(&ctx);
     if (parallelDevTask == nullptr) {
         DfxProcWhenCoreExit(&ctx, args, metric);
         return; // no data exit
@@ -379,7 +389,7 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs, int64_t outputs, int6
     while (true) {
         AICORE_TIMEOUT_CHECK_RETURN_VOID(t0, loop_count, AICORE_LEAF_TASK_RUN_TIMEOUT, STAGE_RUN_LEAFTASK_TIMEOUT);
 
-        curTaskIdx = GetNextLeafTask(lastTaskIdx);
+        curTaskIdx = GetNextLeafTask(lastTaskIdx, args);
         if (curTaskIdx == AICORE_TASK_STOP) {
             DfxProcWhenDevTaskStop(&ctx, args, metric);
             SetStatus(args, STAGE_CORE_EXIT);
@@ -399,7 +409,7 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs, int64_t outputs, int6
             ctx.curLeafTaskParallelIdx = npu::tile_fwk::ParallelIndex(curTaskIdx);
 
             // need dcci new prallel devtask
-            uint32_t ret = RefreshParallelDevTask(args, &ctx, metric, lastRegHighVal);
+            uint32_t ret = RefreshParallelDevTask(&ctx, metric, lastRegHighVal);
             if (ret == AICORE_TASK_ABNORMAL_STOP) {
                 return;
             }
