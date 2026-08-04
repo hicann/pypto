@@ -982,8 +982,7 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
 {
     ASSERT(HostBackEndErr::RUN_PASS_FAILED,
            (PassManager::Instance().RunPass(Program::GetInstance(), *function, "ExecuteGraph") == SUCCESS));
-    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 &&
-        config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && config::IsRuntimeDebugAllEnabled()) {
         mix_info::DumpMixInfo(function);
     }
     std::shared_ptr<DyndevFunctionAttribute> attr = function->GetDyndevAttribute();

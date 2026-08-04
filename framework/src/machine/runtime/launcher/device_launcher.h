@@ -254,8 +254,7 @@ public:
         if (config::GetPlatformConfig(KEY_ENABLE_PROF_FUNC, false)) {
             toSubMachineConfig.profConfig.Add(ProfConfig::AICPU_FUNC);
         }
-        if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_TIME, false) ||
-            config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
+        if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_TIME, false) || config::IsRuntimeDebugAllEnabled()) {
             toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_TIME);
         }
         if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_PMU, false)) {

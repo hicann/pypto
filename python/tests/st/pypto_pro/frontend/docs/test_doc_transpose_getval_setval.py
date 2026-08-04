@@ -66,7 +66,7 @@ def test_getval_setval():
     torch.npu.synchronize()
     # a[0,1] 应被写成原 a[0,0]
     assert abs(a[0, 1].item() - a_orig_00) < 1e-3, \
-        f"getval/setval failed: a[0,1]={a[0,1].item()}, expect {a_orig_00}"
+        f"getval/setval failed: a[0,1]={a[0, 1].item()}, expect {a_orig_00}"
     logging.info("tile getval/setval result equal!")
 
 
@@ -152,7 +152,7 @@ def test_tensor_getval_setval():
     torch.npu.synchronize()
 
     assert abs(tensor5d[1, 1, 1, 1, 1].item() - val_5d) < 1e-6, \
-        f"5D tensor setval failed: tensor5d[1,1,1,1,1]={tensor5d[1,1,1,1,1].item()}, expect {val_5d}"
+        f"5D tensor setval failed: tensor5d[1,1,1,1,1]={tensor5d[1, 1, 1, 1, 1].item()}, expect {val_5d}"
     logging.info("5D tensor getval/setval result equal!")
 
 

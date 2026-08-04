@@ -527,8 +527,7 @@ void CodeGenNPU::BuildArchOptions(std::ostringstream& oss, const CompileInfo& co
     if (ConfigManager::Instance().GetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false)) {
         compileOpts.emplace_back("-DSUPPORT_TILE_TENSOR");
     }
-    if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_TIME, false) ||
-        config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
+    if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_TIME, false) || config::IsRuntimeDebugAllEnabled()) {
         compileOpts.emplace_back("-DOPEN_MIX_PERF");
     }
 

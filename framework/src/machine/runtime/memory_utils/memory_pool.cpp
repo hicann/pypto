@@ -59,7 +59,7 @@ DevMemoryPool& DevMemoryPool::Instance()
 
 DevMemoryPool::DevMemoryPool()
 {
-    needMemCheck_ = (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL);
+    needMemCheck_ = config::IsRuntimeDebugAllEnabled();
     sentinelVec_ = std::vector<uint64_t>(SENTINEL_NUM, SENTINEL_VALUE);
 }
 

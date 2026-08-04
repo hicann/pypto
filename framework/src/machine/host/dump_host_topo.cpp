@@ -24,8 +24,8 @@
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
 #include "interface/tensor/tensor_slot.h"
-#include "utils/file_utils.h"
 #include "interface/utils/string_utils.h"
+#include "machine/utils/dep_verify_dump_path.h"
 #include "machine/utils/dynamic/dev_encode_function.h"
 #include "machine/utils/dynamic/dev_encode_operation.h"
 #include "machine/utils/dynamic/dev_encode_tensor.h"
@@ -33,17 +33,6 @@
 
 namespace npu::tile_fwk::topo_dump {
 namespace {
-
-constexpr const char* kDepVerifyDumpSubDir = "dep_verify_dump";
-const std::string& DepVerifyDumpDir()
-{
-    static const std::string dir = []() {
-        std::string d = config::LogTopFolder() + "/" + kDepVerifyDumpSubDir;
-        (void)CreateDir(d);
-        return d;
-    }();
-    return dir;
-}
 
 inline bool DumpEnabled()
 {
@@ -74,7 +63,7 @@ std::ofstream OpenCsv(const std::string& fileName, std::initializer_list<const c
     if (!enabled) {
         return ofs;
     }
-    outPath = DepVerifyDumpDir() + "/" + fileName;
+    outPath = GetDepVerifyDumpDir() + "/" + fileName;
     ofs.open(outPath);
     if (!ofs.is_open()) {
         return ofs;
@@ -167,7 +156,7 @@ void DumpSlotMapping(const TensorSlotManager& slotManager, const std::unordered_
              << ',' << CsvQuote(feSlotToFuncName[slot.first]) << '\n';
     }
 
-    const std::string path = DepVerifyDumpDir() + "/slot_mapping.csv";
+    const std::string path = GetDepVerifyDumpDir() + "/slot_mapping.csv";
     std::ofstream ofs(path);
     if (!ofs.is_open()) {
         return;

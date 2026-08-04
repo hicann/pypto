@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 #include "interface/configs/config_manager.h"
-#include "utils/file_utils.h"
+#include "machine/utils/dep_verify_dump_path.h"
 #include "machine/utils/dynamic/dev_encode_function_stitch.h"
 #endif
 
@@ -28,18 +28,6 @@ namespace npu::tile_fwk::dynamic::topo_dump {
 
 #ifndef __DEVICE__
 namespace {
-
-constexpr const char* DeviceVerifyDumpSubDir = "dep_verify_dump";
-
-const std::string& DeviceDepVerifyDumpDir()
-{
-    static const std::string dir = []() {
-        std::string d = config::LogTopFolder() + "/" + DeviceVerifyDumpSubDir;
-        (void)CreateDir(d);
-        return d;
-    }();
-    return dir;
-}
 
 void OpenIfPathChanged(std::ofstream& ofs, std::string& lastPath, const std::string& path, const char* header)
 {
@@ -92,7 +80,7 @@ void AppendSlotAccessRow(uint32_t seqNo, int slotIdx, uint32_t funcIdx, uint32_t
     static std::ofstream ofs;
     static std::string lastPath;
     std::lock_guard<std::mutex> lock(mu);
-    OpenIfPathChanged(ofs, lastPath, DeviceDepVerifyDumpDir() + "/dyn_slot_access.csv",
+    OpenIfPathChanged(ofs, lastPath, GetDepVerifyDumpDir() + "/dyn_slot_access.csv",
                       "seqNo,slotIdx,funcIdx,opIdx,taskId,accessType,cellIdxList,allConcrete");
     if (!ofs.is_open()) {
         return;
@@ -160,7 +148,7 @@ void DumpStitchEdge(const DevAscendFunctionDupped& producerDup, const DevAscendF
     static std::ofstream ofs;
     static std::string lastPath;
     std::lock_guard<std::mutex> lock(mu);
-    OpenIfPathChanged(ofs, lastPath, DeviceDepVerifyDumpDir() + "/dyn_stitch_edges.csv",
+    OpenIfPathChanged(ofs, lastPath, GetDepVerifyDumpDir() + "/dyn_stitch_edges.csv",
                       "stitchKind,slotIdx,"
                       "producerFuncKey,producerFuncIdx,producerOpIdx,producerTaskId,"
                       "consumerFuncKey,consumerFuncIdx,consumerOpIdx,consumerTaskId");

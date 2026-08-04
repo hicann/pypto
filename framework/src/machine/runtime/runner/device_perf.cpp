@@ -113,7 +113,7 @@ void DevicePerf::SetDebugEnable()
 bool DevicePerf::RunPrepare() const
 {
     bool ret = true;
-    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL || ENABLE_PERF_TRACE) {
+    if (config::IsRuntimeDebugAllEnabled() || ENABLE_PERF_TRACE) {
         for (uint32_t i = 0; i < GetPerfDataSize(); i++) {
             ret = RuntimeMemcpyDirect(
                       (reinterpret_cast<uint8_t*>(args_.sharedBuffer + sizeof(uint64_t) * SHAK_BUF_DFX_DATA_INDEX)) +

@@ -21,6 +21,7 @@
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error_code.h"
 #include "interface/function/rebuildable_attribute.h"
+#include "machine/device/dump/dump_device_memory.h"
 #include "machine/runtime/launcher/cell_match_dynamic.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
@@ -171,6 +172,7 @@ int64_t KernelBinary::GetWorkspaceSize(const std::vector<DeviceTensorData>& tens
         MACHINE_ASSERT(uint64_t(workspaceSize) ==
                        wsChecker->GetSizeForCheckOnly(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem,
                                                       devProg->memBudget.debug.Total()));
+        mem_dump::DumpMemoryOverview(*devProg, dynFunc.get(), static_cast<uint64_t>(workspaceSize));
     }
     return workspaceSize;
 }

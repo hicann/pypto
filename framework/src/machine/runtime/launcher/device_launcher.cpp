@@ -70,7 +70,7 @@ int DeviceLauncher::SetCaptureStream(RtStream aicoreStream, RtStream aicpuStream
 
 int DeviceLauncher::RunWithProfile(RtStream aicoreStream, RtStream aicpuStream, bool isCapture)
 {
-    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
+    if (config::IsRuntimeDebugAllEnabled()) {
         if (isCapture) {
             MACHINE_LOGW("The swimlane function is not currently supported in CaptureMode. The contents of "
                          "tilefwk_L1_prof_data may be empty.");

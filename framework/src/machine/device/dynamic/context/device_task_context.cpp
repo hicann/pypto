@@ -15,6 +15,7 @@
 
 #include "machine/device/dynamic/context/device_task_context.h"
 #include "machine/device/dynamic/eslmodel_aicore_hal.h"
+#include "machine/device/dump/dump_device_memory.h"
 #ifndef __DEVICE__
 #include "interface/configs/config_manager.h"
 #endif
@@ -316,6 +317,7 @@ int DeviceTaskContext::BuildDynFuncData(DynDeviceTask* dyntask, uint32_t taskId,
     rootFuncNum += stitchedSize;
     for (size_t funcIdx = 0; funcIdx < stitchedSize; ++funcIdx) {
         FillOneDynFuncData(dyndata, stitchedList[funcIdx], startArgs_, workspace_, leafFuncDataSize, leafFuncNum);
+        DEV_IF_NONDEVICE { mem_dump::DumpRootMemory(taskId, static_cast<uint32_t>(funcIdx), stitchedList[funcIdx]); }
         dyndata++;
     }
     dynFuncDataSize += headerSize * sizeof(int64_t);

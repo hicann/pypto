@@ -505,6 +505,8 @@ inline T GetDebugOption(const std::string& key)
     return ConfigManagerNg::CurrentScope()->GetConfigAllType<T>("debug." + key);
 }
 
+inline bool IsRuntimeDebugAllEnabled() { return GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL; }
+
 /**
  * @brief Get operation configuration option
  */
