@@ -17,12 +17,14 @@
 #ifndef PASS_INFER_TENSOR_FORMAT_H_
 #define PASS_INFER_TENSOR_FORMAT_H_
 
+#include <map>
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "interface/function/function.h"
 #include "interface/operation/opcode.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_interface/pass.h"
 
@@ -58,13 +60,12 @@ private:
                                                             const std::shared_ptr<LogicalTensor>& srcTensor,
                                                             const std::shared_ptr<LogicalTensor>& fakeDstTensor,
                                                             Operation* relatedOp, TileOpFormat targetFormat);
-    static Status EnsureTensorFormat(Function& function, std::shared_ptr<LogicalTensor>& tensor, Operation* relatedOp,
-                                     TileOpFormat targetFormat);
+    std::shared_ptr<LogicalTensor> InsertFakeTransOp(Function& function,
+                                                     const std::shared_ptr<LogicalTensor>& srcTensor,
+                                                     TileOpFormat targetFormat, Operation* relatedOp = nullptr);
+    Status EnsureTensorFormat(Function& function, std::shared_ptr<LogicalTensor>& tensor, Operation* relatedOp,
+                              TileOpFormat targetFormat);
     static Status GetFakeTransFormat(const Operation& op, const std::string& attrName, TileOpFormat& format);
-    static Status ResolveFakeTransOp(Function& function, Operation& op,
-                                     const std::shared_ptr<LogicalTensor>& inputTensor,
-                                     std::unordered_map<int, bool>& visitedTensors,
-                                     std::queue<std::shared_ptr<LogicalTensor>>& worklist);
 
     // ---- 输出 format 推导 ----
     static void DetermineOutputFormat(const Function& function, const Operation& op, const std::string& arch,
@@ -79,26 +80,45 @@ private:
                                                    const std::shared_ptr<LogicalTensor>& tensor,
                                                    const std::string& arch, int inputPos,
                                                    std::unordered_set<int>& assembledOutputs);
-    static Status EnsureConsumerInputFormat(Function& function, Operation& consumer,
-                                            const std::shared_ptr<LogicalTensor>& tensor, TileOpFormat required);
+    Status EnsureConsumerInputFormat(Function& function, Operation& consumer,
+                                     const std::shared_ptr<LogicalTensor>& tensor, TileOpFormat required);
     static void MarkConsumerInputProcessed(const Function& function, const Operation& consumer, const std::string& arch,
                                            std::unordered_map<int, int>& processedInputs,
                                            std::unordered_map<int, bool>& visitedTensors,
                                            std::queue<std::shared_ptr<LogicalTensor>>& worklist);
-    static Status ProcessConsumerFormat(Function& function, Operation* consumer,
-                                        const std::shared_ptr<LogicalTensor>& tensor, const std::string& arch,
-                                        std::unordered_map<int, int>& processedInputs,
-                                        std::unordered_map<int, bool>& visitedTensors,
-                                        std::unordered_set<int>& assembledOutputs,
-                                        std::queue<std::shared_ptr<LogicalTensor>>& worklist);
-    static Status ProcessTensorConsumers(Function& function, const std::shared_ptr<LogicalTensor>& tensor,
-                                         const std::string& arch, std::unordered_map<int, int>& processedInputs,
-                                         std::unordered_map<int, bool>& visitedTensors,
-                                         std::unordered_set<int>& assembledOutputs,
-                                         std::queue<std::shared_ptr<LogicalTensor>>& worklist);
+    Status ProcessConsumerFormat(Function& function, Operation* consumer, const std::shared_ptr<LogicalTensor>& tensor,
+                                 const std::string& arch, std::unordered_map<int, int>& processedInputs,
+                                 std::unordered_map<int, bool>& visitedTensors,
+                                 std::unordered_set<int>& assembledOutputs,
+                                 std::queue<std::shared_ptr<LogicalTensor>>& worklist);
+    Status ProcessTensorConsumers(Function& function, const std::shared_ptr<LogicalTensor>& tensor,
+                                  const std::string& arch, std::unordered_map<int, int>& processedInputs,
+                                  std::unordered_map<int, bool>& visitedTensors,
+                                  std::unordered_set<int>& assembledOutputs,
+                                  std::queue<std::shared_ptr<LogicalTensor>>& worklist);
 
     // ---- 主算法 ----
     Status DeriveFormats(Function& function);
+
+    // ---- Phase 2: 值编号+并查集消除冗余 FakeTrans ----
+    Status EliminateRedundantFakeTrans(Function& function);
+    static std::shared_ptr<LogicalTensor> FindRoot(const std::shared_ptr<LogicalTensor>& tensor,
+                                                   std::unordered_map<int, std::shared_ptr<LogicalTensor>>& rootCache);
+    static TileOpFormat GetEffectiveFormat(const std::shared_ptr<LogicalTensor>& tensor);
+    static bool IsFakeTransOutput(const std::shared_ptr<LogicalTensor>& tensor);
+    static bool IsValidFakeTransOp(const Operation& op);
+    using Signature = std::pair<int, int>; // (root magic, format int)
+    static void CollectSignatures(Function& function,
+                                  std::unordered_map<int, std::shared_ptr<LogicalTensor>>& rootCache,
+                                  std::map<Signature, std::vector<std::shared_ptr<LogicalTensor>>>& equivalenceClasses);
+    static bool ReplaceRedundantTensors(
+        std::map<Signature, std::vector<std::shared_ptr<LogicalTensor>>>& equivalenceClasses);
+    static bool DeleteDeadFakeTrans(Function& function);
+
+    // ---- Phase 3: 物化剩余 FakeTrans 为真实 TransData ----
+    Status MaterializeFakeTrans(Function& function);
+
+    IRBuilder irBuilder_;
 };
 
 } // namespace npu::tile_fwk

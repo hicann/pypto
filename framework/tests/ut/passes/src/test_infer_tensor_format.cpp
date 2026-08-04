@@ -302,12 +302,14 @@ TEST_F(InferTensorFormatTest, FakeTransInsertsRequiredInputAndOutputTransDataThe
     Function* func = G.GetFunction();
     ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
 
+    // Phase 2 eliminates the FakeTrans pair (ND→NC1HWC0→ND is identity), so 0 TransData ops.
     EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_FAKE_TRANS), 0);
-    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2NC1HWC0), 1);
-    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NC1HWC02NCHW), 1);
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2NC1HWC0), 0);
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NC1HWC02NCHW), 0);
     auto* abs = G.GetOp("abs");
     ASSERT_NE(abs, nullptr);
-    EXPECT_NE(abs->GetIOperands()[0], G.GetTensor("fake_out"));
+    // abs is reconnected directly to incast (same signature as FakeTrans output)
+    EXPECT_EQ(abs->GetIOperands()[0], G.GetTensor("incast"));
     EXPECT_EQ(abs->GetIOperands()[0]->Format(), TileOpFormat::TILEOP_ND);
     EXPECT_TRUE(G.GetTensor("fake_out")->GetProducers().empty());
     EXPECT_TRUE(G.GetTensor("fake_out")->GetConsumers().empty());
@@ -346,23 +348,25 @@ TEST_F(InferTensorFormatTest, FakeTransUnsupportedFormatConversionFails)
 }
 
 // =============================================================================
-// 场景 j5: 零输入 op (VEC_DUP) 输出驱动 FAKE_TRANS 链路
-//   图: VEC_DUP(零输入) → dup_out → FAKE_TRANS(NC1HWC0→ND) → fake_out → NEG → neg_out(outcast)
+// 场景 j5: 零输入 op (VEC_DUP) 输出驱动 FAKE_TRANS 推导
+//   图: VEC_DUP(零输入) → dup_out(ND) → FAKE_TRANS(ND→NC1HWC0) → fake_out → ASSEMBLE → local_out
 //   预期: 无 incast 时 worklist 完全依赖零输入 op 种子循环;
-//         VEC_DUP 输出被 seed 后, FAKE_TRANS 被替换为 TransData 对 (NCHW2NC1HWC0 + NC1HWC02NCHW),
-//         NEG 输入重连到输出侧 TransData 结果, fake_out 被隔离
+//         VEC_DUP 输出被 seed 后, FAKE_TRANS 输出格式被正确推导为 NC1HWC0,
+//         FAKE_TRANS 被物化为 NCHW2NC1HWC0, ASSEMBLE 输入重连到物化结果
 // =============================================================================
 TEST_F(InferTensorFormatTest, ZeroInputOpOutputFeedsFakeTrans)
 {
     ComputationalGraphBuilder G;
     std::vector<int64_t> shape4d{2, 32, 14, 14};
+    std::vector<int64_t> shape5d{2, 2, 14, 14, 16};
     TileShape::Current().SetVecTile({16, 16, 2, 16});
-    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d, {"dup_out", "fake_out", "neg_out"}));
+    ASSERT_TRUE(G.AddTensor(DataType::DT_FP16, shape4d, "dup_out"));
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape5d, {"fake_out", "local_out"}));
     ASSERT_TRUE(G.AddOp(Opcode::OP_VEC_DUP, {}, {"dup_out"}, "vec_dup"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"dup_out"}, {"fake_out"}, "fake_trans"));
-    ASSERT_TRUE(G.AddOp(Opcode::OP_NEG, {"fake_out"}, {"neg_out"}, "neg"));
-    ASSERT_TRUE(G.SetOutCast({"neg_out"}));
-    SetFakeTransFormat(G, "fake_trans", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"fake_out"}, {"local_out"}, "assemble"));
+    SetFakeTransFormat(G, "fake_trans", TileOpFormat::TILEOP_ND, TileOpFormat::TILEOP_NC1HWC0);
+    UpdateDynValidShapes(G, {"dup_out", "fake_out", "local_out"});
 
     auto* fakeTrans = G.GetOp("fake_trans");
     ASSERT_NE(fakeTrans, nullptr);
@@ -373,11 +377,196 @@ TEST_F(InferTensorFormatTest, ZeroInputOpOutputFeedsFakeTrans)
 
     EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_FAKE_TRANS), 0);
     EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2NC1HWC0), 1);
-    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NC1HWC02NCHW), 1);
-    auto* neg = G.GetOp("neg");
-    ASSERT_NE(neg, nullptr);
-    EXPECT_NE(neg->GetIOperands()[0], G.GetTensor("fake_out"));
-    EXPECT_EQ(neg->GetIOperands()[0]->Format(), TileOpFormat::TILEOP_ND);
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NC1HWC02NCHW), 0);
+    auto* assemble = G.GetOp("assemble");
+    ASSERT_NE(assemble, nullptr);
+    EXPECT_NE(assemble->GetIOperands()[0], G.GetTensor("fake_out"));
+    EXPECT_EQ(assemble->GetIOperands()[0]->Format(), TileOpFormat::TILEOP_NC1HWC0);
+    EXPECT_EQ(G.GetTensor("local_out")->Format(), TileOpFormat::TILEOP_NC1HWC0);
     EXPECT_TRUE(G.GetTensor("fake_out")->GetProducers().empty());
     EXPECT_TRUE(G.GetTensor("fake_out")->GetConsumers().empty());
+}
+
+// =============================================================================
+// 场景: 多步链式+多 consumer（值编号+并查集核心场景）
+//   图: root(NC1HWC0) → FakeTrans_A(NC1HWC0→ND) → FakeTrans_B(ND→FRACTAL_Z) → asm1 → local_out
+//                                            └── FakeTrans_C(ND→NC1HWC0) → asm2 → outcast
+//   预期: FakeTrans_C 与 root 签名相同 (root, NC1HWC0) → 消除
+//         FakeTrans_A (root, ND) 和 FakeTrans_B (root, FRACTAL_Z) 签名唯一 → 保留并物化
+// =============================================================================
+TEST_F(InferTensorFormatTest, MultiStepChainWithMultiConsumer)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape4d{2, 32, 14, 14};
+    std::vector<int64_t> shape5d{2, 2, 14, 14, 16};
+    TileShape::Current().SetVecTile({16, 16, 2, 16});
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape5d, {"root", "c_out"}));
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d, {"a_out", "b_out", "local_out", "outcast"}));
+
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"root"}, {"a_out"}, "fake_trans_a"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"a_out"}, {"b_out"}, "fake_trans_b"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"a_out"}, {"c_out"}, "fake_trans_c"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"b_out"}, {"local_out"}, "asm1"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"c_out"}, {"outcast"}, "asm2"));
+
+    ASSERT_TRUE(G.SetInCast({"root"}));
+    ASSERT_TRUE(G.SetOutCast({"outcast"}));
+
+    SetFakeTransFormat(G, "fake_trans_a", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
+    SetFakeTransFormat(G, "fake_trans_b", TileOpFormat::TILEOP_ND, TileOpFormat::TILEOP_FRACTAL_Z);
+    SetFakeTransFormat(G, "fake_trans_c", TileOpFormat::TILEOP_ND, TileOpFormat::TILEOP_NC1HWC0);
+    G.GetOp("fake_trans_a")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
+    G.GetOp("fake_trans_b")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
+    G.GetOp("fake_trans_c")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
+
+    G.GetTensor("root")->GetRawTensor()->format = TileOpFormat::TILEOP_NC1HWC0;
+
+    UpdateDynValidShapes(G, {"root", "a_out", "b_out", "c_out", "local_out", "outcast"});
+
+    Function* func = G.GetFunction();
+    ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
+
+    // FakeTrans_C eliminated (same signature as root), FakeTrans_A and FakeTrans_B preserved
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_FAKE_TRANS), 0);
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NC1HWC02NCHW), 1);   // FakeTrans_A materialized
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2Fractal_Z), 1); // FakeTrans_B materialized
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2NC1HWC0), 0);   // FakeTrans_C eliminated, not materialized
+}
+
+// =============================================================================
+// 场景: A→B→C→D→A 长链冗余全部消除
+//   图: root(NC1HWC0) → FakeTrans_A(NC1HWC0→ND) → FakeTrans_B(ND→NC1HWC0)
+//                     → FakeTrans_C(NC1HWC0→ND) → FakeTrans_D(ND→NC1HWC0) → asm → local_out
+//   签名: root=(root,NC1HWC0), A=(root,ND), B=(root,NC1HWC0), C=(root,ND), D=(root,NC1HWC0)
+//   预期: B/D 与 root 同签名 → 消除; C 与 A 同签名 → 消除; A 无 live consumer → 消除
+//         asm 直连 root, 0 TransData
+// =============================================================================
+TEST_F(InferTensorFormatTest, LongChainAllEliminated)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape4d{2, 32, 14, 14};
+    std::vector<int64_t> shape5d{2, 2, 14, 14, 16};
+    TileShape::Current().SetVecTile({16, 16, 2, 16});
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape5d, {"root", "b_out", "d_out", "local_out"}));
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d, {"a_out", "c_out"}));
+
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"root"}, {"a_out"}, "fake_trans_a"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"a_out"}, {"b_out"}, "fake_trans_b"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"b_out"}, {"c_out"}, "fake_trans_c"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"c_out"}, {"d_out"}, "fake_trans_d"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"d_out"}, {"local_out"}, "asm"));
+
+    ASSERT_TRUE(G.SetInCast({"root"}));
+
+    SetFakeTransFormat(G, "fake_trans_a", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
+    SetFakeTransFormat(G, "fake_trans_b", TileOpFormat::TILEOP_ND, TileOpFormat::TILEOP_NC1HWC0);
+    SetFakeTransFormat(G, "fake_trans_c", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
+    SetFakeTransFormat(G, "fake_trans_d", TileOpFormat::TILEOP_ND, TileOpFormat::TILEOP_NC1HWC0);
+
+    G.GetTensor("root")->GetRawTensor()->format = TileOpFormat::TILEOP_NC1HWC0;
+
+    UpdateDynValidShapes(G, {"root", "a_out", "b_out", "c_out", "d_out", "local_out"});
+
+    Function* func = G.GetFunction();
+    ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
+
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_FAKE_TRANS), 0);
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NC1HWC02NCHW), 0);
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2NC1HWC0), 0);
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2Fractal_Z), 0);
+
+    auto* asm_op = G.GetOp("asm");
+    ASSERT_NE(asm_op, nullptr);
+    EXPECT_EQ(asm_op->GetIOperands()[0], G.GetTensor("root"));
+}
+
+// =============================================================================
+// 场景: A→B→A 其中 A 的输出有其他 consumer
+//   图: root(NC1HWC0) → FakeTrans_A(NC1HWC0→ND) → FakeTrans_B(ND→NC1HWC0) → asm1 → outcast1
+//                                            └── asm2 → outcast2 (也消费 A 的 ND 输出)
+//   签名: root=(root,NC1HWC0), A=(root,ND), B=(root,NC1HWC0)
+//   预期: B 与 root 同签名 → 消除; Phase1 为 asm1 插入的新 FakeTrans 与 A 同签名 → 消除
+//         A 有 asm2 消费 → 保留并物化
+//         OP_NC1HWC02NCHW=1, OP_NCHW2NC1HWC0=0
+// =============================================================================
+TEST_F(InferTensorFormatTest, PartialChainEliminationWithExtraConsumer)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape4d{2, 32, 14, 14};
+    std::vector<int64_t> shape5d{2, 2, 14, 14, 16};
+    TileShape::Current().SetVecTile({16, 16, 2, 16});
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape5d, {"root", "b_out"}));
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d, {"a_out", "outcast1", "outcast2"}));
+
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"root"}, {"a_out"}, "fake_trans_a"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"a_out"}, {"b_out"}, "fake_trans_b"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"b_out"}, {"outcast1"}, "asm1"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"a_out"}, {"outcast2"}, "asm2"));
+
+    ASSERT_TRUE(G.SetInCast({"root"}));
+    ASSERT_TRUE(G.SetOutCast({"outcast1", "outcast2"}));
+
+    SetFakeTransFormat(G, "fake_trans_a", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
+    SetFakeTransFormat(G, "fake_trans_b", TileOpFormat::TILEOP_ND, TileOpFormat::TILEOP_NC1HWC0);
+    G.GetOp("fake_trans_a")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
+    G.GetOp("fake_trans_b")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
+
+    G.GetTensor("root")->GetRawTensor()->format = TileOpFormat::TILEOP_NC1HWC0;
+
+    UpdateDynValidShapes(G, {"root", "a_out", "b_out", "outcast1", "outcast2"});
+
+    Function* func = G.GetFunction();
+    ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
+
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_FAKE_TRANS), 0);
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NC1HWC02NCHW), 1); // FakeTrans_A materialized
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2NC1HWC0), 0); // FakeTrans_B eliminated
+}
+
+// =============================================================================
+// 场景: A→B→C→B→D 中间部分冗余消除
+//   图: root(NC1HWC0) → FakeTrans_A(NC1HWC0→ND) → FakeTrans_B(ND→NC1HWC0)
+//                     → FakeTrans_C(NC1HWC0→ND) → FakeTrans_D(ND→FRACTAL_Z) → asm → local_out
+//   签名: root=(root,NC1HWC0), A=(root,ND), B=(root,NC1HWC0), C=(root,ND), D=(root,FRACTAL_Z)
+//   预期: B 与 root 同签名 → 消除; C 与 A 同签名 → 消除
+//         A 和 D 签名唯一 → 保留并物化
+//         OP_NC1HWC02NCHW=1, OP_NCHW2Fractal_Z=1
+// =============================================================================
+TEST_F(InferTensorFormatTest, MiddleChainPartialElimination)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape4d{2, 32, 14, 14};
+    std::vector<int64_t> shape5d{2, 2, 14, 14, 16};
+    TileShape::Current().SetVecTile({16, 256, 2, 16});
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape5d, {"root", "b_out"}));
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d, {"a_out", "c_out", "d_out", "local_out"}));
+
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"root"}, {"a_out"}, "fake_trans_a"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"a_out"}, {"b_out"}, "fake_trans_b"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"b_out"}, {"c_out"}, "fake_trans_c"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"c_out"}, {"d_out"}, "fake_trans_d"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"d_out"}, {"local_out"}, "asm"));
+
+    ASSERT_TRUE(G.SetInCast({"root"}));
+
+    SetFakeTransFormat(G, "fake_trans_a", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
+    SetFakeTransFormat(G, "fake_trans_b", TileOpFormat::TILEOP_ND, TileOpFormat::TILEOP_NC1HWC0);
+    SetFakeTransFormat(G, "fake_trans_c", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
+    SetFakeTransFormat(G, "fake_trans_d", TileOpFormat::TILEOP_ND, TileOpFormat::TILEOP_FRACTAL_Z);
+    G.GetOp("fake_trans_a")->GetTileShapeForSetting().SetVecTile({16, 256, 2, 16});
+    G.GetOp("fake_trans_b")->GetTileShapeForSetting().SetVecTile({16, 256, 2, 16});
+    G.GetOp("fake_trans_c")->GetTileShapeForSetting().SetVecTile({16, 256, 2, 16});
+    G.GetOp("fake_trans_d")->GetTileShapeForSetting().SetVecTile({16, 256, 2, 16});
+
+    G.GetTensor("root")->GetRawTensor()->format = TileOpFormat::TILEOP_NC1HWC0;
+
+    UpdateDynValidShapes(G, {"root", "a_out", "b_out", "c_out", "d_out", "local_out"});
+
+    Function* func = G.GetFunction();
+    ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
+
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_FAKE_TRANS), 0);
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NC1HWC02NCHW), 1);   // FakeTrans_A materialized
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2Fractal_Z), 1); // FakeTrans_D materialized
+    EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2NC1HWC0), 0);   // FakeTrans_B/C eliminated
 }

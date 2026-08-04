@@ -152,7 +152,7 @@ void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTenso
 {
     ASSERT(OperationErr::OP_NULL_POINTER, relatedOp != nullptr)
         << "Null relatedOp when applying TransData vec tile for src tensor [" << srcTensor->GetMagic()
-        << "], target format " << static_cast<int>(targetFormat) << ".";
+        << "], target format " << std::to_string(targetFormat) << ".";
     int64_t c0 = srcTensor->Datatype() == DataType::DT_FP32 ? 8 : 16;
     TileOpFormat srcFormat = srcTensor->GetRawTensor()->format;
     VecTile oriVectile = relatedOp->GetTileShape().GetVecTile();
@@ -195,12 +195,30 @@ std::shared_ptr<LogicalTensor> InferTensorFormat::InsertTransDataOp(Function& fu
     return result;
 }
 
+std::shared_ptr<LogicalTensor> InferTensorFormat::InsertFakeTransOp(Function& function,
+                                                                    const std::shared_ptr<LogicalTensor>& srcTensor,
+                                                                    TileOpFormat targetFormat, Operation* relatedOp)
+{
+    TileOpFormat srcFormat = srcTensor->Format();
+    // FakeTrans 阶段 shape 暂保持源 shape，真正的 shape 变换在 Phase 3 物化时由 TransData() 完成
+    auto outputTensor = irBuilder_.CreateTensorVar(function, srcTensor->Datatype(), srcTensor->GetShape(),
+                                                   srcTensor->GetDynValidShape(), targetFormat);
+    auto& fakeOp = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_FAKE_TRANS, {srcTensor}, {outputTensor});
+    fakeOp.SetAttribute(FAKE_TRANS_IN_FORMAT_ATTR, static_cast<int64_t>(srcFormat));
+    fakeOp.SetAttribute(FAKE_TRANS_OUT_FORMAT_ATTR, static_cast<int64_t>(targetFormat));
+    if (relatedOp != nullptr) {
+        fakeOp.UpdateTileShape(relatedOp->GetTileShape());
+    }
+    outputTensor->GetRawTensor()->format = targetFormat;
+    return outputTensor;
+}
+
 Status InferTensorFormat::EnsureTensorFormat(Function& function, std::shared_ptr<LogicalTensor>& tensor,
                                              Operation* relatedOp, TileOpFormat targetFormat)
 {
     if (tensor == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Operation, "Null tensor when ensuring format %d for op [%s][%d].",
-                          static_cast<int>(targetFormat),
+        APASS_LOG_ERROR_F(Elements::Operation, "Null tensor when ensuring format %s for op [%s][%d].",
+                          std::to_string(targetFormat).c_str(),
                           relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
                           relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
         return FAILED;
@@ -210,30 +228,26 @@ Status InferTensorFormat::EnsureTensorFormat(Function& function, std::shared_ptr
         return SUCCESS;
     }
     if (!IsSupportedTransData(current, targetFormat)) {
-        APASS_LOG_ERROR_F(Elements::Operation, "Unsupported format conversion: src=%d dst=%d for op [%s][%d].",
-                          static_cast<int>(current), static_cast<int>(targetFormat),
+        APASS_LOG_ERROR_F(Elements::Operation, "Unsupported format conversion: src=%s dst=%s for op [%s][%d].",
+                          std::to_string(current).c_str(), std::to_string(targetFormat).c_str(),
                           relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
                           relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
         return FAILED;
     }
-    std::shared_ptr<LogicalTensor> newTensor = nullptr;
-    if (relatedOp->GetOpcode() == Opcode::OP_FAKE_TRANS) {
-        newTensor = InsertTransDataOp(function, tensor, relatedOp->GetOOperands()[0], relatedOp, targetFormat);
-    } else {
-        newTensor = InsertTransDataOp(function, tensor, tensor, relatedOp, targetFormat);
-    }
+    std::shared_ptr<LogicalTensor> newTensor = InsertFakeTransOp(function, tensor, targetFormat, relatedOp);
     if (newTensor == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Operation, "Insert TransData failed: tensor[%d] src=%d dst=%d for op [%s][%d].",
-                          tensor->GetMagic(), static_cast<int>(current), static_cast<int>(targetFormat),
+        APASS_LOG_ERROR_F(Elements::Operation, "Insert TransData failed: tensor[%d] src=%s dst=%s for op [%s][%d].",
+                          tensor->GetMagic(), std::to_string(current).c_str(), std::to_string(targetFormat).c_str(),
                           relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
                           relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
         return FAILED;
     }
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Inserted TransData: tensor[%d] (fmt=%d) -> tensor[%d] (fmt=%d) for op [%s][%d].",
-        tensor->GetMagic(), static_cast<int>(current), newTensor->GetMagic(), static_cast<int>(newTensor->Format()),
-        relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
-        relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
+    APASS_LOG_DEBUG_F(Elements::Operation,
+                      "Inserted TransData: tensor[%d] (fmt=%s) -> tensor[%d] (fmt=%s) for op [%s][%d].",
+                      tensor->GetMagic(), std::to_string(current).c_str(), newTensor->GetMagic(),
+                      std::to_string(newTensor->Format()).c_str(),
+                      relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
+                      relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
     tensor = newTensor;
     return SUCCESS;
 }
@@ -255,49 +269,6 @@ Status InferTensorFormat::GetFakeTransFormat(const Operation& op, const std::str
     return SUCCESS;
 }
 
-Status InferTensorFormat::ResolveFakeTransOp(Function& function, Operation& op,
-                                             const std::shared_ptr<LogicalTensor>& inputTensor,
-                                             std::unordered_map<int, bool>& visitedTensors,
-                                             std::queue<std::shared_ptr<LogicalTensor>>& worklist)
-{
-    if (op.GetIOperands().size() != 1 || op.GetOOperands().size() != 1) {
-        APASS_LOG_ERROR_F(Elements::Operation,
-                          "OP_FAKE_TRANS[%d] expects 1 input and 1 output, got %zu inputs and %zu outputs.",
-                          op.GetOpMagic(), op.GetIOperands().size(), op.GetOOperands().size());
-        return FAILED;
-    }
-
-    TileOpFormat fakeInFormat;
-    TileOpFormat fakeOutFormat;
-    if (GetFakeTransFormat(op, FAKE_TRANS_IN_FORMAT_ATTR, fakeInFormat) != SUCCESS ||
-        GetFakeTransFormat(op, FAKE_TRANS_OUT_FORMAT_ATTR, fakeOutFormat) != SUCCESS) {
-        return FAILED;
-    }
-
-    auto finalTensor = inputTensor;
-    if (EnsureTensorFormat(function, finalTensor, &op, fakeInFormat) != SUCCESS ||
-        EnsureTensorFormat(function, finalTensor, &op, fakeOutFormat) != SUCCESS) {
-        return FAILED;
-    }
-
-    auto fakeOutput = op.GetOOperands()[0];
-    auto consumers = fakeOutput->GetConsumers();
-    for (auto* consumer : consumers) {
-        if (consumer == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Null consumer for OP_FAKE_TRANS[%d] output tensor [%d].",
-                              op.GetOpMagic(), fakeOutput->GetMagic());
-            return FAILED;
-        }
-        consumer->ReplaceInput(finalTensor, fakeOutput);
-    }
-
-    op.SetAsDeleted();
-
-    visitedTensors[finalTensor->GetMagic()] = true;
-    worklist.push(finalTensor);
-    return SUCCESS;
-}
-
 // =============================================================================
 // 输出 format 推导
 // =============================================================================
@@ -314,6 +285,14 @@ void InferTensorFormat::DetermineOutputFormat(const Function& function, const Op
 
         if (kPassThroughOps.count(opcode)) {
             fmt = op.GetIOperands()[0]->Format();
+        } else if (opcode == Opcode::OP_FAKE_TRANS) {
+            TileOpFormat fakeOutFmt;
+            if (GetFakeTransFormat(op, FAKE_TRANS_OUT_FORMAT_ATTR, fakeOutFmt) != SUCCESS) {
+                APASS_LOG_ERROR_F(Elements::Operation, "Failed to get FakeTrans output format for op [%s][%d].",
+                                  op.GetOpcodeStr().c_str(), op.GetOpMagic());
+                return;
+            }
+            fmt = fakeOutFmt;
         } else if (opcode == Opcode::OP_ASSEMBLE) {
             fmt = IsFunctionOutcast(function, output) ? TileOpFormat::TILEOP_ND : op.GetIOperands()[0]->Format();
         } else {
@@ -425,7 +404,23 @@ Status InferTensorFormat::ProcessConsumerFormat(Function& function, Operation* c
         return FAILED;
     }
     if (consumer->GetOpcode() == Opcode::OP_FAKE_TRANS) {
-        return ResolveFakeTransOp(function, *consumer, tensor, visitedTensors, worklist);
+        TileOpFormat fakeInFormat;
+        TileOpFormat fakeOutFormat;
+        if (GetFakeTransFormat(*consumer, FAKE_TRANS_IN_FORMAT_ATTR, fakeInFormat) != SUCCESS ||
+            GetFakeTransFormat(*consumer, FAKE_TRANS_OUT_FORMAT_ATTR, fakeOutFormat) != SUCCESS) {
+            return FAILED;
+        }
+        if (!IsSupportedTransData(fakeInFormat, fakeOutFormat)) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Unsupported FakeTrans conversion: in=%s out=%s for op [%s][%d].",
+                              std::to_string(fakeInFormat).c_str(), std::to_string(fakeOutFormat).c_str(),
+                              consumer->GetOpcodeStr().c_str(), consumer->GetOpMagic());
+            return FAILED;
+        }
+        if (EnsureConsumerInputFormat(function, *consumer, tensor, fakeInFormat) != SUCCESS) {
+            return FAILED;
+        }
+        MarkConsumerInputProcessed(function, *consumer, arch, processedInputs, visitedTensors, worklist);
+        return SUCCESS;
     }
 
     TileOpFormat required = ResolveRequiredInputFormat(function, *consumer, tensor, arch, pos, assembledOutputs);
@@ -490,6 +485,253 @@ Status InferTensorFormat::DeriveFormats(Function& function)
 }
 
 // =============================================================================
+// Phase 2: 值编号+并查集消除冗余 FakeTrans
+// =============================================================================
+
+bool InferTensorFormat::IsFakeTransOutput(const std::shared_ptr<LogicalTensor>& tensor)
+{
+    for (auto* producer : tensor->GetProducers()) {
+        if (producer != nullptr && !producer->IsDeleted() && producer->GetOpcode() == Opcode::OP_FAKE_TRANS) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool InferTensorFormat::IsValidFakeTransOp(const Operation& op)
+{
+    if (op.GetIOperands().size() != 1 || op.GetOOperands().size() != 1) {
+        APASS_LOG_ERROR_F(
+            Elements::Operation,
+            "Invalid OP_FAKE_TRANS[%d]: expected 1 input and 1 output, got %zu input(s) and %zu output(s).",
+            op.GetOpMagic(), op.GetIOperands().size(), op.GetOOperands().size());
+        return false;
+    }
+    return true;
+}
+
+std::shared_ptr<LogicalTensor> InferTensorFormat::FindRoot(
+    const std::shared_ptr<LogicalTensor>& tensor, std::unordered_map<int, std::shared_ptr<LogicalTensor>>& rootCache)
+{
+    int magic = tensor->GetMagic();
+    auto it = rootCache.find(magic);
+    if (it != rootCache.end()) {
+        return it->second;
+    }
+
+    std::shared_ptr<LogicalTensor> fakeTransInput;
+    bool isFakeTransOutput = false;
+    for (auto* producer : tensor->GetProducers()) {
+        if (producer != nullptr && !producer->IsDeleted() && producer->GetOpcode() == Opcode::OP_FAKE_TRANS) {
+            if (!IsValidFakeTransOp(*producer)) {
+                break; // Malformed FakeTrans — treat tensor as its own root
+            }
+            isFakeTransOutput = true;
+            fakeTransInput = producer->GetIOperands()[0];
+            break;
+        }
+    }
+
+    if (!isFakeTransOutput) {
+        rootCache[magic] = tensor;
+        return tensor;
+    }
+
+    auto root = FindRoot(fakeTransInput, rootCache);
+    rootCache[magic] = root;
+    return root;
+}
+
+TileOpFormat InferTensorFormat::GetEffectiveFormat(const std::shared_ptr<LogicalTensor>& tensor)
+{
+    for (auto* producer : tensor->GetProducers()) {
+        if (producer != nullptr && !producer->IsDeleted() && producer->GetOpcode() == Opcode::OP_FAKE_TRANS) {
+            TileOpFormat outFmt;
+            if (GetFakeTransFormat(*producer, FAKE_TRANS_OUT_FORMAT_ATTR, outFmt) == SUCCESS) {
+                return outFmt;
+            }
+            break;
+        }
+    }
+    return tensor->Format();
+}
+
+void InferTensorFormat::CollectSignatures(
+    Function& function, std::unordered_map<int, std::shared_ptr<LogicalTensor>>& rootCache,
+    std::map<Signature, std::vector<std::shared_ptr<LogicalTensor>>>& equivalenceClasses)
+{
+    // Collect FakeTrans output signatures
+    for (auto& op : function.Operations()) {
+        if (op.IsDeleted() || op.GetOpcode() != Opcode::OP_FAKE_TRANS) {
+            continue;
+        }
+        if (!IsValidFakeTransOp(op)) {
+            continue;
+        }
+        auto outputTensor = op.GetOOperands()[0];
+        auto root = FindRoot(outputTensor, rootCache);
+        TileOpFormat fmt = GetEffectiveFormat(outputTensor);
+        Signature sig = {root->GetMagic(), static_cast<int>(fmt)};
+        equivalenceClasses[sig].push_back(outputTensor);
+    }
+
+    // Collect non-FakeTrans output signatures (potential leaders)
+    for (auto& op : function.Operations()) {
+        if (op.IsDeleted()) {
+            continue;
+        }
+        for (auto& output : op.GetOOperands()) {
+            if (IsFakeTransOutput(output)) {
+                continue;
+            }
+            Signature sig = {output->GetMagic(), static_cast<int>(output->Format())};
+            equivalenceClasses[sig].push_back(output);
+        }
+    }
+
+    // Collect incast tensors (function inputs)
+    for (const auto& tensor : function.GetIncast()) {
+        if (IsFakeTransOutput(tensor)) {
+            continue;
+        }
+        Signature sig = {tensor->GetMagic(), static_cast<int>(tensor->Format())};
+        equivalenceClasses[sig].push_back(tensor);
+    }
+}
+
+bool InferTensorFormat::ReplaceRedundantTensors(
+    std::map<Signature, std::vector<std::shared_ptr<LogicalTensor>>>& equivalenceClasses)
+{
+    constexpr size_t MIN_TENSORS_FOR_DEDUP = 2; // 等价类中至少需要 2 个 tensor 才存在冗余
+    bool changed = false;
+    for (auto& [sig, tensors] : equivalenceClasses) {
+        (void)sig;
+        if (tensors.size() < MIN_TENSORS_FOR_DEDUP) {
+            continue;
+        }
+        // Pick leader: prefer non-FakeTrans output
+        std::shared_ptr<LogicalTensor> leader = nullptr;
+        for (auto& t : tensors) {
+            if (!IsFakeTransOutput(t)) {
+                leader = t;
+                break;
+            }
+        }
+        if (leader == nullptr) {
+            leader = tensors[0];
+        }
+        // Replace others' consumers with leader
+        for (auto& t : tensors) {
+            if (t == leader) {
+                continue;
+            }
+            auto consumers = t->GetConsumers(); // copy — GetConsumers returns std::set
+            for (auto* consumer : consumers) {
+                if (consumer != nullptr && !consumer->IsDeleted()) {
+                    consumer->ReplaceInput(leader, t);
+                    changed = true;
+                }
+            }
+        }
+    }
+    return changed;
+}
+
+bool InferTensorFormat::DeleteDeadFakeTrans(Function& function)
+{
+    bool changed = false;
+    for (auto& op : function.Operations()) {
+        if (op.IsDeleted() || op.GetOpcode() != Opcode::OP_FAKE_TRANS) {
+            continue;
+        }
+        if (!IsValidFakeTransOp(op)) {
+            continue;
+        }
+        auto output = op.GetOOperands()[0];
+        bool hasLiveConsumer = false;
+        for (auto* consumer : output->GetConsumers()) {
+            if (consumer != nullptr && !consumer->IsDeleted()) {
+                hasLiveConsumer = true;
+                break;
+            }
+        }
+        if (!hasLiveConsumer) {
+            op.SetAsDeleted();
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+Status InferTensorFormat::EliminateRedundantFakeTrans(Function& function)
+{
+    do {
+        std::unordered_map<int, std::shared_ptr<LogicalTensor>> rootCache;
+        std::map<Signature, std::vector<std::shared_ptr<LogicalTensor>>> equivalenceClasses;
+
+        CollectSignatures(function, rootCache, equivalenceClasses);
+        bool changed = ReplaceRedundantTensors(equivalenceClasses);
+        changed = DeleteDeadFakeTrans(function) || changed;
+
+        if (!changed) {
+            break;
+        }
+    } while (true);
+    return SUCCESS;
+}
+
+// =============================================================================
+// Phase 3: 物化剩余 FakeTrans 为真实 TransData
+// =============================================================================
+
+Status InferTensorFormat::MaterializeFakeTrans(Function& function)
+{
+    VecTile savedVecTile = TileShape::Current().GetVecTile();
+    for (auto& op : function.Operations()) {
+        if (op.IsDeleted() || op.GetOpcode() != Opcode::OP_FAKE_TRANS) {
+            continue;
+        }
+
+        if (!IsValidFakeTransOp(op)) {
+            TileShape::Current().SetVecTile(savedVecTile);
+            return FAILED;
+        }
+
+        TileOpFormat inFmt;
+        TileOpFormat outFmt;
+        if (GetFakeTransFormat(op, FAKE_TRANS_IN_FORMAT_ATTR, inFmt) != SUCCESS ||
+            GetFakeTransFormat(op, FAKE_TRANS_OUT_FORMAT_ATTR, outFmt) != SUCCESS) {
+            TileShape::Current().SetVecTile(savedVecTile);
+            return FAILED;
+        }
+
+        auto inputTensor = op.GetIOperands()[0];
+        auto outputTensor = op.GetOOperands()[0];
+
+        // Materialize: input format already matches IN_FORMAT (ensured by Phase 1)
+        auto result = InsertTransDataOp(function, inputTensor, outputTensor, &op, outFmt);
+        // Restore tileShape — ApplyTransDataVecTile modifies it globally
+        TileShape::Current().SetVecTile(savedVecTile);
+        if (result == nullptr) {
+            APASS_LOG_ERROR_F(Elements::Operation, "MaterializeFakeTrans failed for OP_FAKE_TRANS[%d]: in=%s out=%s.",
+                              op.GetOpMagic(), std::to_string(inFmt).c_str(), std::to_string(outFmt).c_str());
+            return FAILED;
+        }
+
+        // Reconnect output's consumers to the materialized result
+        auto consumers = outputTensor->GetConsumers(); // copy
+        for (auto* consumer : consumers) {
+            if (consumer != nullptr && !consumer->IsDeleted()) {
+                consumer->ReplaceInput(result, outputTensor);
+            }
+        }
+
+        op.SetAsDeleted();
+    }
+    return SUCCESS;
+}
+
+// =============================================================================
 // Pass 入口
 // =============================================================================
 
@@ -499,12 +741,30 @@ Status InferTensorFormat::RunOnFunction(Function& function)
     // 兜底告警前端输入中存在dynValidShape的tensor经过assemble后未手动view有效数据的情况，预警可能导致的精度问题。
     FunctionUtils::WarnAssembleDynValidShapeRisk(function);
 
+    // Phase 1: BFS 推导格式，插入 FakeTrans 占位
     Status status = DeriveFormats(function);
     if (status != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function, "InferTensorFormat failed for function [%s].",
+        APASS_LOG_ERROR_F(Elements::Function, "InferTensorFormat Phase 1 failed for function [%s].",
                           function.GetRawName().c_str());
         return FAILED;
     }
+
+    // Phase 2: 值编号+并查集消除冗余 FakeTrans
+    status = EliminateRedundantFakeTrans(function);
+    if (status != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "InferTensorFormat Phase 2 failed for function [%s].",
+                          function.GetRawName().c_str());
+        return FAILED;
+    }
+
+    // Phase 3: 将剩余 FakeTrans 物化为真实 TransData
+    status = MaterializeFakeTrans(function);
+    if (status != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "InferTensorFormat Phase 3 failed for function [%s].",
+                          function.GetRawName().c_str());
+        return FAILED;
+    }
+
     function.EraseOperations(true, false);
 
     APASS_LOG_INFO_F(Elements::Function, "End InferTensorFormat for function [%s].", function.GetRawName().c_str());
