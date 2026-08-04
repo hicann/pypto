@@ -499,7 +499,6 @@ struct ParamConfigs {
     int copyOutResolveCoalescing{0};
     bool combineAxis{false};
     int autoMixPartition{0};
-    bool enableMemoryAwareSort{false};
     std::string oooSchedMode;
     std::string oooSortModeAic;
     std::string oooSortModeAiv;

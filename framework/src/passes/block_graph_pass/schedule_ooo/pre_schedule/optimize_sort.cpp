@@ -15,8 +15,6 @@
 
 #include "optimize_sort.h"
 #include "prior_dfs_sort.h"
-#include "memory_aware_sort.h"
-#include "memory_aware_topo_sort.h"
 #include <queue>
 #include "passes/pass_log/pass_log.h"
 
@@ -547,7 +545,6 @@ void OptimizeSort::AllocAhead()
 
 const std::unordered_map<std::string, OptimizeSort::Factory> OptimizeSort::SORT_ALGOS = {
     {"PriorDFS", [](std::vector<Operation*> ops, Function& f) { return std::make_unique<PriorDFSSort>(ops, f); }},
-    {"MemoryAware", [](std::vector<Operation*> ops, Function& f) { return std::make_unique<MemoryAwareSort>(ops, f); }},
 };
 
 std::string OptimizeSort::ResolveOooSortMode(const std::vector<Operation*>& ops, const ParamConfigs& pc)
