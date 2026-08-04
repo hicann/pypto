@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -18,27 +18,28 @@
 #ifndef PASS_SCHEDULE_STATE_H
 #define PASS_SCHEDULE_STATE_H
 
-#include <vector>
-#include <map>
-#include <unordered_map>
-#include <unordered_set>
-#include <set>
-#include <cstdint>
 #include <algorithm>
 #include <climits>
+#include <cstdint>
+#include <map>
+#include <set>
 #include <sstream>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
 #include "interface/operation/operation.h"
 #include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "interface/utils/common.h"
-#include "passes/pass_log/pass_log.h"
-#include "passes/pass_interface/pass.h"
-#include "tilefwk/error_code.h"
 #include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"
 #include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
-#include "passes/statistics/schedule_observer.h"
-#include "passes/pass_utils/reschedule_utils.h"
+#include "passes/pass_interface/pass.h"
+#include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/reschedule_utils.h"
+#include "passes/statistics/schedule_observer.h"
+#include "tilefwk/error_code.h"
 
 #ifdef MODULE_NAME
 #undef MODULE_NAME
@@ -50,6 +51,8 @@ namespace npu::tile_fwk {
 constexpr int32_t DIM_FIVE = 5;
 constexpr int32_t LAST_TWO_DIM = 2;
 constexpr int32_t UB_BLOCK_SIZE = 32;
+constexpr int32_t MAX_SPILL_NO_PROGRESS_ROUNDS = 10;
+constexpr uint64_t MAX_NUM_TOTAL_ISSUES_RATIO = 3;
 
 const std::unordered_set<Opcode> USE_LESS_OPS = {Opcode::OP_NOP,       Opcode::OP_RESHAPE,  Opcode::OP_SHMEM_WAIT_UNTIL,
                                                  Opcode::OP_VIEW,      Opcode::OP_ASSEMBLE, Opcode::OP_BIND_TENSOR,
@@ -153,6 +156,8 @@ struct OpQueue {
 
     bool Empty() { return queue.empty(); }
 
+    size_t Size() const { return queue.size(); }
+
     Operation* Front() { return queue[0]; }
 
     Operation* PopFront()
@@ -224,6 +229,11 @@ public:
     int clock{0};
     uint64_t numTotalIssues{0};
     std::unordered_map<CoreLocationType, std::map<MemoryType, OpQueue>> allocIssueQueue;
+
+    // === Spill dead-loop detection ===
+    int spillNoProgressCnt{0};
+    int lastPreSpillTotalQSize{-1};
+    uint64_t originalNumTotalIssues{0};
 
     // === State operation methods ===
 
@@ -305,6 +315,10 @@ Status RunSchedulerMainLoop(Scheduler& self)
             }
         } else {
             self.state_.clock = nextCycle;
+        }
+        if (self.state_.numTotalIssues > self.state_.originalNumTotalIssues * MAX_NUM_TOTAL_ISSUES_RATIO) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Spill dead-loop.");
+            return FAILED;
         }
     }
     if (self.PostMainLoop() != SUCCESS) {

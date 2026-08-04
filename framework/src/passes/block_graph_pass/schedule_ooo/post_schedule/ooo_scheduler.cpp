@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  */
 
 #include "ooo_scheduler.h"
+
 #include "buffer_rearrange.h"
 #include "passes/pass_log/pass_log.h"
 
@@ -244,6 +245,28 @@ Status OoOScheduler::SpillOnBlock()
     }
     APASS_LOG_INFO_F(Elements::Operation, "Start to spillOnBlock at %s",
                      coreTypeToString(orderFirstPair.first).c_str());
+
+    int curPreSpillTotalQSize = 0;
+    for (auto& corePair : state_.allocIssueQueue) {
+        for (auto& memPair : corePair.second) {
+            curPreSpillTotalQSize += static_cast<int>(memPair.second.Size());
+        }
+    }
+    if (state_.lastPreSpillTotalQSize >= 0) {
+        if (curPreSpillTotalQSize >= state_.lastPreSpillTotalQSize) {
+            state_.spillNoProgressCnt++;
+            if (state_.spillNoProgressCnt >= MAX_SPILL_NO_PROGRESS_ROUNDS) {
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "Spill dead-loop detected: %d consecutive spills without total queue size reduction "
+                                  "(current=%d, last=%d).",
+                                  state_.spillNoProgressCnt, curPreSpillTotalQSize, state_.lastPreSpillTotalQSize);
+                return FAILED;
+            }
+        } else {
+            state_.spillNoProgressCnt = 0;
+        }
+    }
+    state_.lastPreSpillTotalQSize = curPreSpillTotalQSize;
 
     if (SpillOnCoreBlock(orderFirstPair) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "SpillOnCoreBlock failed.");
@@ -626,6 +649,7 @@ Status OoOScheduler::PreMainLoop()
     UpdateIssueExecOrder();
     LaunchReadyIssue();
     state_.numTotalIssues = state_.orderedOps.size();
+    state_.originalNumTotalIssues = state_.numTotalIssues;
     NotifyMainLoopBegin();
     return SUCCESS;
 }
@@ -714,6 +738,7 @@ Status OoOScheduler::ExecuteAllocIssue(Operation* op, size_t& pcIdx)
 Status OoOScheduler::SeqSchedule()
 {
     UpdateIssueExecOrder();
+    state_.originalNumTotalIssues = state_.orderedOps.size();
     size_t pcIdx = 0;
     LOG_SCOPE_BEGIN(tGenSpillSchedule, Elements::Function, "SeqSchedule");
     while (pcIdx < state_.orderedOps.size()) {
@@ -726,18 +751,19 @@ Status OoOScheduler::SeqSchedule()
             }
         }
         for (auto& outTensor : op->GetOOperands()) {
-            MemoryType memType = outTensor->GetMemoryTypeOriginal();
-            if (memType >= MemoryType::MEM_DEVICE_DDR) {
-                continue;
+            if (outTensor->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
+                state_.tensorOccupyMap[outTensor->memoryrange.memId] = op;
             }
-            int memId = outTensor->memoryrange.memId;
-            state_.tensorOccupyMap[memId] = op;
         }
         if (RetireIssue(op) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "RetireIssue failed! %s", GetFormatBacktrace(*op).c_str());
             return FAILED;
         }
         pcIdx += 1;
+        if (state_.orderedOps.size() > state_.originalNumTotalIssues * MAX_NUM_TOTAL_ISSUES_RATIO) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Spill dead-loop.");
+            return FAILED;
+        }
     }
     for (auto bufRef : state_.bufRefCount) {
         if (bufRef.second != 0) {
