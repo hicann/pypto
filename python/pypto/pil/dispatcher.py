@@ -68,7 +68,7 @@ def _get_or_compile(pyfunc):
         return None
 
 
-def dispatch_call(call: Call, scope: Scope, ctx: BuildContext, callback=None):
+def dispatch_call(call: Call, scope: Scope, ctx: BuildContext):
     callee = scope.resolve(call.callee)
     args = tuple(scope.resolve(call.args))
 
@@ -86,10 +86,7 @@ def dispatch_call(call: Call, scope: Scope, ctx: BuildContext, callback=None):
         if func is not None:
             ret = call_function(func, args, kwargs, ctx)
         else:
-            if callback is None:
-                ret = dispatch(callee, ctx, *args, **kwargs)
-            else:
-                ret = callback(*args, **kwargs)
+            ret = dispatch(callee, ctx, *args, **kwargs)
     if call.result is not None:
         scope.varmap[call.result.id] = ret
 

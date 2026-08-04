@@ -1162,3 +1162,18 @@ def test_replace_in_if_else():
             assert ctx.data > 0
 
     pil.compile(foo, 10)
+
+
+def test_nested_is_loop_begin():
+
+    def bar(i):
+        if pypto.cond(pypto.is_loop_begin(i)):
+            print("begin")
+        if pypto.cond(pypto.is_loop_end(i)):
+            print("end")
+
+    def foo():
+        for i in pypto.loop(1):
+            bar(i)
+
+    pil.compile(foo, has_move=False)

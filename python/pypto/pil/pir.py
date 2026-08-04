@@ -224,6 +224,7 @@ class BuildContext(ir.IRBuilder):
         self.parent = None
         self.span = span
         self.return_var_names = []
+        self.loop_stack = []  # used by legacy is_loop_begin() and is_loop_end()
 
     def __enter__(self):
         self.parent = _current.build_context

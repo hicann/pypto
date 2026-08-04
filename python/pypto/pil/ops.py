@@ -234,18 +234,22 @@ def pypto_loop_unroll_impl(ctx: BuildContext, *args, **kwargs):
 
 @impl(pypto.is_loop_begin)
 def is_loop_begin_impl(ctx: BuildContext, scalar: SymbolicScalar):
-    start = Scope.current()["_loop_begin"]
+    start, _, _ = ctx.loop_stack[-1]
     assert isinstance(start, (SymbolicScalar, int)), "is_loop_begin() must be called in a pypto.loop"
     return scalar == start
 
 
 @impl(pypto.is_loop_end)
 def is_loop_end_impl(ctx: BuildContext, scalar: SymbolicScalar):
-    end = Scope.current()["_loop_end"]
-    step = Scope.current()["_loop_step"]
+    _, end, step = ctx.loop_stack[-1]
     assert isinstance(end, (SymbolicScalar, int)), "is_loop_end() must be called in a pypto.loop"
     assert isinstance(step, (SymbolicScalar, int)), "is_loop_end() must be called in a pypto.loop"
     return scalar + step >= end
+
+
+@impl(pypto.cond)
+def cond_impl(ctx: BuildContext, cond):
+    return cond
 
 
 def _add_jump_stmt(ctx: BuildContext, jump, operands: Optional[list[ir.Expr]] = None):
@@ -386,13 +390,11 @@ def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
 
 
 @impl("pil.loop")
-def loop_impl(ctx, body: Block, loop):
+def loop_impl(ctx: BuildContext, body: Block, loop):
     if isinstance(loop, LoopRange):
-        scope = Scope.current()
-        scope["_loop_begin"] = loop.start
-        scope["_loop_end"] = loop.stop
-        scope["_loop_step"] = loop.step
+        ctx.loop_stack.append((loop.start, loop.stop, loop.step))
         _dyn_for(body, loop, ctx)
+        ctx.loop_stack.pop()
     elif loop is not None:
         _static_for(body, loop)
     else:
