@@ -137,6 +137,7 @@ const std::string OpAttributeKey::rmwMode = "op_attr_rmw_mode";
 const std::string OpAttributeKey::transDataOffset = "TRANSDATA_OFFSET";
 const std::string OpAttributeKey::isConv = "isConv";
 const std::string OpAttributeKey::writeConflict = "write_conflict";
+const std::string OpAttributeKey::parallel = "parallel";
 
 const std::string ConvOpAttributeKey::cin = "CIN";
 const std::string ConvOpAttributeKey::cout = "COUT";

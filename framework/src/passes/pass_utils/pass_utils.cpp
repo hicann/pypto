@@ -296,6 +296,20 @@ bool MayOverlap(const std::vector<Operation*>& prods)
     }
     return false;
 }
+
+bool IsSerialDassemble(const Operation* prod)
+{
+    if (prod == nullptr || prod->GetOpcode() != Opcode::OP_ASSEMBLE) {
+        return false;
+    }
+    if (prod->GetIOperands().size() != 1) {
+        return false;
+    }
+    if (!prod->HasAttr(OpAttributeKey::parallel)) {
+        return false;
+    }
+    return !prod->GetBoolAttribute(OpAttributeKey::parallel);
+}
 } // namespace
 
 Status FunctionUtils::InferOutcastWriteConflict(Function& function)
@@ -313,6 +327,9 @@ Status FunctionUtils::InferOutcastWriteConflict(Function& function)
         for (auto& prod : prodSet) {
             if (prod->GetOpcode() == Opcode::OP_ASSEMBLE || prod->GetOpcode() == Opcode::OP_ASSEMBLE_SSA) {
                 prods.push_back(prod);
+            }
+            if (IsSerialDassemble(prod)) {
+                outcast->SetAttr("NORMAL", true);
             }
         }
         if (MayOverlap(prods)) {

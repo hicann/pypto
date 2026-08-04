@@ -1340,17 +1340,18 @@ Tensor Assemble(const std::vector<std::pair<Tensor, std::vector<int64_t>>>& tens
 }
 
 Operation& TensorDInnerAssemble(Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
-                                const std::vector<SymbolicScalar>& dynOffset)
+                                const std::vector<SymbolicScalar>& dynOffset, bool parallel)
 {
     std::vector<int64_t> offset = SymbolicScalar::Concrete(dynOffset, 0);
     auto& op = function.AddOperation(Opcode::OP_ASSEMBLE, {operand}, {result});
     op.SetAssembleOpAttribute(offset, dynOffset);
     op.SetAttribute("dassemble", true);
+    op.SetAttribute(OpAttributeKey::parallel, parallel);
     function.UpdateTensorDataUsage(op);
     return op;
 }
 
-void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest)
+void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest, bool parallel)
 {
     DECLARE_TRACER();
 
@@ -1368,7 +1369,7 @@ void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset
     CHECK_OP(dest.GetDataType() == tensor.GetDataType()) << "Assemble: src and dest requires same dtype";
 
     auto& func = *Program::GetInstance().GetCurrentFunction();
-    TensorDInnerAssemble(func, tensor.GetStorage(), dest.GetStorage(), dynOffset);
+    TensorDInnerAssemble(func, tensor.GetStorage(), dest.GetStorage(), dynOffset, parallel);
     Program::GetInstance().GetTensorSlotManager()->TensorWrite(dest, SlotProperty::ASSEMBLE_DST);
 }
 

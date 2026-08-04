@@ -734,10 +734,10 @@ void BindOperation(py::module_& m)
         "Tensor assemble");
     m.def(
         "Assemble",
-        [](const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest) {
-            npu::tile_fwk::Assemble(tensor, dynOffset, dest);
+        [](const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest, bool parallel = false) {
+            npu::tile_fwk::Assemble(tensor, dynOffset, dest, parallel);
         },
-        "Tensor dassemble");
+        py::arg("tensor"), py::arg("dynOffset"), py::arg("dest"), py::arg("parallel") = false, "Tensor dassemble");
     m.def(
         "AtomicRMW",
         [](const Tensor& src, const std::vector<SymbolicScalar>& offsets, Tensor& dst, AtomicRMWMode mode) {

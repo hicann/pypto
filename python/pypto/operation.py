@@ -22,7 +22,12 @@ from .tensor import Tensor
 
 
 @overload
-def assemble(src: Tensor, offsets: List[Union[int, SymbolicScalar]], dst: Tensor) -> None:
+def assemble(
+    src: Tensor,
+    offsets: List[Union[int, SymbolicScalar]],
+    dst: Tensor,
+    parallel: bool = False,
+) -> None:
     """
     Assembles a small Tensor into a larger Tensor based on specified offsets.
 
@@ -37,6 +42,10 @@ def assemble(src: Tensor, offsets: List[Union[int, SymbolicScalar]], dst: Tensor
 
     dst: Tensor
         The larger output tensor that will contain the assembled input tensor
+
+    parallel : bool, optional
+        Whether assemble can be executed in parallel. Defaults to False.
+
     Examples
     ---------
     x = pypto.tensor([2, 2], pypto.data_type.DT_FP32)
@@ -61,7 +70,9 @@ def assemble(src: Tensor, offsets: List[Union[int, SymbolicScalar]], dst: Tensor
 
 @overload
 def assemble(
-    srcs: Sequence[Tuple[Tensor, List[Union[int, SymbolicScalar]]]], dst: Tensor, parallel: bool = False
+    srcs: Sequence[Tuple[Tensor, List[Union[int, SymbolicScalar]]]],
+    dst: Tensor,
+    parallel: bool = False,
 ) -> None:
     """
     Assembles multiple small Tensors into a larger Tensor based on specified offsets.
@@ -73,6 +84,10 @@ def assemble(
 
     dst: Tensor
         The larger output tensor
+
+    parallel : bool, optional
+        Whether assemble can be executed in parallel. Defaults to False.
+
     Examples
     ---------
     x = pypto.tensor([2, 2], pypto.DT_FP32)
@@ -107,7 +122,7 @@ def assemble(*args, parallel: bool = False) -> None:
         pypto_impl.Assemble(srcs, dst.base(), parallel)
     else:
         src, offsets, dst = args
-        pypto_impl.Assemble(src.base(), to_syms(offsets), dst.base())
+        pypto_impl.Assemble(src.base(), to_syms(offsets), dst.base(), parallel)
 
 
 def min(a: "SymbolicScalar | int", b: "SymbolicScalar | int") -> "SymbolicScalar":

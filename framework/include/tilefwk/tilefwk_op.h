@@ -130,7 +130,7 @@ Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes,
             const std::vector<SymbolicScalar>& newValidShapes, const std::vector<SymbolicScalar>& newOffsets);
 
 Tensor Assemble(const std::vector<std::pair<Tensor, std::vector<int64_t>>>& tensors);
-void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest);
+void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest, bool parallel = false);
 
 struct AssembleItem {
     Tensor tensor;

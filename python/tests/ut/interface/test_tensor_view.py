@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """ """
 
+
 import pytest
 
 import pypto
@@ -103,6 +104,14 @@ def test_tensor_batch_assemble():
             parallel=True,
         )
 
+
+def test_single_assemble_explicit_parallel():
+    src = pypto.tensor((32, 32), pypto.DT_FP32, "src")
+    dst = pypto.tensor((32, 32), pypto.DT_FP32, "dst")
+
+    with pypto.function("MAIN", src, dst):
+        pypto.set_vec_tile_shapes(32, 32)
+        pypto.assemble(src, [0, 0], dst, parallel=True)
 
 def test_view_dimension_mismatch_shapes():
     """Test that shapes dimension mismatch with operand raises error (LogicalTensor constraint)"""

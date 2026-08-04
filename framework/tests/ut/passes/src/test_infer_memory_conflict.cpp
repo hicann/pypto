@@ -62,4 +62,46 @@ TEST(PassTest, InferMemoryConflictInferOutputWriteConflict)
     }
     EXPECT_EQ(cnt, 3);
 }
+
+TEST(PassTest, InferMemoryConflictAssembleParallelFalseMarksNormalAndCloneKeepsIt)
+{
+    std::vector<int64_t> shape{-1, 32};
+    Tensor serialOut(DT_FP32, shape, "serial_out");
+    Tensor parallelOut(DT_FP32, shape, "parallel_out");
+
+    Function* loopFunc = nullptr;
+    FUNCTION("MAIN", {serialOut, parallelOut})
+    {
+        TileShape::Current().SetVecTile(32, 32);
+        LOOP("LOOP", FunctionType::DYNAMIC_LOOP, idx, LoopRange(32))
+        {
+            loopFunc = Program::GetInstance().GetCurrentFunction();
+            auto t = Full(1.0, DT_FP32, {32, 32});
+            // Cross-loop WAW serial write: parallel=false should mark outcast NORMAL.
+            Assemble(t, {idx * 32, 0}, serialOut, false);
+            // Default parallel=true should not mark NORMAL.
+            Assemble(t, {idx * 32, 0}, parallelOut, true);
+        }
+    }
+
+    const std::string strategyName = "InferAssembleNormalAttrTestStrategy";
+    PassManager::Instance().RegisterStrategy(strategyName, {{"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT}});
+    EXPECT_EQ(PassManager::Instance().RunPass(Program::GetInstance(), *loopFunc, strategyName), SUCCESS);
+
+    int matched = 0;
+    for (auto out : loopFunc->GetOriginOutcast()) {
+        if (out->tensor->GetSymbol() == "serial_out") {
+            EXPECT_TRUE(out->HasAttr("NORMAL"));
+            EXPECT_FALSE(out->HasAttr(OpAttributeKey::writeConflict));
+            auto cloned = out->Clone(*loopFunc, true);
+            ASSERT_NE(cloned, nullptr);
+            EXPECT_TRUE(cloned->HasAttr("NORMAL")) << "NORMAL should be inherited by LogicalTensor::Clone";
+            matched++;
+        } else if (out->tensor->GetSymbol() == "parallel_out") {
+            EXPECT_FALSE(out->HasAttr("NORMAL"));
+            matched++;
+        }
+    }
+    EXPECT_EQ(matched, 2);
+}
 } // namespace npu::tile_fwk

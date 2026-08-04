@@ -134,6 +134,9 @@ std::shared_ptr<LogicalTensor> LogicalTensor::Clone(Function& dstFunc, bool crea
     newTensor->readyTime_ = readyTime_;
     newTensor->remainingTime_ = remainingTime_;
     newTensor->dynOffset_ = dynOffset_;
+    if (HasAttr("NORMAL")) {
+        newTensor->SetAttr("NORMAL", true);
+    }
     dstFunc.GetTensorMap().Insert(newTensor, false);
     return newTensor;
 }
@@ -161,6 +164,9 @@ ir::VarPtr LogicalTensor::Clone(bool shareRawTensor) const
     newTensor->readyTime_ = readyTime_;
     newTensor->remainingTime_ = remainingTime_;
     newTensor->dynOffset_ = dynOffset_;
+    if (HasAttr("NORMAL")) {
+        newTensor->SetAttr("NORMAL", true);
+    }
 
     return std::static_pointer_cast<const ir::Var>(newTensor);
 }
