@@ -486,6 +486,9 @@ void TiledTopKRadixSelect(Function& function, const TileShape& tileShape, size_t
         auto valueTile = valueResult->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto indexTile = indexResult->View(function, input.tileInfo.shape, input.tileInfo.offset);
         std::vector<int64_t> tmpShape = {static_cast<int64_t>(AlignUp(lastDim, NUM_VALUE_128) * NUM_VALUE_26)};
+        if (cur > 0) {
+            tmpShape[0] *= input.tileInfo.shape[cur - 1];
+        }
         auto tempTensor = std::make_shared<LogicalTensor>(function, DataType::DT_UINT8, tmpShape);
         auto& newOp = function.AddOperation(Opcode::OP_RADIX_SELECT, {inputTile}, {valueTile, indexTile, tempTensor});
         newOp.SetAttribute(TOPK_AXIS, axis);

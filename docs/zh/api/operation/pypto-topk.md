@@ -44,7 +44,7 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 
 1. 只支持对尾轴进行topk操作；
 2. 选用MERGE_SORT算法时，TileShape尾轴需要小于22KB\(TileShape\[-1\]\*4 < 22KB\)；
-3. 选用RADIX_SELECT算法时，记TileShape尾轴为tile，tile对齐到128记为tileAlign，则需要临时空间：26\*tileAlign，临时空间加上输入输出的tile块不能超过UB大小；
+3. 选用RADIX_SELECT算法时，记TileShape的次尾轴为tileH（若不存在则为1），尾轴为tileW，tileW对齐到128记为tileAlign，则需要临时空间：26\*tileH\*tileAlign，临时空间加上输入输出的tile块不能超过UB大小；
 4. 选用RADIX_SELECT算法时，尾轴不可切分，TileShape\[-1\]必须大于等于input.shape\[-1\]；
 5. k <= TileShape\[-1\] && k <= input.shape\[-1\]；
 6. RADIX_SELECT算法在不同型号的支持度：
