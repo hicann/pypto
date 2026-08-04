@@ -709,3 +709,101 @@ TEST_F(RuntimeOutcastTensorTest, BoundaryAndInnerTemporalOutcastBudget)
     EXPECT_EQ(budget.BoundaryAndInnerTemporalOutcastSlotNum(), 12u);
     EXPECT_EQ(budget.MaxOutcastMem() * budget.BoundaryAndInnerTemporalOutcastSlotNum(), 12u * 1024);
 }
+
+TEST_F(RuntimeOutcastTensorTest, IsValidSlotMemRequirement_True)
+{
+    std::vector<uint8_t> workspace(1u << 20);
+
+    DeviceWorkspaceAllocator d;
+    DevAscendProgram devProg{};
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.devTaskBoundaryOutcastNum = 1;
+    devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum = 1;
+    devProg.memBudget.tensor.maxStaticOutcastMem = 1024;
+
+    InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
+
+    EXPECT_TRUE(d.IsValidSlotMemRequirement(512));
+}
+
+TEST_F(RuntimeOutcastTensorTest, IsValidSlotMemRequirement_Zero)
+{
+    std::vector<uint8_t> workspace(1u << 20);
+
+    DeviceWorkspaceAllocator d;
+    DevAscendProgram devProg{};
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.devTaskBoundaryOutcastNum = 1;
+    devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum = 1;
+    devProg.memBudget.tensor.maxStaticOutcastMem = 1024;
+
+    InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
+
+    // 0 is a valid slot memory requirement
+    EXPECT_TRUE(d.IsValidSlotMemRequirement(0));
+}
+
+TEST_F(RuntimeOutcastTensorTest, DumpMemoryUsage_NoCrash)
+{
+    std::vector<uint8_t> workspace(1u << 20);
+
+    DeviceWorkspaceAllocator d;
+    DevAscendProgram devProg{};
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
+
+    InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
+
+    d.DumpMemoryUsage("test_hint");
+}
+
+TEST_F(RuntimeOutcastTensorTest, ResetAicpuMemCounter_NoCrash)
+{
+    std::vector<uint8_t> workspace(1u << 20);
+
+    DeviceWorkspaceAllocator d;
+    DevAscendProgram devProg{};
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
+
+    InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
+
+    d.ResetAicpuMemCounter();
+}
+
+TEST_F(RuntimeOutcastTensorTest, RewindMemoryDumper_NoCrash)
+{
+    std::vector<uint8_t> workspace(1u << 20);
+
+    DeviceWorkspaceAllocator d;
+    DevAscendProgram devProg{};
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
+
+    InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
+
+    d.RewindMemoryDumper();
+}
+
+TEST_F(RuntimeOutcastTensorTest, MarkAsNewStitchWindow_NoCrash)
+{
+    std::vector<uint8_t> workspace(1u << 20);
+
+    DeviceWorkspaceAllocator d;
+    DevAscendProgram devProg{};
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
+
+    InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
+
+    d.MarkAsNewStitchWindow();
+}
+
+TEST_F(RuntimeOutcastTensorTest, RecycleDevFuncWorkspace_NoCrash)
+{
+    std::vector<uint8_t> workspace(1u << 20);
+
+    DeviceWorkspaceAllocator d;
+    DevAscendProgram devProg{};
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
+
+    InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
+
+    d.RecycleDevFuncWorkspace();
+}

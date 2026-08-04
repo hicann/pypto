@@ -242,3 +242,100 @@ TEST(DevAscendFunctionDuppedTest, SchemaGetExpressionTable)
     // Just verify it doesn't crash
     (void)exprTable;
 }
+
+TEST(DeviceExecuteContextExtraTest, GetRuid_Basic)
+{
+    DevStartArgs args{};
+    DeviceExecuteContext ctx(&args);
+    ctx.taskId = 42;
+    ctx.stitchContext.stitchedList_.size_ = 5;
+
+    auto ruid = ctx.GetRuid(100, false);
+    (void)ruid;
+}
+
+TEST(DeviceExecuteContextExtraTest, GetRuid_AfterAppend)
+{
+    DevStartArgs args{};
+    DeviceExecuteContext ctx(&args);
+    ctx.taskId = 10;
+    ctx.stitchContext.stitchedList_.size_ = 3;
+
+    auto ruid = ctx.GetRuid(200, true);
+    (void)ruid;
+}
+
+TEST(DeviceExecuteContextExtraTest, NeedSubmmitDevTask_Finish)
+{
+    DevStartArgs args{};
+    DeviceExecuteContext ctx(&args);
+    EXPECT_TRUE(ctx.NeedSubmmitDevTask(RUNTIME_FUNCKEY_FINISH));
+}
+
+TEST(DeviceExecuteContextExtraTest, NeedSubmmitDevTask_LoopBarrier)
+{
+    DevStartArgs args{};
+    DeviceExecuteContext ctx(&args);
+    EXPECT_TRUE(ctx.NeedSubmmitDevTask(RUNTIME_FUNCKEY_LOOP_BARRIER));
+}
+
+TEST(DeviceExecuteContextExtraTest, NeedSubmmitDevTask_ParallelForEnd)
+{
+    DevStartArgs args{};
+    DeviceExecuteContext ctx(&args);
+    EXPECT_TRUE(ctx.NeedSubmmitDevTask(RUNTIME_FUNCKEY_PARALLEL_FOR_END));
+}
+
+TEST(DeviceExecuteContextExtraTest, NeedSubmmitDevTask_ParallelForBegin)
+{
+    DevStartArgs args{};
+    DeviceExecuteContext ctx(&args);
+    EXPECT_TRUE(ctx.NeedSubmmitDevTask(RUNTIME_FUNCKEY_PARALLEL_FOR_BEGIN));
+}
+
+TEST(DeviceExecuteContextExtraTest, NeedSubmmitDevTask_Other)
+{
+    DevStartArgs args{};
+    DeviceExecuteContext ctx(&args);
+    EXPECT_FALSE(ctx.NeedSubmmitDevTask(12345));
+}
+
+TEST(DeviceExecuteContextExtraTest, NeedSubmmitDevTask_Zero)
+{
+    DevStartArgs args{};
+    DeviceExecuteContext ctx(&args);
+    EXPECT_FALSE(ctx.NeedSubmmitDevTask(0));
+}
+
+TEST(DeviceStitchContextTest, DumpStitchInfo_Empty)
+{
+    DeviceStitchContext ctx;
+    ctx.DumpStitchInfo(nullptr, 0);
+}
+
+TEST(DeviceStitchContextTest, DumpStitchInfo_WithMiniDup)
+{
+    MiniDup dup;
+    dup.Build(false);
+
+    DeviceStitchContext ctx;
+    ctx.DumpStitchInfo(&dup.dup, 1);
+}
+
+TEST(DevAscendFunctionDuppedDataTest, Dump_Indent)
+{
+    MiniDup dup;
+    dup.Build(false);
+
+    std::string result = dup.dup.Dump(2);
+    EXPECT_FALSE(result.empty());
+}
+
+TEST(DevAscendFunctionDuppedDataTest, Dump_ZeroIndent)
+{
+    MiniDup dup;
+    dup.Build(false);
+
+    std::string result = dup.dup.Dump(0);
+    EXPECT_FALSE(result.empty());
+}

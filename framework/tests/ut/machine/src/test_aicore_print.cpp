@@ -1224,6 +1224,848 @@ TEST_F(AiCorePrintUTest, HostLogger_IndexedHf8WithIndex)
     EXPECT_TRUE(output.find("[0]") != std::string::npos);
 }
 
+// 测试 EncodeIndexed 编码 FP8 E8M0 值带索引，解码输出包含 tensor name 和索引标记
+TEST_F(AiCorePrintUTest, HostLogger_IndexedFp8E8M0WithIndex)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    logger.EncodeTensorHeader("fp8_e8m0_tensor", 0, 3);
+    logger.Sync();
+
+    uint8_t fp8Bits[] = {0x7F, 0x80, 0x7E};
+    for (int64_t i = 0; i < 3; i++) {
+        logger.EncodeIndexed(AicorePrint::DataType::IndexedFp8E8M0, i, &fp8Bits[i], 1);
+        logger.Sync();
+    }
+
+    std::string output = fixture.ReadAllOutput(logger);
+
+    EXPECT_TRUE(output.find("fp8_e8m0_tensor") != std::string::npos);
+    EXPECT_TRUE(output.find("[0]") != std::string::npos);
+    EXPECT_TRUE(output.find("[1]") != std::string::npos);
+    EXPECT_TRUE(output.find("[2]") != std::string::npos);
+}
+
+// 测试 PrintInt64 的 %d 分支，编码 Int64 类型数据并通过 LegacyRecord 解码
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_IntBranch)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%d";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 42);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("42") != std::string::npos);
+}
+
+// 测试 PrintInt64 的 %x/%X/%o/%u 分支，编码 Int64 类型数据
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_HexBranch)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%x";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 255);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("ff") != std::string::npos);
+}
+
+// 测试 PrintInt64 的 %p 分支，编码 Pointer 类型数据
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_PointerBranch)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%p";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 0x1234ABCD);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_FALSE(output.empty());
+}
+
+// 测试 PrintInt64 的 %c 分支，编码 Char 类型数据
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_CharBranch)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%c";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, static_cast<int64_t>('A'));
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("A") != std::string::npos);
+}
+
+// 测试 PrintInt64 的 %s 分支，编码 String 类型数据
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_StringBranch)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%s";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    const char* str = "hello_world";
+    logger.PrintInt64(fmtPtrPtr, reinterpret_cast<int64_t>(str));
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("hello_world") != std::string::npos);
+}
+
+// 测试 PrintInt64 的 %s 分支传入空指针，应输出 "<null>"
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_StringNullPointer)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%s";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 0);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("<null>") != std::string::npos);
+}
+
+// 测试 PrintInt64 的 default 分支（无有效格式字符），编码 Normal 类型且不崩溃
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_DefaultBranch)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%q";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 99);
+    logger.Sync();
+
+    char readBuf[512];
+    logger.Read(readBuf, sizeof(readBuf));
+}
+
+// 测试 PrintInt64 格式字符串包含 flags/width/precision/length modifier
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_FormatFlagsWidthPrecision)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt1 = "%-10d";
+    const char* fmtPtr1 = fmt1;
+    const char** fmtPtrPtr1 = &fmtPtr1;
+    logger.PrintInt64(fmtPtrPtr1, 42);
+    logger.Sync();
+
+    const char* fmt2 = "%+05d";
+    const char* fmtPtr2 = fmt2;
+    const char** fmtPtrPtr2 = &fmtPtr2;
+    logger.PrintInt64(fmtPtrPtr2, 7);
+    logger.Sync();
+
+    const char* fmt3 = "%ld";
+    const char* fmtPtr3 = fmt3;
+    const char** fmtPtrPtr3 = &fmtPtr3;
+    logger.PrintInt64(fmtPtrPtr3, 100);
+    logger.Sync();
+
+    const char* fmt4 = "%lld";
+    const char* fmtPtr4 = fmt4;
+    const char** fmtPtrPtr4 = &fmtPtr4;
+    logger.PrintInt64(fmtPtrPtr4, 200);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("42") != std::string::npos);
+    EXPECT_TRUE(output.find("100") != std::string::npos);
+    EXPECT_TRUE(output.find("200") != std::string::npos);
+}
+
+// 测试 PrintInt64 格式字符串包含 %% 转义后跟有效格式符
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_EscapedPercent)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%% %d";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 55);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("55") != std::string::npos);
+}
+
+// 测试 PrintInt64 格式字符串无有效格式符（仅 %%），ParseNextFormat 返回 -1
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_NoFormatSpecifier)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%%";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 42);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.empty());
+}
+
+// 测试 PrintFp32 编码 Fp32 类型数据并通过 LegacyRecord 解码
+TEST_F(AiCorePrintUTest, HostLogger_PrintFp32_Value)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%f";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintFp32(fmtPtrPtr, 3.14f);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("3.14") != std::string::npos);
+}
+
+// 测试 PrintFp32 格式字符非 %f，走 Normal 分支
+TEST_F(AiCorePrintUTest, HostLogger_PrintFp32_NonFloatFormat)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%d";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintFp32(fmtPtrPtr, 3.14f);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_FALSE(output.empty());
+}
+
+// 测试 PrintBf16 编码 Bf16 类型数据并通过 LegacyRecord 解码
+TEST_F(AiCorePrintUTest, HostLogger_PrintBf16_Value)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%f";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintBf16(fmtPtrPtr, 0x3F80u);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("1") != std::string::npos);
+}
+
+// 测试 PrintFp16 编码 Fp16 类型数据并通过 LegacyRecord 解码
+TEST_F(AiCorePrintUTest, HostLogger_PrintFp16_Value)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%f";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintFp16(fmtPtrPtr, 0x3C00u);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("1") != std::string::npos);
+}
+
+// 测试 PrintFp8E4M3 编码 Fp8E4M3 类型数据并通过 LegacyRecord 解码
+TEST_F(AiCorePrintUTest, HostLogger_PrintFp8E4M3_Value)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%f";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintFp8E4M3(fmtPtrPtr, 0x38);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("1") != std::string::npos);
+}
+
+// 测试 PrintFp8E5M2 编码 Fp8E5M2 类型数据并通过 LegacyRecord 解码
+TEST_F(AiCorePrintUTest, HostLogger_PrintFp8E5M2_Value)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%f";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintFp8E5M2(fmtPtrPtr, 0x3C);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("1") != std::string::npos);
+}
+
+// 测试 PrintFp8E8M0 编码 Fp8E8M0 类型数据并通过 LegacyRecord 解码
+TEST_F(AiCorePrintUTest, HostLogger_PrintFp8E8M0_Value)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%f";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintFp8E8M0(fmtPtrPtr, 0x7F);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("1") != std::string::npos);
+}
+
+// 测试 PrintHf8 编码 Hf8 类型数据并通过 LegacyRecord 解码
+TEST_F(AiCorePrintUTest, HostLogger_PrintHf8_Value)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%f";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintHf8(fmtPtrPtr, 0x08);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("1") != std::string::npos);
+}
+
+// 测试 PrintRaw 编码 Normal 类型字符串数据
+TEST_F(AiCorePrintUTest, HostLogger_PrintRaw_String)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    logger.PrintRaw("raw_message_test");
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("raw_message_test") != std::string::npos);
+}
+
+// 测试 PrintRaw 传入空字符串，不产生输出
+TEST_F(AiCorePrintUTest, HostLogger_PrintRaw_EmptyString)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    logger.PrintRaw("");
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.empty());
+}
+
+// 测试 Init 使用 0 大小 buffer 后 Sync 不崩溃
+TEST_F(AiCorePrintUTest, HostLogger_SyncWithNullRemoteSafe)
+{
+    AicoreLogger logger;
+    uint8_t tinyBuf[1] = {0};
+    logger.Init(tinyBuf, 0);
+    logger.Sync();
+}
+
+// 测试 StaticPrint 包装器通过 Context 函数指针调用各 Print 方法
+TEST_F(AiCorePrintUTest, HostLogger_StaticPrintWrappers_Int64AndFp32)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    LogContext* ctx = logger.Context();
+
+    const char* fmt1 = "%d";
+    const char* fmtPtr1 = fmt1;
+    const char** fmtPtrPtr1 = &fmtPtr1;
+    ctx->PrintInt64(ctx, fmtPtrPtr1, 77);
+    logger.Sync();
+
+    const char* fmt2 = "%f";
+    const char* fmtPtr2 = fmt2;
+    const char** fmtPtrPtr2 = &fmtPtr2;
+    ctx->PrintFp32(ctx, fmtPtrPtr2, 2.5f);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("77") != std::string::npos);
+    EXPECT_TRUE(output.find("2.5") != std::string::npos);
+}
+
+// 测试 StaticPrint 包装器调用 Bf16/Fp16 Print 方法
+TEST_F(AiCorePrintUTest, HostLogger_StaticPrintWrappers_Bf16AndFp16)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    LogContext* ctx = logger.Context();
+
+    const char* fmt1 = "%f";
+    const char* fmtPtr1 = fmt1;
+    const char** fmtPtrPtr1 = &fmtPtr1;
+    ctx->PrintBf16(ctx, fmtPtrPtr1, 0x4000u);
+    logger.Sync();
+
+    const char* fmt2 = "%f";
+    const char* fmtPtr2 = fmt2;
+    const char** fmtPtrPtr2 = &fmtPtr2;
+    ctx->PrintFp16(ctx, fmtPtrPtr2, 0x4000u);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("2") != std::string::npos);
+}
+
+// 测试 StaticPrint 包装器调用 FP8/HF8 Print 方法
+TEST_F(AiCorePrintUTest, HostLogger_StaticPrintWrappers_Fp8AndHf8)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    LogContext* ctx = logger.Context();
+
+    const char* fmt1 = "%f";
+    const char* fmtPtr1 = fmt1;
+    const char** fmtPtrPtr1 = &fmtPtr1;
+    ctx->PrintFp8E4M3(ctx, fmtPtrPtr1, 0x38);
+    logger.Sync();
+
+    const char* fmt2 = "%f";
+    const char* fmtPtr2 = fmt2;
+    const char** fmtPtrPtr2 = &fmtPtr2;
+    ctx->PrintFp8E5M2(ctx, fmtPtrPtr2, 0x3C);
+    logger.Sync();
+
+    const char* fmt3 = "%f";
+    const char* fmtPtr3 = fmt3;
+    const char** fmtPtrPtr3 = &fmtPtr3;
+    ctx->PrintFp8E8M0(ctx, fmtPtrPtr3, 0x7F);
+    logger.Sync();
+
+    const char* fmt4 = "%f";
+    const char* fmtPtr4 = fmt4;
+    const char** fmtPtrPtr4 = &fmtPtr4;
+    ctx->PrintHf8(ctx, fmtPtrPtr4, 0x08);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("1") != std::string::npos);
+}
+
+// 测试 StaticPrintRaw 包装器通过 Context 函数指针调用
+TEST_F(AiCorePrintUTest, HostLogger_StaticPrintRaw_Wrapper)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    LogContext* ctx = logger.Context();
+    ctx->PrintRaw(ctx, "static_raw_test");
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("static_raw_test") != std::string::npos);
+}
+
+// 测试 Read 方法在 remote_ 为 nullptr 时返回 0
+TEST_F(AiCorePrintUTest, HostLogger_ReadWithNullRemoteReturnsZero)
+{
+    AicoreLogger logger;
+    uint8_t tinyBuf[1] = {0};
+    logger.Init(tinyBuf, 0);
+
+    char readBuf[64];
+    int bytesRead = logger.Read(readBuf, sizeof(readBuf));
+    EXPECT_EQ(bytesRead, 0);
+}
+
+// 测试 Read 方法 maxIterations 参数限制，防止无限循环
+TEST_F(AiCorePrintUTest, HostLogger_ReadMaxIterationsLimit)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    for (int i = 0; i < 5; i++) {
+        const char* fmt = "%d";
+        const char* fmtPtr = fmt;
+        const char** fmtPtrPtr = &fmtPtr;
+        logger.PrintInt64(fmtPtrPtr, i);
+        logger.Sync();
+    }
+
+    char readBuf[512];
+    int bytesRead = logger.Read(readBuf, sizeof(readBuf), 2);
+    EXPECT_GE(bytesRead, 0);
+}
+
+// 测试 PrintFp32 对特殊浮点值(Inf, -Inf)的编码解码
+TEST_F(AiCorePrintUTest, HostLogger_PrintFp32_SpecialValues)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt1 = "%f";
+    const char* fmtPtr1 = fmt1;
+    const char** fmtPtrPtr1 = &fmtPtr1;
+    logger.PrintFp32(fmtPtrPtr1, std::numeric_limits<float>::infinity());
+    logger.Sync();
+
+    const char* fmt2 = "%f";
+    const char* fmtPtr2 = fmt2;
+    const char** fmtPtrPtr2 = &fmtPtr2;
+    logger.PrintFp32(fmtPtrPtr2, 0.0f);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("inf") != std::string::npos || output.find("Inf") != std::string::npos);
+    EXPECT_TRUE(output.find("0") != std::string::npos);
+}
+
+// 测试 PrintInt64 格式字符串包含 precision modifier (%.5f)
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_PrecisionModifier)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%10.5f";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintFp32(fmtPtrPtr, 1.23456f);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("1.23") != std::string::npos);
+}
+
+// 测试 PrintInt64 格式字符串包含 # flag
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_HashFlag)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%#x";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 255);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("ff") != std::string::npos);
+}
+
+// 测试 PrintInt64 格式字符串包含 space flag
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_SpaceFlag)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "% d";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 42);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("42") != std::string::npos);
+}
+
+// 测试 PrintInt64 格式字符串包含 %o (octal) 分支
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_OctalBranch)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%o";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 8);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("10") != std::string::npos);
+}
+
+// 测试 PrintInt64 格式字符串包含 %u (unsigned) 分支
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_UnsignedBranch)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%u";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 123);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("123") != std::string::npos);
+}
+
+// 测试 PrintInt64 格式字符串包含 %X (uppercase hex) 分支
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_UpperHexBranch)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%X";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 255);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("FF") != std::string::npos);
+}
+
+// 测试 PrintInt64 格式字符串包含 %i 分支（与 %d 等价）
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_IBranch)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%i";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, -42);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("-42") != std::string::npos);
+}
+
+// 测试 PrintInt64 格式字符串包含 %zd length modifier
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_ZLengthModifier)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%zd";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 321);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("321") != std::string::npos);
+}
+
+// 测试 PrintInt64 格式字符串包含 %hd length modifier
+TEST_F(AiCorePrintUTest, HostLogger_PrintInt64_HLengthModifier)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%hd";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 16);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("16") != std::string::npos);
+}
+
+// 测试 DecodeRecordImpl 对 TensorHeader 类型的分发（通过 EncodeTensorHeader 间接覆盖）
+TEST_F(AiCorePrintUTest, HostLogger_DecodeRecordImpl_TensorHeaderDispatch)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    logger.EncodeTensorHeader("dispatch_test", 10, 20);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("dispatch_test") != std::string::npos);
+    EXPECT_TRUE(output.find("range=[10, 20)") != std::string::npos);
+}
+
+// 测试 DecodeRecordImpl 对 OverflowWarning 类型的分发
+TEST_F(AiCorePrintUTest, HostLogger_DecodeRecordImpl_OverflowWarningDispatch)
+{
+    size_t smallBufferSize = 50;
+    alignas(64) uint8_t smallBuffer[50];
+    std::fill(smallBuffer, smallBuffer + smallBufferSize, 0);
+
+    AicoreLogger logger;
+    logger.Init(smallBuffer, smallBufferSize);
+
+    logger.EncodeTensorHeader("long_name_for_overflow_test_tensor", 0, 10000);
+    logger.Sync();
+
+    AicoreLoggerHostFixture fixture;
+    std::string output = fixture.ReadAllOutput(logger);
+
+    if (output.find("WARNING") != std::string::npos) {
+        EXPECT_TRUE(output.find("PRINT_BUFFER_SIZE") != std::string::npos);
+    }
+}
+
+// 测试 Read 方法 maxSize 为 0 时不写入但继续处理
+TEST_F(AiCorePrintUTest, HostLogger_ReadWithZeroMaxSize)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    const char* fmt = "%d";
+    const char* fmtPtr = fmt;
+    const char** fmtPtrPtr = &fmtPtr;
+    logger.PrintInt64(fmtPtrPtr, 42);
+    logger.Sync();
+
+    char readBuf[1] = {0};
+    int bytesRead = logger.Read(readBuf, 0);
+    EXPECT_EQ(bytesRead, 0);
+}
+
+// 测试连续多次 PrintRaw 后 Read 能正确解码所有记录
+TEST_F(AiCorePrintUTest, HostLogger_MultiplePrintRawRecords)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    logger.PrintRaw("first_msg");
+    logger.Sync();
+    logger.PrintRaw("second_msg");
+    logger.Sync();
+    logger.PrintRaw("third_msg");
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("first_msg") != std::string::npos);
+    EXPECT_TRUE(output.find("second_msg") != std::string::npos);
+    EXPECT_TRUE(output.find("third_msg") != std::string::npos);
+}
+
+// 测试连续混合 Print 类型后 Read 能正确解码所有记录
+TEST_F(AiCorePrintUTest, HostLogger_MixedPrintTypes)
+{
+    AicoreLoggerHostFixture fixture;
+    fixture.InitBuffer();
+    AicoreLogger logger;
+    logger.Init(fixture.buffer, AicoreLoggerHostFixture::BUFFER_SIZE);
+
+    logger.PrintRaw("raw_part");
+    logger.Sync();
+
+    const char* fmt1 = "%d";
+    const char* fmtPtr1 = fmt1;
+    const char** fmtPtrPtr1 = &fmtPtr1;
+    logger.PrintInt64(fmtPtrPtr1, 999);
+    logger.Sync();
+
+    const char* fmt2 = "%f";
+    const char* fmtPtr2 = fmt2;
+    const char** fmtPtrPtr2 = &fmtPtr2;
+    logger.PrintFp32(fmtPtrPtr2, 1.5f);
+    logger.Sync();
+
+    std::string output = fixture.ReadAllOutput(logger);
+    EXPECT_TRUE(output.find("raw_part") != std::string::npos);
+    EXPECT_TRUE(output.find("999") != std::string::npos);
+    EXPECT_TRUE(output.find("1.5") != std::string::npos);
+}
+
 #endif
 
 // ============================================================================

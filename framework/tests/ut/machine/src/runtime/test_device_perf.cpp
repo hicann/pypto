@@ -142,3 +142,15 @@ TEST(DevicePerfTest, ResetMetrics_WithAicpuPerfAddr_AlreadyInited)
     perf.isPerfDataInited_ = true;
     perf.ResetMetrics(0);
 }
+
+TEST(DevicePerfTest, ResetMetrics_WithoutAicpuPerfAddr)
+{
+    DevicePerf perf;
+    DeviceArgs args{};
+    args.nrAic = 1;
+    args.nrAiv = 0;
+    args.aicpuPerfAddr = 0;
+    perf.args_ = args;
+    perf.perfData_.push_back(nullptr);
+    perf.ResetMetrics(0);
+}
