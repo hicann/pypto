@@ -186,7 +186,16 @@ FlowVerifier::CompareResult FlowVerifier::VerifyResult(const std::shared_ptr<Log
                                                        float rtol, float atol)
 {
     // tensor maybe padded during PadLocalBuffer Pass, tensor shape maybe changed, just check the valid data
-    goldenDataView->UpdateValidShape(outputDataView->GetValidShape());
+    if (goldenDataView->GetValidShape() != outputDataView->GetValidShape()) {
+        auto dtype = outputDataView->GetData()->GetDataType();
+        const auto& rawShape = outputDataView->GetData()->GetShape();
+        size_t requiredSize = RawTensorData::CalcRequiredSize(dtype, rawShape);
+        ASSERT(VerifyResultScene::VERIFY_RESULT_MISMATCH, goldenDataView->GetData()->size() == requiredSize)
+            << "RawTensor size mismatch when updating: existing size=" << goldenDataView->GetData()->size()
+            << ", required size=" << requiredSize;
+        goldenDataView->UpdateValidShape(outputDataView->GetValidShape(), outputDataView->GetOffset());
+        goldenDataView->GetData()->UpdateShapeAndDtype(dtype, rawShape);
+    }
     ASSERT(VerifyResultScene::VERIFY_RESULT_SHAPE_DIFF,
            goldenDataView->GetValidShape() == outputDataView->GetValidShape());
     ASSERT(VerifyResultScene::VERIFY_RESULT_DTYPE_DIFF, goldenDataView->GetDataType() == outputDataView->GetDataType());

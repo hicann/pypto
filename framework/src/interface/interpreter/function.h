@@ -279,10 +279,23 @@ struct FunctionFrame {
                                                         const std::shared_ptr<LogicalTensor>& inplaceTensor = nullptr)
     {
         if (tensorDataViewDict.count(tensor)) {
-            if (!validShape.empty()) {
-                tensorDataViewDict[tensor]->UpdateValidShape(validShape);
+            const auto& existingView = tensorDataViewDict[tensor];
+            if (validShape.empty() || existingView->GetValidShape() == validShape) {
+                return existingView;
             }
-            return tensorDataViewDict[tensor];
+            size_t requiredSize = RawTensorData::CalcRequiredSize(dtype, rawShape);
+            ASSERT(ControlFlowScene::FUNC_RAW_TENSOR_SIZE_MISMATCH, existingView->GetData()->size() == requiredSize)
+                << "RawTensor size mismatch when updating: existing size=" << existingView->GetData()->size()
+                << ", required size=" << requiredSize;
+            auto rawData = std::make_shared<RawTensorData>(existingView->GetData()->GetRawData(), dtype, rawShape);
+            if (existingView->GetData()->IsShmTensor()) {
+                rawData->SetShmOffset(existingView->GetData()->GetShmOffset());
+                rawData->SetAsShmTensor();
+            }
+            auto view = std::make_shared<LogicalTensorData>(rawData, tensor->GetShape(), validShape, offset);
+            view->SetIsSpilled(existingView->GetIsSpilled());
+            tensorDataViewDict[tensor] = view;
+            return view;
         }
 
         auto raw = inplaceTensor ? inplaceTensor->GetRawTensor() : tensor->GetRawTensor();
@@ -1339,6 +1352,36 @@ struct FunctionInterpreter {
         }
     }
 
+    void RefreshInOutDataView(FunctionFrame& frame, Function* func,
+                              const std::shared_ptr<FunctionIODataPair>& inoutDataPair)
+    {
+        if (inoutDataPair == nullptr) {
+            return;
+        }
+        std::vector<SymbolicScalar> linearArgList;
+        if (frame.callopAttr != nullptr) {
+            linearArgList = frame.callopAttr->GetLinearArgList();
+        }
+        ASSERT(ControlFlowScene::FUNC_INCAST_COUNT_MISMATCH,
+               func->GetIncast().size() == inoutDataPair->incastDataViewList.size());
+        for (size_t i = 0; i < inoutDataPair->incastDataViewList.size(); i++) {
+            auto tensor = func->GetIncast()[i];
+            auto newValidShape = EvaluateValidShape(tensor->GetDynValidShape(), linearArgList);
+            if (inoutDataPair->incastDataViewList[i]->GetValidShape() != newValidShape) {
+                inoutDataPair->incastDataViewList[i] = AllocateDataView(frame, tensor);
+            }
+        }
+        ASSERT(ControlFlowScene::FUNC_OUTCAST_COUNT_MISMATCH,
+               func->GetOutcast().size() == inoutDataPair->outcastDataViewList.size());
+        for (size_t i = 0; i < inoutDataPair->outcastDataViewList.size(); i++) {
+            auto tensor = func->GetOutcast()[i];
+            auto newValidShape = EvaluateValidShape(tensor->GetDynValidShape(), linearArgList);
+            if (inoutDataPair->outcastDataViewList[i]->GetValidShape() != newValidShape) {
+                inoutDataPair->outcastDataViewList[i] = AllocateDataView(frame, tensor);
+            }
+        }
+    }
+
     std::shared_ptr<FunctionFrame> ExecuteFunctionFrame(Function* func, Operation* callop,
                                                         std::shared_ptr<FunctionIODataPair>& inoutDataPair)
     {
@@ -1350,6 +1393,7 @@ struct FunctionInterpreter {
         }
         std::shared_ptr<FunctionFrame> frame = std::make_shared<FunctionFrame>(func, callop, callopAttr, inoutDataPair,
                                                                                frameCount.fetch_add(1));
+        RefreshInOutDataView(*frame, func, inoutDataPair);
         if (callop == nullptr) {
             interpreterSyncSimulation_->Reset();
         }

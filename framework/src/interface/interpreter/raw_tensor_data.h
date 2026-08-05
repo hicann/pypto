@@ -415,6 +415,15 @@ struct RawTensorData {
 
     void SetAsShmTensor() { isShmTensor_ = true; }
 
+    void UpdateShapeAndDtype(DataType dataType, const std::vector<int64_t>& shape)
+    {
+        dataType_ = dataType;
+        shape_ = shape;
+        stride_ = ShapeToStride(shape);
+        nelem = Numel(shape);
+        elemSize_ = GetDataSize(dataType);
+    }
+
 private:
     uint8_t* devPtr_{nullptr};
     std::shared_ptr<StorageData> data_;
@@ -481,7 +490,11 @@ struct LogicalTensorData {
     int GetSize() const { return size_; }
     DataType GetDataType() const { return GetData()->GetDataType(); }
 
-    void UpdateValidShape(std::vector<int64_t> shape) { validShape_ = shape; }
+    void UpdateValidShape(std::vector<int64_t> shape, const std::vector<int64_t>& offset)
+    {
+        validShape_ = shape;
+        offset_ = offset;
+    }
     int64_t GetStorageOffset() const
     {
         auto& strides = data_->GetStride();

@@ -903,7 +903,7 @@ def parse_arguments():
 
 def main():
     args = parse_arguments()
-    timestamp = int(time.time())
+    timestamp = int(time.time() * 1_000_000)
     pass_full_name = get_pass_full_name(args.verify_path, "CodegenPreproc")
     csv_path = os.path.join(args.verify_path, f"verify_task_result_cmp~{pass_full_name}~{timestamp}.csv")
     global RESULT_FILE
