@@ -176,8 +176,9 @@ void DevAscendProgram::DumpPartialUpdate(const int indent, std::ostringstream& o
         auto& partialUpdate = At(partialUpdateList, i);
         oss << INDENTINNER << "#slot-partial-update-" << i << ":" << !partialUpdate.Empty();
         oss << " | slotindex:" << partialUpdate.slotIndex;
-        if (partialUpdate.isOutputTensorStitchSlot) {
-            oss << " | outputTensorStitchSlot:true";
+        if (partialUpdate.stitchCtrlBitMask != STITCH_CTRL_NONE) {
+            oss << " | stitchCtrlBitMask:0x" << std::hex << static_cast<unsigned>(partialUpdate.stitchCtrlBitMask)
+                << std::dec;
         }
         if (!partialUpdate.Empty()) {
             oss << " | #cellMatchTableDesc:" << DumpCellMatchTableDesc(partialUpdate.cellMatchTableDesc)

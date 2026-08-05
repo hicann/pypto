@@ -212,8 +212,9 @@ void DeviceWorkspaceAllocator::ResolveOutcastAddress(DevAscendFunctionDupped dev
 {
     auto rawTensor = devRootSrc->GetOutcastRawTensor(outcastIdx);
     if (outputSlotIndex != -1) {
-        /* Output tensor */
-        if (slotList[outputSlotIndex].isOutputTensorNeedCellMatch) {
+        /* Output tensor: allocate dynamic cell-match table when encode marked the slot */
+        if (slotList[outputSlotIndex].isPartialUpdateStitch &&
+            slotList[outputSlotIndex].partialUpdate->stitchCtrlBitMask != STITCH_CTRL_NONE) {
             TryAllocateDynamicCellMatchForAssembleSlot(slotList[outputSlotIndex]);
         }
         outcastDesc = AddressDescriptor::MakeFromRtOutcast(slotList[outputSlotIndex].rtOutcastIter);
@@ -226,15 +227,19 @@ void DeviceWorkspaceAllocator::ResolveOutcastAddress(DevAscendFunctionDupped dev
         outcastDesc = incastDesc;
         RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
     } else if (assembleSlotIndex != -1) {
-        /* assemble outcast tensor */
+        /* assemble outcast tensor: isAssembleSlotNeedAlloc = local buffer alloc only;
+         * cell-match uses stitchCtrlBitMask on partialUpdate (Partial slots only). */
         if (slotList[assembleSlotIndex].isAssembleSlotNeedAlloc) {
             RuntimeOutcastTensorDerefSafe(slotList[assembleSlotIndex].rtOutcastIter);
             slotList[assembleSlotIndex].rtOutcastIter = MakeRuntimeOutcastTensor(
                 AllocateInnerTemporalOutcastSlot(devRootSrc->GetRawName()), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
             slotList[assembleSlotIndex].isAssembleSlotNeedAlloc = false;
-            TryAllocateDynamicCellMatchForAssembleSlot(slotList[assembleSlotIndex]);
-            slotList[assembleSlotIndex]
-                .ChangeSlotAllocIterId(); // mark tensor memory changed for stitch dependency cell match
+            if (slotList[assembleSlotIndex].isPartialUpdateStitch &&
+                slotList[assembleSlotIndex].partialUpdate->stitchCtrlBitMask != STITCH_CTRL_NONE) {
+                TryAllocateDynamicCellMatchForAssembleSlot(slotList[assembleSlotIndex]);
+                slotList[assembleSlotIndex]
+                    .ChangeSlotAllocIterId(); // tensor memory changed → invalidate cell-match tagId
+            }
         } else {
             DEV_ASSERT_MSG(WsErr::WORKSPACE_ITER_INVALID,
                            slotList[assembleSlotIndex].rtOutcastIter != ITEM_POOL_INVALID_INDEX,
@@ -283,9 +288,7 @@ void DeviceWorkspaceAllocator::AssignOutcastAddresses(DevAscendFunctionDupped de
 
 void DeviceWorkspaceAllocator::TryAllocateDynamicCellMatchForAssembleSlot(DeviceExecuteSlot& slot)
 {
-    if (!slot.isPartialUpdateStitch || slot.partialUpdate == nullptr) {
-        return;
-    }
+    // Caller: isPartialUpdateStitch (⇒ partialUpdate set) && mask != NONE.
     auto* partialUpdate = slot.partialUpdate;
     if (partialUpdate->cellMatchRuntimePartialUpdateTable.Data() != nullptr) {
         return;

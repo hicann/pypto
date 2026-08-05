@@ -672,8 +672,10 @@ uint64_t DeviceStitchContext::FastStitchConsumer(DeviceExecuteSlot* slotList, si
                 continue;
             }
             if (slot.isPartialUpdateStitch) {
-                matchCount = PartialUpdateStitchConsumer(nextDup, devTaskId, devNextIdx, slot, slotIdx, incast,
-                                                         cellMatchTagSeq);
+                if (slot.partialUpdate->stitchCtrlBitMask & STITCH_CTRL_WAR) {
+                    matchCount = PartialUpdateStitchConsumer(nextDup, devTaskId, devNextIdx, slot, slotIdx, incast,
+                                                             cellMatchTagSeq);
+                }
                 continue;
             }
             if (slot.rtOutcastIter == ITEM_POOL_INVALID_INDEX) {
@@ -701,7 +703,9 @@ uint64_t DeviceStitchContext::FastStitchProducer(DeviceExecuteSlot* slotList, si
                 continue;
             }
             auto& slot = slotList[slotIdx];
-            if (slot.stitchDupIdx == INVALID_STITCH_IDX || !slot.isPartialUpdateStitch) {
+            // isPartialUpdateStitch ⇒ partialUpdate set by Mark.
+            if (slot.stitchDupIdx == INVALID_STITCH_IDX || !slot.isPartialUpdateStitch ||
+                (slot.partialUpdate->stitchCtrlBitMask & (STITCH_CTRL_RAW | STITCH_CTRL_WAW)) == 0) {
                 continue;
             }
             DEV_VERBOSE_DEBUG("FastStitch slot %d, outcastindex %zu, ispartial %d, stitchDupIdx %u", slotIdx,

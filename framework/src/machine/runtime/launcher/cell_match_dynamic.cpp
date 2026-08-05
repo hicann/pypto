@@ -180,45 +180,14 @@ void WriteDynamicCellMatchStridePatchesToLaunchArgs(int64_t* launchInputs,
     }
 }
 
-static bool IsOutputTensorStitchSlot(const DevAscendProgram* hostDevProg, int slotIndex)
-{
-    if (hostDevProg == nullptr || slotIndex < 0) {
-        return false;
-    }
-    const auto& partialUpdateList = hostDevProg->partialUpdateList;
-    if (static_cast<size_t>(slotIndex) >= partialUpdateList.size() || partialUpdateList.Data() == nullptr) {
-        return false;
-    }
-    const auto* partialUpdates = reinterpret_cast<const DevAscendProgramPartialUpdate*>(
-        reinterpret_cast<const uint8_t*>(hostDevProg) + reinterpret_cast<uintptr_t>(partialUpdateList.Data()));
-    return partialUpdates[slotIndex].isOutputTensorStitchSlot;
-}
-
-static bool HasAnyOutputTensorStitchSlot(const DevAscendProgram* hostDevProg)
-{
-    if (hostDevProg == nullptr) {
-        return false;
-    }
-    for (size_t i = 0; i < hostDevProg->partialUpdateList.size(); ++i) {
-        if (IsOutputTensorStitchSlot(hostDevProg, static_cast<int>(i))) {
-            return true;
-        }
-    }
-    return false;
-}
-
 void ValidateDynamicCellMatchTableMemBudget(const DyndevFunctionAttribute& dynAttr, DevAscendProgram* hostDevProg)
 {
-    if (hostDevProg == nullptr ||
-        (dynAttr.constructAssembleNeedAllocRuntimeSlots.empty() && !HasAnyOutputTensorStitchSlot(hostDevProg))) {
+    if (hostDevProg == nullptr || hostDevProg->memBudget.metadata.dynamicCellMatchSlotNum == 0) {
         return;
     }
     const auto* cfgBytes = reinterpret_cast<const uint8_t*>(hostDevProg);
     for (const auto& launchMeta : dynAttr.dynamicCellMatchLaunchMetaList) {
-        if (dynAttr.constructAssembleNeedAllocRuntimeSlots.count(launchMeta.slotIndex) == 0 &&
-            !IsOutputTensorStitchSlot(hostDevProg, launchMeta.slotIndex)) {
-            continue;
-        }
+        // Validate every launch-meta slot that encode marked stitchCtrlBitMask != 0 (via NeedAlloc/budget).
         const auto* desc = reinterpret_cast<const DevCellMatchTableDesc*>(cfgBytes + launchMeta.descOffset);
         const uint64_t cellMatchStride0 = desc->stride.dimStride[0];
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, cellMatchStride0 < static_cast<uint64_t>(MAX_CELLMATCHSSTRIDE))

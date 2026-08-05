@@ -128,23 +128,11 @@ static uint32_t UpdateSlotsForOutCastPartialStitch(int slotIdx, DeviceExecuteSlo
     return errCode;
 }
 
-static uint32_t UpdateSlotsForOutCastStitch(int slotIdx, DeviceExecuteSlot& slot, DevAscendFunction* devRootSrc,
-                                            DevAscendFunctionOutcast& outcast, uint32_t devTaskId, uint32_t devNextIdx,
-                                            uint32_t outcastIndex, uint64_t* expressionList, uint32_t cellMatchTagSeq)
+static uint32_t UpdateSlotsForOutCastFullCoverStitch(int slotIdx, DevAscendFunction* devRootSrc,
+                                                     DevAscendFunctionOutcast& outcast, uint32_t cellMatchTagId,
+                                                     uint64_t* expressionList)
 {
-    slot.stitchDupIdx = devNextIdx;
-    slot.stitchOutcastIdx = outcastIndex;
-
-    UNUSED(slotIdx);
-    topo_dump::DumpProducerCellAccess(devTaskId, slotIdx, devNextIdx, *devRootSrc, outcast, slot, expressionList);
-    uint32_t cellMatchTagId = CellMatchBuildTagId(slot.slotAllocIterId, cellMatchTagSeq);
     auto producerList = &devRootSrc->At(outcast.producerConsumerList, 0);
-
-    if (slot.isPartialUpdateStitch) {
-        return UpdateSlotsForOutCastPartialStitch(slotIdx, slot, devRootSrc, outcast, producerList, cellMatchTagId,
-                                                  devNextIdx, expressionList);
-    }
-
     // Full Fill only covers producerConsumerList (partial). FullCover producers stitch
     // via POLICY direct edges; they are filled only on the partial path.
     auto& cellMatchTableDesc = outcast.cellMatchTableDesc;
@@ -164,8 +152,8 @@ static uint32_t UpdateSlotsForIncastStitch(int slotIdx, DeviceExecuteSlot& slot,
 {
     UNUSED(slotIdx);
     UNUSED(devTaskId);
-    if (!slot.isPartialUpdateStitch || slot.partialUpdate == nullptr ||
-        slot.partialUpdate->cellMatchRuntimePartialUpdateTable.size() == 0 ||
+    // Caller requires stitchCtrlBitMask & RAW (⇒ partialUpdate set by Mark).
+    if (slot.partialUpdate->cellMatchRuntimePartialUpdateTable.size() == 0 ||
         slot.partialUpdate->cellMatchTableDesc.GetCacheOpMaxCount(CELL_MATCH_OP_TYPE_READ) == 0) {
         return 0;
     }
@@ -206,7 +194,7 @@ static void PrepareRuntimeDynamicPartialUpdateTables(DeviceWorkspaceAllocator* w
         for (size_t j = 0; j < outcast.toSlotList.size(); ++j) {
             int slotIdx = devRootSrc->At(outcast.toSlotList, j);
             auto& slot = slotList[slotIdx];
-            if (!slot.isPartialUpdateStitch || slot.partialUpdate == nullptr) {
+            if (!slot.isPartialUpdateStitch || slot.partialUpdate->stitchCtrlBitMask == STITCH_CTRL_NONE) {
                 continue;
             }
             auto* partialUpdate = slot.partialUpdate;
@@ -240,8 +228,22 @@ static uint32_t UpdateSlotsImpl(DeviceWorkspaceAllocator* workspace, DeviceExecu
         for (size_t j = 0; j < outcast.toSlotList.size(); ++j) {
             int slotIdx = devRootSrc->At(outcast.toSlotList, j);
             auto& slot = slotList[slotIdx];
-            uint32_t errCode = UpdateSlotsForOutCastStitch(slotIdx, slot, devRootSrc, outcast, devTaskId, devNextIdx, i,
-                                                           expressionList, cellMatchTagSeq);
+            slot.stitchDupIdx = devNextIdx;
+            slot.stitchOutcastIdx = static_cast<uint32_t>(i);
+            topo_dump::DumpProducerCellAccess(devTaskId, slotIdx, devNextIdx, *devRootSrc, outcast, slot,
+                                              expressionList);
+            uint32_t cellMatchTagId = CellMatchBuildTagId(slot.slotAllocIterId, cellMatchTagSeq);
+            uint32_t errCode = 0;
+            if (slot.isPartialUpdateStitch) {
+                if (slot.partialUpdate->stitchCtrlBitMask & (STITCH_CTRL_WAR | STITCH_CTRL_WAW)) {
+                    auto producerList = &devRootSrc->At(outcast.producerConsumerList, 0);
+                    errCode = UpdateSlotsForOutCastPartialStitch(slotIdx, slot, devRootSrc, outcast, producerList,
+                                                                 cellMatchTagId, devNextIdx, expressionList);
+                }
+            } else {
+                errCode = UpdateSlotsForOutCastFullCoverStitch(slotIdx, devRootSrc, outcast, cellMatchTagId,
+                                                               expressionList);
+            }
             workspace->RuntimeOutcastTensorAssign(slot.rtOutcastIter, outcastDesc.GetRtOutcastIter());
             DEV_VERBOSE_DEBUG("[UpdateSlots]   Outcast [%3zu] to slot [%3d], address %s, ret = 0x%x.", i, slotIdx,
                               outcastDesc.Dump().c_str(), errCode);
@@ -260,6 +262,9 @@ static uint32_t UpdateSlotsImpl(DeviceWorkspaceAllocator* workspace, DeviceExecu
         for (size_t j = 0; j < incast.fromSlotList.size(); ++j) {
             int slotIdx = devRootSrc->At(incast.fromSlotList, j);
             auto& slot = slotList[slotIdx];
+            if (!slot.isPartialUpdateStitch || (slot.partialUpdate->stitchCtrlBitMask & STITCH_CTRL_RAW) == 0) {
+                continue;
+            }
             DEV_VERBOSE_DEBUG("[UpdateSlots]   Begin update Incast [%3zu] from slot [%3d].", incastIdx, slotIdx);
             uint32_t errCode = UpdateSlotsForIncastStitch(slotIdx, slot, devRootSrc, incast, devTaskId, devNextIdx,
                                                           expressionList, cellMatchTagSeq);
@@ -281,26 +286,18 @@ uint32_t DeviceSlotContext::UpdateSlots(DevAscendFunctionDupped& devRootDup, uin
 
 static void MarkPartialUpdateSlots(DeviceExecuteSlot* slotList, size_t slotSize, DevAscendProgram* devProg)
 {
-    bool dynamicCellMatchBudgetReady = devProg->memBudget.metadata.dynamicCellMatchSlotNum > 0 &&
-                                       devProg->memBudget.metadata.maxDynamicCellMatchTableMem > 0;
     for (size_t index = 0, ie = devProg->partialUpdateList.size(); index < ie; index++) {
         auto& partialUpdate = devProg->At(devProg->partialUpdateList, index);
         int slotIndex = partialUpdate.slotIndex;
-        DEV_ASSERT_MSG(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-                       slotIndex >= 0 && slotIndex < static_cast<int>(slotSize), "Invalid slot index %d", slotIndex);
-        if (partialUpdate.isOutputTensorStitchSlot) {
-            slotList[slotIndex].isOutputTensorNeedCellMatch = true;
-            DEV_VERBOSE_DEBUG("Output Tensor Stitch Slot %d.", slotIndex);
+        if (slotIndex < 0) {
+            continue;
         }
-        bool hasPartialUpdateTable = !partialUpdate.Empty();
-        bool isRuntimeDynamicPartialUpdate = dynamicCellMatchBudgetReady &&
-                                             partialUpdate.cellMatchRuntimePartialUpdateTable.size() == 0 &&
-                                             partialUpdate.cellMatchTableDesc.GetDimensionSize() > 0;
-        if (hasPartialUpdateTable || isRuntimeDynamicPartialUpdate) {
-            slotList[slotIndex].isPartialUpdateStitch = true;
-            slotList[slotIndex].partialUpdate = &partialUpdate;
-            DEV_VERBOSE_DEBUG("Partial Update Slot %d.\n", slotIndex);
-        }
+        DEV_ASSERT_MSG(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, slotIndex < static_cast<int>(slotSize),
+                       "Invalid slot index %d", slotIndex);
+        slotList[slotIndex].isPartialUpdateStitch = true;
+        slotList[slotIndex].partialUpdate = &partialUpdate;
+        DEV_VERBOSE_DEBUG("Partial Update Slot %d mask=0x%x.\n", slotIndex,
+                          static_cast<unsigned>(partialUpdate.stitchCtrlBitMask));
     }
 }
 

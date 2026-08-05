@@ -15,6 +15,7 @@
 
 #include <gtest/gtest.h>
 #include <cstring>
+#include <ios>
 #include <memory>
 #include <vector>
 
@@ -28,7 +29,13 @@
 #include "machine/device/dynamic/context/device_slot_context.h"
 #include "machine/utils/dynamic/dev_encode_function_dupped_data.h"
 #include "machine/utils/dynamic/dev_encode_function_stitch.h"
+#include "machine/utils/dynamic/dev_encode_program.h"
 #include "machine/utils/dynamic/dev_cell_match_mem_layout.h"
+#include "interface/program/program.h"
+#include "interface/configs/config_manager.h"
+#include "interface/configs/config_manager_ng.h"
+#include "tilefwk/tilefwk_op.h"
+#include "tilefwk/data_type.h"
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
@@ -265,6 +272,7 @@ TEST(UpdateSlotsIncastFillTest, DualConsumerLists)
 
     DeviceExecuteSlot slots[1]{};
     slots[0].isPartialUpdateStitch = true;
+    partial.stitchCtrlBitMask = STITCH_CTRL_RAW;
     slots[0].partialUpdate = &partial;
 
     DeviceSlotContext slotCtx;
@@ -278,4 +286,179 @@ TEST(UpdateSlotsIncastFillTest, DualConsumerLists)
     slotCtx.slotList_.dataAllocation_.Invalidate();
     slotCtx.slotList_.size_ = 0;
     slotCtx.slotList_.capacity_ = 0;
+}
+
+namespace {
+
+constexpr int kAssembleMaskTile = 32;
+constexpr int kAssembleMaskIters = 4;
+
+void SetupAssembleBitmaskEncodeTest()
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 64);
+    TileShape::Current().SetVecTile(kAssembleMaskTile, kAssembleMaskTile);
+    TileShape::Current().SetCubeTile({kAssembleMaskTile, kAssembleMaskTile}, {kAssembleMaskTile, kAssembleMaskTile},
+                                     {kAssembleMaskTile, kAssembleMaskTile});
+}
+
+DevAscendProgram* EncodeAndGetDevProg()
+{
+    Function* func = Program::GetInstance().GetLastFunction();
+    EXPECT_NE(func, nullptr);
+    if (func == nullptr) {
+        return nullptr;
+    }
+    auto dynAttr = func->GetDyndevAttribute();
+    EXPECT_NE(dynAttr, nullptr);
+    if (dynAttr == nullptr) {
+        return nullptr;
+    }
+    EXPECT_FALSE(dynAttr->devProgBinary.empty());
+    if (dynAttr->devProgBinary.empty()) {
+        return nullptr;
+    }
+    auto* devProg = reinterpret_cast<DevAscendProgram*>(dynAttr->devProgBinary.data());
+    EXPECT_NE(devProg, nullptr);
+    if (devProg == nullptr) {
+        return nullptr;
+    }
+    // After encode, RelocProgram(this, 0) stores relative offsets; restore before At()/list access.
+    devProg->RelocProgram(0, reinterpret_cast<uint64_t>(devProg));
+    return devProg;
+}
+
+const DevAscendProgramPartialUpdate* FindPartialUpdateBySlot(DevAscendProgram* devProg, int slotIndex)
+{
+    if (devProg == nullptr || slotIndex < 0) {
+        return nullptr;
+    }
+    if (static_cast<size_t>(slotIndex) >= devProg->partialUpdateList.size()) {
+        return nullptr;
+    }
+    const auto& partial = devProg->At(devProg->partialUpdateList, slotIndex);
+    if (partial.slotIndex < 0) {
+        return nullptr;
+    }
+    return &partial;
+}
+
+StitchCtrlBitMask GetOutAssembleSlotBitmask(DevAscendProgram* devProg)
+{
+    if (devProg == nullptr) {
+        return STITCH_CTRL_NONE;
+    }
+    const std::vector<int> outputSlots = devProg->GetOutputTensorSlotIndexList();
+    EXPECT_FALSE(outputSlots.empty());
+    if (outputSlots.empty()) {
+        return STITCH_CTRL_NONE;
+    }
+    const auto* partial = FindPartialUpdateBySlot(devProg, outputSlots[0]);
+    EXPECT_NE(partial, nullptr) << "out should be a partial-update slot, slot=" << outputSlots[0];
+    if (partial == nullptr) {
+        return STITCH_CTRL_NONE;
+    }
+    return partial->stitchCtrlBitMask;
+}
+
+} // namespace
+
+// WAW: two loops Assemble same out; both Assemble(..., true) → NONE
+TEST(StitchCtrlBitMaskEncodeTest, Waw_ParallelTrue_None)
+{
+    SetupAssembleBitmaskEncodeTest();
+
+    Tensor t0(DT_FP32, {kAssembleMaskTile, kAssembleMaskTile}, "t0");
+    Tensor t1(DT_FP32, {kAssembleMaskTile, kAssembleMaskTile}, "t1");
+    Tensor out(DT_FP32, {kAssembleMaskIters * kAssembleMaskTile, kAssembleMaskTile}, "out");
+    FUNCTION("assemble_waw_parallel_true", {t0, t1}, {out})
+    {
+        LOOP("loop_waw_0", FunctionType::DYNAMIC_LOOP, i, LoopRange(kAssembleMaskIters))
+        {
+            auto temp = Add(t0, t1);
+            Assemble(temp, {i * kAssembleMaskTile, 0}, out, true);
+        }
+        LOOP("loop_waw_1", FunctionType::DYNAMIC_LOOP, j, LoopRange(kAssembleMaskIters))
+        {
+            auto temp = Add(t0, t1);
+            Assemble(temp, {j * kAssembleMaskTile, 0}, out, true);
+        }
+    }
+
+    DevAscendProgram* devProg = EncodeAndGetDevProg();
+    ASSERT_NE(devProg, nullptr);
+    EXPECT_EQ(GetOutAssembleSlotBitmask(devProg), STITCH_CTRL_NONE);
+}
+
+// WAW: two loops Assemble same out; both Assemble unmarked → WAW
+TEST(StitchCtrlBitMaskEncodeTest, Waw_ParallelFalse_HasWaw)
+{
+    SetupAssembleBitmaskEncodeTest();
+
+    Tensor t0(DT_FP32, {kAssembleMaskTile, kAssembleMaskTile}, "t0");
+    Tensor t1(DT_FP32, {kAssembleMaskTile, kAssembleMaskTile}, "t1");
+    Tensor out(DT_FP32, {kAssembleMaskIters * kAssembleMaskTile, kAssembleMaskTile}, "out");
+    FUNCTION("assemble_waw_unmarked", {t0, t1}, {out})
+    {
+        LOOP("loop_waw_0", FunctionType::DYNAMIC_LOOP, i, LoopRange(kAssembleMaskIters))
+        {
+            auto temp = Add(t0, t1);
+            Assemble(temp, {i * kAssembleMaskTile, 0}, out);
+        }
+        LOOP("loop_waw_1", FunctionType::DYNAMIC_LOOP, j, LoopRange(kAssembleMaskIters))
+        {
+            auto temp = Add(t0, t1);
+            Assemble(temp, {j * kAssembleMaskTile, 0}, out);
+        }
+    }
+
+    DevAscendProgram* devProg = EncodeAndGetDevProg();
+    ASSERT_NE(devProg, nullptr);
+    EXPECT_NE(GetOutAssembleSlotBitmask(devProg) & STITCH_CTRL_WAW, 0u);
+}
+
+// WAR: Assemble tmp→mid, then View(mid)→Assemble→out → stitchCtrlBitMask has WAR|RAW
+TEST(StitchCtrlBitMaskEncodeTest, War_ParallelFalse_HasWarRaw)
+{
+    SetupAssembleBitmaskEncodeTest();
+
+    Tensor t0(DT_FP32, {kAssembleMaskTile, kAssembleMaskTile}, "t0");
+    Tensor t1(DT_FP32, {kAssembleMaskTile, kAssembleMaskTile}, "t1");
+    Tensor out(DT_FP32, {kAssembleMaskIters * kAssembleMaskTile, kAssembleMaskTile}, "out");
+    FUNCTION("assemble_war_tmp_mid_out", {t0, t1}, {out})
+    {
+        Tensor mid(DT_FP32, {kAssembleMaskIters * kAssembleMaskTile, kAssembleMaskTile}, "mid");
+        LOOP("loop_tmp_to_mid", FunctionType::DYNAMIC_LOOP, i, LoopRange(kAssembleMaskIters))
+        {
+            auto tmp = Add(t0, t1);
+            Assemble(tmp, {i * kAssembleMaskTile, 0}, mid);
+        }
+        LOOP("loop_mid_to_out", FunctionType::DYNAMIC_LOOP, j, LoopRange(kAssembleMaskIters))
+        {
+            auto midTile = View(mid, {kAssembleMaskTile, kAssembleMaskTile}, {j * kAssembleMaskTile, 0});
+            Assemble(midTile, {j * kAssembleMaskTile, 0}, out);
+        }
+    }
+
+    DevAscendProgram* devProg = EncodeAndGetDevProg();
+    ASSERT_NE(devProg, nullptr);
+
+    bool sawWarRaw = false;
+    StitchCtrlBitMask midMask = STITCH_CTRL_NONE;
+    for (size_t i = 0; i < devProg->partialUpdateList.size(); ++i) {
+        const auto& partial = devProg->At(devProg->partialUpdateList, i);
+        if (partial.slotIndex < 0) {
+            continue;
+        }
+        const StitchCtrlBitMask mask = partial.stitchCtrlBitMask;
+        if ((mask & STITCH_CTRL_WAR) != 0 && (mask & STITCH_CTRL_RAW) != 0) {
+            sawWarRaw = true;
+            midMask = mask;
+            break;
+        }
+    }
+    EXPECT_TRUE(sawWarRaw) << "WAR (tmp→mid then mid→out) mid slot should have WAR|RAW, lastSeen=0x" << std::hex
+                           << static_cast<unsigned>(midMask);
 }

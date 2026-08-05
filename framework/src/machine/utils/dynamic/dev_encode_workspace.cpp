@@ -568,8 +568,8 @@ static bool IsRuntimeDynamicPartialNeedAlloc(const DevAscendProgramPartialUpdate
                                              const std::shared_ptr<DyndevFunctionAttribute>& dynAttr,
                                              const std::unordered_set<int>& constructAssembleNeedAllocSlots)
 {
-    return IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr) &&
-           (constructAssembleNeedAllocSlots.count(partial.slotIndex) > 0 || partial.isOutputTensorStitchSlot);
+    (void)constructAssembleNeedAllocSlots;
+    return partial.stitchCtrlBitMask != STITCH_CTRL_NONE && IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr);
 }
 
 static SymbolicScalar ComputeMaxDynamicCellMatchTableMemPerSlot(
@@ -605,7 +605,7 @@ void BuildDynamicCellMatchLaunchMeta(Function* func, DevAscendProgram& devProg)
     const auto* devProgBase = reinterpret_cast<const uint8_t*>(&devProg);
     for (size_t i = 0; i < devProg.partialUpdateList.size(); ++i) {
         auto& partial = devProg.At(devProg.partialUpdateList, i);
-        if (!IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr)) {
+        if (partial.stitchCtrlBitMask == STITCH_CTRL_NONE || !IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr)) {
             continue;
         }
         int slotIndex = partial.slotIndex;

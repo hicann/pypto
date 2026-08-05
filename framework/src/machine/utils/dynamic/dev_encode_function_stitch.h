@@ -134,9 +134,17 @@ private:
 };
 static_assert(sizeof(DevAscendFunctionDuppedStitchList) == sizeof(void*));
 
+// Stitch / cell-match control bit mask (0 = no stitch).
+// NORMAL→WAW; maxReadCount>0→WAR|RAW.
+using StitchCtrlBitMask = uint8_t;
+constexpr StitchCtrlBitMask STITCH_CTRL_NONE = 0;
+constexpr StitchCtrlBitMask STITCH_CTRL_WAW = 1u << 0; // 写后写
+constexpr StitchCtrlBitMask STITCH_CTRL_WAR = 1u << 1; // 写后读
+constexpr StitchCtrlBitMask STITCH_CTRL_RAW = 1u << 2; // 读后写
+
 struct DevAscendProgramPartialUpdate {
-    int slotIndex;
-    bool isOutputTensorStitchSlot{false};
+    int slotIndex{-1};
+    StitchCtrlBitMask stitchCtrlBitMask{STITCH_CTRL_NONE};
 
     DevCellMatchTableDesc cellMatchTableDesc;
     DevRelocVector<uint64_t> cellMatchRuntimePartialUpdateTable;
