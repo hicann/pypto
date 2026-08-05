@@ -42,7 +42,6 @@ target_link_libraries(tile_fwk_bundle
             tile_fwk_utils
             -Wl,--as-needed
             $<BUILD_INTERFACE:json>
-            intf_pub_cxx17
             tile_fwk_intf_pub
             dl
             c_sec
@@ -194,7 +193,6 @@ if (ENABLE_TILE_FWK_BUNDLE_STANDALONE)
     target_link_libraries(tile_fwk_bundle_standalone
             PRIVATE
                 $<BUILD_INTERFACE:json>
-                intf_pub_cxx17
                 tile_fwk_intf_pub
                 dl rt
                 Threads::Threads
