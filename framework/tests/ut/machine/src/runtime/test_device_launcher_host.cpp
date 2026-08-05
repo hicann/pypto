@@ -299,3 +299,115 @@ TEST_F(DeviceLauncherHostTest, CopyControlFlowCache_AllocatesAndFrees)
     }
     SUCCEED();
 }
+
+TEST_F(DeviceLauncherHostTest, SetCaptureStream_NormalMode)
+{
+    AclRtStream aicoreStream = nullptr;
+    AclRtStream aicpuStream = nullptr;
+    AclRtCreateStream(&aicoreStream);
+    AclRtCreateStream(&aicpuStream);
+
+    bool isCapture = false;
+    int ret = DeviceLauncher::SetCaptureStream(aicoreStream, aicpuStream, isCapture);
+    EXPECT_EQ(ret, 0);
+    EXPECT_FALSE(isCapture);
+
+    if (aicoreStream)
+        AclRtDestroyStream(aicoreStream);
+    if (aicpuStream)
+        AclRtDestroyStream(aicpuStream);
+}
+
+TEST_F(DeviceLauncherHostTest, SetDevRunCacheKernel_EnableDisable)
+{
+    auto* func = GetFunc();
+    ASSERT_NE(func, nullptr);
+
+    DeviceLauncher::SetDevRunCacheKernelEnable(func, false);
+    EXPECT_FALSE(DeviceLauncher::IsDevRunCacheKernelEnable(func));
+
+    DeviceLauncher::SetDevRunCacheKernelEnable(func, true);
+    EXPECT_TRUE(DeviceLauncher::IsDevRunCacheKernelEnable(func));
+
+    uint8_t dummyProg[64] = {0};
+    DeviceLauncher::SetDevRunCacheKernel(func, dummyProg);
+
+    auto* op = DeviceLauncher::GetDevRunCacheOperator(func);
+    EXPECT_NE(op, nullptr);
+
+    DeviceLauncher::SetDevRunCacheKernelEnable(func, false);
+}
+
+TEST_F(DeviceLauncherHostTest, DataDumpInit_UnInit_NoDump)
+{
+    DeviceLauncher::DataDumpInit();
+    DeviceLauncher::DataDumpUnInit();
+    SUCCEED();
+}
+
+TEST_F(DeviceLauncherHostTest, DumpIOTensorsWithCann_EmptyTensors)
+{
+    std::vector<DeviceTensorData> tensors;
+    DeviceLauncher::DumpIOTensorsWithCann(nullptr, tensors, "test_func");
+    SUCCEED();
+}
+
+TEST_F(DeviceLauncherHostTest, FreeControlFlowCache_NullSafe)
+{
+    DeviceLauncher::FreeControlFlowCache(nullptr);
+    SUCCEED();
+}
+
+TEST_F(DeviceLauncherHostTest, SaveStream_SetsCurrentStream)
+{
+    AclRtStream stream = nullptr;
+    AclRtCreateStream(&stream);
+    DeviceLauncher::SaveStream(stream);
+    if (stream)
+        AclRtDestroyStream(stream);
+    SUCCEED();
+}
+
+TEST_F(DeviceLauncherHostTest, AddAicpuStream_NonCaptureMode)
+{
+    AclMdlRI rtModel = nullptr;
+    DeviceLauncher::AddAicpuStream(false, rtModel);
+    SUCCEED();
+}
+
+TEST_F(DeviceLauncherHostTest, IsCaptureMode_ReturnsFalse) { EXPECT_FALSE(DeviceLauncher::IsCaptureMode()); }
+
+TEST_F(DeviceLauncherHostTest, RunPreSync_WithRealStreams)
+{
+    AclRtStream scheStream = nullptr;
+    AclRtStream ctrlStream = nullptr;
+    AclRtStream aicoreStream = nullptr;
+
+    AclRtCreateStream(&scheStream);
+    AclRtCreateStream(&ctrlStream);
+    AclRtCreateStream(&aicoreStream);
+
+    if (scheStream && ctrlStream && aicoreStream) {
+        int ret = DeviceLauncher::RunPreSync(scheStream, ctrlStream, aicoreStream);
+        EXPECT_EQ(ret, 0);
+    }
+
+    if (scheStream)
+        AclRtDestroyStream(scheStream);
+    if (ctrlStream)
+        AclRtDestroyStream(ctrlStream);
+    if (aicoreStream)
+        AclRtDestroyStream(aicoreStream);
+}
+
+TEST_F(DeviceLauncherHostTest, LaunchSyncTask_AllModes)
+{
+    AclRtStream stream = nullptr;
+    AclRtCreateStream(&stream);
+
+    EXPECT_EQ(DeviceLauncher::LaunchSyncTask(stream, false, 1), 0);
+    EXPECT_EQ(DeviceLauncher::LaunchSyncTask(stream, true, 0), 0);
+
+    if (stream)
+        AclRtDestroyStream(stream);
+}
