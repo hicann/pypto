@@ -393,6 +393,19 @@ void DeviceTaskContext::DumpReadyQueue(DynDeviceTask* dynTask, const char* prefi
     DEV_DEBUG("%s: ready queue aicpu: %s [%s]", prefix, dynTask->readyQueue[aicpuIndex]->Str().c_str(),
               dynTask->readyQueue[aicpuIndex]->Dump().c_str());
 }
+
+void DeviceTaskContext::TraceFirstBatchResolve(DynDeviceTask* dynTask)
+{
+    for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
+        if (dynTask->readyQueue[i] == nullptr)
+            continue;
+        for (uint32_t task : *dynTask->readyQueue[i]) {
+            DEV_VERBOSE_DEBUG("#trace.ltask.resolve: tid=%d task=%lu firstBatch=1 dtaskId=%lu",
+                              static_cast<int>(CTRL_CPU_THREAD_IDX), (uint64_t)task, dynTask->GetIndex());
+        }
+    }
+}
+
 void DeviceTaskContext::DumpDepend(DynDeviceTask* dyntask, DevAscendProgram* devProg, DevStartArgs* startArgs,
                                    const char* prefix)
 {

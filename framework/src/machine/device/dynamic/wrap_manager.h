@@ -269,14 +269,10 @@ public:
         DEV_IF_VERBOSE_DEBUG
         {
             uint32_t wrapId = static_cast<uint32_t>(GetWrapId(taskIds[WRAP_IDX_AIC]));
-            DEV_VERBOSE_DEBUG("try to send wrapId[%u]'s wrapAicoreIdx[%u] taskId[%u]", wrapId,
-                              static_cast<uint32_t>(WRAP_IDX_AIC), taskIds[WRAP_IDX_AIC]);
-            DEV_VERBOSE_DEBUG("try to send wrapId[%u]'s wrapAicoreIdx[%u] taskId[%u]", wrapId,
-                              static_cast<uint32_t>(WRAP_IDX_AIV0), taskIds[WRAP_IDX_AIV0]);
-            if (mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
-                DEV_VERBOSE_DEBUG("try to send wrapId[%u]'s wrapAicoreIdx[%u] taskId[%u]", wrapId,
-                                  static_cast<uint32_t>(WRAP_IDX_AIV1), taskIds[WRAP_IDX_AIV1]);
-            }
+            DEV_VERBOSE_DEBUG("#trace.mix.send: tid=%d wrapId=%u mixType=%u aicIdx=%u aivIdx0=%u aivIdx1=%u "
+                              "taskAic=%u taskAiv0=%u taskAiv1=%u",
+                              schedIdx_, wrapId, static_cast<uint32_t>(mixResourceType), aicIdx, aivIdx0, aivIdx0 + 1,
+                              taskIds[WRAP_IDX_AIC], taskIds[WRAP_IDX_AIV0], taskIds[WRAP_IDX_AIV1]);
         }
         SendTaskToAiCore(schDevTaskCtx, CoreType::AIC, aicIdx, taskIds[WRAP_IDX_AIC]);
         SendTaskToAiCore(schDevTaskCtx, CoreType::AIV, aivIdx0, taskIds[WRAP_IDX_AIV0]);
@@ -289,8 +285,14 @@ public:
     {
         coreStatusMgr_->RemoveRunAndPendCoreIdx(aicIdx, CORE_IDX_AIC);
         coreStatusMgr_->RemoveRunAndPendCoreIdx(aivIdx0, CORE_IDX_AIV);
+        DEV_VERBOSE_DEBUG("#trace.mix.release: tid=%d core=%u type=%d allFinish=%d", schedIdx_, aicIdx,
+                          static_cast<int>(CoreType::AIC), 0);
+        DEV_VERBOSE_DEBUG("#trace.mix.release: tid=%d core=%u type=%d allFinish=%d", schedIdx_, aivIdx0,
+                          static_cast<int>(CoreType::AIV), 0);
         if (mixResourceType == static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
             coreStatusMgr_->RemoveRunAndPendCoreIdx(aivIdx0 + 1, CORE_IDX_AIV);
+            DEV_VERBOSE_DEBUG("#trace.mix.release: tid=%d core=%u type=%d allFinish=%d", schedIdx_, aivIdx0 + 1,
+                              static_cast<int>(CoreType::AIV), 0);
         }
     }
 
@@ -321,6 +323,12 @@ public:
             WrapInfo* wrapInfo = wrap1c2vTasks[taskIdx];
             uint32_t aicIdx = candidates.core1c2vIdx[taskIdx];
             uint32_t aivIdx0 = GetWrapAiv0CoreIdx(aicIdx);
+            DEV_IF_VERBOSE_DEBUG
+            {
+                uint32_t wrapId = wrapInfo->wrapId;
+                DEV_VERBOSE_DEBUG("#trace.mix.wrapresolve: tid=%d wrapId=%u wrapAicoreIdx=%u taskId=%u", schedIdx_,
+                                  wrapId, static_cast<uint32_t>(WRAP_IDX_AIC), wrapInfo->tasklist[WRAP_IDX_AIC]);
+            }
             SendMixTasksToCore(wrapInfo->tasklist, wrapInfo->mixResourceType, aicIdx, aivIdx0);
             removeMixCoreIdx(wrapInfo->mixResourceType, aicIdx, aivIdx0);
         }
@@ -332,6 +340,12 @@ public:
             uint32_t aicIdx = core1c2vIdx < candidates.core1c2vCnt ? candidates.core1c2vIdx[core1c2vIdx++] :
                                                                      candidates.core1c1vIdx[core1c1vIdx++];
             uint32_t aivIdx0 = GetWrapAiv0CoreIdx(aicIdx);
+            DEV_IF_VERBOSE_DEBUG
+            {
+                uint32_t wrapId = wrapInfo->wrapId;
+                DEV_VERBOSE_DEBUG("#trace.mix.wrapresolve: tid=%d wrapId=%u wrapAicoreIdx=%u taskId=%u", schedIdx_,
+                                  wrapId, static_cast<uint32_t>(WRAP_IDX_AIC), wrapInfo->tasklist[WRAP_IDX_AIC]);
+            }
             SendMixTasksToCore(wrapInfo->tasklist, wrapInfo->mixResourceType, aicIdx, aivIdx0);
             removeMixCoreIdx(wrapInfo->mixResourceType, aicIdx, aivIdx0);
         }
@@ -414,6 +428,9 @@ public:
         readyWrapCoreFunctionQue_->head += validReadyCnt;
         WrapInfoQueueUnLock(readyWrapCoreFunctionQue_);
 
+        DEV_VERBOSE_DEBUG("#trace.mix.dispatch: tid=%d readyWrapQueHead=%u readyWrapQueTail=%u", schedIdx_,
+                          readyWrapCoreFunctionQue_->head, readyWrapCoreFunctionQue_->tail);
+
         WrapInfo** task1c1vPtr = localTasks + taskTail;
         postProcess(localTasks, taskHead, task1c1vPtr, valid1c1vCnt);
         return taskCount > maxReadyCnt;
@@ -484,6 +501,9 @@ public:
         wrapInfo->tasklist[WRAP_IDX_AIV1] = taskIds[WRAP_IDX_AIV1];
         WrapInfoQueueUnLock(readyWrapCoreFunctionQue_);
         wrapInfo->wrapId = wrapId;
+        DEV_VERBOSE_DEBUG("#trace.mix.wrapcreate: tid=%d wrapId=%u mixType=%u taskAic=%u taskAiv0=%u taskAiv1=%u",
+                          schedIdx_, wrapId, static_cast<uint32_t>(mixResourceType), taskIds[WRAP_IDX_AIC],
+                          taskIds[WRAP_IDX_AIV0], taskIds[WRAP_IDX_AIV1]);
     }
 
     inline void ResolveDepForOneMix(const uint32_t* taskIds, uint8_t mixResourceType, uint16_t coreIdx)
@@ -515,11 +535,22 @@ public:
             uint32_t aicReadyCnt = coreStatusMgr_->GetCoreRunReadyCnt(CORE_IDX_AIC);
             if (!GetAvailableWrapCoreIdx(mixResourceType, aicReadyCnt, aicIdx, aivIdx0)) {
                 auto wrapId = static_cast<uint32_t>(GetWrapId(taskIds[WRAP_IDX_AIC]));
+                DEV_VERBOSE_DEBUG("#trace.mix.resolve: tid=%d wrapId=%u aicTaskId=%u aiv0TaskId=%u aiv1TaskId=%u "
+                                  "mixType=%u directSend=%d",
+                                  schedIdx_, wrapId, taskIds[WRAP_IDX_AIC], taskIds[WRAP_IDX_AIV0],
+                                  taskIds[WRAP_IDX_AIV1], static_cast<uint32_t>(mixResourceType), 0);
                 PushMixToReadyQueue(taskIds, mixResourceType, wrapId);
                 return;
             }
         }
-
+        DEV_IF_VERBOSE_DEBUG
+        {
+            auto wrapIdDirect = static_cast<uint32_t>(GetWrapId(taskIds[WRAP_IDX_AIC]));
+            DEV_VERBOSE_DEBUG("#trace.mix.resolve: tid=%d wrapId=%u aicTaskId=%u aiv0TaskId=%u aiv1TaskId=%u "
+                              "mixType=%u directSend=%d",
+                              schedIdx_, wrapIdDirect, taskIds[WRAP_IDX_AIC], taskIds[WRAP_IDX_AIV0],
+                              taskIds[WRAP_IDX_AIV1], static_cast<uint32_t>(mixResourceType), 1);
+        }
         SendMixTasksToCore(taskIds, mixResourceType, aicIdx, aivIdx0);
         RemoveMixRunAndPendCoreIdx(mixResourceType, aicIdx, aivIdx0);
     }

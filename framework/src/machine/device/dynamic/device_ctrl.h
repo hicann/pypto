@@ -97,6 +97,7 @@ public:
 
     int PushTask(DynDeviceTask* dynTask, DeviceExecuteContext* ctx)
     {
+        DEV_VERBOSE_DEBUG("#trace.dtask.built: dtaskId %lu", dynTask->GetIndex());
         auto idx = AllocNewTaskCtrl();
         if (idx < 0) {
             DEV_ERROR(CtrlErr::CTRL_ALLOC_TIMEOUT, "#ctrl.push.alloc: AllocNewTaskCtrl failed, idx=%d.", idx);

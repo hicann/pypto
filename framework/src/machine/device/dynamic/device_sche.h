@@ -354,6 +354,7 @@ struct DynMachineManager {
         // ctrl start only one thread
         PerfMtTrace(PERF_TRACE_BEGIN, 0);
         DEV_INFO("Ctrl enter round=%d", (int)kargs->parameter.globalRound);
+        DEV_VERBOSE_DEBUG("#trace.round.start: round=%lu", kargs->parameter.globalRound);
         ctrlStartRound_.fetch_add(1, std::memory_order_acq_rel);
         initCtrl_.store(true);
         int ret = RunCtrlInitNoLock(kargs, entry);
@@ -367,6 +368,7 @@ struct DynMachineManager {
         ret = RunCtrl(kargs, entry, 0);
         PerfMtTrace(PERF_TRACE_EXIT, 0);
         DEV_INFO("Ctrl leave ret=%d", ret);
+        DEV_VERBOSE_DEBUG("#trace.round.end: round=%lu ret=%d", kargs->parameter.globalRound, ret);
         if (ret != DEVICE_MACHINE_OK) {
             DeviceTrace::GetInstance().ReportTraceMsg();
         }
@@ -454,6 +456,7 @@ struct DynMachineManager {
         DevStartArgs* runtimeDataCurrent = reinterpret_cast<DevStartArgs*>(
             devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
         if (threadIdx != -1 && threadIdx <= arbitratedScheNum) {
+            DEV_VERBOSE_DEBUG("#trace.round.start: round=%lu tid=%d", kargs->parameter.globalRound, threadIdx);
             DEV_INFO("SchedThreadEnter idx=%d round=%d", threadIdx, (int)kargs->parameter.globalRound);
             UpdateScheNumForCtrl(runtimeDataCurrent, arbitratedScheNum);
             ResetDroppedThreadTaskQueues(runtimeDataCurrent, devArgs.scheCpuNum, arbitratedScheNum);
@@ -463,6 +466,8 @@ struct DynMachineManager {
                 DeviceTrace::GetInstance().ReportTraceMsg();
             }
             PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
+            DEV_VERBOSE_DEBUG("#trace.round.end: round=%lu tid=%d ret=%d", kargs->parameter.globalRound, threadIdx,
+                              ret);
         }
         return SyncSchExit(devProg, devArgs, ret, runtimeDataCurrent, arbitratedScheNum);
     }

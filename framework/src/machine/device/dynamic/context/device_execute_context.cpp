@@ -99,6 +99,7 @@ DeviceExecuteContext::DeviceExecuteContext(DevStartArgs* startArgs)
 
 void DeviceExecuteContext::PushTask(DynDeviceTask* dynTask)
 {
+    DEV_IF_VERBOSE_DEBUG { taskContext.TraceFirstBatchResolve(dynTask); }
     pushTask(dynTask, this);
     taskId++;
     // Stitch-cache entry packs only taskId[15:0]; bump epoch on wrap so reused low bits cannot

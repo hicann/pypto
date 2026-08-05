@@ -490,6 +490,27 @@ TEST_F(TestDeviceTaskContext, DumpReadyQueue_CoversLoggingLines)
     DeviceTaskContext::DumpReadyQueue(dyntask.get(), "ut_cov");
 }
 
+TEST_F(TestDeviceTaskContext, TraceFirstBatchResolve_CoversLoggingLines)
+{
+    DeviceWorkspaceAllocator workspace;
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+    dyntask->devTask.coreFunctionCnt = 3;
+    std::array<taskid_t, 4> bufAiv{};
+    std::array<taskid_t, 4> bufAic{};
+    std::array<taskid_t, 4> bufAicpu{};
+    ReadyCoreFunctionQueue qslot[READY_QUEUE_SIZE];
+    InitReadyQueueSlot(qslot[0], bufAiv, 0, 1, MakeTaskID(0, 1));
+    InitReadyQueueSlot(qslot[1], bufAic, 0, 1, MakeTaskID(0, 2));
+    InitReadyQueueSlot(qslot[2], bufAicpu, 0, 1, MakeTaskID(0, 3));
+    for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
+        dyntask->readyQueue[i] = &qslot[i];
+    }
+    DynFuncHeader header{};
+    header.seqNo = 42;
+    dyntask->dynFuncDataList = &header;
+    DeviceTaskContext::TraceFirstBatchResolve(dyntask.get());
+}
+
 TEST_F(TestDeviceTaskContext, DumpDepend_CoversHeadLoggingWithoutDupData)
 {
     DeviceWorkspaceAllocator workspace;

@@ -112,6 +112,8 @@ private:
 public:
     static void DumpReadyQueue(DynDeviceTask* dynTask, const char* prefix);
 
+    static void TraceFirstBatchResolve(DynDeviceTask* dynTask);
+
     static void DumpDepend(DynDeviceTask* dyntask, DevAscendProgram* devProg, DevStartArgs* startArgs,
                            const char* prefix);
 
