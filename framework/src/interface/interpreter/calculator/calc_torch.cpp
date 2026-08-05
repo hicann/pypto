@@ -1660,7 +1660,7 @@ static void QuantExecute(torch::Tensor& tout, const TensorData* scalePtr, uint64
         float scaleValue = 0.0;
         memcpy_s(&scaleValue, sizeof(float), &low32, sizeof(float));
         tout.mul_(scaleValue);
-    } else {
+    } else if (scalePtr != nullptr) {
         auto scaleTensor = From(*scalePtr);
         auto scaleU32 = scaleTensor.second.to(torch::kInt32);
         auto* u32Data = scaleU32.data_ptr<int32_t>();
@@ -1810,7 +1810,8 @@ static void MatMul(const TensorData& out, const TensorData& self, const TensorDa
     } else {
         MatmulMultiDataLoad(tout.second, tself.second, tother.second, bias_tensor.second, param.kStep);
     }
-    if (self.dtype == DataType::DT_INT8 && out.dtype == DataType::DT_FP16) {
+    if (self.dtype == DataType::DT_INT8 && out.dtype == DataType::DT_FP16 &&
+        (param.scale != 0 || param.scalePtr != nullptr)) {
         QuantExecute(tout.second, param.scalePtr, param.scale, param.relu);
     }
     if (calcType != dtype) {

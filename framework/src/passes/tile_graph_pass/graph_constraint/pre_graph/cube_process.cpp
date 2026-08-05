@@ -257,7 +257,8 @@ Status CubeProcess::GetL0CCopyOuts(Operation& op, std::vector<Operation*>& l0CCo
 
 Status CubeProcess::ReconnectGraph(Operation& mulOp, std::vector<Operation*> copyOutOps)
 {
-    for (auto& input : mulOp.GetIOperands()) {
+    auto inputs = mulOp.GetIOperands();
+    for (const auto& input : inputs) {
         if (input->GetMemoryTypeOriginal() == MemoryType::MEM_FIX_QUANT_PRE) {
             mulOp.EraseInput(input);
             input->RemoveConsumer(mulOp);
@@ -266,19 +267,20 @@ Status CubeProcess::ReconnectGraph(Operation& mulOp, std::vector<Operation*> cop
                 input->AddConsumer(copyOutOp);
             }
         }
-        TransferAttr(mulOp, copyOutOps);
     }
+    TransferAttr(mulOp, copyOutOps);
     return SUCCESS;
 }
 
 Status CubeProcess::TransferAttr(Operation& mulOp, std::vector<Operation*> copyOutOps)
 {
-    auto scaleValue = (mulOp.HasAttr(A_MUL_B_SCALE_ATTR)) ? mulOp.GetElementAttribute(A_MUL_B_SCALE_ATTR) :
-                                                            Element(DataType::DT_UINT64, 0);
-    auto reluType = (mulOp.HasAttr(A_MUL_B_RELU_ATTR)) ? mulOp.GetIntAttribute(A_MUL_B_RELU_ATTR) : 0;
     for (auto copyOutOp : copyOutOps) {
-        copyOutOp->SetAttribute(A_MUL_B_SCALE_ATTR, scaleValue);
-        copyOutOp->SetAttribute(A_MUL_B_RELU_ATTR, reluType);
+        if (mulOp.HasAttr(A_MUL_B_SCALE_ATTR)) {
+            copyOutOp->SetAttribute(A_MUL_B_SCALE_ATTR, mulOp.GetElementAttribute(A_MUL_B_SCALE_ATTR));
+        }
+        if (mulOp.HasAttr(A_MUL_B_RELU_ATTR)) {
+            copyOutOp->SetAttribute(A_MUL_B_RELU_ATTR, mulOp.GetIntAttribute(A_MUL_B_RELU_ATTR));
+        }
     }
     return SUCCESS;
 }
@@ -366,8 +368,8 @@ Status CubeProcess::UpdateCubeOp(Function& function)
             return FAILED;
         }
 
-        if (op.GetOpcode() == Opcode::OP_A_MUL_B) {
-            // FixPipe支持随路量化图重连 & MUL -> L0C_COPY_OUT属性传递
+        if (op.GetOpcode() == Opcode::OP_A_MUL_B || op.GetOpcode() == Opcode::OP_A_MULACC_B) {
+            // FixPipe支持随路量化图重连 & 量化属性传递到L0C_COPY_OUT
             ReconnectGraph(op, l0CCopyOuts);
         }
     }

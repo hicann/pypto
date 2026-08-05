@@ -685,6 +685,63 @@ TEST_F(PreGraphTest, TestFixPipeReconnectGraph)
     EXPECT_EQ(reluType, 1);
 }
 
+TEST_F(PreGraphTest, TestFixPipeReconnectGraphMulAcc)
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    auto funcPtr = std::make_shared<Function>(Program::GetInstance(), "TestFixPipeReconnectGraphMulAcc",
+                                              "TestFixPipeReconnectGraphMulAcc", nullptr);
+
+    // Build graph
+    std::vector<int64_t> shape = {NUM16, NUM16};
+    auto tensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    tensor0->SetMemoryTypeBoth(MemoryType::MEM_L0A);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    tensor1->SetMemoryTypeBoth(MemoryType::MEM_L0B);
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    tensor2->SetMemoryTypeBoth(MemoryType::MEM_L0C);
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    tensor3->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    tensor4->SetMemoryTypeBoth(MemoryType::MEM_L1);
+    auto tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    tensor5->SetMemoryTypeBoth(MemoryType::MEM_FIX_QUANT_PRE);
+    auto tensor6 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    tensor6->SetMemoryTypeBoth(MemoryType::MEM_L0C);
+    auto tensor7 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    tensor7->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    auto& copyin = IRBuilder().CreateTensorOpStmt(*funcPtr, Opcode::OP_COPY_IN, {tensor3}, {tensor4});
+    (void)copyin;
+    auto& l1CopyFB = IRBuilder().CreateTensorOpStmt(*funcPtr, Opcode::OP_L1_TO_FIX_QUANT_PRE, {tensor4}, {tensor5});
+    (void)l1CopyFB;
+    auto& aMulAccB = IRBuilder().CreateTensorOpStmt(*funcPtr, Opcode::OP_A_MULACC_B,
+                                                    {tensor0, tensor1, tensor2, tensor5}, {tensor6});
+    aMulAccB.SetAttribute(A_MUL_B_SCALE_ATTR, Element(DataType::DT_UINT64, NUM10));
+    aMulAccB.SetAttribute(A_MUL_B_RELU_ATTR, 1);
+    auto& copyout = IRBuilder().CreateTensorOpStmt(*funcPtr, Opcode::OP_COPY_OUT, {tensor6}, {tensor7});
+
+    // Test Reconnect Graph
+    CubeProcess cubeProcess;
+    std::vector<Operation*> l0CCopyOuts{};
+    EXPECT_EQ(cubeProcess.CheckValidCube(aMulAccB), SUCCESS);
+    EXPECT_EQ(cubeProcess.GetL0CCopyOuts(aMulAccB, l0CCopyOuts), SUCCESS);
+    ASSERT_EQ(l0CCopyOuts.size(), 1);
+    EXPECT_EQ(l0CCopyOuts.front(), &copyout);
+    EXPECT_EQ(aMulAccB.GetInputOperandSize(), 4);
+    EXPECT_EQ(cubeProcess.ReconnectGraph(aMulAccB, l0CCopyOuts), SUCCESS);
+    EXPECT_EQ(aMulAccB.GetInputOperandSize(), 3);
+    ASSERT_EQ(tensor5->GetConsumers().size(), 1);
+    EXPECT_EQ(*tensor5->GetConsumers().begin(), &copyout);
+    EXPECT_EQ(*tensor0->GetConsumers().begin(), &aMulAccB);
+    EXPECT_EQ(*tensor1->GetConsumers().begin(), &aMulAccB);
+    EXPECT_EQ(*tensor2->GetConsumers().begin(), &aMulAccB);
+    auto scaleValue = (copyout.HasAttr(A_MUL_B_SCALE_ATTR)) ? copyout.GetElementAttribute(A_MUL_B_SCALE_ATTR) :
+                                                              Element(DataType::DT_UINT64, 0);
+    auto reluType = (copyout.HasAttr(A_MUL_B_RELU_ATTR)) ? copyout.GetIntAttribute(A_MUL_B_RELU_ATTR) : 0;
+    EXPECT_EQ(scaleValue, Element(DataType::DT_UINT64, NUM10));
+    EXPECT_EQ(reluType, 1);
+}
+
 void ConstructRemoveRedundantView(ComputationalGraphBuilder& G, bool multi)
 {
     // add tensor

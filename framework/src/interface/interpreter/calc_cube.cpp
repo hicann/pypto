@@ -83,6 +83,18 @@ bool HasMXScaleValue(const ExecuteOperationContext* ctx)
     return false;
 }
 
+LogicalTensorDataPtr FindFixpipeScaleInput(const ExecuteOperationContext* ctx, bool isAccOp)
+{
+    const size_t startIdx = isAccOp ? 3 : 2;
+    for (size_t idx = startIdx; idx < ctx->ioperandDataViewList->size(); idx++) {
+        auto tensor = ctx->ioperandDataViewList->at(idx);
+        if (tensor != nullptr && tensor->GetDataType() == DataType::DT_UINT64) {
+            return tensor;
+        }
+    }
+    return nullptr;
+}
+
 MatMulParam BuildMatMulParam(const ExecuteOperationContext* ctx, bool hasMXScale, LogicalTensorDataPtr bias,
                              LogicalTensorDataPtr aScale, LogicalTensorDataPtr bScale, LogicalTensorDataPtr scalePtr)
 {
@@ -180,13 +192,8 @@ void ExecuteOpAMulB(ExecuteOperationContext* ctx)
                       ctx->ioperandDataViewList->at(indexBScale) :
                       nullptr;
     LogicalTensorDataPtr scalePtr = nullptr;
-    uint64_t scale = GetScaleAttrOrDefault(ctx->op);
-    if (lhs->GetDataType() == DataType::DT_INT8 && ret->GetDataType() == DataType::DT_FP16 && scale == 0) {
-        for (size_t idx = 0; idx < ctx->ioperandDataViewList->size(); idx++) {
-            if (ctx->ioperandDataViewList->at(idx)->GetDataType() == DataType::DT_UINT64) {
-                scalePtr = ctx->ioperandDataViewList->at(idx);
-            }
-        }
+    if (lhs->GetDataType() == DataType::DT_INT8 && ret->GetDataType() == DataType::DT_FP16) {
+        scalePtr = FindFixpipeScaleInput(ctx, isAccOp);
     }
     MatMulParam param = BuildMatMulParam(ctx, hasMXScale, bias, aScale, bScale, scalePtr);
     switch (opcode) {
@@ -195,9 +202,6 @@ void ExecuteOpAMulB(ExecuteOperationContext* ctx)
         } break;
         case Opcode::OP_A_MULACC_B: {
             auto acc = ctx->ioperandDataViewList->at(2);
-            ASSERT(ExecuteOperationScene::AMULACC_ACC_DTYPE_UNSUPPORTED,
-                   lhs->GetDataType() != DataType::DT_INT8 || acc->GetDataType() != DataType::DT_FP32)
-                << "pass customized part, cannot restore the computation logic.";
             calc::AccMatMul(ret, lhs, rhs, acc, param);
         } break;
         default:

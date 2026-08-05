@@ -1279,8 +1279,6 @@ TEST_F(DynamicOpsTest, MatMulPertensor)
 {
     std::string logOutput = CaptureLogFileAndEcho([]() {
         config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
-        std::vector<std::string> passFilter = {"CodegenPreproc"};
-        config::SetVerifyOption(KEY_PASS_VERIFY_FILTER, passFilter);
         Tensor t0(DT_INT8, {128, 256}, "t0");
         Tensor t1(DT_INT8, {128, 256}, "t1");
         Tensor out(DT_FP16, {128, 128}, "out");
@@ -1311,7 +1309,7 @@ TEST_F(DynamicOpsTest, MatMulPertensor)
             {
                 (void)i;
                 Matrix::MatmulExtendParam pm;
-                pm.scaleValue = scaleValueTmp;
+                pm.scaleValue = scaleValue;
                 pm.reluType = Matrix::ReLuType::ReLu;
                 out = Matrix::Matmul(DT_FP16, t0, t1, pm, false, true, false);
             }
@@ -1324,8 +1322,6 @@ TEST_F(DynamicOpsTest, MatMulPerchannel)
 {
     std::string logOutput = CaptureLogFileAndEcho([]() {
         config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
-        std::vector<std::string> passFilter = {"CodegenPreproc"};
-        config::SetVerifyOption(KEY_PASS_VERIFY_FILTER, passFilter);
         Tensor t0(DT_INT8, {128, 128}, "t0");
         Tensor t1(DT_INT8, {128, 128}, "t1");
         Tensor out(DT_FP16, {128, 128}, "out");

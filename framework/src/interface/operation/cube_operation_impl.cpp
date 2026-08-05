@@ -106,7 +106,8 @@ LogicalTensorPtr AddOpView(Function& function, const LogicalTensorPtr& srcTensor
     return AddOpView<int64_t>(function, srcTensorPtr, dstTensorInfo);
 }
 
-void SetAMulBAttr(const MatmulGraphNodes& tensorGraphNodes, const MatmulAttrParam& attrParam, Operation& op)
+void SetAMulBAttr(const MatmulGraphNodes& tensorGraphNodes, const MatmulAttrParam& attrParam,
+                  const MatmulIterInfo& iterInfo, Operation& op)
 {
     ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, tensorGraphNodes.aTensorPtr != nullptr)
         << "aTensorPtr is nullptr, check input tensor A.";
@@ -132,6 +133,11 @@ void SetAMulBAttr(const MatmulGraphNodes& tensorGraphNodes, const MatmulAttrPara
         op.SetAttribute(A_MUL_B_BIAS_ATTR, tensorGraphNodes.biasTensorPtr != nullptr);
         op.SetAttribute(A_MUL_B_RELU_ATTR, static_cast<int64_t>(attrParam.reluType));
         op.SetAttribute(A_MUL_B_SCALE_ATTR, Element(DataType::DT_UINT64, attrParam.scaleValue));
+    } else if (op.GetOpcode() == Opcode::OP_A_MULACC_B && iterInfo.isLastK) {
+        op.SetAttribute(A_MUL_B_RELU_ATTR, static_cast<int64_t>(attrParam.reluType));
+        if (attrParam.scaleValue != 0) {
+            op.SetAttribute(A_MUL_B_SCALE_ATTR, Element(DataType::DT_UINT64, attrParam.scaleValue));
+        }
     }
 }
 
@@ -1115,9 +1121,9 @@ void LinkAMulB(Function& function, const MatmulGraphNodes& tensorGraphNodes, con
             if (tileGraphNodes.biasTensorPtr != nullptr) {
                 aMulBInputs.push_back(tileGraphNodes.biasTensorPtr);
             }
-            if (tileGraphNodes.scaleTensorPtr != nullptr) {
-                aMulBInputs.push_back(tileGraphNodes.scaleTensorPtr);
-            }
+        }
+        if (iterInfo.isLastK && tileGraphNodes.scaleTensorPtr != nullptr) {
+            aMulBInputs.push_back(tileGraphNodes.scaleTensorPtr);
         }
     }
     if (iterInfo.isLastK) {
@@ -1132,7 +1138,7 @@ void LinkAMulB(Function& function, const MatmulGraphNodes& tensorGraphNodes, con
         aMulBOutputs = {tileGraphNodes.cL0PartialSumPtr};
     }
     auto& aMulBOp = function.AddOperation(matmulOpStr, aMulBInputs, aMulBOutputs);
-    SetAMulBAttr(tensorGraphNodes, attrParam, aMulBOp);
+    SetAMulBAttr(tensorGraphNodes, attrParam, iterInfo, aMulBOp);
 }
 
 void UpdateIterInfo(const MatmulTileInfo& tileInfo, MatmulIterInfo& iterInfo)
