@@ -1030,6 +1030,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         keywords: list[ast.keyword],
         body: list[ast.stmt],
         decorator_list: list[ast.expr],
+        type_params=None,
         node_attr: PILAttr = NOATTR,
     ) -> tuple[list[ast.stmt], PILExprOrNone]:
         """
