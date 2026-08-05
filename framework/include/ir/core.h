@@ -106,6 +106,7 @@ enum class ObjectKind {
     TensorType,
     TileType,
     TokenType,
+    NoneType,
     TupleType,
     LogicalTensorType,
 

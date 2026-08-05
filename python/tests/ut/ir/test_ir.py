@@ -194,6 +194,10 @@ def test_basic_types():
     tt3 = ir.TokenType()
     assert str(tt3) == "ir.Token"
 
+    # NoneType
+    nt = ir.NoneType()
+    assert str(nt) == "ir.None"
+
     # LogicalTensorType
     lt = ir.LogicalTensorType()
     assert str(lt) == "ir.Tensor"

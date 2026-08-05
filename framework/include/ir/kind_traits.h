@@ -102,6 +102,7 @@ DEFINE_KIND_TRAIT(TupleType, ObjectKind::TupleType);
 DEFINE_KIND_TRAIT(MemRefType, ObjectKind::MemRefType);
 DEFINE_KIND_TRAIT(PtrType, ObjectKind::PtrType);
 DEFINE_KIND_TRAIT(TokenType, ObjectKind::TokenType);
+DEFINE_KIND_TRAIT(NoneType, ObjectKind::NoneType);
 DEFINE_KIND_TRAIT(LogicalTensorType, ObjectKind::LogicalTensorType);
 
 // Other IR node types
@@ -200,9 +201,9 @@ struct KindTrait<UnaryExpr> {
 template <>
 struct KindTrait<Type> {
     static constexpr ObjectKind kinds[] = {
-        ObjectKind::UnknownType, ObjectKind::ScalarType,        ObjectKind::ShapedType,
-        ObjectKind::TensorType,  ObjectKind::TileType,          ObjectKind::TupleType,
-        ObjectKind::TokenType,   ObjectKind::LogicalTensorType, ObjectKind::PtrType};
+        ObjectKind::UnknownType, ObjectKind::ScalarType, ObjectKind::ShapedType, ObjectKind::TensorType,
+        ObjectKind::TileType,    ObjectKind::TupleType,  ObjectKind::TokenType,  ObjectKind::LogicalTensorType,
+        ObjectKind::PtrType,     ObjectKind::NoneType};
     static constexpr size_t count = sizeof(kinds) / sizeof(ObjectKind);
 };
 
@@ -246,6 +247,14 @@ bool IsA(const std::shared_ptr<const Base>& base)
         return detail::IsKindInArray<T>(base->GetKind());
     }
     return false;
+}
+
+/**
+ * \brief True for field-less singleton Types
+ */
+inline bool IsFieldLessType(const TypePtr& type)
+{
+    return IsA<MemRefType>(type) || IsA<NoneType>(type) || IsA<UnknownType>(type);
 }
 
 /**

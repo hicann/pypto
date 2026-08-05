@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import sysconfig
+import traceback
 import typing
 
 from .. import pypto_impl
@@ -68,6 +69,10 @@ def _get_or_compile(pyfunc):
         return None
 
 
+class DispatchError(RuntimeError):
+    pass
+
+
 def dispatch_call(call: Call, scope: Scope, ctx: BuildContext):
     callee = scope.resolve(call.callee)
     args = tuple(scope.resolve(call.args))
@@ -79,14 +84,28 @@ def dispatch_call(call: Call, scope: Scope, ctx: BuildContext):
         else:
             kwargs[k] = scope.resolve(v)
 
-    if isinstance(callee, Function):
-        ret = call_function(callee, args, kwargs, ctx)
-    else:
-        func = _get_or_compile(callee)
-        if func is not None:
+    func = callee if isinstance(callee, Function) else _get_or_compile(callee)
+    if func is not None:
+        ctx.call_stack.append(call.span)
+        try:
             ret = call_function(func, args, kwargs, ctx)
-        else:
+        finally:
+            ctx.call_stack.pop()
+    else:
+        try:
             ret = dispatch(callee, ctx, *args, **kwargs)
+        except (ReturnSignal, BreakSignal, ContinueSignal):
+            # control-flow signals are not dispatch errors; let them propagate.
+            raise
+        except DispatchError:
+            # already built by an inner dispatch_call; don't duplicate the stack.
+            raise
+        except Exception as e:
+            frames = [traceback.FrameSummary(s.filename, s.begin_line, "")
+                      for s in ctx.call_stack + [call.span]]
+            stack = "".join(traceback.format_list(frames))
+            raise DispatchError(f"{e}\n{callee}\n{stack}") from None
+
     if call.result is not None:
         scope.varmap[call.result.id] = ret
 

@@ -610,6 +610,34 @@ inline TokenTypePtr GetTokenType()
 }
 
 /**
+ * \brief None type representation
+ *
+ * Represents the absence of a value (void-like). Carries no data.
+ */
+class NoneType : public Type {
+public:
+    NoneType() = default;
+
+    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::NoneType; }
+    [[nodiscard]] std::string TypeName() const override { return "None"; }
+
+    static constexpr auto GetFieldDescriptors() { return Type::GetFieldDescriptors(); }
+};
+
+using NoneTypePtr = std::shared_ptr<const NoneType>;
+
+/**
+ * \brief Get a shared pointer to the singleton NoneType instance
+ *
+ * \return Shared pointer to NoneType
+ */
+inline NoneTypePtr GetNoneType()
+{
+    static const auto noneType = std::make_shared<NoneType>();
+    return noneType;
+}
+
+/**
  * \brief Logical tensor type representation
  *
  * Represents a logical tensor with dtype and shape, without memory allocation info.

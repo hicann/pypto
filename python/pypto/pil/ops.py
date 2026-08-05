@@ -437,12 +437,12 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
     for i, name in enumerate(yield_var_names):
         if ir.type_equal(then_yield_vars[i], else_yield_vars[i]):
             var = ctx.create_var_like(name, then_yield_vars[i])
-        elif isinstance(then_yield_vars[i].type, ir.UnknownType):
+        elif isinstance(then_yield_vars[i].type, ir.NoneType):
             var = ctx.create_var_like(name, else_yield_vars[i])
-        elif isinstance(else_yield_vars[i].type, ir.UnknownType):
+        elif isinstance(else_yield_vars[i].type, ir.NoneType):
             var = ctx.create_var_like(name, then_yield_vars[i])
         else:
-            raise ValueError(f"Var({name}) then_type={then_yield_vars[i].type}, else_type={else_yield_vars[i].type}")
+            var = ctx.poison(name, then_block.span)
         yield_vars.append(var)
         scope.store(name, ctx.wrap(var))
 

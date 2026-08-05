@@ -11,7 +11,7 @@ import enum
 import inspect
 import textwrap
 import threading
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 import pypto
 from pypto import ir
@@ -218,6 +218,34 @@ def not_in(item: Any, container: Any) -> bool:
     return item not in container
 
 
+class _Poison:
+    """Value for a conflicted yield var.
+
+    Any value-use (arithmetic, indexing, attribute access, ...) raises so the
+    conflict is reported at the point of consumption rather than at if-construction
+    time.
+    """
+
+    __slots__ = ("_name", "_span")
+
+    def __init__(self, name, span):
+        self._name = name
+        self._span = span
+
+    def _conflict(self, *args, **kwargs):
+        raise RuntimeError(
+            f"Conflicted var {self._name}: {self._span.filename}:{self._span.begin_line}"
+        )
+
+    __getattr__ = _conflict
+    __add__ = __radd__ = __sub__ = __rsub__ = __mul__ = __rmul__ = _conflict
+    __truediv__ = __rtruediv__ = __floordiv__ = __rfloordiv__ = __matmul__ = _conflict
+    __mod__ = __rmod__ = __pow__ = __rpow__ = _conflict
+    __neg__ = __pos__ = __abs__ = __invert__ = _conflict
+    __getitem__ = __setitem__ = __iter__ = __len__ = _conflict
+    __eq__ = __ne__ = __lt__ = __le__ = __gt__ = __ge__ = _conflict
+
+
 class BuildContext(ir.IRBuilder):
     def __init__(self, span: ir.Span):
         super().__init__()
@@ -225,6 +253,7 @@ class BuildContext(ir.IRBuilder):
         self.span = span
         self.return_var_names = []
         self.loop_stack = []  # used by legacy is_loop_begin() and is_loop_end()
+        self.call_stack = []
 
     def __enter__(self):
         self.parent = _current.build_context
@@ -256,6 +285,12 @@ class BuildContext(ir.IRBuilder):
         finally:
             self.return_var_names = old_names
 
+    def poison(self, name: str, span: ir.Span):
+        # An UnknownType-typed var that wrap() turns into a _Poison: consuming it
+        # raises "Conflicted var <name>", so a deferred type conflict is reported
+        # at the point of use rather than at if-construction time.
+        return ir.Var(name, ir.UnknownType.get(), span)
+
     def unwrap(self, val: Any) -> ir.Expr:
         if val is None:
             return self.none()
@@ -285,8 +320,11 @@ class BuildContext(ir.IRBuilder):
                 return pypto.SymbolicScalar(val)
             elif isinstance(val.type, ir.LogicalTensorType):
                 return pypto.Tensor.from_logical_tensor(val)
-            elif isinstance(val.type, ir.UnknownType):
+            elif isinstance(val.type, ir.NoneType):
                 return None
+            elif isinstance(val.type, ir.UnknownType):
+                var = cast(ir.Var, val)
+                return _Poison(var.name, var.span)
             else:
                 raise TypeError(f"Invalid type {type(val)} for wrap")
         return val

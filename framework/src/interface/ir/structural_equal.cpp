@@ -789,7 +789,7 @@ bool StructuralEqualImpl<AssertMode>::EqualType(const TypePtr& lhs, const TypePt
                 return false;
         }
         return true;
-    } else if (IsA<MemRefType>(lhs) || IsA<UnknownType>(lhs)) {
+    } else if (IsFieldLessType(lhs)) {
         return true; // Singleton type, both being same type kind is sufficient
     } else if (IsA<LogicalTensorType>(lhs) && IsA<LogicalTensorType>(rhs)) {
         return true;

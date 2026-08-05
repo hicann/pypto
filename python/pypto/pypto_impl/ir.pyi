@@ -714,6 +714,24 @@ class UnknownType(Type):
         """
 
 
+class NoneType(Type):
+    """None (void-like) type representation.
+
+    Represents the absence of a value.
+    """
+
+    def __init__(self) -> None:
+        """Create a none type."""
+
+    @staticmethod
+    def get() -> NoneType:
+        """Get the singleton NoneType instance.
+
+        Returns:
+            The singleton NoneType instance
+        """
+
+
 class ScalarType(Type):
     """Scalar type representation."""
 

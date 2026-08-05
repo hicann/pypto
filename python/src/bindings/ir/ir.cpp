@@ -454,6 +454,11 @@ void BindTypeClass(py::module_& ir)
         .def(py::init<>(), "Create a token type")
         .def_static("get", GetTokenType, "Get the token type");
 
+    // NoneType - const shared_ptr
+    py::class_<NoneType, Type, std::shared_ptr<NoneType>>(ir, "NoneType", "None (void-like) type")
+        .def(py::init<>(), "Create a none type")
+        .def_static("get", GetNoneType, "Get the none type");
+
     // LogicalTensorType - const shared_ptr
     py::class_<LogicalTensorType, Type, std::shared_ptr<LogicalTensorType>>(ir, "LogicalTensorType",
                                                                             "Logical tensor type")

@@ -561,6 +561,10 @@ std::string IRPrinter::Print(const TypePtr& type)
         return prefix_ + ".Token";
     }
 
+    if (auto none_type = As<NoneType>(type)) {
+        return prefix_ + ".None";
+    }
+
     if (auto logical_tensor_type = As<LogicalTensorType>(type)) {
         return prefix_ + ".Tensor";
     }
