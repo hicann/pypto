@@ -756,3 +756,306 @@ TEST_F(TestDevEncode, test_workspace_flex_io_outcast_skips_assemble_mark)
     EXPECT_EQ(flexWs.totalAssembleOutcastSlot, dyndev->inoutLink.assembleSlotIndexList.size());
     EXPECT_LT(flexWs.devTaskBoundaryOutcastNum, devProg->slotSize * stitchNumMax);
 }
+
+TEST_F(TestDevEncode, test_encode_multi_op_chain)
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 64);
+    TileShape::Current().SetVecTile(32, 32);
+    TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
+    constexpr int kLoopCount = 4;
+    int s = 32;
+    Tensor t0(DT_FP32, {s, s}, "t0");
+    Tensor t1(DT_FP32, {s, s}, "t1");
+    Tensor out(DT_FP32, {kLoopCount * s, s}, "out");
+
+    FUNCTION("multi_op_chain", {t0, t1}, {out})
+    {
+        LOOP("multi_op_chain_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(kLoopCount))
+        {
+            auto a = Add(t0, t1);
+            auto b = Add(a, t0);
+            auto c = Add(b, t1);
+            Assemble(c, {i * s, 0}, out);
+        }
+    }
+
+    auto funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    ASSERT_NE(funcDynDev, nullptr);
+    DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(funcDynDev->devProgBinary.data());
+    ASSERT_NE(devProg, nullptr);
+    EXPECT_GT(devProg->GetFunctionSize(), 0u);
+
+    devProg->RelocProgram(0, reinterpret_cast<uint64_t>(devProg), true);
+    devProg->controlFlowCache.isRecording = false;
+    uint64_t ctxAddr = devProg->controlFlowCache.contextWorkspaceAddr;
+    devProg->controlFlowCache.IncastOutcastAddrReloc(ctxAddr, 0, nullptr);
+    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(ctxAddr, 0, nullptr, nullptr, nullptr,
+                                                        devProg->GetParallelism());
+    devProg->controlFlowCache.RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(devProg), 0);
+    devProg->controlFlowCache.TaskAddrRelocWorkspace(ctxAddr, 0, nullptr);
+    devProg->controlFlowCache.TaskAddrRelocProgramAndCtrlCache(
+        reinterpret_cast<uint64_t>(devProg), reinterpret_cast<uint64_t>(&devProg->controlFlowCache), 0, 0);
+    devProg->controlFlowCache.isActivated = true;
+
+    DevAscendFunction* devFunc = devProg->GetFunction(0);
+    ASSERT_NE(devFunc, nullptr);
+    devFunc->Dump();
+    devProg->ResetRerun();
+    devProg->RuntimeVerify(0, 0);
+    devProg->ResetFromLaunch();
+}
+
+TEST_F(TestDevEncode, test_encode_multi_output_assemble)
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 64);
+    TileShape::Current().SetVecTile(32, 32);
+    TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
+    constexpr int kLoopCount = 4;
+    int s = 32;
+    Tensor t0(DT_FP32, {s, s}, "t0");
+    Tensor t1(DT_FP32, {s, s}, "t1");
+    Tensor out1(DT_FP32, {kLoopCount * s, s}, "out1");
+    Tensor out2(DT_FP32, {kLoopCount * s, s}, "out2");
+
+    FUNCTION("multi_output", {t0, t1}, {out1, out2})
+    {
+        LOOP("multi_output_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(kLoopCount))
+        {
+            auto a = Add(t0, t1);
+            auto b = Mul(t0, t1);
+            Assemble(a, {i * s, 0}, out1);
+            Assemble(b, {i * s, 0}, out2);
+        }
+    }
+
+    auto funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    ASSERT_NE(funcDynDev, nullptr);
+    DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(funcDynDev->devProgBinary.data());
+    ASSERT_NE(devProg, nullptr);
+    EXPECT_GT(devProg->GetFunctionSize(), 0u);
+    EXPECT_GE(devProg->slotSize, 2u);
+}
+
+TEST_F(TestDevEncode, test_encode_conditional_branches)
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 64);
+    TileShape::Current().SetVecTile(32, 32);
+    TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
+    constexpr int kLoopCount = 4;
+    int s = 32;
+    Tensor t0(DT_FP32, {s, s}, "t0");
+    Tensor t1(DT_FP32, {s, s}, "t1");
+    Tensor t2(DT_FP32, {s, s}, "t2");
+    Tensor out(DT_FP32, {kLoopCount * s, s}, "out");
+
+    FUNCTION("cond_branches", {t0, t1, t2}, {out})
+    {
+        LOOP("cond_branches_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(kLoopCount))
+        {
+            auto temp = Add(t0, t1);
+            SymbolicScalar sel = std::ternary(i < 2, i, i + 1);
+            IF(sel == i) { temp = Add(temp, t1); }
+            ELSE IF(sel == i + 1) { temp = Add(temp, t2); }
+            ELSE { temp = Add(temp, t0); }
+            Assemble(temp, {i * s, 0}, out);
+        }
+    }
+
+    auto funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    ASSERT_NE(funcDynDev, nullptr);
+    DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(funcDynDev->devProgBinary.data());
+    ASSERT_NE(devProg, nullptr);
+
+    devProg->RelocProgram(0, reinterpret_cast<uint64_t>(devProg), true);
+    devProg->controlFlowCache.isRecording = false;
+    uint64_t ctxAddr = devProg->controlFlowCache.contextWorkspaceAddr;
+    devProg->controlFlowCache.IncastOutcastAddrReloc(ctxAddr, 0, nullptr);
+    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(ctxAddr, 0, nullptr, nullptr, nullptr,
+                                                        devProg->GetParallelism());
+    devProg->controlFlowCache.RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(devProg), 0);
+    devProg->controlFlowCache.TaskAddrRelocWorkspace(ctxAddr, 0, nullptr);
+    devProg->controlFlowCache.TaskAddrRelocProgramAndCtrlCache(
+        reinterpret_cast<uint64_t>(devProg), reinterpret_cast<uint64_t>(&devProg->controlFlowCache), 0, 0);
+    devProg->controlFlowCache.isActivated = true;
+
+    devProg->Dump(0, true);
+    devProg->ResetRerun();
+    devProg->RuntimeVerify(0, 0);
+    devProg->ResetFromLaunch();
+}
+
+TEST_F(TestDevEncode, test_encode_single_iteration_loop)
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 64);
+    TileShape::Current().SetVecTile(32, 32);
+    TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
+    int s = 32;
+    Tensor t0(DT_FP32, {s, s}, "t0");
+    Tensor t1(DT_FP32, {s, s}, "t1");
+    Tensor out(DT_FP32, {s, s}, "out");
+
+    FUNCTION("single_iter", {t0, t1}, {out})
+    {
+        LOOP("single_iter_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            auto temp = Add(t0, t1);
+            Assemble(temp, {i * s, 0}, out);
+        }
+    }
+
+    auto funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    ASSERT_NE(funcDynDev, nullptr);
+    DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(funcDynDev->devProgBinary.data());
+    ASSERT_NE(devProg, nullptr);
+    EXPECT_GT(devProg->GetFunctionSize(), 0u);
+}
+
+TEST_F(TestDevEncode, test_workspace_budget_parallelism)
+{
+    WorkspaceDesc desc;
+    desc.maxStaticOutcastMem = 8192;
+    desc.totalExclusiveOutcastSlot = 2;
+    desc.totalAssembleOutcastSlot = 1;
+
+    WorkspaceDesc::WorkspacePerRootFunctionDesc profile;
+    profile.unroll = 2;
+    profile.rootInnerSpilledRawMem = 2048;
+    profile.rootTotalExclusiveOutcastRawMem = 1024;
+    desc.rootFuncDescList = {profile};
+
+    const WorkspaceDesc wsP1 = ResolvedWorkspaceAtStitchDepth(desc, 8, 1);
+    const WorkspaceDesc wsP2 = ResolvedWorkspaceAtStitchDepth(desc, 8, 2);
+    EXPECT_GE(wsP2.maxRootInnerSpilledMem, wsP1.maxRootInnerSpilledMem);
+}
+
+TEST_F(TestDevEncode, test_encode_fan_out)
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 64);
+    TileShape::Current().SetVecTile(32, 32);
+    TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
+    constexpr int kLoopCount = 4;
+    int s = 32;
+    Tensor t0(DT_FP32, {s, s}, "t0");
+    Tensor t1(DT_FP32, {s, s}, "t1");
+    Tensor out1(DT_FP32, {kLoopCount * s, s}, "out1");
+    Tensor out2(DT_FP32, {kLoopCount * s, s}, "out2");
+    Tensor out3(DT_FP32, {kLoopCount * s, s}, "out3");
+
+    FUNCTION("fan_out", {t0, t1}, {out1, out2, out3})
+    {
+        LOOP("fan_out_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(kLoopCount))
+        {
+            auto a = Add(t0, t1);
+            Assemble(a, {i * s, 0}, out1);
+            Assemble(a, {i * s, 0}, out2);
+            Assemble(a, {i * s, 0}, out3);
+        }
+    }
+
+    auto funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    ASSERT_NE(funcDynDev, nullptr);
+    DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(funcDynDev->devProgBinary.data());
+    ASSERT_NE(devProg, nullptr);
+    EXPECT_GT(devProg->GetFunctionSize(), 0u);
+    EXPECT_GE(devProg->slotSize, 3u);
+}
+
+TEST_F(TestDevEncode, test_encode_deep_chain)
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 64);
+    TileShape::Current().SetVecTile(32, 32);
+    TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
+    constexpr int kLoopCount = 4;
+    int s = 32;
+    Tensor t0(DT_FP32, {s, s}, "t0");
+    Tensor t1(DT_FP32, {s, s}, "t1");
+    Tensor out(DT_FP32, {kLoopCount * s, s}, "out");
+
+    FUNCTION("deep_chain", {t0, t1}, {out})
+    {
+        LOOP("deep_chain_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(kLoopCount))
+        {
+            auto a = Add(t0, t1);
+            auto b = Add(a, t0);
+            auto c = Add(b, t1);
+            auto d = Add(c, t0);
+            auto e = Add(d, t1);
+            auto f = Add(e, t0);
+            Assemble(f, {i * s, 0}, out);
+        }
+    }
+
+    auto funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    ASSERT_NE(funcDynDev, nullptr);
+    DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(funcDynDev->devProgBinary.data());
+    ASSERT_NE(devProg, nullptr);
+
+    devProg->RelocProgram(0, reinterpret_cast<uint64_t>(devProg), true);
+    devProg->controlFlowCache.isRecording = false;
+    uint64_t ctxAddr = devProg->controlFlowCache.contextWorkspaceAddr;
+    devProg->controlFlowCache.IncastOutcastAddrReloc(ctxAddr, 0, nullptr);
+    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(ctxAddr, 0, nullptr, nullptr, nullptr,
+                                                        devProg->GetParallelism());
+    devProg->controlFlowCache.RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(devProg), 0);
+    devProg->controlFlowCache.TaskAddrRelocWorkspace(ctxAddr, 0, nullptr);
+    devProg->controlFlowCache.TaskAddrRelocProgramAndCtrlCache(
+        reinterpret_cast<uint64_t>(devProg), reinterpret_cast<uint64_t>(&devProg->controlFlowCache), 0, 0);
+    devProg->controlFlowCache.isActivated = true;
+
+    devProg->Dump(0, true);
+    devProg->ResetRerun();
+    devProg->RuntimeVerify(0, 0);
+    devProg->ResetFromLaunch();
+}
+
+TEST_F(TestDevEncode, test_encode_wide_parallel)
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 64);
+    TileShape::Current().SetVecTile(32, 32);
+    TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
+    constexpr int kLoopCount = 4;
+    int s = 32;
+    Tensor t0(DT_FP32, {s, s}, "t0");
+    Tensor t1(DT_FP32, {s, s}, "t1");
+    Tensor t2(DT_FP32, {s, s}, "t2");
+    Tensor t3(DT_FP32, {s, s}, "t3");
+    Tensor out(DT_FP32, {kLoopCount * s, s}, "out");
+
+    FUNCTION("wide_parallel", {t0, t1, t2, t3}, {out})
+    {
+        LOOP("wide_parallel_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(kLoopCount))
+        {
+            auto a = Add(t0, t1);
+            auto b = Add(t2, t3);
+            auto c = Mul(a, b);
+            Assemble(c, {i * s, 0}, out);
+        }
+    }
+
+    auto funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    ASSERT_NE(funcDynDev, nullptr);
+    DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(funcDynDev->devProgBinary.data());
+    ASSERT_NE(devProg, nullptr);
+    EXPECT_GT(devProg->GetFunctionSize(), 0u);
+}
