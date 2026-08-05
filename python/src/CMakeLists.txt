@@ -48,6 +48,7 @@ if (NOT DEFINED PTO_FWK_SRC_ROOT)  # 在线编译
     set(CMAKE_CXX_STANDARD 17)  # 指定 C++ 语言使用 ISO C++17 标准
     set(CMAKE_CXX_STANDARD_REQUIRED ON)  # 要求严格支持 C++17 标准
     set(CMAKE_CXX_EXTENSIONS OFF)  # 禁用 C 编译器扩展, 使用纯 ISO C++17 标准
+    include("${_WhlLibFwkDir}/cmake/intf_pub.cmake")
     include("${_WhlLibFwkDir}/cmake/intf.cmake")
 
     option(BUILD_WITH_CANN "Build with CANN." ON)  # 在线编译场景仅会出现在内置 CANN 包场景
@@ -101,7 +102,6 @@ target_link_libraries(pypto_impl
         PRIVATE
             $<$<BOOL:${PTO_FWK_SRC_ROOT}>:json>
             c_sec
-            intf_pub_cxx17
             tile_fwk_intf_pub
             $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:tile_fwk_interface>
 )

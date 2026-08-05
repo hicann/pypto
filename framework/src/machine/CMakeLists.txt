@@ -39,7 +39,6 @@ target_link_libraries(tile_fwk_compiler
             $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_codegen>
             json
         PRIVATE
-            intf_pub_cxx17
             tile_fwk_intf_pub
             dl
             c_sec

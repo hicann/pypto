@@ -48,6 +48,7 @@ if (NOT DEFINED PTO_FWK_SRC_ROOT)  # 在线编译
     set(CMAKE_CXX_STANDARD 17)  # 指定 C++ 语言使用 ISO C++17 标准
     set(CMAKE_CXX_STANDARD_REQUIRED ON)  # 要求严格支持 C++17 标准
     set(CMAKE_CXX_EXTENSIONS OFF)  # 禁用 C 编译器扩展, 使用纯 ISO C++17 标准
+    include("${_WhlLibFwkDir}/cmake/intf_pub.cmake")
     include("${_WhlLibFwkDir}/cmake/intf.cmake")
 endif ()
 file(GLOB_RECURSE _Calculator_Srcs *.cpp)
@@ -58,7 +59,6 @@ add_library(tile_fwk_calculator SHARED)
 target_sources(tile_fwk_calculator PRIVATE ${_Calculator_Srcs})
 target_compile_options(tile_fwk_calculator
         PRIVATE
-            -D_GLIBCXX_USE_CXX11_ABI=${PY3_MOD_TORCH_C_GLIBCXX_USE_CXX11_ABI}
             -D__DEVICE__
 )
 target_include_directories(tile_fwk_calculator
@@ -89,6 +89,8 @@ target_link_options(tile_fwk_calculator
             -Wl,-no-as-needed,${PY3_MOD_TORCH_ROOT_PATH}/lib/libtorch_cpu.so -Wl,-as-needed
             -Wl,-no-as-needed,${PY3_MOD_TORCH_ROOT_PATH}/lib/libc10.so -Wl,-as-needed
 )
+
+set_target_properties(tile_fwk_calculator PROPERTIES CANN_GLIBCXX_USE_CXX11_ABI ${PY3_MOD_TORCH_C_GLIBCXX_USE_CXX11_ABI})
 
 if (NOT DEFINED PTO_FWK_SRC_ROOT)
     install(TARGETS tile_fwk_calculator LIBRARY DESTINATION "lib")

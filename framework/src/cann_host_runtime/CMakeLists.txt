@@ -17,7 +17,6 @@ target_compile_definitions(tile_fwk_cann_host_runtime
 )
 target_link_libraries(tile_fwk_cann_host_runtime
         PRIVATE
-            intf_pub_cxx17
             tile_fwk_intf_pub
             dl
             c_sec

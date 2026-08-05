@@ -19,7 +19,6 @@ target_link_libraries(tile_fwk_operator
             json
             c_sec
         PRIVATE
-            intf_pub_cxx17
             tile_fwk_intf_pub
             $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_interface>
             $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_utils>

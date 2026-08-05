@@ -14,6 +14,7 @@ project (device_pypto)
 
 init_cann_project(PREPEND_MODULE_PATH PRODUCT_SIDE "device")
 add_cann_target_options()
+include(../intf.cmake)
 
 get_filename_component(PYPTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 set(PTO_FWK_SRC_ROOT ${PYPTO_DIR})

@@ -17,7 +17,6 @@ add_library(tile_fwk_platform SHARED)
 target_sources(tile_fwk_platform PRIVATE ${_Platform_Srcs})
 target_link_libraries(tile_fwk_platform
 		PRIVATE
-			intf_pub_cxx17
 			tile_fwk_intf_pub
 			dl
 			c_sec

@@ -21,6 +21,8 @@ project(PTO_Framework
         VERSION 1.0.0
 )
 init_cann_project(PREPEND_MODULE_PATH)
+add_cann_target_options()
+
 if (ENABLE_FEATURE_PACKING_WHL_INTO_RUN)
     # run 包 名称
     #    统一用于 COMPONENT / share/info 路径 / scripts/package 路径
@@ -194,9 +196,13 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
 
     # 1. cmake 配置文件
     #    在线编译 pypto_impl 场景 / 在线编译 calculator 场景 均需要
-    install(FILES
-                cmake/intf.cmake
+    install(FILES cmake/intf.cmake
             DESTINATION ${PyPTO_WhlName}/lib/framework/cmake
+            COMPONENT pypto
+    )
+    install(FILES ${CANN_CMAKE_DIR}/intf_pub/intf_pub_linux.cmake
+            DESTINATION ${PyPTO_WhlName}/lib/framework/cmake
+            RENAME intf_pub.cmake
             COMPONENT pypto
     )
 

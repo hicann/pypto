@@ -30,7 +30,6 @@ target_link_libraries(tile_fwk_adapter
             $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:hcomm_headers>>
             $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:runtime_headers>>
             $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_utils>
-            intf_pub_cxx17
             tile_fwk_intf_pub
             dl
             c_sec

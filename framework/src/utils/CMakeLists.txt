@@ -23,7 +23,6 @@ target_include_directories(tile_fwk_utils
 )
 target_link_libraries(tile_fwk_utils
         PRIVATE
-            intf_pub_cxx17
             tile_fwk_intf_pub
             dl
             c_sec
