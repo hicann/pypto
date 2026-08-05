@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <vector>
 #include <mutex>
 #include "machine/runtime/runner/host_prof.h"
@@ -56,6 +57,10 @@ public:
     void ResetPerData() const;
     void SyncProfData(bool debugEnable);
     void SetDebugEnable();
+
+    // Use bundle-supplied AiCpu backend .so bytes for Init() instead of the on-disk copy.
+    // Must be called before Init(); a later call has no effect.
+    static void SetAiCpuSoOverride(std::vector<uint8_t> soBytes);
 
 private:
     DeviceRunner() = default;

@@ -115,6 +115,27 @@
       ]
     }
   },
+  "libtile_fwk_bundle.so": {
+    "Source-Header": {
+      "Self": [
+        "framework/src/machine/runtime/bundle/"
+      ],
+      "Area": [
+        "framework/src/adapter",
+        "framework/src/interface/",
+        "framework/src/passes/",
+        "framework/src/machine/",
+        "framework/src/utils"
+      ],
+      "Include": [
+        "framework/include/"
+      ],
+      "WhiteList": [
+      ],
+      "BlackList": [
+      ]
+    }
+  },
   "libtile_fwk_runtime.so": {
     "Source-Header": {
       "Self": [

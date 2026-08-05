@@ -9,6 +9,17 @@
 # -----------------------------------------------------------------------------------------------------------
 
 file(GLOB_RECURSE _Runtime_Srcs *.cpp)
+# The kernel-bundle load/query/launch half ships as its own ABI library (libtile_fwk_bundle.so, see bundle/
+# CMakeLists.txt) and must NOT be linked into tile_fwk_runtime as well. Only the pack half stays here, because
+# its hooks are called from emulation_launcher.cpp / kernel_binary.cpp -- that is what would otherwise make the
+# two targets circularly dependent.
+#
+# The split is by DIRECTORY, not by a file whitelist: everything directly under bundle/ belongs to the ABI
+# library, the pack half lives one level down in bundle/pack/ and is picked up by the recursive glob above.
+# bundle/CMakeLists.txt globs its own sources with the same non-recursive pattern, so new files on either side
+# land in the right target automatically with no list to keep in sync.
+file(GLOB _Bundle_Load_Srcs ${CMAKE_CURRENT_SOURCE_DIR}/bundle/*.cpp)
+list(REMOVE_ITEM _Runtime_Srcs ${_Bundle_Load_Srcs})
 file(GLOB_RECURSE _Device_Srcs ${PTO_FWK_SRC_ROOT}/framework/src/machine/device/*.cpp)
 file(GLOB _Device_Utils_Srcs
     ${PTO_FWK_SRC_ROOT}/framework/src/machine/utils/dynamic/dev_encode_function.cpp
@@ -45,3 +56,6 @@ target_link_libraries(tile_fwk_runtime
 
 PTO_Fwk_AnalysisTargetHeaderFiles(TARGET tile_fwk_runtime)
 PTO_Fwk_AnalysisTargetSymbols(TARGET tile_fwk_runtime)
+
+# Standalone kernel-bundle ABI library; must come after tile_fwk_runtime, which it links against.
+add_subdirectory(bundle)

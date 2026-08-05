@@ -30,6 +30,10 @@ struct Evaluator;
 std::vector<DevDynamicCellMatchStridePatch> PrepareDynamicCellMatchDescPatches(const DyndevFunctionAttribute& dynAttr,
                                                                                Evaluator& eval);
 
+// Overload for the kernel-bundle load path (launch-meta list only, no Function).
+std::vector<DevDynamicCellMatchStridePatch> PrepareDynamicCellMatchDescPatches(
+    const std::vector<DyndevFunctionAttribute::DynamicCellMatchLaunchMeta>& launchMetaList, Evaluator& eval);
+
 void PatchHostDynamicCellMatchTableDesc(DevAscendProgram* hostDevProg,
                                         const std::vector<DevDynamicCellMatchStridePatch>& patches);
 

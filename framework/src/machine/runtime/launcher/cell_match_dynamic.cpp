@@ -131,12 +131,18 @@ bool TryBuildDynamicCellMatchDesc(const DyndevFunctionAttribute::DynamicCellMatc
 std::vector<DevDynamicCellMatchStridePatch> PrepareDynamicCellMatchDescPatches(const DyndevFunctionAttribute& dynAttr,
                                                                                Evaluator& eval)
 {
+    return PrepareDynamicCellMatchDescPatches(dynAttr.dynamicCellMatchLaunchMetaList, eval);
+}
+
+std::vector<DevDynamicCellMatchStridePatch> PrepareDynamicCellMatchDescPatches(
+    const std::vector<DyndevFunctionAttribute::DynamicCellMatchLaunchMeta>& launchMetaList, Evaluator& eval)
+{
     std::vector<DevDynamicCellMatchStridePatch> patches;
-    if (dynAttr.dynamicCellMatchLaunchMetaList.empty()) {
+    if (launchMetaList.empty()) {
         return patches;
     }
 
-    for (const auto& launchMeta : dynAttr.dynamicCellMatchLaunchMetaList) {
+    for (const auto& launchMeta : launchMetaList) {
         DevCellMatchTableDesc patchedDesc;
         bool ready = TryBuildDynamicCellMatchDesc(launchMeta, eval, patchedDesc);
         if (!ready) {

@@ -123,6 +123,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
             tile_fwk_codegen
             tile_fwk_compiler
             tile_fwk_runtime
+            tile_fwk_bundle
             tile_fwk_simulation
             tile_fwk_simulation_pv
     )
@@ -186,6 +187,16 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     install(DIRECTORY framework/src/interface/machine/device/tilefwk/
             DESTINATION ${PyPTO_WhlName}/lib/include/tilefwk
             COMPONENT pypto
+            PATTERN "*.h"
+            PATTERN "*.hpp"
+            PATTERN ".svn" EXCLUDE
+            PATTERN ".git" EXCLUDE
+    )
+
+    # 3. kernel bundle 对外 ABI 头文件
+    #    libtile_fwk_bundle.so 的调用方(脱离编译前端, 仅消费 .pyptokb)需要
+    install(DIRECTORY framework/include/tile_fwk_bundle/
+            DESTINATION ${PyPTO_WhlName}/lib/include/tile_fwk_bundle
             PATTERN "*.h"
             PATTERN "*.hpp"
             PATTERN ".svn" EXCLUDE

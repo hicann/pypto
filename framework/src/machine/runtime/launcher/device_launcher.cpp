@@ -30,6 +30,7 @@
 #include "machine/runtime/launcher/emulation_launcher.h"
 #include "machine/runtime/launcher/aicore_model_launcher.h"
 #include "machine/runtime/launcher/ctrl_flow_cache_manager.h"
+#include "machine/runtime/bundle/pack/kernel_bundle_pack.h"
 #include "machine/runtime/runner/kernel_binary.h"
 #include "machine/host/perf_analysis.h"
 #include "interface/program/program.h"
@@ -541,6 +542,10 @@ uint8_t* DeviceLauncher::PrepareLaunch(KernelBinary* kernel, std::vector<DeviceT
     // findOrBuildDevCache===>kermode FindCtrlFlowcache
     uint8_t* ctrlFlowCache = cacheMgr.FindOrBuildDevCache(kernel, tensors);
     HOST_PERF_TRACE(TracePhase::FindCtrlFlowCache);
+    // The one place kernel-bundle packing is decided, for every launch mode and both cache flavours. The cache
+    // build above has by now stashed its bytes with the hook (value-dependent ops stash nothing, which is what
+    // makes their bundle cacheless). No-op unless PYPTO_ENABLE_KERNEL_BUNDLE=1; packs once per op.
+    bundle::KernelBundlePackHook::Instance().MaybePack(kernel->GetFunction()->GetDyndevAttribute().get());
     // emulation launch
     if (launchMode == LaunchMode::DEVICE_RT) {
         return ctrlFlowCache;

@@ -21,6 +21,7 @@
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
+#include "machine/runtime/bundle/pack/kernel_bundle_pack.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void* targ);
 
@@ -237,6 +238,11 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     if (outCtrlFlowCache) {
         *outCtrlFlowCache = hostCtrlFlowCache;
     }
+
+    // Hand the freshly relocated base-0 cache to the pack hook. Packing itself is decided at the launch choke
+    // point (DeviceLauncher::PrepareLaunch), not here -- see KernelBundlePackHook.
+    bundle::KernelBundlePackHook::Instance().StashCtrlFlowCache(
+        dynAttr.get(), reinterpret_cast<const uint8_t*>(hostCtrlFlowCache), hostCtrlFlowCache->usedCacheSize);
     return rc;
 }
 

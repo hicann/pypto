@@ -51,6 +51,9 @@ constexpr uint32_t HIGHT_BIT = 16;
 constexpr uint32_t SUB_CORE = 3;
 constexpr uint32_t AIV_PER_AICORE = 2;
 constexpr uint32_t AICPU_NUM_OF_RUN_AICPU_TASKS = 1;
+// AiCpu backend .so bytes from a kernel bundle; when non-empty, InitAiCpuSoBin uses these instead of the
+// on-disk copy. Set before Init() runs, so no locking is needed.
+std::vector<uint8_t> g_aicpuSoOverride;
 } // namespace
 
 DeviceRunner::~DeviceRunner() {}
@@ -208,22 +211,33 @@ int DeviceRunner::DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlSt
     return rcAicore + rcAicpu + rcCtrl;
 }
 
+void DeviceRunner::SetAiCpuSoOverride(std::vector<uint8_t> soBytes) { g_aicpuSoOverride = std::move(soBytes); }
+
 void DeviceRunner::InitAiCpuSoBin(DeviceArgs& devArgs)
 {
-    std::string fileName = GetPyptoLibPath() + "/libtilefwk_backend_server.so";
-    auto buffer = ReadFile(fileName);
+    std::vector<uint8_t> buffer;
+    std::string source;
+    if (!g_aicpuSoOverride.empty()) {
+        buffer = g_aicpuSoOverride; // bundle-supplied .so takes precedence over the on-disk copy
+        source = "kernel-bundle AICPU_SO";
+    } else {
+        std::string fileName = GetPyptoLibPath() + "/libtilefwk_backend_server.so";
+        source = fileName;
+        buffer = ReadFile(fileName);
+    }
     if (buffer.empty()) {
         MACHINE_LOGE(DevCommonErr::FILE_ERROR,
-                     "Read bin form tilefwk_backend_server.so failed, please check the so[%s]", fileName.c_str());
+                     "Read bin form tilefwk_backend_server.so failed, please check the so[%s]", source.c_str());
         return;
     }
     void* devBufferPtr = CopyDataToDevice(buffer.data(), buffer.size());
     if (devBufferPtr == nullptr) {
-        MACHINE_LOGE(DevCommonErr::MEMCPY_FAILED, "Failed to copy buffer of [%s] to device.", fileName.c_str());
+        MACHINE_LOGE(DevCommonErr::MEMCPY_FAILED, "Failed to copy buffer of [%s] to device.", source.c_str());
         return;
     }
     devArgs.aicpuSoBin = reinterpret_cast<uint64_t>(devBufferPtr);
     devArgs.aicpuSoLen = buffer.size();
+    MACHINE_LOGI("[aicpu-so] init backend server .so from %s, len=%zu", source.c_str(), buffer.size());
     HOST_PERF_TRACE(TracePhase::RunDevKernelInitAicpuSo);
 }
 
