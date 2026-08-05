@@ -1617,7 +1617,7 @@ class BuildCtrl(CMakeParam):
             n_workers = "auto"
         self.py_tests_run_pytest(
             dist=dist,
-            params=[(self.tests.utest, "python/tests/ut")],
+            params=self._get_python_utest_params(),
             ext=f"-n {n_workers} -W ignore::DeprecationWarning",
         )
 
@@ -1851,6 +1851,22 @@ class BuildCtrl(CMakeParam):
         for k, v in update_env.items():
             logging.info("%s=%s", k, v)
         return update_env
+
+    def _get_python_utest_params(self) -> List[Tuple[TestsFilterParam, str]]:
+        """根据 --utest_module 参数生成 Python UTest 的 pytest params 列表
+
+        将 utest_module 指定的模块名映射为 python/tests/ut 下的子目录路径，
+        每个模块对应一个 params 条目，支持多模块混跑。
+
+        :return: pytest params 列表，每个元素为 (TestsFilterParam, 路径)
+        :rtype: List[Tuple[TestsFilterParam, str]]
+        """
+        base = "python/tests/ut"
+        mod = self.tests.utest_module.filter_str
+        if not mod or mod in ("ON", "OFF"):
+            return [(self.tests.utest, base)]
+        modules = [m.strip() for m in mod.replace(":", ",").split(",") if m.strip()]
+        return [(self.tests.utest, f"{base}/{m}") for m in modules]
 
     def _py_generate_coverage(self):
         """生成 Python 场景覆盖率报告
