@@ -1824,11 +1824,9 @@ static std::string MakeBlockSubviewCodegenCCE(const ir::CallPtr& op, codegen::Co
     // Emit: declare tile, TASSIGN offset address, then SetValidShape (must be
     // after TASSIGN — TASSIGN overwrites the constructor's valid_shape).
     std::string temp_addr = base_addr + " + " + byte_offset_expr;
-    codegen.Emit(type_str + " " + temp_name + "(" + vs_row + ", " + vs_col +
-                 ");\n    "
-                 "TASSIGN(" +
-                 temp_name + ", " + temp_addr + ");\n    " + temp_name + ".SetValidShape(" + vs_row + ", " + vs_col +
-                 ");");
+    codegen.Emit(type_str + " " + temp_name + "(" + vs_row + ", " + vs_col + ");");
+    codegen.Emit("TASSIGN(" + temp_name + ", " + temp_addr + ");");
+    codegen.Emit(temp_name + ".SetValidShape(" + vs_row + ", " + vs_col + ");");
     codegen.SetTileAddress(temp_name, temp_addr);
     codegen.RegisterTileEmitShape(temp_name, vs_row, vs_col);
 
