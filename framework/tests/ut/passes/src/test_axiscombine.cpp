@@ -56,7 +56,11 @@ TEST_F(TestAxisCombine, Test1)
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 127}, "t1"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1}, "t2"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 127}, "t3"), true);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_ADD, {"t1", "t2"}, {"t3"}, "add", true), true);
+    std::vector<Opcode> opCodes{Opcode::OP_ADD};
+    std::vector<std::vector<std::string>> ioperands{{"t1", "t2"}};
+    std::vector<std::vector<std::string>> ooperands{{"t3"}};
+    std::vector<std::string> opNames{"add"};
+    EXPECT_EQ(graph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
     auto* rootFuncPtr = graph.GetFunction();
     rootFuncPtr->paramConfigs_.combineAxis = true;
     AxisCombine pass;
@@ -86,9 +90,12 @@ TEST_F(TestAxisCombine, Test2)
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 128}, "t1"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1}, "t2"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 128}, "t3"), true);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUM_SINGLE, {"t1"}, {"t2"}, "rowmax", true), true);
+    std::vector<Opcode> opCodes{Opcode::OP_ROWSUM_SINGLE, Opcode::OP_SUB};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t1", "t2"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}};
+    std::vector<std::string> opNames{"rowmax", "add"};
+    EXPECT_EQ(graph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
     graph.GetOp("rowmax")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 1);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_SUB, {"t1", "t2"}, {"t3"}, "add", true), true);
     auto* rootFuncPtr = graph.GetFunction();
     AxisCombine pass;
     rootFuncPtr->paramConfigs_.combineAxis = true;
@@ -117,17 +124,16 @@ TEST_F(TestAxisCombine, Test3)
     ComputationalGraphBuilder graph;
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 128}, "t1"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 1}, "t2"), true);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWMAX_SINGLE, {"t1"}, {"t2"}, "max", true), true);
-    graph.GetOp("max")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 1);
-
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 1}, "t3"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 1}, "t4"), true);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_ADD, {"t2", "t3"}, {"t4"}, "add1", true), true);
-
-    // left
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 16}, "t5"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 16}, "t6"), true);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_ADD, {"t2", "t5"}, {"t6"}, "add2", true), true);
+    std::vector<Opcode> opCodes{Opcode::OP_ROWMAX_SINGLE, Opcode::OP_ADD, Opcode::OP_ADD};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2", "t3"}, {"t2", "t5"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t4"}, {"t6"}};
+    std::vector<std::string> opNames{"max", "add1", "add2"};
+    EXPECT_EQ(graph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    graph.GetOp("max")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 1);
 
     auto* rootFuncPtr = graph.GetFunction();
     rootFuncPtr->paramConfigs_.combineAxis = true;
@@ -158,14 +164,14 @@ TEST_F(TestAxisCombine, Test4)
     ComputationalGraphBuilder graph;
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {-1, 1}, "t1"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {2, 1}, "t2"), true);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1"}, {"t2"}, "c1", true), true);
-
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {-1, 1}, "t3"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, "t4"), true);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t3"}, {"t4"}, "c2", true), true);
-
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {2, 1}, "t5"), true);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_EXPANDEXPDIF, {"t2", "t4"}, {"t5"}, "expanddif", true), true);
+    std::vector<Opcode> opCodes{Opcode::OP_COPY_IN, Opcode::OP_COPY_IN, Opcode::OP_EXPANDEXPDIF};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t3"}, {"t2", "t4"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t4"}, {"t5"}};
+    std::vector<std::string> opNames{"c1", "c2", "expanddif"};
+    EXPECT_EQ(graph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
 
     auto* rootFuncPtr = graph.GetFunction();
     rootFuncPtr->paramConfigs_.combineAxis = true;
