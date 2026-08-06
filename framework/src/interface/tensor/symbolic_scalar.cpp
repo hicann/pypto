@@ -591,6 +591,18 @@ bool SymbolicExpressionTable::CheckExprDependCore(const RawSymbolicScalarPtr& ra
     }
 }
 
+static RawSymbolicScalarPtr AsRawSymbolicScalar(const pypto::ir::ExprPtr& expr)
+{
+    if (auto val = ir::AsMut<ir::ConstInt>(expr))
+        return std::static_pointer_cast<RawSymbolicImmediate>(val);
+    if (auto var = ir::AsMut<ir::Var>(expr))
+        return std::static_pointer_cast<RawSymbolicSymbol>(var);
+    if (auto sexpr = ir::AsMut<ir::ScalarExpr>(expr)) {
+        return std::static_pointer_cast<RawSymbolicExpression>(sexpr);
+    }
+    return nullptr;
+}
+
 void RawSymbolicScalar::FlattenOperands(const std::vector<RawSymbolicScalarPtr>& inOperandList,
                                         SymbolicOpcode objOpcode, std::vector<RawSymbolicScalarPtr>& outOperandList)
 {
@@ -876,6 +888,67 @@ pypto::ir::ExprPtr SymbolicScalar::AsExpr() const
     }
 }
 
+void SymbolicScalar::GetVarRefs(std::unordered_set<const ir::Var*>& out) const
+{
+    std::function<void(RawSymbolicScalarPtr)> collect;
+
+    collect = [&](const auto& raw) {
+        if (!raw || raw->IsImmediate()) {
+            return;
+        }
+        if (raw->IsSymbol()) {
+            out.insert(std::dynamic_pointer_cast<RawSymbolicSymbol>(raw).get());
+        } else if (raw->IsExpression()) {
+            for (const auto& operand : raw->GetExpressionOperandList()) {
+                collect(operand);
+            }
+        }
+    };
+
+    collect(raw_);
+}
+
+SymbolicScalar SymbolicScalar::SubstituteVars(const std::unordered_map<ir::VarPtr, ir::ExprPtr>& varMap)
+{
+    std::function<RawSymbolicScalarPtr(const RawSymbolicScalarPtr&)> substitute;
+    std::unordered_map<RawSymbolicScalar*, RawSymbolicScalarPtr> exprMap;
+
+    substitute = [&](const RawSymbolicScalarPtr& raw) -> RawSymbolicScalarPtr {
+        if (!raw || raw->IsImmediate()) {
+            return raw;
+        }
+        if (raw->IsSymbol()) {
+            auto v = std::dynamic_pointer_cast<RawSymbolicSymbol>(raw);
+            auto it = varMap.find(v);
+            if (it != varMap.end()) {
+                return AsRawSymbolicScalar(it->second);
+            }
+            return raw;
+        }
+
+        auto it = exprMap.find(raw.get());
+        if (it != exprMap.end()) {
+            return it->second;
+        }
+        auto expr = std::dynamic_pointer_cast<RawSymbolicExpression>(raw);
+        bool changed = false;
+        std::vector<RawSymbolicScalarPtr> nops;
+        for (auto& operand : expr->OperandList()) {
+            auto nop = substitute(operand);
+            nops.push_back(nop);
+            changed = changed || (nop.get() != operand.get());
+        }
+        if (!changed) {
+            return raw;
+        }
+        expr = std::make_shared<RawSymbolicExpression>(expr->Opcode(), nops);
+        exprMap[raw.get()] = expr;
+        return expr;
+    };
+
+    return SymbolicScalar(substitute(raw_));
+}
+
 SymbolicScalar SymbolicScalar::Min(const SymbolicScalar& sval) const
 {
     if (ConcreteValid() && sval.ConcreteValid()) {
@@ -920,14 +993,7 @@ SymbolicScalar::SymbolicScalar(RawSymbolicScalarPtr raw) : raw_(raw)
 
 SymbolicScalar SymbolicScalar::FromExpr(const pypto::ir::ExprPtr& expr)
 {
-    if (auto val = ir::AsMut<ir::ConstInt>(expr))
-        return SymbolicScalar(std::static_pointer_cast<RawSymbolicImmediate>(val));
-    if (auto var = ir::AsMut<ir::Var>(expr))
-        return SymbolicScalar(std::static_pointer_cast<RawSymbolicSymbol>(var));
-    if (auto sexpr = ir::AsMut<ir::ScalarExpr>(expr)) {
-        return SymbolicScalar(std::static_pointer_cast<RawSymbolicExpression>(sexpr));
-    }
-    return SymbolicScalar();
+    return SymbolicScalar(AsRawSymbolicScalar(expr));
 }
 
 std::vector<int64_t> SymbolicScalar::Concrete(const std::vector<SymbolicScalar>& scalarList, int64_t defValue)

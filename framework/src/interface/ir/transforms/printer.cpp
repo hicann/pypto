@@ -302,6 +302,15 @@ static void PrintKwargValue(std::ostream& stream, const std::string& prefix, con
             stream << values[j];
         }
         stream << "]";
+    } else if (value.type() == typeid(std::vector<int64_t>)) {
+        const auto& values = AnyCast<std::vector<int64_t>>(value, key);
+        stream << "[";
+        for (size_t j = 0; j < values.size(); ++j) {
+            if (j != 0)
+                stream << ", ";
+            stream << values[j];
+        }
+        stream << "]";
     } else if (value.type() == typeid(std::vector<SymbolicScalar>)) {
         const auto& values = AnyCast<std::vector<SymbolicScalar>>(value, key);
         stream << "[";
@@ -928,6 +937,19 @@ void IRPrinter::VisitStmt_(const TensorOpStmtPtr& op)
             PrintKwargValue(stream_, prefix_, op->attrs_[i].first, op->attrs_[i].second);
         }
         stream_ << "]";
+    } else {
+        auto attrs = CollectTensorOpAttrs(op);
+        if (!attrs.empty()) {
+            stream_ << ", attrs=[";
+            bool need_comma = false;
+            for (auto [name, val] : attrs) {
+                if (need_comma)
+                    stream_ << ", ";
+                need_comma = true;
+                PrintKwargValue(stream_, prefix_, name, val);
+            }
+            stream_ << "]";
+        }
     }
     stream_ << ")";
 }

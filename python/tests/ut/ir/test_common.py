@@ -23,6 +23,7 @@ def check_snapshot(func, golden):
                 actual.splitlines(keepends=True),
             )
         )
+        print(actual)
         raise AssertionError("IR snapshot mismatch in %s:\n%s" % (func.name, diff))
 
 

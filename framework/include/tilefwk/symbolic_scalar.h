@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include "error.h"
 
 #include "ir/expr.h"
@@ -66,6 +67,8 @@ public:
 
     pypto::ir::VarPtr AsVar() const;
     pypto::ir::ExprPtr AsExpr() const;
+    void GetVarRefs(std::unordered_set<const pypto::ir::Var*>& out) const;
+    SymbolicScalar SubstituteVars(const std::unordered_map<pypto::ir::VarPtr, pypto::ir::ExprPtr>& vars);
 
     operator int() const
     {

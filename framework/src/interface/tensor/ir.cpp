@@ -24,8 +24,8 @@
 #include "ir_finalize.h"
 
 using npu::tile_fwk::LogicalTensor;
+using npu::tile_fwk::Operation;
 using npu::tile_fwk::RawSymbolicExpression;
-using npu::tile_fwk::RawTensor;
 
 namespace pypto::ir {
 std::string DumpScalarExpr(const ScalarExprPtr& op)
@@ -40,6 +40,18 @@ std::string DumpTensorVar(const VarPtr& var)
     auto t = std::dynamic_pointer_cast<const LogicalTensor>(var);
     ASSERT(t) << "not a logical tensor";
     return var->name_ + "@" + std::to_string(t->tensor->memoryId);
+}
+
+std::map<std::string, std::any> CollectTensorOpAttrs(const TensorOpStmtPtr& top)
+{
+    std::map<std::string, std::any> attrs;
+
+    auto op = std::dynamic_pointer_cast<Operation>(std::const_pointer_cast<TensorOpStmt>(top));
+    if (op && op->GetOpAttribute()) {
+        auto opAttr = op->GetOpAttribute();
+        opAttr->CollectAttrs(attrs);
+    }
+    return attrs;
 }
 
 Pass pass::AggressiveDCE()

@@ -10,10 +10,13 @@
 #pragma once
 
 #include <string>
+#include <map>
 
 #include "ir/scalar_expr.h"
+#include "ir/stmt.h"
 
 namespace pypto::ir {
 std::string DumpScalarExpr(const ScalarExprPtr& op);
 std::string DumpTensorVar(const VarPtr& tensor);
+std::map<std::string, std::any> CollectTensorOpAttrs(const TensorOpStmtPtr& ptr);
 } // namespace pypto::ir

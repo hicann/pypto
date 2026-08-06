@@ -17,6 +17,8 @@
 
 #include "tilefwk/symbolic_scalar.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/operation/operation.h"
+#include "interface/tensor/ir_tensor_op_rebuild.h"
 
 using npu::tile_fwk::SatStatus;
 using npu::tile_fwk::SymbolicScalar;
@@ -26,6 +28,7 @@ namespace pypto::ir {
 namespace {
 
 using npu::tile_fwk::LogicalTensor;
+using npu::tile_fwk::Operation;
 using utils::SubstituteVars;
 using utils::VarExprMap;
 
@@ -46,6 +49,46 @@ ExprPtr LookupVarInExpr(ExprPtr expr, const VarExprMap& varMap)
         return it->second;
     }
     return expr;
+}
+
+StmtPtr SubstituteStmt(StmtPtr stmt, const VarExprMap& varMap)
+{
+    if (!stmt || varMap.empty()) {
+        return stmt;
+    }
+
+    stmt = SubstituteVars(stmt, varMap);
+    auto top = As<TensorOpStmt>(stmt);
+    if (!top) {
+        return stmt;
+    }
+
+    auto op = std::dynamic_pointer_cast<Operation>(std::const_pointer_cast<TensorOpStmt>(top));
+    if (!op) {
+        return stmt;
+    }
+
+    bool changed = false;
+    for (auto& attr : op->GetDynamicAttributeList()) {
+        // SubstituteVars returns a new SymbolicScalar; compare raw pointers
+        auto& s = attr.get();
+        if (s.SubstituteVars(varMap).Raw() != s.Raw()) {
+            changed = true;
+            break;
+        }
+    }
+    if (!changed) {
+        return stmt;
+    }
+
+    auto cloned = npu::tile_fwk::RebuildTensorOpStmt(top, op->result_, op->result_token_, op->args_, op->tokens_,
+                                                     Span::Unknown());
+    op = std::dynamic_pointer_cast<Operation>(std::const_pointer_cast<Stmt>(cloned));
+    for (auto& attr : op->GetDynamicAttributeList()) {
+        auto& s = attr.get();
+        s = s.SubstituteVars(varMap).Simplify();
+    }
+    return cloned;
 }
 
 void BuildYieldVarMap(IfStmtPtr ifStmt, SeqStmtsPtr body, VarExprMap& varMap)
@@ -154,7 +197,7 @@ SeqStmtsPtr BuildAppendedBranch(IfStmtPtr ifStmt, SeqStmtsPtr branch, const std:
         BuildYieldVarMap(ifStmt, branch, yieldMap);
     }
     for (auto& s : stmts) {
-        out.push_back(SubstituteVars(s, yieldMap));
+        out.push_back(SubstituteStmt(s, yieldMap));
         ExtendYieldMap(s, yieldMap);
     }
     auto values = ExtractYieldValues(branch);
@@ -175,12 +218,12 @@ SeqStmtsPtr BuildPrependedBranch(const std::vector<StmtPtr>& stmts, std::optiona
     std::vector<StmtPtr> out;
     VarExprMap yieldMap;
     for (auto& s : stmts) {
-        out.push_back(SubstituteVars(s, yieldMap));
+        out.push_back(SubstituteStmt(s, yieldMap));
         ExtendYieldMap(s, yieldMap);
     }
     if (branch) {
         for (auto& s : RemoveLastYieldStmt(branch.value()->stmts_)) {
-            out.push_back(SubstituteVars(s, yieldMap));
+            out.push_back(SubstituteStmt(s, yieldMap));
         }
     }
     std::vector<ExprPtr> values(newVars.begin(), newVars.end());

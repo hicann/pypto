@@ -18,12 +18,15 @@
 #include "ir/expr.h"
 #include "ir/stmt.h"
 #include "ir/transforms/base/visitor.h"
+#include "interface/operation/operation.h"
 
 namespace pypto {
 namespace ir {
 namespace utils {
 
 namespace {
+
+using npu::tile_fwk::Operation;
 
 class VarUseCollector : public IRVisitor {
 public:
@@ -63,6 +66,18 @@ private:
     {
         if (!skip_iter_updates_) {
             IRVisitor::VisitStmt_(op);
+        }
+    }
+
+    void VisitStmt_(const TensorOpStmtPtr& op) override
+    {
+        IRVisitor::VisitStmt_(op);
+
+        auto operation = std::dynamic_pointer_cast<Operation>(std::const_pointer_cast<TensorOpStmt>(op));
+        if (operation) {
+            for (auto& attr : operation->GetDynamicAttributeList()) {
+                attr.get().GetVarRefs(var_uses);
+            }
         }
     }
 
