@@ -398,8 +398,12 @@ def fmod(
     """
     if isinstance(other, pypto_impl.Tensor):
         return pypto_impl.Fmod(input, other, precision_type)
-    else:
-        return pypto_impl.Fmod(input, pypto_impl.Element(input.dtype, other), precision_type)
+    if isinstance(other, float):
+        if np.isnan(other):
+            raise PyptoError(0xF00002, ValueError("fmod(): other must not be NaN."))
+        if np.isinf(other):
+            raise PyptoError(0xF00002, ValueError("fmod(): other must not be inf."))
+    return pypto_impl.Fmod(input, pypto_impl.Element(input.dtype, other), precision_type)
 
 
 @op_wrapper
