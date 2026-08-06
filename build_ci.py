@@ -178,6 +178,7 @@ class FeatureParam(CMakeParam):
     whl_editable: bool = False  # 以 editable 模式编译 whl 包
     whl_break_system_packages: bool = False
     just_build_whl: bool = False  # 只构建 whl 包，不打包进入 run
+    package_type: str = "run"  # 安装包格式: run/rpm/deb/all
 
     def __init__(self, args):
         """初始化 FeatureParam 实例
@@ -193,6 +194,7 @@ class FeatureParam(CMakeParam):
             logging.warning("Environment variable ASCEND_HOME_PATH is unset/empty, falling back to cost_model backend.")
             self.backend_type = "cost_model"
         self.just_build_whl = args.just_build_whl
+        self.package_type = args.pkg_type
         if self.just_build_whl:
             py_abi = args.py_abi
             plat_name = args.plat_name
@@ -224,6 +226,7 @@ class FeatureParam(CMakeParam):
             desc += f"\n    Editable                : {self.whl_editable}"
             desc += f"\n    BreakSystemPackages     : {self.whl_break_system_packages}"
         desc += f"\n    Backend                 : {self.backend_type}"
+        desc += f"\n    PackageType             : {self.package_type}"
         return desc
 
     @property
@@ -310,6 +313,15 @@ class FeatureParam(CMakeParam):
         )
         parser.add_argument(
             "--just_build_whl", action="store_true", default=False, help="Build whl only, without packing into run."
+        )
+        parser.add_argument(
+            "--pkg-type",
+            "--pkg_type",
+            dest="pkg_type",
+            type=str,
+            default="run",
+            choices=["run", "rpm", "deb", "all"],
+            help="Specify package type (run/rpm/deb/all), default: run.",
         )
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
@@ -1577,6 +1589,7 @@ class BuildCtrl(CMakeParam):
         cmd += " -DENABLE_FEATURE_PACKING_WHL_INTO_RUN=ON"
         cmd += f" -DWHL_FILE_PATH={whl_file}"
         cmd += f" -DRUN_OUTPUT_DIR={self.install_root}"
+        cmd += f" -DPACKAGE_TYPE={self.feature.package_type}"
         cmd += f" -DASCEND_CANN_PACKAGE_PATH={self._resolve_ascend_cann_package_path()}"
         cmd += f" -DPYPTO_THIRD_PARTY_PATH={self.third_party_path}" if self.third_party_path else ""
         update_env = self.get_cfg_update_env()

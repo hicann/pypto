@@ -13,6 +13,7 @@ cmake_minimum_required(VERSION 3.16.3)
 # 必须在 project() 命令之前执行
 option(ENABLE_FEATURE_PACKING_WHL_INTO_RUN "Pack whl into run package" OFF)
 option(ENABLE_UNIFIED_BUILD "Enable CANN unified full-source build (CMake-driven whl + run)" OFF)
+set(PACKAGE_TYPE "run" CACHE STRING "Package type: run, rpm, deb, or all")
 include(cmake/prepare.cmake)
 include(cmake/fetch_cann_cmake.cmake)
 
@@ -33,7 +34,7 @@ if (ENABLE_FEATURE_PACKING_WHL_INTO_RUN)
     add_cann_version_info_targets()
     # run 包 打包流程
     include(cmake/package.cmake)
-    set_cann_cpack_config(${PyPTO_PkgName} OUTPUT "${RUN_OUTPUT_DIR}")
+    set_cann_cpack_config(${PyPTO_PkgName} OUTPUT "${RUN_OUTPUT_DIR}" PACKAGE_TYPE "${PACKAGE_TYPE}")
     return()
 endif()
 
@@ -529,5 +530,5 @@ if (ENABLE_UNIFIED_BUILD AND ENABLE_FEATURE_PYTHON_FRONT_END)
     add_cann_version_info_targets()
 
     include(cmake/package.cmake)
-    set_cann_cpack_config(pypto PRE_PKG ${CMAKE_CURRENT_SOURCE_DIR}/cmake/pre_package.cmake)
+    set_cann_cpack_config(pypto PRE_PKG ${CMAKE_CURRENT_SOURCE_DIR}/cmake/pre_package.cmake PACKAGE_TYPE "${PACKAGE_TYPE}")
 endif ()

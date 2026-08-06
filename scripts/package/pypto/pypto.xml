@@ -22,7 +22,7 @@
         <copy_all>true</copy_all>
     </package_info>
     <version_info install="true" install_path="pypto" install_own="$username:$usergroup" install_mod="440"/>
-    <generate_info value="scene.info" dst_path="share/info/pypto" install_path="share/info/pypto" install_mod="440">
+    <generate_info value="scene.info" dst_path="share/info/pypto" install_path="share/info/pypto" install_mod="644">
         <os>$(OS_NAME)</os>
         <os_version>$(OS_VER)</os_version>
         <arch>$(ARCH)</arch>
@@ -51,7 +51,7 @@
         <file value="script_operator.inc" copy_type="source"/>
         <file value="version_cfg.inc" copy_type="source"/>
         <file value="version_compatiable.inc"/>
-        <file value="version.info" install_path="share/info/pypto" dst_path="share/info/pypto"/>
+        <file value="version.info" install_path="share/info/pypto" dst_path="share/info/pypto" install_mod="440"/>
     </file_info>
     <block_info dependtree="false" dst_path="$(TARGET_ENV)" block_conf_path="ascend">
         <block name="EngineeringCommon"/>
