@@ -236,6 +236,9 @@ public:
     void RegisterStructDefinition(const ir::TupleTypePtr& tuple_type, const std::string& type_name,
                                   const std::vector<std::string>& fields, bool is_tiling);
 
+    /** \brief Get the emitted C++ member type for a struct field. */
+    [[nodiscard]] std::string GetStructFieldTypeString(const ir::TypePtr& type) const;
+
     /**
      * \brief Mark a registered TupleType as requiring volatile member declarations.
      */

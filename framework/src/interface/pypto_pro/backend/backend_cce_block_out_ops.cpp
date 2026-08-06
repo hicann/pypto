@@ -2147,7 +2147,11 @@ REGISTER_BACKEND_OP(BackendCCE, "struct.create")
         for (size_t i = 0; i < fields.size(); ++i) {
             if (i)
                 init += ", ";
-            init += "." + fields[i] + "=" + codegen.GetExprAsCode(op->args_[i]);
+            std::string value = codegen.GetExprAsCode(op->args_[i]);
+            if (ir::As<ir::ScalarType>(tuple_type->types_[i])) {
+                value = "static_cast<" + codegen.GetStructFieldTypeString(tuple_type->types_[i]) + ">(" + value + ")";
+            }
+            init += "." + fields[i] + "=" + value;
         }
         init += "};";
         codegen.Emit(init);

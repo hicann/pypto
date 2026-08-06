@@ -1124,6 +1124,26 @@ TEST(BackendCCEBlockOutOps, StructCreate)
     EXPECT_CONTAINS(code, "};");
 }
 
+TEST(BackendCCEBlockOutOps, StructCreateCastsScalarInitializerToFieldType)
+{
+    TestableCCECodegen codegen(ir::SectionKind::Cube);
+    codegen.SetCurrentTargetVar("run_info");
+    auto index = MakeScalarType(ir::DataType::INDEX);
+    auto tuple_type = std::make_shared<const ir::TupleType>(std::vector<ir::TypePtr>{index});
+    auto call = std::make_shared<const ir::Call>("struct.create", std::vector<ir::ExprPtr>{MakeVar("work_id", index)},
+                                                 std::vector<std::pair<std::string, std::any>>{
+                                                     {"name", std::string("RunInfo")},
+                                                     {"fields", std::vector<std::string>{"workId"}},
+                                                 },
+                                                 tuple_type, ir::Span::Unknown());
+
+    auto* info = BackendCCE::Instance().GetOpInfo("struct.create");
+    ASSERT_NE(info, nullptr);
+    info->codegen_func(call, codegen);
+
+    EXPECT_CONTAINS(codegen.GetEmittedCode(), ".workId=static_cast<int64_t>(work_id)");
+}
+
 TEST(BackendCCEBlockOutOps, GeneratesStructCreateThroughAssignStmt)
 {
     auto tile = MakeTileType();

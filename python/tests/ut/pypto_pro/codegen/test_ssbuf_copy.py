@@ -75,6 +75,14 @@ def ssbuf_tiling_kernel(
         pl.ssbuf_load(tiling, 0)
 
 
+@pl.jit()
+def struct_scalar_initializer_kernel(x: pl.Tensor[[1], pl.DT_INT32]):
+    with pl.section_cube():
+        for work_id in pl.range(0, 2):
+            run_info = pl.struct("RunInfo", workId=work_id, offset=work_id // 2)
+            pl.printf("workId=%d, offset=%d", run_info.workId, run_info.offset)
+
+
 def test_ssbuf_store_and_load_codegen():
     cpp = _compile_to_cce(ssbuf_copy_kernel)
     logging.info("%s", cpp)
@@ -104,3 +112,10 @@ def test_ssbuf_tiling_header_uses_volatile_fields():
     assert "volatile int64_t offsets[2];" in header
     assert '#include "SsbufTiling_tiling.h"' in result.content
     assert "class SsbufTiling" not in result.content
+
+
+def test_struct_scalar_initializers_are_cast_to_member_type():
+    cpp = _compile_to_cce(struct_scalar_initializer_kernel)
+    assert "for (uint64_t work_id_0 = 0;" in cpp
+    assert ".workId=static_cast<int64_t>(work_id_0)" in cpp
+    assert ".offset=static_cast<int64_t>(" in cpp

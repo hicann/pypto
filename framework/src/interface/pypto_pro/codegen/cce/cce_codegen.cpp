@@ -2598,6 +2598,8 @@ std::string StructFieldTypeSignature(const ir::TypePtr& type)
 
 } // namespace
 
+std::string CCECodegen::GetStructFieldTypeString(const ir::TypePtr& type) const { return CppTypeForField(type); }
+
 void CCECodegen::RegisterStructDefinition(const ir::TupleTypePtr& tuple_type, const std::string& type_name,
                                           const std::vector<std::string>& fields, bool is_tiling)
 {
