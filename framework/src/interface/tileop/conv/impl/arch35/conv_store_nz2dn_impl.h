@@ -27,7 +27,7 @@
  * offset3: dst_w_offset
  * offset4: 0 (占位)
  */
-template <typename T, typename U>
+template <int64_t reluType, typename T, typename U>
 INLINE void TStoreConv2DNZ2DN(T& dst, U& src, const OffsetInfo& offsetInfo, const int64_t& realM, const int64_t& realN,
                               const int64_t& realCutW, const int64_t& cutW)
 {
@@ -56,7 +56,8 @@ INLINE void TStoreConv2DNZ2DN(T& dst, U& src, const OffsetInfo& offsetInfo, cons
                              strideDim4(dstStrideN, dstStrideC, dstStrideH, dstStrideW));
         tileData srcL0C(realCutW, realN);
         pto::TASSIGN(srcL0C, (uint64_t)src.GetAddr() + loopH * cutW * BLOCK_CUBE_M_N * sizeof(typename U::Type));
-        pto::TSTORE(dstGlobal, srcL0C);
+        pto::TSTORE<tileData, globalData, pto::AtomicType::AtomicNone,
+                    reluType == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(dstGlobal, srcL0C);
         gmOffset += dstW;
     }
 }
@@ -71,7 +72,7 @@ INLINE void TStoreConv2DNZ2DN(T& dst, U& src, const OffsetInfo& offsetInfo, cons
  * offset3: dst_h_offset
  * offset4: dst_w_offset
  */
-template <typename T, typename U>
+template <int64_t reluType, typename T, typename U>
 INLINE void TStoreConv3DNZ2DN(T& dst, U& src, const OffsetInfo& offsetInfo, const int64_t& realM, const int64_t& realN,
                               const int64_t& realCutW, const int64_t& cutW)
 {
@@ -102,18 +103,19 @@ INLINE void TStoreConv3DNZ2DN(T& dst, U& src, const OffsetInfo& offsetInfo, cons
                              strideDim5(dstStrideN, dstStrideC, dstStrideD, dstStrideH, dstStrideW));
         tileData srcL0C(realCutW, realN);
         pto::TASSIGN(srcL0C, (uint64_t)src.GetAddr() + loopH * cutW * BLOCK_CUBE_M_N * sizeof(typename U::Type));
-        pto::TSTORE(dstGlobal, srcL0C);
+        pto::TSTORE<tileData, globalData, pto::AtomicType::AtomicNone,
+                    reluType == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(dstGlobal, srcL0C);
     }
 }
 
-template <bool isConv3D, typename T, typename U>
+template <bool isConv3D, int64_t reluType, typename T, typename U>
 INLINE void TStoreConvNZ2DN(T& dst, U& src, const OffsetInfo& offsetInfo, const int64_t& realM, const int64_t& realN,
                             const int64_t& realCutW, const int64_t& cutW)
 {
     if constexpr (isConv3D) {
-        TStoreConv3DNZ2DN(dst, src, offsetInfo, realM, realN, realCutW, cutW);
+        TStoreConv3DNZ2DN<reluType>(dst, src, offsetInfo, realM, realN, realCutW, cutW);
     } else {
-        TStoreConv2DNZ2DN(dst, src, offsetInfo, realM, realN, realCutW, cutW);
+        TStoreConv2DNZ2DN<reluType>(dst, src, offsetInfo, realM, realN, realCutW, cutW);
     }
 }
 

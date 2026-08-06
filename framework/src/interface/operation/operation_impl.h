@@ -237,6 +237,7 @@ const std::string A_MUL_B_ACT_M = OP_ATTR_PREFIX + "act_m";
 const std::string A_MUL_B_ACT_K = OP_ATTR_PREFIX + "act_k";
 const std::string A_MUL_B_ACT_N = OP_ATTR_PREFIX + "act_n";
 const std::string A_MUL_B_BIAS_ATTR = OP_ATTR_PREFIX + "has_bias";
+const std::string CONV_RELU_ATTR = OP_ATTR_PREFIX + "relu_type";
 const std::vector<int64_t> CONV2D_ATTR_DEFAULT_LIST = {1, 1};
 const std::vector<int64_t> CONV3D_ATTR_DEFAULT_LIST = {1, 1, 1};
 const std::vector<int64_t> CONV2D_PAD_ATTR_DEFAULT_LIST = {0, 0, 0, 0};
@@ -250,6 +251,7 @@ public:
     static const std::string isConv3D;
     static const std::string cutW;     // L0C M方向(hw合轴)的w大小
     static const std::string realCutW; // L0C M方向(hw合轴)的w的validshape
+    static const std::string reluType;
 };
 
 enum class CopyInMode : int {
@@ -281,6 +283,7 @@ struct ConvAttrParam {
     bool isConv1D = false;
     bool isConv3D = false;
     bool hasBias = false;
+    int64_t reluType = 0;
     bool isInOutTensorNZ = false;
 
     ConvAttrParam() = default;

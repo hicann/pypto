@@ -45,7 +45,7 @@ TILEOP void TLoadConv(T& dst, U& src, const int64_t& offset0, const int64_t& off
 }
 
 // Copy data from L0C to DDR
-template <CopyOutMode mode, bool isConv3D, typename T, typename U>
+template <CopyOutMode mode, bool isConv3D, int64_t reluType, typename T, typename U>
 TILEOP void TStoreConv(T& dst, U& src, const int64_t& offset0, const int64_t& offset1, const int64_t& offset2,
                        const int64_t& offset3, const int64_t& offset4, const int64_t& realM, const int64_t& realN,
                        const int64_t& realCutW, const int64_t& cutW)
@@ -57,9 +57,9 @@ TILEOP void TStoreConv(T& dst, U& src, const int64_t& offset0, const int64_t& of
     OffsetInfo offsetInfo = {offset0, offset1, offset2, offset3, offset4};
     if constexpr (mode == CopyOutMode::NZ2ND) {
     } else if constexpr (mode == CopyOutMode::NZ2DN) {
-        TStoreConvNZ2DN<isConv3D>(dst, src, offsetInfo, realM, realN, realCutW, cutW);
+        TStoreConvNZ2DN<isConv3D, reluType>(dst, src, offsetInfo, realM, realN, realCutW, cutW);
     } else if constexpr (mode == CopyOutMode::NZ2NZ) {
-        TStoreConvNZ2NZ<isConv3D>(dst, src, offsetInfo, realM, realN, realCutW, cutW);
+        TStoreConvNZ2NZ<isConv3D, reluType>(dst, src, offsetInfo, realM, realN, realCutW, cutW);
     }
 }
 

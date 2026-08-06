@@ -37,6 +37,7 @@ const std::string LoadStoreConvOpAttributeKey::copyInMode = "COPY_IN_MODE";
 const std::string LoadStoreConvOpAttributeKey::copyOutMode = "COPY_OUT_MODE";
 const std::string LoadStoreConvOpAttributeKey::isFmap = "IS_FMAP";
 const std::string LoadStoreConvOpAttributeKey::isConv3D = "IS_CONV3D";
+const std::string LoadStoreConvOpAttributeKey::reluType = "RELU_TYPE";
 
 bool IsArch32Platform() { return Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_2201; }
 std::vector<int64_t> rotateVector(const std::vector<int64_t>& input, size_t shift)
@@ -472,16 +473,6 @@ void CheckAttrShape(DataType outType, const Tensor& inputTensor, const Tensor& w
     }
     CheckGroupsShape(cinFmap, cinWeight, cOut, groups);
     CheckLoad3dShape(outType, weightTensor, attrParam);
-    if (IsArch32Platform()) {
-        // 由于transdata对于output的转换没有实现消除多余pad，所以当前cout只支持coutPerGroup % c0 = 0
-        int64_t c0 = ALIGN_SIZE_32 / BytesOf(weightTensor.GetStorage()->Datatype());
-        int64_t coutPerGroup = weightTensor.GetShape()[NCHW_N_IDX] / groups;
-        CHECK(ExternalError::INVALID_VAL, coutPerGroup % c0 == 0)
-            << "The tiled Cout per group (" << coutPerGroup << ") must be a multiple of " << c0
-            << " (c0 = 32 / sizeof(dtype)). "
-            << "Current tiled Cout(" << weightTensor.GetShape()[NCHW_N_IDX] << ") / groups(" << groups
-            << ") = " << coutPerGroup << " is not divisible by " << c0 << ".";
-    }
 }
 
 void CheckOriginShape(const Tensor& inputTensor, const Tensor& weightTensor, const Tensor& biasTensor)
@@ -528,6 +519,7 @@ void SetTensorOpAttr(Operation& op, const LogicalTensorPtr& inputTensor, const L
     op.SetAttribute(CONV_ORI_WEIGHT_SHAPE_ATTR, weightTensor->GetShape());
     op.SetAttribute(CONV_ORI_RES_SHAPE_ATTR, resTensor->GetShape());
     op.SetAttribute("dynamicResValidShape", resTensor->GetDynValidShape());
+    op.SetAttribute(CONV_RELU_ATTR, convAttrParam.reluType);
 }
 
 std::vector<LogicalTensorPtr> GetOperandVecIn(std::vector<LogicalTensorPtr> operandVecIn,
@@ -715,6 +707,7 @@ void SetConvAttrParam(const Operation& op, ConvAttrParam& convAttrParam)
                                                                   CONV2D_ATTR_DEFAULT_LIST;
     convAttrParam.groups = (op.HasAttr(CONV_GROUPS_ATTR)) ? op.GetIntAttribute(CONV_GROUPS_ATTR) : 1;
     convAttrParam.hasBias = (op.HasAttr(CONV_BIAS_ATTR)) ? op.GetBoolAttribute(CONV_BIAS_ATTR) : false;
+    convAttrParam.reluType = (op.HasAttr(CONV_RELU_ATTR)) ? op.GetIntAttribute(CONV_RELU_ATTR) : 0;
     convAttrParam.isInOutTensorNZ = false;
     ASSERT(ConvExpandFuncError::EXPANDFUNC_TENSOR_ATTR_GET_FAILED, op.HasAttr(CONV_ORI_FMAP_SHAPE_ATTR))
         << "Conv ori fmapshape should be set when InOut Tensor NZ mode.";
@@ -1245,6 +1238,7 @@ void ConstrucCopyOutTile(Function& function, const ConvAttrParam& convAttrParam,
                                                {tensorGraphNodes.resTensorPtr});
     fixpipeOpRes.SetAttribute(OpAttributeKey::isConv, true);
     fixpipeOpRes.SetAttribute(LoadStoreConvOpAttributeKey::isConv3D, convAttrParam.isConv3D);
+    fixpipeOpRes.SetAttribute(LoadStoreConvOpAttributeKey::reluType, convAttrParam.reluType);
 
     resCl0TensorPtr->UpdateDynValidShape(dstCL0DynValidShape);
 
@@ -1258,11 +1252,16 @@ void ConstrucCopyOutTile(Function& function, const ConvAttrParam& convAttrParam,
     if (IsArch32Platform()) {
         fixpipeOpRes.SetAttribute(LoadStoreConvOpAttributeKey::copyOutMode,
                                   static_cast<int64_t>(CopyOutMode::COPY_MOD_NZ2NZ));
+        std::vector<SymbolicScalar> dstCL0DynValidShapeAlignedN = std::vector<SymbolicScalar>{
+            convTileInfo.dynValidBatchL0 * convTileInfo.dynValidDoutL0 * convTileInfo.dynValidHoutL0 *
+                convTileInfo.dynValidWoutL0,
+            (convTileInfo.dynValidCoutL0 + convTileInfo.cin0 - 1) / convTileInfo.cin0 * convTileInfo.cin0};
+        fixpipeOpRes.SetAttribute(OpAttributeKey::l0cValidMN, dstCL0DynValidShapeAlignedN);
     } else {
         fixpipeOpRes.SetAttribute(LoadStoreConvOpAttributeKey::copyOutMode,
                                   static_cast<int64_t>(CopyOutMode::COPY_MOD_NZ2DN));
+        fixpipeOpRes.SetAttribute(OpAttributeKey::l0cValidMN, dstCL0DynValidShape);
     }
-    fixpipeOpRes.SetAttribute(OpAttributeKey::l0cValidMN, dstCL0DynValidShape);
 
     std::vector<int64_t> dstResGmOffset = GetCopyOutDstOffset(convAttrParam, convTileInfo, iterInfo);
     auto copyAttr = std::make_shared<CopyOpAttribute>(
@@ -1559,6 +1558,7 @@ Tensor Conv(DataType outType, const Tensor& inputTensor, const Tensor& weightTen
     const Tensor& biasTensor = extendParam.biasTensor;
     // init and set attr
     ConvAttrParam convAttrParam(finalPaddings, finalStrides, finalDilations, groups);
+    convAttrParam.reluType = static_cast<int64_t>(extendParam.reluType);
     CheckConvOperands(outType, inputTensor, weightTensor, biasTensor, convAttrParam);
     std::vector<int64_t> resTensorShape = GetResTensorShape(outType, inputTensor, weightTensor, convAttrParam);
     std::vector<SymbolicScalar> resTensorDynValidShape = GetResTensorDynValidShape(outType, inputTensor, weightTensor,

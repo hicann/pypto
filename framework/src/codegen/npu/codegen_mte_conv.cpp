@@ -260,6 +260,8 @@ std::string CodeGenOpNPU::GenMemL0CCopyOutConv() const
 
     bool isConv3D = false;
     GetOpAttr(Conv::LoadStoreConvOpAttributeKey::isConv3D, isConv3D);
+    int64_t reluType = 0;
+    GetOpAttr(Conv::LoadStoreConvOpAttributeKey::reluType, reluType);
 
     // 获取cutW参数，默认值为0
     int64_t cutW = 0;
@@ -290,7 +292,7 @@ std::string CodeGenOpNPU::GenMemL0CCopyOutConv() const
         staticOffsets, realM, realN, realCutW, std::to_string(cutW));
 
     std::ostringstream oss;
-    oss << tileOpName << WrapParamByAngleBrackets({copyOutModeStr, std::to_string(isConv3D)});
+    oss << tileOpName << WrapParamByAngleBrackets({copyOutModeStr, std::to_string(isConv3D), std::to_string(reluType)});
     oss << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
 }

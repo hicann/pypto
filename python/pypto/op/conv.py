@@ -114,8 +114,8 @@ def conv(
             Per-tensor scale value for dequantization, quantization, or requantization operations.
         - 'scale_tensor': Tensor
             Per-channel scale tensor for dequantization or requantization operations.
-        - 'relu_type': ReLuType
-            Type of ReLU activation to apply in fixpipe (e.g., ReLuType.RELU, ReLuType.LEAKY_RELU, ReLuType.PRELU).
+        - 'relu_type': ConvReLuType
+            Type of ReLU activation to apply in fixpipe (e.g., ConvReLuType.RELU).
 
     Returns
     -------
