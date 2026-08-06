@@ -5,6 +5,8 @@ export ASCEND_3RD_LIB_PATH=/home/jenkins/opensource
 export PATH=/opt/buildtools/python-3.10.2/bin:$PATH
 sudo update-alternatives --set gcc /usr/bin/gcc-14
 gcc --version
+rm -rf /home/jenkins/opensource/json
+rm -rf /home/jenkins/opensource/lib_cache/gtest
 
 python3 -m pip install build
 python3 -m pip install --upgrade packaging==24.2

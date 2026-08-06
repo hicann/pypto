@@ -9,6 +9,8 @@ set -euo pipefail
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
+rm -rf /home/jenkins/opensource/json
+
 BASE_DIR="/home/taskspace"
 PYPTO_GOLDEN_PATH="$BASE_DIR/pypto_golden"
 mkdir -p $PYPTO_GOLDEN_PATH

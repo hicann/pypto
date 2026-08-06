@@ -3,6 +3,7 @@ set -euo pipefail
 
 cd "${WORKSPACE}"
 export ASCEND_3RD_LIB_PATH=/home/jenkins/opensource
+rm -rf /home/jenkins/opensource/json
 
 if [[ "${arch}" == "arm64" ]]; then
     ARCH_SUFFIX="aarch64"
