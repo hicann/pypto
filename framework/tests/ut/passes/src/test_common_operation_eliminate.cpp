@@ -53,14 +53,6 @@ void ExpectCommonOperationEliminateOpCount(ComputationalGraphBuilder& graph, siz
     EXPECT_EQ(function->Operations().size(), expectedOpCount);
 }
 
-bool AddVecDupTensor(ComputationalGraphBuilder& graph, const std::string& name, bool setMemoryType)
-{
-    if (setMemoryType) {
-        return graph.AddTensor(DataType::DT_FP32, {16, 16}, MemoryType::MEM_UB, name);
-    }
-    return graph.AddTensor(DataType::DT_FP32, {16, 16}, name);
-}
-
 bool SetAssembleAttributes(ComputationalGraphBuilder& graph)
 {
     auto* assemble1 = graph.GetOp("ASSEMBLE1");
@@ -80,8 +72,10 @@ bool BuildVecDupAssembleGraph(ComputationalGraphBuilder& graph, MemoryType outMe
     std::vector<std::vector<std::string>> ioperands{{}, {}, {"t1"}, {"t2"}};
     std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"out"}, {"out"}};
     std::vector<std::string> opNames{"VECDUP1", "VECDUP2", "ASSEMBLE1", "ASSEMBLE2"};
-    if (!AddVecDupTensor(graph, "t1", setVecDupMemoryType) || !AddVecDupTensor(graph, "t2", setVecDupMemoryType) ||
-        !graph.AddTensor(DataType::DT_FP32, {32, 16}, outMemoryType, "out") ||
+    bool vecDupOk = setVecDupMemoryType ? graph.AddTensors(DataType::DT_FP32, {16, 16},
+                                                           {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"t1", "t2"}) :
+                                          graph.AddTensors(DataType::DT_FP32, {16, 16}, {"t1", "t2"});
+    if (!vecDupOk || !graph.AddTensor(DataType::DT_FP32, {32, 16}, outMemoryType, "out") ||
         !graph.AddOps(opCodes, ioperands, ooperands, opNames, true)) {
         return false;
     }
@@ -100,9 +94,8 @@ bool BuildUnaryOpAssembleGraph(ComputationalGraphBuilder& graph, MemoryType outM
     std::vector<std::vector<std::string>> ioperands{{"input"}, {"input"}, {"t1"}, {"t2"}};
     std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"out"}, {"out"}};
     std::vector<std::string> opNames{"EXP1", "EXP2", "ASSEMBLE1", "ASSEMBLE2"};
-    if (!graph.AddTensor(DataType::DT_FP32, {16, 16}, MemoryType::MEM_UB, "input") ||
-        !graph.AddTensor(DataType::DT_FP32, {16, 16}, MemoryType::MEM_UB, "t1") ||
-        !graph.AddTensor(DataType::DT_FP32, {16, 16}, MemoryType::MEM_UB, "t2") ||
+    if (!graph.AddTensors(DataType::DT_FP32, {16, 16}, {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
+                          {"input", "t1", "t2"}) ||
         !graph.AddTensor(DataType::DT_FP32, {32, 16}, outMemoryType, "out") ||
         !graph.AddOps(opCodes, ioperands, ooperands, opNames, true) || !SetAssembleAttributes(graph)) {
         return false;
@@ -439,9 +432,7 @@ TEST_F(CommonOperationEliminateTest, TestShmemLoadChecker)
 TEST_F(CommonOperationEliminateTest, PreCheck_CopyIn_InvalidInputNum)
 {
     ComputationalGraphBuilder G;
-    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t1"), true);
-    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t2"), true);
-    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t3"), true);
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, {16, 16}, {"t1", "t2", "t3"}), true);
     std::vector<Opcode> opCodes{Opcode::OP_COPY_IN};
     std::vector<std::vector<std::string>> ioperands{{"t1", "t2"}};
     std::vector<std::vector<std::string>> ooperands{{"t3"}};
@@ -457,8 +448,7 @@ TEST_F(CommonOperationEliminateTest, PreCheck_CopyIn_InvalidInputNum)
 TEST_F(CommonOperationEliminateTest, PreCheck_CopyIn_OffsetShapeMismatch)
 {
     ComputationalGraphBuilder G;
-    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t1"), true);
-    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t2"), true);
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, {16, 16}, {"t1", "t2"}), true);
     std::vector<Opcode> opCodes{Opcode::OP_COPY_IN};
     std::vector<std::vector<std::string>> ioperands{{"t1"}};
     std::vector<std::vector<std::string>> ooperands{{"t2"}};
