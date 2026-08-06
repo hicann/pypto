@@ -20,14 +20,17 @@ namespace npu::tile_fwk {
 void LatencyEstimator::LaunchReadyIssue()
 {
     for (auto& op : taskList) {
-        if (USE_LESS_OPS.find(op->GetOpcode()) != USE_LESS_OPS.end() && state_.depManager.GetPredecessors(op).empty()) {
-            auto type = RescheduleUtils::GetOpPipeType(op);
-            opQueues[type].Insert(op);
-        }
         if (state_.IsOpAlloc(op)) {
             auto tensor = op->GetOOperands()[0];
             auto memId = tensor->memoryrange.memId;
             allocIssueQueue[state_.localBufferMap[memId]->memType].Insert(op);
+        } else if (state_.depManager.GetPredecessors(op).empty()) {
+            auto type = RescheduleUtils::GetOpPipeType(op);
+            opQueues[type].Insert(op);
+            if (USE_LESS_OPS.find(op->GetOpcode()) == USE_LESS_OPS.end()) {
+                APASS_LOG_WARN_F(Elements::Operation, "%s[%d]'s predecessor is empty.", op->GetOpcodeStr().c_str(),
+                                 op->GetOpMagic());
+            }
         }
     }
 }
