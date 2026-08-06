@@ -16,31 +16,19 @@
 #include <cstdlib>
 #include <string>
 #include <map>
+#include <thread>
+#include <chrono>
 #include "gtest/gtest.h"
+#define private public
 #include "interface/compiler_monitor/monitor_manager.h"
+#undef private
+#include "monitor_test_fixture.h"
 #include "interface/compiler_monitor/monitor_impl.h"
 #include "interface/compiler_monitor/monitor_util.h"
 
 using namespace npu::tile_fwk;
 
-class TestMonitorManagerState : public testing::Test {
-public:
-    static void SetUpTestCase() {}
-    static void TearDownTestCase() {}
-    void SetUp() override
-    {
-        unsetenv("PYPTO_COMPILER_MONITOR_PREPARE_STARTED");
-        unsetenv("PYPTO_COMPILER_MONITOR_CURRENT");
-        unsetenv("PYPTO_COMPILER_MONITOR_INTERVAL_SEC");
-        unsetenv("PYPTO_COMPILER_MONITOR_TIMEOUT_SEC");
-        unsetenv("PYPTO_COMPILER_MONITOR_TOTAL_TIMEOUT_SEC");
-    }
-    void TearDown() override
-    {
-        MonitorManager::Instance().NotifyCompilationFinished();
-        MonitorManager::Instance().SetProcessingThresholdSec(60);
-    }
-};
+class TestMonitorManagerState : public MonitorTestFixtureBase {};
 
 TEST_F(TestMonitorManagerState, CalcPassStageTimeoutSecZeroOpSize)
 {
@@ -119,6 +107,10 @@ TEST_F(TestMonitorManagerState, SetCompilerMonitorOptionsZeroInterval)
 TEST_F(TestMonitorManagerState, SetCompilerMonitorOptionsNegativeTimeout)
 {
     MonitorManager::Instance().SetCompilerMonitorOptions(true, 60, -2.0, 600, false);
+    EXPECT_EQ(MonitorManager::Instance().GetTimeoutSec(), 0.0);
+    MonitorManager::Instance().SetCompilerMonitorOptions(true, 60, -1.0, 600, false);
+    EXPECT_EQ(MonitorManager::Instance().GetTimeoutSec(), 0.0);
+    MonitorManager::Instance().SetCompilerMonitorOptions(true, 60, 0.0, 600, false);
     EXPECT_EQ(MonitorManager::Instance().GetTimeoutSec(), 0.0);
 }
 
@@ -385,9 +377,18 @@ TEST_F(TestMonitorManagerState, StartStageFuncToBinRemovesCodeGen)
     }
     EXPECT_FALSE(hasCodeGen);
     EXPECT_TRUE(hasFuncToBin);
+    EXPECT_TRUE(MonitorManager::Instance().hasSuspendedCodeGen_);
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     MonitorManager::Instance().EndStage(STAGE_FUNC_TO_BIN, idx, "root_func_1");
     MonitorManager::Instance().EndStage("CodeGen");
+
+    auto totals = MonitorManager::Instance().GetStageElapsedTotals();
+    ASSERT_NE(totals.find("CodeGen"), totals.end());
+    // FuncToBin is folded into CodeGen wall-clock and not listed separately.
+    EXPECT_TRUE(totals.find(STAGE_FUNC_TO_BIN) == totals.end());
+    EXPECT_GE(totals.at("CodeGen"), 0.15);
+    EXPECT_FALSE(MonitorManager::Instance().hasSuspendedCodeGen_);
     MonitorManager::Instance().NotifyCompilationFinished();
 }
 

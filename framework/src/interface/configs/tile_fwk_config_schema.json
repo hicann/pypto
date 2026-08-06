@@ -409,7 +409,7 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 2,
-                    "default": 0,
+                    "default": 1,
                     "label": {
                         "zh": "控制编译阶段监控模式，0表示关闭，1表示开启编译监控但关闭Pass明细，2表示开启编译监控和Pass明细",
                         "en": "Control compiler monitor mode: 0 disables monitor, 1 enables monitor without pass details, 2 enables monitor with pass details."
@@ -427,9 +427,9 @@
                 },
                 "compile_timeout_stage": {
                     "type": "integer",
-                    "minimum": -1,
+                    "minimum": 0,
                     "maximum": 2147483647,
-                    "default": -1,
+                    "default": 0,
                     "label": {
                         "zh": "控制某个阶段编译过程超时的时间",
                         "en": "Control the timeout duration of a certain stage of the compilation process."

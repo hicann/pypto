@@ -144,7 +144,7 @@ TEST_F(CompilerMonitor, CompilerMonitorStageScopeRootFunc)
 TEST_F(CompilerMonitor, CompilerMonitorFuncToBinProcessing)
 {
     MonitorManager::Instance().SetProcessingThresholdSec(1);
-    MonitorManager::Instance().Initialize(true, 1, -1, -1);
+    MonitorManager::Instance().Initialize(true, 1, 0, 600);
     MonitorManager::Instance().SetTotalFunctionCount(4);
     MonitorManager::Instance().SetRootFuncCount(3);
 
@@ -205,8 +205,10 @@ TEST_F(CompilerMonitor, CompilerMonitorAllStageProcessingPaths)
 
 TEST_F(CompilerMonitor, CompilerMonitorTimeoutSecZero)
 {
+    // compile_timeout_stage == 0 disables stage timeout; stages should complete without timeout.
     MonitorManager::Instance().SetProcessingThresholdSec(1);
     MonitorManager::Instance().Initialize(true, 1, 0, 600);
+    EXPECT_EQ(MonitorManager::Instance().GetTimeoutSec(), 0.0);
     MonitorManager::Instance().SetTotalFunctionCount(2);
     MonitorManager::Instance().SetRootFuncCount(1);
     MonitorManager::Instance().SetCurrentFunctionIndex(1);

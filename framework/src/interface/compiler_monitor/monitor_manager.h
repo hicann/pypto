@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace npu::tile_fwk {
@@ -115,6 +116,7 @@ public:
     void SetStageTimeoutFlag(const std::string& name);
     bool GetStageTimeoutFlag(const std::string& name);
     void SetActiveStageWarningPrinted(const std::string& name, int rootFuncIndex);
+    void RecordTimedOutStage(const std::string& name, double elapsed);
 
     std::string GetCurrentFunctionName() const;
     void SetCurrentFunctionName(const std::string& name);
@@ -151,9 +153,17 @@ public:
 private:
     void MaybeStartTotalClock();
     void PrintCompilationFinished();
+    double ComputeTotalElapsed() const;
+    void PrintWatchdogSummary(double totalElapsed);
+    void PrintDetailSummary(double totalElapsed);
     void EndStageInternal(const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
                           const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal,
                           int rootFuncOpSize, int functionIndex, const std::string& functionName, int functionOpSize);
+    std::string BuildStageFinishMsg(const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
+                                    double elapsed, double totalElapsed, int functionIndex,
+                                    const std::string& functionName, int functionOpSize, int rootFuncOpSize) const;
+    void CheckStageTimeoutOnEnd(const std::string& name, double elapsed, int functionOpSize, int functionIndex,
+                                const std::string& functionName, bool stageWarningPrinted);
     std::string BuildPassCompileTimingsForFunction(int functionIndex, const std::string& functionName) const;
     std::string BuildPassFunctionHeaderLocked(int functionIndex, const std::string& functionName,
                                               const std::string& strategy = "") const;
@@ -170,7 +180,7 @@ private:
     bool passDetailEnable_{false};
     bool stageDoing_{false};
     std::atomic<int> intervalSec_{60};
-    std::atomic<double> timeoutSec_{-1.0};
+    std::atomic<double> timeoutSec_{0.0};
     std::atomic<int> totalTimeoutSec_{600};
 
     std::string currentFunction_;
@@ -179,6 +189,7 @@ private:
     std::chrono::steady_clock::time_point stageStart_;
     std::unordered_map<std::string, double> stageElapsedTotals_;
     std::map<std::string, bool> stageTimeoutFlag_;
+    std::map<std::string, double> summaryTimedOutStages_;
     std::vector<PassCompileTiming> passCompileTimings_;
     std::map<std::string, double> passElapsedTotals_;
     CurrentPassInfo currentPass_;
@@ -187,6 +198,10 @@ private:
     std::string lastPassDetailStrategy_;
 
     std::vector<ActiveStageInfo> activeStages_;
+    // CodeGen is suspended (removed from activeStages_) while nested FuncToBin/HostMachine runs.
+    // Keep its startTime so EndStage("CodeGen") still covers the full outer wall-clock span.
+    bool hasSuspendedCodeGen_{false};
+    ActiveStageInfo suspendedCodeGen_;
 
     int currentFuncOpsize_{0};
     int funcSumOpsize_{0};

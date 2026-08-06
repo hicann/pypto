@@ -595,11 +595,13 @@ class JitCallableWrapper:
                 "compile_stage", pypto.CompStage.ALL_COMPLETE
             )
         if "compile_monitor_enable" not in self._host_options:
-            self._host_options["compile_monitor_enable"] = pypto.get_host_options().get("compile_monitor_enable", 0)
+            self._host_options["compile_monitor_enable"] = pypto.get_host_options().get(
+                "compile_monitor_enable", 1
+            )
         if "compile_timeout" not in self._host_options:
             self._host_options["compile_timeout"] = pypto.get_host_options().get("compile_timeout", 600)
         if "compile_timeout_stage" not in self._host_options:
-            self._host_options["compile_timeout_stage"] = pypto.get_host_options().get("compile_timeout_stage", -1)
+            self._host_options["compile_timeout_stage"] = pypto.get_host_options().get("compile_timeout_stage", 0)
         if "compile_monitor_print_interval" not in self._host_options:
             self._host_options["compile_monitor_print_interval"] = pypto.get_host_options().get(
                 "compile_monitor_print_interval", 60

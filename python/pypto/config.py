@@ -372,8 +372,8 @@ def set_host_options(
         Control the compilation phase.
 
     compile_monitor_enable : int
-        Control compiler monitor mode. 0 disables monitor, 1 enables monitor without pass details,
-        2 enables monitor with pass details.
+        Control compiler monitor mode (Watchdog). 0 disables monitor, 1 enables monitor without pass details,
+        2 enables monitor with pass details. Default is 1 (enabled).
 
     compile_timeout : int
         Control the timeout duration for the entire compilation process.

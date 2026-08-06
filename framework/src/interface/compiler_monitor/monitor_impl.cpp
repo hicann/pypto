@@ -63,15 +63,9 @@ bool IsEnabledImmediate(MonitorManager* manager) { return manager->IsEnabled(); 
 double GetTimeoutSecImmediate(MonitorManager* manager)
 {
     double stageTimeoutSec = manager->GetTimeoutSec();
+    // <= 0: stage timeout disabled (do not treat stages as already timed out).
     if (stageTimeoutSec <= 0.0) {
-        if (stageTimeoutSec >= 0.0) {
-            manager->SetStageTimeoutFlag("Prepare");
-            manager->SetStageTimeoutFlag("Pass");
-            manager->SetStageTimeoutFlag("CodeGen");
-            manager->SetStageTimeoutFlag(STAGE_FUNC_TO_BIN);
-        } else {
-            stageTimeoutSec = static_cast<double>(std::numeric_limits<int>::max());
-        }
+        stageTimeoutSec = static_cast<double>(std::numeric_limits<int>::max());
     }
     return stageTimeoutSec;
 }
@@ -122,14 +116,23 @@ void MonitorImpl::PrintTotalTimeOut(double totalElapsed, int totalTimeoutSec)
     if ((totalElapsed >= totalTimeoutSec) && (manager_->GetStageTimeoutFlag("Total") == false)) {
         int currentTotalOpsize = manager_->GetFuncSumOpSize();
         manager_->SetStageTimeoutFlag("Total");
-        std::string warnMsg;
-        warnMsg = "[Compiler Monitor] | [== WARNING ==] Total elapsed [" + FormatElapsed(totalElapsed) +
-                  "] exceeded the total time threshold [" + FormatElapsed(static_cast<double>(totalTimeoutSec)) +
-                  "] | Total number of op: " + std::to_string(currentTotalOpsize) +
-                  ", you can terminate the process by pressing Ctrl+C !!!";
-        COMPILER_LOGI("%s", warnMsg.c_str());
-        (void)fprintf(stdout, "%s\n", warnMsg.c_str());
-        (void)fflush(stdout);
+        manager_->RecordTimedOutStage("Total", totalElapsed);
+        if (manager_->IsPassDetailEnabled()) {
+            std::string warnMsg = "[Compiler Monitor] | [== WARNING ==] Total elapsed [" + FormatElapsed(totalElapsed) +
+                                  "] exceeded the total time threshold [" +
+                                  FormatElapsed(static_cast<double>(totalTimeoutSec)) +
+                                  "] | Total number of op: " + std::to_string(currentTotalOpsize) +
+                                  ", you can terminate the process by pressing Ctrl+C !!!";
+            COMPILER_LOGI("%s", warnMsg.c_str());
+            (void)fprintf(stdout, "%s\n", warnMsg.c_str());
+            (void)fflush(stdout);
+        } else {
+            std::string warnMsg = "[Compiler Monitor] | [== WARNING ==] Total elapsed [" + FormatElapsed(totalElapsed) +
+                                  "] exceeded the total time threshold [" +
+                                  FormatElapsed(static_cast<double>(totalTimeoutSec)) +
+                                  "] | Total number of op: " + std::to_string(currentTotalOpsize);
+            COMPILER_WARN_EVENT("%s", warnMsg.c_str());
+        }
     }
 }
 
@@ -223,25 +226,27 @@ inline std::string FormatPassElapsedThreshold(double elapsed, double threshold)
 
 inline std::string MakeProgressTimeoutWarn(const std::string& label, int idx, int total, int pw,
                                            const std::string& stageBracket, double elapsed, double threshold,
-                                           const std::string& tail)
+                                           const std::string& tail, bool detailMode)
 {
     return kWarningHeader + label + FormatProgressIndex(idx, total, pw) + " | Stage [" + stageBracket +
-           FormatStageElapsedThreshold(elapsed, threshold) + tail + kTerminateHint;
+           FormatStageElapsedThreshold(elapsed, threshold) + tail + (detailMode ? kTerminateHint : "");
 }
 
 inline std::string MakeLabeledTimeoutWarn(const std::string& paddedLabel, const std::string& stage, double elapsed,
-                                          double threshold, const std::string& tail)
+                                          double threshold, const std::string& tail, bool detailMode)
 {
     return kWarningHeader + paddedLabel + "[" + stage + FormatStageElapsedThreshold(elapsed, threshold) + tail +
-           kTerminateHint;
+           (detailMode ? kTerminateHint : "");
 }
 
 inline std::string MakePassTimeoutWarn(int idx, int total, int pw, double elapsed, double threshold,
-                                       const std::string& funcName, int opSize, const std::string& passDesc)
+                                       const std::string& funcName, int opSize, const std::string& passDesc,
+                                       bool detailMode)
 {
     return std::string(kWarningHeader) + "Function: " + FormatProgressIndex(idx, total, pw) + " | Stage [Pass" +
            FormatPassElapsedThreshold(elapsed, threshold) + " | Func:[" + funcName + "]" +
-           FormatOpCountTail(opSize, passDesc) + " | Standard: 200000 ops / 90.0s linear scaled" + kTerminateHint;
+           FormatOpCountTail(opSize, passDesc) + " | Standard: 200000 ops / 90.0s linear scaled" +
+           (detailMode ? kTerminateHint : "");
 }
 
 inline std::string MakeProgressProcessing(const std::string& label, int idx, int total, int pw,
@@ -267,16 +272,22 @@ void HandleFuncToBin(const StageTickCtx& ctx)
     const std::string& stage = stageInfo.stageName;
     int totalRootFuncCount = ctx.manager->GetRootFuncCount();
     int pw = ctx.manager->GetProgressWidth();
+    bool detailMode = ctx.manager->IsPassDetailEnabled();
 
     if (ShouldEmitInstanceWarning(ctx)) {
         ctx.manager->SetActiveStageWarningPrinted(stage, stageInfo.rootFuncIndex);
-        BufferMonitorWarning(
-            ctx, MakeProgressTimeoutWarn(
-                     "RootFunc(parallel): ", stageInfo.rootFuncIndex, totalRootFuncCount, pw, stage,
-                     ctx.currStageElapsed, ctx.stageTimeoutSec,
-                     " | RootFunc:[" + stageInfo.rootFuncName + "]" + FormatOpCountTail(stageInfo.rootFuncOpSize)));
+        if (detailMode) {
+            BufferMonitorWarning(
+                ctx, MakeProgressTimeoutWarn(
+                         "RootFunc(parallel): ", stageInfo.rootFuncIndex, totalRootFuncCount, pw, stage,
+                         ctx.currStageElapsed, ctx.stageTimeoutSec,
+                         " | RootFunc:[" + stageInfo.rootFuncName + "]" + FormatOpCountTail(stageInfo.rootFuncOpSize),
+                         true));
+        } else {
+            ctx.manager->RecordTimedOutStage(stage, ctx.currStageElapsed);
+        }
     }
-    if (ShouldEmitProcessing(ctx)) {
+    if (detailMode && ShouldEmitProcessing(ctx)) {
         ctx.lastPrintTime = static_cast<int>(ctx.currStageElapsed);
         BufferMonitorLine(
             ctx, MakeProgressProcessing("RootFunc(parallel): ", stageInfo.rootFuncIndex, totalRootFuncCount, pw,
@@ -292,16 +303,21 @@ void HandleHostMachine(const StageTickCtx& ctx)
     int totalHostMachineSteps = ctx.manager->GetHostMachineTotalSteps();
     int pw = ctx.manager->GetProgressWidth();
     const std::string& hostMachineStage = stageInfo.rootFuncName.empty() ? STAGE_HOST_MACHINE : stageInfo.rootFuncName;
+    bool detailMode = ctx.manager->IsPassDetailEnabled();
 
     if (ShouldEmitInstanceWarning(ctx)) {
         ctx.manager->SetActiveStageWarningPrinted(stage, stageInfo.rootFuncIndex);
-        BufferMonitorWarning(
-            ctx, MakeProgressTimeoutWarn(
-                     PadLabel("HostMachine: "), stageInfo.rootFuncIndex, totalHostMachineSteps, pw, hostMachineStage,
-                     ctx.currStageElapsed, ctx.stageTimeoutSec,
-                     " | Func:[" + ctx.currentFuncName + "]" + FormatOpCountTail(stageInfo.rootFuncOpSize)));
+        if (detailMode) {
+            BufferMonitorWarning(
+                ctx, MakeProgressTimeoutWarn(
+                         PadLabel("HostMachine: "), stageInfo.rootFuncIndex, totalHostMachineSteps, pw,
+                         hostMachineStage, ctx.currStageElapsed, ctx.stageTimeoutSec,
+                         " | Func:[" + ctx.currentFuncName + "]" + FormatOpCountTail(stageInfo.rootFuncOpSize), true));
+        } else {
+            ctx.manager->RecordTimedOutStage(stage, ctx.currStageElapsed);
+        }
     }
-    if (ShouldEmitProcessing(ctx)) {
+    if (detailMode && ShouldEmitProcessing(ctx)) {
         ctx.lastPrintTime = static_cast<int>(ctx.currStageElapsed);
         BufferMonitorLine(
             ctx, MakeProgressProcessing(PadLabel("HostMachine: "), stageInfo.rootFuncIndex, totalHostMachineSteps, pw,
@@ -316,18 +332,27 @@ inline void EmitPassStageTimeoutWarningIfNeeded(const StageTickCtx& ctx)
     if (stage != "Pass") {
         return;
     }
+    // compile_timeout_stage <= 0 disables stage timeout for all stages including Pass.
+    if (ctx.manager->GetTimeoutSec() <= 0.0) {
+        return;
+    }
     double passStageTimeoutSec = MonitorManager::CalcPassStageTimeoutSec(stageInfo.functionOpSize);
     if (passStageTimeoutSec < 0.0 || ctx.currStageElapsed < passStageTimeoutSec ||
         ctx.manager->GetStageTimeoutFlag(stage)) {
         return;
     }
     ctx.manager->SetStageTimeoutFlag(stage);
-    int currentFunctionIndex = stageInfo.functionIndex;
-    int totalFunctionCount = ctx.manager->GetTotalFunctionCount();
-    int pw = ctx.manager->GetProgressWidth();
-    BufferMonitorWarning(ctx, MakePassTimeoutWarn(currentFunctionIndex, totalFunctionCount, pw, ctx.currStageElapsed,
-                                                  passStageTimeoutSec, stageInfo.functionName, stageInfo.functionOpSize,
-                                                  ctx.currentPassDesc));
+    bool detailMode = ctx.manager->IsPassDetailEnabled();
+    if (detailMode) {
+        int currentFunctionIndex = stageInfo.functionIndex;
+        int totalFunctionCount = ctx.manager->GetTotalFunctionCount();
+        int pw = ctx.manager->GetProgressWidth();
+        BufferMonitorWarning(ctx, MakePassTimeoutWarn(currentFunctionIndex, totalFunctionCount, pw,
+                                                      ctx.currStageElapsed, passStageTimeoutSec, stageInfo.functionName,
+                                                      stageInfo.functionOpSize, ctx.currentPassDesc, true));
+    } else {
+        ctx.manager->RecordTimedOutStage(stage, ctx.currStageElapsed);
+    }
 }
 
 void HandleGenericStage(const StageTickCtx& ctx)
@@ -338,24 +363,31 @@ void HandleGenericStage(const StageTickCtx& ctx)
     const int fnTotal = ctx.manager->GetTotalFunctionCount();
     const int pw = ctx.manager->GetProgressWidth();
     const bool multiFn = fnTotal > 1 && fnIdx > 0;
+    bool detailMode = ctx.manager->IsPassDetailEnabled();
 
     EmitPassStageTimeoutWarningIfNeeded(ctx);
 
     if (stage != "Pass" && ShouldEmitGlobalWarning(ctx)) {
         ctx.manager->SetStageTimeoutFlag(stage);
-        if (multiFn) {
-            BufferMonitorWarning(
-                ctx, MakeProgressTimeoutWarn(
-                         "Function: ", fnIdx, fnTotal, pw, stage, ctx.currStageElapsed, ctx.stageTimeoutSec,
-                         " | Func:[" + ctx.currentFuncName + "]" +
-                             FormatOpCountTail(ctx.currentFuncOpsize, stage == "CodeGen" ? "" : ctx.currentPassDesc)));
+        if (detailMode) {
+            if (multiFn) {
+                BufferMonitorWarning(
+                    ctx,
+                    MakeProgressTimeoutWarn(
+                        "Function: ", fnIdx, fnTotal, pw, stage, ctx.currStageElapsed, ctx.stageTimeoutSec,
+                        " | Func:[" + ctx.currentFuncName + "]" +
+                            FormatOpCountTail(ctx.currentFuncOpsize, stage == "CodeGen" ? "" : ctx.currentPassDesc),
+                        true));
+            } else {
+                BufferMonitorWarning(
+                    ctx, MakeLabeledTimeoutWarn(PadLabel("Stage: "), stage, ctx.currStageElapsed, ctx.stageTimeoutSec,
+                                                FormatOpCountTail(ctx.currentFuncOpsize, ctx.currentPassDesc), true));
+            }
         } else {
-            BufferMonitorWarning(
-                ctx, MakeLabeledTimeoutWarn(PadLabel("Stage: "), stage, ctx.currStageElapsed, ctx.stageTimeoutSec,
-                                            FormatOpCountTail(ctx.currentFuncOpsize, ctx.currentPassDesc)));
+            ctx.manager->RecordTimedOutStage(stage, ctx.currStageElapsed);
         }
     }
-    if (!ShouldEmitProcessing(ctx)) {
+    if (!detailMode || !ShouldEmitProcessing(ctx)) {
         return;
     }
     ctx.lastPrintTime = static_cast<int>(ctx.currStageElapsed);

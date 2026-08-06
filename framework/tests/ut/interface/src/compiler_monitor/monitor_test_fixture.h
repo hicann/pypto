@@ -25,6 +25,9 @@ public:
     {
         unsetenv("PYPTO_COMPILER_MONITOR_PREPARE_STARTED");
         unsetenv("PYPTO_COMPILER_MONITOR_CURRENT");
+        unsetenv("PYPTO_COMPILER_MONITOR_INTERVAL_SEC");
+        unsetenv("PYPTO_COMPILER_MONITOR_TIMEOUT_SEC");
+        unsetenv("PYPTO_COMPILER_MONITOR_TOTAL_TIMEOUT_SEC");
     }
     void TearDown() override
     {

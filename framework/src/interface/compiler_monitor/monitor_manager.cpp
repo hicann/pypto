@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <mutex>
 #include <string>
+#include <vector>
 #include <iostream>
 #include <unistd.h>
 #include <thread>
@@ -98,11 +99,20 @@ void MonitorManager::Initialize(bool enable, int intervalSec, double timeoutSec,
     stageTimeoutFlag_["CodeGen"] = false;
     stageTimeoutFlag_[STAGE_FUNC_TO_BIN] = false;
     stageTimeoutFlag_["Total"] = false;
+    summaryTimedOutStages_.clear();
     pythonStageEnded_ = false;
+    hasSuspendedCodeGen_ = false;
+    suspendedCodeGen_ = ActiveStageInfo{};
     stageElapsedTotals_["Prepare"] = 0.0;
     // Mark that Prepare stage has started (use env var for cross-.so communication)
     (void)setenv("PYPTO_COMPILER_MONITOR_PREPARE_STARTED", "1", 1);
     impl_->StartMonitoring();
+    if (!passDetailEnable) {
+        std::string thresholdMsg = "[Compiler Monitor] Threshold: " + std::to_string(totalTimeoutSec_.load()) +
+                                   "s | You can adjust the timeout threshold via "
+                                   "pypto.set_host_options(compile_timeout=...)";
+        COMPILER_EVENT("%s", thresholdMsg.c_str());
+    }
 }
 
 void MonitorManager::Shutdown()
@@ -123,6 +133,14 @@ void MonitorManager::Shutdown()
     if (implToStop) {
         implToStop->Stop();
         delete implToStop;
+    }
+}
+
+void MonitorManager::RecordTimedOutStage(const std::string& name, double elapsed)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (summaryTimedOutStages_.find(name) == summaryTimedOutStages_.end()) {
+        summaryTimedOutStages_[name] = elapsed;
     }
 }
 
@@ -174,6 +192,9 @@ void MonitorManager::SetTotalFunctionCount(int n)
             lastPassDetailStrategy_.clear();
             stageTimeoutFlag_.clear();
             pythonStageEnded_ = false;
+            summaryTimedOutStages_.clear();
+            hasSuspendedCodeGen_ = false;
+            suspendedCodeGen_ = ActiveStageInfo{};
             toStart = impl_;
             initialized_ = true;
         }
@@ -305,8 +326,15 @@ void MonitorManager::TryEndPrepareStage()
             }()
                 .c_str(),
             static_cast<long>(getpid()), static_cast<long>(getppid()));
-        (void)fprintf(stdout, "%s\n", msg.c_str());
-        (void)fflush(stdout);
+        if (passDetailEnable_) {
+            (void)fprintf(stdout, "%s\n", msg.c_str());
+            (void)fflush(stdout);
+        }
+    }
+    if (timeoutSec_.load() > 0.0 && elapsed > timeoutSec_.load() &&
+        summaryTimedOutStages_.find("Prepare") == summaryTimedOutStages_.end()) {
+        stageTimeoutFlag_["Prepare"] = true;
+        summaryTimedOutStages_["Prepare"] = elapsed;
     }
 }
 
@@ -332,57 +360,100 @@ void MonitorManager::NotifyCompilationFinished()
     }
 }
 
+double MonitorManager::ComputeTotalElapsed() const
+{
+    auto now = std::chrono::steady_clock::now();
+    double totalElapsed = std::chrono::duration<double>(now - totalStart_).count();
+    double stageTotal = 0.0;
+    for (const auto& kv : stageElapsedTotals_) {
+        // HostMachine is nested under the CodeGen MonitorStageScope in DYNAMIC path;
+        // skip to avoid double-count against CodeGen wall-clock.
+        if (kv.first == STAGE_HOST_MACHINE || kv.first == STAGE_FUNC_TO_BIN) {
+            continue;
+        }
+        stageTotal += kv.second;
+    }
+    if (stageTotal > totalElapsed) {
+        totalElapsed = stageTotal;
+    }
+    return totalElapsed;
+}
+
+void MonitorManager::PrintWatchdogSummary(double totalElapsed)
+{
+    if (totalElapsed < static_cast<double>(totalTimeoutSec_.load())) {
+        lastTotalElapsed_ = totalElapsed;
+        return;
+    }
+    static const std::vector<std::string> stageOrder = {"Prepare", "Pass", "HostMachine", "CodeGen"};
+    double avgThreshold = static_cast<double>(totalTimeoutSec_.load()) / static_cast<double>(stageOrder.size());
+    std::string detectedStage;
+    std::vector<double> stageElapsed;
+    for (const auto& name : stageOrder) {
+        auto it = stageElapsedTotals_.find(name);
+        double elapsed = (it != stageElapsedTotals_.end()) ? it->second : 0.0;
+        stageElapsed.push_back(elapsed);
+        if (elapsed > avgThreshold) {
+            if (!detectedStage.empty()) {
+                detectedStage += ", ";
+            }
+            detectedStage += name;
+        }
+    }
+    std::string summaryMsg = "[Compiler Monitor] Threshold: " + std::to_string(totalTimeoutSec_.load()) +
+                             "s | DetectedStage: " + (detectedStage.empty() ? "None" : detectedStage);
+    for (size_t i = 0; i < stageOrder.size(); i++) {
+        summaryMsg += " | " + stageOrder[i] + ": " + FormatElapsed(stageElapsed[i]);
+    }
+    COMPILER_WARN_EVENT("%s", summaryMsg.c_str());
+    lastTotalElapsed_ = totalElapsed;
+}
+
+void MonitorManager::PrintDetailSummary(double totalElapsed)
+{
+    std::string compilationMsg = "[Compiler Monitor] Compilation finished " + std::to_string(currentFunctionIndex_) +
+                                 "/" + std::to_string(totalFunctionCount_ > 0 ? totalFunctionCount_ : 1) +
+                                 " | Total functions: " +
+                                 std::to_string(totalFunctionCount_ > 0 ? totalFunctionCount_ : 1);
+    (void)fprintf(stdout, "%s\n", compilationMsg.c_str());
+    (void)fflush(stdout);
+    COMPILER_LOGI("%s", compilationMsg.c_str());
+
+    int n = totalFunctionCount_ > 0 ? totalFunctionCount_ : 1;
+    std::ostringstream stageMsg;
+    for (const auto& [stage, sec] : stageElapsedTotals_) {
+        if (stage == "Pass" || stage == "CodeGen" || stage == STAGE_HOST_MACHINE) {
+            stageMsg << " " << ("[" + stage + "]:") << std::fixed << std::setprecision(1) << sec << "s"
+                     << " ";
+        } else {
+            stageMsg << " " << ("[" + stage + "]:") << std::fixed << std::setprecision(1) << sec << "s  (sum over " << n
+                     << " functions)\n";
+        }
+    }
+    std::string stageTimingMsg = "[Compiler Monitor] Stage timing (aggregated by stage):" + stageMsg.str();
+    COMPILER_LOGI("%s", stageTimingMsg.c_str());
+    (void)fprintf(stdout, "%s\n", stageTimingMsg.c_str());
+    (void)fflush(stdout);
+
+    std::string finalMsg = "[Compiler Monitor] Monitoring stopped | Total elapsed: " + FormatElapsed(totalElapsed);
+    COMPILER_LOGI("%s", finalMsg.c_str());
+    (void)fprintf(stdout, "%s\n", finalMsg.c_str());
+    (void)fflush(stdout);
+
+    lastTotalElapsed_ = totalElapsed;
+}
+
 void MonitorManager::PrintCompilationFinished()
 {
-    if (enable_) {
-        auto now = std::chrono::steady_clock::now();
-        double totalElapsed = std::chrono::duration<double>(now - totalStart_).count();
-
-        // Calculate total from all stage elapsed totals (sum of all stages)
-        // This ensures Total elapsed includes Prepare time from Python side
-        double stageTotal = 0.0;
-        for (const auto& kv : stageElapsedTotals_) {
-            stageTotal += kv.second;
-        }
-        // Use the larger of: clock-based total vs sum of stages
-        // (sum of stages may be more accurate when Prepare was tracked via Python)
-        if (stageTotal > totalElapsed) {
-            totalElapsed = stageTotal;
-        }
-
-        std::string compilationMsg = "[Compiler Monitor] Compilation finished " +
-                                     std::to_string(currentFunctionIndex_) + "/" +
-                                     std::to_string(totalFunctionCount_ > 0 ? totalFunctionCount_ : 1) +
-                                     " | Total functions: " +
-                                     std::to_string(totalFunctionCount_ > 0 ? totalFunctionCount_ : 1);
-        (void)fprintf(stdout, "%s\n", compilationMsg.c_str());
-        (void)fflush(stdout);
-        COMPILER_LOGI("%s", compilationMsg.c_str());
-
-        int n = totalFunctionCount_ > 0 ? totalFunctionCount_ : 1;
-        std::ostringstream stageMsg;
-        for (const auto& [stage, sec] : stageElapsedTotals_) {
-            if (stage == "Pass" || stage == "CodeGen" || stage == STAGE_HOST_MACHINE) {
-                stageMsg << " " << ("[" + stage + "]:") << std::fixed << std::setprecision(1) << sec << "s"
-                         << " ";
-            } else {
-                stageMsg << " " << ("[" + stage + "]:") << std::fixed << std::setprecision(1) << sec << "s  (sum over "
-                         << n << " functions)\n";
-            }
-        }
-        std::string stageTimingMsg = "[Compiler Monitor] Stage timing (aggregated by stage):" + stageMsg.str();
-        COMPILER_LOGI("%s", stageTimingMsg.c_str());
-        (void)fprintf(stdout, "%s\n", stageTimingMsg.c_str());
-        (void)fflush(stdout);
-
-        std::string finalMsg = "[Compiler Monitor] Monitoring stopped | Total elapsed: " + FormatElapsed(totalElapsed);
-        COMPILER_LOGI("%s", finalMsg.c_str());
-        (void)fprintf(stdout, "%s\n", finalMsg.c_str());
-        (void)fflush(stdout);
-
-        // Save to member variable for GetTotalElapsed() to access
-        lastTotalElapsed_ = totalElapsed;
+    if (!enable_) {
+        return;
     }
+    double totalElapsed = ComputeTotalElapsed();
+    if (!passDetailEnable_) {
+        PrintWatchdogSummary(totalElapsed);
+        return;
+    }
+    PrintDetailSummary(totalElapsed);
 }
 
 std::string MonitorManager::BuildPassCompileTimingsForFunction(int functionIndex, const std::string& functionName) const
@@ -481,7 +552,7 @@ void MonitorManager::SetCompilerMonitorOptions(bool enable, int intervalSec, dou
     intervalSec_.store((intervalSec > 0) ? intervalSec : 60);
     std::string intervalStr = std::to_string(intervalSec_.load());
     (void)setenv("PYPTO_COMPILER_MONITOR_INTERVAL_SEC", intervalStr.c_str(), 1);
-    timeoutSec_.store((timeoutSec >= -1.0) ? timeoutSec : 0.0);
+    timeoutSec_.store((timeoutSec > 0.0) ? timeoutSec : 0.0);
     std::string timeoutStr = std::to_string(timeoutSec_.load());
     (void)setenv("PYPTO_COMPILER_MONITOR_TIMEOUT_SEC", timeoutStr.c_str(), 1);
     totalTimeoutSec_.store((totalTimeoutSec >= 0) ? totalTimeoutSec : 600);
@@ -535,9 +606,9 @@ std::string MonitorManager::GetCurrentStageName() const
 
 void MonitorManager::SwitchStageReset()
 {
+    this->SetCurrentFunctionName("");
     this->SetCurrentFuncOpSize(0);
     this->SetFuncSumOpSize(0, true);
-    this->SetCurrentFunctionName("");
 }
 
 std::string MonitorManager::GetCurrentFunctionName() const
@@ -581,7 +652,7 @@ void MonitorManager::SetCurrentFuncOpSize(int opSize, bool updateActiveStage)
 
 void MonitorManager::PrintCurrentTotalElapsed(std::string strTemp)
 {
-    if (!enable_) {
+    if (!enable_ || !passDetailEnable_) {
         return;
     }
     std::lock_guard<std::mutex> lock(mutex_);
@@ -661,6 +732,15 @@ void MonitorManager::RecordPassCompileTime(const std::string& strategy, const st
             double passTimeoutSec = CalcPassTimeoutSec(functionOpSize, kSinglePassTimeoutBaseSec);
             passTimedOut = passTimeoutSec >= 0.0 && elapsedSec > passTimeoutSec;
         }
+    }
+    if (!passDetailEnable_) {
+        if (timeoutSec_.load() > 0.0) {
+            double passTimeoutSec = CalcPassTimeoutSec(functionOpSize, kSinglePassTimeoutBaseSec);
+            if (passTimeoutSec >= 0.0 && elapsedSec > passTimeoutSec) {
+                summaryTimedOutStages_["Pass"] = elapsedSec;
+            }
+        }
+        return;
     }
     if (!progressLine.empty()) {
         std::lock_guard<std::mutex> printLock(passDetailPrintMutex_);
@@ -761,11 +841,14 @@ void MonitorManager::StartStage(const std::string& name, int rootFuncIndex, cons
         return;
     }
 
-    // 当启动 FuncToBin 或 hostmachine 子阶段时，移除 activeStages_ 中的 CodeGen
+    // Suspend CodeGen while nested FuncToBin / HostMachine runs (avoid dual tick warnings),
+    // but keep its startTime so the outer CodeGen EndStage still covers the full wall-clock span.
     if (name == STAGE_FUNC_TO_BIN || name == STAGE_HOST_MACHINE) {
         auto it = std::find_if(activeStages_.begin(), activeStages_.end(),
                                [](const ActiveStageInfo& info) { return info.stageName == "CodeGen"; });
         if (it != activeStages_.end()) {
+            suspendedCodeGen_ = *it;
+            hasSuspendedCodeGen_ = true;
             activeStages_.erase(it);
         }
     }
@@ -812,6 +895,15 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
             actualFunctionIndex = it->functionIndex;
             actualFunctionName = it->functionName;
             actualFunctionOpSize = it->functionOpSize;
+        } else if (name == "CodeGen" && hasSuspendedCodeGen_) {
+            stageStartTime = suspendedCodeGen_.startTime;
+            actualRootFuncIndex = suspendedCodeGen_.rootFuncIndex;
+            actualRootFuncName = suspendedCodeGen_.rootFuncName;
+            actualFunctionIndex = suspendedCodeGen_.functionIndex;
+            actualFunctionName = suspendedCodeGen_.functionName;
+            actualFunctionOpSize = suspendedCodeGen_.functionOpSize;
+            hasSuspendedCodeGen_ = false;
+            suspendedCodeGen_ = ActiveStageInfo{};
         } else {
             actualRootFuncIndex = currentRootFuncIndex_;
             actualRootFuncName = currentRootFunc_;
@@ -835,6 +927,80 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
                      actualFunctionIndex, actualFunctionName, actualFunctionOpSize);
 }
 
+std::string MonitorManager::BuildStageFinishMsg(const std::string& name, int rootFuncIndex,
+                                                const std::string& rootFuncName, double elapsed, double totalElapsed,
+                                                int functionIndex, const std::string& functionName, int functionOpSize,
+                                                int rootFuncOpSize) const
+{
+    if (name == STAGE_FUNC_TO_BIN) {
+        int pw = GetProgressWidth();
+        return "[Compiler Monitor] " + PadLabel("Function(parallel): ") +
+               PadRight(std::to_string(rootFuncIndex) + "/" + std::to_string(rootFuncCount_), pw) +
+               " | Stage: " + PadStageName("CodeGen[" + name + "]") +
+               "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
+               " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) + " | Func:[" + rootFuncName +
+               "] Ops: " + FormatOpCount(rootFuncOpSize);
+    }
+    if (name == STAGE_HOST_MACHINE) {
+        int pw = GetProgressWidth();
+        const int denom = std::max(hostMachineTotalSteps_, std::max(1, rootFuncIndex));
+        const std::string& hostMachineStage = rootFuncName.empty() ? STAGE_HOST_MACHINE : rootFuncName;
+        return "[Compiler Monitor] " + PadLabel("HostMachine: ") +
+               PadRight(std::to_string(rootFuncIndex) + "/" + std::to_string(denom), pw) +
+               " | Stage: " + PadStageName(hostMachineStage) +
+               "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
+               " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) +
+               " | Ops: " + FormatOpCount(rootFuncOpSize);
+    }
+    if (name == "CodeGen") {
+        return "[Compiler Monitor] Stage: " + name +
+               "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
+               " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed));
+    }
+    int pw = GetProgressWidth();
+    return "[Compiler Monitor] " + PadLabel("Function: ") +
+           PadRight(std::to_string(functionIndex) + "/" + std::to_string(totalFunctionCount_), pw) +
+           " | Stage: " + PadStageName(name) + "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
+           " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) + " | Func:[" + functionName +
+           "] Ops: " + FormatOpCount(functionOpSize);
+}
+
+void MonitorManager::CheckStageTimeoutOnEnd(const std::string& name, double elapsed, int functionOpSize,
+                                            int functionIndex, const std::string& functionName,
+                                            bool stageWarningPrinted)
+{
+    // compile_timeout_stage <= 0: stage timeout disabled for all stages including Pass.
+    if (timeoutSec_.load() <= 0.0) {
+        return;
+    }
+    if (name == "Pass") {
+        double timeoutSec = CalcPassTimeoutSec(functionOpSize, kPassStageTimeoutBaseSec);
+        if (timeoutSec >= 0.0 && elapsed > timeoutSec && !stageWarningPrinted) {
+            stageTimeoutFlag_[name] = true;
+            summaryTimedOutStages_[name] = elapsed;
+            if (passDetailEnable_) {
+                int pw = GetProgressWidth();
+                std::string passTimeoutWarnMsg = "[Compiler Monitor] | [** WARNING **] Function: " +
+                                                 PadRight(std::to_string(functionIndex) + "/" +
+                                                              std::to_string(totalFunctionCount_),
+                                                          pw) +
+                                                 " | Stage [Pass] elapsed [" + FormatPassDuration(elapsed) +
+                                                 "] exceeded the pass stage time threshold [" +
+                                                 FormatPassDuration(timeoutSec) + "] | Func:[" + functionName +
+                                                 "] | Number of op: " + FormatOpCount(functionOpSize) +
+                                                 " | Standard: 200000 ops / 90.0s linear scaled" +
+                                                 ", you can terminate the process by pressing Ctrl+C !!!";
+                (void)fprintf(stdout, "%s\n", passTimeoutWarnMsg.c_str());
+                (void)fflush(stdout);
+                COMPILER_LOGW("%s", passTimeoutWarnMsg.c_str());
+            }
+        }
+    } else if (elapsed > timeoutSec_.load() && summaryTimedOutStages_.find(name) == summaryTimedOutStages_.end()) {
+        stageTimeoutFlag_[name] = true;
+        summaryTimedOutStages_[name] = elapsed;
+    }
+}
+
 void MonitorManager::EndStageInternal(const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
                                       const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal,
                                       int rootFuncOpSize, int functionIndex, const std::string& functionName,
@@ -853,73 +1019,25 @@ void MonitorManager::EndStageInternal(const std::string& name, int rootFuncIndex
     }
     auto now = std::chrono::steady_clock::now();
     double elapsed = std::chrono::duration<double>(now - startTime).count();
+    // FuncToBin is a CodeGen sub-stage: covered by CodeGen wall-clock, not listed separately.
     if (name != STAGE_FUNC_TO_BIN) {
         stageElapsedTotals_[name] += elapsed;
     }
     stageDoing_ = false;
-    COMPILER_LOGI("Stage ==[%s]== end, sub stage cost %lfs.", name.c_str(), stageElapsedTotals_[name]);
+    COMPILER_LOGI("Stage ==[%s]== end, sub stage cost %lfs.", name.c_str(),
+                  name == STAGE_FUNC_TO_BIN ? elapsed : stageElapsedTotals_[name]);
 
     double totalElapsed = std::chrono::duration<double>(now - totalStart_).count();
+    std::string stageFinishMsg = BuildStageFinishMsg(name, rootFuncIndex, rootFuncName, elapsed, totalElapsed,
+                                                     functionIndex, functionName, functionOpSize, rootFuncOpSize);
 
-    std::string stageFinishMsg;
-    if (name == STAGE_FUNC_TO_BIN) {
-        int pw = GetProgressWidth();
-        stageFinishMsg = "[Compiler Monitor] " + PadLabel("Function(parallel): ") +
-                         PadRight(std::to_string(rootFuncIndex) + "/" + std::to_string(rootFuncCount_), pw) +
-                         " | Stage: " + PadStageName("CodeGen[" + name + "]") +
-                         "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
-                         " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) + " | Func:[" + rootFuncName +
-                         "] Ops: " + FormatOpCount(rootFuncOpSize);
-    } else if (name == STAGE_HOST_MACHINE) {
-        int pw = GetProgressWidth();
-        const int denom = std::max(hostMachineTotalSteps_, std::max(1, rootFuncIndex));
-        const std::string& hostMachineStage = rootFuncName.empty() ? STAGE_HOST_MACHINE : rootFuncName;
-        stageFinishMsg = "[Compiler Monitor] " + PadLabel("HostMachine: ") +
-                         PadRight(std::to_string(rootFuncIndex) + "/" + std::to_string(denom), pw) +
-                         " | Stage: " + PadStageName(hostMachineStage) +
-                         "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
-                         " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) +
-                         " | Ops: " + FormatOpCount(rootFuncOpSize);
-    } else if (name == "CodeGen") {
-        stageFinishMsg = "[Compiler Monitor] Stage: " + name +
-                         "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
-                         " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed));
-    } else {
-        int pw = GetProgressWidth();
-        stageFinishMsg = "[Compiler Monitor] " + PadLabel("Function: ") +
-                         PadRight(std::to_string(functionIndex) + "/" + std::to_string(totalFunctionCount_), pw) +
-                         " | Stage: " + PadStageName(name) +
-                         "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
-                         " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) + " | Func:[" + functionName +
-                         "] Ops: " + FormatOpCount(functionOpSize);
+    if (passDetailEnable_) {
+        (void)fprintf(stdout, "%s\n", stageFinishMsg.c_str());
+        (void)fflush(stdout);
     }
-
-    (void)fprintf(stdout, "%s\n", stageFinishMsg.c_str());
-    (void)fflush(stdout);
     COMPILER_LOGI("%s", stageFinishMsg.c_str());
-    if (name == "Pass") {
-        double timeoutSec = CalcPassTimeoutSec(functionOpSize, kPassStageTimeoutBaseSec);
-        if (timeoutSec >= 0.0 && elapsed > timeoutSec && !stageWarningPrinted) {
-            int pw = GetProgressWidth();
-            std::string passTimeoutWarnMsg = "[Compiler Monitor] | [** WARNING **] Function: " +
-                                             PadRight(std::to_string(functionIndex) + "/" +
-                                                          std::to_string(totalFunctionCount_),
-                                                      pw) +
-                                             " | Stage [Pass] elapsed [" + FormatPassDuration(elapsed) +
-                                             "] exceeded the pass stage time threshold [" +
-                                             FormatPassDuration(timeoutSec) + "] | Func:[" + functionName +
-                                             "] | Number of op: " + FormatOpCount(functionOpSize) +
-                                             " | Standard: 200000 ops / 90.0s linear scaled" +
-                                             ", you can terminate the process by pressing Ctrl+C !!!";
-            stageTimeoutFlag_[name] = true;
-            (void)fprintf(stdout, "%s\n", passTimeoutWarnMsg.c_str());
-            (void)fflush(stdout);
-            COMPILER_LOGW("%s", passTimeoutWarnMsg.c_str());
-        }
-    }
-    if (timeoutSec_.load() < 0.0 || timeoutSec_.load() > 0.0) {
-        stageTimeoutFlag_[name] = false;
-    }
+    CheckStageTimeoutOnEnd(name, elapsed, functionOpSize, functionIndex, functionName, stageWarningPrinted);
+    stageTimeoutFlag_[name] = false;
 }
 
 std::vector<ActiveStageInfo> MonitorManager::GetActiveStages() const
