@@ -947,13 +947,17 @@ void TiledCumOperation(Function& function, const TileShape& tileShape, const Cum
 void TensorCumOperation(Function& function, const CumOperationPara& cumOperationPara)
 {
     if (cumOperationPara.input->Datatype() == DT_INT16) {
-        LogicalTensorPtr inputConverted = std::make_shared<LogicalTensor>(
+        LogicalTensorPtr inputConvertedFp32 = std::make_shared<LogicalTensor>(
             function, DT_FP32, cumOperationPara.input->GetShape(), cumOperationPara.input->GetDynValidShape());
-        Operation& castInputOp = function.AddOperation(Opcode::OP_CAST, {cumOperationPara.input}, {inputConverted});
+        Operation& castInputOp = function.AddOperation(Opcode::OP_CAST, {cumOperationPara.input}, {inputConvertedFp32});
         castInputOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
+        LogicalTensorPtr inputConvertedInt32 = std::make_shared<LogicalTensor>(
+            function, DT_INT32, cumOperationPara.input->GetShape(), cumOperationPara.input->GetDynValidShape());
+        Operation& castInputOp2 = function.AddOperation(Opcode::OP_CAST, {inputConvertedFp32}, {inputConvertedInt32});
+        castInputOp2.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_TRUNC);
         LogicalTensorPtr dstConverted = std::make_shared<LogicalTensor>(
-            function, DT_FP32, cumOperationPara.dstTensor->GetShape(), inputConverted->GetDynValidShape());
-        auto& op = function.AddOperation(Opcode::OP_CUM_SUM, {inputConverted}, {dstConverted});
+            function, DT_INT32, cumOperationPara.dstTensor->GetShape(), inputConvertedInt32->GetDynValidShape());
+        auto& op = function.AddOperation(Opcode::OP_CUM_SUM, {inputConvertedInt32}, {dstConverted});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", cumOperationPara.axis);
         op.SetAttribute(OP_ATTR_PREFIX + "flag", cumOperationPara.is_sum);
         cumOperationPara.dstTensor->UpdateDynValidShape(dstConverted->GetDynValidShape());
