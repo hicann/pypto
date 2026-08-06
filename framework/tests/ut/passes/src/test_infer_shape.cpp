@@ -754,5 +754,74 @@ TEST_F(InferShapeTest, TestErfcUnary)
     EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), SUCCESS);
 }
 
+// BRCB op output whose DynValidShape exceeds tensor shape should be skipped and return SUCCESS.
+// Graph:
+//   incast1[16,16] --copy_in--> ub1[16,16] ------------------ add --> addOut[16,16] --copy_out--> outcast[16,16]
+//                                                            /
+//   incast2[16,1]  --copy_in--> ub2[16,1]  --brcb--> brcbOut[16,8](validShape=[16,16] > shape, skipped)
+TEST_F(InferShapeTest, BRCBSkipsValidShapeValidation)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "BRCBSkipsValidShapeValidation",
+                                                      "BRCBSkipsValidShapeValidation", nullptr);
+    ASSERT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape1 = {16, 16};
+    std::vector<int64_t> shape2 = {16, 1};
+    std::vector<int64_t> brcbShape = {16, 8};
+    auto shape1Imme = OpImmediate::Specified(shape1);
+    auto shape2Imme = OpImmediate::Specified(shape2);
+
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, std::vector<SymbolicScalar>{});
+    auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, std::vector<SymbolicScalar>{});
+    auto ub1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, std::vector<SymbolicScalar>{});
+    auto ub2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, std::vector<SymbolicScalar>{});
+    auto brcbOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, brcbShape, std::vector<SymbolicScalar>{});
+    auto addOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, std::vector<SymbolicScalar>{});
+    auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, std::vector<SymbolicScalar>{});
+
+    auto copyin1Attr = CreateCopyInAttribute(OpImmediate::Specified({0, 0}), MEM_UB, shape1Imme, shape1Imme,
+                                             {"Input_0_Dim_0", "Input_0_Dim_1"});
+    AddCopyOp(currFunctionPtr, Opcode::OP_COPY_IN, incast1, ub1, copyin1Attr);
+
+    auto copyin2Attr = CreateCopyInAttribute(OpImmediate::Specified({0, 0}), MEM_UB, shape2Imme, shape2Imme,
+                                             {"Input_1_Dim_0", "Input_1_Dim_1"});
+    AddCopyOp(currFunctionPtr, Opcode::OP_COPY_IN, incast2, ub2, copyin2Attr);
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_BRCB, {ub2}, {brcbOut});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ADD, {ub1, brcbOut}, {addOut});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {addOut}, {outcast});
+
+    ub1->UpdateDynValidShape(CreateTestConstIntVector(shape1));
+    ub2->UpdateDynValidShape(CreateTestConstIntVector(shape2));
+    brcbOut->UpdateDynValidShape({IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(16)});
+    addOut->UpdateDynValidShape(CreateTestConstIntVector(shape1));
+    outcast->UpdateDynValidShape(CreateTestConstIntVector(shape1));
+
+    AppendFunctionIO(currFunctionPtr, {incast1, incast2}, {outcast});
+
+    InferDynShape inferShapeTest;
+    inferShapeTest.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
+// A concrete DynValidShape larger than its tensor shape must fail post-check.
+TEST_F(InferShapeTest, CheckDynValidShapeFailed)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "CheckDynValidShapeFailed",
+                                                      "CheckDynValidShapeFailed", nullptr);
+    ASSERT_TRUE(currFunctionPtr != nullptr);
+
+    const std::vector<int64_t> shape = {16, 16};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{});
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{});
+    output->UpdateDynValidShape({IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(17)});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {input}, {output});
+    AppendFunctionIO(currFunctionPtr, {input}, {output});
+
+    InferDynShape inferShapeTest;
+    inferShapeTest.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), FAILED);
+}
+
 } // namespace tile_fwk
 } // namespace npu

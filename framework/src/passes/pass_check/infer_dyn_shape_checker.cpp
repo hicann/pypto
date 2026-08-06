@@ -63,8 +63,10 @@ Status InferDynShapeChecker::DoPostCheck(Function& function)
                                   op.GetOpcodeStr().c_str(), op.GetOpMagic(), opOut->GetMagic());
                 return FAILED;
             }
-            // 对多输出op的，不参与计算的临时Tensor不校验DynValidShape
-            if (opOut->GetConsumers().empty() && !function.IsFromOutCast(opOut)) {
+            // For multi-output Ops, skip DynValidShape validation for temporary Tensors not participating in
+            // computation. And BRCB
+            if ((opOut->GetConsumers().empty() && !function.IsFromOutCast(opOut)) ||
+                op.GetOpcode() == Opcode::OP_BRCB) {
                 continue;
             }
             if (!IsValidShapeInTensorShape(opOut)) {
