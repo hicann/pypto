@@ -31,6 +31,8 @@ export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH}/${arch}-linux
 export TILE_FWK_DEVICE_ID=0
 ```
 
+> **注**：前端代码（用户编写的 kernel、测试用例）可深入分析写法问题并尝试修正；框架代码（Pass/machine/同步/合轴/合图）仅定位问题归属，不分析框架内部根因。
+
 ## 场景路由
 
 ### 路由匹配规则
@@ -49,6 +51,8 @@ export TILE_FWK_DEVICE_ID=0
 7. machine校验 — 怀疑内存重叠时检测 workspace 是否有问题
 8. 直接上板二分 — 直接添加检查点二分定位
 ```
+
+> **machine校验 组合规则**：machine校验涉及重新编译 whl，成本较高且覆盖场景较少，**默认不加入任何流程**。仅当用户明确要求时，才在对pass校验流程的末端追加 machine校验 步骤。
 
 ### 路由表
 
