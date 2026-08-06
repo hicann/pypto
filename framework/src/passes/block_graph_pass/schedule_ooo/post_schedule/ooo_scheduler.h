@@ -17,17 +17,18 @@
 #define PASS_SCHEDULER_H
 
 #include <climits>
+
 #include "interface/tensor/irbuilder.h"
-#include "passes/pass_interface/pass.h"
-#include "passes/pass_utils/pass_utils.h"
-#include "passes/pass_utils/reschedule_utils.h"
-#include "passes/pass_check/schedule_ooo_checker.h"
 #include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"
 #include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
 #include "passes/block_graph_pass/schedule_ooo/common/schedule_state.h"
-#include "passes/statistics/schedule_observer.h"
-#include "passes/block_graph_pass/schedule_ooo/post_schedule/spill_engine.h"
 #include "passes/block_graph_pass/schedule_ooo/post_schedule/dualdst_engine.h"
+#include "passes/block_graph_pass/schedule_ooo/post_schedule/spill_engine.h"
+#include "passes/pass_check/schedule_ooo_checker.h"
+#include "passes/pass_interface/pass.h"
+#include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/reschedule_utils.h"
+#include "passes/statistics/schedule_observer.h"
 
 namespace npu::tile_fwk {
 
@@ -40,8 +41,6 @@ public:
 
 public:
     Status Schedule(const std::vector<Operation*>& opList,
-                    const std::unordered_map<Operation*, CoreLocationType>& opCoreMap =
-                        std::unordered_map<Operation*, CoreLocationType>(),
                     const std::unordered_set<CoreLocationType> fixCoreConfig = CORE_INIT_CONFIGS_HARDWARE_ONE);
     OoOScheduler(Function& function)
         : function_(function), spillEngine_(state_, function_), dualDstEngine_(state_, function_)
@@ -87,12 +86,10 @@ private:
 
     // scheduler
     Status Init(const std::vector<Operation*>& opList,
-                const std::unordered_map<Operation*, CoreLocationType>& opCoreMap =
-                    std::unordered_map<Operation*, CoreLocationType>(),
                 const std::unordered_set<CoreLocationType> fixCoreConfig = CORE_INIT_CONFIGS_HARDWARE_ONE);
 
-    Status InitOpEntry(Operation* op, const std::unordered_map<Operation*, CoreLocationType>& opCoreMap);
-    Status InitOpCoreType(Operation* op, const std::unordered_map<Operation*, CoreLocationType>& opCoreMap);
+    Status InitOpEntry(Operation* op);
+    Status InitOpCoreType(Operation* op);
     void InitOpViewOps(Operation* op);
 
     void InitCoreConfig(const std::vector<Operation*>& opList);

@@ -255,8 +255,6 @@ public:
     Status CalcBufferSize(LogicalTensors tensors, std::map<MemoryType, int64_t>& bufferSize, std::set<int>& memIdMap);
     std::string DumpOpInfo(Operation& op);
     Status CheckOpBufferSize(Operation* op);
-    void UpdateAllocMap(Operation* op, std::map<int, Operation*>& allocMap);
-    Status CheckAllocOp(std::vector<Operation*> list);
     Status Init(std::vector<Operation*>& opList);
 
     std::vector<Operation*>& GetViewOps(Operation* op) { return schedInfoMap[op].viewOps; }

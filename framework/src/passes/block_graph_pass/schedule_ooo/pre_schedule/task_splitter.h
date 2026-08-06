@@ -62,7 +62,8 @@ public:
     std::vector<std::vector<int>> FindMergeableTaskNodes();
     void MergeTask();
     void MergeTaskByTargetCoreType();
-    void MarkInternalSubgraphID();
+    Status MarkInternalSubgraphID();
+    Status SetAllocInternalSubgraphID(Operation* op);
     void CombineSCC(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes,
                     std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
                     std::vector<std::vector<int>>& sccResult);

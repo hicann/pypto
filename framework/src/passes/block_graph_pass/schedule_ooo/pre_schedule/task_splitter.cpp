@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -14,11 +14,12 @@
  */
 
 #include "task_splitter.h"
-#include "passes/pass_log/pass_log.h"
 
 #include <algorithm>
 #include <queue>
 #include <stack>
+
+#include "passes/pass_log/pass_log.h"
 
 #ifndef MODULE_NAME
 #define MODULE_NAME "CoreAssign"
@@ -33,39 +34,15 @@ void TaskSplitter::BuildSameLayerConnectionWithBack()
         if (ALLOC_OPCODE.count(opList_[i]->GetOpcode()) == 0) {
             continue;
         }
-        ScheduleCoreType srcCoreType = opCoreTypes_[i];
         APASS_LOG_DEBUG_F(Elements::Operation, "Found alloc op %s[%d].", opList_[i]->GetOpcodeStr().c_str(),
                           opList_[i]->GetOpMagic());
-        bool withBack = true;
         for (auto& oop : opList_[i]->GetOOperands()) {
             for (auto& sameLayerOpPtr : oop->GetProducers()) {
                 int dstOpMagic = sameLayerOpPtr->GetOpMagic();
                 if (opMagicToIdx_.count(dstOpMagic) == 0) {
                     continue;
                 }
-                if (opCoreTypes_[opMagicToIdx_[dstOpMagic]] != srcCoreType ||
-                    opList_[i]->GetOpMagic() == sameLayerOpPtr->GetOpMagic()) {
-                    continue;
-                }
-                APASS_LOG_DEBUG_F(Elements::Operation,
-                                  "-- add %s[%d] to same layer connection because of the alloc op.",
-                                  sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
-                sameLayerConnection_.push_back({i, opMagicToIdx_[sameLayerOpPtr->GetOpMagic()]});
-                withBack = false;
-            }
-        }
-        if (withBack) {
-            for (auto& oop : opList_[i]->GetOOperands()) {
-                auto& consumers = oop->GetConsumers();
-                if (consumers.empty()) {
-                    continue;
-                }
-                auto& sameLayerOpPtr = *consumers.begin();
-                int dstOpMagic = sameLayerOpPtr->GetOpMagic();
-                if (opMagicToIdx_.count(dstOpMagic) == 0) {
-                    continue;
-                }
-                if (opCoreTypes_[opMagicToIdx_[dstOpMagic]] != srcCoreType) {
+                if (opList_[i]->GetOpMagic() == sameLayerOpPtr->GetOpMagic()) {
                     continue;
                 }
                 APASS_LOG_DEBUG_F(Elements::Operation,
@@ -1429,36 +1406,77 @@ void TaskSplitter::ComputeTaskLevelBranches()
     APASS_LOG_INFO_F(Elements::Operation, "Built %d task-level vector branches.", branchIdx);
 }
 
+Status TaskSplitter::SetAllocInternalSubgraphID(Operation* op)
+{
+    ScheduleCoreType srcCoreType = opCoreTypes_[opMagicToIdx_[op->GetOpMagic()]];
+    for (auto& producer : op->GetOutputOperand(0)->GetProducers()) {
+        int producerMagic = producer->GetOpMagic();
+        if (opMagicToIdx_.count(producerMagic) == 0 || op == producer) {
+            continue;
+        }
+        if (opCoreTypes_[opMagicToIdx_[producerMagic]] == srcCoreType) {
+            op->SetAIVCore(producer->GetAIVCore());
+            op->UpdateInternalSubgraphID(producer->GetInternalSubgraphID());
+            return SUCCESS;
+        }
+    }
+    for (auto& consumer : op->ConsumerOps()) {
+        int consumerMagic = consumer->GetOpMagic();
+        if (opMagicToIdx_.count(consumerMagic) == 0 || opCoreTypes_[opMagicToIdx_[consumerMagic]] != srcCoreType) {
+            continue;
+        }
+        op->SetAIVCore(consumer->GetAIVCore());
+        op->UpdateInternalSubgraphID(consumer->GetInternalSubgraphID());
+        return SUCCESS;
+    }
+    APASS_LOG_ERROR_F(Elements::Operation, "Set %s[%d] internal SubgraphID failed.", op->GetOpcodeStr().c_str(),
+                      op->GetOpMagic());
+    return FAILED;
+}
+
 // 根据划分结果标记op的AIVCore与internalSubgraphID
-void TaskSplitter::MarkInternalSubgraphID()
+Status TaskSplitter::MarkInternalSubgraphID()
 {
     std::unordered_map<TargetCoreType, AIVCore> targetMap{{TargetCoreType::AIC, AIVCore::UNSPECIFIED},
                                                           {TargetCoreType::UNKNOWN, AIVCore::UNSPECIFIED},
                                                           {TargetCoreType::AIV0, AIVCore::AIV0},
                                                           {TargetCoreType::AIV1, AIVCore::AIV1}};
-    std::unordered_map<TargetCoreType, int> subGraphIdMap{{TargetCoreType::AIC, NEGATIVE_ONE},
-                                                          {TargetCoreType::AIV0, NEGATIVE_ONE},
-                                                          {TargetCoreType::AIV1, NEGATIVE_ONE},
+    std::unordered_map<TargetCoreType, int> subGraphIdMap{{TargetCoreType::AIC, 0},
+                                                          {TargetCoreType::AIV0, 1},
+                                                          {TargetCoreType::AIV1, 1},
                                                           {TargetCoreType::UNKNOWN, NEGATIVE_ONE}};
-    int id = 0;
+    std::unordered_set<AIVCore> targetTypes;
     for (auto& task : taskGraph_.tasks) {
         if (task.targetCoreType == TargetCoreType::UNKNOWN) {
-            APASS_LOG_ERROR_F(Elements::Operation, "task %d coreType is unknow", task.idx);
+            APASS_LOG_ERROR_F(Elements::Operation, "task %d coreType is unknown", task.idx);
         }
-        AIVCore targetType = targetMap[task.targetCoreType];
-        if (subGraphIdMap[task.targetCoreType] == NEGATIVE_ONE) {
-            subGraphIdMap[task.targetCoreType] = id++;
-        }
+        targetTypes.insert(targetMap[task.targetCoreType]);
+    }
+    if (targetTypes.size() <= 1) {
+        APASS_LOG_ERROR_F(Elements::Operation, "task coreType must more than 1");
+        return FAILED;
+    } else if (targetTypes.size() == 3) {
+        subGraphIdMap[TargetCoreType::AIV1]++;
+    }
+    for (auto& task : taskGraph_.tasks) {
         for (auto opPtr : task.opList_) {
-            opPtr->SetAIVCore(targetType);
+            if (ALLOC_OPCODE.count(opPtr->GetOpcode()) == 0) {
+                opPtr->SetAIVCore(targetMap[task.targetCoreType]);
+                opPtr->UpdateInternalSubgraphID(subGraphIdMap[task.targetCoreType]);
+            }
         }
     }
     for (auto& task : taskGraph_.tasks) {
-        auto subGraphId = subGraphIdMap[task.targetCoreType];
         for (auto opPtr : task.opList_) {
-            opPtr->UpdateInternalSubgraphID(subGraphId);
+            if (ALLOC_OPCODE.count(opPtr->GetOpcode()) == 0) {
+                continue;
+            }
+            if (SetAllocInternalSubgraphID(opPtr) != SUCCESS) {
+                return FAILED;
+            }
         }
     }
+    return SUCCESS;
 }
 
 // 将多个taskNode的opList在保持内部顺序的前提下合并成符合拓扑序的一个opList

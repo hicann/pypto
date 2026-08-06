@@ -14,25 +14,26 @@
  */
 
 #include <gtest/gtest.h>
+
 #include <algorithm>
 #include <string>
 #include <vector>
-#include "interface/function/function.h"
-#include "interface/tensor/irbuilder.h"
-#include "symbolic_scalar_test_utils.h"
-#include "tilefwk/tilefwk.h"
-#include "tilefwk/platform.h"
-#include "interface/inner/tilefwk.h"
-#include "passes/pass_mgr/pass_manager.h"
+
 #include "interface/configs/config_manager.h"
+#include "interface/function/function.h"
+#include "interface/inner/tilefwk.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_mgr/pass_manager.h"
+#include "symbolic_scalar_test_utils.h"
+#include "tilefwk/platform.h"
+#include "tilefwk/tilefwk.h"
 #define private public
-#include "passes/block_graph_pass/schedule_ooo/schedule_ooo.h"
-#include "passes/block_graph_pass/schedule_ooo/pre_schedule/core_assign.h"
-#include "passes/block_graph_pass/schedule_ooo/post_schedule/buffer_rearrange.h"
-#include "passes/block_graph_pass/schedule_ooo/common/iso_matcher.h"
-#include "passes/tile_graph_pass/graph_constraint/infer_dyn_shape.h"
 #include "computational_graph_builder.h"
+#include "passes/block_graph_pass/schedule_ooo/common/iso_matcher.h"
+#include "passes/block_graph_pass/schedule_ooo/post_schedule/buffer_rearrange.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/core_assign.h"
+#include "passes/block_graph_pass/schedule_ooo/schedule_ooo.h"
+#include "passes/tile_graph_pass/graph_constraint/infer_dyn_shape.h"
 
 namespace npu::tile_fwk {
 constexpr int OOO_NUM2 = 2;
@@ -1823,67 +1824,6 @@ TEST_F(ScheduleOoOTest, TestOooScopeMerge)
     EXPECT_TRUE(foundMerged24) << "op2 and op4 should be merged into one task by ooo_scope";
 }
 
-TEST_F(ScheduleOoOTest, TestLatencyEstimatorMainLoop)
-{
-    ComputationalGraphBuilder subGraph;
-
-    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4", "t5"};
-    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_L0A, MemoryType::MEM_L0B,
-                                           MemoryType::MEM_L0C, MemoryType::MEM_UB};
-
-    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC,    Opcode::OP_L0A_ALLOC, Opcode::OP_L0B_ALLOC,
-                                Opcode::OP_A_MUL_B,     Opcode::OP_L0C_ALLOC, Opcode::OP_UB_ALLOC,
-                                Opcode::OP_L0C_COPY_UB, Opcode::OP_UB_COPY_L1};
-
-    std::vector<std::vector<std::string>> ioperands{{}, {}, {}, {"t2", "t3"}, {}, {}, {"t4"}, {"t1"}};
-
-    std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"t3"}, {"t4"}, {"t4"}, {"t5"}, {"t5"}, {"t2"}};
-
-    std::vector<std::string> opNames{"UB_ALLOC2",  "L0A_Alloc1", "L0B_Alloc1",     "Mul1",
-                                     "L0C_Alloc1", "UB_ALLOC1",  "OP_L0C_COPY_UB", "OP_UB_COPY_L1"};
-
-    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, tensorMemTypes, tensorNames, 0), true);
-    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
-
-    Function* function = subGraph.GetFunction();
-    EXPECT_NE(function, nullptr);
-
-    auto opList = function->Operations(false).DuplicatedOpList();
-    auto taskList = opList;
-    taskList.erase(taskList.begin());
-    int latency = 0;
-    OoOSchedule oooSchedule;
-    Status res = oooSchedule.SortAndLatencyEstimate(opList, taskList, latency);
-    EXPECT_EQ(res, SUCCESS);
-}
-
-TEST_F(ScheduleOoOTest, TestMixSchedule)
-{
-    ComputationalGraphBuilder subGraph;
-    std::vector<std::string> tensorNames{"T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"};
-    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR,
-                                           MemoryType::MEM_UB,         MemoryType::MEM_UB, MemoryType::MEM_UB,
-                                           MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB};
-    std::vector<Opcode> opcodeList{
-        Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC,      Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC,
-        Opcode::OP_COPY_IN,  Opcode::OP_COPY_IN,  Opcode::OP_ROWMAX_SINGLE, Opcode::OP_ADD,      Opcode::OP_COPY_OUT};
-    std::vector<std::vector<std::string>> inputoperands{{},     {},     {},     {},           {},
-                                                        {"T1"}, {"T3"}, {"T2"}, {"T4", "T5"}, {"T5"}};
-    std::vector<std::vector<std::string>> outputoperands{{"T2"}, {"T4"}, {"T5"},       {"T6"}, {"T8"},
-                                                         {"T2"}, {"T4"}, {"T5", "T6"}, {"T8"}, {"T7"}};
-    std::vector<std::string> opNames{"Alloc1",  "Alloc2",  "Alloc3",  "Alloc4", "Alloc5",
-                                     "Copyin1", "Copyin2", "RowMax1", "Add1",   "Copyout1"};
-    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {32, 32}, tensorMemTypes, tensorNames, 0), true);
-    EXPECT_EQ(subGraph.AddOps(opcodeList, inputoperands, outputoperands, opNames, true), true);
-    Function* function = subGraph.GetFunction();
-    OoOSchedule oooSchedule;
-    auto opList = function->Operations(false).DuplicatedOpList();
-    std::pair<uint64_t, Function*> functionPair = std::make_pair(0, function);
-    int64_t size = 0;
-    Status res = oooSchedule.MixSchedule(opList, *function, functionPair, size);
-    EXPECT_EQ(res, SUCCESS);
-}
-
 TEST_F(ScheduleOoOTest, TestBufferPollRearrange)
 {
     BufferPool pool;
@@ -2040,23 +1980,21 @@ TEST_F(ScheduleOoOTest, TestOoO1C2V)
     EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
     subGraph.GetOp("ADDS1")->SetAttribute(OpAttributeKey::isCube, false);
     Function* function = subGraph.GetFunction();
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
     auto op1 = subGraph.GetOp("ADDS3");
     auto op2 = subGraph.GetOp("ADDS2");
     auto op3 = subGraph.GetOp("ADDS1");
     auto op4 = subGraph.GetOp("L1_TO_L0A");
-    OptimizeSort optimizeSort(function->Operations().DuplicatedOpList(), *function);
-    Status res = optimizeSort.SortOps();
-    EXPECT_EQ(res, SUCCESS);
-    auto opList = optimizeSort.operations;
     OoOSchedule oooSchedule;
     std::pair<uint64_t, Function*> functionPair = std::make_pair(0, function);
     int64_t size = 0;
-    res = oooSchedule.MixSchedule(opList, *function, functionPair, size);
+    std::vector<Operation*> opList = function->Operations().DuplicatedOpList();
+    auto res = oooSchedule.Schedule(opList, *function, functionPair, size);
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(op1->GetInternalSubgraphID(), 0);
+    EXPECT_EQ(op1->GetInternalSubgraphID(), 1);
     EXPECT_EQ(op2->GetInternalSubgraphID(), 1);
-    EXPECT_EQ(op3->GetInternalSubgraphID(), 0);
-    EXPECT_EQ(op4->GetInternalSubgraphID(), 2);
+    EXPECT_EQ(op3->GetInternalSubgraphID(), 2);
+    EXPECT_EQ(op4->GetInternalSubgraphID(), 0);
 }
 
 void SetInternalSubgraphIDAndAIVCore(Operation* op, int id)
@@ -2117,43 +2055,6 @@ void SetAttribute(ComputationalGraphBuilder& subGraph, OoOScheduler& oooSchedule
     auto coreAIC = CoreLocationType::AIC;
     oooSchedule.state_.bufferManagerMap[coreAIC][MemoryType::MEM_L1].Allocate(localBuffer1);
     oooSchedule.state_.tensorOccupyMap.emplace(0, copyin2);
-}
-
-TEST_F(ScheduleOoOTest, TestMixGraphAndDAV_3510)
-{
-    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestParams", "TestParams", nullptr);
-    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestOOO", "TestOOO", rootFuncPtr.get());
-    currFunctionPtr->paramConfigs_.OoOPreScheduleMethod = "PriorDFS";
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-    currFunctionPtr->SetGraphType(GraphType::BLOCK_GRAPH);
-    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
-    std::vector<int64_t> shape = {16, 16};
-    auto shapeImme = OpImmediate::Specified(shape);
-
-    auto tensor0 = CreateTensor(DataType::DT_FP32, shape, MEM_DEVICE_DDR, 0);
-    auto tensor1 = CreateTensor(DataType::DT_FP32, shape, MEM_DEVICE_DDR, 1);
-    auto tensor2 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 2);
-    auto tensor3 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 3);
-    auto tensor4 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 4);
-    auto tensor5 = CreateTensor(DataType::DT_FP32, shape, MEM_L0A, 5);
-    CreateAllocOp(*currFunctionPtr, tensor2, 1);
-    CreateAllocOp(*currFunctionPtr, tensor3, 1);
-    CreateAllocOp(*currFunctionPtr, tensor4, 1);
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_L0A_ALLOC, {}, LogicalTensors({tensor5}));
-    CreateCopyOp(*currFunctionPtr, Opcode::OP_COPY_IN, tensor0, tensor2, shape);
-    CreateCopyOp(*currFunctionPtr, Opcode::OP_COPY_IN, tensor1, tensor3, shape);
-    CreateAddOp(*currFunctionPtr, tensor2, tensor3, tensor4);
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_UB_COPY_L1, LogicalTensors({tensor4}),
-                                     LogicalTensors({tensor5}));
-    for (auto& program : rootFuncPtr->rootFunc_->programs_) {
-        ReorderOperations(*(program.second));
-    }
-    currFunctionPtr->EndFunction(nullptr);
-    OoOSchedule oooSchedule;
-    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
-    EXPECT_EQ(oooSchedule.RunOnFunction(*rootFuncPtr), SUCCESS);
-    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
 TEST_F(ScheduleOoOTest, TensorMemTypeMismatch)
@@ -2379,7 +2280,7 @@ DualDstGraph BuildOnlineSoftmaxDualDstGraph()
 
 Status InitDualDstScheduler(OoOScheduler& s, const DualDstGraph& g, bool enableGuard = false)
 {
-    Status st = s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO);
+    Status st = s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO);
     if (st != SUCCESS)
         return st;
     InjectCoreMap(s, g);
@@ -2474,7 +2375,7 @@ TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpEqual_HitsIdentify)
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape({SymbolicScalar("S0"), SymbolicScalar("S1")});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
     std::vector<DualDstPair> pairs;
@@ -2492,7 +2393,7 @@ TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_ConcreteEqualButDifferentDump_StillHi
         {SymbolicScalar("c", dualdst_ut::TILE_M), SymbolicScalar("d", dualdst_ut::TILE_N)});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
     std::vector<DualDstPair> pairs;
@@ -2508,7 +2409,7 @@ TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpDifferAndNoConcrete_NoPair)
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape({SymbolicScalar("Y0"), SymbolicScalar("Y1")});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
     std::vector<DualDstPair> pairs;
@@ -2525,7 +2426,7 @@ TEST_F(ScheduleOoOTest, DualDst_ReadGeometry_PrefersStaticValidShape)
     dualdst_ut::InjectStaticValidShape(*g.copy1, {dualdst_ut::TILE_M, dualdst_ut::TILE_N});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
     std::vector<DualDstPair> pairs;
@@ -2543,7 +2444,7 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_SplitN_HappyPath)
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
     std::vector<DualDstPair> pairs;
@@ -2562,7 +2463,7 @@ TEST_F(ScheduleOoOTest, DualDst_ShouldEnableDualDst_WithOnlineSoftmaxTasks)
     TaskSplitter splitter;
     splitter.SplitGraph(opList);
     OoOSchedule oooSchedule;
-    ASSERT_EQ(oooSchedule.EstimateTaskLatencyAndSchedule(splitter, opList), SUCCESS);
+    ASSERT_EQ(oooSchedule.TaskSchedule(opList, *g.func, splitter), SUCCESS);
 
     EXPECT_TRUE(dualdst_ut::HasAiv0AndAiv1Tasks(splitter));
     ASSERT_TRUE(oooSchedule.ShouldEnableDualDst(splitter));
@@ -2594,7 +2495,7 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_SplitM_HappyPath)
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
     std::vector<DualDstPair> pairs;
@@ -2618,7 +2519,7 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_NotAdjacent_NoPair)
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
     std::vector<DualDstPair> pairs;
@@ -2636,7 +2537,7 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_SameConsumerCore_NoPair)
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g, /*sameCoreForAdds=*/true); // both consumers AIV0
 
     std::vector<DualDstPair> pairs;
@@ -2654,7 +2555,7 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_DisabledIsNoOp)
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
     s.SetEnableDualDst(false);
@@ -2671,7 +2572,7 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_SingleAivPoolEarlyExit)
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_ONE), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_ONE), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
     s.SetEnableDualDst(true);
@@ -2688,7 +2589,7 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_ActuallyFusesAndMutatesFunction)
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
 
     size_t opsBefore = g.func->Operations().size();
@@ -2718,7 +2619,7 @@ TEST_F(ScheduleOoOTest, DualDst_AllocQueryHelpers_AfterFuse)
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
     s.SetEnableDualDst(true);
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
@@ -2798,7 +2699,7 @@ TEST_F(ScheduleOoOTest, DualDst_AivUbAllocUsesMatchedPeerOffset)
                                            {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     s.SetEnableDualDst(true);
     s.SetEnableDualDstAllocGuard(true);
 
@@ -2860,7 +2761,7 @@ TEST_F(ScheduleOoOTest, DualDst_AllocateDualDstAtCurrent_HappyPath)
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
     s.SetEnableDualDst(true);
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
@@ -2900,6 +2801,9 @@ TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_PicksMatchingGroupAcrossAivPo
 
     OoOScheduler s(*g.func);
     ASSERT_EQ(dualdst_ut::InitDualDstScheduler(s, g), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+    s.SetEnableDualDst(true);
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
 
     Operation* dual = dualdst_ut::FindDualDstOp(*g.func);
@@ -2933,7 +2837,7 @@ TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_EmptyPoolsReturnEmpty)
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
     dualdst_ut::InjectCoreMap(s, g);
     s.SetEnableDualDst(true);
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
@@ -2966,7 +2870,7 @@ TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_FindsSharedStartAddrCandidate)
                                            {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
 
     auto& poolA = s.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
     auto& poolB = s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
@@ -2996,7 +2900,7 @@ TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_NeedSizeExceedsPoolReturnsEmpt
                                            {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
 
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
 
     auto& poolA = s.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
     auto& poolB = s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
@@ -3050,7 +2954,7 @@ TEST_F(ScheduleOoOTest, DualDst_GetNewOperations_DedupePreservesFirstOccurrence)
     auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
                                            {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     OoOScheduler s(*g.func);
-    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
 
     s.state_.newOperations.clear();
     s.state_.newOperations.push_back(g.copy0);

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -260,55 +260,6 @@ Status ScheduleState::CheckOpBufferSize(Operation* op)
             APASS_LOG_ERROR_F(Elements::Operation, " %s.", DumpOpInfo(*op).c_str());
         }
         return FAILED;
-    }
-    return SUCCESS;
-}
-
-void ScheduleState::UpdateAllocMap(Operation* op, std::map<int, Operation*>& allocMap)
-{
-    for (auto outTensor : op->GetOOperands()) {
-        if (outTensor->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
-            continue;
-        }
-        int memId = outTensor->memoryrange.memId;
-        if (allocMap.find(memId) == allocMap.end()) {
-            allocMap[memId] = op;
-        }
-    }
-    for (auto inTensor : op->GetIOperands()) {
-        if (inTensor->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
-            continue;
-        }
-        int memId = inTensor->memoryrange.memId;
-        if (allocMap.find(memId) == allocMap.end()) {
-            allocMap[memId] = op;
-        }
-    }
-}
-
-Status ScheduleState::CheckAllocOp(std::vector<Operation*> list)
-{
-    std::map<int, Operation*> allocMap;
-    for (const auto& op : list) {
-        if (IsOpAlloc(op)) {
-            if (GetInOutOperandCached(op).size() != 1) {
-                APASS_LOG_ERROR_F(Elements::Operation, "%s InOutOperand size not equal to 1.", GetOpInfo(op).c_str());
-                return FAILED;
-            }
-            UpdateAllocMap(op, allocMap);
-        }
-    }
-    for (const auto& op : list) {
-        if (!IsOpAlloc(op)) {
-            UpdateAllocMap(op, allocMap);
-        }
-    }
-    for (auto allocEntry : allocMap) {
-        if (!IsOpAlloc(allocEntry.second)) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "%s Tensor[%d] is missing Alloc.", GetOpInfo(allocEntry.second).c_str(),
-                              allocEntry.first);
-            return FAILED;
-        }
     }
     return SUCCESS;
 }

@@ -230,9 +230,15 @@ void LatencyEstimator::initLatencyEstimatorOpQueues()
 
 void LatencyEstimator::InitMemWithoutAlloc()
 {
+    std::unordered_map<int, Operation*> allocMap;
+    for (const auto& op : operations) {
+        if (op->GetOpcodeStr().find("ALLOC") != std::string::npos) {
+            allocMap[op->GetOutputOperand(0)->memoryrange.memId] = op;
+        }
+    }
     std::unordered_set<int> memIds;
     std::unordered_map<int, Operation*> memIdAllocMap;
-    bool needAddAlloc = false;
+    std::unordered_map<Operation*, std::unordered_set<int>> opMemidMap;
     for (const auto& op : taskList) {
         if (state_.IsOpAlloc(op)) {
             memIdAllocMap[op->GetOutputOperand(0)->memoryrange.memId] = op;
@@ -240,11 +246,13 @@ void LatencyEstimator::InitMemWithoutAlloc()
         for (auto& iOperand : op->GetIOperands()) {
             if (iOperand->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
                 memIds.insert(iOperand->memoryrange.memId);
+                opMemidMap[op].insert(iOperand->memoryrange.memId);
             }
         }
         for (auto& oOperand : op->GetOOperands()) {
             if (oOperand->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
                 memIds.insert(oOperand->memoryrange.memId);
+                opMemidMap[op].insert(oOperand->memoryrange.memId);
             }
         }
     }
@@ -253,23 +261,19 @@ void LatencyEstimator::InitMemWithoutAlloc()
             continue;
         }
         APASS_LOG_INFO_F(Elements::Operation, "The alloc op of memId[%d] in other graph", memId);
-        needAddAlloc = true;
-        for (const auto& op : operations) {
-            if (state_.IsOpAlloc(op) && op->GetOutputOperand(0)->memoryrange.memId == memId) {
-                taskList.push_back(op);
-                APASS_LOG_INFO_F(Elements::Operation, "Add alloc op %s for memId[%d]", state_.GetOpInfo(op).c_str(),
-                                 memId);
+        for (size_t i = 0; i < taskList.size(); ++i) {
+            if (opMemidMap[taskList[i]].find(memId) == opMemidMap[taskList[i]].end()) {
+                continue;
             }
-        }
-    }
-    std::vector<Operation*> opList;
-    if (needAddAlloc) {
-        for (auto op : operations) {
-            if (std::find(taskList.begin(), taskList.end(), op) != taskList.end()) {
-                opList.push_back(op);
+            if (allocMap.find(memId) == allocMap.end()) {
+                continue;
             }
+            memIdAllocMap[memId] = allocMap[memId];
+            taskList.insert(taskList.begin() + i, allocMap[memId]);
+            APASS_LOG_INFO_F(Elements::Operation, "Add %s for memId[%d]", state_.GetOpInfo(allocMap[memId]).c_str(),
+                             memId);
+            break;
         }
-        taskList = opList;
     }
 }
 

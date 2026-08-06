@@ -863,14 +863,16 @@ void OoOScheduler::InitOpViewOps(Operation* op)
     state_.schedInfoMap[op].viewOps = viewOps;
 }
 
-Status OoOScheduler::InitOpCoreType(Operation* op, const std::unordered_map<Operation*, CoreLocationType>& opCoreMap)
+Status OoOScheduler::InitOpCoreType(Operation* op)
 {
     if (op == nullptr)
         return FAILED;
-
+    std::unordered_map<int, CoreLocationType> opCoreMap = {
+        {0, CoreLocationType::AIC}, {1, CoreLocationType::AIV0}, {2, CoreLocationType::AIV1}};
     CoreLocationType coreLocation;
-    if (!opCoreMap.empty()) {
-        coreLocation = opCoreMap.at(op);
+    int internalSubgraphID = op->GetInternalSubgraphID();
+    if (internalSubgraphID != -1) {
+        coreLocation = opCoreMap[op->GetInternalSubgraphID()];
     } else if (op->GetCoreType() == CoreType::AIC) {
         coreLocation = CoreLocationType::AIC;
     } else if (op->GetCoreType() == CoreType::AIV) {
@@ -890,15 +892,11 @@ Status OoOScheduler::InitOpCoreType(Operation* op, const std::unordered_map<Oper
             } else if (op->GetInputOperand(0)->GetMemoryTypeOriginal() <= MemoryType::MEM_BT) {
                 coreLocation = CoreLocationType::AIC;
             } else {
-                APASS_LOG_ERROR_F(Elements::Operation, "%s init coreLocation failed. IOperand memoryType is %s",
-                                  state_.GetOpInfo(op).c_str(),
-                                  MemoryTypeToString(op->GetInputOperand(0)->GetMemoryTypeOriginal()).c_str());
+                APASS_LOG_ERROR_F(Elements::Operation, "%s init coreLocation failed.", state_.GetOpInfo(op).c_str());
                 return FAILED;
             }
         } else {
-            APASS_LOG_ERROR_F(Elements::Operation, "%s init coreLocation failed. OOperand memoryType is %s",
-                              state_.GetOpInfo(op).c_str(),
-                              MemoryTypeToString(op->GetOutputOperand(0)->GetMemoryTypeOriginal()).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "%s init coreLocation failed.", state_.GetOpInfo(op).c_str());
             return FAILED;
         }
     }
@@ -906,7 +904,7 @@ Status OoOScheduler::InitOpCoreType(Operation* op, const std::unordered_map<Oper
     return SUCCESS;
 }
 
-Status OoOScheduler::InitOpEntry(Operation* op, const std::unordered_map<Operation*, CoreLocationType>& opCoreMap)
+Status OoOScheduler::InitOpEntry(Operation* op)
 {
     if (op == nullptr)
         return FAILED;
@@ -936,7 +934,7 @@ Status OoOScheduler::InitOpEntry(Operation* op, const std::unordered_map<Operati
     InitOpViewOps(op);
 
     // 初始化核属性
-    if (InitOpCoreType(op, opCoreMap) != SUCCESS) {
+    if (InitOpCoreType(op) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Operation %s init coreType failed!", state_.GetOpInfo(op).c_str());
         return FAILED;
     }
@@ -947,7 +945,6 @@ Status OoOScheduler::InitOpEntry(Operation* op, const std::unordered_map<Operati
 }
 
 Status OoOScheduler::Init(const std::vector<Operation*>& opList,
-                          const std::unordered_map<Operation*, CoreLocationType>& opCoreMap,
                           const std::unordered_set<CoreLocationType> fixCoreConfig)
 {
     state_.orderedOps.clear();
@@ -964,7 +961,7 @@ Status OoOScheduler::Init(const std::vector<Operation*>& opList,
     }
     // 校验并初始化Operation
     for (const auto& op : opList) {
-        if (InitOpEntry(op, opCoreMap) != SUCCESS) {
+        if (InitOpEntry(op) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "Operation %s[%d] init issue failed!", op->GetOpcodeStr().c_str(),
                               op->GetOpMagic());
             return FAILED;
@@ -982,10 +979,6 @@ Status OoOScheduler::Init(const std::vector<Operation*>& opList,
         return FAILED;
     }
     state_.depManager.PrintDependencies(state_.orderedOps);
-    if (state_.CheckAllocOp(state_.orderedOps) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "CheckAllocOp failed!");
-        return FAILED;
-    }
     InitTensorCoreMap();
     // 初始化内存管理器
     InitIssueQueuesAndBufferManager();
@@ -1047,7 +1040,6 @@ Status OoOScheduler::FinalizeScheduleResult(const std::vector<Operation*>& opLis
     return SUCCESS;
 }
 Status OoOScheduler::Schedule(const std::vector<Operation*>& opList,
-                              const std::unordered_map<Operation*, CoreLocationType>& opCoreMap,
                               const std::unordered_set<CoreLocationType> fixCoreConfig)
 {
     struct EndGuard {
@@ -1060,7 +1052,7 @@ Status OoOScheduler::Schedule(const std::vector<Operation*>& opList,
         return SUCCESS;
     }
 
-    if (Init(opList, opCoreMap, fixCoreConfig) != SUCCESS) {
+    if (Init(opList, fixCoreConfig) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Init failed!");
         return FAILED;
     }

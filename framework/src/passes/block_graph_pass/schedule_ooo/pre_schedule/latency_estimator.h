@@ -23,8 +23,8 @@ namespace npu::tile_fwk {
 class LatencyEstimator {
 public:
     LatencyEstimator() {}
-    LatencyEstimator(std::vector<Operation*>& newTaskList, std::vector<Operation*>& newOperations)
-        : taskList(newTaskList), operations(newOperations)
+    LatencyEstimator(std::vector<Operation*> newTaskList, std::vector<Operation*> newOperations)
+        : taskList(std::move(newTaskList)), operations(std::move(newOperations))
     {
         InitMemWithoutAlloc();
         state_.Init(taskList);

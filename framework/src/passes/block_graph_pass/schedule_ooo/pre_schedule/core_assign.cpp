@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -14,17 +14,18 @@
  */
 
 #include "core_assign.h"
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <numeric>
+#include <sstream>
+
 #include "local_search_solver.h"
 #include "passes/pass_log/pass_log.h"
-
-#include <cstdio>
-#include <sstream>
-#include <cstring>
-#include <cstdlib>
-#include <cmath>
-#include <array>
-#include <numeric>
-#include <algorithm>
 
 #ifndef MODULE_NAME
 #define MODULE_NAME "CoreAssign"
@@ -124,8 +125,6 @@ void CoreScheduler::FindEarliestSlot(std::vector<std::pair<int, int>>& timeSlot,
     int currentEarliestStart = INT32_MAX;
     currentIdx = -1;
     currentInterval = std::make_pair(-1, -1);
-    APASS_LOG_DEBUG_F(Elements::Operation, "Try to find earliest slot with earliestStart=%d and latency=%d.",
-                      earliestStart, latency);
     for (int i = 0; i < static_cast<int>(timeSlot.size()); i++) {
         int validStart = std::max(timeSlot[i].first, earliestStart);
         if (timeSlot[i].second - validStart < latency) {
@@ -137,8 +136,6 @@ void CoreScheduler::FindEarliestSlot(std::vector<std::pair<int, int>>& timeSlot,
             currentIdx = i;
         }
     }
-    APASS_LOG_DEBUG_F(Elements::Operation, "The earliest slot is from %d to %d.", currentInterval.first,
-                      currentInterval.second);
 }
 
 // 更新空闲时间槽
@@ -146,17 +143,12 @@ void CoreScheduler::UpdateInterval(std::vector<std::pair<int, int>>& timeSlot, i
                                    std::pair<int, int>& insertInterval)
 {
     auto origInterval = timeSlot[insertIdx];
-    APASS_LOG_DEBUG_F(Elements::Operation, "The original slot [%d, %d] is removed.", origInterval.first,
-                      origInterval.second);
     timeSlot.erase(timeSlot.begin() + insertIdx);
     if (origInterval.first < insertInterval.first) {
         timeSlot.push_back(std::make_pair(origInterval.first, insertInterval.first));
-        APASS_LOG_DEBUG_F(Elements::Operation, "New slot [%d, %d] is added.", origInterval.first, insertInterval.first);
     }
     if (origInterval.second > insertInterval.second) {
         timeSlot.push_back(std::make_pair(insertInterval.second, origInterval.second));
-        APASS_LOG_DEBUG_F(Elements::Operation, "New slot [%d, %d] is added.", insertInterval.second,
-                          origInterval.second);
     }
 }
 

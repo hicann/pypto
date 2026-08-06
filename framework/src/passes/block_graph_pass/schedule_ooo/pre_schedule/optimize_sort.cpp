@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -14,6 +14,9 @@
  */
 
 #include "optimize_sort.h"
+
+#include <queue>
+
 #include "prior_dfs_sort.h"
 #include <queue>
 #include "passes/pass_log/pass_log.h"
@@ -588,10 +591,6 @@ Status OptimizeSort::SortOps()
     }
     LOG_SCOPE_BEGIN(tSortOps, Elements::Function, "SortOps");
     sorter->state_.Init(sorter->operations);
-    if (sorter->state_.CheckAllocOp(sorter->operations) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "CheckAllocOp failed!");
-        return FAILED;
-    }
     if (sorter->operations.empty()) {
         return SUCCESS;
     }
