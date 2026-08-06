@@ -814,3 +814,136 @@ TEST_F(TestDeviceTaskContext, test_process_wrap_queue_aiv1)
     EXPECT_EQ(wrapQueue->elem[0].tasklist[WRAP_IDX_AIV0], AICORE_TASK_INIT);
     EXPECT_EQ(wrapQueue->elem[0].tasklist[WRAP_IDX_AIV1], MakeTaskID(0, 0));
 }
+
+TEST_F(TestDeviceTaskContext, ReleaseFinishedTasks_NoOp)
+{
+    DeviceTaskContext taskContext;
+    taskContext.ReleaseFinishedTasks(0, 0);
+    SUCCEED();
+}
+
+TEST_F(TestDeviceTaskContext, AppendFinishTask_NullTask)
+{
+    DeviceTaskContext taskContext;
+    taskContext.AppendFinishTask(nullptr);
+    SUCCEED();
+}
+
+TEST_F(TestDeviceTaskContext, DumpDepend_WithEncodedDuppedData)
+{
+    constexpr size_t kOpCount = 4;
+    constexpr size_t kFuncBufferSize = 4096;
+    constexpr size_t kDuppedDataBufferSize = 2048;
+
+    std::unique_ptr<uint8_t[]> funcBuffer;
+    uint8_t* funcDataPtr;
+    DevAscendFunction* devFunc = CreateDevAscendFunctionBuffer(funcBuffer, funcDataPtr, kOpCount, kFuncBufferSize);
+    SetupDevAscendFunctionData(devFunc, funcDataPtr, funcBuffer.get(), kOpCount);
+
+    std::unique_ptr<uint8_t[]> duppedDataBuffer;
+    uint8_t* duppedDataPtr;
+    DevAscendFunctionDuppedData* duppedData = CreateDevAscendFunctionDuppedData(
+        duppedDataBuffer, duppedDataPtr, devFunc, kOpCount, kDuppedDataBufferSize);
+
+    DeviceWorkspaceAllocator workspace;
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+    dyntask->devTask.coreFunctionCnt = 1;
+    DynFuncHeader header{};
+    header.seqNo = 1;
+    header.funcNum = 1;
+    header.funcSize = sizeof(DynFuncHeader);
+    dyntask->dynFuncDataList = &header;
+    dyntask->dynFuncDataCacheList[0].devFunc = devFunc;
+    dyntask->dynFuncDataCacheList[0].duppedData = duppedData;
+    dyntask->dynFuncDataCacheListSize = 1;
+
+    std::array<taskid_t, 4> bufAiv{};
+    std::array<taskid_t, 4> bufAic{};
+    std::array<taskid_t, 4> bufAicpu{};
+    ReadyCoreFunctionQueue qslot[READY_QUEUE_SIZE];
+    InitReadyQueueSlot(qslot[0], bufAiv, 0, 1, MakeTaskID(0, 0));
+    InitReadyQueueSlot(qslot[1], bufAic, 0, 1, MakeTaskID(0, 1));
+    InitReadyQueueSlot(qslot[2], bufAicpu, 0, 0, 0);
+    for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
+        dyntask->readyQueue[i] = &qslot[i];
+    }
+
+    std::array<DevTensorData, 2> tensors{};
+    tensors[0].address = 0x1000ULL;
+    tensors[1].address = 0x2000ULL;
+    DevStartArgs startArgs{};
+    startArgs.contextWorkspaceAddr = 0x3000ULL;
+    startArgs.inputTensorSize = 1;
+    startArgs.outputTensorSize = 1;
+    startArgs.devTensorList = tensors.data();
+
+    DevAscendProgram devProg{};
+    DeviceTaskContext::DumpDepend(dyntask.get(), &devProg, &startArgs, "ut_encoded");
+}
+
+TEST_F(TestDeviceTaskContext, DeviceTaskCtrl_Free_SingleCpu)
+{
+    DeviceWorkspaceAllocator workspace;
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+    dyntask->taskStageAllocMem.canFree.store(false);
+
+    DeviceTaskCtrl ctrl;
+    ctrl.devTask = reinterpret_cast<DeviceTask*>(dyntask.get());
+    ctrl.notFree.store(true, std::memory_order_release);
+    ctrl.freeCnt.store(0, std::memory_order_relaxed);
+
+    EXPECT_TRUE(ctrl.IsNotFree());
+    ctrl.Free(1);
+    EXPECT_FALSE(ctrl.IsNotFree());
+}
+
+TEST_F(TestDeviceTaskContext, DeviceTaskCtrl_Free_MultiCpu)
+{
+    DeviceWorkspaceAllocator workspace;
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+    dyntask->taskStageAllocMem.canFree.store(false);
+
+    DeviceTaskCtrl ctrl;
+    ctrl.devTask = reinterpret_cast<DeviceTask*>(dyntask.get());
+    ctrl.notFree.store(true, std::memory_order_release);
+    ctrl.freeCnt.store(0, std::memory_order_relaxed);
+
+    ctrl.Free(3);
+    EXPECT_TRUE(ctrl.IsNotFree());
+    ctrl.Free(3);
+    EXPECT_TRUE(ctrl.IsNotFree());
+    ctrl.Free(3);
+    EXPECT_FALSE(ctrl.IsNotFree());
+}
+
+TEST_F(TestDeviceTaskContext, DeviceTaskCtrl_SupportParallel)
+{
+    DeviceWorkspaceAllocator workspace;
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+
+    DeviceTaskCtrl ctrl;
+    ctrl.devTask = reinterpret_cast<DeviceTask*>(dyntask.get());
+
+    bool result = ctrl.SupportParallel();
+    EXPECT_FALSE(result);
+}
+
+TEST_F(TestDeviceTaskContext, DeviceTaskCtrl_ExistNextSameIterTask)
+{
+    DeviceTaskCtrl ctrl;
+    ctrl.existNextSameIterTask.store(false, std::memory_order_release);
+    EXPECT_FALSE(ctrl.ExistNextSameIterTask());
+    ctrl.existNextSameIterTask.store(true, std::memory_order_release);
+    EXPECT_TRUE(ctrl.ExistNextSameIterTask());
+}
+
+TEST_F(TestDeviceTaskContext, DeviceTaskCtrl_NextSameIterTaskCtrl)
+{
+    DeviceTaskCtrl ctrl;
+    ctrl.nextSameIterTaskCtrl.store(0, std::memory_order_release);
+    EXPECT_EQ(ctrl.NextSameIterTaskCtrl(), nullptr);
+
+    DeviceTaskCtrl other;
+    ctrl.nextSameIterTaskCtrl.store(reinterpret_cast<uint64_t>(&other), std::memory_order_release);
+    EXPECT_EQ(ctrl.NextSameIterTaskCtrl(), &other);
+}

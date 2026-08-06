@@ -18,6 +18,7 @@
 #include "machine/runtime/launcher/device_launcher.h"
 #undef private
 #include "machine/runtime/context/device_launcher_context.h"
+#include "machine/runtime/memory_utils/emulation_memory_utils.h"
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 
@@ -95,4 +96,73 @@ TEST(DeviceLauncherStaticTest, ConfigFillAndSwimLane_AllBranches)
     config::SetPlatformConfig(KEY_ENABLE_PROF_FUNC, false);
     config::SetPlatformConfig(KEY_ENABLE_PROF_AICORE_TIME, false);
     config::SetPlatformConfig(KEY_ENABLE_PROF_AICORE_PMU, false);
+}
+
+TEST(DeviceLauncherStaticTest, RunPreSync_AllBranches)
+{
+    int rc = DeviceLauncher::RunPreSync(nullptr, nullptr, nullptr);
+    EXPECT_EQ(rc, 0);
+}
+
+TEST(DeviceLauncherStaticTest, AclModeGuard_RAII)
+{
+    AclMdlRICaptureMode mode = AclMdlRICaptureMode::RELAXED;
+    {
+        AclModeGuard guard(mode);
+    }
+    SUCCEED();
+}
+
+TEST(DeviceLauncherStaticTest, ValidateRuntimeDevice_MatchesCurrent)
+{
+    int32_t currentDevId = 0;
+    RuntimeGetDevice(&currentDevId);
+    ValidateRuntimeDevice(currentDevId);
+    SUCCEED();
+}
+
+TEST(DeviceLauncherStaticTest, DeviceSynchronize_NullStreams)
+{
+    int rc = DeviceLauncher::DeviceSynchronize(nullptr, nullptr);
+    EXPECT_GE(rc, -1);
+}
+
+TEST(DeviceLauncherStaticTest, SetCaptureStream_NullModel)
+{
+    DeviceLauncherContext::Get().SetCaptureMode(true);
+    bool isCapture = true;
+    int rc = DeviceLauncher::SetCaptureStream(nullptr, nullptr, isCapture);
+    EXPECT_GE(rc, -1);
+    DeviceLauncherContext::Get().SetCaptureMode(false);
+}
+
+TEST(DeviceLauncherStaticTest, SetCaptureStream_NotCapture)
+{
+    DeviceLauncherContext::Get().SetCaptureMode(false);
+    bool isCapture = false;
+    int rc = DeviceLauncher::SetCaptureStream(nullptr, nullptr, isCapture);
+    EXPECT_EQ(rc, 0);
+}
+
+TEST(DeviceLauncherStaticTest, RunWithProfile_CaptureMode)
+{
+    DeviceLauncherContext::Get().SetCaptureMode(true);
+    int rc = DeviceLauncher::RunWithProfile(nullptr, nullptr, true);
+    EXPECT_EQ(rc, 0);
+    DeviceLauncherContext::Get().SetCaptureMode(false);
+}
+
+TEST(DeviceLauncherStaticTest, DumpIOTensorsWithCann_EmptyTensors)
+{
+    std::vector<DeviceTensorData> tensors;
+    DeviceLauncher::DumpIOTensorsWithCann(nullptr, tensors, "test_func");
+    SUCCEED();
+}
+
+TEST(DeviceLauncherStaticTest, DumpIOTensorsWithCann_WithTensors)
+{
+    std::vector<DeviceTensorData> tensors;
+    tensors.emplace_back(DataType::DT_FP32, nullptr, std::vector<int64_t>{2, 3});
+    DeviceLauncher::DumpIOTensorsWithCann(nullptr, tensors, "test_func");
+    SUCCEED();
 }

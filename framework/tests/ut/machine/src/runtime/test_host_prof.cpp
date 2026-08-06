@@ -135,6 +135,7 @@ TEST(HostProfTest, BuildTensor_WithDeviceTensorData_NZFormat)
 
 TEST(HostProfTest, BuildCacheTensorInfo_WithInputOutputData)
 {
+    ProgramData::GetInstance().Reset();
     HostProf prof;
     prof.opName_ = "test_op";
 
@@ -152,6 +153,7 @@ TEST(HostProfTest, BuildCacheTensorInfo_WithInputOutputData)
 
     EXPECT_EQ(taskInfo->tensorData[0].tensorType, MSPF_GE_TENSOR_TYPE_INPUT);
     EXPECT_EQ(taskInfo->tensorData[1].tensorType, MSPF_GE_TENSOR_TYPE_OUTPUT);
+    ProgramData::GetInstance().Reset();
 }
 
 TEST(HostProfTest, HostProfReportCacheTaskInfo_WithRealStream)
@@ -389,6 +391,7 @@ TEST(HostProfTest, BuildTensor_DeviceTensorData_EmptyShape)
 
 TEST(HostProfTest, BuildCacheTensorInfo_OnlyInputs)
 {
+    ProgramData::GetInstance().Reset();
     HostProf prof;
     prof.opName_ = "test_op";
 
@@ -403,6 +406,7 @@ TEST(HostProfTest, BuildCacheTensorInfo_OnlyInputs)
 
     EXPECT_EQ(taskInfo->tensorData[0].tensorType, MSPF_GE_TENSOR_TYPE_INPUT);
     EXPECT_EQ(taskInfo->tensorData[0].shape[0], 4u);
+    ProgramData::GetInstance().Reset();
 }
 
 TEST(HostProfTest, HostProfReportCacheTaskInfo_AICPUTaskType)
