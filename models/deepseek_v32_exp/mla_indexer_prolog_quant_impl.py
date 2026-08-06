@@ -482,6 +482,7 @@ def mla_indexer_prolog_quant_p(
         "cube_nbuffer_setting": {-1: 6, 0: 1, 1: 1, 2: 1},
     },
     runtime_options={"device_sched_mode": 2},
+    new_ir=True,
 )
 def mla_indexer_prolog_quant_d(
     token_x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),

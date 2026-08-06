@@ -422,6 +422,7 @@ def ai_infra_qat_symmetric_per_tensor(weight, scale, eps, min_v, max_v):
         "stitch_function_max_num": 64,
     },
     pass_options={"vec_nbuffer_setting": {-1: 4}},
+    new_ir=True,
 )
 def ai_infra_qat_symmetric_per_tensor_backward_kernel(
     grad_output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
