@@ -14,6 +14,8 @@
  */
 
 #include "l1_copy_reuse.h"
+#include <algorithm>
+
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/pass_utils.h"
 
@@ -22,6 +24,54 @@ namespace npu::tile_fwk {
 // L1 reuse 矩阵侧编码: 0=auto, 1=left(L0A), 2=right(L0B)
 constexpr int64_t kL1ReuseSideLeft = 1;
 constexpr int64_t kL1ReuseSideRight = 2;
+
+namespace {
+constexpr int INVALID_COLOR = -1;
+} // namespace
+
+void L1CopyInReuseRunner::UpdateTopTwoColors(std::pair<int, int>& topTwoColors, int color)
+{
+    if (color < 0 || color == topTwoColors.first || color == topTwoColors.second) {
+        return;
+    }
+    if (color > topTwoColors.first) {
+        topTwoColors.second = topTwoColors.first;
+        topTwoColors.first = color;
+        return;
+    }
+    if (color > topTwoColors.second) {
+        topTwoColors.second = color;
+    }
+}
+
+void L1CopyInReuseRunner::BuildTopoHashAndMaxInputColors(const OperationsViewer& opList,
+                                                         std::vector<uint64_t>& hashList,
+                                                         std::vector<std::pair<int, int>>& maxInputColors)
+{
+    auto tensorDeps = RescheduleUtils::BuildTensorDependencyInfo(opList, false);
+    RescheduleUtils::BuildInputTopoHashList(opList, tensorDeps, hashList);
+    maxInputColors.assign(opList.size(), {INVALID_COLOR, INVALID_COLOR});
+    for (size_t i = 0; i < opList.size(); i++) {
+        auto& topTwoColors = maxInputColors[i];
+        for (const auto& tensor : opList[i].GetIOperands()) {
+            if (tensor == nullptr) {
+                continue;
+            }
+            auto depIter = tensorDeps.find(tensor.get());
+            if (depIter == tensorDeps.end()) {
+                continue;
+            }
+            const auto& depInfo = depIter->second;
+            const auto& producerColors = depInfo.producerColors;
+            if (!producerColors.empty()) {
+                UpdateTopTwoColors(topTwoColors, producerColors.back());
+                if (producerColors.size() > 1) {
+                    UpdateTopTwoColors(topTwoColors, producerColors[producerColors.size() - 2]);
+                }
+            }
+        }
+    }
+}
 
 // cubeL1ReuseSetting packs (count, side) into one int as side * L1_REUSE_SIDE_BASE + count
 // (side 0=auto/1=left/2=right). Split a raw config map into a pure merge-count map (consumed
@@ -190,17 +240,9 @@ void L1CopyInReuseRunner::TackleOp(int i, Operation* op, std::vector<std::vector
     }
 }
 
-void L1CopyInReuseRunner::GetOriList(Function& func, std::vector<Operation*>& oriList)
-{
-    for (auto& op : func.Operations()) {
-        oriList.emplace_back(&op);
-    }
-}
-
 void L1CopyInReuseRunner::MergeProcessIdUpdate(Function& func, std::vector<std::vector<int>>& colorNode, int color)
 {
-    std::vector<Operation*> oriList;
-    GetOriList(func, oriList);
+    std::vector<Operation*> oriList = func.Operations(true, SortOperationsMode::LIGHTWEIGHT).DuplicatedOpList();
     int colorCount = 0;
     for (int j = 0; j < color; j++) {
         if (colorNode[j].empty()) {
@@ -217,8 +259,7 @@ void L1CopyInReuseRunner::MergeProcessIdUpdate(Function& func, std::vector<std::
 // 合并重复的L1_COPY_IN和L1_ALLOC节点
 Status L1CopyInReuseRunner::MergeDupL1CopyIn(Function& func, std::vector<std::vector<int>>& colorNode, int color)
 {
-    std::vector<Operation*> oriList;
-    GetOriList(func, oriList);
+    std::vector<Operation*> oriList = func.Operations(true, SortOperationsMode::LIGHTWEIGHT).DuplicatedOpList();
     for (int j = 0; j < color; j++) {
         if (colorNode[j].empty()) {
             continue;
@@ -252,15 +293,19 @@ Status L1CopyInReuseRunner::MergeDupL1CopyIn(Function& func, std::vector<std::ve
     return SUCCESS;
 }
 
-int L1CopyInReuseRunner::GetMaxInColor(const std::vector<int>& nodes, const OperationsViewer& opOriList, int curColor)
+int L1CopyInReuseRunner::GetMaxInColor(const std::vector<int>& nodes, int curColor)
 {
     int maxInColor = -1;
     for (int j : nodes) {
-        for (int k : inGraph_[j]) {
-            auto opColor = opOriList[k].GetSubgraphID();
-            if (opColor != curColor) {
-                maxInColor = std::max(maxInColor, opColor);
-            }
+        if (j < 0 || j >= static_cast<int>(maxInputColors_.size())) {
+            continue;
+        }
+        int opMaxColor = maxInputColors_[j].first;
+        if (opMaxColor == curColor) {
+            opMaxColor = maxInputColors_[j].second;
+        }
+        if (opMaxColor != curColor) {
+            maxInColor = std::max(maxInColor, opMaxColor);
         }
     }
     return maxInColor;
@@ -285,28 +330,10 @@ std::vector<int> L1CopyInReuseRunner::GetCopyIn(const OperationsViewer& opOriLis
     return colorCopyIn;
 }
 
-void L1CopyInReuseRunner::GetOpHash(std::vector<uint64_t>& hashList, const std::string op, int idx)
-{
-    uint64_t a = 0x12345678;
-    uint64_t p = 37;
-    const uint64_t mod = 0xFFFFFFFFFFFFF;
-    uint64_t hash = 0;
-    for (char c : op) {
-        hash = (hash * p + static_cast<uint64_t>(c)) % mod;
-    }
-    for (int j : inGraph_[idx]) {
-        hash = (hash * p + (hashList[j] ^ a)) % mod;
-    }
-    hashList[idx] = hash;
-}
-
 void L1CopyInReuseRunner::GetColorHash(const Function& func, const OperationsViewer& opOriList,
-                                       std::vector<uint64_t>& hashColor, const std::vector<std::vector<int>>& colorNode)
+                                       const std::vector<uint64_t>& hashTileOp, std::vector<uint64_t>& hashColor,
+                                       const std::vector<std::vector<int>>& colorNode)
 {
-    std::vector<uint64_t> hashTileOp(opOriList.size(), 0);
-    for (size_t i = 0; i < opOriList.size(); i++) {
-        GetOpHash(hashTileOp, opOriList[i].GetOpcodeStr(), i);
-    }
     uint64_t a = 0x12345678;
     uint64_t p = 23;
     const uint64_t mod = 0xFFFFFFFFFFFFF;
@@ -693,22 +720,53 @@ void L1CopyInReuseRunner::RecordSideMergeOutcome(int subgraphIdx, int side, int 
     }
 }
 
-Status L1CopyInReuseRunner::Phase1(Function& func, int color, std::vector<std::vector<int>>& colorNode,
-                                   std::vector<int>& colorCopyIn, std::vector<uint64_t>& hashColor)
+Status L1CopyInReuseRunner::ResolveL1ReuseConfigLists(const Function& func, const OperationsViewer& opOriList,
+                                                      int color, const std::vector<uint64_t>& hashColor,
+                                                      std::vector<int>& numLRList, std::vector<int>& numLRSideList)
 {
-    // 针对matmul的L1 copy reuse进行子图合并
-    auto opOriList = func.Operations();
-    std::map<std::vector<uint64_t>, int> l1InputList;
-    // Per-subgraph merge count (-1 = auto), from global/func/label settings.
-    std::vector<int> numLRList(color, -1);
+    numLRList.assign(color, -1);
     if (BuildMergeCountList(func, opOriList, numLRList, hashColor, color) == FAILED) {
         return FAILED;
     }
-    // Per-subgraph matrix-side preference (0=auto, 1=left, 2=right).
-    std::vector<int> numLRSideList(color, 0);
+    numLRSideList.assign(color, 0);
     if (BuildMatrixSideList(func, opOriList, numLRSideList, hashColor, color) == FAILED) {
         return FAILED;
     }
+    return SUCCESS;
+}
+
+void L1CopyInReuseRunner::LogSideMergeSummary(const std::vector<int>& mergedNum, const std::vector<int>& numLRSideList,
+                                              int color) const
+{
+    int mergedCnt = 0;
+    int groupCnt = 0;
+    int singletonCnt = 0;
+    for (int c = 0; c < color; c++) {
+        if (numLRSideList[c] != kL1ReuseSideLeft && numLRSideList[c] != kL1ReuseSideRight) {
+            continue;
+        }
+        if (mergedNum[c] == 0) {
+            mergedCnt++;
+        } else if (mergedNum[c] == 1) {
+            singletonCnt++;
+        } else {
+            groupCnt++;
+        }
+    }
+    if (mergedCnt != 0 || groupCnt != 0 || singletonCnt != 0) {
+        APASS_LOG_INFO_F(Elements::Function,
+                         "L1 reuse matrix-side outcome: %d subgraph(s) merged on the requested side into %d group(s); "
+                         "%d left unmerged (no same-side partner). (per-subgraph detail at DEBUG)",
+                         mergedCnt, groupCnt, singletonCnt);
+    }
+}
+
+Status L1CopyInReuseRunner::ProcessL1ReuseCandidates(OperationsViewer& opOriList, int color,
+                                                     std::vector<std::vector<int>>& colorNode,
+                                                     std::vector<int>& colorCopyIn, std::vector<uint64_t>& hashColor,
+                                                     std::vector<int>& numLRList, std::vector<int>& numLRSideList)
+{
+    std::map<std::vector<uint64_t>, int> l1InputList;
     std::vector<int> mergedNum(color, 1);
     std::vector<std::pair<int, int>> opOrder(color);
     std::map<uint64_t, int> mgRem;
@@ -716,7 +774,7 @@ Status L1CopyInReuseRunner::Phase1(Function& func, int color, std::vector<std::v
     for (int ii = 0; ii < color; ii++) {
         int i = opOrder[ii].second;
         int tmpColor = -1;
-        auto maxInColor = GetMaxInColor(colorNode[i], opOriList, i);
+        auto maxInColor = GetMaxInColor(colorNode[i], i);
         int side = numLRSideList[i];
         // Side is a HARD restriction: a side-tagged subgraph only searches copy-ins on that
         // matrix (no fall-back to the other side). side==0 (auto) keeps the original unfiltered
@@ -743,50 +801,27 @@ Status L1CopyInReuseRunner::Phase1(Function& func, int color, std::vector<std::v
             return FAILED;
         }
     }
-    // Summarise from the final group sizes (mergedNum): a side-tagged color either merged into a
-    // group (mergedNum==0, counted as one of the followers), leads a group (mergedNum>1), or is a
-    // lonely singleton (mergedNum==1 -> the only real "not merged" under the hard restriction).
-    int mergedCnt = 0;    // followers merged onto a same-side anchor
-    int groupCnt = 0;     // resulting groups (anchors with >=1 follower)
-    int singletonCnt = 0; // side-tagged but no same-side partner at all
-    for (int c = 0; c < color; c++) {
-        if (numLRSideList[c] != kL1ReuseSideLeft && numLRSideList[c] != kL1ReuseSideRight) {
-            continue;
-        }
-        if (mergedNum[c] == 0) {
-            mergedCnt++;
-        } else if (mergedNum[c] == 1) {
-            singletonCnt++;
-        } else {
-            groupCnt++;
-        }
-    }
-    if (mergedCnt != 0 || groupCnt != 0 || singletonCnt != 0) {
-        APASS_LOG_INFO_F(Elements::Function,
-                         "L1 reuse matrix-side outcome: %d subgraph(s) merged on the requested side into %d group(s); "
-                         "%d left unmerged (no same-side partner). (per-subgraph detail at DEBUG)",
-                         mergedCnt, groupCnt, singletonCnt);
-    }
+    LogSideMergeSummary(mergedNum, numLRSideList, color);
     return SUCCESS;
 }
 
-Status L1CopyInReuseRunner::ApplySemanticLabelSettingsL1Reuse(const OperationsViewer& opOriList,
-                                                              const std::map<std::string, int64_t>& labelMap,
-                                                              std::vector<int>& numLRList,
-                                                              const std::vector<uint64_t>& /* hashColor */, int color)
+Status L1CopyInReuseRunner::Phase1(Function& func, int color, std::vector<std::vector<int>>& colorNode,
+                                   std::vector<int>& colorCopyIn, std::vector<uint64_t>& hashColor)
 {
-    if (labelMap.empty()) {
-        return SUCCESS;
+    auto opOriList = func.Operations(true, SortOperationsMode::LIGHTWEIGHT);
+    std::vector<int> numLRList;
+    std::vector<int> numLRSideList;
+    if (ResolveL1ReuseConfigLists(func, opOriList, color, hashColor, numLRList, numLRSideList) == FAILED) {
+        return FAILED;
     }
+    return ProcessL1ReuseCandidates(opOriList, color, colorNode, colorCopyIn, hashColor, numLRList, numLRSideList);
+}
 
-    // Build a map from semantic label to the subgraph colors that contain ops with that label
+Status L1CopyInReuseRunner::CollectL1ReuseLabelOverrides(const OperationsViewer& opOriList,
+                                                         const std::map<std::string, int64_t>& labelMap, int color,
+                                                         std::map<int, int>& subgraphOverrides)
+{
     auto labelToColors = BuildLabelToColorsMap(opOriList);
-
-    // For L1Reuse, string keys set only the specific subgraphs containing the labeled ops,
-    // NOT the whole isomorphic group.
-    // First step: collect override per subgraph color. If multiple labels target the same
-    // subgraph, take the max among them.
-    std::map<int, int> subgraphOverrides;
     for (const auto& [label, mergeNum] : labelMap) {
         auto it = labelToColors.find(label);
         if (it == labelToColors.end()) {
@@ -809,8 +844,12 @@ Status L1CopyInReuseRunner::ApplySemanticLabelSettingsL1Reuse(const OperationsVi
             }
         }
     }
+    return SUCCESS;
+}
 
-    // Second step: replace the numLRList with collected overrides
+void L1CopyInReuseRunner::ApplyL1ReuseLabelOverrides(const std::map<int, int>& subgraphOverrides,
+                                                     std::vector<int>& numLRList)
+{
     for (const auto& [colorId, val] : subgraphOverrides) {
         if (colorId < static_cast<int>(numLRList.size())) {
             numLRList[colorId] = val;
@@ -818,24 +857,31 @@ Status L1CopyInReuseRunner::ApplySemanticLabelSettingsL1Reuse(const OperationsVi
                              "Applied L1 reuse semantic label override: subgraph_color=%d, merge_num=%d", colorId, val);
         }
     }
-
-    return SUCCESS;
 }
 
-Status L1CopyInReuseRunner::ApplySemanticLabelSettingsCubeNBuffer(const OperationsViewer& opOriList,
-                                                                  std::map<int, int>& hashMergeNumMap,
-                                                                  const std::vector<uint64_t>& hashColor, int color)
+Status L1CopyInReuseRunner::ApplySemanticLabelSettingsL1Reuse(const OperationsViewer& opOriList,
+                                                              const std::map<std::string, int64_t>& labelMap,
+                                                              std::vector<int>& numLRList,
+                                                              const std::vector<uint64_t>& /* hashColor */, int color)
 {
-    if (numDBMapByLabel_.empty()) {
+    if (labelMap.empty()) {
         return SUCCESS;
     }
 
-    // Build a map from semantic label to the subgraph colors that contain ops with that label
-    auto labelToColors = BuildLabelToColorsMap(opOriList);
+    // L1Reuse labels override only the concrete subgraphs containing the labeled ops.
+    std::map<int, int> subgraphOverrides;
+    if (CollectL1ReuseLabelOverrides(opOriList, labelMap, color, subgraphOverrides) == FAILED) {
+        return FAILED;
+    }
+    ApplyL1ReuseLabelOverrides(subgraphOverrides, numLRList);
+    return SUCCESS;
+}
 
-    // First step: collect override value per hashOrder from all labels.
-    // If multiple labels target the same isomorphic group, take max among them.
-    std::map<int, int> labelOverrides;
+Status L1CopyInReuseRunner::CollectCubeNBufferLabelOverrides(const OperationsViewer& opOriList,
+                                                             const std::vector<uint64_t>& hashColor, int color,
+                                                             std::map<int, int>& labelOverrides) const
+{
+    auto labelToColors = BuildLabelToColorsMap(opOriList);
     for (const auto& [label, mergeNum] : numDBMapByLabel_) {
         auto it = labelToColors.find(label);
         if (it == labelToColors.end()) {
@@ -864,14 +910,32 @@ Status L1CopyInReuseRunner::ApplySemanticLabelSettingsCubeNBuffer(const Operatio
             }
         }
     }
+    return SUCCESS;
+}
 
-    // Second step: replace the hashMergeNumMap with collected label overrides
+void L1CopyInReuseRunner::ApplyCubeNBufferLabelOverrides(const std::map<int, int>& labelOverrides,
+                                                         std::map<int, int>& hashMergeNumMap)
+{
     for (const auto& [order, val] : labelOverrides) {
         hashMergeNumMap[order] = val;
         APASS_LOG_INFO_F(Elements::Config, "Applied cube nbuffer semantic label override: hash_order=%d, merge_num=%d",
                          order, val);
     }
+}
 
+Status L1CopyInReuseRunner::ApplySemanticLabelSettingsCubeNBuffer(const OperationsViewer& opOriList,
+                                                                  std::map<int, int>& hashMergeNumMap,
+                                                                  const std::vector<uint64_t>& hashColor, int color)
+{
+    if (numDBMapByLabel_.empty()) {
+        return SUCCESS;
+    }
+
+    std::map<int, int> labelOverrides;
+    if (CollectCubeNBufferLabelOverrides(opOriList, hashColor, color, labelOverrides) == FAILED) {
+        return FAILED;
+    }
+    ApplyCubeNBufferLabelOverrides(labelOverrides, hashMergeNumMap);
     return SUCCESS;
 }
 
@@ -942,35 +1006,37 @@ void L1CopyInReuseRunner::CubeMergeProcess(std::vector<std::vector<int>>& colorN
     }
 }
 
-Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vector<int>>& colorNode)
+void L1CopyInReuseRunner::ConfigureRunSettings(Function& func)
 {
-    auto opOriList = func.Operations();
-    std::vector<uint64_t> hashColor(color, 0);
-    hashOrder_.clear();
-    GetColorHash(func, opOriList, hashColor, colorNode);
-    // print hashorder with function-granularity format
-    int funcMagic = func.GetFuncMagic();
-    APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview.", func.GetMagicName().c_str());
-    for (auto& entry : hashMap_) {
-        std::string fullHashOrder = "func" + std::to_string(funcMagic) + "_" + std::to_string(hashOrder_[entry.first]);
-        APASS_LOG_INFO_F(Elements::Function, "L1 reuse hashOrder: %s, Subgraph count: %zu, Subgraph IDs: %s",
-                         fullHashOrder.c_str(), entry.second.size(), IntVecToStr(entry.second).c_str());
-    }
-    APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview end.", func.GetMagicName().c_str());
-    auto colorCopyIn = GetCopyIn(opOriList, color, colorNode); // 记录各子图的大小
     mgCopyInUpperBound_ = func.paramConfigs_.sgMgCopyInUpperBound;
-    // cubeL1ReuseSetting reuses the existing keys; each value packs (count, side) as
-    // side * L1_REUSE_SIDE_BASE + count (side 0=auto/1=left/2=right). Decode here into the
-    // merge-count maps (fed to the existing logic) and the matrix-side maps.
     DecodeL1ReuseSide(func.paramConfigs_.cubeL1ReuseSetting, numLRMap_, numLRSideMap_);
     DecodeL1ReuseSide(func.paramConfigs_.cubeL1ReuseSettingByFunc, numLRMapByFunc_, numLRSideMapByFunc_);
     DecodeL1ReuseSide(func.paramConfigs_.cubeL1ReuseSettingByLabel, numLRMapByLabel_, numLRSideMapByLabel_);
-    numDBMap_ = func.paramConfigs_.cubeNBufferSetting; // 合并阈值参数设置
+    numDBMap_ = func.paramConfigs_.cubeNBufferSetting;
     numDBMapByFunc_ = func.paramConfigs_.cubeNBufferSettingByFunc;
     numDBMapByLabel_ = func.paramConfigs_.cubeNBufferSettingByLabel;
     L1ReuseMode_ = GetModeBySetting(numLRMap_, numLRMapByFunc_);
     cubeNBufferMode_ = GetModeBySetting(numDBMap_, numDBMapByFunc_);
     APASS_LOG_INFO_F(Elements::Operation, "Param Setting mgCopyInUpperBound %d.", mgCopyInUpperBound_);
+}
+
+void L1CopyInReuseRunner::LogL1ReuseHashOverview(const Function& func) const
+{
+    int funcMagic = func.GetFuncMagic();
+    APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview.", func.GetMagicName().c_str());
+    for (auto& entry : hashMap_) {
+        std::string fullHashOrder = "func" + std::to_string(funcMagic) + "_" +
+                                    std::to_string(hashOrder_.at(entry.first));
+        APASS_LOG_INFO_F(Elements::Function, "L1 reuse hashOrder: %s, Subgraph count: %zu, Subgraph IDs: %s",
+                         fullHashOrder.c_str(), entry.second.size(), IntVecToStr(entry.second).c_str());
+    }
+    APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview end.", func.GetMagicName().c_str());
+}
+
+Status L1CopyInReuseRunner::RunL1ReusePhase(Function& func, int color, std::vector<std::vector<int>>& colorNode,
+                                            std::vector<int>& colorCopyIn, std::vector<uint64_t>& hashColor,
+                                            OperationsViewer& opOriList)
+{
     if ((L1ReuseMode_ == 1 || !numLRMapByLabel_.empty()) && hashMap_.size() != 0) {
         if (Phase1(func, color, colorNode, colorCopyIn, hashColor) == FAILED) {
             APASS_LOG_ERROR_F(Elements::Function, "Phase1 failed; Please check the Phase1 method.");
@@ -982,13 +1048,18 @@ Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vect
         }
         HashUpdate(func, color, hashColor, opOriList, colorNode);
     }
+    return SUCCESS;
+}
+
+Status L1CopyInReuseRunner::RunCubeNBufferPhase(const Function& func, int color,
+                                                std::vector<std::vector<int>>& colorNode, OperationsViewer& opOriList,
+                                                std::vector<int>& colorCopyIn, const std::vector<uint64_t>& hashColor)
+{
     std::map<int, int> hashMergeNumMap;
-    // NBuffer参数设置 - apply global and function-granularity settings
     if (SetNumFromConfig(func, numDBMap_, numDBMapByFunc_, hashMergeNumMap, "cubeNBufferSetting") == FAILED) {
         APASS_LOG_ERROR_F(Elements::Config, "Invalid configuration: %s.", "cubeNBufferSetting");
         return FAILED;
     }
-    // Apply semantic label settings for cube nbuffer (higher priority than hashorder settings)
     if (ApplySemanticLabelSettingsCubeNBuffer(opOriList, hashMergeNumMap, hashColor, color) == FAILED) {
         APASS_LOG_ERROR_F(
             Elements::Config,
@@ -996,16 +1067,45 @@ Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vect
         return FAILED;
     }
     CubeMergeProcess(colorNode, opOriList, hashMergeNumMap, colorCopyIn);
-    MergeProcessIdUpdate(func, colorNode, color);
-    for (auto& op : func.Operations()) {
-        if (static_cast<size_t>(op.GetSubgraphID()) > func.GetTotalSubGraphCount()) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Run: op SubGraph ID %d out of range. %s", op.GetSubgraphID(),
-                              GetFormatBacktrace(op).c_str());
+    return SUCCESS;
+}
+
+Status L1CopyInReuseRunner::ValidateSubgraphIds(Function& func) const
+{
+    auto valOps = func.Operations(false);
+    for (size_t i = 0; i < valOps.size(); i++) {
+        if (static_cast<size_t>(valOps[i].GetSubgraphID()) > func.GetTotalSubGraphCount()) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Run: op SubGraph ID %d out of range. %s", valOps[i].GetSubgraphID(),
+                              GetFormatBacktrace(valOps[i]).c_str());
             return FAILED;
         }
     }
+    return SUCCESS;
+}
+
+Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vector<int>>& colorNode)
+{
+    auto opOriList = func.Operations(true, SortOperationsMode::LIGHTWEIGHT);
+    std::vector<uint64_t> hashTileOp;
+    BuildTopoHashAndMaxInputColors(opOriList, hashTileOp, maxInputColors_);
+    std::vector<uint64_t> hashColor(color, 0);
+    hashOrder_.clear();
+    GetColorHash(func, opOriList, hashTileOp, hashColor, colorNode);
+    LogL1ReuseHashOverview(func);
+    auto colorCopyIn = GetCopyIn(opOriList, color, colorNode);
+    ConfigureRunSettings(func);
+    if (RunL1ReusePhase(func, color, colorNode, colorCopyIn, hashColor, opOriList) == FAILED) {
+        return FAILED;
+    }
+    if (RunCubeNBufferPhase(func, color, colorNode, opOriList, colorCopyIn, hashColor) == FAILED) {
+        return FAILED;
+    }
+    MergeProcessIdUpdate(func, colorNode, color);
+    if (ValidateSubgraphIds(func) == FAILED) {
+        return FAILED;
+    }
     RemoveUselessViews(func); // 删除节点
-    func.EraseOperations(true);
+    func.EraseOperations(true, true, SortOperationsMode::LIGHTWEIGHT);
     APASS_LOG_DEBUG_F(Elements::Operation, "After L1CopyInReuse.");
     RescheduleUtils::PrintColorNode(func);
     return SUCCESS;
@@ -1013,7 +1113,7 @@ Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vect
 
 void L1CopyInReuseRunner::RemoveUselessViews(Function& func) const
 {
-    for (auto& op : func.Operations()) {
+    for (auto& op : func.Operations(false)) {
         if (op.GetOpcode() == Opcode::OP_VIEW && op.GetIOperands().size() == 1 && op.GetOOperands().size() == 1) {
             auto input = op.GetIOperands()[0];
             auto output = op.GetOOperands()[0];
@@ -1040,7 +1140,7 @@ void L1CopyInReuseRunner::RemoveUselessViews(Function& func) const
 Status L1CopyInReuseMerge::InitColorNode(Function& func, std::vector<std::vector<int>>& colorNode) const
 {
     int colorMax{0};
-    auto opOriList = func.Operations();
+    auto opOriList = func.Operations(true, SortOperationsMode::LIGHTWEIGHT);
     for (size_t i = 0; i < opOriList.size(); i++) {
         if (L1CopyInReuseRunner::CanReuse(opOriList[i])) {
             auto feature = GetGMInputFeature(opOriList[i]);
@@ -1067,7 +1167,7 @@ Status L1CopyInReuseMerge::InitColorNode(Function& func, std::vector<std::vector
 
 Status L1CopyInReuseMerge::CheckOpListValid(Function& func) const
 {
-    auto opOriList = func.Operations();
+    auto opOriList = func.Operations(false);
     for (size_t i = 0; i < opOriList.size(); i++) {
         if (opOriList[i].GetIOperands().size() != 0 &&
             opOriList[i].GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
@@ -1114,13 +1214,7 @@ Status L1CopyInReuseMerge::L1CopyInReuse(Function& func) const
         return FAILED;
     }
 
-    std::vector<Operation*> opList;
-    for (auto& op : func.Operations()) {
-        opList.emplace_back(&op);
-    }
-    auto inOutGraph = RescheduleUtils::GetInOutGraphs(opList, func.GetFuncMagic());
-    auto& inGraph = inOutGraph[0];
-    L1CopyInReuseRunner runner(inGraph);
+    L1CopyInReuseRunner runner;
     if (runner.Run(func, colorNode.size(), colorNode) == FAILED) {
         APASS_LOG_ERROR_F(Elements::Function, "L1CopyInReuse: Run failed.");
         return FAILED;

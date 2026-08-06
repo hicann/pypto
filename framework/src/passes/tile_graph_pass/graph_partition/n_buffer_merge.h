@@ -16,14 +16,17 @@
 #ifndef PASS_N_BUFFER_MERGE_H_
 #define PASS_N_BUFFER_MERGE_H_
 
+#include <functional>
+#include <queue>
+
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_interface/pass.h"
+#include "passes/pass_utils/reschedule_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
-#include "passes/pass_utils/dfs_sort_utils.h"
 #include "passes/tile_graph_pass/graph_partition/hash_order_utils.h"
 namespace npu::tile_fwk {
 
@@ -38,12 +41,38 @@ public:
     ~NBufferMerge() override = default;
 
 private:
+    // A tensor-level barrier compresses all producerColor -> consumerColor edges for one tensor.
+    // This avoids expanding high fanin/fanout tensors into producer * consumer color edges.
+    struct ColorTensorDependency {
+        std::vector<int> consumerColors;
+        std::vector<int> nonProducerConsumerColors;
+        int remainingProducerCount{0};
+        int remainingProducerXor{0};
+    };
+    static int GetMinDifferentColor(const std::vector<int>& colors, int color);
+    static void AddConsumerBarrier(const std::vector<int>& producerColors, const std::vector<int>& consumerColors,
+                                   ColorTensorDependency& colorDep, std::vector<int>& pendingBarrierCount,
+                                   bool& hasInterColorDependency);
+    static void BuildColorTensorDependencies(const RescheduleUtils::TensorDependencyMap& tensorDeps, int colorNum,
+                                             std::vector<ColorTensorDependency>& colorTensorDeps,
+                                             std::vector<std::vector<int>>& producerColorToDeps,
+                                             std::vector<int>& pendingBarrierCount);
+    using ColorQueue = std::priority_queue<int, std::vector<int>, std::greater<int>>;
+    static void ReleaseColor(int color, std::vector<int>& pendingBarrierCount, ColorQueue& colorQueue);
+    static void UpdateDependencyAfterProducerReady(ColorTensorDependency& colorDep, int producerColor,
+                                                   std::vector<int>& pendingBarrierCount, ColorQueue& colorQueue);
+    static Status RunColorBarrierTopo(int colorNum, const std::vector<std::vector<int>>& producerColorToDeps,
+                                      std::vector<ColorTensorDependency>& colorTensorDeps,
+                                      std::vector<int>& pendingBarrierCount, std::vector<int>& colorOrder);
+    static void BuildColorDependencySummary(const OperationsViewer& opList, int colorNum,
+                                            std::vector<std::vector<int>>& inColor,
+                                            std::vector<std::vector<int>>& outColor);
+    static Status BuildColorTopoOrder(const OperationsViewer& opList, int colorNum, std::vector<int>& colorOrder);
+    static Status ApplyColorTopoOrder(OperationsViewer& opList, int colorNum);
     Status RunOnFunction(Function& function) override;
     Status NBufferMergeProcess(Function& func);
     Status Init(Function& func);
     void InitParam(OperationsViewer& opOriList);
-    void GetOpHash(std::vector<uint64_t>& hashList, const std::string op, size_t idx);
-    void GetOpHashReverse(std::vector<uint64_t>& hashList, const std::string op, int idx);
     void GetColorHash(const Function& func, const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor,
                       std::map<uint64_t, std::vector<int>>& hashMap);
     void SetHashOrderInfoOnOps(int funcMagic, const OperationsViewer& opOriList,
@@ -57,11 +86,14 @@ private:
     std::vector<std::vector<int>> SortColorWithInput(std::vector<int>& colorValues) const;
     Status MergeProcess(const OperationsViewer& opOriList, std::map<uint64_t, std::vector<int>>& hashMap,
                         std::map<uint64_t, size_t>& hashMergeNum, std::vector<uint64_t>& hashColor);
-    Status ColorTopo(int& color1, std::vector<std::vector<int>>& inputColor, std::vector<std::vector<int>>& outputColor,
-                     OperationsViewer& opOriList);
     void MergePingPong(std::vector<std::vector<int>>& sortedColors, const OperationsViewer& opOriList,
                        std::vector<uint64_t>& hashColor, size_t& numDBmerge, int hashOrder);
     std::map<uint64_t, size_t> SetNumDB(const Function& func, std::map<uint64_t, std::vector<int>>& hashMap);
+    Status BuildHashMergeNum(const Function& func, std::map<uint64_t, std::vector<int>>& hashMap,
+                             std::map<uint64_t, size_t>& hashMergeNum);
+    Status RunMergeByMode(const OperationsViewer& opOriList, std::map<uint64_t, std::vector<int>>& hashMap,
+                          std::map<uint64_t, size_t>& hashMergeNum, std::vector<uint64_t>& hashColor);
+    void LogHashOverview(const Function& func, const std::map<uint64_t, std::vector<int>>& hashMap) const;
     void ApplyByFuncNumDB(int currentFuncMagic, std::map<uint64_t, size_t>& numDBMap,
                           std::map<uint64_t, std::vector<int>>& hashMap);
     void ApplyGlobalNumDB(std::map<uint64_t, size_t>& numDBMap, std::map<uint64_t, std::vector<int>>& hashMap);
@@ -70,18 +102,18 @@ private:
                                       const std::map<uint64_t, std::vector<int>>& hashMap,
                                       const std::map<uint64_t, size_t>& hashMergeNum, std::vector<uint64_t>& hashColor);
     Status InitVecNBufferModeBySetting();
+    Status CollectSemanticLabelOverrides(const OperationsViewer& opOriList, const std::vector<uint64_t>& hashColor,
+                                         std::map<uint64_t, size_t>& labelOverrides) const;
     Status ApplySemanticLabelSettings(const OperationsViewer& opOriList, std::map<uint64_t, size_t>& hashMergeNum,
                                       const std::map<uint64_t, std::vector<int>>& hashMap,
                                       const std::vector<uint64_t>& hashColor);
 
 private:
     int colorNum_{0};
-    std::vector<std::vector<int>> inGraph_;
-    std::vector<std::vector<int>> outGraph_;
     std::vector<std::vector<int>> inColor_;
     std::vector<std::vector<int>> outColor_;
     std::vector<std::vector<int>> colorNode_;
-    std::unordered_map<int, int> dfsColorOrder_;
+    std::unordered_map<int, int> colorTopoOrder_;
     std::vector<int> colorCycles_;
     int vecNBuffermode_;
     int mgVecParallelLb_;

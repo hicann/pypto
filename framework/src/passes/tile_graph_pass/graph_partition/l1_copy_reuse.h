@@ -17,6 +17,7 @@
 #define PASS_L1_COPY_REUSE_H_
 
 #include <functional>
+
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_utils/reschedule_utils.h"
@@ -41,7 +42,7 @@
 namespace npu::tile_fwk {
 class L1CopyInReuseRunner {
 public:
-    explicit L1CopyInReuseRunner(const std::vector<std::vector<int>>& inGraph1) : inGraph_(inGraph1) {}
+    L1CopyInReuseRunner() = default;
     ~L1CopyInReuseRunner() {}
     Status Run(Function& func, int color, std::vector<std::vector<int>>& colorNode);
     static bool CanReuse(const Operation& op);
@@ -53,13 +54,14 @@ public:
                                 const std::map<std::string, int64_t>& settingByFunc);
     static std::vector<int> GetCopyIn(const OperationsViewer& opOriList, int color,
                                       std::vector<std::vector<int>>& colorNode);
-    static void GetOriList(Function& func, std::vector<Operation*>& oriList);
 
 private:
-    void GetOpHash(std::vector<uint64_t>& hashList, const std::string op, int idx);
-    void GetColorHash(const Function& func, const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor,
-                      const std::vector<std::vector<int>>& colorNode);
-    int GetMaxInColor(const std::vector<int>& nodes, const OperationsViewer& opOriList, int curColor);
+    static void UpdateTopTwoColors(std::pair<int, int>& topTwoColors, int color);
+    static void BuildTopoHashAndMaxInputColors(const OperationsViewer& opList, std::vector<uint64_t>& hashList,
+                                               std::vector<std::pair<int, int>>& maxInputColors);
+    void GetColorHash(const Function& func, const OperationsViewer& opOriList, const std::vector<uint64_t>& hashTileOp,
+                      std::vector<uint64_t>& hashColor, const std::vector<std::vector<int>>& colorNode);
+    int GetMaxInColor(const std::vector<int>& nodes, int curColor);
     Status MergeDupL1CopyIn(Function& func, std::vector<std::vector<int>>& colorNode, int color);
     void MergeProcessIdUpdate(Function& func, std::vector<std::vector<int>>& colorNode, int color);
     std::vector<int> GetOpInputFeature(const OperationsViewer& opOriList, const int opIdx, const int ioperandIdx);
@@ -69,6 +71,13 @@ private:
                   std::vector<std::vector<int>>& replacedOutputs);
     Status Phase1(Function& func, int color, std::vector<std::vector<int>>& colorNode, std::vector<int>& colorCopyIn,
                   std::vector<uint64_t>& hashColor);
+    Status ResolveL1ReuseConfigLists(const Function& func, const OperationsViewer& opOriList, int color,
+                                     const std::vector<uint64_t>& hashColor, std::vector<int>& numLRList,
+                                     std::vector<int>& numLRSideList);
+    Status ProcessL1ReuseCandidates(OperationsViewer& opOriList, int color, std::vector<std::vector<int>>& colorNode,
+                                    std::vector<int>& colorCopyIn, std::vector<uint64_t>& hashColor,
+                                    std::vector<int>& numLRList, std::vector<int>& numLRSideList);
+    void LogSideMergeSummary(const std::vector<int>& mergedNum, const std::vector<int>& numLRSideList, int color) const;
     void GetL1ReuseOpOrder(std::vector<std::pair<int, int>>& opOrder, std::map<uint64_t, int>& mgRem,
                            std::vector<int>& numLRList, std::vector<uint64_t>& hashColor, int color);
     bool GetMergedL1(int maxInColor, std::vector<int>& mergedNum, int maxMergeNum, int& tmpColor, int i,
@@ -107,17 +116,34 @@ private:
                              const std::string& configName);
     void HashUpdate(Function& func, int color, const std::vector<uint64_t>& hashColor, OperationsViewer& opOriList,
                     std::vector<std::vector<int>>& colorNode);
+    void ConfigureRunSettings(Function& func);
+    void LogL1ReuseHashOverview(const Function& func) const;
+    Status RunL1ReusePhase(Function& func, int color, std::vector<std::vector<int>>& colorNode,
+                           std::vector<int>& colorCopyIn, std::vector<uint64_t>& hashColor,
+                           OperationsViewer& opOriList);
+    Status RunCubeNBufferPhase(const Function& func, int color, std::vector<std::vector<int>>& colorNode,
+                               OperationsViewer& opOriList, std::vector<int>& colorCopyIn,
+                               const std::vector<uint64_t>& hashColor);
+    Status ValidateSubgraphIds(Function& func) const;
+    static Status CollectL1ReuseLabelOverrides(const OperationsViewer& opOriList,
+                                               const std::map<std::string, int64_t>& labelMap, int color,
+                                               std::map<int, int>& subgraphOverrides);
+    static void ApplyL1ReuseLabelOverrides(const std::map<int, int>& subgraphOverrides, std::vector<int>& numLRList);
+    Status CollectCubeNBufferLabelOverrides(const OperationsViewer& opOriList, const std::vector<uint64_t>& hashColor,
+                                            int color, std::map<int, int>& labelOverrides) const;
+    static void ApplyCubeNBufferLabelOverrides(const std::map<int, int>& labelOverrides,
+                                               std::map<int, int>& hashMergeNumMap);
     Status ApplySemanticLabelSettingsL1Reuse(const OperationsViewer& opOriList,
                                              const std::map<std::string, int64_t>& labelMap,
                                              std::vector<int>& numLRList, const std::vector<uint64_t>& hashColor,
                                              int color);
     Status ApplySemanticLabelSettingsCubeNBuffer(const OperationsViewer& opOriList, std::map<int, int>& hashMergeNumMap,
                                                  const std::vector<uint64_t>& hashColor, int color);
-    const std::vector<std::vector<int>>& inGraph_;
     std::unordered_map<int, int> replacedCopyMap_;
     std::unordered_map<int, int> tensormagic2Op_;
     std::unordered_map<uint64_t, std::vector<int>> hashMap_;
     std::map<uint64_t, int> hashOrder_; // Deterministic ordered map for compilation repeatability
+    std::vector<std::pair<int, int>> maxInputColors_;
     std::map<int64_t, int64_t> numLRMap_;
     std::map<int64_t, int64_t> numDBMap_;
     std::map<std::string, int64_t> numLRMapByFunc_;

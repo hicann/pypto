@@ -14,13 +14,21 @@
  */
 
 #include "reschedule_utils.h"
-#include "interface/utils/common.h"
+#include <algorithm>
+#include <unordered_map>
 
+#include "interface/utils/common.h"
 #include "passes/pass_log/pass_log.h"
 
 #define MODULE_NAME "RecheduleUtils"
 
 namespace npu::tile_fwk {
+namespace {
+constexpr uint64_t TOPO_HASH_BASE = 37;
+constexpr uint64_t TOPO_HASH_MOD = 0xFFFFFFFFFFFFF;
+constexpr uint64_t TOPO_HASH_XOR_SEED = 0x12345678;
+} // namespace
+
 bool RescheduleUtils::isAllocOp(Operation* op)
 {
     static std::unordered_set<Opcode> allocOpcodes = {
@@ -30,43 +38,148 @@ bool RescheduleUtils::isAllocOp(Operation* op)
     return allocOpcodes.find(op->GetOpcode()) != allocOpcodes.end();
 }
 
+void RescheduleUtils::SortUnique(std::vector<int>& values)
+{
+    std::sort(values.begin(), values.end());
+    values.erase(std::unique(values.begin(), values.end()), values.end());
+}
+
+RescheduleUtils::TensorDependencyMap RescheduleUtils::BuildTensorDependencyInfo(const OperationsViewer& opList,
+                                                                                bool collectConsumerColors)
+{
+    TensorDependencyMap tensorDeps;
+    tensorDeps.reserve(opList.size() * 2);
+    for (size_t i = 0; i < opList.size(); i++) {
+        const auto& op = opList[i];
+        int subgraphId = op.GetSubgraphID();
+        for (const auto& tensor : op.GetOOperands()) {
+            if (tensor == nullptr) {
+                continue;
+            }
+            auto& depInfo = tensorDeps[tensor.get()];
+            depInfo.producerOps.emplace_back(static_cast<int>(i));
+            if (subgraphId >= 0) {
+                depInfo.producerColors.emplace_back(subgraphId);
+            }
+        }
+        if (!collectConsumerColors || subgraphId < 0) {
+            continue;
+        }
+        for (const auto& tensor : op.GetIOperands()) {
+            if (tensor == nullptr) {
+                continue;
+            }
+            tensorDeps[tensor.get()].consumerColors.emplace_back(subgraphId);
+        }
+    }
+
+    for (auto& [tensor, depInfo] : tensorDeps) {
+        (void)tensor;
+        std::sort(depInfo.producerOps.begin(), depInfo.producerOps.end(),
+                  [&](int lhs, int rhs) { return opList[lhs].GetOpMagic() < opList[rhs].GetOpMagic(); });
+        depInfo.producerOps.erase(
+            std::unique(depInfo.producerOps.begin(), depInfo.producerOps.end(),
+                        [&](int lhs, int rhs) { return opList[lhs].GetOpMagic() == opList[rhs].GetOpMagic(); }),
+            depInfo.producerOps.end());
+        SortUnique(depInfo.producerColors);
+        SortUnique(depInfo.consumerColors);
+    }
+    return tensorDeps;
+}
+
+uint64_t RescheduleUtils::GetOpcodeHash(const std::string& op)
+{
+    uint64_t hash = 0;
+    for (char c : op) {
+        hash = (hash * TOPO_HASH_BASE + static_cast<uint64_t>(c)) % TOPO_HASH_MOD;
+    }
+    return hash;
+}
+
+RescheduleUtils::TopoHashContribution RescheduleUtils::BuildTopoHashContribution(const std::vector<int>& producerOps,
+                                                                                 const std::vector<uint64_t>& hashList)
+{
+    TopoHashContribution contribution;
+    for (int producerIdx : producerOps) {
+        contribution.polynomial = (contribution.polynomial * TOPO_HASH_BASE +
+                                   (hashList[producerIdx] ^ TOPO_HASH_XOR_SEED)) %
+                                  TOPO_HASH_MOD;
+        contribution.power = (contribution.power * TOPO_HASH_BASE) % TOPO_HASH_MOD;
+    }
+    return contribution;
+}
+
+uint64_t RescheduleUtils::ApplyTopoHashContribution(uint64_t hash, const TopoHashContribution& contribution)
+{
+    return (hash * contribution.power + contribution.polynomial) % TOPO_HASH_MOD;
+}
+
+void RescheduleUtils::BuildInputTopoHashList(const OperationsViewer& opList, const TensorDependencyMap& tensorDeps,
+                                             std::vector<uint64_t>& hashList)
+{
+    hashList.assign(opList.size(), 0);
+    // opList must be topologically sorted so every producer hash is finalized before the first consumer caches it.
+    std::unordered_map<const LogicalTensor*, TopoHashContribution> tensorHashCache;
+    tensorHashCache.reserve(tensorDeps.size());
+    for (size_t i = 0; i < opList.size(); i++) {
+        uint64_t hash = GetOpcodeHash(opList[i].GetOpcodeStr());
+        for (const auto& tensor : opList[i].GetIOperands()) {
+            if (tensor == nullptr) {
+                continue;
+            }
+            auto depIter = tensorDeps.find(tensor.get());
+            if (depIter == tensorDeps.end()) {
+                continue;
+            }
+            const auto& depInfo = depIter->second;
+            TopoHashContribution contribution;
+            auto cacheIter = tensorHashCache.find(tensor.get());
+            if (cacheIter != tensorHashCache.end()) {
+                contribution = cacheIter->second;
+            } else {
+                contribution = BuildTopoHashContribution(depInfo.producerOps, hashList);
+                tensorHashCache.emplace(tensor.get(), contribution);
+            }
+            hash = ApplyTopoHashContribution(hash, contribution);
+        }
+        hashList[i] = hash;
+    }
+}
+
+void RescheduleUtils::BuildInputTopoHashList(const OperationsViewer& opList, std::vector<uint64_t>& hashList)
+{
+    auto tensorDeps = BuildTensorDependencyInfo(opList, false);
+    BuildInputTopoHashList(opList, tensorDeps, hashList);
+}
+
 // vector size == 2
 // 这里in_graph和out_graph只考虑了数据依赖，需要确认控制依赖是不是也要加入到in_graph和out_graph中
-std::vector<std::vector<std::vector<int>>> RescheduleUtils::GetInOutGraphs(const std::vector<Operation*>& opList,
-                                                                           int functionmagic)
+std::vector<std::vector<std::vector<int>>> RescheduleUtils::GetInOutGraphs(const std::vector<Operation*>& opList)
 {
-    std::vector<std::vector<int>> inGraph;
-    std::vector<std::vector<int>> outGraph;
-    inGraph.resize(opList.size());
-    outGraph.resize(opList.size());
+    std::vector<std::vector<int>> inGraph(opList.size());
+    std::vector<std::vector<int>> outGraph(opList.size());
     std::map<int, size_t> magic2Index;
     for (size_t i = 0; i < opList.size(); i++) {
         magic2Index[opList[i]->GetOpMagic()] = i;
     }
-    if (functionmagic != -1) {
-        for (size_t i = 0; i < opList.size(); i++) {
-            // 收集节点输出输出关系，沿着一个方向，如果沿着输入输出都收集，需要去重
-            for (auto& inTensor : opList[i]->GetIOperands()) {
-                for (auto& producer : inTensor->GetProducers()) {
-                    // 只收集了当前func内的节点关联关系
+    std::unordered_map<int, std::vector<size_t>> tensor2ProducerIdx;
+    for (size_t i = 0; i < opList.size(); i++) {
+        for (auto& inTensor : opList[i]->GetIOperands()) {
+            int tensorMagic = inTensor->GetMagic();
+            auto cacheIt = tensor2ProducerIdx.find(tensorMagic);
+            if (cacheIt == tensor2ProducerIdx.end()) {
+                std::vector<size_t> prodIdx;
+                for (auto* producer : inTensor->GetProducers()) {
                     auto iter = magic2Index.find(producer->GetOpMagic());
-                    if (iter == magic2Index.end()) {
-                        continue;
+                    if (iter != magic2Index.end()) {
+                        prodIdx.push_back(iter->second);
                     }
-                    inGraph[i].push_back(iter->second);
-                    outGraph[iter->second].push_back(i);
                 }
+                cacheIt = tensor2ProducerIdx.emplace(tensorMagic, std::move(prodIdx)).first;
             }
-        }
-    } else {
-        for (size_t i = 0; i < opList.size(); i++) {
-            // 收集节点输出输出关系，沿着一个方向，如果沿着输入输出都收集，需要去重
-            for (auto& inTensor : opList[i]->GetIOperands()) {
-                for (auto& producer : inTensor->GetProducers()) {
-                    // 只收集了当前func内的节点关联关系
-                    inGraph[i].push_back(magic2Index[producer->GetOpMagic()]);
-                    outGraph[magic2Index[producer->GetOpMagic()]].push_back(i);
-                }
+            for (size_t prodIdx : cacheIt->second) {
+                inGraph[i].push_back(prodIdx);
+                outGraph[prodIdx].push_back(i);
             }
         }
     }
