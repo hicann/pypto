@@ -19,6 +19,7 @@
 #include <vector>
 #include "interface/interpreter/raw_tensor_data.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "cost_model/simulation/cost_model_launcher.h"
 
 using namespace npu::tile_fwk;
@@ -95,5 +96,9 @@ std::string CostModelRunOnceDataFromHost(const std::vector<DeviceTensorData>& in
     return "";
 }
 
-void BindCostModelRuntime(py::module_& m) { m.def("CostModelRunOnceDataFromHost", &CostModelRunOnceDataFromHost); }
+void BindCostModelRuntime(py::module_& m)
+{
+    m.def("CostModelRunOnceDataFromHost", &CostModelRunOnceDataFromHost);
+    m.def("ExchangeCaptureModeRelax", &ExchangeCaptureModeRelax);
+}
 } // namespace pypto

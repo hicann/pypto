@@ -59,6 +59,7 @@ def _cost_model_run_once_data_from_host(inputs: List[pypto.Tensor], outputs: Lis
             break
 
     host_torch_tensors = []
+    pypto_impl.ExchangeCaptureModeRelax()
     if is_device:
         input_datas, input_host_torch_tensors = _device_to_host_tensor_datas(inputs)
         output_datas, output_host_torch_tensors = _device_to_host_tensor_datas(outputs)
