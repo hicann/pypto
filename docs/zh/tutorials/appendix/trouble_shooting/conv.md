@@ -15,9 +15,9 @@ Operation阶段校验TileShape配置超出硬件缓存空间限制，包括L0A�
    # 以Ascend 950PR/Ascend 950DT为例，L0A_size=65536 bytes
    # FP16（sizeof=2）, tileH=16, tileW=16, tileK=256
    # 16 * 16 * 256 * 2 = 131072 > 65536（L0A_size）
-   tile_l0_info = pypto_impl.TileL0Info（
+   tile_l0_info = pypto_impl.TileL0Info(
        tileH=16, tileW=16, tileK=256, tileN=16
-   ）
+   )
    ```
 
 - L0B空间超限：`tileK * tileN * sizeof（dtype） > L0B_size`。
@@ -37,9 +37,9 @@ Operation阶段校验TileShape配置超出硬件缓存空间限制，包括L0A�
    # L0A: 1 * 16 * 16 * 2 = 512 <= 65536
    # L0B: 16 * 16 * 2 = 512 <= 65536
    # L0C: 1 * 16 * 16 * 4 = 1024 <= 131072
-   tile_l0_info = pypto_impl.TileL0Info（
+   tile_l0_info = pypto_impl.TileL0Info(
        tileH=1, tileW=16, tileK=16, tileN=16
-   ）
+   )
    ```
 
 ## FC6201 EXPANDFUNC_TENSOR_OP_NULLPTR
@@ -54,9 +54,9 @@ Tile图切分阶段，在为MMAD（矩阵乘累加）操作设置属性时，fma
 
    ```python
    # 错误示例-在动态场景中，view操作的offset或shape传入异常，导致Tile图展开时无法正确构造fmap子tensor节点
-   input_a_view = pypto.view（input_a, [tile_batch, 16, 64], [batch_offset, 0, 0]）
+   input_a_view = pypto.view(input_a, [tile_batch, 16, 64], [batch_offset, 0, 0])
    # 若input_a本身为None或未正确初始化，Tile图展开时fmapTensorPtr为空
-   out = pypto.conv（input_a_view, input_b, dtype, [1], [1, 1], [1], extend_params={}, groups=1）
+   out = pypto.conv(input_a_view, input_b, dtype, [1], [1, 1], [1], extend_params={}, groups=1)
    ```
 
 - 在动态shape场景下，view/assemble操作构造的子Tensor链路异常，导致传递到MMAD节点的tensor指针丢失。
@@ -66,8 +66,8 @@ Tile图切分阶段，在为MMAD（矩阵乘累加）操作设置属性时，fma
 1. 开启编译debug模式dump计算图，确认Conv Operation的输入/输出tensor节点是否完整：
 
    ```python
-   @pypto.frontend.jit（debug_options={"compile_debug_mode": 1}）
-   def conv_kernel（）:
+   @pypto.frontend.jit(debug_options={"compile_debug_mode": 1})
+   def conv_kernel():
    ```
 
 2. 在output目录下使用pto-toolkit打开dump的计算图，定位到报错的Conv Operation节点，检查其输入tensor（fmap、weight）和输出tensor（res）是否均存在且非空。
@@ -111,8 +111,8 @@ Tile图切分阶段，Tile图新生成的节点出现空指针，包括：当前
 
    ```python
    # 错误示例-未在jit动态函数内调用conv，functionPtr为空
-   def not_under_jit_example（fmap, weight）:
-       output = pypto.conv（fmap, weight, dtype, [1, 1], [0, 0, 0, 0], [1, 1]）
+   def not_under_jit_example(fmap, weight):
+       output = pypto.conv(fmap, weight, dtype, [1, 1], [0, 0, 0, 0], [1, 1])
        return output  # functionPtr为空，触发FC6203
    ```
 
@@ -121,7 +121,7 @@ Tile图切分阶段，Tile图新生成的节点出现空指针，包括：当前
    ```python
    # 错误示例-hasBias为True但bias在extend_params中传入异常
    extend_params = {'bias_tensor': None}  # bias为None，hasBias标记为True但biasTensorPtr为空
-   output = pypto.conv（fmap, weight, dtype, [1, 1], [0, 0, 0, 0], [1, 1], extend_params=extend_params）
+   output = pypto.conv(fmap, weight, dtype, [1, 1], [0, 0, 0, 0], [1, 1], extend_params=extend_params)
    ```
 
 - Tile图展开过程中，L0层级的fmap/weight/res子tensor节点构造失败。
