@@ -26,14 +26,25 @@
 
 下图展示了从资源准备、任务下发到计算运行的完整执行过程。
 
+```mermaid
+graph LR
+    subgraph Host[Host]
+        A[资源准备]
+        B[硬件任务参数组装]
+        C[硬件任务下发]
+    end
+
+    subgraph Device[Device]
+        D[AICPU 任务执行]
+        E[AICORE 任务执行]
+    end
+```
+
 - 资源准备阶段：根据Execute Graph中描述的执行资源信息，向执行硬件申请如workspace内存、Stream等全局资源。
 - 任务参数组装和下发阶段：PyPTO的硬件执行任务分为AI CPU任务和AI Core任务。完成这两类任务所需的参数组装和任务配置后，提交给RTS以完成任务下发。
 - 任务执行阶段：通过AI CPU和AI Core之间类Client-Server架构的紧密配合，完成整个计算任务的执行。AI CPU基于Execute Graph完成子任务的解析和分发，AI Core则负责接收AI CPU分发的子任务并完成运行。
 
 在执行前，可以启用泳道图的采集和输出，利用PyPTO Toolkit可视化工具，直观查看各个子任务在AIC/AIV上的核间并行关系及前后执行顺序，从而帮助开发者更便捷地了解整体流水线分布，并进行针对性的算子性能优化。
-
-**图2**  计算图执行流程
-![](../figures/computation_graph_execution_process.png)
 
 下图展示了PyPTO任务在硬件运行时的AI CPU与AI Core的关系，以及详细的运行流程。主要过程概括为：HostMachine初始化资源\>DeviceMachine通过Stitch生成DeviceTask并调度CallTask\>CoreMachine执行CallTask\>DeviceProgram协调整个流程。
 

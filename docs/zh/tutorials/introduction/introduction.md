@@ -6,9 +6,31 @@ PyPTO（发音：pai p-t-o）是CANN推出的一款面向AI加速器的高效编
 
 PyPTO框架采用分层架构设计，从用户API到底层硬件执行，共分为以下几个层次：
 
-![](../figures/pypto_architecture.png)
+```mermaid
+flowchart LR
+    subgraph Left["架构层级"]
+        direction TB
+        L1["用户接口层<br>User Interface Layer"]
+        L2["计算图编译层<br>Compute Graph Compile Layer"]
+        L3["代码生成层<br>Code Generation Layer"]
+        L4["调度执行层<br>Scheduling & Execution Layer"]
+    end
 
-- 用户API层（User Interface Layer）：是PyPTO框架与开发者交互的接口层，提供Python友好的编程接口，使开发者能够以直观的方式表达计算逻辑，而无需深入了解底层硬件实现细节。
+    subgraph Right["说明"]
+        direction TB
+        R1["Tensor操作、Function、JIT编译"]
+        R2["Tensor Graph、Tile Graph、Block Graph、Execute Graph"]
+        R3["虚拟指令生成、目标平台代码生成"]
+        R4["MPMD调度、Control Flow"]
+    end
+
+    L1 --> R1
+    L2 --> R2
+    L3 --> R3
+    L4 --> R4
+```
+
+- 用户接口层（User Interface Layer）：是PyPTO框架与开发者交互的接口层，提供Python友好的编程接口，使开发者能够以直观的方式表达计算逻辑，而无需深入了解底层硬件实现细节。
 - 计算图编译层（Compute Graph Compile Layer）：PyPTO采用多层级计算图表达，支持从高到低多个抽象层次的计算图的优化和转换。
 
     - Tensor Graph：高层次的Tensor操作，贴近算法设计者的数学表达式。

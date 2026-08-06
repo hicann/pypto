@@ -1,4 +1,4 @@
-﻿# 环境部署
+# 环境部署
 
 在使用PyPTO开发或运行之前，请您先参考下面步骤完成基础环境搭建和编译安装，确保已安装NPU驱动、固件和CANN软件（`Ascend-cann-toolkit`和`Ascend-cann-ops`）等。
 
@@ -151,7 +151,7 @@
 
     - PyTorch及TorchNPU：
         - **顺序说明**：请务必先完成上文"安装CANN包"章节中的toolkit包安装后，再安装`TorchNPU`。
-        - 请根据实际环境的Python版本单独安装，请参考[TorchNPU文档中心](https://hiascend.com/document/redirect/pytorchuserguide)中的《软件安装》手册。
+        - 请根据实际环境的Python版本单独安装，请参考《[TorchNPU软件安装](https://www.hiascend.com/document/detail/zh/Pytorch/latest/installguide/swinstall/docs/zh/installation_guide/installation_description.md)》。
         - **重要**：需确保`PyTorch`、`TorchNPU`与`PyPTO`三者的Python版本一致。
 
 2. **安装其它依赖**

@@ -17,9 +17,8 @@ docs/
 ├── zh/                         # Chinese documentation
 │   ├── install                 # Environment setup
 │   ├── invocation              # Sample execution
-│   ├── tutorials               # PyPTO programming guide
-│   ├── api                     # PyPTO API reference
-│   └── tools                   # PyPTO Toolkit user guide
+│   ├── tutorials               # PyPTO Operator Development
+│   └── api                     # PyPTO APIs
 ├── CONTRIBUTION_DOC.md         # Documentation contribution guide
 └── README.md                   # This file
 ```

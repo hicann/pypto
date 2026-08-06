@@ -135,7 +135,10 @@ Tensor层次编程是PyPTO当前主要支持的编程方式，开发者直接使
 
     将用户定义的计算图计算图最终转换成可执行代码：
 
-    ![](../figures/transformation_process.png)
+    ```mermaid
+    graph LR
+        A[Tensor Graph<br/>用户定义的计算图] --> B[Tile Graph<br/>硬件感知的Tile操作] --> C[Block Graph<br/>子图分区] --> D[Execution Graph<br/>执行图] --> E[可执行代码]
+    ```
 
 - 计算图的查看
 
@@ -160,7 +163,10 @@ MPMD执行模型的优势包括：
 
 执行流程为：
 
-![](../figures/execution_process_flow.png)
+```mermaid
+graph LR
+    A[计算图] --> B[任务划分] --> C[依赖分析] --> D[任务调度] --> E[任务派发] --> F[并行执行] --> G[任务结果]
+```
 
 ## 编程示例
 

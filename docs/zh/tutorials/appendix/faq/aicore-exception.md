@@ -19,7 +19,7 @@ PyPTO error: PyPTO Inner Error. Please rectify the fault based on the error info
 
 ## 处理方式
 
-1. export ASCEND_WORK_PATH=./wk，详细介绍请参考《[环境变量参考](https://www.hiascend.com/document/redirect/CannCommunityEnvRef)》。
+1. export ASCEND_WORK_PATH=./wk，详细介绍请参考《[环境变量参考](https://gitcode.com/cann/docs/blob/master/docs/zh/env-vars/README.md)》。
 2. 固定cce编译模式
 
     ```python

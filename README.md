@@ -80,9 +80,9 @@ PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现
 ```
 ├── docs/                       # 文档资源
 │   └── zh/
-│      ├── api/                 # API参考文档
+│      ├── api/                 # PyPTO API参考
 │      ├── contribute/          # 贡献指南文档
-│      └── tutorials/           # PyPTO编程指南
+│      └── tutorials/           # PyPTO算子开发
 │
 ├── examples/                   # 示例代码
 │   ├── 01_beginner/            # 初级示例

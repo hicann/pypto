@@ -81,9 +81,9 @@ Key directories are as follows:
 ```
 ├── docs/                       # Documentation resources
 │   └── zh/
-│      ├── api/                 # API reference documentation
+│      ├── api/                 # PyPTO APIs
 │      ├── contribute/          # Contribution guide documentation
-│      └── tutorials/           # PyPTO programming guide
+│      └── tutorials/           # PyPTO Operator Development
 │
 ├── examples/                   # Sample code
 │   ├── 01_beginner/            # Beginner samples
