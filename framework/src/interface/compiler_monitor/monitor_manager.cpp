@@ -108,7 +108,7 @@ void MonitorManager::Initialize(bool enable, int intervalSec, double timeoutSec,
     (void)setenv("PYPTO_COMPILER_MONITOR_PREPARE_STARTED", "1", 1);
     impl_->StartMonitoring();
     if (!passDetailEnable) {
-        std::string thresholdMsg = "[Compiler Monitor] Threshold: " + std::to_string(totalTimeoutSec_.load()) +
+        std::string thresholdMsg = "Threshold: " + std::to_string(totalTimeoutSec_.load()) +
                                    "s | You can adjust the timeout threshold via "
                                    "pypto.set_host_options(compile_timeout=...)";
         COMPILER_EVENT("%s", thresholdMsg.c_str());
@@ -400,7 +400,7 @@ void MonitorManager::PrintWatchdogSummary(double totalElapsed)
             detectedStage += name;
         }
     }
-    std::string summaryMsg = "[Compiler Monitor] Threshold: " + std::to_string(totalTimeoutSec_.load()) +
+    std::string summaryMsg = "Threshold: " + std::to_string(totalTimeoutSec_.load()) +
                              "s | DetectedStage: " + (detectedStage.empty() ? "None" : detectedStage);
     for (size_t i = 0; i < stageOrder.size(); i++) {
         summaryMsg += " | " + stageOrder[i] + ": " + FormatElapsed(stageElapsed[i]);

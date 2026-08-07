@@ -126,12 +126,6 @@ void MonitorImpl::PrintTotalTimeOut(double totalElapsed, int totalTimeoutSec)
             COMPILER_LOGI("%s", warnMsg.c_str());
             (void)fprintf(stdout, "%s\n", warnMsg.c_str());
             (void)fflush(stdout);
-        } else {
-            std::string warnMsg = "[Compiler Monitor] | [== WARNING ==] Total elapsed [" + FormatElapsed(totalElapsed) +
-                                  "] exceeded the total time threshold [" +
-                                  FormatElapsed(static_cast<double>(totalTimeoutSec)) +
-                                  "] | Total number of op: " + std::to_string(currentTotalOpsize);
-            COMPILER_WARN_EVENT("%s", warnMsg.c_str());
         }
     }
 }
