@@ -724,6 +724,23 @@ TEST_F(L1CopyInReuseTest, TestSemanticLabelSetting)
     EXPECT_EQ(LCRM.RunOnFunction(*function), SUCCESS);
 }
 
+// Unmatched semantic labels are ignored (warned, not failed).
+TEST_F(L1CopyInReuseTest, TestSemanticLabelSettingNotFound)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    const int subGraphNum = 20;
+    InitGraphBuilder(G, tileShape, subGraphNum);
+    Function* function = G.GetFunction();
+    function->paramConfigs_.cubeL1ReuseSetting = {{-1, 2}};
+    function->paramConfigs_.cubeL1ReuseSettingByLabel = {{"NoSuchLabel", 1}};
+    function->paramConfigs_.cubeNBufferSetting = {{-1, 4}};
+    function->paramConfigs_.cubeNBufferSettingByLabel = {{"NoSuchLabel", 2}};
+    function->SetTotalSubGraphCount(subGraphNum);
+    L1CopyInReuseMerge LCRM;
+    EXPECT_EQ(LCRM.RunOnFunction(*function), SUCCESS);
+}
+
 // ===== ByFunc Integration Tests =====
 TEST_F(L1CopyInReuseTest, ByFuncL1ReuseFuncSpecificMerge)
 {

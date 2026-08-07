@@ -667,11 +667,12 @@ Status NBufferMerge::CollectSemanticLabelOverrides(const OperationsViewer& opOri
     for (const auto& [label, mergeNum] : vecNBufferSettingByLabel_) {
         auto it = labelToColors.find(label);
         if (it == labelToColors.end()) {
-            APASS_LOG_ERROR_F(Elements::Config,
-                              "Semantic label '%s' specified in vec_nbuffer_setting not found in any operation. "
-                              "Please check that the label matches an operation's semantic_label.",
-                              label.c_str());
-            return FAILED;
+            APASS_LOG_WARN_F(
+                Elements::Config,
+                "Semantic label '%s' specified in vec_nbuffer_setting not found in any operation. "
+                "This label is ignored. Please check that the label matches an operation's semantic_label.",
+                label.c_str());
+            continue;
         }
 
         for (int color : it->second) {

@@ -53,7 +53,6 @@ set_pass_options(*,
 - 设置时机：不要求在图编译开始前调用，可以在任何时候进行设置。
 - 类型安全：必须确保传入的value的类型与参数定义的类型完全一致，否则可能导致未定义行为或运行时错误。
 - 作用范围：参数设置是局部的，只会影响当前jit或者loop内的编译过程，若未设置，则继承上层作用域。
-- 语义标签key：setting的字符串key必须与至少一个operation通过`pypto.set_semantic_label`设置的semantic_label完全匹配，否则编译时报错。
 - sg_set_scope一致性约束：同一scope_id的所有Operation必须设置相同的`allow_parallel_merge`和`allow_cross_scope_merge`，否则编译报错。
 - scope_id为 -1时，`allow_parallel_merge`和`allow_cross_scope_merge`必须为False。
 - 不同scope_id的子图之间不可合并，`allow_cross_scope_merge`仅控制带scope的子图与无scope（scope_id=-1）的子图合并。
@@ -178,7 +177,7 @@ Pass在处理当前function的子图合并时，遵循"func{magic}\_{order} 精�
 
 #### 字符串键值对含义
 
-Key (label): 语义标签名称,必须与至少一个operation的`semantic_label`完全匹配。<br>
+Key (label): 语义标签名称，须与至少一个operation的`semantic_label`完全匹配。若未匹配到任何operation，编译时不会报错，仅打印WARN级别的日志并忽略该key。<br>
 Value (N): 表示合并粒度。<br>
 
 #### 优先级机制

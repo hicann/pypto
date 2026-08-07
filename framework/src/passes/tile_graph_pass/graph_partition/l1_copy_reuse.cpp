@@ -825,11 +825,12 @@ Status L1CopyInReuseRunner::CollectL1ReuseLabelOverrides(const OperationsViewer&
     for (const auto& [label, mergeNum] : labelMap) {
         auto it = labelToColors.find(label);
         if (it == labelToColors.end()) {
-            APASS_LOG_ERROR_F(Elements::Config,
-                              "Semantic label '%s' specified in cube_l1_reuse_setting not found in any operation. "
-                              "Please check that the label matches an operation's semantic_label.",
-                              label.c_str());
-            return FAILED;
+            APASS_LOG_WARN_F(
+                Elements::Config,
+                "Semantic label '%s' specified in cube_l1_reuse_setting not found in any operation. "
+                "This label is ignored. Please check that the label matches an operation's semantic_label.",
+                label.c_str());
+            continue;
         }
 
         for (int colorId : it->second) {
@@ -885,11 +886,12 @@ Status L1CopyInReuseRunner::CollectCubeNBufferLabelOverrides(const OperationsVie
     for (const auto& [label, mergeNum] : numDBMapByLabel_) {
         auto it = labelToColors.find(label);
         if (it == labelToColors.end()) {
-            APASS_LOG_ERROR_F(Elements::Config,
-                              "Semantic label '%s' specified in cube_nbuffer_setting not found in any operation. "
-                              "Please check that the label matches an operation's semantic_label.",
-                              label.c_str());
-            return FAILED;
+            APASS_LOG_WARN_F(
+                Elements::Config,
+                "Semantic label '%s' specified in cube_nbuffer_setting not found in any operation. "
+                "This label is ignored. Please check that the label matches an operation's semantic_label.",
+                label.c_str());
+            continue;
         }
 
         for (int colorId : it->second) {

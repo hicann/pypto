@@ -33,6 +33,9 @@ class CompStage(enum.Enum):
 _FUNC_HASH_ORDER_PATTERN = re.compile(r'^func\d+_\d+$')
 _DEFAULT_KEY = 'DEFAULT'
 
+# Maximum allowed ooo_scope_id
+_OOO_SCOPE_MAX = 100000
+
 # cube_l1_reuse_setting matrix-side encoding. The (count, side) value is packed into the
 # existing cube_l1_reuse_setting int value as side * _L1_REUSE_SIDE_BASE + count, so no extra
 # config keys are needed; L1CopyInReuseMerge decodes it. "auto" packs to just count (fully
@@ -296,13 +299,17 @@ def set_pass_options(
             raise ValueError(f"Invalid sg_set_tunevf_mode: '{sg_set_tunevf_mode}'. Expected 0, 1 or 2.")
         pass_options['sg_set_tunevf_mode'] = sg_set_tunevf_mode
     if sg_set_ooo_scope is not None:
-        if sg_set_ooo_scope > 0:
+        if sg_set_ooo_scope == -1:
+            pass_options['sg_set_ooo_scope'] = [-1]
+        elif 1 <= sg_set_ooo_scope <= _OOO_SCOPE_MAX:
             from pypto._controller import Controller
 
             encoded = sg_set_ooo_scope * 10000 + Controller.get_ooo_scope_iter()
             pass_options['sg_set_ooo_scope'] = [encoded]
         else:
-            pass_options['sg_set_ooo_scope'] = [-1]
+            raise ValueError(
+                f"Invalid sg_set_ooo_scope: '{sg_set_ooo_scope}'. Expected -1 or an integer in [1, {_OOO_SCOPE_MAX}]."
+            )
     if ooo_sched_mode is not None:
         if ooo_sched_mode not in ("", "GAPMIN", "HLF"):
             raise ValueError(f"Invalid ooo_sched_mode: '{ooo_sched_mode}'. Expected '', 'GAPMIN' or 'HLF'.")

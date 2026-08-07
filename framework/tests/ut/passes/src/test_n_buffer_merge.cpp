@@ -342,6 +342,22 @@ TEST_F(NBufferMergeTest, TestSemanticLabelSetting)
     EXPECT_EQ(NBM.RunOnFunction(*function), SUCCESS);
 }
 
+// Unmatched semantic label is ignored (warned, not failed).
+TEST_F(NBufferMergeTest, TestSemanticLabelSettingNotFound)
+{
+    std::vector<int64_t> tileShape{16, 16};
+    const int mgVecParallelLb = 3;
+    const int subGraphNum = 4;
+    ComputationalGraphBuilder G;
+    Function* function = BuildFunctionWithSubgraphs(G, tileShape, subGraphNum);
+    function->paramConfigs_.vecNBufferSetting = {{-1, 4}};
+    function->paramConfigs_.vecNBufferSettingByLabel = {{"NoSuchLabel", 1}};
+    function->paramConfigs_.mgVecParallelLb = mgVecParallelLb;
+    function->SetTotalSubGraphCount(subGraphNum + 1);
+    NBufferMerge NBM;
+    EXPECT_EQ(NBM.RunOnFunction(*function), SUCCESS);
+}
+
 // ===== ByFunc Integration Tests =====
 TEST_F(NBufferMergeTest, ByFuncMergeDefaultTwo)
 {
