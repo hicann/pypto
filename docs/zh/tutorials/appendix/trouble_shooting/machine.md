@@ -206,5 +206,3 @@ Ctrl AICPU运行超时或整网环境中AICPU执行超时。
    ```bash
    python3 tools/schema/schema_memory_check.py -d <device_log_dir> -t <dyn_topo.txt_path>
    ```
-6. **关闭复杂特性缩小范围**：使用 [pypto-precision-debug](https://gitcode.com/cann/pypto-gym/blob/master/.agents/skills/pypto-precision-debug/SKILL.md)关闭unroll_list、合轴特性、设置`submit_before_loop=True`。
-7. **关联Skill**：[pypto-memory-overlap-detector](../../../../../.agents/skills/pypto-memory-overlap-detector/SKILL.md)。

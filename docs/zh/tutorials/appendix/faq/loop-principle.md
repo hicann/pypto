@@ -8,7 +8,7 @@
 def loop(start, end, step=1, name=None, idx_name=None,
          unroll_list=[1], submit_before_loop=False):
 
-def loop_roll(start, end, step=1, name=None, idx_name=None,
+def loop_unroll(start, end, step=1, name=None, idx_name=None,
               unroll_list=[1], submit_before_loop=False):
 ```
 
