@@ -118,7 +118,14 @@ void TiledBinaryOperation(Function& function, const TileShape& tileShape, size_t
         if (opName == "BITWISEXOR" || opName == "COPYSIGN" || opName == "POW") {
             std::vector<int64_t> tmpShape(resultTileInfo.shape);
             auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
-            tmpShape[resultTileInfo.shape.size() - 1] = AlignUp(tmpShape[resultTileInfo.shape.size() - 1], alignSize);
+            auto alignedLast = AlignUp(tmpShape[resultTileInfo.shape.size() - 1], alignSize);
+            if (opName == "POW" && result->Datatype() == DT_FP32 &&
+                Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_2201) {
+                auto maskColsFloat = AlignUp((alignedLast + NUM_VALUE_8 - 1) / NUM_VALUE_8, BLOCK_SIZE) /
+                                     BytesOf(result->Datatype());
+                alignedLast = NUM_VALUE_2 * alignedLast + NUM_VALUE_3 * maskColsFloat;
+            }
+            tmpShape[resultTileInfo.shape.size() - 1] = alignedLast;
             auto tempTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
             op = &function.AddOperation(GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2},
                                         {resultTile, tempTensor});

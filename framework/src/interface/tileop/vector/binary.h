@@ -380,10 +380,155 @@ TILEOP void TBitwiseXor(T0 dst, T1 src0, T2 src1, T3 tmp)
     BinaryTmpCompute<BinaryOp::BITWISEXOR>(dst, src0, src1, tmp);
 }
 
+#ifdef __DAV_V220
+template <typename DstTile, typename Src0Tile, typename Src1Tile, typename TmpTile, typename MaskTile>
+TILEOP void TPowFloatTile(DstTile dstTile, Src0Tile src0Tile, Src1Tile src1Tile, TmpTile tmp0Tile, TmpTile tmp1Tile,
+                          MaskTile mask0Tile, MaskTile mask1Tile, MaskTile selTmpTile)
+{
+    constexpr float scalarHalf = 0.5f;
+    constexpr float scalarNegTwo = -2.0f;
+    constexpr float scalarNegOne = -1.0f;
+    constexpr float scalarOne = 1.0f;
+    constexpr float scalarZero = 0.0f;
+    const float nanValue = __builtin_nanf("");
+    const float infValue = __builtin_huge_valf();
+    const float negInfValue = -infValue;
+
+    // mag = exp(y * log(|x|)) -> dst
+    pto::TABS(tmp0Tile, src0Tile);
+    SyncV();
+    pto::TLOG(tmp0Tile, tmp0Tile);
+    SyncV();
+    pto::TMUL(tmp0Tile, src1Tile, tmp0Tile);
+    SyncV();
+    pto::TEXP(dstTile, tmp0Tile);
+    SyncV();
+
+    // parity = y - 2 * floor(0.5 * y) -> tmp0; odd integer exponent = (parity == 1) -> mask0
+    pto::TMULS(tmp1Tile, src1Tile, scalarHalf);
+    SyncV();
+    pto::TCVT(tmp1Tile, tmp1Tile, pto::RoundMode::CAST_FLOOR);
+    SyncV();
+    pto::TMULS(tmp1Tile, tmp1Tile, scalarNegTwo);
+    SyncV();
+    pto::TADD(tmp0Tile, src1Tile, tmp1Tile);
+    SyncV();
+    pto::TCMPS(mask0Tile, tmp0Tile, scalarOne, pto::CmpMode::EQ);
+    SyncV();
+
+    // negative base -> mask1
+    pto::TCMPS(mask1Tile, src0Tile, scalarZero, pto::CmpMode::LT);
+    SyncV();
+
+    // x < 0 and odd integer exponent: dst = -mag (mask0 = xneg AND isOdd, in-place)
+    pto::TAND(mask0Tile, mask1Tile, mask0Tile);
+    SyncV();
+    pto::TMULS(tmp0Tile, dstTile, scalarNegOne);
+    SyncV();
+    pto::TSEL(dstTile, mask0Tile, tmp0Tile, dstTile, selTmpTile);
+    SyncV();
+
+    // floor(y) -> tmp1; non-integer exponent = (y != floor(y)) -> mask0 (reused)
+    pto::TCVT(tmp1Tile, src1Tile, pto::RoundMode::CAST_FLOOR);
+    SyncV();
+    pto::TCMP(mask0Tile, src1Tile, tmp1Tile, pto::CmpMode::NE);
+    SyncV();
+
+    // x < 0 (finite) and non-integer exponent: dst = NaN.
+    // -inf ^ non-integer = +mag (already in dst), so exclude x == -inf via x > -inf.
+    pto::TAND(mask1Tile, mask1Tile, mask0Tile); // mask1 = xneg AND !isInt
+    SyncV();
+    pto::TCMPS(mask0Tile, src0Tile, negInfValue, pto::CmpMode::GT);
+    SyncV();
+    pto::TAND(mask1Tile, mask1Tile, mask0Tile); // mask1 = xneg AND !isInt AND x > -inf
+    SyncV();
+    pto::TEXPANDS(tmp0Tile, nanValue);
+    SyncV();
+    pto::TSEL(dstTile, mask1Tile, tmp0Tile, dstTile, selTmpTile);
+    SyncV();
+
+    // y == 0: dst = 1
+    pto::TCMPS(mask0Tile, src1Tile, scalarZero, pto::CmpMode::EQ);
+    SyncV();
+    pto::TEXPANDS(tmp0Tile, scalarOne);
+    SyncV();
+    pto::TSEL(dstTile, mask0Tile, tmp0Tile, dstTile, selTmpTile);
+    SyncV();
+
+    // x == 1: dst = 1 (tmp0 still holds 1)
+    pto::TCMPS(mask0Tile, src0Tile, scalarOne, pto::CmpMode::EQ);
+    SyncV();
+    pto::TSEL(dstTile, mask0Tile, tmp0Tile, dstTile, selTmpTile);
+    SyncV();
+
+    // x == -1 and y is +/-inf: dst = 1 (mag is NaN because log(1) == 0)
+    pto::TABS(tmp1Tile, src1Tile);
+    SyncV();
+    pto::TCMPS(mask0Tile, src0Tile, scalarNegOne, pto::CmpMode::EQ);
+    SyncV();
+    pto::TCMPS(mask1Tile, tmp1Tile, infValue, pto::CmpMode::EQ);
+    SyncV();
+    pto::TAND(mask1Tile, mask0Tile, mask1Tile); // mask1 = x==-1 AND |y|==inf
+    SyncV();
+    pto::TSEL(dstTile, mask1Tile, tmp0Tile, dstTile, selTmpTile);
+    SyncV();
+}
+#endif
+
 #define OP_TILE_OP_POW TPow
 template <auto PrecisionType = pto::PowAlgorithm::DEFAULT, typename T0, typename T1, typename T2, typename T3>
 TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
+#ifdef __DAV_V220
+    if constexpr (std::is_same_v<typename T0::Type, float>) {
+        const auto dstLayout = dst.GetLayout();
+        auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+        auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+        auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+        auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+        auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+        if (dstShape0 == 0 || dstShape1 == 0 || dstShape2 == 0) {
+            return;
+        }
+        constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+        constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+        constexpr auto dataTypeSize = sizeof(typename T0::Type);
+        constexpr auto floatSlot = tileH * tileW * dataTypeSize;    // bytes, 32B-aligned
+        constexpr auto maskCols = ((tileW + 7) / 8 + 31) / 32 * 32; // bit-packed mask bytes/row, 32B-aligned
+        constexpr auto maskSlot = tileH * maskCols;                 // bytes
+        constexpr auto maskBase = 2 * floatSlot;                    // masks laid out after 2 float tiles
+        using DataTile = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+        using MaskTile = pto::Tile<pto::TileType::Vec, uint8_t, tileH, maskCols, pto::BLayout::RowMajor, -1, -1>;
+        DataTile dstTile(dstShape3, dstShape4);
+        DataTile src0Tile(dstShape3, dstShape4);
+        DataTile src1Tile(dstShape3, dstShape4);
+        DataTile tmp0Tile(dstShape3, dstShape4);
+        DataTile tmp1Tile(dstShape3, dstShape4);
+        MaskTile mask0Tile(dstShape3, (dstShape4 + 7) / 8);
+        MaskTile mask1Tile(dstShape3, (dstShape4 + 7) / 8);
+        MaskTile selTmpTile(dstShape3, (dstShape4 + 7) / 8);
+        for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
+            for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
+                for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
+                    auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                    auto dstOffset = GenTileOffset(dst, tileOffsets);
+                    auto src0Offset = GenTileOffset(src0, tileOffsets);
+                    auto src1Offset = GenTileOffset(src1, tileOffsets);
+                    pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dataTypeSize));
+                    pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + src0Offset * dataTypeSize));
+                    pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + src1Offset * dataTypeSize));
+                    pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + 0 * floatSlot));
+                    pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + 1 * floatSlot));
+                    pto::TASSIGN(mask0Tile, (uint64_t)(tmp.GetAddr() + maskBase + 0 * maskSlot));
+                    pto::TASSIGN(mask1Tile, (uint64_t)(tmp.GetAddr() + maskBase + 1 * maskSlot));
+                    pto::TASSIGN(selTmpTile, (uint64_t)(tmp.GetAddr() + maskBase + 2 * maskSlot));
+                    TPowFloatTile(dstTile, src0Tile, src1Tile, tmp0Tile, tmp1Tile, mask0Tile, mask1Tile, selTmpTile);
+                }
+            }
+        }
+        return;
+    }
+#endif
     BinaryTmpCompute<BinaryOp::POW, PrecisionType>(dst, src0, src1, tmp);
 }
 
