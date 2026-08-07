@@ -20,6 +20,7 @@ target_compile_options(${_Target}
 )
 target_link_libraries(${_Target}
         INTERFACE
+            $<BUILD_INTERFACE:c_sec_headers>
             tile_fwk_intf_pub
             json
 )

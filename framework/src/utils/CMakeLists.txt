@@ -16,8 +16,6 @@ file(GLOB_RECURSE _Utils_Srcs
 add_library(tile_fwk_utils SHARED)
 target_sources(tile_fwk_utils PRIVATE ${_Utils_Srcs})
 target_include_directories(tile_fwk_utils
-        PUBLIC
-            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/base>>
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}
 )

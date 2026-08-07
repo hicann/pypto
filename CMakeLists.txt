@@ -87,6 +87,7 @@ include(cmake/func.cmake)
 include(cmake/config.cmake)
 include(cmake/intf.cmake)
 find_cann_package(acl_rt REQUIRED)
+find_cann_package(ascend_dump REQUIRED)
 find_cann_package(ascend_hal REQUIRED)
 find_cann_package(hcomm REQUIRED)
 find_cann_package(runtime REQUIRED)
@@ -198,6 +199,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     #    libtile_fwk_bundle.so 的调用方(脱离编译前端, 仅消费 .pyptokb)需要
     install(DIRECTORY framework/include/tile_fwk_bundle/
             DESTINATION ${PyPTO_WhlName}/lib/include/tile_fwk_bundle
+            COMPONENT pypto
             PATTERN "*.h"
             PATTERN "*.hpp"
             PATTERN ".svn" EXCLUDE

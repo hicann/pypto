@@ -15,7 +15,6 @@ target_include_directories(tile_fwk_intf_pub_base
             $<$<BOOL:${PTO_FWK_SRC_ROOT}>:${PTO_FWK_SRC_ROOT}/framework/src>
             $<$<BOOL:${PTO_FWK_SRC_ROOT}>:${PTO_FWK_SRC_ROOT}/framework/src/interface>
             $<$<BOOL:${PTO_FWK_SRC_ROOT}>:${PTO_FWK_SRC_ROOT}/framework/src/interface/machine/device>
-            $<$<BOOL:${PTO_FWK_SRC_ROOT}>:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/include>>
 )
 target_compile_options(tile_fwk_intf_pub_base
         INTERFACE
@@ -113,10 +112,6 @@ target_compile_options(tile_fwk_intf_pub_base
             $<$<BOOL:${ENABLE_UBSAN}>:$<$<CXX_COMPILER_ID:GNU>:-fsanitize=vptr>>
             # ASAN/UBSAN 公共
             $<$<OR:$<BOOL:${ENABLE_ASAN}>,$<BOOL:${ENABLE_UBSAN}>>:-fno-omit-frame-pointer -fsanitize-recover=all>
-)
-target_link_directories(tile_fwk_intf_pub_base
-        INTERFACE
-            $<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/lib64>
 )
 target_link_libraries(tile_fwk_intf_pub_base
         INTERFACE

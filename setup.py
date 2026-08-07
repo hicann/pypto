@@ -537,7 +537,8 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         cmake_install_prefix = self._get_cmake_install_prefix()
 
         params = CMakeCmdParams(
-            src=src, build_dir=build_dir, cmake_install_prefix=cmake_install_prefix, py3_exe=sys.executable, env=env
+            src=src, build_dir=build_dir, cmake_install_prefix=cmake_install_prefix, py3_exe=sys.executable, env=env,
+            install_components=['pypto']
         )
 
         # 主版本构建
