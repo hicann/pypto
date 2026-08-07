@@ -9,8 +9,11 @@
  */
 #pragma once
 
+#include <optional>
 #include <string>
 #include <map>
+#include <unordered_set>
+#include <vector>
 
 #include "ir/scalar_expr.h"
 #include "ir/stmt.h"
@@ -19,4 +22,13 @@ namespace pypto::ir {
 std::string DumpScalarExpr(const ScalarExprPtr& op);
 std::string DumpTensorVar(const VarPtr& tensor);
 std::map<std::string, std::any> CollectTensorOpAttrs(const TensorOpStmtPtr& ptr);
+
+// Returns the underlying allocation id of a tensor Var, used for alias-aware
+// liveness analysis (inplace transforms such as RESHAPE alias the same allocation).
+// Returns std::nullopt when the Var is not a framework tensor or has no allocation.
+std::optional<int> GetVarMemoryId(const Var* var);
+
+// Collects allocation ids of a set of tensor Vars, used for alias-aware liveness
+// analysis. Skips Vars that have no allocation id.
+std::unordered_set<int> CollectMemoryIds(const std::unordered_set<const Var*>& vars);
 } // namespace pypto::ir

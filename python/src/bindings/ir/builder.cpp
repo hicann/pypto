@@ -28,6 +28,9 @@ void BindIRBuilder(py::module_& m)
 {
     // Get or create ir submodule
     py::module_ ir = m.attr("ir");
+    ir.def(
+        "set_assemble_new_logical_tensor", [](bool enabled) { IRContext::Get().SetAssembleNewLogicalTensor(enabled); },
+        py::arg("enabled"));
 
     // IRBuilder class
     py::class_<IRBuilder>(ir, "IRBuilder",

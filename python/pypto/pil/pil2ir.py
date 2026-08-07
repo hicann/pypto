@@ -74,6 +74,8 @@ def compile(pyfunc, *args, **kwargs):
     # we need a pre-pass to collect store names, as move is not treated as store
     # in python, otherwise we could skip it
     has_move = kwargs.pop("has_move", True)
+    create_new_logical_tensor = kwargs.pop("create_new_logical_tensor", False)
+    pypto.pypto_impl.ir.set_assemble_new_logical_tensor(create_new_logical_tensor)
     sig = inspect.signature(pyfunc)
     bound = sig.bind(*args, **kwargs)
     bound.apply_defaults()

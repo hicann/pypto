@@ -31,8 +31,9 @@ using RemovablePredicate = std::function<bool(const StmtPtr&)>;
 void CollectAllAssignStmts(const std::vector<StmtPtr>& stmts, std::vector<std::shared_ptr<const AssignStmt>>& assigns);
 
 /// Eliminate dead code from a statement list using a custom removable predicate.
-/// Dead statements are those whose defined variable is not transitively
-/// used by any non-removable (live-root) statement.
+/// A removable TensorOpStmt stays live when either one of its result variables,
+/// one of its result tensor memoryIds, or its result token is transitively consumed
+/// by a non-removable (live-root) statement.
 std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts, const RemovablePredicate& is_removable);
 
 /// Eliminate dead code from a statement list using the default removable predicate.

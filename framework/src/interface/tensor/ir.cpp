@@ -54,6 +54,26 @@ std::map<std::string, std::any> CollectTensorOpAttrs(const TensorOpStmtPtr& top)
     return attrs;
 }
 
+std::optional<int> GetVarMemoryId(const Var* var)
+{
+    auto tensor = dynamic_cast<const LogicalTensor*>(var);
+    if (tensor && tensor->GetRawTensor()) {
+        return tensor->GetRawTensor()->memoryId;
+    }
+    return std::nullopt;
+}
+
+std::unordered_set<int> CollectMemoryIds(const std::unordered_set<const Var*>& vars)
+{
+    std::unordered_set<int> memory_ids;
+    for (const auto* var : vars) {
+        if (auto mid = GetVarMemoryId(var)) {
+            memory_ids.insert(*mid);
+        }
+    }
+    return memory_ids;
+}
+
 Pass pass::AggressiveDCE()
 {
     return pass::CreateFunctionPass(

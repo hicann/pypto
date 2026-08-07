@@ -2201,6 +2201,20 @@ OutcastProducerTraits ClassifyOutcastByProducers(const LogicalTensor& origin, bo
 
 } // namespace
 
+void Function::RebindAssembleVersionsToOutcast(const LogicalTensorPtr& originOutcast,
+                                               const LogicalTensorPtr& newOutcast)
+{
+    auto originRawTensor = originOutcast->GetRawTensor();
+    auto outcastRawTensor = newOutcast->GetRawTensor();
+    for (auto& operation : operations_) {
+        for (auto& output : operation->GetOOperands()) {
+            if (output->GetRawTensor() == originRawTensor) {
+                output->tensor = outcastRawTensor;
+            }
+        }
+    }
+}
+
 LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& scope)
 {
     LogicalTensors outArgumentList;
@@ -2227,6 +2241,7 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
         SetOutcastNeedAlloc(outCasts_.back(), traits.needRuntimeAlloc);
         if (traits.isAssembleOut) {
             Substitute(origin, outSymbol);
+            RebindAssembleVersionsToOutcast(origin, outSymbol);
             originOutCasts_[idx] = outSymbol;
             if (scope) {
                 scope->partialUpdateOutcastDict[outSymbol] = true;

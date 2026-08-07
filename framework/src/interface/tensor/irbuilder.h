@@ -96,6 +96,9 @@ public:
         ClearTensorDataDescList();
     }
 
+    void SetAssembleNewLogicalTensor(bool enabled) { assembleNewLogicalTensor_ = enabled; }
+    bool AssembleNewLogicalTensor() const { return assembleNewLogicalTensor_; }
+
     void ClearTensorDataDescList() { getTensorDataDescList.clear(); }
 
     void AddDependToken(const ir::ExprPtr& val, const ir::VarPtr& token) { token_map_[val].push_back(token); }
@@ -125,6 +128,7 @@ private:
     std::map<std::string, std::string> all_vars_; // unique var name -> var name
     std::unordered_map<ir::ExprPtr, std::vector<ir::VarPtr>> token_map_;
     std::vector<std::shared_ptr<Tensor>> getTensorDataDescList;
+    bool assembleNewLogicalTensor_{false};
 };
 
 class IRBuilder : public ir::IRBuilder {

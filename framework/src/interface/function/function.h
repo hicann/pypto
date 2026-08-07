@@ -1050,6 +1050,7 @@ private:
     std::shared_ptr<LogicalTensor> CreateOutcastTensor(const std::shared_ptr<LogicalTensor>& outArgument);
     void CreateFromOutcast(const LogicalTensorPtr& symbol, const LogicalTensorPtr& newOutcast,
                            const LogicalTensorPtr& originOutcast);
+    void RebindAssembleVersionsToOutcast(const LogicalTensorPtr& originOutcast, const LogicalTensorPtr& newOutcast);
 
     static void AddWhenNotExistOrAssert(const std::shared_ptr<LogicalTensor>& tensor,
                                         std::map<int, int>& magicToRawMagic,

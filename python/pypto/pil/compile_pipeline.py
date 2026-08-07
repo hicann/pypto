@@ -52,13 +52,20 @@ def _run_pipeline(program, pipeline):
 
 def compile_new_ir(pyfunc, *args, pipeline=None, **kwargs):
     """Compile a Python function and run the complete new-IR lowering pipeline."""
-    builder = ir.IRBuilder()
-    func = pil.compile(pyfunc, *args, **kwargs)
-    program = builder.create_program([func], "main", ir.Span.unknown())
-    setup_verify_data(args)
+    create_new_logical_tensor = kwargs.pop("create_new_logical_tensor", False)
+    pypto_impl.ir.set_assemble_new_logical_tensor(create_new_logical_tensor)
+    try:
+        builder = ir.IRBuilder()
+        func = pil.compile(
+            pyfunc, *args, create_new_logical_tensor=create_new_logical_tensor, **kwargs
+        )
+        program = builder.create_program([func], "main", ir.Span.unknown())
+        setup_verify_data(args)
 
-    if pipeline is None:
-        pipeline = _build_default_pipeline()
+        if pipeline is None:
+            pipeline = _build_default_pipeline()
 
-    program = _run_pipeline(program, pipeline)
-    return program.functions[func.name]
+        program = _run_pipeline(program, pipeline)
+        return program.functions[func.name]
+    finally:
+        pypto_impl.ir.set_assemble_new_logical_tensor(False)

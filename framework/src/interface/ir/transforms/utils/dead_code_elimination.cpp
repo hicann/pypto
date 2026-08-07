@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "interface/tensor/ir.h"
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
 #include "ir/stmt.h"
@@ -102,6 +103,11 @@ void FindLiveRootsRecursiveImpl(const std::vector<StmtPtr>& stmts, const Removab
                        std::dynamic_pointer_cast<const BreakStmt>(stmt);
         if (is_leaf && !is_removable(stmt)) {
             auto all_refs = CollectStmtVarRefs(stmt);
+            // Do not keep an unconsumed result token alive just because its TensorOp is non-removable.
+            if (auto tensor_op = std::dynamic_pointer_cast<const TensorOpStmt>(stmt);
+                tensor_op && tensor_op->result_token_) {
+                all_refs.erase(tensor_op->result_token_.get());
+            }
             live.insert(all_refs.begin(), all_refs.end());
         }
 
@@ -317,8 +323,13 @@ std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts, const 
 
     // Collect all definition sites (AssignStmt, TensorOpStmt, ScalarOpStmt)
     // and cache their def/use pairs for the fixed-point propagation.
+    struct MemoryDef {
+        const Var* var;
+        int memory_id;
+    };
     struct DefSite {
         std::vector<const Var*> defs;
+        std::vector<MemoryDef> memory_defs;
         std::unordered_set<const Var*> uses;
     };
 
@@ -327,11 +338,16 @@ std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts, const 
     std::function<void(const std::vector<StmtPtr>&)> collect_def_sites = [&](const std::vector<StmtPtr>& stmts_vec) {
         for (const auto& s : stmts_vec) {
             if (auto assign = std::dynamic_pointer_cast<const AssignStmt>(s)) {
-                def_sites.push_back({{assign->var_.get()}, CollectVarUses(assign->value_)});
+                def_sites.push_back({{assign->var_.get()}, {}, CollectVarUses(assign->value_)});
             } else if (auto tensor_op = std::dynamic_pointer_cast<const TensorOpStmt>(s)) {
                 std::vector<const Var*> defs;
-                for (const auto& r : tensor_op->result_)
+                std::vector<MemoryDef> memory_defs;
+                for (const auto& r : tensor_op->result_) {
                     defs.push_back(r.get());
+                    if (auto mid = GetVarMemoryId(r.get())) {
+                        memory_defs.push_back({r.get(), *mid});
+                    }
+                }
                 if (tensor_op->result_token_)
                     defs.push_back(tensor_op->result_token_.get());
                 std::unordered_set<const Var*> uses;
@@ -342,14 +358,14 @@ std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts, const 
                 for (const auto& r : tensor_op->tokens_) {
                     uses.insert(r.get());
                 }
-                def_sites.push_back({std::move(defs), std::move(uses)});
+                def_sites.push_back({std::move(defs), std::move(memory_defs), std::move(uses)});
             } else if (auto scalar_op = std::dynamic_pointer_cast<const ScalarOpStmt>(s)) {
                 std::unordered_set<const Var*> uses;
                 for (const auto& arg : scalar_op->args_) {
                     auto arg_uses = CollectVarUses(arg);
                     uses.insert(arg_uses.begin(), arg_uses.end());
                 }
-                def_sites.push_back({{scalar_op->result_.get()}, std::move(uses)});
+                def_sites.push_back({{scalar_op->result_.get()}, {}, std::move(uses)});
             }
             // Recurse into control-flow bodies
             if (auto for_s = std::dynamic_pointer_cast<const ForStmt>(s)) {
@@ -377,12 +393,22 @@ std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts, const 
     bool changed = true;
     while (changed) {
         changed = false;
+        auto live_memory_ids = CollectMemoryIds(live);
         for (size_t i = def_sites.size(); i-- > 0;) {
             bool any_def_live = false;
             for (const auto* def : def_sites[i].defs) {
                 if (live.count(def)) {
                     any_def_live = true;
                     break;
+                }
+            }
+            if (!any_def_live) {
+                for (const auto& memory_def : def_sites[i].memory_defs) {
+                    if (live_memory_ids.count(memory_def.memory_id)) {
+                        if (live.insert(memory_def.var).second)
+                            changed = true;
+                        any_def_live = true;
+                    }
                 }
             }
             if (!any_def_live)

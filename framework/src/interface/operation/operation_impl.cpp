@@ -1369,6 +1369,16 @@ void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset
     CHECK_OP(dest.GetDataType() == tensor.GetDataType()) << "Assemble: src and dest requires same dtype";
 
     auto& func = *Program::GetInstance().GetCurrentFunction();
+
+    if (IRContext::Get().AssembleNewLogicalTensor()) {
+        std::vector<ir::VarPtr> tokens;
+        auto newDest = dest.GetStorage(false)->NextVersion(func, tokens);
+        TensorDInnerAssemble(func, tensor.GetStorage(), newDest, dynOffset, parallel);
+        Program::GetInstance().GetTensorSlotManager()->TensorWrite(dest, SlotProperty::ASSEMBLE_DST);
+        dest = Tensor(newDest);
+        return;
+    }
+
     TensorDInnerAssemble(func, tensor.GetStorage(), dest.GetStorage(), dynOffset, parallel);
     Program::GetInstance().GetTensorSlotManager()->TensorWrite(dest, SlotProperty::ASSEMBLE_DST);
 }

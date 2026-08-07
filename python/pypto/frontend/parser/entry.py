@@ -457,6 +457,7 @@ class JitCallableWrapper:
         self._pto_function = compile_new_ir(
             self._original_func,
             *pto_tensor,
+            create_new_logical_tensor=self._create_new_logical_tensor,
             **(self.kwargs or {}),
         )
 
@@ -1139,6 +1140,7 @@ def jit(
     verify_options: Optional[dict[str, Any]] = None,
     debug_options: Optional[dict[str, Any]] = None,
     new_ir: bool = False,
+    create_new_logical_tensor: bool = False,
 ) -> Union[Callable, Callable[[Callable], JitCallableWrapper]]:
     """JIT decorator for compiling Python functions to PTO IR.
 
@@ -1225,6 +1227,7 @@ def jit(
             captured_locals=captured_locals,
             new_ir=new_ir,
         )
+        wrapper._create_new_logical_tensor = create_new_logical_tensor
         return wrapper
 
     if func is None:

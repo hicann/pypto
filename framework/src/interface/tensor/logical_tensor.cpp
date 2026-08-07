@@ -173,18 +173,12 @@ ir::VarPtr LogicalTensor::Clone(bool shareRawTensor) const
 
 LogicalTensorPtr LogicalTensor::NextVersion(Function& func, std::vector<ir::VarPtr>& tokens) const
 {
+    (void)tokens;
     IRBuilder builder;
 
     auto zeroOffset = std::vector<int64_t>(shape.size(), 0);
     auto newTensor = builder.CreateTensorVar(func, tensor, zeroOffset, shape, dynValidShape_);
 
-    for (auto prod : producers_) {
-        if (!prod->result_token_) {
-            prod->result_token_ = builder.CreateTokenVar(ir::Span());
-            builder.AddDependToken(shared_from_this(), prod->result_token_);
-        }
-        tokens.push_back(prod->result_token_);
-    }
     return newTensor;
 }
 
