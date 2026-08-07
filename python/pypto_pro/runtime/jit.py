@@ -1203,31 +1203,19 @@ def _launch(stream=None, block_dim=1, compiled_result: "CompiledKernel | str" = 
     compiled_func(*args, block_dim=block_dim, stream=stream)
 
 
-def _clamp_block_dim(block_dim: int, is_aiv_only: bool = False) -> int:
-    """Clamp block_dim to platform's available core count.
+def _validate_block_dim(block_dim):
+    """Validate that block_dim is a positive integer.
 
-    If the requested block_dim exceeds the hardware core count,
-    emit a warning and return the maximum available cores.
-
-    On architectures where cube (AIC) and vector (AIV) cores are counted
-    separately, an aiv-only kernel is bounded by the vector core count rather
-    than the total AI core count.
+    Raises ValueError if block_dim is not an int or is <= 0.
     """
-    if not isinstance(block_dim, int) or block_dim <= 0:
-        return block_dim
-    from pypto_pro.runtime.platform import get_platform_info
-
-    info = get_platform_info()
-    max_cores = info.vector_core_num if is_aiv_only else info.core_num
-    if max_cores > 0 and block_dim > max_cores:
-        import warnings
-
-        warnings.warn(
-            f"Requested block_dim={block_dim} exceeds platform core count={max_cores}, clamping to {max_cores}.",
-            stacklevel=3,
+    if not isinstance(block_dim, int) or isinstance(block_dim, bool):
+        raise ValueError(
+            f"block_dim must be a positive integer, got {type(block_dim).__name__}: {block_dim}"
         )
-        return max_cores
-    return block_dim
+    if block_dim <= 0:
+        raise ValueError(
+            f"block_dim must be a positive integer, got {block_dim}"
+        )
 
 
 def _validate_tilingkey_no_var_conflict(f, tilingkey_schema, closure_vars):
@@ -1430,8 +1418,6 @@ class _TileJitKernel:
         """Support kernel[stream, block_dim], with optional tilingkey and datatype dicts.
 
         Returns a callable launcher that executes the compiled kernel.
-        If block_dim exceeds the platform's available core count, it is
-        clamped to the maximum and a warning is emitted.
 
         For tilingkey kernels the third bracket element is the concrete key dict::
 
@@ -1441,11 +1427,9 @@ class _TileJitKernel:
 
         def launcher(*args, **kwargs):
             args = self._normalize_launch_args(args, kwargs)
+            _validate_block_dim(block_dim)
             compiled = self._ensure_compiled(args, concrete_key=tk_key, dtype_key=dtype_key)
-            # Clamp after compile so the kernel's core type (aiv-only vs mix) is
-            # known and block_dim is bounded against the right core count.
-            clamped = _clamp_block_dim(block_dim, is_aiv_only=compiled.is_aiv_only)
-            _launch(stream, clamped, compiled, *args)
+            _launch(stream, block_dim, compiled, *args)
 
         return launcher
 

@@ -680,11 +680,17 @@ REGISTER_OP("vf.arange")
 
 REGISTER_OP("vf.gather")
     .set_op_category("VFOp")
-    .set_description("Gather elements by indices (mode=NORM: vgather2, mode=DATA_BLOCK_LOAD: vgatherb)")
+    .set_description("Gather elements by indices. Two forms: "
+                     "(1) UB-to-Reg: gather(src_ub, indices, mask[, data_copy_mode]). "
+                     "b8 sources are zero-extended to b16. "
+                     "b16 sources support both uint16 and uint32 index. "
+                     "(2) Reg-to-Reg: gather(src_reg, indices). "
+                     "Source and destination must have the same type, supports INT8->INT8. "
+                     "Backend dispatches based on src argument type (Tile vs RegTensor).")
     .add_argument("dst", "Destination register")
-    .add_argument("src_ub", "Source UB pointer")
+    .add_argument("src", "Source UB pointer or source register")
     .add_argument("indices", "Index register")
-    .add_argument("mask", "Mask register")
+    .add_argument("mask", "Mask register (required for UB form, omitted for Reg form)")
     .set_attr<int>("data_copy_mode")
     .f_deduce_type(DeduceVFFromDstArg);
 

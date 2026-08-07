@@ -488,12 +488,17 @@ TEST(BackendCCEVFOpsTest, EmitsGatherAndUnalignedDataMovement)
     auto u8 = MakeVar("u8", ir::DataType::UINT8);
     auto i64 = MakeVar("i64", ir::DataType::INT64);
     auto index = MakeVar("index", ir::DataType::UINT32);
+    auto index_u16 = MakeVar("index_u16", ir::DataType::UINT16);
     auto mask = MakeVar("mask", ir::DataType::UINT32);
     auto ureg = MakeVar("ureg", ir::DataType::INT64);
 
-    ExpectInvoke(codegen, "vf.gather", {"vgather2("}, {fp16, tile, index, mask});
+    // b16 src + uint16 index -> vgather2
+    ExpectInvoke(codegen, "vf.gather", {"vgather2("}, {fp16, tile, index_u16, mask});
+    // b16 src + uint32 index -> vgather2_bc
+    ExpectInvoke(codegen, "vf.gather", {"vgather2_bc("}, {fp16, tile, index, mask});
     ExpectInvoke(codegen, "vf.gather", {"vgatherb("}, {fp16, tile, index, mask},
                  {{"data_copy_mode", EnumValue(ir::DataCopyMode::DATA_BLOCK_LOAD)}});
+    ExpectInvoke(codegen, "vf.gather", {"vselr("}, {fp16, fp16, index});
     ExpectInvoke(codegen, "vf.scatter", {"vscatter("}, {tile, fp16, index, mask});
     ExpectInvoke(codegen, "vf.load", {"UnalignReg __ureg_ld_", "vldas(", "vldus("}, {fp16, tile});
     ExpectInvoke(codegen, "vf.load", {"UnalignReg __ureg_ld_", "vldas(", "vldus(", "(4) * 2", "NORM"},

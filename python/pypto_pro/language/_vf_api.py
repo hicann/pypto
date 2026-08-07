@@ -22,7 +22,7 @@ it.  Outside a kernel, calling a declaration raises ``RuntimeError``.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, overload
 
 from pypto.ir import (
     BinType,
@@ -959,38 +959,65 @@ class Vf:
         """
 
     @staticmethod
-    @_api_decl
-    def gather(src_ub, indices, mask,
-               data_copy_mode: Optional[DataCopyMode] = None):
-        r"""Gather elements by index from UB memory.
+    @overload
+    def gather(src, indices, mask, *, data_copy_mode: Optional[DataCopyMode] = None):
+        r"""Gather elements by index — Tile→Reg form.
 
-        Reads elements from non-contiguous UB locations specified by an index
-        register and writes them to the destination register.  For each active
-        lane ``i``, loads the element at ``src_ub[indices[i]]`` into
-        ``dst[i]``.
+        ``src`` is a UB tile. For each active lane ``i``, loads the element at
+        ``src[indices[i]]`` into ``dst[i]``.
 
-        .. math:: dstReg_i = srcUb[\text{indices}_i]
-
-        The ``data_copy_mode`` kwarg selects the gather granularity::
-
-            dst = vf.gather(src_ub, indices, mask)                                    # per-element (vgather2)
-            dst = vf.gather(src_ub, indices, mask,
-                            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_LOAD)           # per 32B datablock (vgatherb)
-
-        The DATA_BLOCK_LOAD form replaces the former standalone ``vf.gatherb`` op.
+        - **NORM mode** (default): per-element gather. ``indices`` unit is
+          element. b8 sources are zero-extended to b16 (INT8→INT16).
+        - **DATA_BLOCK_LOAD mode**: per-32B-DataBlock gather. ``indices`` unit
+          is byte offset, must be 32-byte aligned. Source and destination
+          types must be identical.
 
         Args:
-            src_ub: Source UB pointer (base address)
-            indices: Index register. NORM mode: element offsets; DATA_BLOCK_LOAD
-                mode: byte offsets, must be 32-byte aligned (one index per datablock)
+            src: Source UB tile, base address must be 32-byte aligned
+            indices: Index register. NORM mode: element offsets;
+                DATA_BLOCK_LOAD mode: byte offsets, must be 32-byte aligned
+                (one index per datablock)
             mask: Predicate mask register
 
         Kwargs:
-            data_copy_mode: ``pl.DataCopyMode.NORM`` (default, per-element via vgather2)
-                or ``pl.DataCopyMode.DATA_BLOCK_LOAD`` (per 32B datablock via vgatherb)
+            data_copy_mode: ``pl.DataCopyMode.NORM`` (default, per-element)
+                or ``pl.DataCopyMode.DATA_BLOCK_LOAD`` (per 32B datablock)
 
         Returns:
             Destination register (``RegTensor``) with gathered elements.
+        """
+
+    @staticmethod
+    @overload
+    def gather(src, indices, mask=None, *, data_copy_mode: Optional[DataCopyMode] = None):
+        r"""Gather elements by index — Reg→Reg form.
+
+        ``src`` is a register. For each lane ``i``, copies ``src[indices[i]]``
+        into ``dst[i]``. Source and destination must have the **same data
+        type**, including INT8→INT8. No mask is needed. Index and dst data
+        type bit-width must match (b8→``uint8_t``, b16→``uint16_t``,
+        b32→``uint32_t``).
+
+        .. math:: dstReg_i = src[\text{indices}_i]
+
+        Args:
+            src: Source register
+            indices: Index register, element offsets within ``src``.
+                Data type bit-width must match ``src``
+
+        Returns:
+            Destination register (``RegTensor``) with gathered elements.
+        """
+
+    @staticmethod
+    @_api_decl
+    def gather(src, indices, mask=None,
+               data_copy_mode: Optional[DataCopyMode] = None):
+        r"""Gather elements by index.
+
+        See the overload signatures above for the two supported forms:
+        **Tile→Reg** (``src`` is a UB tile, ``mask`` required) and
+        **Reg→Reg** (``src`` is a register, ``mask`` omitted).
         """
 
     @staticmethod
@@ -1741,28 +1768,6 @@ class Vf:
             src0: First source register
             src1: Second source register
             src2: Third source register
-            mask: Predicate mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def gather2(dst, src_ub, index, mask):
-        r"""Gather with two-element stride (vgather2 instruction).
-
-        Gathers pairs of elements from UB memory at non-contiguous locations
-        specified by an index register.  For each active lane ``i``, loads a
-        pair of elements starting at ``src_ub[index[i]]`` into ``dst``.
-
-        .. math:: dstReg_{2i},\; dstReg_{2i+1} = srcUb[\text{index}_i],\; srcUb[\text{index}_i + 1]
-
-        Statement form (dst is an explicit parameter)::
-
-            vf.gather2(dst, src_ub, index, pred)
-
-        Args:
-            dst: Destination register
-            src_ub: Source UB pointer
-            index: Index register
             mask: Predicate mask register
         """
 

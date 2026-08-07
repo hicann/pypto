@@ -2065,6 +2065,30 @@ static std::string EmitVFArange(const ir::CallPtr& op, codegen::CodegenBase& cod
 static std::string EmitVFGather(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    // Two forms, dispatched by src argument type:
+    //   Reg-to-Reg: args = [dst, src_reg, indices]  — no mask, src/dst same type
+    //   UB-to-Reg:  args = [dst, src_ub, indices, mask] — with mask, b8 zero-extends to b16
+    auto src_tile_type = ir::As<ir::TileType>(op->args_[1]->GetType());
+    if (!src_tile_type) {
+        // Reg-to-Reg form
+        // Maps all types to unsigned by bit-width:
+        //   b8  -> RegTensor<uint8_t>, b16 -> RegTensor<uint16_t>, b32 -> RegTensor<uint32_t>
+        std::string dst = codegen.GetExprAsCode(op->args_[0]);
+        std::string src = codegen.GetExprAsCode(op->args_[1]);
+        std::string indices = codegen.GetExprAsCode(op->args_[2]);
+        DataType dst_dt = GetExprDtype(op->args_[0]);
+        std::string cast_type = "uint32_t";
+        if (dst_dt.GetBit() <= 8) {
+            cast_type = "uint8_t";
+        } else if (dst_dt.GetBit() == 16) {
+            cast_type = "uint16_t";
+        }
+        codegen.Emit("vselr((RegTensor<" + cast_type + ">&)" + dst + ", (RegTensor<" + cast_type + ">&)" + src +
+                     ", (RegTensor<" + cast_type + ">&)" + indices + ");");
+        return "";
+    }
+
+    // UB-to-Reg form
     // args: [dst, src_ub, indices, mask]
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     DataType dst_dt = GetExprDtype(op->args_[0]);
@@ -2073,7 +2097,7 @@ static std::string EmitVFGather(const ir::CallPtr& op, codegen::CodegenBase& cod
     std::string indices = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
 
-    // Check mode: DATA_BLOCK_LOAD -> vgatherb, otherwise -> vgather2
+    // Check mode: DATA_BLOCK_LOAD -> block gather, otherwise -> per-element gather
     bool is_datablock = false;
     if (op->HasKwarg("data_copy_mode")) {
         auto mode = static_cast<ir::DataCopyMode>(op->GetKwarg<int>("data_copy_mode"));
@@ -2081,18 +2105,50 @@ static std::string EmitVFGather(const ir::CallPtr& op, codegen::CodegenBase& cod
     }
 
     if (is_datablock) {
-        codegen.Emit("vgatherb(" + dst + ", " + src_ub + ", (RegTensor<uint32_t> &)" + indices + ", " + mask + ");");
+        // Block gather: AscendC always casts to signed types (s8/s16/s32/s64)
+        // and uses int8_t*/int16_t*/int32_t*/int64_t* for the UB pointer.
+        std::string signed_c_type;
+        if (dst_dt.GetBit() <= 8) {
+            signed_c_type = "int8_t";
+        } else if (dst_dt.GetBit() == 16) {
+            signed_c_type = "int16_t";
+        } else if (dst_dt.GetBit() == 32) {
+            signed_c_type = "int32_t";
+        } else {
+            signed_c_type = "int64_t";
+        }
+        std::string gb_ub_ptr = GetUBufPtr(codegen, op->args_[1], signed_c_type);
+        codegen.Emit("vgatherb((RegTensor<" + signed_c_type + ">&)" + dst + ", " + gb_ub_ptr +
+                     ", (RegTensor<uint32_t> &)" + indices + ", " + mask + ");");
     } else {
-        // Index reg type mirrors how vgather2 overloads are wired up:
-        //   - 4-byte load (u32/s32/f32) -> u32 index
-        //   - 2-byte load (u16/s16/f16/bf16) -> u16 index
-        //   - 1-byte load (u8/s8/...)        -> u16 index (matches SDK macros)
-        std::string idx_c_type = (dst_dt == DataType::UINT32) ? "uint32_t" :
-                                 (dst_dt == DataType::INT32)  ? "int32_t" :
-                                 (dst_dt == DataType::FP32)   ? "uint32_t" :
-                                                                "uint16_t";
-        codegen.Emit("vgather2(" + dst + ", " + src_ub + ", (RegTensor<" + idx_c_type + "> &)" + indices + ", " + mask +
-                     ");");
+        // Per-element gather. Two chip instructions depending on index dtype:
+        //   vgather2    — b8/b16 src: uint16 index; b32 src: uint32 index.
+        //   vgather2_bc — b16 src with uint32 index (backward-compatible).
+        //                 Each gathered b16 element occupies a 32-bit slot
+        //                 (upper 16 bits zero). Only b16/b32 src supported.
+        // FP8 types (f8e4m3/f8e5m2/f8e8m0) have their own overloads and
+        // need no cast. b64 is handled via DataCopyGatherB64 (not supported here).
+        DataType idx_dt = GetExprDtype(op->args_[2]);
+        bool is_b16_src = (dst_dt == DataType::INT16 || dst_dt == DataType::UINT16 || dst_dt == DataType::FP16 ||
+                           dst_dt == DataType::BF16);
+        bool use_vgather2_bc = is_b16_src && (idx_dt.GetBit() >= 32);
+
+        std::string idx_c_type = use_vgather2_bc ? "uint32_t" : ((dst_dt.GetBit() >= 32) ? "uint32_t" : "uint16_t");
+        std::string dst_expr = dst;
+        std::string ub_ptr = src_ub;
+        if (dst_dt == DataType::INT8 || dst_dt == DataType::UINT8) {
+            dst_expr = "(RegTensor<int16_t>&)" + dst;
+            ub_ptr = GetUBufPtr(codegen, op->args_[1], "int8_t");
+        } else if (is_b16_src) {
+            dst_expr = "(RegTensor<int16_t>&)" + dst;
+            ub_ptr = GetUBufPtr(codegen, op->args_[1], "int16_t");
+        } else if (dst_dt == DataType::INT32 || dst_dt == DataType::UINT32 || dst_dt == DataType::FP32) {
+            dst_expr = "(RegTensor<int32_t>&)" + dst;
+            ub_ptr = GetUBufPtr(codegen, op->args_[1], "int32_t");
+        }
+        std::string instr = use_vgather2_bc ? "vgather2_bc" : "vgather2";
+        codegen.Emit(instr + "(" + dst_expr + ", " + ub_ptr + ", (RegTensor<" + idx_c_type + "> &)" + indices + ", " +
+                     mask + ");");
     }
     return "";
 }
