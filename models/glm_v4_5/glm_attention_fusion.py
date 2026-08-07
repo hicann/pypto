@@ -701,11 +701,9 @@ def test_attention():
     qkv_proj_scale = torch.rand(hidden_size, dtype=torch.bfloat16).to(npu)
     qkv_proj_offset = torch.rand(hidden_size, dtype=torch.bfloat16).to(npu)
 
-    qkv_proj_weight = torch.randint(
-        0, 128, size=(hidden_size, total_head_size), dtype=torch.int8, device=f'npu:{device_id}'
-    )
-    qkv_proj_weight = torch_npu.npu_format_cast(qkv_proj_weight, 29)
-    qkv_proj_quant_bias = torch.randint(0, 128, size=(total_head_size,), dtype=torch.int32, device=f'npu:{device_id}')
+    qkv_proj_weight = torch.randint(0, 128, size=(hidden_size, total_head_size), dtype=torch.int8).to(npu)
+    qkv_proj_weight = torch_npu.npu_format_cast(qkv_proj_weight, 29).to(npu)
+    qkv_proj_quant_bias = torch.randint(0, 128, size=(total_head_size,), dtype=torch.int32).to(npu)
     qkv_proj_deq_scale = torch.rand(total_head_size, dtype=torch.float32).to(npu)
     q_norm_weight = torch.rand(d, dtype=torch.bfloat16).to(npu)
     q_norm_bias = torch.rand(d, dtype=torch.bfloat16).to(npu)
