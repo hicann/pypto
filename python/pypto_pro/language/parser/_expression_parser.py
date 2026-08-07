@@ -28,6 +28,19 @@ from .diagnostics import (
 )
 
 
+def _is_enum_value(value: Any) -> bool:
+    """Whether ``value`` is an enum constant (DataType or a pybind enum).
+
+    DataType is a py::class_ without ``__members__``, so it is matched by type;
+    generic pybind enums (MemorySpace, RoundMode, ...) expose ``.value`` and a
+    class-level ``__members__``. Mirrors the predicate used in parse_attribute /
+    parse_name.
+    """
+    return isinstance(value, ir.DataType) or (
+        hasattr(type(value), "__members__") and hasattr(value, "value")
+    )
+
+
 def _scalar_branches_reconcilable(then_type: Any, else_type: Any) -> bool:
     """Whether two ternary branch types differ only by same-category scalar dtype.
 
@@ -254,10 +267,16 @@ class ExpressionParserMixin:
         if var is not None:
             return var
 
-        # Fall back to closure variables
-        result = self.expr_evaluator.try_eval_as_ir(name)
-        if result is not None:
-            return result
+        # Fall back to closure variables.
+        success, value = self.expr_evaluator.try_eval_expr(name)
+        if success:
+            # An enum constant captured from the closure (e.g. a kernel-factory
+            # ``dtype`` param used as ``dtype=dtype``) is returned as the enum
+            # object, matching how ``pl.DT_FP16`` / ``pl.RoundMode.X`` written
+            # directly resolve.
+            if _is_enum_value(value):
+                return value
+            return self.expr_evaluator.python_value_to_ir(value, self.span_tracker.get_span(name))
 
         raise UndefinedVariableError(
             f"Undefined variable '{var_name}'",
@@ -449,6 +468,21 @@ class ExpressionParserMixin:
         # ── Standard comparison operators (==, !=, <, <=, >, >=) ──
         left = self.parse_expression(compare.left)
         right = self.parse_expression(compare.comparators[0])
+
+        # Compile-time enum comparison (e.g. dtype generalization: ``x_dtype ==
+        # pl.DT_FP16``). Enum operands (DataType / pybind enum) are Python objects,
+        # not ir.Expr, so they cannot go through make_binary/ir.eq; fold ``==`` /
+        # ``!=`` here into a ConstBool. Only equality is meaningful for enums.
+        if _is_enum_value(left) and _is_enum_value(right):
+            if op_type is ast.Eq:
+                return ir.ConstBool(left == right, span)
+            if op_type is ast.NotEq:
+                return ir.ConstBool(left != right, span)
+            raise UnsupportedFeatureError(
+                f"Unsupported comparison {op_type.__name__} between enum values",
+                span=span,
+                hint="Only == and != are supported for enum comparisons",
+            )
 
         # Comparisons also promote mixed int/float operands to float via make_binary.
         op_map = {
@@ -715,10 +749,6 @@ class ExpressionParserMixin:
             obj_name = attr.value.id
             field_name = attr.attr
 
-            if obj_name == "pl" and field_name.startswith("DT_"):
-                dtype = self.type_resolver.resolve_dtype(attr)
-                return ir.ConstInt(int(dtype), DataType.INDEX, span)
-
             # If the scope variable's static IR type is a named tuple
             # (TupleType with dbg_name), lower to GetItemExpr(base, index).
             obj_expr = self.scope_manager.lookup_var_bounded(obj_name)
@@ -732,15 +762,17 @@ class ExpressionParserMixin:
                 if lowered is not None:
                     return lowered
 
-        # Check for nested attribute access like pl.MemorySpace.Left
-        if isinstance(attr.value, ast.Attribute):
-            inner_attr = attr.value
-            if isinstance(inner_attr.value, ast.Name):
-                inner_obj_name = inner_attr.value.id
-                inner_field_name = inner_attr.attr
-                if inner_obj_name == "pl" and inner_field_name == "MemorySpace":
-                    memory_space = self.type_resolver.resolve_memory_space(attr)
-                    return ir.ConstInt(memory_space.value, DataType.INT64, span)
+        # Generic pybind enum constant (pl.MemorySpace.Vec, pl.RoundMode.CAST_FLOOR,
+        # pl.DT_FP16, pl.QuantMode.SYM, pl.STPhase.Partial, ...): evaluate the
+        # attribute and, if it is an enum value, return the enum object. kwarg
+        # consumers use it directly / the C++ boundary extracts .value as int.
+        # Generic pybind enums (MemorySpace, RoundMode, ...) expose .value and a
+        # class-level __members__; DataType is a py::class_ without __members__, so
+        # match it by type. NOTE: enum objects are not IR Exprs, so they cannot be
+        # used as positional op args or list elements (only as kwargs).
+        success, val = self.expr_evaluator.try_eval_expr(attr)
+        if success and _is_enum_value(val):
+            return val
 
         raise UnsupportedFeatureError(
             f"Standalone attribute access not supported: {ast.unparse(attr)}",

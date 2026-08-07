@@ -137,8 +137,6 @@ class ExprEvaluator:
             return ir.ConstInt(value, DataType.INDEX, span)
         if isinstance(value, float):
             return ir.ConstFloat(value, DataType.DEFAULT_CONST_FLOAT, span)
-        if isinstance(value, DataType):
-            return ir.ConstInt(int(value), DataType.INDEX, span)
         if isinstance(value, ir.Expr):
             return value
         # Tile wrapper — unwrap to the underlying IR Call expression.
@@ -153,26 +151,6 @@ class ExprEvaluator:
             span=span,
             hint="Closure variables must be int, float, bool, list, tuple, or IR expressions",
         )
-
-    def try_eval_as_ir(self, node: ast.expr) -> ir.Expr | None:
-        """Try to evaluate an AST node and convert to an IR expression.
-
-        Combines try_eval_expr + python_value_to_ir. Returns None when the
-        name cannot be resolved from closure variables.
-
-        Args:
-            node: AST expression node to evaluate
-
-        Returns:
-            IR expression, or None if the name cannot be resolved.
-
-        Raises:
-            ParserTypeError: If the value is resolved but has an unsupported type.
-        """
-        success, value = self.try_eval_expr(node)
-        if not success:
-            return None
-        return self.python_value_to_ir(value, self._get_span(node))
 
     def _get_span(self, node: ast.AST) -> "ir.Span":
         """Get span for an AST node, falling back to unknown."""

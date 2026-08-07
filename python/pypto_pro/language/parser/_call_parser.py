@@ -139,6 +139,47 @@ def _infer_return_types_from_body(body: ir.Stmt) -> list[ir.Type] | None:
 class CallParserMixin:
     """Mixin containing call and operation parsing methods for ``ASTParser``."""
 
+    # Kwargs whose value must be an enum, not a plain int. Writing e.g. ``phase=2``
+    # or a closure ``a=2; phase=a`` is rejected — use the enum (``phase=pl.STPhase.X``)
+    # or an enum variable. Covers block/tensor/system op enum kwargs and VF-op enum
+    # kwargs. ``cmp_mode`` is intentionally excluded: it is a plain-int parameter of
+    # block gather/cmp (not an enum kwarg), despite _VF_KWARG_ENUMS mapping it.
+    _ENUM_KWARGS: frozenset = frozenset({
+        # block / tensor / system op enum kwargs
+        "phase",
+        "atomic",
+        "mode",
+        "relu_pre_mode",
+        "acc_to_vec_mode",
+        "sync_mode",
+        "core_type",
+        "cache_line",
+        "dst",
+        "target_memory",
+        # dtype-family kwargs (all resolve to a DataType at the C++ boundary)
+        "dtype",
+        "target_type",
+        "out_dtype",
+        "cmp_dtype",
+        # VF-op enum kwargs (from _VF_KWARG_ENUMS, minus cmp_mode)
+        "pattern",
+        "merge_mode",
+        "reduce_mode",
+        "reduce_type",
+        "pos",
+        "layout",
+        "round_mode",
+        "saturate",
+        "bin_type",
+        "hist_type",
+        "gather_mode",
+        "part",
+        "width",
+        "dist",
+        "data_copy_mode",
+        "index_order",
+    })
+
     # Mapping of VF kwarg names to their expected enum classes (tuple of types).
     # When a kwarg value resolves to an instance of any mapped enum, its .value
     # VF enum kwarg validation: if a kwarg is mapped to enum classes, the parser
@@ -708,22 +749,48 @@ class CallParserMixin:
         return {kw.arg: self.resolve_single_kwarg(kw.arg, kw.value) for kw in call.keywords}
 
     def resolve_single_kwarg(self, key: str, value: ast.expr) -> Any:
-        """Resolve a single keyword argument value to a Python or IR value."""
-        if key == "dtype":
-            return self.resolve_dtype_expr(value)
-        if isinstance(value, ast.Constant):
-            result = value.value
-        elif isinstance(value, ast.UnaryOp) and isinstance(value.op, ast.USub):
-            result = self._resolve_unary_kwarg(value)
-        elif isinstance(value, ast.Name):
-            result = self._resolve_name_kwarg(value)
-        elif isinstance(value, ast.Attribute):
-            result = self._resolve_attribute_kwarg(value)
-        elif isinstance(value, ast.List):
-            result = self._resolve_list_kwarg(value)
-        else:
-            result = self.parse_expression(value)
-        return result
+        """Resolve a single keyword argument value to a Python or IR value.
+
+        Kwargs are resolved uniformly through ``parse_expression`` and then
+        unwrapped: a constant IR value (ConstInt/ConstBool/ConstFloat) becomes a
+        plain Python scalar. This is how an enum written as ``pl.RoundMode.X``
+        (lowered to a ConstInt by ``parse_attribute``) turns into the int that op
+        builders / the C++ boundary expect. A dtype written as ``pl.DT_FP16``
+        resolves to a DataType object (``parse_attribute`` returns it as-is) and
+        passes through unchanged, since dtype consumers and the C++ boundary
+        expect a DataType. Other non-constant results (Var, MakeTuple, ...) also
+        pass through unchanged.
+
+        A list of constants (``order=[0, 1]``, ``mutex_ids=[VA]``) is parsed to a
+        MakeTuple and then unwrapped to a Python list, since such consumers expect
+        a list; a list containing an IR Var stays a MakeTuple.
+
+        ``key`` is retained for call-site compatibility (some callers pass it).
+        """
+        # ConstBool/ConstInt/ConstFloat already expose a Python bool/int/float via
+        # ``.value``; the tuple type covers all three (ConstBool is not a subclass
+        # of ConstInt, so list it explicitly).
+        _const_types = (ir.ConstBool, ir.ConstInt, ir.ConstFloat)
+
+        parsed = self.parse_expression(value)
+        if isinstance(parsed, _const_types):
+            # An enum kwarg written directly (pl.RoundMode.X) or via an enum variable
+            # resolves to an enum object above (not a Const*), so reaching here means
+            # a plain int/bool/float was passed — reject it for enum kwargs.
+            if key in self._ENUM_KWARGS:
+                raise ParserTypeError(
+                    f"'{key}' expects an enum value, not {parsed.value!r}",
+                    span=self.span_tracker.get_span(value),
+                    hint=f"Use the enum, e.g. {key}=pl.RoundMode.X / dtype=pl.DT_FP16, "
+                    "or an enum-valued variable",
+                )
+            return parsed.value
+        # An all-constant MakeTuple (order=[0, 1], mutex_ids=[VA], flags=[True, ...])
+        # unwraps to a Python list whose consumers expect one; a MakeTuple with any
+        # non-constant element (e.g. an IR Var) stays a MakeTuple.
+        if isinstance(parsed, ir.MakeTuple) and all(isinstance(e, _const_types) for e in parsed.elements):
+            return [e.value for e in parsed.elements]
+        return parsed
 
     def resolve_const_int_list_kwarg(self, call: ast.Call, key: str) -> "list[int] | None":
         """Resolve a compile-time constant int-list kwarg (e.g. ``tile_dims``) to a list of ints.
@@ -781,21 +848,6 @@ class CallParserMixin:
             hint="A constant list kwarg (e.g. TileType shape/valid_shape) must be compile-time "
             "constants; use pl.set_validshape() for a runtime valid shape.",
         )
-
-    def resolve_dtype_expr(self, value: ast.expr):
-        """Resolve a dtype through ``parse_expression`` then validate its enum value."""
-        parsed = self.parse_expression(value)
-        if isinstance(parsed, ir.ConstInt):
-            dtype = self.type_resolver.dtype_from_value(parsed.value)
-            if dtype is not None:
-                return dtype
-            raise ParserTypeError(
-                f"'{ast.unparse(value)}' is not a valid dtype value",
-                span=self.span_tracker.get_span(value),
-            )
-        # Preserve the existing closure/diagnostic behavior for non-parser dtype
-        # annotations and for unsupported enum values.
-        return self.type_resolver.resolve_dtype(value)
 
     def _default_op_func(self, op_name: str, call: ast.Call) -> ir.Expr:
         if op_name.startswith("vf."):
@@ -1000,40 +1052,6 @@ class CallParserMixin:
     # Keyword argument resolution helpers
     # -------------------------------------------------------------------------
 
-    def _resolve_unary_kwarg(self, value: ast.UnaryOp) -> Any:
-        """Resolve a unary op kwarg value (e.g., -1)."""
-        if isinstance(value.operand, ast.Constant) and isinstance(value.operand.value, (int, float)):
-            return -value.operand.value
-        return self.parse_expression(value)
-
-    def _resolve_name_kwarg(self, value: ast.Name) -> Any:
-        """Resolve a Name kwarg value via scope lookup or closure eval."""
-        if value.id in ["True", "False"]:
-            return value.id == "True"
-        if self.scope_manager.lookup_var_bounded(value.id) is not None:
-            return self.parse_expression(value)  # IR var from scope
-        # Not in IR scope -evaluate from closure (raises ParserTypeError if undefined)
-        return self.expr_evaluator.eval_expr(value)
-
-    def _resolve_attribute_kwarg(self, value: ast.Attribute) -> Any:
-        """Resolve an Attribute kwarg value (e.g., pl.DT_FP32, config.field)."""
-        try:
-            return self.type_resolver.resolve_dtype(value)
-        except ParserTypeError:
-            return self.expr_evaluator.eval_expr(value)
-
-    def _resolve_list_kwarg(self, value: ast.List) -> Any:
-        """Resolve a List kwarg value, trying closure eval first."""
-        if any(
-            isinstance(elt, ast.Name) and self.scope_manager.lookup_var_bounded(elt.id) is not None
-            for elt in value.elts
-        ):
-            return self.parse_list(value)
-        success, result = self.expr_evaluator.try_eval_expr(value)
-        if success and isinstance(result, list):
-            return result
-        return self.parse_list(value)
-
     def _parse_vf_op(self, op_name: str, call: ast.Call) -> ir.Expr:
         """Parse a VF API operation call: vf.{op_name}(...).
 
@@ -1158,16 +1176,18 @@ class CallParserMixin:
             phase = None
             for kw in call.keywords:
                 if kw.arg == "phase":
-                    resolved = self._resolve_attribute_kwarg(kw.value)
-                    if hasattr(resolved, "value"):
-                        phase = resolved.value
+                    # phase is written as pl.STPhase.X / pl.AccPhase.X, which
+                    # resolve_single_kwarg returns as the enum object.
+                    phase = self.resolve_single_kwarg("phase", kw.value)
                     break
-            # STPhase/AccPhase enum: Partial/Final indicates multi-step accumulation
+            # STPhase/AccPhase enum: Partial/Final indicates multi-step accumulation.
+            # phase is written as an enum in the DSL (pl.STPhase.X / pl.AccPhase.X),
+            # which the parser lowers to the enum object, so match the objects.
             _phase_skip = {
-                ir.STPhase.Partial.value,
-                ir.STPhase.Final.value,
-                ir.AccPhase.Partial.value,
-                ir.AccPhase.Final.value,
+                ir.STPhase.Partial,
+                ir.STPhase.Final,
+                ir.AccPhase.Partial,
+                ir.AccPhase.Final,
             }
             if phase in _phase_skip:
                 unique_refs = [r for r in unique_refs if r.memory != ir.MemorySpace.Acc]

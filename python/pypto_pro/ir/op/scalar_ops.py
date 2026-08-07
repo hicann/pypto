@@ -154,7 +154,14 @@ def _parse_typed_constant(self, call: ast.Call):
     if negate:
         value = -value
 
-    dtype = self.resolve_dtype_expr(call.args[1])
+    dtype = self.parse_expression(call.args[1])
+    if not isinstance(dtype, _ir_core.DataType):
+        raise ParserSyntaxError(
+            f"pl.const() second argument must be a dtype (pl.DT_*), "
+            f"got {type(dtype).__name__}",
+            span=span,
+            hint="Use a dtype: pl.DT_FP32, pl.DT_INT32, etc.",
+        )
 
     if dtype == _ir_core.DataType.BOOL:
         return _ir_core.ConstBool(bool(value), span)
