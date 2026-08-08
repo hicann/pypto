@@ -219,6 +219,7 @@ enum class DevCommonErr : uint32_t {
     MEMCPY_FAILED = static_cast<uint32_t>(MachineError::DEV_COMMON) + 0x01U,
     ALLOC_FAILED,
     MALLOC_FAILED,
+    MEMRESET_FAILED,
     NULLPTR,
     PARAM_INVALID,
     PARAM_CHECK_FAILED,

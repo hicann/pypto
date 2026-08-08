@@ -383,11 +383,6 @@ public:
                 args_[coreIdx] = reinterpret_cast<KernelArgs*>((static_cast<uint64_t>(sharedBuffer_)) +
                                                                SHARED_BUFFER_SIZE * coreIdx);
             }
-#if ENABLE_AICORE_PRINT
-            volatile KernelArgs* arg = args_[coreIdx];
-            arg->dfxBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = buffer;
-            __sync_synchronize();
-#endif
         } else {
             GetActiveModel()->InitKernelArgs(args_[coreIdx], coreIdx, sharedBuffer_, buffer);
         }

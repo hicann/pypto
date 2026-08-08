@@ -15,6 +15,7 @@
 
 #include "machine/runtime/launcher/device_launcher.h"
 
+#include "tilefwk/aicore_print_base.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error_code.h"
 #include "adapter/api/msprof_api.h"
@@ -447,23 +448,20 @@ int DeviceLauncher::LaunchAicoreKernel(AclRtStream aicoreStream, void* kernel, R
     auto startTime = MspfSysCycleTime();
     auto ret = RuntimeKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &rtTaskCfg);
     devRunner.ReportHostProfInfo(aicoreStream, startTime, blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
-    if (debugEnable) {
+    constexpr bool enableAicoreprint = static_cast<bool>(ENABLE_AICORE_PRINT);
+    if (debugEnable || (enableAicoreprint && !IsCaptureMode()) || IsPtoDataDumpEnabled()) {
         auto scheStream = GetStreamContext().GetScheStream();
-        int rc = DeviceRunner::Get().DynamicLaunchSynchronize(scheStream, nullptr, aicoreStream);
+        int rc = DeviceSynchronize(scheStream, aicoreStream);
         if (rc != 0) {
-            MACHINE_LOGE(HostLauncherErr::SYNC_FAILED, "sync failed");
+            MACHINE_LOGE(HostLauncherErr::SYNC_FAILED, "stream sync failed");
             return rc;
         }
+    }
+    if (debugEnable) {
         devRunner.SyncProfData(debugEnable);
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, DevMemoryPool::Instance().CheckAllSentinels());
     }
     if (IsPtoDataDumpEnabled()) {
-        auto scheStream = GetStreamContext().GetScheStream();
-        int rc = DeviceRunner::Get().DynamicLaunchSynchronize(scheStream, nullptr, aicoreStream);
-        if (rc != 0) {
-            MACHINE_LOGE(HostLauncherErr::SYNC_FAILED, "sync failed");
-            return rc;
-        }
         uint32_t hostPid = GetProcessId();
         std::string sourceDir = "output/dump_tensor_" + std::to_string(hostPid);
         std::string targetDir = config::LogTopFolder() + "/dump_tensor_" + std::to_string(hostPid);

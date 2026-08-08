@@ -55,6 +55,9 @@ INLINE void AiCoreLogF(LogContext* ctx, __gm__ const char* fmt, Ts... args)
     if (ctx && fmt) {
         (DispatchPrint(ctx, &fmt, args), ...);
         ctx->PrintRaw(ctx, fmt);
+        if (ctx->PrintNewLine != nullptr) {
+            ctx->PrintNewLine(ctx);
+        }
     }
 }
 
@@ -128,6 +131,7 @@ INLINE void PrintTensorImpl(LogContext* ctx, PtrT data, int64_t end, int64_t beg
 
         logger->Sync();
     }
+    logger->PrintNewLine();
 }
 
 // ============================================================================

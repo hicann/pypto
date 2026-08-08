@@ -20,6 +20,7 @@
 #include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime/memory_utils/memory_pool.h"
 #include "machine/device/dynamic/device_common.h"
+#include "machine/device/tilefwk/aicore_print_base.h"
 
 extern "C" {
 __attribute__((weak)) int dlog_getlevel(int32_t moduled, int32_t* enableEvent);
@@ -75,8 +76,17 @@ bool DeviceDfx::Init(DeviceArgs& args)
         MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Fail to copy dfx info from host to device.");
         return false;
     }
+    MACHINE_LOGI("Current %s aicorePrint", static_cast<bool>(ENABLE_AICORE_PRINT) ? "enable" : "disenable");
+    if (static_cast<bool>(ENABLE_AICORE_PRINT) && InitAicorePrint(args) != 0) {
+        MACHINE_LOGW("Failed to init aicore print host manager");
+        return false;
+    }
     return true;
 }
+
+int DeviceDfx::InitAicorePrint(const DeviceArgs& args) { return aicorePrintMgr_.Init(args); }
+
+int DeviceDfx::DumpAicoreLog() { return aicorePrintMgr_.DumpAicoreLog(); }
 
 DeviceDfx& DeviceDfx::GetInstance()
 {

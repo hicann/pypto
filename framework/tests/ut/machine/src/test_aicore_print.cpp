@@ -82,6 +82,8 @@ struct MockLogger {
         self->buffer += std::to_string(DecodeHf8(rawBits));
     }
 
+    static void NoopPrintNewLine(LogContext* /*ctx*/) {}
+
     MockLogger()
     {
         ctx.PrintInt64 = &MockLogger::PrintInt;
@@ -93,6 +95,7 @@ struct MockLogger {
         ctx.PrintFp8E5M2 = &MockLogger::PrintFp8E5M2;
         ctx.PrintFp8E8M0 = &MockLogger::PrintFp8E8M0;
         ctx.PrintHf8 = &MockLogger::PrintHf8;
+        ctx.PrintNewLine = &MockLogger::NoopPrintNewLine;
     }
 };
 

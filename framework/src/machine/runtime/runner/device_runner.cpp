@@ -38,6 +38,7 @@
 #include "machine/runtime/memory_utils/memory_pool.h"
 #include "machine/host/perf_analysis.h"
 #include "machine/device/dynamic/device_common.h"
+#include "machine/device/tilefwk/aicore_print_base.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "securec.h"
 
@@ -205,8 +206,13 @@ int DeviceRunner::DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlSt
             AdxDataDumpServerUnInit();
         }
     }
-    if (rcAicore != 0 || rcAicpu != 0 || rcCtrl != 0) {
-        MACHINE_LOGW("sync stream failed aicpu:%d aicore:%d ctrl cpu:%d", rcAicpu, rcAicore, rcCtrl);
+    int retAicorePrint = 0;
+    if (static_cast<bool>(ENABLE_AICORE_PRINT)) {
+        retAicorePrint = DeviceDfx::GetInstance().DumpAicoreLog();
+    }
+    if (rcAicore != 0 || rcAicpu != 0 || rcCtrl != 0 || retAicorePrint != 0) {
+        MACHINE_LOGW("sync stream failed aicpu:%d aicore:%d ctrl cpu:%d, aicorePrint: %d", rcAicpu, rcAicore, rcCtrl,
+                     retAicorePrint);
     }
     return rcAicore + rcAicpu + rcCtrl;
 }

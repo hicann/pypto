@@ -16,15 +16,19 @@
 #pragma once
 
 #include "interface/machine/device/tilefwk/aicpu_common.h"
+#include "machine/runtime/runner/aicore_print_host_manager.h"
 
 namespace npu::tile_fwk {
 class DeviceDfx {
 public:
     static DeviceDfx& GetInstance();
     bool Init(DeviceArgs& args);
+    int DumpAicoreLog();
 
 private:
     void InitAicpuPerfAddr(DeviceArgs& args);
     void InitDevDfxArgs(bool isPerfTrace, DevDfxArgs& devDfxArg);
+    int InitAicorePrint(const DeviceArgs& args);
+    AicorePrintHostManager aicorePrintMgr_;
 };
 } // namespace npu::tile_fwk

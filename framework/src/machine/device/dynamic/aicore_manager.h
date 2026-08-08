@@ -26,7 +26,6 @@
 #include "securec.h"
 #include "device_common.h"
 #include "tilefwk/config.h"
-#include "tilefwk/aicore_print.h"
 #include "interface/utils/common.h"
 #include "interface/operation/opcode.h"
 #include "interface/schema/schema.h"
@@ -74,8 +73,6 @@ public:
     explicit AiCoreManager(SchThreadStatus& schThreadStatus) : threadStatus(schThreadStatus), aicoreProf_(*this) {};
     ~AiCoreManager() {};
 
-    void InitLogger(AicoreLogger* logger) { logger_ = logger; }
-
     void InitCostModelFuncData(SchDeviceTaskContext* devTaskCtx)
     {
         int64_t funcdata;
@@ -99,8 +96,7 @@ public:
         DEV_IF_DEVICE
         {
             ForEachManageAicore([&](int coreIdx) {
-                auto logbuf = logger_ ? logger_[coreIdx].GetBuffer() : nullptr;
-                aicoreHal_.InitKernelArgs(coreIdx, reinterpret_cast<int64_t>(logbuf));
+                aicoreHal_.InitKernelArgs(coreIdx, 0);
                 FillKernelArgsParallexDevTaskPreGathered(parallelCtx, coreIdx, localFuncData, localDevTaskIds);
             });
         }
@@ -108,8 +104,7 @@ public:
         {
             if (aicoreHal_.IsHostSimMode()) {
                 ForEachManageAicore([&](int coreIdx) {
-                    auto logbuf = logger_ ? logger_[coreIdx].GetBuffer() : nullptr;
-                    aicoreHal_.InitKernelArgs(coreIdx, reinterpret_cast<int64_t>(logbuf));
+                    aicoreHal_.InitKernelArgs(coreIdx, 0);
                     FillKernelArgsParallexDevTaskPreGathered(parallelCtx, coreIdx, localFuncData, localDevTaskIds);
                 });
             }
@@ -217,16 +212,6 @@ public:
         devTaskCtx->CountCoreTaskSent(context_->coreStatusMgr.WaitTaskCnt(static_cast<int>(CoreType::AIC)),
                                       context_->coreStatusMgr.WaitTaskCnt(static_cast<int>(CoreType::AIV)));
         return ret;
-    }
-
-    void DumpAicoreLog(int coreIdx)
-    {
-        DEV_INFO("core-%d ENABLE_AICORE_PRINT is true, AICORE Print start!", coreIdx);
-        const int bufSize = 512;
-        char buf[bufSize];
-        while (logger_[coreIdx].Read(buf, bufSize)) {
-            DEV_INFO("core-%d %s", coreIdx, buf);
-        }
     }
 
     inline int RunTask(SchDeviceTaskContext* deviceTaskCtx)
@@ -2268,10 +2253,6 @@ private:
         if constexpr (!IsDeviceMode())
             return;
 
-#if ENABLE_AICORE_PRINT
-        DumpAicoreLog(coreIdx);
-#endif
-
         aicoreProf_.ProfGetPmu(coreIdx, 0, static_cast<uint32_t>(taskId & TASKID_FROM_CTRL_TOPO_MASK),
                                deviceTaskCtx->TaskId());
 
@@ -2537,7 +2518,6 @@ private:
     std::vector<TaskInfo> recvFinTask_[MAX_AICORE_NUM];
     std::vector<TaskInfo> recvAckTask_[MAX_AICORE_NUM];
 
-    AicoreLogger* logger_{nullptr};
     friend class AiCoreProf;
 
     bool enableEslModel_;

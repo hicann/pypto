@@ -23,7 +23,6 @@
 #include "aicore_constants.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "machine/utils/device_log.h"
-#include "tilefwk/aicore_print.h"
 #include "machine/device/dynamic/aicore_prof.h"
 #include "device_trace.h"
 #include "device_sche_alloc_thread.h"
@@ -33,21 +32,6 @@ constexpr uint32_t LAUNCH_AICPU_NUM = 5;
 constexpr int MAX_RETRIES = 100;
 
 namespace npu::tile_fwk::dynamic {
-struct AicoreLogManager {
-    AicoreLogManager()
-    {
-        data_ = aligned_alloc(PAGE_SIZE, MAX_AICORE_NUM * PRINT_BUFFER_SIZE);
-        uint8_t* buf = (uint8_t*)data_;
-        for (uint32_t i = 0; i < MAX_AICORE_NUM; i++) {
-            logger[i].Init(buf, PRINT_BUFFER_SIZE);
-            buf += PRINT_BUFFER_SIZE;
-        }
-    }
-    ~AicoreLogManager() { free(data_); }
-
-    void* data_;
-    AicoreLogger logger[MAX_AICORE_NUM];
-};
 
 typedef void (*sig_act_f)(int signum, siginfo_t* info, void* act);
 
@@ -94,9 +78,6 @@ public:
             DEV_INFO("thread start ignore ");
             return DEVICE_MACHINE_OK;
         }
-#if ENABLE_AICORE_PRINT
-        aicoreManager_[schedIdx]->InitLogger(logManager.logger);
-#endif
         aicoreManager_[schedIdx]->SetSchedSyncMode(devScheSyncMode_);
         ret = aicoreManager_[schedIdx]->RunManager(threadIdx, devStartArgs, args, schedIdx, arbitratedScheNum);
         DEV_INFO("threadIdx=%d end, ret=%d", threadIdx, ret);
@@ -120,9 +101,6 @@ private:
     SchThreadStatus schThreadStatus;
     uint32_t schAicpuNum_{MAX_SCHEDULE_AICPU_NUM};
     std::unique_ptr<AiCoreManager> aicoreManager_[MAX_SCHEDULE_AICPU_NUM];
-#if ENABLE_AICORE_PRINT
-    AicoreLogManager logManager;
-#endif
 };
 
 constexpr int CPUS_PER_CLUSTER = 4;

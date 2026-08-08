@@ -154,6 +154,7 @@ enum class DataType : uint8_t {
     IndexedFp8E5M2 = 20,
     IndexedFp8E8M0 = 21,
     IndexedHf8 = 22,
+    Newline = 23,
 };
 }
 
@@ -167,6 +168,7 @@ struct LogContext {
     void (*PrintFp8E5M2)(LogContext* ctx, __gm__ const char** fmt, uint8_t rawBits);
     void (*PrintFp8E8M0)(LogContext* ctx, __gm__ const char** fmt, uint8_t rawBits);
     void (*PrintHf8)(LogContext* ctx, __gm__ const char** fmt, uint8_t rawBits);
+    void (*PrintNewLine)(LogContext* ctx);
 };
 
 template <typename ElemT>

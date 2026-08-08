@@ -57,6 +57,14 @@ public:
 
 #undef AICORE_STATIC_PRINT_WRAPPER
 
+    static __aicore__ void StaticPrintNewLine(LogContext* ctx)
+    {
+        auto* self = reinterpret_cast<AicoreLogger*>(ctx);
+        if (self != nullptr) {
+            self->PrintNewLine();
+        }
+    }
+
     __aicore__ void Init(__gm__ uint8_t* buf, size_t n)
     {
         if (n < AicorePrintConst::MIN_BUFFER_TOTAL_SIZE) {
@@ -87,11 +95,31 @@ public:
         ctx_.PrintFp8E5M2 = StaticPrintFp8E5M2;
         ctx_.PrintFp8E8M0 = StaticPrintFp8E8M0;
         ctx_.PrintHf8 = StaticPrintHf8;
+        ctx_.PrintNewLine = StaticPrintNewLine;
     }
 
     __aicore__ __gm__ uint8_t* GetBuffer() const { return data_ - sizeof(RemoteHeader); }
 
     INLINE LogContext* Context() { return &ctx_; }
+
+#ifdef __TILE_FWK_HOST__
+    void BindHostBuffer(const uint8_t* hostBuf, size_t n)
+    {
+        if (n < AicorePrintConst::MIN_BUFFER_TOTAL_SIZE) {
+            remote_ = nullptr;
+            data_ = nullptr;
+            size_ = 0;
+            return;
+        }
+        remote_ = reinterpret_cast<volatile RemoteHeader*>(const_cast<uint8_t*>(hostBuf));
+        data_ = const_cast<uint8_t*>(hostBuf) + sizeof(RemoteHeader);
+        size_ = static_cast<int64_t>(n - sizeof(RemoteHeader));
+        head_ = 0;
+        tail_ = 0;
+        overflowed_ = false;
+        lastTensorName_.clear();
+    }
+#endif
 
     __aicore__ void PrintInt64(__gm__ const char** fmt, int64_t val)
     {
@@ -175,6 +203,16 @@ public:
             EncodeTyped(AicorePrint::DataType::Normal, reinterpret_cast<const __gm__ uint8_t*>(str), n, str, n);
         }
 
+        Sync();
+    }
+
+    __aicore__ void PrintNewLine()
+    {
+        if (!CheckSpaceForRecord(2)) {
+            return;
+        }
+        EncodeByte(static_cast<uint8_t>(AicorePrint::DataType::Newline));
+        EncodeByte(static_cast<uint8_t>(AicorePrint::DataType::End));
         Sync();
     }
 
@@ -328,12 +366,20 @@ public:
             iterationCount++;
             AicorePrint::DataType type = static_cast<AicorePrint::DataType>(ReadDecodeByte(state, state.tail_++));
 
-            if (type == AicorePrint::DataType::End) {
+            if (type == AicorePrint::DataType::Newline) {
+                while (state.tail_ != state.head_ && static_cast<AicorePrint::DataType>(ReadDecodeByte(
+                                                         state, state.tail_)) == AicorePrint::DataType::End) {
+                    state.tail_++;
+                }
                 if (totalWritten > 0) {
                     tail_ = state.tail_;
                     lastTensorName_ = state.lastTensorName_;
                     return static_cast<int>(totalWritten);
                 }
+                continue;
+            }
+
+            if (type == AicorePrint::DataType::End) {
                 continue;
             }
 
@@ -352,7 +398,7 @@ public:
 
         tail_ = state.tail_;
         lastTensorName_ = state.lastTensorName_;
-        return 0;
+        return static_cast<int>(totalWritten);
     }
 #pragma GCC diagnostic pop
 #endif

@@ -79,8 +79,7 @@ struct MultipleCore : ThreadAicoreEmulation {
         devArgs.devDfxArgAddr = (uint64_t)(uintptr_t)devDfxArgs.get();
         KernelSharedBuffer* buffer = memory->GetSharedBuffer();
         for (int i = 0; i < memory->GetAicCount() + memory->GetAivCount(); i++) {
-            buffer[i].args.shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = (uintptr_t)memory->GetPrintBuffer(i);
-            buffer[i].args.shakeBufferCpuToCore[SHAK_BUF_PRINT_BUFFER_INDEX] = (uintptr_t)memory->GetPrintBuffer(i);
+            buffer[i].args.dfxBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = (uintptr_t)memory->GetPrintBuffer(i);
         }
     }
 
@@ -145,7 +144,7 @@ struct MultipleCore : ThreadAicoreEmulation {
             buffer[i].args.parallelDevTask.rear = 1;
             buffer[i].args.parallelDevTask.ptrElements[0] = (uintptr_t)dataList;
 
-            buffer[i].args.shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = (uintptr_t)memory->GetPrintBuffer(i);
+            buffer[i].args.dfxBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = (uintptr_t)memory->GetPrintBuffer(i);
         }
 
         for (int i = 0; i < memory->GetAicCount() + memory->GetAivCount(); i++) {
