@@ -40,6 +40,9 @@ const std::unordered_map<TargetCoreType, CoreLocationType> targetCoreTypeMap{
     {TargetCoreType::AIV0, CoreLocationType::AIV0},
     {TargetCoreType::AIV1, CoreLocationType::AIV1}};
 
+const std::unordered_set<CoreLocationType> CORE_INIT_CONFIGS_HARDWARE_ONE_AIV = {CoreLocationType::AIC,
+                                                                                 CoreLocationType::AIV0};
+
 const std::unordered_set<CoreLocationType> CORE_INIT_CONFIGS_HARDWARE_TWO_AIV = {
     CoreLocationType::AIC, CoreLocationType::AIV0, CoreLocationType::AIV1};
 

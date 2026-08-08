@@ -25,6 +25,7 @@ const std::string socVersionInfo = "SoC_version";
 const std::string npuArchInfo = "NpuArch";
 const std::string shortSocVer = "Short_SoC_version";
 const std::string socInfo = "SoCInfo";
+const std::string cubeVectorMix = "cube_vector_mix";
 const std::string aiCoreCnt = "ai_core_cnt";
 const std::string cubeCoreCnt = "cube_core_cnt";
 const std::string vectorCoreCnt = "vector_core_cnt";
@@ -263,6 +264,7 @@ void Platform::LoadPlatformInfo(const PlatformParser& parser)
 {
     std::string archType;
     std::string shortSocVersion;
+    std::string cvMix;
     std::unordered_map<std::string, std::string> versionInfo;
     PLATFORM_LOGD("Start load platform info.");
     if (parser.GetStringVal(version, npuArchInfo, archType)) {
@@ -270,6 +272,9 @@ void Platform::LoadPlatformInfo(const PlatformParser& parser)
     }
     if (parser.GetStringVal(version, shortSocVer, shortSocVersion)) {
         GetSoc().SetShortSocVersion(shortSocVersion);
+    }
+    if (parser.GetStringVal(socInfo, cubeVectorMix, cvMix)) { // for litenpu ini CV mix, cloudnpu ini uses different key
+        GetSoc().GetCoreWrap().SetIsCVMix(cvMix == cubeVectorMix);
     }
     if (parser.GetCCECVersion(versionInfo)) {
         GetSoc().SetCCECVersion(versionInfo);

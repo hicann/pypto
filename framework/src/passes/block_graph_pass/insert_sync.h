@@ -433,6 +433,7 @@ private:
     int GetMaxEventId(const PipePairEx& pp);
     std::string DumpLatestPipeDepMap();
     void BuildTensorRangeMap(Operation* op);
+    bool IsMixCvCore(CoreType coreOne, CoreType coreTwo);
 
     std::vector<DepOp> depOps_;
     // Cube: MTE2, MTE1, M, FIX, Vector: MTE2, V, MTE3
@@ -450,6 +451,7 @@ private:
     static std::map<PipeCoreRealEx, PipeSeq, PipeCoreRealExCompare> pipe2Seq;
     static std::map<PipeSeq, PipeCoreRealEx> seq2pipe;
     static std::vector<PipePair> dataDepPair;
+    static std::vector<PipePair> mixCVDataDepPair;
     static std::vector<PipeCoreRealEx> cvPipeCoreEx;
 
     static constexpr int EVENT_NUM = 8;

@@ -603,7 +603,8 @@ void CoreScheduler::NormalizeSingleAIVBranches(TaskGraph& taskGraph)
             aiv1TaskIds.push_back(task.idx);
         }
     }
-    if (!hasAIV0 && hasAIV1) {
+    if ((Platform::Instance().GetSoc().GetAICToAIVCoreRatio() == SoCAICToAIVCoreRatio::ONE_AIC_TO_ONE_AIV_CORE) ||
+        (!hasAIV0 && hasAIV1)) {
         for (int taskId : aiv1TaskIds) {
             taskGraph.tasks[taskId].targetCoreType = TargetCoreType::AIV0;
             taskGraph.tasks[taskId].targetCoreTypeCandidate = TargetCoreType::AIV0;

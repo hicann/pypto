@@ -696,8 +696,8 @@ Status PipeSync::ProcessEventIdElement(EventIdProcessContext& ctx)
                          depOps_[ele].selfPipeCore.aivCore);
     PipePairEx pp{currEx, eleEx};
 
-    // 当前逻辑该函数不需要处理cv同步
-    if (currEx.core != eleEx.core) {
+    // 当前逻辑该函数不需要处理cv同步 (if mix cv core, need handle mix cv core sync)
+    if (!IsMixCvCore(currEx.core, eleEx.core) && (currEx.core != eleEx.core)) {
         return SUCCESS;
     }
     return ProcessSameCoreCase(pp, ctx);
@@ -788,6 +788,14 @@ Status PipeSync::PopFromQueue(IssueQueue& issueQ, std::vector<size_t>& poped, bo
     return SUCCESS;
 }
 
+// check if platform architecture is mix cv core, and coreOne and coreTwo are AIV/AIC or vice versa
+bool PipeSync::IsMixCvCore(CoreType coreOne, CoreType coreTwo)
+{
+    return Platform::Instance().GetSoc().GetCoreWrap().IsCVMix() &&
+           ((coreOne == CoreType::AIV && coreTwo == CoreType::AIC) ||
+            (coreOne == CoreType::AIC && coreTwo == CoreType::AIV));
+}
+
 Status PipeSync::InjectWaitFlag(Function& function, size_t idx, std::vector<IndexOp>& syncedOpLog)
 {
     PipeCore currPipe = depOps_[idx].selfPipeCore;
@@ -821,7 +829,7 @@ Status PipeSync::InjectWaitFlag(Function& function, size_t idx, std::vector<Inde
             GetPipeTypeDict().Find(syncOp.syncQueue_.pipeId_).c_str(),
             GetPipeTypeDict().Find(syncOp.syncQueue_.trigPipeId_).c_str(), syncOp.syncQueue_.eventId_,
             static_cast<int>(syncOp.syncQueue_.setAivCore_), static_cast<int>(syncOp.syncQueue_.waitAivCore_));
-        if (setPipe.core == currPipe.core) {
+        if (IsMixCvCore(setPipe.core, currPipe.core) || (setPipe.core == currPipe.core)) {
             GetFreeEventIdQueue({setPipeRealEx, currPipeRealEx}).push_back(eventId);
         }
         // 记录 set op 和 waitflag的对应关系
@@ -1106,6 +1114,16 @@ std::vector<PipeSync::PipePair> PipeSync::dataDepPair = {
     {{PIPE_FIX, CoreType::AIC}, {PIPE_MTE3, CoreType::AIC}},
 };
 
+// mix aic/aiv core dependency pairs
+std::vector<PipeSync::PipePair> PipeSync::mixCVDataDepPair = {
+    // PIPE_FIX->PIPE_V
+    {{PIPE_FIX, CoreType::AIC}, {PIPE_V, CoreType::AIV}},
+    // PIPE_MTE3->PIPE_MTE1
+    {{PIPE_MTE3, CoreType::AIV}, {PIPE_MTE1, CoreType::AIC}},
+    // PIPE_MTE3->PIPE_MTE2
+    {{PIPE_MTE3, CoreType::AIV}, {PIPE_MTE2, CoreType::AIC}},
+};
+
 bool PipeSync::ConstructDepInfo(DataDepInfo& depInfo, std::vector<IndexOp>& syncedOpLog, int i)
 {
     auto& log = syncedOpLog[i].second;
@@ -1201,8 +1219,9 @@ Status PipeSync::SynDependency(int maxOverlapDepIdx, const DataDepInfo& depInfo,
         APASS_LOG_ERROR_F(Elements::Operation, "RelaxFakeDataDep failed at function AddOpDep.");
         return FAILED;
     }
-    // 这里不用处理核间同步
-    if (pipePairEx.first.core != pipePairEx.second.core) {
+    // 这里不用处理核间同步 (if mix cv core, need handle mix cv core sync)
+    if (!(IsMixCvCore(pipePairEx.first.core, pipePairEx.second.core)) &&
+        (pipePairEx.first.core != pipePairEx.second.core)) {
         APASS_LOG_ERROR_F(Elements::Operation, "CoreType is not same, SynDependency failed.");
         return FAILED;
     }
@@ -1300,9 +1319,26 @@ Status PipeSync::RelaxFakeDataDep(std::vector<IndexOp>& syncedOpLog)
         }
     }
 
+    if (Platform::Instance().GetSoc().GetCoreWrap().IsCVMix()) {
+        for (const auto& pipePair : mixCVDataDepPair) {
+            if (pipePair.first.core == CoreType::AIC && pipePair.second.core == CoreType::AIV) {
+                PipeCoreRealEx pp1(pipePair.first.pipe, pipePair.first.core, AIVCore::UNSPECIFIED);
+                PipeCoreRealEx pp2(pipePair.second.pipe, pipePair.second.core, AIVCore::AIV0);
+                PipePairEx ppEx = {pp1, pp2};
+                dataDepPairEx.emplace_back(ppEx);
+            } else if (pipePair.first.core == CoreType::AIV && pipePair.second.core == CoreType::AIC) {
+                PipeCoreRealEx pp1(pipePair.first.pipe, pipePair.first.core, AIVCore::AIV0);
+                PipeCoreRealEx pp2(pipePair.second.pipe, pipePair.second.core, AIVCore::UNSPECIFIED);
+                PipePairEx ppEx = {pp1, pp2};
+                dataDepPairEx.emplace_back(ppEx);
+            }
+        }
+    }
+
     for (const auto& pipePairEx : dataDepPairEx) {
-        // 合并CV同步释放cv eventid 当前逻辑不需要
-        if (pipePairEx.first.core != pipePairEx.second.core) {
+        // 合并CV同步释放cv eventid 当前逻辑不需要 (if mix cv core, need handle mix cv core sync)
+        if (!(IsMixCvCore(pipePairEx.first.core, pipePairEx.second.core)) &&
+            (pipePairEx.first.core != pipePairEx.second.core)) {
             continue;
         }
         if (HasFreeEventId(pipePairEx)) {

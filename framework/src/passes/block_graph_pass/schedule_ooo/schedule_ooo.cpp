@@ -72,7 +72,7 @@ void OoOSchedule::CollectStatistic(OoOScheduleStatistic& oooHealthCheck, Functio
 }
 
 Status OoOSchedule::ModifyTaskOplist(std::vector<Operation*>& taskList,
-    const std::unordered_map<int, Operation*>& allocMap)
+                                     const std::unordered_map<int, Operation*>& allocMap)
 {
     std::unordered_set<int> memIds;
     std::unordered_map<int, Operation*> taskAllocMap;
@@ -192,7 +192,9 @@ Status OoOSchedule::DoOoOSchedule(std::vector<Operation*>& opList, Function& fun
     }
 
     Status schedStat;
-    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510 || !IsMixGraph(opList)) {
+    if (Platform::Instance().GetSoc().GetAICToAIVCoreRatio() == SoCAICToAIVCoreRatio::ONE_AIC_TO_ONE_AIV_CORE) {
+        schedStat = oooSchedule.Schedule(opList, CORE_INIT_CONFIGS_HARDWARE_ONE_AIV);
+    } else if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510 || !IsMixGraph(opList)) {
         schedStat = oooSchedule.Schedule(opList);
     } else {
         schedStat = oooSchedule.Schedule(opList, CORE_INIT_CONFIGS_HARDWARE_TWO_AIV);

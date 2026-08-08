@@ -268,6 +268,7 @@ private:
     AivCore aiv_core_;
     size_t aic_cnt_;
     size_t aiv_cnt_;
+    bool is_cv_mix_;
 
 public:
     size_t GetAICNum() const { return aic_cnt_; }
@@ -276,11 +277,13 @@ public:
     size_t GetAIVMemorySize(MemoryType type) const { return aiv_core_.GetMemorySize(type); }
     AicCore& GetAICCore() { return aic_core_; };
     AivCore& GetAIVCore() { return aiv_core_; };
+    bool IsCVMix() const { return is_cv_mix_; }
 
     void SetAICCore(const AicCore& core) { aic_core_ = core; }
     void SetAIVCore(const AivCore& core) { aiv_core_ = core; }
     void SetAICNum(size_t num) { aic_cnt_ = num; }
     void SetAIVNum(size_t num) { aiv_cnt_ = num; }
+    void SetIsCVMix(const bool& isCVMix) { is_cv_mix_ = isCVMix; }
 
     std::string Dump() const
     {
@@ -379,6 +382,8 @@ inline std::string NPUArchToString(NPUArch npu_arch)
 
 inline bool IsLiteNPU(NPUArch arch) { return arch == NPUArch::DAV_3113 || arch == NPUArch::DAV_3003; }
 
+enum class SoCAICToAIVCoreRatio { ONE_AIC_TO_ONE_AIV_CORE, ONE_AIC_TO_TWO_AIV_CORE, UNSUPPORTED_AIC_TO_AIV_CORE_RATIO };
+
 class SoC {
 private:
     Die die_;
@@ -404,6 +409,17 @@ public:
     size_t GetDiesNum() const { return dies_cnt_; }
     std::string GetShortSocVersion() const { return short_soc_ver_; }
     std::string GetCCECVersion(std::string CoreType);
+
+    SoCAICToAIVCoreRatio GetAICToAIVCoreRatio()
+    {
+        if (cube_core_cnt_ == vector_core_cnt_) {
+            return SoCAICToAIVCoreRatio::ONE_AIC_TO_ONE_AIV_CORE;
+        } else if (2 * cube_core_cnt_ == vector_core_cnt_) {
+            return SoCAICToAIVCoreRatio::ONE_AIC_TO_TWO_AIV_CORE;
+        } else {
+            return SoCAICToAIVCoreRatio::UNSUPPORTED_AIC_TO_AIV_CORE_RATIO;
+        }
+    }
 
     // SOCINFO
     size_t GetAICPUNum();
