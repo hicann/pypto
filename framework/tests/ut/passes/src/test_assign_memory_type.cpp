@@ -2543,4 +2543,54 @@ TEST_F(AssignMemoryTypeTest, PermuteViewRegisterCopyAssembleTransDataForceDdr)
     EXPECT_EQ(G.GetTensor("view_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
 }
 
+TEST_F(AssignMemoryTypeTest, FunctionExpAssembleMatmulA5)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
+    const std::vector<int64_t> inputShape = {NUM_16, NUM_32};
+    const std::vector<int64_t> assembleShape = {NUM_32, NUM_32};
+    const std::vector<int64_t> cShape = {NUM_32, NUM_64};
+    const std::vector<int64_t> matmulShape = {NUM_32, NUM_64};
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor a(DataType::DT_FP32, inputShape, "a");
+        Tensor b(DataType::DT_FP32, inputShape, "b");
+        Tensor c(DataType::DT_FP32, cShape, "c");
+        Tensor expOut(DataType::DT_FP32, assembleShape, "expOut");
+        Tensor matmulOut(DataType::DT_FP32, matmulShape, "matmulOut");
+        SetFullTestStrategy();
+        config::SetBuildStatic(true);
+        FUNCTION("FunctionExpAssembleMatmulA5", {a, b, c, expOut, matmulOut})
+        {
+            TileShape::Current().SetVecTile(NUM_32, NUM_32);
+            Tensor ta = Exp(a);
+            Tensor tb = Exp(b);
+            Tensor lt(DataType::DT_FP32, assembleShape, "Lt");
+            Assemble(ta, {0, 0}, lt);
+            Assemble(tb, {NUM_16, 0}, lt);
+
+            expOut = Exp(lt);
+            TileShape::Current().SetCubeTile({NUM_32, NUM_32}, {NUM_32, NUM_32}, {NUM_64, NUM_64});
+            matmulOut = Matrix::Matmul(matmulOut.GetDataType(), lt, c);
+        }
+        Function* originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_FunctionExpAssembleMatmulA5");
+        ASSERT_NE(originFunction, nullptr);
+        for (const auto& op : originFunction->Operations()) {
+            if (op.GetIOperands().empty() || op.GetOOperands().empty()) {
+                continue;
+            }
+            auto input = op.GetIOperands().front();
+            auto output = op.GetOOperands().front();
+            EXPECT_FALSE(input->GetMemoryTypeOriginal() == MemoryType::MEM_L1 &&
+                         output->GetMemoryTypeOriginal() == MemoryType::MEM_UB)
+                << op.GetOpcodeStr() << "[" << op.GetOpMagic()
+                << "] must not move data from L1 to UB; input=" << input->GetMagic()
+                << ", output=" << output->GetMagic();
+        }
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
 } // namespace npu

@@ -1075,15 +1075,21 @@ MemoryType AssignMemoryType::InferAssembleTempOriginal(const LogicalTensorPtr& o
         return MemoryType::MEM_UNKNOWN;
     }
     MemoryType tempOriginal = MemoryType::MEM_UNKNOWN;
+    bool hasL1ViewTarget = false;
+    bool hasUnknownViewTarget = false;
     auto requirements = inserter.GetConsumerRequirements(output);
     for (const auto& item : requirements) {
         auto consumerOp = item.first;
         MemoryType candidate = item.second;
-        if (candidate == MemoryType::MEM_UNKNOWN && consumerOp != nullptr &&
-            consumerOp->GetOpcode() == Opcode::OP_VIEW) {
+        if (consumerOp != nullptr && consumerOp->GetOpcode() == Opcode::OP_VIEW) {
             auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
-            if (viewOpAttribute != nullptr && viewOpAttribute->GetTo() != MemoryType::MEM_UNKNOWN) {
-                candidate = viewOpAttribute->GetTo();
+            if (viewOpAttribute == nullptr || viewOpAttribute->GetTo() == MemoryType::MEM_UNKNOWN) {
+                hasUnknownViewTarget = true;
+            } else {
+                hasL1ViewTarget = hasL1ViewTarget || viewOpAttribute->GetTo() == MemoryType::MEM_L1;
+                if (candidate == MemoryType::MEM_UNKNOWN) {
+                    candidate = viewOpAttribute->GetTo();
+                }
             }
         }
         if (candidate == MemoryType::MEM_UNKNOWN) {
@@ -1094,6 +1100,9 @@ MemoryType AssignMemoryType::InferAssembleTempOriginal(const LogicalTensorPtr& o
         } else if (tempOriginal != candidate) {
             return MemoryType::MEM_DEVICE_DDR;
         }
+    }
+    if (tempOriginal == MemoryType::MEM_L1 && hasL1ViewTarget && hasUnknownViewTarget) {
+        return MemoryType::MEM_UNKNOWN;
     }
     return tempOriginal;
 }
