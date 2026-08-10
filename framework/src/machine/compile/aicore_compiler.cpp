@@ -99,8 +99,11 @@ static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t 
 
 std::string GenSubFuncCall(std::map<uint64_t, Function*>& leafDict, CoreType coreType,
                            dynamic::EncodeDevAscendFunctionParam& param, const std::string& ccePath, uint64_t tilingKey,
-                           std::stringstream& src_obj)
+                           std::stringstream& src_obj, bool enableSubFunc)
 {
+    if (!enableSubFunc) {
+        return "";
+    }
     std::stringstream code;
     std::map<int, std::string> idxNameMap;
     // Declare extern leaf func.
@@ -222,7 +225,7 @@ static int LinkObject(const std::string& src_objs, std::string& objPath, const s
 
 int CompileAICoreKernel(std::map<uint64_t, Function*>& leafDict, dynamic::EncodeDevAscendFunctionParam& param,
                         const std::string& ccePath, const std::string& funcHash, const std::string& funcRawName,
-                        std::string& kernelPath)
+                        std::string& kernelPath, bool enableSubFunc)
 {
     if (ccePath.empty()) {
         MACHINE_LOGE(DevCommonErr::FILE_ERROR, "No cce path.");
@@ -237,10 +240,11 @@ int CompileAICoreKernel(std::map<uint64_t, Function*>& leafDict, dynamic::Encode
         return -1;
     }
     std::deque<std::function<void(void)>> tasks;
-    auto task = [&ccePath, &funcHash, &funcRawName, &leafDict, &param, &aic_obj, &aicoreSrcFile, &tilingKey]() {
+    auto task = [&ccePath, &funcHash, &funcRawName, &leafDict, &param, &aic_obj, &aicoreSrcFile, &tilingKey,
+                 enableSubFunc]() {
         // gen switch case func
         std::stringstream src_aic_obj;
-        auto headFile = GenSubFuncCall(leafDict, CoreType::AIC, param, ccePath, tilingKey, src_aic_obj);
+        auto headFile = GenSubFuncCall(leafDict, CoreType::AIC, param, ccePath, tilingKey, src_aic_obj, enableSubFunc);
         std::string mid_aic_obj = ccePath + "mid_kernel_" + funcHash + "_aic_" + std::to_string(tilingKey) + ".o";
         auto ret = CompileCoreMachine(mid_aic_obj, true, tilingKey, headFile, aicoreSrcFile, funcRawName);
         ASSERT(HostBackEndErr::COMPILE_AICORE_FAILED, ret == 0)
@@ -252,9 +256,10 @@ int CompileAICoreKernel(std::map<uint64_t, Function*>& leafDict, dynamic::Encode
     };
     tasks.push_back(task);
 
-    auto task1 = [&ccePath, &funcHash, &funcRawName, &leafDict, &param, &aiv_obj, &aicoreSrcFile, &tilingKey]() {
+    auto task1 = [&ccePath, &funcHash, &funcRawName, &leafDict, &param, &aiv_obj, &aicoreSrcFile, &tilingKey,
+                  enableSubFunc]() {
         std::stringstream src_aiv_obj;
-        auto headFile = GenSubFuncCall(leafDict, CoreType::AIV, param, ccePath, tilingKey, src_aiv_obj);
+        auto headFile = GenSubFuncCall(leafDict, CoreType::AIV, param, ccePath, tilingKey, src_aiv_obj, enableSubFunc);
         std::string mid_aiv_obj = ccePath + "mid_kernel_" + funcHash + "_aiv_" + std::to_string(tilingKey) + ".o";
         auto ret = CompileCoreMachine(mid_aiv_obj, false, tilingKey, headFile, aicoreSrcFile, funcRawName);
         ASSERT(HostBackEndErr::COMPILE_AICORE_FAILED, ret == 0)

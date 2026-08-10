@@ -22,12 +22,104 @@
 #include "interface/utils/common.h"
 #include "interface/program/program.h"
 #include "runtime_utils.h"
-#include "tilefwk/error_code.h"
-#include "machine/utils/machine_ws_intf.h"
+#include "interface/configs/config_manager.h"
+#include "utils/file_utils.h"
+#include "machine/utils/dynamic/dev_encode_program.h"
+#include "machine/runtime/bundle/pack/kernel_bundle_packer.h"
+#include "machine/runtime/bundle/pack/kernel_bundle_pack.h"
+#include "machine/utils/dynamic/dev_encode_function_param.h"
+#include "machine/compile/aicore_compiler.h"
+#include "interface/function/function.h"
 
 using namespace npu::tile_fwk;
 namespace npu::tile_fwk::dynamic {
 constexpr int32_t MAX_AICPU_ARG_NUM = 7;
+
+static bool PackAndDumpBundle(const std::vector<uint8_t>& kernelBinary, const DyndevFunctionAttribute* dynAttr,
+                              const char* kernelName, const char* suffix)
+{
+    if (kernelBinary.empty() || dynAttr == nullptr || kernelName == nullptr) {
+        return false;
+    }
+    bundle::KernelBundlePacker packer;
+    packer.SetAicoreKernel(kernelBinary);
+    packer.SetAicpuSo(ReadFile(GetPyptoLibPath() + "/libtilefwk_backend_server.so"));
+    packer.SetDevProgram(dynAttr->devProgBinary);
+    packer.SetSymbolMeta(bundle::SerializeWorkspaceSymbols(*dynAttr));
+
+    std::string path = RealPath(config::LogTopFolder()) + "/" + kernelName + suffix + ".pyptokb";
+    packer.Pack(path);
+    MACHINE_LOGI("Dump pypto bundled kernel to file, file: %s.", path.c_str());
+    return true;
+}
+
+void DumpBundledKernel(const DyndevFunctionAttribute* dynAttr, const char* kernelName)
+{
+    if (dynAttr == nullptr || kernelName == nullptr || dynAttr->devProgBinary.empty()) {
+        return;
+    }
+    // DumpFile() needs host-absolute pointers, but .pyptokb must keep devProgBinary base-0.
+    // Relocate only a copy so the bundle does not capture process-local host addresses.
+    auto devProgForDump = dynAttr->devProgBinary;
+    auto devProg = reinterpret_cast<DevAscendProgram*>(devProgForDump.data());
+    devProg->RelocProgram(0, reinterpret_cast<uint64_t>(devProg));
+    auto progtxtPath = RealPath(config::LogTopFolder()) + "/" + kernelName + "_program.tifwkbintxt";
+    devProg->DumpFile(progtxtPath);
+    MACHINE_LOGI("Dump pypto device program to file, file: %s", progtxtPath.c_str());
+
+    if (dynAttr->kernelBinary.empty()) {
+        MACHINE_LOGI("Skip bundled kernel dump: kernelBinary is empty for %s.", kernelName);
+        return;
+    }
+    PackAndDumpBundle(dynAttr->kernelBinary, dynAttr, kernelName, "");
+}
+
+void DumpNoSubFuncBundledKernel(const DyndevFunctionAttribute* dynAttr, Function* func, const char* kernelName)
+{
+    if (dynAttr == nullptr || func == nullptr || kernelName == nullptr) {
+        return;
+    }
+    if (dynAttr->devProgBinary.empty()) {
+        MACHINE_LOGW("Skip no-subfunc bundled kernel dump: devProgBinary is empty for %s.", kernelName);
+        return;
+    }
+
+    // 1. 恢复编译输入
+    std::map<uint64_t, Function*> leafDict;
+    for (auto leaf : dynAttr->funcGroup.devLeafList) {
+        if (leaf == nullptr) {
+            continue;
+        }
+        leafDict[leaf->ComputeHash().GetHash()] = leaf;
+    }
+    // 只重建编译必需的 calleeHashIndexDict（{hash -> leafIndex}），
+    // 其余 param 字段（symbolTable/slot/outcast 等）仅链接器需要，编译流程不使用。
+    dynamic::EncodeDevAscendFunctionParam param;
+    for (const auto& leafIndex2Hash : dynAttr->devLeafIndex2Hash) {
+        param.calleeHashIndexDict[leafIndex2Hash.second] = leafIndex2Hash.first;
+    }
+
+    const std::string ccePath = RealPath(config::GetEmitPath("kernel_aicore")) + "/";
+    const std::string funcHash = std::to_string(func->GetFunctionHash().GetHash());
+    const std::string funcRawName = func->GetOriginalRawName();
+
+    // 2. 重新编译 __HAS_SUB_FUNC__ 未定义（enableSubFunc=false）的 kernel
+    std::string kernelPath;
+    int ret = CompileAICoreKernel(leafDict, param, ccePath, funcHash, funcRawName, kernelPath, false);
+    if (ret != 0 || RealPath(kernelPath).empty()) {
+        MACHINE_LOGW("Skip no-subfunc bundled kernel dump: recompile kernel failed for %s.", kernelName);
+        return;
+    }
+    bool readOk = false;
+    std::vector<uint8_t> noSubFuncKernel = ReadFile(kernelPath, &readOk);
+    if (!readOk || noSubFuncKernel.empty()) {
+        MACHINE_LOGW("Skip no-subfunc bundled kernel dump: failed to read recompiled kernel %s.", kernelPath.c_str());
+        return;
+    }
+
+    // 3. 打包并 dump
+    PackAndDumpBundle(noSubFuncKernel, dynAttr, kernelName, "_nosubfunc");
+}
 
 void GetTensorInfo(uint32_t inputSize, DevTensorData* tensorData, AdxExceptionDumpInfo* exceptionDumpInfo)
 {
@@ -66,6 +158,9 @@ void GetTensorInfo(uint32_t inputSize, DevTensorData* tensorData, AdxExceptionDu
         exceptionDumpInfo->tensorInfo[i].tensorSize *= BitsOf(static_cast<DataType>(tensorData[i].dataType)) / 8;
     }
     exceptionDumpInfo->extraTensorNum = inputSize;
+    DumpBundledKernel(dynAttr.get(), exceptionDumpInfo->kernelName);
+    // 触发 __HAS_SUB_FUNC__ 未定义的二进制编译并打包 dump（失败仅 WARNING 降级）
+    DumpNoSubFuncBundledKernel(dynAttr.get(), func, exceptionDumpInfo->kernelName);
 }
 
 int32_t GetAicoreExceptionDumpInfo(std::vector<void*> kernelArg, AdxExceptionDumpInfo* exceptionDumpInfo)

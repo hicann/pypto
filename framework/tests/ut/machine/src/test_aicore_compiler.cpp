@@ -29,7 +29,7 @@ using namespace npu::tile_fwk;
 namespace npu::tile_fwk {
 std::string GenSubFuncCall(std::map<uint64_t, Function*>& leafDict, CoreType coreType,
                            dynamic::EncodeDevAscendFunctionParam& param, const std::string& ccePath, uint64_t tilingKey,
-                           std::stringstream& src_obj);
+                           std::stringstream& src_obj, bool enableSubFunc = true);
 }
 
 namespace {

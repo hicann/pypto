@@ -18,64 +18,109 @@ PyPTO error: PyPTO Inner Error. Please rectify the fault based on the error info
 - MACHINE调度框架自身问题。
 
 ## 处理方式
+1. 工具分析
 
-1. export ASCEND_WORK_PATH=./wk，详细介绍请参考《[环境变量参考](https://gitcode.com/cann/docs/blob/master/docs/zh/env-vars/README.md)》。
-2. 固定cce编译模式
+    1. 环境准备
 
-    ```python
-    #调用示例
-    @pypto.frontend.jit(debug_options={"compile_debug_mode": 2})
-    def pypto_kernel():
-    ```
+    - `pypto`和`torch_npu`可正常import（`import pypto; import torch_npu`无报错）。
+    - 已安装`llvm-symbolizer`（`apt install llvm`或`yum install llvm`）。
+    - 已设置`CANN`环境变量。
 
-3. 开启singlecommit，每条指令单步跑
+    2. 用法
 
     ```bash
-    /usr/local/Ascend/driver/tools/msnpureport config --set --singlecommit 1 -d device-id
+    python {pypto安装目录}/lib/scripts/debug_aicore_error.py -p <report_dir> -out <output_dir> [-d <device_id>] [-t <timeout>]
     ```
 
-4. 重新执行用例
-5. plog日志里搜kernel_symbol_locator.cpp
+    | 参数 | 说明 | 约束 |
+    |------|------|------|
+    | `-p` | 存放故障信息的目录，建议在执行用例前设置`export ASCEND_WORK_PATH=./wk`，则`./wk`即包含所需全部信息 | 必须包含`log/debug/plog`、`extra-info/data-dump`、`pypto`子目录，否则报错退出；不支持存在多个AIC Error的`.pyptokb`文件 |
+    | `-out` | 诊断报告输出目录 | — |
+    | `-d` | device id，不指定时从`TILE_FWK_DEVICE_ID`环境变量获取 | `-d`和`TILE_FWK_DEVICE_ID`必须指定其一，且对应NPU卡可用 |
+    | `-t` | 单算子复现脚本执行超时（秒），默认600，用例较大或开启debug日志时可适当调大 | — |
+
+    3. 示例
 
     ```bash
-        #示例
-        grep -rn "kernel_symbol_locator.cpp" wk/log/debug/plog/plog-2341095_20260707170139095.log
-
-        #寄存器信息
-        62:[ERROR] IDEDD(2341095,python):2026-07-07-17:01:41.620.723 [kernel_symbol_locator.cpp:583][tid:2341490] [Dump][Exception] Error register information. coreId=6, coreType=0, AIC_ERR_0=0x0 AIC_ERR_1=0x0 AIC_ERR_2=0x0 AIC_ERR_3=0x40000000 AIC_ERR_4=0x0 AIC_ERR_5=0x0 BIU_ERR_0=0x0 BIU_ERR_1=0x0 CCU_ERR_0=0x0 CCU_ERR_1=0x63851b81 CUBE_ERR_0=0x4000036 CUBE_ERR_1=0x0 IFU_ERR_0=0xde06800 IFU_ERR_1=0x212c3 MTE_ERR_0=0x3bcdf8f6 MTE_ERR_1=0x13 VEC_ERR_0=0x0 VEC_ERR_1=0x0 FIXP_ERR_0=0xbcdf8f6 FIXP_ERR_1=0x13 AIC_COND_0=0x0 AIC_COND_1=0x0
-        #PC信息
-        64:[ERROR] IDEDD(2341095,python):2026-07-07-17:01:41.620.746 [kernel_symbol_locator.cpp:602][tid:2341490] [Dump][Exception] Error PC information. coreId=6, coreType=0, originalStartPC=0x124a00001130, fixedStartPC=0x124a00001000, originalCurrentPC=0x124a000010dc, fixedCurrentPC=0x124a000010d8, fixedPCOffset=0xd8.
-        #符号信息
-        65:[ERROR] IDEDD(2341095,python):2026-07-07-17:01:41.620.750 [kernel_symbol_locator.cpp:608][tid:2341490] [Dump][Exception] Error symbol information. coreId=6, coreType=0, symbol=TENSOR_s0_Unroll1_PATH0_hiddenfunc0_8_0_4294967296+0xd8.
-
-        #如果symbol=TENSOR_s0_Unroll1_PATH0_hiddenfunc0_8_0_4294967296，即表示挂在该cce文件，如果symbol=PyPTO_matmul_add_0_mix_aic，即表示挂在框架aicore处理源码处。
+    python {pypto安装目录}/lib/scripts/debug_aicore_error.py -p ./wk -out ./diagnosis -d 0
     ```
 
-6. llvm-symbolizer --obj=${aicore_kernel_bin_file_path} fixedPCOffset
-    - llvm-symbolizer通过apt install llvm或yum install llvm安装
-    - 触发aicore exception后，aicore_kernel_bin_fil会在${ASCEND_WORK_PATH}/extra-info/data-dump/device-id/目录下自动落盘。
-    - fixedPCOffset，即65行中的0xd8，即core的cce指令基于aicore_kernel_bin_file基地址的偏移量。
+    4. 结果解读
 
-    ```bash
-        #示例
-        llvm-symbolizer --obj=wk/extra-info/data-dump/5/PyPTO_matmul_add_0_host.o 0xd8
+    诊断结论输出到`<out>/info_<timestamp>/info.txt`的section 6~8段：
 
-        void pto::TMatmul<(pto::AccPhase)0, pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>, false, true, false>(pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>::TileDType, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>::TileDType, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>::TileDType, unsigned short, unsigned short, unsigned short, bool)
-        /root/pto-isa/include/pto/npu/a2a3/TMatmul.hpp:51:5
-        void pto::TMATMUL_IMPL<(pto::AccPhase)0, pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>>(pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>&, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>&, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>&)
-        /root/pto-isa/include/pto/npu/a2a3/TMatmul.hpp:161:5
-        pto::RecordEvent pto::TMATMUL<pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>>(pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>&, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>&, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>&)
-        /root/pto-isa/include/pto/common/pto_instr.hpp:661:5
-        void TMatmulImpl<true, (TransMode)0, true, TileTensor<int, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)5>, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)3>, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)4>>(TileTensor<int, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)5>&, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)3>&, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)4>&)
-        /root/miniconda/envs/mq/lib/python3.10/site-packages/pypto/lib/include/tileop/cube/impl/mmad_impl.h:63:9
-        void TMatmul<true, (TransMode)0, true, TileTensor<int, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)5>, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)3>, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)4>>(TileTensor<int, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)5>&, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)3>&, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)4>&)
-        /root/miniconda/envs/mq/lib/python3.10/site-packages/pypto/lib/include/tileop/cube/cube_pto.h:307:5
+    | 结论 | 含义 |
+    |------|------|
+    | Section 6 PASS | 单算子复现无AIC Error，大概率为输入数据导致 |
+    | Section 6 FAIL, Section 7 PASS | 核内同步问题 |
+    | Section 6 FAIL, Section 7 FAIL, Section 8 PASS | Sub-func（CCE kernel代码）问题 |
+    | Section 6 FAIL, Section 7 FAIL, Section 8 FAIL | Machine调度框架问题 |
 
-        /data/m00794585/pypto/wk/pypto/kernel_aicore/TENSOR_s0_Unroll1_PATH0_hiddenfunc0_8_7936091181990093848_0_aic.cpp:45:1
-    ```
+    详细运行日志见`<out>/info_<timestamp>/debug_info.txt`，生成的可独立运行的单算子复现脚本见 `<out>/info_<timestamp>/test_single_op.py`。
 
-7. 基于上述信息，即表示core在TENSOR_s0_Unroll1_PATH0_hiddenfunc0_8_7936091181990093848_0_aic.cpp:45处TMatmul操作。
-8. 找到挂的位置后，可以通过`aicore print`打印问题cce指令涉及的参数，以便定位问题。
+2. 人工分析
+
+    1. export ASCEND_WORK_PATH=./wk，详细介绍请参考《[环境变量参考](https://gitcode.com/cann/docs/blob/master/docs/zh/env-vars/README.md)》。
+
+    2. 固定cce编译模式
+
+        ```python
+        #调用示例
+        @pypto.frontend.jit(debug_options={"compile_debug_mode": 2})
+        def pypto_kernel():
+        ```
+
+    3. 开启singlecommit，每条指令单步跑
+
+        ```bash
+        /usr/local/Ascend/driver/tools/msnpureport config --set --singlecommit 1 -d device-id
+        ```
+
+    4. 重新执行用例
+
+    5. plog日志里搜kernel_symbol_locator.cpp
+
+        ```bash
+            #示例
+            grep -rn "kernel_symbol_locator.cpp" wk/log/debug/plog/plog-2341095_20260707170139095.log
+
+            #寄存器信息
+            62:[ERROR] IDEDD(2341095,python):2026-07-07-17:01:41.620.723 [kernel_symbol_locator.cpp:583][tid:2341490] [Dump][Exception] Error register information. coreId=6, coreType=0, AIC_ERR_0=0x0 AIC_ERR_1=0x0 AIC_ERR_2=0x0 AIC_ERR_3=0x40000000 AIC_ERR_4=0x0 AIC_ERR_5=0x0 BIU_ERR_0=0x0 BIU_ERR_1=0x0 CCU_ERR_0=0x0 CCU_ERR_1=0x63851b81 CUBE_ERR_0=0x4000036 CUBE_ERR_1=0x0 IFU_ERR_0=0xde06800 IFU_ERR_1=0x212c3 MTE_ERR_0=0x3bcdf8f6 MTE_ERR_1=0x13 VEC_ERR_0=0x0 VEC_ERR_1=0x0 FIXP_ERR_0=0xbcdf8f6 FIXP_ERR_1=0x13 AIC_COND_0=0x0 AIC_COND_1=0x0
+            #PC信息
+            64:[ERROR] IDEDD(2341095,python):2026-07-07-17:01:41.620.746 [kernel_symbol_locator.cpp:602][tid:2341490] [Dump][Exception] Error PC information. coreId=6, coreType=0, originalStartPC=0x124a00001130, fixedStartPC=0x124a00001000, originalCurrentPC=0x124a000010dc, fixedCurrentPC=0x124a000010d8, fixedPCOffset=0xd8.
+            #符号信息
+            65:[ERROR] IDEDD(2341095,python):2026-07-07-17:01:41.620.750 [kernel_symbol_locator.cpp:608][tid:2341490] [Dump][Exception] Error symbol information. coreId=6, coreType=0, symbol=TENSOR_s0_Unroll1_PATH0_hiddenfunc0_8_0_4294967296+0xd8.
+
+            #如果symbol=TENSOR_s0_Unroll1_PATH0_hiddenfunc0_8_0_4294967296，即表示挂在该cce文件，如果symbol=PyPTO_matmul_add_0_mix_aic，即表示挂在框架aicore处理源码处。
+        ```
+
+    6. llvm-symbolizer --obj=${aicore_kernel_bin_file_path} fixedPCOffset
+
+        - llvm-symbolizer通过apt install llvm或yum install llvm安装
+        - 触发aicore exception后，aicore_kernel_bin_fil会在${ASCEND_WORK_PATH}/extra-info/data-dump/device-id/目录下自动落盘。
+        - fixedPCOffset，即65行中的0xd8，即core的cce指令基于aicore_kernel_bin_file基地址的偏移量。
+
+        ```bash
+            #示例
+            llvm-symbolizer --obj=wk/extra-info/data-dump/5/PyPTO_matmul_add_0_host.o 0xd8
+
+            void pto::TMatmul<(pto::AccPhase)0, pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>, false, true, false>(pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>::TileDType, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>::TileDType, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>::TileDType, unsigned short, unsigned short, unsigned short, bool)
+            /root/pto-isa/include/pto/npu/a2a3/TMatmul.hpp:51:5
+            void pto::TMATMUL_IMPL<(pto::AccPhase)0, pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>>(pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>&, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>&, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>&)
+            /root/pto-isa/include/pto/npu/a2a3/TMatmul.hpp:161:5
+            pto::RecordEvent pto::TMATMUL<pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>>(pto::Tile<(pto::TileType)4, int, 32, 32, (pto::BLayout)1, -1, -1, (pto::SLayout)1, 1024, (pto::PadValue)0, (pto::CompactMode)0>&, pto::Tile<(pto::TileType)2, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)1, 512, (pto::PadValue)0, (pto::CompactMode)0>&, pto::Tile<(pto::TileType)3, signed char, 32, 32, (pto::BLayout)0, -1, -1, (pto::SLayout)2, 512, (pto::PadValue)0, (pto::CompactMode)0>&)
+            /root/pto-isa/include/pto/common/pto_instr.hpp:661:5
+            void TMatmulImpl<true, (TransMode)0, true, TileTensor<int, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)5>, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)3>, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)4>>(TileTensor<int, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)5>&, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)3>&, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)4>&)
+            /root/miniconda/envs/mq/lib/python3.10/site-packages/pypto/lib/include/tileop/cube/impl/mmad_impl.h:63:9
+            void TMatmul<true, (TransMode)0, true, TileTensor<int, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)5>, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)3>, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)4>>(TileTensor<int, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)5>&, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)3>&, TileTensor<signed char, TileOp::Layout<Std::tuple<unsigned long, unsigned long>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 1ul>>, Std::tuple<Std::integral_constant<unsigned long, 32ul>, Std::integral_constant<unsigned long, 32ul>>>, (Hardware)4>&)
+            /root/miniconda/envs/mq/lib/python3.10/site-packages/pypto/lib/include/tileop/cube/cube_pto.h:307:5
+
+            /data/m00794585/pypto/wk/pypto/kernel_aicore/TENSOR_s0_Unroll1_PATH0_hiddenfunc0_8_7936091181990093848_0_aic.cpp:45:1
+        ```
+
+    7. 基于上述信息，即表示core在TENSOR_s0_Unroll1_PATH0_hiddenfunc0_8_7936091181990093848_0_aic.cpp:45处TMatmul操作。
+
+    8. 找到挂的位置后，可以通过`aicore print`打印问题cce指令涉及的参数，以便定位问题。
 
 ## aicore print
 
@@ -315,10 +360,10 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
    - Ascend 950PR/Ascend 950DT：不支持
    <!-- end id1 -->
    <!-- npu="A3" id2 -->
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+   - Atlas A3训练系列产品/Atlas A3推理系列产品：支持
    <!-- end id2 -->
    <!-- npu="910b" id3 -->
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
+   - Atlas A2训练系列产品/Atlas A2推理系列产品：支持
    <!-- end id3 -->
 
 4. **AIC (Cube核)中不能使用AiCorePrintUbTensor**：AIC (Cube核)的标量处理器(SP)没有到UB地址空间的物理通路，无法从UB标量读取数据。编译期已通过`static_assert`拦截，在AIC kernel中调用`AiCorePrintUbTensor`会触发编译报错：

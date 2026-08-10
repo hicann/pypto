@@ -1,32 +1,49 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
-# ----------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# -----------------------------------------------------------------------------------------------------------
 r"""
-自动串联 msaicerr.py 解析 AIC Error → 解析 info.txt → 生成 test_pypto_single_op.py
-用于基于 dump tensor 数据的单算子复现。
+基于 .pyptokb 离线二进制包的单算子复现工具。
+
+自动串联: msaicerr 解析 → info.txt 解析 → plog 补充 → 生成 test_single_op.py → 执行诊断。
 
 用法示例
 --------
-python pypto_aicerr_repro.py -p /path/to/report -out /tmp/out -d 0
-python pypto_aicerr_repro.py -p /path/to/report -out /tmp/out -d 0 -kernel_src /path/to/kernel_dir
+python debug_aicore_error.py -p /path/to/report -out /tmp/out
+
+python debug_aicore_error.py -p /path/to/report -out /tmp/out -d 0
+
+python debug_aicore_error.py -p /path/to/report -out /tmp/out -t 1200
 """
 
 import argparse
-import datetime
 import os
 import re
 import subprocess
 import sys
-import textwrap
 import time
 from typing import Dict, List, Optional, Tuple
 
 # -------------------------------------------------------------------
-# 日志输出（与 msaicerr 格式一致），同时追加到 CWD 的 debug_info.txt
+# 模块级: pypto 安装根路径（Phase A 中初始化）
 # -------------------------------------------------------------------
 
-_DEBUG_LOG_PATH = "debug_info.txt"  # 写 CWD，main() 最后合并到 msaicerr_out 目录
+_PYTO_ROOT: Optional[str] = None
+
+# -------------------------------------------------------------------
+# 日志输出（与 msaicerr 格式一致），追加到 -out 目录的 debug_info.txt
+# -------------------------------------------------------------------
+
+_DEBUG_LOG_PATH: Optional[str] = None  # _init_debug_log() 后指向 msaicerr_out 下的 debug_info.txt
+_BUNDLED_KERNEL_PATH: Optional[str] = None  # _enrich_from_plog() 后指向 .pyptokb 路径
+_BUNDLED_KERNEL_PATH_UNDEF: Optional[str] = None  # _enrich_from_plog() 后指向 *_nosubfunc.pyptokb 路径
+_EARLY_LOGS: List[str] = []             # _init_debug_log() 之前暂存日志
 
 
 def _print_log(level: str, msg: str) -> None:
@@ -35,32 +52,33 @@ def _print_log(level: str, msg: str) -> None:
     line = current_time + " (" + str(pid) + ") - [" + level + "] " + msg
     print(line)
     sys.stdout.flush()
-    # 同步追加到 CWD 的 debug_info.txt（与 msaicerr 一致）
-    try:
-        with open(_DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
-            f.write(line + '\n')
-    except Exception:
-        pass  # 写文件失败不影响屏幕输出
+    if _DEBUG_LOG_PATH is not None:
+        try:
+            with open(_DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
+                f.write(line + '\n')
+        except Exception:
+            pass
+    else:
+        _EARLY_LOGS.append(line)
 
 
-def _flush_debug_log(msaicerr_out: str) -> None:
-    """将 CWD 的 debug_info.txt 内容合并到 msaicerr_out/debug_info.txt（参考 msaicerr 的 mv 操作）。"""
-    if not os.path.isfile(_DEBUG_LOG_PATH):
-        return
+def _init_debug_log(msaicerr_out: str) -> None:
+    """找到 -out 目录下的 debug_info.txt，后续日志直接追加到该文件。"""
+    global _DEBUG_LOG_PATH
     target = os.path.join(msaicerr_out, "debug_info.txt")
-    try:
-        with open(_DEBUG_LOG_PATH, 'r', encoding='utf-8', errors='replace') as src:
-            content = src.read()
-        if content.strip():
-            with open(target, 'a', encoding='utf-8') as dst:
-                dst.write(content)
-        os.remove(_DEBUG_LOG_PATH)
-    except Exception as e:
-        print(f"[WARN] _flush_debug_log 失败: {e}")
+    _DEBUG_LOG_PATH = os.path.abspath(target)
+    # 将 init 前的早期日志刷入
+    for line in _EARLY_LOGS:
+        try:
+            with open(_DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
+                f.write(line + '\n')
+        except Exception:
+            pass
+    _EARLY_LOGS.clear()
 
 
 # -------------------------------------------------------------------
-# 1. dtype 映射表
+# dtype 映射表
 # -------------------------------------------------------------------
 
 _STR_TO_NP: Dict[str, str] = {
@@ -74,6 +92,13 @@ _STR_TO_NP: Dict[str, str] = {
     "uint8":    "np.uint8",
     "bfloat16": "np.int16",   # numpy 不支持 bfloat16，用 int16 先读
     "bool":     "np.bool_",
+    # fp8: numpy 不支持，用 uint8 读原始字节后 view 为对应 torch 类型
+    "float8_e4m3fn": "np.uint8",
+    "fp8e4m3":       "np.uint8",
+    "float8_e5m2":   "np.uint8",
+    "fp8e5m2":       "np.uint8",
+    "fp8":           "np.uint8",
+    "float8":        "np.uint8",
 }
 
 _STR_TO_TORCH: Dict[str, str] = {
@@ -87,11 +112,17 @@ _STR_TO_TORCH: Dict[str, str] = {
     "uint8":    "torch.uint8",
     "bfloat16": "torch.bfloat16",
     "bool":     "torch.bool",
+    "float8_e4m3fn": "torch.float8_e4m3fn",
+    "fp8e4m3":       "torch.float8_e4m3fn",
+    "float8_e5m2":   "torch.float8_e5m2",
+    "fp8e5m2":       "torch.float8_e5m2",
+    "fp8":           "torch.float8_e4m3fn",
+    "float8":        "torch.float8_e4m3fn",
 }
 
 
 # -------------------------------------------------------------------
-# 2. 获取 CANN 目录
+# 获取 CANN 目录
 # -------------------------------------------------------------------
 
 def get_ascend_home() -> str:
@@ -99,18 +130,19 @@ def get_ascend_home() -> str:
     ascend_home = os.environ.get("ASCEND_HOME_PATH", "")
     if not ascend_home:
         raise RuntimeError(
-            "ASCEND_HOME_PATH 环境变量未设置，请 source set_env.sh 后重试"
+            "ASCEND_HOME_PATH env variable not set, please source set_env.sh and retry"
         )
     if not os.path.isdir(ascend_home):
-        raise RuntimeError(f"ASCEND_HOME_PATH 指向的目录不存在: {ascend_home}")
+        raise RuntimeError(f"ASCEND_HOME_PATH directory does not exist: {ascend_home}")
     return ascend_home
 
 
 # -------------------------------------------------------------------
-# 3. 调用 msaicerr.py 解析
+# 调用 msaicerr.py 解析
 # -------------------------------------------------------------------
 
-def run_msaicerr(report_path: str, output_path: str, device_id: int, ascend_home: str) -> str:
+def run_msaicerr(report_path: str, output_path: str, device_id: int,
+                 ascend_home: str) -> str:
     """
     调用 CANN 包下的 msaicerr.py 解析 AIC Error 报告。
 
@@ -118,7 +150,7 @@ def run_msaicerr(report_path: str, output_path: str, device_id: int, ascend_home
     """
     msaicerr_script = os.path.join(ascend_home, "tools", "msaicerr", "msaicerr.py")
     if not os.path.isfile(msaicerr_script):
-        raise RuntimeError(f"msaicerr.py 未找到: {msaicerr_script}")
+        raise RuntimeError(f"msaicerr.py not found: {msaicerr_script}")
 
     # 先列出将要输出的目录，用于事后定位 info_<timestamp>
     before_items = set()
@@ -133,8 +165,11 @@ def run_msaicerr(report_path: str, output_path: str, device_id: int, ascend_home
         "-out", output_path,
         "-dev", str(device_id),
     ]
-    _print_log("INFO", f"执行: {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    _print_log("INFO", f"Executing: {' '.join(cmd)}")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Phase B: msaicerr.py parsing timed out (600s), check log size or run manually")
 
     if result.stdout:
         sys.stdout.write(result.stdout)
@@ -142,7 +177,7 @@ def run_msaicerr(report_path: str, output_path: str, device_id: int, ascend_home
         sys.stderr.write(result.stderr)
 
     if result.returncode != 0:
-        _print_log("WARNING", f"msaicerr.py 返回码: {result.returncode}（继续尝试定位 info.txt）")
+        _print_log("WARNING", f"msaicerr.py return code: {result.returncode} (continuing to locate info.txt)")
 
     # 定位 info_<timestamp> 目录
     after_items = set()
@@ -154,7 +189,7 @@ def run_msaicerr(report_path: str, output_path: str, device_id: int, ascend_home
     for item in new_items:
         full = os.path.join(output_path, item)
         if os.path.isdir(full) and item.startswith("info_"):
-            _print_log("INFO", f"msaicerr 输出目录: {full}")
+            _print_log("INFO", f"msaicerr output directory: {full}")
             return full
 
     # 备选：在 output_path 下找最新创建的 info_* 目录
@@ -168,11 +203,11 @@ def run_msaicerr(report_path: str, output_path: str, device_id: int, ascend_home
                 best_mtime = mtime
                 best = full
     if best:
-        _print_log("INFO", f"msaicerr 输出目录（mtime）: {best}")
+        _print_log("INFO", f"msaicerr output directory (mtime): {best}")
         return best
 
     raise RuntimeError(
-        f"未能在 {output_path} 中找到 msaicerr 输出的 info_<timestamp> 目录"
+        f"Cannot find info_<timestamp> directory from msaicerr output in {output_path}"
     )
 
 
@@ -182,22 +217,69 @@ def find_info_txt(msaicerr_out_dir: str) -> str:
         for fname in files:
             if fname == "info.txt":
                 return os.path.join(root, fname)
-    raise RuntimeError(f"在 {msaicerr_out_dir} 中未找到 info.txt")
+    raise RuntimeError(f"Cannot find info.txt in {msaicerr_out_dir}")
 
 
-def find_debug_info_txt(msaicerr_out: str) -> Optional[str]:
-    """在 msaicerr 输出顶层目录下查找 debug_info.txt。如不存在则返回 None。
-
-    msaicerr.py 内部将 debug_info.txt 写入 CWD 后 mv 到 collect_path
-    （即 info_<timestamp> 顶层），而 info.txt 可能在子目录中，
-    因此必须用顶层目录而非 info.txt 同级目录来查找。
-    """
-    debug_path = os.path.join(msaicerr_out, "debug_info.txt")
-    return debug_path if os.path.isfile(debug_path) else None
+def find_debug_info_txt_path(msaicerr_out: str) -> str:
+    """返回 msaicerr 输出目录下 debug_info.txt 的路径（不检查是否存在）。"""
+    return os.path.join(msaicerr_out, "debug_info.txt")
 
 
 # -------------------------------------------------------------------
-# 4. 解析 info.txt
+# 工作目录结构校验 & 环境检查
+# -------------------------------------------------------------------
+
+def _get_app_plog_dir(work_dir: str) -> str:
+    """返回工作目录下应用层 PYPTO plog 目录路径。"""
+    return os.path.join(work_dir, "log", "debug", "plog")
+
+
+def _validate_work_dir(work_dir: str) -> None:
+    """检查 -p 目录结构，缺失必要子目录时报错中断。"""
+    required_dirs = {
+        "log/debug/plog": _get_app_plog_dir(work_dir),
+        "extra-info/data-dump": os.path.join(work_dir, "extra-info", "data-dump"),
+        "pypto": os.path.join(work_dir, "pypto"),
+    }
+    missing = []
+    for label, path in required_dirs.items():
+        if not os.path.isdir(path):
+            missing.append(f"  {label}: {path}")
+    if missing:
+        raise RuntimeError(
+            "Work directory missing these subdirectories:\n" + "\n".join(missing)
+        )
+
+
+def _get_device_id(cli_device_id: Optional[str] = None) -> int:
+    """获取 device id。优先级: -d 参数 > TILE_FWK_DEVICE_ID 环境变量。"""
+    if cli_device_id is not None:
+        try:
+            return int(cli_device_id)
+        except ValueError:
+            raise RuntimeError(f"-d argument value invalid: {cli_device_id}")
+
+    val = os.environ.get("TILE_FWK_DEVICE_ID", "")
+    if not val:
+        raise RuntimeError("-d argument not specified and TILE_FWK_DEVICE_ID env variable not set, "
+                           "please specify -d or set the env variable and retry")
+    try:
+        return int(val)
+    except ValueError:
+        raise RuntimeError(f"TILE_FWK_DEVICE_ID value invalid: {val}")
+
+
+def _check_log_level() -> None:
+    """检查 ASCEND_GLOBAL_LOG_LEVEL，非 ERROR 级别时提示可能较慢。"""
+    level = os.environ.get("ASCEND_GLOBAL_LOG_LEVEL", "3")
+    if level != "3":
+        _print_log("WARNING",
+            f"ASCEND_GLOBAL_LOG_LEVEL({level}) not set to ERROR(3), single-operator test be slow at current log level, "
+            "recommend export ASCEND_GLOBAL_LOG_LEVEL=3")
+
+
+# -------------------------------------------------------------------
+# 解析 info.txt
 # -------------------------------------------------------------------
 
 class TensorInfo:
@@ -212,54 +294,38 @@ class TensorInfo:
         self.index = index
 
 
-def parse_info_txt(info_txt_path: str, debug_msgs: Optional[List[str]] = None) -> Tuple[str, List[TensorInfo]]:
-    """
-    解析 info.txt，返回 (kernel_func_name, tensor_list)。
-
-    kernel_func_name: 从 "PyPTO_xxx_kernel_N_mix_aic" 中提取 "xxx_kernel"
-    tensor_list:      按 input/output/workspace 顺序排列的 TensorInfo 列表
-    debug_msgs:       可选的调试信息收集列表
-    """
-    def _log(msg: str):
-        m = re.match(r'^\[(\w+)\]\s+(.*)', msg)
-        if m:
-            _print_log(m.group(1), m.group(2))
-        else:
-            print(msg)
-        if debug_msgs is not None:
-            debug_msgs.append(msg)
-
-    with open(info_txt_path, "r", encoding="utf-8", errors="replace") as f:
-        content = f.read()
-
+def _extract_from_sections(sections: Dict[str, str]) -> Tuple[str, List[TensorInfo]]:
+    """从 sections dict 中提取 kernel 名和 tensor 列表。"""
     # --- 提取 kernel name (section 1) ---
-    kernel_name_match = re.search(r"kernel name\s+:\s*(.+)", content)
+    sec1_key = _find_section_key(sections, "1. Basic information")
+    if sec1_key is None:
+        raise RuntimeError("section 1 (Basic information) not found in info.txt")
+    sec1_content = sections[sec1_key]
+
+    kernel_name_match = re.search(r"kernel name\s+:\s*(.+)", sec1_content)
     if not kernel_name_match:
-        raise RuntimeError("info.txt 中未找到 'kernel name' 字段")
+        raise RuntimeError("'kernel name' field not found in section 1")
     kernel_name = kernel_name_match.group(1).strip()
 
-    # 从 "PyPTO_add_kernel_0_mix_aic" 提取 "add_kernel"
-    func_match = re.match(r"PyPTO_(.+)_kernel_\d+_mix_aic", kernel_name)
+    # 从 "PyPTO_xxx_0_mix_aic" 提取 PyPTO_ 和 _0_mix_aic 之间的部分
+    func_match = re.match(r"PyPTO_(.+?)_\d+_mix_aic", kernel_name)
     if func_match:
-        kernel_func_name = func_match.group(1) + "_kernel"
+        kernel_func_name = func_match.group(1)
     else:
-        # 兜底：尝试去掉 PyPTO_ 前缀
         if kernel_name.startswith("PyPTO_"):
             kernel_func_name = kernel_name[len("PyPTO_"):]
         else:
             kernel_func_name = kernel_name
 
-    _log(f"[INFO] kernel name = {kernel_name}")
-    _log(f"[INFO] 推断 pypto 函数名 = {kernel_func_name}")
+    _print_log("INFO", f"kernel name = {kernel_name}")
+    _print_log("INFO", f"Inferred pypto function name = {kernel_func_name}")
 
     # --- 提取 section 5: Operator Dump File Parsing ---
-    sec5_marker = "5. Operator Dump File Parsing"
-    sec5_pos = content.find(sec5_marker)
-    if sec5_pos < 0:
-        raise RuntimeError("info.txt 中未找到 '5. Operator Dump File Parsing' 段")
-    sec5_content = content[sec5_pos:]
+    sec5_key = _find_section_key(sections, "5. Operator Dump File Parsing")
+    if sec5_key is None:
+        raise RuntimeError("section 5 (Operator Dump File Parsing) not found in info.txt")
+    sec5_content = sections[sec5_key]
 
-    # 正则匹配每个 tensor 的 shape/dtype 行 + 文件路径行
     tensor_pattern = re.compile(
         r"shape:\s*\(([^)]*)\)\s+size:\s*\d+\s+dtype:\s*(\S+)\s*\n"
         r"(.+?)\n",
@@ -272,13 +338,11 @@ def parse_info_txt(info_txt_path: str, debug_msgs: Optional[List[str]] = None) -
         dtype_str = m.group(2)
         file_path = m.group(3).strip()
 
-        # 解析 shape
         if shape_str.strip():
             shape = tuple(int(x.strip()) for x in shape_str.split(",") if x.strip())
         else:
             shape = ()
 
-        # 从文件名推断 io_type 和 index
         basename = os.path.basename(file_path)
         parts = basename.split(".")
         io_type = "unknown"
@@ -296,195 +360,179 @@ def parse_info_txt(info_txt_path: str, debug_msgs: Optional[List[str]] = None) -
             path=file_path, shape=shape, dtype=dtype_str,
             io_type=io_type, index=index,
         ))
-        _log(f"[DEBUG]   tensor[{i}] {io_type}[{index}] shape={shape} dtype={dtype_str} "
-             f"file={basename}")
+        _print_log("DEBUG", f"  tensor[{i}] {io_type}[{index}] shape={shape} dtype={dtype_str} "
+                   f"file={basename}")
 
-    # 排序：input 在前，output 在后，workspace 放最后；同类按 index 排
     order = {"input": 0, "output": 1, "workspace": 2}
     tensors.sort(key=lambda t: (order.get(t.io_type, 9), t.index))
 
-    _log(f"[INFO] 解析到 {len(tensors)} 个 tensor "
-         f"({sum(1 for t in tensors if t.io_type == 'input')} input, "
-         f"{sum(1 for t in tensors if t.io_type == 'output')} output, "
-         f"{sum(1 for t in tensors if t.io_type == 'workspace')} workspace)")
+    _print_log("INFO", f"Parsed {len(tensors)} tensors "
+               f"({sum(1 for t in tensors if t.io_type == 'input')} input, "
+               f"{sum(1 for t in tensors if t.io_type == 'output')} output, "
+               f"{sum(1 for t in tensors if t.io_type == 'workspace')} workspace)")
 
     return kernel_func_name, tensors
 
 
 # -------------------------------------------------------------------
-# 5. 生成 test_pypto_single_op.py
+# Bundle 模式：用 .pyptokb 离线二进制做单算子复现
 # -------------------------------------------------------------------
 
-def _resolve_kernel_import(
-    kernel_func_name: str,
-    kernel_src: Optional[str],
-) -> Tuple[str, List[str]]:
+# DataType enum (tilefwk/data_type.h: DATA_TYPE_ALL)
+# DT_INT4=0, INT8=1, INT16=2, INT32=3, INT64=4, FP8=5, FP16=6, FP32=7, BF16=8, BOOL=9, UINT8=10
+_STR_TO_DT_ENUM: Dict[str, int] = {
+    "int8":     1,
+    "int16":    2,
+    "int32":    3,
+    "int64":    4,
+    "fp8":      5,
+    "float8":   5,
+    "float16":  6,
+    "float32":  7,
+    "bfloat16": 8,
+    "bool":     9,
+    "uint8":    10,
+    "float8_e4m3fn": 17,
+    "fp8e4m3":       17,
+    "float8_e5m2":   18,
+    "fp8e5m2":       18,
+}
+
+
+# 需要做 view 的 dtype（numpy 无原生支持）：bfloat16 用 int16，fp8 系列用 uint8
+_NEEDS_VIEW_DTYPES = frozenset({
+    "bfloat16",
+    "float8_e4m3fn", "fp8e4m3", "float8_e5m2", "fp8e5m2", "fp8", "float8",
+})
+
+_BUNDLE_SO_NAMES = ("libtile_fwk_bundle_standalone.so", "libtile_fwk_bundle.so")
+
+
+def find_bundle_so() -> Optional[str]:
+    """自动查找 libtile_fwk_bundle.so。"""
+    # 1. 环境变量
+    env_so = os.environ.get("PYPTO_BUNDLE_SO", "")
+    if env_so and os.path.isfile(env_so):
+        return env_so
+
+    # 2. 从 _PYTO_ROOT 推断
+    if _PYTO_ROOT:
+        so_dir = os.path.join(_PYTO_ROOT, "lib")
+        for name in _BUNDLE_SO_NAMES:
+            cand = os.path.join(so_dir, name)
+            if os.path.isfile(cand):
+                return cand
+
+    # 3. LD_LIBRARY_PATH 搜索
+    for d in os.environ.get("LD_LIBRARY_PATH", "").split(":"):
+        if not d:
+            continue
+        for name in _BUNDLE_SO_NAMES:
+            cand = os.path.join(d, name)
+            if os.path.isfile(cand):
+                return cand
+
+    return None
+
+
+def _bundle_tensor_load_code(tensors: List[TensorInfo]) -> Tuple[List[str], List[str]]:
     """
-    决定生成的脚本如何 import kernel。
+    生成 bundle 模式的 tensor 加载 + PyptoTensorDesc 构造代码。
 
-    返回 (import_block_code, [extra_header_lines])。
-    - kernel_src 为 None: 尝试 import pypto 后 getattr
-    - kernel_src 是文件: 直接 import 该模块
-    - kernel_src 是目录: 扫描目录下定义 kernel_func_name 的 .py 模块后 import
+    返回 (load_and_desc_lines, tensor_desc_var_names)
+    每个 tensor_desc_var 是 PyptoTensorDesc 的变量名。
     """
-    if kernel_src is None:
-        # 不在 python lib，也没有指定路径 → 假设在 pypto 下
-        return textwrap.dedent(f"""\
-            # 尝试从 pypto 导入 kernel
-            try:
-                from pypto import {kernel_func_name} as _kernel_func
-            except ImportError:
-                # fallback: 作为独立模块 import
-                import {kernel_func_name} as _kernel_func
-        """), []
-
-    abs_src = os.path.abspath(kernel_src)
-
-    if os.path.isfile(abs_src):
-        # 具体 .py 文件 → 将文件所在目录加入 sys.path
-        src_dir = os.path.dirname(abs_src)
-        mod_name = os.path.splitext(os.path.basename(abs_src))[0]
-        headers = [
-            f"_kernel_src_dir = r'{src_dir}'",
-            "if _kernel_src_dir not in sys.path:",
-            "    sys.path.insert(0, _kernel_src_dir)",
-        ]
-        import_code = textwrap.dedent(f"""\
-            # Kernel 源码文件
-            import {mod_name}
-            _kernel_func = {mod_name}.{kernel_func_name}
-        """)
-        return import_code, headers
-    else:
-        # 目录 → 扫描
-        headers = [
-            f"_kernel_src = r'{abs_src}'",
-            "if _kernel_src not in sys.path:",
-            "    sys.path.insert(0, _kernel_src)",
-        ]
-        import_code = textwrap.dedent(f"""\
-            # 扫描 kernel_src 目录，查找定义 {kernel_func_name} 的模块
-            _kernel_func = None
-            for _entry in os.scandir(_kernel_src):
-                if _entry.is_file() and _entry.name.endswith('.py') and not _entry.name.startswith('_'):
-                    _mod_name = os.path.splitext(_entry.name)[0]
-                    try:
-                        _mod = __import__(_mod_name)
-                        if hasattr(_mod, '{kernel_func_name}'):
-                            _kernel_func = getattr(_mod, '{kernel_func_name}')
-                            break
-                    except ImportError:
-                        pass
-            if _kernel_func is None:
-                raise ImportError(
-                    f"在 {{_kernel_src}} 中未找到函数 {kernel_func_name}"
-                )
-        """)
-        return import_code, headers
-
-
-def _tensor_load_code(tensors: List[TensorInfo]) -> Tuple[List[str], List[str], List[str]]:
-    """
-    生成 tensor 加载代码。
-
-    返回 (load_lines, input_var_names, output_var_names)。
-    """
-    load_lines: List[str] = []
-    input_vars: List[str] = []
-    output_vars: List[str] = []
+    lines: List[str] = []
+    desc_vars: List[str] = []
 
     for t in tensors:
         var_name = f"t_{t.io_type}_{t.index}"
+        desc_var = f"d_{t.io_type}_{t.index}"
+        dt_enum = _STR_TO_DT_ENUM.get(t.dtype, _STR_TO_DT_ENUM["float32"])
 
         if t.path.endswith(".npy"):
-            # workspace: np.load
-            load_lines.append(f"{var_name}_np = np.load(r'{t.path}')")
-            load_lines.append(f"{var_name} = torch.tensor({var_name}_np, device=device)")
+            lines.append(f"{var_name}_np = np.load(r'{t.path}')")
+            lines.append(f"{var_name} = torch.tensor({var_name}_np, device=device)")
         elif t.path.endswith(".bin"):
-            np_dtype = _STR_TO_NP.get(t.dtype, "np.float16")
-            torch_dtype = _STR_TO_TORCH.get(t.dtype, "torch.float16")
+            np_dtype = _STR_TO_NP.get(t.dtype, _STR_TO_NP["float16"])
+            torch_dtype = _STR_TO_TORCH.get(t.dtype, _STR_TO_TORCH["float16"])
             shape_repr = repr(t.shape)
 
-            if t.dtype == "bfloat16":
-                # bfloat16: 用 int16 读 → view as bfloat16
-                load_lines.append("# bfloat16: 用 int16 加载后 view 为 bfloat16")
-                load_lines.append(f"{var_name}_np = np.fromfile(r'{t.path}', dtype=np.int16).reshape({shape_repr})")
-                load_lines.append(f"{var_name} = torch.tensor({var_name}_np, device=device).view({torch_dtype})")
+            if t.dtype in _NEEDS_VIEW_DTYPES:
+                lines.append(f"# {t.dtype}: numpy 无原生支持，用 {np_dtype} 加载后 view 为 {torch_dtype}")
+                lines.append(f"{var_name}_np = np.fromfile(r'{t.path}', dtype={np_dtype}).reshape({shape_repr})")
+                lines.append(f"{var_name} = torch.tensor({var_name}_np, device=device).view({torch_dtype})")
             else:
-                load_lines.append(f"{var_name}_np = np.fromfile(r'{t.path}', dtype={np_dtype}).reshape({shape_repr})")
-                load_lines.append(f"{var_name} = torch.tensor({var_name}_np, device=device)")
+                lines.append(f"{var_name}_np = np.fromfile(r'{t.path}', dtype={np_dtype}).reshape({shape_repr})")
+                lines.append(f"{var_name} = torch.tensor({var_name}_np, device=device)")
 
-        load_lines.append("")
+        # 构造 PyptoTensorDesc
+        lines.append(f"{desc_var} = PyptoTensorDesc()")
+        lines.append(f"{desc_var}.addr = ctypes.c_void_p({var_name}.data_ptr())")
+        lines.append(f"{desc_var}.dataType = {dt_enum}  # {t.dtype}")
+        lines.append(f"{desc_var}.rank = {len(t.shape)}")
+        for i, s in enumerate(t.shape):
+            lines.append(f"{desc_var}.shape[{i}] = {s}")
+        lines.append("")
 
-        if t.io_type == "input":
-            input_vars.append(var_name)
-        elif t.io_type == "output":
-            output_vars.append(var_name)
-        # workspace 不加入 input/output 参数列表
+        desc_vars.append(desc_var)
 
-    return load_lines, input_vars, output_vars
+    return lines, desc_vars
 
 
-def codegen_test_script(
+def codegen_bundle_script(
+    bundle_path: str,
     kernel_func_name: str,
     tensors: List[TensorInfo],
-    kernel_src: Optional[str],
     device_id: int,
     output_path: str,
-    debug_msgs: Optional[List[str]] = None,
+    bundle_so: str,
 ) -> None:
-    """生成 test_pypto_single_op.py。"""
-    def _log(msg: str):
-        m = re.match(r'^\[(\w+)\]\s+(.*)', msg)
-        if m:
-            _print_log(m.group(1), m.group(2))
-        else:
-            print(msg)
-        if debug_msgs is not None:
-            debug_msgs.append(msg)
+    """生成基于 .pyptokb 离线二进制的单算子复现脚本。"""
 
-    import_code, extra_headers = _resolve_kernel_import(kernel_func_name, kernel_src)
-    load_lines, input_vars, output_vars = _tensor_load_code(tensors)
-
-    _log("")
-    _log(f"[INFO] codegen kernel import 策略: "
-         f"{'from kernel_src' if kernel_src else 'from pypto'}")
-
-    _log("[INFO] 共加载 tensor:")
-    for t in tensors:
-        _log(f"       {t.io_type}[{t.index}] shape={t.shape} dtype={t.dtype} "
-             f"-> {os.path.basename(t.path)}")
+    load_lines, desc_vars = _bundle_tensor_load_code(tensors)
 
     lines = [
         "#!/usr/bin/env python3",
         "# coding: utf-8",
-        "# Auto-generated by pypto_aicerr_repro.py",
+        "# Auto-generated by pypto_aicerr_repro.py (bundle mode)",
         f"# Kernel: {kernel_func_name}",
-        f"# Device: {device_id}",
+        f"# Bundled kernel:  {bundle_path}",
+        f"# Device:  {device_id}",
         "#",
         "",
+        "import ctypes",
         "import os",
         "import sys",
         "import numpy as np",
         "import torch",
         "import torch_npu  # noqa: F401",
-        "import pypto",
         "",
-    ]
-
-    if extra_headers:
-        lines.extend(extra_headers)
-        lines.append("")
-
-    lines += [
-        "# ---- Import kernel ----",
+        "# ---- PyptoTensorDesc (kernel_bundle_format.h / pypto_bundle_api.h) ----",
         "",
-    ]
-    lines.append(import_code)
-    lines.append("")
-
-    lines += [
-        "# ---- 设置 device ----",
+        "class PyptoTensorDesc(ctypes.Structure):",
+        '    _fields_ = [',
+        '        ("addr",     ctypes.c_void_p),',
+        '        ("dataType", ctypes.c_int32),',
+        '        ("rank",     ctypes.c_int32),',
+        '        ("shape",    ctypes.c_int64 * 8),',
+        "    ]",
+        "",
+        "# ---- Load libtile_fwk_bundle.so ----",
+        "",
+        f'_BUNDLE_SO = os.environ.get("PYPTO_BUNDLE_SO", r"{bundle_so}")',
+        '_BUNDLE_LIB = ctypes.CDLL(_BUNDLE_SO, mode=ctypes.RTLD_GLOBAL)',
+        "",
+        "_desc_p = ctypes.POINTER(PyptoTensorDesc)",
+        "_BUNDLE_LIB.PyptoWorkspace.restype = ctypes.c_uint64",
+        "_BUNDLE_LIB.PyptoWorkspace.argtypes = [ctypes.c_char_p, _desc_p, ctypes.c_uint32]",
+        "_BUNDLE_LIB.PyptoLaunch.restype = ctypes.c_int",
+        "_BUNDLE_LIB.PyptoLaunch.argtypes = [",
+        "    ctypes.c_char_p, _desc_p, ctypes.c_uint32,",
+        "    ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int,",
+        "]",
+        "",
+        "# ---- Device ----",
         f"device = torch.device(f'npu:{device_id}')",
         "torch.npu.set_device(device)",
         "",
@@ -493,64 +541,50 @@ def codegen_test_script(
     ]
     lines.extend(load_lines)
 
-    # 调用 kernel
     lines += [
-        "# ---- 调用 kernel ----",
+        "# ---- 构造 PyptoTensorDesc 数组 ----",
         "",
-        f"print('Calling {kernel_func_name}...')",
-    ]
-
-    non_empty_vars = [vn for vn in input_vars + output_vars if vn]
-    if non_empty_vars:
-        args_str = ", ".join(non_empty_vars)
-        lines.append(f"_kernel_func({args_str})")
-    else:
-        lines.append("_kernel_func()")
-
-    lines += [
+        f"_descs = (PyptoTensorDesc * {len(desc_vars)})({', '.join(desc_vars)})",
         "",
-        "print('Kernel execution completed.')",
+        "# ---- 调用 bundle ----",
+        "",
+        f'_bundle_path = os.environ.get("PYPTO_BUNDLE_PATH", r"{bundle_path}").encode()',
+        "",
+        f"print('kernel: {kernel_func_name}  (bundle mode)')",
+        "",
+        "ws_size = _BUNDLE_LIB.PyptoWorkspace(_bundle_path, _descs, len(_descs))",
+        "",
+        "_ws_keep = None",
+        "_ws_ptr = None",
+        "if ws_size > 0:",
+        "    _ws_keep = torch.empty(ws_size, dtype=torch.uint8, device=device)",
+        "    _ws_ptr = ctypes.c_void_p(_ws_keep.data_ptr())",
+        "",
+        "rc = _BUNDLE_LIB.PyptoLaunch(_bundle_path, _descs, len(_descs), _ws_ptr, None, 1)",
+        "if rc != 0:",
+        "    sys.exit(1)",
         "torch.npu.synchronize()",
-        "print('sync done.')",
+        'print("Bundle execution completed.")',
+        'print("sync done.")',
         "",
     ]
 
     content = "\n".join(lines) + "\n"
-
     with open(output_path, "w") as f:
         f.write(content)
 
-    _log(f"[OK] 已生成: {output_path}")
-    _log(f"     Input tensors:  {len(input_vars)}")
-    _log(f"     Output tensors: {len(output_vars)}")
-    _log("")
-    _log("Next step:")
-    _log(f"  python {output_path}")
+    _print_log("INFO", f"Test script: {output_path}")
+    _print_log("INFO", f"Bundled kernel: {bundle_path}")
 
 
 # -------------------------------------------------------------------
-# 6. 追加调试信息到 debug_info.txt / 执行并覆盖 info.txt 第 6 段
+# info.txt 读写工具
 # -------------------------------------------------------------------
 
 _INFO_SECTION_PATTERN = re.compile(
     r'^\*{3,}\d+\.\s+.+?\*{3,}$', re.MULTILINE
 )
 _TARGET_SECTION_KEYWORD = "6. Execution Result of the Single-Operator Test Case"
-
-
-def append_to_file(filepath: str, header: str, content: str):
-    """向文件追加带分隔头的文本块。"""
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    block = (
-        f"\n{'=' * 72}\n"
-        f"{header}  [{timestamp}]\n"
-        f"{'=' * 72}\n"
-        f"{content}"
-        f"{'=' * 72}\n"
-    )
-    with open(filepath, "a") as f:
-        f.write(block)
-        _print_log("INFO", f"已将内容追加到: {filepath}")
 
 
 
@@ -584,12 +618,17 @@ def _parse_info_txt_to_sections(info_txt_path: str):
     return preamble, sections, header_order
 
 
-def _find_section6_key(sections: Dict[str, str]) -> Optional[str]:
-    """在 sections 中查找第 6 段 Single-Operator Test Case 的 header key。"""
+def _find_section_key(sections: Dict[str, str], keyword: str) -> Optional[str]:
+    """在 sections 中查找匹配 keyword 的 header key。"""
     for header in sections:
-        if _TARGET_SECTION_KEYWORD in header:
+        if keyword in header:
             return header
     return None
+
+
+def _find_section6_key(sections: Dict[str, str]) -> Optional[str]:
+    """在 sections 中查找第 6 段 Single-Operator Test Case 的 header key。"""
+    return _find_section_key(sections, _TARGET_SECTION_KEYWORD)
 
 
 def _rewrite_info_txt(info_txt_path: str, preamble: str,
@@ -603,77 +642,147 @@ def _rewrite_info_txt(info_txt_path: str, preamble: str,
     lines.append("")  # 文件末尾换行
     with open(info_txt_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
-        _print_log("INFO", f"已更新 {info_txt_path}")
+        _print_log("INFO", f"Updated {info_txt_path}")
 
 
 
-def _enrich_from_plog(msaicerr_out: str, sections: Dict[str, str]):
+def _enrich_from_plog(msaicerr_out: str, sections: Dict[str, str],
+                       work_dir: str = ""):
     """
-    从 plog 中获取信息补充到 info.txt：
-    - coreType：grep 'error info:' 取时间戳最早的内容，根据异常类型判断
-      （"exception of fftsplus aicore error" → 0，"exception of fftsplus aivector error" → 1）
-    - fixedStartPC / fixedCurrentPC / fixedPCOffset：从 kernel_symbol_locator.cpp 匹配 core id + core type
+    补充信息到 info.txt：coreType / bundledKernelPath / fixedPC / llvm-symbolizer。
     """
+    global _BUNDLED_KERNEL_PATH, _BUNDLED_KERNEL_PATH_UNDEF
     # 1. 从 section 1 提取 core id
-    sec1_key = None
-    sec1_content = ""
-    for header in sections:
-        if "1. Basic information" in header:
-            sec1_key = header
-            sec1_content = sections[header]
-            break
-
+    sec1_key = _find_section_key(sections, "1. Basic information")
     if sec1_key is None:
-        _print_log("WARNING", "未找到 section 1 (Basic information)，跳过 plog 补充")
+        _print_log("WARNING", "Section 1 (Basic information) not found, skipping plog enrichment")
         return
+    sec1_content = sections[sec1_key]
 
     core_id_match = re.search(r'core\s+id\s*:\s*(\d+)', sec1_content, re.IGNORECASE)
     if not core_id_match:
-        _print_log("WARNING", "section 1 中未找到 core id，跳过 plog 补充")
+        _print_log("WARNING", "core id not found in section 1, skipping plog enrichment")
         return
     core_id = core_id_match.group(1)
     _print_log("INFO", f"section 1 core id = {core_id}")
 
+    # 2. find -name 'PyPTO*0_mix_aic.pyptokb' 获取 bundled kernel 路径
+    report_dir = work_dir if work_dir and os.path.isdir(work_dir) else ""
+    bundled_kernel_path = _find_bundled_kernel(report_dir) if report_dir else None
+    _BUNDLED_KERNEL_PATH = bundled_kernel_path
+
+    # 2b. find -name 'PyPTO*0_mix_aic_nosubfunc.pyptokb' 获取 undef bundled kernel 路径
+    bundled_kernel_path_undef = (
+        _find_undef_bundled_kernel(report_dir) if report_dir else None
+    )
+    _BUNDLED_KERNEL_PATH_UNDEF = bundled_kernel_path_undef
 
     plog_dir = os.path.join(msaicerr_out, "collection", "plog")
     if not os.path.isdir(plog_dir):
-        _print_log("WARNING", f"plog 目录不存在: {plog_dir}")
-        return
+        _print_log("WARNING", f"plog directory does not exist: {plog_dir}")
+        if bundled_kernel_path is None:
+            return
 
-    # 2. grep 'error info:' 取时间戳最早的内容，从中判断 coreType
+    # 3. grep 'error info:' 取时间戳最早的内容，从中判断 coreType
     core_type = _parse_core_type_from_earliest_error_info(plog_dir)
 
-    # 3. grep kernel_symbol_locator.cpp 获取 fixedPC 信息（同时匹配 core id + core type）
+    # 4. grep kernel_symbol_locator.cpp 获取 fixedPC 信息（同时匹配 core id + core type）
     pc_match = _parse_fixed_pc_from_plog(plog_dir, core_id, core_type)
 
-    if core_type is None and pc_match is None:
+    if core_type is None and bundled_kernel_path is None and pc_match is None:
         return
 
-    # 4. 追加 coreType 到 section 1
+    # 5. 追加 coreType 和 bundled kernel 路径到 section 1
+    extra_lines: List[str] = []
     if core_type is not None:
-        sections[sec1_key] = (
-            sec1_content.rstrip()
-            + f"\ncore type          : {core_type}"
+        extra_lines.append(f"core type          : {core_type}")
+    if bundled_kernel_path is not None:
+        extra_lines.append(f"bundled kernel     : {bundled_kernel_path}")
+    if bundled_kernel_path_undef is not None:
+        extra_lines.append(f"bundled kernel undef: {bundled_kernel_path_undef}")
+    if extra_lines:
+        sections[sec1_key] = sec1_content.rstrip() + "\n" + "\n".join(extra_lines)
+
+    # 6. 追加 fixed PC 信息到 section 3，并用 llvm-symbolizer 解析符号
+    if pc_match is not None:
+        sec3_key = _find_section_key(sections, "3. Operator Error Line Number")
+        if sec3_key is None:
+            _print_log("WARNING", "section 3 (Operator Error Line Number) not found")
+        else:
+            sec3_content = sections[sec3_key]
+            kernel_file = _extract_kernel_file(sec1_content, msaicerr_out)
+            extra = (
+                f"\nfixedStartPC       : {pc_match['fixedStartPC']}"
+                f"\nfixedCurrentPC     : {pc_match['fixedCurrentPC']}"
+                f"\nfixedPCOffset      : {pc_match['fixedPCOffset']}"
+            )
+            symbol_info = _run_llvm_symbolizer(kernel_file, pc_match['fixedPCOffset'])
+            if symbol_info:
+                extra += f"\n{symbol_info}"
+            sections[sec3_key] = sec3_content.rstrip() + extra
+
+
+def _find_bundled_kernel(report_dir: str) -> Optional[str]:
+    """从 -p 目录下 find -name 'PyPTO*0_mix_aic.pyptokb' 获取 .pyptokb 路径（排除 _nosubfunc 后缀）。"""
+    try:
+        result = subprocess.run(
+            ["find", report_dir, "-name", "PyPTO*0_mix_aic.pyptokb",
+             "!", "-name", "*_nosubfunc.pyptokb"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        _print_log("WARNING", "Phase C: find bundled kernel timed out (30s)")
+        return None
+    except Exception as e:
+        _print_log("WARNING", f"find bundled kernel failed: {e}")
+        return None
+
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    if not lines:
+        _print_log("WARNING", "PyPTO*0_mix_aic.pyptokb not found under -p directory")
+        return None
+    if len(lines) > 1:
+        raise RuntimeError(
+            f"Found {len(lines)} PyPTO*0_mix_aic.pyptokb files, "
+            "multiple AIC errors in one -p directory is not supported:\n"
+            + "\n".join(f"  {p}" for p in lines)
         )
 
-    # 5. 追加 fixed PC 信息到 section 3，并用 llvm-symbolizer 解析符号
-    if pc_match is not None:
-        for header in sections:
-            if "3. Operator Error Line Number" in header:
-                sec3_content = sections[header]
-                kernel_file = _extract_kernel_file(sec1_content, msaicerr_out)
-                extra = (
-                    f"\nfixedStartPC       : {pc_match['fixedStartPC']}"
-                    f"\nfixedCurrentPC     : {pc_match['fixedCurrentPC']}"
-                    f"\nfixedPCOffset      : {pc_match['fixedPCOffset']}"
-                )
-                symbol_info = _run_llvm_symbolizer(kernel_file, pc_match['fixedPCOffset'])
-                if symbol_info:
-                    extra += f"\n{symbol_info}"
-                sections[header] = sec3_content.rstrip() + extra
-                break
-        else:
-            _print_log("WARNING", "未找到 section 3 (Operator Error Line Number)")
+    path = lines[0]
+    _print_log("INFO", f"Found bundled kernel: {path}")
+    return path
+
+
+def _find_undef_bundled_kernel(report_dir: str) -> Optional[str]:
+    """从 -p 目录下 find -name 'PyPTO*0_mix_aic_nosubfunc.pyptokb' 获取 *_nosubfunc.pyptokb 路径。"""
+    try:
+        result = subprocess.run(
+            ["find", report_dir, "-name", "PyPTO*0_mix_aic_nosubfunc.pyptokb"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        _print_log("WARNING", "Phase C: find undef bundled kernel timed out (30s)")
+        return None
+    except Exception as e:
+        _print_log("WARNING", f"find undef bundled kernel failed: {e}")
+        return None
+
+    lines = [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
+    if not lines:
+        _print_log("WARNING", "PyPTO*0_mix_aic_nosubfunc.pyptokb not found under -p directory")
+        return None
+    if len(lines) > 1:
+        raise RuntimeError(
+            f"Found {len(lines)} PyPTO*0_mix_aic_nosubfunc.pyptokb files, "
+            "multiple AIC errors in one -p directory is not supported:\n"
+            + "\n".join(f"  {p}" for p in lines)
+        )
+
+    path = lines[0]
+    _print_log("INFO", f"Found undef bundled kernel: {path}")
+    return path
+
+
 def _parse_core_type_from_earliest_error_info(plog_dir: str) -> Optional[str]:
     """
     参考 msaicerr 逻辑：grep 'error info:' 取时间戳最早的那一条，
@@ -686,12 +795,15 @@ def _parse_core_type_from_earliest_error_info(plog_dir: str) -> Optional[str]:
             ["grep", "-rnE", "error info:", plog_dir],
             capture_output=True, text=True, timeout=30,
         )
+    except subprocess.TimeoutExpired:
+        _print_log("WARNING", "Phase C: grep 'error info:' timed out (30s)")
+        return None
     except Exception as e:
-        _print_log("WARNING", f"grep 'error info:' 失败: {e}")
+        _print_log("WARNING", f"grep 'error info:' failed: {e}")
         return None
 
     if result.returncode != 0 or not result.stdout.strip():
-        _print_log("WARNING", "plog 中未找到 'error info:'")
+        _print_log("WARNING", "'error info:' not found in plog")
         return None
 
     # 提取时间戳，参考 msaicerr 直接用字符串排序
@@ -704,22 +816,22 @@ def _parse_core_type_from_earliest_error_info(plog_dir: str) -> Optional[str]:
             ts_lines.append((m.group(1), line))
 
     if not ts_lines:
-        _print_log("WARNING", "'error info:' 行中未解析到有效时间戳")
+        _print_log("WARNING", "No valid timestamp found in 'error info:' lines")
         return None
 
     ts_lines.sort(key=lambda x: (x[0] is None, x[0]))
     earliest_line = ts_lines[0][1]
-    _print_log("INFO", f"最早的 error info: {earliest_line.strip()[:200]}...")
+    _print_log("INFO", f"Earliest error info: {earliest_line.strip()[:200]}...")
 
 
     if "exception of fftsplus aicore error" in earliest_line.lower():
-        _print_log("INFO", "coreType 判断为 0 (aicore error)")
+        _print_log("INFO", "coreType determined as 0 (aicore error)")
         return "0"
     elif "exception of fftsplus aivector error" in earliest_line.lower():
-        _print_log("INFO", "coreType 判断为 1 (aivector error)")
+        _print_log("INFO", "coreType determined as 1 (aivector error)")
         return "1"
     else:
-        _print_log("WARNING", "最早的 error info 中未识别到 fftsplus aicore/aivector error，coreType 未知")
+        _print_log("WARNING", "fftsplus aicore/aivector error not recognized in earliest error info, coreType unknown")
         return None
 
 
@@ -733,12 +845,15 @@ def _parse_fixed_pc_from_plog(plog_dir: str, core_id: str, core_type: Optional[s
             ["grep", "-rn", "kernel_symbol_locator.cpp", plog_dir],
             capture_output=True, text=True, timeout=30,
         )
+    except subprocess.TimeoutExpired:
+        _print_log("WARNING", "Phase C: grep kernel_symbol_locator.cpp timed out (30s)")
+        return None
     except Exception as e:
-        _print_log("WARNING", f"grep kernel_symbol_locator.cpp 失败: {e}")
+        _print_log("WARNING", f"grep kernel_symbol_locator.cpp failed: {e}")
         return None
 
     if result.returncode != 0 or not result.stdout.strip():
-        _print_log("WARNING", "plog 中未找到 kernel_symbol_locator.cpp")
+        _print_log("WARNING", "kernel_symbol_locator.cpp not found in plog")
         return None
 
     _pc_pattern = re.compile(
@@ -763,7 +878,7 @@ def _parse_fixed_pc_from_plog(plog_dir: str, core_id: str, core_type: Optional[s
         })
 
     if not parsed:
-        _print_log("WARNING", "plog 中未找到 'Error PC information' 的 kernel_symbol_locator 行")
+        _print_log("WARNING", "No kernel_symbol_locator line with 'Error PC information' found in plog")
         return None
 
     # 优先匹配 coreId + coreType，其次仅 coreId
@@ -780,12 +895,12 @@ def _parse_fixed_pc_from_plog(plog_dir: str, core_id: str, core_type: Optional[s
                 break
     if match is None:
         match = parsed[0]
-        _print_log("WARNING", f"未找到 coreId={core_id}, coreType={core_type} 的匹配项"
-                   f"（共 {len(parsed)} 条），使用 coreId={match['coreId']},"
+        _print_log("WARNING", f"No match found for coreId={core_id}, coreType={core_type}"
+                   f" ({len(parsed)} total), using coreId={match['coreId']},"
                    f" coreType={match['coreType']}")
 
 
-    _print_log("INFO", f"从 plog 提取 fixed PC: "
+    _print_log("INFO", f"Extracted fixed PC from plog: "
               f"fixedStartPC={match['fixedStartPC']}, "
               f"fixedCurrentPC={match['fixedCurrentPC']}, "
               f"fixedPCOffset={match['fixedPCOffset']}")
@@ -800,7 +915,7 @@ def _extract_kernel_file(sec1_content: str, msaicerr_out: str) -> Optional[str]:
     """从 section 1 中提取 kernel file 路径（`.o` 文件）。"""
     m = re.search(r'kernel\s+file\s*:\s*(\S+)', sec1_content, re.IGNORECASE)
     if not m:
-        _print_log("WARNING", "section 1 中未找到 kernel file 路径")
+        _print_log("WARNING", "kernel file path not found in section 1")
         return None
     kernel_file = m.group(1)
     # 如果路径不包含 collection/compile，尝试拼接
@@ -814,7 +929,7 @@ def _extract_kernel_file(sec1_content: str, msaicerr_out: str) -> Optional[str]:
         if candidates:
             kernel_file = candidates[0]
     if not os.path.isfile(kernel_file):
-        _print_log("WARNING", f"kernel file 不存在: {kernel_file}")
+        _print_log("WARNING", f"kernel file does not exist: {kernel_file}")
         return None
     return kernel_file
 
@@ -828,12 +943,15 @@ def _run_llvm_symbolizer(kernel_file: Optional[str], pc_offset: str) -> Optional
             ["llvm-symbolizer", f"--obj={kernel_file}", pc_offset],
             capture_output=True, text=True, timeout=10,
         )
+    except subprocess.TimeoutExpired:
+        _print_log("WARNING", "Phase C: llvm-symbolizer symbol resolution timed out (10s)")
+        return None
     except Exception as e:
-        _print_log("WARNING", f"llvm-symbolizer 执行失败: {e}")
+        _print_log("WARNING", f"llvm-symbolizer execution failed: {e}")
         return None
 
     if result.returncode != 0 or not result.stdout.strip():
-        _print_log("WARNING", f"llvm-symbolizer 无输出 (rc={result.returncode})")
+        _print_log("WARNING", f"llvm-symbolizer no output (rc={result.returncode})")
         return None
 
     # 直接追加：指令 + 原始输出
@@ -841,269 +959,129 @@ def _run_llvm_symbolizer(kernel_file: Optional[str], pc_offset: str) -> Optional
     # 去掉末尾多余空行，保留原始内容中的换行
     output = result.stdout.rstrip('\n')
     symbol_str = cmd_str + "\n" + output
-    _print_log("INFO", f"llvm-symbolizer 结果:\n{output}")
+    _print_log("INFO", f"llvm-symbolizer result:\n{output}")
     return symbol_str
 
 
-def run_test_script_and_update_info(script_path: str, info_txt_path: str,
-                                    device_id: int, msaicerr_out: str) -> bool:
-    """
-    执行 test_pypto_single_op.py，将执行结果覆盖写入 info.txt 的第 6 段
-    (Execution Result of the Single-Operator Test Case)。
-    同时从 plog 补充 coreType / fixedPC 信息到 section 1 和 3。
-    返回 True 表示单算子测试通过（returncode == 0），False 表示失败。
-    """
-    _print_log("INFO", f"执行 test_pypto_single_op.py (device={device_id})...")
-    _print_log("INFO", f"脚本: {script_path}")
+def _detect_python() -> str:
+    """检测可用的 Python 解释器，确保能 import pypto 和 import torch_npu。"""
+    candidates = [sys.executable]
+    if os.path.basename(sys.executable) != "python3":
+        candidates.append("python3")
+    candidates.append("python")
+    # 去重，避免同一解释器重复探测
+    candidates = list(dict.fromkeys([c for c in candidates if c]))
 
-    test_passed = False
+    for exe in candidates:
+        if not exe:
+            continue
+        try:
+            result = subprocess.run(
+                [exe, "-c", "import pypto; import torch_npu"],
+                capture_output=True, text=True, timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            _print_log("WARNING", f"Phase A: {exe} import check timed out (30s), trying next interpreter")
+            continue
+        except Exception:
+            continue
+        if result.returncode == 0:
+            _print_log("INFO", f"Using Python: {exe}")
+            return exe
 
-    # 1. 执行测试脚本
+    raise RuntimeError("No usable Python interpreter found (must be able to import pypto and torch_npu), "
+                       "check the runtime environment")
+
+
+def _execute_test_script(
+    script_path: str,
+    python_exe: str,
+    timeout: int = 600,
+    bundle_path: str = "",
+) -> Tuple[bool, str]:
+    """
+    统一执行测试脚本，返回 (passed: bool, output: str)。
+    - python_exe: Python 解释器路径
+    - bundle_path: 可选，设置 PYPTO_BUNDLE_PATH 环境变量，让脚本用指定 bundle 执行
+    """
+    env = os.environ.copy()
+
+    if bundle_path:
+        env["PYPTO_BUNDLE_PATH"] = bundle_path
+
+    # Ensure pypto/lib is on LD_LIBRARY_PATH so libtile_fwk_runtime.so can be found
+    if _PYTO_ROOT:
+        pypto_lib = os.path.join(_PYTO_ROOT, "lib")
+        if os.path.isdir(pypto_lib):
+            ld_existing = env.get("LD_LIBRARY_PATH", "")
+            env["LD_LIBRARY_PATH"] = os.pathsep.join([pypto_lib, ld_existing]) if ld_existing else pypto_lib
+
+    cmd = [python_exe, script_path]
+    _print_log("INFO", f"Executing command: {' '.join(cmd)}")
     try:
         result = subprocess.run(
-            [sys.executable, script_path],
-            capture_output=True, text=True,
-            timeout=300,
+            cmd,
+            capture_output=True, text=True, timeout=timeout,
+            env=env,
         )
-        output = ""
-        if result.stdout:
-            output += result.stdout
-        if result.stderr:
-            output += "\n[stderr]\n" + result.stderr
-        test_passed = (result.returncode == 0)
     except subprocess.TimeoutExpired:
-        output = "[ERROR] 脚本执行超时（300s）"
+        return False, f"[ERROR] {os.path.basename(script_path)} execution timed out ({timeout}s)"
     except Exception as e:
-        output = f"[ERROR] 脚本执行异常: {e}"
+        return False, f"[ERROR] Script execution exception: {e}"
 
-    # 2. 解析 info.txt 为结构化 dict
-    preamble, sections, header_order = _parse_info_txt_to_sections(info_txt_path)
+    output = ""
+    if result.stdout:
+        output += result.stdout
+    if result.stderr:
+        output += "\n[stderr]\n" + result.stderr
+    return (result.returncode == 0), output
 
-    # 2.5 从 plog 补充 coreType (→section 1) 和 fixedPC (→section 3)
-    _enrich_from_plog(msaicerr_out, sections)
 
-    # 3. 覆盖更新第 6 段
+def run_test_script_and_update_info(script_path: str, device_id: int,
+                                    python_exe: str,
+                                    sections: Dict[str, str],
+                                    timeout: int = 600,
+                                    bundle_path: str = "") -> bool:
+    """执行测试脚本，将结果覆盖 sections dict 中的 section 6。返回 True 表示通过。"""
+    test_passed, output = _execute_test_script(script_path, python_exe, timeout, bundle_path)
+
+    # Update section 6 in sections dict
     sec6_key = _find_section6_key(sections)
     if sec6_key:
         sections[sec6_key] = output
     else:
-        # info.txt 中没有第 6 段（不应出现），退化为追加
-        _print_log("WARNING", "info.txt 中未找到 section 6，退化为追加模式")
-        append_to_file(info_txt_path, "test_pypto_single_op.py Execution Result", output)
-        return False
-
-    # 4. 重写 info.txt
-    _rewrite_info_txt(info_txt_path, preamble, sections, header_order)
+        _print_log("WARNING", "section 6 not found in info.txt, skipping")
 
     return test_passed
 
 
 # -------------------------------------------------------------------
-# 7. 排查框架 vs 算子 CCE 问题
+# Section 7: 排除核内同步问题
 # -------------------------------------------------------------------
 
-_SECTION7_TITLE = "7. Framework vs Operator (CCE) Root Cause Analysis"
-
-_AICORE_ENTRY_SEARCH_DIR = "/opt/conda/envs/py310/lib/python3.10/site-packages"
+_SECTION7_TITLE = "7. Inter-Core Synchronization Diagnosis"
 
 
-def _find_aicore_entry_h(search_dir: str) -> Optional[str]:
-    """find search_dir -name aicore_entry.h，返回第一个匹配路径。"""
-    try:
-        result = subprocess.run(
-            ["find", search_dir, "-name", "aicore_entry.h"],
-            capture_output=True, text=True, timeout=30,
-        )
-    except Exception as e:
-        _print_log("WARNING", f"find aicore_entry.h 失败: {e}")
-        return None
+def _find_msnpureport() -> str:
+    """定位 msnpureport 工具。
 
-    paths = [p.strip() for p in result.stdout.strip().split("\n") if p.strip()]
-    if not paths:
-        return None
-    for p in paths:
-        if "pypto" in p:
-            return p
-    return paths[0]
-
-
-def _comment_exec_core_function(header_path: str) -> Optional[str]:
-    """在 aicore_entry.h 中注释 ExecCoreFunctionKernel 调用，返回备份路径。"""
-    try:
-        with open(header_path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
-    except Exception as e:
-        _print_log("WARNING", f"读取 {header_path} 失败: {e}")
-        return None
-
-    backup_path = header_path + ".bak"
-    try:
-        with open(backup_path, "w", encoding="utf-8") as f:
-            f.write(content)
-    except Exception as e:
-        _print_log("WARNING", f"备份 {header_path} 失败: {e}")
-        return None
-
-    # 注释 ExecCoreFunctionKernel(&ctx, curTaskIdx, lastMixResourceType);
-    pattern = re.compile(r'(ExecCoreFunctionKernel\s*\([^)]+\)\s*;)')
-    if not pattern.search(content):
-        _print_log("WARNING", f"在 {header_path} 中未找到 ExecCoreFunctionKernel 调用")
-        # 即使没找到也返回备份路径，后续恢复用
-        return backup_path
-
-    new_content = pattern.sub(
-        r'// \1  // [COMMENTED BY pypto_aicerr_repro section 7]',
-        content,
-    )
-    try:
-        with open(header_path, "w", encoding="utf-8") as f:
-            f.write(new_content)
-    except Exception as e:
-        _print_log("WARNING", f"写入 {header_path} 失败: {e}")
-        return None
-
-    _print_log("INFO", f"已注释 ExecCoreFunctionKernel → {header_path}")
-    return backup_path
-
-
-def _restore_header(header_path: str, backup_path: str):
-    """从备份恢复 aicore_entry.h。"""
-    if not backup_path or not os.path.isfile(backup_path):
-        return
-    try:
-        with open(backup_path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
-        with open(header_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        os.remove(backup_path)
-        _print_log("INFO", f"已恢复 {header_path}（删除备份 {backup_path}）")
-    except Exception as e:
-        _print_log("WARNING", f"恢复 {header_path} 失败: {e}")
-
-
-def run_section7_framework_vs_cce(info_txt_path: str, script_path: str, device_id: int):
+    优先级:
+    1. 环境变量 MSNPUREPORT_PATH（显式指定）
+    2. ASCEND_HOME_PATH 父目录下 driver/tools/msnpureport（标准昇腾安装布局）
+    3. 默认 /usr/local/Ascend/driver/tools/msnpureport（兜底）
     """
-    Section 7: 排查框架 vs 算子 CCE 问题。
-    注释 aicore_entry.h 中的 ExecCoreFunctionKernel 调用后重新执行单算子脚本，
-    根据结果判断根因归属。
-    """
-    _print_log("INFO", "========== Section 7: 排查框架 vs 算子 CCE 问题 ==========")
+    env_path = os.environ.get("MSNPUREPORT_PATH", "")
+    if env_path and os.path.isfile(env_path):
+        return env_path
 
-    output_lines: List[str] = []
+    ascend_home = os.environ.get("ASCEND_HOME_PATH", "")
+    if ascend_home:
+        ascend_root = os.path.dirname(os.path.abspath(ascend_home))
+        cand = os.path.join(ascend_root, "driver", "tools", "msnpureport")
+        if os.path.isfile(cand):
+            return cand
 
-    # 1. pip3 show pypto
-    _print_log("INFO", "执行: pip3 show pypto")
-    try:
-        result = subprocess.run(
-            ["pip3", "show", "pypto"],
-            capture_output=True, text=True, timeout=30,
-        )
-        pypto_info = result.stdout.strip() if result.returncode == 0 else f"[pip3 show 失败] {result.stderr}"
-    except Exception as e:
-        pypto_info = f"[pip3 show 异常] {e}"
-    output_lines.append("--- pip3 show pypto ---")
-    output_lines.append(pypto_info)
-    output_lines.append("")
-
-    # 2. find aicore_entry.h
-    search_dir = _AICORE_ENTRY_SEARCH_DIR
-    cmd_str = f"find {search_dir} -name aicore_entry.h"
-    _print_log("INFO", cmd_str)
-    header_path = _find_aicore_entry_h(search_dir)
-    output_lines.append("--- find aicore_entry.h ---")
-    output_lines.append(cmd_str)
-    if header_path:
-        output_lines.append(header_path)
-    else:
-        output_lines.append("[ERROR] 未找到 aicore_entry.h")
-    output_lines.append("")
-
-    if not header_path:
-        _write_section7(info_txt_path, "\n".join(output_lines))
-        return
-
-    # 3. 注释 ExecCoreFunctionKernel
-    _print_log("INFO", f"注释 {header_path} 中的 ExecCoreFunctionKernel")
-    backup_path = _comment_exec_core_function(header_path)
-
-    output_lines.append("--- 注释 ExecCoreFunctionKernel ---")
-    if backup_path:
-        output_lines.append(f"备份: {backup_path}")
-        output_lines.append("已注释: ExecCoreFunctionKernel(&ctx, curTaskIdx, lastMixResourceType);")
-    else:
-        output_lines.append("[ERROR] 无法注释 ExecCoreFunctionKernel")
-    output_lines.append("")
-
-    # 4. 再次执行 test_pypto_single_op.py
-    _print_log("INFO", "再次执行 test_pypto_single_op.py（已注释 ExecCoreFunctionKernel）...")
-    try:
-        result = subprocess.run(
-            [sys.executable, script_path],
-            capture_output=True, text=True, timeout=300,
-        )
-        test_output = ""
-        if result.stdout:
-            test_output += result.stdout
-        if result.stderr:
-            test_output += "\n[stderr]\n" + result.stderr
-        test_output += f"\nreturncode = {result.returncode}"
-        test_passed = (result.returncode == 0)
-    except subprocess.TimeoutExpired:
-        test_output = "[ERROR] 脚本执行超时（300s）"
-        test_passed = False
-    except Exception as e:
-        test_output = f"[ERROR] 脚本执行异常: {e}"
-        test_passed = False
-
-    output_lines.append("--- 再次执行 test_pypto_single_op.py（ExecCoreFunctionKernel 已注释）---")
-    output_lines.append(test_output)
-    output_lines.append("")
-
-    # 5. 恢复 aicore_entry.h
-    _print_log("INFO", f"恢复 {header_path}")
-    _restore_header(header_path, backup_path if backup_path else "")
-    output_lines.append(f"--- 已恢复 {header_path} ---")
-    output_lines.append("")
-
-    # 6. 结论
-    if test_passed:
-        conclusion = "结论: 注释 ExecCoreFunctionKernel 后执行通过 → 算子 CCE 问题"
-    else:
-        conclusion = "结论: 注释 ExecCoreFunctionKernel 后仍然失败 → 框架问题"
-    output_lines.append(conclusion)
-    _print_log("INFO", conclusion)
-
-    _write_section7(info_txt_path, "\n".join(output_lines))
-
-
-def _write_section7(info_txt_path: str, content: str):
-    """将内容写入 info.txt 的 section 7。"""
-    preamble, sections, header_order = _parse_info_txt_to_sections(info_txt_path)
-
-    sec7_key = None
-    for header in sections:
-        if _SECTION7_TITLE in header:
-            sec7_key = header
-            break
-
-    if sec7_key:
-        sections[sec7_key] = content
-    else:
-        sec7_header = f"********************{_SECTION7_TITLE}***********************"
-        sec7_key = sec7_header.strip()
-        header_order.append(sec7_key)
-        sections[sec7_key] = content
-
-    _rewrite_info_txt(info_txt_path, preamble, sections, header_order)
-
-
-# -------------------------------------------------------------------
-# 8. 排除核间同步问题
-# -------------------------------------------------------------------
-
-_SECTION8_TITLE = "8. Inter-Core Synchronization Diagnosis"
-
-_MSNPUREPORT = "/usr/local/Ascend/driver/tools/msnpureport"
+    return "/usr/local/Ascend/driver/tools/msnpureport"
 
 
 def _is_docker_env():
@@ -1121,13 +1099,13 @@ def _is_docker_env():
 
 
 def _msnpureport_set_singlecommit(enable: bool, device_id: int, is_docker: bool = False):
-    """开启/关闭 singlecommit 模式。返回 (success, cmd_str, output)。"""
+    """Enable/disable singlecommit mode. Returns (success, cmd_str, output)."""
     val = "1" if enable else "0"
-    cmd = [_MSNPUREPORT, "config", "--set", "--singlecommit", val, "-d", str(device_id)]
+    cmd = [_find_msnpureport(), "config", "--set", "--singlecommit", val, "-d", str(device_id)]
     if is_docker:
         cmd.append("--docker")
     cmd_str = " ".join(cmd)
-    action = "开启" if enable else "恢复"
+    action = "enable" if enable else "restore"
     _print_log("INFO", f"{action} singlecommit: {cmd_str}")
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -1135,120 +1113,154 @@ def _msnpureport_set_singlecommit(enable: bool, device_id: int, is_docker: bool 
         if result.stderr:
             output += "\n" + result.stderr.strip()
         success = (result.returncode == 0)
+    except subprocess.TimeoutExpired:
+        output = f"[ERROR] msnpureport singlecommit config timed out (30s): {cmd_str}"
+        success = False
     except Exception as e:
         output = f"[ERROR] {e}"
         success = False
     return success, cmd_str, output
 
 
-def run_section8_intercore_sync(info_txt_path: str, script_path: str, device_id: int):
+def run_section7_intercore_sync(script_path: str, device_id: int,
+                                 sections: Dict[str, str], header_order: List[str],
+                                 python_exe: str,
+                                 timeout: int = 600,
+                                 bundle_path: str = ""):
     """
-    Section 8: 通过 msnpureport 关闭核间同步（singlecommit=1）排除核间同步问题。
+    Phase E: msnpureport singlecommit=1 排除核内同步问题。
     """
-    _print_log("INFO", "========== Section 8: 排除核间同步问题 ==========")
+    _print_log("INFO", "========== Section 7: Inter-Core Sync Diagnosis ==========")
 
     output_lines: List[str] = []
 
-    # 0. 判断是否为 docker 环境
     is_docker = _is_docker_env()
-    _print_log("INFO", f"Docker 环境: {is_docker}")
+    _print_log("INFO", f"Docker environment: {is_docker}")
 
-    # 1. 开启 singlecommit=1
     success, cmd_str, msn_output = _msnpureport_set_singlecommit(True, device_id, is_docker)
-    output_lines.append("--- msnpureport 开启单步执行模式 ---")
-    output_lines.append(cmd_str)
-    output_lines.append(msn_output)
+    output_lines.append(f"msnpureport enable single-step: {cmd_str}\n{msn_output}")
     output_lines.append("")
     if not success:
-        _print_log("WARNING", f"msnpureport 开启 singlecommit 失败: {msn_output}")
+        _print_log("WARNING", f"msnpureport enable singlecommit failed: {msn_output}")
 
-    # 2. 再次执行 test_pypto_single_op.py
-    _print_log("INFO", "再次执行 test_pypto_single_op.py（单步执行模式）...")
-    try:
-        result = subprocess.run(
-            [sys.executable, script_path],
-            capture_output=True, text=True, timeout=300,
-        )
-        test_output = ""
-        if result.stdout:
-            test_output += result.stdout
-        if result.stderr:
-            test_output += "\n[stderr]\n" + result.stderr
-        test_passed = (result.returncode == 0)
-    except subprocess.TimeoutExpired:
-        test_output = "[ERROR] 脚本执行超时（300s）"
-        test_passed = False
-    except Exception as e:
-        test_output = f"[ERROR] 脚本执行异常: {e}"
-        test_passed = False
+    test_passed, test_output = _execute_test_script(script_path, python_exe, timeout, bundle_path)
 
-    output_lines.append("--- 再次执行 test_pypto_single_op.py（singlecommit=1）---")
-    output_lines.append(test_output)
+    output_lines.append(f"Re-execute (singlecommit=1):\n{test_output}")
     output_lines.append("")
 
-    # 3. 恢复 singlecommit=0
     success2, cmd_str2, msn_output2 = _msnpureport_set_singlecommit(False, device_id, is_docker)
-    output_lines.append("--- msnpureport 恢复 ---")
-    output_lines.append(cmd_str2)
-    output_lines.append(msn_output2)
+    output_lines.append(f"msnpureport restore: {cmd_str2}\n{msn_output2}")
     output_lines.append("")
 
-    # 4. 结论
     if test_passed:
-        conclusion = "结论: 单步执行模式下执行通过 → 核间同步问题"
+        conclusion = "Conclusion: PASS in single-step mode → Inter-core sync issue"
     else:
-        conclusion = "结论: 单步执行模式下仍然失败 → 与核间同步无关"
+        conclusion = "Conclusion: Still FAIL in single-step mode → Not an inter-core sync issue"
     output_lines.append(conclusion)
     _print_log("INFO", conclusion)
 
-    _write_section8(info_txt_path, "\n".join(output_lines))
+    _upsert_section7(sections, header_order, "\n".join(output_lines))
+    return test_passed
 
 
-def _write_section8(info_txt_path: str, content: str):
-    """将内容写入 info.txt 的 section 8。"""
-    preamble, sections, header_order = _parse_info_txt_to_sections(info_txt_path)
+def _upsert_section_into_dict(sections: Dict[str, str], header_order: List[str],
+                              section_title: str, content: str):
+    """将 content 写入 sections dict 中匹配 section_title 的段；不存在则追加。"""
+    for header in list(sections.keys()):
+        if section_title in header:
+            sections[header] = content
+            return
+    # 不存在则新建
+    new_header = f"********************{section_title}***********************"
+    new_key = new_header.strip()
+    header_order.append(new_key)
+    sections[new_key] = content
 
-    sec8_key = None
-    for header in sections:
-        if _SECTION8_TITLE in header:
-            sec8_key = header
-            break
 
-    if sec8_key:
-        sections[sec8_key] = content
-    else:
-        sec8_header = f"********************{_SECTION8_TITLE}***********************"
-        sec8_key = sec8_header.strip()
-        header_order.append(sec8_key)
-        sections[sec8_key] = content
-
-    _rewrite_info_txt(info_txt_path, preamble, sections, header_order)
+def _upsert_section7(sections: Dict[str, str], header_order: List[str], content: str):
+    """将内容写入 sections dict 的 section 7 段。"""
+    _upsert_section_into_dict(sections, header_order, _SECTION7_TITLE, content)
 
 
 # -------------------------------------------------------------------
-# 9. CLI
+# Section 8: 排查框架 vs 算子 CCE 问题
+# -------------------------------------------------------------------
+
+_SECTION8_TITLE = "8. Framework vs Operator (CCE) Root Cause Analysis"
+
+
+def run_section8_framework_vs_cce(script_path: str, device_id: int,
+                                   sections: Dict[str, str], header_order: List[str],
+                                   python_exe: str,
+                                   timeout: int = 600,
+                                   bundle_path_undef: str = ""):
+    """
+    Phase F: 用 *_nosubfunc.pyptokb 重新执行，判断 sub-func 是否为根因。
+    """
+    _print_log("INFO", "========== Section 8: Framework vs Operator CCE Diagnosis ==========")
+
+    output_lines: List[str] = []
+
+    if not bundle_path_undef or not os.path.isfile(bundle_path_undef):
+        _print_log("WARNING", "_nosubfunc.pyptokb not found, skipping Section 8")
+        output_lines.append("[ERROR] *_nosubfunc.pyptokb not found")
+        _upsert_section8(sections, header_order, "\n".join(output_lines))
+        return
+
+    output_lines.append(f"Nosubfunc bundled kernel: {bundle_path_undef}")
+    output_lines.append("")
+    _print_log("INFO", f"Nosubfunc bundled kernel: {bundle_path_undef}")
+
+    test_passed, test_output = _execute_test_script(script_path, python_exe, timeout, bundle_path_undef)
+
+    output_lines.append(f"Re-execute (nosubfunc):\n{test_output}")
+    output_lines.append("")
+
+    if test_passed:
+        conclusion = "Conclusion: PASS with nosubfunc bundled kernel → Sub-func (CCE) issue"
+    else:
+        conclusion = "Conclusion: Still FAIL with nosubfunc bundled kernel → Framework issue (not sub-func)"
+    output_lines.append(conclusion)
+    _print_log("INFO", conclusion)
+
+    _upsert_section8(sections, header_order, "\n".join(output_lines))
+
+
+def _upsert_section8(sections: Dict[str, str], header_order: List[str], content: str):
+    """将内容写入 sections dict 的 section 8 段。"""
+    _upsert_section_into_dict(sections, header_order, _SECTION8_TITLE, content)
+
+
+# -------------------------------------------------------------------
+# CLI
 # -------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="自动串联 msaicerr 解析 → 生成 pypto 单算子复现脚本",
+        description="Debug AICore Error",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python debug_aicore_error.py -p /path/to/report -out /tmp/out\n"
+            "  python debug_aicore_error.py -p /path/to/report -out /tmp/out -d 0\n"
+            "  python debug_aicore_error.py -p /path/to/report -out /tmp/out -t 1200\n"
+        ),
     )
     parser.add_argument(
         "-p", type=str, required=True,
-        help="AIC Error 报告路径（传给 msaicerr.py -p）",
+        help="Path to AIC error debug info",
+    )
+    parser.add_argument(
+        "-d", type=str, default=None,
+        help="Device ID (optional, defaults to TILE_FWK_DEVICE_ID env variable)",
     )
     parser.add_argument(
         "-out", type=str, required=True,
-        help="msaicerr 输出目录（传给 msaicerr.py -out）",
+        help="Output directory for the debug report",
     )
     parser.add_argument(
-        "-d", type=int, required=True,
-        help="device id（传给 msaicerr.py -dev，同时设置 torch.npu.set_device）",
-    )
-    parser.add_argument(
-        "-kernel_src", type=str, default=None,
-        help="kernel 源码路径：可以是目录或 .py 文件（kernel 不在 python lib 时需要）",
+        "-t", type=int, default=600,
+        help="Timeout threshold (seconds) for single-operator reproduction test script execution, default 600",
     )
     return parser.parse_args()
 
@@ -1256,56 +1268,124 @@ def parse_args() -> argparse.Namespace:
 def main():
     args = parse_args()
 
-    # 1. 获取 CANN 目录
+    # ============================================================
+    # Phase A: 预处理
+    # ============================================================
+
+    # 获取 device id（-d 参数 > TILE_FWK_DEVICE_ID 环境变量）
+    device_id = _get_device_id(args.d)
+    _print_log("INFO", f"device_id = {device_id}")
+
+    # 检查 -p 目录结构
+    _validate_work_dir(args.p)
+
+    # 获取 ASCEND_HOME_PATH
     ascend_home = get_ascend_home()
     _print_log("INFO", f"ASCEND_HOME_PATH = {ascend_home}")
 
+    # 检查日志级别
+    _check_log_level()
 
-    # 2. 调用 msaicerr.py 解析
-    msaicerr_out = run_msaicerr(args.p, args.out, args.d, ascend_home)
+    # 检测 Python 解释器
+    python_exe = _detect_python()
 
-    # 定位 info.txt
-    info_txt = find_info_txt(msaicerr_out)
-    _print_log("INFO", f"info.txt: {info_txt}")
+    # 获取 pypto 安装路径
+    global _PYTO_ROOT
+    try:
+        import pypto
+        _PYTO_ROOT = os.path.dirname(os.path.abspath(pypto.__file__))
+        _print_log("INFO", f"pypto root = {_PYTO_ROOT}")
+    except ImportError:
+        raise RuntimeError("cannot import pypto, please ensure pypto is installed")
 
-
-    # 3. 解析 info.txt + 收集 debug 信息
-    debug_msgs: List[str] = []
-    kernel_func_name, tensors = parse_info_txt(info_txt, debug_msgs=debug_msgs)
-
-    if not tensors:
-        _print_log("ERROR", "未解析到任何 dump tensor，无法生成复现脚本")
-        _flush_debug_log(msaicerr_out)
+    # 校验 libtile_fwk_bundle.so
+    bundle_so = find_bundle_so()
+    if not bundle_so:
+        _print_log("ERROR", "libtile_fwk_bundle.so not found, please specify via PYPTO_BUNDLE_SO env variable")
         sys.exit(1)
 
-    # 4. codegen test_pypto_single_op.py
-    output_script = os.path.join(msaicerr_out, "test_pypto_single_op.py")
-    codegen_test_script(
-        kernel_func_name=kernel_func_name,
-        tensors=tensors,
-        kernel_src=args.kernel_src,
-        device_id=args.d,
-        output_path=output_script,
-        debug_msgs=debug_msgs,
+    # ============================================================
+    # Phase B: 调用 msaicerr.py 解析 (→ info.txt section 1~5)
+    # ============================================================
+
+    msaicerr_out = run_msaicerr(args.p, args.out, device_id, ascend_home)
+    _init_debug_log(msaicerr_out)
+
+    # ============================================================
+    # Phase C: 信息补全 (→ info.txt section 1, 3)
+    # ============================================================
+
+    info_txt = find_info_txt(msaicerr_out)
+    _print_log("INFO", f"info.txt: {info_txt}")
+    debug_info_txt = find_debug_info_txt_path(msaicerr_out)
+
+    preamble, sections, header_order = _parse_info_txt_to_sections(info_txt)
+
+    kernel_func_name, tensors = _extract_from_sections(sections)
+
+    if not tensors:
+        _print_log("ERROR", "No dump tensors parsed, cannot generate reproduction script")
+        sys.exit(1)
+
+    _enrich_from_plog(msaicerr_out, sections, args.p)
+
+    bundle_path = _BUNDLED_KERNEL_PATH
+    if not bundle_path:
+        _print_log("ERROR", ".pyptokb file not found")
+        sys.exit(1)
+
+    # ============================================================
+    # Phase D: Single-operator Test (→ info.txt section 6)
+    # ============================================================
+
+    _print_log("INFO", "========== Section 6: Single-Operator Test ==========")
+
+    output_script = os.path.join(msaicerr_out, "test_single_op.py")
+    codegen_bundle_script(
+        bundle_path, kernel_func_name, tensors, device_id,
+        output_script, bundle_so,
     )
 
-    # 5. 合并 CWD debug_info.txt → msaicerr_out/debug_info.txt
-    _flush_debug_log(msaicerr_out)
+    section6_passed = run_test_script_and_update_info(
+        output_script, device_id, python_exe, sections,
+        timeout=args.t, bundle_path=bundle_path,
+    )
 
-    # 6. 执行 test_pypto_single_op.py，结果追加到 info.txt
-    section6_passed = run_test_script_and_update_info(output_script, info_txt, args.d, msaicerr_out)
+    # ============================================================
+    # Phase E: Inter-core sync diagnosis (→ info.txt section 7, only if Phase D fails)
+    # ============================================================
 
     if section6_passed:
-        _print_log("INFO", "Section 6 单算子测试通过，跳过 Section 7（框架 vs 算子 CCE）和 Section 8（核间同步诊断）")
+        _print_log("INFO", "Section 6 passed, skipping Section 7 and Section 8")
     else:
-        # 7. 排查框架 vs 算子 CCE 问题
-        run_section7_framework_vs_cce(info_txt, output_script, args.d)
+        is_sync_issue = run_section7_intercore_sync(
+            output_script, device_id,
+            sections, header_order,
+            python_exe, timeout=args.t,
+            bundle_path=bundle_path,
+        )
 
-        # 8. 排除核间同步问题
-        run_section8_intercore_sync(info_txt, output_script, args.d)
+        # ============================================================
+        # Phase F: Framework vs CCE root cause analysis (→ info.txt section 8, only if Phase E rules out sync)
+        # ============================================================
 
-    # 9. 再次合并（step 6/7/8 产生的日志）
-    _flush_debug_log(msaicerr_out)
+        if not is_sync_issue:
+            run_section8_framework_vs_cce(
+                output_script, device_id,
+                sections, header_order,
+                python_exe, timeout=args.t,
+                bundle_path_undef=_BUNDLED_KERNEL_PATH_UNDEF,
+            )
+        else:
+            _print_log("INFO", "Inter-core sync issue identified, skipping Section 8")
+
+    # ============================================================
+    # Phase G: Finalize
+    # ============================================================
+
+    _rewrite_info_txt(info_txt, preamble, sections, header_order)
+    _print_log("INFO", f"debug_info.txt: {debug_info_txt}")
+    _print_log("INFO", "All phases completed, please check " + info_txt)
 
 
 if __name__ == "__main__":
