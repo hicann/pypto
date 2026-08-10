@@ -252,7 +252,7 @@ def mul(input_tensor: Tensor, other: Union[Tensor, float, int]) -> Tensor:
 
 @op_wrapper
 def div(
-    input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = PrecisionType.HIGH_PRECISION
+    input: Tensor, other: Union[Tensor, float, int], precision_type: PrecisionType = PrecisionType.HIGH_PRECISION
 ) -> Tensor:
     """Computes the element-wise division of `input` and `other`.
 
@@ -304,6 +304,7 @@ def div(
         return pypto_impl.Div(input, other, precision_type)
     else:
         _check_scalar_type("div", input.dtype, other)
+        other = _clip_scalar_to_dtype(input.dtype, other)
         return pypto_impl.Div(input, pypto_impl.Element(input.dtype, other), precision_type)
 
 
@@ -403,6 +404,8 @@ def fmod(
             raise PyptoError(0xF00002, ValueError("fmod(): other must not be NaN."))
         if np.isinf(other):
             raise PyptoError(0xF00002, ValueError("fmod(): other must not be inf."))
+    _check_scalar_type("fmod", input.dtype, other)
+    other = _clip_scalar_to_dtype(input.dtype, other)
     return pypto_impl.Fmod(input, pypto_impl.Element(input.dtype, other), precision_type)
 
 
@@ -538,9 +541,13 @@ def remainder(
         if isinstance(other, pypto_impl.Tensor):
             return pypto_impl.Remainder(input, other, precision_type)
         if isinstance(other, float) or isinstance(other, int):
+            _check_scalar_type("remainder", input.dtype, other)
+            other = _clip_scalar_to_dtype(input.dtype, other)
             return pypto_impl.Remainder(input, pypto_impl.Element(input.dtype, other), precision_type)
     if isinstance(other, pypto_impl.Tensor):
         if isinstance(input, float) or isinstance(input, int):
+            _check_scalar_type("remainder", other.dtype, input)
+            input = _clip_scalar_to_dtype(other.dtype, input)
             return pypto_impl.Remainder(pypto_impl.Element(other.dtype, input), other, precision_type)
     raise PyptoError(0xF00001, TypeError(f"Unsupported operand types for remainder: {type(input)} and {type(other)}"))
 
@@ -2485,6 +2492,8 @@ def ceil_div(
     if isinstance(other, pypto_impl.Tensor):
         return pypto_impl.CeilDiv(self, other)
     else:
+        _check_scalar_type("ceil_div", self.dtype, other)
+        other = _clip_scalar_to_dtype(self.dtype, other)
         return pypto_impl.CeilDiv(self, pypto_impl.Element(self.dtype, other))
 
 
