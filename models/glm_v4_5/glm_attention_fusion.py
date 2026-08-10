@@ -653,7 +653,7 @@ def get_qwen_common_config(device="cpu"):
     return atten_cfg, tile_cfg
 
 
-@pytest.mark.soc("910")
+@pytest.mark.soc("910", "950")
 def test_attention():
     # 使用 torch 生成数据
     torch_npu.npu.config.allow_internal_format = True
