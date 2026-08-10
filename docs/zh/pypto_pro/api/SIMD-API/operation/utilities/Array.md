@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-在tiling class中声明定长同构数组字段。元素类型限定为`int`、`float`或`bool`，分别映射为IR类型`INDEX`、`FP32`、`BOOL`。
+在TilingData类中声明定长同构数组字段。元素类型限定为`int`、`float`或`bool`，分别映射为IR类型`INDEX`、`FP32`、`BOOL`。
 
 数组字段在IR中表示为包含N个标量元素的嵌套Tuple。例如`offsets: int[4]`对应一个包含4个`INDEX`元素的Tuple字段。
 
@@ -31,14 +31,14 @@ bool[N]    # N 个 BOOL 元素
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | 元素类型 | 输入 | 仅限`int`、`float`、`bool` |
-| `N` | 输入 | 数组长度，正整数字面量 |
+| `N` | 输入 | 数组长度，正整数 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | 元素类型 | 输入 | `int` → `DataType.INDEX`<br>`float` → `DataType.FP32`<br>`bool` → `DataType.BOOL`<br>不支持其他元素类型 |
-| `N` | 输入 | 取值范围为1～2048，必须使用整数字面量<br>`N <= 0`、`N > 2048`、布尔值或非字面量均为非法配置 |
+| `N` | 输入 | 取值范围为1～2048，必须直接写出整数值<br>`N <= 0`、`N > 2048`、布尔值或变量均为非法配置 |
 
 ## 补充说明
 
@@ -50,7 +50,7 @@ bool[N]    # N 个 BOOL 元素
 tiling = MyTiling(m=64, n=128, offsets=[0, 64, 128, 192])
 ```
 
-在kernel中可通过下标访问数组元素，也可以先读取整个数组字段再访问。字面量下标越界时编译报错；数组元素类型相同时，也支持使用运行时下标。
+在Kernel中可通过下标访问数组元素，也可以先读取整个数组字段再访问。常量下标越界时编译报错；数组元素类型相同时，也支持使用运行时下标。
 
 ```python
 first_offset = tiling.offsets[0]
@@ -60,7 +60,7 @@ current_offset = offsets[index]
 
 ## 调用示例
 
-以下代码展示tiling class声明和kernel内字段访问片段：
+以下代码展示TilingData类声明和Kernel内字段访问片段：
 
 ```python
 from __future__ import annotations

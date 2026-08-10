@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-把一块较小的源tile，按`offset=[row, col]`指定的行列位置，嵌入到一块较大的目标tile中。对应pto-isa的TINSERT指令，用于**UB→L1**的搬运，典型场景是把UB上的向量计算结果按NZ格式拼入L1缓冲区，供后续cube计算使用。
+把一块较小的源Tile，按`offset=[row, col]`指定的行列位置，嵌入到一块较大的目标Tile中。对应pto-isa的TINSERT指令，用于**UB→L1**的搬运，典型场景是把UB上的向量计算结果按NZ格式拼入L1缓冲区，供后续Cube计算使用。
 
-源tile的左上角对齐到目标tile的`offset`位置。`offset[0]`为目标tile的行偏移`row`，`offset[1]`为列偏移`col`。
+源Tile的左上角对齐到目标Tile的`offset`位置。`offset[0]`为目标Tile的行偏移`row`，`offset[1]`为列偏移`col`。
 
 ## 函数原型
 
@@ -28,16 +28,16 @@ pypto_pro.language.insert(dst_tile, src_tile, offset)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_tile` | 输出 | 目标tile（Mat/L1内存，通常为NZ格式缓冲区） |
-| `src_tile` | 输入 | 源子tile（Vec/UB内存） |
-| `offset` | 输入 | 长度为2的序列，元素类型为int或Expr |
+| `dst_tile` | 输出 | 目标Tile，`target_memory`为`pl.MemorySpace.Mat`（L1），通常采用NZ格式 |
+| `src_tile` | 输入 | 源Tile，`target_memory`为`pl.MemorySpace.Vec`（UB） |
+| `offset` | 输入 | 长度为2的序列，元素为整型常量或运行时整型标量表达式 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_tile` | 输出 | 数据类型：b8、b16、b32、b64<br>内存空间须为Mat(L1)；首地址必须32字节对齐 |
-| `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>内存空间须为Vec(UB) |
+| `dst_tile` | 输出 | 数据类型：b8、b16、b32、b64<br>`target_memory`须为`pl.MemorySpace.Mat`（L1）；首地址必须32字节对齐 |
+| `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>`target_memory`须为`pl.MemorySpace.Vec`（UB） |
 | `offset` | 输入 | 格式为`[row, col]`；须满足`row + src行数 ≤ dst行数`，`col + src列数 ≤ dst列数`，否则越界 |
 
 ## 流水类型
@@ -46,9 +46,9 @@ MTE3（UB → L1的搬运流水）。
 
 ## 调用示例
 
-下面是一个完整kernel：vector侧每个subcore处理32行，算出`x+y`后用`pypto_pro.language.move`做ND→NZ转换，再用`pypto_pro.language.insert`按二维offset拼入一块64×64的L1 NZ缓冲`v1_mat`；cube侧把`v1_mat`当左矩阵和`rhs`做matmul。`insert`在此承担UB→L1的NZ拼接。
+下面是一个完整Kernel：Vector侧每个subcore处理32行，算出`x+y`后用`pypto_pro.language.move`做ND→NZ转换，再用`pypto_pro.language.insert`按二维offset拼入一块64×64的L1 NZ缓冲`v1_mat`；Cube侧把`v1_mat`当左矩阵和`rhs`做matmul。`insert`在此承担UB→L1的NZ拼接。
 
-注意：`insert`的源tile必须是NZ格式（`layout=pl.NZ`），需先经`pypto_pro.language.move`把ND结果转成NZ。示例使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成组内流水同步；vector与cube之间仍显式使用`set_cross_core`/`wait_cross_core`，以`INTRA_BLOCK`模式完成AIV→AIC的段间同步。
+注意：`insert`的源Tile必须是NZ格式（`layout=pl.NZ`），需先经`pypto_pro.language.move`把ND结果转成NZ。示例使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成组内流水同步；Vector与Cube之间仍显式使用`set_cross_core`/`wait_cross_core`，以`INTRA_BLOCK`模式完成AIV→AIC的段间同步。
 
 ```python
 import pypto_pro.language as pl

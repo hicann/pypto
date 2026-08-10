@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-读取tile或tensor指定位置的单个元素值，返回标量。操作走标量pipe（`PipeType.S`），需要配合标量pipe同步。
+读取Tile或Tensor指定位置的单个元素值，返回标量。操作走标量pipe（`PipeType.S`），需要配合标量pipe同步。
 
 统一接口：根据第一个参数的类型（Tile或Tensor）自动分发到对应的后端实现。
 
@@ -37,14 +37,14 @@ value = pypto_pro.language.getval(container, offset)
 
 | 参数        | 输入/输出 | 说明                                                                       |
 | ----------- | --------- | -------------------------------------------------------------------------- |
-| `container` | 输入      | 目标tile或tensor，从中读取单个元素                                      |
+| `container` | 输入      | 目标Tile或Tensor，从中读取单个元素                                      |
 | `i, j, ...` | 输入      | 多维索引（整数），索引数必须等于容器rank；1D容器可用单索引`container[i]` |
 
 ### 线性偏移API `getval(container, offset)`
 
 | 参数        | 输入/输出 | 说明                                  |
 | ----------- | --------- | ------------------------------------- |
-| `container` | 输入      | 目标tile或tensor，从中读取单个元素 |
+| `container` | 输入      | 目标Tile或Tensor，从中读取单个元素 |
 | `offset`    | 输入      | 线性元素偏移，指定读取位置            |
 
 ## 参数范围
@@ -52,7 +52,7 @@ value = pypto_pro.language.getval(container, offset)
 | 参数           | 输入/输出 | 说明                                                                                                                                                                                                                         |
 | -------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `container`    | 输入      | Tile：数据类型b8、b16、b32、b64<br>Tensor：任意支持的数据类型                                                                                                                                                |
-| 索引 /`offset` | 输入      | 整型常量或运行时Expr（支持循环变量）<br>下标语法：多维索引数须等于容器rank，自动线性化为`i * (N1*N2*...) + j * (N2*...) + ...`<br>线性偏移API：`offset`为线性元素偏移（0 ≤ offset < 总元素数），越界行为不确定 |
+| 索引 /`offset` | 输入      | 整型常量或运行时整型标量表达式（支持循环变量）<br>下标语法：多维索引数须等于容器rank，自动线性化为`i * (N1*N2*...) + j * (N2*...) + ...`<br>线性偏移API：`offset`为线性元素偏移（0 ≤ offset < 总元素数），越界行为不确定 |
 
 ## 返回值说明
 
@@ -64,11 +64,11 @@ S（标量流水）。使用`make_tile_group + auto_mutex`时由框架完成MTE2
 
 ## 调用示例
 
-下面通过tile和tensor两种场景演示元素读取的用法。
+下面通过Tile和Tensor两种场景演示元素读取的用法。
 
 ### Tile场景
 
-用下标语法读出tile第0个元素，再写到第1个位置，store回GM验证。示例使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成MTE2→S和S→MTE3流水同步。
+用下标语法读出Tile第0个元素，再写到第1个位置，store回GM验证。示例使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成MTE2→S和S→MTE3流水同步。
 
 ```python
 import pypto_pro.language as pl
@@ -84,14 +84,14 @@ def getval_setval_kernel(
     with pl.section_vector():
         tile_a = tile_a_group.current()
         pl.load(tile_a, a, [0, 0])
-        value = tile_a[0, 0]      # 读 tile[0,0] 元素
-        tile_a[0, 1] = value      # 写到 tile[0,1] 位置
+        value = tile_a[0, 0]      # 读 Tile[0,0] 元素
+        tile_a[0, 1] = value      # 写到 Tile[0,1] 位置
         pl.store(a, tile_a, [0, 0])
 ```
 
 ### Tensor场景
 
-直接从tensor中读取标量值，写到另一个位置。
+直接从Tensor中读取标量值，写到另一个位置。
 
 ```python
 import pypto_pro.language as pl

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-获取当前subblock索引。
+获取当前逻辑AI Core内AIC或AIV的subblock索引。
 
 ## 函数原型
 
@@ -26,22 +26,25 @@ val = pypto_pro.language.get_subblock_idx()
 
 ## 返回值说明
 
-返回当前subblock索引（0或1），类型为整型Expr。A5架构上每个AI Core有两个vector子核，该值用于区分子核身份。
+返回设备运行时产生的整型标量值，可用于Kernel内整数运算和索引。取值范围为
+`[0, get_subblock_num())`；在AIC与AIV比例为1:2的混合Kernel中，同一逻辑Block对应的两个AIV分别返回`0`和`1`。
 
 ## 典型使用场景
 
 `pypto_pro.language.get_subblock_idx()`主要用于以下两种模式：
 
-1. **`insert` + cube模式**：每个子核计算部分结果，用`pypto_pro.language.insert`拼入Mat tile（L1 NZ缓冲），cube侧读取合并后的完整数据。详见[insert](../memory_data_movement/insert.md)文档示例。
+1. **`insert` + Cube模式**：每个子核计算部分结果，用`pypto_pro.language.insert`拼入Mat Tile（L1 NZ缓冲），Cube侧读取合并后的完整数据。详见[insert](../memory_data_movement/insert.md)文档示例。
 
 2. **条件执行**：根据子核号决定是否执行某段代码，例如只让sub-core 0发起`pypto_pro.language.ssbuf_store`。
 
 > [!CAUTION]注意
-> 纯vector kernel中两个子核共享MTE搬运管道，不能让每个子核独立`pypto_pro.language.store`到GM的不同区域。如需按子核切分数据搬运，应使用`insert` + cube模式。
+> 纯Vector Kernel中的两个子核共享MTE搬运管道，不能由每个子核分别使用`pypto_pro.language.store`向GM的不同区域写入数据。按子核切分数据搬运时，使用`insert` + Cube模式。
+
+`get_block_idx()`用于Vector段的全局AIV数据分片，`get_subblock_idx()`用于区分同一逻辑Block内的不同AIV。
 
 ## 调用示例
 
-下面是一个完整kernel：用`pypto_pro.language.get_subblock_idx()`读出子核号（此处验证可调用），实际计算为64×64 FP32 element-wise加法。
+下面示例读取subblock索引，并执行64×64 FP32逐元素加法。
 
 ```python
 import pypto_pro.language as pl

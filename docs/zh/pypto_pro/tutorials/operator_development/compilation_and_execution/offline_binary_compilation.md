@@ -51,8 +51,9 @@ Kernel文件放置在`op_kernel/${op_file}.py`。`${op_file}`不包含`.py`后�
 - 定义TilingKey，并通过`@pl.jit(tiling_key=...)`绑定到Kernel。
 - 使用Python `@dataclass`定义TilingData，并将其作为Kernel参数。
 - Kernel函数名与算子Kernel入口名称保持一致。
-- Kernel的业务输入输出参数名称、顺序必须与算子原型保持一致；参数结尾固定为`workspace, tiling`，其中`workspace`为倒数第二个参数，TilingData参数`tiling`为最后一个参数。
-- Kernel需要获取哪些输入或输出参数的数据类型，就在`@pl.jit(datatype=...)`字典中声明哪些参数。字典的key必须与算子原型中的参数名称一致，value为自定义的变量名；变量名必须是合法的Python标识符，且不能与Kernel参数名或TilingKey字段名冲突。该变量可在Kernel中像TilingKey变量一样直接使用。
+- Kernel业务输入输出参数名称与算子原型一致，形参排列顺序与Host侧Kernel参数下发顺序一致，因为离线交付按位置绑定Host侧下发参数与Device侧Kernel形参。参数可使用[`Tensor`](../../../api/SIMD-API/basic_data_structures/Tensor.md)或[`Ptr`](../../../api/SIMD-API/basic_data_structures/Ptr.md)声明。
+- 在所有业务输入输出参数之后声明`workspace`，并将TilingData作为最后一个参数，即参数结尾固定为`workspace, tiling`。
+- Kernel需要获取哪些输入或输出参数的数据类型，就在`@pl.jit(datatype=...)`字典中声明哪些参数。字典的key必须与算子原型中的参数名称一致，value必须是合法的Python标识符，且不能与Kernel参数名或TilingKey字段名冲突；声明后的变量可在Kernel中直接使用。
 
 下面以`add_example`为例展示代码结构，省略具体计算逻辑：
 
@@ -171,7 +172,7 @@ Host侧Tiling实现需要保证：
 - 传给`GET_TPL_TILING_KEY(...)`的字段值和顺序与Kernel侧TilingKey定义一致，并且属于合法组合。
 - BlockDim与Kernel的多核切分方式一致。
 - Kernel签名中的`workspace`参数位于TilingData之前。
-- Workspace大小满足Kernel的实际需求；不需要Workspace时设置为`0`。
+- Workspace大小满足Kernel实际使用的用户Workspace，以及所调用接口要求的系统Workspace。示例未使用需要系统Workspace的接口，因此设置为`0`；需要系统Workspace时，应通过平台接口查询所需大小后与用户Workspace相加，不能写死固定值。
 
 ## 编译算子二进制
 

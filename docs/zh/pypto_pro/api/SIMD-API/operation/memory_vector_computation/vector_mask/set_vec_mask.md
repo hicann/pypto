@@ -40,8 +40,8 @@ pypto_pro.language.set_vec_mask(mask_high, mask_low)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `mask_high` | 输入 | 64位无符号整数或运行时Expr<br>norm模式下控制第64-127号元素的活跃状态<br>count模式下忽略 |
-| `mask_low` | 输入 | 64位无符号整数或运行时Expr<br>norm模式下控制第0-63号元素的活跃状态<br>count模式下为有效元素个数 |
+| `mask_high` | 输入 | 表示64位掩码位模式的整型常量或运行时整型标量表达式<br>norm模式下控制第64-127号元素的活跃状态<br>count模式下忽略 |
+| `mask_low` | 输入 | 表示64位掩码位模式的整型常量或运行时整型标量表达式<br>norm模式下控制第0-63号元素的活跃状态<br>count模式下为有效元素个数 |
 
 ## 补充说明
 
@@ -55,7 +55,7 @@ pypto_pro.language.set_vec_mask(mask_high, mask_low)
 | `(0, valid_cols)` | count模式下前`valid_cols`个元素活跃 |
 
 > [!CAUTION]注意
-> tile级操作（如`pypto_pro.language.add`、`pypto_pro.language.mul`）内部会自动管理掩码，用户通过`pypto_pro.language.set_vec_mask`设置的掩码会被覆盖。这些API主要用于自定义操作或底层控制场景。
+> Tile级操作（如`pypto_pro.language.add`、`pypto_pro.language.mul`）内部会自动管理掩码，用户通过`pypto_pro.language.set_vec_mask`设置的掩码会被覆盖。这些API主要用于自定义操作或底层控制场景。
 
 ## 流水类型
 
@@ -63,7 +63,7 @@ S（标量流水）。
 
 ## 调用示例
 
-下面是一个完整kernel：在`pypto_pro.language.add`前调用`pypto_pro.language.set_vec_mask(-1, -1)`设置全1掩码，验证掩码状态未损坏。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：在`pypto_pro.language.add`前调用`pypto_pro.language.set_vec_mask(-1, -1)`设置全1掩码，验证掩码状态未损坏。Vector Kernel开启`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-获取block总数。返回值可直接参与偏移计算。
+获取当前任务配置的逻辑Block数量，用于多核控制和数据偏移计算。
 
 ## 函数原型
 
@@ -26,11 +26,15 @@ val = pypto_pro.language.get_block_num()
 
 ## 返回值说明
 
-返回block总数（即启动的AI Core数量），类型为整型Expr，可直接参与坐标计算。
+返回设备运行时产生的整型标量值，可用于Kernel内整数运算和索引。其值等于本次实际
+返回启动时传入的`block_dim`。PyPTO Pro JIT不会根据平台核数上限自动截断该值，
+Host侧应在启动前计算合法的逻辑Block数。
+
+仅启动Cube（AIC）或仅启动Vector（AIV）时，该值等于执行域逻辑核数。1:2 AIC/AIV混合Kernel中，该值表示逻辑Block数；AIC逻辑核数为`get_block_num()`，AIV逻辑核数为`get_block_num() * get_subblock_num()`。
 
 ## 调用示例
 
-下面是一个完整多核kernel：用`kernel[None, NUM_CORES](...)`启动2核，每核用`pypto_pro.language.get_block_num()`读出核总数（此处验证可调用），配合`pypto_pro.language.get_block_idx()`算行偏移，各处理64行做element-wise加法。
+下面是一个仅包含Vector段的多核Kernel：用`kernel[None, NUM_CORES](...)`启动2个逻辑Block，每个AIV读取逻辑Block总数，并配合`pypto_pro.language.get_block_idx()`处理64行逐元素加法。
 
 ```python
 import pypto_pro.language as pl
@@ -49,9 +53,9 @@ def multicore_add_kernel(
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
     tile_c = pl.make_tile_group(type=tt, addrs=0x8000, mutex_ids=[2])
     with pl.section_vector():
-        vidx = pl.get_block_idx()              # 当前核号
-        _bnum = pl.get_block_num()             # 核总数（此处读出验证可调用）
-        offset = vidx * 64                     # 第 vidx 核处理第 [vidx*64, +64) 行
+        vidx = pl.get_block_idx()              # 当前AIV的全局逻辑索引
+        _bnum = pl.get_block_num()             # 启动时配置的逻辑Block数
+        offset = vidx * 64                     # 第vidx个AIV处理[vidx*64, +64)行
         cur_a = tile_a.current()
         cur_b = tile_b.current()
         cur_c = tile_c.current()

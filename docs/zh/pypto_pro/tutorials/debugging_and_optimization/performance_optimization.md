@@ -62,15 +62,65 @@ print(f"average JIT call time: {avg_call_us:.3f} us")
 
 ## 使用Profiling定位瓶颈
 
-可以使用NPU Profiling工具采集运行数据。例如，对可独立运行的测试脚本执行：
+完成正确性验证和JIT预热后，可以使用`torch_npu.profiler`采集Device侧Kernel耗时、AI Core流水指标和任务时间线。Profiling用于解释性能瓶颈，不能代替上一节的稳态基线测量；采集本身以及额外同步可能改变Host下发节奏。
 
-```bash
-msprof python3 test_kernel.py
+以下示例假设待测脚本中已经定义`kernel`、`block_dim`和`args`。示例在每次调用后同步，目的是隔离单次Kernel，并使每个`prof.step()`对应一次已经完成的调用：
+
+```python
+import torch
+import torch_npu
+
+
+profiler_output = "./profiling_output"
+experimental_config = torch_npu.profiler._ExperimentalConfig(
+    export_type=[torch_npu.profiler.ExportType.Text],
+    profiler_level=torch_npu.profiler.ProfilerLevel.Level1,
+    aic_metrics=torch_npu.profiler.AiCMetrics.PipeUtilization,
+)
+
+with torch_npu.profiler.profile(
+    activities=[torch_npu.profiler.ProfilerActivity.NPU],
+    with_stack=False,
+    record_shapes=False,
+    profile_memory=False,
+    experimental_config=experimental_config,
+    schedule=torch_npu.profiler.schedule(
+        wait=0, warmup=1, active=5, repeat=1, skip_first=5
+    ),
+    on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(
+        profiler_output, analyse_flag=True
+    ),
+) as prof:
+    for _ in range(11):
+        kernel[None, block_dim](*args)
+        torch.npu.synchronize()
+        prof.step()
 ```
 
-采集前应先单独运行脚本完成正确性验证，并保证脚本包含预热和足够次数的稳定执行。分析时重点关注Kernel耗时、AI Core利用率、各执行流水耗时、内存搬运量、流水等待和多核执行差异。
+本例依次执行5个`skip_first` step、1个Profiler warmup step和5个active step，因此循环调用次数为11。JIT预热仍应在进入上述`profile`上下文之前完成；`skip_first`和Profiler warmup有各自的采集阶段语义，不应将它们视为已经完成JIT预热的保证。每次Kernel调用后必须调用一次`prof.step()`，否则schedule无法按预期推进。
 
-PyPTO Pro不包含AI CPU侧的Execute Graph调度，其优化对象是单个SPMD Kernel。因此，面向Execute Graph的图执行泳道、图节点耗时以及图级调试环境变量不适用于PyPTO Pro。需要分析端到端调用时，应结合Host侧时间和Kernel时间分别判断开销来源。
+上述写法用于分析单次Kernel。逐次调用`torch.npu.synchronize()`会阻断Kernel之间的异步下发和重叠，对应时间线不反映实际业务链路中的任务间隔或跨Kernel并行。真实调用链分析应保留业务原有的同步位置，并单独建立端到端基线。
+
+采集结束后，在`profiling_output`目录中递归查找以下文件。不同CANN和`torch_npu`配套版本的目录层级及部分文件名可能不同，应以当前安装版本的Profiler说明和实际产物为准。
+
+| 文件 | 检查内容 |
+|---|---|
+| `kernel_details.csv` | 在`Name`或`Type`列中定位目标Kernel，检查`Duration(us)`、`Block Dim`等字段。配置`aic_metrics=PipeUtilization`后，该文件会增加当前平台支持的流水指标字段，可用于比较计算和搬运流水的耗时及占比。 |
+| `trace_view.json`或`trace_result.json` | 使用当前版本支持的性能分析工具打开，检查应用层、CANN层和NPU任务的时间关系、Stream、Kernel启动间隔及Host与Device之间的空闲。 |
+
+`trace_view.json`展示的主要是应用、CANN和NPU任务级时间线，不等同于Kernel内部的指令级流水图。`PipeUtilization`给出各类流水的累计耗时或占比，也不能单独证明MTE、Vector和Cube指令在时间轴上的具体重叠关系。需要定位Kernel内部的断流、同步等待或指令级重叠时，应进一步使用当前平台支持的核内流水分析或仿真工具。
+
+如果`kernel_details.csv`中没有目标Kernel，依次检查采集循环是否实际执行、`prof.step()`调用次数是否覆盖`skip_first + wait + warmup + active`对应的阶段、`activities`是否包含`ProfilerActivity.NPU`，以及输出目录是否可写。比较不同实现时，应保持输入Shape、数据类型、TilingKey、`block_dim`、Stream、预热方式和采集配置一致。
+
+使用`PipeUtilization`指标时，可按以下顺序缩小瓶颈范围：
+
+1. 根据`kernel_details.csv`定位目标Kernel，检查多个采集样本的`Duration(us)`；最终性能结论仍以独立的多轮稳态基线为准。
+2. 比较Cube、Vector和数据搬运流水的耗时及占比，定位关键路径上的最长流水。流水占比表示对应流水的时间覆盖范围；硬件计算效率和带宽利用率需结合指令吞吐、带宽及阻塞指标分析。
+3. 根据数据搬运量、计算量以及目标硬件规格估算理论下界，再将实测流水耗时与理论值比较，区分计算量或搬运量本身较大和硬件利用效率不足两类情况。
+4. 结合任务级时间线检查Host下发、Stream依赖、Kernel间隔和Device空闲；需要判断Kernel内部流水先后关系时，继续使用核内流水分析工具。
+5. 根据证据选择多核切分、Tile Shape、片上复用或多缓冲等单一优化方向。修改后先完成精度回归，再使用相同基线和Profiling配置复测。
+
+`_ExperimentalConfig`是`torch_npu.profiler`中的实验性接口，枚举、字段和产物可能随配套版本变化。使用前应运行最小采集用例，确认当前环境支持相关配置并能正常生成产物。进行性能分析时，应保留Profiler warmup并采集多个active step。Profiling结果主要反映Device侧Kernel及相关调用链情况，评估完整算子调用时，还应单独记录Host侧Tiling、参数校验、Kernel选择和任务下发等端到端耗时。
 
 ## 判断性能瓶颈
 
@@ -86,7 +136,7 @@ PyPTO Pro不包含AI CPU侧的Execute Graph调度，其优化对象是单个SPMD
 
 ## 多核切分优化
 
-PyPTO Pro通过`pl.get_block_idx()`和`pl.get_block_num()`进行多核分片。合理的多核策略应同时满足完整覆盖、无重复写和负载均衡。
+PyPTO Pro通过[`pl.get_block_idx()`](../../api/SIMD-API/operation/system_variables/get_block_idx.md)和[`pl.get_block_num()`](../../api/SIMD-API/operation/system_variables/get_block_num.md)进行多核分片。合理的多核策略应同时满足完整覆盖、无重复写和负载均衡。
 
 - `block_dim`不应超过可独立执行的任务块数量，否则会产生空闲Core。
 - 每个Core的工作量应尽量接近，避免将全部尾块或耗时较高的分支集中到少数Core。
@@ -113,7 +163,7 @@ GM访问应尽量连续、对齐并合并为较大的有效搬运。对于会被
 
 ## 流水与多缓冲优化
 
-`pl.make_tile_group`可为同一逻辑数据声明多块轮转Tile，通过`current()`取得当前Tile、通过`next()`轮转到下一块。配合`@pl.jit(auto_mutex=True)`，编译器根据Tile的mutex信息插入核内流水同步，可用于构建双缓冲或N缓冲。
+[`pl.make_tile_group`](../../api/SIMD-API/operation/resource_management/make_tile_group.md)可为同一逻辑数据声明多块轮转Tile，通过`current()`取得当前Tile、通过`next()`轮转到下一块。配合`@pl.jit(auto_mutex=True)`，编译器根据Tile的mutex信息插入核内流水同步，可用于构建双缓冲或N缓冲。
 
 优化时应重点检查：
 
@@ -128,7 +178,7 @@ GM访问应尽量连续、对齐并合并为较大的有效搬运。对于会被
 
 ## Cube与Vector协同优化
 
-矩阵类Kernel使用`pl.section_cube()`描述Cube任务，向量类处理使用`pl.section_vector()`描述Vector任务。混合Kernel应尽量让Cube计算、Vector前后处理和DMA搬运并行，同时避免不必要的数据格式转换和跨存储层往返。
+矩阵类Kernel使用[`pl.section_cube()`](../../api/SIMD-API/operation/controlflow/section_vector_section_cube.md)描述Cube任务，向量类处理使用`pl.section_vector()`描述Vector任务。混合Kernel应尽量让Cube计算、Vector前后处理和DMA搬运并行，同时避免不必要的数据格式转换和跨存储层往返。
 
 - Cube计算应检查M、N、K方向的Tile Shape、左右矩阵布局、转置方式以及L0A/L0B装载格式。
 - 归约长度较大时，应在Acc/L0C中完成分块累加，再按需要转换并写回。

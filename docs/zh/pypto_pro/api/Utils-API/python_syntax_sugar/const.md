@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-创建指定数据类型的编译期常量标量。用于需要显式指定类型的标量值场景，如与`pypto_pro.language.DT_INT32`类型的tile做比较、初始化索引值等。
+创建指定数据类型的编译期常量标量。用于需要显式指定类型的标量值场景，如与`pypto_pro.language.DT_INT32`类型的Tile做比较、初始化索引值等。
 
 ## 函数原型
 
@@ -33,7 +33,7 @@ result = pypto_pro.language.const(value, dtype)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `value` | 输入 | Python `int`或`float`字面量 |
+| `value` | 输入 | Python `int`或`float`常量值 |
 | `dtype` | 输入 | `pypto_pro.language.DT_INT8`、`pypto_pro.language.DT_INT16`、`pypto_pro.language.DT_INT32`、`pypto_pro.language.DT_INT64`、`pypto_pro.language.DT_UINT8`、`pypto_pro.language.DT_UINT16`、`pypto_pro.language.DT_UINT32`、`pypto_pro.language.DT_UINT64`、`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_BOOL`等 |
 
 ## 返回值

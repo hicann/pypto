@@ -8,7 +8,7 @@
 
 ## Kernel函数实现
 
-通过`@pl.jit()`装饰器定义Kernel函数，使用`pl.printf`在Device端打印字符串。`pl.section_vector()`用于声明该段代码在Vector核上执行，其中`pl.printf`由Scalar流水执行。
+通过`@pl.jit()`装饰器定义Kernel函数，使用[`pl.printf`](../../api/Utils-API/debugging/printf.md)在Device端打印字符串。[`pl.section_vector()`](../../api/SIMD-API/operation/controlflow/section_vector_section_cube.md)用于声明该段代码在Vector核上执行，其中`pl.printf`由Scalar流水执行。
 
 ```python
 import pypto_pro.language as pl
@@ -23,7 +23,7 @@ def hello_world_kernel(out: pl.Tensor[[1], pl.DT_INT32]):
 > [!NOTE]说明
 >
 > - PyPTO Pro的Kernel函数通过`@pl.jit()`装饰器标记为JIT编译目标。首次调用时触发编译，后续调用直接执行缓存的二进制文件，无需重复编译。
-> - `pl.printf`的输出通过NPU设备日志查看，可使用`npu-smi info -l`或查看设备日志文件获取。`printf`仅用于调试，生产环境应移除。
+> - `pl.printf`通过设备侧打印机制输出，具体查看位置由运行环境的CANN日志配置决定。`printf`仅用于调试，生产环境应移除。
 
 ## Host端调用
 
@@ -54,7 +54,7 @@ print(f"kernel finished, out[0] = {out[0].item()}")
 python3 hello_world.py
 ```
 
-运行后，Host端输出`kernel finished, out[0] = 1`，同时NPU设备日志中会打印`Hello World!!!`。
+运行后，Host端输出`kernel finished, out[0] = 1`。`Hello World!!!`由设备侧打印机制输出，请按当前部署环境的CANN日志配置查看；输出位置不固定为Host标准输出。
 
 > [!NOTE]说明
 >

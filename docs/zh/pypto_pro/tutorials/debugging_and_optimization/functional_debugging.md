@@ -1,10 +1,8 @@
 # 功能调试
 
-PyPTO Pro采用SPMD执行模型，同一份Kernel代码在`block_dim`个AI Core上并行执行，各Core通过`pl.get_block_idx()`确定自身处理的数据分片。功能调试应围绕Kernel的编译、下发、多核切分、片上计算和结果写回逐层开展。
+PyPTO Pro采用SPMD执行模型，同一份Kernel代码由多个逻辑AI Core并行执行，各工作单元通过[`pl.get_block_idx()`](../../api/SIMD-API/operation/system_variables/get_block_idx.md)的全局逻辑索引确定数据分片。`block_dim`配置逻辑Block数；混合Kernel中AIC/AIV的实际逻辑核数还取决于两者比例。功能调试应围绕Kernel的编译、下发、多核切分、片上计算和结果写回逐层开展。
 
-PyPTO Pro直接编译并下发Kernel，不包含AI CPU侧的Execute Graph调度。因此，图节点Dump、图执行泳道以及面向Execute Graph的Pass Verify等调试方式不适用于PyPTO Pro。PyPTO Pro提供`pl.printf`、`pl.dump_data`、`pl.pto_assert`和`pl.trap`等Kernel级调试接口。
-
-PyPTO Pro的`@pl.jit`在Kernel包含`pl.printf`或`pl.dump_data`时自动开启设备侧调试打印，不使用`debug_options`、`verify_options`或`runtime_options`，也不通过`RunMode.SIM`切换仿真执行。调试代码应使用PyPTO Pro提供的JIT参数和Kernel级接口。
+PyPTO Pro提供[`pl.printf`](../../api/Utils-API/debugging/printf.md)、[`pl.dump_data`](../../api/Utils-API/debugging/dump_data.md)、[`pl.pto_assert`](../../api/Utils-API/debugging/pto_assert.md)和[`pl.trap`](../../api/Utils-API/debugging/trap.md)等Kernel级调试接口。当Kernel包含`pl.printf`或`pl.dump_data`时，JIT自动启用设备侧调试打印。
 
 ## 调试流程
 
@@ -45,7 +43,7 @@ JIT编译产物的基础目录默认为当前工作目录下的`./build/<kernel_
 
 ## 定位运行问题
 
-Kernel启动是异步操作。Host侧调用成功只表示任务已下发，不表示Kernel已经执行完成。调试时应在Kernel启动后调用同步接口，使设备侧错误在当前调用点暴露：
+Kernel启动是异步操作。Host侧调用完成表示任务已下发，Kernel执行状态通过同步接口确认。调试时在Kernel启动后调用同步接口，使设备侧错误在当前调用点暴露：
 
 ```python
 kernel[None, block_dim](*args)
@@ -115,7 +113,7 @@ pl.dump_data(tile_out)
 pl.pto_assert(offset < total_length, "offset=%d, total=%d", offset, total_length, loc=True)
 ```
 
-当前NPU实现中，断言失败只通过设备侧打印机制输出信息，不会中止Kernel，也不会在Host侧抛出异常。因此，不能依赖`pl.pto_assert`阻止越界访问或保证后续代码安全。需要无条件停止执行时可使用`pl.trap()`，但该接口会直接中止Kernel，仅应在明确的调试分支中临时使用。
+`pl.pto_assert`在条件不满足时通过设备侧打印机制记录信息，不会中止Kernel，也不会在Host侧抛出异常。因此，不能依赖`pl.pto_assert`阻止越界访问或保证后续代码安全。需要无条件停止执行时可使用`pl.trap()`，但该接口会直接中止Kernel，仅应在明确的调试分支中临时使用。
 
 ## 精度问题定位
 

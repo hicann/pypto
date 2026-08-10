@@ -1,11 +1,11 @@
 # Reg矢量计算编程
 
-Reg矢量计算直接使用SIMD Register File保存向量数据和中间结果。PyPTO Pro通过`@pl.vector_function`定义VF函数，并在函数内使用`vf.*` API表达寄存器加载、计算和存储。
+Reg矢量计算直接使用SIMD Register File保存向量数据和中间结果。PyPTO Pro通过`@pl.vector_function`定义VF函数，并在函数内使用[`vf.*` API](../../../api/SIMD-API/operation/vf_computation/index.md)表达寄存器加载、计算和存储。
 
 > [!NOTE]说明
 > Reg矢量计算依赖VF Register File，使用前请确认对应VF API的支持范围。
 
-## 为什么使用Reg矢量计算
+## Reg矢量计算的适用场景
 
 Tile向量计算以UB Tile为数据载体。多个向量操作串联时，中间结果通常需要写回UB，再由下一条指令读取。计算链较长时，反复访问UB会增加读写带宽压力和Bank冲突概率。
 

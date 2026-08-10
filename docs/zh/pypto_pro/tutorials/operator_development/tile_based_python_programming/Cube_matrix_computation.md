@@ -23,15 +23,15 @@ Cube矩阵计算的基本步骤为：数据搬入 → 数据加载 → 计算 �
 
 ### Cube侧Tile分配
 
-Cube矩阵计算主要通过L0A/L0B/L0C Buffer进行计算，并经L1 Buffer中转。开发者需将输入数据从GM搬入L1 Buffer（`pl.MemorySpace.Mat`），再从L1 Buffer搬入L0A（`pl.MemorySpace.Left`）/L0B（`pl.MemorySpace.Right`），最后通过`pl.matmul`完成计算，结果写入L0C（`pl.MemorySpace.Acc`）。
+Cube矩阵计算使用L0A/L0B/L0C Buffer，并经L1 Buffer中转。输入数据从GM搬入L1 Buffer（`pl.MemorySpace.Mat`），再从L1 Buffer搬入L0A（`pl.MemorySpace.Left`）/L0B（`pl.MemorySpace.Right`）；`pl.matmul`执行矩阵计算，并将结果写入L0C（`pl.MemorySpace.Acc`）。
 
-PyPTO Pro通过`TileType`描述Tile的shape、dtype和target_memory。`TileType`本身不分配片上Buffer，需要将其传给`pl.make_tile`或`pl.make_tile_group`。
+PyPTO Pro通过`TileType`描述Tile的shape、dtype和target_memory。`TileType`本身不分配片上缓冲区，需要将其传给`pl.make_tile`或`pl.make_tile_group`。
 
 本节代码仅展示Tile分配和同步方式，省略了完整Kernel的计算、调用及结果验证代码；整体代码结构及调用方式请参考本文末尾的[完整示例](#完整示例)。
 
 各内存空间的典型角色如下：
 
-| `pl.MemorySpace` | 物理Buffer | 典型角色 |
+| `pl.MemorySpace` | 物理缓冲区 | 典型角色 |
 |:---|:---|:---|
 | `Mat` | L1 Buffer | GM与L0A/L0B之间的矩阵暂存 |
 | `Left` | L0A Buffer | `matmul`左操作数 |
@@ -40,7 +40,7 @@ PyPTO Pro通过`TileType`描述Tile的shape、dtype和target_memory。`TileType`
 
 #### 使用make_tile分配单个Tile
 
-`pl.make_tile`分配一块固定的片上Buffer。指定`addr`时需要同时指定`size`，其中`size`为Buffer的字节数。`make_tile`不附带跨Pipe同步，使用这种方式时需要开发者手工插入`sync_src`/`sync_dst`。
+`pl.make_tile`分配一块固定的片上缓冲区。指定`addr`时需要同时指定`size`，其中`size`为缓冲区的字节数。使用`make_tile`时，跨Pipe依赖通过显式的`sync_src`/`sync_dst`对进行同步。
 
 ```python
 TILE_M = 128
@@ -108,37 +108,63 @@ def matmul_kernel(a: pl.Tensor[[pl.DYNAMIC, TILE_K], pl.DT_FP16],
 
 | 方面 | `make_tile` | `make_tile_group` |
 |:---|:---|:---|
-| Buffer组织 | 单块固定Buffer，使用`addr`和`size` | 一组轮转Buffer，使用`addrs`和`mutex_ids` |
-| Buffer选择 | 直接使用Tile变量 | 通过`next()`、`current()`、`previous()`选择 |
+| 缓冲区组织 | 单块固定缓冲区，使用`addr`和`size` | 一组轮转缓冲区，使用`addrs`和`mutex_ids` |
+| 缓冲区选择 | 直接使用Tile变量 | 通过`next()`、`current()`、`previous()`选择 |
 | 跨Pipe同步 | 手工插入`sync_src`/`sync_dst` | 配合`auto_mutex=True`自动插入 |
 | 适用场景 | 需要精确控制同步时序 | 单缓冲、双缓冲及N缓冲等常规场景 |
 
-新Kernel优先使用`make_tile_group`配合`auto_mutex=True`。仅在需要精确控制同步事件和插入位置时，使用`make_tile`配合显式同步。
+常规单缓冲、双缓冲及N缓冲场景使用`make_tile_group`并启用`auto_mutex=True`；需要精确控制同步事件及插入位置的场景使用`make_tile`和显式同步。
 
-### 矩阵计算内存布局
+### 矩阵计算分形介绍
 
-Cube计算单元采用分块计算逻辑，硬件最小计算粒度为分形块（Fractal）。对于half数据类型，分形形状为16×16（即32B/sizeof(half) = 16）；对于int8类型，分形形状为16×32或32×16。传统线性存储布局下，读取一个分形块需要访问多个不连续的内存地址，导致访存效率下降。
+#### Ascend Cube分形布局
 
-为解决该问题，昇腾引入矩阵分形存储格式，使每个分形块在物理内存中连续存放，硬件单次读取即可加载整块数据，大幅提升数据吞吐能力。
+昇腾Cube计算单元以分形块（Fractal）作为基本计算和搬运单位。传统ND线性布局按行连续存放矩阵，读取二维计算块时需要从多段地址逐行收集数据。分形布局通过搬运流水重排数据，使计算块在物理内存中连续存放，从而减少寻址开销并提高数据吞吐率。
 
-PyPTO Pro通过`TileType`的`layout`参数指定分形布局。采用“大Y小x”命名法：
+输入分形的一边固定为16，另一边为`32B / sizeof(dtype)`。常用数据类型的分形大小为：
 
-- 大Y（Z/N）：表示分形矩阵之间的排列顺序（Z为行主序，N为列主序）。
-- 小x（z/n）：表示分形矩阵内部元素的排列顺序（z为行主序，n为列主序）。
+- FP32：A矩阵为16×8，B矩阵为8×16。
+- FP16/BF16：A、B矩阵均为16×16。
+- FP8（E4M3FN/E5M2）：A矩阵为16×32，B矩阵为32×16，累加结果为FP32。
+- INT8：A矩阵为16×32，B矩阵为32×16。
 
-对于矩阵乘法C = A × B，Ascend 950PR/Ascend 950DT要求：左矩阵A使用Nz格式，右矩阵B使用Zn格式，结果矩阵C使用Nz格式。
+L0C中的结果分形固定为16×16。以FP32/INT32累加结果为例，一个结果分形占用`16 × 16 × 4B = 1024B`，因此需要显式描述硬件分形大小的累加场景使用`fractal=1024`。
 
-各内存空间的默认layout如下：
+下图以FP16类型的40×56矩阵为例，展示`compact=0`时的标准分形布局：GM中的`pl.ND` Tensor通过`pl.load`搬入L1 Buffer的`Mat` Tile，并转换为`pl.NZ`布局。有效区为40×56，按16×16分形对齐后的寻址边界为48×64；分形之间按列优先排列，分形内部按行优先排列。图中白色区域为有效数据，灰色区域为无效区域，其值未必为0。`valid_shape`描述有效区域，`pad`/`pl.fillpad`决定是否以及如何填充无效区域；`compact=1`会按`valid_shape`紧凑解释片上布局，不使用图2所示的完整标准分形边界。
 
-| 内存空间 | 默认layout | 说明 |
-|:---|:---|:---|
-| `Mat`（L1） | `pl.NZ` | GM→L1搬运时随路完成ND→NZ转换 |
-| `Left`（L0A） | `pl.NZ` | L1→L0A搬运时为NZ→NZ |
-| `Right`（L0B） | `pl.ZN` | L1→L0B搬运时完成NZ→ZN转换 |
-| `Acc`（L0C） | `pl.NZ` | 矩阵乘结果按NZ存放 |
+**图2** PyPTO Pro中`pl.load`完成ND（GM）到Nz（L1 Mat）的分形转换
 
-> [!NOTE]说明
-> 在同一款硬件上，如果`target_memory`确定了，`layout`和`fractal`是确定的，可以不填。仅转置搬入等特殊场景需要显式指定`layout`。
+![PyPTO Pro中pl.load完成ND（GM）到Nz（L1 Mat）的分形转换](../../figures/cube_matrix_nd_to_nz.png)
+
+#### 分形格式的命名
+
+矩阵分形格式采用“大Y小x”命名法：
+
+- 大Y（Z/N）表示多个分形之间的排列顺序：Z为row major（行主序），N为column major（列主序）。
+- 小x（z/n）表示一个分形内部的元素排列顺序：z为row major（行主序），n为column major（列主序）。
+
+PyPTO Pro使用大写的`pl.NZ`、`pl.ZN`等枚举表示文档中的Nz、Zn格式。以二维矩阵为例，几种常用格式的含义如下：
+
+- **ND**：通用线性布局，通常用于GM中的输入和输出Tensor。
+- **Nz**：分形之间按列主序排列，分形内部按行主序排列。对shape为`[M, N]`的矩阵，补齐并拆分为`[M1, M0, N1, N0]`后，物理排列顺序为`[N1, M1, M0, N0]`。
+- **Zn**：分形之间按行主序排列，分形内部按列主序排列。对shape为`[K, N]`的矩阵，补齐并拆分为`[K1, K0, N1, N0]`后，物理排列顺序为`[K1, N1, N0, K0]`。
+
+对于矩阵乘法`C = A × B`，Ascend 950PR/Ascend 950DT要求左矩阵A使用Nz格式，右矩阵B使用Zn格式，结果矩阵C使用Nz格式。左矩阵按行取数、右矩阵按列取数时，相应元素均能从连续地址读取。
+
+Ascend 950PR/Ascend 950DT的默认数据路径如下：
+
+- GM中的ND数据搬入`Mat`（L1）时转换为`pl.NZ`。
+- A矩阵从`Mat`搬入`Left`（L0A）后保持`pl.NZ`。
+- B矩阵从`Mat`搬入`Right`（L0B）时转换为`pl.ZN`。
+- `matmul`的结果在`Acc`（L0C）中按`pl.NZ`存放。
+
+当`target_memory`确定后，`layout`和`fractal`通常随之确定，上述默认路径可省略这两个参数。转置搬入等特殊场景需要显式指定`layout`。`layout`描述Tile的物理排布，`TileType.shape`保持逻辑轴语义；例如B矩阵在L0B中仍使用`[K, N]`描述shape，物理布局为`pl.ZN`。
+
+下图以FP16输入、FP32累加为例，展示`Left`、`Right`、`Acc` Tile与PyPTO Pro接口的对应关系。
+
+**图3** PyPTO Pro矩阵乘法的Nz × Zn = Nz分形组合（FP16输入）
+
+![PyPTO Pro矩阵乘法的Nz × Zn = Nz分形组合](../../figures/cube_matrix_fractal_formats_950.png)
 
 ### Cube侧同步
 
@@ -151,7 +177,7 @@ Cube矩阵计算的四个步骤分别对应MTE2、MTE1、M、FIX四条流水线�
 | M | 矩阵计算 | `pl.matmul`/`pl.matmul_acc` |
 | FIX | L0C→GM搬运 | `pl.store`/`pl.store_tile` |
 
-使用`make_tile_group`并通过`@pl.jit(auto_mutex=True)`启用自动同步时，框架会根据Tile的使用关系和`mutex_id`插入`mutex_lock`/`mutex_unlock`，开发者无需手工判断Pipe类型和分配event id。
+使用`make_tile_group`并通过`@pl.jit(auto_mutex=True)`启用自动同步时，框架根据Tile的使用关系和`mutex_id`插入`mutex_lock`/`mutex_unlock`。
 
 使用`make_tile`时，框架不会自动插入跨Pipe同步，需要在生产操作之后、消费操作之前插入配对的`pl.system.sync_src`和`pl.system.sync_dst`。下面展示一次完整矩阵计算中的前向数据依赖：
 
@@ -179,7 +205,7 @@ with pl.section_cube():
     pl.store(out, acc, [0, 0])
 ```
 
-`sync_src`由生产流水线SET flag，`sync_dst`由消费流水线WAIT flag；两者的`set_pipe`、`wait_pipe`和`event_id`必须一致。同一个event id只能在上一次同步已经消费后复用。循环复用Tile时，除上述前向依赖外，还需要处理消费完成后才能覆盖Buffer的反向依赖，因此常规流水化场景建议使用`make_tile_group`和自动同步。
+`sync_src`由生产流水线SET flag，`sync_dst`由消费流水线WAIT flag；两者的`set_pipe`、`wait_pipe`和`event_id`必须一致。同一个event id只能在上一次同步已经消费后复用。循环复用Tile时还需处理消费完成后才能覆盖缓冲区的反向依赖；常规流水化场景使用`make_tile_group`和自动同步。
 
 > [!NOTE]说明
 > 当`matmul`/`matmul_acc`使用了`phase`参数时，M流水与FIX流水之间的同步由硬件unit_flag完成，框架不会自动插入该段同步。
@@ -187,6 +213,34 @@ with pl.section_cube():
 ## 矩阵数据搬入
 
 矩阵搬入分为两跳：GM → L1（`pl.load`）和L1 → L0A/L0B（`pl.move`）。
+
+### Ascend 950PR/Ascend 950DT的L1 Buffer内存结构
+
+Ascend 950PR/Ascend 950DT的L1 Buffer总容量为512KB，由16个32KB的Bank组成。每个Bank包含1024行，每行32B；16个Bank进一步组织为8个Bank Group（BG），每个BG包含Bank0和Bank1。单个Bank同一时刻最多执行一次读或一次写；同一BG内的两个Bank允许一个读、另一个写，但不支持同时读或同时写。L1地址的位域组织如下：
+
+```text
+L1_ADDR[18:0] = {BANK[18], BANK_DEPTH[17:8], BG[7:5], BANK_WIDTH[4:0]}
+```
+
+各字段在地址中的范围如下：
+
+| 地址位 | 字段 | 含义 |
+|:---|:---|:---|
+| `[4:0]` | `BANK_WIDTH` | 一行内的字节偏移 |
+| `[7:5]` | `BG` | 选择8个Bank Group之一 |
+| `[17:8]` | `BANK_DEPTH` | 选择Bank中的1024行之一 |
+| `[18]` | `BANK` | 选择当前BG内的Bank0或Bank1 |
+
+例如，`0x00000`和`0x00100`的`BANK`与`BG`字段相同，只是`BANK_DEPTH`不同，
+因此落在同一个Bank的不同数据行；`0x00000`和`0x40000`的`BG`相同、`BANK`
+不同，因此落在同一BG的两个Bank。连续的32B行地址`0x00000`、`0x00020`、…、
+`0x000E0`依次选择BG0～BG7，到`0x00100`后`BANK_DEPTH`加1并回到BG0。
+
+在PyPTO Pro中，`make_tile_group`的`addrs`决定L1 Tile的起始地址。规划A、B矩阵以及双缓冲地址时，除了避免地址范围重叠，还应尽量避免并行访问落入存在冲突的Bank或Bank Group。
+
+**图4** Ascend 950 L1 Buffer（`pl.MemorySpace.Mat`）内存结构
+
+![Ascend 950 L1 Buffer（pl.MemorySpace.Mat）内存结构](../../figures/cube_matrix_l1_buffer_bank.png)
 
 ### GM → L1搬运
 
@@ -294,7 +348,7 @@ K维分块累加对正确性有三个硬性要求：
 
 1. **每步matmul / matmul_acc都要传`phase`**：首块和中间块用`phase=pl.AccPhase.Partial`，末块用`phase=pl.AccPhase.Final`；写回GM的`store`也传`phase=pl.STPhase.Final`。
 2. **L0C累加器设`fractal=1024`**（FP32）。
-3. **cube段用`pl.system.set_mm_layout_transform(enabled=True)`开启**，段末`enabled=False`关闭。
+3. **Cube段用`pl.system.set_mm_layout_transform(enabled=True)`开启**，段末`enabled=False`关闭。
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -458,6 +512,6 @@ print("Matmul kernel passed!")
 >
 > - `make_tile_group`在`section_cube`外部声明，与Add等Vector示例风格一致。
 > - L1使用双缓冲（`mutex_ids`长度为2），L0A/L0B/L0C使用单缓冲（`mutex_ids`长度为1）。
-> - `auto_mutex=True`自动管理各Tile的mutex锁，开发者无需手写`mutex_lock`/`mutex_unlock`。
+> - `auto_mutex=True`由框架自动管理各Tile的mutex锁。
 > - 多核切分通过`pl.range(core_id, M // TILE_M, num_cores)`实现跨步分配，详见[多核切分与Tiling](multi_core_partitioning_and_Tiling.md)。
 > - 上例K恰好为一个Tile，无需K维分块累加。K需要分块时请参考上文[K维分块累加](#k维分块累加)。

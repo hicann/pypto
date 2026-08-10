@@ -17,7 +17,7 @@
 取两个标量中的较小值。Python内置的`min()`在前端解析时会被自动转换为`pypto_pro.language.min`，两者等价。
 
 > [!CAUTION]注意
-> tile逐元素取最小值使用[`pypto_pro.language.minimum`](../elementwise/minimum.md)。
+> Tile逐元素取最小值使用[`pypto_pro.language.minimum`](../elementwise/minimum.md)。
 
 ## 函数原型
 
@@ -36,8 +36,8 @@ result = pypto_pro.language.min(lhs, rhs)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `lhs` | 输入 | 标量Expr、Python `int`或`float` |
-| `rhs` | 输入 | 标量Expr、Python `int`或`float`<br>两个操作数须属于同一数值类别（同为整型或同为浮点型），同类别内自动提升宽度（如INT32 + INT64 → INT64） |
+| `lhs` | 输入 | Python `int`、Python `float`或Kernel内整型或浮点型标量表达式 |
+| `rhs` | 输入 | Python `int`、Python `float`或Kernel内整型或浮点型标量表达式<br>两个操作数须属于同一数值类别（同为整型或同为浮点型），同类别内自动提升宽度（如INT32 + INT64 → INT64） |
 
 ## 流水类型
 

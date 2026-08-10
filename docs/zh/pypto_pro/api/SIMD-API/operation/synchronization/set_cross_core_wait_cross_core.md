@@ -36,12 +36,12 @@ pypto_pro.language.system.wait_cross_core(*, pipe, event_id, sync_mode=pl.CrossC
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `pipe` | 输入 | 发信号 / 等信号所在硬件pipe，取值：<br>`pypto_pro.language.PipeType.MTE1` / `MTE2` / `MTE3` / `V` / `S` / `FIX`<br>set侧pipe为**发送核**执行set的pipe，wait侧pipe为**接收核**执行wait的pipe，两者分属不同核的不同pipe，无需相同。<br>典型组合：Cube→V通信用set(`FIX`) + wait(`V`)；V→Cube通信用set(`MTE3`/`V`) + wait(`MTE1`/`FIX`)。 |
-| `event_id` | 输入 | 整型常量（静态）或运行时Expr（动态）<br>取值范围`[0, max_event_id)` |
+| `event_id` | 输入 | 整型常量（静态）或运行时整型标量表达式（动态）<br>取值范围`[0, max_event_id)` |
 | `sync_mode` | 输入 | 同步模式，set侧和wait侧须使用相同的sync_mode，取值：<br>- `pl.CrossCoreSyncMode.INTER_BLOCK`（mode 0）：AI Core核间同步。AIC场景同步所有AIC核，AIV场景同步所有AIV核。<br>- `pl.CrossCoreSyncMode.INTER_SUBBLOCK`（mode 1）：AI Core内部AIV核间同步。<br>- `pl.CrossCoreSyncMode.INTRA_BLOCK`（mode 2，默认）：AI Core内部AIC与AIV之间同步。<br>- `pl.CrossCoreSyncMode.UNICAST_BLOCK`（mode 3）：AI Core内部AIC与AIV之间同步，AIV0与AIV1可单独触发AIC等待。 |
 
 ## 调用示例
 
-`set_cross_core` / `wait_cross_core`用于vector侧与cube侧的跨核通信。下面是一个完整kernel：vector侧计算`x + y`并通过`insert`拼入L1 NZ缓冲，`set_cross_core`通知cube侧；cube侧`wait_cross_core`后读取并做matmul，计算`out = (x + y) @ rhs`。
+`set_cross_core` / `wait_cross_core`用于Vector侧与Cube侧的跨核通信。下面是一个完整Kernel：Vector侧计算`x + y`并通过`insert`拼入L1 NZ缓冲，`set_cross_core`通知Cube侧；Cube侧`wait_cross_core`后读取并做matmul，计算`out = (x + y) @ rhs`。
 
 ```python
 import pypto_pro.language as pl

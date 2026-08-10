@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-把UB（`Vec`）或L0C（`Acc`）Tile的结果写回GM，与[`pypto_pro.language.store`](store.md)的区别在于：偏移以**tile块索引**为单位，内部自动按`块索引 × tile_shape`换算成绝对元素坐标。是[`pypto_pro.language.load_tile`](load_tile.md)的反向操作。
+把UB（`Vec`）或L0C（`Acc`）Tile的结果写回GM，与[`pypto_pro.language.store`](store.md)的区别在于：偏移以**Tile块索引**为单位，内部自动按`块索引 × tile_shape`换算成绝对元素坐标。是[`pypto_pro.language.load_tile`](load_tile.md)的反向操作。
 
-例如tile shape为`[64, 128]`时，`tile_offsets=[2, 2]`等价于[`pypto_pro.language.store`](store.md)的绝对偏移`[128, 256]`。
+例如Tile shape为`[64, 128]`时，`tile_offsets=[2, 2]`等价于[`pypto_pro.language.store`](store.md)的绝对偏移`[128, 256]`。
 
 下图以UB源Tile为例展示按块索引写回GM Tensor的过程。块索引先换算为元素偏移，再确定目标块的落点；L0C源Tile使用FIX流水。
 
@@ -32,13 +32,13 @@ pypto_pro.language.store_tile(dst_tensor, src_tile, tile_offsets, *, relu_pre_mo
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_tensor` | 输出 | 目标GM tensor，写出目的地 |
+| `dst_tensor` | 输出 | 目标GM Tensor，写出目的地 |
 | `src_tile` | 输入 | 源Tile，内存空间只能是`Vec`(UB)或`Acc`(L0C) |
-| `tile_offsets` | 输入 | 以tile为单位的块索引，内部换算为`块索引 × tile_shape`的绝对元素偏移 |
+| `tile_offsets` | 输入 | 以Tile为单位的块索引，内部换算为`块索引 × tile_shape`的绝对元素偏移 |
 | `relu_pre_mode` | 输入 | 可选，写回前融合ReLU |
 | `pre_quant_scalar` | 输入 | 可选，写回前量化标量 |
-| `fp_tile` | 输入 | 可选，fixpipe量化tile |
-| `order` | 输入 | 可选，Tile维度在目标tensor维度中对应哪几根轴 |
+| `fp_tile` | 输入 | 可选，fixpipe量化Tile |
+| `order` | 输入 | 可选，Tile维度在目标Tensor维度中对应哪几根轴 |
 | `atomic` | 输入 | 可选，原子写模式，默认`pl.AtomicType.AtomicNone` |
 | `phase` | 输入 | 可选，fixpipe分阶段写回模式 |
 
@@ -48,11 +48,11 @@ pypto_pro.language.store_tile(dst_tensor, src_tile, tile_offsets, *, relu_pre_mo
 |---|---|---|
 | `dst_tensor` | 输出 | 数据类型：b8、b16、b32、b64<br>layout：支持`ND`、`DN`、`NZ`<br>换算后的写入范围不得越过对应维度shape |
 | `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>内存空间：只支持`Vec`(UB)和`Acc`(L0C)；UB源通过MTE3写回，L0C源通过FIX写回<br>地址对齐：UB为32字节，L0C为64字节 |
-| `tile_offsets` | 输入 | 单位为tile块索引，支持运行时`Expr`，换算后的绝对偏移不超过对应维度的shape，不支持负数索引<br>被切分的维度（由`order`指定）按`块索引 × tile该维大小`换算；其余维度的取值按绝对偏移直接使用 |
+| `tile_offsets` | 输入 | 单位为Tile块索引，元素支持整型常量或运行时整型标量表达式，换算后的绝对偏移不超过对应维度的shape，不支持负数索引<br>被切分的维度（由`order`指定）按`块索引 × tile该维大小`换算；其余维度的取值按绝对偏移直接使用 |
 | `relu_pre_mode` | 输入 | 可选，支持`pl.ReluPreMode.NormalRelu`；与`fp_tile`互斥 |
 | `pre_quant_scalar` | 输入 | 可选，预量化标量（i64 bit pattern）；与`fp_tile`互斥 |
-| `fp_tile` | 输入 | 可选，启用`store_fp`路径的量化tile；与`relu_pre_mode`、`pre_quant_scalar`、`phase`互斥 |
-| `order` | 输入 | 只支持配置tensor维度范围内的dim，只支持二维数组配置，其余配置报错<br>用于高维tensor中指定tile对应哪几个维度；不配置时默认取tensor的最后两维 |
+| `fp_tile` | 输入 | 可选，启用`store_fp`路径的量化Tile；与`relu_pre_mode`、`pre_quant_scalar`、`phase`互斥 |
+| `order` | 输入 | 只支持配置Tensor维度范围内的dim，只支持二维数组配置，其余配置报错<br>用于高维Tensor中指定Tile对应哪几个维度；不配置时默认取Tensor的最后两维 |
 | `atomic` | 输入 | 支持`pl.AtomicType.AtomicNone`（覆盖写）或`pl.AtomicType.AtomicAdd`（原子累加） |
 | `phase` | 输入 | 可选，支持`pl.STPhase.Partial`或`pl.STPhase.Final`；与`fp_tile`互斥 |
 
@@ -62,7 +62,7 @@ pypto_pro.language.store_tile(dst_tensor, src_tile, tile_offsets, *, relu_pre_mo
 
 ## 调用示例
 
-下面是一个完整kernel：把同一块UB结果按块索引逐块写到GM输出的不同位置。`pypto_pro.language.store_tile`用块号`[ti, 0]`定位，内部自动换算为绝对偏移`[ti*64, 0]`。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：把同一块UB结果按块索引逐块写到GM输出的不同位置。`pypto_pro.language.store_tile`用块号`[ti, 0]`定位，内部自动换算为绝对偏移`[ti*64, 0]`。Vector Kernel开启`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -86,6 +86,6 @@ def store_tile_kernel(
 其他典型用法（节选）：
 
 ```python
-# 4D BSND tensor：tile 对应第 1、3 维，其余维按绝对偏移
+# 4D BSND Tensor：Tile 对应第 1、3 维，其余维按绝对偏移
 pl.store_tile(p_buf, p_f16, [b_idx, qi * 2 + sub_id, n_idx, ki], order=[1, 3])
 ```

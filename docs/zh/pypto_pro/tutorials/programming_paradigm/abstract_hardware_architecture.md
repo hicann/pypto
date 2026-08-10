@@ -46,9 +46,9 @@ AI Core中的计算单元主要包括Scalar、Vector和Cube三类。
 
 ![SIMD-Reg向量计算内存层级](../figures/simd_reg_vector_memory_hierarchy.jpg)
 
-PyPTO Pro使用[`TileType.target_memory`](../../api/SIMD-API/basic_data_structures/TileType.md)将Tile映射到不同的片上Buffer：
+PyPTO Pro使用[`TileType.target_memory`](../../api/SIMD-API/basic_data_structures/TileType.md)将Tile映射到不同的片上缓冲区：
 
-| `pl.MemorySpace` | 物理Buffer | 典型角色 |
+| `pl.MemorySpace` | 物理缓冲区 | 典型角色 |
 |:---|:---|:---|
 | `Vec` | UB（Unified Buffer） | 向量计算的输入、输出和中间结果 |
 | `Mat` | L1 Buffer | GM与L0A/L0B之间的矩阵暂存 |
@@ -72,7 +72,7 @@ DMA（Direct Memory Access）搬运单元负责Global Memory与Local Memory之�
 
 ## Tile与硬件存储的映射
 
-Tile是PyPTO Pro对片上Buffer的编程抽象。[`TileType`](../../api/SIMD-API/basic_data_structures/TileType.md)使用`shape`、`dtype`和`target_memory`描述Tile的逻辑形状、数据类型及所在的片上存储空间；矩阵场景还可以通过布局相关属性描述是否转置及内层分型。开发者通常只需选择目标存储空间，布局细节可沿用对应内存空间的默认值。
+Tile是PyPTO Pro对片上缓冲区的编程抽象。[`TileType`](../../api/SIMD-API/basic_data_structures/TileType.md)使用`shape`、`dtype`和`target_memory`描述Tile的逻辑形状、数据类型及所在的片上存储空间；矩阵场景还可以通过布局相关属性描述是否转置及内层分型。开发者通常只需选择目标存储空间，布局细节可沿用对应内存空间的默认值。
 
 ## 执行流程与同步机制
 
@@ -86,13 +86,16 @@ PyPTO Pro推荐使用`pl.make_tile_group`配合`@pl.jit(auto_mutex=True)`，由�
 
 ## 多核架构
 
-PyPTO Pro采用SPMD编程模型。Kernel描述单个AI Core的工作，每个Core执行相同程序并处理不同数据分片。`pl.get_block_idx()`和`pl.get_block_num()`分别获取当前Core编号和启动的Core总数。
+PyPTO Pro采用SPMD编程模型。各逻辑AI Core执行相同程序，并根据全局逻辑索引处理不同数据分片。`pl.get_block_num()`返回启动时配置的逻辑Block数量，`pl.get_block_idx()`返回当前执行域的全局逻辑核索引。
 
-Vector单元在每个block内包含两个subblock。`pl.get_subblock_idx()`返回`0`或`1`，用于需要在block内进一步切分Vector工作量的场景：
+在同时启动AIC与AIV的1:2混合Kernel中，每个逻辑Block对应一个AIC和两个AIV：
 
 ```text
-block_dim 个 block（AI Core）       ← launch 时决定，pl.get_block_num() 读到
-   └── 每个 block 内 2 个 subblock  ← pl.get_subblock_idx() 读到
+block_dim个逻辑Block
+├── Cube段：block_dim个AIC，get_block_idx()范围为[0, block_dim)
+└── Vector段：2 * block_dim个AIV，get_block_idx()范围为[0, 2 * block_dim)
 ```
+
+`pl.get_subblock_idx()`用于区分同一逻辑Block内的AIV，返回`0`或`1`；Vector段的`pl.get_block_idx()`是展平后的全局AIV逻辑索引，可直接用于数据分片。
 
 多核和subblock切分方法参见[多核切分与Tiling](../operator_development/tile_based_python_programming/multi_core_partitioning_and_Tiling.md)。

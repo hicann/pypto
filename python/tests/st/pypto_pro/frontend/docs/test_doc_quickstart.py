@@ -24,6 +24,7 @@ import pypto_pro.language as pl
 from pypto_pro.language import Vf
 import pytest
 import torch
+import torch_npu  # noqa: F401 — registers npu backend
 
 vf = Vf
 

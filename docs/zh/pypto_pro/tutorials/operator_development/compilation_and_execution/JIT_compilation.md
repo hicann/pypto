@@ -13,6 +13,8 @@ JIT编译的流程如下：
 
 ## 基本用法
 
+以下示例使用[`pl.TileType`](../../../api/SIMD-API/basic_data_structures/TileType.md)定义Tile，通过[`pl.make_tile_group`](../../../api/SIMD-API/operation/resource_management/make_tile_group.md)分配片上缓冲区，并依次调用[`pl.load`](../../../api/SIMD-API/operation/memory_data_movement/load.md)、[`pl.add`](../../../api/SIMD-API/operation/memory_vector_computation/elementwise/add.md)和[`pl.store`](../../../api/SIMD-API/operation/memory_data_movement/store.md)完成数据搬入、计算和搬出。
+
 ```python
 import os
 import pypto_pro.language as pl
@@ -59,7 +61,7 @@ add_kernel[None, 1](a, b, out)        # 相同编译签名：直接执行
 JIT编译完成后，Kernel会被提交到NPU执行。启动语法为`kernel[stream, block_dim](...)`：
 
 - `stream`指定任务下发使用的PyTorch NPU Stream，传入`None`表示使用当前Stream。
-- `block_dim`指定参与执行的AI Core数量。各AI Core执行同一份Kernel代码，并通过`pl.get_block_idx()`区分各自处理的数据分片。
+- `block_dim`指定启动时使用的逻辑Block数量。各执行域中的逻辑AI Core执行同一份Kernel代码，并通过`pl.get_block_idx()`的全局逻辑索引区分数据分片；混合Kernel中AIC/AIV的实际逻辑核数还取决于两者比例。
 
 Kernel下发相对于Host异步执行。Host调用Kernel后会继续执行后续代码，不会自动等待NPU计算完成。因此，在读取输出、进行精度比较或统计Kernel耗时之前，需要同步对应的Stream：
 

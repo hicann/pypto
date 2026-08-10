@@ -27,7 +27,7 @@ pypto_pro.language.struct_array(size, "TypeName", field1=default1, ...)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `size` | 输入 | 数组长度（正整数） |
-| `"TypeName"` | 输入 | 结构体类型名（字符串字面量） |
+| `"TypeName"` | 输入 | 结构体类型名（字符串常量） |
 | `field=value` | 输入 | 字段名和初始值（关键字参数） |
 
 ## 参数范围
@@ -35,9 +35,9 @@ pypto_pro.language.struct_array(size, "TypeName", field1=default1, ...)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `size` | 输入 | 必须是编译时常量正整数（`size >= 1`）<br>非常量或非正整数报`ParserSyntaxError` |
-| `"TypeName"` | 输入 | 必须是字符串字面量，作为第二个位置参数<br>缺失或非字符串报`ParserSyntaxError` |
+| `"TypeName"` | 输入 | 必须是字符串常量，作为第二个位置参数<br>缺失或非字符串报`ParserSyntaxError` |
 | `field=value` | 输入 | 至少一个关键字参数<br>字段名须为合法标识符<br>不支持`**kwargs`展开 |
-| `index`（存取时） | 输入 | 整数常量或运行时Expr（如`task_id % size`、循环变量`i`）<br>不支持负数索引、切片、`for slot in ctx_arr:`遍历、`len(ctx_arr)`<br>越界访问编译期检查，越界报`GetItemExpr index N out of bounds for tuple with M elements` |
+| `index`（存取时） | 输入 | 整型常量或运行时整型标量表达式（如`task_id % size`、循环变量`i`）<br>不支持负数索引、切片、`for slot in ctx_arr:`遍历、`len(ctx_arr)`<br>越界访问会在编译期报错 |
 
 ## 调用示例
 

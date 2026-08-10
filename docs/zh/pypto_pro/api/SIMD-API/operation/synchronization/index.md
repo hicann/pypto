@@ -4,7 +4,7 @@
 :maxdepth: 1
 :titlesonly:
 
-bar_v_bar_m_bar_all
+barrier
 mutex_lock_mutex_unlock
 set_cross_core_wait_cross_core
 sync_all

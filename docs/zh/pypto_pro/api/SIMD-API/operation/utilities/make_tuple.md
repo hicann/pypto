@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-编译期元组，纯IR不生成C++ 代码。将多个IR变量按字段名打包，字段访问被常量折叠回原值，零运行时开销。
+编译期元组，纯IR不生成C++代码。将多个IR变量按字段名打包，字段访问被常量折叠回原值，零运行时开销。
 
 与`pypto_pro.language.struct`的区别：`pypto_pro.language.struct`生成真实C++ struct（用于跨pipe传递），`pypto_pro.language.make_tuple`不生成C++ 代码（仅用于IR层面聚合变量）。
 
@@ -34,7 +34,7 @@ pypto_pro.language.make_tuple(field1=val1, field2=val2, ...)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `field=value` | 输入 | 至少一个关键字参数<br>字段名须为合法标识符<br>值支持的类型：标量变量（`Scalar`，如INT32/INT64）、标量表达式（`Expr`）、Python元组（如`(s.a, s.b)`，支持解包访问）<br>不支持位置参数<br>不支持`**kwargs`展开 |
+| `field=value` | 输入 | 至少一个关键字参数<br>字段名须为合法标识符<br>字段值支持Kernel内可解析的值表达式，包括Python标量值、Kernel标量表达式、Tensor、Tile、Ptr以及由这些值组成的Python元组（如`(tile0, tile1)`）<br>不支持位置参数<br>不支持`**kwargs`展开 |
 
 ## 补充说明
 
@@ -42,9 +42,9 @@ pypto_pro.language.make_tuple(field1=val1, field2=val2, ...)
 
 典型使用场景：
 
-1. **函数返回多个值**：将多个tile或变量打包返回，避免使用全局变量
+1. **函数返回多个值**：将多个Tile或变量打包返回，避免使用全局变量
 2. **组织相关变量**：将逻辑上相关的变量分组，提高代码可读性
-3. **双缓冲管理**：将ping/pong缓冲区的多个tile打包，通过字段名访问
+3. **双缓冲管理**：将ping/pong缓冲区的多个Tile打包，通过字段名访问
 
 与`struct`的选择：
 

@@ -14,13 +14,13 @@
 
 ## 功能说明
 
-用一个裸指针（`pypto_pro.language.Ptr[dtype]`）或已有Tensor，加上显式的shape / stride，构造一个tensor view。view本身不分配内存，只是给同一段GM地址套上“形状 + 步长”的解释，之后即可像普通GM tensor一样被[`load`](../memory_data_movement/load.md)/[`store`](../memory_data_movement/store.md)使用。
+用一个裸指针（`pypto_pro.language.Ptr[dtype]`）或已有Tensor，加上显式的shape和stride，构造一个Tensor视图。Tensor视图本身不分配内存，只为同一段GM地址设置“形状 + 步长”的解释，之后即可像普通GM Tensor一样被[`load`](../memory_data_movement/load.md)/[`store`](../memory_data_movement/store.md)使用。
 
-常与[`pypto_pro.language.addptr`](addptr.md)配合：用`addptr`切出workspace的某一段地址，再用`make_tensor`把它包装成可读写的tensor。
+常与[`pypto_pro.language.addptr`](addptr.md)配合：用`addptr`切出workspace的某一段地址，再用`make_tensor`把它包装成可读写的Tensor。
 
-下图展示`make_tensor`的核心语义：它使用shape和stride为已有地址创建Tensor View，不申请新内存，也不搬运数据。
+下图展示`make_tensor`的核心语义：它使用shape和stride为已有地址创建Tensor视图，不申请新内存，也不搬运数据。
 
-![make_tensor从裸指针创建Tensor View](../../../figures/make_tensor_view.jpg "make_tensor从裸指针创建Tensor View")
+![make_tensor从裸指针创建Tensor视图](../../../figures/make_tensor_view.jpg "make_tensor从裸指针创建Tensor视图")
 
 ## 函数原型
 
@@ -42,8 +42,8 @@ pypto_pro.language.make_tensor(ptr, shape, stride, dtype=None) -> Tensor
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `ptr` | 输入 | 须为`pypto_pro.language.Ptr[dtype]`标注的裸指针或已有Tensor；view与源对象共享底层数据地址 |
-| `shape` | 输入 | 各维大小（int常量或`Expr`）；与`stride`长度一致 |
-| `stride` | 输入 | 各维步长，单位为**元素**。元素`[i0, i1, ...]`相对`ptr`的偏移为`i0 * stride[0] + i1 * stride[1] + ...`；stride可以表达连续视图、高轴非连续视图或交换轴后的视图 |
+| `shape` | 输入 | 各维大小（整型常量或运行时整型标量表达式）；与`stride`长度一致 |
+| `stride` | 输入 | 各维步长，单位为**元素**。元素`[i0, i1, ...]`相对`ptr`的偏移为`i0 * stride[0] + i1 * stride[1] + ...`；stride可以表达连续、高轴非连续或交换轴后的视图 |
 | `dtype` | 输入 | 可选，若传入则view以该dtype创建（相当于把源地址reinterpret为`dtype`）；不传时沿用源指针或源Tensor的元素类型 |
 
 > [!NOTE]说明
@@ -51,7 +51,7 @@ pypto_pro.language.make_tensor(ptr, shape, stride, dtype=None) -> Tensor
 
 ## stride视图示例
 
-下面两个场景都是对基础Tensor View的进一步使用：左侧通过高轴stride表达行间空洞，右侧通过交换shape和stride表达转置后的逻辑索引。
+下面两个场景都是对基础Tensor视图的进一步使用：左侧通过高轴stride表达行间空洞，右侧通过交换shape和stride表达转置后的逻辑索引。
 
 ![make_tensor的非连续与转置视图](../../../figures/make_tensor_stride_cases.jpg "make_tensor的非连续与转置视图")
 
@@ -69,7 +69,7 @@ pitched = pl.make_tensor(ptr, [8, 16], [32, 1])
 ptr + i * 32 + j
 ```
 
-这种视图适合表达带行间填充（padding）或从更宽二维Tensor中截取的尾轴连续区域。
+这种视图适合表达带行间填充（Padding）或从更宽二维Tensor中截取的尾轴连续区域。
 
 ### 交换shape和stride表达转置视图
 
@@ -87,11 +87,11 @@ normal[i, j]     -> ptr + i * 16 + j
 transposed[j, i] -> ptr + j * 1 + i * 16
 ```
 
-因此`normal[i, j]`与`transposed[j, i]`指向同一个物理元素。这里的“等价”是指交换逻辑索引后地址相同，并不是两个view在相同索引下取值相同。
+`normal[i, j]`与`transposed[j, i]`的地址相同；相同索引下的两个Tensor视图对应不同的物理元素。
 
 ## 调用示例
 
-下面是一个完整kernel：用`addptr`将workspace偏移到后半段后，`make_tensor`把裸指针包装成`[64, 128]`的tensor view作为暂存区，完成`a*2`写回`out`。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：用`addptr`将workspace偏移到后半段后，`make_tensor`把裸指针包装成`[64, 128]`的Tensor视图作为暂存区，完成`a*2`写回`out`。Vector Kernel开启`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

@@ -1,4 +1,4 @@
-# pypto_pro.language.system.bar_v / pypto_pro.language.system.bar_m / pypto_pro.language.system.bar_all
+# pypto_pro.language.system.bar_v / pypto_pro.language.system.bar_m / pypto_pro.language.system.bar_mte1 / pypto_pro.language.system.bar_mte2 / pypto_pro.language.system.bar_mte3 / pypto_pro.language.system.bar_fix / pypto_pro.language.system.bar_all
 
 ## 产品支持情况
 
@@ -14,13 +14,17 @@
 
 ## 功能说明
 
-Barrier同步：分别对向量、矩阵、全局做屏障，等待前序操作完成。
+Barrier同步：对V、M、MTE1、MTE2、MTE3、FIX或全部流水线做屏障，等待前序操作完成。
 
 ## 函数原型
 
 ```python
 pypto_pro.language.system.bar_v()
 pypto_pro.language.system.bar_m()
+pypto_pro.language.system.bar_mte1()
+pypto_pro.language.system.bar_mte2()
+pypto_pro.language.system.bar_mte3()
+pypto_pro.language.system.bar_fix()
 pypto_pro.language.system.bar_all()
 ```
 
@@ -28,11 +32,15 @@ pypto_pro.language.system.bar_all()
 
 ## 流水类型
 
-| API | 同步范围 |
-|---|---|
-| `bar_v()` | 向量（V）流水线内barrier，等待前序所有向量操作完成 |
-| `bar_m()` | 矩阵（M）流水线内barrier，等待前序所有矩阵操作完成 |
-| `bar_all()` | 全局barrier，等待所有流水线（V/M/MTE1/MTE2/MTE3/FIX）前序操作完成 |
+| API | 同步范围 | 调用位置 |
+|---|---|---|
+| `bar_v()` | 向量（V）流水线内barrier，等待前序所有向量操作完成 | Vector section |
+| `bar_m()` | 矩阵（M）流水线内barrier，等待前序所有矩阵操作完成 | Cube section |
+| `bar_mte1()` | MTE1流水线内barrier，等待前序所有MTE1操作完成 | Cube section |
+| `bar_mte2()` | MTE2流水线内barrier，等待前序所有MTE2操作完成 | Cube或Vector section |
+| `bar_mte3()` | MTE3流水线内barrier，等待前序所有MTE3操作完成 | Cube或Vector section |
+| `bar_fix()` | FIX流水线内barrier，等待前序所有FIX操作完成 | Cube section |
+| `bar_all()` | 全局barrier，等待所有流水线（V/M/MTE1/MTE2/MTE3/FIX）前序操作完成 | Cube或Vector section |
 
 ## 调用示例
 
@@ -64,9 +72,9 @@ def bar_all_kernel(
             pl.store(out, tile_out, [i, 0])
 ```
 
-### bar_m —— cube（矩阵）流水线内barrier
+### bar_m —— Cube（矩阵）流水线内barrier
 
-在`section_cube()`中，两次matmul之间用`bar_m()`同步，确保前一次矩阵乘完成后再开始下一次。下面是一个完整kernel：两次matmul之间插入`bar_m()`，第二次覆盖acc，最终`out = a @ b`。
+在`section_cube()`中，两次matmul之间用`bar_m()`同步，确保前一次矩阵乘完成后再开始下一次。下面是一个完整Kernel：两次matmul之间插入`bar_m()`，第二次覆盖acc，最终`out = a @ b`。
 
 ```python
 import pypto_pro.language as pl
@@ -112,7 +120,7 @@ def bar_m_kernel(
         pl.store(out, ac, [0, 0])
 ```
 
-### bar_v —— vector流水线内barrier
+### bar_v —— Vector流水线内barrier
 
 `gt`与`select`之间用`bar_v()`同步，确保掩码生成完成后再选择。
 

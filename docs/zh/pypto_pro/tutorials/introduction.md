@@ -36,13 +36,13 @@ PyPTO Pro应用程序相应地包含Host代码和Device代码。Host侧使用Pyt
 
 ## AI Core与并行执行模型
 
-一枚昇腾NPU通常包含多个AI Core，每个AI Core内部具有标量、向量和矩阵运算单元以及片上存储。在PyPTO Pro中，一个**Block对应一个AI Core**，启动Kernel时通过`block_dim`指定参与执行的AI Core数量：
+一个昇腾NPU通常包含多个AI Core，每个AI Core内部具有标量、向量和矩阵运算单元以及片上存储。PyPTO Pro使用逻辑Block描述并行任务，启动Kernel时通过`block_dim`配置逻辑Block数量：
 
 - `pl.get_block_num()`获取本次启动的Block总数。
-- `pl.get_block_idx()`获取当前Block的编号，取值范围为`0`到`block_num - 1`。
-- `pl.get_subblock_idx()`获取AI Core内部的Vector子核编号，仅在需要区分子核时使用。
+- `pl.get_block_idx()`获取当前执行域中逻辑AI Core的全局索引。仅启动Cube或仅启动Vector时，其范围为`[0, block_num)`；1:2混合Kernel的Vector段中，其范围为`[0, 2 * block_num)`。
+- `pl.get_subblock_idx()`获取当前逻辑Block内的subblock索引，仅在混合Kernel需要区分同一Block内的AIV时使用；Vector段的`get_block_idx()`已经包含该信息。
 
-PyPTO Pro采用外层SPMD与内层SIMD结合的并行方式。SPMD（Single Program Multiple Data，单程序多数据）表示多个AI Core执行同一份Kernel代码，各Core依据Block编号处理不同的数据分片；SIMD（Single Instruction Multiple Data，单指令多数据）表示AI Core内部的一条指令同时处理多个同构数据元素，适合矩阵、向量及融合计算。
+PyPTO Pro采用外层SPMD与内层SIMD结合的并行方式。SPMD（Single Program Multiple Data，单程序多数据）表示多个逻辑AI Core执行同一份Kernel代码，并依据全局逻辑索引处理不同的数据分片；SIMD（Single Instruction Multiple Data，单指令多数据）表示AI Core内部的一条指令同时处理多个同构数据元素，适合矩阵、向量及融合计算。
 
 ## Kernel运行流程
 
@@ -51,7 +51,7 @@ PyPTO Pro算子的典型运行流程如下：
 1. **准备数据**：Host侧通过PyTorch在Device Memory上创建输入、输出张量。
 2. **启动Kernel**：通过`kernel[stream, block_dim](...)`调用Kernel；首次调用触发JIT编译，后续调用可复用编译产物。
 3. **多核分块**：各AI Core通过Block编号认领数据分片，通常使用`pl.range(core_id, total, num_cores)`实现跨步分配。
-4. **搬入、计算与搬出**：Kernel使用`pl.load`/`pl.load_tile`将数据搬入片上Buffer，调用`pl.add`、`pl.matmul`等Tile API完成计算，再通过`pl.store`/`pl.store_tile`将结果写回Device Memory。
+4. **搬入、计算与搬出**：Kernel使用`pl.load`/`pl.load_tile`将数据搬入片上缓冲区，调用`pl.add`、`pl.matmul`等Tile API完成计算，再通过`pl.store`/`pl.store_tile`将结果写回Device Memory。
 5. **同步并访问结果**：Kernel相对于Host异步执行，Host在读取结果前应调用`torch.npu.synchronize()`等待任务完成。
 
 ## 核心特性
