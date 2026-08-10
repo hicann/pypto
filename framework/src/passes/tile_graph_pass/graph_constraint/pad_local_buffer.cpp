@@ -329,10 +329,19 @@ void PadLocalBuffer::PadVector256(Operation& op, LogicalTensorPtr& in, bool need
 {
     constexpr size_t kAlignBytes = 32;
     constexpr size_t kShapeSizeThres = 2;
+    constexpr size_t kVectorBytes = 256;
     size_t lastDimBytes = AlignmentUtils::GetLastDimBytes(in);
     if (needRowPad && lastDimBytes != 0 && (lastDimBytes % kAlignBytes == 0)) {
         if (in->shape.size() < kShapeSizeThres || in->tensor->rawshape.size() < kShapeSizeThres) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Tensor %d shape or rawshape less than 2D\n", in->GetMagic());
+            if (in->shape.size() == 1 && in->tensor->rawshape.size() == 1) {
+                auto vectorAlign = AlignmentUtils::GetLastDimAlignBase(in) *
+                                   static_cast<int64_t>(kVectorBytes / kAlignBytes);
+                in->tensor->rawshape[0] = std::max(in->tensor->rawshape[0], vectorAlign);
+                APASS_LOG_INFO_F(Elements::Operation, "Op %d %s 1D input rawshape has been padded to 256B\n",
+                                 op.opmagic, op.GetOpcodeStr().c_str());
+            } else {
+                APASS_LOG_ERROR_F(Elements::Tensor, "Tensor %d shape or rawshape dimension mismatch\n", in->GetMagic());
+            }
             return;
         }
 

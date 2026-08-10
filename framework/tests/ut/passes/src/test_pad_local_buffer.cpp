@@ -1113,6 +1113,27 @@ TEST_F(TestPadLocalBuffer, padCmpsInputTo256)
     EXPECT_EQ(graphBuilder.GetTensor("t2")->GetRawTensor()->GetRawShape()[0], 10);
 }
 
+TEST_F(TestPadLocalBuffer, padCmps1DInputTo256)
+{
+    ComputationalGraphBuilder graphBuilder;
+    EXPECT_EQ(graphBuilder.AddTensor(DataType::DT_FP32, {8}, MemoryType::MEM_DEVICE_DDR, "in1"), true);
+    EXPECT_EQ(graphBuilder.AddTensor(DataType::DT_FP32, {8}, MemoryType::MEM_DEVICE_DDR, "in2"), true);
+    EXPECT_EQ(graphBuilder.AddTensor(DataType::DT_FP32, {8}, MemoryType::MEM_UB, "t1"), true);
+    EXPECT_EQ(graphBuilder.AddTensor(DataType::DT_FP32, {8}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graphBuilder.AddOp(Opcode::OP_COPY_IN, {"in1"}, {"t1"}, "copyin1", true), true);
+    EXPECT_EQ(graphBuilder.AddOp(Opcode::OP_COPY_IN, {"in2"}, {"t2"}, "copyin2", true), true);
+    EXPECT_EQ(graphBuilder.AddTensor(DataType::DT_BOOL, {8}, MemoryType::MEM_UB, "t3"), true);
+    EXPECT_EQ(graphBuilder.AddOp(Opcode::OP_CMPS, {"t1", "t2"}, {"t3"}, "cmps1", true), true);
+    EXPECT_EQ(graphBuilder.AddTensor(DataType::DT_BOOL, {8}, MemoryType::MEM_DEVICE_DDR, "out1"), true);
+    EXPECT_EQ(graphBuilder.AddOp(Opcode::OP_COPY_OUT, {"t3"}, {"out1"}, "copyout1", true), true);
+    graphBuilder.GetOp("cmps1")->SetAttr(OpAttributeKey::rowPad, std::vector<bool>({true, false}));
+
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*graphBuilder.GetFunction()), SUCCESS);
+    EXPECT_EQ(graphBuilder.GetTensor("t1")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{64}));
+    EXPECT_EQ(graphBuilder.GetTensor("t2")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{8}));
+}
+
 TEST_F(TestPadLocalBuffer, padPreluInputTo256)
 {
     ComputationalGraphBuilder graphBuilder;
