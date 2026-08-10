@@ -273,7 +273,8 @@ void Platform::LoadPlatformInfo(const PlatformParser& parser)
     if (parser.GetStringVal(version, shortSocVer, shortSocVersion)) {
         GetSoc().SetShortSocVersion(shortSocVersion);
     }
-    if (parser.GetStringVal(socInfo, cubeVectorMix, cvMix)) { // for litenpu ini CV mix, cloudnpu ini uses different key
+    if (IsLiteNPU(GetSoc().GetNPUArch()) &&
+        parser.GetStringVal(socInfo, cubeVectorMix, cvMix)) { // for litenpu ini CV mix, cloudnpu ini uses different key
         GetSoc().GetCoreWrap().SetIsCVMix(cvMix == cubeVectorMix);
     }
     if (parser.GetCCECVersion(versionInfo)) {

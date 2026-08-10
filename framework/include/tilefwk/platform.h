@@ -268,7 +268,7 @@ private:
     AivCore aiv_core_;
     size_t aic_cnt_;
     size_t aiv_cnt_;
-    bool is_cv_mix_;
+    bool is_cv_mix_ = false;
 
 public:
     size_t GetAICNum() const { return aic_cnt_; }
