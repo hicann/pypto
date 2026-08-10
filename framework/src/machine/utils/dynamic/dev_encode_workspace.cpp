@@ -128,7 +128,7 @@ void ValidateMaxWorkspaceOrThrow(uint64_t maxWorkspaceBytes, uint64_t workspaceS
 {
     constexpr int kMin = 1;
     if (maxWorkspaceBytes > 0 && maxWorkspaceBytes < workspaceStitchMin) {
-        MACHINE_LOGE(DevCommonErr::PARAM_CHECK_FAILED,
+        MACHINE_LOGE(ExternalError::INVALID_VAL,
                      "[workspaceSize] max_workspace_kb=%lu is below minimum runnable workspace=%lu bytes (k_min=%d). "
                      "Reduce operator workspace requirements or increase max_workspace_kb.",
                      WorkspaceBytesToKbCeil(maxWorkspaceBytes), workspaceStitchMin, kMin);

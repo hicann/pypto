@@ -22,6 +22,7 @@
 #include "machine/utils/dynamic/workspace_budget_calculator.h"
 #include "machine/utils/dynamic/dev_workspace.h"
 #include "tilefwk/data_type.h"
+#include "tilefwk/error.h"
 #include "tilefwk/tilefwk_op.h"
 #include "interface/configs/config_manager.h"
 #include "interface/configs/config_manager_ng.h"
@@ -377,6 +378,46 @@ TEST_F(TestDevEncode, test_memory_driven_derives_k_eff_at_minimum)
     ASSERT_NE(devProg, nullptr);
     EXPECT_EQ(devProg->memBudget.tensor.memoryDrivenWorkspace, 1u);
     EXPECT_GE(minKb * 1024, workspaceStitchMin);
+}
+
+TEST_F(TestDevEncode, test_validate_max_workspace_or_throw)
+{
+    constexpr uint64_t kStitchMin = 32ULL * 1024;
+    EXPECT_NO_THROW(ValidateMaxWorkspaceOrThrow(0, kStitchMin));
+    EXPECT_NO_THROW(ValidateMaxWorkspaceOrThrow(kStitchMin, kStitchMin));
+    EXPECT_NO_THROW(ValidateMaxWorkspaceOrThrow(kStitchMin + 1, kStitchMin));
+    EXPECT_THROW(ValidateMaxWorkspaceOrThrow(1024, kStitchMin), Error);
+    EXPECT_THROW(ValidateMaxWorkspaceOrThrow(10ULL * 1024, kStitchMin), Error);
+}
+
+TEST_F(TestDevEncode, test_max_workspace_kb_below_operator_min_throws)
+{
+    SetupMemoryDrivenEncodeTest(64);
+    int s = kMemoryDrivenTileSize;
+    Tensor t0(DT_FP32, {s, s}, "t0");
+    Tensor t1(DT_FP32, {s, s}, "t1");
+    Tensor out(DT_FP32, {kMemoryDrivenLoopCount * s, s}, "out");
+    BuildSimpleLoopFunction("max_ws_below_min_probe", "max_ws_below_min_probe_L0", t0, t1, out);
+    DevAscendProgram* devProg = GetLastDevProg();
+    ASSERT_NE(devProg, nullptr);
+    const uint64_t workspaceStitchMin = ComputeWorkspaceStitchMin(devProg);
+    if (workspaceStitchMin == 0) {
+        GTEST_SKIP() << "Spill-free kernel has zero stitch-min workspace; skip max_workspace_kb below-min check.";
+    }
+
+    constexpr uint64_t kTinyMaxWorkspaceKb = 1;
+    ASSERT_LT(kTinyMaxWorkspaceKb * 1024, workspaceStitchMin);
+
+    SetupMemoryDrivenEncodeTest(64, kTinyMaxWorkspaceKb);
+    RecordFunc rec("max_ws_below_min", {t0, t1}, {out});
+    for ([[maybe_unused]] auto& step : rec) {
+        LOOP("max_ws_below_min_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(kMemoryDrivenLoopCount))
+        {
+            auto temp = Add(t0, t1);
+            Assemble(temp, {i * kMemoryDrivenTileSize, 0}, out);
+        }
+    }
+    EXPECT_THROW(rec.EndFunction(), Error);
 }
 
 TEST_F(TestDevEncode, test_memory_driven_runtime_outcast_cache_depth)
