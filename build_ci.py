@@ -1067,6 +1067,7 @@ class BuildCtrl(CMakeParam):
         :param args: 命令行参数解析结果
         """
         self.clean: bool = args.clean  # 强制清理 Build-Tree 及 Install-Tree 标记
+        self.use_pip_install: bool = args.pip_install  # 使用 pip install 模式直接安装 whl, 默认走 run 包安装
         self.origin_timeout: Optional[int] = args.timeout if args.timeout and args.timeout > 0 else None  # 超时时长
         self.remain_timeout: Optional[int] = self.origin_timeout
         self.src_root: Path = Path(__file__).parent.resolve()
@@ -1121,6 +1122,7 @@ class BuildCtrl(CMakeParam):
         desc += "\nFlag"
         desc += f"\n    Clean                   : {self.clean}"
         desc += f"\n    Verbose                 : {self.verbose}"
+        desc += f"\n    PipInstall              : {self.use_pip_install}"
         desc += "\nOthers"
         desc += f"\n    Timeout                 : {self.origin_timeout}"
         desc += f"\n    TagInfo                 : {self.tag_info}"
@@ -1164,6 +1166,12 @@ class BuildCtrl(CMakeParam):
             help="Specify 3rd Libraries Path",
         )
         parser.add_argument("--verbose", action="store_true", default=False, help="verbose, enable verbose output.")
+        parser.add_argument(
+            "--pip_install",
+            action="store_true",
+            default=False,
+            help="Use pip install mode to install whl package directly, default is run package installation.",
+        )
 
     @staticmethod
     def _resolve_ascend_cann_package_path() -> str:
@@ -1534,7 +1542,7 @@ class BuildCtrl(CMakeParam):
                  对 Python 源码的修改会即时生效, 无需重新安装
         """
         update_env = self.get_cfg_update_env()
-        if self._use_pip_install_mode() or self.feature.whl_editable:
+        if self._use_pip_install_mode():
             opt = " --no-compile --no-deps"
             opt += " --no-build-isolation" if not self.feature.whl_isolation else ""
 
@@ -1602,6 +1610,70 @@ class BuildCtrl(CMakeParam):
         logging.info("CMake Build(run) package, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
         _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="cmake-build-package")
         logging.info("CMake Build(run) package success, %s", duration)
+        # run 包生成后, 仅在需要跑测试时执行安装
+        if self.tests.enable:
+            self.run_install()
+
+    def _find_run_file(self) -> Optional[Path]:
+        """查找 py_build_run() 已生成的 run 包文件
+
+        run 包文件名由 cann-cmake 公共脚本决定, 形如 cann-pypto_9.1.0_linux-aarch64.run.
+        这里通过 glob 模式匹配, 避免硬编码版本号和架构名.
+
+        :return: run 包文件路径, 找不到则返回 None
+        :rtype: Optional[Path]
+        """
+        run_files = sorted(self.install_root.glob(pattern="cann-pypto*.run"))
+        if not run_files:
+            return None
+        return run_files[0]
+
+    def _ensure_parent_dirs_permission(self, path: Path):
+        """确保路径的所有父目录权限至少为 755
+
+        run 包安装脚本会递归检查安装路径的每一层父目录是否属于 root 且权限 >= 755,
+        此处提前修正, 避免安装失败.
+
+        :param path: 需要检查的目标路径
+        :type path: Path
+        """
+        for parent in path.parents:
+            if parent == Path("/"):
+                break
+            if not parent.exists():
+                continue
+            current_mod = parent.stat().st_mode & 0o777
+            if current_mod < 0o755:
+                logging.info("Chmod parent dir %s from %o to 755", parent, current_mod)
+                parent.chmod(0o755)
+
+    def run_install(self):
+        """执行 run 包安装
+
+        默认将 run 包安装到 install_root (即 build_out/) 目录下.
+        安装后的 site-packages 路径 (install_root/cann/python/site-packages) 会通过 _get_pip_install_dist()
+        自动加入 PYTHONPATH, 供后续测试使用.
+        """
+        if self.feature.just_build_whl:
+            logging.info("Run package installation is disabled when just_build_whl, skip.")
+            return
+        run_file = self._find_run_file()
+        if not run_file:
+            raise RuntimeError(f"Can't find run package in {self.install_root}, please run py_build_run first.")
+        install_path = self.install_root
+        install_path.mkdir(parents=True, exist_ok=True)
+        # run 包安装脚本要求安装路径及其所有父目录权限至少为 755
+        install_path.chmod(0o755)
+        self._ensure_parent_dirs_permission(install_path)
+        # 同时通过 umask 保证安装过程创建的新目录默认权限为 755
+        old_umask = os.umask(0o022)
+        cmd = f"bash {run_file} --full -q --pylocal --install-path={install_path}"
+        logging.info("Run Install, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        try:
+            _, duration = self.run_build_cmd(cmd=cmd, pg_desc="run-install")
+        finally:
+            os.umask(old_umask)
+        logging.info("Run Install success, %s", duration)
 
     def py_tests(self):
         """执行 Python 前端测试
@@ -1613,13 +1685,8 @@ class BuildCtrl(CMakeParam):
         if not tests_enable and not self.tests.example.enable and not self.tests.models.enable:
             return
         dist = self._get_pip_install_dist()
-        if not self._use_pip_install_mode():
-            # 此时需查找重装对应 whl 包
-            self.pip_uninstall(name=self.feature.whl_name, path=dist)  # 卸载 whl 包
-            whl = self._find_match_whl(name=self.feature.whl_name, path=dist)  # 查找 whl 包
-            if not whl:
-                raise RuntimeError(f"Can't find {self.feature.whl_name} whl file from {dist}")
-            self.pip_install(whl=whl, dest=dist, opt="--no-compile --no-deps")  # 安装 whl 包
+        # pip install / editable 模式下 dist 指向 whl 安装路径;
+        # run 包模式下 dist 指向 run 包安装后的 site-packages 路径, 自动加入 PYTHONPATH.
 
         # 执行用例, UTest
         # 在 Python 3.12 中, pytest-xdist 通过 os.fork() 创建子进程时会产生 DeprecationWarning.
@@ -1932,11 +1999,14 @@ class BuildCtrl(CMakeParam):
         return self.tests.utest.enable or self.tests.stest.enable
 
     def _use_pip_install_mode(self) -> bool:
-        return self.tests.utest.enable or self.tests.stest.enable
+        return self.use_pip_install or self.feature.whl_editable
 
     def _get_pip_install_dist(self) -> Optional[Path]:
-        # pip install -e 场景需直接安装到 site-packages 默认路径(与指定 --target 参数逻辑冲突), 其他场景安装到自定义目录
-        return None if self._use_pip_install_mode() and self.feature.whl_editable else self.install_root
+        if self._use_pip_install_mode():
+            # pip install -e 场景直接安装到 site-packages 默认路径(与 --target 参数冲突), 其他场景安装到自定义目录
+            return None if self.feature.whl_editable else self.install_root
+        # run 包模式下返回 run 包安装后的 site-packages 路径, 由 _get_py_tests_update_env 自动加入 PYTHONPATH
+        return self.install_root / "cann" / "python" / "site-packages"
 
     def _get_setuptools_build_ext_config_setting(self) -> Tuple[str, str]:
         cmake_args = f"{self.feature.get_cfg_cmd()} {self.build.get_cfg_cmd(ext=False)}"

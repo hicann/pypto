@@ -36,8 +36,9 @@ case "${GE_ST_RT2}" in
     Py3_ninja_simulation)
         python3 build_ci.py --clean --plat_name=manylinux2014 --timeout=360 --no_isolation --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --compile_dependency_check --verbose
         check_ret "PyPTO(Py3-Simulation) build whl failed"
-        chmod +x build_out/*.whl
-        pip install build_out/*.whl
+        bash build_out/cann-pypto_*.run --full -q --pylocal --install-path=./build_out
+        check_ret "PyPTO(Py3-Simulation) install run package failed"
+        export PYTHONPATH=./build_out/cann/python/site-packages:$PYTHONPATH
         python3 python/tests/ut/simulator/costmodel_cpu_swimlane.py
         check_ret "PyPTO(Py3-Simulation) build and run cann UTest failed"
         rm -rf /home/jenkins/Ascend/cann
@@ -47,8 +48,9 @@ case "${GE_ST_RT2}" in
         check_ret "PyPTO(Py3-Simulation) build with cann and run with uncann UTest failed"
         rm -rf build_out output
         python3 build_ci.py --clean --plat_name=manylinux2014 --timeout=300 --no_isolation --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --compile_dependency_check --verbose
-        chmod +x build_out/*.whl
-        pip install build_out/*.whl
+        bash build_out/cann-pypto_*.run --full -q --pylocal --install-path=./build_out
+        check_ret "PyPTO(Py3-Simulation) install run package failed"
+        export PYTHONPATH=./build_out/cann/python/site-packages:$PYTHONPATH
         python3 python/tests/ut/simulator/costmodel_cpu_swimlane.py
         check_ret "PyPTO(Py3-Simulation) build with uncann and run with uncann UTest failed"
         ;;
