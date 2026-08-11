@@ -322,6 +322,12 @@ std::vector<std::shared_ptr<LogicalTensor>> TensorMap::Find(std::shared_ptr<Logi
             belongTo.IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::EXECUTE_GRAPH)) {
             return {};
         }
+        /* A DYNAMIC function aggregates every sibling path's out-args (same
+         * loop-carry buffer, different SSA values) in its tensor map. A path/
+         * hidden function must never resolve its operands against that map. */
+        if (belongTo.Parent().GetFunctionType() == FunctionType::DYNAMIC) {
+            return {};
+        }
         return belongTo.Parent().GetTensorMap().Find(ttensor);
     }
 

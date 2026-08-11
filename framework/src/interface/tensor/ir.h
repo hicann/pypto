@@ -13,7 +13,6 @@
 #include <string>
 #include <map>
 #include <unordered_set>
-#include <vector>
 
 #include "ir/scalar_expr.h"
 #include "ir/stmt.h"
@@ -31,4 +30,7 @@ std::optional<int> GetVarMemoryId(const Var* var);
 // Collects allocation ids of a set of tensor Vars, used for alias-aware liveness
 // analysis. Skips Vars that have no allocation id.
 std::unordered_set<int> CollectMemoryIds(const std::unordered_set<const Var*>& vars);
+
+// Collects all scalar variables referenced by a tensor operation.
+void CollectScalarVarRefs(const TensorOpStmtPtr& op, std::unordered_set<const Var*>& var_uses);
 } // namespace pypto::ir

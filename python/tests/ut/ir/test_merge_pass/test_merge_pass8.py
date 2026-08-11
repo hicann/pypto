@@ -11,7 +11,7 @@ import pypto
 
 from ..test_common import check_snapshot, run_merge_pass
 
-ir = """
+IR = """
 @ir.function
 def foo(x@0: ir.Tensor, y@1: ir.Tensor, z@2: ir.Tensor):
     View_x@3 = VIEW(x@0, attrs=["fromOffset": [0, 0], "toValidShape": [RUNTIME_Min(RUNTIME_Max(RUNTIME_GetInputShapeDim(ARG_x,0), 0), 16), 16]])
@@ -130,4 +130,4 @@ def test_merge_pass8():
     y = pypto.Tensor([-1, 32], pypto.DT_FP32, 'y')
     z = pypto.Tensor([-1, 32], pypto.DT_FP32, 'z')
     func = run_merge_pass(foo, x, y, z)
-    check_snapshot(func, ir)
+    check_snapshot(func, IR)

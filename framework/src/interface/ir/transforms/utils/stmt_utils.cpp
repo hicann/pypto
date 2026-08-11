@@ -18,15 +18,14 @@
 #include "ir/expr.h"
 #include "ir/stmt.h"
 #include "ir/transforms/base/visitor.h"
-#include "interface/operation/operation.h"
+
+#include "interface/tensor/ir.h"
 
 namespace pypto {
 namespace ir {
 namespace utils {
 
 namespace {
-
-using npu::tile_fwk::Operation;
 
 class VarUseCollector : public IRVisitor {
 public:
@@ -72,13 +71,7 @@ private:
     void VisitStmt_(const TensorOpStmtPtr& op) override
     {
         IRVisitor::VisitStmt_(op);
-
-        auto operation = std::dynamic_pointer_cast<Operation>(std::const_pointer_cast<TensorOpStmt>(op));
-        if (operation) {
-            for (auto& attr : operation->GetDynamicAttributeList()) {
-                attr.get().GetVarRefs(var_uses);
-            }
-        }
+        CollectScalarVarRefs(op, var_uses);
     }
 
     bool skip_iter_updates_;
@@ -132,6 +125,28 @@ bool StmtsEqual(const std::vector<StmtPtr>& a, const std::vector<StmtPtr>& b)
 SeqStmtsPtr MakeSeqBody(const std::vector<StmtPtr>& stmts, const Span& span)
 {
     return std::make_shared<SeqStmts>(stmts, span);
+}
+
+ExprPtr LookupVarInExpr(ExprPtr expr, const VarExprMap& varMap)
+{
+    auto cur = std::dynamic_pointer_cast<const Var>(expr);
+    if (!cur) {
+        return expr;
+    }
+    // Resolve transitively: the map may chain (A->B, B->C); follow to the terminal.
+    // Guard against self/cyclic entries; stop at the first revisit.
+    std::unordered_set<const Var*> seen;
+    while (seen.insert(cur.get()).second) {
+        auto it = varMap.find(cur);
+        if (it == varMap.end()) {
+            return cur;
+        }
+        cur = std::dynamic_pointer_cast<const Var>(it->second);
+        if (!cur) {
+            return it->second;
+        }
+    }
+    return cur;
 }
 } // namespace utils
 } // namespace ir

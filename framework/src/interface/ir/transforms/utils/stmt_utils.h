@@ -48,6 +48,9 @@ SeqStmtsPtr MakeSeqBody(const std::vector<StmtPtr>& stmts, const Span& span);
 /// Map from a Var to the expression that should replace it.
 using VarExprMap = std::unordered_map<VarPtr, ExprPtr>;
 
+/// Recursively lookup and replace Var references of the `expr`.
+ExprPtr LookupVarInExpr(ExprPtr expr, const VarExprMap& varMap);
+
 /// IRMutator that replaces every Var leaf equal to a key in `varMap` with the mapped expression.
 /// Copy-on-write: subtrees with no substituted leaf are returned unchanged.
 class VarSubstitutor : public IRMutator {
@@ -57,11 +60,7 @@ public:
     explicit VarSubstitutor(const VarExprMap& varMap) : varMap_(varMap) {}
 
 protected:
-    ExprPtr VisitExpr_(const VarPtr& op) override
-    {
-        auto it = varMap_.find(op);
-        return it != varMap_.end() ? it->second : op;
-    }
+    ExprPtr VisitExpr_(const VarPtr& op) override { return LookupVarInExpr(op, varMap_); }
 
 private:
     const VarExprMap& varMap_;

@@ -10,7 +10,7 @@ import pypto
 
 from ..test_common import check_snapshot, run_merge_pass
 
-ir = """
+IR = """
 @ir.function
 def foo(x@0: ir.Tensor, y@1: ir.Tensor, z@2: ir.Tensor):
     for loop_idx_10 in ir.range(0, 2, 1, attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
@@ -64,4 +64,4 @@ def test_merge_pass1():
     y = pypto.Tensor([32, 32], pypto.DT_FP32, 'y')
     z = pypto.Tensor([32, 32], pypto.DT_FP32, 'z')
     func = run_merge_pass(foo, x, y, z)
-    check_snapshot(func, ir)
+    check_snapshot(func, IR)

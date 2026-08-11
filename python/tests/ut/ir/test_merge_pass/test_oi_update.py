@@ -11,7 +11,7 @@ import pypto
 
 from ..test_common import check_snapshot, run_merge_pass
 
-ir = """
+IR = """
 @ir.function
 def foo(a@0: ir.Tensor, b@1: ir.Tensor):
     for loop_idx_10, (b_1,) in ir.range(0, 10, 1, init_values=(b@1,), attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
@@ -89,4 +89,24 @@ def test_oi_update():
     y = pypto.Tensor((32, 32), pypto.DT_FP32)
     z = pypto.Tensor((32, 32), pypto.DT_FP32)
     func = run_merge_pass(foo, y, z)
-    check_snapshot(func, ir)
+    check_snapshot(func, IR)
+
+
+def test_oi_update_unroll():
+
+    def foo(a, b):
+        n = pypto.symbolic_scalar("n")
+        for x in pypto.loop(10):
+            for y in pypto.loop(10):
+                oi_update = pypto.tensor([32, 32], pypto.DT_FP32, "oi_update")
+                for i in pypto.loop(n, unroll_list=[32, 16, 8, 4, 1]):
+                    if i == 0:
+                        oi_update[:] = a + 1
+                    else:
+                        oi_update[:] = oi_update - 1
+                    if i + 1 >= n:
+                        b[:] = oi_update // 2
+
+    y = pypto.Tensor((32, 32), pypto.DT_FP32)
+    z = pypto.Tensor((32, 32), pypto.DT_FP32)
+    run_merge_pass(foo, y, z)

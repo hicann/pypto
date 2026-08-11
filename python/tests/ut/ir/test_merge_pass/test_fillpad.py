@@ -11,7 +11,7 @@ import pypto
 
 from ..test_common import check_snapshot, run_merge_pass
 
-ir = """
+IR = """
 @ir.function
 def foo(a@0: ir.Tensor, b@1: ir.Tensor):
     for loop_idx_12, (b_1,) in ir.range(0, (((n-0)/2)*2), 2, init_values=(b@1,), attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 2}):
@@ -47,4 +47,4 @@ def test_fillpad():
     y = pypto.Tensor((32, 32), pypto.DT_FP32)
     z = pypto.Tensor((32, 32), pypto.DT_FP32)
     func = run_merge_pass(foo, y, z)
-    check_snapshot(func, ir)
+    check_snapshot(func, IR)

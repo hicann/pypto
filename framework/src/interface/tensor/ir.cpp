@@ -74,6 +74,16 @@ std::unordered_set<int> CollectMemoryIds(const std::unordered_set<const Var*>& v
     return memory_ids;
 }
 
+void CollectScalarVarRefs(const TensorOpStmtPtr& op, std::unordered_set<const Var*>& var_uses)
+{
+    auto operation = std::dynamic_pointer_cast<Operation>(std::const_pointer_cast<TensorOpStmt>(op));
+    if (operation) {
+        for (auto& attr : operation->GetDynamicAttributeList()) {
+            attr.get().GetVarRefs(var_uses);
+        }
+    }
+}
+
 Pass pass::AggressiveDCE()
 {
     return pass::CreateFunctionPass(

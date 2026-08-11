@@ -158,7 +158,7 @@ def atomic_add(src: Tensor, offsets: List[Union[int, SymbolicScalar]], dst: Tens
 @op_wrapper
 def reshape(
     input: Tensor,
-    shape: List[int],
+    shape: List[Union[int, SymbolicScalar]],
     *,
     valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None,
     inplace: bool = False,

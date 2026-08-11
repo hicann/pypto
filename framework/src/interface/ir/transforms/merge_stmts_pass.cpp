@@ -41,16 +41,6 @@ struct BranchClassification {
     std::vector<SymbolicScalar> elseConds;
 };
 
-ExprPtr LookupVarInExpr(ExprPtr expr, const VarExprMap& varMap)
-{
-    auto var = std::dynamic_pointer_cast<const Var>(expr);
-    auto it = varMap.find(var);
-    if (it != varMap.end()) {
-        return it->second;
-    }
-    return expr;
-}
-
 StmtPtr SubstituteStmt(StmtPtr stmt, const VarExprMap& varMap)
 {
     if (!stmt || varMap.empty()) {
@@ -257,7 +247,7 @@ StmtPtr RewriteTerminatorValues(StmtPtr stmt, const VarExprMap& varMap)
     auto remapped = [&](const std::vector<ExprPtr>& values) {
         newValues.clear();
         for (auto& v : values) {
-            newValues.push_back(LookupVarInExpr(v, varMap));
+            newValues.push_back(utils::LookupVarInExpr(v, varMap));
         }
     };
     if (auto yieldStmt = As<YieldStmt>(stmt)) {
@@ -271,6 +261,10 @@ StmtPtr RewriteTerminatorValues(StmtPtr stmt, const VarExprMap& varMap)
     if (auto breakStmt = As<BreakStmt>(stmt)) {
         remapped(breakStmt->value_);
         return std::make_shared<BreakStmt>(newValues, breakStmt->span_);
+    }
+    if (auto retStmt = As<ReturnStmt>(stmt)) {
+        remapped(retStmt->value_);
+        return std::make_shared<ReturnStmt>(newValues, retStmt->span_);
     }
     return stmt;
 }
@@ -446,8 +440,20 @@ private:
     {
         std::vector<StmtPtr> collected;
 
-        // reverse source order, avoid O(n^2) front-insertion.
-        auto prepend = [&](const std::vector<StmtPtr>& ops) {
+        auto merge_survivor = [&](auto& ifstmt, auto& survivor, auto& conds) {
+            VarExprMap local;
+            auto ops = SpliceSurvivor(ifstmt, survivor, conds, local);
+            // `local` maps this dead-if's return vars to THIS survivor's outputs. Apply it to the
+            // already-collected consumers (they execute after the splice, so the outputs dominate)
+            if (!local.empty()) {
+                for (auto& c : collected) {
+                    c = SubstituteVars(c, local);
+                }
+                for (auto& kv : local) {
+                    subst[kv.first] = kv.second;
+                }
+            }
+            // survivor (reverse source order, avoiding O(n^2) front-insertion).
             for (auto rit = ops.rbegin(); rit != ops.rend(); ++rit) {
                 collected.push_back(*rit);
             }
@@ -458,15 +464,12 @@ private:
             if (auto ifStmt = As<IfStmt>(stmt)) {
                 auto cls = ClassifyIfBranches(ifStmt, condPath);
                 if (cls.thenDead) {
-                    if (ifStmt->elseBody_) {
-                        auto ops = SpliceSurvivor(ifStmt, *ifStmt->elseBody_, cls.elseConds, subst);
-                        prepend(ops);
-                    }
+                    if (ifStmt->elseBody_)
+                        merge_survivor(ifStmt, *ifStmt->elseBody_, cls.elseConds);
                     continue;
                 }
                 if (cls.elseDead) {
-                    auto ops = SpliceSurvivor(ifStmt, ifStmt->thenBody_, cls.thenConds, subst);
-                    prepend(ops);
+                    merge_survivor(ifStmt, ifStmt->thenBody_, cls.thenConds);
                     continue;
                 }
                 std::reverse(collected.begin(), collected.end());
@@ -527,8 +530,9 @@ private:
         VarExprMap substMap;
 
         for (auto& stmt : seq->stmts_) {
-            // yield/continue are block terminators. while/for is dynamic loop could not be merged also
-            if (IsA<YieldStmt>(stmt) || IsA<ContinueStmt>(stmt) || IsA<ForStmt>(stmt) || IsA<WhileStmt>(stmt)) {
+            // yield/continue/return are block terminators. while/for is dynamic loop could not be merged also
+            if (IsA<YieldStmt>(stmt) || IsA<ContinueStmt>(stmt) || IsA<ReturnStmt>(stmt) || IsA<ForStmt>(stmt) ||
+                IsA<WhileStmt>(stmt)) {
                 MergeSegment(segment, condPath, merged, cloneMap, substMap);
                 merged.push_back(stmt);
                 segment.clear();
@@ -541,6 +545,14 @@ private:
 
         if (!substMap.empty()) {
             for (auto& s : merged) {
+                // substMap rewrites a SAT-dead IfStmt's return vars to its spliced survivor's outputs.
+                // That rewrite is only valid for consumers that execute AFTER the survivor. Inside a
+                // compound stmt's own body those return vars are input reads (dominated by defs before
+                // the splice), so recursing into them would replace an in-scope def with the survivor's
+                // own output -- a non-dominating self-reference. Apply only to non-compound siblings.
+                if (IsA<IfStmt>(s) || IsA<ForStmt>(s) || IsA<WhileStmt>(s)) {
+                    continue;
+                }
                 s = SubstituteVars(s, substMap);
             }
         }

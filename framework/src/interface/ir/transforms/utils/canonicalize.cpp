@@ -18,7 +18,10 @@
 
 #include "ir/expr.h"
 #include "ir/stmt.h"
+#include "ir/transforms/base/visitor.h"
 #include "stmt_utils.h"
+
+#include "interface/tensor/ir.h"
 
 namespace pypto {
 namespace ir {
@@ -26,6 +29,7 @@ namespace ir {
 namespace {
 
 using utils::CollectStmtVarRefs;
+using utils::CollectVarUses;
 using utils::StmtsEqual;
 
 std::vector<ExprPtr> MakeReturnVars(const std::vector<ExprPtr>& values, const std::vector<size_t>& kept_indices)
@@ -50,6 +54,129 @@ void FilterTrailingTerminator(std::vector<StmtPtr>& stmts, const std::vector<siz
     }
 }
 
+/// A (defs, uses) pair used for carry-liveness propagation.
+struct DefSite {
+    std::vector<const Var*> defs;
+    std::unordered_set<const Var*> uses;
+};
+
+class LivenessCollector : public IRVisitor {
+public:
+    using IRVisitor::VisitStmt_;
+
+    std::vector<DefSite> sites;
+    std::vector<const Var*> liveDefs;
+
+private:
+    std::vector<const std::vector<VarPtr>*> rvStack_;
+
+    bool IsSideEffectOp(const std::string& op)
+    {
+        return op == "ASSEMBLE" || op == "ASSEMBLE_SSA" || op == "ATOMIC_RMW";
+    }
+
+    void AddSite(std::vector<const Var*> defs, std::unordered_set<const Var*> uses)
+    {
+        sites.push_back({std::move(defs), std::move(uses)});
+    }
+    void AddTerminator(const std::vector<ExprPtr>& values)
+    {
+        const auto& returnVars = *rvStack_.back();
+        for (size_t k = 0; k < values.size(); ++k) {
+            AddSite({returnVars[k].get()}, CollectVarUses(values[k]));
+        }
+    }
+
+    void VisitStmt_(const AssignStmtPtr& op) override { AddSite({op->var_.get()}, CollectVarUses(op->value_)); }
+
+    void VisitStmt_(const TensorOpStmtPtr& op) override
+    {
+        std::unordered_set<const Var*> uses;
+
+        for (const auto& arg : op->args_) {
+            auto r = CollectVarUses(arg);
+            uses.insert(r.begin(), r.end());
+        }
+        for (const auto& token : op->tokens_) {
+            uses.insert(token.get());
+        }
+        CollectScalarVarRefs(op, uses);
+
+        std::vector<const Var*> defs;
+        for (const auto& res : op->result_) {
+            defs.push_back(res.get());
+            if (IsSideEffectOp(op->opcode_)) {
+                liveDefs.push_back(res.get());
+            }
+        }
+        if (op->result_token_) {
+            defs.push_back(op->result_token_.get());
+        }
+
+        AddSite(std::move(defs), uses);
+    }
+
+    void VisitStmt_(const YieldStmtPtr& op) override { AddTerminator(op->value_); }
+    void VisitStmt_(const BreakStmtPtr& op) override { AddTerminator(op->value_); }
+    void VisitStmt_(const ContinueStmtPtr& op) override { AddTerminator(op->value_); }
+
+    void VisitStmt_(const IfStmtPtr& op) override
+    {
+        rvStack_.push_back(&op->returnVars_);
+        VisitStmt(op->thenBody_);
+        if (op->elseBody_.has_value()) {
+            VisitStmt(*op->elseBody_);
+        }
+        rvStack_.pop_back();
+    }
+    void VisitStmt_(const ForStmtPtr& op) override
+    {
+        rvStack_.push_back(&op->returnVars_);
+        VisitStmt(op->body_);
+        rvStack_.pop_back();
+    }
+    void VisitStmt_(const WhileStmtPtr& op) override
+    {
+        rvStack_.push_back(&op->returnVars_);
+        VisitStmt(op->body_);
+        rvStack_.pop_back();
+    }
+};
+
+std::unordered_set<const Var*> ComputeLiveVars(const StmtPtr& stmt, const std::unordered_set<const Var*>& afterRefs)
+{
+    LivenessCollector collector;
+    collector.VisitStmt(stmt);
+
+    std::unordered_set<const Var*> live(afterRefs);
+    for (auto def : collector.liveDefs) {
+        live.insert(def);
+    }
+
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (const auto& site : collector.sites) {
+            bool anyDefLive = false;
+            for (auto def : site.defs) {
+                if (live.count(def)) {
+                    anyDefLive = true;
+                    break;
+                }
+            }
+            if (!anyDefLive) {
+                continue;
+            }
+            for (auto use : site.uses) {
+                if (live.insert(use).second) {
+                    changed = true;
+                }
+            }
+        }
+    }
+    return live;
+}
+
 template <typename T, typename Rebuild>
 StmtPtr CanonicalizeLoopImpl(const T& stmt, const std::unordered_set<const Var*>& afterRefs, Rebuild rebuild)
 {
@@ -60,13 +187,10 @@ StmtPtr CanonicalizeLoopImpl(const T& stmt, const std::unordered_set<const Var*>
         return rebuild(stmt->iterArgs_, body, stmt->returnVars_);
     }
 
-    auto refs = CollectStmtVarRefs(stmt->body_->stmts_, /*skip_iter_updates=*/true);
+    auto live = ComputeLiveVars(stmt, afterRefs);
     std::vector<size_t> keptIndices;
     for (size_t i = 0; i < stmt->returnVars_.size(); ++i) {
-        // Keep the carried value if it is live after the loop, OR its incoming
-        // iter-arg var is read inside the body (a loop recurrence such as
-        // ``x = f(x)`` whose final value may be unused after the loop).
-        if (afterRefs.count(stmt->returnVars_[i].get()) || refs.count(stmt->iterArgs_[i]->iterVar_.get())) {
+        if (afterRefs.count(stmt->returnVars_[i].get()) || live.count(stmt->iterArgs_[i]->iterVar_.get())) {
             keptIndices.push_back(i);
         }
     }
@@ -97,16 +221,21 @@ StmtPtr CanonicalizeIfStmt(IfStmtPtr& ifStmt, const std::unordered_set<const Var
         }
     }
 
-    if (returnVars.size() == ifStmt->returnVars_.size()) {
-        return ifStmt;
-    }
-
+    // Always recurse into then/else body: even when returnVars are unchanged,
     std::optional<SeqStmtsPtr> elseBody;
     auto thenBody = CanonicalizeSeqStmts(ifStmt->thenBody_, keptIndices);
     if (ifStmt->elseBody_) {
         elseBody = CanonicalizeSeqStmts(ifStmt->elseBody_.value(), keptIndices);
     }
-    // Always rebuild when returnVars changed
+
+    bool bodyChanged = (thenBody.get() != ifStmt->thenBody_.get());
+    if (ifStmt->elseBody_ && elseBody.has_value()) {
+        bodyChanged = bodyChanged || (elseBody.value().get() != ifStmt->elseBody_.value().get());
+    }
+    if (returnVars.size() == ifStmt->returnVars_.size() && !bodyChanged) {
+        return ifStmt;
+    }
+
     return std::make_shared<const IfStmt>(ifStmt->condition_, thenBody, elseBody, std::move(returnVars), ifStmt->span_);
 }
 

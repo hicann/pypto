@@ -48,8 +48,8 @@ def fa_kernel(q, k, v, block_table, kv_act_seqs, atten_out, softmax_scale, tile_
     g = nq // nkv
     g_loop = g // g_tile
 
-    k_2d_shape = (block_num_scalar * block_size, n2_sym * dn)
-    q_2d_shape = (b_scalar * s1_scalar * nq, dn)
+    k_2d_shape = [block_num_scalar * block_size, n2_sym * dn]
+    q_2d_shape = [b_scalar * s1_scalar * nq, dn]
 
     k_2d = pypto.reshape(k, k_2d_shape, inplace=True)
     v_2d = pypto.reshape(v, k_2d_shape, inplace=True)
@@ -151,11 +151,6 @@ def fa_kernel(q, k, v, block_table, kv_act_seqs, atten_out, softmax_scale, tile_
                             pypto.assemble(oi_final_3d, oi_ofs, atten_out)
 
 
-def _run_dce(func, *args):
-    """Compile a function through the shared new-IR pipeline."""
-    return compile_new_ir(func, *args)
-
-
 def test_fa_compile():
     m_tile = 128
     cube_tile = 128
@@ -183,7 +178,7 @@ def test_fa_compile():
     actual_seq = pypto.Tensor([-1], pypto.DT_INT32, "actual_seq")
     atten_out = pypto.Tensor([-1, nq, qd], pypto.DT_BF16, "atten_out")
 
-    _run_dce(fa_kernel, q, k, v, block_table, actual_seq, atten_out, scale, tile_config)
+    compile_new_ir(fa_kernel, q, k, v, block_table, actual_seq, atten_out, scale, tile_config)
 
 
 if __name__ == "__main__":

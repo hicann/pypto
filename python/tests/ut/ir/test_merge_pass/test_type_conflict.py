@@ -12,7 +12,7 @@ import pypto
 
 from ..test_common import check_snapshot, run_merge_pass
 
-ir = """
+IR = """
 @ir.function
 def foo(x@0: ir.Tensor, y@1: ir.Tensor):
     for loop_idx_10, (x_1, y_1) in ir.range(0, 2, 1, init_values=(x@0, y@1), attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
@@ -45,7 +45,7 @@ def test_type_conflict():
     x = pypto.Tensor([32, 32], pypto.DT_FP32, 'x')
     y = pypto.Tensor([64, 64], pypto.DT_FP32, 'y')
     func = run_merge_pass(foo, x, y)
-    check_snapshot(func, ir)
+    check_snapshot(func, IR)
 
 
 def test_type_conflict1():

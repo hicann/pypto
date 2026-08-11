@@ -297,7 +297,7 @@ def _static_while(body: Block):
             continue
 
 
-def _loop_unroll(body: Block, loop: LoopRange, factor, stop, ctx: BuildContext):
+def _loop_unroll(body: Block, loop: LoopRange, factor, nstart, nstop, ctx: BuildContext):
     scope = Scope.current()
     loop_val = body.args[0]
 
@@ -336,9 +336,9 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, stop, ctx: BuildContext):
                 scope.varmap[loop_val.id] = loop_var + i * loop.step
                 dispatch_block(body, False)
         if is_positive:
-            loop_conds.append(loop_var + (factor - 1) * loop.step < stop)
+            loop_conds.append(loop_var + (factor - 1) * loop.step < loop.stop)
         if is_negative:
-            loop_conds.append(loop_var + (factor - 1) * loop.step > stop)
+            loop_conds.append(loop_var + (factor - 1) * loop.step > loop.stop)
         _add_jump_stmt(ctx, body.jump)
 
     return_vars = []
@@ -357,8 +357,8 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, stop, ctx: BuildContext):
 
     for_stmt = ctx.create_for_stmt(
         loop_var.as_var(),
-        ctx.unwrap(loop.start),
-        ctx.unwrap(loop.stop),
+        ctx.unwrap(nstart),
+        ctx.unwrap(nstop),
         ctx.unwrap(factor * loop.step),
         iter_args,
         body_stmt,
@@ -370,23 +370,21 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, stop, ctx: BuildContext):
 
 
 def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
-    original_start = loop.start
-    original_stop = loop.stop
-    current_start = original_start
+    nstart = loop.start
+    nstop = loop.stop
 
     for factor in loop.unroll_list:
-        loop.start = current_start
         if factor == 1:
-            loop.stop = original_stop
+            nstop = loop.stop
         else:
             unroll_step = factor * loop.step
-            loop.stop = original_start + (original_stop - original_start) // unroll_step * unroll_step
+            nstop = loop.start + (loop.stop - loop.start) // unroll_step * unroll_step
         try:
             pypto_impl.BeginScope("loop", {}, ctx.span.filename, ctx.span.begin_line)
-            _loop_unroll(body, loop, factor, original_stop, ctx=ctx)
+            _loop_unroll(body, loop, factor, nstart, nstop, ctx=ctx)
         finally:
             pypto_impl.EndScope()
-        current_start = loop.stop
+        nstart = nstop
 
 
 @impl("pil.loop")

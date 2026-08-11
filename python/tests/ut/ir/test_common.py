@@ -23,16 +23,15 @@ def check_snapshot(func, golden):
                 actual.splitlines(keepends=True),
             )
         )
-        print(actual)
         raise AssertionError("IR snapshot mismatch in %s:\n%s" % (func.name, diff))
 
 
 def _ssa_verify(verifier, prog, name):
     diagnostic = verifier.verify(prog)
     if diagnostic:
-        print(f"{name}: {prog}\n")
+        print(f"{prog}\n")
         print(ir.IRVerifier.generate_report(diagnostic))
-        raise
+        raise SyntaxError(f"IR verification failed after {name}")
 
 
 def run_merge_pass(func, *args):
@@ -46,7 +45,9 @@ def run_merge_pass(func, *args):
     merge = ir.Pass.merge_stmts_into_if()
     verifier = ir.IRVerifier.create_default()
     _ssa_verify(verifier, prog, "original")
-    prog = dce(canonical(prog))
+    prog = canonical(prog)
+    _ssa_verify(verifier, prog, "canonical")
+    prog = dce(prog)
     _ssa_verify(verifier, prog, "dce")
     prog = canonical(merge(prog))
     _ssa_verify(verifier, prog, "merged")
