@@ -154,8 +154,8 @@ inline void ApplyDynamicCellMatchDescPatchesFromLaunchArgs(DevAscendProgram* dev
     }
     const uint64_t inputCount = static_cast<uint64_t>(inputs[0]);
     const uint64_t outputCount = static_cast<uint64_t>(inputs[1]);
-    auto* patchCountPtr = reinterpret_cast<uint64_t*>(reinterpret_cast<DevTensorData*>(inputs + TENSOR_INFO_OFFSET) +
-                                                      inputCount + outputCount);
+    auto* patchCountPtr = reinterpret_cast<uint64_t*>(
+        reinterpret_cast<DevTensorData*>(inputs + DEV_TENSOR_DATA_OFFSET) + inputCount + outputCount);
     const uint64_t patchCount = *patchCountPtr;
     if (patchCount == 0) {
         return;

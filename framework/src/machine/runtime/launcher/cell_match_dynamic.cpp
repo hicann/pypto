@@ -178,7 +178,7 @@ void WriteDynamicCellMatchStridePatchesToLaunchArgs(int64_t* launchInputs,
     const uint64_t inputCount = static_cast<uint64_t>(launchInputs[0]);
     const uint64_t outputCount = static_cast<uint64_t>(launchInputs[1]);
     auto* patchCountPtr = reinterpret_cast<uint64_t*>(
-        reinterpret_cast<DevTensorData*>(launchInputs + TENSOR_INFO_OFFSET) + inputCount + outputCount);
+        reinterpret_cast<DevTensorData*>(launchInputs + DEV_TENSOR_DATA_OFFSET) + inputCount + outputCount);
     *patchCountPtr = patches.size();
     auto* patchArr = reinterpret_cast<DevDynamicCellMatchStridePatch*>(patchCountPtr + 1);
     for (size_t i = 0; i < patches.size(); ++i) {

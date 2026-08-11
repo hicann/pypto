@@ -393,7 +393,7 @@ TEST_F(DeviceExceptionDumpTest, TestNonAicoreExceptionTypeFFTSPlus)
 static void BuildAicpuArgBuffer(std::vector<uint8_t>& buffer, int64_t inputSize,
                                 const std::vector<DevTensorData>& tensors)
 {
-    size_t totalSize = sizeof(AiCpuArgs) + TENSOR_INFO_OFFSET * sizeof(int64_t) +
+    size_t totalSize = sizeof(AiCpuArgs) + DEV_TENSOR_DATA_OFFSET * sizeof(int64_t) +
                        tensors.size() * sizeof(DevTensorData);
     buffer.assign(totalSize, 0);
     auto* args = reinterpret_cast<AiCpuArgs*>(buffer.data());
@@ -401,7 +401,7 @@ static void BuildAicpuArgBuffer(std::vector<uint8_t>& buffer, int64_t inputSize,
     int64_t* tensorInfo = reinterpret_cast<int64_t*>(buffer.data() + sizeof(AiCpuArgs));
     tensorInfo[0] = inputSize;
     tensorInfo[1] = 0;
-    auto* tensorData = reinterpret_cast<DevTensorData*>(tensorInfo + TENSOR_INFO_OFFSET);
+    auto* tensorData = reinterpret_cast<DevTensorData*>(tensorInfo + DEV_TENSOR_DATA_OFFSET);
     for (size_t i = 0; i < tensors.size(); i++) {
         tensorData[i] = tensors[i];
     }

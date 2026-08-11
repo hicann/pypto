@@ -21,6 +21,8 @@
 #include "aicpu_perf.h"
 #include "aikernel_data.h"
 
+using ArchInfo = npu::tile_fwk::ArchInfo;
+
 const uint64_t AICORE_TASK_INIT = 0xFFFFFFFF;
 const uint64_t AICORE_TASK_STOP = 0xF0000001;
 const uint64_t AICORE_FUNC_STOP = 0xF0000002;
@@ -62,8 +64,6 @@ constexpr const int DEV_SHAPE_DIM_NUM_4 = 4;
 constexpr const int DEV_SHAPE_DIM_NUM_5 = 5;
 
 constexpr const uint32_t MAX_ROUND_NUM = 200;
-
-enum class ArchInfo { DAV_1001 = 1001, DAV_2201 = 2201, DAV_3510 = 3510, DAV_UNKNOWN };
 
 #define DEVICE_TASK_STOP 0x7FFFFFFE
 

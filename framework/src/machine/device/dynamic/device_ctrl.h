@@ -288,7 +288,7 @@ public:
 
         uint64_t inputSize = *kargs->inputs;
         uint64_t outputSize = *(kargs->inputs + 1);
-        auto inputPtr = PtrToPtr<int64_t, DevTensorData>(kargs->inputs + TENSOR_INFO_OFFSET);
+        auto inputPtr = PtrToPtr<int64_t, DevTensorData>(kargs->inputs + DEV_TENSOR_DATA_OFFSET);
         DEV_INFO("inputSize=%lu, outputSize=%lu, tensorListPtr=%p.", inputSize, outputSize, inputPtr);
         devStartArgs->devTensorList = inputPtr;
         devStartArgs->inputTensorSize = static_cast<uint64_t>(inputSize);

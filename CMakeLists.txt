@@ -336,6 +336,12 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/interface/machine/device/tilefwk/aicpu_perf.h
                     framework/src/interface/machine/device/tilefwk/aikernel_data.h
                     framework/src/interface/machine/device/tilefwk/aikernel_define.h
+                    framework/src/interface/machine/device/tilefwk/aikernel_device_task.h
+                    framework/src/interface/machine/device/tilefwk/aikernel_drco_leaf_task_ready_queue.h
+                    framework/src/interface/machine/device/tilefwk/aikernel_root_function.h
+                    framework/src/interface/machine/device/tilefwk/aikernel_runtime_data_ring_buffer.h
+                    framework/src/interface/machine/device/tilefwk/aikernel_runtime.h
+                    framework/src/interface/machine/device/tilefwk/aikernel_tensor.h
                     framework/src/interface/machine/device/tilefwk/core_func_data.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/machine/device/tilefwk
                 COMPONENT pypto

@@ -90,7 +90,7 @@ TEST_F(CellMatchDynamicTest, WriteDynamicCellMatchStridePatchesToLaunchArgs_AllC
     std::vector<DevDynamicCellMatchStridePatch> emptyPatches;
     WriteDynamicCellMatchStridePatchesToLaunchArgs(launchInputs, emptyPatches);
     auto* patchCountPtr = reinterpret_cast<uint64_t*>(
-        reinterpret_cast<DevTensorData*>(launchInputs + TENSOR_INFO_OFFSET) + 2 + 2);
+        reinterpret_cast<DevTensorData*>(launchInputs + DEV_TENSOR_DATA_OFFSET) + 2 + 2);
     EXPECT_EQ(*patchCountPtr, 0u);
 
     int64_t launchInputs2[128];
@@ -104,7 +104,7 @@ TEST_F(CellMatchDynamicTest, WriteDynamicCellMatchStridePatchesToLaunchArgs_AllC
     std::vector<DevDynamicCellMatchStridePatch> validPatches = {patch};
     WriteDynamicCellMatchStridePatchesToLaunchArgs(launchInputs2, validPatches);
     auto* patchCountPtr2 = reinterpret_cast<uint64_t*>(
-        reinterpret_cast<DevTensorData*>(launchInputs2 + TENSOR_INFO_OFFSET) + 1 + 1);
+        reinterpret_cast<DevTensorData*>(launchInputs2 + DEV_TENSOR_DATA_OFFSET) + 1 + 1);
     EXPECT_EQ(*patchCountPtr2, 1u);
     auto* patchArr = reinterpret_cast<DevDynamicCellMatchStridePatch*>(patchCountPtr2 + 1);
     EXPECT_EQ(patchArr[0].descOffset, 0x1234u);
@@ -224,7 +224,7 @@ TEST_F(CellMatchDynamicTest, WriteDynamicCellMatchStridePatchesToLaunchArgs_Mult
     WriteDynamicCellMatchStridePatchesToLaunchArgs(launchInputs, patches);
 
     auto* patchCountPtr = reinterpret_cast<uint64_t*>(
-        reinterpret_cast<DevTensorData*>(launchInputs + TENSOR_INFO_OFFSET) + 2 + 2);
+        reinterpret_cast<DevTensorData*>(launchInputs + DEV_TENSOR_DATA_OFFSET) + 2 + 2);
     EXPECT_EQ(*patchCountPtr, 3u);
 
     auto* patchArr = reinterpret_cast<DevDynamicCellMatchStridePatch*>(patchCountPtr + 1);
