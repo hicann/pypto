@@ -41,6 +41,7 @@ import pytest
 import torch
 
 import pypto
+import pypto.experimental
 
 FP16 = pypto.DT_FP16
 FP32 = pypto.DT_FP32
@@ -72,6 +73,16 @@ def _split_n_prologue_64(a_tensor, b_tensor):
     return upper, lower
 
 
+def _online_softmax_exp(scores, tile_m, tile_n):
+    pypto.set_vec_tile_shapes(tile_m, tile_n)
+    exp_scores_bf16, _, _ = pypto.experimental.online_softmax(scores, 1.0)
+    return exp_scores_bf16
+
+
+def _torch_online_softmax_exp(scores):
+    column_max = torch.max(scores, dim=0, keepdim=True).values
+    return torch.exp(scores - column_max).to(torch.bfloat16).to(torch.float32)
+
 @_DUALDST_JIT
 def dual_dst_split_n_kernel(
     a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC], FP16),
@@ -85,6 +96,8 @@ def dual_dst_split_n_kernel(
     它的两个 L0C_COPY_UB consumer 才是 dual_dst 候选对。
     """
     upper, lower = _split_n_prologue_64(a_tensor, b_tensor)
+    upper = _online_softmax_exp(upper, 64, 64)
+    lower = _online_softmax_exp(lower, 64, 64)
     out0_tensor[:, :] = upper + 1.0
     pypto.set_vec_tile_shapes(64, 64)
     out1_tensor[:, :] = lower + 2.0
@@ -109,8 +122,8 @@ def test_dual_dst_split_n():
 
     # PyTorch golden: matmul(A, B^T) 后按 N 轴二分,各自加常量
     mm_golden = torch.matmul(a.to(torch.float32), b.to(torch.float32).T)
-    golden0 = mm_golden[:, :half_n] + 1.0
-    golden1 = mm_golden[:, half_n:] + 2.0
+    golden0 = _torch_online_softmax_exp(mm_golden[:, :half_n]) + 1.0
+    golden1 = _torch_online_softmax_exp(mm_golden[:, half_n:]) + 2.0
 
     assert_allclose(
         out0.cpu().to(torch.float32).numpy(),
@@ -139,6 +152,8 @@ def dual_dst_split_m_kernel(
     half_m = mm.shape[0] // 2
     upper = mm[:half_m, :]
     lower = mm[half_m:, :]
+    upper = _online_softmax_exp(upper, 64, 64)
+    lower = _online_softmax_exp(lower, 64, 64)
     pypto.set_vec_tile_shapes(64, 64)
     out0_tensor[:, :] = upper + 1.0
     pypto.set_vec_tile_shapes(64, 64)
@@ -163,8 +178,8 @@ def test_dual_dst_split_m():
     dual_dst_split_m_kernel(a, b, out0, out1)
 
     mm_golden = torch.matmul(a.to(torch.float32), b.to(torch.float32).T)
-    golden0 = mm_golden[:half_m, :] + 1.0
-    golden1 = mm_golden[half_m:, :] + 2.0
+    golden0 = _torch_online_softmax_exp(mm_golden[:half_m, :]) + 1.0
+    golden1 = _torch_online_softmax_exp(mm_golden[half_m:, :]) + 2.0
 
     assert_allclose(out0.cpu().to(torch.float32).numpy(), golden0.cpu().numpy(), rtol=5e-3, atol=5e-3)
     assert_allclose(out1.cpu().to(torch.float32).numpy(), golden1.cpu().numpy(), rtol=5e-3, atol=5e-3)
@@ -182,6 +197,8 @@ def dual_dst_chained_ops_kernel(
     验证 dualdst 融合后下游多步依赖链仍正确。
     """
     upper, lower = _split_n_prologue_64(a_tensor, b_tensor)
+    upper = _online_softmax_exp(upper, 64, 64)
+    lower = _online_softmax_exp(lower, 64, 64)
     tmp0 = upper + 1.0
     pypto.set_vec_tile_shapes(64, 64)
     out0_tensor[:, :] = tmp0 * 2.0
@@ -209,8 +226,8 @@ def test_dual_dst_chained_ops():
     dual_dst_chained_ops_kernel(a, b, out0, out1)
 
     mm_golden = torch.matmul(a.to(torch.float32), b.to(torch.float32).T)
-    golden0 = (mm_golden[:, :half_n] + 1.0) * 2.0
-    golden1 = (mm_golden[:, half_n:] * 0.5) + 3.0
+    golden0 = (_torch_online_softmax_exp(mm_golden[:, :half_n]) + 1.0) * 2.0
+    golden1 = (_torch_online_softmax_exp(mm_golden[:, half_n:]) * 0.5) + 3.0
 
     assert_allclose(out0.cpu().to(torch.float32).numpy(), golden0.cpu().numpy(), rtol=5e-3, atol=5e-3)
     assert_allclose(out1.cpu().to(torch.float32).numpy(), golden1.cpu().numpy(), rtol=5e-3, atol=5e-3)
@@ -228,6 +245,8 @@ def dual_dst_asymmetric_scale_kernel(
     验证两个 AIV core 实际执行不同语义但共享同一份 L0C 数据。
     """
     upper, lower = _split_n_prologue_64(a_tensor, b_tensor)
+    upper = _online_softmax_exp(upper, 64, 64)
+    lower = _online_softmax_exp(lower, 64, 64)
     out0_tensor[:, :] = upper + 7.5  # AIV0: add scalar
     pypto.set_vec_tile_shapes(64, 64)
     out1_tensor[:, :] = lower * 1.25  # AIV1: mul scalar
@@ -251,8 +270,8 @@ def test_dual_dst_asymmetric_scale():
     dual_dst_asymmetric_scale_kernel(a, b, out0, out1)
 
     mm_golden = torch.matmul(a.to(torch.float32), b.to(torch.float32).T)
-    golden0 = mm_golden[:, :half_n] + 7.5
-    golden1 = mm_golden[:, half_n:] * 1.25
+    golden0 = _torch_online_softmax_exp(mm_golden[:, :half_n]) + 7.5
+    golden1 = _torch_online_softmax_exp(mm_golden[:, half_n:]) * 1.25
 
     assert_allclose(out0.cpu().to(torch.float32).numpy(), golden0.cpu().numpy(), rtol=5e-3, atol=5e-3)
     assert_allclose(out1.cpu().to(torch.float32).numpy(), golden1.cpu().numpy(), rtol=5e-3, atol=5e-3)
@@ -307,6 +326,7 @@ def dual_dst_max_gain_kernel(
         lo = j * GAIN_HALF_N
         hi = (j + 1) * GAIN_HALF_N
         seg = mm[:, lo:hi]
+        seg = _online_softmax_exp(seg, GAIN_M, GAIN_HALF_N)
         pypto.set_vec_tile_shapes(GAIN_M, GAIN_HALF_N)
         out_tensor[:, lo:hi] = seg + (1.0 if j % 2 == 0 else 2.0)
 
@@ -329,7 +349,7 @@ def test_dual_dst_max_gain():
     for j in range(2 * N_PAIRS):
         lo = j * GAIN_HALF_N
         hi = (j + 1) * GAIN_HALF_N
-        out_golden[:, lo:hi] = mm_golden[:, lo:hi] + (1.0 if j % 2 == 0 else 2.0)
+        out_golden[:, lo:hi] = _torch_online_softmax_exp(mm_golden[:, lo:hi]) + (1.0 if j % 2 == 0 else 2.0)
 
     assert_allclose(out.cpu().to(torch.float32).numpy(), out_golden.cpu().numpy(), rtol=5e-3, atol=5e-3)
 
@@ -375,6 +395,8 @@ def dual_dst_long_chain_kernel(
         a_i = a_tensor[i * MM_M:(i + 1) * MM_M, :]
         b_i = b_tensor[i * MM_N:(i + 1) * MM_N, :]
         upper, lower = _matmul_split_n(a_i, b_i, MM_HALF_N)
+        upper = _online_softmax_exp(upper, MM_M, MM_HALF_N)
+        lower = _online_softmax_exp(lower, MM_M, MM_HALF_N)
 
         # AIV0 chain: upper -> +s0 -> +s1 -> +s2 -> +s3 -> out0
         cur = upper
@@ -420,8 +442,8 @@ def test_dual_dst_long_chain():
         a_i = a[i * MM_M:(i + 1) * MM_M, :].to(torch.float32)
         b_i = b[i * MM_N:(i + 1) * MM_N, :].to(torch.float32)
         mm_i = torch.matmul(a_i, b_i.T)
-        out0_golden[i * MM_M:(i + 1) * MM_M, :] = mm_i[:, :MM_HALF_N] + upper_sum
-        out1_golden[i * MM_M:(i + 1) * MM_M, :] = mm_i[:, MM_HALF_N:] + lower_sum
+        out0_golden[i * MM_M:(i + 1) * MM_M, :] = _torch_online_softmax_exp(mm_i[:, :MM_HALF_N]) + upper_sum
+        out1_golden[i * MM_M:(i + 1) * MM_M, :] = _torch_online_softmax_exp(mm_i[:, MM_HALF_N:]) + lower_sum
 
     # 长 chain + FP16 输入 -> 误差可能略大于 5e-3, 适度放宽
     assert_allclose(out0.cpu().to(torch.float32).numpy(), out0_golden.numpy(), rtol=1e-2, atol=1e-2)
@@ -489,6 +511,8 @@ def dual_dst_link_chain_kernel(
         a_i = a_tensor if i == 0 else ws_a_list[i - 1]
         b_i = b_tensor[i * LINK_N:(i + 1) * LINK_N, :]
         upper, lower = _matmul_split_n(a_i, b_i, LINK_HALF_N)
+        upper = _online_softmax_exp(upper, LINK_M, LINK_HALF_N)
+        lower = _online_softmax_exp(lower, LINK_M, LINK_HALF_N)
         # 选目标 tensor: 最后一步写 out_a/out_b, 中间步写本步独立 ws_a_i/ws_b_i
         dst_a = out_a if i == N_LINK - 1 else ws_a_list[i]
         dst_b = out_b if i == N_LINK - 1 else ws_b_list[i]
@@ -522,13 +546,13 @@ def test_dual_dst_link_chain():
     for i in range(N_LINK):
         b_i = b[i * LINK_N:(i + 1) * LINK_N, :].cpu()
         mm = torch.matmul(prev, b_i.T)  # [LINK_M, LINK_N]
-        last_upper = mm[:, :LINK_HALF_N] + 0.5  # [LINK_M, LINK_HALF_N=LINK_K]
-        last_lower = mm[:, LINK_HALF_N:] + 0.25
+        last_upper = _torch_online_softmax_exp(mm[:, :LINK_HALF_N]) + 0.5  # [LINK_M, LINK_HALF_N=LINK_K]
+        last_lower = _torch_online_softmax_exp(mm[:, LINK_HALF_N:]) + 0.25
         prev = last_upper  # 只传 upper 半边
 
     # 全 FP32 链精度损失小, 容差 1e-3
-    assert_allclose(out_a.cpu().numpy(), last_upper.numpy(), rtol=1e-3, atol=1e-3)
-    assert_allclose(out_b.cpu().numpy(), last_lower.numpy(), rtol=1e-3, atol=1e-3)
+    assert_allclose(out_a.cpu().numpy(), last_upper.numpy(), rtol=1e-2, atol=1e-2)
+    assert_allclose(out_b.cpu().numpy(), last_lower.numpy(), rtol=1e-2, atol=1e-2)
 
 
 """
@@ -615,6 +639,8 @@ def dual_dst_mega_kernel(
             a_i = a_tensor[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :]
             b_i = b_tensor[global_idx * MEGA_N:(global_idx + 1) * MEGA_N, :]
             upper, lower = _matmul_split_n(a_i, b_i, MEGA_HALF_N)
+            upper = _online_softmax_exp(upper, MEGA_M, MEGA_HALF_N)
+            lower = _online_softmax_exp(lower, MEGA_M, MEGA_HALF_N)
             pypto.set_vec_tile_shapes(MEGA_M, MEGA_HALF_N)
             out_a_tensor[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = upper + 1.0
             pypto.set_vec_tile_shapes(MEGA_M, MEGA_HALF_N)
@@ -645,11 +671,15 @@ def test_dual_dst_mega():
             a_i = a_cpu[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :]
             b_i = b_cpu[global_idx * MEGA_N:(global_idx + 1) * MEGA_N, :]
             mm = torch.matmul(a_i, b_i.T)
-            out_a_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = mm[:, :MEGA_HALF_N] + 1.0
-            out_b_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = mm[:, MEGA_HALF_N:] + 2.0
+            out_a_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = _torch_online_softmax_exp(
+                mm[:, :MEGA_HALF_N]
+            ) + 1.0
+            out_b_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = _torch_online_softmax_exp(
+                mm[:, MEGA_HALF_N:]
+            ) + 2.0
 
-    assert_allclose(out_a.cpu().numpy(), out_a_golden.numpy(), rtol=1e-3, atol=1e-3)
-    assert_allclose(out_b.cpu().numpy(), out_b_golden.numpy(), rtol=1e-3, atol=1e-3)
+    assert_allclose(out_a.cpu().numpy(), out_a_golden.numpy(), rtol=1e-2, atol=1e-2)
+    assert_allclose(out_b.cpu().numpy(), out_b_golden.numpy(), rtol=1e-2, atol=1e-2)
 
 
 def main():

@@ -104,6 +104,7 @@ private:
     CoreLocationType ConsumerCore(Operation* copyUbOp);
     Operation* FindAllocPred(Operation* op);
     bool CheckDualDstDtype(LogicalTensorPtr l0cTensor, const std::vector<Operation*>& copyUbs);
+    bool HasOnlySupportedDualDstConsumers(Operation* op) const;
     void BuildAdjacencyCandidates(const std::vector<Operation*>& copyUbs, const std::vector<CopyUbGeometry>& geos,
                                   std::vector<CandidatePair>& candM, std::vector<CandidatePair>& candN);
     void AppendDualDstPairs(const std::vector<CandidatePair>& chosen, std::vector<DualDstPair>& pairs);

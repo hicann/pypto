@@ -2366,7 +2366,7 @@ Status FillAivPoolsWithPlaceholderBuffers(OoOScheduler& s, const DualDstGraph& g
 
 TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpEqual_HitsIdentify)
 {
-    auto g = dualdst_ut::BuildDualDstGraph(
+    auto g = dualdst_ut::BuildDualDstGraph_2(
         /*l0cShape*/ {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
         /*tileShape*/ {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
         /*fromOff0*/ {0, 0},
@@ -2385,8 +2385,8 @@ TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpEqual_HitsIdentify)
 
 TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_ConcreteEqualButDifferentDump_StillHits)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar("a", dualdst_ut::TILE_M), SymbolicScalar("b", dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2403,8 +2403,8 @@ TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_ConcreteEqualButDifferentDump_StillHi
 
 TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpDifferAndNoConcrete_NoPair)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape({SymbolicScalar("X0"), SymbolicScalar("X1")});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape({SymbolicScalar("Y0"), SymbolicScalar("Y1")});
 
@@ -2418,8 +2418,8 @@ TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpDifferAndNoConcrete_NoPair)
 }
 TEST_F(ScheduleOoOTest, DualDst_ReadGeometry_PrefersStaticValidShape)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape({SymbolicScalar("X0"), SymbolicScalar("X1")});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape({SymbolicScalar("Y0"), SymbolicScalar("Y1")});
     dualdst_ut::InjectStaticValidShape(*g.copy0, {dualdst_ut::TILE_M, dualdst_ut::TILE_N});
@@ -2436,8 +2436,8 @@ TEST_F(ScheduleOoOTest, DualDst_ReadGeometry_PrefersStaticValidShape)
 
 TEST_F(ScheduleOoOTest, DualDst_Identify_SplitN_HappyPath)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2487,8 +2487,8 @@ TEST_F(ScheduleOoOTest, DualDst_ShouldEnableDualDst_WithOnlineSoftmaxTasks)
 
 TEST_F(ScheduleOoOTest, DualDst_Identify_SplitM_HappyPath)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M * 2, dualdst_ut::TILE_N},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {dualdst_ut::TILE_M, 0});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M * 2, dualdst_ut::TILE_N},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {dualdst_ut::TILE_M, 0});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2510,9 +2510,27 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_SplitM_HappyPath)
 
 TEST_F(ScheduleOoOTest, DualDst_Identify_NotAdjacent_NoPair)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 4},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0},
-                                           {0, dualdst_ut::TILE_N * 2});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 4},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0},
+                                             {0, dualdst_ut::TILE_N * 2});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+
+    std::vector<DualDstPair> pairs;
+    EXPECT_EQ(s.dualDstEngine_.IdentifyDualDstPairs(pairs), SUCCESS);
+    EXPECT_EQ(pairs.size(), 0u);
+}
+
+TEST_F(ScheduleOoOTest, DualDst_Identify_AddConsumerUnsupported_NoPair)
+{
+    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2529,8 +2547,8 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_NotAdjacent_NoPair)
 
 TEST_F(ScheduleOoOTest, DualDst_Identify_SameConsumerCore_NoPair)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2547,8 +2565,8 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_SameConsumerCore_NoPair)
 
 TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_DisabledIsNoOp)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2564,8 +2582,8 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_DisabledIsNoOp)
 
 TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_SingleAivPoolEarlyExit)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2581,8 +2599,8 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_SingleAivPoolEarlyExit)
 
 TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_ActuallyFusesAndMutatesFunction)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2611,8 +2629,8 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_ActuallyFusesAndMutatesFunction)
 
 TEST_F(ScheduleOoOTest, DualDst_AllocQueryHelpers_AfterFuse)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2695,8 +2713,8 @@ TEST_F(ScheduleOoOTest, DualDst_AllocGuardBlocksAiv0UntilAiv1DualDstAllocRetires
 
 TEST_F(ScheduleOoOTest, DualDst_AivUbAllocUsesMatchedPeerOffset)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
 
     OoOScheduler s(*g.func);
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
@@ -2753,8 +2771,8 @@ TEST_F(ScheduleOoOTest, DualDst_AivUbAllocUsesMatchedPeerOffset)
 
 TEST_F(ScheduleOoOTest, DualDst_AllocateDualDstAtCurrent_HappyPath)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2795,8 +2813,8 @@ TEST_F(ScheduleOoOTest, DualDst_AllocateDualDstAtCurrent_HappyPath)
 
 TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_PicksMatchingGroupAcrossAivPools)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     dualdst_ut::UpdateCopyDynValidShape(g);
 
     OoOScheduler s(*g.func);
@@ -2829,8 +2847,8 @@ TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_PicksMatchingGroupAcrossAivPo
 
 TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_EmptyPoolsReturnEmpty)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2866,8 +2884,8 @@ TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_EmptyPoolsReturnEmpty)
 
 TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_FindsSharedStartAddrCandidate)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
 
     OoOScheduler s(*g.func);
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
@@ -2896,8 +2914,8 @@ TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_FindsSharedStartAddrCandidate)
 
 TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_NeedSizeExceedsPoolReturnsEmpty)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
 
     OoOScheduler s(*g.func);
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
@@ -2919,8 +2937,8 @@ TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_NeedSizeExceedsPoolReturnsEmpt
 
 TEST_F(ScheduleOoOTest, DualDst_InferDynShape_RecordsStaticValidShape)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -2939,8 +2957,8 @@ TEST_F(ScheduleOoOTest, DualDst_InferDynShape_RecordsStaticValidShape)
 
 TEST_F(ScheduleOoOTest, DualDst_InferDynShape_SkipsDynamicValidShape)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape({SymbolicScalar("dyn0"), SymbolicScalar(dualdst_ut::TILE_N)});
 
     InferDynShape pass;
@@ -2951,8 +2969,8 @@ TEST_F(ScheduleOoOTest, DualDst_InferDynShape_SkipsDynamicValidShape)
 
 TEST_F(ScheduleOoOTest, DualDst_GetNewOperations_DedupePreservesFirstOccurrence)
 {
-    auto g = dualdst_ut::BuildDualDstGraph({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
-                                           {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
     OoOScheduler s(*g.func);
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
 

@@ -588,8 +588,8 @@ Status DualDstEngine::CollectDualDstGuardRoots(Operation* dualOp,
                 continue;
             }
             APASS_LOG_ERROR_F(Elements::Operation,
-                              "dual_dst 后 op 不为 OnlineSoftmax/OnlineSoftmaxUpdate，暂时不支持该情况的 dual_dst。"
-                              " dualDstOp=%s, consumer=%s.",
+                              "The operation after dual_dst is not OnlineSoftmax or OnlineSoftmaxUpdate;"
+                              " dual_dst is temporarily not supported for this case. dualDstOp=%s, consumer=%s.",
                               state_.GetOpInfo(dualOp).c_str(), state_.GetOpInfo(consumer).c_str());
             return FAILED;
         }
@@ -659,6 +659,30 @@ bool DualDstEngine::IsSupportedDualDstDtype(DataType dtype)
     return dtype == DataType::DT_FP32 || dtype == DataType::DT_INT32;
 }
 
+bool DualDstEngine::HasOnlySupportedDualDstConsumers(Operation* op) const
+{
+    if (op == nullptr) {
+        return false;
+    }
+    for (auto& out : op->GetOOperands()) {
+        if (out == nullptr) {
+            continue;
+        }
+        for (auto* consumer : out->GetConsumers()) {
+            if (consumer == nullptr) {
+                continue;
+            }
+            if (!IsOnlineSoftmax(consumer) && !IsOnlineSoftmaxUpdate(consumer)) {
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "DualDst condition failed: unsupported consumer after copy op. copy=%s, consumer=%s.",
+                                  state_.GetOpInfo(op).c_str(), state_.GetOpInfo(consumer).c_str());
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool DualDstEngine::CheckDualDstDtype(LogicalTensorPtr l0cTensor, const std::vector<Operation*>& copyUbs)
 {
     if (l0cTensor == nullptr) {
@@ -693,6 +717,9 @@ bool DualDstEngine::CheckDualDstDtype(LogicalTensorPtr l0cTensor, const std::vec
 void DualDstEngine::AppendDualDstPairs(const std::vector<CandidatePair>& chosen, std::vector<DualDstPair>& pairs)
 {
     for (auto& cp : chosen) {
+        if (!HasOnlySupportedDualDstConsumers(cp.opEarly) || !HasOnlySupportedDualDstConsumers(cp.opLate)) {
+            continue;
+        }
         DualDstPair pair;
         pair.opEarly = cp.opEarly;
         pair.opLate = cp.opLate;
