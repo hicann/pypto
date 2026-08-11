@@ -453,9 +453,6 @@ TILEOP void TGatherMask(T0 dst, T1 src)
                                              (patternMode == 6) ? pto::MaskPattern::P1000 :
                                                                   pto::MaskPattern::P1111;
                     pto::TGATHER<DstTileDefine, SrcTileDefine, pattern>(dstTile, srcTile);
-#ifdef __DAV_V220
-                    pipe_barrier(PIPE_V);
-#endif
                 }
             }
         }
