@@ -59,11 +59,13 @@ dev = [
     "pytest",
     "pytest-forked",
     "pytest-xdist",
+    "pytest-cov",
 ]
 tests = [
     "pytest",
     "pytest-forked",
     "pytest-xdist",
+    "pytest-cov",
 ]
 
 [tool.setuptools]

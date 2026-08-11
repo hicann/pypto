@@ -706,8 +706,9 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         供生成覆盖率报告时使用.
         """
         gcov_config_file = build_dir / "gcov_config.json"
-        if not gcov_config_file.exists():
-            # 当未使能 GCov 时, 不会产生 gcov_config.json, 此时也不要产生 build_dir.json
+        py_cov_enabled = bool(self.cmake_options and "ENABLE_PY_COV=ON" in self.cmake_options)
+        if not gcov_config_file.exists() and not py_cov_enabled:
+            # 未使能 GCov(无 gcov_config.json) 且未使能 PyCov 时, 不产生 build_dir.json
             return
 
         marker_file = src_root / "build_dir.json"

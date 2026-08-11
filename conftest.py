@@ -143,6 +143,39 @@ def pytest_runtest_protocol(item, nextitem):
     return None
 
 
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item):
+    """在 fork 子进程中手动保存 coverage 数据。
+
+    pytest-forked 的子进程通过 ``os._exit()`` 退出，跳过 coverage 的
+    ``atexit`` 数据写入，导致 ``--forked`` 模式下覆盖率全部丢失。
+    此钩子复用 pytest-cov 已创建的 Coverage 实例 (已配置 source 和
+    data_suffix)，在测试执行后手动 stop + save，数据写入带后缀的
+    文件，最终由 pytest-cov 的 finish() 中的 combine() 自动合并。
+    """
+    cov_file = os.environ.get("COVERAGE_FILE")
+    is_forked = item.config.getoption("forked", default=False)
+    if not (cov_file and is_forked):
+        yield
+        return
+
+    cov_plugin = item.config.pluginmanager.get_plugin("_cov")
+    if cov_plugin is None or cov_plugin.cov_controller is None:
+        yield
+        return
+
+    cov = cov_plugin.cov_controller.cov
+    if cov is None:
+        yield
+        return
+
+    try:
+        yield
+    finally:
+        cov.stop()
+        cov.save()
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_setup(item):
     """case 进程启动后被调用"""

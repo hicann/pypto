@@ -356,7 +356,9 @@ class BuildParam(CMakeParam):
     asan: bool = False  # 使能 AddressSanitizer
     ubsan: bool = False  # 使能 UndefinedBehaviorSanitizer
     gcov: bool = False  # 使能 GNU Coverage
-    gcov_incr: bool = False  # 使能增量覆盖率 GCov 计算
+    gcov_incr: bool = False  # 使能增量覆盖率 GCov 计算 (兼容旧参数 --gcov_increment)
+    cov_incr: bool = False  # 使能增量覆盖率 (C++ gcov 和 Python coverage 均生效)
+    py_cov: bool = False  # 使能 Python 覆盖率 (pytest-cov)
     clang_install_path: Optional[Path] = None  # Clang 安装位置
     compile_dependency_check: bool = False  # 使能编译依赖关系检查
     # Build
@@ -378,6 +380,8 @@ class BuildParam(CMakeParam):
         self.ubsan = args.ubsan
         self.gcov = args.gcov
         self.gcov_incr = args.gcov_increment
+        self.cov_incr = args.cov_increment or args.gcov_increment  # cov_increment 包含 gcov_increment
+        self.py_cov = args.py_cov
         self.clang_install_path = self._get_clang_install_path(opt=args.clang)
         self.compile_dependency_check = args.compile_dependency_check
 
@@ -394,7 +398,8 @@ class BuildParam(CMakeParam):
         desc += f"\n                  BuildType : {self.build_type}"
         desc += f"\n                       ASan : {self.asan}"
         desc += f"\n                      UbSan : {self.ubsan}"
-        desc += f"\n                       GCov : {self.gcov}, Increment: {self.gcov_incr}"
+        desc += f"\n                       GCov : {self.gcov}, Increment: {self.cov_incr}"
+        desc += f"\n                      PyCov : {self.py_cov}, Increment: {self.cov_incr}"
         desc += f"\n           ClangInstallPath : {self.clang_install_path}"
         desc += f"\n            CompileDepCheck : {self.compile_dependency_check}"
         desc += "\n        Build"
@@ -432,7 +437,21 @@ class BuildParam(CMakeParam):
             "--gcov_increment",
             action="store_true",
             default=False,
-            help="Enable increment coverage calculation based on latest commit.",
+            help="Enable increment coverage calculation based on latest commit. "
+            "(Deprecated alias for --cov_increment, kept for backward compatibility.)",
+        )
+        parser.add_argument(
+            "--cov_increment",
+            action="store_true",
+            default=False,
+            help="Enable increment coverage calculation based on latest commit (applies to both C++ and Python).",
+        )
+        parser.add_argument(
+            "--py_cov",
+            action="store_true",
+            default=False,
+            help="Enable Python coverage (pytest-cov). Independent from --gcov. "
+            "Use with --cov_increment (or --gcov_increment) for Python increment coverage.",
         )
         parser.add_argument(
             "--clang", nargs="?", type=str, default="", help="Specify clang install path, such as /usr/bin/clang"
@@ -538,6 +557,7 @@ class BuildParam(CMakeParam):
         cmd += self._cfg_require(opt="ENABLE_ASAN", ctr=self.asan)
         cmd += self._cfg_require(opt="ENABLE_UBSAN", ctr=self.ubsan)
         cmd += self._cfg_require(opt="ENABLE_GCOV", ctr=self.gcov)
+        cmd += self._cfg_require(opt="ENABLE_PY_COV", ctr=self.py_cov)
 
         def _check_clang_toolchain(_opt: str, _b: str) -> Tuple[bool, str]:
             """检查 Clang 工具链是否存在并生成配置命令"""
@@ -1366,8 +1386,8 @@ class BuildCtrl(CMakeParam):
         env = {}
         if self.build.job_num:
             env["PYPTO_TESTS_PARALLEL_NUM"] = str(self.build.job_num)
-        if self.build.gcov_incr:
-            env["PYPTO_BUILD_GCOV_INCREMENT"] = "True"
+        if self.build.cov_incr:
+            env["PYPTO_BUILD_COV_INCREMENT"] = "True"
         # Tests exec
         tests_exec = self.tests.exec
         if tests_exec.auto_execute:
@@ -1736,8 +1756,8 @@ class BuildCtrl(CMakeParam):
             n_workers=n_workers,
         )
 
-        # 生成覆盖率报告 (如果启用 gcov)
-        if self.build.gcov:
+        # 生成覆盖率报告 (如果启用 gcov 或 py_cov)
+        if self.build.gcov or self.build.py_cov:
             self._py_generate_coverage()
 
     def py_tests_run_pytest(self, dist: Optional[Path], params: List[Tuple[TestsFilterParam, str]], ext: str = ""):
@@ -1891,6 +1911,14 @@ class BuildCtrl(CMakeParam):
             cmd += " --no-loadscope-reorder"
         # cmd 执行
         update_env = self._get_py_tests_update_env(dist=dist)
+        # 使能 Python 覆盖率数据收集 (需安装 pytest-cov, 仅由 --py_cov 触发)
+        if self.build.py_cov and self.check_pip_dependencies(
+            deps={"pytest-cov": ">=4.0.0"}, raise_err=False, log_err=False
+        ):
+            cov_data_file = self._get_py_cov_data_file()
+            if cov_data_file is not None:
+                cmd += " --cov=pypto"
+                update_env["COVERAGE_FILE"] = str(cov_data_file)
         logging.info("pytest run, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
         _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="pytest")
         logging.info("pytest run success, %s", duration)
@@ -1948,20 +1976,31 @@ class BuildCtrl(CMakeParam):
         modules = [m.strip() for m in mod.replace(":", ",").split(",") if m.strip()]
         return [(self.tests.utest, f"{base}/{m}") for m in modules]
 
-    def _py_generate_coverage(self):
-        """生成 Python 场景覆盖率报告
+    def _get_py_cov_data_file(self) -> Optional[Path]:
+        """获取 Python 覆盖率数据文件路径 (与 gen_coverage.py 的 data_dir 一致)"""
+        if not self.build_dir_file.exists():
+            return None
+        with open(self.build_dir_file, 'r', encoding='utf-8') as f:
+            marker = json.load(f)
+        build_dir = Path(marker["cmake_binary_dir"]).resolve()
+        return Path(build_dir, ".coverage")
 
-        该函数读取 setup.py 生成的 build_dir 标记文件和 CMake 生成的 gcov_config.json，
-        然后调用 gen_coverage.py 生成覆盖率报告.
+    def _py_generate_coverage(self):
+        """生成覆盖率报告
+
+        该函数读取 setup.py 生成的 build_dir 标记文件, 调用 gen_coverage.py 生成覆盖率报告.
+        支持 C++ (--gcov) 和 Python (--py_cov) 覆盖率的独立或组合生成.
 
         流程:
             1. 读取 .pypto_build_dir.json -> 获取 CMake 构建目录
-            2. 读取 gcov_config.json -> 获取覆盖率参数 (sys_root, filter_dirs 等)
+            2. 读取 gcov_config.json -> 获取 C++ filter_dirs (仅 --gcov 时存在)
             3. 调用 gen_coverage.py -> 生成覆盖率报告
 
         注意:
-            - 需要在 pytest 执行完成后调用 (此时 .gcda 文件已生成)
-            - 仅在 ENABLE_GCOV=ON 时生效 (通过 build.gcov 参数判断)
+            - 需要在 pytest 执行完成后调用 (此时 .gcda / .coverage 文件已生成)
+            - --gcov: 生成 C++ 覆盖率 (需 CMake ENABLE_GCOV=ON 编译插桩)
+            - --py_cov: 生成 Python 覆盖率 (需 pytest-cov, pytest 已通过 --cov 收集数据)
+            - --cov_increment (or --gcov_increment): 增量覆盖率 (C++ 和 Python 均生效)
         """
         # 1. 读取 build_dir 标记文件
         if not self.build_dir_file.exists():
@@ -1972,22 +2011,26 @@ class BuildCtrl(CMakeParam):
             marker = json.load(f)
         build_dir = Path(marker["cmake_binary_dir"]).resolve()
 
-        # 2. 读取 gcov 配置文件
+        # 2. 读取 gcov 配置文件 (仅 C++ 覆盖率需要 filter_dirs, --py_cov 独立使用时可不存在)
+        filter_dirs = []
         config_file = build_dir / "gcov_config.json"
-        if not config_file.exists():
+        if config_file.exists():
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            filter_dirs = config.get("filter_dirs", [])
+        elif self.build.gcov:
             logging.warning("GCov config file not found: %s, skip coverage generation", config_file)
             return
-
-        with open(config_file, 'r', encoding='utf-8') as f:
-            config = json.load(f)
 
         # 3. 构造 gen_coverage.py 参数
         gen_cov_py = self.src_root / "cmake/scripts/gen_coverage.py"
 
         cmd = f"{sys.executable} {gen_cov_py} -s={self.src_root} -d={build_dir} "
-        for filter_dir in config.get("filter_dirs", []):
+        for filter_dir in filter_dirs:
             cmd += f" -f={filter_dir}"
-        cmd += " -i" if self.build.gcov_incr else ""  # 增量覆盖率
+        cmd += " -i" if self.build.cov_incr else ""  # 增量覆盖率
+        cmd += " --py_cov" if self.build.py_cov else ""  # Python 覆盖率
+        cmd += " --gcov" if self.build.gcov else ""  # 生成 C++ 覆盖率
 
         # 4. 执行覆盖率生成
         logging.info("Generate coverage, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)

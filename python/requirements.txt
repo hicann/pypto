@@ -11,6 +11,7 @@ packaging
 pytest
 pytest-forked
 pytest-xdist
+pytest-cov
 setproctitle
 psutil
 

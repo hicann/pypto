@@ -64,6 +64,7 @@ function(PTO_Fwk_GTest_GenerateCoverage)
         foreach (_dir ${Filter_Dirs})
             list(APPEND _Args "-f=${_dir}")
         endforeach ()
+        list(APPEND _Args "--gcov")
         list(REMOVE_DUPLICATES _Args)
 
         add_custom_command(
