@@ -25,6 +25,8 @@
 #include "ut_json/ut_json_tool.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
+#include "passes/tile_graph_pass/graph_optimization/infer_discontinuous_input.h"
+#include "computational_graph_builder.h"
 
 #include "interface/tensor/irbuilder.h"
 #define private public
@@ -1819,6 +1821,91 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewOutcastWithNonViewProducer)
     EXPECT_EQ(viewNum, kNumOne);
     EXPECT_EQ(assembleNum, kNumTwo);
     EXPECT_EQ(expNum, kNumOne);
+}
+
+// RemoveRedundantOp 删除 REGISTER_COPY+VIEW 后 ASSEMBLE 输入穿透到 CAST(inCast)，
+// Process(function, false) 跳过 NoViewConflict，仅靠 ASSEMBLE 输出覆盖判断 → 不插 copy。
+TEST_F(TestRemoveRedundantOpPass, TestSkipViewConflictAfterRemoveRedundantOp)
+{
+    ComputationalGraphBuilder G;
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    G.AddTensor(DataType::DT_INT8, {82816, 672}, MemoryType::MEM_DEVICE_DDR, "kvActSeqs");
+    G.AddTensor(DataType::DT_INT8, {1, 16}, MemoryType::MEM_DEVICE_DDR, "bIdx");
+    G.AddTensor(DataType::DT_INT8, {1, 512}, MemoryType::MEM_DEVICE_DDR, "s1Idx");
+    G.AddTensor(DataType::DT_INT8, {16, 672}, "gatherOut");
+    G.AddTensor(DataType::DT_INT8, {16, 512}, "view1Out");
+    G.AddTensor(DataType::DT_FP16, {16, 512}, "cast1Out");
+    G.AddTensor(DataType::DT_FP16, {16, 512}, "view2Out");
+    G.AddTensor(DataType::DT_FP32, {16, 512}, "cast2Out");
+    G.AddTensor(DataType::DT_FP32, {16, 512}, "viewAIn");
+    G.AddTensor(DataType::DT_FP32, {16, 512}, "viewBIn");
+    G.AddTensor(DataType::DT_FP32, {16, 512}, "regCopyAOut");
+    G.AddTensor(DataType::DT_FP32, {16, 512}, "regCopyBOut");
+    G.AddTensor(DataType::DT_FP32, {16, 1024}, "asmOut");
+    G.AddTensor(DataType::DT_FP32, {128, 128}, "reshapeOut");
+    G.AddTensor(DataType::DT_FP32, {128, 128}, "viewMulIn");
+    G.AddTensor(DataType::DT_FP32, {128, 1}, "scaleIn");
+    G.AddTensor(DataType::DT_FP32, {128, 1}, "viewScaleOut");
+    G.AddTensor(DataType::DT_FP32, {128, 128}, "mulOut");
+    G.AddTensor(DataType::DT_FP32, {128, 128}, MemoryType::MEM_DEVICE_DDR, "ddrOut");
+
+    G.AddOp(Opcode::OP_GATHER_IN_UB, {"kvActSeqs", "bIdx", "s1Idx"}, {"gatherOut"}, "gather");
+    G.AddOp(Opcode::OP_VIEW, {"gatherOut"}, {"view1Out"}, "view_167");
+    G.GetOp("view_167")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 160}));
+    G.AddOp(Opcode::OP_CAST, {"view1Out"}, {"cast1Out"}, "cast_167");
+    G.AddOp(Opcode::OP_VIEW, {"cast1Out"}, {"view2Out"}, "view_170");
+    G.GetOp("view_170")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_CAST, {"view2Out"}, {"cast2Out"}, "cast_170");
+    G.AddOp(Opcode::OP_VIEW, {"cast2Out"}, {"viewAIn"}, "view_a");
+    G.GetOp("view_a")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_VIEW, {"cast2Out"}, {"viewBIn"}, "view_b");
+    G.GetOp("view_b")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_REGISTER_COPY, {"viewAIn"}, {"regCopyAOut"}, "regcopy_a");
+    G.AddOp(Opcode::OP_REGISTER_COPY, {"viewBIn"}, {"regCopyBOut"}, "regcopy_b");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"regCopyAOut"}, {"asmOut"}, "asm_0");
+    G.GetOp("asm_0")->SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, std::vector<int64_t>{0, 512}));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"regCopyBOut"}, {"asmOut"}, "asm_1");
+    G.GetOp("asm_1")->SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_RESHAPE, {"asmOut"}, {"reshapeOut"}, "reshape");
+    G.AddOp(Opcode::OP_VIEW, {"reshapeOut"}, {"viewMulIn"}, "view_mul");
+    G.GetOp("view_mul")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_VIEW, {"scaleIn"}, {"viewScaleOut"}, "view_scale");
+    G.GetOp("view_scale")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_MUL, {"viewMulIn", "viewScaleOut"}, {"mulOut"}, "mul");
+    G.AddOp(Opcode::OP_COPY_OUT, {"mulOut"}, {"ddrOut"}, "copy_out");
+
+    G.SetInCast({"kvActSeqs", "bIdx", "s1Idx", "scaleIn"});
+    G.SetOutCast({"ddrOut"});
+
+    RemoveRedundantOp removeRedundantOpPass;
+    EXPECT_EQ(removeRedundantOpPass.RunOnFunction(*function), SUCCESS);
+
+    uint32_t regCopyNum = 0;
+    uint32_t viewNum = 0;
+    uint32_t assembleNum = 0;
+    uint32_t castNum = 0;
+    for (const auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_REGISTER_COPY) {
+            regCopyNum++;
+        }
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            viewNum++;
+        }
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            assembleNum++;
+        }
+        if (op.GetOpcode() == Opcode::OP_CAST) {
+            castNum++;
+        }
+    }
+    EXPECT_EQ(regCopyNum, 0);
+    EXPECT_EQ(castNum, 2);
+    EXPECT_EQ(viewNum, 3);
+    EXPECT_EQ(assembleNum, 4);
 }
 } // namespace tile_fwk
 } // namespace npu

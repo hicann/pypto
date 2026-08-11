@@ -14,6 +14,7 @@
  */
 #include <climits>
 #include "remove_redundant_op.h"
+#include "passes/pass_utils/infer_discontinuous_input_utils.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_check/remove_redundant_op_checker.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
@@ -146,6 +147,16 @@ Status RemoveRedundantOp::RunOnFunction(Function& function)
             return FAILED;
         }
         iterTime++;
+    }
+    // 冗余删除（REGISTER_COPY 等）会引入新的 view-assemble 结构，需重新推测不连续输入。
+    // 放在 MergeViewAssemble 之前：MergeViewAssemble 仅合并已有的 view-assemble 模式，
+    // 不引入新的不连续输入冲突；而 re-infer 需在合并前处理冗余删除引入的新结构。
+    // 跳过 NoViewConflict：REGISTER_COPY 删除后 ASSEMBLE 输入可能穿透到上游 VIEW(inCast)，
+    // 但 ASSEMBLE 输出位置不重叠即无冲突，仅靠 PerfectOffsetOverlap 判断即可
+    InferDiscontinuousInputUtils utils;
+    if (utils.Process(function, false) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "InferDiscontinuousInput after RemoveRedundantOp failed.");
+        return FAILED;
     }
     Status status = MergeViewAssembleUtils::MergeViewAssemble(function);
     if (status != SUCCESS) {

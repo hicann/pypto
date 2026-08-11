@@ -16,10 +16,6 @@
 #ifndef PASS_INFER_DISCONTINUOUS_INPUT_H_
 #define PASS_INFER_DISCONTINUOUS_INPUT_H_
 
-#include <vector>
-#include <unordered_map>
-#include <unordered_set>
-
 #include "passes/pass_interface/pass.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/tensor/irbuilder.h"
@@ -35,18 +31,6 @@ public:
 private:
     Status RunOnFunction(Function& function) override;
     Status PostCheck(Function& function) override;
-    Status InferFromIncast(Function& function);
-    void InsertViewOp(Function& function, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand);
-    void InsertAssembleOp(Function& function, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand);
-    void InsertCopyOp(Function& function, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand);
-    Status InsertTensorCopy(Function& function);
-    void Init(Function& function);
-    std::vector<std::pair<LogicalTensorPtr, Operation*>> FilterCopyScenes(
-        Function& function, const std::vector<std::pair<LogicalTensorPtr, Operation*>>&);
-    std::unordered_map<LogicalTensorPtr, std::vector<std::pair<LogicalTensorPtr, Operation*>>> insertCopys_;
-    std::unordered_map<LogicalTensorPtr, size_t> tensorProducers_;
-    std::vector<Operation*> newOps;
-    IRBuilder irBuilder_;
 };
 } // namespace tile_fwk
 } // namespace npu
