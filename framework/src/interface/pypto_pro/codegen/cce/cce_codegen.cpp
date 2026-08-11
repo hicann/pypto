@@ -464,6 +464,8 @@ void CCECodegen::PrepareBodyGeneration()
     PreScanValidShapes();
     tuple_var_to_make_tuple_.clear();
     tuple_backing_arr_.clear();
+    loop_target_stack_.clear();
+    yield_buffer_.clear();
 }
 
 std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std::string& arch)
@@ -500,7 +502,6 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
     tensor_to_pointer_.clear();
     tiling_headers_.clear();
     struct_definitions_.clear();
-    tuple_type_to_struct_name_.clear();
 
     PreScanKernel(kernel_func);
 
@@ -710,23 +711,20 @@ void CCECodegen::EmitSingleFunctionSignature(const ir::FunctionPtr& func, bool h
         // Each parameter is registered here while building the signature (the single place
         // that walks all params): the C++ var name, plus the raw pointer for tensor params.
         if (auto tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(param->GetType())) {
-            std::string element_type = tensor_type->dtype_.ToCTypeString();
             std::string param_name = context_.SanitizeName(param);
             auto ptr_var = std::const_pointer_cast<ir::Var>(ir::As<ir::Var>(*tensor_type->tensor_view_->ptr));
             std::string ptr_name = param_name + "_ptr";
             context_.RegisterVar(ptr_var, ptr_name);
-            sig << "__gm__ " << element_type << "* " << ptr_name;
+            sig << GetGeneratedType(tensor_type) << " " << ptr_name;
             context_.RegisterVar(param, param_name);
             RegisterPointer(param_name, ptr_name);
         } else if (auto scalar_type = std::dynamic_pointer_cast<const ir::ScalarType>(param->GetType())) {
-            std::string cpp_type = scalar_type->dtype_.ToCTypeString();
             std::string param_name = context_.SanitizeName(param);
-            sig << cpp_type << " " << param_name;
+            sig << GetGeneratedType(scalar_type) << " " << param_name;
             context_.RegisterVar(param, param_name);
         } else if (auto ptr_type = std::dynamic_pointer_cast<const ir::PtrType>(param->GetType())) {
-            std::string element_type = ptr_type->dtype_.ToCTypeString();
             std::string param_name = context_.SanitizeName(param);
-            sig << "__gm__ " << element_type << "* " << param_name;
+            sig << GetGeneratedType(ptr_type) << " " << param_name;
             context_.RegisterVar(param, param_name);
         } else if (std::dynamic_pointer_cast<const ir::TupleType>(param->GetType())) {
             // Tiling struct param: pass a raw GM byte pointer `<name>_ptr`; the local
@@ -824,9 +822,7 @@ void CCECodegen::EmitSingleTileDeclarations(const ir::FunctionPtr& func)
             }
             int64_t addr = ExtractConstInt((*tile_type->memref_)->addr_);
             auto space = (*tile_type->memref_)->memorySpace_;
-            std::vector<int64_t> shape_dims = ExtractShapeDimensions(tile_type->shape_);
-            std::string type_key = type_converter_.ConvertTileType(
-                tile_type, shape_dims.size() >= 1 ? shape_dims[0] : 1, shape_dims.size() >= 2 ? shape_dims[1] : 1);
+            std::string type_key = GetGeneratedType(tile_type);
             std::string dedup_key = std::to_string(static_cast<int>(space)) + ":" + std::to_string(addr) + ":" +
                                     type_key;
             auto it = kept_tile_addr_vars.find(dedup_key);
@@ -1006,6 +1002,9 @@ void CCECodegen::VisitStmt_(const ir::AssignStmtPtr& op)
     std::string var_name = context_.SanitizeName(target_var);
     context_.RegisterVar(target_var, var_name);
 
+    // Both outputs of the same visit are needed here -- the code to bind the name to, and the
+    // underlying MakeTuple to register -- so this walks the expression directly instead of
+    // going through GetExprAsCode/GetExprAsMakeTuple, which each surface only one of the two.
     current_target_var_ = var_name;
     current_expr_value_ = "";
     current_tuple_ = nullptr;
@@ -1032,20 +1031,17 @@ void CCECodegen::VisitStmt_(const ir::AssignStmtPtr& op)
     if (current_tuple_) {
         tuple_var_to_make_tuple_.emplace(var_name, current_tuple_); // first-write wins
 
-        // Materialize a homogeneous MakeTuple only once. Constant propagation may
-        // expose this same MakeTuple through multiple tuple Vars, but all of them
-        // must resolve dynamic GetItem through the first backing array.
+        // Materialize an array tuple only once. Constant propagation may expose
+        // this same MakeTuple through multiple tuple Vars, but all aliases must
+        // resolve through the tuple's unique backing array.
         auto make_tuple = current_tuple_;
         auto tt = ir::As<ir::TupleType>(target_var->GetType());
-        if (tt && IsHomogeneousTuple(tt) && tuple_backing_arr_.count(make_tuple.get()) == 0) {
+        if (IsArrayTuple(tt) && tuple_backing_arr_.count(make_tuple.get()) == 0) {
             auto elem_names = CollectTupleElemNames(op->var_);
-            if (!elem_names.empty()) {
-                std::string arr_decl = BuildDynamicTupleArrayDecl(tt->types_[0], elem_names, var_name);
-                if (!arr_decl.empty()) {
-                    emitter_.EmitLine(arr_decl);
-                    tuple_backing_arr_.emplace(make_tuple.get(), var_name);
-                }
-            }
+            CHECK(!elem_names.empty()) << "Array tuple assignment to '" << var_name
+                                       << "' has elements without a C++ name at " << op->span_.ToString();
+            emitter_.EmitLine(BuildDynamicTupleArrayDecl(tt->types_[0], elem_names, var_name));
+            tuple_backing_arr_.emplace(make_tuple.get(), var_name);
         }
     }
     if (tile_addresses_.count(current_expr_value_)) {
@@ -1084,98 +1080,21 @@ void CCECodegen::VisitStmt_(const ir::YieldStmtPtr& op)
     INTERNAL_CHECK(op != nullptr) << "Internal error: null YieldStmt";
 
     if (op->value_.empty()) {
+        yield_buffer_.clear();
         return; // No values to yield
     }
 
-    // Visit each yielded expression and collect values
-    std::vector<std::string> yielded_values;
-    for (const auto& expr : op->value_) {
-        VisitExpr(expr);
-        yielded_values.push_back(current_expr_value_);
-    }
-
-    // Store in temporary buffer for ForStmt to pick up
-    yield_buffer_ = yielded_values;
+    yield_buffer_ = op->value_;
     current_expr_value_ = "";
 }
 
-std::optional<std::string> CCECodegen::ResolveYieldName(const ir::ExprPtr& value) const
-{
-    if (auto var = ir::As<ir::Var>(value)) {
-        return context_.SanitizeName(var);
-    }
-    if (auto cint = ir::As<ir::ConstInt>(value)) {
-        return std::to_string(cint->value_);
-    }
-
-    auto gi = ir::As<ir::GetItemExpr>(value);
-    if (!gi || !ir::As<ir::TupleType>(gi->value_->GetType())) {
-        return std::nullopt;
-    }
-
-    auto const_idx = ir::As<ir::ConstInt>(gi->slice_);
-    if (!const_idx) {
-        return std::nullopt;
-    }
-    int idx_i = static_cast<int>(const_idx->value_);
-    if (auto tuple_var = ir::As<ir::Var>(gi->value_)) {
-        return context_.SanitizeName(tuple_var) + "_" + std::to_string(idx_i);
-    }
-
-    auto make_tuple = ir::As<ir::MakeTuple>(gi->value_);
-    size_t idx = static_cast<size_t>(idx_i);
-    if (!make_tuple || idx >= make_tuple->elements_.size()) {
-        return std::nullopt;
-    }
-    return ResolveYieldName(make_tuple->elements_[idx]);
-}
-
-std::vector<std::string> CCECodegen::ExtractYieldNames(const ir::StmtPtr& body) const
-{
-    std::vector<std::string> yields;
-    ir::YieldStmtPtr yield_stmt;
-    if (auto y = ir::As<ir::YieldStmt>(body)) {
-        yield_stmt = y;
-    } else if (auto seq = ir::As<ir::SeqStmts>(body)) {
-        if (!seq->stmts_.empty())
-            yield_stmt = ir::As<ir::YieldStmt>(seq->stmts_.back());
-    }
-    if (!yield_stmt)
-        return yields;
-    for (const auto& val : yield_stmt->value_) {
-        auto name = ResolveYieldName(val);
-        if (!name.has_value()) {
-            return {};
-        }
-        yields.push_back(name.value());
-    }
-    return yields;
-}
-
-void CCECodegen::EmitYieldAssignments(const std::vector<ir::VarPtr>& return_vars,
-                                      const std::vector<std::string>& target_names)
+void CCECodegen::EmitYieldAssignments(const std::vector<ir::VarPtr>& return_vars)
 {
     if (return_vars.empty() || yield_buffer_.empty())
         return;
+    CHECK(return_vars.size() == yield_buffer_.size()) << "IfStmt yield values must match its return variables";
     for (size_t i = 0; i < return_vars.size(); ++i) {
-        const auto& return_var = return_vars[i];
-        std::string return_var_name = target_names[i];
-        std::string yielded_value = yield_buffer_[i];
-
-        auto return_type = return_var->GetType();
-        std::string resolved_yield = yielded_value;
-        if ((ir::As<ir::TileType>(return_type) || ir::As<ir::TupleType>(return_type)) &&
-            tile_addresses_.count(yielded_value)) {
-            emitter_.EmitLine("TASSIGN(" + return_var_name + ", " + tile_addresses_[yielded_value] + ");");
-            tile_addresses_[return_var_name] = tile_addresses_[yielded_value];
-        } else if (return_var_name != resolved_yield) {
-            emitter_.EmitLine(return_var_name + " = " + resolved_yield + ";");
-        }
-
-        if (std::dynamic_pointer_cast<const ir::TensorType>(return_type)) {
-            std::string yielded_ptr = GetPointer(resolved_yield);
-            RegisterPointer(return_var_name, yielded_ptr);
-        }
+        EmitVariable(return_vars[i], yield_buffer_[i], false);
     }
     yield_buffer_.clear();
 }
@@ -1186,71 +1105,66 @@ void CCECodegen::EmitYieldAssignments(const std::vector<ir::VarPtr>& return_vars
 
 std::vector<std::string> CCECodegen::CollectTupleElemNames(const ir::ExprPtr& tuple_value)
 {
-    // Step 1: resolve the tuple expression to its underlying MakeTuple via visitExpr.
-    current_tuple_ = nullptr;
-    current_expr_value_ = "";
-    VisitExpr(tuple_value);
-    if (!current_tuple_)
+    // Step 1: resolve the tuple expression to its underlying MakeTuple.
+    auto mt = GetExprAsMakeTuple(tuple_value);
+    if (!mt)
         return {};
-    auto mt = current_tuple_; // snapshot, element visits below overwrite current_tuple_
 
-    // Step 2: name each element by visiting it. For dynamic-GetItem the elements are
-    // tile/scalar Var or const literals, so each visit yields a non-empty current_expr_value_.
+    // Step 2: name each element. For dynamic-GetItem the elements are tile/scalar Var or const
+    // literals, so each one has a C++ name of its own; anything else cannot back an array.
     std::vector<std::string> names;
     names.reserve(mt->elements_.size());
     for (const auto& elem : mt->elements_) {
-        current_tuple_ = nullptr;
-        current_expr_value_ = "";
-        VisitExpr(elem);
-        if (current_expr_value_.empty())
+        std::string name = GetExprAsCode(elem);
+        if (name.empty())
             return {};
-        names.push_back(current_expr_value_);
+        names.push_back(std::move(name));
     }
     return names;
+}
+
+std::string CCECodegen::GetGeneratedType(const ir::TypePtr& type) const
+{
+    if (auto scalar_type = ir::As<ir::ScalarType>(type)) {
+        return scalar_type->dtype_.ToCTypeString();
+    }
+    if (auto ptr_type = ir::As<ir::PtrType>(type)) {
+        return "__gm__ " + ptr_type->dtype_.ToCTypeString() + "*";
+    }
+    if (auto tensor_type = ir::As<ir::TensorType>(type)) {
+        return "__gm__ " + tensor_type->dtype_.ToCTypeString() + "*";
+    }
+    if (auto tile_type = ir::As<ir::TileType>(type)) {
+        auto shape_dims = ExtractShapeDimensions(tile_type->shape_);
+        int64_t rows = shape_dims.size() >= 1 ? shape_dims[0] : 1;
+        int64_t cols = shape_dims.size() >= 2 ? shape_dims[1] : 1;
+        return type_converter_.ConvertTileType(tile_type, rows, cols);
+    }
+    if (auto tuple_type = ir::As<ir::TupleType>(type)) {
+        if (const std::string* struct_name = GetStructName(tuple_type)) {
+            return *struct_name;
+        }
+    }
+    // Single-element basic types only. Aggregate tuples and arrays are flattened to their
+    // elements before reaching here, so an unregistered composite type is a codegen bug.
+    CHECK(false) << "Unsupported type for CCE codegen: " << type->TypeName();
+    return "";
 }
 
 std::string CCECodegen::BuildDynamicTupleArrayDecl(const ir::TypePtr& elem_type,
                                                    const std::vector<std::string>& elem_names,
                                                    const std::string& arr_name) const
 {
-    if (elem_names.empty()) {
-        return "";
-    }
+    CHECK(!elem_names.empty()) << "Array tuple '" << arr_name << "' has no elements";
 
-    std::string elem_cpp_type;
-    // For scalar elements, wrap each initializer in an explicit cast to the array's
-    // element type. The element expressions may have a different (e.g. unsigned) C++
-    // type than the declared array type, which would otherwise trigger a narrowing
-    // error in the initializer list (e.g. unsigned long -> int64_t).
-    std::string scalar_cast_type;
-    if (auto tile_type = ir::As<ir::TileType>(elem_type)) {
-        auto shape_dims = ExtractShapeDimensions(tile_type->shape_);
-        int64_t rows = shape_dims.size() >= 1 ? shape_dims[0] : 1;
-        int64_t cols = shape_dims.size() >= 2 ? shape_dims[1] : 1;
-        elem_cpp_type = type_converter_.ConvertTileType(tile_type, rows, cols);
-    } else if (auto scalar_type = ir::As<ir::ScalarType>(elem_type)) {
-        scalar_cast_type = scalar_type->dtype_.ToCTypeString();
-        elem_cpp_type = "const " + scalar_cast_type;
-    } else {
-        auto inner_tt = ir::As<ir::TupleType>(elem_type);
-        if (inner_tt && debug_info_ != nullptr && debug_info_->GetTupleFields(inner_tt.get()) != nullptr) {
-            auto type_it = tuple_type_to_struct_name_.find(inner_tt.get());
-            if (type_it != tuple_type_to_struct_name_.end()) {
-                elem_cpp_type = type_it->second;
-            }
-        }
-    }
-
-    if (elem_cpp_type.empty()) {
-        return "";
-    }
+    std::string elem_cpp_type = GetGeneratedType(elem_type);
 
     std::ostringstream init;
     for (size_t i = 0; i < elem_names.size(); ++i) {
         if (i > 0)
             init << ", ";
-        if (!scalar_cast_type.empty()) {
-            init << "static_cast<" << scalar_cast_type << ">(" << elem_names[i] << ")";
+        if (ir::As<ir::ScalarType>(elem_type)) {
+            init << "static_cast<" << elem_cpp_type << ">(" << elem_names[i] << ")";
         } else {
             init << elem_names[i];
         }
@@ -1270,36 +1184,24 @@ bool CCECodegen::IsHomogeneousTuple(const ir::TupleTypePtr& tt) const
     return true;
 }
 
+bool CCECodegen::IsArrayTuple(const ir::TupleTypePtr& tt) const
+{
+    if (!tt || tt->types_.empty())
+        return false;
+    // Named tuples / structs render as `base.field`; see VisitExpr_(GetItemExprPtr) case 1.
+    if (debug_info_ != nullptr && debug_info_->GetTupleFields(tt.get()) != nullptr)
+        return false;
+    return IsHomogeneousTuple(tt);
+}
+
 void CCECodegen::EmitFullPhiIf(const ir::IfStmtPtr& op)
 {
-    // Declare and register return variables BEFORE the if statement
+    // Declare the phi slots before the `if`: a phi has no initial value, but its C++ shape
+    // follows from its type alone, including a struct name, which codegen seeds from IRDebugInfo
+    // at entry rather than discovering as it walks the branches.
     for (const auto& return_var : op->returnVars_) {
-        std::string return_var_name = context_.SanitizeName(return_var);
-        context_.RegisterVar(return_var, return_var_name);
-
-        if (auto tile_type = std::dynamic_pointer_cast<const ir::TileType>(return_var->GetType())) {
-            std::vector<int64_t> shape_dims = ExtractShapeDimensions(tile_type->shape_);
-            int64_t rows = shape_dims.size() >= 1 ? shape_dims[0] : 1;
-            int64_t cols = shape_dims.size() >= 2 ? shape_dims[1] : 1;
-            auto vs = ExtractValidShapeInfo(tile_type, rows, cols,
-                                            [this](const ir::VarPtr& v) { return GetVarName(v); });
-            std::string ctor_args = BuildTileCtorArgs(vs, rows, cols);
-            std::string ctor_suffix = vs.needs_ctor ? ("(" + ctor_args + ")") : "";
-            std::string type_alias_name = return_var_name + "Type";
-            std::string tile_type_str = type_converter_.ConvertTileType(tile_type, rows, cols);
-            if (loop_depth_ > 0) {
-                loop_hoisted_decls_.push_back("using " + type_alias_name + " = " + tile_type_str + ";");
-                loop_hoisted_decls_.push_back(type_alias_name + " " + return_var_name + ctor_suffix + ";");
-            } else {
-                emitter_.EmitLine("using " + type_alias_name + " = " + tile_type_str + ";");
-                emitter_.EmitLine(type_alias_name + " " + return_var_name + ctor_suffix + ";");
-            }
-        } else if (auto scalar_type = std::dynamic_pointer_cast<const ir::ScalarType>(return_var->GetType())) {
-            std::string cpp_type = scalar_type->dtype_.ToCTypeString();
-            emitter_.EmitLine(cpp_type + " " + return_var_name + ";");
-        } else {
-            throw ir::RuntimeError("Unsupported return_var type in IfStmt");
-        }
+        context_.RegisterVar(return_var, context_.SanitizeName(return_var));
+        EmitVariable(return_var, nullptr, true);
     }
 
     VisitExpr(op->condition_);
@@ -1309,24 +1211,14 @@ void CCECodegen::EmitFullPhiIf(const ir::IfStmtPtr& op)
     emitter_.EmitLine("if (" + condition + ") {");
     emitter_.IncreaseIndent();
     VisitStmt(op->thenBody_);
-    {
-        std::vector<std::string> phi_names;
-        for (const auto& rv : op->returnVars_)
-            phi_names.push_back(context_.SanitizeName(rv));
-        EmitYieldAssignments(op->returnVars_, phi_names);
-    }
+    EmitYieldAssignments(op->returnVars_);
     emitter_.DecreaseIndent();
 
     if (op->elseBody_.has_value()) {
         emitter_.EmitLine("} else {");
         emitter_.IncreaseIndent();
         VisitStmt(*op->elseBody_);
-        {
-            std::vector<std::string> phi_names;
-            for (const auto& rv : op->returnVars_)
-                phi_names.push_back(context_.SanitizeName(rv));
-            EmitYieldAssignments(op->returnVars_, phi_names);
-        }
+        EmitYieldAssignments(op->returnVars_);
         emitter_.DecreaseIndent();
     }
     emitter_.EmitLine("}");
@@ -1363,107 +1255,188 @@ void CCECodegen::VisitStmt_(const ir::IfStmtPtr& op)
         }
     }
 
-    // If-level hoisting: buffer output so array decls can be hoisted before the if
-    bool is_outermost_if = (loop_depth_ == 0 && if_depth_ == 0);
-    if_depth_++;
-
-    std::string pre_if_code;
-    int saved_if_indent = emitter_.GetIndentLevel();
-    if (is_outermost_if) {
-        pre_if_code = emitter_.GetCode();
-        emitter_.Clear();
-        emitter_.SetIndentLevel(saved_if_indent);
-    }
-
     EmitFullPhiIf(effective_op);
-
-    if_depth_--;
-
-    // Insert hoisted declarations before the if statement
-    if (is_outermost_if) {
-        std::string if_code = emitter_.GetCode();
-        emitter_.Clear();
-        emitter_.SetIndentLevel(saved_if_indent);
-        emitter_.EmitRaw(pre_if_code);
-
-        if (!loop_hoisted_decls_.empty()) {
-            for (const auto& decl : loop_hoisted_decls_) {
-                emitter_.EmitLine(decl);
-            }
-            emitter_.EmitLine("");
-            loop_hoisted_decls_.clear();
-        }
-
-        emitter_.EmitRaw(if_code);
-    }
 }
 
 // ========================================================================
 // Phase 5 helpers: ForStmt iter-arg registration and yield assignments
 // ========================================================================
 
+bool CCECodegen::CheckEmitVariable(const ir::VarPtr& target, ir::ExprPtr& value, bool initialize)
+{
+    // The target is a declared slot, so its type must always be resolved.
+    INTERNAL_CHECK(!ir::As<ir::NoneType>(target->GetType()))
+        << "Variable '" << target->name_ << "' has an unresolved type";
+
+    // A NoneType source carries no value: it is the `None` sentinel on a slot with no initial
+    // value, or the placeholder a yield/break/continue emits for a merge variable that a branch
+    // never wrote. Either way there is nothing to assign.
+    if (value && ir::As<ir::NoneType>(value->GetType())) {
+        value = nullptr;
+    }
+    // A control-flow back edge carries a value the body never modified, so the yielded
+    // expression *is* the slot's own variable. Writing it back would emit `x = x`.
+    if (value == target) {
+        value = nullptr;
+    }
+    // With no value left, only a pending declaration is still worth emitting.
+    return initialize || value != nullptr;
+}
+
+void CCECodegen::EmitVariable(const ir::VarPtr& target, ir::ExprPtr value, bool initialize)
+{
+    if (!CheckEmitVariable(target, value, initialize)) {
+        return;
+    }
+
+    const auto& type = target->GetType();
+    std::string name = context_.SanitizeName(target);
+    if (ir::As<ir::TensorType>(type)) {
+        throw ir::RuntimeError("Tensor variable code generation is not supported");
+    }
+    // A struct is a single C++ object with a type name of its own, so it is emitted like any
+    // other scalar. Only a tuple without one needs splitting into an array or leaf slots.
+    if (auto tuple_type = ir::As<ir::TupleType>(type); tuple_type && GetStructName(tuple_type) == nullptr) {
+        EmitTupleVariable(name, tuple_type, value, initialize);
+        return;
+    }
+
+    std::string source = value ? GetExprAsCode(value) : "";
+    if (ir::As<ir::TileType>(type) && value) {
+        auto address = tile_addresses_.find(source);
+        if (address != tile_addresses_.end()) {
+            tile_addresses_[name] = address->second;
+        }
+    }
+
+    if (initialize) {
+        emitter_.EmitLine(GetGeneratedType(type) + " " + name + (value ? " = " + source : "") + ";");
+    } else {
+        emitter_.EmitLine(name + " = " + source + ";");
+    }
+}
+
+void CCECodegen::EmitTupleVariable(const std::string& name, const ir::TupleTypePtr& type, const ir::ExprPtr& value,
+                                   bool initialize)
+{
+    ir::MakeTuplePtr source;
+    ir::Span span = value ? value->span_ : ir::Span::Unknown();
+    if (value) {
+        source = GetExprAsMakeTuple(value);
+        INTERNAL_CHECK_SPAN(source, span) << "Tuple assignment source does not resolve to MakeTuple";
+    }
+
+    // The representation follows the type, not the source value, so a merge variable can be
+    // declared from its type alone once its control-flow structure has been traversed.
+    // `initialize` means this is a fresh slot: define it and take ownership of its storage.
+    if (IsArrayTuple(type)) {
+        const auto& elem_type = type->types_[0];
+        // A C++ array needs a single element spelling. Elements are basic types or registered
+        // structs; a plain nested tuple would need a second dimension, which is not supported.
+        auto elem_tuple = ir::As<ir::TupleType>(elem_type);
+        CHECK(!elem_tuple || GetStructName(elem_tuple) != nullptr)
+            << "Only one-dimensional array tuples are supported, but '" << name << "' has tuple elements at "
+            << span.ToString();
+
+        if (initialize) {
+            // The declaration depends only on the type; only the initial value comes from source.
+            auto target_tuple = std::make_shared<ir::MakeTuple>(source ? source->elements_ : std::vector<ir::ExprPtr>{},
+                                                                span);
+            tuple_var_to_make_tuple_[name] = target_tuple;
+            tuple_backing_arr_[target_tuple.get()] = name;
+            emitter_.EmitLine(GetGeneratedType(elem_type) + " " + name + "[" + std::to_string(type->types_.size()) +
+                              "];");
+        }
+        if (source) {
+            auto source_array = tuple_backing_arr_.find(source.get());
+            INTERNAL_CHECK_SPAN(source_array != tuple_backing_arr_.end(), span)
+                << "Array tuple assignment to '" << name << "' requires an array source";
+            if (name != source_array->second) {
+                for (size_t i = 0; i < type->types_.size(); ++i) {
+                    std::string index = "[" + std::to_string(i) + "]";
+                    emitter_.EmitLine(name + index + " = " + source_array->second + index + ";");
+                }
+            }
+        }
+        return;
+    }
+
+    // Aggregate: flatten into one leaf slot per element, recursing into nested tuples.
+    if (initialize) {
+        std::vector<ir::ExprPtr> elements;
+        elements.reserve(type->types_.size());
+        for (size_t i = 0; i < type->types_.size(); ++i) {
+            std::string element_name = name + "_" + std::to_string(i);
+            ir::ExprPtr element_value = source ? source->elements_[i] : nullptr;
+            // A struct is a leaf: it has a C++ type name of its own, so it is declared and
+            // assigned whole. Only a tuple without one is taken apart further.
+            if (auto element_type = ir::As<ir::TupleType>(type->types_[i]);
+                element_type && GetStructName(element_type) == nullptr) {
+                EmitTupleVariable(element_name, element_type, element_value, true);
+                elements.push_back(tuple_var_to_make_tuple_.at(element_name));
+            } else {
+                auto element = std::make_shared<ir::Var>(element_name, type->types_[i], span);
+                context_.RegisterVar(element, element_name);
+                elements.push_back(element);
+                EmitVariable(element, element_value, true);
+            }
+        }
+        tuple_var_to_make_tuple_[name] = std::make_shared<ir::MakeTuple>(std::move(elements), span);
+        return;
+    }
+
+    // Reuse the leaf slots recorded when this aggregate was defined.
+    auto target = tuple_var_to_make_tuple_.find(name);
+    INTERNAL_CHECK_SPAN(target != tuple_var_to_make_tuple_.end(), span)
+        << "Assignment to undefined aggregate tuple '" << name << "'";
+    for (size_t i = 0; i < type->types_.size(); ++i) {
+        ir::ExprPtr element_value = source ? source->elements_[i] : nullptr;
+        if (auto element_type = ir::As<ir::TupleType>(type->types_[i]);
+            element_type && GetStructName(element_type) == nullptr) {
+            EmitTupleVariable(name + "_" + std::to_string(i), element_type, element_value, false);
+            continue;
+        }
+        auto element = ir::As<ir::Var>(target->second->elements_[i]);
+        INTERNAL_CHECK_SPAN(element, span) << "Aggregate tuple '" << name << "' has no leaf slot at " << i;
+        EmitVariable(element, element_value, false);
+    }
+}
+
 std::vector<std::string> CCECodegen::RegisterLoopIterArgs(const std::vector<ir::IterArgPtr>& iterArgs)
 {
+    // Registration only: the declarations are emitted by EmitLoop after the body has been
+    // traversed, because a slot whose init is UnknownType is not fully typed until then.
     std::vector<std::string> iterArgNames;
-    if (iterArgs.empty()) {
-        return iterArgNames;
-    }
+    iterArgNames.reserve(iterArgs.size());
 
     for (auto& iterArg : iterArgs) {
         const auto& var = iterArg->iterVar_;
         std::string iterArgName = context_.SanitizeName(var);
 
-        VisitExpr(iterArg->initValue_);
-        std::string initValue = current_expr_value_;
-        current_expr_value_ = "";
-
-        auto initVar = std::dynamic_pointer_cast<const ir::Var>(iterArg->initValue_);
-        if (initVar && std::dynamic_pointer_cast<const ir::TensorType>(initVar->GetType())) {
-            std::string initVarName = context_.GetVarName(initVar);
-            std::string initPtr = GetPointer(initVarName);
-            RegisterPointer(iterArgName, initPtr);
-        }
-
         context_.RegisterVar(var, iterArgName);
         iterArgNames.push_back(iterArgName);
-        std::string safeInit = initValue;
-        if (context_.IsAutoRegistered(initValue)) {
-            safeInit = "0";
-        }
-        emitter_.EmitLine("auto " + iterArgName + " = " + safeInit + ";");
     }
-    emitter_.EmitLine("");
     return iterArgNames;
 }
 
-void CCECodegen::EmitCarriedAssignments(const std::vector<std::string>& targets,
-                                        const std::vector<std::string>& sources)
+void CCECodegen::EmitCarriedAssignments(const std::vector<ir::IterArgPtr>& targets,
+                                        const std::vector<ir::ExprPtr>& sources)
 {
     CHECK(targets.size() == sources.size())
         << "Loop-carried write-back expects " << targets.size() << " values but got " << sources.size();
 
     for (size_t i = 0; i < targets.size(); ++i) {
-        const std::string& lhs = targets[i];
-        const std::string& rhs = sources[i];
-        if (lhs == rhs) {
-            continue; // Self-assignment after alias resolution - skip
-        }
-        // For tiles/tuples: use TASSIGN instead of operator= to transfer the hardware address.
-        if (tile_addresses_.count(rhs)) {
-            emitter_.EmitLine("TASSIGN(" + lhs + ", " + tile_addresses_[rhs] + ");");
-            tile_addresses_[lhs] = tile_addresses_[rhs];
-        } else {
-            emitter_.EmitLine(lhs + " = " + rhs + ";");
-        }
+        const auto& var = targets[i]->iterVar_;
+        EmitVariable(var, sources[i], false);
     }
 }
 
-void CCECodegen::EmitForYieldAssignments(const std::vector<std::string>& iterArgNames)
+void CCECodegen::EmitForYieldAssignments(const std::vector<ir::IterArgPtr>& iterArgs)
 {
     if (yield_buffer_.empty()) {
         return;
     }
-    EmitCarriedAssignments(iterArgNames, yield_buffer_);
+    EmitCarriedAssignments(iterArgs, yield_buffer_);
     yield_buffer_.clear();
 }
 
@@ -1477,35 +1450,18 @@ void CCECodegen::RegisterLoopReturnVars(const std::vector<ir::VarPtr>& returnVar
         const auto& returnVar = returnVars[i];
         if (i < iterArgNames.size()) {
             context_.RegisterVar(returnVar, iterArgNames[i]);
+            if (ir::As<ir::TensorType>(returnVar->GetType())) {
+                RegisterPointer(context_.SanitizeName(returnVar), GetPointer(iterArgNames[i]));
+            }
+            if (ir::As<ir::TupleType>(returnVar->GetType())) {
+                auto tuple_it = tuple_var_to_make_tuple_.find(iterArgNames[i]);
+                if (tuple_it != tuple_var_to_make_tuple_.end()) {
+                    tuple_var_to_make_tuple_[context_.SanitizeName(returnVar)] = tuple_it->second;
+                }
+            }
         } else {
             throw ir::RuntimeError("Loop return_var has no corresponding iter_arg");
         }
-    }
-}
-
-void CCECodegen::PropagateTupleIterArgs(const std::vector<ir::IterArgPtr>& iterArgs,
-                                        const std::vector<ir::VarPtr>& returnVars)
-{
-    for (size_t i = 0; i < iterArgs.size(); ++i) {
-        const auto& ia = iterArgs[i];
-        if (!ia || !ir::As<ir::TupleType>(ia->iterVar_->GetType()) || !ia->initValue_) {
-            continue;
-        }
-        std::string savedExpr = current_expr_value_;
-        ir::MakeTuplePtr savedTuple = current_tuple_;
-        current_tuple_ = nullptr;
-        current_expr_value_ = "";
-        VisitExpr(ia->initValue_);
-        if (current_tuple_) {
-            std::string iaName = context_.SanitizeName(ia->iterVar_);
-            tuple_var_to_make_tuple_.emplace(iaName, current_tuple_);
-            if (i < returnVars.size() && returnVars[i] && ir::As<ir::TupleType>(returnVars[i]->GetType())) {
-                std::string rvName = context_.SanitizeName(returnVars[i]);
-                tuple_var_to_make_tuple_.emplace(rvName, current_tuple_);
-            }
-        }
-        current_expr_value_ = savedExpr;
-        current_tuple_ = savedTuple;
     }
 }
 
@@ -1530,7 +1486,6 @@ void CCECodegen::VisitStmt_(const ir::ForStmtPtr& op)
     context_.RegisterVar(op->loopVar_, loop_var_name);
 
     std::vector<std::string> iter_arg_names = RegisterLoopIterArgs(op->iterArgs_);
-    PropagateTupleIterArgs(op->iterArgs_, op->returnVars_);
 
     // Evaluate loop range
     VisitExpr(op->start_);
@@ -1562,26 +1517,22 @@ void CCECodegen::VisitStmt_(const ir::ForStmtPtr& op)
     }
     std::string header = "for (" + loop_type + " " + loop_var_name + " = " + start + "; " + loop_var_name + " < " +
                          stop_expr + "; " + loop_var_name + " += " + step + ") {";
-    EmitLoopWithHoisting(header, op->body_, op->iterArgs_, op->returnVars_, iter_arg_names);
+    EmitLoop(header, op->body_, op->iterArgs_, op->returnVars_, iter_arg_names);
 }
 
-void CCECodegen::EmitLoopWithHoisting(const std::string& header, const ir::StmtPtr& body,
-                                      const std::vector<ir::IterArgPtr>& iterArgs,
-                                      const std::vector<ir::VarPtr>& returnVars,
-                                      const std::vector<std::string>& iterArgNames)
+void CCECodegen::EmitLoop(const std::string& header, const ir::StmtPtr& body,
+                          const std::vector<ir::IterArgPtr>& iterArgs, const std::vector<ir::VarPtr>& returnVars,
+                          const std::vector<std::string>& iterArgNames)
 {
-    // VF base-ptr / POST_UPDATE decls go to section_hoisted_decls_ (hoisted to __VEC_SCOPE__), so
-    // loop-level array-decl hoisting is only needed for the outermost kernel loop.
-    bool shouldHoist = (loop_depth_ == 0);
-    loop_depth_++;
-    size_t hoistStartIdx = loop_hoisted_decls_.size();
-
-    std::string preLoopCode;
-    int savedIndent = emitter_.GetIndentLevel();
-    if (shouldHoist) {
-        preLoopCode = emitter_.GetCode();
-        emitter_.Clear();
-        emitter_.SetIndentLevel(savedIndent);
+    // The iter-arg slots are declared before the loop: every type they can take is known up
+    // front, including a struct name, which codegen seeds from IRDebugInfo at entry rather than
+    // discovering as it walks the body. An UnknownType init (the `None` sentinel for a slot with
+    // no initial value) becomes a plain declaration inside EmitVariable.
+    for (const auto& iterArg : iterArgs) {
+        EmitVariable(iterArg->iterVar_, iterArg->initValue_, true);
+    }
+    if (!iterArgs.empty()) {
+        emitter_.EmitLine("");
     }
 
     emitter_.EmitLine(header);
@@ -1589,37 +1540,17 @@ void CCECodegen::EmitLoopWithHoisting(const std::string& header, const ir::StmtP
 
     // Expose this loop's write-back targets so a native break/continue in the body can assign its
     // self-described carried values (BreakStmt::value_) to the iter_args before jumping.
-    loop_target_stack_.push_back(iterArgNames);
+    loop_target_stack_.push_back(iterArgs);
     yield_buffer_.clear();
     VisitStmt(body);
     loop_target_stack_.pop_back();
 
     if (!iterArgs.empty()) {
-        EmitForYieldAssignments(iterArgNames);
+        EmitForYieldAssignments(iterArgs);
     }
 
     emitter_.DecreaseIndent();
     emitter_.EmitLine("}");
-
-    loop_depth_--;
-
-    // Insert hoisted declarations before the loop.
-    if (shouldHoist) {
-        std::string loopCode = emitter_.GetCode();
-        emitter_.Clear();
-        emitter_.SetIndentLevel(savedIndent);
-        emitter_.EmitRaw(preLoopCode);
-
-        if (loop_hoisted_decls_.size() > hoistStartIdx) {
-            for (size_t i = hoistStartIdx; i < loop_hoisted_decls_.size(); ++i) {
-                emitter_.EmitLine(loop_hoisted_decls_[i]);
-            }
-            emitter_.EmitLine("");
-            loop_hoisted_decls_.resize(hoistStartIdx);
-        }
-
-        emitter_.EmitRaw(loopCode);
-    }
 
     // Return variables capture the final iteration values; alias them to iter_args.
     RegisterLoopReturnVars(returnVars, iterArgNames);
@@ -1641,7 +1572,6 @@ void CCECodegen::VisitStmt_(const ir::WhileStmtPtr& op)
     // writes them to the iter_args before jumping. The body otherwise ends in a YieldStmt that feeds
     // the loop-carried iter_args on the normal loop-back path.
     std::vector<std::string> iter_arg_names = RegisterLoopIterArgs(op->iterArgs_);
-    PropagateTupleIterArgs(op->iterArgs_, op->returnVars_);
 
     // The condition is re-evaluated each iteration, so emit it inline in the while header.
     // Comparison/logical exprs lower to pure C++ expression strings (see IMPLEMENT_BINARY_OP),
@@ -1650,7 +1580,7 @@ void CCECodegen::VisitStmt_(const ir::WhileStmtPtr& op)
     std::string condition = current_expr_value_;
     current_expr_value_ = "";
 
-    EmitLoopWithHoisting("while (" + condition + ") {", op->body_, op->iterArgs_, op->returnVars_, iter_arg_names);
+    EmitLoop("while (" + condition + ") {", op->body_, op->iterArgs_, op->returnVars_, iter_arg_names);
 }
 
 // ========================================================================
@@ -1664,14 +1594,7 @@ void CCECodegen::EmitJumpCarriedWriteback(const std::vector<ir::ExprPtr>& values
     if (values.empty() || loop_target_stack_.empty()) {
         return; // bare jump: loop carries nothing, or jump is outside a tracked loop
     }
-    std::vector<std::string> sources;
-    sources.reserve(values.size());
-    for (const auto& v : values) {
-        VisitExpr(v);
-        sources.push_back(current_expr_value_);
-        current_expr_value_ = "";
-    }
-    EmitCarriedAssignments(loop_target_stack_.back(), sources);
+    EmitCarriedAssignments(loop_target_stack_.back(), values);
 }
 
 void CCECodegen::VisitStmt_(const ir::BreakStmtPtr& op)
@@ -1786,6 +1709,8 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
         << "GetItemExpr requires value to have TupleType, got " << value_type->TypeName();
 
     std::string index_code = GetExprAsCode(op->slice_);
+    // Which of the three cases below applies depends on both outputs of one visit of the base,
+    // so this walks it directly rather than through the single-output accessors.
     current_tuple_ = nullptr;
     current_expr_value_ = "";
     VisitExpr(op->value_);
@@ -1842,11 +1767,34 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
 // CodegenBase interface and CCE-specific helper methods
 // ========================================================================
 
+// Both accessors below clear current_expr_value_ and current_tuple_ on the way in and on the
+// way out. Clearing on the way in is what makes the result describe this expression alone:
+// only Var and MakeTuple write current_tuple_ on every visit, so a scalar expression would
+// otherwise inherit whichever tuple the previous visit left behind. Clearing on the way out
+// keeps that same leftover from reaching whatever is parsed next.
+
 std::string CCECodegen::GetExprAsCode(const ir::ExprPtr& expr)
 {
     auto saved_span = current_expr_span_;
+    current_expr_value_ = "";
+    current_tuple_ = nullptr;
     VisitExpr(expr);
     auto result = current_expr_value_;
+    current_expr_value_ = "";
+    current_tuple_ = nullptr;
+    current_expr_span_ = saved_span;
+    return result;
+}
+
+ir::MakeTuplePtr CCECodegen::GetExprAsMakeTuple(const ir::ExprPtr& expr)
+{
+    auto saved_span = current_expr_span_;
+    current_expr_value_ = "";
+    current_tuple_ = nullptr;
+    VisitExpr(expr);
+    auto result = current_tuple_;
+    current_expr_value_ = "";
+    current_tuple_ = nullptr;
     current_expr_span_ = saved_span;
     return result;
 }
@@ -2619,17 +2567,20 @@ void CCECodegen::RegisterStructDefinition(const ir::TupleTypePtr& tuple_type, co
                 << "Conflicting type for field '" << fields[i] << "' in struct '" << type_name << "'";
         }
     }
-    tuple_type_to_struct_name_[tuple_type.get()] = type_name;
+}
+
+const std::string* CCECodegen::GetStructName(const ir::TupleTypePtr& tuple_type) const
+{
+    return debug_info_ != nullptr ? debug_info_->GetTupleName(tuple_type.get()) : nullptr;
 }
 
 void CCECodegen::MarkStructVolatile(const ir::TypePtr& type)
 {
     auto tuple_type = ir::As<ir::TupleType>(type);
     CHECK(tuple_type != nullptr) << "ssbuf_load/store requires a struct TupleType argument";
-    auto type_it = tuple_type_to_struct_name_.find(tuple_type.get());
-    CHECK(type_it != tuple_type_to_struct_name_.end())
-        << "ssbuf_load/store struct type is not registered for CCE codegen";
-    struct_definitions_.at(type_it->second).requires_volatile = true;
+    const std::string* struct_name = GetStructName(tuple_type);
+    CHECK(struct_name != nullptr) << "ssbuf_load/store struct type is not registered for CCE codegen";
+    struct_definitions_.at(*struct_name).requires_volatile = true;
 }
 
 void CCECodegen::RegisterTilingStructTypes(const ir::FunctionPtr& func)
@@ -2721,7 +2672,7 @@ void CCECodegen::GenerateTileTypeDeclaration(const std::string& var_name, const 
     std::string ctor_args = BuildTileCtorArgs(vs, rows, cols);
 
     // Generate Tile type alias (with dedup: reuse alias if same type string already emitted)
-    std::string tile_type_str = type_converter_.ConvertTileType(tile_type, rows, cols);
+    std::string tile_type_str = GetGeneratedType(tile_type);
     std::string type_alias_name;
     auto dedup_it = emitted_tile_types_.find(tile_type_str);
     if (dedup_it != emitted_tile_types_.end()) {

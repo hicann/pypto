@@ -248,134 +248,17 @@ protected:
         auto new_stop = VisitExpr(op->stop_);
         auto new_step = VisitExpr(op->step_);
 
-        // Save outer scope versions
-        auto versions_before = current_version_;
-
-        auto new_iter_args = VisitIterArgInitializers(op->iterArgs_);
-
-        // PRE-ANALYSIS: Find which outer variables are assigned in the loop body.
-        // This allows us to create iter_args BEFORE visiting the body.
-        AssignmentCollector collector;
-        collector.Collect(op->body_);
-
-        std::string loop_var_base = GetBaseName(op->loopVar_->name_);
-        auto loop_carried_vars = CollectLoopCarriedVars(collector.assigned_vars, versions_before, op->iterArgs_,
-                                                        std::make_optional(loop_var_base));
-
-        // Create iter_args for loop-carried variables BEFORE visiting the body
-        auto return_vars = AppendLoopCarriedIterArgs(loop_carried_vars, versions_before, new_iter_args, op->span_);
-
-        // Enter loop scope
-        EnterScope();
-
-        // Create versioned loop variable
-        int loop_var_version = NextVersion(loop_var_base);
-        auto loop_var_type = SubstituteVarsInType(op->loopVar_->GetType());
-        auto new_loop_var = std::make_shared<Var>(loop_var_base + "_" + std::to_string(loop_var_version), loop_var_type,
-                                                  op->loopVar_->span_);
-        current_version_[loop_var_base] = new_loop_var;
-
-        RegisterIterArgsInCurrentScope(new_iter_args);
-
-        // Track loop-carried values so native break/continue in the body self-describe their phis.
-        loop_ctx_stack_.push_back(BuildLoopCtx(new_iter_args));
-
-        // Visit loop body - now it will correctly reference iter_args
-        auto new_body = VisitStmt(op->body_);
-        auto versions_after_body = current_version_;
-
-        loop_ctx_stack_.pop_back();
-
-        // Exit loop scope
-        ExitScope();
-
-        // Update outer scope to use return_vars for loop-carried variables
-        for (size_t i = 0; i < loop_carried_vars.size(); ++i) {
-            current_version_[loop_carried_vars[i]] = return_vars[i];
-        }
-
-        auto yield_values = CollectYieldValues(new_body, versions_after_body, loop_carried_vars);
-
-        // Copy existing return_vars (from explicit iter_args in original code)
-        for (const auto& rv : op->returnVars_) {
-            return_vars.push_back(rv);
-        }
-
-        // Update body with new yield
-        StmtPtr final_body = new_body;
-        if (!yield_values.empty()) {
-            final_body = ReplaceOrAppendYield(new_body, yield_values, op->span_);
-        }
-
-        return std::make_shared<ForStmt>(new_loop_var, new_start, new_stop, new_step, new_iter_args, final_body,
-                                         return_vars, op->span_, op->attrs_);
+        auto result = ConvertLoopToSSA(op->body_, op->iterArgs_, op->returnVars_, op->loopVar_, nullptr, op->span_);
+        return std::make_shared<ForStmt>(result.loopVar, new_start, new_stop, new_step, result.iterArgs, result.body,
+                                         result.returnVars, op->span_, op->attrs_);
     }
 
     // Override WhileStmt to handle loop-carried variables
     StmtPtr VisitStmt_(const WhileStmtPtr& op) override
     {
-        // Save outer scope versions
-        auto versions_before = current_version_;
-
-        auto new_iter_args = VisitIterArgInitializers(op->iterArgs_);
-
-        // PRE-ANALYSIS: Find which outer variables are assigned in the loop body
-        AssignmentCollector collector;
-        collector.Collect(op->body_);
-        // Also collect from condition (though unusual, it's possible)
-        collector.Collect(std::make_shared<EvalStmt>(op->condition_, op->span_));
-
-        auto loop_carried_vars = CollectLoopCarriedVars(collector.assigned_vars, versions_before, op->iterArgs_,
-                                                        std::nullopt);
-
-        // Create iter_args for loop-carried variables BEFORE visiting the body
-        auto new_loop_carried_return_vars = AppendLoopCarriedIterArgs(loop_carried_vars, versions_before, new_iter_args,
-                                                                      op->span_);
-
-        // Enter loop scope
-        EnterScope();
-
-        RegisterIterArgsInCurrentScope(new_iter_args);
-
-        // Visit condition - it will reference iter_args
-        auto new_condition = VisitExpr(op->condition_);
-
-        // Track loop-carried values so native break/continue in the body self-describe their phis.
-        loop_ctx_stack_.push_back(BuildLoopCtx(new_iter_args));
-
-        // Visit loop body - now it will correctly reference iter_args
-        auto new_body = VisitStmt(op->body_);
-        auto versions_after_body = current_version_;
-
-        loop_ctx_stack_.pop_back();
-
-        // Exit loop scope
-        ExitScope();
-
-        // Build return_vars in same order as new_iter_args and yield_values:
-        // First existing return_vars, then new loop-carried return_vars
-        std::vector<VarPtr> return_vars;
-        for (const auto& rv : op->returnVars_) {
-            return_vars.push_back(rv);
-        }
-        for (const auto& rv : new_loop_carried_return_vars) {
-            return_vars.push_back(rv);
-        }
-
-        // Update outer scope to use return_vars for loop-carried variables
-        for (size_t i = 0; i < loop_carried_vars.size(); ++i) {
-            current_version_[loop_carried_vars[i]] = new_loop_carried_return_vars[i];
-        }
-
-        auto yield_values = CollectYieldValues(new_body, versions_after_body, loop_carried_vars);
-
-        // Update body with new yield
-        StmtPtr final_body = new_body;
-        if (!yield_values.empty()) {
-            final_body = ReplaceOrAppendYield(new_body, yield_values, op->span_);
-        }
-
-        return std::make_shared<WhileStmt>(new_condition, new_iter_args, final_body, return_vars, op->span_);
+        auto result = ConvertLoopToSSA(op->body_, op->iterArgs_, op->returnVars_, nullptr, op->condition_, op->span_);
+        return std::make_shared<WhileStmt>(result.condition, result.iterArgs, result.body, result.returnVars,
+                                           op->span_);
     }
 
     // A native break/continue exits/restarts the loop mid-body, skipping the trailing yield. Capture
@@ -412,14 +295,21 @@ private:
     // New versioned parameters
     std::vector<VarPtr> new_params_;
 
-    // One frame per enclosing loop: the ordered base names of all loop-carried values
-    // ([explicit iter_arg bases..., implicit outer-assigned bases...], matching iterArgs_/yield
-    // order). A native break/continue snapshots current_version_ for each base, so the jump carries
-    // its own phi values instead of the codegen reconstructing them. Innermost loop = back().
+    // One frame per enclosing loop. A native break/continue snapshots current_version_ for each
+    // iter_arg, so the jump carries its own phi values instead of the codegen reconstructing them.
+    // Innermost loop = back().
     struct LoopCtx {
-        std::vector<std::string> carriedBases;
+        std::vector<IterArgPtr> iterArgs;
     };
     std::vector<LoopCtx> loop_ctx_stack_;
+
+    struct LoopSSAResult {
+        VarPtr loopVar;
+        ExprPtr condition;
+        std::vector<IterArgPtr> iterArgs;
+        StmtPtr body;
+        std::vector<VarPtr> returnVars;
+    };
 
     VersionMap VisitThenBranch(const StmtPtr& then_body, StmtPtr& new_then)
     {
@@ -498,7 +388,12 @@ private:
             VarPtr else_var = versions_after_else.count(base_name) ? versions_after_else.at(base_name) :
                                                                      versions_before.at(base_name);
             int phi_version = NextVersion(base_name);
-            auto phi_type = SubstituteVarsInType(then_var->GetType());
+            // Take the type from whichever edge actually carries a value. The then edge is only
+            // the default: when just the else edge writes the variable, the then side is still
+            // the `None` a no-initial-value slot was seeded with, and a phi typed from it has
+            // nothing codegen can declare. Same preference as RefineLoopCarriedTypes.
+            const auto& then_type = then_var->GetType();
+            auto phi_type = SubstituteVarsInType(As<NoneType>(then_type) ? else_var->GetType() : then_type);
             auto phi_var = std::make_shared<Var>(base_name + "_" + std::to_string(phi_version), phi_type, span);
             return_vars.push_back(phi_var);
             then_yields.push_back(then_var);
@@ -570,16 +465,99 @@ private:
         std::vector<VarPtr> return_vars;
         for (const auto& base_name : loop_carried_vars) {
             auto init_var = versions_before.at(base_name);
+            auto carried_type = SubstituteVarsInType(init_var->GetType());
+
             int ia_version = NextVersion(base_name);
-            auto iter_arg = std::make_shared<IterArg>(base_name + "_iter_" + std::to_string(ia_version),
-                                                      init_var->GetType(), init_var, span);
+            auto iter_arg = std::make_shared<IterArg>(base_name + "_iter_" + std::to_string(ia_version), carried_type,
+                                                      init_var, span);
             iter_args.push_back(iter_arg);
 
             int rv_version = NextVersion(base_name);
-            auto rv_type = SubstituteVarsInType(init_var->GetType());
-            return_vars.push_back(std::make_shared<Var>(base_name + "_" + std::to_string(rv_version), rv_type, span));
+            return_vars.push_back(
+                std::make_shared<Var>(base_name + "_" + std::to_string(rv_version), carried_type, span));
         }
         return return_vars;
+    }
+
+    void RefineLoopCarriedTypes(std::vector<IterArgPtr>& iter_args, size_t iter_arg_offset,
+                                std::vector<VarPtr>& return_vars, const std::vector<ExprPtr>& yield_values)
+    {
+        for (size_t i = 0; i < return_vars.size(); ++i) {
+            size_t value_index = iter_arg_offset + i;
+            const auto& old_iter_arg = iter_args[value_index];
+            const auto& merged_value = yield_values[value_index];
+            if (!As<NoneType>(old_iter_arg->iterVar_->GetType()) || As<NoneType>(merged_value->GetType())) {
+                continue;
+            }
+
+            auto inferred_type = SubstituteVarsInType(merged_value->GetType());
+            auto new_iter_var = std::make_shared<Var>(old_iter_arg->iterVar_->name_, inferred_type,
+                                                      old_iter_arg->iterVar_->span_);
+            iter_args[value_index] = std::make_shared<IterArg>(new_iter_var, old_iter_arg->initValue_);
+
+            const auto& old_return_var = return_vars[i];
+            return_vars[i] = std::make_shared<Var>(old_return_var->name_, inferred_type, old_return_var->span_);
+        }
+    }
+
+    LoopSSAResult ConvertLoopToSSA(const StmtPtr& body, const std::vector<IterArgPtr>& iter_args,
+                                   const std::vector<VarPtr>& return_vars, VarPtr loop_var, ExprPtr condition,
+                                   const Span& span)
+    {
+        auto versions_before = current_version_;
+        auto new_iter_args = VisitIterArgInitializers(iter_args);
+
+        AssignmentCollector collector;
+        collector.Collect(body);
+        if (condition) {
+            collector.Collect(std::make_shared<EvalStmt>(condition, span));
+        }
+
+        std::optional<std::string> loop_var_base;
+        if (loop_var) {
+            loop_var_base = GetBaseName(loop_var->name_);
+        }
+        auto loop_carried_vars = CollectLoopCarriedVars(collector.assigned_vars, versions_before, iter_args,
+                                                        loop_var_base);
+        auto loop_carried_return_vars = AppendLoopCarriedIterArgs(loop_carried_vars, versions_before, new_iter_args,
+                                                                  span);
+
+        EnterScope();
+
+        VarPtr new_loop_var;
+        if (loop_var) {
+            int loop_var_version = NextVersion(*loop_var_base);
+            auto loop_var_type = SubstituteVarsInType(loop_var->GetType());
+            new_loop_var = std::make_shared<Var>(*loop_var_base + "_" + std::to_string(loop_var_version), loop_var_type,
+                                                 loop_var->span_);
+            current_version_[*loop_var_base] = new_loop_var;
+        }
+
+        RegisterIterArgsInCurrentScope(new_iter_args);
+        ExprPtr new_condition = condition ? VisitExpr(condition) : nullptr;
+
+        loop_ctx_stack_.push_back(LoopCtx{new_iter_args});
+        auto new_body = VisitStmt(body);
+        auto versions_after_body = current_version_;
+        loop_ctx_stack_.pop_back();
+
+        ExitScope();
+
+        auto yield_values = CollectYieldValues(new_body, versions_after_body, loop_carried_vars);
+        StmtPtr final_body = new_body;
+        if (!yield_values.empty()) {
+            final_body = ReplaceOrAppendYield(new_body, yield_values, span);
+        }
+        RefineLoopCarriedTypes(new_iter_args, iter_args.size(), loop_carried_return_vars, yield_values);
+
+        std::vector<VarPtr> new_return_vars = return_vars;
+        new_return_vars.insert(new_return_vars.end(), loop_carried_return_vars.begin(), loop_carried_return_vars.end());
+        for (size_t i = 0; i < loop_carried_vars.size(); ++i) {
+            current_version_[loop_carried_vars[i]] = loop_carried_return_vars[i];
+        }
+
+        return LoopSSAResult{new_loop_var, new_condition, std::move(new_iter_args), std::move(final_body),
+                             std::move(new_return_vars)};
     }
 
     // The current_version_ key for an iter_arg: its base name with any `_iter` suffix stripped.
@@ -597,27 +575,15 @@ private:
         }
     }
 
-    // Build a loop-carried context from the final iter_args of a loop. The order matches
-    // iterArgs_/yield order, so a break/continue snapshot lines up positionally with the
-    // backend's iter_arg write-back targets.
-    LoopCtx BuildLoopCtx(const std::vector<IterArgPtr>& iterArgs)
-    {
-        LoopCtx ctx;
-        ctx.carriedBases.reserve(iterArgs.size());
-        for (const auto& ia : iterArgs) {
-            ctx.carriedBases.push_back(IterArgBaseKey(ia->iterVar_->name_));
-        }
-        return ctx;
-    }
-
     // Snapshot the current live SSA version of every loop-carried value of the innermost loop,
     // in iterArgs_ order. Used to populate a native break/continue's carried values.
     std::vector<ExprPtr> SnapshotLoopCarried()
     {
         std::vector<ExprPtr> values;
         const auto& ctx = loop_ctx_stack_.back();
-        values.reserve(ctx.carriedBases.size());
-        for (const auto& base : ctx.carriedBases) {
+        values.reserve(ctx.iterArgs.size());
+        for (const auto& iter_arg : ctx.iterArgs) {
+            auto base = IterArgBaseKey(iter_arg->iterVar_->name_);
             auto it = current_version_.find(base);
             // A carried base is always in scope inside its loop body; fall back defensively.
             values.push_back(it != current_version_.end() ? it->second : nullptr);

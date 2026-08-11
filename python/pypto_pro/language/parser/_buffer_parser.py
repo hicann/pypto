@@ -144,7 +144,8 @@ class BufferParserMixin:
             {"name": "_TileGroupCursor", "fields": ["cursor"]},
             span,
         )
-        self.register_struct_fields(cursor_call, ["cursor"])
+        self.register_tuple_name(cursor_call, "_TileGroupCursor")
+        self.register_tuple_fields(cursor_call, ["cursor"])
         cursor = self.builder.let(f"_tg_{var_name}_cursor", cursor_call, span=span)
         result = self.make_named_tuple([tiles_tuple, mut_tuple, cursor], ["tiles", "mutex_ids", "cursor"], span)
         self.tile_group_meta[result] = (num, mutex_ids, tile_type.target_memory)

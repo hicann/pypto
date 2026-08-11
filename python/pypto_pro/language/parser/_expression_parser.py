@@ -284,6 +284,30 @@ class ExpressionParserMixin:
             hint="Check if the variable is defined before using it or is available in the enclosing scope",
         )
 
+    def none_with_mutex_meta(self, span: ir.Span) -> ir.Expr:
+        """The ``None`` sentinel, carrying mutex metadata that stands for "no buffer".
+
+        A merge slot with no initial value is seeded with ``slot = None`` before its control
+        flow. Treating that seed as a tile whose buffer is unknown gives the mutex-id companion
+        a definition at the same place, so ConvertToSSA carries the companion out of the loop in
+        lockstep with the slot itself and a use after the loop locks the buffer the run actually
+        selected. The empty candidate list marks the seed as holding no buffer of its own, and
+        auto_mutex skips locking on it (see tile_mutex_lock_meta).
+        """
+        none_expr = self.builder.builder.none()
+        if self._auto_mutex and none_expr not in self._tile_mutex_meta:
+            self._tile_mutex_meta[none_expr] = (ir.ConstInt(-1, DataType.INDEX, span), [])
+        return none_expr
+
+    def tile_mutex_lock_meta(self, expr):
+        """Mutex metadata for *expr*, but only when it names a buffer worth locking.
+
+        Propagation sites want the metadata as recorded; lock sites want it only when there are
+        candidate ids, so the ``None`` seed (which carries none) never turns into a lock.
+        """
+        meta = self._tile_mutex_meta.get(expr)
+        return meta if meta is not None and meta[1] else None
+
     def parse_constant(self, const: ast.Constant) -> ir.Expr:
         """Parse constant value.
 
@@ -304,6 +328,8 @@ class ExpressionParserMixin:
             return ir.ConstFloat(value, DataType.DEFAULT_CONST_FLOAT, span)
         elif isinstance(value, str):
             return value
+        elif value is None:
+            return self.none_with_mutex_meta(span)
         else:
             raise ParserTypeError(
                 f"Unsupported constant type: {type(value)}",
@@ -685,9 +711,7 @@ class ExpressionParserMixin:
         """
         field_names = list(field_names)
         mt = ir.MakeTuple(elements, span)
-        if field_names and self.debug_info is not None:
-            self.debug_info.register_tuple_fields(mt.type, field_names)
-        return mt
+        return self.register_tuple_fields(mt, field_names)
 
     def named_fields(self, expr) -> list[str]:
         """Field names of a named tuple / struct expr, from the IRDebugInfo side table.
@@ -702,11 +726,26 @@ class ExpressionParserMixin:
             return []
         return list(self.debug_info.get_tuple_fields(expr.type) or [])
 
-    def register_struct_fields(self, expr: ir.Expr, field_names) -> ir.Expr:
-        """Record the field names of a ``struct.create`` / named-tuple result type."""
+    def register_tuple_fields(self, expr: ir.Expr, field_names) -> ir.Expr:
+        """Record the field names of a named tuple / struct result type.
+
+        Every named tuple registers its fields; a struct additionally registers its C++ type
+        name via :meth:`register_tuple_name`.
+        """
         expr_type = expr.type
         if self.debug_info is not None and isinstance(expr_type, ir.TupleType) and field_names:
             self.debug_info.register_tuple_fields(expr_type, list(field_names))
+        return expr
+
+    def register_tuple_name(self, expr: ir.Expr, struct_name: str) -> ir.Expr:
+        """Record the C++ struct type name of a struct result type.
+
+        Codegen seeds its type -> C++ name map from this at entry, so a struct type resolves
+        without having traversed the statement that produces it.
+        """
+        expr_type = expr.type
+        if self.debug_info is not None and isinstance(expr_type, ir.TupleType) and struct_name:
+            self.debug_info.register_tuple_name(expr_type, struct_name)
         return expr
 
     def lower_attr_access(self, base: ir.Expr, field_name: str, span: ir.Span):
@@ -832,7 +871,7 @@ class ExpressionParserMixin:
                 return self._parse_slice_subscript(value_expr, subscript.slice, span)
             # All-integer index: A[i, j] → getval(A, i*cols+j)
             index_expr = self._parse_scalar_subscript_index(value_expr, subscript.slice, span)
-            meta = self._tile_mutex_meta.get(value_expr) if self._auto_mutex else None
+            meta = self.tile_mutex_lock_meta(value_expr) if self._auto_mutex else None
             from pypto_pro.ir.op.block_ops import _ir_getval
             result = _ir_getval(value_expr, index_expr, span=span)
             if meta is not None:

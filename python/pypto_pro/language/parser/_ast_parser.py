@@ -134,7 +134,7 @@ class ASTParser(
         self.gvar_to_func = gvar_to_func or {}  # Track parsed functions for type inference
         self.external_funcs: dict[str, ir.Function] = {}  # Track external functions referenced
 
-        # Track context for handling yields and returns
+        # Track active control-flow builders while parsing nested statements.
         self.in_for_loop = False
         self.in_while_loop = False
         self.in_if_stmt = False
@@ -527,13 +527,10 @@ class ASTParser(
             # field names live in the IRDebugInfo side table (codegen emits `struct <ClassName>`).
             tuple_type = ir.TupleType(elem_types)
             tiling_var = f.param(param_name, tuple_type, param_span)
-            if self.debug_info is not None:
-                # Register against the var's actual type object (keyed by pointer in
-                # IRDebugInfo), mirroring make_named_tuple's use of the resulting expr type.
-                self.debug_info.register_tuple_fields(tiling_var.type, list(fields.keys()))
-                # Record the Python tiling class name so codegen emits `struct <ClassName>`
-                # (matching the host-side struct) instead of a fixed default.
-                self.debug_info.register_tuple_name(tiling_var.type, tiling_cls.__name__)
+            # A tiling param is a struct: register its fields and the Python class name, so
+            # codegen emits `struct <ClassName>` (matching the host-side struct).
+            self.register_tuple_name(tiling_var, tiling_cls.__name__)
+            self.register_tuple_fields(tiling_var, list(fields.keys()))
             self.scope_manager.define_var(param_name, tiling_var, allow_redef=True)
             return
 
@@ -563,6 +560,12 @@ class ASTParser(
             if not isinstance(value, (tuple, list)) or has_scope_binding:
                 continue
             if any(isinstance(v, _ShapePolicy) or v is Ellipsis for v in value):
+                continue
+            # Only flat sequences are anchored. A nested one is a multi-dimensional array,
+            # which has no CCE backing-array form, so hoisting it would emit a tuple whose
+            # elements have no C++ name of their own -- and the point of the hoist is to give
+            # the backing array a home. Names like these reach the body through const_env.
+            if any(isinstance(v, (tuple, list)) for v in value):
                 continue
             entry = seen.get(id(value))
             if entry is None:

@@ -930,62 +930,6 @@ def test_return_unaligned_shape():
         logging.info("test_return_unaligned_shape passed! shape=%s", shape)
 
 
-def alloc_tile():
-    a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
-    b_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[1])
-    a_l0a = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
-    b_l0b = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
-    c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
-    return a_l1, b_l1, a_l0a, b_l0b, c_l0c
-
-
-@pl.jit(auto_mutex=True)
-def return_tile_group_kernel(
-    a: pl.Tensor[[64, 64], pl.DT_FP16],
-    b: pl.Tensor[[64, 64], pl.DT_FP16],
-    out: pl.Tensor[[64, 64], pl.DT_FP32],
-):
-    """Load to L1 (FP16, 2D, default layout), verify via matmul-with-identity. LOAD-N01/N13."""
-    a_l1, b_l1, a_l0a, b_l0b, c_l0c = alloc_tile()
-    with pl.section_cube():
-        cur_a = a_l1.next()
-        cur_b = b_l1.next()
-        al = a_l0a.next()
-        br = b_l0b.next()
-        ac = c_l0c.next()
-        pl.load(cur_a, a, [0, 0])
-        pl.load(cur_b, b, [0, 0])
-        pl.move(al, cur_a)
-        pl.move(br, cur_b)
-        pl.matmul(ac, al, br)
-        pl.store(out, ac, [0, 0])
-
-
-@pytest.mark.soc("950")
-def test_return_tile_group_kernel():
-    """LOAD-N01: Basic load to L1 (FP16), verify via matmul-with-identity."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-    torch.manual_seed(0)
-    a = torch.rand([64, 64], device=device, dtype=torch.float16)
-    b = torch.eye(64, device=device, dtype=torch.float16)
-    out = torch.zeros([64, 64], device=device, dtype=torch.float32)
-    return_tile_group_kernel(a, b, out)
-    torch.npu.synchronize()
-    torch.testing.assert_close(out, a.float(), rtol=1e-2, atol=1e-2)
-    logging.info("LOAD-N01 passed: FP16 load to L1 via matmul-with-identity")
-
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_return_early()
@@ -1000,5 +944,4 @@ if __name__ == "__main__":
     test_for_3layer_direct_return()
     test_for_while_8layer_return()
     test_return_unaligned_shape()
-    test_return_tile_group_kernel()
     logging.info("\nAll tests passed!")

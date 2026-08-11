@@ -20,6 +20,11 @@ from pypto.pypto_impl.ir import DataType
 from .diagnostics import ParserSyntaxError, UnsupportedFeatureError
 
 
+def _is_bare_return(stmt: ast.Return) -> bool:
+    """Return whether *stmt* is a bare ``return`` or ``return None``."""
+    return stmt.value is None or (isinstance(stmt.value, ast.Constant) and stmt.value.value is None)
+
+
 def _body_without_docstring(func_def: ast.FunctionDef) -> list[ast.stmt]:
     body = list(func_def.body)
     if body and isinstance(body[0], ast.Expr):
@@ -188,8 +193,12 @@ class ControlFlowParserMixin:
                     stmt.test,
                 )
                 break_condition = self.parse_expression(break_test)
-                with self.builder.if_stmt(break_condition, span):
-                    self.builder.break_stmt(span)
+                if isinstance(break_condition, ir.ConstBool):
+                    if break_condition.value:
+                        self.builder.break_stmt(span)
+                else:
+                    with self.builder.if_stmt(break_condition, span):
+                        self.builder.break_stmt(span)
 
                 for body_stmt in stmt.body:
                     self.parse_statement(body_stmt)
@@ -297,8 +306,13 @@ class ControlFlowParserMixin:
             stmt: Return AST node
         """
         span = self.span_tracker.get_span(stmt)
+        if self.inline_vf_depth != 0:
+            raise ParserSyntaxError(
+                "Vector function cannot contain return",
+                span=span,
+            )
 
-        if stmt.value is None or (isinstance(stmt.value, ast.Constant) and stmt.value.value is None):
+        if _is_bare_return(stmt):
             # `return None` is identical to a bare `return`; treat it as a void
             # return so a helper can early-exit on a compile-time-dead branch
             # (e.g. `if constInfo.is_tnd: return None`) that inlining later drops.

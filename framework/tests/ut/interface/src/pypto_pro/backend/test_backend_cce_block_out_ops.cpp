@@ -22,6 +22,7 @@
 #include "backend/common/backend_utils.h"
 #include "codegen/cce/cce_codegen.h"
 #include "core/error.h"
+#include "ir/debug_info.h"
 #include "ir/expr.h"
 #include "ir/function.h"
 #include "ir/memref.h"
@@ -100,12 +101,13 @@ ir::MemRefPtr MakeMemRef(ir::MemorySpace space)
     return std::make_shared<const ir::MemRef>(space, MakeConstInt(0), 1024, ir::Span::Unknown());
 }
 
-ir::ProgramPtr MakeProgram(const ir::StmtPtr& body, const std::vector<ir::VarPtr>& params = {})
+ir::ProgramPtr MakeProgram(const ir::StmtPtr& body, const std::vector<ir::VarPtr>& params = {},
+                           ir::IRDebugInfoPtr debug_info = nullptr)
 {
     auto function = std::make_shared<const ir::Function>("kernel", params, std::vector<ir::TypePtr>{}, body,
                                                          ir::Span::Unknown(), ir::FunctionType::IN_CORE, true);
     return std::make_shared<const ir::Program>(std::vector<ir::FunctionPtr>{function}, "test_program",
-                                               ir::Span::Unknown());
+                                               ir::Span::Unknown(), std::move(debug_info));
 }
 
 std::string RunCodegen(const std::string& op_name, const ir::CallPtr& call)
@@ -123,6 +125,11 @@ std::string RunSsbufCodegen(const std::string& op_name)
 {
     auto scalar = MakeScalarType();
     auto tuple_type = std::make_shared<const ir::TupleType>(std::vector<ir::TypePtr>{scalar});
+    // What makes this tuple a struct is the parser's side table, which codegen reads to resolve
+    // the C++ type name. A hand-built program has to supply it the same way the parser does.
+    auto debug_info = std::make_shared<ir::IRDebugInfo>();
+    debug_info->RegisterTupleName(tuple_type, "SsbufStruct");
+    debug_info->RegisterTupleFields(tuple_type, {"value"});
     auto struct_var = MakeVar("struct_var", tuple_type);
     auto create = std::make_shared<const ir::Call>("struct.create", std::vector<ir::ExprPtr>{MakeVar("value", scalar)},
                                                    std::vector<std::pair<std::string, std::any>>{
@@ -137,7 +144,7 @@ std::string RunSsbufCodegen(const std::string& op_name)
         ir::Span::Unknown());
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
-    return codegen.GenerateSingle(MakeProgram(body), "a5");
+    return codegen.GenerateSingle(MakeProgram(body, {}, debug_info), "a5");
 }
 
 #define EXPECT_CONTAINS(haystack, needle)                                                                          \

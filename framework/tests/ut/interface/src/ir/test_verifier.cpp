@@ -497,6 +497,22 @@ TEST_F(VerifierTypeCheckTest, WhileStmt_IterArgYieldTypeMismatch_ReportsError)
     EXPECT_TRUE(HasErrorCode(diags, static_cast<int>(typecheck::ErrorType::DTYPE_MISMATCH)));
 }
 
+TEST_F(VerifierTypeCheckTest, WhileStmt_UnknownInitWithConcreteCarry_NoError)
+{
+    auto concrete_type = Scalar(DataType::INT32);
+    auto none = std::make_shared<Var>("None", GetUnknownType(), Sp());
+    auto iter_var = std::make_shared<Var>("value_iter", concrete_type, Sp());
+    auto iter_arg = std::make_shared<IterArg>(iter_var, none);
+    auto yielded = std::make_shared<Var>("value_next", concrete_type, Sp());
+    auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{yielded}, Sp());
+    auto return_var = std::make_shared<Var>("value_result", concrete_type, Sp());
+    auto while_stmt = std::make_shared<WhileStmt>(std::make_shared<ConstBool>(true, Sp()),
+                                                  std::vector<IterArgPtr>{iter_arg}, yield,
+                                                  std::vector<VarPtr>{return_var}, Sp());
+
+    EXPECT_TRUE(VerifyWithTypeCheck(while_stmt).empty());
+}
+
 TEST_F(VerifierTypeCheckTest, IfStmt_ValidBranches_NoError)
 {
     auto cond = std::make_shared<Var>("c", Scalar(DataType::BOOL), Sp());

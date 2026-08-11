@@ -22,6 +22,7 @@ from pypto.pypto_impl import ir
 from pypto_pro.ir.op._op_registry import _OP_REGISTRY
 from pypto_pro.ir.op.block_ops import block_ir_op
 
+from ._control_flow_parser import _is_bare_return
 from ._span_tracker import SpanTracker
 from .diagnostics import (
     ParserSyntaxError,
@@ -58,6 +59,73 @@ class _InlineLocalRenamer(ast.NodeTransformer):
         if isinstance(node, ast.Name) and node.id in self._rename:
             node.id = self._rename[node.id]
         return super().generic_visit(node)
+
+
+class _InlineReturnLowerer(ast.NodeTransformer):
+    """Lower helper returns and their loop-propagation checks in Python AST."""
+
+    # ast.NodeTransformer dispatches by reflection on `visit_<NodeClassName>`, so the CamelCase
+    # halves of visit_Return / visit_For / visit_While are the library's spelling, not ours.
+    # Renaming them to snake_case silently turns the visitor into a no-op.
+    # pylint: disable=huawei-invalid-name
+
+    def __init__(self, return_val_name: str, returned_name: str):
+        self._return_val_name = return_val_name
+        self._returned_name = returned_name
+
+    @staticmethod
+    def _assignment(name: str, value: ast.expr, location: ast.AST) -> ast.Assign:
+        target = ast.copy_location(ast.Name(id=name, ctx=ast.Store()), location)
+        return ast.copy_location(ast.Assign(targets=[target], value=value), location)
+
+    def _return_checkpoint(self, location: ast.AST) -> ast.If:
+        condition = ast.copy_location(ast.Name(id=self._returned_name, ctx=ast.Load()), location)
+        break_stmt = ast.copy_location(ast.Break(), location)
+        return ast.copy_location(ast.If(test=condition, body=[break_stmt], orelse=[]), location)
+
+    def visit_Return(self, node: ast.Return):
+        lowered: list[ast.stmt] = []
+        if not _is_bare_return(node):
+            lowered.append(self._assignment(self._return_val_name, node.value, node))
+        returned = ast.copy_location(ast.Constant(value=True), node)
+        lowered.append(self._assignment(self._returned_name, returned, node))
+        lowered.append(ast.copy_location(ast.Break(), node))
+        return lowered
+
+    def _lower_loop(self, node: ast.For | ast.While) -> list[ast.stmt]:
+        lowered_loop = self.generic_visit(node)
+        return [lowered_loop, self._return_checkpoint(node)]
+
+    def visit_For(self, node: ast.For):
+        return self._lower_loop(node)
+
+    def visit_While(self, node: ast.While):
+        return self._lower_loop(node)
+
+    def lower(self, body: list[ast.stmt]) -> list[ast.stmt]:
+        module = ast.Module(body=body, type_ignores=[])
+        self.visit(module)
+        location = body[0]
+        return_val_init = self._assignment(
+            self._return_val_name,
+            ast.copy_location(ast.Constant(value=None), location),
+            location,
+        )
+        returned_init = self._assignment(
+            self._returned_name,
+            ast.copy_location(ast.Constant(value=False), location),
+            location,
+        )
+        wrapper = ast.copy_location(
+            ast.While(
+                test=ast.copy_location(ast.Constant(value=True), location),
+                body=[returned_init, *module.body, ast.copy_location(ast.Break(), location)],
+                orelse=[],
+            ),
+            location,
+        )
+        ast.fix_missing_locations(wrapper)
+        return [return_val_init, wrapper]
 
 
 # Builtin function names that map to pl.* ops (syntax sugar).
@@ -418,29 +486,6 @@ class CallParserMixin:
         for stmt in func_def.body:
             collector.visit(stmt)
         return assigned
-
-    @staticmethod
-    def _validate_inline_returns(func_name: str, func_def: ast.FunctionDef, span) -> ast.Return | None:
-        """Validate the straight-line return contract and return the final value return."""
-        body = [stmt for stmt in func_def.body if not CallParserMixin._is_docstring(stmt)]
-        all_returns = [node for node in ast.walk(func_def) if isinstance(node, ast.Return)]
-        has_yield = any(isinstance(node, (ast.Yield, ast.YieldFrom)) for node in ast.walk(func_def))
-        if has_yield:
-            raise ParserSyntaxError(
-                f"Inline function '{func_name}' cannot contain yield",
-                span=span,
-            )
-        top_return = body[-1] if body and isinstance(body[-1], ast.Return) else None
-        if len(all_returns) != (1 if top_return is not None else 0):
-            raise ParserSyntaxError(
-                f"Inline function '{func_name}' may only return from its final top-level statement",
-                span=span,
-            )
-        if top_return is None:
-            return None
-        if top_return.value is None:
-            return None
-        return top_return
 
     @staticmethod
     def _has_unsupported_inline_params(args: ast.arguments) -> bool:
@@ -961,6 +1006,11 @@ class CallParserMixin:
         """Expand a Python helper body directly into the caller's IR builder."""
         span = self.span_tracker.get_span(call)
         template = self._inline_template(func_name, fn, span)
+        if self.inline_vf_depth != 0 and not template.is_vector_function:
+            raise ParserSyntaxError(
+                f"Vector function cannot call non-vector inline function '{func_name}'",
+                span=span,
+            )
         if id(fn) in self.inline_call_stack:
             raise ParserSyntaxError(
                 f"Recursive inline function call detected for '{func_name}'",
@@ -971,19 +1021,22 @@ class CallParserMixin:
         old_const_env = self.const_env
         self.expr_evaluator.closure_vars = {**template.closure_vars, **old_closure}
         try:
-            self._validate_inline_returns(func_name, template.func_def, span)
             bound = self._bind_inline_arguments(func_name, template.func_def, call, span)
             params = self._inline_param_list(template.func_def)
             inline_id = self.inline_counter
             self.inline_counter += 1
             prefix = f"__inline_{inline_id}_"
+            return_val_name = f"{prefix}return_val"
+            returned_name = f"{prefix}returned"
             local_names = self._inline_local_names(template.func_def, params)
             reassigned_params = self._inline_reassigned_params(template.func_def, params)
             func_def = copy.deepcopy(template.func_def)
             renamer = _InlineLocalRenamer(local_names, prefix)
             body = [renamer.visit(stmt) for stmt in func_def.body if not self._is_docstring(stmt)]
-            ast.fix_missing_locations(func_def)
-            renamed_return = body[-1] if body and isinstance(body[-1], ast.Return) else None
+            if template.is_vector_function:
+                ast.fix_missing_locations(func_def)
+            else:
+                body = _InlineReturnLowerer(return_val_name, returned_name).lower(body)
 
             locked_vf_refs: list = []
             if template.is_vector_function and self._auto_mutex:
@@ -1021,20 +1074,19 @@ class CallParserMixin:
                     self.scope_manager.define_var(renamed_name, value, allow_redef=True)
                     self._update_const_env(renamed_name, expr)
 
-                statements = body[:-1] if isinstance(renamed_return, ast.Return) else body
                 if is_outermost_vf:
                     with self.builder.section(ir.SectionKind.VF, span):
                         self.scope_manager.enter_scope("section")
                         try:
-                            for stmt in statements:
+                            for stmt in body:
                                 self.parse_statement(stmt)
                         finally:
                             self.scope_manager.exit_scope(leak_vars=False)
                 else:
-                    for stmt in statements:
+                    for stmt in body:
                         self.parse_statement(stmt)
-                if isinstance(renamed_return, ast.Return) and renamed_return.value is not None:
-                    return self.parse_expression(renamed_return.value)
+                if not template.is_vector_function:
+                    return self.scope_manager.lookup_var_bounded(return_val_name)
                 return None
             finally:
                 self.span_tracker = old_span_tracker
@@ -1124,7 +1176,7 @@ class CallParserMixin:
         expr = self.parse_expression(node)
         if not isinstance(expr, ir.Expr):
             return None
-        meta = self._tile_mutex_meta.get(expr)
+        meta = self.tile_mutex_lock_meta(expr)
         if meta is None:
             return None
         buf_id_ir, mutex_ids = meta

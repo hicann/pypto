@@ -328,7 +328,8 @@ TEST(CCECodegenTest, UsesOneBackingArrayForDynamicAndStaticTupleReads)
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(body, {index}), "a5");
 
-    EXPECT_NE(generated.find("const int64_t values"), std::string::npos);
+    EXPECT_EQ(generated.find("const int64_t values"), std::string::npos);
+    EXPECT_NE(generated.find("int64_t values"), std::string::npos);
     EXPECT_NE(generated.find("static_cast<int64_t>(11)"), std::string::npos);
     EXPECT_NE(generated.find("[index"), std::string::npos);
     EXPECT_NE(generated.find("[0]"), std::string::npos);
@@ -354,8 +355,9 @@ TEST(CCECodegenTest, SharesBackingArrayAcrossTupleAliases)
     CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {index}), "a5");
 
-    EXPECT_EQ(CountOccurrences(generated, "const int64_t first"), 1);
-    EXPECT_EQ(generated.find("const int64_t second"), std::string::npos);
+    EXPECT_EQ(generated.find("const int64_t first"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(generated, "int64_t first"), 1);
+    EXPECT_EQ(generated.find("int64_t second"), std::string::npos);
     EXPECT_NE(generated.find("first"), std::string::npos);
     EXPECT_NE(generated.find("[index"), std::string::npos);
 }
@@ -378,8 +380,10 @@ TEST(CCECodegenTest, ClearsTupleBackingArraysBetweenGenerations)
     auto first = codegen.GenerateSingle(program, "a5");
     auto second = codegen.GenerateSingle(program, "a5");
 
-    EXPECT_NE(first.find("const int64_t values"), std::string::npos);
-    EXPECT_NE(second.find("const int64_t values"), std::string::npos);
+    EXPECT_EQ(first.find("const int64_t values"), std::string::npos);
+    EXPECT_EQ(second.find("const int64_t values"), std::string::npos);
+    EXPECT_NE(first.find("int64_t values"), std::string::npos);
+    EXPECT_NE(second.find("int64_t values"), std::string::npos);
 }
 
 TEST(CCECodegenTest, MaterializesHomogeneousTileTuple)
@@ -486,6 +490,104 @@ TEST(CCECodegenTest, DropsUnusedIfPhiAndYieldOnlyElse)
     EXPECT_EQ(generated.find("} else {"), std::string::npos);
 }
 
+TEST(CCECodegenTest, MergesArrayTuplePhiThroughOneBackingArray)
+{
+    auto bool_type = std::make_shared<const ir::ScalarType>(ir::DataType::BOOL);
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto condition = MakeVar("condition", bool_type);
+    auto index = MakeVar("index", scalar_type);
+    auto left_value = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{MakeConstInt(1), MakeConstInt(2)},
+                                                            ir::Span::Unknown());
+    auto right_value = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{MakeConstInt(3), MakeConstInt(4)},
+                                                             ir::Span::Unknown());
+    auto left = MakeVar("left", left_value->GetType());
+    auto right = MakeVar("right", right_value->GetType());
+    auto selected = MakeVar("selected", left_value->GetType());
+    auto picked = MakeVar("picked", scalar_type);
+    auto then_yield = std::make_shared<const ir::YieldStmt>(std::vector<ir::ExprPtr>{left}, ir::Span::Unknown());
+    auto else_yield = std::make_shared<const ir::YieldStmt>(std::vector<ir::ExprPtr>{right}, ir::Span::Unknown());
+    auto if_stmt = std::make_shared<const ir::IfStmt>(condition, then_yield, std::optional<ir::StmtPtr>(else_yield),
+                                                      std::vector<ir::VarPtr>{selected}, ir::Span::Unknown());
+    auto read_selected = std::make_shared<const ir::AssignStmt>(
+        picked, std::make_shared<const ir::GetItemExpr>(selected, index, ir::Span::Unknown()), ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{std::make_shared<const ir::AssignStmt>(left, left_value, ir::Span::Unknown()),
+                                 std::make_shared<const ir::AssignStmt>(right, right_value, ir::Span::Unknown()),
+                                 if_stmt, read_selected},
+        ir::Span::Unknown());
+
+    CCECodegen codegen(ir::SectionKind::Vector);
+    std::string generated = codegen.GenerateSingle(MakeProgram(body, {condition, index}), "a5");
+
+    EXPECT_EQ(CountOccurrences(generated, "int64_t selected_0[2];"), 1);
+    EXPECT_NE(generated.find("selected_0[0] = left_0[0];"), std::string::npos);
+    EXPECT_NE(generated.find("selected_0[1] = left_0[1];"), std::string::npos);
+    EXPECT_NE(generated.find("selected_0[0] = right_0[0];"), std::string::npos);
+    EXPECT_NE(generated.find("selected_0[1] = right_0[1];"), std::string::npos);
+    EXPECT_NE(generated.find("selected_0[index_0]"), std::string::npos);
+    EXPECT_EQ(generated.find("selected_0_0"), std::string::npos);
+}
+
+TEST(CCECodegenTest, RejectsHomogeneousTupleOfTuples)
+{
+    // A homogeneous tuple whose elements are themselves tuples selects the array
+    // representation by type, but a tuple has no C++ element spelling. Diagnose it
+    // explicitly rather than silently degrading to flattened leaf slots.
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto inner_value = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{MakeConstInt(1), MakeConstInt(2)},
+                                                             ir::Span::Unknown());
+    auto outer_value = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{inner_value, inner_value},
+                                                             ir::Span::Unknown());
+    auto nested = MakeVar("nested", outer_value->GetType());
+    auto body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{std::make_shared<const ir::AssignStmt>(nested, outer_value, ir::Span::Unknown())},
+        ir::Span::Unknown());
+
+    CCECodegen codegen(ir::SectionKind::Vector);
+    EXPECT_THROW((void)codegen.GenerateSingle(MakeProgram(body), "a5"), std::exception);
+}
+
+TEST(CCECodegenTest, FlattensAggregateTuplePhiIntoLeafSlots)
+{
+    auto bool_type = std::make_shared<const ir::ScalarType>(ir::DataType::BOOL);
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto condition = MakeVar("condition", bool_type);
+    auto aggregate_type = std::make_shared<const ir::TupleType>(std::vector<ir::TypePtr>{scalar_type, bool_type});
+    auto left_value = std::make_shared<const ir::MakeTuple>(
+        std::vector<ir::ExprPtr>{MakeConstInt(1), std::make_shared<const ir::ConstBool>(true, ir::Span::Unknown())},
+        ir::Span::Unknown());
+    auto right_value = std::make_shared<const ir::MakeTuple>(
+        std::vector<ir::ExprPtr>{MakeConstInt(3), std::make_shared<const ir::ConstBool>(false, ir::Span::Unknown())},
+        ir::Span::Unknown());
+    auto left = MakeVar("left", aggregate_type);
+    auto right = MakeVar("right", aggregate_type);
+    auto selected = MakeVar("selected", aggregate_type);
+    auto picked = MakeVar("picked", bool_type);
+    auto then_yield = std::make_shared<const ir::YieldStmt>(std::vector<ir::ExprPtr>{left}, ir::Span::Unknown());
+    auto else_yield = std::make_shared<const ir::YieldStmt>(std::vector<ir::ExprPtr>{right}, ir::Span::Unknown());
+    auto if_stmt = std::make_shared<const ir::IfStmt>(condition, then_yield, std::optional<ir::StmtPtr>(else_yield),
+                                                      std::vector<ir::VarPtr>{selected}, ir::Span::Unknown());
+    auto read_selected = std::make_shared<const ir::AssignStmt>(
+        picked, std::make_shared<const ir::GetItemExpr>(selected, MakeConstInt(1), ir::Span::Unknown()),
+        ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{std::make_shared<const ir::AssignStmt>(left, left_value, ir::Span::Unknown()),
+                                 std::make_shared<const ir::AssignStmt>(right, right_value, ir::Span::Unknown()),
+                                 if_stmt, read_selected},
+        ir::Span::Unknown());
+    auto debug_info = std::make_shared<ir::IRDebugInfo>();
+    debug_info->RegisterTupleFields(aggregate_type, {"first", "second"});
+
+    CCECodegen codegen(ir::SectionKind::Vector);
+    std::string generated = codegen.GenerateSingle(MakeProgram(body, {condition}, debug_info), "a5");
+
+    EXPECT_EQ(generated.find("selected_0[2]"), std::string::npos);
+    EXPECT_NE(generated.find("int64_t selected_0_0;"), std::string::npos);
+    EXPECT_NE(generated.find("bool selected_0_1;"), std::string::npos);
+    EXPECT_NE(generated.find("selected_0_0 = 1;"), std::string::npos);
+    EXPECT_NE(generated.find("selected_0_1 = false;"), std::string::npos);
+}
+
 TEST(CCECodegenTest, WritesBackWhileCarriedValueBeforeBreak)
 {
     auto bool_type = std::make_shared<const ir::ScalarType>(ir::DataType::BOOL);
@@ -503,7 +605,7 @@ TEST(CCECodegenTest, WritesBackWhileCarriedValueBeforeBreak)
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(while_loop, {condition}), "a5");
 
-    EXPECT_NE(generated.find("auto acc = 0;"), std::string::npos);
+    EXPECT_NE(generated.find("int64_t acc = 0;"), std::string::npos);
     EXPECT_NE(generated.find("while (condition"), std::string::npos);
     size_t writeback = generated.find("acc = acc_");
     size_t jump = generated.find("break;");

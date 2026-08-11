@@ -309,16 +309,19 @@ void TypeChecker::CheckLoopIterArgYieldTypeAt(const std::vector<IterArgPtr>& ite
         return;
 
     auto init_type = iter_arg->initValue_->GetType();
+    auto iter_type = iter_arg->iterVar_->GetType();
     auto yield_type = yield_value->GetType();
     auto return_type = return_var->GetType();
-    if (!init_type || !yield_type || !return_type)
+    if (!init_type || !iter_type || !yield_type || !return_type)
         return;
 
-    CheckTypeEquality(init_type, yield_type, context, "iter_arg[" + std::to_string(index) + "] initValue",
+    if (!As<UnknownType>(init_type)) {
+        CheckTypeEquality(init_type, iter_type, context, "iter_arg[" + std::to_string(index) + "] initValue",
+                          "iter_arg[" + std::to_string(index) + "] variable", span);
+    }
+    CheckTypeEquality(iter_type, yield_type, context, "iter_arg[" + std::to_string(index) + "] variable",
                       "yield value[" + std::to_string(index) + "]", span);
-    CheckTypeEquality(yield_type, return_type, context, "yield value[" + std::to_string(index) + "]",
-                      "return_var[" + std::to_string(index) + "]", span);
-    CheckTypeEquality(init_type, return_type, context, "iter_arg[" + std::to_string(index) + "] initValue",
+    CheckTypeEquality(iter_type, return_type, context, "iter_arg[" + std::to_string(index) + "] variable",
                       "return_var[" + std::to_string(index) + "]", span);
 }
 

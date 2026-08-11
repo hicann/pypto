@@ -23,6 +23,7 @@
 #include "core/dtype.h"
 #include "ir/expr.h"
 #include "ir/function.h"
+#include "ir/kind_traits.h"
 #include "ir/program.h"
 #include "ir/scalar_expr.h"
 #include "ir/stmt.h"
@@ -103,6 +104,105 @@ TEST_F(ConvertToSSAPassTest, TestForLoopOuterVarBecomesIterArg)
     auto init_var = std::dynamic_pointer_cast<const Var>(for_stmt->iterArgs_[0]->initValue_);
     ASSERT_NE(init_var, nullptr);
     EXPECT_EQ(init_var->name_, init_assign->var_->name_);
+}
+
+TEST_F(ConvertToSSAPassTest, TestNoneInitLoopCarryUsesMergedValueType)
+{
+    // A slot with no initial value is seeded with `None`, which the builder types as NoneType.
+    auto none_type = GetNoneType();
+    auto none = MakeVar("None", none_type);
+    auto result_seed = MakeVar("result", none_type);
+    auto init_result = std::make_shared<AssignStmt>(result_seed, none, Sp());
+
+    auto result_then = MakeVar("result", Scalar(DataType::INT32));
+    auto assign_then = std::make_shared<AssignStmt>(result_then, Int(1), Sp());
+    auto break_then = std::make_shared<BreakStmt>(Sp());
+    auto then_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{assign_then, break_then}, Sp());
+    auto branch = std::make_shared<IfStmt>(std::make_shared<ConstBool>(true, Sp()), then_body, std::nullopt,
+                                           std::vector<VarPtr>{}, Sp());
+
+    auto result_transient = MakeVar("result", Scalar(DataType::FP32));
+    auto assign_transient = std::make_shared<AssignStmt>(result_transient,
+                                                         std::make_shared<ConstFloat>(1.0, DataType::FP32, Sp()), Sp());
+    auto result_tail = MakeVar("result", Scalar(DataType::INT32));
+    auto assign_tail = std::make_shared<AssignStmt>(result_tail, Int(2), Sp());
+    auto break_tail = std::make_shared<BreakStmt>(Sp());
+    auto loop_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{branch, assign_transient, assign_tail, break_tail},
+                                                Sp());
+    auto loop = std::make_shared<WhileStmt>(std::make_shared<ConstBool>(true, Sp()), std::vector<IterArgPtr>{},
+                                            loop_body, std::vector<VarPtr>{}, Sp());
+    auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{init_result, loop}, Sp());
+
+    auto result_func = RunOnFunc(MakeFunc("f", {}, body));
+    auto result_seq = result_func->body_;
+    auto result_loop = std::dynamic_pointer_cast<const WhileStmt>(result_seq->stmts_[1]);
+    ASSERT_NE(result_loop, nullptr);
+    ASSERT_EQ(result_loop->iterArgs_.size(), 1u);
+    ASSERT_EQ(result_loop->returnVars_.size(), 1u);
+    EXPECT_NE(As<NoneType>(result_loop->iterArgs_[0]->initValue_->GetType()), nullptr);
+    auto result_iter_type = As<ScalarType>(result_loop->iterArgs_[0]->iterVar_->GetType());
+    ASSERT_NE(result_iter_type, nullptr);
+    EXPECT_EQ(result_iter_type->dtype_, DataType::INT32);
+    auto result_return_type = As<ScalarType>(result_loop->returnVars_[0]->GetType());
+    ASSERT_NE(result_return_type, nullptr);
+    EXPECT_EQ(result_return_type->dtype_, DataType::INT32);
+
+    auto result_loop_body = std::dynamic_pointer_cast<const SeqStmts>(result_loop->body_);
+    auto result_branch = std::dynamic_pointer_cast<const IfStmt>(result_loop_body->stmts_[0]);
+    ASSERT_NE(result_branch, nullptr);
+    auto result_then_body = std::dynamic_pointer_cast<const SeqStmts>(result_branch->thenBody_);
+    ASSERT_NE(result_then_body, nullptr);
+    ASSERT_GE(result_then_body->stmts_.size(), 2u);
+    auto result_break = std::dynamic_pointer_cast<const BreakStmt>(result_then_body->stmts_[1]);
+    ASSERT_NE(result_break, nullptr);
+    ASSERT_EQ(result_break->value_.size(), 1u);
+    auto result_break_type = As<ScalarType>(result_break->value_[0]->GetType());
+    ASSERT_NE(result_break_type, nullptr);
+    EXPECT_EQ(result_break_type->dtype_, DataType::INT32);
+
+    ASSERT_TRUE(result_branch->elseBody_.has_value());
+    auto result_else_body = std::dynamic_pointer_cast<const SeqStmts>(*result_branch->elseBody_);
+    ASSERT_NE(result_else_body, nullptr);
+    ASSERT_FALSE(result_else_body->stmts_.empty());
+    auto result_else_yield = std::dynamic_pointer_cast<const YieldStmt>(result_else_body->stmts_.back());
+    ASSERT_NE(result_else_yield, nullptr);
+    ASSERT_EQ(result_else_yield->value_.size(), 1u);
+    auto result_else_value = As<Var>(result_else_yield->value_[0]);
+    ASSERT_NE(result_else_value, nullptr);
+    EXPECT_NE(As<NoneType>(result_else_value->GetType()), nullptr);
+}
+
+TEST_F(ConvertToSSAPassTest, TestNestedLoopKeepsNoneInitUninitialized)
+{
+    auto none_type = GetNoneType();
+    auto none = MakeVar("None", none_type);
+    auto result_seed = MakeVar("result", none_type);
+    auto init_result = std::make_shared<AssignStmt>(result_seed, none, Sp());
+
+    auto result_value = MakeVar("result", Scalar(DataType::INT32));
+    auto assign_result = std::make_shared<AssignStmt>(result_value, Int(1), Sp());
+    auto inner_break = std::make_shared<BreakStmt>(Sp());
+    auto inner_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{assign_result, inner_break}, Sp());
+    auto inner_loop = std::make_shared<WhileStmt>(std::make_shared<ConstBool>(true, Sp()), std::vector<IterArgPtr>{},
+                                                  inner_body, std::vector<VarPtr>{}, Sp());
+    auto outer_break = std::make_shared<BreakStmt>(Sp());
+    auto outer_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{inner_loop, outer_break}, Sp());
+    auto outer_loop = std::make_shared<WhileStmt>(std::make_shared<ConstBool>(true, Sp()), std::vector<IterArgPtr>{},
+                                                  outer_body, std::vector<VarPtr>{}, Sp());
+    auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{init_result, outer_loop}, Sp());
+
+    auto result_func = RunOnFunc(MakeFunc("f", {}, body));
+    auto result_outer = std::dynamic_pointer_cast<const WhileStmt>(result_func->body_->stmts_[1]);
+    ASSERT_NE(result_outer, nullptr);
+    ASSERT_EQ(result_outer->iterArgs_.size(), 1u);
+    EXPECT_NE(As<NoneType>(result_outer->iterArgs_[0]->initValue_->GetType()), nullptr);
+
+    auto result_outer_body = std::dynamic_pointer_cast<const SeqStmts>(result_outer->body_);
+    auto result_inner = std::dynamic_pointer_cast<const WhileStmt>(result_outer_body->stmts_[0]);
+    ASSERT_NE(result_inner, nullptr);
+    ASSERT_EQ(result_inner->iterArgs_.size(), 1u);
+    EXPECT_NE(As<NoneType>(result_inner->iterArgs_[0]->initValue_->GetType()), nullptr);
+    EXPECT_NE(As<ScalarType>(result_inner->iterArgs_[0]->iterVar_->GetType()), nullptr);
 }
 
 // ============================================================================
@@ -328,26 +428,31 @@ TEST_F(ConvertToSSAPassTest, TestPreservesVFSectionScope)
 TEST_F(ConvertToSSAPassTest, TestForLoopSkipsExistingIterArgAndPreservesReturnVar)
 {
     auto i = MakeVar("i");
+    auto x = MakeVar("x");
     auto acc_iter = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), Int(0), Sp());
     auto acc_out = MakeVar("acc_out");
     auto add = std::make_shared<Add>(acc_iter->iterVar_, i, DataType::INT32, Sp());
     auto assign_acc = std::make_shared<AssignStmt>(acc_iter->iterVar_, add, Sp());
+    auto assign_x = std::make_shared<AssignStmt>(x, i, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{acc_iter->iterVar_}, Sp());
-    auto for_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{assign_acc, yield}, Sp());
+    auto for_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{assign_acc, assign_x, yield}, Sp());
     auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{acc_iter}, for_body,
                                               std::vector<VarPtr>{acc_out}, Sp());
+    auto body = std::make_shared<SeqStmts>(
+        std::vector<StmtPtr>{std::make_shared<AssignStmt>(x, Int(0), Sp()), for_stmt}, Sp());
 
-    auto result_func = RunOnFunc(MakeFunc("f", {}, for_stmt));
+    auto result_func = RunOnFunc(MakeFunc("f", {}, body));
     ASSERT_NE(result_func, nullptr);
-    auto result_for = std::dynamic_pointer_cast<const ForStmt>(result_func->body_->stmts_[0]);
+    auto result_for = std::dynamic_pointer_cast<const ForStmt>(result_func->body_->stmts_[1]);
     ASSERT_NE(result_for, nullptr);
-    ASSERT_EQ(result_for->iterArgs_.size(), 1u);
-    ASSERT_EQ(result_for->returnVars_.size(), 1u);
+    ASSERT_EQ(result_for->iterArgs_.size(), 2u);
+    ASSERT_EQ(result_for->returnVars_.size(), 2u);
     EXPECT_EQ(result_for->returnVars_[0]->name_, "acc_out");
+    EXPECT_NE(result_for->returnVars_[1]->name_.find("x_"), std::string::npos);
     ASSERT_FALSE(result_for->body_->stmts_.empty());
     auto result_yield = std::dynamic_pointer_cast<const YieldStmt>(result_for->body_->stmts_.back());
     ASSERT_NE(result_yield, nullptr);
-    ASSERT_EQ(result_yield->value_.size(), 1u);
+    ASSERT_EQ(result_yield->value_.size(), 2u);
 }
 
 TEST_F(ConvertToSSAPassTest, TestForLoopAppendsYieldToSeqBodyWithoutTrailingYield)

@@ -112,6 +112,9 @@ public:
     [[nodiscard]] std::string GetCurrentResultTarget() const override { return current_target_var_; }
     void Emit(const std::string& line) override;
     std::string GetExprAsCode(const ir::ExprPtr& expr) override;
+    /// Resolve a tuple-typed expression to the MakeTuple backing it (the tuple counterpart of
+    /// GetExprAsCode, which yields a C++ string). Returns null when the expression is not a tuple.
+    ir::MakeTuplePtr GetExprAsMakeTuple(const ir::ExprPtr& expr);
     [[nodiscard]] std::string GetTypeString(const ir::DataType& dtype) const override;
     /// True when currently generating code inside a VF section (CCE __VEC_SCOPE__).
     [[nodiscard]] bool IsInVFSection() const { return in_vf_section_; }
@@ -331,26 +334,12 @@ protected:
 
 private:
     /**
-     * \brief Extract yield variable names from an IR body without emitting code.
-     *
-     * Inspects the trailing YieldStmt in @p body (which may be a bare YieldStmt
-     * or the last statement of a SeqStmts) and returns the resolved name for each
-     * yielded value.  Handles Var, ConstInt, IterArg, and GetItemExpr on a tuple
-     * (including inlined MakeTuple).  Returns an empty vector when any yield
-     * value cannot be resolved.
-     */
-    std::vector<std::string> ExtractYieldNames(const ir::StmtPtr& body) const;
-    std::optional<std::string> ResolveYieldName(const ir::ExprPtr& value) const;
-
-    /**
      * \brief Emit yield-assignment code for if-stmt return variables.
      *
-     * For each return variable, resolves the corresponding yield value from
-     * @p target_names, emits a TASSIGN (Tile/Tuple) or scalar assignment, and
-     * propagates pointer / tensor-struct mappings.  Clears yield_buffer_ when
-     * done.
+     * For each return variable, writes the buffered YieldStmt expression to the
+     * corresponding return variable and clears yield_buffer_ when done.
      */
-    void EmitYieldAssignments(const std::vector<ir::VarPtr>& return_vars, const std::vector<std::string>& target_names);
+    void EmitYieldAssignments(const std::vector<ir::VarPtr>& return_vars);
 
     /**
      * \brief Emit full phi-style IfStmt codegen.
@@ -459,38 +448,48 @@ private:
     /**
      * \brief Register loop iteration arguments and emit their initialization.
      *
-     * Handles alias propagation, cross-section safety, and pointer/struct inheritance.
-     * Returns the sanitized names of each iter-arg for later yield assignment.
-     * Shared by ForStmt and WhileStmt.
+     * Unknown init values use the uninitialized declaration path; all other init
+     * values use the initialized declaration path. Returns the sanitized names
+     * of each iter-arg for later yield assignment. Shared by ForStmt and WhileStmt.
      */
     std::vector<std::string> RegisterLoopIterArgs(const std::vector<ir::IterArgPtr>& iterArgs);
-    void PropagateTupleIterArgs(const std::vector<ir::IterArgPtr>& iterArgs, const std::vector<ir::VarPtr>& returnVars);
 
     /**
      * \brief Emit yield-to-iter-arg assignments at the end of a loop body.
      *
-     * Resolves aliases, detects self-assignments, and uses TASSIGN for tile transfers.
+     * Resolves aliases and skips self-assignments.
      */
-    void EmitForYieldAssignments(const std::vector<std::string>& iterArgNames);
+    void EmitForYieldAssignments(const std::vector<ir::IterArgPtr>& iterArgs);
 
-    /// Emit `targets[i] = sources[i];` (or TASSIGN for tiles/tuples), skipping self-assignments.
-    /// Shared by the trailing-yield write-back and native break/continue write-back.
-    void EmitCarriedAssignments(const std::vector<std::string>& targets, const std::vector<std::string>& sources);
+    /// Write source expressions to typed loop-carried slots, skipping self-assignments.
+    /// TupleType is dispatched here by its CCE representation: tuples with a
+    /// backing array are copied element-wise, while aggregates recurse into leaf slots.
+    /// Shared by If/loop yields and native jumps.
+    void EmitCarriedAssignments(const std::vector<ir::IterArgPtr>& targets, const std::vector<ir::ExprPtr>& sources);
+
+    /// Generate `type name`, `type name = value`, or `name = value`. A null value
+    /// omits assignment; initialize controls whether the generated statement includes the type.
+    /// Shared entry validation for EmitVariable: type-checks the write and drops the two kinds
+    /// of no-op — a valueless (UnknownType) source and a back edge that yields the slot to
+    /// itself. Returns false when nothing is left to emit.
+    bool CheckEmitVariable(const ir::VarPtr& target, ir::ExprPtr& value, bool initialize);
+    void EmitVariable(const ir::VarPtr& target, ir::ExprPtr value, bool initialize);
+    void EmitTupleVariable(const std::string& name, const ir::TupleTypePtr& type, const ir::ExprPtr& value,
+                           bool initialize);
     void RegisterLoopReturnVars(const std::vector<ir::VarPtr>& returnVars,
                                 const std::vector<std::string>& iterArgNames);
 
     /**
-     * \brief Emit a C++ loop (for/while) with array-decl hoisting, shared by both loop kinds.
+     * \brief Emit a C++ loop shared by both loop kinds.
      *
      * The caller supplies the fully-formed loop header line ("for (...) {" or "while (...) {");
-     * everything else — hoisting scaffold, body emission, loop-carried write-back on the trailing
-     * yield, and return-var registration — is identical. A native break/continue in the body
+     * everything else — body emission, loop-carried write-back on the trailing yield, and
+     * return-var registration — is identical. A native break/continue in the body
      * carries its own loop-carried values (BreakStmt::value_, populated by ConvertToSSA) and writes
      * them back via loop_target_stack_ before jumping.
      */
-    void EmitLoopWithHoisting(const std::string& header, const ir::StmtPtr& body,
-                              const std::vector<ir::IterArgPtr>& iterArgs, const std::vector<ir::VarPtr>& returnVars,
-                              const std::vector<std::string>& iterArgNames);
+    void EmitLoop(const std::string& header, const ir::StmtPtr& body, const std::vector<ir::IterArgPtr>& iterArgs,
+                  const std::vector<ir::VarPtr>& returnVars, const std::vector<std::string>& iterArgNames);
 
     // --- Native break/continue support ---
 
@@ -580,12 +579,10 @@ private:
     std::string current_target_var_;              ///< INPUT: Assignment target variable name (for Call expressions)
     std::string current_expr_value_;              ///< OUTPUT: Inline C++ value for scalar / tile expressions
     ir::MakeTuplePtr current_tuple_;              ///< OUTPUT: underlying MakeTuple for tuple-typed expressions
-    std::vector<std::string> yield_buffer_;       ///< Temporary storage for yielded values from loops
+    std::vector<ir::ExprPtr> yield_buffer_;       ///< Yield expressions buffered while emitting control flow
     const ir::IRDebugInfo* debug_info_ = nullptr; ///< Tuple/struct field names, captured at GenerateSingle entry
     std::map<std::string, std::string> tiling_headers_;          ///< Tiling struct headers (filename -> content)
     std::map<std::string, StructDefinition> struct_definitions_; ///< Struct type name ->definition
-    std::unordered_map<const ir::TupleType*, std::string>
-        tuple_type_to_struct_name_; ///< TupleType identity ->struct type name
 
     CodeEmitter emitter_;                                            ///< Code emitter for structured output
     CodeContext context_;                                            ///< Context for variable tracking
@@ -598,14 +595,10 @@ private:
     std::map<std::string, TensorDef> tensor_defs_;      ///< Prescan: cce var name ->TensorDef (for make_tensor views)
     std::map<std::string, std::string> tile_addresses_; ///< tile_name ->TASSIGN address expression
 
-    // Loop tile hoisting: declarations collected during loop body visit, emitted before outermost loop
-    int loop_depth_ = 0; ///< Current for-loop nesting depth (0 = not in loop)
-    int if_depth_ = 0;   ///< Current if-stmt nesting depth (0 = not in if)
     std::map<std::pair<bool, std::string>, std::string>
         vf_tile_ptrs_; ///< (is_post_update, VF tile expr code) -> hoisted vf_tile_ptr_N var. A dedicated var (e.g. a
                        ///< POST_UPDATE store cursor) and a plain base pointer to the same tile are kept separate, so a
                        ///< cursor store does not corrupt a base load of the same tile.
-    std::vector<std::string> loop_hoisted_decls_;    ///< Lines to hoist before outermost loop/if
     std::vector<std::string> section_hoisted_decls_; ///< VF section decls hoisted before __VEC_SCOPE__ (pre mem_bar)
     std::set<std::string> var_read_names_;           ///< Var names read anywhere in the function body
     std::unordered_map<std::string, int> var_read_counts_; ///< Var name ->read count
@@ -614,7 +607,7 @@ private:
     /// Per active loop: the write-back target C++ names (its iter_arg names), pushed while the loop
     /// body is emitted. A native break/continue assigns its self-described carried values
     /// (BreakStmt::value_) to loop_target_stack_.back() before jumping. Innermost loop = back().
-    std::vector<std::vector<std::string>> loop_target_stack_;
+    std::vector<std::vector<ir::IterArgPtr>> loop_target_stack_;
 
     /**
      * \brief Pre-scan the IR for mutex_id ->pipe mappings.
@@ -665,9 +658,9 @@ private:
     // are propagated in VisitStmt_(ForStmtPtr).
     std::map<std::string, ir::MakeTuplePtr> tuple_var_to_make_tuple_;
 
-    // Homogeneous MakeTuple object -> its first materialized C++ backing array.
-    // Parser constant propagation can replace tuple Vars with their MakeTuple, so
-    // array identity must follow the IR object rather than a particular Var name.
+    // Array-valued MakeTuple object -> its unique C++ backing array. Parser constant
+    // propagation can replace tuple Vars with their MakeTuple, so array identity
+    // follows the IR object rather than a particular Var name.
     std::map<const ir::MakeTuple*, std::string> tuple_backing_arr_;
 
     /**
@@ -677,6 +670,23 @@ private:
      * is only valid when every element maps to the same C++ type. Empty tuple -> false.
      */
     bool IsHomogeneousTuple(const ir::TupleTypePtr& tt) const;
+
+    /// The C++ struct type name registered for a tuple type, or null if it is not a struct.
+    /// Reads the parser's side table, so the answer does not depend on how far codegen has
+    /// walked the body.
+    const std::string* GetStructName(const ir::TupleTypePtr& tuple_type) const;
+
+    /**
+     * \brief Whether a tuple is represented as a C++ array (vs. flattened leaf slots).
+     *
+     * Pure function of the type: it reads only the TupleType and debug_info_, which is
+     * captured once at GenerateSingle entry, so it does not depend on how far codegen has
+     * walked the body.
+     *
+     * Named tuples (structs / named tuples) render as `base.field` and are excluded;
+     * every other homogeneous tuple gets an array, which is what dynamic indexing needs.
+     */
+    bool IsArrayTuple(const ir::TupleTypePtr& tt) const;
 
     /**
      * \brief Collect element C++ names from a tuple value expression.
@@ -689,6 +699,7 @@ private:
      * Returns empty vector on failure.
      */
     std::vector<std::string> CollectTupleElemNames(const ir::ExprPtr& tuple_value);
+    std::string GetGeneratedType(const ir::TypePtr& type) const;
     std::string BuildDynamicTupleArrayDecl(const ir::TypePtr& elem_type, const std::vector<std::string>& elem_names,
                                            const std::string& arr_name) const;
 

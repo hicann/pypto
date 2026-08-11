@@ -397,7 +397,7 @@ class AssignmentParserMixin:
                 "Right-hand side of subscript assignment must be an IR expression",
                 span=span,
             )
-        meta = self._tile_mutex_meta.get(container_expr) if self._auto_mutex else None
+        meta = self.tile_mutex_lock_meta(container_expr) if self._auto_mutex else None
         from pypto_pro.ir.op.block_ops import _ir_setval
         setval_call = _ir_setval(container_expr, index_expr, value_expr, span=span)
         if meta is not None:
