@@ -473,15 +473,12 @@ public:
 
 private:
     Status RunOnFunction(Function& function) override;
-    void InsertPipeAll(Function* subGraphFunc);
     void InsertCvPipeAll(Function* subGraphFunc);
-    void InsertCvSyncOps(Function* subGraphFunc, Operation* currOp, Operation* nextOp,
-                         std::vector<Operation*>& newOpList);
+    void InsertCvSyncOps(Function* subGraphFunc, std::vector<Operation*>& newOpList);
     Status GenNewOpList(Function* subGraphFunc, std::vector<Operation*>& opListNew);
     Status CheckNewOpListSeq(const std::vector<Operation*>& oriOpList, const std::vector<Operation*>& opListNew);
     Status InsertSyncMainLoop(Function* subGraphFunc);
     bool enableDebug_{false};
-    bool enableCvDebug_{false};
     IRBuilder irBuilder_;
 };
 } // namespace tile_fwk

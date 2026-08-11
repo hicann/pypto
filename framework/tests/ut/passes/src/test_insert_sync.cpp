@@ -27,9 +27,13 @@ constexpr int IS_NUM2 = 2;
 constexpr int IS_NUM3 = 3;
 constexpr int IS_NUM4 = 4;
 constexpr int IS_NUM5 = 5;
+constexpr int IS_NUM6 = 6;
+constexpr int IS_NUM7 = 7;
 constexpr int IS_NUM8 = 8;
 constexpr int IS_NUM9 = 9;
 constexpr int IS_NUM10 = 10;
+constexpr int IS_NUM11 = 11;
+constexpr int IS_NUM12 = 12;
 constexpr int IS_NUM16 = 16;
 constexpr int IS_NUM18 = 18;
 constexpr int IS_NUM19 = 19;
@@ -853,6 +857,152 @@ TEST_F(InsertSyncTest, TestRecycleCrossCoreEventIds)
     EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIV1][0].size(), static_cast<size_t>(IS_NUM1));
     EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIV1][0].front(), IS_NUM30);
 }
+
+// Helper: create root + leaf Function pair for enableDebug tests
+static std::pair<std::shared_ptr<Function>, std::shared_ptr<Function>> SetupDebugFunc(const std::string& name)
+{
+    auto root = std::make_shared<Function>(Program::GetInstance(), name, name, nullptr);
+    root->rootFunc_ = root.get();
+    auto leaf = std::make_shared<Function>(Program::GetInstance(), name + "Leaf", name + "Leaf", root.get());
+    root->rootFunc_->programs_.emplace(leaf->GetFuncMagic(), leaf.get());
+    return {root, leaf};
+}
+
+// Helper: batch-create N FP32 tensors with given shape
+static std::vector<std::shared_ptr<LogicalTensor>> MakeTensors(int n, const std::vector<int64_t>& shape)
+{
+    std::vector<std::shared_ptr<LogicalTensor>> ts;
+    for (int i = 0; i < n; i++) {
+        ts.push_back(npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape)));
+    }
+    return ts;
+}
+
+// Helper: verify one sync op's opcode and AIVCore
+static void VerifySyncOp(const Operation* op, Opcode expectedOp, AIVCore expectedCore)
+{
+    EXPECT_EQ(op->GetOpcode(), expectedOp);
+    EXPECT_EQ(op->GetAIVCore(), expectedCore);
+}
+
+// Helper: verify BAR_ALL inserted between same-coreType ops
+static void VerifyBarAll(const std::vector<Operation*>& ops, size_t idx)
+{
+    VerifySyncOp(ops[idx], Opcode::OP_BAR_ALL, AIVCore::UNSPECIFIED);
+}
+
+// Helper: verify full InsertCvSyncOps 12-op sequence, return next index
+static size_t VerifyCvSyncOps(const std::vector<Operation*>& ops, size_t i)
+{
+    // UNSPECIFIED group (ops 1-4)
+    VerifySyncOp(ops[i], Opcode::OP_BAR_ALL, AIVCore::UNSPECIFIED);
+    VerifySyncOp(ops[i + IS_NUM1], Opcode::OP_FFTS_CROSS_CORE_SYNC, AIVCore::UNSPECIFIED);
+    VerifySyncOp(ops[i + IS_NUM2], Opcode::OP_WAIT_FLAG_DEV, AIVCore::UNSPECIFIED);
+    VerifySyncOp(ops[i + IS_NUM3], Opcode::OP_BAR_ALL, AIVCore::UNSPECIFIED);
+    // AIV0 group (ops 5-8)
+    VerifySyncOp(ops[i + IS_NUM4], Opcode::OP_BAR_ALL, AIVCore::AIV0);
+    VerifySyncOp(ops[i + IS_NUM5], Opcode::OP_WAIT_FLAG_DEV, AIVCore::AIV0);
+    VerifySyncOp(ops[i + IS_NUM6], Opcode::OP_FFTS_CROSS_CORE_SYNC, AIVCore::AIV0);
+    VerifySyncOp(ops[i + IS_NUM7], Opcode::OP_BAR_ALL, AIVCore::AIV0);
+    // AIV1 group (ops 9-12)
+    VerifySyncOp(ops[i + IS_NUM8], Opcode::OP_BAR_ALL, AIVCore::AIV1);
+    VerifySyncOp(ops[i + IS_NUM9], Opcode::OP_WAIT_FLAG_DEV, AIVCore::AIV1);
+    VerifySyncOp(ops[i + IS_NUM10], Opcode::OP_FFTS_CROSS_CORE_SYNC, AIVCore::AIV1);
+    VerifySyncOp(ops[i + IS_NUM11], Opcode::OP_BAR_ALL, AIVCore::AIV1);
+    return i + IS_NUM12;
+}
+
+// 覆盖 InsertCvPipeAll 全部 3 条分支：
+//   ADD(AIV)→CAST(AIV): 同coreType → BAR_ALL
+//   CAST(AIV)→A_MUL_B(AIC): 异coreType → InsertCvSyncOps
+//   A_MUL_B(AIC)→EXP(AIV): 异coreType → InsertCvSyncOps
+//   EXP 是最后一个 op → skip
+TEST_F(InsertSyncTest, TestEnableDebugAllPaths)
+{
+    auto [root, leaf] = SetupDebugFunc("TestDbgAll");
+    auto ts = MakeTensors(IS_NUM7, {IS_NUM8, IS_NUM16});
+    (void)IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    (void)IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[2]}, {ts[3]});
+    (void)IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_A_MUL_B, {ts[3], ts[4], ts[5]}, {ts[6]});
+    (void)IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_EXP, {ts[6]}, {ts[0]});
+    InsertSync syncPass;
+    syncPass.SetEnableDebug(true);
+    syncPass.RunOnFunction(*root);
+    // 验证 oriOpList
+    EXPECT_EQ(leaf->oriOpList.size(), static_cast<size_t>(IS_NUM4));
+    // 验证新 op 列表: 4原始 + 1 BAR_ALL + 12 CvSync + 12 CvSync = 29
+    auto ops = leaf->Operations(false).DuplicatedOpList();
+    EXPECT_EQ(ops.size(), static_cast<size_t>(IS_NUM29));
+    size_t idx = 0;
+    EXPECT_EQ(ops[idx++]->GetOpcode(), Opcode::OP_ADD);
+    VerifyBarAll(ops, idx++);
+    EXPECT_EQ(ops[idx++]->GetOpcode(), Opcode::OP_CAST);
+    idx = VerifyCvSyncOps(ops, idx);
+    EXPECT_EQ(ops[idx++]->GetOpcode(), Opcode::OP_A_MUL_B);
+    idx = VerifyCvSyncOps(ops, idx);
+    EXPECT_EQ(ops[idx++]->GetOpcode(), Opcode::OP_EXP);
+    EXPECT_EQ(idx, static_cast<size_t>(IS_NUM29));
+}
+
+// 边界: 单 op 时 i==oriOpList.size()-1 直接 skip，不插入任何 sync op
+TEST_F(InsertSyncTest, TestEnableDebugSingleOp)
+{
+    auto [root, leaf] = SetupDebugFunc("TestDbgSingle");
+    auto ts = MakeTensors(IS_NUM2, {IS_NUM8, IS_NUM16});
+    (void)IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0]}, {ts[1]});
+    InsertSync syncPass;
+    syncPass.SetEnableDebug(true);
+    syncPass.RunOnFunction(*root);
+    EXPECT_EQ(leaf->oriOpList.size(), static_cast<size_t>(IS_NUM1));
+    auto ops = leaf->Operations(false).DuplicatedOpList();
+    EXPECT_EQ(ops.size(), static_cast<size_t>(IS_NUM1));
+    EXPECT_EQ(ops[0]->GetOpcode(), Opcode::OP_ADD);
+}
+
+// 全同 coreType(AIV): 每对相邻 op 之间都插入 BAR_ALL
+TEST_F(InsertSyncTest, TestEnableDebugAllSameCoreType)
+{
+    auto [root, leaf] = SetupDebugFunc("TestDbgSame");
+    auto ts = MakeTensors(IS_NUM4, {IS_NUM8, IS_NUM16});
+    (void)IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    (void)IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[2]}, {ts[3]});
+    (void)IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_EXP, {ts[3]}, {ts[0]});
+    InsertSync syncPass;
+    syncPass.SetEnableDebug(true);
+    syncPass.RunOnFunction(*root);
+    EXPECT_EQ(leaf->oriOpList.size(), static_cast<size_t>(IS_NUM3));
+    // 3 原始 + 2 BAR_ALL = 5
+    auto ops = leaf->Operations(false).DuplicatedOpList();
+    EXPECT_EQ(ops.size(), static_cast<size_t>(IS_NUM5));
+    EXPECT_EQ(ops[0]->GetOpcode(), Opcode::OP_ADD);
+    VerifyBarAll(ops, IS_NUM1);
+    EXPECT_EQ(ops[IS_NUM2]->GetOpcode(), Opcode::OP_CAST);
+    VerifyBarAll(ops, IS_NUM3);
+    EXPECT_EQ(ops[IS_NUM4]->GetOpcode(), Opcode::OP_EXP);
+}
+
+// 全同 coreType(AIC): AIC→AIC 同核心场景，BAR_ALL 的 AIVCore 取自 nextOp(AIC 算子)，其值为 UNSPECIFIED
+TEST_F(InsertSyncTest, TestEnableDebugAllAic)
+{
+    auto [root, leaf] = SetupDebugFunc("TestDbgAic");
+    auto ts = MakeTensors(IS_NUM10, {IS_NUM8, IS_NUM16});
+    (void)IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_A_MUL_B, {ts[0], ts[1], ts[2]}, {ts[3]});
+    (void)IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_A_MULACC_B, {ts[3], ts[4], ts[5]}, {ts[6]});
+    (void)IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_A_MUL_BT, {ts[6], ts[7], ts[8]}, {ts[9]});
+    InsertSync syncPass;
+    syncPass.SetEnableDebug(true);
+    syncPass.RunOnFunction(*root);
+    EXPECT_EQ(leaf->oriOpList.size(), static_cast<size_t>(IS_NUM3));
+    // 3 原始 + 2 BAR_ALL = 5
+    auto ops = leaf->Operations(false).DuplicatedOpList();
+    EXPECT_EQ(ops.size(), static_cast<size_t>(IS_NUM5));
+    EXPECT_EQ(ops[0]->GetOpcode(), Opcode::OP_A_MUL_B);
+    VerifyBarAll(ops, IS_NUM1);
+    EXPECT_EQ(ops[IS_NUM2]->GetOpcode(), Opcode::OP_A_MULACC_B);
+    VerifyBarAll(ops, IS_NUM3);
+    EXPECT_EQ(ops[IS_NUM4]->GetOpcode(), Opcode::OP_A_MUL_BT);
+}
+
 } // namespace tile_fwk
 } // namespace npu
 
