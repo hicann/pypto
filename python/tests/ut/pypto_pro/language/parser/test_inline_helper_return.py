@@ -86,6 +86,13 @@ def test_inline_helper_loop_guard_folds_constant_false():
         result = value
         for _ in pl.range(1):
             result = inner(value)
+        # The second return is what puts `outer` on the lowering path at all. It has to come
+        # after the loop -- an early return ahead of the loop would leave `returned` non-constant
+        # there and the guard would survive -- and one statement clear of it, so that an `if`
+        # sitting right behind the loop can only be the guard itself.
+        doubled = result + result
+        if doubled > 0:
+            return doubled
         return result
 
     @pl.function

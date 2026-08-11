@@ -37,11 +37,18 @@ def _choose_in_loop(value):
     return value
 
 
+# Both helpers return from two sites so their result has to travel through a merge variable.
+# A helper whose only return is its final top-level statement is expanded straight instead,
+# with no merge slot for these tests to inspect.
 def _pair(first, second):
+    if first > second:
+        return second, first
     return first, second
 
 
 def _bundle(first, second):
+    if first > second:
+        return (second, first), False
     return (first, second), True
 
 

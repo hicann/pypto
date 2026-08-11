@@ -421,6 +421,22 @@ class CallParserMixin:
         return ".".join(attrs[1:])
 
     @staticmethod
+    def _needs_return_lowering(func_def: ast.FunctionDef) -> bool:
+        """Check whether a helper's returns have to be lowered onto a merge variable.
+
+        A lone return that is the helper's final top-level statement does not: there is only one
+        exit, so the body runs as-is and the return expression is parsed at the call site. The
+        call then yields whatever that expression evaluates to, including Python-level values
+        such as tile groups, which have no IR representation to merge in the first place.
+
+        Every other shape -- an early return, a return nested in control flow, several returns,
+        or none at all -- goes through `_InlineReturnLowerer`.
+        """
+        body = [stmt for stmt in func_def.body if not CallParserMixin._is_docstring(stmt)]
+        returns = [node for node in ast.walk(func_def) if isinstance(node, ast.Return)]
+        return not (len(returns) == 1 and bool(body) and body[-1] is returns[0])
+
+    @staticmethod
     def _is_docstring(stmt: ast.stmt) -> bool:
         """Check if an AST statement is a docstring (string constant expression)."""
         return isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str)
@@ -1033,10 +1049,14 @@ class CallParserMixin:
             func_def = copy.deepcopy(template.func_def)
             renamer = _InlineLocalRenamer(local_names, prefix)
             body = [renamer.visit(stmt) for stmt in func_def.body if not self._is_docstring(stmt)]
-            if template.is_vector_function:
-                ast.fix_missing_locations(func_def)
-            else:
+            needs_return_lowering = not template.is_vector_function and self._needs_return_lowering(func_def)
+            trailing_return = None
+            if needs_return_lowering:
                 body = _InlineReturnLowerer(return_val_name, returned_name).lower(body)
+            else:
+                ast.fix_missing_locations(func_def)
+                if not template.is_vector_function and body and isinstance(body[-1], ast.Return):
+                    trailing_return = body.pop()
 
             locked_vf_refs: list = []
             if template.is_vector_function and self._auto_mutex:
@@ -1085,8 +1105,12 @@ class CallParserMixin:
                 else:
                     for stmt in body:
                         self.parse_statement(stmt)
-                if not template.is_vector_function:
+                if template.is_vector_function:
+                    return None
+                if needs_return_lowering:
                     return self.scope_manager.lookup_var_bounded(return_val_name)
+                if trailing_return is not None and trailing_return.value is not None:
+                    return self.parse_expression(trailing_return.value)
                 return None
             finally:
                 self.span_tracker = old_span_tracker
