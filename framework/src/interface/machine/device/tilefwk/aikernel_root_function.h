@@ -17,9 +17,6 @@
 #define AIKERNEL_ROOT_FUNCTION_H
 
 #include "tilefwk/aikernel_tensor.h"
-#ifdef __TILE_FWK_HOST__
-#include <functional>
-#endif
 
 namespace npu::tile_fwk {
 
@@ -49,7 +46,8 @@ struct DevAscendFunctionDuppedStitchNode {
     // 函数在核心流程，已在Size()内循环，校验会影响性能
     uint32_t At(uint32_t idx) const { return nodeTaskList[idx]; }
 
-    void ForEach(const std::function<void(uint32_t id)>& callback) const
+    template <typename Callback>
+    void ForEach(Callback&& callback) const
     {
         for (uint32_t i = 0; i < nodeSize; i++) {
             callback(nodeTaskList[i]);
