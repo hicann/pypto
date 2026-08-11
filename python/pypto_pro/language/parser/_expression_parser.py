@@ -581,6 +581,8 @@ class ExpressionParserMixin:
             is_true = condition.value if isinstance(condition, ir.ConstBool) else condition.value != 0
             chosen = expr.body if is_true else expr.orelse
             result = self.parse_expression(chosen, nested=False)
+            if _is_enum_value(result):
+                return result
             if not isinstance(result, ir.Expr):
                 raise ParserTypeError(
                     "Ternary expression branch must return an IR expression",

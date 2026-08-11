@@ -480,6 +480,175 @@ def test_enum_compare_closure_vars():
     assert isinstance(func, ir.Function)
 
 
+# ---------------------------------------------------------------------------
+# Ternary expressions selecting an enum value (parse_ifexp)
+# ---------------------------------------------------------------------------
+# An enum is not an ir.Expr -- parse_attribute / parse_name return the Python enum object
+# itself, so an enum may only reach a kwarg, never an IR operand. A ternary over a
+# *constant* condition is folded at parse time, so it IS the chosen branch: the enum is
+# passed through, exactly as if written literally, and the unselected branch is never
+# parsed. That is what lets a kernel body pick its own dtype, e.g.
+#
+#     io_dtype = pl.DT_BF16 if DataType == 0 else pl.DT_FP16
+#
+# The cases below cover both that the fold accepts enums and that it still selects the
+# right branch -- "it parsed" alone would also hold for an implementation that always
+# took the then-branch.
+#
+# A ternary over a runtime condition is a different path (the branches are phi-merged
+# into one runtime value) and enums do not apply there; it is not covered here.
+
+@pytest.mark.soc("950")
+def test_dtype_kwarg_enum_ternary_const_condition():
+    """A dtype kwarg fed by a ternary over a constant condition is accepted."""
+    data_type = 0
+
+    @pl.function
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        target = pl.DT_FP32 if data_type == 0 else pl.DT_INT32
+        result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=target)
+        return result
+
+    assert isinstance(func, ir.Function)
+
+
+@pytest.mark.soc("950")
+def test_dtype_kwarg_enum_ternary_inline():
+    """The ternary may sit inline in the kwarg, not only behind a local name."""
+
+    @pl.function
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(
+            x, target_type=pl.DT_FP32 if True else pl.DT_INT32
+        )
+        return result
+
+    assert isinstance(func, ir.Function)
+
+
+@pytest.mark.soc("950")
+def test_enum_ternary_constexpr_condition():
+    """pl.constexpr() around the condition also reaches the folded path.
+
+    Worth its own case: constexpr governs how the condition is proven constant, while the
+    enum pass-through happens after the branch is chosen -- so wrapping the condition is
+    neither required for the fold nor an obstacle to it.
+    """
+    data_type = 0
+
+    @pl.function
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        target = pl.DT_FP32 if pl.constexpr(data_type == 0) else pl.DT_INT32
+        result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=target)
+        return result
+
+    assert isinstance(func, ir.Function)
+
+
+@pytest.mark.soc("950")
+def test_enum_ternary_condition_is_an_enum_comparison():
+    """The condition may itself be an enum comparison (dtype generalization).
+
+    ``in_dtype == pl.DT_FP16`` folds to a ConstBool via parse_compare, so this is the
+    kernel-factory idiom: one dtype parameter picking the dtypes of every level below.
+    """
+
+    def make(in_dtype):
+        @pl.function
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+            acc = pl.DT_FP32 if in_dtype == pl.DT_FP16 else pl.DT_INT32
+            result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=acc)
+            return result
+
+        return func
+
+    assert isinstance(make(pl.DT_FP16), ir.Function)
+    assert isinstance(make(pl.DT_FP32), ir.Function)
+
+
+@pytest.mark.soc("950")
+def test_non_dtype_enum_ternary():
+    """The pass-through is not dtype-specific -- a MemorySpace ternary works too.
+
+    parse_ifexp keys off "is this an enum", not "is this a DataType", and DataType is
+    matched by type while other pybind enums are matched by ``__members__``/``.value``.
+    Covering a second enum family keeps the predicate from being narrowed to dtypes.
+    """
+    use_vec = True
+
+    @pl.function
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        space = pl.MemorySpace.Vec if use_vec else pl.MemorySpace.Acc
+        tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=space)
+        a = pl.make_tile(tile_type, addr=0, size=16384)  # noqa: F841
+        result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=pl.DT_FP32)
+        return result
+
+    assert isinstance(func, ir.Function)
+
+
+@pytest.mark.soc("950")
+def test_enum_ternary_unselected_branch_not_parsed():
+    """Only the selected branch is parsed; the dead branch is never looked at.
+
+    This is what makes the pass-through safe rather than a loosened check: with a constant
+    condition there is no second value to reconcile, so an undefined name in the dead
+    branch cannot fail. If the fold ever regressed to parsing both branches, the
+    undefined name would raise and this case would catch it.
+    """
+
+    @pl.function
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        target = pl.DT_FP32 if True else undefined_name_in_dead_branch  # noqa: F821
+        result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=target)
+        return result
+
+    assert isinstance(func, ir.Function)
+
+
+@pytest.mark.soc("950")
+def test_int_via_ternary_still_rejected_by_enum_kwarg_guard():
+    """A ternary is not a way around the enum-kwarg guard.
+
+    The ternary yields an int here, and the kwarg resolver rejects it exactly as it does
+    for ``target_type=1`` written directly -- the pass-through widens what a ternary may
+    *carry*, not what a kwarg may *accept*.
+    """
+    with pytest.raises(ParserTypeError, match="expects an enum value"):
+
+        @pl.function
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+            result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(
+                x, target_type=1 if True else 2
+            )
+            return result
+
+
+@pytest.mark.soc("950")
+def test_mixed_enum_int_branches_follow_the_selected_branch():
+    """Branches need not agree in kind, because only one of them is ever parsed.
+
+    Selecting the enum side is fine; selecting the int side hits the kwarg guard. The
+    asymmetry is the point: validity is decided by the chosen branch alone.
+    """
+
+    @pl.function
+    def picks_enum(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        target = pl.DT_FP32 if True else 1
+        result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=target)
+        return result
+
+    assert isinstance(picks_enum, ir.Function)
+
+    with pytest.raises(ParserTypeError, match="expects an enum value"):
+
+        @pl.function
+        def picks_int(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+            target = pl.DT_FP32 if False else 1
+            result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=target)
+            return result
+
+
 if __name__ == "__main__":
     _tests = [
         test_dtype_kwarg_enum_literal,
@@ -513,6 +682,14 @@ if __name__ == "__main__":
         test_enum_compare_le_rejected,
         test_enum_compare_ge_rejected,
         test_enum_compare_closure_vars,
+        test_dtype_kwarg_enum_ternary_const_condition,
+        test_dtype_kwarg_enum_ternary_inline,
+        test_enum_ternary_constexpr_condition,
+        test_enum_ternary_condition_is_an_enum_comparison,
+        test_non_dtype_enum_ternary,
+        test_enum_ternary_unselected_branch_not_parsed,
+        test_int_via_ternary_still_rejected_by_enum_kwarg_guard,
+        test_mixed_enum_int_branches_follow_the_selected_branch,
     ]
     for _t in _tests:
         _t()
