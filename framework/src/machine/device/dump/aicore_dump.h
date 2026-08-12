@@ -19,10 +19,12 @@
 #include "securec.h"
 #include "machine/utils/dynamic/dev_start_args.h"
 #include "machine/utils/device_log.h"
+#include "tilefwk/aikernel_data.h"
 
 namespace npu::tile_fwk::dynamic {
 constexpr uint64_t DEV_DUMP_DATA_SIZE = 2 * 1024 * 1024;
 constexpr const uint8_t MAIN_BLOCK_SIZE = 2;
+constexpr uint64_t DUMP_RAW_TENSOR_ADDR_MASK = (1UL << 63) - 1;
 using IDE_SESSION = void*;
 enum IdeErrorT {};
 extern "C" {
@@ -77,6 +79,7 @@ struct DumpTensorData {
     uint64_t data;
     std::uint8_t dataByte;
     uint64_t dataOffset{0};
+    bool skipCopy{false};
 
     void TraverseAllAhapeIndexCombinations(const uint64_t shape[], const uint64_t stride[], const uint64_t offset[],
                                            uint32_t idx, uint32_t dims, uint64_t tensorAddr)
@@ -98,6 +101,7 @@ struct DumpTensorData {
         DevMemcpyS(reinterpret_cast<uint8_t*>(dataAddr), sizeof(DumpTensorInfo),
                    reinterpret_cast<const uint8_t*>(&info), sizeof(DumpTensorInfo));
         dataOffset = sizeof(DumpTensorInfo);
+        data = dataAddr;
         dataByte = BytesOf(static_cast<DataType>(info.dataType));
         datasize = dataByte;
         for (int32_t i = 0; i < info.dims; i++) {
@@ -107,6 +111,24 @@ struct DumpTensorData {
         if (datasize > DEV_DUMP_DATA_SIZE) {
             return;
         }
+
+        if (info.tensorAddr == 0) {
+            DEV_ERROR(TensorMetaErr::INCAST_ADDRESS_NULL,
+                      "#sche.dump.addr: skip memcpy, tensorAddr=0 rawMagic=%d dims=%d "
+                      "shape=[%lu,%lu,%lu,%lu] offset=[%lu,%lu,%lu,%lu] rawShape=[%lu,%lu,%lu,%lu]",
+                      info.rawMagic, info.dims, info.shape[0], info.shape[1], info.shape[2], info.shape[3],
+                      info.offset[0], info.offset[1], info.offset[2], info.offset[3], info.rawShape[0],
+                      info.rawShape[1], info.rawShape[2], info.rawShape[3]);
+            skipCopy = true;
+            datasize = 0;
+            return;
+        }
+
+        DEV_DEBUG("#sche.dump.copy: tensorAddr=0x%lx rawMagic=%d dims=%d dataByte=%u copyBytes=%lu "
+                  "shape=[%lu,%lu,%lu] offset=[%lu,%lu,%lu] rawShape=[%lu,%lu,%lu]",
+                  info.tensorAddr, info.rawMagic, info.dims, dataByte, datasize - sizeof(DumpTensorInfo), info.shape[0],
+                  info.shape[1], info.shape[2], info.offset[0], info.offset[1], info.offset[2], info.rawShape[0],
+                  info.rawShape[1], info.rawShape[2]);
 
         uint64_t stride[DEV_SHAPE_DIM_MAX];
         stride[info.dims - 1] = 1;
@@ -123,7 +145,6 @@ struct DumpTensorData {
                 break;
             }
         }
-        data = dataAddr;
         if (is_contiguous) {
             // Copy the tensor data in one shot
             uint64_t copy_size = datasize - sizeof(DumpTensorInfo);
@@ -223,6 +244,10 @@ public:
     {
         DumpTensorData dumpTensorData(dumpTensorInfo, dataAddr);
         dataSize_ = dumpTensorData.GetDumpSize();
+        if (dumpTensorData.skipCopy || dataSize_ == 0) {
+            DEV_WARN("#sche.dump.data: Skip dump due to invalid tensor address, file=%s.", fileName.c_str());
+            return;
+        }
         if (dataSize_ > DEV_DUMP_DATA_SIZE) {
             DEV_WARN("Tensor dataSize=%lu is larger than dumpSize=%lu.", dataSize_, DEV_DUMP_DATA_SIZE);
             return;
@@ -243,20 +268,21 @@ public:
         shapeInfo = oss.str();
     }
 
-    uint64_t GetRawTensorAddr(DevAscendRawTensor* rawTensor, DevAscendFunctionDuppedData* dupData) const
+    static inline DynFuncData* GetDynFuncData(DynDeviceTask* dyntask, uint64_t taskId)
     {
-        uint64_t addr = 0ULL;
-        if (rawTensor->ioProperty == DevIOProperty::ROOT_INCAST) {
-            AddressDescriptor incast = dupData->GetIncastAddress(rawTensor->ioIndex);
-            addr = incast.addr;
-        } else if (rawTensor->ioProperty == DevIOProperty::ROOT_OUTCAST) {
-            AddressDescriptor outcast = dupData->GetOutcastAddress(rawTensor->ioIndex);
-            addr = outcast.addr;
-        } else {
-            uintdevptr_t runtimeWorkspace = dupData->GetRuntimeWorkspace();
-            addr = runtimeWorkspace + rawTensor->addrOffset;
+        auto* head = reinterpret_cast<DynFuncHeader*>(dyntask->GetDynFuncDataList());
+        auto* funcDataList = reinterpret_cast<DynFuncData*>(head + 1);
+        return &funcDataList[FuncID(taskId)];
+    }
+
+    // Same address resolution path as AICore GetTensorAddr / schema dump.
+    static inline uint64_t GetRawTensorAddrFromDyn(DynFuncData* dynFuncData, uint64_t rawIndex)
+    {
+        auto* desc = &dynFuncData->rawTensorDesc[rawIndex];
+        if (desc->location == RAW_TENSOR_LOCATION_LOCAL) {
+            return dynFuncData->workspaceAddr + desc->offsetOrIndex;
         }
-        return addr;
+        return dynFuncData->rawTensorAddr[desc->offsetOrIndex] & DUMP_RAW_TENSOR_ADDR_MASK;
     }
 
     DumpTensorInfo GetDumpTensorInfo(DynDeviceTask* dyntask, std::string iOinfo, int32_t tensorIdx)
@@ -264,9 +290,10 @@ public:
         auto opIdx = TaskID(taskId_);
         auto func = dyntask->dynFuncDataCacheList[FuncID(taskId_)].devFunc;
         auto dupData = dyntask->dynFuncDataCacheList[FuncID(taskId_)].duppedData;
-        DumpTensorInfo dumpTensorInfo;
+        auto* dynFuncData = GetDynFuncData(dyntask, taskId_);
+        DumpTensorInfo dumpTensorInfo{};
 
-        auto setDumpTensorInfo = [&](DevAscendRawTensor* rawTensor, int32_t idx, bool isIOperand) {
+        auto setDumpTensorInfo = [&](DevAscendRawTensor* rawTensor, int32_t idx, bool isIOperand, uint64_t rawIdx) {
             uint32_t dimSize = rawTensor->GetDim();
             int cceIndex = func->GetOperationAttrCalleeIndex(opIdx);
             if (devProg_->devArgs.enableVFFusion) {
@@ -292,7 +319,22 @@ public:
             GetTensorOffsetAndShape<false>(
                 func, dumpTensorInfo.offset, dumpTensorInfo.shape, &(dupData->GetExpression(0)), dimSize, opIdx,
                 operandInfo.staticOffsetAttrBeginIndex, operandInfo.staticShapeAttrBeginIndex);
-            dumpTensorInfo.tensorAddr = GetRawTensorAddr(rawTensor, dupData);
+
+            auto* desc = &dynFuncData->rawTensorDesc[rawIdx];
+            // Prefer DynFuncData path (same as AICore GetTensorAddr). Dup RuntimeWorkspace can be 0.
+            dumpTensorInfo.tensorAddr = GetRawTensorAddrFromDyn(dynFuncData, rawIdx);
+            if (dumpTensorInfo.tensorAddr == 0) {
+                DEV_ERROR(TensorMetaErr::INCAST_ADDRESS_NULL,
+                          "#sche.dump.addr: tensorAddr=0 rawIdx=%lu rawMagic=%d ioProp=%u "
+                          "addrOffset=0x%lx loc=%u offOrIdx=0x%x ws=0x%lx rtWs=0x%lx",
+                          rawIdx, rawTensor->rawMagic, static_cast<uint32_t>(rawTensor->ioProperty),
+                          rawTensor->addrOffset, desc->location, desc->offsetOrIndex, dynFuncData->workspaceAddr,
+                          static_cast<uint64_t>(dupData->GetRuntimeWorkspace()));
+            } else {
+                DEV_DEBUG("#sche.dump.addr: rawIdx=%lu rawMagic=%d ioProp=%u loc=%u offOrIdx=0x%x addr=0x%lx", rawIdx,
+                          rawTensor->rawMagic, static_cast<uint32_t>(rawTensor->ioProperty), desc->location,
+                          desc->offsetOrIndex, dumpTensorInfo.tensorAddr);
+            }
             for (uint32_t i = 0; i < dimSize; i++) {
                 dumpTensorInfo.rawShape[i] = rawTensor->shape.At(i, dupData->GetExpressionAddr());
             }
@@ -301,11 +343,11 @@ public:
         if (iOinfo == "input") {
             uint64_t rawIdx = func->GetOperationIOperand(opIdx, tensorIdx)->rawIndex;
             auto* rawTensor = func->GetRawTensor(rawIdx);
-            setDumpTensorInfo(rawTensor, tensorIdx, true);
+            setDumpTensorInfo(rawTensor, tensorIdx, true, rawIdx);
         } else {
             uint64_t rawIdx = func->GetOperationOOperand(opIdx, tensorIdx)->rawIndex;
             auto* rawTensor = func->GetRawTensor(rawIdx);
-            setDumpTensorInfo(rawTensor, tensorIdx, false);
+            setDumpTensorInfo(rawTensor, tensorIdx, false, rawIdx);
         }
 
         FillLoopVarInfo(dumpTensorInfo, dupData);
