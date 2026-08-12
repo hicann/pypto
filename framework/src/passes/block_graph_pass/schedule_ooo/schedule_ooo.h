@@ -67,10 +67,7 @@ private:
                          int64_t& workeSpaceSize, bool enableDualDst);
     Status Schedule(std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
                     int64_t& maxWorkeSpaceSize);
-    Status BuildMemIdToAllocIdx(const std::vector<Operation*>& opList,
-                                std::unordered_map<uint64_t, size_t>& memIdToAllocIdx);
-    bool MoveAllocBeforeOp(std::vector<Operation*>& opList, size_t allocIdx, int targetIdx,
-                           std::unordered_map<uint64_t, size_t>& memIdToAllocIdx, uint64_t memId);
+    void CollectLocalMemIds(Operation* op, std::vector<int>& memIds);
     Status ModifyAllocOrder(std::vector<Operation*>& opList);
     std::vector<ScheduleUnit> BuildScheduleUnits(const std::vector<TaskNode>& taskNodeList,
                                                  const std::vector<std::pair<int, int>>& cyclePairs);

@@ -352,78 +352,67 @@ bool OoOSchedule::ShouldEnableDualDst(TaskSplitter& splitter)
     return hasPair;
 }
 
-Status OoOSchedule::BuildMemIdToAllocIdx(const std::vector<Operation*>& opList,
-                                         std::unordered_map<uint64_t, size_t>& memIdToAllocIdx)
+void OoOSchedule::CollectLocalMemIds(Operation* op, std::vector<int>& memIds)
 {
+    for (const auto& operand : op->GetOOperands()) {
+        if (operand->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
+            memIds.push_back(operand->memoryrange.memId);
+        }
+    }
+    for (const auto& operand : op->GetIOperands()) {
+        if (operand->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
+            memIds.push_back(operand->memoryrange.memId);
+        }
+    }
+}
+
+// 按首次引用重建 alloc 顺序:三遍扫描,先建 memId -> alloc 表,再为每个 op 找出应插在它之前的 alloc,
+// 最后按序重建 opList。两条不变式:被引用的 alloc 紧贴其首次引用点(reordered 去重保证只插一次),
+// 未被任何 op 引用的 alloc 保持原位。
+Status OoOSchedule::ModifyAllocOrder(std::vector<Operation*>& opList)
+{
+    std::unordered_map<int, Operation*> allocOfMemId;
     for (size_t i = 0; i < opList.size(); i++) {
-        Operation* op = opList[i];
-        if (op == nullptr) {
+        if (opList[i] == nullptr) {
             APASS_LOG_ERROR_F(Elements::Operation, "ModifyAllocOrder: null op at index %zu.", i);
             return FAILED;
         }
-        if (IsAllocOpCode(op->GetOpcode())) {
-            uint64_t memId = op->GetOutputOperand(0)->memoryrange.memId;
-            memIdToAllocIdx[memId] = i;
+        if (IsAllocOpCode(opList[i]->GetOpcode())) {
+            allocOfMemId[opList[i]->GetOutputOperand(0)->memoryrange.memId] = opList[i];
         }
     }
-    return SUCCESS;
-}
 
-bool OoOSchedule::MoveAllocBeforeOp(std::vector<Operation*>& opList, size_t allocIdx, int targetIdx,
-                                    std::unordered_map<uint64_t, size_t>& memIdToAllocIdx, uint64_t memId)
-{
-    if (allocIdx >= opList.size()) {
-        APASS_LOG_ERROR_F(Elements::Operation, "ModifyAllocOrder: allocIdx %zu out of range (size %zu).", allocIdx,
-                          opList.size());
-        return false;
-    }
-    if (allocIdx > static_cast<size_t>(targetIdx)) {
-        Operation* allocOp = opList[allocIdx];
-        APASS_LOG_DEBUG_F(Elements::Operation, "Move %s[%d] from index[%zu] to index[%d] before %s[%d]",
-                          allocOp->GetOpcodeStr().c_str(), allocOp->GetOpMagic(), allocIdx, targetIdx,
-                          opList[targetIdx]->GetOpcodeStr().c_str(), opList[targetIdx]->GetOpMagic());
-        opList.erase(opList.begin() + allocIdx);
-        opList.insert(opList.begin() + targetIdx, allocOp);
-
-        for (auto& [id, idx] : memIdToAllocIdx) {
-            (void)id;
-            if (idx >= static_cast<size_t>(targetIdx) && idx < allocIdx) {
-                idx++;
+    std::unordered_map<size_t, std::vector<Operation*>> allocsBeforeIdx;
+    std::unordered_set<Operation*> reordered;
+    for (size_t i = 0; i < opList.size(); i++) {
+        if (IsAllocOpCode(opList[i]->GetOpcode())) {
+            continue;
+        }
+        std::vector<int> memIds;
+        CollectLocalMemIds(opList[i], memIds);
+        for (int memId : memIds) {
+            auto it = allocOfMemId.find(memId);
+            if (it != allocOfMemId.end() && reordered.insert(it->second).second) {
+                allocsBeforeIdx[i].push_back(it->second);
             }
         }
-        memIdToAllocIdx[memId] = static_cast<size_t>(targetIdx);
-    }
-    return true;
-}
-
-Status OoOSchedule::ModifyAllocOrder(std::vector<Operation*>& opList)
-{
-    std::unordered_map<uint64_t, size_t> memIdToAllocIdx;
-    if (BuildMemIdToAllocIdx(opList, memIdToAllocIdx) != SUCCESS) {
-        return FAILED;
     }
 
-    for (int i = static_cast<int>(opList.size()) - 1; i >= 0; i--) {
-        Operation* op = opList[i];
-        if (IsAllocOpCode(op->GetOpcode())) {
-            continue;
+    std::vector<Operation*> newOpList;
+    newOpList.reserve(opList.size());
+    for (size_t i = 0; i < opList.size(); i++) {
+        auto it = allocsBeforeIdx.find(i);
+        if (it != allocsBeforeIdx.end()) {
+            newOpList.insert(newOpList.end(), it->second.begin(), it->second.end());
         }
-
-        auto outOpd = op->GetOutputOperand(0);
-        if (outOpd == nullptr || outOpd->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
-            continue;
-        }
-
-        uint64_t memId = outOpd->memoryrange.memId;
-        auto it = memIdToAllocIdx.find(memId);
-        if (it == memIdToAllocIdx.end()) {
-            continue;
-        }
-
-        if (!MoveAllocBeforeOp(opList, it->second, i, memIdToAllocIdx, memId)) {
-            return FAILED;
+        if (reordered.count(opList[i]) == 0) {
+            newOpList.push_back(opList[i]);
         }
     }
+    opList = std::move(newOpList);
+
+    APASS_LOG_DEBUG_F(Elements::Operation, "ModifyAllocOrder: reordered %zu allocs among %zu ops.", reordered.size(),
+                      opList.size());
     return SUCCESS;
 }
 

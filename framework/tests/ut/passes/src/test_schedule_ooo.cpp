@@ -3010,4 +3010,115 @@ TEST_F(ScheduleOoOTest, IsoMatch_IsoMatchChains_RootSignatureMismatch)
     EXPECT_EQ(res.pairs.size(), 0u);
 }
 
+static int IndexOf(const std::vector<Operation*>& opList, Operation* op)
+{
+    for (size_t i = 0; i < opList.size(); i++) {
+        if (opList[i] == op) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+TEST_F(ScheduleOoOTest, TestModifyAllocOrderPushesEarlyAllocDown)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> names{"t1", "t2", "t3", "t4", "t5", "t6"};
+    std::vector<MemoryType> memTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR,
+                                     MemoryType::MEM_UB,         MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, memTypes, names, 0), true);
+    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN,
+                                Opcode::OP_COPY_IN,  Opcode::OP_ADD,      Opcode::OP_COPY_OUT};
+    std::vector<std::vector<std::string>> ins{{}, {}, {}, {"t1"}, {"t3"}, {"t2", "t4"}, {"t5"}};
+    std::vector<std::vector<std::string>> outs{{"t2"}, {"t4"}, {"t5"}, {"t2"}, {"t4"}, {"t5"}, {"t6"}};
+    std::vector<std::string> opNames{"AllocT2", "AllocT4", "AllocT5", "Copyin1", "Copyin2", "Add1", "Copyout1"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ins, outs, opNames, true), true);
+    Function* function = subGraph.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    std::vector<Operation*> opList{subGraph.GetOp("AllocT2"), subGraph.GetOp("AllocT4"), subGraph.GetOp("AllocT5"),
+                                   subGraph.GetOp("Copyin1"), subGraph.GetOp("Copyin2"), subGraph.GetOp("Add1"),
+                                   subGraph.GetOp("Copyout1")};
+    EXPECT_EQ(IndexOf(opList, subGraph.GetOp("Copyin1")) - IndexOf(opList, subGraph.GetOp("AllocT2")), 3);
+
+    OoOSchedule oooSchedule;
+    EXPECT_EQ(oooSchedule.ModifyAllocOrder(opList), SUCCESS);
+
+    EXPECT_EQ(opList.size(), 7u);
+    EXPECT_EQ(IndexOf(opList, subGraph.GetOp("Copyin1")) - IndexOf(opList, subGraph.GetOp("AllocT2")), 1);
+    EXPECT_EQ(IndexOf(opList, subGraph.GetOp("Copyin2")) - IndexOf(opList, subGraph.GetOp("AllocT4")), 1);
+    EXPECT_EQ(IndexOf(opList, subGraph.GetOp("Add1")) - IndexOf(opList, subGraph.GetOp("AllocT5")), 1);
+}
+
+TEST_F(ScheduleOoOTest, TestModifyAllocOrderPullsLateAllocUp)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> names{"t1", "t2", "t3"};
+    std::vector<MemoryType> memTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, memTypes, names, 0), true);
+    std::vector<Opcode> opCodes{Opcode::OP_COPY_IN, Opcode::OP_UB_ALLOC, Opcode::OP_COPY_OUT};
+    std::vector<std::vector<std::string>> ins{{"t1"}, {}, {"t2"}};
+    std::vector<std::vector<std::string>> outs{{"t2"}, {"t2"}, {"t3"}};
+    std::vector<std::string> opNames{"Copyin1", "AllocT2", "Copyout1"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ins, outs, opNames, true), true);
+    Function* function = subGraph.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    std::vector<Operation*> opList{subGraph.GetOp("Copyin1"), subGraph.GetOp("AllocT2"), subGraph.GetOp("Copyout1")};
+    OoOSchedule oooSchedule;
+    EXPECT_EQ(oooSchedule.ModifyAllocOrder(opList), SUCCESS);
+
+    EXPECT_EQ(opList.size(), 3u);
+    EXPECT_EQ(IndexOf(opList, subGraph.GetOp("AllocT2")), 0);
+    EXPECT_EQ(IndexOf(opList, subGraph.GetOp("Copyin1")), 1);
+}
+
+TEST_F(ScheduleOoOTest, TestModifyAllocOrderKeepsUnreferencedAllocInPlace)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> names{"t1", "t2", "t3", "t4"};
+    std::vector<MemoryType> memTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR,
+                                     MemoryType::MEM_UB};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, memTypes, names, 0), true);
+    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN, Opcode::OP_COPY_OUT};
+    std::vector<std::vector<std::string>> ins{{}, {}, {"t1"}, {"t2"}};
+    std::vector<std::vector<std::string>> outs{{"t4"}, {"t2"}, {"t2"}, {"t3"}};
+    std::vector<std::string> opNames{"AllocT4", "AllocT2", "Copyin1", "Copyout1"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ins, outs, opNames, true), true);
+    Function* function = subGraph.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    std::vector<Operation*> opList{subGraph.GetOp("AllocT4"), subGraph.GetOp("AllocT2"), subGraph.GetOp("Copyin1"),
+                                   subGraph.GetOp("Copyout1")};
+    OoOSchedule oooSchedule;
+    EXPECT_EQ(oooSchedule.ModifyAllocOrder(opList), SUCCESS);
+
+    EXPECT_EQ(opList.size(), 4u);
+    EXPECT_EQ(IndexOf(opList, subGraph.GetOp("AllocT4")), 0);
+    EXPECT_EQ(IndexOf(opList, subGraph.GetOp("Copyin1")) - IndexOf(opList, subGraph.GetOp("AllocT2")), 1);
+}
+
+TEST_F(ScheduleOoOTest, TestModifyAllocOrderInsertsAllocOnceForInPlaceOp)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> names{"t1", "t2", "t3"};
+    std::vector<MemoryType> memTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, memTypes, names, 0), true);
+    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN, Opcode::OP_ADD, Opcode::OP_COPY_OUT};
+    std::vector<std::vector<std::string>> ins{{}, {"t1"}, {"t2", "t2"}, {"t2"}};
+    std::vector<std::vector<std::string>> outs{{"t2"}, {"t2"}, {"t2"}, {"t3"}};
+    std::vector<std::string> opNames{"AllocT2", "Copyin1", "AddInPlace", "Copyout1"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ins, outs, opNames, true), true);
+    Function* function = subGraph.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    std::vector<Operation*> opList{subGraph.GetOp("AllocT2"), subGraph.GetOp("AddInPlace"), subGraph.GetOp("Copyout1")};
+    OoOSchedule oooSchedule;
+    EXPECT_EQ(oooSchedule.ModifyAllocOrder(opList), SUCCESS);
+
+    EXPECT_EQ(opList.size(), 3u);
+    EXPECT_EQ(IndexOf(opList, subGraph.GetOp("AllocT2")), 0);
+    EXPECT_EQ(IndexOf(opList, subGraph.GetOp("AddInPlace")), 1);
+}
+
 } // namespace npu::tile_fwk
