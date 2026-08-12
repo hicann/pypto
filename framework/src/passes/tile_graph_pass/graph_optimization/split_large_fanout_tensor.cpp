@@ -815,13 +815,13 @@ Shape SplitLargeFanoutTensor::AdjustLcmTileShapeForTailBlock(const Shape& lcmSha
 bool SplitLargeFanoutTensor::CheckOverlapCoverage(const LogicalTensors& overlaps, const Shape& lcmTileShape)
 {
     auto [lcmTileArea, lcmOverflow] = CommonUtils::SafeMultiplyShape(lcmTileShape);
-    if (lcmOverflow) {
+    if (lcmOverflow || lcmTileArea == -1) {
         return false;
     }
     int64_t overlapTotalArea = 0;
     for (const auto& overlap : overlaps) {
         auto [area, overflow] = CommonUtils::SafeMultiplyShape(overlap->shape);
-        if (overflow || overlapTotalArea > INT64_MAX - area) {
+        if (overflow || area == -1 || overlapTotalArea > INT64_MAX - area) {
             return false;
         }
         overlapTotalArea += area;

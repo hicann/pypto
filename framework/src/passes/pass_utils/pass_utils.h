@@ -101,7 +101,9 @@ public:
     static std::unordered_map<MemoryType, int64_t> GetLocalMemorySize();
 
     // 安全计算 shape 的乘积，检测溢出
-    // 返回 pair<结果, 是否溢出>，如果溢出则返回 <0, true>
+    // 返回 pair<结果, 是否溢出>
+    // 如果溢出则返回 <0, true>
+    // 如果存在动态轴 -1，则返回 <-1, false> 表示无法精确计算但不溢出；
     static std::pair<int64_t, bool> SafeMultiplyShape(const Shape& shape)
     {
         if (shape.empty()) {
@@ -109,6 +111,9 @@ public:
         }
         int64_t result = 1;
         for (int64_t dim : shape) {
+            if (dim == -1) {
+                return {-1, false};
+            }
             if (result != 0 && dim != 0) {
                 if (result > INT64_MAX / dim) {
                     return {0, true};
