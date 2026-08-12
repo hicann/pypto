@@ -27,6 +27,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import uuid
 
 import torch
 
@@ -129,7 +130,6 @@ class CompilePaths:
     build_dir: str
     raw_cpp_path: str
     final_kernel: str
-    lib_path: str
 
 
 @dataclasses.dataclass
@@ -150,8 +150,8 @@ class CodegenResult:
 
     This is pipeline-agnostic and contains nothing tilingkey-specific, so a
     single result is reused across every concrete tilingkey within a run and is the only
-    thing future binary packaging needs — it does not require the JIT call_kernel.cpp/.so
-    build that follows.
+    thing future binary packaging needs — it does not require the JIT call_kernel.cpp /
+    call_kernel_<digest>.so build that follows.
     """
 
     build_dir: str
@@ -230,8 +230,9 @@ def _make_artifact_build_dir(prog, arch: str, test_prefix: str | None = None, ti
 
 def _make_tilingkey_dir(build_dir: str, tilingkey_packed: int | None) -> str:
     """The per-tilingkey subdir under the kernel build dir. Holds this key's kernel.cpp,
-    tiling headers, call_kernel.cpp and call_kernel.so. Keys without a tiling_key use
-    ``tk_none`` so the layout is uniform."""
+    tiling headers, call_kernel.cpp and the compiled call_kernel_<digest>.so (bisheng
+    writes to a per-call temp file, which is then renamed to embed a content hash). Keys
+    without a tiling_key use ``tk_none`` so the layout is uniform."""
     suffix = "none" if tilingkey_packed is None else format(tilingkey_packed, "x")
     return os.path.join(build_dir, f"tk_{suffix}")
 
@@ -760,12 +761,13 @@ def _prepare_codegen_inputs(
 
 def _make_jit_paths(out_dir: str) -> CompilePaths:
     """JIT artifact paths within one tilingkey's output dir: kernel.cpp, call_kernel.cpp and
-    call_kernel.so all live side by side in ``out_dir``."""
+    the compiled library all live side by side in ``out_dir``. The compiled library is built
+    under a process-unique temp name and renamed to call_kernel_<digest>.so
+    (see :func:`_compile_shared_library`)."""
     return CompilePaths(
         build_dir=out_dir,
         raw_cpp_path=os.path.join(out_dir, "kernel.cpp"),
         final_kernel=os.path.join(out_dir, "call_kernel.cpp"),
-        lib_path=os.path.join(out_dir, "call_kernel.so"),
     )
 
 
@@ -1007,8 +1009,9 @@ def _run_bisheng(
     paths: CompilePaths,
     link_args: list[str],
     compile_timeout: int,
+    output_path: str,
 ) -> bool:
-    """Run bisheng to build the final shared library."""
+    """Run bisheng to build the shared library at ``output_path``."""
     result = subprocess.run(
         [
             bisheng_path,
@@ -1017,7 +1020,7 @@ def _run_bisheng(
             paths.final_kernel,
             *link_args,
             "-o",
-            paths.lib_path,
+            output_path,
         ],
         check=False,
         timeout=compile_timeout,
@@ -1038,7 +1041,15 @@ def _compile_shared_library(
     clean_up: bool,
     compile_timeout: int,
 ) -> str | None:
-    """Compile generated C++ and caller wrapper into a shared library."""
+    """Compile generated C++ and caller wrapper into a shared library.
+
+    bisheng writes to a process-and-call-unique temp file in ``paths.build_dir`` rather
+    than a shared fixed name: concurrent compiles of the same tilingkey target the same
+    directory (e.g. distinct pytest-xdist workers compiling the same kernel/key), so a
+    shared fixed output name would let one compile's rename race another's read. The temp
+    file is renamed to call_kernel_<digest>.so, embedding a sha256 of the compiled bytes,
+    and that hashed path is returned.
+    """
     pto_lib_path = os.environ["ASCEND_TOOLKIT_HOME"]
     ascend_home_path = os.environ.get("ASCEND_HOME_PATH")
     if not ascend_home_path:
@@ -1059,13 +1070,24 @@ def _compile_shared_library(
     if bisheng_path is None:
         logging.error("bisheng executable was not found")
         return None
-    if not _run_bisheng(bisheng_path, flags, arch, paths, link_args, compile_timeout):
-        return None
 
-    if clean_up:
-        os.remove(paths.raw_cpp_path)
-        os.remove(paths.final_kernel)
-    return paths.lib_path
+    tmp_lib_path = os.path.join(paths.build_dir, f".call_kernel.{os.getpid()}.{uuid.uuid4().hex}.so")
+    try:
+        if not _run_bisheng(bisheng_path, flags, arch, paths, link_args, compile_timeout, tmp_lib_path):
+            return None
+
+        if clean_up:
+            os.remove(paths.raw_cpp_path)
+            os.remove(paths.final_kernel)
+
+        lib_bytes = Path(tmp_lib_path).read_bytes()
+        digest = hashlib.sha256(lib_bytes).hexdigest()[:12]
+        unique_lib_path = os.path.join(paths.build_dir, f"call_kernel_{digest}.so")
+        os.replace(tmp_lib_path, unique_lib_path)
+        return unique_lib_path
+    finally:
+        if os.path.exists(tmp_lib_path):
+            os.remove(tmp_lib_path)
 
 
 def _codegen(
@@ -1117,7 +1139,8 @@ def _build_jit_so(
     compile_timeout: int,
 ) -> str | None:
     """Write call_kernel.cpp next to the (already per-key) kernel.cpp in ``cg.build_dir`` and
-    compile .so. kernel.cpp, call_kernel.cpp and call_kernel.so all share that one dir."""
+    compile the .so. kernel.cpp, call_kernel.cpp and the resulting call_kernel_<digest>.so all
+    share that one dir."""
     paths = _make_jit_paths(cg.build_dir)
     resolved_print_debug = cg.needs_print_debug
 
