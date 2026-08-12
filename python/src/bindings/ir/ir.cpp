@@ -541,6 +541,7 @@ void BindTypeClass(py::module_& ir)
 
     py::enum_<ir::AccToVecMode>(ir, "AccToVecMode", "Accumulator to vector transfer mode")
         .value("SingleModeVec0", ir::AccToVecMode::SingleModeVec0, "Single vector sub-core 0")
+        .value("SingleModeVec1", ir::AccToVecMode::SingleModeVec1, "Single vector sub-core 1")
         .value("DualModeSplitM", ir::AccToVecMode::DualModeSplitM, "Dual split along M dimension")
         .value("DualModeSplitN", ir::AccToVecMode::DualModeSplitN, "Dual split along N dimension");
 

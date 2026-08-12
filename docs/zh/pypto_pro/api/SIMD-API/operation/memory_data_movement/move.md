@@ -46,7 +46,7 @@ pypto_pro.language.move(dst_tile, src_tile, offset=None, *, acc_to_vec_mode=None
 | `dst_tile` | 输出 | 数据类型：b8、b16、b32、b64<br>内存空间与源共同决定流水（见“流水类型”）；首地址必须32字节对齐 |
 | `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>使用`offset`提取子块时，源tile须不小于目的tile |
 | `offset` | 输入 | 二维`[offset_m, offset_k]`，单位为元素个数<br>以源tile声明的物理`shape`为坐标系；`valid_shape`不改变offset的坐标原点和计量单位，每一维须满足`0 <= offset < src_tile.shape`<br>实际提取范围为`[offset, offset + dst_tile.valid_shape)`。使用尾块时，完整的`dst_tile.shape`可以超出offset后的剩余范围，但实际提取范围不得超出`src_tile.shape`；若源tile设置了更小的`valid_shape`，实际提取范围还须位于该有效区域内 |
-| `acc_to_vec_mode` | 输入 | 取`pl.AccToVecMode.SingleModeVec0`/`pl.AccToVecMode.DualModeSplitM`/`pl.AccToVecMode.DualModeSplitN`；仅在源为`Acc`、目的为`Vec`时有意义。`fp_tile`存在时只支持单vec模式（`DualModeSplitM`/`DualModeSplitN`报错） |
+| `acc_to_vec_mode` | 输入 | 取`pl.AccToVecMode.SingleModeVec0`/`pl.AccToVecMode.SingleModeVec1`/`pl.AccToVecMode.DualModeSplitM`/`pl.AccToVecMode.DualModeSplitN`；仅在源为`Acc`、目的为`Vec`时有意义。`fp_tile`存在时只支持单vec模式（`DualModeSplitM`/`DualModeSplitN`报错） |
 | `relu_pre_mode` | 输入 | 默认`None`（不融合ReLU）；可取`pl.ReluPreMode.NormalRelu` |
 | `pre_quant_scalar` | 输入 | 整数预量化标量；与`fp_tile`互斥 |
 | `fp_tile` | 输入 | 提供时改走`move_fp`路径（fixpipe量化）；与`pre_quant_scalar`互斥，且只支持单vec模式 |

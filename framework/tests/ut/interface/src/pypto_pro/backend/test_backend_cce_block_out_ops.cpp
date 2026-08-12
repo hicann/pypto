@@ -761,6 +761,36 @@ TEST(BackendCCEBlockOutOps, MoveWithAccToVecMode)
     EXPECT_CONTAINS(code, "AccToVecMode::SingleModeVec0");
 }
 
+TEST(BackendCCEBlockOutOps, MoveWithDualModeSplitMAlignsValidShape)
+{
+    auto tile = MakeTileType();
+    auto call = MakeCallWithKwargs("block.move", {MakeVar("dst", tile), MakeVar("src", tile)},
+                                   {{"acc_to_vec_mode", static_cast<int>(ir::AccToVecMode::DualModeSplitM)}});
+    auto code = RunCodegen("block.move", call);
+    EXPECT_CONTAINS(code, "AccToVecMode::DualModeSplitM");
+    EXPECT_CONTAINS(code, "src.SetValidShape((src.GetValidRow() + 1) / 2 * 2, src.GetValidCol());");
+}
+
+TEST(BackendCCEBlockOutOps, MoveWithDualModeSplitNAlignsValidShape)
+{
+    auto tile = MakeTileType();
+    auto call = MakeCallWithKwargs("block.move", {MakeVar("dst", tile), MakeVar("src", tile)},
+                                   {{"acc_to_vec_mode", static_cast<int>(ir::AccToVecMode::DualModeSplitN)}});
+    auto code = RunCodegen("block.move", call);
+    EXPECT_CONTAINS(code, "AccToVecMode::DualModeSplitN");
+    EXPECT_CONTAINS(code, "src.SetValidShape(src.GetValidRow(), (src.GetValidCol() + 31) / 32 * 32);");
+}
+
+TEST(BackendCCEBlockOutOps, MoveWithSingleModeVec1NoAlignment)
+{
+    auto tile = MakeTileType();
+    auto call = MakeCallWithKwargs("block.move", {MakeVar("dst", tile), MakeVar("src", tile)},
+                                   {{"acc_to_vec_mode", static_cast<int>(ir::AccToVecMode::SingleModeVec1)}});
+    auto code = RunCodegen("block.move", call);
+    EXPECT_CONTAINS(code, "AccToVecMode::SingleModeVec1");
+    EXPECT_NOT_CONTAINS(code, "SetValidShape");
+}
+
 TEST(BackendCCEBlockOutOps, MoveWithReluPreMode)
 {
     auto tile = MakeTileType();
@@ -842,8 +872,24 @@ TEST(BackendCCEBlockOutOps, MoveFpDualModeThrows)
     auto scaling_tile = MakeTileType({16, 16}, ir::DataType::FP16, scaling_memref);
     auto call = MakeCallWithKwargs("block.move_fp",
                                    {MakeVar("dst", vec_tile), MakeVar("src", acc_tile), MakeVar("fp", scaling_tile)},
-                                   {{"acc_to_vec_mode", 1}});
+                                   {{"acc_to_vec_mode", static_cast<int>(ir::AccToVecMode::DualModeSplitM)}});
     EXPECT_THROW(RunCodegen("block.move_fp", call), ir::ValueError);
+}
+
+TEST(BackendCCEBlockOutOps, MoveFpWithSingleModeVec1)
+{
+    auto vec_memref = MakeMemRef(ir::MemorySpace::Vec);
+    auto acc_memref = MakeMemRef(ir::MemorySpace::Acc);
+    auto scaling_memref = MakeMemRef(ir::MemorySpace::Scaling);
+    auto vec_tile = MakeTileType({16, 16}, ir::DataType::FP16, vec_memref);
+    auto acc_tile = MakeTileType({16, 16}, ir::DataType::FP16, acc_memref);
+    auto scaling_tile = MakeTileType({16, 16}, ir::DataType::FP16, scaling_memref);
+    auto call = MakeCallWithKwargs("block.move_fp",
+                                   {MakeVar("dst", vec_tile), MakeVar("src", acc_tile), MakeVar("fp", scaling_tile)},
+                                   {{"acc_to_vec_mode", static_cast<int>(ir::AccToVecMode::SingleModeVec1)}});
+    auto code = RunCodegen("block.move_fp", call);
+    EXPECT_CONTAINS(code, "TMOV<");
+    EXPECT_CONTAINS(code, "AccToVecMode::SingleModeVec1");
 }
 
 TEST(BackendCCEBlockOutOps, MoveFpWrongSpace)

@@ -569,9 +569,10 @@ static std::string MakeBlockOutMoveCodegenCCE(const ir::CallPtr& op, codegen::Co
         int mode_val = op->GetKwarg<int>("acc_to_vec_mode");
         template_params = ", " + GetAccToVecModeCCE(mode_val, true);
         // Auto-align Acc valid_shape for DualModeSplitM (M%2==0) / DualModeSplitN (N%32==0).
-        if (mode_val == 1) {
+        auto mode = static_cast<ir::AccToVecMode>(mode_val);
+        if (mode == ir::AccToVecMode::DualModeSplitM) {
             codegen.Emit(src + ".SetValidShape((" + src + ".GetValidRow() + 1) / 2 * 2, " + src + ".GetValidCol());");
-        } else if (mode_val == 2) {
+        } else if (mode == ir::AccToVecMode::DualModeSplitN) {
             codegen.Emit(src + ".SetValidShape(" + src + ".GetValidRow(), (" + src +
                          ".GetValidCol() + 31) / 32 * 32);");
         }

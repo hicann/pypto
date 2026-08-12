@@ -217,7 +217,7 @@ def move(
         dst_tile: Destination Tile
         src_tile: Source Tile
         offset: Optional ``[offset_m, offset_k]`` to extract a sub-block from a wider source Tile
-        acc_to_vec_mode: Acc→Vec mode — ``pl.AccToVecMode.SingleModeVec0``,
+        acc_to_vec_mode: Acc→Vec mode — ``pl.AccToVecMode.SingleModeVec0``, ``pl.AccToVecMode.SingleModeVec1``,
             ``pl.AccToVecMode.DualModeSplitM``, ``pl.AccToVecMode.DualModeSplitN``;
             only meaningful when src is Acc and dst is Vec
         relu_pre_mode: Optional ReLU fusion — ``pl.ReluPreMode.NormalRelu``
