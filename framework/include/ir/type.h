@@ -88,6 +88,9 @@ using UnknownTypePtr = std::shared_ptr<const UnknownType>;
  * \brief Get a shared pointer to the singleton UnknownType instance
  *
  * \return Shared pointer to UnknownType
+ *
+ * IR Syntax:
+ *      `unknown`
  */
 inline UnknownTypePtr GetUnknownType()
 {
@@ -99,6 +102,9 @@ inline UnknownTypePtr GetUnknownType()
  * \brief Scalar type representation
  *
  * Represents a scalar value type with a data type.
+ *
+ * IR Syntax:
+ *      dtype
  */
 class ScalarType : public Type {
 public:
@@ -151,6 +157,9 @@ using ScalarTypePtr = std::shared_ptr<const ScalarType>;
  * Represents the view information for a tensor, including stride and layout.
  * The shape is stored in TensorType itself, so TensorView only needs
  * stride and layout information.
+ *
+ * IR Syntax:
+ *      `tensor_view` `<` validshape0 `x` ... validshapeN `,` stride0 `x` ... strideN `,` layout (`,` ptr)? `>`
  */
 struct TensorView {
     std::vector<ExprPtr> validShape; ///< Valid shape dimensions (symbolic or constant)
@@ -266,6 +275,9 @@ struct HardwareInfo {
  * Represents the view information for a tile, including valid shape,
  * stride, and start offset. This is used by TileType to track how
  * a tile views its underlying memory.
+ *
+ * IR Syntax:
+ *      `tile_view` `<` validshape0 `x` ... validshapeN `,` stride0 `x` ... strideN `,` start_offset `>`
  */
 struct TileView {
     std::vector<ExprPtr> validShape; ///< Valid shape dimensions
@@ -356,6 +368,9 @@ using ShapedTypePtr = std::shared_ptr<const ShapedType>;
  * \brief Tensor type representation
  *
  * Represents a tensor type with a data type and shape dimensions.
+ *
+ * IR Syntax:
+ *      `tensor` `<` shape0 `x` ... shapeN `,` dtype ( `,` tensor_view )? `>`
  */
 class TensorType : public ShapedType {
 public:
@@ -412,6 +427,9 @@ using TensorTypePtr = std::shared_ptr<const TensorType>;
  * Represents a tile type (multi-dimensional tensor).
  * Tiles are used for hardware-optimized operations on multi-dimensional data structures.
  * Note: Code generation currently only supports up to 2D tiles.
+ *
+ * IR Syntax:
+ *      `tile` `<` shape0 `x` ... shapeN `,` dtype ( `,` tileView_ )? ( `,` hardwareInfo_ )? `>`
  */
 class TileType : public ShapedType {
 public:
@@ -469,6 +487,9 @@ using TileTypePtr = std::shared_ptr<const TileType>;
  *
  * Represents a tuple type containing multiple types.
  * Tuples are used for multiple return values and structured data.
+ *
+ * IR Syntax:
+ *      `tuple` `<` dtype `>`
  */
 class TupleType : public Type {
 public:
@@ -502,6 +523,9 @@ using TupleTypePtr = std::shared_ptr<const TupleType>;
  *
  * Represents a memory reference type for shaped data (tensors and tiles).
  * Used as the type for MemRef variables.
+ *
+ * IR Syntax:
+ *      `memref`
  */
 class MemRefType : public Type {
 public:
@@ -538,6 +562,9 @@ inline MemRefTypePtr GetMemRefType()
  *
  * `base_ptr` and `offset` are codegen-level annotations (excluded from
  * structural equality) that track the decomposition of chained addptr calls.
+ *
+ * IR Syntax:
+ *      `ptr` `<` dtype `>`
  */
 class PtrType : public Type {
 public:
@@ -585,6 +612,9 @@ using PtrTypePtr = std::shared_ptr<const PtrType>;
  * Represents an opaque token value used for side-effect ordering.
  * Tokens carry no data and are only used to establish dependencies
  * between operations.
+ *
+ * IR Syntax:
+ *      `token`
  */
 class TokenType : public Type {
 public:
@@ -613,6 +643,9 @@ inline TokenTypePtr GetTokenType()
  * \brief None type representation
  *
  * Represents the absence of a value (void-like). Carries no data.
+ *
+ * IR Syntax:
+ *      `none`
  */
 class NoneType : public Type {
 public:
@@ -642,6 +675,9 @@ inline NoneTypePtr GetNoneType()
  *
  * Represents a logical tensor with dtype and shape, without memory allocation info.
  * Used for tensor values in the PIL/IR layer before memory planning.
+ *
+ * IR Syntax:
+ *      `tensor`
  */
 class LogicalTensorType : public Type {
 public:

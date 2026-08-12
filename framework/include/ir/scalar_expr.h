@@ -36,6 +36,9 @@ using OpPtr = std::shared_ptr<const Op>;
  * \brief Constant numeric expression
  *
  * Represents a constant numeric value.
+ *
+ * IR Syntax:
+ *      C
  */
 class ConstInt : public Expr {
 public:
@@ -82,6 +85,9 @@ using ConstIntPtr = std::shared_ptr<const ConstInt>;
  * \brief Constant floating-point expression
  *
  * Represents a constant floating-point value.
+ *
+ * IR Syntax:
+ *      C
  */
 class ConstFloat : public Expr {
 public:
@@ -129,6 +135,9 @@ using ConstFloatPtr = std::shared_ptr<const ConstFloat>;
  * \brief Constant boolean expression
  *
  * Represents a constant boolean value.
+ *
+ * IR Syntax:
+ *      C
  */
 class ConstBool : public Expr {
 public:
@@ -167,6 +176,9 @@ using ConstBoolPtr = std::shared_ptr<const ConstBool>;
  * \brief Base class for binary expressions
  *
  * Abstract base for all operations with two operands.
+ *
+ * IR Syntax:
+ *      `(` left_ op right_ `)`
  */
 class BinaryExpr : public Expr {
 public:
@@ -238,6 +250,9 @@ DEFINE_BINARY_EXPR_NODE(BitShiftRight, "Bitwise right shift expression (left >> 
  * \brief Base class for unary expressions
  *
  * Abstract base for all operations with one operand.
+ *
+ * IR Syntax:
+ *      `(` op operand_ `)`
  */
 class UnaryExpr : public Expr {
 public:
