@@ -232,7 +232,7 @@ class JitCallableWrapper:
         verify_options: Optional[dict[str, Any]] = None,
         debug_options: Optional[dict[str, Any]] = None,
         captured_locals: Optional[dict[str, Any]] = None,
-        new_ir: bool = False,
+        new_ir: bool = True,
     ):
         """Initialize the JIT callable wrapper with compilation and runtime configurations.
 
@@ -1139,7 +1139,7 @@ def jit(
     runtime_options: Optional[dict[str, Any]] = None,
     verify_options: Optional[dict[str, Any]] = None,
     debug_options: Optional[dict[str, Any]] = None,
-    new_ir: bool = False,
+    new_ir: bool = True,
     create_new_logical_tensor: bool = False,
 ) -> Union[Callable, Callable[[Callable], JitCallableWrapper]]:
     """JIT decorator for compiling Python functions to PTO IR.

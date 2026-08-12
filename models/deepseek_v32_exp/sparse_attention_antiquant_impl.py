@@ -283,6 +283,7 @@ def options_list():
 @pypto.frontend.jit(
     pass_options=options_list()["pass_options"],
     runtime_options=options_list()["runtime_options"],
+    new_ir=False,
 )
 def sparse_attention_antiquant_d(
     query_nope: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),

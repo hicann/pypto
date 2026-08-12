@@ -39,7 +39,7 @@ def test_python_error_codes_are_bound_from_cpp():
 def test_varargs_error():
     """Test that variable-length arguments trigger proper error handling."""
 
-    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM}, new_ir=False)
     def varargs_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32), *args):
         out[:] = x
 
@@ -53,7 +53,7 @@ def test_varargs_error():
 def test_kwargs_error():
     """Test that keyword arguments trigger proper error handling."""
 
-    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM}, new_ir=False)
     def kwargs_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32), **kwargs):
         out[:] = x
 
@@ -67,7 +67,7 @@ def test_kwargs_error():
 def test_error_message_contains_error_code():
     """Test that error messages contain error codes."""
 
-    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM}, new_ir=False)
     def varargs_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.DT_FP32), *args):
         out[:] = x
 
@@ -130,6 +130,7 @@ def test_error_on_input_tensor_reassign():
     """Test that reassigning input tensor triggers ParserError."""
 
     @pypto.frontend.jit(
+        new_ir=False,
         runtime_options={"run_mode": pypto.RunMode.SIM}, host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
     )
     def error_assign_input(
@@ -152,6 +153,7 @@ def test_error_on_first_input_tensor_reassign():
     """Test that reassigning the first input tensor triggers ParserError."""
 
     @pypto.frontend.jit(
+        new_ir=False,
         runtime_options={"run_mode": pypto.RunMode.SIM}, host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
     )
     def error_assign_first_input(
@@ -174,6 +176,7 @@ def test_error_location_on_reshape_dynamic_shape(capsys):
     """Test that reshape errors report the exact kernel source location."""
 
     @pypto.frontend.jit(
+        new_ir=False,
         runtime_options={"run_mode": pypto.RunMode.SIM}, host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
     )
     def reshape_dynamic_shape_error(

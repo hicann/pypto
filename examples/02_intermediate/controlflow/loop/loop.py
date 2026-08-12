@@ -128,7 +128,10 @@ def test_loop_basic(device_id: int = None, dynamic: bool = False) -> None:
 # ============================================================================
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
+@pypto.frontend.jit(
+    new_ir=False,
+    runtime_options={"run_mode": global_run_mode}
+)
 def loop_compile_phase_print_kernel(
     in_t0: pypto.Tensor(), in_t1: pypto.Tensor(), out_t0: pypto.Tensor(), out_t1: pypto.Tensor()
 ):

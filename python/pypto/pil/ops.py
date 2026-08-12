@@ -59,6 +59,8 @@ def load_impl(ctx, name):
 
 @impl("pil.store")
 def store_impl(ctx, name, val):
+    if isinstance(val, pypto.SymbolicScalar) and val.is_concrete():
+        val = val.concrete()
     Scope.store(name, val)
 
 

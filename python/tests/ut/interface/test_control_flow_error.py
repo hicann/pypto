@@ -20,7 +20,7 @@ from pypto.error import ParserError
 def test_return_statement_error():
     """Test that return statements in kernel functions raise ParserError."""
 
-    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM}, new_ir=False)
     def kernel_with_return(x: pypto.Tensor([4, 4], pypto.DT_FP32), out: pypto.Tensor([4, 4], pypto.DT_FP32)):
         out[:] = x
         return out
@@ -35,7 +35,7 @@ def test_return_statement_error():
 def test_return_nested_in_if_error():
     """Test that return statements nested in if structures raise ParserError."""
 
-    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM}, new_ir=False)
     def kernel_with_return_in_if(
         x: pypto.Tensor([4, 4], pypto.DT_FP32),
         flag: pypto.Tensor([], pypto.DT_INT32),
@@ -57,7 +57,7 @@ def test_return_nested_in_if_error():
 def test_return_nested_in_for_error():
     """Test that return statements nested in for loops raise ParserError."""
 
-    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM}, new_ir=False)
     def kernel_with_return_in_for(x: pypto.Tensor([4, 4], pypto.DT_FP32), out: pypto.Tensor([4, 4], pypto.DT_FP32)):
         for i in range(4):
             out[i, :] = x[i, :]
@@ -75,7 +75,7 @@ def test_return_nested_in_for_error():
 def test_break_statement_error():
     """Test that break statements in loops raise ParserError."""
 
-    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM}, new_ir=False)
     def kernel_with_break(x: pypto.Tensor([4, 4], pypto.DT_FP32), out: pypto.Tensor([4, 4], pypto.DT_FP32)):
         for i in range(4):
             if i == 2:
@@ -91,7 +91,7 @@ def test_break_statement_error():
 def test_continue_statement_error():
     """Test that continue statements in loops raise ParserError."""
 
-    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM}, new_ir=False)
     def kernel_with_continue(x: pypto.Tensor([4, 4], pypto.DT_FP32), out: pypto.Tensor([4, 4], pypto.DT_FP32)):
         for i in range(4):
             if i % 2 == 0:

@@ -744,6 +744,7 @@ def ifa_func_kernel_for_910_high_performance(
     },
     host_options={"compile_monitor_enable": 0},
     debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0},
+    new_ir=False,
 )
 def ifa_func_kernel_for_910_s1_range_high_performance(
     q: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),

@@ -29,6 +29,7 @@ K_TILE = 320
 
 
 @pypto.frontend.jit(
+    new_ir=False,
     debug_options={
         "runtime_debug_mode": 0,
     },
