@@ -21,6 +21,7 @@
 #include "adapter/api/runtime_api.h"
 #include "adapter/api/runtime_capture_context.h"
 #include "adapter/manager/adapter_manager.h"
+#include "adapter/stubs/adump_stubs.h"
 #include "tilefwk/error.h"
 
 namespace npu::tile_fwk {
@@ -166,6 +167,16 @@ TEST_F(TestAdapterApi, test_adump_api)
     tensorInfo.originShape = {1, 128};
     std::vector<AdxTensorInfoV2> tensors = {tensorInfo};
     CHECK_API_RET(AdxDumpDumpTensorV2("op_name", "op_type", tensors, nullptr), 0);
+    CHECK_API_RET(AdxDumpDataDumpServerInit(), 0);
+    CHECK_API_RET(AdxDumpDataDumpServerUnInit(), 0);
+}
+
+TEST_F(TestAdapterApi, test_adump_stubs)
+{
+    EXPECT_EQ(StubDumpGetDumpSwitch(AdxDumpType::OPERATOR), 0);
+    EXPECT_EQ(StubDumpDumpTensorV2("op_name", "op_type", {}, nullptr), 0);
+    EXPECT_EQ(StubDumpDataDumpServerInit(), 0);
+    EXPECT_EQ(StubDumpDataDumpServerUnInit(), 0);
 }
 
 TEST_F(TestAdapterApi, test_hal_api)
@@ -297,6 +308,12 @@ TEST_F(TestAdapterApi, test_adump_api_with_valid_params)
     std::vector<AdxTensorInfoV2> tensors = {tensorInfo};
     auto dumpRet = AdxDumpDumpTensorV2("op_name", "op_type", tensors, nullptr);
     EXPECT_EQ(dumpRet, 0);
+
+    auto serverInitRet = AdxDumpDataDumpServerInit();
+    EXPECT_EQ(serverInitRet, 0);
+
+    auto serverUnInitRet = AdxDumpDataDumpServerUnInit();
+    EXPECT_EQ(serverUnInitRet, 0);
 }
 
 TEST_F(TestAdapterApi, test_hal_api_with_valid_params)
@@ -410,6 +427,10 @@ TEST_F(TestAdapterApi, test_adump_adapter)
     EXPECT_EQ(
         AdapterManager::Instance().GetAdumpAdapter().GetFunction(AdumpFunc::DumpFailTaskExceptionCallBack) != nullptr,
         loaded);
+    EXPECT_EQ(AdapterManager::Instance().GetAdumpAdapter().GetFunction(AdumpFunc::DataDumpServerInit) != nullptr,
+              loaded);
+    EXPECT_EQ(AdapterManager::Instance().GetAdumpAdapter().GetFunction(AdumpFunc::DataDumpServerUnInit) != nullptr,
+              loaded);
 }
 
 TEST_F(TestAdapterApi, test_hal_adapter)
@@ -668,6 +689,9 @@ TEST_F(TestAdapterApi, test_adump_api_with_device)
     tensorInfo.originShape = {1, 128};
     std::vector<AdxTensorInfoV2> tensors = {tensorInfo};
     EXPECT_EQ(AdxDumpDumpTensorV2("op_name", "op_type", tensors, nullptr), 0);
+
+    EXPECT_EQ(AdxDumpDataDumpServerInit(), 0);
+    EXPECT_EQ(AdxDumpDataDumpServerUnInit(), 0);
 }
 
 TEST_F(TestAdapterApi, test_hal_api_with_device)

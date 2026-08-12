@@ -24,4 +24,6 @@ namespace npu::tile_fwk {
 uint64_t StubDumpGetDumpSwitch(const AdxDumpType dumpType);
 int32_t StubDumpDumpTensorV2(const std::string& opType, const std::string& opName,
                              const std::vector<AdxTensorInfoV2>& tensors, AclRtStream stream);
+int32_t StubDumpDataDumpServerInit();
+int32_t StubDumpDataDumpServerUnInit();
 } // namespace npu::tile_fwk

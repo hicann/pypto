@@ -34,4 +34,16 @@ int32_t StubDumpDumpTensorV2(const std::string& opType, const std::string& opNam
     (void)stream;
     return 0;
 }
+
+int32_t StubDumpDataDumpServerInit()
+{
+    ADAPTER_LOGD("Enter stub function of AdxDataDumpServerInit.");
+    return 0;
+}
+
+int32_t StubDumpDataDumpServerUnInit()
+{
+    ADAPTER_LOGD("Enter stub function of AdxDataDumpServerUnInit.");
+    return 0;
+}
 } // namespace npu::tile_fwk

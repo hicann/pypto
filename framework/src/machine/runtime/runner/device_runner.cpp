@@ -42,9 +42,6 @@
 #include "machine/utils/machine_ws_intf.h"
 #include "securec.h"
 
-extern "C" {
-__attribute__((weak)) int AdxDataDumpServerUnInit();
-}
 namespace npu::tile_fwk {
 namespace {
 constexpr uint32_t MIX_BLOCK_DIM = 2;
@@ -199,12 +196,8 @@ int DeviceRunner::DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlSt
         rcCtrl = RuntimeStreamSynchronize(ctrlStream);
     }
     if (IsPtoDataDumpEnabled()) {
-        if (!AdxDataDumpServerUnInit) {
-            MACHINE_LOGE(DevCommonErr::NULLPTR, "AdxDataDumpServerUnInit function not found (weak symbol is null).");
-        } else {
-            MACHINE_LOGD("DataDumpServerInit is called \n");
-            AdxDataDumpServerUnInit();
-        }
+        MACHINE_LOGD("DataDumpServerUnInit is called \n");
+        (void)AdxDumpDataDumpServerUnInit();
     }
     int retAicorePrint = 0;
     if (static_cast<bool>(ENABLE_AICORE_PRINT)) {

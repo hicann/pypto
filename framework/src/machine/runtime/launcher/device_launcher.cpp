@@ -36,9 +36,6 @@
 #include "machine/host/perf_analysis.h"
 #include "interface/program/program.h"
 
-extern "C" __attribute__((weak)) int AdxDataDumpServerUnInit();
-extern "C" __attribute__((weak)) int AdxDataDumpServerInit();
-
 namespace npu::tile_fwk::dynamic {
 bool DeviceLauncher::inited_ = false;
 std::vector<uint8_t> DeviceLauncher::tensorInfo_(kDefaultTensorinfoSize);
@@ -229,12 +226,8 @@ CachedOperator* DeviceLauncher::GetDevRunCacheOperator(Function* func)
 void DeviceLauncher::DataDumpInit()
 {
     if (IsPtoDataDumpEnabled()) {
-        if (!AdxDataDumpServerInit) {
-            MACHINE_LOGE(DevCommonErr::NULLPTR, "AdxDataDumpServerInit function not found (weak symbol is null).");
-            return;
-        }
         MACHINE_LOGD("DataDumpServerInit is called \n");
-        int sf = AdxDataDumpServerInit();
+        int sf = AdxDumpDataDumpServerInit();
         if (sf != 0) {
             MACHINE_LOGW("ERROR AdxDataDumpServerInit failed \n");
         }
@@ -244,12 +237,8 @@ void DeviceLauncher::DataDumpInit()
 void DeviceLauncher::DataDumpUnInit()
 {
     if (IsPtoDataDumpEnabled()) {
-        if (!AdxDataDumpServerUnInit) {
-            MACHINE_LOGE(DevCommonErr::NULLPTR, "AdxDataDumpServerUnInit function not found (weak symbol is null).");
-            return;
-        }
         MACHINE_LOGD("DataDumpServerUnInit is called \n");
-        int sf = AdxDataDumpServerUnInit();
+        int sf = AdxDumpDataDumpServerUnInit();
         if (sf != 0) {
             MACHINE_LOGW("AdxDataDumpServerUnInit is failed %d \n", sf);
         }

@@ -501,9 +501,12 @@ class CompactDumpTensorInfoParser:
         """
         field_size = FIELD_SIZES[field_type]
         total_bytes = field_size * array_len
-        # 校验数据长度
+        # verify data length
         if offset + total_bytes > len(bin_data):
-            raise ValueError(f"字段解析失败：偏移{offset}，需要{total_bytes}字节，剩余{len(bin_data) - offset}字节")
+            remaining = len(bin_data) - offset
+            raise ValueError(
+                f"Field parse failed: offset {offset}, need {total_bytes} bytes, remaining {remaining} bytes"
+            )
 
         # 构建单个元素的格式符
         fmt_char = {"uint8_t": "B", "uint16_t": "H", "uint32_t": "I", "int32_t": "i", "int64_t": "q", "uint64_t": "Q"}[
@@ -651,7 +654,7 @@ class CompactDumpTensorInfoParser:
     def parse_file(self, file_path: str) -> list[dict]:
         """解析整个紧凑存储的bin文件"""
         if not os.path.exists(file_path):
-            raise FileNotFoundError(f"文件不存在：{file_path}")
+            raise FileNotFoundError(f"File not found: {file_path}")
 
         with open(file_path, "rb") as f:
             bin_data = f.read()

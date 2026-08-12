@@ -25,4 +25,6 @@ int32_t AdxDumpDumpTensorV2(const std::string& opType, const std::string& opName
                             const std::vector<AdxTensorInfoV2>& tensors, AclRtStream stream);
 
 int32_t AdumpRegExceptionDumpCallBack(AdumpExceptionDumpCallback callback);
+int32_t AdxDumpDataDumpServerInit();
+int32_t AdxDumpDataDumpServerUnInit();
 } // namespace npu::tile_fwk
