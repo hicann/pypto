@@ -13,6 +13,7 @@ import ast
 import inspect
 import logging
 import textwrap
+import unittest
 
 import pypto.frontend.parser.pil as pil
 
@@ -22,9 +23,9 @@ LOGGER = logging.getLogger(__name__)
 class Expr:
     trace = []
 
-    def __init__(self, value):
-        self._item_dict = {}
-        self._attr_dict = {}
+    def __init__(self, value, item_dict=None, attr_dict=None):
+        self._item_dict = dict(item_dict) if item_dict else {}
+        self._attr_dict = dict(attr_dict) if attr_dict else {}
         self._value = value
         Expr.trace.append(('init', self._value))
 
@@ -161,6 +162,20 @@ class Expr:
 
     class TypeC(ValueError):  # noqa: N818
         pass
+
+
+class PILTestCase(unittest.TestCase):
+    """Base class for the data-driven pil builder tests.
+
+    Provides a fresh ``Expr.trace`` before each case and a helper to project a
+    ``locals()`` snapshot down to the ``var_``-prefixed names under test.
+    """
+
+    def setUp(self):
+        Expr.trace.clear()
+
+    def get_var(self, local_dict):
+        return {k: v for k, v in local_dict.items() if k.startswith("var_")}
 
 
 class TestParser:

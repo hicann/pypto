@@ -139,6 +139,7 @@ class PILContext:
         self._continue_stack = []
         self._temp_count = 0
         self._prefix = prefix
+        self._ann_assign_in_function = False
 
     @property
     def continue_stack(self) -> list[Optional[tuple[ast.expr, str]]]:
@@ -148,6 +149,15 @@ class PILContext:
         name = f"{self._prefix}{self._temp_count}"
         self._temp_count += 1
         return name
+
+    def ann_assign_in_function_switch(self, switch: bool) -> bool:
+        curr = self._ann_assign_in_function
+        self._ann_assign_in_function = switch
+        return curr
+
+    @property
+    def ann_assign_in_function(self):
+        return self._ann_assign_in_function
 
 
 class PILAttr(Mapping):
@@ -1005,7 +1015,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             dec_stmts, dec_name = self.visit(dec)
             decorator_stmts.extend(dec_stmts)
             decorator_names.append(dec_name)
+
+        curr = self._ctx.ann_assign_in_function_switch(True)
         body_stmt_list, _ = self.visit_stmts(body)
+        self._ctx.ann_assign_in_function_switch(curr)
+
         func_def = self.create_pil_function_def(
             name, args, body_stmt_list, decorator_names, returns, type_comment, node_attr=node_attr
         )
@@ -1296,7 +1310,12 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             value_stmts, value_expr = self.visit(value)
         else:
             value_stmts, value_expr = [], None
-        ann_stmts, _ = self.visit(annotation)
+        if self._ctx.ann_assign_in_function:
+            # In function, annotation is not computed. However, local class level annotations
+            # are still computed for side effects. So we only compute annotation if we are not in a function.
+            ann_stmts = []
+        else:
+            ann_stmts, _ = self.visit(annotation)
         return value_stmts + self.visit_lhs(target, value_expr) + ann_stmts, None
 
     def visit_for(
