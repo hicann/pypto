@@ -391,8 +391,8 @@ Status OptimizeSort::ModifyBuffer(std::map<MemoryType, int64_t>& curMemoryMap, M
             return FAILED;
         }
         curMemoryMap[memType] = curMemoryMap[memType] + size;
-        APASS_LOG_DEBUG_F(Elements::Operation, "Increase %d-memType memory, size: %ld, total memory %ld", memType,
-                          static_cast<long>(size), static_cast<long>(curMemoryMap[memType]));
+        APASS_LOG_DEBUG_F(Elements::Operation, "Increase %d-memType memory, size: %ld bytes, total memory %ld bytes",
+                          memType, static_cast<long>(size), static_cast<long>(curMemoryMap[memType]));
         return SUCCESS;
     }
     if (curMemoryMap[memType] - size < 0) {
@@ -400,7 +400,7 @@ Status OptimizeSort::ModifyBuffer(std::map<MemoryType, int64_t>& curMemoryMap, M
         return FAILED;
     }
     curMemoryMap[memType] = curMemoryMap[memType] - size;
-    APASS_LOG_DEBUG_F(Elements::Operation, "Reduce %d-memType memory, size: %ld, total memory %ld", memType,
+    APASS_LOG_DEBUG_F(Elements::Operation, "Reduce %d-memType memory, size: %ld bytes, total memory %ld bytes", memType,
                       static_cast<long>(size), static_cast<long>(curMemoryMap[memType]));
     return SUCCESS;
 }

@@ -487,6 +487,14 @@ TEST_F(TestGlobalMemoryReuse, TestConnectionMatrix)
     EXPECT_FALSE(invalidResult.GetBit(0));
 }
 
+TEST_F(TestGlobalMemoryReuse, TestLargeBitmapInvalidIndex)
+{
+    LargeBitmap bitmap(4);
+    bitmap.SetBit(99);
+    bitmap.ClearBit(99);
+    EXPECT_FALSE(bitmap.GetBit(99));
+}
+
 TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseNormal)
 {
     ComputationalGraphBuilder G;

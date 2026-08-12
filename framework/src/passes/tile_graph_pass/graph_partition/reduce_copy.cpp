@@ -244,7 +244,7 @@ Status ReduceCopyMerge::BuildGraph(Function& function, MergeInput& mergeInput)
         }
     }
     for (int i = 0; i < subgraphNum; i++) {
-        APASS_LOG_INFO_F(Elements::Operation, "Subgraph %d : AIC Latency %d, AIV Latency %d.", i,
+        APASS_LOG_INFO_F(Elements::Operation, "Subgraph %d : AIC Latency %d cycles, AIV Latency %d cycles.", i,
                          mergeInput.subgraphAICLatency[i], mergeInput.subgraphAIVLatency[i]);
     }
     return SUCCESS;
@@ -625,8 +625,8 @@ bool MixGraphMerger::CheckLatencyConstraint(const std::vector<int>& actualGroup)
     }
     int totalLatency = totalAIC + totalAIV;
     if (totalLatency > mInput.maxLatency) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Merge skipped: total latency %d exceeds max latency %d.", totalLatency,
-                          mInput.maxLatency);
+        APASS_LOG_DEBUG_F(Elements::Operation, "Merge skipped: total latency %d cycles exceeds max latency %d cycles.",
+                          totalLatency, mInput.maxLatency);
         return false;
     }
     double ratio = (double)totalAIV / (double)totalAIC;

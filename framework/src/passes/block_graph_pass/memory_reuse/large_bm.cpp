@@ -51,8 +51,8 @@ void LargeBitmap::ResizeBits(const size_t newSize)
 void LargeBitmap::ClearBit(const size_t bitIdx)
 {
     if (bitIdx >= size_) {
-        APASS_LOG_WARN_F(Elements::Function, "Func LargeBitmap::ClearBit bitIdx %zu is not valid, total size is %zu.",
-                         bitIdx, size_);
+        APASS_LOG_WARN_F(Elements::Function,
+                         "Func LargeBitmap::ClearBit bitIdx %zu is not valid, total size is %zu bits.", bitIdx, size_);
         return;
     }
     bits_[bitIdx >> RIGHT_SHIFT_SIZE] &= ~(1UL << (bitIdx % BITS_EACH_VALUE));
@@ -69,7 +69,7 @@ void LargeBitmap::SetValues(const uint64_t& value) { std::fill(bits_.begin(), bi
 void LargeBitmap::SetBit(const size_t& index)
 {
     if (index >= size_) {
-        APASS_LOG_WARN_F(Elements::Function, "Index %zu is not valid, total size is %zu.", index, size_);
+        APASS_LOG_WARN_F(Elements::Function, "Index %zu is not valid, total size is %zu bits.", index, size_);
         return;
     }
     bits_[index / BITS_EACH_VALUE] |= 1UL << (index % BITS_EACH_VALUE);
@@ -78,7 +78,7 @@ void LargeBitmap::SetBit(const size_t& index)
 bool LargeBitmap::GetBit(const size_t& index) const
 {
     if (index >= size_) {
-        APASS_LOG_WARN_F(Elements::Function, "Index %zu is not valid, total size is %zu.", index, size_);
+        APASS_LOG_WARN_F(Elements::Function, "Index %zu is not valid, total size is %zu bits.", index, size_);
         return false;
     }
     return static_cast<bool>(bits_[index / BITS_EACH_VALUE] & (1UL << (index % BITS_EACH_VALUE)));

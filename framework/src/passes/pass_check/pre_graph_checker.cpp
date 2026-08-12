@@ -129,7 +129,8 @@ Status PreGraphProcessChecker::PostCheckHelpFunc(const LogicalTensor& singleTens
     }
     if (singleTensor.MemorySize() < 1 && !singleTensor.IsDummy()) {
         // 是否存在 dummy tensor
-        APASS_LOG_INFO_F(Elements::Tensor, "Tensor magic: %d, its memory size %zu should be over than 0, but not.",
+        APASS_LOG_INFO_F(Elements::Tensor,
+                         "Tensor magic: %d, its memory size %zu bytes should be over than 0, but not.",
                          singleTensor.GetMagic(), singleTensor.MemorySize());
     }
     return SUCCESS;

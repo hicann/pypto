@@ -1530,7 +1530,7 @@ Status AssignMemoryType::ApplyOversizedLocalBufferFallback(Function& function)
         Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
     const size_t l1Threshold = static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) *
                                                    L1_THRESHOLD);
-    APASS_LOG_INFO_F(Elements::Function, "Memory threshold: UB assemble %zu, UB normal %zu, L1 %zu.",
+    APASS_LOG_INFO_F(Elements::Function, "Memory threshold: UB assemble %zu bytes, UB normal %zu bytes, L1 %zu bytes.",
                      ubAssembleThreshold, ubNormalThreshold, l1Threshold);
     for (auto& op : function.Operations()) {
         RETURN_IF_NOT_SUCCESS(ApplyOversizedLocalBufferFallback(op));

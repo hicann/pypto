@@ -356,7 +356,8 @@ bool InferMemoryConflict::CheckRawShapeConflict(const LogicalTensorPtr& inTensor
         return true;
     }
     if (inRawSize > 0 && outRawSize > 0 && inRawSize != outRawSize) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "The raw size of input is %ld, the raw size of output is %ld", inRawSize,
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "The raw size of input is %ld bytes, the raw size of output is %ld bytes", inRawSize,
                           outRawSize);
         return true;
     }

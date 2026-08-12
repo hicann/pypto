@@ -1015,7 +1015,8 @@ Status DualDstEngine::ResolveDualDstMemAndBuf(Operation* allocOp, DualDstAllocCt
     ctx.bufA = state_.localBufferMap[ctx.memIdA];
     ctx.bufB = state_.localBufferMap[ctx.memIdB];
     if (ctx.bufA == nullptr || ctx.bufB == nullptr || ctx.bufA->size != ctx.bufB->size) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "DualDst[%d]: missing localBuffer or size mismatch (A=%lu B=%lu).",
+        APASS_LOG_ERROR_F(Elements::Tensor,
+                          "DualDst[%d]: missing localBuffer or size mismatch (A=%lu bytes B=%lu bytes).",
                           allocOp->GetOpMagic(), ctx.bufA ? ctx.bufA->size : 0, ctx.bufB ? ctx.bufB->size : 0);
         return FAILED;
     }
@@ -1144,24 +1145,24 @@ Status DualDstEngine::AllocateDualDstAtCurrent(Operation* allocA, bool& allocate
         return SUCCESS;
     }
     if (poolForA.AllocateAtOffset(ctx.bufA, *off) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "DualDst alloc[%d]: AllocateAtOffset poolForA failed at offset %lu.",
+        APASS_LOG_ERROR_F(Elements::Tensor, "DualDst alloc[%d]: AllocateAtOffset poolForA failed at offset %lu bytes.",
                           allocA->GetOpMagic(), *off);
         return FAILED;
     }
     if (poolForB.AllocateAtOffset(ctx.bufB, *off) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Tensor,
-                          "DualDst alloc[%d]: AllocateAtOffset poolForB failed at offset %lu, rollback.",
+                          "DualDst alloc[%d]: AllocateAtOffset poolForB failed at offset %lu bytes, rollback.",
                           allocA->GetOpMagic(), *off);
         (void)poolForA.Free(ctx.memIdA);
         return FAILED;
     }
     // dualdst 会同时在两个 UB 池分配，两侧各打一条事件。
-    APASS_LOG_DEBUG_F(Elements::Operation, "[pool-evt] alloc clock=%llu core=%d mt=0 memId=%d size=%llu dualdst=A",
-                      (unsigned long long)state_.clock, static_cast<int>(ctx.coreA), ctx.memIdA,
-                      (unsigned long long)ctx.bufA->size);
-    APASS_LOG_DEBUG_F(Elements::Operation, "[pool-evt] alloc clock=%llu core=%d mt=0 memId=%d size=%llu dualdst=B",
-                      (unsigned long long)state_.clock, static_cast<int>(ctx.coreB), ctx.memIdB,
-                      (unsigned long long)ctx.bufB->size);
+    APASS_LOG_DEBUG_F(
+        Elements::Operation, "[pool-evt] alloc clock=%llu cycles core=%d mt=0 memId=%d size=%llu bytes dualdst=A",
+        (unsigned long long)state_.clock, static_cast<int>(ctx.coreA), ctx.memIdA, (unsigned long long)ctx.bufA->size);
+    APASS_LOG_DEBUG_F(
+        Elements::Operation, "[pool-evt] alloc clock=%llu cycles core=%d mt=0 memId=%d size=%llu bytes dualdst=B",
+        (unsigned long long)state_.clock, static_cast<int>(ctx.coreB), ctx.memIdB, (unsigned long long)ctx.bufB->size);
     CommitDualDstAlloc(allocA, ctx, *off);
     allocated = true;
     return SUCCESS;

@@ -410,7 +410,7 @@ Status OoOScheduler::TryRegularAllocOnce(Operation* op, MemoryType memType, Core
         return FAILED;
     }
     // pool-evt 记录单池 alloc 成功时的 clock、memId 和 size，用于重建池占用曲线。
-    APASS_LOG_DEBUG_F(Elements::Operation, "[pool-evt] alloc clock=%llu core=%d mt=%d memId=%d size=%llu",
+    APASS_LOG_DEBUG_F(Elements::Operation, "[pool-evt] alloc clock=%llu cycles core=%d mt=%d memId=%d size=%llu bytes",
                       (unsigned long long)state_.clock, static_cast<int>(coreLocation), static_cast<int>(memType),
                       reqMemIds[0], (unsigned long long)buf->size);
     NotifyAllocExec(op, reqMemIds[0]);

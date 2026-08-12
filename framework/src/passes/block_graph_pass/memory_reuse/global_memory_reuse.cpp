@@ -44,7 +44,7 @@ inline uint64_t Align(const uint64_t n) { return (n + ALIGN_SIZE_IN_BYTE - 1) & 
 void TensorBucket::UpdateOffset(const uint64_t offset)
 {
     offset_ = offset;
-    APASS_LOG_INFO_F(Elements::Tensor, "Updated bucket offset to %lu with %zu tensor groups.", offset,
+    APASS_LOG_INFO_F(Elements::Tensor, "Updated bucket offset to %lu bytes with %zu tensor groups.", offset,
                      tensorGroups_.size());
 
     // 更新存储信息
