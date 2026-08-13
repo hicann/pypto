@@ -437,8 +437,7 @@ int DeviceLauncher::LaunchAicoreKernel(AclRtStream aicoreStream, void* kernel, R
     auto startTime = MspfSysCycleTime();
     auto ret = RuntimeKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &rtTaskCfg);
     devRunner.ReportHostProfInfo(aicoreStream, startTime, blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
-    constexpr bool enableAicoreprint = static_cast<bool>(ENABLE_AICORE_PRINT);
-    if (debugEnable || (enableAicoreprint && !IsCaptureMode()) || IsPtoDataDumpEnabled()) {
+    if (debugEnable || !IsCaptureMode() || IsPtoDataDumpEnabled()) {
         auto scheStream = GetStreamContext().GetScheStream();
         int rc = DeviceSynchronize(scheStream, aicoreStream);
         if (rc != 0) {

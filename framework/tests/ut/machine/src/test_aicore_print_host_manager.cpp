@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "aicore_emulation.h"
 #include "interface/machine/device/tilefwk/aicore_print.h"
 #include "tilefwk/error_code.h"
 
@@ -190,6 +191,119 @@ TEST_F(AicorePrintHostManagerUTest, Enabled_SingleCoreFlow)
         output.append(line);
     }
     EXPECT_NE(output.find("single_core_marker"), std::string::npos);
+
+    mgr.Release();
+}
+
+// 辅助: 向 devBuffer 编码一条带 level+timestamp 的日志
+static void EncodeLogLine(AicoreLogger& enc, uint8_t level, uint64_t ts, const char* msg)
+{
+    enc.EncodeLogLevel(level);
+    enc.EncodeTimestamp(ts);
+    enc.PrintRaw(msg);
+    enc.PrintNewLine();
+}
+
+// 测试 Read 正确返回 level 和 timestamp: 编码 DEBUG/INFO/WARN/ERROR 四条日志, 逐条读取验证
+TEST_F(AicorePrintHostManagerUTest, Enabled_ReadReturnsLevelAndTimestamp)
+{
+    AicorePrintHostManager mgr;
+    DeviceArgs args = MakeArgsWithCores(1, sharedBuf_.data());
+    ASSERT_EQ(mgr.Init(args), 0);
+
+    auto* devPtr = static_cast<uint8_t*>(mgr.devBuffers_[0]);
+    AicoreLogger enc;
+    enc.Init(devPtr, PRINT_BUFFER_SIZE);
+    EncodeLogLine(enc, static_cast<uint8_t>(AicoreLogLevel::DEBUG), 100, "debug_msg");
+    EncodeLogLine(enc, static_cast<uint8_t>(AicoreLogLevel::INFO), 200, "info_msg");
+    EncodeLogLine(enc, static_cast<uint8_t>(AicoreLogLevel::WARN), 300, "warn_msg");
+    EncodeLogLine(enc, static_cast<uint8_t>(AicoreLogLevel::ERROR), 400, "error_msg");
+
+    AicoreLogger reader;
+    reader.BindHostBuffer(devPtr, PRINT_BUFFER_SIZE);
+    char line[512];
+    uint8_t level = static_cast<uint8_t>(AicoreLogLevel::NONE);
+    uint64_t ts = 0;
+
+    ASSERT_GT(reader.Read(line, sizeof(line), &level, &ts), 0);
+    EXPECT_EQ(level, static_cast<uint8_t>(AicoreLogLevel::DEBUG));
+    EXPECT_EQ(ts, 100u);
+    EXPECT_NE(std::string(line).find("debug_msg"), std::string::npos);
+
+    ASSERT_GT(reader.Read(line, sizeof(line), &level, &ts), 0);
+    EXPECT_EQ(level, static_cast<uint8_t>(AicoreLogLevel::INFO));
+    EXPECT_EQ(ts, 200u);
+    EXPECT_NE(std::string(line).find("info_msg"), std::string::npos);
+
+    ASSERT_GT(reader.Read(line, sizeof(line), &level, &ts), 0);
+    EXPECT_EQ(level, static_cast<uint8_t>(AicoreLogLevel::WARN));
+    EXPECT_EQ(ts, 300u);
+    EXPECT_NE(std::string(line).find("warn_msg"), std::string::npos);
+
+    ASSERT_GT(reader.Read(line, sizeof(line), &level, &ts), 0);
+    EXPECT_EQ(level, static_cast<uint8_t>(AicoreLogLevel::ERROR));
+    EXPECT_EQ(ts, 400u);
+    EXPECT_NE(std::string(line).find("error_msg"), std::string::npos);
+
+    mgr.Release();
+}
+
+// 测试 DumpAicoreLog 按级别解码: 多核多级别日志, dump 后用 verifier 验证 head/tail 推进
+TEST_F(AicorePrintHostManagerUTest, Enabled_DumpAicoreLogMultiCoreMultiLevel)
+{
+    AicorePrintHostManager mgr;
+    DeviceArgs args = MakeArgsWithCores(TEST_NUM_CORES, sharedBuf_.data());
+    ASSERT_EQ(mgr.Init(args), 0);
+
+    for (uint32_t i = 0; i < TEST_NUM_CORES; i++) {
+        auto* devPtr = static_cast<uint8_t*>(mgr.devBuffers_[i]);
+        AicoreLogger enc;
+        enc.Init(devPtr, PRINT_BUFFER_SIZE);
+        EncodeLogLine(enc, static_cast<uint8_t>(AicoreLogLevel::DEBUG), 1000 + i, "dbg");
+        EncodeLogLine(enc, static_cast<uint8_t>(AicoreLogLevel::INFO), 2000 + i, "inf");
+        EncodeLogLine(enc, static_cast<uint8_t>(AicoreLogLevel::ERROR), 4000 + i, "err");
+    }
+
+    EXPECT_EQ(mgr.DumpAicoreLog(), 0);
+
+    AicoreLogger verifier;
+    verifier.BindHostBuffer(mgr.hostBuf_.data(), mgr.hostBuf_.size());
+    char line[512];
+    uint8_t level = static_cast<uint8_t>(AicoreLogLevel::NONE);
+    uint64_t ts = 0;
+    int readCount = 0;
+    while (verifier.Read(line, sizeof(line), &level, &ts) > 0) {
+        readCount++;
+        EXPECT_NE(ts, 0u);
+    }
+    // 每核3条, TEST_NUM_CORES 核
+    EXPECT_EQ(readCount, 3);
+
+    mgr.Release();
+}
+
+// 测试无 marker 的日志: level 回退为 NONE, timestamp 为 0
+TEST_F(AicorePrintHostManagerUTest, Enabled_ReadWithoutMarkersReturnsDefaults)
+{
+    AicorePrintHostManager mgr;
+    DeviceArgs args = MakeArgsWithCores(1, sharedBuf_.data());
+    ASSERT_EQ(mgr.Init(args), 0);
+
+    auto* devPtr = static_cast<uint8_t*>(mgr.devBuffers_[0]);
+    AicoreLogger enc;
+    enc.Init(devPtr, PRINT_BUFFER_SIZE);
+    enc.PrintRaw("no_marker_msg");
+    enc.PrintNewLine();
+
+    AicoreLogger reader;
+    reader.BindHostBuffer(devPtr, PRINT_BUFFER_SIZE);
+    char line[512];
+    uint8_t level = 0xFF;
+    uint64_t ts = 999;
+    ASSERT_GT(reader.Read(line, sizeof(line), &level, &ts), 0);
+    EXPECT_EQ(level, static_cast<uint8_t>(AicoreLogLevel::NONE));
+    EXPECT_EQ(ts, 0u);
+    EXPECT_NE(std::string(line).find("no_marker_msg"), std::string::npos);
 
     mgr.Release();
 }

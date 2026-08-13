@@ -155,8 +155,18 @@ enum class DataType : uint8_t {
     IndexedFp8E8M0 = 21,
     IndexedHf8 = 22,
     Newline = 23,
+    LogLevelMarker = 24,
+    TimestampMarker = 25,
 };
 }
+
+enum class AicoreLogLevel : uint8_t {
+    DEBUG = 0,
+    INFO = 1,
+    WARN = 2,
+    ERROR = 3,
+    NONE = 0xFF,
+};
 
 struct LogContext {
     void (*PrintInt64)(LogContext* ctx, __gm__ const char** fmt, int64_t val);
@@ -169,6 +179,7 @@ struct LogContext {
     void (*PrintFp8E8M0)(LogContext* ctx, __gm__ const char** fmt, uint8_t rawBits);
     void (*PrintHf8)(LogContext* ctx, __gm__ const char** fmt, uint8_t rawBits);
     void (*PrintNewLine)(LogContext* ctx);
+    uint8_t logLevel{static_cast<uint8_t>(AicoreLogLevel::NONE)};
 };
 
 template <typename ElemT>

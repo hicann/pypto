@@ -65,7 +65,7 @@ public:
         }
     }
 
-    __aicore__ void Init(__gm__ uint8_t* buf, size_t n)
+    __aicore__ void Init(__gm__ uint8_t* buf, size_t n, uint8_t level = static_cast<uint8_t>(AicoreLogLevel::NONE))
     {
         if (n < AicorePrintConst::MIN_BUFFER_TOTAL_SIZE) {
             overflowed_ = true;
@@ -74,6 +74,7 @@ public:
             data_ = nullptr;
             head_ = 0;
             tail_ = 0;
+            ctx_.logLevel = static_cast<uint8_t>(AicoreLogLevel::NONE);
             return;
         }
 
@@ -96,6 +97,7 @@ public:
         ctx_.PrintFp8E8M0 = StaticPrintFp8E8M0;
         ctx_.PrintHf8 = StaticPrintHf8;
         ctx_.PrintNewLine = StaticPrintNewLine;
+        ctx_.logLevel = level;
     }
 
     __aicore__ __gm__ uint8_t* GetBuffer() const { return data_ - sizeof(RemoteHeader); }
@@ -214,6 +216,25 @@ public:
         EncodeByte(static_cast<uint8_t>(AicorePrint::DataType::Newline));
         EncodeByte(static_cast<uint8_t>(AicorePrint::DataType::End));
         Sync();
+    }
+
+    __aicore__ void EncodeLogLevel(uint8_t level)
+    {
+        if (!CheckSpaceForRecord(2)) {
+            return;
+        }
+        EncodeByte(static_cast<uint8_t>(AicorePrint::DataType::LogLevelMarker));
+        EncodeByte(level);
+    }
+
+    __aicore__ void EncodeTimestamp(uint64_t cycle)
+    {
+        constexpr int64_t recordSize = 1 + sizeof(uint64_t);
+        if (!CheckSpaceForRecord(recordSize)) {
+            return;
+        }
+        EncodeByte(static_cast<uint8_t>(AicorePrint::DataType::TimestampMarker));
+        EncodeValue<uint64_t>(cycle);
     }
 
     __aicore__ void EncodeTensorHeader(__gm__ const char* name, int64_t begin, int64_t end)
@@ -346,7 +367,8 @@ public:
 #ifdef __TILE_FWK_HOST__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
-    int Read(char* buf, size_t maxSize, uint32_t maxIterations = 1000)
+    int Read(char* buf, size_t maxSize, uint8_t* outLevel = nullptr, uint64_t* outTimestamp = nullptr,
+             uint32_t maxIterations = 1000)
     {
         if (remote_ == nullptr || data_ == nullptr || size_ == 0) {
             return 0;
@@ -354,6 +376,8 @@ public:
 
         size_t totalWritten = 0;
         head_ = remote_->head_;
+        uint8_t lineLevel = static_cast<uint8_t>(AicoreLogLevel::NONE);
+        uint64_t lineTimestamp = 0;
 
         if (tail_ < remote_->tail_) {
             tail_ = remote_->tail_;
@@ -372,10 +396,30 @@ public:
                     state.tail_++;
                 }
                 if (totalWritten > 0) {
+                    if (outLevel != nullptr) {
+                        *outLevel = lineLevel;
+                    }
+                    if (outTimestamp != nullptr) {
+                        *outTimestamp = lineTimestamp;
+                    }
                     tail_ = state.tail_;
                     lastTensorName_ = state.lastTensorName_;
                     return static_cast<int>(totalWritten);
                 }
+                lineLevel = static_cast<uint8_t>(AicoreLogLevel::NONE);
+                lineTimestamp = 0;
+                continue;
+            }
+
+            if (type == AicorePrint::DataType::LogLevelMarker) {
+                lineLevel = ReadDecodeValue<uint8_t>(state, state.tail_);
+                state.tail_ += sizeof(uint8_t);
+                continue;
+            }
+
+            if (type == AicorePrint::DataType::TimestampMarker) {
+                lineTimestamp = ReadDecodeValue<uint64_t>(state, state.tail_);
+                state.tail_ += sizeof(uint64_t);
                 continue;
             }
 

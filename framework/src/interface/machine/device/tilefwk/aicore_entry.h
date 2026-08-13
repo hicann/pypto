@@ -296,7 +296,8 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
 }
 #endif
 
-INLINE void InitCtx(ExecuteContext* ctx, __gm__ Metrics* metric, volatile __gm__ ParallelDevTask* prallelDevTask)
+INLINE void InitCtx(ExecuteContext* ctx, __gm__ Metrics* metric, volatile __gm__ ParallelDevTask* prallelDevTask,
+                    uint8_t logLevel = static_cast<uint8_t>(AicoreLogLevel::NONE))
 {
     ctx->curLeafTaskParallelIdx = 0; // default init first devtask
     PerfTraceRecord(ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL);
@@ -305,10 +306,11 @@ INLINE void InitCtx(ExecuteContext* ctx, __gm__ Metrics* metric, volatile __gm__
 #if ENABLE_AICORE_PRINT
     auto buffer = reinterpret_cast<__gm__ uint8_t*>(ctx->args->dfxBuffer[SHAK_BUF_PRINT_BUFFER_INDEX]);
     if (buffer != 0 && ctx->logger.GetBuffer() != buffer) {
-        ctx->logger.Init(buffer, PRINT_BUFFER_SIZE);
+        ctx->logger.Init(buffer, PRINT_BUFFER_SIZE, logLevel);
     }
 #endif
     (void)metric;
+    (void)logLevel;
     dcci((__gm__ void*)0, ENTIRE_DATA_CACHE, CACHELINE_OUT);
     return;
 }
@@ -360,7 +362,14 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs, int64_t outputs, int6
     ExecuteContext ctx = {};
     ctx.args = args;
     ctx.blockIdx = blockIdx;
-    ctx.aicoreDevTaskMetric.devTaskMetricEnable = (((__gm__ DevDfxArgs*)devArgs->devDfxArgAddr)->isOpenPerfTrace != 0);
+    __gm__ DevDfxArgs* devDfxAddr = (__gm__ DevDfxArgs*)devArgs->devDfxArgAddr;
+    ctx.aicoreDevTaskMetric.devTaskMetricEnable = devDfxAddr->isOpenPerfTrace != 0;
+    uint8_t aicoreLogLevel = static_cast<uint8_t>(AicoreLogLevel::NONE);
+#if ENABLE_AICORE_PRINT
+    if (devDfxAddr->logLevel >= 0) {
+        aicoreLogLevel = static_cast<uint8_t>(devDfxAddr->logLevel);
+    }
+#endif
     if (ctx.aicoreDevTaskMetric.devTaskMetricEnable && metric->turnNum < MAX_ROUND_NUM) {
         uint64_t round = metric->turnNum;
         ctx.aicoreDevTaskMetric.devTaskMetric = &(metric->aicoreDevTaskInfo[round]);
@@ -384,7 +393,7 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs, int64_t outputs, int6
         DfxProcWhenCoreExit(&ctx, args, metric);
         return; // no data exit
     }
-    InitCtx(&ctx, metric, parallelDevTask);
+    InitCtx(&ctx, metric, parallelDevTask, aicoreLogLevel);
     AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
     while (true) {
         AICORE_TIMEOUT_CHECK_RETURN_VOID(t0, loop_count, AICORE_LEAF_TASK_RUN_TIMEOUT, STAGE_RUN_LEAFTASK_TIMEOUT);

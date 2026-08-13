@@ -61,6 +61,49 @@ INLINE void AiCoreLogF(LogContext* ctx, __gm__ const char* fmt, Ts... args)
     }
 }
 
+template <typename... Ts>
+INLINE void AiCoreLogFWithLevel(LogContext* ctx, uint8_t level, __gm__ const char* fmt, Ts... args)
+{
+    if (ctx && fmt) {
+        auto* logger = reinterpret_cast<AicoreLogger*>(ctx);
+        logger->EncodeLogLevel(level);
+        logger->EncodeTimestamp(get_sys_cnt());
+        (DispatchPrint(ctx, &fmt, args), ...);
+        ctx->PrintRaw(ctx, fmt);
+        if (ctx->PrintNewLine != nullptr) {
+            ctx->PrintNewLine(ctx);
+        }
+    }
+}
+
+#define AICORE_LOGD(ctx, fmt, ...)                                                                       \
+    do {                                                                                                 \
+        if ((ctx) && (ctx)->logLevel <= static_cast<uint8_t>(AicoreLogLevel::DEBUG)) {                   \
+            AiCoreLogFWithLevel((ctx), static_cast<uint8_t>(AicoreLogLevel::DEBUG), fmt, ##__VA_ARGS__); \
+        }                                                                                                \
+    } while (false)
+
+#define AICORE_LOGI(ctx, fmt, ...)                                                                      \
+    do {                                                                                                \
+        if ((ctx) && (ctx)->logLevel <= static_cast<uint8_t>(AicoreLogLevel::INFO)) {                   \
+            AiCoreLogFWithLevel((ctx), static_cast<uint8_t>(AicoreLogLevel::INFO), fmt, ##__VA_ARGS__); \
+        }                                                                                               \
+    } while (false)
+
+#define AICORE_LOGW(ctx, fmt, ...)                                                                      \
+    do {                                                                                                \
+        if ((ctx) && (ctx)->logLevel <= static_cast<uint8_t>(AicoreLogLevel::WARN)) {                   \
+            AiCoreLogFWithLevel((ctx), static_cast<uint8_t>(AicoreLogLevel::WARN), fmt, ##__VA_ARGS__); \
+        }                                                                                               \
+    } while (false)
+
+#define AICORE_LOGE(ctx, fmt, ...)                                                                       \
+    do {                                                                                                 \
+        if ((ctx) && (ctx)->logLevel <= static_cast<uint8_t>(AicoreLogLevel::ERROR)) {                   \
+            AiCoreLogFWithLevel((ctx), static_cast<uint8_t>(AicoreLogLevel::ERROR), fmt, ##__VA_ARGS__); \
+        }                                                                                                \
+    } while (false)
+
 #if defined(__TILE_FWK_AICORE__) && defined(TILEOP_UTILS_TUPLE_H)
 
 template <size_t I, typename ShapeTuple>
@@ -79,8 +122,9 @@ template <size_t N>
 INLINE void LogShapeDims(LogContext* ctx, const int64_t (&dims)[AicorePrintConst::MAX_SHAPE_DIMS],
                          __gm__ const char* name = nullptr)
 {
-    // PrintRaw avoids DispatchPrint's is_pointer_v→PrintInt64 path which leaks ^C into output.
     auto* logger = reinterpret_cast<AicoreLogger*>(ctx);
+    logger->EncodeLogLevel(ctx->logLevel);
+    logger->EncodeTimestamp(get_sys_cnt());
     if (name) {
         logger->PrintRaw(name);
     } else {
@@ -109,6 +153,8 @@ INLINE void PrintTensorImpl(LogContext* ctx, PtrT data, int64_t end, int64_t beg
 {
     using ElemT = std::remove_cv_t<T>;
     auto* logger = reinterpret_cast<AicoreLogger*>(ctx);
+    logger->EncodeLogLevel(ctx->logLevel);
+    logger->EncodeTimestamp(get_sys_cnt());
     logger->EncodeTensorHeader(name, begin, end);
     logger->Sync();
 

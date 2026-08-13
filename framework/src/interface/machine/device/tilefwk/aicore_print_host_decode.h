@@ -218,9 +218,37 @@ inline int DecodeLegacyRecord(DecodeState& state, AicorePrint::DataType type, ch
     }
 }
 
+inline int DecodeLogLevelMarker(DecodeState& state, char* buf, size_t maxSize)
+{
+    uint8_t level = ReadDecodeValue<uint8_t>(state, state.tail_);
+    state.tail_ += sizeof(uint8_t);
+
+    const char* tag = "";
+    switch (static_cast<AicoreLogLevel>(level)) {
+        case AicoreLogLevel::DEBUG:
+            tag = "[DEBUG] ";
+            break;
+        case AicoreLogLevel::INFO:
+            tag = "[INFO] ";
+            break;
+        case AicoreLogLevel::WARN:
+            tag = "[WARN] ";
+            break;
+        case AicoreLogLevel::ERROR:
+            tag = "[ERROR] ";
+            break;
+        default:
+            return 0;
+    }
+    return snprintf_s(buf, maxSize, maxSize - 1, "%s", tag);
+}
+
 inline int DecodeRecordImpl(DecodeState& state, AicorePrint::DataType type, char* buf, size_t maxSize)
 {
     switch (type) {
+        case AicorePrint::DataType::LogLevelMarker:
+            return DecodeLogLevelMarker(state, buf, maxSize);
+
         case AicorePrint::DataType::TensorHeader:
             return DecodeTensorHeader(state, buf, maxSize);
 

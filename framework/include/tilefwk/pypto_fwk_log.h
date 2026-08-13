@@ -126,4 +126,22 @@
 #define PYPTO_LOGE(...) PYPTO_HOST_LOG_WITHOUT_MODULE(DLOG_ERROR, __VA_ARGS__)
 #define PYPTO_LOGE_FULL(fmt, ...) PYPTO_HOST_SPLIT_LOG_WITHOUT_MODULE(DLOG_ERROR, fmt, ##__VA_ARGS__)
 
+#define AICORE_HOST_LOG_INNER(level, fmt, ...)                                                                       \
+    do {                                                                                                             \
+        if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                             \
+            npu::tile_fwk::LogFuncInfo::Instance().setAttr(false);                                                   \
+        }                                                                                                            \
+        if (npu::tile_fwk::LogFuncInfo::Instance().checkLevel != nullptr &&                                          \
+            npu::tile_fwk::LogFuncInfo::Instance().record != nullptr) {                                              \
+            if (npu::tile_fwk::LogFuncInfo::Instance().checkLevel(PYPTO, level, npu::tile_fwk::LogModule::AICORE)) { \
+                npu::tile_fwk::LogFuncInfo::Instance().record(PYPTO, level, fmt, ##__VA_ARGS__);                     \
+            }                                                                                                        \
+        }                                                                                                            \
+    } while (0)
+
+#define AICORE_HOST_LOGD(fmt, ...) AICORE_HOST_LOG_INNER(DLOG_DEBUG, fmt, ##__VA_ARGS__)
+#define AICORE_HOST_LOGI(fmt, ...) AICORE_HOST_LOG_INNER(DLOG_INFO, fmt, ##__VA_ARGS__)
+#define AICORE_HOST_LOGW(fmt, ...) AICORE_HOST_LOG_INNER(DLOG_WARN, fmt, ##__VA_ARGS__)
+#define AICORE_HOST_LOGE(fmt, ...) AICORE_HOST_LOG_INNER(DLOG_ERROR, fmt, ##__VA_ARGS__)
+
 #endif

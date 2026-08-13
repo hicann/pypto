@@ -102,8 +102,24 @@ int AicorePrintHostManager::DumpAicoreLog()
         logger.BindHostBuffer(hostBuf_.data(), hostBuf_.size());
         constexpr int lineSize = 512;
         char line[lineSize];
-        while (logger.Read(line, lineSize) > 0) {
-            MACHINE_LOGI("core-%u %s", i, line);
+        uint8_t level = static_cast<uint8_t>(AicoreLogLevel::NONE);
+        uint64_t timestamp = 0;
+        while (logger.Read(line, lineSize, &level, &timestamp) > 0) {
+            switch (static_cast<AicoreLogLevel>(level)) {
+                case AicoreLogLevel::DEBUG:
+                    AICORE_HOST_LOGD("[AICORE][Core-%u](time:%lu) %s", i, timestamp, line);
+                    break;
+                case AicoreLogLevel::WARN:
+                    AICORE_HOST_LOGW("[AICORE][Core-%u](time:%lu) %s", i, timestamp, line);
+                    break;
+                case AicoreLogLevel::ERROR:
+                    AICORE_HOST_LOGE("[AICORE][Core-%u](time:%lu) %s", i, timestamp, line);
+                    break;
+                case AicoreLogLevel::INFO:
+                default:
+                    AICORE_HOST_LOGI("[AICORE][Core-%u](time:%lu) %s", i, timestamp, line);
+                    break;
+            }
         }
     }
     MACHINE_LOGD("DumpAicoreLog: done, retCode=%d", retCode);

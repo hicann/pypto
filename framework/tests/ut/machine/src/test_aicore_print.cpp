@@ -16,6 +16,7 @@
 #include <vector>
 #include <limits>
 
+#include "aicore_emulation.h"
 #include "interface/machine/device/tilefwk/aicore_print.h"
 
 using namespace npu::tile_fwk;
@@ -764,9 +765,6 @@ TEST_F(AiCorePrintUTest, Fp8E5M2Const_CorrectValues)
 // ============================================================================
 // Section 9: 编译条件功能测试 - 宏定义值验证
 // ============================================================================
-
-// 测试 ENABLE_AICORE_PRINT 宏默认为 0(打印功能关闭)
-TEST_F(AiCorePrintUTest, CompileConditions_EnableAicorePrint) { EXPECT_EQ(ENABLE_AICORE_PRINT, 0); }
 
 // 测试 CACHE_LINE_SIZE 宏为 64 字节
 TEST_F(AiCorePrintUTest, CompileConditions_CacheLineSize) { EXPECT_EQ(CACHE_LINE_SIZE, 64); }
@@ -1772,7 +1770,7 @@ TEST_F(AiCorePrintUTest, HostLogger_ReadMaxIterationsLimit)
     }
 
     char readBuf[512];
-    int bytesRead = logger.Read(readBuf, sizeof(readBuf), 2);
+    int bytesRead = logger.Read(readBuf, sizeof(readBuf));
     EXPECT_GE(bytesRead, 0);
 }
 
