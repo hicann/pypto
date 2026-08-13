@@ -461,7 +461,6 @@ void CCECodegen::PreScanKernel(const ir::FunctionPtr& kernel_func)
 
 void CCECodegen::PrepareBodyGeneration()
 {
-    PreScanValidShapes();
     tuple_var_to_make_tuple_.clear();
     tuple_backing_arr_.clear();
     loop_target_stack_.clear();
@@ -2445,16 +2444,6 @@ bool CCECodegen::ShouldSkipVPipeMutex(ir::PipeType pipe, const std::vector<int>&
         }
     }
     return true;
-}
-
-void CCECodegen::PreScanValidShapes()
-{
-    // set_validshape is guaranteed to precede any load/store that uses the same tile.
-    // Shape registration is therefore handled at emit-time by RegisterTileEmitShape()
-    // (called from MakeBlockOutSetValidShapeCodegenCCE), so no pre-scan is needed.
-    // This function clears the emit-time map so each GenerateSingle
-    // call starts with a clean slate.
-    tile_emit_shape_.clear();
 }
 
 void CCECodegen::CollectTensorDefs(const ir::FunctionPtr& func)

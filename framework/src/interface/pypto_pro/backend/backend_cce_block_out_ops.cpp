@@ -256,70 +256,34 @@ static std::string MakeBlockOutRowExpandCodegenCCE(const std::string& cce_op_nam
 }
 
 // ============================================================================
-// Helper: Resolve the (row, col) SetShape expressions from the tile's declared
-// TileType shape (ConstInt dims only). This is the no-set_validshape fallback:
-// EmitSetShapeIfDynamic only reaches here when the tile has no cached valid
-// window, so the tile's own full shape is the correct value.
-// Returns ("", "") when a dimension cannot be statically resolved.
-// ============================================================================
-static std::pair<std::string, std::string> ResolveEffectiveTileShape(const ir::ExprPtr& tile_arg)
-{
-    auto dim_from_type = [](const ir::ExprPtr& dim_expr) -> std::string {
-        if (!dim_expr)
-            return "";
-        if (auto ci = ir::As<ir::ConstInt>(dim_expr))
-            return std::to_string(ci->value_);
-        return ""; // dynamic var  -  cannot embed as literal
-    };
-
-    if (!tile_arg)
-        return {"", ""};
-    auto tile_type = ir::As<ir::TileType>(tile_arg->GetType());
-    if (!tile_type || tile_type->shape_.size() < 2)
-        return {"", ""};
-    return {dim_from_type(tile_type->shape_[0]), dim_from_type(tile_type->shape_[1])};
-}
-
-// ============================================================================
 // Helper: Emit SetShape<DIM_3, DIM_4> before TASSIGN.
 // GlobalTensor shapes use Shape<1,1,1,-1,-1>; only DIM_3 and DIM_4 are dynamic.
 // Must NOT be called for NZ-layout tensors (their shape is fully static).
 //
-// When the tile has a set_validshape, the GM tensor's (row, col) is taken from
-// the tile's RUNTIME valid shape via GetValidRow()/GetValidCol() rather than a
-// host-side expression. This is correct no matter where set_validshape was
-// emitted: a single straight-line call, a value selected in if/else and set
-// once, or set_validshape duplicated inside separate if/else branches. The old
-// scheme cached the textually-last set_validshape (row, col) strings, which did
-// not match the runtime-taken branch and over-sized the DMA (nBurst = gShape3),
-// faulting on every non-corner tile. Reading the tile back removes that coupling.
-//
-// When no set_validshape was issued the tile carries no dynamic valid window, so
-// fall back to its declared full TileType shape (unchanged behavior).
+// The GM transfer shape is always derived from the tile's RUNTIME valid region
+// via GetValidRow()/GetValidCol(). Every generated tile carries DYNAMIC (-1)
+// valid template params unless the user pinned an explicit static valid_shape;
+// GetValidRow()/GetValidCol() therefore return either the static template
+// constant or the runtime value set by the last SetValidShape executed on the
+// current path. This is path-sensitive by construction — correct for straight
+// line calls, if/else with set_validshape in one or both branches, and loop
+// buffer reuse — and removes the need for the emit-time tile_emit_shape_ map
+// (which cached the textually-last set_validshape and could not match the
+// runtime-taken branch).
 // ============================================================================
-static void EmitSetShapeIfDynamic(codegen::CCECodegen& codegen, const std::string& tensor_var,
-                                  const std::string& tile_cpp_name, const ir::ExprPtr& tile_arg)
+static void EmitSetShapeFromTile(codegen::CCECodegen& codegen, const std::string& tensor_var,
+                                 const std::string& tile_cpp_name)
 {
-    auto cached = codegen.LookupTileEmitShape(tile_cpp_name);
-    if (cached.has_value()) {
-        codegen.Emit(tensor_var + ".SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>(" +
-                     "static_cast<int64_t>(" + tile_cpp_name + ".GetValidRow()), " + "static_cast<int64_t>(" +
-                     tile_cpp_name + ".GetValidCol()));");
-        return;
-    }
-
-    auto [row_expr, col_expr] = ResolveEffectiveTileShape(tile_arg);
-    if (row_expr.empty() || col_expr.empty())
-        return;
     codegen.Emit(tensor_var + ".SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>(" +
-                 "static_cast<int64_t>(" + row_expr + "), " + "static_cast<int64_t>(" + col_expr + "));");
+                 "static_cast<int64_t>(" + tile_cpp_name + ".GetValidRow()), " + "static_cast<int64_t>(" +
+                 tile_cpp_name + ".GetValidCol()));");
 }
 
 // ============================================================================
 // block.load  -  args = [out_tile, tensor, offsets]
 // Emits: [SetShape<DIM_3,DIM_4>(...);] TASSIGN(tensor_global, ptr + offset); TLOAD(out_tile, tensor_global);
-// SetShape is emitted automatically when the tensor has dynamic dims and a
-// set_validshape was previously issued for out_tile (cache lookup).
+// SetShape is emitted when the tensor has dynamic dims; the transfer shape is
+// always read from the tile's runtime valid region (GetValidRow/Col).
 // ============================================================================
 static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
@@ -348,7 +312,7 @@ static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::Co
     std::string out_name = codegen.GetExprAsCode(op->args_[0]);
 
     if (!cce::IsNZTensorType(src_tensor_type)) {
-        EmitSetShapeIfDynamic(codegen, src_tensor_var, out_name, op->args_[0]);
+        EmitSetShapeFromTile(codegen, src_tensor_var, out_name);
     }
     codegen.Emit("TASSIGN(" + src_tensor_var + ", " + src_ptr + " + " + offset + ");");
     codegen.Emit("TLOAD(" + out_name + ", " + src_tensor_var + ");");
@@ -358,8 +322,8 @@ static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::Co
 // ============================================================================
 // block.store  -  args = [output_tensor, tile, offsets]
 // Emits: [SetShape<DIM_3,DIM_4>(...);] TASSIGN(tensor_global, ptr + offset); TSTORE(tensor_global, tile);
-// SetShape is emitted automatically when the tensor has dynamic dims and a
-// set_validshape was previously issued for the src tile (cache lookup).
+// SetShape is emitted when the tensor has dynamic dims; the transfer shape is
+// always read from the tile's runtime valid region (GetValidRow/Col).
 // ============================================================================
 static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
@@ -384,7 +348,7 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
     std::string dst_ptr = codegen.GetPointer(dst_tensor_var);
 
     if (!cce::IsNZTensorType(dst_tensor_type)) {
-        EmitSetShapeIfDynamic(codegen, dst_tensor_var, src_tile, op->args_[1]);
+        EmitSetShapeFromTile(codegen, dst_tensor_var, src_tile);
     }
     codegen.Emit("TASSIGN(" + dst_tensor_var + ", " + dst_ptr + " + " + offset + ");");
 
@@ -527,7 +491,7 @@ static std::string MakeBlockOutStoreFpCodegenCCE(const ir::CallPtr& op, codegen:
     std::string fp_tile = codegen.GetExprAsCode(op->args_[2]);
 
     if (!cce::IsNZTensorType(dst_tensor_type)) {
-        EmitSetShapeIfDynamic(codegen, dst_tensor_var, src_tile, op->args_[1]);
+        EmitSetShapeFromTile(codegen, dst_tensor_var, src_tile);
     }
     codegen.Emit("TASSIGN(" + dst_tensor_var + ", " + dst_ptr + " + " + offset + ");");
     codegen.Emit("TSTORE_FP(" + dst_tensor_var + ", " + src_tile + ", " + fp_tile + ");");
@@ -713,8 +677,6 @@ static std::string MakeBlockOutSetValidShapeCodegenCCE(const ir::CallPtr& op, co
     std::string tile = codegen.GetExprAsCode(op->args_[0]);
     std::string row = codegen.GetExprAsCode(op->args_[1]);
     std::string col = codegen.GetExprAsCode(op->args_[2]);
-    // Register for any subsequent store that uses this tile.
-    codegen.RegisterTileEmitShape(tile, row, col);
     codegen.Emit(tile + ".SetValidShape(" + row + ", " + col + ");");
     return "";
 }

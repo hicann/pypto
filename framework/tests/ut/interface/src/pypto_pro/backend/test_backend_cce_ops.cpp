@@ -842,10 +842,6 @@ TEST(BackendCceOpsTest, BlockSubviewUsesRegisteredAddressAndResultTarget)
     EXPECT_NE(generated.find("view.SetValidShape(8, 12)"), std::string::npos);
     EXPECT_TRUE(codegen.HasTileAddress("view"));
     EXPECT_EQ(codegen.GetTileAddress("view"), "0x200 + ((3)*32+(0))*2");
-    auto shape = codegen.LookupTileEmitShape("view");
-    ASSERT_TRUE(shape.has_value());
-    EXPECT_EQ(shape->first, "8");
-    EXPECT_EQ(shape->second, "12");
 }
 
 TEST(BackendCceOpsTest, BlockSubviewUsesDynamicTileGroupAddressAndGeneratedName)

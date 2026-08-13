@@ -1828,7 +1828,6 @@ static std::string MakeBlockSubviewCodegenCCE(const ir::CallPtr& op, codegen::Co
     codegen.Emit("TASSIGN(" + temp_name + ", " + temp_addr + ");");
     codegen.Emit(temp_name + ".SetValidShape(" + vs_row + ", " + vs_col + ");");
     codegen.SetTileAddress(temp_name, temp_addr);
-    codegen.RegisterTileEmitShape(temp_name, vs_row, vs_col);
 
     return temp_name;
 }

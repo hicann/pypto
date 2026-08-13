@@ -49,8 +49,6 @@ def _is_a5() -> bool:
 #
 # tile[2:6, 16:50] on [8, 64]
 #   offset = 2*64+16 = 144, valid_shape = [4, 34], stride mismatch (34 != 64)
-#
-#         SetValidShape, RegisterTileEmitShape
 # ===========================================================================
 @pl.jit(auto_mutex=True)
 def tile_subview_kernel(

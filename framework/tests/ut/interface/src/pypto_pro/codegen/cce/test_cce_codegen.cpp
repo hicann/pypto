@@ -87,13 +87,6 @@ TEST(CCECodegenHeaderTest, CoversHeaderOnlyStateAccessors)
     EXPECT_TRUE(codegen.GetTilingHeaders().empty());
     EXPECT_EQ(codegen.GetTypeConverter().ConvertEventId(3), "EVENT_ID3");
 
-    codegen.RegisterTileEmitShape("tile_0", "rows", "cols");
-    auto shape = codegen.LookupTileEmitShape("tile_0");
-    ASSERT_TRUE(shape.has_value());
-    EXPECT_EQ(shape->first, "rows");
-    EXPECT_EQ(shape->second, "cols");
-    EXPECT_FALSE(codegen.LookupTileEmitShape("missing_tile").has_value());
-
     codegen.RegisterRegTensorVar("reg_tensor");
     EXPECT_TRUE(codegen.IsRegTensorVar("reg_tensor"));
     EXPECT_FALSE(codegen.IsRegTensorVar("other_reg_tensor"));

@@ -149,19 +149,6 @@ public:
     /** \brief Set the base address of a tile variable (for subview offset registration). */
     void SetTileAddress(const std::string& tile_name, const std::string& addr) { tile_addresses_[tile_name] = addr; }
 
-    /** \brief Register valid-shape C++ code strings for a tile at emit-time.
-     *
-     * Called from set_validshape codegen when each SetValidShape line is emitted.
-     * row_code / col_code are already-resolved C++ expression strings.
-     * Because set_validshape is guaranteed to precede any load/store that uses the
-     * same tile, the entry is always present when load/store codegen queries it.
-     */
-    void RegisterTileEmitShape(const std::string& tile_cpp_name, const std::string& row_code,
-                               const std::string& col_code)
-    {
-        tile_emit_shape_[tile_cpp_name] = {row_code, col_code};
-    }
-
     /** \brief Register a VF RegTensor variable (called from EmitVFRegTensor). */
     void RegisterRegTensorVar(const std::string& cpp_name) { reg_tensor_vars_.insert(cpp_name); }
 
@@ -182,15 +169,6 @@ public:
 
     /** \brief Check if a C++ variable name was declared as a VF AddrReg. */
     bool IsAddrRegVar(const std::string& cpp_name) const { return addr_reg_vars_.count(cpp_name) > 0; }
-
-    /** \brief Look up the emit-time valid-shape for a tile (used by load and store). */
-    std::optional<std::pair<std::string, std::string>> LookupTileEmitShape(const std::string& tile_cpp_name) const
-    {
-        auto it = tile_emit_shape_.find(tile_cpp_name);
-        if (it != tile_emit_shape_.end())
-            return it->second;
-        return std::nullopt;
-    }
 
     /**
      * \brief Compute offset from IR tensor shape (for single-file mode without Tensor struct)
@@ -564,17 +542,6 @@ private:
                                   const std::optional<std::vector<int>>& tile_dims, bool is_transpose,
                                   const std::string& base_pointer);
 
-    /**
-     * \brief Clear the emit-time tile shape map before body generation.
-     *
-     * set_validshape is guaranteed to precede any load/store using the same tile,
-     * so no pre-scan is needed.  Shape registration happens at emit-time via
-     * RegisterTileEmitShape().  This function resets the map for each new function.
-     *
-     * \param body Unused ->kept for call-site compatibility.
-     */
-    void PreScanValidShapes();
-
     // Dual-mode context for expression visitor pattern
     std::string current_target_var_;              ///< INPUT: Assignment target variable name (for Call expressions)
     std::string current_expr_value_;              ///< OUTPUT: Inline C++ value for scalar / tile expressions
@@ -702,10 +669,6 @@ private:
     std::string GetGeneratedType(const ir::TypePtr& type) const;
     std::string BuildDynamicTupleArrayDecl(const ir::TypePtr& elem_type, const std::vector<std::string>& elem_names,
                                            const std::string& arr_name) const;
-
-    /// Emit-time valid-shape map: tile C++ name -> (row code, col code).
-    /// Populated when set_validshape is emitted; consumed by the following load or store.
-    std::map<std::string, std::pair<std::string, std::string>> tile_emit_shape_;
 
     ir::Span current_stmt_span_;
     ir::Span current_expr_span_;
