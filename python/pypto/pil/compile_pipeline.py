@@ -27,6 +27,7 @@ def _dump_program(name, program):
 
 
 def _build_default_pipeline():
+    infer_token_pass = ir.Pass.infer_token_pass()
     dce = ir.Pass.aggressive_dce()
     canonicalize = ir.Pass.canonicalize()
     merge_stmts = ir.Pass.merge_stmts_into_if()
@@ -34,6 +35,7 @@ def _build_default_pipeline():
     finalize = ir.Pass.finalize_dynamic_function()
 
     return [
+        ("infer_token_pass", infer_token_pass),
         ("first_canonicalize_dce", lambda p:dce(canonicalize(p))),
         ("second_canonicalize_dce", lambda p:dce(canonicalize(p))),
         ("canonicalize(merge_stmts)", lambda p:canonicalize(merge_stmts(p))),

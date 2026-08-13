@@ -789,6 +789,15 @@ bool StructuralEqualImpl<AssertMode>::EqualType(const TypePtr& lhs, const TypePt
                 return false;
         }
         return true;
+    } else if (auto lhs_token = As<TokenType>(lhs)) {
+        auto rhs_token = As<TokenType>(rhs);
+        if (!rhs_token) {
+            return IRAssert({}, "Type cast failed for TokenType");
+        }
+        if (lhs_token->kind_ != rhs_token->kind_) {
+            return IRAssert({}, "TokenType kind mismatch");
+        }
+        return true;
     } else if (IsFieldLessType(lhs)) {
         return true; // Singleton type, both being same type kind is sufficient
     } else if (IsA<LogicalTensorType>(lhs) && IsA<LogicalTensorType>(rhs)) {

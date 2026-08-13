@@ -89,8 +89,8 @@ public:
         for (auto& v : op->result_) {
             defs.insert(v);
         }
-        if (op->result_token_) {
-            defs.insert(op->result_token_);
+        for (const auto& token : op->result_token_) {
+            defs.insert(token);
         }
         IRVisitor::VisitStmt_(op);
     }

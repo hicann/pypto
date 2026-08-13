@@ -449,10 +449,17 @@ void BindTypeClass(py::module_& ir)
                          "Create a tuple type from a list of types");
     BindFields<TupleType>(tuple_type_class);
 
+    py::enum_<TokenKind>(ir, "TokenKind", "Token semantic kind")
+        .value("NORMAL", TokenKind::NORMAL, "Ordinary dependency token")
+        .value("READ", TokenKind::READ, "Tensor graph read token")
+        .value("WRITE", TokenKind::WRITE, "Tensor graph write token");
+
     // TokenType - const shared_ptr
-    py::class_<TokenType, Type, std::shared_ptr<TokenType>>(ir, "TokenType", "Opaque token type")
-        .def(py::init<>(), "Create a token type")
-        .def_static("get", GetTokenType, "Get the token type");
+    auto token_type_class = py::class_<TokenType, Type, std::shared_ptr<TokenType>>(ir, "TokenType",
+                                                                                    "Opaque token type");
+    token_type_class.def(py::init<TokenKind>(), py::arg("kind") = TokenKind::NORMAL, "Create a token type")
+        .def_static("get", &GetTokenType, py::arg("kind") = TokenKind::NORMAL, "Get the token type");
+    BindFields<TokenType>(token_type_class);
 
     // NoneType - const shared_ptr
     py::class_<NoneType, Type, std::shared_ptr<NoneType>>(ir, "NoneType", "None (void-like) type")
@@ -1352,12 +1359,12 @@ void BindStmt(py::module_& ir)
     auto tensorop_stmt_class = py::class_<TensorOpStmt, Stmt, std::shared_ptr<TensorOpStmt>>(
         ir, "TensorOpStmt", "Tensor operation statement: results, result_token = opcode(args, attrs, tokens)");
     tensorop_stmt_class.def(
-        py::init([](std::vector<VarPtr> results, VarPtr result_token, std::string opcode, std::vector<ExprPtr> args,
-                    const std::vector<VarPtr>& tokens, py::dict attrs, Span span) {
+        py::init([](std::vector<VarPtr> results, std::vector<VarPtr> result_tokens, std::string opcode,
+                    std::vector<ExprPtr> args, const std::vector<VarPtr>& tokens, py::dict attrs, Span span) {
             auto attr_list = ConvertAttrDict(attrs);
-            return std::make_shared<TensorOpStmt>(results, result_token, opcode, args, tokens, attr_list, span);
+            return std::make_shared<TensorOpStmt>(results, result_tokens, opcode, args, tokens, attr_list, span);
         }),
-        py::arg("results"), py::arg("result_token"), py::arg("opcode"), py::arg("args"), py::arg("tokens"),
+        py::arg("results"), py::arg("result_tokens"), py::arg("opcode"), py::arg("args"), py::arg("tokens"),
         py::arg("attrs"), py::arg("span"), "Create a tensor operation statement");
     BindFields<TensorOpStmt>(tensorop_stmt_class);
 }

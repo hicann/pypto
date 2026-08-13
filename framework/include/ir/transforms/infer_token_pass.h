@@ -13,6 +13,6 @@
 
 namespace pypto::ir {
 
-SeqStmtsPtr InferTokenPass(SeqStmtsPtr seq);
+SeqStmtsPtr RunInferTokenPass(SeqStmtsPtr seq);
 
 } // namespace pypto::ir

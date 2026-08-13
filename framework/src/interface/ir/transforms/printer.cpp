@@ -567,7 +567,15 @@ std::string IRPrinter::Print(const TypePtr& type)
     }
 
     if (auto token_type = As<TokenType>(type)) {
-        return prefix_ + ".Token";
+        switch (token_type->kind_) {
+            case TokenKind::READ:
+                return prefix_ + ".ReadToken";
+            case TokenKind::WRITE:
+                return prefix_ + ".WriteToken";
+            case TokenKind::NORMAL:
+            default:
+                return prefix_ + ".Token";
+        }
     }
 
     if (auto none_type = As<NoneType>(type)) {
@@ -909,9 +917,9 @@ void IRPrinter::VisitStmt_(const TensorOpStmtPtr& op)
         }
         stream_ << "]";
     }
-    if (op->result_token_) {
+    for (const auto& token : op->result_token_) {
         stream_ << ", ";
-        VisitExpr(op->result_token_);
+        VisitExpr(token);
     }
     stream_ << " = " << op->opcode_ << "(";
     for (size_t i = 0; i < op->args_.size(); ++i) {

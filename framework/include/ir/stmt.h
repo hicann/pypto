@@ -730,14 +730,15 @@ using ScalarOpStmtPtr = std::shared_ptr<const ScalarOpStmt>;
 class TensorOpStmt : public Stmt {
 public:
     std::vector<VarPtr> result_;
-    VarPtr result_token_;
+    std::vector<VarPtr> result_token_;
     std::string opcode_;
     std::vector<ExprPtr> args_;
     std::vector<VarPtr> tokens_;
     std::vector<std::pair<std::string, std::any>> attrs_;
 
-    TensorOpStmt(std::vector<VarPtr> result, VarPtr result_token, std::string opcode, std::vector<ExprPtr> args,
-                 std::vector<VarPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, Span span)
+    TensorOpStmt(std::vector<VarPtr> result, std::vector<VarPtr> result_token, std::string opcode,
+                 std::vector<ExprPtr> args, std::vector<VarPtr> tokens,
+                 std::vector<std::pair<std::string, std::any>> attrs, Span span)
         : Stmt(std::move(span)),
           result_(std::move(result)),
           result_token_(std::move(result_token)),
@@ -745,6 +746,13 @@ public:
           args_(std::move(args)),
           tokens_(std::move(tokens)),
           attrs_(std::move(attrs))
+    {}
+
+    TensorOpStmt(std::vector<VarPtr> result, VarPtr result_token, std::string opcode, std::vector<ExprPtr> args,
+                 std::vector<VarPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, Span span)
+        : TensorOpStmt(std::move(result),
+                       result_token ? std::vector<VarPtr>{std::move(result_token)} : std::vector<VarPtr>{},
+                       std::move(opcode), std::move(args), std::move(tokens), std::move(attrs), std::move(span))
     {}
 
     explicit TensorOpStmt(Span span) : Stmt(std::move(span)) {}

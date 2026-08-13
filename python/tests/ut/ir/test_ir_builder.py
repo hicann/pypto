@@ -860,7 +860,7 @@ def test_builder_create_tensor_op_stmt():
         "d": [b.create_scalar_var('b'), b.create_scalar_var('c')],
     }
     created = b.create_tensor_op_stmt([result_var], token, "add", [arg1, arg2], [], attrs, sp)
-    manual = ir.TensorOpStmt([result_var], token, "add", [arg1, arg2], [], attrs, sp)
+    manual = ir.TensorOpStmt([result_var], [token], "add", [arg1, arg2], [], attrs, sp)
     assert str(created) == str(manual)
 
 

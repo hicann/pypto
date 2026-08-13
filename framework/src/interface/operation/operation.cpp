@@ -406,8 +406,8 @@ void Operation::DumpOperandsJson(Json& opDump, bool dumpTensor) const
         itokensDump.push_back(token->name_);
     }
     Json otokensDump = Json::array();
-    if (result_token_ != nullptr) {
-        otokensDump.push_back(result_token_->name_);
+    for (const auto& token : result_token_) {
+        otokensDump.push_back(token->name_);
     }
     opDump["itokens"] = itokensDump;
     opDump["otokens"] = otokensDump;
@@ -716,8 +716,8 @@ std::string Operation::DumpSSA(const std::string& prefix) const
         oss << oOperand[i]->DumpSSA(false, true, true);
         hasResult = true;
     }
-    if (result_token_ != nullptr) {
-        oss << ((hasResult) ? ", " : "") << "Token(" << result_token_->name_ << ")";
+    for (const auto& token : result_token_) {
+        oss << ((hasResult) ? ", " : "") << "Token(" << token->name_ << ")";
         hasResult = true;
     }
     oss << ((hasResult) ? " = " : "");
@@ -890,9 +890,11 @@ std::set<Operation*, Operation::OperationComparator> Operation::ProducerOpsOrder
 std::unordered_set<Operation*> Operation::ConsumerOpsByToken() const
 {
     std::unordered_set<Operation*> consumers;
-    if (result_token_ && function_) {
-        for (const auto& stmt : function_->GetVarDependency().GetConsumers(result_token_)) {
-            consumers.emplace(static_cast<Operation*>(const_cast<ir::Stmt*>(stmt.get())));
+    if (function_) {
+        for (const auto& token : result_token_) {
+            for (const auto& stmt : function_->GetVarDependency().GetConsumers(token)) {
+                consumers.emplace(static_cast<Operation*>(const_cast<ir::Stmt*>(stmt.get())));
+            }
         }
     }
     return consumers;
@@ -995,7 +997,7 @@ void Operation::UnlinkFromLogicalTensors()
 
 std::shared_ptr<Operation> Operation::CloneTensorOpStmt(const LogicalTensors& iOperandList,
                                                         const LogicalTensors& oOperandList,
-                                                        const ir::VarPtr& resultToken,
+                                                        const std::vector<ir::VarPtr>& resultTokens,
                                                         const std::vector<ir::VarPtr>& tokens, ir::Span span,
                                                         Function* targetFunc) const
 {
@@ -1009,7 +1011,7 @@ std::shared_ptr<Operation> Operation::CloneTensorOpStmt(const LogicalTensors& iO
         op.attributes = attributes;
         op.UpdateTileShape(tileShape_);
         op.coreType_ = coreType_;
-        op.result_token_ = resultToken;
+        op.result_token_ = resultTokens;
         op.tokens_ = tokens;
         op.attrs_ = attrs_;
         if (semanticLabel_) {

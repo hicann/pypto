@@ -80,7 +80,7 @@ TEST_F(OperationTokenDepTest, ConsumerOpsByTokenBasic)
     auto& dep = opsFunc->GetVarDependency();
     dep.AddConsumer(tokenA, std::static_pointer_cast<const ir::Stmt>(ops[1]));
 
-    ops[0]->result_token_ = tokenA;
+    ops[0]->result_token_ = {tokenA};
 
     auto consumers = ops[0]->ConsumerOpsByToken();
     EXPECT_EQ(consumers.size(), 1);
@@ -182,10 +182,10 @@ TEST_F(OperationTokenDepTest, MultiTokenDependency)
     dep.AddProducer(tokenBC, std::static_pointer_cast<const ir::Stmt>(ops[1]));
     dep.AddConsumer(tokenBC, std::static_pointer_cast<const ir::Stmt>(ops[2]));
 
-    ops[0]->result_token_ = tokenAB;
+    ops[0]->result_token_ = {tokenAB};
 
     ops[1]->tokens_.push_back(tokenAB);
-    ops[1]->result_token_ = tokenBC;
+    ops[1]->result_token_ = {tokenBC};
 
     ops[2]->tokens_.push_back(tokenBC);
 
@@ -220,7 +220,7 @@ TEST_F(OperationTokenDepTest, ConsumerOpsByTokenUnknownToken)
     ASSERT_GE(ops.size(), 1);
 
     auto unknownToken = MakeToken("unknown");
-    ops[0]->result_token_ = unknownToken;
+    ops[0]->result_token_ = {unknownToken};
 
     auto consumers = ops[0]->ConsumerOpsByToken();
     EXPECT_TRUE(consumers.empty());

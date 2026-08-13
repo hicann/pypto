@@ -347,8 +347,8 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathF
     ir::StmtPtr opStmt = RebuildTensorOpStmt(tensorOpStmt, tensorOpStmt->result_, tensorOpStmt->result_token_,
                                              tensorOpStmt->args_, tensorOpStmt->tokens_, tensorOpStmt->span_,
                                              pathFunc.get());
-    if (tensorOpStmt->result_token_) {
-        pathFunc->GetVarDependency().AddProducer(tensorOpStmt->result_token_, opStmt);
+    for (const auto& token : tensorOpStmt->result_token_) {
+        pathFunc->GetVarDependency().AddProducer(token, opStmt);
     }
     for (auto& token : tensorOpStmt->tokens_) {
         pathFunc->GetVarDependency().AddConsumer(token, opStmt);

@@ -333,8 +333,8 @@ static SymbolicScalar DoGetTensorDataInt32(SymbolHandlerId handlerId, const Tens
     argList.insert(argList.end(), offset.begin(), offset.end());
     auto scalar = getRuntimeHandler(argList);
 
-    emuopAssemble->result_token_ = builder.CreateTokenVar(emuopAssemble->GetSpan());
-    builder.AddDependToken(scalar, emuopAssemble->result_token_);
+    emuopAssemble->result_token_ = {builder.CreateTokenVar(emuopAssemble->GetSpan())};
+    builder.AddDependToken(scalar, emuopAssemble->result_token_.front());
     return scalar;
 }
 

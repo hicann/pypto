@@ -204,6 +204,20 @@ TEST_F(VerifierSSATest, MultipleAssignment_ReportsError)
     EXPECT_GE(diags.size(), 1u);
 }
 
+TEST_F(VerifierSSATest, TensorOpResultTokens)
+{
+    IRVerifier v;
+    v.AddRule(CreateSSAPropertyVerifier());
+
+    auto write_token = std::make_shared<Var>("write_token", GetWriteTokenType(), Sp());
+    auto read_token = std::make_shared<Var>("read_token", GetReadTokenType(), Sp());
+    auto op = std::make_shared<TensorOpStmt>(std::vector<VarPtr>{}, std::vector<VarPtr>{write_token, read_token}, "EXP",
+                                             std::vector<ExprPtr>{}, std::vector<VarPtr>{},
+                                             decltype(TensorOpStmt::attrs_){}, Sp());
+
+    EXPECT_TRUE(v.Verify(MakeProgram("f", op)).empty());
+}
+
 TEST_F(VerifierSSATest, ForStmt_MissingYield_ReportsError)
 {
     IRVerifier v;

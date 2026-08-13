@@ -547,11 +547,8 @@ StmtPtr IRMutator::VisitStmt_(const ScalarOpStmtPtr& op)
 StmtPtr IRMutator::VisitStmt_(const TensorOpStmtPtr& op)
 {
     auto [new_results, changed] = VisitVarList(op->result_);
-    VarPtr new_token = op->result_token_;
-    if (op->result_token_) {
-        new_token = As<Var>(ExprFunctor<ExprPtr>::VisitExpr(op->result_token_));
-        changed = changed || (new_token.get() != op->result_token_.get());
-    }
+    auto [new_tokens_result, result_tokens_changed] = VisitVarList(op->result_token_);
+    changed = changed || result_tokens_changed;
 
     auto [new_args, args_changed] = VisitExprList(op->args_);
     changed = changed || args_changed;
@@ -560,8 +557,8 @@ StmtPtr IRMutator::VisitStmt_(const TensorOpStmtPtr& op)
     changed = changed || tokens_changed;
 
     if (changed) {
-        return npu::tile_fwk::RebuildTensorOpStmt(op, std::move(new_results), std::move(new_token), std::move(new_args),
-                                                  std::move(new_tokens), op->span_);
+        return npu::tile_fwk::RebuildTensorOpStmt(op, std::move(new_results), std::move(new_tokens_result),
+                                                  std::move(new_args), std::move(new_tokens), op->span_);
     }
     return op;
 }

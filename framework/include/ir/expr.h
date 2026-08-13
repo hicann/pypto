@@ -242,6 +242,12 @@ public:
 
 using VarPtr = std::shared_ptr<const Var>;
 
+inline ExprPtr NoneValue()
+{
+    static const auto none = std::make_shared<Var>("None", GetNoneType(), Span::Unknown());
+    return none;
+}
+
 /**
  * \brief Iteration argument variable
  *

@@ -109,8 +109,8 @@ private:
                 liveDefs.push_back(res.get());
             }
         }
-        if (op->result_token_) {
-            defs.push_back(op->result_token_.get());
+        for (const auto& token : op->result_token_) {
+            defs.push_back(token.get());
         }
 
         AddSite(std::move(defs), uses);

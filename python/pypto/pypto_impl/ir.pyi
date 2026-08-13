@@ -861,13 +861,23 @@ class PtrType(Type):
     def __init__(self, dtype: DataType = DataType.INT8) -> None: ...
 
 
+class TokenKind(enum.IntEnum):
+    """Token semantic kind."""
+
+    NORMAL = ...
+    READ = ...
+    WRITE = ...
+
+
 class TokenType(Type):
     """Opaque token type for side-effect ordering."""
 
-    def __init__(self) -> None: ...
+    kind: Final[TokenKind]
+
+    def __init__(self, kind: TokenKind = TokenKind.NORMAL) -> None: ...
 
     @staticmethod
-    def get() -> TokenType:
+    def get(kind: TokenKind = TokenKind.NORMAL) -> TokenType:
         """Get the singleton TokenType instance."""
         ...
 
@@ -1518,8 +1528,8 @@ class TensorOpStmt(Stmt):
     result: Final[list[Var]]
     """Result expression."""
 
-    result_token: Final[Var]
-    """Second operand."""
+    result_token: Final[list[Var]]
+    """Result tokens (can be empty)."""
 
     opcode: Final[str]
     """Tensor operation."""
@@ -1533,13 +1543,13 @@ class TensorOpStmt(Stmt):
     attrs: Final[dict[str, Any]]
     """Attributes (key-value metadata)."""
 
-    def __init__(self, result: list[Var], result_token: Var, opcode: str, args: list[Expr],
+    def __init__(self, result: list[Var], result_tokens: list[Var], opcode: str, args: list[Expr],
                  tokens: list[Var], attrs: dict[str, Any], span: Span) -> None:
         """Create a tensor operation statement.
 
         Args:
             result: Result expression
-            result_token: Second operand
+            result_tokens: Result tokens
             opcode: Tensor operation
             args: Operands to the operation
             tokens: Tokens (can be empty)
@@ -2372,6 +2382,10 @@ class Pass:
     @staticmethod
     def token_pass() -> Pass:
         """Add WAR/WAW token dependencies."""
+
+    @staticmethod
+    def infer_token_pass() -> Pass:
+        """Infer token dependencies."""
 
     @staticmethod
     def merge_stmts_into_if() -> Pass:

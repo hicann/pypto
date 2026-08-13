@@ -9,319 +9,483 @@
  */
 #include "ir/transforms/infer_token_pass.h"
 #include "ir/transforms/base/mutator.h"
+#include "ir/transforms/base/visitor.h"
 
+#include <cstdint>
+#include <unordered_map>
 #include <unordered_set>
 
-#include "ir/expr.h"
-#include "ir/kind_traits.h"
 #include "ir/type.h"
 
-#include "interface/tensor/ir_tensor_op_rebuild.h"
+#include "interface/tensor/irbuilder.h"
+#include "interface/tensor/logical_tensor.h"
 
 namespace pypto::ir {
 
-using VarTokenMap = std::unordered_map<VarPtr, VarPtr>;
+using npu::tile_fwk::IRContext;
+using npu::tile_fwk::RawTensor;
 
-thread_local int tokenCounter = 0;
-
-class InferTokenMutator : public IRMutator {
+class InferTokenPass : public IRMutator {
 public:
-    using IRMutator::VisitExpr_;
     using IRMutator::VisitStmt_;
 
-    StmtPtr Apply(StmtPtr stmt)
+    SeqStmtsPtr Apply(const SeqStmtsPtr& seq)
     {
-        producers_.clear();
-        pendingUpdates_.clear();
-        return VisitStmt(stmt);
+        RegisterRaws(seq);
+        AnalyzeLiveRaws(seq);
+        return SeqStmts::AsMut(VisitStmt(seq));
     }
 
 private:
-    VarTokenMap producers_;
-    std::vector<std::pair<VarPtr, VarPtr>> pendingUpdates_;
+    struct RawTokenState {
+        VarPtr latestWrite;
+        VarPtr latestRead;
+        uint64_t readRevision{0};
+    };
 
-    VarPtr CreateTokenVar(Span span, const std::string& name = "")
+    struct TensorAccess {
+        RawTensor* raw;
+        VarPtr token;
+    };
+
+    using RawTokenStateMap = std::unordered_map<RawTensor*, RawTokenState>;
+    using RawNameMap = std::unordered_map<RawTensor*, std::string>;
+    using RawSet = std::unordered_set<RawTensor*>;
+
+    static npu::tile_fwk::LogicalTensorPtr AsLogicalTensor(const ExprPtr& expr)
     {
-        return std::make_shared<Var>("_" + name + "_token_" + std::to_string(++tokenCounter), GetTokenType(), span);
+        auto tensor = std::dynamic_pointer_cast<const npu::tile_fwk::LogicalTensor>(expr);
+        return std::const_pointer_cast<npu::tile_fwk::LogicalTensor>(tensor);
     }
 
-    VarTokenMap BuildResultTokenMap(SeqStmtsPtr body)
+    class RawTensorCollector : public IRVisitor {
+    public:
+        RawNameMap TakeRawMap() { return std::move(rawMap_); }
+
+    private:
+        using IRVisitor::VisitExpr_;
+
+        void VisitExpr_(const VarPtr& op) override
+        {
+            auto tensor = AsLogicalTensor(op);
+            if (tensor && tensor->GetRawTensor()) {
+                rawMap_.emplace(tensor->GetRawTensor().get(), tensor->name_);
+            }
+            IRVisitor::VisitExpr_(op);
+        }
+
+        RawNameMap rawMap_;
+    };
+
+    void RegisterRaws(const StmtPtr& stmt)
     {
-        VarTokenMap map;
-        if (!body) {
-            return map;
-        }
-        for (auto& stmt : body->stmts_) {
-            if (stmt->GetKind() != ObjectKind::TensorOpStmt) {
-                continue;
-            }
-            auto t = std::static_pointer_cast<const TensorOpStmt>(stmt);
-            if (!t->result_token_) {
-                continue;
-            }
-            for (auto& v : t->result_) {
-                if (v) {
-                    map[v] = t->result_token_;
-                }
-            }
-        }
-        return map;
+        RawTensorCollector collector;
+        collector.VisitStmt(stmt);
+        registeredRaws_ = collector.TakeRawMap();
     }
 
-    std::vector<VarPtr> CollectBranchOutputTokens(SeqStmtsPtr body)
+    void AddTensorRaw(const ExprPtr& expr)
     {
-        std::vector<VarPtr> tokens;
+        auto tensor = AsLogicalTensor(expr);
+        if (tensor && tensor->GetRawTensor()) {
+            liveRaws_.insert(tensor->GetRawTensor().get());
+        }
+    }
+
+    void AnalyzeLiveRaws(const StmtPtr& stmt)
+    {
+        if (auto seq = As<SeqStmts>(stmt)) {
+            for (auto it = seq->stmts_.rbegin(); it != seq->stmts_.rend(); ++it) {
+                AnalyzeLiveRaws(*it);
+            }
+        } else if (auto tensorOp = As<TensorOpStmt>(stmt)) {
+            for (const auto& arg : tensorOp->args_) {
+                AddTensorRaw(arg);
+            }
+            for (const auto& result : tensorOp->result_) {
+                AddTensorRaw(result);
+            }
+        } else if (auto ifStmt = As<IfStmt>(stmt)) {
+            auto initialLiveRaws = liveRaws_;
+            controlLiveOutRaws_[ifStmt.get()] = initialLiveRaws;
+
+            AnalyzeLiveRaws(ifStmt->thenBody_);
+            auto thenLiveRaws = liveRaws_;
+
+            liveRaws_ = initialLiveRaws;
+            if (ifStmt->elseBody_) {
+                AnalyzeLiveRaws(*ifStmt->elseBody_);
+            }
+            liveRaws_.insert(thenLiveRaws.begin(), thenLiveRaws.end());
+        } else if (auto forStmt = As<ForStmt>(stmt)) {
+            auto initialLiveRaws = liveRaws_;
+            controlLiveOutRaws_[forStmt.get()] = initialLiveRaws;
+            AnalyzeLiveRaws(forStmt->body_);
+        } else if (auto section = As<SectionStmt>(stmt)) {
+            AnalyzeLiveRaws(section->body_);
+        }
+    }
+
+    VarPtr CreateTokenVar(const npu::tile_fwk::LogicalTensorPtr& tensor, Span span, TokenKind kind)
+    {
+        const char* suffix = kind == TokenKind::READ ? "_r" : "_w";
+        std::string name = tensor->name_ + suffix;
+        return IRContext::Get().MakeVar(name, GetTokenType(kind), span);
+    }
+
+    VarPtr CreateControlToken(const std::string& base, const char* control, Span span, TokenKind kind)
+    {
+        const char* suffix = kind == TokenKind::READ ? "_r" : "_w";
+        std::string name = base + suffix;
+        if (control[0] != '\0') {
+            name += "_" + std::string(control);
+        }
+        return IRContext::Get().MakeVar(name, GetTokenType(kind), span);
+    }
+
+    static void AppendToken(const VarPtr& token, std::vector<VarPtr>& tokens, std::unordered_set<VarPtr>& seen)
+    {
+        if (token && seen.insert(token).second) {
+            tokens.push_back(token);
+        }
+    }
+
+    static RawTokenState GetRawState(const RawTokenStateMap& states, RawTensor* raw)
+    {
+        auto it = states.find(raw);
+        return it == states.end() ? RawTokenState{} : it->second;
+    }
+
+    static std::vector<ExprPtr> GetTerminatorValues(const SeqStmtsPtr& body)
+    {
         if (!body || body->stmts_.empty()) {
-            return tokens;
+            return {};
         }
-        auto resultTokenMap = BuildResultTokenMap(body);
-        auto& lastStmt = body->stmts_.back();
-        if (lastStmt->GetKind() != ObjectKind::YieldStmt) {
-            return tokens;
+        const auto& terminator = body->stmts_.back();
+        if (auto yield = As<YieldStmt>(terminator)) {
+            return yield->value_;
         }
-        auto yieldStmt = std::static_pointer_cast<const YieldStmt>(lastStmt);
-        std::unordered_set<VarPtr> seen;
-        for (auto& val : yieldStmt->value_) {
-            auto var = std::dynamic_pointer_cast<const Var>(val);
-            if (!var) {
-                continue;
-            }
-            auto it = resultTokenMap.find(var);
-            if (it != resultTokenMap.end() && !seen.count(it->second)) {
-                seen.insert(it->second);
-                tokens.push_back(it->second);
-            }
+        if (auto cont = As<ContinueStmt>(terminator)) {
+            return cont->value_;
         }
-        return tokens;
+        return {};
     }
 
-    SeqStmtsPtr ExtendYieldWithTokens(SeqStmtsPtr body, const std::vector<VarPtr>& tokens)
+    static SeqStmtsPtr AppendTerminatorValues(const SeqStmtsPtr& body, const std::vector<ExprPtr>& values)
     {
-        if (!body || body->stmts_.empty() || tokens.empty()) {
+        if (values.empty()) {
             return body;
         }
-        auto& lastStmt = body->stmts_.back();
-        if (lastStmt->GetKind() != ObjectKind::YieldStmt) {
-            return body;
+
+        auto statements = body->stmts_;
+        auto newValues = GetTerminatorValues(body);
+        newValues.insert(newValues.end(), values.begin(), values.end());
+        const auto& terminator = statements.back();
+        if (As<YieldStmt>(terminator)) {
+            statements.back() = std::make_shared<YieldStmt>(std::move(newValues), terminator->span_);
+        } else if (As<ContinueStmt>(terminator)) {
+            statements.back() = std::make_shared<ContinueStmt>(std::move(newValues), terminator->span_);
         }
-        auto yieldStmt = std::static_pointer_cast<const YieldStmt>(lastStmt);
-        std::vector<ExprPtr> newValues = yieldStmt->value_;
-        for (auto& tk : tokens) {
-            newValues.push_back(tk);
-        }
-        std::vector<StmtPtr> newStmts = body->stmts_;
-        newStmts.back() = std::make_shared<YieldStmt>(newValues, body->span_);
-        return std::make_shared<SeqStmts>(newStmts, body->span_);
+        return std::make_shared<SeqStmts>(std::move(statements), body->span_);
     }
 
-    std::vector<size_t> BuildReturnVarToTokenIndex(SeqStmtsPtr body, size_t originalReturnVarCount,
-                                                   const std::vector<VarPtr>& branchTokens)
+    VarPtr MergeIfToken(const VarPtr& thenToken, const VarPtr& elseToken, const std::string& base, TokenKind kind,
+                        Span span, std::vector<ExprPtr>& thenValues, std::vector<ExprPtr>& elseValues,
+                        std::vector<VarPtr>& returnVars, bool forceMerge = false)
     {
-        std::vector<size_t> mapping(originalReturnVarCount, SIZE_MAX);
-        if (!body || body->stmts_.empty() || branchTokens.empty()) {
-            return mapping;
+        if (!thenToken && !elseToken) {
+            return nullptr;
         }
-        auto resultTokenMap = BuildResultTokenMap(body);
-        auto& lastStmt = body->stmts_.back();
-        if (lastStmt->GetKind() != ObjectKind::YieldStmt) {
-            return mapping;
+        if (!forceMerge && thenToken == elseToken) {
+            return thenToken;
         }
-        auto yieldStmt = std::static_pointer_cast<const YieldStmt>(lastStmt);
-        for (size_t i = 0; i < originalReturnVarCount && i < yieldStmt->value_.size(); ++i) {
-            auto var = std::dynamic_pointer_cast<const Var>(yieldStmt->value_[i]);
-            if (!var) {
-                continue;
-            }
-            auto rtIt = resultTokenMap.find(var);
-            if (rtIt == resultTokenMap.end()) {
-                continue;
-            }
-            for (size_t j = 0; j < branchTokens.size(); ++j) {
-                if (branchTokens[j] == rtIt->second) {
-                    mapping[i] = j;
-                    break;
-                }
-            }
-        }
-        return mapping;
+        auto token = CreateControlToken(base, "if", span, kind);
+        thenValues.push_back(thenToken ? thenToken : NoneValue());
+        elseValues.push_back(elseToken ? elseToken : NoneValue());
+        returnVars.push_back(token);
+        return token;
     }
 
-    void UpdateProducers(const std::vector<VarPtr>& results, VarPtr token)
+    VarPtr AddForToken(const VarPtr& initToken, const VarPtr& bodyToken, const std::string& base, TokenKind kind,
+                       Span span, std::vector<IterArgPtr>& iterArgs, std::vector<ExprPtr>& bodyValues,
+                       std::vector<VarPtr>& returnVars, bool forceMerge = false)
     {
-        for (auto& v : results) {
-            if (v) {
-                producers_[v] = token;
-            }
+        if (!initToken && !bodyToken) {
+            return nullptr;
         }
+        if (!forceMerge && initToken == bodyToken) {
+            return initToken;
+        }
+        auto resultToken = CreateControlToken(base, "for", span, kind);
+        auto iterToken = IRContext::Get().MakeVar(resultToken->name_ + "_iter", resultToken->GetType(), span);
+        iterArgs.push_back(std::make_shared<IterArg>(iterToken, initToken ? initToken : NoneValue()));
+        bodyValues.push_back(bodyToken ? bodyToken : NoneValue());
+        returnVars.push_back(resultToken);
+        return resultToken;
     }
 
-    void QueueUpdate(const VarTokenMap& mappings)
-    {
-        for (auto& [var, token] : mappings) {
-            pendingUpdates_.emplace_back(var, token);
-        }
-    }
-
-    void FlushUpdates()
-    {
-        for (auto& update : pendingUpdates_) {
-            producers_[update.first] = update.second;
-        }
-        pendingUpdates_.clear();
-    }
-
-    // ========== IRMutator 访问方法 ==========
     StmtPtr VisitStmt_(const SeqStmtsPtr& op) override
     {
-        std::vector<StmtPtr> newStmts;
-        newStmts.reserve(op->stmts_.size());
-
-        for (auto& stmt : op->stmts_) {
-            FlushUpdates();
-            StmtPtr newStmt = VisitStmt(stmt);
-            newStmts.push_back(newStmt);
+        std::vector<StmtPtr> statements;
+        statements.reserve(op->stmts_.size());
+        for (const auto& statement : op->stmts_) {
+            statements.push_back(VisitStmt(statement));
         }
-
-        FlushUpdates();
-        return std::make_shared<SeqStmts>(newStmts, op->span_);
+        return std::make_shared<SeqStmts>(std::move(statements), op->span_);
     }
 
     StmtPtr VisitStmt_(const TensorOpStmtPtr& op) override
     {
-        VarPtr resultToken = op->result_token_ ? op->result_token_ : CreateTokenVar(op->span_, op->opcode_);
+        std::vector<TensorAccess> writes;
+        std::unordered_set<RawTensor*> writtenRaws;
+        for (const auto& result : op->result_) {
+            auto tensor = AsLogicalTensor(result);
+            auto token = CreateTokenVar(tensor, op->span_, TokenKind::WRITE);
+            tensor->SetWriteToken(token);
+            auto* raw = tensor->GetRawTensor().get();
+            writes.push_back({raw, std::move(token)});
+            writtenRaws.insert(raw);
+        }
 
-        std::vector<VarPtr> newTokens = op->tokens_;
-        std::unordered_set<VarPtr> seen(op->tokens_.begin(), op->tokens_.end());
-
-        for (auto& arg : op->args_) {
-            auto var = std::dynamic_pointer_cast<const Var>(arg);
-            if (!var) {
+        std::vector<TensorAccess> reads;
+        std::unordered_map<RawTensor*, VarPtr> opReadTokens;
+        for (const auto& arg : op->args_) {
+            auto tensor = AsLogicalTensor(arg);
+            auto* raw = tensor->GetRawTensor().get();
+            auto it = opReadTokens.find(raw);
+            if (it != opReadTokens.end()) {
+                tensor->SetReadToken(it->second);
                 continue;
             }
-            auto it = producers_.find(var);
-            if (it != producers_.end() && !seen.count(it->second)) {
-                seen.insert(it->second);
-                newTokens.push_back(it->second);
+
+            VarPtr token;
+            if (!writtenRaws.count(raw)) {
+                token = rawTokenStates_[raw].latestRead;
             }
+            if (!token) {
+                token = CreateTokenVar(tensor, op->span_, TokenKind::READ);
+            }
+            tensor->SetReadToken(token);
+            opReadTokens.emplace(raw, token);
+            reads.push_back({raw, std::move(token)});
         }
 
-        if (op->opcode_ == "ASSEMBLE" || op->opcode_ == "ASSEMBLE_SSA") {
-            for (auto& res : op->result_) {
-                if (!res) {
-                    continue;
-                }
-                auto it = producers_.find(res);
-                if (it != producers_.end() && !seen.count(it->second)) {
-                    seen.insert(it->second);
-                    newTokens.push_back(it->second);
-                }
+        std::vector<VarPtr> tokens = op->tokens_;
+        std::unordered_set<VarPtr> seenTokens(tokens.begin(), tokens.end());
+        for (const auto& read : reads) {
+            if (!writtenRaws.count(read.raw)) {
+                AppendToken(rawTokenStates_[read.raw].latestWrite, tokens, seenTokens);
             }
         }
+        for (const auto& write : writes) {
+            const auto& state = rawTokenStates_[write.raw];
+            AppendToken(state.latestRead ? state.latestRead : state.latestWrite, tokens, seenTokens);
+        }
 
-        auto newStmt = npu::tile_fwk::RebuildTensorOpStmt(op, op->result_, resultToken, op->args_, newTokens,
-                                                          op->span_);
+        std::vector<VarPtr> resultTokens = op->result_token_;
+        for (const auto& write : writes) {
+            resultTokens.push_back(write.token);
+        }
+        for (const auto& read : reads) {
+            resultTokens.push_back(read.token);
+        }
 
-        UpdateProducers(op->result_, resultToken);
-        return newStmt;
+        auto mutableOp = std::const_pointer_cast<TensorOpStmt>(op);
+        mutableOp->tokens_ = std::move(tokens);
+        mutableOp->result_token_ = std::move(resultTokens);
+
+        for (const auto& write : writes) {
+            auto& state = rawTokenStates_[write.raw];
+            state.latestWrite = write.token;
+            state.latestRead = nullptr;
+            state.readRevision = 0;
+        }
+        for (const auto& read : reads) {
+            if (!writtenRaws.count(read.raw)) {
+                auto& state = rawTokenStates_[read.raw];
+                state.latestRead = read.token;
+                state.readRevision = ++readRevision_;
+            }
+        }
+        return op;
     }
 
     StmtPtr VisitStmt_(const IfStmtPtr& op) override
     {
-        auto savedProducers = producers_;
+        auto incomingStates = rawTokenStates_;
 
-        auto processedThen = SeqStmts::AsMut(VisitStmt(op->thenBody_));
-        auto thenProducers = producers_;
+        rawTokenStates_ = incomingStates;
+        auto thenBody = SeqStmts::AsMut(VisitStmt(op->thenBody_));
+        auto thenStates = rawTokenStates_;
 
-        producers_ = savedProducers;
-        std::optional<SeqStmtsPtr> processedElse;
+        rawTokenStates_ = incomingStates;
+        std::optional<SeqStmtsPtr> elseBody;
+        RawTokenStateMap elseStates = incomingStates;
         if (op->elseBody_) {
-            processedElse = SeqStmts::AsMut(VisitStmt(op->elseBody_.value()));
+            elseBody = SeqStmts::AsMut(VisitStmt(*op->elseBody_));
+            elseStates = rawTokenStates_;
         }
 
-        size_t originalReturnVarCount = op->returnVars_.size();
-        auto thenTokens = CollectBranchOutputTokens(processedThen);
-        auto elseTokens = processedElse ? CollectBranchOutputTokens(processedElse.value()) : std::vector<VarPtr>{};
+        auto thenTerminatorValues = GetTerminatorValues(thenBody);
+        auto elseTerminatorValues = elseBody ? GetTerminatorValues(*elseBody) : std::vector<ExprPtr>{};
+        std::vector<ExprPtr> thenTokenValues;
+        std::vector<ExprPtr> elseTokenValues;
+        std::vector<VarPtr> returnVars = op->returnVars_;
+        std::unordered_map<RawTensor*, VarPtr> returnedTensorWrites;
 
-        size_t tokenCount = std::max(thenTokens.size(), elseTokens.size());
-        std::vector<VarPtr> phiTokens;
-        for (size_t i = 0; i < tokenCount; ++i) {
-            phiTokens.push_back(CreateTokenVar(op->span_));
-        }
-
-        std::vector<VarPtr> thenYieldTokens = thenTokens;
-        std::vector<VarPtr> elseYieldTokens = elseTokens;
-        while (thenYieldTokens.size() < tokenCount) {
-            thenYieldTokens.push_back(CreateTokenVar(op->span_));
-        }
-        while (elseYieldTokens.size() < tokenCount) {
-            elseYieldTokens.push_back(CreateTokenVar(op->span_));
-        }
-
-        auto newThenBody = ExtendYieldWithTokens(processedThen, thenYieldTokens);
-        std::optional<SeqStmtsPtr> newElseBody;
-        if (processedElse) {
-            newElseBody = ExtendYieldWithTokens(processedElse.value(), elseYieldTokens);
-        }
-
-        std::vector<VarPtr> newReturnVars = op->returnVars_;
-        for (auto& phiToken : phiTokens) {
-            newReturnVars.push_back(phiToken);
-        }
-
-        VarTokenMap returnVarToPhiToken;
-        auto thenMapping = BuildReturnVarToTokenIndex(processedThen, originalReturnVarCount, thenTokens);
-
-        for (size_t i = 0; i < originalReturnVarCount; ++i) {
-            if (thenMapping[i] != SIZE_MAX && thenMapping[i] < phiTokens.size()) {
-                returnVarToPhiToken[op->returnVars_[i]] = phiTokens[thenMapping[i]];
+        size_t originalReturnCount = op->returnVars_.size();
+        ASSERT(!elseBody || thenTerminatorValues.size() == elseTerminatorValues.size());
+        for (size_t i = 0; i < originalReturnCount; ++i) {
+            auto returnTensor = AsLogicalTensor(op->returnVars_[i]);
+            if (!returnTensor) {
+                continue;
+            }
+            auto thenTensor = AsLogicalTensor(thenTerminatorValues[i]);
+            auto elseTensor = elseBody ? AsLogicalTensor(elseTerminatorValues[i]) : nullptr;
+            auto thenToken = thenTensor ? thenTensor->GetWriteToken() : nullptr;
+            auto elseToken = elseTensor ? elseTensor->GetWriteToken() : nullptr;
+            auto token = MergeIfToken(thenToken, elseToken, returnTensor->name_, TokenKind::WRITE, op->span_,
+                                      thenTokenValues, elseTokenValues, returnVars);
+            if (token) {
+                returnTensor->SetWriteToken(token);
+                if (returnTensor->GetRawTensor()) {
+                    returnedTensorWrites[returnTensor->GetRawTensor().get()] = token;
+                }
             }
         }
 
-        QueueUpdate(returnVarToPhiToken);
+        RawTokenStateMap mergedStates = incomingStates;
+        const auto& liveOutRaws = controlLiveOutRaws_[op.get()];
+        for (const auto& [raw, baseName] : registeredRaws_) {
+            if (!liveOutRaws.count(raw)) {
+                continue;
+            }
+            auto thenState = GetRawState(thenStates, raw);
+            auto elseState = GetRawState(elseStates, raw);
+            RawTokenState mergedState;
+            auto returnedWrite = returnedTensorWrites.find(raw);
+            if (returnedWrite != returnedTensorWrites.end()) {
+                mergedState.latestWrite = returnedWrite->second;
+            } else {
+                mergedState.latestWrite = MergeIfToken(thenState.latestWrite, elseState.latestWrite, baseName,
+                                                       TokenKind::WRITE, op->span_, thenTokenValues, elseTokenValues,
+                                                       returnVars);
+            }
+            bool sameReadState = thenState.latestRead == elseState.latestRead &&
+                                 thenState.readRevision == elseState.readRevision;
+            mergedState.latestRead = MergeIfToken(thenState.latestRead, elseState.latestRead, baseName, TokenKind::READ,
+                                                  op->span_, thenTokenValues, elseTokenValues, returnVars,
+                                                  !sameReadState);
+            mergedState.readRevision = mergedState.latestRead ?
+                                           (sameReadState ? thenState.readRevision : ++readRevision_) :
+                                           0;
+            if (mergedState.latestWrite || mergedState.latestRead) {
+                mergedStates[raw] = std::move(mergedState);
+            } else {
+                mergedStates.erase(raw);
+            }
+        }
+        for (const auto& [raw, token] : returnedTensorWrites) {
+            mergedStates[raw].latestWrite = token;
+        }
+        rawTokenStates_ = std::move(mergedStates);
 
-        return std::make_shared<IfStmt>(op->condition_, newThenBody, newElseBody, newReturnVars, op->span_);
+        thenBody = AppendTerminatorValues(thenBody, thenTokenValues);
+        if (elseBody) {
+            elseBody = AppendTerminatorValues(*elseBody, elseTokenValues);
+        } else if (!elseTokenValues.empty()) {
+            elseBody = std::make_shared<SeqStmts>(
+                std::vector<StmtPtr>{std::make_shared<YieldStmt>(elseTokenValues, op->span_)}, op->span_);
+        }
+
+        return std::make_shared<IfStmt>(op->condition_, thenBody, elseBody, std::move(returnVars), op->span_);
     }
 
     StmtPtr VisitStmt_(const ForStmtPtr& op) override
     {
-        auto savedProducers = producers_;
+        auto incomingStates = rawTokenStates_;
+        rawTokenStates_ = incomingStates;
+        auto body = SeqStmts::AsMut(VisitStmt(op->body_));
+        auto bodyStates = rawTokenStates_;
 
-        auto processedBody = SeqStmts::AsMut(VisitStmt(op->body_));
+        auto bodyTerminatorValues = GetTerminatorValues(body);
+        std::vector<IterArgPtr> iterArgs = op->iterArgs_;
+        std::vector<ExprPtr> bodyTokenValues;
+        std::vector<VarPtr> returnVars = op->returnVars_;
+        std::unordered_map<RawTensor*, VarPtr> returnedTensorWrites;
 
-        size_t originalReturnVarCount = op->returnVars_.size();
-        auto bodyTokens = CollectBranchOutputTokens(processedBody);
-
-        std::vector<VarPtr> carryTokens;
-        for (size_t i = 0; i < bodyTokens.size(); ++i) {
-            carryTokens.push_back(CreateTokenVar(op->span_));
-        }
-
-        std::vector<VarPtr> newReturnVars = op->returnVars_;
-        for (auto& carryToken : carryTokens) {
-            newReturnVars.push_back(carryToken);
-        }
-
-        VarTokenMap returnVarToCarryToken;
-        auto bodyMapping = BuildReturnVarToTokenIndex(processedBody, originalReturnVarCount, bodyTokens);
-
-        for (size_t i = 0; i < originalReturnVarCount; ++i) {
-            if (bodyMapping[i] != SIZE_MAX && bodyMapping[i] < carryTokens.size()) {
-                returnVarToCarryToken[op->returnVars_[i]] = carryTokens[bodyMapping[i]];
+        size_t originalReturnCount = op->returnVars_.size();
+        ASSERT(op->iterArgs_.size() == bodyTerminatorValues.size());
+        for (size_t i = 0; i < originalReturnCount; ++i) {
+            auto returnTensor = AsLogicalTensor(op->returnVars_[i]);
+            if (!returnTensor) {
+                continue;
+            }
+            auto initTensor = AsLogicalTensor(op->iterArgs_[i]->initValue_);
+            auto bodyTensor = AsLogicalTensor(bodyTerminatorValues[i]);
+            auto initToken = initTensor ? initTensor->GetWriteToken() : nullptr;
+            auto bodyToken = bodyTensor ? bodyTensor->GetWriteToken() : nullptr;
+            auto token = AddForToken(initToken, bodyToken, returnTensor->name_, TokenKind::WRITE, op->span_, iterArgs,
+                                     bodyTokenValues, returnVars);
+            if (token) {
+                returnTensor->SetWriteToken(token);
+                if (returnTensor->GetRawTensor()) {
+                    returnedTensorWrites[returnTensor->GetRawTensor().get()] = token;
+                }
             }
         }
 
-        QueueUpdate(returnVarToCarryToken);
-        producers_ = savedProducers;
+        RawTokenStateMap mergedStates = incomingStates;
+        const auto& liveOutRaws = controlLiveOutRaws_[op.get()];
+        for (const auto& [raw, baseName] : registeredRaws_) {
+            if (!liveOutRaws.count(raw)) {
+                continue;
+            }
+            auto initState = GetRawState(incomingStates, raw);
+            auto bodyState = GetRawState(bodyStates, raw);
+            RawTokenState mergedState;
+            auto returnedWrite = returnedTensorWrites.find(raw);
+            if (returnedWrite != returnedTensorWrites.end()) {
+                mergedState.latestWrite = returnedWrite->second;
+            } else {
+                mergedState.latestWrite = AddForToken(initState.latestWrite, bodyState.latestWrite, baseName,
+                                                      TokenKind::WRITE, op->span_, iterArgs, bodyTokenValues,
+                                                      returnVars);
+            }
+            bool sameReadState = initState.latestRead == bodyState.latestRead &&
+                                 initState.readRevision == bodyState.readRevision;
+            mergedState.latestRead = AddForToken(initState.latestRead, bodyState.latestRead, baseName, TokenKind::READ,
+                                                 op->span_, iterArgs, bodyTokenValues, returnVars, !sameReadState);
+            mergedState.readRevision = mergedState.latestRead ?
+                                           (sameReadState ? initState.readRevision : ++readRevision_) :
+                                           0;
+            if (mergedState.latestWrite || mergedState.latestRead) {
+                mergedStates[raw] = std::move(mergedState);
+            } else {
+                mergedStates.erase(raw);
+            }
+        }
+        for (const auto& [raw, token] : returnedTensorWrites) {
+            mergedStates[raw].latestWrite = token;
+        }
+        rawTokenStates_ = std::move(mergedStates);
 
-        return std::make_shared<ForStmt>(op->loopVar_, op->start_, op->stop_, op->step_, op->iterArgs_, processedBody,
-                                         newReturnVars, op->span_, op->attrs_);
+        body = AppendTerminatorValues(body, bodyTokenValues);
+        return std::make_shared<ForStmt>(op->loopVar_, op->start_, op->stop_, op->step_, std::move(iterArgs), body,
+                                         std::move(returnVars), op->span_, op->attrs_);
     }
+
+    RawTokenStateMap rawTokenStates_;
+    uint64_t readRevision_{0};
+    RawNameMap registeredRaws_;
+    RawSet liveRaws_;
+    std::unordered_map<const Stmt*, RawSet> controlLiveOutRaws_;
 };
 
-SeqStmtsPtr InferTokenPass(SeqStmtsPtr seq)
+SeqStmtsPtr RunInferTokenPass(SeqStmtsPtr seq)
 {
-    InferTokenMutator mutator;
-    return SeqStmts::AsMut(mutator.Apply(seq));
+    InferTokenPass inferTokenPass;
+    return inferTokenPass.Apply(seq);
 }
 
 } // namespace pypto::ir

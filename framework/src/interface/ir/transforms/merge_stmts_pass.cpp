@@ -120,9 +120,7 @@ static std::vector<VarPtr> CollectOutputVars(const std::vector<StmtPtr>& stmts)
             for (auto& var : t->result_) {
                 outputs.push_back(var);
             }
-            if (t->result_token_) {
-                outputs.push_back(t->result_token_);
-            }
+            outputs.insert(outputs.end(), t->result_token_.begin(), t->result_token_.end());
         } else if (auto i = As<IfStmt>(stmt)) {
             for (auto& var : i->returnVars_) {
                 outputs.push_back(var);

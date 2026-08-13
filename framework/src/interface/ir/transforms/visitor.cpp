@@ -288,8 +288,8 @@ void IRVisitor::VisitStmt_(const TensorOpStmtPtr& op)
     for (auto v : op->tokens_) {
         VisitExpr(v);
     }
-    if (op->result_token_) {
-        VisitExpr(op->result_token_);
+    for (const auto& token : op->result_token_) {
+        VisitExpr(token);
     }
 }
 

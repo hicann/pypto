@@ -49,8 +49,8 @@ def test_waw_conflict():
 
     ops = _assembles(func)
     assert len(ops) == 2
-    assert ops[0].result_token is not None
-    assert ops[0].result_token in ops[1].tokens
+    assert ops[0].result_token
+    assert ops[0].result_token[0] in ops[1].tokens
 
 
 def test_waw_no_conflict():
@@ -69,7 +69,7 @@ def test_waw_no_conflict():
     ops = _assembles(func)
     assert len(ops) == 2
     # No edge created: the first write produced no token consumed by the second.
-    assert ops[0].result_token not in ops[1].tokens
+    assert not ops[0].result_token
 
 
 # ---------- Write-After-Read ----------
@@ -130,7 +130,7 @@ def test_scalar_dependency():
 
     ops = _assembles(func)
     assert len(ops) == 2
-    assert ops[0].result_token is not None  # assemble used generate by get_tensor_data
+    assert ops[0].result_token  # assemble used generate by get_tensor_data
     assert len(ops[1].tokens) == 1
 
 

@@ -411,6 +411,8 @@ StructuralHasher::ResultType StructuralHasher::HashType(const TypePtr& type)
             INTERNAL_CHECK(t) << "structural_hash encountered null type in TupleType";
             h = HashCombine(h, HashType(t));
         }
+    } else if (auto token_type = As<TokenType>(type)) {
+        h = HashCombine(h, static_cast<ResultType>(token_type->kind_));
     } else if (IsFieldLessType(type)) {
         // Field-less singletons have no fields; only the type name is hashed (already done above)
     } else {

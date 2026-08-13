@@ -1791,7 +1791,7 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
             oOp->tensor = newRaw;
             auto deps = builder.GetDependToken(parent);
             if (!deps.empty()) {
-                op.result_token_ = deps[0];
+                op.result_token_ = {deps[0]};
             }
             op.tokens_ = tokenList;
         }

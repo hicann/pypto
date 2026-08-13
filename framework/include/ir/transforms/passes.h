@@ -230,6 +230,11 @@ Pass Canonicalize();
 Pass TokenPass();
 
 /**
+ * \brief Create a pass that infers token dependencies
+ */
+Pass InferTokenPass();
+
+/**
  * \brief Create a pass that flattens nested call expressions
  */
 Pass FlattenCallExpr();

@@ -47,15 +47,15 @@ LogicalTensors VarsToLogicalTensors(const std::vector<ir::VarPtr>& vars)
 
 } // namespace
 
-ir::StmtPtr RebuildTensorOpStmt(const ir::TensorOpStmtPtr& src, std::vector<ir::VarPtr> results, ir::VarPtr resultToken,
-                                std::vector<ir::ExprPtr> args, std::vector<ir::VarPtr> tokens, ir::Span span,
-                                Function* targetFunc)
+ir::StmtPtr RebuildTensorOpStmt(const ir::TensorOpStmtPtr& src, std::vector<ir::VarPtr> results,
+                                std::vector<ir::VarPtr> resultTokens, std::vector<ir::ExprPtr> args,
+                                std::vector<ir::VarPtr> tokens, ir::Span span, Function* targetFunc)
 {
     ir::Span outSpan = span.IsUnknown() ? src->span_ : span;
 
     auto srcOp = std::dynamic_pointer_cast<const Operation>(src);
     if (srcOp == nullptr) {
-        return std::make_shared<const ir::TensorOpStmt>(std::move(results), std::move(resultToken), src->opcode_,
+        return std::make_shared<const ir::TensorOpStmt>(std::move(results), std::move(resultTokens), src->opcode_,
                                                         std::move(args), std::move(tokens), src->attrs_, outSpan);
     }
 
@@ -63,7 +63,7 @@ ir::StmtPtr RebuildTensorOpStmt(const ir::TensorOpStmtPtr& src, std::vector<ir::
         << "RebuildTensorOpStmt: Operation has no owning function, opcode=" << src->opcode_;
     auto iOperands = ExprsToLogicalTensors(args);
     auto oOperands = VarsToLogicalTensors(results);
-    return srcOp->CloneTensorOpStmt(iOperands, oOperands, resultToken, tokens, outSpan, targetFunc);
+    return srcOp->CloneTensorOpStmt(iOperands, oOperands, resultTokens, tokens, outSpan, targetFunc);
 }
 
 } // namespace npu::tile_fwk

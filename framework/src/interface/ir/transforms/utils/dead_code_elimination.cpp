@@ -104,9 +104,10 @@ void FindLiveRootsRecursiveImpl(const std::vector<StmtPtr>& stmts, const Removab
         if (is_leaf && !is_removable(stmt)) {
             auto all_refs = CollectStmtVarRefs(stmt);
             // Do not keep an unconsumed result token alive just because its TensorOp is non-removable.
-            if (auto tensor_op = std::dynamic_pointer_cast<const TensorOpStmt>(stmt);
-                tensor_op && tensor_op->result_token_) {
-                all_refs.erase(tensor_op->result_token_.get());
+            if (auto tensor_op = std::dynamic_pointer_cast<const TensorOpStmt>(stmt)) {
+                for (const auto& token : tensor_op->result_token_) {
+                    all_refs.erase(token.get());
+                }
             }
             live.insert(all_refs.begin(), all_refs.end());
         }
@@ -170,8 +171,11 @@ std::vector<StmtPtr> FilterDeadCodeImpl(const std::vector<StmtPtr>& stmts, const
                         break;
                     }
                 }
-                if (tensor_op->result_token_ && live.count(tensor_op->result_token_.get())) {
-                    any_live = true;
+                for (const auto& token : tensor_op->result_token_) {
+                    if (live.count(token.get())) {
+                        any_live = true;
+                        break;
+                    }
                 }
                 if (!any_live)
                     continue;
@@ -348,8 +352,9 @@ std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts, const 
                         memory_defs.push_back({r.get(), *mid});
                     }
                 }
-                if (tensor_op->result_token_)
-                    defs.push_back(tensor_op->result_token_.get());
+                for (const auto& token : tensor_op->result_token_) {
+                    defs.push_back(token.get());
+                }
                 std::unordered_set<const Var*> uses;
                 for (const auto& arg : tensor_op->args_) {
                     auto arg_uses = CollectVarUses(arg);

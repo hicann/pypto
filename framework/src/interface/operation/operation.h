@@ -486,8 +486,9 @@ public:
                               const LogicalTensors& oOperandList) const;
 
     std::shared_ptr<Operation> CloneTensorOpStmt(const LogicalTensors& iOperandList, const LogicalTensors& oOperandList,
-                                                 const ir::VarPtr& resultToken, const std::vector<ir::VarPtr>& tokens,
-                                                 ir::Span span, Function* targetFunc = nullptr) const;
+                                                 const std::vector<ir::VarPtr>& resultTokens,
+                                                 const std::vector<ir::VarPtr>& tokens, ir::Span span,
+                                                 Function* targetFunc = nullptr) const;
 
     [[nodiscard]] std::string GetOpcodeStr(bool appendTile = false) const;
     [[nodiscard]] CoreType GetCoreType() const { return coreType_; }

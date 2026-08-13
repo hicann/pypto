@@ -131,10 +131,10 @@ private:
                 }
                 // prev is a read (WAR) or a write (WAW); both serialize
                 // behind a producer->consumer token edge.
-                if (prev.op->result_token_ == nullptr) {
-                    prev.op->result_token_ = builder_.CreateTokenVar(prev.op->GetSpan());
+                if (prev.op->result_token_.empty()) {
+                    prev.op->result_token_ = {builder_.CreateTokenVar(prev.op->GetSpan())};
                 }
-                tokenSet.insert(prev.op->result_token_);
+                tokenSet.insert(prev.op->result_token_.front());
             }
         }
     }

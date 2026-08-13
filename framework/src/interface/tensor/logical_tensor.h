@@ -125,6 +125,10 @@ public:
     void SetMagic(int m) { magic = m; }
     int GetRawMagic() const { return tensor->GetRawMagic(); }
     std::shared_ptr<RawTensor> GetRawTensor() const { return tensor; }
+    ir::VarPtr GetReadToken() const { return readToken_; }
+    ir::VarPtr GetWriteToken() const { return writeToken_; }
+    void SetReadToken(const ir::VarPtr& token) { readToken_ = token; }
+    void SetWriteToken(const ir::VarPtr& token) { writeToken_ = token; }
     const Offset& GetOffset() const { return offset; }
     const Shape& GetShape() const { return shape; }
     void UpdateOffset(const Offset& newOffset)
@@ -205,6 +209,8 @@ private:
     int readyTime_{INVALID_TIME};
     int remainingTime_{INVALID_TIME};
     Function* function_;
+    ir::VarPtr readToken_;
+    ir::VarPtr writeToken_;
 
     std::set<Operation*, CompareOp> producers_;
     std::set<Operation*, CompareOp> consumers_;

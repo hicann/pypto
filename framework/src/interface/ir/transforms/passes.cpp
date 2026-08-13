@@ -15,6 +15,7 @@
 
 #include "ir/transforms/utils/dead_code_elimination.h"
 #include "ir/transforms/utils/canonicalize.h"
+#include "ir/transforms/infer_token_pass.h"
 #include "ir/transforms/merge_stmts_pass.h"
 
 #include <algorithm>
@@ -27,6 +28,7 @@
 
 #include "core/error.h"
 #include "core/logging.h"
+#include "interface/tensor/irbuilder.h"
 #include "ir/function.h"
 #include "ir/program.h"
 #include "ir/transforms/ir_property.h"
@@ -229,6 +231,24 @@ Pass Canonicalize()
                                                     func->funcType_, func->entry_);
         },
         "Canonicalize");
+}
+
+Pass InferTokenPass()
+{
+    return CreateFunctionPass(
+        [](const FunctionPtr& func) -> FunctionPtr {
+            if (!func || !func->body_)
+                return func;
+            if (!npu::tile_fwk::IRContext::Get().AssembleNewLogicalTensor())
+                return func;
+            auto seq = SeqStmts::AsMut(func->body_);
+            auto inferredBody = ::pypto::ir::RunInferTokenPass(seq);
+            if (inferredBody == func->body_)
+                return func;
+            return std::make_shared<const Function>(func->name_, func->params_, func->returnTypes_, inferredBody,
+                                                    func->span_, func->funcType_, func->entry_);
+        },
+        "InferTokenPass");
 }
 
 Pass MergeStmtsIntoIf()

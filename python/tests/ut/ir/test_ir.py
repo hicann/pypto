@@ -419,7 +419,7 @@ def test_basic_stmt():
     token = ir.Var("tok", st, span)
     scalar_op = pypto_impl.ir.ScalarOpStmt(x, token, "add", [val1], span)
     assert str(scalar_op) == "x, tok = add(1)"
-    tensor_op = ir.TensorOpStmt([x], token, "matmul", [val1], [], {}, span)
+    tensor_op = ir.TensorOpStmt([x], [token], "matmul", [val1], [], {}, span)
     assert str(tensor_op) == "x, tok = matmul(1)"
 
     # Function

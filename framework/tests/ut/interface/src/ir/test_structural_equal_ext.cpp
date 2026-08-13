@@ -240,6 +240,10 @@ TEST_F(IRStructEqTypeTest, TestTupleAndOtherTypes)
 
     // MemRefType singleton
     EXPECT_TRUE(structural_equal(GetMemRefType(), GetMemRefType()));
+
+    // TokenType kind match / mismatch
+    EXPECT_TRUE(structural_equal(GetReadTokenType(), GetReadTokenType()));
+    EXPECT_FALSE(structural_equal(GetReadTokenType(), GetWriteTokenType()));
 }
 
 // ============================================================================

@@ -22,6 +22,7 @@
 #include "ir/span.h"
 #include "ir/stmt.h"
 #include "ir/transforms/base/visitor.h"
+#include "ir/type.h"
 #include "ir/verifier/verification_error.h"
 #include "ir/verifier/verifier.h"
 
@@ -309,9 +310,12 @@ void SSAVerifier::VisitStmt_(const TensorOpStmtPtr& op)
         }
         Define(result);
     }
-    if (op->result_token_) {
-        CheckVariableAssignment(op->result_token_);
-        Define(op->result_token_);
+    for (const auto& token : op->result_token_) {
+        auto tokenType = std::dynamic_pointer_cast<const TokenType>(token->GetType());
+        if (!tokenType || tokenType->kind_ != TokenKind::READ) {
+            CheckVariableAssignment(token);
+        }
+        Define(token);
     }
 }
 

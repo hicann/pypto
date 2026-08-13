@@ -606,24 +606,37 @@ public:
 
 using PtrTypePtr = std::shared_ptr<const PtrType>;
 
+enum class TokenKind : uint8_t {
+    NORMAL,
+    READ,
+    WRITE,
+};
+
 /**
  * \brief Token type representation
  *
  * Represents an opaque token value used for side-effect ordering.
  * Tokens carry no data and are only used to establish dependencies
- * between operations.
+ * between operations.READ and WRITE tokens are semantic tokens used
+ * by the tensor graph; NORMAL tokens are used by tile graph.
  *
  * IR Syntax:
  *      `token`
  */
 class TokenType : public Type {
 public:
-    TokenType() = default;
+    TokenKind kind_;
+
+    explicit TokenType(TokenKind kind = TokenKind::NORMAL) : kind_(kind) {}
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::TokenType; }
     [[nodiscard]] std::string TypeName() const override { return "Token"; }
 
-    static constexpr auto GetFieldDescriptors() { return Type::GetFieldDescriptors(); }
+    static constexpr auto GetFieldDescriptors()
+    {
+        return std::tuple_cat(Type::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&TokenType::kind_, "kind")));
+    }
 };
 
 using TokenTypePtr = std::shared_ptr<const TokenType>;
@@ -633,11 +646,25 @@ using TokenTypePtr = std::shared_ptr<const TokenType>;
  *
  * \return Shared pointer to TokenType
  */
-inline TokenTypePtr GetTokenType()
+inline TokenTypePtr GetTokenType(TokenKind kind = TokenKind::NORMAL)
 {
-    static const auto tokenType = std::make_shared<TokenType>();
-    return tokenType;
+    static const auto normalTokenType = std::make_shared<TokenType>(TokenKind::NORMAL);
+    static const auto readTokenType = std::make_shared<TokenType>(TokenKind::READ);
+    static const auto writeTokenType = std::make_shared<TokenType>(TokenKind::WRITE);
+    switch (kind) {
+        case TokenKind::READ:
+            return readTokenType;
+        case TokenKind::WRITE:
+            return writeTokenType;
+        case TokenKind::NORMAL:
+        default:
+            return normalTokenType;
+    }
 }
+
+inline TokenTypePtr GetReadTokenType() { return GetTokenType(TokenKind::READ); }
+
+inline TokenTypePtr GetWriteTokenType() { return GetTokenType(TokenKind::WRITE); }
 
 /**
  * \brief None type representation
