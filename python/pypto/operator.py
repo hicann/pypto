@@ -53,13 +53,13 @@ def sigmoid(input: Tensor) -> Tensor:
     if soc_version in ["Kirin9030", "KirinX90"]:
         exp_res = pypto.exp(pypto.mul(input, f_nega_1))
         res = pypto.add(exp_res, f_1)
-        ones = pypto.full(res.shape, 1.0, dtype, valid_shape=res.shape)
+        ones = pypto.full(res.shape, 1.0, dtype, valid_shape=res.valid_shape)
         res = pypto.div(ones, res, pypto.PrecisionType.INTRINSIC)
     else:
         input = pypto.cast(input, pypto.DT_FP32)
         exp_res = pypto.exp(pypto.mul(input, f_nega_1))
         res = pypto.add(exp_res, f_1)
-        ones = pypto.full(res.shape, 1.0, pypto.DT_FP32, valid_shape=res.shape)
+        ones = pypto.full(res.shape, 1.0, pypto.DT_FP32, valid_shape=res.valid_shape)
         res = pypto.div(ones, res, pypto.PrecisionType.INTRINSIC)
 
         if dtype != pypto.DT_FP32:
