@@ -126,6 +126,23 @@ torch.npu.synchronize()
 
 核函数的调用是异步的。首次调用时触发JIT编译，后续调用直接执行缓存的二进制文件，无需重复编译。
 
+### stream的含义与设置
+
+`stream`指定Kernel下发的NPU执行流。当前仅支持传入`None`，表示使用当前Stream：
+
+```python
+kernel[None, num_cores](x, out)
+```
+
+显式传入`torch.npu.Stream`暂未验证，不建议使用。
+
+### blockDim的含义与设置
+
+`block_dim`为逻辑核数，JIT在launch前会将其clamp到平台可用核数上限：若`block_dim`超过上限则告警并截断。上限取决于编译产物的核类型，由`is_aiv_only`自动判定：
+
+- **纯Vector算子**（kernel仅含`section_vector`、不含`section_cube`）：编译为aiv-only（arch选`dav-*-vec`）。`block_dim`上限为`vector_core_num`，语义为启动多少个AIV实例。例如某处理器有40个AIV核，建议设为40。
+- **融合算子**（kernel同时含`section_cube`与`section_vector`）：编译为mix（arch选`dav-c220`/`dav-c310`）。`block_dim`上限为`core_num`，语义为启动多少个AICore组合。运行时每个AICore按1:2拆分为1个AIC与2个AIV，例如20个AICore的处理器建议设为20，实际占用20个AIC与40个AIV。
+
 ## Tiling参数化
 
 `@pl.jit()`支持通过`tiling_key`参数实现Tiling参数化，在启动时通过字典选择不同的Kernel实例化，使每种模式各编一份专用Kernel（消除死分支、拿到最优指令）：
