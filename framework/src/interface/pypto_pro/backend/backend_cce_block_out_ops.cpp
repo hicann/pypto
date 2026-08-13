@@ -1619,12 +1619,6 @@ REGISTER_BACKEND_OP(BackendCCE, "block.mins")
         return MakeBlockOutScalarCodegenCCE("TMINS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(BackendCCE, "block.lrelu")
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutScalarCodegenCCE("TLRELU", op, codegen);
-    });
-
 REGISTER_BACKEND_OP(BackendCCE, "block.axpy")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
@@ -2048,12 +2042,6 @@ REGISTER_BACKEND_OP(BackendCCE, "block.xors")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutTernaryCodegenCCE("TXORS", op, codegen);
-    });
-
-REGISTER_BACKEND_OP(BackendCCE, "block.prelu")
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutTernaryCodegenCCE("TPRELU", op, codegen);
     });
 
 REGISTER_BACKEND_OP(BackendCCE, "block.addc")

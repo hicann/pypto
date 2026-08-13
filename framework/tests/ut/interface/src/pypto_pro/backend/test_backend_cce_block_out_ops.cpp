@@ -219,8 +219,7 @@ INSTANTIATE_TEST_SUITE_P(BlockOutScalarOps, ScalarOpTest,
                                            SimpleOpParam{"block.rems", "TREMS"}, SimpleOpParam{"block.ands", "TANDS"},
                                            SimpleOpParam{"block.ors", "TORS"}, SimpleOpParam{"block.shls", "TSHLS"},
                                            SimpleOpParam{"block.shrs", "TSHRS"}, SimpleOpParam{"block.maxs", "TMAXS"},
-                                           SimpleOpParam{"block.mins", "TMINS"}, SimpleOpParam{"block.lrelu", "TLRELU"},
-                                           SimpleOpParam{"block.axpy", "TAXPY"}));
+                                           SimpleOpParam{"block.mins", "TMINS"}, SimpleOpParam{"block.axpy", "TAXPY"}));
 
 class RowReductionOpTest : public ::testing::TestWithParam<SimpleOpParam> {};
 TEST_P(RowReductionOpTest, EmitsCorrectCode)
@@ -271,8 +270,8 @@ TEST_P(TernaryOpTest, EmitsCorrectCode)
 }
 INSTANTIATE_TEST_SUITE_P(BlockOutTernaryOps, TernaryOpTest,
                          ::testing::Values(SimpleOpParam{"block.xor", "TXOR"}, SimpleOpParam{"block.xors", "TXORS"},
-                                           SimpleOpParam{"block.prelu", "TPRELU"}, SimpleOpParam{"block.addc", "TADDC"},
-                                           SimpleOpParam{"block.subc", "TSUBC"}, SimpleOpParam{"block.addsc", "TADDSC"},
+                                           SimpleOpParam{"block.addc", "TADDC"}, SimpleOpParam{"block.subc", "TSUBC"},
+                                           SimpleOpParam{"block.addsc", "TADDSC"},
                                            SimpleOpParam{"block.subsc", "TSUBSC"},
                                            SimpleOpParam{"block.gemv_acc", "TGEMV_ACC"},
                                            SimpleOpParam{"block.gemv_bias", "TGEMV_BIAS"}));

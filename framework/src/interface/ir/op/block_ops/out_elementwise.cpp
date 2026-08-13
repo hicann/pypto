@@ -199,7 +199,6 @@ REGISTER_BLOCK_OUT_BINARY_SCALAR(shls);
 REGISTER_BLOCK_OUT_BINARY_SCALAR(shrs);
 REGISTER_BLOCK_OUT_BINARY_SCALAR(maxs);
 REGISTER_BLOCK_OUT_BINARY_SCALAR(mins);
-REGISTER_BLOCK_OUT_BINARY_SCALAR(lrelu);
 REGISTER_BLOCK_OUT_BINARY_SCALAR(axpy);
 
 #undef REGISTER_BLOCK_OUT_BINARY_SCALAR
@@ -346,19 +345,6 @@ REGISTER_OP("block.xors")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.xors", 4);
-    });
-
-// prelu with tmp buffer (out, tile, slope, tmp): 4 args.
-REGISTER_OP("block.prelu")
-    .set_op_category("BlockOp")
-    .set_description("Block explicit-output parametric ReLU: out = prelu(tile, slope); tmp is scratch buffer")
-    .add_argument("out", "Pre-allocated output tile (TileType)")
-    .add_argument("tile", "Input tile (TileType)")
-    .add_argument("slope", "Slope tile (TileType)")
-    .add_argument("tmp", "Scratch tile required by hardware (TileType)")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutTileType(args, kwargs, "block.prelu", 4);
     });
 
 // Three-tile arithmetic (out, tile, tile, tile): 4 args.

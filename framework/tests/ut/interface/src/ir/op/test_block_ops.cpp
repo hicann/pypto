@@ -549,8 +549,8 @@ TEST_F(BlockOpsOutElemwiseTest, BlockRemainingBinaryScalarOps_ReturnsOutType)
     auto tile = MakeTileVar("t", {16, 16}, DataType::FP16);
     auto scalar = MakeScalarVar("s", DataType::FP16);
 
-    for (const auto& op_name : {"block.subs", "block.muls", "block.divs", "block.rems", "block.maxs", "block.mins",
-                                "block.lrelu", "block.axpy"}) {
+    for (const auto& op_name :
+         {"block.subs", "block.muls", "block.divs", "block.rems", "block.maxs", "block.mins", "block.axpy"}) {
         auto call = reg.Create(op_name, {out, tile, scalar}, Sp());
         auto rt = As<TileType>(call->GetType());
         ASSERT_NE(rt, nullptr) << op_name;
@@ -687,19 +687,6 @@ TEST_F(BlockOpsOutElemwiseTest, BlockXors_FourArgs_ReturnsOutType)
     auto rt = As<TileType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->dtype_, DataType::INT32);
-}
-
-TEST_F(BlockOpsOutElemwiseTest, BlockPrelu_FourArgs_ReturnsOutType)
-{
-    auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create(
-        "block.prelu",
-        {MakeTileVar("o", {16, 16}, DataType::FP16), MakeTileVar("tile", {16, 16}, DataType::FP16),
-         MakeTileVar("slope", {16, 16}, DataType::FP16), MakeTileVar("tmp", {16, 16}, DataType::FP16)},
-        Sp());
-    auto rt = As<TileType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::FP16);
 }
 
 TEST_F(BlockOpsOutElemwiseTest, BlockSubc_FourTiles_ReturnsOutType)
