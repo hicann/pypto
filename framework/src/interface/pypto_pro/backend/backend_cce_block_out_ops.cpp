@@ -83,6 +83,41 @@ static std::string GetAtomicTypeCCE(int atomic)
     return ir::EnumToString(mode);
 }
 
+// ============================================================================
+// Helper: build the deqScalar (uint64) expression for a fixpipe preQuant operand.
+//
+// The deqScalar register's low 32 bits are the IEEE-754 float32 bit pattern of
+// the scale; bit 46 selects signed-int8 requantization. A runtime FP32 scalar
+// must therefore be *reinterpreted* (bitcast), not numerically converted:
+//   - static_cast<uint64_t>(float) does fp_to_uint, which both mis-encodes the
+//     bits (2.0 -> 2 instead of 0x40000000) and crashes the bisheng backend
+//     ("Cannot select: i64 = fp_to_uint ... undef") for GM-loaded scalars.
+//   - __builtin_bit_cast(uint32_t, float) reinterprets the bits (used by the
+//     pto-isa headers), so it is supported in generated device code.
+// ============================================================================
+static std::string MakePreQuantExprCCE(codegen::CCECodegen& codegen, const ir::ExprPtr& pre_quant,
+                                       ir::DataType dst_dtype)
+{
+    std::string code = codegen.GetExprAsCode(pre_quant);
+    auto scalar_type = ir::As<ir::ScalarType>(pre_quant->GetType());
+    if (scalar_type != nullptr && scalar_type->dtype_ == DataType::FP32) {
+        // Runtime float scale value: reinterpret its bits as the deqScalar low word.
+        code = "static_cast<uint64_t>(__builtin_bit_cast(uint32_t, " + code + "))";
+    } else {
+        // Compile-time encoded bits or runtime integer bits: widen as-is.
+        code = "static_cast<uint64_t>(" + code + ")";
+    }
+    if (dst_dtype == DataType::INT8) {
+        // For a signed-int8 output, bit46 of the deqScalar register selects signed
+        // (vs unsigned) requantization on the fixpipe; the hardware reads negative
+        // L0C values as signed only when this flag is set, otherwise they saturate
+        // to 0 as if unsigned. Emit the bit set as a runtime expression so it works
+        // for both constant and dynamic scales.
+        code = "(" + code + " & ~(1ULL << 46)) | (1ULL << 46)";
+    }
+    return code;
+}
+
 static std::string GetReluPreModeCCE(int relu)
 {
     auto mode = static_cast<ir::ReluPreMode>(relu);
@@ -377,38 +412,30 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
     // pto-isa: low 32 bits = float32 bit-pattern of the scale, bit46 = signed-int8 flag.
     // It may be a compile-time constant or a runtime scalar.
     if (op->args_.size() > 3) {
-        std::string pre_quant = codegen.GetExprAsCode(op->args_[3]);
-        if (dst_tensor_type->dtype_ == DataType::INT8) {
-            // For a signed-int8 output, bit46 of the deqScalar register selects signed (vs unsigned)
-            // requantization on the fixpipe; the hardware reads negative L0C values as signed only when
-            // this flag is set, otherwise they saturate to 0 as if unsigned. Emit the bit set as a
-            // runtime expression so it works for both constant and dynamic scales. The value is already
-            // uint64, so cast straight to uint64_t (no uint32 narrowing that would drop high bits).
-            args += ", ((static_cast<uint64_t>(" + pre_quant + ") & ~(1ULL << 46)) | (1ULL << 46))";
-        } else {
-            args += ", static_cast<uint64_t>(" + pre_quant + ")";
-        }
+        args += ", " + MakePreQuantExprCCE(codegen, op->args_[3], dst_tensor_type->dtype_);
     }
 
     // Emit atomic mode before TSTORE if atomic mode is add (pto-isa API)
     if (atomic_enum == "AtomicType::AtomicAdd") {
-        // Get dtype from tile type for set_atomic_dtype
-        auto src_tile_type = std::dynamic_pointer_cast<const ir::TileType>(op->args_[1]->GetType());
-        if (src_tile_type) {
-            auto dtype = src_tile_type->dtype_;
-            if (dtype == DataType::FP32) {
-                codegen.Emit("set_atomic_f32();");
-            } else if (dtype == DataType::FP16) {
-                codegen.Emit("set_atomic_f16();");
-            } else if (dtype == DataType::BF16) {
-                codegen.Emit("set_atomic_bf16();");
-            } else if (dtype == DataType::INT32) {
-                codegen.Emit("set_atomic_s32();");
-            } else if (dtype == DataType::INT16) {
-                codegen.Emit("set_atomic_s16();");
-            } else if (dtype == DataType::INT8) {
-                codegen.Emit("set_atomic_s8();");
-            }
+        // Get dtype from the DESTINATION tensor for set_atomic_dtype: the atomic add
+        // accumulates into GM memory, so the atomic engine must operate on the GM
+        // (dst) dtype. pto-isa TSTORE_IMPL does the same — SetAtomicAdd<DstT>() with
+        // DstT = GlobalData::RawDType. Using the Acc (src) dtype here is wrong when
+        // the store quantizes (e.g. FP32 Acc -> INT8 GM), causing a dtype mismatch
+        // in the atomic engine (NPU device error 507015).
+        auto dtype = dst_tensor_type->dtype_;
+        if (dtype == DataType::FP32) {
+            codegen.Emit("set_atomic_f32();");
+        } else if (dtype == DataType::FP16) {
+            codegen.Emit("set_atomic_f16();");
+        } else if (dtype == DataType::BF16) {
+            codegen.Emit("set_atomic_bf16();");
+        } else if (dtype == DataType::INT32) {
+            codegen.Emit("set_atomic_s32();");
+        } else if (dtype == DataType::INT16) {
+            codegen.Emit("set_atomic_s16();");
+        } else if (dtype == DataType::INT8) {
+            codegen.Emit("set_atomic_s8();");
         }
         codegen.Emit("set_atomic_add();");
     }
@@ -582,18 +609,12 @@ static std::string MakeBlockOutMoveCodegenCCE(const ir::CallPtr& op, codegen::Co
     std::string args = dst + ", " + src;
 
     if (pre_quant_operand != nullptr) {
-        std::string pre_quant = codegen.GetExprAsCode(pre_quant_operand);
         auto dst_tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
-        if (dst_tile_type != nullptr && dst_tile_type->dtype_ == DataType::INT8) {
-            // For a signed-int8 output, bit46 of the deqScalar register selects signed (vs unsigned)
-            // requantization on the fixpipe; negative L0C values are read as signed only when this flag
-            // is set, otherwise they saturate to 0 as if unsigned. Emit as a runtime expression so it
-            // works for both constant and dynamic scales. The value is already uint64, so cast straight
-            // to uint64_t (no uint32 narrowing that would drop high bits).
-            args += ", ((static_cast<uint64_t>(" + pre_quant + ") & ~(1ULL << 46)) | (1ULL << 46))";
-        } else {
-            args += ", static_cast<uint64_t>(" + pre_quant + ")";
+        ir::DataType dst_dtype = DataType::INT8;
+        if (dst_tile_type != nullptr) {
+            dst_dtype = dst_tile_type->dtype_;
         }
+        args += ", " + MakePreQuantExprCCE(codegen, pre_quant_operand, dst_dtype);
     }
 
     codegen.Emit("TMOV<std::remove_reference_t<decltype(" + dst + ")>, std::remove_reference_t<decltype(" + src + ")>" +

@@ -119,8 +119,7 @@ def store(
     offsets: Offset,
     *,
     relu_pre_mode: Optional[ReluPreMode] = None,
-    pre_quant_scalar: Optional[int] = None,
-    fp_tile: Optional[Tile] = None,
+    scale: Optional[Union[float, Scalar, Tile]] = None,
     order: Optional[List[int]] = None,
     atomic: AtomicType = AtomicType.AtomicNone,
     phase: Optional[STPhase] = None,
@@ -131,17 +130,32 @@ def store(
         dst_tensor: Destination Tensor (global memory)
         src_tile: Source Tile (on-chip buffer)
         offsets: Element-level offset per axis, e.g. ``[row, col]`` or ``[b, n, sq, sk]``
-        relu_pre_mode: Optional ReLU fusion — ``pl.ReluPreMode.NormalRelu``; mutually exclusive with ``fp_tile``
-        pre_quant_scalar: Optional pre-quantization scalar (i64 bit pattern); mutually exclusive with ``fp_tile``
-        fp_tile: Optional fixpipe quantization Tile; enables ``store_fp`` path,
-            mutually exclusive with ``relu_pre_mode``, ``pre_quant_scalar``, and ``phase``
+        relu_pre_mode: Optional ReLU fusion — ``pl.ReluPreMode.NormalRelu``
+        scale: Optional fixpipe quantization scale.
+            ``float`` or runtime scalar → per-tensor quantization (deqScalar path);
+            a runtime **FP32** scalar is auto-reinterpreted as its IEEE-754 bit
+            pattern (codegen bitcast), so pass the raw float value; a runtime
+            **INT32/INT64** scalar must carry the pre-encoded float32 bit pattern
+            (``struct.pack("!f", scale)``). Other runtime scalar dtypes
+            (FP16/BF16/unsigned/narrower ints) are rejected at parse time.
+            ``Tile`` (INT64, MemorySpace.Scaling, shape ``[1, N]``) → per-channel quantization with a
+            **user-prepared deqTensor tile**; the framework reuses it directly (no auto-allocation,
+            no sync insertion) — the user owns the data flow and must ensure the tile is ready
+            (load → move → sync MTE1→FIX) before the store.
+            Hardware requires ``[1, N]`` (row == 1, per-column), ``N % 16 == 0`` and ``N <= 512`` —
+            ``[N, 1]`` per-row scaling is NOT supported.
+            ``None`` → no fixpipe quantization.
+            Quantization direction (quantize vs dequantize) is determined by ``dst_tensor`` dtype:
+            INT8 → quantize; FP16 → dequantize (from INT32 L0C). Unsupported scale combos —
+            UINT8 output, and FP32/INT32 → BF16 output — are rejected at parse time
+            (hardware fixpipe has no unsigned requantization and only dequantizes INT32→FP16).
         order: Optional, which axes of the Tensor the Tile dimensions map to.
             When the Tensor has more dimensions than the Tile, this specifies the mapping.
             E.g. ``order=[0, 2]`` means Tile dim 0 → Tensor axis 0, Tile dim 1 → Tensor axis 2.
             Default: last N axes of the Tensor (N = Tile ndim)
         atomic: Atomic write mode — ``pl.AtomicType.AtomicNone`` (overwrite) or
             ``pl.AtomicType.AtomicAdd`` (atomic accumulate)
-        phase: Fixpipe drain phase — ``pl.STPhase.Partial`` or ``pl.STPhase.Final``; mutually exclusive with ``fp_tile``
+        phase: Fixpipe drain phase — ``pl.STPhase.Partial`` or ``pl.STPhase.Final``
     """
 
 
@@ -152,8 +166,7 @@ def store_tile(
     tile_offsets: Offset,
     *,
     relu_pre_mode: Optional[ReluPreMode] = None,
-    pre_quant_scalar: Optional[int] = None,
-    fp_tile: Optional[Tile] = None,
+    scale: Optional[Union[float, Scalar, Tile]] = None,
     order: Optional[List[int]] = None,
     atomic: AtomicType = AtomicType.AtomicNone,
     phase: Optional[STPhase] = None,
@@ -165,17 +178,28 @@ def store_tile(
         src_tile: Source Tile (on-chip buffer)
         tile_offsets: Tile-block index, e.g. ``[tile_row, tile_col]``;
             internally multiplied by tile shape to get element offsets
-        relu_pre_mode: Optional ReLU fusion — ``pl.ReluPreMode.NormalRelu``; mutually exclusive with ``fp_tile``
-        pre_quant_scalar: Optional pre-quantization scalar (i64 bit pattern); mutually exclusive with ``fp_tile``
-        fp_tile: Optional fixpipe quantization Tile; enables ``store_fp`` path,
-            mutually exclusive with ``relu_pre_mode``, ``pre_quant_scalar``, and ``phase``
+        relu_pre_mode: Optional ReLU fusion — ``pl.ReluPreMode.NormalRelu``
+        scale: Optional fixpipe quantization scale.
+            ``float`` or runtime scalar → per-tensor quantization (deqScalar path);
+            a runtime **FP32** scalar is auto-reinterpreted as its IEEE-754 bit
+            pattern (codegen bitcast), so pass the raw float value; a runtime
+            **INT32/INT64** scalar must carry the pre-encoded float32 bit pattern
+            (``struct.pack("!f", scale)``). Other runtime scalar dtypes
+            (FP16/BF16/unsigned/narrower ints) are rejected at parse time.
+            ``Tile`` (INT64, MemorySpace.Scaling, shape ``[1, N]``) → per-channel quantization with a
+            **user-prepared deqTensor tile**; the framework reuses it directly (no auto-allocation,
+            no sync insertion) — the user owns the data flow and must ensure the tile is ready
+            (load → move → sync MTE1→FIX) before the store.
+            Hardware requires ``[1, N]`` (row == 1, per-column), ``N % 16 == 0`` and ``N <= 512`` —
+            ``[N, 1]`` per-row scaling is NOT supported.
+            ``None`` → no fixpipe quantization.
         order: Optional, which axes of the Tensor the Tile dimensions map to.
             When the Tensor has more dimensions than the Tile, this specifies the mapping.
             E.g. ``order=[0, 2]`` means Tile dim 0 → Tensor axis 0, Tile dim 1 → Tensor axis 2.
             Default: last N axes of the Tensor (N = Tile ndim)
         atomic: Atomic write mode — ``pl.AtomicType.AtomicNone`` (overwrite) or
             ``pl.AtomicType.AtomicAdd`` (atomic accumulate)
-        phase: Fixpipe drain phase — ``pl.STPhase.Partial`` or ``pl.STPhase.Final``; mutually exclusive with ``fp_tile``
+        phase: Fixpipe drain phase — ``pl.STPhase.Partial`` or ``pl.STPhase.Final``
     """
 
 
@@ -187,8 +211,7 @@ def move(
     *,
     acc_to_vec_mode: Optional[AccToVecMode] = None,
     relu_pre_mode: Optional[ReluPreMode] = None,
-    pre_quant_scalar: Optional[int] = None,
-    fp_tile: Optional[Tile] = None,
+    scale: Optional[Union[float, Scalar, Tile]] = None,
 ) -> None:
     """Move data between on-chip Tiles (tile↔tile, no GM access).
 
@@ -209,9 +232,7 @@ def move(
 
     - ``acc_to_vec_mode``: Acc→Vec conversion mode (single/dual split M/N)
     - ``relu_pre_mode``: ReLU activation before destination
-    - ``pre_quant_scalar``: pre-quantization scalar (mutually exclusive with ``fp_tile``)
-    - ``fp_tile``: fixpipe quantization tile, enables ``move_fp`` path
-      (mutually exclusive with ``pre_quant_scalar``; single-mode only)
+    - ``scale``: fixpipe quantization scale (per-tensor or per-channel)
 
     Args:
         dst_tile: Destination Tile
@@ -221,9 +242,20 @@ def move(
             ``pl.AccToVecMode.DualModeSplitM``, ``pl.AccToVecMode.DualModeSplitN``;
             only meaningful when src is Acc and dst is Vec
         relu_pre_mode: Optional ReLU fusion — ``pl.ReluPreMode.NormalRelu``
-        pre_quant_scalar: Optional pre-quantization scalar; mutually exclusive with ``fp_tile``
-        fp_tile: Optional fixpipe quantization Tile; enables ``move_fp`` path,
-            mutually exclusive with ``pre_quant_scalar``
+        scale: Optional fixpipe quantization scale.
+            ``float`` or runtime scalar → per-tensor quantization (deqScalar path);
+            a runtime **FP32** scalar is auto-reinterpreted as its IEEE-754 bit
+            pattern (codegen bitcast), so pass the raw float value; a runtime
+            **INT32/INT64** scalar must carry the pre-encoded float32 bit pattern
+            (``struct.pack("!f", scale)``). Other runtime scalar dtypes
+            (FP16/BF16/unsigned/narrower ints) are rejected at parse time.
+            ``Tile`` (INT64, MemorySpace.Scaling, shape ``[1, N]``) → per-channel quantization with a
+            **user-prepared deqTensor tile**; the framework reuses it directly (no auto-allocation,
+            no sync insertion) — the user owns the data flow and must ensure the tile is ready
+            (load → move → sync MTE1→FIX) before the move.
+            Hardware requires ``[1, N]`` (row == 1, per-column), ``N % 16 == 0`` and ``N <= 512`` —
+            ``[N, 1]`` per-row scaling is NOT supported.
+            ``None`` → no fixpipe quantization.
     """
 
 

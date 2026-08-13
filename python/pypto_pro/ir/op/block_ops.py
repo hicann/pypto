@@ -21,6 +21,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 import enum
 import os
+import struct
 from typing import Any, Optional
 
 from pypto.pypto_impl import ir as _ir_core
@@ -204,6 +205,50 @@ def _ir_load_tile(
     return _ir_core.create_op_call(block_ir_op("load"), [out, tensor, abs_offsets], kwargs, actual_span)
 
 
+def _encode_deq_scalar(scale: float) -> int:
+    scale_bits = struct.unpack("!I", struct.pack("!f", scale))[0]
+    return scale_bits
+
+
+def _resolve_scale_param(
+    scale: Any,
+    span: Span,
+) -> tuple[Optional["int | Expr"], Optional[Expr]]:
+    if scale is None:
+        return None, None
+    if isinstance(scale, (int, float)):
+        encoded = _encode_deq_scalar(float(scale))
+        return encoded, None
+    if isinstance(scale, Expr):
+        scale_type = getattr(scale, "type", None)
+        if isinstance(scale_type, _ir_core.TileType):
+            # User-prepared Scaling tile (per-channel): already validated by
+            # _auto_alloc_scaling_tile_hook before the builder runs; resolve it
+            # here to the store_fp/move_fp operand.
+            return None, scale
+        if not isinstance(scale_type, _ir_core.ScalarType):
+            raise TypeError(
+                f"scale Expr must be a runtime scalar, got {type(scale_type).__name__}; "
+                f"per-channel quantization requires a user-prepared Scaling Tile"
+            )
+        # Only FP32 (auto bitcast in codegen) and INT32/INT64 (user passes the
+        # pre-encoded float32 bit pattern) are supported as runtime scalars:
+        # FP16/BF16 would be numerically converted to uint64 (wrong bits, and
+        # fp_to_uint crashes the bisheng backend), and narrower/unsigned ints
+        # risk sign-extension or truncation of the bit pattern.
+        if scale_type.dtype not in (DataType.FP32, DataType.INT32, DataType.INT64):
+            raise TypeError(
+                f"scale runtime scalar dtype {scale_type.dtype} is not supported — pass "
+                f"an FP32 scalar (auto-reinterpreted as its IEEE-754 bit pattern) or an "
+                f"INT32/INT64 scalar carrying the pre-encoded float32 bit pattern "
+                f"(struct.pack(\"!f\", scale))"
+            )
+        return scale, None
+    raise TypeError(
+        f"scale must be float, int, Expr, or Tile, got {type(scale).__name__}"
+    )
+
+
 def _ir_store(
     out: Expr,
     tile: Expr,
@@ -211,8 +256,7 @@ def _ir_store(
     *,
     span: Span | None = None,
     relu_pre_mode: ReluPreMode | None = None,
-    pre_quant_scalar: int | Expr | None = None,
-    fp_tile: Expr | None = None,
+    scale: Any = None,
     order: list[int] | None = None,
     atomic: AtomicType = AtomicType.AtomicNone,
     phase: STPhase | None = None,
@@ -245,14 +289,20 @@ def _ir_store(
         raise ValueError(f"{op_name}: order must be ascending, got {order}")
     _validate_offsets(offsets_tuple, tile_dims, tile_shape, out.type.shape, op_name)
 
-    # Validate offset bounds at Python frontend level
     _validate_offset_bounds("store", out.type.shape, offsets_tuple.elements)
+
+    pre_quant_scalar, fp_tile = _resolve_scale_param(scale, actual_span)
+
+    _check_scale_dst_supported(
+        getattr(tile.type, "dtype", None),
+        getattr(out.type, "dtype", None),
+        pre_quant_scalar is not None or fp_tile is not None,
+        op_name,
+    )
     if fp_tile is not None and relu_pre_mode is not None:
-        raise ValueError("fp_tile cannot be used together with relu_pre_mode")
-    if fp_tile is not None and pre_quant_scalar is not None:
-        raise ValueError("fp_tile cannot be used together with pre_quant_scalar")
+        raise ValueError("scale (per-channel) cannot be used together with relu_pre_mode")
     if fp_tile is not None and phase is not None:
-        raise ValueError("fp_tile cannot be combined with phase")
+        raise ValueError("scale (per-channel) cannot be combined with phase")
     if fp_tile is not None:
         return _ir_core.create_op_call(block_ir_op("store_fp"), [out, tile, fp_tile, offsets_tuple], {}, actual_span)
 
@@ -302,8 +352,7 @@ def _ir_store_tile(
     *,
     span: Span | None = None,
     relu_pre_mode: ReluPreMode | None = None,
-    pre_quant_scalar: int | Expr | None = None,
-    fp_tile: Expr | None = None,
+    scale: Any = None,
     order: list[int] | None = None,
     atomic: AtomicType = AtomicType.AtomicNone,
     phase: STPhase | None = None,
@@ -332,14 +381,20 @@ def _ir_store_tile(
     _validate_offsets(offsets_tuple, tile_dims, tile_shape, out.type.shape, op_name, use_tile_absolute=True)
 
     abs_offsets = _compute_absolute_offsets(offsets_tuple, tile_shape, tile_dims, actual_span)
-    # Validate offset bounds at Python frontend level
     _validate_offset_bounds("store_tile", out.type.shape, abs_offsets.elements)
+
+    pre_quant_scalar, fp_tile = _resolve_scale_param(scale, actual_span)
+
+    _check_scale_dst_supported(
+        getattr(tile.type, "dtype", None),
+        getattr(out.type, "dtype", None),
+        pre_quant_scalar is not None or fp_tile is not None,
+        op_name,
+    )
     if fp_tile is not None and relu_pre_mode is not None:
-        raise ValueError("fp_tile cannot be used together with relu_pre_mode")
-    if fp_tile is not None and pre_quant_scalar is not None:
-        raise ValueError("fp_tile cannot be used together with pre_quant_scalar")
+        raise ValueError("scale (per-channel) cannot be used together with relu_pre_mode")
     if fp_tile is not None and phase is not None:
-        raise ValueError("fp_tile cannot be combined with phase")
+        raise ValueError("scale (per-channel) cannot be combined with phase")
     if fp_tile is not None:
         return _ir_core.create_op_call(block_ir_op("store_fp"), [out, tile, fp_tile, abs_offsets], {}, actual_span)
     kwargs = _build_store_kwargs(
@@ -451,8 +506,7 @@ def _ir_move(
     span: Span | None = None,
     acc_to_vec_mode: AccToVecMode | None = None,
     relu_pre_mode: ReluPreMode | None = None,
-    pre_quant_scalar: int | Expr | None = None,
-    fp_tile: Expr | None = None,
+    scale: Any = None,
 ) -> Expr:
     actual_span = span or _span()
     if not isinstance(out.type, _ir_core.TileType):
@@ -473,18 +527,24 @@ def _ir_move(
             f"move: unsupported data path src({_src_mem.name})->dst({_dst_mem.name}), "
             f"supported paths: Mat->Left, Mat->Right, Acc->Vec, Vec->Vec"
         )
-    if fp_tile is not None and pre_quant_scalar is not None:
-        raise ValueError("fp_tile cannot be used together with pre_quant_scalar")
-    if fp_tile is not None and acc_to_vec_mode in {AccToVecMode.DualModeSplitM, AccToVecMode.DualModeSplitN}:
-        raise ValueError("fp_tile only supports single-mode acc_to_vec_mode")
-    # Validate src/dst tile shape compatibility (issue #99: transpose-style mismatch)
+
     _check_move_shape_compat(out, src, offset, acc_to_vec_mode, actual_span)
-    # Validate offset bounds at Python frontend level
     if offset is not None:
         if isinstance(offset, _ir_core.MakeTuple):
             _validate_offset_bounds("move", src.type.shape, offset.elements)
         elif isinstance(offset, (list, tuple)):
             _validate_offset_bounds("move", src.type.shape, offset)
+
+    pre_quant_scalar, fp_tile = _resolve_scale_param(scale, actual_span)
+
+    _check_scale_dst_supported(
+        getattr(src.type, "dtype", None),
+        getattr(out.type, "dtype", None),
+        pre_quant_scalar is not None or fp_tile is not None,
+        "move",
+    )
+    if fp_tile is not None and acc_to_vec_mode in {AccToVecMode.DualModeSplitM, AccToVecMode.DualModeSplitN}:
+        raise ValueError("scale (per-channel) only supports single-mode acc_to_vec_mode")
     kwargs: dict[str, Any] = {}
     if acc_to_vec_mode is not None:
         kwargs["acc_to_vec_mode"] = acc_to_vec_mode
@@ -492,9 +552,6 @@ def _ir_move(
         kwargs["relu_pre_mode"] = relu_pre_mode
     if fp_tile is not None:
         return _ir_core.create_op_call(block_ir_op("move_fp"), [out, src, fp_tile], kwargs, actual_span)
-    # Positional operands: [out, src, (offset tuple)?, (pre_quant_scalar)?].
-    # offset is a TupleType, pre_quant_scalar is a ScalarType — the backend disambiguates by type,
-    # so pre_quant_scalar can be a runtime scalar value, not just a compile-time constant.
     args = [out, src]
     if offset is not None:
         args.append(_to_make_tuple(offset, actual_span))
@@ -720,6 +777,31 @@ def _build_store_kwargs(
 def _validate_dtype(dtype: DataType | None, role: str, op_name: str) -> None:
     if dtype is not None and dtype not in _SUPPORTED_DTYPES:
         raise ValueError(f"{op_name}: unsupported {role} dtype {dtype}, supported: b8/b16/b32/b64")
+
+
+def _check_scale_dst_supported(src_dtype: DataType | None, dst_dtype: DataType | None, is_quant_active: bool,
+                               op_name: str) -> None:
+    """Reject scale quantization to dtype combinations the hardware fixpipe cannot produce.
+
+    The fixpipe has no unsigned requantization (UINT8 output) and only dequantizes
+    INT32→FP16 (not INT32→BF16); FP32→BF16 only supports a no-scale truncation.
+    These combos compile but fault on device (NPU device error 507015), so surface
+    them as parse-time errors instead of a device crash.
+    """
+    if not is_quant_active:
+        return
+    if dst_dtype == DataType.UINT8:
+        raise ValueError(
+            f"{op_name}: scale quantization to UINT8 is not supported — the hardware "
+            "fixpipe has no unsigned requantization path. Use an INT8 output, or quantize "
+            "in the Vector (UB) domain."
+        )
+    if dst_dtype == DataType.BF16 and src_dtype in (DataType.FP32, DataType.INT32):
+        raise ValueError(
+            f"{op_name}: scale quantization from {src_dtype} to BF16 is not supported — "
+            "the fixpipe only dequantizes INT32→FP16 and only truncates FP32→BF16 without "
+            "a scale. Write FP16 output, or drop the scale and truncate in the Vector (UB) domain."
+        )
 
 
 def _resolve_order(
@@ -1207,7 +1289,8 @@ def _parse_make_tile(self, call: ast.Call) -> Expr:
             kwargs.setdefault("compact", tile_type.compact)
         args = args[1:]
 
-    return make_tile(*args, **kwargs, span=span)
+    result = make_tile(*args, **kwargs, span=span)
+    return result
 
 
 
@@ -1215,6 +1298,113 @@ def _resolve_order_kwarg(self, call: ast.Call, kwargs: dict) -> None:
     order = self.resolve_const_int_list_kwarg(call, "order")
     if order is not None:
         kwargs["order"] = order
+
+
+def _static_shape_ints(shape, what: str) -> list[int]:
+    """Resolve a scale Tile shape to plain ints (hardware deqTensor constraints)."""
+    ints = []
+    for dim in shape:
+        if isinstance(dim, ConstInt):
+            ints.append(int(dim.value))
+        elif isinstance(dim, int):
+            ints.append(dim)
+        else:
+            raise ValueError(f"{what} shape must contain static integer dimensions, got {type(dim)}")
+    return ints
+
+
+def _validate_fp_shape_dtype(fp_shape_ints: list[int], scale_dtype: DataType, what: str) -> None:
+    """Validate a per-channel scale Tile against the FixPipe deqTensor constraints.
+
+    Hardware FixPipe deqTensor (pto-isa TMov.hpp): row must be 1;
+    col * sizeof(int64) 128B-aligned (col % 16 == 0); col * sizeof(int64) <= 4KB FB (col <= 512).
+    ``[N, 1]`` per-row scaling is NOT supported — it fails at compile time with
+    "TMov: When TileType is Scaling, row must be 1."
+    """
+    if len(fp_shape_ints) != 2:
+        raise ValueError(f"{what} must be 2D, got shape {fp_shape_ints}")
+    if fp_shape_ints[0] != 1:
+        raise ValueError(
+            f"{what} must have shape [1, N] (row == 1), got [{fp_shape_ints[0]}, {fp_shape_ints[1]}]. "
+            f"Hardware FixPipe deqTensor only supports per-column scaling ([1, N]); "
+            f"[N, 1] per-row scaling is not supported. "
+            f"Per-token (row-wise) quantization must be done in the Vector (UB) domain."
+        )
+    if fp_shape_ints[1] % 16 != 0:
+        raise ValueError(
+            f"{what} [1, N]: N must be a multiple of 16 (128B alignment for INT64), "
+            f"got [{fp_shape_ints[0]}, {fp_shape_ints[1]}]"
+        )
+    if fp_shape_ints[1] > 512:
+        raise ValueError(
+            f"{what} [1, N]: N must be <= 512 (4KB fixpipe buffer limit for INT64), "
+            f"got [{fp_shape_ints[0]}, {fp_shape_ints[1]}]"
+        )
+    if scale_dtype == DataType.FP32:
+        raise ValueError(
+            f"{what} dtype FP32 is not supported. "
+            f"Please convert FP32 scale to INT64 using torch_npu.npu_trans_quant_param() before passing to kernel. "
+            f"Example: scale_int64 = torch_npu.npu_trans_quant_param(scale_fp32.npu())"
+        )
+    if scale_dtype != DataType.INT64:
+        raise ValueError(
+            f"{what} dtype must be INT64, got {scale_dtype}. "
+            f"For FP32 scale, use torch_npu.npu_trans_quant_param() to convert to INT64."
+        )
+
+
+def _auto_alloc_scaling_tile_hook(self, call: ast.Call, kwargs: dict) -> None:
+    """Pre-hook: validate a user-prepared Scaling tile when scale is a Tile (per-channel quantization).
+
+    Per-channel quantization requires a user-prepared deqTensor tile: the user
+    builds a Scaling tile (MemorySpace.Scaling, [1, N] INT64), owns the data
+    flow (load -> move -> sync MTE1->FIX before the store/move), and passes it
+    as ``scale``. This hook only validates it — no auto-allocation of
+    Scaling/Mat tiles and no sync events are emitted. The validated tile stays
+    in the ``scale`` kwarg and is resolved by ``_resolve_scale_param`` in the
+    builder to the store_fp/move_fp operand.
+
+    A GM Tensor scale is rejected at parse time: the automatic per-channel path
+    (auto-allocated Mat intermediate + auto sync events) has been removed; users
+    must prepare the Scaling tile themselves.
+
+    Scale tile shape constraint:
+    - Hardware FixPipe deqTensor only supports per-column scaling: scale tile must be
+      ``[1, N]`` (row == 1), with ``N % 16 == 0`` (128B alignment) and ``N <= 512`` (4KB
+      fixpipe buffer). ``[N, 1]`` per-row scaling is rejected here with a clear error
+      (hardware would otherwise fail compilation with "TMov: row must be 1").
+
+    FP32 scale tile limitation:
+    - Only INT64 scale tiles are supported; FP32 scale tensors must be converted
+      on the host side via ``torch_npu.npu_trans_quant_param`` before being loaded
+      into the Scaling tile.
+    """
+    scale = kwargs.get("scale")
+    if scale is None:
+        return
+    if not isinstance(scale, Expr):
+        return
+    scale_type = getattr(scale, "type", None)
+
+    if isinstance(scale_type, _ir_core.TileType):
+        mem = getattr(getattr(scale_type, "memref", None), "memory_space", None)
+        if mem != MemorySpace.Scaling:
+            raise ValueError(
+                f"scale Tile must be allocated in MemorySpace.Scaling for per-channel quantization, got {mem}"
+            )
+        fp_shape_ints = _static_shape_ints(scale_type.shape, "scale tile")
+        _validate_fp_shape_dtype(fp_shape_ints, scale_type.dtype, "scale tile")
+        return
+
+    if isinstance(scale_type, _ir_core.TensorType):
+        raise ValueError(
+            "scale Tensor is not supported for per-channel quantization — pass a "
+            "user-prepared Scaling Tile (MemorySpace.Scaling, shape [1, N], INT64) "
+            "instead, and ensure it is ready (load -> move -> sync MTE1->FIX) before "
+            "the store/move"
+        )
+
+    return  # scalar / runtime bits -> handled by _resolve_scale_param
 
 
 # ---------------------------------------------------------------------------
@@ -1317,7 +1507,7 @@ register_table(
     {
         # args + kwargs -> builder
         "store_fp": OpSpec(builder=_ir_store_fp),
-        "move": OpSpec(builder=_ir_move),
+        "move": OpSpec(builder=_ir_move, pre_hooks=[_auto_alloc_scaling_tile_hook]),
         "insert": OpSpec(builder=_ir_insert),
         "getval": OpSpec(builder=_ir_getval),
         "setval": OpSpec(builder=_ir_setval),
@@ -1349,11 +1539,11 @@ register_table(
         "expand_mul": OpSpec(builder=_ir_expand_mul),
         "expand_sub": OpSpec(builder=_ir_expand_sub),
         "expand_div": OpSpec(builder=_ir_expand_div),
-    # args + kwargs + order hook (load) / order hook (store)
+    # args + kwargs + order hook (load) / order hook + scaling tile hook (store)
     "load": OpSpec(builder=_ir_load, pre_hooks=[_resolve_order_kwarg]),
     "load_tile": OpSpec(builder=_ir_load_tile, pre_hooks=[_resolve_order_kwarg]),
-    "store": OpSpec(builder=_ir_store, pre_hooks=[_resolve_order_kwarg]),
-    "store_tile": OpSpec(builder=_ir_store_tile, pre_hooks=[_resolve_order_kwarg]),
+    "store": OpSpec(builder=_ir_store, pre_hooks=[_auto_alloc_scaling_tile_hook, _resolve_order_kwarg]),
+    "store_tile": OpSpec(builder=_ir_store_tile, pre_hooks=[_auto_alloc_scaling_tile_hook, _resolve_order_kwarg]),
         # kwargs only
         "set_mask_count": OpSpec(builder=_ir_set_mask_count, parse_args=False),
         "set_mask_norm": OpSpec(builder=_ir_set_mask_norm, parse_args=False),

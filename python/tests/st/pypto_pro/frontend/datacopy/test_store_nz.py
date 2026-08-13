@@ -7,7 +7,12 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-"""Frontend runtime example for pl.store(...)->GM(NZ) on A5 CCE."""
+"""Frontend runtime example for pl.store(...)->GM(NZ) with per-channel quantization on A5 CCE.
+
+This test validates the unified ``scale`` parameter API for per-channel quantization
+with NZ format output. The user prepares a Scaling tile (scale=Tile) and owns the
+data flow (load -> move -> sync MTE1->FIX).
+"""
 
 import logging
 import os
@@ -67,12 +72,8 @@ def store_nz_cce_kernel(
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
         q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
-        fp_mat_type = pl.TileType(
-            shape=[1, 64],
-            dtype=pl.DT_INT64,
-            target_memory=pl.MemorySpace.Mat,
-            layout=pl.ND,
-        )
+
+        fp_mat_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Mat, layout=pl.ND)
         fp_mat = pl.make_tile(fp_mat_type, addr=0x8000, size=512)
 
         left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
@@ -90,6 +91,7 @@ def store_nz_cce_kernel(
             shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
         )
         acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+
         fp_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
         fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
 
@@ -111,13 +113,15 @@ def store_nz_cce_kernel(
         pl.system.sync_src(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
 
-        pl.store(nd_out, acc, [0, 0])
-        pl.store(nz_out, acc, [0, 0])
+        # user-owned data flow: move scale into Scaling tile, sync MTE1->FIX
         pl.move(fp_tile, fp_mat)
         pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.FIX, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.FIX, event_id=1)
-        pl.store(fp_nd_out, acc, [0, 0], fp_tile=fp_tile)
-        pl.store(fp_nz_out, acc, [0, 0], fp_tile=fp_tile)
+
+        pl.store(nd_out, acc, [0, 0])
+        pl.store(nz_out, acc, [0, 0])
+        pl.store(fp_nd_out, acc, [0, 0], scale=fp_tile)
+        pl.store(fp_nz_out, acc, [0, 0], scale=fp_tile)
         pl.system.bar_all()
         pl.dump_data(nd_out, offsets=[0, 0], shapes=[16, 8])
         pl.dump_data(nz_out, offsets=[0, 0], shapes=[16, 8])

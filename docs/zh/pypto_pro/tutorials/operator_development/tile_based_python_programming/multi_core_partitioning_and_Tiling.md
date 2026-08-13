@@ -225,10 +225,10 @@ add_kernel[None, num_cores](x, y, z)
 def scaled_kernel(
     a: pl.Tensor[[64, 64], pl.DT_FP32],
     out: pl.Tensor[[64, 64], pl.DT_INT8],
-    scale_bits: pl.DT_INT32,          # <-- 运行时标量
+    scale_bits: pl.DT_INT32,          # <-- 运行时标量（预编码的 float32 位模式）
 ):
     ...
-    pl.store(out, acc, [0, 0], pre_quant_scalar=scale_bits)
+    pl.store(out, acc, [0, 0], scale=scale_bits)
 
 # Host侧启动
 scaled_kernel(a, out, scale_bits)      # 直接传 int
