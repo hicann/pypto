@@ -186,7 +186,7 @@ def histograms_high_vf(hist_high_tile, score_u16_tile, hist_loop: pl.DT_INT64):
     cout1 = vf.full(0, preg_b16, dtype=pl.DT_UINT16)
 
     for i in pl.range(0, hist_loop):
-        vreg_low, vreg_high = vf.load_align(score_u16_tile, i * 256, dist=pl.LoadDist.DINTLV_B8)
+        vreg_low, vreg_high = vf.load_align(score_u16_tile, i * 256, dist=pl.LoadDist.DINTLV_B8, dtype=pl.DT_UINT8)
         cout0 = vf.histograms(vreg_high, preg_b8, bin_type=pl.BinType.BIN0, hist_type=pl.HistType.ACCUMULATE)
         cout1 = vf.histograms(vreg_high, preg_b8, bin_type=pl.BinType.BIN1, hist_type=pl.HistType.ACCUMULATE)
 
@@ -267,7 +267,7 @@ def find_high_bin_and_histograms_low(
     cout1 = vf.full(0, preg_b16, dtype=pl.DT_UINT16)
 
     for i in pl.range(0, hist_loop):
-        vreg_low, vreg_high = vf.load_align(score_u16_tile, i * 256, dist=pl.LoadDist.DINTLV_B8)
+        vreg_low, vreg_high = vf.load_align(score_u16_tile, i * 256, dist=pl.LoadDist.DINTLV_B8, dtype=pl.DT_UINT8)
         preg_eq = vf.eq(vreg_high, idx_high, preg_b8, cmp_dtype=pl.DT_UINT8)
         cout0 = vf.histograms(vreg_low, preg_eq, bin_type=pl.BinType.BIN0, hist_type=pl.HistType.ACCUMULATE)
         cout1 = vf.histograms(vreg_low, preg_eq, bin_type=pl.BinType.BIN1, hist_type=pl.HistType.ACCUMULATE)
@@ -308,8 +308,8 @@ def find_kth_vf(kth_value_tile, hist_low_tile, idx_high_tile, sqz_idx_buf, nk_va
     # BRC_B16: broadcast u16[0] of sqz_idx_buf -> 0x00YY00YY
     # u16 Add: idx_k = 0x00XX00XX + 0x00YY00YY = 0x00(XX+YY)... (no carry across u16)
     # NORM_B16 store: write as u16 array so BRC_B16 in collect_gt reads correctly.
-    idx_high = vf.load_align(idx_high_tile, 0, dist=pl.LoadDist.BRC_B8)
-    idx_low = vf.load_align(sqz_idx_buf, 0, dist=pl.LoadDist.BRC_B16)
+    idx_high = vf.load_align(idx_high_tile, 0, dist=pl.LoadDist.BRC_B8, dtype=pl.DT_UINT16)
+    idx_low = vf.load_align(sqz_idx_buf, 0, dist=pl.LoadDist.BRC_B16, dtype=pl.DT_UINT16)
     idx_mask = vf.full(0xff00, dtype=pl.DT_UINT16)
     idx_high = vf.and_(idx_high, idx_mask, preg_b32)
     idx_k = vf.add(idx_high, idx_low, preg_b16)
@@ -336,7 +336,7 @@ def collect_indices_gt_eq_vf(
     vf.clear_spr()
     align_idx = vf.unalign_reg_for_store()
 
-    kth_value = vf.load_align(kth_value_tile, 0, dist=pl.LoadDist.BRC_B16)
+    kth_value = vf.load_align(kth_value_tile, 0, dist=pl.LoadDist.BRC_B16, dtype=pl.DT_UINT16)
 
     # Pass 1: collect GT indices
     for i in pl.range(0, vf_loop):

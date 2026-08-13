@@ -672,8 +672,8 @@ class Vf:
 
         Kwargs:
             layout: ``pl.CastLayout.ZERO`` (default) / ``ONE`` / ``TWO`` / ``THREE``
-            round_mode: ``pl.VFRoundMode.CAST_ROUND`` (default) / ``CAST_RINT`` /
-                ``CAST_FLOOR`` / ``CAST_CEIL`` / ``CAST_TRUNC`` / ``CAST_RNA`` /
+            round_mode: ``pl.VFRoundMode.CAST_RINT`` (default) / ``CAST_ROUND`` /
+                ``CAST_FLOOR`` / ``CAST_CEIL`` / ``CAST_TRUNC`` /
                 ``CAST_ODD`` / ``CAST_HYBRID``
             saturate: ``pl.SaturateMode.OFF`` (default) or ``pl.SaturateMode.ON``
 

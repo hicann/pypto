@@ -677,12 +677,11 @@ Members:
 Rounding mode for VF type conversion (vcvt).
 
 Members:
-    CAST_ROUND    default rounding
-    CAST_RINT     round to nearest even
+    CAST_ROUND    round to nearest, ties away from zero
+    CAST_RINT     default rounding (round to nearest even)
     CAST_FLOOR    round down (floor)
     CAST_CEIL     round up (ceil)
     CAST_TRUNC    round toward zero (truncate)
-    CAST_RNA      round to nearest, ties away from zero
     CAST_ODD      von Neumann rounding (nearest odd)
     CAST_HYBRID   hybrid rounding (Ascend 950PR/DT only))pbdoc")
         .value("CAST_ROUND", ir::VFRoundMode::CAST_ROUND)
@@ -690,7 +689,6 @@ Members:
         .value("CAST_FLOOR", ir::VFRoundMode::CAST_FLOOR)
         .value("CAST_CEIL", ir::VFRoundMode::CAST_CEIL)
         .value("CAST_TRUNC", ir::VFRoundMode::CAST_TRUNC)
-        .value("CAST_RNA", ir::VFRoundMode::CAST_RNA)
         .value("CAST_ODD", ir::VFRoundMode::CAST_ODD)
         .value("CAST_HYBRID", ir::VFRoundMode::CAST_HYBRID);
 

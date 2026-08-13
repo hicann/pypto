@@ -233,6 +233,7 @@ TEST(BackendCCEVFOpsTest, EmitsDeclarationsMasksBroadcastsAndMoves)
     auto fp = MakeVar("fp");
     auto s4 = MakeVar("s4", ir::DataType::INT4);
     auto u4 = MakeVar("u4", ir::DataType::UINT4);
+    auto i32_reg = MakeVar("i32_reg", ir::DataType::INT32);
     auto mask = MakeVar("mask", ir::DataType::UINT32);
     auto mask2 = MakeVar("mask2", ir::DataType::UINT32);
     auto addr = MakeVar("addr", ir::DataType::INT64);
@@ -240,6 +241,7 @@ TEST(BackendCCEVFOpsTest, EmitsDeclarationsMasksBroadcastsAndMoves)
     Invoke(codegen, "vf.reg_tensor", {}, {{"dtype", ir::DataType::FP32}}, "fp");
     Invoke(codegen, "vf.reg_tensor", {}, {{"dtype", ir::DataType::INT4}}, "s4");
     Invoke(codegen, "vf.reg_tensor", {}, {{"dtype", ir::DataType::UINT4}}, "u4");
+    Invoke(codegen, "vf.reg_tensor", {}, {{"dtype", ir::DataType::INT32}}, "i32_reg");
     EXPECT_TRUE(codegen.IsRegTensorVar("fp"));
     EXPECT_TRUE(codegen.IsRegTensorVar("s4"));
     EXPECT_TRUE(codegen.IsRegTensorVar("u4"));
@@ -262,8 +264,8 @@ TEST(BackendCCEVFOpsTest, EmitsDeclarationsMasksBroadcastsAndMoves)
     ExpectInvoke(codegen, "vf.create_addr_reg", {"AddrReg addr = vag_b32((4) * 2, (8) * 2);"},
                  {Int(0), Int(4), Int(1), Int(8)}, {{"dtype", ir::DataType::INT64}}, "addr");
     EXPECT_TRUE(codegen.IsAddrRegVar("addr"));
-    ExpectInvoke(codegen, "vf.move", {"vmov(fp, s4);"}, {fp, s4});
-    ExpectInvoke(codegen, "vf.move", {"vmov(fp, s4, mask, MODE_MERGING);"}, {fp, s4, mask});
+    ExpectInvoke(codegen, "vf.move", {"vmov(fp, i32_reg);"}, {fp, i32_reg});
+    ExpectInvoke(codegen, "vf.move", {"vmov(fp, i32_reg, mask, MODE_MERGING);"}, {fp, i32_reg, mask});
     ExpectInvoke(codegen, "vf.move", {"pmov(mask2, mask);"}, {mask2, mask});
     ExpectInvoke(codegen, "vf.move", {"pmov(mask2, mask, mask);"}, {mask2, mask, mask});
 }
@@ -323,7 +325,12 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
     expect_scalar("vf.mins", "vmins(");
     expect_scalar("vf.maxs", "vmaxs(");
     expect_scalar("vf.leaky_relu", "vlrelu(");
-    expect_scalar("vf.muls_cast", "vmulscvt(");
+    auto fp32_src = MakeVar("fp32_src", ir::DataType::FP32);
+    auto fp16_dst = MakeVar("fp16_dst", ir::DataType::FP16);
+    codegen.RegisterRegTensorVar("fp32_src");
+    codegen.RegisterRegTensorVar("fp16_dst");
+    ExpectInvoke(codegen, "vf.muls_cast", {"vmulscvt("}, {fp16_dst, fp32_src, Float(0.5), mask},
+                 {{"mode", EnumValue(ir::MergeMode::MERGING)}, {"dtype", ir::DataType::FP16}});
 }
 
 TEST(BackendCCEVFOpsTest, EmitsReductionAndPermutationIntrinsics)
@@ -351,13 +358,13 @@ TEST(BackendCCEVFOpsTest, EmitsReductionAndPermutationIntrinsics)
     ExpectInvoke(codegen, "vf.pair_reduce_sum", {"vcpadd("}, {dst, src0, mask}, merging);
     ExpectInvoke(codegen, "vf.axpy", {"vaxpy("}, {dst, src0, Float(0.25), mask}, merging);
     ExpectInvoke(codegen, "vf.copy", {"vmov("}, {dst, src0, mask});
-    ExpectInvoke(codegen, "vf.shift_left", {"vshls("}, {dst, src0, Int(2), mask}, merging);
-    ExpectInvoke(codegen, "vf.shift_right", {"vshr("}, {dst, src0, int_src, mask}, merging);
-    ExpectInvoke(codegen, "vf.mull", {"vmull("}, {dst, dst2, src0, src1, mask});
+    ExpectInvoke(codegen, "vf.shift_left", {"vshls("}, {int_dst, int_src0, Int(2), mask}, merging);
+    ExpectInvoke(codegen, "vf.shift_right", {"vshr("}, {int_dst, int_src0, int_src, mask}, merging);
+    ExpectInvoke(codegen, "vf.mull", {"vmull("}, {int_dst, int_dst, int_src0, int_src1, mask});
     ExpectInvoke(codegen, "vf.addc", {"vaddcs("}, {carry, int_dst, int_src0, int_src1, mask, mask});
     ExpectInvoke(codegen, "vf.subc", {"vsubcs("}, {carry, int_dst, int_src0, int_src1, mask, mask});
     ExpectInvoke(codegen, "vf.exp_sub", {"vexpdif(", "PART_ODD"}, {dst, src0, src1, mask},
-                 {{"layout", EnumValue(ir::CastLayout::ONE)}});
+                 {{"layout", EnumValue(ir::CastLayout::ONE)}, {"dtype", ir::DataType::FP32}});
     ExpectInvoke(codegen, "vf.select", {"vsel("}, {dst, src0, int_src, mask});
     ExpectInvoke(codegen, "vf.mem_bar", {"mem_bar(VV_ALL)"}, {}, {{"mode", EnumValue(ir::MemBarMode::VV_ALL)}});
 }
@@ -370,37 +377,45 @@ TEST(BackendCCEVFOpsTest, EmitsPackAndCastIntrinsics)
     auto i64 = MakeVar("i64", ir::DataType::INT64);
     auto i32 = MakeVar("i32", ir::DataType::INT32);
     auto i16 = MakeVar("i16", ir::DataType::INT16);
+    auto u16 = MakeVar("u16", ir::DataType::UINT16);
+    auto u32 = MakeVar("u32", ir::DataType::UINT32);
     auto s4 = MakeVar("s4", ir::DataType::INT4);
     auto mask = MakeVar("mask", ir::DataType::UINT32);
-    for (const auto& var : {fp32, fp16, i64, i32, i16, s4}) {
+    for (const auto& var : {fp32, fp16, i64, i32, i16, u16, u32, s4}) {
         codegen.RegisterRegTensorVar(var->name_);
     }
 
-    ExpectInvoke(codegen, "vf.pack", {"vpack(", "HIGHER"}, {fp16, fp32}, {{"part", EnumValue(ir::PackPart::UPPER)}});
-    ExpectInvoke(codegen, "vf.pack", {"vdintlv("}, {i32, i64});
-    ExpectInvoke(codegen, "vf.unpack", {"vunpack(", "HIGHER"}, {fp32, fp16},
-                 {{"part", EnumValue(ir::PackPart::UPPER)}});
-    ExpectInvoke(codegen, "vf.unpack", {"vintlv("}, {i64, i32});
+    ExpectInvoke(codegen, "vf.pack", {"vpack(", "HIGHER"}, {u16, u32},
+                 {{"part", EnumValue(ir::PackPart::UPPER)}, {"dtype", ir::DataType::UINT16}});
+    ExpectInvoke(codegen, "vf.pack", {"vdintlv("}, {i32, i64}, {{"dtype", ir::DataType::INT32}});
+    ExpectInvoke(codegen, "vf.unpack", {"vunpack(", "HIGHER"}, {u32, u16},
+                 {{"part", EnumValue(ir::PackPart::UPPER)}, {"dtype", ir::DataType::UINT32}});
+    ExpectInvoke(codegen, "vf.unpack", {"vintlv("}, {i64, i32}, {{"dtype", ir::DataType::INT64}});
 
     const Kwargs cast_options = {{"layout", EnumValue(ir::CastLayout::ONE)},
                                  {"round_mode", EnumValue(ir::VFRoundMode::CAST_FLOOR)},
                                  {"saturate", EnumValue(ir::SaturateMode::ON)}};
+    auto with_dtype = [](const Kwargs& base, ir::DataType dt) {
+        Kwargs result = base;
+        result.emplace_back("dtype", dt);
+        return result;
+    };
     ExpectInvoke(codegen, "vf.astype", {"vcvt(fp32, fp16, mask, PART_ODD, MODE_ZEROING);"}, {fp32, fp16, mask},
-                 cast_options);
+                 with_dtype(cast_options, ir::DataType::FP32));
     ExpectInvoke(codegen, "vf.astype", {"vcvt(fp32, i32, mask, ROUND_F, MODE_ZEROING);"}, {fp32, i32, mask},
-                 cast_options);
+                 with_dtype(cast_options, ir::DataType::FP32));
     ExpectInvoke(codegen, "vf.astype", {"vcvt(i32, fp32, mask, ROUND_F, RS_ENABLE, MODE_ZEROING);"}, {i32, fp32, mask},
-                 cast_options);
+                 with_dtype(cast_options, ir::DataType::INT32));
     ExpectInvoke(codegen, "vf.astype", {"vcvt(i32, fp16, mask, ROUND_F, PART_ODD, MODE_ZEROING);"}, {i32, fp16, mask},
-                 cast_options);
+                 with_dtype(cast_options, ir::DataType::INT32));
     ExpectInvoke(codegen, "vf.astype", {"vcvt(fp16, i32, mask, ROUND_F, PART_ODD, MODE_ZEROING);"}, {fp16, i32, mask},
-                 cast_options);
+                 with_dtype(cast_options, ir::DataType::FP16));
     ExpectInvoke(codegen, "vf.astype", {"vcvt(i16, i32, mask, RS_ENABLE, PART_ODD, MODE_ZEROING);"}, {i16, i32, mask},
-                 cast_options);
+                 with_dtype(cast_options, ir::DataType::INT16));
     ExpectInvoke(codegen, "vf.astype", {"vcvt_s42f16(fp16, s4, mask, PART_P1, MODE_ZEROING);"}, {fp16, s4, mask},
-                 cast_options);
+                 with_dtype(cast_options, ir::DataType::FP16));
     ExpectInvoke(codegen, "vf.astype", {"vcvt_f162s4(s4, fp16, mask, ROUND_F, RS_ENABLE, PART_P1, MODE_ZEROING);"},
-                 {s4, fp16, mask}, cast_options);
+                 {s4, fp16, mask}, with_dtype(cast_options, ir::DataType::INT4));
 }
 
 TEST(BackendCCEVFOpsTest, EmitsCompareHistogramAndMaskConversions)
@@ -410,30 +425,31 @@ TEST(BackendCCEVFOpsTest, EmitsCompareHistogramAndMaskConversions)
     auto fp16 = MakeVar("fp16", ir::DataType::FP16);
     auto i64 = MakeVar("i64", ir::DataType::INT64);
     auto i32 = MakeVar("i32", ir::DataType::INT32);
+    auto u16 = MakeVar("u16", ir::DataType::UINT16);
     auto u8 = MakeVar("u8", ir::DataType::UINT8);
     auto mask = MakeVar("mask", ir::DataType::UINT32);
-    for (const auto& var : {fp32, fp16, i64, i32, u8}) {
+    for (const auto& var : {fp32, fp16, i64, i32, u16, u8}) {
         codegen.RegisterRegTensorVar(var->name_);
     }
 
     ExpectInvoke(codegen, "vf.update_mask", {"plt_b8("}, {Int(17)}, {{"dtype", ir::DataType::UINT8}}, "mask8");
     ExpectInvoke(codegen, "vf.update_mask", {"plt_b16("}, {Int(17)}, {{"dtype", ir::DataType::FP16}}, "mask16");
     ExpectInvoke(codegen, "vf.update_mask", {"plt_b32("}, {Int(17)}, {}, "mask32");
-    ExpectInvoke(codegen, "vf.histograms", {"dhistv2("}, {i32, fp32, mask},
+    ExpectInvoke(codegen, "vf.histograms", {"dhistv2("}, {u16, u8, mask},
                  {{"bin_type", EnumValue(ir::BinType::BIN1)}, {"hist_type", EnumValue(ir::HistType::FREQUENCY)}});
-    ExpectInvoke(codegen, "vf.histograms", {"chistv2("}, {i32, u8, mask}, {{"bin_type", EnumValue(ir::BinType::BIN0)}});
+    ExpectInvoke(codegen, "vf.histograms", {"chistv2("}, {u16, u8, mask}, {{"bin_type", EnumValue(ir::BinType::BIN0)}});
 
     ExpectInvoke(codegen, "vf.eq", {"vcmps_eq("}, {mask, fp32, Float(1.0), mask});
     ExpectInvoke(codegen, "vf.ne", {"vcmp_ne("}, {mask, fp32, fp16, mask}, {{"cmp_dtype", ir::DataType::UINT8}});
-    ExpectInvoke(codegen, "vf.lt", {"vcmp_lt("}, {mask, fp32, fp16, mask});
-    ExpectInvoke(codegen, "vf.gt", {"vcmp_gt("}, {mask, fp32, fp16, mask});
-    ExpectInvoke(codegen, "vf.le", {"vcmp_le("}, {mask, fp32, fp16, mask});
-    ExpectInvoke(codegen, "vf.ge", {"vcmp_ge("}, {mask, fp32, fp16, mask});
+    ExpectInvoke(codegen, "vf.lt", {"vcmp_lt("}, {mask, fp32, fp16, mask}, {{"cmp_dtype", ir::DataType::UINT8}});
+    ExpectInvoke(codegen, "vf.gt", {"vcmp_gt("}, {mask, fp32, fp16, mask}, {{"cmp_dtype", ir::DataType::UINT8}});
+    ExpectInvoke(codegen, "vf.le", {"vcmp_le("}, {mask, fp32, fp16, mask}, {{"cmp_dtype", ir::DataType::UINT8}});
+    ExpectInvoke(codegen, "vf.ge", {"vcmp_ge("}, {mask, fp32, fp16, mask}, {{"cmp_dtype", ir::DataType::UINT8}});
     ExpectInvoke(codegen, "vf.squeeze", {"vsqz(", "MODE_NO_STORED"}, {i32, fp16, mask},
                  {{"gather_mode", EnumValue(ir::SqueezeMode::NO_STORE_REG)}});
     ExpectInvoke(codegen, "vf.arange", {"vneg(", "vadds("}, {i32, Int(3)},
-                 {{"index_order", EnumValue(ir::IndexOrder::DECREASE_ORDER)}});
-    ExpectInvoke(codegen, "vf.arange", {"vci(i64_b64_lo_"}, {i64, Int(5)});
+                 {{"index_order", EnumValue(ir::IndexOrder::DECREASE_ORDER)}, {"dtype", ir::DataType::INT32}});
+    ExpectInvoke(codegen, "vf.arange", {"vci(i64_b64_lo_"}, {i64, Int(5)}, {{"dtype", ir::DataType::INT64}});
     ExpectInvoke(codegen, "vf.unsqueeze", {"vusqz("}, {i32, mask});
     ExpectInvoke(codegen, "vf.truncate", {"vtrc(i32, fp32, ROUND_C, mask, MODE_MERGING)"}, {i32, fp32, mask},
                  {{"round_mode", EnumValue(ir::VFRoundMode::CAST_CEIL)}, {"mode", EnumValue(ir::MergeMode::MERGING)}});
@@ -498,8 +514,8 @@ TEST(BackendCCEVFOpsTest, EmitsGatherAndUnalignedDataMovement)
     ExpectInvoke(codegen, "vf.gather", {"vgather2_bc("}, {fp16, tile, index, mask});
     ExpectInvoke(codegen, "vf.gather", {"vgatherb("}, {fp16, tile, index, mask},
                  {{"data_copy_mode", EnumValue(ir::DataCopyMode::DATA_BLOCK_LOAD)}});
-    ExpectInvoke(codegen, "vf.gather", {"vselr("}, {fp16, fp16, index});
-    ExpectInvoke(codegen, "vf.scatter", {"vscatter("}, {tile, fp16, index, mask});
+    ExpectInvoke(codegen, "vf.gather", {"vselr("}, {fp16, fp16, index_u16});
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter("}, {tile, fp16, index_u16, mask});
     ExpectInvoke(codegen, "vf.load", {"UnalignReg __ureg_ld_", "vldas(", "vldus("}, {fp16, tile});
     ExpectInvoke(codegen, "vf.load", {"UnalignReg __ureg_ld_", "vldas(", "vldus(", "(4) * 2", "NORM"},
                  {i64, tile64, Int(4)}, {{"post_mode", std::string("NORM")}});

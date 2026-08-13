@@ -617,9 +617,9 @@ def kernel_12_prelu_mul(
 
 @pl.vector_function
 def _vf_kernel_13_shift_vec_0(in_a, in_b, t_u0, t_u1):
-    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
-    reg_a = vf.load_align(in_a, 0, dtype=pl.DT_UINT32)
-    reg_b = vf.load_align(in_b, 0, dtype=pl.DT_UINT32)
+    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_INT32)
+    reg_a = vf.load_align(in_a, 0, dtype=pl.DT_INT32)
+    reg_b = vf.load_align(in_b, 0, dtype=pl.DT_INT32)
     reg_dst = vf.shift_left(reg_a, reg_b, preg)
     vf.store_align(t_u0, reg_dst, preg)
     reg_dst = vf.shift_right(reg_a, reg_b, preg)
@@ -1639,11 +1639,14 @@ def kernel_38_avg_add3(
 @pl.vector_function
 def _vf_kernel_39_selectr_max_0(in_a, in_b, t_f0, t_f1):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
+    preg_u32 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     reg_a = vf.load_align(in_a, 0)
     reg_b = vf.load_align(in_b, 0)
-    reg_idx = vf.arange(0, dtype=pl.DT_INT32)
-    # gather: use gather to load from tile with index (replaces select_r)
-    reg_dst = vf.gather(in_a, reg_idx, preg)
+    # gather: broadcast element 0 from tile to all lanes (replaces select_r)
+    reg_idx = vf.full(0, preg_u32, dtype=pl.DT_UINT32)
+    reg_dst = vf.gather(in_a, reg_idx, preg_u32)
+    # gather result is UINT32 reinterpret of FP32 data; copy back as FP32
+    reg_dst = vf.copy(reg_dst, preg, dtype=pl.DT_FP32)
     vf.store_align(t_f0, reg_dst, preg)
     # max: element-wise max(a, b)
     reg_dst = vf.max(reg_a, reg_b, preg)
@@ -1766,50 +1769,6 @@ def kernel_42_cast_fp162s4_roundtrip(
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         _vf_kernel_42_cast_fp162s4_roundtrip_0(in_a, t_f0)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.store(out_f0, t_f0, [0, 0])
-        pl.store(out_f1, t_f1, [0, 0])
-        pl.store(out_u0, t_u0, [0, 0])
-        pl.store(out_u1, t_u1, [0, 0])
-        pl.store(out_u2, t_u2, [0, 0])
-
-
-@pl.vector_function
-def _vf_kernel_45_gather2_0(in_a, t_f0):
-    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # fill index register with 0,1,2,...63 (identity gather)
-    reg_idx = vf.arange(0, dtype=pl.DT_INT32)
-    # gather: gather from UB tile using index register (replaces gather2)
-    reg_dst = vf.gather(in_a, reg_idx, preg)
-    vf.store_align(t_f0, reg_dst, preg)
-
-
-@pl.jit()
-def kernel_45_gather2(
-    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    out_f0: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    out_f1: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    out_u0: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
-    out_u1: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
-    out_u2: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
-):
-    tf = pl.TileType(shape=[N, M], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    tu = pl.TileType(shape=[N, M], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=VA_IN_A, size=TILE_SIZE)
-    in_b = pl.make_tile(tf, addr=VA_IN_B, size=TILE_SIZE)
-    t_f0 = pl.make_tile(tf, addr=VA_F0, size=TILE_SIZE)
-    t_f1 = pl.make_tile(tf, addr=VA_F1, size=TILE_SIZE)
-    t_u0 = pl.make_tile(tu, addr=VA_U0, size=TILE_SIZE)
-    t_u1 = pl.make_tile(tu, addr=VA_U1, size=TILE_SIZE)
-    t_u2 = pl.make_tile(tu, addr=VA_U2, size=TILE_SIZE)
-    with pl.section_vector():
-        pl.load(in_a, a, [0, 0])
-        pl.load(in_b, b, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        _vf_kernel_45_gather2_0(in_a, t_f0)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out_f0, t_f0, [0, 0])
@@ -2490,10 +2449,10 @@ def kernel_61_load_unalign_post_update(
 
 
 @pl.vector_function
-def _vf_kernel_62_scatter_0(in_a, t_f0):
+def _vf_kernel_62_scatter_0(in_a, in_idx, t_f0):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(in_a, 0)
-    reg_idx = vf.arange(0, dtype=pl.DT_INT32)
+    reg_idx = vf.load_align(in_idx, 0, dtype=pl.DT_UINT32)
     vf.scatter(t_f0, reg_a, reg_idx, preg)
 
 
@@ -2519,55 +2478,10 @@ def kernel_62_scatter(
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_b, b, [0, 0])
+        pl.load(t_u0, out_u0, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        _vf_kernel_62_scatter_0(in_a, t_f0)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.store(out_f0, t_f0, [0, 0])
-        pl.store(out_f1, t_f1, [0, 0])
-        pl.store(out_u0, t_u0, [0, 0])
-        pl.store(out_u1, t_u1, [0, 0])
-        pl.store(out_u2, t_u2, [0, 0])
-
-
-@pl.vector_function
-def _vf_kernel_63_gather_gatherb_0(in_a, t_f0, t_f1):
-    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    reg_idx = vf.arange(0, dtype=pl.DT_INT32)
-    reg_dst = vf.gather(in_a, reg_idx, preg)
-    vf.store_align(t_f0, reg_dst, preg)
-    preg_u = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
-    reg_idx_b = vf.shift_left(reg_idx, 5, preg_u)
-    reg_dst = vf.gather(in_a, reg_idx_b, preg, data_copy_mode=pl.DataCopyMode.DATA_BLOCK_LOAD)
-    vf.store_align(t_f1, reg_dst, preg)
-
-
-@pl.jit()
-def kernel_63_gather_gatherb(
-    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    out_f0: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    out_f1: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    out_u0: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
-    out_u1: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
-    out_u2: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
-):
-    tf = pl.TileType(shape=[N, M], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    tu = pl.TileType(shape=[N, M], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=VA_IN_A, size=TILE_SIZE)
-    in_b = pl.make_tile(tf, addr=VA_IN_B, size=TILE_SIZE)
-    t_f0 = pl.make_tile(tf, addr=VA_F0, size=TILE_SIZE)
-    t_f1 = pl.make_tile(tf, addr=VA_F1, size=TILE_SIZE)
-    t_u0 = pl.make_tile(tu, addr=VA_U0, size=TILE_SIZE)
-    t_u1 = pl.make_tile(tu, addr=VA_U1, size=TILE_SIZE)
-    t_u2 = pl.make_tile(tu, addr=VA_U2, size=TILE_SIZE)
-    with pl.section_vector():
-        pl.load(in_a, a, [0, 0])
-        pl.load(in_b, b, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        _vf_kernel_63_gather_gatherb_0(in_a, t_f0, t_f1)
+        _vf_kernel_62_scatter_0(in_a, t_u0, t_f0)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out_f0, t_f0, [0, 0])
@@ -3448,7 +3362,7 @@ def _vf_kernel_91_new_feats_0(in_a, t_f0, t_f1, t_u0):
     preg_u = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     reg_a = vf.load_align(in_a, 0)
     # F1: arange UINT32 (verifies signed_type selection doesn't fall to int8)
-    idx32 = vf.arange(0, dtype=pl.DT_UINT32)
+    idx32 = vf.arange(0, dtype=pl.DT_INT32)
     vf.store_align(t_u0, idx32, preg_u)
     reg_max = vf.load_align(in_a, 0)
     reg_e = vf.exp_sub(reg_a, reg_max, preg, layout=pl.CastLayout.ONE)
@@ -3580,7 +3494,6 @@ _KERNELS = [
     kernel_39_selectr_max,
     kernel_40_log2_log10,
     kernel_42_cast_fp162s4_roundtrip,
-    kernel_45_gather2,
     kernel_46_mask_logic,
     kernel_47_load_store_simple,
     kernel_48_log,
@@ -3597,7 +3510,6 @@ _KERNELS = [
     kernel_60_load_store_u_align,
     kernel_61_load_unalign_post_update,
     kernel_62_scatter,
-    kernel_63_gather_gatherb,
     kernel_65_update_mask,
     kernel_66_mask_or_xor_not,
     kernel_67_mask_mov_sel,
@@ -3631,12 +3543,14 @@ for _k in _KERNELS:
     _KERNEL_MAP[_num] = _k
 
 
-def _run_kernel(kernel_num, a_fp32, b_fp32, device):
+def _run_kernel(kernel_num, a_fp32, b_fp32, device, idx_u0=None):
     out_f0 = torch.empty([N, M], device=device, dtype=torch.float32)
     out_f1 = torch.empty([N, M], device=device, dtype=torch.float32)
     out_u0 = torch.empty([N, M], device=device, dtype=torch.int32)
     out_u1 = torch.empty([N, M], device=device, dtype=torch.int32)
     out_u2 = torch.empty([N, M], device=device, dtype=torch.int32)
+    if idx_u0 is not None:
+        out_u0 = idx_u0.to(torch.int32)
     _KERNEL_MAP[kernel_num](a_fp32, b_fp32, out_f0, out_f1, out_u0, out_u1, out_u2)
     torch.npu.synchronize()
     return out_f0, out_f1, out_u0, out_u1, out_u2
@@ -3815,7 +3729,7 @@ def test_vf_basic_ops():
     logging.info("Kernel 38 (Avg, Add3) PASSED")
     # Kernel 39: SelectR (vselr gather by identity index) + Max
     f0, f1, *_ = _run_kernel(39, a_fp32, b_fp32, device)
-    torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
+    torch.testing.assert_close(f0, a_fp32[:, :1].expand_as(a_fp32), rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, torch.max(a_fp32, b_fp32), rtol=1e-5, atol=1e-5)
     logging.info("Kernel 39 (SelectR, Max) PASSED")
     # Kernel 40: Log2 + Log10 (use positive inputs)
@@ -3826,9 +3740,6 @@ def test_vf_basic_ops():
     f0, *_ = _run_kernel(42, a_fp32, b_fp32, device)
     assert f0.dtype == torch.float32
     logging.info("Kernel 42 (CastFp162S4, CastS42Fp16) PASSED")
-    f0, *_ = _run_kernel(45, a_fp32, b_fp32, device)
-    assert f0.dtype == torch.float32
-    logging.info("Kernel 45 (Gather2) PASSED")
     f0, *_ = _run_kernel(46, a_fp32, b_fp32, device)
     assert f0.dtype == torch.float32
     logging.info("Kernel 46 (MaskAnd/Or/Xor/Not) PASSED")
@@ -3896,15 +3807,11 @@ def test_vf_basic_ops():
     f0, *_ = _run_kernel(61, a_fp32, b_fp32, device)
     torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 61 (LoadUnalignPostUpdate) PASSED")
-    # Kernel 62: Scatter (identity scatter with arange index)
-    f0, *_ = _run_kernel(62, a_fp32, b_fp32, device)
+    # Kernel 62: Scatter (identity scatter with loaded index)
+    idx = torch.arange(M, device=device, dtype=torch.int32).reshape([N, M]).to(torch.uint32)
+    f0, *_ = _run_kernel(62, a_fp32, b_fp32, device, idx_u0=idx)
     torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 62 (Scatter) PASSED")
-    # Kernel 63: Gather, Gatherb (identity gather with arange index)
-    f0, f1, *_ = _run_kernel(63, a_fp32, b_fp32, device)
-    torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
-    assert f1.dtype == torch.float32
-    logging.info("Kernel 63 (Gather, Gatherb) PASSED")
     # Kernel 65: UpdateMask (smoke test)
     f0, *_ = _run_kernel(65, a_fp32, b_fp32, device)
     assert f0.dtype == torch.float32

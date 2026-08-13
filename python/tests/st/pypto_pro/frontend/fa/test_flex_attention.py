@@ -518,8 +518,8 @@ def last_div_vf(dst_tile, cur_tile, exp_sum_tile, s1_size, has_tail):
 
 @pl.vector_function
 def decode_mask(mask, maskr, holel, holes, col, s1_size, hole_num):
-    index = vf.arange(col, dtype=pl.DT_UINT32)
-    index_unroll = vf.arange(col + 64, dtype=pl.DT_UINT32)
+    index = vf.arange(col, dtype=pl.DT_INT32)
+    index_unroll = vf.arange(col + 64, dtype=pl.DT_INT32)
     preg_all = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     preg_all_b16 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT16)
     merge_bit = vf.create_mask(pattern=pl.MaskPattern.ALLF, dtype=pl.DT_UINT8)
@@ -529,7 +529,7 @@ def decode_mask(mask, maskr, holel, holes, col, s1_size, hole_num):
     vreg_zero = vf.full(0, dtype=pl.DT_UINT16)
     vreg_one = vf.full(1, dtype=pl.DT_UINT16)
     for m in pl.range(0, s1_size):
-        maskr_reg = vf.load_align(maskr, m, dist=pl.LoadDist.BRC_B32)
+        maskr_reg = vf.load_align(maskr, m, dist=pl.LoadDist.BRC_B32, dtype=pl.DT_INT32)
         # Start from the causal right bound: visible where c < maskr.
         merge_bit = vf.lt(index, maskr_reg, preg_all)
         merge_unroll_bit = vf.lt(index_unroll, maskr_reg, preg_all)
@@ -540,8 +540,8 @@ def decode_mask(mask, maskr, holel, holes, col, s1_size, hole_num):
         # at an arbitrary position (holel > 0) is handled without a signed branch;
         # holes == 0 makes the condition trivially true (an unused hole slot).
         for h in pl.range(0, hole_num):
-            holel_reg = vf.load_align(holel, h * TS_HALF + m, dist=pl.LoadDist.BRC_B32)
-            holes_reg = vf.load_align(holes, h * TS_HALF + m, dist=pl.LoadDist.BRC_B32)
+            holel_reg = vf.load_align(holel, h * TS_HALF + m, dist=pl.LoadDist.BRC_B32, dtype=pl.DT_INT32)
+            holes_reg = vf.load_align(holes, h * TS_HALF + m, dist=pl.LoadDist.BRC_B32, dtype=pl.DT_INT32)
             diff = vf.sub(index, holel_reg, preg_all)
             diff_unroll = vf.sub(index_unroll, holel_reg, preg_all)
             hole_bit = vf.ge(diff, holes_reg, preg_all)
