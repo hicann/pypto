@@ -335,27 +335,35 @@ def _create_mutex_dedup_op(
     *,
     pipe: PipeType,
     mutex_id_exprs: list[Expr],
+    mutex_id_owner_indices: list[int] | None = None,
     mode: int = 0,
     mutex_ids_union: list | None = None,
     span: Span | None = None,
 ) -> Call:
-    """Create a dedup mutex lock/unlock for N aliasing tiles (in-place scenario).
+    """Create a dedup mutex lock/unlock for N runtime mutex-id expressions.
 
     Emits a single ``system.mutex_lock_dyn`` / ``system.mutex_unlock_dyn`` IR Call
-    with multiple mutex_id expressions in args. The CCE codegen generates runtime
-    if-guards so each unique mutex_id is only locked/unlocked once (avoids hardware
-    hang from double get_buf on the same pipe + same id).
+    with multiple mutex_id expressions in args. Expressions with the same owner
+    index in ``mutex_id_owner_indices`` are known distinct; CCE only generates
+    runtime if-guards across different Tiles. Lock and unlock both use
+    first-occurrence order.
 
     Args:
         op_name: Base operation name ("system.mutex_lock" or "system.mutex_unlock").
         pipe: Pipe to lock on.
         mutex_id_exprs: List of N mutex_id IR expressions (already normalized to Expr).
+        mutex_id_owner_indices: Owner index for every expression. Expressions with
+            the same index come from one Tile and are guaranteed distinct.
         mode: Mutex mode (default 0).
         mutex_ids_union: Union of all candidate mutex_id values (for ShouldSkipVPipeMutex).
         span: Source span.
     """
     actual_span = span if span is not None else _get_span_or_capture(span, frame_offset=3)
     kwargs: dict = {"pipe": pipe, "mode": mode, "max_mutex_id": len(mutex_id_exprs)}
+    if mutex_id_owner_indices is not None:
+        if len(mutex_id_owner_indices) != len(mutex_id_exprs):
+            raise ValueError("mutex_id_owner_indices length must match mutex_id_exprs length")
+        kwargs["mutex_id_owner_indices"] = list(mutex_id_owner_indices)
     if mutex_ids_union is not None:
         kwargs["mutex_ids"] = list(mutex_ids_union)
     return _ir_core.create_op_call(f"{op_name}_dyn", mutex_id_exprs, kwargs, actual_span)
@@ -401,7 +409,7 @@ def mutex_lock(
     Args:
         pipe: PipeType for which to acquire the lock (e.g. PipeType.MTE2).
         mutex_id: MutexID (0-31, per Ascend C Mutex ISASI spec).
-            May be a static int or a dynamic IR Expr; when dynamic, the
+            May be a static int/ConstInt or a dynamic IR Expr; when dynamic, the
             codegen emits an if-chain of static `pto.get_buf` using
             ``mutex_ids`` as the comparison targets.
         mode: Optional mode attribute (default 0).

@@ -329,27 +329,27 @@ class AssignmentParserMixin:
             self._update_const_env(var_name, value_expr)
 
     def _coemit_tile_mutexid_companion(self, var, mm) -> None:
-        """Co-emit a companion scalar ``<name>__mutexid = <buf_id>`` alongside ``var = <tile>``.
+        """Co-emit companion scalars for every mutex id alongside ``var = <tile>``.
 
         Called from _transfer_tile_sync_metadata (before define_var rebinds the name), for any
-        assignment whose value carries tile mutex meta ``mm = (buf_id, ids)``. The companion is
-        re-recorded as ``_tile_mutex_meta[var] = (companion_var, union_ids)`` so the use site
+        assignment whose value carries tile mutex meta ``mm = (buf_ids, ids)``. The companions are
+        re-recorded as ``_tile_mutex_meta[var] = (companion_vars, mutex_ids)`` so the use site
         stays on the single _tile_mutex_meta path; ConvertToSSA phi-merges the companion by
         name in lockstep with the tile pointer, so an if/else-selected tile locks the branch
-        chosen at runtime.
-
-        The candidate-id union accumulates across branches via the shared left-value name:
-        ``lookup_var(var.name)`` still resolves to the previous branch's tile var here, whose
-        recorded ids we merge in.
+        chosen at runtime. ScopeManager merges candidate ids when a control-flow scope exits.
         """
-        buf_id, mutex_ids = mm
-        companion_name = f"{var.name}__mutexid"
-        prev_var = self.scope_manager.lookup_var(var.name)
-        prev_ids = list(self._tile_mutex_meta.get(prev_var, (None, []))[1] or []) if prev_var else []
-        companion_var = self.builder.var(companion_name, ir.ScalarType(DataType.INDEX), var.span)
-        self.builder.assign(companion_var, buf_id, var.span)
-        union_ids = list(dict.fromkeys(prev_ids + list(mutex_ids or [])))
-        self._tile_mutex_meta[var] = (companion_var, union_ids)
+        buf_ids, mutex_ids = mm
+        companion_vars = []
+        for index, buf_id in enumerate(buf_ids):
+            suffix = "" if index == 0 else f"_{index}"
+            companion_name = f"{var.name}__mutexid{suffix}"
+            companion_var = self.builder.var(companion_name, ir.ScalarType(DataType.INDEX), var.span)
+            self.builder.assign(companion_var, buf_id, var.span)
+            companion_vars.append(companion_var)
+        self._tile_mutex_meta[var] = (
+            tuple(companion_vars),
+            list(dict.fromkeys(mutex_ids or ())),
+        )
 
     def _parse_struct_field_assignment(self, target: ast.Attribute, stmt: ast.Assign, span: ir.Span) -> None:
         """Lower ``base.field = rhs`` to ``EvalStmt(struct.set(base, rhs, field=...))``.
@@ -397,18 +397,13 @@ class AssignmentParserMixin:
                 "Right-hand side of subscript assignment must be an IR expression",
                 span=span,
             )
-        meta = self.tile_mutex_lock_meta(container_expr) if self._auto_mutex else None
         from pypto_pro.ir.op.block_ops import _ir_setval
         setval_call = _ir_setval(container_expr, index_expr, value_expr, span=span)
-        if meta is not None:
-            from pypto_pro.ir.op.system_ops import mutex_lock, mutex_unlock
-
+        mutex_locked = False
+        if self._auto_mutex:
             from ._op_pipeline import get_op_pipe
             pipe = get_op_pipe("setval")
-            buf_id_ir, mutex_ids = meta
-            self.builder.emit(ir.EvalStmt(
-                mutex_lock(pipe=pipe, mutex_id=buf_id_ir, mutex_ids=mutex_ids, span=span), span))
+            mutex_locked = self._emit_mutex_for_tile(container_expr, pipe, span, is_lock=True)
         self.builder.emit(ir.EvalStmt(setval_call, span))
-        if meta is not None:
-            self.builder.emit(ir.EvalStmt(
-                mutex_unlock(pipe=pipe, mutex_id=buf_id_ir, mutex_ids=mutex_ids, span=span), span))
+        if mutex_locked:
+            self._emit_mutex_for_tile(container_expr, pipe, span, is_lock=False)

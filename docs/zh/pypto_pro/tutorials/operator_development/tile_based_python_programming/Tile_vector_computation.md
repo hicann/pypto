@@ -41,7 +41,7 @@ Pipe类型（`pl.PipeType`）：`MTE2`（GM→L1/UB加载）、`MTE1`（L1→L0�
 
 ## TileGroup —— 自动同步的双缓冲/N缓冲
 
-[`pl.make_tile_group`](../../../api/SIMD-API/operation/resource_management/make_tile_group.md)声明一组轮转的Tile，用于实现双缓冲及N缓冲。配合`auto_mutex=True`时，框架在每次使用轮转Tile的前后自动插入`mutex_lock`/`mutex_unlock`。
+[`pl.make_tile_group`](../../../api/SIMD-API/operation/resource_management/make_tile_group.md)声明一组轮转的Tile，用于实现双缓冲及N缓冲。配置非空`mutex_ids`并配合`auto_mutex=True`时，框架在每次使用轮转Tile的前后自动插入`mutex_lock`/`mutex_unlock`；`mutex_ids`为`None`或空列表时，必须通过`depth`指定Tile数量，跨Pipe同步由用户自行保证。
 
 ![PyPTO Pro TileGroup双缓冲的理想化流水时序](../../figures/pro_tile_vector_double_buffer.png)
 
@@ -56,6 +56,10 @@ tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.Mem
 a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
 b_db = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[2, 3])
 c_db = pl.make_tile_group(type=tile_type, addrs=0x20000, mutex_ids=[30, 31])
+
+# 两块Tile，仅使用轮转/下标能力，不启用自动mutex
+manual_sync_db = pl.make_tile_group(
+    type=tile_type, addrs=0x30000, mutex_ids=None, depth=2)
 ```
 
 ### 游标接口
@@ -65,13 +69,14 @@ c_db = pl.make_tile_group(type=tile_type, addrs=0x20000, mutex_ids=[30, 31])
 | `g.next()` | 前进+1 | 新索引处的Tile（`(cur+1) % N`） |
 | `g.current()` | 不变 | 当前索引处的Tile |
 | `g.previous()` | 不变 | 前一个Tile（`(cur-1) % N`） |
+| `g[i]` | 不变 | 按照索引取第i个Tile |
 
 `next()`是主力：每次循环迭代调用一次以取“下一块缓冲区”，游标按N取模回绕。`current()`在同一迭代中多个算子共享同一块缓冲区时使用。`previous()`在不扰动游标的情况下窥视前一块缓冲区。
 
 ### addrs的两种写法
 
 - **单个基地址**→ Tile连续排布：`base + i * slot_size`
-- **地址列表**（长度 == `len(mutex_ids)`）→ 每个Tile一个显式的、可不连续的地址
+- **地址列表**（长度 == `len(mutex_ids)`/确定的`depth`）→ 每个Tile一个显式的、可不连续的地址
 
 ```python
 # 连续基地址

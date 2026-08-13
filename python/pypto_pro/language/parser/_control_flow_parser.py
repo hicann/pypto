@@ -203,7 +203,6 @@ class ControlFlowParserMixin:
                 for body_stmt in stmt.body:
                     self.parse_statement(body_stmt)
 
-                # Variables leak to outer scope (ConvertToSSA will handle)
                 self.scope_manager.exit_scope(leak_vars=True)
         finally:
             self.in_while_loop = prev_in_while_loop

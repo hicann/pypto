@@ -296,7 +296,7 @@ class ExpressionParserMixin:
         """
         none_expr = self.builder.builder.none()
         if self._auto_mutex and none_expr not in self._tile_mutex_meta:
-            self._tile_mutex_meta[none_expr] = (ir.ConstInt(-1, DataType.INDEX, span), [])
+            self._tile_mutex_meta[none_expr] = ((ir.ConstInt(-1, DataType.INDEX, span),), [])
         return none_expr
 
     def tile_mutex_lock_meta(self, expr):
@@ -631,11 +631,15 @@ class ExpressionParserMixin:
             # auto_mutex: for a tile ternary, yield the chosen tile's mutex id alongside the
             # tile so ConvertToSSA phi-merges the id in lockstep with the pointer (arbitrary
             # nesting). Probe each branch's id expr; both must be tiles-with-meta to add it.
-            then_mutexid, then_ids = self._ternary_branch_mutexid(then_value)
+            then_mutexids, then_ids = self._ternary_branch_mutexid(then_value)
             if_builder.return_var(tmp_name, then_value.type, span)
-            if then_mutexid is not None:
-                if_builder.return_var(f"{tmp_name}__mutexid", ir.ScalarType(DataType.INDEX), span)
-                self.builder.emit(ir.YieldStmt([then_value, then_mutexid], span))
+            if then_mutexids is not None:
+                for index in range(len(then_mutexids)):
+                    suffix = "" if index == 0 else f"_{index}"
+                    if_builder.return_var(
+                        f"{tmp_name}__mutexid{suffix}", ir.ScalarType(DataType.INDEX), span
+                    )
+                self.builder.emit(ir.YieldStmt([then_value, *then_mutexids], span))
             else:
                 self.builder.emit(ir.YieldStmt([then_value], span))
 
@@ -659,12 +663,12 @@ class ExpressionParserMixin:
                 )
             # Same-category scalar branches with differing dtypes (e.g. INT32 vs INDEX)
             # are promoted to a common dtype when the if statement is finalized.
-            else_mutexid, else_ids = self._ternary_branch_mutexid(else_value)
-            # The 2nd return_var (mutexid) is declared in the then branch based only on
-            # then_mutexid; both branches must then yield the same arity. If one branch is a
+            else_mutexids, else_ids = self._ternary_branch_mutexid(else_value)
+            # Mutex return vars are declared in the then branch based only on
+            # then_mutexids; both branches must then yield the same arity. If one branch is a
             # tile-with-mutex and the other is not, we cannot honor that -> reject explicitly
             # rather than emit an ill-formed if (mismatched yield count).
-            if (then_mutexid is None) != (else_mutexid is None):
+            if (then_mutexids is None) != (else_mutexids is None):
                 raise ParserTypeError(
                     "Ternary selecting a tile must have both branches carry a mutex id; "
                     "one branch has no tile mutex metadata",
@@ -672,29 +676,35 @@ class ExpressionParserMixin:
                     hint="Ensure both branches are tiles from a tile_group (auto_mutex), "
                          "or neither is",
                 )
-            if then_mutexid is not None and else_mutexid is not None:
-                self.builder.emit(ir.YieldStmt([else_value, else_mutexid], span))
+            if then_mutexids is not None and else_mutexids is not None:
+                if len(then_mutexids) != len(else_mutexids):
+                    raise ParserTypeError(
+                        f"cannot merge tile mutex metadata with different ID counts: "
+                        f"{len(then_mutexids)} and {len(else_mutexids)}",
+                        span=span,
+                    )
+                self.builder.emit(ir.YieldStmt([else_value, *else_mutexids], span))
             else:
                 self.builder.emit(ir.YieldStmt([else_value], span))
 
         return_var = if_builder.output(0)
         self.scope_manager.define_var(tmp_name, return_var, span=span)
 
-        # The 2nd output is the mutex-id phi. Record it on the result exactly like a plain
+        # The remaining outputs are mutex-id phis. Record them on the result like a plain
         # tile's mutex meta, so the use site (and any enclosing ternary) reads it through the
-        # single _tile_mutex_meta path -- buf_id is the runtime-chosen id var.
-        if then_mutexid is not None and else_mutexid is not None:
-            mutexid_var = if_builder.output(1)
+        # single _tile_mutex_meta path -- each buf_id is a runtime-chosen id var.
+        if then_mutexids is not None and else_mutexids is not None:
+            mutexid_vars = tuple(if_builder.output(index + 1) for index in range(len(then_mutexids)))
             union_ids = list(dict.fromkeys(list(then_ids) + list(else_ids)))
-            self._tile_mutex_meta[return_var] = (mutexid_var, union_ids)
+            self._tile_mutex_meta[return_var] = (mutexid_vars, union_ids)
 
         return return_var
 
     def _ternary_branch_mutexid(self, branch_value):
-        """Return ``(buf_id, mutex_ids)`` for a ternary branch, or ``(None, None)``.
+        """Return ``(buf_ids, mutex_ids)`` for a ternary branch, or ``(None, None)``.
 
         Both a plain tile and a nested ternary result carry their id in _tile_mutex_meta
-        (buf_id is always an ir.Expr now — ConstInt / slot GetItemExpr / companion var), so
+        (every buf_id is an ir.Expr: ConstInt / slot GetItemExpr / companion var), so
         the meta tuple can be returned as-is; nesting chains through the same lookup.
         """
         if not self._auto_mutex:
@@ -857,6 +867,12 @@ class ExpressionParserMixin:
                 return self._parse_tensor_shape_subscript(base_expr, subscript.slice, span)
 
         value_expr = self.parse_expression(subscript.value)
+
+        # A tile-group handle is a named tuple, so this must precede the TupleType
+        # dispatch below: g[0] means "slot 0 of the group", not "field 0 of the handle".
+        if self.is_tile_group(value_expr):
+            return self.lower_group_subscript(value_expr, subscript.slice, span)
+
         value_type = value_expr.type
 
         # Tile/Tensor subscript: dispatch by index type
@@ -871,20 +887,16 @@ class ExpressionParserMixin:
                 return self._parse_slice_subscript(value_expr, subscript.slice, span)
             # All-integer index: A[i, j] → getval(A, i*cols+j)
             index_expr = self._parse_scalar_subscript_index(value_expr, subscript.slice, span)
-            meta = self.tile_mutex_lock_meta(value_expr) if self._auto_mutex else None
             from pypto_pro.ir.op.block_ops import _ir_getval
             result = _ir_getval(value_expr, index_expr, span=span)
-            if meta is not None:
-                from pypto_pro.ir.op.system_ops import mutex_lock, mutex_unlock
-
+            mutex_locked = False
+            if self._auto_mutex:
                 from ._op_pipeline import get_op_pipe
                 pipe = get_op_pipe("getval")
-                buf_id_ir, mutex_ids = meta
-                self.builder.emit(ir.EvalStmt(
-                    mutex_lock(pipe=pipe, mutex_id=buf_id_ir, mutex_ids=mutex_ids, span=span), span))
+                mutex_locked = self._emit_mutex_for_tile(value_expr, pipe, span, is_lock=True)
+            if mutex_locked:
                 result = self._materialize_nested_expr(result, span)
-                self.builder.emit(ir.EvalStmt(
-                    mutex_unlock(pipe=pipe, mutex_id=buf_id_ir, mutex_ids=mutex_ids, span=span), span))
+                self._emit_mutex_for_tile(value_expr, pipe, span, is_lock=False)
             return result
 
         if not isinstance(value_type, ir.TupleType):

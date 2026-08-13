@@ -16,7 +16,7 @@
 
 一次性创建一组**同规格、可轮转复用**的Tile，为每块Tile绑定独立地址，并建立Tile与`mutex_id`的一一映射。解析器会将group展开成多个[`make_tile`](make_tile.md)；配合`auto_mutex`，框架根据该映射为后续Tile操作自动插入同步，是实现多缓冲（N-buffer）流水并行的核心接口。
 
-缓冲深度由`mutex_ids`列表长度决定：
+缓冲深度由`depth`或非空`mutex_ids`的长度确定：
 
 - **1-buffer**（`mutex_ids`长度1）：单块tile，用`current()`取用，无轮转
 - **2-buffer**（double-buffer / ping-pong）：两块tile交替使用，最常用
@@ -31,10 +31,9 @@
 ## 函数原型
 
 ```python
-pypto_pro.language.make_tile_group(type=, addrs=, mutex_ids=) -> group
+pypto_pro.language.make_tile_group(type=, addrs=, mutex_ids=None, depth=None) -> group
 ```
 
-> 只接受关键字参数`type=`、`addrs=`、`mutex_ids=`，三者均必填。
 
 ## 参数类型
 
@@ -42,25 +41,28 @@ pypto_pro.language.make_tile_group(type=, addrs=, mutex_ids=) -> group
 |---|---|---|
 | `type` | 输入 | `pypto_pro.language.TileType`，组内每块tile的统一规格 |
 | `addrs` | 输入 | 单个基地址（组内tile连续排布），或地址列表（逐块指定） |
-| `mutex_ids` | 输入 | 每块tile的mutex id列表，组的tile数量 = 该列表长度 |
+| `mutex_ids` | 输入 | 可选的mutex id列表, 为每块Tile分配mutex id，可配置为空列表或者使用非空整数列表/元组。配置非空时，框架为每块Tile记录一个或多个mutex id，建立Tile与`mutex_id`的一一映射，例如[1, 2, 3, 4]为4个tile各分配一个ID, [[1, 2], [3, 4]]为两块Tile各分配两个ID；配置为`None`或空列表时，group只管理Tile、地址和轮转游标，不插入自动mutex id，需手动插入同步 |
+| `depth` | 输入 | 可选的Tile数量；`mutex_ids`为`None`或空列表时必填 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `type` | 输入 | 须为[`pypto_pro.language.TileType`](../../basic_data_structures/TileType.md)；非该类型报错 |
-| `addrs` | 输入 | 给单个基址时，第i块地址自动取`base + i × slot_size`（`slot_size`为单块字节数）；给列表时，长度必须等于`mutex_ids`长度，逐块指定（用于非连续布局） |
-| `mutex_ids` | 输入 | 非空整数列表，取值范围`[0, 31]`，且必须互不相同；否则报错 |
+| `addrs` | 输入 | 给单个基址时，第i块地址自动取`base + i × slot_size`（`slot_size`为单块字节数）；给列表时，长度必须等于`mutex_ids`长度或者确定的`depth`，逐块指定（用于非连续布局） |
+| `mutex_ids` | 输入 | 可为`None`、空列表或整数列表。整数取值范围`[0, 31]`；每块Tile的ID数量必须一致，且同一Tile内多个ID时ID不得重复，不同Tile间ID可重复 |
+| `depth` | 输入 | 正的编译期整数。非空`mutex_ids`未指定时由其长度推导；两者同时指定时必须相等 |
 
 ## 补充说明
 
-返回一个group句柄，提供三个方法取出裸Tile。Tile与mutex的映射会随返回值保留，供`auto_mutex`使用：
+返回一个group句柄，提供三个方法和下标形式取出裸Tile。配置非空`mutex_ids`时，Tile与mutex的映射会随返回值保留，供`auto_mutex`使用：
 
 | 方法 | 说明 |
 |---|---|
 | `group.next()` | 推进轮转状态并返回下一个Tile；连续调用时按组大小N循环选择槽位 |
 | `group.current()` | 不推进轮转状态，返回当前选择的Tile |
 | `group.previous()` | 不推进轮转状态，返回当前选择之前的Tile |
+| `group[i]` | 按照下标进行索引取第i个Tile，不读取也不推进轮转状态 |
 
 group句柄可直接传给[`pypto_pro.language.set_validshape`](../memory_vector_computation/transpose_and_element_access/set_validshape.md)，对group中所有tile批量设置valid_shape，适用于全局只需设置一次、后续直接`next()`的场景。
 

@@ -1372,7 +1372,9 @@ def _parse_set_validshape(self, call: ast.Call) -> Expr:
         group_var = args[0]
         shape = args[1] if len(args) > 1 else None
 
-        meta = self.tile_group_meta.get(id(group_var), (1, None))
+        # tile_group_meta is keyed by the handle expression itself, not by id():
+        # an id() lookup never hits, silently collapsing the group to one tile.
+        meta = self.tile_group_meta.get(group_var, (1, None))
         n_tiles = meta[0]
         tiles = self.lower_attr_access(group_var, "tiles", span)
 

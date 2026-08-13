@@ -1138,11 +1138,22 @@ def get_spr() -> int:
 
 
 @_api_decl
-def make_tile_group(*, type: Any, addrs: list, mutex_ids: list) -> Any:
-    """Create a rotating Tile group for multi-buffering with automatic mutex.
+def make_tile_group(*, type: Any, addrs: int | list,
+    mutex_ids: list[int | list[int] | tuple[int, ...]] | tuple | None = None,
+    depth: int | None = None,
+) -> Any:
+    """Create a rotating Tile group with optional mutex metadata.
+
+    The handle supports ``group.next()``, ``group.current()``,
+    ``group.previous()``, and ``group[i]``. When ``mutex_ids`` is provided,
+    ``auto_mutex`` synchronizes accesses automatically.
 
     Args:
         type: ``pl.TileType`` descriptor
-        addrs: List of Tile addresses
-        mutex_ids: List of mutex IDs for synchronization
+        addrs: Base address for contiguous Tiles, or one address per Tile
+        mutex_ids: Optional mutex IDs for synchronization. Each Tile may use
+            one int or a non-empty list/tuple. Every Tile must use the same
+            mutex ID count, with no duplicates for one Tile
+        depth: Number of Tiles. Required when ``mutex_ids`` is None or empty;
+            otherwise inferred from ``len(mutex_ids)``
     """

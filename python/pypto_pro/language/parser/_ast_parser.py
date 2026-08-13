@@ -106,7 +106,13 @@ class ASTParser(
         self._target = target
         self.matched_target = False
         self.span_tracker = SpanTracker(source_file, source_lines, line_offset, col_offset)
-        self.scope_manager = ScopeManager(strict_ssa=strict_ssa)
+        # Maps tile Expr objects -> (tuple[buf_id_ir, ...], mutex_ids) for tiles returned by
+        # group.next()/current()/previous()/group[i]; consumed by auto_mutex and
+        # shared with ScopeManager for control-flow candidate-id merging.
+        # Keep the Expr itself as the key. A bare id(expr) does not retain the
+        # Python IR wrapper and can be reused by an unrelated expression.
+        self._tile_mutex_meta: dict[ir.Expr, tuple] = {}
+        self.scope_manager = ScopeManager(strict_ssa=strict_ssa, tile_mutex_meta=self._tile_mutex_meta)
         # Concrete tilingkey field values (per launch key) are injected as closure constants
         # so the parser folds field references (e.g. NeedAttnMask) to ConstInt — no template
         # params reach the IR. Field values win over any same-named closure var.
@@ -154,14 +160,8 @@ class ASTParser(
         self._tuple_idx_counter: int = 0
         self._expr_tmp_counter: int = 0
         self._ifexpr_tmp_counter: int = 0
-        # Maps group Expr objects -> (num_tiles, mutex_ids) for make_tile_group handles.
+        # Maps group Expr objects -> (depth, per-tile mutex IDs, memory).
         self.tile_group_meta: dict[ir.Expr, tuple] = {}
-        # Maps tile Expr objects -> (buf_id_ir, mutex_ids) for tiles returned by
-        # group.next()/current()/previous(); consumed by auto_mutex.
-        # Keep the Expr itself as the key.  A bare id(expr) does not retain the
-        # Python IR wrapper and can be reused by an unrelated expression.
-        self._tile_mutex_meta: dict[ir.Expr, tuple] = {}
-
         # Parser-only constant environment. Runtime bindings remain exclusively in
         # ScopeManager as Vars; this map only says which names can safely be
         # substituted while parsing the current control-flow path.

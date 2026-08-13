@@ -221,7 +221,7 @@ def scan_buffer_addr_ranges(kernel_func_def: ast.FunctionDef, closure_vars: dict
     addrs handling (mirrors _buffer_parser):
       - single value  -> contiguous slots: base + i*slot_size
       - list/tuple     -> one explicit start address per slot
-    slot count = len(mutex_ids).
+    slot count comes from depth when present, otherwise len(mutex_ids).
     """
     result: dict = {}
     for node in ast.walk(kernel_func_def):
@@ -238,15 +238,28 @@ def scan_buffer_addr_ranges(kernel_func_def: ast.FunctionDef, closure_vars: dict
         type_node = kwargs.get("type")
         addrs_node = kwargs.get("addrs")
         mutex_node = kwargs.get("mutex_ids")
-        if not (isinstance(type_node, ast.Call) and addrs_node is not None and mutex_node is not None):
+        depth_node = kwargs.get("depth")
+        if not (isinstance(type_node, ast.Call) and addrs_node is not None):
             continue
 
         slot_size = _tile_type_slot_size(type_node, closure_vars)
-        mutex_ids = _eval_const(mutex_node, closure_vars)
+        mutex_ids = _eval_const(mutex_node, closure_vars) if mutex_node is not None else None
+        depth = _eval_const(depth_node, closure_vars) if depth_node is not None else None
         addrs = _eval_const(addrs_node, closure_vars)
-        if slot_size is None or not isinstance(mutex_ids, (list, tuple)) or addrs is None:
+        if slot_size is None or addrs is None:
             continue
-        num = len(mutex_ids)
+        if mutex_ids is not None and not isinstance(mutex_ids, (list, tuple)):
+            continue
+        if depth_node is not None:
+            if isinstance(depth, bool) or not isinstance(depth, int) or depth <= 0:
+                continue
+            num = depth
+        elif isinstance(mutex_ids, (list, tuple)) and mutex_ids:
+            num = len(mutex_ids)
+        else:
+            continue
+        if isinstance(mutex_ids, (list, tuple)) and mutex_ids and len(mutex_ids) != num:
+            continue  # malformed; parser will raise the real error
 
         if isinstance(addrs, (list, tuple)):
             if len(addrs) != num:
@@ -412,21 +425,33 @@ def _lift_literal_ids(fwd_node, bwd_node, bufname: str, lifted_ids: list) -> tup
     return fwd_node, bwd_node
 
 
+def _slot_accessor_group_name(value: ast.expr) -> str | None:
+    """Group name for a slot accessor expression, or None if it is not one.
+
+    Both accessor spellings resolve a group handle to one of its tiles:
+    ``group.next()/current()/previous()`` and ``group[i]``.
+    """
+    if isinstance(value, ast.Call):
+        func = value.func
+        if isinstance(func, ast.Attribute) and func.attr in ("next", "current", "previous"):
+            return func.value.id if isinstance(func.value, ast.Name) else None
+        return None
+    if isinstance(value, ast.Subscript):
+        return value.value.id if isinstance(value.value, ast.Name) else None
+    return None
+
+
 def _get_slot_accessor_assignment(node: ast.AST, param_names: set[str]) -> tuple[str, str] | None:
-    """Return slot variable and source buffer for ``slot = group.next()`` patterns."""
+    """Return slot variable and source buffer for ``slot = group.next()`` / ``slot = group[i]``."""
     if not isinstance(node, ast.Assign):
         return None
     if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
         return None
-    if not isinstance(node.value, ast.Call):
-        return None
 
-    func = node.value.func
-    if not isinstance(func, ast.Attribute) or func.attr not in ("next", "current", "previous"):
+    group_name = _slot_accessor_group_name(node.value)
+    if group_name is None or group_name not in param_names:
         return None
-    if not isinstance(func.value, ast.Name) or func.value.id not in param_names:
-        return None
-    return node.targets[0].id, func.value.id
+    return node.targets[0].id, group_name
 
 
 def scan_kernel_slot_to_buffer(func_def: ast.FunctionDef, cross_buffers: dict) -> dict[str, str]:
@@ -489,7 +514,7 @@ def build_binding_map(
         elif actual in caller_bindings:
             result[param_names[pos]] = caller_bindings[actual]
 
-    # (b) + (c) Propagate .next() and alias assignments until stable
+    # (b) + (c) Propagate slot accessors (.next() / group[i]) and alias assignments until stable
     changed = True
     while changed:
         changed = False
@@ -502,15 +527,10 @@ def build_binding_map(
             if target in result:
                 continue  # already resolved
 
-            if isinstance(node.value, ast.Call):
-                func = node.value.func
-                is_slot_method = (
-                    isinstance(func, ast.Attribute)
-                    and func.attr in ("next", "current", "previous")
-                    and isinstance(func.value, ast.Name)
-                )
-                if is_slot_method and func.value.id in result:
-                    src_buf, src_is_group = result[func.value.id]
+            if isinstance(node.value, (ast.Call, ast.Subscript)):
+                group_name = _slot_accessor_group_name(node.value)
+                if group_name is not None and group_name in result:
+                    src_buf, src_is_group = result[group_name]
                     if src_is_group:
                         result[target] = (src_buf, False)
                         changed = True
@@ -794,28 +814,28 @@ def _build_stage_overlap_map(addr_overlaps, cross_buffers, slot_to_buffer, stage
 
 
 def _validate_slot_accessors(stage_func_def: ast.FunctionDef, group_param_names: set[str]) -> None:
-    """L10: cross-core buffer slot accessors must be `slot = param.next()` form.
+    """L10: cross-core buffer slot accessors must be `slot = param.next()` / `slot = param[i]` form.
 
     group_param_names: formal params that carry a cross-core buffer GROUP (the ones
-    the body calls .next()/.current()/.previous() on)."""
+    the body calls .next()/.current()/.previous() on, or subscripts)."""
     accessor_rhs_ids = set()
     for node in ast.walk(stage_func_def):
         sa = _get_slot_accessor_assignment(node, group_param_names)
         if sa is not None:
             accessor_rhs_ids.add(id(node.value))
     for node in ast.walk(stage_func_def):
-        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+        if not isinstance(node, (ast.Call, ast.Subscript)):
             continue
-        if node.func.attr not in ("next", "current", "previous"):
-            continue
-        if not (isinstance(node.func.value, ast.Name) and node.func.value.id in group_param_names):
+        group_name = _slot_accessor_group_name(node)
+        if group_name is None or group_name not in group_param_names:
             continue
         if id(node) in accessor_rhs_ids:
             continue
+        accessor = "[...]" if isinstance(node, ast.Subscript) else f".{node.func.attr}()"
         raise ValueError(
-            f"pipeline: cross-core buffer group '{node.func.value.id}' slot accessor "
-            f"`.{node.func.attr}()` must be assigned to a simple variable "
-            f"(`slot = {node.func.value.id}.{node.func.attr}()`); inline/chained/"
+            f"pipeline: cross-core buffer group '{group_name}' slot accessor "
+            f"`{accessor}` must be assigned to a simple variable "
+            f"(`slot = {group_name}{accessor}`); inline/chained/"
             f"tuple-unpack forms are not supported."
         )
 

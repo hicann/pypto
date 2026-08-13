@@ -473,6 +473,7 @@ def for_continue_mid_fp16_kernel(
                 tile_a = a_db.next()
                 tile_b = b_db.next()
                 tile_c = c_db.next()
+                pl.system.bar_mte2()
                 pl.load_tile(tile_a, x, [i, j])
                 pl.load_tile(tile_b, y, [i, j])
                 if j >= 1:
@@ -546,6 +547,7 @@ def while_continue_mid_fp16_kernel(
                 tile_a = a_db.next()
                 tile_b = b_db.next()
                 tile_c = c_db.next()
+                pl.system.bar_mte2()
                 pl.load_tile(tile_a, x, [i, j])
                 pl.load_tile(tile_b, y, [i, j])
                 if j >= 1:

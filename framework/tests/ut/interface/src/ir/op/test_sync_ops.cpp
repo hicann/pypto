@@ -39,6 +39,32 @@ namespace ir {
 using namespace test_helpers;
 
 // ============================================================================
+// system.mutex_lock_dyn / system.mutex_unlock_dyn
+// ============================================================================
+
+TEST(SyncOpsMutexTest, DynamicMutexAcceptsMutexIdOwnerIndices)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto id0 = MakeScalarVar("id0", DataType::INDEX);
+    auto id1 = MakeScalarVar("id1", DataType::INDEX);
+    const std::vector<int> mutex_id_owner_indices = {0, 0};
+    std::vector<std::pair<std::string, std::any>> kwargs = {
+        {"pipe", 5},
+        {"mode", 0},
+        {"max_mutex_id", 2},
+        {"mutex_ids", std::vector<int>{0, 1, 2, 3}},
+        {"mutex_id_owner_indices", mutex_id_owner_indices},
+    };
+
+    for (const char* op_name : {"system.mutex_lock_dyn", "system.mutex_unlock_dyn"}) {
+        auto call = reg.Create(op_name, {id0, id1}, kwargs, Sp());
+        ASSERT_NE(call, nullptr);
+        EXPECT_NE(As<UnknownType>(call->GetType()), nullptr);
+        EXPECT_EQ(call->GetKwarg<std::vector<int>>("mutex_id_owner_indices"), mutex_id_owner_indices);
+    }
+}
+
+// ============================================================================
 // system.dcci
 // ============================================================================
 

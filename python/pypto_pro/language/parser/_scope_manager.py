@@ -16,22 +16,30 @@ __all__ = ["ScopeManager", "SSAViolationError", "ScopeIsolationError"]
 
 from typing import Any
 
+from pypto.pypto_impl.ir import Expr
 from pypto_pro.ir import Span
 
-from .diagnostics import ScopeIsolationError, SSAViolationError
+from .diagnostics import ParserTypeError, ScopeIsolationError, SSAViolationError
 
 
 class ScopeManager:
     """Manages variable scopes and optionally enforces SSA properties."""
 
-    def __init__(self, strict_ssa: bool = False):
+    def __init__(
+        self,
+        strict_ssa: bool = False,
+        tile_mutex_meta: dict[Any, tuple[Any, Any]] | None = None,
+    ):
         """Initialize scope manager.
 
         Args:
             strict_ssa: If True, enforce SSA (single assignment per variable).
                        If False (default), allow variable reassignment.
+            tile_mutex_meta: Shared parser metadata mapping tile expressions to
+                             their runtime mutex expression and candidate ids.
         """
         self.strict_ssa = strict_ssa
+        self._tile_mutex_meta = tile_mutex_meta
         self.scopes: list[dict[str, Any]] = [{}]  # Stack of scope dictionaries
         self.assignments: dict[str, int] = {}  # Track assignment count per variable
         self.scope_types: list[str] = ["global"]  # Track type of each scope
@@ -65,6 +73,8 @@ class ScopeManager:
         self.var_spans.pop()
         self.scope_types.pop()
 
+        self._merge_tile_mutex_meta_to_outer(scope_vars, leak_vars)
+
         # Leak variables to parent scope if requested
         if leak_vars and self.scopes:
             parent_scope = self.scopes[-1]
@@ -72,6 +82,42 @@ class ScopeManager:
                 parent_scope[name] = value
 
         return scope_vars
+
+    def _merge_tile_mutex_meta_to_outer(self, scope_vars: dict[str, Any], leak_vars: bool) -> None:
+        """Merge final inner mutex candidates into the nearest outer binding."""
+        if self._tile_mutex_meta is None:
+            return
+
+        for name, inner_var in scope_vars.items():
+            if not isinstance(inner_var, Expr):
+                continue
+            inner_meta = self._tile_mutex_meta.get(inner_var)
+            if inner_meta is None:
+                continue
+
+            outer_var = self.lookup_var(name)
+            if outer_var is None:
+                continue
+
+            outer_meta = self._tile_mutex_meta.get(outer_var)
+            if outer_meta is None:
+                continue
+
+            inner_mutex_ids, inner_ids = inner_meta
+            outer_mutex_ids, outer_ids = outer_meta
+            outer_mutex_id_count = len(outer_mutex_ids)
+            inner_mutex_id_count = len(inner_mutex_ids)
+            if outer_mutex_id_count != inner_mutex_id_count:
+                raise ParserTypeError(
+                    f"cannot merge tile mutex metadata with different ID counts: "
+                    f"{outer_mutex_id_count} and {inner_mutex_id_count}"
+                )
+            merged_ids = list(dict.fromkeys(list(outer_ids or ()) + list(inner_ids or ())))
+
+            if leak_vars:
+                self._tile_mutex_meta[inner_var] = (inner_mutex_ids, merged_ids)
+            else:
+                self._tile_mutex_meta[outer_var] = (outer_mutex_ids, merged_ids)
 
     def register_mask_reg_var(self, name: str) -> None:
         """Mark a variable as a MaskReg (mask register).

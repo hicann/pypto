@@ -630,6 +630,71 @@ TEST(BackendCceOpsTest, MutexUnlockDyn)
     EXPECT_NE(generated.find("rls_buf(PIPE_S, 2, 0);"), std::string::npos);
 }
 
+TEST(BackendCceOpsTest, MutexDynDedupUnlocksFirstOccurrencesInInputOrder)
+{
+    Kwargs kwargs = {{"pipe", 5}, {"mode", 0}};
+    auto id0 = MakeVar("id0", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
+    auto id1 = MakeVar("id1", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
+    std::vector<ir::ExprPtr> ids = {id0, id1, id0};
+    auto lock = std::make_shared<const ir::Call>("system.mutex_lock_dyn", ids, kwargs, ir::Span::Unknown());
+    auto unlock = std::make_shared<const ir::Call>("system.mutex_unlock_dyn", ids, kwargs, ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{std::make_shared<const ir::EvalStmt>(lock, ir::Span::Unknown()),
+                                 std::make_shared<const ir::EvalStmt>(unlock, ir::Span::Unknown())},
+        ir::Span::Unknown());
+
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
+    auto generated = codegen.GenerateSingle(MakeProgram(body, {id0, id1}), "a5");
+    auto release_id0 = generated.find("rls_buf(PIPE_S, id0_0, 0);");
+    auto release_id1 = generated.find("rls_buf(PIPE_S, id1_0, 0);", release_id0);
+    auto duplicate_guard = generated.find("if ((id0_0 != id0_0) && (id0_0 != id1_0)) {", release_id1);
+    auto duplicate_release = generated.find("rls_buf(PIPE_S, id0_0, 0);", duplicate_guard);
+    EXPECT_NE(release_id0, std::string::npos);
+    EXPECT_NE(release_id1, std::string::npos);
+    EXPECT_NE(duplicate_guard, std::string::npos);
+    EXPECT_NE(duplicate_release, std::string::npos);
+    EXPECT_LT(release_id0, release_id1);
+    EXPECT_LT(release_id1, duplicate_guard);
+    EXPECT_LT(duplicate_guard, duplicate_release);
+}
+
+TEST(BackendCceOpsTest, MutexDynSkipsDedupWithinOneTile)
+{
+    Kwargs kwargs = {{"pipe", 5}, {"mode", 0}, {"mutex_id_owner_indices", std::vector<int>{0, 0, 1}}};
+    auto output0 = MakeVar("output0", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
+    auto output1 = MakeVar("output1", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
+    auto source = MakeVar("source", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
+    std::vector<ir::ExprPtr> ids = {output0, output1, source};
+    auto lock = std::make_shared<const ir::Call>("system.mutex_lock_dyn", ids, kwargs, ir::Span::Unknown());
+    auto unlock = std::make_shared<const ir::Call>("system.mutex_unlock_dyn", ids, kwargs, ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{std::make_shared<const ir::EvalStmt>(lock, ir::Span::Unknown()),
+                                 std::make_shared<const ir::EvalStmt>(unlock, ir::Span::Unknown())},
+        ir::Span::Unknown());
+
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
+    auto generated = codegen.GenerateSingle(MakeProgram(body, {output0, output1, source}), "a5");
+    const std::string same_tile_guard = "if ((output1_0 != output0_0)) {";
+    const std::string cross_tile_guard = "if ((source_0 != output0_0) && (source_0 != output1_0)) {";
+    auto acquire_output0 = generated.find("get_buf(PIPE_S, output0_0, 0);");
+    auto acquire_output1 = generated.find("get_buf(PIPE_S, output1_0, 0);", acquire_output0);
+    auto acquire_source_guard = generated.find(cross_tile_guard, acquire_output1);
+    auto release_output0 = generated.find("rls_buf(PIPE_S, output0_0, 0);", acquire_source_guard);
+    auto release_output1 = generated.find("rls_buf(PIPE_S, output1_0, 0);", release_output0);
+    auto release_source_guard = generated.find(cross_tile_guard, release_output1);
+    EXPECT_EQ(generated.find(same_tile_guard), std::string::npos);
+    EXPECT_NE(acquire_output0, std::string::npos);
+    EXPECT_NE(acquire_output1, std::string::npos);
+    EXPECT_NE(acquire_source_guard, std::string::npos);
+    EXPECT_NE(release_output0, std::string::npos);
+    EXPECT_NE(release_output1, std::string::npos);
+    EXPECT_NE(release_source_guard, std::string::npos);
+    EXPECT_LT(acquire_output0, acquire_output1);
+    EXPECT_LT(acquire_output1, acquire_source_guard);
+    EXPECT_LT(release_output0, release_output1);
+    EXPECT_LT(release_output1, release_source_guard);
+}
+
 // ============================================================================
 // A5-specific: set_mm_layout_transform
 // ============================================================================

@@ -91,15 +91,16 @@ class TileType:
 TileGroup是用`pl.make_tile_group`声明的一组轮转的Tile，用于实现双缓冲乃至更广义的N缓冲。当一块缓冲区正在被消费时，下一块可以同时被生产，从而让多条pipe重叠以提升吞吐。
 
 ```python
-g = pl.make_tile_group(type=<TileType>, addrs=<base|list>, mutex_ids=[...])
+g = pl.make_tile_group(type=<TileType>, addrs=<base|list>, mutex_ids=[...], depth=<optional>)
 ```
 
 - `type` —— 描述组中每一个Tile的`pl.TileType`
-- `mutex_ids` —— 非空的、互不相同的整数列表，取值范围`[0, 31]`，其长度即缓冲区数量（2→双缓冲，N→N缓冲）
+- `mutex_ids` —— 可选；每块Tile使用一个整数或非空整数列表/元组，ID取值范围`[0, 31]`。同一Tile内的ID不得重复，不同Tile可以复用ID
+- `depth` —— Tile数量；`mutex_ids`为`None`或空列表时必填，非空时可由`len(mutex_ids)`推导
 - `addrs` —— 单个基地址（Tile连续排布）或地址列表（每个Tile一个显式地址）
 
 > [!NOTE]说明
-> `mutex_ids`在整个Kernel内必须唯一。两个组共享同一个id会导致同步互相混叠。
+> `mutex_ids=None`或`mutex_ids=[]`时，该group不参与`auto_mutex`，跨Pipe同步需由用户自行保证。
 
 关于Tile和TileGroup的详细使用方法请参考[Tile矢量计算](Tile_vector_computation.md)和[Cube矩阵计算](Cube_matrix_computation.md)。
 

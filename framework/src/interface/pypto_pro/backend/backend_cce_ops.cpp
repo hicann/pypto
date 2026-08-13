@@ -1876,30 +1876,50 @@ static std::string MakeMutexBufCodegenCCE(const ir::CallPtr& op, codegen::Codege
     int mode = GetMutexModeCCE(op);
     std::string pipe_str = PipeTypeToCCEString(pipe);
 
-    // N-way dedup: when args has multiple mutex_id expressions (in-place aliasing tiles
-    // that share mutex_ids), emit runtime if-guards so each unique mutex_id is only
-    // locked/unlocked once. Without this, two get_buf(pipe, same_id) on the same pipe
-    // hangs the hardware.
+    // N-way cross-Tile dedup: mutex IDs owned by one Tile are already known distinct.
+    // Compare only across Tiles so each unique mutex_id is acquired and released once.
+    // Without cross-Tile dedup, two get_buf(pipe, same_id) on the same pipe hang the hardware.
     if (is_dynamic && op->args_.size() >= 2) {
         std::vector<std::string> id_exprs;
         id_exprs.reserve(op->args_.size());
         for (const auto& arg : op->args_) {
             id_exprs.push_back(codegen.GetExprAsCode(arg));
         }
-        // First id: always lock unconditionally
-        codegen.Emit(intrinsic + "(" + pipe_str + ", " + id_exprs[0] + ", " + std::to_string(mode) + ");");
-        // Subsequent ids: only lock if different from all preceding ids
-        for (size_t i = 1; i < id_exprs.size(); ++i) {
+        // Backward-compatible default: without owner metadata every expression
+        // has a separate owner, preserving the original all-pairs dedup.
+        std::vector<int> mutex_id_owner_indices(id_exprs.size());
+        for (size_t i = 0; i < mutex_id_owner_indices.size(); ++i) {
+            mutex_id_owner_indices[i] = static_cast<int>(i);
+        }
+        for (const auto& [key, value] : op->kwargs_) {
+            if (key == "mutex_id_owner_indices") {
+                mutex_id_owner_indices = std::any_cast<std::vector<int>>(value);
+                break;
+            }
+        }
+        CHECK(mutex_id_owner_indices.size() == id_exprs.size())
+            << "mutex_id_owner_indices size must match dynamic mutex args size";
+
+        auto emit_id = [&](size_t i) {
             std::string condition;
             for (size_t j = 0; j < i; ++j) {
+                // IDs owned by one Tile are guaranteed distinct by the frontend.
+                if (mutex_id_owner_indices[i] == mutex_id_owner_indices[j])
+                    continue;
                 if (!condition.empty())
                     condition += " && ";
                 condition += "(" + id_exprs[i] + " != " + id_exprs[j] + ")";
             }
+            if (condition.empty()) {
+                codegen.Emit(intrinsic + "(" + pipe_str + ", " + id_exprs[i] + ", " + std::to_string(mode) + ");");
+                return;
+            }
             codegen.Emit("if (" + condition + ") {");
             codegen.Emit("  " + intrinsic + "(" + pipe_str + ", " + id_exprs[i] + ", " + std::to_string(mode) + ");");
             codegen.Emit("}");
-        }
+        };
+        for (size_t i = 0; i < id_exprs.size(); ++i)
+            emit_id(i);
         return "";
     }
 
