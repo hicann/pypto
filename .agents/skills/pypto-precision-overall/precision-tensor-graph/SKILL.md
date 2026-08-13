@@ -58,6 +58,8 @@ python3 -m pip install . --verbose
 
 在 PyPTO 算子实现文件中配置 `verify_options`，开启 tensor_graph 校验：
 
+> **必须使用 `pass_verify_pass_filter: []`（空列表）**，表示只校验 tensor_graph，不校验任何 Pass。即使用户原始代码中配置了 `["all"]`，进入本阶段时也必须改为 `[]`。
+
 ```python
 verify_options = {
     "enable_pass_verify": True,
@@ -102,6 +104,8 @@ cat output/output_*/verify_*/interpreter.log
 | **verify 日志无内容** | Golden 数据未设置或顺序错误 | 确保"计算 golden → 设置 golden → 执行算子"顺序，检查 set_verify_golden_data 输入输出是否匹配 |
 
 ### 步骤 5：根据校验结果决策
+
+> **结论必须基于 `interpreter.log` 的实际输出**。禁止仅凭代码注释、变量命名或推测得出结论。报告中对 PASS / FAIL 的判定必须引用 `interpreter.log` 中的具体行（如 `result FAILED` / `result PASS`）。
 
 ```
 tensor_graph 校验结果

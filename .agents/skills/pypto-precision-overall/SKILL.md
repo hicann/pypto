@@ -96,13 +96,15 @@ export TILE_FWK_DEVICE_ID=0
 ```
 
 执行步骤：
-1. 进入 [precision-tensor-graph/SKILL.md](precision-tensor-graph/SKILL.md) 执行完整流程
+1. 进入 [precision-tensor-graph/SKILL.md](precision-tensor-graph/SKILL.md) 执行完整流程（**必须用 `pass_verify_pass_filter: []` 先做 tensor_graph 校验，禁止直接开 `["all"]`**）
 2. 若 tensor_graph FAIL → 阶段二定位问题 op → 结束
 3. 若 tensor_graph PASS → 进入 [precision-pass/SKILL.md](precision-pass/SKILL.md) 的"一、Pass 校验"
 4. 若 Pass 校验定位到问题 Op → 结束
 5. 若 Pass 校验全部通过 → 进入 [precision-pass/SKILL.md](precision-pass/SKILL.md) 的"二、特定问题排查"
 6. 若特定问题定位到 → 结束
 7. 若仍未定位 → 进入 [precision-binary-search/SKILL.md](precision-binary-search/SKILL.md)
+
+> **结论约束**：所有阶段的 PASS / FAIL 判定和根因结论必须基于精度工具实际输出（`interpreter.log`、`pass_compare.py`、`compare_accuracy.py` 等）。禁止仅凭代码注释、变量命名或推测得出结论。
 
 ### 用例剪枝
 

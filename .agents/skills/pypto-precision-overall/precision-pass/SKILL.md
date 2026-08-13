@@ -123,6 +123,8 @@ python3 your_test_case.py
 
 ### 分析验证结果
 
+> **结论必须基于精度工具的实际输出**（`interpreter.log`、`pass_compare.py` 结果）。禁止仅凭代码注释、变量命名或推测得出根因结论。报告中 PASS / FAIL 判定必须引用 `interpreter.log` 中的具体行；根因定位必须引用 `pass_compare.py` 的输出数据。
+
 错误码定义：`framework/include/tilefwk/error_code.h`
 
 | 错误码       | 名称                   | 阶段      | 处理方法                                           |
