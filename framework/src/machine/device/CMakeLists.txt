@@ -83,3 +83,4 @@ target_link_options(tile_fwk_server
 set_target_properties(tile_fwk_server PROPERTIES OUTPUT_NAME tilefwk_backend_server)
 
 install(TARGETS tile_fwk_server LIBRARY DESTINATION lib COMPONENT pypto)
+install(FILES ${PTO_FWK_SRC_ROOT}/framework/src/machine/runtime/runner/pypto_op_info.json DESTINATION lib COMPONENT pypto)

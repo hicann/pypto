@@ -36,6 +36,8 @@ AclError StubRtSetExceptionInfoCallback(AclRtExceptionInfoCallback callback);
 AclError StubRtCreateStream(AclRtStream* stream);
 AclError StubRtSynchronizeStream(AclRtStream stream);
 AclError StubRtDestroyStream(AclRtStream stream);
+AclError StubRtBinaryLoadFromFile(const char* binPath, AclRtBinaryLoadOptions* options, AclRtBinHandle* binHandle);
+AclError StubRtBinaryGetFunction(AclRtBinHandle binHandle, const char* kernelName, AclRtFuncHandle* funcHandle);
 AclError StubMdlRICaptureGetInfo(AclRtStream stream, AclMdlRICaptureStatus* status, AclMdlRI* modelRI);
 AclError StubMdlRICaptureThreadExchangeMode(AclMdlRICaptureMode* mode);
 AclError StubSysGetVersionStr(const char* pkgName, char* versionStr);

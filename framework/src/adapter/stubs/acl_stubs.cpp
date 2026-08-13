@@ -160,6 +160,28 @@ AclError StubRtDestroyStream(AclRtStream stream)
     return ACLRT_SUCCESS;
 }
 
+AclError StubRtBinaryLoadFromFile(const char* binPath, AclRtBinaryLoadOptions* options, AclRtBinHandle* binHandle)
+{
+    ADAPTER_LOGD("Enter stub function of AclRtBinaryLoadFromFile.");
+    (void)binPath;
+    (void)options;
+    if (binHandle != nullptr) {
+        *binHandle = nullptr;
+    }
+    return ACLRT_SUCCESS;
+}
+
+AclError StubRtBinaryGetFunction(AclRtBinHandle binHandle, const char* kernelName, AclRtFuncHandle* funcHandle)
+{
+    ADAPTER_LOGD("Enter stub function of AclRtBinaryGetFunction.");
+    (void)binHandle;
+    (void)kernelName;
+    if (funcHandle != nullptr) {
+        *funcHandle = nullptr;
+    }
+    return ACLRT_SUCCESS;
+}
+
 AclError StubMdlRICaptureGetInfo(AclRtStream stream, AclMdlRICaptureStatus* status, AclMdlRI* modelRI)
 {
     ADAPTER_LOGD("Enter stub function of AclMdlRICaptureGetInfo.");

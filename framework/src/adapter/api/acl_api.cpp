@@ -250,6 +250,35 @@ AclError AclRtDestroyStream(AclRtStream stream)
     return StubRtDestroyStream(stream);
 }
 
+AclError AclRtBinaryLoadFromFile(const char* binPath, AclRtBinaryLoadOptions* options, AclRtBinHandle* binHandle)
+{
+#ifdef BUILD_WITH_CANN
+    void* func = AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::BinaryLoadFromFile);
+    if (func != nullptr) {
+        aclError (*aclFunc)(const char*, aclrtBinaryLoadOptions*, aclrtBinHandle*) = reinterpret_cast<aclError (*)(
+            const char*, aclrtBinaryLoadOptions*, aclrtBinHandle*)>(func);
+        return aclFunc(binPath, reinterpret_cast<aclrtBinaryLoadOptions*>(options),
+                       reinterpret_cast<aclrtBinHandle*>(binHandle));
+    }
+#endif
+    return StubRtBinaryLoadFromFile(binPath, options, binHandle);
+}
+
+AclError AclRtBinaryGetFunction(AclRtBinHandle binHandle, const char* kernelName, AclRtFuncHandle* funcHandle)
+{
+#ifdef BUILD_WITH_CANN
+    void* func = AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::BinaryGetFunction);
+    if (func != nullptr) {
+        aclError (*aclFunc)(
+            aclrtBinHandle, const char*,
+            aclrtFuncHandle*) = reinterpret_cast<aclError (*)(aclrtBinHandle, const char*, aclrtFuncHandle*)>(func);
+        return aclFunc(reinterpret_cast<aclrtBinHandle>(binHandle), kernelName,
+                       reinterpret_cast<aclrtFuncHandle*>(funcHandle));
+    }
+#endif
+    return StubRtBinaryGetFunction(binHandle, kernelName, funcHandle);
+}
+
 AclError AclMdlRICaptureGetInfo(AclRtStream stream, AclMdlRICaptureStatus* status, AclMdlRI* modelRI)
 {
 #ifdef BUILD_WITH_CANN
@@ -292,6 +321,10 @@ AclError AclSysGetVersionStr(const char* pkgName, char* versionStr)
 static_assert(std::is_same<AclError, aclError>::value);
 static_assert(std::is_same<AclRtStream, aclrtStream>::value);
 static_assert(std::is_same<AclRtEvent, aclrtEvent>::value);
+static_assert(std::is_same<AclRtBinHandle, aclrtBinHandle>::value);
+static_assert(std::is_same<AclRtFuncHandle, aclrtFuncHandle>::value);
+static_assert(sizeof(AclRtBinaryLoadOption) == sizeof(aclrtBinaryLoadOption));
+static_assert(sizeof(AclRtBinaryLoadOptions) == sizeof(aclrtBinaryLoadOptions));
 static_assert(std::is_same<AclMdlRI, aclmdlRI>::value);
 static_assert(ACLRT_SUCCESS == ACL_SUCCESS);
 static_assert(ACLRT_ERROR_REPEAT_INITIALIZE == ACL_ERROR_REPEAT_INITIALIZE);

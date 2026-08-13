@@ -240,37 +240,6 @@ void DeviceRunner::InitAiCpuSoBin(DeviceArgs& devArgs)
     HOST_PERF_TRACE(TracePhase::RunDevKernelInitAicpuSo);
 }
 
-int DeviceRunner::LaunchAicpuServerInit(int64_t* devArgsAddr)
-{
-    auto aicpuStream = GetStreamContext().GetScheStream();
-#ifdef BUILD_WITH_NEW_CANN
-    return LoadAicpuOp::GetInstance().LaunchBuiltInOp(aicpuStream, kArgs, 1, "PyptoInit");
-#endif
-    struct Args {
-        DeviceKernelArgs kArgs;
-        const char kernelName[32] = {"DynTileFwkKernelServerInit"};
-        const char soName[32] = {"libaicpu_extend_kernels.so"};
-        const char opName[32] = {""};
-    } args;
-
-    args.kArgs.cfgdata = devArgsAddr;
-
-    RtAicpuArgsEx rtArgs;
-    memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
-    rtArgs.args = &args;
-    rtArgs.argsSize = sizeof(args);
-    rtArgs.kernelNameAddrOffset = offsetof(struct Args, kernelName);
-    rtArgs.soNameAddrOffset = offsetof(struct Args, soName);
-    int ret = RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(RtKernelType::AICPU_KFC), "AST_DYN_AICPU", 1,
-                                                 &rtArgs, nullptr, aicpuStream, 0);
-    if (ret != RT_SUCCESS) {
-        MACHINE_LOGE(RtErr::RT_LAUNCH_FAILED, "Aicpu server init failed %d", ret);
-        return ret;
-    }
-    // for triple stream schedule, must wait aicpu server init done
-    return RuntimeStreamSynchronize(aicpuStream);
-}
-
 bool DeviceRunner::GetEnableDumpDevPref() const { return args_.aicpuPerfAddr != 0; }
 
 void DeviceRunner::SetDebugEnable() { devicePerf_.SetDebugEnable(); }
@@ -298,26 +267,23 @@ void DeviceRunner::ReportHostProfInfo(RtStream stream, uint64_t startTime, uint3
 
 int DeviceRunner::Init()
 {
-    LoadAicpuOp::GetInstance().GenBuiltInOpInfo();
-    if (LoadAicpuOp::GetInstance().GetBuiltInOpBinHandle() != 0) {
-        MACHINE_LOGE(DevCommonErr::GET_HANDLE_FAILED, "Get builtInOp Funchandle failed\n");
-        return -1;
-    }
-
     hostProf_.RegHostProf();
     InitializeErrorCallback();
 
     if (InitDeviceArgs(args_) != 0) {
         MACHINE_LOGE(HostLauncherErr::PREPARE_ARGS_FAILED, "prepareArgs failed\n");
-        return -1;
+        return static_cast<int>(HostLauncherErr::PREPARE_ARGS_FAILED);
     }
     int64_t* devArgsAddr = static_cast<int64_t*>(CopyDataToDevice(&args_, sizeof(DeviceArgs)));
     if (devArgsAddr == nullptr) {
         MACHINE_LOGE(DevCommonErr::MEMCPY_FAILED, "Failed to copy args to device.");
-        return -1;
+        return static_cast<int>(DevCommonErr::MEMCPY_FAILED);
     }
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM) {
-        LaunchAicpuServerInit(devArgsAddr);
+        if (LoadAicpuOp::GetInstance().GetBuiltInOpBinHandle(devArgsAddr) != 0) {
+            MACHINE_LOGE(DevCommonErr::GET_HANDLE_FAILED, "Get builtInOp Funchandle failed\n");
+            return static_cast<int>(DevCommonErr::GET_HANDLE_FAILED);
+        }
         devicePerf_.InitAndStartDumpThread(args_);
         npu::tile_fwk::dynamic::AdumpRegExceptionDump();
     }

@@ -19,6 +19,7 @@ pypto@pypto:
       - framework/src/machine/runtime/
       - framework/src/cost_model/simulation_pv/
       - framework/src/cann_host_runtime/
+      - framework/src/adapter/
   llt:
     ut_check: true
     st_check: false

@@ -70,7 +70,6 @@ private:
     static void InitAiCpuSoBin(DeviceArgs& devArgs);
     static void GetAicoreRegs(const ArchInfo archInfo, std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu);
     static int InitDeviceArgsCore(DeviceArgs& args);
-    static int LaunchAicpuServerInit(int64_t* devArgsAddr);
 
 private:
     std::once_flag once_;

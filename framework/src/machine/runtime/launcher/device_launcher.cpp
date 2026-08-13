@@ -389,7 +389,7 @@ int DeviceLauncher::RunPreSync(RtStream scheStream, RtStream ctrlStream, RtStrea
     return 0;
 }
 
-int DeviceLauncher::LaunchAicpuKernel(RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable,
+int DeviceLauncher::LaunchAicpuKernel(AicpuLaunchDesc& launchDesc, [[maybe_unused]] bool debugEnable,
                                       [[maybe_unused]] Function* function, const std::vector<DeviceTensorData>& tensors)
 {
     auto ctrlStream = GetStreamContext().GetCtrlStream();
@@ -397,7 +397,7 @@ int DeviceLauncher::LaunchAicpuKernel(RtAicpuArgsEx& rtArgs, [[maybe_unused]] bo
     auto& devRunner = DeviceRunner::Get();
     devRunner.SetHostProfFunction(function, tensors);
     int ret = 0;
-    auto args = (AiCpuArgs*)rtArgs.args;
+    auto args = static_cast<AiCpuArgs*>(launchDesc.args);
     const int nrAicpu = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu);
     const bool launchSchedSameCluster = static_cast<int>(
         DeviceLauncher::GetDevProg(function)->devArgs.launchSchedSameCluster);
@@ -408,9 +408,9 @@ int DeviceLauncher::LaunchAicpuKernel(RtAicpuArgsEx& rtArgs, [[maybe_unused]] bo
     args->kArgs.parameter.ctrlBlockNum = static_cast<int>(DeviceLauncher::GetDevProg(function)->ctrlBlockDim);
     auto startTime = MspfSysCycleTime();
     args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
-    ret = RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC),
-                                             "AST_DYN_AICPU", 1, &rtArgs, nullptr, ctrlStream,
-                                             RT_KERNEL_USE_SPECIAL_TIMEOUT);
+    launchDesc.stream = ctrlStream;
+    launchDesc.blockDim = 1U;
+    ret = LoadAicpuOp::GetInstance().LaunchBuiltInOpWithHostArgs(launchDesc, "PyptoRun");
     devRunner.ReportHostProfInfo(ctrlStream, startTime, 1, MSPF_GE_TASK_TYPE_AI_CPU, false);
     if (ret != RT_SUCCESS) {
         return ret;
@@ -418,9 +418,9 @@ int DeviceLauncher::LaunchAicpuKernel(RtAicpuArgsEx& rtArgs, [[maybe_unused]] bo
     args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_SCHE;
     startTime = MspfSysCycleTime();
     const int scheCpuNum = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.scheCpuNum);
-    ret = RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC),
-                                             "AST_DYN_AICPU", nrAicpu, &rtArgs, nullptr, schedStream,
-                                             RT_KERNEL_USE_SPECIAL_TIMEOUT);
+    launchDesc.stream = schedStream;
+    launchDesc.blockDim = static_cast<uint32_t>(nrAicpu);
+    ret = LoadAicpuOp::GetInstance().LaunchBuiltInOpWithHostArgs(launchDesc, "PyptoRun");
     devRunner.ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);
     return ret;
 }
@@ -465,14 +465,14 @@ int DeviceLauncher::LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCach
                                  int64_t* workspace, const std::vector<DeviceTensorData>& tensors, bool isDebugMode,
                                  int launchEarlyMode)
 {
-    auto& rtAicpuArgs = kernel->GetRtAicpuArgs();
+    auto& aicpuLaunchDesc = kernel->GetAicpuLaunchDesc();
     auto& rtAicoreArgs = kernel->GetRtAicoreArgs();
     auto& rtTaskCfg = kernel->GetRtTaskCfg();
     auto& kernelArgs = kernel->GetKernelArgs();
 
     auto [args, argsSize] = kernel->BuildKernelArgs(tensors);
-    rtAicpuArgs.args = args;
-    rtAicpuArgs.argsSize = argsSize;
+    aicpuLaunchDesc.args = args;
+    aicpuLaunchDesc.argsSize = argsSize;
 
     args->kArgs.ctrlFlowCache = (int64_t*)ctrlFlowCache;
     args->kArgs.workspace = workspace;
@@ -492,7 +492,7 @@ int DeviceLauncher::LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCach
     if (!isCaptureMode) {
         args->kArgs.toSubMachineConfig = kernel->GetMachineConfig();
     }
-    ret = LaunchAicpuKernel(rtAicpuArgs, debugEnable, kernel->GetFunction(), tensors);
+    ret = LaunchAicpuKernel(aicpuLaunchDesc, debugEnable, kernel->GetFunction(), tensors);
     MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicpu failed: " << ret;
 
     kernelArgs[5] = args->kArgs.cfgdata;

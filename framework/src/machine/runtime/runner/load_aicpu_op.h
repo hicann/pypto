@@ -24,17 +24,38 @@
 #include "machine/utils/machine_ws_intf.h"
 
 namespace npu::tile_fwk {
+struct AicpuHostInput {
+    // device 上待刷新的位置， launch时。rt
+    // 会申请Device内存并将该device内存地址刷新到hostArgs中，该参数描述就是这个待刷新的位置的偏移
+    uint32_t addrOffset = 0;
+    // 数据偏移区，指向的数据去需要拷贝到device侧， 该参数用于指定数据区基于hostArgs的地址偏移(主要描述input 信息)
+    uint32_t dataOffset = 0;
+};
+
+struct AicpuLaunchDesc {
+    void* stream = nullptr;
+    // args 表示的host侧 DeviceKernelArgs + input info 等组装的info
+    AiCpuArgs* args = nullptr;
+    uint32_t argsSize = 0;
+    AicpuHostInput* hostInputs = nullptr;
+    uint16_t hostInputNum = 0;
+    uint16_t timeout = 0;
+    uint32_t blockDim = 1;
+    uint32_t kernelNameOffset = 0;
+    uint32_t soNameOffset = 0;
+};
+
 class LoadAicpuOp {
 public:
     LoadAicpuOp() = default;
     ~LoadAicpuOp() {}
-    static int AicpuKernelLaunch([[maybe_unused]] void* funcHandle, [[maybe_unused]] const RtStream& stream,
-                                 [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] const uint32_t& blockDim);
-    int LaunchBuiltInOp(RtStream stream, DeviceKernelArgs* kArgs, const int& aicpuNum,
-                        const std::string& funcName) const;
-    int LaunchPyptoNullOp(RtStream stream, DeviceKernelArgs* kArgs, const int& aicpuNum);
-    int GetBuiltInOpBinHandle();
-    int LaunchCustomOp(RtStream stream, DeviceKernelArgs* kArgs, std::string& OpType) const;
+    static int AicpuKernelLaunch(void* funcHandle, const AicpuLaunchDesc& desc);
+    static int LaunchWithHostArgs(void* funcHandle, const AicpuLaunchDesc& desc);
+    int LaunchBuiltInOp(const AicpuLaunchDesc& desc, const std::string& funcName) const;
+    int LaunchBuiltInOpWithHostArgs(const AicpuLaunchDesc& desc, const std::string& funcName) const;
+    int GetBuiltInOpBinHandle(int64_t* devArgsAddr);
+    int LaunchCustomOp([[maybe_unused]] const AicpuLaunchDesc& desc, [[maybe_unused]] std::string& OpType) const;
+    int LaunchAicpuServerInit(int64_t* devArgsAddr);
     void CustomAiCpuSoLoad();
     void GenBuiltInOpInfo();
     static LoadAicpuOp& GetInstance()

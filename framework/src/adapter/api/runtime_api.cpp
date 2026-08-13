@@ -187,13 +187,8 @@ RtError RuntimeGetLogicDevIdByUserDevId(const int32_t userDevId, int32_t* const 
 RtError RuntimeFuncGetByName(const RtBinHandle binHandle, const char_t* kernelName, RtFuncHandle* funcHandle)
 {
 #ifdef BUILD_WITH_CANN
-    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::FuncGetByName);
-    if (func != nullptr) {
-        rtError_t (*runtimeFunc)(
-            const rtBinHandle, const char_t*,
-            rtFuncHandle*) = reinterpret_cast<rtError_t (*)(const rtBinHandle, const char_t*, rtFuncHandle*)>(func);
-        return runtimeFunc(binHandle, kernelName, funcHandle);
-    }
+    return AclRtBinaryGetFunction(reinterpret_cast<AclRtBinHandle>(binHandle), kernelName,
+                                  reinterpret_cast<AclRtFuncHandle*>(funcHandle));
 #endif
     return StubFuncGetByName(binHandle, kernelName, funcHandle);
 }
@@ -202,14 +197,9 @@ RtError RuntimeBinaryLoadFromFile(const char_t* const binPath, const RtLoadBinar
                                   RtBinHandle* handle)
 {
 #ifdef BUILD_WITH_CANN
-    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::BinaryLoadFromFile);
-    if (func != nullptr) {
-        rtError_t (*runtimeFunc)(
-            const char_t* const, const rtLoadBinaryConfig_t* const,
-            rtBinHandle*) = reinterpret_cast<rtError_t (*)(const char_t* const, const rtLoadBinaryConfig_t* const,
-                                                           rtBinHandle*)>(func);
-        return runtimeFunc(binPath, reinterpret_cast<const rtLoadBinaryConfig_t*>(optionalCfg), handle);
-    }
+    return AclRtBinaryLoadFromFile(
+        binPath, reinterpret_cast<AclRtBinaryLoadOptions*>(const_cast<RtLoadBinaryConfig*>(optionalCfg)),
+        reinterpret_cast<AclRtBinHandle*>(handle));
 #endif
     return StubBinaryLoadFromFile(binPath, optionalCfg, handle);
 }
@@ -386,6 +376,25 @@ RtError RuntimeAicpuKernelLaunchExWithArgs(const uint32_t kernelType, const char
     return StubAicpuKernelLaunchExWithArgs(kernelType, opName, numBlocks, argsInfo, smDesc, stm, flags);
 }
 
+RtError RuntimeLaunchKernelWithHostArgs(RtFuncHandle funcHandle, uint32_t numBlocks, RtStream stm,
+                                        RtKernelLaunchCfg* cfg, void* hostArgs, uint32_t argsSize,
+                                        RtHostInputInfo* placeHolderArray, uint32_t placeHolderNum)
+{
+#ifdef BUILD_WITH_CANN
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::LaunchKernelWithHostArgs);
+    if (func != nullptr) {
+        rtError_t (*runtimeFunc)(
+            rtFuncHandle, uint32_t, rtStream_t, rtKernelLaunchCfg_t*, void*, uint32_t, rtPlaceHolderInfo_t*,
+            uint32_t) = reinterpret_cast<rtError_t (*)(rtFuncHandle, uint32_t, rtStream_t, rtKernelLaunchCfg_t*, void*,
+                                                       uint32_t, rtPlaceHolderInfo_t*, uint32_t)>(func);
+        return runtimeFunc(funcHandle, numBlocks, stm, reinterpret_cast<rtKernelLaunchCfg_t*>(cfg), hostArgs, argsSize,
+                           reinterpret_cast<rtPlaceHolderInfo_t*>(placeHolderArray), placeHolderNum);
+    }
+#endif
+    return StubLaunchKernelWithHostArgs(funcHandle, numBlocks, stm, cfg, hostArgs, argsSize, placeHolderArray,
+                                        placeHolderNum);
+}
+
 RtError RuntimeGeExceptionRegInfo(RtExceptionInfo* exceptionInfo, RtExceptionRegInfo* execptionReg)
 {
 #ifdef BUILD_WITH_CANN
@@ -417,6 +426,7 @@ static_assert(std::is_same<RtBinHandle, rtBinHandle>::value);
 static_assert(RT_SUCCESS == RT_ERROR_NONE);
 static_assert(sizeof(RtDevBinary) == sizeof(rtDevBinary_t));
 static_assert(sizeof(RtHostInputInfo) == sizeof(rtHostInputInfo_t));
+static_assert(sizeof(RtHostInputInfo) == sizeof(rtPlaceHolderInfo_t));
 static_assert(sizeof(RtArgsEx) == sizeof(rtArgsEx_t));
 static_assert(sizeof(RtSmData) == sizeof(rtSmData_t));
 static_assert(sizeof(RtSmDesc) == sizeof(rtSmDesc_t));

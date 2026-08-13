@@ -40,6 +40,8 @@ enum class AclFunc {
     RtSynchronizeStream,
     RtFree,
     RtDestroyStream,
+    BinaryLoadFromFile,
+    BinaryGetFunction,
     SysGetVersionStr,
     Bottom
 };
@@ -66,5 +68,7 @@ const std::map<AclFunc, std::string> kAclFuncStrMap{
     {AclFunc::RtSynchronizeStream, "aclrtSynchronizeStream"},
     {AclFunc::RtFree, "aclrtFree"},
     {AclFunc::RtDestroyStream, "aclrtDestroyStream"},
+    {AclFunc::BinaryLoadFromFile, "aclrtBinaryLoadFromFile"},
+    {AclFunc::BinaryGetFunction, "aclrtBinaryGetFunction"},
     {AclFunc::SysGetVersionStr, "aclsysGetVersionStr"}};
 } // namespace npu::tile_fwk

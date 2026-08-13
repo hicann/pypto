@@ -25,6 +25,7 @@
 #include "interface/function/function.h"
 #include "machine/runtime/launcher/ctrl_flow_cache_manager.h"
 #include "machine/runtime/launcher/device_launcher_types.h"
+#include "machine/runtime/runner/load_aicpu_op.h"
 #include "machine/utils/dynamic/dev_encode_tensor.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "adapter/api/runtime_define.h"
@@ -66,7 +67,7 @@ public:
 
     void PatchHostDynamicCellMatchAddr(DevAscendProgram* hostProg);
 
-    RtAicpuArgsEx& GetRtAicpuArgs() { return rtAicpuArgs_; }
+    AicpuLaunchDesc& GetAicpuLaunchDesc() { return aicpuLaunchDesc_; }
     RtArgsEx& GetRtAicoreArgs() { return rtAicoreArgs_; }
     RtTaskCfgInfo& GetRtTaskCfg() { return rtTaskCfg_; }
     std::vector<void*>& GetKernelArgs() { return kernelArgs_; }
@@ -100,11 +101,11 @@ private:
     ToSubMachineConfig toSubMachineConfig_;
     uint8_t scheSyncModel_{0};
 
-    RtAicpuArgsEx rtAicpuArgs_;
+    AicpuLaunchDesc aicpuLaunchDesc_;
     RtArgsEx rtAicoreArgs_;
     RtTaskCfgInfo rtTaskCfg_;
     std::vector<void*> kernelArgs_;
-    RtHostInputInfo hostInfo_;
+    AicpuHostInput hostInfo_;
 };
 
 } // namespace npu::tile_fwk::dynamic

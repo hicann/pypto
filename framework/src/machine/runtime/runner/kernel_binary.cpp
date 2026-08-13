@@ -329,14 +329,12 @@ void KernelBinary::InitCachedArgs()
 
 void KernelBinary::InitLaunchArgs()
 {
-    memset_s(&rtAicpuArgs_, sizeof(RtAicpuArgsEx), 0, sizeof(RtAicpuArgsEx));
-    rtAicpuArgs_.kernelNameAddrOffset = offsetof(AiCpuArgs, kernelName);
-    rtAicpuArgs_.soNameAddrOffset = offsetof(AiCpuArgs, soName);
-    rtAicpuArgs_.hostInputInfoNum = 1;
+    aicpuLaunchDesc_ = {};
+    aicpuLaunchDesc_.hostInputNum = 1;
     hostInfo_.addrOffset = offsetof(AiCpuArgs, kArgs.inputs);
     hostInfo_.dataOffset = sizeof(AiCpuArgs);
-    rtAicpuArgs_.hostInputInfoPtr = &hostInfo_;
-    rtAicpuArgs_.timeout = AICPU_EXECUTE_TIMEOUT;
+    aicpuLaunchDesc_.hostInputs = &hostInfo_;
+    aicpuLaunchDesc_.timeout = AICPU_EXECUTE_TIMEOUT;
     memset_s(&rtAicoreArgs_, sizeof(RtArgsEx), 0, sizeof(RtArgsEx));
     kernelArgs_.resize(0x7, nullptr);
     rtAicoreArgs_.args = kernelArgs_.data();

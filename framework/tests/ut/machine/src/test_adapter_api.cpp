@@ -484,10 +484,6 @@ TEST_F(TestAdapterApi, test_runtime_adapter)
     EXPECT_EQ(
         AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetLogicDevIdByUserDevId) != nullptr,
         loaded);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::FuncGetByName) != nullptr,
-              loaded);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::BinaryLoadFromFile) != nullptr,
-              loaded);
     EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamCreate) != nullptr, loaded);
     EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamDestroy) != nullptr,
               loaded);

@@ -38,5 +38,7 @@ AclError AclRtFree(void* devPtr);
 AclError AclRtCreateStream(AclRtStream* stream);
 AclError AclRtSynchronizeStream(AclRtStream stream);
 AclError AclRtDestroyStream(AclRtStream stream);
+AclError AclRtBinaryLoadFromFile(const char* binPath, AclRtBinaryLoadOptions* options, AclRtBinHandle* binHandle);
+AclError AclRtBinaryGetFunction(AclRtBinHandle binHandle, const char* kernelName, AclRtFuncHandle* funcHandle);
 AclError AclSysGetVersionStr(const char* pkgName, char* versionStr);
 } // namespace npu::tile_fwk

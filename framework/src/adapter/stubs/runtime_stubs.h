@@ -59,4 +59,8 @@ RtError StubKernelLaunchWithHandleV2(void* hdl, const uint64_t tilingKey, uint32
 RtError StubAicpuKernelLaunchExWithArgs(const uint32_t kernelType, const char_t* const opName, const uint32_t numBlocks,
                                         const RtAicpuArgsEx* argsInfo, RtSmDesc* const smDesc, const RtStream stm,
                                         const uint32_t flags);
+
+RtError StubLaunchKernelWithHostArgs(RtFuncHandle funcHandle, uint32_t numBlocks, RtStream stm, RtKernelLaunchCfg* cfg,
+                                     void* hostArgs, uint32_t argsSize, RtHostInputInfo* placeHolderArray,
+                                     uint32_t placeHolderNum);
 } // namespace npu::tile_fwk

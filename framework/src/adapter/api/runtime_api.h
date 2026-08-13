@@ -57,6 +57,10 @@ RtError RuntimeLaunchCpuKernel(const RtFuncHandle funcHandle, uint32_t numBlocks
 RtError RuntimeAicpuKernelLaunchExWithArgs(const uint32_t kernelType, const char_t* const opName,
                                            const uint32_t numBlocks, const RtAicpuArgsEx* argsInfo,
                                            RtSmDesc* const smDesc, const RtStream stm, const uint32_t flags);
+
+RtError RuntimeLaunchKernelWithHostArgs(RtFuncHandle funcHandle, uint32_t numBlocks, RtStream stm,
+                                        RtKernelLaunchCfg* cfg, void* hostArgs, uint32_t argsSize,
+                                        RtHostInputInfo* placeHolderArray, uint32_t placeHolderNum);
 RtError RuntimeDevBinaryRegister(const RtDevBinary* bin, void** hdl);
 RtError RuntimeFunctionRegister(void* binHandle, const void* stubFunc, const char_t* stubName,
                                 const void* kernelInfoExt, uint32_t funcMode);

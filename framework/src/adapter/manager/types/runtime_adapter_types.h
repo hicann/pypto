@@ -32,8 +32,6 @@ enum class RuntimeFunc {
     GetAiCpuCount,
     GetL2CacheOffset,
     GetLogicDevIdByUserDevId,
-    FuncGetByName,
-    BinaryLoadFromFile,
     StreamCreate,
     StreamDestroy,
     StreamAddToModel,
@@ -46,6 +44,7 @@ enum class RuntimeFunc {
     DevBinaryRegister,
     FunctionRegister,
     KernelLaunch,
+    LaunchKernelWithHostArgs,
     GetExceptionRegInfo,
     Bottom
 };
@@ -63,8 +62,6 @@ const std::map<RuntimeFunc, std::string> kRuntimeFuncStrMap{
     {RuntimeFunc::GetAiCpuCount, "rtGetAiCpuCount"},
     {RuntimeFunc::GetL2CacheOffset, "rtGetL2CacheOffset"},
     {RuntimeFunc::GetLogicDevIdByUserDevId, "rtGetLogicDevIdByUserDevId"},
-    {RuntimeFunc::FuncGetByName, "rtsFuncGetByName"},
-    {RuntimeFunc::BinaryLoadFromFile, "rtsBinaryLoadFromFile"},
     {RuntimeFunc::StreamCreate, "rtStreamCreate"},
     {RuntimeFunc::StreamDestroy, "rtStreamDestroy"},
     {RuntimeFunc::StreamAddToModel, "rtStreamAddToModel"},
@@ -77,6 +74,7 @@ const std::map<RuntimeFunc, std::string> kRuntimeFuncStrMap{
     {RuntimeFunc::DevBinaryRegister, "rtDevBinaryRegister"},
     {RuntimeFunc::FunctionRegister, "rtFunctionRegister"},
     {RuntimeFunc::KernelLaunch, "rtKernelLaunch"},
+    {RuntimeFunc::LaunchKernelWithHostArgs, "rtsLaunchKernelWithHostArgs"},
     {RuntimeFunc::GetExceptionRegInfo, "rtGetExceptionRegInfo"},
 };
 } // namespace npu::tile_fwk

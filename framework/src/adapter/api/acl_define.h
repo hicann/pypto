@@ -29,6 +29,31 @@ constexpr int ACLRT_ERROR_REPEAT_INITIALIZE = 100002;
 typedef int AclError;
 typedef void* AclRtStream;
 typedef void* AclRtEvent;
+typedef void* AclRtBinHandle;
+typedef void* AclRtFuncHandle;
+
+enum class AclRtBinaryLoadOptionType {
+    LAZY_LOAD = 1,
+    MAGIC = 2,
+    CPU_KERNEL_MODE = 3,
+};
+
+typedef union {
+    uint32_t isLazyLoad;
+    uint32_t magic;
+    int32_t cpuKernelMode;
+    uint32_t rsv[4];
+} AclRtBinaryLoadOptionValue;
+
+typedef struct {
+    AclRtBinaryLoadOptionType type;
+    AclRtBinaryLoadOptionValue value;
+} AclRtBinaryLoadOption;
+
+typedef struct {
+    AclRtBinaryLoadOption* options;
+    size_t numOpt;
+} AclRtBinaryLoadOptions;
 
 enum class AclRtMemcpyKind {
     HOST_TO_HOST,

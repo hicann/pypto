@@ -75,8 +75,8 @@ TEST(KernelBinaryTest, RefReturningGetters)
     (void)config;
     EXPECT_TRUE(helper.kb->GetHostCtrlFlowCaches().empty());
     EXPECT_TRUE(helper.kb->GetArgTypes().empty());
-    auto& aicpuArgs = helper.kb->GetRtAicpuArgs();
-    (void)aicpuArgs;
+    auto& aicpuLaunchDesc = helper.kb->GetAicpuLaunchDesc();
+    (void)aicpuLaunchDesc;
     auto& aicoreArgs = helper.kb->GetRtAicoreArgs();
     (void)aicoreArgs;
     auto& taskCfg = helper.kb->GetRtTaskCfg();

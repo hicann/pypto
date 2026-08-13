@@ -34,6 +34,7 @@
 #include "machine/runtime/memory_utils/device_memory_utils.h"
 #include "machine/runtime/distributed/distributed_context.h"
 #include "machine/runtime/runner/device_runner.h"
+#include "machine/runtime/runner/load_aicpu_op.h"
 #include "machine/runtime/launcher/device_launcher_types.h"
 #include "machine/runtime/launcher/launcher_router.h"
 
@@ -481,7 +482,7 @@ public:
     static void SaveStream(AclRtStream aicoreStream);
     static void GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel);
     static void AddAicpuStream(const bool isCapture, AclMdlRI& rtModel);
-    static int LaunchAicpuKernel(RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable,
+    static int LaunchAicpuKernel(AicpuLaunchDesc& launchDesc, [[maybe_unused]] bool debugEnable,
                                  [[maybe_unused]] Function* function,
                                  const std::vector<DeviceTensorData>& tensors = {});
     static int LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode, int launchEarlyMode);

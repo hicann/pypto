@@ -271,4 +271,20 @@ RtError StubAicpuKernelLaunchExWithArgs(const uint32_t kernelType, const char_t*
     (void)flags;
     return RT_SUCCESS;
 }
+
+RtError StubLaunchKernelWithHostArgs(RtFuncHandle funcHandle, uint32_t numBlocks, RtStream stm, RtKernelLaunchCfg* cfg,
+                                     void* hostArgs, uint32_t argsSize, RtHostInputInfo* placeHolderArray,
+                                     uint32_t placeHolderNum)
+{
+    ADAPTER_LOGD("Enter stub function of LaunchKernelWithHostArgs.");
+    (void)funcHandle;
+    (void)numBlocks;
+    (void)stm;
+    (void)cfg;
+    (void)hostArgs;
+    (void)argsSize;
+    (void)placeHolderArray;
+    (void)placeHolderNum;
+    return RT_SUCCESS;
+}
 } // namespace npu::tile_fwk
