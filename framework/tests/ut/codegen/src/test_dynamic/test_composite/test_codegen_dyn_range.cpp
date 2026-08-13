@@ -80,4 +80,16 @@ TEST_F(TestCodegenDynRange, RangeTileTensor)
 
     GenOpCodeFromOp(*function, op, {.isMainBlk = true});
 }
+
+TEST_F(TestCodegenDynRange, RangeUnsupportedDtype)
+{
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
+    auto function = GenMockFuncDyn("RangeUnsupportedDtype");
+    auto localTensor = CreateLogicalTensor({*function, DataType::DT_BOOL, MemoryType::MEM_UB, {64, 64}});
+    auto& op = function->AddOperation(Opcode::OP_RANGE, {}, {localTensor});
+    op.SetAttribute(OP_ATTR_PREFIX + "START", Element(DataType::DT_INT32, 1));
+    op.SetAttribute(OP_ATTR_PREFIX + "STEP", Element(DataType::DT_INT32, 1));
+    op.SetAttribute(OP_ATTR_PREFIX + "SIZE", Element(DataType::DT_INT32, 1));
+    EXPECT_EQ(GenOpCodeFromOp(*function, op), CG_ERROR);
+}
 } // namespace npu::tile_fwk

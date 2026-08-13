@@ -162,6 +162,21 @@ TEST_F(ProcessAtomicTest, TestMMINT8) { CheckL0cType(DataType::DT_INT8, DataType
 TEST_F(ProcessAtomicTest, TestMMINT16) { CheckL0cType(DataType::DT_INT16, DataType::DT_INT16, DataType::DT_INT32); }
 TEST_F(ProcessAtomicTest, TestMMINT32) { CheckL0cType(DataType::DT_INT32, DataType::DT_INT32, DataType::DT_INT32); }
 
+TEST_F(ProcessAtomicTest, TestGetL0CCopyOutsInvalidOutputMemory)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP32, {16, 16}, "l0_c");
+    auto l0c = G.GetTensor("l0_c");
+    l0c->SetMemoryTypeBoth(MemoryType::MEM_L0C, true);
+    G.AddTensor(DataType::DT_FP32, {16, 16}, "bad_out");
+    auto badOut = G.GetTensor("bad_out");
+    badOut->SetMemoryTypeBoth(MemoryType::MEM_L0C, true);
+    G.AddOp(Opcode::OP_COPY_OUT, {"l0_c"}, {"bad_out"}, "L0C_Copy_out");
+    CubeProcess cubeProcess;
+    std::vector<Operation*> copyOuts;
+    EXPECT_EQ(cubeProcess.GetL0CCopyOuts(*G.GetOp("L0C_Copy_out"), copyOuts), FAILED);
+}
+
 TEST_F(ProcessAtomicTest, TestReducAccProcessAtomicOn)
 {
     ComputationalGraphBuilder G;

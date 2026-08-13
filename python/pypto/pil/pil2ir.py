@@ -95,6 +95,6 @@ def compile(pyfunc, *args, **kwargs):
     all_args, tensor_args = _init_arguments(bound.arguments)
     with pypto.function("__entry__", *tensor_args):
         func_def = pil2ir(func, all_args, tensor_args)
-        # funtion input args still need to be valid, it'll be used later by tensor slot
+        # function input args still need to be valid, it'll be used later by tensor slot
         setattr(func_def, "__args__", tensor_args)
         return func_def

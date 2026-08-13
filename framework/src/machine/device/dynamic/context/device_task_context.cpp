@@ -125,7 +125,7 @@ void DeviceTaskContext::ShowStats()
     DEV_DEBUG("   Stitched function count: %10lu.", stitchedFuncNum);
     DEV_DEBUG("       Root function count: %10lu.", rootFuncNum);
     DEV_DEBUG("       Leaf function count: %10lu.", leafFuncNum);
-    DEV_DEBUG("   Inital ready task count: %10lu.", readyTaskNum);
+    DEV_DEBUG("  Initial ready task count: %10lu.", readyTaskNum);
     DEV_DEBUG(" Static function data size: %10lu bytes.", dynFuncDataSize);
     DEV_DEBUG("   Leaf function data size: %10lu bytes.", leafFuncDataSize);
 }

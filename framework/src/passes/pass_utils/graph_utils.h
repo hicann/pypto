@@ -128,7 +128,7 @@ public:
      */
     static void SetAssembleAttr(Operation& op, const AssembleOp& assemble);
     /**
-     * @brief Determine it is a CV seperate or CV mix platform.
+     * @brief Determine it is a CV separate or CV mix platform.
      */
     static bool IsCVMixPlatform();
     /**

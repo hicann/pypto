@@ -245,7 +245,7 @@ Status CubeProcess::GetL0CCopyOuts(Operation& op, std::vector<Operation*>& l0CCo
         if (finalOutput->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR &&
             finalOutput->GetMemoryTypeOriginal() != MemoryType::MEM_L1 &&
             finalOutput->GetMemoryTypeOriginal() != MemoryType::MEM_UB) {
-            APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] has invlid output memType: %s. %s",
+            APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] has invalid output memType: %s. %s",
                               chainEndCopyOut->GetOpcodeStr().c_str(), chainEndCopyOut->GetOpMagic(),
                               MemoryTypeToString(finalOutput->GetMemoryTypeOriginal()).c_str(),
                               GetFormatBacktrace(op).c_str());

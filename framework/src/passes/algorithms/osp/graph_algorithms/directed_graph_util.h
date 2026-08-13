@@ -63,7 +63,7 @@ VWorkwT<GraphT> CriticalPathWeight(const GraphT& graph)
     std::vector<VWorkwT<GraphT>> topLength(graph.NumVertices(), 0);
     VWorkwT<GraphT> criticalPathWeight = 0;
 
-    // calculating lenght of longest path
+    // calculating length of longest path
     for (const auto& node : GetTopOrder(graph)) {
         VWorkwT<GraphT> maxTemp = 0;
         for (const auto& parent : graph.Parents(node)) {

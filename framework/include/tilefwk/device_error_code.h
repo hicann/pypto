@@ -52,7 +52,7 @@ namespace npu::tile_fwk {
 #define PYPTO_DEVICE_ERROR_EVENT_CAPTURED 107028              // event is captured
 #define PYPTO_DEVICE_ERROR_STREAM_NOT_CAPTURED 107029         // stream is not in capture status
 #define PYPTO_DEVICE_ERROR_CAPTURE_MODE_NOT_SUPPORT 107030    // stream is captured, not support current oper
-#define PYPTO_DEVICE_ERROR_STREAM_CAPTURE_IMPLICIT 107031     // a disallowed implicit dependency from defalut stream
+#define PYPTO_DEVICE_ERROR_STREAM_CAPTURE_IMPLICIT 107031     // a disallowed implicit dependency from default stream
 #define PYPTO_DEVICE_ERROR_STREAM_CAPTURE_CONFLICT 107032     // interdependent stream cannot begin capture together
 #define PYPTO_DEVICE_ERROR_STREAM_TASK_GROUP_STATUS 107033    // task group status error
 #define PYPTO_DEVICE_ERROR_STREAM_TASK_GROUP_INTR 107034      // task group interrupted

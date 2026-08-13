@@ -392,7 +392,7 @@ void TestDynMatmul(MatrixOpParams& opParams)
     EXPECT_TRUE(resultCmp(golden, (outputDtype*)outs->data(), 0.001f));
 }
 
-// intput:fp16 output:fp16 bias:fp16
+// input:fp16 output:fp16 bias:fp16
 TEST_F(DynamicMatmulTest, mm_A_Bt_ND_fp16_BIAS)
 {
     TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
@@ -408,7 +408,7 @@ TEST_F(DynamicMatmulTest, mm_A_Bt_ND_fp16_BIAS)
     TestDynMatmul<TestMatmulType>(opParams);
 }
 
-// intput:fp16 output:fp32 bias:fp32
+// input:fp16 output:fp32 bias:fp32
 TEST_F(DynamicMatmulTest, mm_A_Bt_NZ_fp16_BIAS)
 {
     int64_t m = 1;
@@ -423,7 +423,7 @@ TEST_F(DynamicMatmulTest, mm_A_Bt_NZ_fp16_BIAS)
     TestDynMatmul<TestMatmulType>(opParams);
 }
 
-// intput:fp32 output:fp32 bias:fp32
+// input:fp32 output:fp32 bias:fp32
 TEST_F(DynamicMatmulTest, mm_A_B_NZ_fp32_BIAS)
 {
     TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
@@ -438,7 +438,7 @@ TEST_F(DynamicMatmulTest, mm_A_B_NZ_fp32_BIAS)
     TestDynMatmul<TestMatmulType>(opParams);
 }
 
-// intput:int8 output:int32 bias:int32
+// input:int8 output:int32 bias:int32
 TEST_F(DynamicMatmulTest, mm_A_Bt_NZ_int8_BIAS)
 {
     int64_t m = 1;

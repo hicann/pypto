@@ -127,7 +127,7 @@ Status ExpandFunction::VerifyScopeInfo(Function& function, std::ostringstream& o
     for (auto& [scopeId, coreTypes] : scopeCoreTypes) {
         if (coreTypes.count(CoreType::AIC) > 0 && coreTypes.count(CoreType::AIV) > 0) {
             if (!GraphUtils::IsCVMixPlatform()) {
-                oss << "Cannot mix cube and vector op on a CV seperate platform in function: " << function.GetRawName()
+                oss << "Cannot mix cube and vector op on a CV separate platform in function: " << function.GetRawName()
                     << ", please check your setting: sg_set_scope=" << scopeId;
                 return FAILED;
             }

@@ -1468,6 +1468,10 @@ class BuildCtrl(CMakeParam):
                 shutil.rmtree(self.build_root)
             if self.install_root.exists():
                 logging.info("Clean Install-Tree(%s)", self.install_root)
+                cann_install_root = self.install_root / "cann"
+                if cann_install_root.exists():
+                    logging.info("Restore owner write permission for Install-Tree(%s)", cann_install_root)
+                    subprocess.run(["chmod", "-R", "u+w", str(cann_install_root)], check=True)
                 shutil.rmtree(self.install_root)
             home_dir = os.environ.get('HOME')
             astdata_folder = os.path.join(home_dir, 'ast_data')

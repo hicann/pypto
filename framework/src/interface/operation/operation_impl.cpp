@@ -1361,7 +1361,7 @@ void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset
     CHECK_OP(dstShape.size() == dynOffset.size()) << "Assemble: dynOffset and dest requires same shape";
 
     for (size_t dimIdx = 0; dimIdx < srcShape.size(); ++dimIdx) {
-        CHECK_OP(srcShape[dimIdx] > 0) << "Assemble: shape of src tensor requires interger";
+        CHECK_OP(srcShape[dimIdx] > 0) << "Assemble: shape of src tensor requires integer";
     }
 
     CHECK_OP(dest.GetStorage(false)->Format() == tensor.GetStorage(false)->Format())

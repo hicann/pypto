@@ -20,7 +20,7 @@ import pypto
 logging.basicConfig(level=logging.INFO, format="", force=True)
 SIM_RUNTIME_OPTIONS = {"run_mode": pypto.RunMode.SIM}
 DYNAMIC_SHAPE_ERROR = "Dynamic shape tensors are not allowed as operation operands"
-ASSEMBLE_DYNAMIC_SHAPE_ERROR = "Assemble: shape of src tensor requires interger"
+ASSEMBLE_DYNAMIC_SHAPE_ERROR = "Assemble: shape of src tensor requires integer"
 
 
 @pypto.frontend.jit(runtime_options=SIM_RUNTIME_OPTIONS)

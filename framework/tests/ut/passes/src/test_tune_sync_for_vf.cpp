@@ -174,6 +174,28 @@ TEST_F(TuneSyncForVFTest, TestSkip)
     EXPECT_EQ(tuneSync.RunOnFunction(*rootFuncPtr.get()), SUCCESS);
 }
 
+TEST_F(TuneSyncForVFTest, TestErrorLogPaths)
+{
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestErrorPaths", "TestErrorPaths", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestErrorPathsLeaf",
+                                                      "TestErrorPathsLeaf", rootFuncPtr.get());
+    std::vector<Operation*> opList;
+    BuildGraphForTest(currFunctionPtr, opList);
+    TuneSyncForVF tuneSync;
+    tuneSync.opList_ = opList;
+    tuneSync.mergedOps = {{opList[TS_NUM3]}};
+    int vfStart = 0;
+    int opEnd = 0;
+    EXPECT_EQ(tuneSync.UpdatePipeVTime(opList[TS_NUM3], 0, 1, vfStart, opEnd), FAILED);
+    std::vector<Operation*> setFlags{opList[1]};
+    EXPECT_EQ(tuneSync.UpdateSetPipeTime(currFunctionPtr.get(), setFlags, opEnd), FAILED);
+    int maxMoveBack = 0;
+    std::vector<Operation*> waitFlags{opList[4]};
+    EXPECT_EQ(tuneSync.UpdateWaitPipeTime(currFunctionPtr.get(), waitFlags, vfStart, maxMoveBack), FAILED);
+    EXPECT_EQ(tuneSync.MoveBackPipeVOps(0, 1), FAILED);
+}
+
 } // namespace tile_fwk
 } // namespace npu
 
