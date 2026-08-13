@@ -70,7 +70,10 @@ AiCore Print用于在AICore kernel中打印tensor数据和调试信息，支持G
 
 | 接口名称 | 功能 | 适用场景 |
 |---------|------|---------|
-| **AiCoreLogF** | 格式化日志打印 | 打印地址、标量、提示信息 |
+| **AICORE_LOGD** | 格式化日志打印 | 打印地址、标量、提示维测信息【DEBUG级别】 |
+| **AICORE_LOGI** | 格式化日志打印 | 打印地址、标量、提示关键的信息【INFO级别】 |
+| **AICORE_LOGW** | 格式化日志打印 | 打印地址、标量、提示不符合预期的信息【WARN级别】 |
+| **AICORE_LOGE** | 格式化日志打印 | 打印地址、标量、记录异常的信息【ERROR级别】 |
 | **AiCorePrintShape** | 打印Shape信息 | 查看tensor shape维度 |
 | **AiCorePrintGmTensor** | 打印GM Tensor | 查看Global Memory数据 |
 | **AiCorePrintUbTensor** | 打印UB Tensor | 查看Unified Buffer数据（仅AIV kernel） |
@@ -172,7 +175,10 @@ ls kernel_aicore/*.cpp
 打印接口调用格式：
 
 ```cpp
-AiCoreLogF(param->ctx, "format string", args...);
+AICORE_LOGD(param->ctx, "format string", args...);
+AICORE_LOGI(param->ctx, "format string", args...);
+AICORE_LOGW(param->ctx, "format string", args...);
+AICORE_LOGE(param->ctx, "format string", args...);
 AiCorePrintShape(param->ctx, Shape2Dim(dim0, dim1), "name");
 AiCorePrintGmTensor(param->ctx, (__gm__ T*)addr, end, begin, "name");
 AiCorePrintUbTensor(param->ctx, (__ubuf__ T*)addr, end, begin, "name");
@@ -190,14 +196,17 @@ __gm__ T* l1_staging = (__gm__ T*)(param->funcData->workspaceAddr);
 __gm__ T* l0c_staging = (__gm__ T*)(param->funcData->workspaceAddr);
 ```
 
-**关键注意事项**：首次运行或切换用例删除kernel_aic*，同一用例重复运行保留修改。
+**关键注意事项**：
+1. 首次运行或切换用例删除kernel_aic*，同一用例重复运行保留修改。
+2. capture 模式下，要看aicore 日志的输出，必须在replay 之后，增加pypto.runtime._device_synchronize()，否则无法输出aicore 日志
 
 ### 4. 运行测试并查看打印结果
 
 **重要**：以下命令必须**一次性完整执行**（使用`&&`连接），不要拆分为多个命令：
 
 ```bash
-export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=1 && rm -rf output/ wk/ && python xxx.py && grep -rn "DumpAicoreLog" ./wk
+export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=1 && rm -rf output/ wk/ && python xxx.py &&
+grep -rn "\[AICORE\]\[Core" ./wk
 ```
 
 **命令说明**：
@@ -206,7 +215,7 @@ export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=1 && rm -r
 2. `export ASCEND_GLOBAL_LOG_LEVEL=1`：设置日志级别为INFO（级别1），开启日志输出
 3. `rm -rf output/ wk/`：清理旧日志和编译产物，避免干扰
 4. `python xxx.py`：运行测试用例，触发kernel编译和执行
-5. `grep -rn "DumpAicoreLog" ./wk`：搜索并打印所有AiCore Print输出（包含tensor数据和调试信息）
+5. `grep -rn "\[AICORE\]\[Core" ./wk`：搜索并打印所有AiCore Print输出（包含tensor数据和调试信息）
 
 ### 不同数据类型打印示例
 
@@ -279,12 +288,12 @@ __gm__ int32_t* l0c_staging = (__gm__ int32_t*)(param->funcData->workspaceAddr);
 AiCorePrintL0CTensor(param->ctx, (__cc__ int32_t*)l0cTensor.GetAddr(), 1024, 0, 32, 32, l0c_staging, "int32_l0c");
 ```
 
-AiCoreLogF：
-
+AICORE_LOG：
+以下能使用的AICORE_LOGD的地方，也可以使用AICORE_LOGI/AICORE_LOGW/AICORE_LOGE，使用方式和AICORE_LOGD相同。
 ```cpp
-AiCoreLogF(param->ctx, "GM address=%p", ((__gm__ float*)gmTensor.GetAddr()));
-AiCoreLogF(param->ctx, "Shape=[%ld,%ld]", dim0, dim1);
-AiCoreLogF(param->ctx, "INT8 input loaded");
+AICORE_LOGD(param->ctx, "GM address=%p", ((__gm__ float*)gmTensor.GetAddr()));
+AICORE_LOGD(param->ctx, "Shape=[%ld,%ld]", dim0, dim1);
+AICORE_LOGD(param->ctx, "INT8 input loaded");
 ```
 
 ### 注意事项
@@ -312,7 +321,7 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
    UB数据检查请在AIV (Vector核) kernel中完成，或在AIC中使用`AiCorePrintGmTensor`打印已搬到GM的数据。
 
-5. **AiCoreLogF在AIC中打印UB数据值会触发运行时错误**：`AiCoreLogF`在AIC kernel中使用`%f`、`%d`等格式打印UB数据值时（如`((__ubuf__ float*)addr)[521]`），编译器会生成一条从UB地址空间的标量load指令，AIC SP不支持此操作，触发MPU error 271：
+5. **AICORE_LOGX在AIC中打印UB数据值会触发运行时错误**：`AICORE_LOGD`在AIC kernel中使用`%f`、`%d`等格式打印UB数据值时（如`((__ubuf__ float*)addr)[521]`），编译器会生成一条从UB地址空间的标量load指令，AIC SP不支持此操作，触发MPU error 271：
 
    ```text
    error from aicore error exception, core id is 0, error code = 271
@@ -378,7 +387,7 @@ error: static assertion failed due to requirement '!std::is_same_v<float, float>
 在AIC kernel的CCE文件中使用如下代码：
 
 ```cpp
-AiCoreLogF(param->ctx, "ubTensor val=%f", ((__ubuf__ float*)ubTensor.GetAddr())[521]);
+AICORE_LOGD(param->ctx, "ubTensor val=%f", ((__ubuf__ float*)ubTensor.GetAddr())[521]);
 ```
 
 运行时触发aicore error：
@@ -388,7 +397,7 @@ error from aicore error exception, core id is 0, error code = 271
 errorStr: The MPU address access is invalid
 ```
 
-**原因**：`((__ubuf__ float*)addr)[521]`会生成一条从UB地址空间的标量load指令，AIC SP不支持此操作。**注意**：AIC kernel中从UB地址空间标量读取无法在编译期被`static_assert`拦截（因为`AiCoreLogF`的变参模板在参数表达式求值后，`__ubuf__`属性已丢失），也无法在运行时拦截（MPU error是硬件trap，无软件恢复机制）。
+**原因**：`((__ubuf__ float*)addr)[521]`会生成一条从UB地址空间的标量load指令，AIC SP不支持此操作。**注意**：AIC kernel中从UB地址空间标量读取无法在编译期被`static_assert`拦截（因为`AICORE_LOGD`的变参模板在参数表达式求值后，`__ubuf__`属性已丢失），也无法在运行时拦截（MPU error是硬件trap，无软件恢复机制）。
 
 **解决方案**：
 

@@ -312,8 +312,8 @@ pypto.set_pass_options(auto_mix_partition=0)
 | ------------- | ----------------------- | ---------------- |
 | GM tensor数据 | `AiCorePrintGmTensor` | DDR/GM上的tensor |
 | UB tensor数据 | `AiCorePrintUbTensor` | UB上的tensor     |
-| Shape变量值   | `AicoreLogF`          | 动态shape实际值  |
-| Offset值      | `AicoreLogF`          | 动态offset实际值 |
+| Shape变量值   | `AICORE_LOGD`          | 动态shape实际值  |
+| Offset值      | `AICORE_LOGD`          | 动态offset实际值 |
 
 ---
 
