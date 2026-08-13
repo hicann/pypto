@@ -23,7 +23,7 @@ import torch_npu
 import pypto
 
 
-@pypto.frontend.jit(debug_options=dict(runtime_debug_mode=1), new_ir=True)
+@pypto.frontend.jit(debug_options=dict(runtime_debug_mode=1))
 def matmul_add(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8),

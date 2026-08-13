@@ -43,7 +43,7 @@ import pypto
 # ============================================================================
 # 2D Matmul K-Split Kernel (handles transpose via config)
 # ============================================================================
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
 def matmul_2d_k_split_kernel(
     a_tensor: pypto.Tensor([], pypto.DT_FP16),
     b_tensor: pypto.Tensor([], pypto.DT_FP16),
@@ -92,7 +92,7 @@ def matmul_2d_k_split_kernel(
 # ============================================================================
 # 3D BMM K-Split Kernel (handles transpose via config)
 # ============================================================================
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
 def matmul_3d_bmm_k_split_kernel(
     a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
@@ -143,7 +143,7 @@ def matmul_3d_bmm_k_split_kernel(
 # ============================================================================
 # 2D ScaledMM K-Split Kernel
 # ============================================================================
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
 def scaled_mm_2d_k_split_kernel(
     a_tensor: pypto.Tensor([], pypto.DT_FP8E4M3),
     b_tensor: pypto.Tensor([], pypto.DT_FP8E4M3),

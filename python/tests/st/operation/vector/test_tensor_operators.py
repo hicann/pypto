@@ -28,7 +28,7 @@ import pypto
 # =============================================================================
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def neg_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -58,7 +58,7 @@ def test_tensor_neg():
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def pos_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -93,7 +93,7 @@ def test_tensor_pos():
 # =============================================================================
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def rsub_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -123,7 +123,7 @@ def test_tensor_rsub():
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def rmul_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -153,7 +153,7 @@ def test_tensor_rmul():
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def rtruediv_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -188,7 +188,7 @@ def test_tensor_rtruediv():
 # =============================================================================
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def floordiv_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -218,7 +218,7 @@ def test_tensor_floordiv():
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def mod_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -248,7 +248,7 @@ def test_tensor_mod():
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def pow_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -283,7 +283,7 @@ def test_tensor_pow():
 # =============================================================================
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def lt_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL),
@@ -313,7 +313,7 @@ def test_tensor_lt():
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def le_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL),
@@ -343,7 +343,7 @@ def test_tensor_le():
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def ge_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL),
@@ -373,7 +373,7 @@ def test_tensor_ge():
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def eq_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL),
@@ -404,7 +404,7 @@ def test_tensor_eq():
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-5)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def ne_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL),
@@ -440,7 +440,7 @@ def test_tensor_ne():
 # =============================================================================
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def tanh_like_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -472,7 +472,7 @@ def test_tanh_like_expression():
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-4, atol=1e-4)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def combined_arithmetic_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     z: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -504,7 +504,7 @@ def test_combined_arithmetic():
     assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-4, atol=1e-4)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def complex_expression_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),

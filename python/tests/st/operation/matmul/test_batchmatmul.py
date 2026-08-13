@@ -148,7 +148,7 @@ def process_mn_loops_4d(ctx: TileProcessContext4D):
             process_tile_4d(ctx)
 
 
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
 def batch_matmul_kernel_3d(
     a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
     b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
@@ -196,7 +196,7 @@ def batch_matmul_kernel_3d(
                 )
 
 
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
 def batch_matmul_kernel_4d(
     a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
     b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
@@ -352,7 +352,7 @@ def run_batch_matmul_demo():
     m_view_size, n_view_size = 128, 128
     b_view_size = 2
 
-    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
+    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
     def batch_matmul_demo_kernel(
         a: pypto.Tensor([], pypto.DT_FP16),
         b: pypto.Tensor([], pypto.DT_FP16),

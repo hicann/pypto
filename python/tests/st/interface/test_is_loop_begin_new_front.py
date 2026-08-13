@@ -23,7 +23,7 @@ N1 = 64
 D = 64
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def dyn_loop_with_loop_begin(
     in_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),

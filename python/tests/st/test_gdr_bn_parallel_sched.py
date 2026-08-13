@@ -303,7 +303,7 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):  # noqa: E741
     core_attn_out_shape = [t, nv, d]
     last_state_data_shape = [b, nv, d, d]
 
-    @pypto.frontend.jit(new_ir=True, runtime_options={"stitch_function_max_num": 1, "device_sched_parallelism": 8})
+    @pypto.frontend.jit(runtime_options={"stitch_function_max_num": 1, "device_sched_parallelism": 8})
     def kernel(
         query: pypto.Tensor(query_shape, pypto.DT_FP32),
         key: pypto.Tensor(key_shape, pypto.DT_FP32),

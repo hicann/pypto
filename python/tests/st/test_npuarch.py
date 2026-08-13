@@ -32,7 +32,7 @@ def runtime_options_list():
         return {"stitch_function_max_num": 128, "device_sched_mode": 1}
 
 
-@pypto.frontend.jit(runtime_options=runtime_options_list(), new_ir=True)
+@pypto.frontend.jit(runtime_options=runtime_options_list())
 def add(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),

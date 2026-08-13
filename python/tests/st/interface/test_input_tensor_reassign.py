@@ -18,7 +18,7 @@ import torch_npu
 import pypto
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def subscript_assign_ok(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
@@ -42,7 +42,7 @@ def test_subscript_assign_allowed():
     assert torch.allclose(c.cpu(), golden.cpu())
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def move_assign_ok(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
@@ -66,7 +66,7 @@ def test_move_assign_allowed():
     assert torch.allclose(c.cpu(), golden.cpu())
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def var_reassign_ok(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),

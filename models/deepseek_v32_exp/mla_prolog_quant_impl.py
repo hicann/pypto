@@ -843,7 +843,6 @@ def mla_prolog_quant_p(
 
 
 @pypto.frontend.jit(
-    new_ir=True,
     runtime_options=options_list()["runtime_options"],
 )
 def mla_prolog_quant_d(

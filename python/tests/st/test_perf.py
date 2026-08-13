@@ -83,7 +83,6 @@ class ShapeConfig:
 
 @pypto.frontend.jit(
     debug_options={"runtime_debug_mode": 1}, runtime_options={"device_sched_mode": 2, "stitch_function_max_num": 32},
-    new_ir=True,
 )
 def bmm_kernel_with_no_mn_split(
     a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP16),

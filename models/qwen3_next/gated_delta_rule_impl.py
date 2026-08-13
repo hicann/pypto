@@ -388,8 +388,7 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):  # noqa: E741
                 4: 4,
                 -2: 1,
             }
-        },
-        new_ir=True,
+        }
     )
     def kernel(
         query: pypto.Tensor(query_shape, pypto.DT_FP32),
@@ -542,8 +541,7 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):  # noqa: E741
                 36: 16,
                 -2: 1,
             }
-        },
-        new_ir=True,
+        }
     )
     def kernel(
         query: pypto.Tensor(query_shape, pypto.DT_FP32),

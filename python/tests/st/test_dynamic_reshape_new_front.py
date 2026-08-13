@@ -20,7 +20,7 @@ import torch_npu
 import pypto
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def reshape_kernel(
     in_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),

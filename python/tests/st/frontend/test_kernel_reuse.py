@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO, format="", force=True)
 DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, new_ir=True)
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
 def kernel_with_dynamic(
     a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),
     out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),

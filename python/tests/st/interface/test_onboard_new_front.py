@@ -68,7 +68,7 @@ def test_device_run_data_from_device():
     assert d_data_list == [v * 11 for v in c_data_list]
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def matmul_add(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8),

@@ -32,7 +32,6 @@ import pypto
 
 
 @pypto.frontend.jit(
-    new_ir=True,
     runtime_options={"stitch_function_max_num": 64, "max_workspace_kb": 20000},
     pass_options={"vec_nbuffer_setting": {-1: 2, -2: 1}},
 )
@@ -104,7 +103,6 @@ def ai_infra_qat_asymmetric_per_group(weight, scale, offset, group_size=128, bit
 
 
 @pypto.frontend.jit(
-    new_ir=True,
     pass_options={"vec_nbuffer_setting": {-1: 2, -2: 1}},
     runtime_options={"stitch_function_max_num": 64},
 )
@@ -240,7 +238,6 @@ def ai_infra_qat_asymmetric_per_group_backward(
 
 
 @pypto.frontend.jit(
-    new_ir=True,
     runtime_options={
         "stitch_function_max_num": 64,
     },
@@ -373,7 +370,6 @@ def ai_infra_qat_symmetric_per_channel_backward(grad_output, weight, scale, eps,
 
 
 @pypto.frontend.jit(
-    new_ir=True,
     runtime_options={"stitch_function_max_num": 64},
 )
 def ai_infra_qat_symmetric_per_tensor_kernel(
@@ -421,8 +417,7 @@ def ai_infra_qat_symmetric_per_tensor(weight, scale, eps, min_v, max_v):
     runtime_options={
         "stitch_function_max_num": 64,
     },
-    pass_options={"vec_nbuffer_setting": {-1: 4}},
-    new_ir=True,
+    pass_options={"vec_nbuffer_setting": {-1: 4}}
 )
 def ai_infra_qat_symmetric_per_tensor_backward_kernel(
     grad_output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),

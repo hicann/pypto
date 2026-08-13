@@ -41,7 +41,7 @@ def test_attention_residuals_pypto():
     assert torch.allclose(k_out_cpu, k_golden, rtol=3e-3, atol=3e-3)
 
 
-@pypto.frontend.jit(debug_options={"compile_debug_mode": 0}, new_ir=True)
+@pypto.frontend.jit(debug_options={"compile_debug_mode": 0})
 def attention_residuals(
     k_in: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC]),
     k_out: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC]),

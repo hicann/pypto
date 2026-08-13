@@ -19,7 +19,6 @@ def test_comipile_stage(host_options=None):
     @pypto.frontend.jit(
         host_options=host_options,
         runtime_options={"run_mode": 0},
-        new_ir=True,
 )
     def test_func(
         a: pypto.Tensor((4, 4), pypto.DT_FP32),

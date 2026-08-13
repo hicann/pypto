@@ -24,7 +24,7 @@ def gen_data(shape):
     return x, expected
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def kernel_if(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     result: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -37,7 +37,7 @@ def kernel_if(
     result[:] = b + 1
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def kernel_loop(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     result: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),

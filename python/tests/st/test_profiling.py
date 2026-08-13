@@ -91,7 +91,7 @@ def _kernel_details_contains_pypto(csv_file: str) -> bool:
         return False
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, new_ir=True)
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
 def add_direct_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),

@@ -642,7 +642,6 @@ def sparse_flash_attention_quant_d_950(
 
 
 @pypto.frontend.jit(
-    new_ir=False,
     pass_options={
         "vec_nbuffer_setting": {-1: 2, 0: 8, 1: 8},
         "cube_l1_reuse_setting": {-1: 2},

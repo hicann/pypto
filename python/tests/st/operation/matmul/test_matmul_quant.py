@@ -50,7 +50,7 @@ def fixpipe_mask_scale(scale_input):
         return scale_input_float, np.float32(golden_scale)
 
 
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
 def matmul_quant_pertensor_kernel(
     a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),
     b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),
@@ -95,7 +95,7 @@ def matmul_quant_pertensor_kernel(
             ] = out_view
 
 
-@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
 def matmul_quant_perchannel_kernel(
     a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),
     b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),
@@ -235,7 +235,7 @@ def run_matmul_quant_pertensor_demo():
     scale_dequant = np.random.uniform(0.1, 2.0)
     scale_input, golden_scale = fixpipe_mask_scale(scale_dequant)
 
-    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
+    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
     def matmul_quant_pertensor_demo_kernel(
         a: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),
         b: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),
@@ -274,7 +274,7 @@ def run_matmul_quant_perchannel_demo():
     scale_dequant = torch.from_numpy(np.random.uniform(0.1, 2.0, [1, n_size]).astype(np.float32))
     scale_input, golden_scale = fixpipe_mask_scale(scale_dequant)
 
-    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}, new_ir=True)
+    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
     def matmul_quant_perchannel_demo_kernel(
         a: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),
         b: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),

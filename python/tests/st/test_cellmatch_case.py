@@ -45,7 +45,7 @@ def _linear_dx_only(dy, weight):
     return pypto.matmul(dy, weight, pypto.DT_FP32, b_trans=True)
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit()
 def k_tmp_to_d_emb(
     dy: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, H_STATIC, D_STATIC], pypto.DT_FP32),
     weight: pypto.Tensor([H_STATIC, D_STATIC, D_STATIC], pypto.DT_FP32),

@@ -129,7 +129,6 @@ def test_loop_basic(device_id: int = None, dynamic: bool = False) -> None:
 
 
 @pypto.frontend.jit(
-    new_ir=False,
     runtime_options={"run_mode": global_run_mode}
 )
 def loop_compile_phase_print_kernel(
