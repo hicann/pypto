@@ -14,7 +14,7 @@
  *
  * The packed base-0 control-flow cache is copied host->device once per bundle (keyed by LoadedBundle::bundleKey,
  * a content digest -- NOT hashKey, which is equal across shape variants of one op) and reused across launches.
- * All cached device buffers are released together in the singleton destructor at process exit.
+ * Cached device buffers live for the whole process; DevMemoryPool releases them at teardown.
  */
 
 #pragma once
@@ -31,12 +31,12 @@ public:
     static KernelBundleDevCache& Instance();
 
     // Return the device pointer holding `hostCtrlCache` for `key`, copying host->device once and caching it for
-    // reuse. Returns nullptr when `hostCtrlCache` is empty. Freed only in the destructor at exit.
+    // reuse. Returns nullptr when `hostCtrlCache` is empty. Held until process exit.
     uint8_t* GetOrCopy(uint64_t key, const std::vector<uint8_t>& hostCtrlCache);
 
     // Return a device buffer of at least `bytes` for bundle `key`'s cell-match metadata pool, allocated once and
     // reused (grown if a later launch needs more). Returns nullptr when bytes==0. The device inits the pool in
-    // place, so no host->device copy here. Freed in the destructor.
+    // place, so no host->device copy here. Held until process exit.
     uint8_t* GetOrAllocCellMatch(uint64_t key, uint64_t bytes);
 
     KernelBundleDevCache(const KernelBundleDevCache&) = delete;

@@ -68,16 +68,9 @@ uint8_t* KernelBundleDevCache::GetOrAllocCellMatch(uint64_t key, uint64_t bytes)
 
 KernelBundleDevCache::~KernelBundleDevCache()
 {
-    // Release every cached device buffer at once. Runs only on a normal process exit; the STs use os._exit(0),
-    // which skips static destructors (the OS reclaims device memory on process death).
-    dynamic::DeviceMemoryUtils devMem(true);
-    for (auto& kv : cache_) {
-        devMem.Free(kv.second);
-    }
+    // No free here: DevMemoryPool is a static destroyed before this one, and its DestroyPool() has already
+    // released every block. Freeing again would only hit an empty addrToBlock_ and raise FREE_FAILED.
     cache_.clear();
-    for (auto& kv : cellMatchCache_) {
-        devMem.Free(kv.second.addr);
-    }
     cellMatchCache_.clear();
 }
 
