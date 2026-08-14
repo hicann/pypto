@@ -261,6 +261,8 @@ public:
                 return "float8_e4m3_t";
             case kFp8e5m2Code:
                 return "float8_e5m2_t";
+            case kHf8Code:
+                return "hifloat8_t";
             default:
                 return "unknown";
         }

@@ -51,34 +51,34 @@ using namespace pto;
 """
 
 
-# torch.dtype -> pl DataType (used to validate tensor args against kernel signature)
-_TORCH_TO_PL_DTYPE: dict = {}
+# pl DataType -> the torch.dtype a tensor argument for that parameter must have (used to
+# validate tensor args against the kernel signature).
+_PL_DTYPE_TO_TORCH: dict[str, "torch.dtype"] = {}
 
 
-def _register_torch_dtype(torch_name: str, pl_dtype: DataType) -> None:
+def _register_pl_dtype(pl_dtype: DataType, torch_name: str) -> None:
+    """Map a pl dtype to the torch dtype named ``torch_name``, if this torch build has it."""
     torch_dtype = getattr(torch, torch_name, None)
     if torch_dtype is not None:
-        _TORCH_TO_PL_DTYPE[torch_dtype] = pl_dtype
+        _PL_DTYPE_TO_TORCH[str(pl_dtype)] = torch_dtype
 
 
-for _torch_name, _pl_dtype in (
-    ("float16", DataType.FP16),
-    ("bfloat16", DataType.BF16),
-    ("float32", DataType.FP32),
-    ("int8", DataType.INT8),
-    ("int16", DataType.INT16),
-    ("int32", DataType.INT32),
-    ("int64", DataType.INT64),
-    ("uint8", DataType.UINT8),
-    ("uint64", DataType.UINT64),
-    ("bool", DataType.BOOL),
+for _pl_dtype, _torch_name in (
+    (DataType.FP16, "float16"),
+    (DataType.BF16, "bfloat16"),
+    (DataType.FP32, "float32"),
+    (DataType.INT8, "int8"),
+    (DataType.INT16, "int16"),
+    (DataType.INT32, "int32"),
+    (DataType.INT64, "int64"),
+    (DataType.UINT8, "uint8"),
+    (DataType.UINT64, "uint64"),
+    (DataType.BOOL, "bool"),
+    (DataType.HF8, "uint8"),
 ):
-    _register_torch_dtype(_torch_name, _pl_dtype)
+    _register_pl_dtype(_pl_dtype, _torch_name)
 
-# pl DataType -> ctypes type (used to wrap scalar args before the ctypes call)
-# Keyed by str(DataType) because nanobind DataType objects returned from IR introspection
-# are distinct Python objects that compare equal (==) but have different hash values,
-# making DataType-keyed dicts unreliable.
+
 _PL_DTYPE_TO_CTYPE: dict[str, type] = {
     str(DataType.FP32): ctypes.c_float,
     str(DataType.INT8): ctypes.c_int8,
@@ -341,11 +341,8 @@ def write_datatype_metadata(output_dir: str, metadata: dict | None) -> None:
 
 
 def _pl_dtype_to_torch(dtype: DataType):
-    """Return the torch.dtype that corresponds to a pl DataType, or None if unknown."""
-    for torch_dtype, pl_dtype in _TORCH_TO_PL_DTYPE.items():
-        if pl_dtype == dtype:
-            return torch_dtype
-    return None
+    """Return the torch.dtype an argument for this pl DataType must have, or None if unknown."""
+    return _PL_DTYPE_TO_TORCH.get(str(dtype))
 
 
 def _get_kernel_ir_function(prog):

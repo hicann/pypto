@@ -76,7 +76,7 @@ def test_dtypes():
         (ir.FP64, 64, False, False, True, "fp64", "double"),
         (ir.BF16, 16, False, False, True, "bfloat16", "bfloat16_t"),
         (ir.HF4, 4, False, False, True, "hf4", "unknown"),
-        (ir.HF8, 8, False, False, True, "hf8", "unknown"),
+        (ir.HF8, 8, False, False, True, "hf8", "hifloat8_t"),
     ]
     for dtype, *info in dtypes:
         assert info == [
