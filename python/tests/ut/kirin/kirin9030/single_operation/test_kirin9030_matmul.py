@@ -52,6 +52,7 @@ def test_matmul(
         bias_shape,
         a_trans,
         b_trans,
+        "Kirin9030",
     )
 
 

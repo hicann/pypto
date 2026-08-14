@@ -39,6 +39,8 @@ def get_matmul_kernel(
     a_trans=False,
     b_trans=False,
 ):
+    # X90 硬件要求 bias 以 32 位 fp32 格式传入（低 16 位有效，高 16 位无效）
+    bias_dtype = pypto.DT_FP32 if (soc_version == "KirinX90" and out_dtype == pypto.DT_FP16) else out_dtype
     if has_bias:
 
         @pypto.frontend.jit(
@@ -47,7 +49,7 @@ def get_matmul_kernel(
         def matmul_kernel(
             a: pypto.Tensor([...], in_dtype),
             b: pypto.Tensor([...], in_dtype),
-            bias: pypto.Tensor([...], out_dtype),
+            bias: pypto.Tensor([...], bias_dtype),
             c: pypto.Tensor([...], out_dtype),
         ):
             pypto.set_cube_tile_shapes(cube_tile_shape[0], cube_tile_shape[1], cube_tile_shape[2])
@@ -344,6 +346,7 @@ def run_matmul_test(
     bias_shape,
     a_trans,
     b_trans,
+    soc_version,
 ):
     """Run a single matmul kernel test with given kernels dict."""
     device = "cpu"
@@ -377,16 +380,21 @@ def run_matmul_test(
 
     if has_bias:
         if torch_in_dtype == torch.float16:
+            # X90 硬件要求 bias 以 32 位 fp32 格式传入（低 16 位有效，高 16 位无效）
             bias = torch.rand(bias_shape, dtype=torch_out_dtype, device=device)
+            gold_bias = bias
+            if soc_version == "KirinX90" and torch_out_dtype == torch.float16:
+                bias = bias.view(torch.int16).to(torch.int32).bitwise_and(0xFFFF).view(torch.float32)
         else:
             bias = torch.randint(-128, 127, bias_shape, dtype=torch.int32)
+            gold_bias = bias
 
         kernels[kernel_name](a, b, bias, c)
 
         if torch_out_dtype == torch.int32:
-            golden_c = a_new.to(torch.int32) @ b_new.to(torch.int32) + bias
+            golden_c = a_new.to(torch.int32) @ b_new.to(torch.int32) + gold_bias
         else:
-            golden_c = a_new @ b_new + bias
+            golden_c = a_new @ b_new + gold_bias
     else:
         kernels[kernel_name](a, b, c)
 
@@ -418,7 +426,7 @@ def create_test_matmul_module(soc_version):
         for p in TEST_CASES
     }
     return kernels, lambda: run_matmul_test(
-        kernels, None, None, None, None, None, None, None, False, None, False, False
+        kernels, None, None, None, None, None, None, None, False, None, False, False, soc_version
     )
 
 

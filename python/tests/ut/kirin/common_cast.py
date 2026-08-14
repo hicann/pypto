@@ -147,7 +147,7 @@ def dtype_str_to_numpy(dtype_str):
 
 def _resolve_cast_none_mode(in_dtype, out_np_dtype):
     if np.issubdtype(in_dtype, np.floating) and np.issubdtype(out_np_dtype, np.integer):
-        return "CAST_RINT"
+        return "CAST_TRUNC"
     if in_dtype == np.float32 and out_np_dtype == np.float16:
         return "CAST_RINT"
     return "CAST_NONE"
@@ -202,9 +202,9 @@ def torch_cast_with_mode(input_tensor, out_dtype, cast_mode, sat_mode):
 
 def generate_input(shape, dtype_str, device="cpu"):
     if dtype_str == "FP16":
-        return torch.rand(shape, dtype=torch.float16, device=device)
+        return torch.rand(shape, dtype=torch.float16, device=device) * 10 - 5
     elif dtype_str == "FP32":
-        return torch.rand(shape, dtype=torch.float32, device=device)
+        return torch.rand(shape, dtype=torch.float32, device=device) * 10 - 5
     elif dtype_str == "INT8":
         return torch.randint(-100, 100, shape, dtype=torch.int8, device=device)
     elif dtype_str == "UINT8":

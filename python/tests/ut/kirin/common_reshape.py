@@ -29,8 +29,9 @@ def make_reshape_kernel(soc_version, name, dtype, tile_shapes, output_shape, inp
     ):
         pypto.set_vec_tile_shapes(*tile_shapes)
         if inplace:
-            out_tensor_tmp = pypto.add(input_tensor, 1.0)
-            out_tensor[:] = pypto.reshape(out_tensor_tmp, output_shape, inplace=True)
+            input_tensor_tmp = pypto.add(input_tensor, 0)
+            pypto.reshape(input_tensor_tmp, output_shape, inplace=True)
+            out_tensor[:] = pypto.add(input_tensor_tmp, 0)
         else:
             out_tensor[:] = pypto.reshape(input_tensor, output_shape)
 
@@ -330,6 +331,17 @@ TEST_CASES = [
         id="025",
     ),
     pytest.param(
+        "reshape_kernel_inplace_fp32_006",
+        torch.float32,
+        pypto.DT_FP32,
+        (1, 8),
+        (40, 20),
+        (20, 40),
+        True,
+        marks=[],
+        id="026",
+    ),
+    pytest.param(
         "reshape_kernel_int8_001",
         torch.int8,
         pypto.DT_INT8,
@@ -338,7 +350,7 @@ TEST_CASES = [
         (1, 2, 1, 2),
         False,
         marks=[pytest.mark.skip()],
-        id="026",
+        id="027",
     ),
     pytest.param(
         "reshape_kernel_int8_002",
@@ -349,7 +361,7 @@ TEST_CASES = [
         (16,),
         False,
         marks=[pytest.mark.skip()],
-        id="027",
+        id="028",
     ),
     pytest.param(
         "reshape_kernel_int8_003",
@@ -360,7 +372,7 @@ TEST_CASES = [
         (2, 4),
         False,
         marks=[pytest.mark.skip()],
-        id="028",
+        id="029",
     ),
     pytest.param(
         "reshape_kernel_int8_004",
@@ -371,7 +383,7 @@ TEST_CASES = [
         (2, 12),
         False,
         marks=[pytest.mark.skip()],
-        id="029",
+        id="030",
     ),
     pytest.param(
         "reshape_kernel_int8_005",
@@ -382,7 +394,7 @@ TEST_CASES = [
         (2, 2, 3),
         False,
         marks=[pytest.mark.skip()],
-        id="030",
+        id="031",
     ),
     pytest.param(
         "reshape_kernel_int16_001",
@@ -393,7 +405,7 @@ TEST_CASES = [
         (1, 2, 1, 2),
         False,
         marks=[pytest.mark.skip()],
-        id="031",
+        id="032",
     ),
     pytest.param(
         "reshape_kernel_int16_002",
@@ -404,7 +416,7 @@ TEST_CASES = [
         (16,),
         False,
         marks=[pytest.mark.skip()],
-        id="032",
+        id="033",
     ),
     pytest.param(
         "reshape_kernel_int16_003",
@@ -415,7 +427,7 @@ TEST_CASES = [
         (2, 4),
         False,
         marks=[pytest.mark.skip()],
-        id="033",
+        id="034",
     ),
     pytest.param(
         "reshape_kernel_int16_004",
@@ -426,7 +438,7 @@ TEST_CASES = [
         (2, 12),
         False,
         marks=[pytest.mark.skip()],
-        id="034",
+        id="035",
     ),
     pytest.param(
         "reshape_kernel_int16_005",
@@ -437,7 +449,7 @@ TEST_CASES = [
         (2, 2, 3),
         False,
         marks=[pytest.mark.skip()],
-        id="035",
+        id="036",
     ),
     pytest.param(
         "reshape_kernel_int32_001",
@@ -448,7 +460,7 @@ TEST_CASES = [
         (1, 2, 1, 2),
         False,
         marks=[pytest.mark.skip()],
-        id="036",
+        id="037",
     ),
     pytest.param(
         "reshape_kernel_int32_002",
@@ -459,7 +471,7 @@ TEST_CASES = [
         (16,),
         False,
         marks=[pytest.mark.skip()],
-        id="037",
+        id="038",
     ),
     pytest.param(
         "reshape_kernel_int32_003",
@@ -470,7 +482,7 @@ TEST_CASES = [
         (2, 4),
         False,
         marks=[pytest.mark.skip()],
-        id="038",
+        id="039",
     ),
     pytest.param(
         "reshape_kernel_int32_004",
@@ -481,7 +493,7 @@ TEST_CASES = [
         (2, 12),
         False,
         marks=[pytest.mark.skip()],
-        id="039",
+        id="040",
     ),
     pytest.param(
         "reshape_kernel_int32_005",
@@ -492,7 +504,7 @@ TEST_CASES = [
         (2, 2, 3),
         False,
         marks=[pytest.mark.skip()],
-        id="040",
+        id="041",
     ),
 ]
 
