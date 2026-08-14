@@ -623,6 +623,198 @@
                 "func_id": -1
             },
             "index": 11
+        },
+        {
+            "case_index": 12,
+            "case_name": "BitwiseXor_scalar_int8",
+            "operation": "BitwiseXors",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int8",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int8",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "scalar": -3,
+                "scalar_type": "int8",
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 12
+        },
+        {
+            "case_index": 13,
+            "case_name": "BitwiseXor_scalar_uint8",
+            "operation": "BitwiseXors",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint8",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0,
+                        "max": 255
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint8",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "scalar": 240,
+                "scalar_type": "uint8",
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 13
+        },
+        {
+            "case_index": 14,
+            "case_name": "BitwiseXor_scalar_int32",
+            "operation": "BitwiseXors",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -1000,
+                        "max": 1000
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "scalar": -257,
+                "scalar_type": "int32",
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 14
+        },
+        {
+            "case_index": 15,
+            "case_name": "BitwiseXor_scalar_uint32",
+            "operation": "BitwiseXors",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0,
+                        "max": 65535
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "scalar": 65535,
+                "scalar_type": "uint32",
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 15
         }
     ]
 }

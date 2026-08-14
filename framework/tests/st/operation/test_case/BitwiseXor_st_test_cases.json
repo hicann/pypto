@@ -792,11 +792,12 @@
                         32
                     ],
                     "dtype": "int8",
+                    "format": "ND",
+                    "need_trans": false,
                     "data_range": {
                         "min": -10,
                         "max": 10
-                    },
-                    "format": "ND"
+                    }
                 },
                 {
                     "name": "input1",
@@ -805,11 +806,12 @@
                         32
                     ],
                     "dtype": "int8",
+                    "format": "ND",
+                    "need_trans": false,
                     "data_range": {
                         "min": -10,
                         "max": 10
-                    },
-                    "format": "ND"
+                    }
                 }
             ],
             "output_tensors": [
@@ -820,7 +822,8 @@
                         32
                     ],
                     "dtype": "int8",
-                    "format": "ND"
+                    "format": "ND",
+                    "need_trans": false
                 }
             ],
             "view_shape": [
@@ -832,6 +835,7 @@
                 16
             ],
             "params": {
+                "on_board": true,
                 "func_id": -1
             },
             "index": 12
@@ -848,11 +852,12 @@
                         32
                     ],
                     "dtype": "uint8",
+                    "format": "ND",
+                    "need_trans": false,
                     "data_range": {
                         "min": -10,
                         "max": 10
-                    },
-                    "format": "ND"
+                    }
                 },
                 {
                     "name": "input1",
@@ -861,11 +866,12 @@
                         32
                     ],
                     "dtype": "uint8",
+                    "format": "ND",
+                    "need_trans": false,
                     "data_range": {
                         "min": -10,
                         "max": 10
-                    },
-                    "format": "ND"
+                    }
                 }
             ],
             "output_tensors": [
@@ -876,7 +882,8 @@
                         32
                     ],
                     "dtype": "uint8",
-                    "format": "ND"
+                    "format": "ND",
+                    "need_trans": false
                 }
             ],
             "view_shape": [
@@ -888,6 +895,7 @@
                 16
             ],
             "params": {
+                "on_board": true,
                 "func_id": -1
             },
             "index": 13
@@ -904,11 +912,12 @@
                         32
                     ],
                     "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
                     "data_range": {
                         "min": -1000,
                         "max": 1000
-                    },
-                    "format": "ND"
+                    }
                 },
                 {
                     "name": "input1",
@@ -917,11 +926,12 @@
                         32
                     ],
                     "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
                     "data_range": {
                         "min": -1000,
                         "max": 1000
-                    },
-                    "format": "ND"
+                    }
                 }
             ],
             "output_tensors": [
@@ -932,7 +942,8 @@
                         32
                     ],
                     "dtype": "int32",
-                    "format": "ND"
+                    "format": "ND",
+                    "need_trans": false
                 }
             ],
             "view_shape": [
@@ -944,9 +955,70 @@
                 16
             ],
             "params": {
+                "on_board": true,
                 "func_id": -1
             },
             "index": 14
+        },
+        {
+            "case_index": 15,
+            "case_name": "BitwiseXor_test_4",
+            "operation": "BitwiseXor",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0,
+                        "max": 65535
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0,
+                        "max": 65535
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 15
         }
     ]
 }

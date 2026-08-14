@@ -531,10 +531,9 @@ Tensor BitwiseAnd(const Tensor& self, const Tensor& other)
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseAnd");
 
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEAND");
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEAND");
+    static const std::unordered_set<DataType> BITWISE_AND_TYPES = {DT_INT8,   DT_UINT8, DT_INT16,
+                                                                   DT_UINT16, DT_INT32, DT_UINT32};
+    CheckTensorDataType(self.GetStorage(), BITWISE_AND_TYPES, "BITWISEAND");
     RETURN_CALL(BinaryOperation<BinaryOpType::BITWISEAND>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
@@ -545,10 +544,9 @@ Tensor BitwiseOr(const Tensor& self, const Tensor& other)
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseOr");
 
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEOR");
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEOR");
+    static const std::unordered_set<DataType> BITWISE_OR_TYPES = {DT_INT8,   DT_UINT8, DT_INT16,
+                                                                  DT_UINT16, DT_INT32, DT_UINT32};
+    CheckTensorDataType(self.GetStorage(), BITWISE_OR_TYPES, "BITWISEOR");
     RETURN_CALL(BinaryOperation<BinaryOpType::BITWISEOR>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
@@ -559,10 +557,9 @@ Tensor BitwiseXor(const Tensor& self, const Tensor& other)
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseXor");
 
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEXOR");
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEXOR");
+    static const std::unordered_set<DataType> BITWISE_XOR_TYPES = {DT_INT8,   DT_UINT8, DT_INT16,
+                                                                   DT_UINT16, DT_INT32, DT_UINT32};
+    CheckTensorDataType(self.GetStorage(), BITWISE_XOR_TYPES, "BITWISEXOR");
     RETURN_CALL(BinaryOperation<BinaryOpType::BITWISEXOR>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
@@ -1083,10 +1080,9 @@ Tensor BitwiseAnd(const Tensor& self, const Element& other)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseAnd");
 
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEAND");
+    static const std::unordered_set<DataType> BITWISE_AND_TYPES = {DT_INT8,   DT_UINT8, DT_INT16,
+                                                                   DT_UINT16, DT_INT32, DT_UINT32};
+    CheckTensorDataType(self.GetStorage(), BITWISE_AND_TYPES, "BITWISEAND");
     RETURN_CALL(BinaryOperationScalar<BinaryOpType::BITWISEAND>, *Program::GetInstance().GetCurrentFunction(),
                 self.GetStorage(), other);
 }
@@ -1096,10 +1092,9 @@ Tensor BitwiseOr(const Tensor& self, const Element& other)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseOr");
 
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEOR");
+    static const std::unordered_set<DataType> BITWISE_OR_TYPES = {DT_INT8,   DT_UINT8, DT_INT16,
+                                                                  DT_UINT16, DT_INT32, DT_UINT32};
+    CheckTensorDataType(self.GetStorage(), BITWISE_OR_TYPES, "BITWISEOR");
     RETURN_CALL(BinaryOperationScalar<BinaryOpType::BITWISEOR>, *Program::GetInstance().GetCurrentFunction(),
                 self.GetStorage(), other);
 }
@@ -1109,10 +1104,9 @@ Tensor BitwiseXor(const Tensor& self, const Element& other)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseXor");
 
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEXOR");
+    static const std::unordered_set<DataType> BITWISE_XOR_TYPES = {DT_INT8,   DT_UINT8, DT_INT16,
+                                                                   DT_UINT16, DT_INT32, DT_UINT32};
+    CheckTensorDataType(self.GetStorage(), BITWISE_XOR_TYPES, "BITWISEXOR");
     RETURN_CALL(BinaryOperationScalar<BinaryOpType::BITWISEXOR>, *Program::GetInstance().GetCurrentFunction(),
                 self.GetStorage(), other);
 }

@@ -30,8 +30,8 @@ bitwise_or(input: Tensor, other: Union[Tensor, int]) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br>不支持空Tensor；Shape仅支持1-4维，支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other   | 输入      | 源操作数。<br>支持的类型为int以及Tensor类型。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br>不支持空Tensor；Shape仅支持1-4维，支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32。<br>不支持空Tensor；Shape仅支持1-4维，支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other   | 输入      | 源操作数。<br>支持的类型为int以及Tensor类型。<br>Tensor支持的数据类型为：DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32。<br>不支持空Tensor；Shape仅支持1-4维，支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
@@ -40,17 +40,7 @@ bitwise_or(input: Tensor, other: Union[Tensor, int]) -> Tensor
 ## 约束说明
 
 1. input和other都为Tensor时，数据类型应该相同。
-2. Tensor数据类型说明：
-   <!-- npu="950" id4 -->
-   - Ascend 950PR/Ascend 950DT：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32
-   <!-- end id4 -->
-   <!-- npu="A3" id5 -->
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8
-   <!-- end id5 -->
-   <!-- npu="910b" id6 -->
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8
-   <!-- end id6 -->
-3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 ## 调用示例
 

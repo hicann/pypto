@@ -285,10 +285,9 @@ Tensor BitwiseNot(const Tensor& self)
     if (self.GetDataType() == DT_BOOL) {
         return LogicalNot(self);
     }
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseNot");
+    static const std::unordered_set<DataType> BITWISE_NOT_TYPES = {DT_INT8,   DT_UINT8, DT_INT16,
+                                                                   DT_UINT16, DT_INT32, DT_UINT32};
+    CheckTensorDataType(self.GetStorage(), BITWISE_NOT_TYPES, "BitwiseNot");
     RETURN_CALL(UnaryOperation<UnaryOpType::BITWISENOT>, *Program::GetInstance().GetCurrentFunction(),
                 self.GetStorage());
 }
@@ -909,7 +908,8 @@ REGISTER_OPERATION_TILED_FUNC(OP_ISNAN, Opcode::OP_ISNAN, IsNanOperationTileFunc
 REGISTER_OPERATION_TILED_FUNC(OP_HUB, Opcode::OP_HUB, HubOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SINH, Opcode::OP_SINH,
                               (Fp32AlignedTmpUnaryOperationTileFunc<UnaryOpType::SINH, NUM_VALUE_4>));
-REGISTER_OPERATION_TILED_FUNC(OP_COSH, Opcode::OP_COSH, (Fp32AlignedTmpUnaryOperationTileFunc<UnaryOpType::COSH, 1>));
+REGISTER_OPERATION_TILED_FUNC(OP_COSH, Opcode::OP_COSH,
+                              (Fp32AlignedTmpUnaryOperationTileFunc<UnaryOpType::COSH, NUM_VALUE_3>));
 REGISTER_OPERATION_TILED_FUNC(OP_ATANH, Opcode::OP_ATANH, AtanhOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ERF, Opcode::OP_ERF, ErfOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_PACK, Opcode::OP_PACK, PackOperationTileFunc);

@@ -816,11 +816,12 @@
                         32
                     ],
                     "dtype": "int8",
+                    "format": "ND",
+                    "need_trans": false,
                     "data_range": {
                         "min": -10,
                         "max": 10
-                    },
-                    "format": "ND"
+                    }
                 }
             ],
             "output_tensors": [
@@ -831,7 +832,8 @@
                         32
                     ],
                     "dtype": "int8",
-                    "format": "ND"
+                    "format": "ND",
+                    "need_trans": false
                 }
             ],
             "view_shape": [
@@ -843,6 +845,7 @@
                 16
             ],
             "params": {
+                "on_board": true,
                 "func_id": -1
             },
             "index": 16
@@ -859,11 +862,12 @@
                         32
                     ],
                     "dtype": "uint8",
+                    "format": "ND",
+                    "need_trans": false,
                     "data_range": {
                         "min": -10,
                         "max": 10
-                    },
-                    "format": "ND"
+                    }
                 }
             ],
             "output_tensors": [
@@ -874,7 +878,8 @@
                         32
                     ],
                     "dtype": "uint8",
-                    "format": "ND"
+                    "format": "ND",
+                    "need_trans": false
                 }
             ],
             "view_shape": [
@@ -886,6 +891,7 @@
                 16
             ],
             "params": {
+                "on_board": true,
                 "func_id": -1
             },
             "index": 17
@@ -902,11 +908,12 @@
                         32
                     ],
                     "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
                     "data_range": {
                         "min": -1000,
                         "max": 1000
-                    },
-                    "format": "ND"
+                    }
                 }
             ],
             "output_tensors": [
@@ -917,7 +924,8 @@
                         32
                     ],
                     "dtype": "int32",
-                    "format": "ND"
+                    "format": "ND",
+                    "need_trans": false
                 }
             ],
             "view_shape": [
@@ -929,9 +937,56 @@
                 16
             ],
             "params": {
+                "on_board": true,
                 "func_id": -1
             },
             "index": 18
+        },
+        {
+            "case_index": 19,
+            "case_name": "BitwiseNot_test_20",
+            "operation": "BitwiseNot",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0,
+                        "max": 1000
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 19
         }
     ]
 }

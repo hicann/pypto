@@ -20,6 +20,7 @@
 #include "utils/tile_tensor.h"
 
 #include <cmath>
+#include <limits>
 
 TILEOP void SyncV()
 {
@@ -868,6 +869,86 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
     }
 }
 
+#ifdef __DAV_V220
+template <typename T0, typename T1, typename T2>
+TILEOP void TCoshCompute(T0 dstTile, T1 srcTile, T2 tmpTile)
+{
+    constexpr float SCALAR_ZERO_POINT_FIVE = 0.5f;
+    constexpr float SCALAR_NEGATIVE_ONE_POINT_FIVE = -1.5f;
+
+    // cosh(x) = 0.5 * (exp(x / 2) + exp(-3 * x / 2)) * exp(x / 2)
+    pto::TABS(tmpTile, srcTile);
+    SyncV();
+    pto::TMULS(dstTile, tmpTile, SCALAR_NEGATIVE_ONE_POINT_FIVE);
+    SyncV();
+    pto::TMULS(tmpTile, tmpTile, SCALAR_ZERO_POINT_FIVE);
+    SyncV();
+    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(tmpTile, tmpTile);
+    SyncV();
+    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(dstTile, dstTile);
+    SyncV();
+    pto::TADD(dstTile, dstTile, tmpTile);
+    SyncV();
+    pto::TMULS(dstTile, dstTile, SCALAR_ZERO_POINT_FIVE);
+    SyncV();
+    pto::TMUL(dstTile, dstTile, tmpTile);
+    SyncV();
+}
+#else
+template <typename T0, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6>
+TILEOP void TCoshCompute(T0 dstTile, T1 srcTile, T2 tmp0Tile, T3 tmp1Tile, T4 tmp2Tile, T5 tmp0IntTile, T6 tmp2MaskTile)
+{
+    constexpr float kLog2e = 1.442695041f;
+    constexpr float kNegLn2Hi = -0.6931471825f;
+    constexpr float kLn2Lo = 1.9046542e-9f;
+    constexpr float kExpMagic = 12583037.0f;
+    constexpr int32_t kFp32MantissaBits = 23;
+    constexpr float kNClamp = 126.0f;
+    constexpr float kHalfInv8 = 0.125f;
+    constexpr float kTwo = 2.0f;
+    constexpr float kOvfThreshold = 90.0f;
+    constexpr float kInf = std::numeric_limits<float>::infinity();
+
+    // ax = abs(x), temporarily stored in dstTile.
+    pto::TABS(dstTile, srcTile);
+    // n = trunc(ax * log2(e))
+    pto::TMULS(tmp0Tile, dstTile, kLog2e);
+    pto::TCVT(tmp0Tile, tmp0Tile, pto::RoundMode::CAST_TRUNC);
+    // n = min(n, 126)
+    pto::TMINS(tmp0Tile, tmp0Tile, kNClamp);
+    // r = ax
+    pto::TADDS(tmp1Tile, dstTile, 0.0f);
+    // r += n * (-ln2_hi)
+    pto::TMULS(tmp2Tile, tmp0Tile, 0.0f);
+    pto::TADDS(tmp2Tile, tmp2Tile, kNegLn2Hi);
+    pto::TMULADDDST(tmp1Tile, tmp0Tile, tmp2Tile);
+    // r += n * (+ln2_lo)
+    pto::TMULS(tmp2Tile, tmp2Tile, 0.0f);
+    pto::TADDS(tmp2Tile, tmp2Tile, kLn2Lo);
+    pto::TMULADDDST(tmp1Tile, tmp0Tile, tmp2Tile);
+    // p2 = 2^(n - 2)
+    pto::TADDS(tmp0Tile, tmp0Tile, kExpMagic);
+    pto::TSHLS(tmp0IntTile, tmp0IntTile, kFp32MantissaBits);
+    // er = exp(r) * p2 = exp(ax) / 4
+    pto::TEXP(tmp1Tile, tmp1Tile);
+    pto::TMUL(tmp1Tile, tmp1Tile, tmp0Tile);
+    // Generate the overflow mask before overwriting ax in dstTile.
+    // NaN >= 90 is false, so the naturally computed NaN is preserved.
+    pto::TCMPS(tmp2MaskTile, dstTile, kOvfThreshold, pto::CmpMode::GE);
+    // dst = 0.125 / er
+    pto::TRECIP(dstTile, tmp1Tile);
+    pto::TMULS(dstTile, dstTile, kHalfInv8);
+    // tmp0 = 2 * er
+    pto::TMULS(tmp0Tile, tmp1Tile, kTwo);
+    // dst = 2 * er + 0.125 / er
+    pto::TADD(dstTile, tmp0Tile, dstTile);
+    pto::TADDS(tmp0Tile, tmp0Tile, kInf);
+    // Select +inf on overflow; otherwise preserve the regular result.
+    // er in tmp1Tile is dead and can be used as TSEL scratch.
+    pto::TSEL(dstTile, tmp2MaskTile, tmp0Tile, dstTile, tmp1Tile);
+}
+#endif
+
 #define OP_TILE_OP_COSH TCosh
 template <typename T0, typename T1, typename T2>
 TILEOP void TCosh(T0 dst, T1 src, T2 tmp)
@@ -879,45 +960,62 @@ TILEOP void TCosh(T0 dst, T1 src, T2 tmp)
     auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    constexpr float SCALAR_ZERO_POINT_FIVE = 0.5f;
-    constexpr float SCALAR_NEGATIVE_ONE_POINT_FIVE = -1.5f;
-
     constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
+    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
+        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
 
     using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
                                      -1>;
+
     DataTileDefine dstTile(dstShape3, dstShape4);
     DataTileDefine srcTile(dstShape3, dstShape4);
+
+#ifdef __DAV_V220
     DataTileDefine tmpTile(dstShape3, dstShape4);
+#else
+
+    using IntTileDefine = pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+
+    using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * sizeof(float), pto::BLayout::RowMajor,
+                                     -1, -1>;
+
+    DataTileDefine tmp0Tile(dstShape3, dstShape4);
+    DataTileDefine tmp1Tile(dstShape3, dstShape4);
+    DataTileDefine tmp2Tile(dstShape3, dstShape4);
+    IntTileDefine tmp0IntTile(dstShape3, dstShape4);
+    MaskTileDefine tmp2MaskTile(dstShape3, dstShape4);
+#endif
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
             for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto srcOffset = GenTileOffset(src, tileOffsets);
-                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + srcOffset * dstTypeSize));
-                pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * dstTypeSize));
-                pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr() + srcOffset * dstTypeSize));
+                auto dstOffset = GenTileOffset(dst, tileOffsets);
 
-                // cosh(x) = 1/2 * (e^{x/2} + e^{-3x/2}) * e^{x/2}
-                pto::TABS(tmpTile, srcTile);
-                SyncV();
-                pto::TMULS(dstTile, tmpTile, SCALAR_NEGATIVE_ONE_POINT_FIVE);
-                SyncV();
-                pto::TMULS(tmpTile, tmpTile, SCALAR_ZERO_POINT_FIVE);
-                SyncV();
-                pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(tmpTile, tmpTile);
-                SyncV();
-                pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(dstTile, dstTile);
-                SyncV();
-                pto::TADD(dstTile, dstTile, tmpTile);
-                SyncV();
-                pto::TMULS(dstTile, dstTile, SCALAR_ZERO_POINT_FIVE);
-                SyncV();
-                pto::TMUL(dstTile, dstTile, tmpTile);
-                SyncV();
+                pto::TASSIGN(dstTile, static_cast<uint64_t>(dst.GetAddr() + dstOffset * dstTypeSize));
+                pto::TASSIGN(srcTile, static_cast<uint64_t>(src.GetAddr() + srcOffset * dstTypeSize));
+
+#ifdef __DAV_V220
+                pto::TASSIGN(tmpTile, static_cast<uint64_t>(tmp.GetAddr() + dstOffset * dstTypeSize));
+
+                TCoshCompute(dstTile, srcTile, tmpTile);
+#else
+                auto tmp0Addr = static_cast<uint64_t>(tmp.GetAddr() + dstOffset * dstTypeSize);
+                auto tmp1Addr = static_cast<uint64_t>(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize);
+                auto tmp2Addr = static_cast<uint64_t>(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize);
+
+                pto::TASSIGN(tmp0Tile, tmp0Addr);
+                pto::TASSIGN(tmp1Tile, tmp1Addr);
+                pto::TASSIGN(tmp2Tile, tmp2Addr);
+
+                pto::TASSIGN(tmp0IntTile, tmp0Addr);
+                pto::TASSIGN(tmp2MaskTile, tmp2Addr);
+
+                TCoshCompute(dstTile, srcTile, tmp0Tile, tmp1Tile, tmp2Tile, tmp0IntTile, tmp2MaskTile);
+#endif
             }
         }
     }
@@ -1765,19 +1863,18 @@ TILEOP void TASinh(T0 dst, T1 src, T2 tmp)
 
                 pto::TABS(tmp0Tile, srcTile); // |x|
                 SyncV();
-                pto::TDIVS<pto::DivAlgorithm::HIGH_PRECISION>(tmp1Tile, CONST_ONE, tmp0Tile); // 1/|x|
+                pto::TDIVS(tmp1Tile, CONST_ONE, tmp0Tile); // 1/|x|
                 SyncV();
                 pto::TMUL(tmp2Tile, tmp1Tile, tmp1Tile); // 1/(|x|)^2
                 SyncV();
 
                 pto::TADDS(tmp3Tile, tmp2Tile, CONST_ONE); // 1 + 1/(|x|)^2
                 SyncV();
-                pto::TSQRT<pto::SqrtAlgorithm::HIGH_PRECISION>(tmp3Tile, tmp3Tile); // sqrt(1 + 1/(|x|)^2)
+                pto::TSQRT(tmp3Tile, tmp3Tile); // sqrt(1 + 1/(|x|)^2)
                 SyncV();
                 pto::TADD(tmp1Tile, tmp3Tile, tmp1Tile); // sqrt(1 + 1/(|x|)^2) + 1/|x|
                 SyncV();
-                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp0Tile,
-                                                             tmp1Tile); // |x| / (sqrt(1 + 1/(|x|)^2) + 1/|x|)
+                pto::TDIV(tmp1Tile, tmp0Tile, tmp1Tile); // |x| / (sqrt(1 + 1/(|x|)^2) + 1/|x|)
                 SyncV();
                 pto::TADD(tmp1Tile, tmp0Tile, tmp1Tile); // r = |x| + |x| / (sqrt(1 + 1/(|x|)^2) + 1/|x|)
                 SyncV();
@@ -1791,15 +1888,14 @@ TILEOP void TASinh(T0 dst, T1 src, T2 tmp)
                 pto::TMINS(dstTile, dstTile, CONST_COMPARE_VALUE_MAX);
                 SyncV();
 
-                pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp3Tile, tmp3Tile); // log(r + 1)
+                pto::TLOG(tmp3Tile, tmp3Tile); // log(r + 1)
                 SyncV();
                 pto::TMUL(tmp1Tile, tmp1Tile, tmp3Tile); // r * log(r + 1)
                 SyncV();
-                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp1Tile,
-                                                             dstTile); // r * log(r + 1) / clamp(r, s_min, s_max)
+                pto::TDIV(tmp1Tile, tmp1Tile, dstTile); // r * log(r + 1) / clamp(r, s_min, s_max)
                 SyncV();
 
-                pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp3Tile, tmp0Tile); // log(|x|)
+                pto::TLOG(tmp3Tile, tmp0Tile); // log(|x|)
                 SyncV();
                 pto::TADDS(tmp3Tile, tmp3Tile, CONST_LOG_TWO_VALUE); // log(|x|) + log2
                 SyncV();
@@ -1876,7 +1972,7 @@ TILEOP void TACosh(T0 dst, T1 src, T2 tmp)
                 SyncV();
                 pto::TADD(tmp1Tile, tmp1Tile, tmp2Tile); // t^2 + 2t
                 SyncV();
-                pto::TSQRT<pto::SqrtAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp1Tile); // sqrt(t^2 + 2t)
+                pto::TSQRT(tmp1Tile, tmp1Tile); // sqrt(t^2 + 2t)
                 SyncV();
                 pto::TADD(tmp1Tile, tmp1Tile, tmp0Tile); // t + sqrt(t^2 + 2t) = r
                 SyncV();
@@ -1890,15 +1986,14 @@ TILEOP void TACosh(T0 dst, T1 src, T2 tmp)
                 pto::TMINS(tmp0Tile, tmp0Tile, CONST_COMPARE_VALUE_MAX);
                 SyncV();
 
-                pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(dstTile, tmp2Tile); // log(r + 1)
+                pto::TLOG(dstTile, tmp2Tile); // log(r + 1)
                 SyncV();
                 pto::TMUL(dstTile, dstTile, tmp1Tile); // r * log(r + 1)
                 SyncV();
-                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(dstTile, dstTile,
-                                                             tmp0Tile); // r * log(r + 1) / clamp(r, s_min, s_max)
+                pto::TDIV(dstTile, dstTile, tmp0Tile); // r * log(r + 1) / clamp(r, s_min, s_max)
                 SyncV();
 
-                pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp0Tile, srcTile); // log(x)
+                pto::TLOG(tmp0Tile, srcTile); // log(x)
                 SyncV();
                 pto::TADDS(tmp0Tile, tmp0Tile, CONST_LOG_TWO_VALUE); // log(x) + log(2)
                 SyncV();

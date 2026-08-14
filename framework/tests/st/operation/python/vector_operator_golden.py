@@ -1317,12 +1317,13 @@ def gen_bitwise_not_op_golden(case_name: str, output: Path, case_index: int = No
     def golden_func(inputs: list, _config: dict):
         assert len(inputs) > 0, "inputs must contain at least one element"
         x = torch.tensor(inputs[0])
-        if x.dtype == torch.uint16:
-            x.numpy()
-            y = np.bitwise_not(x)
+        if x.dtype in [torch.uint16, torch.uint32]:
+            x_np = x.numpy()
+            y = np.bitwise_not(x_np)
+            return [y]
         else:
             y = torch.bitwise_not(x)
-        return [y.numpy()]
+            return [y.numpy()]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("BitwiseNot", golden_func, output, case_index)
