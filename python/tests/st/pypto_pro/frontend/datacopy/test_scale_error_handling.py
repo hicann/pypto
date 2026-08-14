@@ -22,7 +22,7 @@ ValueError/TypeError 会被 parse_target_program 包装为 ParserSyntaxError，
 """
 
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics._exceptions import ParserSyntaxError, UnsupportedFeatureError
+from pypto_pro.language.parser.diagnostics._exceptions import ParserSyntaxError, ParserTypeError
 import pytest
 import torch
 
@@ -272,7 +272,7 @@ def test_err_scale_list():
 @pytest.mark.soc("950")
 def test_err_scale_dict():
     """scale 不能是字典"""
-    # 注意：dict 字面量在 AST 解析阶段就抛 UnsupportedFeatureError（早于
+    # 注意：dict 字面量在 AST 解析阶段就抛 ParserTypeError早于
     # _resolve_scale_param 的类型检查），故此处断言 UnsupportedFeatureError。
 
     @pl.jit()
@@ -287,7 +287,7 @@ def test_err_scale_dict():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(UnsupportedFeatureError, match="Unsupported expression type"):
+    with pytest.raises(ParserTypeError, match="Unsupported closure variable type: dict"):
         kernel(q, k, out)
 
 
