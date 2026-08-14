@@ -144,6 +144,22 @@ class ParserTypeError(ParserError):
     error_code = ErrorCode.INVALID_TYPE
 
 
+class FinalRejectionError(ParserTypeError):
+    """Raised when a rejection must not be retried as a Python expression.
+
+    ``ExpressionParserMixin.parse_expression`` recovers from a failed IR build by
+    re-evaluating the expression in Python, so a position that deliberately
+    rejects an otherwise-valid value has to say the rejection is final. Raising a
+    plain ``ParserTypeError`` there would let the retry succeed and the rejection
+    disappear; raising this instead propagates it unchanged.
+
+    Subclasses ``ParserTypeError`` so callers that catch the general type still
+    catch it — only the parser's retry treats it specially.
+    """
+
+    error_code = ErrorCode.INVALID_TYPE
+
+
 class UndefinedVariableError(ParserError):
     """Raised when referencing an undefined variable."""
 

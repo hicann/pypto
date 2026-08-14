@@ -16,6 +16,7 @@ __all__ = [
     "ParserError",
     "ParserSyntaxError",
     "ParserTypeError",
+    "FinalRejectionError",
     "UndefinedVariableError",
     "SSAViolationError",
     "UnsupportedFeatureError",
@@ -29,6 +30,7 @@ __all__ = [
 
 from ._error_codes import ErrorCode, get_error_code
 from ._exceptions import (
+    FinalRejectionError,
     InvalidOperationError,
     ParserError,
     ParserSyntaxError,

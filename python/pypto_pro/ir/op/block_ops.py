@@ -1296,9 +1296,21 @@ def _parse_make_tile(self, call: ast.Call) -> Expr:
 
 
 def _resolve_order_kwarg(self, call: ast.Call, kwargs: dict) -> None:
-    order = self.resolve_const_int_list_kwarg(call, "order")
-    if order is not None:
-        kwargs["order"] = order
+    """Resolve the ``order`` axis list, which selects tensor axes while parsing."""
+    node = self._kwarg_node(call, "order")
+    if node is None:
+        return
+    kwargs["order"] = list(
+        self.resolve_const_value(
+            node,
+            key="order",
+            expects="integer list",
+            hint="order selects tensor axes at compile time; pass a constant list "
+            "(e.g. order=[1, 3]) or a variable bound to one, not a runtime value.",
+            check=lambda value: isinstance(value, tuple)
+            and all(isinstance(axis, int) and not isinstance(axis, bool) for axis in value),
+        )
+    )
 
 
 def _static_shape_ints(shape, what: str) -> list[int]:

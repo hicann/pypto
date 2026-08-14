@@ -163,7 +163,7 @@ def test_unsupported_closure_type_raises():
     """Unsupported closure variable type raises ParserTypeError."""
     bad_value = "not_a_number"
 
-    with pytest.raises(ParserTypeError, match="Unsupported closure variable type"):
+    with pytest.raises(ParserTypeError, match="Unsupported closure variable type: str"):
 
         @pl.function
         def func(x: pl.Tensor[[64], pl.DT_FP32]) -> pl.Tensor[[64], pl.DT_FP32]:

@@ -23,8 +23,10 @@ from pypto_pro.ir.op._op_registry import _OP_REGISTRY
 from pypto_pro.ir.op.block_ops import block_ir_op
 
 from ._control_flow_parser import _is_bare_return
+from ._expr_evaluator import ExprEvaluator
 from ._span_tracker import SpanTracker
 from .diagnostics import (
+    FinalRejectionError,
     ParserSyntaxError,
     ParserTypeError,
     UndefinedVariableError,
@@ -126,6 +128,11 @@ class _InlineReturnLowerer(ast.NodeTransformer):
         )
         ast.fix_missing_locations(wrapper)
         return [return_val_init, wrapper]
+
+
+def _is_int(value) -> bool:
+    """Whether *value* is a plain integer (bool is not, despite subclassing int)."""
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 # Builtin function names that map to pl.* ops (syntax sugar).
@@ -828,86 +835,62 @@ class CallParserMixin:
 
         ``key`` is retained for call-site compatibility (some callers pass it).
         """
-        # ConstBool/ConstInt/ConstFloat already expose a Python bool/int/float via
-        # ``.value``; the tuple type covers all three (ConstBool is not a subclass
-        # of ConstInt, so list it explicitly).
-        _const_types = (ir.ConstBool, ir.ConstInt, ir.ConstFloat)
-
         parsed = self.parse_expression(value)
-        if isinstance(parsed, _const_types):
-            # An enum kwarg written directly (pl.RoundMode.X) or via an enum variable
-            # resolves to an enum object above (not a Const*), so reaching here means
-            # a plain int/bool/float was passed — reject it for enum kwargs.
-            if key in self._ENUM_KWARGS:
-                raise ParserTypeError(
-                    f"'{key}' expects an enum value, not {parsed.value!r}",
-                    span=self.span_tracker.get_span(value),
-                    hint=f"Use the enum, e.g. {key}=pl.RoundMode.X / dtype=pl.DT_FP16, "
-                    "or an enum-valued variable",
-                )
-            return parsed.value
-        # An all-constant MakeTuple (order=[0, 1], mutex_ids=[VA], flags=[True, ...])
-        # unwraps to a Python list whose consumers expect one; a MakeTuple with any
-        # non-constant element (e.g. an IR Var) stays a MakeTuple.
-        if isinstance(parsed, ir.MakeTuple) and all(isinstance(e, _const_types) for e in parsed.elements):
-            return [e.value for e in parsed.elements]
-        return parsed
+        # An enum kwarg written directly (pl.RoundMode.X) or via an enum variable
+        # parses to the enum object, not a Const*, so a Const* here means a plain
+        # int/bool/float was passed — reject it for enum kwargs.
+        if key in self._ENUM_KWARGS and isinstance(parsed, (ir.ConstBool, ir.ConstInt, ir.ConstFloat)):
+            # Final: the int is a perfectly good Python value, so a retry would
+            # accept it and lose the rejection.
+            raise FinalRejectionError(
+                f"'{key}' expects an enum value, not {parsed.value!r}",
+                span=self.span_tracker.get_span(value),
+                hint=f"Use the enum, e.g. {key}=pl.RoundMode.X / dtype=pl.DT_FP16, "
+                "or an enum-valued variable",
+            )
+        found, python_value = ExprEvaluator.ir_to_python_value(parsed)
+        if not found:
+            return parsed
+        if isinstance(python_value, tuple) and any(isinstance(e, tuple) for e in python_value):
+            return parsed
+        return python_value
 
-    def resolve_const_int_list_kwarg(self, call: ast.Call, key: str) -> "list[int] | None":
-        """Resolve a compile-time constant int-list kwarg (e.g. ``tile_dims``) to a list of ints.
+    @staticmethod
+    def _kwarg_node(call: ast.Call, key: str) -> "ast.expr | None":
+        """Value node of keyword *key*, or None when the call does not pass it."""
+        return next((kw.value for kw in call.keywords if kw.arg == key), None)
 
-        Validates the parsed expression as a constant tuple of integers.
+    def resolve_const_value(
+        self, node: ast.expr, *, expects: str, hint: str, check=None, key: str | None = None
+    ) -> Any:
+        """Python value of an expression that has to be known while parsing.
+
+        The single compile-time accessor: parse the expression, take its
+        parse-time value, and report one consistent diagnostic when it has none
+        or fails the caller's *check*. Callers add only what is specific to them
+        — what the position expects and how to fix it.
         """
-        for kw in call.keywords:
-            if kw.arg != key:
-                continue
-            value = kw.value
-            parsed = self.parse_expression(value)
-            if isinstance(parsed, ir.MakeTuple):
-                values = []
-                for element in parsed.elements:
-                    if not isinstance(element, ir.ConstInt) or element.type.dtype == ir.DataType.BOOL:
-                        break
-                    values.append(element.value)
-                else:
-                    return values
-            raise ParserTypeError(
-                f"'{key}' must be a compile-time constant integer list, got '{ast.unparse(value)}'",
-                span=self.span_tracker.get_span(value),
-                hint=f"{key} selects tensor axes at compile time; pass a constant list "
-                f"(e.g. {key}=[1, 3]) or a variable bound to one, not a runtime value.",
+        found, value = ExprEvaluator.ir_to_python_value(self.parse_expression(node))
+        if not found or (check is not None and not check(value)):
+            subject = f"'{key}'" if key else f"'{ast.unparse(node)}'"
+            detail = f", got '{ast.unparse(node)}'" if key else ""
+            # Final for the same reason: *check* rejects values Python evaluation
+            # would happily produce.
+            raise FinalRejectionError(
+                f"{subject} must be a compile-time {expects}{detail}",
+                span=self.span_tracker.get_span(node),
+                hint=hint,
             )
-        return None
-
-    def resolve_const_bool_kwarg(self, call: ast.Call, key: str) -> bool | None:
-        """Resolve a compile-time constant bool kwarg through ``const_env``."""
-        for kw in call.keywords:
-            if kw.arg != key:
-                continue
-            value = kw.value
-            parsed = self.parse_expression(value)
-            if isinstance(parsed, ir.ConstBool):
-                return parsed.value
-            if isinstance(parsed, ir.ConstInt) and parsed.type.dtype == ir.DataType.BOOL:
-                return bool(parsed.value)
-            raise ParserTypeError(
-                f"'{key}' must be a compile-time constant bool, got '{ast.unparse(value)}'",
-                span=self.span_tracker.get_span(value),
-                hint=f"{key} is a compile-time attribute; pass a constant bool "
-                f"(e.g. {key}=True) or a variable bound to one, not a runtime value.",
-            )
-        return None
+        return value
 
     def resolve_static_int(self, elt: ast.expr) -> int:
         """Resolve a compile-time integer through the normal expression parser."""
-        value = self.parse_expression(elt)
-        if isinstance(value, ir.ConstInt) and value.type.dtype != ir.DataType.BOOL:
-            return value.value
-        raise ParserTypeError(
-            f"'{ast.unparse(elt)}' is not a compile-time integer constant",
-            span=self.span_tracker.get_span(elt),
+        return self.resolve_const_value(
+            elt,
+            expects="integer",
             hint="A constant list kwarg (e.g. TileType shape/valid_shape) must be compile-time "
             "constants; use pl.set_validshape() for a runtime valid shape.",
+            check=_is_int,
         )
 
     def _default_op_func(self, op_name: str, call: ast.Call) -> ir.Expr:

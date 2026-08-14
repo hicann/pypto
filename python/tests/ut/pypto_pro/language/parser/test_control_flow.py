@@ -379,3 +379,88 @@ def test_while_with_multiple_updates():
     if isinstance(while_stmt.body, ir.SeqStmts):
         # Should have at least 2 statements (x = x + 1, y = y * 2)
         assert len(while_stmt.body.stmts) >= 2
+
+
+closure_allowed = [5, 6]
+
+
+def test_in_operator_with_kernel_local_list():
+    """``x in <list>`` accepts a list bound inside the function, not just a literal."""
+
+    @pl.function
+    def func(n: pl.DT_INT64) -> pl.DT_INT64:
+        allowed = [0, 1]
+        total: pl.DT_INT64 = 0
+        for i in pl.range(n):
+            if i in allowed:
+                total = total + 1
+        return total
+
+    assert isinstance(func, ir.Function)
+
+
+def test_in_operator_kernel_local_list_shadows_closure():
+    """A function-local list wins over a same-named closure list, as in Python."""
+
+    @pl.function
+    def func(n: pl.DT_INT64) -> pl.DT_INT64:
+        closure_allowed = [0, 1]  # noqa: F841 - shadows the module-level list
+        total: pl.DT_INT64 = 0
+        for i in pl.range(n):
+            if i in closure_allowed:
+                total = total + 1
+        return total
+
+    text = str(func)
+    # The local values (0, 1) drive the eq-chain; the closure values (5, 6) do not.
+    assert "== 5" not in text and "== 6" not in text, text
+
+
+def test_in_operator_with_closure_list_still_works():
+    @pl.function
+    def func(n: pl.DT_INT64) -> pl.DT_INT64:
+        total: pl.DT_INT64 = 0
+        for i in pl.range(n):
+            if i in closure_allowed:
+                total = total + 1
+        return total
+
+    assert isinstance(func, ir.Function)
+
+
+_FP32_INT32 = (pl.DT_FP32, pl.DT_INT32)
+
+
+def _addr_for(dtype):
+    """Plain Python helper the parser inlines when it appears in a kwarg."""
+    return 0x8000 if dtype in _FP32_INT32 else 0x4000
+
+
+def _addr_for_not_in(dtype):
+    return 0x1000 if dtype not in _FP32_INT32 else 0x2000
+
+
+def _tile_group_addr_ir(dtype, helper) -> str:
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[128, 128], pl.DT_FP16]):
+        tt = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        dt = dtype
+        g = pl.make_tile_group(type=tt, addrs=helper(dt), mutex_ids=[0, 1])
+        pl.load(g.next(), a, [0, 0])
+
+    return str(k.parse_target_program(ir.SectionKind.Vector)[0])
+
+
+def test_enum_in_tuple_folds_to_selected_branch():
+    """``dtype in (pl.DT_FP32, ...)`` has no runtime form; it folds at parse time.
+
+    An enum operand cannot be lowered to an IR constant, so the membership test
+    must be decided while parsing and the enclosing ternary collapsed.
+    """
+    assert "ir.MemRef(ir.MemorySpace.Mat, 32768" in _tile_group_addr_ir(pl.DT_FP32, _addr_for)
+    assert "ir.MemRef(ir.MemorySpace.Mat, 16384" in _tile_group_addr_ir(pl.DT_FP16, _addr_for)
+
+
+def test_enum_not_in_tuple_folds_to_selected_branch():
+    assert "ir.MemRef(ir.MemorySpace.Mat, 4096" in _tile_group_addr_ir(pl.DT_FP16, _addr_for_not_in)
+    assert "ir.MemRef(ir.MemorySpace.Mat, 8192" in _tile_group_addr_ir(pl.DT_FP32, _addr_for_not_in)

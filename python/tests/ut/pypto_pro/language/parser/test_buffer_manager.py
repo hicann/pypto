@@ -94,6 +94,56 @@ def test_discrete_addrs_list():
     assert "65536" in ir_str
 
 
+def test_addrs_from_kernel_local_constant():
+    """addrs=/mutex_ids= accept kernel-local constants, not just literals."""
+
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[128, 128], pl.DT_FP16]):
+        tt = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        base_addr = 0x10000
+        ids = [0, 1]
+        db = pl.make_tile_group(type=tt, addrs=base_addr + 0x8000, mutex_ids=ids)
+        cur0 = db.next()
+        pl.load(cur0, a, [0, 0])
+        cur1 = db.next()
+        pl.load(cur1, a, [0, 0])
+
+    ir_str = _ir_to_str(_parse_kernel(k))
+    assert "98304" in ir_str  # 0x18000
+    assert "131072" in ir_str  # 0x18000 + 128*128*2
+
+
+def test_discrete_addrs_list_from_kernel_local_constant():
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[128, 128], pl.DT_FP16]):
+        tt = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        base_addr = 0x10000
+        addrs = [base_addr, base_addr * 2]
+        db = pl.make_tile_group(type=tt, addrs=addrs, mutex_ids=[0, 1])
+        cur0 = db.next()
+        pl.load(cur0, a, [0, 0])
+        cur1 = db.next()
+        pl.load(cur1, a, [0, 0])
+
+    ir_str = _ir_to_str(_parse_kernel(k))
+    assert "65536" in ir_str
+    assert "131072" in ir_str
+
+
+def test_runtime_addr_rejected_with_compile_time_hint():
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
+        tt = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        addr = a.shape[0] * 2
+        db = pl.make_tile_group(type=tt, addrs=addr, mutex_ids=[0, 1])
+        cur0 = db.next()
+        pl.load(cur0, a, [0, 0])
+
+    with pytest.raises(ParserTypeError) as excinfo:
+        _parse_kernel(k)
+    assert "runtime value" in str(excinfo.value)
+
+
 def test_auto_mutex_single_tile():
     @pl.kernel(auto_mutex=True)
     def k(x: pl.Tensor[[64], pl.DT_FP16]):

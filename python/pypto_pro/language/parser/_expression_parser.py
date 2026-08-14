@@ -20,7 +20,9 @@ from pypto_pro.ir import op as ir_op
 from pypto_pro.ir._operators import make_binary as _make_binary
 from pypto_pro.ir._utils import _normalize_expr
 
+from ._expr_evaluator import ExprEvaluator
 from .diagnostics import (
+    FinalRejectionError,
     ParserSyntaxError,
     ParserTypeError,
     UndefinedVariableError,
@@ -61,25 +63,33 @@ def _scalar_branches_reconcilable(then_type: Any, else_type: Any) -> bool:
 class ExpressionParserMixin:
     """Mixin containing expression, attribute, and subscript parsing."""
 
+    def local_binding(self, name: str) -> "tuple[str, Any] | None":
+        """How *name* is bound inside the kernel, or None if it is not bound there.
+
+        The single definition of kernel-local name precedence, shared by name
+        parsing and by compile-time evaluation so the two cannot disagree:
+
+        * ``("const", <IR constant>)`` — folded in ``const_env`` (``addr = 0x10000``);
+        * ``("parse_time", <object>)`` — bound to a value that has no IR form and
+          therefore only exists while parsing (``dt = pl.DT_FP16``);
+        * ``("runtime", <IR expression>)`` — a value that only exists at run time.
+
+        A name not bound in the kernel returns None and falls back to the
+        enclosing Python scope, matching Python's own scoping.
+        """
+        const = self.const_env.get(name)
+        if const is not None:
+            return ("const", const)
+        scoped = self.scope_manager.lookup_var_bounded(name)
+        if scoped is None:
+            return None
+        return ("runtime", scoped) if isinstance(scoped, ir.Expr) else ("parse_time", scoped)
+
     @staticmethod
     def _const_scalar_value(expr: ir.Expr) -> bool | int | float | None:
         """Return a scalar constant's value, including the effect of constant casts."""
-        if isinstance(expr, (ir.ConstBool, ir.ConstInt, ir.ConstFloat)):
-            return expr.value
-        if not isinstance(expr, ir.Cast):
-            return None
-
-        value = ExpressionParserMixin._const_scalar_value(expr.operand)
-        if value is None:
-            return None
-        dtype = expr.type.dtype
-        if dtype == DataType.BOOL:
-            return bool(value)
-        if dtype.is_int():
-            return int(value)
-        if dtype.is_float():
-            return float(value)
-        raise TypeError(f"Unsupported scalar constant dtype: {dtype}")
+        found, value = ExprEvaluator.ir_to_python_value(expr)
+        return value if found and isinstance(value, (bool, int, float)) else None
 
     @staticmethod
     def _const_truth(expr: ir.Expr) -> bool | None:
@@ -146,23 +156,25 @@ class ExpressionParserMixin:
 
     @staticmethod
     def _try_const_fold_in(left, elements, is_not_in, span):
-        """If left and all elements are compile-time constants, eval directly."""
-        if not isinstance(left, (ir.ConstInt, ir.ConstFloat, ir.ConstBool)):
+        """Decide ``x in (...)`` when every operand is known at parse time.
+
+        The single place membership is evaluated. Handles IR constants and
+        parse-time-only values alike, so both callers share it: ``_desugar_in_literal``
+        uses it as an optimization before building an eq-chain.
+        Returns None when any operand is a runtime value, leaving the caller to
+        lower the comparison instead.
+        """
+        known, left_value = ExprEvaluator.ir_to_python_value(left)
+        if not known:
             return None
-        const_values = []
+        values = []
         for elt in elements:
-            if isinstance(elt, ir.ConstInt):
-                const_values.append(elt.value)
-            elif isinstance(elt, ir.ConstFloat):
-                const_values.append(elt.value)
-            elif isinstance(elt, ir.ConstBool):
-                const_values.append(elt.value)
-            else:
+            known, value = ExprEvaluator.ir_to_python_value(elt)
+            if not known:
                 return None
-        result = left.value in const_values
-        if is_not_in:
-            result = not result
-        return ir.ConstBool(result, span)
+            values.append(value)
+        found = any(left_value == value for value in values)
+        return ir.ConstBool(found != is_not_in, span)
 
     def parse_evaluation_statement(self, stmt: ast.Expr) -> None:
         """Parse evaluation statement (EvalStmt).
@@ -206,6 +218,43 @@ class ExpressionParserMixin:
         if expr in self._parsed_expr_cache:
             return self._parsed_expr_cache[expr]
         self._current_node = expr
+        try:
+            result = self._parse_expression_node(expr)
+        except FinalRejectionError:
+            # A position that deliberately rejected this value; retrying it in
+            # Python would accept it and lose the rejection. See
+            # ``FinalRejectionError``.
+            raise
+        except (ParserTypeError, UndefinedVariableError, UnsupportedFeatureError):
+            # Some compile-time expressions have no IR form to build at all: a
+            # plain Python helper call, a dict lookup, a test against a DataType.
+            # Evaluate those as Python and keep the constant; kernel-local names
+            # resolve because the evaluator reads const_env as well as the closure.
+            #
+            # A value Python cannot produce re-raises the original IR error, and
+            # one ``python_value_to_ir`` cannot lower reports its own type error,
+            # so an unusable value never silently survives the retry.
+            #
+            # ast.Slice is not an expression position (it only appears inside a
+            # rejected subscript); evaluating it would produce a Python slice
+            # object and bury the real "Unsupported expression type" error.
+            if isinstance(expr, ast.Slice):
+                raise
+            success, value = self.expr_evaluator.try_eval_expr(expr)
+            if not success:
+                raise
+            if _is_enum_value(value):
+                result = value
+            else:
+                result = self.expr_evaluator.python_value_to_ir(value, self.span_tracker.get_span(expr))
+
+        if nested:
+            result = self._materialize_nested_expr(result, self.span_tracker.get_span(expr))
+        self._parsed_expr_cache[expr] = result
+        return result
+
+    def _parse_expression_node(self, expr: ast.expr) -> Any:
+        """Dispatch an AST expression node to its parser."""
         if isinstance(expr, ast.Name):
             result = self.parse_name(expr)
         elif isinstance(expr, ast.Constant):
@@ -236,10 +285,6 @@ class ExpressionParserMixin:
                 span=self.span_tracker.get_span(expr),
                 hint="Use supported expressions like variables, constants, operations, or function calls",
             )
-
-        if nested:
-            result = self._materialize_nested_expr(result, self.span_tracker.get_span(expr))
-        self._parsed_expr_cache[expr] = result
         return result
 
     def parse_name(self, name: ast.Name) -> ir.Expr | Any:
@@ -259,24 +304,9 @@ class ExpressionParserMixin:
         # the DSL scope.  ``lookup_var_bounded`` behaves like the normal lookup
         # outside an inline scope, but stops at the inline boundary so a helper
         # cannot silently capture a caller IR variable.
-        const = self.const_env.get(var_name)
-        if const is not None:
-            return const
-
-        var = self.scope_manager.lookup_var_bounded(var_name)
-        if var is not None:
-            return var
-
-        # Fall back to closure variables.
-        success, value = self.expr_evaluator.try_eval_expr(name)
-        if success:
-            # An enum constant captured from the closure (e.g. a kernel-factory
-            # ``dtype`` param used as ``dtype=dtype``) is returned as the enum
-            # object, matching how ``pl.DT_FP16`` / ``pl.RoundMode.X`` written
-            # directly resolve.
-            if _is_enum_value(value):
-                return value
-            return self.expr_evaluator.python_value_to_ir(value, self.span_tracker.get_span(name))
+        binding = self.local_binding(var_name)
+        if binding is not None:
+            return binding[1]
 
         raise UndefinedVariableError(
             f"Undefined variable '{var_name}'",
@@ -1018,24 +1048,19 @@ class ExpressionParserMixin:
         }
         return self._make_scalar_constant(unary_ops[op_name](), operation.type.dtype, span)
 
-    def _desugar_in_literal(self, left, elements, is_not_in, span, elements_are_ir=False):
+    def _desugar_in_literal(self, left, elements, is_not_in, span):
         """Desugar x in (a,b,c) -> Or-chain of eq; x not in -> And-chain of ne."""
         folded = self._try_const_fold_in(left, elements, is_not_in, span)
         if folded is not None:
             return folded
-        if len(elements) == 0:
+        if not elements:
             return ir.ConstBool(is_not_in, span)
         cmp_name = "ne" if is_not_in else "eq"
         fold_fn = ir.And if is_not_in else ir.Or
-        bool_dtype = DataType.BOOL
 
-        def get_element(elt):
-            return elt if elements_are_ir else self.parse_expression(elt)
-
-        result = _make_binary(cmp_name, left, get_element(elements[0]), span)
+        result = _make_binary(cmp_name, left, elements[0], span)
         for elt in elements[1:]:
-            cmp_expr = _make_binary(cmp_name, left, get_element(elt), span)
-            result = fold_fn(result, cmp_expr, bool_dtype, span)
+            result = fold_fn(result, _make_binary(cmp_name, left, elt, span), DataType.BOOL, span)
         return result
 
     def _desugar_in_range(self, left, range_call, is_not_in, span):
@@ -1073,16 +1098,13 @@ class ExpressionParserMixin:
         left = self.parse_expression(compare.left)
         container = compare.comparators[0]
 
-        if isinstance(container, (ast.Tuple, ast.List)):
-            return self._desugar_in_literal(left, container.elts, is_not_in, span)
-
         if isinstance(container, ast.Call) and self._is_pl_range_call(container):
             return self._desugar_in_range(left, container, is_not_in, span)
 
-        success, value = self.expr_evaluator.try_eval_expr(container)
-        if success and isinstance(value, (list, tuple)):
-            ir_elements = [self.expr_evaluator.python_value_to_ir(v, span) for v in value]
-            return self._desugar_in_literal(left, ir_elements, is_not_in, span, elements_are_ir=True)
+        # A literal, a kernel-local list and a closure list all parse to a MakeTuple.
+        parsed = self.parse_expression(container)
+        if isinstance(parsed, ir.MakeTuple):
+            return self._desugar_in_literal(left, list(parsed.elements), is_not_in, span)
 
         raise ParserSyntaxError(
             f"'{'not in' if is_not_in else 'in'}' only supports tuple/list literals, "

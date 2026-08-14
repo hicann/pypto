@@ -12,6 +12,7 @@
 
 from pypto_pro import ir
 import pypto_pro.language as pl
+from pypto_pro.language.parser.diagnostics import ParserTypeError
 import pytest
 
 
@@ -296,3 +297,76 @@ def test_tile_factories_accept_propagated_constant_kwargs():
         valid_shape = tile_assignment.value.args[1]
         assert isinstance(valid_shape, ir.MakeTuple)
         assert [element.value for element in valid_shape.elements] == [32, 64]
+
+
+# ---------------------------------------------------------------------------
+# Compile-time-only kwargs reject runtime values
+# ---------------------------------------------------------------------------
+# TileType shape/valid_shape and the load/store `order` axes are consumed while
+# parsing, so a runtime value in them cannot be lowered at all: a scalar var
+# would leak its name into the generated C++ tile declaration, which is hoisted
+# above the point where that var is defined. They are resolved through the
+# strict compile-time accessor rather than the permissive kwarg resolver, which
+# passes runtime IR through by design.
+#
+# The tests below pin the *diagnostic*, not just the rejection. Routing these
+# positions through the permissive resolver still rejects all four cases, but
+# the error degrades to a raw TypeError / pybind cast failure from inside the
+# builder, with no span and no hint.
+
+
+def test_tile_type_shape_rejects_runtime_value():
+    """A runtime tensor dimension is not a usable TileType shape."""
+    with pytest.raises(ParserTypeError, match="must be a compile-time integer"):
+
+        @pl.function
+        def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
+            m = x.shape[0]
+            tile_type = pl.TileType(  # noqa: F841
+                shape=[m, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat
+            )
+
+
+def test_tile_type_valid_shape_rejects_runtime_value():
+    """Same for valid_shape — pl.set_validshape() is the runtime form."""
+    with pytest.raises(ParserTypeError, match="must be a compile-time integer"):
+
+        @pl.function
+        def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
+            m = x.shape[0]
+            tile_type = pl.TileType(  # noqa: F841
+                shape=[128, 128],
+                valid_shape=[m, 128],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Mat,
+            )
+
+
+def _parse_order_kernel(kernel_def):
+    return kernel_def.parse_target_program(ir.SectionKind.Vector)[0]
+
+
+def test_order_kwarg_rejects_runtime_axis():
+    """`order` selects tensor axes at parse time, so an axis may not be runtime."""
+
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16], axis: pl.DT_INT32):
+        tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
+        pl.load(group.next(), a, [0, 0, 0], order=[axis, 2])
+
+    with pytest.raises(ParserTypeError, match="'order' must be a compile-time integer list"):
+        _parse_order_kernel(k)
+
+
+def test_order_kwarg_rejects_float_axes():
+    """A constant `order` still has to be integral."""
+
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16]):
+        tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
+        pl.load(group.next(), a, [0, 0, 0], order=[1.5, 2])
+
+    with pytest.raises(ParserTypeError, match="'order' must be a compile-time integer list"):
+        _parse_order_kernel(k)

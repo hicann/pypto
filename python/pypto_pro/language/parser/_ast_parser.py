@@ -121,9 +121,14 @@ class ASTParser(
             **(tilingkey_consts or {}),
             **(datatype_consts or {}),
         }
+        # local_binding lets every compile-time position (make_tile_group addrs/mutex_ids,
+        # shapes, axes, ``x in <list>``, ...) read kernel-local names such as
+        # ``addr = 0x10000``, which live in the parser rather than in the closure.
+        # Bound as a method: const_env is created further down and swapped during inlining.
         self.expr_evaluator = ExprEvaluator(
             closure_vars=merged_closure,
             span_tracker=self.span_tracker,
+            local_binding=self.local_binding,
         )
         self.type_resolver = TypeResolver(
             expr_evaluator=self.expr_evaluator,

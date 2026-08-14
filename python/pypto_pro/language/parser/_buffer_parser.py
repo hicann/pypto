@@ -35,7 +35,13 @@ from pypto_pro.ir.op._op_registry import op_impl
 from pypto_pro.ir.op.block_ops import TileType as _TileType
 from pypto_pro.ir.op.block_ops import make_tile as _ir_make_tile
 
+from ._call_parser import _is_int
 from .diagnostics import ParserSyntaxError, ParserTypeError
+
+
+def _is_int_sequence(value) -> bool:
+    """Whether *value* is a non-empty tuple of plain integers."""
+    return isinstance(value, tuple) and bool(value) and all(_is_int(e) for e in value)
 
 
 class BufferParserMixin:
@@ -101,8 +107,8 @@ class BufferParserMixin:
     def is_tile_group(self, expr) -> bool:
         return "tiles" in self.named_fields(expr)
 
-    # --- factory --------------------------------------------------------------
 
+    # --- factory --------------------------------------------------------------
     @op_impl("make_tile_group")
     def _parse_make_tile_group(self, call: ast.Call) -> ir.Expr:
         span = self.span_tracker.get_span(call)
@@ -150,7 +156,14 @@ class BufferParserMixin:
         slot_size = self._tile_type_slot_size(tile_type)
         # addrs: a single base address -> contiguous tiles (base + i*slot_size);
         # a list -> one explicit address per tile (non-contiguous).
-        addrs = self.expr_evaluator.eval_expr(kw["addrs"].value)
+        addrs = self.resolve_const_value(
+            kw["addrs"].value,
+            key="addrs",
+            expects="integer, or list of integers",
+            check=lambda value: _is_int(value) or _is_int_sequence(value),
+            hint="addrs is fixed while parsing; pass a literal, or a variable bound to "
+            "literals/constants — not a runtime value such as a tensor shape or loop index",
+        )
         if isinstance(addrs, (list, tuple)):
             tile_addrs = list(addrs)
             if len(tile_addrs) != depth:

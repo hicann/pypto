@@ -649,6 +649,66 @@ def test_mixed_enum_int_branches_follow_the_selected_branch():
             return result
 
 
+# ---------------------------------------------------------------------------
+# Legal: an enum reached through an expression with no IR form
+# ---------------------------------------------------------------------------
+_DTYPE_TABLE = [pl.DT_FP16, pl.DT_FP32]
+
+
+def _pick_dtype(wide):
+    """Plain Python helper selecting a dtype; its ternary has no IR form."""
+    return pl.DT_FP32 if wide else pl.DT_FP16
+
+
+@pytest.mark.soc("950")
+def test_dtype_kwarg_from_closure_enum_list():
+    """Indexing a closure list of enums yields the enum, not an IR value.
+
+    A list of DataType has no IR form, so the index cannot be lowered; it is
+    evaluated at parse time and the enum is used as if written literally.
+    """
+
+    @pl.function
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=_DTYPE_TABLE[1])
+        return result
+
+    assert isinstance(func, ir.Function)
+    assert "ir.FP32" in str(func)
+
+
+@pytest.mark.soc("950")
+def test_dtype_kwarg_from_helper_returning_enum():
+    """A Python helper may return the enum for an enum kwarg."""
+
+    @pl.function
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=_pick_dtype(True))
+        return result
+
+    assert isinstance(func, ir.Function)
+    assert "ir.FP32" in str(func)
+
+
+@pytest.mark.soc("950")
+def test_helper_returning_int_still_rejected_for_enum_kwarg():
+    """Accepting enums must not let a plain int through the enum guard.
+
+    The kwarg check runs inside the IR path; evaluating the helper in Python
+    yields an int, which is not an enum, so the rejection still stands.
+    """
+
+    def _pick_int(_wide):
+        return 1
+
+    with pytest.raises(ParserTypeError, match="expects an enum value"):
+
+        @pl.function
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+            result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=_pick_int(True))
+            return result
+
+
 if __name__ == "__main__":
     _tests = [
         test_dtype_kwarg_enum_literal,
@@ -690,6 +750,9 @@ if __name__ == "__main__":
         test_enum_ternary_unselected_branch_not_parsed,
         test_int_via_ternary_still_rejected_by_enum_kwarg_guard,
         test_mixed_enum_int_branches_follow_the_selected_branch,
+        test_dtype_kwarg_from_closure_enum_list,
+        test_dtype_kwarg_from_helper_returning_enum,
+        test_helper_returning_int_still_rejected_for_enum_kwarg,
     ]
     for _t in _tests:
         _t()
