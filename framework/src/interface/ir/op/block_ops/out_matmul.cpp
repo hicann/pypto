@@ -75,6 +75,7 @@ REGISTER_OP("block.matmul_bias")
     .add_argument("lhs", "Left matrix tile [M,K] (TileType)")
     .add_argument("rhs", "Right matrix tile [K,N] (TileType)")
     .add_argument("bias", "Bias tile [1,N] (TileType)")
+    .set_attr<int>("phase")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.matmul_bias", 4);

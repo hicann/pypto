@@ -769,6 +769,30 @@ static std::string MakeBlockOutMatmulAccCodegenCCE(const ir::CallPtr& op, codege
     return "";
 }
 
+// block.matmul_bias  - args = [dst, left, right, bias]
+// Emits: TMATMUL_BIAS[<AccPhase::Phase>](dst, left, right, bias);  (when phase present)
+//     or TMATMUL_BIAS(dst, left, right, bias);                      (no phase)
+static std::string MakeBlockOutMatmulBiasCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(op->args_.size() == 4) << "block.matmul_bias: expected 4 args (dst, left, right, bias), got "
+                                 << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string left = codegen.GetExprAsCode(op->args_[1]);
+    std::string right = codegen.GetExprAsCode(op->args_[2]);
+    std::string bias = codegen.GetExprAsCode(op->args_[3]);
+
+    // Get phase (unit-flag) — AccPhase template parameter for TMATMUL_BIAS.
+    std::string phase_template = GetAccPhaseCCE(op);
+
+    if (!phase_template.empty()) {
+        codegen.Emit("TMATMUL_BIAS<" + phase_template + ">(" + dst + ", " + left + ", " + right + ", " + bias + ");");
+    } else {
+        codegen.Emit("TMATMUL_BIAS(" + dst + ", " + left + ", " + right + ", " + bias + ");");
+    }
+    return "";
+}
+
 // block.cast  - args = [dst, src] + mode kwarg
 static std::string MakeBlockOutCastCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
@@ -1974,7 +1998,7 @@ REGISTER_BACKEND_OP(BackendCCE, "block.matmul_acc")
 REGISTER_BACKEND_OP(BackendCCE, "block.matmul_bias")
     .set_pipe(ir::PipeType::M)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutQuaternaryCodegenCCE("TMATMUL_BIAS", op, codegen);
+        return MakeBlockOutMatmulBiasCodegenCCE(op, codegen);
     });
 
 REGISTER_BACKEND_OP(BackendCCE, "block.gemv")

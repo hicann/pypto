@@ -77,7 +77,7 @@ def get_move_pipe(
     if src_memory == MemorySpace.Acc and target_memory == MemorySpace.Vec:
         return PipeType.FIX
     if src_memory == MemorySpace.Mat:
-        if target_memory in (MemorySpace.Left, MemorySpace.Right):
+        if target_memory in (MemorySpace.Left, MemorySpace.Right, MemorySpace.Bias):
             return PipeType.MTE1
         if target_memory == MemorySpace.Vec:
             return PipeType.V

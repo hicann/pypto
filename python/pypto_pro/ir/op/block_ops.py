@@ -521,11 +521,12 @@ def _ir_move(
         (MemorySpace.Acc, MemorySpace.Vec),
         (MemorySpace.Vec, MemorySpace.Vec),
         (MemorySpace.Mat, MemorySpace.Scaling),
+        (MemorySpace.Mat, MemorySpace.Bias),
     }
     if _src_mem is not None and _dst_mem is not None and (_src_mem, _dst_mem) not in _supported_move_paths:
         raise ValueError(
             f"move: unsupported data path src({_src_mem.name})->dst({_dst_mem.name}), "
-            f"supported paths: Mat->Left, Mat->Right, Acc->Vec, Vec->Vec"
+            f"supported paths: Mat->Left, Mat->Right, Mat->Bias, Acc->Vec, Vec->Vec"
         )
 
     _check_move_shape_compat(out, src, offset, acc_to_vec_mode, actual_span)
@@ -1615,11 +1616,27 @@ def _ir_matmul_acc(
     return _ir_core.create_op_call(block_ir_op("matmul_acc"), [dst, acc, lhs, rhs], kwargs, actual_span)
 
 
+def _ir_matmul_bias(
+    dst: Expr, lhs: Expr, rhs: Expr, bias: Expr, *, span: Span | None = None, phase: AccPhase | None = None
+) -> Expr:
+    actual_span = span or _span()
+    _check_tile_memory_space("matmul_bias", "dst_tile", dst, MemorySpace.Acc, "L0C (Acc)")
+    _check_tile_memory_space("matmul_bias", "lhs_tile", lhs, MemorySpace.Left, "L0A (Left)")
+    _check_tile_memory_space("matmul_bias", "rhs_tile", rhs, MemorySpace.Right, "L0B (Right)")
+    _check_tile_memory_space("matmul_bias", "bias_tile", bias, MemorySpace.Bias, "L0B (Bias)")
+    kwargs: dict[str, Any] = {}
+    if phase is not None:
+        kwargs["phase"] = phase
+    return _ir_core.create_op_call(block_ir_op("matmul_bias"), [dst, lhs, rhs, bias], kwargs, actual_span)
+
+
 @op_impl("matmul")
 def _parse_matmul(self, call: ast.Call) -> Expr:
     span = self.span_tracker.get_span(call)
     args = [self.parse_expression(arg) for arg in call.args]
     kwargs = self.parse_op_kwargs(call)
+    if len(args) == 4:
+        return _ir_matmul_bias(*args, **kwargs, span=span)
     return _ir_matmul(*args, **kwargs, span=span)
 
 

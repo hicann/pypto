@@ -287,8 +287,7 @@ TEST_P(QuaternaryOpTest, EmitsCorrectCode)
     EXPECT_CONTAINS(code, p.cce_op + "(dst, a, b, c, d);");
 }
 INSTANTIATE_TEST_SUITE_P(BlockOutQuaternaryOps, QuaternaryOpTest,
-                         ::testing::Values(SimpleOpParam{"block.sel", "TSEL"}, SimpleOpParam{"block.sels", "TSELS"},
-                                           SimpleOpParam{"block.matmul_bias", "TMATMUL_BIAS"}));
+                         ::testing::Values(SimpleOpParam{"block.sel", "TSEL"}, SimpleOpParam{"block.sels", "TSELS"}));
 
 TEST(BackendCCEBlockOutOps, ColMax)
 {
@@ -435,6 +434,26 @@ TEST(BackendCCEBlockOutOps, MatmulAcc)
         "block.matmul_acc", {MakeVar("dst", tile), MakeVar("acc", tile), MakeVar("left", tile), MakeVar("right", tile)},
         {{"phase", 2}});
     EXPECT_CONTAINS(RunCodegen("block.matmul_acc", callPhase), "TMATMUL_ACC<AccPhase::Final>(dst, acc, left, right);");
+}
+
+TEST(BackendCCEBlockOutOps, MatmulBias)
+{
+    auto tile = MakeTileType();
+    auto call = MakeCall("block.matmul_bias",
+                         {MakeVar("dst", tile), MakeVar("left", tile), MakeVar("right", tile), MakeVar("bias", tile)});
+    EXPECT_CONTAINS(RunCodegen("block.matmul_bias", call), "TMATMUL_BIAS(dst, left, right, bias);");
+
+    auto callPartial = MakeCallWithKwargs(
+        "block.matmul_bias",
+        {MakeVar("dst", tile), MakeVar("left", tile), MakeVar("right", tile), MakeVar("bias", tile)}, {{"phase", 1}});
+    EXPECT_CONTAINS(RunCodegen("block.matmul_bias", callPartial),
+                    "TMATMUL_BIAS<AccPhase::Partial>(dst, left, right, bias);");
+
+    auto callFinal = MakeCallWithKwargs(
+        "block.matmul_bias",
+        {MakeVar("dst", tile), MakeVar("left", tile), MakeVar("right", tile), MakeVar("bias", tile)}, {{"phase", 2}});
+    EXPECT_CONTAINS(RunCodegen("block.matmul_bias", callFinal),
+                    "TMATMUL_BIAS<AccPhase::Final>(dst, left, right, bias);");
 }
 
 TEST(BackendCCEBlockOutOps, Cast)

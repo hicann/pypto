@@ -598,13 +598,19 @@ def partadd(out: Tile, src0: Tile, src1: Tile) -> None:
 
 
 @_api_decl
-def matmul(dst_tile: Tile, lhs_tile: Tile, rhs_tile: Tile, *, phase: Optional[AccPhase] = None) -> None:
+def matmul(
+    dst_tile: Tile, lhs_tile: Tile, rhs_tile: Tile, bias_tile: Tile = None, *, phase: Optional[AccPhase] = None
+) -> None:
     """Matrix multiply: ``dst = lhs @ rhs`` (L0A × L0B → L0C).
+
+    When ``bias_tile`` is provided, performs fused matmul + bias:
+    ``dst = lhs @ rhs + bias`` (bias row-broadcast [1,N], added in fixpipe).
 
     Args:
         dst_tile: Accumulator Tile (L0C, output)
         lhs_tile: Left matrix Tile (L0A)
         rhs_tile: Right matrix Tile (L0B)
+        bias_tile: Optional — Bias Tile (L0B Bias area, shape [1, N], row-broadcast)
         phase: Optional — ``pl.AccPhase.Partial`` or ``pl.AccPhase.Final``
     """
 
