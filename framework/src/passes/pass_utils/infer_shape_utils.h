@@ -33,11 +33,8 @@ public:
      *                  dependent operations; otherwise, topological ordering and inference may be incorrect.
      * @return Status Operation result, SUCCESS indicates success, FAILED indicates failure.
      *
-     * @note When targetOps is non-empty, only the operations in targetOps are included in the operation set,
-     *       and only edges between operations within targetOps are added during dependency graph construction.
-     *       The caller must ensure that targetOps contains all required dependent operations, or that the
-     *       DynValidShape of those operations is already correctly set, to avoid inference errors caused by
-     *       dependency truncation.
+     * @note When targetOps is non-empty, the target operations are filtered, deduplicated, and ordered according
+     *       to the function's LIGHTWEIGHT topological order. Only the specified operations are inferred.
      */
     static Status InferShape(Function& function, const std::vector<Operation*>& targetOps = {});
 };

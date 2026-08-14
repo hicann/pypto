@@ -145,16 +145,7 @@ static Status HubSpecialProcess(Function& function)
 
     std::vector<std::set<int>> subgraphInGraph(function.GetTotalSubGraphCount());
     std::vector<std::set<int>> subgraphOutGraph(function.GetTotalSubGraphCount());
-    for (auto& op : function.Operations()) {
-        int currSubgraphID = op.GetSubgraphID();
-        for (auto nextOp : op.ConsumerOps()) {
-            int nextSubgraphID = nextOp->GetSubgraphID();
-            if (currSubgraphID != nextSubgraphID) {
-                subgraphInGraph[nextSubgraphID].insert(currSubgraphID);
-                subgraphOutGraph[currSubgraphID].insert(nextSubgraphID);
-            }
-        }
-    }
+    ColorGraph::BuildSubgraphDependencyGraph(function, subgraphInGraph, subgraphOutGraph);
     std::vector<int> parent;
     DSUinit(parent, function.GetTotalSubGraphCount());
     for (int subgraphId = 0; subgraphId < static_cast<int>(function.GetTotalSubGraphCount()); subgraphId++) {

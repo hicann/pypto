@@ -43,24 +43,7 @@ void AxisCombineMarker::Init(Function& function)
     tensorStatus_.clear();
     parent_.clear();
     rank_.clear();
-    size_t i = 0U;
-    std::map<int, size_t> opMagic2Idx;
-    opList_ = function.Operations().DuplicatedOpList();
-    for (const auto op : opList_) {
-        opMagic2Idx[op->GetOpMagic()] = i;
-        i++;
-    }
-    opInGraph_.assign(opList_.size(), {});
-    opOutGraph_.assign(opList_.size(), {});
-    for (size_t opIdx = 0; opIdx < opList_.size(); opIdx++) {
-        const auto& op = opList_[opIdx];
-        for (const auto producer : op->ProducerOpsOrdered()) {
-            opInGraph_[opMagic2Idx[op->GetOpMagic()]].insert(opMagic2Idx[producer->GetOpMagic()]);
-        }
-        for (const auto consumer : op->ConsumerOpsOrdered()) {
-            opOutGraph_[opMagic2Idx[op->GetOpMagic()]].insert(opMagic2Idx[consumer->GetOpMagic()]);
-        }
-    }
+    opList_ = function.Operations(true, SortOperationsMode::LIGHTWEIGHT).DuplicatedOpList();
 }
 
 void UpdateCopyinStatus(Operation* op, std::unordered_map<LogicalTensorPtr, AxisReorderStatus>& tensorStatus)
@@ -412,25 +395,8 @@ void AxisCombineMarker::ResolveGroupStatus()
 
 void AxisCombineMarker::ForwardVisit()
 {
-    std::queue<size_t> procOpQueue;
-    std::vector<size_t> inDegree(opList_.size(), 0);
-    for (size_t j = 0; j < opInGraph_.size(); ++j) {
-        if (opInGraph_[j].empty()) {
-            procOpQueue.push(j);
-            UpdateOpACEnableForward(j);
-        }
-        inDegree[j] = opInGraph_[j].size();
-    }
-    while (!procOpQueue.empty()) {
-        auto opIdx = procOpQueue.front();
-        procOpQueue.pop();
-        for (auto outIdx : opOutGraph_[opIdx]) {
-            inDegree[outIdx]--;
-            if (inDegree[outIdx] == 0) {
-                procOpQueue.push(outIdx);
-                UpdateOpACEnableForward(outIdx);
-            }
-        }
+    for (size_t opIdx = 0; opIdx < opList_.size(); ++opIdx) {
+        UpdateOpACEnableForward(opIdx);
     }
 }
 } // namespace tile_fwk

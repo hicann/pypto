@@ -13,12 +13,11 @@
  * \brief
  */
 
-#include <queue>
 #include <vector>
 #include "infer_param_index.h"
-#include "interface/operation/op_infer_shape_impl.h"
 #include "interface/operation/opcode.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/topo_program.h"
 
 #define MODULE_NAME "InferParamIndex"
 
@@ -185,29 +184,15 @@ Status InferParamIndex::ResetDynValidShape(Function& function)
 
 Status InferParamIndex::InferShape(Function& function)
 {
-    size_t i = 0U;
-    std::map<int, size_t> opMagic2Idx;
-    std::vector<Operation*> opList = function.Operations(false).DuplicatedOpList();
+    auto opList = function.Operations(true, SortOperationsMode::LIGHTWEIGHT).DuplicatedOpList();
     if (opList.empty()) {
         APASS_LOG_ERROR_F(Elements::Tensor,
                           "There is no operation in function %s. Please check the operation list of the input graph",
                           function.GetRawName().c_str());
         return FAILED;
     }
-    for (auto op : opList) {
-        opMagic2Idx[op->GetOpMagic()] = i;
-        i++;
-    }
-    std::vector<std::vector<size_t>> opInGraph(opList.size());
-    std::vector<std::vector<size_t>> opOutGraph(opList.size());
-    for (auto op : opList) {
-        for (auto producer : op->ProducerOps()) {
-            opInGraph[opMagic2Idx[op->GetOpMagic()]].push_back(opMagic2Idx[producer->GetOpMagic()]);
-            opOutGraph[opMagic2Idx[producer->GetOpMagic()]].push_back(opMagic2Idx[op->GetOpMagic()]);
-        }
-    }
-    bool isParamIndex = true;
-    TopoProgramUtils::TopoProgram(opList, opInGraph, opOutGraph, isParamIndex);
+
+    TopoProgramUtils::TopoProgram(opList, true);
     return SUCCESS;
 }
 

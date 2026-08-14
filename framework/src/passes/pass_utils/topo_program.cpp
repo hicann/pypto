@@ -15,6 +15,8 @@
 
 #include "topo_program.h"
 
+#include "interface/operation/op_infer_shape_impl.h"
+
 namespace npu {
 namespace tile_fwk {
 bool NeedInferShape(const Operation* op)
@@ -23,48 +25,26 @@ bool NeedInferShape(const Operation* op)
         return false;
     }
     if (op->GetOpcode() != Opcode::OP_ASSEMBLE) {
-        bool anyEmpty = false;
-        for (auto output : op->GetOOperands()) {
+        for (const auto& output : op->GetOOperands()) {
             if (output->GetDynValidShape().empty()) {
-                anyEmpty = true;
-                break;
+                return true;
             }
         }
-        if (!anyEmpty) {
-            return false;
-        }
+        return false;
     }
     return true;
 }
 
-void TopoProgramUtils::TopoProgram(const std::vector<Operation*>& opList,
-                                   const std::vector<std::vector<size_t>>& opInGraph,
-                                   const std::vector<std::vector<size_t>>& opOutGraph, bool isParamIndex)
+void TopoProgramUtils::TopoProgram(const std::vector<Operation*>& opList, bool isParamIndex)
 {
-    std::queue<size_t> procOpQueue;
-    std::vector<size_t> inDegree(opList.size(), 0);
-    for (size_t j = 0; j < opInGraph.size(); ++j) {
-        if (opInGraph[j].empty()) {
-            procOpQueue.push(j);
-        }
-        inDegree[j] = opInGraph[j].size();
-    }
-    while (!procOpQueue.empty()) {
-        auto opIdx = procOpQueue.front();
-        procOpQueue.pop();
-        for (auto outIdx : opOutGraph[opIdx]) {
-            inDegree[outIdx]--;
-            if (inDegree[outIdx] == 0) {
-                procOpQueue.push(outIdx);
-            }
-        }
+    for (auto* op : opList) {
         if (isParamIndex) {
-            if (NeedInferShape(opList[opIdx])) {
-                InferShapeRegistry::GetInstance().CallInferShapeFunc(opList[opIdx]);
+            if (NeedInferShape(op)) {
+                InferShapeRegistry::GetInstance().CallInferShapeFunc(op);
             }
             continue;
         }
-        InferShapeRegistry::GetInstance().CallInferShapeFunc(opList[opIdx]);
+        InferShapeRegistry::GetInstance().CallInferShapeFunc(op);
     }
 }
 } // namespace tile_fwk

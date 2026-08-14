@@ -28,6 +28,8 @@ public:
     ColorGraph() {}
     ~ColorGraph() = default;
 
+    static void BuildSubgraphDependencyGraph(Function& function, std::vector<std::set<int>>& subgraphInGraph,
+                                             std::vector<std::set<int>>& subgraphOutGraph);
     Status PreColorSort(Function& function);
     void InitializeTensorMem(Operation& op) const;
 };

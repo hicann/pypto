@@ -976,7 +976,7 @@ Status RemoveRedundantAssemble::DeleteRedundantAssemble(Function& function) cons
         APASS_LOG_ERROR_F(Elements::Function, "ProcessView failed.");
         return FAILED;
     }
-    function.EraseOperations(false);
+    function.EraseOperations(false, true, SortOperationsMode::LIGHTWEIGHT);
     HandleForReshapeToOutcast(function);
     return SUCCESS;
 }

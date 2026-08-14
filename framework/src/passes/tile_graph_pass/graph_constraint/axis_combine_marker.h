@@ -17,7 +17,6 @@
 #define AXIS_COMBINE_MARKER_H
 
 #include <vector>
-#include <queue>
 
 #include "interface/operation/opcode.h"
 #include "tilefwk/data_type.h"
@@ -43,8 +42,6 @@ public:
 private:
     void Init(Function& function);
     std::vector<Operation*> opList_;
-    std::vector<std::set<size_t>> opInGraph_;
-    std::vector<std::set<size_t>> opOutGraph_;
     void UpdateOpACEnableForward(size_t opIdx);
     void ForwardVisit();
     void DisableNoneWhiteListTensor(Operation* op);

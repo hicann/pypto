@@ -16,18 +16,16 @@
 #pragma once
 #ifndef TOPO_PROGRAM_H
 #define TOPO_PROGRAM_H
+
 #include <vector>
-#include <queue>
-#include "interface/operation/op_infer_shape_impl.h"
-#include "interface/function/function.h"
-#include "interface/tensor/logical_tensor.h"
+
+#include "interface/operation/operation.h"
 
 namespace npu {
 namespace tile_fwk {
 class TopoProgramUtils {
 public:
-    static void TopoProgram(const std::vector<Operation*>& opList, const std::vector<std::vector<size_t>>& opInGraph,
-                            const std::vector<std::vector<size_t>>& opOutGraph, bool isParamIndex = false);
+    static void TopoProgram(const std::vector<Operation*>& opList, bool isParamIndex = false);
 };
 } // namespace tile_fwk
 } // namespace npu

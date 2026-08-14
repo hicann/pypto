@@ -66,7 +66,7 @@ Status GenerateMoveOp::PostCheck(Function& function)
 bool GenerateMoveOp::HasSpecificConsumer(const Operation& op) const
 {
     auto viewResult = op.GetOOperands()[0];
-    auto consumersCopy = viewResult->GetConsumers();
+    const auto& consumersCopy = viewResult->GetConsumers();
 
     for (auto childOp : consumersCopy) {
         if (childOp->GetOpcode() == Opcode::OP_INDEX_OUTCAST || childOp->GetOpcode() == Opcode::OP_RESHAPE) {
@@ -458,7 +458,7 @@ Status GenerateMoveOp::CreateMoveOp(Function& function) const
                 break;
         }
     }
-    function.EraseOperations(false);
+    function.EraseOperations(false, true, SortOperationsMode::LIGHTWEIGHT);
     return SUCCESS;
 }
 
@@ -466,7 +466,7 @@ Status GenerateMoveOp::ProcessL1CopyInConv(Operation& op) const
 {
     // 1. 获取 L1_COPY_IN_CONV 的 producer VIEW
     auto inputTensor = op.GetIOperands()[0];
-    auto producers = inputTensor->GetProducers();
+    const auto& producers = inputTensor->GetProducers();
     if (producers.empty()) {
         return SUCCESS;
     }
@@ -526,7 +526,7 @@ Status GenerateMoveOp::ProcessL0CCopyOutConv(Operation& op) const
 {
     // 1. 获取 L0C_COPY_OUT_CONV 的 consumer ASSEMBLE
     auto outputTensor = op.GetOOperands()[0];
-    auto consumers = outputTensor->GetConsumers();
+    const auto& consumers = outputTensor->GetConsumers();
     if (consumers.empty()) {
         return SUCCESS;
     }

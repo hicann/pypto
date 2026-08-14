@@ -15,7 +15,70 @@
 
 #include "color_graph.h"
 
+#include <unordered_set>
+
 namespace npu::tile_fwk {
+void ColorGraph::BuildSubgraphDependencyGraph(Function& function, std::vector<std::set<int>>& subgraphInGraph,
+                                              std::vector<std::set<int>>& subgraphOutGraph)
+{
+    std::unordered_set<const LogicalTensor*> visitedTensors;
+    visitedTensors.reserve(function.Operations(false).size());
+    std::vector<int> producerSubgraphIds;
+    std::vector<int> consumerSubgraphIds;
+    std::vector<bool> producerSubgraphSeen(function.GetTotalSubGraphCount(), false);
+    std::vector<bool> consumerSubgraphSeen(function.GetTotalSubGraphCount(), false);
+
+    for (const auto& op : function.Operations(false)) {
+        for (const auto& output : op.GetOOperands()) {
+            if (!visitedTensors.insert(output.get()).second) {
+                continue;
+            }
+            producerSubgraphIds.clear();
+            consumerSubgraphIds.clear();
+            for (const auto* producer : output->GetProducers()) {
+                if (producer->BelongTo() != &function) {
+                    continue;
+                }
+                int subgraphId = producer->GetSubgraphID();
+                if (subgraphId < 0 || subgraphId >= static_cast<int>(function.GetTotalSubGraphCount())) {
+                    continue;
+                }
+                if (!producerSubgraphSeen[subgraphId]) {
+                    producerSubgraphSeen[subgraphId] = true;
+                    producerSubgraphIds.emplace_back(subgraphId);
+                }
+            }
+            for (const auto* consumer : output->GetConsumers()) {
+                if (consumer->BelongTo() != &function) {
+                    continue;
+                }
+                int subgraphId = consumer->GetSubgraphID();
+                if (subgraphId < 0 || subgraphId >= static_cast<int>(function.GetTotalSubGraphCount())) {
+                    continue;
+                }
+                if (!consumerSubgraphSeen[subgraphId]) {
+                    consumerSubgraphSeen[subgraphId] = true;
+                    consumerSubgraphIds.emplace_back(subgraphId);
+                }
+            }
+            for (int producerSubgraphId : producerSubgraphIds) {
+                for (int consumerSubgraphId : consumerSubgraphIds) {
+                    if (producerSubgraphId != consumerSubgraphId) {
+                        subgraphInGraph[consumerSubgraphId].insert(producerSubgraphId);
+                        subgraphOutGraph[producerSubgraphId].insert(consumerSubgraphId);
+                    }
+                }
+            }
+            for (int producerSubgraphId : producerSubgraphIds) {
+                producerSubgraphSeen[producerSubgraphId] = false;
+            }
+            for (int consumerSubgraphId : consumerSubgraphIds) {
+                consumerSubgraphSeen[consumerSubgraphId] = false;
+            }
+        }
+    }
+}
+
 Status DFSVisit(std::unordered_set<int>& visited, int preColor, std::unordered_map<int, int>& newColorMap,
                 std::vector<std::set<int>>& colorInGraph, std::vector<std::set<int>>& colorOutGraph)
 {
@@ -57,16 +120,7 @@ Status ColorGraph::PreColorSort(Function& function)
     int colorNum = function.GetTotalSubGraphCount();
     std::vector<std::set<int>> colorInGraph(colorNum);
     std::vector<std::set<int>> colorOutGraph(colorNum);
-    for (const auto& op : function.Operations()) {
-        int opColor = op.GetSubgraphID();
-        for (const auto& consumer : op.ConsumerOps()) {
-            int consumerColor = consumer->GetSubgraphID();
-            if (opColor != consumerColor) {
-                colorInGraph[consumerColor].insert(opColor);
-                colorOutGraph[opColor].insert(consumerColor);
-            }
-        }
-    }
+    ColorGraph::BuildSubgraphDependencyGraph(function, colorInGraph, colorOutGraph);
     std::unordered_map<int, int> newColorMap;
     std::unordered_set<int> visited;
     for (int preColor = 0; preColor < colorNum; preColor++) {

@@ -13,57 +13,44 @@
  * \brief 公共的 InferShape 方法实现
  */
 
+#include <algorithm>
+#include <unordered_map>
 #include <unordered_set>
 #include "infer_shape_utils.h"
-#include "passes/pass_utils/topo_program.h"
 
 namespace npu {
 namespace tile_fwk {
 Status InferShapeUtils::InferShape(Function& function, const std::vector<Operation*>& targetOps)
 {
+    auto sortedOperations = function.Operations(true, SortOperationsMode::LIGHTWEIGHT);
+    if (targetOps.empty()) {
+        for (auto& op : sortedOperations) {
+            InferShapeRegistry::GetInstance().CallInferShapeFunc(&op);
+        }
+        return SUCCESS;
+    }
+
+    std::unordered_map<const Operation*, size_t> opToIndex;
+    opToIndex.reserve(sortedOperations.size());
+    for (size_t index = 0; index < sortedOperations.size(); ++index) {
+        opToIndex.emplace(&sortedOperations[index], index);
+    }
+
     std::vector<Operation*> opList;
     std::unordered_set<Operation*> targetOpSet;
-
-    if (targetOps.empty()) {
-        opList = function.Operations().DuplicatedOpList();
-    } else {
-        std::unordered_set<Operation*> validOps;
-        for (auto& op : function.Operations()) {
-            validOps.insert(&op);
-        }
-        opList.reserve(targetOps.size());
-        for (const auto op : targetOps) {
-            if (op != nullptr && validOps.find(op) != validOps.end() && targetOpSet.insert(op).second) {
-                opList.push_back(op);
-            }
+    opList.reserve(targetOps.size());
+    for (const auto op : targetOps) {
+        if (op != nullptr && opToIndex.find(op) != opToIndex.end() && targetOpSet.insert(op).second) {
+            opList.push_back(op);
         }
     }
 
-    // 构建 opMagic -> index 映射
-    std::map<int, size_t> opMagic2Idx;
-    for (size_t i = 0; i < opList.size(); ++i) {
-        opMagic2Idx[opList[i]->GetOpMagic()] = i;
+    std::sort(opList.begin(), opList.end(), [&opToIndex](const Operation* lhs, const Operation* rhs) {
+        return opToIndex.at(lhs) < opToIndex.at(rhs);
+    });
+    for (auto* op : opList) {
+        InferShapeRegistry::GetInstance().CallInferShapeFunc(op);
     }
-
-    std::vector<std::vector<size_t>> opOutGraph(opList.size());
-    std::vector<std::vector<size_t>> opInGraph(opList.size());
-    for (size_t opIdx = 0; opIdx < opList.size(); ++opIdx) {
-        const auto& op = opList[opIdx];
-        size_t currentIdx = opMagic2Idx[op->GetOpMagic()];
-
-        for (const auto producer : op->ProducerOpsOrdered()) {
-            if (targetOpSet.empty() || targetOpSet.find(producer) != targetOpSet.end()) {
-                opInGraph[currentIdx].push_back(opMagic2Idx[producer->GetOpMagic()]);
-            }
-        }
-        for (const auto consumer : op->ConsumerOpsOrdered()) {
-            if (targetOpSet.empty() || targetOpSet.find(consumer) != targetOpSet.end()) {
-                opOutGraph[currentIdx].push_back(opMagic2Idx[consumer->GetOpMagic()]);
-            }
-        }
-    }
-
-    TopoProgramUtils::TopoProgram(opList, opInGraph, opOutGraph);
     return SUCCESS;
 }
 } // namespace tile_fwk
