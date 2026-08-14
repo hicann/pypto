@@ -15,6 +15,7 @@
 #include "interface/function/function.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "machine/runtime/launcher/device_launcher_types.h"
+#include "machine/utils/machine_ws_intf.h"
 
 namespace npu::tile_fwk {
 struct CacheTaskInfo {
@@ -31,6 +32,7 @@ struct CacheTaskInfo {
 
 class HostProf {
 public:
+    static HostProf& GetInstance();
     HostProf() = default;
     ~HostProf();
     bool HostProfReportApi(const uint64_t& startTime, const uint64_t& endTime) const;
@@ -38,6 +40,9 @@ public:
     void HostProfReportContextInfo(const uint64_t& endTime) const;
     void HostProfReportCacheTaskInfo(const AclRtStream stream, const uint32_t numBlocks, const uint32_t taskType) const;
     void SetProfFunction(Function* function, const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors = {});
+    uint32_t GetHostProfType() const;
+    void ReportHostProfInfo(RtStream stream, uint64_t startTime, uint32_t blockDim, uint16_t taskType,
+                            bool isCore = false) const;
     static uint64_t GetProfSwitch();
     static uint32_t GetProfType();
     static void RegHostProf();

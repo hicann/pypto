@@ -23,6 +23,7 @@
 namespace npu::tile_fwk {
 class DevicePerf {
 public:
+    static DevicePerf& GetInstance();
     DevicePerf();
     ~DevicePerf();
     void InitAndStartDumpThread(const DeviceArgs& args);

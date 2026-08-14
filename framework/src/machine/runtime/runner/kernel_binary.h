@@ -29,6 +29,8 @@
 #include "machine/utils/dynamic/dev_encode_tensor.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "adapter/api/runtime_define.h"
+#include "machine/runtime/runner/host_prof.h"
+#include "machine/runtime/runner/device_perf.h"
 
 namespace npu::tile_fwk::dynamic {
 
@@ -36,6 +38,10 @@ class KernelBinary {
 public:
     KernelBinary(std::shared_ptr<Function> func, std::vector<std::shared_ptr<Function>> pinnedGraph = {});
     ~KernelBinary();
+
+    static void SetAiCpuSoOverride(std::vector<uint8_t> soBytes);
+    static void InitMetaData(DeviceArgs& devArgs);
+    static bool GetEnableDumpDevPref();
 
     ToSubMachineConfig& GetMachineConfig();
 
@@ -76,6 +82,12 @@ private:
     void InitCachedArgs();
     void InitLaunchArgs();
     void RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes);
+
+    static void InitDeviceArgs();
+    static int InitDeviceArgs(DeviceArgs& args);
+    static int InitDeviceArgsCore(DeviceArgs& args);
+    static void GetAicoreRegs(const ArchInfo archInfo, std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu);
+    static void InitAiCpuSoBin(DeviceArgs& devArgs);
 
     std::shared_ptr<Function> dynFunc;
     std::vector<std::shared_ptr<Function>> pinnedGraph_;

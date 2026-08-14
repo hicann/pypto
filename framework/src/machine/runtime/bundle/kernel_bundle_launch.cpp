@@ -30,6 +30,7 @@
 #include "machine/runtime/context/stream_context.h"
 #include "machine/runtime/context/device_launcher_context.h"
 #include "machine/runtime/runner/runtime_utils.h"
+#include "machine/runtime/runner/host_prof.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/launcher/cell_match_dynamic.h"
 
@@ -41,7 +42,6 @@ int BundleLaunchAicpu(RtAicpuArgsEx& rtArgs, DevAscendProgram* devProg)
 {
     auto ctrlStream = GetStreamContext().GetCtrlStream();
     auto schedStream = GetStreamContext().GetScheStream();
-    auto& devRunner = DeviceRunner::Get();
     int ret = 0;
     auto args = (AiCpuArgs*)rtArgs.args;
     const int nrAicpu = static_cast<int>(devProg->devArgs.nrAicpu);
@@ -56,7 +56,7 @@ int BundleLaunchAicpu(RtAicpuArgsEx& rtArgs, DevAscendProgram* devProg)
     ret = RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC),
                                              "AST_DYN_AICPU", 1, &rtArgs, nullptr, ctrlStream,
                                              RT_KERNEL_USE_SPECIAL_TIMEOUT);
-    devRunner.ReportHostProfInfo(ctrlStream, startTime, 1, MSPF_GE_TASK_TYPE_AI_CPU, false);
+    HostProf::GetInstance().ReportHostProfInfo(ctrlStream, startTime, 1, MSPF_GE_TASK_TYPE_AI_CPU, false);
     if (ret != RT_SUCCESS) {
         return ret;
     }
@@ -66,7 +66,7 @@ int BundleLaunchAicpu(RtAicpuArgsEx& rtArgs, DevAscendProgram* devProg)
     ret = RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC),
                                              "AST_DYN_AICPU", nrAicpu, &rtArgs, nullptr, schedStream,
                                              RT_KERNEL_USE_SPECIAL_TIMEOUT);
-    devRunner.ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);
+    HostProf::GetInstance().ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);
     return ret;
 }
 
@@ -74,7 +74,6 @@ int BundleLaunchAicpu(RtAicpuArgsEx& rtArgs, DevAscendProgram* devProg)
 int BundleLaunchAicore(AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs, RtTaskCfgInfo& rtTaskCfg,
                        DevAscendProgram* devProg)
 {
-    auto& devRunner = DeviceRunner::Get();
     auto tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
     int blockDim = static_cast<int>(devProg->ctrlBlockDim);
     if (blockDim == 0) {
@@ -82,7 +81,7 @@ int BundleLaunchAicore(AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs,
     }
     auto startTime = MspfSysCycleTime();
     auto ret = RuntimeKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &rtTaskCfg);
-    devRunner.ReportHostProfInfo(aicoreStream, startTime, blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
+    HostProf::GetInstance().ReportHostProfInfo(aicoreStream, startTime, blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
     return ret;
 }
 } // namespace
@@ -216,7 +215,7 @@ int LaunchBundleKernelOnce(const std::vector<uint8_t>& devProgBinary, void* binH
     }
 
     if (streamSynchronize) {
-        rc = DeviceRunner::Get().DynamicLaunchSynchronize(GetContextScheStream(), GetContextCtrlStream(), aicoreStream);
+        rc = DeviceLauncher::DynamicLaunchSynchronize(GetContextScheStream(), GetContextCtrlStream(), aicoreStream);
     }
     MACHINE_LOGI("finish Kernel Launch (bundle).");
     return rc;

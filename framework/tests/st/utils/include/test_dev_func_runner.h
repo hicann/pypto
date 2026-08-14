@@ -310,7 +310,7 @@ private:
         CheckDeviceId();
 
         auto kernel = std::make_unique<KernelBinary>(Program::GetInstance().GetFunctionSharedPtr(function_));
-        DeviceRunner::Get().SetHostProfFunction(function_);
+        HostProf::GetInstance().SetProfFunction(function_);
 
         MemoryHelper memoryHelper(false);
         std::vector<DeviceTensorData> inputList;
@@ -338,11 +338,10 @@ private:
             rc = DeviceLauncher::LaunchKernel(aicoreStream, ctrlFlowCache, kernel.get(), wsAddr, tensors, false, 0);
             EXPECT_EQ(rc, 0);
 
-            rc = DeviceRunner::Get().DynamicLaunchSynchronize(GetContextScheStream(), GetContextCtrlStream(),
-                                                              aicoreStream);
+            rc = DeviceLauncher::DynamicLaunchSynchronize(GetContextScheStream(), GetContextCtrlStream(), aicoreStream);
             EXPECT_EQ(rc, 0);
             bool debugEnable = config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL;
-            DeviceRunner::Get().SyncProfData(debugEnable);
+            DevicePerf::GetInstance().SyncProfData(debugEnable);
         }
         CopyBackInOut(memoryHelper, inputs, outputs);
         if (IsDumpTensorEnable()) {

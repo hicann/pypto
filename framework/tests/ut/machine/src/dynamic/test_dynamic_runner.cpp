@@ -15,7 +15,7 @@
 
 #include "gtest/gtest.h"
 #include <cstdlib>
-#include "machine/runtime/runner/device_runner.h"
+#include "machine/runtime/runner/kernel_binary.h"
 #include <memory>
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/runner/host_prof.h"
@@ -71,12 +71,11 @@ TEST_F(TestDynamicDeviceRunner, DynPyptoKernelServerInit_ReturnsErrorWhenKernelN
 
 TEST_F(TestDynamicDeviceRunner, TestInitArgs)
 {
-    npu::tile_fwk::DeviceRunner runner;
     [[maybe_unused]] DeviceArgs args;
     args.nrAic = 2;
     args.nrAiv = 2;
     args.nrValidAic = args.nrAic;
-    runner.SyncProfData(false);
+    npu::tile_fwk::DevicePerf::GetInstance().SyncProfData(false);
 }
 
 TEST_F(TestDynamicDeviceRunner, test_pypto_kernel_server_null)
@@ -94,7 +93,7 @@ TEST_F(TestDynamicDeviceRunner, test_dump_device_perf)
     setenv("DUMP_DEVICE_PERF", "true", 1);
     DeviceArgs devKernelArgs;
     config::SetOptionsNg<int64_t>("debug.runtime_debug_mode", 1);
-    npu::tile_fwk::DeviceRunner::Get().InitMetaData(devKernelArgs);
+    npu::tile_fwk::dynamic::KernelBinary::InitMetaData(devKernelArgs);
     devKernelArgs.nrAic = 1;
     devKernelArgs.nrAiv = 2;
     devKernelArgs.nrValidAic = 1;

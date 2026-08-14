@@ -21,22 +21,28 @@
 #include "adapter/api/msprof_api.h"
 #include "adapter/api/acl_api.h"
 #include "adapter/api/adump_api.h"
+#include "adapter/api/runtime_api.h"
 #include "interface/utils/op_info_manager.h"
+#include "interface/utils/common.h"
+#include "interface/configs/config_manager.h"
 #include "machine/runtime/memory_utils/eslmodel_memory_utils.h"
 #include "interface/configs/config_manager_ng.h"
 #include "machine/runtime/context/stream_context.h"
 #include "machine/runtime/context/device_launcher_context.h"
 #include "machine/runtime/runner/runtime_utils.h"
+#include "machine/runtime/runner/device_dfx.h"
+#include "machine/runtime/runner/kernel_binary.h"
 #include "machine/runtime/launcher/device_launcher_driver_gate.h"
 #include "machine/runtime/launcher/emulation_launcher.h"
 #include "machine/runtime/launcher/aicore_model_launcher.h"
 #include "machine/runtime/launcher/ctrl_flow_cache_manager.h"
 #include "machine/runtime/bundle/pack/kernel_bundle_pack.h"
-#include "machine/runtime/runner/kernel_binary.h"
 #include "machine/host/perf_analysis.h"
 #include "interface/program/program.h"
 
 namespace npu::tile_fwk::dynamic {
+
+void DeviceLauncher::InitDevArgs(DeviceArgs& devArgs) { KernelBinary::InitMetaData(devArgs); }
 bool DeviceLauncher::inited_ = false;
 std::vector<uint8_t> DeviceLauncher::tensorInfo_(kDefaultTensorinfoSize);
 std::unordered_map<Function*, DeviceLauncher::DeviceRunCacheInfo> DeviceLauncher::cacheInfoDict_;
@@ -75,14 +81,34 @@ int DeviceLauncher::RunWithProfile(RtStream aicoreStream, RtStream aicpuStream, 
                          "tilefwk_L1_prof_data may be empty.");
             return 0;
         }
-        int rc = DeviceRunner::Get().DynamicLaunchSynchronize(aicpuStream, nullptr, aicoreStream);
+        int rc = DynamicLaunchSynchronize(aicpuStream, nullptr, aicoreStream);
         if (rc < 0) {
             return rc;
         }
-        DeviceRunner::Get().SyncProfData(true);
-        DeviceRunner::Get().ResetPerData();
+        DevicePerf::GetInstance().SyncProfData(true);
+        DevicePerf::GetInstance().ResetPerData();
     }
     return 0;
+}
+
+int DeviceLauncher::DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlStream, RtStream aicoreStream)
+{
+    int rcAicore = RuntimeStreamSynchronize(aicoreStream);
+    int rcAicpu = RuntimeStreamSynchronize(schedStream);
+    int rcCtrl = 0;
+    if (ctrlStream != nullptr) {
+        rcCtrl = RuntimeStreamSynchronize(ctrlStream);
+    }
+    if (IsPtoDataDumpEnabled()) {
+        MACHINE_LOGD("DataDumpServerUnInit is called \n");
+        (void)AdxDumpDataDumpServerUnInit();
+    }
+    int retAicorePrint = DeviceDfx::GetInstance().DumpAicoreLog();
+    if (rcAicore != 0 || rcAicpu != 0 || rcCtrl != 0 || retAicorePrint != 0) {
+        MACHINE_LOGW("sync stream failed aicpu:%d aicore:%d ctrl cpu:%d, aicorePrint: %d", rcAicpu, rcAicore, rcCtrl,
+                     retAicorePrint);
+    }
+    return rcAicore + rcAicpu + rcCtrl;
 }
 
 int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
@@ -106,7 +132,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     }
     HOST_PERF_TRACE(TracePhase::RunDeviceSetCapture);
 
-    DeviceRunner::Get().SetHostProfFunction(function);
+    HostProf::GetInstance().SetProfFunction(function);
     rc = AclInit(nullptr);
     if (rc != 0 && rc != ACLRT_ERROR_REPEAT_INITIALIZE) {
         return rc;
@@ -149,7 +175,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
         return rc;
     }
     if (streamSynchronize) {
-        rc = DeviceRunner::Get().DynamicLaunchSynchronize(launchInfo.schedStream, launchInfo.ctrlStream, aicoreStream);
+        rc = DynamicLaunchSynchronize(launchInfo.schedStream, launchInfo.ctrlStream, aicoreStream);
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, DevMemoryPool::Instance().CheckAllSentinels());
     }
     MACHINE_LOGI("finish Kernel Launch.");
@@ -161,7 +187,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
 
 int DeviceLauncher::DeviceSynchronize(RtStream aicpuStream, RtStream aicoreStream)
 {
-    int rc = DeviceRunner::Get().DynamicLaunchSynchronize(aicpuStream, nullptr, aicoreStream);
+    int rc = DynamicLaunchSynchronize(aicpuStream, nullptr, aicoreStream);
     return rc;
 }
 
@@ -337,12 +363,11 @@ bool DeviceLauncher::IsCaptureMode() { return DeviceLauncherContext::Get().IsCap
 
 void DeviceLauncher::SetDevPerfAddr([[maybe_unused]] const bool debugEnable, [[maybe_unused]] const bool isCaptureMode)
 {
-    auto& devRunner = DeviceRunner::Get();
-    if (debugEnable || devRunner.GetEnableDumpDevPref() || devRunner.GetHostProfType() == 1) {
+    if (debugEnable || KernelBinary::GetEnableDumpDevPref() || HostProf::GetInstance().GetHostProfType() == 1) {
         if (isCaptureMode) {
             ExchangeCaptureModeRelax();
         }
-        devRunner.SetDebugEnable();
+        DevicePerf::GetInstance().SetDebugEnable();
         if (isCaptureMode) {
             ExchangeCaptureModeGlobal();
         }
@@ -394,8 +419,7 @@ int DeviceLauncher::LaunchAicpuKernel(AicpuLaunchDesc& launchDesc, [[maybe_unuse
 {
     auto ctrlStream = GetStreamContext().GetCtrlStream();
     auto schedStream = GetStreamContext().GetScheStream();
-    auto& devRunner = DeviceRunner::Get();
-    devRunner.SetHostProfFunction(function, tensors);
+    HostProf::GetInstance().SetProfFunction(function, tensors);
     int ret = 0;
     auto args = static_cast<AiCpuArgs*>(launchDesc.args);
     const int nrAicpu = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu);
@@ -411,7 +435,7 @@ int DeviceLauncher::LaunchAicpuKernel(AicpuLaunchDesc& launchDesc, [[maybe_unuse
     launchDesc.stream = ctrlStream;
     launchDesc.blockDim = 1U;
     ret = LoadAicpuOp::GetInstance().LaunchBuiltInOpWithHostArgs(launchDesc, "PyptoRun");
-    devRunner.ReportHostProfInfo(ctrlStream, startTime, 1, MSPF_GE_TASK_TYPE_AI_CPU, false);
+    HostProf::GetInstance().ReportHostProfInfo(ctrlStream, startTime, 1, MSPF_GE_TASK_TYPE_AI_CPU, false);
     if (ret != RT_SUCCESS) {
         return ret;
     }
@@ -421,14 +445,13 @@ int DeviceLauncher::LaunchAicpuKernel(AicpuLaunchDesc& launchDesc, [[maybe_unuse
     launchDesc.stream = schedStream;
     launchDesc.blockDim = static_cast<uint32_t>(nrAicpu);
     ret = LoadAicpuOp::GetInstance().LaunchBuiltInOpWithHostArgs(launchDesc, "PyptoRun");
-    devRunner.ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);
+    HostProf::GetInstance().ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);
     return ret;
 }
 
 int DeviceLauncher::LaunchAicoreKernel(AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs,
                                        RtTaskCfgInfo& rtTaskCfg, bool debugEnable, [[maybe_unused]] Function* function)
 {
-    auto& devRunner = DeviceRunner::Get();
     auto tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
     int blockDim = static_cast<int>(DeviceLauncher::GetDevProg(function)->ctrlBlockDim);
     if (blockDim == 0) {
@@ -436,7 +459,7 @@ int DeviceLauncher::LaunchAicoreKernel(AclRtStream aicoreStream, void* kernel, R
     }
     auto startTime = MspfSysCycleTime();
     auto ret = RuntimeKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &rtTaskCfg);
-    devRunner.ReportHostProfInfo(aicoreStream, startTime, blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
+    HostProf::GetInstance().ReportHostProfInfo(aicoreStream, startTime, blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
     if (debugEnable || !IsCaptureMode() || IsPtoDataDumpEnabled()) {
         auto scheStream = GetStreamContext().GetScheStream();
         int rc = DeviceSynchronize(scheStream, aicoreStream);
@@ -446,7 +469,7 @@ int DeviceLauncher::LaunchAicoreKernel(AclRtStream aicoreStream, void* kernel, R
         }
     }
     if (debugEnable) {
-        devRunner.SyncProfData(debugEnable);
+        DevicePerf::GetInstance().SyncProfData(debugEnable);
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, DevMemoryPool::Instance().CheckAllSentinels());
     }
     if (IsPtoDataDumpEnabled()) {

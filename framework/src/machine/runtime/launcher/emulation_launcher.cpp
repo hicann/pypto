@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file device_runner.cpp
+ * \file emulation_launcher.cpp
  * \brief
  */
 

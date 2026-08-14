@@ -12,11 +12,13 @@
 
 #include <sys/syscall.h>
 #include "tilefwk/pypto_fwk_log.h"
+#include "tilefwk/error_code.h"
 #include "machine/runtime/runner/runtime_utils.h"
 #include "tilefwk/error.h"
 #include "adapter/api/msprof_api.h"
 #include "adapter/api/acl_api.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/utils/common.h"
 #include "passes/pass_utils/pass_utils.h"
 
 #define CCECPU 25
@@ -26,9 +28,40 @@ namespace {
 const std::string kOpType = "PyPTO";
 constexpr uint32_t kFormatNd = 2;
 constexpr uint32_t kFormatNz = 29;
+constexpr uint32_t MIX_BLOCK_DIM = 2;
+constexpr uint32_t HIGHT_BIT = 16;
 } // namespace
 
+HostProf& HostProf::GetInstance()
+{
+    thread_local HostProf instance;
+    return instance;
+}
+
 HostProf::~HostProf() {}
+
+uint32_t HostProf::GetHostProfType() const { return (GetProfSwitch() & MSPF_TASK_TIME_L2_MASK) != 0; }
+
+void HostProf::ReportHostProfInfo(RtStream stream, uint64_t startTime, uint32_t blockDim, uint16_t taskType,
+                                  bool isCore) const
+{
+    if (GetProfType() == MSPF_COMMANDHANDLE_TYPE_START) {
+        uint64_t endTime = MspfSysCycleTime();
+        if (isCore) {
+            uint32_t mixBlockDim = MIX_BLOCK_DIM;
+            blockDim = (mixBlockDim << HIGHT_BIT) | blockDim;
+            HostProfReportContextInfo(endTime);
+        }
+        if ((GetProfSwitch() & MSPF_TASK_TIME_L1_MASK) != 0) {
+            HostProfReportNodeInfo(endTime, blockDim, taskType);
+        }
+        endTime = MspfSysCycleTime();
+        (void)HostProfReportApi(startTime, endTime);
+    }
+    if (taskType == MSPF_GE_TASK_TYPE_MIX_AIC) {
+        HostProfReportCacheTaskInfo(stream, blockDim, taskType);
+    }
+}
 
 uint64_t HostProf::GetProfSwitch() { return profSwitch_; }
 

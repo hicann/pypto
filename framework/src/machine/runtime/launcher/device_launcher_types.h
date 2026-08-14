@@ -17,9 +17,30 @@
 
 #include <cstdint>
 #include <numeric>
+#include "adapter/api/runtime_define.h"
 #include "machine/utils/dynamic/dev_tensor_creator.h"
+#include "machine/utils/machine_ws_intf.h"
 
 namespace npu::tile_fwk::dynamic {
+struct KernelLaunchInfo {
+    RtStream schedStream;
+    RtStream ctrlStream;
+    RtStream aicoreStream;
+    uint32_t blockDim;
+    uint32_t aicpuNum;
+    RtBinHandle binHandle;
+    bool isCaptureActivate;
+    KernelLaunchInfo(RtStream sStream, RtStream cStream, RtStream aStream, uint32_t blkDim, uint32_t cpuNum)
+        : schedStream(sStream),
+          ctrlStream(cStream),
+          aicoreStream(aStream),
+          blockDim(blkDim),
+          aicpuNum(cpuNum),
+          binHandle(nullptr),
+          isCaptureActivate(false)
+    {}
+};
+
 class DeviceTensorData {
 public:
     DeviceTensorData() = default;

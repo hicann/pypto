@@ -33,7 +33,8 @@
 #include "machine/runtime/runner/runtime_agent.h"
 #include "machine/runtime/memory_utils/device_memory_utils.h"
 #include "machine/runtime/distributed/distributed_context.h"
-#include "machine/runtime/runner/device_runner.h"
+#include "machine/runtime/runner/host_prof.h"
+#include "machine/runtime/runner/device_perf.h"
 #include "machine/runtime/runner/load_aicpu_op.h"
 #include "machine/runtime/launcher/device_launcher_types.h"
 #include "machine/runtime/launcher/launcher_router.h"
@@ -82,6 +83,8 @@ public:
     /** Query Ascend driver package version once per process (skipped on ArchInfo::DAV_3510). Abort if official x.y.z
      *  format and below 25.5; ACL failure, empty string, or non-official format skips gate with MACHINE_LOGW. */
     static void CheckAscendDriverVersionOnboard();
+
+    static void InitDevArgs(DeviceArgs& devArgs);
 
     static void DeviceLauncherConfigFillDeviceInfo(const DeviceLauncherConfig& config)
     {
@@ -230,7 +233,7 @@ public:
         }
 
         if (isDevice) {
-            DeviceRunner::Get().InitMetaData(devProg->devArgs);
+            InitDevArgs(devProg->devArgs);
         }
 
         devProg->workspaceSize = devProg->memBudget.Total();
@@ -468,6 +471,7 @@ public:
 
     static int SetCaptureStream(RtStream aicoreStream, RtStream aicpuStream, bool& isCapture);
     static int RunWithProfile(RtStream aicoreStream, RtStream aicpuStream, bool isCapture);
+    static int DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlStream, RtStream aicoreStream);
     static int DeviceLaunchOnceWithDeviceTensorData(Function* function, const std::vector<DeviceTensorData>& inputList,
                                                     const std::vector<DeviceTensorData>& outputList,
                                                     RtStream aicoreStream, bool streamSynchronize,

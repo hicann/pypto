@@ -20,7 +20,8 @@
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
 #include "interface/inner/tilefwk.h"
-#include "machine/runtime/runner/device_runner.h"
+#include "machine/runtime/runner/host_prof.h"
+#include "machine/runtime/runner/device_perf.h"
 #include "machine/runtime/runner/pmu_common.h"
 #include "machine/utils/machine_ws_intf.h"
 #define private public
@@ -32,6 +33,7 @@
 #include "machine/device/dynamic/aicore_manager.h"
 #include "machine/device/tilefwk/aicpu_common.h"
 #include "machine/device/dynamic/device_sche_context.h"
+#include "machine/runtime/launcher/device_launcher_types.h"
 
 using namespace npu::tile_fwk;
 class TestDeviceRunner : public testing::Test {
@@ -47,7 +49,6 @@ public:
 
 TEST_F(TestDeviceRunner, test_set_pmu_event)
 {
-    // auto runner = npu::tile_fwk::DeviceRunner::Get();
     std::vector<int64_t> pmuEvtType;
     for (int i = 0; i < 9; i++) {
         setenv("PYPTO_PROF_PMU_EVENT_TYPE", std::to_string(i).c_str(), 1);
@@ -166,7 +167,7 @@ TEST_F(TestDeviceRunner, test_create_proflevel)
 
 TEST_F(TestDeviceRunner, KernelLaunchInfo_Constructor)
 {
-    KernelLaunchInfo info(nullptr, nullptr, nullptr, 24, 6);
+    npu::tile_fwk::dynamic::KernelLaunchInfo info(nullptr, nullptr, nullptr, 24, 6);
     EXPECT_EQ(info.schedStream, nullptr);
     EXPECT_EQ(info.ctrlStream, nullptr);
     EXPECT_EQ(info.aicoreStream, nullptr);
@@ -176,90 +177,40 @@ TEST_F(TestDeviceRunner, KernelLaunchInfo_Constructor)
     EXPECT_FALSE(info.isCaptureActivate);
 }
 
-TEST_F(TestDeviceRunner, DeviceRunner_InitMetaData)
+TEST_F(TestDeviceRunner, HostProf_GetHostProfType_Default) { EXPECT_EQ(HostProf::GetInstance().GetHostProfType(), 0u); }
+
+TEST_F(TestDeviceRunner, HostProf_SetProfFunction_Null) { HostProf::GetInstance().SetProfFunction(nullptr); }
+
+TEST_F(TestDeviceRunner, DevicePerf_SetDebugEnable) { DevicePerf::GetInstance().SetDebugEnable(); }
+
+TEST_F(TestDeviceRunner, HostProf_ReportHostProfInfo_NoProf)
 {
-    DeviceArgs srcArgs{};
-    srcArgs.runtimeDataRingBufferAddr = 0x1000;
-    srcArgs.sharedBuffer = 0x2000;
-    srcArgs.coreRegAddr = 0x3000;
-    srcArgs.nrAic = 24;
-    srcArgs.nrAiv = 48;
-    srcArgs.corePmuRegAddr = 0x4000;
-    srcArgs.corePmuAddr = 0x5000;
-    srcArgs.taskWastTime = 0x6000;
-    srcArgs.pmuEventAddr = 0x7000;
-    srcArgs.aicpuPerfAddr = 0x8000;
-    srcArgs.devDfxArgAddr = 0x9000;
-
-    DeviceRunner runner;
-    runner.args_ = srcArgs;
-
-    DeviceArgs dstArgs{};
-    runner.InitMetaData(dstArgs);
-
-    EXPECT_EQ(dstArgs.runtimeDataRingBufferAddr, 0x1000u);
-    EXPECT_EQ(dstArgs.sharedBuffer, 0x2000u);
-    EXPECT_EQ(dstArgs.coreRegAddr, 0x3000u);
-    EXPECT_EQ(dstArgs.nrAic, 24u);
-    EXPECT_EQ(dstArgs.nrAiv, 48u);
-    EXPECT_EQ(dstArgs.corePmuRegAddr, 0x4000u);
-    EXPECT_EQ(dstArgs.corePmuAddr, 0x5000u);
-    EXPECT_EQ(dstArgs.taskWastTime, 0x6000u);
-    EXPECT_EQ(dstArgs.pmuEventAddr, 0x7000u);
-    EXPECT_EQ(dstArgs.aicpuPerfAddr, 0x8000u);
-    EXPECT_EQ(dstArgs.devDfxArgAddr, 0x9000u);
+    HostProf::GetInstance().ReportHostProfInfo(nullptr, 100, 24, 1, false);
 }
 
-TEST_F(TestDeviceRunner, DeviceRunner_GetHostProfType_Default)
+TEST_F(TestDeviceRunner, HostProf_ReportHostProfInfo_WithProf)
 {
-    DeviceRunner runner;
-    EXPECT_EQ(runner.GetHostProfType(), 0u);
-}
-
-TEST_F(TestDeviceRunner, DeviceRunner_SetHostProfFunction_Null)
-{
-    DeviceRunner runner;
-    runner.SetHostProfFunction(nullptr);
-}
-
-TEST_F(TestDeviceRunner, DeviceRunner_SetDebugEnable)
-{
-    DeviceRunner runner;
-    runner.SetDebugEnable();
-}
-
-TEST_F(TestDeviceRunner, DeviceRunner_ReportHostProfInfo_NoProf)
-{
-    DeviceRunner runner;
-    runner.ReportHostProfInfo(nullptr, 100, 24, 1, false);
-}
-
-TEST_F(TestDeviceRunner, DeviceRunner_ReportHostProfInfo_WithProf)
-{
-    DeviceRunner runner;
     HostProf::profSwitch_ = MSPF_TASK_TIME_L1_MASK | MSPF_TASK_TIME_L2_MASK;
     HostProf::profType_ = MSPF_COMMANDHANDLE_TYPE_START;
-    runner.ReportHostProfInfo(nullptr, 100, 24, 1, false);
+    HostProf::GetInstance().ReportHostProfInfo(nullptr, 100, 24, 1, false);
     HostProf::profSwitch_ = 0;
     HostProf::profType_ = 0;
 }
 
-TEST_F(TestDeviceRunner, DeviceRunner_ReportHostProfInfo_WithCore)
+TEST_F(TestDeviceRunner, HostProf_ReportHostProfInfo_WithCore)
 {
-    DeviceRunner runner;
     HostProf::profSwitch_ = MSPF_TASK_TIME_L1_MASK | MSPF_TASK_TIME_L2_MASK;
     HostProf::profType_ = MSPF_COMMANDHANDLE_TYPE_START;
-    runner.ReportHostProfInfo(nullptr, 100, 24, 1, true);
+    HostProf::GetInstance().ReportHostProfInfo(nullptr, 100, 24, 1, true);
     HostProf::profSwitch_ = 0;
     HostProf::profType_ = 0;
 }
 
-TEST_F(TestDeviceRunner, DeviceRunner_ReportHostProfInfo_MixAic)
+TEST_F(TestDeviceRunner, HostProf_ReportHostProfInfo_MixAic)
 {
-    DeviceRunner runner;
     HostProf::profSwitch_ = MSPF_TASK_TIME_L1_MASK | MSPF_TASK_TIME_L2_MASK;
     HostProf::profType_ = MSPF_COMMANDHANDLE_TYPE_START;
-    runner.ReportHostProfInfo(nullptr, 100, 24, MSPF_GE_TASK_TYPE_MIX_AIC, false);
+    HostProf::GetInstance().ReportHostProfInfo(nullptr, 100, 24, MSPF_GE_TASK_TYPE_MIX_AIC, false);
     HostProf::profSwitch_ = 0;
     HostProf::profType_ = 0;
 }

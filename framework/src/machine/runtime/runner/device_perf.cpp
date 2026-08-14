@@ -26,6 +26,13 @@ namespace npu::tile_fwk {
 namespace {
 constexpr uint32_t AICPU_NUM_OF_RUN_AICPU_TASKS = 1;
 }
+
+DevicePerf& DevicePerf::GetInstance()
+{
+    static DevicePerf instance;
+    return instance;
+}
+
 DevicePerf::DevicePerf() : args_() {}
 DevicePerf::~DevicePerf()
 {

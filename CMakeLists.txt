@@ -460,7 +460,6 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
         )
         install(FILES
                     framework/src/machine/runtime/runner/device_perf.h
-                    framework/src/machine/runtime/runner/device_runner.h
                     framework/src/machine/runtime/runner/load_aicpu_op.h
                     framework/src/machine/runtime/runner/host_prof.h
                     framework/src/machine/runtime/runner/runtime_agent.h

@@ -23,7 +23,7 @@
 #include "machine/runtime/bundle/kernel_bundle_launch.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
-#include "machine/runtime/runner/device_runner.h"
+#include "machine/runtime/runner/kernel_binary.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/error_code.h"
 #include "tilefwk/platform.h"
@@ -52,7 +52,7 @@ std::vector<DeviceTensorData> ToDeviceTensors(const PyptoTensorDesc* descs, uint
 }
 
 // Post-load prep shared by the path and in-memory entries: seed the AiCpu backend .so from the bundle's AICPU_SO
-// segment before any DeviceRunner::Init(), arch-check, and register the aicore .o. Stays pure host (no Get()).
+// segment before any KernelBinary::InitDeviceArgs(), arch-check, and register the aicore .o. Stays pure host.
 std::shared_ptr<LoadedBundle> PrepareBundle(std::shared_ptr<LoadedBundle> bundle)
 {
     if (bundle == nullptr) {
@@ -60,7 +60,7 @@ std::shared_ptr<LoadedBundle> PrepareBundle(std::shared_ptr<LoadedBundle> bundle
     }
     if (!bundle->aicpuSo.empty()) {
         // Harmless to set repeatedly; only the first Get() (inside the first Launch) consumes it.
-        DeviceRunner::SetAiCpuSoOverride(bundle->aicpuSo);
+        npu::tile_fwk::dynamic::KernelBinary::SetAiCpuSoOverride(bundle->aicpuSo);
     } else {
         MACHINE_LOGW("[kernel-bundle] bundle has no AICPU_SO segment; will fall back to on-disk backend .so");
     }

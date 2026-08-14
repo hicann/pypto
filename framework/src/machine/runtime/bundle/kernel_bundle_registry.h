@@ -11,7 +11,7 @@
 /*!
  * \file kernel_bundle_registry.h
  * \brief Singleton that owns loaded bundles and their registered kernel handles.
- *        The AICPU .so is copied to device by DeviceRunner::Init() (InitAiCpuSoBin), not here.
+ *        The AICPU .so is copied to device by KernelBinary::InitDeviceArgs() (InitAiCpuSoBin), not here.
  */
 
 #pragma once
