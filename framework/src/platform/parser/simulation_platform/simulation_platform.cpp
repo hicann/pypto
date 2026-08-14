@@ -40,6 +40,8 @@ std::string DPlatformToSocVersion(DPlatform platform)
         {DPlatform::ASCEND_910B4, DEFAULT_SOC_VERSION},
         {DPlatform::ASCEND_910C4, "910PR_9363"},
         {DPlatform::ASCEND_950PR_9579, "950PR_957x"},
+        {DPlatform::ASCEND_950DT_9581, "950DT_9581"},
+        {DPlatform::ASCEND_950DT_9581X, "950DT_9581x"},
         {DPlatform::ASCEND_950DT_9582, "950DT_958x"},
         {DPlatform::ASCEND_950PR_9582, "950PR_958x"},
         {DPlatform::ASCEND_950DT_9579, "950DT_957x"},

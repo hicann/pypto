@@ -31,6 +31,7 @@ const std::string ubSize = "ub_size";
 const std::string l0cSize = "l0_c_size";
 const std::string l1Size = "l1_size";
 const std::string l0aSize = "l0_a_size";
+const std::string socVersionInfo = "SoC_version";
 const std::string npuArchInfo = "NpuArch";
 
 class TestDevicePlatformConfig : public testing::Test {
@@ -61,6 +62,8 @@ TEST_F(TestDevicePlatformConfig, StringToDpaltformAllMappings)
     EXPECT_EQ(StringToDpaltform("ASCEND_910B4"), DPlatform::ASCEND_910B4);
     EXPECT_EQ(StringToDpaltform("ASCEND_910C4"), DPlatform::ASCEND_910C4);
     EXPECT_EQ(StringToDpaltform("ASCEND_950PR_9579"), DPlatform::ASCEND_950PR_9579);
+    EXPECT_EQ(StringToDpaltform("ASCEND_950DT_9581"), DPlatform::ASCEND_950DT_9581);
+    EXPECT_EQ(StringToDpaltform("ASCEND_950DT_9581X"), DPlatform::ASCEND_950DT_9581X);
     EXPECT_EQ(StringToDpaltform("ASCEND_950DT_9582"), DPlatform::ASCEND_950DT_9582);
     EXPECT_EQ(StringToDpaltform("ASCEND_950PR_9582"), DPlatform::ASCEND_950PR_9582);
     EXPECT_EQ(StringToDpaltform("ASCEND_950DT_9579"), DPlatform::ASCEND_950DT_9579);
@@ -79,6 +82,14 @@ TEST_F(TestDevicePlatformConfig, ConfigGetDevicePlatformChain)
     config::SetPlatformConfig("device_platform", std::string("ASCEND_950PR_9579"));
     DPlatform platform = config::GetDevicePlatform();
     EXPECT_EQ(platform, DPlatform::ASCEND_950PR_9579);
+
+    config::SetPlatformConfig("device_platform", std::string("ASCEND_950DT_9581"));
+    platform = config::GetDevicePlatform();
+    EXPECT_EQ(platform, DPlatform::ASCEND_950DT_9581);
+
+    config::SetPlatformConfig("device_platform", std::string("ASCEND_950DT_9581X"));
+    platform = config::GetDevicePlatform();
+    EXPECT_EQ(platform, DPlatform::ASCEND_950DT_9581X);
 
     config::SetPlatformConfig("device_platform", std::string("ASCEND_910B2"));
     platform = config::GetDevicePlatform();
@@ -122,6 +133,46 @@ TEST_F(TestDevicePlatformConfig, INIParserLoadsWithConfigSocVersion)
     std::string archType;
     EXPECT_TRUE(parser.GetStringVal(version, npuArchInfo, archType));
     EXPECT_EQ(archType, "3510");
+}
+
+TEST_F(TestDevicePlatformConfig, INIParserLoadsNew950DT9581Config)
+{
+    INIParser parser("950DT_9581");
+
+    size_t memoryLimit;
+    EXPECT_TRUE(parser.GetSizeVal(aiCoreSpec, ubSize, memoryLimit));
+    EXPECT_EQ(memoryLimit, 253952UL);
+
+    EXPECT_TRUE(parser.GetSizeVal(aiCoreSpec, l0cSize, memoryLimit));
+    EXPECT_EQ(memoryLimit, 262144UL);
+
+    std::string archType;
+    EXPECT_TRUE(parser.GetStringVal(version, npuArchInfo, archType));
+    EXPECT_EQ(archType, "3510");
+
+    std::string socVersion;
+    EXPECT_TRUE(parser.GetStringVal(version, socVersionInfo, socVersion));
+    EXPECT_EQ(socVersion, "Ascend950DT_9581");
+}
+
+TEST_F(TestDevicePlatformConfig, INIParserLoadsNew950DT9581xConfig)
+{
+    INIParser parser("950DT_9581x");
+
+    size_t memoryLimit;
+    EXPECT_TRUE(parser.GetSizeVal(aiCoreSpec, ubSize, memoryLimit));
+    EXPECT_EQ(memoryLimit, 253952UL);
+
+    EXPECT_TRUE(parser.GetSizeVal(aiCoreSpec, l0cSize, memoryLimit));
+    EXPECT_EQ(memoryLimit, 262144UL);
+
+    std::string archType;
+    EXPECT_TRUE(parser.GetStringVal(version, npuArchInfo, archType));
+    EXPECT_EQ(archType, "3510");
+
+    std::string socVersion;
+    EXPECT_TRUE(parser.GetStringVal(version, socVersionInfo, socVersion));
+    EXPECT_EQ(socVersion, "Ascend950DT_9581X");
 }
 
 TEST_F(TestDevicePlatformConfig, DifferentPlatformDifferentMemory)

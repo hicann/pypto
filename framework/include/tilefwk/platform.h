@@ -41,6 +41,8 @@ enum class DPlatform {
     ASCEND_950DT_9579,
     KIRIN_9030,
     KIRIN_X90,
+    ASCEND_950DT_9581,
+    ASCEND_950DT_9581X,
 
     UNKNOWN_DEVICE,
 };
@@ -54,6 +56,8 @@ inline DPlatform StringToDpaltform(std::string platform)
         {"ASCEND_910B4", DPlatform::ASCEND_910B4},
         {"ASCEND_910C4", DPlatform::ASCEND_910C4},
         {"ASCEND_950PR_9579", DPlatform::ASCEND_950PR_9579},
+        {"ASCEND_950DT_9581", DPlatform::ASCEND_950DT_9581},
+        {"ASCEND_950DT_9581X", DPlatform::ASCEND_950DT_9581X},
         {"KIRIN_9030", DPlatform::KIRIN_9030},
         {"KIRIN_X90", DPlatform::KIRIN_X90},
         {"ASCEND_950DT_9582", DPlatform::ASCEND_950DT_9582},
