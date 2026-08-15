@@ -1,0 +1,14 @@
+function foo incast(logical_tensor %x, logical_tensor %y) outcast() #type(Opaque) #entry(false) {
+    for %loop_idx_5 inrange 0, 10, 1 iter {} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        if scalar_expr then {
+            logical_tensor %y = ASSEMBLE(%x) token();
+            yield;
+        }
+        else {
+            logical_tensor %y = ASSEMBLE(%x) token();
+            yield;
+        }
+        continue;
+    }
+    return %x, %y;
+}

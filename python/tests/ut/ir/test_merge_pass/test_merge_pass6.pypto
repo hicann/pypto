@@ -1,0 +1,18 @@
+function foo incast(logical_tensor %x, logical_tensor %y, logical_tensor %z) outcast() #type(Opaque) #entry(false) {
+    logical_tensor %View_x = VIEW(%x) token();
+    logical_tensor %View_y = VIEW(%y) token();
+    for %loop_idx_32 inrange 0, 2, 1 iter {} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        if scalar_expr then {
+            logical_tensor %$0 = ADD(%View_x, %View_y) token();
+            logical_tensor %z = ASSEMBLE(%$0) token();
+            yield;
+        }
+        else {
+            logical_tensor %$3 = SUB(%View_x, %View_y) token();
+            logical_tensor %z = ASSEMBLE(%$3) token();
+            yield;
+        }
+        continue;
+    }
+    return %x, %y, %z;
+}

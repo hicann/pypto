@@ -1,0 +1,10 @@
+function foo incast(logical_tensor %x, logical_tensor %aux, logical_tensor %out) outcast() #type(Opaque) #entry(false) {
+    int64_t %i_0, logical_tensor %src_0, token %src_0_w_for, token %aux_1_w_for = for %loop_idx_N inrange 0, 2, 1 iter {none %i = %None;none %src = %None;token %src_0_w_for_iter = %None;token %aux_1_w_for_iter = %None;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        logical_tensor %$0, token %$0_w = VEC_DUP() token();
+        logical_tensor %aux_1, token %aux_1_w, token %$0_r = ASSEMBLE(%$0) token(%$0_w);
+        continue %loop_idx_N, %$0, %$0_w, %aux_1_w;
+    }
+    logical_tensor %$2, token %$2_w, token %x_r, token %aux_1_r = ADD(%x, %aux_1) token(%aux_1_w_for);
+    logical_tensor %out_1, token %out_1_w, token %$2_r = ASSEMBLE(%$2) token(%$2_w);
+    return %x, %aux_1, %out_1;
+}

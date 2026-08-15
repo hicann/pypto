@@ -6,40 +6,15 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
+from pathlib import Path
+
 import pypto
 
 from ..test_common import check_snapshot, run_merge_pass
 
-IR = """
-@ir.function
-def foo(x@0: ir.Tensor, y@1: ir.Tensor, z@2: ir.Tensor):
-    for loop_idx_10 in ir.range(0, 2, 1, attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
-        if (loop_idx_10==0):
-            View_x@3 = VIEW(x@0, attrs=["fromOffset": [0, 0], "toValidShape": [16, 16]])
-            View_y@4 = VIEW(y@1, attrs=["fromOffset": [0, 0], "toValidShape": [16, 16]])
-            $0@5 = ADD(View_x@3, View_y@4)
-            $4@8 = SUB($0@5, View_x@3)
-            z@2 = ASSEMBLE($4@8, attrs=["toOffset": [0, 0]])
-            ir.yield_()
-        else:
-            if (loop_idx_10==1):
-                View_x_8@3 = VIEW(x@0, attrs=["fromOffset": [0, 0], "toValidShape": [16, 16]])
-                View_y_8@4 = VIEW(y@1, attrs=["fromOffset": [0, 0], "toValidShape": [16, 16]])
-                $1@6 = SUB(View_x_8@3, View_y_8@4)
-                $3@7 = ADD($1@6, View_x_8@3)
-                z@2 = ASSEMBLE($3@7, attrs=["toOffset": [0, 0]])
-                ir.yield_()
-            else:
-                View_x_6@3 = VIEW(x@0, attrs=["fromOffset": [0, 0], "toValidShape": [16, 16]])
-                View_y_6@4 = VIEW(y@1, attrs=["fromOffset": [0, 0], "toValidShape": [16, 16]])
-                $1_1@6 = SUB(View_x_6@3, View_y_6@4)
-                $4_0@8 = SUB($1_1@6, View_x_6@3)
-                z@2 = ASSEMBLE($4_0@8, attrs=["toOffset": [0, 0]])
-                ir.yield_()
-            ir.yield_()
-        continue
-    return x@0, y@1, z@2
-"""
+_GOLDEN_DIR = Path(__file__).parent
+
+IR = (_GOLDEN_DIR / "test_merge_pass1.pypto").read_text()
 
 
 def test_merge_pass1():

@@ -1,0 +1,28 @@
+function kernel incast(logical_tensor %a, logical_tensor %b) outcast() #type(Opaque) #entry(false) {
+    logical_tensor %oi_update = TENSOR_ALLOC() token();
+    logical_tensor %oi_update1 = TENSOR_ALLOC() token();
+    logical_tensor %oi_update_40, logical_tensor %oi_update_41 = for %loop_idx_31 inrange 0, 10, 1 iter {logical_tensor %oi_update_2 = %oi_update;logical_tensor %oi_update_3 = %oi_update1;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        logical_tensor %oi_update_43, logical_tensor %oi_update_44 = if scalar_expr then {
+            logical_tensor %oi_update_4 = ADDS(%a) token();
+            logical_tensor %oi_update_22 = ADDS(%a) token();
+            yield %oi_update_4, %oi_update_22;
+        }
+        else {
+            logical_tensor %oi_update_49, logical_tensor %oi_update_50 = if scalar_expr then {
+                logical_tensor %oi_update_10 = ADD(%a, %oi_update_2) token();
+                logical_tensor %b = ASSEMBLE(%oi_update_10) token();
+                logical_tensor %oi_update_27 = ADD(%a, %oi_update_3) token();
+                logical_tensor %b = ASSEMBLE(%oi_update_27) token();
+                yield %oi_update_2, %oi_update_3;
+            }
+            else {
+                logical_tensor %oi_update_54 = ADD(%a, %oi_update_2) token();
+                logical_tensor %oi_update_46 = ADD(%a, %oi_update_3) token();
+                yield %oi_update_54, %oi_update_46;
+            }
+            yield %oi_update_49, %oi_update_50;
+        }
+        continue %oi_update_43, %oi_update_44;
+    }
+    return %a, %b;
+}

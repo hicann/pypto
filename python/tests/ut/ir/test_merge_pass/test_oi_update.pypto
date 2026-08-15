@@ -1,0 +1,72 @@
+function foo incast(logical_tensor %a, logical_tensor %b) outcast() #type(Opaque) #entry(false) {
+    logical_tensor %b_24 = for %loop_idx_10 inrange 0, 10, 1 iter {logical_tensor %b_1 = %b;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        logical_tensor %b_22 = for %loop_idx_16 inrange 0, 10, 1 iter {logical_tensor %b_3 = %b_1;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+            logical_tensor %oi_update_1 = TENSOR_ALLOC() token();
+            logical_tensor %b_13, logical_tensor %oi_update_13 = for %loop_idx_34 inrange 0, scalar_expr, 2 iter {logical_tensor %b_5 = %b_3;logical_tensor %oi_update_3 = %oi_update_1;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(2) {
+                logical_tensor %oi_update_27, logical_tensor %b_26 = if scalar_expr then {
+                    logical_tensor %oi_update_31, logical_tensor %b_11 = if scalar_expr then {
+                        logical_tensor %oi_update_4 = ADDS(%a) token();
+                        logical_tensor %oi_update_9 = SUBS(%oi_update_4) token();
+                        logical_tensor %$6 = DIVS(%oi_update_9) token();
+                        logical_tensor %b_9 = FLOOR(%$6) token();
+                        yield %oi_update_9, %b_9;
+                    }
+                    else {
+                        logical_tensor %oi_update_33 = ADDS(%a) token();
+                        logical_tensor %oi_update_35 = SUBS(%oi_update_33) token();
+                        yield %oi_update_35, %b_5;
+                    }
+                    yield %oi_update_31, %b_11;
+                }
+                else {
+                    logical_tensor %oi_update_39, logical_tensor %b_28 = if scalar_expr then {
+                        logical_tensor %oi_update_5 = SUBS(%oi_update_3) token();
+                        logical_tensor %oi_update_45 = SUBS(%oi_update_5) token();
+                        logical_tensor %$6_0 = DIVS(%oi_update_45) token();
+                        logical_tensor %b_30 = FLOOR(%$6_0) token();
+                        yield %oi_update_45, %b_30;
+                    }
+                    else {
+                        logical_tensor %oi_update_41 = SUBS(%oi_update_3) token();
+                        logical_tensor %oi_update_43 = SUBS(%oi_update_41) token();
+                        yield %oi_update_43, %b_5;
+                    }
+                    yield %oi_update_39, %b_28;
+                }
+                continue %b_26, %oi_update_27;
+            }
+            logical_tensor %b_20, logical_tensor %oi_update_21 = for %loop_idx_34_0 inrange scalar_expr, %n, 1 iter {logical_tensor %b_15 = %b_13;logical_tensor %oi_update_15 = %oi_update_13;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+                logical_tensor %oi_update_19, logical_tensor %b_32 = if scalar_expr then {
+                    logical_tensor %oi_update_47, logical_tensor %b_18 = if scalar_expr then {
+                        logical_tensor %oi_update_16 = ADDS(%a) token();
+                        logical_tensor %$10 = DIVS(%oi_update_16) token();
+                        logical_tensor %b_16 = FLOOR(%$10) token();
+                        yield %oi_update_16, %b_16;
+                    }
+                    else {
+                        logical_tensor %oi_update_49 = ADDS(%a) token();
+                        yield %oi_update_49, %b_15;
+                    }
+                    yield %oi_update_47, %b_18;
+                }
+                else {
+                    logical_tensor %oi_update_51, logical_tensor %b_36 = if scalar_expr then {
+                        logical_tensor %oi_update_17 = SUBS(%oi_update_15) token();
+                        logical_tensor %$10_0 = DIVS(%oi_update_17) token();
+                        logical_tensor %b_34 = FLOOR(%$10_0) token();
+                        yield %oi_update_17, %b_34;
+                    }
+                    else {
+                        logical_tensor %oi_update_53 = SUBS(%oi_update_15) token();
+                        yield %oi_update_53, %b_15;
+                    }
+                    yield %oi_update_51, %b_36;
+                }
+                continue %b_32, %oi_update_19;
+            }
+            continue %b_20;
+        }
+        continue %b_22;
+    }
+    return %a, %b_24;
+}

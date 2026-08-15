@@ -7,35 +7,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 
+from pathlib import Path
+
 import pypto
 
 from ..test_common import check_snapshot, run_merge_pass
 
-IR = """
-@ir.function
-def kernel(a@0: ir.Tensor, b@1: ir.Tensor):
-    oi_update@2 = TENSOR_ALLOC()
-    oi_update1@3 = TENSOR_ALLOC()
-    for loop_idx_31, (oi_update_2, oi_update_3) in ir.range(0, 10, 1, init_values=(oi_update@2, oi_update1@3), attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
-        if (loop_idx_31==0):
-            oi_update_4@2 = ADDS(a@0)
-            oi_update_22@3 = ADDS(a@0)
-            oi_update_43, oi_update_44 = ir.yield_(oi_update_4@2, oi_update_22@3)
-        else:
-            if (10<=(loop_idx_31+1)):
-                oi_update_10@2 = ADD(a@0, oi_update_2@2)
-                b@1 = ASSEMBLE(oi_update_10@2, attrs=["toOffset": [0, 0]])
-                oi_update_27@3 = ADD(a@0, oi_update_3@3)
-                b@1 = ASSEMBLE(oi_update_27@3, attrs=["toOffset": [0, 0]])
-                oi_update_49, oi_update_50 = ir.yield_(oi_update_2@2, oi_update_3@3)
-            else:
-                oi_update_54@2 = ADD(a@0, oi_update_2@2)
-                oi_update_46@3 = ADD(a@0, oi_update_3@3)
-                oi_update_49, oi_update_50 = ir.yield_(oi_update_54@2, oi_update_46@3)
-            oi_update_43, oi_update_44 = ir.yield_(oi_update_49@2, oi_update_50@3)
-        oi_update_40, oi_update_41 = continue oi_update_43@2, oi_update_44@3
-    return a@0, b@1
-"""  # noqa: E501
+_GOLDEN_DIR = Path(__file__).parent
+
+IR = (_GOLDEN_DIR / "test_oi_update1.pypto").read_text()
 
 
 def test_oi_update1():

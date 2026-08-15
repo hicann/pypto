@@ -1,0 +1,21 @@
+program #entry(foo) {
+    function foo incast(logical_tensor %a, logical_tensor %aux, logical_tensor %out) outcast() #type(Orchestration) #entry(true) {
+        logical_tensor %aux_3, logical_tensor %out_0 = CALL(%a) token() #callee(Unsupported);
+        return %a, %aux_3, %out_0;
+    }
+    function foo_PATH0_7 incast(logical_tensor %a_3, logical_tensor %aux_7, logical_tensor %out_4) outcast() #type(InCore) #entry(false) {
+        logical_tensor %INCAST_LOCAL_BUF0_0 = VIEW(%a_3) token();
+        logical_tensor %OUTCAST_LOCAL_BUF0, logical_tensor %OUTCAST_LOCAL_BUF1_0 = CALL(%INCAST_LOCAL_BUF0_0) token() #callee(Unsupported);
+        logical_tensor %aux_7 = ASSEMBLE(%OUTCAST_LOCAL_BUF0) token();
+        logical_tensor %out_4 = ASSEMBLE(%OUTCAST_LOCAL_BUF1_0) token();
+    }
+    function foo_PATH0_hiddenfunc_5 incast(logical_tensor %a_1, logical_tensor %aux_5, logical_tensor %out_2) outcast() #type(InCore) #entry(false) {
+        logical_tensor %INCAST_LOCAL_BUF0 = VIEW(%a_1) token();
+        logical_tensor %$0 = VEC_DUP() token();
+        logical_tensor %aux_1 = ASSEMBLE(%$0) token();
+        logical_tensor %$1 = VEC_DUP() token();
+        logical_tensor %aux_5 = ASSEMBLE(%$1) token();
+        logical_tensor %OUTCAST_LOCAL_BUF1 = ADD(%INCAST_LOCAL_BUF0, %aux_5) token();
+        logical_tensor %out_2 = ASSEMBLE(%OUTCAST_LOCAL_BUF1) token();
+    }
+}

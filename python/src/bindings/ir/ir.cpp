@@ -37,6 +37,7 @@
 #include "ir/scalar_expr.h"
 #include "ir/scalar_expr_ops.h"
 #include "ir/stmt.h"
+#include "ir/transforms/io_text.h"
 #include "ir/transforms/op_conversion_registry.h"
 #include "ir/transforms/printer.h"
 #include "ir/transforms/structural_comparison.h"
@@ -1395,6 +1396,8 @@ void BindProgram(py::module_& ir)
         py::arg("name"), py::arg("params"), py::arg("return_types"), py::arg("body"), py::arg("span"),
         py::arg("type") = FunctionType::OPAQUE, py::arg("entry") = false, "Create a function definition");
     BindFields<Function>(function_class);
+    function_class.def(
+        "__str__", [](const std::shared_ptr<Function>& self) { return TextDump(self); }, "IR text representation");
 
     // IRDebugInfo - compilation-session side table for tuple/struct field names.
     auto debug_info_class = py::class_<IRDebugInfo, std::shared_ptr<IRDebugInfo>>(
@@ -1460,6 +1463,8 @@ void BindProgram(py::module_& ir)
         "Map of function names to their corresponding functions, sorted by name");
     program_class.def_readonly("name", &Program::name_, "Program name");
     program_class.def_readonly("span", &Program::span_, "Source location");
+    program_class.def(
+        "__str__", [](const std::shared_ptr<const Program>& self) { return TextDump(self); }, "IR text representation");
 
     // Python-style printer function - unified API for IRNode
     ir.def(

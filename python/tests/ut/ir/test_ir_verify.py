@@ -68,7 +68,11 @@ def test_ir_verify():
     y = pypto.from_torch(b)
     z = pypto.from_torch(c)
 
+    original_options = pypto.get_verify_options()
     pypto.set_verify_options(**verify_options)
-    BuildOnlineCalculatorManager().build_and_load_calculator()
+    try:
+        BuildOnlineCalculatorManager().build_and_load_calculator()
 
-    _run_dce(foo, golden, x, y, z)
+        _run_dce(foo, golden, x, y, z)
+    finally:
+        pypto.set_verify_options(**original_options)

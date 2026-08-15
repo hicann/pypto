@@ -1,0 +1,6 @@
+function foo incast(logical_tensor %a) outcast() #type(Opaque) #entry(false) {
+    logical_tensor %$0, token %$0_w, token %a_r = EXP(%a) token();
+    logical_tensor %$1, token %$1_w, token %a_r = EXP(%a) token();
+    logical_tensor %a_1, token %a_1_w, token %$0_r = ASSEMBLE(%$0) token(%$0_w, %a_r);
+    return %a_1;
+}

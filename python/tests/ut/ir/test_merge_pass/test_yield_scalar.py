@@ -6,23 +6,15 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
+from pathlib import Path
+
 import pypto
 
 from ..test_common import check_snapshot, run_merge_pass
 
-IR = """
-@ir.function
-def foo(x@0: ir.Tensor, y@1: ir.Tensor):
-    for loop_idx_5 in ir.range(0, 10, 1, attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
-        if (loop_idx_5==0):
-            y@1 = ASSEMBLE(x@0, attrs=["toOffset": [32, 32]])
-            ir.yield_()
-        else:
-            y@1 = ASSEMBLE(x@0, attrs=["toOffset": [64, 64]])
-            ir.yield_()
-        continue
-    return x@0, y@1
-"""
+_GOLDEN_DIR = Path(__file__).parent
+
+IR = (_GOLDEN_DIR / "test_yield_scalar.pypto").read_text()
 
 def test_yield_symbolic_scalar():
     def foo(x, y):

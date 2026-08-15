@@ -49,9 +49,9 @@ def _make_ptr_then_addptr_kernel(p: pl.Ptr[pl.DT_UINT8]):
 def test_make_ptr_emits_ptr_make_ptr_call_with_new_dtype():
     s = _ir_str(_make_ptr_change_dtype_kernel)
     assert "ptr.make_ptr" in s
-    assert "ir.FP16" in s
+    assert "dtype=half" in s
     # The tensor view built on the reinterpreted pointer carries the new dtype.
-    assert "ir.Tensor[[64, 128], ir.FP16" in s
+    assert "tensor<64 x 128, half, tensor_view<, 128 x 1, ND, %fp16_ptr>>" in s
 
 
 def test_make_ptr_result_type_is_ptr_with_changed_dtype():
@@ -136,7 +136,7 @@ def test_make_tensor_from_tensor_ir_type():
 def test_make_tensor_from_tensor_reinterpret_dtype_ir():
     s = _ir_str(_retensor_dtype_kernel)
     assert "ptr.make_tensor" in s
-    assert "ir.Tensor[[64, 256], ir.UINT8" in s
+    assert "tensor<64 x 256, uint8_t, tensor_view<, 256 x 1, ND, %src>>" in s
 
 
 def test_make_tensor_view_of_view_ir():

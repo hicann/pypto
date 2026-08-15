@@ -1,0 +1,8 @@
+function foo incast(logical_tensor %x) outcast() #type(Opaque) #entry(false) {
+    logical_tensor %aux, token %aux_w = TENSOR_ALLOC() token();
+    logical_tensor %$0, token %$0_w, token %aux_r = ADDS(%aux) token(%aux_w);
+    logical_tensor %$1, token %$1_w = VEC_DUP() token();
+    logical_tensor %aux_1, token %aux_1_w, token %$1_r = ASSEMBLE(%$1) token(%$1_w, %aux_r);
+    logical_tensor %$2, token %$2_w, token %$0_r, token %x_r = ADD(%$0, %x) token(%$0_w);
+    return %x;
+}

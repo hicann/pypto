@@ -1,0 +1,16 @@
+function foo incast(logical_tensor %x, logical_tensor %aux, logical_tensor %out, logical_tensor %condition) outcast() #type(Opaque) #entry(false) {
+    logical_tensor %read0, logical_tensor %read1, logical_tensor %result, token %read0_w_if, token %read1_w_if, token %result_w_if, token %aux_r_if = if scalar_expr then {
+        logical_tensor %$0, token %$0_w, token %aux_r = ADDS(%aux) token();
+        logical_tensor %$1, token %$1_w, token %aux_r = SUBS(%aux) token();
+        logical_tensor %$2, token %$2_w, token %$0_r, token %$1_r = ADD(%$0, %$1) token(%$0_w, %$1_w);
+        yield %$0, %$1, %$2, %$0_w, %$1_w, %$2_w, %aux_r;
+    }
+    else {
+        logical_tensor %$3, token %$3_w, token %x_r = ADDS(%x) token();
+        yield %None, %None, %$3, %None, %None, %$3_w, %None;
+    }
+    logical_tensor %$7, token %$7_w = VEC_DUP() token();
+    logical_tensor %aux_1, token %aux_1_w, token %$7_r = ASSEMBLE(%$7) token(%$7_w, %aux_r_if);
+    logical_tensor %out_1, token %out_1_w, token %result_r = ASSEMBLE(%result) token(%result_w_if);
+    return %x, %aux_1, %out_1, %condition;
+}

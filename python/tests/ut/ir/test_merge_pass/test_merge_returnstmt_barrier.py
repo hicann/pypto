@@ -7,23 +7,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 
+from pathlib import Path
+
 import pypto
 
 from ..test_common import check_snapshot, run_merge_pass
 
-IR = """
-@ir.function
-def foo(x@0: ir.Tensor, y@1: ir.Tensor, z@2: ir.Tensor):
-    if (0<n):
-        $0@3 = ADD(x@0, y@1)
-        z@2 = ASSEMBLE($0@3, attrs=["toOffset": [0, 0]])
-        z = ir.yield_(z@2)
-    else:
-        $1@4 = SUB(x@0, y@1)
-        z@2 = ASSEMBLE($1@4, attrs=["toOffset": [0, 0]])
-        z = ir.yield_(z@2)
-    return x@0, y@1, z@2
-"""  # noqa: E501
+_GOLDEN_DIR = Path(__file__).parent
+
+IR = (_GOLDEN_DIR / "test_merge_returnstmt_barrier.pypto").read_text()
 
 
 def test_merge_return_stmt_barrier():

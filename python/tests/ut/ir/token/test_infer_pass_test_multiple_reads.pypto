@@ -1,0 +1,6 @@
+function foo incast(logical_tensor %x) outcast() #type(Opaque) #entry(false) {
+    logical_tensor %$0, token %$0_w, token %x_r = ADDS(%x) token();
+    logical_tensor %$1, token %$1_w, token %x_r = SUBS(%x) token();
+    logical_tensor %$2, token %$2_w, token %$0_r, token %$1_r = ADD(%$0, %$1) token(%$0_w, %$1_w);
+    return %x;
+}

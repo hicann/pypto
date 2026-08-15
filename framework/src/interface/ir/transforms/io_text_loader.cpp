@@ -558,9 +558,12 @@ public:
             MUST_MATCH(ParseToken(LexerTokenKind::PunComma));
             MUST_VALID(layoutStr, ParseIdent());
             TensorLayout layout = GetTensorLayoutDict().Find(layoutStr->data, TensorLayout::ND);
-            MUST_MATCH(ParseToken(LexerTokenKind::PunComma));
-            MUST_VALID(ptrExpr, ParseExpr());
-            tensorView = TensorView(validShape->data, stride->data, layout, ptrExpr);
+            if (CheckToken(LexerTokenKind::PunComma, true)) {
+                MUST_VALID(ptrExpr, ParseExpr());
+                tensorView = TensorView(validShape->data, stride->data, layout, ptrExpr);
+            } else {
+                tensorView = TensorView(validShape->data, stride->data, layout);
+            }
         }
 
         MUST_MATCH(ParseToken(LexerTokenKind::PunGt));
@@ -592,7 +595,11 @@ public:
             MUST_MATCH(ParseToken(LexerTokenKind::PunComma));
             auto stride = ParseShape();
             MUST_MATCH(ParseToken(LexerTokenKind::PunComma));
-            MUST_VALID(startOffset, ParseExpr());
+            ExprPtr startOffset = nullptr;
+            if (!CheckToken(LexerTokenKind::KwNull)) {
+                MUST_VALID(offset, ParseExpr());
+                startOffset = offset;
+            }
             tileView = TileView(validShape->data, stride->data, startOffset);
         }
 

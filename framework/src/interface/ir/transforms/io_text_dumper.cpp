@@ -128,8 +128,10 @@ void IRDumperText::VisitType_(const TensorTypePtr& op)
         stream_ << IR_PUN_COMMA << " ";
         PrintShape(tv.stride);
         stream_ << IR_PUN_COMMA << " " << GetTensorLayoutDict().Find(tv.layout);
-        stream_ << IR_PUN_COMMA << " ";
-        VisitExpr(tv.ptr.value());
+        if (tv.ptr.has_value()) {
+            stream_ << IR_PUN_COMMA << " ";
+            VisitExpr(tv.ptr.value());
+        }
     }
     stream_ << IR_PUN_GT;
     stream_ << IR_PUN_GT;
@@ -147,7 +149,11 @@ void IRDumperText::VisitType_(const TileTypePtr& op)
         stream_ << IR_PUN_COMMA << " ";
         PrintShape(tv.stride);
         stream_ << IR_PUN_COMMA << " ";
-        VisitExpr(tv.startOffset);
+        if (tv.startOffset) {
+            VisitExpr(tv.startOffset);
+        } else {
+            stream_ << IR_KW_NULL;
+        }
     }
     stream_ << IR_PUN_GT;
     stream_ << IR_PUN_COMMA << " " << IR_KW_HW_INFO << IR_PUN_LT;
@@ -391,7 +397,11 @@ void IRDumperText::VisitStmt_(const IfStmtPtr& op)
     stream_ << " " << IR_KW_THEN;
     PrintBody(op->thenBody_);
     stream_ << "\n" << GetIndent() << IR_KW_ELSE;
-    PrintBody(op->elseBody_.value());
+    if (op->elseBody_.has_value()) {
+        PrintBody(op->elseBody_.value());
+    } else {
+        stream_ << " " << IR_PUN_LBRACE << IR_PUN_RBRACE;
+    }
 }
 
 void IRDumperText::VisitStmt_(const YieldStmtPtr& op)

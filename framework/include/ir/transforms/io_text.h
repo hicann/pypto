@@ -59,6 +59,7 @@
 #define IR_KW_PTR "ptr"
 #define IR_KW_TOKEN "token"
 #define IR_KW_NONE "none"
+#define IR_KW_NULL "null"
 #define IR_KW_TENSOR_VIEW "tensor_view"
 #define IR_KW_TILE_VIEW "tile_view"
 #define IR_KW_MEMREF "memref"
@@ -160,6 +161,7 @@ enum class LexerTokenKind {
     KwEntry,
     KwType,
     KwDim,
+    KwNull,
     // Scalar binary op keywords
     KwBOpAdd,
     KwBOpSub,
@@ -277,6 +279,7 @@ static inline const npu::tile_fwk::BiMap<LexerTokenKind>& GetLexerTokenDict()
         {LexerTokenKind::KwEntry, IR_KW_ENTRY},
         {LexerTokenKind::KwType, IR_KW_TYPE},
         {LexerTokenKind::KwDim, IR_KW_DIM},
+        {LexerTokenKind::KwNull, IR_KW_NULL},
         // Scalar binary ops
         {LexerTokenKind::KwBOpAdd, IR_KW_SCALAR_BOP_ADD},
         {LexerTokenKind::KwBOpSub, IR_KW_SCALAR_BOP_SUB},

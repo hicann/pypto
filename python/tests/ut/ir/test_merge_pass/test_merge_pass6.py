@@ -7,27 +7,15 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 
+from pathlib import Path
+
 import pypto
 
 from ..test_common import check_snapshot, run_merge_pass
 
-IR = """
-@ir.function
-def foo(x@0: ir.Tensor, y@1: ir.Tensor, z@2: ir.Tensor):
-    View_x@3 = VIEW(x@0, attrs=["fromOffset": [0, 0], "toValidShape": [16, 16]])
-    View_y@4 = VIEW(y@1, attrs=["fromOffset": [0, 0], "toValidShape": [16, 16]])
-    for loop_idx_32 in ir.range(0, 2, 1, attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
-        if (loop_idx_32==0):
-            $0@5 = ADD(View_x@3, View_y@4)
-            z@2 = ASSEMBLE($0@5, attrs=["toOffset": [0, 0]])
-            ir.yield_()
-        else:
-            $3@7 = SUB(View_x@3, View_y@4)
-            z@2 = ASSEMBLE($3@7, attrs=["toOffset": [0, 0]])
-            ir.yield_()
-        continue
-    return x@0, y@1, z@2
-"""
+_GOLDEN_DIR = Path(__file__).parent
+
+IR = (_GOLDEN_DIR / "test_merge_pass6.pypto").read_text()
 
 
 def test_merge_pass6():

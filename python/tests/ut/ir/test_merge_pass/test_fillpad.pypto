@@ -1,0 +1,25 @@
+function foo incast(logical_tensor %a, logical_tensor %b) outcast() #type(Opaque) #entry(false) {
+    logical_tensor %b_9 = for %loop_idx_12 inrange 0, scalar_expr, 2 iter {logical_tensor %b_1 = %b;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(2) {
+        logical_tensor %b_7 = if scalar_expr then {
+            logical_tensor %$3 = VEC_DUP() token();
+            logical_tensor %b_5 = ADDS(%$3) token();
+            yield %b_5;
+        }
+        else {
+            yield %b_1;
+        }
+        continue %b_7;
+    }
+    logical_tensor %b_16 = for %loop_idx_12_0 inrange scalar_expr, %n, 1 iter {logical_tensor %b_11 = %b_9;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        logical_tensor %b_14 = if scalar_expr then {
+            logical_tensor %$8 = VEC_DUP() token();
+            logical_tensor %b_12 = ADDS(%$8) token();
+            yield %b_12;
+        }
+        else {
+            yield %b_11;
+        }
+        continue %b_14;
+    }
+    return %a, %b_16;
+}

@@ -75,7 +75,7 @@ def test_contiguous_addr_auto_offset():
 
     ir_str = _ir_to_str(_parse_kernel(k))
     # 128*128*2 bytes = 32768 -> second tile at base + 32768.
-    assert "ir.MemRef" in ir_str
+    assert "memref_addr=" in ir_str
     assert "32768" in ir_str
 
 
@@ -90,7 +90,7 @@ def test_discrete_addrs_list():
         pl.load(cur1, a, [0, 0])
 
     ir_str = _ir_to_str(_parse_kernel(k))
-    assert "ir.MemRef" in ir_str
+    assert "memref_addr=" in ir_str
     assert "65536" in ir_str
 
 
@@ -293,7 +293,7 @@ def test_subscript_const_index_materializes_mutex_companions():
     assert ir_str.count("block.make_tile") == 2, ir_str
     assert "_bufidx" not in ir_str, ir_str
     assert ir_str.count("system.mutex_lock_dyn") == 2, ir_str
-    assert "mutex_ids=\"mutex_ids\": [6, 7]" in ir_str, ir_str
+    assert "mutex_ids=[6, 7]" in ir_str, ir_str
 
 
 def test_subscript_negative_index_rejected():
@@ -361,7 +361,7 @@ def test_subscript_dynamic_index_expression():
     ir_str = _ir_to_str(_parse_kernel(k))
     assert "mutex_lock_dyn" in ir_str, ir_str
     assert ir_str.count("_bufidx") >= 2, ir_str
-    assert " % " in ir_str, ir_str
+    assert " mod " in ir_str, ir_str
 
 
 def test_subscript_single_tile_group_requires_bounded_index():
@@ -377,7 +377,7 @@ def test_subscript_single_tile_group_requires_bounded_index():
     ir_str = _ir_to_str(_parse_kernel(k))
     assert "mutex_lock_dyn" in ir_str, ir_str
     assert "_bufidx" in ir_str, ir_str
-    assert " % " in ir_str, ir_str
+    assert " mod " in ir_str, ir_str
 
 
 def test_subscript_two_slots_in_one_op_dedup():
@@ -603,8 +603,8 @@ def test_const_multi_mutex_ids_use_one_dedup_op():
     ir_str = _ir_to_str(_parse_kernel(k))
     assert ir_str.count("system.mutex_lock_dyn") == 1, ir_str
     assert ir_str.count("system.mutex_unlock_dyn") == 1, ir_str
-    assert "mutex_id_owner_indices=\"mutex_id_owner_indices\": [0, 0]" in ir_str, ir_str
-    assert "mutex_ids=\"mutex_ids\": [2, 3]" in ir_str, ir_str
+    assert "mutex_id_owner_indices=[0, 0]" in ir_str, ir_str
+    assert "mutex_ids=[2, 3]" in ir_str, ir_str
 
 
 def test_dynamic_multi_mutex_ids_use_one_dedup_op():

@@ -457,10 +457,11 @@ def test_enum_in_tuple_folds_to_selected_branch():
     An enum operand cannot be lowered to an IR constant, so the membership test
     must be decided while parsing and the enclosing ternary collapsed.
     """
-    assert "ir.MemRef(ir.MemorySpace.Mat, 32768" in _tile_group_addr_ir(pl.DT_FP32, _addr_for)
-    assert "ir.MemRef(ir.MemorySpace.Mat, 16384" in _tile_group_addr_ir(pl.DT_FP16, _addr_for)
+    assert "target_memory=Mat" in _tile_group_addr_ir(pl.DT_FP32, _addr_for)
+    assert "memref_addr=32768" in _tile_group_addr_ir(pl.DT_FP32, _addr_for)
+    assert "memref_addr=16384" in _tile_group_addr_ir(pl.DT_FP16, _addr_for)
 
 
 def test_enum_not_in_tuple_folds_to_selected_branch():
-    assert "ir.MemRef(ir.MemorySpace.Mat, 4096" in _tile_group_addr_ir(pl.DT_FP16, _addr_for_not_in)
-    assert "ir.MemRef(ir.MemorySpace.Mat, 8192" in _tile_group_addr_ir(pl.DT_FP32, _addr_for_not_in)
+    assert "memref_addr=4096" in _tile_group_addr_ir(pl.DT_FP16, _addr_for_not_in)
+    assert "memref_addr=8192" in _tile_group_addr_ir(pl.DT_FP32, _addr_for_not_in)

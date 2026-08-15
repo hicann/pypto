@@ -674,7 +674,7 @@ def test_dtype_kwarg_from_closure_enum_list():
         return result
 
     assert isinstance(func, ir.Function)
-    assert "ir.FP32" in str(func)
+    assert "target_type=float" in str(func)
 
 
 @pytest.mark.soc("950")
@@ -687,7 +687,7 @@ def test_dtype_kwarg_from_helper_returning_enum():
         return result
 
     assert isinstance(func, ir.Function)
-    assert "ir.FP32" in str(func)
+    assert "target_type=float" in str(func)
 
 
 @pytest.mark.soc("950")

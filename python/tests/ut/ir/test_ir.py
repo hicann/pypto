@@ -426,17 +426,17 @@ def test_basic_stmt():
     func = ir.Function("test_func", [x], [st], assign_x, span)
     assert str(func) == "\n".join(
         [
-            "@ir.function",
-            "def test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
-            "    x: ir.Scalar[ir.INT32] = 42",
+            "function test_func incast(int32_t %x) outcast(int32_t) #type(Opaque) #entry(false) {",
+            "    int32_t %x = 42;",
+            "}",
         ]
     )
     helper_func = ir.Function("helper", [x], [st], ir.YieldStmt([x], span), span, ir.FunctionType.Helper)
     assert str(helper_func) == "\n".join(
         [
-            "@ir.function(type=ir.FunctionType.Helper)",
-            "def helper(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
-            "    return x",
+            "function helper incast(int32_t %x) outcast(int32_t) #type(Helper) #entry(false) {",
+            "    yield %x;",
+            "}",
         ]
     )
 
@@ -445,13 +445,14 @@ def test_basic_stmt():
     prog = ir.Program([func, func2], "test_prog", span)
     assert str(prog) == "\n".join(
         [
-            "# ir.program: test_prog",
-            "@ir.function",
-            "def test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
-            "    x: ir.Scalar[ir.INT32] = 42",
-            "@ir.function",
-            "def test_func2(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
-            "    x: ir.Scalar[ir.INT32] = 42",
+            "program #entry() {",
+            "    function test_func incast(int32_t %x) outcast(int32_t) #type(Opaque) #entry(false) {",
+            "        int32_t %x = 42;",
+            "    }",
+            "    function test_func2 incast(int32_t %x) outcast(int32_t) #type(Opaque) #entry(false) {",
+            "        int32_t %x = 42;",
+            "    }",
+            "}",
         ]
     )
     assert prog["test_func"] is not None

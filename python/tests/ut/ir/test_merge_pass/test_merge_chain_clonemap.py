@@ -7,46 +7,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 
+from pathlib import Path
+
 import pypto
 from pypto import ir, pil
 
 from ..test_common import check_snapshot
 
-IR = """
-@ir.function
-def foo(x@0: ir.Tensor, y@1: ir.Tensor, z@2: ir.Tensor):
-    for loop_idx_20, (i, s0, t0, t1) in ir.range(0, 2, 1, init_values=(None, None, None, None), attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
-        if (0<n):
-            if (0<m):
-                $0@3 = ADD(x@0, y@1)
-                $3@5 = ADD($0@3, y@1)
-                $6@7 = ADD($3@5, x@0)
-                z@2 = ASSEMBLE($6@7, attrs=["toOffset": [0, 0]])
-                $0_0, t1_0, $6_0, z = ir.yield_($0@3, $3@5, $6@7, z@2)
-            else:
-                $0_1@3 = ADD(x@0, y@1)
-                $4@6 = SUB($0_1@3, y@1)
-                $6_2@7 = ADD($4@6, x@0)
-                z@2 = ASSEMBLE($6_2@7, attrs=["toOffset": [0, 0]])
-                $0_0, t1_0, $6_0, z = ir.yield_($0_1@3, $4@6, $6_2@7, z@2)
-            t0_0, t1_2, $6_1, z = ir.yield_($0_0@3, t1_0@5, $6_0@7, z@2)
-        else:
-            if (0<m):
-                $1@4 = SUB(x@0, y@1)
-                $3_0@5 = ADD($1@4, y@1)
-                $6_4@7 = ADD($3_0@5, x@0)
-                z@2 = ASSEMBLE($6_4@7, attrs=["toOffset": [0, 0]])
-                $1_0, t1_3, $6_5, z = ir.yield_($1@4, $3_0@5, $6_4@7, z@2)
-            else:
-                $1_1@4 = SUB(x@0, y@1)
-                $4_0@6 = SUB($1_1@4, y@1)
-                $6_3@7 = ADD($4_0@6, x@0)
-                z@2 = ASSEMBLE($6_3@7, attrs=["toOffset": [0, 0]])
-                $1_0, t1_3, $6_5, z = ir.yield_($1_1@4, $4_0@6, $6_3@7, z@2)
-            t0_0, t1_2, $6_1, z = ir.yield_($1_0@4, t1_3@5, $6_5@7, z@2)
-        i_0, s0_0, t0_1, t1_1 = continue loop_idx_20, $6_1@7, t0_0@3, t1_2@5
-    return x@0, y@1, z@2
-"""  # noqa: E501
+_GOLDEN_DIR = Path(__file__).parent
+
+IR = (_GOLDEN_DIR / "test_merge_chain_clonemap.pypto").read_text()
 
 
 def test_merge_chain_clonemap():

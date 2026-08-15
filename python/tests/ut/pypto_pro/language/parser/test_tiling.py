@@ -149,7 +149,7 @@ def test_tiling_field_access_lowers_to_getitem():
     assert len(kernel.params) == 1
     assert kernel.params[0].name == "tiling"
     # tiling.x lowers to tiling[0] (field index 0 of the struct).
-    assert "tiling[0]" in str(kernel)
+    assert "getitem(%tiling, 0)" in str(kernel)
 
 
 def test_tiling_registry_reset_between_functions():
@@ -361,7 +361,7 @@ def test_array_bare_name_resolves_to_nested_tuple():
 
     assert isinstance(kernel, ir.Function)
     # tiling.offsets lowers to tiling[0], the nested tuple holding the array elements.
-    assert "tiling[0]" in str(kernel)
+    assert "getitem(%tiling, 0)" in str(kernel)
 
 
 def test_array_out_of_bounds_raises_error():

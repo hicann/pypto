@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 """Tests for ir.Pass.infer_token_pass."""
 
+from pathlib import Path
 import re
 
 import pypto
@@ -16,6 +17,8 @@ from pypto import ir
 from pypto.pil.compile_pipeline import compile_new_ir
 
 from ..test_common import check_snapshot
+
+_GOLDEN_DIR = Path(__file__).parent
 
 
 def _run_infer_token_pass(func, *args):
@@ -57,14 +60,7 @@ def _check_snapshot(func, golden):
     check_snapshot(_NormalizedSnapshot(func), _normalize_token_names(golden))
 
 
-IR_0 = """
-@ir.function
-def foo(x@0: ir.Tensor):
-    $0@1, $0_w, x_r = ADD(x@0, x@0)
-    return x@0
-"""
-
-
+IR_0 = (_GOLDEN_DIR / "test_infer_pass_test_repeated_input.pypto").read_text()
 def test_repeated_input():
     def foo(x):
         pypto.add(x, x)
@@ -73,14 +69,7 @@ def test_repeated_input():
     check_snapshot(func, IR_0)
 
 
-IR_1 = """
-@ir.function
-def foo(x@0: ir.Tensor):
-    [$1@2, $0@1], $1_w, $0_w, x_r = TOPK(x@0)
-    return x@0
-"""
-
-
+IR_1 = (_GOLDEN_DIR / "test_infer_pass_test_multiple_outputs.pypto").read_text()
 def test_multiple_outputs():
     def foo(x):
         pypto.topk(x, 2)
@@ -89,16 +78,7 @@ def test_multiple_outputs():
     check_snapshot(func, IR_1)
 
 
-IR_2 = """
-@ir.function
-def foo(x@0: ir.Tensor):
-    $0@1, $0_w, x_r = ADDS(x@0)
-    $1@2, $1_w, x_r = SUBS(x@0)
-    $2@3, $2_w, $0_r, $1_r = ADD($0@1, $1@2, tokens=[$0_w, $1_w])
-    return x@0
-"""
-
-
+IR_2 = (_GOLDEN_DIR / "test_infer_pass_test_multiple_reads.pypto").read_text()
 def test_multiple_reads():
     def foo(x):
         lhs = x + 1.0
@@ -109,17 +89,7 @@ def test_multiple_reads():
     check_snapshot(func, IR_2)
 
 
-IR_3 = """
-@ir.function
-def foo(a@0: ir.Tensor, b@1: ir.Tensor):
-    $0@2, $0_w, b_r = EXP(b@1)
-    a_1@0, a_1_w, $0_r = ASSEMBLE($0@2, tokens=[$0_w], attrs=["toOffset": [0, 0]])
-    $1@3, $1_w, a_1_r = EXP(a_1@0, tokens=[a_1_w])
-    $2@4, $2_w, a_1_r = EXP(a_1@0, tokens=[a_1_w])
-    return a_1@0, b@1
-"""
-
-
+IR_3 = (_GOLDEN_DIR / "test_infer_pass_test_read_after_write.pypto").read_text()
 def test_read_after_write():
     def foo(a, b):
         value = pypto.exp(b)
@@ -131,18 +101,7 @@ def test_read_after_write():
     check_snapshot(func, IR_3)
 
 
-IR_4 = """
-@ir.function
-def foo(x@0: ir.Tensor):
-    aux@1, aux_w = TENSOR_ALLOC()
-    $0@2, $0_w, aux_r = ADDS(aux@1, tokens=[aux_w])
-    $1@3, $1_w = VEC_DUP()
-    aux_1@1, aux_1_w, $1_r = ASSEMBLE($1@3, tokens=[$1_w, aux_r], attrs=["toOffset": [0, 0]])
-    $2@4, $2_w, $0_r, x_r = ADD($0@2, x@0, tokens=[$0_w])
-    return x@0
-"""
-
-
+IR_4 = (_GOLDEN_DIR / "test_infer_pass_test_write_after_read.pypto").read_text()
 def test_write_after_read():
     def foo(x):
         pypto.set_vec_tile_shapes(16, 16)
@@ -156,16 +115,7 @@ def test_write_after_read():
     check_snapshot(func, IR_4)
 
 
-IR_5 = """
-@ir.function
-def foo(a@0: ir.Tensor):
-    $0@1, $0_w, a_r = EXP(a@0)
-    $1@2, $1_w, a_r = EXP(a@0)
-    a_1@0, a_1_w, $0_r = ASSEMBLE($0@1, tokens=[$0_w, a_r], attrs=["toOffset": [0, 0]])
-    return a_1@0
-"""
-
-
+IR_5 = (_GOLDEN_DIR / "test_infer_pass_test_read_read_write.pypto").read_text()
 def test_read_read_write():
     def foo(a):
         value = pypto.exp(a)
@@ -176,18 +126,7 @@ def test_read_read_write():
     check_snapshot(func, IR_5)
 
 
-IR_6 = """
-@ir.function
-def foo(a@0: ir.Tensor, b@1: ir.Tensor, c@2: ir.Tensor):
-    $0@3, $0_w, b_r = EXP(b@1)
-    a_1@0, a_1_w, $0_r = ASSEMBLE($0@3, tokens=[$0_w], attrs=["toOffset": [0, 0]])
-    $1@4, $1_w, c_r = EXP(c@2)
-    a_3@0, a_3_w, $1_r = ASSEMBLE($1@4, tokens=[$1_w, a_1_w], attrs=["toOffset": [0, 0]])
-    $2@5, $2_w, a_3_r = EXP(a_3@0, tokens=[a_3_w])
-    return a_3@0, b@1, c@2
-"""
-
-
+IR_6 = (_GOLDEN_DIR / "test_infer_pass_test_write_write_read.pypto").read_text()
 def test_write_write_read():
     def foo(a, b, c):
         first = pypto.exp(b)
@@ -200,22 +139,7 @@ def test_write_write_read():
     check_snapshot(func, IR_6)
 
 
-IR_7 = """
-@ir.function
-def foo(x@0: ir.Tensor, aux@1: ir.Tensor, out@2: ir.Tensor, condition@3: ir.Tensor):
-    $0@4, $0_w = VEC_DUP()
-    aux_1@1, aux_1_w, $0_r = ASSEMBLE($0@4, tokens=[$0_w], attrs=["toOffset": [0, 0]])
-    if (0<RUNTIME_GetInputShapeDim(ARG_condition,0)):
-        $1@5, $1_w, aux_1_r, x_r = ADD(aux_1@1, x@0, tokens=[aux_1_w])
-        result, result_w_if = ir.yield_($1@5, $1_w)
-    else:
-        $2@6, $2_w, aux_1_r_0, x_r_0 = SUB(aux_1@1, x@0, tokens=[aux_1_w])
-        result, result_w_if = ir.yield_($2@6, $2_w)
-    out_1@2, out_1_w, result_r = ASSEMBLE(result@5, tokens=[result_w_if], attrs=["toOffset": [0, 0]])
-    return x@0, aux_1@1, out_1@2, condition@3
-"""
-
-
+IR_7 = (_GOLDEN_DIR / "test_infer_pass_test_if_input.pypto").read_text()
 def test_if_input():
     def foo(x, aux, out, condition):
         pypto.set_vec_tile_shapes(16, 16)
@@ -231,23 +155,7 @@ def test_if_input():
     _check_snapshot(func, IR_7)
 
 
-IR_8 = """
-@ir.function
-def foo(x@0: ir.Tensor, aux@1: ir.Tensor, out@2: ir.Tensor, condition@3: ir.Tensor):
-    if (0<RUNTIME_GetInputShapeDim(ARG_condition,0)):
-        $0@4, $0_w = VEC_DUP()
-        aux_1@1, aux_1_w, $0_r = ASSEMBLE($0@4, tokens=[$0_w], attrs=["toOffset": [0, 0]])
-        src_else, src_then, src_else_w_if, src_then_w_if, aux_1_w_if = ir.yield_(None, $0@4, None, $0_w, aux_1_w)
-    else:
-        $1@5, $1_w = VEC_DUP()
-        aux_3@1, aux_3_w, $1_r = ASSEMBLE($1@5, tokens=[$1_w], attrs=["toOffset": [0, 0]])
-        src_else, src_then, src_else_w_if, src_then_w_if, aux_1_w_if = ir.yield_($1@5, None, $1_w, None, aux_3_w)
-    $4@6, $4_w, aux_r, x_r = ADD(aux@1, x@0, tokens=[aux_1_w_if])
-    out_1@2, out_1_w, $4_r = ASSEMBLE($4@6, tokens=[$4_w], attrs=["toOffset": [0, 0]])
-    return x@0, aux@1, out_1@2, condition@3
-"""
-
-
+IR_8 = (_GOLDEN_DIR / "test_infer_pass_test_if_output.pypto").read_text()
 def test_if_output():
     def foo(x, aux, out, condition):
         pypto.set_vec_tile_shapes(16, 16)
@@ -264,23 +172,7 @@ def test_if_output():
     _check_snapshot(func, IR_8)
 
 
-IR_9 = """
-@ir.function
-def foo(x@0: ir.Tensor, aux@1: ir.Tensor, out@2: ir.Tensor, condition@3: ir.Tensor):
-    $0@4, $0_w = VEC_DUP()
-    aux_1@1, aux_1_w, $0_r = ASSEMBLE($0@4, tokens=[$0_w], attrs=["toOffset": [0, 0]])
-    if (0<RUNTIME_GetInputShapeDim(ARG_condition,0)):
-        $1@5, $1_w = VEC_DUP()
-        aux_3@1, aux_3_w, $1_r = ASSEMBLE($1@5, tokens=[$1_w, aux_1_w], attrs=["toOffset": [0, 0]])
-        inside, inside_w_if, aux_1_w_if = ir.yield_($1@5, $1_w, aux_3_w)
-    else:
-        inside, inside_w_if, aux_1_w_if = ir.yield_(None, None, aux_1_w)
-    $3@6, $3_w, aux_1_r, x_r = ADD(aux_1@1, x@0, tokens=[aux_1_w_if])
-    out_1@2, out_1_w, $3_r = ASSEMBLE($3@6, tokens=[$3_w], attrs=["toOffset": [0, 0]])
-    return x@0, aux_1@1, out_1@2, condition@3
-"""
-
-
+IR_9 = (_GOLDEN_DIR / "test_infer_pass_test_if_passthrough.pypto").read_text()
 def test_if_passthrough():
     def foo(x, aux, out, condition):
         pypto.set_vec_tile_shapes(16, 16)
@@ -296,24 +188,7 @@ def test_if_passthrough():
     _check_snapshot(func, IR_9)
 
 
-IR_10 = """
-@ir.function
-def foo(x@0: ir.Tensor, aux@1: ir.Tensor, out@2: ir.Tensor, condition@3: ir.Tensor):
-    if (0<RUNTIME_GetInputShapeDim(ARG_condition,0)):
-        $0@4, $0_w, aux_r = ADDS(aux@1)
-        $1@5, $1_w, aux_r = SUBS(aux@1)
-        $2@6, $2_w, $0_r, $1_r = ADD($0@4, $1@5, tokens=[$0_w, $1_w])
-        read0, read1, result, read0_w_if, read1_w_if, result_w_if, aux_r_if = ir.yield_($0@4, $1@5, $2@6, $0_w, $1_w, $2_w, aux_r)
-    else:
-        $3@7, $3_w, x_r = ADDS(x@0)
-        read0, read1, result, read0_w_if, read1_w_if, result_w_if, aux_r_if = ir.yield_(None, None, $3@7, None, None, $3_w, None)
-    $7@8, $7_w = VEC_DUP()
-    aux_1@1, aux_1_w, $7_r = ASSEMBLE($7@8, tokens=[$7_w, aux_r_if], attrs=["toOffset": [0, 0]])
-    out_1@2, out_1_w, result_r = ASSEMBLE(result@6, tokens=[result_w_if], attrs=["toOffset": [0, 0]])
-    return x@0, aux_1@1, out_1@2, condition@3
-"""
-
-
+IR_10 = (_GOLDEN_DIR / "test_infer_pass_test_if_multiple_reads.pypto").read_text()
 def test_if_multiple_reads():
     def foo(x, aux, out, condition):
         pypto.set_vec_tile_shapes(16, 16)
@@ -331,19 +206,7 @@ def test_if_multiple_reads():
     _check_snapshot(func, IR_10)
 
 
-IR_11 = """
-@ir.function
-def foo(x@0: ir.Tensor, aux@1: ir.Tensor, out@2: ir.Tensor):
-    $0@3, $0_w = VEC_DUP()
-    aux_1@1, aux_1_w, $0_r = ASSEMBLE($0@3, tokens=[$0_w], attrs=["toOffset": [0, 0]])
-    for loop_idx_N, (_, result, result_0_w_for_iter) in ir.range(0, 2, 1, init_values=(None, None, None), attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
-        $1@4, $1_w, aux_1_r, x_r = ADD(aux_1@1, x@0, tokens=[aux_1_w])
-        __0, result_0, result_0_w_for = continue loop_idx_N, $1@4, $1_w
-    out_1@2, out_1_w, result_0_r = ASSEMBLE(result_0@4, tokens=[result_0_w_for], attrs=["toOffset": [0, 0]])
-    return x@0, aux_1@1, out_1@2
-"""
-
-
+IR_11 = (_GOLDEN_DIR / "test_infer_pass_test_for_input.pypto").read_text()
 def test_for_input():
     def foo(x, aux, out):
         pypto.set_vec_tile_shapes(16, 16)
@@ -357,19 +220,7 @@ def test_for_input():
     _check_snapshot(func, IR_11)
 
 
-IR_12 = """
-@ir.function
-def foo(x@0: ir.Tensor, aux@1: ir.Tensor, out@2: ir.Tensor):
-    for loop_idx_N, (i, src, src_0_w_for_iter, aux_1_w_for_iter) in ir.range(0, 2, 1, init_values=(None, None, None, None), attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
-        $0@3, $0_w = VEC_DUP()
-        aux_1@1, aux_1_w, $0_r = ASSEMBLE($0@3, tokens=[$0_w], attrs=["toOffset": [(loop_idx_N*8), 0]])
-        i_0, src_0, src_0_w_for, aux_1_w_for = continue loop_idx_N, $0@3, $0_w, aux_1_w
-    $2@4, $2_w, x_r, aux_1_r = ADD(x@0, aux_1@1, tokens=[aux_1_w_for])
-    out_1@2, out_1_w, $2_r = ASSEMBLE($2@4, tokens=[$2_w], attrs=["toOffset": [0, 0]])
-    return x@0, aux_1@1, out_1@2
-"""
-
-
+IR_12 = (_GOLDEN_DIR / "test_infer_pass_test_for_output.pypto").read_text()
 def test_for_output():
     def foo(x, aux, out):
         pypto.set_vec_tile_shapes(16, 16)
@@ -383,21 +234,7 @@ def test_for_output():
     _check_snapshot(func, IR_12)
 
 
-IR_13 = """
-@ir.function
-def foo(x@0: ir.Tensor, aux@1: ir.Tensor, out@2: ir.Tensor, condition@3: ir.Tensor):
-    if (0<RUNTIME_GetInputShapeDim(ARG_condition,0)):
-        $0@4, $0_w = VEC_DUP()
-        aux_1@1, aux_1_w, $0_r = ASSEMBLE($0@4, tokens=[$0_w], attrs=["toOffset": [0, 0]])
-        inside, inside_w_if, aux_1_w_if = ir.yield_($0@4, $0_w, aux_1_w)
-    else:
-        inside, inside_w_if, aux_1_w_if = ir.yield_(None, None, None)
-    $2@5, $2_w, aux_r, x_r = ADD(aux@1, x@0, tokens=[aux_1_w_if])
-    out_1@2, out_1_w, $2_r = ASSEMBLE($2@5, tokens=[$2_w], attrs=["toOffset": [0, 0]])
-    return x@0, aux@1, out_1@2, condition@3
-"""
-
-
+IR_13 = (_GOLDEN_DIR / "test_infer_pass_test_if_none.pypto").read_text()
 def test_if_none():
     def foo(x, aux, out, condition):
         pypto.set_vec_tile_shapes(16, 16)
@@ -411,19 +248,7 @@ def test_if_none():
     _check_snapshot(func, IR_13)
 
 
-IR_14 = """
-@ir.function
-def foo(x@0: ir.Tensor, aux@1: ir.Tensor, out@2: ir.Tensor):
-    for loop_idx_N, (_, read, read_0_w_for_iter, aux_r_for_iter) in ir.range(0, 2, 1, init_values=(None, None, None, None), attrs={"parallel": False, "submit_before_loop": False, "unroll_times": 1}):
-        $0@3, $0_w, aux_r, x_r = ADD(aux@1, x@0)
-        __0, read_0, read_0_w_for, aux_r_for = continue loop_idx_N, $0@3, $0_w, aux_r
-    $2@4, $2_w = VEC_DUP()
-    aux_1@1, aux_1_w, $2_r = ASSEMBLE($2@4, tokens=[$2_w, aux_r_for], attrs=["toOffset": [0, 0]])
-    out_1@2, out_1_w, read_0_r = ASSEMBLE(read_0@3, tokens=[read_0_w_for], attrs=["toOffset": [0, 0]])
-    return x@0, aux_1@1, out_1@2
-"""
-
-
+IR_14 = (_GOLDEN_DIR / "test_infer_pass_test_for_read_output.pypto").read_text()
 def test_for_read_output():
     def foo(x, aux, out):
         pypto.set_vec_tile_shapes(16, 16)

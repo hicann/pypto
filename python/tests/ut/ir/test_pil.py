@@ -976,8 +976,8 @@ def test_printer():
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
-    assert "= continue" in str(func)
-    assert "= ir.yield_" in str(func)
+    assert "continue %loop_idx_" in str(func)
+    assert "yield" in str(func)
 
 
 def nest1(a, b, out):
