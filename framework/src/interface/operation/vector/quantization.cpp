@@ -702,7 +702,6 @@ LogicalTensorPtr TensorQuantizeSymmetricOperation(Function& function, const Logi
     auto result = std::make_shared<LogicalTensor>(function, DataType::DT_INT8, src->shape, src->GetDynValidShape());
     auto& op = function.AddOperation(Opcode::OP_QUANTIZE_SYM, {src, scale}, {result});
     op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
-    function.UpdateTensorDataUsage(op);
     return result;
 }
 
@@ -714,7 +713,6 @@ LogicalTensorPtr TensorQuantizeAsymmetricOperation(Function& function, const Log
     auto result = std::make_shared<LogicalTensor>(function, DataType::DT_UINT8, src->shape, src->GetDynValidShape());
     auto& op = function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {src, scale, offset}, {result});
     op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
-    function.UpdateTensorDataUsage(op);
     return result;
 }
 
@@ -1010,7 +1008,6 @@ LogicalTensorPtr TensorDequantizeOperation(Function& function, const LogicalTens
     auto result = std::make_shared<LogicalTensor>(function, DataType::DT_FP32, src->shape, src->GetDynValidShape());
     auto& op = function.AddOperation(Opcode::OP_DEQUANTIZE, {src, scale, offset}, {result});
     op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
-    function.UpdateTensorDataUsage(op);
     return result;
 }
 

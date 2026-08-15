@@ -529,7 +529,6 @@ void experimental::Print(SymbolicScalar cond, const std::string& format, const s
     op.SetAttr(OP_ATTR_PREFIX + "format", format);
     op.SetAttr(OP_ATTR_PREFIX + "scalars", scalars);
     op.SetAttribute(OP_ATTR_PREFIX + "cond", cond);
-    function->UpdateTensorDataUsage(op);
 }
 
 void ToFile(const Tensor& operand, const std::string& fname, const std::vector<SymbolicScalar>& scalars,
@@ -541,7 +540,6 @@ void ToFile(const Tensor& operand, const std::string& fname, const std::vector<S
     op.SetAttribute(OP_ATTR_PREFIX + "fname", fname);
     op.SetAttribute(OP_ATTR_PREFIX + "scalars", scalars);
     op.SetAttribute(OP_ATTR_PREFIX + "cond", cond);
-    function->UpdateTensorDataUsage(op);
 }
 
 Tensor Unsqueeze(const Tensor& old, int unsqueezeDimNum)
@@ -1239,7 +1237,6 @@ Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes, const std
     result.GetStorage()->UpdateDynValidShape(validShape);
     std::vector<int64_t> newOffsetsConcrete = SymbolicScalar::Concrete(newOffsets, 0);
     op.SetOpAttribute(std::make_shared<ViewOpAttribute>(newOffsetsConcrete, newOffsets, validShape));
-    function->UpdateTensorDataUsage(op);
     return result;
 }
 
@@ -1270,7 +1267,6 @@ Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes,
     std::vector<int64_t> newOffsetsConcrete = SymbolicScalar::Concrete(newOffsets, 0);
     op.SetOpAttribute(std::make_shared<ViewOpAttribute>(newOffsetsConcrete, newOffsets, newValidShapes));
     result.GetStorage()->UpdateDynValidShape(newValidShapes);
-    function->UpdateTensorDataUsage(op);
     return result;
 }
 
@@ -1347,7 +1343,6 @@ Operation& TensorDInnerAssemble(Function& function, const LogicalTensorPtr& oper
     op.SetAssembleOpAttribute(offset, dynOffset);
     op.SetAttribute("dassemble", true);
     op.SetAttribute(OpAttributeKey::parallel, parallel);
-    function.UpdateTensorDataUsage(op);
     return op;
 }
 
@@ -1398,7 +1393,6 @@ void AtomicRMW(const Tensor& t, const std::vector<SymbolicScalar>& dynOffset, Te
     auto& op = func.AddOperation(Opcode::OP_ATOMIC_RMW, {t.GetStorage()}, {dest.GetStorage()});
     op.SetAssembleOpAttribute(offset, dynOffset);
     op.SetAttribute(OpAttributeKey::rmwMode, (int)mode);
-    func.UpdateTensorDataUsage(op);
 
     Program::GetInstance().GetTensorSlotManager()->TensorWrite(dest, SlotProperty::ASSEMBLE_DST);
 }
@@ -1453,7 +1447,6 @@ void TensorInnerAssemble(Function& function, const LogicalTensorPtr& value, cons
     auto& op = function.AddOperation(Opcode::OP_ASSEMBLE_SSA, {value, dst}, {result});
     op.SetAssembleOpAttribute(staticOffsets, offsets);
     op.SetAttribute(OpAttributeKey::inplaceIdx, 1);
-    function.UpdateTensorDataUsage(op);
 }
 
 void Assemble(const std::vector<AssembleItem>& items, Tensor& src, bool parallelInAssemble)

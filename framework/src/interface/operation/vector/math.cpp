@@ -370,6 +370,7 @@ Tensor Log(const Tensor& self, LogBaseType base, PrecisionType precisionType)
 Tensor Log1p(const Tensor& self)
 {
     DECLARE_TRACER();
+    auto& function = *Program::GetInstance().GetCurrentFunction();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Log1p");
 
     std::unordered_set<DataType> supportedTypes = {DT_BF16, DT_FP16, DT_FP32};
@@ -386,9 +387,7 @@ Tensor Log1p(const Tensor& self)
     auto resTensorBeforeCast = std::make_shared<LogicalTensor>(*Program::GetInstance().GetCurrentFunction(),
                                                                DataType::DT_FP32, self.GetShape(),
                                                                self.GetStorage()->GetDynValidShape());
-    auto& op = Program::GetInstance().GetCurrentFunction()->AddOperation(Opcode::OP_LOG1P, {operandCast},
-                                                                         {resTensorBeforeCast});
-    Program::GetInstance().GetCurrentFunction()->UpdateTensorDataUsage(op);
+    function.AddOperation(Opcode::OP_LOG1P, {operandCast}, {resTensorBeforeCast});
 
     if (self.GetStorage()->Datatype() == DataType::DT_FP16) {
         RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), resTensorBeforeCast,
@@ -645,7 +644,6 @@ Tensor TensorOneHot(Function& function, const LogicalTensorPtr& self, int numCla
     auto result = std::make_shared<LogicalTensor>(function, DataType::DT_INT64, shape, validShape);
     auto& op = function.AddOperation(Opcode::OP_ONEHOT, {self}, {result});
     op.SetAttribute(OP_ATTR_PREFIX + "numClasses", numClasses);
-    function.UpdateTensorDataUsage(op);
     return result;
 }
 
@@ -1409,8 +1407,7 @@ Tensor TensorExp2(Function& function, const LogicalTensorPtr& self)
     if (self->Datatype() == DataType::DT_INT32 || self->Datatype() == DataType::DT_INT16) {
         result = std::make_shared<LogicalTensor>(function, DT_FP32, self->GetShape(), self->GetDynValidShape());
     }
-    auto& op = function.AddOperation(Opcode::OP_EXP2, {self}, {result});
-    function.UpdateTensorDataUsage(op);
+    function.AddOperation(Opcode::OP_EXP2, {self}, {result});
     return result;
 }
 
@@ -1495,7 +1492,6 @@ Tensor TensorRound(Function& function, const LogicalTensorPtr& self, const int& 
                                                   self->GetDynValidShape());
     auto& op = function.AddOperation(Opcode::OP_ROUND, {self}, {result});
     op.SetAttribute(OP_ATTR_PREFIX + "decimals", decimals);
-    function.UpdateTensorDataUsage(op);
     return result;
 }
 
@@ -1580,8 +1576,7 @@ Tensor TensorExpm1(Function& function, const LogicalTensorPtr& self)
     if (self->Datatype() == DataType::DT_INT32 || self->Datatype() == DataType::DT_INT16) {
         result = std::make_shared<LogicalTensor>(function, DT_FP32, self->GetShape(), self->GetDynValidShape());
     }
-    auto& op = function.AddOperation(Opcode::OP_EXPM1, {self}, {result});
-    function.UpdateTensorDataUsage(op);
+    function.AddOperation(Opcode::OP_EXPM1, {self}, {result});
     return result;
 }
 

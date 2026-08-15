@@ -1409,7 +1409,6 @@ void TensorIndexPut(Function& function, const LogicalTensorPtr& self, const Logi
     op.SetAttribute(OpAttributeKey::inplaceIdx, 0);
     op.SetAttribute(OpAttributeKey::accumulate, accumulate);
     op.SetAttribute(OpAttributeKey::indicesSize, static_cast<int>(indices.size()));
-    function.UpdateTensorDataUsage(op);
 }
 
 static void CheckIndexPutParamsInvalid(const Tensor& self, const std::vector<Tensor>& indices, const Tensor& values)

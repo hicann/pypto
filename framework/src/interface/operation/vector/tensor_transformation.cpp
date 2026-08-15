@@ -181,7 +181,6 @@ Tensor TensorExpandOperation(Function& function, const LogicalTensorPtr& operand
 
     op.SetAttribute(OP_ATTR_PREFIX + "shape", dstShape);
     op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
-    function.UpdateTensorDataUsage(op);
     return result;
 }
 
@@ -1466,7 +1465,6 @@ Tensor TensorFullOperation(Function& function, const Element& src, const Symboli
     }
     op.SetAttribute(OP_ATTR_PREFIX + "shape", dstShape);
     op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
-    function.UpdateTensorDataUsage(op);
     return result;
 }
 

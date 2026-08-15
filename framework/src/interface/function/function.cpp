@@ -585,23 +585,16 @@ GetTensorDataIODescDict Function::GetTensorDataForTensorGraph()
         if (!CheckEmuOpcode(&op, EMUOP_TENSOR_GETDATA_IMPORT)) {
             continue;
         }
-        int getTensorDataIndex = GetTensorDataGetIndex(&op);
-        FE_ASSERT(FeError::INVALID_VAL, getTensorDataIndex != -1) << "Failed to get tensor data index for operation";
-        FE_ASSERT(FeError::NOT_EXIST, currDynAttr->getTensorDataUsageDict.count(this))
-            << "Current function not found in getTensorDataUsageDict";
-        std::unordered_map<int, Operation*>& importDict = currDynAttr->getTensorDataUsageDict[this].importDict;
-        FE_ASSERT(FeError::NOT_EXIST, importDict.count(getTensorDataIndex))
-            << "Import index " << getTensorDataIndex << " not found in importDict";
-        auto import = importDict[getTensorDataIndex];
-        int outcastIndex = GetTensorDataLookupOutcast(this, import);
+        int index = GetTensorDataGetIndex(&op);
+        FE_ASSERT(FeError::INVALID_VAL, index != -1) << "Invalid import index";
+        int outcastIndex = GetTensorDataLookupOutcast(this, &op);
         if (outcastIndex != INVALID_IOINDEX) {
-            iodescDict[getTensorDataIndex] = GetTensorDataIODesc(GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST, outcastIndex,
-                                                                 0);
+            iodescDict[index] = GetTensorDataIODesc(GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST, outcastIndex, 0);
         } else {
-            int incastIndex = GetTensorDataLookupIncast(this, import);
+            int incastIndex = GetTensorDataLookupIncast(this, &op);
             FE_ASSERT(FeError::INVALID_VAL, incastIndex != INVALID_IOINDEX)
                 << "Both outcast and incast indices are invalid";
-            iodescDict[getTensorDataIndex] = GetTensorDataIODesc(GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST, incastIndex, 0);
+            iodescDict[index] = GetTensorDataIODesc(GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST, incastIndex, 0);
         }
     }
     return iodescDict;
@@ -928,6 +921,7 @@ FunctionCallArgs Function::EndFunction(const std::shared_ptr<TensorSlotScope>& s
     if (IsGraphType(GraphType::TENSOR_GRAPH) ||
         IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH)) {
         SetCallOpSlot();
+        CreateTensorDataImportOp();
         inArgumentList = MakeIncasts(scope);
         outArgumentList = MakeOutcasts(scope);
         auto iodescDict = GetTensorDataForTensorGraph();
@@ -1799,34 +1793,30 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
     return ret;
 }
 
-void Function::UpdateTensorDataUsage(Operation& op)
+void Function::CreateTensorDataImportOp()
 {
-    auto dynFunc = Program::GetInstance().GetCurrentDynamicFunction();
-    if (dynFunc == nullptr) {
-        return;
-    }
-    auto dynDevAttr = dynFunc->GetDyndevAttribute();
-    if (dynDevAttr == nullptr) {
-        return;
-    }
-    auto& importDict = dynDevAttr->getTensorDataUsageDict[this].importDict;
     IRBuilder builder;
 
-    auto dynAttrList = op.GetDynamicAttributeList();
-    auto dict = GetTensorDataDict(dynAttrList);
-    for (auto& [index, callList] : dict) {
-        (void)callList;
-        if (importDict.count(index)) {
-            continue;
+    std::unordered_set<int> visited;
+    auto n = operations_.size();
+    for (size_t i = 0; i < n; i++) {
+        auto& op = operations_[i];
+        auto dynAttrList = op->GetDynamicAttributeList();
+        auto dict = GetTensorDataDict(dynAttrList);
+        for (auto& [index, callList] : dict) {
+            (void)callList;
+            if (visited.count(index)) {
+                continue;
+            }
+            auto assemble = builder.GetTensorDataDesc(index);
+            std::vector<int64_t> importShape(assemble->GetShape().size(), 1);
+            std::vector<int64_t> importOffset(assemble->GetShape().size(), 0);
+            auto import = View(*assemble, importShape, importOffset);
+            auto importOp = *import.GetStorage()->GetProducers().begin();
+            SetEmuOpcode(importOp, EMUOP_TENSOR_GETDATA_IMPORT);
+            GetTensorDataSetIndex(importOp, index);
+            visited.insert(index);
         }
-        auto assemble = builder.GetTensorDataDesc(index);
-        std::vector<int64_t> importShape(assemble->GetShape().size(), 1);
-        std::vector<int64_t> importOffset(assemble->GetShape().size(), 0);
-        auto import = View(*assemble, importShape, importOffset);
-        auto importOp = *import.GetStorage()->GetProducers().begin();
-        SetEmuOpcode(importOp, EMUOP_TENSOR_GETDATA_IMPORT);
-        GetTensorDataSetIndex(importOp, index);
-        importDict[index] = importOp;
     }
 }
 

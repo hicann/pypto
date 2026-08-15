@@ -122,7 +122,6 @@ Tensor TensorPermuteOperation(Function& function, LogicalTensorPtr self, const s
     auto result = MakePermutedLogicalTensor(function, self, perm);
     auto& op = function.AddOperation(Opcode::OP_PERMUTE, {self}, {result});
     op.SetAttribute(OpAttributeKey::perm, perm);
-    function.UpdateTensorDataUsage(op);
     return result;
 }
 
@@ -178,7 +177,6 @@ Tensor TensorElementPermuteOperation(Function& function, LogicalTensorPtr self, 
     auto result = MakePermutedLogicalTensor(function, self, perm);
     auto& op = function.AddOperation(Opcode::OP_PERMUTE_ELEMENT, {self}, {result});
     op.SetAttribute(OpAttributeKey::perm, perm);
-    function.UpdateTensorDataUsage(op);
     return result;
 }
 

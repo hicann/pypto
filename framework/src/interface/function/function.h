@@ -369,13 +369,6 @@ struct DyndevFunctionAttribute {
     };
     std::unordered_map<Function*, ValueDependDesc> valueDependDescDict;
 
-    struct GetTensorDataUsage {
-        // In each function, one usage at most correpond to one import
-        // Mapping from the GetTensorData index to the View operation
-        std::unordered_map<int, Operation*> importDict;
-    };
-    std::unordered_map<Function*, GetTensorDataUsage> getTensorDataUsageDict;
-
     struct FunctionGroup {
         /* loop */
         OrderedSet<Function*> loopList;
@@ -943,7 +936,7 @@ public:
     GetTensorDataIODescDict GetTensorDataForTensorGraph();
     GetTensorDataIODescDict GetTensorDataForLeafGraph();
     void GetTensorDataRefreshIO(const GetTensorDataIODescDict& descDict);
-    void UpdateTensorDataUsage(Operation& op);
+    void CreateTensorDataImportOp();
 
     void SetSpan(const ir::Span& span) { span_ = span; }
 

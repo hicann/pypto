@@ -286,7 +286,7 @@ static Tensor ShmemPutImpl(const Tensor& src, const ShmemTensor& dst, const Symb
         fromType, OpImmediate::Specified({0, 0}), OpImmediate::Specified({src.GetShape()}),
         OpImmediate::Specified({src.GetShape()}), OpImmediate::Specified(src.GetValidShape())));
     op.SetAttr(OpAttributeKey::isDistCopyOut, true);
-    function.UpdateTensorDataUsage(op);
+
     ShmemPutAttr distOpAttr;
     distOpAttr.atomicType = putOp;
     distOpAttr.ownerRank = dstRank;
@@ -327,7 +327,7 @@ Tensor ShmemGet(const ShmemTensor& src, const SymbolicScalar& srcRank, const Ten
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 0}), OpImmediate::Specified(src.data.GetShape()),
         OpImmediate::Specified(src.data.GetShape()), OpImmediate::Specified(src.data.GetValidShape())));
-    function.UpdateTensorDataUsage(op);
+
     ShmemGetAttr distOpAttr;
     distOpAttr.ownerRank = srcRank;
     distOpAttr.group = src.group;
@@ -356,7 +356,7 @@ Tensor ShmemLoad(const ShmemTensor& src, const SymbolicScalar& srcRank, const Te
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, OpImmediate::Specified(src.data.GetShape()),
         OpImmediate::Specified(out->shape), OpImmediate::Specified(src.data.GetValidShape())));
-    function.UpdateTensorDataUsage(op);
+
     ShmemGetAttr distOpAttr;
     distOpAttr.ownerRank = srcRank;
     distOpAttr.group = src.group;
