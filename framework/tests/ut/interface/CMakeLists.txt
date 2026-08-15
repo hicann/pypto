@@ -28,3 +28,7 @@ PTO_Fwk_UTest_AddCaseLib(
         PRIVATE_INCLUDE_DIRECTORIES ${PTO_FWK_SRC_ROOT}/framework/include/pypto_pro
         LINK_LIBRARIES ${LinkLibraries}
 )
+
+target_compile_definitions(${_Target} PRIVATE
+        IO_TEXT_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/src/ir/test_io_text_dump_data"
+)

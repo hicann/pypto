@@ -23,6 +23,7 @@
 
 #include "core/logging.h"
 #include "ir/scalar_expr.h"
+#include "ir/transforms/io_text.h"
 
 namespace pypto {
 namespace ir {
@@ -287,6 +288,123 @@ inline ExprPtr MakeNot(const ExprPtr& operand, const Span& span = Span::Unknown(
 {
     GetScalarDtype(operand, span);
     return std::make_shared<Not>(operand, DataType::BOOL, span);
+}
+
+// ========== Logical Operator Construction Functions ==========
+
+inline ExprPtr MakeAnd(const ExprPtr& left, const ExprPtr& right, const Span& span = Span::Unknown())
+{
+    PromoteBinaryOperands(left, right, "and", span);
+    return std::make_shared<And>(left, right, DataType::BOOL, span);
+}
+
+inline ExprPtr MakeOr(const ExprPtr& left, const ExprPtr& right, const Span& span = Span::Unknown())
+{
+    PromoteBinaryOperands(left, right, "or", span);
+    return std::make_shared<Or>(left, right, DataType::BOOL, span);
+}
+
+inline ExprPtr MakeXor(const ExprPtr& left, const ExprPtr& right, const Span& span = Span::Unknown())
+{
+    PromoteBinaryOperands(left, right, "xor", span);
+    return std::make_shared<Xor>(left, right, DataType::BOOL, span);
+}
+
+inline ExprPtr MakeAbs(const ExprPtr& operand, const Span& span = Span::Unknown())
+{
+    DataType dtype = NormalizeBoolDtype(GetScalarDtype(operand, span));
+    return std::make_shared<Abs>(operand, dtype, span);
+}
+
+// ========== Name-dispatched factory functions (for IR text loader) ==========
+
+/**
+ * \brief Construct a binary expression node by operator name.
+ *
+ * Dispatches to the corresponding Make<Op> factory function.
+ *
+ * \param opName Operator name matching the node TypeName (e.g. "Add", "Sub").
+ * \param left Left operand
+ * \param right Right operand
+ * \param span Source location
+ * \return Constructed binary expression, or nullptr if opName is unknown.
+ */
+inline ExprPtr MakeBinaryOp(const std::string& opName, const ExprPtr& left, const ExprPtr& right,
+                            const Span& span = Span::Unknown())
+{
+    if (opName == IR_KW_SCALAR_BOP_ADD)
+        return MakeAdd(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_SUB)
+        return MakeSub(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_MUL)
+        return MakeMul(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_DIV)
+        return MakeFloorDiv(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_MOD)
+        return MakeFloorMod(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_FDIV)
+        return MakeFloatDiv(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_MIN)
+        return MakeMin(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_MAX)
+        return MakeMax(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_POW)
+        return MakePow(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_EQ)
+        return MakeEq(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_NE)
+        return MakeNe(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_LT)
+        return MakeLt(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_LE)
+        return MakeLe(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_GT)
+        return MakeGt(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_GE)
+        return MakeGe(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_LAND)
+        return MakeAnd(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_LOR)
+        return MakeOr(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_LXOR)
+        return MakeXor(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_AND)
+        return MakeBitAnd(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_OR)
+        return MakeBitOr(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_XOR)
+        return MakeBitXor(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_SHL)
+        return MakeBitShiftLeft(left, right, span);
+    if (opName == IR_KW_SCALAR_BOP_SHR)
+        return MakeBitShiftRight(left, right, span);
+    return nullptr;
+}
+
+/**
+ * \brief Construct a unary expression node by operator name.
+ *
+ * Dispatches to the corresponding Make<Op> factory function.
+ *
+ * \param opName Operator name matching the node TypeName (e.g. "Neg", "Cast").
+ * \param operand Operand expression
+ * \param span Source location
+ * \return Constructed unary expression, or nullptr if opName is unknown.
+ */
+inline ExprPtr MakeUnaryOp(const std::string& opName, const ExprPtr& operand, DataType castDtype = DataType::INT64,
+                           const Span& span = Span::Unknown())
+{
+    if (opName == IR_KW_SCALAR_UOP_ABS)
+        return MakeAbs(operand, span);
+    if (opName == IR_KW_SCALAR_UOP_NEG)
+        return MakeNeg(operand, span);
+    if (opName == IR_KW_SCALAR_UOP_NOT)
+        return MakeNot(operand, span);
+    if (opName == IR_KW_SCALAR_UOP_INV)
+        return MakeBitNot(operand, span);
+    if (opName == IR_KW_SCALAR_UOP_CAST)
+        return MakeCast(operand, castDtype, span);
+    return nullptr;
 }
 
 } // namespace ir

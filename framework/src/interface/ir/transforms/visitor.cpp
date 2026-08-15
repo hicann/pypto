@@ -47,6 +47,8 @@ void IRVisitor::VisitExpr(const ExprPtr& expr) { ExprFunctor<void>::VisitExpr(ex
 
 void IRVisitor::VisitStmt(const StmtPtr& stmt) { StmtFunctor<void>::VisitStmt(stmt); }
 
+void IRVisitor::VisitType(const TypePtr& type) { TypeFunctor<void>::VisitType(type); }
+
 void IRVisitor::VisitVarLike_(const VarPtr& op)
 {
     if (auto tensor_type = As<TensorType>(op->GetType())) {
@@ -294,6 +296,18 @@ void IRVisitor::VisitStmt_(const TensorOpStmtPtr& op)
 }
 
 void IRVisitor::VisitStmt_(const StmtPtr&) {}
+
+// Type handlers - default: no-op
+void IRVisitor::VisitType_(const UnknownTypePtr&) {}
+void IRVisitor::VisitType_(const ScalarTypePtr&) {}
+void IRVisitor::VisitType_(const TensorTypePtr&) {}
+void IRVisitor::VisitType_(const TileTypePtr&) {}
+void IRVisitor::VisitType_(const TupleTypePtr&) {}
+void IRVisitor::VisitType_(const MemRefTypePtr&) {}
+void IRVisitor::VisitType_(const PtrTypePtr&) {}
+void IRVisitor::VisitType_(const TokenTypePtr&) {}
+void IRVisitor::VisitType_(const NoneTypePtr&) {}
+void IRVisitor::VisitType_(const LogicalTensorTypePtr&) {}
 
 } // namespace ir
 } // namespace pypto

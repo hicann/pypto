@@ -18,6 +18,7 @@
 #include "ir/memref.h"
 #include "ir/scalar_expr.h"
 #include "ir/stmt.h"
+#include "ir/type.h"
 
 namespace pypto {
 namespace ir {
@@ -230,16 +231,69 @@ R StmtFunctor<R, Args...>::VisitStmt(const StmtPtr& stmt, Args... args)
 #undef STMT_FUNCTOR_DISPATCH
 
 /**
- * \brief Unified functor for both expressions and statements
+ * \brief Base template for type functors
  *
- * Combines ExprFunctor and StmtFunctor to provide a unified interface
- * for visiting both expression and statement IR nodes.
+ * Provides a visitor-like interface for operating on IR types.
+ * Subclasses implement specific operations by overriding VisitType_ methods.
  *
  * \tparam R Return type of the visit operations
  * \tparam Args Additional arguments passed to visit methods
  */
 template <typename R, typename... Args>
-class IRFunctor : public ExprFunctor<R, Args...>, public StmtFunctor<R, Args...> {
+class TypeFunctor {
+public:
+    virtual ~TypeFunctor() = default;
+
+    virtual R VisitType(const TypePtr& type, Args... args);
+
+protected:
+    virtual R VisitType_(const UnknownTypePtr& op, Args... args) = 0;
+    virtual R VisitType_(const ScalarTypePtr& op, Args... args) = 0;
+    virtual R VisitType_(const TensorTypePtr& op, Args... args) = 0;
+    virtual R VisitType_(const TileTypePtr& op, Args... args) = 0;
+    virtual R VisitType_(const TupleTypePtr& op, Args... args) = 0;
+    virtual R VisitType_(const MemRefTypePtr& op, Args... args) = 0;
+    virtual R VisitType_(const PtrTypePtr& op, Args... args) = 0;
+    virtual R VisitType_(const TokenTypePtr& op, Args... args) = 0;
+    virtual R VisitType_(const NoneTypePtr& op, Args... args) = 0;
+    virtual R VisitType_(const LogicalTensorTypePtr& op, Args... args) = 0;
+};
+
+#define TYPE_FUNCTOR_DISPATCH(OpType)                       \
+    if (auto op = As<OpType>(type)) {                       \
+        return VisitType_(op, std::forward<Args>(args)...); \
+    }
+
+template <typename R, typename... Args>
+R TypeFunctor<R, Args...>::VisitType(const TypePtr& type, Args... args)
+{
+    TYPE_FUNCTOR_DISPATCH(TensorType);
+    TYPE_FUNCTOR_DISPATCH(TileType);
+    TYPE_FUNCTOR_DISPATCH(ScalarType);
+    TYPE_FUNCTOR_DISPATCH(TupleType);
+    TYPE_FUNCTOR_DISPATCH(PtrType);
+    TYPE_FUNCTOR_DISPATCH(TokenType);
+    TYPE_FUNCTOR_DISPATCH(NoneType);
+    TYPE_FUNCTOR_DISPATCH(LogicalTensorType);
+    TYPE_FUNCTOR_DISPATCH(MemRefType);
+    TYPE_FUNCTOR_DISPATCH(UnknownType);
+
+    throw TypeError("Unknown type in TypeFunctor::VisitType");
+}
+
+#undef TYPE_FUNCTOR_DISPATCH
+
+/**
+ * \brief Unified functor for expressions, statements, and types
+ *
+ * Combines ExprFunctor, StmtFunctor, and TypeFunctor to provide a unified
+ * interface for visiting all IR node categories.
+ *
+ * \tparam R Return type of the visit operations
+ * \tparam Args Additional arguments passed to visit methods
+ */
+template <typename R, typename... Args>
+class IRFunctor : public ExprFunctor<R, Args...>, public StmtFunctor<R, Args...>, public TypeFunctor<R, Args...> {
 public:
     virtual ~IRFunctor() = default;
 

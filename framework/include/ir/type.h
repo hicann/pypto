@@ -159,7 +159,10 @@ using ScalarTypePtr = std::shared_ptr<const ScalarType>;
  * stride and layout information.
  *
  * IR Syntax:
- *      `tensor_view` `<` validshape0 `x` ... validshapeN `,` stride0 `x` ... strideN `,` layout (`,` ptr)? `>`
+ *      has_value == true:
+ *          `tensor_view` `<` validshape0 `x` ... validshapeN `,` stride0 `x` ... strideN `,` layout `,` ptr `>`
+ *      has_value == false:
+ *          `tensor_view` `<` `>`
  */
 struct TensorView {
     std::vector<ExprPtr> validShape; ///< Valid shape dimensions (symbolic or constant)
@@ -242,6 +245,12 @@ enum class CompactMode {
  *
  * Contains layout, fractal, padding, and compact mode parameters
  * that describe how a tile is physically stored in hardware memory.
+ *
+ * IR Syntax:
+ *      has_value == true:
+ *          `hardware` `<` blayout `,` slayout `,`  fractal `,` pad `,` compact `>`
+ *      has_value == false:
+ *          `hardware` `<` `>`
  */
 struct HardwareInfo {
     static constexpr uint64_t kDefaultFractal = 512;
@@ -277,7 +286,10 @@ struct HardwareInfo {
  * a tile views its underlying memory.
  *
  * IR Syntax:
- *      `tile_view` `<` validshape0 `x` ... validshapeN `,` stride0 `x` ... strideN `,` start_offset `>`
+ *      has_value == true:
+ *          `tile_view` `<` validshape0 `x` ... validshapeN `,` stride0 `x` ... strideN `,` start_offset `>`
+ *      has_value == false:
+ *          `tile_view` `<` `>`
  */
 struct TileView {
     std::vector<ExprPtr> validShape; ///< Valid shape dimensions
@@ -370,7 +382,7 @@ using ShapedTypePtr = std::shared_ptr<const ShapedType>;
  * Represents a tensor type with a data type and shape dimensions.
  *
  * IR Syntax:
- *      `tensor` `<` shape0 `x` ... shapeN `,` dtype ( `,` tensor_view )? `>`
+ *      `tensor` `<` shape0 `x` ... shapeN `,` dtype `,` tensor_view `>`
  */
 class TensorType : public ShapedType {
 public:
@@ -429,7 +441,7 @@ using TensorTypePtr = std::shared_ptr<const TensorType>;
  * Note: Code generation currently only supports up to 2D tiles.
  *
  * IR Syntax:
- *      `tile` `<` shape0 `x` ... shapeN `,` dtype ( `,` tileView_ )? ( `,` hardwareInfo_ )? `>`
+ *      `tile` `<` shape0 `x` ... shapeN `,` dtype  `,` tileView  `,` hardwareInfo `>`
  */
 class TileType : public ShapedType {
 public:
@@ -489,7 +501,7 @@ using TileTypePtr = std::shared_ptr<const TileType>;
  * Tuples are used for multiple return values and structured data.
  *
  * IR Syntax:
- *      `tuple` `<` dtype `>`
+ *      `tuple` `<` type0 `,` ... `,` typeN `>`
  */
 class TupleType : public Type {
 public:

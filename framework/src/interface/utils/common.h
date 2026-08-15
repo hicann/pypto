@@ -29,6 +29,7 @@
 
 #include "tilefwk/error.h"
 #include "tilefwk/symbolic_scalar.h"
+#include "core/bimap.h"
 
 namespace npu::tile_fwk {
 
@@ -244,44 +245,6 @@ constexpr int ParamLocIncast = 1;
 constexpr int ParamLocOutcast = 2;
 
 std::string ParamLocToStr(uint32_t loc);
-
-template <typename T>
-class BiMap {
-public:
-    BiMap(const std::initializer_list<std::pair<T, std::string>>& init)
-    {
-        for (const auto& [i, s] : init) {
-            type2strDict[i] = s;
-            str2typeDict[s] = i;
-        }
-    }
-
-    bool Count(T key) const { return type2strDict.count(key); }
-
-    bool Count(const std::string& key) const { return str2typeDict.count(key); }
-
-    const std::string& Find(T key, const std::string& defaultValue = "") const
-    {
-        if (type2strDict.count(key)) {
-            return type2strDict.find(key)->second;
-        } else {
-            return defaultValue;
-        }
-    }
-
-    T Find(const std::string& key, T defaultValue) const
-    {
-        if (str2typeDict.count(key)) {
-            return str2typeDict.find(key)->second;
-        } else {
-            return defaultValue;
-        }
-    }
-
-private:
-    std::unordered_map<T, std::string> type2strDict;
-    std::unordered_map<std::string, T> str2typeDict;
-};
 
 inline const BiMap<CoreType>& GetCoreTypeDict()
 {

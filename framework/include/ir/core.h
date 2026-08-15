@@ -115,7 +115,8 @@ enum class ObjectKind {
     Program,
 
     // Op kinds
-    Op
+    Op,
+    Invalid,
 };
 
 /**

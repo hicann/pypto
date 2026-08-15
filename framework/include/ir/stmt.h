@@ -559,7 +559,7 @@ public:
 
 using WhileStmtPtr = std::shared_ptr<const WhileStmt>;
 
-/*
+/**
  * IR Syntax:
  *      `section` sectionKind_
  *          body
@@ -682,7 +682,7 @@ public:
 
 using ContinueStmtPtr = std::shared_ptr<const ContinueStmt>;
 
-/*
+/**
  * IR Syntax:
  *      result `,` result_token `=` opcode `(` arg1 `,` arg2 `,` ... `)` `;`
  */
@@ -721,10 +721,10 @@ public:
 
 using ScalarOpStmtPtr = std::shared_ptr<const ScalarOpStmt>;
 
-/*
+/**
  * IR Syntax:
  *      result0 `,` result1 `,` ... `,` result_token `=`
- *          opcode `(` arg1 `,` arg2 `,` ... `)`
+ *          opcode `(` arg1 `,` arg2 `,` ... `)` `token` `(` tok0 `,` ... tokN `)`
  *          `#` attr0 `(` attr0_value `)` ... `#` attrN `(` attrN_value `)` `;`
  */
 class TensorOpStmt : public Stmt {

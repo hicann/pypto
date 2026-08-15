@@ -108,6 +108,7 @@ frontend@pypto:
   src:
     release:
       - framework/include/core/any_cast.h
+      - framework/include/core/bimap.h
       - framework/include/core/common.h
       - framework/include/core/dtype.h
       - framework/include/core/error.h

@@ -21,6 +21,28 @@
 #include <cstdint>
 #include <string>
 
+#include "core/bimap.h"
+
+// C-style type strings returned by DataType::ToCTypeString()
+#define IR_KW_TYPE_BOOL "bool"
+#define IR_KW_TYPE_INT8 "int8_t"
+#define IR_KW_TYPE_INT16 "int16_t"
+#define IR_KW_TYPE_INT32 "int32_t"
+#define IR_KW_TYPE_INT64 "int64_t"
+#define IR_KW_TYPE_UINT8 "uint8_t"
+#define IR_KW_TYPE_UINT16 "uint16_t"
+#define IR_KW_TYPE_UINT32 "uint32_t"
+#define IR_KW_TYPE_UINT64 "uint64_t"
+#define IR_KW_TYPE_FP16 "half"
+#define IR_KW_TYPE_FP32 "float"
+#define IR_KW_TYPE_FP64 "double"
+#define IR_KW_TYPE_BF16 "bfloat16_t"
+#define IR_KW_TYPE_FP8E4M3FN "float8_e4m3_t"
+#define IR_KW_TYPE_FP8E5M2 "float8_e5m2_t"
+#define IR_KW_TYPE_HF4 "hifloat4_t"
+#define IR_KW_TYPE_HF8 "hifloat8_t"
+#define IR_KW_TYPE_UNKNOWN "unknown"
+
 namespace pypto {
 namespace ir {
 
@@ -219,6 +241,37 @@ public:
     }
 
     /**
+     * \brief Bidirectional map between DataType code (uint8_t) and C-type string.
+     *
+     * Correspondence follows ToCTypeString(). Forward lookup: code -> string.
+     * Reverse lookup: string -> code.
+     */
+    static inline const npu::tile_fwk::BiMap<uint8_t>& GetDataTypeCTypeStringDict()
+    {
+        static npu::tile_fwk::BiMap<uint8_t> dict{{
+            {kBoolCode, IR_KW_TYPE_BOOL},
+            {kInt8Code, IR_KW_TYPE_INT8},
+            {kInt16Code, IR_KW_TYPE_INT16},
+            {kInt32Code, IR_KW_TYPE_INT32},
+            {kInt64Code, IR_KW_TYPE_INT64},
+            {kIndexCode, IR_KW_TYPE_INT64},
+            {kUInt8Code, IR_KW_TYPE_UINT8},
+            {kUInt16Code, IR_KW_TYPE_UINT16},
+            {kUInt32Code, IR_KW_TYPE_UINT32},
+            {kUInt64Code, IR_KW_TYPE_UINT64},
+            {kFp16Code, IR_KW_TYPE_FP16},
+            {kFp32Code, IR_KW_TYPE_FP32},
+            {kFp64Code, IR_KW_TYPE_FP64},
+            {kBf16Code, IR_KW_TYPE_BF16},
+            {kFp8e4m3fnCode, IR_KW_TYPE_FP8E4M3FN},
+            {kFp8e5m2Code, IR_KW_TYPE_FP8E5M2},
+            {kHf4Code, IR_KW_TYPE_UNKNOWN},
+            {kHf8Code, IR_KW_TYPE_HF8},
+        }};
+        return dict;
+    }
+
+    /**
      * \brief Get C style type string for code generation
      *
      * Returns the C/C++ type string representation used in code generation.
@@ -229,43 +282,7 @@ public:
      */
     [[nodiscard]] std::string ToCTypeString() const
     {
-        switch (code_) {
-            case kBoolCode:
-                return "bool";
-            case kInt8Code:
-                return "int8_t";
-            case kInt16Code:
-                return "int16_t";
-            case kInt32Code:
-                return "int32_t";
-            case kInt64Code:
-            case kIndexCode:
-                return "int64_t";
-            case kUInt8Code:
-                return "uint8_t";
-            case kUInt16Code:
-                return "uint16_t";
-            case kUInt32Code:
-                return "uint32_t";
-            case kUInt64Code:
-                return "uint64_t";
-            case kFp16Code:
-                return "half";
-            case kFp32Code:
-                return "float";
-            case kFp64Code:
-                return "double";
-            case kBf16Code:
-                return "bfloat16_t";
-            case kFp8e4m3fnCode:
-                return "float8_e4m3_t";
-            case kFp8e5m2Code:
-                return "float8_e5m2_t";
-            case kHf8Code:
-                return "hifloat8_t";
-            default:
-                return "unknown";
-        }
+        return GetDataTypeCTypeStringDict().Find(code_, IR_KW_TYPE_UNKNOWN);
     }
 
     /**

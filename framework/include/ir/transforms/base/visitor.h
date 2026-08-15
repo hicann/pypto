@@ -39,6 +39,7 @@ public:
 
     void VisitExpr(const ExprPtr& expr) override;
     void VisitStmt(const StmtPtr& stmt) override;
+    void VisitType(const TypePtr& type) override;
 
 protected:
     /// Override to handle Var with a single method.
@@ -104,6 +105,18 @@ protected:
     void VisitStmt_(const TensorOpStmtPtr& op) override;
     void VisitStmt_(const ScalarOpStmtPtr& op) override;
     void VisitStmt_(const StmtPtr& op) override;
+
+    // Type handlers
+    void VisitType_(const UnknownTypePtr& op) override;
+    void VisitType_(const ScalarTypePtr& op) override;
+    void VisitType_(const TensorTypePtr& op) override;
+    void VisitType_(const TileTypePtr& op) override;
+    void VisitType_(const TupleTypePtr& op) override;
+    void VisitType_(const MemRefTypePtr& op) override;
+    void VisitType_(const PtrTypePtr& op) override;
+    void VisitType_(const TokenTypePtr& op) override;
+    void VisitType_(const NoneTypePtr& op) override;
+    void VisitType_(const LogicalTensorTypePtr& op) override;
 
     /// Override to handle ALL binary expressions (Add, Sub, Mul, ...) in one method.
     /// Default: visits left and right children.

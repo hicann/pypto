@@ -199,7 +199,7 @@ using OpPtr = std::shared_ptr<const Op>;
  * IR Syntax:
  *      RHS:
  *          `%` name
- *      LHR:
+ *      LHS:
  *          type `%` name
  *      INCAST/OUTCAST:
  *          type `%` name
