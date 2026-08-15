@@ -1010,6 +1010,46 @@ TEST_F(SplitLargeFanoutTensorTest, MtoMGetCorrectAssemble)
     std::cout << "Run Pass Done" << std::endl;
 }
 
+TEST_F(SplitLargeFanoutTensorTest, NewAssembleInheritsScopeInfo)
+{
+    ComputationalGraphBuilder G;
+    BuildGraphForMToM(G);
+    Function* function = G.GetFunction();
+
+    Operation::ScopeInfo scopeInfo(5002);
+    scopeInfo.allowParallelMerge = true;
+    scopeInfo.allowCrossScopeMerge = false;
+    for (const auto& opName : {"Assemble_A", "Assemble_B", "Assemble_C", "Assemble_D"}) {
+        G.GetOp(opName)->SetScopeInfo(scopeInfo);
+    }
+
+    npu::tile_fwk::SplitLargeFanoutTensor splitLargeFanoutTensor;
+    EXPECT_EQ(SUCCESS, splitLargeFanoutTensor.PreCheck(*function));
+    EXPECT_EQ(SUCCESS, splitLargeFanoutTensor.RunOnFunction(*function));
+    EXPECT_EQ(SUCCESS, splitLargeFanoutTensor.PostCheck(*function));
+
+    auto tiledA = G.GetTensor("tiledA");
+    auto tiledB = G.GetTensor("tiledB");
+    auto tiledC = G.GetTensor("tiledC");
+    auto tiledD = G.GetTensor("tiledD");
+    auto largeTensor = G.GetTensor("largeTensor");
+    size_t newAssembleCount = 0;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE || op.GetOOperands().front() == largeTensor) {
+            continue;
+        }
+        auto input = op.GetIOperands().front();
+        if (input != tiledA && input != tiledB && input != tiledC && input != tiledD) {
+            continue;
+        }
+        EXPECT_EQ(op.GetScopeId(), scopeInfo.scopeId);
+        EXPECT_EQ(op.GetAllowParallelMerge(), scopeInfo.allowParallelMerge);
+        EXPECT_EQ(op.GetAllowCrossScopeMerge(), scopeInfo.allowCrossScopeMerge);
+        newAssembleCount++;
+    }
+    EXPECT_EQ(newAssembleCount, 4U);
+}
+
 void Build1ToMMultiConsumers(ComputationalGraphBuilder& G)
 {
     int NUM_16 = 16;

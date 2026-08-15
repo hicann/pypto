@@ -735,6 +735,13 @@ Status IsoPartitioner::UpdatePartitionResult(Function& function)
             colorIdx++;
         }
     }
+    for (const auto& op : function.Operations()) {
+        if (op.GetSubgraphID() < 0) {
+            APASS_LOG_ERROR_F(Elements::Operation, "GraphPartition left op %s[%d] without a valid SubgraphID.",
+                              op.GetOpcodeStr().c_str(), op.GetOpMagic());
+            return FAILED;
+        }
+    }
     function.SetTotalSubGraphCount(colorIdx);
     return SUCCESS;
 }

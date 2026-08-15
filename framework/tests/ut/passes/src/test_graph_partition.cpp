@@ -22,8 +22,10 @@
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
 #include "symbolic_scalar_test_utils.h"
+#define private public
 #include "passes/tile_graph_pass/graph_partition/iso_partitioner.h"
 #include "passes/tile_graph_pass/graph_partition/graph_partition.h"
+#undef private
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
@@ -900,6 +902,9 @@ TEST_F(GraphPartitionTest, TestScopeCase5)
     IsoPartitioner partitioner;
     EXPECT_EQ(partitioner.SetParameter(100000, 20, 0), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
+    for (auto& op : function->Operations()) {
+        EXPECT_GE(op.GetSubgraphID(), 0);
+    }
 
     int scope1Subgraph = VerifyOpsInSameSubgraph(G, scope1Ops);
     int scope2Subgraph = VerifyOpsInSameSubgraph(G, scope2Ops);
@@ -925,6 +930,52 @@ TEST_F(GraphPartitionTest, TestScopeCase5)
     EXPECT_NE(v2Subgraph, scope1Subgraph);
     EXPECT_NE(v2Subgraph, scope2Subgraph);
     EXPECT_NE(v2Subgraph, cubeSubgraph);
+}
+
+TEST_F(GraphPartitionTest, TestScopeParallelMergeRebuildAvoidLoop)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape{16, 16};
+    EXPECT_EQ(
+        G.AddTensors(DataType::DT_FP32, shape, {"input", "scope_head_out", "bridge_out", "scope_tail_out", "output"}),
+        true);
+    EXPECT_EQ(G.AddOps({Opcode::OP_ADDS, Opcode::OP_MULS, Opcode::OP_ADDS, Opcode::OP_COPY_OUT},
+                       {{"input"}, {"scope_head_out"}, {"bridge_out"}, {"scope_tail_out"}},
+                       {{"scope_head_out"}, {"bridge_out"}, {"scope_tail_out"}, {"output"}},
+                       {"SCOPE_HEAD", "BRIDGE", "SCOPE_TAIL", "COPY_OUT"}, true),
+              true);
+    EXPECT_EQ(G.SetInCast({"input"}), true);
+    EXPECT_EQ(G.SetOutCast({"output"}), true);
+
+    Operation::ScopeInfo scope(5002);
+    scope.allowParallelMerge = true;
+    scope.allowCrossScopeMerge = false;
+    SetScopeInfoForOps(G, {"SCOPE_HEAD", "SCOPE_TAIL"}, scope);
+
+    Function* function = G.GetFunction();
+    IsoPartitioner partitioner;
+    EXPECT_EQ(partitioner.SetParameter(100000, 20, 0), SUCCESS);
+    EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
+
+    for (auto& op : function->Operations()) {
+        EXPECT_GE(op.GetSubgraphID(), 0);
+    }
+    EXPECT_EQ(G.GetOp("SCOPE_HEAD")->GetSubgraphID(), G.GetOp("SCOPE_TAIL")->GetSubgraphID());
+    EXPECT_EQ(G.GetOp("SCOPE_HEAD")->GetSubgraphID(), G.GetOp("BRIDGE")->GetSubgraphID());
+}
+
+TEST_F(GraphPartitionTest, TestUpdatePartitionResultInvalidSubgraphId)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape{16, 16};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, shape, {"input", "output"}), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_EXP, {"input"}, {"output"}, "EXP", true), true);
+    EXPECT_EQ(G.SetInCast({"input"}), true);
+    EXPECT_EQ(G.SetOutCast({"output"}), true);
+
+    Function* function = G.GetFunction();
+    IsoPartitioner partitioner;
+    EXPECT_EQ(partitioner.UpdatePartitionResult(*function), FAILED);
 }
 
 // cvmix

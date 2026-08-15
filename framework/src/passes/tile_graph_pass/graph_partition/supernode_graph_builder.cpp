@@ -1080,7 +1080,7 @@ Status SuperNodeGraphBuilder::CheckAndMergeScopes(const ScopeCollectResult& scop
     return SUCCESS;
 }
 
-void SuperNodeGraphBuilder::RebuildSuperNodes(std::vector<int32_t>& snParent, int32_t numNodes)
+Status SuperNodeGraphBuilder::RebuildSuperNodes(std::vector<int32_t>& snParent, int32_t numNodes)
 {
     std::vector<int32_t> parentToNewNode(numNodes, -1);
     std::vector<std::vector<int32_t>> newNode2Op;
@@ -1096,10 +1096,33 @@ void SuperNodeGraphBuilder::RebuildSuperNodes(std::vector<int32_t>& snParent, in
         }
     }
 
+    std::vector<int32_t> opParent(operationInfo_->opList_.size());
+    for (int32_t i = 0; i < static_cast<int32_t>(operationInfo_->opList_.size()); i++) {
+        opParent[i] = i;
+    }
+    for (const auto& nodeOps : newNode2Op) {
+        if (nodeOps.empty()) {
+            continue;
+        }
+        int32_t firstOp = nodeOps[0];
+        for (int32_t opIdx : nodeOps) {
+            opParent[opIdx] = firstOp;
+        }
+    }
+    bool updated = true;
+    while (updated) {
+        updated = false;
+        if (superNodeInfo_->AvoidLoop(operationInfo_, opParent, newNode2Op, updated) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "Avoid loop after scope merge failed.");
+            return FAILED;
+        }
+    }
+
     superNodeInfo_->node2Op_ = std::move(newNode2Op);
     superNodeInfo_->BuildNodeMapping(operationInfo_);
     superNodeInfo_->BuildInOutGraph(operationInfo_);
     superNodeInfo_->SetNodeCoreTypeAndMergeable(operationInfo_, false);
+    return SUCCESS;
 }
 
 void SuperNodeGraphBuilder::ApplyCvFuseIds(const std::map<int32_t, int32_t>& scopeToCvFuseId)
@@ -1142,7 +1165,10 @@ Status SuperNodeGraphBuilder::ProcessScopeMerge()
     }
 
     if (needRebuild) {
-        RebuildSuperNodes(snParent, numNodes);
+        if (RebuildSuperNodes(snParent, numNodes) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "Rebuild supernodes after scope merge failed.");
+            return FAILED;
+        }
         scopeInfo = CollectScopeInfo(static_cast<int32_t>(superNodeInfo_->node2Op_.size()));
     }
 

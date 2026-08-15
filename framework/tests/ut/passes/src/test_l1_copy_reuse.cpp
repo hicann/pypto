@@ -556,6 +556,23 @@ TEST_F(L1CopyInReuseTest, TestInvalidL1Num)
     EXPECT_EQ(LCRM.RunOnFunction(*function), FAILED);
 }
 
+TEST_F(L1CopyInReuseTest, TestInvalidSubgraphId)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, {"input", "output"}), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_EXP, {"input"}, {"output"}, "EXP", true), true);
+    EXPECT_EQ(G.SetInCast({"input"}), true);
+    EXPECT_EQ(G.SetOutCast({"output"}), true);
+
+    Function* function = G.GetFunction();
+    function->paramConfigs_.cubeL1ReuseSetting = {{-1, 1}};
+    function->SetTotalSubGraphCount(1);
+
+    L1CopyInReuseMerge LCRM;
+    EXPECT_EQ(LCRM.RunOnFunction(*function), FAILED);
+}
+
 TEST_F(L1CopyInReuseTest, TestInvalidL1Map)
 {
     ComputationalGraphBuilder G;

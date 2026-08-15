@@ -1154,6 +1154,12 @@ Status L1CopyInReuseMerge::InitColorNode(Function& func, std::vector<std::vector
             APASS_LOG_INFO_F(Elements::Operation, "Op %zu feature: %s.", i, IntVecToStr(feature).c_str());
         }
         auto opColor = opOriList[i].GetSubgraphID();
+        if (opColor < 0) {
+            APASS_LOG_ERROR_F(Elements::Operation, "InitColorNode: op %s[%d] has invalid SubgraphID %d. %s",
+                              opOriList[i].GetOpcodeStr().c_str(), opOriList[i].GetOpMagic(), opColor,
+                              GetFormatBacktrace(opOriList[i]).c_str());
+            return FAILED;
+        }
         if (opColor > colorMax) {
             colorMax = opColor;
         }

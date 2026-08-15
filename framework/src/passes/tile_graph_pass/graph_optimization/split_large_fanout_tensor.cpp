@@ -268,8 +268,8 @@ Status AddNewAssembleOp(Function& function, LogicalTensorPtr overlap, LogicalTen
                 for (size_t j = 0; j < newAssembleOffset.size(); j++) {
                     newAssembleOffset[j] -= lcmTileOffset[j];
                 }
-                auto newAssembleOp = AssembleOp{overlap->GetMemoryTypeOriginal(), newAssembleOffset, overlap,
-                                                newTensor};
+                auto newAssembleOp = AssembleOp{overlap->GetMemoryTypeOriginal(), newAssembleOffset, overlap, newTensor,
+                                                oldAssembleOp};
                 GraphUtils::AddAssembleOperation(function, newAssembleOp);
                 return SUCCESS;
             }
