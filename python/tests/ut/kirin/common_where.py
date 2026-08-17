@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -920,6 +920,7 @@ def run_where_test(kernels, kernel_name, dtype, shape_input, shape_other, shape_
     out_np = np.array(out.cpu())
     expect_np = np.array(expect.cpu())
 
+    check_nan(out, name=kernel_name)
     cos_value = abs(compare_cos(out_np, expect_np))
     if cos_value < 0.9999:
         raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")

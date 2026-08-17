@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -107,6 +107,7 @@ def run_scatter_test(
         data, indices.squeeze(1), update
     )
 
+    check_nan(data)
     cos_value = abs(compare_cos(np.array(data.cpu()), np.array(golden.cpu())))
     if cos_value < 0.9999:
         raise AssertionError(f"cos_value {cos_value} < 0.9999")

@@ -16,7 +16,7 @@ Test rmsnorm codegen - common functions for Kirin9030 and KirinX90
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -55,9 +55,25 @@ TEST_CASES = [
     # shape: input tensor shape
     # has_gamma: whether to use gamma parameter
     # marks: pytest marks
-    pytest.param("rmsnorm_kernel_001", torch.float16, pypto.DT_FP16, (32,), (32,), False, marks=[], id="001"),
     pytest.param(
-        "rmsnorm_kernel_002", torch.float16, pypto.DT_FP16, (96,), (96,), False, marks=[pytest.mark.skip()], id="002"
+        "rmsnorm_kernel_001",
+        torch.float16,
+        pypto.DT_FP16,
+        (32,),
+        (32,),
+        False,
+        marks=[pytest.mark.skip()],
+        id="001"
+    ),
+    pytest.param(
+        "rmsnorm_kernel_002",
+        torch.float16,
+        pypto.DT_FP16,
+        (96,),
+        (96,),
+        False,
+        marks=[pytest.mark.skip()],
+        id="002"
     ),
     pytest.param(
         "rmsnorm_kernel_003",
@@ -66,7 +82,7 @@ TEST_CASES = [
         (2, 32),
         (2, 32),
         False,
-        marks=[pytest.mark.skip()],
+        marks=[],
         id="003",
     ),
     pytest.param(
@@ -452,6 +468,7 @@ def run_rmsnorm_test(kernels, kernel_name, dtype, shape, has_gamma):
         kernels[kernel_name](a, out)
         golden = _compute_golden_rmsnorm(a)
 
+    check_nan(out, name=kernel_name)
     cos_val = abs(compare_cos(out.numpy(), golden.numpy()))
     if cos_val < 0.9999:
         raise AssertionError(f"{kernel_name}: cos_val {cos_val} < 0.9999")

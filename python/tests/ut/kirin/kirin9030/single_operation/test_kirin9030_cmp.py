@@ -10,21 +10,21 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """
-Test eq codegen for Kirin9030
+Test comparison ops (eq/ne/lt/le/gt/ge) codegen for Kirin9030
 """
 
-from kirin.common_cmp import TEST_CASES, create_test_eq_module, run_eq_test
+from kirin.common_cmp import TEST_CASES, create_test_cmp_module, run_cmp_test
 import pytest
 
-KERNELS, _ = create_test_eq_module("Kirin9030")
+KERNELS, _ = create_test_cmp_module("Kirin9030")
 
 
 @pytest.mark.parametrize(
-    "kernel_name,torch_dtype,pypto_dtype,tile_shape,shape_a,shape_b,scalar_val",
+    "kernel_name,op_name,torch_dtype,pypto_dtype,tile_shape,shape_a,shape_b,scalar_val",
     TEST_CASES,
 )
-def test_eq(kernel_name, torch_dtype, pypto_dtype, tile_shape, shape_a, shape_b, scalar_val):
-    run_eq_test(KERNELS, kernel_name, torch_dtype, shape_a, shape_b, scalar_val)
+def test_cmp(kernel_name, op_name, torch_dtype, pypto_dtype, tile_shape, shape_a, shape_b, scalar_val):
+    run_cmp_test(KERNELS, kernel_name, op_name, torch_dtype, shape_a, shape_b, scalar_val)
 
 
 if __name__ == "__main__":

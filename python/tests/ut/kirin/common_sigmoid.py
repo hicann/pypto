@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -41,12 +41,32 @@ TEST_CASES = [
     # tile_shapes: tile shape for pypto kernel
     # shape: input tensor shape
     # marks: pytest marks
-    pytest.param("sigmoid_kernel_fp16_001", torch.float16, pypto.DT_FP16, (50,), (112,), marks=[], id="001"),
     pytest.param(
-        "sigmoid_kernel_fp16_002", torch.float16, pypto.DT_FP16, (100,), (100,), marks=[pytest.mark.skip()], id="002"
+        "sigmoid_kernel_fp16_001",
+        torch.float16,
+        pypto.DT_FP16,
+        (50,),
+        (112,),
+        marks=[pytest.mark.skip()],
+        id="001"
     ),
     pytest.param(
-        "sigmoid_kernel_fp16_003", torch.float16, pypto.DT_FP16, (2, 32), (4, 128), marks=[pytest.mark.skip()], id="003"
+        "sigmoid_kernel_fp16_002",
+        torch.float16,
+        pypto.DT_FP16,
+        (100,),
+        (100,),
+        marks=[],
+        id="002"
+    ),
+    pytest.param(
+        "sigmoid_kernel_fp16_003",
+        torch.float16,
+        pypto.DT_FP16,
+        (2, 32),
+        (4, 128),
+        marks=[pytest.mark.skip()],
+        id="003"
     ),
     pytest.param(
         "sigmoid_kernel_fp16_004",
@@ -284,6 +304,7 @@ def run_sigmoid_test(kernels, kernel_name, dtype, shape):
     kernels[kernel_name](input_, output)
 
     expect = torch.sigmoid(input_)
+    check_nan(output, name=kernel_name)
     cos_value = abs(compare_cos(np.array(output.cpu()), np.array(expect.cpu())))
     if cos_value < 0.9999:
         raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")

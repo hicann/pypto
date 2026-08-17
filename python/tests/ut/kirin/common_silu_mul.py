@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -68,6 +68,7 @@ def run_silu_mul_test(kernels, shape, dtype):
 
     kernels["silu_mul_fp16"](x, y, output)
 
+    check_nan(output)
     cos_value = abs(compare_cos(np.array(output.cpu()), np.array(golden.cpu())))
     if cos_value < 0.9999:
         raise AssertionError(f"cos_value {cos_value} < 0.9999")

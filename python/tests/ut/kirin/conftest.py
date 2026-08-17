@@ -10,5 +10,9 @@
 
 import logging
 
+import pypto
+
 logging.getLogger().setLevel(logging.INFO)
 logging.basicConfig(level=logging.INFO)
+
+pypto.set_global_config("simulation.accuracy_level", 2)

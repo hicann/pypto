@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -228,14 +228,17 @@ def run_qkv_fused_test(
         q_input, k_input, v_input, cos_cache, sin_cache, indices, q_out, past_key_k_out, past_value_v_out
     )
 
+    check_nan(q_out, name="q_out")
     cos_value_q = abs(compare_cos(np.array(q_out.cpu()), np.array(q_golden.cpu())))
     if cos_value_q < 0.9999:
         raise AssertionError(f"cos_value_q {cos_value_q} < 0.9999")
 
+    check_nan(past_key_k_out, name="past_key_k_out")
     cos_value_k = abs(compare_cos(np.array(past_key_k_out.cpu()), np.array(k_golden.cpu())))
     if cos_value_k < 0.9999:
         raise AssertionError(f"cos_value_k {cos_value_k} < 0.9999")
 
+    check_nan(past_value_v_out, name="past_value_v_out")
     cos_value_v = abs(compare_cos(np.array(past_value_v_out.cpu()), np.array(v_golden.cpu())))
     if cos_value_v < 0.9999:
         raise AssertionError(f"cos_value_v {cos_value_v} < 0.9999")

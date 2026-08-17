@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -180,6 +180,7 @@ def run_full_test(kernels, kernel_name, dtype, shape, input_val):
     output = torch.empty(shape, dtype=dtype, device="cpu")
     kernels[kernel_name](output, shape, input_val)
     golden = torch.full(shape, input_val, dtype=dtype, device="cpu")
+    check_nan(output, name=kernel_name)
     cos_value = abs(compare_cos(np.array(output.cpu()), np.array(golden.cpu())))
     if cos_value < 0.9999:
         raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")

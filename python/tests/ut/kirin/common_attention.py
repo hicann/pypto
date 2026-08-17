@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 TEST_CASES_4INPUT = [
@@ -274,6 +274,7 @@ def run_4input_test(kernels, op_type, shapes):
     kernels[op_type](a, b, c, out)
     golden = _compute_golden_4input(op_type, a, b, c)
 
+    check_nan(out, name=op_type)
     cos_value = abs(compare_cos(np.array(out.cpu()), np.array(golden.cpu())))
     if cos_value < 0.9999:
         raise AssertionError(f"cos_value {cos_value} < 0.9999")
@@ -289,6 +290,7 @@ def run_attention_test(kernels, op_type, shapes):
     kernels[op_type](q, k, v, attn_mask, output)
     golden = _compute_golden_attention(op_type, q, k, v, attn_mask)
 
+    check_nan(output, name=op_type)
     cos_value = abs(compare_cos(np.array(output.cpu()), np.array(golden.cpu())))
     if cos_value < 0.9999:
         raise AssertionError(f"cos_value {cos_value} < 0.9999")

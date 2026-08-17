@@ -16,7 +16,7 @@ Test add codegen - common functions for Kirin9030 and KirinX90
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -586,6 +586,7 @@ def run_add_test(kernels, kernel_name, dtype, shape_in0, shape_in1, scalar_val):
 
     golden = input0 + input1
 
+    check_nan(output, name=kernel_name)
     cos_value = compare_cos(output.cpu().numpy(), golden.cpu().numpy())
     cos_value = abs(cos_value)
     if cos_value < 0.9999:

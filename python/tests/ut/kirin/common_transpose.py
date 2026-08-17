@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -503,6 +503,7 @@ def run_transpose_test(kernels, kernel_name, dtype, shape, dim0, dim1):
     out_np = np.array(out_tensor.cpu().to(torch.int32) if is_int else out_tensor.cpu())
     expect_np = np.array(golden_out.cpu().to(torch.int32) if is_int else golden_out.cpu())
 
+    check_nan(out_tensor, name=kernel_name)
     cos_value = abs(compare_cos(out_np, expect_np))
     if cos_value < 0.9999:
         raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")

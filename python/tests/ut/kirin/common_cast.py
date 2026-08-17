@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 from pypto import CastMode, SaturationMode
 
@@ -483,13 +483,13 @@ def run_cast_test(kernels, kernel_name, in_dtype_str, out_dtype_str, shape, cast
 
     golden = torch_cast_with_mode(a, out_dtype_pypto, cast_mode, sat_mode)
 
+    check_nan(out, name=kernel_name)
     if out_dtype_torch in (torch.int8, torch.int16, torch.int32, torch.uint8):
-        cos_val = abs(compare_cos(out.float().numpy(), golden.float().numpy()))
+        np.testing.assert_array_equal(out.cpu(), golden.cpu())
     else:
         cos_val = abs(compare_cos(out.numpy(), golden.numpy()))
-
-    if cos_val < 0.9999:
-        raise AssertionError(f"{kernel_name}: cos_val {cos_val} < 0.9999")
+        if cos_val < 0.9999:
+            raise AssertionError(f"{kernel_name}: cos_val {cos_val} < 0.9999")
 
 
 def create_test_cast_module(soc_version):

@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 DTYPE_MAP = {
@@ -403,6 +403,7 @@ def run_matmul_test(
         else:
             golden_c = a_new @ b_new
 
+    check_nan(c, name=kernel_name)
     cos_value = compare_cos(np.array(c.cpu()), np.array(golden_c.cpu()))
     cos_value = abs(cos_value)
     if cos_value < 0.9999:

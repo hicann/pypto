@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -280,6 +280,7 @@ def run_concat_test(kernels, kernel_name, dtype, input_shapes, output_shape, dim
     kernels[kernel_name](*args)
 
     golden = torch.cat(inputs, dim=dim)
+    check_nan(output, name=kernel_name)
     cos_value = abs(compare_cos(np.array(output.cpu()), np.array(golden.cpu())))
     if cos_value < 0.9999:
         raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")

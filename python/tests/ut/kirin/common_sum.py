@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -256,6 +256,7 @@ def run_sum_test(kernels, kernel_name, dtype, shape_input, shape_out, dim):
 
     golden_out = _compute_golden_sum(input_tensor, dim)
 
+    check_nan(out_tensor, name=kernel_name)
     cos_value = abs(compare_cos(np.array(out_tensor.cpu()), np.array(golden_out.cpu())))
     if cos_value < 0.9999:
         raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")

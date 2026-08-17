@@ -10,50 +10,73 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """
-Test eq comparison codegen - common functions for Kirin9030 and KirinX90
+Test comparison ops (eq/ne/lt/le/gt/ge) codegen - common functions for Kirin9030 and KirinX90
 """
 
 import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan
 import pypto
 
+# op_name -> (pypto_op, torch_op). Pypto and torch expose the same six comparison
+# operators with identical semantics, so a single dispatch table drives both the
+# kernel body and the golden reference.
+CMP_OPS = {
+    "eq": (pypto.eq, torch.eq),
+    "ne": (pypto.ne, torch.ne),
+    "lt": (pypto.lt, torch.lt),
+    "le": (pypto.le, torch.le),
+    "gt": (pypto.gt, torch.gt),
+    "ge": (pypto.ge, torch.ge),
+}
 
-def make_eq_kernel(soc_version, name, dtype, tile_shapes):
-    @pypto.frontend.jit(codegen_options={"soc_version": soc_version}, runtime_options={"run_mode": pypto.RunMode.SIM})
+
+def make_cmp_kernel(soc_version, name, op_name, dtype, tile_shapes):
+    """Build a jit kernel that computes ``out = pypto_op(a, b)`` for the given op."""
+    pypto_op = CMP_OPS[op_name][0]
+
+    @pypto.frontend.jit(
+        codegen_options={"soc_version": soc_version},
+        runtime_options={"run_mode": pypto.RunMode.SIM}
+    )
     def kernel(
         a: pypto.Tensor([...], dtype),
         b: pypto.Tensor([...], dtype),
         out: pypto.Tensor([...], pypto.DT_BOOL),
     ):
         pypto.set_vec_tile_shapes(*tile_shapes)
-        out[:] = pypto.eq(a, b)
-
+        out[:] = pypto_op(a, b)
     kernel.__name__ = name
     return kernel
 
 
 TEST_CASES = [
     # kernel_name: name of the kernel
+    # op_name: comparison op ("eq"/"ne"/"lt"/"le"/"gt"/"ge") - selects pypto/torch op via CMP_OPS
     # torch_dtype: torch data type (float16, float32)
-    # pypto_dtype: pypto data type
+    # pypto_dtype: pypto data type (DT_FP16, DT_FP32, etc.)
     # tile_shape: tile shape for pypto kernel
     # shape_a: first input tensor shape
-    # shape_b: second input tensor shape (or None)
-    # scalar_val: scalar value (or None)
+    # shape_b: second input tensor shape (or None for scalar)
+    # scalar_val: scalar value (or None for tensor)
     # marks: pytest marks
-    # - kernel_name: name of the kernel in create_cmp_kernels dict
-    # - torch_dtype: torch data type (float16, float32)
-    # - pypto_dtype: pypto data type (DT_FP16, DT_FP32, etc.)
-    # - tile_shape: tile shape for pypto kernel
-    # - shape_a: first input tensor shape
-    # - shape_b: second input tensor shape (or None for scalar)
-    # - scalar_val: scalar value (or None for tensor)
-    pytest.param("eq_kernel_fp16_001", torch.float16, pypto.DT_FP16, (50,), (112,), (112,), None, marks=[], id="001"),
+    pytest.param(
+        "eq_kernel_fp16_001",
+        "eq",
+        torch.float16,
+        pypto.DT_FP16,
+        (50,),
+        (112,),
+        (112,),
+        None,
+        marks=[],
+        id="001"
+    ),
     pytest.param(
         "eq_kernel_fp16_002",
+        "eq",
         torch.float16,
         pypto.DT_FP16,
         (32,),
@@ -65,6 +88,7 @@ TEST_CASES = [
     ),
     pytest.param(
         "eq_kernel_fp16_003",
+        "eq",
         torch.float16,
         pypto.DT_FP16,
         (16,),
@@ -76,6 +100,7 @@ TEST_CASES = [
     ),
     pytest.param(
         "eq_kernel_fp16_004",
+        "eq",
         torch.float16,
         pypto.DT_FP16,
         (16, 8),
@@ -87,6 +112,7 @@ TEST_CASES = [
     ),
     pytest.param(
         "eq_kernel_fp16_005",
+        "eq",
         torch.float16,
         pypto.DT_FP16,
         (2, 40),
@@ -98,6 +124,7 @@ TEST_CASES = [
     ),
     pytest.param(
         "eq_kernel_fp16_006",
+        "eq",
         torch.float16,
         pypto.DT_FP16,
         (1, 48),
@@ -109,6 +136,7 @@ TEST_CASES = [
     ),
     pytest.param(
         "eq_kernel_fp16_007",
+        "eq",
         torch.float16,
         pypto.DT_FP16,
         (2, 16),
@@ -120,6 +148,7 @@ TEST_CASES = [
     ),
     pytest.param(
         "eq_kernel_fp16_008",
+        "eq",
         torch.float16,
         pypto.DT_FP16,
         (2, 64),
@@ -130,7 +159,8 @@ TEST_CASES = [
         id="008",
     ),
     pytest.param(
-        "eq_kernel_fp16_009",
+        "ne_kernel_fp16_009",
+        "ne",
         torch.float16,
         pypto.DT_FP16,
         (32, 64),
@@ -141,7 +171,8 @@ TEST_CASES = [
         id="009",
     ),
     pytest.param(
-        "eq_kernel_fp16_010",
+        "ne_kernel_fp16_010",
+        "ne",
         torch.float16,
         pypto.DT_FP16,
         (64, 32),
@@ -152,7 +183,8 @@ TEST_CASES = [
         id="010",
     ),
     pytest.param(
-        "eq_kernel_fp16_011",
+        "ne_kernel_fp16_011",
+        "ne",
         torch.float16,
         pypto.DT_FP16,
         (1, 32, 32),
@@ -163,7 +195,8 @@ TEST_CASES = [
         id="011",
     ),
     pytest.param(
-        "eq_kernel_fp16_012",
+        "ne_kernel_fp16_012",
+        "ne",
         torch.float16,
         pypto.DT_FP16,
         (1, 1, 24),
@@ -174,7 +207,8 @@ TEST_CASES = [
         id="012",
     ),
     pytest.param(
-        "eq_kernel_fp16_013",
+        "ne_kernel_fp16_013",
+        "ne",
         torch.float16,
         pypto.DT_FP16,
         (1, 32, 24),
@@ -185,7 +219,8 @@ TEST_CASES = [
         id="013",
     ),
     pytest.param(
-        "eq_kernel_fp16_014",
+        "ne_kernel_fp16_014",
+        "ne",
         torch.float16,
         pypto.DT_FP16,
         (1, 24, 24),
@@ -196,7 +231,8 @@ TEST_CASES = [
         id="014",
     ),
     pytest.param(
-        "eq_kernel_fp16_015",
+        "ne_kernel_fp16_015",
+        "ne",
         torch.float16,
         pypto.DT_FP16,
         (1, 32, 24),
@@ -207,7 +243,8 @@ TEST_CASES = [
         id="015",
     ),
     pytest.param(
-        "eq_kernel_fp16_016",
+        "ne_kernel_fp16_016",
+        "ne",
         torch.float16,
         pypto.DT_FP16,
         (3, 32, 32),
@@ -218,7 +255,8 @@ TEST_CASES = [
         id="016",
     ),
     pytest.param(
-        "eq_kernel_fp16_017",
+        "lt_kernel_fp16_017",
+        "lt",
         torch.float16,
         pypto.DT_FP16,
         (1, 32, 32),
@@ -229,7 +267,8 @@ TEST_CASES = [
         id="017",
     ),
     pytest.param(
-        "eq_kernel_fp16_018",
+        "lt_kernel_fp16_018",
+        "lt",
         torch.float16,
         pypto.DT_FP16,
         (16, 16, 16),
@@ -240,7 +279,8 @@ TEST_CASES = [
         id="018",
     ),
     pytest.param(
-        "eq_kernel_fp16_019",
+        "lt_kernel_fp16_019",
+        "lt",
         torch.float16,
         pypto.DT_FP16,
         (1, 1, 16, 16),
@@ -251,7 +291,8 @@ TEST_CASES = [
         id="019",
     ),
     pytest.param(
-        "eq_kernel_fp16_020",
+        "lt_kernel_fp16_020",
+        "lt",
         torch.float16,
         pypto.DT_FP16,
         (1, 2, 8, 8),
@@ -262,7 +303,8 @@ TEST_CASES = [
         id="020",
     ),
     pytest.param(
-        "eq_kernel_fp16_021",
+        "lt_kernel_fp16_021",
+        "lt",
         torch.float16,
         pypto.DT_FP16,
         (1, 1, 12, 12),
@@ -273,7 +315,8 @@ TEST_CASES = [
         id="021",
     ),
     pytest.param(
-        "eq_kernel_fp16_022",
+        "lt_kernel_fp16_022",
+        "lt",
         torch.float16,
         pypto.DT_FP16,
         (1, 1, 20, 20),
@@ -284,7 +327,8 @@ TEST_CASES = [
         id="022",
     ),
     pytest.param(
-        "eq_kernel_fp16_023",
+        "lt_kernel_fp16_023",
+        "lt",
         torch.float16,
         pypto.DT_FP16,
         (1, 1, 8, 8),
@@ -295,7 +339,8 @@ TEST_CASES = [
         id="023",
     ),
     pytest.param(
-        "eq_kernel_fp32_001",
+        "lt_kernel_fp32_024",
+        "lt",
         torch.float32,
         pypto.DT_FP32,
         (4, 1),
@@ -306,7 +351,8 @@ TEST_CASES = [
         id="024",
     ),
     pytest.param(
-        "eq_kernel_fp32_002",
+        "le_kernel_fp32_025",
+        "le",
         torch.float32,
         pypto.DT_FP32,
         (2, 1, 32, 32),
@@ -317,7 +363,8 @@ TEST_CASES = [
         id="025",
     ),
     pytest.param(
-        "eq_kernel_fp32_003",
+        "le_kernel_fp32_026",
+        "le",
         torch.float32,
         pypto.DT_FP32,
         (1, 4, 16, 16),
@@ -328,7 +375,8 @@ TEST_CASES = [
         id="026",
     ),
     pytest.param(
-        "eq_kernel_fp32_004",
+        "le_kernel_fp32_027",
+        "le",
         torch.float32,
         pypto.DT_FP32,
         (2, 2, 24, 48),
@@ -339,7 +387,8 @@ TEST_CASES = [
         id="027",
     ),
     pytest.param(
-        "eq_kernel_fp32_005",
+        "le_kernel_fp32_028",
+        "le",
         torch.float32,
         pypto.DT_FP32,
         (1, 4, 32, 32),
@@ -350,7 +399,8 @@ TEST_CASES = [
         id="028",
     ),
     pytest.param(
-        "eq_kernel_fp32_006",
+        "le_kernel_fp32_029",
+        "le",
         torch.float32,
         pypto.DT_FP32,
         (1, 2, 16, 16),
@@ -361,7 +411,8 @@ TEST_CASES = [
         id="029",
     ),
     pytest.param(
-        "eq_kernel_fp32_007",
+        "le_kernel_fp32_030",
+        "le",
         torch.float32,
         pypto.DT_FP32,
         (1, 2, 16, 32),
@@ -372,7 +423,8 @@ TEST_CASES = [
         id="030",
     ),
     pytest.param(
-        "eq_kernel_fp32_008",
+        "le_kernel_fp32_031",
+        "le",
         torch.float32,
         pypto.DT_FP32,
         (1, 3, 24, 24),
@@ -383,7 +435,8 @@ TEST_CASES = [
         id="031",
     ),
     pytest.param(
-        "eq_kernel_fp32_009",
+        "le_kernel_fp32_032",
+        "le",
         torch.float32,
         pypto.DT_FP32,
         (1, 2, 8, 16),
@@ -394,7 +447,8 @@ TEST_CASES = [
         id="032",
     ),
     pytest.param(
-        "eq_kernel_fp32_010",
+        "gt_kernel_fp32_033",
+        "gt",
         torch.float32,
         pypto.DT_FP32,
         (2, 1, 32, 32),
@@ -405,7 +459,8 @@ TEST_CASES = [
         id="033",
     ),
     pytest.param(
-        "eq_kernel_fp32_011",
+        "gt_kernel_fp32_034",
+        "gt",
         torch.float32,
         pypto.DT_FP32,
         (1, 1, 24, 32),
@@ -416,7 +471,8 @@ TEST_CASES = [
         id="034",
     ),
     pytest.param(
-        "eq_kernel_fp32_012",
+        "gt_kernel_fp32_035",
+        "gt",
         torch.float32,
         pypto.DT_FP32,
         (8, 8, 8, 4),
@@ -427,7 +483,8 @@ TEST_CASES = [
         id="035",
     ),
     pytest.param(
-        "eq_kernel_fp32_013",
+        "gt_kernel_fp32_036",
+        "gt",
         torch.float32,
         pypto.DT_FP32,
         (8, 8, 4),
@@ -438,7 +495,8 @@ TEST_CASES = [
         id="036",
     ),
     pytest.param(
-        "eq_kernel_fp32_014",
+        "gt_kernel_fp32_037",
+        "gt",
         torch.float32,
         pypto.DT_FP32,
         (8, 1, 48),
@@ -449,7 +507,8 @@ TEST_CASES = [
         id="037",
     ),
     pytest.param(
-        "eq_kernel_fp32_015",
+        "gt_kernel_fp32_038",
+        "gt",
         torch.float32,
         pypto.DT_FP32,
         (1, 64, 24),
@@ -460,7 +519,8 @@ TEST_CASES = [
         id="038",
     ),
     pytest.param(
-        "eq_kernel_fp32_016",
+        "gt_kernel_fp32_039",
+        "gt",
         torch.float32,
         pypto.DT_FP32,
         (2, 16, 16),
@@ -471,7 +531,8 @@ TEST_CASES = [
         id="039",
     ),
     pytest.param(
-        "eq_kernel_fp32_017",
+        "gt_kernel_fp32_040",
+        "gt",
         torch.float32,
         pypto.DT_FP32,
         (16, 24, 32),
@@ -482,7 +543,8 @@ TEST_CASES = [
         id="040",
     ),
     pytest.param(
-        "eq_kernel_fp32_018",
+        "ge_kernel_fp32_041",
+        "ge",
         torch.float32,
         pypto.DT_FP32,
         (1, 2, 16, 48),
@@ -493,7 +555,8 @@ TEST_CASES = [
         id="041",
     ),
     pytest.param(
-        "eq_kernel_fp32_019",
+        "ge_kernel_fp32_042",
+        "ge",
         torch.float32,
         pypto.DT_FP32,
         (1, 2, 32, 32),
@@ -504,7 +567,8 @@ TEST_CASES = [
         id="042",
     ),
     pytest.param(
-        "eq_kernel_fp32_020",
+        "ge_kernel_fp32_043",
+        "ge",
         torch.float32,
         pypto.DT_FP32,
         (2, 2, 16, 32),
@@ -515,7 +579,8 @@ TEST_CASES = [
         id="043",
     ),
     pytest.param(
-        "eq_kernel_fp32_021",
+        "ge_kernel_fp32_044",
+        "ge",
         torch.float32,
         pypto.DT_FP32,
         (1, 2, 16, 32),
@@ -526,7 +591,8 @@ TEST_CASES = [
         id="044",
     ),
     pytest.param(
-        "eq_kernel_fp32_022",
+        "ge_kernel_fp32_045",
+        "ge",
         torch.float32,
         pypto.DT_FP32,
         (4, 2),
@@ -537,7 +603,8 @@ TEST_CASES = [
         id="045",
     ),
     pytest.param(
-        "eq_kernel_fp32_023",
+        "ge_kernel_fp32_046",
+        "ge",
         torch.float32,
         pypto.DT_FP32,
         (16, 12, 8),
@@ -548,7 +615,8 @@ TEST_CASES = [
         id="046",
     ),
     pytest.param(
-        "eq_kernel_fp32_024",
+        "ge_kernel_fp32_047",
+        "ge",
         torch.float32,
         pypto.DT_FP32,
         (8, 8, 8, 8),
@@ -561,8 +629,10 @@ TEST_CASES = [
 ]
 
 
-def run_eq_test(kernels, kernel_name, dtype, shape_a, shape_b, scalar_val):
-    """Run a single eq kernel test with given kernels dict."""
+def run_cmp_test(kernels, kernel_name, op_name, dtype, shape_a, shape_b, scalar_val):
+    """Run a single comparison kernel test; ``op_name`` picks the op from CMP_OPS."""
+    torch_op = CMP_OPS[op_name][1]
+
     device = "cpu"
 
     a = torch.rand(shape_a, dtype=dtype, device=device)
@@ -577,19 +647,25 @@ def run_eq_test(kernels, kernel_name, dtype, shape_a, shape_b, scalar_val):
 
     kernels[kernel_name](a, b, out)
 
-    expect = torch.eq(a, b)
+    expect = torch_op(a, b)
     out_np = np.array(out.cpu())
     expect_np = np.array(expect.cpu())
 
-    cos_value = abs(compare_cos(out_np, expect_np))
-    if cos_value < 0.9999:
-        raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")
+    check_nan(out, name=kernel_name)
+    np.testing.assert_array_equal(out_np, expect_np)
 
 
-def create_test_eq_module(soc_version):
-    """Create a test module for eq with specified soc_version."""
-    kernels = {p.values[0]: make_eq_kernel(soc_version, p.values[0], p.values[2], p.values[3]) for p in TEST_CASES}
-    return kernels, lambda: run_eq_test(kernels, None, None, None, None, None)
+def create_test_cmp_module(soc_version):
+    """Build the comparison-op kernel registry for the given soc_version.
+
+    Returns (kernels_dict, smoke_runner); the per-case runner is invoked directly
+    by the per-soc test files, which parametrize over TEST_CASES.
+    """
+    kernels = {
+        p.values[0]: make_cmp_kernel(soc_version, p.values[0], p.values[1], p.values[3], p.values[4])
+        for p in TEST_CASES
+    }
+    return kernels, lambda: run_cmp_test(kernels, None, None, None, None, None, None)
 
 
 if __name__ == "__main__":

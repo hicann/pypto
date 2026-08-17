@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -168,6 +168,7 @@ def run_reciprocal_test(kernels, kernel_name, dtype, shape):
     kernels[kernel_name](a, out)
 
     golden_out = torch.reciprocal(a)
+    check_nan(out, name=kernel_name)
     cos_value = abs(compare_cos(np.array(out.cpu()), np.array(golden_out.cpu())))
     if cos_value < 0.9999:
         raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")

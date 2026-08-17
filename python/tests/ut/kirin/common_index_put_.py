@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -339,6 +339,7 @@ def run_index_put_test(
             x, indices[0], indices[1], indices[2], indices[3], values
         )
 
+    check_nan(x, name=kernel_name)
     cos_value = abs(compare_cos(np.array(x.cpu()), np.array(golden.cpu())))
     if cos_value < 0.9999:
         raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")

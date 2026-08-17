@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -572,6 +572,7 @@ def run_assemble_test(kernels, kernel_name, dtype, input_shape, output_shape, of
         golden_out = out.clone()
         pypto_assemble_in_torch([(input1, offsets1), (input2, offsets2)], golden_out)
         kernels[kernel_name](input1, input2, out)
+        check_nan(out, name=kernel_name)
         cos_value = abs(compare_cos(np.array(out.cpu()), np.array(golden_out.cpu())))
     else:
         offsets = offsets_or_offsets_list if isinstance(offsets_or_offsets_list, list) else offsets_or_offsets_list[0]
@@ -588,6 +589,7 @@ def run_assemble_test(kernels, kernel_name, dtype, input_shape, output_shape, of
         golden_out = out.clone()
         pypto_assemble_in_torch(input_, golden_out, offsets)
         kernels[kernel_name](input_, out)
+        check_nan(out, name=kernel_name)
         cos_value = abs(compare_cos(np.array(out.cpu()), np.array(golden_out.cpu())))
 
     if cos_value < 0.9999:

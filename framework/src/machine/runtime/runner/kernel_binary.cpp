@@ -74,19 +74,21 @@ KernelBinary::KernelBinary(std::shared_ptr<Function> func, std::vector<std::shar
     devProg = (DevAscendProgram*)dynAttr->devProgBinary.data();
     kernelBin = RegisterKernelBinary(dynAttr->kernelBinary);
     workspaceSize = devProg->memBudget.Total();
-    InitCachedArgs();
-    InitLaunchArgs();
-    InitDeviceArgs();
-    auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
-    DeviceLauncher::FillSwimLaneEnableInfo(toSubMachineConfig_);
-    if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
-        EslModelMemoryUtils eslMemoryUtils{true, IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch()) ? false : true};
-        DeviceLauncher::FillDeviceKernelArgs(eslMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs,
-                                             dynAttr->commGroupNames);
-    } else {
-        DeviceMemoryUtils deviceMemoryUtils;
-        DeviceLauncher::FillDeviceKernelArgs(deviceMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs,
-                                             dynAttr->commGroupNames);
+    if (!IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) { // litenpu does not need init device args
+        InitCachedArgs();
+        InitLaunchArgs();
+        InitDeviceArgs();
+        auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
+        DeviceLauncher::FillSwimLaneEnableInfo(toSubMachineConfig_);
+        if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
+            EslModelMemoryUtils eslMemoryUtils{true, true};
+            DeviceLauncher::FillDeviceKernelArgs(eslMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs,
+                                                 dynAttr->commGroupNames);
+        } else {
+            DeviceMemoryUtils deviceMemoryUtils;
+            DeviceLauncher::FillDeviceKernelArgs(deviceMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs,
+                                                 dynAttr->commGroupNames);
+        }
     }
     kernelName_ = "PyPTO_" + dynFunc->GetOriginalRawName();
 }

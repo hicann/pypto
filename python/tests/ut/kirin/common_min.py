@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -681,6 +681,7 @@ def run_min_test(kernels, kernel_name, dtype, shape_a, shape_b, scalar_val):
     out_np = np.array(out.cpu().to(torch.int32) if use_int32_conv else out.cpu())
     expect_np = np.array(expect.cpu().to(torch.int32) if use_int32_conv else expect.cpu())
 
+    check_nan(out, name=kernel_name)
     cos_value = abs(compare_cos(out_np, expect_np))
     if cos_value < 0.9999:
         raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")

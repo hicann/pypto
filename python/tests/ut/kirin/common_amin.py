@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from kirin.common import compare_cos
+from kirin.common import check_nan, compare_cos
 import pypto
 
 
@@ -409,6 +409,7 @@ def run_amin_test(kernels, kernel_name, dtype, input_shape, output_shape, dim):
     kernels[kernel_name](input_, output)
 
     expect = torch.amin(input_, dim=dim, keepdim=True)
+    check_nan(output, name=kernel_name)
     cos_value = abs(compare_cos(np.array(output.cpu()), np.array(expect.cpu())))
     if cos_value < 0.9999:
         raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")
