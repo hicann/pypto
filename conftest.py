@@ -272,14 +272,22 @@ def pytest_collection_modifyitems(config, items):
     item_path = str(first_item.fspath)
     has_ut = "ut" in item_path.lower()
 
+    def _is_verify_case(item):
+        # Host pass_verify 用例：python/tests/ut/interpreter（原 tests/verify）
+        return "ut/interpreter" in str(item.fspath).lower().replace("\\", "/")
+
     if has_ut:
         filtered_items = items
     else:
-        # 先根据torch_npu接口获取soc version
-        target_soc = _get_soc_version()
-
-        # 筛选用例
-        filtered_items = [item for item in items if _is_case_match_soc(item, target_soc)]
+        verify_items = [item for item in items if _is_verify_case(item)]
+        other_items = [item for item in items if not _is_verify_case(item)]
+        # ut/interpreter 看护 Host pass_verify / SIM，不依赖 NPU soc 探测
+        if other_items:
+            target_soc = _get_soc_version()
+            filtered_items = [item for item in other_items if _is_case_match_soc(item, target_soc)]
+            filtered_items.extend(verify_items)
+        else:
+            filtered_items = verify_items
 
     # 根据卡数要求过滤用例
     cards_per_case = config.getoption("--cards-per-case", 1)
