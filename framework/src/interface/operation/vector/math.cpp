@@ -246,8 +246,8 @@ void TiledTanhOperation(Function& function, const TileShape& tileShape, size_t c
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
 
         constexpr size_t ALIGN_SIZE = 32;
-        int64_t tmpSize = MultiplyLastTwoDims<float>(input.tileInfo.shape);
-        int64_t cmpsize = CmpResAlign(input.tileInfo.shape);
+        int64_t tmpSize = MultiplyLastTwoDims<float>(tileShape.GetVecTile().tile);
+        int64_t cmpsize = CmpResAlign(tileShape.GetVecTile().tile);
         if (input.tensor.GetDataType() != DT_FP32) {
             tmpSize = 4 * tmpSize * sizeof(float);
         } else {
