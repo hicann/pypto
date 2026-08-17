@@ -61,6 +61,18 @@ std::vector<ir::VarPtr>& IRContext::GetDependToken(const ir::ExprPtr& val)
     return token_map_[val];
 }
 
+std::vector<ir::VarPtr> IRContext::GetDependToken(Operation& op)
+{
+    std::set<ir::VarPtr> tokenSet;
+    for (auto& scalar : op.GetDynamicAttributeList()) {
+        auto token = GetDependToken(scalar.get().AsExpr());
+        tokenSet.insert(token.begin(), token.end());
+    }
+    std::vector<ir::VarPtr> tokenList(tokenSet.begin(), tokenSet.end());
+    std::sort(tokenList.begin(), tokenList.end(), [](ir::VarPtr a, ir::VarPtr b) { return a->name_ < b->name_; });
+    return tokenList;
+}
+
 Function& DummyFunc()
 {
     static auto func = []() {
@@ -275,6 +287,7 @@ void IRBuilder::EmitTensorStmts()
     for (auto& op : func->Operations(false)) {
         auto stmt = std::dynamic_pointer_cast<ir::TensorOpStmt>(op.shared_from_this());
         stmt->span_ = ir::Span::Current();
+        stmt->tokens_ = irContext_.GetDependToken(op);
         Emit(stmt);
     }
     func->ResetOperations();

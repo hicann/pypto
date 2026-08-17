@@ -375,7 +375,7 @@ void RootFunctionBuilder::ComputeOutcast(Function& pathFunc)
         for (auto& oOperand : op.GetOOperands()) {
             bool neededByConsumer = consumedTensors_.count(oOperand) > 0;
             bool isFuncOutput = paramTensors_.count(oOperand) > 0;
-            if (neededByConsumer || isFuncOutput) {
+            if (neededByConsumer || isFuncOutput || oOperand->IsGetTensorDataOutcast()) {
                 pathFunc.AddOriginOutcast(oOperand);
             }
         }
@@ -590,6 +590,7 @@ std::pair<LogicalTensors, LogicalTensors> RootFunctionBuilder::FinalizeHiddenFun
 
     BuildPathFuncSlotScope(hiddenFunc, hiddenScope, hiddenFunc->GetOriginIncast(), hiddenFunc->GetOriginOutcast());
 
+    hiddenFunc->CreateTensorDataImportOp();
     auto hiddenInArgs = hiddenFunc->MakeIncasts(hiddenScope);
     auto hiddenOutArgs = hiddenFunc->MakeOutcasts(hiddenScope);
     for (size_t idx = 0; idx < hiddenFunc->GetOutcast().size(); idx++) {
@@ -632,6 +633,8 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
     pathFunc->funcType_ = ir::FunctionType::IN_CORE;
 
     // 2. hiddenFunc 设为 hidden，parent 改为 pathFunc
+    auto origFunc = program_.GetCurrentFunction();
+    program_.SetCurrentFunction(hiddenFunc);
     hiddenFunc->SetHiddenFunction(true);
     hiddenFunc->SetParent(pathFunc.get());
 
@@ -651,6 +654,8 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
         slotManager->SetSameSlot(originalOutcasts[i], hiddenFuncArgs.second[i]);
     }
     CreateAndFinalizePathFunc(pathFunc.get(), hiddenFunc, hiddenFuncArgs.first, hiddenFuncArgs.second, placeholder);
+
+    program_.SetCurrentFunction(origFunc);
 
     // 5. dynFunc 的 CALL op
     auto& callOperation = dynFunc_->AddRawOperation(Opcode::OP_CALL, originalIncasts, originalOutcasts,

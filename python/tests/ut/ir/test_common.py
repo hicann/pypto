@@ -34,6 +34,14 @@ def _ssa_verify(verifier, prog, name):
         raise SyntaxError(f"IR verification failed after {name}")
 
 
+def ssa_verify(func, desc=""):
+    """Verify that the function is in SSA form."""
+    b = ir.IRBuilder()
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    verifier = ir.IRVerifier.create_default()
+    _ssa_verify(verifier, prog, desc)
+
+
 def run_merge_pass(func, *args):
     """Compile a kernel and run canonicalize + dce + merge_stmts_into_if, stopping before lowering
     so the resulting if-tree (func.body) is inspectable. Mirrors compile_new_ir's first half."""

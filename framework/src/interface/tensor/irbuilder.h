@@ -103,6 +103,9 @@ public:
 
     void AddDependToken(const ir::ExprPtr& val, const ir::VarPtr& token) { token_map_[val].push_back(token); }
     std::vector<ir::VarPtr>& GetDependToken(const ir::ExprPtr& val);
+
+    std::vector<ir::VarPtr> GetDependToken(Operation& op);
+
     int AddTensorDataDesc(const std::shared_ptr<Tensor>& assembleTensor)
     {
         int index = static_cast<int>(getTensorDataDescList.size());
@@ -232,6 +235,8 @@ public:
 
     void AddDependToken(ir::ExprPtr expr, ir::VarPtr token) { irContext_.AddDependToken(expr, token); }
     std::vector<ir::VarPtr>& GetDependToken(ir::ExprPtr expr) { return irContext_.GetDependToken(expr); }
+    std::vector<ir::VarPtr> GetDependToken(Operation& op) { return irContext_.GetDependToken(op); }
+
     int AddTensorDataDesc(const std::shared_ptr<Tensor>& assembleTensor)
     {
         return irContext_.AddTensorDataDesc(assembleTensor);
