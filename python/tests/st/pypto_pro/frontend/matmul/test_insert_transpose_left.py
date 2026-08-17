@@ -42,7 +42,7 @@ ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 M = 64            # square P: [M, M]  (contraction == output rows, like FA TKV==TS)
 N = 64
 K = 128             # V is [M, D]
-SUB = M // 2       # 64, subcore split along the query axis
+SUB = M // 2       # 32, subcore split along the query axis
 
 
 def _require_a5(device):
@@ -70,11 +70,11 @@ def insert_zn_left_kernel(
         off = sub_id * SUB
 
         # vector holds P contraction-major, [M(key), SUB(query)] per subcore (FA [TKV, TS_HALF])
-        tile_d = pl.make_tile(pl.TileType(shape=[K, M], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
+        tile_d = pl.make_tile(pl.TileType(shape=[K, M // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
                               addr=0x0000, size=16384)
         tile_nz = pl.make_tile(
-            pl.TileType(shape=[K, M], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
-            addr=0x6000, size=16896)
+            pl.TileType(shape=[K, M // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
+            addr=0x6000, size=16384)
 
         pl.load(tile_d, d, [0, off])                 # d[:, off:off+SUB] -> [M, SUB]
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)

@@ -18,6 +18,10 @@
 
 可在搬运的同时融合 ReLU、预量化，或经 fixpipe 做量化（`scale`）；也可通过 `offset` 从一块较宽的源 tile 中提取子块（对应后端 `pto::TEXTRACT`）。
 
+当带 `offset` 且源 tile 是目的 tile 的子块（目的每一维均不小于源，至少一维严格大于）时，`move` 自动转为 [`insert`](insert.md) 语义（把较小的源 tile 嵌入较大的目标 tile），无需手动调用 `insert`。当源/目的 layout 互为 ZN/NZ（物理转置）时，按转置后的 shape 比较。
+
+`insert` 作为显式入口仍保留，但 `move` 已覆盖其能力。注意：带了 `move` 专属参数（`acc_to_vec_mode`/`relu_pre_mode`/`scale`）时不自动转 insert，仍按 `move` 语义处理。
+
 与 [`pypto_pro.language.load`](load.md)/[`pypto_pro.language.store`](store.md)（tensor↔tile，跨 GM）不同，`move` 是 tile↔tile，不涉及 GM。
 
 ## 函数原型
@@ -33,7 +37,7 @@ pypto_pro.language.move(dst_tile, src_tile, offset=None, *, acc_to_vec_mode=None
 |---|---|---|
 | `dst_tile` | 输出 | 目标 tile，搬入目的地；其内存空间决定 TMOV 变体 |
 | `src_tile` | 输入 | 源 tile |
-| `offset` | 输入 | 可选，`[offset_m, offset_k]`，从较宽的源 tile 中提取子块 |
+| `offset` | 输入 | 可选，`[offset_m, offset_k]`；源 tile 不小于目的 tile 时为提取子块（TEXTRACT），源 tile 为目的 tile 的子块时自动转为嵌入（TINSERT，见功能说明） |
 | `acc_to_vec_mode` | 输入 | 可选，Acc→Vec 搬运模式 |
 | `relu_pre_mode` | 输入 | 可选，搬运时融合 ReLU |
 | `scale` | 输入 | 可选，随路量化比例（deqScalar / deqTensor 路径） |
@@ -42,9 +46,9 @@ pypto_pro.language.move(dst_tile, src_tile, offset=None, *, acc_to_vec_mode=None
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_tile` | 输出 | 数据类型：b8、b16、b32、b64<br>内存空间与源共同决定流水（见“流水类型”）；首地址必须 32 字节对齐 |
-| `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>使用 `offset` 提取子块时，源 tile 须不小于目的 tile |
-| `offset` | 输入 | 二维 `[offset_m, offset_k]`，单位为元素个数<br>以源 tile 声明的物理 `shape` 为坐标系；`valid_shape` 不改变 offset 的坐标原点和计量单位，每一维须满足 `0 <= offset < src_tile.shape`<br>实际提取范围为 `[offset, offset + dst_tile.valid_shape)`。使用尾块时，完整的 `dst_tile.shape` 可以超出 offset 后的剩余范围，但实际提取范围不得超出 `src_tile.shape`；若源 tile 设置了更小的 `valid_shape`，实际提取范围还须位于该有效区域内 |
+| `dst_tile` | 输出 | 数据类型：b8、b16、b32、b64<br>内存空间与源共同决定流水（见"流水类型"）；首地址必须 32 字节对齐 |
+| `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>提取子块（TEXTRACT）时源 tile 须不小于目的 tile；自动转为嵌入（TINSERT）时源 tile 须为目的 tile 的子块 |
+| `offset` | 输入 | 二维 `[offset_m, offset_k]`，单位为元素个数<br>**TEXTRACT（源≥目的）**：以源 tile 声明的物理 `shape` 为坐标系；`valid_shape` 不改变 offset 的坐标原点和计量单位，每一维须满足 `0 <= offset < src_tile.shape`<br>实际提取范围为 `[offset, offset + dst_tile.valid_shape)`。使用尾块时，完整的 `dst_tile.shape` 可以超出 offset 后的剩余范围，但实际提取范围不得超出 `src_tile.shape`；若源 tile 设置了更小的 `valid_shape`，实际提取范围还须位于该有效区域内<br>**TINSERT（源<目的，自动转 insert）**：改以目的 tile 为坐标系，须满足 `offset[0] + src 行数 ≤ dst 行数`、`offset[1] + src 列数 ≤ dst 列数`，否则越界 |
 | `acc_to_vec_mode` | 输入 | 取 `pl.AccToVecMode.SingleModeVec0`/`pl.AccToVecMode.SingleModeVec1`/`pl.AccToVecMode.DualModeSplitM`/`pl.AccToVecMode.DualModeSplitN`；仅在源为 `Acc`、目的为 `Vec` 时有意义。`scale` 为 `Tile`（per-channel）时只支持单 vec 模式（`DualModeSplitM`/`DualModeSplitN` 报错） |
 | `relu_pre_mode` | 输入 | 默认 `None`（不融合 ReLU）；可取 `pl.ReluPreMode.NormalRelu` |
 | `scale` | 输入 | 可选，随路量化比例：`float`（编译期标量）→ per-tensor 量化；运行时 `FP32` 标量 → 自动重解释为 IEEE-754 位模式；运行时 `INT` 标量 → 须传预编码的 float32 位模式（`struct.pack("!f", v)`）；`Tile`（INT64、`MemorySpace.Scaling`、shape `[1, N]`）→ per-channel 量化（`move_fp` 路径），用户预制 deqTensor tile，框架直接复用（不自动分配/同步，用户负责 load→move→sync(MTE1→FIX)），只支持单 vec 模式；`Tensor` 不支持（per-channel 须以 `Tile` 传入） |
@@ -109,6 +113,9 @@ pl.move(vec_tile, acc, scale=2.0, acc_to_vec_mode=pl.AccToVecMode.SingleModeVec0
 
 # 从宽源 tile 提取子块（TEXTRACT）
 pl.move(cur_a_left, a_wide_slot, offset=[0, KL0])
+
+# 源是目的子块，自动按 insert 语义处理（TINSERT）——无需手动调用 pl.insert
+pl.move(p_mat, tile_nz, offset=[0, 0])
 ```
 
 ## pl.AccToVecMode.DualModeSplitM / pl.AccToVecMode.DualModeSplitN 尾块处理

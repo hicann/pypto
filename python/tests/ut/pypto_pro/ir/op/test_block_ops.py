@@ -399,3 +399,85 @@ def test_set_validshape_tile_group_single_tile():
     vs_pos = ir_str.index("block.set_validshape")
     load_pos = ir_str.index("block.load")
     assert vs_pos < load_pos
+
+
+def test_move_to_insert_subblock():
+    @pl.program
+    class Program:
+        @pl.function(type=pl.FunctionType.InCore)
+        def main(
+            self,
+            output: pl.Tensor[[32, 32], pl.DT_FP32],
+        ) -> pl.Tensor[[32, 32], pl.DT_FP32]:
+            dst_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
+            src_type = pl.TileType(shape=[16, 16], dtype=pl.DT_FP32)
+            dst = pl.make_tile(dst_type, addr=0x30200, size=4096)
+            src = pl.make_tile(src_type, addr=0x31200, size=1024)
+            pl.move(dst, src, [8, 8])
+            return pl.store(output, dst, [0, 0])
+
+    ir_str = _program_ir(Program)
+    assert "block.insert" in ir_str
+    assert "block.move" not in ir_str
+
+
+def test_move_to_insert_transpose_layout():
+    @pl.program
+    class Program:
+        @pl.function(type=pl.FunctionType.InCore)
+        def main(
+            self,
+            output: pl.Tensor[[32, 32], pl.DT_FP32],
+        ) -> pl.Tensor[[32, 32], pl.DT_FP32]:
+            dst_type = pl.TileType(
+                shape=[32, 64], dtype=pl.DT_FP32,
+                target_memory=pl.MemorySpace.Vec, layout=pl.ZN)
+            src_type = pl.TileType(
+                shape=[64, 16], dtype=pl.DT_FP32,
+                target_memory=pl.MemorySpace.Vec, layout=pl.NZ)
+            dst = pl.make_tile(dst_type, addr=0x30200, size=16384)
+            src = pl.make_tile(src_type, addr=0x31200, size=4096)
+            pl.move(dst, src, [0, 0])
+            return pl.store(output, dst, [0, 0])
+
+    ir_str = _program_ir(Program)
+    assert "block.insert" in ir_str
+    assert "block.move" not in ir_str
+
+
+def test_move_equal_shape_stays_move():
+    @pl.program
+    class Program:
+        @pl.function(type=pl.FunctionType.InCore)
+        def main(
+            self,
+            output: pl.Tensor[[32, 32], pl.DT_FP32],
+        ) -> pl.Tensor[[32, 32], pl.DT_FP32]:
+            dst_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
+            src_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
+            dst = pl.make_tile(dst_type, addr=0x30200, size=4096)
+            src = pl.make_tile(src_type, addr=0x31200, size=4096)
+            pl.move(dst, src, [0, 0])
+            return pl.store(output, dst, [0, 0])
+
+    ir_str = _program_ir(Program)
+    assert "block.move" in ir_str
+
+
+def test_move_src_larger_stays_move():
+    @pl.program
+    class Program:
+        @pl.function(type=pl.FunctionType.InCore)
+        def main(
+            self,
+            output: pl.Tensor[[32, 32], pl.DT_FP32],
+        ) -> pl.Tensor[[32, 32], pl.DT_FP32]:
+            dst_type = pl.TileType(shape=[16, 16], dtype=pl.DT_FP32)
+            src_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
+            dst = pl.make_tile(dst_type, addr=0x30200, size=1024)
+            src = pl.make_tile(src_type, addr=0x31200, size=4096)
+            pl.move(dst, src, [0, 0])
+            return pl.store(output, dst, [0, 0])
+
+    ir_str = _program_ir(Program)
+    assert "block.move" in ir_str

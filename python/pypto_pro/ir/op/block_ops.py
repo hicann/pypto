@@ -498,6 +498,63 @@ def _check_move_shape_compat(
                 )
 
 
+def _maybe_dispatch_to_insert(
+    out: Expr,
+    src: Expr,
+    offset: Expr | Sequence[Any] | None,
+    acc_to_vec_mode: AccToVecMode | None,
+    relu_pre_mode: ReluPreMode | None,
+    scale: Any,
+) -> bool:
+    """Whether ``move`` should dispatch to ``insert`` (TINSERT).
+
+    Rule A: offset given, dst is a super-block of src (fractal-transpose
+    pairs compare via dst[::-1]).
+    Rule B: equal-shape fractal transpose on Vec->Mat (TMOV can't convert layout).
+    Skipped when move-only kwargs are present.
+    """
+    if acc_to_vec_mode is not None or relu_pre_mode is not None or scale is not None:
+        return False
+
+    out_type = out.type
+    src_type = src.type
+    if not isinstance(out_type, _IRTileType) or not isinstance(src_type, _IRTileType):
+        return False
+    dst_shape = _tile_shape_ints(out_type)
+    src_shape = _tile_shape_ints(src_type)
+    if dst_shape is None or src_shape is None:
+        return False
+    if len(dst_shape) != len(src_shape):
+        return False
+
+    dst_layout = _tile_layout(out_type)
+    src_layout = _tile_layout(src_type)
+    layout_transpose = (
+        dst_layout is not None
+        and src_layout is not None
+        and _is_fractal_transpose(dst_layout, src_layout)
+    )
+    dst_cmp = dst_shape[::-1] if layout_transpose else dst_shape
+
+    is_shape_insert = (
+        offset is not None
+        and all(d >= s for d, s in zip(dst_cmp, src_shape))
+        and any(d > s for d, s in zip(dst_cmp, src_shape))
+    )
+
+    out_mem = getattr(getattr(out_type, "memref", None), "memory_space_", None)
+    src_mem = getattr(getattr(src_type, "memref", None), "memory_space_", None)
+    is_equal_transpose_vec_mat = (
+        layout_transpose
+        and len(dst_shape) == 2
+        and dst_shape == src_shape[::-1]
+        and src_mem == MemorySpace.Vec
+        and out_mem == MemorySpace.Mat
+    )
+
+    return is_shape_insert or is_equal_transpose_vec_mat
+
+
 def _ir_move(
     out: Expr,
     src: Expr,
@@ -509,6 +566,11 @@ def _ir_move(
     scale: Any = None,
 ) -> Expr:
     actual_span = span or _span()
+
+    if _maybe_dispatch_to_insert(out, src, offset, acc_to_vec_mode, relu_pre_mode, scale):
+        actual_offset = offset if offset is not None else [0, 0]
+        return _ir_insert(out, src, actual_offset, span=actual_span)
+
     if not isinstance(out.type, _ir_core.TileType):
         raise ValueError(f"move: dst must be a Tile, got {type(out.type).__name__}")
     if not isinstance(src.type, _ir_core.TileType):
@@ -521,12 +583,13 @@ def _ir_move(
         (MemorySpace.Acc, MemorySpace.Vec),
         (MemorySpace.Vec, MemorySpace.Vec),
         (MemorySpace.Mat, MemorySpace.Scaling),
+        (MemorySpace.Vec, MemorySpace.Mat),
         (MemorySpace.Mat, MemorySpace.Bias),
     }
     if _src_mem is not None and _dst_mem is not None and (_src_mem, _dst_mem) not in _supported_move_paths:
         raise ValueError(
             f"move: unsupported data path src({_src_mem.name})->dst({_dst_mem.name}), "
-            f"supported paths: Mat->Left, Mat->Right, Mat->Bias, Acc->Vec, Vec->Vec"
+            f"supported paths: Mat->Left, Mat->Right, Mat->Scaling, Mat->Bias, Acc->Vec, Vec->Vec, Vec->Mat"
         )
 
     _check_move_shape_compat(out, src, offset, acc_to_vec_mode, actual_span)
@@ -1069,6 +1132,30 @@ _LAYOUT_TO_BS: dict[TensorLayout, tuple[int, int]] = {
     TensorLayout.NN: (2, 2),
     TensorLayout.ZZ: (1, 1),
 }
+
+_BS_TO_LAYOUT: dict[tuple[int, int], TensorLayout] = {v: k for k, v in _LAYOUT_TO_BS.items()}
+
+
+_FRACTAL_TRANSPOSE: dict[TensorLayout, TensorLayout] = {
+    TensorLayout.NZ: TensorLayout.ZN,
+    TensorLayout.ZN: TensorLayout.NZ,
+    TensorLayout.NN: TensorLayout.ZZ,
+    TensorLayout.ZZ: TensorLayout.NN,
+    TensorLayout.ND: TensorLayout.DN,
+    TensorLayout.DN: TensorLayout.ND,
+}
+
+
+def _is_fractal_transpose(a: TensorLayout, b: TensorLayout) -> bool:
+    """True when layouts a, b are transpose-pairs (Z<->N flipped)."""
+    return _FRACTAL_TRANSPOSE.get(a) == b
+
+
+def _tile_layout(tile_type: "_IRTileType") -> "TensorLayout | None":
+    """Return the TensorLayout of a TileType derived from its hardware_info blayout/slayout."""
+    hw = tile_type.hardware_info
+    return _BS_TO_LAYOUT.get((int(hw.blayout), int(hw.slayout)))
+
 
 _DEFAULT_LAYOUTS_A3: dict[MemorySpace, TensorLayout] = {
     MemorySpace.Mat: TensorLayout.NZ,

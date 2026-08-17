@@ -58,11 +58,11 @@ def insert_group_transpose_left(
     with pl.section_vector():
         sub_id = pl.get_subblock_idx()
         off = sub_id * SUB
-        tile_d = pl.make_tile(pl.TileType(shape=[K, M], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
+        tile_d = pl.make_tile(pl.TileType(shape=[K, M // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
                               addr=0x0000, size=16384)
         tile_nz = pl.make_tile(
-            pl.TileType(shape=[K, M], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
-            addr=0x6000, size=16896)
+            pl.TileType(shape=[K, M // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
+            addr=0x6000, size=16384)
         p_mat = p_mat_db.current()
         pl.load(tile_d, d, [0, off])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
