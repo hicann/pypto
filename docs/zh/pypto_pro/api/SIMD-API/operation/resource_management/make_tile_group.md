@@ -64,6 +64,8 @@ pypto_pro.language.make_tile_group(type=, addrs=, mutex_ids=None, depth=None) ->
 | `group.previous()` | 不推进轮转状态，返回当前选择之前的Tile |
 | `group[i]` | 按照下标进行索引取第i个Tile，不读取也不推进轮转状态 |
 
+使用`group[i]`进行下标索引时，`i`的取值范围为`[0, num_tile)`。`mutex_ids`非空时，`num_tile`为`len(mutex_ids)`；否则为确定的`depth`。
+
 group句柄可直接传给[`pypto_pro.language.set_validshape`](../memory_vector_computation/transpose_and_element_access/set_validshape.md)，对group中所有tile批量设置valid_shape，适用于全局只需设置一次、后续直接`next()`的场景。
 
 ## 调用示例

@@ -133,8 +133,9 @@ REGISTER_OP("ptr.make_ptr")
 TypePtr DeduceMakeTensorType([[maybe_unused]] const std::vector<ExprPtr>& args,
                              [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    // ptr.make_tensor: Create a tensor view from a pointer (or an existing tensor) with explicit
-    // shape and strides. Args: (ptr_or_tensor, shape_tuple, stride_tuple)
+    // ptr.make_tensor: Create a tensor view from a pointer (or an existing tensor) with
+    // shape and optional strides. An empty stride tuple means an implicit contiguous
+    // row-major layout. Args: (ptr_or_tensor, shape_tuple, stride_tuple)
     CHECK(args.size() == 0x3) << "ptr.make_tensor requires exactly 3 arguments (ptr, shape, stride), but got "
                               << args.size();
 
@@ -158,30 +159,33 @@ TypePtr DeduceMakeTensorType([[maybe_unused]] const std::vector<ExprPtr>& args,
     auto shape_tuple = As<MakeTuple>(args[1]);
     CHECK(shape_tuple) << "ptr.make_tensor requires shape to be a MakeTuple";
 
-    // Third argument must be MakeTuple (stride)
+    // Third argument must be MakeTuple (stride); an empty tuple means implicit contiguous stride.
     auto stride_tuple = As<MakeTuple>(args[2]);
     CHECK(stride_tuple) << "ptr.make_tensor requires stride to be a MakeTuple";
 
-    CHECK(shape_tuple->elements_.size() == stride_tuple->elements_.size())
-        << "ptr.make_tensor shape rank (" << shape_tuple->elements_.size() << ") must match stride rank ("
-        << stride_tuple->elements_.size() << ")";
+    const auto& stride = stride_tuple->elements_;
+    if (!stride.empty()) {
+        CHECK(shape_tuple->elements_.size() == stride.size())
+            << "ptr.make_tensor shape rank (" << shape_tuple->elements_.size() << ") must match stride rank ("
+            << stride.size() << ")";
+    }
 
     // Element dtype: use the explicit 'dtype' kwarg if provided, otherwise derive it from the
     // source pointer/tensor's element type. This lets callers reinterpret a raw byte pointer
     // (e.g. uint8) as a typed view (e.g. fp16) without baking the dtype into the pointer parameter.
     DataType result_dtype = GetOpKwarg<DataType>(kwargs, "dtype", std::optional<DataType>(source_dtype));
 
-    TensorView tv(stride_tuple->elements_, TensorLayout::ND, args[0]);
+    TensorView tv(stride, TensorLayout::ND, args[0]);
     return std::make_shared<TensorType>(shape_tuple->elements_, result_dtype, std::nullopt, tv);
 }
 
 REGISTER_OP("ptr.make_tensor")
     .set_op_category("PtrOp")
-    .set_description("Create a tensor view from a pointer or an existing tensor with explicit shape and strides"
-                     " (emits pto.make_tensor_view)")
+    .set_description("Create a tensor view from a pointer or an existing tensor with shape and optional strides"
+                     " (an empty stride means contiguous row-major layout; emits pto.make_tensor_view)")
     .add_argument("ptr", "Input raw pointer (PtrType) or source tensor (TensorType)")
     .add_argument("shape", "New shape dimensions (MakeTuple of ConstInt)")
-    .add_argument("stride", "Stride per dimension (MakeTuple of ConstInt or Var)")
+    .add_argument("stride", "Stride per dimension (MakeTuple of ConstInt or Var; empty means contiguous)")
     .set_attr<DataType>("dtype")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {

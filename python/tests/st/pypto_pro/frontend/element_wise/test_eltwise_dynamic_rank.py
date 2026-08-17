@@ -94,9 +94,9 @@ def add_dynrank_kernel(
     n = tiling.shape[3]
     m = tiling.shape[0] * tiling.shape[1] * tiling.shape[2]
 
-    tensor_x = pl.make_tensor(x, [m, n], [n, 1])
-    tensor_y = pl.make_tensor(y, [m, n], [n, 1])
-    tensor_z = pl.make_tensor(z, [m, n], [n, 1])
+    tensor_x = pl.make_tensor(x, [m, n])
+    tensor_y = pl.make_tensor(y, [m, n])
+    tensor_z = pl.make_tensor(z, [m, n])
 
     # valid_shape=[-1, -1] makes the per-tile valid window dynamic (set at runtime
     # via set_validshape) so edge tiles can process a partial [rows, cols] block.

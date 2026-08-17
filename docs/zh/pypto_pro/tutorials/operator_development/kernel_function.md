@@ -49,8 +49,8 @@ def dynamic_kernel(
     scale: pl.DT_FP32,
     tiling: AddTiling,
 ):
-    tensor_x = pl.make_tensor(x, [tiling.m, tiling.n], [tiling.n, 1])
-    tensor_out = pl.make_tensor(out, [tiling.m, tiling.n], [tiling.n, 1])
+    tensor_x = pl.make_tensor(x, [tiling.m, tiling.n])
+    tensor_out = pl.make_tensor(out, [tiling.m, tiling.n])
     ...
 ```
 

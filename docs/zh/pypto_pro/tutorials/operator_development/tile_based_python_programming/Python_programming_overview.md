@@ -46,11 +46,11 @@ def fa_kernel(
     tiling: OpTiling,
 ):
     # 由裸指针构造带类型的二维视图
-    tensor_q = pl.make_tensor(q, [tiling.sq, tiling.d], [tiling.d, 1])
+    tensor_q = pl.make_tensor(q, [tiling.sq, tiling.d])
     ...
 ```
 
-`pl.make_tensor(ptr, shape, stride, dtype=None)`由裸指针结合显式shape与stride构造Tensor视图。shape的各维长度可以来自运行时TilingData，但`shape`列表的长度由Kernel代码确定，因此构造出的Tensor rank是编译期固定的。
+`pl.make_tensor(ptr, shape, stride=None, dtype=None)`由裸指针结合shape和可选stride构造Tensor视图。省略stride时，接口根据shape自动生成连续的行主序stride；需要表示非连续布局时，可继续传入显式stride。该接口是动态rank kernel的基础。
 
 [`pl.make_ptr(tensor, dtype=None)`](../../../api/SIMD-API/operation/resource_management/make_ptr.md)从已有Tensor提取底层裸指针。
 省略`dtype`时保留Tensor的元素类型；指定`dtype`时按目标元素类型解释指针，底层地址保持不变。

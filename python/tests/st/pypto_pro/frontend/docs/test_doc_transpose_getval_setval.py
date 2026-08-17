@@ -165,7 +165,7 @@ def test_tensor_getval_setval():
 def ptr_make_tensor_getval_setval_kernel(
     data_ptr: pl.Ptr[pl.DT_FP32],
 ):
-    tensor_view = pl.make_tensor(data_ptr, [2], [1])
+    tensor_view = pl.make_tensor(data_ptr, [2])
     scale = tensor_view[0]
     tensor_view[1] = scale
 

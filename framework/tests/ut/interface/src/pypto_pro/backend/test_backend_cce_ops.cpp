@@ -1102,7 +1102,7 @@ TEST(BackendCceOpsTest, DcciTensorWithMultidimensionalOffset)
         ir::Span::Unknown());
 
     auto generated = RunCodegen("system.dcci", call);
-    EXPECT_NE(generated.find("2 * 16 + 3"), std::string::npos);
+    EXPECT_NE(generated.find("2 * (16) + 3"), std::string::npos);
     EXPECT_NE(generated.find("CACHELINE_OUT"), std::string::npos);
 }
 

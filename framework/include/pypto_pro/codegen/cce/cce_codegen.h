@@ -171,10 +171,10 @@ public:
     bool IsAddrRegVar(const std::string& cpp_name) const { return addr_reg_vars_.count(cpp_name) > 0; }
 
     /**
-     * \brief Compute offset from IR tensor shape (for single-file mode without Tensor struct)
+     * \brief Compute an element offset from the tensor's logical stride
      *
-     * Computes row-major stride-based offset: off[0]*stride[0] + off[1]*stride[1] + ...
-     * where stride[i] = product(shape[i+1..n-1])
+     * Uses TensorView stride when present; otherwise derives a contiguous row-major
+     * stride from the tensor shape.
      */
     std::string ComputeIRBasedOffset(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets);
 
@@ -508,6 +508,8 @@ private:
      * Pads to five slots with leading 1s. Used for the NZ physical fractal shape.
      */
     std::string GenerateSingleFileStrideType(const std::vector<int64_t>& dims) const;
+
+    std::vector<std::string> BuildTensorStrideExpressions(const ir::TensorTypePtr& tensor_type);
 
     std::string BuildDynamicNZTensorDimArg(const ir::TensorTypePtr& tensor_type, size_t axis);
 

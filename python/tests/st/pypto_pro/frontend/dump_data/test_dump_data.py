@@ -707,7 +707,7 @@ def dump_data_tile_acc_ptr_workspace_kernel(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
         addrs=0x0000, mutex_ids=[4])
 
-    ws = pl.make_tensor(workspace_ptr, [64, 64], [64, 1])
+    ws = pl.make_tensor(workspace_ptr, [64, 64])
 
     with pl.section_cube():
         cur_a = a_l1.current()

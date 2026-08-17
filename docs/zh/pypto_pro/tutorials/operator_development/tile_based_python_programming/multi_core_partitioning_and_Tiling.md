@@ -258,7 +258,7 @@ def add_dynrank_kernel(
 ):
     N = tiling.shape[3]                          # 字段当普通运行时值用
     M = tiling.shape[0] * tiling.shape[1] * tiling.shape[2]
-    tensor_x = pl.make_tensor(x, [M, N], [N, 1])
+    tensor_x = pl.make_tensor(x, [M, N])
     ...
     if tiling.opkind[4] == 0:                    # 数组元素驱动运行时分支
         pl.add(tile_c, tile_a, tile_b)

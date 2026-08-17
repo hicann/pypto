@@ -78,10 +78,10 @@ def fa_kernel(
     tiling: OpTiling,          # <-- TilingData 参数
 ):
     # 重建二维带类型视图；两个维度的运行时取值来自 tiling，而非函数签名。
-    tensor_q = pl.make_tensor(q, [tiling.sq,  tiling.d], [tiling.d, 1])
-    tensor_k = pl.make_tensor(k, [tiling.skv, tiling.d], [tiling.d, 1])
-    tensor_v = pl.make_tensor(v, [tiling.skv, tiling.d], [tiling.d, 1])
-    tensor_o = pl.make_tensor(o, [tiling.sq,  tiling.d], [tiling.d, 1])
+    tensor_q = pl.make_tensor(q, [tiling.sq,  tiling.d])
+    tensor_k = pl.make_tensor(k, [tiling.skv, tiling.d])
+    tensor_v = pl.make_tensor(v, [tiling.skv, tiling.d])
+    tensor_o = pl.make_tensor(o, [tiling.sq,  tiling.d])
 
     sq_dim    = tiling.sq
     skv_dim   = tiling.skv
@@ -234,9 +234,9 @@ def add_dynrank_kernel(
     # 把Host侧2～4维输入的shape折叠成Kernel内固定的二维[M, N] Tensor视图。
     n = tiling.shape[3]
     m = tiling.shape[0] * tiling.shape[1] * tiling.shape[2]
-    tensor_x = pl.make_tensor(x, [m, n], [n, 1])
-    tensor_y = pl.make_tensor(y, [m, n], [n, 1])
-    tensor_z = pl.make_tensor(z, [m, n], [n, 1])
+    tensor_x = pl.make_tensor(x, [m, n])
+    tensor_y = pl.make_tensor(y, [m, n])
+    tensor_z = pl.make_tensor(z, [m, n])
 
     tile_type = pl.TileType(
         shape=[TILE_M, TILE_N],
@@ -455,7 +455,7 @@ class MyTiling:
 # 在Kernel签名中声明TilingData参数
 @pl.jit(auto_mutex=True)
 def k(x: pl.Ptr[pl.DT_FP16], tiling: MyTiling):
-    t = pl.make_tensor(x, [tiling.n, 128], [128, 1])   # shape 中的标量字段
+    t = pl.make_tensor(x, [tiling.n, 128])             # shape 中的标量字段
     for i in pl.range(0, tiling.n, 1):                 # 作循环边界的标量字段
         if tiling.flags[4] == 1:                       # 分支中的数组元素
             ...

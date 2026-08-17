@@ -29,7 +29,7 @@ from ._op_registry import OpSpec, register_table
 def make_tensor(
     ptr: Expr,
     shape: Sequence[int | Expr] | _ir_core.MakeTuple,
-    stride: Sequence[int | Expr] | _ir_core.MakeTuple,
+    stride: Sequence[int | Expr] | _ir_core.MakeTuple | None = None,
     dtype: DataType | None = None,
     span: Span | None = None,
 ) -> Call:
@@ -49,7 +49,9 @@ def make_tensor(
     Args:
         ptr: Raw pointer expression (PtrType) or source tensor (TensorType)
         shape: New shape dimensions (int or Expr per dimension), or a MakeTuple
-        stride: Stride per dimension (int or Expr), or a MakeTuple
+        stride: Optional stride per dimension (int or Expr), or a MakeTuple.
+            If omitted, the IR records an implicit contiguous row-major layout;
+            codegen derives the stride from ``shape`` when needed.
         dtype: Optional element dtype for the view. If omitted, it is derived
             from the source pointer/tensor's element type; if given, the view is
             created with this dtype (the source is reinterpreted as ``dtype``).
@@ -60,7 +62,10 @@ def make_tensor(
     """
     actual_span = _get_span_or_capture(span)
     shape_tuple = _to_make_tuple(shape, actual_span)
-    stride_tuple = _to_make_tuple(stride, actual_span)
+    if stride is None:
+        stride_tuple = _ir_core.MakeTuple([], actual_span)
+    else:
+        stride_tuple = _to_make_tuple(stride, actual_span)
     kwargs: dict[str, Any] = {}
     if dtype is not None:
         kwargs["dtype"] = dtype

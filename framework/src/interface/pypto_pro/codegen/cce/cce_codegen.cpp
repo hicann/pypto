@@ -1844,14 +1844,10 @@ const TensorDef* CCECodegen::GetTensorDef(const std::string& name) const
 
 std::string CCECodegen::ComputeIRBasedOffset(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets)
 {
-    // Compute row-major strides from IR tensor shape and build offset expression.
-    // For tensor shape [d0, d1, ..., dn-1]:
-    //   stride[i] = d_{i+1} * d_{i+2} * ... * d_{n-1}
-    //   stride[n-1] = 1
-    //   offset = off[0]*stride[0] + off[1]*stride[1] + ...
     size_t ndim = tensor_type->shape_.size();
     CHECK(offsets->elements_.size() == ndim)
         << "Offset dimensions (" << offsets->elements_.size() << ") != tensor dimensions (" << ndim << ")";
+    const auto stride_exprs = BuildTensorStrideExpressions(tensor_type);
 
     std::ostringstream result;
     result << "(";
@@ -1859,15 +1855,14 @@ std::string CCECodegen::ComputeIRBasedOffset(const ir::TensorTypePtr& tensor_typ
     for (size_t i = 0; i < ndim; ++i) {
         std::string off_expr = GetExprAsCode(offsets->elements_[i]);
 
-        // Build stride as product of shape[i+1..n-1]
-        // For the last dimension, stride = 1, so just add the offset directly
+        // TensorView stride is used when present; otherwise a contiguous stride is derived from the shape.
+        // For a unit stride, add the offset directly.
         if (!first)
             result << " + ";
         first = false;
         result << off_expr;
-
-        for (size_t j = i + 1; j < ndim; ++j) {
-            result << " * " << GetExprAsCode(tensor_type->shape_[j]);
+        if (stride_exprs[i] != "1") {
+            result << " * (" << stride_exprs[i] << ")";
         }
     }
     result << ")";
@@ -2725,26 +2720,56 @@ std::string CCECodegen::GenerateSingleFileStrideType(const std::vector<int64_t>&
     return oss.str();
 }
 
+std::vector<std::string> CCECodegen::BuildTensorStrideExpressions(const ir::TensorTypePtr& tensor_type)
+{
+    CHECK(tensor_type != nullptr) << "Cannot build stride expressions for a null tensor type";
+    const size_t ndim = tensor_type->shape_.size();
+
+    if (tensor_type->tensor_view_.has_value() && !tensor_type->tensor_view_->stride.empty()) {
+        const auto& view_stride = tensor_type->tensor_view_->stride;
+        CHECK(view_stride.size() == ndim)
+            << "TensorView stride rank (" << view_stride.size() << ") != tensor rank (" << ndim << ")";
+
+        std::vector<std::string> stride_exprs;
+        stride_exprs.reserve(ndim);
+        for (const auto& stride : view_stride) {
+            stride_exprs.push_back(GetExprAsCode(stride));
+        }
+        return stride_exprs;
+    }
+
+    std::vector<std::string> stride_exprs(ndim, "1");
+    for (size_t i = 0; i < ndim; ++i) {
+        std::ostringstream stride;
+        for (size_t j = i + 1; j < ndim; ++j) {
+            if (j > i + 1) {
+                stride << " * ";
+            }
+            stride << GetExprAsCode(tensor_type->shape_[j]);
+        }
+        if (i + 1 < ndim) {
+            stride_exprs[i] = stride.str();
+        }
+    }
+    return stride_exprs;
+}
+
 void CCECodegen::AppendDynamicStrideGlobalTensorArgs(
     std::ostringstream& global_instance, const std::string& shape_type_name, const std::string& stride_type_name,
     const ir::TensorTypePtr& tensor_type, const std::optional<std::vector<int>>& tile_dims, bool is_transpose)
 {
-    auto full_stride_expr = [&](int dim_idx) -> std::string {
-        std::string expr = "1";
-        for (size_t i = static_cast<size_t>(dim_idx) + 1; i < tensor_type->shape_.size(); ++i) {
-            std::string dim = GetExprAsCode(tensor_type->shape_[i]);
-            expr = (expr == "1") ? dim : expr + "*" + dim;
-        }
-        return expr;
-    };
-
+    const auto stride_exprs = BuildTensorStrideExpressions(tensor_type);
+    const size_t ndim = tensor_type->shape_.size();
     std::string row_stride_expr;
     std::string col_stride_expr;
     if (tile_dims.has_value() && tile_dims->size() == 2) {
-        row_stride_expr = full_stride_expr((*tile_dims)[0]);
-        col_stride_expr = full_stride_expr((*tile_dims)[1]);
+        row_stride_expr = stride_exprs[static_cast<size_t>((*tile_dims)[0])];
+        col_stride_expr = stride_exprs[static_cast<size_t>((*tile_dims)[1])];
+    } else if (ndim >= 2) {
+        row_stride_expr = stride_exprs[ndim - 2];
+        col_stride_expr = stride_exprs[ndim - 1];
     } else {
-        row_stride_expr = GetExprAsCode(tensor_type->shape_.back());
+        row_stride_expr = stride_exprs[0];
         col_stride_expr = "1";
     }
     global_instance << ", " << shape_type_name << "(), " << stride_type_name << "(1, 1, 1, ";

@@ -729,7 +729,7 @@ TEST(CCECodegenTest, ComputesIRBasedOffsetAndRejectsRankMismatch)
 
     CCECodegen codegen(ir::SectionKind::Vector);
 
-    EXPECT_EQ(codegen.ComputeIRBasedOffset(tensor_type, offsets), "(1 * 3 * 4 + 2 * 4 + 3)");
+    EXPECT_EQ(codegen.ComputeIRBasedOffset(tensor_type, offsets), "(1 * (3 * 4) + 2 * (4) + 3)");
     EXPECT_THROW((void)codegen.ComputeIRBasedOffset(tensor_type, short_offsets), std::exception);
 }
 

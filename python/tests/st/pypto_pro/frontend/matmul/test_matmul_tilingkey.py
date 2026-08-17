@@ -72,16 +72,13 @@ def matmul_tilingkey(
     a_tensor_shape = [M_DIM, D_DIM]
     b_tensor_shape = [D_DIM, N_DIM]
     out_tensor_shape = [M_DIM, N_DIM]
-    a_tensor_strides = [D_DIM, 1]
-    b_tensor_strides = [N_DIM, 1]
-    out_tensor_strides = [N_DIM, 1]
     a_tile_shape = [mn_tile_size, D_DIM]
     b_tile_shape = [D_DIM, mn_tile_size]
     out_tile_shape = [mn_tile_size, mn_tile_size]
 
-    a = pl.make_tensor(a_ptr, a_tensor_shape, a_tensor_strides, dtype=io_dtype)
-    b = pl.make_tensor(b_ptr, b_tensor_shape, b_tensor_strides, dtype=io_dtype)
-    out = pl.make_tensor(out_ptr, out_tensor_shape, out_tensor_strides, dtype=pl.DT_FP32)
+    a = pl.make_tensor(a_ptr, a_tensor_shape, dtype=io_dtype)
+    b = pl.make_tensor(b_ptr, b_tensor_shape, dtype=io_dtype)
+    out = pl.make_tensor(out_ptr, out_tensor_shape, dtype=pl.DT_FP32)
 
     with pl.section_cube():
         a_mat_db = pl.make_tile_group(

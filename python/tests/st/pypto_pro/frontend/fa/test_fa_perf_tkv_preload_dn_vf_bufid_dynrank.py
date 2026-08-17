@@ -538,28 +538,24 @@ def flash_attention_score(
     tensor_q = pl.make_tensor(
         query,
         [tiling.b, tiling.sq, tiling.n, tiling.d],
-        [tiling.sq * tiling.n * tiling.d, tiling.n * tiling.d, tiling.d, 1],
         dtype=io_dtype,
     )
     tensor_k = pl.make_tensor(
         key,
         [tiling.b, tiling.skv, tiling.n, tiling.d],
-        [tiling.skv * tiling.n * tiling.d, tiling.n * tiling.d, tiling.d, 1],
         dtype=io_dtype,
     )
     tensor_v = pl.make_tensor(
         value,
         [tiling.b, tiling.skv, tiling.n, tiling.d],
-        [tiling.skv * tiling.n * tiling.d, tiling.n * tiling.d, tiling.d, 1],
         dtype=io_dtype,
     )
     tensor_o = pl.make_tensor(
         attention_out,
         [tiling.b, tiling.sq, tiling.n, tiling.d],
-        [tiling.sq * tiling.n * tiling.d, tiling.n * tiling.d, tiling.d, 1],
         dtype=io_dtype,
     )
-    tensor_attn_mask = pl.make_tensor(atten_mask, [FIXED_MASK_S, FIXED_MASK_S], [FIXED_MASK_S, 1])
+    tensor_attn_mask = pl.make_tensor(atten_mask, [FIXED_MASK_S, FIXED_MASK_S])
 
     n_dim = tiling.n
     sq_dim = tiling.sq
