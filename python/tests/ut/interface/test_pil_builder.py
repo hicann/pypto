@@ -11,7 +11,7 @@
 """Check every ``test_*.py.pil`` is a faithful render of its ``test_*.py``.
 
 ``render.py`` produces a ``.py.pil`` from a ``.py`` (raw) via
-``ast.parse`` -> ``pil.parse_stmts`` -> ``ast.unparse`` (prefixed with a license
+``ast.parse`` -> ``pil_parser.parse_stmts`` -> ``ast.unparse`` (prefixed with a license
 header). This test re-applies the same transform to the raw file and compares it
 against the committed ``.py.pil`` after normalising both sides through
 ``ast.parse`` -> ``ast.unparse``. The round-trip strips comments (the license
@@ -30,7 +30,7 @@ import sys
 import types
 import unittest
 
-import pypto.frontend.parser.pil as pil
+import pypto.frontend.parser.pil_parser as pil_parser
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_pil_builder_data")
 
@@ -38,9 +38,9 @@ _NON_DATA_FILES = {"test_pil_builder_utils.py"}
 
 
 def _render(src):
-    """Apply the pil transform directly: ast.parse -> pil.parse_stmts -> ast.unparse."""
+    """Apply the pil transform directly: ast.parse -> pil_parser.parse_stmts -> ast.unparse."""
     tree = ast.parse(src)
-    transformed = pil.parse_stmts(tree.body)
+    transformed = pil_parser.parse_stmts(tree.body)
     return ast.unparse(ast.Module(body=transformed, type_ignores=[]))
 
 

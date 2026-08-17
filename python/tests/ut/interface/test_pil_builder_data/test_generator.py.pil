@@ -9,7 +9,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-from .test_pil_builder_utils import Expr, PILTestCase
+from .test_pil_builder_utils import Expr
+from .test_pil_builder_utils import PILTestCase
 
 class ListCompTest(PILTestCase):
 
@@ -283,7 +284,7 @@ class ListCompTest(PILTestCase):
             _pil_220 = [_pil_222, _pil_224]
             _pil_214 = [_pil_215, _pil_220]
             for _pil_225 in _pil_214:
-                [_pil_226, _pil_227] = _pil_225
+                _pil_226, _pil_227 = _pil_225
                 var_a = _pil_226
                 var_b = _pil_227
                 _pil_228 = Expr.str
@@ -784,7 +785,7 @@ class SetCompTest(PILTestCase):
             _pil_645 = [_pil_647, _pil_649]
             _pil_639 = [_pil_640, _pil_645]
             for _pil_650 in _pil_639:
-                [_pil_651, _pil_652] = _pil_650
+                _pil_651, _pil_652 = _pil_650
                 var_a = _pil_651
                 var_b = _pil_652
                 _pil_653 = Expr.str
@@ -1245,7 +1246,7 @@ class DictCompTest(PILTestCase):
             _pil_1038 = [_pil_1040, _pil_1042]
             _pil_1032 = [_pil_1033, _pil_1038]
             for _pil_1043 in _pil_1032:
-                [_pil_1044, _pil_1045] = _pil_1043
+                _pil_1044, _pil_1045 = _pil_1043
                 var_a = _pil_1044
                 var_b = _pil_1045
                 _pil_1047 = Expr.int
@@ -1734,7 +1735,7 @@ class GeneratorExpTest(PILTestCase):
             _pil_1454 = [_pil_1456, _pil_1458]
             _pil_1448 = [_pil_1449, _pil_1454]
             for _pil_1459 in _pil_1448:
-                [_pil_1460, _pil_1461] = _pil_1459
+                _pil_1460, _pil_1461 = _pil_1459
                 var_a = _pil_1460
                 var_b = _pil_1461
                 _pil_1462 = Expr.str

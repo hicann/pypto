@@ -15,7 +15,7 @@ import logging
 import textwrap
 import unittest
 
-import pypto.frontend.parser.pil as pil
+import pypto.frontend.parser.pil_parser as pil_parser
 
 LOGGER = logging.getLogger(__name__)
 
@@ -231,7 +231,7 @@ class TestParser:
             stmt_list = ast.parse(source).body[0].body
 
             python_trace, python_vardict = self.run_ast(stmt_list)
-            pil_trace, pil_vardict = self.run_ast(pil.parse_stmts(stmt_list))
+            pil_trace, pil_vardict = self.run_ast(pil_parser.parse_stmts(stmt_list))
 
             assert python_trace == pil_trace, f'{target.__name__}: {python_trace=} {pil_trace=}'
             assert python_vardict == pil_vardict, f'{target.__name__}: {python_vardict=} {pil_vardict=}'

@@ -11,7 +11,7 @@
 """Render pil-transformed test sources.
 
 Reads every ``test_*.raw.py`` in this directory, transforms it through the pil
-frontend (``ast.parse`` -> ``pil.parse_stmts`` -> ``ast.unparse``) and writes the
+frontend (``ast.parse`` -> ``pil_parser.parse_stmts`` -> ``ast.unparse``) and writes the
 result to the matching ``test_*.pil.py``. The pil form is semantically
 equivalent to the raw form (it is a 3-address normalisation), so both should
 behave identically when executed.
@@ -21,7 +21,7 @@ import ast
 import glob
 import os
 
-import pypto.frontend.parser.pil as pil
+import pypto.frontend.parser.pil_parser as pil_parser
 
 _DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -36,7 +36,7 @@ def render(src):
     ``render_data.txt``.
     """
     tree = ast.parse(src)
-    transformed = pil.parse_stmts(tree.body)
+    transformed = pil_parser.parse_stmts(tree.body)
     code = ast.unparse(ast.Module(body=transformed, type_ignores=[]))
     return _LICENSE + "\n" + code + "\n"
 

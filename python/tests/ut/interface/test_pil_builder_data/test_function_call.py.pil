@@ -9,7 +9,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-from .test_pil_builder_utils import Expr, PILTestCase
+from .test_pil_builder_utils import Expr
+from .test_pil_builder_utils import PILTestCase
 
 class FunctionDefTest(PILTestCase):
 

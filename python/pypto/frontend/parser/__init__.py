@@ -73,4 +73,4 @@ For detailed developer documentation, see developer_doc.md in the frontend direc
 
 from ... import error  # noqa: F401
 from .entry import function, jit  # noqa: F401
-from .pil import parse_stmts  # noqa: F401
+from .pil_parser import parse_stmts  # noqa: F401

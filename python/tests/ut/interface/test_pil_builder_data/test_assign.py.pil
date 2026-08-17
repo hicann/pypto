@@ -9,7 +9,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-from .test_pil_builder_utils import Expr, PILTestCase
+from .test_pil_builder_utils import Expr
+from .test_pil_builder_utils import PILTestCase
 
 class ExprTest(PILTestCase):
 
@@ -1276,7 +1277,7 @@ class AssignTest(PILTestCase):
         _pil_1067 = Expr.int
         _pil_1068 = _pil_1067(1)
         _pil_1064 = [_pil_1066, _pil_1068]
-        [_pil_1069, _pil_1070] = _pil_1064
+        _pil_1069, _pil_1070 = _pil_1064
         _var_x = _pil_1069
         _var_y = _pil_1070
         _pil_1071 = self.assertEqual
@@ -1607,10 +1608,10 @@ class AssignTest(PILTestCase):
         _pil_1341 = Expr.int
         _pil_1342 = _pil_1341(1)
         _pil_1338 = [_pil_1340, _pil_1342]
-        [_pil_1343, _pil_1344] = _pil_1338
+        _pil_1343, _pil_1344 = _pil_1338
         _var_a = _pil_1343
         _var_b = _pil_1344
-        [_pil_1345, _pil_1346] = _pil_1338
+        _pil_1345, _pil_1346 = _pil_1338
         _var_c = _pil_1345
         _var_d = _pil_1346
         _pil_1347 = self.assertEqual
@@ -1703,11 +1704,11 @@ class AssignTest(PILTestCase):
         _pil_1418 = [_pil_1420, _pil_1421]
         _pil_1415 = [_pil_1417, _pil_1418]
         _var_x = _pil_1415
-        [_pil_1426, _pil_1427] = _pil_1415
+        _pil_1426, _pil_1427 = _pil_1415
         var_a = _pil_1426
-        [_pil_1428, _pil_1429] = _pil_1427
+        _pil_1428, _pil_1429 = _pil_1427
         var_b = _pil_1428
-        [_pil_1430, _pil_1431] = _pil_1429
+        _pil_1430, _pil_1431 = _pil_1429
         var_c = _pil_1430
         var_d = _pil_1431
         _pil_1432 = self.assertEqual
@@ -1740,7 +1741,7 @@ class AssignTest(PILTestCase):
         _var_x = _pil_1446
         _pil_1457, _pil_1458 = _pil_1446
         var_a = _pil_1457
-        [_pil_1459, _pil_1460] = _pil_1458
+        _pil_1459, _pil_1460 = _pil_1458
         var_b = _pil_1459
         _pil_1461, _pil_1462 = _pil_1460
         var_c = _pil_1461
@@ -1771,7 +1772,7 @@ class AssignTest(PILTestCase):
         _pil_1485 = _pil_1484(3)
         _pil_1477 = [_pil_1479, _pil_1481, _pil_1483, _pil_1485]
         _var_x = _pil_1477
-        [_pil_1486, _pil_1487, _pil_1488, _pil_1489] = _pil_1477
+        _pil_1486, _pil_1487, _pil_1488, _pil_1489 = _pil_1477
         var_a = _pil_1486
         var_b = _pil_1487
         var_c = _pil_1488
@@ -1817,7 +1818,7 @@ class AssignTest(PILTestCase):
         _pil_1525 = _pil_1524(1)
         _pil_1521 = [_pil_1523, _pil_1525]
         _var_x = _pil_1521
-        [_pil_1526, _pil_1527] = _pil_1521
+        _pil_1526, _pil_1527 = _pil_1521
         var_c = _pil_1526
         var_d = _pil_1527
         _pil_1528, _pil_1529 = _pil_1521
