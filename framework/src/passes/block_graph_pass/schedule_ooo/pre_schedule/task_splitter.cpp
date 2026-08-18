@@ -1095,6 +1095,8 @@ void TaskSplitter::RunSmallClusterMerge(DSUWithOrder& dsu, const std::vector<int
                                         int clusterNum, const std::unordered_set<int>& protectedClusterIds)
 {
     std::vector<bool> removed(clusterNum, false);
+    // 记录每个原始 cluster 的代表 op 索引，用于后续迭代中映射新旧 cluster ID
+    std::vector<int> representativeOp(clusterNum, -1);
     for (int iter = 0; iter < OOO_SMALL_CLUSTER_MERGE_MAX_ITER; iter++) {
         bool merged = false;
         // 需要重新获取 opCluster 因为 dsu 可能变化
@@ -1103,30 +1105,40 @@ void TaskSplitter::RunSmallClusterMerge(DSUWithOrder& dsu, const std::vector<int
         CollectClusters(dsu, rootToCluster2, tmpTypes2);
         std::vector<int> opCluster2;
         GetOpClusterIds(dsu, rootToCluster2, opCluster2);
+        // iter=0 时记录每个原始 cluster 的代表 op，用于后续迭代映射
+        if (iter == 0) {
+            for (size_t i = 0; i < opCluster2.size(); i++) {
+                int cid = opCluster2[i];
+                if (representativeOp[cid] < 0) {
+                    representativeOp[cid] = static_cast<int>(i);
+                }
+            }
+        }
+        // 映射: 原始 cluster ID → 当前迭代中对应的 cluster ID
+        auto oldToNew = [&](int oldId) {
+            int rep = representativeOp[oldId];
+            return (rep >= 0) ? opCluster2[rep] : oldId;
+        };
         for (int c : topoOrder) {
-            if (removed[c] || coreTypes[c] != ScheduleCoreType::AIV) {
-                continue;
-            }
-            if (protectedClusterIds.count(c) > 0) {
-                continue;
-            }
-            if (cycle[c] >= OOO_CYCLE_LB) {
+            if (removed[c] || coreTypes[c] != ScheduleCoreType::AIV || protectedClusterIds.count(c) > 0 ||
+                cycle[c] >= OOO_CYCLE_LB) {
                 continue;
             }
             int target = FindMergeTarget(c, coreTypes, cycle, clIn, clOut);
-            if (target < 0 || protectedClusterIds.count(target) > 0) {
+            if (target < 0 || protectedClusterIds.count(target) > 0)
                 continue;
-            }
+            // 映射到当前迭代的 cluster ID
+            int curSrc = oldToNew(c);
+            int curDst = oldToNew(target);
             APASS_LOG_DEBUG_F(Elements::Operation, "Merge small vec cluster %d (cycle=%d) into cluster %d (cycle=%d).",
                               c, cycle[c], target, cycle[target]);
-            UnionTwoClusters(dsu, opCluster2, c, target);
+            UnionTwoClusters(dsu, opCluster2, curSrc, curDst);
             UpdateClusterGraphAfterMerge(c, target, cycle, clIn, clOut);
             removed[c] = true;
             merged = true;
         }
-        if (!merged) {
+        if (!merged)
             break;
-        }
     }
 }
 
