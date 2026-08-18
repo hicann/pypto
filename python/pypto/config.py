@@ -515,7 +515,9 @@ def set_debug_options(
         0: disabled;
         1: enabled, one-click to enable graph compilation related configs (e.g. compute graph);
         2: enabled, one-click to enable fixed CCE (fix device-side code output path,
-           do not overwrite existing CCE files, single-thread compilation).
+           do not overwrite existing CCE files). Parallel compile threads are still
+           controlled by codegen.parallel_compile; kernel names are deterministically
+           assigned so multi-thread codegen outputs remain reproducible.
 
     runtime_debug_mode : int
         Whether to enable debug mode during execution stage.

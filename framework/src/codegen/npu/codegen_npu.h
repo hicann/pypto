@@ -42,6 +42,28 @@ struct CompileTaskInfo {
     std::string compileCmd;
 };
 
+/* The 64-bit subTilingKey embedded in the kernel name must be reproducible under
+ * multi-threaded codegen; otherwise fixed-CCE debug cannot match on-disk symbol
+ * names with the names allocated in this compile. The id is therefore derived
+ * from the task identity, not from completion order.
+ * Layout (pure concat, LSB -> MSB):
+ *   [0:0]     isMainBlock   (1)
+ *   [1:19]    subProgramId  (19)
+ *   [20:31]   devRootIndex  (12)
+ *   [32:63]   folded topFuncHash (32) = low32(hash ^ (hash >> 32))
+ * All fields are fixed before tasks are dispatched and can be read safely in parallel.
+ */
+constexpr uint32_t SUB_ID_MAIN_BLOCK_BITS = 1U;
+constexpr uint32_t SUB_ID_PROGRAM_BITS = 19U;
+constexpr uint32_t SUB_ID_DEV_ROOT_BITS = 12U;
+constexpr uint32_t SUB_ID_HASH_BITS = 32U;
+constexpr uint32_t SUB_ID_PROGRAM_SHIFT = SUB_ID_MAIN_BLOCK_BITS;
+constexpr uint32_t SUB_ID_DEV_ROOT_SHIFT = SUB_ID_PROGRAM_SHIFT + SUB_ID_PROGRAM_BITS;
+constexpr uint32_t SUB_ID_HASH_SHIFT = SUB_ID_DEV_ROOT_SHIFT + SUB_ID_DEV_ROOT_BITS;
+constexpr uint64_t SUB_ID_PROGRAM_MAX = (1UL << SUB_ID_PROGRAM_BITS) - 1UL;
+constexpr uint64_t SUB_ID_DEV_ROOT_MAX = (1UL << SUB_ID_DEV_ROOT_BITS) - 1UL;
+constexpr uint64_t SUB_ID_HASH_MASK = (1UL << SUB_ID_HASH_BITS) - 1UL;
+
 class CompileInfo {
 public:
     CompileInfo(Function& topFunc, const CodeGenCtx& ctx, const std::pair<uint64_t, Function*>& subFuncPair,
@@ -49,7 +71,10 @@ public:
         : userSpecCCEDir_(ctx.cceDir),
           isCube_(isCube),
           attr_(subFuncPair.second->GetLeafFuncAttribute()),
-          isMainBlock_(ctx.isMainBlock)
+          isMainBlock_(ctx.isMainBlock),
+          subProgramId_(subFuncPair.first),
+          devRootIndex_(ctx.devRootIndex),
+          topFuncHash_(topFunc.GetFunctionHash().GetHash())
     {
         Init(topFunc, subFuncPair.first);
     };
@@ -65,6 +90,9 @@ public:
     void SetFuncDeclare(const std::string& funcDeclare) { funcDeclare_ = funcDeclare; }
     std::string GetFuncDeclare() const { return funcDeclare_; }
     bool IsCube() const { return isCube_; }
+    uint64_t GetSubProgramId() const { return subProgramId_; }
+    const std::string& GetCCEFileName() const { return cceFileName_; }
+    uint64_t GetDeterministicSubId() const;
 
 protected:
     void Init(Function& topFunc, uint64_t subProgramId)
@@ -115,6 +143,9 @@ protected:
     std::string funcDeclare_;
     std::shared_ptr<LeafFuncAttribute> attr_{nullptr};
     bool isMainBlock_{false};
+    uint64_t subProgramId_{0};
+    int devRootIndex_{0};
+    uint64_t topFuncHash_{0};
 };
 
 class CodeGenNPU : public CodeGenCCE {
@@ -139,10 +170,10 @@ protected:
                            CompileInfo& compileInfo, std::ostringstream& oss) const;
     void GenInclude(const Function& topFunc, std::ostringstream& oss) const;
     void GenCommentBeforeFuncHeader(Function& subFunc, std::ostringstream& oss) const;
-    std::string GenFuncHeader(uint64_t programId, Function& topFunc, CompileInfo& compileInfo) const;
+    std::string GenFuncHeader(Function& topFunc, CompileInfo& compileInfo) const;
     virtual void GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) = 0;
     void GenFuncEnd(std::ostringstream& oss) const;
-    static std::string GenKernelName(Function& topFunc, uint64_t programId);
+    static std::string GenKernelName(Function& topFunc, const CompileInfo& compileInfo);
 
     void GenCodeToBinaryTask(std::ostringstream& code, const CompileInfo& compileInfo,
                              const std::string& compileOptions) const;

@@ -140,12 +140,15 @@ struct CodeGenCtx {
     std::string cceDir;
     bool isMainBlock{false};
     bool isDynamicAligned{false};
+    int devRootIndex{0};
     CodeGenCtx() = default;
-    CodeGenCtx(std::string inPath, std::string cmpPath, bool isMainBlk = false, bool isDynAligned = false)
+    CodeGenCtx(std::string inPath, std::string cmpPath, bool isMainBlk = false, bool isDynAligned = false,
+               int devRootIdx = 0)
         : includePath(std::move(inPath)),
           cceDir(std::move(cmpPath)),
           isMainBlock(isMainBlk),
-          isDynamicAligned(isDynAligned)
+          isDynamicAligned(isDynAligned),
+          devRootIndex(devRootIdx)
     {}
     bool IsCCEPathEmpty() const { return cceDir.empty(); }
     bool IsIncludePathEmpty() const { return includePath.empty(); }

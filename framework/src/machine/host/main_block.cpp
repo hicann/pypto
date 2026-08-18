@@ -228,11 +228,12 @@ SymbolicScalar MainBlockCondBulider::BuildMainBlockExpression()
     return cond;
 }
 
-void MainBlockCondBulider::Gencode(Function* function)
+void MainBlockCondBulider::Gencode(Function* function, int devRootIndex)
 {
     if (IsEnableVF()) {
         bool isDynamicAligned = function->paramConfigs_.dynamicAlignedOps;
-        npu::tile_fwk::CodeGenCtx codeGenCtxMainBlock("", config::GetEmitPath("kernel_aicore"), true, isDynamicAligned);
+        npu::tile_fwk::CodeGenCtx codeGenCtxMainBlock("", config::GetEmitPath("kernel_aicore"), true, isDynamicAligned,
+                                                      devRootIndex);
         npu::tile_fwk::CodeGen codeGenMainBlock(codeGenCtxMainBlock);
         codeGenMainBlock.GenCode(*function);
     }

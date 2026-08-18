@@ -17,23 +17,18 @@
 
 #include <map>
 #include <vector>
-#include <mutex>
 #include "tilefwk/tensor.h"
 
 namespace npu::tile_fwk {
-constexpr uint64_t MAIN_KEY_MASK = 0xFFFFFFFF;
-constexpr uint64_t SUB_KEY_OFFSET = 32UL;
-constexpr uint64_t SUB_KEY_MASK = 0xFFFFFFFF00000000;
+// Top-level dy_kernel / KERNEL_ENTRY tilingKey; leaf subTilingKey is produced by codegen separately.
+constexpr uint64_t DEFAULT_OP_TILING_KEY = 0UL;
 
 class OpInfoManager {
 public:
     OpInfoManager() = default;
     ~OpInfoManager() = default;
     static OpInfoManager& GetInstance();
-    void SetOpTilingKey(uint64_t opTilingKey);
     uint64_t GetOpTilingKey() const;
-    uint64_t GetNewSubTilingKey();
-    uint64_t GetCurSubTilingKey() const;
     void SetOpType(const std::string& opType);
     const std::string& GetOpType() const;
     bool IsNotFabinCompile();
@@ -45,10 +40,7 @@ public:
     void SetControlBinHandle(void* controlFlowBindHandle);
 
 private:
-    std::mutex mtx_;
     std::string opType_ = "PyPTO";
-    uint64_t opTilingKey_{0};
-    uint64_t subTilingKey_{0};
     std::vector<uint8_t> controlBuffer_ = {'0'};
     std::vector<char> customJson_ = {'0'};
     std::string controlFlowSoPath_;

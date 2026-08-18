@@ -29,43 +29,11 @@ public:
     void TearDown() override {}
 };
 
-TEST_F(TestOpInfoManager, SetAndGetOpTilingKey)
+TEST_F(TestOpInfoManager, GetOpTilingKeyDefault)
 {
     auto& mgr = OpInfoManager::GetInstance();
-    uint64_t key = 0x123456789ABCDULL;
-    mgr.SetOpTilingKey(key);
-    uint64_t result = mgr.GetOpTilingKey();
-    EXPECT_EQ(result, key & MAIN_KEY_MASK);
-}
-
-TEST_F(TestOpInfoManager, SetOpTilingKeyMasked)
-{
-    auto& mgr = OpInfoManager::GetInstance();
-    uint64_t keyWithSub = 0xFFF123456789ABCDULL;
-    mgr.SetOpTilingKey(keyWithSub);
-    uint64_t result = mgr.GetOpTilingKey();
-    EXPECT_EQ(result, keyWithSub & MAIN_KEY_MASK);
-}
-
-TEST_F(TestOpInfoManager, GetNewSubTilingKeyIncrementing)
-{
-    auto& mgr = OpInfoManager::GetInstance();
-    mgr.SetOpTilingKey(100);
-    uint64_t k1 = mgr.GetNewSubTilingKey();
-    uint64_t k2 = mgr.GetNewSubTilingKey();
-    EXPECT_NE(k1, k2);
-    uint64_t mainKey = 100 & MAIN_KEY_MASK;
-    EXPECT_EQ(k1 & MAIN_KEY_MASK, mainKey);
-    EXPECT_EQ(k2 & MAIN_KEY_MASK, mainKey);
-}
-
-TEST_F(TestOpInfoManager, GetCurSubTilingKeyNoIncrement)
-{
-    auto& mgr = OpInfoManager::GetInstance();
-    mgr.SetOpTilingKey(200);
-    uint64_t k1 = mgr.GetCurSubTilingKey();
-    uint64_t k2 = mgr.GetCurSubTilingKey();
-    EXPECT_EQ(k1, k2);
+    EXPECT_EQ(mgr.GetOpTilingKey(), DEFAULT_OP_TILING_KEY);
+    EXPECT_EQ(mgr.GetOpTilingKey(), 0UL);
 }
 
 TEST_F(TestOpInfoManager, SetAndGetOpType)
@@ -117,15 +85,4 @@ TEST_F(TestOpInfoManager, SetAndGetControlBinHandle)
     void* result = mgr.GetControlBinHandle("/test/path.so");
     EXPECT_NE(result, nullptr);
     mgr.GetCustomOpJsonPath() = "";
-}
-
-TEST_F(TestOpInfoManager, SubTilingKeyComposition)
-{
-    auto& mgr = OpInfoManager::GetInstance();
-    mgr.SetOpTilingKey(0xABC);
-    uint64_t composite = mgr.GetNewSubTilingKey();
-    uint64_t mainPart = composite & MAIN_KEY_MASK;
-    uint64_t subPart = (composite & SUB_KEY_MASK) >> SUB_KEY_OFFSET;
-    EXPECT_EQ(mainPart, 0xABC & MAIN_KEY_MASK);
-    EXPECT_GE(subPart, 1u);
 }

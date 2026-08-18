@@ -28,7 +28,7 @@ public:
     void CollectCallopMainBlockConds(Function* func);
     void CollectLeafMainBlockConds(Function* func, const std::vector<SymbolicScalar>& linearArgList);
     SymbolicScalar BuildMainBlockExpression();
-    static void Gencode(Function* function);
+    static void Gencode(Function* function, int devRootIndex = 0);
     const std::vector<SymbolicScalar>& GetCondGroup() const;
     const std::unordered_set<std::string>& GetCondStrSet() const;
 

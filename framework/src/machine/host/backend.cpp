@@ -947,15 +947,18 @@ static void RunCodeGenStage(const std::shared_ptr<DyndevFunctionAttribute>& attr
 
     std::deque<std::function<void(void)>> tasks;
     for (auto& devRoot : attr->funcGroup.devRootList) {
-        std::function<void(void)> task = [&devRoot, &attr, &leafDict, &leafDictMutex]() {
+        // Capture the index before dispatch so parallel tasks do not touch devRootList.
+        int devRootIndex = attr->funcGroup.devRootList.GetIndex(devRoot);
+        std::function<void(void)> task = [&devRoot, &attr, &leafDict, &leafDictMutex, devRootIndex]() {
             Function* devTile = attr->rootTileDict[devRoot];
             bool isDynamicAligned = devTile->paramConfigs_.dynamicAlignedOps;
-            npu::tile_fwk::CodeGenCtx codeGenCtx("", config::GetEmitPath("kernel_aicore"), false, isDynamicAligned);
+            npu::tile_fwk::CodeGenCtx codeGenCtx("", config::GetEmitPath("kernel_aicore"), false, isDynamicAligned,
+                                                 devRootIndex);
             npu::tile_fwk::CodeGen codeGen(codeGenCtx);
             COMPILER_LOGI("Function :[%s] starts executing codegen and binary compilation",
                           devTile->GetMagicName().c_str());
             codeGen.GenCode(*devTile);
-            MainBlockCondBulider::Gencode(devTile);
+            MainBlockCondBulider::Gencode(devTile, devRootIndex);
 
             std::lock_guard<std::mutex> lock(leafDictMutex);
             for (auto& [psgId, leaf] : devRoot->programs_) {

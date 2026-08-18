@@ -196,12 +196,8 @@ void PrintIndent(std::ostringstream& os, int scopeLevel)
 
 unsigned GetCGThreadNum()
 {
-    unsigned threadNum;
-    if (config::IsFixedCceMode()) {
-        threadNum = 1;
-    } else {
-        threadNum = ConfigManager::Instance().GetCodeGenConfig(KEY_PARALLEL_COMPILE, 1u);
-    }
+    // kernel名已按任务身份确定性编号，固定CCE场景不必再退化为单线程
+    unsigned threadNum = ConfigManager::Instance().GetCodeGenConfig(KEY_PARALLEL_COMPILE, 1u);
     unsigned cpuCores = std::thread::hardware_concurrency();
     if (cpuCores != 0 && threadNum > cpuCores * CORE_NUM_MULTIPLE) {
         return cpuCores * CORE_NUM_MULTIPLE;

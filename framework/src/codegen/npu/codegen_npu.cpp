@@ -14,9 +14,11 @@
  */
 #include "codegen_npu.h"
 
+#include <algorithm>
 #include <cstring>
 #include <error.h>
 #include <fstream>
+#include <map>
 
 #include "codegen/utils/parallel_execute.h"
 #include "codegen_op_npu.h"
@@ -106,21 +108,61 @@ void CodeGenNPU::GenCommentBeforeFuncHeader(Function& subFunc, std::ostringstrea
     CODEGEN_LOGI("function hash is: %s", subFunc.GetFunctionHash().c_str());
 }
 
-std::string CodeGenNPU::GenKernelName(Function& topFunc, uint64_t programId)
+uint64_t CompileInfo::GetDeterministicSubId() const
+{
+    ASSERT(GenCodeErr::GEN_OP_CODE_FAILED,
+           devRootIndex_ >= 0 && static_cast<uint64_t>(devRootIndex_) <= SUB_ID_DEV_ROOT_MAX)
+        << "devRootIndex " << devRootIndex_ << " is out of the deterministic kernel id range [0, "
+        << SUB_ID_DEV_ROOT_MAX << "]";
+    ASSERT(GenCodeErr::GEN_OP_CODE_FAILED, subProgramId_ <= SUB_ID_PROGRAM_MAX)
+        << "subProgramId " << subProgramId_ << " is out of the deterministic kernel id range [0, " << SUB_ID_PROGRAM_MAX
+        << "]";
+
+    uint64_t subId = static_cast<uint64_t>(devRootIndex_) << SUB_ID_DEV_ROOT_SHIFT;
+    subId |= subProgramId_ << SUB_ID_PROGRAM_SHIFT;
+    subId |= isMainBlock_ ? 1UL : 0UL;
+
+    // Fold 64-bit hash into the high 32 bits so the full key is a pure bit-field concat.
+    const uint64_t foldedHash = (topFuncHash_ ^ (topFuncHash_ >> SUB_ID_HASH_BITS)) & SUB_ID_HASH_MASK;
+    subId |= foldedHash << SUB_ID_HASH_SHIFT;
+    return subId;
+}
+
+/* Once the id no longer matches identity one-to-one, two kernels share a name and
+ * the link-time symbol clash is hard to trace back here. Validate at generation:
+ * regenerating the same CCE is fine (the same op must get the same name), but two
+ * different CCEs with the same name means the bit fields are insufficient.
+ */
+void CheckKernelNameUnique(const std::string& kernelName, const std::string& cceFileName)
+{
+    static std::mutex registryMutex;
+    static std::map<std::string, std::string> nameRegistry;
+
+    std::lock_guard<std::mutex> lock(registryMutex);
+    auto [iter, inserted] = nameRegistry.emplace(kernelName, cceFileName);
+    ASSERT(GenCodeErr::GEN_OP_CODE_FAILED, inserted || iter->second == cceFileName)
+        << "kernel name " << kernelName << " is shared by two kernels: " << iter->second << " and " << cceFileName;
+}
+
+std::string CodeGenNPU::GenKernelName(Function& topFunc, const CompileInfo& compileInfo)
 {
     std::ostringstream kernelName;
-    kernelName << topFunc.GetMagicName() << "_" << programId;
-    uint64_t tilingKey = OpInfoManager::GetInstance().GetNewSubTilingKey();
-    kernelName << "_" << std::to_string(tilingKey);
+    uint64_t tilingKey = compileInfo.GetDeterministicSubId();
+    /* Keep funcHash in the kernel name to match CCE file naming; subTilingKey
+     * uniqueness comes from the 64-bit packed identity fields.
+     */
+    kernelName << topFunc.GetMagicName() << "_" << topFunc.GetFunctionHash() << "_" << compileInfo.GetSubProgramId()
+               << "_" << std::to_string(tilingKey);
+    CheckKernelNameUnique(kernelName.str(), compileInfo.GetCCEFileName());
     return kernelName.str();
 }
 
-std::string CodeGenNPU::GenFuncHeader(uint64_t programId, Function& topFunc, CompileInfo& compileInfo) const
+std::string CodeGenNPU::GenFuncHeader(Function& topFunc, CompileInfo& compileInfo) const
 {
     std::ostringstream funcHeader;
     funcHeader << "extern \"C\" [aicore] void ";
     // kernel name
-    auto kernelName = GenKernelName(topFunc, programId);
+    auto kernelName = GenKernelName(topFunc, compileInfo);
     compileInfo.SetKernelName(kernelName);
     funcHeader << kernelName;
     // kernel func param
@@ -159,7 +201,7 @@ void CodeGenNPU::GenFuncBodyBefore(const std::pair<uint64_t, Function*>& subFunc
     GenInclude(topFunc, oss);
     GenCommentBeforeFuncHeader(*subFuncPair.second, oss);
     GenDDRChecker(oss);
-    oss << GenFuncHeader(subFuncPair.first, topFunc, compileInfo);
+    oss << GenFuncHeader(topFunc, compileInfo);
 }
 
 void CodeGenNPU::GenFuncEnd(std::ostringstream& oss) const { oss << "}\n"; }
@@ -758,6 +800,10 @@ void CodeGenNPU::GenerateMakefile(const std::string& makefilePath) const
         ASSERT(CmpCodeErr::FILE_IO_FAILED, false) << "Failed to create Makefile: " << makefilePath;
         return;
     }
+
+    // 任务按并行完成顺序入列，排序后写出才能让Makefile内容与线程调度无关
+    std::sort(compileTasks_.begin(), compileTasks_.end(),
+              [](const CompileTaskInfo& lhs, const CompileTaskInfo& rhs) { return lhs.outputPath < rhs.outputPath; });
 
     makefile << "# Auto-generated Makefile for parallel compilation\n";
 

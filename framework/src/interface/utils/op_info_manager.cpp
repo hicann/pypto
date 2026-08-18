@@ -22,32 +22,7 @@ OpInfoManager& OpInfoManager::GetInstance()
     return instance;
 }
 
-// need add check
-void OpInfoManager::SetOpTilingKey(uint64_t opTilingKey)
-{
-    opTilingKey_ = (opTilingKey & MAIN_KEY_MASK);
-    return;
-}
-
-uint64_t OpInfoManager::GetOpTilingKey() const { return opTilingKey_; }
-
-// need check
-uint64_t OpInfoManager::GetNewSubTilingKey()
-{
-    std::lock_guard<std::mutex> lock(mtx_);
-    subTilingKey_++;
-    if (subTilingKey_ > MAIN_KEY_MASK) {
-        subTilingKey_ = 1;
-    }
-    uint64_t cur_key = (subTilingKey_ << SUB_KEY_OFFSET) | opTilingKey_;
-    return cur_key;
-}
-
-uint64_t OpInfoManager::GetCurSubTilingKey() const
-{
-    uint64_t cur_key = (subTilingKey_ << SUB_KEY_OFFSET) | opTilingKey_;
-    return cur_key;
-}
+uint64_t OpInfoManager::GetOpTilingKey() const { return DEFAULT_OP_TILING_KEY; }
 
 void OpInfoManager::SetOpType(const std::string& opType)
 {

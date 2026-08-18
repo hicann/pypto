@@ -15,56 +15,77 @@
 
 #include "parallel_execute.h"
 
-#include <thread>
+#include <cstddef>
+#include <deque>
+#include <future>
 #include <mutex>
 #include <optional>
-#include <deque>
+#include <thread>
+#include <vector>
 
 namespace npu::tile_fwk {
 namespace {
-class ThreadSafeTaskQueue {
+class ThreadSafeIndexQueue {
 public:
-    explicit ThreadSafeTaskQueue(const std::deque<Task>& v) { q = v; }
-    explicit ThreadSafeTaskQueue(std::deque<Task>&& v) { q = std::move(v); }
+    explicit ThreadSafeIndexQueue(std::deque<size_t> indices) { q_ = std::move(indices); }
 
-    std::optional<Task> GetTask()
+    std::optional<size_t> GetIndex()
     {
-        const std::lock_guard<std::mutex> taskLock(m);
+        const std::lock_guard<std::mutex> taskLock(m_);
 
-        if (q.empty()) {
+        if (q_.empty()) {
             return std::nullopt;
         }
 
-        Task e = q.front();
-        q.pop_front();
-
-        return e;
+        size_t index = q_.front();
+        q_.pop_front();
+        return index;
     }
 
 private:
-    std::deque<Task> q;
-    std::mutex m;
+    std::deque<size_t> q_;
+    std::mutex m_;
 };
 
-void TaskRunner(ThreadSafeTaskQueue& taskQueue)
+using PackagedTask = std::packaged_task<void()>;
+
+struct TaskBatch {
+    std::vector<PackagedTask> packagedTasks;
+    std::vector<std::future<void>> futures;
+
+    explicit TaskBatch(std::deque<Task> tasks)
+    {
+        packagedTasks.reserve(tasks.size());
+        futures.reserve(tasks.size());
+        while (!tasks.empty()) {
+            packagedTasks.emplace_back(std::move(tasks.front()));
+            tasks.pop_front();
+            futures.push_back(packagedTasks.back().get_future());
+        }
+    }
+};
+
+void TaskRunner(ThreadSafeIndexQueue& indexQueue, TaskBatch& batch)
 {
     while (true) {
-        auto taskMaybe = taskQueue.GetTask();
-        if (!taskMaybe) {
+        auto indexMaybe = indexQueue.GetIndex();
+        if (!indexMaybe) {
             break;
         }
 
-        auto& task = taskMaybe.value();
-        try {
-            task();
-        } catch (const std::exception& e) {
-            CODEGEN_LOGE(FwkErr::TASK_RUN_FAILED, "Parallel task exception: %s", e.what());
-        } catch (...) {
-            CODEGEN_LOGE(FwkErr::TASK_RUN_FAILED, "Parallel task unknown exception");
+        batch.packagedTasks[indexMaybe.value()]();
+    }
+}
+
+void WaitTaskFutures(std::vector<std::future<void>>& futures)
+{
+    for (auto& future : futures) {
+        if (future.valid()) {
+            future.get();
         }
     }
 }
-}; // namespace
+} // namespace
 
 void ParallelExecuteAndWait(unsigned threadNum, std::deque<Task> tasks)
 {
@@ -72,30 +93,33 @@ void ParallelExecuteAndWait(unsigned threadNum, std::deque<Task> tasks)
         threadNum = 1;
     }
 
-    if (threadNum == 1) {
-        // no need to use extra thread if only one thread is needed
-        for (auto& task : tasks) {
-            try {
-                task();
-            } catch (const std::exception& e) {
-                CODEGEN_LOGE(FwkErr::TASK_RUN_FAILED, "Parallel task exception: %s", e.what());
-            } catch (...) {
-                CODEGEN_LOGE(FwkErr::TASK_RUN_FAILED, "Parallel task unknown exception");
-            }
-        }
+    TaskBatch batch(std::move(tasks));
 
+    if (threadNum == 1) {
+        for (size_t i = 0; i < batch.packagedTasks.size(); ++i) {
+            batch.packagedTasks[i]();
+            batch.futures[i].get();
+        }
         return;
     }
 
-    ThreadSafeTaskQueue taskQueue(std::move(tasks));
+    std::deque<size_t> indices;
+    for (size_t i = 0; i < batch.packagedTasks.size(); ++i) {
+        indices.push_back(i);
+    }
+
+    ThreadSafeIndexQueue indexQueue(std::move(indices));
 
     std::vector<std::thread> threadPool;
+    threadPool.reserve(threadNum);
     for (unsigned i = 0; i < threadNum; i++) {
-        threadPool.emplace_back(TaskRunner, std::ref(taskQueue));
+        threadPool.emplace_back(TaskRunner, std::ref(indexQueue), std::ref(batch));
     }
 
-    for (auto& tth : threadPool) {
-        tth.join();
+    for (auto& worker : threadPool) {
+        worker.join();
     }
+
+    WaitTaskFutures(batch.futures);
 }
 } // namespace npu::tile_fwk
