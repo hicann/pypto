@@ -225,7 +225,7 @@ add_kernel[None, num_cores](x, y, z)
 def scaled_kernel(
     a: pl.Tensor[[64, 64], pl.DT_FP32],
     out: pl.Tensor[[64, 64], pl.DT_INT8],
-    scale_bits: pl.DT_INT32,          # <-- 运行时标量（预编码的 float32 位模式）
+    scale_bits: pl.DT_INT32,          # <--运行时标量（预编码的float32位模式）
 ):
     ...
     pl.store(out, acc, [0, 0], scale=scale_bits)
