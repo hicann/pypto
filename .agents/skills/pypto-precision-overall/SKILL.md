@@ -50,6 +50,7 @@ export TILE_FWK_DEVICE_ID=0
 6. 只跑Pass对比 — 只做 Pass 层校验
 7. machine校验 — 怀疑内存重叠时检测 workspace 是否有问题
 8. 直接上板二分 — 直接添加检查点二分定位
+9. 偶现精度排查 — 无法稳定复现，用独立开关逐项排查
 ```
 
 > **machine校验 组合规则**：machine校验涉及重新编译 whl，成本较高且覆盖场景较少，**默认不加入任何流程**。仅当用户明确要求时，才在对pass校验流程的末端追加 machine校验 步骤。
@@ -66,6 +67,7 @@ export TILE_FWK_DEVICE_ID=0
 | 只跑Pass对比 | pass校验、pass_compare、Pass层 | pass校验 → 结束 |
 | machine校验 | 内存重叠、workspace问题、内存管理异常、内存复用错误 | memory-overlap-detector → 结束 |
 | 直接上板二分 | 二分、上板二分、检查点tensor | 二分 → 结束 |
+| 偶现精度排查 | 偶现、不稳定、无法复现、随机失败、时好时坏 | 偶现排查（独立开关逐项验证）→ 结束 |
 
 ## 路由链详情
 
@@ -210,6 +212,15 @@ export TILE_FWK_DEVICE_ID=0
 
 执行步骤：
 1. 直接进入 [precision-binary-search/SKILL.md](precision-binary-search/SKILL.md) 执行完整流程
+
+### 偶现精度排查
+
+> **独立场景，不在全自动排查流程中**。仅当精度问题无法稳定复现（偶现、随机失败、时好时坏）时触发。通过独立开关逐项关闭框架功能，重新编译执行后观察精度是否恢复，定位偶现问题的归属组件。
+
+执行步骤：
+1. 进入 [precision-occasional/SKILL.md](precision-occasional/SKILL.md) 执行完整流程
+
+> **关键原则**：每个开关独立测试，每次只改一个变量。每个开关修改后必须重新编译安装。每个开关建议运行 3 次以统计复现概率。测试完成后恢复所有代码改动。
 
 ## 方法对比
 
