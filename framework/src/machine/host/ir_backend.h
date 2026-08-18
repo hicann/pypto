@@ -67,7 +67,8 @@ void VisitIRStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Link
                                std::unordered_map<Function*, Function*>& rootTileDict,
                                std::ostringstream& controlFlowOss, std::ostringstream& expressionOss,
                                std::ostringstream& exprHeaderOss, int indent, const std::string& expName,
-                               std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta);
+                               std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta,
+                               const std::vector<ir::VarPtr>& currentReturnVars = {});
 
 void BuildControlFlowFromIR(IrBackendContext& ctx, FunctionCache& cache, Linker& linker, const std::string& sectionName,
                             Function* func, std::unordered_map<int, int>& slotIdxMapping,

@@ -49,6 +49,11 @@ ir::VarPtr MakeVar(const std::string& name)
     return std::make_shared<ir::Var>(name, std::make_shared<ir::ScalarType>(ir::DataType::INT64), Sp());
 }
 
+ir::VarPtr MakeTensorVar(const std::string& name)
+{
+    return std::make_shared<ir::Var>(name, std::make_shared<ir::LogicalTensorType>(), Sp());
+}
+
 ir::StmtPtr MakeTensorOpStmt(const std::string& opcode, const std::vector<std::pair<std::string, std::any>>& attrs = {})
 {
     return std::make_shared<ir::TensorOpStmt>(std::vector<ir::VarPtr>{}, nullptr, opcode, std::vector<ir::ExprPtr>{},
@@ -62,9 +67,27 @@ ir::StmtPtr MakeForStmt(ir::VarPtr loopVar, ir::ExprPtr start, ir::ExprPtr stop,
                                          std::vector<ir::VarPtr>{}, Sp(), attrs);
 }
 
+ir::StmtPtr MakeForStmtWithReturn(ir::VarPtr loopVar, ir::ExprPtr start, ir::ExprPtr stop, ir::ExprPtr step,
+                                  ir::StmtPtr body, std::vector<ir::VarPtr> returnVars)
+{
+    return std::make_shared<ir::ForStmt>(loopVar, start, stop, step, std::vector<ir::IterArgPtr>{}, body,
+                                         std::move(returnVars), Sp());
+}
+
 ir::StmtPtr MakeIfStmt(ir::ExprPtr cond, ir::StmtPtr thenBody, std::optional<ir::StmtPtr> elseBody = std::nullopt)
 {
     return std::make_shared<ir::IfStmt>(cond, thenBody, elseBody, std::vector<ir::VarPtr>{}, Sp());
+}
+
+ir::StmtPtr MakeIfStmtWithReturn(ir::ExprPtr cond, ir::StmtPtr thenBody, std::optional<ir::StmtPtr> elseBody,
+                                 std::vector<ir::VarPtr> returnVars)
+{
+    return std::make_shared<ir::IfStmt>(cond, thenBody, elseBody, std::move(returnVars), Sp());
+}
+
+ir::StmtPtr MakeYieldStmt(std::vector<ir::ExprPtr> values)
+{
+    return std::make_shared<ir::YieldStmt>(std::move(values), Sp());
 }
 
 ir::StmtPtr MakeSeqStmts(std::vector<ir::StmtPtr> stmts)
@@ -610,4 +633,229 @@ TEST_F(TestSuite_IrBackend, BuildControlFlowFromIR_EmitsGetInputCseStackInits)
     unsetenv("ASCEND_WORK_PATH");
     std::string rmCmd = "rm -rf " + workDir;
     ASSERT_EQ(system(rmCmd.c_str()), 0);
+}
+
+TEST_F(TestSuite_IrBackend, FindExprFromIfStmt_RegistersReturnVars)
+{
+    IrBackendContext irBackendCtx;
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    FunctionCache cache;
+    std::vector<ir::ExprPtr> condStack;
+
+    auto retVarA = MakeVar("a1");
+    auto retVarB = MakeVar("b1");
+    auto ifStmt = MakeIfStmtWithReturn(MakeSymbolExpr("cond"), MakeSeqStmts({}), std::nullopt, {retVarA, retVarB});
+
+    FindExprFromIRStmt(irBackendCtx, cache, *linkerFixture.linker, ifStmt, dynFixture.dynFunc.get(), condStack);
+
+    const auto& symTable = linkerFixture.linker->GetSymbolTable()->GetSymbolTable();
+    EXPECT_TRUE(symTable.count("a1") > 0);
+    EXPECT_TRUE(symTable.count("b1") > 0);
+}
+
+TEST_F(TestSuite_IrBackend, FindExprFromIRStmt_YieldStmtCollectsSymbols)
+{
+    IrBackendContext irBackendCtx;
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    FunctionCache cache;
+    std::vector<ir::ExprPtr> condStack;
+
+    auto yield = MakeYieldStmt({MakeGetInputShapeDimExpr("ARG_x", 0)});
+    auto ifStmt = MakeIfStmtWithReturn(MakeSymbolExpr("cond"), MakeSeqStmts({yield}), std::nullopt, {MakeVar("c1")});
+
+    FindExprFromIRStmt(irBackendCtx, cache, *linkerFixture.linker, ifStmt, dynFixture.dynFunc.get(), condStack);
+
+    const auto& symTable = linkerFixture.linker->GetSymbolTable()->GetSymbolTable();
+    EXPECT_TRUE(symTable.count("c1") > 0);
+    EXPECT_TRUE(symTable.count("RUNTIME_GetInputShapeDim") > 0);
+}
+
+TEST_F(TestSuite_IrBackend, VisitIRStmtForControlFlow_IfStmtYieldImmediate)
+{
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+
+    auto retVar = MakeVar("a1");
+    auto yield = MakeYieldStmt({MakeImmediateExpr(2048)});
+    auto ifStmt = MakeIfStmtWithReturn(MakeSymbolExpr("cond"), MakeSeqStmts({yield}), std::nullopt, {retVar});
+
+    VisitIRStmtForControlFlow(ctx.irBackendCtx, ctx.cache, *linkerFixture.linker, ".pypto", ifStmt,
+                              dynFixture.dynFunc.get(), ctx.slotIdxMapping, ctx.group, ctx.rootTileDict,
+                              ctx.controlFlowOss, ctx.expressionOss, ctx.exprHeaderOss, 1, "expr", ctx.exprSrcFiles,
+                              ctx.meta);
+
+    auto output = ctx.controlFlowOss.str();
+    EXPECT_TRUE(output.find("VALUE_a1 = 2048;") != std::string::npos);
+}
+
+TEST_F(TestSuite_IrBackend, VisitIRStmtForControlFlow_IfStmtYieldSymbolicExpr)
+{
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+
+    auto retVar = MakeVar("c1");
+    auto yield = MakeYieldStmt({MakeSymbolExpr("some_var")});
+    auto ifStmt = MakeIfStmtWithReturn(MakeSymbolExpr("cond"), MakeSeqStmts({yield}), std::nullopt, {retVar});
+
+    VisitIRStmtForControlFlow(ctx.irBackendCtx, ctx.cache, *linkerFixture.linker, ".pypto", ifStmt,
+                              dynFixture.dynFunc.get(), ctx.slotIdxMapping, ctx.group, ctx.rootTileDict,
+                              ctx.controlFlowOss, ctx.expressionOss, ctx.exprHeaderOss, 1, "expr", ctx.exprSrcFiles,
+                              ctx.meta);
+
+    auto output = ctx.controlFlowOss.str();
+    EXPECT_TRUE(output.find("VALUE_c1 = VALUE_some_var;") != std::string::npos);
+}
+
+TEST_F(TestSuite_IrBackend, VisitIRStmtForControlFlow_NestedIfStmtYieldIsolation)
+{
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+
+    auto innerYield = MakeYieldStmt({MakeImmediateExpr(1)});
+    auto innerIf = MakeIfStmtWithReturn(MakeSymbolExpr("inner_cond"), MakeSeqStmts({innerYield}), std::nullopt,
+                                        {MakeVar("a")});
+    auto outerYield = MakeYieldStmt({MakeImmediateExpr(2)});
+    auto outerIf = MakeIfStmtWithReturn(MakeSymbolExpr("outer_cond"), MakeSeqStmts({innerIf, outerYield}), std::nullopt,
+                                        {MakeVar("x")});
+
+    VisitIRStmtForControlFlow(ctx.irBackendCtx, ctx.cache, *linkerFixture.linker, ".pypto", outerIf,
+                              dynFixture.dynFunc.get(), ctx.slotIdxMapping, ctx.group, ctx.rootTileDict,
+                              ctx.controlFlowOss, ctx.expressionOss, ctx.exprHeaderOss, 1, "expr", ctx.exprSrcFiles,
+                              ctx.meta);
+
+    auto output = ctx.controlFlowOss.str();
+    EXPECT_TRUE(output.find("VALUE_a = 1;") != std::string::npos);
+    EXPECT_TRUE(output.find("VALUE_x = 2;") != std::string::npos);
+}
+
+TEST_F(TestSuite_IrBackend, VisitIRStmtForControlFlow_IfStmtNoReturnVarsBackwardCompat)
+{
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+
+    auto yield = MakeYieldStmt({MakeImmediateExpr(42)});
+    auto ifStmt = MakeIfStmt(MakeSymbolExpr("cond"), MakeSeqStmts({yield}));
+
+    VisitIRStmtForControlFlow(ctx.irBackendCtx, ctx.cache, *linkerFixture.linker, ".pypto", ifStmt,
+                              dynFixture.dynFunc.get(), ctx.slotIdxMapping, ctx.group, ctx.rootTileDict,
+                              ctx.controlFlowOss, ctx.expressionOss, ctx.exprHeaderOss, 1, "expr", ctx.exprSrcFiles,
+                              ctx.meta);
+
+    auto output = ctx.controlFlowOss.str();
+    EXPECT_TRUE(output.find("= 42;") == std::string::npos);
+}
+
+TEST_F(TestSuite_IrBackend, FindExprFromIfStmt_SkipsTensorReturnVars)
+{
+    IrBackendContext irBackendCtx;
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    FunctionCache cache;
+    std::vector<ir::ExprPtr> condStack;
+
+    auto scalarRet = MakeVar("scalar_a");
+    auto tensorRet = MakeTensorVar("tensor_b");
+    auto ifStmt = MakeIfStmtWithReturn(MakeSymbolExpr("cond"), MakeSeqStmts({}), std::nullopt, {scalarRet, tensorRet});
+
+    FindExprFromIRStmt(irBackendCtx, cache, *linkerFixture.linker, ifStmt, dynFixture.dynFunc.get(), condStack);
+
+    const auto& symTable = linkerFixture.linker->GetSymbolTable()->GetSymbolTable();
+    EXPECT_TRUE(symTable.count("scalar_a") > 0);
+    EXPECT_TRUE(symTable.count("tensor_b") == 0);
+}
+
+TEST_F(TestSuite_IrBackend, VisitIRStmtForControlFlow_IfStmtYieldSkipsTensor)
+{
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+
+    auto scalarRet = MakeVar("scalar_a");
+    auto tensorRet = MakeTensorVar("tensor_b");
+    auto scalarYield = MakeImmediateExpr(100);
+    auto tensorYield = MakeTensorVar("tensor_val");
+    auto yield = MakeYieldStmt({scalarYield, tensorYield});
+    auto ifStmt = MakeIfStmtWithReturn(MakeSymbolExpr("cond"), MakeSeqStmts({yield}), std::nullopt,
+                                       {scalarRet, tensorRet});
+
+    VisitIRStmtForControlFlow(ctx.irBackendCtx, ctx.cache, *linkerFixture.linker, ".pypto", ifStmt,
+                              dynFixture.dynFunc.get(), ctx.slotIdxMapping, ctx.group, ctx.rootTileDict,
+                              ctx.controlFlowOss, ctx.expressionOss, ctx.exprHeaderOss, 1, "expr", ctx.exprSrcFiles,
+                              ctx.meta);
+
+    auto output = ctx.controlFlowOss.str();
+    EXPECT_TRUE(output.find("VALUE_scalar_a = 100;") != std::string::npos);
+    EXPECT_TRUE(output.find("VALUE_tensor_b") == std::string::npos);
+}
+
+TEST_F(TestSuite_IrBackend, FindExprFromForStmt_RegistersScalarReturnVars)
+{
+    IrBackendContext irBackendCtx;
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    FunctionCache cache;
+
+    auto loopVar = MakeVar("loop_idx");
+    auto scalarRet = MakeVar("acc");
+    auto tensorRet = MakeTensorVar("tensor_out");
+    auto forStmt = MakeForStmtWithReturn(loopVar, MakeImmediateExpr(0), MakeImmediateExpr(10), MakeImmediateExpr(1),
+                                         MakeSeqStmts({}), {scalarRet, tensorRet});
+
+    std::vector<ir::ExprPtr> condStack;
+    FindExprFromIRStmt(irBackendCtx, cache, *linkerFixture.linker, forStmt, dynFixture.dynFunc.get(), condStack);
+
+    const auto& symTable = linkerFixture.linker->GetSymbolTable()->GetSymbolTable();
+    EXPECT_TRUE(symTable.count("loop_idx") > 0);
+    EXPECT_TRUE(symTable.count("acc") > 0);
+    EXPECT_TRUE(symTable.count("tensor_out") == 0);
+}
+
+TEST_F(TestSuite_IrBackend, VisitForStmtForControlFlow_YieldScalarReturnVar)
+{
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+
+    auto loopVar = MakeVar("loop_idx");
+    auto retVar = MakeVar("counter");
+    auto yield = MakeYieldStmt({MakeImmediateExpr(42)});
+    auto forStmt = MakeForStmtWithReturn(loopVar, MakeImmediateExpr(0), MakeImmediateExpr(10), MakeImmediateExpr(1),
+                                         MakeSeqStmts({yield}), {retVar});
+
+    VisitIRStmtForControlFlow(ctx.irBackendCtx, ctx.cache, *linkerFixture.linker, ".pypto", forStmt,
+                              dynFixture.dynFunc.get(), ctx.slotIdxMapping, ctx.group, ctx.rootTileDict,
+                              ctx.controlFlowOss, ctx.expressionOss, ctx.exprHeaderOss, 1, "expr", ctx.exprSrcFiles,
+                              ctx.meta);
+
+    auto output = ctx.controlFlowOss.str();
+    EXPECT_TRUE(output.find("VALUE_counter = 42;") != std::string::npos);
+}
+
+TEST_F(TestSuite_IrBackend, VisitForStmtForControlFlow_YieldSkipsTensor)
+{
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+
+    auto loopVar = MakeVar("loop_idx");
+    auto scalarRet = MakeVar("acc");
+    auto tensorRet = MakeTensorVar("tensor_out");
+    auto yield = MakeYieldStmt({MakeImmediateExpr(99), MakeTensorVar("tensor_val")});
+    auto forStmt = MakeForStmtWithReturn(loopVar, MakeImmediateExpr(0), MakeImmediateExpr(10), MakeImmediateExpr(1),
+                                         MakeSeqStmts({yield}), {scalarRet, tensorRet});
+
+    VisitIRStmtForControlFlow(ctx.irBackendCtx, ctx.cache, *linkerFixture.linker, ".pypto", forStmt,
+                              dynFixture.dynFunc.get(), ctx.slotIdxMapping, ctx.group, ctx.rootTileDict,
+                              ctx.controlFlowOss, ctx.expressionOss, ctx.exprHeaderOss, 1, "expr", ctx.exprSrcFiles,
+                              ctx.meta);
+
+    auto output = ctx.controlFlowOss.str();
+    EXPECT_TRUE(output.find("VALUE_acc = 99;") != std::string::npos);
+    EXPECT_TRUE(output.find("VALUE_tensor_out") == std::string::npos);
 }

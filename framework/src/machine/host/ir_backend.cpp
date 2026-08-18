@@ -40,6 +40,12 @@ void FindExprFromForStmt(IrBackendContext& ctx, FunctionCache& cache, Linker& li
 {
     SymbolicScalar iterSymbol(forStmt->loopVar_->name_);
     linker.AddSymbol(iterSymbol);
+    for (auto& retVar : forStmt->returnVars_) {
+        if (ir::As<ir::ScalarType>(retVar->GetType())) {
+            SymbolicScalar retSymbol(retVar->name_);
+            linker.AddSymbol(retSymbol);
+        }
+    }
     Function* loopFunc = IrBuildVirtualLoopFunc(ctx, forStmt.get(), dynFunc);
     linker.AddPrimaryExpressionForLoopBes(loopFunc, ExprPtrToSymbolicScalar(forStmt->start_));
     linker.AddPrimaryExpressionForLoopBes(loopFunc, ExprPtrToSymbolicScalar(forStmt->stop_));
@@ -52,6 +58,12 @@ void FindExprFromForStmt(IrBackendContext& ctx, FunctionCache& cache, Linker& li
 void FindExprFromIfStmt(IrBackendContext& ctx, FunctionCache& cache, Linker& linker, const ir::IfStmtPtr& ifStmt,
                         Function* dynFunc, std::vector<ir::ExprPtr>& condStack)
 {
+    for (auto& retVar : ifStmt->returnVars_) {
+        if (ir::As<ir::ScalarType>(retVar->GetType())) {
+            SymbolicScalar retSymbol(retVar->name_);
+            linker.AddSymbol(retSymbol);
+        }
+    }
     condStack.push_back(ifStmt->condition_);
     FindExprFromIRStmt(ctx, cache, linker, ifStmt->thenBody_, dynFunc, condStack);
     if (ifStmt->elseBody_) {
@@ -89,12 +101,12 @@ void VisitIfStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Link
     controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "if (" << cond << ") {\n";
     VisitIRStmtForControlFlow(ctx, cache, linker, sectionName, ifStmt->thenBody_, dynFunc, slotIdxMapping, group,
                               rootTileDict, controlFlowOss, expressionOss, exprHeaderOss, indent + 1, expName,
-                              exprSrcFiles, valDependTensorMeta);
+                              exprSrcFiles, valDependTensorMeta, ifStmt->returnVars_);
     if (ifStmt->elseBody_) {
         controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "} else {\n";
         VisitIRStmtForControlFlow(ctx, cache, linker, sectionName, ifStmt->elseBody_.value(), dynFunc, slotIdxMapping,
                                   group, rootTileDict, controlFlowOss, expressionOss, exprHeaderOss, indent + 1,
-                                  expName, exprSrcFiles, valDependTensorMeta);
+                                  expName, exprSrcFiles, valDependTensorMeta, ifStmt->returnVars_);
     }
     controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "}\n";
 }
@@ -272,6 +284,16 @@ void FindExprFromIRStmt(IrBackendContext& ctx, FunctionCache& cache, Linker& lin
         case ir::ObjectKind::TensorOpStmt:
             FindExprFromTensorOpStmt(cache, linker, stmt, dynFunc, condStack);
             break;
+        case ir::ObjectKind::YieldStmt: {
+            if (auto yieldStmt = ir::As<ir::YieldStmt>(stmt)) {
+                for (auto& val : yieldStmt->value_) {
+                    if (ir::As<ir::ScalarType>(val->GetType())) {
+                        linker.GetSymbolTable()->AddSymbolFromExpression(ExprPtrToSymbolicScalar(val));
+                    }
+                }
+            }
+            break;
+        }
         default:
             break;
     }
@@ -343,7 +365,7 @@ void VisitForStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Lin
 
     VisitIRStmtForControlFlow(ctx, cache, linker, sectionName, forStmt->body_, dynFunc, slotIdxMapping, group,
                               rootTileDict, controlFlowOss, expressionOss, exprHeaderOss, indent + 1, expName,
-                              exprSrcFiles, valDependTensorMeta);
+                              exprSrcFiles, valDependTensorMeta, forStmt->returnVars_);
 
     if (needCrossDie) {
         controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' ' << "RUNTIME_ClearLoopDieId(" << iterSymbolName
@@ -363,7 +385,8 @@ void VisitIRStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Link
                                std::unordered_map<Function*, Function*>& rootTileDict,
                                std::ostringstream& controlFlowOss, std::ostringstream& expressionOss,
                                std::ostringstream& exprHeaderOss, int indent, const std::string& expName,
-                               std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta)
+                               std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta,
+                               const std::vector<ir::VarPtr>& currentReturnVars)
 {
     if (!stmt) {
         return;
@@ -374,7 +397,7 @@ void VisitIRStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Link
                 for (auto& child : seq->stmts_) {
                     VisitIRStmtForControlFlow(ctx, cache, linker, sectionName, child, dynFunc, slotIdxMapping, group,
                                               rootTileDict, controlFlowOss, expressionOss, exprHeaderOss, indent,
-                                              expName, exprSrcFiles, valDependTensorMeta);
+                                              expName, exprSrcFiles, valDependTensorMeta, currentReturnVars);
                 }
             }
             break;
@@ -408,6 +431,21 @@ void VisitIRStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Link
                                      exprHeaderOss,  expName,      exprSrcFiles,   valDependTensorMeta,
                                      ctx.getInputCse};
             BuildControlFlow(cfCtx, pathFunc, indent);
+            break;
+        }
+        case ir::ObjectKind::YieldStmt: {
+            if (auto yieldStmt = ir::As<ir::YieldStmt>(stmt)) {
+                const auto* getInputCseMap = ResolveGetInputCseMap(ctx);
+                for (size_t i = 0; i < yieldStmt->value_.size() && i < currentReturnVars.size(); i++) {
+                    if (ir::As<ir::ScalarType>(yieldStmt->value_[i]->GetType()) &&
+                        ir::As<ir::ScalarType>(currentReturnVars[i]->GetType())) {
+                        auto yieldExpr = ExprPtrToSymbolicScalar(yieldStmt->value_[i]);
+                        auto exprStr = SymbolicExpressionTable::BuildExpression(yieldExpr.Raw(), getInputCseMap);
+                        controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "VALUE_" << currentReturnVars[i]->name_
+                                       << " = " << exprStr << ";\n";
+                    }
+                }
+            }
             break;
         }
         default:
