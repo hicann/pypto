@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-该接口用于将源操作数src与标量scalar相乘，再按照CAST_ROUND模式将结果转换为half类型，根据mask将计算结果写入目的操作数dst。计算公式如下：
+该接口用于将源操作数`src`与标量`scalar`相乘，再按照`layout`将结果转换为DT_FP16类型，根据`preg`将计算结果写入目的操作数`dst`。计算公式如下：
 
 $$
 dst_i = cast\_round\_to\_f16(src_i \times scalar)
@@ -23,42 +23,32 @@ $$
 ## 函数原型
 
 ```python
-dst = vf.muls_cast(src, scalar, preg, *, dtype=pl.DT_FP16)
-# 指定结果半区
-dst = vf.muls_cast(src, scalar, preg, dtype=pl.DT_FP16, layout=pl.CastLayout.ONE)
+muls_cast(src, scalar, preg, dtype: Optional[DType] = None, layout: Optional[CastLayout] = None) -> dst
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器（FP16） |
-| `src` | 输入 | 源操作数（FP32） |
-| `scalar` | 输入 | 标量源操作数 |
-| `preg` | 输入 | 掩码寄存器 |
-| `dtype` | 输入 | 必选，指定目标寄存器的数据类型。由于乘法后进行类型转换（FP32→FP16），目标类型与源类型不同，必须显式指定，通常为`pl.DT_FP16` |
-| `layout` | 输入 | 可选，结果放置半区：`pl.CastLayout.ZERO`（偶数半区，默认，PART_EVEN）或`pl.CastLayout.ONE`（奇数半区，PART_ODD） |
-
-## dtype说明
-
-`vf.muls_cast`先将FP32源操作数与标量相乘，再转换为FP16类型写入目标寄存器。目标寄存器的数据类型与源寄存器不同（FP32→FP16），无法从源操作数推断目标类型，因此必须通过`dtype`参数显式指定。
-
-## 数据类型
-
-| src | scalar | dst |
-|---|---|---|
-| FP32 | FP32 | FP16 |
-
-## 返回值说明
-
-返回目标向量寄存器（`RegTensor`类型）。
+| `src` | 输入 | 源操作数，reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。 |
+| `scalar` | 输入 | 标量源操作数。 |
+| `preg` | 输入 | mask_tensor。 |
+| `dtype` | 输入 | 必选，指定目标reg_tensor的数据类型，支持的数据类型请参见[约束说明](#约束说明)。由于乘法后进行类型转换（DT_FP32→DT_FP16），目标类型与源类型不同，必须显式指定，通常为`pl.DT_FP16`。 |
+| `layout` | 输入 | 可选，结果放置半区：`pl.CastLayout.ZERO`（偶数半区，默认，PART_EVEN）或`pl.CastLayout.ONE`（奇数半区，PART_ODD），对应[CastLayout](../types/CastLayout.md)类型。计算按照`CAST_ROUND`模式舍入。 |
 
 ## 约束说明
 
-- 本接口不支持源操作数寄存器和目的操作数寄存器重叠，支持源操作数寄存器之间重叠。
-- 本接口操作数为寄存器，不涉及地址对齐。
-- 本接口不修改全局寄存器的值。
-- Cast计算按照CAST_ROUND模式舍入。
+- 数据类型约束：
+
+  | src | scalar | dst |
+  |---|---|---|
+  | DT_FP32 | DT_FP32 | DT_FP16 |
+
+- 不支持源操作数寄存器和目的操作数寄存器重叠。
+
+## 返回值说明
+
+返回`dst`目的操作数，reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。
 
 ## 调用示例
 
@@ -68,7 +58,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -76,7 +65,6 @@ def example_vf(src_tile, dst_tile):
     reg_f16 = vf.muls_cast(reg_src, 2.0, preg, dtype=pl.DT_FP16)
     reg_out = vf.astype(reg_f16, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_out, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -95,7 +83,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -107,7 +94,6 @@ def test_example():
     torch.npu.synchronize()
     expected = (a * 2.0).to(torch.float16).to(torch.float32)
     torch.testing.assert_close(out, expected, rtol=1e-3, atol=1e-3)
-
 
 if __name__ == "__main__":
     test_example()

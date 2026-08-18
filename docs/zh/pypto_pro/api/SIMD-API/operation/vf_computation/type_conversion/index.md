@@ -5,5 +5,6 @@
 :titlesonly:
 
 astype
+bit_cast
 truncate
 ```

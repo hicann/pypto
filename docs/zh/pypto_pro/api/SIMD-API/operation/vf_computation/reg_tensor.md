@@ -25,20 +25,24 @@
 - 从UB tile加载数据
 
 ```python
-reg = vf.load_align(tile, offset, *, dtype=None)
+# 不指定 dtype（由 tile 数据类型推断）
+reg = vf.load_align(tile, offset)
+
+# 指定 dtype
+reg = vf.load_align(tile, offset, dtype=pl.DT_UINT32)
 ```
 
 - 标量初始化
 
 ```python
-reg = vf.full(scalar, preg, *, dtype)
+reg = vf.full(scalar, preg, dtype)
 ```
 
 - VF运算结果赋值
 
 ```python
-reg = vf.add(src_a, src_b, preg)
-reg = vf.mul(src_a, src_b, preg)
+reg = vf.add(src0, src1, preg)
+reg = vf.mul(src0, src1, preg)
 # ...其他 VF 计算接口
 ```
 
@@ -46,88 +50,68 @@ reg = vf.mul(src_a, src_b, preg)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dtype` | 输入 | 寄存器存储的数据类型，决定寄存器覆盖的元素个数 |
+| `dtype` | 输入 | 寄存器存储的数据类型，决定寄存器覆盖的元素个数。 - `vf.reg_tensor`不能直接调用，由编译器在赋值形式中自动声明。<br>- 寄存器在`@pl.vector_function`函数内创建和使用，函数结束后自动释放。<br>- 创建寄存器后必须通过`vf.load_align`或`vf.full`初始化数据，否则内容未定义。<br>- RegTensor寄存器数量上限为32。超出限制上限的寄存器数据会写入预留的8K UB内存中，可能会引起性能劣化。编译器会自动复用生命周期结束的寄存器和预留内存，若寄存器与预留内存均存在可用空间，将优先复用寄存器。 |
 
-## 支持的数据类型
+## 约束说明
 
-| dtype | 元素个数 | 典型用途 |
-|---|---|---|
-| `pypto_pro.language.DT_FP32` | 64个 | 单精度浮点运算 |
-| `pypto_pro.language.DT_FP16` | 128个 | 半精度浮点运算 |
-| `pypto_pro.language.DT_UINT32` | 64个 | 32位无符号整数（索引、计数） |
-| `pypto_pro.language.DT_UINT16` | 128个 | 16位无符号整数（掩码、键值） |
-| `pypto_pro.language.DT_UINT8` | 256个 | 8位无符号整数（直方图统计） |
+- 数据类型约束：
 
-## 数据类型
+  RegTensor支持的数据类型由`dtype`参数决定，不同dtype对应不同的元素个数（寄存器总大小固定为256字节）：
 
-RegTensor支持的数据类型由`dtype`参数决定，不同dtype对应不同的元素个数（寄存器总大小固定为256字节）：
+  | dtype | 元素宽度 | 元素个数 |
+  |---|---|---|
+  | DT_INT8 / DT_UINT8 / DT_HF8 / DT_FP8E4M3FN / DT_FP8E5M2 / DT_FP8E8M0 | 8 bit | 256 |
+  | DT_FP4 / DT_FP4E2M1 / DT_FP4E1M2 | 4 bit（b8 打包存储，2 元素/字节） | 256（逻辑 512） |
+  | DT_INT16 / DT_UINT16 / DT_FP16 / DT_BF16 | 16 bit | 128 |
+  | DT_INT32 / DT_UINT32 / DT_FP32 | 32 bit | 64 |
+  | DT_INT64 / DT_UINT64 | 64 bit | 32 |
 
-| dtype | 元素宽度 | 元素个数 |
-|---|---|---|
-| DT_INT8 / DT_UINT8 | 8 bit | 256 |
-| DT_INT16 / DT_UINT16 / DT_FP16 / DT_BF16 | 16 bit | 128 |
-| DT_INT32 / DT_UINT32 / DT_FP32 | 32 bit | 64 |
-| DT_INT64 / DT_UINT64 | 64 bit | 32 |
+  > **FP8/FP4 说明**：FP8 类型（`DT_FP8E4M3FN`、`DT_FP8E5M2`、`DT_FP8E8M0`、`DT_HF8`）为 8 位浮点存储类型，仅支持数据搬运（`load_align`/`store_align`）、数据填充（`full`）和类型转换（`astype`），不支持直接参与算术运算。FP4 类型（`DT_FP4E2M1`、`DT_FP4E1M2`、`DT_FP4`）为 4 位浮点存储类型，两个元素打包在一个字节中（b8 存储），同样仅支持搬运、填充和类型转换。使用时需通过`vf.astype`转换为 FP32/BF16/FP16 进行计算。
 
 ## 返回值说明
 
 `vf.reg_tensor`为类型声明，不产生返回值。寄存器由赋值形式自动声明（如`reg = vf.load_align(...)`或`reg = vf.add(...)`）。
 
-## 约束说明
-
-- `vf.reg_tensor`不能直接调用，由编译器在赋值形式中自动声明。
-- 寄存器在`@pl.vector_function`函数内创建和使用，函数结束后自动释放。
-- 创建寄存器后必须通过`vf.load_align`或`vf.full`初始化数据，否则内容未定义。
-- RegTensor寄存器数量上限为32。超出限制上限的寄存器数据会写入预留的8K UB内存中，可能会引起性能劣化。编译器会自动复用生命周期结束的寄存器和预留内存，若寄存器与预留内存均存在可用空间，将优先复用寄存器。
-
 ## 关键特性
 
-### complex32类型RegTensor存储结构
+### DT_FP16类型双寄存器模式存储结构
 
-下图为complex32在RegTraitNumOne和RegTraitNumTwo场景下RegTensor存储情况：
+下图为DT_FP16在单寄存器模式和双寄存器模式场景下RegTensor存储情况：
 
-**图1**RegTensor搬运complex32
+**图1**RegTensor搬运DT_FP16
 
-![](../../../figures/reg_tensor_move_complex32.jpg "RegTensor搬运complex32")
+![](../../../figures/reg_tensor_move_complex32.jpg "RegTensor搬运DT_FP16")
 
-complex32是一个包含两个half（实部real、虚部imag）类型的复合类型，通常是连续存储，低位为实部高位为虚部。
+DT_FP16为16位浮点类型。在双寄存器模式场景下，从UB中以DIST_DINTLV_B16双搬入模式读取2*VL数据量，将数据交错搬运，偶数索引的元素存入reg[0]，奇数索引的元素存入reg[1]，数据类型为DT_UINT16。两个RegTensor存储512B的数据量，reg[0]和reg[1]各存128个DT_FP16元素。
 
-在RegTraitNumOne场景下，从UB（src0Addr）中以DIST_NORM模式搬运VL数据量，在RegTensor中连续存储。
+### DT_FP32类型双寄存器模式存储结构
 
-在RegTraitNumTwo场景下，从UB（src0Addr）中以DIST_DINTLV_B16双搬入模式读取2*VL数据量，将complex32数据交错搬运，偶数索引（实部）的元素存入reg[0]，将奇数索引（虚部）的元素存入reg[1]，数据类型为uint16_t。两个RegTensor存储512B的数据量，reg[0]存的是128个complex32的前16位（实部），reg[1]存的是128个complex32的前16位（虚部）。
+下图为DT_FP32在单寄存器模式和双寄存器模式场景下RegTensor存储情况：
 
-### complex64类型RegTensor存储结构
+**图2**RegTensor搬运DT_FP32
 
-下图为complex64在RegTraitNumOne和RegTraitNumTwo场景下RegTensor存储情况：
+![](../../../figures/reg_tensor_move_complex64.jpg "RegTensor搬运DT_FP32")
 
-**图2**RegTensor搬运complex64
+DT_FP32为32位浮点类型。在双寄存器模式场景下，从UB中以DIST_DINTLV_B32双搬入模式读取2*VL数据量，将数据交错搬运，偶数索引的元素存入reg[0]，奇数索引的元素存入reg[1]，数据类型为DT_UINT32。两个RegTensor存储512B的数据量，reg[0]和reg[1]各存64个DT_FP32元素。
 
-![](../../../figures/reg_tensor_move_complex64.jpg "RegTensor搬运complex64")
+### DT_INT64/DT_UINT64类型双寄存器模式存储结构
 
-complex64是一个包含两个float（实部real、虚部imag）类型的复合类型，通常是连续存储，低位为实部高位为虚部。
-
-在RegTraitNumOne场景下，从UB（src0Addr）中以DIST_NORM模式搬运VL数据量，在RegTensor中连续存储。
-
-在RegTraitNumTwo场景下，从UB（src0Addr）中以DIST_DINTLV_B32双搬入模式读取2*VL数据量，将complex64数据交错搬运，偶数索引（实部）的元素存入reg[0]，将奇数索引（虚部）的元素存入reg[1]，数据类型为uint32_t。两个RegTensor存储512B的数据量，reg[0]存的是64个complex64的前32位（实部），reg[1]存的是64个complex64的后32位（虚部）。
-
-### b64类型RegTensor存储结构
-
-下图为b64（uint64_t、int64_t）在RegTraitNumOne和RegTraitNumTwo场景下RegTensor存储情况：
+下图为b64（DT_INT64、DT_UINT64）在单寄存器模式和双寄存器模式场景下RegTensor存储情况：
 
 **图3**RegTensor搬运b64
 
 ![](../../../figures/reg_tensor_move_b64.jpg "RegTensor搬运b64")
 
-在RegTraitNumOne场景下，从UB（src0Addr）中以DIST_NORM模式搬运VL数据量。
+在单寄存器模式场景下，从UB中以DIST_NORM模式搬运VL数据量。
 
-在RegTraitNumTwo场景下，从UB（src0Addr）中以DIST_DINTLV_B32双搬入模式读取2*VL数据量，将b64数据交错搬运，偶数索引（低位）的元素存入reg[0]，将奇数索引（高位）的元素存入reg[1]，数据类型为b32。两个RegTensor存储512B的数据量，reg[0]存的是64个b64的前32位（低位），reg[1]存的是64个b64的后32位（高位）。
+在双寄存器模式场景下，从UB中以DIST_DINTLV_B32双搬入模式读取2*VL数据量，将b64数据交错搬运，偶数索引（低位）的元素存入reg[0]，奇数索引（高位）的元素存入reg[1]，数据类型为DT_UINT32。两个RegTensor存储512B的数据量，reg[0]存的是64个b64的前32位（低位），reg[1]存的是64个b64的后32位（高位）。
 
 ## 使用模式
 
 ### 从UB tile加载数据
 
 ```python
-reg = vf.load_align(src_tile, 0)  # 从 tile 的字节偏移 0 处加载
+reg = vf.load_align(src_tile, 0)  # 从 tile 的元素个数偏移 0 处加载
 ```
 
 ### 作为VF运算的输入/输出
@@ -175,7 +159,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_a, src_b, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -183,7 +166,6 @@ def example_vf(src_a, src_b, dst_tile):
     reg_b = vf.load_align(src_b, 0)
     reg_out = vf.add(reg_a, reg_b, preg)
     vf.store_align(dst_tile, reg_out, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -205,7 +187,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -217,7 +198,6 @@ def test_example():
     example_kernel[None, core_nums](a, b, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a + b, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

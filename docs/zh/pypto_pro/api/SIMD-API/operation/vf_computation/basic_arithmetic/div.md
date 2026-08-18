@@ -14,41 +14,32 @@
 
 ## 功能说明
 
-两个向量寄存器逐元素除法。
+两个reg_tensor逐元素除法。
+
+$$dstReg_i = srcReg0_i \div srcReg1_i$$
 
 ## 函数原型
 
 ```python
-dst = vf.div(src_a, src_b, preg)
+div(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器 |
-| `src_a` | 输入 | 源操作数A |
-| `src_b` | 输入 | 源操作数B |
-| `preg` | 输入 | 掩码寄存器 |
-
-## 数据类型
-
-| src | dst |
-|---|---|
-| FP16 | FP16 |
-| FP32 | FP32 |
-| INT32 | INT32 |
-| UINT32 | UINT32 |
-
-## 返回值说明
-
-返回目标向量寄存器（`RegTensor`类型）。
+| `src0` | 输入 | 源操作数0，reg_tensor，源操作数`src0`、`src1`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_FP32。 |
+| `src1` | 输入 | 源操作数1，reg_tensor，支持的数据类型和`src0`中的说明一致。 |
+| `preg` | 输入 | mask_tensor。 |
+| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
-- 本接口操作数为寄存器，不涉及地址对齐。
-- 本接口不修改全局寄存器的值。
-- 源操作数与目标操作数的数据类型需要保持一致。
+无
+
+## 返回值说明
+
+返回`dst`目的操作数，reg_tensor，支持的数据类型和`src0`中的说明一致。
 
 ## 调用示例
 
@@ -58,16 +49,13 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_a, src_b, dst_tile):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_a, 0)
     reg_b = vf.load_align(src_b, 0)
     reg_out = vf.div(reg_a, reg_b, preg)
     vf.store_align(dst_tile, reg_out, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -89,7 +77,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -101,7 +88,6 @@ def test_example():
     example_kernel[None, core_nums](a, b, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a / b, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

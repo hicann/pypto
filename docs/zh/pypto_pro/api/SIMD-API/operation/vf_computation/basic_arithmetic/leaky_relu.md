@@ -14,36 +14,32 @@
 
 ## 功能说明
 
-该接口用于按元素执行Leaky ReLU(Leaky Rectified Linear Unit)操作：当源操作数中某元素大于等于0时，直接将该元素写入目的操作数；否则将该元素乘以标量值scalarValue后写入目的操作数。计算公式如下：
+该接口用于按元素执行Leaky ReLU（Leaky Rectified Linear Unit）操作：当源操作数中某元素大于等于0时，直接将该元素写入目的操作数；否则将该元素乘以标量值`scalar`后写入目的操作数。计算公式如下：
 
-$$dstReg_i = \begin{cases} srcReg_i & srcReg_i \geq 0 \\ srcReg_i \times scalarValue & srcReg_i < 0 \end{cases}$$
+$$dst_i = \begin{cases} src_i & src_i \geq 0 \\ src_i \times scalar & src_i < 0 \end{cases}$$
 
 ## 函数原型
 
 ```python
-dst = vf.leaky_relu(src, scalar, preg)
+leaky_relu(src, scalar, preg, mode: Optional[MergeMode] = None) -> dst
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器，向量寄存器 |
-| `src` | 输入 | 源操作数，向量寄存器。源操作数的数据类型需要与目的操作数保持一致。 |
-| `scalar` | 输入 | 标量源操作数，类型为标量，数据类型需与目的操作数保持一致。 |
-| `preg` | 输入 | 掩码寄存器，类型为`MaskReg` |
-
-## 数据类型
-
-目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：FP16、FP32。
-
-## 返回值说明
-
-返回目标向量寄存器（`RegTensor`类型）。
+| `src` | 输入 | 源操作数，reg_tensor，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_FP16、DT_FP32。 |
+| `scalar` | 输入 | 标量源操作数，scaler。 |
+| `preg` | 输入 | mask_tensor。 |
+| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
 无
+
+## 返回值说明
+
+返回`dst`目的操作数，reg_tensor，支持的数据类型和`src`中的说明一致。
 
 ## 调用示例
 
@@ -53,15 +49,12 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_tile, 0)
     reg_out = vf.leaky_relu(reg_a, 0.01, preg)
     vf.store_align(dst_tile, reg_out, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -80,7 +73,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -92,7 +84,6 @@ def test_example():
     torch.npu.synchronize()
     expected = torch.nn.functional.leaky_relu(a, 0.01)
     torch.testing.assert_close(out, expected, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

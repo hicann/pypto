@@ -14,47 +14,42 @@
 
 ## 功能说明
 
-该接口根据mask对输入数据srcReg0、srcReg1按元素相乘操作，将乘法结果的低位部分写入dstReg0，溢出（高位）部分写入dstReg1。计算公式如下：
+该接口根据mask对输入数据`src0`、`src1`按元素相乘操作，将乘法结果的低位部分写入`dst_lo`，溢出（高位）部分写入`dst_hi`。计算公式如下：
 
-$$dstReg0_i = (srcReg0_i \times srcReg1_i) \bmod 2^{bit}$$
+$$dst\_lo_i = (src0_i \times src1_i) \bmod 2^{bit}$$
 
-$$dstReg1_i = \lfloor (srcReg0_i \times srcReg1_i) / 2^{bit} \rfloor$$
+$$dst\_hi_i = \lfloor (src0_i \times src1_i) / 2^{bit} \rfloor$$
 
 其中，bit表示操作数的位宽bit数。
+
+**图1** vf.mull功能说明
 
 ![](../../../../figures/mull_diagram.jpg)
 
 ## 函数原型
 
 ```python
-# 元组赋值形式（推荐）
-dst_lo, dst_hi = vf.mull(src0, src1, preg)
-
-# 语句形式（dst 需预声明）
-vf.mull(dst_lo, dst_hi, src0, src1, preg)
+mull(src0, src1, preg, mode: Optional[MergeMode] = None) -> (dst_lo, dst_hi)
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_lo` | 输出 | 目标向量寄存器（乘法结果低位），向量寄存器 |
-| `dst_hi` | 输出 | 目标向量寄存器（乘法结果高位），向量寄存器 |
-| `src0` | 输入 | 源操作数，向量寄存器 |
-| `src1` | 输入 | 源操作数，向量寄存器 |
-| `preg` | 输入 | 掩码寄存器，类型为`MaskReg` |
-
-## 数据类型
-
-目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：INT32、UINT32。
-
-## 返回值说明
-
-返回元组`(dst_lo, dst_hi)`：`dst_lo`为乘法结果低32位的`RegTensor`寄存器，`dst_hi`为乘法结果高32位的`RegTensor`寄存器。
+| `src0` | 输入 | 源操作数0，reg_tensor，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT32、DT_UINT32。 |
+| `src1` | 输入 | 源操作数1，reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。 |
+| `preg` | 输入 | mask_tensor。 |
 
 ## 约束说明
 
 无
+
+## 返回值说明
+
+返回一个二元组 `(dst_lo, dst_hi)`。
+
+- `dst_lo` 目的操作数（乘法结果低位），reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。
+- `dst_hi` 目的操作数（乘法结果高位），reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。
 
 ## 调用示例
 
@@ -64,10 +59,8 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_a, src_b, dst_lo, dst_hi):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
 
     reg_a = vf.load_align(src_a, 0, dtype=pl.DT_UINT32)
@@ -75,7 +68,6 @@ def example_vf(src_a, src_b, dst_lo, dst_hi):
     reg_lo, reg_hi = vf.mull(reg_a, reg_b, preg)
     vf.store_align(dst_lo, reg_lo, preg)
     vf.store_align(dst_hi, reg_hi, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -100,7 +92,6 @@ def example_kernel(
         pl.store(out_lo, t_lo, [0, 0])
         pl.store(out_hi, t_hi, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -117,7 +108,6 @@ def test_example():
     expected_hi = (product >> 32).to(torch.int32)
     assert torch.equal(out_lo, expected_lo)
     assert torch.equal(out_hi, expected_hi)
-
 
 if __name__ == "__main__":
     test_example()

@@ -14,27 +14,23 @@
 
 ## 功能说明
 
-清除特殊寄存器（AR寄存器），重置某些VF指令使用的累加寄存器。通常在 @pl.vector_function函数的开头或结尾调用。
+清除特殊寄存器（AddrReg寄存器），重置某些VF指令使用的累加寄存器。通常在 @pl.vector_function函数的开头或结尾调用。
 
 ## 函数原型
 
 ```python
-vf.clear_spr()
+clear_spr()
 ```
 
 ## 参数说明
 
 无参数。
 
-## 数据类型
-
-不涉及数据类型。
-
-## 返回值说明
+## 约束说明
 
 无
 
-## 约束说明
+## 返回值说明
 
 无
 
@@ -46,16 +42,13 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
-    # clear_spr 清除特殊寄存器，重置累加寄存器
+    # clear_spr清除特殊寄存器，重置累加寄存器
     vf.clear_spr()
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
     vf.store_align(dst_tile, reg, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -74,7 +67,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -85,7 +77,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

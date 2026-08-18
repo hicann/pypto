@@ -14,48 +14,35 @@
 
 ## 功能说明
 
-数据搬运接口，从UB加载数据到RegTensor，对应AscendC `Load`接口。支持post-update模式，在搬运后自动累进源地址，实现连续数据搬运。
+数据搬运接口，从Tile加载数据到reg_tensor。支持post-update模式，在搬运后自动累进源地址，实现连续数据搬运。
 
 ## 函数原型
 
 ```python
-# 基本加载（搬运量为 VL = 256B / sizeof(T)）
-dst = vf.load(tile)
-
-# 指定搬运数据量
-dst = vf.load(tile, *, count=N)
-
-# 带 post-update 的连续加载（搬运后地址自动累进）
-dst = vf.load(tile, stride, *, post_update=True)
-
-# 带 post-update、重复步长和搬运数据量的连续加载
-dst = vf.load(tile, stride, *, post_update=True, repeat_stride=0, count=N)
+load(tile, stride=None, post_update: bool = False, repeat_stride=None, count=None) -> dst
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目的操作数，向量寄存器 |
-| `tile` | 输入 | 源UB tile，起始地址不需要32字节对齐 |
-| `stride` | 输入 | 可选，post-update步长，触发POST_UPDATE模式 |
-| `post_update` | 输入 | 可选，`True`时搬运后地址自动累进，默认`False` |
-| `repeat_stride` | 输入 | 可选，重复加载时的步长，默认`0` |
-| `count` | 输入 | 可选，搬运数据量，默认为256B / sizeof(T) |
-
-## 数据类型
-
-目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：INT8、UINT8、INT16、UINT16、FP16、BF16、INT32、UINT32、FP32、INT64、UINT64。
-
-赋值形式`dst = vf.load(...)`返回目标向量寄存器。
+| `tile` | 输入 | 源操作数，Tile，起始地址不需要32字节对齐。目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
+| `stride` | 输入 | 可选，`post_update`步长，配置`post_update=True`后有效。 |
+| `post_update` | 输入 | 可选，`post_update=True`时，源地址会在每次搬运后自动累进`stride`指定的步长，无需用户手动更新offset。默认`post_update=False`。 |
+| `repeat_stride` | 输入 | 可选，重复加载时的步长，默认`0`。 |
+| `count` | 输入 | 可选，搬运数据量，单位为元素个数。 |
 
 ## 约束说明
 
-- dst不支持RegTraitNumTwo。
-- 接口内部定义了一个UnalignRegForLoad，该寄存器数量上限为4。
-- `post_update=True`时，源地址会在每次搬运后自动累进`stride`指定的步长，无需用户手动更新offset。
+- 此接口有调用次数约束，接口内部定义了一个vf.unalign_reg_for_store，该寄存器数量上限为4。
+
+## 返回值说明
+
+返回`dst`目的操作数，reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。不支持双寄存器模式。
 
 ## 调用示例
+
+### 基本加载示例
 
 ```python
 import os
@@ -63,15 +50,12 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 简单加载：支持非 32 字节对齐地址
+    # 简单加载：支持非32字节对齐地址
     src_reg = vf.load(src_tile)
     vf.store_align(dst_tile, src_reg, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -89,7 +73,6 @@ def example_kernel(
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -102,13 +85,12 @@ def test_example():
     torch.npu.synchronize()
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
 
-
 if __name__ == "__main__":
     test_example()
     print("PASSED")
 ```
 
-## post-update连续加载示例
+### post-update连续加载示例
 
 ```python
 import os
@@ -116,15 +98,12 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # post_update 模式：搬运后地址自动累进 stride，适合循环内连续加载
+    # post_update模式：搬运后地址自动累进stride，适合循环内连续加载
     src_reg = vf.load(src_tile, 64, post_update=True)
     vf.store_align(dst_tile, src_reg, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -143,7 +122,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example_2():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -154,7 +132,6 @@ def test_example_2():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example_2()

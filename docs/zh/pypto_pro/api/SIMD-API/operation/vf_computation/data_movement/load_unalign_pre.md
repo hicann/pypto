@@ -16,33 +16,26 @@
 
 非对齐搬入初始化接口。在读非对齐地址前，应该先通过`vf.load_unalign_pre`进行初始化，保存非32字节对齐的数据，然后再调用`vf.load_unalign`进行数据搬入。
 
-连续非对齐搬入时，`vf.load_unalign`会将后续未对齐的数据缓存至ureg，所以下一次搬入不需要再次调用`vf.load_unalign_pre`，只需在迭代开始前调用一次`vf.load_unalign_pre`，从而实现非对齐搬入的性能优化。
-
 ## 函数原型
 
 ```python
-vf.load_unalign_pre(align_reg, tile)
+load_unalign_pre(align_reg, tile)
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `align_reg` | 输入/输出 | 非对齐寄存器，UnalignRegForLoad类型，用于缓存非32字节对齐的数据（由`vf.load_unalign_init()`创建） |
-| `tile` | 输入 | 源UB tile，起始地址不需要32字节对齐 |
-
-## 数据类型
-
-目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：INT8、UINT8、INT16、UINT16、FP16、BF16、INT32、UINT32、FP32、INT64、UINT64。
-
-## 返回值说明
-
-无
+| `align_reg` | 输入/输出 | 源操作数，非对齐寄存器，UnalignRegForLoad类型，用于缓存非32字节对齐的数据（由`vf.load_unalign_init()`创建）。 |
+| `tile` | 输入 | 源操作数，Tile地址，起始地址不需要32字节对齐。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 
 ## 约束说明
 
 - `vf.load_unalign_pre`与`vf.load_unalign`接口需要组合使用。
-- 连续非对齐搬入时，只需在迭代开始前调用一次`vf.load_unalign_pre`。
+
+## 返回值说明
+
+无
 
 ## 调用示例
 
@@ -52,19 +45,15 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
-    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 分配非对齐搬入缓存寄存器
     ureg = vf.load_unalign_init()
     # 非对齐搬入初始化，只需在迭代开始前调用一次
     vf.load_unalign_pre(ureg, src_tile)
-    # 非对齐搬入
     src_reg = vf.load_unalign(ureg, src_tile, post_update=True)
-    vf.store_align(dst_tile, src_reg, preg)
-
+    store_ureg = vf.unalign_reg_for_store()
+    vf.store_unalign(dst_tile, src_reg, store_ureg, 64, post_update=True)
+    vf.store_unalign_post(dst_tile, store_ureg, 0, post_update=True)
 
 @pl.jit()
 def example_kernel(
@@ -83,7 +72,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -94,7 +82,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

@@ -14,37 +14,35 @@
 
 ## 功能说明
 
-根据mask对输入数据src执行按位取反操作，将结果写入dst。
+根据`preg`对输入数据`src`执行按位取反操作，将结果写入`dst`。
+
+$$dstReg_i = \sim srcReg_i$$
 
 ## 函数原型
 
 ```python
-dst = vf.not_(src, preg)
+not_(src, preg, mode: Optional[MergeMode] = None) -> dst
 ```
-
-> 本接口为统一接口，同时支持RegTensor和MaskReg输入。当源操作数为MaskReg时，目标寄存器自动推断为MaskReg。
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器 |
-| `src` | 输入 | 源操作数 |
-| `preg` | 输入 | 掩码寄存器 |
-
-## 数据类型
-
-支持的数据类型为：INT8、UINT8、INT16、UINT16、FP16、INT32、UINT32、FP32、INT64、UINT64。
-
-## 返回值说明
-
-源操作数为RegTensor时返回`RegTensor`；源操作数为MaskReg时返回`MaskReg`。
+| `src` | 输入 | 源操作数，reg_tensor或mask_tensor，支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_FP32。 |
+| `preg` | 输入 | mask_tensor。 |
+| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
 无
 
+## 返回值说明
+
+返回`dst`目的操作数，reg_tensor或mask_tensor，支持的数据类型和`src`中的说明一致。
+
 ## 调用示例
+
+### reg_tensor调用示例
 
 ```python
 import os
@@ -52,14 +50,12 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT16)
     reg_a = vf.load_align(src_tile, 0)
     reg_out = vf.not_(reg_a, preg)
     vf.store_align(dst_tile, reg_out, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -78,7 +74,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -90,15 +85,14 @@ def test_example():
     torch.npu.synchronize()
     assert out.dtype == torch.int16
 
-
 if __name__ == "__main__":
     test_example()
     print("PASSED")
 ```
 
-## MaskReg调用示例
+### mask_tensor调用示例
 
-当源操作数为MaskReg时，`vf.not_`对掩码按位取反。
+当源操作数为mask_tensor时，`vf.not_`对掩码按位取反。
 
 ```python
 import os
@@ -106,19 +100,17 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # 生成比较掩码：reg >= 0 的位置为 1
+    # 生成比较掩码：reg >= 0的位置为1
     mask_a = vf.ge(reg, 0.0, preg)
-    # not_：取反后 reg < 0 处为 1
+    # not_：取反后reg < 0处为1
     preg_not = vf.not_(mask_a, preg)
-    # 使用取反后的掩码做 abs：reg < 0 处取 abs（即 -reg），否则置零
+    # 使用取反后的掩码做abs：reg < 0处取abs（即-reg），否则置零
     reg_dst = vf.abs(reg, preg_not)
     vf.store_align(dst_tile, reg_dst, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -137,7 +129,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -149,7 +140,6 @@ def test_example():
     torch.npu.synchronize()
     expected = torch.where(a < 0, torch.abs(a), torch.zeros_like(a))
     torch.testing.assert_close(out, expected, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

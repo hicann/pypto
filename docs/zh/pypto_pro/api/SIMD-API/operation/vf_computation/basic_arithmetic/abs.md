@@ -14,55 +14,43 @@
 
 ## 功能说明
 
-- 对实数类型
+- 对实数类型（DT_INT8、DT_INT16、DT_INT32、DT_FP16、DT_FP32）
 
-    对srcReg中的有效元素逐个取绝对值，并将结果写入dstReg对应位置，计算公式如下：
+    对`src`中的有效元素逐个取绝对值，并将结果写入`dst`对应位置，计算公式如下：
 
-    $$dstReg_i = |srcReg_i|$$
+    $$dst_i = |src_i|$$
 
-- 对复数类型
+- 对复数类型（DT_FP16双寄存器模式、DT_FP32双寄存器模式）
 
-    对srcReg中有效元素逐个取模，并将结果写入dstReg对应位置，计算公式如下：
+    复数类型通过双寄存器模式实现：DT_FP16双寄存器模式对应由两个DT_FP16组成的复数（实部和虚部各16位，共32位），DT_FP32双寄存器模式对应由两个DT_FP32组成的复数（实部和虚部各32位，共64位）。`reg[0]`存储实部，`reg[1]`存储虚部。
 
-    $$dstReg_i = |srcReg_i| = (\alpha^2 + \beta^2)^{1/2}$$
+    对`src`中有效元素逐个取模，并将结果写入`dst`对应位置，计算公式如下：
 
-    其中$srcReg_i = \alpha + \beta i$，α为复数的实部，β为复数的虚部。
+    $$dst_i = |src_i| = (\alpha^2 + \beta^2)^{1/2}$$
+
+    其中$src_i = \alpha + \beta i$，α为复数的实部，β为复数的虚部。
 
 ## 函数原型
 
 ```python
-dst = vf.abs(src, preg)
+abs(src, preg, mode: Optional[MergeMode] = None) -> dst
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器，向量寄存器 |
-| `src` | 输入 | 源操作数，向量寄存器 |
-| `preg` | 输入 | 掩码寄存器，类型为`MaskReg` |
-
-## 数据类型
-
-| src | dst |
-|---|---|
-| INT8 | INT8 |
-| INT16 | INT16 |
-| FP16 | FP16 |
-| INT32 | INT32 |
-| FP32 | FP32 |
-| COMPLEX32 | FP16 |
-| INT64 | INT64 |
-| COMPLEX64 | FP32 |
-
-## 返回值说明
-
-返回目标向量寄存器（`RegTensor`类型）。
+| `src` | 输入 | 源操作数，reg_tensor。源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_INT16、DT_INT32、DT_FP16、DT_FP32。其中DT_FP16和DT_FP32支持双寄存器模式，用于复数取模运算。 |
+| `preg` | 输入 | mask_tensor。 |
+| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
 - 当目的操作数和源操作数数据类型不一致时，目的操作数和源操作数不可重叠。
-- 整型数据的计算结果如果超出数据类型的表示范围会采取非饱和截断，比如INT8类型，srcReg为-128，其绝对值128会被截断成-128。
+
+## 返回值说明
+
+返回`dst`目的操作数，reg_tensor，支持的数据类型和`src`中的说明一致。整型数据的计算结果如果超出数据类型的表示范围会采取非饱和截断，比如DT_INT8类型，src为-128，其绝对值128会被截断成-128。
 
 ## 调用示例
 
@@ -72,10 +60,8 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_tile, 0)
     reg_out = vf.abs(reg_a, preg)
@@ -98,7 +84,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -109,7 +94,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, torch.abs(a), rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

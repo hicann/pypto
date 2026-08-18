@@ -14,75 +14,38 @@
 
 ## 功能说明
 
-向量寄存器求和归约：将源寄存器中的所有有效元素（mask选中的元素）求和，结果写入目标寄存器的第一个元素（`dst[0]`），其余元素置零（`ZEROING`模式）或保留原值（`MERGING`模式）。对应硬件`vcadd`指令（AscendC ReduceSum）。
+reg_tensor求和归约：将源寄存器`src`中的所有有效元素（`preg`选中的元素）求和，结果写入目标寄存器的第一个元素`dst[0]`，其余元素置零。
 
-当`datablock=True`时，启用datablock粒度归约（对应`vcgadd`指令，AscendC ReduceSumDatablock），每个datablock独立归约：b32类型每16个元素为一个datablock，b16类型每32个元素为一个datablock，各datablock分别求和并将结果写入各自datablock的第一个元素。
+以二叉树累加的方式计算源操作数`src`内有效元素的数据总和。以DT_FP16类型的数据求和为例，在`src`内有128个数，通过二叉树的方式，两两相加，最终得到目的操作数为1个DT_FP16类型的数据sum，计算过程如下图所示：
 
-必须在`@pl.vector_function`函数内使用。
+**图1** reduce_sum累加顺序
+
+![reduce_sum累加顺序](../../../../figures/reduce_sum_accum_order.jpg)
+
+当源操作数数据类型为DT_FP16时，中间累加过程在DT_FP32精度下进行，最终结果再舍入为DT_FP16，因此精度高于先逐对`vf.add`再手动归约的写法。
 
 ## 函数原型
 
 ```python
-dst = vf.reduce_sum(src, preg, *, datablock=False, merge_mode=pl.MergeMode.ZEROING)
+reduce_sum(src, preg, datablock: bool = False, merge_mode: Optional[MergeMode] = None)
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器，归约结果写入第一个元素 |
-| `src` | 输入 | 源向量寄存器 |
-| `preg` | 输入 | 掩码寄存器 |
-| `datablock` | 输入 | 可选，``True``时按datablock粒度归约（对应`vcgadd`指令），默认``False`` |
-| `merge_mode` | 输入 | 可选，合并模式：``pl.MergeMode.ZEROING``（默认）或``pl.MergeMode.MERGING`` |
-
-## 数据类型
-
-**普通归约（`datablock=False`，对应`vcadd`）**：
-
-| src | dst |
-|---|---|
-| FP16 | FP16 |
-| FP32 | FP32 |
-| INT16 | INT16 |
-| UINT16 | UINT16 |
-| INT32 | INT32 |
-| UINT32 | UINT32 |
-| INT8 | INT8 |
-| UINT8 | UINT8 |
-
-**Datablock归约（`datablock=True`，对应`vcgadd`）**：
-
-| src | dst |
-|---|---|
-| FP16 | FP16 |
-| FP32 | FP32 |
-| INT32 | INT32 |
-| UINT32 | UINT32 |
-
-## 返回值说明
-
-返回目标向量寄存器（`RegTensor`类型），归约结果存储在第一个元素`dst[0]`中，其余元素根据`merge_mode`置零或保留原值。
+| `src` | 输入 | 源reg_tensor，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_FP32。 |
+| `preg` | 输入 | mask_tensor。当所有元素均不参与计算时（mask为空），将目的操作数数据类型的0写入`dst[0]`。 |
+| `datablock` | 输入 | 可选，决定接口工作模式，`True`时按datablock粒度归约（对应`vcgadd`指令），默认`False`。当`datablock=True`时，启用datablock粒度归约，每个datablock独立归约：32位宽（DT_INT32、DT_UINT32、DT_FP32）类型每16个元素为一个datablock，16位宽（DT_INT16、DT_UINT16、DT_FP16）类型每32个元素为一个datablock，各datablock分别求和并将结果写入各自datablock的第一个元素。 |
+| `merge_mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
-- 本接口操作数为寄存器，不涉及地址对齐。
-- 本接口不修改全局寄存器的值。
-- 源操作数与目标操作数的数据类型需要保持一致。
-- 当所有元素均不参与计算时（mask为空），将目的操作数数据类型的0写入dstReg。
-- 指令内累加顺序采用二叉树累加方式，结果具有确定性。
-- 当源操作数数据类型为FP16时，中间累加过程在FP32精度下进行，最终结果再舍入为FP16，因此精度高于先逐对`vf.add`再手动归约的写法。
-- datablock归约模式（`datablock=True`）仅支持b16/b32宽度的数据类型（FP16/FP32/INT32/UINT32），不支持b8类型。
+- `datablock=True`时，支持的数据类型为：DT_INT16、DT_UINT16、DT_FP16、DT_INT32、DT_UINT32、DT_FP32。
 
-## 关键特性
+## 返回值说明
 
-**ReduceSum累加顺序**
-
-以二叉树累加的方式计算源操作数srcReg内有效元素的数据总和。以half类型的数据求和为例，在srcReg内有128个数，通过二叉树的方式，两两相加，最终得到目的操作数为1个half类型的数据sum，计算过程如下图所示：
-
-**图1**ReduceSum累加顺序
-
-![ReduceSum累加顺序](../../../../figures/reduce_sum_accum_order.jpg)
+返回`dst`目标reg_tensor，支持的数据类型和`src`中的说明一致，归约结果写入第一个元素`dst[0]`，其余元素置零。指令内累加顺序采用二叉树累加方式，结果具有确定性。
 
 ## 调用示例
 
@@ -92,14 +55,12 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg_all = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     src0 = vf.load_align(src_tile, 0)
     sum0 = vf.reduce_sum(src0, preg_all)
     vf.store_align(dst_tile, sum0, preg_all)
-
 
 @pl.jit()
 def example_kernel(
@@ -118,7 +79,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -129,7 +89,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out[0, 0], a.sum(), rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

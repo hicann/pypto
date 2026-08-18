@@ -21,53 +21,32 @@
 ## 函数原型
 
 ```python
-# 1 层循环: offset = index0 * stride0
-a_reg = vf.create_addr_reg(index0, stride0, *, dtype=pl.DT_FP32)
-
-# 2 层循环: offset = index0 * stride0 + index1 * stride1
-a_reg = vf.create_addr_reg(index0, stride0, index1, stride1, *, dtype=pl.DT_FP32)
-
-# 3 层循环: offset = index0 * stride0 + index1 * stride1 + index2 * stride2
-a_reg = vf.create_addr_reg(index0, stride0, index1, stride1, index2, stride2, *, dtype=pl.DT_FP32)
-
-# 4 层循环: offset = index0 * stride0 + index1 * stride1 + index2 * stride2 + index3 * stride3
-a_reg = vf.create_addr_reg(index0, stride0, index1, stride1, index2, stride2, index3, stride3, *, dtype=pl.DT_FP32)
+create_addr_reg(index0, stride0, index1=None, stride1=None, index2=None, stride2=None, index3=None, stride3=None, dtype: Optional[DType] = None) -> a_reg
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `a_reg` | 输出 | AddrReg地址偏移量寄存器 |
-| `index0` | 输入 | 最外层循环轴索引（循环变量） |
-| `stride0` | 输入 | 最外层循环轴对应的地址偏移量，单位为元素个数 |
-| `index1` | 输入 | 可选，第二层循环轴索引 |
-| `stride1` | 输入 | 可选，第二层循环轴对应的地址偏移量 |
-| `index2` | 输入 | 可选，第三层循环轴索引 |
-| `stride2` | 输入 | 可选，第三层循环轴对应的地址偏移量 |
-| `index3` | 输入 | 可选，第四层循环轴索引 |
-| `stride3` | 输入 | 可选，第四层循环轴对应的地址偏移量 |
-| `dtype` | 输入 | 可选，模板参数对应的数据类型（默认`pl.DT_FP32`）。决定元素宽度：b8/b16/b32/b64 |
-
-## 数据类型
-
-| dtype | 元素宽度 |
-|---|---|
-| b8 | 1字节 |
-| b16 | 2字节 |
-| b32 | 4字节 |
-| b64 | 8字节 |
-
-## 返回值说明
-
-返回AddrReg类型
+| `index0` | 输入 | 最外层循环轴索引（循环变量）。 |
+| `stride0` | 输入 | 最外层循环轴对应的地址偏移量，单位为元素个数。 |
+| `index1` | 输入 | 可选，第二层循环轴索引。 |
+| `stride1` | 输入 | 可选，第二层循环轴对应的地址偏移量，单位为元素个数。 |
+| `index2` | 输入 | 可选，第三层循环轴索引。 |
+| `stride2` | 输入 | 可选，第三层循环轴对应的地址偏移量，单位为元素个数。 |
+| `index3` | 输入 | 可选，第四层循环轴索引。 |
+| `stride3` | 输入 | 可选，第四层循环轴对应的地址偏移量，单位为元素个数。 |
+| `dtype` | 输入 | 可选，模板参数对应的数据类型（默认`pl.DT_FP32`）。决定元素宽度：8位宽（DT_INT8、DT_UINT8）/16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）/32位宽（DT_INT32、DT_UINT32、DT_FP32）/64位宽（DT_INT64、DT_UINT64）。 |
 
 ## 约束说明
 
-- AddrReg数量上限为8。
-- 由于硬件循环（HardwareLoop）限制，AddrReg最多支持4层循环轴。
-- AddrReg仅支持`vf.load_align`和`vf.store_align`搬运指令使用。
-- 通过AddrReg设置地址偏移进行搬运时，需要满足对应搬运指令的地址对齐约束。
+- 数据类型约束：
+
+  支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。
+
+## 返回值说明
+
+返回`a_reg`目的操作数，AddrReg地址偏移量寄存器。<br>- AddrReg数量上限为8。<br>- 由于硬件循环限制，AddrReg最多支持4层循环轴。<br>-AddrReg仅支持`vf.load_align`和`vf.store_align`搬运指令使用。<br>- 通过AddrReg设置地址偏移进行搬运时，需要满足对应搬运指令的地址对齐约束。
 
 ## 调用示例
 
@@ -77,10 +56,8 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     one_repeat_size = 64
     repeat_times = 2
@@ -89,7 +66,6 @@ def example_vf(src_tile, dst_tile):
         a_reg = vf.create_addr_reg(i, one_repeat_size, dtype=pl.DT_FP32)
         reg = vf.load_align(src_tile, a_reg)
         vf.store_align(dst_tile, reg, preg, a_reg)
-
 
 @pl.jit()
 def example_kernel(
@@ -108,7 +84,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -119,7 +94,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

@@ -14,45 +14,42 @@
 
 ## 功能说明
 
-根据mask对输入数据src0、src1按位求或（|）操作，将结果写入dst。
+根据`preg`对输入数据`src0`、`src1`按位求或操作，将结果写入`dst`。
+
+$$dstReg_i = srcReg0_i \;|\; srcReg1_i$$
 
 ## 函数原型
 
 ```python
-dst = vf.or_(src0, src1, preg)
+or_(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 ```
-
-> 本接口为统一接口，同时支持RegTensor和MaskReg输入。当源操作数为MaskReg时，目标寄存器自动推断为MaskReg。
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器 |
-| `src0` | 输入 | 源操作数0 |
-| `src1` | 输入 | 源操作数1 |
-| `preg` | 输入 | 掩码寄存器 |
-
-## 数据类型
-
-支持的数据类型为：BOOL、INT8、UINT8、INT16、UINT16、INT32、UINT32、INT64、UINT64。
-
-## 返回值说明
-
-源操作数为RegTensor时返回`RegTensor`；源操作数为MaskReg时返回`MaskReg`。
+| `src0` | 输入 | 源操作数0，reg_tensor或mask_tensor，支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8。 |
+| `src1` | 输入 | 源操作数1，reg_tensor或mask_tensor，数据类型与`src0`一致。 |
+| `preg` | 输入 | mask_tensor。 |
+| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
 无
 
+## 返回值说明
+
+返回`dst`目的操作数，reg_tensor或mask_tensor，支持的数据类型和`src0`中的说明一致。
+
 ## 调用示例
+
+### reg_tensor调用示例
 
 ```python
 import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
-
 
 @pl.vector_function
 def example_vf(src_a, src_b, dst_tile):
@@ -61,7 +58,6 @@ def example_vf(src_a, src_b, dst_tile):
     reg_b = vf.load_align(src_b, 0)
     reg_out = vf.or_(reg_a, reg_b, preg)
     vf.store_align(dst_tile, reg_out, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -83,7 +79,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -96,15 +91,14 @@ def test_example():
     torch.npu.synchronize()
     assert out.dtype == torch.uint16
 
-
 if __name__ == "__main__":
     test_example()
     print("PASSED")
 ```
 
-## MaskReg调用示例
+### mask_tensor调用示例
 
-当源操作数为MaskReg时，`vf.or_`对两个掩码按位或。
+当源操作数为mask_tensor时，`vf.or_`对两个掩码按位或。
 
 ```python
 import os
@@ -112,20 +106,18 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
     # 生成两个互补掩码
-    mask_a = vf.ge(reg, 0.0, preg)   # reg >= 0 处为 1
-    mask_b = vf.lt(reg, 0.0, preg)   # reg < 0 处为 1
-    # or_：mask_a | mask_b = 全 1
+    mask_a = vf.ge(reg, 0.0, preg)   # reg >= 0处为1
+    mask_b = vf.lt(reg, 0.0, preg)   # reg < 0处为1
+    # or_：mask_a | mask_b = 全1
     preg_or = vf.or_(mask_a, mask_b, preg)
-    # 使用 or 后的掩码做 abs：所有元素取绝对值
+    # 使用or后的掩码做abs：所有元素取绝对值
     reg_dst = vf.abs(reg, preg_or)
     vf.store_align(dst_tile, reg_dst, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -144,7 +136,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -155,7 +146,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, torch.abs(a), rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

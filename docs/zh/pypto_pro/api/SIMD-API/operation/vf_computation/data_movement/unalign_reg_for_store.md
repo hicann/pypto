@@ -19,25 +19,20 @@
 ## 函数原型
 
 ```python
-align_reg = vf.unalign_reg_for_store()
+unalign_reg_for_store() -> align_reg
 ```
 
 ## 参数说明
 
-无参数。
-
-## 数据类型
-
-不涉及数据类型。
-
-## 返回值说明
-
-返回UnalignReg类型，供`vf.store_unalign`和`vf.store_unalign_post`使用。
+无
 
 ## 约束说明
 
-- 本接口操作数为寄存器，不涉及地址对齐。
-- 后续`vf.store_unalign`和`vf.store_unalign_post`必须使用带步长形式（4参数 / 3参数），无步长legacy形式在当前硬件上可能导致挂死。
+无
+
+## 返回值说明
+
+返回`align_reg`目标reg_tensor。
 
 ## 调用示例
 
@@ -47,19 +42,14 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
-    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 分配 alignment tracker 寄存器，贯穿后续非对齐存储
-    align_reg = vf.unalign_reg_for_store()
-    reg = vf.load_align(src_tile, 0)
-    # 4 参数形式（带步长）：stride=64 存储 64 个 FP32 元素，post_update=True
-    vf.store_unalign(dst_tile, reg, align_reg, 64, post_update=True)
-    # 3 参数形式（带步长）：stride=0，post_update=True
-    vf.store_unalign_post(dst_tile, align_reg, 0, post_update=True)
-
+    ureg = vf.load_unalign_init()
+    vf.load_unalign_pre(ureg, src_tile)
+    src_reg = vf.load_unalign(ureg, src_tile, post_update=True)
+    store_ureg = vf.unalign_reg_for_store()
+    vf.store_unalign(dst_tile, src_reg, store_ureg, 64, post_update=True)
+    vf.store_unalign_post(dst_tile, store_ureg, 0, post_update=True)
 
 @pl.jit()
 def example_kernel(
@@ -78,7 +68,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -89,7 +78,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

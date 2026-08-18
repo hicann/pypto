@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-该接口根据mask将src0与src1逐元素相减再求绝对值，计算结果写入dst。
+该接口根据`preg`将`src0`与`src1`逐元素相减再求绝对值，计算结果写入`dst`。
 
 计算公式如下：
 
@@ -25,33 +25,25 @@ $$
 ## 函数原型
 
 ```python
-dst = vf.abs_sub(src0, src1, preg)
+abs_sub(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器 |
-| `src0` | 输入 | 源操作数0 |
-| `src1` | 输入 | 源操作数1 |
-| `preg` | 输入 | 掩码寄存器 |
-
-## 数据类型
-
-| src0 | src1 | dst |
-|---|---|---|
-| FP16 | FP16 | FP16 |
-| FP32 | FP32 | FP32 |
-| INT64 | INT64 | INT64 |
-
-## 返回值说明
-
-返回目标向量寄存器（`RegTensor`类型）。
+| `src0` | 输入 | 源操作数0，支持的数据类型为：DT_FP16、DT_FP32。 |
+| `src1` | 输入 | 源操作数1，支持的数据类型和`src0`中的说明一致。 |
+| `preg` | 输入 | mask_tensor。 |
+| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
 无
+
+## 返回值说明
+
+返回`dst`目标reg_tensor，支持的数据类型和`src0`中的说明一致。
 
 ## 调用示例
 
@@ -61,7 +53,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_a, src_b, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -69,7 +60,6 @@ def example_vf(src_a, src_b, dst_tile):
     reg_b = vf.load_align(src_b, 0)
     reg_out = vf.abs_sub(reg_a, reg_b, preg)
     vf.store_align(dst_tile, reg_out, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -91,7 +81,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -103,7 +92,6 @@ def test_example():
     example_kernel[None, core_nums](a, b, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, torch.abs(a - b), rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

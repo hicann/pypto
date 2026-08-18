@@ -14,45 +14,34 @@
 
 ## 功能说明
 
-逐元素按位异或。
+根据`preg`将`src0`和`src1`逐元素按位异或，结果输出到`dst`。
 
 ## 函数原型
 
 ```python
-dst = vf.xor(src_a, src_b, preg)
+xor(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None) -> dst
 ```
-
-> 本接口为统一接口，同时支持RegTensor和MaskReg输入。当源操作数为MaskReg时，目标寄存器自动推断为MaskReg。
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器 |
-| `src_a` | 输入 | 源操作数A |
-| `src_b` | 输入 | 源操作数B |
-| `preg` | 输入 | 掩码寄存器 |
-
-## 数据类型
-
-| src_a | src_b | dst |
-|---|---|---|
-| FP16 | FP16 | FP16 |
-| FP32 | FP32 | FP32 |
-| INT32 | INT32 | INT32 |
-| UINT32 | UINT32 | UINT32 |
-
-## 返回值说明
-
-源操作数为RegTensor时返回`RegTensor`；源操作数为MaskReg时返回`MaskReg`。
+| `src0` | 输入 | 源操作数0，reg_tensor或mask_tensor，源操作数`src0`、`src1`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8。 |
+| `src1` | 输入 | 源操作数1，reg_tensor或mask_tensor，数据类型与`src0`一致。 |
+| `preg` | 输入 | mask_tensor。 - src0、src1与dst数据类型需一致。<br>- 本接口操作数为寄存器，不涉及地址对齐。<br>- 本接口不修改全局寄存器的值。 |
+| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
-- src_a、src_b与dst数据类型需一致。
-- 本接口操作数为寄存器，不涉及地址对齐。
-- 本接口不修改全局寄存器的值。
+无
+
+## 返回值说明
+
+返回`dst`目的操作数，reg_tensor或mask_tensor，支持的数据类型和`src0`中的说明一致。
 
 ## 调用示例
+
+### reg_tensor调用示例
 
 ```python
 import os
@@ -60,23 +49,21 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_a, src_b, dst_tile):
-    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT16)
+    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_INT16)
     reg_a = vf.load_align(src_a, 0)
     reg_b = vf.load_align(src_b, 0)
     reg_out = vf.xor(reg_a, reg_b, preg)
     vf.store_align(dst_tile, reg_out, preg)
 
-
 @pl.jit()
 def example_kernel(
-    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT16],
-    b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT16],
-    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT16],
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT16],
+    b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT16],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT16],
 ):
-    tf = pl.TileType(shape=[1, 128], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec)
+    tf = pl.TileType(shape=[1, 128], dtype=pl.DT_INT16, target_memory=pl.MemorySpace.Vec)
     in_a = pl.make_tile(tf, addr=0, size=256)
     in_b = pl.make_tile(tf, addr=256, size=256)
     t_out = pl.make_tile(tf, addr=512, size=256)
@@ -90,30 +77,27 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
-    a = torch.randint(0, 256, [1, 128], device=device, dtype=torch.int16).to(torch.uint16)
-    b = torch.randint(0, 256, [1, 128], device=device, dtype=torch.int16).to(torch.uint16)
-    out = torch.empty([1, 128], device=device, dtype=torch.int16).to(torch.uint16)
+    a = torch.randint(0, 256, [1, 128], device=device, dtype=torch.int16)
+    b = torch.randint(0, 256, [1, 128], device=device, dtype=torch.int16)
+    out = torch.empty([1, 128], device=device, dtype=torch.int16)
     example_kernel[None, core_nums](a, b, out)
     torch.npu.synchronize()
     expected = torch.bitwise_xor(a, b)
     torch.testing.assert_close(out, expected, rtol=0, atol=0)
-    assert out.dtype == torch.uint16
-
 
 if __name__ == "__main__":
     test_example()
     print("PASSED")
 ```
 
-## MaskReg调用示例
+### mask_tensor调用示例
 
-当源操作数为MaskReg时，`vf.xor`对两个掩码按位异或。
+当源操作数为mask_tensor时，`vf.xor`对两个掩码按位异或。
 
 ```python
 import os
@@ -121,20 +105,18 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # 生成比较掩码：reg >= 0 的位置为 1
+    # 生成比较掩码：reg >= 0的位置为1
     mask_a = vf.ge(reg, 0.0, preg)
     mask_full = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # xor：mask_a ^ mask_full = NOT(mask_a)，即 reg < 0 处为 1
+    # xor：mask_a ^ mask_full = NOT(mask_a)，即reg < 0处为1
     preg_xor = vf.xor(mask_a, mask_full, preg)
-    # 使用 xor 后的掩码做 abs：reg < 0 处取 abs（即 -reg），否则置零
+    # 使用xor后的掩码做abs：reg < 0处取abs（即-reg），否则置零
     reg_dst = vf.abs(reg, preg_xor)
     vf.store_align(dst_tile, reg_dst, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -153,7 +135,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -165,7 +146,6 @@ def test_example():
     torch.npu.synchronize()
     expected = torch.where(a < 0, torch.abs(a), torch.zeros_like(a))
     torch.testing.assert_close(out, expected, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

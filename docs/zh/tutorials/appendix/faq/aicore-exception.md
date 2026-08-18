@@ -37,7 +37,7 @@ PyPTO error: PyPTO Inner Error. Please rectify the fault based on the error info
     ```
     | 参数 | 说明 | 约束 |
     |------|------|------|
-    | `-p` | 存放故障信息的目录，建议在执行用例前设置`export ASCEND_WORK_PATH=./wk`，则`./wk`即包含所需全部信息。 | 必须包含`log/debug/plog``extra-info/data-dump`、`pypto`子目录，否则报错退出；不支持存在多个AIC Error的`.pyptokb`文件。 |
+    | `-p` | 存放故障信息的目录，建议在执行用例前设置`export ASCEND_WORK_PATH=./wk`，则`./wk`即包含所需全部信息。 | 必须包含`log/debug/plog`、`extra-info/data-dump`、`pypto`子目录，否则报错退出；不支持存在多个AIC Error的`.pyptokb`文件。 |
     | `-out` | 诊断报告输出目录。 | — |
     | `-d` | device id，不指定时从`TILE_FWK_DEVICE_ID`环境变量获取。 | `-d`和`TILE_FWK_DEVICE_ID`必须指定其一，且对应NPU卡可用。 |
     | `-t` | 单算子复现脚本执行超时（秒），默认600，用例较大或开启debug日志时可适当调大。 | — |

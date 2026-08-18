@@ -14,33 +14,27 @@
 
 ## 功能说明
 
-读取指定特殊寄存器的值，返回标量值。当前仅支持AR寄存器（`get_ar`指令）。
+读取指定特殊寄存器的值，返回标量值。当前仅支持AddrReg寄存器。
 
-AR寄存器是一个特殊的地址寄存器，通常配合`vf.squeeze`使用——`vf.squeeze`会将有效元素的总字节数存储到AR寄存器中，随后可通过`pl.get_spr`读取该值。
+AddrReg寄存器是一个特殊的地址寄存器，通常配合`vf.squeeze`使用——`vf.squeeze`会将有效元素的总字节数存储到AddrReg寄存器中，随后可通过`pl.get_spr`读取该值。
 
 ## 函数原型
 
 ```python
-ar_value = pl.get_spr()
+pl.get_spr() -> ar_value
 ```
 
 ## 参数说明
 
 无参数。当前仅支持读取AR寄存器。
 
-## 数据类型
+## 约束说明
 
-返回int64_t类型的标量值。
+无
 
 ## 返回值说明
 
-返回`int64_t`类型的标量值，为AR寄存器中的数值。
-
-## 约束说明
-
-- 当前仅支持读取AR寄存器，不支持其他特殊寄存器。
-- AR寄存器的值由`vf.squeeze`写入，需在调用`pl.get_spr`之前先执行`vf.squeeze`。
-- `get_ar()`为`__aicore__`指令，不能在`@pl.vector_function`函数体内使用。应在`@pl.jit` kernel的非VF区域调用。
+返回`ar_value`目标reg_tensor。
 
 ## 调用示例
 
@@ -50,15 +44,13 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # Squeeze 会将有效元素字节数写入 AR 寄存器
+    # Squeeze会将有效元素字节数写入AddrReg寄存器
     reg_sq = vf.squeeze(reg, preg)
     vf.store_align(dst_tile, reg_sq, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -76,9 +68,8 @@ def example_kernel(
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-    # 在 kernel 的非 VF 区域读取 AR 寄存器
+    # 在kernel的非VF区域读取AddrReg寄存器
     ar_value = pl.get_spr()
-
 
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -90,7 +81,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

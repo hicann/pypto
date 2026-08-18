@@ -14,33 +14,31 @@
 
 ## 功能说明
 
-将传入的srcReg中相邻两个数值相加，并将产生的结果保存在dstReg中的低位位置。
+将传入的`src`中相邻两个数值相加，并将产生的结果保存在`dst`中的低位位置。
+
+$$dstReg_i = srcReg_{2i} + srcReg_{2i+1}$$
 
 ## 函数原型
 
 ```python
-dst = vf.pair_reduce_sum(src, preg)
+pair_reduce_sum(src, preg, mode: Optional[MergeMode] = None) -> dst
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目的操作数，向量寄存器 |
-| `src` | 输入 | 源操作数，向量寄存器 |
-| `preg` | 输入 | 掩码寄存器，类型为`MaskReg`，mask未筛选的元素在dst中置零 |
-
-## 数据类型
-
-目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：FP16、FP32。
-
-## 返回值说明
-
-返回目标向量寄存器（`RegTensor`类型）。
+| `src` | 输入 | 源操作数，reg_tensor，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_FP16、DT_FP32。 |
+| `preg` | 输入 | mask_tensor，mask未筛选的元素在`dst`中置零。 |
+| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
 无
+
+## 返回值说明
+
+返回`dst`目的操作数，reg_tensor，支持的数据类型和`src`中的说明一致。
 
 ## 调用示例
 
@@ -50,14 +48,12 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     src_reg = vf.load_align(src_tile, 0)
     dst_reg = vf.pair_reduce_sum(src_reg, preg)
     vf.store_align(dst_tile, dst_reg, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -76,7 +72,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -89,7 +84,6 @@ def test_example():
     expected = torch.zeros([1, 64], device=device, dtype=torch.float32)
     expected[0, :32] = a[0, 0::2] + a[0, 1::2]
     torch.testing.assert_close(out[0, :32], expected[0, :32], rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

@@ -13,6 +13,7 @@ get_spr
 load
 load_align
 load_unalign
+load_unalign_init
 load_unalign_pre
 mem_bar
 move

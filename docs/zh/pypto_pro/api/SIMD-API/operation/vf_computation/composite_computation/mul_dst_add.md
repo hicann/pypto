@@ -14,49 +14,38 @@
 
 ## 功能说明
 
-该接口根据mask对dst、src0和src1逐元素执行乘加融合运算（FMA），将dst与src0相乘的积加上src1，结果写回dst。计算公式如下：
+该接口根据`preg`对`dst`、`src0`和`src1`逐元素执行乘加融合运算（FMA），将`dst`与`src0`相乘的积加上`src1`，结果写回`dst`。计算公式如下：
 
 $$
 dst_i = dst_i \times src0_i + src1_i
 $$
 
-由于乘法和加法在单条指令内完成，中间乘积不会因寄存器宽度限制而被截断或舍入，因此精度高于先调用`vf.mul`再调用`vf.add`的分步写法。该指令对应硬件`vmadd`指令（AscendC MulDstAdd）。
+由于乘法和加法在单条指令内完成，中间乘积不会因寄存器宽度限制而被截断或舍入，因此精度高于先调用`vf.mul`再调用`vf.add`的分步写法。
 
 dst寄存器既被读取（作为被乘数）又被写入（存储结果），调用前必须预初始化。
 
 ## 函数原型
 
 ```python
-dst = vf.mul_dst_add(src0, src1, preg)
+mul_dst_add(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输入/输出 | 目标/累加寄存器，计算前作为被乘数参与运算，计算后存储结果，调用前需预初始化 |
-| `src0` | 输入 | 源操作数0（乘数） |
-| `src1` | 输入 | 源操作数1（加数） |
-| `preg` | 输入 | 掩码寄存器 |
-
-## 数据类型
-
-| src0 | src1 | dst |
-|---|---|---|
-| FP16 | FP16 | FP32 |
-| BF16 | BF16 | BF16 |
-| FP32 | FP32 | FP32 |
-
-## 返回值说明
-
-返回目标向量寄存器（`RegTensor`类型）。
+| `src0` | 输入 | 源操作数0（乘数），reg_tensor，源操作数`src0`、`src1`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。 |
+| `src1` | 输入 | 源操作数1（加数），reg_tensor，数据类型与`src0`一致。 |
+| `preg` | 输入 | mask_tensor。 |
+| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
-- 本接口操作数为寄存器，不涉及地址对齐。
-- 本接口不修改全局寄存器的值。
-- 源操作数与目标操作数的数据类型需要保持一致。
-- dst寄存器既被读取（作为被乘数）又被写入（存储结果），调用前必须预初始化。
+无
+
+## 返回值说明
+
+返回`dst`目标/累加操作数，reg_tensor，支持的数据类型和`src0`中的说明一致。计算前作为被乘数参与运算，计算后存储结果，调用前需预初始化。
 
 ## 调用示例
 
@@ -66,7 +55,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src0_tile, src1_tile, dst_tile, out_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -75,7 +63,6 @@ def example_vf(src0_tile, src1_tile, dst_tile, out_tile):
     reg_out = vf.load_align(dst_tile, 0)
     reg_out = vf.mul_dst_add(reg_a, reg_b, preg)
     vf.store_align(out_tile, reg_out, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -100,7 +87,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -113,7 +99,6 @@ def test_example():
     example_kernel[None, core_nums](a, b, c, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, c * a + b, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-内存屏障，对`src`类内存操作与其后的`dst`类内存操作施加顺序保证，确保屏障前的操作对屏障后的操作可见。对应AscendC的`LocalMemBar<src, dst>`。
+内存屏障，对`src`类内存操作与其后的`dst`类内存操作施加顺序保证，确保屏障前的操作对屏障后的操作可见。
 
 如下图所示，目的流水线将等待源流水线上所有指令完成才进行执行。读写场景下，当读指令使用的寄存器和写指令使用的寄存器相同时，可以触发寄存器保序，指令将会按照代码顺序执行，不需要插入同步指令；而当使用的寄存器不同时，如果要确保读写指令顺序执行，则需要插入同步指令，写写场景同理。
 
@@ -42,27 +42,22 @@
 ## 函数原型
 
 ```python
-vf.mem_bar()                              # 默认 VST_VLD
-vf.mem_bar(mode=pl.MemBarMode.VST_VLD)
+mem_bar(mode: Optional[MemBarMode] = None)
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `mode` | 输入 | 可选，屏障模式，`pl.MemBarMode`枚举（见上表12种组合）。默认`VST_VLD` |
+| `mode` | 输入 | 可选，屏障模式，对应[MemBarMode](../types/MemBarMode.md)类型，`pl.MemBarMode`枚举（见上表12种组合）。默认`pl.MemBarMode.VST_VLD`。`mode`只能取上表12种合法组合之一。 |
 
-## 数据类型
+## 约束说明
 
-不涉及数据类型。
+无
 
 ## 返回值说明
 
 无
-
-## 约束说明
-
-- `mode`只能取上表12种合法组合之一。
 
 ## 调用示例
 
@@ -72,21 +67,18 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(in_a, t_f0):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(in_a, 0)
     reg_t = vf.add(reg_a, reg_a, preg)
     vf.store_align(t_f0, reg_t, preg)
-    # 写-写屏障：保证对同一 tile 的两次 store 有序
+    # 写-写屏障：保证对同一tile的两次store有序
     vf.mem_bar(mode=pl.MemBarMode.VST_VST)
     reg_r = vf.load_align(t_f0, 0)
     # 全量矢量屏障
     vf.mem_bar(mode=pl.MemBarMode.VV_ALL)
     vf.store_align(t_f0, reg_r, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -105,7 +97,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -116,7 +107,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a + a, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

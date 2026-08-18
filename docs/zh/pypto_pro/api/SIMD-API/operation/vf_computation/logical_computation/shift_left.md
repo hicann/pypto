@@ -14,21 +14,18 @@
 
 ## 功能说明
 
-`shift_left`指令根据mask对源操作数src进行左移操作，将结果写入目的操作数dst。移位量`shift`既可以是**标量**（所有元素移动相同位数），也可以是**向量寄存器**（每个元素按对应lane的位数移动）。接口会根据`shift`参数的类型自动选择：
+`vf.shift_left`指令根据`preg`对源操作数src进行左移操作，将结果写入目的操作数dst。移位量`shift`既可以是**标量**（所有元素移动相同位数），也可以是**reg_tensor**（每个元素按对应lane的位数移动）。接口会根据`shift`参数的类型自动选择：
 
-- `shift`为标量（整数值或标量变量）：所有元素统一左移。
-- `shift`为向量寄存器：逐元素左移。
+- **标量模式**（整数值或标量变量）：所有元素统一左移。
 
-> 说明：原标量版接口`vf.shift_lefts`已合并进`vf.shift_left`，无需再区分接口名，直接由`shift`参数类型分派。
-
-根据源操作数的数据类型，左移操作分为以下两种情况：
+- **reg_tensor模式**：reg_tensor中逐元素左移。根据源操作数的数据类型，左移操作分为以下两种情况：
 
 - **数据类型为无符号类型：执行逻辑左移。**
 
-  逻辑左移会将二进制数整体向左移动指定的位数，最高位被丢弃，最低位用0填充。例如，二进制数1010101010101010（UINT16类型）逻辑左移1位后，结果为0101010101010100。
+  逻辑左移会将二进制数整体向左移动指定的位数，最高位被丢弃，最低位用0填充。例如，二进制数1010101010101010（DT_UINT16类型）逻辑左移1位后，结果为0101010101010100。
 - **数据类型为有符号类型：执行算术左移。**
 
-  算术左移与逻辑左移一样，将超出数据类型位宽的最高位丢弃，并在最低位补0；区别只体现在结果按有符号类型解释。例如，二进制数1010101010101010（INT16类型）左移1位后，位模式为0101010101010100；左移3位后，位模式为0101010101010000。
+  算术左移与逻辑左移一样，将超出数据类型位宽的最高位丢弃，并在最低位补0；区别只体现在结果按有符号类型解释。例如，二进制数1010101010101010（DT_INT16类型）左移1位后，位模式为0101010101010100；左移3位后，位模式为0101010101010000。
 
 $$
 dst_i = src_i \ll shift_i
@@ -37,52 +34,29 @@ $$
 ## 函数原型
 
 ```python
-# shift 为标量：所有元素统一左移
-dst = vf.shift_left(src, shift_bits, preg)
-
-# shift 为向量寄存器：逐元素左移
-dst = vf.shift_left(src, shift_reg, preg)
+shift_left(src, shift, preg, mode: Optional[MergeMode] = None) -> dst
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器 |
-| `src` | 输入 | 源操作数 |
-| `shift` | 输入 | 左移位数。标量（整型，所有元素统一移位）或向量寄存器（逐元素移位）。不支持设置为负数，负数行为未定义 |
-| `preg` | 输入 | 掩码寄存器 |
-
-## 数据类型
-
-`shift`为向量寄存器时：
-
-| dst | src | shift（寄存器） |
-|---|---|---|
-| INT8 | INT8 | INT8 |
-| UINT8 | UINT8 | INT8 |
-| INT16 | INT16 | INT16 |
-| UINT16 | UINT16 | INT16 |
-| INT32 | INT32 | INT32 |
-| UINT32 | UINT32 | INT32 |
-| INT64 | INT64 | INT64 |
-| UINT64 | UINT64 | INT64 |
-
-`shift`为标量时，src/dst支持INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64，移位量为标量整型。
-
-## 返回值说明
-
-返回目标向量寄存器（`RegTensor`类型）。
+| `src` | 输入 | 源操作数，reg_tensor。源操作数`src`、`shift`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32。 |
+| `shift` | 输入 | 左移位数。标量（整型，所有元素统一移位）或reg_tensor（逐元素移位）。<br>- 对于**reg_tensor模式**下逻辑位移（无符号数据类型），如果位移量大于数据类型位宽，则输出为0。<br>- 对于**reg_tensor模式**下算术位移（有符号数据类型），如果位移量大于数据类型位宽，则输出0。<br>- 两种模式下均不支持设置为负数，负数行为未定义。 |
+| `preg` | 输入 | mask_tensor。 |
+| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
-- 对于逻辑位移（无符号数据类型），如果位移量大于数据类型位宽，则输出为0。
-- 对于算术位移（有符号数据类型），如果位移量大于数据类型位宽，则输出0。
-- 移位量不支持设置为负数，负数行为未定义。
+无
+
+## 返回值说明
+
+返回`dst`目的操作数，reg_tensor，支持的数据类型和`src`中的说明一致。
 
 ## 调用示例
 
-标量移位（所有元素统一左移）：
+### 标量模式
 
 ```python
 import os
@@ -90,14 +64,12 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_scalar(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     reg_src = vf.load_align(src_tile, 0)
     reg_out = vf.shift_left(reg_src, 4, preg)
     vf.store_align(dst_tile, reg_out, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -116,7 +88,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -128,20 +99,18 @@ def test_example():
     torch.npu.synchronize()
     torch.testing.assert_close(out, a << 4, rtol=0, atol=0)
 
-
 if __name__ == "__main__":
     test_example()
     print("PASSED")
 ```
 
-向量移位（逐元素左移）：
+### reg_tensor模式
 
 ```python
 import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
-
 
 @pl.vector_function
 def example_vf_vector(src_tile, shift_tile, dst_tile):
@@ -150,7 +119,6 @@ def example_vf_vector(src_tile, shift_tile, dst_tile):
     reg_shift = vf.load_align(shift_tile, 0)
     reg_out = vf.shift_left(reg_src, reg_shift, preg)
     vf.store_align(dst_tile, reg_out, preg)
-
 
 @pl.jit()
 def example_kernel_vector(
@@ -173,7 +141,6 @@ def example_kernel_vector(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example_2():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -185,7 +152,6 @@ def test_example_2():
     example_kernel_vector[None, core_nums](a, shift, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a << 4, rtol=0, atol=0)
-
 
 if __name__ == "__main__":
     test_example_2()

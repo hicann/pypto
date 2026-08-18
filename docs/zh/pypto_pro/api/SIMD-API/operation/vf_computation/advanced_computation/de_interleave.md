@@ -14,51 +14,51 @@
 
 ## 功能说明
 
-给定源操作数寄存器src0和src1，将src0和src1中的元素解交织存入结果操作数dst0和dst1中。解交织排列方式如下图所示，其中每个方格代表一个元素：
+给定源操作数`src0`和`src1`，将`src0`和`src1`中的元素解交织存入结果操作数`dst0`和`dst1`中。解交织排列方式如下图所示，其中每个方格代表一个元素：
+
+$$dstReg0_i = srcReg_{2i}, \quad dstReg1_i = srcReg_{2i+1}$$
+
+**图1** de_interleave解交织示意图
 
 ![](../../../../figures/de_interleave_data_layout.jpg)
 
 ## 函数原型
 
 ```python
-# 元组赋值形式（推荐）
-dst0, dst1 = vf.de_interleave(src0, src1)
-
-# 语句形式（dst 需预声明）
-vf.de_interleave(dst0, dst1, src0, src1)
+de_interleave(src0, src1, dtype: Optional[DType] = None) -> (dst0, dst1)
 ```
-
-> 本接口为统一接口，同时支持RegTensor和MaskReg输入。当源操作数为MaskReg时，目标寄存器自动推断为MaskReg。
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst0` | 输出 | 目的操作数，向量寄存器 |
-| `dst1` | 输出 | 目的操作数，向量寄存器 |
-| `src0` | 输入 | 源操作数，向量寄存器。数据类型需要与目的操作数保持一致 |
-| `src1` | 输入 | 源操作数，向量寄存器。数据类型需要与目的操作数保持一致 |
-
-## 数据类型
-
-目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：INT8、UINT8、INT16、UINT16、FP16、BF16、INT32、UINT32、FP32、INT64、UINT64。
-
-## 返回值说明
-
-返回元组`(dst0, dst1)`：`dst0`为偶数元素寄存器，`dst1`为奇数元素寄存器，均为`RegTensor`类型。
+| `src0` | 输入 | 源操作数，reg_tensor或者mask_tensor类型。<br>- **reg_tensor输入**：源操作数`src0`、`src1`和目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。<br>- **mask_tensor输入**：支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。 |
+| `src1` | 输入 | 源操作数，reg_tensor或者mask_tensor类型，支持的数据类型和`src0`一致。 |
 
 ## 约束说明
 
-- 数据类型为b64时，仅支持RegTraitNumTwo。
+- src0和scr1可以为同一个reg_tensor；dst0和dst1不能为同一个reg_tensor。
+
+- 允许源操作数和目的操作数为同一个reg_tensor。
+
+- 数据类型为64位宽（DT_INT64、DT_UINT64）时，仅支持双寄存器模式。
+
+## 返回值说明
+
+返回一个二元组 `(dst0, dst1)`。
+
+- `dst0` 目的操作数，reg_tensor或者mask_tensor类型，支持的数据类型和`src0`中的说明一致。
+- `dst1` 目的操作数，reg_tensor或者mask_tensor类型，支持的数据类型和`src0`中的说明一致。
 
 ## 调用示例
+
+### reg_tensor调用示例
 
 ```python
 import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
-
 
 @pl.vector_function
 def example_vf(src_a, src_b, dst_tile):
@@ -67,7 +67,6 @@ def example_vf(src_a, src_b, dst_tile):
     src1 = vf.load_align(src_b, 0)
     dst0, dst1 = vf.de_interleave(src0, src1)
     vf.store_align(dst_tile, dst0, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -89,7 +88,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -102,22 +100,20 @@ def test_example():
     torch.npu.synchronize()
     assert out.shape == torch.Size([1, 128])
 
-
 if __name__ == "__main__":
     test_example()
     print("PASSED")
 ```
 
-## MaskReg调用示例
+### mask_tensor调用示例
 
-当源操作数为MaskReg时，`vf.de_interleave`按位解交织两个掩码寄存器。解交织位宽由MaskReg的数据类型决定。
+当源操作数为mask_tensor时，`vf.de_interleave`按位解交织两个mask_tensor。解交织位宽由mask_tensor的数据类型决定。
 
 ```python
 import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
-
 
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
@@ -128,10 +124,9 @@ def example_vf(src_tile, dst_tile):
     # 先交织再解交织，掩码恢复原值
     new_mask0, new_mask1 = vf.interleave(mask_full, mask_m3)
     new_mask0, new_mask1 = vf.de_interleave(new_mask0, new_mask1)
-    # new_mask0 恢复为 ALL，用其做 abs：对所有元素取绝对值
+    # new_mask0恢复为ALL，用其做abs：对所有元素取绝对值
     reg_dst = vf.abs(reg, new_mask0)
     vf.store_align(dst_tile, reg_dst, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -150,7 +145,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -161,7 +155,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, torch.abs(a), rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

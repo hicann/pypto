@@ -14,78 +14,42 @@
 
 ## 功能说明
 
-向量寄存器最小值归约：将源寄存器中的所有有效元素（mask选中的元素）求最小值，结果写入目标寄存器的第一个元素`dst[0]`，第一个最小值所在索引写入`dst[1]`，其余元素置零（`ZEROING`模式）或保留原值（`MERGING`模式）。对应硬件`vcmin`指令（AscendC ReduceMin）。
+reg_tensor最小值归约：将源寄存器`src`中的所有有效元素（`preg`选中的元素）求最小值，结果写入目标寄存器的第一个元素`dst[0]`，第一个最小值所在索引写入`dst[1]`，其余元素置零。
 
-当`datablock=True`时，启用datablock粒度归约（对应`vcgmin`指令，AscendC ReduceMinDatablock），每个datablock独立归约：b32类型每16个元素为一个datablock，b16类型每32个元素为一个datablock，各datablock分别求最小值并将结果写入各自datablock的第一个元素。
+归约求最小值的计算过程及索引保存方式如下图所示：
 
-必须在`@pl.vector_function`函数内使用。
+**图1** reduce_min归约索引示意图
+
+![reg_reduce_index示意图](../../../../figures/reg_reduce_index.jpg)
 
 ## 函数原型
 
 ```python
-dst = vf.reduce_min(src, preg, *, datablock=False, merge_mode=pl.MergeMode.ZEROING)
+reduce_min(src, preg, datablock: bool = False, merge_mode: Optional[MergeMode] = None)
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标向量寄存器，归约结果写入第一个元素`dst[0]`，索引写入`dst[1]` |
-| `src` | 输入 | 源向量寄存器 |
-| `preg` | 输入 | 掩码寄存器 |
-| `datablock` | 输入 | 可选，``True``时按datablock粒度归约（对应`vcgmin`指令），默认``False`` |
-| `merge_mode` | 输入 | 可选，合并模式：``pl.MergeMode.ZEROING``（默认）或``pl.MergeMode.MERGING`` |
-
-## 数据类型
-
-**普通归约（`datablock=False`，对应`vcmin`）**：
-
-| src | dst |
-|---|---|
-| FP16 | FP16 |
-| FP32 | FP32 |
-| INT16 | INT16 |
-| UINT16 | UINT16 |
-| INT32 | INT32 |
-| UINT32 | UINT32 |
-| INT8 | INT8 |
-| UINT8 | UINT8 |
-
-**Datablock归约（`datablock=True`，对应`vcgmin`）**：
-
-| src | dst |
-|---|---|
-| FP16 | FP16 |
-| FP32 | FP32 |
-| INT32 | INT32 |
-| UINT32 | UINT32 |
-
-## 返回值说明
-
-返回目标向量寄存器（`RegTensor`类型）。最小值存储在`dst[0]`，第一个最小值元素的索引存储在`dst[1]`，其余元素根据`merge_mode`置零或保留原值。
+| `src` | 输入 | 源reg_tensor，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT16、DT_UINT16、DT_FP16、DT_INT32、DT_UINT32、DT_FP32。 |
+| `preg` | 输入 | mask_tensor。当所有元素均不参与计算时（mask为空），将该数据类型的最大值写入`dst[0]`。 |
+| `datablock` | 输入 | 可选，决定接口工作模式，`True`时按datablock粒度归约（对应`vcgmin`指令），默认`False`。当`datablock=True`时，启用datablock粒度归约，每个datablock独立归约：32位宽（DT_INT32、DT_UINT32、DT_FP32）类型每16个元素为一个datablock，16位宽（DT_INT16、DT_UINT16、DT_FP16）类型每32个元素为一个datablock，各datablock分别求最小值并将结果写入各自datablock的第一个元素。 |
+| `merge_mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
-- 本接口操作数为寄存器，不涉及地址对齐。
-- 本接口不修改全局寄存器的值。
-- 源操作数与目标操作数的数据类型需要保持一致。
-- 当所有元素均不参与计算时（mask为空），将该数据类型的最大值写入`dst[0]`。
+- `datablock=True`时，支持的数据类型为：DT_INT16、DT_UINT16、DT_FP16、DT_INT32、DT_UINT32、DT_FP32。
+
+## 返回值说明
+
+返回`dst`目标reg_tensor，支持的数据类型和`src`中的说明一致，归约结果写入第一个元素`dst[0]`，索引写入`dst[1]`。
+
 - 当存在多个最小值时，将第一个最小值的索引保存在`dst[1]`中。
-- `min(-0, +0) = -0`。
+
 - 如果输入数据存在nan，将该数据类型的nan写入`dst[0]`，并将第一个nan的索引保存在`dst[1]`中。
-- datablock归约模式（`datablock=True`）仅支持b16/b32宽度的数据类型（FP16/FP32/INT32/UINT32），不支持b8类型。
 
-## 关键特性
-
-**索引值需要强制类型转换**
-
-dstReg的最小值索引按照dstReg的数据类型存储，比如dstReg为half类型时，索引按照half类型存储，因此读取索引需要使用reinterpret_cast方法转换到整数类型。若数据类型是half，需要使用reinterpret_cast<uint16_t*>；若数据类型是float，需要使用reinterpret_cast<uint32_t*>。
-
-归约求最小值的计算过程及索引保存方式如下图所示：
-
-**图1**ReduceMin归约索引示意图
-
-![reg_reduce_index示意图](../../../../figures/reg_reduce_index.jpg)
+- `min(-0, +0) = -0`。
 
 ## 调用示例
 
@@ -95,14 +59,12 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg_all = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     src0 = vf.load_align(src_tile, 0)
     min0 = vf.reduce_min(src0, preg_all)
     vf.store_align(dst_tile, min0, preg_all)
-
 
 @pl.jit()
 def example_kernel(
@@ -121,7 +83,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -132,7 +93,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out[0, 0], torch.min(a), rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

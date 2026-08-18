@@ -14,41 +14,45 @@
 
 ## 功能说明
 
-从标量值更新掩码寄存器。标量值的比特位定义新的掩码模式。
+从标量值更新mask_tensor。标量值的比特位定义新的掩码模式。
 
-UpdateMask根据当前scalarValue的值生成对应长度的有效位掩码，并自动将scalarValue减去当前向量长度以更新剩余待处理元素数量：`scalarValue = (scalarValue < VL_T) ? 0 : (scalarValue - VL_T)`。以b16数据类型为例，掩码生成过程如下图所示：
+update_mask根据当前scalarValue的值生成对应长度的有效位掩码，并自动将scalarValue减去当前向量长度以更新剩余待处理元素数量：`scalarValue = (scalarValue < VL_T) ? 0 : (scalarValue - VL_T)`。以16位宽数据类型为例，掩码生成过程如下图所示：
 
-**图1**b16数据类型下UpdateMask接口基于scalarValue的掩码生成
+**图1**update_mask 16位宽数据类型下基于scalarValue的掩码生成
 
-![maskreg-b16数据类型下UpdateMask接口基于scalerValue的掩码生成](../../../../figures/maskreg_b16_update_mask_gen.jpg)
+![update_mask 16位宽数据类型下基于scalarValue的掩码生成](../../../../figures/maskreg_b16_update_mask_gen.jpg)
 
 ## 函数原型
 
 ```python
-preg = vf.update_mask(scalar, *, dtype=pl.DT_FP32)
+update_mask(scalar, dtype: Optional[DType] = None) -> preg
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `scalar` | 输入 | 标量值，其比特位定义新的掩码模式 |
-| `dtype` | 输入 | 掩码对应的数据类型，决定掩码宽度（默认`pl.DT_FP32`） |
-
-## 数据类型
-
-| dst |
-|---|---|
-| MaskReg |
-
-## 返回值说明
-
-返回一个`MaskReg`类型的掩码寄存器，其比特模式由输入标量值决定。
+| `scalar` | 输入 | 标量值，其比特位定义新的掩码模式。 |
+| `dtype` | 输入 | 掩码对应的数据类型，决定掩码宽度（默认`pl.DT_FP32`）。 - 本接口操作数为寄存器，不涉及地址对齐。<br>- 本接口不修改全局寄存器的值。 |
 
 ## 约束说明
 
-- 本接口操作数为寄存器，不涉及地址对齐。
-- 本接口不修改全局寄存器的值。
+- 数据类型约束：
+
+  `dtype`参数决定掩码粒度（即每多少 bit 对应一个数据元素），掩码寄存器总位宽固定为 256 bit：
+
+  | dtype | 元素位宽 | 元素个数 | 每元素掩码位数 | 总掩码位数 |
+  |---|---|---|---|---|
+  | `DT_INT8` / `DT_UINT8` / `DT_FP8E4M3FN` / `DT_FP8E5M2` / `DT_FP8E8M0` / `DT_HF8` / `DT_FP4E2M1` / `DT_FP4E1M2` | 8 bit | 256 | 1 bit（b8 粒度） | 256 bit |
+  | `DT_FP16` / `DT_UINT16` / `DT_BF16` | 16 bit | 128 | 2 bit（b16 粒度） | 256 bit |
+  | `DT_FP32` / `DT_INT32` / `DT_UINT32` | 32 bit | 64 | 4 bit（b32 粒度） | 256 bit |
+  | `DT_INT64` / `DT_UINT64` | 64 bit | 32 | 8 bit（b64 粒度） | 256 bit |
+
+  > **注意**：FP8 类型（FP8E4M3FN/FP8E5M2/FP8E8M0/HF8）和 FP4 类型（FP4E2M1/FP4E1M2）均为 b8 存储，按 b8 粒度处理。掩码寄存器始终为`mask_tensor`类型。
+
+## 返回值说明
+
+返回`preg`目标reg_tensor。
 
 ## 调用示例
 
@@ -58,15 +62,12 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # vf 是 @pl.vector_function 函数内的保留命名空间，无需 import
-    # update_mask 从标量值生成掩码
+    # update_mask从标量值生成掩码
     preg = vf.update_mask(0xFFFFFFFF, dtype=pl.DT_FP16)
     reg = vf.load_align(src_tile, 0)
     vf.store_align(dst_tile, reg, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -85,7 +86,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -96,7 +96,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

@@ -14,44 +14,43 @@
 
 ## 功能说明
 
-该接口根据mask，对源操作数srcReg0、srcReg1及输入进位carrySrc进行按元素求和操作，将结果写入目的操作数dstReg，同时将每个元素的进位结果写入carry。计算公式如下：
+该接口根据mask，对源操作数`src0`、`src1`及输入进位`carry_src`进行按元素求和操作，将结果写入目的操作数`dst`，同时将每个元素的进位结果写入`carry`。计算公式如下：
 
-$$\{carry_i, dstReg_i\} = srcReg0_i + srcReg1_i + carrySrc_i$$
+$$\{carry_i, dst_i\} = src0_i + src1_i + carry\_src_i$$
 
-Carry flag（进位标志）用于表示加法进位，若srcReg0，srcReg1，carrySrc输入按位相加后最高位有进位，在carry（存放进位的MaskReg寄存器）中对应位置每4bit设置1，否则写0。
+Carry flag（进位标志）用于表示加法进位，若`src0`、`src1`、`carry_src`输入按位相加后最高位有进位，在`carry`（存放进位的mask_tensor）中对应位置每4bit设置1，否则写0。
 
-以int64_t类型数据计算 -1 + 8 = 7为例，AddC接口的适用场景如下图所示：
+以int64_t类型数据计算 -1 + 8 = 7为例，vf.addc接口的适用场景如下图所示：
+
+**图1** vf.addc适用场景
 
 ![](../../../../figures/addc_scenario.jpg)
 
 ## 函数原型
 
 ```python
-carry, dst = vf.addc(src0, src1, carry_src, preg)
+addc(src0, src1, carry_src, preg, mode: Optional[MergeMode] = None) -> (carry, dst)
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `carry` | 输出 | 目标操作数，输出进位值，类型为`MaskReg` |
-| `dst` | 输出 | 目标向量寄存器，向量寄存器 |
-| `src0` | 输入 | 源操作数，向量寄存器 |
-| `src1` | 输入 | 源操作数，向量寄存器 |
-| `carry_src` | 输入 | 输入进位寄存器，类型为`MaskReg` |
-| `preg` | 输入 | 掩码寄存器，类型为`MaskReg` |
-
-## 数据类型
-
-目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：INT32、UINT32。
-
-## 返回值说明
-
-返回元组`(carry, dst)`：`carry`为`MaskReg`类型的进位标志寄存器，`dst`为`RegTensor`类型的求和寄存器。
+| `src0` | 输入 | 源操作数，reg_tensor，源操作数`src0`、`src1`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT32、DT_UINT32。 |
+| `src1` | 输入 | 源操作数，reg_tensor，支持的数据类型和`src0`中的说明一致。 |
+| `carry_src` | 输入 | 输入进位值，mask_tensor。 |
+| `preg` | 输入 | mask_tensor。 |
 
 ## 约束说明
 
 无
+
+## 返回值说明
+
+返回一个二元组 `(carry, dst)`。
+
+- `carry` 输出进位值，mask_tensor。
+- `dst` 目的操作数，reg_tensor，支持的数据类型和`src0`中的说明一致。
 
 ## 调用示例
 
@@ -60,7 +59,6 @@ import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
-
 
 @pl.vector_function
 def example_vf(src_a, src_b, dst_tile):
@@ -71,7 +69,6 @@ def example_vf(src_a, src_b, dst_tile):
     reg_b = vf.load_align(src_b, 0, dtype=pl.DT_UINT32)
     carry, reg_out = vf.addc(reg_a, reg_b, carry_src, preg)
     vf.store_align(dst_tile, reg_out, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -93,7 +90,6 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
-
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
@@ -106,7 +102,6 @@ def test_example():
     torch.npu.synchronize()
     expected = (a.to(torch.int64) + b.to(torch.int64) + 1).to(torch.int32)
     assert torch.equal(out, expected)
-
 
 if __name__ == "__main__":
     test_example()
