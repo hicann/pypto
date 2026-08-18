@@ -44,6 +44,32 @@ std::string GetOpInfo(Operation* op)
     return op->GetOpcodeStr() + "[" + std::to_string(op->GetOpMagic()) + "]";
 }
 
+// task 划分与核间调度的最终结果：核绑定、起止时间、task 间依赖，以及每个 task 内的 op 明细
+static void DumpTaskGraph(const TaskGraph& taskGraph)
+{
+    APASS_LOG_DEBUG_F(Elements::Operation, "============>OoO task schedule result: %zu tasks, makespan %d.",
+                      taskGraph.tasks.size(), taskGraph.makespan);
+    for (size_t i = 0; i < taskGraph.tasks.size(); i++) {
+        const auto& t = taskGraph.tasks[i];
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "task[%zu] idx %d on %s: startTime %d - %d, latency %d, ops %zu, inTasks %s, outTasks %s.", i,
+                          t.idx, TargetCoreTypeToString(t.targetCoreType).c_str(), t.startTime, t.endTime, t.latency,
+                          t.opList_.size(), IntVecToStr(t.inTasks).c_str(), IntVecToStr(t.outTasks).c_str());
+        for (size_t j = 0; j < t.opList_.size(); j++) {
+            APASS_LOG_DEBUG_F(Elements::Operation, "task[%d] op[%zu]: %s", t.idx, j, GetOpInfo(t.opList_[j]).c_str());
+        }
+    }
+}
+
+// task 阶段结束后的 op 线性顺序，即后续调度实际接手的下发顺序
+static void DumpOpOrderAfterTaskStage(const std::vector<Operation*>& opList)
+{
+    APASS_LOG_DEBUG_F(Elements::Operation, "============>OoO op order after task stage: %zu ops.", opList.size());
+    for (size_t i = 0; i < opList.size(); i++) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "op[%zu]: %s", i, GetOpInfo(opList[i]).c_str());
+    }
+}
+
 static bool IsMixGraph(const std::vector<Operation*>& opList)
 {
     bool hasAIC = false;
@@ -134,6 +160,7 @@ Status OoOSchedule::TaskSchedule(std::vector<Operation*>& opList, Function& func
     if (splitter.MarkInternalSubgraphID() != SUCCESS) {
         return FAILED;
     }
+    DumpTaskGraph(splitter.GetTaskGraph());
     return SUCCESS;
 }
 
@@ -170,6 +197,7 @@ Status OoOSchedule::ConcatTaskOpLists(TaskSplitter& splitter, std::vector<Operat
         APASS_LOG_ERROR_F(Elements::Operation, "ModifyAllocOrder failed.");
         return FAILED;
     }
+    DumpOpOrderAfterTaskStage(newOpList);
     return SUCCESS;
 }
 
@@ -180,6 +208,7 @@ Status OoOSchedule::DoOoOSchedule(std::vector<Operation*>& opList, Function& fun
     oooSchedule.SetEnableDualDst(enableDualDst);
     if (enableDualDst) {
         oooSchedule.SetDualDstPairs(std::move(dualDstPairs_));
+        oooSchedule.SetDualDstOpPairs(std::move(dualDstOpPairs_));
         oooSchedule.SetEnableDualDstAllocGuard(true);
     }
     OoOScheduleStatistic oooHealthCheck;
@@ -305,19 +334,24 @@ bool OoOSchedule::CheckAndRecordDualDstPair(int start, const TaskNode* ta, const
     APASS_LOG_INFO_F(Elements::Operation,
                      "DualDst isomorphism check passed: startTime=%d, matchedNonAlloc=%zu, allocPairs=%zu.", start,
                      res.pairs.size(), res.allocPairs.size());
-    for (const auto& p : res.allocPairs) {
-        auto pairIt = dualDstPairs_.find(p.opA);
-        if (pairIt != dualDstPairs_.end()) {
-            if (pairIt->second != p.opB) {
-                APASS_LOG_INFO_F(Elements::Operation,
-                                 "DualDst disabled: duplicated AIV0 alloc maps to different AIV1 alloc, "
-                                 "aiv0Alloc=%s, oldAiv1Alloc=%s, newAiv1Alloc=%s.",
-                                 GetOpInfo(p.opA).c_str(), GetOpInfo(pairIt->second).c_str(), GetOpInfo(p.opB).c_str());
-                return false;
-            }
+    return MergeIsoPairs(res.allocPairs, dualDstPairs_) && MergeIsoPairs(res.pairs, dualDstOpPairs_);
+}
+
+bool OoOSchedule::MergeIsoPairs(const std::vector<IsoPair>& pairs, std::unordered_map<Operation*, Operation*>& target)
+{
+    for (const auto& p : pairs) {
+        auto it = target.find(p.opA);
+        if (it == target.end()) {
+            target[p.opA] = p.opB;
             continue;
         }
-        dualDstPairs_[p.opA] = p.opB;
+        if (it->second != p.opB) {
+            APASS_LOG_INFO_F(Elements::Operation,
+                             "DualDst disabled: duplicated AIV0 op maps to different AIV1 op, "
+                             "aiv0Op=%s, oldAiv1Op=%s, newAiv1Op=%s.",
+                             GetOpInfo(p.opA).c_str(), GetOpInfo(it->second).c_str(), GetOpInfo(p.opB).c_str());
+            return false;
+        }
     }
     return true;
 }
@@ -325,6 +359,7 @@ bool OoOSchedule::CheckAndRecordDualDstPair(int start, const TaskNode* ta, const
 bool OoOSchedule::ShouldEnableDualDst(TaskSplitter& splitter)
 {
     dualDstPairs_.clear();
+    dualDstOpPairs_.clear();
     const auto& tasks = splitter.GetTaskGraph().tasks;
     std::unordered_map<int, std::vector<const TaskNode*>> aiv0ByStart;
     std::unordered_map<int, std::vector<const TaskNode*>> aiv1ByStart;
@@ -338,6 +373,8 @@ bool OoOSchedule::ShouldEnableDualDst(TaskSplitter& splitter)
         for (const TaskNode* ta : aiv0Tasks) {
             for (const TaskNode* tb : it->second) {
                 if (!CheckAndRecordDualDstPair(start, ta, tb)) {
+                    dualDstPairs_.clear();
+                    dualDstOpPairs_.clear();
                     return false;
                 }
             }
@@ -348,6 +385,7 @@ bool OoOSchedule::ShouldEnableDualDst(TaskSplitter& splitter)
                          "DualDst enabled: all same-startTime AIV0/AIV1 task pairs fully isomorphic.");
     } else {
         dualDstPairs_.clear();
+        dualDstOpPairs_.clear();
     }
     return hasPair;
 }

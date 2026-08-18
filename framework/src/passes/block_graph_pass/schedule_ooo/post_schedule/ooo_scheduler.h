@@ -53,6 +53,10 @@ public:
     void SetEnableDualDst(bool v) { state_.enableDualDst = v; }
     void SetEnableDualDstAllocGuard(bool v) { dualDstEngine_.SetEnableDualDstAllocGuard(v); }
     void SetDualDstPairs(std::unordered_map<Operation*, Operation*> pairs) { state_.dualDstPairs = std::move(pairs); }
+    void SetDualDstOpPairs(std::unordered_map<Operation*, Operation*> pairs)
+    {
+        state_.dualDstOpPairs = std::move(pairs);
+    }
 
 private:
     Function& function_;

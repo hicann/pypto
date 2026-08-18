@@ -2278,6 +2278,40 @@ DualDstGraph BuildOnlineSoftmaxDualDstGraph()
     return g;
 }
 
+bool TopoSortInPlace(DependencyManager& depManager, std::vector<Operation*>& ops)
+{
+    std::vector<Operation*> sorted;
+    sorted.reserve(ops.size());
+    std::unordered_set<Operation*> placed;
+    while (sorted.size() < ops.size()) {
+        bool progressed = false;
+        for (auto* op : ops) {
+            if (placed.count(op) != 0) {
+                continue;
+            }
+            bool ready = true;
+            for (auto* pred : depManager.GetPredecessors(op)) {
+                if (pred != nullptr && placed.count(pred) == 0 &&
+                    std::find(ops.begin(), ops.end(), pred) != ops.end()) {
+                    ready = false;
+                    break;
+                }
+            }
+            if (!ready) {
+                continue;
+            }
+            sorted.push_back(op);
+            placed.insert(op);
+            progressed = true;
+        }
+        if (!progressed) {
+            return false;
+        }
+    }
+    ops = sorted;
+    return true;
+}
+
 Status InitDualDstScheduler(OoOScheduler& s, const DualDstGraph& g, bool enableGuard = false)
 {
     Status st = s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO);
@@ -2470,10 +2504,12 @@ TEST_F(ScheduleOoOTest, DualDst_ShouldEnableDualDst_WithOnlineSoftmaxTasks)
     ASSERT_FALSE(oooSchedule.dualDstPairs_.empty());
     EXPECT_TRUE(dualdst_ut::HasIsoAllocPair(oooSchedule.dualDstPairs_, g.allocUb0, g.allocUb1) ||
                 dualdst_ut::HasIsoAllocPair(oooSchedule.dualDstPairs_, g.allocOut0, g.allocOut1));
+    EXPECT_TRUE(dualdst_ut::HasIsoAllocPair(oooSchedule.dualDstOpPairs_, g.add0, g.add1));
 
     OoOScheduler scheduler(*g.func);
     ASSERT_EQ(dualdst_ut::InitDualDstScheduler(scheduler, g), SUCCESS);
     scheduler.SetDualDstPairs(oooSchedule.dualDstPairs_);
+    scheduler.SetDualDstOpPairs(oooSchedule.dualDstOpPairs_);
     std::vector<DualDstPair> pairs;
     EXPECT_EQ(scheduler.dualDstEngine_.IdentifyDualDstPairs(pairs), SUCCESS);
     ASSERT_TRUE(scheduler.state_.enableDualDst);
@@ -2483,6 +2519,82 @@ TEST_F(ScheduleOoOTest, DualDst_ShouldEnableDualDst_WithOnlineSoftmaxTasks)
     EXPECT_EQ(scheduler.dualDstEngine_.RealignAllocByIso(scheduler.state_.orderedOps), SUCCESS);
     EXPECT_EQ(scheduler.dualDstEngine_.RunDualDstFuse(), SUCCESS);
     EXPECT_TRUE(dualdst_ut::HasDualDstOp(scheduler.state_.orderedOps));
+}
+
+TEST_F(ScheduleOoOTest, DualDst_Realign_MovesConsumersWithAllocs)
+{
+    auto g = dualdst_ut::BuildOnlineSoftmaxDualDstGraph();
+    OoOScheduler s(*g.func);
+    ASSERT_EQ(dualdst_ut::InitDualDstScheduler(s, g), SUCCESS);
+    s.SetDualDstPairs({{g.allocUb0, g.allocUb1}});
+    s.SetDualDstOpPairs({{g.add0, g.add1}});
+
+    auto& ops = s.state_.orderedOps;
+
+    // 构造出的 opList 并非拓扑序（copy 排在自己的 UB_ALLOC 之前），拓扑守卫会直接
+    // 否掉整次重排。先归位成拓扑序，让重排本身有机会执行。
+    ASSERT_TRUE(dualdst_ut::TopoSortInPlace(s.state_.depManager, ops));
+
+    auto slotOf = [&ops](Operation* op) {
+        return static_cast<int>(std::find(ops.begin(), ops.end(), op) - ops.begin());
+    };
+    int allocSlot = slotOf(g.allocUb1);
+    int addSlot = slotOf(g.add1);
+    ASSERT_LT(addSlot, static_cast<int>(ops.size()));
+    ASSERT_LT(allocSlot, addSlot);
+    ASSERT_LT(slotOf(g.allocUb0), slotOf(g.add0));
+
+    std::swap(ops[allocSlot], ops[addSlot]);
+    auto before = ops;
+    ASSERT_EQ(s.dualDstEngine_.RealignAllocByIso(ops), SUCCESS);
+
+    ASSERT_EQ(before.size(), ops.size());
+    EXPECT_EQ(std::unordered_set<Operation*>(before.begin(), before.end()),
+              std::unordered_set<Operation*>(ops.begin(), ops.end()));
+    EXPECT_EQ(slotOf(g.allocUb1), allocSlot);
+    EXPECT_EQ(slotOf(g.add1), addSlot);
+}
+
+TEST_F(ScheduleOoOTest, DualDst_Realign_SkipsWhenTopoOrderWouldBreak)
+{
+    auto g = dualdst_ut::BuildOnlineSoftmaxDualDstGraph();
+    OoOScheduler s(*g.func);
+    ASSERT_EQ(dualdst_ut::InitDualDstScheduler(s, g), SUCCESS);
+    // Pairing an alloc with a consumer of the other core forces the mirrored order to
+    // place a consumer ahead of its own producer, which the topo guard must reject.
+    s.SetDualDstPairs({{g.allocUb0, g.allocUb1}});
+    s.SetDualDstOpPairs({{g.add0, g.allocOut1}});
+
+    auto before = s.state_.orderedOps;
+    EXPECT_EQ(s.dualDstEngine_.RealignAllocByIso(s.state_.orderedOps), SUCCESS);
+    EXPECT_EQ(before, s.state_.orderedOps);
+}
+
+TEST_F(ScheduleOoOTest, DualDst_Realign_SkipsPairsOutsideOpList)
+{
+    auto g = dualdst_ut::BuildOnlineSoftmaxDualDstGraph();
+    auto other = dualdst_ut::BuildOnlineSoftmaxDualDstGraph();
+    OoOScheduler s(*g.func);
+    ASSERT_EQ(dualdst_ut::InitDualDstScheduler(s, g), SUCCESS);
+    s.SetDualDstPairs({{g.allocUb0, g.allocUb1}});
+    s.SetDualDstOpPairs({{other.add0, other.add1}});
+
+    auto before = s.state_.orderedOps;
+    EXPECT_EQ(s.dualDstEngine_.RealignAllocByIso(s.state_.orderedOps), SUCCESS);
+    EXPECT_EQ(before, s.state_.orderedOps);
+}
+
+TEST_F(ScheduleOoOTest, DualDst_Realign_SkipsWhenOneAiv1OpHasTwoAiv0Pairs)
+{
+    auto g = dualdst_ut::BuildOnlineSoftmaxDualDstGraph();
+    OoOScheduler s(*g.func);
+    ASSERT_EQ(dualdst_ut::InitDualDstScheduler(s, g), SUCCESS);
+    s.SetDualDstPairs({{g.allocUb0, g.allocUb1}});
+    s.SetDualDstOpPairs({{g.add0, g.allocUb1}});
+
+    auto before = s.state_.orderedOps;
+    EXPECT_EQ(s.dualDstEngine_.RealignAllocByIso(s.state_.orderedOps), SUCCESS);
+    EXPECT_EQ(before, s.state_.orderedOps);
 }
 
 TEST_F(ScheduleOoOTest, DualDst_Identify_SplitM_HappyPath)

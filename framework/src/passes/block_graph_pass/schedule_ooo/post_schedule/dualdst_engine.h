@@ -141,10 +141,14 @@ private:
     Status TryCancelAivUbAllocRecords();
     std::string FormatAivUbAllocRecord(const AivUbAllocRecord& record) const;
 
-    // 把 AIV1 侧 alloc 在 orderedOps 中重排为与 AIV0 侧一致。
-    // AIV0 侧保持原始顺序。
-    Status ReorderAiv1AllocToAiv0Order(std::vector<Operation*>& opList,
-                                       const std::unordered_map<Operation*, Operation*>& allocPairs);
+    // 把 AIV1 侧同构 op 在 orderedOps 中重排为与 AIV0 侧一致，AIV0 侧保持原始顺序。
+    // 返回是否真的重排了，跳过不算失败。
+    bool ReorderAiv1ToAiv0Order(std::vector<Operation*>& opList,
+                                const std::unordered_map<Operation*, Operation*>& isoPairs);
+    bool BuildIsoReorderPlan(const std::vector<Operation*>& opList,
+                             const std::unordered_map<Operation*, Operation*>& isoPairs,
+                             std::vector<Operation*>& values, std::vector<size_t>& slots);
+    bool IsTopoOrderPreserved(const std::vector<Operation*>& opList);
 
     ScheduleState& state_;
     Function& function_;

@@ -1195,13 +1195,10 @@ Status DualDstEngine::RunDualDstFuse()
     return SUCCESS;
 }
 
-Status DualDstEngine::ReorderAiv1AllocToAiv0Order(std::vector<Operation*>& opList,
-                                                  const std::unordered_map<Operation*, Operation*>& allocPairs)
+bool DualDstEngine::BuildIsoReorderPlan(const std::vector<Operation*>& opList,
+                                        const std::unordered_map<Operation*, Operation*>& isoPairs,
+                                        std::vector<Operation*>& values, std::vector<size_t>& slots)
 {
-    if (allocPairs.empty())
-        return SUCCESS;
-
-    // 位置表。
     std::unordered_map<Operation*, size_t> pos;
     pos.reserve(opList.size());
     for (size_t i = 0; i < opList.size(); ++i) {
@@ -1209,66 +1206,106 @@ Status DualDstEngine::ReorderAiv1AllocToAiv0Order(std::vector<Operation*>& opLis
             pos[opList[i]] = i;
     }
 
-    // 按 AIV0 侧 alloc 原始位置排序，保持 AIV0 原序。
-    for (const auto& p : allocPairs) {
-        if (pos.find(p.first) == pos.end() || pos.find(p.second) == pos.end()) {
-            APASS_LOG_ERROR_F(Elements::Operation,
-                              "DualDst iso reorder: alloc pair not in orderedOps, AIV0 alloc[%d], AIV1 alloc[%d].",
-                              p.first->GetOpMagic(), p.second->GetOpMagic());
-            return FAILED;
-        }
+    std::vector<std::pair<Operation*, Operation*>> ordered;
+    ordered.reserve(isoPairs.size());
+    for (const auto& p : isoPairs) {
+        if (pos.find(p.first) == pos.end() || pos.find(p.second) == pos.end())
+            continue;
+        ordered.emplace_back(p.first, p.second);
     }
-
-    std::vector<std::pair<Operation*, Operation*>> ordered(allocPairs.begin(), allocPairs.end());
     std::sort(ordered.begin(), ordered.end(),
               [&](const auto& x, const auto& y) { return pos.at(x.first) < pos.at(y.first); });
 
-    std::vector<size_t> bPositions;
+    values.clear();
+    slots.clear();
+    values.reserve(ordered.size());
+    slots.reserve(ordered.size());
+    std::unordered_set<Operation*> seenValues;
     for (const auto& p : ordered) {
-        bPositions.push_back(pos.at(p.second));
+        if (!seenValues.insert(p.second).second) {
+            APASS_LOG_INFO_F(Elements::Operation,
+                             "DualDst iso reorder skip: AIV1 op %s is paired with more than one AIV0 op.",
+                             state_.GetOpInfo(p.second).c_str());
+            return false;
+        }
+        values.push_back(p.second);
+        slots.push_back(pos.at(p.second));
     }
-    std::sort(bPositions.begin(), bPositions.end());
+    std::sort(slots.begin(), slots.end());
+    return true;
+}
 
-    // 依赖安全：AIV1 侧 alloc 之间不能存在依赖。
-    // 任意一对存在依赖时，保守跳过本次重排。
-    for (size_t i = 0; i < ordered.size(); ++i) {
-        for (size_t j = i + 1; j < ordered.size(); ++j) {
-            Operation* bi = ordered[i].second;
-            Operation* bj = ordered[j].second;
-            if (state_.depManager.GetSuccessors(bi).count(bj) > 0 ||
-                state_.depManager.GetSuccessors(bj).count(bi) > 0) {
-                APASS_LOG_DEBUG_F(Elements::Operation,
-                                  "DualDst iso reorder skip (dep between AIV1 allocs): b[%d] b[%d]", bi->GetOpMagic(),
-                                  bj->GetOpMagic());
-                return SUCCESS;
+bool DualDstEngine::IsTopoOrderPreserved(const std::vector<Operation*>& opList)
+{
+    std::unordered_map<Operation*, size_t> pos;
+    pos.reserve(opList.size());
+    for (size_t i = 0; i < opList.size(); ++i) {
+        if (opList[i] != nullptr)
+            pos[opList[i]] = i;
+    }
+    for (size_t i = 0; i < opList.size(); ++i) {
+        if (opList[i] == nullptr)
+            continue;
+        for (auto* pred : state_.depManager.GetPredecessors(opList[i])) {
+            auto it = pos.find(pred);
+            if (it != pos.end() && it->second > i) {
+                APASS_LOG_DEBUG_F(Elements::Operation, "DualDst iso reorder skip: %s would precede its producer %s.",
+                                  state_.GetOpInfo(opList[i]).c_str(), state_.GetOpInfo(pred).c_str());
+                return false;
             }
         }
     }
+    return true;
+}
 
-    // 按 AIV0 顺序把 AIV1 侧 alloc 写回 bPositions。
-    // ordered[k].second 写回到 orderedOps[bPositions[k]]。
-    // 结果是 AIV1 alloc 在 orderedOps 中的顺序与 AIV0 原始顺序一致。
-    // 上面已按 AIV0 顺序写回，这里不再额外重排 AIV0。
-    for (size_t k = 0; k < ordered.size(); ++k) {
-        opList[bPositions[k]] = ordered[k].second;
+// 返回是否真的重排了。跳过（无可重排的 pair、置换非法、会破坏拓扑序）都不是失败，
+// 调用方无需区分成功/失败，只需知道 opList 有没有被改。
+bool DualDstEngine::ReorderAiv1ToAiv0Order(std::vector<Operation*>& opList,
+                                           const std::unordered_map<Operation*, Operation*>& isoPairs)
+{
+    if (isoPairs.empty())
+        return false;
+
+    std::vector<Operation*> values;
+    std::vector<size_t> slots;
+    if (!BuildIsoReorderPlan(opList, isoPairs, values, slots)) {
+        return false;
+    }
+    APASS_LOG_INFO_F(Elements::Operation, "DualDst iso reorder: %zu of %zu pairs in this opList.", values.size(),
+                     isoPairs.size());
+
+    // AIV1 侧同构 op 在自己原有的槽位集合内置换，使其相对顺序镜像 AIV0 侧。
+    // 槽位集合不变，所以这批 op 占用的位置范围不会外扩；alloc 和它的消费者同属这批，
+    // 不会再出现只搬 alloc、消费者留在原地而拉长 buffer 生命周期的情况。
+    std::vector<Operation*> candidate = opList;
+    for (size_t k = 0; k < values.size(); ++k) {
+        candidate[slots[k]] = values[k];
     }
 
-    APASS_LOG_DEBUG_F(Elements::Operation, "DualDst iso reorder: aligned %zu AIV1 allocs to AIV0 order.",
-                      ordered.size());
-    return SUCCESS;
+    if (!IsTopoOrderPreserved(candidate)) {
+        APASS_LOG_INFO_F(Elements::Operation, "DualDst iso reorder skipped: topo order would break.");
+        return false;
+    }
+    opList = std::move(candidate);
+
+    APASS_LOG_INFO_F(Elements::Operation, "DualDst iso reorder: aligned %zu AIV1 ops to AIV0 order.", values.size());
+    return true;
 }
 
 Status DualDstEngine::RealignAllocByIso(std::vector<Operation*>& opList)
 {
     if (!state_.enableDualDst)
         return SUCCESS;
-    if (state_.dualDstPairs.empty())
+
+    std::unordered_map<Operation*, Operation*> isoPairs = state_.dualDstPairs;
+    isoPairs.insert(state_.dualDstOpPairs.begin(), state_.dualDstOpPairs.end());
+    if (isoPairs.empty())
         return SUCCESS;
-    if (ReorderAiv1AllocToAiv0Order(opList, state_.dualDstPairs) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "DualDst iso: ReorderAiv1AllocToAiv0Order failed.");
-        return FAILED;
-    }
-    APASS_LOG_INFO_F(Elements::Operation, "DualDst iso realign: %zu alloc pairs aligned.", state_.dualDstPairs.size());
+
+    bool reordered = ReorderAiv1ToAiv0Order(opList, isoPairs);
+    APASS_LOG_INFO_F(Elements::Operation, "DualDst iso realign: %zu pairs (%zu alloc + %zu op), reordered=%d.",
+                     isoPairs.size(), state_.dualDstPairs.size(), state_.dualDstOpPairs.size(),
+                     static_cast<int>(reordered));
     return SUCCESS;
 }
 } // namespace npu::tile_fwk

@@ -17,6 +17,7 @@
 #define PASS_SCHEDULE_OOO_H
 
 #include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"
+#include "passes/block_graph_pass/schedule_ooo/common/iso_matcher.h"
 #include "passes/block_graph_pass/schedule_ooo/post_schedule/ooo_scheduler.h"
 #include "passes/block_graph_pass/schedule_ooo/post_schedule/remove_alloc.h"
 #include "passes/block_graph_pass/schedule_ooo/pre_schedule/add_alloc.h"
@@ -77,7 +78,9 @@ private:
     size_t CountNonAllocOps(const std::vector<Operation*>& ops);
     bool CheckAndRecordDualDstPair(int start, const TaskNode* ta, const TaskNode* tb);
     bool ShouldEnableDualDst(TaskSplitter& splitter);
-    std::unordered_map<Operation*, Operation*> dualDstPairs_; // AIV0 alloc -> AIV1 alloc
+    bool MergeIsoPairs(const std::vector<IsoPair>& pairs, std::unordered_map<Operation*, Operation*>& target);
+    std::unordered_map<Operation*, Operation*> dualDstPairs_;   // AIV0 alloc -> AIV1 alloc
+    std::unordered_map<Operation*, Operation*> dualDstOpPairs_; // AIV0 op -> AIV1 op, non-alloc
     std::vector<Function*> oriFunctions;
     std::map<uint64_t, OoOScheduleStatistic> statisticMap_;
     // Per-program tracers, populated on SUCCESS only; failure path flushes inline.

@@ -219,7 +219,8 @@ public:
     std::unordered_map<int, int> dualDstPairedMemId;
     // DualDst 总开关 (OoOScheduler 在 Schedule() 前设置)。各引擎共享。
     bool enableDualDst{false};
-    std::unordered_map<Operation*, Operation*> dualDstPairs; // AIV0 alloc -> AIV1 alloc
+    std::unordered_map<Operation*, Operation*> dualDstPairs;   // AIV0 alloc -> AIV1 alloc
+    std::unordered_map<Operation*, Operation*> dualDstOpPairs; // AIV0 op -> AIV1 op, non-alloc
     int64_t workspaceOffset{0};
     std::unordered_map<PipeType, int> pipeEndTime;
     int workspaceMemId{SYMBOL_STACK_BASE};
