@@ -16,6 +16,7 @@
 #include "task_splitter.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <queue>
 #include <stack>
 
@@ -653,23 +654,35 @@ void TaskSplitter::BuildClusterDepGraph(const std::vector<int>& opCluster, int c
         }
     }
 
-    // Step 2: 计算传递闭包（Floyd-Warshall 算法）
-    // reach[i][j] = true 表示 cluster i 可达 cluster j
-    std::vector<std::vector<bool>> reach(clusterNum, std::vector<bool>(clusterNum, false));
+    // Step 2: 计算传递闭包（bitset Warshall 算法）
+    // reach[i] 按 64 bit 分块，避免 vector<bool> 代理对象在三重循环中的高开销，
+    // 并将逐元素更新改为整行按 word 合并。
+    constexpr size_t BITS_PER_WORD = 64;
+    const size_t wordNum = (static_cast<size_t>(clusterNum) + BITS_PER_WORD - 1) / BITS_PER_WORD;
+    std::vector<std::vector<uint64_t>> reach(clusterNum, std::vector<uint64_t>(wordNum, 0));
+    auto setReachable = [&reach](int from, int to) {
+        reach[from][static_cast<size_t>(to) / BITS_PER_WORD] |= uint64_t{1}
+                                                                << (static_cast<size_t>(to) % BITS_PER_WORD);
+    };
+    auto isReachable = [&reach](int from, int to) {
+        return (reach[from][static_cast<size_t>(to) / BITS_PER_WORD] &
+                (uint64_t{1} << (static_cast<size_t>(to) % BITS_PER_WORD))) != 0;
+    };
     for (int i = 0; i < clusterNum; i++) {
-        reach[i][i] = true; // 自反性
+        setReachable(i, i); // 自反性
         for (int j : clusterIn[i]) {
-            reach[j][i] = true; // j -> i 有直接边
+            setReachable(j, i); // j -> i 有直接边
         }
     }
 
-    // Floyd-Warshall 传递闭包
+    // Warshall 传递闭包：若 i 可达 k，则将 k 的全部可达节点合并到 i。
     for (int k = 0; k < clusterNum; k++) {
         for (int i = 0; i < clusterNum; i++) {
-            for (int j = 0; j < clusterNum; j++) {
-                if (reach[i][k] && reach[k][j]) {
-                    reach[i][j] = true;
-                }
+            if (!isReachable(i, k)) {
+                continue;
+            }
+            for (size_t word = 0; word < wordNum; word++) {
+                reach[i][word] |= reach[k][word];
             }
         }
     }
@@ -678,7 +691,7 @@ void TaskSplitter::BuildClusterDepGraph(const std::vector<int>& opCluster, int c
     std::vector<std::set<int>> clusterInTransitive(clusterNum);
     for (int i = 0; i < clusterNum; i++) {
         for (int j = 0; j < clusterNum; j++) {
-            if (i != j && reach[j][i]) {
+            if (i != j && isReachable(j, i)) {
                 clusterInTransitive[i].insert(j);
             }
         }
