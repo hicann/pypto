@@ -71,6 +71,11 @@ function(PTO_Fwk_UTest_RunExe)
             ${ARGN}
     )
     if (ENABLE_TESTS_EXECUTE)
+        # GCOV 并发写隔离: 传递 GCOV 数据目录, 使 utest_accelerate.py 为每个 Cntr 设置独立 GCOV_PREFIX
+        if (ENABLE_GCOV)
+            list(APPEND ARG_ENV_LINES_EXT "PYPTO_GCOV_ENABLED=1")
+            list(APPEND ARG_ENV_LINES_EXT "PYPTO_GCOV_DATA_DIR=${PTO_FWK_BIN_ROOT}/gcov_prefix_data")
+        endif ()
         # 命令行参数处理
         PTO_Fwk_GTest_RunExe_GetPreExecSetup(PyCmdSetup PyEnvLines BashCmdSetup
                 TARGET              ${ARG_TARGET}

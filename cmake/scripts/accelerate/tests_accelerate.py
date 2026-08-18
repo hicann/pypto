@@ -45,6 +45,7 @@ from multiprocessing import Event, JoinableQueue, Process, Value, cpu_count
 import os
 from pathlib import Path
 import queue
+import shutil
 import signal
 import subprocess
 import sys
@@ -401,6 +402,8 @@ class TestsAccelerate(ABC):
         self.case_list: List[Exec.CaseDesc] = []
         self.case_dict: Dict[str, Exec.CaseDesc] = {}
         self.case_ordered_cnt: int = 0
+        # GCOV 并发写隔离: 在获取用例列表前设置 GCOV_PREFIX, 避免主进程 --gtest_list_tests 产生并发写
+        self._init_gcov_prefix()
         self.case_ordered_cnt, self.case_list, self.case_dict = self.exe.get_case_name_info(
             case_name_list=args.cases, duration_json=self.case_duration_json
         )
@@ -599,6 +602,36 @@ class TestsAccelerate(ABC):
 
         # 默认值
         return 5.0
+
+    def _init_gcov_prefix(self):
+        """初始化 GCOV_PREFIX 隔离配置
+
+        设置 GCOV_PREFIX_STRIP, 由 Cntr 进程通过 fork 继承.
+        主进程不设置 GCOV_PREFIX (.gcda 写入 build 目录, 无并发写问题), 减少不必要的 .gcda 副本.
+        """
+        gcov_data_dir = self.exe.envs.get("PYPTO_GCOV_DATA_DIR")
+        if not gcov_data_dir:
+            return
+        gcov_root = Path(gcov_data_dir)
+        if gcov_root.exists():
+            shutil.rmtree(gcov_root)
+        gcov_root.mkdir(parents=True, exist_ok=True)
+        build_dir = str(gcov_root.parent.resolve())
+        strip_count = len(Path(build_dir).parts) - 1
+        os.environ["GCOV_PREFIX_STRIP"] = str(strip_count)
+
+    def _cntr_set_gcov_prefix(self, cntr_id: int):
+        """为 Cntr 进程设置独立 GCOV_PREFIX
+
+        Case 子进程继承 Cntr 的 os.environ, GTest 退出时 .gcda 写入隔离目录, 避免并发写冲突.
+        GCOV_PREFIX_STRIP 由主进程 _init_gcov_prefix 设置, 通过 fork 继承, 无需重复设置.
+        """
+        gcov_data_dir = self.exe.envs.get("PYPTO_GCOV_DATA_DIR")
+        if not gcov_data_dir:
+            return
+        cntr_dir = Path(gcov_data_dir) / f"cntr_{cntr_id}"
+        cntr_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["GCOV_PREFIX"] = str(cntr_dir)
 
     @staticmethod
     def _move(src: JoinableQueue, dst: JoinableQueue):
@@ -894,6 +927,7 @@ class TestsAccelerate(ABC):
         """
         self._set_process_desc()
         self._cntr_set_cpu_affinity(cntr_id=cntr_id)
+        self._cntr_set_gcov_prefix(cntr_id=cntr_id)
         ctx = TestsAccelerate.CntrContext(cntr_id=cntr_id, exec_param=exec_param)
         try:
             time.sleep(delay)

@@ -11,6 +11,7 @@
 """生成覆盖率"""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import dataclasses
 from datetime import datetime, timezone
 import logging
@@ -451,33 +452,217 @@ class GenCoverage:
         # 压缩结果目录, 仅在增量覆盖率使能时压缩, 避免影响 CI 执行性能
         self.compress_result_root()
 
-    def gen_full_cov_info_file(self):
-        """生成过滤后的全量覆盖率文件"""
-        # 生成覆盖率原始统计文件
-        cmd = f"lcov -c -d {self.data_dir} -o {self.full_cov_info_file}"
+    def _build_lcov_capture_cmd(self, data_dirs, output_file, build_dir=None, parallel=True, job_num=None) -> str:
+        """构建 lcov 采集命令(含过滤与容错选项)
+
+        :param data_dirs: .gcda 所在目录, 支持单个 Path 或 List[Path]（多目录时 lcov 自动合并同源数据）
+        :param build_dir: 当 .gcda 与 .gcno 在不同目录时, 指定 .gcno 所在的 build 目录
+        :param parallel: 是否使用 --parallel 并行采集
+        :param job_num: 并行任务数, 为 None 时使用 self.job_num
+        """
+        if isinstance(data_dirs, (str, Path)):
+            data_dirs = [data_dirs]
+        effective_job_num = job_num if job_num is not None else self.job_num
+        cmd = "lcov -c " + " ".join(f"-d {d}" for d in data_dirs)
+        cmd += f" -o {output_file}"
+        if build_dir:
+            cmd += f" --build-directory {build_dir}"
         if self.lcov_ability.lcov_supported_exclude:
             for filter_path in self.filter_lst:
                 cmd += f" --exclude {filter_path}"
-        if self.lcov_ability.lcov_supported_parallel:
-            cmd += " --rc geninfo_unexecuted_blocks=1"  # 接受未执行块
-            cmd += " --ignore-errors unused,unused"  # 兼容高版本 LCov
+        if parallel and self.lcov_ability.lcov_supported_parallel:
+            cmd += " --rc geninfo_unexecuted_blocks=1"
+            cmd += " --ignore-errors unused,unused"
             cmd += " --ignore-errors negative"
-            cmd += " --ignore-errors gcov,parallel"  # 容忍并行执行中的 gcov 失败
-            cmd += f" -j {self.job_num}"
+            cmd += " --ignore-errors gcov,parallel"
+            cmd += f" -j {effective_job_num}"
+        else:
+            cmd += " --rc geninfo_unexecuted_blocks=1"
+            cmd += " --ignore-errors unused,unused"
+            cmd += " --ignore-errors negative"
+            cmd += " --ignore-errors gcov"
         if self.lcov_ability.lcov_supported_ignore_mismatch:
-            cmd += " --ignore-errors mismatch,mismatch"  # 兼容宏展开等导致的行号不匹配
-        cmd += " --ignore-errors source"  # 兼容 pip isolation 模式下临时环境被清理
+            cmd += " --ignore-errors mismatch,mismatch"
+        cmd += " --ignore-errors source"
+        return cmd
+
+    def _get_gcov_prefix_dirs(self) -> List[Path]:
+        """检测 GCOV 并行隔离数据目录
+
+        并行执行模式下, utest_accelerate.py 为每个 Cntr 进程设置独立 GCOV_PREFIX,
+        .gcda 文件写入 <data_dir>/gcov_prefix_data/<cntr_id>/ 下.
+        本方法扫描该目录, 返回包含 .gcda 数据的子目录列表.
+        """
+        gcov_root = Path(self.data_dir, "gcov_prefix_data")
+        if not gcov_root.exists():
+            return []
+        prefix_dirs = sorted([d for d in gcov_root.iterdir() if d.is_dir()])
+        if not prefix_dirs:
+            return []
+        logging.info("Detected %d gcov prefix dirs under %s", len(prefix_dirs), gcov_root)
+        return prefix_dirs
+
+    @staticmethod
+    def _read_gcov_stamp(path: Path) -> Optional[int]:
+        """读取 .gcda/.gcno 文件头的 stamp 字段(offset 8, 4 bytes)"""
+        try:
+            with open(path, 'rb') as f:
+                f.seek(8)
+                data = f.read(4)
+                if len(data) == 4:
+                    return int.from_bytes(data, 'big')
+        except (OSError, IOError):
+            pass
+        return None
+
+    def _clean_mismatched_gcda(self, data_dirs, build_dir) -> int:
+        """清理 stamp mismatch 的 .gcda 文件
+
+        增量编译场景下, 源文件重编译生成新 .gcno(stamp 变化), 但旧 .gcda 仍残留,
+        lcov 2.0 并行模式下 gcov 遇到 stamp mismatch 会触发 die("expected TraceFile") 硬崩溃.
+        采集前删除 stamp 不匹配的 .gcda, 让 lcov 跳过该文件, 避免硬崩溃.
+        """
+        build_dir = Path(build_dir)
+        if isinstance(data_dirs, (str, Path)):
+            data_dirs = [data_dirs]
+        cleaned = 0
+        for data_dir in data_dirs:
+            data_dir = Path(data_dir)
+            for gcda in data_dir.rglob("*.gcda"):
+                rel = gcda.relative_to(data_dir)
+                gcno = build_dir / rel.with_suffix(".gcno")
+                if not gcno.exists():
+                    continue
+                gcda_stamp = self._read_gcov_stamp(gcda)
+                gcno_stamp = self._read_gcov_stamp(gcno)
+                if gcda_stamp is not None and gcno_stamp is not None and gcda_stamp != gcno_stamp:
+                    gcda.unlink()
+                    cleaned += 1
+                    logging.warning(
+                        "Removed stamp-mismatched gcda (gcda_stamp=%d, gcno_stamp=%d): %s",
+                        gcda_stamp, gcno_stamp, gcda,
+                    )
+        if cleaned:
+            logging.info("Cleaned %d stamp-mismatched gcda files", cleaned)
+        return cleaned
+
+    def _run_lcov_capture_parallel(self, data_dirs, output_file, build_dir=None) -> subprocess.CompletedProcess:
+        """并行采集多个目录的覆盖率数据, 然后合并
+
+        对每个 data_dir 启动独立的 lcov -c 进程并行采集,
+        各进程产出 partial_N.info, 最后用 lcov -a 合并为最终 .info 文件.
+        相比将所有目录传给单次 lcov 调用(目录间串行扫描), 本方法将目录间扫描并行化.
+        """
+        num_dirs = len(data_dirs)
+        per_invocation_jobs = max(1, self.job_num // num_dirs)
+
+        tmp_dir = Path(output_file.parent, f"_tmp_{output_file.stem}")
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            partial_files: List[Path] = []
+            failed_count = 0
+
+            def _capture_single(idx: int, data_dir: Path):
+                partial_info = tmp_dir / f"partial_{idx}.info"
+                cmd = self._build_lcov_capture_cmd(
+                    data_dirs=data_dir, output_file=partial_info,
+                    build_dir=build_dir, parallel=True, job_num=per_invocation_jobs,
+                )
+                ret = subprocess.run(cmd.split(), capture_output=True, check=False, encoding='utf-8')
+                return idx, data_dir, partial_info, ret
+
+            logging.info("Parallel lcov capture: %d dirs, %d jobs/dir", num_dirs, per_invocation_jobs)
+
+            with ThreadPoolExecutor(max_workers=num_dirs) as executor:
+                futures = {
+                    executor.submit(_capture_single, i, d): d
+                    for i, d in enumerate(data_dirs)
+                }
+                for future in as_completed(futures):
+                    idx, data_dir, partial_info, ret = future.result()
+                    if ret.returncode != 0 or not partial_info.exists():
+                        logging.warning("lcov capture failed for %s (rc=%d)", data_dir, ret.returncode)
+                        self._check_ret(ret=ret, cmd=f"lcov -c -d {data_dir}")
+                        failed_count += 1
+                    else:
+                        partial_files.append(partial_info)
+
+            if not partial_files:
+                raise RuntimeError(f"All {num_dirs} parallel lcov captures failed")
+
+            if failed_count:
+                logging.warning("lcov capture: %d/%d dirs failed, merging remaining %d",
+                                failed_count, num_dirs, len(partial_files))
+
+            add_args = " ".join(f"-a {f}" for f in sorted(partial_files))
+            merge_cmd = f"lcov {add_args} -o {output_file}"
+            if self.lcov_ability and self.lcov_ability.lcov_supported_ignore_mismatch:
+                merge_cmd += " --ignore-errors mismatch,mismatch"
+            merge_cmd += " --ignore-errors source"
+            logging.info("Merging %d partial .info files", len(partial_files))
+            ret = subprocess.run(merge_cmd.split(), capture_output=False, check=False, encoding='utf-8')
+            self._check_ret(ret=ret, cmd=merge_cmd)
+            ret.check_returncode()
+            return ret
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def _run_lcov_capture(self, data_dirs, output_file, build_dir=None) -> subprocess.CompletedProcess:
+        """执行 lcov 采集命令
+
+        采集前清理 stamp mismatch 的 .gcda 文件, 避免 lcov 2.0 并行模式下
+        gcov 失败触发 die("expected TraceFile") 硬崩溃.
+        """
+        if isinstance(data_dirs, (str, Path)):
+            data_dirs = [data_dirs]
+        effective_build_dir = build_dir if build_dir else (
+            data_dirs[0] if isinstance(data_dirs, list) else data_dirs
+        )
+        self._clean_mismatched_gcda(data_dirs=data_dirs, build_dir=effective_build_dir)
+
+        if len(data_dirs) > 1 and self.lcov_ability and self.lcov_ability.lcov_supported_parallel:
+            return self._run_lcov_capture_parallel(
+                data_dirs=data_dirs, output_file=output_file, build_dir=build_dir
+            )
+
+        cmd = self._build_lcov_capture_cmd(
+            data_dirs=data_dirs, output_file=output_file, build_dir=build_dir, parallel=True
+        )
         ret = subprocess.run(cmd.split(), capture_output=False, check=False, encoding='utf-8')
         self._check_ret(ret=ret, cmd=cmd)
         ret.check_returncode()
+        return ret
+
+    def gen_full_cov_info_file(self):
+        """生成过滤后的全量覆盖率文件"""
+        # 检测 GCOV 并行隔离数据目录(并行执行模式下, 各 Cntr 的 .gcda 写入独立目录)
+        gcov_prefix_dirs = self._get_gcov_prefix_dirs()
+
+        if gcov_prefix_dirs:
+            # 并行模式: 直接将多个 gcda 目录传给 lcov, 由 lcov 内部合并
+            self._run_lcov_capture(
+                data_dirs=gcov_prefix_dirs, output_file=self.full_cov_info_file, build_dir=self.data_dir
+            )
+            gcov_root = Path(self.data_dir, "gcov_prefix_data")
+            shutil.rmtree(gcov_root, ignore_errors=True)
+            logging.info(
+                "Generated coverage file from %d gcov prefix dirs",
+                len(gcov_prefix_dirs),
+            )
+        else:
+            # 串行模式: 直接从 build 目录采集
+            self._run_lcov_capture(
+                data_dirs=self.data_dir, output_file=self.full_cov_info_file
+            )
+            logging.info(
+                "Generated%s coverage file %s",
+                "" if self.lcov_ability.lcov_supported_exclude else " origin",
+                self.full_cov_info_file,
+            )
+
         if self.full_cov_info_file.stat().st_size == 0:
             raise RuntimeError(f"lcov produced empty coverage file: {self.full_cov_info_file}")
-        logging.info(
-            "Generated%s coverage file %s, cmd: %s",
-            "" if self.lcov_ability.lcov_supported_exclude else " origin",
-            self.full_cov_info_file,
-            cmd,
-        )
         # 滤掉某些文件/路径的覆盖率信息
         filtered_file = Path(
             self.full_cov_info_file.parent, f"{self.full_cov_info_file.stem}_filtered{self.full_cov_info_file.suffix}"
