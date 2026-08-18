@@ -17,9 +17,8 @@
 #include "PvModelFactory.h"
 
 namespace CostModel {
-std::shared_ptr<DynPvModel> PvModelFactory::CreateDyn()
+std::shared_ptr<DynPvModel> PvModelFactory::CreateDyn(const std::string& soPath)
 {
-    std::string soPath = "libtile_fwk_simulation_pv.so";
     void* handle = dlopen(soPath.c_str(), RTLD_LAZY);
     if (!handle) {
         throw std::runtime_error("can not load library: ");
@@ -29,6 +28,10 @@ std::shared_ptr<DynPvModel> PvModelFactory::CreateDyn()
     using CreateFunc = std::shared_ptr<DynPvModel> (*)();
     std::string funcName = "CreateDynPvModelImpl";
     auto createFunc = (CreateFunc)(dlsym(handle, funcName.c_str()));
+    if (createFunc == nullptr) {
+        const char* err = dlerror();
+        throw std::runtime_error("can not find symbol: " + funcName + (err ? ": " + std::string(err) : ""));
+    }
 
     // 创建对象并返回
     return createFunc();

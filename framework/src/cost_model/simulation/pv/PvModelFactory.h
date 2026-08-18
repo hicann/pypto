@@ -21,6 +21,6 @@
 namespace CostModel {
 class PvModelFactory {
 public:
-    static std::shared_ptr<DynPvModel> CreateDyn();
+    static std::shared_ptr<DynPvModel> CreateDyn(const std::string& soPath = "libtile_fwk_simulation_pv.so");
 };
 } // namespace CostModel

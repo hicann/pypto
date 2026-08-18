@@ -144,6 +144,11 @@ Json CostModelAgent::ParseDynTopo(std::string& path)
                 SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_CONTENT_ERROR, "Out of range: %s", e.what());
             }
         }
+        if (fields.size() < succStartPos) {
+            SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_CONTENT_ERROR,
+                            "Invalid topo line: expected at least %lu fields, got %zu", succStartPos, fields.size());
+            continue;
+        }
         uint64_t seqNo = fields[seqPos];
         uint64_t taskId = fields[taskIdPos];
         Json taskJson;

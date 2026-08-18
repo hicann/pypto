@@ -1083,6 +1083,24 @@ TEST_F(CostModelTest, TestParseDynTopo)
     unlink(topoPath.c_str());
 }
 
+TEST_F(CostModelTest, TestParseDynTopoInsufficientFields)
+{
+    std::string topoPath = "/tmp/parse_dyn_topo_insuf_" + std::to_string(getpid()) + ".txt";
+    std::ofstream ofs(topoPath);
+    ofs << "1,2,3\n";
+    ofs << "1,2,3,4,5,6,7,8,9,10,11,12\n";
+    ofs.close();
+    npu::tile_fwk::CostModelAgent agent;
+    Json res = agent.ParseDynTopo(topoPath);
+    EXPECT_EQ(res.size(), 1);
+    unlink(topoPath.c_str());
+}
+
+TEST_F(CostModelTest, TestPvModelFactoryDlsymNull)
+{
+    EXPECT_THROW(CostModel::PvModelFactory::CreateDyn("libm.so.6"), std::runtime_error);
+}
+
 TEST_F(CostModelTest, TestSubmitTopo)
 {
     std::string topoPath = "/tmp/submit_topo_test_" + std::to_string(getpid()) + ".txt";
