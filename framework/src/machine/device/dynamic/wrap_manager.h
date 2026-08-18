@@ -588,6 +588,15 @@ public:
 
     ReadyCoreFunctionQueue* GetDieReadyAicQue() { return selectReadyDieAicFunctionQue_; }
     ReadyCoreFunctionQueue* GetDieReadyAivQue() { return selectReadyDieAivFunctionQue_; }
+
+    // Index into die-ready queues (DIE_0 / DIE_1). Used when DIE_MIX must drain both.
+    inline ReadyCoreFunctionQueue* GetDieReadyQue(CoreType type, size_t dieIndex) const
+    {
+        if (dieIndex >= DIE_NUM) {
+            return nullptr;
+        }
+        return (type == CoreType::AIC) ? readyDieAicFunctionQue_[dieIndex] : readyDieAivFunctionQue_[dieIndex];
+    }
 };
 
 } // namespace npu::tile_fwk::dynamic

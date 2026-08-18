@@ -1002,7 +1002,7 @@ private:
             }
         }
         auto& wrapManager = devTaskCtx->GetWrapManager();
-        if (wrapManager.IsMixArch()) {
+        if (wrapManager.IsMixArch() && wrapManager.GetDieId() != DieId::DIE_MIX) {
             ReadyCoreFunctionQueue* dieReadyQue = (type == CoreType::AIC) ? wrapManager.GetDieReadyAicQue() :
                                                                             wrapManager.GetDieReadyAivQue();
             if (dieReadyQue != readyQue) {
@@ -1010,6 +1010,15 @@ private:
             }
         }
         TryBatchSendTask(devTaskCtx, type, readyQue, coreIdxStart, coreIdxEnd);
+        // DIE_MIX only: GetDieReady*Que() == default, so die tasks would starve; fall back when default empty.
+        if (wrapManager.IsMixArch() && wrapManager.GetDieId() == DieId::DIE_MIX && readyQue->UnsafeAtomicSize() == 0) {
+            for (size_t i = 0; i < DIE_NUM; ++i) {
+                ReadyCoreFunctionQueue* dieReadyQue = wrapManager.GetDieReadyQue(type, i);
+                if (dieReadyQue != nullptr && dieReadyQue != readyQue) {
+                    TryBatchSendTask(devTaskCtx, type, dieReadyQue, coreIdxStart, coreIdxEnd);
+                }
+            }
+        }
         if (enableFairSch_) {
             if (context_->coreStatusMgr.GetCoreRunReadyCnt(static_cast<int>(type)) > 0) {
                 AicpuIsIdle(type);
