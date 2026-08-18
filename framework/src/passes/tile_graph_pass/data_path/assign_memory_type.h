@@ -245,7 +245,7 @@ private:
     bool IsDimMultiple(const Shape& shape1, const Shape& shape2);
     bool CheckInnerAxisC0Size(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
     size_t CalcNZTensorSize(const LogicalTensorPtr& tensor) const;
-    int64_t CalcLineOffset(const Shape& shape, const Offset& offset);
+    int64_t CalcLineOffset(const Shape& shape, const Offset& offset) const;
     ConvertInserter inserter;
     AssignMemoryTypeChecker checker;
 };

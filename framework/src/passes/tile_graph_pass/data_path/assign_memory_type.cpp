@@ -607,8 +607,17 @@ Status AssignMemoryType::InferViewKnownInputUnknownOutput(Operation& operation, 
 bool AssignMemoryType::TryHandleUnalignedView(Operation& operation, const LogicalTensorPtr& input,
                                               MemoryType inputOriginal, MemoryType outputOriginal)
 {
-    if (inputOriginal == MemoryType::MEM_UNKNOWN || IsViewFromOffsetAligned(operation))
+    if (inputOriginal == MemoryType::MEM_UNKNOWN) {
         return false;
+    }
+    // cube 数据加载路径不受 32 字节对齐约束
+    if (outputOriginal == MemoryType::MEM_L0A || outputOriginal == MemoryType::MEM_L0B ||
+        outputOriginal == MemoryType::MEM_L0AMX || outputOriginal == MemoryType::MEM_L0BMX) {
+        return false;
+    }
+    if (IsViewFromOffsetAligned(operation)) {
+        return false;
+    }
     if (outputOriginal != MemoryType::MEM_UNKNOWN) {
         auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());
         if (viewOpAttribute != nullptr) {
@@ -701,14 +710,24 @@ bool AssignMemoryType::CanUseDirectViewPath(Operation& operation, MemoryType fro
 bool AssignMemoryType::IsViewFromOffsetAligned(Operation& operation) const
 {
     auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());
-    if (viewOpAttribute == nullptr || operation.oOperand.empty())
+    if (viewOpAttribute == nullptr || operation.iOperand.empty() || operation.oOperand.empty()) {
         return false;
+    }
     auto fromOffset = viewOpAttribute->GetFromOffset();
-    if (fromOffset.empty())
+    if (fromOffset.empty()) {
         return true;
+    }
+    auto input = operation.iOperand.front();
+    if (input == nullptr || input->GetRawTensor() == nullptr) {
+        return false;
+    }
+    int64_t lineOffset = CalcLineOffset(input->GetRawTensor()->rawshape, fromOffset);
+    if (lineOffset == -1) {
+        return true;
+    }
     static constexpr int VIEW_ALIGN_BYTES = 32;
     auto output = operation.oOperand.front();
-    return (BytesOf(output->Datatype()) * fromOffset.back()) % VIEW_ALIGN_BYTES == 0;
+    return (BytesOf(output->Datatype()) * lineOffset) % VIEW_ALIGN_BYTES == 0;
 }
 
 bool AssignMemoryType::HasDynOffsetViewAndReshape(Operation& operation, const LogicalTensorPtr& output) const
@@ -1918,7 +1937,7 @@ Status AssignMemoryType::PreCheck(Function& function) { return checker.DoPreChec
 
 Status AssignMemoryType::PostCheck(Function& function) { return checker.DoPostCheck(function); }
 
-int64_t AssignMemoryType::CalcLineOffset(const Shape& shape, const Offset& offset)
+int64_t AssignMemoryType::CalcLineOffset(const Shape& shape, const Offset& offset) const
 {
     if (shape.size() != offset.size()) {
         return -1;

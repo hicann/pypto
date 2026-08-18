@@ -2543,53 +2543,170 @@ TEST_F(AssignMemoryTypeTest, PermuteViewRegisterCopyAssembleTransDataForceDdr)
     EXPECT_EQ(G.GetTensor("view_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
 }
 
-TEST_F(AssignMemoryTypeTest, FunctionExpAssembleMatmulA5)
+// 场景：view 的 fromOffset 在外层维度有偏移 [1,0]，线性偏移 = 1*8+0 = 8 元素
+// FP16: 2*8=16 bytes，16 % 32 != 0 -> 不对齐，view 输入回退 DDR
+// 修复前仅检查 fromOffset.back()=0，会错误判定为对齐
+TEST_F(AssignMemoryTypeTest, UnalignedViewOuterDimOffsetFallbackDdr)
 {
+    ComputationalGraphBuilder G;
+    Shape shape{NUM_16, NUM_8};
+    G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "vec_out");
+    G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "view_out");
+    G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "adds_out");
+
+    G.AddOp(Opcode::OP_VEC_DUP, {}, {"vec_out"}, "vec_dup");
+    G.AddOp(Opcode::OP_VIEW, {"vec_out"}, {"view_out"}, "view");
+    G.GetOp("view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{1, 0}, MemoryType::MEM_UB));
+    G.AddOp(Opcode::OP_ADDS, {"view_out"}, {"adds_out"}, "adds");
+
+    Function* func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+
+    EXPECT_EQ(G.GetTensor("vec_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_EQ(G.GetTensor("view_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    int assembleCount = 0;
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        assembleCount++;
+        EXPECT_EQ(op.GetIOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+        EXPECT_EQ(op.GetOOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    }
+    EXPECT_EQ(assembleCount, 1) << "Should insert assemble(UB->DDR) for unaligned view fromOffset outer dim";
+}
+
+// gdr_bwd 实际场景：shape [128,1], fromOffset [127,0]
+// 线性偏移 = 127，FP16: 2*127=254, 254%32=30 != 0 -> 不对齐，view 输入回退 DDR
+TEST_F(AssignMemoryTypeTest, UnalignedViewOffset127GdrBwdFallbackDdr)
+{
+    ComputationalGraphBuilder G;
+    Shape inShape{NUM_128, NUM_1};
+    Shape outShape{NUM_1, NUM_1};
+    G.AddTensor(DataType::DT_FP16, inShape, MemoryType::MEM_UNKNOWN, "vec_out");
+    G.AddTensor(DataType::DT_FP16, outShape, MemoryType::MEM_UNKNOWN, "view_out");
+    G.AddTensor(DataType::DT_FP16, outShape, MemoryType::MEM_UNKNOWN, "adds_out");
+
+    G.AddOp(Opcode::OP_VEC_DUP, {}, {"vec_out"}, "vec_dup");
+    G.AddOp(Opcode::OP_VIEW, {"vec_out"}, {"view_out"}, "view");
+    G.GetOp("view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{127, 0}, MemoryType::MEM_UB));
+    G.AddOp(Opcode::OP_ADDS, {"view_out"}, {"adds_out"}, "adds");
+
+    Function* func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+
+    EXPECT_EQ(G.GetTensor("vec_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_EQ(G.GetTensor("view_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    int assembleCount = 0;
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        assembleCount++;
+        EXPECT_EQ(op.GetIOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+        EXPECT_EQ(op.GetOOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    }
+    EXPECT_EQ(assembleCount, 1) << "Should insert assemble(UB->DDR) for view fromOffset [127,0]";
+}
+
+// cube 数据加载路径豁免场景，源自 ScaledMmMxMNSplitWithBiasFp8e4m3 失败用例：
+// A5 平台 FP8 MatmulMX（含 scale），K 方向切分后首个 A_MUL_B 产出 L0C 累加器，
+// 后续 A_MULACC_B 沿 K 累加。scaleA 在 L1 中按 K 组切片后经 view 加载到 L0AMX，
+// 切片偏移不在最内层维度，字节不对齐；此类 cube 加载路径若回退 DDR 会级联产生
+// 无路径的 L1->UB CONVERT，故豁免对齐检查，保持 L1->L0AMX 管线完整。
+TEST_F(AssignMemoryTypeTest, UnalignedViewToCubePathSkipsDdrFallback)
+{
+    const NPUArch savedArch = Platform::Instance().GetSoc().GetNPUArch();
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
     Platform::Instance().ReloadMemoryPaths("3510");
-    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
-    const std::vector<int64_t> inputShape = {NUM_16, NUM_32};
-    const std::vector<int64_t> assembleShape = {NUM_32, NUM_32};
-    const std::vector<int64_t> cShape = {NUM_32, NUM_64};
-    const std::vector<int64_t> matmulShape = {NUM_32, NUM_64};
-    PROGRAM("AssignMemoryTest")
-    {
-        Tensor a(DataType::DT_FP32, inputShape, "a");
-        Tensor b(DataType::DT_FP32, inputShape, "b");
-        Tensor c(DataType::DT_FP32, cShape, "c");
-        Tensor expOut(DataType::DT_FP32, assembleShape, "expOut");
-        Tensor matmulOut(DataType::DT_FP32, matmulShape, "matmulOut");
-        SetFullTestStrategy();
-        config::SetBuildStatic(true);
-        FUNCTION("FunctionExpAssembleMatmulA5", {a, b, c, expOut, matmulOut})
-        {
-            TileShape::Current().SetVecTile(NUM_32, NUM_32);
-            Tensor ta = Exp(a);
-            Tensor tb = Exp(b);
-            Tensor lt(DataType::DT_FP32, assembleShape, "Lt");
-            Assemble(ta, {0, 0}, lt);
-            Assemble(tb, {NUM_16, 0}, lt);
+    ComputationalGraphBuilder G;
+    // M-split 后的 tile：matA/scaleA/matB/scaleB（k64 = 192/64 = 3）
+    Shape matShape{NUM_64, 192};
+    Shape scaleAShape{NUM_64, 3, 2};
+    Shape matBShape{96, 192};
+    Shape scaleBShape{3, 96, 2};
+    G.AddTensor(DataType::DT_FP8E4M3, matShape, MemoryType::MEM_UNKNOWN, "input_a");
+    G.AddTensor(DataType::DT_FP8E8M0, scaleAShape, MemoryType::MEM_UNKNOWN, "input_sa");
+    G.AddTensor(DataType::DT_FP8E4M3, matBShape, MemoryType::MEM_UNKNOWN, "input_b");
+    G.AddTensor(DataType::DT_FP8E8M0, scaleBShape, MemoryType::MEM_UNKNOWN, "input_sb");
+    G.AddTensor(DataType::DT_FP8E4M3, matShape, MemoryType::MEM_UNKNOWN, "t_a");
+    G.AddTensor(DataType::DT_FP8E8M0, scaleAShape, MemoryType::MEM_UNKNOWN, "t_sa");
+    G.AddTensor(DataType::DT_FP8E4M3, matBShape, MemoryType::MEM_UNKNOWN, "t_b");
+    G.AddTensor(DataType::DT_FP8E8M0, scaleBShape, MemoryType::MEM_UNKNOWN, "t_sb");
 
-            expOut = Exp(lt);
-            TileShape::Current().SetCubeTile({NUM_32, NUM_32}, {NUM_32, NUM_32}, {NUM_64, NUM_64});
-            matmulOut = Matrix::Matmul(matmulOut.GetDataType(), lt, c);
-        }
-        Function* originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_FunctionExpAssembleMatmulA5");
-        ASSERT_NE(originFunction, nullptr);
-        for (const auto& op : originFunction->Operations()) {
-            if (op.GetIOperands().empty() || op.GetOOperands().empty()) {
-                continue;
-            }
-            auto input = op.GetIOperands().front();
-            auto output = op.GetOOperands().front();
-            EXPECT_FALSE(input->GetMemoryTypeOriginal() == MemoryType::MEM_L1 &&
-                         output->GetMemoryTypeOriginal() == MemoryType::MEM_UB)
-                << op.GetOpcodeStr() << "[" << op.GetOpMagic()
-                << "] must not move data from L1 to UB; input=" << input->GetMagic()
-                << ", output=" << output->GetMagic();
+    G.AddOp(Opcode::OP_VIEW, {"input_a"}, {"t_a"}, "view_a_l1");
+    G.GetOp("view_a_l1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+    G.AddOp(Opcode::OP_VIEW, {"input_sa"}, {"t_sa"}, "view_sa_l1");
+    G.GetOp("view_sa_l1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0, 0}, MemoryType::MEM_L1));
+    G.AddOp(Opcode::OP_VIEW, {"input_b"}, {"t_b"}, "view_b_l1");
+    G.GetOp("view_b_l1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+    G.AddOp(Opcode::OP_VIEW, {"input_sb"}, {"t_sb"}, "view_sb_l1");
+    G.GetOp("view_sb_l1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0, 0}, MemoryType::MEM_L1));
+
+    // K-slice #0：A_MUL_B 产出初始 L0C 累加器
+    G.AddTensor(DataType::DT_FP8E4M3, Shape{NUM_64, NUM_64}, MemoryType::MEM_UNKNOWN, "a0");
+    G.AddTensor(DataType::DT_FP8E4M3, Shape{NUM_64, 96}, MemoryType::MEM_UNKNOWN, "b0");
+    G.AddTensor(DataType::DT_FP8E8M0, Shape{NUM_64, 1, 2}, MemoryType::MEM_UNKNOWN, "sa0");
+    G.AddTensor(DataType::DT_FP8E8M0, Shape{1, 96, 2}, MemoryType::MEM_UNKNOWN, "sb0");
+    G.AddTensor(DataType::DT_FP16, Shape{NUM_64, 96}, MemoryType::MEM_UNKNOWN, "c0");
+    G.AddTensor(DataType::DT_FP8E4M3, Shape{NUM_64, NUM_64}, MemoryType::MEM_UNKNOWN, "a1");
+    G.AddTensor(DataType::DT_FP8E4M3, Shape{NUM_64, 96}, MemoryType::MEM_UNKNOWN, "b1");
+    G.AddTensor(DataType::DT_FP8E8M0, Shape{NUM_64, 1, 2}, MemoryType::MEM_UNKNOWN, "sa1");
+    G.AddTensor(DataType::DT_FP8E8M0, Shape{1, 96, 2}, MemoryType::MEM_UNKNOWN, "sb1");
+    G.AddTensor(DataType::DT_FP16, Shape{NUM_64, 96}, MemoryType::MEM_UNKNOWN, "out");
+
+    G.AddOp(Opcode::OP_VIEW, {"t_a"}, {"a0"}, "view_a0");
+    G.GetOp("view_a0")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0A));
+    G.AddOp(Opcode::OP_VIEW, {"t_b"}, {"b0"}, "view_b0");
+    G.GetOp("view_b0")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0B));
+    G.AddOp(Opcode::OP_VIEW, {"t_sa"}, {"sa0"}, "view_sa0");
+    G.GetOp("view_sa0")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0, 0}, MemoryType::MEM_L0AMX));
+    G.AddOp(Opcode::OP_VIEW, {"t_sb"}, {"sb0"}, "view_sb0");
+    G.GetOp("view_sb0")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0, 0}, MemoryType::MEM_L0BMX));
+    G.AddOp(Opcode::OP_A_MUL_B, {"a0", "b0", "sa0", "sb0"}, {"c0"}, "mmad_k0");
+
+    // K-slice #1：A_MULACC_B 沿 K 累加，scaleA 切片偏移不在最内层维度即豁免命中点
+    G.AddOp(Opcode::OP_VIEW, {"t_a"}, {"a1"}, "view_a1");
+    G.GetOp("view_a1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, NUM_64}, MemoryType::MEM_L0A));
+    G.AddOp(Opcode::OP_VIEW, {"t_b"}, {"b1"}, "view_b1");
+    G.GetOp("view_b1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, NUM_64}, MemoryType::MEM_L0B));
+    G.AddOp(Opcode::OP_VIEW, {"t_sa"}, {"sa1"}, "view_sa1");
+    G.GetOp("view_sa1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 1, 0}, MemoryType::MEM_L0AMX));
+    G.AddOp(Opcode::OP_VIEW, {"t_sb"}, {"sb1"}, "view_sb1");
+    G.GetOp("view_sb1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{1, 0, 0}, MemoryType::MEM_L0BMX));
+    G.AddOp(Opcode::OP_A_MULACC_B, {"a1", "b1", "c0", "sa1", "sb1"}, {"out"}, "mmacc_k1");
+
+    G.SetInCast({"input_a", "input_sa", "input_b", "input_sb"});
+    G.SetOutCast({"out"});
+
+    Function* func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+
+    // cube 加载管线完整保留：L1 中转 + L0A/L0B/L0AMX/L0BMX 就位，无 DDR 回退
+    EXPECT_EQ(G.GetTensor("t_a")->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+    EXPECT_EQ(G.GetTensor("t_sa")->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+    EXPECT_EQ(G.GetTensor("t_b")->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+    EXPECT_EQ(G.GetTensor("t_sb")->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+    EXPECT_EQ(G.GetTensor("a1")->GetMemoryTypeOriginal(), MemoryType::MEM_L0A);
+    EXPECT_EQ(G.GetTensor("b1")->GetMemoryTypeOriginal(), MemoryType::MEM_L0B);
+    EXPECT_EQ(G.GetTensor("sa1")->GetMemoryTypeOriginal(), MemoryType::MEM_L0AMX);
+    EXPECT_EQ(G.GetTensor("sb1")->GetMemoryTypeOriginal(), MemoryType::MEM_L0BMX);
+    EXPECT_EQ(G.GetTensor("c0")->GetMemoryTypeOriginal(), MemoryType::MEM_L0C);
+    EXPECT_EQ(G.GetTensor("out")->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    int assembleCount = 0;
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            assembleCount++;
         }
     }
-    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    EXPECT_EQ(assembleCount, 0) << "Cube path view (to L0AMX) should skip unaligned DDR fallback";
+    Platform::Instance().GetSoc().SetNPUArch(savedArch);
     Platform::Instance().ReloadMemoryPaths("2201");
 }
 
