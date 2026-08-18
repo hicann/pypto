@@ -131,7 +131,7 @@ Status RemoveRedundantOpChecker::ProcessPreCheck(Function& function, const Opera
     return SUCCESS;
 }
 
-Status RemoveRedundantOpChecker::PostCheckAssemble(const Operation& op)
+Status RemoveRedundantOpChecker::PostCheckAssemble(Function& function, const Operation& op)
 {
     auto assembleIn = op.iOperand.front();
     auto assembleOut = op.oOperand.front();
@@ -164,6 +164,13 @@ Status RemoveRedundantOpChecker::PostCheckAssemble(const Operation& op)
         }
     }
     if (hasParallelAssemble && hasReshapeConsumer) {
+        return SUCCESS;
+    }
+    // 镜像 RemoveRedundantOp 的 outcast 保护：output 为 outcast 且 input 有其他 consumer 的
+    // ASSEMBLE 被 pass 有意保留，豁免同 shape/memtype 的冗余检查
+    if (function.IsFromOutCast(assembleOut) && assembleIn->GetConsumers().size() > 1) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Assemble[%d] kept for outcast protection, skip redundancy check.",
+                          op.GetOpMagic());
         return SUCCESS;
     }
     if (assembleIn->shape == assembleOut->shape &&
@@ -251,10 +258,10 @@ Status RemoveRedundantOpChecker::PostCheckCopyIn(const Operation& op)
     return SUCCESS;
 }
 
-Status RemoveRedundantOpChecker::ProcessPostCheck(const Operation& op)
+Status RemoveRedundantOpChecker::ProcessPostCheck(Function& function, const Operation& op)
 {
     if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
-        if (PostCheckAssemble(op) != SUCCESS) {
+        if (PostCheckAssemble(function, op) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "PostCheck for Assemble failed.%s", GetFormatBacktrace(op).c_str());
             return FAILED;
         }
@@ -313,7 +320,7 @@ Status RemoveRedundantOpChecker::DoPostCheck(Function& function)
         return FAILED;
     }
     for (const auto& op : function.Operations()) {
-        if (ProcessPostCheck(op) != SUCCESS) {
+        if (ProcessPostCheck(function, op) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "PostCheck for RemoveRedundantOp failed.%s",
                               GetFormatBacktrace(op).c_str());
             return FAILED;

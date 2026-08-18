@@ -130,8 +130,8 @@ TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast)
     PrintGraphInfoRemoveRedundantOp(func);
     // ================== Verify the effect of the Pass ==================
     auto updated_operations = func->Operations(true);
-    int opSize = 14;
-    EXPECT_EQ(updated_operations.size(), opSize) << "After the Pass, there should be 14 operations, no VIEW be deleted";
+    int opSize = 15;
+    EXPECT_EQ(updated_operations.size(), opSize) << "After the Pass, there should be 15 operations, no VIEW be deleted";
     EXPECT_EQ(updated_operations[0].GetOpcode(), Opcode::OP_VIEW) << "The first operation should be VIEW";
     int view_count = 0;
     int assemble_count = 0;
@@ -144,7 +144,7 @@ TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast)
         }
     }
     EXPECT_EQ(view_count, 5) << "There shoule be 5 ASSEMBLE op after RemoveRedundantOp";
-    EXPECT_EQ(assemble_count, 4) << "There shoule be 5 ASSEMBLE op after RemoveRedundantOp";
+    EXPECT_EQ(assemble_count, 5) << "outcast ASSEMBLE should be kept after RemoveRedundantOp";
 }
 
 TEST_F(RemoveRedundantOpTest, TestInternalAssembleView)

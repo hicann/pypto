@@ -34,11 +34,11 @@ private:
     Status PreCheckView(Function& function, const Operation& op, const LogicalTensorPtr& in);
     Status PreCheckRegCopy(Function& function, const Operation& op);
     Status ProcessPreCheck(Function& function, const Operation& op);
-    Status PostCheckAssemble(const Operation& op);
+    Status PostCheckAssemble(Function& function, const Operation& op);
     Status PostCheckView(const Operation& op);
     Status PostCheckRegCopy(const Operation& op);
     Status PostCheckCopyIn(const Operation& op);
-    Status ProcessPostCheck(const Operation& op);
+    Status ProcessPostCheck(Function& function, const Operation& op);
 };
 } // namespace tile_fwk
 } // namespace npu

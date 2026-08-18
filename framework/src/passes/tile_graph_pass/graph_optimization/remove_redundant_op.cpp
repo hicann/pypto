@@ -117,6 +117,14 @@ Status RemoveRedundantOp::RemoveDummyOp(Function& function)
         } else if (matchOpcodeWithoutDynshape.find(op.GetOpcode()) != matchOpcodeWithoutDynshape.end()) {
             canRemove = ProcessRedundantOpWithoutDynShape(op);
         }
+        // outcast tensor 的 ASSEMBLE 不能移除（当 input 有其他 consumer 时）：
+        // 移除后 outcast 会被提前到 input tensor，继承其内部 consumer，
+        // 导致 SubgraphToFunction 的 isFromCast 误判 outcast 为非 boundary tensor，
+        // 进而 AllocWorkspaceGM 误设 workspaceBaseOffset，跨 kernel 读取到未初始化数据
+        if (canRemove && op.GetOpcode() == Opcode::OP_ASSEMBLE && function.IsFromOutCast(op.GetOOperands().front()) &&
+            op.GetIOperands().front()->GetConsumers().size() > 1) {
+            canRemove = false;
+        }
         if (canRemove) {
             operationUpdated = true;
             anyRemoved = true;

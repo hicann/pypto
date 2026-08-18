@@ -179,10 +179,10 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest2)
 /*
 TESTRemoveDummyAssembleDDRSpecialCase(WARNING CASE)
 inCast{8,16}->exp(any legal op)->ddrTensor1{8,16}  ->exp->outCast3{8,16}
-                                    ->assemble->outCast1{8,16}
-                                    ->assemble->outCast2{8,16}
+                                     ->assemble->outCast1{8,16}
+                                     ->assemble->outCast2{8,16}
 
-inCast{8,16}->exp->outCast1/outCast2{8,16}->exp->outCast3{8,16}
+assembles kept: output is outcast and input has other consumers (outcast protection)
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest3)
 {
@@ -214,7 +214,7 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest3)
     currFunctionPtr->outCasts_.push_back(outCast3);
 
     RemoveRedundantOp removeredundantpass;
-    EXPECT_NE(removeredundantpass.PostCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(removeredundantpass.PostCheck(*currFunctionPtr), SUCCESS);
     EXPECT_NE(removeredundantpass.PreCheck(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(removeredundantpass.RunOnFunction(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(removeredundantpass.PostCheck(*currFunctionPtr), SUCCESS);
@@ -225,7 +225,7 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest3)
             ++assemble_num;
         }
     }
-    EXPECT_EQ(assemble_num, kNumZero);
+    EXPECT_EQ(assemble_num, kNumTwo);
     EXPECT_EQ(exp1.GetOutputOperandSize(), kSizeOne);
     EXPECT_EQ(exp2.GetInputOperandSize(), kSizeOne);
 }
@@ -1263,8 +1263,8 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewDynOffsetCase)
 /*
 TestOutcastMutiConsumerCase
 inCast{8,16}->view->Tensor1{4,16}->assemble->outCast1{4,16}
-                                 ->exp->Tensor2{4,16}->exp->outCast2{4,16}
-inCast{8,16}->view->outCast1{4,16}->exp->Tensor2{4,16}->exp->outCast2{4,16}
+                                  ->exp->Tensor2{4,16}->exp->outCast2{4,16}
+graph unchanged: assemble kept because output is outcast and input has other consumers
 */
 TEST_F(TestRemoveRedundantOpPass, TestOutcastMutiConsumerCase)
 {
@@ -1303,7 +1303,7 @@ TEST_F(TestRemoveRedundantOpPass, TestOutcastMutiConsumerCase)
     EXPECT_EQ(RemoveRedundantOpPass.RunOnFunction(*currFunctionPtr), SUCCESS);
 
     uint32_t opNum = currFunctionPtr->Operations().size();
-    EXPECT_EQ(opNum, kNumThree);
+    EXPECT_EQ(opNum, kNumFour);
 }
 
 /*
@@ -1821,6 +1821,87 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewOutcastWithNonViewProducer)
     EXPECT_EQ(viewNum, kNumOne);
     EXPECT_EQ(assembleNum, kNumTwo);
     EXPECT_EQ(expNum, kNumOne);
+}
+
+// outcast-ASSEMBLE guard 回归测试：RESHAPE 输出 reshapeOut{256,64}(DDR) 有 3 个 consumer
+// （2个VIEW+1个ASSEMBLE），该 ASSEMBLE 输出 outcast outCastZ{256,64}(DDR)，输入输出同形同 DDR，
+// 看似冗余但必须被 RemoveDummyOp 的 outcast guard 保留。
+TEST_F(TestRemoveRedundantOpPass, TestReshapeLoopOutcastAssembleKept)
+{
+    ComputationalGraphBuilder G;
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    G.AddTensor(DataType::DT_FP32, {128, 128}, MemoryType::MEM_DEVICE_DDR, "inCastA");
+    G.AddTensor(DataType::DT_FP32, {128, 128}, MemoryType::MEM_DEVICE_DDR, "inCastB");
+    G.AddTensor(DataType::DT_FP32, {128, 128}, "aL1");
+    G.AddTensor(DataType::DT_FP32, {128, 128}, "bL1");
+    G.AddTensor(DataType::DT_FP32, {128, 128}, "mulOut");
+    G.AddTensor(DataType::DT_FP32, {128, 128}, MemoryType::MEM_DEVICE_DDR, "zDdr");
+    G.AddTensor(DataType::DT_FP32, {256, 64}, MemoryType::MEM_DEVICE_DDR, "reshapeOut");
+    G.AddTensor(DataType::DT_FP32, {128, 64}, "view0Out");
+    G.AddTensor(DataType::DT_FP32, {128, 64}, "view1Out");
+    G.AddTensor(DataType::DT_FP32, {128, 64}, "reg0");
+    G.AddTensor(DataType::DT_FP32, {128, 64}, "reg1");
+    G.AddTensor(DataType::DT_FP32, {256, 64}, MemoryType::MEM_DEVICE_DDR, "outCastTmp");
+    G.AddTensor(DataType::DT_FP32, {256, 64}, MemoryType::MEM_DEVICE_DDR, "outCastZ");
+
+    G.AddOp(Opcode::OP_VIEW, {"inCastA"}, {"aL1"}, "view_a");
+    G.GetOp("view_a")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_VIEW, {"inCastB"}, {"bL1"}, "view_b");
+    G.GetOp("view_b")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_A_MUL_B, {"aL1", "bL1"}, {"mulOut"}, "mul");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"mulOut"}, {"zDdr"}, "asm_zddr");
+    G.GetOp("asm_zddr")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_RESHAPE, {"zDdr"}, {"reshapeOut"}, "reshape");
+    G.AddOp(Opcode::OP_VIEW, {"reshapeOut"}, {"view0Out"}, "view0");
+    G.GetOp("view0")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_VIEW, {"reshapeOut"}, {"view1Out"}, "view1");
+    G.GetOp("view1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 128}));
+    G.AddOp(Opcode::OP_REGISTER_COPY, {"view0Out"}, {"reg0"}, "regcopy0");
+    G.AddOp(Opcode::OP_REGISTER_COPY, {"view1Out"}, {"reg1"}, "regcopy1");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reg0"}, {"outCastTmp"}, "asm_tmp0");
+    G.GetOp("asm_tmp0")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reg1"}, {"outCastTmp"}, "asm_tmp1");
+    G.GetOp("asm_tmp1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 128}));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reshapeOut"}, {"outCastZ"}, "asm_outcastz");
+    G.GetOp("asm_outcastz")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+
+    G.SetInCast({"inCastA", "inCastB"});
+    G.SetOutCast({"outCastTmp", "outCastZ"});
+
+    RemoveRedundantOp removeRedundantOpPass;
+    EXPECT_EQ(removeRedundantOpPass.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(removeRedundantOpPass.PostCheck(*function), SUCCESS);
+
+    // 核心断言：outcast-ASSEMBLE guard 必须保留 reshapeOut→outCastZ 的 ASSEMBLE
+    bool outcastAssembleKept = false;
+    auto outCastZ = G.GetTensor("outCastZ");
+    for (const auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE && op.oOperand.front() == outCastZ) {
+            outcastAssembleKept = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(outcastAssembleKept);
+
+    uint32_t regCopyNum = 0;
+    uint32_t viewNum = 0;
+    uint32_t assembleNum = 0;
+    for (const auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_REGISTER_COPY) {
+            regCopyNum++;
+        }
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            viewNum++;
+        }
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            assembleNum++;
+        }
+    }
+    EXPECT_EQ(regCopyNum, 0);
+    EXPECT_EQ(viewNum, 4);
+    EXPECT_EQ(assembleNum, 4);
 }
 
 // RemoveRedundantOp 删除 REGISTER_COPY+VIEW 后 ASSEMBLE 输入穿透到 CAST(inCast)，
