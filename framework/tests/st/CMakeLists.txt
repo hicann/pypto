@@ -13,10 +13,8 @@ if (ENABLE_STEST OR ENABLE_STEST_DISTRIBUTED)
 endif ()
 
 if (ENABLE_STEST)
-    add_subdirectory(operator)
     add_subdirectory(operation)
     add_subdirectory(machine)
-    add_subdirectory(simulation)
 
     # 可执行程序
     PTO_Fwk_STest_AddExe_RunExe(TARGET ${PTO_Fwk_STestNamePrefix})

@@ -113,22 +113,9 @@ stest:
       - DynamicBasicTest.DuplicateName
       - DynamicBasicTest.HiddenLoopConditionMixed
       - DynamicBasicTest.HiddenLoopConditionMixedMulLoops
-      - DynamicTest.TestPartial
-      - DynamicUnalignTest.test_unary_unalign
-      - DynamicUnalignTest.test_mm_unalign
-      - DynamicUnalignTest.test_mm2_unalign
-      - DynamicUnalignTest.test_rowmaxsingle_unalign
-      - DynamicUnalignTest.test_rowsumsingle_unalign
-      - DynamicExpandTest.TestDynamicExpandUnalign
       - DynamicBinTest.testDynMulsUnalign
       - DynamicBinTest.testScalarDivsUnalign
       - DynamicBinTest.TestDynamicAddUnalign
-      - DynamicCastTest.testDynCastUnalign
-      - DynamicCastTest.testDynCastDevSeparate
-      - DynamicTransposeTest.TestDynamicVnchwconv
-      - DynamicGatherTest.TestDynamicGatherDim2
-      - DynamicGatherTest.TestDynamicGatherDim3
-      - DynamicDatamoveTest.TestDynamicDatamove
       - DynamicBrcTest.TestDynamicMulBrcUnalign
       - DynamicBindingTest.TestDefaultCompute
       - DynamicBindingTest.TestDeviceRunDataFromHost
@@ -141,10 +128,6 @@ stest:
       #- DynamicControlFlowCacheTest.PartialCacheValueDependData
       #- DynamicControlFlowCacheTest.PartialCacheValueDependControl
       - DynamicOutcastTensorTest.TensorAllocateIntermediate
-      #===========================================================================
-      # parallel sort
-      #===========================================================================
-      - ParallelSortSTest.fp32_64k
       #===========================================================================
       # matmul Interpreter 功能用例
       #===========================================================================

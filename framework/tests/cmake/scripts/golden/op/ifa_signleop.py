@@ -74,126 +74,6 @@ def dump_file(data_pool, data_path, type_str):
         np.array(data_pool).astype(bfloat16).tofile(data_path)
 
 
-def gen_uniform_data(data_shape, min_value, max_value, dtype):
-    if min_value == 0 and max_value == 0:
-        return np.zeros(data_shape, dtype=dtype)
-    if dtype == np.bool_:
-        return np.random.choice([True, False], size=data_shape)
-    return np.random.uniform(low=min_value, high=max_value, size=data_shape).astype(dtype)
-
-
-def gen_unalign_mm2_golden(batch, nq, block_size, d, actual_seq, output_dir):
-    dtype = bfloat16
-    sq = 1
-    nkv = 1
-    shape_qk = [batch * nq * sq, nkv * block_size]
-    shape_v = [batch * nkv * block_size, d]
-    out_shape = [batch * nq * sq, d]
-
-    # gen data
-    qk = np.zeros(shape_qk).astype(dtype)
-    v = np.zeros(shape_v).astype(dtype)
-    out = np.zeros(out_shape).astype(dtype)
-
-    for bid in range(batch):
-        seq = actual_seq[bid]
-        signle_actual_shape_qk = [nq * sq, nkv * seq]
-        signle_actual_shape_v = [nkv * seq, d]
-
-        qk_i = gen_uniform_data(signle_actual_shape_qk, -1, 1, dtype)
-        v_i = gen_uniform_data(signle_actual_shape_v, -1, 1, dtype)
-
-        qkv_bmm_signle = np.matmul(qk_i, v_i, dtype=np.float32)
-
-        qk[bid * nq * sq:(bid + 1) * nq * sq, 0:nkv * seq] = qk_i
-
-        v[bid * nq * sq:bid * nq * sq + nkv * seq, :] = v_i
-
-        out[bid * nq * sq:(bid + 1) * nq * sq, :] = qkv_bmm_signle  # assemble
-    # dump golden file
-    dump_file(qk, Path(output_dir, 'qk.bin'), "bf16")
-    dump_file(v, Path(output_dir, 'v.bin'), "bf16")
-    dump_file(out, Path(output_dir, 'out.bin'), "fp32")
-    dump_file(actual_seq, Path(output_dir, 'actual_seq_len.bin'), "int32")
-
-
-def gen_unalign_mm_golden(batch, nq, block_size, d_r, d_n, actual_seq, output_dir):
-    dtype = bfloat16
-    sq = 1
-    nk = 1
-    d = d_r + d_n
-
-    shape_q = [batch * nq * sq, d_r + d_n]
-
-    shape_k = [batch * nk * block_size, d_r + d_n]
-
-    out_shape = [batch * nq * sq, nk * block_size]
-
-    # gen data
-    q = gen_uniform_data(shape_q, -1, 1, dtype)
-    k = np.zeros(shape_k).astype(dtype)
-    out = np.zeros(out_shape).astype(dtype)
-
-    for bid in range(batch):
-        seq = actual_seq[bid]
-        ki = gen_uniform_data([nk * seq, d], -1, 1, dtype)
-        begin = bid * nk * block_size
-        k[begin:begin + seq * nk, :] = ki
-
-        q_cur = q[bid * nq * sq:(bid + 1) * nq * sq, :]
-        # k_cur = k[begin : begin + block_size * nk, :]
-
-        qk_bmm_signle = np.matmul(q_cur, ki.transpose(1, 0), dtype=np.float32)
-
-        out[bid * nq * sq:(bid + 1) * nq * sq, 0:seq] = qk_bmm_signle  # assemble
-
-    q_nope = q[:, 0:d_n]
-    q_rope = q[:, d_n:]
-    k_nope = k[:, 0:d_n]
-    k_rope = k[:, d_n:]
-
-    # dump golden file
-    dump_file(q, Path(output_dir, 'q.bin'), "bf16")
-    dump_file(k, Path(output_dir, 'k.bin'), "bf16")
-    dump_file(out, Path(output_dir, 'out.bin'), "fp32")
-    dump_file(actual_seq, Path(output_dir, 'actual_seq_len.bin'), "int32")
-
-    dump_file(q_nope, Path(output_dir, 'q_nope.bin'), "bf16")
-    dump_file(q_rope, Path(output_dir, 'q_rope.bin'), "bf16")
-    dump_file(k_nope, Path(output_dir, 'k_nope.bin'), "bf16")
-    dump_file(k_rope, Path(output_dir, 'k_rope.bin'), "bf16")
-
-
-def gen_unalign_reduce_golden(batch, n_tile, block_size, actual_seq, output_dir, reduce_axis=-1, reduce_type="Max"):
-    dtype = np.float32
-
-    shape_q = [batch * n_tile, block_size]
-    out_shape = [batch * n_tile, 1]
-
-    q = np.ones(shape_q).astype(dtype)
-    out = np.ones(out_shape).astype(dtype)
-
-    for bid in range(batch):
-        seq = actual_seq[bid]
-        q_tmp = gen_uniform_data([n_tile, seq], -5, -2, dtype)
-        # out_tmp = q_tmp.max(axis=-1, keepdims=True)
-        if reduce_type.lower() == "max":
-            logging.debug("======================= max golden =======================")
-            out_tmp = q_tmp.max(axis=reduce_axis, keepdims=True)
-        elif reduce_type.lower() == "sum":
-            logging.debug("======================= sum golden =======================")
-            out_tmp = q_tmp.sum(axis=reduce_axis, keepdims=True)
-        else:
-            raise KeyError(f"Unknown Reduce Type {reduce_type}")
-        q[bid * n_tile:(bid + 1) * n_tile, 0:seq] = q_tmp
-        out[bid * n_tile:(bid + 1) * n_tile, :] = out_tmp
-    # print(q)
-    # print(out)
-    dump_file(q, Path(output_dir, 'q.bin'), "fp32")
-    dump_file(out, Path(output_dir, 'out.bin'), "fp32")
-    dump_file(actual_seq, Path(output_dir, 'actual_seq_len.bin'), "int32")
-
-
 def gen_scalardivs_golden(batch, sq, d, scalar, actual_seq, reverse_operand, output_dir: Path):
     dtype = np.float32
 
@@ -216,72 +96,6 @@ def gen_scalardivs_golden(batch, sq, d, scalar, actual_seq, reverse_operand, out
     dump_file(actual_seq, Path(output_dir, 'actual_seq_len.bin'), "int32")
 
 
-def gen_gather_data_2d(axis, b, sq, s1, d, dtype, indices_dtype, output_dir: Path, valid_len=None):
-    if valid_len is None:
-        valid_len = sq
-
-    shape_params = [s1, d]
-    shape_indices = [b * sq]
-    shape_res = [b * sq, d]
-    logging.debug("shape params is %s", shape_params)
-    logging.debug("shape indices is %s", shape_indices)
-    logging.debug("shape res is %s", shape_res)
-    x_path = Path(output_dir, "x.bin")
-    indices_path = Path(output_dir, "indices.bin")
-    y_path = Path(output_dir, "out.bin")
-
-    x = np.random.uniform(-10, 10, shape_params).astype(dtype)
-    x.tofile(x_path)
-    indices = np.zeros(shape_indices, dtype=indices_dtype)
-    for bidx in range(b):
-        batch_start = bidx * sq
-        valid_indices = np.random.randint(0, shape_params[axis], size=valid_len).astype(indices_dtype)
-        indices[batch_start:batch_start + valid_len] = valid_indices
-    indices.tofile(indices_path)
-
-    # numpy
-    y = np.zeros(shape_res).astype(dtype)
-    for bidx in range(b):
-        for _s in range(valid_len):
-            index = indices[bidx * sq + _s]
-            y[bidx * sq + _s][:] = x[index][:]
-    y.tofile(y_path)
-
-
-def gen_gather_data_3d(axis, b, sq, s1, d, s2, dtype, indices_dtype, output_dir: Path, valid_len=None):
-    if valid_len is None:
-        valid_len = sq
-
-    shape_params = [s1, d]
-    shape_indices = [b * sq, s2]
-    shape_res = [b * sq, s2, d]
-    logging.debug("shape params is %s", shape_params)
-    logging.debug("shape indices is %s", shape_indices)
-    logging.debug("shape res is %s", shape_res)
-    x_path = Path(output_dir, "x.bin")
-    indices_path = Path(output_dir, "indices.bin")
-    y_path = Path(output_dir, "out.bin")
-
-    x = np.random.uniform(-10, 10, shape_params).astype(dtype)
-    x.tofile(x_path)
-    indices = np.zeros(shape_indices, dtype=indices_dtype)
-    for bidx in range(b):
-        batch_start = bidx * sq
-        for seq_idx in range(valid_len):
-            valid_indices = np.random.randint(0, shape_params[axis], size=s2).astype(indices_dtype)
-            indices[batch_start + seq_idx, :] = valid_indices
-    indices.tofile(indices_path)
-
-    # numpy
-    y = np.zeros(shape_res).astype(dtype)
-    for bidx in range(b):
-        for seq_idx in range(valid_len):
-            for s2_idx in range(s2):
-                index = indices[bidx * sq + seq_idx, s2_idx]
-                y[bidx * sq + seq_idx][s2_idx][:] = x[index][:]
-    y.tofile(y_path)
-
-
 @GoldenRegister.reg_golden_func(
     case_names=[
         # ifa op
@@ -299,89 +113,16 @@ def gen_gather_data_3d(axis, b, sq, s1, d, s2, dtype, indices_dtype, output_dir:
         "OnBoardIFATest.test_operation_32_128_row_sum_single",
         "OnBoardIFATest.test_concat_32_512_32_64",
         "OnBoardIFATest.test_concat_32_tensor",
-        "DynamicUnalignTest.test_unary_unalign",
-        "DynamicUnalignTest.test_mm_unalign",
-        "DynamicUnalignTest.test_mm2_unalign",
-        "DynamicUnalignTest.test_rowmaxsingle_unalign",
-        "DynamicUnalignTest.test_rowsumsingle_unalign",
-        "DynamicExpandTest.TestDynamicExpandUnalign",
         "DynamicBinTest.testDynMulsUnalign",
-        "DynamicCastTest.testDynCastUnalign",
-        "DynamicTransposeTest.TestDynamicVnchwconv",
         "DynamicBinTest.TestDynamicAddUnalign",
         "DynamicBinTest.testScalarDivsUnalign",
-        "DynamicGatherTest.TestDynamicGatherDim2",
-        "DynamicGatherTest.TestDynamicGatherDim3",
-        "DynamicDatamoveTest.TestDynamicDatamove",
         "DynamicBrcTest.TestDynamicMulBrcUnalign",
     ]
 )
 def gen_ifa_op_golden(case_name: str, output: Path) -> bool:
-    if case_name == "DynamicTransposeTest.TestDynamicVnchwconv":
-        dtype = np.float32
-        b = 1
-        sq = 128
-        d = 64
-        shape_q = [b * sq, d]
-        shape_out = [b * d, sq]
-
-        q = np.zeros(shape_q).astype(dtype)
-        out = np.zeros(shape_out).astype(dtype)
-        for bid in range(b):
-            seq = 100
-            qi = gen_uniform_data([seq, d], -1, 1, dtype)
-            begin = bid * sq
-            q[begin:begin + seq, :] = qi
-            temp = qi.transpose(1, 0)
-            out[bid * d:(bid + 1) * d, 0:seq] = temp
-        input_path = Path(output, 'q.bin')
-        output_path = Path(output, 'out.bin')
-        q.tofile(input_path)
-        out.tofile(output_path)
-    elif case_name == "DynamicGatherTest.TestDynamicGatherDim2":
-        b, sq, s1, d = 2, 128, 128, 64
-        axis = 0
-        dtype = np.float32
-        indices_dtype = np.int32
-        gen_gather_data_2d(axis, b, sq, s1, d, dtype, indices_dtype, output, 100)
-    elif case_name == "DynamicGatherTest.TestDynamicGatherDim3":
-        b, sq, s1, d, s2 = 2, 32, 32, 64, 2
-        axis = 0
-        dtype = np.float32
-        indices_dtype = np.int32
-        gen_gather_data_3d(axis, b, sq, s1, d, s2, dtype, indices_dtype, output, 30)
-    elif case_name == "DynamicDatamoveTest.TestDynamicDatamove":
-        dtype = np.float32
-        b = 1
-        n = 1
-        sq = 32
-        d = 64
-        shape_q = [b * n, sq, d]
-        shape_out = [b * sq, n, d]
-
-        q = np.zeros(shape_q).astype(dtype)
-        out = np.zeros(shape_out).astype(dtype)
-        for bid in range(b):
-            for nid in range(n):
-                seq = 30
-                qi = gen_uniform_data([seq, d], -1, 1, dtype)
-                q[bid * n + nid, 0:seq, :] = qi
-                temp = qi.transpose(1, 0)
-                for i in range(seq):
-                    out[bid * sq + i, nid, :] = temp[:, i]
-        input_path = Path(output, "q.bin")
-        output_path = Path(output, "out.bin")
-        q.tofile(input_path)
-        out.tofile(output_path)
-    elif case_name == "DynamicBrcTest.TestDynamicMulBrcUnalign":
-        return True
-    elif case_name == "DynamicExpandTest.TestDynamicExpandUnalign":
-        return True
-    elif case_name == "DynamicCastTest.testDynCastUnalign":
+    if case_name == "DynamicBrcTest.TestDynamicMulBrcUnalign":
         return True
     elif case_name == "DynamicBinTest.testDynMulsUnalign":
-        return True
-    elif case_name == "DynamicUnalignTest.test_unary_unalign":
         return True
     elif case_name == "DynamicBinTest.testScalarDivsUnalign":
         batch = 1
@@ -390,33 +131,6 @@ def gen_ifa_op_golden(case_name: str, output: Path) -> bool:
         scalar = 1
         actual_seq = [100] * batch
         gen_scalardivs_golden(batch, sq, d, scalar, actual_seq, 0, output)
-    elif case_name == "DynamicUnalignTest.test_rowsumsingle_unalign":
-        batch = 2
-        n_tile = 32
-        block_size = 256
-        actual_seq = [248] * batch
-        gen_unalign_reduce_golden(batch, n_tile, block_size, actual_seq, output, -1, reduce_type="Sum")
-    elif case_name == "DynamicUnalignTest.test_mm_unalign":
-        batch = 1
-        nq = 32
-        block_size = 256
-        d_r = 64
-        d_n = 512
-        actual_seq = [248] * batch
-        gen_unalign_mm_golden(batch, nq, block_size, d_r, d_n, actual_seq, output)
-    elif case_name == "DynamicUnalignTest.test_mm2_unalign":
-        batch = 1
-        nq = 32
-        block_size = 128
-        d = 64
-        actual_seq = [120] * batch
-        gen_unalign_mm2_golden(batch, nq, block_size, d, actual_seq, output)
-    elif case_name == "DynamicUnalignTest.test_rowmaxsingle_unalign":
-        batch = 1
-        n_tile = 32
-        block_size = 256
-        actual_seq = [248] * batch
-        gen_unalign_reduce_golden(batch, n_tile, block_size, actual_seq, output)
     elif case_name == "OnBoardIFATest.test_32_128_sub_32_1":
         dtype = np.float32
         shape_x = [32, 128]
