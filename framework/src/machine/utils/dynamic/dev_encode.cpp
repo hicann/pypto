@@ -1099,6 +1099,25 @@ void DevAscendFunction::InitIncastOutcast(
     };
 }
 
+void AddTokenDependEdgesToColorGraph(std::vector<Operation*>& callopList,
+                                     std::unordered_map<Operation*, int>& callopIndexDict,
+                                     std::unordered_map<int, std::vector<int>>& colorOutGraph)
+{
+    for (auto* op : callopList) {
+        if (op->GetOpcode() != Opcode::OP_CALL) {
+            continue;
+        }
+        int producerIdx = callopIndexDict[op];
+        for (auto* consumer : op->ConsumerOpsByToken()) {
+            auto it = callopIndexDict.find(consumer);
+            if (it == callopIndexDict.end() || consumer == op) {
+                continue;
+            }
+            colorOutGraph[producerIdx].push_back(it->second);
+        }
+    }
+}
+
 struct EncodeDevAscendFunctionInfo {
     Function* devRoot{nullptr};
     Function* devTile{nullptr};
@@ -2058,6 +2077,7 @@ struct EncodeDevAscendFunctionInfo {
             }
         }
         AddDependOperandsToColorGraphForMix(callopList, callopIndexDict);
+        AddTokenDependEdgesToColorGraph(callopList, callopIndexDict, colorOutGraph);
         for (size_t idx = 0; idx < callopList.size(); idx++) {
             std::sort(colorOutGraph[idx].begin(), colorOutGraph[idx].end());
             // remove repeated idx in ooperand's consumer callop idx list

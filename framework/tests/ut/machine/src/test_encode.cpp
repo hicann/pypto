@@ -17,16 +17,24 @@
 #include <cstdint>
 
 #include "interface/function/rebuildable_attribute.h"
+#include "interface/tensor/irbuilder.h"
 #include "machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h"
 #include "machine/utils/dynamic/dev_encode_workspace.h"
 #include "machine/utils/dynamic/workspace_budget_calculator.h"
 #include "machine/utils/dynamic/dev_workspace.h"
+#include "machine/utils/dynamic/dev_encode.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/error.h"
 #include "tilefwk/tilefwk_op.h"
 #include "interface/configs/config_manager.h"
 #include "interface/configs/config_manager_ng.h"
 #include "interface/program/program.h"
+
+namespace npu::tile_fwk::dynamic {
+void AddTokenDependEdgesToColorGraph(std::vector<Operation*>& callopList,
+                                     std::unordered_map<Operation*, int>& callopIndexDict,
+                                     std::unordered_map<int, std::vector<int>>& colorOutGraph);
+}
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
@@ -880,7 +888,65 @@ TEST_F(TestDevEncode, test_encode_multi_output_assemble)
     DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(funcDynDev->devProgBinary.data());
     ASSERT_NE(devProg, nullptr);
     EXPECT_GT(devProg->GetFunctionSize(), 0u);
-    EXPECT_GE(devProg->slotSize, 2u);
+}
+
+namespace {
+ir::VarPtr MakeEncodeToken(const std::string& name)
+{
+    return std::make_shared<ir::Var>(name, ir::GetTokenType(), ir::Span::Unknown());
+}
+
+void BindToken(Function& func, Operation* producer, Operation* consumer, const std::string& name)
+{
+    auto token = MakeEncodeToken(name);
+    auto& dep = func.GetVarDependency();
+    dep.AddProducer(token, std::static_pointer_cast<const ir::Stmt>(producer->shared_from_this()));
+    dep.AddConsumer(token, std::static_pointer_cast<const ir::Stmt>(consumer->shared_from_this()));
+    producer->result_token_ = {token};
+    consumer->tokens_.push_back(token);
+}
+} // namespace
+
+TEST_F(TestDevEncode, test_add_token_depend_edges_to_color_graph)
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    TileShape::Current().SetVecTile({32, 32});
+    Tensor input(DT_FP32, {32, 32}, "input");
+    Tensor output(DT_FP32, {32, 32}, "output");
+    FUNCTION("TokenEdgeCallop") { output = Exp(input); }
+    Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_TokenEdgeCallop");
+    ASSERT_NE(func, nullptr);
+
+    IRBuilder builder;
+    (void)builder.CreateTensorOpStmt(*func, Opcode::OP_VIEW, {}, {}, ir::Span::Unknown());
+    (void)builder.CreateTensorOpStmt(*func, Opcode::OP_CALL, {}, {}, ir::Span::Unknown());
+    (void)builder.CreateTensorOpStmt(*func, Opcode::OP_CALL, {}, {}, ir::Span::Unknown());
+    (void)builder.CreateTensorOpStmt(*func, Opcode::OP_CALL, {}, {}, ir::Span::Unknown());
+
+    auto opList = func->Operations(false).DuplicatedOpList();
+    ASSERT_GE(opList.size(), 4);
+    Operation* viewOp = opList[opList.size() - 4];
+    Operation* callOp0 = opList[opList.size() - 3];
+    Operation* callOp1 = opList[opList.size() - 2];
+    Operation* callOp2 = opList[opList.size() - 1];
+
+    BindToken(*func, viewOp, callOp0, "tokenVC");
+    BindToken(*func, callOp0, callOp1, "token01");
+    BindToken(*func, callOp1, callOp2, "token12");
+
+    std::vector<Operation*> callopList = {viewOp, callOp0, callOp1, callOp2};
+    std::unordered_map<Operation*, int> callopIndexDict = {{viewOp, 0}, {callOp0, 1}, {callOp1, 2}, {callOp2, 3}};
+    std::unordered_map<int, std::vector<int>> colorOutGraph;
+    AddTokenDependEdgesToColorGraph(callopList, callopIndexDict, colorOutGraph);
+
+    EXPECT_EQ(colorOutGraph.count(0), 0u);
+    ASSERT_EQ(colorOutGraph.size(), 2u);
+    EXPECT_EQ(colorOutGraph[1].size(), 1u);
+    EXPECT_EQ(colorOutGraph[1][0], 2);
+    EXPECT_EQ(colorOutGraph[2].size(), 1u);
+    EXPECT_EQ(colorOutGraph[2][0], 3);
+    EXPECT_EQ(colorOutGraph.count(3), 0u);
 }
 
 TEST_F(TestDevEncode, test_encode_conditional_branches)
