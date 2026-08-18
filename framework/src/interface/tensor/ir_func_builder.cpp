@@ -157,18 +157,20 @@ std::shared_ptr<Function> RootFunctionBuilder::Build(const ir::FunctionPtr& irFu
 
 void RootFunctionBuilder::InitDynFunc(const ir::FunctionPtr& irFunc)
 {
-    for (const auto& param : irFunc->params_) {
-        auto lt = AsLogicalTensor(param);
-        ASSERT(lt) << "RootFunctionBuilder: param is not a LogicalTensor: " << param->name_;
-        logicalParams_.push_back(lt);
-    }
-
     auto funcMagicName = irFunc->name_ + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().NewId());
     dynFunc_ = std::make_shared<Function>(program_, funcMagicName, irFunc->name_, parentFunc_);
     dynFunc_->SetFunctionType(FunctionType::DYNAMIC);
     dynFunc_->SetGraphType(GraphType::TENSOR_GRAPH);
     dynFunc_->SetSpan(irFunc->span_);
     dynFunc_->SetDyndevAttribute(std::make_shared<DyndevFunctionAttribute>());
+    auto attr = dynFunc_->GetDyndevAttribute();
+
+    for (const auto& param : irFunc->params_) {
+        auto lt = AsLogicalTensor(param);
+        ASSERT(lt) << "RootFunctionBuilder: param is not a LogicalTensor: " << param->name_;
+        logicalParams_.push_back(lt);
+        attr->startArgsInputLogicalTensorList.push_back(lt);
+    }
     program_.SetCurrentDynamicFunction(dynFunc_.get());
 }
 
@@ -464,11 +466,9 @@ void RootFunctionBuilder::BuildDynSlotScope()
         dynScope->ioslot.outcastSlot[idx] = {tensor->Id()};
     }
 
-    attr->startArgsInputLogicalTensorList.resize(logicalParams_.size());
     for (size_t idx = 0; idx < logicalParams_.size(); idx++) {
         auto tensor = slotManager->GetSlotTensor(logicalParams_[idx]);
         attr->startArgsInputTensorList.emplace_back(*tensor);
-        attr->startArgsInputLogicalTensorList[idx] = attr->startArgsInputTensorList.back().get().GetStorage(false);
         slotManager->MarkInput(*tensor);
     }
 

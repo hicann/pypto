@@ -33,6 +33,18 @@ def kernel_with_dynamic(
         out[idx:idx + 1, :] = temp + 1
 
 
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, new_ir=True)
+def kernel_with_inplace_reshape(
+    scale: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
+    out: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
+):
+    pypto.set_vec_tile_shapes(1, 8)
+    scale = pypto.reshape(scale, [1, scale.shape[0]], inplace=True)
+    for idx in pypto.loop(out.shape[0], name="LOOP", idx_name="k"):
+        temp = scale[idx:idx + 1, :]
+        out[idx:idx + 1, :] = temp + 1
+
+
 def test_kernel_reuse():
     """DYNAMIC axis: second call skips compilation, should be faster."""
     torch.npu.set_device(DEVICE_ID)
@@ -83,6 +95,32 @@ def test_kernel_recompile():
     logging.info("✓ Recompile on static axis change")
 
 
+def test_new_ir_inplace_reshape_cache_reuse():
+    """new_ir cache should use entry shapes, not shapes mutated by inplace reshape."""
+    torch.npu.set_device(DEVICE_ID)
+    dev = f"npu:{DEVICE_ID}"
+
+    scale = torch.ones(8, 1, dtype=torch.float32, device=dev)
+    out = torch.zeros(1, 8, dtype=torch.float32, device=dev)
+    t1 = time.perf_counter()
+    kernel_with_inplace_reshape(scale, out)
+    t1 = time.perf_counter() - t1
+    assert torch.allclose(out.cpu(), torch.full((1, 8), 2, dtype=torch.float32))
+
+    scale = torch.ones(8, 1, dtype=torch.float32, device=dev)
+    out = torch.zeros(1, 8, dtype=torch.float32, device=dev)
+    t2 = time.perf_counter()
+    kernel_with_inplace_reshape(scale, out)
+    t2 = time.perf_counter() - t2
+    assert torch.allclose(out.cpu(), torch.full((1, 8), 2, dtype=torch.float32))
+
+    ratio = t2 / t1
+    logging.info(f"new_ir inplace reshape first: {t1:.4f}s, second: {t2:.4f}s, ratio: {ratio:.2f}")
+    assert ratio < 0.1, f"Second not faster after inplace reshape ({t2:.4f}s vs {t1:.4f}s)"
+    logging.info(f"✓ new_ir inplace reshape cache reused, speedup {t1 / t2:.1f}x")
+
+
 if __name__ == "__main__":
     test_kernel_reuse()
     test_kernel_recompile()
+    test_new_ir_inplace_reshape_cache_reuse()
