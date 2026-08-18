@@ -933,6 +933,14 @@ void Allocator::ProcessOperations()
 
             // 跳过已有存储分配的tensor
             if (outputTensor->storage_ != nullptr) {
+                // 若tensor的存储由UpdateStorageForActualRaw等路径预先分配（通过actualRawmagic别名），
+                // 它可能未被加入对应storage group的tensorsDesc.tensors集合。此处补充加入，
+                // 否则CollectComsuerOpDesc会漏掉该tensor的消费者，导致HasTopoDependency误判复用安全。
+                auto storageIter = storageMap_.find(outputTensor->GetRawMagic());
+                if (storageIter != storageMap_.end()) {
+                    TensorsDesc& tensorsDesc = storageNeedToAllocate_.at(storageIter->second);
+                    tensorsDesc.tensors.emplace(outputTensor);
+                }
                 continue;
             }
 
