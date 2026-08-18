@@ -75,8 +75,8 @@ jobs:
           object-prefix: ${{ env.obs_path }}/
     if: "${{ default() }}"
     runs-on:
-      - dedicate-hosted
-      - x64
-      - ${{ inputs.runner_spec }}
+      - self-hosted
+      - arch=x64
+      - spec=${{ inputs.runner_spec }}
     container:
       image: swr.cn-north-4.myhuaweicloud.com/ci_cann/${{ inputs.image_version }}

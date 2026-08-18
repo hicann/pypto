@@ -19,11 +19,11 @@ on:
 
 env:
   org_name: ${{ vars.ORG_NAME }}
-  repo_name: "pypto"
-  MERGE_ID: ${{atomgit.event.pull_request.number}}
-  TARGET_BRANCH: ${{atomgit.base_ref}}
-  SOURCE_BRANCH: ${{atomgit.head_ref}}
-  obs_path: "${{ vars.OBS_PATH }}/${{ env.MERGE_ID }}"
+  repo_name: ${{ atomgit.event.repository.name }}
+  MERGE_ID: ${{ atomgit.event.pull_request.number }}
+  TARGET_BRANCH: ${{ atomgit.base_ref }}
+  SOURCE_BRANCH: ${{ atomgit.head_ref }}
+  obs_path: "${{ env.org_name }}/${{ env.repo_name }}/ci/package/${{ env.MERGE_ID }}"
   obs_smoke_path: "${{ env.obs_path }}/presmoke/3"
   online: ${{ vars.APPLY_LABEL }}
 
@@ -38,14 +38,14 @@ stages:
             identifier: revise_image
             uses: cann/.gitcode/actions/revise-img@master
             with:
-              repo_name: "pypto"
+              repo_name: ${{ env.repo_name }}
               target_branch: ${{ env.TARGET_BRANCH }}
               repo_url: ${{ vars.CI_PATH }}
           -
             name: show_output
             run: |
               echo "image: ${{ steps.revise_image.outputs.Compile_Ascend_ARM }}"
-        runs-on: [dedicate-hosted, x64, small]
+        runs-on: ["self-hosted", "arch=x64", "spec=small"]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/ci_cann/ubuntu20.04.05_x86:k8s_v1.1006
       JOB_pre:
@@ -59,7 +59,7 @@ stages:
     jobs:
       JOB_codecheck_action:
         name: CodeCheck
-        uses: .gitcode/workflows/codecheck_action.yml
+        uses: cann/.gitcode/.gitcode/workflows/codecheck_action.yml@master
         with:
           precommit_image_version: ${{ jobs.JOB_image.outputs.precommit }}
           codecheck_image_version: ${{ jobs.JOB_image.outputs.codecheck }}
@@ -240,7 +240,7 @@ stages:
                 ${{ steps.process_checkout.outputs.path }}/ut_cov_*.tar.gz
               object-prefix: ${{ env.obs_path }}/
         if: "${{ default() }}"
-        runs-on: [dedicate-hosted, x64, large]
+        runs-on: ["self-hosted", "arch=x64", "spec=large"]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/ci_cann/${{ jobs.JOB_image.outputs.UT_Test_report }}
     pre:

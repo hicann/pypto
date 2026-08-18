@@ -36,6 +36,8 @@ if [ "${GIT_TARGET_BRANCH}" = "br_0.1.1_20260313_beta" ]; then
     wget https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/br_0313/package/cann-pto-isa_9.0.0_linux-${ARCH_SUFFIX}.run
 elif [ "${GIT_TARGET_BRANCH}" = "0.2.0" ]; then
     wget https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/package/pto/9.0.0/20260330/${ARCH_SUFFIX}/cann-pto-isa_9.0.0_linux-${ARCH_SUFFIX}.run
+elif [ "${GIT_TARGET_BRANCH}" = "9.1.0" ]; then
+    wget https://opencann-obs.obs.cn-north-4.myhuaweicloud.com/pto-isa/9.1.0/cann-pto-isa_linux-${ARCH_SUFFIX}.run
 else
     wget https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/pto-isa/daily/cann-pto-isa_linux-${ARCH_SUFFIX}.run
 fi
