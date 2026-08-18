@@ -45,6 +45,9 @@ struct MemoryHelper {
     uint8_t* CopyToDev(uint8_t* data, uint64_t size, uint8_t** cachedDevAddrHolder)
     {
         uint8_t* devPtr = AllocDev(size, cachedDevAddrHolder);
+        if (devPtr == nullptr) {
+            return nullptr;
+        }
         if (isTest_)
             memcpy_s(devPtr, size, data, size);
         else
@@ -92,6 +95,9 @@ struct MemoryHelper {
     {
         (void)cachedDevAddrHolder;
         uint8_t* devPtr = AllocDev(size, nullptr);
+        if (devPtr == nullptr) {
+            return nullptr;
+        }
         if (isTest_)
             memset(devPtr, 0, size);
         else
