@@ -74,7 +74,8 @@ class Vf:
             pattern: Mask pattern, ``pl.MaskPattern.ALL`` (default) or other
                 ``MaskPattern`` enum value (VL1..VL128, M3, M4, H, Q, ALLF)
             dtype: Data type that determines mask granularity (default FP32;
-                FP16/UINT8 etc.)
+                FP16/BF16/UINT8/INT8/FP8E4M3FN/FP8E5M2/FP8E8M0/HF8/FP4E2M1/FP4E1M2 etc.
+                — all b8/b4 types are treated as b8 mask width)
 
         Returns:
             mask_reg: Initialized mask register
@@ -157,7 +158,10 @@ class Vf:
                 list/tuple (linear offset = ``row * shape[1] + col``)
 
         Kwargs:
-            dtype: Data type for type-specific variants (e.g. ``pl.DT_UINT32``)
+            dtype: Data type for type-specific variants (e.g. ``pl.DT_UINT32``).
+                Supports all b8 types including FP8 (``DT_FP8E4M3FN``/``DT_FP8E5M2``/
+                ``DT_FP8E8M0``/``DT_HF8``) and b4-packed FP4 (``DT_FP4E2M1``/
+                ``DT_FP4E1M2``).
             dist: ``pl.LoadDist`` value selecting load distribution pattern
                 (e.g. ``pl.LoadDist.BRC``, ``pl.LoadDist.US``, ``pl.LoadDist.BRC_B32``)
             data_copy_mode: ``pl.DataCopyMode.DATA_BLOCK_COPY`` (AscendC's name for
@@ -662,9 +666,22 @@ class Vf:
         each lane ``i`` where ``mask[i]`` is active, the converted value is
         written to ``dst[i]``.  Supports same-width and cross-width
         conversions: float->int, int->int narrowing/widening, float precision
-        changes.
+        changes, and low-precision FP8/FP4 conversions.
 
-        .. math:: dstReg_i = \text{cast}_{dtype}(srcReg_i)
+        **FP8/FP4 conversion support** (Ascend 950PR/950DT only):
+
+        ==================================  ==================================
+        Source type                         Target type
+        ==================================  ==================================
+        ``DT_HF8``                          ``DT_FP16``, ``DT_FP32``
+        ``DT_FP8E4M3FN``                    ``DT_FP32``
+        ``DT_FP8E5M2``                      ``DT_FP32``
+        ``DT_FP4E2M1``                      ``DT_BF16``
+        ``DT_FP4E1M2``                      ``DT_BF16``
+        ``DT_FP16``                         ``DT_HF8``
+        ``DT_FP32``                         ``DT_HF8``, ``DT_FP8E4M3FN``, ``DT_FP8E5M2``
+        ``DT_BF16``                         ``DT_FP4E2M1``, ``DT_FP4E1M2``
+        ==================================  ==================================
 
         Args:
             src: Source register (source type)
@@ -1148,7 +1165,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def sqrt(src, mask, mode: Optional[MergeMode] = None,
-             precision: Optional[str] = None):
+             precision: Optional[bool] = None):
         r"""Square root of each element.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the square
@@ -1164,6 +1181,12 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            precision: When ``True``, enables high-precision mode using the
+                fast-inverse algorithm. The maximum precision error is 0 ulp
+                for input values in [0, 85070596800837026223494223584045301760].
+                Input values exceeding this range output 0. Only effective for
+                ``DT_FP32`` source type. Default ``False`` (standard mode,
+                1 ulp precision error).
 
         Returns:
             Destination register (``RegTensor``) holding the square
@@ -1453,6 +1476,43 @@ class Vf:
         Returns:
             Destination register (``RegTensor``) holding the copied
             elements from ``src``.
+        """
+
+    @staticmethod
+    @_api_decl
+    def bit_cast(src, *, dtype: DType):
+        r"""Bitwise type reinterpretation of a register.
+
+        Returns a view of ``src`` reinterpreted as the target ``dtype``,
+        without converting any element values. The bit pattern is preserved
+        exactly; only the C++ type used for code generation changes.
+
+        This is primarily used as an argument inside other ``vf.xxx`` calls
+        to satisfy AscendC instruction type requirements. For example, to
+        perform ``vf.xor`` on FP8E4M3 registers:
+
+        .. code-block:: python
+
+            reg_c = vf.xor(vf.bit_cast(reg_a, dtype=pl.DT_FP32),
+                           vf.bit_cast(reg_b, dtype=pl.DT_FP32), preg)
+
+        The generated C++ code applies ``RegTensor<T>&`` reference casts:
+
+        .. code-block:: cpp
+
+            RegTensor<float> reg_c;
+            vxor(reg_c, (RegTensor<float>&)reg_a,
+                 (RegTensor<float>&)reg_b, preg, MODE_ZEROING);
+
+        Args:
+            src: Source register (``RegTensor``)
+
+        Kwargs:
+            dtype: Target data type (e.g. ``pl.DT_FP32``, ``pl.DT_UINT16``)
+
+        Returns:
+            A type-annotated reference to ``src``, for use as an argument
+            in other ``vf.xxx`` calls.
         """
 
     @staticmethod

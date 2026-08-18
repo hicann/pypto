@@ -339,6 +339,7 @@ class CallParserMixin:
         "le": 1,
         "ge": 1,
         "histograms": 1,
+        "bit_cast": 1,
         # 2 dsts
         "interleave": 2,
         "de_interleave": 2,
@@ -1138,7 +1139,7 @@ class CallParserMixin:
         # (The assignment form is handled in _assignment_parser, which never routes
         # through here — so reaching this point means it's a statement-form call.)
         dst_count = self._VF_OP_DST_COUNT.get(op_name)
-        if dst_count is not None and dst_count > 0:
+        if dst_count is not None and dst_count > 0 and op_name != "bit_cast":
             if dst_count == 1:
                 correct = f"dst = vf.{op_name}(...)"
             else:

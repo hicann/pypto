@@ -39,6 +39,9 @@
 #define IR_KW_TYPE_BF16 "bfloat16_t"
 #define IR_KW_TYPE_FP8E4M3FN "float8_e4m3_t"
 #define IR_KW_TYPE_FP8E5M2 "float8_e5m2_t"
+#define IR_KW_TYPE_FP8E8M0 "float8_e8m0_t"
+#define IR_KW_TYPE_FP4E2M1 "float4_e2m1x2_t"
+#define IR_KW_TYPE_FP4E1M2 "float4_e1m2x2_t"
 #define IR_KW_TYPE_HF4 "hifloat4_t"
 #define IR_KW_TYPE_HF8 "hifloat8_t"
 #define IR_KW_TYPE_UNKNOWN "unknown"
@@ -53,7 +56,7 @@ namespace ir {
  * It includes:
  * - Signed integers: INT4, INT8, INT16, INT32, INT64
  * - Unsigned integers: UINT4, UINT8, UINT16, UINT32, UINT64
- * - Floating point: FP4, FP8, FP16, FP32
+ * - Floating point: FP4, FP4E2M1, FP4E1M2, FP8, FP8E4M3FN, FP8E5M2, FP8E8M0, FP16, FP32
  * - Brain floating point: BF16
  * - Hisilicon float formats: HF4, HF8
  * - Boolean: BOOL
@@ -93,11 +96,14 @@ public:
     static constexpr uint8_t kFp8e4m3fnCode = 0x31;
     static constexpr uint8_t kFp8e5m2Code = 0x32;
     static constexpr uint8_t kFp8Code = kFp8e4m3fnCode; // Backward compatibility alias
+    static constexpr uint8_t kFp8e8m0Code = 0x36;
+    static constexpr uint8_t kFp4e2m1Code = 0x37;
+    static constexpr uint8_t kFp4e1m2Code = 0x38;
     static constexpr uint8_t kFp16Code = 0x33;
     static constexpr uint8_t kFp32Code = 0x34;
     static constexpr uint8_t kFp64Code = 0x35; // Reserved for future FP64 support
     static constexpr uint8_t kIeeeFloatRangeEnd = 0x3F;
-    // 0x36-0x3F reserved for future IEEE float types
+    // 0x39-0x3F reserved for future IEEE float types
 
     // Brain/Hisilicon float types: 0x40-0x4F (16 slots reserved)
     static constexpr uint8_t kBrainFloatRangeStart = 0x40;
@@ -123,6 +129,9 @@ public:
     static const DataType FP8E4M3FN; // 8-bit floating point (IEEE 754 e4m3fn format)
     static const DataType FP8E5M2;   // 8-bit floating point (IEEE 754 e5m2 format)
     static const DataType FP8;       // 8-bit floating point (backward compatibility alias)
+    static const DataType FP8E8M0;   // 8-bit floating point (8-bit exponent, 0-bit mantissa)
+    static const DataType FP4E2M1;   // 4-bit floating point (2-bit exponent, 1-bit mantissa)
+    static const DataType FP4E1M2;   // 4-bit floating point (1-bit exponent, 2-bit mantissa)
     static const DataType FP16;      // 16-bit floating point (IEEE 754 half precision)
     static const DataType FP32;      // 32-bit floating point (IEEE 754 single precision)
     static const DataType FP64;      // 64-bit floating point (IEEE 754 double precision)
@@ -157,12 +166,15 @@ public:
                 return 8; // These dtypes occupy 8 bits.
             case kHf4Code:
             case kFp4Code:
+            case kFp4e2m1Code:
+            case kFp4e1m2Code:
             case kUInt4Code:
             case kInt4Code:
                 return 4; // These dtypes occupy 4 bits.
             case kHf8Code:
             case kFp8e4m3fnCode:
             case kFp8e5m2Code:
+            case kFp8e8m0Code:
             case kUInt8Code:
             case kInt8Code:
                 return 8; // These dtypes occupy 8 bits.
@@ -221,6 +233,12 @@ public:
                 return "fp8e4m3fn";
             case kFp8e5m2Code:
                 return "fp8e5m2";
+            case kFp8e8m0Code:
+                return "fp8e8m0";
+            case kFp4e2m1Code:
+                return "fp4e2m1";
+            case kFp4e1m2Code:
+                return "fp4e1m2";
             case kFp16Code:
                 return "fp16";
             case kFp32Code:
@@ -265,6 +283,9 @@ public:
             {kBf16Code, IR_KW_TYPE_BF16},
             {kFp8e4m3fnCode, IR_KW_TYPE_FP8E4M3FN},
             {kFp8e5m2Code, IR_KW_TYPE_FP8E5M2},
+            {kFp8e8m0Code, IR_KW_TYPE_FP8E8M0},
+            {kFp4e2m1Code, IR_KW_TYPE_FP4E2M1},
+            {kFp4e1m2Code, IR_KW_TYPE_FP4E1M2},
             {kHf4Code, IR_KW_TYPE_UNKNOWN},
             {kHf8Code, IR_KW_TYPE_HF8},
         }};
@@ -288,7 +309,7 @@ public:
     /**
      * \brief Check if this data type is a floating point type
      *
-     * \return true if this is FP4, FP8, FP16, FP32, BF16, HF4, or HF8
+     * \return true if this is FP4, FP4E2M1, FP4E1M2, FP8, FP8E4M3FN, FP8E5M2, FP8E8M0, FP16, FP32, BF16, HF4, or HF8
      */
     [[nodiscard]] bool IsFloat() const
     {
@@ -364,6 +385,9 @@ inline constexpr DataType DataType::FP4 = DataType(kFp4Code);
 inline constexpr DataType DataType::FP8E4M3FN = DataType(kFp8e4m3fnCode);
 inline constexpr DataType DataType::FP8E5M2 = DataType(kFp8e5m2Code);
 inline constexpr DataType DataType::FP8 = DataType(kFp8Code);
+inline constexpr DataType DataType::FP8E8M0 = DataType(kFp8e8m0Code);
+inline constexpr DataType DataType::FP4E2M1 = DataType(kFp4e2m1Code);
+inline constexpr DataType DataType::FP4E1M2 = DataType(kFp4e1m2Code);
 inline constexpr DataType DataType::FP16 = DataType(kFp16Code);
 inline constexpr DataType DataType::FP32 = DataType(kFp32Code);
 inline constexpr DataType DataType::FP64 = DataType(kFp64Code);
@@ -417,6 +441,12 @@ inline std::string DTypeToString(const DataType& dtype)
         return "FP8E4M3FN";
     if (dtype == DataType::FP8E5M2)
         return "FP8E5M2";
+    if (dtype == DataType::FP8E8M0)
+        return "FP8E8M0";
+    if (dtype == DataType::FP4E2M1)
+        return "FP4E2M1";
+    if (dtype == DataType::FP4E1M2)
+        return "FP4E1M2";
     if (dtype == DataType::FP16)
         return "FP16";
     if (dtype == DataType::FP32)

@@ -2733,7 +2733,7 @@ def _vf_kernel_71_cast_cross_width_0(in_a, t_f0, t_f1):
     reg_f16 = vf.astype(reg_fp32_tmp, preg_f32, round_mode=pl.VFRoundMode.CAST_ROUND, dtype=pl.DT_FP16)
     # Test S16→FP32: cast FP32→S16 first, then S16→FP32 (cross-width widening)
     reg_s16 = vf.astype(reg_a, preg_f32, round_mode=pl.VFRoundMode.CAST_TRUNC, dtype=pl.DT_INT16)
-    reg_dst = vf.astype(reg_s16, preg_f32, round_mode=pl.VFRoundMode.CAST_ROUND, dtype=pl.DT_FP32)
+    reg_dst = vf.astype(reg_s16, preg_f32, dtype=pl.DT_FP32)
     vf.store_align(t_f0, reg_dst, preg_f32)
     # Test FP16→BF16: cast FP32→FP16 then FP16→BF16 then BF16→FP32 roundtrip
     reg_f16 = vf.astype(reg_a, preg_f32, round_mode=pl.VFRoundMode.CAST_ROUND, dtype=pl.DT_FP16)
@@ -3242,7 +3242,7 @@ def kernel_88_maskdist(
 def _vf_kernel_89_cast_odd_0(in_a, t_f0):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(in_a, 0)
-    reg_i = vf.astype(reg_a, preg, dtype=pl.DT_INT32, round_mode=pl.VFRoundMode.CAST_ODD)
+    reg_i = vf.astype(reg_a, preg, dtype=pl.DT_INT32, round_mode=pl.VFRoundMode.CAST_TRUNC)
     reg_f = vf.astype(reg_i, preg, dtype=pl.DT_FP32)
     vf.store_align(t_f0, reg_f, preg)
 

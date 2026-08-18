@@ -30,6 +30,9 @@ class DataType:
     FP4: DataType  # 4-bit floating point
     FP8E4M3FN: DataType  # 8-bit floating point (IEEE 754 e4m3fn format)
     FP8E5M2: DataType  # 8-bit floating point (IEEE 754 e5m2 format)
+    FP8E8M0: DataType  # 8-bit floating point (8-bit exponent, 0-bit mantissa)
+    FP4E2M1: DataType  # 4-bit floating point (2-bit exponent, 1-bit mantissa)
+    FP4E1M2: DataType  # 4-bit floating point (1-bit exponent, 2-bit mantissa)
     FP16: DataType  # 16-bit floating point (IEEE 754 half precision)
     FP32: DataType  # 32-bit floating point (IEEE 754 single precision)
     FP64: DataType  # 64-bit floating point (IEEE 754 double precision)
@@ -58,7 +61,7 @@ class DataType:
 
     def is_float(self) -> bool:
         """
-        Check if this data type is a floating point type (FP4, FP8, FP16, FP32, BF16, HF4, HF8).
+        Check if this data type is a floating point type (FP4, FP4E2M1, FP4E1M2, FP8, FP8E4M3FN, FP8E5M2, FP8E8M0, FP16, FP32, BF16, HF4, HF8).
 
         Returns:
             True if the data type is a floating point type, False otherwise

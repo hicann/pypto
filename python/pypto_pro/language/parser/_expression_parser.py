@@ -406,7 +406,7 @@ class ExpressionParserMixin:
         # Every other operator on a pointer (-, *, /, //, %) is forbidden.
         if isinstance(left.type, ir.PtrType):
             if isinstance(binop.op, ast.Add):
-                # Sub-byte element types (INT4/UINT4/FP4/HF4) pack two elements per
+                # Sub-byte element types (INT4/UINT4/FP4/FP4E2M1/FP4E1M2/HF4) pack two elements per
                 # byte, so an element offset cannot address a half-byte and there is
                 # no valid C element type to lower to. Forbid `ptr + offset` on them.
                 if left.type.dtype.get_bit() < 8:

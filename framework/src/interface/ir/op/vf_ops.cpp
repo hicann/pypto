@@ -447,6 +447,14 @@ REGISTER_OP("vf.copy")
     .set_attr<int>("mode")
     .f_deduce_type(DeduceVFFromDstArg);
 
+REGISTER_OP("vf.bit_cast")
+    .set_op_category("VFOp")
+    .set_description("Bitwise type reinterpretation (no value conversion)")
+    .add_argument("dst", "Destination register")
+    .add_argument("src", "Source register")
+    .set_attr<DataType>("dtype")
+    .f_deduce_type(DeduceVFScalarType);
+
 REGISTER_OP("vf.mul_dst_add")
     .set_op_category("VFOp")
     .set_description("Multiply-dst-add: dst = dst + src0 * src1 (vmadd)")

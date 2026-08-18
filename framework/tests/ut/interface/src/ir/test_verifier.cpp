@@ -676,6 +676,19 @@ TEST_F(VerifierNoNestedCallTest, NoNesting_Clean)
     EXPECT_TRUE(diags.empty());
 }
 
+TEST_F(VerifierNoNestedCallTest, BitCastAsNestedCall_NoError)
+{
+    IRVerifier v;
+    v.AddRule(CreateNoNestedCallPropertyVerifier());
+
+    auto bit_cast_call = std::make_shared<Call>("vf.bit_cast", std::vector<ExprPtr>{}, Sp());
+    auto outer_call = std::make_shared<Call>("vf.xor", std::vector<ExprPtr>{bit_cast_call}, Sp());
+    auto eval = std::make_shared<EvalStmt>(outer_call, Sp());
+    auto program = MakeProgram("f", eval);
+    auto diags = v.Verify(program);
+    EXPECT_TRUE(diags.empty());
+}
+
 TEST_F(VerifierNoNestedCallTest, ErrorTypeToString_ReturnsCorrectString)
 {
     using namespace nested_call;

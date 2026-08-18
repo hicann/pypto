@@ -109,5 +109,29 @@ TEST_F(VFOpsTest, Add_WithArgs_ReturnsDstArgType)
     EXPECT_EQ(rt->dtype_, DataType::FP32);
 }
 
+// ============================================================================
+// DeduceVFScalarType: vf.bit_cast
+// ============================================================================
+
+TEST_F(VFOpsTest, BitCast_WithDtypeKwarg_ReturnsTargetScalarType)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto src = MakeScalarVar("src", DataType::FP8E4M3FN);
+    auto call = reg.Create("vf.bit_cast", {src}, {{"dtype", DataType::FP32}}, Sp());
+    auto rt = As<ScalarType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::FP32);
+}
+
+TEST_F(VFOpsTest, BitCast_NoDtypeKwarg_DefaultsToFP32)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto src = MakeScalarVar("src", DataType::UINT16);
+    auto call = reg.Create("vf.bit_cast", {src}, Sp());
+    auto rt = As<ScalarType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::FP32);
+}
+
 } // namespace ir
 } // namespace pypto

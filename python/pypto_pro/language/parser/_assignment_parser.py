@@ -108,7 +108,7 @@ class AssignmentParserMixin:
         )
 
     # Ops where dst type differs from src type — dtype kwarg is mandatory.
-    _TYPE_CHANGING_OPS = frozenset({"astype", "muls_cast", "pack", "unpack"})
+    _TYPE_CHANGING_OPS = frozenset({"astype", "muls_cast", "pack", "unpack", "bit_cast"})
 
     def _parse_vf_assignment(
         self,

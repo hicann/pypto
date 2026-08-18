@@ -1911,6 +1911,7 @@ void CCECodegen::VisitExpr_(const ir::CallPtr& op)
             "vf.mask_gen_with_reg_tensor",
             "vf.compare",
             "vf.compares",
+            "vf.bit_cast",
         };
         if (skip_ops.count(op->name_) == 0) {
             static const std::set<std::string> dual_dst_ops = {

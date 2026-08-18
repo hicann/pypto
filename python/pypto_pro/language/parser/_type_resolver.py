@@ -42,6 +42,9 @@ class TypeResolver:
         "DT_FP4": DataType.FP4,
         "DT_FP8E4M3FN": DataType.FP8E4M3FN,
         "DT_FP8E5M2": DataType.FP8E5M2,
+        "DT_FP8E8M0": DataType.FP8E8M0,
+        "DT_FP4E2M1": DataType.FP4E2M1,
+        "DT_FP4E1M2": DataType.FP4E1M2,
         "DT_FP16": DataType.FP16,
         "DT_FP32": DataType.FP32,
         "DT_BF16": DataType.BF16,
@@ -65,6 +68,9 @@ class TypeResolver:
             "DT_FP4",
             "DT_FP8E4M3FN",
             "DT_FP8E5M2",
+            "DT_FP8E8M0",
+            "DT_FP4E2M1",
+            "DT_FP4E1M2",
             "DT_INT4",
             "DT_UINT4",
             "DT_HF4",
@@ -488,7 +494,8 @@ class TypeResolver:
                 if dtype_name in self._SCALAR_UNSUPPORTED_DTYPE_NAMES:
                     raise ParserTypeError(
                         f"Scalar type does not support dtype {dtype_name}; "
-                        "low-precision types (FP4/FP8/INT4/UINT4/HF4/HF8) are storage-only "
+                        "low-precision types (FP4/FP4E2M1/FP4E1M2/FP8/FP8E4M3FN/FP8E5M2/"
+                        "FP8E8M0/INT4/UINT4/HF4/HF8) are storage-only "
                         "and cannot be used in scalar expressions",
                         span=self._get_span(type_node),
                         hint="Use a supported scalar dtype: DT_BOOL, DT_INT8, DT_INT16, DT_INT32, "

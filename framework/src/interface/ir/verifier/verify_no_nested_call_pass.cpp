@@ -150,7 +150,15 @@ void NoNestedCallVerifier::VisitExpr_(const CallPtr& op)
 {
     // Check each argument of the call
     for (const auto& arg : op->args_) {
-        if (As<Call>(arg)) {
+        auto nested = As<Call>(arg);
+        if (nested) {
+            // Allow vf.bit_cast as a nested call — it is a type annotation,
+            // not a real compute op, and is designed to be used as an
+            // argument inside other vf.xxx calls.
+            if (nested->name_ == "vf.bit_cast") {
+                VisitExpr(arg);
+                continue;
+            }
             std::ostringstream msg;
             msg << "Call expression has nested call in arguments";
             RecordError(nested_call::ErrorType::CALL_IN_CALL_ARGS, msg.str(), arg->span_);

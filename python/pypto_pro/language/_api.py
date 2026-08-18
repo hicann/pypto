@@ -299,7 +299,8 @@ def ssbuf_store(struct_var: Any, offset: int) -> None:
 # Constraints (apply to all ops in this section):
 # - No broadcast: ``out``, ``lhs``, ``rhs`` (when Tile) must have identical shape.
 # - No implicit type promotion: all operands must have the same dtype.
-# - Supported dtypes: FP16, FP32, BF16 (op-dependent; FP8 not supported).
+# - Supported dtypes: FP16, FP32, BF16 (op-dependent; FP8/FP4 are storage-only
+#   — use vf.astype to convert to/from FP32/BF16/FP16 for computation).
 
 
 @_api_decl
