@@ -700,7 +700,7 @@ private:
             auto pyalloc = py::getattr(module, "alloc");
             wsAddr = (int64_t*)pyalloc(wsSize).cast<int64_t>();
         }
-        COMPILER_LOGD("alloc workspace %ld", wsSize);
+        COMPILER_LOGD("alloc workspace %ld bytes", wsSize);
         HOST_PERF_TRACE(TracePhase::LaunchAllocWorkSpace);
 
         uint8_t* ctrlFlowCache = DeviceLauncher::PrepareLaunch(kbinary, tensors, rtModel, kmodule->GetLaunchMode());

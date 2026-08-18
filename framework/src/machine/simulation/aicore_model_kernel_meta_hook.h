@@ -48,7 +48,7 @@ inline bool InitAicoreModelCoreAddrs(DeviceMemoryTy& devMem, DevAscendProgram* d
     auto allocAndAssign = [&](uint64_t& addr, size_t bytes, const char* name) {
         auto* ptr = devMem.AllocZero(bytes, nullptr);
         if (ptr == nullptr) {
-            MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Alloc aicore model host %s failed, size=%zu", name, bytes);
+            MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Alloc aicore model host %s failed, size=%zu bytes", name, bytes);
             addr = 0;
             return false;
         }
@@ -81,7 +81,8 @@ inline bool InitAicoreModelMetrics(DeviceMemoryTy& devMem, DevAscendProgram* dev
         auto* args = reinterpret_cast<KernelArgs*>(sharedBuffer + static_cast<size_t>(i) * SHARED_BUFFER_SIZE);
         auto* metric = devMem.AllocZero(metricSize, nullptr);
         if (metric == nullptr) {
-            MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Alloc aicore model host metric failed, core=%u", i);
+            MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Alloc aicore model host metric failed, size=%zu bytes, coreId=%u",
+                         metricSize, i);
             devProg->devArgs.sharedBuffer = 0;
             return false;
         }

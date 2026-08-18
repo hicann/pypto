@@ -72,7 +72,7 @@ DevMemoryPool::~DevMemoryPool()
 void DevMemoryPool::AllocDevAddr(uint8_t** devAddr, const uint64_t size)
 {
     if (!AllocDevAddrInPool(devAddr, size)) {
-        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "AllocDevAddrInPool failed for size %lu", size);
+        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "AllocDevAddrInPool failed for size %lu bytes", size);
     } else {
         MACHINE_LOGI("RuntimeAgentMemory: Alloc success %p", *devAddr);
     }
@@ -112,7 +112,7 @@ bool DevMemoryPool::AllocDevAddrInPool(uint8_t** devAddr, const uint64_t size)
         }
     }
 
-    MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Allocate failed: size=%lu", size);
+    MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Allocate failed: size=%lu bytes", size);
     return false;
 }
 
@@ -285,7 +285,7 @@ void DevMemoryPool::FreeMemBlock(MemoryBlock* block)
     }
 
     if (block->baseAddr != nullptr) {
-        MACHINE_LOGI("Releasing physical memory: addr=%p, size=%lu", block->baseAddr, block->blockSize);
+        MACHINE_LOGI("Releasing physical memory: addr=%p, size=%lu bytes", block->baseAddr, block->blockSize);
         RuntimeFree(block->baseAddr);
         block->baseAddr = nullptr;
     }
@@ -319,7 +319,7 @@ void* DevAlloc(const uint64_t size)
     }
     if (RuntimeMemset(devPtr, size, 0, size) != RT_SUCCESS) {
         DevMemoryPool::Instance().FreeDevAddr(devPtr);
-        MACHINE_LOGE(RtErr::RT_MEMSET_FAILED, "RuntimeMemset failed size=%lu.", size);
+        MACHINE_LOGE(RtErr::RT_MEMSET_FAILED, "RuntimeMemset failed size=%lu bytes.", size);
         return nullptr;
     }
     return devPtr;
@@ -329,12 +329,12 @@ void* CopyDataToDevice(const void* dataPtr, const uint64_t dataSize)
 {
     void* devAddr = DevAlloc(dataSize);
     if (devAddr == nullptr) {
-        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to alloc dev memory of size %lu", dataSize);
+        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to alloc dev memory of size %lu bytes", dataSize);
         return nullptr;
     }
     if (RuntimeMemcpyDirect(devAddr, dataSize, dataPtr, dataSize, RtMemcpyKind::HOST_TO_DEVICE) != RT_SUCCESS) {
         DevMemoryPool::Instance().FreeDevAddr(devAddr);
-        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to copy data to dev of size %lu", dataSize);
+        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to copy data to dev of size %lu bytes", dataSize);
         return nullptr;
     }
     return devAddr;

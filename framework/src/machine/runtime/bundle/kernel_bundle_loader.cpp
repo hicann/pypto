@@ -74,8 +74,8 @@ std::shared_ptr<LoadedBundle> KernelBundleLoader::LoadFromMemory(const uint8_t* 
         return nullptr;
     }
     if (hdr.totalSize != n) {
-        MACHINE_LOGE(DevCommonErr::FILE_ERROR, "[kernel-bundle] size mismatch: header=%lu actual=%zu", hdr.totalSize,
-                     n);
+        MACHINE_LOGE(DevCommonErr::FILE_ERROR, "[kernel-bundle] size mismatch: header=%lu bytes actual=%zu bytes",
+                     hdr.totalSize, n);
         return nullptr;
     }
     if (Crc32(p, sizeof(BundleHeader) - sizeof(uint32_t)) != hdr.headerCrc32) {

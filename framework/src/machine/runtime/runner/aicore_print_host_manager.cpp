@@ -38,13 +38,15 @@ int AicorePrintHostManager::Init(const DeviceArgs& args)
     for (uint32_t i = 0; i < numCores_; i++) {
         void* devPtr = nullptr;
         if (RuntimeMalloc(&devPtr, PRINT_BUFFER_SIZE, RT_MEMORY_HBM, 0) != RT_SUCCESS) {
-            MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to alloc aicore print buffer for core %u", i);
+            MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to alloc aicore print buffer, size=%lu bytes, coreId=%u",
+                         PRINT_BUFFER_SIZE, i);
             Release();
             return static_cast<int>(DevCommonErr::ALLOC_FAILED);
         }
-        MACHINE_LOGD("AicorePrintHostManager alloc core %u buffer=%p size=%lu", i, devPtr, PRINT_BUFFER_SIZE);
+        MACHINE_LOGD("AicorePrintHostManager alloc buffer=%p size=%lu bytes, coreId=%u", devPtr, PRINT_BUFFER_SIZE, i);
         if (RuntimeMemset(devPtr, PRINT_BUFFER_SIZE, 0, PRINT_BUFFER_SIZE) != RT_SUCCESS) {
-            MACHINE_LOGE(DevCommonErr::MEMRESET_FAILED, "Failed to memset aicore print buffer for core %u", i);
+            MACHINE_LOGE(DevCommonErr::MEMRESET_FAILED,
+                         "Failed to memset aicore print buffer, size=%lu bytes, coreId=%u", PRINT_BUFFER_SIZE, i);
             RuntimeFree(devPtr);
             Release();
             return static_cast<int>(DevCommonErr::MEMRESET_FAILED);
@@ -57,7 +59,7 @@ int AicorePrintHostManager::Init(const DeviceArgs& args)
         return static_cast<int>(DevCommonErr::MEMCPY_FAILED);
     }
     hostBuf_.resize(PRINT_BUFFER_SIZE);
-    MACHINE_LOGI("AicorePrintHostManager init success: %u cores, buffer size %lu", numCores_, PRINT_BUFFER_SIZE);
+    MACHINE_LOGI("AicorePrintHostManager init success: %u cores, buffer size %lu bytes", numCores_, PRINT_BUFFER_SIZE);
     return 0;
 }
 
@@ -94,7 +96,9 @@ int AicorePrintHostManager::DumpAicoreLog()
         auto ret = NormalizedRtMemcpy(hostBuf_.data(), PRINT_BUFFER_SIZE, devBuffers_[i], PRINT_BUFFER_SIZE,
                                       RtMemcpyKind::DEVICE_TO_HOST);
         if (ret != RT_SUCCESS) {
-            MACHINE_LOGE(DevCommonErr::MEMCPY_FAILED, "D2H copy aicore print buffer failed, core %u, ret %d", i, ret);
+            MACHINE_LOGE(DevCommonErr::MEMCPY_FAILED,
+                         "D2H copy aicore print buffer failed, size=%lu bytes, coreId=%u, ret %d", PRINT_BUFFER_SIZE, i,
+                         ret);
             retCode = static_cast<int>(DevCommonErr::MEMCPY_FAILED);
             continue;
         }

@@ -258,7 +258,7 @@ static std::vector<DeviceTensorData> toHostTensorData(const std::vector<DeviceTe
     for (auto& devData : devDataList) {
         int64_t size = devData.GetDataSize();
         if (size == 0 || size > 0x500000000) {
-            MACHINE_LOGE(DevCommonErr::PARAM_INVALID, "AllocDev failed: size=%ld", size);
+            MACHINE_LOGE(DevCommonErr::PARAM_INVALID, "AllocDev failed: size=%ld bytes", size);
             return {};
         }
         void* ptr = malloc(size);

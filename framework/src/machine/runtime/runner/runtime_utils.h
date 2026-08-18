@@ -76,8 +76,8 @@ inline void RuntimeMemcpyWithCheck(void* dst, uint64_t destMax, const void* src,
     const RtError ret = RuntimeMemcpyDirect(dst, destMax, src, cnt, kind);
     if (ret != RT_SUCCESS) {
         MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED,
-                     "RuntimeMemcpy failed: func=%s, file=%s:%d, ret=%d, kind=%d, size=%lu, dst=%p, src=%p", func, file,
-                     line, static_cast<int>(ret), static_cast<int>(kind), cnt, dst, src);
+                     "RuntimeMemcpy failed: func=%s, file=%s:%d, ret=%d, kind=%d, size=%lu bytes, dst=%p, src=%p", func,
+                     file, line, static_cast<int>(ret), static_cast<int>(kind), cnt, dst, src);
         MACHINE_ASSERT(false) << "RuntimeMemcpy failed, ret=" << static_cast<int>(ret);
     }
 }
@@ -89,8 +89,8 @@ inline void RuntimeMemcpyAsyncWithCheck(void* dst, uint64_t destMax, const void*
     const RtError ret = RuntimeMemcpyDirectAsync(dst, destMax, src, cnt, kind, stm);
     if (ret != RT_SUCCESS) {
         MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED,
-                     "RuntimeMemcpyAsync failed: func=%s, file=%s:%d, ret=%d, kind=%d, size=%lu, dst=%p, src=%p", func,
-                     file, line, static_cast<int>(ret), static_cast<int>(kind), cnt, dst, src);
+                     "RuntimeMemcpyAsync failed: func=%s, file=%s:%d, ret=%d, kind=%d, size=%lu bytes, dst=%p, src=%p",
+                     func, file, line, static_cast<int>(ret), static_cast<int>(kind), cnt, dst, src);
         MACHINE_ASSERT(false) << "RuntimeMemcpyAsync failed, ret=" << static_cast<int>(ret);
     }
 }
@@ -142,11 +142,11 @@ inline void* DevMallocWithAlignSize(const uint64_t size, const RtMemType memType
 {
     uint8_t* devPtr = nullptr;
     if (RuntimeMalloc(reinterpret_cast<void**>(&devPtr), AlignSize(size), memType, 0) != 0) {
-        MACHINE_LOGW("Fail to malloc dev memory with size[%lu] and mem type[%u].", size, memType);
+        MACHINE_LOGW("Fail to malloc dev memory with size[%lu] bytes and mem type[%u].", size, memType);
         return nullptr;
     }
     if (RuntimeMemset(devPtr, AlignSize(size), 0, AlignSize(size)) != 0) {
-        MACHINE_LOGW("Fail to memset of size[%lu].", size);
+        MACHINE_LOGW("Fail to memset of size[%lu] bytes.", size);
         RuntimeFree(devPtr);
         return nullptr;
     }

@@ -317,7 +317,7 @@ static std::vector<DeviceTensorData> toHostTensorData(const std::vector<DeviceTe
         auto size = devData.GetDataSize();
         if (size == 0) {
             // Optional placeholder (e.g. empty dequant_scale); no device buffer — skip D2H memcpy.
-            MACHINE_LOGW("toHostTensorData: skip zero-size tensor, isInput=%d", isInput);
+            MACHINE_LOGW("toHostTensorData: skip empty tensor, isInput=%d", isInput);
             hostDataList.emplace_back(devData.GetDataType(), nullptr, devData.GetShape());
             continue;
         }

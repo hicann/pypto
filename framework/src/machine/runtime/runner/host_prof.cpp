@@ -329,7 +329,7 @@ void HostProf::HostProfReportCacheTaskInfo(const AclRtStream stream, const uint3
     size_t bufferSize = sizeof(CacheTaskInfo) + sizeof(MspfTensorData) * tensorSize;
     void* buffer = malloc(bufferSize);
     if (buffer == nullptr) {
-        MACHINE_LOGW("Fail to malloc memory, size is [%zu]", bufferSize);
+        MACHINE_LOGW("Fail to malloc memory, size is [%zu] bytes", bufferSize);
         return;
     }
     (void)memset_s(buffer, bufferSize, 0, bufferSize);

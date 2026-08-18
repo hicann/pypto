@@ -157,7 +157,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
         DeviceMemoryUtils devMem;
         wsAddr = reinterpret_cast<int64_t*>(devMem.AllocDev(static_cast<size_t>(wsSize), nullptr));
         if (wsAddr == nullptr) {
-            MACHINE_LOGE(RtErr::RT_MALLOC_FAILED, "Failed to alloc workspace of size %ld", wsSize);
+            MACHINE_LOGE(RtErr::RT_MALLOC_FAILED, "Failed to alloc workspace of size %ld bytes", wsSize);
             return -1;
         }
     }

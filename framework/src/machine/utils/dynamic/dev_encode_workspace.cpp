@@ -162,7 +162,7 @@ uint64_t CalcGeneralMetadataSlotWorkspace(DevAscendProgram* devProg)
                  itemPoolMemSize, vectorMemSize, slotAllocatorMemSize);
     static constexpr uint64_t AICPU_SLOT_STATIC_MEMSIZE = 2 * MEBI;
     generalMetadataSlotSize = itemPoolMemSize + vectorMemSize + slotAllocatorMemSize + AICPU_SLOT_STATIC_MEMSIZE;
-    MACHINE_LOGI("[workspaceSize] Workspace of generalMetadataSlotSize is %lu., ", generalMetadataSlotSize);
+    MACHINE_LOGI("[workspaceSize] Workspace of generalMetadataSlotSize is %lu bytes., ", generalMetadataSlotSize);
     return generalMetadataSlotSize;
 }
 
@@ -216,7 +216,7 @@ uint64_t CalcStitchWorkspace(DevAscendProgram& devProg)
         uint32_t requiredSlabNum = ((objUsedNum[i] << 2) + slabCapacity[i] - 1) / slabCapacity[i];
         stitchPoolSize += slabSize * requiredSlabNum;
     }
-    MACHINE_LOGD("[workspaceSize] Stitch pool size is %lu, with slab size:%u.", stitchPoolSize, slabSize);
+    MACHINE_LOGD("[workspaceSize] Stitch pool size is %lu bytes, with slab size:%u bytes.", stitchPoolSize, slabSize);
     return (stitchPoolSize + SLAB_ALIGN_GRANULARITY) * devProg.GetParallelism();
 }
 
@@ -250,7 +250,7 @@ uint64_t CalcStitchCacheSize(DevAscendProgram* devProg)
     }
     uint64_t cacheSize = static_cast<uint64_t>(devProg->rootFuncMaxCallOpsize) * devProg->rootFuncMaxCallOpsize *
                          sizeof(uint64_t);
-    MACHINE_LOGI("stitchCacheSize: %lu, maxCallOpsize: %u", cacheSize, devProg->rootFuncMaxCallOpsize);
+    MACHINE_LOGI("stitchCacheSize: %lu bytes, maxCallOpsize: %u", cacheSize, devProg->rootFuncMaxCallOpsize);
     return cacheSize;
 }
 
@@ -300,10 +300,13 @@ void LogWorkspaceEncodeSummary(int kMin, uint32_t stitchNumMax, const DevAscendP
                                const StitchDepthConfig& depthConfig, uint64_t maxWorkspaceBytes,
                                uint64_t workspaceStitchMin)
 {
-    MACHINE_LOGI("[workspaceSize] stitch depth: k_min=%d, stitchNumMax=%u, k_eff=%u, outcastCacheDepth=%u, "
-                 "runtimeOutcastPoolDepth=%u, devTaskBoundaryOutcastNum=%lu, devTaskInnerTemporalOutcastNum=%lu, "
-                 "stitchMax=%u, stitch_1=%lu, encoded_tensor_budget=%lu, context_workspace=%lu, metadata=%lu, "
-                 "max_workspace_kb=%lu, memory_driven=%d, runtimeOutcastPoolSize=%u.",
+    MACHINE_LOGI("[workspaceSize] stitch depth: k_min=%d, stitchNumMax=%u, k_eff=%u, "
+                 "outcastCacheDepth=%u, "
+                 "runtimeOutcastPoolDepth=%u, devTaskBoundaryOutcastNum=%lu, "
+                 "devTaskInnerTemporalOutcastNum=%lu, "
+                 "stitchMax=%u, stitch_1=%lu bytes, encoded_tensor_budget=%lu bytes, context_workspace=%lu bytes, "
+                 "metadata=%lu bytes, "
+                 "max_workspace_kb=%lu KB, memory_driven=%d, runtimeOutcastPoolSize=%u bytes.",
                  kMin, stitchNumMax, depthConfig.kEff, depthConfig.outcastCacheDepth,
                  depthConfig.runtimeOutcastPoolDepth, devProg.memBudget.tensor.devTaskBoundaryOutcastNum,
                  devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum, devProg.stitchMaxFunctionNum,

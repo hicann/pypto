@@ -421,7 +421,7 @@ public:
             kArgs.inputs = reinterpret_cast<int64_t*>(tensorInfo_.data() + sizeof(AiCpuArgs));
             kArgs.outputs = kArgs.inputs + 1;
         }
-        MACHINE_LOGD("Inputs=%p, outputs=%p, workspace=%p, cfgdata=%p, tensorSize=%zu, patchTailSize=%zu.",
+        MACHINE_LOGD("Inputs=%p, outputs=%p, workspace=%p, cfgdata=%p, tensorSize=%zu bytes, patchTailSize=%zu bytes.",
                      kArgs.inputs, kArgs.outputs, kArgs.workspace, kArgs.cfgdata, tensorSize, patchTailSize);
     }
 

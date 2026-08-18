@@ -198,7 +198,7 @@ int64_t KernelBinary::GetWorkspaceSize(const std::vector<DeviceTensorData>& tens
 
         // check and pretty print total workspace consumption
         auto* wsChecker = RebuildableAttributeManager::GetInstance().GetAttr<RebuildableWorkspaceDesc>(dynFunc.get());
-        MACHINE_LOGI_FULL("Memory Consumption: size=%ld\n%s\n", workspaceSize,
+        MACHINE_LOGI_FULL("Memory Consumption: size=%ld bytes\n%s\n", workspaceSize,
                           wsChecker
                               ->PrettyDumpSize(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem,
                                                devProg->memBudget.debug.Total())
