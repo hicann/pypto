@@ -54,9 +54,9 @@ def test_err_per_channel_with_relu():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -76,9 +76,9 @@ def test_err_per_channel_with_phase():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -98,10 +98,10 @@ def test_err_scale_tensor_rejected():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        scale_tensor: pl.Tensor[[1, 64], pl.DT_INT64],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        scale_tensor: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -120,9 +120,9 @@ def test_err_scale_uint8_output():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_UINT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -140,9 +140,9 @@ def test_err_scale_fp32_to_bf16():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_BF16],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -160,9 +160,9 @@ def test_err_scale_int32_to_bf16():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_INT8],
-        k: pl.Tensor[[64, 64], pl.DT_INT8],
-        out: pl.Tensor[[64, 64], pl.DT_BF16],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
     ):
         with pl.section_cube():
             acc_type = pl.TileType(
@@ -184,9 +184,9 @@ def test_err_scale_tile_not_scaling():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -206,9 +206,9 @@ def test_err_per_channel_move_dual_mode():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
         vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
@@ -235,9 +235,9 @@ def test_err_scale_string():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -255,9 +255,9 @@ def test_err_scale_list():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -277,9 +277,9 @@ def test_err_scale_dict():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -297,9 +297,9 @@ def test_err_scale_none_type():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -312,10 +312,10 @@ def test_err_scale_unsupported_scalar_dtype():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
         scale_val: pl.DT_FP16,
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -339,9 +339,9 @@ def test_err_per_channel_1d_tile():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -361,9 +361,9 @@ def test_err_per_channel_3d_tile():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -383,9 +383,9 @@ def test_err_per_channel_0d_tile():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -405,9 +405,9 @@ def test_err_per_channel_n1_tile():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -427,9 +427,9 @@ def test_err_per_channel_col_not_aligned():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -454,9 +454,9 @@ def test_err_legacy_pre_quant_scalar():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()
@@ -474,9 +474,9 @@ def test_err_legacy_fp_tile():
 
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             acc = _make_acc()

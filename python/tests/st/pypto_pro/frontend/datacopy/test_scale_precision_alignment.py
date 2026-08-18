@@ -53,9 +53,9 @@ def _make_per_tensor_store_kernel(scale_value: float):
 
     @pl.jit(name=f"p4_per_tensor_store_{scale_value}")
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -99,9 +99,9 @@ def _make_per_tensor_relu_kernel(scale_value: float):
 
     @pl.jit(name=f"p4_per_tensor_relu_{scale_value}")
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         with pl.section_cube():
             mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -142,9 +142,9 @@ def _make_per_tensor_relu_kernel(scale_value: float):
 
 @pl.jit()
 def per_tensor_dynamic_store_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_bits: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -183,10 +183,10 @@ def per_tensor_dynamic_store_kernel(
 
 @pl.jit()
 def per_channel_store_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -236,10 +236,10 @@ def per_channel_store_kernel(
 
 @pl.jit()
 def per_channel_dequant_store_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_INT8],
-    k: pl.Tensor[[64, 64], pl.DT_INT8],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    out: pl.Tensor[[64, 64], pl.DT_FP16],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)

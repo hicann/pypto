@@ -50,9 +50,9 @@ def _make_k(device: str) -> torch.Tensor:
 
 @pl.jit()
 def fp32_scale_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     """Kernel with FP32 Scaling tile (should fail at parse time)."""
     with pl.section_cube():
@@ -121,9 +121,9 @@ def test_err_scale_tile_fp32():
 
 @pl.jit()
 def fp16_scale_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     """Kernel with FP16 Scaling tile (should fail at parse time)."""
     with pl.section_cube():
@@ -191,9 +191,9 @@ def test_err_scale_tile_fp16():
 
 @pl.jit()
 def int32_scale_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     """Kernel with INT32 Scaling tile (should fail at parse time)."""
     with pl.section_cube():
@@ -261,10 +261,10 @@ def test_err_scale_tile_int32():
 
 @pl.jit()
 def int64_scale_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     """Kernel with a user-prepared INT64 Scaling tile (correct usage)."""
     with pl.section_cube():

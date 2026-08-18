@@ -48,26 +48,44 @@ def _make_k(device: str) -> torch.Tensor:
 
 @pl.jit()
 def scale_store_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    raw_out: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    raw_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    vm: pl.DT_INT32,
+    vn: pl.DT_INT32,
 ):
     with pl.section_cube():
-        mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
+        mat_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+        )
         q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
-        left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
+        left_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+        )
         q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
-        right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
+        right_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right,
+            layout=pl.ZN, valid_shape=[-1, -1], compact=1,
+        )
         k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
 
         acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
+            layout=pl.NZ, fractal=1024, valid_shape=[-1, -1], compact=1,
         )
         acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+
+        pl.set_validshape(q_mat, [vm, 64])
+        pl.set_validshape(q_left, [vm, 64])
+        pl.set_validshape(k_mat, [64, vn])
+        pl.set_validshape(k_right, [64, vn])
+        pl.set_validshape(acc, [vm, vn])
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -90,28 +108,46 @@ def scale_store_kernel(
 
 @pl.jit()
 def scale_move_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    move_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    move_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    vm: pl.DT_INT32,
+    vn: pl.DT_INT32,
 ):
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
     vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
 
     with pl.section_cube():
-        mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
+        mat_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+        )
         q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
-        left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
+        left_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+        )
         q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
-        right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
+        right_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right,
+            layout=pl.ZN, valid_shape=[-1, -1], compact=1,
+        )
         k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
 
         acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
+            layout=pl.NZ, fractal=1024, valid_shape=[-1, -1], compact=1,
         )
         acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+
+        pl.set_validshape(q_mat, [vm, 64])
+        pl.set_validshape(q_left, [vm, 64])
+        pl.set_validshape(k_mat, [64, vn])
+        pl.set_validshape(k_right, [64, vn])
+        pl.set_validshape(acc, [vm, vn])
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -140,26 +176,44 @@ def scale_move_kernel(
 
 @pl.jit()
 def scale_dynamic_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_bits: pl.DT_INT32,
+    vm: pl.DT_INT32,
+    vn: pl.DT_INT32,
 ):
     with pl.section_cube():
-        mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
+        mat_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+        )
         q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
-        left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
+        left_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+        )
         q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
-        right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
+        right_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right,
+            layout=pl.ZN, valid_shape=[-1, -1], compact=1,
+        )
         k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
 
         acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
+            layout=pl.NZ, fractal=1024, valid_shape=[-1, -1], compact=1,
         )
         acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+
+        pl.set_validshape(q_mat, [vm, 64])
+        pl.set_validshape(q_left, [vm, 64])
+        pl.set_validshape(k_mat, [64, vn])
+        pl.set_validshape(k_right, [64, vn])
+        pl.set_validshape(acc, [vm, vn])
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -180,7 +234,9 @@ def scale_dynamic_kernel(
 
 
 @pytest.mark.soc("950")
-def test_scale_store_per_tensor():
+@pytest.mark.parametrize("m,n", [(64, 64), (48, 96), (96, 96)], ids=["full", "row_tail", "dual_tail"])
+def test_scale_store_per_tensor(m, n):
+    """编译期 float scale per-tensor store，覆盖完整/行尾/双尾块有效区。"""
     device = ST_DEVICE
     torch.npu.set_device(device)
 
@@ -189,20 +245,23 @@ def test_scale_store_per_tensor():
         logging.info("Current device is %s, skip.", device_name)
         return
 
-    q = _make_q(device)
-    k = _make_k(device)
-    raw_out = torch.zeros((64, 64), device=device, dtype=torch.float32)
-    quant_out = torch.zeros((64, 64), device=device, dtype=torch.int8)
+    vm, vn = min(m, 64), min(n, 64)
+    q = torch.randn(m, n, device=device, dtype=torch.float32)
+    k = torch.eye(n, device=device, dtype=torch.float32)
+    raw_out = torch.zeros((m, n), device=device, dtype=torch.float32)
+    quant_out = torch.zeros((m, n), device=device, dtype=torch.int8)
 
-    scale_store_kernel(q, k, raw_out, quant_out)
+    scale_store_kernel(q, k, raw_out, quant_out, vm, vn)
     torch.npu.synchronize()
 
     raw_ref = torch.matmul(q, k)
     expected_quant = torch.clamp(torch.round(raw_ref * FP_SCALE_VALUE), -128, 127).to(torch.int8)
 
-    torch.testing.assert_close(raw_out, raw_ref, rtol=1e-2, atol=1e-2)
-    torch.testing.assert_close(quant_out.to(torch.int32), expected_quant.to(torch.int32), rtol=0, atol=0)
-    logging.info("test_scale_store_per_tensor passed.")
+    torch.testing.assert_close(raw_out[:vm, :vn], raw_ref[:vm, :vn], rtol=1e-2, atol=1e-2)
+    torch.testing.assert_close(
+        quant_out[:vm, :vn].to(torch.int32), expected_quant[:vm, :vn].to(torch.int32), rtol=0, atol=1
+    )
+    logging.info("test_scale_store_per_tensor[%s,%s] passed.", m, n)
 
 
 @pytest.mark.soc("950")
@@ -227,7 +286,7 @@ def test_scale_store_random_input():
     raw_out = torch.zeros((64, 64), device=device, dtype=torch.float32)
     quant_out = torch.zeros((64, 64), device=device, dtype=torch.int8)
 
-    scale_store_kernel(q, k, raw_out, quant_out)
+    scale_store_kernel(q, k, raw_out, quant_out, 64, 64)
     torch.npu.synchronize()
 
     raw_ref = torch.matmul(q, k)
@@ -254,7 +313,7 @@ def test_scale_move_per_tensor():
     k = _make_k(device)
     move_out = torch.zeros((64, 64), device=device, dtype=torch.int8)
 
-    scale_move_kernel(q, k, move_out)
+    scale_move_kernel(q, k, move_out, 64, 64)
     torch.npu.synchronize()
 
     raw_ref = torch.matmul(q, k)
@@ -280,7 +339,7 @@ def test_scale_dynamic():
 
     scale_bits = struct.unpack("!I", struct.pack("!f", FP_SCALE_VALUE))[0]
 
-    scale_dynamic_kernel(q, k, quant_out, scale_bits)
+    scale_dynamic_kernel(q, k, quant_out, scale_bits, 64, 64)
     torch.npu.synchronize()
 
     raw_ref = torch.matmul(q, k)

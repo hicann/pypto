@@ -53,10 +53,10 @@ def _make_fp_params(device: str, scale_value: float = FP_SCALE_VALUE) -> torch.T
 
 @pl.jit()
 def dynamic_scale_store_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     """Per-channel store with a user-prepared Scaling tile (runtime kernel parameter data)."""
     with pl.section_cube():
@@ -137,12 +137,12 @@ def test_dynamic_scale_per_channel_store():
 
 @pl.jit()
 def multi_store_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    fp_params_1: pl.Tensor[[1, 64], pl.DT_INT64],
-    fp_params_2: pl.Tensor[[1, 64], pl.DT_INT64],
-    out_1: pl.Tensor[[64, 64], pl.DT_INT8],
-    out_2: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params_1: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    fp_params_2: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    out_1: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    out_2: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     """Two per-channel stores with different scale tiles in the same kernel."""
     with pl.section_cube():
@@ -241,10 +241,10 @@ def test_multiple_per_channel_stores():
 
 @pl.jit()
 def dynamic_scale_move_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    move_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    move_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     """Per-channel move (Acc->Vec) with a user-prepared Scaling tile, then store to GM."""
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
@@ -337,10 +337,10 @@ def test_dynamic_scale_per_channel_move():
 
 @pl.jit()
 def per_channel_store_tile_group_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     """Per-channel store where user Mat tiles come from make_tile_group.
 
@@ -432,10 +432,10 @@ def test_per_channel_store_tile_group():
 
 @pl.jit()
 def per_channel_store_user_tile_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     """Per-channel store with a user-prepared Scaling tile (scale=Tile).
 

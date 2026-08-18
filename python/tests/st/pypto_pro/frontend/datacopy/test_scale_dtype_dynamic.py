@@ -41,9 +41,9 @@ ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 @pl.jit()
 def bf16_to_int8_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_BF16],
-    k: pl.Tensor[[64, 64], pl.DT_BF16],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -106,9 +106,9 @@ def test_bf16_to_int8():
 
 @pl.jit()
 def fp16_to_int8_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP16],
-    k: pl.Tensor[[64, 64], pl.DT_FP16],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -170,9 +170,9 @@ def test_fp16_to_int8():
 
 @pl.jit()
 def int32_to_int8_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_INT8],
-    k: pl.Tensor[[64, 64], pl.DT_INT8],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -359,9 +359,9 @@ def test_special_distribution():
 
 @pl.jit()
 def dynamic_scale_int64_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_bits: pl.DT_INT64,
 ):
     with pl.section_cube():
@@ -426,9 +426,9 @@ def test_dynamic_scale_int64():
 
 @pl.jit()
 def dynamic_relu_store_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_bits: pl.DT_INT64,
 ):
     with pl.section_cube():
@@ -467,10 +467,10 @@ def dynamic_relu_store_kernel(
 
 @pl.jit()
 def dynamic_scale_from_gm_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     scale_tensor: pl.Tensor[[1], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -569,9 +569,9 @@ def test_multiple_calls_different_scale():
 
 @pl.jit()
 def int32_to_fp16_relu_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_INT8],
-    k: pl.Tensor[[64, 64], pl.DT_INT8],
-    quant_out: pl.Tensor[[64, 64], pl.DT_FP16],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     scale: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -634,9 +634,9 @@ def test_int32_to_fp16_relu():
 
 @pl.jit()
 def int32_to_fp16_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_INT8],
-    k: pl.Tensor[[64, 64], pl.DT_INT8],
-    quant_out: pl.Tensor[[64, 64], pl.DT_FP16],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     scale: pl.DT_INT32,
 ):
     """Per-tensor INT32 -> FP16 dequantization (DEQF16), no ReLU.
@@ -705,8 +705,11 @@ def test_int32_to_fp16():
 
 
 @pytest.mark.soc("950")
-def test_scale_zero_with_relu():
-    """scale=0 with ReLU should produce all zeros."""
+@pytest.mark.parametrize(
+    "input_mode", ["zero_scale", "all_negative", "mixed"], ids=["zero_scale", "all_negative", "mixed"]
+)
+def test_relu_input_mode(input_mode):
+    """ReLU fusion semantics: zero scale -> all zeros; all-negative inputs -> zeros; mixed -> >=0."""
     device = ST_DEVICE
     torch.npu.set_device(device)
 
@@ -715,135 +718,38 @@ def test_scale_zero_with_relu():
         logging.info("Current device is %s, skip.", device_name)
         return
 
-    q = torch.randn(64, 64, dtype=torch.float32, device=device)
-    k = torch.randn(64, 64, dtype=torch.float32, device=device)
-    quant_relu_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
+    if input_mode == "all_negative":
+        q = -torch.abs(torch.randn(64, 64, dtype=torch.float32, device=device))
+        k = torch.eye(64, dtype=torch.float32, device=device)
+        scale_bits = struct.unpack("!I", struct.pack("!f", 2.0))[0]
+    elif input_mode == "zero_scale":
+        q = torch.randn(64, 64, dtype=torch.float32, device=device)
+        k = torch.randn(64, 64, dtype=torch.float32, device=device)
+        scale_bits = struct.unpack("!I", struct.pack("!f", 0.0))[0]
+    else:
+        q = torch.randn(64, 64, dtype=torch.float32, device=device)
+        k = torch.eye(64, dtype=torch.float32, device=device)
+        scale_bits = struct.unpack("!I", struct.pack("!f", 2.0))[0]
 
-    scale_bits = struct.unpack("!I", struct.pack("!f", 0.0))[0]
+    quant_relu_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
     dynamic_relu_store_kernel(q, k, quant_relu_out, scale_bits)
     torch.npu.synchronize()
 
-    # scale=0 should produce all zeros
-    assert (quant_relu_out == 0).all()
-    logging.info("test_scale_zero_with_relu passed.")
-
-
-@pytest.mark.soc("950")
-def test_all_negative_input_with_relu():
-    """All negative input with ReLU should produce all zeros."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    # All negative values
-    q = -torch.abs(torch.randn(64, 64, dtype=torch.float32, device=device))
-    k = torch.eye(64, dtype=torch.float32, device=device)
-    quant_relu_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
-
-    scale_bits = struct.unpack("!I", struct.pack("!f", 2.0))[0]
-    dynamic_relu_store_kernel(q, k, quant_relu_out, scale_bits)
-    torch.npu.synchronize()
-
-    # ReLU should zero out all negative values
-    assert (quant_relu_out == 0).all()
-    logging.info("test_all_negative_input_with_relu passed.")
-
-
-@pytest.mark.soc("950")
-def test_mixed_input_with_relu():
-    """Mixed positive/negative input with ReLU."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    # Mixed values
-    q = torch.randn(64, 64, dtype=torch.float32, device=device)
-    k = torch.eye(64, dtype=torch.float32, device=device)
-    quant_relu_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
-
-    scale_bits = struct.unpack("!I", struct.pack("!f", 2.0))[0]
-    dynamic_relu_store_kernel(q, k, quant_relu_out, scale_bits)
-    torch.npu.synchronize()
-
-    # All outputs should be >= 0 due to ReLU
-    assert (quant_relu_out >= 0).all()
-    # Should have some non-zero values
-    assert quant_relu_out.abs().sum() > 0
-    logging.info("test_mixed_input_with_relu passed.")
-
-
-# ============================================================================
-# 6-7. Phase and Atomic Fusion (2 tests)
-# ============================================================================
-
-
-@pytest.mark.soc("950")
-def test_phase_unspecified():
-    """Phase=Unspecified (default) should work."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = torch.randn(64, 64, dtype=torch.float32, device=device)
-    k = torch.randn(64, 64, dtype=torch.float32, device=device)
-    quant_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
-
-    # Default phase (Unspecified)
-    scale_bits = struct.unpack("!I", struct.pack("!f", 2.0))[0]
-    dynamic_scale_int64_kernel(q, k, quant_out, scale_bits)
-    torch.npu.synchronize()
-
-    assert quant_out.abs().sum() > 0
-    logging.info("test_phase_unspecified passed.")
-
-
-@pytest.mark.soc("950")
-def test_atomic_none():
-    """Atomic=None (default overwrite) should work."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = torch.randn(64, 64, dtype=torch.float32, device=device)
-    k = torch.randn(64, 64, dtype=torch.float32, device=device)
-    quant_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
-
-    # Default atomic (None = overwrite)
-    scale_bits = struct.unpack("!I", struct.pack("!f", 2.0))[0]
-    dynamic_scale_int64_kernel(q, k, quant_out, scale_bits)
-    torch.npu.synchronize()
-
-    assert quant_out.abs().sum() > 0
-    logging.info("test_atomic_none passed.")
-
-
-# ============================================================================
-# 8. Order Parameter (3 tests)
-# ============================================================================
+    if input_mode in ("zero_scale", "all_negative"):
+        assert (quant_relu_out == 0).all()
+    else:
+        assert (quant_relu_out >= 0).all()
+        assert quant_relu_out.abs().sum() > 0
+    logging.info("test_relu_input_mode[%s] passed.", input_mode)
 
 
 @pl.jit()
-def order_default_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+def order_kernel(
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale: pl.DT_INT32,
+    use_order: pl.DT_INT32,
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -875,14 +781,17 @@ def order_default_kernel(
         pl.system.sync_src(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
 
-        # Default order
-        pl.store(quant_out, acc, [0, 0], scale=scale)
+        if use_order == 1:
+            pl.store(quant_out, acc, [0, 0], scale=scale, order=[0, 1])
+        else:
+            pl.store(quant_out, acc, [0, 0], scale=scale)
         pl.system.bar_all()
 
 
 @pytest.mark.soc("950")
-def test_order_default():
-    """Default order parameter."""
+@pytest.mark.parametrize("use_order", [0, 1], ids=["default", "ascending"])
+def test_order_2d(use_order):
+    """Order parameter: default (None) vs explicit ascending [0, 1] on 2D."""
     device = ST_DEVICE
     torch.npu.set_device(device)
 
@@ -892,78 +801,16 @@ def test_order_default():
         return
 
     q = torch.randn(64, 64, dtype=torch.float32, device=device)
-    k = torch.randn(64, 64, dtype=torch.float32, device=device)
+    k = torch.eye(64, dtype=torch.float32, device=device)
     quant_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
+    scale_bits = struct.unpack("!I", struct.pack("!f", 2.0))[0]
 
-    order_default_kernel(q, k, quant_out, scale=struct.unpack("!I", struct.pack("!f", 2.0))[0])
+    order_kernel(q, k, quant_out, scale_bits, use_order)
     torch.npu.synchronize()
 
-    assert quant_out.abs().sum() > 0
-    logging.info("test_order_default passed.")
-
-
-@pl.jit()
-def order_ascending_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
-    scale: pl.DT_INT32,
-):
-    with pl.section_cube():
-        mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
-
-        left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
-
-        right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
-
-        acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
-        )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
-
-        pl.load(q_mat, q, [0, 0])
-        pl.load(k_mat, k, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
-
-        pl.move(q_left, q_mat)
-        pl.move(k_right, k_mat)
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
-
-        pl.matmul(acc, q_left, k_right)
-        pl.system.sync_src(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-
-        # Explicit ascending order [0, 1]
-        pl.store(quant_out, acc, [0, 0], scale=scale, order=[0, 1])
-        pl.system.bar_all()
-
-
-@pytest.mark.soc("950")
-def test_order_ascending():
-    """Explicit ascending order [0, 1]."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = torch.randn(64, 64, dtype=torch.float32, device=device)
-    k = torch.randn(64, 64, dtype=torch.float32, device=device)
-    quant_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
-
-    order_ascending_kernel(q, k, quant_out, scale=struct.unpack("!I", struct.pack("!f", 2.0))[0])
-    torch.npu.synchronize()
-
-    assert quant_out.abs().sum() > 0
-    logging.info("test_order_ascending passed.")
+    expected = torch.clamp(torch.round(q * 2.0), -128, 127).to(torch.int8)
+    torch.testing.assert_close(quant_out.to(torch.int32), expected.to(torch.int32), rtol=0, atol=1)
+    logging.info("test_order_2d[%s] passed.", "default" if use_order == 0 else "ascending")
 
 
 @pl.jit()
@@ -1038,9 +885,9 @@ def test_order_4d():
 
 @pl.jit()
 def store_tile_dynamic_scale_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_bits: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -1104,9 +951,9 @@ def test_store_tile_dynamic_scale():
 
 @pl.jit()
 def store_tile_phase_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -1172,9 +1019,9 @@ def test_store_tile_phase():
 
 @pl.jit()
 def store_tile_relu_phase_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -1242,9 +1089,9 @@ def test_store_tile_relu_phase():
 
 @pl.jit()
 def store_tile_single_kernel(
-    q: pl.Tensor[[128, 128], pl.DT_FP32],
-    k: pl.Tensor[[128, 128], pl.DT_FP32],
-    quant_out: pl.Tensor[[128, 128], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale: pl.DT_INT32,
     tile_row: pl.DT_INT32,
     tile_col: pl.DT_INT32,

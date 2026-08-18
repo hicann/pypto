@@ -46,9 +46,9 @@ def _make_k(device: str) -> torch.Tensor:
 
 @pl.jit()
 def scale_phase_partial_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_value: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -95,9 +95,9 @@ def scale_phase_partial_kernel(
 
 @pl.jit()
 def scale_phase_final_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_value: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -203,9 +203,9 @@ def test_phase_final():
 
 @pl.jit()
 def scale_atomic_add_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_value: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -296,9 +296,9 @@ def test_order_descending_rejected():
     """
     @pl.jit()
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
         scale_value: pl.DT_INT32,
     ):
         with pl.section_cube():

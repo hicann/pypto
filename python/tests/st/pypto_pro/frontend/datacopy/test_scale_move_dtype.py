@@ -36,9 +36,9 @@ ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 @pl.jit()
 def move_fp32_to_fp16_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    vec_out: pl.Tensor[[64, 64], pl.DT_FP16],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    vec_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     scale: pl.DT_INT32,
 ):
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
@@ -111,9 +111,9 @@ def test_move_fp32_to_fp16():
 
 @pl.jit()
 def move_int32_to_int8_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_INT8],
-    k: pl.Tensor[[64, 64], pl.DT_INT8],
-    vec_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    vec_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
     vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
@@ -190,10 +190,11 @@ def test_move_int32_to_int8():
 
 
 @pl.jit()
-def move_scale_negative_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    vec_out: pl.Tensor[[64, 64], pl.DT_INT8],
+def move_scale_kernel(
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    vec_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    scale_bits: pl.DT_INT32,
 ):
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
     vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
@@ -228,7 +229,7 @@ def move_scale_negative_kernel(
         pl.system.sync_src(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
 
-        pl.move(vec_tile, acc, scale=-2.0, acc_to_vec_mode=pl.AccToVecMode.SingleModeVec0)
+        pl.move(vec_tile, acc, scale=scale_bits, acc_to_vec_mode=pl.AccToVecMode.SingleModeVec0)
         pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=0)
 
     with pl.section_vector():
@@ -239,9 +240,14 @@ def move_scale_negative_kernel(
         pl.system.bar_all()
 
 
+MOVE_SCALE_VALUES = [-2.0, 0.0, 0.5, 1e-6, 1e6]
+MOVE_SCALE_IDS = ["negative", "zero", "fraction", "very_small", "very_large"]
+
+
 @pytest.mark.soc("950")
-def test_move_scale_negative():
-    """Move with negative scale."""
+@pytest.mark.parametrize("scale_value", MOVE_SCALE_VALUES, ids=MOVE_SCALE_IDS)
+def test_move_scale_value(scale_value):
+    """Acc->Vec move deqScalar value range (negative/zero/fraction/small/large)."""
     device = ST_DEVICE
     torch.npu.set_device(device)
 
@@ -251,314 +257,23 @@ def test_move_scale_negative():
         return
 
     q = torch.randn(64, 64, dtype=torch.float32, device=device)
-    k = torch.randn(64, 64, dtype=torch.float32, device=device)
+    k = torch.eye(64, dtype=torch.float32, device=device)
     vec_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
+    scale_bits = struct.unpack("!I", struct.pack("!f", scale_value))[0]
 
-    move_scale_negative_kernel(q, k, vec_out)
+    move_scale_kernel(q, k, vec_out, scale_bits)
     torch.npu.synchronize()
 
-    assert vec_out.abs().sum() > 0
-    logging.info("test_move_scale_negative passed.")
-
-
-@pl.jit()
-def move_scale_zero_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    vec_out: pl.Tensor[[64, 64], pl.DT_INT8],
-):
-    vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
-    vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
-
-    with pl.section_cube():
-        mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
-
-        left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
-
-        right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
-
-        acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
-        )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
-
-        pl.load(q_mat, q, [0, 0])
-        pl.load(k_mat, k, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
-
-        pl.move(q_left, q_mat)
-        pl.move(k_right, k_mat)
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
-
-        pl.matmul(acc, q_left, k_right)
-        pl.system.sync_src(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-
-        pl.move(vec_tile, acc, scale=0.0, acc_to_vec_mode=pl.AccToVecMode.SingleModeVec0)
-        pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=0)
-
-    with pl.section_vector():
-        sub_id = pl.get_subblock_idx()
-        pl.system.wait_cross_core(pipe=pl.PipeType.MTE3, event_id=0)
-        if sub_id == 0:
-            pl.store(vec_out, vec_tile, [0, 0])
-        pl.system.bar_all()
-
-
-@pytest.mark.soc("950")
-def test_move_scale_zero():
-    """Move with zero scale."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = torch.randn(64, 64, dtype=torch.float32, device=device)
-    k = torch.randn(64, 64, dtype=torch.float32, device=device)
-    vec_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
-
-    move_scale_zero_kernel(q, k, vec_out)
-    torch.npu.synchronize()
-
-    assert (vec_out == 0).all()
-    logging.info("test_move_scale_zero passed.")
-
-
-@pl.jit()
-def move_scale_fraction_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    vec_out: pl.Tensor[[64, 64], pl.DT_INT8],
-):
-    vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
-    vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
-
-    with pl.section_cube():
-        mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
-
-        left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
-
-        right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
-
-        acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
-        )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
-
-        pl.load(q_mat, q, [0, 0])
-        pl.load(k_mat, k, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
-
-        pl.move(q_left, q_mat)
-        pl.move(k_right, k_mat)
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
-
-        pl.matmul(acc, q_left, k_right)
-        pl.system.sync_src(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-
-        pl.move(vec_tile, acc, scale=0.5, acc_to_vec_mode=pl.AccToVecMode.SingleModeVec0)
-        pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=0)
-
-    with pl.section_vector():
-        sub_id = pl.get_subblock_idx()
-        pl.system.wait_cross_core(pipe=pl.PipeType.MTE3, event_id=0)
-        if sub_id == 0:
-            pl.store(vec_out, vec_tile, [0, 0])
-        pl.system.bar_all()
-
-
-@pytest.mark.soc("950")
-def test_move_scale_fraction():
-    """Move with fractional scale."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = torch.randn(64, 64, dtype=torch.float32, device=device)
-    k = torch.randn(64, 64, dtype=torch.float32, device=device)
-    vec_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
-
-    move_scale_fraction_kernel(q, k, vec_out)
-    torch.npu.synchronize()
-
-    assert vec_out.abs().sum() > 0
-    logging.info("test_move_scale_fraction passed.")
-
-
-@pl.jit()
-def move_scale_very_small_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    vec_out: pl.Tensor[[64, 64], pl.DT_INT8],
-):
-    vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
-    vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
-
-    with pl.section_cube():
-        mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
-
-        left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
-
-        right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
-
-        acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
-        )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
-
-        pl.load(q_mat, q, [0, 0])
-        pl.load(k_mat, k, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
-
-        pl.move(q_left, q_mat)
-        pl.move(k_right, k_mat)
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
-
-        pl.matmul(acc, q_left, k_right)
-        pl.system.sync_src(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-
-        pl.move(vec_tile, acc, scale=1e-6, acc_to_vec_mode=pl.AccToVecMode.SingleModeVec0)
-        pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=0)
-
-    with pl.section_vector():
-        sub_id = pl.get_subblock_idx()
-        pl.system.wait_cross_core(pipe=pl.PipeType.MTE3, event_id=0)
-        if sub_id == 0:
-            pl.store(vec_out, vec_tile, [0, 0])
-        pl.system.bar_all()
-
-
-@pytest.mark.soc("950")
-def test_move_scale_very_small():
-    """Move with very small scale."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = torch.randn(64, 64, dtype=torch.float32, device=device)
-    k = torch.randn(64, 64, dtype=torch.float32, device=device)
-    vec_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
-
-    move_scale_very_small_kernel(q, k, vec_out)
-    torch.npu.synchronize()
-
-    # Very small scale should produce mostly zeros
-    zero_ratio = (vec_out == 0).sum().item() / vec_out.numel()
-    assert zero_ratio > 0.5
-    logging.info(f"test_move_scale_very_small passed: {zero_ratio:.2%} zeros.")
-
-
-@pl.jit()
-def move_scale_very_large_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    vec_out: pl.Tensor[[64, 64], pl.DT_INT8],
-):
-    vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
-    vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
-
-    with pl.section_cube():
-        mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
-
-        left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
-
-        right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
-
-        acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
-        )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
-
-        pl.load(q_mat, q, [0, 0])
-        pl.load(k_mat, k, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
-
-        pl.move(q_left, q_mat)
-        pl.move(k_right, k_mat)
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
-
-        pl.matmul(acc, q_left, k_right)
-        pl.system.sync_src(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
-
-        pl.move(vec_tile, acc, scale=1e6, acc_to_vec_mode=pl.AccToVecMode.SingleModeVec0)
-        pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=0)
-
-    with pl.section_vector():
-        sub_id = pl.get_subblock_idx()
-        pl.system.wait_cross_core(pipe=pl.PipeType.MTE3, event_id=0)
-        if sub_id == 0:
-            pl.store(vec_out, vec_tile, [0, 0])
-        pl.system.bar_all()
-
-
-@pytest.mark.soc("950")
-def test_move_scale_very_large():
-    """Move with very large scale."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = torch.randn(64, 64, dtype=torch.float32, device=device)
-    k = torch.randn(64, 64, dtype=torch.float32, device=device)
-    vec_out = torch.zeros(64, 64, dtype=torch.int8, device=device)
-
-    move_scale_very_large_kernel(q, k, vec_out)
-    torch.npu.synchronize()
-
-    # Very large scale should produce mostly saturation
-    saturation_count = ((vec_out == 127) | (vec_out == -128)).sum().item()
-    saturation_ratio = saturation_count / vec_out.numel()
-    assert saturation_ratio > 0.5
-    logging.info(f"test_move_scale_very_large passed: {saturation_ratio:.2%} saturated.")
+    expected = torch.clamp(torch.round(q * scale_value), -128, 127).to(torch.int8)
+    torch.testing.assert_close(vec_out.to(torch.int32), expected.to(torch.int32), rtol=0, atol=1)
+    logging.info("test_move_scale_value[%s] passed.", scale_value)
 
 
 @pl.jit()
 def move_relu_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    vec_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    vec_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
     vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
@@ -633,9 +348,9 @@ def test_move_relu():
 
 @pl.jit()
 def move_dynamic_scale_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    vec_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    vec_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_bits: pl.DT_INT32,
 ):
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
@@ -714,9 +429,9 @@ def test_move_dynamic_scale():
 
 @pl.jit()
 def store_bf16_to_fp16_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_BF16],
-    k: pl.Tensor[[64, 64], pl.DT_BF16],
-    out: pl.Tensor[[64, 64], pl.DT_FP16],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -776,9 +491,9 @@ def test_store_bf16_to_fp16():
 
 @pl.jit()
 def store_fp16_to_bf16_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP16],
-    k: pl.Tensor[[64, 64], pl.DT_FP16],
-    out: pl.Tensor[[64, 64], pl.DT_BF16],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -838,9 +553,9 @@ def test_store_fp16_to_bf16():
 
 @pl.jit()
 def store_scale_boundary_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -903,9 +618,9 @@ def test_store_scale_boundary():
 
 @pl.jit()
 def store_data_sparse_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -982,9 +697,9 @@ def test_store_data_sparse():
 
 @pl.jit()
 def store_data_periodic_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -1049,9 +764,9 @@ def test_store_data_periodic():
 
 @pl.jit()
 def store_dynamic_scale_int64_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_bits: pl.DT_INT64,
 ):
     with pl.section_cube():
@@ -1121,10 +836,10 @@ def test_store_dynamic_scale_int64():
 
 @pl.jit()
 def store_multiple_calls_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out1: pl.Tensor[[64, 64], pl.DT_INT8],
-    out2: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out1: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    out2: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale1: pl.DT_INT32,
     scale2: pl.DT_INT32,
 ):
@@ -1206,10 +921,10 @@ def test_store_multiple_calls():
 
 @pl.jit()
 def per_channel_int32_to_fp16_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_INT8],
-    k: pl.Tensor[[64, 64], pl.DT_INT8],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    out: pl.Tensor[[64, 64], pl.DT_FP16],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -1293,10 +1008,10 @@ def test_per_channel_int32_to_fp16():
 
 @pl.jit()
 def per_channel_move_int32_to_fp16_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_INT8],
-    k: pl.Tensor[[64, 64], pl.DT_INT8],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    vec_out: pl.Tensor[[64, 64], pl.DT_FP16],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    vec_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
 ):
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
     vec_tile = pl.make_tile(vec_type, addr=0x0000, size=8192)
@@ -1383,10 +1098,10 @@ def test_per_channel_move_int32_to_fp16():
 
 @pl.jit()
 def per_channel_store_tile_single_kernel(
-    q: pl.Tensor[[128, 128], pl.DT_FP32],
-    k: pl.Tensor[[128, 128], pl.DT_FP32],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    out: pl.Tensor[[128, 128], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     tile_row: pl.DT_INT32,
     tile_col: pl.DT_INT32,
 ):
@@ -1487,10 +1202,10 @@ def test_per_channel_store_tile_offset():
 
 @pl.jit()
 def per_channel_store_tile_dynamic_scale_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -1572,9 +1287,9 @@ def test_per_channel_store_tile_dynamic_scale():
 
 @pl.jit()
 def no_quant_store_fp32_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_FP32],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -1634,9 +1349,9 @@ def test_no_quant_store_fp32():
 
 @pl.jit()
 def no_quant_store_int32_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_INT8],
-    k: pl.Tensor[[64, 64], pl.DT_INT8],
-    out: pl.Tensor[[64, 64], pl.DT_INT32],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -1696,9 +1411,9 @@ def test_no_quant_store_int32():
 
 @pl.jit()
 def no_quant_move_fp32_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    vec_out: pl.Tensor[[64, 64], pl.DT_FP32],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    vec_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
     vec_tile = pl.make_tile(vec_type, addr=0x0000, size=16384)
@@ -1768,9 +1483,9 @@ def test_no_quant_move_fp32():
 
 @pl.jit()
 def no_quant_store_tile_fp32_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_FP32],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)

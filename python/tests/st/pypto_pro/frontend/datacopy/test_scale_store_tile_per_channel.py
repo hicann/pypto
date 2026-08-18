@@ -61,9 +61,9 @@ def _make_scale_tensor(device: str, scale_values: list, shape: tuple = (1, 64)) 
 
 @pl.jit()
 def store_tile_basic_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_value: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -135,9 +135,9 @@ def test_store_tile_basic():
 
 @pl.jit()
 def store_tile_offset_kernel(
-    q: pl.Tensor[[128, 128], pl.DT_FP32],
-    k: pl.Tensor[[128, 128], pl.DT_FP32],
-    quant_out: pl.Tensor[[128, 128], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_value: pl.DT_INT32,
     tile_row: pl.DT_INT32,
     tile_col: pl.DT_INT32,
@@ -179,8 +179,9 @@ def store_tile_offset_kernel(
 
 
 @pytest.mark.soc("950")
-def test_store_tile_offset_0_1():
-    """Test store_tile with offset [0, 1]."""
+@pytest.mark.parametrize("tile_row,tile_col", [(0, 1), (1, 0), (1, 1)], ids=["0_1", "1_0", "1_1"])
+def test_store_tile_offset(tile_row, tile_col):
+    """store_tile with different tile offsets (single K=64 block product)."""
     device = ST_DEVICE
     torch.npu.set_device(device)
 
@@ -195,101 +196,27 @@ def test_store_tile_offset_0_1():
     scale_value = 0.1
     scale_bits = struct.unpack("!I", struct.pack("!f", scale_value))[0]
 
-    store_tile_offset_kernel(q, k, quant_out, scale_bits, 0, 1)
+    store_tile_offset_kernel(q, k, quant_out, scale_bits, tile_row, tile_col)
     torch.npu.synchronize()
 
-    # Compute expected for tile [0, 1]
     # kernel loads q[row block][0:64] x k[0:64][col block] (single K=64 block)
-    q_tile = q[0:64, 0:64]
-    k_tile = k[0:64, 64:128]
+    q_tile = q[tile_row * 64:tile_row * 64 + 64, 0:64]
+    k_tile = k[0:64, tile_col * 64:tile_col * 64 + 64]
     raw_ref = torch.matmul(q_tile, k_tile)
     expected = torch.clamp(torch.round(raw_ref * scale_value), -128, 127).to(torch.int8)
 
-    # Check only the [0, 1] tile region
-    actual_tile = quant_out[0:64, 64:128]
+    # Check only the [tile_row, tile_col] tile region
+    actual_tile = quant_out[tile_row * 64:tile_row * 64 + 64, tile_col * 64:tile_col * 64 + 64]
     # matmul precision w/ random data, scale=0.1
     torch.testing.assert_close(actual_tile.to(torch.int32), expected.to(torch.int32), rtol=0, atol=4)
-    logging.info("test_store_tile_offset_0_1 passed.")
-
-
-@pytest.mark.soc("950")
-def test_store_tile_offset_1_0():
-    """Test store_tile with offset [1, 0]."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = torch.randn((128, 128), dtype=torch.float32, device=device)
-    k = torch.randn((128, 128), dtype=torch.float32, device=device)
-    quant_out = torch.zeros((128, 128), device=device, dtype=torch.int8)
-    scale_value = 0.1
-    scale_bits = struct.unpack("!I", struct.pack("!f", scale_value))[0]
-
-    store_tile_offset_kernel(q, k, quant_out, scale_bits, 1, 0)
-    torch.npu.synchronize()
-
-    # Compute expected for tile [1, 0]
-    # kernel loads q[row block][0:64] x k[0:64][col block] (single K=64 block)
-    q_tile = q[64:128, 0:64]
-    k_tile = k[0:64, 0:64]
-    raw_ref = torch.matmul(q_tile, k_tile)
-    expected = torch.clamp(torch.round(raw_ref * scale_value), -128, 127).to(torch.int8)
-
-    # Check only the [1, 0] tile region
-    actual_tile = quant_out[64:128, 0:64]
-    # matmul precision w/ random data, scale=0.1
-    torch.testing.assert_close(actual_tile.to(torch.int32), expected.to(torch.int32), rtol=0, atol=4)
-    logging.info("test_store_tile_offset_1_0 passed.")
-
-
-@pytest.mark.soc("950")
-def test_store_tile_offset_1_1():
-    """Test store_tile with offset [1, 1]."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = torch.randn((128, 128), dtype=torch.float32, device=device)
-    k = torch.randn((128, 128), dtype=torch.float32, device=device)
-    quant_out = torch.zeros((128, 128), device=device, dtype=torch.int8)
-    scale_value = 0.1
-    scale_bits = struct.unpack("!I", struct.pack("!f", scale_value))[0]
-
-    store_tile_offset_kernel(q, k, quant_out, scale_bits, 1, 1)
-    torch.npu.synchronize()
-
-    # Compute expected for tile [1, 1]
-    # kernel loads q[row block][0:64] x k[0:64][col block] (single K=64 block)
-    q_tile = q[64:128, 0:64]
-    k_tile = k[0:64, 64:128]
-    raw_ref = torch.matmul(q_tile, k_tile)
-    expected = torch.clamp(torch.round(raw_ref * scale_value), -128, 127).to(torch.int8)
-
-    # Check only the [1, 1] tile region
-    actual_tile = quant_out[64:128, 64:128]
-    # matmul precision w/ random data, scale=0.1
-    torch.testing.assert_close(actual_tile.to(torch.int32), expected.to(torch.int32), rtol=0, atol=4)
-    logging.info("test_store_tile_offset_1_1 passed.")
-
-
-# ============================================================================
-# Test 3: store_tile fusion scenarios
-# ============================================================================
+    logging.info("test_store_tile_offset[%d_%d] passed.", tile_row, tile_col)
 
 
 @pl.jit()
 def store_tile_relu_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_value: pl.DT_INT32,
 ):
     with pl.section_cube():
@@ -362,10 +289,10 @@ def test_store_tile_relu():
 
 @pl.jit()
 def per_channel_store_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -414,40 +341,25 @@ def per_channel_store_kernel(
 
 
 @pytest.mark.soc("950")
-def test_per_channel_varying_scale():
-    """Test per-channel with varying scale values."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = _make_q(device)
-    k = _make_k(device)
-    quant_out = torch.zeros((64, 64), device=device, dtype=torch.int8)
-
-    # Varying scale: [0.5, 1.0, 1.5, 2.0, ...]
-    scale_values = [0.5 + i * 0.5 for i in range(64)]
-    fp_params = _make_scale_tensor(device, scale_values)
-
-    per_channel_store_kernel(q, k, fp_params, quant_out)
-    torch.npu.synchronize()
-
-    raw_ref = torch.matmul(q, k)
-    # Apply per-channel scale
-    scale_tensor_fp32 = torch.tensor(scale_values, dtype=torch.float32, device=device)
-    scaled_ref = raw_ref * scale_tensor_fp32.unsqueeze(0)
-    expected = torch.clamp(torch.round(scaled_ref), -128, 127).to(torch.int8)
-
-    torch.testing.assert_close(quant_out.to(torch.int32), expected.to(torch.int32), rtol=0, atol=1)
-    logging.info("test_per_channel_varying_scale passed.")
+def _per_channel_scale_values(pattern: str) -> list:
+    """Generate a per-column [1, 64] scale pattern."""
+    if pattern == "varying":
+        return [0.5 + i * 0.5 for i in range(64)]
+    if pattern == "alternating":
+        return [1.0 if i % 2 == 0 else 2.0 for i in range(64)]
+    if pattern == "extreme":
+        return [1e-6 if i % 2 == 0 else 1e6 for i in range(64)]
+    if pattern == "zero":
+        return [0.0 if i % 2 == 0 else 2.0 for i in range(64)]
+    if pattern == "negative":
+        return [-1.0 - i * 0.1 for i in range(64)]
+    raise ValueError(f"unknown pattern {pattern}")
 
 
 @pytest.mark.soc("950")
-def test_per_channel_alternating_scale():
-    """Test per-channel with alternating scale values."""
+@pytest.mark.parametrize("pattern", ["varying", "alternating", "extreme", "zero", "negative"])
+def test_per_channel_scale_pattern(pattern):
+    """Per-channel (scale=Tile) store with different per-column scale patterns."""
     device = ST_DEVICE
     torch.npu.set_device(device)
 
@@ -460,8 +372,7 @@ def test_per_channel_alternating_scale():
     k = _make_k(device)
     quant_out = torch.zeros((64, 64), device=device, dtype=torch.int8)
 
-    # Alternating scale: [1.0, 2.0, 1.0, 2.0, ...]
-    scale_values = [1.0 if i % 2 == 0 else 2.0 for i in range(64)]
+    scale_values = _per_channel_scale_values(pattern)
     fp_params = _make_scale_tensor(device, scale_values)
 
     per_channel_store_kernel(q, k, fp_params, quant_out)
@@ -473,113 +384,15 @@ def test_per_channel_alternating_scale():
     expected = torch.clamp(torch.round(scaled_ref), -128, 127).to(torch.int8)
 
     torch.testing.assert_close(quant_out.to(torch.int32), expected.to(torch.int32), rtol=0, atol=1)
-    logging.info("test_per_channel_alternating_scale passed.")
-
-
-@pytest.mark.soc("950")
-def test_per_channel_extreme_scale():
-    """Test per-channel with extreme scale values."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = _make_q(device)
-    k = _make_k(device)
-    quant_out = torch.zeros((64, 64), device=device, dtype=torch.int8)
-
-    # Extreme scale: [1e-6, 1e6, 1e-6, 1e6, ...]
-    scale_values = [1e-6 if i % 2 == 0 else 1e6 for i in range(64)]
-    fp_params = _make_scale_tensor(device, scale_values)
-
-    per_channel_store_kernel(q, k, fp_params, quant_out)
-    torch.npu.synchronize()
-
-    raw_ref = torch.matmul(q, k)
-    scale_tensor_fp32 = torch.tensor(scale_values, dtype=torch.float32, device=device)
-    scaled_ref = raw_ref * scale_tensor_fp32.unsqueeze(0)
-    expected = torch.clamp(torch.round(scaled_ref), -128, 127).to(torch.int8)
-
-    torch.testing.assert_close(quant_out.to(torch.int32), expected.to(torch.int32), rtol=0, atol=1)
-    logging.info("test_per_channel_extreme_scale passed.")
-
-
-@pytest.mark.soc("950")
-def test_per_channel_zero_scale():
-    """Test per-channel with zero scale values."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = _make_q(device)
-    k = _make_k(device)
-    quant_out = torch.zeros((64, 64), device=device, dtype=torch.int8)
-
-    # Zero scale for some columns: [0, 2.0, 0, 2.0, ...]
-    scale_values = [0.0 if i % 2 == 0 else 2.0 for i in range(64)]
-    fp_params = _make_scale_tensor(device, scale_values)
-
-    per_channel_store_kernel(q, k, fp_params, quant_out)
-    torch.npu.synchronize()
-
-    raw_ref = torch.matmul(q, k)
-    scale_tensor_fp32 = torch.tensor(scale_values, dtype=torch.float32, device=device)
-    scaled_ref = raw_ref * scale_tensor_fp32.unsqueeze(0)
-    expected = torch.clamp(torch.round(scaled_ref), -128, 127).to(torch.int8)
-
-    torch.testing.assert_close(quant_out.to(torch.int32), expected.to(torch.int32), rtol=0, atol=1)
-    logging.info("test_per_channel_zero_scale passed.")
-
-
-@pytest.mark.soc("950")
-def test_per_channel_negative_scale():
-    """Test per-channel with negative scale values."""
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-
-    device_name = torch.npu.get_device_name()
-    if "Ascend950" not in device_name:
-        logging.info("Current device is %s, skip.", device_name)
-        return
-
-    q = _make_q(device)
-    k = _make_k(device)
-    quant_out = torch.zeros((64, 64), device=device, dtype=torch.int8)
-
-    # Negative scale: [-1.0, -2.0, ...]
-    scale_values = [-1.0 - i * 0.1 for i in range(64)]
-    fp_params = _make_scale_tensor(device, scale_values)
-
-    per_channel_store_kernel(q, k, fp_params, quant_out)
-    torch.npu.synchronize()
-
-    raw_ref = torch.matmul(q, k)
-    scale_tensor_fp32 = torch.tensor(scale_values, dtype=torch.float32, device=device)
-    scaled_ref = raw_ref * scale_tensor_fp32.unsqueeze(0)
-    expected = torch.clamp(torch.round(scaled_ref), -128, 127).to(torch.int8)
-
-    torch.testing.assert_close(quant_out.to(torch.int32), expected.to(torch.int32), rtol=0, atol=1)
-    logging.info("test_per_channel_negative_scale passed.")
-
-
-# ============================================================================
-# Test 5: per-channel move expansion
-# ============================================================================
+    logging.info("test_per_channel_scale_pattern[%s] passed.", pattern)
 
 
 @pl.jit()
 def per_channel_move_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    move_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    move_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
     vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
@@ -676,10 +489,10 @@ def test_per_channel_move_varying_scale():
 
 @pl.jit()
 def per_channel_store_tile_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    fp_params: pl.Tensor[[1, 64], pl.DT_INT64],
-    quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
@@ -764,19 +577,15 @@ if __name__ == "__main__":
     test_store_tile_basic()
 
     # store_tile multi-tile offsets
-    test_store_tile_offset_0_1()
-    test_store_tile_offset_1_0()
-    test_store_tile_offset_1_1()
+    for tile_row, tile_col in [(0, 1), (1, 0), (1, 1)]:
+        test_store_tile_offset(tile_row, tile_col)
 
     # store_tile fusion scenarios
     test_store_tile_relu()
 
     # per-channel store expansion
-    test_per_channel_varying_scale()
-    test_per_channel_alternating_scale()
-    test_per_channel_extreme_scale()
-    test_per_channel_zero_scale()
-    test_per_channel_negative_scale()
+    for pattern in ["varying", "alternating", "extreme", "zero", "negative"]:
+        test_per_channel_scale_pattern(pattern)
 
     # per-channel move expansion
     test_per_channel_move_varying_scale()

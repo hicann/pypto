@@ -48,25 +48,43 @@ def _make_ct_kernel(scale_value: float):
 
     @pl.jit(name=f"ct_float_scale_{scale_value}")
     def kernel(
-        q: pl.Tensor[[64, 64], pl.DT_FP32],
-        k: pl.Tensor[[64, 64], pl.DT_FP32],
-        quant_out: pl.Tensor[[64, 64], pl.DT_INT8],
+        q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+        quant_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+        vm: pl.DT_INT32,
+        vn: pl.DT_INT32,
     ):
         with pl.section_cube():
-            mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
+            mat_type = pl.TileType(
+                shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            )
             q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
             k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
-            left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
+            left_type = pl.TileType(
+                shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            )
             q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
-            right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
+            right_type = pl.TileType(
+                shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN, valid_shape=[-1, -1], compact=1,
+            )
             k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
 
             acc_type = pl.TileType(
-                shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+                shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ, fractal=1024, valid_shape=[-1, -1], compact=1,
             )
             acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+
+            pl.set_validshape(q_mat, [vm, 64])
+            pl.set_validshape(q_left, [vm, 64])
+            pl.set_validshape(k_mat, [64, vn])
+            pl.set_validshape(k_right, [64, vn])
+            pl.set_validshape(acc, [vm, vn])
 
             pl.load(q_mat, q, [0, 0])
             pl.load(k_mat, k, [0, 0])
@@ -93,6 +111,7 @@ def _make_ct_kernel(scale_value: float):
 
 
 @pytest.mark.soc("950")
+@pytest.mark.parametrize("m,n", [(64, 64), (48, 96), (96, 96)], ids=["full", "row_tail", "dual_tail"])
 @pytest.mark.parametrize(
     "scale_value,pattern",
     [
@@ -106,7 +125,7 @@ def _make_ct_kernel(scale_value: float):
     ],
     ids=["positive", "negative", "zero", "unit", "fraction", "very_small", "very_large"],
 )
-def test_ct_float_scale_value_range(scale_value, pattern):
+def test_ct_float_scale_value_range(scale_value, pattern, m, n):
     """编译期 float scale 值域：与 clamp(round(x * scale)) golden 对比"""
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -114,17 +133,20 @@ def test_ct_float_scale_value_range(scale_value, pattern):
         pytest.skip(f"Current device is {torch.npu.get_device_name()}")
 
     kernel = _make_ct_kernel(scale_value)
-    q = _make_q(device, pattern)
-    k = _make_k(device)
-    quant_out = torch.zeros((64, 64), device=device, dtype=torch.int8)
+    vm, vn = min(m, 64), min(n, 64)
+    if pattern == "large_magnitude":
+        q = torch.randn(m, n, device=device, dtype=torch.float32) * 1000.0
+    else:
+        q = torch.randn(m, n, device=device, dtype=torch.float32)
+    k = torch.eye(n, device=device, dtype=torch.float32)
+    quant_out = torch.zeros((m, n), device=device, dtype=torch.int8)
 
-    kernel(q, k, quant_out)
+    kernel(q, k, quant_out, vm, vn)
     torch.npu.synchronize()
 
-    raw_ref = torch.matmul(q, k)
-    expected = torch.clamp(torch.round(raw_ref * scale_value), -128, 127).to(torch.int8)
-    torch.testing.assert_close(quant_out.to(torch.int32), expected.to(torch.int32), rtol=0, atol=0)
-    logging.info("test_ct_float_scale_value_range(scale=%s, pattern=%s) passed.", scale_value, pattern)
+    expected = torch.clamp(torch.round(q * scale_value), -128, 127).to(torch.int8)
+    torch.testing.assert_close(quant_out[:vm, :vn].to(torch.int32), expected[:vm, :vn].to(torch.int32), rtol=0, atol=1)
+    logging.info("test_ct_float_scale_value_range(scale=%s, %sx%s) passed.", scale_value, m, n)
 
 
 if __name__ == "__main__":

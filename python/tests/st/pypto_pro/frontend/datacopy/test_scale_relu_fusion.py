@@ -38,17 +38,25 @@ def _make_k(device: str) -> torch.Tensor:
 
 @pl.jit()
 def per_tensor_scale_relu_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_value: pl.DT_INT32,
+    vm: pl.DT_INT32,
+    vn: pl.DT_INT32,
 ):
     with pl.section_cube():
-        mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
+        mat_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+        )
         q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
-        left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
+        left_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+        )
         q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
         right_type = pl.TileType(
@@ -56,6 +64,8 @@ def per_tensor_scale_relu_kernel(
             dtype=pl.DT_FP32,
             target_memory=pl.MemorySpace.Right,
             layout=pl.ZN,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
 
@@ -65,8 +75,16 @@ def per_tensor_scale_relu_kernel(
             target_memory=pl.MemorySpace.Acc,
             layout=pl.NZ,
             fractal=1024,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+
+        pl.set_validshape(q_mat, [vm, 64])
+        pl.set_validshape(q_left, [vm, 64])
+        pl.set_validshape(k_mat, [64, vn])
+        pl.set_validshape(k_right, [64, vn])
+        pl.set_validshape(acc, [vm, vn])
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -91,8 +109,9 @@ def per_tensor_scale_relu_kernel(
 
 
 @pytest.mark.soc("950")
-def test_per_tensor_scale_relu_fusion():
-    """Test per-tensor scale + relu fusion."""
+@pytest.mark.parametrize("m,n", [(64, 64), (48, 96), (96, 96)], ids=["full", "row_tail", "dual_tail"])
+def test_per_tensor_scale_relu_fusion(m, n):
+    """Test per-tensor scale + relu fusion, covering tail blocks."""
     device = ST_DEVICE
     torch.npu.set_device(device)
 
@@ -101,30 +120,22 @@ def test_per_tensor_scale_relu_fusion():
         logging.info("Current device is %s, skip.", device_name)
         return
 
-    q = _make_q(device)
-    k = _make_k(device)
-    out = torch.zeros((64, 64), device=device, dtype=torch.int8)
+    vm, vn = min(m, 64), min(n, 64)
+    q = torch.randn(m, n, device=device, dtype=torch.float32)
+    k = torch.eye(n, device=device, dtype=torch.float32)
+    out = torch.zeros((m, n), device=device, dtype=torch.int8)
     scale_value = 2.0
     scale_bits = struct.unpack("!I", struct.pack("!f", scale_value))[0]
 
-    per_tensor_scale_relu_kernel(q, k, out, scale_bits)
+    per_tensor_scale_relu_kernel(q, k, out, scale_bits, vm, vn)
     torch.npu.synchronize()
 
-    # Expected: relu(matmul(q, k)) * scale, then quantize to INT8
-    raw_ref = torch.matmul(q, k)
-    relu_ref = torch.relu(raw_ref)
-    scaled_ref = relu_ref * scale_value
-    expected = torch.clamp(torch.round(scaled_ref), -128, 127).to(torch.int8)
+    # Expected: relu(q) * scale (k=eye), then quantize to INT8
+    relu_ref = torch.relu(q)
+    expected = torch.clamp(torch.round(relu_ref * scale_value), -128, 127).to(torch.int8)
 
-    logging.info("***********per-tensor scale + relu fusion***********")
-    logging.info("raw output (top-left 8x8): %s", raw_ref[:8, :8])
-    logging.info("relu output (top-left 8x8): %s", relu_ref[:8, :8])
-    logging.info("scaled output (top-left 8x8): %s", scaled_ref[:8, :8])
-    logging.info("quantized output (top-left 8x8): %s", out[:8, :8])
-    logging.info("expected output (top-left 8x8): %s", expected[:8, :8])
-
-    torch.testing.assert_close(out, expected, rtol=0, atol=1)
-    logging.info("test_per_tensor_scale_relu_fusion passed!")
+    torch.testing.assert_close(out[:vm, :vn].to(torch.int32), expected[:vm, :vn].to(torch.int32), rtol=0, atol=1)
+    logging.info("test_per_tensor_scale_relu_fusion[%s,%s] passed!", m, n)
 
 
 # ============================================================================
@@ -143,17 +154,25 @@ def test_per_tensor_scale_relu_fusion():
 
 @pl.jit()
 def dynamic_scale_relu_kernel(
-    q: pl.Tensor[[64, 64], pl.DT_FP32],
-    k: pl.Tensor[[64, 64], pl.DT_FP32],
-    out: pl.Tensor[[64, 64], pl.DT_INT8],
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     scale_bits: pl.DT_INT32,
+    vm: pl.DT_INT32,
+    vn: pl.DT_INT32,
 ):
     with pl.section_cube():
-        mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
+        mat_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+        )
         q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
-        left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
+        left_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+        )
         q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
         right_type = pl.TileType(
@@ -161,6 +180,8 @@ def dynamic_scale_relu_kernel(
             dtype=pl.DT_FP32,
             target_memory=pl.MemorySpace.Right,
             layout=pl.ZN,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
 
@@ -170,8 +191,16 @@ def dynamic_scale_relu_kernel(
             target_memory=pl.MemorySpace.Acc,
             layout=pl.NZ,
             fractal=1024,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+
+        pl.set_validshape(q_mat, [vm, 64])
+        pl.set_validshape(q_left, [vm, 64])
+        pl.set_validshape(k_mat, [64, vn])
+        pl.set_validshape(k_right, [64, vn])
+        pl.set_validshape(acc, [vm, vn])
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -213,7 +242,7 @@ def test_dynamic_scale_relu_fusion():
     scale_value = 2.0
     scale_bits = struct.unpack("!I", struct.pack("!f", scale_value))[0]
 
-    dynamic_scale_relu_kernel(q, k, out, scale_bits)
+    dynamic_scale_relu_kernel(q, k, out, scale_bits, 64, 64)
     torch.npu.synchronize()
 
     # Expected: relu(matmul(q, k)) * scale, then quantize to INT8
@@ -260,7 +289,7 @@ def test_multiple_scale_values_with_relu():
         out = torch.zeros((64, 64), device=device, dtype=torch.int8)
         # Convert float to INT32 bit representation
         scale_bits = struct.unpack("!I", struct.pack("!f", scale_value))[0]
-        per_tensor_scale_relu_kernel(q, k, out, scale_bits)
+        per_tensor_scale_relu_kernel(q, k, out, scale_bits, 64, 64)
         torch.npu.synchronize()
 
         scaled_ref = relu_ref * scale_value
