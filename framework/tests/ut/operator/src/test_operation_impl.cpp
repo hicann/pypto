@@ -1333,6 +1333,63 @@ TEST_F(OperationImplTest, test_GatherMask_3)
     FUNCTION("TestGatherMask") { result = GatherMask(operand1, 3); }
 }
 
+TEST_F(OperationImplTest, test_GatherMask_ViewSplitLastAxis_ExpectError)
+{
+    TileShape::Current().SetVecTile(8, 8);
+    Tensor operand1(DT_FP16, {8, 32}, "operand1");
+    Tensor result;
+    auto runGatherMask = [&]() {
+        FUNCTION("TestGatherMaskViewSplit")
+        {
+            auto viewTensor = View(operand1, {8, 16}, {8, 16}, {0, 0});
+            result = GatherMask(viewTensor, 1);
+        }
+    };
+    EXPECT_THROW(runGatherMask(), Error);
+}
+
+TEST_F(OperationImplTest, test_GatherMask_ViewSplitLastAxis_Mode3_ExpectError)
+{
+    TileShape::Current().SetVecTile(8, 8);
+    Tensor operand1(DT_FP16, {8, 32}, "operand1");
+    Tensor result;
+    auto runGatherMask = [&]() {
+        FUNCTION("TestGatherMaskViewSplitMode3")
+        {
+            auto viewTensor = View(operand1, {8, 16}, {8, 16}, {0, 0});
+            result = GatherMask(viewTensor, 3);
+        }
+    };
+    EXPECT_THROW(runGatherMask(), Error);
+}
+
+TEST_F(OperationImplTest, test_GatherMask_ViewSplitLastAxis_4D_ExpectError)
+{
+    TileShape::Current().SetVecTile(2, 3, 5, 16);
+    Tensor operand1(DT_FP32, {4, 8, 8, 32}, "operand1");
+    Tensor result;
+    auto runGatherMask = [&]() {
+        FUNCTION("TestGatherMaskViewSplit4D")
+        {
+            auto viewTensor = View(operand1, {4, 8, 8, 16}, {4, 8, 8, 16}, {0, 0, 0, 0});
+            result = GatherMask(viewTensor, 2);
+        }
+    };
+    EXPECT_THROW(runGatherMask(), Error);
+}
+
+TEST_F(OperationImplTest, test_GatherMask_ViewEqualInputShape_Pass)
+{
+    TileShape::Current().SetVecTile(8, 16);
+    Tensor operand1(DT_FP16, {8, 16}, "operand1");
+    Tensor result;
+    FUNCTION("TestGatherMaskViewEqual")
+    {
+        auto viewTensor = View(operand1, {8, 16}, {8, 16}, {0, 0});
+        result = GatherMask(viewTensor, 1);
+    }
+}
+
 TEST_F(OperationImplTest, test_Scatter_FP16)
 {
     TileShape::Current().SetVecTile(8, 16);

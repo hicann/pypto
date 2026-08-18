@@ -175,9 +175,9 @@ static void GatherMaskOperationExeFuncQuadrupleCut(const std::vector<Tensor>& in
 class GatherMaskOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<GatherMaskOpMetaData> {};
 
 INSTANTIATE_TEST_SUITE_P(TestGatherMask, GatherMaskOperationTest,
-                         ::testing::ValuesIn(GetOpMetaData<GatherMaskOpMetaData>(
-                             {GatherMaskOperationExeFuncDoubleCut, GatherMaskOperationExeFuncTripleCut,
-                              GatherMaskOperationExeFuncQuadrupleCut},
+                         ::testing::ValuesIn(GetOpMetaData<GatherMaskOpMetaData, 1>(
+                             {GatherMaskOperationExeFuncCut, GatherMaskOperationExeFuncDoubleCut,
+                              GatherMaskOperationExeFuncTripleCut, GatherMaskOperationExeFuncQuadrupleCut},
                              "GatherMask")));
 
 TEST_P(GatherMaskOperationTest, TestGatherMask)

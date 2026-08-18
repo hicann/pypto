@@ -1685,6 +1685,19 @@ Tensor GatherMask(const Tensor& self, const uint8_t patternMode)
     CheckTensorShapeSize(self.GetStorage(), "GATHERMASK");
     auto shape = self.GetShape();
     auto& vecTile = TileShape::Current().GetVecTile();
+    if (patternMode >= 1 && patternMode <= 6) {
+        const auto& producers = self.GetStorage()->GetProducers();
+        for (auto* op : producers) {
+            if (op->GetOpcode() == Opcode::OP_VIEW) {
+                const auto& inputShape = op->GetIOperands()[0]->GetShape();
+                if (inputShape.size() == shape.size() && inputShape.back() > 0) {
+                    CHECK(VectorErrorCode::ERR_PARAM_INVALID, shape.back() >= inputShape.back())
+                        << "GatherMask requires the last axis of self.shape not to be split by view. "
+                        << "self.shape last axis: " << inputShape.back() << ", viewshape last axis: " << shape.back();
+                }
+            }
+        }
+    }
     if (patternMode == 1 || patternMode == 2) {
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, shape[shape.size() - 1] % 2 == 0)
             << "The last axis of input shape should be divisible by 2 when patternMode is 1 or 2";

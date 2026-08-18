@@ -2497,7 +2497,13 @@ def gen_gcds_op_golden(case_name: str, output: Path, case_index: int = None) -> 
 )
 def gen_gathermask_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
     def golden_func(inputs: list, config: dict):
-        input_tensor = torch.from_numpy(inputs[0])
+        orig_dtype = inputs[0].dtype
+        if orig_dtype == np.uint32:
+            input_tensor = torch.from_numpy(inputs[0].astype(np.int32))
+        elif orig_dtype == np.uint16:
+            input_tensor = torch.from_numpy(inputs[0].astype(np.int16))
+        else:
+            input_tensor = torch.from_numpy(inputs[0])
         params = config.get("params")
         pattern_mode = int(params.get("patternMode"))
         last_dim = input_tensor.shape[-1]
@@ -2531,7 +2537,7 @@ def gen_gathermask_op_golden(case_name: str, output: Path, case_index: int = Non
                 selected_indices = indices[3::4]
             # 使用索引选择元素
             output = input_tensor.index_select(-1, selected_indices)
-            return [output.numpy()]
+            return [output.numpy().astype(orig_dtype)]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("GatherMask", golden_func, output, case_index)
