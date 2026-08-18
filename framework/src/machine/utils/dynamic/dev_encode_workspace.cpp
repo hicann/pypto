@@ -112,9 +112,10 @@ void CalcWorkspacePlatform(WorkspaceDesc& wsDesc)
 RuntimeWorkspaceConfig LoadRuntimeWorkspaceConfig(uint32_t maxUnrollTimes)
 {
     RuntimeWorkspaceConfig cfg;
-    cfg.stitchNumMax = EffectiveStitchNumMax(maxUnrollTimes);
     cfg.parallelism = config::GetRuntimeOption<uint32_t>(DEVICE_SCHED_PARALLELISM);
     cfg.maxWorkspaceBytes = GetMaxWorkspaceBytes();
+    cfg.stitchNumMax = (cfg.maxWorkspaceBytes == 0) ? ConfiguredStitchFunctionMaxNum() :
+                                                      EffectiveStitchNumMax(maxUnrollTimes);
     return cfg;
 }
 
