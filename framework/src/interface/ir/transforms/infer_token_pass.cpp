@@ -130,7 +130,7 @@ private:
     {
         const char* suffix = kind == TokenKind::READ ? "_r" : "_w";
         std::string name = tensor->name_ + suffix;
-        return IRContext::Get().MakeVar(name, GetTokenType(kind), span);
+        return IRContext::Get().MakeSemanticToken(name, kind, span);
     }
 
     VarPtr CreateControlToken(const std::string& base, const char* control, Span span, TokenKind kind)
@@ -140,7 +140,7 @@ private:
         if (control[0] != '\0') {
             name += "_" + std::string(control);
         }
-        return IRContext::Get().MakeVar(name, GetTokenType(kind), span);
+        return IRContext::Get().MakeSemanticToken(name, kind, span);
     }
 
     static void AppendToken(const VarPtr& token, std::vector<VarPtr>& tokens, std::unordered_set<VarPtr>& seen)

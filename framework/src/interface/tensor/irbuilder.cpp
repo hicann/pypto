@@ -18,6 +18,7 @@
 
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
+#include "ir/type.h"
 #include "ir/transforms/printer.h" // for test
 #include "ir/transforms/infer_token_pass.h"
 
@@ -71,6 +72,25 @@ std::vector<ir::VarPtr> IRContext::GetDependToken(Operation& op)
     std::vector<ir::VarPtr> tokenList(tokenSet.begin(), tokenSet.end());
     std::sort(tokenList.begin(), tokenList.end(), [](ir::VarPtr a, ir::VarPtr b) { return a->name_ < b->name_; });
     return tokenList;
+}
+
+ir::VarPtr IRContext::MakeSemanticToken(std::string name, ir::TokenKind kind, ir::Span span)
+{
+    FE_ASSERT(FeError::INVALID_VAL, kind == ir::TokenKind::READ || kind == ir::TokenKind::WRITE)
+        << "MakeSemanticToken requires READ or WRITE kind";
+    auto semantic = MakeVar(std::move(name), ir::GetTokenType(kind), span);
+    auto normal = MakeVar(semantic->name_ + "_n", ir::GetTokenType(ir::TokenKind::NORMAL), span);
+    semantic_to_normal_.emplace(semantic, normal);
+    return semantic;
+}
+
+ir::VarPtr IRContext::GetNormalToken(const ir::VarPtr& semantic) const
+{
+    if (!semantic) {
+        return nullptr;
+    }
+    auto it = semantic_to_normal_.find(semantic);
+    return it != semantic_to_normal_.end() ? it->second : nullptr;
 }
 
 Function& DummyFunc()

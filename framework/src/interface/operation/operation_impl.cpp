@@ -25,6 +25,7 @@
 #include "tilefwk/symbolic_scalar.h"
 #include "tilefwk/tensor.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/tensor/contract_write_token.h"
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/common.h"
@@ -142,7 +143,8 @@ void PropagateExpandedAssembleOpAttrs(Function& function, const Operation& sourc
 }
 
 void TiledAssembleRecursive(Function& function, const TileShape& tileShape, size_t cur, Input& input,
-                            const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr)
+                            const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr,
+                            const Operation& sourceOp)
 {
     if (cur == input.tensor.GetShape().size()) {
         auto operand = input.tensor.GetStorage();
@@ -161,7 +163,9 @@ void TiledAssembleRecursive(Function& function, const TileShape& tileShape, size
         auto& sliceOp = function.AddRawOperation(Opcode::OP_SLICE, {operand}, {inputTile});
         sliceOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(fromOffset, fromDynOffset, tileValidShape));
 
+        AttachContractWriteTokenAttrs(result, sourceOp);
         auto& contractOp = function.AddRawOperation(Opcode::OP_CONTRACT, {inputTile}, {result});
+        ApplyContractWriteNormalTokens(contractOp, result);
         contractOp.SetAttr("NeedCopy", true);
         inputTile->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN);
         const auto& baseToOffset = attr->GetToOffset();
@@ -188,7 +192,7 @@ void TiledAssembleRecursive(Function& function, const TileShape& tileShape, size
     for (int i = 0; i < input.tensor.GetShape()[cur]; i += tileDim) {
         input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, tileDim);
         input.tileInfo.offset[cur] = i;
-        TiledAssembleRecursive(function, tileShape, cur + 1, input, result, attr);
+        TiledAssembleRecursive(function, tileShape, cur + 1, input, result, attr, sourceOp);
     }
 }
 
@@ -250,14 +254,15 @@ void TiledViewOperationRecursive(Function& function, const TileShape& tileShape,
 namespace npu::tile_fwk {
 
 void TiledAssemble(Function& function, const TileShape& tileShape, const std::shared_ptr<LogicalTensor>& operand,
-                   const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr)
+                   const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr,
+                   const Operation& sourceOp)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "operand's shape size and offset size should be equal";
 
     TileInfo tileInfo(operand->shape.size(), operand->offset.size());
     auto input = Input{operand, tileInfo};
-    TiledAssembleRecursive(function, tileShape, 0, input, result, attr);
+    TiledAssembleRecursive(function, tileShape, 0, input, result, attr, sourceOp);
 }
 
 void TiledViewOperation(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
@@ -1556,11 +1561,16 @@ void AtomicRMW(const Tensor& t, const std::vector<SymbolicScalar>& dynOffset, Te
 
 void TiledInnerAssemble(Function& function, const TileShape& tileShape, size_t cur,
                         const std::vector<SymbolicScalar>& initialOffsets, const LogicalTensorPtr& src,
-                        const LogicalTensorPtr& dst, const LogicalTensorPtr& result, TileInfo& tileInfo)
+                        const LogicalTensorPtr& dst, const LogicalTensorPtr& result, TileInfo& tileInfo,
+                        const Operation& sourceOp)
 {
     if (cur == src->GetShape().size()) {
         auto srcTile = src->View(function, tileInfo.shape, tileInfo.offset);
+        AttachContractWriteTokenAttrs(result, sourceOp);
         auto& op = function.AddOperation(Opcode::OP_ASSEMBLE_SSA, {srcTile, dst}, {result});
+        if (result->HasAttr(kContractWriteTokenOut) || result->HasAttr(kContractWriteTokenIn)) {
+            ApplyContractWriteNormalTokens(op, result);
+        }
         auto srcTileOffset = initialOffsets;
         CHECK_OP(initialOffsets.size() == tileInfo.offset.size());
         for (size_t i = 0; i < srcTileOffset.size(); i++) {
@@ -1578,7 +1588,7 @@ void TiledInnerAssemble(Function& function, const TileShape& tileShape, size_t c
     for (auto i = 0; i < src->shape[cur]; i += vecTile[cur]) {
         tileInfo.offset[cur] = i;
         tileInfo.shape[cur] = std::min(src->shape[cur] - tileInfo.offset[cur], vecTile[cur]);
-        TiledInnerAssemble(function, tileShape, cur + 1, initialOffsets, src, dst, result, tileInfo);
+        TiledInnerAssemble(function, tileShape, cur + 1, initialOffsets, src, dst, result, tileInfo, sourceOp);
     }
 }
 
@@ -1594,7 +1604,7 @@ void TiledInnerAssemble(Function& function, const TileShape& tileShape, const Op
     CHECK_OP(assembleOpAttribute != nullptr);
     const auto& initialOffsets = assembleOpAttribute->GetToDynOffset();
     TileInfo tileInfo(src->GetShape().size(), src->GetOffset().size());
-    TiledInnerAssemble(function, tileShape, 0, initialOffsets, src, dst, result, tileInfo);
+    TiledInnerAssemble(function, tileShape, 0, initialOffsets, src, dst, result, tileInfo, op);
 }
 
 void TensorInnerAssemble(Function& function, const LogicalTensorPtr& value, const std::vector<SymbolicScalar>& offsets,
@@ -2111,7 +2121,7 @@ void ExpandOperationInto(Function& function, const TileShape& tileShape, Opcode 
                 const auto& inputShape = iOperand[0]->GetShape();
                 assembleOpAttribute = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>(inputShape.size(), 0));
             }
-            TiledAssemble(function, GetAssembleExpandTileShape(op), iOperand[0], oOperand[0], assembleOpAttribute);
+            TiledAssemble(function, GetAssembleExpandTileShape(op), iOperand[0], oOperand[0], assembleOpAttribute, op);
             PropagateExpandedAssembleOpAttrs(function, op, opListPreSize);
             break;
         }

@@ -39,6 +39,7 @@
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "interface/tensor/contract_write_token.h"
 #include "interface/tensor/irbuilder.h"
 #include "ir/transforms/printer.h"
 using namespace npu::tile_fwk;
@@ -1765,6 +1766,11 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
                                                       iOp->tensor->symbol);
             auto& op = AddRawOperation(sliceOpcode, {parent}, {iOp});
             op.SetOpAttribute(std::make_shared<ViewOpAttribute>(iOp->offset, iOp->dynOffset_, iOp->dynValidShape_));
+            if (auto readToken = parent->GetReadToken()) {
+                if (auto normalToken = IRContext::Get().GetNormalToken(readToken)) {
+                    op.result_token_ = {normalToken};
+                }
+            }
             ClearOffset(iOp);
             iOp->RemoveAttr("SLICE_PARENT");
             iOp->tensor = newRaw;
@@ -1791,6 +1797,7 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
                 op.result_token_ = {deps[0]};
             }
             op.tokens_ = tokenList;
+            ApplyContractWriteNormalTokens(op, oOp);
         }
     }
     return ret;
