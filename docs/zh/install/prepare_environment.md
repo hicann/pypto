@@ -161,6 +161,7 @@
     - g++ >= 7.3.1
     - gcc >= 7.3.1
     - pybind11 >= 2.13.6（pip包，可通过`python3 -m pip install pybind11`安装）
+    - patch
 
 ## 环境验证
 
