@@ -372,12 +372,15 @@ TEST_F(TestDevEncode, test_memory_driven_derives_k_eff_at_minimum)
     const uint64_t minKb = std::max<uint64_t>(1, (workspaceStitchMin + 1023) / 1024);
 
     SetupMemoryDrivenEncodeTest(64, minKb);
-    BuildSimpleLoopFunction("memory_driven_k_eff_cap", "memory_driven_k_eff_cap_L0", t0, t1, out);
-    devProg = GetLastDevProg();
-    ASSERT_NE(devProg, nullptr);
-    EXPECT_EQ(devProg->memBudget.tensor.memoryDrivenWorkspace, 0u);
-    EXPECT_EQ(devProg->stitchMaxFunctionNum, 64u);
-    EXPECT_GT(devProg->memBudget.Total(), workspaceStitchMin);
+    RecordFunc recEqual("memory_driven_k_eff_cap", {t0, t1}, {out});
+    for ([[maybe_unused]] auto& step : recEqual) {
+        LOOP("memory_driven_k_eff_cap_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(kMemoryDrivenLoopCount))
+        {
+            auto temp = Add(t0, t1);
+            Assemble(temp, {i * kMemoryDrivenTileSize, 0}, out);
+        }
+    }
+    EXPECT_THROW(recEqual.EndFunction(), Error);
 
     const uint64_t capKb = minKb + 1;
     SetupMemoryDrivenEncodeTest(64, capKb);
@@ -392,7 +395,7 @@ TEST_F(TestDevEncode, test_validate_max_workspace_or_throw)
 {
     constexpr uint64_t kStitchMin = 32ULL * 1024;
     EXPECT_NO_THROW(ValidateMaxWorkspaceOrThrow(0, kStitchMin));
-    EXPECT_NO_THROW(ValidateMaxWorkspaceOrThrow(kStitchMin, kStitchMin));
+    EXPECT_THROW(ValidateMaxWorkspaceOrThrow(kStitchMin, kStitchMin), Error);
     EXPECT_NO_THROW(ValidateMaxWorkspaceOrThrow(kStitchMin + 1, kStitchMin));
     EXPECT_THROW(ValidateMaxWorkspaceOrThrow(1024, kStitchMin), Error);
     EXPECT_THROW(ValidateMaxWorkspaceOrThrow(10ULL * 1024, kStitchMin), Error);

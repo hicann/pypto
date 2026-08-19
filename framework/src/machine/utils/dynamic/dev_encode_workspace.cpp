@@ -125,17 +125,24 @@ uint64_t GetMaxWorkspaceBytes()
     return maxWorkspaceKb <= 0 ? UINT64_C(0) : static_cast<uint64_t>(maxWorkspaceKb) * UINT64_C(1024);
 }
 
+static void EmitWorkspaceUserMessage(const std::string& msg)
+{
+    (void)fprintf(stdout, "%s\n", msg.c_str());
+    (void)fflush(stdout);
+}
+
 void ValidateMaxWorkspaceOrThrow(uint64_t maxWorkspaceBytes, uint64_t workspaceStitchMin)
 {
-    constexpr int kMin = 1;
-    if (maxWorkspaceBytes > 0 && maxWorkspaceBytes < workspaceStitchMin) {
-        MACHINE_LOGE(ExternalError::INVALID_VAL,
-                     "[workspaceSize] max_workspace_kb=%lu is below minimum runnable workspace=%lu bytes (k_min=%d). "
-                     "Reduce operator workspace requirements or increase max_workspace_kb.",
-                     WorkspaceBytesToKbCeil(maxWorkspaceBytes), workspaceStitchMin, kMin);
+    if (maxWorkspaceBytes > 0 && maxWorkspaceBytes <= workspaceStitchMin) {
+        const uint64_t maxKb = WorkspaceBytesToKbCeil(maxWorkspaceBytes);
+        const uint64_t minKb = WorkspaceBytesToKbCeil(workspaceStitchMin);
         std::ostringstream oss;
-        oss << "max_workspace_kb below minimum runnable workspace=" << workspaceStitchMin;
-        throw std::runtime_error(oss.str());
+        oss << "[workspaceSize] max_workspace_kb=" << maxKb
+            << "KB must be greater than the minimum runnable workspace=" << minKb << "KB.";
+        const std::string msg = oss.str();
+        EmitWorkspaceUserMessage(msg);
+        MACHINE_LOGE(ExternalError::INVALID_VAL, "%s", msg.c_str());
+        throw std::runtime_error(msg);
     }
 }
 
@@ -273,29 +280,6 @@ void ApplyStitchDepthConfig(DevAscendProgram* devProg, WorkspaceDesc& wsDesc, co
                                                        devProg->GetParallelism();
 }
 
-static void EmitWorkspaceUserMessage(const std::string& msg)
-{
-    MACHINE_LOGI("%s", msg.c_str());
-    (void)fprintf(stdout, "%s\n", msg.c_str());
-    (void)fflush(stdout);
-}
-
-static std::string BuildNonMemoryDrivenWorkspaceUserMessage(uint64_t contextWsKb, uint64_t stitchMinKb)
-{
-    std::ostringstream oss;
-    oss << "Recommended: set max_workspace_kb near " << contextWsKb << "KB and above " << stitchMinKb
-        << "KB to activate memory-driven mode.";
-    return oss.str();
-}
-
-static std::string BuildMemoryDrivenWorkspaceUserMessage(uint64_t maxWorkspaceKb, uint32_t kEff)
-{
-    std::ostringstream oss;
-    oss << "[workspaceSize] Set max_workspace_kb=" << maxWorkspaceKb
-        << "KB, memory-driven stitch mode is active (Estimated stitch func num=" << kEff << ").";
-    return oss.str();
-}
-
 void LogWorkspaceEncodeSummary(int kMin, uint32_t stitchNumMax, const DevAscendProgram& devProg,
                                const StitchDepthConfig& depthConfig, uint64_t maxWorkspaceBytes,
                                uint64_t workspaceStitchMin)
@@ -313,16 +297,6 @@ void LogWorkspaceEncodeSummary(int kMin, uint32_t stitchNumMax, const DevAscendP
                  workspaceStitchMin, depthConfig.encodedWorkspaceSize, devProg.workspaceSize,
                  devProg.memBudget.metadata.Total(), WorkspaceBytesToKbCeil(maxWorkspaceBytes),
                  static_cast<int>(depthConfig.memoryDrivenWorkspace), devProg.memBudget.tensor.runtimeOutcastPoolSize);
-    if (depthConfig.memoryDrivenWorkspace == 0) {
-        // No meaningful workspace budget to tune; skip the recommendation tip.
-        if (devProg.workspaceSize > 0) {
-            EmitWorkspaceUserMessage(BuildNonMemoryDrivenWorkspaceUserMessage(
-                WorkspaceBytesToKbCeil(devProg.workspaceSize), WorkspaceBytesToKbCeil(workspaceStitchMin)));
-        }
-        return;
-    }
-    EmitWorkspaceUserMessage(
-        BuildMemoryDrivenWorkspaceUserMessage(WorkspaceBytesToKbCeil(maxWorkspaceBytes), depthConfig.kEff));
 }
 
 struct FlexSlotInfo {
