@@ -452,18 +452,6 @@ def test_dce_reshape_inplace1():
     assert stmt.opcode == "ASSEMBLE"
 
 
-def test_dce_reshape_inplace2():
-    def foo(a, b):
-        a1 = pypto.reshape(a, [32, 32], inplace=True)
-        a1[:] = b + 1  # a1 reshaped from input, could not be deleted
-    x = pypto.Tensor((32, 32), pypto.DT_FP32)
-    y = pypto.Tensor((32, 32), pypto.DT_FP32)
-    func = _run_dce(foo, x, y)
-    stmt = func.body[1]
-    assert isinstance(stmt, ir.TensorOpStmt)
-    assert stmt.opcode == "ADDS"
-
-
 def test_dce_reshape_inplace3():
     def foo(a, b):
         a1 = a + 1

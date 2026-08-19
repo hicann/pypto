@@ -76,7 +76,8 @@ private:
                                    const LogicalTensors& hiddenOutArgs, const ir::StmtPtr& placeholder);
     ir::StmtPtr ProcessTensorOp(std::shared_ptr<Function> pathFunc, const ir::StmtPtr& stmt,
                                 std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
-                                std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs);
+                                std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs,
+                                std::unordered_map<int, std::shared_ptr<RawTensor>>& memIdMap);
     void RecordDefinedTensors(const ir::TensorOpStmtPtr& tensorOpStmt, Function* pathFunc);
     void MigrateInplaceLinks(const std::shared_ptr<const Operation>& sourceOp, const LogicalTensors& oOperands,
                              Function* pathFunc);

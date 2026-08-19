@@ -282,21 +282,6 @@ void RootFunctionBuilder::RecordDefinedTensors(const ir::TensorOpStmtPtr& tensor
     }
 }
 
-void RootFunctionBuilder::MigrateInplaceLinks(const std::shared_ptr<const Operation>& sourceOp,
-                                              const LogicalTensors& oOperands, Function* pathFunc)
-{
-    if (sourceOp == nullptr || sourceOp->BelongTo() == nullptr) {
-        return;
-    }
-    const auto& sourceLinkMap = sourceOp->BelongTo()->outIncastLinkMap;
-    for (const auto& output : oOperands) {
-        auto link = sourceLinkMap.find(output->GetRawTensor());
-        if (link != sourceLinkMap.end()) {
-            pathFunc->outIncastLinkMap[link->first] = link->second;
-        }
-    }
-}
-
 void RootFunctionBuilder::CollectAssembleConsumed(const std::shared_ptr<const Operation>& sourceOp,
                                                   const LogicalTensors& oOperands, Function* pathFunc)
 {
@@ -318,7 +303,8 @@ void RootFunctionBuilder::CollectAssembleConsumed(const std::shared_ptr<const Op
 
 ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathFunc, const ir::StmtPtr& stmt,
                                                  std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
-                                                 std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs)
+                                                 std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs,
+                                                 std::unordered_map<int, std::shared_ptr<RawTensor>>& memIdMap)
 {
     auto tensorOpStmt = std::dynamic_pointer_cast<const ir::TensorOpStmt>(stmt);
     if (!tensorOpStmt) {
@@ -338,6 +324,7 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathF
         auto lt = AsLogicalTensor(arg);
         iOperands.push_back(lt);
         allInputs.insert(lt);
+        memIdMap.try_emplace(lt->tensor->memoryId, lt->tensor);
     }
 
     LogicalTensors oOperands;
@@ -348,10 +335,13 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathF
         auto lt = AsLogicalTensor(result);
         oOperands.push_back(lt);
         definedOutputs.insert(lt);
+        auto it = memIdMap.find(lt->tensor->memoryId);
+        if (it != memIdMap.end()) {
+            pathFunc->outIncastLinkMap[lt->tensor] = it->second;
+        }
     }
 
     auto sourceOp = std::dynamic_pointer_cast<const Operation>(tensorOpStmt);
-    MigrateInplaceLinks(sourceOp, oOperands, pathFunc.get());
     CollectAssembleConsumed(sourceOp, oOperands, pathFunc.get());
 
     ir::StmtPtr opStmt = RebuildTensorOpStmt(tensorOpStmt, tensorOpStmt->result_, tensorOpStmt->result_token_,
@@ -409,8 +399,9 @@ std::shared_ptr<Function> RootFunctionBuilder::CreateHiddenFunc(const ir::SeqStm
 
     std::unordered_set<std::shared_ptr<LogicalTensor>> definedOutputs;
     std::unordered_set<std::shared_ptr<LogicalTensor>> allInputs;
+    std::unordered_map<int, std::shared_ptr<RawTensor>> memIdMap;
     for (auto& stmt : seq->stmts_) {
-        (void)ProcessTensorOp(hiddenFunc, stmt, allInputs, definedOutputs);
+        (void)ProcessTensorOp(hiddenFunc, stmt, allInputs, definedOutputs, memIdMap);
     }
     ComputeIncast(*hiddenFunc, allInputs, definedOutputs);
     hiddenFunc->name_ = hiddenMagicName;
@@ -423,14 +414,6 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
                                                  const LogicalTensors& originalOutcasts)
 {
     auto slotManager = program_.GetTensorSlotManager();
-
-    for (auto& incast : originalIncasts) {
-        for (auto& outcast : originalOutcasts) {
-            if (incast->GetRawTensor()->memoryId == outcast->GetRawTensor()->memoryId) {
-                slotManager->SetSameSlot(incast, outcast);
-            }
-        }
-    }
 
     scope->ioslot.incastSlot.resize(originalIncasts.size());
     for (size_t idx = 0; idx < originalIncasts.size(); idx++) {
@@ -882,9 +865,11 @@ void RootFunctionBuilder::FlushConstructAssembleSlots()
     auto slotManager = program_.GetTensorSlotManager();
 
     std::unordered_set<int> paramSlotIds;
+    std::unordered_set<int> memIds;
     for (auto& param : logicalParams_) {
         auto tensor = slotManager->GetSlotTensor(param);
         paramSlotIds.insert(tensor->Id());
+        memIds.insert(param->tensor->memoryId);
     }
 
     std::unordered_set<Function*> affectedPathFuncs;
@@ -898,6 +883,9 @@ void RootFunctionBuilder::FlushConstructAssembleSlots()
             continue;
         }
         if (paramSlotIds.count(tensor->Id()) > 0) {
+            continue;
+        }
+        if (memIds.count(lt->tensor->memoryId) > 0) {
             continue;
         }
         if (!func->HasParent()) {

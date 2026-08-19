@@ -6,6 +6,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 from contextlib import contextmanager
+import functools
 import operator
 from typing import Optional, Sequence
 
@@ -16,27 +17,40 @@ from .dispatcher import dispatch_block
 from .op_registry import impl
 from .pir import Block, BreakSignal, BuildContext, ContinueSignal, DoubleStarred, InsertPoint, Jump, LoopRange, Scope
 
-_orig_move = pypto.Tensor.move
+_patch_methods = [
+    (pypto.Tensor, "move", 0),
+    (pypto, "index_put_", 0),
+    (pypto, "index_add_", 0),
+]
+
 _orig_assemble = pypto.assemble
+
+def _store_wrapper(orig, arg_idx):
+    @functools.wraps(orig)
+    def wrapper(*args, **kwargs):
+        Block.mark_store(args[arg_idx])
+        return orig(*args, **kwargs)
+    return wrapper
 
 
 @contextmanager
 def apply_patches():
-    def move(self, other):
-        Block.mark_store(self)
-        _orig_move(self, other)
-
     def assemble(*args, **kwargs) -> None:
         if not isinstance(args[0], Sequence):
             Block.mark_store(args[2])
         _orig_assemble(*args, **kwargs)
 
-    pypto.Tensor.move = move
-    pypto.assemble = assemble
     try:
+        originals = []
+        for obj, name, arg_idx in _patch_methods:
+            method = getattr(obj, name)
+            originals.append((obj, name, method))
+            setattr(obj, name, _store_wrapper(method, arg_idx))
+        pypto.assemble = assemble
         yield
     finally:
-        pypto.Tensor.move = _orig_move
+        for obj, name, method in originals:
+            setattr(obj, name, method)
         pypto.assemble = _orig_assemble
 
 
