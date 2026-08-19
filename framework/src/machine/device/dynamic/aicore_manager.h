@@ -912,6 +912,7 @@ private:
             DEV_VERBOSE_DEBUG("AiCpud:%d, can not send task currently. ready Task: 0", aicpuIdx_);
             return 0;
         }
+        const int typeInt = static_cast<int>(type);
         uint64_t remaining = 0;
         bool isTail = CheckIsTailBatch(devTaskCtx, type, remaining);
         uint32_t ready = GetReadyCoreNum(type, isTail);
@@ -920,7 +921,7 @@ private:
             return 0;
         }
         PerfMtBegin(PERF_EVT_SEND_AIC_TASK, aicpuIdx_);
-        const bool isRealLifo = (enableL2CacheSch_ && !firstLock[static_cast<int>(type)]);
+        const bool isRealLifo = (enableL2CacheSch_ && !firstLock[typeInt]);
         uint32_t readyId[MAX_MANAGER_AIV_NUM];
         auto readyTasksRange = isRealLifo ? readyQue->DequeueTail(ready, readyId) : readyQue->Dequeue(ready);
         const uint32_t taskCount = readyTasksRange.second - readyTasksRange.first;
@@ -933,8 +934,8 @@ private:
         DEV_VERBOSE_DEBUG("AiCpud:%d, pop all new task count: %u", aicpuIdx_, taskCount);
         BatchSendTask(devTaskCtx, type, isRealLifo ? readyTasksRange.second - 1 : readyTasksRange.first, taskCount,
                       coreIdxStart, coreIdxEnd, isRealLifo);
-        DEV_VERBOSE_DEBUG("core ready cnt: %u", context_->coreStatusMgr.GetCorePendReadyCnt(static_cast<int>(type)));
-        firstLock[static_cast<int>(type)] = false;
+        DEV_VERBOSE_DEBUG("core ready cnt: %u", context_->coreStatusMgr.GetCorePendReadyCnt(typeInt));
+        firstLock[typeInt] = false;
         PerfMtEnd(PERF_EVT_SEND_AIC_TASK, aicpuIdx_);
         return taskCount;
     }
@@ -942,52 +943,51 @@ private:
     [[gnu::hot]] inline uint32_t BatchSendTask(SchDeviceTaskContext* devTaskCtx, CoreType type, const uint32_t* newTask,
                                                uint32_t taskCount, int coreIdxStart, int coreIdxEnd, bool isLifo)
     {
+        const int typeInt = static_cast<int>(type);
         uint32_t sendCnt = 0;
         uint32_t coreNum = coreIdxEnd - coreIdxStart;
-        uint32_t coreRunReadyCnt = context_->coreStatusMgr.GetCoreRunReadyCnt(static_cast<int>(type));
+        uint32_t coreRunReadyCnt = context_->coreStatusMgr.GetCoreRunReadyCnt(typeInt);
+        uint32_t corePendReadyCnt = context_->coreStatusMgr.GetCorePendReadyCnt(typeInt);
         DEV_VERBOSE_DEBUG("Begin Batch send %s task: corerunreadycnt:%u, pendreadyCnt:%u, taskCount:%u.",
-                          type == CoreType::AIC ? "AIC" : "AIV", coreRunReadyCnt,
-                          context_->coreStatusMgr.GetCorePendReadyCnt(static_cast<int>(type)), taskCount);
-        if (unlikely(coreRunReadyCnt > coreNum ||
-                     context_->coreStatusMgr.GetCorePendReadyCnt(static_cast<int>(type)) > coreNum)) {
+                          type == CoreType::AIC ? "AIC" : "AIV", coreRunReadyCnt, corePendReadyCnt, taskCount);
+        if (unlikely(coreRunReadyCnt > coreNum || corePendReadyCnt > coreNum)) {
             DEV_ERROR(SchedErr::CORE_INFO_INVALID,
                       "Core info is invalid aicpu %d, %s coreNum: %u, coreRunReadCnt: %u,"
                       "corePendReadyCnt: %u",
-                      aicpuIdx_, type == CoreType::AIC ? "AIC" : "AIV", coreNum, coreRunReadyCnt,
-                      context_->coreStatusMgr.GetCorePendReadyCnt(static_cast<int>(type)));
+                      aicpuIdx_, type == CoreType::AIC ? "AIC" : "AIV", coreNum, coreRunReadyCnt, corePendReadyCnt);
             return DEVICE_MACHINE_ERROR;
         }
         while (sendCnt < static_cast<uint64_t>(coreRunReadyCnt) && sendCnt < taskCount) {
             uint32_t coreIdx = context_->coreStatusMgr.GetRunReadyCoreIdx(
-                static_cast<int>(type), context_->coreStatusMgr.GetCoreRunReadyCnt(static_cast<int>(type)) - 1);
-            context_->coreStatusMgr.RemoveReadyCoreIdxTail(coreIdx, static_cast<int>(type));
+                typeInt, context_->coreStatusMgr.GetCoreRunReadyCnt(typeInt) - 1);
+            context_->coreStatusMgr.RemoveReadyCoreIdxTail(coreIdx, typeInt);
             SendTaskToAiCore(devTaskCtx, type, coreIdx, isLifo ? *newTask-- : *newTask++);
             sendCnt++;
         }
-        context_->coreStatusMgr.BatchRemovePendReadyCoreIdx(static_cast<int>(type), sendCnt);
+        context_->coreStatusMgr.BatchRemovePendReadyCoreIdx(typeInt, sendCnt);
 
-        uint32_t idx = context_->coreStatusMgr.GetLastPendReadyCoreIdx(static_cast<int>(type));
+        uint32_t idx = context_->coreStatusMgr.GetLastPendReadyCoreIdx(typeInt);
         uint32_t lastProcCore = idx;
         DEV_VERBOSE_DEBUG("  ## send task left pend ready cnt %u , last core index:%u.",
-                          context_->coreStatusMgr.GetCorePendReadyCnt(static_cast<int>(type)), idx);
-        while (context_->coreStatusMgr.GetCorePendReadyCnt(static_cast<int>(type)) > 0 && sendCnt < taskCount) {
+                          context_->coreStatusMgr.GetCorePendReadyCnt(typeInt), idx);
+        while (context_->coreStatusMgr.GetCorePendReadyCnt(typeInt) > 0 && sendCnt < taskCount) {
             if (pendingIds_[idx] == AICORE_TASK_INIT) {
                 DEV_VERBOSE_DEBUG("  ## send task use pendready core %u.", idx);
                 SendTaskToAiCore(devTaskCtx, type, idx, isLifo ? *newTask-- : *newTask++);
                 sendCnt++;
-                context_->coreStatusMgr.RemovePendReadyCoreIdx(static_cast<int>(type));
+                context_->coreStatusMgr.RemovePendReadyCoreIdx(typeInt);
                 lastProcCore = idx;
             }
             idx = coreIdxStart + (idx - coreIdxStart + 1) % coreNum;
         }
 
-        if (lastProcCore != context_->coreStatusMgr.GetLastPendReadyCoreIdx(static_cast<int>(type))) {
-            context_->coreStatusMgr.SetLastPendReadyCoreIdx(static_cast<int>(type),
+        if (lastProcCore != context_->coreStatusMgr.GetLastPendReadyCoreIdx(typeInt)) {
+            context_->coreStatusMgr.SetLastPendReadyCoreIdx(typeInt,
                                                             coreIdxStart + (lastProcCore - coreIdxStart + 1) % coreNum);
         }
         DEV_VERBOSE_DEBUG("  ## finish send task left runreadycnt:%u pendreadycnt %u, last coreindex:%u.",
-                          context_->coreStatusMgr.GetCoreRunReadyCnt(static_cast<int>(type)),
-                          context_->coreStatusMgr.GetCorePendReadyCnt(static_cast<int>(type)), idx);
+                          context_->coreStatusMgr.GetCoreRunReadyCnt(typeInt),
+                          context_->coreStatusMgr.GetCorePendReadyCnt(typeInt), idx);
         return sendCnt;
     }
 
@@ -1187,14 +1187,14 @@ private:
         auto& wrapManager = devTaskCtx->GetWrapManager();
         wrapManager.DispatchMixCoreTask();
 
-        if (!enableL2CacheSch_ && !devTaskCtx->IsParallel()) {
+        const bool isParallel = devTaskCtx->IsParallel();
+        if (!enableL2CacheSch_ && !isParallel) {
             // send task to available core
             ReadyCoreFunctionQueue* readyQue = (type == CoreType::AIC) ? devTaskCtx->readyAicCoreFunctionQue :
                                                                          devTaskCtx->readyAivCoreFunctionQue;
-            if (devTaskCtx->GetWrapManager().IsMixArch()) {
-                ReadyCoreFunctionQueue* dieReadyQue = (type == CoreType::AIC) ?
-                                                          devTaskCtx->GetWrapManager().GetDieReadyAicQue() :
-                                                          devTaskCtx->GetWrapManager().GetDieReadyAivQue();
+            if (wrapManager.IsMixArch()) {
+                ReadyCoreFunctionQueue* dieReadyQue = (type == CoreType::AIC) ? wrapManager.GetDieReadyAicQue() :
+                                                                                wrapManager.GetDieReadyAivQue();
                 if (dieReadyQue != readyQue) {
                     TryBatchSendTask(devTaskCtx, type, dieReadyQue, coreIdxStart, coreIdxEnd);
                 }
@@ -1246,6 +1246,8 @@ private:
         int32_t ret = DEVICE_MACHINE_OK;
         uint32_t aicIndex = static_cast<uint32_t>(CoreType::AIC);
         uint32_t aivIndex = static_cast<uint32_t>(CoreType::AIV);
+        auto& wrapManager = devTaskCtx->GetWrapManager();
+        const bool isMixArch = wrapManager.IsMixArch();
         if (devTaskCtx->readyCount[aicIndex] > 0) {
             uint32_t needSendCnt = std::min(GetRunReadyCoreNum(CoreType::AIC), devTaskCtx->readyCount[aicIndex]);
             if (needSendCnt > 0) {
@@ -1257,9 +1259,8 @@ private:
                               aicIndex);
             if (devTaskCtx->readyCount[aicIndex] > 0) {
                 ReadyCoreFunctionQueue* targetReadyQue = devTaskCtx->readyAicCoreFunctionQue;
-                if (devTaskCtx->GetWrapManager().IsMixArch() &&
-                    EnableDieScheduling(devTaskCtx, CoreType::AIC, devTaskCtx->readyIds[aicIndex][0])) {
-                    targetReadyQue = devTaskCtx->GetWrapManager().GetDieReadyAicQue();
+                if (isMixArch && EnableDieScheduling(devTaskCtx, CoreType::AIC, devTaskCtx->readyIds[aicIndex][0])) {
+                    targetReadyQue = wrapManager.GetDieReadyAicQue();
                 }
                 ret = PushReadyQue(targetReadyQue, devTaskCtx->readyIds[aicIndex], devTaskCtx->readyCount[aicIndex]);
                 if (unlikely(ret != DEVICE_MACHINE_OK)) {
@@ -1280,9 +1281,8 @@ private:
                               aivIndex);
             if (devTaskCtx->readyCount[aivIndex] > 0) {
                 ReadyCoreFunctionQueue* targetReadyQue = devTaskCtx->readyAivCoreFunctionQue;
-                if (devTaskCtx->GetWrapManager().IsMixArch() &&
-                    EnableDieScheduling(devTaskCtx, CoreType::AIV, devTaskCtx->readyIds[aivIndex][0])) {
-                    targetReadyQue = devTaskCtx->GetWrapManager().GetDieReadyAivQue();
+                if (isMixArch && EnableDieScheduling(devTaskCtx, CoreType::AIV, devTaskCtx->readyIds[aivIndex][0])) {
+                    targetReadyQue = wrapManager.GetDieReadyAivQue();
                 }
                 ret = PushReadyQue(targetReadyQue, devTaskCtx->readyIds[aivIndex], devTaskCtx->readyCount[aivIndex]);
                 if (unlikely(ret != DEVICE_MACHINE_OK)) {

@@ -90,7 +90,7 @@
 
 当 PR 涉及 `framework/src/machine/` 下 AICPU Control-Flow / Schedule 热路径（`device_*`、`device_sche*`、`dev_workspace`、`item_pool`、`aot_binary`、`spsc_queue`、CF cache、stitch/task build）时额外检查。
 
-详细原则见 [references/perf-rules.md](perf-rules.md)（**必读**后再下评审结论），至少覆盖 §2.1–§2.5、§2.9–§2.11。
+详细原则见 [references/perf-rules.md](perf-rules.md)（**必读**后再下评审结论），至少覆盖 §2.1–§2.5、§2.9–§2.11、§2.10.1、§2.14。
 
 | # | 检查项 | 级别 | 典型问题 |
 |---|---|---|---|
@@ -100,10 +100,13 @@
 | 6.4 | 热点结构体 trivial 默构 + 布局纪律 | Major | 非平凡默构放大成无用写；热点结构塞冷字段（原则 §2.4） |
 | 6.5 | 无整结构 memset | Major | `memset(整个 DeviceTask, 0, sizeof(...))`，应 `InitShell` 只清壳字段（原则 §2.5） |
 | 6.6 | 能 Host 判断的 if 不放到 AICPU | Major | 未「以存代算」——encode 置 flag，runtime 读（原则 §2.9） |
-| 6.7 | 循环边界与不变量外提 | Major | 循环条件里重复算 `B`、体内重复加载（原则 §2.10） |
+| 6.7 | 循环边界与不变量外提 | Major | 循环条件里重复算 `B` / `.size()`、体内重复 `GetSource()` / `IsMixArch()`（原则 §2.10） |
 | 6.8 | Host 无新增直连 `rtMemcpy` H2D | Blocker | 必须拷贝则 `NormalizedRtMemcpy` / RELAXED（原则 §2.11） |
-| 6.9 | Schedule 路径与 CF 路径一并检查 | Major | 只优化 stitch、忽略 `device_sche*` |
-| 6.10 | 耗时 debug 操作加宏隔离 | Major | 仅 Host 仿真的 dump 用 `DEV_IF_NONDEVICE`；device 侧需要的耗時 debug 用 `DEV_IF_DEBUG`；禁止裸调 debug 函数仅靠 `#else` 空实现（原则 §2.14.1） |
+| 6.9 | Schedule 路径与 CF 路径一并检查 | Major | 只优化 stitch、忽略 `device_sche*` / `aicore_manager` |
+| 6.10 | 耗时 debug 操作加宏隔离 | Major | 仅 Host 仿真的 dump 用 `DEV_IF_NONDEVICE`；device 侧需要的耗时 debug 用 `DEV_IF_DEBUG`；禁止裸调 debug 函数仅靠 `#else` 空实现（原则 §2.14.1） |
+| 6.11 | 热循环指针遍历，避开带检查的 `[]` | Major | 热循环 `operator[]` / 每轮 `At`；应 `Data()` / `&At(list,0)` 后下标（原则 §2.10.1） |
+| 6.12 | 热循环无 `DEV_INFO` | Major | Init / Stitch / Resolve 热循环用 `DEV_VERBOSE_DEBUG`（原则 §2.14） |
+| 6.13 | 函数内 `static` 跨线程缓存安全 | Major | 多 Ctrl / Sche 线程下按线程或按 prog 键控（原则 §4） |
 
 验证方法：读 [references/perf-rules.md](perf-rules.md) 原则逐条对照；grep `std::vector|std::map|new |malloc` 在 `framework/src/machine/device/dynamic/*` 热路径文件中是否出现。
 
@@ -116,5 +119,6 @@ framework/src/machine/utils/dynamic/device_task.h
 framework/src/machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h
 framework/src/machine/device/dynamic/aot_binary.h
 framework/src/machine/device/dynamic/device_sche.cpp
+framework/src/machine/device/dynamic/aicore_manager.h
 framework/src/machine/runtime/memory_utils/memory_pool.cpp  # NormalizedRtMemcpy
 ```

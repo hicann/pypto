@@ -39,19 +39,20 @@ inline void FillOneDynFuncData(DynFuncData* dyndata, DevAscendFunctionDupped& du
                                npu::tile_fwk::DevStartArgsBase* startArgs, DeviceWorkspaceAllocator* workspace,
                                uint64_t& leafFuncDataSize, uint64_t& leafFuncNum)
 {
-    dyndata->opAttrs = reinterpret_cast<uint64_t*>(const_cast<SymInt*>(dupFunc.GetSource()->GetSymoffset(0)));
-    dyndata->opAtrrOffsets = dupFunc.GetSource()->GetOpAttrOffsetAddr();
-    dyndata->exprNum = dupFunc.GetSource()->expressionList.size();
+    auto* src = dupFunc.GetSource();
+    dyndata->opAttrs = reinterpret_cast<uint64_t*>(const_cast<SymInt*>(src->GetSymoffset(0)));
+    dyndata->opAtrrOffsets = src->GetOpAttrOffsetAddr();
+    dyndata->exprNum = src->expressionList.size();
     dyndata->exprTbl = dupFunc.GetExpressionAddr();
     dyndata->rawTensorAddr = reinterpret_cast<uint64_t*>(&dupFunc.GetIncastAddress(0));
-    dyndata->rawTensorDesc = dupFunc.GetSource()->GetRawTensorDesc(0);
+    dyndata->rawTensorDesc = src->GetRawTensorDesc(0);
     dyndata->startArgs = startArgs;
     dyndata->workspaceAddr = dupFunc.RuntimeWorkspace();
     dyndata->stackWorkSpaceSize = workspace->StandardStackWorkspacePerCore();
     dyndata->stackWorkSpaceAddr = workspace->StackWorkspaceAddr();
-    dyndata->opAttrSize = dupFunc.GetSource()->GetOpAttrSize();
-    dyndata->rawTensorAddrSize = dupFunc.GetSource()->GetIncastSize() + dupFunc.GetSource()->GetOutcastSize();
-    dyndata->rawTensorDescSize = dupFunc.GetSource()->GetRawTensorDescSize();
+    dyndata->opAttrSize = src->GetOpAttrSize();
+    dyndata->rawTensorAddrSize = src->GetIncastSize() + src->GetOutcastSize();
+    dyndata->rawTensorDescSize = src->GetRawTensorDescSize();
 
     CheckAddrAligned(reinterpret_cast<uint64_t>(dyndata->opAttrs), OP_ATTRS_PRE_NUM,
                      "#ctrl.task.pre.dynfunc.process: opAttrs address is not aligned.");
@@ -62,11 +63,11 @@ inline void FillOneDynFuncData(DynFuncData* dyndata, DevAscendFunctionDupped& du
     CheckAddrAligned(reinterpret_cast<uint64_t>(dyndata->rawTensorAddr), RAW_TENSOR_ADDR_MASK,
                      "#ctrl.task.pre.dynfunc.process: rawTensorAddr address is not aligned.");
 
-    leafFuncDataSize += dupFunc.GetSource()->GetOpAttrSize() * sizeof(SymInt);
-    leafFuncDataSize += dupFunc.GetSource()->GetOperationSize() * sizeof(int32_t);
+    leafFuncDataSize += src->GetOpAttrSize() * sizeof(SymInt);
+    leafFuncDataSize += src->GetOperationSize() * sizeof(int32_t);
     leafFuncDataSize += dyndata->exprNum * sizeof(int64_t);
-    leafFuncDataSize += dupFunc.GetSource()->GetRawTensorSize() * sizeof(DevRawTensorDesc);
-    leafFuncNum += dupFunc.GetSource()->GetOperationSize();
+    leafFuncDataSize += src->GetRawTensorSize() * sizeof(DevRawTensorDesc);
+    leafFuncNum += src->GetOperationSize();
     dupFunc.SetFuncData(dyndata);
 }
 } // namespace
@@ -125,7 +126,7 @@ void DeviceTaskContext::ShowStats()
     DEV_DEBUG("   Stitched function count: %10lu.", stitchedFuncNum);
     DEV_DEBUG("       Root function count: %10lu.", rootFuncNum);
     DEV_DEBUG("       Leaf function count: %10lu.", leafFuncNum);
-    DEV_DEBUG("  Initial ready task count: %10lu.", readyTaskNum);
+    DEV_DEBUG("   Initial ready task count: %10lu.", readyTaskNum);
     DEV_DEBUG(" Static function data size: %10lu bytes.", dynFuncDataSize);
     DEV_DEBUG("   Leaf function data size: %10lu bytes.", leafFuncDataSize);
 }
@@ -324,25 +325,28 @@ int DeviceTaskContext::BuildDynFuncData(DynDeviceTask* dyntask, uint32_t taskId,
     return DEVICE_MACHINE_OK;
 }
 
-void DeviceTaskContext::ResolveEarlyDepends(DynDeviceTask* dyntask, size_t funcIndex, size_t opIdx)
+void DeviceTaskContext::ResolveEarlyDepends(DynDeviceTask* dyntask, size_t funcIndex, size_t opIdx, bool hasWrap,
+                                            bool isMultiDie)
 {
-    size_t succSize;
-
+    const auto& cache = dyntask->dynFuncDataCacheList[funcIndex];
     auto cceBinary = dyntask->cceBinary;
-    auto func = dyntask->dynFuncDataCacheList[funcIndex].devFunc;
-    auto predList = dyntask->dynFuncDataCacheList[funcIndex].predCount;
-    auto succList = func->GetOperationDepGraphSuccAddr(opIdx, succSize);
-    auto callList = dyntask->dynFuncDataCacheList[funcIndex].calleeList;
+    auto func = cache.devFunc;
+    auto predList = cache.predCount;
+    size_t succSize;
+    auto succList = func->GetOperationDepGraphSuccAddr(static_cast<int>(opIdx), succSize);
+    auto callList = cache.calleeList;
     DEV_VERBOSE_DEBUG("ResolveEarlyDepends:: funcdup %p", &dyntask->stitchedList[funcIndex]);
     for (size_t index = 0; index < succSize; ++index) {
         auto succIdx = succList[index];
         DEV_VERBOSE_DEBUG("ResolveEarlyDepends inner func %d opindex %d succfunc %d succOpIdx %d",
                           static_cast<int>(funcIndex), static_cast<int>(opIdx), static_cast<int>(funcIndex), succIdx);
-        doResolve(dyntask, cceBinary[callList[succIdx]].coreType, funcIndex, succIdx, predList);
+        doResolve(dyntask, cceBinary[callList[succIdx]].coreType, funcIndex, succIdx, predList, hasWrap, isMultiDie);
     }
 
-    auto& funcDup = dyntask->stitchedList[funcIndex];
-    auto& stitchList = funcDup.GetOperationStitch(opIdx);
+    if (func->GetOperationStitchIndex(static_cast<int>(opIdx)) == 0) {
+        return;
+    }
+    auto& stitchList = cache.duppedData->GetOperationStitch(static_cast<int>(opIdx));
     DEV_VERBOSE_DEBUG("ResolveEarlyDepends:: stitchList %p", &stitchList);
     for (auto* node = stitchList.Head(); node != nullptr; node = node->Next()) {
         DEV_VERBOSE_DEBUG("ResolveEarlyDepends:: node %p", node);
@@ -356,23 +360,29 @@ void DeviceTaskContext::ResolveEarlyDepends(DynDeviceTask* dyntask, size_t funcI
             DEV_VERBOSE_DEBUG("ResolveEarlyDepends inner stitch func %d opindex %d succfunc %d succOpIdx %d",
                               static_cast<int>(funcIndex), static_cast<int>(opIdx), static_cast<int>(succFuncIdx),
                               static_cast<int>(succIdx));
-            doResolve(dyntask, cceBinary[callList[succIdx]].coreType, succFuncIdx, succIdx, predList);
+            doResolve(dyntask, cceBinary[callList[succIdx]].coreType, succFuncIdx, succIdx, predList, hasWrap,
+                      isMultiDie);
         }
     }
 }
 
 void DeviceTaskContext::ResolveEarlyDepends(DynDeviceTask* dyntask)
 {
-    size_t funcSize = dyntask->stitchedList.size();
+    const bool hasWrap = dyntask->devTask.mixTaskData.wrapIdNum > 0;
+    const bool isMultiDie = IsMultiDie(devProg_);
+    size_t funcSize = dyntask->dynFuncDataCacheListSize;
     for (size_t funcIdx = 0; funcIdx < funcSize; ++funcIdx) {
         auto func = dyntask->dynFuncDataCacheList[funcIdx].devFunc;
         auto predList = dyntask->dynFuncDataCacheList[funcIdx].predCount;
         auto& predInfo = func->GetPredInfo();
+        if (predInfo.totalZeroPredHub == 0) {
+            continue;
+        }
         auto opIndex = predInfo.totalZeroPredAIC + predInfo.totalZeroPredAIV + predInfo.totalZeroPredAicpu;
         while (opIndex < predInfo.totalZeroPred) {
             if (predList[opIndex] == 0) {
                 DEV_VERBOSE_DEBUG("ResolveEarlyDepends func %d opindex %lu", static_cast<int>(funcIdx), opIndex);
-                ResolveEarlyDepends(dyntask, funcIdx, opIndex);
+                ResolveEarlyDepends(dyntask, funcIdx, opIndex, hasWrap, isMultiDie);
             }
             opIndex++;
         }

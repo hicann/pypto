@@ -33,8 +33,10 @@ struct DeviceSlotContext {
 
     void ClearDirty()
     {
-        for (size_t i = 0; i < slotList_.size(); i++) {
-            slotList_[i].stitchDupIdx = INVALID_STITCH_IDX;
+        const size_t n = slotList_.size();
+        DeviceExecuteSlot* slots = slotList_.data();
+        for (size_t i = 0; i < n; i++) {
+            slots[i].stitchDupIdx = INVALID_STITCH_IDX;
         }
     }
 

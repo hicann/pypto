@@ -72,7 +72,8 @@ private:
     bool IsMixArch(DevAscendProgram* devProg);
     bool IsMultiDie(DevAscendProgram* devProg);
     bool IsNeedWrapProcess(DynDeviceTask* dyntask, DevAscendProgram* devProg);
-    inline void doResolve(DynDeviceTask* dyntask, int coreType, size_t funcIdx, size_t succIdx, predcount_t* predList)
+    inline void doResolve(DynDeviceTask* dyntask, int coreType, size_t funcIdx, size_t succIdx, predcount_t* predList,
+                          bool hasWrap, bool isMultiDie)
     {
         predList[succIdx] -= 1;
         if (predList[succIdx] != 0)
@@ -81,15 +82,27 @@ private:
         if (IsHubType(coreType)) {
             DEV_VERBOSE_DEBUG("doResolve hub func %d succindex %d", static_cast<int>(funcIdx),
                               static_cast<int>(succIdx));
-            ResolveEarlyDepends(dyntask, funcIdx, succIdx);
-        } else {
+            ResolveEarlyDepends(dyntask, funcIdx, succIdx, hasWrap, isMultiDie);
+            return;
+        }
+        if (hasWrap) {
             int32_t* opWrapList = reinterpret_cast<int32_t*>(dyntask->devTask.mixTaskData.opWrapList[funcIdx]);
-            if (dyntask->devTask.mixTaskData.wrapIdNum > 0 && opWrapList[succIdx] != -1) {
+            if (opWrapList[succIdx] != -1) {
                 ProcessWrapQueue(
                     dyntask, MakeMixWrapID(funcIdx, static_cast<uint32_t>(opWrapList[succIdx])), funcIdx, succIdx,
                     reinterpret_cast<WrapInfoQueue*>(dyntask->devTask.mixTaskData.readyWrapCoreFunctionQue));
-            } else if (IsMultiDie(devProg_) && (GetLoopDieId(dyntask, funcIdx) >= 0)) {
-                auto dieId = GetLoopDieId(dyntask, funcIdx);
+                readyTaskNum++;
+                return;
+            }
+        }
+        EnqueueReadyTask(dyntask, coreType, funcIdx, succIdx, isMultiDie);
+    }
+
+    inline void EnqueueReadyTask(DynDeviceTask* dyntask, int coreType, size_t funcIdx, size_t succIdx, bool isMultiDie)
+    {
+        if (isMultiDie) {
+            auto dieId = GetLoopDieId(dyntask, funcIdx);
+            if (dieId >= 0) {
                 auto q = reinterpret_cast<ReadyCoreFunctionQueue*>(
                     dyntask->devTask.dieReadyFunctionQue.readyDieAicCoreFunctionQue[dieId]);
                 if (coreType == static_cast<int>(CoreType::AIV)) {
@@ -97,15 +110,16 @@ private:
                         dyntask->devTask.dieReadyFunctionQue.readyDieAivCoreFunctionQue[dieId]);
                 }
                 q->UnsafeEnqueue(MakeTaskID(funcIdx, succIdx));
-            } else {
-                auto q = dyntask->readyQueue[dyntask->GetReadyQueueIndexByCoreType(static_cast<CoreType>(coreType))];
-                q->UnsafeEnqueue(MakeTaskID(funcIdx, succIdx));
+                readyTaskNum++;
+                return;
             }
-            readyTaskNum++;
         }
+        auto q = dyntask->readyQueue[dyntask->GetReadyQueueIndexByCoreType(static_cast<CoreType>(coreType))];
+        q->UnsafeEnqueue(MakeTaskID(funcIdx, succIdx));
+        readyTaskNum++;
     }
 
-    void ResolveEarlyDepends(DynDeviceTask* dyntask, size_t funcIdx, size_t opIdx);
+    void ResolveEarlyDepends(DynDeviceTask* dyntask, size_t funcIdx, size_t opIdx, bool hasWrap, bool isMultiDie);
 
     void ResolveEarlyDepends(DynDeviceTask* dyntask);
 

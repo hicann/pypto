@@ -189,11 +189,13 @@ void DeviceWorkspaceAllocator::AllocateInnerWorkspaceForDup(DevAscendFunctionDup
 void DeviceWorkspaceAllocator::AssignIncastAddresses(DevAscendFunctionDupped devRootDup, DeviceExecuteSlot* slotList)
 {
     DevAscendFunction* devRootSrc = devRootDup.GetSource();
-    for (size_t i = 0; i < devRootSrc->GetIncastSize(); ++i) {
-        DEV_ASSERT_MSG(WsErr::WORKSPACE_ITER_INVALID, devRootSrc->GetIncast(i).fromSlotList.size() > 0,
+    const size_t incastSize = devRootSrc->GetIncastSize();
+    for (size_t i = 0; i < incastSize; ++i) {
+        auto& incast = devRootSrc->GetIncast(i);
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_ITER_INVALID, incast.fromSlotList.size() > 0,
                        "Root [%s] Incast %zu has no fromSlotList.", devRootSrc->GetRawName(), i);
 
-        int slotIndex = devRootSrc->At(devRootSrc->GetIncast(i).fromSlotList, 0);
+        int slotIndex = devRootSrc->At(incast.fromSlotList, 0);
         DEV_ASSERT_MSG(WsErr::WORKSPACE_ITER_INVALID, slotList[slotIndex].rtOutcastIter != ITEM_POOL_INVALID_INDEX,
                        "Root[%s] incast %zu  slotIndex %d read from empty address.", devRootSrc->GetRawName(), i,
                        slotIndex);
@@ -264,16 +266,21 @@ void DeviceWorkspaceAllocator::AssignOutcastAddresses(DevAscendFunctionDupped de
 {
     DevAscendFunction* devRootSrc = devRootDup.GetSource();
     uintdevptr_t outcastBaseAddr = devRootDup.RuntimeOutcastBase();
-    for (size_t i = 0; i < devRootSrc->GetOutcastSize(); ++i) {
+    const size_t outcastSize = devRootSrc->GetOutcastSize();
+    for (size_t i = 0; i < outcastSize; ++i) {
         int outputSlotIndex = -1;
         int assembleSlotIndex = -1;
         auto& toSlotList = devRootSrc->GetOutcast(i).toSlotList;
-        for (size_t k = 0; k < toSlotList.size(); ++k) {
-            auto idx = devRootSrc->At(toSlotList, k);
-            if (slotList[idx].IsOutputAddress()) {
-                outputSlotIndex = idx;
-            } else if (slotList[idx].IsAssembleAddress()) {
-                assembleSlotIndex = idx;
+        const size_t toCnt = toSlotList.size();
+        if (toCnt > 0) {
+            auto* toSlots = &devRootSrc->At(toSlotList, 0);
+            for (size_t k = 0; k < toCnt; ++k) {
+                auto idx = toSlots[k];
+                if (slotList[idx].IsOutputAddress()) {
+                    outputSlotIndex = idx;
+                } else if (slotList[idx].IsAssembleAddress()) {
+                    assembleSlotIndex = idx;
+                }
             }
         }
 
@@ -750,13 +757,23 @@ void DeviceWorkspaceAllocator::InitAICoreSpilledMemory(uintdevptr_t workspaceAdd
 
 uint32_t DeviceWorkspaceAllocator::DevFunctionDuppedSlabMemObjSize()
 {
+    // Allocator is stack-local per launch, so maxDevFuncDuppedSize_ resets to 0.
+    // DevProg is shared across launches on this Ctrl thread; cache the scan there.
     if (maxDevFuncDuppedSize_ == 0) {
+        static DevAscendProgram* cachedProg = nullptr;
+        static uint32_t cachedSize = 0;
+        if (cachedProg == devProg_ && cachedSize != 0) {
+            maxDevFuncDuppedSize_ = cachedSize;
+            return maxDevFuncDuppedSize_;
+        }
         for (uint32_t i = 0; i < devProg_->GetFunctionSize(); i++) {
             uint64_t curSize = devProg_->GetFunction(i)->GetDuppedDataAllocSize();
             if (curSize > maxDevFuncDuppedSize_) {
                 maxDevFuncDuppedSize_ = curSize;
             }
         }
+        cachedProg = devProg_;
+        cachedSize = maxDevFuncDuppedSize_;
     }
 
     return maxDevFuncDuppedSize_;

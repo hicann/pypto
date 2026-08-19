@@ -74,7 +74,8 @@ struct DevAscendFunctionDuppedStitchList {
         }
     }
 
-    void PushBack(uint32_t taskId, std::function<DevAscendFunctionDuppedStitch*()> allocate)
+    template <typename AllocFn>
+    void PushBack(uint32_t taskId, AllocFn&& allocate)
     {
         if (head_ == nullptr || head_->Size() == DUPPED_STITCH_SIZE) {
             auto* newNode = allocate();

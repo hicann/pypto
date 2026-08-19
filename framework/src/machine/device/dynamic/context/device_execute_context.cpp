@@ -297,7 +297,8 @@ void DeviceExecuteContext::CalcControlMaxAicore()
     currentMaxC_ = 0;
     currentMaxV_ = 0;
     const auto& stitchedList = stitchContext.GetStitchedList();
-    for (size_t i = 0; i < stitchedList.size(); i++) {
+    const size_t stitchedSize = stitchedList.size();
+    for (size_t i = 0; i < stitchedSize; i++) {
         const DevAscendFunction* sourceFunc = stitchedList[i].GetSource();
         if (sourceFunc != nullptr) {
             currentMaxC_ += sourceFunc->GetMaxC();
@@ -322,7 +323,7 @@ void DeviceExecuteContext::CalcControlMaxAicore()
             currentMaxC_ = currentMaxV_ / AIV_NUM_PER_AI_CORE;
         }
     }
-    DEV_INFO("[CalcControlMaxAicore] stitchedSize=%u, maxC=%u, maxV=%u", static_cast<uint32_t>(stitchedList.size()),
+    DEV_INFO("[CalcControlMaxAicore] stitchedSize=%u, maxC=%u, maxV=%u", static_cast<uint32_t>(stitchedSize),
              currentMaxC_, currentMaxV_);
 }
 

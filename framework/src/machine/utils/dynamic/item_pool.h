@@ -109,6 +109,23 @@ public:
         return reinterpret_cast<ItemBlock*>(item) - allocation_.As<ItemBlock>();
     }
 
+    // Virgin bump: Fill I/O is the first Allocate on a freshly Init()'d pool, so the
+    // freelist is empty. Skip ItemAt bounds check and freelist branch per item.
+    template <typename... Args>
+    ItemPoolIter AllocateBump(Args&&... args)
+    {
+        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_FREE_LIST_INVALID,
+                       freeCount_ > 0 && initReadyCount_ < size_ && freeListHeadIndex_ == ITEM_POOL_INVALID_INDEX,
+                       "Available items: %zu/%zu ready=%zu", freeCount_, size_, initReadyCount_);
+        ItemBlock* base = allocation_.As<ItemBlock>();
+        ItemBlock* item = base + initReadyCount_;
+        item->freeListNextIndex = ITEM_POOL_NON_FREE_INDEX;
+        initReadyCount_++;
+        freeCount_--;
+        new (item->buf) T(std::forward<Args>(args)...);
+        return static_cast<ItemPoolIter>(item - base);
+    }
+
     void Destroy(T* item)
     {
         item->~T();

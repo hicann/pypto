@@ -45,9 +45,9 @@ description: PyPTO machine 侧（framework/src/machine）代码检视与行级 r
 - §3 缓存/哈希碰撞（AOT cache、registry 去重键）
 - §4 范围纪律（无关改动混入、死代码删除）
 - §5 bundle 专项（format/header/TLV/CRC/对齐）
-- §6 AICPU 热路径性能（禁 STL/堆分配、显式指针、平凡默构、以存代算、循环外提、Host 严禁随意 rtMemcpy）
+- §6 AICPU 热路径性能（禁 STL/堆分配、显式指针、平凡默构、以存代算、循环外提、指针遍历、Host 严禁随意 rtMemcpy）
 
-**若 §6 命中**（PR 涉及 AICPU 热路径），额外读 [references/perf-rules.md](references/perf-rules.md)（详细原则，至少覆盖 §2.1–§2.5、§2.9–§2.11）。
+**若 §6 命中**（PR 涉及 AICPU 热路径），额外读 [references/perf-rules.md](references/perf-rules.md)（详细原则，至少覆盖 §2.1–§2.5、§2.9–§2.11、§2.10.1、§2.14）。
 
 **同时读** [references/memory-rules.md](references/memory-rules.md)（内存规则），将其与内置清单合并执行。该文件表格为空时跳过；非空时按相同流程命中记录。
 
@@ -139,15 +139,16 @@ description: PyPTO machine 侧（framework/src/machine）代码检视与行级 r
 | trivial 默构 + 合理布局 | 默构清大数组；热点结构塞冷字段 |
 | Host 预计算；循环外提 | AICPU 重复 if/算本可 Host 完成的事 |
 | 必须 H2D 时用 `NormalizedRtMemcpy` | Host 随意新增直连 `rtMemcpy` |
+| `Data()` / `&At(0)` 指针迭代；热循环 `DEV_VERBOSE_DEBUG` | 热循环 `operator[]` / 每轮 `At`；热循环 `DEV_INFO` |
 
-违反 §6 / `perf-rules.md` §2.1–§2.5、§2.9、§2.11：**即使功能正确，也视为回归。**
+违反 §6 / `perf-rules.md` §2.1–§2.5、§2.9、§2.11、§2.10.1、§2.14：**即使功能正确，也视为回归。**
 
 ## 参考文件
 
 | File | Purpose | Load Timing |
 |------|---------|-------------|
 | [references/review-checklist.md](references/review-checklist.md) | machine 侧 C++ 检视清单（6 大类，含 AICPU 热路径性能） | 阶段 2 开始前必读 |
-| [references/perf-rules.md](references/perf-rules.md) | AICPU 热路径性能规则（15 条） | §6 命中时必读 |
+| [references/perf-rules.md](references/perf-rules.md) | AICPU 热路径性能规则（原则全文，含 ARMv8 特化） | §6 命中时必读 |
 | [references/memory-rules.md](references/memory-rules.md) | 内存规则（跨核数据一致性 U4–U7 等） | 阶段 2 与内置清单合并执行 |
 | [references/gitcode-review-api.md](references/gitcode-review-api.md) | GitCode 行级评论 API 字段对照与踩坑 | 阶段 3 提交前必读 |
 | [scripts/submit_review_comments.py](scripts/submit_review_comments.py) | 批量提交 diff_comment 脚本 | 阶段 3 方式 A |

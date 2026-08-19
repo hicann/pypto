@@ -70,7 +70,8 @@ struct DeviceStitchContext {
     static void PushBackTask(DevAscendFunctionDuppedStitchList& stitch, uint32_t coreTask,
                              DeviceWorkspaceAllocator* workspace)
     {
-        stitch.PushBack(coreTask, [workspace] { return workspace->AllocateStitch(); });
+        // Template AllocFn avoids std::function type-erasure on the stitch hot path.
+        stitch.PushBack(coreTask, [workspace]() { return workspace->AllocateStitch(); });
     }
 
     uint32_t stitchedCallOpSize() { return stitchedCallOpSize_; }

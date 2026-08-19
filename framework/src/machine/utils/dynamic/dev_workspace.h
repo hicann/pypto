@@ -229,6 +229,13 @@ public:
         return runtimeOutcastTensorPool_.Allocate(allocation, property, 1);
     }
 
+    // Virgin bump: Fill I/O is the first Allocate on a freshly Init()'d pool, so the
+    // freelist is empty. Skip ItemAt bounds check and freelist branch per item.
+    ItemPoolIter MakeRuntimeOutcastTensorBump(WsAllocation allocation, RuntimeTensorMemProperty property)
+    {
+        return runtimeOutcastTensorPool_.AllocateBump(allocation, property, 1);
+    }
+
     ItemPool<RuntimeOutcastTensor>::ItemBlock* GetRuntimeOutcastTensorPoolBase()
     {
         return reinterpret_cast<ItemPool<RuntimeOutcastTensor>::ItemBlock*>(&runtimeOutcastTensorPool_.At(0));
@@ -245,7 +252,11 @@ public:
     void RuntimeOutcastTensorDeref(ItemPoolIter iter)
     {
         DEV_ASSERT(WsErr::WORKSPACE_ITER_INVALID, iter != ITEM_POOL_INVALID_INDEX);
-        auto& outcast = runtimeOutcastTensorPool_.At(iter);
+        RuntimeOutcastTensorDeref(runtimeOutcastTensorPool_.At(iter));
+    }
+
+    void RuntimeOutcastTensorDeref(RuntimeOutcastTensor& outcast)
+    {
         DEV_ASSERT(WsErr::WORKSPACE_REFCOUNT_INVALID, outcast.refCnt > 0);
         outcast.refCnt--;
         if (outcast.refCnt == 0) {
