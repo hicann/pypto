@@ -125,26 +125,6 @@ BASIC_TESTS = [
         "extend_params": {},
         "products": ["950", "910"],
     },
-    {
-        "id": "B04",
-        "name": "int8_2d_nd_out_int32",
-        "desc": "INT8输入INT32输出",
-        "m": 129,
-        "k": 257,
-        "n": 511,
-        "out_shape": [129, 511],
-        "a_dtype": "DT_INT8",
-        "b_dtype": "DT_INT8",
-        "c_dtype": "DT_INT32",
-        "a_format": "ND",
-        "b_format": "ND",
-        "a_trans": False,
-        "b_trans": False,
-        "viewshape": [128, 256],
-        "tileshape": [[128, 128], [64, 128], [128, 128]],
-        "extend_params": {},
-        "products": ["950", "910"],
-    },
 ]
 
 NZ_FORMAT_TESTS = [

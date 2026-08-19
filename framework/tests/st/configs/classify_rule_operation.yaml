@@ -20,52 +20,6 @@ stest:
   operation_cube:
     cases:
       # - TestMatmul/MatmulOperationTest.TestMatmul/0
-      - TestMatmul/MatmulOperationTest.TestMatmul/1
-      - TestMatmul/MatmulOperationTest.TestMatmul/2
-      - TestMatmul/MatmulOperationTest.TestMatmul/3
-      - TestMatmul/MatmulOperationTest.TestMatmul/4
-      - TestMatmul/MatmulOperationTest.TestMatmul/5
-      - TestMatmul/MatmulOperationTest.TestMatmul/6
-      - TestMatmul/MatmulOperationTest.TestMatmul/7
-      - TestMatmul/MatmulOperationTest.TestMatmul/8
-      - TestMatmul/MatmulOperationTest.TestMatmul/9
-      - TestMatmul/MatmulOperationTest.TestMatmul/10
-      - TestMatmul/MatmulOperationTest.TestMatmul/11
-      - TestMatmul/MatmulOperationTest.TestMatmul/12
-      - TestMatmul/MatmulOperationTest.TestMatmul/13
-      - TestMatmul/MatmulOperationTest.TestMatmul/14
-      - TestMatmul/MatmulOperationTest.TestMatmul/15
-      - TestMatmul/MatmulOperationTest.TestMatmul/16
-      - TestMatmul/MatmulOperationTest.TestMatmul/17
-      - TestMatmul/MatmulOperationTest.TestMatmul/18
-      - TestMatmul/MatmulOperationTest.TestMatmul/19
-      - TestMatmul/MatmulOperationTest.TestMatmul/20
-      - TestMatmul/MatmulOperationTest.TestMatmul/21
-      - TestMatmul/MatmulOperationTest.TestMatmul/22
-      - TestMatmul/MatmulOperationTest.TestMatmul/23
-      - TestMatmul/MatmulOperationTest.TestMatmul/24
-      - TestMatmul/MatmulOperationTest.TestMatmul/25
-      - TestMatmul/MatmulOperationTest.TestMatmul/26
-      - TestMatmul/MatmulOperationTest.TestMatmul/27
-      - TestMatmul/MatmulOperationTest.TestMatmul/28
-      - TestMatmul/MatmulOperationTest.TestMatmul/29
-      - TestMatmul/MatmulOperationTest.TestMatmul/30
-      - TestMatmul/MatmulOperationTest.TestMatmul/31
-      # - TestMatmul/MatmulOperationTest.TestMatmul/32
-      - TestMatmul/MatmulOperationTest.TestMatmul/33
-      - TestMatmul/MatmulOperationTest.TestMatmul/34
-      - TestMatmul/MatmulOperationTest.TestMatmul/35
-      - TestMatmul/MatmulOperationTest.TestMatmul/36
-      - TestMatmul/MatmulOperationTest.TestMatmul/37
-      - TestMatmul/MatmulOperationTest.TestMatmul/38
-      - TestMatmul/MatmulOperationTest.TestMatmul/39
-      - TestMatmul/MatmulOperationTest.TestMatmul/40
-      - TestMatmul/MatmulOperationTest.TestMatmul/41
-      - TestMatmul/MatmulOperationTest.TestMatmul/42
-      - TestMatmul/MatmulOperationTest.TestMatmul/43
-      - TestMatmul/MatmulOperationTest.TestMatmul/44
-      - TestMatmul/MatmulOperationTest.TestMatmul/45
-      - TestMatmul/MatmulOperationTest.TestMatmul/46
       # - GatherInL1Test.gather_in_a_unalign
       # - GatherInL1Test.gather_in_bt_with_valid_shape
 

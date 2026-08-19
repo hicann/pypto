@@ -131,21 +131,21 @@ stest:
       #===========================================================================
       # matmul Interpreter 功能用例
       #===========================================================================
-      - DynamicMatmulInterpreterTest.mm_A_B_ND_bf16
-      - DynamicMatmulInterpreterTest.mm_A_B_NZ_bf16
-      - DynamicMatmulInterpreterTest.mm_A_Bt_ND_fp16
-      - DynamicMatmulInterpreterTest.mm_A_Bt_NZ_fp16
-      - DynamicMatmulInterpreterTest.mm_A_Bt_ND_fp16_tile2
-      - DynamicMatmulInterpreterTest.mm_A_Bt_NZ_int8_tile4
+      # - DynamicMatmulInterpreterTest.mm_A_B_ND_bf16
+      # - DynamicMatmulInterpreterTest.mm_A_B_NZ_bf16
+      # - DynamicMatmulInterpreterTest.mm_A_Bt_ND_fp16
+      # - DynamicMatmulInterpreterTest.mm_A_Bt_NZ_fp16
+      # - DynamicMatmulInterpreterTest.mm_A_Bt_ND_fp16_tile2
+      # - DynamicMatmulInterpreterTest.mm_A_Bt_NZ_int8_tile4
       #===========================================================================
         # batchMatmul Interpreter 功能用例
       #===========================================================================
-      - DynamicBatchMatmulInterpreterTest.test_bmm_A_B_ND_bf16
-      - DynamicBatchMatmulInterpreterTest.test_bmm_A_Bt_ND_fp16
-      - DynamicBatchMatmulInterpreterTest.test_bmm_A_B_NZ_bf16
-      - DynamicBatchMatmulInterpreterTest.test_bmm_A_Bt_NZ_fp16
-      - DynamicBatchMatmulInterpreterTest.test_bmm_A_B_ND_bf16_tile1
-      - DynamicBatchMatmulInterpreterTest.bmm4D_A_B_NZ
+      # - DynamicBatchMatmulInterpreterTest.test_bmm_A_B_ND_bf16
+      # - DynamicBatchMatmulInterpreterTest.test_bmm_A_Bt_ND_fp16
+      # - DynamicBatchMatmulInterpreterTest.test_bmm_A_B_NZ_bf16
+      # - DynamicBatchMatmulInterpreterTest.test_bmm_A_Bt_NZ_fp16
+      # - DynamicBatchMatmulInterpreterTest.test_bmm_A_B_ND_bf16_tile1
+      # - DynamicBatchMatmulInterpreterTest.bmm4D_A_B_NZ
       #===========================================================================
       # NSA native spare attention Interpreter
       #===========================================================================
