@@ -31,7 +31,9 @@
 #include "computational_graph_builder.h"
 #include "passes/block_graph_pass/schedule_ooo/common/iso_matcher.h"
 #include "passes/block_graph_pass/schedule_ooo/post_schedule/buffer_rearrange.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/cluster_list_sort.h"
 #include "passes/block_graph_pass/schedule_ooo/pre_schedule/core_assign.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/prior_dfs_sort.h"
 #include "passes/block_graph_pass/schedule_ooo/schedule_ooo.h"
 #include "passes/tile_graph_pass/graph_constraint/infer_dyn_shape.h"
 
@@ -3122,6 +3124,8 @@ TEST_F(ScheduleOoOTest, IsoMatch_IsoMatchChains_RootSignatureMismatch)
     EXPECT_EQ(res.pairs.size(), 0u);
 }
 
+// === upstream/master: ModifyAllocOrder tests ===
+
 static int IndexOf(const std::vector<Operation*>& opList, Operation* op)
 {
     for (size_t i = 0; i < opList.size(); i++) {
@@ -3231,6 +3235,106 @@ TEST_F(ScheduleOoOTest, TestModifyAllocOrderInsertsAllocOnceForInPlaceOp)
     EXPECT_EQ(opList.size(), 3u);
     EXPECT_EQ(IndexOf(opList, subGraph.GetOp("AllocT2")), 0);
     EXPECT_EQ(IndexOf(opList, subGraph.GetOp("AddInPlace")), 1);
+}
+
+// === vecSortAlgo: OptimizeSort factory interface tests ===
+
+// 用按 mode 实例化正确的 sorter 子类。
+TEST_F(ScheduleOoOTest, OptimizeSortCreateFactory)
+{
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestParams", "TestParams", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCreate", "TestCreate",
+                                                      rootFuncPtr.get());
+    ASSERT_NE(currFunctionPtr, nullptr);
+
+    std::vector<Operation*> emptyOps;
+    auto priordfs = OptimizeSort::Create(emptyOps, *currFunctionPtr, "PriorDFS");
+    EXPECT_NE(priordfs, nullptr);
+    EXPECT_NE(dynamic_cast<PriorDFSSort*>(priordfs.get()), nullptr);
+
+    auto clusterList = OptimizeSort::Create(emptyOps, *currFunctionPtr, "ClusterList");
+    EXPECT_NE(clusterList, nullptr);
+    EXPECT_NE(dynamic_cast<ClusterListSort*>(clusterList.get()), nullptr);
+
+    auto unknown = OptimizeSort::Create(emptyOps, *currFunctionPtr, "UnknownMode");
+    EXPECT_EQ(unknown, nullptr);
+}
+
+// SortOps 端到端——oooSortModeAiv="ClusterList" + 纯 AIV 图 → SUCCESS。
+TEST_F(ScheduleOoOTest, SortOpsClusterListMode)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB,
+                                           MemoryType::MEM_DEVICE_DDR};
+    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN, Opcode::OP_ADD,
+                                Opcode::OP_COPY_OUT};
+    std::vector<std::vector<std::string>> ioperands{{}, {}, {"t1"}, {"t2"}, {"t3"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"Alloc1", "Alloc2", "Copyin1", "Add1", "Copyout1"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {64, 64}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    Function* function = subGraph.GetFunction();
+    ASSERT_NE(function, nullptr);
+    function->paramConfigs_.oooSortModeAiv = "ClusterList";
+
+    OptimizeSort sort(function->Operations().DuplicatedOpList(), *function);
+    EXPECT_EQ(sort.SortOps(), SUCCESS);
+    auto result = sort.GetOperations();
+    EXPECT_EQ(result.size(), 5U);
+    Operation* copyin = subGraph.GetOp("Copyin1");
+    Operation* add = subGraph.GetOp("Add1");
+    Operation* copyout = subGraph.GetOp("Copyout1");
+    auto pos = [&](Operation* target) {
+        for (size_t i = 0; i < result.size(); ++i) {
+            if (result[i] == target) {
+                return i;
+            }
+        }
+        return result.size();
+    };
+    EXPECT_LT(pos(copyin), pos(add));
+    EXPECT_LT(pos(add), pos(copyout));
+}
+
+// SortOps 端到端——oooSortModeAiv="" + 纯 AIV 图 → SUCCESS（默认走 PriorDFS）。
+TEST_F(ScheduleOoOTest, SortOpsDefaultPriorDFSMode)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB,
+                                           MemoryType::MEM_DEVICE_DDR};
+    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN, Opcode::OP_ADD,
+                                Opcode::OP_COPY_OUT};
+    std::vector<std::vector<std::string>> ioperands{{}, {}, {"t1"}, {"t2"}, {"t3"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"Alloc1", "Alloc2", "Copyin1", "Add1", "Copyout1"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {64, 64}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    Function* function = subGraph.GetFunction();
+    ASSERT_NE(function, nullptr);
+    function->paramConfigs_.oooSortModeAiv = "";
+
+    OptimizeSort sort(function->Operations().DuplicatedOpList(), *function);
+    EXPECT_EQ(sort.SortOps(), SUCCESS);
+    auto result = sort.GetOperations();
+    EXPECT_EQ(result.size(), 5U);
+}
+
+// SortOps 端到端——空 operations → SUCCESS。
+TEST_F(ScheduleOoOTest, SortOpsEmptyInput)
+{
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestParams", "TestParams", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestEmpty", "TestEmpty",
+                                                      rootFuncPtr.get());
+    ASSERT_NE(currFunctionPtr, nullptr);
+
+    std::vector<Operation*> emptyOps;
+    OptimizeSort sort(emptyOps, *currFunctionPtr);
+    EXPECT_EQ(sort.SortOps(), SUCCESS);
+    EXPECT_TRUE(sort.GetOperations().empty());
 }
 
 } // namespace npu::tile_fwk

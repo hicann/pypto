@@ -18,7 +18,7 @@
 #include <queue>
 
 #include "prior_dfs_sort.h"
-#include <queue>
+#include "cluster_list_sort.h"
 #include "passes/pass_log/pass_log.h"
 
 namespace npu::tile_fwk {
@@ -548,6 +548,7 @@ void OptimizeSort::AllocAhead()
 
 const std::unordered_map<std::string, OptimizeSort::Factory> OptimizeSort::SORT_ALGOS = {
     {"PriorDFS", [](std::vector<Operation*> ops, Function& f) { return std::make_unique<PriorDFSSort>(ops, f); }},
+    {"ClusterList", [](std::vector<Operation*> ops, Function& f) { return std::make_unique<ClusterListSort>(ops, f); }},
 };
 
 std::string OptimizeSort::ResolveOooSortMode(const std::vector<Operation*>& ops, const ParamConfigs& pc)
