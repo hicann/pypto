@@ -190,6 +190,12 @@ public:
 
     static RawSymbolicScalarPtr Create(const std::string& name) { return std::make_shared<RawSymbolicSymbol>(name); }
 
+    std::shared_ptr<const ir::Var> Clone() const override
+    {
+        static thread_local int cloneCounter = 0;
+        return std::make_shared<RawSymbolicSymbol>(name_ + "_clone_" + std::to_string(++cloneCounter));
+    }
+
 private:
     void DumpBuffer(std::ostream& buffer) const override { buffer << name_; }
 };

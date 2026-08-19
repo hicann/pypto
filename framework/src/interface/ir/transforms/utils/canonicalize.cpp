@@ -65,7 +65,7 @@ public:
     using IRVisitor::VisitStmt_;
 
     std::vector<DefSite> sites;
-    std::vector<const Var*> liveDefs;
+    std::vector<const Var*> liveRoots;
 
 private:
     std::vector<const std::vector<VarPtr>*> rvStack_;
@@ -78,6 +78,11 @@ private:
     void AddSite(std::vector<const Var*> defs, std::unordered_set<const Var*> uses)
     {
         sites.push_back({std::move(defs), std::move(uses)});
+    }
+    void AddLiveUses(const ExprPtr& expr)
+    {
+        auto uses = CollectVarUses(expr);
+        liveRoots.insert(liveRoots.end(), uses.begin(), uses.end());
     }
     void AddTerminator(const std::vector<ExprPtr>& values)
     {
@@ -106,7 +111,7 @@ private:
         for (const auto& res : op->result_) {
             defs.push_back(res.get());
             if (IsSideEffectOp(op->opcode_)) {
-                liveDefs.push_back(res.get());
+                liveRoots.push_back(res.get());
             }
         }
         for (const auto& token : op->result_token_) {
@@ -122,6 +127,7 @@ private:
 
     void VisitStmt_(const IfStmtPtr& op) override
     {
+        AddLiveUses(op->condition_);
         rvStack_.push_back(&op->returnVars_);
         VisitStmt(op->thenBody_);
         if (op->elseBody_.has_value()) {
@@ -131,12 +137,22 @@ private:
     }
     void VisitStmt_(const ForStmtPtr& op) override
     {
+        AddLiveUses(op->start_);
+        AddLiveUses(op->stop_);
+        AddLiveUses(op->step_);
+        for (const auto& iterArg : op->iterArgs_) {
+            AddLiveUses(iterArg->initValue_);
+        }
         rvStack_.push_back(&op->returnVars_);
         VisitStmt(op->body_);
         rvStack_.pop_back();
     }
     void VisitStmt_(const WhileStmtPtr& op) override
     {
+        AddLiveUses(op->condition_);
+        for (const auto& iterArg : op->iterArgs_) {
+            AddLiveUses(iterArg->initValue_);
+        }
         rvStack_.push_back(&op->returnVars_);
         VisitStmt(op->body_);
         rvStack_.pop_back();
@@ -149,8 +165,8 @@ std::unordered_set<const Var*> ComputeLiveVars(const StmtPtr& stmt, const std::u
     collector.VisitStmt(stmt);
 
     std::unordered_set<const Var*> live(afterRefs);
-    for (auto def : collector.liveDefs) {
-        live.insert(def);
+    for (auto root : collector.liveRoots) {
+        live.insert(root);
     }
 
     bool changed = true;

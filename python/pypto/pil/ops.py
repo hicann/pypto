@@ -7,7 +7,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 from contextlib import contextmanager
 import operator
-from typing import Optional
+from typing import Optional, Sequence
 
 import pypto
 from pypto import SatStatus, SymbolicScalar, ir, pypto_impl
@@ -17,6 +17,7 @@ from .op_registry import impl
 from .pir import Block, BreakSignal, BuildContext, ContinueSignal, DoubleStarred, InsertPoint, Jump, LoopRange, Scope
 
 _orig_move = pypto.Tensor.move
+_orig_assemble = pypto.assemble
 
 
 @contextmanager
@@ -25,11 +26,18 @@ def apply_patches():
         Block.mark_store(self)
         _orig_move(self, other)
 
+    def assemble(*args, **kwargs) -> None:
+        if not isinstance(args[0], Sequence):
+            Block.mark_store(args[2])
+        _orig_assemble(*args, **kwargs)
+
     pypto.Tensor.move = move
+    pypto.assemble = assemble
     try:
         yield
     finally:
         pypto.Tensor.move = _orig_move
+        pypto.assemble = _orig_assemble
 
 
 def has_scalar(values: list) -> bool:

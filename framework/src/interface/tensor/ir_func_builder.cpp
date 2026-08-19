@@ -263,6 +263,11 @@ std::vector<std::vector<ir::StmtPtr>> RootFunctionBuilder::SplitIntoTensorOpSegm
 
 void RootFunctionBuilder::RecordDefinedTensors(const ir::TensorOpStmtPtr& tensorOpStmt, Function* pathFunc)
 {
+    auto sourceOp = std::dynamic_pointer_cast<const Operation>(tensorOpStmt);
+    bool isAssembleLike = sourceOp != nullptr &&
+                          ((sourceOp->GetOpcode() == Opcode::OP_ASSEMBLE && sourceOp->HasAttr("dassemble")) ||
+                           sourceOp->GetOpcode() == Opcode::OP_ASSEMBLE_SSA ||
+                           sourceOp->GetOpcode() == Opcode::OP_ATOMIC_RMW);
     for (auto& result : tensorOpStmt->result_) {
         if (!result) {
             continue;
@@ -270,6 +275,9 @@ void RootFunctionBuilder::RecordDefinedTensors(const ir::TensorOpStmtPtr& tensor
         auto lt = AsLogicalTensor(result);
         if (tensorDefineFunc_.find(lt) == tensorDefineFunc_.end()) {
             tensorDefineFunc_[lt] = pathFunc;
+        }
+        if (!isAssembleLike && tensorConstructFunc_.find(lt) == tensorConstructFunc_.end()) {
+            tensorConstructFunc_[lt] = pathFunc;
         }
     }
 }
@@ -880,7 +888,7 @@ void RootFunctionBuilder::FlushConstructAssembleSlots()
     }
 
     std::unordered_set<Function*> affectedPathFuncs;
-    for (auto& [lt, func] : tensorDefineFunc_) {
+    for (auto& [lt, func] : tensorConstructFunc_) {
         auto tensor = slotManager->GetSlotTensor(lt, false);
         if (tensor == nullptr) {
             continue;

@@ -53,6 +53,7 @@ private:
     std::unordered_set<LogicalTensorPtr> paramTensors_;
     std::unordered_map<std::string, int> loopNameCounters_;
     std::unordered_map<LogicalTensorPtr, Function*> tensorDefineFunc_;
+    std::unordered_map<LogicalTensorPtr, Function*> tensorConstructFunc_;
 
     void InitDynFunc(const ir::FunctionPtr& irFunc);
     void FinalizeDynFunc(const ir::FunctionPtr& irFunc);

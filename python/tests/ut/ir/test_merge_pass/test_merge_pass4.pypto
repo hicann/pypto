@@ -1,7 +1,7 @@
 function foo incast(logical_tensor %x, logical_tensor %y, logical_tensor %z) outcast() #type(Opaque) #entry(false) {
     logical_tensor %View_x = VIEW(%x) token();
     logical_tensor %View_y = VIEW(%y) token();
-    for %loop_idx_32 inrange 0, 2, 1 iter {} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+    logical_tensor %z_7 = for %loop_idx_32 inrange 0, 2, 1 iter {logical_tensor %z_1 = %z;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
         logical_tensor %a_0 = if scalar_expr then {
             logical_tensor %$0 = ADD(%View_x, %View_y) token();
             yield %$0;
@@ -10,21 +10,21 @@ function foo incast(logical_tensor %x, logical_tensor %y, logical_tensor %z) out
             logical_tensor %$1 = SUB(%View_x, %View_y) token();
             yield %$1;
         }
-        for %loop_idx_50 inrange 0, 2, 1 iter {} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
-            logical_tensor %z = ASSEMBLE(%a_0) token();
-            continue;
+        logical_tensor %z_5 = for %loop_idx_50 inrange 0, 2, 1 iter {logical_tensor %z_3 = %z_1;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+            logical_tensor %z_3 = ASSEMBLE(%a_0) token();
+            continue %z_3;
         }
-        if scalar_expr then {
+        logical_tensor %z_9 = if scalar_expr then {
             logical_tensor %$3 = ADD(%a_0, %View_y) token();
-            logical_tensor %z = ASSEMBLE(%$3) token();
-            yield;
+            logical_tensor %z_5 = ASSEMBLE(%$3) token();
+            yield %z_5;
         }
         else {
             logical_tensor %$4 = SUB(%a_0, %View_y) token();
-            logical_tensor %z = ASSEMBLE(%$4) token();
-            yield;
+            logical_tensor %z_11 = ASSEMBLE(%$4) token();
+            yield %z_11;
         }
-        continue;
+        continue %z_9;
     }
-    return %x, %y, %z;
+    return %x, %y, %z_7;
 }

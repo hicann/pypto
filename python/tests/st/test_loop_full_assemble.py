@@ -24,7 +24,7 @@ TILE_S = 4
 TILE_B = 8
 
 
-@pypto.frontend.jit()
+@pypto.frontend.jit(create_new_logical_tensor=True)
 def loop_full_assemble_kernel(
     out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
 ):

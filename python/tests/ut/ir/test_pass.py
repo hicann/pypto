@@ -400,7 +400,7 @@ def test_tensor_move():
     add_stmt = func.body[2]
     assert isinstance(add_stmt, ir.TensorOpStmt)
     assert add_stmt.opcode == "ADDS"
-    assert add_stmt.result[0].name == 'b_0'
+    assert add_stmt.result[0].name == 'b_4'
 
 
 def test_tensor_move2():
@@ -421,7 +421,7 @@ def test_tensor_move2():
     add_stmt = func.body[2]
     assert isinstance(add_stmt, ir.TensorOpStmt)
     assert add_stmt.opcode == "ADDS"
-    assert add_stmt.result[0].name == 'b_0'
+    assert add_stmt.result[0].name == 'b_4'
 
 
 def test_tensor_move3():
