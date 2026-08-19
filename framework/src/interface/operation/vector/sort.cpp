@@ -20,6 +20,7 @@
 #include "interface/operation/operation_common.h"
 #include "interface/function/function.h"
 #include "interface/program/program.h"
+#include "interface/configs/config_manager.h"
 #include "interface/utils/operator_tracer.h"
 #include "tensor_transformation.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -769,7 +770,7 @@ void TiledSort(Function& function, const TileShape& tileShape, size_t cur, Input
                 tempTensor->UpdateDynValidShape({1, mrgSortDynValidShape[axis]});
             }
 
-            auto& assembleOp = function.AddOperation(Opcode::OP_ASSEMBLE, {tmp}, {sortOutputTensor});
+            auto& assembleOp = function.AddOperation(config::GetContractOpcode(), {tmp}, {sortOutputTensor});
             assembleOp.iOperand[0]->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
             assembleOp.oOperand[0]->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
             assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
@@ -804,7 +805,7 @@ void TiledSort(Function& function, const TileShape& tileShape, size_t cur, Input
                 i += tileOutputShape[axis];
 
                 auto src = std::make_shared<LogicalTensor>(function, source->Datatype(), tileOutputShape);
-                auto& viewOp = function.AddOperation(Opcode::OP_VIEW, {roundInputTensor}, {src});
+                auto& viewOp = function.AddOperation(config::GetSliceOpcode(), {roundInputTensor}, {src});
                 curValidShape[axis] = std::max(
                     0, std::min(sortOutputValidShape[axis] - tileOutputOffset[axis], tileOutputShape[axis]));
                 viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
@@ -818,7 +819,8 @@ void TiledSort(Function& function, const TileShape& tileShape, size_t cur, Input
                 std::vector<SymbolicScalar> tileMrgSortDynValidShape(src->GetDynValidShape());
                 outputInUB->UpdateDynValidShape(tileMrgSortDynValidShape);
 
-                auto& assembleOp = function.AddOperation(Opcode::OP_ASSEMBLE, {outputInUB}, {roundOutputTensor});
+                auto& assembleOp = function.AddOperation(config::GetContractOpcode(), {outputInUB},
+                                                         {roundOutputTensor});
                 assembleOp.iOperand[0]->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
                 assembleOp.oOperand[0]->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
                 assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(

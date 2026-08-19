@@ -796,8 +796,9 @@ public:
     {
         Opcode code = Opcode::OP_UNKNOWN;
         for (size_t i = 0UL; i < operations_.size(); i++) {
-            if ((operations_[i]->GetOpcode() != Opcode::OP_VIEW) &&
+            if ((operations_[i]->GetOpcode() != Opcode::OP_VIEW) && (operations_[i]->GetOpcode() != Opcode::OP_SLICE) &&
                 (operations_[i]->GetOpcode() != Opcode::OP_ASSEMBLE) &&
+                (operations_[i]->GetOpcode() != Opcode::OP_CONTRACT) &&
                 (operations_[i]->GetCoreType() != CoreType::AICPU)) {
                 return std::make_pair(false, Opcode::OP_UNKNOWN);
             } else if (operations_[i]->GetCoreType() == CoreType::AICPU) {
@@ -815,7 +816,7 @@ public:
         return std::all_of(operations_.begin(), operations_.end(), [](auto& op) {
             Opcode opcode = op->GetOpcode();
             // 扩展支持的算子类型：RESHAPE、VIEW、ASSEMBLE
-            return opcode == Opcode::OP_RESHAPE || opcode == Opcode::OP_VIEW || opcode == Opcode::OP_ASSEMBLE ||
+            return opcode == Opcode::OP_RESHAPE || IsViewLike(opcode) || IsAssembleLike(opcode) ||
                    opcode == Opcode::OP_BIND_TENSOR;
         });
     }

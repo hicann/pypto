@@ -559,11 +559,13 @@ public:
         }
 
         switch (opcode_) {
-            case Opcode::OP_VIEW: {
+            case Opcode::OP_VIEW:
+            case Opcode::OP_SLICE: {
                 FE_ASSERT(std::dynamic_pointer_cast<ViewOpAttribute>(opAttribute_) != nullptr);
                 break;
             }
-            case Opcode::OP_ASSEMBLE: {
+            case Opcode::OP_ASSEMBLE:
+            case Opcode::OP_CONTRACT: {
                 FE_ASSERT(std::dynamic_pointer_cast<AssembleOpAttribute>(opAttribute_) != nullptr);
                 break;
             }
@@ -589,8 +591,8 @@ public:
     void SetAssembleOpAttribute(const std::vector<int64_t>& toOffset,
                                 const std::vector<SymbolicScalar>& toDynOffset = {})
     {
-        FE_ASSERT(opcode_ == Opcode::OP_ASSEMBLE || opcode_ == Opcode::OP_ASSEMBLE_SSA ||
-                  opcode_ == Opcode::OP_ATOMIC_RMW);
+        FE_ASSERT(opcode_ == Opcode::OP_ASSEMBLE || opcode_ == Opcode::OP_CONTRACT ||
+                  opcode_ == Opcode::OP_ASSEMBLE_SSA || opcode_ == Opcode::OP_ATOMIC_RMW);
         SetOpAttribute(std::make_shared<AssembleOpAttribute>(toOffset, toDynOffset));
     }
 

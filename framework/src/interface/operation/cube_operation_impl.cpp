@@ -86,7 +86,7 @@ LogicalTensorPtr AddOpView(Function& function, const LogicalTensorPtr& srcTensor
             << ", actual dimensions: " << dstValidShape.size();
         std::swap(dstValidShape[0], dstValidShape[1]);
     }
-    auto& viewOp = function.AddOperation(Opcode::OP_VIEW, {srcTensorPtr}, {dstTensorPtr});
+    auto& viewOp = function.AddOperation(config::GetSliceOpcode(), {srcTensorPtr}, {dstTensorPtr});
     auto viewAttribute = std::make_shared<ViewOpAttribute>(
         dstTensorInfo.offset, SymbolicScalar::FromConcrete(dstTensorInfo.offset), dstTensorPtr->GetDynValidShape());
     viewAttribute->SetToType(dstTensorInfo.memType);

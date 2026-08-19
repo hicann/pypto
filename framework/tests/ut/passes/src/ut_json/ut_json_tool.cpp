@@ -15,9 +15,15 @@
 
 #include "ut_json_tool.h"
 
+#include "utils/file_utils.h"
+
 void DumpJsonFile(Json programJson, std::string jsonFilePath)
 {
     std::string filePath = jsonFilePath;
+    const auto slashPos = filePath.find_last_of('/');
+    if (slashPos != std::string::npos) {
+        (void)CreateDir(filePath.substr(0, slashPos), true);
+    }
 
     std::ofstream outFile(filePath);
     if (outFile.is_open()) {

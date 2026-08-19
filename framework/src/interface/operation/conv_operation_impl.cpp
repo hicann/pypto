@@ -812,12 +812,13 @@ LogicalTensorPtr ConstructBiasTile(Function& function, const ConvGraphNodes& ten
         function, tensorGraphNodes.biasTensorPtr->Datatype(), dstBiasL1Shape,
         SymbolicScalar::FromConcrete(dstBiasL1Shape), tensorGraphNodes.biasTensorPtr->Format(), "biasL1Tensor");
     dstBiasl1TensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete(dstBiasL1Shape));
-    auto& viewOpBiasL1 = function.AddOperation(Opcode::OP_VIEW, {tensorGraphNodes.biasTensorPtr}, {dstBiasl1TensorPtr});
+    auto& sliceOpBiasL1 = function.AddOperation(config::GetSliceOpcode(), {tensorGraphNodes.biasTensorPtr},
+                                                {dstBiasl1TensorPtr});
     auto viewAttributeBiasL1 = std::make_shared<ViewOpAttribute>(dstBiasL1Offset, MemoryType::MEM_L1,
                                                                  SymbolicScalar::FromConcrete(dstBiasL1Offset),
                                                                  dstBiasl1TensorPtr->GetDynValidShape());
-    viewOpBiasL1.SetOpAttribute(viewAttributeBiasL1);
-    viewOpBiasL1.SetAttribute(Matrix::A_MUL_B_COPY_IN_MODE, static_cast<int64_t>(Matrix::CopyInMode::ND2ND));
+    sliceOpBiasL1.SetOpAttribute(viewAttributeBiasL1);
+    sliceOpBiasL1.SetAttribute(Matrix::A_MUL_B_COPY_IN_MODE, static_cast<int64_t>(Matrix::CopyInMode::ND2ND));
 
     std::vector<int64_t> dstBiasBtShape = std::vector<int64_t>{1, iterInfo.nL0Size};
     std::vector<int64_t> dstBiasBtOffset = std::vector<int64_t>{0, iterInfo.nL0Offset};
@@ -825,11 +826,11 @@ LogicalTensorPtr ConstructBiasTile(Function& function, const ConvGraphNodes& ten
         function, DataType::DT_FP32, dstBiasBtShape, SymbolicScalar::FromConcrete(dstBiasBtShape),
         tensorGraphNodes.biasTensorPtr->Format(), "biasBtTensor");
     dstBiasBtTensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete(dstBiasBtShape));
-    auto& viewOpBiasBt = function.AddOperation(Opcode::OP_VIEW, {dstBiasl1TensorPtr}, {dstBiasBtTensorPtr});
+    auto& sliceOpBiasBt = function.AddOperation(config::GetSliceOpcode(), {dstBiasl1TensorPtr}, {dstBiasBtTensorPtr});
     auto viewAttributeBiasBt = std::make_shared<ViewOpAttribute>(dstBiasBtOffset, MemoryType::MEM_BT,
                                                                  SymbolicScalar::FromConcrete(dstBiasBtOffset),
                                                                  dstBiasBtTensorPtr->GetDynValidShape());
-    viewOpBiasBt.SetOpAttribute(viewAttributeBiasBt);
+    sliceOpBiasBt.SetOpAttribute(viewAttributeBiasBt);
 
     return dstBiasBtTensorPtr;
 }

@@ -75,33 +75,179 @@ void CheckViewValidShapesConstraint(const std::vector<SymbolicScalar>& newValidS
     }
 }
 
-void TiledAssemble(Function& function, const TileShape& tileShape, size_t cur, Input& input,
-                   const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr)
+TileShape GetOpEffectiveTileShape(const Operation& op)
+{
+    if (op.GetTileShape().GetVecTile().valid()) {
+        return op.GetTileShape();
+    }
+    return TileShape::Current();
+}
+
+TileShape GetViewExpandTileShape(const Operation& op)
+{
+    TileShape tileShape = GetOpEffectiveTileShape(op);
+    if (!tileShape.GetVecTile().valid() && !op.GetOOperands().empty()) {
+        // 直接写 vec tile，避免 SetVecTile 污染全局 Current()。
+        tileShape.GetVecTile().tile = op.GetOOperands()[0]->GetShape();
+    }
+    return tileShape;
+}
+
+TileShape GetAssembleExpandTileShape(const Operation& op)
+{
+    TileShape tileShape = GetOpEffectiveTileShape(op);
+    if (!tileShape.GetVecTile().valid() && !op.GetIOperands().empty()) {
+        // 直接写 vec tile，避免 SetVecTile 污染全局 Current()。
+        tileShape.GetVecTile().tile = op.GetIOperands()[0]->GetShape();
+    }
+    return tileShape;
+}
+
+void PropagateExpandedViewOpAttrs(Function& function, const Operation& sourceOp, size_t opListPreSize)
+{
+    auto opListPost = function.Operations(false);
+    for (size_t i = opListPreSize; i < opListPost.size(); ++i) {
+        auto& newOp = opListPost[i];
+        if (newOp.GetOpcode() != Opcode::OP_SLICE && newOp.GetOpcode() != Opcode::OP_CONTRACT) {
+            continue;
+        }
+        newOp.SetScopeInfo(sourceOp.GetScopeInfo());
+        newOp.CopyAttrFrom(sourceOp, OP_EMUOP_PREFIX);
+        if (sourceOp.HasAttribute(OpAttributeKey::inplaceIdx)) {
+            newOp.SetAttribute(OpAttributeKey::inplaceIdx, sourceOp.GetIntAttribute(OpAttributeKey::inplaceIdx));
+        }
+        if (sourceOp.HasAttribute(OpAttributeKey::isGlobalInput)) {
+            newOp.SetAttribute(OpAttributeKey::isGlobalInput, sourceOp.GetBoolAttribute(OpAttributeKey::isGlobalInput));
+        }
+    }
+}
+
+void PropagateExpandedAssembleOpAttrs(Function& function, const Operation& sourceOp, size_t opListPreSize)
+{
+    auto opListPost = function.Operations(false);
+    for (size_t i = opListPreSize; i < opListPost.size(); ++i) {
+        auto& newOp = opListPost[i];
+        if (newOp.GetOpcode() != Opcode::OP_SLICE && newOp.GetOpcode() != Opcode::OP_CONTRACT) {
+            continue;
+        }
+        newOp.SetScopeInfo(sourceOp.GetScopeInfo());
+        newOp.CopyAttrFrom(sourceOp, OP_EMUOP_PREFIX);
+        if (sourceOp.HasAttribute(OpAttributeKey::inplaceIdx)) {
+            newOp.SetAttribute(OpAttributeKey::inplaceIdx, sourceOp.GetIntAttribute(OpAttributeKey::inplaceIdx));
+        }
+        if (sourceOp.HasAttribute(OpAttributeKey::rmwMode)) {
+            newOp.SetAttribute(OpAttributeKey::rmwMode, sourceOp.GetIntAttribute(OpAttributeKey::rmwMode));
+        }
+    }
+}
+
+void TiledAssembleRecursive(Function& function, const TileShape& tileShape, size_t cur, Input& input,
+                            const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr)
 {
     if (cur == input.tensor.GetShape().size()) {
-        auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
-        auto& assemble = function.AddOperation(Opcode::OP_ASSEMBLE, {tile}, {result});
-        assemble.SetAttr("NeedCopy", true);
-        auto& toDynOffset = attr->GetToDynOffset();
-        std::vector<SymbolicScalar> newDynOffset;
-        newDynOffset.resize(toDynOffset.size());
-        for (size_t i = 0; i < toDynOffset.size(); ++i) {
-            newDynOffset[i] = toDynOffset[i] + SymbolicScalar(input.tileInfo.offset[i]);
+        auto operand = input.tensor.GetStorage();
+        auto inputTile = operand->View(function, input.tileInfo.shape, input.tileInfo.offset);
+
+        std::vector<int64_t> fromOffset = input.tileInfo.offset;
+        std::vector<SymbolicScalar> fromDynOffset;
+        fromDynOffset.reserve(fromOffset.size());
+        for (size_t i = 0; i < fromOffset.size(); ++i) {
+            fromDynOffset.emplace_back(SymbolicScalar(fromOffset[i]));
         }
-        assemble.iOperand[0]->SetMemoryTypeOriginal(MemoryType::MEM_UB);
-        assemble.SetOpAttribute(
-            std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, input.tileInfo.offset, newDynOffset));
+        auto tileValidShape = GetViewValidShape(operand->GetDynValidShape(), fromOffset, fromDynOffset,
+                                                input.tileInfo.shape);
+        inputTile->UpdateDynValidShape(tileValidShape);
+
+        auto& sliceOp = function.AddRawOperation(Opcode::OP_SLICE, {operand}, {inputTile});
+        sliceOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(fromOffset, fromDynOffset, tileValidShape));
+
+        auto& contractOp = function.AddRawOperation(Opcode::OP_CONTRACT, {inputTile}, {result});
+        contractOp.SetAttr("NeedCopy", true);
+        inputTile->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN);
+        const auto& baseToOffset = attr->GetToOffset();
+        const auto& baseToDynOffset = attr->GetToDynOffset();
+        size_t offsetSize = std::min(baseToOffset.size(), input.tileInfo.offset.size());
+        std::vector<int64_t> newToOffset(offsetSize);
+        std::vector<SymbolicScalar> newDynOffset;
+        newDynOffset.reserve(baseToDynOffset.empty() ? offsetSize : std::min(baseToDynOffset.size(), offsetSize));
+        for (size_t i = 0; i < offsetSize; ++i) {
+            newToOffset[i] = baseToOffset[i] + input.tileInfo.offset[i];
+            if (baseToDynOffset.empty()) {
+                newDynOffset.emplace_back(newToOffset[i]);
+            } else {
+                newDynOffset.push_back(baseToDynOffset[i] + SymbolicScalar(input.tileInfo.offset[i]));
+            }
+        }
+        contractOp.SetOpAttribute(
+            std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UNKNOWN, newToOffset, newDynOffset));
         return;
     }
 
     auto& vecTile = tileShape.GetVecTile();
-    CheckFwkOpTileShape(vecTile, input.tensor.GetStorage(), "OP_ASSEMBLE");
-    for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
-        input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
+    int64_t tileDim = (cur < vecTile.size()) ? vecTile[cur] : vecTile[vecTile.size() - 1];
+    for (int i = 0; i < input.tensor.GetShape()[cur]; i += tileDim) {
+        input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, tileDim);
         input.tileInfo.offset[cur] = i;
-        TiledAssemble(function, tileShape, cur + 1, input, result, attr);
+        TiledAssembleRecursive(function, tileShape, cur + 1, input, result, attr);
     }
 }
+
+void TiledViewOperationRecursive(Function& function, const TileShape& tileShape, size_t cur, Input& output,
+                                 const std::shared_ptr<LogicalTensor>& operand, std::shared_ptr<ViewOpAttribute> attr)
+{
+    if (cur == output.tensor.GetShape().size()) {
+        auto resultTile = output.tensor.GetStorage()->View(function, output.tileInfo.shape, output.tileInfo.offset);
+        const auto& baseFromOffset = attr->GetFromOffset();
+        const auto& baseFromDynOffset = attr->GetFromDynOffset();
+        size_t offsetSize = std::min(baseFromOffset.size(), output.tileInfo.offset.size());
+        std::vector<int64_t> newFromOffset(offsetSize);
+        std::vector<SymbolicScalar> newFromDynOffset;
+        newFromDynOffset.reserve(baseFromDynOffset.empty() ? offsetSize :
+                                                             std::min(baseFromDynOffset.size(), offsetSize));
+        for (size_t i = 0; i < offsetSize; ++i) {
+            newFromOffset[i] = baseFromOffset[i] + output.tileInfo.offset[i];
+            if (baseFromDynOffset.empty()) {
+                newFromDynOffset.emplace_back(newFromOffset[i]);
+            } else {
+                newFromDynOffset.push_back(baseFromDynOffset[i] + SymbolicScalar(output.tileInfo.offset[i]));
+            }
+        }
+        auto tileValidShape = GetViewValidShape(operand->GetDynValidShape(), newFromOffset, newFromDynOffset,
+                                                output.tileInfo.shape);
+        resultTile->UpdateDynValidShape(tileValidShape);
+        auto& viewOp = function.AddRawOperation(Opcode::OP_SLICE, {operand}, {resultTile});
+        auto viewAttr = std::make_shared<ViewOpAttribute>(newFromOffset, newFromDynOffset, tileValidShape);
+        if (attr->GetTo() != MemoryType::MEM_UNKNOWN) {
+            viewAttr->SetToType(attr->GetTo());
+        }
+        viewOp.SetOpAttribute(viewAttr);
+
+        auto resultParent = output.tensor.GetStorage();
+        auto& contractOp = function.AddRawOperation(Opcode::OP_CONTRACT, {resultTile}, {resultParent});
+        contractOp.SetAttr("NeedCopy", true);
+        resultTile->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN);
+        std::vector<SymbolicScalar> toDynOffset;
+        toDynOffset.reserve(output.tileInfo.offset.size());
+        for (size_t i = 0; i < output.tileInfo.offset.size(); ++i) {
+            toDynOffset.emplace_back(SymbolicScalar(output.tileInfo.offset[i]));
+        }
+        contractOp.SetOpAttribute(
+            std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UNKNOWN, output.tileInfo.offset, toDynOffset));
+        return;
+    }
+
+    auto& vecTile = tileShape.GetVecTile();
+    int64_t tileDim = (cur < vecTile.size()) ? vecTile[cur] : vecTile[vecTile.size() - 1];
+    for (int i = 0; i < output.tensor.GetShape()[cur]; i += tileDim) {
+        output.tileInfo.shape[cur] = std::min(output.tensor.GetShape()[cur] - i, tileDim);
+        output.tileInfo.offset[cur] = i;
+        TiledViewOperationRecursive(function, tileShape, cur + 1, output, operand, attr);
+    }
+}
+
+} // namespace
+
+namespace npu::tile_fwk {
 
 void TiledAssemble(Function& function, const TileShape& tileShape, const std::shared_ptr<LogicalTensor>& operand,
                    const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr)
@@ -109,14 +255,25 @@ void TiledAssemble(Function& function, const TileShape& tileShape, const std::sh
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "operand's shape size and offset size should be equal";
 
-    TileInfo tileInfo(result->shape.size(), result->offset.size());
+    TileInfo tileInfo(operand->shape.size(), operand->offset.size());
     auto input = Input{operand, tileInfo};
-    TiledAssemble(function, tileShape, 0, input, result, attr);
+    TiledAssembleRecursive(function, tileShape, 0, input, result, attr);
 }
 
-} // namespace
+void TiledViewOperation(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
+                        const LogicalTensorPtr& result, const Operation& op)
+{
+    auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
+    FE_ASSERT(FeError::INVALID_VAL, viewOpAttribute != nullptr)
+        << "View op missing ViewOpAttribute, opmagic=" << op.GetOpMagic();
+    FE_ASSERT(FeError::INVALID_VAL, result->shape.size() == result->offset.size())
+        << "result's shape size and offset size should be equal";
 
-namespace npu::tile_fwk {
+    TileInfo tileInfo(result->shape.size(), result->offset.size());
+    auto output = Input{result, tileInfo};
+    TiledViewOperationRecursive(function, tileShape, 0, output, operand, viewOpAttribute);
+}
+
 constexpr int NCHW_DIM_NUM = 4;
 constexpr int NC1HWC0_DIM_NUM = 5;
 constexpr int STRIDE_DIM_NUM = 2;
@@ -1702,7 +1859,7 @@ static bool ReshapeNeedCopy(const Tensor& operand)
     }
 
     auto op = *operand.GetStorage()->GetProducers().begin();
-    while (op->GetOpcode() == Opcode::OP_VIEW) {
+    while (op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_SLICE) {
         if (op->GetInputOperand(0)->GetShape() != op->GetOutputOperand(0)->GetShape()) {
             return true;
         }
@@ -1940,9 +2097,22 @@ void ExpandOperationInto(Function& function, const TileShape& tileShape, Opcode 
             TiledReduceAcc(function, tileShape, iOperand, oOperand[0]);
             break;
         }
-        case Opcode::OP_ASSEMBLE: {
+        case Opcode::OP_VIEW: {
+            size_t opListPreSize = function.Operations(false).size();
+            TiledViewOperation(function, GetViewExpandTileShape(op), iOperand[0], oOperand[0], op);
+            PropagateExpandedViewOpAttrs(function, op, opListPreSize);
+            break;
+        }
+        case Opcode::OP_ASSEMBLE:
+        case Opcode::OP_CONTRACT: {
+            size_t opListPreSize = function.Operations(false).size();
             auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
-            TiledAssemble(function, tileShape, iOperand[0], oOperand[0], assembleOpAttribute);
+            if (assembleOpAttribute == nullptr) {
+                const auto& inputShape = iOperand[0]->GetShape();
+                assembleOpAttribute = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>(inputShape.size(), 0));
+            }
+            TiledAssemble(function, GetAssembleExpandTileShape(op), iOperand[0], oOperand[0], assembleOpAttribute);
+            PropagateExpandedAssembleOpAttrs(function, op, opListPreSize);
             break;
         }
         case Opcode::OP_ASSEMBLE_SSA: {

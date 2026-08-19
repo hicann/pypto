@@ -220,6 +220,7 @@ def set_pass_options(
     ooo_sched_mode: Optional[str] = None,
     auto_mix_partition: Optional[int] = None,
     sg_set_tunevf_mode: Optional[int] = None,
+    enable_slice: Optional[bool] = None,
 ) -> None:
     """
     Set pass options.
@@ -273,6 +274,9 @@ def set_pass_options(
         - 1: bypass TuneTileOpSeqForVF and TuneSyncForVF passes
         - 2: ignore performance modeling and maximize fusion in TuneSyncForVF
 
+    enable_slice : bool
+        Whether to enable slice-related processing. Defaults to False.
+
     Raises
     ------
     ValueError
@@ -314,6 +318,10 @@ def set_pass_options(
         if ooo_sched_mode not in ("", "GAPMIN", "HLF"):
             raise ValueError(f"Invalid ooo_sched_mode: '{ooo_sched_mode}'. Expected '', 'GAPMIN' or 'HLF'.")
         pass_options['ooo_sched_mode'] = ooo_sched_mode
+    if enable_slice is not None:
+        if not isinstance(enable_slice, bool):
+            raise ValueError(f"Invalid enable_slice: '{enable_slice}'. Expected bool.")
+        pass_options['enable_slice'] = enable_slice
 
     if pass_options:
         set_options(pass_options=pass_options)
@@ -332,7 +340,7 @@ def _merge_split_settings(rst: dict, base_key: str) -> dict:
     return merged
 
 
-def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], Dict[str, int]]]:
+def get_pass_options() -> Dict[str, Union[str, int, bool, List[int], Dict[int, int], Dict[str, int]]]:
     """
     Get pass options.
 
@@ -359,6 +367,7 @@ def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], D
     result['sg_set_ooo_scope'] = ooo_val[0] // 10000 if ooo_val and ooo_val[0] > 0 else (ooo_val[0] if ooo_val else 0)
     result['ooo_sched_mode'] = rst.get('ooo_sched_mode', '')
     result['sg_set_tunevf_mode'] = rst.get('sg_set_tunevf_mode', 0)
+    result['enable_slice'] = rst.get('enable_slice', False)
     return result
 
 

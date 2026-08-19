@@ -23,6 +23,7 @@
 
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/tile_shape.h"
+#include "interface/operation/opcode.h"
 
 namespace npu::tile_fwk {
 
@@ -46,6 +47,7 @@ constexpr const char* DB_TYPE = "db_type";
 constexpr const char* COPYOUT_RESOLVE_COALESCING = "copyout_resolve_coalescing";
 constexpr const char* AUTO_MIX_PARTITION = "auto_mix_partition";
 constexpr const char* SG_SET_TUNEVF_MODE = "sg_set_tunevf_mode";
+constexpr const char* ENABLE_SLICE = "enable_slice";
 
 // runtime
 constexpr const char* DEVICE_SCHED_MODE = "device_sched_mode";
@@ -468,6 +470,12 @@ inline T GetPassOption(const std::string& key)
 {
     return ConfigManagerNg::CurrentScope()->GetConfigAllType<T>("pass." + key);
 }
+
+inline bool EnableSlice() { return GetPassOption<bool>(ENABLE_SLICE); }
+
+inline Opcode GetSliceOpcode() { return EnableSlice() ? Opcode::OP_SLICE : Opcode::OP_VIEW; }
+
+inline Opcode GetContractOpcode() { return EnableSlice() ? Opcode::OP_CONTRACT : Opcode::OP_ASSEMBLE; }
 
 /**
  * @brief Get runtime configuration option

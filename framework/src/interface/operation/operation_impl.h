@@ -14,12 +14,14 @@
  */
 
 #pragma once
+#include <memory>
 #include <string>
 #include <tuple>
 #include <unordered_set>
 #include <vector>
 
 #include "interface/configs/config_manager.h"
+#include "interface/operation/attribute.h"
 #include "opcode.h"
 #include "tilefwk/tensor.h"
 #include "tilefwk/tile_shape.h"
@@ -32,6 +34,12 @@ using LogicalTensorPtr = std::shared_ptr<LogicalTensor>;
 void ExpandOperationInto(Function& function, const TileShape& tileShape, Opcode opCode,
                          const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
                          const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
+
+void TiledAssemble(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
+                   const LogicalTensorPtr& result, std::shared_ptr<AssembleOpAttribute> attr);
+
+void TiledViewOperation(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
+                        const LogicalTensorPtr& result, const Operation& op);
 
 namespace Matrix {
 const size_t M_INDEX = 0;

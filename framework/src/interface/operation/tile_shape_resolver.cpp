@@ -92,6 +92,7 @@ std::vector<int64_t> VecTileAxisFull(const std::vector<int64_t>& inShape, const 
     }
     return tile;
 }
+
 } // namespace
 
 TileShape TileShapeResolver::GetInputTileShape(const Operation& op, int index) const
@@ -455,6 +456,8 @@ TileShape TileShapeResolver::GetInputTileShape(const Operation& op, int index) c
             }
             return opTileShape;
         }
+        case Opcode::OP_RESHAPE:
+            return MakeTileShapeFromVec(inShape);
         default:
             return MakeTileShapeFromVec(ElementwiseInputVecTile(inShape, opVecTile));
     }
@@ -627,6 +630,40 @@ TileShape TileShapeResolver::GetOutputTileShape(const Operation& op, int index) 
                 }
             }
             return MakeTileShapeFromVec(tile);
+        }
+        case Opcode::OP_RESHAPE:
+            return MakeTileShapeFromVec(outShape);
+        case Opcode::OP_INDEX_PUT:
+            // TiledIndexPut emits every tile op with the same full {result} buffer (in-place GM
+            // write), not a per-tile output View.
+            return MakeTileShapeFromVec(outShape);
+        case Opcode::OP_ASSEMBLE_SSA:
+            // TiledInnerAssemble emits {srcTile, dst}, {result} with the same full result buffer
+            // on every tile cut (inplaceIdx=1).
+            return MakeTileShapeFromVec(outShape);
+        case Opcode::OP_INDEX_OUTCAST: {
+            const auto& iOperands = op.GetIOperands();
+            int axis = op.HasAttr("axis") ? static_cast<int>(op.GetIntAttribute("axis")) : 0;
+            if (op.HasAttr(OpAttributeKey::cacheMode) &&
+                op.GetStringAttribute(OpAttributeKey::cacheMode) == "PA_BSND") {
+                // TiledScatterUpdateFor2Dims/4Dims: every tile op writes the full {result}.
+                return MakeTileShapeFromVec(outShape);
+            }
+            if (!iOperands.empty()) {
+                const auto& srcShape = iOperands[0]->GetShape();
+                // TiledIndexScatterUpdate (2-D index cut): output is the full dst/result tensor.
+                if (axis == 1 && srcShape.size() == 2 && opVecTile.tile.size() >= 2 &&
+                    opVecTile.tile[1] == srcShape[1]) {
+                    return MakeTileShapeFromVec(outShape);
+                }
+            }
+            // TiledScatterUpdate: output is resultTile = View(result, dstTileInfo); same tiling
+            // as the result/dst buffer (typically iOperand[2] shares the shape).
+            if (iOperands.size() >= 3) {
+                const auto& dstShape = iOperands[2]->GetShape();
+                return MakeTileShapeFromVec(VecTileAxisFull(dstShape, dstShape, opVecTile, axis));
+            }
+            return MakeTileShapeFromVec(ElementwiseInputVecTile(outShape, opVecTile));
         }
         default:
             // Default: output tiled by the op-level VecTile, per-axis clamped to the output's own

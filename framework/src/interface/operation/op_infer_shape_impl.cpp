@@ -1533,6 +1533,7 @@ void ViewInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outV
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_VIEW, Opcode::OP_VIEW, ViewInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_SLICE, Opcode::OP_SLICE, ViewInferFunc);
 
 void AssembleInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
@@ -1568,6 +1569,7 @@ void AssembleInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_ASSEMBLE, Opcode::OP_ASSEMBLE, AssembleInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_CONTRACT, Opcode::OP_CONTRACT, AssembleInferFunc);
 
 const std::string TOPK_AXIS = OP_ATTR_PREFIX + "axis";
 const std::string TOPK_ORDER = OP_ATTR_PREFIX + "order";
@@ -1750,12 +1752,18 @@ REGISTER_INFER_SHAPE_FUNC(OP_VEC_DUP, Opcode::OP_VEC_DUP, VecDupInferFunc);
 
 void ReshapeInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& validShapes)
 {
-    std::vector<SymbolicScalar> validShape;
-    if (op->GetAttr(OP_ATTR_PREFIX + "validShape", validShape) && validShape.size() != 0) {
-        validShapes.push_back(validShape);
-    } else {
-        auto dstShape = op->GetOOperands()[0]->GetShape();
-        validShapes.push_back(SymbolicScalar::FromConcrete(dstShape));
+    for (const auto& output : op->GetOOperands()) {
+        std::vector<SymbolicScalar> validShape;
+        if (op->GetAttr(OP_ATTR_PREFIX + "validShape", validShape) && !validShape.empty()) {
+            validShapes.push_back(validShape);
+            continue;
+        }
+        const auto& dynValid = output->GetDynValidShape();
+        if (!dynValid.empty()) {
+            validShapes.push_back(dynValid);
+        } else {
+            validShapes.push_back(SymbolicScalar::FromConcrete(output->GetShape()));
+        }
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_RESHAPE, Opcode::OP_RESHAPE, ReshapeInferFunc);

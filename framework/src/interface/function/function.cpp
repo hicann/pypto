@@ -48,9 +48,9 @@ const std::string PREFIX = "  ";
 const int SPACE_NUM_THREE = 3;
 const int LAST_TWO = -2;
 
-const std::set<Opcode> SPECIAL_OPCODE_SET = {Opcode::OP_INDEX_OUTCAST, Opcode::OP_VIEW,    Opcode::OP_ASSEMBLE,
-                                             Opcode::OP_CALL,          Opcode::OP_CONVERT, Opcode::OP_COPY_IN,
-                                             Opcode::OP_COPY_OUT};
+const std::set<Opcode> SPECIAL_OPCODE_SET = {Opcode::OP_INDEX_OUTCAST, Opcode::OP_VIEW,     Opcode::OP_SLICE,
+                                             Opcode::OP_ASSEMBLE,      Opcode::OP_CONTRACT, Opcode::OP_CALL,
+                                             Opcode::OP_CONVERT,       Opcode::OP_COPY_IN,  Opcode::OP_COPY_OUT};
 struct ViewKey {
     ViewKey(const int magic, const std::vector<int64_t>& newShape, const std::vector<int64_t>& newOffset,
             const std::vector<SymbolicScalar>& tmpDynOffset)
@@ -732,7 +732,7 @@ void Function::EraseCallOpOpnd(const FunctionHash& calleeHash, size_t index)
         FE_ASSERT(callopAttr->GetOutCastIndexToExpr().empty())
             << "OutCastIndexToExpr is not empty for CallOp:" << callop->Dump();
         for (auto& consumer : callop->oOperand[index]->GetConsumers()) {
-            if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            if (IsAssembleLike(consumer->GetOpcode())) {
                 consumer->SetAsDeleted();
             }
         }
@@ -1506,7 +1506,7 @@ void Function::ProducerMagicLookup(const Function* function, const LogicalTensor
             ss << op->GetTileShape().ToString();
         }
         if (op->GetOpAttribute() != nullptr) {
-            if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            if (IsAssembleLike(op->GetOpcode())) {
                 if (!SubgraphUtils::IsBoundary(op->oOperand[0])) {
                     ss << " " << op->GetOpAttribute()->Dump();
                 }
@@ -1753,6 +1753,9 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
         t->dynOffset_ = std::vector<SymbolicScalar>(dim, SymbolicScalar(0));
     };
 
+    const Opcode sliceOpcode = config::GetSliceOpcode();
+    const Opcode contractOpcode = config::GetContractOpcode();
+
     auto cmp = [](ir::VarPtr a, ir::VarPtr b) { return a->name_ < b->name_; };
     std::set<ir::VarPtr, decltype(cmp)> tokenSets(cmp);
     for (auto& iOp : iOperands) {
@@ -1760,7 +1763,7 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
         if (iOp->GetAttr("SLICE_PARENT", parent)) {
             auto newRaw = std::make_shared<RawTensor>(iOp->tensor->datatype, iOp->shape, iOp->tensor->format,
                                                       iOp->tensor->symbol);
-            auto& op = AddRawOperation(Opcode::OP_VIEW, {parent}, {iOp});
+            auto& op = AddRawOperation(sliceOpcode, {parent}, {iOp});
             op.SetOpAttribute(std::make_shared<ViewOpAttribute>(iOp->offset, iOp->dynOffset_, iOp->dynValidShape_));
             ClearOffset(iOp);
             iOp->RemoveAttr("SLICE_PARENT");
@@ -1778,7 +1781,7 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
         if (oOp->GetAttr("SLICE_PARENT", parent)) {
             auto newRaw = std::make_shared<RawTensor>(oOp->tensor->datatype, oOp->shape, oOp->tensor->format,
                                                       oOp->tensor->symbol);
-            auto& op = AddRawOperation(Opcode::OP_ASSEMBLE, {oOp}, {parent});
+            auto& op = AddRawOperation(contractOpcode, {oOp}, {parent});
             op.SetAssembleOpAttribute(oOp->offset, oOp->dynOffset_);
             ClearOffset(oOp);
             oOp->RemoveAttr("SLICE_PARENT");
@@ -3048,7 +3051,7 @@ std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(std::vector<Oper
 
 static bool IsInplaceIncast(Operation* op, std::vector<Operation*>& copyInList)
 {
-    if (op->GetOpcode() != Opcode::OP_VIEW && op->GetOpcode() != Opcode::OP_RESHAPE) {
+    if (!IsViewLike(op->GetOpcode()) && op->GetOpcode() != Opcode::OP_RESHAPE) {
         return false;
     }
     LogicalTensorPtr data = op->GetOOperands()[0];
@@ -3580,11 +3583,11 @@ TensorGraphInfo Function::GetGraphInfo()
     std::set<std::shared_ptr<LogicalTensor>> iOperandSet, oOperandSet;
     std::vector<std::shared_ptr<Operation>> operations;
     for (auto& op : operations_) {
-        if (op->GetOpcode() == Opcode::OP_VIEW) {
+        if (IsViewLike(op->GetOpcode())) {
             viewOpSet.emplace(op);
             continue;
         }
-        if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+        if (IsAssembleLike(op->GetOpcode())) {
             assembleOpSet.emplace(op);
             continue;
         }
@@ -3595,14 +3598,22 @@ TensorGraphInfo Function::GetGraphInfo()
         LogicalTensors incasts;
         LogicalTensors outcasts;
         for (auto& iOperand : op->GetIOperands()) {
-            auto& viewOp = *iOperand->GetProducers().begin();
+            const auto& producers = iOperand->GetProducers();
+            if (config::EnableSlice() && producers.empty()) {
+                continue;
+            }
+            auto& viewOp = *producers.begin();
             auto& incast = viewOp->GetIOperands()[0];
 
             iOperandSet.emplace(iOperand);
             incasts.push_back(incast);
         }
         for (auto& oOperand : op->GetOOperands()) {
-            auto& assembleOp = *oOperand->GetConsumers().begin();
+            const auto& consumers = oOperand->GetConsumers();
+            if (config::EnableSlice() && consumers.empty()) {
+                continue;
+            }
+            auto& assembleOp = *consumers.begin();
             auto& outcast = assembleOp->GetOOperands()[0];
 
             oOperandSet.emplace(oOperand);
@@ -3796,35 +3807,35 @@ void Function::OpValidCheck(Operation& op) const
     std::unordered_set<const Operation*> opMap;
     std::unordered_set<std::shared_ptr<LogicalTensor>> incasts(GetIncast().begin(), GetIncast().end());
     if (SPECIAL_OPCODE_SET.count(op.GetOpcode()) != 0) {
-        if (op.GetOpcode() == Opcode::OP_VIEW) {
+        if (IsViewLike(op.GetOpcode())) {
             FE_ASSERT(FeError::OUT_OF_RANGE, op.GetIOperands().size() == 1)
-                << "OP_VIEW expects 1 input operand, but got " << op.GetIOperands().size();
+                << "View-like op expects 1 input operand, but got " << op.GetIOperands().size();
             FE_ASSERT(FeError::OUT_OF_RANGE, op.GetOOperands().size() <= 1)
-                << "OP_VIEW expects at most 1 output operand, but got " << op.GetOOperands().size();
+                << "View-like op expects at most 1 output operand, but got " << op.GetOOperands().size();
             auto opAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
             FE_ASSERT(FeError::INVALID_PTR, opAttr != nullptr)
-                << "OP_VIEW should have a ViewOpAttribute, but it is null";
+                << "View-like op should have a ViewOpAttribute, but it is null";
             ASSERT(FeError::INVALID_VAL, op.GetIOperands()[0]->GetOffset().size() == opAttr->GetFromOffset().size())
-                << "OP_VIEW input operand offset size does not match attribute from offset size";
+                << "View-like op input operand offset size does not match attribute from offset size";
             if (!op.GetOOperands().empty()) {
                 ASSERT(FeError::INVALID_VAL, op.GetOOperands()[0]->GetOffset().size() == opAttr->GetFromOffset().size())
-                    << "OP_VIEW output operand offset size does not match attribute from offset size";
+                    << "View-like op output operand offset size does not match attribute from offset size";
             }
         }
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+        if (IsAssembleLike(op.GetOpcode())) {
             FE_ASSERT(FeError::OUT_OF_RANGE, op.GetIOperands().size() == 1)
-                << "OP_ASSEMBLE should have exactly 1 input operand, but has " << op.GetIOperands().size();
+                << "Assemble-like op should have exactly 1 input operand, but has " << op.GetIOperands().size();
             FE_ASSERT(FeError::OUT_OF_RANGE, op.GetOOperands().size() <= 1)
-                << "OP_ASSEMBLE should have at most 1 output operand, but has " << op.GetOOperands().size();
+                << "Assemble-like op should have at most 1 output operand, but has " << op.GetOOperands().size();
             auto opAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
             FE_ASSERT(FeError::INVALID_PTR, opAttr != nullptr)
-                << "OP_ASSEMBLE should have an AssembleOpAttribute, but it is null";
+                << "Assemble-like op should have an AssembleOpAttribute, but it is null";
             if (!op.GetIOperands().empty()) {
                 ASSERT(FeError::INVALID_VAL, op.GetIOperands()[0]->GetOffset().size() == opAttr->GetToOffset().size())
-                    << "OP_ASSEMBLE input operand offset size does not match attribute to offset size";
+                    << "Assemble-like op input operand offset size does not match attribute to offset size";
             }
             ASSERT(FeError::INVALID_VAL, op.GetOOperands()[0]->GetOffset().size() == opAttr->GetToOffset().size())
-                << "OP_ASSEMBLE output operand offset size does not match attribute to offset size";
+                << "Assemble-like op output operand offset size does not match attribute to offset size";
         }
     } else {
         FE_ASSERT(FeError::INVALID_PTR, op.GetOpAttribute() == nullptr)

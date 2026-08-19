@@ -232,7 +232,9 @@ enum class Opcode {
     OP_L0C_RESHAPE_COPY_OUT,
     OP_ASSEMBLE,
     OP_ASSEMBLE_SSA,
+    OP_CONTRACT,
     OP_VIEW,
+    OP_SLICE,
     OP_VIEW_TYPE,
     OP_ATOMIC_RMW,
     // Move
@@ -1085,9 +1087,13 @@ inline bool IsCopyOut(const Opcode& op)
             op == Opcode::OP_L0C_COPY_OUT_CONV || op == Opcode::OP_L0C_RESHAPE_COPY_OUT);
 }
 
+inline bool IsViewLike(Opcode op) { return op == Opcode::OP_VIEW || op == Opcode::OP_SLICE; }
+
+inline bool IsAssembleLike(Opcode op) { return op == Opcode::OP_ASSEMBLE || op == Opcode::OP_CONTRACT; }
+
 inline bool IsOpCodeSupportMultiProducers(Opcode opCode)
 {
-    return opCode == Opcode::OP_ASSEMBLE || IsCopyOut(opCode) || opCode == Opcode::OP_CALL ||
+    return IsAssembleLike(opCode) || IsCopyOut(opCode) || opCode == Opcode::OP_CALL ||
            opCode == Opcode::OP_INDEX_OUTCAST;
 }
 

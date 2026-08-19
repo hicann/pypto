@@ -1111,8 +1111,10 @@ void OpcodeManager::RegisterCommon()
     RegisterInfo(Opcode::OP_RESHAPE_COPY_OUT, OpCoreType::ANY, "RESHAPE_COPY_OUT", {MemoryType::MEM_UB},
                  {MemoryType::MEM_DEVICE_DDR}, {"TileOp::ReshapeCopyOut", PIPE_MTE3, PIPE_MTE3, CoreType::AIV},
                  OpCalcType::OTHER, {});
-    RegisterInfo(Opcode::OP_ASSEMBLE, OpCoreType::ANY, "ASSEMBLE", {}, {MemoryType::MEM_DEVICE_DDR},
-                 {"ASSEMBLE", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::MOVE_LOCAL);
+    RegisterInfo(Opcode::OP_ASSEMBLE, OpCoreType::ANY, "ASSEMBLE", {}, {}, {"ASSEMBLE", PIPE_S, PIPE_S, CoreType::AIV},
+                 OpCalcType::MOVE_LOCAL);
+    RegisterInfo(Opcode::OP_CONTRACT, OpCoreType::ANY, "CONTRACT", {}, {MemoryType::MEM_DEVICE_DDR},
+                 {"CONTRACT", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::MOVE_LOCAL);
     RegisterInfo(Opcode::OP_ASSEMBLE_SSA, OpCoreType::ANY, "ASSEMBLE_SSA",
                  {MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_DEVICE_DDR},
                  {"ASSEMBLE_SSA", PIPE_MTE3, PIPE_MTE3, CoreType::AIV},
@@ -1121,6 +1123,8 @@ void OpcodeManager::RegisterCommon()
                  {MemoryType::MEM_DEVICE_DDR}, {"AtomicRMW", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_OUT,
                  {OpAttributeKey::rmwMode});
     RegisterInfo(Opcode::OP_VIEW, OpCoreType::ANY, "VIEW", {}, {}, {"VIEW", PIPE_S, PIPE_S, CoreType::AIV},
+                 OpCalcType::MOVE_LOCAL);
+    RegisterInfo(Opcode::OP_SLICE, OpCoreType::ANY, "SLICE", {}, {}, {"SLICE", PIPE_S, PIPE_S, CoreType::AIV},
                  OpCalcType::MOVE_LOCAL);
     RegisterInfo(Opcode::OP_VIEW_TYPE, OpCoreType::ANY, "VIEW_TYPE", {}, {},
                  {"VIEW_TYPE", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::MOVE_LOCAL);
@@ -1400,9 +1404,9 @@ std::unordered_set<Opcode> SUPPORT_VF_FUSE_OPS{
 };
 
 std::unordered_set<Opcode> SKIP_OPCODE_FOR_CODEGEN = {
-    Opcode::OP_VIEW,        Opcode::OP_ASSEMBLE,  Opcode::OP_RESHAPE,   Opcode::OP_UB_ALLOC,  Opcode::OP_L1_ALLOC,
-    Opcode::OP_L0A_ALLOC,   Opcode::OP_L0B_ALLOC, Opcode::OP_L0C_ALLOC, Opcode::OP_FIX_ALLOC, Opcode::OP_BT_ALLOC,
-    Opcode::OP_BIND_TENSOR, Opcode::OP_NOP,       Opcode::OP_HUB,
+    Opcode::OP_VIEW,      Opcode::OP_SLICE,    Opcode::OP_ASSEMBLE,    Opcode::OP_CONTRACT,  Opcode::OP_RESHAPE,
+    Opcode::OP_UB_ALLOC,  Opcode::OP_L1_ALLOC, Opcode::OP_L0A_ALLOC,   Opcode::OP_L0B_ALLOC, Opcode::OP_L0C_ALLOC,
+    Opcode::OP_FIX_ALLOC, Opcode::OP_BT_ALLOC, Opcode::OP_BIND_TENSOR, Opcode::OP_NOP,       Opcode::OP_HUB,
 };
 
 std::unordered_set<Opcode> SUPPORT_BRC_INLINE{

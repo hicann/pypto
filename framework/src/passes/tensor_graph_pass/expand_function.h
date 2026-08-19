@@ -36,6 +36,8 @@ private:
     Status ExpandOperation(Function& function, Operation& op) const;
     Status VerifyScopeInfo(Function& function, std::ostringstream& oss) const;
     Status ClearIOOperand(const std::vector<OperationPtr>& tensorOperations) const;
+    void RefreshViewAssembleTileShapes(const std::vector<OperationPtr>& tensorOperations,
+                                       const std::unordered_set<Operation*>& skipExpandOps) const;
     void ProcessForNotExpandOp(Function& function, Operation& op) const;
     void DoHealthCheckBefore(Function& function, const std::string& folderPath) override;
 

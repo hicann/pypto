@@ -189,6 +189,13 @@
                     "minimum": 0,
                     "maximum": 2
                 },
+                "enable_slice": {
+                    "type": "boolean",
+                    "label": {
+                        "zh": "是否启用 slice 相关处理。默认为 false。",
+                        "en": "Whether to enable slice-related processing. Defaults to false."
+                    }
+                },
                 "sg_set_scope": {
                     "type": "array",
                     "items": {
