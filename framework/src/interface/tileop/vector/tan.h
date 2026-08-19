@@ -249,11 +249,8 @@ TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
     auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
     auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
 
-    auto srcShape0 = srcLayout.template GetShapeDim<0, expectSize>();
-    auto srcShape1 = srcLayout.template GetShapeDim<1, expectSize>();
-    auto srcShape2 = srcLayout.template GetShapeDim<2, expectSize>();
-    auto srcShape3 = srcLayout.template GetShapeDim<3, expectSize>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, expectSize>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, expectSize>(dst, src);
 
     auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
     auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
@@ -266,8 +263,9 @@ TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
     constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, expectSize>();
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
 
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
+    using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
+    constexpr auto srcTileH = SrcExecConfig::tileH;
+    constexpr auto srcTileW = SrcExecConfig::tileW;
 
     constexpr auto ALIGN32HALF = 16;
     constexpr auto ALIGN32FLOAT = 8;
@@ -290,16 +288,16 @@ TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
     using Tmp8Tile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
 
     DstTile dstTile(dstShape3, dstShape4);
-    SrcTile srcTile(srcShape3, srcShape4);
-    TmpFp32Tile tmpFp32Tile(srcShape3, srcShape4);
-    TmpInt32Tile tmpInt32Tile(srcShape3, srcShape4);
-    Tmp2Tile tmp2Tile(srcShape3, srcShape4);
-    Tmp3Tile tmp3Tile(srcShape3, srcShape4);
-    Tmp4Tile tmp4Tile(srcShape3, srcShape4);
-    Tmp5Tile tmp5Tile(srcShape3, srcShape4);
-    Tmp6Tile tmp6Tile(srcShape3, srcShape4);
-    Tmp7Tile tmp7Tile(srcShape3, srcShape4);
-    Tmp8Tile tmp8Tile(srcShape3, srcShape4);
+    SrcTile srcTile(srcExecShape3, srcExecShape4);
+    TmpFp32Tile tmpFp32Tile(srcExecShape3, srcExecShape4);
+    TmpInt32Tile tmpInt32Tile(srcExecShape3, srcExecShape4);
+    Tmp2Tile tmp2Tile(srcExecShape3, srcExecShape4);
+    Tmp3Tile tmp3Tile(srcExecShape3, srcExecShape4);
+    Tmp4Tile tmp4Tile(srcExecShape3, srcExecShape4);
+    Tmp5Tile tmp5Tile(srcExecShape3, srcExecShape4);
+    Tmp6Tile tmp6Tile(srcExecShape3, srcExecShape4);
+    Tmp7Tile tmp7Tile(srcExecShape3, srcExecShape4);
+    Tmp8Tile tmp8Tile(srcExecShape3, srcExecShape4);
 
     constexpr auto tmpFp32TileSize = srcTileH * tmpTileW32Bit * sizeof(float);
     pto::TASSIGN(tmpFp32Tile, (uint64_t)(tmp.GetAddr()));

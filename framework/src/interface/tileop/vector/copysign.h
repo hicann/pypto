@@ -80,11 +80,10 @@ TILEOP void TCopysign(T0 dst, T1 src0, T2 src1, T3 tmp)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    auto src0ExecShape3 = GetElementwiseOperandExecShapeDim<DIM_4TH, MAX_DIMS>(dst, src0);
+    auto src0ExecShape4 = GetElementwiseOperandExecShapeDim<DIM_5TH, MAX_DIMS>(dst, src0);
+    auto src1ExecShape3 = GetElementwiseOperandExecShapeDim<DIM_4TH, MAX_DIMS>(dst, src1);
+    auto src1ExecShape4 = GetElementwiseOperandExecShapeDim<DIM_5TH, MAX_DIMS>(dst, src1);
 
     constexpr uint32_t VALUEMASK32B = 0x7FFFFFFF;
     constexpr uint16_t VALUEMASK16B = 0x7FFF;
@@ -92,21 +91,22 @@ TILEOP void TCopysign(T0 dst, T1 src0, T2 src1, T3 tmp)
     constexpr uint16_t SIGNMASK16B = 0x8000;
     using T = select_bit<T0>;
     constexpr auto STRIDE = sizeof(typename T0::Type) / 2;
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    using Src0ExecConfig = ElementwiseOperandExecConfig<T0, T1>;
+    using Src1ExecConfig = ElementwiseOperandExecConfig<T0, T2>;
+    constexpr auto src0TileH = Src0ExecConfig::tileH;
+    constexpr auto src0TileW = Src0ExecConfig::tileW;
+    constexpr auto src1TileH = Src1ExecConfig::tileH;
+    constexpr auto src1TileW = Src1ExecConfig::tileW;
 
     using dstTileDefine = pto::Tile<pto::TileType::Vec, T, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-    using src0TileDefine = pto::Tile<pto::TileType::Vec, T, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-    using src1TileDefine = pto::Tile<pto::TileType::Vec, T, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-    using TmpMaskDefine = pto::Tile<pto::TileType::Vec, T, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-
-    auto dstAddr = (__ubuf__ typename T0::Type*)((uint64_t)(dst.GetAddr()));
-    auto src0Addr = (__ubuf__ typename T1::Type*)((uint64_t)(src0.GetAddr()));
-    auto src1Addr = (__ubuf__ typename T2::Type*)((uint64_t)(src1.GetAddr()));
-    auto tmpAddr = (__ubuf__ typename T3::Type*)((uint64_t)(tmp.GetAddr()));
-
+    using src0TileDefine = pto::Tile<pto::TileType::Vec, T, src0TileH, src0TileW, pto::BLayout::RowMajor, -1, -1>;
+    using src1TileDefine = pto::Tile<pto::TileType::Vec, T, src1TileH, src1TileW, pto::BLayout::RowMajor, -1, -1>;
     dstTileDefine dstTile(shape3, shape4);
-    src0TileDefine src0Tile(shape3, shape4);
-    src1TileDefine src1Tile(shape3, shape4);
-    TmpMaskDefine tmpTile(shape3, shape4);
+    src0TileDefine src0Tile(src0ExecShape3, src0ExecShape4);
+    src1TileDefine src1Tile(src1ExecShape3, src1ExecShape4);
+    auto tmpExecTile = MakeElementwiseOperandExecTile<T>(dst, tmp);
 
     if (shape3 == 0 || shape4 == 0) {
         return;
@@ -115,24 +115,27 @@ TILEOP void TCopysign(T0 dst, T1 src0, T2 src1, T3 tmp)
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
-                auto tileOffsets = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
-                pto::TASSIGN(dstTile, (uint64_t)(dstAddr + tileOffsets));
-                pto::TASSIGN(src0Tile, (uint64_t)(src0Addr + tileOffsets));
-                pto::TASSIGN(src1Tile, (uint64_t)(src1Addr + tileOffsets));
-                pto::TASSIGN(tmpTile, (uint64_t)(tmpAddr + tileOffsets));
-                TMASKS<VALUEMASK16B, VALUEMASK32B>(tmpTile);
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                auto dstOffset = GenTileOffset(dst, tileOffsets);
+                auto src0Offset = GenTileOffset(src0, tileOffsets);
+                auto src1Offset = GenTileOffset(src1, tileOffsets);
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * sizeof(typename T0::Type)));
+                pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + src0Offset * sizeof(typename T1::Type)));
+                pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + src1Offset * sizeof(typename T2::Type)));
+                AssignElementwiseOperandExecTile(tmpExecTile, tmp, tileOffsets);
+                TMASKS<VALUEMASK16B, VALUEMASK32B>(tmpExecTile);
 #ifdef __DAV_V220
                 pipe_barrier(PIPE_V);
 #endif
-                TAND16B<STRIDE>(src0Tile, tmpTile);
+                TAND16B<STRIDE>(src0Tile, tmpExecTile);
 #ifdef __DAV_V220
                 pipe_barrier(PIPE_V);
 #endif
-                TMASKS<SIGNMASK16B, SIGNMASK32B>(tmpTile);
+                TMASKS<SIGNMASK16B, SIGNMASK32B>(tmpExecTile);
 #ifdef __DAV_V220
                 pipe_barrier(PIPE_V);
 #endif
-                TAND16B<STRIDE>(src1Tile, tmpTile);
+                TAND16B<STRIDE>(src1Tile, tmpExecTile);
 #ifdef __DAV_V220
                 pipe_barrier(PIPE_V);
 #endif

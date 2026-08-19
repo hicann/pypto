@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_ISNAN__H
 #define TILEOP_TILE_OPERATOR_ISNAN__H
+#include "pto_tile.h"
 #include "tileop_common.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
@@ -63,11 +64,14 @@ TILEOP void TIsNan(T0 dst, T1 src, T2 tmp)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<DIM_4TH, MAX_DIMS>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<DIM_5TH, MAX_DIMS>(dst, src);
 
     constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, DIM_4TH, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
+    using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
+    constexpr auto srcTileH = SrcExecConfig::tileH;
+    constexpr auto srcTileW = SrcExecConfig::tileW;
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
 
@@ -95,10 +99,10 @@ TILEOP void TIsNan(T0 dst, T1 src, T2 tmp)
     using ScalarTmpTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, TileOp::BLOCK_SIZE, pto::BLayout::RowMajor, -1, -1>;
 
     DstTile dstTile(shape3, shape4);
-    SrcTile srcTile(shape3, shape4);
-    CastTile castTile(shape3, shape4);
-    MaskTile maskTile(shape3, shape4);
-    ResultTile resultTile(shape3, shape4);
+    SrcTile srcTile(srcExecShape3, srcExecShape4);
+    CastTile castTile(srcExecShape3, srcExecShape4);
+    MaskTile maskTile(srcExecShape3, srcExecShape4);
+    ResultTile resultTile(srcExecShape3, srcExecShape4);
     ScalarTmpTile scalarTmpTile(1, TileOp::BLOCK_SIZE);
     pto::TASSIGN(castTile, (uint64_t)(tmp.GetAddr() + castOffset));
     pto::TASSIGN(maskTile, (uint64_t)(tmp.GetAddr() + maskOffset));

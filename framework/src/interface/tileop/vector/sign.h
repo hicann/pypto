@@ -135,11 +135,8 @@ TILEOP void TSign(T0 dst, T1 src, T3 tmp)
     auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
     auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
 
-    auto srcShape0 = srcLayout.template GetShapeDim<0, expectSize>();
-    auto srcShape1 = srcLayout.template GetShapeDim<1, expectSize>();
-    auto srcShape2 = srcLayout.template GetShapeDim<2, expectSize>();
-    auto srcShape3 = srcLayout.template GetShapeDim<3, expectSize>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, expectSize>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, expectSize>(dst, src);
 
     auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
     auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
@@ -152,8 +149,9 @@ TILEOP void TSign(T0 dst, T1 src, T3 tmp)
     constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, expectSize>();
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
 
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
+    using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
+    constexpr auto srcTileH = SrcExecConfig::tileH;
+    constexpr auto srcTileW = SrcExecConfig::tileW;
 
     constexpr auto ALIGN32HALF = 16;
     constexpr auto tmpTileW = (srcTileW + ALIGN32HALF - 1) / ALIGN32HALF * ALIGN32HALF;
@@ -164,8 +162,8 @@ TILEOP void TSign(T0 dst, T1 src, T3 tmp)
                               -1>;
     using TmpTile = pto::Tile<pto::TileType::Vec, half, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
     DstTile dstTile(dstShape3, dstShape4);
-    SrcTile srcTile(srcShape3, srcShape4);
-    TmpTile tmpTile(srcShape3, srcShape4);
+    SrcTile srcTile(srcExecShape3, srcExecShape4);
+    TmpTile tmpTile(srcExecShape3, srcExecShape4);
     pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {

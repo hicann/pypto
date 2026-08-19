@@ -90,14 +90,14 @@ TILEOP void BinaryScalarCompute(T0 dst, T1 src0, Scalar src1)
     }
 
     auto dstTile = PtoTile<T0>(dst);
-    auto src0Tile = PtoTile<T1>(src0);
+    auto src0ExecTile = MakeElementwiseOperandExecTile(dst, src0);
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
-                src0Tile.Assign(src0, tileOffsets);
-                BinaryScalarComputeImpl<op, PrecisionType, LastUse>(dstTile.Data(), src0Tile.Data(), src1);
+                AssignElementwiseOperandExecTile(src0ExecTile, src0, tileOffsets);
+                BinaryScalarComputeImpl<op, PrecisionType, LastUse>(dstTile.Data(), src0ExecTile, src1);
             }
         }
     }
@@ -172,6 +172,7 @@ template <typename Scalar, typename T0, typename T1>
 TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1)
 {
     const auto dstLayout = dst.GetLayout();
+    const auto srcLayout = src0.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
@@ -181,6 +182,10 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1)
     auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
     auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
     auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
     auto src0Addr = (__ubuf__ typename T1::Type*)((uint64_t)(src0.GetAddr()));
     auto dstAddr = (__ubuf__ typename T0::Type*)((uint64_t)(dst.GetAddr()));
     using inputType = typename T1::Type;
@@ -192,8 +197,9 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1)
             for (LoopVar k = 0; k < shape2; k++) {
                 for (LoopVar m = 0; m < shape3; m++) {
                     for (LoopVar i = 0; i < shape4; i++) {
-                        int tmpStride = n * dstStride0 + j * dstStride1 + k * dstStride2 + m * dstStride3 + i;
-                        inputType a = src0Addr[tmpStride];
+                        int dstOffset = n * dstStride0 + j * dstStride1 + k * dstStride2 + m * dstStride3 + i;
+                        int srcOffset = n * srcStride0 + j * srcStride1 + k * srcStride2 + m * srcStride3 + i;
+                        inputType a = src0Addr[srcOffset];
                         inputType b = src1;
                         if (a < 0) {
                             a = 0 - a;
@@ -202,7 +208,7 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1)
                             b = 0 - b;
                         }
                         if (b == 0) {
-                            dstAddr[tmpStride] = a;
+                            dstAddr[dstOffset] = a;
                             continue;
                         }
                         while (a % b != 0) {
@@ -210,7 +216,7 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1)
                             a = b;
                             b = c;
                         }
-                        dstAddr[tmpStride] = b;
+                        dstAddr[dstOffset] = b;
                     }
                 }
             }
@@ -254,16 +260,31 @@ TILEOP void BinaryScalarTmpCompute(T0 dst, T1 src0, Scalar src1, T2 tmp)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
 
     auto dstTile = PtoTile<T0>(dst);
-    auto src0Tile = PtoTile<T1>(src0);
-    auto tmpTile = PtoTile<T2>(tmp);
-    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
-                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                dstTile.Assign(dst, tileOffsets);
-                src0Tile.Assign(src0, tileOffsets);
-                tmpTile.Assign(tmp, tileOffsets);
-                BinaryScalarTmpComputeImpl<op, PrecisionType>(dstTile.Data(), src0Tile.Data(), src1, tmpTile.Data());
+    auto src0ExecTile = MakeElementwiseOperandExecTile(dst, src0);
+    if constexpr (op == BinaryScalarOp::REM) {
+        auto tmpTile = PtoTile<T2>(tmp);
+        for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+            for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+                for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                    auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                    dstTile.Assign(dst, tileOffsets);
+                    AssignElementwiseOperandExecTile(src0ExecTile, src0, tileOffsets);
+                    tmpTile.Assign(tmp, tileOffsets);
+                    BinaryScalarTmpComputeImpl<op, PrecisionType>(dstTile.Data(), src0ExecTile, src1, tmpTile.Data());
+                }
+            }
+        }
+    } else {
+        auto tmpExecTile = MakeElementwiseOperandExecTile(dst, tmp);
+        for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+            for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+                for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                    auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                    dstTile.Assign(dst, tileOffsets);
+                    AssignElementwiseOperandExecTile(src0ExecTile, src0, tileOffsets);
+                    AssignElementwiseOperandExecTile(tmpExecTile, tmp, tileOffsets);
+                    BinaryScalarTmpComputeImpl<op, PrecisionType>(dstTile.Data(), src0ExecTile, src1, tmpExecTile);
+                }
             }
         }
     }
@@ -301,7 +322,7 @@ TILEOP void TRemainderRS(T0 dst, T1 src0, Scalar src1, T2 tmp)
     auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     auto dstTile = PtoTile<T0>(dst);
-    auto src0Tile = PtoTile<T1>(src0);
+    auto src0ExecTile = MakeElementwiseOperandExecTile(dst, src0);
     constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
     constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
     using tmp0TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, tmpTileH, tmpTileW, pto::BLayout::RowMajor,
@@ -316,14 +337,14 @@ TILEOP void TRemainderRS(T0 dst, T1 src0, Scalar src1, T2 tmp)
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
-                src0Tile.Assign(src0, tileOffsets);
+                AssignElementwiseOperandExecTile(src0ExecTile, src0, tileOffsets);
                 pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr()));
                 pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + shape3 * tmpTileW * sizeof(typename T2::Type)));
                 pto::TEXPANDS(tmp0Tile, src1);
 #ifdef __DAV_V220
                 pipe_barrier(PIPE_V);
 #endif
-                pto::TREM<PrecisionType>(dstTile.Data(), tmp0Tile, src0Tile.Data(), tmp1Tile);
+                pto::TREM<PrecisionType>(dstTile.Data(), tmp0Tile, src0ExecTile, tmp1Tile);
             }
         }
     }

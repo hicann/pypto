@@ -169,6 +169,42 @@ __aicore__ inline constexpr size_t GetAllAxisValidProduct()
     return TileOp::GetAllAxisProduct<size, typename T::Shape>();
 }
 
+template <typename Dst, typename Src>
+__aicore__ inline constexpr bool IsElementwiseDstLayoutCoveredByOperand()
+{
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<Dst, DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<Dst, DIM_5TH, MAX_DIMS>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<Src, DIM_4TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<Src, DIM_5TH, MAX_DIMS>();
+    constexpr bool outerTileShapeCovered = TileOp::GetTensorTileShapeDim<Dst, DIM_1ST, MAX_DIMS>() <=
+                                               TileOp::GetTensorTileShapeDim<Src, DIM_1ST, MAX_DIMS>() &&
+                                           TileOp::GetTensorTileShapeDim<Dst, DIM_2ND, MAX_DIMS>() <=
+                                               TileOp::GetTensorTileShapeDim<Src, DIM_2ND, MAX_DIMS>() &&
+                                           TileOp::GetTensorTileShapeDim<Dst, DIM_3RD, MAX_DIMS>() <=
+                                               TileOp::GetTensorTileShapeDim<Src, DIM_3RD, MAX_DIMS>();
+    constexpr bool rowContinuous = (dstTileH == 1 ||
+                                    TileOp::GetTensorStrideDim<Dst, DIM_4TH, MAX_DIMS>() == dstTileW) &&
+                                   (srcTileH == 1 ||
+                                    TileOp::GetTensorStrideDim<Src, DIM_4TH, MAX_DIMS>() == srcTileW) &&
+                                   TileOp::GetTensorStrideDim<Dst, DIM_5TH, MAX_DIMS>() == 1 &&
+                                   TileOp::GetTensorStrideDim<Src, DIM_5TH, MAX_DIMS>() == 1;
+    constexpr bool tileLayoutCompatible = outerTileShapeCovered && rowContinuous;
+    if constexpr (Dst::IsStaticLayout() && Src::IsStaticLayout()) {
+        constexpr bool validShapeCovered = TileOp::GetTensorShapeDim<Dst, DIM_1ST, MAX_DIMS>() <=
+                                               TileOp::GetTensorShapeDim<Src, DIM_1ST, MAX_DIMS>() &&
+                                           TileOp::GetTensorShapeDim<Dst, DIM_2ND, MAX_DIMS>() <=
+                                               TileOp::GetTensorShapeDim<Src, DIM_2ND, MAX_DIMS>() &&
+                                           TileOp::GetTensorShapeDim<Dst, DIM_3RD, MAX_DIMS>() <=
+                                               TileOp::GetTensorShapeDim<Src, DIM_3RD, MAX_DIMS>() &&
+                                           TileOp::GetTensorShapeDim<Dst, DIM_4TH, MAX_DIMS>() <=
+                                               TileOp::GetTensorShapeDim<Src, DIM_4TH, MAX_DIMS>() &&
+                                           TileOp::GetTensorShapeDim<Dst, DIM_5TH, MAX_DIMS>() <=
+                                               TileOp::GetTensorShapeDim<Src, DIM_5TH, MAX_DIMS>();
+        return tileLayoutCompatible && validShapeCovered;
+    }
+    return tileLayoutCompatible;
+}
+
 template <typename T>
 __aicore__ inline constexpr int GetValidWidth()
 {
@@ -265,4 +301,49 @@ public:
 private:
     Type data_;
 };
+
+template <typename Dst, typename Src, typename DtypeOverride = void>
+struct ElementwiseOperandExecConfig {
+    static constexpr bool dstLayoutCovered = IsElementwiseDstLayoutCoveredByOperand<Dst, Src>();
+    static_assert(dstLayoutCovered,
+                  "The source layout must cover the destination execution layout for an elementwise operation.");
+    static constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<Dst, DIM_4TH, MAX_DIMS>();
+    static constexpr auto operandTileH = TileOp::GetTensorTileShapeDim<Src, DIM_4TH, MAX_DIMS>();
+    static constexpr auto tileH = dstTileH < operandTileH ? dstTileH : operandTileH;
+    static constexpr auto tileW = TileOp::GetTensorTileShapeDim<Src, DIM_5TH, MAX_DIMS>();
+    static constexpr auto validH = GetValidHeight<Dst>();
+    static constexpr auto validW = GetValidWidth<Dst>();
+    using OperandDtype = std::conditional_t<std::is_void_v<DtypeOverride>, typename PtoTile<Src>::Dtype, DtypeOverride>;
+    using OperandTile = pto::Tile<pto::TileType::Vec, OperandDtype, tileH, tileW, pto::BLayout::RowMajor, validH,
+                                  validW>;
+};
+
+template <typename DtypeOverride = void, typename Dst, typename Src>
+__aicore__ inline auto MakeElementwiseOperandExecTile(Dst dst, Src)
+{
+    using OperandExecTile = typename ElementwiseOperandExecConfig<Dst, Src, DtypeOverride>::OperandTile;
+    if constexpr (Dst::IsStaticLayout()) {
+        OperandExecTile operandExecTile;
+        return operandExecTile;
+    } else {
+        OperandExecTile operandExecTile(dst.GetLayout().template GetShapeDim<DIM_4TH, MAX_DIMS>(),
+                                        dst.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>());
+        return operandExecTile;
+    }
+}
+
+template <size_t index, size_t expectSize = MAX_DIMS, typename Dst, typename Src>
+__aicore__ inline auto GetElementwiseOperandExecShapeDim(Dst dst, Src)
+{
+    static_assert(ElementwiseOperandExecConfig<Dst, Src>::dstLayoutCovered);
+    return dst.GetLayout().template GetShapeDim<index, expectSize>();
+}
+
+template <typename OperandTile, typename Operand>
+__aicore__ inline void AssignElementwiseOperandExecTile(OperandTile& operandTile, Operand operand,
+                                                        const TileOffset& offsets)
+{
+    auto operandByteOffset = TileOp::GetPackedByteOffset<typename Operand::Type>(GenTileOffset(operand, offsets));
+    pto::TASSIGN(operandTile, (uint64_t)(operand.GetAddr() + operandByteOffset));
+}
 #endif // TILEOP_TILE_OPERATOR_PTO_TILE__H

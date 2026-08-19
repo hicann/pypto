@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_SIGNBIT__H
 #define TILEOP_TILE_OPERATOR_SIGNBIT__H
+#include "pto_tile.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 #include <type_traits>
@@ -35,11 +36,8 @@ TILEOP void TSignbit(T0 dst, T1 src, T2 tmp)
     auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
     auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
 
-    auto srcShape0 = srcLayout.template GetShapeDim<0, expectSize>();
-    auto srcShape1 = srcLayout.template GetShapeDim<1, expectSize>();
-    auto srcShape2 = srcLayout.template GetShapeDim<2, expectSize>();
-    auto srcShape3 = srcLayout.template GetShapeDim<3, expectSize>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, expectSize>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, expectSize>(dst, src);
 
     auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
     auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
@@ -52,8 +50,9 @@ TILEOP void TSignbit(T0 dst, T1 src, T2 tmp)
     constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, expectSize>();
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
 
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
+    using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
+    constexpr auto srcTileH = SrcExecConfig::tileH;
+    constexpr auto srcTileW = SrcExecConfig::tileW;
 
     constexpr auto ALIGN32HALF = 16;
     constexpr auto tmpTileW = (srcTileW + ALIGN32HALF - 1) / ALIGN32HALF * ALIGN32HALF;
@@ -72,20 +71,20 @@ TILEOP void TSignbit(T0 dst, T1 src, T2 tmp)
     using SrcUint8Tile = pto::Tile<pto::TileType::Vec, uint8_t, srcTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
     using SrcInt8Tile = pto::Tile<pto::TileType::Vec, int8_t, srcTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
     DstTile dstTile(dstShape3, dstShape4);
-    SrcTile srcTile(srcShape3, srcShape4);
-    SrcUint32Tile srcUint32Tile(srcShape3, srcShape4);
-    SrcUint16Tile srcUint16Tile(srcShape3, srcShape4);
-    SrcInt32Tile srcInt32Tile(srcShape3, srcShape4);
-    SrcInt16Tile srcInt16Tile(srcShape3, srcShape4);
-    SrcUint8Tile srcUint8Tile(srcShape3, srcShape4);
-    SrcInt8Tile srcInt8Tile(srcShape3, srcShape4);
+    SrcTile srcTile(srcExecShape3, srcExecShape4);
+    SrcUint32Tile srcUint32Tile(srcExecShape3, srcExecShape4);
+    SrcUint16Tile srcUint16Tile(srcExecShape3, srcExecShape4);
+    SrcInt32Tile srcInt32Tile(srcExecShape3, srcExecShape4);
+    SrcInt16Tile srcInt16Tile(srcExecShape3, srcExecShape4);
+    SrcUint8Tile srcUint8Tile(srcExecShape3, srcExecShape4);
+    SrcInt8Tile srcInt8Tile(srcExecShape3, srcExecShape4);
 
     using TempUint16Tile = pto::Tile<pto::TileType::Vec, uint16_t, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
     using TempInt16Tile = pto::Tile<pto::TileType::Vec, int16_t, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
     using TempFp16Tile = pto::Tile<pto::TileType::Vec, half, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
-    TempUint16Tile tempUint16Tile(srcShape3, srcShape4);
-    TempInt16Tile tempInt16Tile(srcShape3, srcShape4);
-    TempFp16Tile tempFp16Tile(srcShape3, srcShape4);
+    TempUint16Tile tempUint16Tile(srcExecShape3, srcExecShape4);
+    TempInt16Tile tempInt16Tile(srcExecShape3, srcExecShape4);
+    TempFp16Tile tempFp16Tile(srcExecShape3, srcExecShape4);
     pto::TASSIGN(tempUint16Tile, (uint64_t)(tmp.GetAddr()));
     pto::TASSIGN(tempInt16Tile, (uint64_t)(tmp.GetAddr()));
     pto::TASSIGN(tempFp16Tile, (uint64_t)(tmp.GetAddr()));

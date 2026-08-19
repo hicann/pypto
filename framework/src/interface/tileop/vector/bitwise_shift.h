@@ -89,26 +89,25 @@ TILEOP void BitwiseShiftCompute(T0 dst, T1 src0, T2 src1, T3 tmp)
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto dstTile = PtoTile<T0>(dst);
-    auto src0Tile = PtoTile<T1>(src0);
-    auto src1Tile = PtoTile<T2>(src1);
-    auto tmpTile = PtoTile<T3>(tmp);
-    auto src1SignedTile = PtoTile<T2, pto::BLayout::RowMajor, false, std::make_signed_t<typename PtoTile<T2>::Dtype>>(
-        src1);
-    auto tmpSignedTile = PtoTile<T3, pto::BLayout::RowMajor, false, std::make_signed_t<typename PtoTile<T3>::Dtype>>(
-        tmp);
+    auto src0ExecTile = MakeElementwiseOperandExecTile(dst, src0);
+    auto src1ExecTile = MakeElementwiseOperandExecTile(dst, src1);
+    auto tmpExecTile = MakeElementwiseOperandExecTile(dst, tmp);
+    auto src1SignedExecTile = MakeElementwiseOperandExecTile<std::make_signed_t<typename PtoTile<T2>::Dtype>>(dst,
+                                                                                                              src1);
+    auto tmpSignedExecTile = MakeElementwiseOperandExecTile<std::make_signed_t<typename PtoTile<T3>::Dtype>>(dst, tmp);
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
-                src0Tile.Assign(src0, tileOffsets);
-                src1Tile.Assign(src1, tileOffsets);
-                tmpTile.Assign(tmp, tileOffsets);
-                src1SignedTile.Assign(src1, tileOffsets);
-                tmpSignedTile.Assign(tmp, tileOffsets);
-                BitwiseShiftImpl<op, MAX_SHIFT_NUM>(dstTile.Data(), src0Tile.Data(), src1Tile.Data(), tmpTile.Data(),
-                                                    src1SignedTile.Data(), tmpSignedTile.Data());
+                AssignElementwiseOperandExecTile(src0ExecTile, src0, tileOffsets);
+                AssignElementwiseOperandExecTile(src1ExecTile, src1, tileOffsets);
+                AssignElementwiseOperandExecTile(tmpExecTile, tmp, tileOffsets);
+                AssignElementwiseOperandExecTile(src1SignedExecTile, src1, tileOffsets);
+                AssignElementwiseOperandExecTile(tmpSignedExecTile, tmp, tileOffsets);
+                BitwiseShiftImpl<op, MAX_SHIFT_NUM>(dstTile.Data(), src0ExecTile, src1ExecTile, tmpExecTile,
+                                                    src1SignedExecTile, tmpSignedExecTile);
             }
         }
     }
@@ -123,7 +122,7 @@ TILEOP void BitwiseShiftScalarCompute(T0 dst, T1 src0, Scalar src1)
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto dstTile = PtoTile<T0>(dst);
-    auto src0Tile = PtoTile<T1>(src0);
+    auto src0ExecTile = MakeElementwiseOperandExecTile(dst, src0);
     if (src1 < 0 || src1 > MAX_SHIFT_NUM) {
         src1 = MAX_SHIFT_NUM;
     }
@@ -132,8 +131,8 @@ TILEOP void BitwiseShiftScalarCompute(T0 dst, T1 src0, Scalar src1)
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
-                src0Tile.Assign(src0, tileOffsets);
-                BitwiseShiftScalarComputeImpl<op>(dstTile.Data(), src0Tile.Data(), src1);
+                AssignElementwiseOperandExecTile(src0ExecTile, src0, tileOffsets);
+                BitwiseShiftScalarComputeImpl<op>(dstTile.Data(), src0ExecTile, src1);
             }
         }
     }
@@ -159,24 +158,23 @@ TILEOP void ScalarBitwiseShiftCompute(T0 dst, Scalar src0, T1 src1, T2 tmp)
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto dstTile = PtoTile<T0>(dst);
-    auto src1Tile = PtoTile<T1>(src1);
-    auto tmpTile = PtoTile<T2>(tmp);
-    auto src1SignedTile = PtoTile<T1, pto::BLayout::RowMajor, false, std::make_signed_t<typename PtoTile<T1>::Dtype>>(
-        src1);
-    auto tmpSignedTile = PtoTile<T2, pto::BLayout::RowMajor, false, std::make_signed_t<typename PtoTile<T2>::Dtype>>(
-        tmp);
+    auto src1ExecTile = MakeElementwiseOperandExecTile(dst, src1);
+    auto tmpExecTile = MakeElementwiseOperandExecTile(dst, tmp);
+    auto src1SignedExecTile = MakeElementwiseOperandExecTile<std::make_signed_t<typename PtoTile<T1>::Dtype>>(dst,
+                                                                                                              src1);
+    auto tmpSignedExecTile = MakeElementwiseOperandExecTile<std::make_signed_t<typename PtoTile<T2>::Dtype>>(dst, tmp);
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
-                src1Tile.Assign(src1, tileOffsets);
-                tmpTile.Assign(tmp, tileOffsets);
-                src1SignedTile.Assign(src1, tileOffsets);
-                tmpSignedTile.Assign(tmp, tileOffsets);
-                ScalarBitwiseShiftImpl<op, MAX_SHIFT_NUM>(dstTile.Data(), src0, src1Tile.Data(), tmpTile.Data(),
-                                                          src1SignedTile.Data(), tmpSignedTile.Data());
+                AssignElementwiseOperandExecTile(src1ExecTile, src1, tileOffsets);
+                AssignElementwiseOperandExecTile(tmpExecTile, tmp, tileOffsets);
+                AssignElementwiseOperandExecTile(src1SignedExecTile, src1, tileOffsets);
+                AssignElementwiseOperandExecTile(tmpSignedExecTile, tmp, tileOffsets);
+                ScalarBitwiseShiftImpl<op, MAX_SHIFT_NUM>(dstTile.Data(), src0, src1ExecTile, tmpExecTile,
+                                                          src1SignedExecTile, tmpSignedExecTile);
             }
         }
     }

@@ -131,9 +131,10 @@ TILEOP void UnaryCompute(T0 dst, T1 src)
         return;
     }
 
-    if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
+    using SrcExecDtype = typename ElementwiseOperandExecConfig<T0, T1>::OperandDtype;
+    if constexpr (TileOp::IsConstContinous<T0, T1>()) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
-        auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data();
+        auto srcTile = PtoTile<T0, pto::BLayout::RowMajor, true, SrcExecDtype>().Data();
         pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
         pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
         UnaryComputeImpl<op, PrecisionType, LastUse>(dstTile, srcTile);
@@ -141,14 +142,14 @@ TILEOP void UnaryCompute(T0 dst, T1 src)
     }
 
     auto dstTile = PtoTile<T0>(dst);
-    auto srcTile = PtoTile<T1>(src);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
-                srcTile.Assign(src, tileOffsets);
-                UnaryComputeImpl<op, PrecisionType, LastUse>(dstTile.Data(), srcTile.Data());
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
+                UnaryComputeImpl<op, PrecisionType, LastUse>(dstTile.Data(), srcExecTile);
             }
         }
     }
@@ -290,8 +291,9 @@ TILEOP void TIsFinite4Integral(DstTileTensor dst, SrcTileTensor src)
     constexpr size_t tileDstH = GetMergedAxisIfNeed<DstTileTensor, false>();
     constexpr size_t tileDstW = TileOp::GetTensorTileShapeDim<DstTileTensor, DIM_5TH, MAX_DIMS>();
 
-    int validH = src.GetLayout().template GetShapeDim<DIM_4TH, MAX_DIMS>();
-    int validW = src.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    static_assert(IsElementwiseDstLayoutCoveredByOperand<DstTileTensor, SrcTileTensor>());
+    int validH = dst.GetLayout().template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    int validW = dst.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
     using TileDefineDst = pto::Tile<pto::TileType::Vec, int16_t, tileDstH, tileDstW / 2, pto::BLayout::RowMajor, -1,
                                     -1>;
@@ -323,13 +325,14 @@ TILEOP void TIsFinite4Floats(DstTileTensor dst, SrcTileTensor src, BufferTileTen
     using SrcType = typename SrcTileTensor::Type;
     using DstType = std::conditional_t<std::is_same_v<typename DstTileTensor::Type, bool>, uint8_t,
                                        typename DstTileTensor::Type>;
-    constexpr size_t tileSrcH = GetMergedAxisIfNeed<SrcTileTensor, false>();
+    static_assert(IsElementwiseDstLayoutCoveredByOperand<DstTileTensor, SrcTileTensor>());
+    constexpr size_t tileSrcH = ElementwiseOperandExecConfig<DstTileTensor, SrcTileTensor>::tileH;
     constexpr size_t tileSrcW = TileOp::GetTensorTileShapeDim<SrcTileTensor, DIM_5TH, MAX_DIMS>();
     constexpr size_t tileDstH = GetMergedAxisIfNeed<DstTileTensor, false>();
     constexpr size_t tileDstW = TileOp::GetTensorTileShapeDim<DstTileTensor, DIM_5TH, MAX_DIMS>();
 
-    int validH = src.GetLayout().template GetShapeDim<DIM_4TH, MAX_DIMS>();
-    int validW = src.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    int validH = dst.GetLayout().template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    int validW = dst.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
     using TileDefineDst = pto::Tile<pto::TileType::Vec, DstType, tileDstH, tileDstW, pto::BLayout::RowMajor, -1, -1>;
     using HalfTileDefineSrc = pto::Tile<pto::TileType::Vec, half, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(half),
@@ -358,8 +361,8 @@ TILEOP void TIsFinite4Floats(DstTileTensor dst, SrcTileTensor src, BufferTileTen
                                                         pto::BLayout::RowMajor, -1, -1>;
                     FP32TileDefineSrc srcFP32(validH, validW);
                     HalfTileDefineSrc srcFP16(validH, validW);
-                    pto::TASSIGN(srcFP32, src.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(float));
-                    pto::TASSIGN(srcFP16, src.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(half));
+                    pto::TASSIGN(srcFP32, src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(float));
+                    pto::TASSIGN(srcFP16, src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(half));
                     pto::TCVT(srcFP16, srcFP32, pto::RoundMode::CAST_NONE);
                     SyncV();
                 }
@@ -373,7 +376,8 @@ TILEOP void TIsFinite4Floats(DstTileTensor dst, SrcTileTensor src, BufferTileTen
 template <typename DstTileTensor, typename SrcTileTensor, typename BufferTileTensor>
 TILEOP void TIsFinite(DstTileTensor dst, SrcTileTensor src, BufferTileTensor buffer)
 {
-    if constexpr (TileOp::IsConstContinous<DstTileTensor, SrcTileTensor>()) {
+    constexpr bool sameExecSize = GetAllAxisTileProduct<DstTileTensor>() == GetAllAxisTileProduct<SrcTileTensor>();
+    if constexpr (TileOp::IsConstContinous<DstTileTensor, SrcTileTensor>() && sameExecSize) {
         TIsFiniteCombineAxis(dst, src, buffer);
         return;
     }
@@ -433,9 +437,10 @@ TILEOP void TCeil(T0 dst, T1 src)
         }
     }
 
-    if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
+    using SrcExecDtype = typename ElementwiseOperandExecConfig<T0, T1>::OperandDtype;
+    if constexpr (TileOp::IsConstContinous<T0, T1>()) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
-        auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data();
+        auto srcTile = PtoTile<T0, pto::BLayout::RowMajor, true, SrcExecDtype>().Data();
         pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
         pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
         CeilComputeImpl<float>(dstTile, srcTile);
@@ -448,15 +453,15 @@ TILEOP void TCeil(T0 dst, T1 src)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
 
     auto dstTile = PtoTile<T0>(dst);
-    auto srcTile = PtoTile<T1>(src);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
-                srcTile.Assign(src, tileOffsets);
-                CeilComputeImpl<float>(dstTile.Data(), srcTile.Data());
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
+                CeilComputeImpl<float>(dstTile.Data(), srcExecTile);
             }
         }
     }
@@ -481,9 +486,10 @@ TILEOP void TFloor(T0 dst, T1 src)
         }
     }
 
-    if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
+    using SrcExecDtype = typename ElementwiseOperandExecConfig<T0, T1>::OperandDtype;
+    if constexpr (TileOp::IsConstContinous<T0, T1>()) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
-        auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data();
+        auto srcTile = PtoTile<T0, pto::BLayout::RowMajor, true, SrcExecDtype>().Data();
         pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
         pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
         FloorComputeImpl<float>(dstTile, srcTile);
@@ -496,15 +502,15 @@ TILEOP void TFloor(T0 dst, T1 src)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
 
     auto dstTile = PtoTile<T0>(dst);
-    auto srcTile = PtoTile<T1>(src);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
-                srcTile.Assign(src, tileOffsets);
-                FloorComputeImpl<float>(dstTile.Data(), srcTile.Data());
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
+                FloorComputeImpl<float>(dstTile.Data(), srcExecTile);
             }
         }
     }
@@ -529,9 +535,10 @@ TILEOP void TTrunc(T0 dst, T1 src)
         }
     }
 
-    if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
+    using SrcExecDtype = typename ElementwiseOperandExecConfig<T0, T1>::OperandDtype;
+    if constexpr (TileOp::IsConstContinous<T0, T1>()) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
-        auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data();
+        auto srcTile = PtoTile<T0, pto::BLayout::RowMajor, true, SrcExecDtype>().Data();
         pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
         pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
         TruncComputeImpl<float>(dstTile, srcTile);
@@ -544,15 +551,15 @@ TILEOP void TTrunc(T0 dst, T1 src)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
 
     auto dstTile = PtoTile<T0>(dst);
-    auto srcTile = PtoTile<T1>(src);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
-                srcTile.Assign(src, tileOffsets);
-                TruncComputeImpl<float>(dstTile.Data(), srcTile.Data());
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
+                TruncComputeImpl<float>(dstTile.Data(), srcExecTile);
             }
         }
     }
@@ -570,7 +577,7 @@ TILEOP void TExp2(T0 dst, T1 tmp, T2 tmp2, T3 src)
     auto dstTile = PtoTile<T0>(dst);
     auto tmpTile = PtoTile<T1>(tmp);
     auto tmpTile2 = PtoTile<T2>(tmp2);
-    auto srcTile = PtoTile<T3>(src);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
@@ -578,7 +585,7 @@ TILEOP void TExp2(T0 dst, T1 tmp, T2 tmp2, T3 src)
                 dstTile.Assign(dst, tileOffsets);
                 tmpTile.Assign(tmp, tileOffsets);
                 tmpTile2.Assign(tmp2, tileOffsets);
-                srcTile.Assign(src, tileOffsets);
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
 
                 if constexpr (std::is_same_v<typename T3::Type, float>) {
                     pto::TEXPANDS(tmpTile2.Data(), 2.0f);
@@ -589,7 +596,7 @@ TILEOP void TExp2(T0 dst, T1 tmp, T2 tmp2, T3 src)
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
-                    pto::TMUL(tmpTile2.Data(), srcTile.Data(), tmpTile2.Data());
+                    pto::TMUL(tmpTile2.Data(), srcExecTile, tmpTile2.Data());
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
@@ -598,7 +605,7 @@ TILEOP void TExp2(T0 dst, T1 tmp, T2 tmp2, T3 src)
                     pipe_barrier(PIPE_V);
 #endif
                 } else {
-                    pto::TCVT(tmpTile.Data(), srcTile.Data(), pto::RoundMode::CAST_NONE);
+                    pto::TCVT(tmpTile.Data(), srcExecTile, pto::RoundMode::CAST_NONE);
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
@@ -647,34 +654,34 @@ TILEOP void TRound(T0 dst, T1 tmp, T2 src, Scalar powDecimals)
 
     auto dstTile = PtoTile<T0>(dst);
     auto tmpTile = PtoTile<T1>(tmp);
-    auto srcTile = PtoTile<T2>(src);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 tmpTile.Assign(tmp, tileOffsets);
-                srcTile.Assign(src, tileOffsets);
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
 
                 if constexpr (std::is_integral_v<typename T2::Type>) {
                     if (powDecimals >= 1.0f) {
-                        pto::TMOV(dstTile.Data(), srcTile.Data());
+                        pto::TMOV(dstTile.Data(), srcExecTile);
                         continue;
                     }
                 }
 
                 if constexpr (std::is_same_v<typename T2::Type, float>) {
-                    pto::TMULS(srcTile.Data(), srcTile.Data(), powDecimals);
+                    pto::TMULS(srcExecTile, srcExecTile, powDecimals);
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
-                    pto::TCVT(srcTile.Data(), srcTile.Data(), pto::RoundMode::CAST_RINT);
+                    pto::TCVT(srcExecTile, srcExecTile, pto::RoundMode::CAST_RINT);
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
-                    pto::TDIVS(dstTile.Data(), srcTile.Data(), powDecimals);
+                    pto::TDIVS(dstTile.Data(), srcExecTile, powDecimals);
                 } else {
-                    pto::TCVT(tmpTile.Data(), srcTile.Data(), pto::RoundMode::CAST_NONE);
+                    pto::TCVT(tmpTile.Data(), srcExecTile, pto::RoundMode::CAST_NONE);
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
@@ -708,23 +715,23 @@ TILEOP void TExpm1(T0 dst, T1 tmp, T2 src)
 
     auto dstTile = PtoTile<T0>(dst);
     auto tmpTile = PtoTile<T1>(tmp);
-    auto srcTile = PtoTile<T2>(src);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 tmpTile.Assign(tmp, tileOffsets);
-                srcTile.Assign(src, tileOffsets);
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
 
                 if constexpr (std::is_same_v<typename T2::Type, float>) {
-                    pto::TEXP(dstTile.Data(), srcTile.Data());
+                    pto::TEXP(dstTile.Data(), srcExecTile);
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
                     pto::TADDS(dstTile.Data(), dstTile.Data(), -1.0f);
                 } else {
-                    pto::TCVT(tmpTile.Data(), srcTile.Data(), pto::RoundMode::CAST_NONE);
+                    pto::TCVT(tmpTile.Data(), srcExecTile, pto::RoundMode::CAST_NONE);
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
@@ -791,34 +798,34 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
     constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
         DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
 
-    using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
-                                     -1>;
+    using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                    -1>;
     using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
-    DataTileDefine dstTile(dstShape3, dstShape4);
-    DataTileDefine srcTile(dstShape3, dstShape4);
-    DataTileDefine tmp0Tile(dstShape3, dstShape4);
-    DataTileDefine tmp1Tile(dstShape3, dstShape4);
-    DataTileDefine tmp2Tile(dstShape3, dstShape4);
-    DataTileDefine tmp3Tile(dstShape3, dstShape4);
+    DstTileDefine dstTile(dstShape3, dstShape4);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
+    DstTileDefine tmp0Tile(dstShape3, dstShape4);
+    DstTileDefine tmp1Tile(dstShape3, dstShape4);
+    DstTileDefine tmp2Tile(dstShape3, dstShape4);
+    DstTileDefine tmp3Tile(dstShape3, dstShape4);
     MaskTileDefine tmp1MaskTile(dstShape3, dstShape4);
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
             for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                auto srcOffset = GenTileOffset(src, tileOffsets);
                 auto dstOffset = GenTileOffset(dst, tileOffsets);
+                auto tmpByteOffset = TileOp::GetPackedByteOffset<typename T2::Type>(GenTileOffset(tmp, tileOffsets));
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
-                pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * dstTypeSize));
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
 
-                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + dstOffset * dstTypeSize));
-                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize));
-                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize));
-                pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 3 * tileShapeSize) * dstTypeSize));
-                pto::TASSIGN(tmp1MaskTile, (uint64_t)(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset));
+                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + tileShapeSize * dstTypeSize));
+                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + 2 * tileShapeSize * dstTypeSize));
+                pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + 3 * tileShapeSize * dstTypeSize));
+                pto::TASSIGN(tmp1MaskTile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + tileShapeSize * dstTypeSize));
 
                 // sinh(x) = x + x^3 / 3! + x^5 / 5! + x^7 / 7! for small x
-                pto::TABS(tmp0Tile, srcTile);
+                pto::TABS(tmp0Tile, srcExecTile);
                 SyncV();
                 pto::TMUL(tmp1Tile, tmp0Tile, tmp0Tile);
                 SyncV();
@@ -860,7 +867,7 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
 
                 pto::TMULS(tmp2Tile, dstTile, SCALAR_NEGATIVE_ONE);
                 SyncV();
-                pto::TCMPS(tmp1MaskTile, srcTile, SCALAR_ZERO, pto::CmpMode::GE);
+                pto::TCMPS(tmp1MaskTile, srcExecTile, SCALAR_ZERO, pto::CmpMode::GE);
                 SyncV();
                 pto::TSEL(dstTile, tmp1MaskTile, dstTile, tmp2Tile, tmp0Tile);
                 SyncV();
@@ -968,16 +975,13 @@ TILEOP void TCosh(T0 dst, T1 src, T2 tmp)
 
     using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
                                      -1>;
-
     DataTileDefine dstTile(dstShape3, dstShape4);
-    DataTileDefine srcTile(dstShape3, dstShape4);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
 
 #ifdef __DAV_V220
     DataTileDefine tmpTile(dstShape3, dstShape4);
 #else
-
     using IntTileDefine = pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-
     using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * sizeof(float), pto::BLayout::RowMajor,
                                      -1, -1>;
 
@@ -992,29 +996,26 @@ TILEOP void TCosh(T0 dst, T1 src, T2 tmp)
         for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
             for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                auto srcOffset = GenTileOffset(src, tileOffsets);
                 auto dstOffset = GenTileOffset(dst, tileOffsets);
-
-                pto::TASSIGN(dstTile, static_cast<uint64_t>(dst.GetAddr() + dstOffset * dstTypeSize));
-                pto::TASSIGN(srcTile, static_cast<uint64_t>(src.GetAddr() + srcOffset * dstTypeSize));
+                auto tmpByteOffset = TileOp::GetPackedByteOffset<typename T2::Type>(GenTileOffset(tmp, tileOffsets));
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
 
 #ifdef __DAV_V220
-                pto::TASSIGN(tmpTile, static_cast<uint64_t>(tmp.GetAddr() + dstOffset * dstTypeSize));
-
-                TCoshCompute(dstTile, srcTile, tmpTile);
+                pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr() + tmpByteOffset));
+                TCoshCompute(dstTile, srcExecTile, tmpTile);
 #else
-                auto tmp0Addr = static_cast<uint64_t>(tmp.GetAddr() + dstOffset * dstTypeSize);
-                auto tmp1Addr = static_cast<uint64_t>(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize);
-                auto tmp2Addr = static_cast<uint64_t>(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize);
+                auto tmp0Addr = static_cast<uint64_t>(tmp.GetAddr() + tmpByteOffset);
+                auto tmp1Addr = static_cast<uint64_t>(tmp.GetAddr() + tmpByteOffset + tileShapeSize * dstTypeSize);
+                auto tmp2Addr = static_cast<uint64_t>(tmp.GetAddr() + tmpByteOffset + 2 * tileShapeSize * dstTypeSize);
 
                 pto::TASSIGN(tmp0Tile, tmp0Addr);
                 pto::TASSIGN(tmp1Tile, tmp1Addr);
                 pto::TASSIGN(tmp2Tile, tmp2Addr);
-
                 pto::TASSIGN(tmp0IntTile, tmp0Addr);
                 pto::TASSIGN(tmp2MaskTile, tmp2Addr);
 
-                TCoshCompute(dstTile, srcTile, tmp0Tile, tmp1Tile, tmp2Tile, tmp0IntTile, tmp2MaskTile);
+                TCoshCompute(dstTile, srcExecTile, tmp0Tile, tmp1Tile, tmp2Tile, tmp0IntTile, tmp2MaskTile);
 #endif
             }
         }
@@ -1339,10 +1340,11 @@ TILEOP void TrigErfCompute(T0 dst, T1 tmp, T2 src)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
-    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
+    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
 
-    using TmpFP32Tile = pto::Tile<pto::TileType::Vec, typename T2::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using TmpFP32Tile = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     using TmpINT32Tile = pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     using TmpMaskTile = pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
 
@@ -1351,34 +1353,32 @@ TILEOP void TrigErfCompute(T0 dst, T1 tmp, T2 src)
     TmpINT32Tile tmp1Tile(shape3, shape4);
     TmpFP32Tile tmp2Tile(shape3, shape4);
     TmpFP32Tile tmp3Tile(shape3, shape4);
-    TmpFP32Tile src0Tile(shape3, shape4);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                pto::TASSIGN(dstTile,
-                             (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(typename T2::Type)));
-                pto::TASSIGN(src0Tile,
-                             (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T2::Type)));
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * dstTypeSize));
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
                 pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr()));
-                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + 2 * tileW * tileH * sizeof(float)));
+                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + 2 * tileW * tileH * dstTypeSize));
                 if constexpr (op == UnaryOp::ERF) {
-                    pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * sizeof(float)));
+                    pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * dstTypeSize));
 #ifdef __DAV_V220
-                    ErfPadeCompute(dstTile, tmp0Tile, tmp3Tile, tmp2Tile, src0Tile);
+                    ErfPadeCompute(dstTile, tmp0Tile, tmp3Tile, tmp2Tile, srcExecTile);
 #else
                     TmpMaskTile tmpmaskTile(shape3, shape4);
                     pto::TASSIGN(tmpmaskTile, (uint64_t)(tmp.GetAddr()));
-                    ErfSubsectionCompute(dstTile, tmpmaskTile, tmp3Tile, tmp2Tile, src0Tile);
+                    ErfSubsectionCompute(dstTile, tmpmaskTile, tmp3Tile, tmp2Tile, srcExecTile);
 #endif
                 } else {
-                    pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * sizeof(float)));
+                    pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * dstTypeSize));
 
-                    reduceKCompute<op>(dstTile, tmp0Tile, tmp1Tile, tmp2Tile, src0Tile);
+                    reduceKCompute<op>(dstTile, tmp0Tile, tmp1Tile, tmp2Tile, srcExecTile);
                     SyncV();
                     TmpFP32Tile tmp3Tile(shape3, shape4);
-                    pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * sizeof(float)));
-                    SinCosCompute<op>(dstTile, tmp0Tile, tmp3Tile, tmp2Tile, src0Tile);
+                    pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * dstTypeSize));
+                    SinCosCompute<op>(dstTile, tmp0Tile, tmp3Tile, tmp2Tile, srcExecTile);
                 }
             }
         }
@@ -1464,8 +1464,8 @@ constexpr float ERFC_S3 = 0.8058268949e2f;
 constexpr float ERFC_S4 = 0.9155653738e2f;
 constexpr float ERFC_S5 = 0.4380524152e2f;
 
-template <typename TileType>
-TILEOP inline void ErfcClip(TileType& dst, const TileType& src)
+template <typename DstTileType, typename SrcTileType>
+TILEOP inline void ErfcClip(DstTileType& dst, const SrcTileType& src)
 {
     pto::TMINS(dst, src, ERFC_BOUNDARY_MAX);
     SyncV();
@@ -1586,15 +1586,16 @@ TILEOP void TErfc(T0 dst, T1 tmp, T2 src)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T2, DIM_4TH, MAX_DIMS>();
-    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
+    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
     if (shape0 == 0 || shape1 == 0 || shape2 == 0 || shape3 == 0 || shape4 == 0) {
         return;
     }
 
-    using TmpFP32Tile = pto::Tile<pto::TileType::Vec, typename T2::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using TmpFP32Tile = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     TmpFP32Tile dstTile(shape3, shape4);
-    TmpFP32Tile srcTile(shape3, shape4);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
     TmpFP32Tile tmpCompBuf1(shape3, shape4);
     TmpFP32Tile tmpCompBuf2(shape3, shape4);
     TmpFP32Tile tmpCompBuf3(shape3, shape4);
@@ -1604,17 +1605,15 @@ TILEOP void TErfc(T0 dst, T1 tmp, T2 src)
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                pto::TASSIGN(dstTile,
-                             (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(typename T2::Type)));
-                pto::TASSIGN(srcTile,
-                             (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T2::Type)));
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * dstTypeSize));
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
 
                 pto::TASSIGN(tmpCompBuf1, (uint64_t)(tmp.GetAddr()));
-                pto::TASSIGN(tmpCompBuf2, (uint64_t)(tmp.GetAddr() + 1 * tileW * tileH * sizeof(typename T2::Type)));
-                pto::TASSIGN(tmpCompBuf3, (uint64_t)(tmp.GetAddr() + 2 * tileW * tileH * sizeof(typename T2::Type)));
-                pto::TASSIGN(tmpCompBuf4, (uint64_t)(tmp.GetAddr() + 3 * tileW * tileH * sizeof(typename T2::Type)));
+                pto::TASSIGN(tmpCompBuf2, (uint64_t)(tmp.GetAddr() + 1 * tileW * tileH * dstTypeSize));
+                pto::TASSIGN(tmpCompBuf3, (uint64_t)(tmp.GetAddr() + 2 * tileW * tileH * dstTypeSize));
+                pto::TASSIGN(tmpCompBuf4, (uint64_t)(tmp.GetAddr() + 3 * tileW * tileH * dstTypeSize));
 
-                ErfcClip(dstTile, srcTile);
+                ErfcClip(dstTile, srcExecTile);
                 ErfcPreCompute(dstTile, dstTile, tmpCompBuf1);
                 ErfcPublicSteps(tmpCompBuf1, tmpCompBuf2, tmpCompBuf3, tmpCompBuf4);
                 ErfcPostCompute(dstTile, dstTile, tmpCompBuf2, tmpCompBuf3);
@@ -1771,7 +1770,7 @@ TILEOP void TAsinAcosImpl(T0 dst, T1 src, T2 tmp)
     using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
 
     DataTileDefine dstTile(shape3, shape4);
-    DataTileDefine srcTile(shape3, shape4);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
     DataTileDefine tmp0Tile(shape3, shape4); // |x|, then large-branch result / negated result
     DataTileDefine tmp1Tile(shape3, shape4); // large-branch argument, then Horner / TSEL scratch
     DataTileDefine tmp2Tile(shape3, shape4); // shared reduced argument
@@ -1788,8 +1787,8 @@ TILEOP void TAsinAcosImpl(T0 dst, T1 src, T2 tmp)
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * dstTypeSize));
-                pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * dstTypeSize));
-                TAsinAcosTileImpl<IsAsin>(dstTile, srcTile, tmp0Tile, tmp1Tile, tmp2Tile, maskTile);
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
+                TAsinAcosTileImpl<IsAsin>(dstTile, srcExecTile, tmp0Tile, tmp1Tile, tmp2Tile, maskTile);
             }
         }
     }
@@ -1838,7 +1837,7 @@ TILEOP void TASinh(T0 dst, T1 src, T2 tmp)
     using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
                                      -1>;
     using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, 4 * tileW, pto::BLayout::RowMajor, -1, -1>;
-    DataTileDefine srcTile(dstShape3, dstShape4);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
     DataTileDefine dstTile(dstShape3, dstShape4);
     DataTileDefine tmp0Tile(dstShape3, dstShape4);
     DataTileDefine tmp1Tile(dstShape3, dstShape4);
@@ -1851,17 +1850,17 @@ TILEOP void TASinh(T0 dst, T1 src, T2 tmp)
             for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto dstOffset = GenTileOffset(dst, tileOffsets);
-                auto srcOffset = GenTileOffset(src, tileOffsets);
-                pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * dstTypeSize));
+                auto tmpByteOffset = TileOp::GetPackedByteOffset<typename T2::Type>(GenTileOffset(tmp, tileOffsets));
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
 
-                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + dstOffset * dstTypeSize));
-                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize));
-                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize));
-                pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 3 * tileShapeSize) * dstTypeSize));
-                pto::TASSIGN(tmp2MaskTile, (uint64_t)(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset));
+                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + tileShapeSize * dstTypeSize));
+                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + 2 * tileShapeSize * dstTypeSize));
+                pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + 3 * tileShapeSize * dstTypeSize));
+                pto::TASSIGN(tmp2MaskTile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + 2 * tileShapeSize * dstTypeSize));
 
-                pto::TABS(tmp0Tile, srcTile); // |x|
+                pto::TABS(tmp0Tile, srcExecTile); // |x|
                 SyncV();
                 pto::TDIVS(tmp1Tile, CONST_ONE, tmp0Tile); // 1/|x|
                 SyncV();
@@ -1911,7 +1910,7 @@ TILEOP void TASinh(T0 dst, T1 src, T2 tmp)
                 pto::TMULS(tmp1Tile, tmp0Tile, CONST_NEG_ONE);
                 SyncV();
 
-                pto::TCMPS(tmp2MaskTile, srcTile, CONST_ZERO, pto::CmpMode::GE);
+                pto::TCMPS(tmp2MaskTile, srcExecTile, CONST_ZERO, pto::CmpMode::GE);
                 SyncV();
                 pto::TSEL(dstTile, tmp2MaskTile, tmp0Tile, tmp1Tile, tmp3Tile);
                 SyncV();
@@ -1946,7 +1945,7 @@ TILEOP void TACosh(T0 dst, T1 src, T2 tmp)
 
     using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
                                      -1>;
-    DataTileDefine srcTile(dstShape3, dstShape4);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
     DataTileDefine dstTile(dstShape3, dstShape4);
     DataTileDefine tmp0Tile(dstShape3, dstShape4);
     DataTileDefine tmp1Tile(dstShape3, dstShape4);
@@ -1955,16 +1954,16 @@ TILEOP void TACosh(T0 dst, T1 src, T2 tmp)
         for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
             for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                auto srcOffset = GenTileOffset(src, tileOffsets);
                 auto dstOffset = GenTileOffset(dst, tileOffsets);
-                pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * dstTypeSize));
+                auto tmpByteOffset = TileOp::GetPackedByteOffset<typename T2::Type>(GenTileOffset(tmp, tileOffsets));
+                AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
 
-                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + dstOffset * dstTypeSize));
-                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize));
-                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset));
+                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + tileShapeSize * dstTypeSize));
+                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + 2 * tileShapeSize * dstTypeSize));
 
-                pto::TADDS(tmp0Tile, srcTile, CONST_NEG_ONE); // t
+                pto::TADDS(tmp0Tile, srcExecTile, CONST_NEG_ONE); // t
                 SyncV();
                 pto::TADD(tmp1Tile, tmp0Tile, tmp0Tile); // 2t
                 SyncV();
@@ -1993,7 +1992,7 @@ TILEOP void TACosh(T0 dst, T1 src, T2 tmp)
                 pto::TDIV(dstTile, dstTile, tmp0Tile); // r * log(r + 1) / clamp(r, s_min, s_max)
                 SyncV();
 
-                pto::TLOG(tmp0Tile, srcTile); // log(x)
+                pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp0Tile, srcExecTile); // log(x)
                 SyncV();
                 pto::TADDS(tmp0Tile, tmp0Tile, CONST_LOG_TWO_VALUE); // log(x) + log(2)
                 SyncV();

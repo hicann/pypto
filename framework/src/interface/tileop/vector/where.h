@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_WHERE__H
 #define TILEOP_TILE_OPERATOR_WHERE__H
+#include "pto_tile.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
@@ -123,6 +124,9 @@ TILEOP void TWhereTT(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 for (LoopVar n3Index = 0; n3Index < shape3; ++n3Index) {
+                    auto tileOffsets = TileOffset4Dim(n0Index, n1Index, n2Index, n3Index);
+                    auto src0BaseOffset = GenTileOffset(src0, tileOffsets);
+                    auto src1BaseOffset = GenTileOffset(src1, tileOffsets);
                     if constexpr (std::is_same_v<typename TCond::Type, bool>) {
                         for (LoopVar j = 0; j < numCountPerLine; j++) {
                             auto conditionOffset = n0Index * conditionStride0 + n1Index * conditionStride1 +
@@ -130,6 +134,8 @@ TILEOP void TWhereTT(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                    j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 +
                                           n3Index * stride3 + j * elementsPerCount;
+                            auto src0Offset = src0BaseOffset + j * elementsPerCount;
+                            auto src1Offset = src1BaseOffset + j * elementsPerCount;
 
                             CaculateMask<elementsPerCount>(
                                 (uint64_t)(condition.GetAddr() + conditionOffset * conditionTypeSize), castCondition,
@@ -137,8 +143,8 @@ TILEOP void TWhereTT(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
 
                             ProcessWhere<typename TDst::Type, elementsPerCount>(
                                 (uint64_t)(dst.GetAddr() + offset * dstTypeSize), (uint64_t)(vcmpBitResult),
-                                (uint64_t)(src0.GetAddr() + offset * src0TypeSize),
-                                (uint64_t)(src1.GetAddr() + offset * src1TypeSize), (uint64_t)(startAddrUB),
+                                (uint64_t)(src0.GetAddr() + src0Offset * src0TypeSize),
+                                (uint64_t)(src1.GetAddr() + src1Offset * src1TypeSize), (uint64_t)(startAddrUB),
                                 elementsPerCount);
                         }
                         if (elementsRemainPerLine) {
@@ -147,14 +153,16 @@ TILEOP void TWhereTT(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                    numCountPerLine * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 +
                                           n3Index * stride3 + numCountPerLine * elementsPerCount;
+                            auto src0Offset = src0BaseOffset + numCountPerLine * elementsPerCount;
+                            auto src1Offset = src1BaseOffset + numCountPerLine * elementsPerCount;
                             CaculateMask<elementsPerCount>(
                                 (uint64_t)(condition.GetAddr() + conditionOffset * conditionTypeSize), castCondition,
                                 compareCondition, vcmpBitResult, elementsRemainPerLine);
 
                             ProcessWhere<typename TDst::Type, elementsPerCount>(
                                 (uint64_t)(dst.GetAddr() + offset * dstTypeSize), (uint64_t)(vcmpBitResult),
-                                (uint64_t)(src0.GetAddr() + offset * src0TypeSize),
-                                (uint64_t)(src1.GetAddr() + offset * src1TypeSize), (uint64_t)(startAddrUB),
+                                (uint64_t)(src0.GetAddr() + src0Offset * src0TypeSize),
+                                (uint64_t)(src1.GetAddr() + src1Offset * src1TypeSize), (uint64_t)(startAddrUB),
                                 elementsRemainPerLine);
                         }
                     } else {
@@ -180,8 +188,8 @@ TILEOP void TWhereTT(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
 
                         pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + offset * dstTypeSize));
                         pto::TASSIGN(maskTile, (uint64_t)(condition.GetAddr() + conditionOffset * conditionTypeSize));
-                        pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + offset * src0TypeSize));
-                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + offset * src1TypeSize));
+                        pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + src0BaseOffset * src0TypeSize));
+                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + src1BaseOffset * src1TypeSize));
                         pto::TSEL(dstTile, maskTile, src0Tile, src1Tile, startAddrUBTile);
                     }
                 }
@@ -242,6 +250,7 @@ TILEOP void TWhereTS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 for (LoopVar n3Index = 0; n3Index < shape3; ++n3Index) {
+                    auto src0BaseOffset = GenTileOffset(src0, TileOffset4Dim(n0Index, n1Index, n2Index, n3Index));
                     if constexpr (std::is_same_v<typename TCond::Type, bool>) {
                         for (LoopVar j = 0; j < numCountPerLine; j++) {
                             auto conditionOffset = n0Index * conditionStride0 + n1Index * conditionStride1 +
@@ -249,6 +258,7 @@ TILEOP void TWhereTS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                    j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 +
                                           n3Index * stride3 + j * elementsPerCount;
+                            auto src0Offset = src0BaseOffset + j * elementsPerCount;
 
                             CaculateMask<elementsPerCount>(
                                 (uint64_t)(condition.GetAddr() + conditionOffset * conditionTypeSize), castCondition,
@@ -256,7 +266,7 @@ TILEOP void TWhereTS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
 
                             ProcessWhere<typename TDst::Type, elementsPerCount>(
                                 (uint64_t)(dst.GetAddr() + offset * dstTypeSize), (uint64_t)(vcmpBitResult),
-                                (uint64_t)(src0.GetAddr() + offset * src0TypeSize), (uint64_t)(otherTempTensor),
+                                (uint64_t)(src0.GetAddr() + src0Offset * src0TypeSize), (uint64_t)(otherTempTensor),
                                 (uint64_t)(startAddrUB), elementsPerCount);
                         }
                         if (elementsRemainPerLine) {
@@ -265,13 +275,14 @@ TILEOP void TWhereTS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                    numCountPerLine * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 +
                                           n3Index * stride3 + numCountPerLine * elementsPerCount;
+                            auto src0Offset = src0BaseOffset + numCountPerLine * elementsPerCount;
                             CaculateMask<elementsPerCount>(
                                 (uint64_t)(condition.GetAddr() + conditionOffset * conditionTypeSize), castCondition,
                                 compareCondition, vcmpBitResult, elementsRemainPerLine);
 
                             ProcessWhere<typename TDst::Type, elementsPerCount>(
                                 (uint64_t)(dst.GetAddr() + offset * dstTypeSize), (uint64_t)(vcmpBitResult),
-                                (uint64_t)(src0.GetAddr() + offset * src0TypeSize), (uint64_t)(otherTempTensor),
+                                (uint64_t)(src0.GetAddr() + src0Offset * src0TypeSize), (uint64_t)(otherTempTensor),
                                 (uint64_t)(startAddrUB), elementsRemainPerLine);
                         }
                     } else {
@@ -281,10 +292,11 @@ TILEOP void TWhereTS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                    j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 +
                                           n3Index * stride3 + j * elementsPerCount;
+                            auto src0Offset = src0BaseOffset + j * elementsPerCount;
                             ProcessWhere<typename TDst::Type, elementsPerCount>(
                                 (uint64_t)(dst.GetAddr() + offset * dstTypeSize),
                                 (uint64_t)(condition.GetAddr() + conditionOffset * conditionTypeSize),
-                                (uint64_t)(src0.GetAddr() + offset * src0TypeSize), (uint64_t)(otherTempTensor),
+                                (uint64_t)(src0.GetAddr() + src0Offset * src0TypeSize), (uint64_t)(otherTempTensor),
                                 (uint64_t)(startAddrUB), elementsPerCount);
                         }
                         if (elementsRemainPerLine) {
@@ -293,10 +305,11 @@ TILEOP void TWhereTS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                    numCountPerLine * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 +
                                           n3Index * stride3 + numCountPerLine * elementsPerCount;
+                            auto src0Offset = src0BaseOffset + numCountPerLine * elementsPerCount;
                             ProcessWhere<typename TDst::Type, elementsPerCount>(
                                 (uint64_t)(dst.GetAddr() + offset * dstTypeSize),
                                 (uint64_t)(condition.GetAddr() + conditionOffset * conditionTypeSize),
-                                (uint64_t)(src0.GetAddr() + offset * src0TypeSize), (uint64_t)(otherTempTensor),
+                                (uint64_t)(src0.GetAddr() + src0Offset * src0TypeSize), (uint64_t)(otherTempTensor),
                                 (uint64_t)(startAddrUB), elementsRemainPerLine);
                         }
                     }
@@ -358,6 +371,7 @@ TILEOP void TWhereST(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 for (LoopVar n3Index = 0; n3Index < shape3; ++n3Index) {
+                    auto src1BaseOffset = GenTileOffset(src1, TileOffset4Dim(n0Index, n1Index, n2Index, n3Index));
                     if constexpr (std::is_same_v<typename TCond::Type, bool>) {
                         for (LoopVar j = 0; j < numCountPerLine; j++) {
                             auto conditionOffset = n0Index * conditionStride0 + n1Index * conditionStride1 +
@@ -365,6 +379,7 @@ TILEOP void TWhereST(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                    j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 +
                                           n3Index * stride3 + j * elementsPerCount;
+                            auto src1Offset = src1BaseOffset + j * elementsPerCount;
 
                             CaculateMask<elementsPerCount>(
                                 (uint64_t)(condition.GetAddr() + conditionOffset * conditionTypeSize), castCondition,
@@ -372,7 +387,7 @@ TILEOP void TWhereST(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
 
                             ProcessWhere<typename TDst::Type, elementsPerCount>(
                                 (uint64_t)(dst.GetAddr() + offset * dstTypeSize), (uint64_t)(vcmpBitResult),
-                                (uint64_t)(inputTempTensor), (uint64_t)(src1.GetAddr() + offset * src1TypeSize),
+                                (uint64_t)(inputTempTensor), (uint64_t)(src1.GetAddr() + src1Offset * src1TypeSize),
                                 (uint64_t)(startAddrUB), elementsPerCount);
                         }
                         if (elementsRemainPerLine) {
@@ -381,13 +396,14 @@ TILEOP void TWhereST(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                    numCountPerLine * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 +
                                           n3Index * stride3 + numCountPerLine * elementsPerCount;
+                            auto src1Offset = src1BaseOffset + numCountPerLine * elementsPerCount;
                             CaculateMask<elementsPerCount>(
                                 (uint64_t)(condition.GetAddr() + conditionOffset * conditionTypeSize), castCondition,
                                 compareCondition, vcmpBitResult, elementsRemainPerLine);
 
                             ProcessWhere<typename TDst::Type, elementsPerCount>(
                                 (uint64_t)(dst.GetAddr() + offset * dstTypeSize), (uint64_t)(vcmpBitResult),
-                                (uint64_t)(inputTempTensor), (uint64_t)(src1.GetAddr() + offset * src1TypeSize),
+                                (uint64_t)(inputTempTensor), (uint64_t)(src1.GetAddr() + src1Offset * src1TypeSize),
                                 (uint64_t)(startAddrUB), elementsRemainPerLine);
                         }
                     } else {
@@ -397,10 +413,11 @@ TILEOP void TWhereST(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                    j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 +
                                           n3Index * stride3 + j * elementsPerCount;
+                            auto src1Offset = src1BaseOffset + j * elementsPerCount;
                             ProcessWhere<typename TDst::Type, elementsPerCount>(
                                 (uint64_t)(dst.GetAddr() + offset * dstTypeSize),
                                 (uint64_t)(condition.GetAddr() + conditionOffset * conditionTypeSize),
-                                (uint64_t)(inputTempTensor), (uint64_t)(src1.GetAddr() + offset * src1TypeSize),
+                                (uint64_t)(inputTempTensor), (uint64_t)(src1.GetAddr() + src1Offset * src1TypeSize),
                                 (uint64_t)(startAddrUB), elementsPerCount);
                         }
                         if (elementsRemainPerLine) {
@@ -409,10 +426,11 @@ TILEOP void TWhereST(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                    numCountPerLine * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 +
                                           n3Index * stride3 + numCountPerLine * elementsPerCount;
+                            auto src1Offset = src1BaseOffset + numCountPerLine * elementsPerCount;
                             ProcessWhere<typename TDst::Type, elementsPerCount>(
                                 (uint64_t)(dst.GetAddr() + offset * dstTypeSize),
                                 (uint64_t)(condition.GetAddr() + conditionOffset * conditionTypeSize),
-                                (uint64_t)(inputTempTensor), (uint64_t)(src1.GetAddr() + offset * src1TypeSize),
+                                (uint64_t)(inputTempTensor), (uint64_t)(src1.GetAddr() + src1Offset * src1TypeSize),
                                 (uint64_t)(startAddrUB), elementsRemainPerLine);
                         }
                     }

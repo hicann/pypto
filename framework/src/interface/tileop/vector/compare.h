@@ -16,6 +16,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_COMPARE__H
 #define TILEOP_TILE_OPERATOR_COMPARE__H
+#include "pto_tile.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
@@ -248,12 +249,14 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
                 for (LoopVar n3Index = 0; n3Index < info.shape3; ++n3Index) {
                     size_t srcOffset, dstOffset;
                     CalcOffsets(info, n0Index, n1Index, n2Index, n3Index, srcOffset, dstOffset);
+                    auto src1Offset = GenTileOffset(src1, TileOffset4Dim(n0Index, n1Index, n2Index, n3Index));
 
                     for (LoopVar j = 0; j < numCountPerLine; ++j) {
                         size_t curShape4 = elementsPerCount;
                         size_t curDstShape = (mode == 0) ? curShape4 : ((curShape4 + 7) / 8);
 
                         size_t curSrcOffset = srcOffset + j * elementsPerCount;
+                        size_t curSrc1Offset = src1Offset + j * elementsPerCount;
                         size_t curDstOffset = dstOffset + j * dstElementsPerCount;
 
                         uint64_t dstAddr = dst.GetAddr() + curDstOffset * dstTypeSize;
@@ -270,7 +273,7 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
                                                    bitResTile, cmpResTile, buffers, dstAddr, curShape4, curDstShape);
 
                         pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + curSrcOffset * src0TypeSize));
-                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + curSrcOffset * src1TypeSize));
+                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + curSrc1Offset * src1TypeSize));
 
                         auto& dst0 = (mode == 0) ? cmpResTile : bitResTile;
                         ExecuteCompare<cmpOp>(dst0, src0Tile, src1Tile);
@@ -286,6 +289,7 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
                         size_t curDstShape = (mode == 0) ? curShape4 : ((curShape4 + 7) / 8);
 
                         size_t curSrcOffset = srcOffset + numCountPerLine * elementsPerCount;
+                        size_t curSrc1Offset = src1Offset + numCountPerLine * elementsPerCount;
                         size_t curDstOffset = dstOffset + numCountPerLine * dstElementsPerCount;
 
                         uint64_t dstAddr = dst.GetAddr() + curDstOffset * dstTypeSize;
@@ -302,7 +306,7 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
                                                    bitResTile, cmpResTile, buffers, dstAddr, curShape4, curDstShape);
 
                         pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + curSrcOffset * src0TypeSize));
-                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + curSrcOffset * src1TypeSize));
+                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + curSrc1Offset * src1TypeSize));
 
                         auto& dst0 = (mode == 0) ? cmpResTile : bitResTile;
                         ExecuteCompare<cmpOp>(dst0, src0Tile, src1Tile);

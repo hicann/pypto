@@ -27,8 +27,8 @@
 
 #include <cmath>
 
-template <typename DATA, typename CMP>
-TILEOP void AtanCalc(DATA dst, DATA src, DATA tmp1, DATA tmp2, CMP cmp)
+template <typename DST, typename SRC, typename TMP1, typename TMP2, typename CMP>
+TILEOP void AtanCalc(DST dst, SRC src, TMP1 tmp1, TMP2 tmp2, CMP cmp)
 {
     constexpr float a[] = {-0.333329409,  0.199887753,  -0.141718030,  0.105184801,
                            -0.0725297481, 0.0398497507, -0.0143969795, 0.00245002890};
@@ -98,7 +98,7 @@ TILEOP void TAtan(DST dst, TMP tmp, SRC src)
     auto cmpSize = (dstShape[DIM_5TH] + NUM_8 - 1) / NUM_8;
     using CmpTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, 1, cmpTileW, pto::BLayout::RowMajor, -1, -1>;
     auto dstTile = PtoTile<DST>(dst);
-    auto srcTile = PtoTile<SRC>(src);
+    auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
     auto tmp1Tile = PtoTile<DST>(dst);
     auto tmp2Tile = PtoTile<DST>(dst);
     CmpTileDefine cmpTile(dstShape[DIM_4TH], cmpSize);
@@ -107,14 +107,14 @@ TILEOP void TAtan(DST dst, TMP tmp, SRC src)
             for (LoopVar n2Index = 0; n2Index < dstShape[DIM_3RD]; ++n2Index) {
                 auto dstOffset = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, dstOffset);
-                srcTile.Assign(src, dstOffset);
+                AssignElementwiseOperandExecTile(srcExecTile, src, dstOffset);
                 auto tmp1Offset = GenTileOffset(dst, dstOffset) * NUM_3;
                 auto tmp2Offset = tmp1Offset + tileH * tileW;
                 auto cmpOffset = tmp2Offset + tileH * tileW;
                 tmp1Tile.Assign(tmp.GetAddr(), tmp1Offset);
                 tmp2Tile.Assign(tmp.GetAddr(), tmp2Offset);
                 pto::TASSIGN(cmpTile, tmp.GetAddr() + cmpOffset * sizeof(typename DST::Type));
-                AtanCalc(dstTile.Data(), srcTile.Data(), tmp1Tile.Data(), tmp2Tile.Data(), cmpTile);
+                AtanCalc(dstTile.Data(), srcExecTile, tmp1Tile.Data(), tmp2Tile.Data(), cmpTile);
             }
         }
     }
@@ -135,8 +135,8 @@ TILEOP void Atan2Cast(HDST dstH, FSRC srcF, UDST dstU, UTMP tmpU, CMP cmp)
     ATAN_SYNC_V;
 }
 
-template <typename DATA, typename CMP>
-TILEOP void Atan2Sp(DATA dst, DATA src0, DATA src1, DATA tmp1, DATA tmp2, DATA tmp3, CMP cmp)
+template <typename DST, typename SRC0, typename SRC1, typename TMP1, typename TMP2, typename TMP3, typename CMP>
+TILEOP void Atan2Sp(DST dst, SRC0 src0, SRC1 src1, TMP1 tmp1, TMP2 tmp2, TMP3 tmp3, CMP cmp)
 {
     constexpr float pi = 3.14159265358979323;
     constexpr float pi2 = 1.570796326794896619;
@@ -176,8 +176,8 @@ TILEOP void Atan2Sp(DATA dst, DATA src0, DATA src1, DATA tmp1, DATA tmp2, DATA t
     ATAN_SYNC_V;
 }
 
-template <typename DATA, typename CMP>
-TILEOP void Atan2Div(DATA dst, DATA src0, DATA src1, DATA tmp1, DATA tmp2, DATA tmp3, CMP cmp)
+template <typename DST, typename SRC0, typename SRC1, typename TMP1, typename TMP2, typename TMP3, typename CMP>
+TILEOP void Atan2Div(DST dst, SRC0 src0, SRC1 src1, TMP1 tmp1, TMP2 tmp2, TMP3 tmp3, CMP cmp)
 {
     pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(dst, src0, src1);
     pto::TCMP(cmp, src0, src1, pto::CmpMode::NE);
@@ -212,8 +212,8 @@ TILEOP void TAtan2(DST dst, SRC0 src0, SRC1 src1, TMP tmp)
     using UIntTileDefine = pto::Tile<pto::TileType::Vec, uint16_t, tileH, b2TileW, pto::BLayout::RowMajor, -1, -1>;
     using HalfTileDefine = pto::Tile<pto::TileType::Vec, half, tileH, b2TileW, pto::BLayout::RowMajor, -1, -1>;
     auto dstTile = PtoTile<DST>(dst);
-    auto src0Tile = PtoTile<SRC0>(src0);
-    auto src1Tile = PtoTile<SRC1>(src1);
+    auto src0ExecTile = MakeElementwiseOperandExecTile(dst, src0);
+    auto src1ExecTile = MakeElementwiseOperandExecTile(dst, src1);
     auto tmp1Tile = PtoTile<DST>(dst);
     auto tmp2Tile = PtoTile<DST>(dst);
     auto tmp3Tile = PtoTile<DST>(dst);
@@ -226,8 +226,8 @@ TILEOP void TAtan2(DST dst, SRC0 src0, SRC1 src1, TMP tmp)
             for (LoopVar n2Index = 0; n2Index < dstShape[DIM_3RD]; ++n2Index) {
                 auto dstOffset = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, dstOffset);
-                src0Tile.Assign(src0, dstOffset);
-                src1Tile.Assign(src1, dstOffset);
+                AssignElementwiseOperandExecTile(src0ExecTile, src0, dstOffset);
+                AssignElementwiseOperandExecTile(src1ExecTile, src1, dstOffset);
                 auto tileOffset = GenTileOffset(dst, dstOffset);
                 pto::TASSIGN(dstUIntTile, dst.GetAddr() + tileOffset * dstDtypeSize);
                 pto::TASSIGN(dstHalfTile, dst.GetAddr() + tileOffset * dstDtypeSize);
@@ -240,12 +240,12 @@ TILEOP void TAtan2(DST dst, SRC0 src0, SRC1 src1, TMP tmp)
                 tmp3Tile.Assign(tmp.GetAddr(), tmp3Offset);
                 pto::TASSIGN(tmp2UIntTile, tmp.GetAddr() + tmp2Offset * dstDtypeSize);
                 pto::TASSIGN(cmpTile, tmp.GetAddr() + cmpOffset * dstDtypeSize);
-                Atan2Div(dstTile.Data(), src0Tile.Data(), src1Tile.Data(), tmp1Tile.Data(), tmp2Tile.Data(),
-                         tmp3Tile.Data(), cmpTile);
+                Atan2Div(dstTile.Data(), src0ExecTile, src1ExecTile, tmp1Tile.Data(), tmp2Tile.Data(), tmp3Tile.Data(),
+                         cmpTile);
                 AtanCalc(tmp1Tile.Data(), dstTile.Data(), tmp2Tile.Data(), tmp3Tile.Data(), cmpTile);
-                Atan2Cast(dstHalfTile, src0Tile.Data(), dstUIntTile, tmp2UIntTile, cmpTile);
-                Atan2Sp(dstTile.Data(), src0Tile.Data(), src1Tile.Data(), tmp1Tile.Data(), tmp2Tile.Data(),
-                        tmp3Tile.Data(), cmpTile);
+                Atan2Cast(dstHalfTile, src0ExecTile, dstUIntTile, tmp2UIntTile, cmpTile);
+                Atan2Sp(dstTile.Data(), src0ExecTile, src1ExecTile, tmp1Tile.Data(), tmp2Tile.Data(), tmp3Tile.Data(),
+                        cmpTile);
             }
         }
     }

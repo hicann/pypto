@@ -42,6 +42,8 @@ TILEOP void TCast(T0 dst, T1 src, T2 tmp)
     auto shape2 = dstLayout.template GetShapeDim<2, expectSize>();
     auto shape3 = dstLayout.template GetShapeDim<3, expectSize>();
     auto shape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, expectSize>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, expectSize>(dst, src);
     if (shape0 == 0 || shape1 == 0 || shape2 == 0 || shape3 == 0 || shape4 == 0) {
         return;
     }
@@ -53,8 +55,9 @@ TILEOP void TCast(T0 dst, T1 src, T2 tmp)
     auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
     constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, 5>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
+    using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
+    constexpr auto srcTileH = SrcExecConfig::tileH;
+    constexpr auto srcTileW = SrcExecConfig::tileW;
     constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T2, 3, 5>();
     constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
@@ -66,8 +69,8 @@ TILEOP void TCast(T0 dst, T1 src, T2 tmp)
     using DstDtype = std::conditional_t<std::is_same_v<typename T0::Type, bool>, uint8_t, typename T0::Type>;
     constexpr auto dstValidH = GetValidHeight<T0, false>();
     constexpr auto dstValidW = GetValidWidth<T0>();
-    constexpr auto srcValidH = GetValidHeight<T1, false>();
-    constexpr auto srcValidW = GetValidWidth<T1>();
+    constexpr auto srcValidH = SrcExecConfig::validH;
+    constexpr auto srcValidW = SrcExecConfig::validW;
     constexpr auto tmpValidH = GetValidHeight<T2, false>();
     constexpr auto tmpValidW = GetValidWidth<T2>();
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
@@ -83,7 +86,7 @@ TILEOP void TCast(T0 dst, T1 src, T2 tmp)
                 TileDefineSrc srcTile;
                 TmpTile tmpTile;
                 INIT_TILE(dstTile, TileDefineDst, dstValidH, dstValidW, shape3, shape4)
-                INIT_TILE(srcTile, TileDefineSrc, srcValidH, srcValidW, shape3, shape4)
+                INIT_TILE(srcTile, TileDefineSrc, srcValidH, srcValidW, srcExecShape3, srcExecShape4)
                 INIT_TILE(tmpTile, TmpTile, tmpValidH, tmpValidW, shape3, shape4)
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
@@ -109,6 +112,8 @@ TILEOP void TCast(T0 dst, T1 src)
     auto shape2 = dstLayout.template GetShapeDim<2, expectSize>();
     auto shape3 = dstLayout.template GetShapeDim<3, expectSize>();
     auto shape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, expectSize>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, expectSize>(dst, src);
     if (shape0 == 0 || shape1 == 0 || shape2 == 0 || shape3 == 0 || shape4 == 0) {
         return;
     }
@@ -120,8 +125,9 @@ TILEOP void TCast(T0 dst, T1 src)
     auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
     constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, 5>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
+    using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
+    constexpr auto srcTileH = SrcExecConfig::tileH;
+    constexpr auto srcTileW = SrcExecConfig::tileW;
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
@@ -130,8 +136,8 @@ TILEOP void TCast(T0 dst, T1 src)
     using DstDtype = std::conditional_t<std::is_same_v<typename T0::Type, bool>, uint8_t, typename T0::Type>;
     constexpr auto dstValidH = GetValidHeight<T0, false>();
     constexpr auto dstValidW = GetValidWidth<T0>();
-    constexpr auto srcValidH = GetValidHeight<T1, false>();
-    constexpr auto srcValidW = GetValidWidth<T1>();
+    constexpr auto srcValidH = SrcExecConfig::validH;
+    constexpr auto srcValidW = SrcExecConfig::validW;
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
@@ -142,7 +148,7 @@ TILEOP void TCast(T0 dst, T1 src)
                 TileDefineDst dstTile;
                 TileDefineSrc srcTile;
                 INIT_TILE(dstTile, TileDefineDst, dstValidH, dstValidW, shape3, shape4)
-                INIT_TILE(srcTile, TileDefineSrc, srcValidH, srcValidW, shape3, shape4)
+                INIT_TILE(srcTile, TileDefineSrc, srcValidH, srcValidW, srcExecShape3, srcExecShape4)
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
