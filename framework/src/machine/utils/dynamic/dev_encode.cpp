@@ -369,11 +369,11 @@ void DevAscendFunction::InitRawTensorAndMemoryRequirement(
         }
         for (size_t idx = 0; idx < rawList.size(); idx++) {
             const auto& rawTensor = rawList[idx];
+            auto& encoded = *GetRawTensor(idx);
+            encoded.rawMagic = rawTensor->GetRawMagic();
             if (rawTensor->actualRawmagic != -1 && rawTensor->actualRawmagic != rawTensor->rawmagic) {
                 continue;
             }
-            auto& encoded = *GetRawTensor(idx);
-            encoded.rawMagic = rawTensor->GetRawMagic();
             if (incastRawList.count(rawTensor)) {
                 // No need to allocate memory for root incasts
                 encoded.ioProperty = DevIOProperty::ROOT_INCAST;
