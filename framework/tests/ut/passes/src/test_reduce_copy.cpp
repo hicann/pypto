@@ -20,7 +20,9 @@
 #include "tilefwk/tilefwk_op.h"
 #include "tilefwk/platform.h"
 #include "interface/function/function.h"
+#define private public
 #include "passes/tile_graph_pass/graph_partition/reduce_copy.h"
+#undef private
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
@@ -424,6 +426,70 @@ TEST_F(ReduceCopyTest, OutputStageBypassMergesAllSinks)
     EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
     const int Num1 = 1;
     EXPECT_EQ(function->GetTotalSubGraphCount(), Num1);
+}
+
+// ============================================================================
+// MixGraphMerger 缓存优化 UT
+
+static MergeInput BuildSimpleMergeInput(int numSubgraph, const std::vector<std::set<int>>& outGraph,
+                                        const std::vector<std::vector<int>>& groups)
+{
+    MergeInput input;
+    input.numSubgraph = numSubgraph;
+    input.maxLatency = 1e7;
+    input.aivRatio = {1e-6, 1e6};
+    input.subgraphAICLatency.assign(numSubgraph, 50);
+    input.subgraphAIVLatency.assign(numSubgraph, 50);
+    input.subGraphOutGraph = outGraph;
+    input.mergeGroup = groups;
+    input.isEnforceMergeGroup.assign(groups.size(), true);
+    input.isValidMergeGroup.assign(groups.size(), true);
+    return input;
+}
+
+// 两对独立子图 0->1, 2->3, 强制合并 {0,1} 和 {2,3}
+// 验证 ApplyMergeToGraph 在 UnionSets 之后用 FindParent 获取正确 root, 增量更新缓存图
+TEST_F(ReduceCopyTest, MixGraphMerger_ApplyMergeToGraphUpdatesCache)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {3}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1}, {2, 3}});
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 2);
+    EXPECT_EQ(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_EQ(output.subgraphIdUpdated[2], output.subgraphIdUpdated[3]);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[2]);
+}
+
+// 0->1->2, 0->3, 强制合并 {0,2}(因成环被拒) 然后 {0,1}(成功)
+// 验证 CanMergeWithoutCycle 被拒后 save/restore 正确恢复缓存, 随后 {0,1} 合并成功
+TEST_F(ReduceCopyTest, MixGraphMerger_CacheRestoreAfterRejection)
+{
+    std::vector<std::set<int>> outGraph{{1, 3}, {2}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 2}, {0, 1}});
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    const int Num2 = 2;
+    EXPECT_EQ(output.numSubgraphUpdated, Num2);
+    EXPECT_EQ(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_EQ(output.subgraphIdUpdated[1], output.subgraphIdUpdated[2]);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[3]);
+}
+
+// 经历多轮「合并-拒绝-合并」后, 直接对比缓存图与 BuildMergedGraph 全量重建结果
+// 守护「增量更新 ≡ 全量重建」这一核心不变量
+TEST_F(ReduceCopyTest, MixGraphMerger_CacheConsistentWithFullRebuild)
+{
+    std::vector<std::set<int>> outGraph{{1, 3}, {2}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 2}, {0, 1}});
+    MixGraphMerger merger;
+    merger.Merge(input);
+    std::vector<std::set<int>> freshOut, freshIn;
+    merger.BuildMergedGraph(freshOut, freshIn);
+    for (int i = 0; i < input.numSubgraph; i++) {
+        EXPECT_EQ(merger.mCachedOutGraph[i], freshOut[i]) << "outGraph mismatch at node " << i;
+        EXPECT_EQ(merger.mCachedInGraph[i], freshIn[i]) << "inGraph mismatch at node " << i;
+    }
 }
 
 } // namespace tile_fwk

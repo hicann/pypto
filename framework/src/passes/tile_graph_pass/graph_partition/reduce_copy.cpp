@@ -456,6 +456,7 @@ void MixGraphMerger::Initialize(const MergeInput& input)
         mOutput.subgraphIdUpdated[i] = i;
     }
     InitBoundaryTensorIndex();
+    BuildMergedGraph(mCachedOutGraph, mCachedInGraph);
 }
 
 void MixGraphMerger::InitBoundaryTensorIndex()
@@ -540,8 +541,10 @@ void MixGraphMerger::BuildMergedGraph(std::vector<std::set<int>>& outGraph, std:
 bool MixGraphMerger::HasCycle(const std::vector<std::set<int>>& outGraph, const std::vector<std::set<int>>& inGraph)
 {
     int n = mInput.numSubgraph;
-    std::vector<int> inDegree(n, 0);
-    std::vector<bool> isRoot(n, false);
+    mInDegreeBuf.assign(n, 0);
+    mIsRootBuf.assign(n, false);
+    std::vector<int>& inDegree = mInDegreeBuf;
+    std::vector<bool>& isRoot = mIsRootBuf;
     int rootCount = 0;
     for (int i = 0; i < n; ++i) {
         if (FindParent(i) == i) {
@@ -550,7 +553,8 @@ bool MixGraphMerger::HasCycle(const std::vector<std::set<int>>& outGraph, const 
             rootCount++;
         }
     }
-    std::queue<int> q;
+    mQueueBuf = {};
+    std::queue<int>& q = mQueueBuf;
     int count = 0;
     for (int i = 0; i < n; ++i) {
         if (isRoot[i] && inDegree[i] == 0) {
@@ -578,28 +582,33 @@ bool MixGraphMerger::CanMergeWithoutCycle(const std::vector<int>& actualGroup)
     if (actualGroup.size() <= 1) {
         return false;
     }
-    std::vector<std::set<int>> inGraph;
-    std::vector<std::set<int>> outGraph;
-    BuildMergedGraph(outGraph, inGraph);
     int root = actualGroup[0];
     std::set<int> del(actualGroup.begin() + 1, actualGroup.end());
+    std::unordered_set<int> affectedNodes;
+    affectedNodes.insert(root);
     for (int d : del) {
-        for (int u : inGraph[d]) {
-            outGraph[u].erase(d);
-            outGraph[u].insert(root);
+        affectedNodes.insert(d);
+        for (int u : mCachedInGraph[d]) {
+            affectedNodes.insert(u);
         }
-        for (int v : outGraph[d]) {
-            inGraph[v].erase(d);
-            inGraph[v].insert(root);
+        for (int v : mCachedOutGraph[d]) {
+            affectedNodes.insert(v);
         }
-        inGraph[root].insert(inGraph[d].begin(), inGraph[d].end());
-        outGraph[root].insert(outGraph[d].begin(), outGraph[d].end());
-        inGraph[d].clear();
-        outGraph[d].clear();
     }
-    inGraph[root].erase(root);
-    outGraph[root].erase(root);
-    if (HasCycle(outGraph, inGraph)) {
+    std::unordered_map<int, std::set<int>> savedOut, savedIn;
+    for (int node : affectedNodes) {
+        savedOut[node] = mCachedOutGraph[node];
+        savedIn[node] = mCachedInGraph[node];
+    }
+    MergeNodesInCachedGraph(root, del);
+    bool hasCycle = HasCycle(mCachedOutGraph, mCachedInGraph);
+    for (auto& kv : savedOut) {
+        mCachedOutGraph[kv.first] = std::move(kv.second);
+    }
+    for (auto& kv : savedIn) {
+        mCachedInGraph[kv.first] = std::move(kv.second);
+    }
+    if (hasCycle) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Merge skipped: detect cycle.");
         return false;
     }
@@ -858,7 +867,43 @@ void MixGraphMerger::PerformMerge(const std::vector<int>& actualGroup)
     for (size_t i = 1; i < actualGroup.size(); ++i) {
         UnionSets(root, actualGroup[i]);
     }
+    ApplyMergeToGraph(actualGroup);
     UpdateBoundaryTensorIndex(actualGroup);
+}
+
+void MixGraphMerger::ApplyMergeToGraph(const std::vector<int>& actualGroup)
+{
+    if (actualGroup.size() <= 1) {
+        return;
+    }
+    int root = FindParent(actualGroup[0]);
+    std::set<int> del;
+    for (int d : actualGroup) {
+        if (d != root) {
+            del.insert(d);
+        }
+    }
+    MergeNodesInCachedGraph(root, del);
+}
+
+void MixGraphMerger::MergeNodesInCachedGraph(int root, const std::set<int>& del)
+{
+    for (int d : del) {
+        for (int u : mCachedInGraph[d]) {
+            mCachedOutGraph[u].erase(d);
+            mCachedOutGraph[u].insert(root);
+        }
+        for (int v : mCachedOutGraph[d]) {
+            mCachedInGraph[v].erase(d);
+            mCachedInGraph[v].insert(root);
+        }
+        mCachedInGraph[root].insert(mCachedInGraph[d].begin(), mCachedInGraph[d].end());
+        mCachedOutGraph[root].insert(mCachedOutGraph[d].begin(), mCachedOutGraph[d].end());
+        mCachedInGraph[d].clear();
+        mCachedOutGraph[d].clear();
+    }
+    mCachedInGraph[root].erase(root);
+    mCachedOutGraph[root].erase(root);
 }
 
 void MixGraphMerger::UpdateOutput()

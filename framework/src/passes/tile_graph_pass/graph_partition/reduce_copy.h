@@ -72,6 +72,13 @@ private:
     std::vector<int> mTensorVisitStamp;
     int mVisitStamp{0};
     std::unordered_set<int> mGlobalOutputSinks; // 出度0子图: 不作为任何 boundary tensor producer, 即最终输出端点
+    // cached merged graph (avoid redundant rebuild in CanMergeWithoutCycle)
+    std::vector<std::set<int>> mCachedOutGraph;
+    std::vector<std::set<int>> mCachedInGraph;
+    // HasCycle scratch buffers (avoid per-call reallocation)
+    std::vector<int> mInDegreeBuf;
+    std::vector<bool> mIsRootBuf;
+    std::queue<int> mQueueBuf;
 
     void Initialize(const MergeInput& input);
     void InitBoundaryTensorIndex();
@@ -81,6 +88,8 @@ private:
     bool CanMergeWithConstraints(const std::vector<int>& actualGroup);
     void PerformMerge(const std::vector<int>& actualGroup);
     void UpdateBoundaryTensorIndex(const std::vector<int>& actualGroup);
+    void ApplyMergeToGraph(const std::vector<int>& actualGroup);
+    void MergeNodesInCachedGraph(int root, const std::set<int>& del);
     void UpdateOutput();
     bool CheckLatencyConstraint(const std::vector<int>& actualGroup);
     bool CheckMergeBenefitByStructuralPattern(const std::vector<int>& actualGroup);
