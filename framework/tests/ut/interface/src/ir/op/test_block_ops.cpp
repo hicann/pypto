@@ -366,6 +366,60 @@ TEST_F(BlockOpsStructTest, StructSet_NonTupleBase_Throws)
                  npu::tile_fwk::Error);
 }
 
+TEST_F(BlockOpsStructTest, StructSet_WithIndex_ReturnsTupleType)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto array_type = std::make_shared<TupleType>(std::vector<TypePtr>{
+        std::make_shared<ScalarType>(DataType::INT64),
+        std::make_shared<ScalarType>(DataType::INT64),
+        std::make_shared<ScalarType>(DataType::INT64),
+        std::make_shared<ScalarType>(DataType::INT64),
+    });
+    auto struct_type = std::make_shared<TupleType>(std::vector<TypePtr>{
+        std::make_shared<ScalarType>(DataType::INT64),
+        array_type,
+    });
+    auto base = std::make_shared<Var>("state", struct_type, Sp());
+    auto index = std::make_shared<Var>("idx", std::make_shared<ScalarType>(DataType::INDEX), Sp());
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"field", std::string("arr")}};
+    auto call = reg.Create("struct.set", {base, index, MakeScalarVar("val", DataType::INT64)}, kwargs, Sp());
+    auto rt = As<TupleType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->types_.size(), 2u);
+}
+
+TEST_F(BlockOpsStructTest, StructSet_WithIndex_WrongArgCount_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto struct_type = std::make_shared<TupleType>(std::vector<TypePtr>{
+        std::make_shared<ScalarType>(DataType::INT64),
+    });
+    auto base = std::make_shared<Var>("state", struct_type, Sp());
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"field", std::string("f")}};
+    EXPECT_THROW((void)reg.Create("struct.set",
+                                  {base, MakeScalarVar("a", DataType::INT64), MakeScalarVar("b", DataType::INT64),
+                                   MakeScalarVar("c", DataType::INT64)},
+                                  kwargs, Sp()),
+                 npu::tile_fwk::Error);
+}
+
+TEST_F(BlockOpsStructTest, StructSet_WithIndex_NullIndex_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto array_type = std::make_shared<TupleType>(std::vector<TypePtr>{
+        std::make_shared<ScalarType>(DataType::INT64),
+        std::make_shared<ScalarType>(DataType::INT64),
+    });
+    auto struct_type = std::make_shared<TupleType>(std::vector<TypePtr>{
+        std::make_shared<ScalarType>(DataType::INT64),
+        array_type,
+    });
+    auto base = std::make_shared<Var>("state", struct_type, Sp());
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"field", std::string("arr")}};
+    EXPECT_THROW((void)reg.Create("struct.set", {base, nullptr, MakeScalarVar("val", DataType::INT64)}, kwargs, Sp()),
+                 npu::tile_fwk::Error);
+}
+
 // ============================================================================
 // out_elementwise.cpp: Tile x Tile binary ops
 // ============================================================================

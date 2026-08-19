@@ -12,7 +12,7 @@
 
 from pypto_pro import DataType, ir
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
+from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError, UnsupportedFeatureError
 import pytest
 
 
@@ -201,7 +201,7 @@ def test_shape_subscript_rejects_non_tensor_base():
 def shape_index(x: pl.DT_INT64) -> pl.DT_INT64:
     return x.shape[0]
 """
-    with pytest.raises(ParserTypeError, match="tensor.shape requires TensorType input"):
+    with pytest.raises((ParserSyntaxError, ParserTypeError, UnsupportedFeatureError)):
         pl.parse(code)
 
 

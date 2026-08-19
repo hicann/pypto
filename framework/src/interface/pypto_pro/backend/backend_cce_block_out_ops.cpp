@@ -2143,11 +2143,31 @@ REGISTER_BACKEND_OP(BackendCCE, "struct.create")
         for (size_t i = 0; i < fields.size(); ++i) {
             if (i)
                 init += ", ";
-            std::string value = codegen.GetExprAsCode(op->args_[i]);
-            if (ir::As<ir::ScalarType>(tuple_type->types_[i])) {
-                value = "static_cast<" + codegen.GetStructFieldTypeString(tuple_type->types_[i]) + ">(" + value + ")";
+            init += "." + fields[i] + "=";
+            // Array field: arg is a MakeTuple → emit brace-enclosed initializer {v0, v1, ...}
+            auto mt = ir::As<ir::MakeTuple>(op->args_[i]);
+            if (mt) {
+                auto arr_type = ir::As<ir::TupleType>(tuple_type->types_[i]);
+                init += "{";
+                for (size_t j = 0; j < mt->elements_.size(); ++j) {
+                    if (j)
+                        init += ", ";
+                    std::string elem = codegen.GetExprAsCode(mt->elements_[j]);
+                    if (arr_type && ir::As<ir::ScalarType>(arr_type->types_[0])) {
+                        elem = "static_cast<" + codegen.GetStructFieldTypeString(arr_type->types_[0]) + ">(" + elem +
+                               ")";
+                    }
+                    init += elem;
+                }
+                init += "}";
+            } else {
+                std::string value = codegen.GetExprAsCode(op->args_[i]);
+                if (ir::As<ir::ScalarType>(tuple_type->types_[i])) {
+                    value = "static_cast<" + codegen.GetStructFieldTypeString(tuple_type->types_[i]) + ">(" + value +
+                            ")";
+                }
+                init += value;
             }
-            init += "." + fields[i] + "=" + value;
         }
         init += "};";
         codegen.Emit(init);
@@ -2160,12 +2180,19 @@ REGISTER_BACKEND_OP(BackendCCE, "struct.set")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) -> std::string {
         auto& cg = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-        INTERNAL_CHECK(op->args_.size() == 2) << "struct.set expects 2 args (base, value)";
+        INTERNAL_CHECK(op->args_.size() == 2 || op->args_.size() == 3)
+            << "struct.set expects 2 args (base, value) or 3 args (base, index, value)";
         CHECK(op->HasKwarg("field")) << "struct.set missing 'field' kwarg";
         std::string field = op->GetKwarg<std::string>("field");
         std::string base_code = cg.GetExprAsCode(op->args_[0]);
-        std::string value_code = cg.GetExprAsCode(op->args_[1]);
-        cg.Emit(base_code + "." + field + " = " + value_code + ";");
+        if (op->args_.size() == 3) {
+            std::string index_code = cg.GetExprAsCode(op->args_[1]);
+            std::string value_code = cg.GetExprAsCode(op->args_[2]);
+            cg.Emit(base_code + "." + field + "[" + index_code + "] = " + value_code + ";");
+        } else {
+            std::string value_code = cg.GetExprAsCode(op->args_[1]);
+            cg.Emit(base_code + "." + field + " = " + value_code + ";");
+        }
         return "";
     });
 

@@ -792,13 +792,19 @@ class ExpressionParserMixin:
         """Lower attribute read ``base.field`` to ``GetItemExpr(base, index)``.
 
         Resolves the field index from the base's named TupleType and records the
-        type's field names in ``IRDebugInfo``. Returns None if ``base`` is not a
-        named tuple or has no such field (caller keeps its own error handling).
+        type's field names in ``IRDebugInfo``. When *base* is a parse-time
+        constant ``MakeTuple`` (never for struct_array, whose elements are
+        mutable structs with backing-array alias semantics), constant-folds the
+        read to the static element instead of emitting a ``GetItemExpr``.
+        Returns None if ``base`` is not a named tuple or has no such field
+        (caller keeps its own error handling).
         """
         fields = self.named_fields(base)
         if not fields or field_name not in fields:
             return None
         idx = fields.index(field_name)
+        if isinstance(base, ir.MakeTuple) and not self._is_struct_array_tuple(base):
+            return base.elements[idx]
         return ir.GetItemExpr(base, ir.ConstInt(idx, DataType.INDEX, span), span)
 
     def parse_attribute(self, attr: ast.Attribute) -> ir.Expr:
@@ -812,33 +818,18 @@ class ExpressionParserMixin:
         """
         span = self.span_tracker.get_span(attr)
 
-        if attr.attr == "shape":
-            base_expr = self.parse_expression(attr.value)
-            if isinstance(base_expr, ir.Expr) and isinstance(base_expr.type, ir.TensorType):
-                return ir.MakeTuple(list(base_expr.type.shape), span)
-            if isinstance(base_expr, ir.Expr):
-                lowered = self.lower_attr_access(base_expr, attr.attr, span)
-                if lowered is not None:
-                    return lowered
-            raise ParserTypeError(
-                "tensor.shape requires TensorType input",
-                span=span,
-                hint="Use tensor.shape only on Tensor values",
-            )
-
         if isinstance(attr.value, ast.Name):
             obj_name = attr.value.id
             field_name = attr.attr
 
-            # If the scope variable's static IR type is a named tuple
-            # (TupleType with dbg_name), lower to GetItemExpr(base, index).
+            # Scope holds the let-bound Var; the original MakeTuple (if any)
+            # lives in const_env. Fold the const MakeTuple read first, then
+            # fall back to the runtime Var for a GetItemExpr lowering.
             obj_expr = self.scope_manager.lookup_var_bounded(obj_name)
             if isinstance(obj_expr, ir.Expr):
                 const_obj = self.const_env.get(obj_name)
                 if isinstance(const_obj, ir.MakeTuple) and not self._is_struct_array_tuple(const_obj):
-                    fields = self.named_fields(const_obj)
-                    if field_name in fields:
-                        return const_obj.elements[fields.index(field_name)]
+                    obj_expr = const_obj
                 lowered = self.lower_attr_access(obj_expr, field_name, span)
                 if lowered is not None:
                     return lowered
@@ -855,10 +846,22 @@ class ExpressionParserMixin:
         if success and _is_enum_value(val):
             return val
 
+        # Attribute access on a parsed base (e.g. arr[0].field, arr[i].field, or
+        # x.shape on a Tensor): Tensor.shape yields its shape MakeTuple; any other
+        # base lowers through the named-field lookup.
+        base_expr = self.parse_expression(attr.value)
+        if attr.attr == "shape" and isinstance(base_expr, ir.Expr) and isinstance(base_expr.type, ir.TensorType):
+            return ir.MakeTuple(list(base_expr.type.shape), span)
+        if isinstance(base_expr, ir.Expr):
+            lowered = self.lower_attr_access(base_expr, attr.attr, span)
+            if lowered is not None:
+                return lowered
+
         raise UnsupportedFeatureError(
             f"Standalone attribute access not supported: {ast.unparse(attr)}",
             span=span,
-            hint="Attribute access is only supported for tiling parameters (e.g., tiling.x) or within function calls",
+            hint="Attribute access is supported on named tuples, structs, Tensor values (tensor.shape), "
+            "tiling parameters, or enum constants",
         )
 
     def parse_list(self, list_node: ast.List) -> ir.MakeTuple:
@@ -1457,7 +1460,7 @@ class ExpressionParserMixin:
         return value
 
     def _route_ir_node_method(self, node: ast.Call):
-        """Route ``xxx.f(...)`` to an op func when ``xxx`` is an IR node.
+        """Route ``xxx.f(...)`` to an op func when ``xxx`` is a tile-group handle.
 
         Tile-group handle: next/current/previous (each returns a bare tile).
         Returns the IR result, or None when not routed.
@@ -1465,10 +1468,9 @@ class ExpressionParserMixin:
         if not isinstance(node.func, ast.Attribute):
             return None
         method = node.func.attr
-        span = self.span_tracker.get_span(node)
-        if not isinstance(node.func.value, ast.Name):
+        if method not in ("next", "current", "previous"):
             return None
-        obj = self.scope_manager.lookup_var_bounded(node.func.value.id)
-        if self.is_tile_group(obj) and method in ("next", "current", "previous"):
-            return self._lower_group_accessor(obj, method, span)
+        obj = self.parse_expression(node.func.value)
+        if isinstance(obj, ir.Expr) and self.is_tile_group(obj):
+            return self._lower_group_accessor(obj, method, self.span_tracker.get_span(node))
         return None

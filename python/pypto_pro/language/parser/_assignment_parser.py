@@ -378,10 +378,90 @@ class AssignmentParserMixin:
                 f"Right-hand side of '{ast.unparse(target)}' must be an IR expression",
                 span=span,
             )
+        field_idx = fields.index(field_name)
+        field_type = base.type.types[field_idx]
+        if isinstance(field_type, ir.TupleType) and isinstance(value_expr, ir.MakeTuple):
+            arr_len = len(field_type.types)
+            val_len = len(value_expr.elements)
+            if val_len != arr_len:
+                raise ParserSyntaxError(
+                    f"Array field '{field_name}' expects {arr_len} elements, got {val_len}",
+                    span=span,
+                )
+            for j in range(val_len):
+                idx_const = ir.ConstInt(j, DataType.INDEX, span)
+                call = ir.create_op_call(
+                    "struct.set", [base, idx_const, value_expr.elements[j]],
+                    {"field": field_name}, span,
+                )
+                self.builder.emit(ir.EvalStmt(call, span))
+            return
         call = ir.create_op_call("struct.set", [base, value_expr], {"field": field_name}, span)
         self.builder.emit(ir.EvalStmt(call, span))
 
     def _parse_subscript_assignment(self, target: ast.Subscript, stmt: ast.Assign, span: ir.Span) -> None:
+        value_expr = self.parse_expression(stmt.value, nested=False)
+        if not isinstance(value_expr, ir.Expr):
+            raise ParserTypeError(
+                "Right-hand side of subscript assignment must be an IR expression",
+                span=span,
+            )
+        # Struct (or struct_array element) array-field element write:
+        # base.field[idx] = val, e.g. s.arr[i] = v or a[i].b[j] = v.
+        if isinstance(target.value, ast.Attribute):
+            base = self.parse_expression(target.value.value)
+            field_name = target.value.attr
+            fields = self.named_fields(base)
+            if fields:
+                if self.debug_info.get_tuple_name(base.type) is None:
+                    raise ParserSyntaxError(
+                        f"Cannot assign to immutable named tuple field '{ast.unparse(target)}'",
+                        span=span,
+                        hint="Use pl.struct() or pl.struct_array() for mutable fields.",
+                    )
+                if field_name not in fields:
+                    raise ParserTypeError(
+                        f"Struct has no field '{field_name}'",
+                        span=span,
+                    )
+                field_idx = fields.index(field_name)
+                field_type = base.type.types[field_idx]
+                # An array field is a nested TupleType that carries no struct type
+                # name in IRDebugInfo; a nested struct field is also a TupleType but
+                # registers its C++ name at creation. Only the former is subscript
+                # writable — subscripting the latter would emit a bogus struct.set.
+                is_array_field = (
+                    isinstance(field_type, ir.TupleType)
+                    and self.debug_info.get_tuple_name(field_type) is None
+                )
+                if not is_array_field:
+                    raise ParserTypeError(
+                        f"Cannot subscript struct field '{field_name}': field is not an array",
+                        span=span,
+                        hint="Only array fields (e.g. field=[0, 0, 0, 0]) support element assignment",
+                    )
+                # Single scalar index only; mirror the read path's tuple-subscript rules.
+                if isinstance(target.slice, ast.Tuple):
+                    raise ParserSyntaxError(
+                        "Multi-dimensional subscript is not supported for struct array fields",
+                        span=span,
+                        hint="Use a scalar index like s.arr[0]",
+                    )
+                index_expr = self.parse_expression(target.slice)
+                if isinstance(index_expr, ir.ConstInt) and not (
+                    0 <= index_expr.value < len(field_type.types)
+                ):
+                    raise ParserSyntaxError(
+                        f"Array field '{field_name}' index {index_expr.value} out of bounds "
+                        f"for {len(field_type.types)} elements",
+                        span=span,
+                    )
+                call = ir.create_op_call(
+                    "struct.set", [base, index_expr, value_expr], {"field": field_name}, span,
+                )
+                self.builder.emit(ir.EvalStmt(call, span))
+                return
+
         container_expr = self.parse_expression(target.value)
         container_type = container_expr.type
         if not isinstance(container_type, (ir.TileType, ir.TensorType)):
@@ -391,12 +471,6 @@ class AssignmentParserMixin:
                 hint="Only Tile and Tensor support element assignment via A[i] = v",
             )
         index_expr = self._parse_scalar_subscript_index(container_expr, target.slice, span)
-        value_expr = self.parse_expression(stmt.value, nested=False)
-        if not isinstance(value_expr, ir.Expr):
-            raise ParserTypeError(
-                "Right-hand side of subscript assignment must be an IR expression",
-                span=span,
-            )
         from pypto_pro.ir.op.block_ops import _ir_setval
         setval_call = _ir_setval(container_expr, index_expr, value_expr, span=span)
         mutex_locked = False

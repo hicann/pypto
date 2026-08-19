@@ -2472,22 +2472,14 @@ std::string CCECodegen::FormatAddressHex(int64_t addr)
 namespace {
 
 // Map an IR field type to a best-effort C++ type string for struct member declaration.
-// Only the common cases needed by v1 are covered; uncovered cases fall back to int64_t.
+// Scalar types resolve through DataType::ToCTypeString; an uncovered code is an upstream
+// validation gap and fails loudly instead of emitting a mismatched struct definition.
 std::string CppTypeForField(const ir::TypePtr& t)
 {
     if (auto scalar = ir::As<ir::ScalarType>(t)) {
-        const auto& d = scalar->dtype_;
-        if (d == DataType::INDEX || d == DataType::INT64)
-            return "int64_t";
-        if (d == DataType::INT32)
-            return "int32_t";
-        if (d == DataType::FP32)
-            return "float";
-        if (d == DataType::FP16)
-            return "half";
-        if (d == DataType::BOOL)
-            return "bool";
-        return "int64_t";
+        std::string ctype = scalar->dtype_.ToCTypeString();
+        CHECK(ctype != "unknown") << "Struct field uses unsupported scalar dtype: " << scalar->dtype_.ToString();
+        return ctype;
     }
     if (ir::As<ir::TileType>(t)) {
         // Tile fields are stored as opaque tile references; v1 emits as auto-deduced.

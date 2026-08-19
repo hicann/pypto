@@ -1248,6 +1248,116 @@ TEST(BackendCCEBlockOutOps, StructSet)
     EXPECT_CONTAINS(code, "base.my_field = value;");
 }
 
+TEST(BackendCCEBlockOutOps, StructSet_WithIndex)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto call = MakeCallWithKwargs(
+        "struct.set", {MakeVar("base", scalar_type), MakeVar("idx", scalar_type), MakeVar("value", scalar_type)},
+        {{"field", std::string("arr")}});
+    auto code = RunCodegen("struct.set", call);
+    EXPECT_CONTAINS(code, "base.arr[idx] = value;");
+}
+
+TEST(BackendCCEBlockOutOps, StructCreate_WithArrayField)
+{
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.SetCurrentTargetVar("result");
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto array_type = std::make_shared<const ir::TupleType>(
+        std::vector<ir::TypePtr>{scalar_type, scalar_type, scalar_type, scalar_type});
+    auto tuple_type = std::make_shared<const ir::TupleType>(std::vector<ir::TypePtr>{scalar_type, array_type});
+    auto arr_init = std::make_shared<const ir::MakeTuple>(
+        std::vector<ir::ExprPtr>{MakeConstInt(0), MakeConstInt(0), MakeConstInt(0), MakeConstInt(0)},
+        ir::Span::Unknown());
+    auto call = std::make_shared<const ir::Call>("struct.create", std::vector<ir::ExprPtr>{MakeConstInt(42), arr_init},
+                                                 std::vector<std::pair<std::string, std::any>>{
+                                                     {"name", std::string("MyStruct")},
+                                                     {"fields", std::vector<std::string>{"x", "arr"}},
+                                                 },
+                                                 tuple_type, ir::Span::Unknown());
+    auto* info = BackendCCE::Instance().GetOpInfo("struct.create");
+    ASSERT_NE(info, nullptr);
+    info->codegen_func(call, codegen);
+    auto code = codegen.GetEmittedCode();
+    EXPECT_CONTAINS(code, "MyStruct result = {");
+    EXPECT_CONTAINS(code, ".x=static_cast<int64_t>(42)");
+    EXPECT_CONTAINS(code, ".arr={static_cast<int64_t>(0), static_cast<int64_t>(0), static_cast<int64_t>(0), "
+                          "static_cast<int64_t>(0)}");
+    EXPECT_CONTAINS(code, "};");
+}
+
+TEST(BackendCCEBlockOutOps, StructCreate_MultipleArrayFields)
+{
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.SetCurrentTargetVar("result");
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto array_type_2 = std::make_shared<const ir::TupleType>(std::vector<ir::TypePtr>{scalar_type, scalar_type});
+    auto array_type_4 = std::make_shared<const ir::TupleType>(
+        std::vector<ir::TypePtr>{scalar_type, scalar_type, scalar_type, scalar_type});
+    auto tuple_type = std::make_shared<const ir::TupleType>(std::vector<ir::TypePtr>{array_type_2, array_type_4});
+    auto a_init = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{MakeConstInt(1), MakeConstInt(2)},
+                                                        ir::Span::Unknown());
+    auto b_init = std::make_shared<const ir::MakeTuple>(
+        std::vector<ir::ExprPtr>{MakeConstInt(10), MakeConstInt(20), MakeConstInt(30), MakeConstInt(40)},
+        ir::Span::Unknown());
+    auto call = std::make_shared<const ir::Call>("struct.create", std::vector<ir::ExprPtr>{a_init, b_init},
+                                                 std::vector<std::pair<std::string, std::any>>{
+                                                     {"name", std::string("DualArr")},
+                                                     {"fields", std::vector<std::string>{"a", "b"}},
+                                                 },
+                                                 tuple_type, ir::Span::Unknown());
+    auto* info = BackendCCE::Instance().GetOpInfo("struct.create");
+    ASSERT_NE(info, nullptr);
+    info->codegen_func(call, codegen);
+    auto code = codegen.GetEmittedCode();
+    EXPECT_CONTAINS(code, "DualArr result = {");
+    EXPECT_CONTAINS(code, ".a={static_cast<int64_t>(1), static_cast<int64_t>(2)}");
+    EXPECT_CONTAINS(code, ".b={static_cast<int64_t>(10), static_cast<int64_t>(20), static_cast<int64_t>(30), "
+                          "static_cast<int64_t>(40)}");
+    EXPECT_CONTAINS(code, "};");
+}
+
+TEST(BackendCCEBlockOutOps, StructCreate_MixedScalarArray)
+{
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.SetCurrentTargetVar("result");
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto array_type = std::make_shared<const ir::TupleType>(
+        std::vector<ir::TypePtr>{scalar_type, scalar_type, scalar_type, scalar_type});
+    auto tuple_type = std::make_shared<const ir::TupleType>(
+        std::vector<ir::TypePtr>{scalar_type, array_type, scalar_type});
+    auto arr_init = std::make_shared<const ir::MakeTuple>(
+        std::vector<ir::ExprPtr>{MakeConstInt(0), MakeConstInt(0), MakeConstInt(0), MakeConstInt(0)},
+        ir::Span::Unknown());
+    auto call = std::make_shared<const ir::Call>("struct.create",
+                                                 std::vector<ir::ExprPtr>{MakeConstInt(42), arr_init, MakeConstInt(99)},
+                                                 std::vector<std::pair<std::string, std::any>>{
+                                                     {"name", std::string("Mixed")},
+                                                     {"fields", std::vector<std::string>{"x", "arr", "y"}},
+                                                 },
+                                                 tuple_type, ir::Span::Unknown());
+    auto* info = BackendCCE::Instance().GetOpInfo("struct.create");
+    ASSERT_NE(info, nullptr);
+    info->codegen_func(call, codegen);
+    auto code = codegen.GetEmittedCode();
+    EXPECT_CONTAINS(code, "Mixed result = {");
+    EXPECT_CONTAINS(code, ".x=static_cast<int64_t>(42)");
+    EXPECT_CONTAINS(code, ".arr={static_cast<int64_t>(0), static_cast<int64_t>(0), static_cast<int64_t>(0), "
+                          "static_cast<int64_t>(0)}");
+    EXPECT_CONTAINS(code, ".y=static_cast<int64_t>(99)");
+    EXPECT_CONTAINS(code, "};");
+}
+
+TEST(BackendCCEBlockOutOps, StructSet_WithConstIndex)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto call = MakeCallWithKwargs("struct.set",
+                                   {MakeVar("base", scalar_type), MakeConstInt(2), MakeVar("value", scalar_type)},
+                                   {{"field", std::string("arr")}});
+    auto code = RunCodegen("struct.set", call);
+    EXPECT_CONTAINS(code, "base.arr[2] = value;");
+}
+
 } // namespace
 } // namespace backend
 } // namespace pypto

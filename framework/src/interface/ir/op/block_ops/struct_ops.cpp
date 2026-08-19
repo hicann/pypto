@@ -82,17 +82,23 @@ REGISTER_OP("struct.create")
 
 REGISTER_OP("struct.set")
     .set_op_category("StructOp")
-    .set_description("Statement side-effect call: write one struct field. args are (base, value); kwarg `field` "
-                     "is the C++ field name (same naming convention as struct.create's `fields`). Lowered by the "
-                     "CCE backend to `base.field = value;`. Must be used inside an EvalStmt, not as an RHS value.")
+    .set_description("Statement side-effect call: write one struct field. args are (base, value) for a scalar "
+                     "field or (base, index, value) for an array field element; kwarg `field` is the C++ field "
+                     "name (same naming convention as struct.create's `fields`). Lowered by the CCE backend to "
+                     "`base.field = value;` or `base.field[index] = value;`. Must be used inside an EvalStmt, "
+                     "not as an RHS value.")
     .add_argument("base", "Struct instance (named TupleType)")
-    .add_argument("value", "New field value expression")
+    .add_argument("value", "New field value expression (or index for array field writes)")
     .set_attr<std::string>("field")
     .f_deduce_type([](const std::vector<ExprPtr>& args,
                       const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-        CHECK(args.size() == 2) << "struct.set requires 2 args (base, value), got " << args.size();
+        CHECK(args.size() == 2 || args.size() == 3)
+            << "struct.set requires 2 args (base, value) or 3 args (base, index, value), got " << args.size();
         CHECK(args[0]) << "struct.set: base arg is null";
-        CHECK(args[1]) << "struct.set: value arg is null";
+        if (args.size() == 3) {
+            CHECK(args[1]) << "struct.set: index arg is null";
+        }
+        CHECK(args.back()) << "struct.set: value arg is null";
         bool has_field = false;
         for (const auto& [key, value] : kwargs) {
             if (key == "field") {
