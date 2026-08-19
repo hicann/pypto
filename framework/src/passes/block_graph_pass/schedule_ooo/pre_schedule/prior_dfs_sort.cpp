@@ -203,8 +203,46 @@ Status PriorDFSSort::PriorDFS(const std::unordered_map<Opcode, int>& preNodePrio
             outNodeQueue.emplace_back(operations[i]);
         }
     }
-    std::stable_sort(outNodeQueue.begin(), outNodeQueue.end(),
-                     [&](Operation* a, Operation* b) { return GetMaxDepthSimple(a) > GetMaxDepthSimple(b); });
+
+    // 同源分组：每个出口节点反向溯源到入度=0 的源头，用源头指针做 groupId。
+    // 同源的出口节点排在一起（组内深度降序），DFS 走完一组的主干后立即补同源短分支，
+    // 不会跳到别组。反向溯源取最深的那个前驱（与 GetMaxDepthSimple 方向一致）。
+    std::unordered_map<Operation*, int> sourceGroupId;
+    std::unordered_map<Operation*, int> outNodeGroup;
+    int nextGroupId = 0;
+    for (auto* outNode : outNodeQueue) {
+        Operation* cur = outNode;
+        while (!state_.depManager.GetPredecessors(cur).empty()) {
+            Operation* deepest = nullptr;
+            int maxDepth = -1;
+            for (auto* pred : state_.depManager.GetPredecessors(cur)) {
+                int d = GetMaxDepthSimple(pred);
+                if (d > maxDepth) {
+                    maxDepth = d;
+                    deepest = pred;
+                }
+            }
+            cur = deepest;
+        }
+        auto it = sourceGroupId.find(cur);
+        if (it == sourceGroupId.end()) {
+            sourceGroupId[cur] = nextGroupId;
+            outNodeGroup[outNode] = nextGroupId;
+            ++nextGroupId;
+        } else {
+            outNodeGroup[outNode] = it->second;
+        }
+    }
+
+    // 组优先（同源连续），组内深度降序（长链先走）。
+    std::stable_sort(outNodeQueue.begin(), outNodeQueue.end(), [&](Operation* a, Operation* b) {
+        int ga = outNodeGroup[a];
+        int gb = outNodeGroup[b];
+        if (ga != gb) {
+            return ga < gb;
+        }
+        return GetMaxDepthSimple(a) > GetMaxDepthSimple(b);
+    });
 
     if (DFSFromOutNode(outNodeQueue, preNodePriority, visited) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "DFSFromOutNode failed.");
