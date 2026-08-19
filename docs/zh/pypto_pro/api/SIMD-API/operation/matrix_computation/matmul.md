@@ -41,7 +41,7 @@ pypto_pro.language.matmul(dst_tile, lhs_tile, rhs_tile, bias_tile=None, *, phase
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `dst_tile` | 输出 | 数据类型：FP16、BF16、FP32、INT32（累加器精度通常高于输入，如FP16输入对应FP32累加）<br>shape：`[M, N]`<br>地址配置：<br>• 只能是Acc/L0C内存空间，其他空间报错<br>• `layout=pl.NZ`；FP32/INT32累加器需设`fractal`（FP32默认1024）<br>• 支持通过`valid_shape=[-1, -1]` + `set_validshape`设置尾块有效大小 |
-| `lhs_tile` | 输入 | 数据类型：FP16、BF16、FP32、INT8<br>shape：`[M, K]`<br>地址配置：<br>• 只能是L0A/Left内存空间，其他空间报错<br>• A3默认`layout=pl.ZZ`；A5默认`layout=pl.NZ` |
+| `lhs_tile` | 输入 | 数据类型：FP16、BF16、FP32、INT8、HF8<br>shape：`[M, K]`<br>地址配置：<br>• 只能是L0A/Left内存空间，其他空间报错<br>• A3默认`layout=pl.ZZ`；A5默认`layout=pl.NZ` |
 | `rhs_tile` | 输入 | 数据类型：与`lhs_tile`一致<br>shape：`[K, N]`，K维需与`lhs_tile`的K一致<br>地址配置：<br>• 只能是L0B/Right内存空间，其他空间报错<br>• `layout=pl.ZN` |
 | `bias_tile` | 输入 | 可选，传入时执行`dst = lhs @ rhs + bias`，仅支持作为第4个位置参数传入（`matmul(dst, lhs, rhs, bias)`），不支持`bias_tile=`关键字传参<br>数据类型：FP32（必须与累加器dtype一致，硬件要求`TileRes::DType == TileBias::DType`）<br>shape：`[1, N]`，N维需与`rhs_tile`的N一致，沿M维行广播到`[M, N]`<br>地址配置：<br>• 只能是Bias内存空间（`pl.MemorySpace.Bias`），其他空间报错<br>• bias tile无法直接从GM加载，需先load到L1(Mat) 再`move`到Bias，`move`时自动完成dtype转换（如FP16→FP32、BF16→FP32） |
 | `phase` | 输入 | 可选，K维分块累加时控制fixpipe写回GM的unit_flag：<br>• 不传（默认）：单次乘法，无分块累加<br>• `pl.AccPhase.Partial`：中间累加步，表示后续还有K块<br>• `pl.AccPhase.Final`：最终步，表示K累加结束、可写回GM<br>详见 [`matmul_acc`](matmul_acc.md) 的分块累加用法 |

@@ -126,6 +126,7 @@ def matmul_kernel(a: pl.Tensor[[pl.DYNAMIC, TILE_K], pl.DT_FP16],
 - FP32：A矩阵为16×8，B矩阵为8×16。
 - FP16/BF16：A、B矩阵均为16×16。
 - FP8（E4M3FN/E5M2）：A矩阵为16×32，B矩阵为32×16，累加结果为FP32。
+- HF8：A矩阵为16×32，B矩阵为32×16，累加结果为FP32。
 - INT8：A矩阵为16×32，B矩阵为32×16。
 
 L0C中的结果分形固定为16×16。以FP32/INT32累加结果为例，一个结果分形占用`16 × 16 × 4B = 1024B`，因此需要显式描述硬件分形大小的累加场景使用`fractal=1024`。
@@ -332,7 +333,7 @@ def kernel(...,
 
 | 矩阵 | 存储位置 | 维度 | 数据格式 | 数据类型 |
 |:---|:---|:---|:---|:---|
-| A | L0A Buffer | M × K | Nz | FP16、BF16、FP32、INT8 |
+| A | L0A Buffer | M × K | Nz | FP16、BF16、FP32、INT8、HF8 |
 | B | L0B Buffer | K × N | Zn | 与A一致 |
 | C | L0C Buffer | M × N | Nz | FP16、BF16、FP32、INT32 |
 

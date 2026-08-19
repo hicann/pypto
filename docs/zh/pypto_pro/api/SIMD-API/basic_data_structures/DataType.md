@@ -38,7 +38,7 @@
 | `pypto_pro.language.DT_FP32` | 32 | 否 | 是 | `float` | IEEE浮点 | 累加器、高精度计算 |
 | `pypto_pro.language.DT_BF16` | 16 | 否 | 是 | `bfloat16_t` | Brain浮点 | 矩阵输入（动态范围优于FP16） |
 | `pypto_pro.language.DT_HF4` | 4 | 否 | 是 | — | 海思浮点 | 低精度推理 |
-| `pypto_pro.language.DT_HF8` | 8 | 否 | 是 | — | 海思浮点 | 低精度推理 |
+| `pypto_pro.language.DT_HF8` | 8 | 否 | 是 | `hifloat8_t` | 海思浮点 | 低精度推理 |
 
 ## 补充说明
 

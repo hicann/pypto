@@ -38,7 +38,7 @@ pypto_pro.language.matmul_acc(dst_tile, acc_tile, lhs_tile, rhs_tile, *, phase=N
 |---|---|---|
 | `dst_tile` | 输出 | 数据类型：FP16、BF16、FP32、INT32<br>shape：`[M, N]`，需与`acc_tile`一致<br>地址配置：<br>• 只能是Acc/L0C内存空间，其他空间报错<br>• `layout=pl.NZ`；FP32/INT32需设`fractal`（FP32默认1024）<br>• 通常与`acc_tile`为同一个tile，实现in-place累加 |
 | `acc_tile` | 输入 | 数据类型：FP16、BF16、FP32、INT32<br>shape：`[M, N]`，需与`dst_tile`一致<br>地址配置：<br>• 只能是Acc/L0C内存空间，其他空间报错<br>• 通常与`dst_tile`为同一个tile（K维循环里持续累加）<br>• 其值应为前一步累加的结果；首块请改用`matmul`而非`matmul_acc` |
-| `lhs_tile` | 输入 | 数据类型：FP16、BF16、FP32、INT8<br>shape：`[M, K]`<br>地址配置：<br>• 只能是L0A/Left内存空间，其他空间报错<br>• A3默认`layout=pl.ZZ`；A5默认`layout=pl.NZ` |
+| `lhs_tile` | 输入 | 数据类型：FP16、BF16、FP32、INT8、HF8<br>shape：`[M, K]`<br>地址配置：<br>• 只能是L0A/Left内存空间，其他空间报错<br>• A3默认`layout=pl.ZZ`；A5默认`layout=pl.NZ` |
 | `rhs_tile` | 输入 | 数据类型：与`lhs_tile`一致<br>shape：`[K, N]`，K维需与`lhs_tile`的K一致<br>地址配置：<br>• 只能是L0B/Right内存空间，其他空间报错<br>• `layout=pl.ZN` |
 | `phase` | 输入 | 可选，K维分块累加时控制fixpipe写回GM的unit_flag：<br>• 不传（默认）：单次累加，无分块控制<br>• `pl.AccPhase.Partial`：中间累加步，表示后续还有K块<br>• `pl.AccPhase.Final`：最终步，表示K累加结束、可写回GM |
 

@@ -42,7 +42,7 @@ pypto_pro.language.Tensor[[shape], dtype, layout]
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `shape` | 输入 | 维度列表<br>固定维度：正整数，如`[64, 128]`<br>动态维度：`pypto_pro.language.DYNAMIC`<br>编译期特化维度：`pypto_pro.language.STATIC`<br>末尾`...`：其余维度均按`STATIC`处理<br>不同策略可混用，如`[64, pl.DYNAMIC, pl.STATIC]` |
-| `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md)枚举值<br>常用：`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_INT8`、`pypto_pro.language.DT_INT32` |
+| `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md)枚举值<br>常用：`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_INT8`、`pypto_pro.language.DT_INT32`、`pypto_pro.language.DT_HF8` |
 | `layout` | 输入 | [`pypto_pro.language.TensorLayout`](TensorLayout.md)枚举值或`None`（默认）<br>`pypto_pro.language.ND`（非分形行主序）/ `pypto_pro.language.DN`（非分形DN布局标记）/ `pypto_pro.language.NZ`（NZ分形布局）<br>不指定时为`None`（后端按`pypto_pro.language.ND`处理） |
 
 ## shape维度策略
