@@ -652,6 +652,10 @@ class Tensor:
         return self._base.LogicalTensor()
 
     def set_logical_tensor(self, logical_tensor: 'LogicalTensor') -> None:
+        # Move/AssignStorage uniquifies IR names. Skip when storage is unchanged
+        # so if-branch rollback does not rename function parameters.
+        if not self.is_empty() and self.logical_tensor() is logical_tensor:
+            return
         self._base.Move(pypto_impl.Tensor(logical_tensor))
 
     @source_location

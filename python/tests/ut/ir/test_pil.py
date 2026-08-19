@@ -177,6 +177,10 @@ def _for_ops_of(ops):
     return [op for op in ops if isinstance(op, ir.ForStmt)]
 
 
+def _iter_arg_names(for_stmt: ir.ForStmt):
+    return [getattr(arg, 'name', str(arg)) for arg in for_stmt.iter_args]
+
+
 def info(x):
     logging.log_info(f"{x}")
 
@@ -933,6 +937,44 @@ def test_tensor_move2():
     func = pil.compile(foo, x, y)
     print(func)
     assert isinstance(func.body[0], ir.ForStmt)
+
+
+def test_ir_loop_helper_move_carry():
+    """MOVE in a helper must mark the caller buffer as a loop carry variable."""
+
+    def foo(cank, src):
+        def update(dst, val):
+            dst.move(val)
+
+        for _ in pypto.loop(10):
+            tmp = src + 1
+            update(cank, tmp)
+
+    cank = pypto.Tensor((4, 4), pypto.DT_FP32, 'cank')
+    src = pypto.Tensor((4, 4), pypto.DT_FP32, 'src')
+    func = pil.compile(foo, cank, src)
+    for_stmt = _for_ops_of(func.body)[0]
+    iter_names = _iter_arg_names(for_stmt)
+    assert any(name.startswith('cank') for name in iter_names), iter_names
+    assert any(name == 'tmp' for name in iter_names), iter_names
+
+
+def test_restore_tensor_lts_after_move():
+    """Snapshot/restore must roll back in-place MOVE handles for if branch replay."""
+    from pypto.pil.ops import _restore_tensor_lts, _snapshot_tensor_lts
+    from pypto.pil.pir import Scope
+
+    dst = pypto.Tensor((4, 4), pypto.DT_FP32, 'dst')
+    src = pypto.Tensor((4, 4), pypto.DT_FP32, 'src')
+    scope = Scope(['dst', 'src'])
+    scope['dst'] = dst
+    scope['src'] = src
+    snap = _snapshot_tensor_lts(scope, {'dst'})
+    before = dst.logical_tensor()
+    dst.move(src)
+    assert dst.logical_tensor() is not before
+    _restore_tensor_lts(snap)
+    assert dst.logical_tensor() is before
 
 
 def test_printer():

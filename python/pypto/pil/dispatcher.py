@@ -29,6 +29,7 @@ from .pir import (
     Jump,
     ReturnSignal,
     Scope,
+    _collector_stack,
     _current,
 )
 
@@ -199,12 +200,15 @@ def dispatch_block(block: Block, is_static: bool):
 
     prev_block = _current.collector_block
     _current.collector_block = block
+    stack = _collector_stack()
+    stack.append((scope, block))
     try:
         for call in block.calls:
             with ctx.change_span(call.span):
                 dispatch_call(call, scope, ctx)
                 _collect_block_access(ctx, block, call)
     finally:
+        stack.pop()
         _propagate_block_access(ctx, prev_block, block)
         _current.collector_block = prev_block
 
@@ -216,8 +220,9 @@ def dispatch_block(block: Block, is_static: bool):
 
 def collect(block: Block):
     # A function invocation starts a fresh collection tree. Reset the
-    # enclosing collector block so the callee's store/load names don't
-    # propagate into the caller's block
+    # enclosing collector block so the callee's Python name stores/loads don't
+    # propagate into the caller's block. MOVE aliases are recovered separately
+    # via collector_stack in Block.mark_store (caller names that share identity).
     prev_block = _current.collector_block
     _current.collector_block = None
     try:

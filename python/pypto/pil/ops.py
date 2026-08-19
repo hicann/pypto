@@ -409,13 +409,45 @@ def loop_impl(ctx: BuildContext, body: Block, loop):
         _static_while(body)
 
 
+def _snapshot_tensor_lts(scope: Scope, names: set) -> list:
+    """Capture storage for tensors this if may MOVE in-place.
+
+    Python rebinding (``t = xv + yv``) is already rolled back by restoring
+    ``scope.locals``. In-place MOVE is not: it mutates the Tensor object.
+    Only snapshot pre-existing Tensors among ``store_names``, and skip objects
+    that still hold the snapshotted logical tensor on restore. Calling
+    ``Tensor.Move`` / ``set_logical_tensor`` uniquifies IR names via
+    ``AssignStorage`` even when storage did not change.
+    """
+    snap = []
+    seen = set()
+    for name in names:
+        val = scope.locals.get(name)
+        if not isinstance(val, pypto.Tensor) or val.is_empty():
+            continue
+        tid = id(val)
+        if tid in seen:
+            continue
+        seen.add(tid)
+        snap.append((val, val.logical_tensor()))
+    return snap
+
+
+def _restore_tensor_lts(snap: list) -> None:
+    for val, lt in snap:
+        if not val.is_empty() and val.logical_tensor() is not lt:
+            val.set_logical_tensor(lt)
+
+
 def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext):
     scope = Scope.current()
 
     saved = dict(scope.locals)
+    store_names = then_block.store_names | else_block.store_names
+    tensor_snap = _snapshot_tensor_lts(scope, store_names)
     yield_var_names = [
         name
-        for name in sorted(then_block.store_names | else_block.store_names)
+        for name in sorted(store_names)
         if not is_opaque_value(scope.locals.get(name))
     ]
 
@@ -429,6 +461,7 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
     finally:
         ctx.restore()
         scope.locals = saved
+        _restore_tensor_lts(tensor_snap)
 
     try:
         ctx.checkpoint()
@@ -440,6 +473,7 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
     finally:
         ctx.restore()
         scope.locals = saved
+        _restore_tensor_lts(tensor_snap)
 
     yield_vars = []
     for i, name in enumerate(yield_var_names):

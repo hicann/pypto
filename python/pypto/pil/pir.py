@@ -141,6 +141,23 @@ class Block:
 
     @classmethod
     def mark_store(cls, tensor):
+        """Record Python names that alias ``tensor`` as stored.
+
+        ``x[:] = y`` / ``Tensor.move`` is not a Python name store, so loop-carry
+        collection has to recover the binding by object identity. Walk the
+        collector stack rather than only ``Scope.current()``: MOVE inside a
+        helper must mark the caller's alias (e.g. ``cank``) on the enclosing
+        loop/if block, matching old-IR mutable-handle semantics.
+        """
+        stack = _collector_stack()
+        if stack:
+            for scope, block in stack:
+                if block is None:
+                    continue
+                for name, val in scope.locals.items():
+                    if val is tensor:
+                        block.store_names.add(name)
+            return
         block = _current.collector_block
         if block is None:
             return
@@ -407,6 +424,15 @@ class _Current(threading.local):
     scope: Optional[Scope] = None
     build_context: Optional[BuildContext] = None
     collector_block: Optional["Block"] = None
+    collector_stack: Optional[list] = None
 
 
 _current = _Current()
+
+
+def _collector_stack() -> list:
+    stack = getattr(_current, "collector_stack", None)
+    if stack is None:
+        stack = []
+        _current.collector_stack = stack
+    return stack

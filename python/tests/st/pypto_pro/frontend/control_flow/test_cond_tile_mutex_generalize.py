@@ -439,7 +439,7 @@ def _run(kernel, name):
         if not torch.allclose(got, expected, rtol=1e-3, atol=1e-3):
             diff = (got - expected).abs().sum(dim=1)
             bad = (diff > 1e-3).nonzero().flatten().tolist()
-            details = [f"dst行{b}: got={got[b,0].item()} 期望={expected[b,0].item()}" for b in bad]
+            details = [f"dst行{b}: got={got[b, 0].item()} 期望={expected[b, 0].item()}" for b in bad]
             raise AssertionError(f"[{name}] run {run}: 数据错误\n" + "\n".join(details))
     logging.info("[%s] PASSED (%d runs)", name, runs)
 
