@@ -168,9 +168,34 @@ def bundle_so_path() -> str:
     return os.path.join(os.path.dirname(os.path.abspath(pypto.__file__)), "lib", "libtile_fwk_bundle.so")
 
 
+# DT_NEEDED of the plain libtile_fwk_bundle.so. Production builds skip RPATH, so dlopen-by-abspath
+# does not search the sibling directory; map these first (same order as python/pypto/_loader.py).
+_BUNDLE_NEEDED = (
+    "libc_sec.so",
+    "libtile_fwk_utils.so",
+    "libtile_fwk_adapter.so",
+    "libtile_fwk_cann_host_runtime.so",
+    "libtile_fwk_platform.so",
+    "libtile_fwk_interface.so",
+    "libtile_fwk_codegen.so",
+    "libtile_fwk_compiler.so",
+    "libtile_fwk_runtime.so",
+)
+
+
+def _preload_bundle_needed(so_path: str) -> None:
+    so_dir = os.path.dirname(os.path.abspath(so_path))
+    for name in _BUNDLE_NEEDED:
+        path = os.path.join(so_dir, name)
+        if os.path.isfile(path):
+            ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)
+
+
 def load_bundle_lib():
     """dlopen the bundle ABI and declare its 4 exported symbols."""
-    lib = ctypes.CDLL(bundle_so_path(), mode=ctypes.RTLD_GLOBAL)
+    so_path = bundle_so_path()
+    _preload_bundle_needed(so_path)
+    lib = ctypes.CDLL(so_path, mode=ctypes.RTLD_GLOBAL)
     desc_p = ctypes.POINTER(PyptoTensorDesc)
 
     lib.PyptoWorkspace.restype = ctypes.c_uint64

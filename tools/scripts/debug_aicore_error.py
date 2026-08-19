@@ -405,7 +405,7 @@ _NEEDS_VIEW_DTYPES = frozenset({
     "float8_e4m3fn", "fp8e4m3", "float8_e5m2", "fp8e5m2", "fp8", "float8",
 })
 
-_BUNDLE_SO_NAMES = ("libtile_fwk_bundle_standalone.so", "libtile_fwk_bundle.so")
+_BUNDLE_SO_NAMES = ("libtile_fwk_bundle.so",)
 
 
 def find_bundle_so() -> Optional[str]:
@@ -521,7 +521,24 @@ def codegen_bundle_script(
         "# ---- Load libtile_fwk_bundle.so ----",
         "",
         f'_BUNDLE_SO = os.environ.get("PYPTO_BUNDLE_SO", r"{bundle_so}")',
-        '_BUNDLE_LIB = ctypes.CDLL(_BUNDLE_SO, mode=ctypes.RTLD_GLOBAL)',
+        "# Production builds skip RPATH, so dlopen-by-abspath does not search the sibling dir.",
+        "# Preload DT_NEEDED of the plain bundle .so first (same order as python/pypto/_loader.py).",
+        "_BUNDLE_DIR = os.path.dirname(os.path.abspath(_BUNDLE_SO))",
+        "for _dep in (",
+        '    "libc_sec.so",',
+        '    "libtile_fwk_utils.so",',
+        '    "libtile_fwk_adapter.so",',
+        '    "libtile_fwk_cann_host_runtime.so",',
+        '    "libtile_fwk_platform.so",',
+        '    "libtile_fwk_interface.so",',
+        '    "libtile_fwk_codegen.so",',
+        '    "libtile_fwk_compiler.so",',
+        '    "libtile_fwk_runtime.so",',
+        "):",
+        "    _p = os.path.join(_BUNDLE_DIR, _dep)",
+        "    if os.path.isfile(_p):",
+        "        ctypes.CDLL(_p, mode=ctypes.RTLD_GLOBAL)",
+        "_BUNDLE_LIB = ctypes.CDLL(_BUNDLE_SO, mode=ctypes.RTLD_GLOBAL)",
         "",
         "_desc_p = ctypes.POINTER(PyptoTensorDesc)",
         "_BUNDLE_LIB.PyptoWorkspace.restype = ctypes.c_uint64",
