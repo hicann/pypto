@@ -15,7 +15,7 @@ from typing import Callable, Dict, Optional
 
 
 class Argument:
-    """存储单个参数的定义"""
+    """Store definition of a single argument"""
 
     def __init__(self, *args, **kwargs):
         self.args = args
@@ -56,12 +56,12 @@ class Command:
 
 
 def command(name: Optional[str] = None, help_info: Optional[str] = None):
-    """装饰器：标记一个函数为子命令"""
+    """Decorator: mark a function as a subcommand"""
 
     def decorator(func: Callable):
         cmd = Command.get_entry(func)
         cmd_name = name or func.__name__
-        cmd_help = help_info or func.__doc__ or f"执行 {cmd_name} 命令"
+        cmd_help = help_info or func.__doc__ or f"Execute {cmd_name} command"
         cmd.set_name_help(cmd_name, cmd_help)
         Command.cmd_dict[cmd_name] = cmd
         return func
@@ -70,7 +70,7 @@ def command(name: Optional[str] = None, help_info: Optional[str] = None):
 
 
 def argument(*args, **kwargs):
-    """装饰器：为当前命令添加参数（必须在 @command 之后使用）"""
+    """Decorator: add arguments to the current command (must be used after @command)"""
 
     def decorator(func: Callable):
         cmd = Command.get_entry(func)
@@ -81,7 +81,7 @@ def argument(*args, **kwargs):
 
 
 def build_parser(prog: str = None, description: str = None) -> argparse.ArgumentParser:
-    """根据命令注册表构建 argparse 解析器"""
+    """Build argparse parser from command registry"""
     parser = argparse.ArgumentParser(prog=prog, description=description)
     subparsers = parser.add_subparsers(dest='command', required=True, help='可用的子命令')
 
@@ -93,7 +93,7 @@ def build_parser(prog: str = None, description: str = None) -> argparse.Argument
 
 
 def dispatch(args: argparse.Namespace):
-    """执行对应的命令函数，传入解析后的参数"""
+    """Execute the corresponding command function with parsed arguments"""
     cmd_name = args.command
     if cmd_name not in Command.cmd_dict:
         raise ValueError(f"Unknown command: {cmd_name}")
@@ -106,7 +106,7 @@ def dispatch(args: argparse.Namespace):
 
 
 def run(main_prog: str = None, description: str = None, commands_dir: str = "commands"):
-    """主入口：加载命令、构建解析器、执行"""
+    """Main entry: load commands, build parser, execute"""
     parser = build_parser(prog=main_prog, description=description)
     parsed_args = parser.parse_args()
     return dispatch(parsed_args)

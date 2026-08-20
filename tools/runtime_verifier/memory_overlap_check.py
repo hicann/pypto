@@ -114,10 +114,13 @@ def _find_input(output_dir: str, name: str, preferred_relative_path: str) -> str
         if name in files:
             matches.append(os.path.abspath(os.path.join(root, name)))
     if not matches:
-        raise FileNotFoundError(f"未在 output 目录中找到 {name}: {output_dir}")
+        raise FileNotFoundError(f"{name} not found in output directory: {output_dir}")
     if len(matches) > 1:
         joined = "\n  ".join(sorted(matches))
-        raise ValueError(f"发现多个 {name}，无法确认所属运行，请传入单次运行的 output 目录：\n  {joined}")
+        raise ValueError(
+            f"Multiple {name} found, cannot determine which run they belong to. "
+            f"Please pass a single-run output directory:\n  {joined}"
+        )
     preferred = os.path.abspath(preferred)
     return preferred if preferred in matches else matches[0]
 
@@ -135,14 +138,14 @@ def resolve_inputs(output_dir: str) -> Tuple[str, str]:
 def _header_index(path: str, reader) -> Dict[str, int]:
     header = next(reader, None)
     if not header:
-        raise ValueError(f"文件为空或缺少表头: {path}")
+        raise ValueError(f"File is empty or missing header: {path}")
     return {name.strip(): index for index, name in enumerate(header)}
 
 
 def _require_columns(path: str, columns: Dict[str, int], required: Set[str]):
     missing = sorted(required - set(columns))
     if missing:
-        raise ValueError(f"{path} 缺少必要字段: {', '.join(missing)}")
+        raise ValueError(f"{path} missing required columns: {', '.join(missing)}")
 
 
 def load_dyn_topo(path: str) -> Dict[TaskKey, TopoTask]:
@@ -176,10 +179,10 @@ def load_dyn_topo(path: str) -> Dict[TaskKey, TopoTask]:
                     ],
                 )
             except (IndexError, ValueError) as error:
-                raise ValueError(f"{path}:{row_number} dyn_topo 行解析失败: {error}") from error
+                raise ValueError(f"{path}:{row_number} dyn_topo row parse failed: {error}") from error
             if key in tasks:
                 raise ValueError(
-                    f"{path}:{row_number} 存在重复 (seqNo, taskId)=({key.seq_no}, {key.task_id})"
+                    f"{path}:{row_number} duplicate (seqNo, taskId)=({key.seq_no}, {key.task_id})"
                 )
             tasks[key] = task
     return tasks
@@ -222,15 +225,15 @@ def load_accesses(path: str) -> Tuple[Dict[TaskKey, List[Access]], Counter]:
                     raw_magic_text = row[raw_magic_column].strip()
                     raw_magic = int(raw_magic_text) if raw_magic_text else None
             except (IndexError, ValueError) as error:
-                raise ValueError(f"{path}:{row_number} access 行解析失败: {error}") from error
+                raise ValueError(f"{path}:{row_number} access row parse failed: {error}") from error
 
             if access_type not in {"R", "W"}:
-                raise ValueError(f"{path}:{row_number} accessType 不是 R/W: {access_type!r}")
+                raise ValueError(f"{path}:{row_number} accessType is not R/W: {access_type!r}")
             expected_task_id = (func_idx << TASK_OP_BITS) | (op_idx & 0xffff)
             if task_id != expected_task_id:
                 raise ValueError(
-                    f"{path}:{row_number} taskId={task_id} 与 "
-                    f"(funcIdx << 16 | opIdx)={expected_task_id} 不一致"
+                    f"{path}:{row_number} taskId={task_id} vs "
+                    f"(funcIdx << 16 | opIdx)={expected_task_id} mismatch"
                 )
             operand_counter_key = (seq_no, task_id, access_type)
             operand_index = operand_counters[operand_counter_key]
@@ -276,8 +279,8 @@ def validate_task_sets(topo_tasks: Dict[TaskKey, TopoTask], accesses: Dict[TaskK
     examples = ", ".join(f"({key.seq_no},{key.task_id})" for key in missing[:10])
     suffix = " ..." if len(missing) > 10 else ""
     raise ValueError(
-        f"有 {len(missing)} 个 access task 无对应 dyn_topo 节点: {examples}{suffix}。"
-        "请确认两个文件来自同一次运行。"
+        f"{len(missing)} access task(s) have no corresponding dyn_topo node: {examples}{suffix}."
+        "Please confirm both files are from the same run."
     )
 
 
@@ -295,8 +298,8 @@ def validate_topology(topo_tasks: Dict[TaskKey, TopoTask]):
     )
     suffix = " ..." if len(dangling) > 10 else ""
     raise ValueError(
-        f"dyn_topo 存在 {len(dangling)} 条悬空后继边: {examples}{suffix}。"
-        "拓扑不完整时不能可靠判断任务先后关系。"
+        f"dyn_topo has {len(dangling)} dangling successor edge(s): {examples}{suffix}."
+        "Cannot reliably determine task ordering when topology is incomplete."
     )
 
 
@@ -308,7 +311,7 @@ def build_graph(topo_tasks: Dict[TaskKey, TopoTask]) -> Dict[int, Dict[int, Set[
 
 
 class ReachabilityIndex:
-    """仅为实际存在空间冲突候选的 task 惰性计算并缓存拓扑可达集。"""
+    """Lazily compute and cache topology reachability sets only for tasks with spatial conflict candidates."""
 
     def __init__(self, graph: Dict[int, Dict[int, Set[int]]]):
         self._graph = graph
@@ -341,7 +344,7 @@ class ReachabilityIndex:
 
     def is_ordered(self, lhs: TaskKey, rhs: TaskKey) -> bool:
         if lhs.seq_no != rhs.seq_no:
-            raise ValueError("只能查询同一 seqNo 内的任务依赖关系")
+            raise ValueError("Can only query task dependencies within the same seqNo")
         pair = (lhs, rhs) if lhs < rhs else (rhs, lhs)
         cached = self._ordered_pair_cache.get(pair)
         if cached is not None:
@@ -505,26 +508,26 @@ def _print_overlap_detail(conflict: Conflict):
 
 def _print_conflict_kind_guide():
     print()
-    print("Overlap Kind 说明:")
+    print("Overlap Kind descriptions:")
     print(
-        "  ALL_DIMENSIONS_OVERLAP: 两个可能并发的任务访问同一完整物理分配，"
-        "且所有维度的访问区间均重叠。"
+        "  ALL_DIMENSIONS_OVERLAP: Two possibly concurrent tasks access the same full physical allocation,"
+        "and all dimension access ranges overlap."
     )
     print(
-        "  INVALID_PARTIAL_ADDRESS_OVERLAP: 两个 RawTensor 物理区间发生部分交叉，"
-        "但不是同一完整分配；需检查地址、大小和分配逻辑。"
+        "  INVALID_PARTIAL_ADDRESS_OVERLAP: Two RawTensor physical ranges partially overlap,"
+        "but not the same full allocation; check address, size and allocation logic."
     )
     print(
-        "  INVALID_RAW_SHAPE_MISMATCH: 两个 RawTensor 使用同一完整物理区间，"
-        "但 rawShape 不一致，无法在同一多维坐标系中可靠比较。"
+        "  INVALID_RAW_SHAPE_MISMATCH: Two RawTensors use the same full physical range,"
+        "but rawShape differs, cannot reliably compare in the same coordinate system."
     )
     print(
-        "  INVALID_DIMENSION_MISMATCH: 两个 RawTensor 使用同一完整物理区间，"
-        "但 offset/shape 维度数不一致，无法可靠比较各维交集。"
+        "  INVALID_DIMENSION_MISMATCH: Two RawTensors use the same full physical range,"
+        "but offset/shape dimension count differs, cannot reliably compare per-dimension intersection."
     )
-    print("Race Kind 说明:")
-    print("  RACE_READ_WRITE: 一个任务读取、另一个任务写入冲突内存。")
-    print("  RACE_WRITE_WRITE: 两个任务都写入冲突内存。")
+    print("Race Kind descriptions:")
+    print("  RACE_READ_WRITE: One task reads, another writes to conflicting memory.")
+    print("  RACE_WRITE_WRITE: Both tasks write to conflicting memory.")
 
 
 def print_report(
@@ -535,13 +538,13 @@ def print_report(
     print("PyPTO Memory Overlap Check (dyn_topo based)")
     print(SEPARATOR)
     if conflicts:
-        print(f"RESULT: FAIL - 共发现 {len(conflicts)} 处内存重叠。")
+        print(f"RESULT: FAIL - Found {len(conflicts)} memory overlap(s).")
         if unchecked_access_count:
-            print(f"WARNING: 另有 {unchecked_access_count} 条 access 数据无效，未参与检查。")
+            print(f"WARNING: {unchecked_access_count} access record(s) are invalid and were not checked.")
     elif unchecked_access_count:
-        print(f"RESULT: FAIL - 有 {unchecked_access_count} 条 access 数据无效，无法完成全部检查。")
+        print(f"RESULT: FAIL - {unchecked_access_count} access record(s) are invalid, cannot complete full check.")
     else:
-        print("RESULT: PASS - 未发现无拓扑依赖任务之间的 Read-Write/Write-Write 内存重叠。")
+        print("RESULT: PASS - No Read-Write/Write-Write memory overlap found between topology-independent tasks.")
 
     if not conflicts:
         return
@@ -556,7 +559,7 @@ def print_report(
     if compact_conflicts:
         print()
         print(SEPARATOR)
-        print("非全维度重叠异常（紧凑列表）")
+        print("Non-full-dimension overlap anomalies (compact list)")
         print(SEPARATOR)
         for conflict_index, conflict in compact_conflicts:
             print(
@@ -578,7 +581,7 @@ def print_report(
     if all_dimension_conflicts:
         print()
         print(SEPARATOR)
-        print("ALL_DIMENSIONS_OVERLAP 详细信息")
+        print("ALL_DIMENSIONS_OVERLAP details")
         print(SEPARATOR)
         for group_index, (task_pair, indexed_group) in enumerate(
             sorted(all_dimension_conflicts.items(), key=lambda item: item[0]),
@@ -594,8 +597,8 @@ def print_report(
                 f"operandConflicts={len(group)}"
             )
             print(
-                "Dependency: 两个 Op 位于同一 DeviceTask，且在 dyn_topo 传递闭包中互相不可达，"
-                "因此可能并发执行。"
+                "Dependency: Two Ops are in the same DeviceTask and mutually unreachable "
+                "in dyn_topo transitive closure, thus may execute concurrently."
             )
             _print_task("Source Task", representative.src, representative.src_topo)
             _print_task("Destination Task", representative.dst, representative.dst_topo)
@@ -633,21 +636,21 @@ def run(output_dir: str) -> int:
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "基于 output 目录中的 dyn_topo.txt 和 mem_rawtensor_access.csv "
-            "检查无拓扑依赖 Op 之间的内存重叠。"
+            "Check memory overlap between topology-independent Ops based on dyn_topo.txt and mem_rawtensor_access.csv "
+            "in the output directory."
         )
     )
-    parser.add_argument("output_dir", help="单次运行的 output 目录")
+    parser.add_argument("output_dir", help="Output directory of a single run")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     if not os.path.isdir(args.output_dir):
-        print(f"RESULT: FAIL - output 目录不存在: {args.output_dir}")
+        print(f"RESULT: FAIL - output directory does not exist: {args.output_dir}")
         return 1
     try:
         return run(os.path.abspath(args.output_dir))
     except (OSError, ValueError) as error:
-        print(f"RESULT: FAIL - 内存重叠检查执行失败: {error}")
+        print(f"RESULT: FAIL - memory overlap check failed: {error}")
         return 1
 
 

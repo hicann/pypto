@@ -313,7 +313,7 @@ void DeviceWorkspaceAllocator::TryAllocateDynamicCellMatchForAssembleSlot(Device
                    metadataAllocators_.dynamicCellMatch.AvailableSlots());
     WsAllocation dynamicCellMatchAlloc = metadataAllocators_.dynamicCellMatch.Allocate();
     DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, dynamicCellMatchAlloc.ptr != 0,
-                   "Dynamic cell match metadata alloc failed, size=%" PRIu64, dynamicCellMatchSlotBytes);
+                   "Dynamic cell match metadata alloc failed, sizeBytes=%" PRIu64, dynamicCellMatchSlotBytes);
     dynamicCellMatchAlloc.parallelWsId = curParallelWsId;
     partialUpdate->cellMatchRuntimePartialUpdateTable = DevRelocVector<uint64_t>(
         0, reinterpret_cast<uint64_t*>(dynamicCellMatchAlloc.ptr));

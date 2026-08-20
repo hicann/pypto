@@ -69,7 +69,7 @@ _data_type_full_mapping = {
 
 
 def _get_data_type(data_type: int):
-    """数据类型数值转可读字符串"""
+    """Convert data type numeric value to readable string"""
     return _data_type_full_mapping.get(data_type, f"UNKNOWN({data_type})")
 
 
@@ -475,7 +475,7 @@ class CompactDumpTensorInfoParser:
 
     @staticmethod
     def _calc_compact_size():
-        """计算无对齐的紧凑总字节数"""
+        """Calculate compact total byte count without alignment"""
         total = 0
         # 基础字段
         total += FIELD_SIZES["uint8_t"] * 2  # version ~ rsrv_01
@@ -604,7 +604,7 @@ class CompactDumpTensorInfoParser:
         return merge_tensor_info
 
     def parse_single(self, bin_data: bytes, offset: int = 0) -> dict:
-        """解析单个紧凑存储的DumpTensorInfo结构体"""
+        """Parse a single compactly stored DumpTensorInfo struct"""
         result = {"B>PHASE_NAME": "task_dump"}
         current_offset = offset
 
@@ -652,7 +652,7 @@ class CompactDumpTensorInfoParser:
         return result
 
     def parse_file(self, file_path: str) -> list[dict]:
-        """解析整个紧凑存储的bin文件"""
+        """Parse the entire compactly stored bin file"""
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -688,7 +688,7 @@ class CompactDumpTensorInfoParser:
         return tensor_info
 
     def get_exec_time(self, prof_data_file):
-        """解析prof_data文件，获取每个任务的执行时间"""
+        """Parse prof_data file to get execution time per task"""
         with open(prof_data_file, "rb") as f:
             data = json.load(f)
 
@@ -849,7 +849,7 @@ class CompactDumpTensorInfoParser:
 
 
 def scan_pass_info_from_path(verify_path: str) -> Dict[str, int]:
-    """扫描 computation_graph 目录，返回 {pass_name: pass_num} 字典。"""
+    """Scan computation_graph directory, return {pass_name: pass_num} dict."""
     pass_info: Dict[str, int] = {}
     if not verify_path or not os.path.exists(verify_path):
         return pass_info
@@ -887,7 +887,7 @@ def get_pass_full_name(verify_path: str, pass_name: str = "CodegenPreproc") -> s
 
 
 def to_json_str(x):
-    """将 list/tuple 转为紧凑 JSON 字符串，其余原样返回。"""
+    """Convert list/tuple to compact JSON string, return others as-is."""
     return json.dumps(x, separators=(',', ':')) if isinstance(x, (list, tuple)) else x
 
 
@@ -912,11 +912,11 @@ def main():
     global RESULT_FILE
     RESULT_FILE = csv_path
     if not os.path.exists(args.dump_tensor_path):
-        logging.error(f"目录不存在：{args.dump_tensor_path}")
+        logging.error(f"Directory does not exist: {args.dump_tensor_path}")
         return
     # 初始化紧凑解析器
     parser = CompactDumpTensorInfoParser(args.dump_tensor_path)
-    logging.info(f"单个结构字节数：{parser.struct_compact_size}")
+    logging.info(f"Single struct byte count: {parser.struct_compact_size}")
 
     _verify_res.read_verify_result(args.verify_path)
 

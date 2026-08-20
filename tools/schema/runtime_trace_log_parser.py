@@ -185,22 +185,22 @@ class DeviceTaskRecord:
     def structural_issues(self) -> List[str]:
         issues = []
         if not self.start_events:
-            issues.append("缺少 DeviceTask start")
+            issues.append("Missing DeviceTask start")
         if self.abnormal_end_events:
             pass
         elif not self.end_events:
-            issues.append("缺少 DeviceTask end")
+            issues.append("Missing DeviceTask end")
         if len(self.core_counts) > 1:
-            issues.append(f"coreFunctionCnt 不一致: {sorted(self.core_counts)}")
+            issues.append(f"coreFunctionCnt inconsistent: {sorted(self.core_counts)}")
         if self.end_events and len(self.finished_counts) > 1:
-            issues.append(f"finishedFunctionCnt 不一致: {sorted(self.finished_counts)}")
+            issues.append(f"finishedFunctionCnt inconsistent: {sorted(self.finished_counts)}")
         expected = self.expected_core_count
         finished = self.finished_core_count
         if expected is not None and finished is not None and expected != finished:
-            suffix = "（异常结束）" if self.abnormal_end_events else ""
-            issues.append(f"CoreTask 未全部执行结束: {finished}/{expected}{suffix}")
+            suffix = " (abnormal end)" if self.abnormal_end_events else ""
+            issues.append(f"CoreTask not all finished: {finished}/{expected}{suffix}")
         elif self.abnormal_end_events:
-            issues.append("DeviceTask 异常结束")
+            issues.append("DeviceTask abnormal end")
         start_tids = {
             event.get_int("tid") for event in self.start_events if event.get_int("tid") is not None
         }
@@ -209,7 +209,7 @@ class DeviceTaskRecord:
         }
         missing_end_tids = sorted(start_tids - end_tids)
         if self.end_events and missing_end_tids:
-            issues.append(f"调度线程缺少 end: {missing_end_tids}")
+            issues.append(f"Scheduler thread missing end: {missing_end_tids}")
         return issues
 
 
@@ -276,19 +276,19 @@ class CoreTaskLifecycle:
     def issues(self) -> List[str]:
         issues = []
         if not self.resolved:
-            issues.append("缺少 resolve")
+            issues.append("Missing resolve")
         if not self.sends:
-            issues.append("缺少 send")
+            issues.append("Missing send")
         if not self.finishes:
-            issues.append("缺少 finish")
+            issues.append("Missing finish")
         if len(self.sends) > 1:
-            issues.append(f"send 重复 {len(self.sends)} 次")
+            issues.append(f"send duplicated {len(self.sends)} times")
         if len(self.finishes) > 1:
-            issues.append(f"finish 重复 {len(self.finishes)} 次")
+            issues.append(f"finish duplicated {len(self.finishes)} times")
         if len(self.runtime_resolves) > 1:
-            issues.append(f"运行时 resolve 重复 {len(self.runtime_resolves)} 次")
+            issues.append(f"runtime resolve duplicated {len(self.runtime_resolves)} times")
         if len(self.acks) > 1:
-            issues.append(f"ack 重复 {len(self.acks)} 次")
+            issues.append(f"ack duplicated {len(self.acks)} times")
 
         send_cores = {
             event.get_int("coreIdx") for event in self.sends if event.get_int("coreIdx") is not None
@@ -301,18 +301,18 @@ class CoreTaskLifecycle:
         }
         all_cores = send_cores | ack_cores | finish_cores
         if len(all_cores) > 1:
-            issues.append(f"send/ack/finish 核不一致: {sorted(all_cores)}")
+            issues.append(f"send/ack/finish core mismatch: {sorted(all_cores)}")
 
         first_resolve = self._first_time(self.first_batch_resolves + self.runtime_resolves)
         first_send = self._first_time(self.sends)
         first_ack = self._first_time(self.acks)
         first_finish = self._first_time(self.finishes)
         if first_resolve is not None and first_send is not None and first_send < first_resolve:
-            issues.append("send 早于 resolve")
+            issues.append("send before resolve")
         if first_ack is not None and first_send is not None and first_ack < first_send:
-            issues.append("ack 早于 send")
+            issues.append("ack before send")
         if first_finish is not None and first_send is not None and first_finish < first_send:
-            issues.append("finish 早于 send")
+            issues.append("finish before send")
         return issues
 
     @staticmethod
@@ -445,22 +445,22 @@ class MixWrapRecord:
         issues = []
         expected = self.expected_roles
         if not expected:
-            issues.append("mixType 未知")
+            issues.append("Unknown mixType")
             return issues
         missing_tasks = sorted(expected - set(self.tasks))
         if missing_tasks:
             issues.append(
-                "缺少角色任务: " + ", ".join(MIX_ROLE_NAMES[role] for role in missing_tasks)
+                "Missing role tasks: " + ", ".join(MIX_ROLE_NAMES[role] for role in missing_tasks)
             )
         missing_sends = sorted(expected - self.sent_roles)
         if missing_sends:
             issues.append(
-                "未下发角色: " + ", ".join(MIX_ROLE_NAMES[role] for role in missing_sends)
+                "Unsent roles: " + ", ".join(MIX_ROLE_NAMES[role] for role in missing_sends)
             )
         missing_finishes = sorted(expected - self.finished_roles)
         if missing_finishes:
             issues.append(
-                "未完成角色: " + ", ".join(MIX_ROLE_NAMES[role] for role in missing_finishes)
+                "Unfinished roles: " + ", ".join(MIX_ROLE_NAMES[role] for role in missing_finishes)
             )
         return issues
 
@@ -754,7 +754,7 @@ def collect_overall_issues(result: AnalysisResult) -> List[str]:
             }
         )
         for error_code in error_codes:
-            issues.append(f"Round {round_id} 返回错误 ret={error_code}")
+            issues.append(f"Round {round_id} returned error ret={error_code}")
     for key, device_task in executed_device_task_items(result):
         for issue in device_task.structural_issues():
             issues.append(f"DeviceTask round={key[0]} taskId={key[1]}: {issue}")
@@ -766,7 +766,7 @@ def collect_overall_issues(result: AnalysisResult) -> List[str]:
             + mix_core_records(core_records)
         )
         if abnormal_count:
-            issues.append(f"DeviceTask round={key[0]} taskId={key[1]}: {abnormal_count} 个异常 CoreTask")
+            issues.append(f"DeviceTask round={key[0]} taskId={key[1]}: {abnormal_count} abnormal CoreTask(s)")
     return issues
 
 
@@ -787,8 +787,8 @@ class Rule:
 
 
 class SchedulerCoreRangeRule(Rule):
-    name = "调度核范围校验"
-    description = "线程下发的 coreIdx 必须在自身仲裁管理的核范围内"
+    name = "Scheduler core range check"
+    description = "coreIdx dispatched by thread must be within its arbitrated core range"
 
     def check(self, result: AnalysisResult) -> RuleResult:
         ranges: Dict[Tuple[int, int], Tuple[int, int, int, int]] = {}
@@ -821,36 +821,36 @@ class SchedulerCoreRangeRule(Rule):
                 if core_type == 1:
                     if not (aic_start <= core_idx < aic_end):
                         violations.append(
-                            f"tid={tid} 向 AIC[{core_idx}] 下发任务，"
-                            f"但管理范围为 [{aic_start}, {aic_end})"
+                            f"tid={tid} dispatched to AIC[{core_idx}],"
+                            f"but managed range is [{aic_start}, {aic_end})"
                         )
                 elif core_type == 0:
                     if not (aiv_start <= core_idx < aiv_end):
                         violations.append(
-                            f"tid={tid} 向 AIV[{core_idx}] 下发任务，"
-                            f"但管理范围为 [{aiv_start}, {aiv_end})"
+                            f"tid={tid} dispatched to AIV[{core_idx}],"
+                            f"but managed range is [{aiv_start}, {aiv_end})"
                         )
 
         if violations:
             shown = "; ".join(violations[:5])
-            suffix = f" 等 {len(violations)} 条" if len(violations) > 5 else ""
+            suffix = f" and {len(violations)} more" if len(violations) > 5 else ""
             return RuleResult(
                 name=self.name,
                 description=self.description,
                 passed=False,
-                details=f"校验 {checked} 次，违规 {len(violations)} 次: {shown}{suffix}",
+                details=f"Checked {checked} times, {len(violations)} violations: {shown}{suffix}",
             )
         return RuleResult(
             name=self.name,
             description=self.description,
             passed=True,
-            details="通过",
+            details="Passed",
         )
 
 
 class ThreadIdxUniqueRule(Rule):
-    name = "threadIdx 唯一性校验"
-    description = "所有线程的 threadIdx 不能有重复"
+    name = "threadIdx uniqueness check"
+    description = "threadIdx must be unique across all threads"
 
     def check(self, result: AnalysisResult) -> RuleResult:
         tid_to_thread_idx: Dict[int, int] = {}
@@ -866,7 +866,7 @@ class ThreadIdxUniqueRule(Rule):
                 name=self.name,
                 description=self.description,
                 passed=True,
-                details="无 arbitration 事件，跳过",
+                details="No arbitration events, skipped",
             )
 
         idx_to_tids: Dict[int, List[int]] = defaultdict(list)
@@ -876,28 +876,31 @@ class ThreadIdxUniqueRule(Rule):
         duplicates = {idx: tids for idx, tids in idx_to_tids.items() if len(tids) > 1}
         if duplicates:
             parts = [
-                f"threadIdx={idx} 被 tid={tids} 共用"
+                f"threadIdx={idx} shared by tid={tids}"
                 for idx, tids in sorted(duplicates.items())
             ]
             shown = "; ".join(parts[:5])
-            suffix = f" 等 {len(duplicates)} 个" if len(duplicates) > 5 else ""
+            suffix = f" and {len(duplicates)} more" if len(duplicates) > 5 else ""
             return RuleResult(
                 name=self.name,
                 description=self.description,
                 passed=False,
-                details=f"共 {len(tid_to_thread_idx)} 个线程，重复 threadIdx {len(duplicates)} 个: {shown}{suffix}",
+                details=(
+                    f"Total {len(tid_to_thread_idx)} threads, "
+                    f"{len(duplicates)} duplicate threadIdx: {shown}{suffix}"
+                ),
             )
         return RuleResult(
             name=self.name,
             description=self.description,
             passed=True,
-            details="通过",
+            details="Passed",
         )
 
 
 class ArbitrationNumConsistentRule(Rule):
-    name = "arbitrationNum 一致性校验"
-    description = "所有线程的 arbitratedScheNum 必须相同"
+    name = "arbitrationNum consistency check"
+    description = "All threads must have the same arbitratedScheNum"
 
     def check(self, result: AnalysisResult) -> RuleResult:
         tid_to_num: Dict[int, int] = {}
@@ -913,7 +916,7 @@ class ArbitrationNumConsistentRule(Rule):
                 name=self.name,
                 description=self.description,
                 passed=True,
-                details="无 arbitration 事件，跳过",
+                details="No arbitration events, skipped",
             )
 
         unique_nums = set(tid_to_num.values())
@@ -929,19 +932,19 @@ class ArbitrationNumConsistentRule(Rule):
                 name=self.name,
                 description=self.description,
                 passed=False,
-                details=f"共 {len(tid_to_num)} 个线程，存在 {len(unique_nums)} 种值: {'; '.join(parts)}",
+                details=f"Total {len(tid_to_num)} threads, {len(unique_nums)} distinct values: {'; '.join(parts)}",
             )
         return RuleResult(
             name=self.name,
             description=self.description,
             passed=True,
-            details="通过",
+            details="Passed",
         )
 
 
 class CoreIdRangeRule(Rule):
-    name = "coreId 范围校验"
-    description = "所有 coreId 应该在 0 - 108 之间"
+    name = "coreId range check"
+    description = "All coreId should be in range 0-108"
 
     def check(self, result: AnalysisResult) -> RuleResult:
         min_core_id = 0
@@ -962,7 +965,7 @@ class CoreIdRangeRule(Rule):
                 name=self.name,
                 description=self.description,
                 passed=True,
-                details="未发现 coreId，跳过",
+                details="No coreId found, skipped",
             )
         out_of_range = sorted(c for c in seen if not (min_core_id <= c <= max_core_id))
         if out_of_range:
@@ -970,19 +973,19 @@ class CoreIdRangeRule(Rule):
                 name=self.name,
                 description=self.description,
                 passed=False,
-                details=f"共 {len(seen)} 个 coreId，越界 {len(out_of_range)} 个: {out_of_range[:10]}",
+                details=f"Total {len(seen)} coreIds, {len(out_of_range)} out of range: {out_of_range[:10]}",
             )
         return RuleResult(
             name=self.name,
             description=self.description,
             passed=True,
-            details="通过",
+            details="Passed",
         )
 
 
 class CoreTaskDuplicateRule(Rule):
-    name = "CoreTask 重复事件校验"
-    description = "同一 CoreTask 的 send/finish/ack/runtime resolve 不应重复出现"
+    name = "CoreTask duplicate event check"
+    description = "send/finish/ack/runtime resolve should not repeat for the same CoreTask"
 
     def check(self, result: AnalysisResult) -> RuleResult:
         total = 0
@@ -1010,28 +1013,28 @@ class CoreTaskDuplicateRule(Rule):
                 name=self.name,
                 description=self.description,
                 passed=True,
-                details="无已 resolve 的 CoreTask，跳过",
+                details="No resolved CoreTask, skipped",
             )
         if violations:
             shown = "; ".join(violations[:5])
-            suffix = f" 等 {len(violations)} 个" if len(violations) > 5 else ""
+            suffix = f" and {len(violations)} more" if len(violations) > 5 else ""
             return RuleResult(
                 name=self.name,
                 description=self.description,
                 passed=False,
-                details=f"校验 {total} 个 CoreTask，重复 {len(violations)} 个: {shown}{suffix}",
+                details=f"Checked {total} CoreTasks, {len(violations)} duplicates: {shown}{suffix}",
             )
         return RuleResult(
             name=self.name,
             description=self.description,
             passed=True,
-            details="通过",
+            details="Passed",
         )
 
 
 class CoreReadyCntRangeRule(Rule):
-    name = "Run/PendReadyCnt 计数校验 1"
-    description = "runReady/pendReady 计数不应超过管理的核总数"
+    name = "Run/PendReadyCnt count check 1"
+    description = "runReady/pendReady count should not exceed managed core count"
 
     def check(self, result: AnalysisResult) -> RuleResult:
         checked = 0
@@ -1054,22 +1057,22 @@ class CoreReadyCntRangeRule(Rule):
                 if run_ready_aic > aic_num:
                     violations.append(
                         f"round={round_id} schedIdx={event.get_int('schedIdx')} "
-                        f"runReadyAic={run_ready_aic} > AIC 核数 {aic_num}"
+                        f"runReadyAic={run_ready_aic} > AIC core count {aic_num}"
                     )
                 if run_ready_aiv > aiv_num:
                     violations.append(
                         f"round={round_id} schedIdx={event.get_int('schedIdx')} "
-                        f"runReadyAiv={run_ready_aiv} > AIV 核数 {aiv_num}"
+                        f"runReadyAiv={run_ready_aiv} > AIV core count {aiv_num}"
                     )
                 if pend_ready_aic > aic_num:
                     violations.append(
                         f"round={round_id} schedIdx={event.get_int('schedIdx')} "
-                        f"pendReadyAic={pend_ready_aic} > AIC 核数 {aic_num}"
+                        f"pendReadyAic={pend_ready_aic} > AIC core count {aic_num}"
                     )
                 if pend_ready_aiv > aiv_num:
                     violations.append(
                         f"round={round_id} schedIdx={event.get_int('schedIdx')} "
-                        f"pendReadyAiv={pend_ready_aiv} > AIV 核数 {aiv_num}"
+                        f"pendReadyAiv={pend_ready_aiv} > AIV core count {aiv_num}"
                     )
 
         if not checked:
@@ -1077,28 +1080,28 @@ class CoreReadyCntRangeRule(Rule):
                 name=self.name,
                 description=self.description,
                 passed=True,
-                details="仅异常时检测",
+                details="Checked only on anomaly",
             )
         if violations:
             shown = "; ".join(violations[:5])
-            suffix = f" 等 {len(violations)} 条" if len(violations) > 5 else ""
+            suffix = f" and {len(violations)} more" if len(violations) > 5 else ""
             return RuleResult(
                 name=self.name,
                 description=self.description,
                 passed=False,
-                details=f"校验 {checked} 次快照，违规 {len(violations)} 条: {shown}{suffix}",
+                details=f"Checked {checked} snapshots, {len(violations)} violations: {shown}{suffix}",
             )
         return RuleResult(
             name=self.name,
             description=self.description,
             passed=True,
-            details="通过",
+            details="Passed",
         )
 
 
 class CoreReadyCntBalanceRule(Rule):
-    name = "Run/PendReadyCnt 计数校验 2"
-    description = "pendReady 计数应不小于 runReady 计数"
+    name = "Run/PendReadyCnt count check 2"
+    description = "pendReady count should be >= runReady count"
 
     def check(self, result: AnalysisResult) -> RuleResult:
         checked = 0
@@ -1128,28 +1131,28 @@ class CoreReadyCntBalanceRule(Rule):
                 name=self.name,
                 description=self.description,
                 passed=True,
-                details="仅异常时检测",
+                details="Checked only on anomaly",
             )
         if violations:
             shown = "; ".join(violations[:5])
-            suffix = f" 等 {len(violations)} 条" if len(violations) > 5 else ""
+            suffix = f" and {len(violations)} more" if len(violations) > 5 else ""
             return RuleResult(
                 name=self.name,
                 description=self.description,
                 passed=False,
-                details=f"校验 {checked} 次快照，违规 {len(violations)} 条: {shown}{suffix}",
+                details=f"Checked {checked} snapshots, {len(violations)} violations: {shown}{suffix}",
             )
         return RuleResult(
             name=self.name,
             description=self.description,
             passed=True,
-            details="通过",
+            details="Passed",
         )
 
 
 class CoreTaskPendingRunningRule(Rule):
-    name = "核任务运行态一致性校验"
-    description = "runningId/pendingId 应与 send 记录匹配，且两者不能同时为非 INIT"
+    name = "Core task running state consistency check"
+    description = "runningId/pendingId should match send records and not both be non-INIT"
 
     TASK_BITS = 16
     FUNC_BITS = 10
@@ -1166,7 +1169,7 @@ class CoreTaskPendingRunningRule(Rule):
                 name=self.name,
                 description=self.description,
                 passed=True,
-                details="仅异常时检测",
+                details="Checked only on anomaly",
             )
 
         core_sent_tasks: Dict[int, Set[int]] = {}
@@ -1194,7 +1197,7 @@ class CoreTaskPendingRunningRule(Rule):
                 pending_id = self._task_func_id(pending)
                 if running_id == pending_id:
                     violations.append(
-                        f"core={core} running 和 pending 同时有效且 task+func 相同 "
+                        f"core={core} running and pending both active with same task+func "
                         f"(running=0x{running:X} pending=0x{pending:X})"
                     )
             if running_active:
@@ -1203,7 +1206,7 @@ class CoreTaskPendingRunningRule(Rule):
                 if running_id is not None and sent_tasks and running_id not in sent_tasks:
                     violations.append(
                         f"core={core} running taskFunc={running_id} (0x{running:X}) "
-                        f"不在 send 记录中 {sorted(sent_tasks)[:5]}"
+                        f"not in send records {sorted(sent_tasks)[:5]}"
                     )
             if pending_active:
                 pending_id = self._task_func_id(pending)
@@ -1211,23 +1214,23 @@ class CoreTaskPendingRunningRule(Rule):
                 if pending_id is not None and sent_tasks and pending_id not in sent_tasks:
                     violations.append(
                         f"core={core} pending taskFunc={pending_id} (0x{pending:X}) "
-                        f"不在 send 记录中 {sorted(sent_tasks)[:5]}"
+                        f"not in send records {sorted(sent_tasks)[:5]}"
                     )
 
         if violations:
             shown = "; ".join(violations[:5])
-            suffix = f" 等 {len(violations)} 条" if len(violations) > 5 else ""
+            suffix = f" and {len(violations)} more" if len(violations) > 5 else ""
             return RuleResult(
                 name=self.name,
                 description=self.description,
                 passed=False,
-                details=f"校验 {checked} 个核状态，违规 {len(violations)} 条: {shown}{suffix}",
+                details=f"Checked {checked} core statuses, {len(violations)} violations: {shown}{suffix}",
             )
         return RuleResult(
             name=self.name,
             description=self.description,
             passed=True,
-            details="通过",
+            details="Passed",
         )
 
 
@@ -1251,9 +1254,9 @@ def build_abnormal_summary(
     result: AnalysisResult,
     execution_items: List[Tuple[Tuple[int, int], DeviceTaskRecord]],
 ) -> List[str]:
-    lines: List[str] = ["  异常总结:"]
+    lines: List[str] = ["  Abnormal summary:"]
     lines.append(
-        f"    构建/执行 DeviceTask: {built_device_task_count(result)}/{len(execution_items)}"
+        f"    Built/Exec DeviceTask: {built_device_task_count(result)}/{len(execution_items)}"
     )
 
     abnormal_devtask_infos = []
@@ -1269,10 +1272,10 @@ def build_abnormal_summary(
             abnormal_devtask_infos.append((idx, key, expected, unfinished))
     if abnormal_devtask_infos:
         parts = [
-            f"第 {idx} 个 (round={key[0]}, taskId={key[1]}), CoreTask 总数={total}, 未完成={unfinished}"
+            f"#{idx} (round={key[0]}, taskId={key[1]}), CoreTask total={total}, unfinished={unfinished}"
             for idx, key, total, unfinished in abnormal_devtask_infos
         ]
-        lines.append(f"    异常 DeviceTask: {'; '.join(parts)}")
+        lines.append(f"    Abnormal DeviceTask: {'; '.join(parts)}")
 
     latest_status_by_core: Dict[int, TraceEvent] = {}
     stats_by_sched: Dict[int, Dict[str, Tuple[int, int]]] = {}
@@ -1347,10 +1350,10 @@ def build_abnormal_summary(
                 f"    Scheduler {sched}: AIC QUE SIZE: {q.get('readyAicCoreFunctionQue', 0)}, "
                 f"AIV QUE SIZE: {q.get('readyAivCoreFunctionQue', 0)}, "
                 f"MIX QUE SIZE: {q.get('readyWrapCoreFunctionQue', 0)}, "
-                f"未下发task={unsent_count}"
+                f"unsent task={unsent_count}"
             )
     else:
-        lines.append(f"    队列中未下发 task 数: {unsent_count}")
+        lines.append(f"    Unsent task count in queue: {unsent_count}")
 
     if result.mix_wraps:
         total_mix = len(result.mix_wraps)
@@ -1358,8 +1361,8 @@ def build_abnormal_summary(
         unsent_mix = sum(1 for r in result.mix_wraps.values() if not r.sent_roles and r.resolved_roles)
         unfinished_mix = sum(1 for r in result.mix_wraps.values() if r.sent_roles and not r.complete)
         lines.append(
-            f"    MIX wrap: 总数={total_mix}, 完成={completed_mix}, "
-            f"未下发={unsent_mix}, 未完成={unfinished_mix}"
+            f"    MIX wrap: total={total_mix}, completed={completed_mix}, "
+            f"unsent={unsent_mix}, unfinished={unfinished_mix}"
         )
 
     incomplete_coretask = sum(
@@ -1368,7 +1371,7 @@ def build_abnormal_summary(
         if record.resolved and record.issues()
     )
     if incomplete_coretask:
-        lines.append(f"    CoreTask 生命周期不完整: {incomplete_coretask}")
+        lines.append(f"    CoreTask lifecycle incomplete: {incomplete_coretask}")
 
     if stats_by_sched:
         total_idle = sum(s["idle"][0] + s["idle"][1] for s in stats_by_sched.values())
@@ -1387,19 +1390,19 @@ def build_abnormal_summary(
                 if event.fields.get("name") in que_names
             )
         if total_que > 0 and total_idle == 0 and total_active == 0:
-            lines.append("    总结: 队列有任务但无空闲核可下发")
+            lines.append("    Summary: queue has tasks but no idle cores")
         elif total_que > 0 and total_idle > 0:
-            lines.append("    总结: 队列有任务且有空闲核可下发")
+            lines.append("    Summary: queue has tasks and idle cores available")
         elif total_que == 0 and total_idle == 0 and total_active > 0:
-            lines.append("    总结: 无任务可下发且无空闲核，仅有核在执行中")
+            lines.append("    Summary: no tasks to dispatch, no idle cores, only cores running")
         elif total_que == 0 and total_idle > 0 and total_active > 0:
-            lines.append("    总结: 无任务可下发，有空闲核且有核在执行中")
+            lines.append("    Summary: no tasks to dispatch, idle cores available with cores running")
         elif total_que == 0 and total_idle == 0 and total_active == 0 and incomplete_coretask > 0:
-            lines.append("    总结: 无任务可下发且无核在执行，CoreTask 生命周期不完整")
+            lines.append("    Summary: no tasks to dispatch, no cores running, CoreTask lifecycle incomplete")
         elif total_que == 0 and total_idle > 0 and total_active == 0 and incomplete_coretask > 0:
-            lines.append("    总结: 无任务可下发且有空闲核，CoreTask 生命周期不完整")
+            lines.append("    Summary: no tasks to dispatch, idle cores available, CoreTask lifecycle incomplete")
         elif total_que == 0 and total_idle > 0 and total_active == 0 and incomplete_coretask == 0:
-            lines.append("    总结: 无任务可下发，有空闲核，无异常 CoreTask")
+            lines.append("    Summary: no tasks to dispatch, idle cores available, no abnormal CoreTask")
 
     return lines
 
@@ -1422,27 +1425,27 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
 
     lines.extend(
         [
-            "PyPTO Trace 任务生命周期报告",
+            "PyPTO Trace Task Lifecycle Report",
             "=" * 88,
-            f"日志目录      : {log_dir}",
-            f"Trace 文件数  : {len(result.source_files)}",
-            f"Trace 事件数  : {len(result.events)}",
-            f"执行结果      : {'异常' if overall_issues else '正常'}",
-            f"构建 DeviceTask: {built_count}",
-            f"执行 DeviceTask: {len(execution_items)}",
-            f"首批 CoreTask : {len(first_batch_tasks)}",
-            f"入队 CoreTask : {len(queued_tasks) + len(mix_tasks)}",
-            f"异常 CoreTask : {len(abnormal_core_tasks)}",
+            f"Log directory  : {log_dir}",
+            f"Trace files    : {len(result.source_files)}",
+            f"Trace events   : {len(result.events)}",
+            f"Result         : {'Abnormal' if overall_issues else 'Normal'}",
+            f"Built DeviceTask: {built_count}",
+            f"Exec DeviceTask: {len(execution_items)}",
+            f"First batch CoreTask: {len(first_batch_tasks)}",
+            f"Queued CoreTask: {len(queued_tasks) + len(mix_tasks)}",
+            f"Abnormal CoreTask: {len(abnormal_core_tasks)}",
         ]
     )
     if result.mix_wraps:
         lines.append(
-            f"MIX wrap      : {len(result.mix_wraps)}，异常 {len(abnormal_mix_wraps)}"
+            f"MIX wrap      : {len(result.mix_wraps)}, abnormal {len(abnormal_mix_wraps)}"
         )
     lines.append("")
 
     if result.source_files:
-        lines.append("输入文件")
+        lines.append("Input files")
         lines.append("-" * 88)
         for path in result.source_files:
             lines.append(f"  {path}")
@@ -1477,19 +1480,19 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
         lines.append("")
 
     if result.handshakes:
-        lines.append("2. 握手统计")
+        lines.append("2. Handshake statistics")
         lines.append("-" * 88)
         summary = handshake_summary(result.arbitrations, result.handshakes)
         aic_success = summary[1][0]
         aiv_success = summary[0][0]
         lines.append(
-            f"  握手成功数: AIC={aic_success}, AIV={aiv_success}"
+            f"  Handshake success: AIC={aic_success}, AIV={aiv_success}"
         )
         arbitration_ranges = {}
         for event in result.arbitrations:
             arbitration_ranges.setdefault(event.round_id, []).append(event)
         for round_id in sorted(arbitration_ranges):
-            lines.append(f"  Round {round_id} 仲裁控核范围:")
+            lines.append(f"  Round {round_id} arbitration core range:")
             for scheduler, aic_start, aic_end, aiv_start, aiv_end, _ in control_core_ranges(
                 result, round_id
             ):
@@ -1500,10 +1503,10 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
                 )
         lines.append("")
 
-    lines.append("3. DeviceTask 与 CoreTask 生命周期")
+    lines.append("3. DeviceTask and CoreTask lifecycle")
     lines.append("-" * 88)
     if not execution_items:
-        lines.append("  未发现 DeviceTask Trace。")
+        lines.append("  No DeviceTask Trace found.")
     for key, device_task in execution_items:
         core_records = device_task_core_records(result, *key)
         task_queued_records = queued_core_records(core_records)
@@ -1522,7 +1525,7 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
         mix_finish_count = sum(bool(record.finishes) for record in task_mix_records)
         expected = device_task.expected_core_count
         finished = device_task.finished_core_count
-        status = "异常" if device_task.structural_issues() or abnormal_records else "正常"
+        status = "Abnormal" if device_task.structural_issues() or abnormal_records else "Normal"
         start_tids = sorted(
             {
                 event.get_int("tid")
@@ -1540,15 +1543,15 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
         lines.extend(
             [
                 f"  Round {device_task.round_id} / DeviceTask {device_task.task_id}: {status}",
-                f"    时间        : {format_timestamp(device_task.start_time)} -> "
+                f"    Time        : {format_timestamp(device_task.start_time)} -> "
                 f"{format_timestamp(device_task.end_time)} "
                 f"({format_duration(device_task.start_time, device_task.end_time)})",
-                f"    调度线程    : start={start_tids}, end={end_tids}",
-                f"    DevTask CoreTask 计数 : finished={finished if finished is not None else '-'} / "
+                f"    Scheduler threads: start={start_tids}, end={end_tids}",
+                f"    DevTask CoreTask count: finished={finished if finished is not None else '-'} / "
                 f"expected={expected if expected is not None else '-'}",
-                f"    首批 CoreTask: unique={len(task_first_batch_records)}, "
+                f"    First batch CoreTask: unique={len(task_first_batch_records)}, "
                 f"sent={fb_sent_count}, finished={fb_finish_count}",
-                f"    入队 CoreTask: unique={len(task_queued_records)}, "
+                f"    Queued CoreTask: unique={len(task_queued_records)}, "
                 f"sent={sent_count}, ack={ack_count}, finished={finish_count}, "
                 f"abnormal={len(abnormal_records)}",
                 f"    MIX CoreTask : unique={len(task_mix_records)}, "
@@ -1562,7 +1565,7 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
             total_aic = sum(aic_end - aic_start for _, aic_start, aic_end, _, _, _ in core_ranges)
             total_aiv = sum(aiv_end - aiv_start for _, _, _, aiv_start, aiv_end, _ in core_ranges)
             lines.append(
-                f"    控核统计    : AIC={total_aic}, AIV={total_aiv}, total={total_aic + total_aiv}"
+                f"    Core control stats: AIC={total_aic}, AIV={total_aiv}, total={total_aic + total_aiv}"
             )
             for scheduler, aic_start, aic_end, aiv_start, aiv_end, disabled in core_ranges:
                 switch_text = ""
@@ -1575,13 +1578,13 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
                     f"{switch_text}"
                 )
         for issue in device_task.structural_issues():
-            lines.append(f"    DeviceTask 异常: {issue}")
+            lines.append(f"    DeviceTask abnormal: {issue}")
     lines.append("")
 
-    lines.append("4. 异常 CoreTask")
+    lines.append("4. Abnormal CoreTask")
     lines.append("-" * 88)
     if not abnormal_core_tasks:
-        lines.append("  无。所有 CoreTask 均具备 resolve + send + finish 生命周期。")
+        lines.append("  None. All CoreTasks have complete resolve + send + finish lifecycle.")
     else:
         grouped_records = defaultdict(list)
         for record in abnormal_core_tasks:
@@ -1596,17 +1599,17 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
                     f"leafHash={leaf_text}  "
                     f"{record.stage_text()}  Scheduler: {record.scheduler_ids or '-'} "
                     f"Core: {record.core_names or '-'}  "
-                    f"异常: {'；'.join(record.issues())}"
+                    f"Issues: {';'.join(record.issues())}"
                 )
     lines.append("")
 
-    lines.append("5. MIX wrap 统计")
+    lines.append("5. MIX wrap statistics")
     lines.append("-" * 88)
     if result.mix_wraps:
         complete_count = sum(record.complete for record in result.mix_wraps.values())
         lines.append(
-            f"  总数={len(result.mix_wraps)}，完成={complete_count}，"
-            f"异常={len(abnormal_mix_wraps)}"
+            f"  total={len(result.mix_wraps)},completed={complete_count},"
+            f"abnormal={len(abnormal_mix_wraps)}"
         )
         for record in sorted(
             result.mix_wraps.values(),
@@ -1614,7 +1617,7 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
         ):
             if record.complete and not record.issues():
                 continue
-            state = "异常"
+            state = "Abnormal"
             path = (
                 "direct"
                 if record.direct_send is True
@@ -1634,23 +1637,23 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
                 [
                     f"  Round {record.round_id} / DeviceTask {record.dev_task_id} / "
                     f"Wrap {record.wrap_id}: {state}",
-                    f"    类型/路径 : {MIX_TYPE_NAMES.get(record.mix_type, record.mix_type)} / {path}",
+                    f"    Type/Path : {MIX_TYPE_NAMES.get(record.mix_type, record.mix_type)} / {path}",
                     f"    Tasks     : {task_text or '-'}",
                     f"    Cores     : {core_text or '-'}",
-                    f"    状态      : sent=[{', '.join(MIX_ROLE_NAMES[r] for r in sorted(record.sent_roles))}], "
+                    f"    Status    : sent=[{', '.join(MIX_ROLE_NAMES[r] for r in sorted(record.sent_roles))}], "
                     f"finished=[{', '.join(MIX_ROLE_NAMES[r] for r in sorted(record.finished_roles))}], "
                     f"allFinish={int(record.all_finish)}",
                 ]
             )
             issues = record.issues()
             if issues:
-                lines.append(f"    异常原因  : {'；'.join(issues)}")
+                lines.append(f"    Root cause: {';'.join(issues)}")
     else:
-        lines.append("  日志中未找到 mix 任务 trace")
+        lines.append("  No mix task trace found in logs")
     lines.append("")
 
     if abnormal_core_tasks and result.aicore_statuses:
-        lines.append("6. 异常时 AICore 快照")
+        lines.append("6. AICore snapshot on anomaly")
         lines.append("-" * 88)
         abnormal_cores = {
             event.get_int("coreIdx")
@@ -1676,7 +1679,7 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
         lines.append("")
 
     if overall_issues:
-        lines.append("结论")
+        lines.append("Conclusion")
         lines.append("-" * 88)
         for issue in overall_issues:
             lines.append(f"  - {issue}")
@@ -1685,18 +1688,18 @@ def render_report(result: AnalysisResult, log_dir: Path) -> str:
     else:
         lines.extend(
             [
-                "结论",
+                "Conclusion",
                 "-" * 88,
-                "  本次执行正常：DeviceTask 计数一致，所有运行时入队 CoreTask 生命周期完整。",
+                "  Execution normal: DeviceTask counts consistent, all runtime-queued CoreTask lifecycles complete.",
             ]
         )
         if result.mix_wraps:
-            lines.append("  MIX wrap 生命周期统计正常。")
+            lines.append("  MIX wrap lifecycle statistics normal.")
 
     rule_results = run_rules(result)
     if rule_results:
         lines.append("")
-        lines.append("规则校验")
+        lines.append("Rule checks")
         lines.append("-" * 88)
         for rr in rule_results:
             status = "[✓]" if rr.passed else "[✗]"
@@ -1710,21 +1713,21 @@ def parse_directory(log_dir: Path) -> Tuple[AnalysisResult, str]:
     log_files = discover_log_files(log_dir)
     events, source_files = parse_log_files(log_files)
     if not events:
-        raise ValueError(f"目录中未发现 #trace.* 日志: {log_dir}")
+        raise ValueError(f"No #trace.* logs found in directory: {log_dir}")
     result = build_analysis(events, source_files)
     return result, render_report(result, log_dir)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="解析日志目录中的 PyPTO Trace，并生成单个任务生命周期报告。"
+        description="Parse PyPTO Trace from log directory and generate task lifecycle report."
     )
-    parser.add_argument("log_dir", help="日志目录；脚本会递归扫描其中的 .log/.txt/.out 文件")
+    parser.add_argument("log_dir", help="Log directory; script recursively scans .log/.txt/.out files")
     args = parser.parse_args()
 
     log_dir = Path(args.log_dir).expanduser().resolve()
     if not log_dir.is_dir():
-        parser.error(f"日志目录不存在或不是目录: {log_dir}")
+        parser.error(f"Log directory does not exist or is not a directory: {log_dir}")
 
     try:
         _, report = parse_directory(log_dir)

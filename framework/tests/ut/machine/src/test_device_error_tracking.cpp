@@ -106,7 +106,7 @@ TEST(DeviceErrorTrackingTest, PyPTOExceptionInfoCallBackOutputsCorrectInfo)
     EXPECT_NE(output.find("task_id: 123"), std::string::npos);
     EXPECT_NE(output.find("retcode: 507015"), std::string::npos);
     EXPECT_NE(output.find("kernelName: test_kernel"), std::string::npos);
-    EXPECT_NE(output.find("PyPTO Inner Error"), std::string::npos);
+    EXPECT_NE(output.find("PyPTO Internal Error"), std::string::npos);
 }
 
 TEST(DeviceErrorTrackingTest, InitializeErrorCallbackExecutesNormally)

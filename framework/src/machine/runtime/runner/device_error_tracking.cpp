@@ -181,7 +181,7 @@ void PyPTOExceptionInfoCallBack(AclRtExceptionInfo* exceptionInfo)
     printf("[Error]: %s, device_id: %u, stream_id: %u, task_id: %u, retcode: %u, kernelName: %s\n", errMsg,
            exceptionInfo->deviceid, exceptionInfo->streamid, exceptionInfo->taskid, exceptionInfo->retcode, kernelName);
     printf("        Rectify the fault based on the error information in the ascend log.\n");
-    printf("PyPTO error: PyPTO Inner Error. Please rectify the fault based on the error information "
+    printf("PyPTO error: PyPTO Internal Error. Please rectify the fault based on the error information "
            "in the ascend log. (function PyPTOExceptionInfoCallBack)\n");
 }
 

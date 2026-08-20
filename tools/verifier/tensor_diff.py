@@ -22,7 +22,7 @@ MAX_PRECISION = sys.float_info.dig + 1
 
 
 class IsCloseConfig(NamedTuple):
-    """check_isclose 函数的配置参数"""
+    """Configuration parameters for check_isclose function"""
 
     rtol: float = 1.0e-2
     atol: float = 1.0e-2
@@ -80,10 +80,10 @@ class TensorComparator:
         df = pd.DataFrame(table_data, columns=headers)
         if file_exists:
             df.to_csv(csv_path, mode='a', index=False, header=False, encoding='utf-8-sig')
-            logging.info(f"数据已追加到: {csv_path}")
+            logging.info(f"Data appended to: {csv_path}")
         else:
             df.to_csv(csv_path, index=False, encoding='utf-8-sig')
-            logging.info(f"数据已保存到: {csv_path}")
+            logging.info(f"Data saved to: {csv_path}")
 
     @staticmethod
     def check_isclose(a, b, config: IsCloseConfig = IsCloseConfig()):
