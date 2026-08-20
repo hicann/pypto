@@ -43,7 +43,17 @@ sign(input: Tensor) -> Tensor
 ## 约束说明
 
 1. TileShape与input维度保持一致；
-2. 由于存在临时内存使用，当输入数据类型为DT\_INT8，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么a\*b\*c\*d\*sizeof\(self\) + c\*d\*sizeof\(INT8\) <UB。
+2. 由于存在临时内存使用，设置TileShape时需保证输入Tile、输出Tile及临时空间的总占用小于可用UB。假设TileShape的最后两维为`H`和`W`（一维TileShape取`H = 1`），各数据类型对应的临时空间如下：
+
+   | 输入数据类型 | 实际工作数据类型 | 尾轴对齐长度 | 临时空间大小（字节） |
+   |--------------|------------------|--------------|----------------------|
+   | `DT_INT8` | `DT_FP16` | `W_align = CeilAlign(W, 16)` | `H * W_align * sizeof(DT_FP16)` |
+   | `DT_FP16` | `DT_FP16` | `W_align = CeilAlign(W, 16)` | `2 * H * W_align * sizeof(DT_FP16) + 32` |
+   | `DT_BF16` | `DT_FP32` | `W_align = CeilAlign(W, 8)` | `2 * H * W_align * sizeof(DT_FP32) + 32` |
+   | `DT_FP32` | `DT_FP32` | `W_align = CeilAlign(W, 8)` | `2 * H * W_align * sizeof(DT_FP32) + 32` |
+   | `DT_INT16`、`DT_INT32` | 与输入一致 | 不涉及 | `32` |
+
+   浮点计算路径中的两块等大临时空间分别用于工作数据和比较掩码，额外的32字节用于标量临时块。`DT_BF16`输入在进入Sign TileOp前会通过AutoCast转换为`DT_FP32`，因此按`DT_FP32`路径申请临时空间；计算完成后，结果再转换回`DT_BF16`。
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 ## 调用示例

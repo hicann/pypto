@@ -31,26 +31,6 @@ TILEOP void SignInt(DstTile dstTile, SrcTile srcTile)
     pto::TMAXS(dstTile, dstTile, static_cast<T>(-1));
 }
 
-template <typename LastUse, typename T, typename DstTile, typename SrcTile>
-TILEOP void SignHalf(DstTile dstTile, SrcTile srcTile)
-{
-    constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
-    constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
-    pto::TMINS(dstTile, srcTile, static_cast<T>(5.960464e-08f));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    pto::TMAXS(dstTile, dstTile, static_cast<T>(-5.960464e-08f));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    pto::TMULS(dstTile, dstTile, static_cast<T>(4.096000e+03f));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    pto::TMULS(dstTile, dstTile, static_cast<T>(4.096000e+03f));
-}
-
 template <typename LastUse, typename T, typename DstTile, typename SrcTile, typename TmpTile>
 TILEOP void SignIntCast(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
 {
@@ -79,41 +59,54 @@ TILEOP void SignIntCast(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
     pto::TCVT(dstTile, tmpTile, pto::RoundMode::CAST_NONE);
 }
 
-template <typename LastUse, typename T, typename DstTile, typename SrcTile>
-TILEOP void SignFloat(DstTile dstTile, SrcTile srcTile)
+template <typename LastUse, typename T, typename DstTile, typename SrcTile, typename RightTile, typename MaskTile,
+          typename ScalarTmpTile>
+TILEOP void SignFloat(DstTile dstTile, SrcTile srcTile, RightTile rightTile, MaskTile maskTile,
+                      ScalarTmpTile scalarTmpTile)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
-    pto::TMINS(dstTile, srcTile, static_cast<T>(1.1754943508222875e-38f));
+
+    pto::TCMPS(maskTile, srcTile, static_cast<T>(0.0f), pto::CmpMode::LT);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMAXS(dstTile, dstTile, static_cast<T>(-1.1754943508222875e-38f));
+    pto::TEXPANDS(rightTile, static_cast<T>(1.0f));
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMULS(dstTile, dstTile, static_cast<T>(4.6116860184273879e+18f));
+    pto::TSELS(rightTile, maskTile, rightTile, scalarTmpTile, static_cast<T>(0.0f));
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMULS(dstTile, dstTile, static_cast<T>(4.6116860184273879e+18f));
+    pto::TCMPS(maskTile, srcTile, static_cast<T>(0.0f), pto::CmpMode::GT);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMULS(dstTile, dstTile, static_cast<T>(4.0000000000000000e+00f));
+    pto::TEXPANDS(dstTile, static_cast<T>(1.0f));
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TSELS(dstTile, maskTile, dstTile, scalarTmpTile, static_cast<T>(0.0f));
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TSUB(dstTile, dstTile, rightTile);
 }
 
-template <typename LastUse, typename T, typename DstTile, typename SrcTile, typename TmpTile>
-TILEOP void SignImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
+template <typename LastUse, typename T, typename DstTile, typename SrcTile, typename WorkTile, typename MaskTile,
+          typename ScalarTmpTile>
+TILEOP void SignImpl(DstTile dstTile, SrcTile srcTile, WorkTile workTile, MaskTile maskTile,
+                     ScalarTmpTile scalarTmpTile)
 {
     if constexpr (std::is_same<T, int32_t>::value || std::is_same<T, int16_t>::value) {
         SignInt<LastUse, T, DstTile, SrcTile>(dstTile, srcTile);
-    } else if constexpr (std::is_same<T, half>::value) {
-        SignHalf<LastUse, T, DstTile, SrcTile>(dstTile, srcTile);
-    } else if constexpr (std::is_same<T, float>::value || std::is_same<T, bfloat16_t>::value) {
-        SignFloat<LastUse, T, DstTile, SrcTile>(dstTile, srcTile);
+    } else if constexpr (std::is_same<T, half>::value || std::is_same<T, float>::value) {
+        SignFloat<LastUse, T>(dstTile, srcTile, workTile, maskTile, scalarTmpTile);
+    } else if constexpr (std::is_same<T, bfloat16_t>::value) {
+        static_assert(!std::is_same<T, bfloat16_t>::value, "BF16 Sign must be converted to FP32 by AutoCast.");
     } else if constexpr (std::is_same<T, int8_t>::value) {
-        SignIntCast<LastUse, T, DstTile, SrcTile, TmpTile>(dstTile, srcTile, tmpTile);
+        SignIntCast<LastUse, T>(dstTile, srcTile, workTile);
     }
     return;
 }
@@ -153,18 +146,29 @@ TILEOP void TSign(T0 dst, T1 src, T3 tmp)
     constexpr auto srcTileH = SrcExecConfig::tileH;
     constexpr auto srcTileW = SrcExecConfig::tileW;
 
-    constexpr auto ALIGN32HALF = 16;
-    constexpr auto tmpTileW = (srcTileW + ALIGN32HALF - 1) / ALIGN32HALF * ALIGN32HALF;
+    using DstType = typename T0::Type;
+    using WorkType = std::conditional_t<std::is_same<DstType, int8_t>::value, half, DstType>;
+    constexpr auto align32 = TileOp::BLOCK_SIZE / sizeof(WorkType);
+    constexpr auto tmpTileW = (srcTileW + align32 - 1) / align32 * align32;
+    constexpr size_t workBlockBytes = srcTileH * tmpTileW * sizeof(WorkType);
 
-    using DstTile = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1,
-                              -1>;
+    using DstTile = pto::Tile<pto::TileType::Vec, DstType, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
     using SrcTile = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor, -1,
                               -1>;
-    using TmpTile = pto::Tile<pto::TileType::Vec, half, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
+    using WorkTile = pto::Tile<pto::TileType::Vec, WorkType, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
+    using MaskTile = pto::Tile<pto::TileType::Vec, uint8_t, srcTileH, tmpTileW * sizeof(WorkType),
+                               pto::BLayout::RowMajor, -1, -1>;
+    using ScalarTmpTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, TileOp::BLOCK_SIZE, pto::BLayout::RowMajor, -1, -1>;
+
     DstTile dstTile(dstShape3, dstShape4);
     SrcTile srcTile(srcExecShape3, srcExecShape4);
-    TmpTile tmpTile(srcExecShape3, srcExecShape4);
-    pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
+    WorkTile workTile(srcExecShape3, srcExecShape4);
+    MaskTile maskTile(srcExecShape3, srcExecShape4);
+    ScalarTmpTile scalarTmpTile(1, TileOp::BLOCK_SIZE);
+
+    pto::TASSIGN(workTile, (uint64_t)(tmp.GetAddr()));
+    pto::TASSIGN(maskTile, (uint64_t)(tmp.GetAddr() + workBlockBytes));
+    pto::TASSIGN(scalarTmpTile, (uint64_t)(tmp.GetAddr() + 2 * workBlockBytes));
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
@@ -173,7 +177,7 @@ TILEOP void TSign(T0 dst, T1 src, T3 tmp)
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
-                SignImpl<LastUse, typename T0::Type, DstTile, SrcTile, TmpTile>(dstTile, srcTile, tmpTile);
+                SignImpl<LastUse, DstType>(dstTile, srcTile, workTile, maskTile, scalarTmpTile);
             }
         }
     }

@@ -1027,6 +1027,7 @@ const std::unordered_set<Opcode> UNSUPPORT_BF16_ARCH35_OPS{
     Opcode::OP_REM,
     Opcode::OP_ROWMIN_SINGLE,
     Opcode::OP_ROWSUM_SINGLE,
+    Opcode::OP_SIGN,
     Opcode::OP_MOD,
     Opcode::OP_MODS,
     Opcode::OP_PRELU,

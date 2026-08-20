@@ -130,6 +130,15 @@ void TiledSignOperation(Function& function, const TileShape& tileShape, size_t c
         int64_t tmpSize = ALIGN_SIZE / BytesOf(DT_FP16);
         if (input.tensor.GetDataType() == DT_INT8) {
             tmpSize = MultiplyLastTwoDims<float16>(input.tileInfo.shape);
+        } else if (input.tensor.GetDataType() == DT_FP16 || input.tensor.GetDataType() == DT_FP32) {
+            const int64_t typeSize = BytesOf(input.tensor.GetDataType());
+            const int64_t alignElements = ALIGN_SIZE / typeSize;
+            const auto& shape = input.tileInfo.shape;
+            const int64_t tmpH = shape.size() > 1 ? shape[shape.size() - 2] : 1;
+            const int64_t tmpW = (shape.back() + alignElements - 1) / alignElements * alignElements;
+            // One work tile, one mask tile with the same byte footprint, and one scalar block.
+            const int64_t tmpBytes = 2 * tmpH * tmpW * typeSize + ALIGN_SIZE;
+            tmpSize = tmpBytes / BytesOf(DT_FP16);
         }
 
         std::vector<int64_t> tmpShape({tmpSize});
