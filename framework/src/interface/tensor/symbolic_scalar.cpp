@@ -25,6 +25,7 @@
 #include "symbolic_scalar_simplify.h"
 #include "symbolic_scalar_solver.h"
 #include "ir/kind_traits.h"
+#include "interface/tensor/irbuilder.h"
 
 constexpr uint64_t IMMEDIATE = 0;
 constexpr uint64_t SYMBOL = 1;
@@ -875,6 +876,12 @@ pypto::ir::VarPtr SymbolicScalar::AsVar() const
 {
     ASSERT(IsSymbol());
     return std::dynamic_pointer_cast<RawSymbolicSymbol>(raw_);
+}
+
+std::shared_ptr<const ir::Var> RawSymbolicSymbol::Clone() const
+{
+    IRBuilder builder;
+    return builder.CreateScalarVar(name_).AsVar();
 }
 
 pypto::ir::ExprPtr SymbolicScalar::AsExpr() const

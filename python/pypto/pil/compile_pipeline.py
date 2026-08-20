@@ -31,6 +31,7 @@ def _build_default_pipeline():
     dce = ir.Pass.aggressive_dce()
     canonicalize = ir.Pass.canonicalize()
     merge_stmts = ir.Pass.merge_stmts_into_if()
+    remove_redundant_tokens = ir.Pass.remove_redundant_token_pass()
     create_root_functions = ir.Pass.create_root_functions()
     finalize = ir.Pass.finalize_dynamic_function()
 
@@ -39,6 +40,7 @@ def _build_default_pipeline():
         ("first_canonicalize_dce", lambda p:dce(canonicalize(p))),
         ("second_canonicalize_dce", lambda p:dce(canonicalize(p))),
         ("canonicalize(merge_stmts)", lambda p:canonicalize(merge_stmts(p))),
+        ("remove_redundant_token_pass", remove_redundant_tokens),
         ("create_root_functions", create_root_functions),
         ("finalize", finalize),
     ]

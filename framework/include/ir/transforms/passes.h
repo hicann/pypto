@@ -235,6 +235,16 @@ Pass TokenPass();
 Pass InferTokenPass();
 
 /**
+ * \brief Create a pass that removes redundant tensor-graph token dependencies
+ *
+ * The first implementation handles straight-line TensorOp sequences. It removes
+ * read/write token edges already implied by another SSA/token path, or edges
+ * between accesses proven disjoint while forwarding the dependency to direct
+ * successors. Dependencies crossing If/For/While boundaries are preserved.
+ */
+Pass RemoveRedundantTokenPass();
+
+/**
  * \brief Create a pass that flattens nested call expressions
  */
 Pass FlattenCallExpr();

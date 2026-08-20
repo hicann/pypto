@@ -17,6 +17,7 @@
 #include "ir/transforms/utils/canonicalize.h"
 #include "ir/transforms/infer_token_pass.h"
 #include "ir/transforms/merge_stmts_pass.h"
+#include "ir/transforms/remove_redundant_token_pass.h"
 
 #include <algorithm>
 #include <functional>
@@ -249,6 +250,23 @@ Pass InferTokenPass()
                                                     func->span_, func->funcType_, func->entry_);
         },
         "InferTokenPass");
+}
+
+Pass RemoveRedundantTokenPass()
+{
+    return CreateFunctionPass(
+        [](const FunctionPtr& func) -> FunctionPtr {
+            if (!func || !func->body_)
+                return func;
+            if (!npu::tile_fwk::IRContext::Get().AssembleNewLogicalTensor())
+                return func;
+            auto body = ::pypto::ir::RunRemoveRedundantTokenPass(SeqStmts::AsMut(func->body_));
+            if (body == func->body_)
+                return func;
+            return std::make_shared<const Function>(func->name_, func->params_, func->returnTypes_, body, func->span_,
+                                                    func->funcType_, func->entry_);
+        },
+        "RemoveRedundantTokenPass");
 }
 
 Pass MergeStmtsIntoIf()

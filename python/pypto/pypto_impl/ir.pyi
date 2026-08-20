@@ -2391,6 +2391,10 @@ class Pass:
         """Infer token dependencies."""
 
     @staticmethod
+    def remove_redundant_token_pass() -> Pass:
+        """Remove redundant token dependencies."""
+
+    @staticmethod
     def merge_stmts_into_if() -> Pass:
         """Merge statements into if statements."""
 
