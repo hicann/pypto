@@ -48,7 +48,7 @@ mask_tensor的总位宽为256 bit，其粒度由`dtype`参数决定；每个数�
 
 ![b8数据类型下CreateMask接口不同MaskPattern模式下元素选取](../../../../figures/create_mask_b8_pattern_selection.jpg)
 
-## astype精度转换中的mask_tensor
+### astype精度转换中的mask_tensor
 
 不同数据类型下元素对应的mask位宽不一致，在astype进行类型转换时，mask_tensor根据输入的源操作数进行有效元素筛选。
 

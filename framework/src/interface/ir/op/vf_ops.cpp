@@ -438,15 +438,6 @@ REGISTER_OP("vf.axpy")
     .set_attr<int>("mode")
     .f_deduce_type(DeduceVFFromDstArg);
 
-REGISTER_OP("vf.copy")
-    .set_op_category("VFOp")
-    .set_description("Register copy with MODE_MERGING")
-    .add_argument("dst", "Destination register")
-    .add_argument("src", "Source register")
-    .add_argument("mask", "Mask register")
-    .set_attr<int>("mode")
-    .f_deduce_type(DeduceVFFromDstArg);
-
 REGISTER_OP("vf.bit_cast")
     .set_op_category("VFOp")
     .set_description("Bitwise type reinterpretation (no value conversion)")
@@ -565,6 +556,7 @@ REGISTER_OP("vf.astype")
     .set_attr<int>("layout")
     .set_attr<int>("round_mode")
     .set_attr<int>("saturate")
+    .set_attr<int>("mode")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.de_interleave")

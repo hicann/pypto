@@ -529,7 +529,7 @@ def _vf_kernel_11_copy_madd_0(in_a, in_b, t_f0, t_f1):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(in_a, 0)
     reg_b = vf.load_align(in_b, 0)
-    reg_dst = vf.copy(reg_a, preg)
+    reg_dst = vf.move(reg_a, preg)
     vf.store_align(t_f0, reg_dst, preg)
     reg_dst = vf.load_align(in_b, 0)
     reg_dst = vf.mul_dst_add(reg_a, reg_b, preg)
@@ -1456,7 +1456,7 @@ def kernel_34_ln(
 def _vf_kernel_35_rsqrt_mov_0(in_a, t_f1):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(in_a, 0)
-    reg_mov = vf.copy(reg_a, preg)
+    reg_mov = vf.move(reg_a, preg)
     vf.store_align(t_f1, reg_mov, preg)
 
 
@@ -1502,8 +1502,8 @@ def _vf_kernel_36_mla_mov_0(in_a, in_b, t_f0, t_f1):
     reg_dst = vf.load_align(in_b, 0)
     reg_dst = vf.mul_add_dst(reg_a, reg_a, preg)
     vf.store_align(t_f0, reg_dst, preg)
-    # copy: copy a to dst
-    reg_dst = vf.copy(reg_a, preg)
+    # move: copy a to dst
+    reg_dst = vf.move(reg_a, preg)
     vf.store_align(t_f1, reg_dst, preg)
 
 
@@ -1645,8 +1645,8 @@ def _vf_kernel_39_selectr_max_0(in_a, in_b, t_f0, t_f1):
     # gather: broadcast element 0 from tile to all lanes (replaces select_r)
     reg_idx = vf.full(0, preg_u32, dtype=pl.DT_UINT32)
     reg_dst = vf.gather(in_a, reg_idx, preg_u32)
-    # gather result is UINT32 reinterpret of FP32 data; copy back as FP32
-    reg_dst = vf.copy(reg_dst, preg, dtype=pl.DT_FP32)
+    # gather result is UINT32 reinterpret of FP32 data; move back as FP32
+    reg_dst = vf.move(reg_dst, preg)
     vf.store_align(t_f0, reg_dst, preg)
     # max: element-wise max(a, b)
     reg_dst = vf.max(reg_a, reg_b, preg)

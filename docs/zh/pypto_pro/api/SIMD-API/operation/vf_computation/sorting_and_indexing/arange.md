@@ -83,7 +83,7 @@ def test_example():
     out = torch.empty([1, 64], device=device, dtype=torch.int32)
     example_kernel[None, core_nums](out)
     torch.npu.synchronize()
-    expected = torch.arange(64, device=device, dtype=torch.int32).unsqueeze(0)
+    expected = torch.arange(64, dtype=torch.int32).unsqueeze(0).to(device)
     torch.testing.assert_close(out, expected, rtol=0, atol=0)
 
 if __name__ == "__main__":
@@ -127,7 +127,7 @@ def test_example_2():
     out = torch.empty([1, 64], device=device, dtype=torch.int32)
     example_kernel_dec[None, core_nums](out)
     torch.npu.synchronize()
-    expected = torch.arange(63, -1, -1, device=device, dtype=torch.int32).unsqueeze(0)
+    expected = torch.arange(126, 62, -1, dtype=torch.int32).unsqueeze(0).to(device)
     torch.testing.assert_close(out, expected, rtol=0, atol=0)
 
 if __name__ == "__main__":

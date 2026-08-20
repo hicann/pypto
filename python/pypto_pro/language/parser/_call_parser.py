@@ -296,7 +296,6 @@ class CallParserMixin:
         "sqrt": 1,
         "relu": 1,
         "neg": 1,
-        "copy": 1,
         "pair_reduce_sum": 1,
         "squeeze": 1,
         "truncate": 1,

@@ -5,6 +5,7 @@
 :titlesonly:
 
 reg_tensor
+types/index
 basic_arithmetic/index
 logical_computation/index
 comparison_and_selection/index

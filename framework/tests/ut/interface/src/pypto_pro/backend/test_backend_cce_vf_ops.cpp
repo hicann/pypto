@@ -173,7 +173,6 @@ TEST(BackendCCEVFOpsTest, RegistersExpectedVectorFunctionOperations)
                                             "vf.pair_reduce_sum",
                                             "vf.abs_sub",
                                             "vf.axpy",
-                                            "vf.copy",
                                             "vf.mul_dst_add",
                                             "vf.pack",
                                             "vf.unpack",
@@ -286,9 +285,9 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
     auto mask = MakeVar("mask", ir::DataType::UINT32);
     auto carry = MakeVar("carry", ir::DataType::UINT32);
 
-    const Kwargs merging = {{"mode", EnumValue(ir::MergeMode::MERGING)}};
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
     const auto expect_binary = [&](const std::string& name, const std::string& intrinsic) {
-        ExpectInvoke(codegen, name, {intrinsic}, {dst, src0, src1, mask}, merging);
+        ExpectInvoke(codegen, name, {intrinsic}, {dst, src0, src1, mask}, zeroing);
     };
     expect_binary("vf.max", "vmax(");
     expect_binary("vf.add", "vadd(");
@@ -303,11 +302,9 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
     expect_binary("vf.abs_sub", "vabsdif(");
     expect_binary("vf.mul_dst_add", "vmadd(");
     expect_binary("vf.prelu", "vprelu(");
-    ExpectInvoke(codegen, "vf.add", {"vaddc("}, {carry, int_dst, int_src0, int_src1, mask});
-    ExpectInvoke(codegen, "vf.sub", {"vsubc("}, {carry, int_dst, int_src0, int_src1, mask});
 
     const auto expect_unary = [&](const std::string& name, const std::vector<std::string>& expected) {
-        ExpectInvoke(codegen, name, expected, {dst, src0, mask}, merging);
+        ExpectInvoke(codegen, name, expected, {dst, src0, mask}, zeroing);
     };
     expect_unary("vf.ln", {"vln("});
     expect_unary("vf.log", {"vln("});
@@ -322,7 +319,7 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
     expect_unary("vf.log10", {"vln(", "0.4342944819032518f"});
 
     const auto expect_scalar = [&](const std::string& name, const std::string& intrinsic) {
-        ExpectInvoke(codegen, name, {intrinsic}, {dst, src0, Float(0.5), mask}, merging);
+        ExpectInvoke(codegen, name, {intrinsic}, {dst, src0, Float(0.5), mask}, zeroing);
     };
     expect_scalar("vf.muls", "vmuls(");
     expect_scalar("vf.adds", "vadds(");
@@ -335,7 +332,7 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
     codegen.RegisterRegTensorVar("fp32_src");
     codegen.RegisterRegTensorVar("fp16_dst");
     ExpectInvoke(codegen, "vf.muls_cast", {"vmulscvt("}, {fp16_dst, fp32_src, Float(0.5), mask},
-                 {{"mode", EnumValue(ir::MergeMode::MERGING)}, {"dtype", ir::DataType::FP16}});
+                 {{"mode", EnumValue(ir::MergeMode::ZEROING)}, {"dtype", ir::DataType::FP16}});
     auto f8_src = MakeVar("f8_src", ir::DataType::FP8E4M3FN);
     codegen.RegisterRegTensorVar("f8_src");
     ExpectInvoke(codegen, "vf.full", {"vdup("}, {dst, f8_src, mask},
@@ -356,19 +353,18 @@ TEST(BackendCCEVFOpsTest, EmitsReductionAndPermutationIntrinsics)
     auto mask = MakeVar("mask", ir::DataType::UINT32);
     auto carry = MakeVar("carry", ir::DataType::UINT32);
     codegen.RegisterRegTensorVar("int_src");
-    const Kwargs merging = {{"mode", EnumValue(ir::MergeMode::MERGING)}};
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
 
     ExpectInvoke(codegen, "vf.reduce_sum", {"vcgadd("}, {dst, src0, mask},
-                 {{"datablock", true}, {"merge_mode", EnumValue(ir::MergeMode::MERGING)}});
+                 {{"datablock", true}, {"merge_mode", EnumValue(ir::MergeMode::ZEROING)}});
     ExpectInvoke(codegen, "vf.reduce_max", {"vcmax("}, {dst, src0, mask});
     ExpectInvoke(codegen, "vf.reduce_min", {"vcgmin("}, {dst, src0, mask}, {{"datablock", true}});
     ExpectInvoke(codegen, "vf.interleave", {"vintlv("}, {dst, dst2, src0, src1});
     ExpectInvoke(codegen, "vf.de_interleave", {"vdintlv("}, {dst, dst2, src0, int_src});
-    ExpectInvoke(codegen, "vf.pair_reduce_sum", {"vcpadd("}, {dst, src0, mask}, merging);
-    ExpectInvoke(codegen, "vf.axpy", {"vaxpy("}, {dst, src0, Float(0.25), mask}, merging);
-    ExpectInvoke(codegen, "vf.copy", {"vmov("}, {dst, src0, mask});
-    ExpectInvoke(codegen, "vf.shift_left", {"vshls("}, {int_dst, int_src0, Int(2), mask}, merging);
-    ExpectInvoke(codegen, "vf.shift_right", {"vshr("}, {int_dst, int_src0, int_src, mask}, merging);
+    ExpectInvoke(codegen, "vf.pair_reduce_sum", {"vcpadd("}, {dst, src0, mask}, zeroing);
+    ExpectInvoke(codegen, "vf.axpy", {"vaxpy("}, {dst, src0, Float(0.25), mask}, zeroing);
+    ExpectInvoke(codegen, "vf.shift_left", {"vshls("}, {int_dst, int_src0, Int(2), mask}, zeroing);
+    ExpectInvoke(codegen, "vf.shift_right", {"vshr("}, {int_dst, int_src0, int_src, mask}, zeroing);
     ExpectInvoke(codegen, "vf.mull", {"vmull("}, {int_dst, int_dst, int_src0, int_src1, mask});
     ExpectInvoke(codegen, "vf.addc", {"vaddcs("}, {carry, int_dst, int_src0, int_src1, mask, mask});
     ExpectInvoke(codegen, "vf.subc", {"vsubcs("}, {carry, int_dst, int_src0, int_src1, mask, mask});
@@ -491,17 +487,17 @@ TEST(BackendCCEVFOpsTest, EmitsPackAndCastIntrinsics)
                  {{"layout", EnumValue(ir::CastLayout::ONE)},
                   {"round_mode", EnumValue(ir::VFRoundMode::CAST_FLOOR)},
                   {"dtype", ir::DataType::FP4E1M2}});
-    // layout TWO/THREE → PART_P2/PART_P3
+    // layout TWO/THREE → PART_P2/PART_P3 (only for 4x narrowing: FP32→FP8)
     const Kwargs layout_two = {{"layout", EnumValue(ir::CastLayout::TWO)},
-                               {"round_mode", EnumValue(ir::VFRoundMode::CAST_FLOOR)},
+                               {"round_mode", EnumValue(ir::VFRoundMode::CAST_RINT)},
                                {"saturate", EnumValue(ir::SaturateMode::ON)},
-                               {"dtype", ir::DataType::FP16}};
-    ExpectInvoke(codegen, "vf.astype", {"PART_TWO"}, {fp16, fp32, mask}, layout_two);
+                               {"dtype", ir::DataType::FP8E4M3FN}};
+    ExpectInvoke(codegen, "vf.astype", {"PART_P2"}, {f8e4m3, fp32, mask}, layout_two);
     const Kwargs layout_three = {{"layout", EnumValue(ir::CastLayout::THREE)},
-                                 {"round_mode", EnumValue(ir::VFRoundMode::CAST_FLOOR)},
+                                 {"round_mode", EnumValue(ir::VFRoundMode::CAST_RINT)},
                                  {"saturate", EnumValue(ir::SaturateMode::ON)},
-                                 {"dtype", ir::DataType::FP16}};
-    ExpectInvoke(codegen, "vf.astype", {"PART_THREE"}, {fp16, fp32, mask}, layout_three);
+                                 {"dtype", ir::DataType::FP8E4M3FN}};
+    ExpectInvoke(codegen, "vf.astype", {"PART_P3"}, {f8e4m3, fp32, mask}, layout_three);
 }
 
 // ============================================================================
@@ -519,6 +515,9 @@ TEST(BackendCCEVFOpsTest, RejectsMismatchedSrcDstTypes)
     // vf.add: dst=FP32, src0=FP16, src1=FP16 → should reject
     EXPECT_ANY_THROW(Invoke(codegen, "vf.add", {fp32_dst, fp16_src, fp16_src, mask}));
 
+    // vf.sub: dst=FP32, src0=FP16, src1=FP16 → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.sub", {fp32_dst, fp16_src, fp16_src, mask}));
+
     // vf.move: dst=FP32, src=FP16 → should reject
     EXPECT_ANY_THROW(Invoke(codegen, "vf.move", {fp32_dst, fp16_src, mask}));
 
@@ -533,6 +532,33 @@ TEST(BackendCCEVFOpsTest, RejectsMismatchedSrcDstTypes)
     // vf.xor: dst=32-bit, src0=16-bit → should reject (bit width mismatch)
     auto fp16_dst = MakeVar("fp16_dst", ir::DataType::FP16);
     EXPECT_ANY_THROW(Invoke(codegen, "vf.xor", {fp32_dst, fp16_src, fp16_dst, mask}));
+}
+
+TEST(BackendCCEVFOpsTest, RejectsMergingForZeroingOnlyOps)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst = MakeVar("dst", ir::DataType::FP32);
+    auto src0 = MakeVar("src0", ir::DataType::FP32);
+    auto src1 = MakeVar("src1", ir::DataType::FP32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    const Kwargs merging = {{"mode", EnumValue(ir::MergeMode::MERGING)}};
+
+    // Ops that only support ZEROING should reject MERGING
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.sub", {dst, src0, src1, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.mul", {dst, src0, src1, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.div", {dst, src0, src1, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.and_", {dst, src0, src1, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.xor", {dst, src0, src1, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.adds", {dst, src0, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.abs", {dst, src0, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.sqrt", {dst, src0, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.truncate", {dst, src0, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.astype", {dst, src0, mask},
+                            {{"mode", EnumValue(ir::MergeMode::MERGING)}, {"dtype", ir::DataType::FP16}}));
+
+    // vf.move only supports MERGING, should reject ZEROING
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.move", {dst, src0, mask}, zeroing));
 }
 
 TEST(BackendCCEVFOpsTest, RejectsInvalidParameterCombinations)
@@ -664,12 +690,12 @@ TEST(BackendCCEVFOpsTest, EmitsCompareHistogramAndMaskConversions)
     ExpectInvoke(codegen, "vf.ge", {"vcmp_ge("}, {mask, fp32, fp16, mask}, {{"cmp_dtype", ir::DataType::UINT8}});
     ExpectInvoke(codegen, "vf.squeeze", {"vsqz(", "MODE_NO_STORED"}, {i32, fp16, mask},
                  {{"gather_mode", EnumValue(ir::SqueezeMode::NO_STORE_REG)}});
-    ExpectInvoke(codegen, "vf.arange", {"vneg(", "vadds("}, {i32, Int(3)},
+    ExpectInvoke(codegen, "vf.arange", {"vci(i32, 3, DEC_ORDER)"}, {i32, Int(3)},
                  {{"index_order", EnumValue(ir::IndexOrder::DECREASE_ORDER)}, {"dtype", ir::DataType::INT32}});
     ExpectInvoke(codegen, "vf.arange", {"vci(i64_b64_lo_"}, {i64, Int(5)}, {{"dtype", ir::DataType::INT64}});
     ExpectInvoke(codegen, "vf.unsqueeze", {"vusqz("}, {i32, mask});
-    ExpectInvoke(codegen, "vf.truncate", {"vtrc(fp32, fp32, ROUND_C, mask, MODE_MERGING)"}, {fp32, fp32, mask},
-                 {{"round_mode", EnumValue(ir::VFRoundMode::CAST_CEIL)}, {"mode", EnumValue(ir::MergeMode::MERGING)}});
+    ExpectInvoke(codegen, "vf.truncate", {"vtrc(fp32, fp32, ROUND_C, mask, MODE_ZEROING)"}, {fp32, fp32, mask},
+                 {{"round_mode", EnumValue(ir::VFRoundMode::CAST_CEIL)}, {"mode", EnumValue(ir::MergeMode::ZEROING)}});
 }
 
 TEST(BackendCCEVFOpsTest, EmitsAlignedDataMovement)

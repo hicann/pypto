@@ -659,7 +659,8 @@ class Vf:
     def astype(src, mask, dtype: Optional[DType] = None,
                layout: Optional[CastLayout] = None,
                round_mode: Optional[VFRoundMode] = None,
-               saturate: Optional[SaturateMode] = None):
+               saturate: Optional[SaturateMode] = None,
+               mode: Optional[MergeMode] = None):
         r"""Type conversion between register types (vcvt instruction).
 
         Converts each element of ``src`` to the destination data type.  For
@@ -693,6 +694,8 @@ class Vf:
                 ``CAST_FLOOR`` / ``CAST_CEIL`` / ``CAST_TRUNC`` /
                 ``CAST_ODD`` / ``CAST_HYBRID``
             saturate: ``pl.SaturateMode.OFF`` (default) or ``pl.SaturateMode.ON``
+            mode: ``pl.MergeMode.ZEROING`` (default). Current device only supports
+                ZEROING mode. Non-active lanes are zeroed.
 
         Returns:
             Destination register (``RegTensor``) with the converted type.
@@ -1458,28 +1461,6 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def copy(src, mask, mode: Optional[MergeMode] = None):
-        r"""Register copy.
-
-        For each lane ``i`` where ``mask[i]`` is active, copies ``src[i]`` to
-        ``dst[i]``.  Maps to hardware ``vmov`` instruction with MODE_MERGING.
-
-        .. math:: dstReg_i = srcReg_i
-
-        Args:
-            src: Source register
-            mask: Predicate mask register
-
-        Kwargs:
-            mode: ``pl.MergeMode.MERGING`` (default, only supported mode)
-
-        Returns:
-            Destination register (``RegTensor``) holding the copied
-            elements from ``src``.
-        """
-
-    @staticmethod
-    @_api_decl
     def bit_cast(src, *, dtype: DType):
         r"""Bitwise type reinterpretation of a register.
 
@@ -1736,17 +1717,6 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def gatherb(*args, **kwargs):
-        """Deprecated --- merged into :func:`vf.gather`.
-
-        Use ``vf.gather(src_ub, indices, mask,
-        data_copy_mode=pl.DataCopyMode.DATA_BLOCK_LOAD)`` for the former
-        datablock-granularity gather. This name is no longer accepted by the
-        parser and is retained only as a migration pointer.
-        """
-
-    @staticmethod
-    @_api_decl
     def get_mask_spr(width: MaskWidth = MaskWidth.B32):
         """Get mask from special purpose register (movp_b32/movp_b16).
 
@@ -1761,84 +1731,6 @@ class Vf:
 
         Returns:
             mask_reg with current SPR value
-        """
-
-    @staticmethod
-    @_api_decl
-    def mla(dst, src0, src1, src2, mask):
-        r"""Multiply-add (3 source).
-
-        For each lane ``i`` where ``mask[i]`` is active, multiplies ``src0[i]``
-        by ``src1[i]``, adds ``src2[i]`` to the product, and writes the sum to
-        ``dst[i]``.  Unlike :func:`vf.mul_dst_add` which accumulates into dst,
-        mla takes a separate addend register.
-
-        .. math:: dstReg_i = srcReg0_i \times srcReg1_i + srcReg2_i
-
-        Statement form (dst is an explicit parameter)::
-
-            vf.mla(dst, src0, src1, src2, pred)
-
-        Args:
-            dst: Destination register
-            src0: First multiplicand register
-            src1: Second multiplicand register
-            src2: Addend register
-            mask: Predicate mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def avg(dst, src0, src1, mask):
-        r"""Element-wise average.
-
-        For each lane ``i`` where ``mask[i]`` is active, computes the average
-        of ``src0[i]`` and ``src1[i]`` and writes the result to ``dst[i]``.
-
-        .. math:: dstReg_i = \frac{srcReg0_i + srcReg1_i}{2}
-
-        Statement form (dst is an explicit parameter)::
-
-            vf.avg(dst, src0, src1, pred)
-
-        Args:
-            dst: Destination register
-            src0: First source register
-            src1: Second source register
-            mask: Predicate mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def add3(dst, src0, src1, src2, mask):
-        r"""Three-operand add.
-
-        For each lane ``i`` where ``mask[i]`` is active, adds ``src0[i]``,
-        ``src1[i]``, and ``src2[i]`` together and writes the sum to
-        ``dst[i]``.
-
-        .. math:: dstReg_i = srcReg0_i + srcReg1_i + srcReg2_i
-
-        Statement form (dst is an explicit parameter)::
-
-            vf.add3(dst, src0, src1, src2, pred)
-
-        Args:
-            dst: Destination register
-            src0: First source register
-            src1: Second source register
-            src2: Third source register
-            mask: Predicate mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def select_r(src_true, src_false, mask, mode: Optional[MergeMode] = None):
-        """Deprecated --- not implemented.
-
-        Use :func:`vf.select` with swapped arguments, or :func:`vf.gather`
-        for mask-based element selection. This name has no backend
-        implementation and is retained only as a migration pointer.
         """
 
     @staticmethod
