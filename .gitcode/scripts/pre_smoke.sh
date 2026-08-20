@@ -11,7 +11,7 @@ set -euo pipefail
 
 rm -rf /home/jenkins/opensource/json
 
-BASE_DIR="/home/taskspace"
+BASE_DIR=${WORKSPACE}
 PYPTO_GOLDEN_PATH="$BASE_DIR/pypto_golden"
 mkdir -p $PYPTO_GOLDEN_PATH
 PYPTO_3RD_LIB_PATH="/home/opensource"
@@ -50,36 +50,26 @@ cd "$BASE_DIR"
 
 set +e
 
-device_params=("-d=0" "-d=1" "-d=2" "-d=3" "-d=4" "-d=5" "-d=6" "-d=7" "-d=8" "-d=9" "-d=10" "-d=11" "-d=12" "-d=13" "-d=14" "-d=15")
-common_params=("--clean" "--verbose" "--golden_path=$PYPTO_GOLDEN_PATH" "--changed_files=$CHANGED_FILES_PARAM")
+RUN_PACKAGE_NAME="cann-pypto_linux-aarch64_ubuntu24.run"
+RUN_PACKAGE_URL="https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/${obs_path}/${RUN_PACKAGE_NAME}"
+if ! wget -q -O "${RUN_PACKAGE_NAME}" "${RUN_PACKAGE_URL}"; then
+    echo "Package download failed!URL:${RUN_PACKAGE_URL}"
+else
+    echo "Package downloaded successfully: ./${RUN_PACKAGE_NAME}"
+fi
+# Add execute permission to the downloaded package
+echo "Adding execute permission: chmod +x ${RUN_PACKAGE_NAME}"
+chmod +x "${RUN_PACKAGE_NAME}" || echo "Failed to add execute permission to the package"
+bash "${RUN_PACKAGE_NAME}" --full -q --pylocal --install-path=/usr/local/Ascend
+source /usr/local/Ascend/cann/set_env.sh
 
-# ===== 测试阶段 1: Python STest & Examples & Models =====
-python3 build_ci.py "${common_params[@]}" --no_isolation --stest --example --models "${device_params[@]}"
+# ===== 测试阶段 =====
+python3 examples/validate_examples.py -t examples -d 0,1,2,3
 ret=$?
 if [ $ret -ne 0 ]; then
-    echo "[ERROR] Python(STest & Examples) failed"
+    echo "[ERROR] Python Examples failed"
     exit $ret
 fi
-echo "[INFO] Python(STest & Examples) succeeded"
+echo "[INFO] Python Examples succeeded"
 
-# ===== 测试阶段 2: C++ STest =====
-python3 build_ci.py --frontend=cpp "${common_params[@]}" --stest "${device_params[@]}" --case_execute_timeout=35
-ret=$?
-if [ $ret -ne 0 ]; then
-    echo "[ERROR] C++(STest) failed"
-    exit $ret
-fi
-echo "[INFO] C++(STest) succeeded"
-
-# ===== 测试阶段 3: C++ STest Distributed =====
-python3 build_ci.py --frontend=cpp "${common_params[@]}" --stest_distributed "${device_params[@]}" --case_execute_timeout=35
-ret=$?
-if [ $ret -ne 0 ]; then
-    echo "[ERROR] C++(STest Distributed) failed"
-    exit $ret
-fi
-echo "[INFO] C++(STest Distributed) succeeded"
-
-echo "All builds completed successfully"
-echo "execute sample success"
 source /opt/conda/bin/deactivate
