@@ -149,10 +149,10 @@ static void CellMatchStitchEnhance(const uint64_t offset[DEV_SHAPE_DIM_MAX], con
         uint64_t* matchCount = std::get<10>(argsTuple);
 
         struct HandleStitch {
-            static inline uint32_t Process(int cellIndex, uint64_t* data, DevAscendFunctionDupped* list, int size,
-                                           DevAscendFunctionDupped* dup, uint64_t tag, uint64_t stitchDevTaskId,
-                                           size_t currIdx, uint32_t opIdx, DeviceWorkspaceAllocator* ws, uint64_t* cnt,
-                                           uint32_t type, int slot, const DevCellMatchTableDesc& desc)
+            static inline uint32_t Process(int cellIndex, const DevCellMatchTableDesc& desc, uint64_t* data,
+                                           DevAscendFunctionDupped* list, int size, DevAscendFunctionDupped* dup,
+                                           uint64_t tag, uint64_t stitchDevTaskId, size_t currIdx, uint32_t opIdx,
+                                           DeviceWorkspaceAllocator* ws, uint64_t* cnt, uint32_t type, int slot)
             {
                 CellMatchStitchHandle(cellIndex, data, type, list, size, dup, tag, stitchDevTaskId, currIdx, opIdx, ws,
                                       cnt, slot, desc);
@@ -162,7 +162,7 @@ static void CellMatchStitchEnhance(const uint64_t offset[DEV_SHAPE_DIM_MAX], con
 
         CellMatchHandle<HandleStitch>(offset, shape, cellMatchTableDesc, cellMatchTableData, stitchingList,
                                       stitchingSize, currDup, tagId, stitchDevTaskId, devCurrIdx, operationIdx,
-                                      workspace, matchCount, opType, slotIdx, cellMatchTableDesc);
+                                      workspace, matchCount, opType, slotIdx);
     }
 }
 

@@ -132,10 +132,13 @@ TEST_F(DevEncodeFunctionStitchTest, CellMatchProcessByDim_1D)
     uint64_t rangeEnd[DEV_SHAPE_DIM_MAX] = {3};
 
     struct TestHandler {
-        static uint32_t Process([[maybe_unused]] int index) { return 0; }
+        static uint32_t Process([[maybe_unused]] int index, [[maybe_unused]] const DevCellMatchTableDesc& desc)
+        {
+            return 0;
+        }
     };
 
-    uint32_t ret = CellMatchProcessByDim<TestHandler>(desc, rangeBegin, rangeEnd);
+    uint32_t ret = CellMatchProcessByDim<TestHandler>(desc.GetDimensionSize(), desc, rangeBegin, rangeEnd);
     EXPECT_EQ(ret, 0u);
 }
 
@@ -153,10 +156,13 @@ TEST_F(DevEncodeFunctionStitchTest, CellMatchProcessByDim_2D)
     uint64_t rangeEnd[DEV_SHAPE_DIM_MAX] = {1, 1};
 
     struct TestHandler {
-        static uint32_t Process([[maybe_unused]] int index) { return 0; }
+        static uint32_t Process([[maybe_unused]] int index, [[maybe_unused]] const DevCellMatchTableDesc& desc)
+        {
+            return 0;
+        }
     };
 
-    uint32_t ret = CellMatchProcessByDim<TestHandler>(desc, rangeBegin, rangeEnd);
+    uint32_t ret = CellMatchProcessByDim<TestHandler>(desc.GetDimensionSize(), desc, rangeBegin, rangeEnd);
     EXPECT_EQ(ret, 0u);
 }
 
@@ -176,10 +182,13 @@ TEST_F(DevEncodeFunctionStitchTest, CellMatchProcessByDim_3D)
     uint64_t rangeEnd[DEV_SHAPE_DIM_MAX] = {1, 1, 1};
 
     struct TestHandler {
-        static uint32_t Process([[maybe_unused]] int index) { return 0; }
+        static uint32_t Process([[maybe_unused]] int index, [[maybe_unused]] const DevCellMatchTableDesc& desc)
+        {
+            return 0;
+        }
     };
 
-    uint32_t ret = CellMatchProcessByDim<TestHandler>(desc, rangeBegin, rangeEnd);
+    uint32_t ret = CellMatchProcessByDim<TestHandler>(desc.GetDimensionSize(), desc, rangeBegin, rangeEnd);
     EXPECT_EQ(ret, 0u);
 }
 
@@ -201,10 +210,13 @@ TEST_F(DevEncodeFunctionStitchTest, CellMatchProcessByDim_4D)
     uint64_t rangeEnd[DEV_SHAPE_DIM_MAX] = {1, 1, 1, 1};
 
     struct TestHandler {
-        static uint32_t Process([[maybe_unused]] int index) { return 0; }
+        static uint32_t Process([[maybe_unused]] int index, [[maybe_unused]] const DevCellMatchTableDesc& desc)
+        {
+            return 0;
+        }
     };
 
-    uint32_t ret = CellMatchProcessByDim<TestHandler>(desc, rangeBegin, rangeEnd);
+    uint32_t ret = CellMatchProcessByDim<TestHandler>(desc.GetDimensionSize(), desc, rangeBegin, rangeEnd);
     EXPECT_EQ(ret, 0u);
 }
 
@@ -228,10 +240,13 @@ TEST_F(DevEncodeFunctionStitchTest, CellMatchProcessByDim_5D)
     uint64_t rangeEnd[DEV_SHAPE_DIM_MAX] = {1, 1, 1, 1, 1};
 
     struct TestHandler {
-        static uint32_t Process([[maybe_unused]] int index) { return 0; }
+        static uint32_t Process([[maybe_unused]] int index, [[maybe_unused]] const DevCellMatchTableDesc& desc)
+        {
+            return 0;
+        }
     };
 
-    uint32_t ret = CellMatchProcessByDim<TestHandler>(desc, rangeBegin, rangeEnd);
+    uint32_t ret = CellMatchProcessByDim<TestHandler>(desc.GetDimensionSize(), desc, rangeBegin, rangeEnd);
     EXPECT_EQ(ret, 0u);
 }
 
@@ -247,10 +262,13 @@ TEST_F(DevEncodeFunctionStitchTest, CellMatchProcessByDim_ErrorOnNonZeroReturn)
     uint64_t rangeEnd[DEV_SHAPE_DIM_MAX] = {3};
 
     struct ErrorHandler {
-        static uint32_t Process([[maybe_unused]] int index) { return 42; }
+        static uint32_t Process([[maybe_unused]] int index, [[maybe_unused]] const DevCellMatchTableDesc& desc)
+        {
+            return 42;
+        }
     };
 
-    uint32_t ret = CellMatchProcessByDim<ErrorHandler>(desc, rangeBegin, rangeEnd);
+    uint32_t ret = CellMatchProcessByDim<ErrorHandler>(desc.GetDimensionSize(), desc, rangeBegin, rangeEnd);
     EXPECT_EQ(ret, 42u);
 }
 

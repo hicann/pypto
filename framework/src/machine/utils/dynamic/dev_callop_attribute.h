@@ -20,20 +20,6 @@
 #include "tilefwk/aicpu_common.h"
 
 namespace npu::tile_fwk::dynamic {
-inline bool IsCellMatchDescFillReady(const DevCellMatchTableDesc& cellMatchTableDesc)
-{
-    int dim = cellMatchTableDesc.GetDimensionSize();
-    if (dim <= 0) {
-        return false;
-    }
-    for (int d = 0; d < dim; ++d) {
-        if (cellMatchTableDesc.GetCellShape(d) <= 0 || cellMatchTableDesc.GetStrideShape(d) <= 0) {
-            return false;
-        }
-    }
-    return true;
-}
-
 inline void DumpCellMatchAccessRange(int funcKey, int operationIndex, const uint64_t offset[DEV_SHAPE_DIM_MAX],
                                      const uint64_t validShape[DEV_SHAPE_DIM_MAX],
                                      const uint64_t rawShape[DEV_SHAPE_DIM_MAX],
@@ -71,8 +57,6 @@ inline bool CheckOffsetAndValidShapeInRawShape(uint64_t offset[DEV_SHAPE_DIM_MAX
         if (validShape[i] == 0) {
             return clamped;
         }
-    }
-    for (int i = 0; i < dims; i++) {
         if (offset[i] > rawShape[i]) {
             DEV_WARN("#ctrl.stitch.bound: action=offset_out_of_range, offset > rawShape");
             offset[i] = rawShape[i];
@@ -145,59 +129,43 @@ static bool GetTensorRawShape(DevAscendFunction* devFunc, uint64_t rawShape[DEV_
     return paramConcrete;
 }
 
-template <bool skipExpression>
-static bool GetTensorOffsetAndValidShape(const DevAscendFunction* devFunc, uint64_t offset[DEV_SHAPE_DIM_MAX],
+inline void GetTensorOffsetAndValidShape(const DevAscendFunction* devFunc, uint64_t offset[DEV_SHAPE_DIM_MAX],
                                          uint64_t validShape[DEV_SHAPE_DIM_MAX], const uint64_t* runtimeExpressionList,
-                                         const DevCellMatchTableDesc& cellMatchTableDesc, int dims, int operationIndex,
-                                         int offsetAttrIndex)
+                                         const DevCellMatchTableDesc& cellMatchTableDesc, int dims, int offsetAttrIndex,
+                                         SymInt*& cachedAttrBase, int operationIndex)
 {
-    const SymInt* offsetSymList = &(devFunc->GetOperationAttr(operationIndex, offsetAttrIndex));
-    const SymInt* validShapeSymList = &(devFunc->GetOperationAttr(operationIndex, offsetAttrIndex + 3 * dims));
-    const SymInt* rawShapeSymList = &(devFunc->GetOperationAttr(operationIndex, offsetAttrIndex + 2 * dims));
+    if (cachedAttrBase == nullptr) {
+        cachedAttrBase = const_cast<SymInt*>(devFunc->GetSymoffset(offsetAttrIndex));
+    }
+    const SymInt* offsetSymList = cachedAttrBase;
+    const SymInt* rawShapeSymList = offsetSymList + 2 * dims;
+    const SymInt* validShapeSymList = offsetSymList + 3 * dims;
 
     uint64_t rawShape[DEV_SHAPE_DIM_MAX] = {0};
-    bool paramConcrete = true;
     for (int i = 0; i < dims; i++) {
         if (offsetSymList[i].IsExpression()) {
-            if (skipExpression) {
-                paramConcrete = false;
-            } else {
-                offset[i] = runtimeExpressionList[offsetSymList[i].Value()];
-            }
+            offset[i] = runtimeExpressionList[offsetSymList[i].Value()];
         } else {
             offset[i] = offsetSymList[i].Value();
         }
 
         if (validShapeSymList[i].IsExpression()) {
-            if (skipExpression) {
-                paramConcrete = false;
-            } else {
-                validShape[i] = runtimeExpressionList[validShapeSymList[i].Value()];
-            }
+            validShape[i] = runtimeExpressionList[validShapeSymList[i].Value()];
         } else {
             validShape[i] = validShapeSymList[i].Value();
         }
 
         if (rawShapeSymList[i].IsExpression()) {
-            if (skipExpression) {
-                paramConcrete = false;
-            } else {
-                rawShape[i] = runtimeExpressionList[rawShapeSymList[i].Value()];
-            }
+            rawShape[i] = runtimeExpressionList[rawShapeSymList[i].Value()];
         } else {
             rawShape[i] = rawShapeSymList[i].Value();
         }
     }
 
-    if (!paramConcrete) {
-        return paramConcrete;
-    }
-
     bool clamped = CheckOffsetAndValidShapeInRawShape(offset, validShape, rawShape, dims);
-    if (clamped) {
+    if (unlikely(clamped)) {
         DumpCellMatchAccessRange(devFunc->GetFuncKey(), operationIndex, offset, validShape, rawShape,
                                  cellMatchTableDesc);
     }
-    return paramConcrete;
 }
 } // namespace npu::tile_fwk::dynamic

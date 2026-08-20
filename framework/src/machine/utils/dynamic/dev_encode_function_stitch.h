@@ -165,7 +165,7 @@ static uint32_t CellMatch5Dimension(const DevCellMatchTableDesc& cellMatchTableD
             for (int d2 = d1 + rangeBegin[2] * s2, e2 = d1 + rangeEnd[2] * s2; d2 <= e2; d2 += s2) {
                 for (int d3 = d2 + rangeBegin[3] * s3, e3 = d2 + rangeEnd[3] * s3; d3 <= e3; d3 += s3) {
                     for (int d4 = d3 + rangeBegin[4] * s4, e4 = d3 + rangeEnd[4] * s4; d4 <= e4; d4 += s4) {
-                        errCode = HandleType::Process(d4, args...);
+                        errCode = HandleType::Process(d4, cellMatchTableDesc, args...);
                         if (errCode != 0) {
                             return errCode;
                         }
@@ -188,7 +188,7 @@ static uint32_t CellMatch4Dimension(const DevCellMatchTableDesc& cellMatchTableD
         for (int d1 = d0 + rangeBegin[1] * s1, e1 = d0 + rangeEnd[1] * s1; d1 <= e1; d1 += s1) {
             for (int d2 = d1 + rangeBegin[2] * s2, e2 = d1 + rangeEnd[2] * s2; d2 <= e2; d2 += s2) {
                 for (int d3 = d2 + rangeBegin[3] * s3, e3 = d2 + rangeEnd[3] * s3; d3 <= e3; d3 += s3) {
-                    errCode = HandleType::Process(d3, args...);
+                    errCode = HandleType::Process(d3, cellMatchTableDesc, args...);
                     if (errCode != 0) {
                         return errCode;
                     }
@@ -200,15 +200,15 @@ static uint32_t CellMatch4Dimension(const DevCellMatchTableDesc& cellMatchTableD
 }
 
 template <typename HandleType, typename... TyArgs>
-static uint32_t CellMatchProcessByDim(const DevCellMatchTableDesc& cellMatchTableDesc, uint64_t* rangeBegin,
+static uint32_t CellMatchProcessByDim(int dims, const DevCellMatchTableDesc& cellMatchTableDesc, uint64_t* rangeBegin,
                                       uint64_t* rangeEnd, TyArgs... args)
 {
     uint32_t errCode = 0;
-    switch (cellMatchTableDesc.cellShape.dimSize) {
+    switch (dims) {
         case 1: {
             int s0 = 1;
             for (int d0 = 0 + rangeBegin[0] * s0, e0 = 0 + rangeEnd[0] * s0; d0 <= e0; d0 += s0) {
-                errCode = HandleType::Process(d0, args...);
+                errCode = HandleType::Process(d0, cellMatchTableDesc, args...);
                 if (errCode != 0) {
                     return errCode;
                 }
@@ -218,7 +218,7 @@ static uint32_t CellMatchProcessByDim(const DevCellMatchTableDesc& cellMatchTabl
             int s0 = cellMatchTableDesc.GetStride(1), s1 = 1;
             for (int d0 = 0 + rangeBegin[0] * s0, e0 = 0 + rangeEnd[0] * s0; d0 <= e0; d0 += s0)
                 for (int d1 = d0 + rangeBegin[1] * s1, e1 = d0 + rangeEnd[1] * s1; d1 <= e1; d1 += s1) {
-                    errCode = HandleType::Process(d1, args...);
+                    errCode = HandleType::Process(d1, cellMatchTableDesc, args...);
                     if (errCode != 0) {
                         return errCode;
                     }
@@ -229,7 +229,7 @@ static uint32_t CellMatchProcessByDim(const DevCellMatchTableDesc& cellMatchTabl
             for (int d0 = 0 + rangeBegin[0] * s0, e0 = 0 + rangeEnd[0] * s0; d0 <= e0; d0 += s0)
                 for (int d1 = d0 + rangeBegin[1] * s1, e1 = d0 + rangeEnd[1] * s1; d1 <= e1; d1 += s1)
                     for (int d2 = d1 + rangeBegin[2] * s2, e2 = d1 + rangeEnd[2] * s2; d2 <= e2; d2 += s2) {
-                        errCode = HandleType::Process(d2, args...);
+                        errCode = HandleType::Process(d2, cellMatchTableDesc, args...);
                         if (errCode != 0) {
                             return errCode;
                         }
@@ -249,8 +249,7 @@ static uint32_t CellMatchProcessByDim(const DevCellMatchTableDesc& cellMatchTabl
         } break;
         default:
             DEV_ERROR(ProgEncodeErr::CELL_MATCH_PARAM_INVALID,
-                      "#ctrl.encode.stitch.dim: [Stitch] Too many dimensions: dimSize=%d\n",
-                      (int)cellMatchTableDesc.GetDimensionSize());
+                      "#ctrl.encode.stitch.dim: [Stitch] Too many dimensions: dimSize=%d\n", dims);
             break;
     }
     return errCode;
@@ -260,9 +259,10 @@ template <typename HandleType, typename... TyArgs>
 static uint32_t CellMatchHandle(const uint64_t offset[DEV_SHAPE_DIM_MAX], const uint64_t shape[DEV_SHAPE_DIM_MAX],
                                 const DevCellMatchTableDesc& cellMatchTableDesc, TyArgs... args)
 {
+    const int dims = cellMatchTableDesc.GetDimensionSize();
     uint64_t rangeBegin[DEV_SHAPE_DIM_MAX];
     uint64_t rangeEnd[DEV_SHAPE_DIM_MAX];
-    for (int i = 0; i < cellMatchTableDesc.GetDimensionSize(); ++i) {
+    for (int i = 0; i < dims; ++i) {
         auto cellMatchShapeDim = cellMatchTableDesc.GetCellShape(i);
         if (cellMatchShapeDim != 0) {
             rangeBegin[i] = offset[i] / cellMatchShapeDim;
@@ -272,11 +272,11 @@ static uint32_t CellMatchHandle(const uint64_t offset[DEV_SHAPE_DIM_MAX], const 
             rangeEnd[i] = (offset[i] + shape[i] - 1) / cellMatchShapeDim;
         } else {
             DEV_ERROR(ProgEncodeErr::CELL_MATCH_DIM_ZERO,
-                      "#ctrl.encode.cell_match: CellMatchGetIndexRange: cellMatchShapeDim is zero for dimension=%d", i);
+                      "#ctrl.encode.cell_match: cellMatchShapeDim is zero for dimension=%d", i);
             DEV_ASSERT(ProgEncodeErr::CELL_MATCH_DIM_ZERO, 0);
         }
     }
-    return CellMatchProcessByDim<HandleType>(cellMatchTableDesc, rangeBegin, rangeEnd, args...);
+    return CellMatchProcessByDim<HandleType>(dims, cellMatchTableDesc, rangeBegin, rangeEnd, args...);
 }
 
 template <typename... TyArgs>
@@ -287,8 +287,10 @@ static uint32_t CellMatchFill(const uint64_t offset[DEV_SHAPE_DIM_MAX], const ui
         auto argsTuple = std::make_tuple(args...);
         uint32_t* cellMatchTableData = std::get<0>(argsTuple);
         struct HandleFill {
-            static inline uint32_t Process(int index, uint32_t* cellMatchTableData, uint32_t operationIdx)
+            static inline uint32_t Process(int index, const DevCellMatchTableDesc& desc, uint32_t* cellMatchTableData,
+                                           uint32_t operationIdx)
             {
+                UNUSED(desc);
                 cellMatchTableData[index] = operationIdx;
                 DEV_VERBOSE_DEBUG("cell match fill, operation %u , cellindex[%d] = operationindex(%u)", operationIdx,
                                   index, operationIdx);
@@ -303,9 +305,10 @@ static uint32_t CellMatchFill(const uint64_t offset[DEV_SHAPE_DIM_MAX], const ui
         uint32_t tagId = std::get<1>(argsTuple);
         uint32_t funcIdx = std::get<2>(argsTuple);
         struct HandleFill {
-            static inline uint32_t Process(int index, uint64_t* cellMatchTableData, uint32_t tagId, uint32_t funcIdx,
-                                           uint32_t operationIdx)
+            static inline uint32_t Process(int index, const DevCellMatchTableDesc& desc, uint64_t* cellMatchTableData,
+                                           uint32_t tagId, uint32_t funcIdx, uint32_t operationIdx)
             {
+                UNUSED(desc);
                 cellMatchTableData[index] = (static_cast<uint64_t>(tagId) << CELL_MATCH_META_TAGID_SHIFT32) |
                                             MakeTaskID(funcIdx, operationIdx);
                 DEV_VERBOSE_DEBUG("cell match fill, tagid:%u funcIdx %u operation %u , cellindex[%d] = taskid(%lx)",
@@ -320,7 +323,7 @@ static uint32_t CellMatchFill(const uint64_t offset[DEV_SHAPE_DIM_MAX], const ui
 }
 
 inline uint32_t CellMatchHandleFillEnhanceExec(int cellIndex, uint64_t* cellMatchTableData, uint32_t myOpType,
-                                               uint64_t updateTagId, uint32_t updateFuncIdx, uint32_t operationIdx,
+                                               uint64_t updateTagId, uint32_t taskId, uint32_t maxCount,
                                                const DevCellMatchTableDesc& desc)
 {
     DEV_VERBOSE_DEBUG("CellMatchHandleFillEnhanceExec: cell[%d], cellMatchTableData=%p", cellIndex, cellMatchTableData);
@@ -330,7 +333,6 @@ inline uint32_t CellMatchHandleFillEnhanceExec(int cellIndex, uint64_t* cellMatc
     uint32_t curActiveOpCount = CellMatchGetCurrentOpCount(meta);
     uint64_t curTagId = CellMatchGetTagId(meta);
     uint32_t targetCount = 0, targetIndex = 0;
-    uint32_t maxCount = desc.GetCacheOpMaxCount(myOpType);
     if (maxCount == 0) {
         DEV_VERBOSE_DEBUG("Op type %u not supported in cell[%d], maxCount=0", myOpType, cellIndex);
         return static_cast<uint32_t>(CtrlErr::CELL_MATCH_OP_TYPE_NOT_SUPPORTED);
@@ -366,11 +368,11 @@ inline uint32_t CellMatchHandleFillEnhanceExec(int cellIndex, uint64_t* cellMatc
     CellMatchSetCurrentOpCount(meta, targetCount);
     CellMatchSetTagId(meta, updateTagId);
 
-    uint64_t taskId = (static_cast<uint64_t>(updateTagId) << CELL_MATCH_META_TAGID_SHIFT32) |
-                      MakeTaskID(updateFuncIdx, operationIdx);
-    CellMatchAddOpId(cellMatchTableData, cellMemBase, taskId, targetIndex, myOpType, desc);
+    uint64_t fullTaskId = (static_cast<uint64_t>(updateTagId) << CELL_MATCH_META_TAGID_SHIFT32) | taskId;
+    CellMatchAddOpId(cellMatchTableData, cellMemBase, fullTaskId, targetIndex, myOpType, desc);
     DEV_VERBOSE_DEBUG("Added opId to cell[%d]: taskId=0x%lx (Tagid=%lx, funcIdx=%u, opIdx=%u), index=%u, opType=%u",
-                      cellIndex, taskId, updateTagId, updateFuncIdx, operationIdx, targetIndex, myOpType);
+                      cellIndex, fullTaskId, updateTagId, FuncID(taskId), taskId & TASKID_TASK_MASK, targetIndex,
+                      myOpType);
     cellMatchTableData[cellMemBase] = meta;
     return 0;
 }
@@ -385,8 +387,10 @@ static uint32_t CellMatchFillEnhance(const uint64_t offset[DEV_SHAPE_DIM_MAX], c
         auto argsTuple = std::make_tuple(args...);
         uint32_t* cellMatchTableData = std::get<0>(argsTuple);
         struct HandleFillFull {
-            static inline uint32_t Process(int index, uint32_t* cellMatchTableData, uint32_t operationIdx)
+            static inline uint32_t Process(int index, const DevCellMatchTableDesc& desc, uint32_t* cellMatchTableData,
+                                           uint32_t operationIdx)
             {
+                UNUSED(desc);
                 cellMatchTableData[index] = operationIdx;
                 DEV_VERBOSE_DEBUG("cell match fill full, operation %u , cellindex[%d] = operationindex(%u)",
                                   operationIdx, index, operationIdx);
@@ -400,39 +404,36 @@ static uint32_t CellMatchFillEnhance(const uint64_t offset[DEV_SHAPE_DIM_MAX], c
         auto argsTuple = std::make_tuple(args...);
         uint64_t* cellMatchTableData = std::get<0>(argsTuple);
         uint64_t tagId = std::get<1>(argsTuple);
-        uint32_t updateFuncIdx = std::get<2>(argsTuple);
+        uint32_t maxCount = cellMatchTableDesc.GetCacheOpMaxCount(opType);
+        uint32_t taskId = MakeTaskID(std::get<2>(argsTuple), operationIdx);
 
         struct HandleFillEnhance {
-            static inline uint32_t Process(int cellIndex, uint64_t* data, uint64_t tagId, uint32_t funcIdx,
-                                           uint32_t opIdx, uint32_t type, const DevCellMatchTableDesc& desc)
+            static inline uint32_t Process(int cellIndex, const DevCellMatchTableDesc& desc, uint64_t* data,
+                                           uint64_t tagId, uint32_t taskId, uint32_t type, uint32_t maxCount)
             {
-                return CellMatchHandleFillEnhanceExec(cellIndex, data, type, tagId, funcIdx, opIdx, desc);
+                return CellMatchHandleFillEnhanceExec(cellIndex, data, type, tagId, taskId, maxCount, desc);
             }
         };
 
-        return CellMatchHandle<HandleFillEnhance>(offset, shape, cellMatchTableDesc, cellMatchTableData, tagId,
-                                                  updateFuncIdx, operationIdx, opType, cellMatchTableDesc);
+        return CellMatchHandle<HandleFillEnhance>(offset, shape, cellMatchTableDesc, cellMatchTableData, tagId, taskId,
+                                                  opType, maxCount);
     }
     return 0;
 }
 
-template <bool skipExpression, typename... TyArgs>
+template <typename... TyArgs>
 static uint32_t CellMatchFillIncastOutcast(DevAscendFunction* devFunc, DevAscendFunctionCallOperandUse* operandUseList,
                                            size_t useSize, const uint64_t* runtimeExpressionList,
                                            const DevCellMatchTableDesc& cellMatchTableDesc, TyArgs... args)
 {
-    if (!IsCellMatchDescFillReady(cellMatchTableDesc)) {
-        return 0;
-    }
-
     for (size_t i = 0; i < useSize; i++) {
         auto& use = operandUseList[i];
         uint64_t offset[DEV_SHAPE_DIM_MAX];
         uint64_t validShape[DEV_SHAPE_DIM_MAX];
 
-        bool paramConcrete = GetTensorOffsetAndValidShape<skipExpression>(
-            devFunc, offset, validShape, runtimeExpressionList, cellMatchTableDesc,
-            cellMatchTableDesc.GetDimensionSize(), use.operationIdx, use.offsetAttrIdx);
+        GetTensorOffsetAndValidShape(devFunc, offset, validShape, runtimeExpressionList, cellMatchTableDesc,
+                                     cellMatchTableDesc.GetDimensionSize(), use.offsetAttrIdx, use.cachedAttrBase,
+                                     use.operationIdx);
 
         DEV_IF_VERBOSE_DEBUG
         {
@@ -444,12 +445,10 @@ static uint32_t CellMatchFillIncastOutcast(DevAscendFunction* devFunc, DevAscend
             }
         }
 
-        if (paramConcrete) {
-            uint32_t errCode = CellMatchFillEnhance(offset, validShape, use.operationIdx, cellMatchTableDesc,
-                                                    static_cast<uint32_t>(use.opType), args...);
-            if (errCode != 0) {
-                return errCode;
-            }
+        uint32_t errCode = CellMatchFillEnhance(offset, validShape, use.operationIdx, cellMatchTableDesc,
+                                                static_cast<uint32_t>(use.opType), args...);
+        if (errCode != 0) {
+            return errCode;
         }
     }
     return 0;

@@ -236,6 +236,7 @@ public:
     }
 
     int32_t* GetOpAttrOffsetAddr() { return &At(opAttrOffsetList_, 0); }
+    const int32_t* GetOpAttrOffsetAddr() const { return &At(opAttrOffsetList_, 0); }
     inline int32_t GetOpAttrOffsetSize() { return opAttrOffsetList_.size(); }
     int* GetCalleeIndexAddr() { return &At(opCalleeList_, 0); }
 

@@ -53,20 +53,16 @@ struct DevAscendOperation {
 struct DevAscendFunctionCallOperandUse {
     int operationIdx{-1};
     int offsetAttrIdx{-1};
-    int shapeAttrIdx{-1};
+    SymInt* cachedAttrBase{nullptr};
     CellMatchOpType opType{CellMatchOpType::READ};
     Opcode opCode{Opcode::OP_UNKNOWN};
-    int wrapTaskHubOpIdx{INVALID_WRAP_TASK_HUB_OP_IDX};
+    int stitchOpIdx{INVALID_WRAP_TASK_HUB_OP_IDX};
 
     DevAscendFunctionCallOperandUse() = default;
-    DevAscendFunctionCallOperandUse(int operationIdx_, int offsetAttrIdx_, int shapeAttrIdx_,
+    DevAscendFunctionCallOperandUse(int operationIdx_, int offsetAttrIdx_,
                                     CellMatchOpType opType_ = CellMatchOpType::READ,
                                     Opcode opCode_ = Opcode::OP_UNKNOWN)
-        : operationIdx(operationIdx_),
-          offsetAttrIdx(offsetAttrIdx_),
-          shapeAttrIdx(shapeAttrIdx_),
-          opType(opType_),
-          opCode(opCode_)
+        : operationIdx(operationIdx_), offsetAttrIdx(offsetAttrIdx_), opType(opType_), opCode(opCode_)
     {}
 };
 

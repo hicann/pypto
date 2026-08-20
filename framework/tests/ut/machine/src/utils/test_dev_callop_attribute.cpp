@@ -10,52 +10,6 @@
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
 
-TEST(DevCallOpAttributeTest, IsCellMatchDescFillReady_ZeroDim)
-{
-    DevCellMatchTableDesc desc{};
-    desc.cellShape.dimSize = 0;
-    EXPECT_FALSE(IsCellMatchDescFillReady(desc));
-}
-
-TEST(DevCallOpAttributeTest, IsCellMatchDescFillReady_NegativeDim)
-{
-    DevCellMatchTableDesc desc{};
-    desc.cellShape.dimSize = -1;
-    EXPECT_FALSE(IsCellMatchDescFillReady(desc));
-}
-
-TEST(DevCallOpAttributeTest, IsCellMatchDescFillReady_ValidDim)
-{
-    DevCellMatchTableDesc desc{};
-    desc.SetCellShape({4, 8});
-    desc.SetStrideShape({4, 8});
-    EXPECT_TRUE(IsCellMatchDescFillReady(desc));
-}
-
-TEST(DevCallOpAttributeTest, IsCellMatchDescFillReady_ZeroCellShape)
-{
-    DevCellMatchTableDesc desc{};
-    desc.SetCellShape({0, 8});
-    desc.SetStrideShape({4, 8});
-    EXPECT_FALSE(IsCellMatchDescFillReady(desc));
-}
-
-TEST(DevCallOpAttributeTest, IsCellMatchDescFillReady_ZeroStrideShape)
-{
-    DevCellMatchTableDesc desc{};
-    desc.SetCellShape({4, 8});
-    desc.SetStrideShape({4, 0});
-    EXPECT_FALSE(IsCellMatchDescFillReady(desc));
-}
-
-TEST(DevCallOpAttributeTest, IsCellMatchDescFillReady_NegativeCellShape)
-{
-    DevCellMatchTableDesc desc{};
-    desc.SetCellShape({-1, 8});
-    desc.SetStrideShape({4, 8});
-    EXPECT_FALSE(IsCellMatchDescFillReady(desc));
-}
-
 TEST(DevCallOpAttributeTest, CheckOffsetAndValidShapeInRawShape_NoClamp)
 {
     uint64_t offset[DEV_SHAPE_DIM_MAX] = {0, 0, 0, 0, 0};

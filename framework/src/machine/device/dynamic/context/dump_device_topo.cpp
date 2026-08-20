@@ -51,8 +51,9 @@ inline bool DumpEnabled()
 }
 
 struct CellMatchHandleCollect {
-    static inline uint32_t Process(int index, std::vector<int>* cellIdxListOut)
+    static inline uint32_t Process(int index, const DevCellMatchTableDesc& desc, std::vector<int>* cellIdxListOut)
     {
+        UNUSED(desc);
         cellIdxListOut->push_back(index);
         return 0;
     }
@@ -64,13 +65,11 @@ bool CollectCellIdxForUse(DevAscendFunction* devFunc, const DevAscendFunctionCal
 {
     uint64_t offset[DEV_SHAPE_DIM_MAX];
     uint64_t validShape[DEV_SHAPE_DIM_MAX];
-    bool paramConcrete = GetTensorOffsetAndValidShape<false>(devFunc, offset, validShape, runtimeExpressionList,
-                                                             cellMatchTableDesc, cellMatchTableDesc.GetDimensionSize(),
-                                                             use.operationIdx, use.offsetAttrIdx);
-    if (paramConcrete) {
-        CellMatchHandle<CellMatchHandleCollect>(offset, validShape, cellMatchTableDesc, cellIdxListOut);
-    }
-    return paramConcrete;
+    SymInt* dummy = nullptr;
+    GetTensorOffsetAndValidShape(devFunc, offset, validShape, runtimeExpressionList, cellMatchTableDesc,
+                                 cellMatchTableDesc.GetDimensionSize(), use.offsetAttrIdx, dummy, use.operationIdx);
+    CellMatchHandle<CellMatchHandleCollect>(offset, validShape, cellMatchTableDesc, cellIdxListOut);
+    return true;
 }
 
 void AppendSlotAccessRow(uint32_t seqNo, int slotIdx, uint32_t funcIdx, uint32_t opIdx, char accessType,

@@ -217,11 +217,11 @@ TEST(FullCoverUpdateStitchTest, ReadProducerSkipped)
 
     auto& outcast = prev.func->GetOutcast(0);
     auto* prod = prev.Alloc<DevAscendFunctionCallOperandUse>();
-    new (prod) DevAscendFunctionCallOperandUse(0, -1, -1, CellMatchOpType::READ);
+    new (prod) DevAscendFunctionCallOperandUse(0, -1, CellMatchOpType::READ);
     outcast.producerConsumerList.AssignOffsetSize(reinterpret_cast<uint8_t*>(prod) - prev.funcBuf.get(), 1);
 
     auto* cons = next.Alloc<DevAscendFunctionCallOperandUse>();
-    new (cons) DevAscendFunctionCallOperandUse(0, -1, -1, CellMatchOpType::READ);
+    new (cons) DevAscendFunctionCallOperandUse(0, -1, CellMatchOpType::READ);
 
     DevAscendFunctionIncast incast{};
     incast.stitchPolicyFullCoverConsumerList.AssignOffsetSize(reinterpret_cast<uint8_t*>(cons) - next.funcBuf.get(), 1);
@@ -256,11 +256,11 @@ TEST(UpdateSlotsIncastFillTest, DualConsumerLists)
     ic->fromSlotList.AssignOffsetSize(reinterpret_cast<uint8_t*>(slotIdx) - root.funcBuf.get(), 1);
 
     auto* partialConsumer = root.Alloc<DevAscendFunctionCallOperandUse>();
-    new (partialConsumer) DevAscendFunctionCallOperandUse(0, -1, -1, CellMatchOpType::READ);
+    new (partialConsumer) DevAscendFunctionCallOperandUse(0, -1, CellMatchOpType::READ);
     ic->consumerList.AssignOffsetSize(reinterpret_cast<uint8_t*>(partialConsumer) - root.funcBuf.get(), 1);
 
     auto* full = root.Alloc<DevAscendFunctionCallOperandUse>();
-    new (full) DevAscendFunctionCallOperandUse(0, -1, -1, CellMatchOpType::READ);
+    new (full) DevAscendFunctionCallOperandUse(0, -1, CellMatchOpType::READ);
     ic->stitchPolicyFullCoverConsumerList.AssignOffsetSize(reinterpret_cast<uint8_t*>(full) - root.funcBuf.get(), 1);
     ic->stitchPolicyFullCoverConsumerAllOpIdxList.AssignOffsetSize(0, 0);
 
@@ -461,4 +461,56 @@ TEST(StitchCtrlBitMaskEncodeTest, War_ParallelFalse_HasWarRaw)
     }
     EXPECT_TRUE(sawWarRaw) << "WAR (tmp→mid then mid→out) mid slot should have WAR|RAW, lastSeen=0x" << std::hex
                            << static_cast<unsigned>(midMask);
+}
+
+TEST(PrepareRuntimeDynamicPartialUpdateTableTest, ZeroStrideAndZeroCapacityCoverAssertBranches)
+{
+    MiniDup root;
+    root.Build(true);
+
+    root.Align(alignof(DevAscendFunctionOutcast));
+    auto* oc = reinterpret_cast<DevAscendFunctionOutcast*>(root.funcBuf.get() + root.cursor);
+    auto* slotIdxVal = root.Alloc<int>();
+    *slotIdxVal = 0;
+    oc->toSlotList.AssignOffsetSize(reinterpret_cast<uint8_t*>(slotIdxVal) - root.funcBuf.get(), 1);
+    oc->producerConsumerList.AssignOffsetSize(0, 0);
+    oc->stitchPolicyFullCoverProducerList.AssignOffsetSize(0, 0);
+    oc->stitchPolicyFullCoverProducerHubOpIdx = -1;
+    oc->cellMatchRuntimeFullUpdateTable.AssignOffsetSize(0, 0);
+    root.func->outcastList.AssignOffsetSize(root.cursor, 1);
+
+    uint64_t table[4] = {0};
+    DevAscendProgramPartialUpdate partial{};
+    partial.slotIndex = 0;
+    partial.cellMatchTableDesc.SetCellShape({4});
+    partial.cellMatchTableDesc.SetStrideShape({0});
+    partial.cellMatchTableDesc.cellUint64Size = 2;
+    partial.cellMatchRuntimePartialUpdateTable = DevRelocVector<uint64_t>(4, table);
+    partial.stitchCtrlBitMask = STITCH_CTRL_WAW;
+
+    DeviceExecuteSlot slots[1]{};
+    slots[0].isPartialUpdateStitch = true;
+    slots[0].partialUpdate = &partial;
+    slots[0].stitchDupIdx = 0;
+    slots[0].stitchOutcastIdx = 0;
+
+    uint8_t progBuf[sizeof(DevAscendProgram)] = {0};
+    auto* prog = reinterpret_cast<DevAscendProgram*>(progBuf);
+    prog->memBudget.metadata.maxDynamicCellMatchTableMem = 0;
+    DeviceWorkspaceAllocator ws(prog);
+
+    DeviceSlotContext slotCtx;
+    slotCtx.slotList_.dataAllocation_.ptr = reinterpret_cast<uint64_t>(slots);
+    slotCtx.slotList_.size_ = 1;
+    slotCtx.slotList_.capacity_ = 1;
+    slotCtx.workspace_ = &ws;
+
+    try {
+        (void)slotCtx.UpdateSlots(root.dup, 0, 0, 0);
+    } catch (const std::exception&) {
+    }
+
+    slotCtx.slotList_.dataAllocation_.Invalidate();
+    slotCtx.slotList_.size_ = 0;
+    slotCtx.slotList_.capacity_ = 0;
 }

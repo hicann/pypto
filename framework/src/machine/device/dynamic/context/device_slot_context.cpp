@@ -27,31 +27,30 @@ static void PrepareRuntimeDynamicPartialUpdateTable(DeviceWorkspaceAllocator* wo
     const int dim = desc.GetDimensionSize();
 
     uint64_t cellCount = 1;
-    bool launchPrepared = (dim > 0);
     for (int d = 0; d < dim; ++d) {
         int stride = desc.GetStrideShape(d);
-        if (stride <= 0) {
-            launchPrepared = false;
-            break;
+        DEV_IF_NONDEVICE
+        {
+            DEV_ASSERT_MSG(ProgEncodeErr::CELL_MATCH_PARAM_INVALID, stride > 0,
+                           "Dynamic cell match launch prepare missing for slot=%d dim=%d stride[%d]=%d",
+                           partialUpdate->slotIndex, dim, d, stride);
         }
         cellCount *= static_cast<uint64_t>(stride);
     }
-    DEV_ASSERT_MSG(ProgEncodeErr::CELL_MATCH_PARAM_INVALID, launchPrepared,
-                   "Dynamic cell match launch prepare missing for slot=%d dim=%d", partialUpdate->slotIndex, dim);
 
     uint32_t cellUint64Size = desc.cellUint64Size;
-    uint64_t slotTableCapacity = workspace->DynamicCellMatchSlotByteSize() / (cellUint64Size * sizeof(uint64_t));
-    DEV_ASSERT_MSG(ProgEncodeErr::CELL_MATCH_PARAM_INVALID, cellCount > 0 && cellCount <= slotTableCapacity,
-                   "Dynamic cell match table size invalid for slot=%d, cellCount=%lu capacity=%lu cellUint64Size=%u",
-                   partialUpdate->slotIndex, cellCount, slotTableCapacity, cellUint64Size);
-
-    if (partialUpdate->cellMatchRuntimePartialUpdateTable.Data() == nullptr) {
-        return;
+    DEV_IF_NONDEVICE
+    {
+        uint64_t slotTableCapacity = workspace->DynamicCellMatchSlotByteSize() / (cellUint64Size * sizeof(uint64_t));
+        DEV_ASSERT_MSG(
+            ProgEncodeErr::CELL_MATCH_PARAM_INVALID, cellCount > 0 && cellCount <= slotTableCapacity,
+            "Dynamic cell match table size invalid for slot=%d, cellCount=%lu capacity=%lu cellUint64Size=%u",
+            partialUpdate->slotIndex, cellCount, slotTableCapacity, cellUint64Size);
     }
 
-    uint64_t tableSize = cellCount * cellUint64Size;
     partialUpdate->cellMatchRuntimePartialUpdateTable.HostAssignDataSize(
-        reinterpret_cast<uintdevptr_t>(partialUpdate->cellMatchRuntimePartialUpdateTable.Data()), tableSize);
+        reinterpret_cast<uintdevptr_t>(partialUpdate->cellMatchRuntimePartialUpdateTable.Data()),
+        cellCount * cellUint64Size);
 }
 
 void DeviceSlotContext::InitAllocator(DeviceWorkspaceAllocator& workspace, uint64_t slotSize)
@@ -90,28 +89,27 @@ static uint32_t UpdateSlotsForOutCastPartialStitch(int slotIdx, DeviceExecuteSlo
     auto producerSize = outcast.producerConsumerList.size();
     uint32_t errCode = 0;
 
-    if (cellMatchTableDesc.MaybeHaveAtomic()) {
+    if (unlikely(cellMatchTableDesc.MaybeHaveAtomic())) {
         if (producerSize != 0) {
-            errCode = CellMatchFillIncastOutcast<false>(devRootSrc, producerList, producerSize, expressionList,
-                                                        cellMatchTableDesc, tableData, cellMatchTagId, devNextIdx);
+            errCode = CellMatchFillIncastOutcast(devRootSrc, producerList, producerSize, expressionList,
+                                                 cellMatchTableDesc, tableData, cellMatchTagId, devNextIdx);
         }
         if (outcast.stitchPolicyFullCoverProducerList.size() != 0) {
-            errCode = CellMatchFillIncastOutcast<false>(
-                devRootSrc, &devRootSrc->At(outcast.stitchPolicyFullCoverProducerList, 0),
-                outcast.stitchPolicyFullCoverProducerList.size(), expressionList, cellMatchTableDesc, tableData,
-                cellMatchTagId, devNextIdx);
+            errCode = CellMatchFillIncastOutcast(devRootSrc,
+                                                 &devRootSrc->At(outcast.stitchPolicyFullCoverProducerList, 0),
+                                                 outcast.stitchPolicyFullCoverProducerList.size(), expressionList,
+                                                 cellMatchTableDesc, tableData, cellMatchTagId, devNextIdx);
         }
     } else if (producerSize != 0) {
-        errCode = CellMatchFillIncastOutcast<false>(devRootSrc, producerList, producerSize, expressionList,
-                                                    cellMatchTableDesc, tableData, cellMatchTagId, devNextIdx);
+        errCode = CellMatchFillIncastOutcast(devRootSrc, producerList, producerSize, expressionList, cellMatchTableDesc,
+                                             tableData, cellMatchTagId, devNextIdx);
         DEV_VERBOSE_DEBUG("Fill cell match table slot %d outcastIndex %u, "
                           "outcast producer list, size = %zu.",
                           slotIdx, slot.stitchOutcastIdx, producerSize);
     } else {
-        errCode = CellMatchFillIncastOutcast<false>(devRootSrc,
-                                                    &devRootSrc->At(outcast.stitchPolicyFullCoverProducerList, 0),
-                                                    outcast.stitchPolicyFullCoverProducerList.size(), expressionList,
-                                                    cellMatchTableDesc, tableData, cellMatchTagId, devNextIdx);
+        errCode = CellMatchFillIncastOutcast(devRootSrc, &devRootSrc->At(outcast.stitchPolicyFullCoverProducerList, 0),
+                                             outcast.stitchPolicyFullCoverProducerList.size(), expressionList,
+                                             cellMatchTableDesc, tableData, cellMatchTagId, devNextIdx);
         DEV_VERBOSE_DEBUG("Fill cell match table slot %d outcastIndex %u, "
                           "outcast full cover producer list.",
                           slotIdx, slot.stitchOutcastIdx);
@@ -134,8 +132,8 @@ static uint32_t UpdateSlotsForOutCastFullCoverStitch(int slotIdx, DevAscendFunct
     // via POLICY direct edges; they are filled only on the partial path.
     auto& cellMatchTableDesc = outcast.cellMatchTableDesc;
     auto tableData = &devRootSrc->At(outcast.cellMatchRuntimeFullUpdateTable, 0);
-    uint32_t errCode = CellMatchFillIncastOutcast<false>(devRootSrc, producerList, outcast.producerConsumerList.size(),
-                                                         expressionList, cellMatchTableDesc, tableData);
+    uint32_t errCode = CellMatchFillIncastOutcast(devRootSrc, producerList, outcast.producerConsumerList.size(),
+                                                  expressionList, cellMatchTableDesc, tableData);
     DEV_VERBOSE_DEBUG(
         "[UpdateSlots] slot %d  CellMatchFull=%s cellMatchTagId=%x, ret=0x%x\n", slotIdx,
         DevAscendFunctionDuppedStitchList::DumpTask(tableData, outcast.cellMatchRuntimeFullUpdateTable.size()).c_str(),
@@ -161,15 +159,14 @@ static uint32_t UpdateSlotsForIncastStitch(int slotIdx, DeviceExecuteSlot& slot,
 
     uint32_t errCode = 0;
     if (incast.consumerList.size() != 0) {
-        errCode = CellMatchFillIncastOutcast<false>(devRootSrc, &devRootSrc->At(incast.consumerList, 0),
-                                                    incast.consumerList.size(), expressionList, cellMatchTableDesc,
-                                                    tableData, cellMatchTagId, devNextIdx);
+        errCode = CellMatchFillIncastOutcast(devRootSrc, &devRootSrc->At(incast.consumerList, 0),
+                                             incast.consumerList.size(), expressionList, cellMatchTableDesc, tableData,
+                                             cellMatchTagId, devNextIdx);
     }
     if (errCode == 0 && incast.stitchPolicyFullCoverConsumerList.size() != 0) {
-        errCode = CellMatchFillIncastOutcast<false>(devRootSrc,
-                                                    &devRootSrc->At(incast.stitchPolicyFullCoverConsumerList, 0),
-                                                    incast.stitchPolicyFullCoverConsumerList.size(), expressionList,
-                                                    cellMatchTableDesc, tableData, cellMatchTagId, devNextIdx);
+        errCode = CellMatchFillIncastOutcast(devRootSrc, &devRootSrc->At(incast.stitchPolicyFullCoverConsumerList, 0),
+                                             incast.stitchPolicyFullCoverConsumerList.size(), expressionList,
+                                             cellMatchTableDesc, tableData, cellMatchTagId, devNextIdx);
     }
     DEV_VERBOSE_DEBUG_SPLIT(
         "[UpdateSlots]  incast slot %d  cellMatchTagId=%x, ret=0x%x partialConsumerCount=%zu "

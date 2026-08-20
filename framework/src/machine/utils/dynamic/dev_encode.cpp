@@ -873,10 +873,11 @@ void DevAscendFunction::FillIncastUseList(
             incast.consumerList.AssignRangeOffsetSize(fillUseList, useSize, attr.useList.size());
             for (size_t k = 0; k < attr.useList.size(); k++) {
                 At(incast.consumerList, k) = attr.useList[k];
+                auto& use = At(incast.consumerList, k);
+                int opAttrBase = At(opAttrOffsetList_, use.operationIdx);
+                use.offsetAttrIdx += opAttrBase;
                 auto it = opIdxToHubOpIdx.find(attr.useList[k].operationIdx);
-                if (it != opIdxToHubOpIdx.end()) {
-                    At(incast.consumerList, k).wrapTaskHubOpIdx = it->second;
-                }
+                use.stitchOpIdx = (it != opIdxToHubOpIdx.end()) ? it->second : use.operationIdx;
             }
         }
         useSize += attr.useList.size();
@@ -886,10 +887,11 @@ void DevAscendFunction::FillIncastUseList(
                 fillUseList, useSize, attr.stitchPolicyFullCoverConsumerList.size());
             for (size_t k = 0; k < attr.stitchPolicyFullCoverConsumerList.size(); k++) {
                 At(incast.stitchPolicyFullCoverConsumerList, k) = attr.stitchPolicyFullCoverConsumerList[k];
+                auto& use = At(incast.stitchPolicyFullCoverConsumerList, k);
+                int opAttrBase = At(opAttrOffsetList_, use.operationIdx);
+                use.offsetAttrIdx += opAttrBase;
                 auto it = opIdxToHubOpIdx.find(attr.stitchPolicyFullCoverConsumerList[k].operationIdx);
-                if (it != opIdxToHubOpIdx.end()) {
-                    At(incast.stitchPolicyFullCoverConsumerList, k).wrapTaskHubOpIdx = it->second;
-                }
+                use.stitchOpIdx = (it != opIdxToHubOpIdx.end()) ? it->second : use.operationIdx;
             }
         }
         useSize += attr.stitchPolicyFullCoverConsumerList.size();
@@ -910,10 +912,11 @@ void DevAscendFunction::FillOutcastUseList(
             outcast.producerConsumerList.AssignRangeOffsetSize(fillUseList, useSize, attr.useList.size());
             for (size_t k = 0; k < attr.useList.size(); k++) {
                 At(outcast.producerConsumerList, k) = attr.useList[k];
+                auto& use = At(outcast.producerConsumerList, k);
+                int opAttrBase = At(opAttrOffsetList_, use.operationIdx);
+                use.offsetAttrIdx += opAttrBase;
                 auto it = opIdxToHubOpIdx.find(attr.useList[k].operationIdx);
-                if (it != opIdxToHubOpIdx.end()) {
-                    At(outcast.producerConsumerList, k).wrapTaskHubOpIdx = it->second;
-                }
+                use.stitchOpIdx = (it != opIdxToHubOpIdx.end()) ? it->second : use.operationIdx;
             }
         }
         useSize += attr.useList.size();
@@ -1036,10 +1039,11 @@ void DevAscendFunction::InitIncastOutcast(
                     outAttr.stitchPolicyFullCoverProducerList.size());
                 for (size_t k = 0; k < outAttr.stitchPolicyFullCoverProducerList.size(); k++) {
                     At(outcast.stitchPolicyFullCoverProducerList, k) = outAttr.stitchPolicyFullCoverProducerList[k];
+                    auto& use = At(outcast.stitchPolicyFullCoverProducerList, k);
+                    int opAttrBase = At(opAttrOffsetList_, use.operationIdx);
+                    use.offsetAttrIdx += opAttrBase;
                     auto it = opIdxToHubOpIdx.find(outAttr.stitchPolicyFullCoverProducerList[k].operationIdx);
-                    if (it != opIdxToHubOpIdx.end()) {
-                        At(outcast.stitchPolicyFullCoverProducerList, k).wrapTaskHubOpIdx = it->second;
-                    }
+                    use.stitchOpIdx = (it != opIdxToHubOpIdx.end()) ? it->second : use.operationIdx;
                 };
             }
             fullCoverTotal += outAttr.stitchPolicyFullCoverProducerList.size();
@@ -1357,7 +1361,7 @@ struct EncodeDevAscendFunctionInfo {
                         continue;
                     }
                     auto coaIndex = succOp->GetIOpAttrOffset(k) + COA_INDEX_DIM_BASE;
-                    useList.emplace_back(succOpIdx, coaIndex, coaIndex + outcastOpAttr.dim, CellMatchOpType::READ);
+                    useList.emplace_back(succOpIdx, coaIndex, CellMatchOpType::READ);
                     MACHINE_LOGD("MATCH! consumerList.emplace_back succOpIdx=%d coaIndex=%d dim=%d iOprandIdx=%zu.",
                                  succOpIdx, coaIndex, outcastOpAttr.dim, k);
 
@@ -1387,10 +1391,9 @@ struct EncodeDevAscendFunctionInfo {
         std::vector<int64_t> shape = callAttr->GetLinearImmediateArgList(coaIndex + dimSize, coaIndex + dimSize * 0x2,
                                                                          false);
         if (offset == std::vector<int64_t>(dimSize, 0) && shape == oOperand->GetShape()) {
-            stitchPolicyFullCoverProducer = DevAscendFunctionCallOperandUse(opIdx, coaIndex, coaIndex + dimSize,
-                                                                            producerOpType, opCode);
+            stitchPolicyFullCoverProducer = DevAscendFunctionCallOperandUse(opIdx, coaIndex, producerOpType, opCode);
         } else {
-            useList.emplace_back(opIdx, coaIndex, coaIndex + dimSize, producerOpType, opCode);
+            useList.emplace_back(opIdx, coaIndex, producerOpType, opCode);
         }
         MACHINE_LOGD("Outcast oOperandIdx for outcast %d rawtensor maigic %d is %zu.", o->magic, o->GetRawMagic(),
                      oOperandIdx);
@@ -1430,8 +1433,8 @@ struct EncodeDevAscendFunctionInfo {
                 for (auto& use : useList) {
                     UNUSED(use.operationIdx);
                     UNUSED(use.opType);
-                    auto shape = callAttr->GetLinearImmediateArgList(use.shapeAttrIdx, use.shapeAttrIdx + dimSize,
-                                                                     false);
+                    auto shape = callAttr->GetLinearImmediateArgList(use.offsetAttrIdx + dimSize,
+                                                                     use.offsetAttrIdx + dimSize * 2, false);
                     UpdateCellMatchShape(outcastOpAttr.cellMatchTableDesc, shape);
                     MACHINE_LOGD("Minimal shape for outcast %d rawtensor magic %d op %zu %d is %s.\n", o->magic,
                                  o->GetRawMagic(), i, op.GetOpMagic(),
@@ -1516,13 +1519,12 @@ struct EncodeDevAscendFunctionInfo {
         }
         // fullCover → POLICY list only (skip DEFAULT cell match); partial → DEFAULT useList
         if (offset == std::vector<int64_t>(dimSize, 0) && shape == index->GetShape()) {
-            incastOpAttr.stitchPolicyFullCoverConsumerList.emplace_back(opIdx, coaIndex, coaIndex + dimSize,
-                                                                        CellMatchOpType::READ);
+            incastOpAttr.stitchPolicyFullCoverConsumerList.emplace_back(opIdx, coaIndex, CellMatchOpType::READ);
             MACHINE_LOGD("FullCover incast consumer: incast %d rawtensor magic %d coaIndex %d op %zu %d shape %s.\n",
                          index->magic, index->GetRawMagic(), coaIndex, opIdx, op.GetOpMagic(),
                          IntVecToStr(shape).c_str());
         } else {
-            incastOpAttr.useList.emplace_back(opIdx, coaIndex, coaIndex + dimSize, CellMatchOpType::READ);
+            incastOpAttr.useList.emplace_back(opIdx, coaIndex, CellMatchOpType::READ);
             UpdateCellMatchShape(incastOpAttr.cellMatchTableDesc, shape);
             MACHINE_LOGD("Partial incast consumer: incast %d rawtensor magic %d coaIndex %d op %zu %d cellShape %s.\n",
                          index->magic, index->GetRawMagic(), coaIndex, opIdx, op.GetOpMagic(),

@@ -145,7 +145,7 @@ std::string DevAscendFunction::DumpIncast(int incastIndex, const std::string& in
                             const DevAscendFunctionCallOperandUse& consumer, const char* tag) {
         int consumerIdx = consumer.operationIdx;
         int offsetAttrIdx = consumer.offsetAttrIdx;
-        int shapeAttrIdx = consumer.shapeAttrIdx;
+        int shapeAttrIdx = offsetAttrIdx + incast.dim;
         oss << indent;
         oss << " | #" << tag << ":!" << consumerIdx;
         oss << " | #offsetAttrIdx:" << offsetAttrIdx;
@@ -176,7 +176,7 @@ std::string DevAscendFunction::DumpOutcast(int outcastIndex, const std::string& 
             auto& producer = At(producerList, j);
             int producerIdx = producer.operationIdx;
             int offsetAttrIdx = producer.offsetAttrIdx;
-            int shapeAttrIdx = producer.shapeAttrIdx;
+            int shapeAttrIdx = offsetAttrIdx + outcast.dim;
             oss << indent;
             oss << " | #opIdx:!" << producerIdx;
             oss << " | #opType:" << (producer.opType == CellMatchOpType::READ ? "consumer" : "producer");
