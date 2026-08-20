@@ -144,6 +144,52 @@ def test_runtime_addr_rejected_with_compile_time_hint():
     assert "runtime value" in str(excinfo.value)
 
 
+def test_slot_stride_matches_a_standalone_tile_of_the_same_type():
+    """A group slot is exactly as wide as pl.make_tile() of the same TileType."""
+
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[64, 96], pl.DT_FP32]):
+        tt = pl.TileType(shape=[64, 96], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat)
+        standalone = pl.make_tile(tt, addr=0x40000)
+        pl.load(standalone, a, [0, 0])
+        db = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
+        pl.load(db.next(), a, [0, 0])
+        pl.load(db.next(), a, [0, 0])
+
+    ir_str = _ir_to_str(_parse_kernel(k))
+    slot_size = 64 * 96 * 4
+    assert ir_str.count(f"memref_size={slot_size}") == 3, ir_str
+    # Second slot starts one slot after the base address.
+    assert f"memref_addr={slot_size}" in ir_str, ir_str
+
+
+def test_slot_stride_rounds_a_sub_byte_dtype_up_to_one_byte_per_element():
+    """A 4-bit element cannot reserve half a byte, so each slot over-reserves."""
+
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[64, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[64, 64], dtype=pl.DT_INT4, target_memory=pl.MemorySpace.Mat)
+        db = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])  # noqa: F841
+
+    ir_str = _ir_to_str(_parse_kernel(k))
+    assert ir_str.count(f"memref_size={64 * 64}") == 2, ir_str
+
+
+def test_tile_type_with_a_runtime_shape_rejected():
+    """The slot stride is a compile-time byte count, so the shape has to be one too."""
+
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
+        # A tuple (not a list) skips the TileType compile-time check, so the
+        # runtime dimension survives into the TileType.
+        tt = pl.TileType(shape=(a.shape[0], 128), dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        db = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
+        pl.load(db.next(), a, [0, 0])
+
+    with pytest.raises(ParserTypeError, match="make_tile_group.. tile shape must contain compile-time integers"):
+        _parse_kernel(k)
+
+
 def test_auto_mutex_single_tile():
     @pl.kernel(auto_mutex=True)
     def k(x: pl.Tensor[[64], pl.DT_FP16]):

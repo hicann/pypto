@@ -224,7 +224,7 @@ for t in pl.range(0, num_tiles, 1):
 ```python
 # --- Tile（片上）---
 tt   = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-tile = pl.make_tile(tt, addr=0x0, size=128*128*2)  # 给addr必须给size
+tile = pl.make_tile(tt, addr=0x0)  # addr必选；size缺省时由tt推导为128*128*2
 # pipe间手动同步：
 pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
 pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)

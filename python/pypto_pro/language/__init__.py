@@ -260,7 +260,7 @@ from pypto.pypto_impl.ir import (
     TilePad,
 )
 from pypto_pro.ir.op import system_ops as system
-from pypto_pro.ir.op.block_ops import FillPadMode, TileType, make_tile
+from pypto_pro.ir.op.block_ops import FillPadMode, TileType
 from pypto_pro.ir.op.ptr_ops import addptr, make_ptr, make_tensor
 from pypto_pro.ir.op.system_ops import mutex_lock as _mutex_lock
 from pypto_pro.ir.op.system_ops import mutex_unlock as _mutex_unlock
@@ -311,6 +311,7 @@ from ._api import (
     load_tile,
     log,
     lt,
+    make_tile,
     make_tile_group,
     matmul,
     matmul_acc,

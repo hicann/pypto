@@ -346,6 +346,58 @@ def _parse_order_kernel(kernel_def):
     return kernel_def.parse_target_program(ir.SectionKind.Vector)[0]
 
 
+def test_order_kwarg_selects_the_tensor_axes():
+    """A constant `order` reaches the builder and becomes the load's tile_dims."""
+
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16]):
+        tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
+        pl.load(group.next(), a, [0, 0, 0], order=[0, 2])
+
+    assert "tile_dims=[0, 2]" in str(_parse_order_kernel(k))
+
+
+def test_order_kwarg_accepts_a_kernel_local_axis_list():
+    """The axes only have to be known while parsing, not spelled as a literal."""
+
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16]):
+        axes = [0, 2]
+        tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
+        pl.load(group.next(), a, [0, 0, 0], order=axes)
+
+    assert "tile_dims=[0, 2]" in str(_parse_order_kernel(k))
+
+
+def test_load_without_order_is_left_alone():
+    """The order hook is a no-op when the call does not pass the kwarg."""
+
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16]):
+        tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
+        pl.load(group.next(), a, [0, 0, 0])
+
+    ir_str = str(_parse_order_kernel(k))
+    assert "block.load" in ir_str
+    assert "tile_dims" not in ir_str
+
+
+def test_order_kwarg_rejects_bool_axes():
+    """bool subclasses int, but ``True`` is not an axis."""
+
+    @pl.kernel(auto_mutex=True)
+    def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16]):
+        tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
+        pl.load(group.next(), a, [0, 0, 0], order=[True, 2])
+
+    with pytest.raises(ParserTypeError, match="'order' must be a compile-time integer list"):
+        _parse_order_kernel(k)
+
+
 def test_order_kwarg_rejects_runtime_axis():
     """`order` selects tensor axes at parse time, so an axis may not be runtime."""
 

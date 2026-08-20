@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-__all__ = ["_get_span_or_capture", "_normalize_expr", "_normalize_shape", "_to_make_tuple"]
+__all__ = ["_get_span_or_capture", "_is_int", "_normalize_expr", "_normalize_shape", "_to_make_tuple"]
 
 
 from collections.abc import Sequence
@@ -50,6 +50,11 @@ def _get_span_or_capture(span: _ir.Span | None = None, frame_offset: int = 1) ->
         return _ir.Span(info.filename, info.lineno, -1)
 
     return _ir.Span.unknown()
+
+
+def _is_int(value: object) -> bool:
+    """Whether *value* is a plain integer (bool is not, despite subclassing int)."""
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _normalize_expr(

@@ -13,6 +13,8 @@
 import inspect
 
 import pypto_pro.language as pl
+from pypto_pro.language.parser.diagnostics import ParserTypeError
+import pytest
 
 
 def _program_ir(program) -> str:
@@ -481,3 +483,277 @@ def test_move_src_larger_stays_move():
 
     ir_str = _program_ir(Program)
     assert "block.move" in ir_str
+
+
+def test_make_tile_missing_addr_rejected():
+    with pytest.raises(ParserTypeError, match="missing required keyword 'addr'"):
+
+        @pl.program
+        class Program:
+            @pl.function(type=pl.FunctionType.InCore)
+            def main(
+                self,
+                a: pl.Tensor[[128, 128], pl.DT_FP16],
+                output: pl.Tensor[[128, 128], pl.DT_FP16],
+            ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+                tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+                tile_a = pl.make_tile(tile_type, size=32768)
+                pl.load(tile_a, a, [0, 0])
+                return pl.store(output, tile_a, [0, 0])
+
+
+def test_make_tile_size_defaults_to_tile_footprint():
+    @pl.program
+    class Program:
+        @pl.function(type=pl.FunctionType.InCore)
+        def main(
+            self,
+            a: pl.Tensor[[128, 128], pl.DT_FP16],
+            output: pl.Tensor[[128, 128], pl.DT_FP16],
+        ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+            tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+            tile_a = pl.make_tile(tile_type, addr=0x0000)
+            pl.load(tile_a, a, [0, 0])
+            return pl.store(output, tile_a, [0, 0])
+
+    # 128 * 128 elements * 2 bytes (FP16)
+    assert 'memref_size=32768' in _program_ir(Program)
+
+
+def test_make_tile_explicit_size_overrides_derived():
+    """An NZ tile rounded up to whole fractals reserves more than shape * dtype."""
+
+    @pl.program
+    class Program:
+        @pl.function(type=pl.FunctionType.InCore)
+        def main(
+            self,
+            a: pl.Tensor[[128, 128], pl.DT_FP16],
+            output: pl.Tensor[[128, 128], pl.DT_FP16],
+        ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+            tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+            tile_a = pl.make_tile(tile_type, addr=0x0000, size=40960)
+            pl.load(tile_a, a, [0, 0])
+            return pl.store(output, tile_a, [0, 0])
+
+    ir_str = _program_ir(Program)
+    assert 'memref_size=40960' in ir_str
+    assert 'memref_size=32768' not in ir_str
+
+
+def test_make_tile_runtime_size_rejected_with_compile_time_hint():
+    with pytest.raises(ParserTypeError) as excinfo:
+
+        @pl.program
+        class Program:
+            @pl.function(type=pl.FunctionType.InCore)
+            def main(
+                self,
+                a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16],
+                output: pl.Tensor[[128, 128], pl.DT_FP16],
+            ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+                tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+                tile_a = pl.make_tile(tile_type, addr=0x0000, size=a.shape[0] * 32)
+                pl.load(tile_a, a, [0, 0])
+                return pl.store(output, tile_a, [0, 0])
+
+    assert "compile-time integer" in str(excinfo.value)
+
+
+def test_make_tile_runtime_addr_rejected_with_compile_time_hint():
+    with pytest.raises(ParserTypeError) as excinfo:
+
+        @pl.program
+        class Program:
+            @pl.function(type=pl.FunctionType.InCore)
+            def main(
+                self,
+                a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16],
+                output: pl.Tensor[[128, 128], pl.DT_FP16],
+            ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+                tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+                tile_a = pl.make_tile(tile_type, addr=a.shape[0] * 32, size=32768)
+                pl.load(tile_a, a, [0, 0])
+                return pl.store(output, tile_a, [0, 0])
+
+    assert "compile-time integer" in str(excinfo.value)
+    assert "runtime value" in str(excinfo.value)
+
+
+def test_make_tile_non_positive_size_rejected():
+    with pytest.raises(ParserTypeError, match="positive byte count"):
+
+        @pl.program
+        class Program:
+            @pl.function(type=pl.FunctionType.InCore)
+            def main(
+                self,
+                a: pl.Tensor[[128, 128], pl.DT_FP16],
+                output: pl.Tensor[[128, 128], pl.DT_FP16],
+            ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+                tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+                tile_a = pl.make_tile(tile_type, addr=0x0000, size=0)
+                pl.load(tile_a, a, [0, 0])
+                return pl.store(output, tile_a, [0, 0])
+
+
+def test_make_tile_addr_after_tile_type():
+    """The documented prototype: pl.make_tile(tile_type, *, addr, size=None)."""
+
+    @pl.program
+    class Program:
+        @pl.function(type=pl.FunctionType.InCore)
+        def main(
+            self,
+            a: pl.Tensor[[128, 128], pl.DT_FP16],
+            output: pl.Tensor[[128, 128], pl.DT_FP16],
+        ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+            tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+            tile_a = pl.make_tile(tile_type, addr=0x1000)
+            pl.load(tile_a, a, [0, 0])
+            return pl.store(output, tile_a, [0, 0])
+
+    ir_str = _program_ir(Program)
+    assert 'memref_addr=4096' in ir_str
+    assert 'memref_size=32768' in ir_str
+
+
+def test_make_tile_addr_and_size_after_tile_type():
+    @pl.program
+    class Program:
+        @pl.function(type=pl.FunctionType.InCore)
+        def main(
+            self,
+            a: pl.Tensor[[128, 128], pl.DT_FP16],
+            output: pl.Tensor[[128, 128], pl.DT_FP16],
+        ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+            tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+            tile_a = pl.make_tile(tile_type, addr=0x1000, size=40960)
+            pl.load(tile_a, a, [0, 0])
+            return pl.store(output, tile_a, [0, 0])
+
+    ir_str = _program_ir(Program)
+    assert 'memref_addr=4096' in ir_str
+    assert 'memref_size=40960' in ir_str
+
+
+def test_make_tile_builder_form_rejected():
+    """make_tile(shape, dtype, target_memory, ...) is the IR builder, not the DSL op."""
+
+    with pytest.raises(ParserTypeError, match="takes a pl.TileType as its first argument"):
+
+        @pl.program
+        class Program:
+            @pl.function(type=pl.FunctionType.InCore)
+            def main(
+                self,
+                a: pl.Tensor[[128, 128], pl.DT_FP16],
+                output: pl.Tensor[[128, 128], pl.DT_FP16],
+            ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+                tile_a = pl.make_tile([128, 128], pl.DT_FP16, pl.MemorySpace.Vec, 0x2000, 32768)
+                pl.load(tile_a, a, [0, 0])
+                return pl.store(output, tile_a, [0, 0])
+
+
+def test_make_tile_misaligned_addr_rejected():
+    """addr reaches the alignment check as a plain int, whatever expression wrote it."""
+
+    with pytest.raises(ValueError, match="32-byte aligned"):
+
+        @pl.program
+        class Program:
+            @pl.function(type=pl.FunctionType.InCore)
+            def main(
+                self,
+                a: pl.Tensor[[128, 128], pl.DT_FP16],
+                output: pl.Tensor[[128, 128], pl.DT_FP16],
+            ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+                tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+                tile_a = pl.make_tile(tile_type, addr=0x1)
+                pl.load(tile_a, a, [0, 0])
+                return pl.store(output, tile_a, [0, 0])
+
+
+def test_make_tile_runtime_addr_rejected_quoting_source():
+    with pytest.raises(ParserTypeError) as excinfo:
+
+        @pl.program
+        class Program:
+            @pl.function(type=pl.FunctionType.InCore)
+            def main(
+                self,
+                a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16],
+                output: pl.Tensor[[128, 128], pl.DT_FP16],
+            ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+                tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+                tile_a = pl.make_tile(tile_type, addr=a.shape[0] * 32)
+                pl.load(tile_a, a, [0, 0])
+                return pl.store(output, tile_a, [0, 0])
+
+    assert "compile-time integer" in str(excinfo.value)
+    # the offending expression, not a repr of the parsed IR object
+    assert "a.shape[0] * 32" in str(excinfo.value)
+
+
+def test_make_tile_positional_addr_rejected():
+    """The tile type is the only positional argument; addr/size are keywords."""
+
+    with pytest.raises(ParserTypeError, match="takes 1 positional argument .* but 2 were given"):
+
+        @pl.program
+        class Program:
+            @pl.function(type=pl.FunctionType.InCore)
+            def main(
+                self,
+                a: pl.Tensor[[128, 128], pl.DT_FP16],
+                output: pl.Tensor[[128, 128], pl.DT_FP16],
+            ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+                tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+                tile_a = pl.make_tile(tile_type, 0x1000)
+                pl.load(tile_a, a, [0, 0])
+                return pl.store(output, tile_a, [0, 0])
+
+
+def test_make_tile_positional_addr_and_size_rejected_with_keyword_hint():
+    """The rejection carries the fix, so the call site does not have to guess."""
+
+    with pytest.raises(ParserTypeError) as excinfo:
+
+        @pl.program
+        class Program:
+            @pl.function(type=pl.FunctionType.InCore)
+            def main(
+                self,
+                a: pl.Tensor[[128, 128], pl.DT_FP16],
+                output: pl.Tensor[[128, 128], pl.DT_FP16],
+            ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+                tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+                tile_a = pl.make_tile(tile_type, 0x0000, 32768)
+                pl.load(tile_a, a, [0, 0])
+                return pl.store(output, tile_a, [0, 0])
+
+    assert "takes 1 positional argument (the tile type) but 3 were given" in str(excinfo.value)
+    # the hint spells out the accepted spelling
+    assert "addr=" in str(excinfo.value)
+
+
+VEC_BASE = 0x1000
+
+
+def test_make_tile_addr_from_constant_expression():
+    """addr goes through the full compile-time path, not just literals."""
+
+    @pl.program
+    class Program:
+        @pl.function(type=pl.FunctionType.InCore)
+        def main(
+            self,
+            a: pl.Tensor[[128, 128], pl.DT_FP16],
+            output: pl.Tensor[[128, 128], pl.DT_FP16],
+        ) -> pl.Tensor[[128, 128], pl.DT_FP16]:
+            tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
+            tile_a = pl.make_tile(tile_type, addr=VEC_BASE + 0x20)
+            pl.load(tile_a, a, [0, 0])
+            return pl.store(output, tile_a, [0, 0])
+
+    assert 'memref_addr=4128' in _program_ir(Program)

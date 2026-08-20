@@ -130,11 +130,6 @@ class _InlineReturnLowerer(ast.NodeTransformer):
         return [return_val_init, wrapper]
 
 
-def _is_int(value) -> bool:
-    """Whether *value* is a plain integer (bool is not, despite subclassing int)."""
-    return isinstance(value, int) and not isinstance(value, bool)
-
-
 # Builtin function names that map to pl.* ops (syntax sugar).
 _BUILTIN_TO_OP: dict[str, str] = {
     "min": "min",
@@ -834,6 +829,11 @@ class CallParserMixin:
         MakeTuple and then unwrapped to a Python list, since such consumers expect
         a list; a list containing an IR Var stays a MakeTuple.
 
+        This is the lenient policy: an argument with no parse-time value keeps its
+        IR, because most kwargs accept a runtime value. A position that cannot
+        (an address, an axis list) uses :meth:`require_const_value` instead,
+        which rejects it.
+
         ``key`` is retained for call-site compatibility (some callers pass it).
         """
         parsed = self.parse_expression(value)
@@ -852,8 +852,6 @@ class CallParserMixin:
         found, python_value = ExprEvaluator.ir_to_python_value(parsed)
         if not found:
             return parsed
-        if isinstance(python_value, tuple) and any(isinstance(e, tuple) for e in python_value):
-            return parsed
         return python_value
 
     @staticmethod
@@ -861,17 +859,23 @@ class CallParserMixin:
         """Value node of keyword *key*, or None when the call does not pass it."""
         return next((kw.value for kw in call.keywords if kw.arg == key), None)
 
-    def resolve_const_value(
-        self, node: ast.expr, *, expects: str, hint: str, check=None, key: str | None = None
+    def require_const_value(
+        self, parsed: Any, node: ast.expr, *, expects: str, hint: str, check=None, key: str | None = None
     ) -> Any:
         """Python value of an expression that has to be known while parsing.
 
-        The single compile-time accessor: parse the expression, take its
-        parse-time value, and report one consistent diagnostic when it has none
-        or fails the caller's *check*. Callers add only what is specific to them
-        — what the position expects and how to fix it.
+        The single compile-time accessor: take the parse-time value of *parsed*,
+        and report one consistent diagnostic when it has none or fails the caller's
+        *check*. Callers add only what is specific to them — what the position
+        expects and how to fix it.
+
+        *parsed* is the caller's own ``parse_expression(node)``: a handler that
+        parsed its arguments up front already holds it, and re-parsing to reach the
+        check is not free — ``parse_expression`` can emit IR and falls back to
+        evaluating the expression in Python. *node* is kept only for the
+        diagnostic's text and span, so it must be the node *parsed* came from.
         """
-        found, value = ExprEvaluator.ir_to_python_value(self.parse_expression(node))
+        found, value = ExprEvaluator.ir_to_python_value(parsed)
         if not found or (check is not None and not check(value)):
             subject = f"'{key}'" if key else f"'{ast.unparse(node)}'"
             detail = f", got '{ast.unparse(node)}'" if key else ""
@@ -883,16 +887,6 @@ class CallParserMixin:
                 hint=hint,
             )
         return value
-
-    def resolve_static_int(self, elt: ast.expr) -> int:
-        """Resolve a compile-time integer through the normal expression parser."""
-        return self.resolve_const_value(
-            elt,
-            expects="integer",
-            hint="A constant list kwarg (e.g. TileType shape/valid_shape) must be compile-time "
-            "constants; use pl.set_validshape() for a runtime valid shape.",
-            check=_is_int,
-        )
 
     def _default_op_func(self, op_name: str, call: ast.Call) -> ir.Expr:
         if op_name.startswith("vf."):

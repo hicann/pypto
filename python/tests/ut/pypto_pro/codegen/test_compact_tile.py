@@ -11,7 +11,7 @@
 """Unit tests for compact mode propagation through Block tile creation."""
 
 from pypto_pro import DataType
-from pypto_pro.ir.op.block_ops import make_tile as make_tile_expr
+from pypto_pro.ir.op.block_ops import make_tile_expr
 import pypto_pro.language as pl
 import pytest
 

@@ -49,9 +49,10 @@ def make_tile_add_kernel(
     out: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tt, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tt, addr=0x4000, size=16384)
-    tile_out = pl.make_tile(tt, addr=0x8000, size=16384)
+    # size缺省，由tt推导为64 * 128 * 2 = 16384字节
+    tile_a = pl.make_tile(tt, addr=0x0000)
+    tile_b = pl.make_tile(tt, addr=0x4000)
+    tile_out = pl.make_tile(tt, addr=0x8000)
 
     with pl.section_vector():
         pl.load(tile_a, a, [0, 0])

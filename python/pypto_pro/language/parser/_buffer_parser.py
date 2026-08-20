@@ -27,15 +27,15 @@ Both produce the same metadata, so auto_mutex cannot tell them apart.
 from __future__ import annotations
 
 import ast
-from functools import reduce
 
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
+from pypto_pro.ir._utils import _is_int
 from pypto_pro.ir.op._op_registry import op_impl
 from pypto_pro.ir.op.block_ops import TileType as _TileType
-from pypto_pro.ir.op.block_ops import make_tile as _ir_make_tile
+from pypto_pro.ir.op.block_ops import make_tile_expr as _make_tile_expr
+from pypto_pro.ir.op.block_ops import tile_slot_size as _tile_slot_size
 
-from ._call_parser import _is_int
 from .diagnostics import ParserSyntaxError, ParserTypeError
 
 
@@ -93,16 +93,15 @@ class BufferParserMixin:
 
     @staticmethod
     def _tile_type_slot_size(tile_type: _TileType) -> int:
-        """Per-tile byte size derived from the TileType static shape and dtype."""
-        shape = tile_type.shape
-        if isinstance(shape, ir.MakeTuple):
-            shape = tuple(element.value for element in shape.elements if isinstance(element, ir.ConstInt))
-            if len(shape) != len(tile_type.shape.elements):
-                raise ParserTypeError("make_tile_group() TileType shape must contain constant integers")
-        else:
-            shape = tuple(shape)
-        elems = reduce(lambda a, b: a * b, shape, 1)
-        return int(elems) * max(1, (int(tile_type.dtype.get_bit()) + 7) // 8)
+        """Per-tile byte size derived from the TileType static shape and dtype.
+
+        Same helper make_tile() uses for its default ``size``, so a group slot is
+        exactly as wide as a standalone tile of the same TileType.
+        """
+        try:
+            return _tile_slot_size(tile_type.shape, tile_type.dtype)
+        except ValueError as exc:
+            raise ParserTypeError(f"make_tile_group() {exc}") from exc
 
     def is_tile_group(self, expr) -> bool:
         return "tiles" in self.named_fields(expr)
@@ -156,8 +155,10 @@ class BufferParserMixin:
         slot_size = self._tile_type_slot_size(tile_type)
         # addrs: a single base address -> contiguous tiles (base + i*slot_size);
         # a list -> one explicit address per tile (non-contiguous).
-        addrs = self.resolve_const_value(
-            kw["addrs"].value,
+        addrs_node = kw["addrs"].value
+        addrs = self.require_const_value(
+            self.parse_expression(addrs_node),
+            addrs_node,
             key="addrs",
             expects="integer, or list of integers",
             check=lambda value: _is_int(value) or _is_int_sequence(value),
@@ -195,7 +196,7 @@ class BufferParserMixin:
         per_tile_mutex_ids = mutex_ids or ()
         tile_vars = []
         for i, addr in enumerate(tile_addrs):
-            t = _ir_make_tile(
+            t = _make_tile_expr(
                 shape=tile_type.shape,
                 dtype=tile_type.dtype,
                 target_memory=tile_type.target_memory,

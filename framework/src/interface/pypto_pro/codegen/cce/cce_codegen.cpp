@@ -711,9 +711,17 @@ void CCECodegen::EmitSingleFunctionSignature(const ir::FunctionPtr& func, bool h
         // that walks all params): the C++ var name, plus the raw pointer for tensor params.
         if (auto tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(param->GetType())) {
             std::string param_name = context_.SanitizeName(param);
-            auto ptr_var = std::const_pointer_cast<ir::Var>(ir::As<ir::Var>(*tensor_type->tensor_view_->ptr));
             std::string ptr_name = param_name + "_ptr";
-            context_.RegisterVar(ptr_var, ptr_name);
+            // The view and its source pointer are both optional (the IR text grammar allows
+            // `tensor_view<>`, and hand-built programs need not attach one). Registering the ptr
+            // Var only gives body references to it the same C++ name; the signature always takes
+            // `<name>_ptr`, so a view-less tensor param is emitted the same way.
+            if (tensor_type->tensor_view_.has_value() && tensor_type->tensor_view_->ptr.has_value()) {
+                auto ptr_var = std::const_pointer_cast<ir::Var>(ir::As<ir::Var>(*tensor_type->tensor_view_->ptr));
+                CHECK(ptr_var != nullptr)
+                    << "Tensor parameter '" << param->name_ << "' has a tensor_view ptr that is not a Var";
+                context_.RegisterVar(ptr_var, ptr_name);
+            }
             sig << GetGeneratedType(tensor_type) << " " << ptr_name;
             context_.RegisterVar(param, param_name);
             RegisterPointer(param_name, ptr_name);

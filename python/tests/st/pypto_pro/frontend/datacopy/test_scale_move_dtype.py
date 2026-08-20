@@ -1199,7 +1199,7 @@ def test_per_channel_store_tile_offset():
     )
     logging.info("test_per_channel_store_tile_offset passed.")
 
-
+addr_offset = 0x0000
 @pl.jit()
 def per_channel_store_tile_dynamic_scale_kernel(
     q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
@@ -1208,8 +1208,10 @@ def per_channel_store_tile_dynamic_scale_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     with pl.section_cube():
+        addr1 = 0x0000 + 16 - 16
+        addr2 = addr1 + addr_offset - addr_offset * 1
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=addr2, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
         fp_mat_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Mat, layout=pl.ND)

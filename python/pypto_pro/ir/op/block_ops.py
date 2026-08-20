@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 import enum
 import os
 import struct
@@ -43,7 +43,7 @@ from pypto.pypto_impl.ir import (
     TilePad,
 )
 from pypto.pypto_impl.ir import TileType as _IRTileType  # IR-level TileType (C++ binding);
-from pypto_pro.ir._utils import _normalize_expr, _to_make_tuple
+from pypto_pro.ir._utils import _is_int, _normalize_expr, _to_make_tuple
 
 # NOTE: a DSL-descriptor dataclass named ``TileType`` is defined later in this
 # module and shadows this import, so use ``_IRTileType`` for isinstance checks.
@@ -1284,11 +1284,58 @@ def _validate_tile_addr_alignment(
         )
 
 
-def make_tile(
+_MAKE_TILE_HINT = (
+    "A tile occupies a fixed range of its memory space, so it needs an address, "
+    "e.g. pl.make_tile(tile_type, addr=0x0); use pl.make_tile_group(type=..., "
+    "addrs=..., depth=...) to lay several tiles out from one base address."
+)
+
+_MAKE_TILE_TYPE_HINT = (
+    "A tile's shape, dtype, memory space and layout all come from a pl.TileType, which is "
+    "pl.make_tile()'s only positional input; addr/size are keywords, e.g. "
+    "pl.make_tile(pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, "
+    "target_memory=pl.MemorySpace.Vec), addr=0x0)."
+)
+
+
+def _static_dim(dim) -> "int | None":
+    """A shape dimension as a plain int, or None when it is not known while parsing."""
+    if isinstance(dim, bool):
+        return None
+    if isinstance(dim, int):
+        return dim
+    if isinstance(dim, ConstInt):
+        return int(dim.value)
+    return None
+
+
+def tile_slot_size(shape: "Sequence[int] | _ir_core.MakeTuple", dtype: DataType) -> int:
+    """Byte footprint of one tile, derived from its static shape and dtype.
+
+    Shared by pl.make_tile()'s default ``size`` and make_tile_group()'s slot stride,
+    so a group slot is exactly as wide as a standalone tile of the same TileType.
+
+    Raises ValueError when the shape is not a tuple of compile-time positive
+    integers, which is when the caller has to state ``size`` itself.
+    """
+    dims = list(shape.elements) if isinstance(shape, _ir_core.MakeTuple) else list(shape)
+    static_dims = [_static_dim(dim) for dim in dims]
+    if any(dim is None for dim in static_dims):
+        raise ValueError(f"tile shape must contain compile-time integers, got {dims}")
+    if any(dim <= 0 for dim in static_dims):
+        raise ValueError(f"tile shape dimensions must be positive, got {static_dims}")
+    elems = 1
+    for dim in static_dims:
+        elems *= dim
+    return elems * max(1, (int(dtype.get_bit()) + 7) // 8)
+
+
+def make_tile_expr(
     shape: "Sequence[int] | _ir_core.MakeTuple",
     dtype: DataType,
-    target_memory: MemorySpace = MemorySpace.Vec,
-    addr: "int | Expr | None" = None,
+    target_memory: MemorySpace,
+    *,
+    addr: "int",
     size: "int | None" = None,
     valid_shape: "Sequence[int] | _ir_core.MakeTuple | None" = None,
     layout: "TensorLayout | None" = None,
@@ -1297,7 +1344,17 @@ def make_tile(
     compact: "int | None" = None,
     span: "Span | None" = None,
 ) -> Expr:
-    """Create the block.make_tile allocation expression used by block buffers."""
+    """Create the block.make_tile allocation expression used by block buffers.
+
+    This is the IR builder, which takes the tile's fields spread out. The DSL
+    entry point is ``pl.make_tile(tile_type, *, addr, size=None)``, whose parse
+    handler unpacks the TileType and calls this.
+
+    ``addr`` is required: it is what attaches a MemRef to the tile type, and a
+    tile without one is placed nowhere in particular. ``size`` defaults to the
+    footprint derived from ``shape`` and ``dtype``; pass it only to reserve more
+    than that, as an NZ/ZN tile rounded up to whole fractals does.
+    """
     actual_span = span or _span()
     shape_tuple = _to_make_tuple(shape, actual_span)
     valid_shape_tuple = (
@@ -1320,16 +1377,22 @@ def make_tile(
         "compact": compact,
     }
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    if addr is not None:
-        if size is None:
-            raise ValueError("When specifying addr for make_tile, size must also be provided.")
-        if isinstance(addr, int):
-            _validate_tile_addr_alignment(addr, target_memory, actual_span)
-        global mem_id
-        mem_id += 1
-        kwargs["memref_addr"] = addr
-        kwargs["memref_size"] = size
-        kwargs["memref_id"] = mem_id
+    if addr is None:
+        raise ValueError(f"make_tile_expr() requires 'addr', but it is missing. {_MAKE_TILE_HINT}")
+    if size is None:
+        try:
+            size = tile_slot_size(shape_tuple, dtype)
+        except ValueError as exc:
+            raise ValueError(
+                f"pl.make_tile() cannot derive 'size' from the tile type: {exc}. Pass an explicit byte size."
+            ) from exc
+    if isinstance(addr, int):
+        _validate_tile_addr_alignment(addr, target_memory, actual_span)
+    global mem_id
+    mem_id += 1
+    kwargs["memref_addr"] = addr
+    kwargs["memref_size"] = size
+    kwargs["memref_id"] = mem_id
     return _ir_core.create_op_call(block_ir_op("make_tile"), args, kwargs, actual_span)
 
 
@@ -1348,48 +1411,122 @@ def _parse_tile_type_call(self, call: ast.Call):
         # defined). Reject it here with a clear error; use pl.set_validshape() for
         # a runtime valid shape.
         if kw.arg in ("shape", "valid_shape") and isinstance(kw.value, ast.List):
-            kwargs[kw.arg] = [self.resolve_static_int(elt) for elt in kw.value.elts]
+            kwargs[kw.arg] = [
+                self.require_const_value(
+                    self.parse_expression(elt),
+                    elt,
+                    expects="integer",
+                    hint="A constant list kwarg (e.g. TileType shape/valid_shape) must be compile-time "
+                    "constants; use pl.set_validshape() for a runtime valid shape.",
+                    check=_is_int,
+                )
+                for elt in kw.value.elts
+            ]
         else:
             kwargs[kw.arg] = self.resolve_single_kwarg(kw.arg, kw.value)
     return TileType(**kwargs)
 
 
+def _resolve_make_tile_memref(self, call: ast.Call, kwargs: dict, span: Span) -> dict:
+    """Resolve the addr/size pair that places a tile in its memory space.
+
+    ``addr`` is required and fixed while parsing, the same contract
+    make_tile_group() enforces for addrs. Without the check a missing addr
+    yields a tile with no MemRef, which codegen happily emits — the kernel
+    builds and runs, reading and writing whatever happens to sit there.
+    ``size`` is optional (it is derived from the tile type), but when given it is
+    held to the same compile-time contract.
+
+    Both arrive as keywords, so they are already unwrapped to Python values here;
+    they still go through ``require_const_value`` — the same accessor
+    make_tile_group() uses — because a runtime expression unwraps to an ir.Expr,
+    which an int annotation does not keep out.
+    """
+    from pypto_pro.language.parser.diagnostics import FinalRejectionError
+
+    memref: dict[str, int] = {}
+    for key in ("addr", "size"):
+        if key not in kwargs:
+            continue
+        value = kwargs[key]
+        if value is None:  # a literal addr=None parses to an ir.Var and is rejected below
+            continue
+        memref[key] = self.require_const_value(
+            value,
+            self._kwarg_node(call, key),
+            key=key,
+            expects="integer",
+            check=_is_int,
+            hint=f"{key} is fixed while parsing; pass a literal, or a variable bound to "
+            "literals/constants — not a runtime value such as a tensor shape or loop index",
+        )
+    if "addr" not in memref:
+        raise FinalRejectionError("pl.make_tile() missing required keyword 'addr'", span=span, hint=_MAKE_TILE_HINT)
+    if "size" in memref and memref["size"] <= 0:
+        raise FinalRejectionError(
+            f"pl.make_tile() 'size' must be a positive byte count, got {memref['size']}",
+            span=span,
+            hint="Drop 'size' to reserve the tile type's own footprint, or pass the larger "
+            "byte count the layout needs (an NZ/ZN tile rounded up to whole fractals)",
+        )
+
+    # addr/size move back as plain ints, so make_tile_expr() runs its alignment
+    # check on them rather than on whatever expression the call site wrote.
+    return {**kwargs, **memref}
+
+
 @op_impl("make_tile")
 def _parse_make_tile(self, call: ast.Call) -> Expr:
+    from pypto_pro.language.parser.diagnostics import FinalRejectionError
+
     span = self.span_tracker.get_span(call)
-    args = [self.parse_expression(arg) for arg in call.args]
+    # Only the first positional is parsed: the gate below rejects the rest, and its
+    # message should win over whatever parsing an unexpected expression would say.
+    tile_type = self.parse_expression(call.args[0]) if call.args else None
     kwargs = self.parse_op_kwargs(call)
 
-    if len(args) >= 1 and isinstance(args[0], TileType):
-        tile_type = args[0]
-        kwargs.setdefault("shape", tile_type.shape)
-        kwargs.setdefault("dtype", tile_type.dtype)
-        kwargs.setdefault("target_memory", tile_type.target_memory)
-        if tile_type.valid_shape is not None:
-            kwargs.setdefault("valid_shape", tile_type.valid_shape)
-        if tile_type.layout is not None:
-            kwargs.setdefault("layout", tile_type.layout)
-        if tile_type.fractal is not None:
-            kwargs.setdefault("fractal", tile_type.fractal)
-        if tile_type.pad is not None:
-            kwargs.setdefault("pad", tile_type.pad)
-        if tile_type.compact is not None:
-            kwargs.setdefault("compact", tile_type.compact)
-        args = args[1:]
+    if not isinstance(tile_type, TileType):
+        got = ast.unparse(call.args[0]) if call.args else "no positional argument"
+        raise FinalRejectionError(
+            f"pl.make_tile() takes a pl.TileType as its first argument, got {got}",
+            span=span,
+            hint=_MAKE_TILE_TYPE_HINT,
+        )
+    if len(call.args) > 1:
+        # addr/size name a placement, not an operand, and a swapped pair of bare ints
+        # reads exactly like a correct one — so they are keywords, as in make_tile_group().
+        # The values are not echoed: ast.unparse would print 0x40 back as 64, which reads
+        # badly beside the source line the diagnostic already quotes.
+        raise FinalRejectionError(
+            f"pl.make_tile() takes 1 positional argument (the tile type) but {len(call.args)} were given",
+            span=span,
+            hint="pass addr and size as keywords, e.g. pl.make_tile(tile_type, addr=0x0, size=1024)",
+        )
 
-    result = make_tile(*args, **kwargs, span=span)
-    return result
+    # Every TileType field names a make_tile_expr() parameter, so the type is spread
+    # over the kwargs it did not already carry; an explicit kwarg wins over it.
+    for field in fields(tile_type):
+        value = getattr(tile_type, field.name)
+        if value is not None:
+            kwargs.setdefault(field.name, value)
 
+    kwargs = _resolve_make_tile_memref(self, call, kwargs, span)
+    return make_tile_expr(**kwargs, span=span)
 
 
 def _resolve_order_kwarg(self, call: ast.Call, kwargs: dict) -> None:
-    """Resolve the ``order`` axis list, which selects tensor axes while parsing."""
-    node = self._kwarg_node(call, "order")
-    if node is None:
+    """Resolve the ``order`` axis list, which selects tensor axes while parsing.
+
+    A pre-hook runs after ``_make_handler`` parsed the kwargs, so ``order`` is
+    already a parse-time value here; only the AST node is fetched, for the
+    diagnostic.
+    """
+    if "order" not in kwargs:
         return
     kwargs["order"] = list(
-        self.resolve_const_value(
-            node,
+        self.require_const_value(
+            kwargs["order"],
+            self._kwarg_node(call, "order"),
             key="order",
             expects="integer list",
             hint="order selects tensor axes at compile time; pass a constant list "
