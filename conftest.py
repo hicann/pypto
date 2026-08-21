@@ -200,6 +200,33 @@ def pytest_runtest_setup(item):
     return None  # 继续执行默认的测试流程
 
 
+@pytest.hookimpl(trylast=True)
+def pytest_runtest_teardown(item):
+    """用例执行后清理 C++ Program 单例的全局状态。
+
+    PyPTO 的 C++ 侧 ``Program`` 是进程级单例, 用例通过 ``pypto.function()``
+    在其中累积 ``Function`` / ``Operation`` 图节点。``EndFunction`` 仅结束当前
+    函数录制, 不会清理前序用例遗留的全局图对象, 导致同进程内连续执行多个用例时,
+    后续用例在 ``GetGraphInfo`` / ``RemoveCallOpViewAssemble`` 等阶段访问到悬垂的
+    ``shared_ptr<Operation>``, 触发 segfault。
+
+    ``--forked`` 模式下每个用例运行在独立子进程中, 进程退出自动回收全局状态,
+    因此不会复现。但串行 / xdist worker 内连续执行时, 需要在 teardown 阶段调用
+    ``pypto_impl.Reset()`` (对应 ``Program::Reset()``) 清理全局图对象。
+
+    仅对 UTest (python/tests/ut) 路径生效, 避免影响 STest 的 NPU 设备状态。
+    """
+    item_path = str(item.fspath).replace("\\", "/")
+    if "/tests/ut/" not in item_path:
+        return
+    try:
+        import pypto
+
+        pypto.pypto_impl.Reset()
+    except Exception:
+        pass
+
+
 def _get_test_time_cost(item):
     """
     获取测试用例的耗时信息
