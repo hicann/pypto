@@ -82,7 +82,8 @@ struct OpSchedInfo {
     PipeType pipeType{PipeType::PIPE_FIX};
     bool isAlloc{false};
     bool isRetired{false};
-    std::vector<Operation*> viewOps;
+    // 生产者在前: 会照这个次序写回调度序列, 反了则消费者排在生产者之前。
+    std::vector<Operation*> skipOps;
     CoreLocationType coreLocation{CoreLocationType::UNKNOWN};
 };
 
@@ -258,7 +259,7 @@ public:
     Status CheckOpBufferSize(Operation* op);
     Status Init(std::vector<Operation*>& opList);
 
-    std::vector<Operation*>& GetViewOps(Operation* op) { return schedInfoMap[op].viewOps; }
+    std::vector<Operation*>& GetSkipOps(Operation* op) { return schedInfoMap[op].skipOps; }
     void SetIsRetired(Operation* op, bool isRetired) { schedInfoMap[op].isRetired = isRetired; }
     void SetCoreLocation(Operation* op, CoreLocationType loc) { schedInfoMap[op].coreLocation = loc; }
     CoreLocationType GetCoreLocation(Operation* op) const;

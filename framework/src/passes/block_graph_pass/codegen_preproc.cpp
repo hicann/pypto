@@ -673,9 +673,11 @@ Status CodegenPreproc::RunOnFunction(Function& function)
     combineAxis = function.paramConfigs_.combineAxis;
     APASS_LOG_INFO_F(Elements::Operation,
                      "===============================================================> Start CodegenPreproc.");
-    for (auto& op : function.Operations()) {
-        if (op.GetOpcode() == Opcode::OP_VIEW_TYPE) {
-            op.SetOpCode(Opcode::OP_VIEW);
+    for (auto& subProgram : function.rootFunc_->programs_) {
+        for (auto& op : subProgram.second->Operations(false)) {
+            if (op.GetOpcode() == Opcode::OP_VIEW_TYPE) {
+                op.SetOpCode(Opcode::OP_VIEW);
+            }
         }
     }
     if (SaveGmTensorParamIdxToOp(function) != SUCCESS) {

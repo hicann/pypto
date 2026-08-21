@@ -302,8 +302,8 @@ PromotePriority PriorDFSSort::ClassifyPromoteOp(Operation* op) const
     if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
         return PromotePriority::Assemble;
     }
-    if (IsViewOp(*op)) {
-        return PromotePriority::View;
+    if (IsSkipOp(*op)) {
+        return PromotePriority::Skip;
     }
     if (OpcodeManager::Inst().IsCopyOut(op->GetOpcode()) &&
         op->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {

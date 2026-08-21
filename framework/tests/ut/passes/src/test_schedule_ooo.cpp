@@ -196,10 +196,10 @@ TEST_F(ScheduleOoOTest, TestMainScheduleOoO)
     EXPECT_EQ(oooSchedule.PostCheck(*rootFuncPtr), SUCCESS);
 }
 
-static bool CheckViewOps(std::vector<Operation*>& viewOps, Operation* op)
+static bool CheckSkipOps(std::vector<Operation*>& skipOps, Operation* op)
 {
-    for (auto viewop : viewOps) {
-        if (viewop == op) {
+    for (auto skipOp : skipOps) {
+        if (skipOp == op) {
             return true;
         }
     }
@@ -267,9 +267,116 @@ TEST_F(ScheduleOoOTest, TestDependenciesView)
     EXPECT_TRUE(ooOScheduler.state_.depManager.GetPredecessors(copyin).count(subGraph.GetOp("Alloc1")) > 0);
     EXPECT_TRUE(ooOScheduler.state_.depManager.GetPredecessors(add).count(subGraph.GetOp("Alloc2")) > 0);
     EXPECT_TRUE(ooOScheduler.state_.depManager.GetPredecessors(add).count(subGraph.GetOp("Copyin1")) > 0);
-    EXPECT_TRUE(CheckViewOps(ooOScheduler.GetViewOps(add), subGraph.GetOp("View1")));
-    EXPECT_TRUE(CheckViewOps(ooOScheduler.GetViewOps(add), subGraph.GetOp("View2")));
+    EXPECT_TRUE(CheckSkipOps(ooOScheduler.GetSkipOps(add), subGraph.GetOp("View1")));
+    EXPECT_TRUE(CheckSkipOps(ooOScheduler.GetSkipOps(add), subGraph.GetOp("View2")));
     EXPECT_EQ(res, SUCCESS);
+}
+
+TEST_F(ScheduleOoOTest, TestDependenciesReshape)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB,
+                                           MemoryType::MEM_UB};
+    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN, Opcode::OP_RESHAPE,
+                                Opcode::OP_ADD};
+    std::vector<std::vector<std::string>> ioperands{{}, {}, {"t1"}, {"t2"}, {"t3", "t3"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t4"}, {"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"Alloc1", "Alloc2", "Copyin1", "Reshape1", "Add1"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    Function* function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+    std::shared_ptr<LogicalTensor> reshapeOut = subGraph.GetTensor("t3");
+    reshapeOut->memoryrange.memId = subGraph.GetTensor("t2")->memoryrange.memId;
+
+    OoOScheduler ooOScheduler(*function);
+    Status res = ooOScheduler.Init(function->Operations().DuplicatedOpList());
+    EXPECT_EQ(res, SUCCESS);
+
+    Operation* add = subGraph.GetOp("Add1");
+    Operation* reshape = subGraph.GetOp("Reshape1");
+    EXPECT_NE(add, nullptr);
+    EXPECT_NE(reshape, nullptr);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetPredecessors(add).count(subGraph.GetOp("Copyin1")) > 0);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetPredecessors(add).count(reshape) == 0);
+    EXPECT_TRUE(CheckSkipOps(ooOScheduler.GetSkipOps(add), reshape));
+    EXPECT_EQ(ooOScheduler.GetSkipOps(add).size(), 1UL);
+}
+
+// copyin -> t2 -> reshape1 -> t3 -+-> reshape2 -> t4 -> add(t4, t4)
+//                                 +-> mul(t3, t3)
+// t3 是链中间的张量且有旁支消费者 mul: 克隆范围必须覆盖到链尾 reshape2, 且只动 add 那一支。
+TEST_F(ScheduleOoOTest, TestSpillClonesSharedReshapeChain)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4", "t5", "t6"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB,
+                                           MemoryType::MEM_UB,         MemoryType::MEM_UB, MemoryType::MEM_UB};
+    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN,
+                                Opcode::OP_RESHAPE,  Opcode::OP_RESHAPE,  Opcode::OP_ADD,      Opcode::OP_MUL};
+    std::vector<std::vector<std::string>> ioperands{{}, {}, {}, {"t1"}, {"t2"}, {"t3"}, {"t4", "t4"}, {"t3", "t3"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t5"}, {"t6"}, {"t2"}, {"t3"}, {"t4"}, {"t5"}, {"t6"}};
+    std::vector<std::string> opNames{"Alloc1", "Alloc2", "Alloc3", "Copyin1", "Reshape1", "Reshape2", "Add1", "Mul1"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    Function* function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+    int spillMemId = subGraph.GetTensor("t2")->memoryrange.memId;
+    std::shared_ptr<LogicalTensor> midTensor = subGraph.GetTensor("t3");
+    std::shared_ptr<LogicalTensor> tailOut = subGraph.GetTensor("t4");
+
+    OoOScheduler ooOScheduler(*function);
+    EXPECT_EQ(ooOScheduler.Init(function->Operations().DuplicatedOpList()), SUCCESS);
+
+    Operation* reshape1 = subGraph.GetOp("Reshape1");
+    Operation* reshape2 = subGraph.GetOp("Reshape2");
+    Operation* add = subGraph.GetOp("Add1");
+    Operation* mul = subGraph.GetOp("Mul1");
+    LogicalTensorPtr reshape1InBefore = reshape1->GetInputOperand(0);
+
+    midTensor->memoryrange.memId = spillMemId;
+    tailOut->memoryrange.memId = spillMemId;
+    EXPECT_EQ(ooOScheduler.GetSkipOps(add).size(), 2UL);
+
+    LogicalTensorPtr reloadTensor = subGraph.GetTensor("t2")->Clone(*function, true);
+    reloadTensor->memoryrange.memId = spillMemId + 1000;
+    EXPECT_EQ(ooOScheduler.spillEngine_.UpdateOperationInput(add, subGraph.GetOp("Copyin1"), reloadTensor, spillMemId),
+              SUCCESS);
+
+    EXPECT_EQ(reshape1->GetInputOperand(0), reshape1InBefore);
+    EXPECT_EQ(reshape2->GetInputOperand(0), midTensor);
+    EXPECT_EQ(mul->GetIOperands()[0], midTensor);
+    EXPECT_EQ(midTensor->memoryrange.memId, spillMemId);
+    EXPECT_NE(add->GetIOperands()[0], tailOut);
+    EXPECT_EQ(add->GetIOperands()[0]->memoryrange.memId, reloadTensor->memoryrange.memId);
+    EXPECT_EQ(add->GetIOperands()[1]->memoryrange.memId, reloadTensor->memoryrange.memId);
+    EXPECT_EQ(add->GetIOperands()[0]->Datatype(), tailOut->Datatype());
+    EXPECT_EQ(add->GetIOperands()[0]->Format(), tailOut->Format());
+    EXPECT_EQ(add->GetIOperands()[0]->GetShape(), tailOut->GetShape());
+    EXPECT_EQ(add->GetIOperands()[0]->GetRawTensor()->rawshape, tailOut->GetRawTensor()->rawshape);
+
+    // 旁支 mul 还读着 t3, 链首 reshape1 留着; 链尾 reshape2 两个 operand 都改指后没人读, 被摘掉。
+    auto& skipOps = ooOScheduler.GetSkipOps(add);
+    EXPECT_EQ(skipOps.size(), 5UL);
+    EXPECT_TRUE(CheckSkipOps(skipOps, reshape1));
+    EXPECT_FALSE(CheckSkipOps(skipOps, reshape2));
+    EXPECT_FALSE(reshape1->IsDeleted());
+    EXPECT_TRUE(reshape2->IsDeleted());
+
+    Operation* cloneTail = *add->GetIOperands()[0]->GetProducers().begin();
+    Operation* cloneHead = *cloneTail->GetInputOperand(0)->GetProducers().begin();
+    EXPECT_NE(cloneTail, reshape2);
+    EXPECT_NE(cloneHead, reshape1);
+    EXPECT_TRUE(CheckSkipOps(skipOps, cloneTail));
+    EXPECT_TRUE(CheckSkipOps(skipOps, cloneHead));
+    EXPECT_EQ(cloneHead->GetInputOperand(0), reloadTensor);
+    EXPECT_EQ(cloneTail->GetOutputOperand(0)->memoryrange.memId, reloadTensor->memoryrange.memId);
+    // 克隆体持有私有 RawTensor, 改它不会连坐原链。
+    EXPECT_NE(cloneTail->GetOutputOperand(0)->GetRawTensor(), tailOut->GetRawTensor());
+    EXPECT_TRUE(tailOut->GetConsumers().empty());
+    // 被 spill 的 t2 不受连坐。
+    EXPECT_EQ(subGraph.GetTensor("t2")->memoryrange.memId, spillMemId);
 }
 
 TEST_F(ScheduleOoOTest, TestDependenciesAssemble)
@@ -1908,7 +2015,7 @@ TEST_F(ScheduleOoOTest, TestSchedulerAllocTensorMemRangeNonViewOp)
     Function* function = subGraph.GetFunction();
     OoOScheduler oooSchedule(*function);
     auto addOp = subGraph.GetOp("add1");
-    oooSchedule.GetViewOps(addOp).push_back(addOp);
+    oooSchedule.GetSkipOps(addOp).push_back(addOp);
     EXPECT_EQ(oooSchedule.AllocTensorMemRange(addOp), FAILED);
 }
 

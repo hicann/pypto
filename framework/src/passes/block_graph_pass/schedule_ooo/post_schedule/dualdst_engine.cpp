@@ -913,7 +913,7 @@ void DualDstEngine::RegisterFusedOpInMaps(Operation* C, int execOrder)
     state_.schedInfoMap[C].isAlloc = false;
     state_.schedInfoMap[C].isRetired = false;
     state_.schedInfoMap[C].coreLocation = CoreLocationType::AIC;
-    state_.schedInfoMap[C].viewOps = {};
+    state_.schedInfoMap[C].skipOps = {};
     state_.InsertOrdered(C);
 }
 

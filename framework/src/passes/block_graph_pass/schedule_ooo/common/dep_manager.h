@@ -26,10 +26,37 @@
 
 namespace npu::tile_fwk {
 
-inline bool IsViewOp(const Operation& op)
+inline bool IsSkipOp(const Operation& op)
 {
     const auto opc = op.GetOpcode();
-    return opc == Opcode::OP_VIEW || opc == Opcode::OP_VIEW_TYPE;
+    return opc == Opcode::OP_VIEW || opc == Opcode::OP_VIEW_TYPE || opc == Opcode::OP_RESHAPE;
+}
+
+// 沿 skip 链走出的路径, from 自身在最前, 最远的 skip op 在最后; from 不是 skip op 时为空。
+// 分叉与跨函数处停止: 前者没有唯一的穿透对象, 后者的 buffer 不在同一作用域内分配。
+// 前置条件: skip op 单进单出 —— 只取 operand 0。新增 skip opcode 须先满足这一条, 否则这里会静默漏掉其余 operand。
+inline std::vector<Operation*> SkipChainPath(Operation* from, bool followProducers)
+{
+    std::vector<Operation*> path;
+    if (from == nullptr) {
+        return path;
+    }
+    for (Operation* op = from; op != nullptr && IsSkipOp(*op) && op->BelongTo() == from->BelongTo();) {
+        path.push_back(op);
+        const auto& nextOps = followProducers ? op->GetInputOperand(0)->GetProducers() :
+                                                op->GetOutputOperand(0)->GetConsumers();
+        if (nextOps.size() != 1) {
+            break;
+        }
+        op = *nextOps.begin();
+    }
+    return path;
+}
+
+inline Operation* SkipChain(Operation* from, bool followProducers)
+{
+    const auto path = SkipChainPath(from, followProducers);
+    return path.empty() ? nullptr : path.back();
 }
 
 class DependencyManager {
@@ -60,8 +87,6 @@ public:
     bool HasOp(Operation* op) const;
 
     std::string PrintOp(Operation* op);
-
-    Operation* SkipViewChain(Operation* start, bool followProducers);
 
     void FindDependencies(Operation* op, bool needView);
     void InitOpConsumerAndProducer(const std::vector<Operation*>& ops);

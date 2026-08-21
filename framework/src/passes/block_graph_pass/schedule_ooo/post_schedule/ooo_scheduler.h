@@ -71,6 +71,9 @@ private:
     IRBuilder irBuilder_;
     std::unordered_map<int, DDRBufferKind> ddrKindMap_;
     std::vector<Operation*> guardBlockedAllocs_;
+    // 输出在 DDR 上的 skip op: 没有消费者的 skipOps 接管它, 由 PlaceDdrSkipOps 定稿时紧跟生产者插入。
+    // 按 opList 原序存放, 祖先在前, 链上后继才能看到已落位的前驱。
+    std::vector<Operation*> ddrSkipOps_;
 
     void NotifyOpLaunch(Operation* op, int cycleEnd);
     void NotifyOpRetire(Operation* op, const std::vector<int>& freedMemIds);
@@ -94,7 +97,8 @@ private:
 
     Status InitOpEntry(Operation* op);
     Status InitOpCoreType(Operation* op);
-    void InitOpViewOps(Operation* op);
+    void InitSkipOps(Operation* op);
+    void PlaceDdrSkipOps();
 
     void InitCoreConfig(const std::vector<Operation*>& opList);
     void InitTensorCoreMap();
@@ -120,10 +124,10 @@ private:
     Status TryDualDstAllocOnce(Operation* op, uint64_t& commitCnt, bool& allocated);
     Status TryRegularAllocOnce(Operation* op, MemoryType memType, CoreLocationType coreLocation,
                                const std::vector<int>& reqMemIds, uint64_t& commitCnt, bool& allocated);
-    void HandleViewOp(Operation* op);
+    void HandleSkipOp(Operation* op);
     Status LaunchIssueStage(int& nextCycle);
     Status AllocTensorMemRange(Operation* op);
-    Status AllocViewTensorMemRange(Operation& operation);
+    Status AllocSkipTensorMemRange(Operation& operation);
     Status CheckAndUpdateLifecycle();
     void UpdateIssueExecOrder();
     void PrintOpList(std::vector<Operation*> opList);
@@ -153,7 +157,7 @@ private:
     Status FindFirstOrder(std::pair<CoreLocationType, MemoryType>& orderFirstPair);
     Status FindCoreLocationMemoryType(CoreLocationType coreLocation, MemoryType& spillMemType);
 
-    std::vector<Operation*>& GetViewOps(Operation* op) { return state_.schedInfoMap[op].viewOps; }
+    std::vector<Operation*>& GetSkipOps(Operation* op) { return state_.schedInfoMap[op].skipOps; }
     void SetIsRetired(Operation* op, bool isRetired) { state_.schedInfoMap[op].isRetired = isRetired; }
     void SetCoreLocation(Operation* op, CoreLocationType loc) { state_.schedInfoMap[op].coreLocation = loc; }
 

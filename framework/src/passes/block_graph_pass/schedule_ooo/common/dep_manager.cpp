@@ -173,29 +173,6 @@ void DependencyManager::PrintDependencies(const std::vector<Operation*>& ops)
     }
 }
 
-Operation* DependencyManager::SkipViewChain(Operation* start, bool followProducers)
-{
-    if (start == nullptr)
-        return nullptr;
-    Operation* op = start;
-    Operation* lastView = nullptr;
-    while (op != nullptr && IsViewOp(*op)) {
-        lastView = op;
-        if (followProducers) {
-            const auto& nextOps = op->GetInputOperand(0)->GetProducers();
-            if (nextOps.size() != 1)
-                break;
-            op = *nextOps.begin();
-        } else {
-            const auto& nextOps = op->GetOutputOperand(0)->GetConsumers();
-            if (nextOps.size() != 1)
-                break;
-            op = *nextOps.begin();
-        }
-    }
-    return lastView;
-}
-
 Status DependencyManager::InitAllocDependencies(Operation* op, std::unordered_map<int, Operation*>& tensor2AllocOpMap)
 {
     for (auto& tensor : op->GetOOperands()) {
@@ -228,13 +205,13 @@ void DependencyManager::HandleScaleOpDependency(Operation* op, MemoryType memTyp
 void DependencyManager::AddProducerDependencies(Operation* op)
 {
     for (auto& producer : op->ProducerOps()) {
-        Operation* lastView = SkipViewChain(producer, true);
-        if (lastView == nullptr) {
-            AddDependency(producer, op); // producer 不是 view，直接连
+        Operation* farthestSkip = SkipChain(producer, true);
+        if (farthestSkip == nullptr) {
+            AddDependency(producer, op);
             continue;
         }
-        for (auto* realProd : lastView->ProducerOps()) {
-            AddDependency(realProd, op);
+        for (auto* realProducer : farthestSkip->ProducerOps()) {
+            AddDependency(realProducer, op);
         }
     }
 }
@@ -242,12 +219,12 @@ void DependencyManager::AddProducerDependencies(Operation* op)
 void DependencyManager::AddConsumerDependencies(Operation* op)
 {
     for (auto& consumer : op->ConsumerOps()) {
-        Operation* lastView = SkipViewChain(consumer, false);
-        if (lastView == nullptr) {
-            continue; // 非 view consumer 的边由它自己的 AddProducerDependencies 补
+        Operation* farthestSkip = SkipChain(consumer, false);
+        if (farthestSkip == nullptr) {
+            continue;
         }
-        for (auto* realCon : lastView->ConsumerOps()) {
-            AddDependency(op, realCon);
+        for (auto* realConsumer : farthestSkip->ConsumerOps()) {
+            AddDependency(op, realConsumer);
         }
     }
 }

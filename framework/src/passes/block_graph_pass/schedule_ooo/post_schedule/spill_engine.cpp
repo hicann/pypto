@@ -470,67 +470,127 @@ bool SpillEngine::IsUnusedTensor(Operation* spillOp)
     return true;
 }
 
-void SpillEngine::UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr newTensor,
-                                       int spillMemId)
+Status SpillEngine::UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr reloadTensor,
+                                         int spillMemId)
 {
     for (size_t index = 0; index < targetOp->GetIOperands().size(); index++) {
         if (targetOp->GetIOperands()[index]->memoryrange.memId != spillMemId) {
             continue;
         }
         for (auto& inOp : targetOp->GetIOperands()[index]->GetProducers()) {
-            if (IsViewOp(*inOp)) {
-                Operation* op = SkipViewChain(inOp, true);
-                UpdateTensorInputForView(*op, spillOp, newTensor);
+            if (IsSkipOp(*inOp)) {
+                if (UpdateSkipOpInput(inOp, spillOp, targetOp, reloadTensor, index) != SUCCESS) {
+                    return FAILED;
+                }
             } else if (inOp == spillOp) {
-                targetOp->UpdateInputOperand(index, newTensor);
+                targetOp->UpdateInputOperand(index, reloadTensor);
             }
         }
     }
+    return SUCCESS;
 }
 
-void SpillEngine::UpdateTensorInputForView(Operation& op, Operation* spillOp, LogicalTensorPtr tensor)
+// 一律给 targetOp 重建一条链, 不判是否被共享: 原链原封不动留给别的读者 (含已发射的), 语义上永远安全。
+// 代价只是多几个 skip op —— 它们零 codegen、不申请内存、不进流水线, 判"能不能省下这份克隆"反而更贵更险。
+Status SpillEngine::UpdateSkipOpInput(Operation* chainTail, Operation* spillOp, Operation* targetOp,
+                                      LogicalTensorPtr reloadTensor, size_t index)
 {
-    bool hit = false;
-    for (auto it : op.GetInputOperand(0)->GetProducers()) {
-        if (it == spillOp) {
-            hit = true;
-            op.UpdateInputOperand(0, tensor);
-            break;
-        }
+    // 从链尾往上取祖先路径: 链中间的张量允许有旁支消费者, 沿 consumers 走会在分叉处停下, 到不了链尾。
+    std::vector<Operation*> chain = SkipChainPath(chainTail, true);
+    if (chain.empty()) {
+        return SUCCESS;
     }
-    if (!hit)
-        return;
-    for (Operation* p = &op; p != nullptr && IsViewOp(*p);) {
-        p->GetOutputOperand(0)->memoryrange.memId = tensor->memoryrange.memId;
-        auto consumers = p->GetOutputOperand(0)->GetConsumers();
-        if (consumers.empty())
-            break;
-        p = *consumers.begin();
+    std::reverse(chain.begin(), chain.end());
+    const auto& producers = chain.front()->GetInputOperand(0)->GetProducers();
+    if (producers.find(spillOp) == producers.end()) {
+        return SUCCESS;
     }
+
+    LogicalTensorPtr clonedTail = CloneSkipChain(targetOp, chain, reloadTensor);
+    if (clonedTail == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Clone skip chain failed for %s.", state_.GetOpInfo(targetOp).c_str());
+        return FAILED;
+    }
+    targetOp->UpdateInputOperand(index, clonedTail);
+    DetachOrphanedSkipChain(chain, targetOp);
+    return SUCCESS;
 }
 
-void SpillEngine::ReplaceViewOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId)
+// 只标删, 收在定稿: 中途删会撞上上游 UpdateOperationInput 正按引用迭代的 producers_。
+void SpillEngine::DetachOrphanedSkipChain(const std::vector<Operation*>& chain, Operation* targetOp)
 {
-    std::vector<Operation*> viewConsumers;
-    for (auto* consumer : startTensor->GetConsumers()) {
-        if (IsViewOp(*consumer)) {
-            viewConsumers.push_back(consumer);
-        }
-    }
-
-    while (!viewConsumers.empty()) {
-        Operation* viewOp = viewConsumers.back();
-        viewConsumers.pop_back();
-        auto viewOutTensor = viewOp->GetOutputOperand(0);
-        if (viewOutTensor == nullptr) {
+    auto& skipOps = state_.schedInfoMap[targetOp].skipOps;
+    const auto& targetIns = targetOp->GetIOperands();
+    // 从链尾往链首扫: 摘掉尾巴才会让它的上游变成无读者, 一趟就能连锁清干净。
+    for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+        Operation* oldOp = *it;
+        LogicalTensorPtr outTensor = oldOp->GetOutputOperand(0);
+        const auto& consumers = outTensor->GetConsumers();
+        // 标删的链尾此刻还挂在 consumers 上, 算作读者会让级联在倒数第二个就断掉。
+        if (std::any_of(consumers.begin(), consumers.end(), [](Operation* c) { return !c->IsDeleted(); })) {
             continue;
         }
-        if (viewOutTensor->memoryrange.memId == oldMemId) {
-            viewOutTensor->memoryrange.memId = newMemId;
+        // consumers 是 set: targetOp 两个 operand 读同一张量只记一份, 改第一个就整个移掉了。
+        if (std::find(targetIns.begin(), targetIns.end(), outTensor) != targetIns.end()) {
+            continue;
         }
-        for (auto* consumer : viewOutTensor->GetConsumers()) {
-            if (IsViewOp(*consumer)) {
-                viewConsumers.push_back(consumer);
+        auto pos = std::find(skipOps.begin(), skipOps.end(), oldOp);
+        if (pos != skipOps.end()) {
+            skipOps.erase(pos);
+        }
+        EraseSchedulerSideMaps(oldOp);
+        oldOp->SetAsDeleted();
+        APASS_LOG_DEBUG_F(Elements::Operation, "Detached orphaned skip op %s.", state_.GetOpInfo(oldOp).c_str());
+    }
+}
+
+// 逐个克隆 chain 上的 skip op, 把上一个克隆的输出接给下一个的输入, 链首的输入直接用 reload copyin 的产物。
+// 返回克隆链尾的输出张量, 供 targetOp 改指。
+// Clone(function_, true) 新建 RawTensor 并深拷 shape/rawshape/offset/dtype/format/dynValidShape, 这里只覆写 memId。
+LogicalTensorPtr SpillEngine::CloneSkipChain(Operation* targetOp, const std::vector<Operation*>& chain,
+                                             LogicalTensorPtr reloadTensor)
+{
+    std::vector<Operation*> clones;
+    LogicalTensorPtr inTensor = reloadTensor;
+    for (Operation* op : chain) {
+        LogicalTensorPtr outTensor = op->GetOutputOperand(0)->Clone(function_, true);
+        if (outTensor == nullptr) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Clone skip op %s operand failed.", state_.GetOpInfo(op).c_str());
+            return nullptr;
+        }
+        outTensor->memoryrange.memId = reloadTensor->memoryrange.memId;
+        Operation& cloneOp = op->CloneOperation(function_, {inTensor}, {outTensor});
+        UpdateOpInternalSubgraphID(cloneOp, op);
+        clones.push_back(&cloneOp);
+        inTensor = outTensor;
+    }
+    auto& skipOps = state_.schedInfoMap[targetOp].skipOps;
+    skipOps.insert(skipOps.end(), clones.begin(), clones.end());
+    return inTensor;
+}
+
+void SpillEngine::ReplaceSkipOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId)
+{
+    std::vector<Operation*> skipConsumers;
+    for (auto* consumer : startTensor->GetConsumers()) {
+        if (IsSkipOp(*consumer)) {
+            skipConsumers.push_back(consumer);
+        }
+    }
+
+    while (!skipConsumers.empty()) {
+        Operation* skipOp = skipConsumers.back();
+        skipConsumers.pop_back();
+        auto skipOutTensor = skipOp->GetOutputOperand(0);
+        if (skipOutTensor == nullptr) {
+            continue;
+        }
+        if (skipOutTensor->memoryrange.memId == oldMemId) {
+            skipOutTensor->memoryrange.memId = newMemId;
+        }
+        for (auto* consumer : skipOutTensor->GetConsumers()) {
+            if (IsSkipOp(*consumer)) {
+                skipConsumers.push_back(consumer);
             }
         }
     }
@@ -550,7 +610,7 @@ void SpillEngine::ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId)
     for (auto& outTensor : op->GetOOperands()) {
         if (outTensor->memoryrange.memId == oldMemId) {
             outTensor->memoryrange.memId = newMemId;
-            ReplaceViewOpChainMemId(outTensor, oldMemId, newMemId);
+            ReplaceSkipOpChainMemId(outTensor, oldMemId, newMemId);
         }
     }
 }
@@ -569,39 +629,17 @@ Status SpillEngine::UpdateSpillOpDepend(Operation* spillOp, LogicalTensorPtr new
     for (auto succOp : successors) {
         if (!state_.schedInfoMap[succOp].isRetired) {
             auto& reqMemIds = state_.opReqMemIdsMap[succOp];
-            if (std::count(reqMemIds.begin(), reqMemIds.end(), spillMemId) > 0) {
-                UpdateOperationInput(succOp, spillOp, newTensor, spillMemId);
+            if (std::count(reqMemIds.begin(), reqMemIds.end(), spillMemId) > 0 &&
+                UpdateOperationInput(succOp, spillOp, newTensor, spillMemId) != SUCCESS) {
+                return FAILED;
             }
         }
     }
     return SUCCESS;
 }
 
-Operation* SpillEngine::SkipViewChain(Operation* start, bool followProducers)
-{
-    if (start == nullptr)
-        return nullptr;
-    Operation* op = start;
-    Operation* lastView = nullptr;
-    while (op != nullptr && IsViewOp(*op)) {
-        lastView = op;
-        if (followProducers) {
-            const auto& nextOps = op->GetInputOperand(0)->GetProducers();
-            if (nextOps.size() != 1)
-                break;
-            op = *nextOps.begin();
-        } else {
-            const auto& nextOps = op->GetOutputOperand(0)->GetConsumers();
-            if (nextOps.size() != 1)
-                break;
-            op = *nextOps.begin();
-        }
-    }
-    return lastView;
-}
-
-void SpillEngine::UpdateSuccessorDependencies(Operation* succOp, Operation* spillOp, Operation* reloadCopyin,
-                                              int spillMemId, int reloadMemId)
+Status SpillEngine::UpdateSuccessorDependencies(Operation* succOp, Operation* spillOp, Operation* reloadCopyin,
+                                                int spillMemId, int reloadMemId)
 {
     auto& reqMemIds = state_.GetOpMemIds(succOp);
     if (std::count(reqMemIds.begin(), reqMemIds.end(), spillMemId) > 0) {
@@ -610,13 +648,14 @@ void SpillEngine::UpdateSuccessorDependencies(Operation* succOp, Operation* spil
         for (auto& outTensor : succOp->GetOOperands()) {
             if (outTensor->memoryrange.memId == spillMemId) {
                 outTensor->memoryrange.memId = reloadMemId;
-                ReplaceViewOpChainMemId(outTensor, spillMemId, reloadMemId);
+                ReplaceSkipOpChainMemId(outTensor, spillMemId, reloadMemId);
             }
         }
         state_.depManager.RemovePredecessor(succOp, spillOp);
         state_.depManager.InsertPredecessor(succOp, reloadCopyin);
-        UpdateOperationInput(succOp, spillOp, reloadCopyin->GetOutputOperand(0), spillMemId);
+        return UpdateOperationInput(succOp, spillOp, reloadCopyin->GetOutputOperand(0), spillMemId);
     }
+    return SUCCESS;
 }
 
 void SpillEngine::UpdatePredecessorAllocDependencies(Operation* succOp, Operation* reloadAlloc, int spillMemId)
@@ -655,7 +694,9 @@ Status SpillEngine::UpdateSmallShapeDependAndBuf(std::vector<std::pair<Operation
             continue;
         }
         state_.bufRefCount[reloadMemId]++;
-        UpdateSuccessorDependencies(succOp, spillOp, reloadCopyin, spillMemId, reloadMemId);
+        if (UpdateSuccessorDependencies(succOp, spillOp, reloadCopyin, spillMemId, reloadMemId) != SUCCESS) {
+            return FAILED;
+        }
         UpdatePredecessorAllocDependencies(succOp, reloadAlloc, spillMemId);
     }
     return SUCCESS;

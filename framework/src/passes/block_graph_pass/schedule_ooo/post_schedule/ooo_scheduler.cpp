@@ -275,7 +275,7 @@ Status OoOScheduler::SpillOnBlock()
     return SUCCESS;
 }
 
-Status OoOScheduler::AllocViewTensorMemRange(Operation& operation)
+Status OoOScheduler::AllocSkipTensorMemRange(Operation& operation)
 {
     auto outTensor = operation.GetOOperands()[0];
     int memId = outTensor->memoryrange.memId;
@@ -289,14 +289,15 @@ Status OoOScheduler::AllocViewTensorMemRange(Operation& operation)
 
 Status OoOScheduler::AllocTensorMemRange(Operation* op)
 {
-    auto& viewOps = state_.schedInfoMap[op].viewOps;
-    for (auto& viewOp : viewOps) {
-        if (!IsViewOp(*viewOp)) {
-            APASS_LOG_ERROR_F(Elements::Operation, "op[%d] is not OP_VIEW.", viewOp->GetOpMagic());
+    auto& skipOps = state_.schedInfoMap[op].skipOps;
+    for (auto& skipOp : skipOps) {
+        if (!IsSkipOp(*skipOp)) {
+            APASS_LOG_ERROR_F(Elements::Operation, "%s is not a skip op.", state_.GetOpInfo(skipOp).c_str());
             return FAILED;
         }
-        if (AllocViewTensorMemRange(*viewOp) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "AllocViewTensorMemRange failed.");
+        if (AllocSkipTensorMemRange(*skipOp) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "AllocSkipTensorMemRange failed on %s.",
+                              state_.GetOpInfo(skipOp).c_str());
             return FAILED;
         }
     }
@@ -323,14 +324,14 @@ Status OoOScheduler::AllocTensorMemRange(Operation* op)
     return SUCCESS;
 }
 
-void OoOScheduler::HandleViewOp(Operation* op)
+void OoOScheduler::HandleSkipOp(Operation* op)
 {
-    auto& viewOps = state_.schedInfoMap[op].viewOps;
-    for (auto& viewOp : viewOps) {
-        if (std::find(state_.newOperations.begin(), state_.newOperations.end(), viewOp) != state_.newOperations.end()) {
+    auto& skipOps = state_.schedInfoMap[op].skipOps;
+    for (auto& skipOp : skipOps) {
+        if (std::find(state_.newOperations.begin(), state_.newOperations.end(), skipOp) != state_.newOperations.end()) {
             continue;
         }
-        state_.newOperations.emplace_back(viewOp);
+        state_.newOperations.emplace_back(skipOp);
     }
 }
 
@@ -350,7 +351,7 @@ Status OoOScheduler::LaunchIssueStage(int& nextCycle)
             pipe.curOp = op;
             pipe.curOpRetireCycle = state_.clock + op->GetLatency();
             NotifyOpLaunch(op, op->cycleEnd);
-            HandleViewOp(op);
+            HandleSkipOp(op);
             state_.newOperations.emplace_back(op);
             if (nextCycle == -1 || nextCycle > pipe.curOpRetireCycle) {
                 nextCycle = pipe.curOpRetireCycle;
@@ -847,20 +848,31 @@ void OoOScheduler::InitCoreConfig(const std::vector<Operation*>& opList)
     }
 }
 
-void OoOScheduler::InitOpViewOps(Operation* op)
+// skipOps 按生产者在前存放: HandleSkipOp 照这个次序写回调度序列, 反了的话消费者会排在生产者之前。
+// 向上走出的祖先路径天然是消费者在前, 每条子链单独翻转后追加; 去重命中意味着该 op 连同它的整条
+// 祖先前缀已经在更前面放好了, 所以跨 operand 共享祖先时次序依然成立。
+void OoOScheduler::InitSkipOps(Operation* op)
 {
     if (op == nullptr)
         return;
-    std::vector<Operation*> viewOps;
+    std::vector<Operation*> skipOps;
     for (auto iOperand : op->GetIOperands()) {
         for (auto pre : iOperand->GetProducers()) {
-            while (IsViewOp(*pre) && pre->GetOutputOperand(0)->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
-                viewOps.push_back(pre);
-                pre = *(pre->GetInputOperand(0)->GetProducers().begin());
+            std::vector<Operation*> chain;
+            while (pre != nullptr && IsSkipOp(*pre) &&
+                   pre->GetOutputOperand(0)->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
+                chain.push_back(pre);
+                const auto& upProducers = pre->GetInputOperand(0)->GetProducers();
+                pre = upProducers.empty() ? nullptr : *upProducers.begin();
+            }
+            for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+                if (std::find(skipOps.begin(), skipOps.end(), *it) == skipOps.end()) {
+                    skipOps.push_back(*it);
+                }
             }
         }
     }
-    state_.schedInfoMap[op].viewOps = viewOps;
+    state_.schedInfoMap[op].skipOps = skipOps;
 }
 
 Status OoOScheduler::InitOpCoreType(Operation* op)
@@ -909,9 +921,10 @@ Status OoOScheduler::InitOpEntry(Operation* op)
     if (op == nullptr)
         return FAILED;
 
-    if (IsViewOp(*op)) {
+    // skip op 由消费者的 skipOps 带走; 输出在 DDR 上的没有消费者接管, 攒起来等定稿时按拓扑落位。
+    if (IsSkipOp(*op)) {
         if (op->GetOutputOperand(0)->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
-            state_.newOperations.push_back(op);
+            ddrSkipOps_.push_back(op);
         }
         return SUCCESS;
     }
@@ -930,8 +943,7 @@ Status OoOScheduler::InitOpEntry(Operation* op)
     state_.schedInfoMap[op].isRetired = false;
     state_.SetOpMemIds(op, {});
 
-    // 初始化viewOps
-    InitOpViewOps(op);
+    InitSkipOps(op);
 
     // 初始化核属性
     if (InitOpCoreType(op) != SUCCESS) {
@@ -951,6 +963,7 @@ Status OoOScheduler::Init(const std::vector<Operation*>& opList,
     state_.schedInfoMap.clear();
     state_.ClearAllOpMemIds();
     state_.localBufferMap.clear();
+    ddrSkipOps_.clear();
     LOG_SCOPE_BEGIN(tInit, Elements::Function, "Init");
     // 初始化芯片各buffer大小
     state_.localMemSize = CommonUtils::GetLocalMemorySize();
@@ -1026,8 +1039,44 @@ void OoOScheduler::UpdateDualDstL0MXRange()
     }
 }
 
+// 紧跟最后一个生产者插入: 位置唯一确定, 且不会把 skip op 推得比必要更晚。
+// 一个生产者都不在序列里的留在头部 —— 无依赖可违背。
+void OoOScheduler::PlaceDdrSkipOps()
+{
+    for (auto* skipOp : ddrSkipOps_) {
+        // 已标删的不再落位: 插进 newOperations 就成了"既发射又删除", 数量守恒当场不成立。
+        if (skipOp->IsDeleted()) {
+            continue;
+        }
+        size_t insertPos = 0;
+        for (auto iOperand : skipOp->GetIOperands()) {
+            if (iOperand == nullptr) {
+                continue;
+            }
+            for (auto* prod : iOperand->GetProducers()) {
+                // 生产者自己也可能不参与调度 (USE_LESS_OPS), 不在序列里就没有位置约束可言。
+                auto it = std::find(state_.newOperations.begin(), state_.newOperations.end(), prod);
+                if (it == state_.newOperations.end()) {
+                    continue;
+                }
+                size_t prodPos = static_cast<size_t>(std::distance(state_.newOperations.begin(), it));
+                insertPos = std::max(insertPos, prodPos + 1);
+            }
+        }
+        state_.newOperations.insert(state_.newOperations.begin() + static_cast<long>(insertPos), skipOp);
+        APASS_LOG_DEBUG_F(Elements::Operation, "Place DDR skip op %s at %zu.", state_.GetOpInfo(skipOp).c_str(),
+                          insertPos);
+    }
+}
+
 Status OoOScheduler::FinalizeScheduleResult(const std::vector<Operation*>& opList)
 {
+    PlaceDdrSkipOps();
+    // 消费者可能在链标删之前就发射过, 那时 HandleSkipOp 已把它写进 newOperations。
+    auto& newOps = state_.newOperations;
+    newOps.erase(std::remove_if(newOps.begin(), newOps.end(), [](Operation* op) { return op->IsDeleted(); }),
+                 newOps.end());
+    function_.EraseOperations(false, false);
     UpdateL0MXMap(opList);
     UpdateDualDstL0MXRange();
     PrintOpList(state_.newOperations);

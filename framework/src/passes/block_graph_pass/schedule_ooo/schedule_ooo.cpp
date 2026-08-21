@@ -241,7 +241,9 @@ Status OoOSchedule::DoOoOSchedule(std::vector<Operation*>& opList, Function& fun
         CollectMemoryTrace(oooMemoryTrace, function, program);
     }
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
-    program.second->ScheduleBy(oooSchedule.GetNewOperations());
+    // needRefresh: spill 收割悬空 skip 链时重建过 operations_, opPosition_ 的下标已过期,
+    // 不刷新会让两个 op 映到同一下标 (表现是 RefreshOpPosition 报 Duplicate operation)。
+    program.second->ScheduleBy(oooSchedule.GetNewOperations(), true);
     program.second->RecordOOOSeq();
     RescheduleUtils::UpdateTensorConsProd(program.second);
     workeSpaceSize = std::max(workeSpaceSize, (*program.second).GetStackWorkespaceSize());

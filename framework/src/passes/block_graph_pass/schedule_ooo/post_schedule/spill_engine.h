@@ -45,7 +45,6 @@ public:
     Operation* GetSpillOp(int memId);
     int GetBufNextUseTime(int curMemId);
     bool IsBelongSpillBlackList(Operation* spillOp, Operation* op);
-    void EraseSchedulerSideMaps(Operation* op);
 
 private:
     ScheduleState& state_;
@@ -53,6 +52,7 @@ private:
     IRBuilder irBuilder_;
     int64_t workspaceOffset_{0};
     std::unordered_map<int, DDRBufferKind> ddrKindMap_;
+    void EraseSchedulerSideMaps(Operation* op);
     void FindFilterLtags(Operation* allocOp, std::set<Operation*>& filterLtags);
     bool CheckMachineAndL1(Operation* spillOp, Operation* allocOp);
 
@@ -104,8 +104,8 @@ private:
     const std::vector<int64_t>& GetLargerShape(const std::vector<int64_t>& shape1, const std::vector<int64_t>& shape2);
 
     bool IsUnusedTensor(Operation* spillOp);
-    void UpdateSuccessorDependencies(Operation* succOp, Operation* spillOp, Operation* reloadCopyin, int spillMemId,
-                                     int reloadMemId);
+    Status UpdateSuccessorDependencies(Operation* succOp, Operation* spillOp, Operation* reloadCopyin, int spillMemId,
+                                       int reloadMemId);
     void UpdatePredecessorAllocDependencies(Operation* succOp, Operation* reloadAlloc, int spillMemId);
     Status UpdateSmallShapeDependAndBuf(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap, int spillMemId,
                                         Operation* spillOp);
@@ -128,9 +128,13 @@ private:
     Status GetActualSpill(Operation* op, Operation*& actualOp, LogicalTensorPtr& actualTensor);
     Status UpdateSpillOpDepend(Operation* spillOp, LogicalTensorPtr newTensor, int spillMemId);
 
-    void UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr tensor, int spillMemId);
-    void UpdateTensorInputForView(Operation& op, Operation* spillSrcOp, LogicalTensorPtr tensor);
-    void ReplaceViewOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId);
+    Status UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr reloadTensor, int spillMemId);
+    Status UpdateSkipOpInput(Operation* chainTail, Operation* spillOp, Operation* targetOp,
+                             LogicalTensorPtr reloadTensor, size_t index);
+    LogicalTensorPtr CloneSkipChain(Operation* targetOp, const std::vector<Operation*>& chain,
+                                    LogicalTensorPtr reloadTensor);
+    void DetachOrphanedSkipChain(const std::vector<Operation*>& chain, Operation* targetOp);
+    void ReplaceSkipOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId);
     void ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId);
     Status UpdateRemainMemid(int oldMemId, int newMemId);
     void UpdateOpInternalSubgraphID(Operation& op, Operation* srcOp);
@@ -150,7 +154,6 @@ private:
                                      std::vector<SymbolicScalar>& toDynOffset,
                                      std::vector<SymbolicScalar>& fromDynValidShape) const;
 
-    Operation* SkipViewChain(Operation* start, bool followProducers);
     void UpdateScheduleStatusForDualDst(const std::vector<std::pair<Operation*, std::vector<int>>>& opMemidMap,
                                         int memId, Operation* spillAllocOp, Operation* spillOp);
 };

@@ -17,7 +17,7 @@ namespace npu::tile_fwk {
 
 enum class PromotePriority {
     Assemble = 0,
-    View = 1,
+    Skip = 1,
     DdrCopyOut = 2,
     Normal = 3,
 };
