@@ -24,6 +24,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -44,6 +46,7 @@ def _check_npu():
 # Section A: Tensor 输入（自动分发到 dump_tensor）
 # =============================================================================
 
+
 @pl.jit()
 def dump_data_tensor_full_kernel(
     out: pl.Tensor[[16], pl.DT_INT32],
@@ -55,6 +58,7 @@ def dump_data_tensor_full_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tensor_full():
     _check_npu()
     logging.info("------------test_dump_data_tensor_full--------------")
@@ -77,6 +81,7 @@ def dump_data_tensor_window_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tensor_window():
     _check_npu()
     logging.info("------------test_dump_data_tensor_window--------------")
@@ -99,6 +104,7 @@ def dump_data_tensor_loc_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tensor_loc():
     _check_npu()
     logging.info("------------test_dump_data_tensor_loc--------------")
@@ -113,6 +119,7 @@ def test_dump_data_tensor_loc():
 # =============================================================================
 # Section B: Tile Vec 输入（自动分发到 dump_tile）
 # =============================================================================
+
 
 @pl.jit(auto_mutex=True)
 def dump_data_tile_full_kernel(
@@ -136,6 +143,7 @@ def dump_data_tile_full_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_full():
     _check_npu()
     logging.info("------------test_dump_data_tile_full--------------")
@@ -170,6 +178,7 @@ def dump_data_tile_window_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_window():
     _check_npu()
     logging.info("------------test_dump_data_tile_window--------------")
@@ -205,6 +214,7 @@ def dump_data_tile_dynamic_offset_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_dynamic_offset():
     _check_npu()
     logging.info("------------test_dump_data_tile_dynamic_offset--------------")
@@ -240,6 +250,7 @@ def dump_data_tile_for_loop_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_for_loop():
     _check_npu()
     logging.info("------------test_dump_data_tile_for_loop--------------")
@@ -278,6 +289,7 @@ def dump_data_tile_if_else_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_if_else():
     _check_npu()
     logging.info("------------test_dump_data_tile_if_else--------------")
@@ -316,6 +328,7 @@ def dump_data_tile_while_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_while():
     _check_npu()
     logging.info("------------test_dump_data_tile_while--------------")
@@ -351,6 +364,7 @@ def dump_data_tile_loc_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_loc():
     _check_npu()
     logging.info("------------test_dump_data_tile_loc--------------")
@@ -406,6 +420,7 @@ def dump_data_tile_large_partitioned_kernel(
 # Section C: Tile Acc(L0C) 输入（自动分发到 dump_tile + workspace）
 # =============================================================================
 
+
 @pl.jit(auto_mutex=True)
 def dump_data_tile_acc_fp16_kernel(
     a: pl.Tensor[[64, 64], pl.DT_FP16],
@@ -415,19 +430,29 @@ def dump_data_tile_acc_fp16_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x2000, mutex_ids=[1])
+        addrs=0x2000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
 
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -446,6 +471,7 @@ def dump_data_tile_acc_fp16_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_fp16():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_fp16--------------")
@@ -469,19 +495,29 @@ def dump_data_tile_acc_large_offset_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x2000, mutex_ids=[1])
+        addrs=0x2000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
 
     with pl.section_cube():
         for i in pl.range(0, 256, 64):
@@ -501,6 +537,7 @@ def dump_data_tile_acc_large_offset_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_large_offset():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_large_offset--------------")
@@ -524,19 +561,29 @@ def dump_data_tile_acc_bf16_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x2000, mutex_ids=[1])
+        addrs=0x2000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
 
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -554,6 +601,7 @@ def dump_data_tile_acc_bf16_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_bf16():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_bf16--------------")
@@ -577,19 +625,29 @@ def dump_data_tile_acc_256x256_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[256, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 256], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x8000, mutex_ids=[1])
+        addrs=0x8000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[256, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[64, 256], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[256, 256], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
 
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -607,6 +665,7 @@ def dump_data_tile_acc_256x256_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_256x256():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_256x256--------------")
@@ -630,19 +689,29 @@ def dump_data_tile_acc_control_flow_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x2000, mutex_ids=[1])
+        addrs=0x2000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
 
     with pl.section_cube():
         for i in pl.range(0, 256, 64):
@@ -670,6 +739,7 @@ def dump_data_tile_acc_control_flow_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_control_flow():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_control_flow--------------")
@@ -693,19 +763,29 @@ def dump_data_tile_acc_ptr_workspace_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x2000, mutex_ids=[1])
+        addrs=0x2000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
 
     ws = pl.make_tensor(workspace_ptr, [64, 64])
 
@@ -726,6 +806,7 @@ def dump_data_tile_acc_ptr_workspace_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_ptr_workspace():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_ptr_workspace--------------")

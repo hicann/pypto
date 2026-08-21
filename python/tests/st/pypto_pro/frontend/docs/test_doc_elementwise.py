@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -80,8 +82,9 @@ def _run_positive_unary(kernel, ref_fn):
 # 逐元素二元：add / sub / mul / maximum / div / minimum
 # ===========================================================================
 @pl.jit(auto_mutex=True)
-def add_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32],
-               out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def add_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]
+):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -97,8 +100,9 @@ def add_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_
 
 
 @pl.jit(auto_mutex=True)
-def sub_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32],
-               out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def sub_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]
+):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -114,8 +118,9 @@ def sub_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_
 
 
 @pl.jit(auto_mutex=True)
-def mul_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32],
-               out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def mul_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]
+):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -131,8 +136,9 @@ def mul_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_
 
 
 @pl.jit(auto_mutex=True)
-def maximum_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32],
-                   out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def maximum_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]
+):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -148,8 +154,9 @@ def maximum_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl
 
 
 @pl.jit(auto_mutex=True)
-def div_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32],
-               out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def div_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]
+):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -165,8 +172,9 @@ def div_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_
 
 
 @pl.jit(auto_mutex=True)
-def minimum_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32],
-                   out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def minimum_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]
+):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -185,8 +193,7 @@ MIN_SCALAR = 1.0
 
 
 @pl.jit(auto_mutex=True)
-def minimum_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-                out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def minimum_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -199,42 +206,49 @@ def minimum_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_add():
     _run_binary(add_kernel, lambda a, b: a + b)
     logging.info("add result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sub():
     _run_binary(sub_kernel, lambda a, b: a - b)
     logging.info("sub result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_mul():
     _run_binary(mul_kernel, lambda a, b: a * b)
     logging.info("mul result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_maximum():
     _run_binary(maximum_kernel, lambda a, b: torch.maximum(a, b))
     logging.info("maximum result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_div():
     _run_binary(div_kernel, lambda a, b: a / b)
     logging.info("div result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_minimum():
     _run_binary(minimum_kernel, lambda a, b: torch.minimum(a, b))
     logging.info("minimum result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_minimum_scalar():
     _run_unary(minimum_scalar_kernel, lambda a: torch.minimum(a, torch.tensor(MIN_SCALAR)))
     logging.info("minimum_scalar result equal!")
@@ -266,6 +280,7 @@ def xor_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_xor():
     device = ST_DEVICE
     _require_a5(device)
@@ -282,8 +297,7 @@ def test_xor():
 # 逐元素标量：mul / sub / div (tile-scalar)
 # ===========================================================================
 @pl.jit(auto_mutex=True)
-def mul_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-                out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def mul_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -296,8 +310,7 @@ def mul_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pl.jit(auto_mutex=True)
-def sub_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-                out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def sub_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -310,8 +323,7 @@ def sub_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pl.jit(auto_mutex=True)
-def div_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-                out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def div_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -324,26 +336,28 @@ def div_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_mul_scalar():
     _run_unary(mul_scalar_kernel, lambda a: a * SCALE)
     logging.info("mul_scalar result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sub_scalar():
     _run_unary(sub_scalar_kernel, lambda a: a - SUB_VALUE)
     logging.info("sub_scalar result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_div_scalar():
     _run_unary(div_scalar_kernel, lambda a: a / DIVISOR)
     logging.info("div_scalar result equal!")
 
 
 @pl.jit(auto_mutex=True)
-def add_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-                out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def add_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -356,8 +370,7 @@ def add_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pl.jit(auto_mutex=True)
-def maximum_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-                out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def maximum_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -370,12 +383,14 @@ def maximum_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_add_scalar():
     _run_unary(add_scalar_kernel, lambda a: a + ADD_VALUE)
     logging.info("add_scalar result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_maximum_scalar():
     _run_unary(maximum_scalar_kernel, lambda a: torch.maximum(a, torch.tensor(MAX_SCALAR)))
     logging.info("maximum_scalar result equal!")
@@ -385,8 +400,7 @@ def test_maximum_scalar():
 # 逐元素一元：exp / relu / neg
 # ===========================================================================
 @pl.jit(auto_mutex=True)
-def exp_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-               out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def exp_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -399,8 +413,7 @@ def exp_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pl.jit(auto_mutex=True)
-def relu_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-                out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def relu_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -413,8 +426,7 @@ def relu_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pl.jit(auto_mutex=True)
-def neg_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-               out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def neg_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -427,8 +439,7 @@ def neg_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pl.jit(auto_mutex=True)
-def rsqrt_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-                 out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def rsqrt_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -441,8 +452,7 @@ def rsqrt_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pl.jit(auto_mutex=True)
-def recip_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-                 out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def recip_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -455,38 +465,42 @@ def recip_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_exp():
     _run_unary(exp_kernel, lambda a: torch.exp(a))
     logging.info("exp result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_relu():
     _run_unary(relu_kernel, lambda a: torch.relu(a))
     logging.info("relu result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_neg():
     _run_unary(neg_kernel, lambda a: -a)
     logging.info("neg result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_rsqrt():
     _run_positive_unary(rsqrt_kernel, lambda a: torch.rsqrt(a))
     logging.info("rsqrt result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_recip():
     _run_positive_unary(recip_kernel, lambda a: torch.reciprocal(a))
     logging.info("recip result equal!")
 
 
 @pl.jit(auto_mutex=True)
-def sqrt_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
-                out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def sqrt_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -499,6 +513,7 @@ def sqrt_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sqrt():
     _run_positive_unary(sqrt_kernel, lambda a: torch.sqrt(a))
     logging.info("sqrt result equal!")
@@ -509,7 +524,8 @@ def test_sqrt():
 # ===========================================================================
 @pl.jit(auto_mutex=True)
 def fused_mul_add_kernel(
-    a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32],
+    a: pl.Tensor[[64, 64], pl.DT_FP32],
+    b: pl.Tensor[[64, 64], pl.DT_FP32],
     c: pl.Tensor[[64, 64], pl.DT_FP32],
 ):
     # fused_mul_add 为 in-place 融合乘加：c = c * a + b
@@ -529,8 +545,9 @@ def fused_mul_add_kernel(
 
 
 @pl.jit(auto_mutex=True)
-def add_relu_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32],
-                    out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def add_relu_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]
+):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -546,8 +563,9 @@ def add_relu_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], p
 
 
 @pl.jit(auto_mutex=True)
-def sub_relu_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32],
-                    out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def sub_relu_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32], out: pl.Tensor[[64, 64], pl.DT_FP32]
+):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -563,6 +581,7 @@ def sub_relu_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], p
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fused_mul_add():
     device = ST_DEVICE
     _require_a5(device)
@@ -578,12 +597,14 @@ def test_fused_mul_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_add_relu():
     _run_binary(add_relu_kernel, lambda a, b: torch.relu(a + b))
     logging.info("add_relu result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sub_relu():
     _run_binary(sub_relu_kernel, lambda a, b: torch.relu(a - b))
     logging.info("sub_relu result equal!")
@@ -593,8 +614,9 @@ def test_sub_relu():
 # 类型转换融合：add_relu_cast / mul_cast / sub_relu_cast（输入 FP16，输出 FP32）
 # ===========================================================================
 @pl.jit(auto_mutex=True)
-def add_relu_cast_kernel(a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 64], pl.DT_FP16],
-                         out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def add_relu_cast_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 64], pl.DT_FP16], out: pl.Tensor[[64, 64], pl.DT_FP32]
+):
     tt_in = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tt_out = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt_in, addrs=0x0000, mutex_ids=[0])
@@ -611,8 +633,9 @@ def add_relu_cast_kernel(a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 6
 
 
 @pl.jit(auto_mutex=True)
-def mul_cast_kernel(a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 64], pl.DT_FP16],
-                    out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def mul_cast_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 64], pl.DT_FP16], out: pl.Tensor[[64, 64], pl.DT_FP32]
+):
     tt_in = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tt_out = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt_in, addrs=0x0000, mutex_ids=[0])
@@ -629,8 +652,9 @@ def mul_cast_kernel(a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 64], p
 
 
 @pl.jit(auto_mutex=True)
-def sub_relu_cast_kernel(a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 64], pl.DT_FP16],
-                         out: pl.Tensor[[64, 64], pl.DT_FP32]):
+def sub_relu_cast_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 64], pl.DT_FP16], out: pl.Tensor[[64, 64], pl.DT_FP32]
+):
     tt_in = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tt_out = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt_in, addrs=0x0000, mutex_ids=[0])
@@ -659,18 +683,21 @@ def _run_cast_binary(kernel, ref_fn):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_add_relu_cast():
     _run_cast_binary(add_relu_cast_kernel, lambda a, b: torch.relu(a + b))
     logging.info("add_relu_cast result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_mul_cast():
     _run_cast_binary(mul_cast_kernel, lambda a, b: a * b)
     logging.info("mul_cast result equal!")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sub_relu_cast():
     _run_cast_binary(sub_relu_cast_kernel, lambda a, b: torch.relu(a - b))
     logging.info("sub_relu_cast result equal!")
@@ -684,6 +711,7 @@ def _doc_binary(title):
         kernel(a, b, out)
         ctx.synchronize()
         return ctx.snippet(title, {"a": a, "b": b}, {"out": out})
+
     return collect
 
 
@@ -694,6 +722,7 @@ def _doc_unary(title, positive=False):
         kernel(a, out)
         ctx.synchronize()
         return ctx.snippet(title, {"a": a}, {"out": out})
+
     return collect
 
 
@@ -705,6 +734,7 @@ def _doc_cast_binary(title):
         kernel(a, b, out)
         ctx.synchronize()
         return ctx.snippet(title, {"a": a, "b": b}, {"out": out})
+
     return collect
 
 
@@ -769,12 +799,32 @@ DOC_OUTPUT_CASES = {
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    for fn in [test_add, test_sub, test_mul, test_maximum, test_div, test_minimum,
-               test_xor,
-               test_add_scalar, test_sub_scalar, test_mul_scalar, test_div_scalar,
-               test_minimum_scalar, test_maximum_scalar,
-               test_exp, test_relu, test_neg, test_rsqrt, test_recip, test_sqrt,
-               test_fused_mul_add, test_add_relu, test_sub_relu,
-               test_add_relu_cast, test_mul_cast, test_sub_relu_cast]:
+    for fn in [
+        test_add,
+        test_sub,
+        test_mul,
+        test_maximum,
+        test_div,
+        test_minimum,
+        test_xor,
+        test_add_scalar,
+        test_sub_scalar,
+        test_mul_scalar,
+        test_div_scalar,
+        test_minimum_scalar,
+        test_maximum_scalar,
+        test_exp,
+        test_relu,
+        test_neg,
+        test_rsqrt,
+        test_recip,
+        test_sqrt,
+        test_fused_mul_add,
+        test_add_relu,
+        test_sub_relu,
+        test_add_relu_cast,
+        test_mul_cast,
+        test_sub_relu_cast,
+    ]:
         fn()
     logging.info("\nAll batch-1 element-wise / fused examples passed!")

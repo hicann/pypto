@@ -43,6 +43,8 @@ from numpy.testing import assert_allclose  # noqa: E402
 import pytest  # noqa: E402
 import torch  # noqa: E402
 
+import pypto  # noqa: E402
+
 logging.basicConfig(level=logging.INFO, format='%(message)s', force=True)
 
 
@@ -319,6 +321,7 @@ def run_test(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_01():
     """用例规格信息：batch=8, heads=8, s1=320, s2=320, dim=64"""
     return run_test(batch_size=8, num_heads=8, s1_size=320, s2_size=320, dim=64)
@@ -361,12 +364,14 @@ def test_07_varlen_small_seq():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_08_varlen_long_seq():
     """用例规格信息: batch=2, heads=8, q_seqlens=[384,512], kv_seqlens=[384,512], dim=64"""
     return run_test(num_heads=8, dim=64, q_seqlens=[384, 512], kv_seqlens=[384, 512])
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_09_varlen_cross_attn():
     """用例规格信息：batch=3, heads=8, q_seqlens=[128,64,192], kv_seqlens=[96,256,128], dim=64"""
     return run_test(num_heads=8, dim=64, q_seqlens=[128, 64, 192], kv_seqlens=[96, 256, 128])

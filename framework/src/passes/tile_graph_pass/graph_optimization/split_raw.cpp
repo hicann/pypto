@@ -80,13 +80,13 @@ void SplitRawTensor::UpdateConsumerView(Function& function, const LogicalTensorP
     /* 1. 更新View相关的属性 */
     TensorOffset tensorOffset = logicalTensor->GetTensorOffset();
     for (const auto& viewOp : logicalTensor->GetConsumers()) {
-        if (viewOp->GetOpcode() != Opcode::OP_VIEW) {
+        if (!IsViewLike(viewOp->GetOpcode())) {
             continue;
         }
         auto& output = viewOp->oOperand[0];
         if (function.IsFromOutCast(output)) {
             APASS_LOG_WARN_F(Elements::Tensor,
-                             "OP_VIEW oOperand tensor[%d] is outCast; Please check if it is an external output.",
+                             "View-like op oOperand tensor[%d] is outCast; Please check if it is an external output.",
                              output->GetMagic());
             continue;
         }
@@ -105,7 +105,7 @@ void SplitRawTensor::UpdateConsumerView(Function& function, const LogicalTensorP
                 }
             }
         }
-        APASS_LOG_DEBUG_F(Elements::Operation, "Update View op needs fromOffset: %d.", viewOp->GetOpMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Update View-like op needs fromOffset: %d.", viewOp->GetOpMagic());
     }
 }
 
@@ -117,13 +117,13 @@ void SplitRawTensor::UpdateProducerAssemble(Function& function, const LogicalTen
     // Assemble2 ->
     TensorOffset tensorOffset = logicalTensor->GetTensorOffset();
     for (const auto& assembleOp : logicalTensor->GetProducers()) {
-        if (assembleOp->GetOpcode() != Opcode::OP_ASSEMBLE) {
+        if (!IsAssembleLike(assembleOp->GetOpcode())) {
             continue;
         }
         auto& input = assembleOp->iOperand[0];
         if (function.IsFromInCast(input)) {
             APASS_LOG_WARN_F(Elements::Operation,
-                             "OP_ASSEMBLE iOperand tensor[%d] is inCast; Please check if it is an external input.",
+                             "Assemble-like op iOperand tensor[%d] is inCast; Please check if it is an external input.",
                              input->GetMagic());
             continue;
         }
@@ -142,7 +142,7 @@ void SplitRawTensor::UpdateProducerAssemble(Function& function, const LogicalTen
                 }
             }
         }
-        APASS_LOG_DEBUG_F(Elements::Operation, "Update Assemble op needs toOffset: %d.", assembleOp->GetOpMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Update Assemble-like op needs toOffset: %d.", assembleOp->GetOpMagic());
     }
 }
 

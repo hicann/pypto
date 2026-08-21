@@ -20,6 +20,8 @@ import torch
 import torch.nn as nn
 import torch_npu
 
+import pypto
+
 np.random.seed(0)
 torch.manual_seed(0)
 np.set_printoptions(formatter={"float": "{:.6f}".format})
@@ -288,6 +290,7 @@ def compile_model(model):
     return compile_model
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_comp_128(enable_acl_graph=False):
     """Test Compressor"""
     print("=" * 60)
@@ -388,6 +391,7 @@ def test_comp_128(enable_acl_graph=False):
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_comp_4(enable_acl_graph=False):
     """Test Compressor"""
     print("Test: Compressor")
@@ -487,6 +491,7 @@ def test_comp_4(enable_acl_graph=False):
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_comp_indexer(enable_acl_graph=False):
     """Test Compressor"""
     print("=" * 60)

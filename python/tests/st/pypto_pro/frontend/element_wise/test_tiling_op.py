@@ -28,18 +28,18 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 
 @dataclass
 class OpTiling:
-    placeholder_before_1: int[60]   # array padding field before opkind
-    placeholder_before_2: int       # scalar padding field before opkind
-    opkind: int[8]                   # operation selector array; real value at opkind[4]
-    placeholder_after: int          # scalar padding field after opkind
-
-
+    placeholder_before_1: int[60]  # array padding field before opkind
+    placeholder_before_2: int  # scalar padding field before opkind
+    opkind: int[8]  # operation selector array; real value at opkind[4]
+    placeholder_after: int  # scalar padding field after opkind
 
 
 @pl.jit()
@@ -86,6 +86,7 @@ def tiling_op_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tiling_op():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -109,7 +110,7 @@ def test_tiling_op():
             for i in range(60):
                 placeholder[i] = i
             opkind_arr = [0] * 8
-            opkind_arr[4] = opkind   # real operation selector lives at index 4
+            opkind_arr[4] = opkind  # real operation selector lives at index 4
             tiling = OpTiling(
                 placeholder_before_1=placeholder,
                 placeholder_before_2=0,

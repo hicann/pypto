@@ -223,7 +223,7 @@ void ConvertInserter::UpdateConsumerAndReconnect(std::shared_ptr<LogicalTensor> 
     for (size_t i = 0; i < op->iOperand.size(); ++i) {
         if ((op->iOperand[i]->magic == oldTensor->magic) &&
             (op->iOperand[i]->tensor->rawmagic == oldTensor->tensor->rawmagic)) {
-            if (op->GetOpcode() == Opcode::OP_VIEW) {
+            if (op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_SLICE) {
                 updateViewOffset(oldTensor, newTensor, op);
             }
             op->ReplaceIOperand(i, newTensor);
@@ -293,25 +293,25 @@ void ConvertInserter::InsertConvertOpForEachConsumer(Function& function, const O
     }
 }
 
-// 特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR
+// 特殊场景处理：生成者均为Contract或者消费者均为Slice/Contract，且mem路径中经过DDR
 void ConvertInserter::ProcessSpecialProducersOrConsumers(Function& function, const Operation& op,
                                                          const std::shared_ptr<LogicalTensor>& oOperand,
                                                          std::set<Operation*, OpMagicComparator>& consumers,
                                                          MemoryType& requiredMemoryType)
 {
-    // case1:当tensor的生产者都是assemble，并且tensor的mem路径需要经过DDR，则将tensor的ori刷成DDR
+    // case1:当tensor的生产者都是contract，并且tensor的mem路径需要经过DDR，则将tensor的ori刷成DDR
     APASS_LOG_DEBUG_F(Elements::Operation, "Operation %s[%d] has output %d original and requirement conflict.",
                       op.GetOpcodeStr().c_str(), op.GetOpMagic(), oOperand->magic);
     const auto& items = tensorTobeMap.at(oOperand);
     bool crossCore = std::all_of(items.begin(), items.end(), [this, &oOperand](const auto& item) {
         return CrossCore(oOperand->GetMemoryTypeOriginal(), item.second.second);
     });
-    bool producedByAssemble = isAllProducerAssemble(oOperand);
-    if (producedByAssemble && crossCore) {
+    bool producedByContract = IsAllProducerContract(oOperand);
+    if (producedByContract && crossCore) {
         oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
     }
-    // case2:当tensor的消费者都是view或者assemble，并且tensor的mem路径需要经过DDR时，将需求降级为DDR
-    bool canSetBoth = isAllConsumersValid(function, consumers);
+    // case2:当tensor的消费者都是slice或者contract，并且tensor的mem路径需要经过DDR时，将需求降级为DDR
+    bool canSetBoth = IsAllMoveConsumersValid(function, consumers);
     if (canSetBoth && crossCore) {
         requiredMemoryType = MEM_DEVICE_DDR;
     }
@@ -462,21 +462,21 @@ bool ConvertInserter::SkipOperand(const std::shared_ptr<LogicalTensor>& oOperand
             (visitedTensor.find(oOperand->magic) != visitedTensor.end()));
 }
 
-bool ConvertInserter::isAllProducerAssemble(const std::shared_ptr<LogicalTensor>& oOperand) const
+bool ConvertInserter::IsAllProducerContract(const std::shared_ptr<LogicalTensor>& oOperand) const
 {
     auto producers = oOperand->GetProducers();
     return std::all_of(producers.begin(), producers.end(),
-                       [](const Operation* producerOp) { return producerOp->GetOpcode() == Opcode::OP_ASSEMBLE; });
+                       [](const Operation* producerOp) { return producerOp->GetOpcode() == Opcode::OP_CONTRACT; });
 }
 
-bool ConvertInserter::isAllConsumersValid(Function& function,
-                                          const std::set<Operation*, OpMagicComparator>& consumers) const
+bool ConvertInserter::IsAllMoveConsumersValid(Function& function,
+                                              const std::set<Operation*, OpMagicComparator>& consumers) const
 {
     for (const auto consumer : consumers) {
-        if (consumer->GetOpcode() != Opcode::OP_VIEW && consumer->GetOpcode() != Opcode::OP_ASSEMBLE) {
+        if (consumer->GetOpcode() != Opcode::OP_SLICE && consumer->GetOpcode() != Opcode::OP_CONTRACT) {
             return false;
         }
-        if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE &&
+        if (consumer->GetOpcode() == Opcode::OP_CONTRACT &&
             FunctionUtils::GetNodeType(*(consumer->GetOOperands().front()), function) != NodeType::OUTCAST) {
             return false;
         }
@@ -535,8 +535,8 @@ bool ConvertInserter::CreateMoveOpForConvert(Operation& op)
     auto [from, to] = convertOpAttribute->GetConvertPath();
 
     if (from == MemoryType::MEM_DEVICE_DDR) {
-        op.SetOpCode(Opcode::OP_VIEW); // 将convert根据View, 后续GenerateMoveOp Pass会转化为copyin
-        op.SetOpAttribute(BuildViewAttrForConvert(op, to));
+        op.SetOpCode(Opcode::OP_SLICE); // 将convert改为搬入操作，后续GenerateMoveOp Pass会转化为copyin
+        op.SetOpAttribute(BuildSliceAttrForConvert(op, to));
         auto childOp = *op.oOperand.front()->GetConsumers().begin();
         op.UpdateSubgraphID(childOp->GetSubgraphID());
         op.SetScopeInfo(childOp->GetScopeInfo());
@@ -544,8 +544,8 @@ bool ConvertInserter::CreateMoveOpForConvert(Operation& op)
     }
 
     if (to == MemoryType::MEM_DEVICE_DDR) {
-        op.SetOpCode(Opcode::OP_ASSEMBLE); // 将convert根据Assemble, 后续GenerateMoveOp Pass会转化为copyout
-        op.SetOpAttribute(BuildAssembleAttrForConvert(op, from));
+        op.SetOpCode(Opcode::OP_CONTRACT); // 将convert改为搬出操作，后续GenerateMoveOp Pass会转化为copyout
+        op.SetOpAttribute(BuildContractAttrForConvert(op, from));
         auto parentOp = *op.iOperand.front()->GetProducers().begin();
         op.UpdateSubgraphID(parentOp->GetSubgraphID());
         op.SetScopeInfo(parentOp->GetScopeInfo());
@@ -568,13 +568,13 @@ void ConvertInserter::InsertConvertOps(Function& function)
     }
 }
 
-std::shared_ptr<ViewOpAttribute> ConvertInserter::BuildViewAttrForConvert(const Operation& op, MemoryType to) const
+std::shared_ptr<ViewOpAttribute> ConvertInserter::BuildSliceAttrForConvert(const Operation& op, MemoryType to) const
 {
     auto input = op.iOperand.front();
     return std::make_shared<ViewOpAttribute>(input->GetOffset(), to, input->GetDynOffset(), input->GetDynValidShape());
 }
 
-std::shared_ptr<AssembleOpAttribute> ConvertInserter::BuildAssembleAttrForConvert(const Operation& op,
+std::shared_ptr<AssembleOpAttribute> ConvertInserter::BuildContractAttrForConvert(const Operation& op,
                                                                                   MemoryType from) const
 {
     auto input = op.iOperand.front();

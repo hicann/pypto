@@ -44,6 +44,8 @@ import pytest
 import torch
 import torch.nn.functional as functional
 
+import pypto
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -493,6 +495,7 @@ def run_cascade_test(
         pytest.param(1, 1023, 32, 512, "bf16", True, 1.0, True, id="b1_t1023_n32_d512_bf16"),
     ],
 )
+@pypto.options(pass_options={"enable_slice": True})
 def test_block_attn_res(b, t, n, d, dtype_str, enable_rmsnorm, scale, has_partial_block):
     """Block Attention Residuals 正反向级联精度测试。"""
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))

@@ -47,6 +47,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 # ================================================================
@@ -56,8 +58,8 @@ TILE_M = 256
 TILE_N = 256
 KL0 = 64
 KL1 = 128
-STEP_KA = KL1 // KL0                     # 2 KL0 sub-tiles per KL1 wide load
-MAIN_WINDOW = 4                          # ASW window: #M-tiles must be a multiple of this
+STEP_KA = KL1 // KL0  # 2 KL0 sub-tiles per KL1 wide load
+MAIN_WINDOW = 4  # ASW window: #M-tiles must be a multiple of this
 
 # ================================================================
 #  Buffer addresses (unchanged from the static kernel; tiles keep their fixed shapes).
@@ -84,25 +86,48 @@ def matmul_perf_asw_8k_k128_dn_move_offset_dynamic_kernel(
 
     with pl.section_cube():
         a_l1_wide = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE_M, KL1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             valid_shape=[-1, -1]),
-            addrs=A_L1_ADDR_0, mutex_ids=[0, 1, 10, 11])
+            type=pl.TileType(
+                shape=[TILE_M, KL1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1]
+            ),
+            addrs=A_L1_ADDR_0,
+            mutex_ids=[0, 1, 10, 11],
+        )
         b_l1_wide = pl.make_tile_group(
-            type=pl.TileType(shape=[KL1, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             valid_shape=[-1, -1]),
-            addrs=B_L1_BASE, mutex_ids=[2, 3, 12, 13])
+            type=pl.TileType(
+                shape=[KL1, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1]
+            ),
+            addrs=B_L1_BASE,
+            mutex_ids=[2, 3, 12, 13],
+        )
         a_left_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE_M, KL0], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                             layout=pl.NZ, valid_shape=[-1, -1]),
-            addrs=L0A_BASE, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE_M, KL0],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+            ),
+            addrs=L0A_BASE,
+            mutex_ids=[4, 5],
+        )
         b_right_db = pl.make_tile_group(
-            type=pl.TileType(shape=[KL0, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right,
-                             valid_shape=[-1, -1]),
-            addrs=L0B_BASE, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[KL0, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, valid_shape=[-1, -1]
+            ),
+            addrs=L0B_BASE,
+            mutex_ids=[6, 7],
+        )
         acc = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                             fractal=1024, valid_shape=[-1, -1]),
-            addrs=L0C_BASE, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE_M, TILE_N],
+                dtype=pl.DT_FP32,
+                target_memory=pl.MemorySpace.Acc,
+                fractal=1024,
+                valid_shape=[-1, -1],
+            ),
+            addrs=L0C_BASE,
+            mutex_ids=[8],
+        )
 
         pl.system.set_mm_layout_transform(enabled=True)
 
@@ -129,12 +154,12 @@ def matmul_perf_asw_8k_k128_dn_move_offset_dynamic_kernel(
 
                 i = mi * TILE_M
                 j = ni * TILE_N
-                valid_m = pl.min(TILE_M, m - i)      # live rows in this (edge) M-tile
-                valid_n = pl.min(TILE_N, n - j)      # live cols in this (edge) N-tile
+                valid_m = pl.min(TILE_M, m - i)  # live rows in this (edge) M-tile
+                valid_n = pl.min(TILE_N, n - j)  # live cols in this (edge) N-tile
 
                 for ko in pl.range(0, k_outer):
                     k_off = ko * KL1
-                    valid_k1 = pl.min(KL1, k - k_off)    # K tail for this wide block
+                    valid_k1 = pl.min(KL1, k - k_off)  # K tail for this wide block
 
                     # Loads clip to the live window (avoid OOB); the compute stays full-tile.
                     a_wide_slot = a_l1_wide.next()
@@ -164,18 +189,18 @@ def matmul_perf_asw_8k_k128_dn_move_offset_dynamic_kernel(
 
                         if gsub == 0:
                             if gsub == last_sub:
-                                pl.matmul(acc.current(), cur_a_left, cur_b_right,
-                                          phase=pl.AccPhase.Final)
+                                pl.matmul(acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Final)
                             else:
-                                pl.matmul(acc.current(), cur_a_left, cur_b_right,
-                                          phase=pl.AccPhase.Partial)
+                                pl.matmul(acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Partial)
                         else:
                             if gsub == last_sub:
-                                pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right,
-                                              phase=pl.AccPhase.Final)
+                                pl.matmul_acc(
+                                    acc.current(), acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Final
+                                )
                             else:
-                                pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right,
-                                              phase=pl.AccPhase.Partial)
+                                pl.matmul_acc(
+                                    acc.current(), acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Partial
+                                )
 
                 # FIX: ACC -> FP16 GM, clipped to the live valid_m x valid_n window.
                 pl.set_validshape(acc.current(), [valid_m, valid_n])
@@ -191,8 +216,7 @@ def _run_case(m, n, k):
     torch.manual_seed(42)
 
     m_tiles = (m + TILE_M - 1) // TILE_M
-    assert m_tiles % MAIN_WINDOW == 0, \
-        f"ASW requires #M-tiles ({m_tiles}) to be a multiple of {MAIN_WINDOW}"
+    assert m_tiles % MAIN_WINDOW == 0, f"ASW requires #M-tiles ({m_tiles}) to be a multiple of {MAIN_WINDOW}"
 
     logging.info(f"\n=== Test ASW Matmul dynamic M={m} N={n} K={k} (8K-K128 regime, arbitrary M/N/K) ===")
     a = torch.randn(m, k, device=device, dtype=torch.float16)
@@ -212,15 +236,16 @@ def _run_case(m, n, k):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_perf_asw_8k_k128_dn_move_offset_dynamic():
     # (M, N, K): one compiled kernel serves all. N fully arbitrary; M arbitrary with #M-tiles
     # a multiple of 4 (ASW); K arbitrary. The 8K-K128 regime is large M/N with small K.
     cases = [
-        (2048, 2048, 128),   # K = one wide block (2 KL0 sub-tiles)
-        (800, 304, 128),     # M tail 32, N tail 48
-        (1024, 300, 96),     # N=300 (unaligned), K<KL1 -> sub-tiles 64 + 32 (K tail)
-        (800, 250, 128),     # arbitrary M (tail) and N=250 (unaligned)
-        (8192, 8192, 128),   # the original 8K-K128 shape, now via the dynamic kernel
+        (2048, 2048, 128),  # K = one wide block (2 KL0 sub-tiles)
+        (800, 304, 128),  # M tail 32, N tail 48
+        (1024, 300, 96),  # N=300 (unaligned), K<KL1 -> sub-tiles 64 + 32 (K tail)
+        (800, 250, 128),  # arbitrary M (tail) and N=250 (unaligned)
+        (8192, 8192, 128),  # the original 8K-K128 shape, now via the dynamic kernel
     ]
     for m, n, k in cases:
         _run_case(m, n, k)

@@ -27,6 +27,8 @@ import pytest
 import torch
 import torch_npu  # noqa: F401
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -57,7 +59,8 @@ def tile_subview_kernel(
 ):
     tile_group = pl.make_tile_group(
         type=pl.TileType(shape=[8, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0],
+        addrs=0x0000,
+        mutex_ids=[0],
     )
     with pl.section_vector():
         tile = tile_group.next()
@@ -67,6 +70,7 @@ def tile_subview_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tile_subview():
     if not _is_a5():
         return
@@ -96,7 +100,8 @@ def tile_subview_vshape_kernel(
 ):
     tile_group = pl.make_tile_group(
         type=pl.TileType(shape=[8, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]),
-        addrs=0x0000, mutex_ids=[0],
+        addrs=0x0000,
+        mutex_ids=[0],
     )
     with pl.section_vector():
         tile = tile_group.next()
@@ -107,6 +112,7 @@ def tile_subview_vshape_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tile_subview_valid_shape():
     if not _is_a5():
         return
@@ -147,11 +153,13 @@ def tile_subview_vf_kernel(
 ):
     vf_src_group = pl.make_tile_group(
         type=pl.TileType(shape=[4, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1],
+        addrs=0x4000,
+        mutex_ids=[1],
     )
     vf_dst_group = pl.make_tile_group(
         type=pl.TileType(shape=[3, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x5000, mutex_ids=[2],
+        addrs=0x5000,
+        mutex_ids=[2],
     )
     with pl.section_vector():
         vf_src = vf_src_group.next()
@@ -162,6 +170,7 @@ def tile_subview_vf_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tile_subview_vf():
     if not _is_a5():
         return

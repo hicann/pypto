@@ -38,7 +38,7 @@ private:
     void PushProducers(const LogicalTensors& operands, std::stack<Operation*>& stack,
                        std::unordered_set<int>& visitedOps, std::unordered_set<int>& visitedTensors) const;
     Status ProcessGatherIn(Function& function, Operation& operation, std::vector<Operation*>& newOps) const;
-    Status ProcessView(Function& function, Operation& operation, std::vector<Operation*>& newOps) const;
+    Status ProcessViewLike(Function& function, Operation& operation, std::vector<Operation*>& newOps) const;
 };
 
 } // namespace npu::tile_fwk

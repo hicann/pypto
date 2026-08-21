@@ -53,6 +53,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 # ================================================================
@@ -65,19 +67,19 @@ TILE_M = 256
 TILE_N = 256
 KL0 = 64
 KL1 = 128
-STEP_KA = KL1 // KL0                     # 2
+STEP_KA = KL1 // KL0  # 2
 NUM_CORES = 32
 
-M_TILES = M_SIZE // TILE_M               # 16
-N_TILES = N_SIZE // TILE_N               # 16
-K_OUTER = K_SIZE // KL1                  # 32
-K_INNER = STEP_KA                        # 2
-K_TOTAL = K_OUTER * K_INNER              # 64
-TOTAL_CNT = M_TILES * N_TILES            # 256
+M_TILES = M_SIZE // TILE_M  # 16
+N_TILES = N_SIZE // TILE_N  # 16
+K_OUTER = K_SIZE // KL1  # 32
+K_INNER = STEP_KA  # 2
+K_TOTAL = K_OUTER * K_INNER  # 64
+TOTAL_CNT = M_TILES * N_TILES  # 256
 
 # ASW
 MAIN_WINDOW = 4
-MAIN_ROW = M_TILES // MAIN_WINDOW - 1    # 3
+MAIN_ROW = M_TILES // MAIN_WINDOW - 1  # 3
 TAIL_WINDOW = M_TILES - MAIN_ROW * MAIN_WINDOW
 assert TAIL_WINDOW == MAIN_WINDOW
 
@@ -88,11 +90,11 @@ ROUND = (TOTAL_CNT + NUM_CORES - 1) // NUM_CORES  # 8
 #  L0A / L0B / L0C / L1 are FOUR separate SRAMs; each starts at 0x0.
 # ================================================================
 
-L0A_BASE = 0x0000                         # 64KB in 64KB L0A
-L0B_BASE = 0x0000                         # 64KB in 64KB L0B
-L0C_BASE = 0x0000                         # 256KB in 256KB L0C
-A_L1_ADDR_0 = 0x00000                     # A wide region (4x64KB = 256KB)
-B_L1_BASE = 0x40000                       # B wide region (after A's 256KB)
+L0A_BASE = 0x0000  # 64KB in 64KB L0A
+L0B_BASE = 0x0000  # 64KB in 64KB L0B
+L0C_BASE = 0x0000  # 256KB in 256KB L0C
+A_L1_ADDR_0 = 0x00000  # A wide region (4x64KB = 256KB)
+B_L1_BASE = 0x40000  # B wide region (after A's 256KB)
 
 
 @pl.jit(auto_mutex=True)
@@ -110,29 +112,37 @@ def matmul_perf_asw_4k_dn_move_offset_kernel(
         # ONE wide tile, no c0/c1 chunk views -> L1 4-buffer is unblocked.
         a_l1_wide = pl.make_tile_group(
             type=pl.TileType(shape=[TILE_M, KL1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-            addrs=A_L1_ADDR_0, mutex_ids=[0, 1, 10, 11])
+            addrs=A_L1_ADDR_0,
+            mutex_ids=[0, 1, 10, 11],
+        )
 
         # --- B_L1: 4-buffer, wide shape=(128, 256) ---
         b_l1_wide = pl.make_tile_group(
             type=pl.TileType(shape=[KL1, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-            addrs=B_L1_BASE, mutex_ids=[2, 3, 12, 13])
+            addrs=B_L1_BASE,
+            mutex_ids=[2, 3, 12, 13],
+        )
 
         # --- L0A: double buffer, narrow shape=(256, 64), 32KB x 2 = 64KB ---
         # TEXTRACT (emitted by an offset move) allows src wide (256,128) /
         # dst narrow (256,64), unlike TMOV which requires shape equality.
         a_left_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE_M, KL0], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                             layout=pl.NZ),
-            addrs=L0A_BASE, mutex_ids=[4, 5])
+            type=pl.TileType(shape=[TILE_M, KL0], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
+            addrs=L0A_BASE,
+            mutex_ids=[4, 5],
+        )
         # --- L0B: double buffer, narrow shape=(64, 256), 32KB x 2 = 64KB ---
         b_right_db = pl.make_tile_group(
             type=pl.TileType(shape=[KL0, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-            addrs=L0B_BASE, mutex_ids=[6, 7])
+            addrs=L0B_BASE,
+            mutex_ids=[6, 7],
+        )
         # --- L0C: SINGLE 256KB ---
         acc = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                             fractal=1024),
-            addrs=L0C_BASE, mutex_ids=[8])
+            type=pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, fractal=1024),
+            addrs=L0C_BASE,
+            mutex_ids=[8],
+        )
 
         # Enable N-direction fixpipe drain
         pl.system.set_mm_layout_transform(enabled=True)
@@ -180,11 +190,9 @@ def matmul_perf_asw_4k_dn_move_offset_kernel(
                     pl.move(cur_b_right, b_wide_slot, offset=[0, 0])
 
                     if ko == 0:
-                        pl.matmul(acc.current(), cur_a_left, cur_b_right,
-                                   phase=pl.AccPhase.Partial)
+                        pl.matmul(acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Partial)
                     else:
-                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right,
-                                       phase=pl.AccPhase.Partial)
+                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Partial)
 
                     # --- ki=1: A offset [0, KL0] (K=cols); B offset [KL0, 0] (K=rows) ---
                     cur_a_left = a_left_db.next()
@@ -193,11 +201,9 @@ def matmul_perf_asw_4k_dn_move_offset_kernel(
                     pl.move(cur_b_right, b_wide_slot, offset=[KL0, 0])
 
                     if ko == K_OUTER - 1:
-                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right,
-                                       phase=pl.AccPhase.Final)
+                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Final)
                     else:
-                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right,
-                                       phase=pl.AccPhase.Partial)
+                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Partial)
 
                 # FIX: ACC -> FP16 GM
                 pl.store(out, acc.current(), [i, j], phase=pl.STPhase.Final)
@@ -206,18 +212,14 @@ def matmul_perf_asw_4k_dn_move_offset_kernel(
         pl.system.set_mm_layout_transform(enabled=False)
 
 
-
 def run_perf_test(num_iters: int = 20, warmup: int = 3):
     logging.info("=" * 60)
     logging.info("ASW Matmul 4K — two-layer K (2D move offset [m, k] + L0 DB)")
     logging.info("=" * 60)
     logging.info("Shape: M=%d, N=%d, K=%d", M_SIZE, N_SIZE, K_SIZE)
-    logging.info("Tile:  TILE_M=%d, TILE_N=%d, KL0=%d, KL1=%d",
-                 TILE_M, TILE_N, KL0, KL1)
-    logging.info("K loop: %d outer x %d inner = %d total mmad",
-                 K_OUTER, K_INNER, K_TOTAL)
-    logging.info("A/B GM->L1: %d loads each (vs %d in single-layer baseline)",
-                 K_OUTER, K_TOTAL)
+    logging.info("Tile:  TILE_M=%d, TILE_N=%d, KL0=%d, KL1=%d", TILE_M, TILE_N, KL0, KL1)
+    logging.info("K loop: %d outer x %d inner = %d total mmad", K_OUTER, K_INNER, K_TOTAL)
+    logging.info("A/B GM->L1: %d loads each (vs %d in single-layer baseline)", K_OUTER, K_TOTAL)
     logging.info("L1 depth: 4 (one wide tile, no chunk views)")
     logging.info("L0 DB: enabled (offset move -> TEXTRACT, narrow dst)")
     logging.info("ASW: mainWindow=%d, MAIN_ROW=%d", MAIN_WINDOW, MAIN_ROW)
@@ -286,6 +288,7 @@ def run_perf_test(num_iters: int = 20, warmup: int = 3):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_perf_asw_4k_dn_move_offset():
     run_perf_test()
 

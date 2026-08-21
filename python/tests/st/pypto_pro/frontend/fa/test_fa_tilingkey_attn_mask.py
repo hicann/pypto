@@ -40,6 +40,8 @@ from pypto_pro.runtime.tilingkey import TilingKeyField
 import pytest
 import torch
 
+import pypto
+
 logging.basicConfig(level=logging.INFO)
 
 QK_PRELOAD = 2
@@ -131,8 +133,7 @@ class FaTilingKey:
 
 
 @pl.vector_function
-def process_vec1_dn_vf(input_tile, x_exp_tile, max_tile, exp_max_tile, sum_tile, is_update,
-                       mask_tile, need_mask):
+def process_vec1_dn_vf(input_tile, x_exp_tile, max_tile, exp_max_tile, sum_tile, is_update, mask_tile, need_mask):
     """Softmax DN VF kernel — unchanged from the reference (need_mask/is_update are literals)."""
     preg_108 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     preg_136 = vf.update_mask(128, dtype=pl.DT_FP16)
@@ -209,14 +210,26 @@ def process_vec1_dn_vf(input_tile, x_exp_tile, max_tile, exp_max_tile, sum_tile,
         vreg_x_exp_even_f16_1 = vf.astype(vreg_x_exp_1, preg_108, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_x_exp_odd_f16_1 = vf.astype(vreg_x_exp_3, preg_108, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_x_exp_f16_1_pack, vreg_x_exp_f16_1_packa = vf.de_interleave(vreg_x_exp_even_f16_1, vreg_x_exp_odd_f16_1)
-        vf.store_align(x_exp_tile, vreg_x_exp_f16_pack, preg_136,
-                      block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-                      data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            x_exp_tile,
+            vreg_x_exp_f16_pack,
+            preg_136,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
         vreg_x_sum_0 = vf.add(vreg_x_exp_0, vreg_x_sum_0, preg_108)
         vreg_x_sum_2 = vf.add(vreg_x_exp_2, vreg_x_sum_2, preg_108)
-        vf.store_align(x_exp_1, vreg_x_exp_f16_1_pack, preg_136,
-                      block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-                      data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            x_exp_1,
+            vreg_x_exp_f16_1_pack,
+            preg_136,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
         vreg_x_sum_1 = vf.add(vreg_x_exp_1, vreg_x_sum_1, preg_108)
         vreg_x_sum_3 = vf.add(vreg_x_exp_3, vreg_x_sum_3, preg_108)
     vreg_x_sum0 = vf.add(vreg_x_sum_2, vreg_x_sum_0, preg_108)
@@ -319,8 +332,21 @@ def compute_pv(b_idx, n_idx, ctx, v_l1_db, p_mat_db, left_db, right_db, acc_db, 
     )
 
 
-def compute_p(p_ctx, global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo, qk_vec_db, p_f16_db, p_f16_main_db,
-    p_f16_back_db, p_mat_db, sub_id, attn_mask, mask_db, need_attn_mask):
+def compute_p(
+    p_ctx,
+    global_max_rm_buf,
+    global_sum_rm_buf,
+    exp_corr_rm_fifo,
+    qk_vec_db,
+    p_f16_db,
+    p_f16_main_db,
+    p_f16_back_db,
+    p_mat_db,
+    sub_id,
+    attn_mask,
+    mask_db,
+    need_attn_mask,
+):
     pl.system.wait_cross_core(
         pipe=pl.PipeType.V,
         event_id=QK_READY_FORWARD_IDS[p_ctx.task_id_mod2],
@@ -341,25 +367,31 @@ def compute_p(p_ctx, global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo, qk_
             mask_slot = mask_db.next()
             pl.load(mask_slot, attn_mask, [0, sub_id * TS_HALF])
             if p_ctx.ki == 0:
-                process_vec1_dn_vf(qk_slot, p_f16_slot, global_max_rm_cur,
-                                   exp_corr_rm_cur, global_sum_rm_cur, 0, mask_slot, 1)
+                process_vec1_dn_vf(
+                    qk_slot, p_f16_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 0, mask_slot, 1
+                )
             else:
-                process_vec1_dn_vf(qk_slot, p_f16_slot, global_max_rm_cur,
-                                   exp_corr_rm_cur, global_sum_rm_cur, 1, mask_slot, 1)
+                process_vec1_dn_vf(
+                    qk_slot, p_f16_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 1, mask_slot, 1
+                )
         else:
             if p_ctx.ki == 0:
-                process_vec1_dn_vf(qk_slot, p_f16_slot, global_max_rm_cur,
-                                   exp_corr_rm_cur, global_sum_rm_cur, 0, qk_slot, 0)
+                process_vec1_dn_vf(
+                    qk_slot, p_f16_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 0, qk_slot, 0
+                )
             else:
-                process_vec1_dn_vf(qk_slot, p_f16_slot, global_max_rm_cur,
-                                   exp_corr_rm_cur, global_sum_rm_cur, 1, qk_slot, 0)
+                process_vec1_dn_vf(
+                    qk_slot, p_f16_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 1, qk_slot, 0
+                )
     else:
         if p_ctx.ki == 0:
-            process_vec1_dn_vf(qk_slot, p_f16_slot, global_max_rm_cur,
-                               exp_corr_rm_cur, global_sum_rm_cur, 0, qk_slot, 0)
+            process_vec1_dn_vf(
+                qk_slot, p_f16_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 0, qk_slot, 0
+            )
         else:
-            process_vec1_dn_vf(qk_slot, p_f16_slot, global_max_rm_cur,
-                               exp_corr_rm_cur, global_sum_rm_cur, 1, qk_slot, 0)
+            process_vec1_dn_vf(
+                qk_slot, p_f16_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 1, qk_slot, 0
+            )
     pl.system.set_cross_core(
         pipe=pl.PipeType.V,
         event_id=QK_READY_BARKWARD_IDS[p_ctx.task_id_mod2],
@@ -372,8 +404,9 @@ def compute_p(p_ctx, global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo, qk_
     )
 
 
-def compute_gu(b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_corr_rm_fifo,
-    running_o_buf, o_f16_buf, o):
+def compute_gu(
+    b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_corr_rm_fifo, running_o_buf, o_f16_buf, o
+):
     pv_slot = pv_vec_db.next()
     gsum_gu = global_sum_rm_buf[g_ctx.q_count_mod3]
     exp_corr_gu = exp_corr_rm_fifo[g_ctx.task_id_mod3]
@@ -427,35 +460,51 @@ def fa_tilingkey_attn_mask_kernel(
 
     qk_vec_db = pl.make_tile_group(
         type=pl.TileType(shape=[TKV, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=VA0, mutex_ids=[14, 15])
+        addrs=VA0,
+        mutex_ids=[14, 15],
+    )
     pv_vec_db = pl.make_tile_group(
         type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=VA8, mutex_ids=[16, 17])
+        addrs=VA8,
+        mutex_ids=[16, 17],
+    )
     p_mat_db = pl.make_tile_group(
-        type=pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                         layout=pl.ZN),
-        addrs=MA2, mutex_ids=[18, 19, 20])
+        type=pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
+        addrs=MA2,
+        mutex_ids=[18, 19, 20],
+    )
 
     with pl.section_cube():
         q_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             layout=pl.ZN),
-            addrs=MA0, mutex_ids=[0, 1])
+            type=pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
+            addrs=MA0,
+            mutex_ids=[0, 1],
+        )
         k_l1_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-            addrs=MA1, mutex_ids=[2, 3])
+            addrs=MA1,
+            mutex_ids=[2, 3],
+        )
         v_l1_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-            addrs=MA3, mutex_ids=[4, 5])
+            addrs=MA3,
+            mutex_ids=[4, 5],
+        )
         left_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-            addrs=LA0, mutex_ids=[6, 7])
+            addrs=LA0,
+            mutex_ids=[6, 7],
+        )
         right_db = pl.make_tile_group(
             type=pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-            addrs=RA0, mutex_ids=[8, 9])
+            addrs=RA0,
+            mutex_ids=[8, 9],
+        )
         acc_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-            addrs=CA0, mutex_ids=[10, 11, 12, 13])
+            addrs=CA0,
+            mutex_ids=[10, 11, 12, 13],
+        )
 
         work_start = work_ranges[core_id, 0]
         work_end = work_ranges[core_id, 1]
@@ -481,30 +530,57 @@ def fa_tilingkey_attn_mask_kernel(
                         ctx_curr.ki = ki
                         ctx_curr.task_id_mod2 = task_id % 2
                         ctx_curr.task_id_mod3 = task_id % 3
-                        compute_qk(b_idx, n_idx, ki, qi, cur_q_slot, q, k, k_l1_db, left_db, right_db,
-                                   acc_db, qk_vec_db, task_id)
+                        compute_qk(
+                            b_idx,
+                            n_idx,
+                            ki,
+                            qi,
+                            cur_q_slot,
+                            q,
+                            k,
+                            k_l1_db,
+                            left_db,
+                            right_db,
+                            acc_db,
+                            qk_vec_db,
+                            task_id,
+                        )
 
                     if task_id > 1:
                         prev = ctx_arr[(task_id + 2) % 4]
-                        compute_pv(prev.b_idx, prev.n_idx, prev, v_l1_db, p_mat_db, left_db, right_db, acc_db,
-                                   pv_vec_db, v)
+                        compute_pv(
+                            prev.b_idx, prev.n_idx, prev, v_l1_db, p_mat_db, left_db, right_db, acc_db, pv_vec_db, v
+                        )
                     task_id = task_id + 1
 
     with pl.section_vector():
         p_f16_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF * 2], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Vec),
-            addrs=[VA2, VA2B], mutex_ids=[0, 1])
+            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF * 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
+            addrs=[VA2, VA2B],
+            mutex_ids=[0, 1],
+        )
         p_f16_main_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[TKV // 2, TS_HALF], layout=pl.NZ),
-            addrs=[VA2, VA2B], mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TKV // 2 + 1, TS_HALF],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Vec,
+                valid_shape=[TKV // 2, TS_HALF],
+                layout=pl.NZ,
+            ),
+            addrs=[VA2, VA2B],
+            mutex_ids=[0, 1],
+        )
         p_f16_back_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[TKV // 2, TS_HALF], layout=pl.NZ),
-            addrs=[VA2_DN, VA2B_DN], mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TKV // 2 + 1, TS_HALF],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Vec,
+                valid_shape=[TKV // 2, TS_HALF],
+                layout=pl.NZ,
+            ),
+            addrs=[VA2_DN, VA2B_DN],
+            mutex_ids=[0, 1],
+        )
         red_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         gmax_rm_0 = pl.make_tile(red_rm_type, addr=VA_GMAX0, size=VB_RED)
         gmax_rm_1 = pl.make_tile(red_rm_type, addr=VA_GMAX1, size=VB_RED)
@@ -520,15 +596,21 @@ def fa_tilingkey_attn_mask_kernel(
         exp_corr_rm_fifo = (ec_rm_0, ec_rm_1, ec_rm_2)
         o_f16_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-            addrs=VA9, mutex_ids=[11])
+            addrs=VA9,
+            mutex_ids=[11],
+        )
         o_f16_buf = o_f16_g.next()
         running_o_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=VA7, mutex_ids=[12])
+            addrs=VA7,
+            mutex_ids=[12],
+        )
         running_o_buf = running_o_g.next()
         mask_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TS_HALF], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec),
-            addrs=VA_MASK, mutex_ids=[8, 9])
+            addrs=VA_MASK,
+            mutex_ids=[8, 9],
+        )
 
         pl.system.set_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_BARKWARD_IDS[0])
         pl.system.set_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_BARKWARD_IDS[1])
@@ -540,8 +622,9 @@ def fa_tilingkey_attn_mask_kernel(
         sub_id = pl.get_subblock_idx()
         task_id = 0
         q_count = 0
-        ctx_arr = pl.struct_array(4, "VecCtx", b_idx=0, n_idx=0, qi=0, ki=0, skv_tiles=0,
-                                  task_id_mod2=0, task_id_mod3=0, q_count_mod3=0)
+        ctx_arr = pl.struct_array(
+            4, "VecCtx", b_idx=0, n_idx=0, qi=0, ki=0, skv_tiles=0, task_id_mod2=0, task_id_mod3=0, q_count_mod3=0
+        )
         for work_id in pl.range(work_start, work_end):
             b_idx = work_id // n_dim
             n_idx = work_id % n_dim
@@ -567,13 +650,35 @@ def fa_tilingkey_attn_mask_kernel(
                     if task_id > 0:
                         if ki < causal_skv + 1:
                             p_ctx = ctx_arr[(task_id + 3) % 4]
-                            compute_p(p_ctx, global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo,
-                                qk_vec_db, p_f16_db, p_f16_main_db,
-                                p_f16_back_db, p_mat_db, sub_id, attn_mask, mask_db, NeedAttnMask)  # noqa: F821
+                            compute_p(
+                                p_ctx,
+                                global_max_rm_buf,
+                                global_sum_rm_buf,
+                                exp_corr_rm_fifo,
+                                qk_vec_db,
+                                p_f16_db,
+                                p_f16_main_db,
+                                p_f16_back_db,
+                                p_mat_db,
+                                sub_id,
+                                attn_mask,
+                                mask_db,
+                                NeedAttnMask,
+                            )  # noqa: F821
                     if task_id > 2:
                         g_ctx = ctx_arr[(task_id + 1) % 4]
-                        compute_gu(g_ctx.b_idx, g_ctx.n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf,
-                                   exp_corr_rm_fifo, running_o_buf, o_f16_buf, o)
+                        compute_gu(
+                            g_ctx.b_idx,
+                            g_ctx.n_idx,
+                            g_ctx,
+                            sub_id,
+                            pv_vec_db,
+                            global_sum_rm_buf,
+                            exp_corr_rm_fifo,
+                            running_o_buf,
+                            o_f16_buf,
+                            o,
+                        )
                     task_id = task_id + 1
                 q_count = q_count + 1
 
@@ -610,8 +715,7 @@ def flash_attention_full_ref_bs(q, k, v, d):
 
 
 def make_causal_mask_dn_fixed_u8(device):
-    return torch.tril(
-        torch.ones((FIXED_MASK_S, FIXED_MASK_S), dtype=torch.uint8, device=device), diagonal=-1)
+    return torch.tril(torch.ones((FIXED_MASK_S, FIXED_MASK_S), dtype=torch.uint8, device=device), diagonal=-1)
 
 
 def _build_work_ranges(total_work, num_cores, device):
@@ -624,6 +728,7 @@ def _build_work_ranges(total_work, num_cores, device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_tilingkey_attn_mask():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
@@ -643,24 +748,25 @@ def test_fa_tilingkey_attn_mask():
 
     o_causal = torch.zeros((b, sq, n, d), device=device, dtype=torch.float16)
     fa_tilingkey_attn_mask_kernel[None, actual_num_cores, {"NeedAttnMask": 1}](
-        q_t, k_t, v_t, o_causal, work_ranges, attn_mask)
+        q_t, k_t, v_t, o_causal, work_ranges, attn_mask
+    )
     torch.npu.synchronize()
     o_causal_ref = flash_attention_causal_ref_bs(q_t, k_t, v_t, d)
     torch.testing.assert_close(o_causal, o_causal_ref, rtol=5e-3, atol=5e-3)
-    logging.info("NeedAttnMask=1 (causal+mask) PASS: max|diff|=%.6f",
-                 (o_causal - o_causal_ref).abs().max().item())
+    logging.info("NeedAttnMask=1 (causal+mask) PASS: max|diff|=%.6f", (o_causal - o_causal_ref).abs().max().item())
 
     o_full = torch.zeros((b, sq, n, d), device=device, dtype=torch.float16)
     fa_tilingkey_attn_mask_kernel[None, actual_num_cores, {"NeedAttnMask": 0}](
-        q_t, k_t, v_t, o_full, work_ranges, attn_mask)
+        q_t, k_t, v_t, o_full, work_ranges, attn_mask
+    )
     torch.npu.synchronize()
     o_full_ref = flash_attention_full_ref_bs(q_t, k_t, v_t, d)
     torch.testing.assert_close(o_full, o_full_ref, rtol=5e-3, atol=5e-3)
-    logging.info("NeedAttnMask=0 (full) PASS: max|diff|=%.6f",
-                 (o_full - o_full_ref).abs().max().item())
+    logging.info("NeedAttnMask=0 (full) PASS: max|diff|=%.6f", (o_full - o_full_ref).abs().max().item())
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_tilingkey_errors():
     """Error paths: direct call, missing/unknown field, bad value."""
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -673,6 +779,7 @@ def test_fa_tilingkey_errors():
         fa_tilingkey_attn_mask_kernel[None, 1, {}]  # missing field
     with pytest.raises(ValueError):
         fa_tilingkey_attn_mask_kernel[None, 1, {"NeedAttnMask": 2}]  # value not in candidates
+
 
 if __name__ == "__main__":
     test_fa_tilingkey_attn_mask()

@@ -537,8 +537,7 @@ def torch_chunk_gated_delta_rule(
     # reshape to chunks
     b, h, n, d = query.shape
     query, key, value, k_beta, v_beta = [
-        x.reshape(b, h, -1, chunk_size, d)
-        for x in (query, key, value, k_beta, v_beta)
+        x.reshape(b, h, -1, chunk_size, d) for x in (query, key, value, k_beta, v_beta)
     ]
     g = g.reshape(b, h, -1, chunk_size)
     causal = torch.triu(torch.ones(chunk_size, chunk_size, dtype=torch.bool, device=query.device), diagonal=0)
@@ -714,6 +713,7 @@ def detailed_tensor_compare(tensor1, tensor2, rtol=1e-3, atol=1e-3, verbose=True
     return result
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_chunk_gated_delta_rule():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

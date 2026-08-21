@@ -26,6 +26,8 @@ from pypto_pro.runtime.tilingkey import TilingKeyField
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -134,6 +136,7 @@ def matmul_tilingkey(
         (1, 1, torch.bfloat16, 5e-2, 5e-2),
     ],
 )
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_tilingkey(dtype_key, tile_key, torch_dtype, rtol, atol):
     """All dtype/block key combinations use the matching specialized TileTypes."""
     device = ST_DEVICE
@@ -155,5 +158,6 @@ def test_matmul_tilingkey(dtype_key, tile_key, torch_dtype, rtol, atol):
         max_diff,
     )
     torch.testing.assert_close(out, golden, rtol=rtol, atol=atol)
+
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")

@@ -36,6 +36,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -43,6 +45,7 @@ ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 # ============================================================================
 # Helper functions
 # ============================================================================
+
 
 def verify_histogram_output(
     tag: str,
@@ -79,14 +82,14 @@ def verify_histogram_output(
 # UINT16 histogram tests (BYTE_1/BYTE_0)
 # ============================================================================
 
-ROWS = 32   # ColMajor UINT8 alignment requires Rows * sizeof(T) % 32 == 0 → Rows % 32 == 0
+ROWS = 32  # ColMajor UINT8 alignment requires Rows * sizeof(T) % 32 == 0 → Rows % 32 == 0
 COLS = 128
 IDX_COLS_DN = 1  # DN (ColMajor) idx has 1 logical column; alignment satisfied by ROWS=32
 
 # Buffer sizes (static constants for make_tile)
-SRC_SIZE = ROWS * COLS * 2      # UINT16: 32 * 128 * 2 = 8192 bytes
-IDX_SIZE = ROWS * IDX_COLS_DN   # UINT8 DN layout: 32 * 1 = 32 bytes
-DST_SIZE = ROWS * 256 * 4       # UINT32: 32 * 256 * 4 = 32768 bytes
+SRC_SIZE = ROWS * COLS * 2  # UINT16: 32 * 128 * 2 = 8192 bytes
+IDX_SIZE = ROWS * IDX_COLS_DN  # UINT8 DN layout: 32 * 1 = 32 bytes
+DST_SIZE = ROWS * 256 * 4  # UINT32: 32 * 256 * 4 = 32768 bytes
 
 
 @pl.jit()
@@ -107,12 +110,7 @@ def histogram_uint16_msb_kernel_cce(
 
     # src: ND format (row_major + none_box)
     tile_src = pl.make_tile(
-        pl.TileType(
-            shape=[ROWS, COLS],
-            dtype=pl.DT_UINT16,
-            target_memory=pl.MemorySpace.Vec,
-            layout=pl.ND
-        ),
+        pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x0000,
         size=SRC_SIZE,
     )
@@ -124,7 +122,7 @@ def histogram_uint16_msb_kernel_cce(
             shape=[ROWS, IDX_COLS_DN],  # [32, 1]: 1 logical column, alignment from ROWS=32
             dtype=pl.DT_UINT8,
             target_memory=pl.MemorySpace.Vec,
-            layout=pl.DN
+            layout=pl.DN,
         ),
         addr=0x2000,  # After tile_src (0x0000 + 8192 = 0x2000)
         size=IDX_SIZE,
@@ -132,12 +130,7 @@ def histogram_uint16_msb_kernel_cce(
 
     # dst: ND format (row_major + none_box)
     tile_dst = pl.make_tile(
-        pl.TileType(
-            shape=[ROWS, 256],
-            dtype=pl.DT_UINT32,
-            target_memory=pl.MemorySpace.Vec,
-            layout=pl.ND
-        ),
+        pl.TileType(shape=[ROWS, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x2020,  # After tile_idx (0x2000 + 32 = 0x2020)
         size=DST_SIZE,
     )
@@ -153,9 +146,9 @@ def histogram_uint16_msb_kernel_cce(
         pl.store(histogram_out, tile_dst, [0, 0])
 
 
-
 @pl.jit()
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_histogram_uint16_msb():
     """Test histogram with uint16 input, MSB mode (bits 15-8)."""
     device = ST_DEVICE
@@ -211,6 +204,7 @@ def test_histogram_uint16_msb():
 # UINT16 histogram LSB mode (filtered)
 # ============================================================================
 
+
 @pl.jit()
 def histogram_uint16_lsb_kernel_cce(
     src: pl.Tensor[[ROWS, COLS], pl.DT_UINT16],
@@ -228,12 +222,7 @@ def histogram_uint16_lsb_kernel_cce(
     pl.system.bar_all()
 
     tile_src = pl.make_tile(
-        pl.TileType(
-            shape=[ROWS, COLS],
-            dtype=pl.DT_UINT16,
-            target_memory=pl.MemorySpace.Vec,
-            layout=pl.ND
-        ),
+        pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x0000,
         size=SRC_SIZE,
     )
@@ -245,19 +234,14 @@ def histogram_uint16_lsb_kernel_cce(
             shape=[ROWS, IDX_COLS_DN],  # [32, 1]: 1 logical column, alignment from ROWS=32
             dtype=pl.DT_UINT8,
             target_memory=pl.MemorySpace.Vec,
-            layout=pl.DN
+            layout=pl.DN,
         ),
         addr=0x2000,  # After tile_src (0x0000 + 8192 = 0x2000)
         size=IDX_SIZE,
     )
 
     tile_dst = pl.make_tile(
-        pl.TileType(
-            shape=[ROWS, 256],
-            dtype=pl.DT_UINT32,
-            target_memory=pl.MemorySpace.Vec,
-            layout=pl.ND
-        ),
+        pl.TileType(shape=[ROWS, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x2020,  # After tile_idx (0x2000 + 32 = 0x2020)
         size=DST_SIZE,
     )
@@ -273,9 +257,9 @@ def histogram_uint16_lsb_kernel_cce(
         pl.store(histogram_out, tile_dst, [0, 0])
 
 
-
 @pl.jit()
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_histogram_uint16_lsb():
     """Test histogram with uint16 input, LSB mode (bits 7-0, filtered by MSB)."""
     device = ST_DEVICE
@@ -287,10 +271,40 @@ def test_histogram_uint16_lsb():
     cols = COLS
     idx_cols = IDX_COLS_DN  # DN layout requires physical cols aligned to 32
 
-    filter_values = [0xAB, 0xCD, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC,
-                     0xDE, 0xF0, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
-                     0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
-                     0xFF, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07]
+    filter_values = [
+        0xAB,
+        0xCD,
+        0x12,
+        0x34,
+        0x56,
+        0x78,
+        0x9A,
+        0xBC,
+        0xDE,
+        0xF0,
+        0x11,
+        0x22,
+        0x33,
+        0x44,
+        0x55,
+        0x66,
+        0x77,
+        0x88,
+        0x99,
+        0xAA,
+        0xBB,
+        0xCC,
+        0xDD,
+        0xEE,
+        0xFF,
+        0x01,
+        0x02,
+        0x03,
+        0x04,
+        0x05,
+        0x06,
+        0x07,
+    ]
 
     logging.info("\n=== histogram uint16 LSB mode test ===")
     logging.info("Input shape: (%s, %s), dtype=UINT16", rows, cols)
@@ -342,12 +356,12 @@ def test_histogram_uint16_lsb():
 # UINT32 histogram BYTE_3 (MSB, first radix pass)
 # ============================================================================
 
-ROWS_U32 = 32   # ColMajor UINT8 alignment: Rows * sizeof(T) % 32 == 0 → Rows % 32 == 0
+ROWS_U32 = 32  # ColMajor UINT8 alignment: Rows * sizeof(T) % 32 == 0 → Rows % 32 == 0
 COLS_U32 = 128
 
-SRC_SIZE_U32 = ROWS_U32 * COLS_U32 * 2   # UINT16: 32 * 128 * 2 = 8192 bytes
-IDX_SIZE_U32 = ROWS_U32 * 1              # UINT8 DN layout: 32 * 1 = 32 bytes
-DST_SIZE_U32 = ROWS_U32 * 256 * 4        # UINT32: 32 * 256 * 4 = 32768 bytes
+SRC_SIZE_U32 = ROWS_U32 * COLS_U32 * 2  # UINT16: 32 * 128 * 2 = 8192 bytes
+IDX_SIZE_U32 = ROWS_U32 * 1  # UINT8 DN layout: 32 * 1 = 32 bytes
+DST_SIZE_U32 = ROWS_U32 * 256 * 4  # UINT32: 32 * 256 * 4 = 32768 bytes
 
 
 @pl.jit()
@@ -366,35 +380,20 @@ def histogram_uint32_byte3_kernel_cce(
     pl.system.bar_all()
 
     tile_src = pl.make_tile(
-        pl.TileType(
-            shape=[ROWS_U32, COLS_U32],
-            dtype=pl.DT_UINT16,
-            target_memory=pl.MemorySpace.Vec,
-            layout=pl.ND
-        ),
+        pl.TileType(shape=[ROWS_U32, COLS_U32], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x0000,
         size=SRC_SIZE_U32,
     )
 
     # idx: col_major + none_box (DN layout) — required by THISTOGRAM regardless of mode
     tile_idx = pl.make_tile(
-        pl.TileType(
-            shape=[ROWS_U32, 1],
-            dtype=pl.DT_UINT8,
-            target_memory=pl.MemorySpace.Vec,
-            layout=pl.DN
-        ),
+        pl.TileType(shape=[ROWS_U32, 1], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec, layout=pl.DN),
         addr=0x2000,  # After tile_src (0x0000 + 8192 = 0x2000)
         size=IDX_SIZE_U32,
     )
 
     tile_dst = pl.make_tile(
-        pl.TileType(
-            shape=[ROWS_U32, 256],
-            dtype=pl.DT_UINT32,
-            target_memory=pl.MemorySpace.Vec,
-            layout=pl.ND
-        ),
+        pl.TileType(shape=[ROWS_U32, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x2020,  # After tile_idx (0x2000 + 32 = 0x2020)
         size=DST_SIZE_U32,
     )
@@ -410,9 +409,9 @@ def histogram_uint32_byte3_kernel_cce(
         pl.store(histogram_out, tile_dst, [0, 0])
 
 
-
 @pl.jit()
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_histogram_uint32_byte3():
     """Test histogram with uint16 input, MSB mode (bits 15-8), ROWS_U32 rows.
 

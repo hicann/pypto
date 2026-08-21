@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
+#include "interface/configs/config_manager_ng.h"
 #include "distributed_test_framework.h"
 #include "test_distributed.h"
 #include "adapter/api/hcomm_api.h"
@@ -113,5 +114,9 @@ void GegisterOps()
 }
 
 INSTANTIATE_TEST_SUITE_P(TestDistributedOps, DistributedTest, ::testing::ValuesIn(GetOpMetaData<OpMetaData>()));
-TEST_P(DistributedTest, TestOps) { RunDistributedTestGeneric(GetParam().testData_, GetParam().fileName_); }
+TEST_P(DistributedTest, TestOps)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    RunDistributedTestGeneric(GetParam().testData_, GetParam().fileName_);
+}
 } // namespace npu::tile_fwk::Distributed

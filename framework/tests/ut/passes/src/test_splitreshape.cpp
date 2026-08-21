@@ -1199,7 +1199,7 @@ void CheckOpReshape(Function* func, CheckReshapeStruct expectReshape)
             EXPECT_EQ(reshapeInput->shape, expectReshape.reshapeInputShape);
             EXPECT_EQ(reshapeInput->GetProducers().size(), expectReshape.reshapeInputProducerSize);
             for (const auto& producer : reshapeInput->GetProducers()) {
-                EXPECT_EQ(producer->GetOpcode(), Opcode::OP_ASSEMBLE);
+                EXPECT_EQ(producer->GetOpcode(), Opcode::OP_CONTRACT);
                 if (expectReshape.checkProducer) {
                     EXPECT_EQ(producer->GetInputOperandSize(), kSizeOne);
                     EXPECT_EQ(producer->GetInputOperand(kSizeZero)->shape, expectReshape.reshapeInputOperandShape);
@@ -1211,7 +1211,7 @@ void CheckOpReshape(Function* func, CheckReshapeStruct expectReshape)
             EXPECT_EQ(reshapeOutput->shape, expectReshape.reshapeOutputShape);
             EXPECT_EQ(reshapeOutput->GetConsumers().size(), expectReshape.reshapeOutputProducerSize);
             for (const auto& consumer : reshapeOutput->GetConsumers()) {
-                EXPECT_EQ(consumer->GetOpcode(), Opcode::OP_VIEW);
+                EXPECT_EQ(consumer->GetOpcode(), Opcode::OP_SLICE);
                 if (expectReshape.checkConsumer) {
                     EXPECT_EQ(consumer->GetOutputOperandSize(), kSizeOne);
                     EXPECT_EQ(consumer->GetOutputOperand(kSizeZero)->shape, expectReshape.reshapeOutputOperandShape);
@@ -2400,6 +2400,40 @@ void BuildReduceAccAssembleInputGraph(std::shared_ptr<Function>& func,
     func->outCasts_ = outputs;
 }
 
+void BuildReduceAccContractSliceInputGraph(std::shared_ptr<Function>& func,
+                                           const MultipleParallelCopyOutAssembleShapes& shapes,
+                                           std::vector<std::shared_ptr<LogicalTensor>>& inputs,
+                                           std::vector<std::shared_ptr<LogicalTensor>>& outputs)
+{
+    auto ddrTensors = BuildReduceAccAssembleDdrTensors(func, shapes, inputs);
+    auto ddrBigTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.ddrBigShape,
+                                                                   CreateTestConstIntVector(shapes.ddrBigShape));
+    ddrBigTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    for (size_t i = 0; i < kNumThree; i++) {
+        auto& contractOp = PassOperationUtils::AddOperation(*func, Opcode::OP_CONTRACT, {ddrTensors[i]},
+                                                            {ddrBigTensor});
+        contractOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, shapes.assembleOffsets[i]));
+    }
+    auto ddrReshape = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.reshapeShape,
+                                                                 CreateTestConstIntVector(shapes.reshapeShape));
+    ddrReshape->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto& reshapeOp = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ddrBigTensor}, {ddrReshape});
+    reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", std::vector<SymbolicScalar>{kNumThree, kNumEight});
+    for (size_t i = 0; i < kNumThree; i++) {
+        auto ubOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape,
+                                                                CreateTestConstIntVector(shapes.viewOutShape));
+        ubOut->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+        auto& sliceOp = PassOperationUtils::AddOperation(*func, Opcode::OP_SLICE, {ddrReshape}, {ubOut});
+        sliceOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(shapes.viewOffsets[i]));
+        auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape,
+                                                                 CreateTestConstIntVector(shapes.viewOutShape));
+        PassOperationUtils::AddOperation(*func, Opcode::OP_ADDS, {ubOut}, {output});
+        outputs.push_back(output);
+    }
+    func->inCasts_ = inputs;
+    func->outCasts_ = outputs;
+}
+
 std::vector<int64_t> GetLargeScaleAssembleOffset(size_t pathIndex, const std::vector<int64_t>& ubShape)
 {
     return {static_cast<int64_t>(pathIndex) * ubShape.front(), 0};
@@ -2544,7 +2578,11 @@ TEST_F(TestSplitReshapePass, TestSkipSplitReshapeWhenAssembleInputProducedByRedu
 
     SplitReshape pass;
     pass.Init();
+    func->DumpJsonFile("./config/pass/json/"
+                       "TestSplitReshapePass_TestSkipSplitReshapeWhenAssembleInputProducedByReduceAcc_before1.json");
     EXPECT_EQ(pass.RunOnFunction(*func), SUCCESS);
+    func->DumpJsonFile(
+        "./config/pass/json/TestSplitReshapePass_TestSkipSplitReshapeWhenAssembleInputProducedByReduceAcc_after1.json");
     EXPECT_EQ(pass.reshapes_.size(), kSizeZero);
     EXPECT_EQ(pass.assembles_.size(), kSizeZero);
 
@@ -2574,6 +2612,79 @@ TEST_F(TestSplitReshapePass, TestSkipSplitReshapeWhenAssembleInputProducedByRedu
         EXPECT_EQ(reshapeOutput->shape, shapes.reshapeShape);
     }
     EXPECT_TRUE(hasReduceAccAssembleInput);
+    EXPECT_EQ(reshapeOpCount, kNumOne);
+}
+
+TEST_F(TestSplitReshapePass, TestSkipSplitReshapeWhenContractInputProducedByReduceAcc)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestReduceAccContractReshapeSplit",
+                                           "TestReduceAccContractReshapeSplit", nullptr);
+    ASSERT_TRUE(func != nullptr);
+
+    MultipleParallelCopyOutAssembleShapes shapes;
+    std::vector<std::shared_ptr<LogicalTensor>> inputs;
+    std::vector<std::shared_ptr<LogicalTensor>> outputs;
+    BuildReduceAccContractSliceInputGraph(func, shapes, inputs, outputs);
+
+    SplitReshape pass;
+    pass.Init();
+    EXPECT_EQ(pass.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(pass.reshapes_.size(), kSizeZero);
+    EXPECT_EQ(pass.assembles_.size(), kSizeZero);
+
+    int reshapeOpCount = 0;
+    bool hasReduceAccContractInput = false;
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_RESHAPE) {
+            continue;
+        }
+        reshapeOpCount++;
+        auto reshapeInput = op.GetInputOperand(kSizeZero);
+        ASSERT_NE(reshapeInput, nullptr);
+        EXPECT_EQ(reshapeInput->shape, shapes.ddrBigShape);
+        EXPECT_EQ(reshapeInput->GetProducers().size(), kSizeThree);
+        for (const auto& producer : reshapeInput->GetProducers()) {
+            ASSERT_NE(producer, nullptr);
+            EXPECT_EQ(producer->GetOpcode(), Opcode::OP_CONTRACT);
+            auto contractInput = producer->GetInputOperand(kSizeZero);
+            ASSERT_NE(contractInput, nullptr);
+            for (const auto& contractInputProducer : contractInput->GetProducers()) {
+                ASSERT_NE(contractInputProducer, nullptr);
+                hasReduceAccContractInput |= contractInputProducer->GetOpcode() == Opcode::OP_REDUCE_ACC;
+            }
+        }
+        auto reshapeOutput = op.GetOutputOperand(kSizeZero);
+        ASSERT_NE(reshapeOutput, nullptr);
+        EXPECT_EQ(reshapeOutput->shape, shapes.reshapeShape);
+    }
+    EXPECT_TRUE(hasReduceAccContractInput);
+    EXPECT_EQ(reshapeOpCount, kNumOne);
+}
+
+TEST_F(TestSplitReshapePass, TestSkipSplitReshapeWhenReshapeOutputContainsNegativeOne)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestNegativeOneReshapeSplit",
+                                           "TestNegativeOneReshapeSplit", nullptr);
+    ASSERT_TRUE(func != nullptr);
+
+    MultipleParallelCopyOutAssembleShapes shapes;
+    shapes.reshapeShape = {kNumThree, -1};
+    std::vector<std::shared_ptr<LogicalTensor>> inputs;
+    std::vector<std::shared_ptr<LogicalTensor>> outputs;
+    BuildMultipleParallelCopyOutAssembleGraph(func, shapes, inputs, outputs);
+
+    SplitReshape pass;
+    pass.Init();
+    EXPECT_EQ(pass.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(pass.reshapes_.size(), kSizeZero);
+    EXPECT_EQ(pass.assembles_.size(), kSizeZero);
+
+    int reshapeOpCount = 0;
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            reshapeOpCount++;
+        }
+    }
     EXPECT_EQ(reshapeOpCount, kNumOne);
 }
 

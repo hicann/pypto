@@ -189,7 +189,8 @@ TEST_F(PassManagerTest, TestPassDFX)
     config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", "dump_graph", true);
     config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", "dump_graph", true);
     PassManager::Instance().RunPass(Program::GetInstance(), *function, "TestPassDFX");
-    auto strategyPath = rootPath + "/computation_graph/Strategy_00_TestPassDFX";
+    auto strategyPath = rootPath + "/computation_graph/" +
+                        PassManager::Instance().GetStrategyLogFolderName("TestPassDFX");
     auto afterJsonPath = strategyPath +
                          "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
     auto beforeJsonPath = strategyPath +
@@ -218,7 +219,8 @@ TEST_F(PassManagerTest, TestDumpMultiplePassGraphByDebugOption)
     GetGraph(G);
     Function* function = G.GetFunction();
     auto rootPath = config::LogTopFolder();
-    auto strategyPath = rootPath + "/computation_graph/Strategy_00_" + testStrategy;
+    auto strategyPath = rootPath + "/computation_graph/" +
+                        PassManager::Instance().GetStrategyLogFolderName(testStrategy);
     if (IsPathExist(strategyPath)) {
         DeleteDir(strategyPath, true);
     }

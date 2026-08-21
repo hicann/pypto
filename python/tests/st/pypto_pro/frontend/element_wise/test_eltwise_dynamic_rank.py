@@ -67,6 +67,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -77,8 +79,8 @@ TILE_N = 128
 
 @dataclass
 class AddTiling:
-    shape: int[4]       # per-dim sizes; unused *leading* dims are 1
-    opkind: int[8]      # operation selector array; real value at opkind[4]
+    shape: int[4]  # per-dim sizes; unused *leading* dims are 1
+    opkind: int[8]  # operation selector array; real value at opkind[4]
 
 
 @pl.jit(auto_mutex=True)
@@ -100,8 +102,9 @@ def add_dynrank_kernel(
 
     # valid_shape=[-1, -1] makes the per-tile valid window dynamic (set at runtime
     # via set_validshape) so edge tiles can process a partial [rows, cols] block.
-    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec,
-                            valid_shape=[-1, -1])
+    tile_type = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
     a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
     b_db = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[2, 3])
     c_db = pl.make_tile_group(type=tile_type, addrs=0x20000, mutex_ids=[30, 31])
@@ -117,8 +120,8 @@ def add_dynrank_kernel(
 
         # Each core strides over the flattened (row-tile, col-tile) grid.
         for idx in pl.range(core_id, total_tiles, num_cores):
-            i = idx // n_tiles          # row-tile index
-            j = idx % n_tiles           # col-tile index
+            i = idx // n_tiles  # row-tile index
+            j = idx % n_tiles  # col-tile index
             tile_a = a_db.next()
             tile_b = b_db.next()
             tile_c = c_db.next()
@@ -146,7 +149,6 @@ def add_dynrank_kernel(
                     pl.set_validshape(tile_a, [rem_r, rem_c])
                     pl.set_validshape(tile_b, [rem_r, rem_c])
                     pl.set_validshape(tile_c, [rem_r, rem_c])
-
 
             pl.load_tile(tile_a, tensor_x, [i, j])
             pl.load_tile(tile_b, tensor_y, [i, j])
@@ -221,17 +223,18 @@ def _run_case(shape, opkind, ref_fn, op_name):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_add_dynamic_rank():
     shapes = [
-        [512, 512],          # rank 2 -> M=512,  N=512   -> 4x4 full tiles (no tail)
-        [8, 256, 256],       # rank 3 -> M=2048, N=256   -> exact tiles (no tail)
-        [2, 4, 256, 256],    # rank 4 -> M=2048, N=256   -> exact tiles (no tail)
+        [512, 512],  # rank 2 -> M=512,  N=512   -> 4x4 full tiles (no tail)
+        [8, 256, 256],  # rank 3 -> M=2048, N=256   -> exact tiles (no tail)
+        [2, 4, 256, 256],  # rank 4 -> M=2048, N=256   -> exact tiles (no tail)
         # --- unaligned shapes: exercise the partial edge / corner tiles ---
-        [513, 513],          # rank 2 -> M=513,  N=513   -> 128x1, 1x128, 1x1 tails
-        [513, 511],          # rank 2 -> M=513,  N=511   -> 128x127, 1x128, 1x127 tails
-        [200, 300],          # rank 2 -> M=200,  N=300   -> mixed partial rows & cols
-        [2, 3, 513],         # rank 3 -> M=6,    N=513   -> 6x128 body + 6x1 col tail
-        [2, 2, 3, 200],      # rank 4 -> M=12,   N=200   -> 12x128 body + 12x72 col tail
+        [513, 513],  # rank 2 -> M=513,  N=513   -> 128x1, 1x128, 1x1 tails
+        [513, 511],  # rank 2 -> M=513,  N=511   -> 128x127, 1x128, 1x127 tails
+        [200, 300],  # rank 2 -> M=200,  N=300   -> mixed partial rows & cols
+        [2, 3, 513],  # rank 3 -> M=6,    N=513   -> 6x128 body + 6x1 col tail
+        [2, 2, 3, 200],  # rank 4 -> M=12,   N=200   -> 12x128 body + 12x72 col tail
     ]
     for shape in shapes:
         for opkind, ref_fn, op_name in OP_CASES:

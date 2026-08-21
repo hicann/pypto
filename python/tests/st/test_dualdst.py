@@ -83,6 +83,7 @@ def _torch_online_softmax_exp(scores):
     column_max = torch.max(scores, dim=0, keepdim=True).values
     return torch.exp(scores - column_max).to(torch.bfloat16).to(torch.float32)
 
+
 @_DUALDST_JIT
 def dual_dst_split_n_kernel(
     a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC], FP16),
@@ -105,6 +106,7 @@ def dual_dst_split_n_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dual_dst_split_n():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -162,6 +164,7 @@ def dual_dst_split_m_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dual_dst_split_m():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -210,6 +213,7 @@ def dual_dst_chained_ops_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dual_dst_chained_ops():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -254,6 +258,7 @@ def dual_dst_asymmetric_scale_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dual_dst_asymmetric_scale():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -333,6 +338,7 @@ def dual_dst_max_gain_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dual_dst_max_gain():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -419,6 +425,7 @@ def dual_dst_long_chain_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dual_dst_long_chain():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -524,6 +531,7 @@ def dual_dst_link_chain_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dual_dst_link_chain():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -649,6 +657,7 @@ def dual_dst_mega_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dual_dst_mega():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -671,12 +680,12 @@ def test_dual_dst_mega():
             a_i = a_cpu[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :]
             b_i = b_cpu[global_idx * MEGA_N:(global_idx + 1) * MEGA_N, :]
             mm = torch.matmul(a_i, b_i.T)
-            out_a_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = _torch_online_softmax_exp(
-                mm[:, :MEGA_HALF_N]
-            ) + 1.0
-            out_b_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = _torch_online_softmax_exp(
-                mm[:, MEGA_HALF_N:]
-            ) + 2.0
+            out_a_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = (
+                _torch_online_softmax_exp(mm[:, :MEGA_HALF_N]) + 1.0
+            )
+            out_b_golden[global_idx * MEGA_M:(global_idx + 1) * MEGA_M, :] = (
+                _torch_online_softmax_exp(mm[:, MEGA_HALF_N:]) + 2.0
+            )
 
     assert_allclose(out_a.cpu().numpy(), out_a_golden.numpy(), rtol=1e-2, atol=1e-2)
     assert_allclose(out_b.cpu().numpy(), out_b_golden.numpy(), rtol=1e-2, atol=1e-2)

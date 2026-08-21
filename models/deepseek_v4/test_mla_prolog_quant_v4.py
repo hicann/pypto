@@ -465,6 +465,7 @@ def mla_prolog_eager(params, input_tensors, golden_tensors, dtype, is_nz, attrs,
 
 
 @pytest.mark.skip("t=4")
+@pypto.options(pass_options={"enable_slice": True})
 def test_t4_pa_nd_bf16():
     prep_env()
     params = {
@@ -483,6 +484,7 @@ def test_t4_pa_nd_bf16():
 
 
 @pytest.mark.skip("t=16")
+@pypto.options(pass_options={"enable_slice": True})
 def test_t4_pa_nd_bf16_eager():
     prep_env()
     params = {
@@ -511,6 +513,7 @@ def test_t4_pa_nd_bf16_eager():
 
 
 @pytest.mark.skip("t=16")
+@pypto.options(pass_options={"enable_slice": True})
 def test_t16_pa_nd_bf16():
     prep_env()
     params = {
@@ -529,6 +532,7 @@ def test_t16_pa_nd_bf16():
 
 
 @pytest.mark.skip("t=16")
+@pypto.options(pass_options={"enable_slice": True})
 def test_t16_pa_nd_bf16_eager():
     prep_env()
     params = {
@@ -557,6 +561,7 @@ def test_t16_pa_nd_bf16_eager():
 
 
 @pytest.mark.skip("t=512")
+@pypto.options(pass_options={"enable_slice": True})
 def test_t512_pa_nd_bf16():
     prep_env()
     params = {

@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -50,7 +52,7 @@ def add_kernel(
     mutex_ids23 = [2, 3]
     switch = True
     dtype_ = pl.DT_FP16
-    a_db = pl.make_tile_group(type=tile_type, addrs=addrs_real, mutex_ids=[0, 1]) # 地址手动指定， 使能double buffer
+    a_db = pl.make_tile_group(type=tile_type, addrs=addrs_real, mutex_ids=[0, 1])  # 地址手动指定， 使能double buffer
     b_db = pl.make_tile_group(type=tile_type, addrs=_addr_b(dtype_, switch), mutex_ids=mutex_ids23)
     c_db = pl.make_tile_group(type=tile_type, addrs=0x20000, mutex_ids=[30, 31])
     with pl.section_vector():
@@ -62,16 +64,17 @@ def add_kernel(
             if i in mutex_ids23:
                 pl.printf("i = %d", i)
             for j in pl.range(0, n_tile_num, 1):
-                tile_a = a_db.next() # 自动选择下一块buffer，并插入对应的同步
+                tile_a = a_db.next()  # 自动选择下一块buffer，并插入对应的同步
                 tile_b = b_db.next()
                 tile_c = c_db.next()
-                pl.load_tile(tile_a, x, [i, j]) # 根据坐标自动计算offset
+                pl.load_tile(tile_a, x, [i, j])  # 根据坐标自动计算offset
                 pl.load_tile(tile_b, y, [i, j])
                 pl.add(tile_c, tile_a, tile_b)
                 pl.store_tile(z, tile_c, [i, j])
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_add():
     device = ST_DEVICE
     torch.npu.set_device(device)

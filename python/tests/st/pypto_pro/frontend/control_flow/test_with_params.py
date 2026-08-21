@@ -25,6 +25,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -74,6 +76,7 @@ def _ref(tdt, fn, x, y):
 #   Scalar-scalar comparison only in while conditions (not in if).
 # ===================================================================
 
+
 def make_for_scalar_stop_kernel(dtype, name_suffix=""):
     # =============================================================================
     # Test 1: 标量 stop 参数驱动 for
@@ -114,12 +117,14 @@ def make_for_scalar_stop_kernel(dtype, name_suffix=""):
                     pl.sub(tile_c, tile_a, tile_b)
                     pl.store_tile(z, tile_c, [i, j])
                 i = i + 1
+
     return kernel
 
 
 # ===================================================================
 # for_scalar_step: for-loop with scalar step params
 # ===================================================================
+
 
 def make_for_scalar_step_kernel(dtype, name_suffix=""):
     # =============================================================================
@@ -149,12 +154,14 @@ def make_for_scalar_step_kernel(dtype, name_suffix=""):
                     pl.load_tile(tile_b, y, [i, j])
                     pl.add(tile_c, tile_a, tile_b)
                     pl.store_tile(z, tile_c, [i, j])
+
     return kernel
 
 
 # ===================================================================
 # if_scalar_flag: if-branch with scalar flag
 # ===================================================================
+
 
 def make_if_scalar_flag_kernel(dtype, name_suffix=""):
     # =============================================================================
@@ -187,12 +194,14 @@ def make_if_scalar_flag_kernel(dtype, name_suffix=""):
                     else:
                         pl.sub(tile_c, tile_a, tile_b)
                     pl.store_tile(z, tile_c, [i, j])
+
     return kernel
 
 
 # ===================================================================
 # while_scalar_cond: while-loop with scalar condition
 # ===================================================================
+
 
 def make_while_scalar_cond_kernel(dtype, name_suffix=""):
     # =============================================================================
@@ -223,12 +232,14 @@ def make_while_scalar_cond_kernel(dtype, name_suffix=""):
                     pl.add(tile_c, tile_a, tile_b)
                     pl.store_tile(z, tile_c, [i, j])
                 i = i + 1
+
     return kernel
 
 
 # ===================================================================
 # for_if_break_scalar: for-loop with if-break on scalar
 # ===================================================================
+
 
 def make_for_if_break_scalar_kernel(dtype, name_suffix=""):
     # =============================================================================
@@ -260,12 +271,14 @@ def make_for_if_break_scalar_kernel(dtype, name_suffix=""):
                     pl.load_tile(tile_b, y, [i, j])
                     pl.add(tile_c, tile_a, tile_b)
                     pl.store_tile(z, tile_c, [i, j])
+
     return kernel
 
 
 # ===================================================================
 # constexpr_scalar: constexpr branch with scalar
 # ===================================================================
+
 
 def make_constexpr_scalar_kernel(dtype, name_suffix=""):
     # =============================================================================
@@ -297,6 +310,7 @@ def make_constexpr_scalar_kernel(dtype, name_suffix=""):
                     else:
                         pl.sub(tile_c, tile_a, tile_b)
                     pl.store_tile(z, tile_c, [i, j])
+
     return kernel
 
 
@@ -305,6 +319,7 @@ def make_constexpr_scalar_kernel(dtype, name_suffix=""):
 #   div(m, n) -> m // n;  sub(m, n) -> m - n;  mul(m, n) -> m * n
 #   All evaluated at compile-time to produce range stop/step.
 # ===================================================================
+
 
 def _div(a, b):
     return a // b
@@ -344,6 +359,7 @@ def make_func_range_bound_kernel(dtype, name_suffix=""):
                     else:
                         pl.sub(tile_c, tile_a, tile_b)
                     pl.store_tile(z, tile_c, [i, j])
+
     return kernel
 
 
@@ -351,6 +367,7 @@ def make_func_range_bound_kernel(dtype, name_suffix=""):
 # if_func_bool_expr: if-condition uses a plain function returning bool
 #   if _mul(i, j) < 3 → add, else → sub
 # ===================================================================
+
 
 def make_if_func_bool_expr_kernel(dtype, name_suffix=""):
     # =============================================================================
@@ -382,6 +399,7 @@ def make_if_func_bool_expr_kernel(dtype, name_suffix=""):
                     else:
                         pl.sub(tile_c, tile_a, tile_b)
                     pl.store_tile(z, tile_c, [i, j])
+
     return kernel
 
 
@@ -389,7 +407,9 @@ def make_if_func_bool_expr_kernel(dtype, name_suffix=""):
 # Test functions
 # ===================================================================
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_scalar_stop():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -408,6 +428,7 @@ def test_for_scalar_stop():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_scalar_step():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -424,6 +445,7 @@ def test_for_scalar_step():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_scalar_flag():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -445,6 +467,7 @@ def test_if_scalar_flag():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_scalar_cond():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -461,6 +484,7 @@ def test_while_scalar_cond():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_if_break_scalar():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -478,6 +502,7 @@ def test_for_if_break_scalar():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_constexpr_scalar():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -494,6 +519,7 @@ def test_constexpr_scalar():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_func_range_bound():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -510,6 +536,7 @@ def test_func_range_bound():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_func_bool_expr():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -524,15 +551,19 @@ def test_if_func_bool_expr():
         for ti in range(shape[0] // TILE_M):
             for tj in range(shape[1] // TILE_N):
                 if ti * tj < 3:
-                    z_ref[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N] = \
-                        _ref(tdt, lambda a, b: a + b,
-                             x[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N],
-                             y[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N])
+                    z_ref[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N] = _ref(
+                        tdt,
+                        lambda a, b: a + b,
+                        x[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N],
+                        y[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N],
+                    )
                 else:
-                    z_ref[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N] = \
-                        _ref(tdt, lambda a, b: a - b,
-                             x[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N],
-                             y[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N])
+                    z_ref[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N] = _ref(
+                        tdt,
+                        lambda a, b: a - b,
+                        x[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N],
+                        y[ti * TILE_M:(ti + 1) * TILE_M, tj * TILE_N:(tj + 1) * TILE_N],
+                    )
         torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
         logging.info("test_if_func_bool_expr [%s] passed! shape=%s", label, shape)
 

@@ -182,7 +182,7 @@ private:
     unsigned long ComputeReshapeHash(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
     unsigned long ComputeReshapeHashOrderless(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
     std::vector<int64_t> ObtainMapOffset(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
-    bool HasAssembleInputProducedByReduceAcc(const LogicalTensorPtr& reshapeSource, int& assembleOpMagic) const;
+    bool HasAssembleLikeInputProducedByReduceAcc(const LogicalTensorPtr& reshapeSource, int& assembleLikeOpMagic) const;
 
     Status AddAssembleOp(const MemoryType& memoryType, const std::vector<int64_t>& outputOffset,
                          const LogicalTensorPtr& input, const LogicalTensorPtr& output, const Operation* originOp);

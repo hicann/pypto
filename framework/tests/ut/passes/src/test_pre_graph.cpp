@@ -42,6 +42,7 @@ constexpr int SUBGRAPHID2 = 2;
 constexpr int NUM5 = 5;
 constexpr int NUM10 = 10;
 constexpr int NUM128 = 128;
+constexpr const char* TEST_ENABLE_TRUE_KEY = "enable_true";
 void PrintGraphInfoPreGraph(Function* func, std::set<int>& tensorMagicWithColorSet)
 {
     std::cout << "func->Operations().size() = " << func->Operations().size() << std::endl;
@@ -94,8 +95,8 @@ void SetUpPassStrategy()
                                      {"SplitReshape", PassName::SPLIT_RESHAPE},
                                      {"SplitRawTensor", PassName::SPLIT_RAW_TENSOR},
                                      {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
-                                     {"InferDiscontinuousInput", PassName::INFER_DISCONTINUOUS_INPUT},
                                      {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                     {"InferDiscontinuousInput", PassName::INFER_DISCONTINUOUS_INPUT},
                                      {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
                                      {"ProcessAtomic", PassName::PROCESS_ATOMIC},
                                      {"GraphPartition", PassName::GRAPH_PARTITION},
@@ -1077,6 +1078,140 @@ void CompareOpImmediateVector(const std::vector<OpImmediate>& result, const std:
     }
 }
 
+TEST_F(PreGraphTest, TestMergeViewToCopyInOffset)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 16}, MemoryType::MEM_DEVICE_DDR, "view_input");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, MemoryType::MEM_DEVICE_DDR, "view_output");
+    G.AddTensor(DataType::DT_FP16, {4, 4}, MemoryType::MEM_UB, "copy_output");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output"}, "VIEW");
+    G.GetOp("VIEW")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{2, 3}));
+    G.AddOp(Opcode::OP_COPY_IN, {"view_output"}, {"copy_output"}, "COPYIN");
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN")->GetOpAttribute());
+    copyAttr->SetFromOffset(OpImmediate::Specified({4, 5}));
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessViewToCopyIn(*G.GetFunction()), SUCCESS);
+
+    EXPECT_TRUE(G.GetOp("VIEW")->IsDeleted());
+    EXPECT_EQ(G.GetOp("COPYIN")->GetIOperands().front(), G.GetTensor("view_input"));
+    CompareOpImmediateVector(copyAttr->GetFromOffset(), {6, 8});
+    CompareOpImmediateVector(copyAttr->GetShape(), {4, 4});
+    CompareOpImmediateVector(copyAttr->GetRawShape(), {16, 16});
+    CompareOpImmediateVector(copyAttr->GetToDynValidShape(), {4, 4});
+}
+
+TEST_F(PreGraphTest, TestMergeViewToMultiCopyInOffset)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 16}, MemoryType::MEM_DEVICE_DDR, "view_input");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, MemoryType::MEM_DEVICE_DDR, "view_output");
+    G.AddTensor(DataType::DT_FP16, {4, 4}, MemoryType::MEM_UB, "copy_output1");
+    G.AddTensor(DataType::DT_FP16, {4, 4}, MemoryType::MEM_UB, "copy_output2");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output"}, "VIEW");
+    G.GetOp("VIEW")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{2, 3}));
+    G.AddOp(Opcode::OP_COPY_IN, {"view_output"}, {"copy_output1"}, "COPYIN1");
+    G.AddOp(Opcode::OP_COPY_IN, {"view_output"}, {"copy_output2"}, "COPYIN2");
+    auto copyAttr1 = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN1")->GetOpAttribute());
+    auto copyAttr2 = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN2")->GetOpAttribute());
+    copyAttr1->SetFromOffset(OpImmediate::Specified({4, 5}));
+    copyAttr2->SetFromOffset(OpImmediate::Specified({6, 7}));
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessViewToCopyIn(*G.GetFunction()), SUCCESS);
+
+    EXPECT_TRUE(G.GetOp("VIEW")->IsDeleted());
+    CompareOpImmediateVector(copyAttr1->GetFromOffset(), {6, 8});
+    CompareOpImmediateVector(copyAttr2->GetFromOffset(), {8, 10});
+}
+
+TEST_F(PreGraphTest, TestMergeDynamicViewToCopyInOffset)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 16}, MemoryType::MEM_DEVICE_DDR, "view_input");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, MemoryType::MEM_DEVICE_DDR, "view_output");
+    G.AddTensor(DataType::DT_FP16, {4, 4}, MemoryType::MEM_UB, "copy_output");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output"}, "VIEW");
+    auto dynOffset = OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{2, 3}));
+    G.GetOp("VIEW")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN, dynOffset));
+    G.AddOp(Opcode::OP_COPY_IN, {"view_output"}, {"copy_output"}, "COPYIN");
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN")->GetOpAttribute());
+    copyAttr->SetFromOffset(OpImmediate::Specified({4, 5}));
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessViewToCopyIn(*G.GetFunction()), SUCCESS);
+
+    EXPECT_TRUE(G.GetOp("VIEW")->IsDeleted());
+    CompareOpImmediateVector(copyAttr->GetFromOffset(), {6, 8});
+}
+
+TEST_F(PreGraphTest, TestKeepViewWithNonCopyInConsumer)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 16}, MemoryType::MEM_DEVICE_DDR, "view_input");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, MemoryType::MEM_DEVICE_DDR, "view_output");
+    G.AddTensor(DataType::DT_FP16, {4, 4}, MemoryType::MEM_UB, "copy_output");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, "abs_output");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output"}, "VIEW");
+    G.GetOp("VIEW")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{2, 3}));
+    G.AddOp(Opcode::OP_COPY_IN, {"view_output"}, {"copy_output"}, "COPYIN");
+    G.AddOp(Opcode::OP_ABS, {"view_output"}, {"abs_output"}, "ABS");
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN")->GetOpAttribute());
+    copyAttr->SetFromOffset(OpImmediate::Specified({4, 5}));
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessViewToCopyIn(*G.GetFunction()), SUCCESS);
+
+    EXPECT_FALSE(G.GetOp("VIEW")->IsDeleted());
+    EXPECT_EQ(G.GetOp("COPYIN")->GetIOperands().front(), G.GetTensor("view_output"));
+    CompareOpImmediateVector(copyAttr->GetFromOffset(), {4, 5});
+}
+
+TEST_F(PreGraphTest, TestMergeViewToCopyInWithoutCopyAttr)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 16}, MemoryType::MEM_DEVICE_DDR, "view_input");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, MemoryType::MEM_DEVICE_DDR, "view_output");
+    G.AddTensor(DataType::DT_FP16, {4, 4}, MemoryType::MEM_UB, "copy_output");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output"}, "VIEW");
+    G.GetOp("VIEW")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{2, 3}));
+    G.AddOp(Opcode::OP_COPY_IN, {"view_output"}, {"copy_output"}, "COPYIN");
+    G.GetOp("COPYIN")->GetOpAttribute() = nullptr;
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessViewToCopyIn(*G.GetFunction()), SUCCESS);
+
+    EXPECT_TRUE(G.GetOp("VIEW")->IsDeleted());
+    EXPECT_EQ(G.GetOp("COPYIN")->GetIOperands().front(), G.GetTensor("view_input"));
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN")->GetOpAttribute());
+    ASSERT_NE(copyAttr, nullptr);
+    CompareOpImmediateVector(copyAttr->GetFromOffset(), {2, 3});
+    CompareOpImmediateVector(copyAttr->GetShape(), {4, 4});
+    CompareOpImmediateVector(copyAttr->GetRawShape(), {16, 16});
+    CompareOpImmediateVector(copyAttr->GetToDynValidShape(), {4, 4});
+}
+
+TEST_F(PreGraphTest, TestKeepViewWhenCopyInOffsetRankMismatch)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 16}, MemoryType::MEM_DEVICE_DDR, "view_input");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, MemoryType::MEM_DEVICE_DDR, "view_output");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, MemoryType::MEM_UB, "copy_output");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output"}, "VIEW");
+    G.GetOp("VIEW")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{2, 3}));
+    G.AddOp(Opcode::OP_COPY_IN, {"view_output"}, {"copy_output"}, "COPYIN");
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN")->GetOpAttribute());
+    copyAttr->SetFromOffset(OpImmediate::Specified({4}));
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessViewToCopyIn(*G.GetFunction()), SUCCESS);
+
+    EXPECT_FALSE(G.GetOp("VIEW")->IsDeleted());
+    EXPECT_EQ(G.GetOp("COPYIN")->GetIOperands().front(), G.GetTensor("view_output"));
+    CompareOpImmediateVector(copyAttr->GetFromOffset(), {4});
+}
+
 TEST_F(PreGraphTest, TestRemoveViewSingleReshapeNormalizesCopyInRawShape)
 {
     ComputationalGraphBuilder G;
@@ -1175,6 +1310,168 @@ TEST_F(PreGraphTest, TestRemoveRedundantAssembleNormalizesCopyOutRawShape)
     EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
     CompareOpImmediateVector(copyAttr->GetRawShape(), {-1, 128});
     EXPECT_EQ(G.GetTensor("reshape_input")->tensor->GetRawShape(), (std::vector<int64_t>{-1, 128}));
+}
+
+TEST_F(PreGraphTest, TestMergeCompleteViewCopyoutFamily)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_L0C, "view_input");
+    G.AddTensor(DataType::DT_FP16, {64, 64}, MemoryType::MEM_L0C, "view_output0");
+    G.AddTensor(DataType::DT_FP16, {64, 64}, MemoryType::MEM_L0C, "view_output1");
+    G.AddTensor(DataType::DT_FP16, {-1, -1}, MemoryType::MEM_DEVICE_DDR, "copyout_output");
+    G.GetTensor("copyout_output")
+        ->UpdateDynValidShape({CreateTestScalarVar("copyout_dim0"), CreateTestScalarVar("copyout_dim1")});
+    auto viewInput = G.GetTensor("view_input");
+    G.GetTensor("view_output0")->tensor = viewInput->tensor;
+    G.GetTensor("view_output0")->UpdateOffset({0, 0});
+    G.GetTensor("view_output1")->tensor = viewInput->tensor;
+    G.GetTensor("view_output1")->UpdateOffset({0, 64});
+
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output0"}, "VIEW0");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output1"}, "VIEW1");
+    G.GetOp("VIEW0")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.GetOp("VIEW1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 64}));
+    G.AddOp(Opcode::OP_COPY_OUT, {"view_output0"}, {"copyout_output"}, "COPYOUT0");
+    G.AddOp(Opcode::OP_COPY_OUT, {"view_output1"}, {"copyout_output"}, "COPYOUT1");
+    auto retainedMagic = G.GetOp("COPYOUT0")->GetOpMagic();
+    auto copyAttr0 = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYOUT0")->GetOpAttribute());
+    auto copyAttr1 = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYOUT1")->GetOpAttribute());
+    auto copyoutBase0 = CreateTestScalarVar("copyout_base0");
+    auto copyoutBase1 = CreateTestScalarVar("copyout_base1");
+    auto copyoutRawDim0 = CreateTestScalarVar("copyout_raw_dim0");
+    auto copyoutRawDim1 = CreateTestScalarVar("copyout_raw_dim1");
+    copyAttr0->SetToOffset(OpImmediate::Specified(std::vector<SymbolicScalar>{copyoutBase0, copyoutBase1}));
+    copyAttr1->SetToOffset(OpImmediate::Specified(std::vector<SymbolicScalar>{copyoutBase0, copyoutBase1 + 64}));
+    copyAttr0->SetRawShape(OpImmediate::Specified(std::vector<SymbolicScalar>{copyoutRawDim0, copyoutRawDim1}));
+    copyAttr1->SetRawShape(OpImmediate::Specified(std::vector<SymbolicScalar>{copyoutRawDim0, copyoutRawDim1}));
+    GmOutOfRangeCheckInfo checkInfo{OpImmediate::Specified(1), OpImmediate::Specified(2), OpImmediate::Specified(3),
+                                    GmOutOfRangeCheckInfo::AccessType::WRITE_GM};
+    copyAttr0->SetGmOutOfRangeCheck(checkInfo);
+    G.SetOutCast({"copyout_output"});
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
+    EXPECT_EQ(G.GetFunction()->Operations().size(), 4);
+    EXPECT_EQ(G.GetOp("COPYOUT0")->GetIOperands().front(), G.GetTensor("view_output0"));
+    EXPECT_EQ(G.GetOp("COPYOUT1")->GetIOperands().front(), G.GetTensor("view_output1"));
+
+    config::SetPassGlobalConfig(TEST_ENABLE_TRUE_KEY, true);
+    EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
+
+    ASSERT_EQ(G.GetFunction()->Operations().size(), 1);
+    auto* retainedCopyout = G.GetFunction()->GetOpByOpMagic(retainedMagic);
+    ASSERT_NE(retainedCopyout, nullptr);
+    EXPECT_EQ(retainedCopyout->GetIOperands().front(), viewInput);
+    auto retainedAttr = std::dynamic_pointer_cast<CopyOpAttribute>(retainedCopyout->GetOpAttribute());
+    ASSERT_EQ(retainedAttr, copyAttr0);
+    CompareOpImmediateVector(retainedAttr->GetShape(), {64, 128});
+    ASSERT_EQ(retainedAttr->GetRawShape().size(), 2);
+    EXPECT_EQ(retainedAttr->GetRawShape()[0].GetSpecifiedValue().Dump(), copyoutRawDim0.Dump());
+    EXPECT_EQ(retainedAttr->GetRawShape()[1].GetSpecifiedValue().Dump(), copyoutRawDim1.Dump());
+    CompareOpImmediateVector(retainedAttr->GetFromDynValidShape(), {64, 128});
+    ASSERT_NE(retainedAttr->GetGmOutOfRangeCheck(), nullptr);
+    EXPECT_EQ(retainedAttr->GetGmOutOfRangeCheck()->accessType, GmOutOfRangeCheckInfo::AccessType::WRITE_GM);
+}
+
+TEST_F(PreGraphTest, TestKeepViewCopyoutWhenTargetTranslationMismatch)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_L0C, "view_input");
+    G.AddTensor(DataType::DT_FP16, {64, 64}, MemoryType::MEM_L0C, "view_output0");
+    G.AddTensor(DataType::DT_FP16, {64, 64}, MemoryType::MEM_L0C, "view_output1");
+    G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_DEVICE_DDR, "copyout_output");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output0"}, "VIEW0");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output1"}, "VIEW1");
+    G.GetOp("VIEW0")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.GetOp("VIEW1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 64}));
+    G.AddOp(Opcode::OP_COPY_OUT, {"view_output0"}, {"copyout_output"}, "COPYOUT0");
+    G.AddOp(Opcode::OP_COPY_OUT, {"view_output1"}, {"copyout_output"}, "COPYOUT1");
+    auto copyAttr0 = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYOUT0")->GetOpAttribute());
+    auto copyAttr1 = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYOUT1")->GetOpAttribute());
+    copyAttr0->SetToOffset(OpImmediate::Specified({0, 0}));
+    copyAttr1->SetToOffset(OpImmediate::Specified({0, 32}));
+
+    config::SetPassGlobalConfig(TEST_ENABLE_TRUE_KEY, true);
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
+    EXPECT_EQ(G.GetFunction()->Operations().size(), 4);
+    EXPECT_EQ(G.GetOp("COPYOUT0")->GetIOperands().front(), G.GetTensor("view_output0"));
+    EXPECT_EQ(G.GetOp("COPYOUT1")->GetIOperands().front(), G.GetTensor("view_output1"));
+}
+
+TEST_F(PreGraphTest, TestMergeCompleteCopyinAssembleFamily)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_DEVICE_DDR, "copyin_input");
+    G.AddTensor(DataType::DT_FP16, {64, 64}, MemoryType::MEM_L1, "copyin_output0");
+    G.AddTensor(DataType::DT_FP16, {64, 64}, MemoryType::MEM_L1, "copyin_output1");
+    G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_L1, "assemble_output");
+    G.AddOp(Opcode::OP_COPY_IN, {"copyin_input"}, {"copyin_output0"}, "COPYIN0");
+    G.AddOp(Opcode::OP_COPY_IN, {"copyin_input"}, {"copyin_output1"}, "COPYIN1");
+    auto copyinBase0 = CreateTestScalarVar("copyin_base0");
+    auto copyinBase1 = CreateTestScalarVar("copyin_base1");
+    auto copyAttr0 = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(std::vector<SymbolicScalar>{copyinBase0, copyinBase1}), MemoryType::MEM_L1,
+        OpImmediate::Specified({64, 64}), OpImmediate::Specified({64, 128}), OpImmediate::Specified({64, 64}));
+    auto copyAttr1 = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(std::vector<SymbolicScalar>{copyinBase0, copyinBase1 + 64}), MemoryType::MEM_L1,
+        OpImmediate::Specified({64, 64}), OpImmediate::Specified({64, 128}), OpImmediate::Specified({64, 64}));
+    G.GetOp("COPYIN0")->SetOpAttribute(copyAttr0);
+    G.GetOp("COPYIN1")->SetOpAttribute(copyAttr1);
+    G.AddOp(Opcode::OP_ASSEMBLE, {"copyin_output0"}, {"assemble_output"}, "ASSEMBLE0");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"copyin_output1"}, {"assemble_output"}, "ASSEMBLE1");
+    G.GetOp("ASSEMBLE0")
+        ->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{0, 0}));
+    G.GetOp("ASSEMBLE1")
+        ->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{0, 64}));
+    auto retainedMagic = G.GetOp("COPYIN0")->GetOpMagic();
+    G.SetOutCast({"assemble_output"});
+
+    config::SetPassGlobalConfig(TEST_ENABLE_TRUE_KEY, true);
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
+
+    ASSERT_EQ(G.GetFunction()->Operations().size(), 1);
+    auto* retainedCopyin = G.GetFunction()->GetOpByOpMagic(retainedMagic);
+    ASSERT_NE(retainedCopyin, nullptr);
+    EXPECT_EQ(retainedCopyin->GetOOperands().front(), G.GetTensor("assemble_output"));
+    auto retainedAttr = std::dynamic_pointer_cast<CopyOpAttribute>(retainedCopyin->GetOpAttribute());
+    ASSERT_EQ(retainedAttr, copyAttr0);
+    EXPECT_EQ(retainedAttr->GetFromOffset()[0].Dump(), copyinBase0.Dump());
+    EXPECT_EQ(retainedAttr->GetFromOffset()[1].Dump(), copyinBase1.Dump());
+    CompareOpImmediateVector(retainedAttr->GetShape(), {64, 128});
+    CompareOpImmediateVector(retainedAttr->GetRawShape(), {64, 128});
+    CompareOpImmediateVector(retainedAttr->GetToDynValidShape(), {64, 128});
+}
+
+TEST_F(PreGraphTest, TestKeepCopyinAssembleWhenRegionsOverlap)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_DEVICE_DDR, "copyin_input");
+    G.AddTensor(DataType::DT_FP16, {64, 64}, MemoryType::MEM_L1, "copyin_output0");
+    G.AddTensor(DataType::DT_FP16, {64, 64}, MemoryType::MEM_L1, "copyin_output1");
+    G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_L1, "assemble_output");
+    G.AddOp(Opcode::OP_COPY_IN, {"copyin_input"}, {"copyin_output0"}, "COPYIN0");
+    G.AddOp(Opcode::OP_COPY_IN, {"copyin_input"}, {"copyin_output1"}, "COPYIN1");
+    G.GetOp("COPYIN0")->SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified({0, 0}), MemoryType::MEM_L1, OpImmediate::Specified({64, 64}),
+        OpImmediate::Specified({64, 128}), OpImmediate::Specified({64, 64})));
+    G.GetOp("COPYIN1")->SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified({0, 32}), MemoryType::MEM_L1, OpImmediate::Specified({64, 64}),
+        OpImmediate::Specified({64, 128}), OpImmediate::Specified({64, 64})));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"copyin_output0"}, {"assemble_output"}, "ASSEMBLE0");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"copyin_output1"}, {"assemble_output"}, "ASSEMBLE1");
+    G.GetOp("ASSEMBLE0")
+        ->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{0, 0}));
+    G.GetOp("ASSEMBLE1")
+        ->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{0, 32}));
+
+    config::SetPassGlobalConfig(TEST_ENABLE_TRUE_KEY, true);
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
+    EXPECT_EQ(G.GetFunction()->Operations().size(), 4);
+    EXPECT_EQ(G.GetOp("COPYIN0")->GetOOperands().front(), G.GetTensor("copyin_output0"));
+    EXPECT_EQ(G.GetOp("COPYIN1")->GetOOperands().front(), G.GetTensor("copyin_output1"));
 }
 
 // vec_in0 - CopyIn - L1_TO_L0A - A_MUL_B[isCube = true] - CopyOut[no isCube] - vec_out

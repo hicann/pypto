@@ -120,6 +120,7 @@ def layer_norm_kernel(
     pypto.assemble(out, [0, 0], output)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_layer_norm(device_id=None, dynamic: bool = False):
     """Test LayerNorm."""
     print("=" * 60)
@@ -175,6 +176,7 @@ def rms_norm_kernel(x: pypto.Tensor(), gamma: pypto.Tensor(), output: pypto.Tens
     pypto.assemble(out, [0, 0], output)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_rms_norm(device_id=None, dynamic: bool = False) -> None:
     """Test RMSNorm."""
     print("=" * 60)

@@ -63,9 +63,9 @@ void SetUpPassStrategy()
                                      {"ExpandFunction", PassName::EXPAND_FUNCTION},
                                      {"DuplicateOp", PassName::DUPLICATE_OP},
                                      {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
-                                     {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
                                      {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
                                      {"SplitReshape", PassName::SPLIT_RESHAPE},
+                                     {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
                                  });
 }
 
@@ -112,7 +112,7 @@ TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast)
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_RemoveRedundantOpFunction");
     npu::tile_fwk::RemoveRedundantOp removeRedundantOp;
     auto oriOpList = func->Operations(true);
-    EXPECT_EQ(oriOpList.size(), 15) << "Before the Pass, there should be 15 operations";
+    EXPECT_EQ(oriOpList.size(), 19) << "Before the Pass, there should be 19 operations";
     int ori_view_count = 0;
     int ori_assemble_count = 0;
     for (auto& op : oriOpList) {
@@ -122,17 +122,17 @@ TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast)
             ori_assemble_count += 1;
         }
     }
-    EXPECT_EQ(ori_view_count, 5) << "There shoule be 5 VIEW op before RemoveRedundantOp";
-    EXPECT_EQ(ori_assemble_count, 5) << "There shoule be 5 ASSEMBLE op before RemoveRedundantOp";
-    removeRedundantOp.PreCheck(*func);
-    removeRedundantOp.RunOnFunction(*func);
-    removeRedundantOp.PostCheck(*func);
+    EXPECT_EQ(ori_view_count, 4) << "There should be 4 VIEW ops before RemoveRedundantOp";
+    EXPECT_EQ(ori_assemble_count, 1) << "There should be 1 ASSEMBLE op before RemoveRedundantOp";
+    EXPECT_EQ(removeRedundantOp.PreCheck(*func), SUCCESS);
+    EXPECT_EQ(removeRedundantOp.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(removeRedundantOp.PostCheck(*func), SUCCESS);
     PrintGraphInfoRemoveRedundantOp(func);
     // ================== Verify the effect of the Pass ==================
     auto updated_operations = func->Operations(true);
-    int opSize = 15;
-    EXPECT_EQ(updated_operations.size(), opSize) << "After the Pass, there should be 15 operations, no VIEW be deleted";
-    EXPECT_EQ(updated_operations[0].GetOpcode(), Opcode::OP_VIEW) << "The first operation should be VIEW";
+    int opSize = 19;
+    EXPECT_EQ(updated_operations.size(), opSize) << "After the Pass, there should be 19 operations";
+    EXPECT_EQ(updated_operations[0].GetOpcode(), Opcode::OP_SLICE) << "The first operation should be SILCE";
     int view_count = 0;
     int assemble_count = 0;
 
@@ -143,8 +143,16 @@ TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast)
             assemble_count += 1;
         }
     }
-    EXPECT_EQ(view_count, 5) << "There shoule be 5 ASSEMBLE op after RemoveRedundantOp";
-    EXPECT_EQ(assemble_count, 5) << "outcast ASSEMBLE should be kept after RemoveRedundantOp";
+    EXPECT_EQ(view_count, 4) << "There should be 4 VIEW ops after RemoveRedundantOp";
+    EXPECT_EQ(assemble_count, 1) << "There should be 1 Assemble op after RemoveRedundantOp";
+    const auto& outcasts = func->GetOutcast();
+    ASSERT_GE(outcasts.size(), 2U);
+    ASSERT_EQ(outcasts[0]->GetProducers().size(), 1U);
+    const auto& validShape = outcasts[0]->GetDynValidShape();
+    ASSERT_EQ(validShape.size(), resShape.size());
+    EXPECT_EQ(validShape[0].Simplify().Concrete(), n);
+    EXPECT_EQ(validShape[1].Simplify().Concrete(), bs);
+    EXPECT_EQ(validShape[2].Simplify().Concrete(), d);
 }
 
 TEST_F(RemoveRedundantOpTest, TestInternalAssembleView)
@@ -171,16 +179,6 @@ TEST_F(RemoveRedundantOpTest, TestInternalAssembleView)
 
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_RemoveRedundantOpFunction");
     npu::tile_fwk::RemoveRedundantOp removeRedundantOp;
-    auto oriOpList = func->Operations(true);
-    int ori_view_count = 0;
-    int ori_assemble_count = 0;
-    for (auto& op : oriOpList) {
-        if (op.GetOpcode() == Opcode::OP_VIEW) {
-            ori_view_count += 1;
-        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
-            ori_assemble_count += 1;
-        }
-    }
     removeRedundantOp.PreCheck(*func);
     removeRedundantOp.RunOnFunction(*func);
     removeRedundantOp.PostCheck(*func);
@@ -197,9 +195,8 @@ TEST_F(RemoveRedundantOpTest, TestInternalAssembleView)
             assemble_count += 1;
         }
     }
-    EXPECT_EQ(updated_operations.size(), oriOpList.size()) << "No op should be removed in RemoveRedundantOp";
-    EXPECT_EQ(view_count, ori_view_count) << "No VIEW op should be removed in RemoveRedundantOp";
-    EXPECT_EQ(assemble_count, ori_assemble_count) << "No ASSEMBLE op should be removed in RemoveRedundantOp";
+    EXPECT_EQ(view_count, 32) << "VIEW op should be removed in RemoveRedundantOp";
+    EXPECT_EQ(assemble_count, 0) << "ASSEMBLE op should be removed in RemoveRedundantOp";
 }
 
 std::shared_ptr<Function> SetUpParallelAssembleWithReshapeGraph()

@@ -29,6 +29,8 @@ from pypto_pro.language import Vf as vf  # noqa: N813
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -174,19 +176,23 @@ def softmax_dn_vf_kernel(
 ):
     # UB tiles
     input_tile_type = pl.TileType(
-        shape=[UB_N, M], dtype=pl.DT_FP32,
+        shape=[UB_N, M],
+        dtype=pl.DT_FP32,
         target_memory=pl.MemorySpace.Vec,
     )
     xexp_tile_type = pl.TileType(
-        shape=[UB_N, M], dtype=pl.DT_FP16,
+        shape=[UB_N, M],
+        dtype=pl.DT_FP16,
         target_memory=pl.MemorySpace.Vec,
     )
     max_tile_type = pl.TileType(
-        shape=[1, M], dtype=pl.DT_FP32,
+        shape=[1, M],
+        dtype=pl.DT_FP32,
         target_memory=pl.MemorySpace.Vec,
     )
     sum_tile_type = pl.TileType(
-        shape=[1, M], dtype=pl.DT_FP32,
+        shape=[1, M],
+        dtype=pl.DT_FP32,
         target_memory=pl.MemorySpace.Vec,
     )
 
@@ -363,6 +369,7 @@ def simulate_vsstb_layout(x_exp_fp16, device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_softmax_dn():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -407,6 +414,7 @@ def test_softmax_dn():
     logging.info("x_exp layout check PASSED")
 
     logging.info("Softmax DN VF API (full version) test PASSED!")
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")

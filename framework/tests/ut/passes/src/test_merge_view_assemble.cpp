@@ -173,10 +173,11 @@ TEST_F(MergeViewAssembleTest, TestMergeViewAssemble)
     constexpr int32_t tilex = 8;
     constexpr int32_t tiley = 16;
     constexpr int expectedOps = 8;
-    constexpr int expectedView1 = 2;
-    constexpr int expectedView2 = 2;
-    constexpr int expectedAdd = 2;
-    constexpr int expectedAssemble = 1;
+    constexpr int expected_view = 0;
+    constexpr int expected_slice = 4;
+    constexpr int expected_add = 2;
+    constexpr int expected_assemble = 0;
+    constexpr int expected_contract = 2;
     std::vector<int64_t> shape{16, 16};
     Tensor a(DT_FP32, shape, "a");
     Tensor in_tensor(DT_FP32, shape, "in_tensor");
@@ -190,7 +191,9 @@ TEST_F(MergeViewAssembleTest, TestMergeViewAssemble)
                                      {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
                                      {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
                                      {"ExpandFunction", PassName::EXPAND_FUNCTION},
-                                     {"DuplicateOp", PassName::DUPLICATE_OP},
+                                     {"SplitReshape", PassName::SPLIT_RESHAPE},
+                                     {"SplitRawTensor", PassName::SPLIT_RAW_TENSOR},
+                                     {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
                                  });
 
     Function* originFunction = nullptr;
@@ -225,40 +228,30 @@ TEST_F(MergeViewAssembleTest, TestMergeViewAssemble)
     // ================== Verify Pass Effect ==================
     auto updated_operations = currentFunction->Operations();
     EXPECT_EQ(updated_operations.size(), expectedOps) << "14 operations should remain";
-    int view1_count = 0;
-    int view2_count = 0;
+    int view_count = 0;
+    int slice_count = 0;
     int add_count = 0;
-    int assemble1_count = 0;
-    int assemble2_count = 0;
-    std::vector<int64_t> offset1 = {0, 0};
-    std::vector<int64_t> offset2 = {8, 0};
+    int assemble_count = 0;
+    int contract_count = 0;
     for (const auto& op : updated_operations) {
         if (op.GetOpcodeStr() == "VIEW") {
-            auto viewOpAttribute = dynamic_cast<ViewOpAttribute*>(op.GetOpAttribute().get());
-            ASSERT_NE(viewOpAttribute, nullptr);
-            if (viewOpAttribute->GetFrom() == offset1) {
-                view1_count++;
-            } else if (viewOpAttribute->GetFrom() == offset2) {
-                view2_count++;
-            }
+            view_count++;
         } else if (op.GetOpcodeStr() == "ADD") {
             add_count++;
+        } else if (op.GetOpcodeStr() == "SLICE") {
+            slice_count++;
         } else if (op.GetOpcodeStr() == "ASSEMBLE") {
-            auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute*>(op.GetOpAttribute().get());
-            ASSERT_NE(assembleOpAttribute, nullptr);
-            if (assembleOpAttribute->GetToOffset() == offset1) {
-                assemble1_count++;
-            } else if (assembleOpAttribute->GetToOffset() == offset2) {
-                assemble2_count++;
-            }
+            assemble_count++;
+        } else if (op.GetOpcodeStr() == "CONTRACT") {
+            contract_count++;
         }
     }
 
-    EXPECT_EQ(view1_count, expectedView1) << "6 VIEW1 operations should remain";
-    EXPECT_EQ(view2_count, expectedView2) << "4 VIEW2 operations should remain";
-    EXPECT_EQ(add_count, expectedAdd) << "2 ADD operations should remain";
-    EXPECT_EQ(assemble1_count, expectedAssemble) << "1 ASSEMBLE1 operation should remain";
-    EXPECT_EQ(assemble2_count, expectedAssemble) << "1 ASSEMBLE2 operation should remain";
+    EXPECT_EQ(view_count, expected_view) << "0 VIEW operations should remain";
+    EXPECT_EQ(slice_count, expected_slice) << "4 SLICE operations should remain";
+    EXPECT_EQ(add_count, expected_add) << "2 ADD operations should remain";
+    EXPECT_EQ(assemble_count, expected_assemble) << "0 ASSEMBLE operation should remain";
+    EXPECT_EQ(contract_count, expected_contract) << "2 CONTRACT operation should remain";
 
     // Check the offset of the View operation
 }
@@ -1358,5 +1351,123 @@ TEST_F(MergeViewAssembleTest, BuilderLargeSharedTensorMergeableChainsPerfGuard)
     EXPECT_LT(elapsedMs, thresholdMs);
 }
 
+static void SetSimpleViewAttr(Operation* op, const std::vector<int64_t>& offset)
+{
+    ASSERT_NE(op, nullptr);
+    op->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(offset, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{}));
+}
+
+static void SetSimpleAssembleAttr(Operation* op, const std::vector<int64_t>& offset)
+{
+    ASSERT_NE(op, nullptr);
+    op->SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset, std::vector<SymbolicScalar>{}));
+}
+
+TEST_F(MergeViewAssembleTest, ViewSliceChainShouldMergeToSlice)
+{
+    ComputationalGraphBuilder G;
+    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {10, 10}, {"input", "mid", "output"}));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_VIEW, {"input"}, {"mid"}, "view", true));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_SLICE, {"mid"}, {"output"}, "slice", true));
+    EXPECT_TRUE(G.SetInCast({"input"}));
+    EXPECT_TRUE(G.SetOutCast({"output"}));
+    SetSimpleViewAttr(G.GetOp("view"), {1, 2});
+    SetSimpleViewAttr(G.GetOp("slice"), {3, 4});
+
+    MergeViewAssemble mergePass;
+    ASSERT_EQ(mergePass.RunOnFunction(*G.GetFunction()), SUCCESS);
+
+    int sliceCount = 0;
+    Operation* mergedSlice = nullptr;
+    for (auto& op : G.GetFunction()->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_SLICE && !op.IsDeleted()) {
+            sliceCount++;
+            mergedSlice = &op;
+        }
+        EXPECT_NE(op.GetOpcode(), Opcode::OP_VIEW);
+    }
+    ASSERT_EQ(sliceCount, 1);
+    ASSERT_NE(mergedSlice, nullptr);
+    auto attr = std::dynamic_pointer_cast<ViewOpAttribute>(mergedSlice->GetOpAttribute());
+    ASSERT_NE(attr, nullptr);
+    EXPECT_EQ(attr->GetFromOffset(), (std::vector<int64_t>{4, 6}));
+}
+
+TEST_F(MergeViewAssembleTest, SliceSliceChainShouldNotMerge)
+{
+    ComputationalGraphBuilder G;
+    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {10, 10}, {"input", "mid", "output"}));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_SLICE, {"input"}, {"mid"}, "slice1", true));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_SLICE, {"mid"}, {"output"}, "slice2", true));
+    EXPECT_TRUE(G.SetInCast({"input"}));
+    EXPECT_TRUE(G.SetOutCast({"output"}));
+    SetSimpleViewAttr(G.GetOp("slice1"), {1, 2});
+    SetSimpleViewAttr(G.GetOp("slice2"), {3, 4});
+
+    MergeViewAssemble mergePass;
+    ASSERT_EQ(mergePass.RunOnFunction(*G.GetFunction()), SUCCESS);
+
+    int sliceCount = 0;
+    for (auto& op : G.GetFunction()->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_SLICE && !op.IsDeleted()) {
+            sliceCount++;
+        }
+    }
+    EXPECT_EQ(sliceCount, 2);
+}
+
+TEST_F(MergeViewAssembleTest, AssembleContractChainShouldMergeToContract)
+{
+    ComputationalGraphBuilder G;
+    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {10, 10}, {"input", "mid", "output"}));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"input"}, {"mid"}, "assemble", true));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_CONTRACT, {"mid"}, {"output"}, "contract", true));
+    EXPECT_TRUE(G.SetInCast({"input"}));
+    EXPECT_TRUE(G.SetOutCast({"output"}));
+    SetSimpleAssembleAttr(G.GetOp("assemble"), {1, 2});
+    SetSimpleAssembleAttr(G.GetOp("contract"), {3, 4});
+
+    MergeViewAssemble mergePass;
+    ASSERT_EQ(mergePass.RunOnFunction(*G.GetFunction()), SUCCESS);
+
+    int contractCount = 0;
+    Operation* mergedContract = nullptr;
+    for (auto& op : G.GetFunction()->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_CONTRACT && !op.IsDeleted()) {
+            contractCount++;
+            mergedContract = &op;
+        }
+        EXPECT_NE(op.GetOpcode(), Opcode::OP_ASSEMBLE);
+    }
+    ASSERT_EQ(contractCount, 1);
+    ASSERT_NE(mergedContract, nullptr);
+    auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(mergedContract->GetOpAttribute());
+    ASSERT_NE(attr, nullptr);
+    EXPECT_EQ(attr->GetToOffset(), (std::vector<int64_t>{4, 6}));
+}
+
+TEST_F(MergeViewAssembleTest, ContractContractChainShouldNotMerge)
+{
+    ComputationalGraphBuilder G;
+    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {10, 10}, {"input", "mid", "output"}));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_CONTRACT, {"input"}, {"mid"}, "contract1", true));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_CONTRACT, {"mid"}, {"output"}, "contract2", true));
+    EXPECT_TRUE(G.SetInCast({"input"}));
+    EXPECT_TRUE(G.SetOutCast({"output"}));
+    SetSimpleAssembleAttr(G.GetOp("contract1"), {1, 2});
+    SetSimpleAssembleAttr(G.GetOp("contract2"), {3, 4});
+
+    MergeViewAssemble mergePass;
+    ASSERT_EQ(mergePass.RunOnFunction(*G.GetFunction()), SUCCESS);
+
+    int contractCount = 0;
+    for (auto& op : G.GetFunction()->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_CONTRACT && !op.IsDeleted()) {
+            contractCount++;
+        }
+    }
+    EXPECT_EQ(contractCount, 2);
+}
 } // namespace tile_fwk
 } // namespace npu

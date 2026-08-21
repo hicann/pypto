@@ -344,8 +344,8 @@ struct FunctionFrame {
 private:
     bool IsAllowedInplaceChainOpcode(Opcode opcode) const
     {
-        return opcode == Opcode::OP_INDEX_OUTCAST || opcode == Opcode::OP_VIEW || opcode == Opcode::OP_RESHAPE ||
-               opcode == Opcode::OP_ASSEMBLE || opcode == Opcode::OP_PRINT || opcode == Opcode::OP_INDEX_ADD;
+        return opcode == Opcode::OP_INDEX_OUTCAST || IsViewLike(opcode) || opcode == Opcode::OP_RESHAPE ||
+               IsAssembleLike(opcode) || opcode == Opcode::OP_PRINT || opcode == Opcode::OP_INDEX_ADD;
     }
 
     void TryEraseOpIndex(Operation* op, const std::unordered_map<Operation*, int>& opIndexMap)
@@ -1081,7 +1081,7 @@ struct FunctionInterpreter {
         ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, index != -1);
         auto iop = op.GetInputOperand(index);
         ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, iOpDataList[index] != nullptr);
-        if (op.GetOpcode() == Opcode::OP_VIEW) {
+        if (IsViewLike(op.GetOpcode())) {
             if (iOpDataList[0]->IsShmTensor()) {
                 auto ret = AllocateDataView(frame, oop);
                 ret->GetData()->SetAsShmTensor();

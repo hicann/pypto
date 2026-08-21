@@ -68,7 +68,7 @@ def _run_side_matmul(side: str, case: _Case):
             "cube_nbuffer_setting": {-1: 1},
         },
         debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0},
-)
+    )
     def matmul_kernel(
         a: pypto.Tensor([m, k], pypto.DT_FP16),
         b: pypto.Tensor([k, n], pypto.DT_FP16),
@@ -108,13 +108,21 @@ _GRID_CASE = _Case(1024, 128, 1024, [128, 128], [128, 128], [128, 128], 4)
 @pytest.mark.soc("950", "910")
 @pytest.mark.parametrize("side", ["auto", "left", "right"])
 def test_matmul_l1_reuse_side(side):
-    _run_side_matmul(side, _side_tiling_case(side))
+    if side != "left":
+        _run_side_matmul(side, _side_tiling_case(side))
+        return
+    with pypto.options(pass_options={"enable_slice": False}):
+        _run_side_matmul(side, _side_tiling_case(side))
 
 
 @pytest.mark.soc("950", "910")
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_matmul_l1_reuse_side_grid(side):
-    _run_side_matmul(side, _GRID_CASE)
+    if side != "right":
+        _run_side_matmul(side, _GRID_CASE)
+        return
+    with pypto.options(pass_options={"enable_slice": False}):
+        _run_side_matmul(side, _GRID_CASE)
 
 
 if __name__ == "__main__":

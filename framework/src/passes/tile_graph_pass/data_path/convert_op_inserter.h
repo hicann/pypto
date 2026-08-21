@@ -94,7 +94,7 @@ public:
     // 根据已记录的converts插入OP_CONVERT
     void InsertConvertOps(Function& function);
 
-    // 将插入的OP_CONVERT转化为View和Assemble，后续GenerateMoveOp时会转化为copy类Op
+    // 将插入的OP_CONVERT转化为Slice和Contract，后续GenerateMoveOp时会转化为copy类Op
     bool CreateMoveOpForConvert(Operation& op);
 
     // 判断是否跨Memory层级
@@ -115,11 +115,11 @@ public:
     bool SkipOperand(const std::shared_ptr<LogicalTensor>& oOperand,
                      const std::unordered_set<int>& visitedTensor) const;
 
-    // 检查tensor生产者是否都是assemble
-    bool isAllProducerAssemble(const std::shared_ptr<LogicalTensor>& oOperand) const;
+    // 检查tensor生产者是否都是contract
+    bool IsAllProducerContract(const std::shared_ptr<LogicalTensor>& oOperand) const;
 
-    // 检查tensor所有的消费者是否都有效
-    bool isAllConsumersValid(Function& function, const std::set<Operation*, OpMagicComparator>& consumers) const;
+    // 检查tensor所有的消费者是否都是有效的move-like消费者
+    bool IsAllMoveConsumersValid(Function& function, const std::set<Operation*, OpMagicComparator>& consumers) const;
 
     // 为每个存在内存冲突的消费者插入convert op
     void InsertConvertOpForEachConsumer(Function& function, const Operation& op,
@@ -136,11 +136,11 @@ public:
     std::shared_ptr<LogicalTensor> CreateTensorLikeForConvert(const std::shared_ptr<LogicalTensor>& input,
                                                               MemoryType outputMemoryType) const;
 
-    // 构造convert转view时使用的ViewOpAttribute
-    std::shared_ptr<ViewOpAttribute> BuildViewAttrForConvert(const Operation& op, MemoryType to) const;
+    // 构造convert转slice时使用的ViewOpAttribute
+    std::shared_ptr<ViewOpAttribute> BuildSliceAttrForConvert(const Operation& op, MemoryType to) const;
 
-    // 构造convert转assemble时使用的AssembleOpAttribute
-    std::shared_ptr<AssembleOpAttribute> BuildAssembleAttrForConvert(const Operation& op, MemoryType from) const;
+    // 构造convert转contract时使用的AssembleOpAttribute
+    std::shared_ptr<AssembleOpAttribute> BuildContractAttrForConvert(const Operation& op, MemoryType from) const;
 
     // graph重连
     void GraphReconnect(const std::shared_ptr<LogicalTensor>& oOperand, std::shared_ptr<LogicalTensor> output,
@@ -161,7 +161,7 @@ public:
     // 判断同一源 tensor 是否有并行 consumer 需要不同的 memory 去向
     bool HasParallelDifferentConsumerRequirement(const LogicalTensorPtr& tensor, MemoryType targetType) const;
 
-    // 特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR
+    // 特殊场景处理：生成者均为Contract或者消费者均为Slice/Contract，且mem路径中经过DDR
     void ProcessSpecialProducersOrConsumers(Function& function, const Operation& op,
                                             const std::shared_ptr<LogicalTensor>& oOperand,
                                             std::set<Operation*, OpMagicComparator>& consumers,

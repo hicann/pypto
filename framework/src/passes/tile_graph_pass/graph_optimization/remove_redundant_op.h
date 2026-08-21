@@ -33,8 +33,9 @@
 
 namespace npu {
 namespace tile_fwk {
-const std::unordered_set<Opcode> matchOpcodeWithDynshape = {Opcode::OP_VIEW, Opcode::OP_EXPAND};
-const std::unordered_set<Opcode> matchOpcodeWithoutDynshape = {Opcode::OP_REGISTER_COPY, Opcode::OP_ASSEMBLE};
+const std::unordered_set<Opcode> matchOpcodeWithDynshape = {Opcode::OP_VIEW, Opcode::OP_SLICE, Opcode::OP_EXPAND};
+const std::unordered_set<Opcode> matchOpcodeWithoutDynshape = {Opcode::OP_REGISTER_COPY, Opcode::OP_ASSEMBLE,
+                                                               Opcode::OP_CONTRACT};
 class RemoveRedundantOp : public Pass {
 public:
     RemoveRedundantOp() : Pass("RemoveRedundantOp") {}
@@ -48,14 +49,6 @@ private:
     Status ProcessViewAssemble(Function& function);
     Status ProcessReshape(Function& function);
     Status RemoveDummyOps(Function& function);
-    void ProcessPerfectMatch(Function& function, LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor);
-    void RemoveViewAssembleForOutcast(Function& function, LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor);
-    void CalculateViewOffset(Operation& op, LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor,
-                             std::vector<long>& newoffset, std::vector<SymbolicScalar>& newDynoffset);
-    void GenerateNewView(Function& function, Operation& op, LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor);
-    bool IsNotSameViewInput(LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor) const;
-    bool IsDataReplace(LogicalTensorPtr& endTensor) const;
-    bool IsValidViewAssemble(LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor) const;
     bool ProcessRedundantOpWithDynShape(Operation& op) const;
     bool ProcessRedundantOpWithoutDynShape(Operation& op) const;
 

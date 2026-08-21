@@ -287,6 +287,7 @@ def ffn_shared_expert_quant(
 
 
 @pytest.mark.soc("910")
+@pypto.options(pass_options={"enable_slice": True})
 def test_ffn_share() -> None:
     x_dtype = torch.bfloat16
     # parameter config

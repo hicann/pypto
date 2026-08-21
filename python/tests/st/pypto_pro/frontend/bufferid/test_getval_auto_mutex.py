@@ -29,6 +29,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -50,12 +52,12 @@ def getval_setval_am_kernel(a: pl.Tensor[[64, 128], pl.DT_FP16]):
     with pl.section_vector():
         t = a_db.next()
         pl.load(t, a, [0, 0])
-        pl.exp(t, t)                      # V writes buf 20
-        v00 = t[0, 0]                      # S reads t[0,0] == exp(a[0,0])   (needs V->S)
-        v63 = t[0, 63]                     # S reads t[0,63] == exp(a[0,63])
-        t[1, 0] = v00                      # S writes t[1,0]  = v00
-        t[1, 1] = v63                      # S writes t[1,1]  = v63
-        pl.store(a, t, [0, 0])            # MTE3 consumer
+        pl.exp(t, t)  # V writes buf 20
+        v00 = t[0, 0]  # S reads t[0,0] == exp(a[0,0])   (needs V->S)
+        v63 = t[0, 63]  # S reads t[0,63] == exp(a[0,63])
+        t[1, 0] = v00  # S writes t[1,0]  = v00
+        t[1, 1] = v63  # S writes t[1,1]  = v63
+        pl.store(a, t, [0, 0])  # MTE3 consumer
 
 
 @pl.jit(arch="a5", auto_mutex=True)
@@ -84,7 +86,7 @@ def _run_and_measure(a: torch.Tensor):
     torch.npu.synchronize()
     out = a.detach().to("cpu", torch.float32)
 
-    exp_ref = torch.exp(a_cpu)            # golden for the exp() result region
+    exp_ref = torch.exp(a_cpu)  # golden for the exp() result region
     # golden: whole tile is exp(input); plus t[1,0]=exp(a[0,0]), t[1,1]=exp(a[0,63])
     golden = exp_ref.clone()
     golden[1, 0] = exp_ref[0, 0]
@@ -94,7 +96,7 @@ def _run_and_measure(a: torch.Tensor):
     details = {
         "a00_orig": a_cpu[0, 0].item(),
         "exp_a00": exp_ref[0, 0].item(),
-        "got_t10": out[1, 0].item(),      # getval->setval result
+        "got_t10": out[1, 0].item(),  # getval->setval result
         "got_t11": out[1, 1].item(),
         "exp_a63": exp_ref[0, 63].item(),
         "max_diff": diff.max().item(),
@@ -103,6 +105,7 @@ def _run_and_measure(a: torch.Tensor):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_getval_setval_auto_mutex():
     device = ST_DEVICE
     _require_a5(device)
@@ -111,14 +114,13 @@ def test_getval_setval_auto_mutex():
     max_diff, d = _run_and_measure(a)
     logging.info("getval/setval auto_mutex: %s", d)
     # getval must observe exp() output, not the stale loaded value
-    assert abs(d["got_t10"] - d["exp_a00"]) < 3e-3, \
-        f"stale read: t[1,0]={d['got_t10']} expect exp(a00)={d['exp_a00']}"
-    assert abs(d["got_t11"] - d["exp_a63"]) < 3e-3, \
-        f"stale read: t[1,1]={d['got_t11']} expect exp(a63)={d['exp_a63']}"
+    assert abs(d["got_t10"] - d["exp_a00"]) < 3e-3, f"stale read: t[1,0]={d['got_t10']} expect exp(a00)={d['exp_a00']}"
+    assert abs(d["got_t11"] - d["exp_a63"]) < 3e-3, f"stale read: t[1,1]={d['got_t11']} expect exp(a63)={d['exp_a63']}"
     assert max_diff < 3e-3, f"max|diff|={max_diff} too large"
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_getval_while_condition_auto_mutex():
     device = ST_DEVICE
     _require_a5(device)

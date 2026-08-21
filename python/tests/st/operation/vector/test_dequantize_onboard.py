@@ -51,6 +51,7 @@ def dequantize_golden(input_tensor, scale, axis, zero_points=None):
     return result
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_dequantize_sym_axis_neg1_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -126,6 +127,7 @@ def test_dequantize_sym_axis_neg1_onboard():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_dequantize_sym_axis_neg1_aligned_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -201,6 +203,7 @@ def test_dequantize_sym_axis_neg1_aligned_onboard():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_dequantize_asym_axis_neg1_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

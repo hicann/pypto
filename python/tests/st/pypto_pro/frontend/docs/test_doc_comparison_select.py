@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -54,10 +56,14 @@ def scalar_gt_select_kernel(
     tmp_vec_group = pl.make_tile_group(type=tt32, addrs=0x18000, mutex_ids=[3])
     mask_fp16_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x20000, mutex_ids=[4])
+        addrs=0x20000,
+        mutex_ids=[4],
+    )
     mask_vec_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec),
-        addrs=0x24000, mutex_ids=[5])
+        addrs=0x24000,
+        mutex_ids=[5],
+    )
     with pl.section_vector():
         tile_a = tile_a_group.current()
         tile_b = tile_b_group.current()
@@ -77,6 +83,7 @@ def scalar_gt_select_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_scalar_gt_select():
     device = ST_DEVICE
     _require_a5(device)
@@ -89,7 +96,7 @@ def test_scalar_gt_select():
     scalar_gt_select_kernel(a, b, mask_in, out)
     torch.npu.synchronize()
     # 【推导】mask>0 取 a，否则取 b
-    cond = (mask_in.float() > 0)
+    cond = mask_in.float() > 0
     out_ref = torch.where(cond, a, b)
     torch.testing.assert_close(out, out_ref, rtol=1e-2, atol=1e-2)
     logging.info("scalar gt+select result equal!")

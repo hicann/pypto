@@ -19,6 +19,7 @@ import torch
 import pypto
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_log():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -60,6 +61,7 @@ def test_vector_operation_log():
 
 
 @pytest.mark.skip(reason="Dep operation interface")
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_log2():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -101,6 +103,7 @@ def test_vector_operation_log2():
 
 
 @pytest.mark.skip(reason="Dep operation interface")
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_log10():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

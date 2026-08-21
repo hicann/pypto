@@ -24,6 +24,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -53,14 +55,13 @@ def printf_di_kernel(
     v_i64: pl.DT_INT64,
 ):
     with pl.section_vector():
-        pl.printf("printf_di: flag=%d i8=%d i16=%d i32=%d i64=%d\n",
-                   flag, v_i8, v_i16, v_i32, v_i64)
-        pl.printf("printf_i: flag=%i i8=%i i16=%i i32=%i i64=%i\n",
-                   flag, v_i8, v_i16, v_i32, v_i64)
+        pl.printf("printf_di: flag=%d i8=%d i16=%d i32=%d i64=%d\n", flag, v_i8, v_i16, v_i32, v_i64)
+        pl.printf("printf_i: flag=%i i8=%i i16=%i i32=%i i64=%i\n", flag, v_i8, v_i16, v_i32, v_i64)
         out[0] = 1
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_printf_di():
     """测试 pl.printf 的 %d/%i 格式说明符，验证有符号整数（bool、INT8、INT16、INT32、INT64）标量参数的打印功能。
 
@@ -90,8 +91,7 @@ def printf_u_kernel(
     v_u64: pl.DT_UINT64,
 ):
     with pl.section_vector():
-        pl.printf("printf_u: flag=%u u8=%u u16=%u u32=%u u64=%u\n",
-                   flag, v_u8, v_u16, v_u32, v_u64)
+        pl.printf("printf_u: flag=%u u8=%u u16=%u u32=%u u64=%u\n", flag, v_u8, v_u16, v_u32, v_u64)
         out[0] = 2
 
 
@@ -121,8 +121,7 @@ def printf_x_kernel(
     v_u64: pl.DT_UINT64,
 ):
     with pl.section_vector():
-        pl.printf("printf_x: u8=%#04x u16=%#06x u32=%#08x u64=%#010x\n",
-                   v_u8, v_u16, v_u32, v_u64)
+        pl.printf("printf_x: u8=%#04x u16=%#06x u32=%#08x u64=%#010x\n", v_u8, v_u16, v_u32, v_u64)
         out[0] = 4
 
 
@@ -140,6 +139,7 @@ def printf_ptr_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_printf_ptr():
     """测试 pl.printf 的 %p 格式说明符，验证指针地址的打印功能。
 
@@ -185,6 +185,7 @@ def printf_for_loop_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_printf_for_loop():
     """测试 pl.printf 在 for 循环内的使用，验证 printf 在循环控制流中每轮迭代能正确打印格式字符串。
 
@@ -247,8 +248,6 @@ def printf_loc_combo_kernel(
         pl.printf("loc_combo: pre v_i32=%d v_fp=%f\n", v_i32, v_fp, loc=True)
         out[0] = v_i32
         pl.printf("loc_combo: post setval out[0]=%d\n", v_i32, loc=True)
-
-
 
 
 if __name__ == "__main__":

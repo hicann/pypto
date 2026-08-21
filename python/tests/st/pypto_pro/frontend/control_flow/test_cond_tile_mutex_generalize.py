@@ -26,6 +26,8 @@ from pypto_pro.language import Vf
 import pytest
 import torch
 
+import pypto
+
 vf = Vf
 
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -87,24 +89,24 @@ def k_two_vars(src: pl.Tensor[[ROWS, N], pl.DT_FP32], dst: pl.Tensor[[ROWS, N], 
     with pl.section_vector():
         out = og.next()
         for r in pl.range(0, ROWS):
-          a0 = g0.next()
-          a1 = g1.next()
-          b0 = g2.next()
-          b1 = g3.next()
-          la = a0
-          if r % 2 == 0:
-              la = a0
-          else:
-              la = a1
-          lb = b0
-          if r % 3 == 0:
-              lb = b0
-          else:
-              lb = b1
-          pl.load(la, src, [r, 0])
-          pl.load(lb, src, [r, 0])
-          vf_copy(la, out)
-          pl.store(dst, out, [r, 0])
+            a0 = g0.next()
+            a1 = g1.next()
+            b0 = g2.next()
+            b1 = g3.next()
+            la = a0
+            if r % 2 == 0:
+                la = a0
+            else:
+                la = a1
+            lb = b0
+            if r % 3 == 0:
+                lb = b0
+            else:
+                lb = b1
+            pl.load(la, src, [r, 0])
+            pl.load(lb, src, [r, 0])
+            vf_copy(la, out)
+            pl.store(dst, out, [r, 0])
 
 
 # ---------------------------------------------------------------------------
@@ -443,77 +445,93 @@ def _run(kernel, name):
             raise AssertionError(f"[{name}] run {run}: 数据错误\n" + "\n".join(details))
     logging.info("[%s] PASSED (%d runs)", name, runs)
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_two_ifelse():
     _run(k_two_ifelse, "two_ifelse")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_two_vars():
     _run(k_two_vars, "two_vars")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_elif():
     _run(k_elif, "elif")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_only():
     _run(k_if_only, "if_only")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_nested():
     _run(k_nested, "nested")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ifelse_then_ternary():
     _run(k_ifelse_then_ternary, "ifelse_then_ternary")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ternary():
     _run(k_ternary, "ternary")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ternary_db():
     _run(k_ternary_db, "ternary_db")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ternary_nested():
     _run(k_ternary_nested, "ternary_nested")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ternary_nested3():
     _run(k_ternary_nested3, "ternary_nested3")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ifelse():
     _run(k_ifelse, "ifelse")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ifelse_db():
     _run(k_ifelse_db, "ifelse_db")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ifelse_multi():
     _run(k_ifelse_multi, "ifelse_multi")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_next_current():
     _run(k_next_current, "next_current")
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ternary_next_current():
     _run(k_ternary_next_current, "ternary_next_current")
 
@@ -521,9 +539,20 @@ def test_ternary_next_current():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     for fn in (
-        test_two_ifelse, test_two_vars, test_elif, test_if_only, test_nested,
-        test_ifelse_then_ternary, test_ternary, test_ternary_db, test_ternary_nested,
-        test_ternary_nested3, test_ifelse, test_ifelse_db, test_ifelse_multi,
-        test_next_current, test_ternary_next_current,
+        test_two_ifelse,
+        test_two_vars,
+        test_elif,
+        test_if_only,
+        test_nested,
+        test_ifelse_then_ternary,
+        test_ternary,
+        test_ternary_db,
+        test_ternary_nested,
+        test_ternary_nested3,
+        test_ifelse,
+        test_ifelse_db,
+        test_ifelse_multi,
+        test_next_current,
+        test_ternary_next_current,
     ):
         fn()

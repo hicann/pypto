@@ -29,6 +29,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -61,27 +63,41 @@ def call_kernel_single_vec0(
     m_total: pl.DT_INT32,
 ):
     a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x00000, mutex_ids=[0])
+        type=pl.TileType(
+            shape=[TILE, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        type=pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat), addrs=0x20000, mutex_ids=[1]
+    )
     a_l0a = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[2])
+        type=pl.TileType(
+            shape=[TILE, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[TILE, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     vec_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x00000, mutex_ids=[5])
+        type=pl.TileType(
+            shape=[TILE, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x00000,
+        mutex_ids=[5],
+    )
 
     with pl.section_cube():
         cur_b = b_l1.current()
@@ -125,6 +141,7 @@ def _device():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_single_vec0_odd_tail(_device):
     m_total = 289
     a = _inputs(_device, [m_total, K])

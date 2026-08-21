@@ -14,15 +14,22 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 
 def advance_block_traversal(
-    block_count, batch_index, sequence_index,
-    start_position_tensor, sequence_used_tensor,
-    cumulative_lengths_tensor, compression_ratio_value,
-    batch_size_value, layout_value,
+    block_count,
+    batch_index,
+    sequence_index,
+    start_position_tensor,
+    sequence_used_tensor,
+    cumulative_lengths_tensor,
+    compression_ratio_value,
+    batch_size_value,
+    layout_value,
 ):
     skipped = 0
     while skipped < block_count:
@@ -30,10 +37,12 @@ def advance_block_traversal(
         if layout_value == 1:
             sequence_used_value = pl.getval(sequence_used_tensor, batch_index)
         else:
-            sequence_used_value = pl.getval(cumulative_lengths_tensor, batch_index + 1) - \
-                                  pl.getval(cumulative_lengths_tensor, batch_index)
-        compression_limit = (start_position_value + sequence_used_value) \
-            // compression_ratio_value * compression_ratio_value
+            sequence_used_value = pl.getval(cumulative_lengths_tensor, batch_index + 1) - pl.getval(
+                cumulative_lengths_tensor, batch_index
+            )
+        compression_limit = (
+            (start_position_value + sequence_used_value) // compression_ratio_value * compression_ratio_value
+        )
         blocks_in_this_batch = (compression_limit - start_position_value) // compression_ratio_value
         blocks_remaining_this_batch = blocks_in_this_batch - sequence_index
 
@@ -66,9 +75,15 @@ def advance_block_traversal_kernel(
     layout = 1
 
     result_batch, result_seq = advance_block_traversal(
-        block_count, batch_idx, seq_idx,
-        start_pos, seq_used, cum_lengths,
-        comp_ratio, batch_sz, layout,
+        block_count,
+        batch_idx,
+        seq_idx,
+        start_pos,
+        seq_used,
+        cum_lengths,
+        comp_ratio,
+        batch_sz,
+        layout,
     )
 
     tile_type = pl.TileType(shape=[8, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
@@ -81,6 +96,7 @@ def advance_block_traversal_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_advance_block_traversal():
     device = ST_DEVICE
     torch.npu.set_device(device)

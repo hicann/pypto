@@ -936,7 +936,7 @@ TEST_F(ProcessAtomicTest, TestGatherOnL1)
     G.AddTensor(outputAstDtype, {64, 64}, "mat_a_partial_3");
     auto mat_a_partial_3 = G.GetTensor("mat_a_partial_3");
     mat_a_partial_3->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
-    // Assemble on L1
+    // Contract on L1
     G.AddTensor(outputAstDtype, {128, 128}, "mat_a_L1");
     auto mat_a_L1 = G.GetTensor("mat_a_L1");
     mat_a_L1->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
@@ -980,22 +980,22 @@ TEST_F(ProcessAtomicTest, TestGatherOnL1)
                                                            OpImmediate::Specified(mat_a->tensor->GetRawShape()));
     L1copyInA_3->SetOpAttribute(attrCopyInA_3);
 
-    G.AddOp(Opcode::OP_ASSEMBLE, {"mat_a_partial_0"}, {"mat_a_L1"}, "assemble_A_0");
-    auto assemble_A_0 = G.GetOp("assemble_A_0");
-    auto attrAssemble_0 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{0, 0});
-    assemble_A_0->SetOpAttribute(attrAssemble_0);
-    G.AddOp(Opcode::OP_ASSEMBLE, {"mat_a_partial_1"}, {"mat_a_L1"}, "assemble_A_1");
-    auto assemble_A_1 = G.GetOp("assemble_A_1");
-    auto attrAssemble_1 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{0, 64});
-    assemble_A_1->SetOpAttribute(attrAssemble_1);
-    G.AddOp(Opcode::OP_ASSEMBLE, {"mat_a_partial_2"}, {"mat_a_L1"}, "assemble_A_2");
-    auto assemble_A_2 = G.GetOp("assemble_A_2");
-    auto attrAssemble_2 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{64, 0});
-    assemble_A_2->SetOpAttribute(attrAssemble_2);
-    G.AddOp(Opcode::OP_ASSEMBLE, {"mat_a_partial_3"}, {"mat_a_L1"}, "assemble_A_3");
-    auto assemble_A_3 = G.GetOp("assemble_A_3");
-    auto attrAssemble_3 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{64, 64});
-    assemble_A_3->SetOpAttribute(attrAssemble_3);
+    G.AddOp(Opcode::OP_CONTRACT, {"mat_a_partial_0"}, {"mat_a_L1"}, "contract_A_0");
+    auto contract_A_0 = G.GetOp("contract_A_0");
+    auto attrContract_0 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{0, 0});
+    contract_A_0->SetOpAttribute(attrContract_0);
+    G.AddOp(Opcode::OP_CONTRACT, {"mat_a_partial_1"}, {"mat_a_L1"}, "contract_A_1");
+    auto contract_A_1 = G.GetOp("contract_A_1");
+    auto attrContract_1 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{0, 64});
+    contract_A_1->SetOpAttribute(attrContract_1);
+    G.AddOp(Opcode::OP_CONTRACT, {"mat_a_partial_2"}, {"mat_a_L1"}, "contract_A_2");
+    auto contract_A_2 = G.GetOp("contract_A_2");
+    auto attrContract_2 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{64, 0});
+    contract_A_2->SetOpAttribute(attrContract_2);
+    G.AddOp(Opcode::OP_CONTRACT, {"mat_a_partial_3"}, {"mat_a_L1"}, "contract_A_3");
+    auto contract_A_3 = G.GetOp("contract_A_3");
+    auto attrContract_3 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{64, 64});
+    contract_A_3->SetOpAttribute(attrContract_3);
 
     G.AddOp(Opcode::OP_COPY_IN, {"mat_b"}, {"mat_b_L1"}, "L1_Copy_In_B");
     auto L1copyInB = G.GetOp("L1_Copy_In_B");
@@ -1044,18 +1044,18 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWBasic)
     auto inputDdr = G.GetTensor("inputDdr");
     inputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    G.AddTensor(dtype, {64, 128}, "assembleInput");
-    auto assembleInput = G.GetTensor("assembleInput");
-    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.AddTensor(dtype, {64, 128}, "contractInput");
+    auto contractInput = G.GetTensor("contractInput");
+    contractInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     G.AddTensor(dtype, {128, 128}, "outputDdr");
     auto outputDdr = G.GetTensor("outputDdr");
     outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
-    auto assembleOp = G.GetOp("assembleOp");
-    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
-    assembleOp->SetOpAttribute(assembleAttr);
+    G.AddOp(Opcode::OP_CONTRACT, {"contractInput"}, {"inputDdr"}, "contractOp");
+    auto contractOp = G.GetOp("contractOp");
+    auto contractAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    contractOp->SetOpAttribute(contractAttr);
 
     G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwOp");
     auto atomicRmwOp = G.GetOp("atomicRmwOp");
@@ -1063,7 +1063,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWBasic)
     atomicRmwOp->SetOpAttribute(atomicRmwAttr);
     atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::ADD);
 
-    G.SetInCast({"assembleInput"});
+    G.SetInCast({"contractInput"});
     G.SetOutCast({"outputDdr"});
 
     Function* function = G.GetFunction();
@@ -1088,9 +1088,9 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWBasic)
     }
     EXPECT_EQ(atomicRmwCount, 0);
 
-    auto updatedAssembleOp = G.GetOp("assembleOp");
-    EXPECT_NE(updatedAssembleOp, nullptr);
-    EXPECT_EQ(updatedAssembleOp->HasAttr(RMW_MODE_ATTR_ADD), true);
+    auto updatedContractOp = G.GetOp("contractOp");
+    EXPECT_NE(updatedContractOp, nullptr);
+    EXPECT_EQ(updatedContractOp->HasAttr(RMW_MODE_ATTR_ADD), true);
 }
 
 TEST_F(ProcessAtomicTest, TestAtomicRMWMaxModeUnsupported)
@@ -1102,18 +1102,18 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWMaxModeUnsupported)
     auto inputDdr = G.GetTensor("inputDdr");
     inputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    G.AddTensor(dtype, {64, 128}, "assembleInput");
-    auto assembleInput = G.GetTensor("assembleInput");
-    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.AddTensor(dtype, {64, 128}, "contractInput");
+    auto contractInput = G.GetTensor("contractInput");
+    contractInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     G.AddTensor(dtype, {128, 128}, "outputDdr");
     auto outputDdr = G.GetTensor("outputDdr");
     outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
-    auto assembleOp = G.GetOp("assembleOp");
-    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
-    assembleOp->SetOpAttribute(assembleAttr);
+    G.AddOp(Opcode::OP_CONTRACT, {"contractInput"}, {"inputDdr"}, "contractOp");
+    auto contractOp = G.GetOp("contractOp");
+    auto contractAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    contractOp->SetOpAttribute(contractAttr);
 
     G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwOp");
     auto atomicRmwOp = G.GetOp("atomicRmwOp");
@@ -1121,7 +1121,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWMaxModeUnsupported)
     atomicRmwOp->SetOpAttribute(atomicRmwAttr);
     atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::MAX);
 
-    G.SetInCast({"assembleInput"});
+    G.SetInCast({"contractInput"});
     G.SetOutCast({"outputDdr"});
 
     Function* function = G.GetFunction();
@@ -1143,18 +1143,18 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWMinModeUnsupported)
     auto inputDdr = G.GetTensor("inputDdr");
     inputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    G.AddTensor(dtype, {64, 128}, "assembleInput");
-    auto assembleInput = G.GetTensor("assembleInput");
-    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.AddTensor(dtype, {64, 128}, "contractInput");
+    auto contractInput = G.GetTensor("contractInput");
+    contractInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     G.AddTensor(dtype, {128, 128}, "outputDdr");
     auto outputDdr = G.GetTensor("outputDdr");
     outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
-    auto assembleOp = G.GetOp("assembleOp");
-    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
-    assembleOp->SetOpAttribute(assembleAttr);
+    G.AddOp(Opcode::OP_CONTRACT, {"contractInput"}, {"inputDdr"}, "contractOp");
+    auto contractOp = G.GetOp("contractOp");
+    auto contractAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    contractOp->SetOpAttribute(contractAttr);
 
     G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwOp");
     auto atomicRmwOp = G.GetOp("atomicRmwOp");
@@ -1162,7 +1162,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWMinModeUnsupported)
     atomicRmwOp->SetOpAttribute(atomicRmwAttr);
     atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::MIN);
 
-    G.SetInCast({"assembleInput"});
+    G.SetInCast({"contractInput"});
     G.SetOutCast({"outputDdr"});
 
     Function* function = G.GetFunction();
@@ -1252,9 +1252,9 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWWithReduceAcc)
     auto matCAfterReduce = G.GetTensor("matCAfterReduce");
     matCAfterReduce->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    G.AddTensor(dtype, {64, 128}, "assembleInput");
-    auto assembleInput = G.GetTensor("assembleInput");
-    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.AddTensor(dtype, {64, 128}, "contractInput");
+    auto contractInput = G.GetTensor("contractInput");
+    contractInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     G.AddTensor(dtype, {128, 128}, "atomicOutput");
     auto atomicOutput = G.GetTensor("atomicOutput");
@@ -1262,10 +1262,10 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWWithReduceAcc)
 
     G.AddOp(Opcode::OP_REDUCE_ACC, {"matCBeforeReduce0", "matCBeforeReduce1"}, {"matCAfterReduce"}, "ReduceAcc");
 
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"matCAfterReduce"}, "assembleOp");
-    auto assembleOp = G.GetOp("assembleOp");
-    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
-    assembleOp->SetOpAttribute(assembleAttr);
+    G.AddOp(Opcode::OP_CONTRACT, {"contractInput"}, {"matCAfterReduce"}, "contractOp");
+    auto contractOp = G.GetOp("contractOp");
+    auto contractAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    contractOp->SetOpAttribute(contractAttr);
 
     G.AddOp(Opcode::OP_ATOMIC_RMW, {"matCAfterReduce"}, {"atomicOutput"}, "atomicRmwOp");
     auto atomicRmwOp = G.GetOp("atomicRmwOp");
@@ -1273,7 +1273,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWWithReduceAcc)
     atomicRmwOp->SetOpAttribute(atomicRmwAttr);
     atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::ADD);
 
-    G.SetInCast({"matCBeforeReduce0", "matCBeforeReduce1", "assembleInput"});
+    G.SetInCast({"matCBeforeReduce0", "matCBeforeReduce1", "contractInput"});
     G.SetOutCast({"atomicOutput"});
 
     Function* function = G.GetFunction();
@@ -1304,9 +1304,9 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWModeConflict)
     ComputationalGraphBuilder G;
     DataType dtype = DataType::DT_FP16;
 
-    G.AddTensor(dtype, {64, 128}, "assembleInput");
-    auto assembleInput = G.GetTensor("assembleInput");
-    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.AddTensor(dtype, {64, 128}, "contractInput");
+    auto contractInput = G.GetTensor("contractInput");
+    contractInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     G.AddTensor(dtype, {64, 128}, "inputDdr");
     auto inputDdr = G.GetTensor("inputDdr");
@@ -1316,11 +1316,11 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWModeConflict)
     auto outputDdr = G.GetTensor("outputDdr");
     outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
-    auto assembleOp = G.GetOp("assembleOp");
-    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
-    assembleOp->SetOpAttribute(assembleAttr);
-    assembleOp->SetAttribute(RMW_MODE_ATTR_ADD, 1);
+    G.AddOp(Opcode::OP_CONTRACT, {"contractInput"}, {"inputDdr"}, "contractOp");
+    auto contractOp = G.GetOp("contractOp");
+    auto contractAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    contractOp->SetOpAttribute(contractAttr);
+    contractOp->SetAttribute(RMW_MODE_ATTR_ADD, 1);
 
     G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwMax");
     auto atomicRmwMaxOp = G.GetOp("atomicRmwMax");
@@ -1328,7 +1328,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWModeConflict)
     atomicRmwMaxOp->SetOpAttribute(atomicRmwMaxAttr);
     atomicRmwMaxOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::MAX);
 
-    G.SetInCast({"assembleInput"});
+    G.SetInCast({"contractInput"});
     G.SetOutCast({"outputDdr"});
 
     Function* function = G.GetFunction();
@@ -1344,9 +1344,9 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWSameModeNoConflict)
     ComputationalGraphBuilder G;
     DataType dtype = DataType::DT_FP16;
 
-    G.AddTensor(dtype, {64, 128}, "assembleInput");
-    auto assembleInput = G.GetTensor("assembleInput");
-    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.AddTensor(dtype, {64, 128}, "contractInput");
+    auto contractInput = G.GetTensor("contractInput");
+    contractInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     G.AddTensor(dtype, {64, 128}, "inputDdr");
     auto inputDdr = G.GetTensor("inputDdr");
@@ -1356,11 +1356,11 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWSameModeNoConflict)
     auto outputDdr = G.GetTensor("outputDdr");
     outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
-    auto assembleOp = G.GetOp("assembleOp");
-    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
-    assembleOp->SetOpAttribute(assembleAttr);
-    assembleOp->SetAttribute(RMW_MODE_ATTR_ADD, 1);
+    G.AddOp(Opcode::OP_CONTRACT, {"contractInput"}, {"inputDdr"}, "contractOp");
+    auto contractOp = G.GetOp("contractOp");
+    auto contractAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    contractOp->SetOpAttribute(contractAttr);
+    contractOp->SetAttribute(RMW_MODE_ATTR_ADD, 1);
 
     G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwAdd");
     auto atomicRmwAddOp = G.GetOp("atomicRmwAdd");
@@ -1368,7 +1368,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWSameModeNoConflict)
     atomicRmwAddOp->SetOpAttribute(atomicRmwAddAttr);
     atomicRmwAddOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::ADD);
 
-    G.SetInCast({"assembleInput"});
+    G.SetInCast({"contractInput"});
     G.SetOutCast({"outputDdr"});
 
     Function* function = G.GetFunction();
@@ -1389,27 +1389,27 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWSameModeNoConflict)
     }
     EXPECT_EQ(atomicRmwCount, 0);
 
-    auto updatedAssembleOp = G.GetOp("assembleOp");
-    EXPECT_NE(updatedAssembleOp, nullptr);
-    EXPECT_EQ(updatedAssembleOp->HasAttr(RMW_MODE_ATTR_ADD), true);
+    auto updatedContractOp = G.GetOp("contractOp");
+    EXPECT_NE(updatedContractOp, nullptr);
+    EXPECT_EQ(updatedContractOp->HasAttr(RMW_MODE_ATTR_ADD), true);
 }
 
-TEST_F(ProcessAtomicTest, TestAtomicRMWSharedInputCloneAssembleProducer)
+TEST_F(ProcessAtomicTest, TestAtomicRMWSharedInputCloneContractProducer)
 {
     ComputationalGraphBuilder G;
     DataType dtype = DataType::DT_FP16;
 
-    auto assembleInput = AddDdrTensor(G, dtype, {64, 128}, "assembleInput");
+    auto contractInput = AddDdrTensor(G, dtype, {64, 128}, "contractInput");
     auto inputDdr = AddDdrTensor(G, dtype, {64, 128}, "inputDdr");
     auto viewOut = AddDdrTensor(G, dtype, {64, 128}, "viewOut");
     auto outputDdr = AddDdrTensor(G, dtype, {128, 128}, "outputDdr");
 
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
-    auto assembleOp = G.GetOp("assembleOp");
-    assembleOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    assembleOp->SetScopeId(7);
+    G.AddOp(Opcode::OP_CONTRACT, {"contractInput"}, {"inputDdr"}, "contractOp");
+    auto contractOp = G.GetOp("contractOp");
+    contractOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    contractOp->SetScopeId(7);
     const std::string copyAttr = OP_ATTR_PREFIX + "copy_test_attr";
-    assembleOp->SetAttribute(copyAttr, 123L);
+    contractOp->SetAttribute(copyAttr, 123L);
 
     G.AddOp(Opcode::OP_VIEW, {"inputDdr"}, {"viewOut"}, "viewOp");
     G.GetOp("viewOp")->SetOpAttribute(std::make_shared<ViewOpAttribute>(
@@ -1420,7 +1420,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWSharedInputCloneAssembleProducer)
     atomicRmwOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0}));
     atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
 
-    G.SetInCast({"assembleInput"});
+    G.SetInCast({"contractInput"});
     G.SetOutCast({"outputDdr", "viewOut"});
 
     ProcessAtomic passLocal;
@@ -1431,23 +1431,23 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWSharedInputCloneAssembleProducer)
     EXPECT_EQ(passLocal.EliminateReduceAcc(*G.GetFunction()), SUCCESS);
     EXPECT_EQ(passLocal.EliminateAtomicRMW(*G.GetFunction()), SUCCESS);
 
-    Operation* atomicAssemble = nullptr;
-    Operation* viewAssemble = nullptr;
+    Operation* atomicContract = nullptr;
+    Operation* viewContract = nullptr;
     for (auto& op : G.GetFunction()->Operations()) {
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+        if (op.GetOpcode() == Opcode::OP_CONTRACT) {
             if (op.GetOutputOperand(0) == outputDdr)
-                atomicAssemble = &op;
+                atomicContract = &op;
             if (op.GetOutputOperand(0) == inputDdr)
-                viewAssemble = &op;
+                viewContract = &op;
         }
     }
 
-    ASSERT_NE(atomicAssemble, nullptr);
-    ASSERT_NE(viewAssemble, nullptr);
-    EXPECT_TRUE(atomicAssemble->HasAttr(RMW_MODE_ATTR_ADD));
-    EXPECT_FALSE(viewAssemble->HasAttr(RMW_MODE_ATTR_ADD));
-    EXPECT_EQ(atomicAssemble->GetScopeId(), 7);
-    EXPECT_TRUE(atomicAssemble->HasAttr(copyAttr));
+    ASSERT_NE(atomicContract, nullptr);
+    ASSERT_NE(viewContract, nullptr);
+    EXPECT_TRUE(atomicContract->HasAttr(RMW_MODE_ATTR_ADD));
+    EXPECT_FALSE(viewContract->HasAttr(RMW_MODE_ATTR_ADD));
+    EXPECT_EQ(atomicContract->GetScopeId(), 7);
+    EXPECT_TRUE(atomicContract->HasAttr(copyAttr));
     EXPECT_EQ(G.GetOp("viewOp")->GetInputOperand(0), inputDdr);
 }
 
@@ -1460,20 +1460,20 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWReduceAccChainVecDupBranchRemove)
     auto matb3 = AddDdrTensor(G, dtype, {128, 128}, "matb3");
     AddDdrTensor(G, dtype, {1}, "vecdupIn");
     AddDdrTensor(G, dtype, {64, 128}, "vecdupOut");
-    AddDdrTensor(G, dtype, {64, 128}, "assembleOut1");
+    AddDdrTensor(G, dtype, {64, 128}, "contractOut1");
     AddDdrTensor(G, dtype, {64, 128}, "mulbOut");
     AddDdrTensor(G, dtype, {64, 128}, "mulaccOut");
-    AddDdrTensor(G, dtype, {64, 128}, "assembleOut2");
+    AddDdrTensor(G, dtype, {64, 128}, "contractOut2");
     AddDdrTensor(G, dtype, {64, 128}, "reduceOut");
     AddDdrTensor(G, dtype, {64, 128}, "atomicOut");
     G.AddOp(Opcode::OP_VEC_DUP, {"vecdupIn"}, {"vecdupOut"}, "vecdupOp");
-    G.AddOp(Opcode::OP_ASSEMBLE, {"vecdupOut"}, {"assembleOut1"}, "assembleOp1");
-    G.GetOp("assembleOp1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    G.AddOp(Opcode::OP_A_MUL_B, {"assembleOut1", "matb1", "matb2"}, {"mulbOut"}, "mulbOp");
+    G.AddOp(Opcode::OP_CONTRACT, {"vecdupOut"}, {"contractOut1"}, "contractOp1");
+    G.GetOp("contractOp1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_A_MUL_B, {"contractOut1", "matb1", "matb2"}, {"mulbOut"}, "mulbOp");
     G.AddOp(Opcode::OP_A_MULACC_B, {"mulbOut", "matb3"}, {"mulaccOut"}, "mulaccOp");
-    G.AddOp(Opcode::OP_ASSEMBLE, {"mulaccOut"}, {"assembleOut2"}, "assembleOp2");
-    G.GetOp("assembleOp2")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    G.AddOp(Opcode::OP_REDUCE_ACC, {"assembleOut2"}, {"reduceOut"}, "reduceOp");
+    G.AddOp(Opcode::OP_CONTRACT, {"mulaccOut"}, {"contractOut2"}, "contractOp2");
+    G.GetOp("contractOp2")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_REDUCE_ACC, {"contractOut2"}, {"reduceOut"}, "reduceOp");
     G.AddOp(Opcode::OP_ATOMIC_RMW, {"reduceOut"}, {"atomicOut"}, "atomicrmwOp");
     G.GetOp("atomicrmwOp")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0}));
     G.GetOp("atomicrmwOp")->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
@@ -1494,9 +1494,9 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWReduceAccChainVecDupBranchRemove)
     EXPECT_EQ(CountOpsByType(function, Opcode::OP_ATOMIC_RMW), 0);
     EXPECT_EQ(CountOpsByType(function, Opcode::OP_REDUCE_ACC), 0);
     EXPECT_EQ(CountOpsByType(function, Opcode::OP_VEC_DUP), 0);
-    auto assembleOp2 = G.GetOp("assembleOp2");
-    ASSERT_NE(assembleOp2, nullptr);
-    EXPECT_TRUE(assembleOp2->HasAttr(RMW_MODE_ATTR_ADD));
+    auto contractOp2 = G.GetOp("contractOp2");
+    ASSERT_NE(contractOp2, nullptr);
+    EXPECT_TRUE(contractOp2->HasAttr(RMW_MODE_ATTR_ADD));
 }
 
 TEST_F(ProcessAtomicTest, TestAtomicRMWNoReduceAccVecDupBranchKeep)
@@ -1507,17 +1507,17 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWNoReduceAccVecDupBranchKeep)
     auto matb2 = AddDdrTensor(G, dtype, {128, 128}, "matb2");
     AddDdrTensor(G, dtype, {1}, "vecdupIn");
     AddDdrTensor(G, dtype, {64, 128}, "vecdupOut");
-    AddDdrTensor(G, dtype, {64, 128}, "assembleOut1");
+    AddDdrTensor(G, dtype, {64, 128}, "contractOut1");
     AddDdrTensor(G, dtype, {64, 128}, "mulbOut");
-    AddDdrTensor(G, dtype, {64, 128}, "assembleOut2");
+    AddDdrTensor(G, dtype, {64, 128}, "contractOut2");
     AddDdrTensor(G, dtype, {64, 128}, "atomicOut");
     G.AddOp(Opcode::OP_VEC_DUP, {"vecdupIn"}, {"vecdupOut"}, "vecdupOp");
-    G.AddOp(Opcode::OP_ASSEMBLE, {"vecdupOut"}, {"assembleOut1"}, "assembleOp1");
-    G.GetOp("assembleOp1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    G.AddOp(Opcode::OP_A_MUL_B, {"assembleOut1", "matb1", "matb2"}, {"mulbOut"}, "mulbOp");
-    G.AddOp(Opcode::OP_ASSEMBLE, {"mulbOut"}, {"assembleOut2"}, "assembleOp2");
-    G.GetOp("assembleOp2")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    G.AddOp(Opcode::OP_ATOMIC_RMW, {"assembleOut2"}, {"atomicOut"}, "atomicrmwOp");
+    G.AddOp(Opcode::OP_CONTRACT, {"vecdupOut"}, {"contractOut1"}, "contractOp1");
+    G.GetOp("contractOp1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_A_MUL_B, {"contractOut1", "matb1", "matb2"}, {"mulbOut"}, "mulbOp");
+    G.AddOp(Opcode::OP_CONTRACT, {"mulbOut"}, {"contractOut2"}, "contractOp2");
+    G.GetOp("contractOp2")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"contractOut2"}, {"atomicOut"}, "atomicrmwOp");
     G.GetOp("atomicrmwOp")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0}));
     G.GetOp("atomicrmwOp")->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
     G.SetInCast({"vecdupIn", "matb1", "matb2"});
@@ -1552,7 +1552,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWThroughReshape)
     reshapeMid->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     atomicOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"reshapeInput"}, "assembleOp");
+    G.AddOp(Opcode::OP_CONTRACT, {"assembleInput"}, {"reshapeInput"}, "assembleOp");
     G.GetOp("assembleOp")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
     G.AddOp(Opcode::OP_RESHAPE, {"reshapeInput"}, {"reshapeMid"}, "reshapeOp");
     G.AddOp(Opcode::OP_ATOMIC_RMW, {"reshapeMid"}, {"atomicOutput"}, "atomicRmwOp");
@@ -1579,7 +1579,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWThroughReshape)
     EXPECT_EQ(assembleOp->GetOutputOperand(0)->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
     EXPECT_EQ(assembleOp->GetOutputOperand(0)->GetMemoryTypeToBe(), MemoryType::MEM_DEVICE_DDR);
     EXPECT_EQ(G.GetOp("reshapeOp")->GetOutputOperand(0), atomicOutput);
-    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ASSEMBLE), 1);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_CONTRACT), 1);
 }
 
 TEST_F(ProcessAtomicTest, TestAtomicRMWThroughReshapeWithAssembleFanin)
@@ -1595,9 +1595,9 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWThroughReshapeWithAssembleFanin)
         G.GetTensor(name)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     }
 
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput0"}, {"reshapeInput"}, "assembleOp0");
+    G.AddOp(Opcode::OP_CONTRACT, {"assembleInput0"}, {"reshapeInput"}, "assembleOp0");
     G.GetOp("assembleOp0")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput1"}, {"reshapeInput"}, "assembleOp1");
+    G.AddOp(Opcode::OP_CONTRACT, {"assembleInput1"}, {"reshapeInput"}, "assembleOp1");
     G.GetOp("assembleOp1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 16}));
     G.AddOp(Opcode::OP_RESHAPE, {"reshapeInput"}, {"reshapeOutput"}, "reshapeOp");
     G.AddOp(Opcode::OP_ATOMIC_RMW, {"reshapeOutput"}, {"atomicOutput"}, "atomicRmwOp");
@@ -1612,7 +1612,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWThroughReshapeWithAssembleFanin)
     ProcessAtomic passLocal;
     EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
     EXPECT_EQ(CountOpsByType(function, Opcode::OP_ATOMIC_RMW), 0);
-    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ASSEMBLE), 2);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_CONTRACT), 2);
 
     auto* assembleOp0 = G.GetOp("assembleOp0");
     auto* assembleOp1 = G.GetOp("assembleOp1");
@@ -1646,7 +1646,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWThroughMultiDimReshape)
     }
     auto atomicOutput = G.GetTensor("atomicOutput");
 
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"reshapeInput"}, "assembleOp");
+    G.AddOp(Opcode::OP_CONTRACT, {"assembleInput"}, {"reshapeInput"}, "assembleOp");
     G.GetOp("assembleOp")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
     G.AddOp(Opcode::OP_RESHAPE, {"reshapeInput"}, {"reshapeMid"}, "reshapeOp0");
     G.AddOp(Opcode::OP_RESHAPE, {"reshapeMid"}, {"atomicInput"}, "reshapeOp1");
@@ -1676,7 +1676,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWThroughMultiDimReshape)
     EXPECT_EQ(G.GetOp("reshapeOp0")->GetOutputOperand(0)->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
     EXPECT_EQ(G.GetOp("reshapeOp0")->GetOutputOperand(0)->GetMemoryTypeToBe(), MemoryType::MEM_DEVICE_DDR);
     EXPECT_EQ(G.GetOp("reshapeOp1")->GetOutputOperand(0), atomicOutput);
-    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ASSEMBLE), 1);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_CONTRACT), 1);
 }
 
 TEST_F(ProcessAtomicTest, TestAtomicRMWWithReshapeBeforeAssemble)
@@ -1695,10 +1695,10 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWWithReshapeBeforeAssemble)
     }
 
     G.AddOp(Opcode::OP_A_MUL_B, {"matA", "matB"}, {"matmulOutput"}, "matmulOp");
-    G.AddOp(Opcode::OP_ASSEMBLE, {"matmulOutput"}, {"transported"}, "transportAssemble");
+    G.AddOp(Opcode::OP_CONTRACT, {"matmulOutput"}, {"transported"}, "transportAssemble");
     G.GetOp("transportAssemble")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
     G.AddOp(Opcode::OP_RESHAPE, {"transported"}, {"reshaped"}, "reshapeOp");
-    G.AddOp(Opcode::OP_ASSEMBLE, {"reshaped"}, {"assembled"}, "wrapperAssemble");
+    G.AddOp(Opcode::OP_CONTRACT, {"reshaped"}, {"assembled"}, "wrapperAssemble");
     G.GetOp("wrapperAssemble")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0, 0}));
     G.AddOp(Opcode::OP_ATOMIC_RMW, {"assembled"}, {"atomicOutput"}, "atomicRmwOp");
     auto atomicRmwOp = G.GetOp("atomicRmwOp");
@@ -1720,7 +1720,163 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWWithReshapeBeforeAssemble)
     EXPECT_TRUE(transportAssemble->HasAttr(RMW_MODE_ATTR_ADD));
     EXPECT_NE(transportAssemble->GetOutputOperand(0)->GetRawTensor(), atomicOutput->GetRawTensor());
     EXPECT_EQ(G.GetOp("reshapeOp")->GetOutputOperand(0), atomicOutput);
-    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ASSEMBLE), 1);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_CONTRACT), 1);
 }
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWWithContract)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    G.AddTensor(dtype, {64, 128}, "inputDdr");
+    auto inputDdr = G.GetTensor("inputDdr");
+    inputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {64, 128}, "contractInput");
+    auto contractInput = G.GetTensor("contractInput");
+    contractInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {128, 128}, "outputDdr");
+    auto outputDdr = G.GetTensor("outputDdr");
+    outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddOp(Opcode::OP_CONTRACT, {"contractInput"}, {"inputDdr"}, "contractOp");
+    auto contractOp = G.GetOp("contractOp");
+    auto contractAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    contractOp->SetOpAttribute(contractAttr);
+
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    auto atomicRmwAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0});
+    atomicRmwOp->SetOpAttribute(atomicRmwAttr);
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::ADD);
+
+    G.SetInCast({"contractInput"});
+    G.SetOutCast({"outputDdr"});
+
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    ProcessAtomic passLocal;
+    bool hasReduceAccCascade = false;
+    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function, hasReduceAccCascade), SUCCESS);
+    EXPECT_FALSE(hasReduceAccCascade);
+    EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
+    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
+
+    int atomicRmwCount = 0;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+            atomicRmwCount++;
+        }
+    }
+    EXPECT_EQ(atomicRmwCount, 0);
+
+    auto updatedContractOp = G.GetOp("contractOp");
+    EXPECT_NE(updatedContractOp, nullptr);
+    EXPECT_EQ(updatedContractOp->HasAttr(RMW_MODE_ATTR_ADD), true);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWContractVecDupBranchRemove)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+    auto matb1 = AddDdrTensor(G, dtype, {128, 128}, "matb1");
+    auto matb2 = AddDdrTensor(G, dtype, {128, 128}, "matb2");
+    auto matb3 = AddDdrTensor(G, dtype, {128, 128}, "matb3");
+    AddDdrTensor(G, dtype, {1}, "vecdupIn");
+    AddDdrTensor(G, dtype, {64, 128}, "vecdupOut");
+    AddDdrTensor(G, dtype, {64, 128}, "contractOut1");
+    AddDdrTensor(G, dtype, {64, 128}, "mulbOut");
+    AddDdrTensor(G, dtype, {64, 128}, "mulaccOut");
+    AddDdrTensor(G, dtype, {64, 128}, "contractOut2");
+    AddDdrTensor(G, dtype, {64, 128}, "reduceOut");
+    AddDdrTensor(G, dtype, {64, 128}, "atomicOut");
+    G.AddOp(Opcode::OP_VEC_DUP, {"vecdupIn"}, {"vecdupOut"}, "vecdupOp");
+    G.AddOp(Opcode::OP_CONTRACT, {"vecdupOut"}, {"contractOut1"}, "contractOp1");
+    G.GetOp("contractOp1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_A_MUL_B, {"contractOut1", "matb1", "matb2"}, {"mulbOut"}, "mulbOp");
+    G.AddOp(Opcode::OP_A_MULACC_B, {"mulbOut", "matb3"}, {"mulaccOut"}, "mulaccOp");
+    G.AddOp(Opcode::OP_CONTRACT, {"mulaccOut"}, {"contractOut2"}, "contractOp2");
+    G.GetOp("contractOp2")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_REDUCE_ACC, {"contractOut2"}, {"reduceOut"}, "reduceOp");
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"reduceOut"}, {"atomicOut"}, "atomicrmwOp");
+    G.GetOp("atomicrmwOp")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0}));
+    G.GetOp("atomicrmwOp")->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
+    G.SetInCast({"vecdupIn", "matb1", "matb2", "matb3"});
+    G.SetOutCast({"atomicOut"});
+    ProcessAtomic passLocal;
+    auto* function = G.GetFunction();
+    bool hasReduceAccCascade = false;
+    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function, hasReduceAccCascade), SUCCESS);
+    EXPECT_TRUE(hasReduceAccCascade);
+    EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
+    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
+    auto mulbOp = G.GetOp("mulbOp");
+    ASSERT_NE(mulbOp, nullptr);
+    EXPECT_EQ(mulbOp->GetInputOperandSize(), 2);
+    EXPECT_EQ(mulbOp->GetInputOperand(0), matb1);
+    EXPECT_EQ(mulbOp->GetInputOperand(1), matb2);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ATOMIC_RMW), 0);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_REDUCE_ACC), 0);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_VEC_DUP), 0);
+    auto contractOp2 = G.GetOp("contractOp2");
+    ASSERT_NE(contractOp2, nullptr);
+    EXPECT_TRUE(contractOp2->HasAttr(RMW_MODE_ATTR_ADD));
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWContractSharedInputCloneProducer)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    auto contractInput = AddDdrTensor(G, dtype, {64, 128}, "contractInput");
+    auto inputDdr = AddDdrTensor(G, dtype, {64, 128}, "inputDdr");
+    auto viewOut = AddDdrTensor(G, dtype, {64, 128}, "viewOut");
+    auto outputDdr = AddDdrTensor(G, dtype, {128, 128}, "outputDdr");
+
+    G.AddOp(Opcode::OP_CONTRACT, {"contractInput"}, {"inputDdr"}, "contractOp");
+    auto contractOp = G.GetOp("contractOp");
+    contractOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    contractOp->SetScopeId(7);
+
+    G.AddOp(Opcode::OP_VIEW, {"inputDdr"}, {"viewOut"}, "viewOp");
+    G.GetOp("viewOp")->SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{0, 0}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{}));
+
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    atomicRmwOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0}));
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
+
+    G.SetInCast({"contractInput"});
+    G.SetOutCast({"outputDdr", "viewOut"});
+
+    ProcessAtomic passLocal;
+    bool hasReduceAccCascade = false;
+    EXPECT_EQ(passLocal.EliminateVecDupBranch(*G.GetFunction(), hasReduceAccCascade), SUCCESS);
+    EXPECT_FALSE(hasReduceAccCascade);
+    EXPECT_EQ(passLocal.EliminateReduceAcc(*G.GetFunction()), SUCCESS);
+    EXPECT_EQ(passLocal.EliminateAtomicRMW(*G.GetFunction()), SUCCESS);
+
+    Operation* atomicContract = nullptr;
+    Operation* viewContract = nullptr;
+    for (auto& op : G.GetFunction()->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_CONTRACT) {
+            if (op.GetOutputOperand(0) == outputDdr)
+                atomicContract = &op;
+            if (op.GetOutputOperand(0) == inputDdr)
+                viewContract = &op;
+        }
+    }
+
+    ASSERT_NE(atomicContract, nullptr);
+    ASSERT_NE(viewContract, nullptr);
+    EXPECT_TRUE(atomicContract->HasAttr(RMW_MODE_ATTR_ADD));
+    EXPECT_FALSE(viewContract->HasAttr(RMW_MODE_ATTR_ADD));
+    EXPECT_EQ(atomicContract->GetScopeId(), 7);
+    EXPECT_EQ(G.GetOp("viewOp")->GetInputOperand(0), inputDdr);
+}
+
 } // namespace tile_fwk
 } // namespace npu

@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -258,6 +260,7 @@ class TestArrayTypeSingle:
     """Simple cases: single Array type in tiling class."""
 
     @pytest.mark.soc("950")
+    @pypto.options(pass_options={"enable_slice": False})
     def test_int_only(self):
         device = ST_DEVICE
         torch.npu.set_device(device)
@@ -275,6 +278,7 @@ class TestArrayTypeSingle:
         torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
 
     @pytest.mark.soc("950")
+    @pypto.options(pass_options={"enable_slice": False})
     def test_float_only(self):
         device = ST_DEVICE
         torch.npu.set_device(device)
@@ -292,6 +296,7 @@ class TestArrayTypeSingle:
         torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
 
     @pytest.mark.soc("950")
+    @pypto.options(pass_options={"enable_slice": False})
     def test_bool_only(self):
         device = ST_DEVICE
         torch.npu.set_device(device)
@@ -313,6 +318,7 @@ class TestArrayTypeMixed:
     """Complex cases: mixed Array types in one tiling class."""
 
     @pytest.mark.soc("950")
+    @pypto.options(pass_options={"enable_slice": False})
     def test_int_and_float(self):
         device = ST_DEVICE
         torch.npu.set_device(device)
@@ -331,6 +337,7 @@ class TestArrayTypeMixed:
         torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
 
     @pytest.mark.soc("950")
+    @pypto.options(pass_options={"enable_slice": False})
     def test_int_and_bool(self):
         device = ST_DEVICE
         torch.npu.set_device(device)
@@ -349,6 +356,7 @@ class TestArrayTypeMixed:
         torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
 
     @pytest.mark.soc("950")
+    @pypto.options(pass_options={"enable_slice": False})
     def test_all_three_types(self):
         device = ST_DEVICE
         torch.npu.set_device(device)

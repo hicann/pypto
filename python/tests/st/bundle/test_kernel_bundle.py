@@ -42,6 +42,7 @@ bundle may only be LAUNCHED at the shape it was packed with -- launching another
 wrong results or trips an AICPU fault. The multi-shape assertion therefore covers PyptoWorkspace only
 (pure host, no dispatch), and the launch stays on the packed shape. Lift this once the cache goes dynamic.
 """
+
 import importlib.util
 import os
 import shutil
@@ -52,6 +53,7 @@ import tempfile
 import pytest
 
 from conftest import duration_estimate
+import pypto
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -98,7 +100,9 @@ def _run_worker(phase: str, case: str, bundle_path: str, *args, extra_env=None, 
 
 def _pack(case: str, bundle_path: str) -> str:
     return _run_worker(
-        "pack", case, bundle_path,
+        "pack",
+        case,
+        bundle_path,
         extra_env={
             "PYPTO_ENABLE_KERNEL_BUNDLE": "1",
             "PYPTO_KERNEL_BUNDLE_PATH": bundle_path,
@@ -134,6 +138,7 @@ def _bundle_path():
 
 
 @duration_estimate(40)
+@pypto.options(pass_options={"enable_slice": True})
 def test_bundle_static_add(bundle_path):
     """Non-value-dependent, static, zero-workspace op: the baseline pack -> load -> launch round trip.
 
@@ -156,6 +161,7 @@ def test_bundle_static_add(bundle_path):
 
 
 @duration_estimate(30)
+@pypto.options(pass_options={"enable_slice": True})
 def test_bundle_dynamic_cellmatch(bundle_path):
     """Dynamically shaped op: workspace is evaluated from the launch shapes, not read off a baked constant.
 
@@ -182,6 +188,7 @@ def test_bundle_dynamic_cellmatch(bundle_path):
 
 
 @duration_estimate(34)
+@pypto.options(pass_options={"enable_slice": True})
 def test_bundle_value_depend_page_attention(bundle_path):
     """Value-dependent control flow: loop bounds come from tensor VALUES, so there is no cache to bake.
 
@@ -206,6 +213,7 @@ def test_bundle_value_depend_page_attention(bundle_path):
 
 
 @duration_estimate(28)
+@pypto.options(pass_options={"enable_slice": True})
 def test_bundle_standalone_delivery(bundle_path, tmp_path):
     """The self-contained delivery form: ONE .so + ONE .pyptokb + configs/, with no pypto install in reach.
 
@@ -241,14 +249,11 @@ def test_bundle_standalone_delivery(bundle_path, tmp_path):
 
     # Runs the smoke script, which must not import pypto -- hence a plain subprocess rather than the worker.
     cmd = [sys.executable, _STANDALONE_SMOKE, str(deliver / "libtile_fwk_bundle_standalone.so"), bundle_path]
-    proc = subprocess.run(cmd, env=os.environ.copy(), capture_output=True, text=True,
-                          timeout=_CONSUME_TIMEOUT_S)
+    proc = subprocess.run(cmd, env=os.environ.copy(), capture_output=True, text=True, timeout=_CONSUME_TIMEOUT_S)
     if proc.returncode != 0:
         pytest.fail(
             f"standalone delivery smoke failed (rc={proc.returncode})\ncmd: {' '.join(cmd)}\n"
             f"--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}"
         )
     print(proc.stdout)
-    assert "no pypto shared objects mapped" in proc.stdout, (
-        "the smoke test did not reach its self-containment check"
-    )
+    assert "no pypto shared objects mapped" in proc.stdout, "the smoke test did not reach its self-containment check"

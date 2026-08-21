@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -47,12 +49,9 @@ def histogram_kernel(
     out: pl.Tensor[[ROWS, 256], pl.DT_UINT32],
 ):
     pl.system.bar_all()
-    tt_src = pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_UINT16,
-                         target_memory=pl.MemorySpace.Vec, layout=pl.ND)
-    tt_idx = pl.TileType(shape=[ROWS, IDX_COLS_DN], dtype=pl.DT_UINT8,
-                         target_memory=pl.MemorySpace.Vec, layout=pl.DN)
-    tt_dst = pl.TileType(shape=[ROWS, 256], dtype=pl.DT_UINT32,
-                         target_memory=pl.MemorySpace.Vec, layout=pl.ND)
+    tt_src = pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
+    tt_idx = pl.TileType(shape=[ROWS, IDX_COLS_DN], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec, layout=pl.DN)
+    tt_dst = pl.TileType(shape=[ROWS, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec, layout=pl.ND)
     tile_src = pl.make_tile_group(type=tt_src, addrs=0x0000, mutex_ids=[0])
     tile_idx = pl.make_tile_group(type=tt_idx, addrs=0x2000, mutex_ids=[1])
     tile_dst = pl.make_tile_group(type=tt_dst, addrs=0x2020, mutex_ids=[2])
@@ -67,6 +66,7 @@ def histogram_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_histogram():
     device = ST_DEVICE
     _require_a5(device)

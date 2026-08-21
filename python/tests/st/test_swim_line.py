@@ -41,6 +41,7 @@ def matmul_add(
 
 
 def device_run_data_from_device_mix_nodep(queue):
+    pypto.set_pass_options(enable_slice=False)
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     os.environ["DUMP_DEVICE_PERF"] = "true"
@@ -75,6 +76,7 @@ def device_run_data_from_device_mix_nodep(queue):
     queue.put(pref_path)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_swim():
     mp.set_start_method('spawn', force=True)
     result_queue = mp.Queue()

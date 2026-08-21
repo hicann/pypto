@@ -40,17 +40,19 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 # ================================================================
 # Constants
 # ================================================================
-MAX_N = 512               # max supported columns == compile-time UB tile width
-TILE_ROWS = 16            # rows processed per tile-group slot (row count is dynamic)
+MAX_N = 512  # max supported columns == compile-time UB tile width
+TILE_ROWS = 16  # rows processed per tile-group slot (row count is dynamic)
 
-SLOT_BYTES = TILE_ROWS * MAX_N * 4      # fp32 [TILE_ROWS, MAX_N]
-RED_BYTES = 512                         # fp32 [TILE_ROWS, 1] reduction result (padded/aligned)
+SLOT_BYTES = TILE_ROWS * MAX_N * 4  # fp32 [TILE_ROWS, MAX_N]
+RED_BYTES = 512  # fp32 [TILE_ROWS, 1] reduction result (padded/aligned)
 
 # UB addresses: double-buffered input / output / workspace groups + reduction result.
 VA_IN0 = 0
@@ -70,11 +72,13 @@ def softmax_tile_group_kernel(
 ):
     # valid_shape=[-1, -1] makes the per-tile valid window dynamic (set at runtime via
     # set_validshape): the tail row-tile carries fewer rows and N narrows the columns.
-    tile_type = pl.TileType(shape=[TILE_ROWS, MAX_N], dtype=pl.DT_FP32,
-                            target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    tile_type = pl.TileType(
+        shape=[TILE_ROWS, MAX_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
     # Row reductions write a [TILE_ROWS, 1] column vector (layout=pl.DN).
-    red_type = pl.TileType(shape=[TILE_ROWS, 1], dtype=pl.DT_FP32,
-                           target_memory=pl.MemorySpace.Vec, layout=pl.DN, valid_shape=[-1, -1])
+    red_type = pl.TileType(
+        shape=[TILE_ROWS, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN, valid_shape=[-1, -1]
+    )
     in_group = pl.make_tile_group(type=tile_type, addrs=[VA_IN0, VA_IN1], mutex_ids=[0, 1])
     out_group = pl.make_tile_group(type=tile_type, addrs=[VA_OUT0, VA_OUT1], mutex_ids=[2, 3])
     tmp_group = pl.make_tile_group(type=tile_type, addrs=[VA_TMP0, VA_TMP1], mutex_ids=[4, 5])
@@ -105,12 +109,12 @@ def softmax_tile_group_kernel(
             pl.set_validshape(red_slot, [valid_rows, 1])
 
             # ---- pass 1: row max ----
-            pl.row_max(red_slot, in_slot, tmp_slot)          # red = max over N valid cols
-            pl.row_expand_sub(out_slot, in_slot, red_slot)   # out = x - max (row broadcast)
+            pl.row_max(red_slot, in_slot, tmp_slot)  # red = max over N valid cols
+            pl.row_expand_sub(out_slot, in_slot, red_slot)  # out = x - max (row broadcast)
 
             # ---- pass 2: exp then row sum ----
-            pl.exp(out_slot, out_slot)                       # out = exp(x - max)
-            pl.row_sum(red_slot, out_slot, tmp_slot)         # red = sum over N valid cols
+            pl.exp(out_slot, out_slot)  # out = exp(x - max)
+            pl.row_sum(red_slot, out_slot, tmp_slot)  # red = sum over N valid cols
 
             # ---- pass 3: normalize ----
             pl.row_expand_div(out_slot, out_slot, red_slot)  # out = exp(x - max) / sum
@@ -126,9 +130,7 @@ def _run_case(rows, cols):
     torch.npu.set_device(device)
     torch.manual_seed(0)
 
-    logging.info(
-        "\n=== Test Softmax dynamic rows=%s cols=%s (make_tile_group + tile ops, multicore) ===", rows, cols
-    )
+    logging.info("\n=== Test Softmax dynamic rows=%s cols=%s (make_tile_group + tile ops, multicore) ===", rows, cols)
     x = torch.rand([rows, cols], device=device, dtype=torch.float32) * 8.0 - 4.0
     y = torch.empty([rows, cols], device=device, dtype=torch.float32)
 
@@ -147,15 +149,16 @@ def _run_case(rows, cols):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_softmax_tile_group_vf():
     # partial row-tiles, and multicore.
     cases = [
-        (2048, 64),     # 128 tiles -> 32 cores
+        (2048, 64),  # 128 tiles -> 32 cores
         (4096, 128),
-        (1000, 200),    # N unaligned + partial row-tile
-        (777, 300),     # N unaligned + partial row-tile
-        (100, 512),     # full MAX_N
-        (2049, 100),    # odd rows + N unaligned
+        (1000, 200),  # N unaligned + partial row-tile
+        (777, 300),  # N unaligned + partial row-tile
+        (100, 512),  # full MAX_N
+        (2049, 100),  # odd rows + N unaligned
     ]
     for rows, cols in cases:
         _run_case(rows, cols)

@@ -32,6 +32,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -61,21 +63,22 @@ def load_left(dst, src, order):
 
 def _make_tiles():
     a_mat = pl.make_tile(
-        pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addr=MA0, size=SZ)
+        pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN), addr=MA0, size=SZ
+    )
     b_mat = pl.make_tile(
-        pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addr=MA1, size=SZ)
+        pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ), addr=MA1, size=SZ
+    )
     a_left = pl.make_tile(
-        pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addr=0x0, size=SZ)
+        pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ), addr=0x0, size=SZ
+    )
     b_right = pl.make_tile(
-        pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addr=0x0, size=SZ)
+        pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN), addr=0x0, size=SZ
+    )
     c = pl.make_tile(
-        pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                    fractal=1024),
-        addr=0x0, size=SZ)
+        pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
+        addr=0x0,
+        size=SZ,
+    )
     return a_mat, b_mat, a_left, b_right, c
 
 
@@ -94,8 +97,9 @@ def _matmul_body(a_mat, b_mat, a_left, b_right, c, a_t, b, out):
 
 
 @pl.jit()
-def k_transpose_lit(a_t: pl.Tensor[[K, M], pl.DT_FP16], b: pl.Tensor[[K, N], pl.DT_FP16],
-                    out: pl.Tensor[[M, N], pl.DT_FP32]):
+def k_transpose_lit(
+    a_t: pl.Tensor[[K, M], pl.DT_FP16], b: pl.Tensor[[K, N], pl.DT_FP16], out: pl.Tensor[[M, N], pl.DT_FP32]
+):
     with pl.section_cube():
         a_mat, b_mat, a_left, b_right, c = _make_tiles()
         pl.load(a_mat, a_t, [0, 0], order=[1, 0])
@@ -103,8 +107,9 @@ def k_transpose_lit(a_t: pl.Tensor[[K, M], pl.DT_FP16], b: pl.Tensor[[K, N], pl.
 
 
 @pl.jit()
-def k_transpose_local_var(a_t: pl.Tensor[[K, M], pl.DT_FP16], b: pl.Tensor[[K, N], pl.DT_FP16],
-                          out: pl.Tensor[[M, N], pl.DT_FP32]):
+def k_transpose_local_var(
+    a_t: pl.Tensor[[K, M], pl.DT_FP16], b: pl.Tensor[[K, N], pl.DT_FP16], out: pl.Tensor[[M, N], pl.DT_FP32]
+):
     with pl.section_cube():
         a_mat, b_mat, a_left, b_right, c = _make_tiles()
         flag = [1, 0]
@@ -113,8 +118,9 @@ def k_transpose_local_var(a_t: pl.Tensor[[K, M], pl.DT_FP16], b: pl.Tensor[[K, N
 
 
 @pl.jit()
-def k_transpose_helper_var(a_t: pl.Tensor[[K, M], pl.DT_FP16], b: pl.Tensor[[K, N], pl.DT_FP16],
-                           out: pl.Tensor[[M, N], pl.DT_FP32]):
+def k_transpose_helper_var(
+    a_t: pl.Tensor[[K, M], pl.DT_FP16], b: pl.Tensor[[K, N], pl.DT_FP16], out: pl.Tensor[[M, N], pl.DT_FP32]
+):
     with pl.section_cube():
         a_mat, b_mat, a_left, b_right, c = _make_tiles()
         load_left(a_mat, a_t, [1, 0])
@@ -143,12 +149,14 @@ def _run(kernel, a_arg, b_arg, a, b):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_transpose_literal(_ab):
     a, b = _ab
     _run(k_transpose_lit, a.t().contiguous(), b, a, b)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_transpose_local_var(_ab):
     """order from a local list assignment (assignment-fold path)."""
     a, b = _ab
@@ -156,6 +164,7 @@ def test_transpose_local_var(_ab):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_transpose_helper_var(_ab):
     """order threaded through an inlined helper parameter (inline-fold path)."""
     a, b = _ab

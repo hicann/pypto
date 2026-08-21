@@ -21,6 +21,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -30,6 +32,7 @@ START = 0
 # ============================================================================
 # fill_index
 # ============================================================================
+
 
 @pl.jit(auto_mutex=True)
 def fill_index_kernel(
@@ -51,7 +54,9 @@ def fill_index_kernel(
 # Test functions
 # ============================================================================
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fill_index():
     torch.npu.set_device(ST_DEVICE)
     m_val, n_val = 1, 64
@@ -66,6 +71,7 @@ def test_fill_index():
 # ============================================================================
 # make_tuple
 # ============================================================================
+
 
 @pl.jit()
 def tuple_scalar_kernel(
@@ -92,6 +98,7 @@ def tuple_in_loop_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tuple_scalar():
     torch.npu.set_device(ST_DEVICE)
     out = torch.zeros(2, device=ST_DEVICE, dtype=torch.int32)
@@ -103,6 +110,7 @@ def test_tuple_scalar():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tuple_in_loop():
     torch.npu.set_device(ST_DEVICE)
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)

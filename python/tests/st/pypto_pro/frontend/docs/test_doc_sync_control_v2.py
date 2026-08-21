@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -52,19 +54,29 @@ def bar_m_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x2000, mutex_ids=[1])
+        addrs=0x2000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
 
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -83,6 +95,7 @@ def bar_m_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bar_m():
     device = ST_DEVICE
     _require_a5(device)
@@ -113,21 +126,29 @@ def mm_layout_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_ACC, TILE_ACC], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_ACC, TILE_ACC], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_left = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_ACC, TILE_ACC], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                         layout=pl.NZ),
-        addrs=0x0000, mutex_ids=[4, 5])
+        type=pl.TileType(shape=[TILE_ACC, TILE_ACC], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
+        addrs=0x0000,
+        mutex_ids=[4, 5],
+    )
     b_right = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_ACC, TILE_ACC], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[6, 7])
+        addrs=0x0000,
+        mutex_ids=[6, 7],
+    )
     acc = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_ACC, TILE_ACC], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                         fractal=1024),
-        addrs=0x0000, mutex_ids=[8])
+        type=pl.TileType(shape=[TILE_ACC, TILE_ACC], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, fractal=1024),
+        addrs=0x0000,
+        mutex_ids=[8],
+    )
 
     with pl.section_cube():
         pl.system.set_mm_layout_transform(enabled=True)
@@ -150,6 +171,7 @@ def mm_layout_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_set_mm_layout_transform():
     device = ST_DEVICE
     _require_a5(device)
@@ -176,24 +198,29 @@ def cross_core_kernel(
     out: pl.Tensor[[64, 64], pl.DT_FP32],
 ):
     v1_mat = pl.make_tile(
-        pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
-                    layout=pl.NZ),
-        addr=0x10000, size=16384)
+        pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
+        addr=0x10000,
+        size=16384,
+    )
 
     with pl.section_vector():
         sub_index = pl.get_subblock_idx()
         off = sub_index * 32
 
-        tile_x = pl.make_tile(pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-                              addr=0x0000, size=8192)
-        tile_y = pl.make_tile(pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-                              addr=0x2000, size=8192)
-        tile_sum = pl.make_tile(pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-                                addr=0x4000, size=8192)
+        tile_x = pl.make_tile(
+            pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=8192
+        )
+        tile_y = pl.make_tile(
+            pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=0x2000, size=8192
+        )
+        tile_sum = pl.make_tile(
+            pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=0x4000, size=8192
+        )
         tile_nz = pl.make_tile(
-            pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec,
-                        layout=pl.NZ),
-            addr=0x6000, size=8448)
+            pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
+            addr=0x6000,
+            size=8448,
+        )
 
         pl.load(tile_x, x, [off, 0])
         pl.load(tile_y, y, [off, 0])
@@ -208,21 +235,25 @@ def cross_core_kernel(
 
     with pl.section_cube():
         rhs_mat = pl.make_tile(
-            pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
-                        layout=pl.NZ),
-            addr=0x0000, size=16384)
+            pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
+            addr=0x0000,
+            size=16384,
+        )
         v1_left = pl.make_tile(
-            pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
-                        layout=pl.NZ),
-            addr=0x0000, size=16384)
+            pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
+            addr=0x0000,
+            size=16384,
+        )
         rhs_right = pl.make_tile(
-            pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right,
-                        layout=pl.ZN),
-            addr=0x0000, size=16384)
+            pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
+            addr=0x0000,
+            size=16384,
+        )
         c_l0c = pl.make_tile(
-            pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                        layout=pl.NZ, fractal=1024),
-            addr=0x0000, size=16384)
+            pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
+            addr=0x0000,
+            size=16384,
+        )
 
         pl.load(rhs_mat, rhs, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
@@ -239,6 +270,7 @@ def cross_core_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_set_cross_core_wait_cross_core():
     device = ST_DEVICE
     _require_a5(device)

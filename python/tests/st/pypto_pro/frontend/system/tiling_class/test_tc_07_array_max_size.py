@@ -23,6 +23,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -139,6 +141,7 @@ class TestArrayMaxSizePositive:
     """Positive cases: N within 2048 limit should work."""
 
     @pytest.mark.soc("950")
+    @pypto.options(pass_options={"enable_slice": False})
     def test_array_size_512(self):
         device = ST_DEVICE
         torch.npu.set_device(device)
@@ -158,6 +161,7 @@ class TestArrayMaxSizePositive:
         torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
 
     @pytest.mark.soc("950")
+    @pypto.options(pass_options={"enable_slice": False})
     def test_array_size_1024(self):
         device = ST_DEVICE
         torch.npu.set_device(device)
@@ -177,6 +181,7 @@ class TestArrayMaxSizePositive:
         torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
 
     @pytest.mark.soc("950")
+    @pypto.options(pass_options={"enable_slice": False})
     def test_array_size_2048(self):
         device = ST_DEVICE
         torch.npu.set_device(device)

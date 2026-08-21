@@ -12,6 +12,8 @@
 
 from test_case_class_vector_operations import ExpandExpDifTestCase
 
+import pypto
+
 
 def exec_test_tensor_expand_exp_dif(input_shapes, view_shape, tile_shape):
     input_tensors = [
@@ -47,6 +49,7 @@ def exec_test_tensor_expand_exp_dif(input_shapes, view_shape, tile_shape):
     test_case.exec(False)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_tensor_expand_exp_dif_0():
     input_shapes = [(16, 128), (16, 1)]
     view_shape = (16, 128)
@@ -54,6 +57,7 @@ def test_tensor_expand_exp_dif_0():
     exec_test_tensor_expand_exp_dif(input_shapes, view_shape, tile_shape)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_tensor_expand_exp_dif_0():  # noqa: F811
     input_shapes = [(16, 128), (1, 128)]
     view_shape = (16, 128)

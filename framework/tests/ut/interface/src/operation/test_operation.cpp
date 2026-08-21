@@ -23,7 +23,15 @@
 
 using namespace npu::tile_fwk;
 
-class OperationOpsTest : public testing::Test {};
+class OperationOpsTest : public testing::Test {
+public:
+    void SetUp() override
+    {
+        Program::GetInstance().Reset();
+        config::Reset();
+    }
+    void TearDown() override {}
+};
 
 TEST_F(OperationOpsTest, CheckIndexAddParamsInvalid_FP16_Overflow)
 {

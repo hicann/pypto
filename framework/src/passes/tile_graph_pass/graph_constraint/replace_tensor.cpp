@@ -761,6 +761,16 @@ Status ReplaceTensor::RefactorViewConnectForReplace(Function& function)
         if (iOperand == srcTensor) { // 开头的VIEW不需要插入NOP来控制顺序
             continue;
         }
+        bool hasNonInplaceConsumer = false;
+        for (auto consumer : oOperand->GetConsumers()) {
+            if (consumer->GetOpcode() != Opcode::OP_NOP && !consumer->HasAttribute(OpAttributeKey::inplaceIdx)) {
+                hasNonInplaceConsumer = true;
+                break;
+            }
+        }
+        if (hasNonInplaceConsumer) {
+            continue;
+        }
         ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, iOperand->GetRawTensor() == srcTensor->GetRawTensor());
         ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, oOperand->GetRawTensor() == srcTensor->GetRawTensor());
         op->ReplaceIOperand(0, srcTensor);

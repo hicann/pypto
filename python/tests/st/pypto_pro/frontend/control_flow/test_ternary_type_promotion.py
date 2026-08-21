@@ -23,6 +23,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -49,15 +51,17 @@ def ternary_promote_nested_int_kernel(
 
         nested_value = (
             (pl.getval(int16_data, 0) if flag1 else pl.getval(int32_data, 5))
-            if flag0 else (
+            if flag0
+            else (
                 (data_len if flag2 else pl.getval(int32_data, 6))
-                if flag1 else (
+                if flag1
+                else (
                     (pl.getval(int32_data, 7) if flag3 else pl.getval(int64_data, 0))
-                    if flag2 else (
+                    if flag2
+                    else (
                         (pl.getval(int8_data, 0) if flag4 else pl.getval(int32_data, 8))
-                        if flag3 else (
-                            pl.getval(int16_data, 1) if flag4 else pl.getval(int64_data, 1)
-                        )
+                        if flag3
+                        else (pl.getval(int16_data, 1) if flag4 else pl.getval(int64_data, 1))
                     )
                 )
             )
@@ -100,15 +104,17 @@ def ternary_promote_nested_float_kernel(
 
         nested_value = (
             (pl.getval(fp16_data, 0) if flag1 else pl.getval(fp32_data, 0))
-            if flag0 else (
+            if flag0
+            else (
                 (pl.getval(fp32_data, 1) if flag2 else pl.getval(fp16_data, 1))
-                if flag1 else (
+                if flag1
+                else (
                     (pl.getval(fp16_data, 2) if flag3 else pl.getval(fp32_data, 2))
-                    if flag2 else (
+                    if flag2
+                    else (
                         (pl.getval(fp32_data, 3) if flag4 else pl.getval(fp16_data, 3))
-                        if flag3 else (
-                            pl.getval(fp16_data, 4) if flag4 else pl.getval(fp32_data, 4)
-                        )
+                        if flag3
+                        else (pl.getval(fp16_data, 4) if flag4 else pl.getval(fp32_data, 4))
                     )
                 )
             )
@@ -151,6 +157,7 @@ def ternary_promote_used_size_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ternary_promote_nested_int():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -169,6 +176,7 @@ def test_ternary_promote_nested_int():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ternary_promote_nested_float():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -186,6 +194,7 @@ def test_ternary_promote_nested_float():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ternary_promote_used_size():
     device = ST_DEVICE
     torch.npu.set_device(device)

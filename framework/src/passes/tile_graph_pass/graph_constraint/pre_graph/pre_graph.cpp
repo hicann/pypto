@@ -195,6 +195,11 @@ Status PreGraphProcess::RunOnFunction(Function& function)
     setBoundary.SetTensorBoundary(function);
     // Processing Special Ops
     SetCopyAttr setCopyAttr;
+    RemoveRedundantAssemble removeRedundantAssemble;
+    if (removeRedundantAssemble.ProcessViewToCopyIn(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "ProcessViewToCopyIn failed.");
+        return FAILED;
+    }
     for (auto& op : opList) {
         bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
         if (IsCopyOut(op.GetOpcode()) && (op.GetOpAttribute() == nullptr) &&
@@ -206,8 +211,10 @@ Status PreGraphProcess::RunOnFunction(Function& function)
             setCopyAttr.ProcessMoveInOperation(op);
         }
     }
-    RemoveRedundantAssemble removeRedundantAssemble;
-    removeRedundantAssemble.DeleteRedundantAssemble(function);
+    if (removeRedundantAssemble.DeleteRedundantAssemble(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "DeleteRedundantAssemble failed.");
+        return FAILED;
+    }
     CubeProcess cubeProcess;
     if (cubeProcess.UpdateCubeOp(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Update Cube attr failed.");

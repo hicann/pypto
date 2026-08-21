@@ -31,6 +31,7 @@
 #include "interface/tensor/irbuilder.h"
 #define private public
 #include "passes/tile_graph_pass/graph_optimization/remove_redundant_op.h"
+#include "passes/pass_utils/remove_redundant_op_utils.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -498,8 +499,8 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest12)
 view->exp(end assemble)->view(end assemble)->expand(end assemble)->exp(end assemble)
                                                                  ->exp(end assemble)
 
-exp(end assemble*3) ->exp(end assemble)
-                    ->exp(end assemble)
+exp(end contract*3) ->exp(end contract)
+                    ->exp(end contract)
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest1)
 {
@@ -529,6 +530,12 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest1)
 
     passManager.RegisterStrategy("RemoveRedundantOpTestStrategy",
                                  {
+                                     {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                     {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
+                                     {"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                     {"SplitReshape", PassName::SPLIT_RESHAPE},
+                                     {"SplitRawTensor", PassName::SPLIT_RAW_TENSOR},
+                                     {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
                                      {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
                                      {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
                                  });
@@ -538,16 +545,16 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest1)
     // ================== Verify the effect of the Pass ==================
     auto updated_operations = func->Operations();
 
-    int view_num = kNumZero;
+    int slice_num = kNumZero;
     int expand_num = kNumZero;
     for (const auto& op : updated_operations) {
-        if (op.GetOpcode() == Opcode::OP_VIEW) {
-            view_num++;
+        if (op.GetOpcode() == Opcode::OP_SLICE) {
+            slice_num++;
         } else if (op.GetOpcode() == Opcode::OP_EXPAND) {
             expand_num++;
         }
     }
-    EXPECT_EQ(view_num, kNumOne);
+    EXPECT_EQ(slice_num, kNumOne);
     EXPECT_EQ(expand_num, kNumZero);
 }
 
@@ -555,8 +562,8 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest1)
 view->exp(end assemble)->view(end assemble)->expand(end assemble)->exp(end assemble)
                                                                  ->exp(end assemble)
 
-exp(end assemble)->view(end assemble)->expand(end assemble) ->exp(end assemble)
-                                                            ->exp(end assemble)
+exp(end contract)->view(end assemble)->expand*4(end contract) ->exp*4(end contract)
+                                                              ->exp*4(end contract)
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest2)
 {
@@ -587,6 +594,12 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest2)
 
     passManager.RegisterStrategy("RemoveRedundantOpTestStrategy",
                                  {
+                                     {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                     {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
+                                     {"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                     {"SplitReshape", PassName::SPLIT_RESHAPE},
+                                     {"SplitRawTensor", PassName::SPLIT_RAW_TENSOR},
+                                     {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
                                      {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
                                      {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
                                  });
@@ -605,8 +618,8 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest2)
             expand_num++;
         }
     }
-    EXPECT_EQ(view_num, kNumTwo);
-    EXPECT_EQ(expand_num, kNumOne);
+    EXPECT_EQ(view_num, kNumOne);
+    EXPECT_EQ(expand_num, kNumFour);
 }
 
 /*
@@ -623,10 +636,16 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest3)
     std::vector<int64_t> tile_shape = {kNumExpFive, kNumExpSix};
 
     PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy("ExpandFunctionTestStrategy", {
-                                                                   {"ExpandFunction", PassName::EXPAND_FUNCTION},
-                                                                   {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
-                                                               });
+    passManager.RegisterStrategy("ExpandFunctionTestStrategy",
+                                 {
+                                     {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                     {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
+                                     {"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                     {"SplitReshape", PassName::SPLIT_RESHAPE},
+                                     {"SplitRawTensor", PassName::SPLIT_RAW_TENSOR},
+                                     {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
+                                     {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                 });
 
     Tensor input(DT_FP32, shape, "input");
     Tensor output(DT_FP32, shape, "output");
@@ -638,13 +657,6 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest3)
     }
 
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_STCase3");
-    int assemble_before = kNumZero;
-    for (const auto& op : func->Operations()) {
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
-            assemble_before++;
-        }
-    }
-    EXPECT_EQ(assemble_before, kNumThree);
 
     passManager.RegisterStrategy("RemoveRedundantOpTestStrategy",
                                  {
@@ -653,14 +665,13 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest3)
     EXPECT_EQ(passManager.RunPass(Program::GetInstance(), *func, "RemoveRedundantOpTestStrategy"), SUCCESS);
 
     // ================== Verify the effect of the Pass ==================
-    int assemble_after = kNumZero;
+    int contract_after = kNumZero;
     for (const auto& op : func->Operations()) {
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
-            assemble_after++;
+        if (op.GetOpcode() == Opcode::OP_CONTRACT) {
+            contract_after++;
         }
     }
-    EXPECT_EQ(assemble_after, kNumTwo);
-    EXPECT_NE(assemble_after, assemble_before);
+    EXPECT_EQ(contract_after, kNumTwo);
 }
 void RemoveRedundantL1DataMoveGraph(std::shared_ptr<Function>& currFunctionPtr)
 {
@@ -1622,6 +1633,879 @@ TEST_F(TestRemoveRedundantOpPass, TestNewViewDynValidShapeInference)
     EXPECT_EQ(newViewOutput->GetDynValidShape()[1].Dump(), "view_output_dim1");
 }
 
+TEST_F(TestRemoveRedundantOpPass, ContractSliceFullShouldRemoveBoth)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestContractSliceFull",
+                                                      "TestContractSliceFull", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND,
+                                               "out");
+
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_CONTRACT, {input}, {contractOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset)); });
+    auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {sliceOutput}, {outCast});
+
+    currFunctionPtr->inCasts_.push_back(input);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_SLICE), kNumZero);
+    EXPECT_EQ(expOp.GetInputOperand(kSizeZero), input);
+}
+
+TEST_F(TestRemoveRedundantOpPass, SingleContractWithNonZeroOffsetShouldRemove)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSingleContractNonZeroOffset",
+                                                      "TestSingleContractNonZeroOffset", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> offset = {kNumFour, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND,
+                                               "out");
+
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_CONTRACT, {input}, {contractOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
+    auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {contractOutput}, {outCast});
+
+    currFunctionPtr->inCasts_.push_back(input);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(expOp.GetInputOperand(kSizeZero), input);
+}
+
+TEST_F(TestRemoveRedundantOpPass, ContractMultiSliceShouldBypassFullAndGenerateViewForPartial)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestContractMultiSlice",
+                                                      "TestContractMultiSlice", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> partOffset = {kNumFour, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto fullSliceOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto partSliceOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto fullOut = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape),
+                                               TileOpFormat::TILEOP_ND, "fullOut");
+    auto partOut = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                               TileOpFormat::TILEOP_ND, "partOut");
+
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_CONTRACT, {input}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_SLICE, {contractOutput}, {fullSliceOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_SLICE, {contractOutput}, {partSliceOutput},
+        [&partOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(partOffset)); });
+    auto& fullExp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {fullSliceOutput}, {fullOut});
+    auto& partExp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {partSliceOutput}, {partOut});
+
+    currFunctionPtr->inCasts_.push_back(input);
+    currFunctionPtr->outCasts_.push_back(fullOut);
+    currFunctionPtr->outCasts_.push_back(partOut);
+
+    std::vector<Operation*> contractSliceNewOps;
+    bool contractSliceUpdated = false;
+    EXPECT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*currFunctionPtr, contractSliceNewOps, contractSliceUpdated),
+              SUCCESS);
+
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_SLICE), kNumZero);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_VIEW), kNumOne);
+    EXPECT_EQ(fullExp.GetInputOperand(kSizeZero), input);
+    auto viewOp = FindSingleOp(currFunctionPtr, Opcode::OP_VIEW);
+    ASSERT_NE(viewOp, nullptr);
+    EXPECT_EQ(partExp.GetInputOperand(kSizeZero), viewOp->GetOOperands().front());
+    auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(viewOp->GetOpAttribute());
+    ASSERT_NE(viewAttr, nullptr);
+    EXPECT_EQ(viewAttr->GetFromOffset(), partOffset);
+}
+
+void VerifyMatmulContractMultiSliceNotFolded(Opcode matmulOpcode)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TestMatmulContractMultiSlice",
+                                               "TestMatmulContractMultiSlice", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> partOffset = {kNumFour, kNumZero};
+    auto inputA = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto inputB = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto inputAcc = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto matmulOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto sliceOutput1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto out0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                            TileOpFormat::TILEOP_ND, "out0");
+    auto out1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                            TileOpFormat::TILEOP_ND, "out1");
+
+    std::vector<LogicalTensorPtr> matmulInputs = {inputA, inputB};
+    if (matmulOpcode == Opcode::OP_A_MULACC_B) {
+        matmulInputs.push_back(inputAcc);
+    }
+    PassOperationUtils::AddOperation(*function, matmulOpcode, matmulInputs, {matmulOutput});
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {matmulOutput}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput0},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput1},
+        [&partOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(partOffset)); });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput0}, {out0});
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput1}, {out1});
+
+    function->inCasts_ = {inputA, inputB};
+    if (matmulOpcode == Opcode::OP_A_MULACC_B) {
+        function->inCasts_.push_back(inputAcc);
+    }
+    function->outCasts_ = {out0, out1};
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_FALSE(operationUpdated);
+    EXPECT_TRUE(newOps.empty());
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+}
+
+TEST_F(TestRemoveRedundantOpPass, MatmulContractMultiSliceShouldNotFold)
+{
+    VerifyMatmulContractMultiSliceNotFolded(Opcode::OP_A_MUL_B);
+}
+
+TEST_F(TestRemoveRedundantOpPass, MatmulAccContractMultiSliceShouldNotFold)
+{
+    VerifyMatmulContractMultiSliceNotFolded(Opcode::OP_A_MULACC_B);
+}
+
+void VerifyMatmulContractSingleSliceFolded(Opcode matmulOpcode)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TestMatmulContractSingleSlice",
+                                               "TestMatmulContractSingleSlice", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> partOffset = {kNumFour, kNumZero};
+    auto inputA = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto inputB = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto inputAcc = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto matmulOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto out = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                           TileOpFormat::TILEOP_ND, "out");
+
+    std::vector<LogicalTensorPtr> matmulInputs = {inputA, inputB};
+    if (matmulOpcode == Opcode::OP_A_MULACC_B) {
+        matmulInputs.push_back(inputAcc);
+    }
+    PassOperationUtils::AddOperation(*function, matmulOpcode, matmulInputs, {matmulOutput});
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {matmulOutput}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&partOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(partOffset)); });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {out});
+
+    function->inCasts_ = {inputA, inputB};
+    if (matmulOpcode == Opcode::OP_A_MULACC_B) {
+        function->inCasts_.push_back(inputAcc);
+    }
+    function->outCasts_ = {out};
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_TRUE(operationUpdated);
+    EXPECT_EQ(newOps.size(), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
+}
+
+TEST_F(TestRemoveRedundantOpPass, MatmulContractSingleSliceShouldFold)
+{
+    VerifyMatmulContractSingleSliceFolded(Opcode::OP_A_MUL_B);
+}
+
+TEST_F(TestRemoveRedundantOpPass, MatmulAccContractSingleSliceShouldFold)
+{
+    VerifyMatmulContractSingleSliceFolded(Opcode::OP_A_MULACC_B);
+}
+
+TEST_F(TestRemoveRedundantOpPass, MultiContractSingleSliceShouldBecomeAssemble)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMultiContractSingleSlice",
+                                                      "TestMultiContractSingleSlice", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> rawShape = {kNumFour, 24};
+    std::vector<int64_t> inputOffset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> inputOffset1 = {kNumZero, kNumEight};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset1 = {kNumFour, kNumZero};
+    IRBuilder builder;
+    auto rawInput0 = builder.CreateRawTensor(DT_FP32, rawShape);
+    auto rawInput1 = builder.CreateRawTensor(DT_FP32, rawShape);
+    auto input0 = builder.CreateTensorVar(rawInput0, inputOffset0, partShape, CreateTestConstIntVector(partShape));
+    auto input1 = builder.CreateTensorVar(rawInput1, inputOffset1, partShape, CreateTestConstIntVector(partShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto outCast = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape),
+                                               TileOpFormat::TILEOP_ND, "out");
+
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_CONTRACT, {input0}, {contractOutput},
+        [&offset0](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset0)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_CONTRACT, {input1}, {contractOutput},
+        [&offset1](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&offset0](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0)); });
+    auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {sliceOutput}, {outCast});
+
+    currFunctionPtr->inCasts_.push_back(input0);
+    currFunctionPtr->inCasts_.push_back(input1);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    std::vector<Operation*> contractSliceNewOps;
+    bool contractSliceUpdated = false;
+    EXPECT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*currFunctionPtr, contractSliceNewOps, contractSliceUpdated),
+              SUCCESS);
+
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_SLICE), kNumZero);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_ASSEMBLE), kNumTwo);
+    EXPECT_EQ(expOp.GetInputOperand(kSizeZero), sliceOutput);
+    for (const auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        EXPECT_EQ(op.GetOOperands().front(), sliceOutput);
+    }
+}
+
+TEST_F(TestRemoveRedundantOpPass, MultiContractSingleSliceWithMaterializedMatmulInputShouldNotFold)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TestMultiContractMatmulInput",
+                                               "TestMultiContractMatmulInput", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> matmulRhsShape = {kNumExpFour, kNumExpFour};
+    std::vector<int64_t> contractOffset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> contractOffset1 = {kNumFour, kNumZero};
+    auto matmulInputA = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto matmulInputB = IRBuilder().CreateTensorVar(DT_FP32, matmulRhsShape, CreateTestConstIntVector(matmulRhsShape));
+    auto matmulOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto matmulContractOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto matmulSliceOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto otherInput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+
+    PassOperationUtils::AddOperation(*function, Opcode::OP_A_MUL_B, {matmulInputA, matmulInputB}, {matmulOutput});
+    PassOperationUtils::AddOperation(*function, Opcode::OP_CONTRACT, {matmulOutput}, {matmulContractOutput},
+                                     [&contractOffset0](Operation& op) {
+                                         op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(contractOffset0));
+                                     });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {matmulContractOutput}, {matmulSliceOutput},
+        [&contractOffset0](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(contractOffset0)); });
+    auto& matmulOuterContract = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {matmulSliceOutput}, {contractOutput}, [&contractOffset0](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(contractOffset0));
+        });
+    auto& otherOuterContract = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {otherInput}, {contractOutput}, [&contractOffset1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(contractOffset1));
+        });
+    auto& finalSlice = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&contractOffset0](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(contractOffset0)); });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_TRUE(operationUpdated);
+    EXPECT_TRUE(newOps.empty());
+    EXPECT_EQ(matmulOuterContract.GetOpcode(), Opcode::OP_CONTRACT);
+    EXPECT_EQ(otherOuterContract.GetOpcode(), Opcode::OP_CONTRACT);
+    EXPECT_FALSE(finalSlice.IsDeleted());
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumZero);
+}
+
+TEST_F(TestRemoveRedundantOpPass, MultiContractSingleSliceWithUnalignedInputOffsetShouldNotBecomeAssemble)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestUnalignedMultiContractSingleSlice",
+                                                      "TestUnalignedMultiContractSingleSlice", nullptr);
+    ASSERT_NE(currFunctionPtr, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> alignedRawShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> unalignedRawShape = {kNumFour, 17};
+    std::vector<int64_t> alignedInputOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> unalignedInputOffset = {kNumZero, kNumOne};
+    std::vector<int64_t> contractOffset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> contractOffset1 = {kNumFour, kNumZero};
+    IRBuilder builder;
+    auto alignedRawInput = builder.CreateRawTensor(DT_FP32, alignedRawShape);
+    auto unalignedRawInput = builder.CreateRawTensor(DT_FP32, unalignedRawShape);
+    auto input0 = builder.CreateTensorVar(alignedRawInput, alignedInputOffset, partShape,
+                                          CreateTestConstIntVector(partShape));
+    auto input1 = builder.CreateTensorVar(unalignedRawInput, unalignedInputOffset, partShape,
+                                          CreateTestConstIntVector(partShape));
+    auto contractOutput = builder.CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = builder.CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto outCast = builder.CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape),
+                                           TileOpFormat::TILEOP_ND, "out");
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_CONTRACT, {input0}, {contractOutput},
+                                     [&contractOffset0](Operation& op) {
+                                         op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(contractOffset0));
+                                     });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_CONTRACT, {input1}, {contractOutput},
+                                     [&contractOffset1](Operation& op) {
+                                         op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(contractOffset1));
+                                     });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&contractOffset0](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(contractOffset0)); });
+    auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {sliceOutput}, {outCast});
+
+    currFunctionPtr->inCasts_.push_back(input0);
+    currFunctionPtr->inCasts_.push_back(input1);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    std::vector<Operation*> contractSliceNewOps;
+    bool contractSliceUpdated = false;
+    EXPECT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*currFunctionPtr, contractSliceNewOps, contractSliceUpdated),
+              SUCCESS);
+
+    EXPECT_FALSE(contractSliceUpdated);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_CONTRACT), kNumTwo);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_ASSEMBLE), kNumZero);
+    EXPECT_EQ(expOp.GetInputOperand(kSizeZero), sliceOutput);
+}
+
+TEST_F(TestRemoveRedundantOpPass, ContractFullL1SliceShouldTransferRequirementToPrecedingSlice)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "ContractFullL1", "ContractFullL1", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto precedingOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    precedingOutput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    sliceOutput->SetMemoryTypeBoth(MemoryType::MEM_L1);
+
+    auto precedingAttr = std::make_shared<ViewOpAttribute>(offset);
+    precedingAttr->SetToType(MemoryType::MEM_UB);
+    auto& precedingSlice = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {input}, {precedingOutput},
+        [&precedingAttr](Operation& op) { op.SetOpAttribute(precedingAttr); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {precedingOutput}, {contractOutput}, [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset));
+        });
+    auto l1Attr = std::make_shared<ViewOpAttribute>(offset);
+    l1Attr->SetToType(MemoryType::MEM_L1);
+    PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+                                     [&l1Attr](Operation& op) {
+                                         op.SetOpAttribute(l1Attr);
+                                         op.SetAttr(OpAttributeKey::copyInMode, static_cast<int64_t>(0));
+                                         op.SetAttr("op_attr_copy_in_l1_k_index", static_cast<int64_t>(1));
+                                         op.SetAttr("op_attr_copy_in_l1_padding_mode", static_cast<int64_t>(2));
+                                     });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_TRUE(operationUpdated);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(precedingSlice.GetOOperands().front(), sliceOutput);
+    EXPECT_EQ(exp.GetIOperands().front(), sliceOutput);
+    auto transferredAttr = std::dynamic_pointer_cast<ViewOpAttribute>(precedingSlice.GetOpAttribute());
+    ASSERT_NE(transferredAttr, nullptr);
+    EXPECT_EQ(transferredAttr->GetTo(), MemoryType::MEM_L1);
+    EXPECT_EQ(sliceOutput->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+    EXPECT_EQ(sliceOutput->GetMemoryTypeToBe(), MemoryType::MEM_L1);
+    int64_t transferredCopyInMode = -1;
+    EXPECT_TRUE(precedingSlice.GetAttr<int64_t>(OpAttributeKey::copyInMode, transferredCopyInMode));
+    EXPECT_EQ(transferredCopyInMode, kNumZero);
+    int64_t transferredKIndex = -1;
+    EXPECT_TRUE(precedingSlice.GetAttr<int64_t>("op_attr_copy_in_l1_k_index", transferredKIndex));
+    EXPECT_EQ(transferredKIndex, kNumOne);
+    int64_t transferredPaddingMode = -1;
+    EXPECT_TRUE(precedingSlice.GetAttr<int64_t>("op_attr_copy_in_l1_padding_mode", transferredPaddingMode));
+    EXPECT_EQ(transferredPaddingMode, kNumTwo);
+    for (const auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_SLICE) {
+            EXPECT_EQ(op.GetOpMagic(), precedingSlice.GetOpMagic());
+        }
+    }
+}
+
+TEST_F(TestRemoveRedundantOpPass, ContractPartialL1SliceShouldGenerateL1View)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "ContractPartialL1", "ContractPartialL1",
+                                               nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> partOffset = {kNumFour, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto precedingOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    precedingOutput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    sliceOutput->SetMemoryTypeBoth(MemoryType::MEM_L1);
+
+    auto precedingAttr = std::make_shared<ViewOpAttribute>(zeroOffset);
+    precedingAttr->SetToType(MemoryType::MEM_UB);
+    auto& precedingSlice = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {input}, {precedingOutput},
+        [&precedingAttr](Operation& op) { op.SetOpAttribute(precedingAttr); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {precedingOutput}, {contractOutput}, [&zeroOffset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, zeroOffset));
+        });
+    auto l1Attr = std::make_shared<ViewOpAttribute>(partOffset);
+    l1Attr->SetToType(MemoryType::MEM_L1);
+    PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+                                     [&l1Attr](Operation& op) { op.SetOpAttribute(l1Attr); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
+    auto transferredAttr = std::dynamic_pointer_cast<ViewOpAttribute>(precedingSlice.GetOpAttribute());
+    ASSERT_NE(transferredAttr, nullptr);
+    EXPECT_EQ(transferredAttr->GetTo(), MemoryType::MEM_L1);
+    auto* generatedView = FindSingleOp(function, Opcode::OP_VIEW);
+    ASSERT_NE(generatedView, nullptr);
+    auto generatedAttr = std::dynamic_pointer_cast<ViewOpAttribute>(generatedView->GetOpAttribute());
+    ASSERT_NE(generatedAttr, nullptr);
+    EXPECT_EQ(generatedAttr->GetTo(), MemoryType::MEM_L1);
+    EXPECT_EQ(exp.GetIOperands().front(), generatedView->GetOOperands().front());
+}
+
+TEST_F(TestRemoveRedundantOpPass, SliceContractMultiL1SlicesShouldKeepFanout)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "SliceContractMultiL1", "SliceContractMultiL1",
+                                               nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> partOffset = {kNumFour, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto precedingOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto sliceOutput1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto output0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto output1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    precedingOutput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    contractOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    sliceOutput0->SetMemoryTypeBoth(MemoryType::MEM_L1);
+    sliceOutput1->SetMemoryTypeBoth(MemoryType::MEM_L1);
+
+    auto precedingAttr = std::make_shared<ViewOpAttribute>(zeroOffset);
+    precedingAttr->SetToType(MemoryType::MEM_UB);
+    auto& precedingSlice = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {input}, {precedingOutput},
+        [&precedingAttr](Operation& op) { op.SetOpAttribute(precedingAttr); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {precedingOutput}, {contractOutput}, [&zeroOffset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, zeroOffset));
+        });
+    auto l1Attr0 = std::make_shared<ViewOpAttribute>(zeroOffset);
+    l1Attr0->SetToType(MemoryType::MEM_L1);
+    auto& l1Slice0 = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput0}, [&l1Attr0](Operation& op) {
+            op.SetOpAttribute(l1Attr0);
+            op.SetAttr(OpAttributeKey::copyInMode, static_cast<int64_t>(0));
+            op.SetAttr("op_attr_copy_in_l1_k_index", static_cast<int64_t>(1));
+        });
+    auto l1Attr1 = std::make_shared<ViewOpAttribute>(partOffset);
+    l1Attr1->SetToType(MemoryType::MEM_L1);
+    auto& l1Slice1 = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput1}, [&l1Attr1](Operation& op) {
+            op.SetOpAttribute(l1Attr1);
+            op.SetAttr(OpAttributeKey::copyInMode, static_cast<int64_t>(1));
+            op.SetAttr("op_attr_copy_in_l1_k_index", static_cast<int64_t>(2));
+        });
+    auto& exp0 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput0}, {output0});
+    auto& exp1 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput1}, {output1});
+
+    function->inCasts_.push_back(input);
+    function->outCasts_.push_back(output0);
+    function->outCasts_.push_back(output1);
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::Process(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_TRUE(operationUpdated);
+    EXPECT_TRUE(newOps.empty());
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumThree);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    EXPECT_EQ(l1Slice0.GetIOperands().front(), precedingOutput);
+    EXPECT_EQ(l1Slice1.GetIOperands().front(), precedingOutput);
+    EXPECT_EQ(exp0.GetIOperands().front(), sliceOutput0);
+    EXPECT_EQ(exp1.GetIOperands().front(), sliceOutput1);
+
+    auto precedingSliceAttr = std::dynamic_pointer_cast<ViewOpAttribute>(precedingSlice.GetOpAttribute());
+    ASSERT_NE(precedingSliceAttr, nullptr);
+    EXPECT_EQ(precedingSliceAttr->GetTo(), MemoryType::MEM_UB);
+    EXPECT_EQ(precedingOutput->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+
+    auto sliceAttr0 = std::dynamic_pointer_cast<ViewOpAttribute>(l1Slice0.GetOpAttribute());
+    auto sliceAttr1 = std::dynamic_pointer_cast<ViewOpAttribute>(l1Slice1.GetOpAttribute());
+    ASSERT_NE(sliceAttr0, nullptr);
+    ASSERT_NE(sliceAttr1, nullptr);
+    EXPECT_EQ(sliceAttr0->GetTo(), MemoryType::MEM_L1);
+    EXPECT_EQ(sliceAttr1->GetTo(), MemoryType::MEM_L1);
+    EXPECT_EQ(sliceAttr0->GetFromOffset(), zeroOffset);
+    EXPECT_EQ(sliceAttr1->GetFromOffset(), partOffset);
+    EXPECT_EQ(sliceOutput0->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+    EXPECT_EQ(sliceOutput1->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+
+    int64_t copyInMode0 = -1;
+    int64_t copyInMode1 = -1;
+    int64_t kIndex0 = -1;
+    int64_t kIndex1 = -1;
+    EXPECT_TRUE(l1Slice0.GetAttr<int64_t>(OpAttributeKey::copyInMode, copyInMode0));
+    EXPECT_TRUE(l1Slice1.GetAttr<int64_t>(OpAttributeKey::copyInMode, copyInMode1));
+    EXPECT_TRUE(l1Slice0.GetAttr<int64_t>("op_attr_copy_in_l1_k_index", kIndex0));
+    EXPECT_TRUE(l1Slice1.GetAttr<int64_t>("op_attr_copy_in_l1_k_index", kIndex1));
+    EXPECT_EQ(copyInMode0, kNumZero);
+    EXPECT_EQ(copyInMode1, kNumOne);
+    EXPECT_EQ(kIndex0, kNumOne);
+    EXPECT_EQ(kIndex1, kNumTwo);
+}
+
+TEST_F(TestRemoveRedundantOpPass, MultiContractL1SliceWithMultipleProducersShouldNotFold)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "MultiContractL1", "MultiContractL1", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset1 = {kNumFour, kNumZero};
+    auto input0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto input1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto part0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto part1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    part0->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    part1->SetMemoryTypeBoth(MemoryType::MEM_UB);
+
+    auto preAttr0 = std::make_shared<ViewOpAttribute>(offset0);
+    preAttr0->SetToType(MemoryType::MEM_UB);
+    auto& preSlice0 = PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {input0}, {part0},
+                                                       [&preAttr0](Operation& op) { op.SetOpAttribute(preAttr0); });
+    auto preAttr1 = std::make_shared<ViewOpAttribute>(offset0);
+    preAttr1->SetToType(MemoryType::MEM_UB);
+    auto& preSlice1 = PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {input1}, {part1},
+                                                       [&preAttr1](Operation& op) { op.SetOpAttribute(preAttr1); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {part0}, {contractOutput}, [&offset0](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset0));
+        });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {part1}, {contractOutput}, [&offset1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset1));
+        });
+    auto l1Attr = std::make_shared<ViewOpAttribute>(offset0);
+    l1Attr->SetToType(MemoryType::MEM_L1);
+    PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+                                     [&l1Attr](Operation& op) { op.SetOpAttribute(l1Attr); });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_FALSE(operationUpdated);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumThree);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumZero);
+    for (auto* precedingSlice : {&preSlice0, &preSlice1}) {
+        auto attr = std::dynamic_pointer_cast<ViewOpAttribute>(precedingSlice->GetOpAttribute());
+        ASSERT_NE(attr, nullptr);
+        EXPECT_EQ(attr->GetTo(), MemoryType::MEM_UB);
+        EXPECT_EQ(precedingSlice->GetOOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    }
+}
+
+TEST_F(TestRemoveRedundantOpPass, ContractL1SliceWithoutPrecedingSliceShouldNotFold)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "ContractL1WithoutPreSlice",
+                                               "ContractL1WithoutPreSlice", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {input}, {contractOutput}, [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset));
+        });
+    auto l1Attr = std::make_shared<ViewOpAttribute>(offset);
+    l1Attr->SetToType(MemoryType::MEM_L1);
+    PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+                                     [&l1Attr](Operation& op) { op.SetOpAttribute(l1Attr); });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_FALSE(operationUpdated);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+}
+
+TEST_F(TestRemoveRedundantOpPass, ContractL1SliceWithMultipleInputProducersShouldNotFold)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "ContractL1MultiInputProducer",
+                                               "ContractL1MultiInputProducer", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto input0 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto input1 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto contractInput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    contractInput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    sliceOutput->SetMemoryTypeBoth(MemoryType::MEM_L1);
+
+    auto preAttr = std::make_shared<ViewOpAttribute>(offset);
+    preAttr->SetToType(MemoryType::MEM_UB);
+    PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {input0}, {contractInput},
+                                     [&preAttr](Operation& op) { op.SetOpAttribute(preAttr); });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {input1}, {contractInput},
+                                     [&preAttr](Operation& op) { op.SetOpAttribute(preAttr); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {contractInput}, {contractOutput}, [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset));
+        });
+    auto l1Attr = std::make_shared<ViewOpAttribute>(offset);
+    l1Attr->SetToType(MemoryType::MEM_L1);
+    PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+                                     [&l1Attr](Operation& op) { op.SetOpAttribute(l1Attr); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_FALSE(operationUpdated);
+    EXPECT_TRUE(newOps.empty());
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumThree);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    EXPECT_EQ(exp.GetIOperands().front(), sliceOutput);
+}
+
+TEST_F(TestRemoveRedundantOpPass, SliceContractPartialShouldGenerateViewWithoutMemoryTransform)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSliceContractPartialView",
+                                                      "TestSliceContractPartialView", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> inputShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto outCast = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                               TileOpFormat::TILEOP_ND, "out");
+
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_SLICE, {input}, {sliceOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_CONTRACT, {sliceOutput}, {contractOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
+    auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {contractOutput}, {outCast});
+
+    currFunctionPtr->inCasts_.push_back(input);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_SLICE), kNumZero);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_VIEW), kNumOne);
+    auto viewOp = FindSingleOp(currFunctionPtr, Opcode::OP_VIEW);
+    ASSERT_NE(viewOp, nullptr);
+    EXPECT_EQ(expOp.GetInputOperand(kSizeZero), viewOp->GetOOperands().front());
+}
+
+TEST_F(TestRemoveRedundantOpPass, SingleSliceContractZeroOffsetOutcastShouldBecomeView)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "SingleSliceContractZeroOffsetOutcast",
+                                               "SingleSliceContractZeroOffsetOutcast", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> inputShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> sliceOffset = {kNumFour, kNumZero};
+    std::vector<int64_t> contractOffset = {kNumZero, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto sliceInput = IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                                      TileOpFormat::TILEOP_ND, "out");
+    input->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    sliceInput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    sliceOutput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    contractOutput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {input}, {sliceInput});
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {sliceInput}, {sliceOutput},
+        [&sliceOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(sliceOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {sliceOutput}, {contractOutput},
+        [&contractOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(contractOffset)); });
+    function->inCasts_.push_back(input);
+    function->outCasts_.push_back(contractOutput);
+
+    RemoveRedundantOp pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
+    auto* view = FindSingleOp(function, Opcode::OP_VIEW);
+    ASSERT_NE(view, nullptr);
+    auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(view->GetOpAttribute());
+    ASSERT_NE(viewAttr, nullptr);
+    EXPECT_EQ(viewAttr->GetFromOffset(), sliceOffset);
+    EXPECT_EQ(view->GetIOperands().front(), sliceInput);
+    EXPECT_EQ(view->GetOOperands().front(), contractOutput);
+}
+
+TEST_F(TestRemoveRedundantOpPass, SliceContractPartialShouldGenerateSliceWithMemoryTransform)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSliceContractPartialSlice",
+                                                      "TestSliceContractPartialSlice", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> inputShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    input->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    sliceOutput->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    contractOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+    auto outCast = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                               TileOpFormat::TILEOP_ND, "out");
+
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_SLICE, {input}, {sliceOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_CONTRACT, {sliceOutput}, {contractOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
+    auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {contractOutput}, {outCast});
+
+    currFunctionPtr->inCasts_.push_back(input);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_VIEW), kNumZero);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_SLICE), kNumOne);
+    auto sliceOp = FindSingleOp(currFunctionPtr, Opcode::OP_SLICE);
+    ASSERT_NE(sliceOp, nullptr);
+    EXPECT_EQ(expOp.GetInputOperand(kSizeZero), sliceOp->GetOOperands().front());
+}
+
 /*
 TestGenerateViewWithNonViewProducer
 inCast{8,16}->view->Tensor1{4,16}->assemble->outCast{16,16}
@@ -1690,6 +2574,65 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewWithNonViewProducer)
     }
     EXPECT_EQ(viewNum, kNumOne);
     EXPECT_EQ(assembleNum, kNumTwo);
+}
+
+TEST_F(TestRemoveRedundantOpPass, PerfectMatchWithNonViewProducerShouldNotBypass)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "PerfectMatchWithNonViewProducer",
+                                               "PerfectMatchWithNonViewProducer", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> sourceShape = {kNumTwo, kNumTwo, kNumExpFour};
+    std::vector<int64_t> flatShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumTwo, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> partOffset = {kNumTwo, kNumZero};
+
+    auto source = IRBuilder().CreateTensorVar(DT_FP32, sourceShape, CreateTestConstIntVector(sourceShape));
+    auto start = IRBuilder().CreateTensorVar(DT_FP32, flatShape, CreateTestConstIntVector(flatShape));
+    auto viewOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto otherInput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto otherValue = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto assembled = IRBuilder().CreateTensorVar(DT_FP32, flatShape, CreateTestConstIntVector(flatShape));
+    auto reshaped = IRBuilder().CreateTensorVar(DT_FP32, sourceShape, CreateTestConstIntVector(sourceShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, sourceShape, CreateTestConstIntVector(sourceShape),
+                                              TileOpFormat::TILEOP_ND, "output");
+
+    source->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    start->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    viewOutput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    otherInput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    otherValue->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    assembled->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    reshaped->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    output->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+
+    PassOperationUtils::AddOperation(*function, Opcode::OP_RESHAPE, {source}, {start});
+    PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {start}, {viewOutput}, [&zeroOffset](Operation& op) {
+        op.SetOpAttribute(std::make_shared<ViewOpAttribute>(zeroOffset));
+    });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_ASSEMBLE, {viewOutput}, {assembled},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {otherInput}, {otherValue});
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_ASSEMBLE, {otherValue}, {assembled},
+        [&partOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(partOffset)); });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_RESHAPE, {assembled}, {reshaped});
+    auto& finalExp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {reshaped}, {output});
+
+    function->inCasts_.push_back(source);
+    function->inCasts_.push_back(otherInput);
+    function->outCasts_.push_back(output);
+
+    RemoveRedundantOp pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_RESHAPE), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_EXP), kNumTwo);
+    EXPECT_EQ(finalExp.GetIOperands().front(), reshaped);
 }
 
 /*
@@ -1973,10 +2916,10 @@ TEST_F(TestRemoveRedundantOpPass, TestSkipViewConflictAfterRemoveRedundantOp)
         if (op.GetOpcode() == Opcode::OP_REGISTER_COPY) {
             regCopyNum++;
         }
-        if (op.GetOpcode() == Opcode::OP_VIEW) {
+        if (op.GetOpcode() == Opcode::OP_VIEW || op.GetOpcode() == Opcode::OP_SLICE) {
             viewNum++;
         }
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE || op.GetOpcode() == Opcode::OP_CONTRACT) {
             assembleNum++;
         }
         if (op.GetOpcode() == Opcode::OP_CAST) {
@@ -1987,6 +2930,269 @@ TEST_F(TestRemoveRedundantOpPass, TestSkipViewConflictAfterRemoveRedundantOp)
     EXPECT_EQ(castNum, 2);
     EXPECT_EQ(viewNum, 3);
     EXPECT_EQ(assembleNum, 4);
+}
+
+TEST_F(TestRemoveRedundantOpPass, NonPerfectContiguousViewAssembleShouldGenerateSingleView)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "NonPerfectContiguousViewAssemble",
+                                               "NonPerfectContiguousViewAssemble", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> inputShape = {kNumExpEight, kNumExpSeven};
+    std::vector<int64_t> partShape = {kNumExpSix, kNumExpSeven};
+    std::vector<int64_t> outputShape = {kNumExpSeven, kNumExpSeven};
+    std::vector<int64_t> sourceOffset0 = {kNumExpSeven, kNumZero};
+    std::vector<int64_t> sourceOffset1 = {192, kNumZero};
+    std::vector<int64_t> targetOffset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> targetOffset1 = {kNumExpSix, kNumZero};
+
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto part0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto part1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto assembled = IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape),
+                                              TileOpFormat::TILEOP_ND, "output");
+    input->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    part0->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    part1->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    assembled->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    output->SetMemoryTypeBoth(MemoryType::MEM_UB);
+
+    PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {input}, {part0}, [&sourceOffset0](Operation& op) {
+        op.SetOpAttribute(std::make_shared<ViewOpAttribute>(sourceOffset0));
+    });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {input}, {part1}, [&sourceOffset1](Operation& op) {
+        op.SetOpAttribute(std::make_shared<ViewOpAttribute>(sourceOffset1));
+    });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_ASSEMBLE, {part0}, {assembled},
+        [&targetOffset0](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(targetOffset0)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_ASSEMBLE, {part1}, {assembled},
+        [&targetOffset1](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(targetOffset1)); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {assembled}, {output});
+    function->inCasts_.push_back(input);
+    function->outCasts_.push_back(output);
+
+    RemoveRedundantOp pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumZero);
+    auto* view = FindSingleOp(function, Opcode::OP_VIEW);
+    ASSERT_NE(view, nullptr);
+    auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(view->GetOpAttribute());
+    ASSERT_NE(viewAttr, nullptr);
+    EXPECT_EQ(viewAttr->GetFromOffset(), sourceOffset0);
+    EXPECT_EQ(view->GetIOperands().front(), input);
+    EXPECT_EQ(exp.GetIOperands().front(), view->GetOOperands().front());
+}
+
+TEST_F(TestRemoveRedundantOpPass, SliceContractWithPartialValidShapeShouldGenerateSingleView)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "SliceContractPartialValidShape",
+                                               "SliceContractPartialValidShape", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> inputShape = {kNumExpEight, kNumExpSeven};
+    std::vector<int64_t> partShape = {kNumExpSix, kNumExpFive};
+    std::vector<int64_t> outputShape = {kNumExpEight, kNumExpFive};
+    std::vector<SymbolicScalar> partValidShape = CreateTestConstIntVector(partShape);
+    std::vector<std::vector<int64_t>> targetOffsets = {
+        {kNumZero, kNumZero}, {kNumExpSix, kNumZero}, {kNumExpSeven, kNumZero}, {192, kNumZero}};
+
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto assembled = IRBuilder().CreateTensorVar(DT_FP32, outputShape, partValidShape);
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, outputShape, partValidShape, TileOpFormat::TILEOP_ND, "output");
+    input->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    assembled->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    output->SetMemoryTypeBoth(MemoryType::MEM_UB);
+
+    for (const auto& targetOffset : targetOffsets) {
+        std::vector<int64_t> sourceOffset = {targetOffset[0], kNumExpFive};
+        auto part = IRBuilder().CreateTensorVar(DT_FP32, partShape, partValidShape);
+        part->SetMemoryTypeBoth(MemoryType::MEM_UB);
+        PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {input}, {part}, [&sourceOffset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(sourceOffset));
+        });
+        PassOperationUtils::AddOperation(
+            *function, Opcode::OP_CONTRACT, {part}, {assembled},
+            [&targetOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(targetOffset)); });
+    }
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {assembled}, {output});
+    function->inCasts_.push_back(input);
+    function->outCasts_.push_back(output);
+
+    RemoveRedundantOp pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
+    auto* view = FindSingleOp(function, Opcode::OP_VIEW);
+    ASSERT_NE(view, nullptr);
+    auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(view->GetOpAttribute());
+    ASSERT_NE(viewAttr, nullptr);
+    EXPECT_EQ(viewAttr->GetFromOffset(), (std::vector<int64_t>{kNumZero, kNumExpFive}));
+    EXPECT_EQ(view->GetIOperands().front(), input);
+    EXPECT_EQ(exp.GetIOperands().front(), view->GetOOperands().front());
+}
+
+TEST_F(TestRemoveRedundantOpPass, OrderedViewAssembleWithDifferentTranslationsShouldNotFold)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "OrderedViewAssemble", "OrderedViewAssemble",
+                                               nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> inputShape = {kNumExpEight, kNumExpSeven};
+    std::vector<int64_t> partShape = {kNumExpSix, kNumExpSeven};
+    std::vector<int64_t> outputShape = {kNumExpSeven, kNumExpSeven};
+    std::vector<int64_t> sourceOffset0 = {120, kNumZero};
+    std::vector<int64_t> sourceOffset1 = {192, kNumZero};
+    std::vector<int64_t> targetOffset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> targetOffset1 = {kNumExpSix, kNumZero};
+
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto part0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto part1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto assembled = IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape),
+                                              TileOpFormat::TILEOP_ND, "output");
+    input->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    part0->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    part1->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    assembled->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    output->SetMemoryTypeBoth(MemoryType::MEM_UB);
+
+    PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {input}, {part0}, [&sourceOffset0](Operation& op) {
+        op.SetOpAttribute(std::make_shared<ViewOpAttribute>(sourceOffset0));
+    });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {input}, {part1}, [&sourceOffset1](Operation& op) {
+        op.SetOpAttribute(std::make_shared<ViewOpAttribute>(sourceOffset1));
+    });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_ASSEMBLE, {part0}, {assembled},
+        [&targetOffset0](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(targetOffset0)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_ASSEMBLE, {part1}, {assembled},
+        [&targetOffset1](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(targetOffset1)); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {assembled}, {output});
+    function->inCasts_.push_back(input);
+    function->outCasts_.push_back(output);
+
+    RemoveRedundantOp pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumTwo);
+    EXPECT_EQ(exp.GetIOperands().front(), assembled);
+}
+
+TEST_F(TestRemoveRedundantOpPass, ParallelViewAssembleToOutcastShouldRelinkAllProducers)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "ParallelViewAssembleToOutcast",
+                                               "ParallelViewAssembleToOutcast", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> shape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumOne, kNumExpFour};
+    auto input0 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto input1 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto sharedOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND,
+                                               "outcast");
+    input0->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    input1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    sharedOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+
+    auto& producer0 = PassOperationUtils::AddOperation(*function, Opcode::OP_ADD, {input0, input1}, {sharedOutput});
+    auto& producer1 = PassOperationUtils::AddOperation(*function, Opcode::OP_ADD, {input1, input0}, {sharedOutput});
+    for (int64_t idx = 0; idx < kNumFour; ++idx) {
+        std::vector<int64_t> offset = {idx, kNumZero};
+        auto part = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+        part->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+        PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {sharedOutput}, {part}, [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+        });
+        PassOperationUtils::AddOperation(*function, Opcode::OP_ASSEMBLE, {part}, {outcast}, [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+        });
+    }
+    function->inCasts_.push_back(input0);
+    function->inCasts_.push_back(input1);
+    function->outCasts_.push_back(outcast);
+
+    RemoveRedundantOp pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ADD), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumZero);
+    EXPECT_EQ(outcast->GetProducers().size(), kNumTwo);
+    EXPECT_TRUE(outcast->HasProducer(&producer0));
+    EXPECT_TRUE(outcast->HasProducer(&producer1));
+    EXPECT_EQ(producer0.GetOOperands().front(), outcast);
+    EXPECT_EQ(producer1.GetOOperands().front(), outcast);
+    for (auto& op : function->Operations()) {
+        if (!op.GetIOperands().empty() && !op.GetOOperands().empty()) {
+            EXPECT_NE(op.GetIOperands().front(), op.GetOOperands().front());
+        }
+    }
+}
+
+TEST_F(TestRemoveRedundantOpPass, ParallelViewAssembleToIntermediateShouldKeepStartProducer)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "ParallelViewAssembleToIntermediate",
+                                               "ParallelViewAssembleToIntermediate", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> shape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumTwo, kNumExpFour};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset1 = {kNumTwo, kNumZero};
+    auto input0 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto input1 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto start = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto part0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto part1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto assembled = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    input0->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    input1->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    start->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    part0->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    part1->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    assembled->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    output->SetMemoryTypeBoth(MemoryType::MEM_UB);
+
+    auto& startProducer = PassOperationUtils::AddOperation(*function, Opcode::OP_ADD, {input0, input1}, {start});
+    PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {start}, {part0}, [&offset0](Operation& op) {
+        op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+    });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {start}, {part1}, [&offset1](Operation& op) {
+        op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
+    });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_ASSEMBLE, {part0}, {assembled}, [&offset0](Operation& op) {
+        op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset0));
+    });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_ASSEMBLE, {part1}, {assembled}, [&offset1](Operation& op) {
+        op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1));
+    });
+    auto& consumer = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {assembled}, {output});
+    function->inCasts_.push_back(input0);
+    function->inCasts_.push_back(input1);
+    function->outCasts_.push_back(output);
+
+    RemoveRedundantOp pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ADD), kNumOne);
+    EXPECT_EQ(consumer.GetIOperands().front(), start);
+    EXPECT_EQ(startProducer.GetOOperands().front(), start);
+    EXPECT_TRUE(start->HasProducer(&startProducer));
 }
 } // namespace tile_fwk
 } // namespace npu

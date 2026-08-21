@@ -19,6 +19,8 @@ import torch
 from torch._subclasses.fake_tensor import FakeTensor
 import torch_npu
 
+import pypto
+
 try:
     from torch._dynamo import allow_in_graph
 except Exception:
@@ -684,6 +686,7 @@ def do_test_lightning_indexer_prolog_quant(case_name, is_acl=False):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_b1_s1_8k_s2_8k():
     do_test_lightning_indexer_prolog_quant("QuantLightningIndexerPrologSTest.b1_s1_8k_s2_8k", is_acl=False)
 
@@ -699,6 +702,7 @@ def test_b4_s1_8k_s2_8k():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_b1_s1_4_s2_8k():
     do_test_lightning_indexer_prolog_quant("QuantLightningIndexerPrologSTest.b1_s1_4_s2_8k", is_acl=False)
 
@@ -729,11 +733,13 @@ def test_b4_s1_128k_s2_128k():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_b1_s1_8k_333_s2_8k_333():
     do_test_lightning_indexer_prolog_quant("QuantLightningIndexerPrologSTest.b1_s1_8k_333_s2_8k_333", is_acl=False)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_b111_s1_1_s2_8k():
     do_test_lightning_indexer_prolog_quant("QuantLightningIndexerPrologSTest.b111_s1_1_s2_8k", is_acl=False)
 

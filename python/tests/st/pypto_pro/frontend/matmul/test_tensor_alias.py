@@ -23,6 +23,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -45,19 +47,29 @@ def call_kernel_tensor_alias(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -81,6 +93,7 @@ def call_kernel_tensor_alias(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_load_tensor_alias():
     device = ST_DEVICE
     _require_a5(device)
@@ -106,19 +119,29 @@ def call_kernel_tile_alias(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -136,6 +159,7 @@ def call_kernel_tile_alias(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_load_tile_alias():
     device = ST_DEVICE
     _require_a5(device)
@@ -158,19 +182,29 @@ def call_kernel_tile_alias_rebind(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         tile_alias = cur_a
@@ -187,6 +221,7 @@ def call_kernel_tile_alias_rebind(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tile_alias_after_source_rebind():
     device = ST_DEVICE
     _require_a5(device)
@@ -199,5 +234,6 @@ def test_tile_alias_after_source_rebind():
     ref = torch.matmul(a.float(), b.float())
     torch.testing.assert_close(out, ref, rtol=1e-2, atol=1e-2)
     logging.info("test_tile_alias_after_source_rebind passed")
+
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")

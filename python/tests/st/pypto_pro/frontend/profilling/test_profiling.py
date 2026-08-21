@@ -33,6 +33,8 @@ import pytest
 import torch
 import torch_npu
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -90,6 +92,7 @@ def prof_add_kernel(
 # Test 1: torch_npu.profiler API 采集 — 验证 kernel_details.csv
 # =============================================================================
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_profiler_api_kernel_details():
     """测试 torch_npu.profiler API 采集模式，验证 profiler 能正确生成 kernel_details.csv 并包含 PyPTO kernel 记录。
 
@@ -120,12 +123,8 @@ def test_profiler_api_kernel_details():
         record_shapes=False,
         profile_memory=True,
         experimental_config=experimental_config,
-        schedule=torch_npu.profiler.schedule(
-            wait=0, warmup=0, active=1, repeat=1, skip_first=5
-        ),
-        on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(
-            output_dir, analyse_flag=True
-        ),
+        schedule=torch_npu.profiler.schedule(wait=0, warmup=0, active=1, repeat=1, skip_first=5),
+        on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(output_dir, analyse_flag=True),
     ) as prof:
         for _ in range(10):
             prof_add_kernel(x, y, z)
@@ -134,9 +133,7 @@ def test_profiler_api_kernel_details():
 
     logging.info("profiler output dir: %s", output_dir)
 
-    kernel_detail_files = glob.glob(
-        os.path.join(output_dir, "**", "kernel_details.csv"), recursive=True
-    )
+    kernel_detail_files = glob.glob(os.path.join(output_dir, "**", "kernel_details.csv"), recursive=True)
     logging.info("Profiler output dir: %s", output_dir)
     logging.info("Found kernel_details files: %s", kernel_detail_files)
     assert len(kernel_detail_files) > 0, (
@@ -159,8 +156,7 @@ def test_profiler_api_kernel_details():
             break
 
     assert matched, (
-        f"kernel_details.csv 中未找到 Name/Type 包含 'prof_add_kernel' 的记录。\n"
-        f"已检查文件: {kernel_detail_files}"
+        f"kernel_details.csv 中未找到 Name/Type 包含 'prof_add_kernel' 的记录。\n已检查文件: {kernel_detail_files}"
     )
 
     logging.info("profiler_api_kernel_details passed!")
@@ -171,6 +167,7 @@ def test_profiler_api_kernel_details():
 # Test 2: torch_npu.profiler 采集 — 验证 trace_view.json 生成
 # =============================================================================
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_profiler_api_trace_view():
     """测试 torch_npu.profiler API 采集模式，验证 profiler 能正确生成 trace_view.json（或 trace_result.json）且文件非空。
 
@@ -200,12 +197,8 @@ def test_profiler_api_trace_view():
         record_shapes=False,
         profile_memory=True,
         experimental_config=experimental_config,
-        schedule=torch_npu.profiler.schedule(
-            wait=0, warmup=0, active=1, repeat=1, skip_first=5
-        ),
-        on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(
-            output_dir, analyse_flag=True
-        ),
+        schedule=torch_npu.profiler.schedule(wait=0, warmup=0, active=1, repeat=1, skip_first=5),
+        on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(output_dir, analyse_flag=True),
     ) as prof:
         for _ in range(10):
             prof_add_kernel(x, y, z)
@@ -216,9 +209,7 @@ def test_profiler_api_trace_view():
     if not trace_files:
         trace_files = glob.glob(os.path.join(output_dir, "**", "trace_result.json"), recursive=True)
 
-    assert len(trace_files) > 0, (
-        f"未在 {output_dir} 下找到 trace_view.json 或 trace_result.json"
-    )
+    assert len(trace_files) > 0, f"未在 {output_dir} 下找到 trace_view.json 或 trace_result.json"
 
     for tf in trace_files:
         sz = os.path.getsize(tf)

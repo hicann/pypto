@@ -21,13 +21,15 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 
-LINE = 128          # elements per line (fp16)
-N_LINES = 512       # total lines in the source GM tensor
-N_PAIRS = 32        # number of pl.load ops, each loading a [2, LINE] tile
+LINE = 128  # elements per line (fp16)
+N_LINES = 512  # total lines in the source GM tensor
+N_PAIRS = 32  # number of pl.load ops, each loading a [2, LINE] tile
 OUT_LINES = N_PAIRS * 2  # 64 gathered lines
 
 
@@ -57,14 +59,15 @@ def set_stride_basic_kernel(
     ub_db = pl.make_tile_group(type=ub_type, addrs=0x0000, mutex_ids=[0, 1])
 
     with pl.section_vector():
-        s = strides[0, 0]          # element (row) stride, read from GM input
+        s = strides[0, 0]  # element (row) stride, read from GM input
         tile = ub_db.next()
-        pl.set_stride(x, [s, 1])           # override the GM row stride
-        pl.load(tile, x, [0, 0])           # row0 = line 0, row1 = line 0 + s/LINE
+        pl.set_stride(x, [s, 1])  # override the GM row stride
+        pl.load(tile, x, [0, 0])  # row0 = line 0, row1 = line 0 + s/LINE
         pl.store(out, tile, [0, 0])
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_set_stride_basic():
     if not _is_a5():
         return
@@ -102,14 +105,15 @@ def gather_stride_kernel(
 
     with pl.section_vector():
         for i in pl.range(0, N_PAIRS, 1):
-            s = strides[0, i]      # per-pair element (row) stride from GM input
+            s = strides[0, i]  # per-pair element (row) stride from GM input
             tile = ub_db.next()
-            pl.set_stride(x, [s, 1])       # positive stride between the two loaded lines
-            pl.load(tile, x, [i, 0])       # row0 = line i, row1 = line i + s/LINE
+            pl.set_stride(x, [s, 1])  # positive stride between the two loaded lines
+            pl.load(tile, x, [i, 0])  # row0 = line i, row1 = line i + s/LINE
             pl.store(out, tile, [2 * i, 0])
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_gather_64_lines_with_set_stride():
     if not _is_a5():
         return

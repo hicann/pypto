@@ -30,6 +30,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -57,27 +59,44 @@ def scale_store_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
-            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
         left_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
-            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
         right_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right,
-            layout=pl.ZN, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Right,
+            layout=pl.ZN,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
 
         acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-            layout=pl.NZ, fractal=1024, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Acc,
+            layout=pl.NZ,
+            fractal=1024,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
 
@@ -119,27 +138,44 @@ def scale_move_kernel(
 
     with pl.section_cube():
         mat_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
-            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
         left_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
-            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
         right_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right,
-            layout=pl.ZN, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Right,
+            layout=pl.ZN,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
 
         acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-            layout=pl.NZ, fractal=1024, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Acc,
+            layout=pl.NZ,
+            fractal=1024,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
 
@@ -185,27 +221,44 @@ def scale_dynamic_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
-            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
         left_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
-            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
         right_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right,
-            layout=pl.ZN, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Right,
+            layout=pl.ZN,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
 
         acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-            layout=pl.NZ, fractal=1024, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Acc,
+            layout=pl.NZ,
+            fractal=1024,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
 
@@ -235,6 +288,7 @@ def scale_dynamic_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("m,n", [(64, 64), (48, 96), (96, 96)], ids=["full", "row_tail", "dual_tail"])
+@pypto.options(pass_options={"enable_slice": False})
 def test_scale_store_per_tensor(m, n):
     """编译期 float scale per-tensor store，覆盖完整/行尾/双尾块有效区。"""
     device = ST_DEVICE
@@ -265,6 +319,7 @@ def test_scale_store_per_tensor(m, n):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_scale_store_random_input():
     """随机输入 per-tensor 量化：golden = clamp(round(raw_ref * scale))。
 
@@ -300,6 +355,7 @@ def test_scale_store_random_input():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_scale_move_per_tensor():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -324,6 +380,7 @@ def test_scale_move_per_tensor():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_scale_dynamic():
     device = ST_DEVICE
     torch.npu.set_device(device)

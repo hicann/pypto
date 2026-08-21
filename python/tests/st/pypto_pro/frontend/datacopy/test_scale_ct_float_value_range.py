@@ -21,6 +21,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -56,27 +58,44 @@ def _make_ct_kernel(scale_value: float):
     ):
         with pl.section_cube():
             mat_type = pl.TileType(
-                shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
-                layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+                shape=[64, 64],
+                dtype=pl.DT_FP32,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
             )
             q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
             k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
             left_type = pl.TileType(
-                shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
-                layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+                shape=[64, 64],
+                dtype=pl.DT_FP32,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
             )
             q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
             right_type = pl.TileType(
-                shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right,
-                layout=pl.ZN, valid_shape=[-1, -1], compact=1,
+                shape=[64, 64],
+                dtype=pl.DT_FP32,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
             )
             k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
 
             acc_type = pl.TileType(
-                shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                layout=pl.NZ, fractal=1024, valid_shape=[-1, -1], compact=1,
+                shape=[64, 64],
+                dtype=pl.DT_FP32,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
             )
             acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
 
@@ -125,6 +144,7 @@ def _make_ct_kernel(scale_value: float):
     ],
     ids=["positive", "negative", "zero", "unit", "fraction", "very_small", "very_large"],
 )
+@pypto.options(pass_options={"enable_slice": False})
 def test_ct_float_scale_value_range(scale_value, pattern, m, n):
     """编译期 float scale 值域：与 clamp(round(x * scale)) golden 对比"""
     device = ST_DEVICE

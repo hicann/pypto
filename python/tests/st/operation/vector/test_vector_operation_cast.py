@@ -15,6 +15,7 @@ from test_case_class_vector_operations import CastTestCase
 import pypto
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_tensor_cast():
     original_shape = (64, 64)
     input_tensors = [

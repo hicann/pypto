@@ -125,13 +125,13 @@ void check(Function* function, ComputationalGraphBuilder& G)
     auto inputTensor2 = G.GetTensor("inputTensor2");
     auto inputTensor3 = G.GetTensor("inputTensor3");
     auto viewOp0 = *inputTensor0->GetConsumers().begin();
-    EXPECT_EQ(viewOp0->GetOpcode(), Opcode::OP_VIEW);
+    EXPECT_EQ(viewOp0->GetOpcode(), Opcode::OP_SLICE);
     auto viewOp1 = *inputTensor1->GetConsumers().begin();
-    EXPECT_EQ(viewOp1->GetOpcode(), Opcode::OP_VIEW);
+    EXPECT_EQ(viewOp1->GetOpcode(), Opcode::OP_SLICE);
     auto viewOp2 = *inputTensor2->GetConsumers().begin();
-    EXPECT_EQ(viewOp2->GetOpcode(), Opcode::OP_VIEW);
+    EXPECT_EQ(viewOp2->GetOpcode(), Opcode::OP_SLICE);
     auto viewOp3 = *inputTensor3->GetConsumers().begin();
-    EXPECT_EQ(viewOp3->GetOpcode(), Opcode::OP_VIEW);
+    EXPECT_EQ(viewOp3->GetOpcode(), Opcode::OP_SLICE);
     auto insertTensor0 = viewOp0->GetOOperands()[0];
     EXPECT_EQ(insertTensor0->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
     auto insertTensor1 = viewOp1->GetOOperands()[0];
@@ -141,13 +141,13 @@ void check(Function* function, ComputationalGraphBuilder& G)
     auto insertTensor3 = viewOp3->GetOOperands()[0];
     EXPECT_EQ(insertTensor3->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
     auto assembleOp0 = *insertTensor0->GetConsumers().begin();
-    EXPECT_EQ(assembleOp0->GetOpcode(), Opcode::OP_ASSEMBLE);
+    EXPECT_EQ(assembleOp0->GetOpcode(), Opcode::OP_CONTRACT);
     auto assembleOp1 = *insertTensor1->GetConsumers().begin();
-    EXPECT_EQ(assembleOp1->GetOpcode(), Opcode::OP_ASSEMBLE);
+    EXPECT_EQ(assembleOp1->GetOpcode(), Opcode::OP_CONTRACT);
     auto assembleOp2 = *insertTensor2->GetConsumers().begin();
-    EXPECT_EQ(assembleOp2->GetOpcode(), Opcode::OP_ASSEMBLE);
+    EXPECT_EQ(assembleOp2->GetOpcode(), Opcode::OP_CONTRACT);
     auto assembleOp3 = *insertTensor3->GetConsumers().begin();
-    EXPECT_EQ(assembleOp3->GetOpcode(), Opcode::OP_ASSEMBLE);
+    EXPECT_EQ(assembleOp3->GetOpcode(), Opcode::OP_CONTRACT);
 }
 TEST_F(TestInferDiscontinuousInput, testScenarioInsert_1)
 {
@@ -191,8 +191,8 @@ TEST_F(TestInferDiscontinuousInput, testViewAssembleScenario)
     G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_DEVICE_DDR, "t1");
     G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_DEVICE_DDR, "t2");
     G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_DEVICE_DDR, "t3");
-    G.AddOp(Opcode::OP_VIEW, {"t1"}, {"t2"}, "view");
-    G.AddOp(Opcode::OP_ASSEMBLE, {"t2"}, {"t3"}, "assemble");
+    G.AddOp(Opcode::OP_SLICE, {"t1"}, {"t2"}, "view");
+    G.AddOp(Opcode::OP_CONTRACT, {"t2"}, {"t3"}, "assemble");
     auto view = G.GetOp("view");
     view->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     auto assemble = G.GetOp("assemble");
@@ -277,18 +277,18 @@ TEST_F(TestInferDiscontinuousInput, testValidShapeInfer)
     EXPECT_EQ(inferDiscontinuousInput.PostCheck(*function), SUCCESS);
 
     auto insertedViewOps = function->Operations().DuplicatedOpList();
-    bool foundViewWithValidShape = false;
+    bool foundViewLikeWithValidShape = false;
     for (const auto& op : insertedViewOps) {
-        if (op->GetOpcode() == Opcode::OP_VIEW) {
+        if (IsViewLike(op->GetOpcode())) {
             auto oOperand = op->GetOOperands().front();
             auto dynValidShape = oOperand->GetDynValidShape();
             if (!dynValidShape.empty()) {
-                foundViewWithValidShape = true;
+                foundViewLikeWithValidShape = true;
                 EXPECT_EQ(dynValidShape.size(), 2);
             }
         }
     }
-    EXPECT_TRUE(foundViewWithValidShape);
+    EXPECT_TRUE(foundViewLikeWithValidShape);
 }
 
 // Construct DDR VIEW->ASSEMBLE chain: DDRTensorAssignUB converts tensor type to UB
@@ -374,7 +374,7 @@ TEST_F(TestInferDiscontinuousInput, testDDRTensorAssignUBNoInsert)
     EXPECT_EQ(inferDiscontinuousInput.Run(*function, "", "", 0), SUCCESS);
     EXPECT_EQ(inferDiscontinuousInput.PostCheck(*function), SUCCESS);
 
-    // Verify no new VIEW or ASSEMBLE ops were inserted
+    // Verify no new VIEW or ASSEMBLE ops were inserted (SLICE/CONTRACT may be inserted instead)
     auto opList = function->Operations().DuplicatedOpList();
     int viewCount = 0;
     int assembleCount = 0;

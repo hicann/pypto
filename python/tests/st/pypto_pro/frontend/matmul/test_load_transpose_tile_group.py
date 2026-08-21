@@ -26,6 +26,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -129,7 +131,7 @@ def k_nt_group(
         pl.load(a_mat_temp, a, [0, 0])
         pl.load(b_mat, b_t, [0, 0], order=[1, 0])
         pl.move(a_left, a_mat_temp)
-        pl.move(b_right, b_mat)          # Mat[N,K] group -> Right[K,N]: reversed -> swap all slots
+        pl.move(b_right, b_mat)  # Mat[N,K] group -> Right[K,N]: reversed -> swap all slots
         pl.matmul(acc, a_left, b_right)
         pl.store(out, acc, [0, 0])
 
@@ -174,7 +176,7 @@ def k_tn_group(
         acc = acc_db.next()
         pl.load(a_mat, a_t, [0, 0], order=[1, 0])
         pl.load(b_mat, b, [0, 0])
-        pl.move(a_left, a_mat)           # Mat[K,M] group -> Left[M,K]: reversed -> swap all slots
+        pl.move(a_left, a_mat)  # Mat[K,M] group -> Left[M,K]: reversed -> swap all slots
         pl.move(b_right, b_mat)
         pl.matmul(acc, a_left, b_right)
         pl.store(out, acc, [0, 0])
@@ -220,8 +222,8 @@ def k_tt_group(
         acc = acc_db.next()
         pl.load(a_mat, a_t, [0, 0], order=[1, 0])
         pl.load(b_mat, b_t, [0, 0], order=[1, 0])
-        pl.move(a_left, a_mat)           # reversed -> swap all slots
-        pl.move(b_right, b_mat)          # reversed -> swap all slots
+        pl.move(a_left, a_mat)  # reversed -> swap all slots
+        pl.move(b_right, b_mat)  # reversed -> swap all slots
         pl.matmul(acc, a_left, b_right)
         pl.store(out, acc, [0, 0])
 
@@ -246,24 +248,28 @@ def _ab():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_group_nn(_ab):
     a, b = _ab
     _run(k_nn_group, a, b, a, b)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_group_nt(_ab):
     a, b = _ab
     _run(k_nt_group, a, b.t().contiguous(), a, b)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_group_tn(_ab):
     a, b = _ab
     _run(k_tn_group, a.t().contiguous(), b, a, b)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_group_tt(_ab):
     a, b = _ab
     _run(k_tt_group, a.t().contiguous(), b.t().contiguous(), a, b)

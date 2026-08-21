@@ -266,6 +266,7 @@ def ffn_activation_kernel(
     pypto.assemble(result, [0, 0], output)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_ffn_static_gelu(device_id=None):
     """Test static FFN with GELU activation."""
     print("=" * 60)
@@ -321,6 +322,7 @@ def test_ffn_static_gelu(device_id=None):
     print()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_ffn_static_swiglu(device_id=None):
     """Test static FFN with SwiGLU activation."""
     print("=" * 60)
@@ -378,6 +380,7 @@ def test_ffn_static_swiglu(device_id=None):
     print()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_ffn_dynamic_gelu(device_id: int = None, dynamic: bool = True):
     """Test dynamic FFN with GELU activation."""
     print("=" * 60)
@@ -429,9 +432,7 @@ def test_ffn_dynamic_gelu(device_id: int = None, dynamic: bool = True):
 
     output = torch.empty(batch_size, hidden_size, dtype=dtype, device=device)
     if config.use_dynamic_shape and config.activation == "gelu":
-        dynamic_gelu_activation_core(
-            hidden_states_torch, up_proj_weight_torch, down_proj_weight_torch, output, config
-        )
+        dynamic_gelu_activation_core(hidden_states_torch, up_proj_weight_torch, down_proj_weight_torch, output, config)
     else:
         ffn_activation_kernel(
             hidden_states_torch, gate_proj_weight_torch, up_proj_weight_torch, down_proj_weight_torch, output, config
@@ -443,6 +444,7 @@ def test_ffn_dynamic_gelu(device_id: int = None, dynamic: bool = True):
     print()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_ffn_static_relu(device_id: int = None):
     """Test static FFN with ReLU activation."""
     print("=" * 60)

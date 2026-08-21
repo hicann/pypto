@@ -21,6 +21,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -98,7 +100,6 @@ def fillpad_dynamic_cce_kernel(
         pl.system.bar_all()
 
 
-
 @pl.jit()
 def fillpad_inplace_dynamic_cce_kernel(
     x: pl.Tensor[[8, 8], pl.DT_INT32],
@@ -136,7 +137,6 @@ def fillpad_inplace_dynamic_cce_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(z, dst, [0, 0])
         pl.system.bar_all()
-
 
 
 @pl.jit()
@@ -177,14 +177,15 @@ def fillpad_expand_dynamic_cce_kernel(
         pl.system.bar_all()
 
 
-
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fillpad_dynamic_cce():
     _print_case_header("test_fillpad_dynamic_cce")
     _run_fillpad_cce_case("fillpad_dynamic_cce", fillpad_dynamic_cce_kernel, (8, 8), "output", ST_DEVICE)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fillpad_inplace_dynamic_cce():
     _print_case_header("test_fillpad_inplace_dynamic_cce")
     _run_fillpad_cce_case(
@@ -197,6 +198,7 @@ def test_fillpad_inplace_dynamic_cce():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fillpad_expand_dynamic_cce():
     _print_case_header("test_fillpad_expand_dynamic_cce")
     _run_fillpad_cce_case("fillpad_expand_dynamic_cce", fillpad_expand_dynamic_cce_kernel, (8, 16), "output", ST_DEVICE)

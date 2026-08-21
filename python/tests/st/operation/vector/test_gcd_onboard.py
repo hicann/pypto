@@ -17,6 +17,7 @@ import torch
 import pypto
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_gcd_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

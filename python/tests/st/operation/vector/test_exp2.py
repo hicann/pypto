@@ -19,6 +19,7 @@ import torch
 import pypto
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_exp2():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -60,6 +61,7 @@ def test_vector_operation_exp2():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_exp2_int8():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -101,6 +103,7 @@ def test_vector_operation_exp2_int8():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_exp2_uint8():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

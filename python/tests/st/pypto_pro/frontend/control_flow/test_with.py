@@ -25,6 +25,8 @@ from pypto_pro.language import Vf
 import pytest
 import torch
 
+import pypto
+
 vf = Vf
 
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -63,6 +65,7 @@ def _ref(tdt, fn, x, y):
 # with_section_cube: matmul via section_cube  (FP16->FP32 / BF16->FP32 / FP32->FP32)
 # ===================================================================
 
+
 # =============================================================================
 # Test 1: section_cube 矩阵乘 - FP16
 #         section_cube matmul - FP16
@@ -75,19 +78,29 @@ def with_section_cube_fp16_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -114,19 +127,29 @@ def with_section_cube_bf16_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 32], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[32, 64], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 32], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[32, 64], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -153,19 +176,29 @@ def with_section_cube_fp32_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -188,6 +221,7 @@ WITH_SECTION_CUBE_KERNELS = {
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_with_section_cube():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -214,6 +248,7 @@ def test_with_section_cube():
 #   x shapes covered by test: [128,128], [256,128], [1024,1024]
 # ===================================================================
 
+
 # =============================================================================
 # Test 4: section_cube 矩阵乘 shape 泛化
 #         section_cube matmul shape generalization
@@ -229,21 +264,33 @@ def with_section_cube_shape_generalization_kernel(
     n = y.shape[1]
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[CUBE_TILE, CUBE_TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[CUBE_TILE, CUBE_TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
-        type=pl.TileType(shape=[CUBE_TILE, CUBE_TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                         layout=pl.NZ),
-        addrs=0x0000, mutex_ids=[4, 5])
+        type=pl.TileType(
+            shape=[CUBE_TILE, CUBE_TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ
+        ),
+        addrs=0x0000,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[CUBE_TILE, CUBE_TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[6, 7])
+        addrs=0x0000,
+        mutex_ids=[6, 7],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[CUBE_TILE, CUBE_TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                         fractal=1024),
-        addrs=0x0000, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[CUBE_TILE, CUBE_TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, fractal=1024
+        ),
+        addrs=0x0000,
+        mutex_ids=[8],
+    )
 
     with pl.section_cube():
         pl.system.set_mm_layout_transform(enabled=True)
@@ -271,6 +318,7 @@ def with_section_cube_shape_generalization_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_with_section_cube_shape_generalization():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -291,7 +339,14 @@ def test_with_section_cube_shape_generalization():
         torch.testing.assert_close(z, z_ref, atol=2e-1, rtol=2e-2)
         logging.info(
             "test_with_section_cube_shape_generalization passed! x=[%d,%d] y=[%d,%d] z=[%d,%d] dtype=%s",
-            m_size, k_size, k_size, n_size, m_size, n_size, x.dtype)
+            m_size,
+            k_size,
+            k_size,
+            n_size,
+            m_size,
+            n_size,
+            x.dtype,
+        )
 
 
 # ===================================================================
@@ -347,6 +402,7 @@ def with_section_vf_min_exp_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_with_section_vf_min_exp():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -365,6 +421,7 @@ def test_with_section_vf_min_exp():
 # ===================================================================
 # with_section_if: section_vector with if/else add/sub  (FP16)
 # ===================================================================
+
 
 @pl.jit(auto_mutex=True)
 def with_section_if_fp16_kernel(
@@ -394,6 +451,7 @@ def with_section_if_fp16_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_with_section_if():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -416,6 +474,7 @@ def test_with_section_if():
 #   a: [64, 32], b: [32, 64], out: [64, 64]
 # ===================================================================
 
+
 # =============================================================================
 # Test 7: section_cube 后接 section_vector 加法
 #         section_vector add after section_cube
@@ -429,19 +488,29 @@ def with_cube_then_vector_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
 
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -461,13 +530,19 @@ def with_cube_then_vector_kernel(
         pl.system.wait_cross_core(pipe=pl.PipeType.MTE2, event_id=0)
         mm_vec = pl.make_tile_group(
             type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=0x0000, mutex_ids=[5])
+            addrs=0x0000,
+            mutex_ids=[5],
+        )
         x_vec = pl.make_tile_group(
             type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=0x4000, mutex_ids=[6])
+            addrs=0x4000,
+            mutex_ids=[6],
+        )
         out_vec = pl.make_tile_group(
             type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=0x8000, mutex_ids=[7])
+            addrs=0x8000,
+            mutex_ids=[7],
+        )
         mm = mm_vec.current()
         xv = x_vec.current()
         ov = out_vec.current()
@@ -478,6 +553,7 @@ def with_cube_then_vector_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_with_cube_then_vector():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -525,19 +601,29 @@ def with_cube_then_vf_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
 
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -557,13 +643,19 @@ def with_cube_then_vf_kernel(
         pl.system.wait_cross_core(pipe=pl.PipeType.MTE2, event_id=0)
         mm_vec = pl.make_tile_group(
             type=pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=0x0000, mutex_ids=[5])
+            addrs=0x0000,
+            mutex_ids=[5],
+        )
         d_vec = pl.make_tile_group(
             type=pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=0x0400, mutex_ids=[6])
+            addrs=0x0400,
+            mutex_ids=[6],
+        )
         out_vec = pl.make_tile_group(
             type=pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=0x0800, mutex_ids=[7])
+            addrs=0x0800,
+            mutex_ids=[7],
+        )
         mm = mm_vec.current()
         dv = d_vec.current()
         ov = out_vec.current()
@@ -578,6 +670,7 @@ def with_cube_then_vf_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_with_cube_then_vf():
     device = ST_DEVICE
     torch.npu.set_device(device)

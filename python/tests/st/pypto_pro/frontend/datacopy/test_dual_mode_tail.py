@@ -32,6 +32,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -41,7 +43,7 @@ TILE = 128
 K = 128
 N = 128
 TILE_HALF = TILE // 2  # 64
-NUM_M_TILES = 3       # 2 full + 1 tail
+NUM_M_TILES = 3  # 2 full + 1 tail
 
 
 def _require_a5(device):
@@ -62,6 +64,7 @@ def _inputs(device, shape, dtype=torch.float16):
 # DualModeSplitM: M-axis split, tail with odd/even M
 # ================================================================
 
+
 @pl.jit(auto_mutex=True)
 def call_kernel_split_m(
     a: pl.Tensor[[pl.DYNAMIC, K], pl.DT_FP16],
@@ -70,27 +73,41 @@ def call_kernel_split_m(
     m_total: pl.DT_INT32,
 ):
     a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x00000, mutex_ids=[0])
+        type=pl.TileType(
+            shape=[TILE, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        type=pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat), addrs=0x20000, mutex_ids=[1]
+    )
     a_l0a = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[2])
+        type=pl.TileType(
+            shape=[TILE, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[TILE, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     vec_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_HALF, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x00000, mutex_ids=[5])
+        type=pl.TileType(
+            shape=[TILE_HALF, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x00000,
+        mutex_ids=[5],
+    )
 
     with pl.section_cube():
         cur_b = b_l1.current()
@@ -110,7 +127,7 @@ def call_kernel_split_m(
             pl.set_validshape(ac, [valid_m, N])
             pl.matmul(ac, al, br)
             pl.system.wait_cross_core(pipe=pl.PipeType.FIX, event_id=1)
-            pl.move(vec, ac, acc_to_vec_mode=pl.AccToVecMode.DualModeSplitM)    # 框架自动 M向上对齐到2的倍数
+            pl.move(vec, ac, acc_to_vec_mode=pl.AccToVecMode.DualModeSplitM)  # 框架自动 M向上对齐到2的倍数
             pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=0)
 
     with pl.section_vector():
@@ -136,6 +153,7 @@ def call_kernel_split_m(
 # DualModeSplitN: N-axis split, tail with odd/even N
 # ================================================================
 
+
 @pl.jit(auto_mutex=True)
 def call_kernel_split_n(
     a: pl.Tensor[[TILE, K], pl.DT_FP16],
@@ -145,26 +163,42 @@ def call_kernel_split_n(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[K, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x20000, mutex_ids=[1])
+        type=pl.TileType(
+            shape=[K, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
-        type=pl.TileType(shape=[K, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[3])
+        type=pl.TileType(
+            shape=[K, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     vec_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x00000, mutex_ids=[5])
+        type=pl.TileType(
+            shape=[TILE, TILE_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x00000,
+        mutex_ids=[5],
+    )
 
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -184,7 +218,7 @@ def call_kernel_split_n(
             pl.set_validshape(ac, [TILE, valid_n])
             pl.matmul(ac, al, br)
             pl.system.wait_cross_core(pipe=pl.PipeType.FIX, event_id=1)
-            pl.move(vec, ac, acc_to_vec_mode=pl.AccToVecMode.DualModeSplitN)        # 框架自动 N向上对齐到32的倍数
+            pl.move(vec, ac, acc_to_vec_mode=pl.AccToVecMode.DualModeSplitN)  # 框架自动 N向上对齐到32的倍数
             pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=0)
 
     with pl.section_vector():
@@ -210,6 +244,7 @@ def call_kernel_split_n(
 # Test functions
 # ================================================================
 
+
 @pytest.fixture(scope="module")
 def _device():
     dev = ST_DEVICE
@@ -218,6 +253,7 @@ def _device():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_split_m_odd_tail(_device):
     m_total = 289
     a = _inputs(_device, [m_total, K])
@@ -231,6 +267,7 @@ def test_split_m_odd_tail(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_split_m_even_tail(_device):
     m_total = 288
     a = _inputs(_device, [m_total, K])
@@ -244,6 +281,7 @@ def test_split_m_even_tail(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_split_n_odd_tail(_device):
     n_total = 289
     a = _inputs(_device, [TILE, K])
@@ -257,6 +295,7 @@ def test_split_n_odd_tail(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_split_n_even_tail(_device):
     n_total = 288
     a = _inputs(_device, [TILE, K])
@@ -270,6 +309,7 @@ def test_split_n_even_tail(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_split_n_tail_st_16(_device):
     n_total = 266
     a = _inputs(_device, [TILE, K])

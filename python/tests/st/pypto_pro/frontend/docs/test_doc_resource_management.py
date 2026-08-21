@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -66,6 +68,7 @@ def make_tile_add_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_make_tile_add_kernel():
     device = ST_DEVICE
     _require_a5(device)
@@ -99,27 +102,37 @@ def tile_group_matmul_kernel(
     # L1 双缓冲（next() 轮转）
     a_l1_db = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, MM_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1_db = pl.make_tile_group(
         type=pl.TileType(shape=[MM_K, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     # L0A / L0B / Acc 单 tile group（current()）
     a_left = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, MM_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     b_right = pl.make_tile_group(
         type=pl.TileType(shape=[MM_K, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     acc = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[6])
+        addrs=0x0000,
+        mutex_ids=[6],
+    )
 
     with pl.section_cube():
         for i in pl.range(0, MM_M, TILE):
             for j in pl.range(0, MM_N, TILE):
-                cur_a = a_l1_db.next()      # 双缓冲轮转
+                cur_a = a_l1_db.next()  # 双缓冲轮转
                 cur_b = b_l1_db.next()
-                al = a_left.current()       # 单 tile group
+                al = a_left.current()  # 单 tile group
                 br = b_right.current()
                 ac = acc.current()
                 pl.load(cur_a, a, [i, 0])
@@ -131,6 +144,7 @@ def tile_group_matmul_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tile_group_matmul_kernel():
     device = ST_DEVICE
     _require_a5(device)
@@ -160,19 +174,29 @@ def tile_group_4buf_matmul_kernel(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, MM_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0, 1, 2, 3])
+        addrs=0x00000,
+        mutex_ids=[0, 1, 2, 3],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[MM_K, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[4, 5, 6, 7])
+        addrs=0x20000,
+        mutex_ids=[4, 5, 6, 7],
+    )
     a_left = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, MM_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[8])
+        addrs=0x0000,
+        mutex_ids=[8],
+    )
     b_right = pl.make_tile_group(
         type=pl.TileType(shape=[MM_K, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[9])
+        addrs=0x0000,
+        mutex_ids=[9],
+    )
     acc = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[10])
+        addrs=0x0000,
+        mutex_ids=[10],
+    )
 
     with pl.section_cube():
         for i in pl.range(0, MM_M, TILE):
@@ -191,6 +215,7 @@ def tile_group_4buf_matmul_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tile_group_4buf_matmul_kernel():
     device = ST_DEVICE
     _require_a5(device)
@@ -241,6 +266,7 @@ def workspace_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_workspace_kernel():
     device = ST_DEVICE
     _require_a5(device)

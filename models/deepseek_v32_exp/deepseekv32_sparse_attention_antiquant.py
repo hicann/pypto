@@ -313,7 +313,7 @@ def do_test_sparse_attention_func_aq(bn1n2s1, actual_seq, input_params, input_da
             c1_tile_shape=[128, 128, 128, 128, 128, 128],
             v1_tile_shape=[8, 2048],
             c2_tile_shape=[128, 128, 128, 128, 128, 128],
-            v2_tile_shape=[64, 128]
+            v2_tile_shape=[64, 128],
         )
 
     b, s1, n_q, n_kv, max_kv_seq, kv_lora_rank, qk_rope_dim, block_num, block_size, topk, softmax_scale = input_params
@@ -337,7 +337,8 @@ def do_test_sparse_attention_func_aq(bn1n2s1, actual_seq, input_params, input_da
 
     if is_p:
         sparse_attention_antiquant_p(
-            *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, max_blocknum_perbatch, tile_config)
+            *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, max_blocknum_perbatch, tile_config
+        )
     else:
         sparse_attention_antiquant_d(
             *pto_inputs,
@@ -475,7 +476,7 @@ def gen_gather_select_attention_golden_aq_950(dtype, bn1n2s1, is_kn_quant, actua
     # v head dim
     _d_v = kv_lora_rank
 
-    scalar = d_q ** -0.5
+    scalar = d_q**-0.5
     if isinstance(actual_seq, int):
         actual_seq = [actual_seq] * b
     elif isinstance(actual_seq, list):
@@ -576,11 +577,10 @@ def do_test_sparse_attention_func_aq_950(bn1n2s1, actual_seq, input_params, inpu
         c1_tile_shape=[128, 128, 256, 256, 128, 128],
         v1_tile_shape=[64, 128],
         c2_tile_shape=[128, 128, 128, 128, 256, 256],
-        v2_tile_shape=[128, 128]
+        v2_tile_shape=[128, 128],
     )
 
-    b, s1, n_q, n_kv, max_kv_seq, kv_lora_rank, qk_rope_dim, block_num, block_size, topk, \
-        softmax_scale = input_params
+    b, s1, n_q, n_kv, max_kv_seq, kv_lora_rank, qk_rope_dim, block_num, block_size, topk, softmax_scale = input_params
     q_nope, q_rope, nope_cache_2d, topk_indices, block_table, kv_actual_seqs = input_data
     kv_act_seqs = torch.tensor(actual_seq, dtype=torch.int32)
 
@@ -612,8 +612,9 @@ def do_test_sparse_attention_func_aq_950(bn1n2s1, actual_seq, input_params, inpu
         a = torch.randn((int(192 * 1024 * 1024 * 2.5))).to(torch.float32).npu()
         for _ in range(100):
             _a_max = torch.max(a)
-        sparse_attention_antiquant_d_950(*pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, \
-            max_blocknum_perbatch, tile_config)
+        sparse_attention_antiquant_d_950(
+            *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, max_blocknum_perbatch, tile_config
+        )
     torch_npu.npu.synchronize()
 
     calc_attention_out_npu = calc_attention_out_npu.reshape(b, s1, n_q, kv_lora_rank)
@@ -627,8 +628,11 @@ def get_case_config(case_name: str):
         "sfa_bf16_b4_s2_seq64K_total_int8_d": ((4, 128, 1, 2), 1, [65536, 16381, 666, 15]),
         "sfa_bf16_b4_s2_seq64K_per_int8_d": ((4, 128, 1, 2), 1, [65536] * 4),
         "sfa_bf16_b1_s256_seq64K_int8_p": ((1, 128, 1, 256), 1, [65536]),
-        "sfa_bf16_b64_s2_seq64K_uniform_per_int8_d_950": ((64, 128, 1, 2), 1, [16384] * 8 + [32768] * 8 + \
-            [49152] * 8 + [65536] * 16 + [81920] * 8 + [98304] * 8 + [114688] * 8),
+        "sfa_bf16_b64_s2_seq64K_uniform_per_int8_d_950": (
+            (64, 128, 1, 2),
+            1,
+            [16384] * 8 + [32768] * 8 + [49152] * 8 + [65536] * 16 + [81920] * 8 + [98304] * 8 + [114688] * 8,
+        ),
         "sfa_bf16_b4_s2_seq64K_per_int8_d_950": ((4, 128, 1, 2), 1, [65536] * 4),
         "sfa_bf16_b64_s2_seq64K_per_int8_d_950": ((64, 128, 1, 2), 1, [65536] * 64),
     }
@@ -663,12 +667,12 @@ def do_test_sfa_entry_950(case_name: str):
     )
     logging.info("sfa_quant golden end")
 
-    do_test_sparse_attention_func_aq_950(
-        bn1n2s1, actual_seq, input_params, input_data, atten_out)
+    do_test_sparse_attention_func_aq_950(bn1n2s1, actual_seq, input_params, input_data, atten_out)
     return True
 
 
 @pytest.mark.soc("950", "910")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sfa_bf16_b4_s2_seq64k_total_int8_d():
     '''
     sfa decode测试函数
@@ -678,6 +682,7 @@ def test_sfa_bf16_b4_s2_seq64k_total_int8_d():
 
 @pytest.mark.soc("950", "910")
 @pytest.mark.skip(reason="perf")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sfa_bf16_b4_s2_seq64k_per_int8_d():
     '''
     sfa decode测试函数
@@ -687,6 +692,7 @@ def test_sfa_bf16_b4_s2_seq64k_per_int8_d():
 
 @pytest.mark.soc("950", "910")
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sfa_bf16_b1_s256_seq64k_int8_p():
     '''
     sfa prefill测试函数
@@ -696,6 +702,7 @@ def test_sfa_bf16_b1_s256_seq64k_int8_p():
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sfa_bf16_b64_s2_seq64k_uniform_per_int8_d_950():
     '''
     sfa decode测试函数
@@ -705,6 +712,7 @@ def test_sfa_bf16_b64_s2_seq64k_uniform_per_int8_d_950():
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sfa_bf16_b4_s2_seq64k_per_int8_d_950():
     '''
     sfa decode测试函数
@@ -713,6 +721,7 @@ def test_sfa_bf16_b4_s2_seq64k_per_int8_d_950():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sfa_bf16_b64_s2_seq64k_per_int8_d_950():
     '''
     sfa decode测试函数

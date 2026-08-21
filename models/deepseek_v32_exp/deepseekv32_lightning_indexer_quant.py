@@ -393,15 +393,18 @@ def lightning_indexer(case_name: str) -> bool:
     return True
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_lightning_indexer_topk_quant_4_b_2_s1_64k_s2():
     lightning_indexer("LightningIndexerSTest.lightning_indexer_quant_4_b_2_s1_64k_s2")
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_lightning_indexer_topk_quant_8_b_2_s1_64k_s2():
     lightning_indexer("LightningIndexerSTest.lightning_indexer_quant_8_b_2_s1_64k_s2")
 
 
 @pytest.mark.skip(reason="large shape")
+@pypto.options(pass_options={"enable_slice": True})
 def test_lightning_indexer_topk_quant_4_b_2_s1_64k_s2_perf():
     lightning_indexer("LightningIndexerSTest.lightning_indexer_quant_4_b_2_s1_64k_s2_perf")
 

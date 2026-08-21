@@ -77,6 +77,7 @@ def var_2dim_tensor_proc(input_shape, dst_shape, param):
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_var0_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -85,6 +86,7 @@ def test_var0_onboard():
     var_2dim_tensor_proc([b, s], [1], VarParam(None, 1, False, False))
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_var1_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -93,6 +95,7 @@ def test_var1_onboard():
     var_2dim_tensor_proc([b, s], [b], VarParam(1, 1, False, False))
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_var2_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -101,6 +104,7 @@ def test_var2_onboard():
     var_2dim_tensor_proc([b, s], [1], VarParam((), 1, False, False))
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_var3_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -109,6 +113,7 @@ def test_var3_onboard():
     var_2dim_tensor_proc([b, s], [1], VarParam([], 1, False, False))
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_var4_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -117,6 +122,7 @@ def test_var4_onboard():
     var_2dim_tensor_proc([b, s], [1], VarParam([0, 1], 1, False, False))
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_var5_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -125,6 +131,7 @@ def test_var5_onboard():
     var_2dim_tensor_proc([b, s], [8], VarParam([-2], 1, False, False))
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_var6_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -133,6 +140,7 @@ def test_var6_onboard():
     var_2dim_tensor_proc([b, s], [8], VarParam([-2], 1, False, True))
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_var7_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -184,6 +192,7 @@ def prims_var_2dim_tensor_proc(input_shape, dst_shape, dim, correction):
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_var8_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

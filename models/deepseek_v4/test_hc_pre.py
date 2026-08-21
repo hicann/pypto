@@ -159,6 +159,7 @@ class HcPre(torch.nn.Module):
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_hc_pre_inmodel(t=16):
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch.npu.set_device(int(device_id))
@@ -192,6 +193,7 @@ def test_hc_pre_inmodel(t=16):
     print("comb compare success!!!")
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_hc_pre(t=16, is_trans=False):
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch.npu.set_device(int(device_id))

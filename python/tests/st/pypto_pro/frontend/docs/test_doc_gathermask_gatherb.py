@@ -22,15 +22,17 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 # gatherb 常量
-DTYPE_SIZE = 2          # FP16
+DTYPE_SIZE = 2  # FP16
 BLOCK_BYTES = 32
-BLOCK_ELEMS = BLOCK_BYTES // DTYPE_SIZE   # 16
+BLOCK_ELEMS = BLOCK_BYTES // DTYPE_SIZE  # 16
 ROWS, COLS = 64, 128
-OFFSETS_PER_ROW = COLS // BLOCK_ELEMS     # 8
+OFFSETS_PER_ROW = COLS // BLOCK_ELEMS  # 8
 
 
 def _require_a5(device):
@@ -53,10 +55,14 @@ def gathermask_p1_kernel(
 ):
     tile_src_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_dst_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     with pl.section_vector():
         tile_src = tile_src_group.current()
         tile_dst = tile_dst_group.current()
@@ -72,10 +78,14 @@ def gathermask_p2_kernel(
 ):
     tile_src_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_dst_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     with pl.section_vector():
         tile_src = tile_src_group.current()
         tile_dst = tile_dst_group.current()
@@ -91,10 +101,14 @@ def gathermask_p7_kernel(
 ):
     tile_src_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_dst_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     with pl.section_vector():
         tile_src = tile_src_group.current()
         tile_dst = tile_dst_group.current()
@@ -104,6 +118,7 @@ def gathermask_p7_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_gathermask_p1():
     device = ST_DEVICE
     _require_a5(device)
@@ -117,6 +132,7 @@ def test_gathermask_p1():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_gathermask_p2():
     device = ST_DEVICE
     _require_a5(device)
@@ -130,6 +146,7 @@ def test_gathermask_p2():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_gathermask_p7():
     device = ST_DEVICE
     _require_a5(device)
@@ -154,13 +171,19 @@ def gatherb_kernel(
 ):
     tile_src_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_offsets_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 8], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     tile_dst_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4800, mutex_ids=[2])
+        addrs=0x4800,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         tile_src = tile_src_group.current()
         tile_offsets = tile_offsets_group.current()
@@ -172,6 +195,7 @@ def gatherb_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_gatherb_identity():
     device = ST_DEVICE
     _require_a5(device)
@@ -179,8 +203,9 @@ def test_gatherb_identity():
     src = torch.rand([ROWS, COLS], device=device, dtype=torch.float16)
     # identity：每个 offset 指向行顺序对应的 32 字节块
     total_blocks = ROWS * OFFSETS_PER_ROW
-    offsets = (torch.arange(total_blocks, device=device, dtype=torch.int32) * BLOCK_BYTES
-               ).reshape(ROWS, OFFSETS_PER_ROW)
+    offsets = (torch.arange(total_blocks, device=device, dtype=torch.int32) * BLOCK_BYTES).reshape(
+        ROWS, OFFSETS_PER_ROW
+    )
     dst = torch.empty([ROWS, COLS], device=device, dtype=torch.float16)
     gatherb_kernel(src, offsets, dst)
     torch.npu.synchronize()

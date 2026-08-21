@@ -500,6 +500,7 @@ def do_test_sfa_entry(case_name: str, is_acl_graph: bool = False):
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_sfa_bf16_b1_s4_seq64k_acl_graph_p():
     '''
     scfa aclgraph测试用例
@@ -508,6 +509,7 @@ def test_sfa_bf16_b1_s4_seq64k_acl_graph_p():
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_sfa_bf16_b1_s256_seq64k_p():
     '''
     scfa prefill测试用例
@@ -516,6 +518,7 @@ def test_sfa_bf16_b1_s256_seq64k_p():
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_sfa_bf16_b4_s16_seq64k_p():
     '''
     scfa prefill测试用例, 验证多batch mtp
@@ -524,6 +527,7 @@ def test_sfa_bf16_b4_s16_seq64k_p():
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_sfa_bf16_b1_s16_seq64k_p():
     '''
     scfa prefill测试用例, 验证小seq
@@ -531,6 +535,7 @@ def test_sfa_bf16_b1_s16_seq64k_p():
     do_test_sfa_entry("sfa_bf16_b1_s16_seq64K_p")
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_sfa_bf16_b64_s2_seq8k_d():
     '''
     scfa decode, mtp 1

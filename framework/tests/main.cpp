@@ -25,6 +25,7 @@
 #include <sched.h>
 #include <algorithm>
 #include "utils/test_cost_macro.h"
+#include "interface/configs/config_manager_ng.h"
 
 #if defined(ENABLE_STEST)
 #include "adapter/api/runtime_api.h"
@@ -251,6 +252,12 @@ int main(int argc, char** argv)
         ListTestsWithMetadata();
         return 0;
     }
+
+    // 总开关：在 root scope 上设置 enable_slice=true（覆盖 tile_fwk_config.json 的 false 默认值）
+    // root scope 不受 config::Reset() 影响，所以 UT SetUp 中的 Clear() 不会清除该设置
+    // 单个测试用例仍可通过 config::SetPassOption(ENABLE_SLICE, false) 覆盖此设置
+    const std::string enableSliceKey = "pass." + std::string(npu::tile_fwk::ENABLE_SLICE);
+    npu::tile_fwk::ConfigManagerNg::GlobalScope()->UpdateValue(enableSliceKey, true);
 
     auto ret = RUN_ALL_TESTS();
 

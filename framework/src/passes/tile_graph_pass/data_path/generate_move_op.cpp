@@ -14,6 +14,7 @@
  */
 
 #include "passes/tile_graph_pass/data_path/generate_move_op.h"
+#include "interface/configs/config_manager_ng.h"
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
 #include "interface/operation/operation.h"
@@ -412,20 +413,21 @@ void GenerateMoveOp::ProcessUB2L1(Function& function, Operation& op) const
 
 Status GenerateMoveOp::CreateMoveOp(Function& function) const
 {
+    const Opcode sliceOpcode = config::GetSliceOpcode();
+    const Opcode contractOpcode = config::GetContractOpcode();
     for (auto& op : function.Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op.GetOpcode() == contractOpcode) {
+            CreateMoveOpForAssemble(function, op);
+            continue;
+        }
+        if (op.GetOpcode() == sliceOpcode) {
+            Status status = ProcessViewOp(function, op);
+            if (status != SUCCESS) {
+                return status;
+            }
+            continue;
+        }
         switch (op.GetOpcode()) {
-            case Opcode::OP_ASSEMBLE_SSA:
-            case Opcode::OP_ASSEMBLE: {
-                CreateMoveOpForAssemble(function, op);
-                break;
-            }
-            case Opcode::OP_VIEW: {
-                Status status = ProcessViewOp(function, op);
-                if (status != SUCCESS) {
-                    return status;
-                }
-                break;
-            }
             case Opcode::OP_CONVERT: {
                 Status createMoveOpForConvert = CreateMoveOpForConvert(function, op);
                 if (createMoveOpForConvert != SUCCESS) {
@@ -464,7 +466,7 @@ Status GenerateMoveOp::CreateMoveOp(Function& function) const
 
 Status GenerateMoveOp::ProcessL1CopyInConv(Operation& op) const
 {
-    // 1. 获取 L1_COPY_IN_CONV 的 producer VIEW
+    // 1. 获取 L1_COPY_IN_CONV 的 producer view-family op
     auto inputTensor = op.GetIOperands()[0];
     const auto& producers = inputTensor->GetProducers();
     if (producers.empty()) {
@@ -472,19 +474,19 @@ Status GenerateMoveOp::ProcessL1CopyInConv(Operation& op) const
     }
 
     auto producerOp = *producers.begin();
-    if (producerOp->GetOpcode() != Opcode::OP_VIEW) {
+    if (producerOp->GetOpcode() != config::GetSliceOpcode()) {
         return SUCCESS;
     }
 
-    // 2. 获取 VIEW 的 fromOffset 属性
+    // 2. 获取 view-family op 的 fromOffset 属性
     auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(producerOp->GetOpAttribute());
     if (viewAttr == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Operation, "L1_COPY_IN_CONV op[%d]: VIEW producer[%d] has null ViewOpAttribute.",
-                          op.GetOpMagic(), producerOp->GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "L1_COPY_IN_CONV op[%d]: %s producer[%d] has null ViewOpAttribute.",
+                          op.GetOpMagic(), producerOp->GetOpcodeStr().c_str(), producerOp->GetOpMagic());
         return FAILED;
     }
 
-    // 3. 将 VIEW 的 fromOffset 累加到 L1_COPY_IN_CONV 的 CopyOpAttribute 的 fromOffset
+    // 3. 将 view-family op 的 fromOffset 累加到 L1_COPY_IN_CONV 的 CopyOpAttribute 的 fromOffset
     auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
     if (copyAttr == nullptr) {
         APASS_LOG_ERROR_F(Elements::Operation, "L1_COPY_IN_CONV op[%d]: CopyOpAttribute is null.", op.GetOpMagic());
@@ -492,7 +494,7 @@ Status GenerateMoveOp::ProcessL1CopyInConv(Operation& op) const
     }
     std::vector<OpImmediate> curFromOffset = copyAttr->GetFromOffset();
 
-    // 如果当前 offset 为空，直接使用 VIEW 的 offset
+    // 如果当前 offset 为空，直接使用 view-family op 的 offset
     if (curFromOffset.empty()) {
         copyAttr->SetFromOffset(OpImmediate::Specified(viewAttr->GetFromTensorOffset()));
     } else {
@@ -516,7 +518,7 @@ Status GenerateMoveOp::ProcessL1CopyInConv(Operation& op) const
     copyAttr->SetRawShape(OpImmediate::Specified(viewInput->GetRawTensor()->GetDynRawShape()));
     op.SetOpAttribute(copyAttr);
 
-    // 4. 标记删除 VIEW
+    // 4. 标记删除 view-family op
     op.ReplaceIOperand(0, viewInput);
     producerOp->SetAsDeleted();
     return SUCCESS;
@@ -524,7 +526,7 @@ Status GenerateMoveOp::ProcessL1CopyInConv(Operation& op) const
 
 Status GenerateMoveOp::ProcessL0CCopyOutConv(Operation& op) const
 {
-    // 1. 获取 L0C_COPY_OUT_CONV 的 consumer ASSEMBLE
+    // 1. 获取 L0C_COPY_OUT_CONV 的 consumer assemble-family op
     auto outputTensor = op.GetOOperands()[0];
     const auto& consumers = outputTensor->GetConsumers();
     if (consumers.empty()) {
@@ -532,20 +534,20 @@ Status GenerateMoveOp::ProcessL0CCopyOutConv(Operation& op) const
     }
 
     auto consumerOp = *consumers.begin();
-    if (consumerOp->GetOpcode() != Opcode::OP_ASSEMBLE) {
+    if (consumerOp->GetOpcode() != config::GetContractOpcode()) {
         return SUCCESS;
     }
 
-    // 2. 获取 ASSEMBLE 的 toOffset 属性
+    // 2. 获取 assemble-family op 的 toOffset 属性
     auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(consumerOp->GetOpAttribute());
     if (assembleAttr == nullptr) {
         APASS_LOG_ERROR_F(Elements::Operation,
-                          "L0C_COPY_OUT_CONV op[%d]: ASSEMBLE consumer[%d] has null AssembleOpAttribute.",
-                          op.GetOpMagic(), consumerOp->GetOpMagic());
+                          "L0C_COPY_OUT_CONV op[%d]: %s consumer[%d] has null AssembleOpAttribute.", op.GetOpMagic(),
+                          consumerOp->GetOpcodeStr().c_str(), consumerOp->GetOpMagic());
         return FAILED;
     }
 
-    // 3. 将 ASSEMBLE 的 toOffset 累加到 L0C_COPY_OUT_CONV 的 toOffset
+    // 3. 将 assemble-family op 的 toOffset 累加到 L0C_COPY_OUT_CONV 的 toOffset
     auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
     if (copyAttr == nullptr) {
         APASS_LOG_ERROR_F(Elements::Operation, "L0C_COPY_OUT_CONV op[%d]: CopyOpAttribute is null.", op.GetOpMagic());
@@ -553,7 +555,7 @@ Status GenerateMoveOp::ProcessL0CCopyOutConv(Operation& op) const
     }
     std::vector<OpImmediate> curToOffset = copyAttr->GetToOffset();
 
-    // 如果当前 offset 为空，直接使用 ASSEMBLE 的 offset
+    // 如果当前 offset 为空，直接使用 assemble-family op 的 offset
     if (curToOffset.empty()) {
         copyAttr->SetToOffset(
             OpImmediate::Specified(TensorOffset(assembleAttr->GetToOffset(), assembleAttr->GetToDynOffset())));
@@ -578,7 +580,7 @@ Status GenerateMoveOp::ProcessL0CCopyOutConv(Operation& op) const
     copyAttr->SetRawShape(OpImmediate::Specified(assembleOutput->GetRawTensor()->GetDynRawShape()));
     op.SetOpAttribute(copyAttr);
 
-    // 4. 标记删除 ASSEMBLE
+    // 4. 标记删除 assemble-family op
     op.ReplaceOOperand(0, assembleOutput);
     consumerOp->SetAsDeleted();
     return SUCCESS;

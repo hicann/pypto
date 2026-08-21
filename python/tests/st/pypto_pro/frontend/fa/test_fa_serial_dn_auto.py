@@ -34,13 +34,15 @@ from pypto_pro.language import Vf as vf  # noqa: N813
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 # ================================================================
 #  Configuration — change QK_PRELOAD to tune pre-compute depth
 # ================================================================
-QK_PRELOAD = 2          # How many KV tiles to pre-compute QK ahead
+QK_PRELOAD = 2  # How many KV tiles to pre-compute QK ahead
 FIFO_SIZE = QK_PRELOAD + 1  # Exp-corr FIFO depth (avoids read/write collision)
 
 # ================================================================
@@ -172,14 +174,26 @@ def process_vec1_dn_no_update_vf(input_tile, x_exp_tile, max_tile, sum_tile):
         vreg_x_exp_even_f16_1 = vf.astype(vreg_x_exp_1, preg_108, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_x_exp_odd_f16_1 = vf.astype(vreg_x_exp_3, preg_108, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_x_exp_f16_1_pack, vreg_x_exp_f16_1_packa = vf.de_interleave(vreg_x_exp_even_f16_1, vreg_x_exp_odd_f16_1)
-        vf.store_align(x_exp_tile, vreg_x_exp_f16_pack, preg_136,
-                      block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-                      data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            x_exp_tile,
+            vreg_x_exp_f16_pack,
+            preg_136,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
         vreg_x_sum_0 = vf.add(vreg_x_exp_0, vreg_x_sum_0, preg_108)
         vreg_x_sum_2 = vf.add(vreg_x_exp_2, vreg_x_sum_2, preg_108)
-        vf.store_align(x_exp_1, vreg_x_exp_f16_1_pack, preg_136,
-                      block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-                      data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            x_exp_1,
+            vreg_x_exp_f16_1_pack,
+            preg_136,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
         vreg_x_sum_1 = vf.add(vreg_x_exp_1, vreg_x_sum_1, preg_108)
         vreg_x_sum_3 = vf.add(vreg_x_exp_3, vreg_x_sum_3, preg_108)
     vreg_x_sum0 = vf.add(vreg_x_sum_2, vreg_x_sum_0, preg_108)
@@ -243,14 +257,26 @@ def process_vec1_dn_update_vf(input_tile, x_exp_tile, max_tile, exp_max_tile, su
         vreg_x_exp_even_f16_1 = vf.astype(vreg_x_exp_1, preg_108, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_x_exp_odd_f16_1 = vf.astype(vreg_x_exp_3, preg_108, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_x_exp_f16_1_pack, vreg_x_exp_f16_1_packa = vf.de_interleave(vreg_x_exp_even_f16_1, vreg_x_exp_odd_f16_1)
-        vf.store_align(x_exp_tile, vreg_x_exp_f16_pack, preg_136,
-                      block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-                      data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            x_exp_tile,
+            vreg_x_exp_f16_pack,
+            preg_136,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
         vreg_x_sum_0 = vf.add(vreg_x_exp_0, vreg_x_sum_0, preg_108)
         vreg_x_sum_2 = vf.add(vreg_x_exp_2, vreg_x_sum_2, preg_108)
-        vf.store_align(x_exp_1, vreg_x_exp_f16_1_pack, preg_136,
-                      block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-                      data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            x_exp_1,
+            vreg_x_exp_f16_1_pack,
+            preg_136,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
         vreg_x_sum_1 = vf.add(vreg_x_exp_1, vreg_x_sum_1, preg_108)
         vreg_x_sum_3 = vf.add(vreg_x_exp_3, vreg_x_sum_3, preg_108)
     vreg_x_sum0 = vf.add(vreg_x_sum_2, vreg_x_sum_0, preg_108)
@@ -300,6 +326,7 @@ def last_div_vf(dst_tile, cur_tile, exp_sum_tile):
             vreg_div = vf.div(vreg_input_cur, vreg_exp_sum, preg_all)
             vf.store_align(dst_tile + (i * TD + j * FLOAT_REP_SIZE), vreg_div, preg_all)
 
+
 # ================================================================
 #  Stage functions — each receives NBuffers/tiles/scalars as params
 # ================================================================
@@ -341,9 +368,20 @@ def compute_pv(ki, tick, v, v_l1_db, p_mat_db, left_db, right_db, acc_db, pv_vec
 
 
 @pl.pipeline.stage
-def compute_p(ki, tick, q_count, sub_id,
-              qk_vec_db, p_f16_db, p_f16_main_db, p_f16_back_db, p_mat_db,
-              global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo):
+def compute_p(
+    ki,
+    tick,
+    q_count,
+    sub_id,
+    qk_vec_db,
+    p_f16_db,
+    p_f16_main_db,
+    p_f16_back_db,
+    p_mat_db,
+    global_max_rm_buf,
+    global_sum_rm_buf,
+    exp_corr_rm_fifo,
+):
     """Softmax stage (Vector). Reads qk_vec, writes p_mat."""
     global_max_rm_cur = global_max_rm_buf[q_count % 3]
     global_sum_rm_cur = global_sum_rm_buf[q_count % 3]
@@ -373,9 +411,20 @@ def compute_p(ki, tick, q_count, sub_id,
 
 
 @pl.pipeline.stage
-def compute_gu(ki, skv_tiles, tick, q_count, sq_off, row_off, o,
-               pv_vec_db, running_o_buf, o_f16_buf,
-               global_sum_rm_buf, exp_corr_rm_fifo):
+def compute_gu(
+    ki,
+    skv_tiles,
+    tick,
+    q_count,
+    sq_off,
+    row_off,
+    o,
+    pv_vec_db,
+    running_o_buf,
+    o_f16_buf,
+    global_sum_rm_buf,
+    exp_corr_rm_fifo,
+):
     """Flash update stage (Vector). Reads pv_vec, writes output."""
     pv_slot = pv_vec_db.next()
     running_o = running_o_buf.next()
@@ -403,6 +452,7 @@ def compute_gu(ki, skv_tiles, tick, q_count, sq_off, row_off, o,
             pl.cast(o_f16, running_o, mode=pl.RoundMode.CAST_ROUND)
             pl.store(o, o_f16, [sq_off + row_off, 0])
 
+
 # ================================================================
 #  Kernel — serial execution, AscendC-style interleaved sections
 # ================================================================
@@ -429,59 +479,87 @@ def fa_perf_tkv_preload_dn_kernel(
     # ===== Cross-core shared buffers (outside sections) =====
     qk_vec_db = pl.make_tile_group(
         type=pl.TileType(shape=[TKV, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=VA0, mutex_ids=[14, 15],
-        fwd_ids=[0, 1], bwd_ids=[2, 3])
+        addrs=VA0,
+        mutex_ids=[14, 15],
+        fwd_ids=[0, 1],
+        bwd_ids=[2, 3],
+    )
     pv_vec_db = pl.make_tile_group(
         type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=VA8, mutex_ids=[16, 17],
-        fwd_ids=[7, 8], bwd_ids=[9, 10])
+        addrs=VA8,
+        mutex_ids=[16, 17],
+        fwd_ids=[7, 8],
+        bwd_ids=[9, 10],
+    )
     p_mat_db = pl.make_tile_group(
-        type=pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                         layout=pl.ZN),
-        addrs=MA2, mutex_ids=[18, 19, 20],
-        fwd_ids=[4, 5, 6])
+        type=pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
+        addrs=MA2,
+        mutex_ids=[18, 19, 20],
+        fwd_ids=[4, 5, 6],
+    )
 
     # ===== Cube-local buffer declarations (in section) =====
     with pl.section_cube():
         q_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             layout=pl.ZN),
-            addrs=MA0, mutex_ids=[0, 1])
+            type=pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
+            addrs=MA0,
+            mutex_ids=[0, 1],
+        )
         k_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             layout=pl.NZ),
-            addrs=MA1, mutex_ids=[2, 3])
+            type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
+            addrs=MA1,
+            mutex_ids=[2, 3],
+        )
         v_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             layout=pl.NZ),
-            addrs=MA3, mutex_ids=[4, 5])
+            type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
+            addrs=MA3,
+            mutex_ids=[4, 5],
+        )
         left_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                             layout=pl.NZ),
-            addrs=LA0, mutex_ids=[6, 7])
+            type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
+            addrs=LA0,
+            mutex_ids=[6, 7],
+        )
         right_db = pl.make_tile_group(
             type=pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-            addrs=RA0, mutex_ids=[8, 9])
+            addrs=RA0,
+            mutex_ids=[8, 9],
+        )
         acc_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-            addrs=CA0, mutex_ids=[10, 11, 12, 13])
+            addrs=CA0,
+            mutex_ids=[10, 11, 12, 13],
+        )
 
     # ===== Vector-local buffer declarations (in section) =====
     with pl.section_vector():
         p_f16_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF * 2], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Vec),
-            addrs=[VA2, VA2B], mutex_ids=[0, 1])
+            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF * 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
+            addrs=[VA2, VA2B],
+            mutex_ids=[0, 1],
+        )
         p_f16_main_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[TKV // 2, TS_HALF], layout=pl.NZ),
-            addrs=[VA2, VA2B], mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TKV // 2 + 1, TS_HALF],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Vec,
+                valid_shape=[TKV // 2, TS_HALF],
+                layout=pl.NZ,
+            ),
+            addrs=[VA2, VA2B],
+            mutex_ids=[0, 1],
+        )
         p_f16_back_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[TKV // 2, TS_HALF], layout=pl.NZ),
-            addrs=[VA2_DN, VA2B_DN], mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TKV // 2 + 1, TS_HALF],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Vec,
+                valid_shape=[TKV // 2, TS_HALF],
+                layout=pl.NZ,
+            ),
+            addrs=[VA2_DN, VA2B_DN],
+            mutex_ids=[0, 1],
+        )
         red_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         gmax_rm_0 = pl.make_tile(red_rm_type, addr=VA_GMAX0, size=VB_RED)
         gmax_rm_1 = pl.make_tile(red_rm_type, addr=VA_GMAX1, size=VB_RED)
@@ -497,10 +575,14 @@ def fa_perf_tkv_preload_dn_kernel(
         exp_corr_rm_fifo = (ec_rm_0, ec_rm_1, ec_rm_2)
         o_f16_buf = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-            addrs=VA9, mutex_ids=[11])
+            addrs=VA9,
+            mutex_ids=[11],
+        )
         running_o_buf = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=VA7, mutex_ids=[12])
+            addrs=VA7,
+            mutex_ids=[12],
+        )
         sub_id = pl.get_subblock_idx()
         row_off = sub_id * TS_HALF
 
@@ -514,21 +596,42 @@ def fa_perf_tkv_preload_dn_kernel(
             cur_q_slot = q_l1_db.next()
         for ki in pl.range(0, skv_tiles):
             with pl.section_cube():
-                compute_qk(ki, sq_off, tick, q, k, cur_q_slot,
-                           k_l1_db, left_db, right_db, acc_db, qk_vec_db)
+                compute_qk(ki, sq_off, tick, q, k, cur_q_slot, k_l1_db, left_db, right_db, acc_db, qk_vec_db)
             with pl.section_vector():
-                compute_p(ki, tick, q_count, sub_id,
-                          qk_vec_db, p_f16_db, p_f16_main_db, p_f16_back_db, p_mat_db,
-                          global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo)
+                compute_p(
+                    ki,
+                    tick,
+                    q_count,
+                    sub_id,
+                    qk_vec_db,
+                    p_f16_db,
+                    p_f16_main_db,
+                    p_f16_back_db,
+                    p_mat_db,
+                    global_max_rm_buf,
+                    global_sum_rm_buf,
+                    exp_corr_rm_fifo,
+                )
             with pl.section_cube():
-                compute_pv(ki, tick, v, v_l1_db, p_mat_db,
-                           left_db, right_db, acc_db, pv_vec_db)
+                compute_pv(ki, tick, v, v_l1_db, p_mat_db, left_db, right_db, acc_db, pv_vec_db)
             with pl.section_vector():
-                compute_gu(ki, skv_tiles, tick, q_count, sq_off, row_off, o,
-                           pv_vec_db, running_o_buf, o_f16_buf,
-                           global_sum_rm_buf, exp_corr_rm_fifo)
+                compute_gu(
+                    ki,
+                    skv_tiles,
+                    tick,
+                    q_count,
+                    sq_off,
+                    row_off,
+                    o,
+                    pv_vec_db,
+                    running_o_buf,
+                    o_f16_buf,
+                    global_sum_rm_buf,
+                    exp_corr_rm_fifo,
+                )
             tick = tick + 1
         q_count = q_count + 1
+
 
 # ================================================================
 #  Reference + Tests
@@ -547,6 +650,7 @@ def flash_attention_ref(q, k, v, d):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_perf():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -575,6 +679,7 @@ def test_fa_perf():
             prev_diff = diff
         torch.testing.assert_close(o_t, o_ref, rtol=5e-3, atol=5e-3)
         logging.info("  PASS (deterministic, max|diff|=%.6f)", prev_diff)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")

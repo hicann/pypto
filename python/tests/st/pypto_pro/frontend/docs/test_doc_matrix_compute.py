@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -43,7 +45,7 @@ def _require_a5(device):
 #   C[M,N] = A[M,K] @ B[K,N]，K = TILE 一次性装入，每个 [i,j] 块一次 matmul。
 # ===========================================================================
 M_SIZE = 256
-K_SIZE_MM = 128      # K 恰好一个 tile，无需分块累加
+K_SIZE_MM = 128  # K 恰好一个 tile，无需分块累加
 N_SIZE = 256
 
 
@@ -56,24 +58,34 @@ def matmul_kernel(
     # L1 双缓冲（next() 轮转）
     a_l1_db = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, K_SIZE_MM], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1_db = pl.make_tile_group(
         type=pl.TileType(shape=[K_SIZE_MM, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     # L0A / L0B / Acc 单 tile group（current()）
     a_left = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, K_SIZE_MM], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     b_right = pl.make_tile_group(
         type=pl.TileType(shape=[K_SIZE_MM, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     acc = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[6])
+        addrs=0x0000,
+        mutex_ids=[6],
+    )
 
     with pl.section_cube():
-        for i in pl.range(0, M_SIZE, TILE):          # M 维分块
-            for j in pl.range(0, N_SIZE, TILE):      # N 维分块
+        for i in pl.range(0, M_SIZE, TILE):  # M 维分块
+            for j in pl.range(0, N_SIZE, TILE):  # N 维分块
                 cur_a = a_l1_db.next()
                 cur_b = b_l1_db.next()
                 al = a_left.current()
@@ -88,6 +100,7 @@ def matmul_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_kernel():
     device = ST_DEVICE
     _require_a5(device)
@@ -109,7 +122,7 @@ def test_matmul_kernel():
 #   C[128,128] = A[128,K_SIZE] @ B[K_SIZE,128]，K 分 K_SIZE//TILE 块累加。
 #   单输出 tile（M=N=128），突出 matmul_acc 的 K 累加链。
 # ===========================================================================
-K_SIZE_ACC = 256     # 分 2 个 TILE 块累加
+K_SIZE_ACC = 256  # 分 2 个 TILE 块累加
 
 
 @pl.jit(auto_mutex=True)
@@ -121,27 +134,35 @@ def matmul_acc_kernel(
     # L1 / L0 双缓冲（next() 轮转）
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_left = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                         layout=pl.NZ),
-        addrs=0x0000, mutex_ids=[4, 5])
+        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
+        addrs=0x0000,
+        mutex_ids=[4, 5],
+    )
     b_right = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[6, 7])
+        addrs=0x0000,
+        mutex_ids=[6, 7],
+    )
     # Acc：K 累加要求 fractal=1024
     acc = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                         fractal=1024),
-        addrs=0x0000, mutex_ids=[8])
+        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, fractal=1024),
+        addrs=0x0000,
+        mutex_ids=[8],
+    )
 
     with pl.section_cube():
         pl.system.set_mm_layout_transform(enabled=True)
         ac = acc.current()
-        for k in pl.range(0, K_SIZE_ACC, TILE):     # K 维分块（累加）
+        for k in pl.range(0, K_SIZE_ACC, TILE):  # K 维分块（累加）
             cur_a = a_l1.next()
             cur_b = b_l1.next()
             al = a_left.next()
@@ -151,14 +172,15 @@ def matmul_acc_kernel(
             pl.move(al, cur_a)
             pl.move(br, cur_b)
             if k == 0:
-                pl.matmul(ac, al, br, phase=pl.AccPhase.Partial)          # 首块写入累加器
+                pl.matmul(ac, al, br, phase=pl.AccPhase.Partial)  # 首块写入累加器
             else:
-                pl.matmul_acc(ac, ac, al, br, phase=pl.AccPhase.Final)    # 末块累加（K=2 块）
+                pl.matmul_acc(ac, ac, al, br, phase=pl.AccPhase.Final)  # 末块累加（K=2 块）
         pl.store(c, ac, [0, 0], phase=pl.STPhase.Final)
         pl.system.set_mm_layout_transform(enabled=False)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_acc_kernel():
     device = ST_DEVICE
     _require_a5(device)

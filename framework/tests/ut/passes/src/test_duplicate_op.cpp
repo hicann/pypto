@@ -193,6 +193,62 @@ TEST_F(TestDuplicateOpPass, DuplicateViewUTest2)
 }
 
 /*
+TESTDuplicateSliceTwoConsumer
+inCast{8,16}->slice->sliceTensor{4,16}->exp->outCast1{4,16}
+                                      ->sqrt->outCast2{4,16}
+
+inCast{8,16}->slice->sliceTensor1{4,16}->exp->outCast1{4,16}
+            ->slice->sliceTensor2{4,16}->sqrt->outCast2{4,16}
+*/
+TEST_F(TestDuplicateOpPass, DuplicateSliceUTest1)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateSlice",
+                                                      "TestDuplicateSlice", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> inputShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> sliceShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto inCast = IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto sliceTensor = IRBuilder().CreateTensorVar(DT_FP32, sliceShape, CreateTestConstIntVector(sliceShape));
+    auto outCast1 = IRBuilder().CreateTensorVar(DT_FP32, sliceShape, CreateTestConstIntVector(sliceShape));
+    auto outCast2 = IRBuilder().CreateTensorVar(DT_FP32, sliceShape, CreateTestConstIntVector(sliceShape));
+
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_SLICE, {inCast}, {sliceTensor}, [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, MEM_VECTOR_REG, std::vector<SymbolicScalar>{}));
+        });
+    auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {sliceTensor}, {outCast1});
+    auto& sqrtOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {sliceTensor}, {outCast2});
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast1);
+    currFunctionPtr->outCasts_.push_back(outCast2);
+
+    DuplicateOp duplicateoppass;
+    EXPECT_EQ(duplicateoppass.PreCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(duplicateoppass.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(duplicateoppass.PostCheck(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_SLICE), kNumTwo);
+    EXPECT_EQ(expOp.GetInputOperandSize(), kNumOne);
+    EXPECT_EQ(sqrtOp.GetInputOperandSize(), kNumOne);
+    EXPECT_NE(expOp.GetInputOperand(kSizeZero), sliceTensor);
+    EXPECT_NE(sqrtOp.GetInputOperand(kSizeZero), sliceTensor);
+    EXPECT_NE(expOp.GetInputOperand(kSizeZero), sqrtOp.GetInputOperand(kSizeZero));
+
+    for (const auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_SLICE) {
+            continue;
+        }
+        auto sliceAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
+        ASSERT_NE(sliceAttr, nullptr);
+        EXPECT_EQ(sliceAttr->GetFromOffset(), offset);
+        EXPECT_EQ(sliceAttr->GetTo(), MEM_VECTOR_REG);
+    }
+}
+
+/*
 TESTDuplicateViewAlternativeConsumer
 inCast{8,16}->view->ubTensor1{1,8,16}
             ->view->ubTensor2{1,8,16}

@@ -721,6 +721,7 @@ def moe_distributed_dispatch(
 
 @pytest.mark.skip(reason="CI 上仅看护 test_moe_distributed_dispatch_combine")
 @pytest.mark.world_size(2)
+@pypto.options(pass_options={"enable_slice": True})
 def test_moe_distributed_dispatch() -> None:
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -761,10 +762,7 @@ def moe_distributed_combine_kernel(
 
     stitch_function_max_num = 128 if batch_size in (1, 8) else 10
 
-    @pypto.frontend.jit(
-        new_ir=False,
-        runtime_options={"stitch_function_max_num": stitch_function_max_num}
-    )
+    @pypto.frontend.jit(new_ir=False, runtime_options={"stitch_function_max_num": stitch_function_max_num})
     def kernel(
         expand_x: pypto.Tensor([row, hidden_size], data_type, format=pypto.TileOpFormat.TILEOP_ND),
         assist_info_for_combine: pypto.Tensor([row, 3], pypto.DT_INT32, format=pypto.TileOpFormat.TILEOP_ND),
@@ -896,6 +894,7 @@ def moe_distributed_combine(
 
 
 @pytest.mark.world_size(16)
+@pypto.options(pass_options={"enable_slice": True})
 def test_moe_distributed_combine() -> None:
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -963,6 +962,7 @@ def moe_distributed_dispatch_combine(
 
 
 @pytest.mark.world_size(4)
+@pypto.options(pass_options={"enable_slice": True})
 def test_moe_distributed_dispatch_combine() -> None:
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

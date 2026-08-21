@@ -31,9 +31,7 @@ const std::unordered_set<Opcode>& CommonOperationEliminateUtils::GetSkipEliminat
 {
     // Opcodes in this set are excluded from common operation elimination on purpose:
     //   - OP_VIEW: works with GraphPartition processing logic.
-    static const std::unordered_set<Opcode> skipOpcodes = {
-        Opcode::OP_VIEW,
-    };
+    static const std::unordered_set<Opcode> skipOpcodes = {Opcode::OP_VIEW, Opcode::OP_SLICE};
     return skipOpcodes;
 }
 

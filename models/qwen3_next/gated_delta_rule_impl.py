@@ -369,7 +369,7 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):  # noqa: E741
     last_state_data_shape = [b, nv, d, d]
 
     @pypto.frontend.jit(
-        runtime_options={"stitch_function_max_num": 2, "device_sched_parallelism": 8, "max_workspace_kb": 600000},
+        runtime_options={"stitch_function_max_num": 2, "device_sched_parallelism": 8, "max_workspace_kb": 1600000},
         pass_options={
             "vec_nbuffer_setting": {
                 8: 16,
@@ -388,7 +388,7 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):  # noqa: E741
                 4: 4,
                 -2: 1,
             }
-        }
+        },
     )
     def kernel(
         query: pypto.Tensor(query_shape, pypto.DT_FP32),
@@ -518,7 +518,7 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):  # noqa: E741
     last_state_data_shape = [b, nv, d, d]
 
     @pypto.frontend.jit(
-        runtime_options={"stitch_function_max_num": 2, "device_sched_parallelism": 8, "max_workspace_kb": 600000},
+        runtime_options={"stitch_function_max_num": 2, "device_sched_parallelism": 8, "max_workspace_kb": 1600000},
         pass_options={
             "vec_nbuffer_setting": {
                 9: 16,
@@ -541,7 +541,7 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):  # noqa: E741
                 36: 16,
                 -2: 1,
             }
-        }
+        },
     )
     def kernel(
         query: pypto.Tensor(query_shape, pypto.DT_FP32),

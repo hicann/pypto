@@ -33,6 +33,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 M_SIZE = 256
 K_SIZE = 64
 N_SIZE = 256
@@ -53,32 +55,48 @@ def tiled_matmul_add_db(
     # L1 double buffer (rotate via next())
     a_l1_db = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1_db = pl.make_tile_group(
         type=pl.TileType(shape=[K_SIZE, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x04000, mutex_ids=[2, 3])
+        addrs=0x04000,
+        mutex_ids=[2, 3],
+    )
 
     # L0A / L0B (single tile)
     a_left = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     b_right = pl.make_tile_group(
         type=pl.TileType(shape=[K_SIZE, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
 
     acc = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[6])
+        addrs=0x0000,
+        mutex_ids=[6],
+    )
 
     mm_res_ub = pl.make_tile_group(
         type=pl.TileType(shape=[32, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[7])
+        addrs=0x0000,
+        mutex_ids=[7],
+    )
     x_ub = pl.make_tile_group(
         type=pl.TileType(shape=[32, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x2000, mutex_ids=[8])
+        addrs=0x2000,
+        mutex_ids=[8],
+    )
     out_ub = pl.make_tile_group(
         type=pl.TileType(shape=[32, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[9])
+        addrs=0x4000,
+        mutex_ids=[9],
+    )
 
     # ========== Cube Section ==========
     with pl.section_cube():
@@ -131,6 +149,7 @@ def tiled_matmul_add_db(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tiled_matmul_add_db_npu():
     """End-to-end NPU test (A5 only)."""
 
@@ -155,5 +174,6 @@ def test_tiled_matmul_add_db_npu():
     out_ref = torch.matmul(a.float(), b.float()) + x
     torch.testing.assert_close(out, out_ref, rtol=1e-2, atol=1e-2)
     logging.info("result equal!")
+
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")

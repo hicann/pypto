@@ -40,6 +40,8 @@ from pypto_pro.language import Vf as vf  # noqa: N813
 import pytest
 import torch
 
+import pypto
+
 # ================================================================
 #  Configuration -- change QK_PRELOAD to tune pre-compute depth
 # ================================================================
@@ -70,13 +72,13 @@ QK_HALF_F32 = TKV * TS * 4
 PV_HALF_F32 = TS * TD * 4
 
 # ---- MAT (512KB) : tile_group base addresses (slots derived from type size) ----
-MA0 = 0                       # q_l1_db   (2 slots)
-MA1 = Q_F16 * 2               # k_l1_db   (2 slots)
-MA2 = MA1 + KT_F16 * 2        # p_mat_db  (3 slots)
-MA3 = MA2 + P_F16 * 3         # v_l1_db   (2 slots)
-LA0 = 0                       # left_db   (2 slots)
-RA0 = 0                       # right_db  (2 slots)
-CA0 = 0                       # acc_db    (4 slots)
+MA0 = 0  # q_l1_db   (2 slots)
+MA1 = Q_F16 * 2  # k_l1_db   (2 slots)
+MA2 = MA1 + KT_F16 * 2  # p_mat_db  (3 slots)
+MA3 = MA2 + P_F16 * 3  # v_l1_db   (2 slots)
+LA0 = 0  # left_db   (2 slots)
+RA0 = 0  # right_db  (2 slots)
+CA0 = 0  # acc_db    (4 slots)
 
 # ---- VEC addresses (248KB on a5) ----
 VB4_KV = TS_HALF * TKV * 4
@@ -86,14 +88,14 @@ VB4 = TS_HALF * TD * 4
 VB2 = TS_HALF * TD * 2
 VB_RED = TS_HALF * 1 * 4
 
-VA0 = 0                       # qk_vec_db (2 slots)
-VA2 = VA0 + 2 * VB4_KV        # p_f16 region (main halves)
-VA2_DN = VA2 + VB2_KV_HALF    # p_f16 back half (slot 0)
-VA2B = VA2 + VB2_KV           # p_f16 (slot 1)
+VA0 = 0  # qk_vec_db (2 slots)
+VA2 = VA0 + 2 * VB4_KV  # p_f16 region (main halves)
+VA2_DN = VA2 + VB2_KV_HALF  # p_f16 back half (slot 0)
+VA2B = VA2 + VB2_KV  # p_f16 (slot 1)
 VA2B_DN = VA2B + VB2_KV_HALF  # p_f16 back half (slot 1)
-VA8 = VA2 + 2 * VB2_KV        # pv_vec_db (2 slots)
-VA7 = VA8 + 2 * VB4           # running_o (1 slot)
-VA9 = VA7 + VB4               # o_f16     (1 slot)
+VA8 = VA2 + 2 * VB2_KV  # pv_vec_db (2 slots)
+VA7 = VA8 + 2 * VB4  # running_o (1 slot)
+VA9 = VA7 + VB4  # o_f16     (1 slot)
 VA_GMAX0 = VA9 + VB2
 VA_GMAX1 = VA_GMAX0 + VB_RED
 VA_GMAX2 = VA_GMAX1 + VB_RED
@@ -182,16 +184,24 @@ def process_vec1_dn_no_update_vf(input_tile, x_exp_tile, max_tile, sum_tile, act
         vreg_x_exp_odd_f16_1 = vf.astype(vreg_x_exp_3, preg_main, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_x_exp_f16_1_pack, vreg_x_exp_f16_1_packa = vf.de_interleave(vreg_x_exp_even_f16_1, vreg_x_exp_odd_f16_1)
         vf.store_align(
-            x_exp_tile, vreg_x_exp_f16_pack, preg_store,
-            block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True,
+            x_exp_tile,
+            vreg_x_exp_f16_pack,
+            preg_store,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
         )
         vreg_x_sum_0 = vf.add(vreg_x_exp_0, vreg_x_sum_0, preg_main)
         vreg_x_sum_2 = vf.add(vreg_x_exp_2, vreg_x_sum_2, preg_main)
         vf.store_align(
-            x_exp_1, vreg_x_exp_f16_1_pack, preg_store,
-            block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True,
+            x_exp_1,
+            vreg_x_exp_f16_1_pack,
+            preg_store,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
         )
         vreg_x_sum_1 = vf.add(vreg_x_exp_1, vreg_x_sum_1, preg_main)
         vreg_x_sum_3 = vf.add(vreg_x_exp_3, vreg_x_sum_3, preg_main)
@@ -270,16 +280,24 @@ def process_vec1_dn_update_vf(input_tile, x_exp_tile, max_tile, exp_max_tile, su
         vreg_x_exp_odd_f16_1 = vf.astype(vreg_x_exp_3, preg_main, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_x_exp_f16_1_pack, vreg_x_exp_f16_1_packa = vf.de_interleave(vreg_x_exp_even_f16_1, vreg_x_exp_odd_f16_1)
         vf.store_align(
-            x_exp_tile, vreg_x_exp_f16_pack, preg_store,
-            block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True,
+            x_exp_tile,
+            vreg_x_exp_f16_pack,
+            preg_store,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
         )
         vreg_x_sum_0 = vf.add(vreg_x_exp_0, vreg_x_sum_0, preg_main)
         vreg_x_sum_2 = vf.add(vreg_x_exp_2, vreg_x_sum_2, preg_main)
         vf.store_align(
-            x_exp_1, vreg_x_exp_f16_1_pack, preg_store,
-            block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True,
+            x_exp_1,
+            vreg_x_exp_f16_1_pack,
+            preg_store,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
         )
         vreg_x_sum_1 = vf.add(vreg_x_exp_1, vreg_x_sum_1, preg_main)
         vreg_x_sum_3 = vf.add(vreg_x_exp_3, vreg_x_sum_3, preg_main)
@@ -336,8 +354,24 @@ def last_div_vf(dst_tile, cur_tile, exp_sum_tile):
             vf.store_align(dst_tile + (i * TD + j * FLOAT_REP_SIZE), vreg_div, preg_all)
 
 
-def compute_qk(ki, sq_off, skv_off, task_id_mod2, actual_skv, actual_sq, actual_sq_pad, actual_sq_half,
-               cur_q, q, k, k_l1_db, left_db, right_db, acc_db, qk_vec_db):
+def compute_qk(
+    ki,
+    sq_off,
+    skv_off,
+    task_id_mod2,
+    actual_skv,
+    actual_sq,
+    actual_sq_pad,
+    actual_sq_half,
+    cur_q,
+    q,
+    k,
+    k_l1_db,
+    left_db,
+    right_db,
+    acc_db,
+    qk_vec_db,
+):
     if ki == 0:
         pl.set_validshape(cur_q, [TD, actual_sq])
         pl.load(cur_q, q, [sq_off, 0], order=[1, 0])
@@ -363,8 +397,21 @@ def compute_qk(ki, sq_off, skv_off, task_id_mod2, actual_skv, actual_sq, actual_
     pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=QK_READY_FORWARD_IDS[task_id_mod2])
 
 
-def compute_pv(ki, task_id_mod2, task_id_mod3, actual_skv, actual_sq_pad, actual_sq_half,
-               v, v_l1_db, p_mat_db, left_db, right_db, acc_db, pv_vec_db):
+def compute_pv(
+    ki,
+    task_id_mod2,
+    task_id_mod3,
+    actual_skv,
+    actual_sq_pad,
+    actual_sq_half,
+    v,
+    v_l1_db,
+    p_mat_db,
+    left_db,
+    right_db,
+    acc_db,
+    pv_vec_db,
+):
     sv_off = ki * TKV
     pl.system.wait_cross_core(pipe=pl.PipeType.MTE1, event_id=P_READY_FORWARD_IDS[task_id_mod3])
     cur_v = v_l1_db.next()
@@ -394,9 +441,23 @@ def compute_pv(ki, task_id_mod2, task_id_mod3, actual_skv, actual_sq_pad, actual
 # ================================================================
 #  Vector: compute_p (softmax) / compute_gu (flash update)
 # ================================================================
-def compute_p(ki, task_id_mod2, task_id_mod3, q_count_mod3, actual_skv, actual_sq_half, sub_id,
-              global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo,
-              qk_vec_db, p_f16_db, p_f16_main_db, p_f16_back_db, p_mat_db):
+def compute_p(
+    ki,
+    task_id_mod2,
+    task_id_mod3,
+    q_count_mod3,
+    actual_skv,
+    actual_sq_half,
+    sub_id,
+    global_max_rm_buf,
+    global_sum_rm_buf,
+    exp_corr_rm_fifo,
+    qk_vec_db,
+    p_f16_db,
+    p_f16_main_db,
+    p_f16_back_db,
+    p_mat_db,
+):
     """Softmax on KQ tile -> P. Column-direction VF; TINSERT with dynamic col offset."""
     pl.system.wait_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_FORWARD_IDS[task_id_mod2])
     global_max_rm_cur = global_max_rm_buf[q_count_mod3]
@@ -410,11 +471,13 @@ def compute_p(ki, task_id_mod2, task_id_mod3, q_count_mod3, actual_skv, actual_s
     p_mat_slot = p_mat_db.next()
 
     if ki == 0:
-        process_vec1_dn_no_update_vf(qk_slot, p_f16_slot, global_max_rm_cur, global_sum_rm_cur,
-                                     actual_sq_half, actual_skv)
+        process_vec1_dn_no_update_vf(
+            qk_slot, p_f16_slot, global_max_rm_cur, global_sum_rm_cur, actual_sq_half, actual_skv
+        )
     if ki > 0:
-        process_vec1_dn_update_vf(qk_slot, p_f16_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur,
-                                  actual_sq_half, actual_skv)
+        process_vec1_dn_update_vf(
+            qk_slot, p_f16_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, actual_sq_half, actual_skv
+        )
     pl.system.set_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_BARKWARD_IDS[task_id_mod2])
 
     # DN: TINSERT with dynamic column offset (actual_sq_half * sub_id). Full TKV//2 rows per half.
@@ -425,8 +488,23 @@ def compute_p(ki, task_id_mod2, task_id_mod3, q_count_mod3, actual_skv, actual_s
     pl.system.set_cross_core(pipe=pl.PipeType.MTE3, event_id=P_READY_FORWARD_IDS[task_id_mod3])
 
 
-def compute_gu(ki, skv_tiles, sq_off, task_id_mod2, task_id_mod3, q_count_mod3, actual_sq_half, real_rows, row_off,
-               o, pv_vec_db, running_o, o_f16, exp_corr_rm_fifo, global_sum_rm_buf):
+def compute_gu(
+    ki,
+    skv_tiles,
+    sq_off,
+    task_id_mod2,
+    task_id_mod3,
+    q_count_mod3,
+    actual_sq_half,
+    real_rows,
+    row_off,
+    o,
+    pv_vec_db,
+    running_o,
+    o_f16,
+    exp_corr_rm_fifo,
+    global_sum_rm_buf,
+):
     """GU: running output update. running_o/pv have actual_sq_half rows; only real_rows stored to o."""
     pv_slot = pv_vec_db.next()
     gsum_gu = global_sum_rm_buf[q_count_mod3]
@@ -474,49 +552,91 @@ def fa_perf_tkv_preload_dn_kernel(
 
     # ===== Cross-core shared buffers (declared outside the sections) =====
     qk_vec_db = pl.make_tile_group(
-        type=pl.TileType(shape=[TKV, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec,
-                         valid_shape=[-1, -1], compact=1, pad=pl.TilePad.min),
-        addrs=VA0, mutex_ids=[14, 15])
+        type=pl.TileType(
+            shape=[TKV, TS_HALF],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Vec,
+            valid_shape=[-1, -1],
+            compact=1,
+            pad=pl.TilePad.min,
+        ),
+        addrs=VA0,
+        mutex_ids=[14, 15],
+    )
     pv_vec_db = pl.make_tile_group(
-        type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec,
-                         valid_shape=[-1, -1]),
-        addrs=VA8, mutex_ids=[16, 17])
+        type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]),
+        addrs=VA8,
+        mutex_ids=[16, 17],
+    )
     p_mat_db = pl.make_tile_group(
-        type=pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                         layout=pl.ZN, valid_shape=[-1, -1]),
-        addrs=MA2, mutex_ids=[18, 19, 20])
+        type=pl.TileType(
+            shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN, valid_shape=[-1, -1]
+        ),
+        addrs=MA2,
+        mutex_ids=[18, 19, 20],
+    )
 
     # =================== CUBE SECTION ===================
     with pl.section_cube():
         q_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             layout=pl.ZN, valid_shape=[-1, -1]),
-            addrs=MA0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN, valid_shape=[-1, -1]
+            ),
+            addrs=MA0,
+            mutex_ids=[0, 1],
+        )
         k_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             layout=pl.NZ, valid_shape=[-1, -1]),
-            addrs=MA1, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ, valid_shape=[-1, -1]
+            ),
+            addrs=MA1,
+            mutex_ids=[2, 3],
+        )
         v_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             layout=pl.NZ, valid_shape=[-1, -1]),
-            addrs=MA3, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ, valid_shape=[-1, -1]
+            ),
+            addrs=MA3,
+            mutex_ids=[4, 5],
+        )
         left_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                             layout=pl.NZ, valid_shape=[-1, -1], compact=1),
-            addrs=LA0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TKV, TD],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=LA0,
+            mutex_ids=[6, 7],
+        )
         right_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=RA0, mutex_ids=[8, 9])
+            type=pl.TileType(
+                shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, valid_shape=[-1, -1], compact=1
+            ),
+            addrs=RA0,
+            mutex_ids=[8, 9],
+        )
         acc_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV, TS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=CA0, mutex_ids=[10, 11, 12, 13])
+            type=pl.TileType(
+                shape=[TKV, TS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, valid_shape=[-1, -1], compact=1
+            ),
+            addrs=CA0,
+            mutex_ids=[10, 11, 12, 13],
+        )
 
         task_id = 0
         ctx_arr = pl.struct_array(
-            4, "CubeCtx", ki=0, task_id_mod2=0, task_id_mod3=0,
-            actual_skv=0, actual_sq=0, actual_sq_pad=0, actual_sq_half=0,
+            4,
+            "CubeCtx",
+            ki=0,
+            task_id_mod2=0,
+            task_id_mod3=0,
+            actual_skv=0,
+            actual_sq=0,
+            actual_sq_pad=0,
+            actual_sq_half=0,
         )
         for qi in pl.range(core_id, sq_tiles, num_cores):
             sq_off = qi * TS
@@ -539,32 +659,74 @@ def fa_perf_tkv_preload_dn_kernel(
                     ctx_curr.actual_sq = actual_sq
                     ctx_curr.actual_sq_pad = actual_sq_pad
                     ctx_curr.actual_sq_half = actual_sq_half
-                    compute_qk(ki, sq_off, skv_off, task_id % 2,
-                               actual_skv, actual_sq, actual_sq_pad, actual_sq_half,
-                               cur_q, q, k, k_l1_db, left_db, right_db, acc_db, qk_vec_db)
+                    compute_qk(
+                        ki,
+                        sq_off,
+                        skv_off,
+                        task_id % 2,
+                        actual_skv,
+                        actual_sq,
+                        actual_sq_pad,
+                        actual_sq_half,
+                        cur_q,
+                        q,
+                        k,
+                        k_l1_db,
+                        left_db,
+                        right_db,
+                        acc_db,
+                        qk_vec_db,
+                    )
                 if task_id > 1:
                     prev = ctx_arr[(task_id + 2) % 4]
-                    compute_pv(prev.ki, prev.task_id_mod2, prev.task_id_mod3,
-                               prev.actual_skv, prev.actual_sq_pad, prev.actual_sq_half,
-                               v, v_l1_db, p_mat_db, left_db, right_db, acc_db, pv_vec_db)
+                    compute_pv(
+                        prev.ki,
+                        prev.task_id_mod2,
+                        prev.task_id_mod3,
+                        prev.actual_skv,
+                        prev.actual_sq_pad,
+                        prev.actual_sq_half,
+                        v,
+                        v_l1_db,
+                        p_mat_db,
+                        left_db,
+                        right_db,
+                        acc_db,
+                        pv_vec_db,
+                    )
                 task_id = task_id + 1
 
     # =================== VECTOR SECTION ===================
     with pl.section_vector():
         p_f16_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF * 2], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Vec),
-            addrs=[VA2, VA2B], mutex_ids=[0, 1])
+            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF * 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
+            addrs=[VA2, VA2B],
+            mutex_ids=[0, 1],
+        )
         p_f16_main_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[-1, -1], layout=pl.NZ, compact=2),
-            addrs=[VA2, VA2B], mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TKV // 2 + 1, TS_HALF],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Vec,
+                valid_shape=[-1, -1],
+                layout=pl.NZ,
+                compact=2,
+            ),
+            addrs=[VA2, VA2B],
+            mutex_ids=[0, 1],
+        )
         p_f16_back_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[-1, -1], layout=pl.NZ, compact=2),
-            addrs=[VA2_DN, VA2B_DN], mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TKV // 2 + 1, TS_HALF],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Vec,
+                valid_shape=[-1, -1],
+                layout=pl.NZ,
+                compact=2,
+            ),
+            addrs=[VA2_DN, VA2B_DN],
+            mutex_ids=[0, 1],
+        )
 
         red_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         gmax_rm_0 = pl.make_tile(red_rm_type, addr=VA_GMAX0, size=VB_RED)
@@ -581,13 +743,19 @@ def fa_perf_tkv_preload_dn_kernel(
         exp_corr_rm_fifo = (ec_rm_0, ec_rm_1, ec_rm_2)
 
         o_f16_buf = pl.make_tile_group(
-            type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[-1, -1]),
-            addrs=VA9, mutex_ids=[11])
+            type=pl.TileType(
+                shape=[TS_HALF, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+            ),
+            addrs=VA9,
+            mutex_ids=[11],
+        )
         running_o_buf = pl.make_tile_group(
-            type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[-1, -1]),
-            addrs=VA7, mutex_ids=[12])
+            type=pl.TileType(
+                shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+            ),
+            addrs=VA7,
+            mutex_ids=[12],
+        )
         o_f16 = o_f16_buf.next()
         running_o = running_o_buf.next()
 
@@ -600,9 +768,18 @@ def fa_perf_tkv_preload_dn_kernel(
         q_count = 0
         sub_id = pl.get_subblock_idx()
         ctx_arr = pl.struct_array(
-            4, "VecCtx", sq_off=0, ki=0, skv_tiles=0,
-            task_id_mod2=0, task_id_mod3=0, q_count_mod3=0,
-            actual_skv=0, actual_sq_half=0, real_rows=0, row_off=0,
+            4,
+            "VecCtx",
+            sq_off=0,
+            ki=0,
+            skv_tiles=0,
+            task_id_mod2=0,
+            task_id_mod3=0,
+            q_count_mod3=0,
+            actual_skv=0,
+            actual_sq_half=0,
+            real_rows=0,
+            row_off=0,
         )
         for qi in pl.range(core_id, sq_tiles, num_cores):
             sq_off = qi * TS
@@ -634,16 +811,42 @@ def fa_perf_tkv_preload_dn_kernel(
                 if task_id > 0:
                     if ki < skv_tiles + 1:
                         p_ctx = ctx_arr[(task_id + 3) % 4]
-                        compute_p(p_ctx.ki, p_ctx.task_id_mod2, p_ctx.task_id_mod3,
-                                  p_ctx.q_count_mod3, p_ctx.actual_skv, p_ctx.actual_sq_half, sub_id,
-                                  global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo,
-                                  qk_vec_db, p_f16_db, p_f16_main_db, p_f16_back_db, p_mat_db)
+                        compute_p(
+                            p_ctx.ki,
+                            p_ctx.task_id_mod2,
+                            p_ctx.task_id_mod3,
+                            p_ctx.q_count_mod3,
+                            p_ctx.actual_skv,
+                            p_ctx.actual_sq_half,
+                            sub_id,
+                            global_max_rm_buf,
+                            global_sum_rm_buf,
+                            exp_corr_rm_fifo,
+                            qk_vec_db,
+                            p_f16_db,
+                            p_f16_main_db,
+                            p_f16_back_db,
+                            p_mat_db,
+                        )
                 if task_id > 2:
                     g_ctx = ctx_arr[(task_id + 1) % 4]
-                    compute_gu(g_ctx.ki, g_ctx.skv_tiles, g_ctx.sq_off,
-                               g_ctx.task_id_mod2, g_ctx.task_id_mod3, g_ctx.q_count_mod3,
-                               g_ctx.actual_sq_half, g_ctx.real_rows, g_ctx.row_off,
-                               o, pv_vec_db, running_o, o_f16, exp_corr_rm_fifo, global_sum_rm_buf)
+                    compute_gu(
+                        g_ctx.ki,
+                        g_ctx.skv_tiles,
+                        g_ctx.sq_off,
+                        g_ctx.task_id_mod2,
+                        g_ctx.task_id_mod3,
+                        g_ctx.q_count_mod3,
+                        g_ctx.actual_sq_half,
+                        g_ctx.real_rows,
+                        g_ctx.row_off,
+                        o,
+                        pv_vec_db,
+                        running_o,
+                        o_f16,
+                        exp_corr_rm_fifo,
+                        global_sum_rm_buf,
+                    )
                 task_id = task_id + 1
             q_count = q_count + 1
 
@@ -663,6 +866,7 @@ def flash_attention_ref(q, k, v, d):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_perf():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
@@ -676,8 +880,7 @@ def test_fa_perf():
         (8128, 8128, TD, 32),
         (8111, 7777, TD, 32),
     ]:
-        logging.info("\nFA-Perf DN tile-group (%s,%s,%s) cores=%s  QK_PRELOAD=%s",
-                     sq, skv, d, num_cores, QK_PRELOAD)
+        logging.info("\nFA-Perf DN tile-group (%s,%s,%s) cores=%s  QK_PRELOAD=%s", sq, skv, d, num_cores, QK_PRELOAD)
         q_t = torch.rand((sq, d), device=device, dtype=torch.float16)
         k_t = torch.rand((skv, d), device=device, dtype=torch.float16)
         v_t = torch.rand((skv, d), device=device, dtype=torch.float16)
@@ -702,8 +905,9 @@ def test_fa_perf():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    logging.info("FA perf DN tile-group: double-buffer + QK pre-compute (QK_PRELOAD=%s, FIFO=%s)",
-                 QK_PRELOAD, FIFO_SIZE)
+    logging.info(
+        "FA perf DN tile-group: double-buffer + QK pre-compute (QK_PRELOAD=%s, FIFO=%s)", QK_PRELOAD, FIFO_SIZE
+    )
     logging.info("%s", '=' * 60)
     test_fa_perf()
     logging.info("\nAll FlashAttention DN tile-group tests passed!")

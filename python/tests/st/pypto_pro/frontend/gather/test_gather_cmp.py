@@ -34,6 +34,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -42,17 +44,17 @@ COLS = 128
 K_VALUE = 20
 
 # UB tile sizes
-SRC_SIZE = 256    # [1, 128] INT16 = 256 bytes
-K_VALUE_SIZE = 32     # [1, 16]  UINT16 = 32 bytes
-TMP_SIZE = 1024   # [1, 256] UINT32 = 1024 bytes
-DST_SIZE = 512    # [1, 128] UINT32 = 512 bytes
-CDST_SIZE = 64     # [1, 16]  UINT32 = 64 bytes
+SRC_SIZE = 256  # [1, 128] INT16 = 256 bytes
+K_VALUE_SIZE = 32  # [1, 16]  UINT16 = 32 bytes
+TMP_SIZE = 1024  # [1, 256] UINT32 = 1024 bytes
+DST_SIZE = 512  # [1, 128] UINT32 = 512 bytes
+CDST_SIZE = 64  # [1, 16]  UINT32 = 64 bytes
 
 # Output tensor layout: [GT indices | EQ indices | GT cdst (16) | EQ cdst (16)]
-OUT_COLS = COLS * 2 + 32   # 128 + 128 + 16 + 16 = 288 UINT32 elements
+OUT_COLS = COLS * 2 + 32  # 128 + 128 + 16 + 16 = 288 UINT32 elements
 GT_OFF = 0
 EQ_OFF = COLS
-CNT_OFF = COLS * 2        # GT count tile starts here (16 elements)
+CNT_OFF = COLS * 2  # GT count tile starts here (16 elements)
 CNT_EQ_OFF = COLS * 2 + 16  # EQ count tile starts here (16 elements)
 
 
@@ -62,32 +64,29 @@ def gather_cmp_kernel(
     out: pl.Tensor[[ROWS, OUT_COLS], pl.DT_UINT32],
 ):
     src_tile = pl.make_tile(
-        pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_INT16, target_memory=pl.MemorySpace.Vec),
-        addr=0x0000, size=SRC_SIZE
+        pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_INT16, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=SRC_SIZE
     )
     k_value_tile = pl.make_tile(
-        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec),
-        addr=0x1000, size=K_VALUE_SIZE
+        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec), addr=0x1000, size=K_VALUE_SIZE
     )
     tmp_tile = pl.make_tile(
-        pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-        addr=0x2000, size=TMP_SIZE
+        pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec), addr=0x2000, size=TMP_SIZE
     )
     indices_gt_tile = pl.make_tile(
         pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-        addr=0x3000, size=DST_SIZE
+        addr=0x3000,
+        size=DST_SIZE,
     )
     indices_eq_tile = pl.make_tile(
         pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-        addr=0x3200, size=DST_SIZE
+        addr=0x3200,
+        size=DST_SIZE,
     )
     cdst_gt_tile = pl.make_tile(
-        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-        addr=0x4000, size=CDST_SIZE
+        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec), addr=0x4000, size=CDST_SIZE
     )
     cdst_eq_tile = pl.make_tile(
-        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-        addr=0x4040, size=CDST_SIZE
+        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec), addr=0x4040, size=CDST_SIZE
     )
 
     with pl.section_vector():
@@ -112,7 +111,6 @@ def gather_cmp_kernel(
         pl.store(out, cdst_eq_tile, [0, CNT_EQ_OFF])
 
 
-
 def create_test_data():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -134,6 +132,7 @@ def compute_expected(src_data, k_value):
 
 @pl.jit()
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_gather_cmp():
     device = ST_DEVICE
     torch.npu.set_device(device)

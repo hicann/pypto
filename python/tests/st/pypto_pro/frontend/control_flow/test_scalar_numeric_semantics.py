@@ -14,6 +14,8 @@ import pytest
 import torch
 import torch_npu  # noqa: F401 — registers npu backend
 
+import pypto
+
 
 @pl.jit()
 def scalar_numeric_semantics_kernel(
@@ -49,7 +51,9 @@ def _run_scalar_case(lhs, rhs, expected_div, expected_int):
         f"got {int_out.cpu().tolist()}, expected {expected_numeric.cpu().tolist()}"
     )
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_runtime_int_truediv_and_bool_numeric_semantics():
     _run_scalar_case(7, 2, 3.5, [8, 1, 3, 2, 1, 1])
     _run_scalar_case(1, 2, 0.5, [7, 0, 2, 3, 0, 1])

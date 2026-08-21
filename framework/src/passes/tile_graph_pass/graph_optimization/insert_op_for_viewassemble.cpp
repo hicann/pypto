@@ -13,6 +13,7 @@
  * \brief
  */
 #include "insert_op_for_viewassemble.h"
+#include "interface/configs/config_manager_ng.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 
@@ -34,11 +35,12 @@ void InsertOpForViewAssemble::InsertViewAssemble(Function& function, Operation* 
     moveInTensorPtr->UpdateDynValidShape(moveOutTensorPtr->GetDynValidShape());
     std::vector<int64_t> offset(moveOutTensorPtr->GetShape().size(), 0);
     std::vector<SymbolicScalar> dynOffset(moveOutTensorPtr->GetShape().size(), 0);
-    Operation& assemble = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {moveOutTensorPtr},
+    Operation& assemble = irBuilder_.CreateTensorOpStmt(function, config::GetContractOpcode(), {moveOutTensorPtr},
                                                         {ddrTensorPtr});
     assemble.SetOpAttribute(std::make_shared<AssembleOpAttribute>(moveOutTensorPtr->GetMemoryTypeOriginal(), offset,
                                                                   dynOffset, moveOutTensorPtr->GetDynValidShape()));
-    Operation& view = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_VIEW, {ddrTensorPtr}, {moveInTensorPtr});
+    Operation& view = irBuilder_.CreateTensorOpStmt(function, config::GetSliceOpcode(), {ddrTensorPtr},
+                                                    {moveInTensorPtr});
     view.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, moveOutTensorPtr->GetMemoryTypeOriginal(), dynOffset,
                                                           moveOutTensorPtr->GetDynValidShape()));
     assembleOp->ReplaceInput(moveInTensorPtr, moveOutTensorPtr);
@@ -47,6 +49,9 @@ void InsertOpForViewAssemble::InsertViewAssemble(Function& function, Operation* 
 Status InsertOpForViewAssemble::InsertCopy(Function& function, Operation* viewOp, Operation* assOp)
 {
     if (assOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+        if (viewOp->GetOpcode() != config::GetSliceOpcode() || assOp->GetOpcode() != config::GetContractOpcode()) {
+            return SUCCESS;
+        }
         assOp->GetIOperands()[0]->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
         auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(viewOp->GetOpAttribute());
         if (viewOpAttr != nullptr) {
@@ -75,7 +80,7 @@ bool InsertOpForViewAssemble::NeedInsertCopy(LogicalTensorPtr& assembleOut)
     bool isNeedInsert = false;
     for (auto& assOp : assembleOut->GetProducers()) {
         auto& prodOp = *assOp->GetIOperands()[0]->GetProducers().begin();
-        if (prodOp->GetOpcode() != Opcode::OP_VIEW) {
+        if (!IsViewLike(prodOp->GetOpcode())) {
             isNeedInsert = true;
             APASS_LOG_INFO_F(Elements::Operation, "assOp[%d] producerOp %s[%d] is not viewOp.", assOp->GetOpMagic(),
                              prodOp->GetOpcodeStr().c_str(), prodOp->GetOpMagic());
@@ -138,7 +143,7 @@ bool InsertOpForViewAssemble::NeedInsertCopy(LogicalTensorPtr& assembleOut)
 Status InsertOpForViewAssemble::JudgedViewAssemble(Function& function)
 {
     for (auto& op : function.Operations()) {
-        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+        if (!IsAssembleLike(op.GetOpcode())) {
             continue;
         }
         auto& prodOp = *op.GetIOperands()[0]->GetProducers().begin();
@@ -148,8 +153,7 @@ Status InsertOpForViewAssemble::JudgedViewAssemble(Function& function)
             }
             continue;
         }
-        if (prodOp->GetOpcode() == Opcode::OP_VIEW &&
-            assembleOutSet_.find(op.GetOOperands()[0]) == assembleOutSet_.end() &&
+        if (IsViewLike(prodOp->GetOpcode()) && assembleOutSet_.find(op.GetOOperands()[0]) == assembleOutSet_.end() &&
             prodOp->GetIOperands()[0]->GetMemoryTypeOriginal() == prodOp->GetOOperands()[0]->GetMemoryTypeOriginal() &&
             notProcessOut_.find(op.GetOOperands()[0]) == notProcessOut_.end()) {
             assembleOutSet_.insert(op.GetOOperands()[0]);

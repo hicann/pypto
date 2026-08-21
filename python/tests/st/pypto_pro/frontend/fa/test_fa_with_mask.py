@@ -38,6 +38,8 @@ from pypto_pro.language import Vf as vf  # noqa: N813
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -148,9 +150,6 @@ PV_READY_BARKWARD_IDS = (9, 10)
 PV_CORE_STRIDE = 2 * FIFO_SIZE * TS
 
 
-
-
-
 def calc_segment_idx(b_idx, s1_idx, segment_starts, actual_s1):
     """Return (segment_idx, segment_acc, cross_segment) for this Q-tile.
 
@@ -168,7 +167,7 @@ def calc_segment_idx(b_idx, s1_idx, segment_starts, actual_s1):
     s1_end = pl.min(s1_start + TS, actual_s1)
     # --- owning segment (the one containing s1_start) ---
     segment_idx = 0
-    segment_acc = 0      # start offset of the owning segment (== own_start)
+    segment_acc = 0  # start offset of the owning segment (== own_start)
     acc = 0
     for si in pl.range(seq_num):
         seg = pl.getval(segment_starts, b_idx * seq_num + si)
@@ -210,15 +209,15 @@ def seg_window(rule, gs, ge, r0, c0):
     """
     mi = 128
     mj = 0
-    diag_tile = (r0 == c0)
-    if rule == 0:            # causal: diag tile -> lower-tri block; else visible
+    diag_tile = r0 == c0
+    if rule == 0:  # causal: diag tile -> lower-tri block; else visible
         if diag_tile:
             mi = 0
             mj = 0
         else:
             mi = 128
             mj = 0
-    elif rule == 1:          # full: visible up to ge, then vertical cut
+    elif rule == 1:  # full: visible up to ge, then vertical cut
         if c0 + TKV <= ge:
             mi = 128
             mj = 0
@@ -228,7 +227,7 @@ def seg_window(rule, gs, ge, r0, c0):
         else:
             mi = 264
             mj = (c0 + TKV - ge) + 8
-    else:                    # rule == 2 diag: prefix cut at gs + own diagonal
+    else:  # rule == 2 diag: prefix cut at gs + own diagonal
         if diag_tile:
             p = gs - c0
             if p <= 0:
@@ -263,7 +262,7 @@ def calc_loop(start, end, work_id, b_idx, s1_o_acc, s1_size_acc, s2_size_acc, ac
             actual_s1 = pl.getval(actual_seq_q, b_idx) - pl.getval(actual_seq_q, b_idx - 1)
             actual_s2 = pl.getval(actual_seq_kv, b_idx) - pl.getval(actual_seq_kv, b_idx - 1)
         s1o_size = s1_o_acc + (actual_s1 + TS - 1) // TS * n_dim
-        if (work_id >= s1o_size):
+        if work_id >= s1o_size:
             s1_o_acc = s1o_size
             s1_size_acc = s1_size_acc + actual_s1
             s2_size_acc = s2_size_acc + actual_s2
@@ -274,8 +273,9 @@ def calc_loop(start, end, work_id, b_idx, s1_o_acc, s1_size_acc, s2_size_acc, ac
 
 
 @pl.vector_function
-def process_vec1_nd_no_update_vf_unalign64(input_tile, dst_tile, max_tile, max_tile_st, sum_tile, mask_tile,
-                                           s1_size, s2_size):
+def process_vec1_nd_no_update_vf_unalign64(
+    input_tile, dst_tile, max_tile, max_tile_st, sum_tile, mask_tile, s1_size, s2_size
+):
     preg_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     ureg_max = vf.unalign_reg_for_store()
     ureg_exp_sum = vf.unalign_reg_for_store()
@@ -308,15 +308,22 @@ def process_vec1_nd_no_update_vf_unalign64(input_tile, dst_tile, max_tile, max_t
 
         vreg_exp_even_f16 = vf.astype(vreg_exp_even, preg_all_f16, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_dst_even_f16, vreg_dst_odd_f16 = vf.de_interleave(vreg_exp_even_f16, vreg_exp_even_f16)
-        vf.store_align(dst_tile, vreg_dst_even_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_dst_even_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(sum_tile, ureg_exp_sum, 0, post_update=True)
 
 
 @pl.vector_function
-def process_vec1_nd_no_update_vf_unalign(input_tile, dst_tile, max_tile, max_tile_st, sum_tile, mask_tile,
-                                         s1_size, s2_size):
+def process_vec1_nd_no_update_vf_unalign(
+    input_tile, dst_tile, max_tile, max_tile_st, sum_tile, mask_tile, s1_size, s2_size
+):
     preg_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     preg_mask_unroll = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     ureg_max = vf.unalign_reg_for_store()
@@ -361,9 +368,15 @@ def process_vec1_nd_no_update_vf_unalign(input_tile, dst_tile, max_tile, max_til
         vreg_exp_even_f16 = vf.astype(vreg_exp_even, preg_all, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_exp_odd_f16 = vf.astype(vreg_exp_odd, preg_all, layout=pl.CastLayout.ONE, dtype=pl.DT_FP16)
         vreg_exp_f16 = vf.or_(vreg_exp_even_f16, vreg_exp_odd_f16, preg_all_f16)
-        vf.store_align(dst_tile, vreg_exp_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_exp_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(sum_tile, ureg_exp_sum, 0, post_update=True)
 
 
@@ -411,15 +424,22 @@ def process_vec1_nd_no_update_vf(input_tile, dst_tile, max_tile, max_tile_st, su
         vreg_exp_even_f16 = vf.astype(vreg_exp_even, preg_all, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_exp_odd_f16 = vf.astype(vreg_exp_odd, preg_all, layout=pl.CastLayout.ONE, dtype=pl.DT_FP16)
         vreg_exp_f16 = vf.or_(vreg_exp_even_f16, vreg_exp_odd_f16, preg_all_f16)
-        vf.store_align(dst_tile, vreg_exp_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_exp_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(sum_tile, ureg_exp_sum, 0, post_update=True)
 
 
 @pl.vector_function
-def process_vec1_nd_update_vf_unalign64(input_tile, dst_tile, max_tile, mask_tile,
-                                        tmp_max, tmp_max_st, tmp_exp_sum, s1_size, s2_size):
+def process_vec1_nd_update_vf_unalign64(
+    input_tile, dst_tile, max_tile, mask_tile, tmp_max, tmp_max_st, tmp_exp_sum, s1_size, s2_size
+):
     preg_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     ureg_max = vf.unalign_reg_for_store()
     ureg_exp_sum = vf.unalign_reg_for_store()
@@ -457,15 +477,22 @@ def process_vec1_nd_update_vf_unalign64(input_tile, dst_tile, max_tile, mask_til
 
         vreg_exp_even_f16 = vf.astype(vreg_exp, preg_all, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_dst_even_f16, vreg_dst_odd_f16 = vf.de_interleave(vreg_exp_even_f16, vreg_exp_even_f16)
-        vf.store_align(dst_tile, vreg_dst_even_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_dst_even_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(tmp_exp_sum, ureg_exp_sum, 0, post_update=True)
 
 
 @pl.vector_function
-def process_vec1_nd_update_vf_unalign(input_tile, dst_tile, max_tile, mask_tile,
-                                      tmp_max, tmp_max_st, tmp_exp_sum, s1_size, s2_size):
+def process_vec1_nd_update_vf_unalign(
+    input_tile, dst_tile, max_tile, mask_tile, tmp_max, tmp_max_st, tmp_exp_sum, s1_size, s2_size
+):
     preg_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     preg_mask_unroll = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     ureg_max = vf.unalign_reg_for_store()
@@ -515,15 +542,20 @@ def process_vec1_nd_update_vf_unalign(input_tile, dst_tile, max_tile, mask_tile,
         vreg_exp_even_f16 = vf.astype(vreg_exp_even, preg_all, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_exp_odd_f16 = vf.astype(vreg_exp_odd, preg_all, layout=pl.CastLayout.ONE, dtype=pl.DT_FP16)
         vreg_exp_f16 = vf.or_(vreg_exp_even_f16, vreg_exp_odd_f16, preg_all_f16)
-        vf.store_align(dst_tile, vreg_exp_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_exp_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(tmp_exp_sum, ureg_exp_sum, 0, post_update=True)
 
 
 @pl.vector_function
-def process_vec1_nd_update_vf(input_tile, dst_tile, max_tile, mask_tile,
-                              tmp_max, tmp_max_st, tmp_exp_sum, s1_size):
+def process_vec1_nd_update_vf(input_tile, dst_tile, max_tile, mask_tile, tmp_max, tmp_max_st, tmp_exp_sum, s1_size):
     preg_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     preg_mask_unroll = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     ureg_max = vf.unalign_reg_for_store()
@@ -571,9 +603,15 @@ def process_vec1_nd_update_vf(input_tile, dst_tile, max_tile, mask_tile,
         vreg_exp_even_f16 = vf.astype(vreg_exp_even, preg_all, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_exp_odd_f16 = vf.astype(vreg_exp_odd, preg_all, layout=pl.CastLayout.ONE, dtype=pl.DT_FP16)
         vreg_exp_f16 = vf.or_(vreg_exp_even_f16, vreg_exp_odd_f16, preg_all_f16)
-        vf.store_align(dst_tile, vreg_exp_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_exp_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(tmp_exp_sum, ureg_exp_sum, 0, post_update=True)
 
 
@@ -653,8 +691,9 @@ def last_div_vf(dst_tile, cur_tile, exp_sum_tile, s1_size, has_tail):
             vf.store_align(dst_tile + (i * TD + D_LOOPS * FLOAT_REP_SIZE), vreg_div, preg_tail)
 
 
-def compute_qk(ctx, ki, sq_off, q, k, cur_q_slot, k_l1_db, left_db, right_db, acc_db, qk_vec_db, task_id,
-               left2, right2, acc2):
+def compute_qk(
+    ctx, ki, sq_off, q, k, cur_q_slot, k_l1_db, left_db, right_db, acc_db, qk_vec_db, task_id, left2, right2, acc2
+):
     # --- compute_qk inlined ---
     skv_off = ctx.s2SizeAcc + ctx.ki * TKV
     cur_k_slot = k_l1_db.next()
@@ -713,9 +752,22 @@ def compute_pv(ctx, v_l1_db, p_mat_db, left_db, right_db, acc_db, pv_vec_db, v, 
     pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=PV_READY_FORWARD_IDS[ctx.task_id % 2])
 
 
-def compute_p(ctx_p, sub_id, qk_vec_db, tile_nz_db, tmp_max, tmp_sum,
-              global_max, global_sum, exp_corr_db, p_mat_db, mask_db, mask,
-              segment_starts, rules) -> None:
+def compute_p(
+    ctx_p,
+    sub_id,
+    qk_vec_db,
+    tile_nz_db,
+    tmp_max,
+    tmp_sum,
+    global_max,
+    global_sum,
+    exp_corr_db,
+    p_mat_db,
+    mask_db,
+    mask,
+    segment_starts,
+    rules,
+) -> None:
     """Softmax on KQ tile -> P. Includes cross-core sync."""
     seq_num = rules.shape[0]
     p_eid = ctx_p.task_id % FIFO_SIZE
@@ -757,7 +809,7 @@ def compute_p(ctx_p, sub_id, qk_vec_db, tile_nz_db, tmp_max, tmp_sum,
         g = ctx_p.segment_idx + k
         ge = gs + pl.getval(segment_starts, ctx_p.b_idx * seq_num + g)
         rule_g = pl.getval(rules, g)
-        rlo = pl.max(gs - r0, lo_tile)         # this seg's rows within sub-block
+        rlo = pl.max(gs - r0, lo_tile)  # this seg's rows within sub-block
         rhi = pl.min(ge - r0, hi_tile)
         cnt = rhi - rlo
         if cnt > 0:
@@ -795,20 +847,24 @@ def compute_p(ctx_p, sub_id, qk_vec_db, tile_nz_db, tmp_max, tmp_sum,
         if ctx_p.s2_size == 128:
             process_vec1_nd_no_update_vf(qk_slot, tile_nz, gmax_p, gmax_p, gsum_p, mask_buf, ctx_p.half_s1)
         elif ctx_p.s2_size <= 64:
-            process_vec1_nd_no_update_vf_unalign64(qk_slot, tile_nz, gmax_p, gmax_p, gsum_p, mask_buf,
-                                                   ctx_p.half_s1, ctx_p.s2_size)
+            process_vec1_nd_no_update_vf_unalign64(
+                qk_slot, tile_nz, gmax_p, gmax_p, gsum_p, mask_buf, ctx_p.half_s1, ctx_p.s2_size
+            )
         else:
-            process_vec1_nd_no_update_vf_unalign(qk_slot, tile_nz, gmax_p, gmax_p, gsum_p, mask_buf,
-                                         ctx_p.half_s1, ctx_p.s2_size)
+            process_vec1_nd_no_update_vf_unalign(
+                qk_slot, tile_nz, gmax_p, gmax_p, gsum_p, mask_buf, ctx_p.half_s1, ctx_p.s2_size
+            )
     else:
         if ctx_p.s2_size == 128:
             process_vec1_nd_update_vf(qk_slot, tile_nz, gmax_p, mask_buf, tmp_max, tmp_max, tmp_sum, ctx_p.half_s1)
         elif ctx_p.s2_size <= 64:
-            process_vec1_nd_update_vf_unalign64(qk_slot, tile_nz, gmax_p, mask_buf, tmp_max, tmp_max, tmp_sum,
-                                                ctx_p.half_s1, ctx_p.s2_size)
+            process_vec1_nd_update_vf_unalign64(
+                qk_slot, tile_nz, gmax_p, mask_buf, tmp_max, tmp_max, tmp_sum, ctx_p.half_s1, ctx_p.s2_size
+            )
         else:
-            process_vec1_nd_update_vf_unalign(qk_slot, tile_nz, gmax_p, mask_buf, tmp_max, tmp_max, tmp_sum,
-                                              ctx_p.half_s1, ctx_p.s2_size)
+            process_vec1_nd_update_vf_unalign(
+                qk_slot, tile_nz, gmax_p, mask_buf, tmp_max, tmp_max, tmp_sum, ctx_p.half_s1, ctx_p.s2_size
+            )
         update_exp_sum(exp_diff, gmax_p, tmp_max, gsum_p, tmp_sum)
     pl.system.set_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_BARKWARD_IDS[p_eid])
 
@@ -876,77 +932,135 @@ def fa_tnd_with_mask_kernel(
     # P MAT - Vector insert, Cube PV read
     p_mat_db = pl.make_tile_group(
         type=pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=MA2_P, mutex_ids=[14, 15, 16])
+        addrs=MA2_P,
+        mutex_ids=[14, 15, 16],
+    )
 
     # qk_vec UB - Cube store from ACC, Vector softmax (double-buffer for FIFO)
     qk_vec_db = pl.make_tile_group(
         type=pl.TileType(
-            shape=[TS_HALF, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec,
-            valid_shape=[-1, -1], compact=1, pad=pl.TilePad.min,
+            shape=[TS_HALF, TKV],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Vec,
+            valid_shape=[-1, -1],
+            compact=1,
+            pad=pl.TilePad.min,
         ),
-        addrs=VA0, mutex_ids=[17, 18])
+        addrs=VA0,
+        mutex_ids=[17, 18],
+    )
 
     # pv_vec UB - Cube store from ACC, Vector GU (double-buffer for FIFO)
     pv_vec_db = pl.make_tile_group(
         type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=VA8, mutex_ids=[19, 20])
+        addrs=VA8,
+        mutex_ids=[19, 20],
+    )
 
     # =================== CUBE SECTION ===================
     with pl.section_cube():
         # Cube-only buffers (independent buf_id space: 0-11)
         q_l1_db = pl.make_tile_group(
             type=pl.TileType(
-                shape=[TS, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                valid_shape=[-1, -1], compact=1,
+                shape=[TS, TD],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Mat,
+                valid_shape=[-1, -1],
+                compact=1,
             ),
-            addrs=MA0_Q, mutex_ids=[0, 1])
+            addrs=MA0_Q,
+            mutex_ids=[0, 1],
+        )
         k_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TD, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             layout=pl.ZN, valid_shape=[-1, -1], compact=1),
-            addrs=MA1_K, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TD, TKV],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=MA1_K,
+            mutex_ids=[2, 3],
+        )
         v_l1_db = pl.make_tile_group(
             type=pl.TileType(
-                shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                valid_shape=[-1, -1], compact=1,
+                shape=[TKV, TD],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Mat,
+                valid_shape=[-1, -1],
+                compact=1,
             ),
-            addrs=MA3_V, mutex_ids=[4, 5])
+            addrs=MA3_V,
+            mutex_ids=[4, 5],
+        )
 
         left_db = pl.make_tile_group(
             type=pl.TileType(
-                shape=[TS, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                valid_shape=[-1, -1], compact=1,
+                shape=[TS, TD],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Left,
+                valid_shape=[-1, -1],
+                compact=1,
             ),
-            addrs=[0, 32768], mutex_ids=[6, 7])
+            addrs=[0, 32768],
+            mutex_ids=[6, 7],
+        )
         right_db = pl.make_tile_group(
             type=pl.TileType(
-                shape=[TD, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right,
-                valid_shape=[-1, -1], compact=1,
+                shape=[TD, TKV],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Right,
+                valid_shape=[-1, -1],
+                compact=1,
             ),
-            addrs=[0, 32768], mutex_ids=[8, 9])
+            addrs=[0, 32768],
+            mutex_ids=[8, 9],
+        )
         acc_db = pl.make_tile_group(
             type=pl.TileType(
-                shape=[TS, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                valid_shape=[-1, -1], compact=1,
+                shape=[TS, TKV],
+                dtype=pl.DT_FP32,
+                target_memory=pl.MemorySpace.Acc,
+                valid_shape=[-1, -1],
+                compact=1,
             ),
-            addrs=[0, 65536, 131072, 196608], mutex_ids=[10, 11, 12, 13])
+            addrs=[0, 65536, 131072, 196608],
+            mutex_ids=[10, 11, 12, 13],
+        )
         left_db2 = pl.make_tile_group(
             type=pl.TileType(
-                shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                valid_shape=[-1, -1], compact=1,
+                shape=[TS, TKV],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Left,
+                valid_shape=[-1, -1],
+                compact=1,
             ),
-            addrs=[0, 32768], mutex_ids=[6, 7])
+            addrs=[0, 32768],
+            mutex_ids=[6, 7],
+        )
         right_db2 = pl.make_tile_group(
             type=pl.TileType(
-                shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right,
-                valid_shape=[-1, -1], compact=1,
+                shape=[TKV, TD],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Right,
+                valid_shape=[-1, -1],
+                compact=1,
             ),
-            addrs=[0, 32768], mutex_ids=[8, 9])
+            addrs=[0, 32768],
+            mutex_ids=[8, 9],
+        )
         acc_db2 = pl.make_tile_group(
             type=pl.TileType(
-                shape=[TS, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                valid_shape=[-1, -1], compact=1,
+                shape=[TS, TD],
+                dtype=pl.DT_FP32,
+                target_memory=pl.MemorySpace.Acc,
+                valid_shape=[-1, -1],
+                compact=1,
             ),
-            addrs=[0, 65536, 131072, 196608], mutex_ids=[10, 11, 12, 13])
+            addrs=[0, 65536, 131072, 196608],
+            mutex_ids=[10, 11, 12, 13],
+        )
 
         work_start = pl.getval(work_ranges, core_id * 2)
         work_end = pl.getval(work_ranges, core_id * 2 + 1)
@@ -957,8 +1071,9 @@ def fa_tnd_with_mask_kernel(
         actual_s1 = 0
         actual_s2 = 0
         s1_o_acc = 0
-        ctx_arr = pl.struct_array(4, "CubeCtx", n_idx=0, qi=0, ki=0,
-                                  task_id=0, s1SizeAcc=0, s2SizeAcc=0, s1_size=0, s2_size=0)
+        ctx_arr = pl.struct_array(
+            4, "CubeCtx", n_idx=0, qi=0, ki=0, task_id=0, s1SizeAcc=0, s2SizeAcc=0, s1_size=0, s2_size=0
+        )
         # calc start
         s1o_size = 0  # tmp-val
         for idx in pl.range(batch):
@@ -969,7 +1084,7 @@ def fa_tnd_with_mask_kernel(
                 actual_s1 = pl.getval(actual_seq_q, idx) - pl.getval(actual_seq_q, idx - 1)
                 actual_s2 = pl.getval(actual_seq_kv, idx) - pl.getval(actual_seq_kv, idx - 1)
             s1o_size = s1o_size + (actual_s1 + TS - 1) // TS * n_dim
-            if (work_start >= s1o_size):
+            if work_start >= s1o_size:
                 s1_o_acc = s1o_size
                 s1_size_acc = s1_size_acc + actual_s1
                 s2_size_acc = s2_size_acc + actual_s2
@@ -985,7 +1100,7 @@ def fa_tnd_with_mask_kernel(
                     actual_s1 = pl.getval(actual_seq_q, b_idx) - pl.getval(actual_seq_q, b_idx - 1)
                     actual_s2 = pl.getval(actual_seq_kv, b_idx) - pl.getval(actual_seq_kv, b_idx - 1)
                 s1o_size = s1_o_acc + (actual_s1 + TS - 1) // TS * n_dim
-                if (work_id >= s1o_size):
+                if work_id >= s1o_size:
                     s1_o_acc = s1o_size
                     s1_size_acc = s1_size_acc + actual_s1
                     s2_size_acc = s2_size_acc + actual_s2
@@ -1025,36 +1140,67 @@ def fa_tnd_with_mask_kernel(
 
                     # ========== compute_qk (current step) ==========
                     compute_qk(
-                        ctx_curr, ki, sq_off, q, k, cur_q_slot, k_l1_db, left_db, right_db,
-                        acc_db, qk_vec_db, task_id, left_db2, right_db2, acc_db2,
+                        ctx_curr,
+                        ki,
+                        sq_off,
+                        q,
+                        k,
+                        cur_q_slot,
+                        k_l1_db,
+                        left_db,
+                        right_db,
+                        acc_db,
+                        qk_vec_db,
+                        task_id,
+                        left_db2,
+                        right_db2,
+                        acc_db2,
                     )
 
                 # ========== compute_pv (delayed 1 step: uses ctx from task_id-1) ==========
                 if task_id > 1:
                     ctx_pre2 = ctx_arr[(task_id + 2) % 4]
-                    compute_pv(ctx_pre2, v_l1_db, p_mat_db, left_db2, right_db2, acc_db2, pv_vec_db, v,
-                               left_db, right_db, acc_db)
+                    compute_pv(
+                        ctx_pre2,
+                        v_l1_db,
+                        p_mat_db,
+                        left_db2,
+                        right_db2,
+                        acc_db2,
+                        pv_vec_db,
+                        v,
+                        left_db,
+                        right_db,
+                        acc_db,
+                    )
                 task_id = task_id + 1
 
     # =================== VECTOR SECTION ===================
     with pl.section_vector():
         tile_nz_g = pl.make_tile_group(
-            type=pl.TileType(shape=[65, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[-1, -1], layout=pl.NZ),
-            addrs=VA1, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[65, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1], layout=pl.NZ
+            ),
+            addrs=VA1,
+            mutex_ids=[0, 1],
+        )
 
         running_o = pl.make_tile(
-            pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addr=VA7, size=VB4)
+            pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA7, size=VB4
+        )
 
         o_f16_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-            addrs=VA9, mutex_ids=[2])
+            addrs=VA9,
+            mutex_ids=[2],
+        )
         o_f16 = o_f16_g.next()
 
         mask_db = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec),
-            addrs=VA10, mutex_ids=[3, 4])
+            addrs=VA10,
+            mutex_ids=[3, 4],
+        )
 
         # Double-buffered global state (per Q tile) -use tile tuples for dynamic
         # indexing by q_count % 2, since StructArray ctx references need runtime index.
@@ -1098,10 +1244,26 @@ def fa_tnd_with_mask_kernel(
         segment_idx = 0
 
         # StructArray(3) for pipeline context tracking (same as original)
-        ctx_arr = pl.struct_array(4, "VecCtx", b_idx=0, n_idx=0, s1_idx=0, q_off=0, ki=0,
-                                  q_count=0, sub_id=0, task_id=0, kv_loop=0, half_s1=0, first_s1=0,
-                                  s1_size=0, s2_size=0,
-                                  segment_acc=0, segment_idx=0, cross_segment=0)
+        ctx_arr = pl.struct_array(
+            4,
+            "VecCtx",
+            b_idx=0,
+            n_idx=0,
+            s1_idx=0,
+            q_off=0,
+            ki=0,
+            q_count=0,
+            sub_id=0,
+            task_id=0,
+            kv_loop=0,
+            half_s1=0,
+            first_s1=0,
+            s1_size=0,
+            s2_size=0,
+            segment_acc=0,
+            segment_idx=0,
+            cross_segment=0,
+        )
 
         # calc start
         s1o_size = 0  # tmp-val
@@ -1113,7 +1275,7 @@ def fa_tnd_with_mask_kernel(
                 actual_s1 = pl.getval(actual_seq_q, idx) - pl.getval(actual_seq_q, idx - 1)
                 actual_s2 = pl.getval(actual_seq_kv, idx) - pl.getval(actual_seq_kv, idx - 1)
             s1o_size = s1o_size + (actual_s1 + TS - 1) // TS * n_dim
-            if (work_start >= s1o_size):
+            if work_start >= s1o_size:
                 s1_o_acc = s1o_size
                 s1_size_acc = s1_size_acc + actual_s1
                 s2_size_acc = s2_size_acc + actual_s2
@@ -1129,7 +1291,7 @@ def fa_tnd_with_mask_kernel(
                     actual_s1 = pl.getval(actual_seq_q, b_idx) - pl.getval(actual_seq_q, b_idx - 1)
                     actual_s2 = pl.getval(actual_seq_kv, b_idx) - pl.getval(actual_seq_kv, b_idx - 1)
                 s1o_size = s1_o_acc + (actual_s1 + TS - 1) // TS * n_dim
-                if (work_id >= s1o_size):
+                if work_id >= s1o_size:
                     s1_o_acc = s1o_size
                     s1_size_acc = s1_size_acc + actual_s1
                     s2_size_acc = s2_size_acc + actual_s2
@@ -1195,9 +1357,22 @@ def fa_tnd_with_mask_kernel(
                 if task_id > 0:
                     if ki <= kv_loop:
                         ctx_p = ctx_arr[(task_id + 3) % 4]
-                        compute_p(ctx_p, sub_id, qk_vec_db, tile_nz_g, tmp_max, tmp_sum,
-                            global_max, global_sum, exp_corr_db, p_mat_db, mask_db, mask,
-                            segment_starts, rules)
+                        compute_p(
+                            ctx_p,
+                            sub_id,
+                            qk_vec_db,
+                            tile_nz_g,
+                            tmp_max,
+                            tmp_sum,
+                            global_max,
+                            global_sum,
+                            exp_corr_db,
+                            p_mat_db,
+                            mask_db,
+                            mask,
+                            segment_starts,
+                            rules,
+                        )
 
                 # ===== compute_gu (consumer, lag 3: every step incl. all drains) =====
                 if task_id > 2:
@@ -1234,7 +1409,7 @@ def build_segment_mask(segment, rules, device):
       * the main diagonal is always visible.
     """
     seq_len = sum(segment)
-    mask = torch.ones(seq_len, seq_len, device=device)   # 1 = masked
+    mask = torch.ones(seq_len, seq_len, device=device)  # 1 = masked
     starts = [0]
     for s in segment:
         starts.append(starts[-1] + s)
@@ -1253,8 +1428,8 @@ def build_segment_mask(segment, rules, device):
             # diag instead of causal.
             rr = torch.arange(sz, device=device).view(-1, 1)
             cc = torch.arange(sz, device=device).view(1, -1)
-            mask[s0:s1, s0:s1] = (cc > rr).to(mask.dtype)   # 1 = masked (col > row)
-        elif rule == 1:      # full within own segment
+            mask[s0:s1, s0:s1] = (cc > rr).to(mask.dtype)  # 1 = masked (col > row)
+        elif rule == 1:  # full within own segment
             mask[s0:s1, s0:s1] = 0
         # rule == 2 (diag): only the main diagonal (filled below)
     mask.diagonal(0).fill_(0)
@@ -1295,6 +1470,7 @@ def flash_attention_ref_tnd(q_tnd, k_tnd, v_tnd, seq_q_list, seq_kv_list, d, seg
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_perf_nbuf():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1303,8 +1479,7 @@ def test_fa_perf_nbuf():
     for test_cfg in [
         # small diag middle segments (size 5) -> diagonal tile spans 11 segments
         # (cross_segment==11), exercises the variable-length overlay loop.
-        (None, None, [[2200, 8, 300, 5, 200, 110, 5, 400, 5, 5, 1024]],
-         [0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2], 1, TD, 28),
+        (None, None, [[2200, 8, 300, 5, 200, 110, 5, 400, 5, 5, 1024]], [0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2], 1, TD, 28),
         # ===== variable-length overlay loop: generalization suite =====
         # All validated against golden by scratchpad/matrix_test.py (per-core,
         # per-basic-block replay, 0 mismatch).  Each exercises the diagonal-tile
@@ -1313,66 +1488,97 @@ def test_fa_perf_nbuf():
         (None, None, [[2048, 8] + [1] * 40 + [1024]], [0, 1] + [2] * 40 + [2], 1, TD, 28),
         (None, None, [[1024, 8] + [1] * 120 + [1024]], [0, 1] + [2] * 120 + [2], 1, TD, 28),
         (None, None, [[2048, 8] + [7] * 40 + [936]], [0, 1] + [2] * 40 + [2], 1, TD, 28),
-        (None, None, [[1280, 8, 3, 7, 1, 5, 2, 9, 1, 4, 6, 1, 8, 2, 5, 3, 1000]],
-         [0, 1] + [2] * 14 + [2], 1, TD, 28),
+        (None, None, [[1280, 8, 3, 7, 1, 5, 2, 9, 1, 4, 6, 1, 8, 2, 5, 3, 1000]], [0, 1] + [2] * 14 + [2], 1, TD, 28),
         # --- non-128 total (unalign tail) with the loop mid-sequence ---
         (None, None, [[2200, 8] + [5] * 8 + [967]], [0, 1] + [2] * 8 + [2], 1, TD, 28),
         (None, None, [[1536, 5, 5, 5, 5, 1000]], [1, 0, 0, 0, 0, 2], 1, TD, 28),
-
         # --- causal middles (loop still fires on diag tile, rule-0 windows) ---
         (None, None, [[2048, 8] + [5] * 10 + [1024]], [0, 1] + [0] * 10 + [2], 1, TD, 28),
         (None, None, [[1536] + [5] * 10 + [1024]], [1] + [2] * 10 + [2], 1, TD, 28),
         (None, None, [[1024] + [1] * 60 + [1000]], [1] + [2] * 60 + [2], 1, TD, 28),
         (None, None, [[1536] + [5] * 12 + [1000]], [1] + [0] * 12 + [2], 1, TD, 28),
         # --- loop ON the final PARTIAL tile (s2_size<128, half_s1<64) ---
-        (None, None, [[2048, 8] + [5] * 32], [0, 1] + [2] * 32, 1, TD, 28),   # tail 40
-        (None, None, [[2048, 8] + [5] * 44], [0, 1] + [2] * 44, 1, TD, 28),   # tail 100
-        (None, None, [[1536] + [3] * 40], [1] + [2] * 40, 1, TD, 28),         # fr1 tail 120
+        (None, None, [[2048, 8] + [5] * 32], [0, 1] + [2] * 32, 1, TD, 28),  # tail 40
+        (None, None, [[2048, 8] + [5] * 44], [0, 1] + [2] * 44, 1, TD, 28),  # tail 100
+        (None, None, [[1536] + [3] * 40], [1] + [2] * 40, 1, TD, 28),  # fr1 tail 120
         # --- multi-head (n>1) and multi-batch (shared SeqNum/rules) ---
         (None, None, [[2200, 8] + [5] * 8 + [1024]], [0, 1] + [2] * 8 + [2], 4, TD, 28),
-        (None, None, [[2200, 8] + [5] * 8 + [1024], [1536, 8, 7, 3, 1, 5, 2, 9, 4, 6, 1000]],
-         [0, 1] + [2] * 8 + [2], 1, TD, 28),
+        (
+            None,
+            None,
+            [[2200, 8] + [5] * 8 + [1024], [1536, 8, 7, 3, 1, 5, 2, 9, 4, 6, 1000]],
+            [0, 1] + [2] * 8 + [2],
+            1,
+            TD,
+            28,
+        ),
         # ----- HETEROGENEOUS-RULE middles (causal+diag interleaved in one seq) -----
         # Stresses per-segment seg_window rule dispatch AND coalescing across
         # DIFFERENT windows (merge equal runs, break+restart where they differ).
         # All validated against golden by scratchpad/matrix_test.py (0 mismatch).
         (None, None, [[2048, 8] + [5] * 8 + [1024]], [0, 1] + [0, 2] * 4 + [2], 1, TD, 28),
-        (None, None, [[1536, 8, 3, 7, 1, 9, 2, 5, 4, 6, 1000]],
-         [0, 1] + [2, 0, 2, 0, 2, 0, 2, 0] + [2], 1, TD, 28),
+        (None, None, [[1536, 8, 3, 7, 1, 9, 2, 5, 4, 6, 1000]], [0, 1] + [2, 0, 2, 0, 2, 0, 2, 0] + [2], 1, TD, 28),
         (None, None, [[2048, 8] + [1] * 40 + [1024]], [0, 1] + [0, 2] * 20 + [2], 1, TD, 28),
         (None, None, [[2048, 8] + [3] * 18 + [1000]], [0, 1] + [2] * 6 + [0] * 6 + [2] * 6 + [2], 1, TD, 28),
         (None, None, [[1536] + [5] * 10 + [1024]], [1] + [0, 2] * 5 + [2], 1, TD, 28),
-        (None, None, [[1280, 7, 1, 5, 2, 9, 3, 1, 6, 4, 1000]],
-         [1] + [2, 0, 2, 0, 2, 0, 2, 0, 2] + [2], 1, TD, 28),
+        (None, None, [[1280, 7, 1, 5, 2, 9, 3, 1, 6, 4, 1000]], [1] + [2, 0, 2, 0, 2, 0, 2, 0, 2] + [2], 1, TD, 28),
         (None, None, [[2200, 8] + [5] * 8 + [967]], [0, 1] + [0, 2] * 4 + [2], 1, TD, 28),
         (None, None, [[2048, 8] + [5] * 8 + [1024]], [0, 1] + [0, 2] * 4 + [2], 4, TD, 28),
-        (None, None, [[2048, 8] + [5] * 8 + [1024], [1536, 8, 3, 7, 1, 9, 2, 5, 4, 6, 1000]],
-         [0, 1] + [0, 2] * 4 + [2], 1, TD, 28),
+        (
+            None,
+            None,
+            [[2048, 8] + [5] * 8 + [1024], [1536, 8, 3, 7, 1, 9, 2, 5, 4, 6, 1000]],
+            [0, 1] + [0, 2] * 4 + [2],
+            1,
+            TD,
+            28,
+        ),
         # ===== end generalization suite =====
         # ===== supplementary regression (board-verified, max|diff|=0.000488) =====
         # original cross>=4 cases, now routed through the variable loop (n=8):
         (None, None, [[1800, 8, 100, 1500], [1500, 8, 300, 1200]], [0, 1, 0, 2], 8, TD, 28),
         (None, None, [[1548, 8, 100, 100, 100, 1088]], [0, 1, 2, 2, 2, 2], 8, TD, 28),
-        (None, None, [[2200, 8, 200, 1048], [1800, 8, 100, 1164], [2440, 8, 200, 2088],
-                      [1600, 8, 600, 2016], [3300, 8, 200, 1356], [1700, 8, 300, 2216],
-                      [1780, 8, 700, 1224], [2048, 8, 500, 1924]], [0, 1, 2, 2], 8, TD, 28),
+        (
+            None,
+            None,
+            [
+                [2200, 8, 200, 1048],
+                [1800, 8, 100, 1164],
+                [2440, 8, 200, 2088],
+                [1600, 8, 600, 2016],
+                [3300, 8, 200, 1356],
+                [1700, 8, 300, 2216],
+                [1780, 8, 700, 1224],
+                [2048, 8, 500, 1924],
+            ],
+            [0, 1, 2, 2],
+            8,
+            TD,
+            28,
+        ),
         # fixed first_rule==1 causal-middle pattern in new combinations:
-        (None, None, [[1536] + [5] * 8 + [1000], [1536, 7, 3, 5, 1, 9, 2, 4, 6, 1000]],
-         [1] + [0] * 8 + [2], 1, TD, 28),                                    # 2-batch
-        (None, None, [[1536] + [5] * 8 + [1000]], [1] + [0] * 8 + [2], 4, TD, 28),   # n=4
-        (None, None, [[1536] + [3] * 40], [1] + [0] * 39 + [2], 1, TD, 28),          # tail staircase
+        (
+            None,
+            None,
+            [[1536] + [5] * 8 + [1000], [1536, 7, 3, 5, 1, 9, 2, 4, 6, 1000]],
+            [1] + [0] * 8 + [2],
+            1,
+            TD,
+            28,
+        ),  # 2-batch
+        (None, None, [[1536] + [5] * 8 + [1000]], [1] + [0] * 8 + [2], 4, TD, 28),  # n=4
+        (None, None, [[1536] + [3] * 40], [1] + [0] * 39 + [2], 1, TD, 28),  # tail staircase
         (None, None, [[1536] + [1] * 50 + [1000]], [1] + [0] * 50 + [2], 1, TD, 28),  # size-1 x50
-        (None, None, [[2048, 8] + [5] * 32], [0, 1] + [0] * 31 + [2], 1, TD, 28),    # fr0 causal tail
+        (None, None, [[2048, 8] + [5] * 32], [0, 1] + [0] * 31 + [2], 1, TD, 28),  # fr0 causal tail
         # ===== end supplementary regression =====
         ([600], [600], [[256, 8, 128, 208]], [0, 1, 2, 2], 2, TD, 8),
         ([3584], [3584], [[1536, 8, 800, 1240]], [0, 1, 2, 2], 1, TD, 28),
         ([3712], [3712], [[1536, 8, 800, 1368]], [0, 1, 2, 2], 1, TD, 28),
         ([2048, 2048], [2048, 2048], [[1536, 8, 200, 304], [1536, 8, 180, 324]], [0, 1, 2, 2], 1, TD, 28),
-
-        ([639], [639], [[256, 8, 128, 247]], [0, 1, 2, 2], 1, TD, 28),   # tail 127 (unalign)
-        ([576], [576], [[256, 8, 128, 184]], [0, 1, 2, 2], 1, TD, 28),   # tail 64  (unalign64 boundary)
-        ([520], [520], [[256, 8, 128, 128]], [0, 1, 2, 2], 1, TD, 28),   # tail 8   (tiny, unalign64)
-        ([612], [612], [[256, 8, 128, 220]], [0, 1, 0, 2], 1, TD, 28),   # tail 100, causal middle (unalign)
+        ([639], [639], [[256, 8, 128, 247]], [0, 1, 2, 2], 1, TD, 28),  # tail 127 (unalign)
+        ([576], [576], [[256, 8, 128, 184]], [0, 1, 2, 2], 1, TD, 28),  # tail 64  (unalign64 boundary)
+        ([520], [520], [[256, 8, 128, 128]], [0, 1, 2, 2], 1, TD, 28),  # tail 8   (tiny, unalign64)
+        ([612], [612], [[256, 8, 128, 220]], [0, 1, 0, 2], 1, TD, 28),  # tail 100, causal middle (unalign)
         # tail tile STRADDLES a segment boundary (cross2) under non-128: last seg
         # is only 48 rows, so rows [512,576) span seg2(diag)->seg3(diag-last).
         ([576], [576], [[256, 8, 264, 48]], [0, 1, 2, 2], 1, TD, 28),
@@ -1386,36 +1592,123 @@ def test_fa_perf_nbuf():
         (None, None, [[1600, 8, 200, 1200]], [0, 1, 0, 2], 8, TD, 28),
         (None, None, [[1600, 8, 200, 1200], [1700, 8, 300, 1024]], [0, 1, 2, 2], 8, TD, 28),
         (None, None, [[1800, 8, 100, 1500], [1500, 8, 300, 1200]], [0, 1, 0, 2], 8, TD, 28),
-        (None, None,
-         [[1600, 8, 200, 1200], [1700, 8, 300, 1024], [1680, 8, 200, 1280], [2000, 8, 700, 2048]],
-         [0, 1, 2, 2], 8, TD, 28),
-        (None, None,
-         [[3200, 8, 200, 1200], [2300, 8, 400, 1800], [2080, 8, 200, 1800], [1700, 8, 100, 1024]],
-         [0, 1, 0, 2], 8, TD, 28),
-        (None, None,
-         [[2200, 8, 200, 1024], [1700, 8, 100, 1100], [2440, 8, 200, 2048], [1600, 8, 600, 1900],
-          [3300, 8, 200, 1300], [1700, 8, 300, 2100], [1780, 8, 700, 1200], [2048, 8, 500, 1800]],
-         [0, 1, 2, 2], 8, TD, 28),
-        (None, None,
-         [[2200, 8, 200, 1024], [1700, 8, 300, 1100], [2440, 8, 200, 2048], [1600, 8, 600, 1800],
-          [3300, 8, 200, 1300], [1700, 8, 300, 2048], [1780, 8, 700, 1024], [2048, 8, 500, 1800]],
-         [0, 1, 0, 2], 8, TD, 28),
+        (
+            None,
+            None,
+            [[1600, 8, 200, 1200], [1700, 8, 300, 1024], [1680, 8, 200, 1280], [2000, 8, 700, 2048]],
+            [0, 1, 2, 2],
+            8,
+            TD,
+            28,
+        ),
+        (
+            None,
+            None,
+            [[3200, 8, 200, 1200], [2300, 8, 400, 1800], [2080, 8, 200, 1800], [1700, 8, 100, 1024]],
+            [0, 1, 0, 2],
+            8,
+            TD,
+            28,
+        ),
+        (
+            None,
+            None,
+            [
+                [2200, 8, 200, 1024],
+                [1700, 8, 100, 1100],
+                [2440, 8, 200, 2048],
+                [1600, 8, 600, 1900],
+                [3300, 8, 200, 1300],
+                [1700, 8, 300, 2100],
+                [1780, 8, 700, 1200],
+                [2048, 8, 500, 1800],
+            ],
+            [0, 1, 2, 2],
+            8,
+            TD,
+            28,
+        ),
+        (
+            None,
+            None,
+            [
+                [2200, 8, 200, 1024],
+                [1700, 8, 300, 1100],
+                [2440, 8, 200, 2048],
+                [1600, 8, 600, 1800],
+                [3300, 8, 200, 1300],
+                [1700, 8, 300, 2048],
+                [1780, 8, 700, 1024],
+                [2048, 8, 500, 1800],
+            ],
+            [0, 1, 0, 2],
+            8,
+            TD,
+            28,
+        ),
         (None, None, [[1600, 200, 1024]], [1, 0, 2], 8, TD, 28),
         (None, None, [[1600, 200, 1000], [2000, 300, 1100]], [1, 0, 2], 8, TD, 28),
-        (None, None,
-         [[1600, 200, 1024], [1700, 300, 1600], [1680, 200, 1200], [2000, 700, 2400]],
-         [1, 0, 2], 8, TD, 28),
-        (None, None, [[2200, 200, 1024], [1700, 300, 1100], [2440, 200, 2048], [1600, 400, 1800], [2200, 200, 1300],
-                      [1700, 300, 2048], [1680, 300, 1024], [2048, 700, 1800]], [1, 0, 2], 8, TD, 28),
+        (
+            None,
+            None,
+            [[1600, 200, 1024], [1700, 300, 1600], [1680, 200, 1200], [2000, 700, 2400]],
+            [1, 0, 2],
+            8,
+            TD,
+            28,
+        ),
+        (
+            None,
+            None,
+            [
+                [2200, 200, 1024],
+                [1700, 300, 1100],
+                [2440, 200, 2048],
+                [1600, 400, 1800],
+                [2200, 200, 1300],
+                [1700, 300, 2048],
+                [1680, 300, 1024],
+                [2048, 700, 1800],
+            ],
+            [1, 0, 2],
+            8,
+            TD,
+            28,
+        ),
         (None, None, [[1600, 8, 10, 1200]], [0, 1, 2, 2], 8, TD, 28),
         (None, None, [[1600, 8, 8, 12, 1200], [1700, 8, 6, 15, 1024]], [0, 1, 0, 0, 2], 8, TD, 28),
-        (None, None, [[1600, 8, 5, 6, 7, 8, 1200], [1700, 8, 10, 12, 13, 15, 1024], [1680, 8, 10, 12, 13, 15, 1280],
-                      [2000, 8, 13, 14, 15, 15, 2048]], [0, 1, 2, 2, 2, 2, 2], 8, TD, 28),
-        (None, None, [[2200, 8] + [5] * 8 + [1024], [1700, 8, 5, 5, 5, 5, 5, 5, 5, 10, 1100],
-                      [2440, 8, 5, 5, 5, 5, 5, 5, 5, 12, 2048], [1600, 8, 5, 15, 5, 5, 5, 5, 5, 5, 1900],
-                      [3300, 8, 5, 5, 10, 10, 5, 5, 5, 5, 1300], [1700, 8, 15, 15, 5, 5, 5, 5, 5, 5, 2100],
-                      [1780, 8, 15, 15, 15, 5, 5, 5, 5, 5, 1200], [2048, 8, 15, 15, 15, 15, 5, 5, 5, 5, 1800]],
-                       [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 2], 8, TD, 28),
+        (
+            None,
+            None,
+            [
+                [1600, 8, 5, 6, 7, 8, 1200],
+                [1700, 8, 10, 12, 13, 15, 1024],
+                [1680, 8, 10, 12, 13, 15, 1280],
+                [2000, 8, 13, 14, 15, 15, 2048],
+            ],
+            [0, 1, 2, 2, 2, 2, 2],
+            8,
+            TD,
+            28,
+        ),
+        (
+            None,
+            None,
+            [
+                [2200, 8] + [5] * 8 + [1024],
+                [1700, 8, 5, 5, 5, 5, 5, 5, 5, 10, 1100],
+                [2440, 8, 5, 5, 5, 5, 5, 5, 5, 12, 2048],
+                [1600, 8, 5, 15, 5, 5, 5, 5, 5, 5, 1900],
+                [3300, 8, 5, 5, 10, 10, 5, 5, 5, 5, 1300],
+                [1700, 8, 15, 15, 5, 5, 5, 5, 5, 5, 2100],
+                [1780, 8, 15, 15, 15, 5, 5, 5, 5, 5, 1200],
+                [2048, 8, 15, 15, 15, 15, 5, 5, 5, 5, 1800],
+            ],
+            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+            8,
+            TD,
+            28,
+        ),
         (None, None, [[1600, 8] + [5] * 1 + [1200]], [0, 1, 2, 2], 8, TD, 28),
         (None, None, [[1600, 8] + [5] * 2 + [1200]], [0, 1] + [2] * 2 + [2], 8, TD, 28),
         (None, None, [[1600, 8] + [5] * 4 + [1200]], [0, 1] + [2] * 4 + [2], 8, TD, 28),
@@ -1430,26 +1723,55 @@ def test_fa_perf_nbuf():
         # ======================================================================= #
         (None, None, [[1600, 200, 1024]], [1, 2, 2], 8, TD, 28),
         (None, None, [[1600, 200, 1000], [2000, 300, 1100]], [1, 2, 2], 8, TD, 28),
-        (None, None,
-         [[1600, 200, 1024], [1700, 300, 1600], [1680, 200, 1200], [2000, 700, 2400]],
-         [1, 2, 2], 8, TD, 28),
-        (None, None, [[2200, 200, 1024], [1700, 300, 1100], [2440, 200, 2048], [1600, 400, 1800],
-                       [2200, 200, 1300], [1700, 300, 2048], [1680, 300, 1024], [2048, 700, 1800]],
-         [1, 2, 2], 8, TD, 28),
+        (
+            None,
+            None,
+            [[1600, 200, 1024], [1700, 300, 1600], [1680, 200, 1200], [2000, 700, 2400]],
+            [1, 2, 2],
+            8,
+            TD,
+            28,
+        ),
+        (
+            None,
+            None,
+            [
+                [2200, 200, 1024],
+                [1700, 300, 1100],
+                [2440, 200, 2048],
+                [1600, 400, 1800],
+                [2200, 200, 1300],
+                [1700, 300, 2048],
+                [1680, 300, 1024],
+                [2048, 700, 1800],
+            ],
+            [1, 2, 2],
+            8,
+            TD,
+            28,
+        ),
         ####################################################################################
         ####################################################################################
         # NB: each batch's sum(segment) must equal its seq length and be a
         # --- baseline: 4 segments [0,1,2,2], 8 batches (128-aligned) ---
-        ([3456, 3072, 4736, 4224, 4864, 4224, 3712, 4480], [3456, 3072, 4736, 4224, 4864, 4224, 3712, 4480],
-         [[2200, 8, 200, 1048],  # 1024 + 24
-          [1800, 8, 100, 1164],  # 1100 + 36
-          [2440, 8, 200, 2088],  # 2048 + 40
-          [1600, 8, 600, 2016],  # 1900 + 116
-          [3300, 8, 200, 1356],  # 1300 + 56
-          [1700, 8, 300, 2216],  # 2100 + 116
-          [1780, 8, 700, 1224],  # 1200 + 24
-          [2048, 8, 500, 1924]],
-         [0, 1, 2, 2], 8, TD, 28),
+        (
+            [3456, 3072, 4736, 4224, 4864, 4224, 3712, 4480],
+            [3456, 3072, 4736, 4224, 4864, 4224, 3712, 4480],
+            [
+                [2200, 8, 200, 1048],  # 1024 + 24
+                [1800, 8, 100, 1164],  # 1100 + 36
+                [2440, 8, 200, 2088],  # 2048 + 40
+                [1600, 8, 600, 2016],  # 1900 + 116
+                [3300, 8, 200, 1356],  # 1300 + 56
+                [1700, 8, 300, 2216],  # 2100 + 116
+                [1780, 8, 700, 1224],  # 1200 + 24
+                [2048, 8, 500, 1924],
+            ],
+            [0, 1, 2, 2],
+            8,
+            TD,
+            28,
+        ),
         # --- 5 segments, diag middle: seg0 tail tile spans seg0+seg1+seg2 (cross3) ---
         ([2816], [2816], [[1548, 8, 120, 120, 1020]], [0, 1, 2, 2, 2], 8, TD, 28),
         # --- 6 segments, diag middle: seg0 tail tile spans 4 segments (cross4) ---
@@ -1466,9 +1788,15 @@ def test_fa_perf_nbuf():
         # --- 3 segments, NO middle part: [causal, full(8), diag-last] ---
         ([2944], [2944], [[1280, 8, 1656]], [0, 1, 2], 8, TD, 28),
         # --- 2 batches, 5-segment diag middle (different segment offsets) ---
-        ([2816, 2944], [2816, 2944],
-         [[1548, 8, 120, 120, 1020], [1676, 8, 120, 120, 1020]],
-         [0, 1, 2, 2, 2], 8, TD, 28),
+        (
+            [2816, 2944],
+            [2816, 2944],
+            [[1548, 8, 120, 120, 1020], [1676, 8, 120, 120, 1020]],
+            [0, 1, 2, 2, 2],
+            8,
+            TD,
+            28,
+        ),
         ([2816, 2944], [2816, 2944], [[1556, 120, 120, 1020], [1684, 120, 120, 1020]], [1, 2, 2, 2], 8, TD, 28),
         ([1408], [1408], [[148, 120, 120, 1020]], [1, 2, 2, 2], 8, TD, 28),
         # --- first_rule==1, large full leading + CAUSAL middle (all-0) ---
@@ -1493,8 +1821,16 @@ def test_fa_perf_nbuf():
         b = len(seq_q_list)
         tq = sum(seq_q_list)
         tkv = sum(seq_kv_list)
-        logging.info("\nFA-TND-DN-A5 (b=%s, seq_q=%s, seq_kv=%s, n=%s, d=%s) rules=%s cores=%s",
-            b, seq_q_list, seq_kv_list, n, d, rules, num_cores,)
+        logging.info(
+            "\nFA-TND-DN-A5 (b=%s, seq_q=%s, seq_kv=%s, n=%s, d=%s) rules=%s cores=%s",
+            b,
+            seq_q_list,
+            seq_kv_list,
+            n,
+            d,
+            rules,
+            num_cores,
+        )
 
         q = torch.rand((tq, n, d), device="cpu", dtype=torch.float16)
         k = torch.rand((tkv, n, d), device="cpu", dtype=torch.float16)
@@ -1531,8 +1867,9 @@ def test_fa_perf_nbuf():
         mask = mask.to(device)
         work_ranges = work_ranges.to(device)
         actual_num_cores = min(num_cores, total_work)
-        fa_tnd_with_mask_kernel[None, actual_num_cores](q, k, v, o, mask, segments_dev, rules_dev,
-                  actual_seq_q, actual_seq_kv, work_ranges)
+        fa_tnd_with_mask_kernel[None, actual_num_cores](
+            q, k, v, o, mask, segments_dev, rules_dev, actual_seq_q, actual_seq_kv, work_ranges
+        )
         torch.npu.synchronize()
 
         o_ref = flash_attention_ref_tnd(q, k, v, seq_q_list, seq_kv_list, d, segments, rules)

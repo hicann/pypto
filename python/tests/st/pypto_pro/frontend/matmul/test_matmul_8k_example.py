@@ -23,6 +23,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 
 def store_to_out(out, acc_tile, offset):
     pl.store_tile(out, acc_tile, offset)
@@ -33,34 +35,44 @@ class OpTiling:
     valid_size: int
 
 
-
 @pl.jit(auto_mutex=True)
 def matmul_example(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-    tiling: OpTiling
+    tiling: OpTiling,
 ):
     num_cores = pl.get_block_num()
     core_id = pl.get_block_idx() // pl.get_subblock_num()
     valid_n = 128
     with pl.section_cube():
         a_mat_4_buffer = pl.make_tile_group(
-            type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             valid_shape=[valid_n, valid_n]),
-            addrs=0, mutex_ids=[0, 1, 10, 11])
+            type=pl.TileType(
+                shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[valid_n, valid_n]
+            ),
+            addrs=0,
+            mutex_ids=[0, 1, 10, 11],
+        )
         b_mat_4_buffer = pl.make_tile_group(
             type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-            addrs=0x20000, mutex_ids=[2, 3, 12, 13])
+            addrs=0x20000,
+            mutex_ids=[2, 3, 12, 13],
+        )
         a_left_db = pl.make_tile_group(
-            type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left), addrs=0,
-                      mutex_ids=[4, 5])
+            type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
+            addrs=0,
+            mutex_ids=[4, 5],
+        )
         b_right_db = pl.make_tile_group(
             type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-            addrs=0, mutex_ids=[6, 7])
+            addrs=0,
+            mutex_ids=[6, 7],
+        )
         acc_db = pl.make_tile_group(
             type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-            addrs=0, mutex_ids=[8, 9])
+            addrs=0,
+            mutex_ids=[8, 9],
+        )
 
         for i in pl.range(core_id, a.shape[0] // 128, num_cores):
             a_l1_tile = a_mat_4_buffer.next()
@@ -109,6 +121,7 @@ def run_perf_test(num_iters: int = 20, warmup: int = 3):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_perf_asw_8k_k128_dn_move_offset():
     run_perf_test()
 

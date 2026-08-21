@@ -14,6 +14,7 @@
  */
 
 #include "assign_memory_type_checker.h"
+#include "interface/configs/config_manager.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "tilefwk/error_code.h"
@@ -24,8 +25,8 @@
 namespace npu {
 namespace tile_fwk {
 const std::unordered_set<Opcode> AssignMemoryTypeChecker::kValidProducerOpcodes = {
-    Opcode::OP_L1_TO_L0A,   Opcode::OP_L1_TO_L0B, Opcode::OP_L1_TO_L0_AT,
-    Opcode::OP_L1_TO_L0_BT, Opcode::OP_VIEW,      Opcode::OP_VEC_DUP};
+    Opcode::OP_L1_TO_L0A, Opcode::OP_L1_TO_L0B, Opcode::OP_L1_TO_L0_AT, Opcode::OP_L1_TO_L0_BT,
+    Opcode::OP_VIEW,      Opcode::OP_SLICE,     Opcode::OP_VEC_DUP};
 const std::unordered_set<MemoryType> AssignMemoryTypeChecker::kValidViewToTypes = {
     MemoryType::MEM_BT,    MemoryType::MEM_FIX_QUANT_PRE, MemoryType::MEM_L0A,    MemoryType::MEM_L0B,
     MemoryType::MEM_L0AMX, MemoryType::MEM_L0BMX,         MemoryType::MEM_UNKNOWN};
@@ -69,8 +70,9 @@ Status AssignMemoryTypeChecker::DoPreCheck(Function& function)
 
 Status AssignMemoryTypeChecker::CheckAmulBInputProducers(Operation& operation)
 {
-    auto inputs = operation.GetIOperands();
     auto producerOps = operation.ProducerOps();
+    const Opcode expectedViewLikeOpcode = config::EnableSlice() ? Opcode::OP_SLICE : Opcode::OP_VIEW;
+    const auto& expectedViewLikeOpcodeStr = OpcodeManager::Inst().GetOpcodeStr(expectedViewLikeOpcode);
     for (auto& producerOp : producerOps) {
         auto producerOpcode = producerOp->GetOpcode();
         if (!kValidProducerOpcodes.count(producerOpcode)) {
@@ -82,16 +84,34 @@ Status AssignMemoryTypeChecker::CheckAmulBInputProducers(Operation& operation)
                               GetFormatBacktrace(operation).c_str());
             return FAILED;
         }
-        if (producerOpcode == Opcode::OP_VIEW) {
+        if (producerOpcode == Opcode::OP_VIEW || producerOpcode == Opcode::OP_SLICE) {
+            if (producerOpcode != expectedViewLikeOpcode) {
+                APASS_LOG_ERROR_C(OperationErr::OP_SPECIAL_CONSTRAINT, Elements::Operation,
+                                  "Memory error, %s[%d] has invalid input %s; "
+                                  "Please check input %s[%d]. %s",
+                                  operation.GetOpcodeStr().c_str(), operation.GetOpMagic(),
+                                  producerOp->GetOpcodeStr().c_str(), expectedViewLikeOpcodeStr.c_str(),
+                                  producerOp->GetOpMagic(), GetFormatBacktrace(operation).c_str());
+                return FAILED;
+            }
             auto viewOpAttribute = dynamic_cast<ViewOpAttribute*>(producerOp->GetOpAttribute().get());
+            if (viewOpAttribute == nullptr) {
+                APASS_LOG_ERROR_C(OperationErr::OP_SPECIAL_CONSTRAINT, Elements::Operation,
+                                  "Slice attribute error, %s[%d] has input %s without ViewOpAttribute; "
+                                  "Please check input view %s[%d]. %s",
+                                  operation.GetOpcodeStr().c_str(), operation.GetOpMagic(),
+                                  producerOp->GetOpcodeStr().c_str(), producerOp->GetOpcodeStr().c_str(),
+                                  producerOp->GetOpMagic(), GetFormatBacktrace(operation).c_str());
+                return FAILED;
+            }
             MemoryType attrToType = viewOpAttribute->GetTo();
             if (!kValidViewToTypes.count(attrToType)) {
                 APASS_LOG_ERROR_C(OperationErr::OP_SPECIAL_CONSTRAINT, Elements::Operation,
-                                  "View attribute error, %s[%d] has invalid input OP_VIEW(toType: %d); "
+                                  "Slice attribute error, %s[%d] has invalid input %s(toType: %d); "
                                   "Please check input view %s[%d]. %s",
-                                  operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), attrToType,
-                                  producerOp->GetOpcodeStr().c_str(), producerOp->GetOpMagic(),
-                                  GetFormatBacktrace(operation).c_str());
+                                  operation.GetOpcodeStr().c_str(), operation.GetOpMagic(),
+                                  producerOp->GetOpcodeStr().c_str(), attrToType, producerOp->GetOpcodeStr().c_str(),
+                                  producerOp->GetOpMagic(), GetFormatBacktrace(operation).c_str());
                 return FAILED;
             }
         }
@@ -104,8 +124,14 @@ void AssignMemoryTypeChecker::CheckPattern(Operation* operation, std::queue<std:
                                            int depth, std::unordered_set<Operation*>& visited)
 {
     for (auto& tensor : operation->oOperand) {
+        if (tensor == nullptr) {
+            continue;
+        }
         for (auto& consumerOp : tensor->GetConsumers()) {
-            if (consumerOp->GetOpcode() == Opcode::OP_VIEW || consumerOp->GetOpcode() == Opcode::OP_ASSEMBLE ||
+            if (consumerOp == nullptr) {
+                continue;
+            }
+            if (IsViewLike(consumerOp->GetOpcode()) || IsAssembleLike(consumerOp->GetOpcode()) ||
                 consumerOp->GetOpcode() == Opcode::OP_RESHAPE) {
                 Operation* consumerOpPtr = consumerOp;
                 if (visited.find(consumerOpPtr) == visited.end()) {

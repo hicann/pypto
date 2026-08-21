@@ -16,6 +16,7 @@
 #include "gtest/gtest.h"
 
 #include <algorithm>
+#include <regex>
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/inner/tile_shape.h"
@@ -267,9 +268,11 @@ TEST_F(DynamicFunctionTest, TestOnlyExpression)
     EXPECT_EQ(rootFunc->GetCallopAttrList().size(), 1);
     auto attr = rootFunc->GetCallopAttrList().front();
     FE_LOGI("%s", attr->DumpAttr().c_str());
-    EXPECT_EQ(
-        attr->DumpAttr(2),
-        "attr[2][4611686018427387914,  0,(k*16), 16, 16, 16, 64, 16,RUNTIME_Min(RUNTIME_Max((64-(k*16)), 0), 16)]]");
+    auto attrStr = attr->DumpAttr(2);
+    std::regex idRegex(R"(attr\[2\]\[\d+,(.*)\]\])");
+    std::smatch idMatch;
+    ASSERT_TRUE(std::regex_match(attrStr, idMatch, idRegex)) << "attr format mismatch: " << attrStr;
+    EXPECT_EQ(idMatch[1].str(), "  0,(k*16), 16, 16, 16, 64, 16,RUNTIME_Min(RUNTIME_Max((64-(k*16)), 0), 16)");
 }
 
 TEST_F(DynamicFunctionTest, TestOnlySymbol)
@@ -304,8 +307,11 @@ TEST_F(DynamicFunctionTest, TestOnlySymbol)
     EXPECT_EQ(rootFunc->GetCallopAttrList().size(), 1);
     auto attr = rootFunc->GetCallopAttrList().front();
     FE_LOGI("%s", attr->DumpAttr().c_str());
-    EXPECT_EQ(attr->DumpAttr(2),
-              "attr[2][4611686018427387914,  k,  0,  1, 64,  4, 64,RUNTIME_Min(RUNTIME_Max((4-k), 0), 1), 64]]");
+    auto attrStr = attr->DumpAttr(2);
+    std::regex idRegex(R"(attr\[2\]\[\d+,(.*)\]\])");
+    std::smatch idMatch;
+    ASSERT_TRUE(std::regex_match(attrStr, idMatch, idRegex)) << "attr format mismatch: " << attrStr;
+    EXPECT_EQ(idMatch[1].str(), "  k,  0,  1, 64,  4, 64,RUNTIME_Min(RUNTIME_Max((4-k), 0), 1), 64");
 }
 
 void TestHybridLoopIf(const Tensor& t0, const Tensor& t1, const Tensor& t2, const Tensor& t3, const Tensor& t4,

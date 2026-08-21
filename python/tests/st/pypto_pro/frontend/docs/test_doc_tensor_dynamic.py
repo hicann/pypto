@@ -22,9 +22,10 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
-
 
 
 def _require_a5(device):
@@ -59,6 +60,7 @@ def dynamic_tensor_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dynamic_tensor():
     """验证 pl.DYNAMIC 语法可用（单 tile 场景）"""
     device = ST_DEVICE

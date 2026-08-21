@@ -23,10 +23,7 @@ verify_options = {
 }
 
 
-@pypto.frontend.jit(
-    runtime_options={"run_mode": pypto.RunMode.NPU},
-    verify_options=verify_options
-)
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, verify_options=verify_options)
 def add_dyn_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
@@ -53,6 +50,7 @@ def add_dyn_kernel(
             del res, tile_tensor_0, tile_tensor_1
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_verify_dyn():
     shape = [72, 144]
 
@@ -69,9 +67,7 @@ def test_verify_dyn():
     assert torch.allclose(output_data, golden)
 
 
-@pypto.frontend.jit(
-    runtime_options={"run_mode": pypto.RunMode.NPU}, verify_options=verify_options
-)
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU}, verify_options=verify_options)
 def cmp_where_kenrel(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
     out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
@@ -82,6 +78,7 @@ def cmp_where_kenrel(
         out[:] = pypto.where(mask, 1.0, 0.0)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_verify_where():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -111,6 +108,7 @@ def cmp_where_kenrel2(
         out[:] = pypto.where(mask, 1.0, 0.0)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_verify_set_options():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

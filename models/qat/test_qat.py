@@ -44,6 +44,8 @@ from qat_impl import (
 import torch
 import torch_npu
 
+import pypto
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -658,6 +660,7 @@ def run_asymmetric_per_group_test(n, m, group_size, bit, eps, clip_val, distribu
         pytest.param(768, 2048, 128, 3, 0.0001, 0.99, id="N768-M2048-group128-bit3-eps0.0001-clip_val0.99"),
     ],
 )
+@pypto.options(pass_options={"enable_slice": True})
 def test_asymmetric_per_group(n, m, group, bit, eps, clip_val) -> None:
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -701,6 +704,7 @@ def run_symmetric_per_channel_test(n, m, bit, eps, distribution, device_id):
         pytest.param(38344, 2048, 4, 0.0001, id="N38344-M2048-bit4-eps0.0001"),
     ],
 )
+@pypto.options(pass_options={"enable_slice": True})
 def test_symmetric_per_channel(n, m, bit, eps) -> None:
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -744,6 +748,7 @@ def run_symmetric_per_tensor_test(n, m, bit, eps, distribution, device_id):
         pytest.param(38344, 2048, 8, 0.0001, id="N38344-M2048-bit8-eps0.0001"),
     ],
 )
+@pypto.options(pass_options={"enable_slice": True})
 def test_symmetric_per_tensor(n, m, bit, eps) -> None:
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -802,6 +807,7 @@ def run_asymmetric_per_group_backward_test(n, m, group_size, bit, eps, clip_val,
         pytest.param(768, 2048, 128, 3, 0.0001, 0.99, id="N768-M2048-group128-bit3-eps0.0001-clip_val0.99"),
     ],
 )
+@pypto.options(pass_options={"enable_slice": True})
 def test_asymmetric_per_group_backward(n, m, group, bit, eps, clip_val) -> None:
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -852,6 +858,7 @@ def run_symmetric_per_channel_backward_test(n, m, bit, eps, distribution, device
         ),
     ],
 )
+@pypto.options(pass_options={"enable_slice": True})
 def test_symmetric_per_channel_backward(n, m, bit, eps) -> None:
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -895,6 +902,7 @@ def run_symmetric_per_tensor_backward_test(n, m, bit, eps, distribution, device_
         pytest.param(38344, 2048, 8, 0.0001, id="N38344-M2048-bit8-eps0.0001"),
     ],
 )
+@pypto.options(pass_options={"enable_slice": True})
 def test_symmetric_per_tensor_backward(n, m, bit, eps) -> None:
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

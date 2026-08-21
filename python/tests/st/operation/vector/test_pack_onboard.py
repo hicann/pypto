@@ -8,8 +8,8 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import os
 
 import torch
@@ -17,11 +17,12 @@ import torch
 import pypto
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_pack_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     input_shape = (67, 69)
-    output_shape = (67 * 69 * 4, )
+    output_shape = (67 * 69 * 4,)
     tile_shape = (32, 32)
     pypto.runtime._device_init()
 

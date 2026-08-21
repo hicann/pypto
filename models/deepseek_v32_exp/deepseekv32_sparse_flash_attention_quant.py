@@ -26,6 +26,8 @@ import torch
 import torch_npu
 from utils.compare import compare
 
+import pypto
+
 
 def gen_uniform_data(data_shape, min_value, max_value, dtype):
     """
@@ -515,6 +517,7 @@ def do_test_sfa_entry(case_name: str, is_p: bool, is_soc_950: bool):
 
 
 @pytest.mark.soc("950", "910")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sfa_bf16_b4_s2_seq64k_total_int8_d():
     '''
     sfa decode测试函数
@@ -523,6 +526,7 @@ def test_sfa_bf16_b4_s2_seq64k_total_int8_d():
 
 
 @pytest.mark.skip(reason="perf")
+@pypto.options(pass_options={"enable_slice": True})
 def test_sfa_bf16_b4_s2_seq64k_per_int8_d():
     '''
     sfa decode测试函数
@@ -532,6 +536,7 @@ def test_sfa_bf16_b4_s2_seq64k_per_int8_d():
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="perf")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sfa_bf16_b4_s2_seq64k_per_int8_d_950():
     '''
     sfa decode测试函数
@@ -540,6 +545,7 @@ def test_sfa_bf16_b4_s2_seq64k_per_int8_d_950():
 
 
 @pytest.mark.skip(reason="bf16 perf")
+@pypto.options(pass_options={"enable_slice": True})
 def test_sfa_bf16_b4_s2_seq64k_per_bf16_d():
     '''
     sfa decode非量化测试函数
@@ -548,6 +554,7 @@ def test_sfa_bf16_b4_s2_seq64k_per_bf16_d():
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_sfa_bf16_b1_s256_seq64k_int8_p():
     '''
     sfa prefill测试函数

@@ -52,6 +52,20 @@ std::string GetStr(const std::vector<SymbolicScalar>& vec)
     }
     return "{" + ret + "}";
 }
+
+Opcode InferAssembleOpcode(const Operation* originOp)
+{
+    if (originOp == nullptr) {
+        APASS_LOG_WARN_F(Elements::Operation, "Origin assemble-family op is nullptr, fallback to OP_ASSEMBLE.");
+        return Opcode::OP_ASSEMBLE;
+    }
+    if (!IsAssembleLike(originOp->GetOpcode())) {
+        APASS_LOG_WARN_F(Elements::Operation, "Origin op[%d] is not assemble-family, fallback to OP_ASSEMBLE.",
+                         originOp->GetOpMagic());
+        return Opcode::OP_ASSEMBLE;
+    }
+    return originOp->GetOpcode();
+}
 } // namespace
 
 Status SplitReshape::RunOnFunction(Function& function)
@@ -355,32 +369,6 @@ std::vector<int64_t> SplitReshape::ObtainMapOffset(const LogicalTensorPtr& input
     return it->second;
 }
 
-bool SplitReshape::HasAssembleInputProducedByReduceAcc(const LogicalTensorPtr& reshapeSource,
-                                                       int& assembleOpMagic) const
-{
-    if (reshapeSource == nullptr || reshapeSource->GetRawTensor() == nullptr) {
-        return false;
-    }
-    auto it = assembleOutToInput_.find(reshapeSource->GetRawTensor()->GetRawMagic());
-    if (it == assembleOutToInput_.end()) {
-        return false;
-    }
-    for (const auto& input : it->second) {
-        if (input == nullptr) {
-            continue;
-        }
-        const bool hasReduceAccProducer = std::any_of(
-            input->GetProducers().begin(), input->GetProducers().end(),
-            [](const auto* producer) { return producer != nullptr && producer->GetOpcode() == Opcode::OP_REDUCE_ACC; });
-        if (hasReduceAccProducer) {
-            auto assembleIt = assembleOpPtrs_.find({input->GetMagic(), reshapeSource->GetMagic()});
-            assembleOpMagic = assembleIt == assembleOpPtrs_.end() ? -1 : assembleIt->second->GetOpMagic();
-            return true;
-        }
-    }
-    return false;
-}
-
 Status SplitReshape::CollectReshapeInfo(const Operation& op)
 {
     auto input = op.GetIOperands().front();
@@ -447,7 +435,7 @@ Status SplitReshape::CollectCopyOut(Function& function)
         if (op.GetOpcode() == Opcode::OP_RESHAPE && CollectReshapeInfo(op) != SUCCESS) {
             return FAILED;
         }
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE && CollectAssembleInfo(op) != SUCCESS) {
+        if (IsAssembleLike(op.GetOpcode()) && CollectAssembleInfo(op) != SUCCESS) {
             return FAILED;
         }
     }
@@ -1165,6 +1153,34 @@ Status SplitReshape::UpdateReshapeOp(Function& function, Operation& op, const Ov
     return SUCCESS;
 }
 
+bool SplitReshape::HasAssembleLikeInputProducedByReduceAcc(const LogicalTensorPtr& reshapeSource,
+                                                           int& assembleLikeOpMagic) const
+{
+    if (reshapeSource == nullptr || reshapeSource->GetRawTensor() == nullptr) {
+        return false;
+    }
+    // assembleOutToInput_ 由 CollectAssembleInfo 填充，其门控 CollectCopyOut 已用 IsAssembleLike，
+    // 故 OP_ASSEMBLE 与 OP_CONTRACT 均已记录，本函数天然覆盖 reduce_acc-contract-reshape 场景。
+    auto it = assembleOutToInput_.find(reshapeSource->GetRawTensor()->GetRawMagic());
+    if (it == assembleOutToInput_.end()) {
+        return false;
+    }
+    for (const auto& input : it->second) {
+        if (input == nullptr) {
+            continue;
+        }
+        const bool hasReduceAccProducer = std::any_of(
+            input->GetProducers().begin(), input->GetProducers().end(),
+            [](const auto* producer) { return producer != nullptr && producer->GetOpcode() == Opcode::OP_REDUCE_ACC; });
+        if (hasReduceAccProducer) {
+            auto assembleIt = assembleOpPtrs_.find({input->GetMagic(), reshapeSource->GetMagic()});
+            assembleLikeOpMagic = assembleIt == assembleOpPtrs_.end() ? -1 : assembleIt->second->GetOpMagic();
+            return true;
+        }
+    }
+    return false;
+}
+
 Status SplitReshape::CheckReshapeSkip(const LogicalTensorPtr& input, const LogicalTensorPtr& output,
                                       CheckOutputParam& checkOutputParam)
 {
@@ -1181,30 +1197,31 @@ Status SplitReshape::CheckReshapeSkip(const LogicalTensorPtr& input, const Logic
         return WARNING;
     }
     checkOutputParam.reshapeSource = reshapeSourceIter->second;
-    int assembleOpMagic = -1;
-    if (HasAssembleInputProducedByReduceAcc(checkOutputParam.reshapeSource, assembleOpMagic)) {
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor,
-            "Skip splitreshape because one assemble input is produced by ReduceAcc, assemble op magic is %d.",
-            assembleOpMagic);
+    int assembleLikeOpMagic = -1;
+    if (HasAssembleLikeInputProducedByReduceAcc(checkOutputParam.reshapeSource, assembleLikeOpMagic)) {
+        APASS_LOG_DEBUG_F(Elements::Tensor,
+                          "Skip splitreshape because one assemble-like input is produced by ReduceAcc, op magic is %d.",
+                          assembleLikeOpMagic);
         return WARNING;
     }
-    size_t assembleProducerCount = 0;
+    size_t assembleLikeProducerCount = 0;
     for (const auto& producer : checkOutputParam.reshapeSource->GetProducers()) {
-        if (producer != nullptr && producer->GetOpcode() == Opcode::OP_ASSEMBLE) {
-            ++assembleProducerCount;
+        if (producer != nullptr && IsAssembleLike(producer->GetOpcode())) {
+            ++assembleLikeProducerCount;
         }
     }
-    if (assembleProducerCount <= 1) {
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Skip splitreshape because reshape source has only one assemble producer.");
+    if (assembleLikeProducerCount <= 1) {
+        APASS_LOG_DEBUG_F(Elements::Tensor,
+                          "Skip splitreshape because reshape source has only one assemble-like producer.");
         return WARNING;
     }
     for (const auto& consumer : input->GetConsumers()) {
         if (consumer == nullptr) {
             continue;
         }
-        if (consumer->GetOpcode() != Opcode::OP_VIEW) {
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Skip splitreshape because reshape output has non-view consumers.");
+        if (!IsViewLike(consumer->GetOpcode())) {
+            APASS_LOG_DEBUG_F(Elements::Tensor,
+                              "Skip splitreshape because reshape output has non-view-like consumers.");
             return WARNING;
         }
     }
@@ -1223,9 +1240,8 @@ Status SplitReshape::CheckReshapeSkip(const LogicalTensorPtr& input, const Logic
 Status SplitReshape::CheckValidOp(const CheckParam& para, CheckOutputParam& checkOutputParam)
 {
     auto input = para.input;
-    auto output = para.output;
     auto inputView = para.inputView;
-    if (CheckReshapeSkip(input, output, checkOutputParam) == WARNING) {
+    if (CheckReshapeSkip(input, para.output, checkOutputParam) == WARNING) {
         return WARNING;
     }
     const int inputRawMagic = input->GetRawTensor()->GetRawMagic();
@@ -1339,7 +1355,7 @@ Status SplitReshape::CheckOp(Function& function, Operation& op)
 Status SplitReshape::CheckCopyIn(Function& function)
 {
     for (auto& op : function.Operations(false)) {
-        if (op.GetOpcode() != Opcode::OP_VIEW) {
+        if (!IsViewLike(op.GetOpcode())) {
             continue;
         }
         if (CheckOp(function, op) == FAILED) {
@@ -1381,7 +1397,8 @@ Status SplitReshape::AddAssembleOp(const MemoryType& memoryType, const std::vect
                                    const LogicalTensorPtr& input, const LogicalTensorPtr& output,
                                    const Operation* originOp)
 {
-    assembles_.emplace_back(AssembleOp{memoryType, outputOffset, input, output, originOp});
+    assembles_.emplace_back(
+        AssembleOp{memoryType, outputOffset, input, output, originOp, InferAssembleOpcode(originOp)});
     auto iter = reshapeOffset_.find(output);
     if (iter == reshapeOffset_.end()) {
         reshapeOffset_[output] = outputOffset;
@@ -1442,11 +1459,10 @@ Status SplitReshape::AddOperation(Function& function)
             return FAILED;
         }
         auto& newCopyOut = GraphUtils::AddAssembleOperation(function, a, {dynValidShape});
-        APASS_LOG_INFO_F(
-            Elements::Operation,
-            "ADD OP_ASSEMBLE, magic %d, IOperand tensor magic %d OOperand tensor magic %d, dynValidShape %s.",
-            newCopyOut.opmagic, a.input->GetMagic(), a.output->GetMagic(),
-            GetStr(a.output->GetDynValidShape()).c_str());
+        APASS_LOG_INFO_F(Elements::Operation,
+                         "ADD %s, magic %d, IOperand tensor magic %d OOperand tensor magic %d, dynValidShape %s.",
+                         newCopyOut.GetOpcodeStr().c_str(), newCopyOut.opmagic, a.input->GetMagic(),
+                         a.output->GetMagic(), GetStr(a.output->GetDynValidShape()).c_str());
     }
     for (const auto& b : reshapes_) {
         dynValidShape.clear();
@@ -1468,7 +1484,7 @@ Status SplitReshape::AddOperation(Function& function)
 Status SplitReshape::SetMemoryType(Function& function)
 {
     for (const auto& op : function.Operations(false)) {
-        if (op.GetOpcode() != Opcode::OP_VIEW) {
+        if (!IsViewLike(op.GetOpcode())) {
             continue;
         }
         for (const auto consumerOp : op.ConsumerOps()) {

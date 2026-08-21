@@ -16,6 +16,8 @@ import os
 import torch
 from win_attention_impl import deepseekv4_win_atten, get_mask, sliding_win_atten_graph
 
+import pypto
+
 
 class SWA(torch.nn.Module):
     def forward(self, q, ori_block_table, ori_kv, seqused_kv, sinks, win_size, mask, cu_seqlens_q):
@@ -143,6 +145,7 @@ def win_atten_calc_tnd(
     return atten_out
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_win_atten_tnd_mask(allow_in_graph=False) -> None:
     for b in [64]:
         s_val = 2

@@ -736,8 +736,8 @@ def ifa_func_kernel_for_910_high_performance(
         "max_workspace_kb": 2000000,
     },
     pass_options={
-        "cube_l1_reuse_setting": {0: 16, 1: 8, 2:1},
-        "cube_nbuffer_setting": {0: 2, 1: 4, 2:4},
+        "cube_l1_reuse_setting": {0: 16, 1: 8, 2: 1},
+        "cube_nbuffer_setting": {0: 2, 1: 4, 2: 4},
         "vec_nbuffer_setting": {-2: 1, 0: 1, 1: 1},
     },
     host_options={"compile_monitor_enable": 0},
@@ -751,7 +751,8 @@ def ifa_func_kernel_for_910_s1_range_high_performance(
     block_table: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_INT32),
     kv_act_seqs: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
     atten_out: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
-    softmax_scale, tile_config
+    softmax_scale,
+    tile_config,
 ):
     pypto.experimental.set_operation_options(combine_axis=True)
     shape_q = q.shape
@@ -801,7 +802,8 @@ def ifa_func_kernel_for_910_s1_range_high_performance(
                 s2_loop = (max_cur_seq + s2_tile - 1) // s2_tile
 
                 for s2_idx in pypto.loop(
-                    s2_loop, name="LOOP_s2", idx_name="s2_idx", unroll_list=[32, 16, 12, 8, 4, 2, 1]):
+                    s2_loop, name="LOOP_s2", idx_name="s2_idx", unroll_list=[32, 16, 12, 8, 4, 2, 1]
+                ):
                     block_num = s2_tile // block_size
                     idx = s2_idx * block_num
                     n1g_ofs = n2_idx * group + g_idx * g_tile
@@ -810,17 +812,18 @@ def ifa_func_kernel_for_910_s1_range_high_performance(
                     for i in range(block_num):
                         block_idx = block_table[b_idx, idx + i]
                         block_idx_vaild = block_idx.max(0)
-                        kj_assemble[i * block_size:(i + 1) * block_size, 0:] = pypto.view(k_2d,
-                            [block_size, dn], [block_idx_vaild * block_size, n2_idx * dn])
-                    kj_assemble = pypto.view(kj_assemble, [s2_tile, dn], [0, 0],
-                                            valid_shape=[s2_tile, dn])
+                        kj_assemble[i * block_size:(i + 1) * block_size, 0:] = pypto.view(
+                            k_2d, [block_size, dn], [block_idx_vaild * block_size, n2_idx * dn]
+                        )
+                    kj_assemble = pypto.view(kj_assemble, [s2_tile, dn], [0, 0], valid_shape=[s2_tile, dn])
 
                     vj_assemble = pypto.tensor([s2_tile, dn], v_2d.dtype, "vj_assemble")
                     for i in range(block_num):
                         block_idx = block_table[b_idx, idx + i]
                         block_idx_vaild = block_idx.max(0)
-                        vj_assemble[i * block_size:(i + 1) * block_size, 0:] = pypto.view(v_2d,
-                            [block_size, dn], [block_idx_vaild * block_size, n2_idx * dn])
+                        vj_assemble[i * block_size:(i + 1) * block_size, 0:] = pypto.view(
+                            v_2d, [block_size, dn], [block_idx_vaild * block_size, n2_idx * dn]
+                        )
 
                     # ===== merged Q: stack two s1 q into one matmul =====
                     cur_seq_0 = kv_act_seqs[b_idx] - (s1_scalar - 1)
@@ -839,10 +842,10 @@ def ifa_func_kernel_for_910_s1_range_high_performance(
                     pypto.set_cube_tile_shapes(c1_tile[0], c1_tile[1], c1_tile[2])
                     sij_merged = pypto.matmul(qi_merged, kj_assemble, pypto.DT_FP32, a_trans=False, b_trans=True)
 
-                    sij_0 = pypto.view(sij_merged, [g_tile, s2_tile], [0, 0],
-                            valid_shape=[g_tile, actual_s2_tile_0])
-                    sij_1 = pypto.view(sij_merged, [g_tile, s2_tile], [g_tile, 0],
-                            valid_shape=[g_tile, actual_s2_tile_1])
+                    sij_0 = pypto.view(sij_merged, [g_tile, s2_tile], [0, 0], valid_shape=[g_tile, actual_s2_tile_0])
+                    sij_1 = pypto.view(
+                        sij_merged, [g_tile, s2_tile], [g_tile, 0], valid_shape=[g_tile, actual_s2_tile_1]
+                    )
 
                     # ===== s1_idx = 0 softmax + V matmul =====
                     pypto.set_vec_tile_shapes(v1_tile[0], v1_tile[1])
@@ -854,8 +857,9 @@ def ifa_func_kernel_for_910_s1_range_high_performance(
                     vec1_res_fp16_0 = pypto.cast(vec1_res_0, dtype)
                     sum_local_0 = pypto.sum(vec1_res_0, dim=-1, keepdim=True)
 
-                    vj_assemble_view_0 = pypto.view(vj_assemble, [s2_tile, dn], [0, 0],
-                                    valid_shape=[actual_s2_tile_0, dn])
+                    vj_assemble_view_0 = pypto.view(
+                        vj_assemble, [s2_tile, dn], [0, 0], valid_shape=[actual_s2_tile_0, dn]
+                    )
                     pypto.set_pass_options(sg_set_scope=-1)
 
                     pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
@@ -868,8 +872,9 @@ def ifa_func_kernel_for_910_s1_range_high_performance(
                         oi_tmp_0 = mm2_res_0
                         oi_update_0[:] = pypto.tensor(oi_tmp_0.shape, pypto.DT_FP32, "oi_update_0_init")
                         if pypto.is_loop_end(s2_idx):
-                            oi_update_0[:] = pypto.div(oi_tmp_0, safe_sum_0,
-                                                    precision_type=pypto.PrecisionType.INTRINSIC)
+                            oi_update_0[:] = pypto.div(
+                                oi_tmp_0, safe_sum_0, precision_type=pypto.PrecisionType.INTRINSIC
+                            )
                             oi_update_3d_0 = pypto.reshape(oi_update_0, [1, g_tile, dn])
                             pypto.set_vec_tile_shapes(1, v2_tile[0], v2_tile[1])
                             oi_update_3d_0 = pypto.cast(oi_update_3d_0, dtype)
@@ -919,8 +924,9 @@ def ifa_func_kernel_for_910_s1_range_high_performance(
                     vec1_res_fp16_1 = pypto.cast(vec1_res_1, dtype)
                     sum_local_1 = pypto.sum(vec1_res_1, dim=-1, keepdim=True)
 
-                    vj_assemble_view_1 = pypto.view(vj_assemble, [s2_tile, dn], [0, 0],
-                                    valid_shape=[actual_s2_tile_1, dn])
+                    vj_assemble_view_1 = pypto.view(
+                        vj_assemble, [s2_tile, dn], [0, 0], valid_shape=[actual_s2_tile_1, dn]
+                    )
                     pypto.set_pass_options(sg_set_scope=-1)
 
                     pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
@@ -932,8 +938,9 @@ def ifa_func_kernel_for_910_s1_range_high_performance(
                         oi_tmp_1 = mm2_res_1
                         oi_update_1[:] = pypto.tensor(oi_tmp_1.shape, pypto.DT_FP32, "oi_update_1_init")
                         if pypto.is_loop_end(s2_idx):
-                            oi_update_1[:] = pypto.div(oi_tmp_1, sum_local_1,
-                                                    precision_type=pypto.PrecisionType.INTRINSIC)
+                            oi_update_1[:] = pypto.div(
+                                oi_tmp_1, sum_local_1, precision_type=pypto.PrecisionType.INTRINSIC
+                            )
                             oi_update_3d_1 = pypto.reshape(oi_update_1, [1, g_tile, dn])
                             pypto.set_vec_tile_shapes(1, v2_tile[0], v2_tile[1])
                             oi_update_3d_1 = pypto.cast(oi_update_3d_1, dtype)
@@ -1477,6 +1484,7 @@ def ifa_flash_torch(q, k, v, block_table, kv_act_seqs, out, is_fp32=False):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ifa_for_950():
     case_names = [
         "ifa_950_b16_s1_1_s2_8k_nkv_2",
@@ -1502,6 +1510,7 @@ def test_ifa_for_950():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ifa_for_950_high_through():
     case_names = [
         "ifa_950_b64_s1_2_s2_8k_high_through",
@@ -1524,6 +1533,7 @@ def test_ifa_for_950_high_through():
 
 
 @pytest.mark.soc("950", "910")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ifa():
     case_names = [
         "ifa_b8_s1_1_s2_16k",
@@ -1547,6 +1557,7 @@ def test_ifa():
 
 
 @pytest.mark.soc("950", "910")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ifa_910_high_performance():
     case_names = [
         "ifa_b16_s1_1_s2_8k",

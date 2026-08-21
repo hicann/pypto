@@ -45,6 +45,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -92,6 +94,7 @@ def _run(kernel, a_arg, b_arg, a, b, out_shape, device=ST_DEVICE):
 
 # === A1: NN non-square — Left NZ, Right NZ (only valid L1 combo for NN) =============
 
+
 @pl.jit(auto_mutex=True)
 def t01_nsq_nd_nz_single(
     a: pl.Tensor[[M_NSQ, K_NSQ], pl.DT_FP16],
@@ -101,20 +104,31 @@ def t01_nsq_nd_nz_single(
     """NN nsq: both L1 NZ, no transpose, single tile."""
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, K_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[K_NSQ, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, K_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[2])
+        addrs=0x0,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[K_NSQ, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[3])
+        addrs=0x0,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -140,20 +154,31 @@ def t02_nsq_nd_nz_kloop_if(
     tile_k = 128
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[4, 5])
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[6, 7])
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, k_total, tile_k):
@@ -178,6 +203,7 @@ def t02_nsq_nd_nz_kloop_if(
 
 # === A2: NT non-square (right transpose) — rec NZ(relabel) vs exp ZN ===============
 
+
 @pl.jit(auto_mutex=True)
 def t03_nsq_dn_zn_single(
     a: pl.Tensor[[M_NSQ, K_NSQ], pl.DT_FP16],
@@ -187,20 +213,31 @@ def t03_nsq_dn_zn_single(
     """NT nsq explicit: B^T[N,K] with is_transpose=True into Mat ZN [K,N]."""
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, K_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[K_NSQ, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, K_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[2])
+        addrs=0x0,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[K_NSQ, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[3])
+        addrs=0x0,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -226,20 +263,31 @@ def t05_nsq_dn_zn_kloop(
     tile_k = 128
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[4, 5])
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[6, 7])
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, k_total, tile_k):
@@ -272,25 +320,60 @@ def t06_nsq_dn_zn_kloop_tail(
     k_total = 200
     tile_k = 128
     a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x00000, mutex_ids=[0, 1])
+        type=pl.TileType(
+            shape=[M_NSQ, tile_k],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x10000, mutex_ids=[2, 3])
+        type=pl.TileType(
+            shape=[tile_k, N_NSQ],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Mat,
+            layout=pl.ZN,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0, mutex_ids=[4, 5])
+        type=pl.TileType(
+            shape=[M_NSQ, tile_k],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
-        type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0, mutex_ids=[6, 7])
+        type=pl.TileType(
+            shape=[tile_k, N_NSQ],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Right,
+            layout=pl.ZN,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, k_total, tile_k):
@@ -321,6 +404,7 @@ def t06_nsq_dn_zn_kloop_tail(
 
 # === A3: TN non-square (left transpose) — rec NZ(relabel) vs exp ZN ===============
 
+
 @pl.jit(auto_mutex=True)
 def t07_nsq_dn_zn_tn_single(
     a_t: pl.Tensor[[K_NSQ, M_NSQ], pl.DT_FP16],
@@ -330,20 +414,31 @@ def t07_nsq_dn_zn_tn_single(
     """TN nsq explicit single: A^T[K,M] is_transpose=True into Mat ZN [M,K]."""
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, K_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[K_NSQ, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, K_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[2])
+        addrs=0x0,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[K_NSQ, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[3])
+        addrs=0x0,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -368,20 +463,31 @@ def t09_nsq_dn_zn_tn_kloop_if(
     tile_k = 64
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[4, 5])
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[6, 7])
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, K_NSQ, tile_k):
@@ -417,23 +523,44 @@ def t10_nsq_dn_zn_tn_kloop_tail(
     k_total = K_NSQ
     tile_k = 64
     a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN,
-                         valid_shape=[-1, -1]),
-        addrs=0x00000, mutex_ids=[0, 1])
+        type=pl.TileType(
+            shape=[M_NSQ, tile_k],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Mat,
+            layout=pl.ZN,
+            valid_shape=[-1, -1],
+        ),
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                         valid_shape=[-1, -1]),
-        addrs=0x10000, mutex_ids=[2, 3])
+        type=pl.TileType(
+            shape=[tile_k, N_NSQ],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+        ),
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[4, 5])
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[6, 7])
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, k_total, tile_k):
@@ -462,6 +589,7 @@ def t10_nsq_dn_zn_tn_kloop_tail(
 
 # === A4: TT non-square (both transpose) — rec NZ(relabel) vs exp ZN ===============
 
+
 @pl.jit(auto_mutex=True)
 def t11_nsq_dn_zn_tt_single(
     a_t: pl.Tensor[[K_NSQ, M_NSQ], pl.DT_FP16],
@@ -470,20 +598,31 @@ def t11_nsq_dn_zn_tt_single(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, K_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[K_NSQ, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, K_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[2])
+        addrs=0x0,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[K_NSQ, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[3])
+        addrs=0x0,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -512,20 +651,31 @@ def t12_nsq_dn_zn_tt_kloop(
     tile_k = 128
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[4, 5])
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[6, 7])
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, k_total, tile_k):
@@ -558,20 +708,31 @@ def t13_nsq_dn_zn_tt_kloop_if(
     tile_k = 64
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_NSQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[4, 5])
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, N_NSQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[6, 7])
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_NSQ, N_NSQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, K_NSQ, tile_k):
@@ -600,6 +761,7 @@ def t13_nsq_dn_zn_tt_kloop_if(
 
 # === B1: NN square, recommended =====================================================
 
+
 @pl.jit(auto_mutex=True)
 def t14_sq_nd_nz_single(
     a: pl.Tensor[[M_SQ, K_SQ], pl.DT_FP16],
@@ -609,20 +771,31 @@ def t14_sq_nd_nz_single(
     """NN square recommended: no transpose, baseline."""
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, K_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[K_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, K_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[2])
+        addrs=0x0,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[K_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[3])
+        addrs=0x0,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -647,20 +820,31 @@ def t15_sq_nd_nz_kloop_if(
     k_total = 256
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, TILE_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, TILE_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[4, 5])
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[6, 7])
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, k_total, TILE_SQ):
@@ -693,20 +877,31 @@ def t16_sq_nd_nz_kacc_3blocks(
     tile = 128
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[4, 5])
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[6, 7])
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[tile, tile], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         pl.system.set_mm_layout_transform(enabled=True)
         ac = acc_grp.current()
@@ -733,6 +928,7 @@ def t16_sq_nd_nz_kacc_3blocks(
 
 # === B2: NN square, M-tiling and M-tail =============================================
 
+
 @pl.jit(auto_mutex=True)
 def t17_sq_nd_nz_m_tiling(
     a: pl.Tensor[[256, 64], pl.DT_FP16],
@@ -743,20 +939,31 @@ def t17_sq_nd_nz_m_tiling(
     tile = 64
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[2])
+        addrs=0x10000,
+        mutex_ids=[2],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[3])
+        addrs=0x0,
+        mutex_ids=[3],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[4])
+        addrs=0x0,
+        mutex_ids=[4],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[5])
+        type=pl.TileType(
+            shape=[tile, tile], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[5],
+    )
     with pl.section_cube():
         for i in pl.range(0, 4, 1):
             cur_a = a_l1.next()
@@ -781,22 +988,39 @@ def t18_sq_nd_nz_m_tail(
     """NN M-axis tail: M=200, tile=128, tail=72 with valid_shape on M dimension."""
     tile = 128
     a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                         valid_shape=[-1, -1]),
-        addrs=0x00000, mutex_ids=[0])
+        type=pl.TileType(
+            shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ, valid_shape=[-1, -1]
+        ),
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[2])
+        addrs=0x0,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[3])
+        addrs=0x0,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[tile, tile], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024, valid_shape=[-1, -1]),
-        addrs=0x0, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[tile, tile],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Acc,
+            layout=pl.NZ,
+            fractal=1024,
+            valid_shape=[-1, -1],
+        ),
+        addrs=0x0,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -815,6 +1039,7 @@ def t18_sq_nd_nz_m_tail(
 
 # === B3: NN square FP32 =============================================================
 
+
 @pl.jit(auto_mutex=True)
 def t19_sq_nd_nz_fp32_single(
     a: pl.Tensor[[64, 64], pl.DT_FP32],
@@ -824,20 +1049,31 @@ def t19_sq_nd_nz_fp32_single(
     """NN square FP32: tests FP32 dtype path (c0Size=8 instead of 16)."""
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[2])
+        addrs=0x0,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[3])
+        addrs=0x0,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32,
-                         target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
-        addrs=0x0, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -854,6 +1090,7 @@ def t19_sq_nd_nz_fp32_single(
 
 # === B4: NT/TN/TT square explicit (is_transpose required for square) ================
 
+
 @pl.jit(auto_mutex=True)
 def t20_sq_dn_zn_single(
     a: pl.Tensor[[M_SQ, K_SQ], pl.DT_FP16],
@@ -863,20 +1100,31 @@ def t20_sq_dn_zn_single(
     """NT square explicit single: is_transpose=True required (Pass cannot detect square reversed)."""
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, K_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[K_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, K_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[2])
+        addrs=0x0,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[K_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[3])
+        addrs=0x0,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -900,20 +1148,31 @@ def t21_sq_dn_zn_kloop(
     """NT square explicit with K-loop + if."""
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, TILE_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, TILE_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[4, 5])
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[6, 7])
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, K_SQ, TILE_SQ):
@@ -945,20 +1204,31 @@ def t22_sq_dn_zn_tn_kloop_if(
     """TN square explicit with K-loop + if: A^T[K,M] is_transpose=True, B normal."""
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, K_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[K_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, K_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[4, 5])
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[K_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[6, 7])
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, K_SQ, TILE_SQ):
@@ -990,20 +1260,31 @@ def t23_sq_dn_zn_tt_kloop_if(
     """TT square explicit with K-loop + if: both is_transpose=True, both Mat ZN."""
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, K_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[K_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[M_SQ, K_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0, mutex_ids=[4, 5])
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[K_SQ, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0, mutex_ids=[6, 7])
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, K_SQ, TILE_SQ):
@@ -1039,25 +1320,60 @@ def t24_sq_dn_zn_kloop_tail(
     k_total = 200
     tile_k = 128
     a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[M_SQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x00000, mutex_ids=[0, 1])
+        type=pl.TileType(
+            shape=[M_SQ, tile_k],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[tile_k, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x10000, mutex_ids=[2, 3])
+        type=pl.TileType(
+            shape=[tile_k, N_SQ],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Mat,
+            layout=pl.ZN,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
-        type=pl.TileType(shape=[M_SQ, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0, mutex_ids=[4, 5])
+        type=pl.TileType(
+            shape=[M_SQ, tile_k],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x0,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
-        type=pl.TileType(shape=[tile_k, N_SQ], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0, mutex_ids=[6, 7])
+        type=pl.TileType(
+            shape=[tile_k, N_SQ],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Right,
+            layout=pl.ZN,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x0,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
-        type=pl.TileType(shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                         fractal=1024),
-        addrs=0x0, mutex_ids=[8])
+        type=pl.TileType(
+            shape=[M_SQ, N_SQ], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        ),
+        addrs=0x0,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         ac = acc_grp.current()
         for ki in pl.range(0, k_total, tile_k):
@@ -1090,6 +1406,7 @@ def t24_sq_dn_zn_kloop_tail(
 # Test functions
 # #####################################################################################
 
+
 @pytest.fixture(scope="module")
 def _device():
     dev = ST_DEVICE
@@ -1099,7 +1416,9 @@ def _device():
 
 # --- Part A: Non-square tests ---
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t01(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1107,6 +1426,7 @@ def test_t01(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t02(_device):
     a = _inputs(_device, [M_NSQ, 256])
     b = _inputs(_device, [256, N_NSQ])
@@ -1114,6 +1434,7 @@ def test_t02(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t03(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1121,6 +1442,7 @@ def test_t03(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t05(_device):
     a = _inputs(_device, [M_NSQ, 256])
     b = _inputs(_device, [256, N_NSQ])
@@ -1128,6 +1450,7 @@ def test_t05(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t06(_device):
     a = _inputs(_device, [M_NSQ, 200])
     b = _inputs(_device, [200, N_NSQ])
@@ -1135,6 +1458,7 @@ def test_t06(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t07(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1142,6 +1466,7 @@ def test_t07(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t09(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1149,6 +1474,7 @@ def test_t09(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t10(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1156,6 +1482,7 @@ def test_t10(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t11(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1163,6 +1490,7 @@ def test_t11(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t12(_device):
     a = _inputs(_device, [M_NSQ, 256])
     b = _inputs(_device, [256, N_NSQ])
@@ -1170,6 +1498,7 @@ def test_t12(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t13(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1178,7 +1507,9 @@ def test_t13(_device):
 
 # --- Part B: Square tests ---
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t14(_device):
     a = _inputs(_device, [M_SQ, K_SQ])
     b = _inputs(_device, [K_SQ, N_SQ])
@@ -1186,6 +1517,7 @@ def test_t14(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t15(_device):
     a = _inputs(_device, [M_SQ, 256])
     b = _inputs(_device, [256, N_SQ])
@@ -1193,6 +1525,7 @@ def test_t15(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t16(_device):
     a = _inputs(_device, [128, 384])
     b = _inputs(_device, [384, 128])
@@ -1200,6 +1533,7 @@ def test_t16(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t17(_device):
     a = _inputs(_device, [256, 64])
     b = _inputs(_device, [64, 64])
@@ -1207,6 +1541,7 @@ def test_t17(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t18(_device):
     a = _inputs(_device, [200, 128])
     b = _inputs(_device, [128, 128])
@@ -1220,6 +1555,7 @@ def test_t18(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t19(_device):
     a = _inputs(_device, [64, 64], dtype=torch.float32)
     b = _inputs(_device, [64, 64], dtype=torch.float32)
@@ -1233,6 +1569,7 @@ def test_t19(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t20(_device):
     a = _inputs(_device, [M_SQ, K_SQ])
     b = _inputs(_device, [K_SQ, N_SQ])
@@ -1240,6 +1577,7 @@ def test_t20(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t21(_device):
     a = _inputs(_device, [M_SQ, K_SQ])
     b = _inputs(_device, [K_SQ, N_SQ])
@@ -1247,6 +1585,7 @@ def test_t21(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t22(_device):
     a = _inputs(_device, [M_SQ, K_SQ])
     b = _inputs(_device, [K_SQ, N_SQ])
@@ -1254,6 +1593,7 @@ def test_t22(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t23(_device):
     a = _inputs(_device, [M_SQ, K_SQ])
     b = _inputs(_device, [K_SQ, N_SQ])
@@ -1261,6 +1601,7 @@ def test_t23(_device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_t24(_device):
     a = _inputs(_device, [M_SQ, 200])
     b = _inputs(_device, [200, N_SQ])

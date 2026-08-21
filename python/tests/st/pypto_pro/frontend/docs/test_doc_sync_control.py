@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -62,6 +64,7 @@ def sync_src_dst_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sync_src_dst():
     device = ST_DEVICE
     _require_a5(device)
@@ -100,6 +103,7 @@ def bar_all_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bar_all():
     device = ST_DEVICE
     _require_a5(device)
@@ -128,10 +132,12 @@ def bar_v_kernel(
     tile_b = pl.make_tile(tt32, addr=0x8000, size=32768)
     tile_out = pl.make_tile(tt32, addr=0x10000, size=32768)
     tmp_vec = pl.make_tile(tt32, addr=0x18000, size=32768)
-    mask_fp16 = pl.make_tile(pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-                             addr=0x20000, size=16384)
-    mask_vec = pl.make_tile(pl.TileType(shape=[64, 128], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec),
-                            addr=0x24000, size=8192)
+    mask_fp16 = pl.make_tile(
+        pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x20000, size=16384
+    )
+    mask_vec = pl.make_tile(
+        pl.TileType(shape=[64, 128], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec), addr=0x24000, size=8192
+    )
     with pl.section_vector():
         pl.load(tile_a, a, [0, 0])
         pl.load(tile_b, b, [0, 0])
@@ -147,6 +153,7 @@ def bar_v_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bar_v():
     device = ST_DEVICE
     _require_a5(device)
@@ -157,7 +164,7 @@ def test_bar_v():
     out = torch.zeros(64, 128, device=device, dtype=torch.float32)
     bar_v_kernel(a, b, mask_in, out)
     torch.npu.synchronize()
-    cond = (mask_in.float() > 0)
+    cond = mask_in.float() > 0
     out_ref = torch.where(cond, a, b)
     torch.testing.assert_close(out, out_ref, rtol=1e-2, atol=1e-2)
     logging.info("bar_v result equal!")

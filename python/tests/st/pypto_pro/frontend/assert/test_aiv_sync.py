@@ -24,6 +24,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -54,7 +56,8 @@ def aiv_sync_kernel(
 ):
     tile_buf = pl.make_tile(
         pl.TileType(shape=[8, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
-        addr=0x0000, size=256,
+        addr=0x0000,
+        size=256,
     )
     with pl.section_cube():
         pass
@@ -72,11 +75,13 @@ def aiv_sync_kernel(
 
         if enable_sync:
             pl.system.set_cross_core(
-                pipe=pl.PipeType.MTE3, event_id=AIV_SYNC_IDS[slot],
+                pipe=pl.PipeType.MTE3,
+                event_id=AIV_SYNC_IDS[slot],
                 sync_mode=pl.CrossCoreSyncMode.INTER_SUBBLOCK,
             )
             pl.system.wait_cross_core(
-                pipe=pl.PipeType.MTE2, event_id=AIV_SYNC_IDS[slot],
+                pipe=pl.PipeType.MTE2,
+                event_id=AIV_SYNC_IDS[slot],
                 sync_mode=pl.CrossCoreSyncMode.INTER_SUBBLOCK,
             )
 
@@ -100,6 +105,7 @@ def _run(enable_sync):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_aiv_barrier_sync():
     """正对照：有同步时 AIV1 能读到 AIV0 写入的 TARGET_VAL。"""
     result = _run(True)

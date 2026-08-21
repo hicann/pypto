@@ -22,6 +22,8 @@ import pytest
 import torch
 import torch_npu
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -128,8 +130,8 @@ def store_nz_cce_kernel(
         pl.dump_data(fp_nz_out, offsets=[0, 0], shapes=[16, 32])
 
 
-
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_store_nz_cce():
     device = ST_DEVICE
     torch.npu.set_device(device)

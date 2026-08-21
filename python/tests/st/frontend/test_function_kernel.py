@@ -22,6 +22,7 @@ import pypto
 # @jit @function 场景验证
 # =============================================================================
 @pytest.mark.skip("Failed for sync")
+@pypto.options(pass_options={"enable_slice": True})
 def test_add_with_kwargs_run():
     @pypto.frontend.function
     def sub_add_kernel(
@@ -61,6 +62,7 @@ def test_add_with_kwargs_run():
 # =============================================================================
 # @fucntion检验场景验证 固定轴
 # =============================================================================
+@pypto.options(pass_options={"enable_slice": True})
 def test_add_with_kwargs_check_stable():
     @pypto.frontend.function
     def sub_add_kernel(
@@ -101,6 +103,7 @@ def test_add_with_kwargs_check_stable():
 # =============================================================================
 # @fucntion检验场景验证 dtype
 # =============================================================================
+@pypto.options(pass_options={"enable_slice": True})
 def test_add_with_kwargs_check_dtype():
     @pypto.frontend.function
     def sub_add_kernel(

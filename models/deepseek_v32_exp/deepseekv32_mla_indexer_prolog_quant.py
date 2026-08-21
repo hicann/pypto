@@ -939,6 +939,7 @@ params_base = {
 
 
 @pytest.mark.soc("950", "910")
+@pypto.options(pass_options={"enable_slice": False})
 def test_b_4_s1_2_tilebs_8_d():
     '''
     mlaLp decode测试函数
@@ -1021,6 +1022,7 @@ def test_b_4_s1_2_tilebs_8_d():
 
 
 @pytest.mark.skip(reason="prefill test cast")
+@pypto.options(pass_options={"enable_slice": True})
 def test_t_32_tilebs_16_p():
     '''
     mlaLp prefill测试函数
@@ -1104,6 +1106,7 @@ def test_t_32_tilebs_16_p():
 
 
 @pytest.mark.skip(reason="large shape")
+@pypto.options(pass_options={"enable_slice": True})
 def test_t_512_tilebs_128_p():
     '''
     mlaLp prefill测试函数

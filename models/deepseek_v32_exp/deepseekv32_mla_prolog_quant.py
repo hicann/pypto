@@ -695,6 +695,7 @@ def mla_prolog_quant_v32(
 
 
 @pytest.mark.skip(reason="large shape")
+@pypto.options(pass_options={"enable_slice": True})
 def test_b128_s4k4_pa_nd_bf16_quantb_p():
     '''
     mla_prolog prefill测试函数
@@ -757,6 +758,7 @@ def test_b128_s4k4_pa_nd_bf16_quantb_p():
 
 
 @pytest.mark.soc("950", "910")
+@pypto.options(pass_options={"enable_slice": False})
 def test_b4_s64k2_pa_nd_bf16_quantb_d():
     '''
     mla_prolog decode测试函数
@@ -819,6 +821,7 @@ def test_b4_s64k2_pa_nd_bf16_quantb_d():
 
 
 @pytest.mark.skip(reason="large shape")
+@pypto.options(pass_options={"enable_slice": True})
 def test_b64_s64k2_pa_nd_bf16_quantb_d():
     '''
     mla_prolog decode int8量化高吞吐测试用例
@@ -881,6 +884,7 @@ def test_b64_s64k2_pa_nd_bf16_quantb_d():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_b4_s64k2_pa_nd_bf16_d():
     '''
     mla_prolog decode非量化测试函数
@@ -943,6 +947,7 @@ def test_b4_s64k2_pa_nd_bf16_d():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_b64_s64k2_pa_nd_bf16_d():
     '''
     mla_prolog decode非量化测试函数

@@ -412,7 +412,7 @@ void FunctionInterpreter::FillOperationOutputInfo(
         if (k < ooperandDataViewList->size()) {
             auto dataView = ooperandDataViewList->at(k);
             std::string dumpTensorFileName = GetDumpTensorFileName(op->GetOOperands()[k], op, frame);
-            bool isRaw = (op->GetOpcode() == Opcode::OP_COPY_OUT || op->GetOpcode() == Opcode::OP_ASSEMBLE);
+            bool isRaw = (op->GetOpcode() == Opcode::OP_COPY_OUT || IsAssembleLike(op->GetOpcode()));
             DumpTensorBinary(dataView, dumpTensorFileName, isRaw);
             if (execDumpFile) {
                 fprintf(execDumpFile, "<div class=\"detail indent_%d\">%s</a></div>\n", indent,

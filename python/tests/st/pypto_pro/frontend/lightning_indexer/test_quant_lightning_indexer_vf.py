@@ -34,6 +34,8 @@ from pypto_pro.language import Vf as vf  # noqa: N813
 import pytest
 import torch
 
+import pypto
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
@@ -75,8 +77,9 @@ VEC_TO_CUBE_1 = 11
 
 
 @pl.vector_function
-def reduce_and_cast_sk_vf(mm1_vec_tile, wq_tile, kscale_tile, score_u16_sk_tile,
-                          gsize: pl.DT_INT64, wq_col_pad: pl.DT_INT64):
+def reduce_and_cast_sk_vf(
+    mm1_vec_tile, wq_tile, kscale_tile, score_u16_sk_tile, gsize: pl.DT_INT64, wq_col_pad: pl.DT_INT64
+):
     """Reduce mm1_vec [m_half, TS] DT_FP32 across gsize heads -> [2, 128] u16 sortable key.
 
     mm1_vec_tile: [m_half, TS] — dual_split_m result with all TS columns per row.
@@ -170,6 +173,7 @@ def reduce_and_cast_sk_vf(mm1_vec_tile, wq_tile, kscale_tile, score_u16_sk_tile,
     key_reg = vf.xor(key_reg, xor_mask, preg_u16)
     vf.store_align(score_u16_sk_tile + TS, key_reg, preg_u16, dist=pl.StoreDist.NORM_B16)
 
+
 # ================================================================
 # TopK VF Implementation
 # ================================================================
@@ -201,8 +205,14 @@ def histograms_high_vf(hist_high_tile, score_u16_tile, hist_loop: pl.DT_INT64):
 
 @pl.vector_function
 def find_high_bin_and_histograms_low(
-    hist_low_tile, idx_high_tile, hist_high_tile, score_u16_tile, sqz_idx_buf, nk_value_tile, bottom_k: pl.DT_INT64,
-    hist_loop: pl.DT_INT64
+    hist_low_tile,
+    idx_high_tile,
+    hist_high_tile,
+    score_u16_tile,
+    sqz_idx_buf,
+    nk_value_tile,
+    bottom_k: pl.DT_INT64,
+    hist_loop: pl.DT_INT64,
 ):
     """Find high target bin + histogram low byte (merged).
 
@@ -310,7 +320,7 @@ def find_kth_vf(kth_value_tile, hist_low_tile, idx_high_tile, sqz_idx_buf, nk_va
     # NORM_B16 store: write as u16 array so BRC_B16 in collect_gt reads correctly.
     idx_high = vf.load_align(idx_high_tile, 0, dist=pl.LoadDist.BRC_B8, dtype=pl.DT_UINT16)
     idx_low = vf.load_align(sqz_idx_buf, 0, dist=pl.LoadDist.BRC_B16, dtype=pl.DT_UINT16)
-    idx_mask = vf.full(0xff00, dtype=pl.DT_UINT16)
+    idx_mask = vf.full(0xFF00, dtype=pl.DT_UINT16)
     idx_high = vf.and_(idx_high, idx_mask, preg_b32)
     idx_k = vf.add(idx_high, idx_low, preg_b16)
     vf.store_align(kth_value_tile, idx_k, preg_b32, dist=pl.StoreDist.NORM_B16)
@@ -356,14 +366,14 @@ def collect_indices_gt_eq_vf(
 
     vf.store_unalign_post(output_idx_tile, align_idx)
 
+
 # ================================================================
 # Kernel Factory
 # ================================================================
 
 
 def make_quant_lightning_indexer_vf_kernel(
-    b: int, n1: int, n2: int, sq: int, sk: int, d: int,
-    topk: int, num_cores: int, sparse_mode: int
+    b: int, n1: int, n2: int, sq: int, sk: int, d: int, topk: int, num_cores: int, sparse_mode: int
 ):
     _gsize = n1 // n2
     assert n2 == 1, f"n2={n2} not supported; only n2=1 (MHA/GQA with single KV head) is supported."
@@ -373,7 +383,7 @@ def make_quant_lightning_indexer_vf_kernel(
     _s2_row_coeff = 1 if sparse_mode == 3 else 0
     _s2_sq_coeff = -1 if sparse_mode == 3 else 0
     _s2_const = 1 if sparse_mode == 3 else 0
-    _atten_mask_flag = (sparse_mode == 3)
+    _atten_mask_flag = sparse_mode == 3
     _input_dtype = pl.DT_FP8E4M3FN
     _group_size = n1 // n2
 
@@ -518,43 +528,56 @@ def make_quant_lightning_indexer_vf_kernel(
         # Vec reads via full-slot tile group (interleaved pingpong layout)
         mm1_vec_group = pl.make_tile_group(
             type=pl.TileType(shape=[m_half_runtime, TS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=[va_mm1_vec_ping, va_mm1_vec_pong], mutex_ids=[15, 16])
+            addrs=[va_mm1_vec_ping, va_mm1_vec_pong],
+            mutex_ids=[15, 16],
+        )
 
         pl.system.bar_all()
 
         with pl.section_cube():
             q_l1_db = pl.make_tile_group(
-                type=pl.TileType(shape=[m_cube_runtime, TD], dtype=_input_dtype,
-                                 target_memory=pl.MemorySpace.Mat),
-                addrs=ma_q0, mutex_ids=[0, 1])
+                type=pl.TileType(shape=[m_cube_runtime, TD], dtype=_input_dtype, target_memory=pl.MemorySpace.Mat),
+                addrs=ma_q0,
+                mutex_ids=[0, 1],
+            )
             k_l1_db = pl.make_tile_group(
-                type=pl.TileType(shape=[TD, TS], dtype=_input_dtype,
-                                 target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-                addrs=ma0, mutex_ids=[2, 3, 4])
+                type=pl.TileType(shape=[TD, TS], dtype=_input_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
+                addrs=ma0,
+                mutex_ids=[2, 3, 4],
+            )
             left_db = pl.make_tile_group(
-                type=pl.TileType(shape=[m_cube_runtime, TD], dtype=_input_dtype,
-                                 target_memory=pl.MemorySpace.Left, compact=1),
-                addrs=la0, mutex_ids=[5, 6])
+                type=pl.TileType(
+                    shape=[m_cube_runtime, TD], dtype=_input_dtype, target_memory=pl.MemorySpace.Left, compact=1
+                ),
+                addrs=la0,
+                mutex_ids=[5, 6],
+            )
             right_db = pl.make_tile_group(
-                type=pl.TileType(shape=[TD, TS], dtype=_input_dtype,
-                                 target_memory=pl.MemorySpace.Right, compact=1),
-                addrs=ra0, mutex_ids=[7, 8])
+                type=pl.TileType(shape=[TD, TS], dtype=_input_dtype, target_memory=pl.MemorySpace.Right, compact=1),
+                addrs=ra0,
+                mutex_ids=[7, 8],
+            )
 
             # ACC: single make_tile_group for matmul + fixpipe (auto_mutex handles M↔FIX sync)
             acc_group = pl.make_tile_group(
-                type=pl.TileType(shape=[m_cube_runtime, TS], dtype=pl.DT_FP32,
-                                 target_memory=pl.MemorySpace.Acc, compact=1),
-                addrs=[ca0, ca1], mutex_ids=[9, 10])
+                type=pl.TileType(
+                    shape=[m_cube_runtime, TS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, compact=1
+                ),
+                addrs=[ca0, ca1],
+                mutex_ids=[9, 10],
+            )
 
             # UB dst: ND0 and ND1 each as make_tile_group (auto_mutex handles FIX↔V sync)
             mm1_nd0_group = pl.make_tile_group(
-                type=pl.TileType(shape=[m_half_runtime, TS], dtype=pl.DT_FP32,
-                                 target_memory=pl.MemorySpace.Vec),
-                addrs=[va_mm1_vec_ping, va_mm1_vec_pong], mutex_ids=[11, 12])
+                type=pl.TileType(shape=[m_half_runtime, TS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+                addrs=[va_mm1_vec_ping, va_mm1_vec_pong],
+                mutex_ids=[11, 12],
+            )
             mm1_nd1_group = pl.make_tile_group(
-                type=pl.TileType(shape=[m_half_runtime, TS], dtype=pl.DT_FP32,
-                                 target_memory=pl.MemorySpace.Vec),
-                addrs=[va_mm1_vec_ping_hi, va_mm1_vec_pong_hi], mutex_ids=[13, 14])
+                type=pl.TileType(shape=[m_half_runtime, TS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+                addrs=[va_mm1_vec_ping_hi, va_mm1_vec_pong_hi],
+                mutex_ids=[13, 14],
+            )
 
             loop = 0
 
@@ -637,69 +660,92 @@ def make_quant_lightning_indexer_vf_kernel(
             # The DT_FP16 load buffers are make_tile_group so auto_mutex inserts the
             # MTE2(load)→V(cast) handshake and WAR reuse guard (replaces the manual
             weight_f16_group = pl.make_tile_group(
-                type=pl.TileType(shape=[sq_rows_per_sub, wq_col_pad], dtype=pl.DT_FP16,
-                                 target_memory=pl.MemorySpace.Vec),
-                addrs=[va_weight_f16], mutex_ids=[19])
+                type=pl.TileType(
+                    shape=[sq_rows_per_sub, wq_col_pad], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec
+                ),
+                addrs=[va_weight_f16],
+                mutex_ids=[19],
+            )
             weight_tile = pl.make_tile(
                 pl.TileType(shape=[sq_rows_per_sub, wq_col_pad], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-                addr=va_weight, size=vb_weight_sk
+                addr=va_weight,
+                size=vb_weight_sk,
             )
             qscale_f16_group = pl.make_tile_group(
-                type=pl.TileType(shape=[sq_rows_per_sub, wq_col_pad], dtype=pl.DT_FP16,
-                                 target_memory=pl.MemorySpace.Vec),
-                addrs=[va_qscale_f16], mutex_ids=[20])
+                type=pl.TileType(
+                    shape=[sq_rows_per_sub, wq_col_pad], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec
+                ),
+                addrs=[va_qscale_f16],
+                mutex_ids=[20],
+            )
             qscale_tile = pl.make_tile(
                 pl.TileType(shape=[sq_rows_per_sub, wq_col_pad], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-                addr=va_qscale, size=vb_weight_sk
+                addr=va_qscale,
+                size=vb_weight_sk,
             )
             # kscale: full-size tile (same shape as original for codegen compatibility).
             # DT_FP16 load buffer is a make_tile_group so auto_mutex inserts the
             # MTE2(load)→V(cast) handshake (replaces manual sync_src/sync_dst event_id=4).
             kscale_f16_group = pl.make_tile_group(
                 type=pl.TileType(shape=[1, sk_align128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-                addrs=[va_kscale_f16], mutex_ids=[21])
+                addrs=[va_kscale_f16],
+                mutex_ids=[21],
+            )
             kscale_f32_tile = pl.make_tile(
                 pl.TileType(shape=[1, sk_align128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-                addr=va_kscale_f32, size=vb_kscale_all_f32
+                addr=va_kscale_f32,
+                size=vb_kscale_all_f32,
             )
             # score_u16_sk: make_tile_group (auto_mutex handles V↔MTE3 sync)
             score_u16_sk_group = pl.make_tile_group(
                 type=pl.TileType(shape=[sq_rows_per_sub, TS], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec),
-                addrs=[va_score_u16_sk_ping, va_score_u16_sk_pong], mutex_ids=[17, 18])
+                addrs=[va_score_u16_sk_ping, va_score_u16_sk_pong],
+                mutex_ids=[17, 18],
+            )
             # score_u16_row: make_tile_group so auto_mutex inserts the MTE2(load)→V(vf)
             # handshake and the WAR reuse guard across trunks (replaces the manual
             score_u16_row_group = pl.make_tile_group(
                 type=pl.TileType(shape=[1, sk_align256], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec, pad=0),
-                addrs=[va_score_u16_row], mutex_ids=[22])
+                addrs=[va_score_u16_row],
+                mutex_ids=[22],
+            )
             hist_high_tile = pl.make_tile(
                 pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-                addr=tk_hist_high, size=1024
+                addr=tk_hist_high,
+                size=1024,
             )
             hist_low_tile = pl.make_tile(
                 pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-                addr=tk_hist_low, size=1024
+                addr=tk_hist_low,
+                size=1024,
             )
             sqz_idx_buf = pl.make_tile(
                 pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-                addr=tk_sqz_idx, size=1024
+                addr=tk_sqz_idx,
+                size=1024,
             )
             idx_high_tile = pl.make_tile(
                 pl.TileType(shape=[1, 64], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-                addr=tk_idx_high, size=256
+                addr=tk_idx_high,
+                size=256,
             )
             nk_value_tile = pl.make_tile(
                 pl.TileType(shape=[1, 64], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-                addr=tk_nk_value, size=256
+                addr=tk_nk_value,
+                size=256,
             )
             kth_value_tile = pl.make_tile(
                 pl.TileType(shape=[1, 64], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-                addr=tk_kth_value, size=256
+                addr=tk_kth_value,
+                size=256,
             )
             # DT_UINT16 collect buffer (VF Squeeze writes DT_UINT16, matching reference tmpIdxLocal).
             # make_tile_group so auto_mutex inserts the V(vf)→MTE3(store) handshake and the
             output_idx_group = pl.make_tile_group(
                 type=pl.TileType(shape=[1, _topk_output_buf_len], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec),
-                addrs=[tk_output_idx], mutex_ids=[23])
+                addrs=[tk_output_idx],
+                mutex_ids=[23],
+            )
 
             # Vec pre-sends two VEC_TO_CUBE signals so cube can start immediately
             # (mirrors reference: CrossCoreSetFlag(CROSS_VC_EVENT+0/1) at vec init)
@@ -761,9 +807,14 @@ def make_quant_lightning_indexer_vf_kernel(
 
                         mm1_slot = mm1_vec_group.next()
                         score_slot = score_u16_sk_group.next()
-                        reduce_and_cast_sk_vf(mm1_slot,
-                                              weight_tile, kscale_f32_tile[:, kscale_off:],
-                                              score_slot, g_size_static, wq_col_pad)
+                        reduce_and_cast_sk_vf(
+                            mm1_slot,
+                            weight_tile,
+                            kscale_f32_tile[:, kscale_off:],
+                            score_slot,
+                            g_size_static,
+                            wq_col_pad,
+                        )
 
                         pl.store(score_gm, score_slot, [core_id, sq_row_base, sk_off], order=[1, 2])
 
@@ -825,16 +876,22 @@ def make_quant_lightning_indexer_vf_kernel(
                                             pl.expands(score_row_slot, 0)
 
                                         pl.set_validshape(score_row_slot, [1, trunk_len_actual])
-                                        pl.load(score_row_slot, score_gm,
-                                                [core_id, row_within, trunk_start], order=[1, 2])
+                                        pl.load(
+                                            score_row_slot, score_gm, [core_id, row_within, trunk_start], order=[1, 2]
+                                        )
 
                                         histograms_high_vf(hist_high_tile, score_row_slot, hist_loop)
 
                                         bottom_k = pl.max(1, trunk_len_align256 - topk + 1)
                                         find_high_bin_and_histograms_low(
-                                            hist_low_tile, idx_high_tile, hist_high_tile,
-                                            score_row_slot, sqz_idx_buf, nk_value_tile,
-                                            bottom_k, hist_loop,
+                                            hist_low_tile,
+                                            idx_high_tile,
+                                            hist_high_tile,
+                                            score_row_slot,
+                                            sqz_idx_buf,
+                                            nk_value_tile,
+                                            bottom_k,
+                                            hist_loop,
                                         )
 
                                         find_kth_vf(
@@ -858,8 +915,8 @@ def make_quant_lightning_indexer_vf_kernel(
                                         pl.set_validshape(output_idx_slot, [1, topk])
                                         pl.store(sorted_indices, output_idx_slot, [b_id, row_abs, 0, 0])
 
-
     return quant_lightning_indexer_vf_kernel
+
 
 # ================================================================
 # Reference + Tests
@@ -913,7 +970,7 @@ def reference_quant_lightning_indexer(query, key, weights, q_scale, k_scale, top
     qk_u16 = qk_bf16.view(torch.int16).to(torch.int32) & 0xFFFF
 
     # FloatToSortableKey: NaN -> 0xFFFF, then XOR
-    is_nan = ((qk_u16 & 0x7FFF) > 0x7F80)
+    is_nan = (qk_u16 & 0x7FFF) > 0x7F80
     key = torch.where(is_nan, torch.tensor(0xFFFF, dtype=torch.int32), qk_u16)
 
     sign_bit = (key >> 15) & 1
@@ -928,10 +985,9 @@ def reference_quant_lightning_indexer(query, key, weights, q_scale, k_scale, top
     return indices, qk_reduced
 
 
-def _evaluate_topk_quality(npu_indices, ref_indices, ref_qk, topk, sk,
-                            recall_threshold=0.80,
-                            sparse_mode=0, sq=None,
-                            rows_to_sample=None):
+def _evaluate_topk_quality(
+    npu_indices, ref_indices, ref_qk, topk, sk, recall_threshold=0.80, sparse_mode=0, sq=None, rows_to_sample=None
+):
     """Score the NPU output against the reference top-k indices.
 
     Recall = |NPU top-k ∩ Ref top-k| / |Ref top-k|
@@ -1035,14 +1091,10 @@ def _evaluate_topk_quality(npu_indices, ref_indices, ref_qk, topk, sk,
         sorted_rows = sorted(row_recalls, key=lambda x: x[3])[:8]
         logging.info("  Lowest recall rows (top 8):")
         for bi, gi, si, recall, hit, ref_total in sorted_rows:
-            logging.info(f"    b={bi+1} n2={gi+1} sq={si+1}: recall={recall:.4f} (hit={hit}/{ref_total})")
+            logging.info(f"    b={bi + 1} n2={gi + 1} sq={si + 1}: recall={recall:.4f} (hit={hit}/{ref_total})")
 
-    assert valid_rate >= 0.5, (
-        f"valid_rate={valid_rate:.4f} too low"
-    )
-    assert mean_recall >= recall_threshold, (
-        f"Mean recall {mean_recall:.4f} below threshold {recall_threshold}"
-    )
+    assert valid_rate >= 0.5, f"valid_rate={valid_rate:.4f} too low"
+    assert mean_recall >= recall_threshold, f"Mean recall {mean_recall:.4f} below threshold {recall_threshold}"
 
     return {
         "valid_rate": valid_rate,
@@ -1053,6 +1105,7 @@ def _evaluate_topk_quality(npu_indices, ref_indices, ref_qk, topk, sk,
 
 @pytest.mark.soc("950")
 @pl.jit()
+@pypto.options(pass_options={"enable_slice": False})
 def test_quant_lightning_indexer_vf():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
@@ -1065,28 +1118,29 @@ def test_quant_lightning_indexer_vf():
     ]
 
     for b, n1, n2, sq, sk, d, topk, num_cores, sparse_mode, input_dtype in test_cases:
-        logging.info(f"\nCase: B={b} N1={n1} N2={n2} Sq={sq} Sk={sk} "
-                     f"topk={topk} dtype={input_dtype} sparse_mode={sparse_mode}")
+        logging.info(
+            f"\nCase: B={b} N1={n1} N2={n2} Sq={sq} Sk={sk} topk={topk} dtype={input_dtype} sparse_mode={sparse_mode}"
+        )
 
         np.random.seed(42)
 
         assert input_dtype == "fp8", f"input_dtype={input_dtype!r} not supported; only 'fp8' (FP8E4M3FN) is supported."
         torch_input_dtype = torch.float8_e4m3fn
-        query = torch.tensor(
-            np.random.uniform(-128, 127, (b, sq, n1, d)), dtype=torch.float32
-        ).to(torch_input_dtype).to(device)
-        key = torch.tensor(
-            np.random.uniform(-128, 127, (b, sk, n2, d)), dtype=torch.float32
-        ).to(torch_input_dtype).to(device)
-        weights = torch.tensor(
-            np.random.uniform(0, 0.01, (b, sq, n1)), dtype=torch.float32
-        ).to(torch.float16).to(device)
-        q_scale = torch.tensor(
-            np.random.uniform(0, 10, (b, sq, n1)), dtype=torch.float32
-        ).to(torch.float16).to(device)
-        k_scale = torch.tensor(
-            np.random.uniform(0, 10, (b, sk, n2)), dtype=torch.float32
-        ).to(torch.float16).to(device)
+        query = (
+            torch.tensor(np.random.uniform(-128, 127, (b, sq, n1, d)), dtype=torch.float32)
+            .to(torch_input_dtype)
+            .to(device)
+        )
+        key = (
+            torch.tensor(np.random.uniform(-128, 127, (b, sk, n2, d)), dtype=torch.float32)
+            .to(torch_input_dtype)
+            .to(device)
+        )
+        weights = (
+            torch.tensor(np.random.uniform(0, 0.01, (b, sq, n1)), dtype=torch.float32).to(torch.float16).to(device)
+        )
+        q_scale = torch.tensor(np.random.uniform(0, 10, (b, sq, n1)), dtype=torch.float32).to(torch.float16).to(device)
+        k_scale = torch.tensor(np.random.uniform(0, 10, (b, sk, n2)), dtype=torch.float32).to(torch.float16).to(device)
 
         sorted_indices = torch.full([b, sq, n2, topk], -1, device=device, dtype=torch.int16)
 
@@ -1094,13 +1148,20 @@ def test_quant_lightning_indexer_vf():
         score_gm = torch.zeros([num_cores, S1_BASE_SIZE, sk_aligned], device=device, dtype=torch.int16)
 
         kernel = make_quant_lightning_indexer_vf_kernel(
-            b, n1, n2, sq, sk, d, topk, num_cores, sparse_mode,
+            b,
+            n1,
+            n2,
+            sq,
+            sk,
+            d,
+            topk,
+            num_cores,
+            sparse_mode,
         )
 
         for run_i in range(10):
             sorted_indices.fill_(-1)
-            kernel[None, num_cores](
-                      query, key, weights, q_scale, k_scale, score_gm, sorted_indices)
+            kernel[None, num_cores](query, key, weights, q_scale, k_scale, score_gm, sorted_indices)
             torch.npu.synchronize()
             logging.info(f"  run {run_i} done")
 
@@ -1115,19 +1176,24 @@ def test_quant_lightning_indexer_vf():
         # Small cases: evaluate every row; large cases: sample to bound runtime.
         rows_to_sample = None if sq <= 2048 else 32
         metrics = _evaluate_topk_quality(
-            sorted_indices_i32, ref_indices, ref_qk, topk=topk, sk=sk,
+            sorted_indices_i32,
+            ref_indices,
+            ref_qk,
+            topk=topk,
+            sk=sk,
             recall_threshold=0.999,
-            sparse_mode=sparse_mode, sq=sq,
+            sparse_mode=sparse_mode,
+            sq=sq,
             rows_to_sample=rows_to_sample,
         )
 
         assert metrics['mean_recall'] >= 0.999, (
             f"FAIL: recall={metrics['mean_recall']:.4f}, score_ratio={metrics['mean_score_ratio']:.4f}"
         )
-        logging.info(f"  PASS  (recall={metrics['mean_recall']:.4f}, "
-              f"score_ratio={metrics['mean_score_ratio']:.4f})")
+        logging.info(f"  PASS  (recall={metrics['mean_recall']:.4f}, score_ratio={metrics['mean_score_ratio']:.4f})")
 
         torch.save(sorted_indices_i32, "pypto_Li_vf_sorted_indices.bin")
+
 
 if __name__ == "__main__":
     logging.info("QuantLightningIndexer VF Test")

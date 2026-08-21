@@ -26,6 +26,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -294,6 +296,7 @@ def per_channel_dequant_store_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("scale_value", [2.0, -1.0, 0.5])
+@pypto.options(pass_options={"enable_slice": False})
 def test_golden_per_tensor_int8(scale_value):
     """FP32->INT8 编译期 float scale，与 Torch golden 精确对比"""
     device = ST_DEVICE
@@ -316,6 +319,7 @@ def test_golden_per_tensor_int8(scale_value):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_golden_per_tensor_int8_saturation():
     """FP32->INT8 大 scale 饱和路径"""
     device = ST_DEVICE
@@ -338,6 +342,7 @@ def test_golden_per_tensor_int8_saturation():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_golden_per_tensor_relu():
     """FP32->INT8 编译期 float scale + ReLU 融合，与 Torch golden 对比"""
     device = ST_DEVICE
@@ -366,6 +371,7 @@ def test_golden_per_tensor_relu():
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("scale_value", [2.0, 0.5])
+@pypto.options(pass_options={"enable_slice": False})
 def test_golden_dynamic_scale(scale_value):
     """动态 scale（运行时 INT32 位编码），与 Torch golden 对比"""
     device = ST_DEVICE
@@ -393,6 +399,7 @@ def test_golden_dynamic_scale(scale_value):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_golden_per_channel_int8():
     """per-channel 量化（uniform scale tensor），与 Torch golden 对比"""
     device = ST_DEVICE
@@ -416,6 +423,7 @@ def test_golden_per_channel_int8():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_golden_per_channel_varying():
     """per-channel 量化（逐列不同 scale），与 Torch golden 对比"""
     device = ST_DEVICE
@@ -440,6 +448,7 @@ def test_golden_per_channel_varying():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_golden_per_channel_dequant_fp16():
     """per-channel 反量化（INT32 Acc -> FP16），与 Torch golden 对比"""
     device = ST_DEVICE

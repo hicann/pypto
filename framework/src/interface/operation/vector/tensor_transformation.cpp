@@ -1686,16 +1686,12 @@ Tensor Cat(const std::vector<Tensor>& tensors, int axis)
 
     auto format = tensors[0].Format();
     Tensor result(tensors[0].GetDataType(), resultShape, "", format);
-    Tensor tmp(tensors[0].GetDataType(), resultShape, "", format);
-    auto& function = *Program::GetInstance().GetCurrentFunction();
-    std::vector<int64_t> offset(shapeSize, 0);
+    std::vector<SymbolicScalar> offset(shapeSize, 0);
     for (auto tensor : tensors) {
-        auto tmpView = tmp.GetStorage()->View(function, tensor.GetShape(), offset);
-        InnerConcatNew(*Program::GetInstance().GetCurrentFunction(), tensor.GetStorage(), tmpView);
-        offset[axis] += tensor.GetShape()[axis];
+        auto materialized = Assign(tensor);
+        Assemble(materialized, offset, result);
+        offset[axis] = offset[axis] + tensor.GetShape()[axis];
     }
-    auto& op = function.AddOperation(Opcode::OP_ASSEMBLE, {tmp.GetStorage()}, {result.GetStorage()});
-    op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>(shapeSize, 0)));
 
     return result;
 }

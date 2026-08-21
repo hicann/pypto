@@ -26,6 +26,8 @@ from pypto_pro.language.parser.diagnostics._exceptions import ParserSyntaxError,
 import pytest
 import torch
 
+import pypto
+
 
 def _mkl() -> "pl.TileType":
     return pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024)
@@ -33,7 +35,6 @@ def _mkl() -> "pl.TileType":
 
 def _make_acc():
     return pl.make_tile(_mkl(), addr=0x0000, size=16384)
-
 
 
 def _make_qk() -> tuple[torch.Tensor, torch.Tensor]:
@@ -49,6 +50,7 @@ def _make_qk() -> tuple[torch.Tensor, torch.Tensor]:
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_per_channel_with_relu():
     """per-channel scale 不能与 relu_pre_mode 同时使用"""
 
@@ -71,6 +73,7 @@ def test_err_per_channel_with_relu():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_per_channel_with_phase():
     """per-channel scale 不能与 phase 同时使用"""
 
@@ -93,6 +96,7 @@ def test_err_per_channel_with_phase():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_tensor_rejected():
     """scale 传 GM Tensor 应在解析期被拒绝（Tensor 自动路径已移除）"""
 
@@ -115,6 +119,7 @@ def test_err_scale_tensor_rejected():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_uint8_output():
     """scale 量化到 UINT8 输出不被硬件支持，应在解析期被拒绝（而非设备 507015）"""
 
@@ -135,6 +140,7 @@ def test_err_scale_uint8_output():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_fp32_to_bf16():
     """FP32→BF16 带 scale 不被硬件支持（仅支持无 scale 截断），应在解析期拒绝"""
 
@@ -155,6 +161,7 @@ def test_err_scale_fp32_to_bf16():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_int32_to_bf16():
     """INT32→BF16 带 scale 不被硬件支持（硬件只支持 INT32→FP16 反量化），应在解析期拒绝"""
 
@@ -179,6 +186,7 @@ def test_err_scale_int32_to_bf16():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_tile_not_scaling():
     """scale 传非 Scaling 空间的 Tile 应在解析期被拒绝"""
 
@@ -201,6 +209,7 @@ def test_err_scale_tile_not_scaling():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_per_channel_move_dual_mode():
     """per-channel scale 在 move 时只支持 single-mode"""
 
@@ -230,6 +239,7 @@ def test_err_per_channel_move_dual_mode():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_string():
     """scale 不能是字符串"""
 
@@ -250,6 +260,7 @@ def test_err_scale_string():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_list():
     """scale 不能是列表"""
 
@@ -270,6 +281,7 @@ def test_err_scale_list():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_dict():
     """scale 不能是字典"""
     # 注意：dict 字面量在 AST 解析阶段就抛 ParserTypeError早于
@@ -292,6 +304,7 @@ def test_err_scale_dict():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_none_type():
     """scale 不能是自定义对象"""
 
@@ -307,6 +320,7 @@ def test_err_scale_none_type():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_unsupported_scalar_dtype():
     """运行时标量只支持 FP32 / INT32 / INT64，FP16/BF16 等其余 dtype 应在解析期拒绝"""
 
@@ -334,6 +348,7 @@ def test_err_scale_unsupported_scalar_dtype():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_per_channel_1d_tile():
     """per-channel scale tile 必须是 2D，不能是 1D"""
 
@@ -356,6 +371,7 @@ def test_err_per_channel_1d_tile():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_per_channel_3d_tile():
     """per-channel scale tile 必须是 2D，不能是 3D"""
 
@@ -378,6 +394,7 @@ def test_err_per_channel_3d_tile():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_per_channel_0d_tile():
     """per-channel scale tile 必须是 2D，不能是 0D scalar"""
 
@@ -400,6 +417,7 @@ def test_err_per_channel_0d_tile():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_per_channel_n1_tile():
     """[N, 1] 逐行 scale 不被硬件 FixPipe 支持，应在解析期被拒绝"""
 
@@ -422,6 +440,7 @@ def test_err_per_channel_n1_tile():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_per_channel_col_not_aligned():
     """[1, N] 的 N 必须为 16 的倍数（128B 对齐），否则应在解析期被拒绝"""
 
@@ -449,6 +468,7 @@ def test_err_per_channel_col_not_aligned():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_legacy_pre_quant_scalar():
     """旧参数 pre_quant_scalar 已废弃，应抛出 TypeError"""
 
@@ -469,6 +489,7 @@ def test_err_legacy_pre_quant_scalar():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_legacy_fp_tile():
     """旧参数 fp_tile 已废弃，应抛出 TypeError（per-channel 统一走 scale= 入口）"""
 

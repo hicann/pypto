@@ -29,6 +29,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -47,7 +49,7 @@ def _make_scale_tensor(device: str, scale_values: list, shape: tuple = (1, 64)) 
     scale_bits_list = []
     for scale_value in scale_values:
         scale_bits = struct.unpack("!I", struct.pack("!f", scale_value))[0]
-        scale_bits |= (1 << 46)  # signed flag for INT8 output
+        scale_bits |= 1 << 46  # signed flag for INT8 output
         scale_bits_list.append(scale_bits)
 
     scale_tensor = torch.tensor(scale_bits_list, dtype=torch.int64, device=device)
@@ -102,6 +104,7 @@ def store_tile_basic_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_store_tile_basic():
     """Test store_tile basic scenario."""
     device = ST_DEVICE
@@ -180,6 +183,7 @@ def store_tile_offset_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("tile_row,tile_col", [(0, 1), (1, 0), (1, 1)], ids=["0_1", "1_0", "1_1"])
+@pypto.options(pass_options={"enable_slice": False})
 def test_store_tile_offset(tile_row, tile_col):
     """store_tile with different tile offsets (single K=64 block product)."""
     device = ST_DEVICE
@@ -255,6 +259,7 @@ def store_tile_relu_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_store_tile_relu():
     """Test store_tile + ReLU fusion."""
     device = ST_DEVICE
@@ -358,6 +363,7 @@ def _per_channel_scale_values(pattern: str) -> list:
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("pattern", ["varying", "alternating", "extreme", "zero", "negative"])
+@pypto.options(pass_options={"enable_slice": False})
 def test_per_channel_scale_pattern(pattern):
     """Per-channel (scale=Tile) store with different per-column scale patterns."""
     device = ST_DEVICE
@@ -452,6 +458,7 @@ def per_channel_move_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_per_channel_move_varying_scale():
     """Test per-channel move with varying scale values."""
     device = ST_DEVICE
@@ -542,6 +549,7 @@ def per_channel_store_tile_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_per_channel_store_tile():
     """Test per-channel store_tile basic scenario."""
     device = ST_DEVICE

@@ -166,6 +166,7 @@ def _run_quant_mx_onboard(case: _QuantMXOnboardCase) -> None:
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_quant_mx_fp32_2d_onboard():
     input_shape = [4, 256]
     view_shape = [2, 256]
@@ -197,6 +198,7 @@ def test_quant_mx_fp32_2d_onboard():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_quant_mx_e2m1_nv_fp16_2d_onboard():
     input_shape = [1, 128]
     view_shape = [1, 128]

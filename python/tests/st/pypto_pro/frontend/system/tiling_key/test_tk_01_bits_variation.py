@@ -23,6 +23,8 @@ from pypto_pro.runtime.tilingkey import TilingKeyField
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -41,6 +43,8 @@ class TkBits2:
 
 class TkBits4:
     OpType = TilingKeyField(bits=4, values=list(range(16)))
+
+
 # ---- 公共 kernel 模板 --------------------------------------------------
 
 
@@ -115,6 +119,8 @@ def kernel_bits1(
                 pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
                 pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
                 pl.store(z, tile_c, [i, j])
+
+
 kernel_bits2 = _make_kernel(TkBits2)
 kernel_bits4 = _make_kernel(TkBits4)
 # ---- 辅助函数 -----------------------------------------------------------
@@ -138,21 +144,25 @@ def _run_npu_test(kernel, key, ref_fn, shape=(128, 256)):
 
 # ---- 简单用例 (NPU 全流程验证) : bits=1, 2, 4 -------------------------
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bits_1_use_mask_0_add():
     _run_npu_test(kernel_bits1, {"UseMask": 0}, lambda a, b: a + b)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bits_1_use_mask_1_addsub():
     _run_npu_test(kernel_bits1, {"UseMask": 1}, lambda a, b: b)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bits_2_sub():
     _run_npu_test(kernel_bits2, {"OpType": 1}, lambda a, b: a - b)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bits_4_mul():
     _run_npu_test(kernel_bits4, {"OpType": 2}, lambda a, b: a * b)
 

@@ -636,6 +636,7 @@ def run_fixpipe_bias_test(case: dict):
 @pytest.mark.parametrize(
     "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in BIAS_FIXPIPE_TESTS]
 )
+@pypto.options(pass_options={"enable_slice": True})
 def test_fixpipe_bias(case: dict):
     run_fixpipe_bias_test(case)
 
@@ -652,8 +653,9 @@ def run_batch_matmul_demo(run_mode):
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
     @pypto.frontend.jit(
-        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1}, runtime_options={"run_mode": mode},
-)
+        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1},
+        runtime_options={"run_mode": mode},
+    )
     def batch_matmul_demo_kernel(
         a: pypto.Tensor([], pypto.DT_INT8),
         b: pypto.Tensor([], pypto.DT_INT8),

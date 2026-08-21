@@ -39,6 +39,8 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 import torch  # noqa: E402
 
+import pypto  # noqa: E402
+
 logging.basicConfig(level=logging.INFO, format='%(message)s', force=True)
 
 
@@ -358,36 +360,42 @@ def run_test(batch_size=None, num_heads=None, s1_size=None, s2_size=None, dim=No
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_01():
     """batch=8, heads=8, s1=320, s2=320, dim=64"""
     return run_test(batch_size=8, num_heads=8, s1_size=320, s2_size=320, dim=64)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_02():
     """batch=1, heads=8, s1=4096, s2=4096, dim=128"""
     return run_test(batch_size=1, num_heads=8, s1_size=4096, s2_size=4096, dim=128)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_03():
     """batch=8, heads=16, s1=32, s2=32, dim=32"""
     return run_test(batch_size=8, num_heads=16, s1_size=32, s2_size=32, dim=32)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_04():
     """batch=8, heads=16, s1=64, s2=64, dim=32"""
     return run_test(batch_size=8, num_heads=16, s1_size=64, s2_size=64, dim=32)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_05():
     """batch=8, heads=8, s1=32, s2=32, dim=64"""
     return run_test(batch_size=8, num_heads=8, s1_size=32, s2_size=32, dim=64)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_06():
     """batch=8, heads=4, s1=64, s2=64, dim=128"""
     return run_test(batch_size=8, num_heads=4, s1_size=64, s2_size=64, dim=128)

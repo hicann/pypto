@@ -21,6 +21,8 @@ from pypto_pro.runtime.tilingkey import TilingKeyField
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -77,18 +79,22 @@ def _run_npu_test(key, ref_fn, shape=(128, 256)):
     torch.npu.synchronize()
     z_ref = ref_fn(x.float(), y.float()).half()
     torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
+
+
 # ---- 反例：总 bits > 64 ----------------------------------------------------
 # ---- 正例：总 bits == 64 ---------------------------------------------------
 # ---- 简单用例 (NPU 全流程验证 64-bit 正例) ---------------------------------
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_64bits_add_npu():
     """64-bit TilingKey, A=0 走 add 分支"""
     _run_npu_test({"a": 0, "b": 0}, lambda a, b: a + b)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_64bits_sub_npu():
     """64-bit TilingKey, A=1 走 sub 分支"""
     _run_npu_test({"a": 1, "b": 0}, lambda a, b: a - b)

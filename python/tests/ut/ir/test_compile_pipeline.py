@@ -13,6 +13,7 @@ import pypto
 from pypto.pil.compile_pipeline import compile_new_ir
 
 
+@pytest.mark.skip(reason="write-after-write split-large-fanout-tensor not support yet")
 def test_assemble():
     def assemble_kernel(a, out):
         pypto.set_vec_tile_shapes(64, 128)

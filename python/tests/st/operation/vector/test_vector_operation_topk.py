@@ -12,7 +12,10 @@
 
 from test_case_class_vector_operations import TopKTestCase
 
+import pypto
 
+
+@pypto.options(pass_options={"enable_slice": True})
 def test_tensor_topk():
     original_shape = (64, 64)
     k = 10

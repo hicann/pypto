@@ -611,6 +611,16 @@ static Status ProcessVisitedViewOps(Function& function, const std::unordered_map
         auto oOperand = op->GetOutputOperand(0);
         if (iOperand == srcTensor)
             continue; // 开头的VIEW不需要插入NOP来控制顺序
+        bool hasNonInplaceConsumer = false;
+        for (auto consumer : oOperand->GetConsumers()) {
+            if (consumer->GetOpcode() != Opcode::OP_NOP && !consumer->HasAttribute(OpAttributeKey::inplaceIdx)) {
+                hasNonInplaceConsumer = true;
+                break;
+            }
+        }
+        if (hasNonInplaceConsumer) {
+            continue;
+        }
         if (iOperand->GetRawTensor() != srcTensor->GetRawTensor()) {
             APASS_LOG_ERROR_F(Elements::Operation, "RawTensor mismatch for input operand of operation %d",
                               op->GetOpMagic());

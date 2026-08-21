@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -53,10 +55,8 @@ def fillpad_kernel(
     x: pl.Tensor[[8, 8], pl.DT_INT32],
     z: pl.Tensor[[8, 8], pl.DT_INT32],
 ):
-    src_type = pl.TileType(shape=[8, 8], dtype=pl.DT_INT32,
-                           target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
-    dst_type = pl.TileType(shape=[8, 8], dtype=pl.DT_INT32,
-                           target_memory=pl.MemorySpace.Vec, pad=pl.TilePad.zero)
+    src_type = pl.TileType(shape=[8, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    dst_type = pl.TileType(shape=[8, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec, pad=pl.TilePad.zero)
     src = pl.make_tile_group(type=src_type, addrs=0x0000, mutex_ids=[0])
     dst = pl.make_tile_group(type=dst_type, addrs=0x0100, mutex_ids=[1])
     with pl.section_vector():
@@ -69,6 +69,7 @@ def fillpad_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fillpad():
     device = ST_DEVICE
     _require_a5(device)
@@ -87,10 +88,8 @@ def fillpad_expand_kernel(
     x: pl.Tensor[[8, 8], pl.DT_INT32],
     z: pl.Tensor[[8, 16], pl.DT_INT32],
 ):
-    src_type = pl.TileType(shape=[8, 8], dtype=pl.DT_INT32,
-                           target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
-    dst_type = pl.TileType(shape=[8, 16], dtype=pl.DT_INT32,
-                           target_memory=pl.MemorySpace.Vec, pad=pl.TilePad.zero)
+    src_type = pl.TileType(shape=[8, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    dst_type = pl.TileType(shape=[8, 16], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec, pad=pl.TilePad.zero)
     src = pl.make_tile_group(type=src_type, addrs=0x0000, mutex_ids=[0])
     dst = pl.make_tile_group(type=dst_type, addrs=0x0100, mutex_ids=[1])
     with pl.section_vector():
@@ -103,6 +102,7 @@ def fillpad_expand_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fillpad_expand():
     device = ST_DEVICE
     _require_a5(device)
@@ -122,11 +122,10 @@ def fillpad_inplace_kernel(
     x: pl.Tensor[[8, 8], pl.DT_INT32],
     z: pl.Tensor[[8, 8], pl.DT_INT32],
 ):
-    src_type = pl.TileType(shape=[8, 8], dtype=pl.DT_INT32,
-                           target_memory=pl.MemorySpace.Vec,
-                           pad=pl.TilePad.zero, valid_shape=[-1, -1])
-    dst_type = pl.TileType(shape=[8, 8], dtype=pl.DT_INT32,
-                           target_memory=pl.MemorySpace.Vec, pad=pl.TilePad.zero)
+    src_type = pl.TileType(
+        shape=[8, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec, pad=pl.TilePad.zero, valid_shape=[-1, -1]
+    )
+    dst_type = pl.TileType(shape=[8, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec, pad=pl.TilePad.zero)
     src = pl.make_tile_group(type=src_type, addrs=0x0000, mutex_ids=[0])
     dst = pl.make_tile_group(type=dst_type, addrs=0x0000, mutex_ids=[1])
     with pl.section_vector():
@@ -139,6 +138,7 @@ def fillpad_inplace_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fillpad_inplace():
     device = ST_DEVICE
     _require_a5(device)

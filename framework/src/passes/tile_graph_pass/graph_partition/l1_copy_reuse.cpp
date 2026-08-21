@@ -16,6 +16,7 @@
 #include "l1_copy_reuse.h"
 #include <algorithm>
 
+#include "interface/configs/config_manager_ng.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/pass_utils.h"
 
@@ -103,7 +104,7 @@ inline std::vector<uint64_t> GetGMInputFeature(const Operation& op)
     }
     std::vector<uint64_t> vec = {static_cast<uint64_t>(ioperand->GetRawTensor()->GetRawMagic())};
     std::vector<OpImmediate> opImmList;
-    if (op.GetOpcode() == Opcode::OP_VIEW) {
+    if (op.GetOpcode() == config::GetSliceOpcode()) {
         std::shared_ptr<ViewOpAttribute> attr = std::static_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
         opImmList = OpImmediate::Specified(attr->GetFromTensorOffset());
     } else if (op.GetOpcode() == Opcode::OP_CONVERT) {
@@ -134,7 +135,7 @@ bool L1CopyInReuseRunner::CanReuse(const Operation& op)
 {
     if (op.GetIOperands().size() != 0 && op.GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
         op.GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
-        if (op.GetOpcode() == Opcode::OP_VIEW || op.GetOpcode() == Opcode::OP_CONVERT) {
+        if (op.GetOpcode() == config::GetSliceOpcode() || op.GetOpcode() == Opcode::OP_CONVERT) {
             return true;
         }
     }
@@ -1116,7 +1117,8 @@ Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vect
 void L1CopyInReuseRunner::RemoveUselessViews(Function& func) const
 {
     for (auto& op : func.Operations(false)) {
-        if (op.GetOpcode() == Opcode::OP_VIEW && op.GetIOperands().size() == 1 && op.GetOOperands().size() == 1) {
+        if (op.GetOpcode() == config::GetSliceOpcode() && op.GetIOperands().size() == 1 &&
+            op.GetOOperands().size() == 1) {
             auto input = op.GetIOperands()[0];
             auto output = op.GetOOperands()[0];
             if (func.IsFromInCast(input) || func.IsFromOutCast(output)) {
@@ -1180,7 +1182,8 @@ Status L1CopyInReuseMerge::CheckOpListValid(Function& func) const
         if (opOriList[i].GetIOperands().size() != 0 &&
             opOriList[i].GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
             opOriList[i].GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
-            if (opOriList[i].GetOpcode() == Opcode::OP_VIEW || opOriList[i].GetOpcode() == Opcode::OP_CONVERT ||
+            if (opOriList[i].GetOpcode() == config::GetSliceOpcode() ||
+                opOriList[i].GetOpcode() == Opcode::OP_CONVERT ||
                 opOriList[i].GetOpcode() == Opcode::OP_L1_COPY_IN_CONV) {
                 // 符合预期且合法
                 continue;

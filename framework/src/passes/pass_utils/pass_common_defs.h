@@ -20,12 +20,14 @@
 
 namespace npu {
 namespace tile_fwk {
+enum class Opcode;
 struct AssembleOp {
     MemoryType from;
     std::vector<int64_t> toOffset;
     LogicalTensorPtr input;
     LogicalTensorPtr output;
     const Operation* originOp = nullptr;
+    Opcode opcode;
 };
 
 struct ViewOp {

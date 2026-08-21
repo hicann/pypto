@@ -24,7 +24,8 @@
 
 namespace npu::tile_fwk {
 
-const std::unordered_set<Opcode> nodeScopeSkipCode{Opcode::OP_ASSEMBLE, Opcode::OP_VIEW};
+const std::unordered_set<Opcode> nodeScopeSkipCode{Opcode::OP_CONTRACT, Opcode::OP_SLICE, Opcode::OP_ASSEMBLE,
+                                                   Opcode::OP_VIEW};
 
 uint64_t OperationGraphInfo::GetHash(const Operation* op) const
 {
@@ -194,9 +195,9 @@ Status NodeGraphInfo::MergeSrcToDstIsland(const std::shared_ptr<OperationGraphIn
                                    operationGraphInfo->opCoreType_[dstParent]};
     bool isAICPUandVIEW = false;
     isAICPUandVIEW = isAICPUandVIEW || (operationGraphInfo->opCoreType_[src] == OpCoreType::AICPU &&
-                                        operationGraphInfo->opList_[dst]->GetOpcode() == Opcode::OP_VIEW);
+                                        IsViewLike(operationGraphInfo->opList_[dst]->GetOpcode()));
     isAICPUandVIEW = isAICPUandVIEW || (operationGraphInfo->opCoreType_[dst] == OpCoreType::AICPU &&
-                                        operationGraphInfo->opList_[src]->GetOpcode() == Opcode::OP_VIEW);
+                                        IsViewLike(operationGraphInfo->opList_[src]->GetOpcode()));
     bool isAICPUandAssemble = false;
     // HUB只能和View/Assemble在一张子图中
     bool hubWithViewAssemble = false;
@@ -207,16 +208,16 @@ Status NodeGraphInfo::MergeSrcToDstIsland(const std::shared_ptr<OperationGraphIn
         auto srcOpCode = operationGraphInfo->opList_[src]->GetOpcode();
         auto dstOpCode = operationGraphInfo->opList_[dst]->GetOpcode();
         if (srcOpCoreType != OpCoreType::HUB) {
-            hubWithViewAssemble = (srcOpCode == Opcode::OP_VIEW || srcOpCode == Opcode::OP_ASSEMBLE);
+            hubWithViewAssemble = IsViewLike(srcOpCode) || IsAssembleLike(srcOpCode);
         }
         if (dstOpCoreType != OpCoreType::HUB) {
-            hubWithViewAssemble = (dstOpCode == Opcode::OP_VIEW || dstOpCode == Opcode::OP_ASSEMBLE);
+            hubWithViewAssemble = IsViewLike(dstOpCode) || IsAssembleLike(dstOpCode);
         }
     }
     isAICPUandAssemble = isAICPUandAssemble || (operationGraphInfo->opCoreType_[src] == OpCoreType::AICPU &&
-                                                operationGraphInfo->opList_[dst]->GetOpcode() == Opcode::OP_ASSEMBLE);
+                                                IsAssembleLike(operationGraphInfo->opList_[dst]->GetOpcode()));
     isAICPUandAssemble = isAICPUandAssemble || (operationGraphInfo->opCoreType_[dst] == OpCoreType::AICPU &&
-                                                operationGraphInfo->opList_[src]->GetOpcode() == Opcode::OP_ASSEMBLE);
+                                                IsAssembleLike(operationGraphInfo->opList_[src]->GetOpcode()));
     if ((!hubWithViewAssemble) && (!isAICPUandVIEW) && (!isAICPUandAssemble) &&
         (!operationGraphInfo->CoreTypeMergeable(coreTypes))) {
         APASS_LOG_ERROR_F(Elements::Operation,
@@ -364,7 +365,7 @@ bool NodeGraphInfo::CheckScopeNotMergeable(Operation& op)
 
 bool NodeGraphInfo::CheckUbToUbWithDynOffset(Operation& op)
 {
-    if (op.GetOpcode() != Opcode::OP_VIEW && op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+    if (!IsViewLike(op.GetOpcode()) && !IsAssembleLike(op.GetOpcode())) {
         return false;
     }
 
@@ -381,12 +382,12 @@ bool NodeGraphInfo::CheckUbToUbWithDynOffset(Operation& op)
     }
 
     bool hasDynOffset = false;
-    if (op.GetOpcode() == Opcode::OP_VIEW) {
+    if (IsViewLike(op.GetOpcode())) {
         auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
         if (viewAttr && !viewAttr->GetFromDynOffset().empty()) {
             hasDynOffset = true;
         }
-    } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+    } else if (IsAssembleLike(op.GetOpcode())) {
         auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
         if (assembleAttr && !assembleAttr->GetToDynOffset().empty()) {
             hasDynOffset = true;
@@ -405,14 +406,14 @@ bool NodeGraphInfo::CheckUbToUbWithDynOffset(Operation& op)
 
 bool NodeGraphInfo::CheckViewAssembleOffset(Operation& op)
 {
-    if (op.GetOpcode() != Opcode::OP_VIEW && op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+    if (!IsViewLike(op.GetOpcode()) && !IsAssembleLike(op.GetOpcode())) {
         return false;
     }
 
     std::string offsetStr;
     std::string dynOffsetStr;
 
-    if (op.GetOpcode() == Opcode::OP_VIEW) {
+    if (IsViewLike(op.GetOpcode())) {
         auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
         if (!viewAttr) {
             return false;
@@ -425,7 +426,7 @@ bool NodeGraphInfo::CheckViewAssembleOffset(Operation& op)
         for (auto& val : fromDynOffset) {
             dynOffsetStr += val.Dump() + ",";
         }
-    } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+    } else if (IsAssembleLike(op.GetOpcode())) {
         auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
         if (!assembleAttr) {
             return false;
@@ -601,9 +602,8 @@ Status SuperNodeGraphBuilder::BuildOpGraph(const std::vector<Operation*>& opList
 
 inline bool IsL0cToL1MoveOp(Operation* op)
 {
-    return (op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_ASSEMBLE) &&
-           op->GetOOperands().size() > 0 && op->GetIOperands().size() > 0 &&
-           op->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
+    return (IsViewLike(op->GetOpcode()) || IsAssembleLike(op->GetOpcode())) && op->GetOOperands().size() > 0 &&
+           op->GetIOperands().size() > 0 && op->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
            op->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1;
 }
 
@@ -628,7 +628,7 @@ bool SuperNodeGraphBuilder::L1CopyInCombine(const std::shared_ptr<OperationGraph
     }
     if (IsL0cToL1MoveOp(opList[i])) {
         for (auto outNode : operationInfo->outGraph_[i]) {
-            if (opList[i]->GetOpcode() == Opcode::OP_ASSEMBLE && IsCubeLocalLoad(opList[outNode])) {
+            if (IsAssembleLike(opList[i]->GetOpcode()) && IsCubeLocalLoad(opList[outNode])) {
                 continue;
             }
             mergePair.emplace_back(outNode, i);
@@ -702,7 +702,7 @@ bool SuperNodeGraphBuilder::AssembleCombine(const std::shared_ptr<OperationGraph
         return false;
     }
     // assemble 特殊处理, assemble到local tensor，需要将这些assemble统一island
-    if (opList[i]->GetOpcode() == Opcode::OP_ASSEMBLE) {
+    if (IsAssembleLike(opList[i]->GetOpcode())) {
         if (opList[i]->GetOOperands().empty()) {
             return false;
         }
@@ -783,7 +783,7 @@ bool SuperNodeGraphBuilder::MulAccCombine(const std::shared_ptr<OperationGraphIn
             }
         }
         for (auto outOp : operationInfo->outGraph_[i]) {
-            if (opList[outOp]->GetOpcode() == Opcode::OP_VIEW && !opList[outOp]->GetOOperands().empty() &&
+            if (IsViewLike(opList[outOp]->GetOpcode()) && !opList[outOp]->GetOOperands().empty() &&
                 opList[outOp]->GetOOperands().front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0C) {
                 mergePair.emplace_back(i, outOp);
                 APASS_LOG_DEBUG_F(Elements::Operation, "Combine MatMul %d and View %d in building SuperNode.",
@@ -860,12 +860,12 @@ inline bool FindScopeFromConsumers(Operation* op, Operation::ScopeInfo& foundSco
 
 inline void PropagateScopeInfo(std::vector<Operation*>& opList)
 {
-    // ASSEMBLE inherits scope from producers, VIEW from consumers.
+    // Assemble-like ops inherit scope from producers, view-like ops from consumers.
     // Pending list is in topological order; reversing deferred before retry
-    // resolves VIEW chains (tail-first) in one additional pass.
+    // resolves view-like chains (tail-first) in one additional pass.
     std::vector<Operation*> pending;
     for (Operation* op : opList) {
-        if (op->GetOpcode() != Opcode::OP_ASSEMBLE && op->GetOpcode() != Opcode::OP_VIEW) {
+        if (!IsAssembleLike(op->GetOpcode()) && !IsViewLike(op->GetOpcode())) {
             continue;
         }
         if (op->GetScopeId() == -1) {
@@ -873,8 +873,8 @@ inline void PropagateScopeInfo(std::vector<Operation*>& opList)
             continue;
         }
         Operation::ScopeInfo neighbourScope{};
-        bool found = (op->GetOpcode() == Opcode::OP_ASSEMBLE) ? FindScopeFromProducers(op, neighbourScope) :
-                                                                FindScopeFromConsumers(op, neighbourScope);
+        bool found = IsAssembleLike(op->GetOpcode()) ? FindScopeFromProducers(op, neighbourScope) :
+                                                       FindScopeFromConsumers(op, neighbourScope);
         if (found && neighbourScope.scopeId != op->GetScopeId()) {
             pending.push_back(op);
         }
@@ -884,8 +884,8 @@ inline void PropagateScopeInfo(std::vector<Operation*>& opList)
         std::vector<Operation*> deferred;
         for (Operation* op : pending) {
             Operation::ScopeInfo foundScope{};
-            bool found = (op->GetOpcode() == Opcode::OP_ASSEMBLE) ? FindScopeFromProducers(op, foundScope) :
-                                                                    FindScopeFromConsumers(op, foundScope);
+            bool found = IsAssembleLike(op->GetOpcode()) ? FindScopeFromProducers(op, foundScope) :
+                                                           FindScopeFromConsumers(op, foundScope);
             if (found && foundScope.scopeId != op->GetScopeId()) {
                 op->SetScopeInfo(foundScope);
             } else if (!found) {

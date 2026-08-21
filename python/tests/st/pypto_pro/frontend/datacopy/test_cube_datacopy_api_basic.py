@@ -20,6 +20,8 @@ from pypto_pro.language.parser.diagnostics._exceptions import ParserSyntaxError
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -48,6 +50,7 @@ def _inputs(device, shape, dtype=torch.float16):
 # Section 1: Basic — FP16, BF16, FP32
 # =====================================================================================
 
+
 @pl.jit(auto_mutex=True)
 def call_kernel_basic_fp16(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
@@ -56,19 +59,29 @@ def call_kernel_basic_fp16(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -91,19 +104,29 @@ def call_kernel_basic_bf16(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -126,19 +149,29 @@ def call_kernel_basic_fp32(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -157,6 +190,7 @@ def call_kernel_basic_fp32(
 # Section 2: Offsets — load/store row, col, both + load_tile/store_tile combined
 # =====================================================================================
 
+
 @pl.jit(auto_mutex=True)
 def call_kernel_offset_row(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
@@ -165,19 +199,29 @@ def call_kernel_offset_row(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -200,19 +244,29 @@ def call_kernel_offset_col(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -235,19 +289,29 @@ def call_kernel_offset_both(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -270,19 +334,29 @@ def call_kernel_tile_offset(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -301,6 +375,7 @@ def call_kernel_tile_offset(
 # Section 3: Layout / is_transpose
 # =====================================================================================
 
+
 @pl.jit(auto_mutex=True)
 def call_kernel_dn_transpose(
     k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
@@ -309,19 +384,29 @@ def call_kernel_dn_transpose(
 ):
     k_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     q_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     k_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     q_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_k = k_l1.current()
         cur_q = q_l1.current()
@@ -340,6 +425,7 @@ def call_kernel_dn_transpose(
 # Section 4: 4D tensor + tile_dims
 # =====================================================================================
 
+
 @pl.jit(auto_mutex=True)
 def call_kernel_4d_tile_dims(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
@@ -348,19 +434,29 @@ def call_kernel_4d_tile_dims(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -379,6 +475,7 @@ def call_kernel_4d_tile_dims(
 # Section 4a: Negative test kernels — store/store_tile with descending order
 # =====================================================================================
 
+
 @pl.jit(auto_mutex=True)
 def call_kernel_store_descending_order(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
@@ -386,16 +483,24 @@ def call_kernel_store_descending_order(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[1])
+        addrs=0x0000,
+        mutex_ids=[1],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         al = a_l0a.current()
@@ -414,16 +519,24 @@ def call_kernel_store_tile_descending_order(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[1])
+        addrs=0x0000,
+        mutex_ids=[1],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         al = a_l0a.current()
@@ -439,6 +552,7 @@ def call_kernel_store_tile_descending_order(
 # Section 5: Control flow — for-loop, if/else, while+for+if/elif/else
 # =====================================================================================
 
+
 @pl.jit(auto_mutex=True)
 def call_kernel_for_loop(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
@@ -447,19 +561,29 @@ def call_kernel_for_loop(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[2])
+        addrs=0x20000,
+        mutex_ids=[2],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[3, 4])
+        addrs=0x0000,
+        mutex_ids=[3, 4],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[6, 7])
+        addrs=0x0000,
+        mutex_ids=[6, 7],
+    )
     with pl.section_cube():
         cur_b = b_l1.next()
         pl.load(cur_b, b, [0, 0])
@@ -484,19 +608,29 @@ def call_kernel_if_else(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -523,19 +657,29 @@ def call_kernel_while_for_ifelse(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[2])
+        addrs=0x20000,
+        mutex_ids=[2],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[3, 4])
+        addrs=0x0000,
+        mutex_ids=[3, 4],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[6, 7])
+        addrs=0x0000,
+        mutex_ids=[6, 7],
+    )
     with pl.section_cube():
         cur_b = b_l1.next()
         pl.load(cur_b, b, [0, 0])
@@ -568,6 +712,7 @@ def call_kernel_while_for_ifelse(
 # Section 6: Tail blocks
 # =====================================================================================
 
+
 @pl.jit(auto_mutex=True)
 def call_kernel_tail_row(
     a: pl.Tensor[[72, TILE_LARGE], pl.DT_FP16],
@@ -575,23 +720,48 @@ def call_kernel_tail_row(
     out: pl.Tensor[[72, TILE_LARGE], pl.DT_FP32],
 ):
     a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x00000, mutex_ids=[0])
+        type=pl.TileType(
+            shape=[TILE_LARGE, TILE_LARGE],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Mat,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[2])
+        type=pl.TileType(
+            shape=[TILE_LARGE, TILE_LARGE],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Left,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[TILE_LARGE, TILE_LARGE],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Acc,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -616,23 +786,48 @@ def call_kernel_tail_loop(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x00000, mutex_ids=[0, 1])
+        type=pl.TileType(
+            shape=[TILE_LARGE, TILE_LARGE],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Mat,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[2])
+        addrs=0x20000,
+        mutex_ids=[2],
+    )
     a_l0a = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[3, 4])
+        type=pl.TileType(
+            shape=[TILE_LARGE, TILE_LARGE],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Left,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x0000,
+        mutex_ids=[3, 4],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[6, 7])
+        type=pl.TileType(
+            shape=[TILE_LARGE, TILE_LARGE],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Acc,
+            valid_shape=[-1, -1],
+            compact=1,
+        ),
+        addrs=0x0000,
+        mutex_ids=[6, 7],
+    )
     with pl.section_cube():
         cur_b = b_l1.next()
         pl.load(cur_b, b, [0, 0])
@@ -664,21 +859,37 @@ def call_kernel_tail_pad_zero(
     out: pl.Tensor[[TILE_LARGE, TILE_LARGE], pl.DT_FP32],
 ):
     a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                         valid_shape=[-1, -1], pad=pl.TilePad.zero, compact=1),
-        addrs=0x00000, mutex_ids=[0])
+        type=pl.TileType(
+            shape=[TILE_LARGE, TILE_LARGE],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Mat,
+            valid_shape=[-1, -1],
+            pad=pl.TilePad.zero,
+            compact=1,
+        ),
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_LARGE, TILE_LARGE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -702,19 +913,29 @@ def call_kernel_store_relu(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -737,19 +958,29 @@ def call_kernel_store_atomic_add(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -774,19 +1005,29 @@ def call_kernel_store_phase_final(
     tile_k = 64
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[2, 3])
+        addrs=0x20000,
+        mutex_ids=[2, 3],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, tile_k], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[4, 5])
+        addrs=0x0000,
+        mutex_ids=[4, 5],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[tile_k, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[6, 7])
+        addrs=0x0000,
+        mutex_ids=[6, 7],
+    )
     acc_grp = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[8])
+        addrs=0x0000,
+        mutex_ids=[8],
+    )
     with pl.section_cube():
         pl.system.set_mm_layout_transform(enabled=True)
         ac = acc_grp.current()
@@ -813,6 +1054,7 @@ def call_kernel_store_phase_final(
 # Section 8: Move — offset sub-block (K-axis, M-axis) + acc_to_vec (5 modes)
 # =====================================================================================
 
+
 @pl.jit(auto_mutex=True)
 def call_kernel_move_offset_k(
     a: pl.Tensor[[TILE, TILE_LARGE], pl.DT_FP16],
@@ -821,19 +1063,29 @@ def call_kernel_move_offset_k(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE_LARGE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -856,19 +1108,29 @@ def call_kernel_move_offset_m(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_LARGE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     with pl.section_cube():
         cur_a = a_l1.current()
         cur_b = b_l1.current()
@@ -891,22 +1153,34 @@ def call_kernel_move_acc_to_vec_single(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     vec_tile = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     mat_res = vec_tile.current()
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -937,22 +1211,34 @@ def call_kernel_move_acc_to_vec_dual_m(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     vec_tile = pl.make_tile_group(
         type=pl.TileType(shape=[32, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     mat_res = vec_tile.current()
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -982,22 +1268,34 @@ def call_kernel_move_acc_to_vec_dual_n(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     vec_tile = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     mat_res = vec_tile.current()
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -1027,22 +1325,34 @@ def call_kernel_move_acc_to_vec_relu(
 ):
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     vec_tile = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     mat_res = vec_tile.current()
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -1055,8 +1365,7 @@ def call_kernel_move_acc_to_vec_relu(
         pl.move(al, cur_a)
         pl.move(br, cur_b)
         pl.matmul(ac, al, br)
-        pl.move(mat_res, ac, acc_to_vec_mode=pl.AccToVecMode.SingleModeVec0,
-                relu_pre_mode=pl.ReluPreMode.NormalRelu)
+        pl.move(mat_res, ac, acc_to_vec_mode=pl.AccToVecMode.SingleModeVec0, relu_pre_mode=pl.ReluPreMode.NormalRelu)
         pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=0)
     with pl.section_vector():
         sub_id = pl.get_subblock_idx()
@@ -1073,26 +1382,41 @@ def call_kernel_move_acc_to_vec_tail(
     out: pl.Tensor[[TILE, TILE], pl.DT_FP32],
 ):
     a_l1 = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x00000, mutex_ids=[0])
+        type=pl.TileType(
+            shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[1])
+        addrs=0x20000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[2])
+        type=pl.TileType(
+            shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
-        type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                         valid_shape=[-1, -1], compact=1),
-        addrs=0x0000, mutex_ids=[4])
+        type=pl.TileType(
+            shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, valid_shape=[-1, -1], compact=1
+        ),
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     vec_tile = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     mat_res = vec_tile.current()
     with pl.section_cube():
         cur_a = a_l1.current()
@@ -1122,7 +1446,9 @@ def call_kernel_move_acc_to_vec_tail(
 # Test functions
 # =====================================================================================
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_basic_fp16():
     device = ST_DEVICE
     _require_a5(device)
@@ -1135,6 +1461,7 @@ def test_basic_fp16():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_basic_bf16():
     device = ST_DEVICE
     _require_a5(device)
@@ -1147,6 +1474,7 @@ def test_basic_bf16():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_basic_fp32():
     device = ST_DEVICE
     _require_a5(device)
@@ -1159,6 +1487,7 @@ def test_basic_fp32():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_offset_row():
     device = ST_DEVICE
     _require_a5(device)
@@ -1171,6 +1500,7 @@ def test_offset_row():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_offset_col():
     device = ST_DEVICE
     _require_a5(device)
@@ -1183,6 +1513,7 @@ def test_offset_col():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_offset_both():
     device = ST_DEVICE
     _require_a5(device)
@@ -1195,6 +1526,7 @@ def test_offset_both():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tile_offset():
     device = ST_DEVICE
     _require_a5(device)
@@ -1207,6 +1539,7 @@ def test_tile_offset():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dn_transpose():
     device = ST_DEVICE
     _require_a5(device)
@@ -1220,6 +1553,7 @@ def test_dn_transpose():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_4d_tile_dims():
     device = ST_DEVICE
     _require_a5(device)
@@ -1232,6 +1566,7 @@ def test_4d_tile_dims():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_loop():
     device = ST_DEVICE
     _require_a5(device)
@@ -1244,6 +1579,7 @@ def test_for_loop():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_else():
     device = ST_DEVICE
     _require_a5(device)
@@ -1259,6 +1595,7 @@ def test_if_else():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_for_ifelse():
     device = ST_DEVICE
     _require_a5(device)
@@ -1271,6 +1608,7 @@ def test_while_for_ifelse():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tail_row():
     device = ST_DEVICE
     _require_a5(device)
@@ -1283,6 +1621,7 @@ def test_tail_row():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tail_loop():
     device = ST_DEVICE
     _require_a5(device)
@@ -1295,6 +1634,7 @@ def test_tail_loop():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tail_pad_zero():
     device = ST_DEVICE
     _require_a5(device)
@@ -1308,6 +1648,7 @@ def test_tail_pad_zero():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_store_relu():
     device = ST_DEVICE
     _require_a5(device)
@@ -1320,6 +1661,7 @@ def test_store_relu():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_store_atomic_add():
     device = ST_DEVICE
     _require_a5(device)
@@ -1332,6 +1674,7 @@ def test_store_atomic_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_store_phase_final():
     device = ST_DEVICE
     _require_a5(device)
@@ -1344,6 +1687,7 @@ def test_store_phase_final():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_move_offset_k():
     device = ST_DEVICE
     _require_a5(device)
@@ -1356,6 +1700,7 @@ def test_move_offset_k():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_move_offset_m():
     device = ST_DEVICE
     _require_a5(device)
@@ -1368,6 +1713,7 @@ def test_move_offset_m():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_move_acc_to_vec_single():
     device = ST_DEVICE
     _require_a5(device)
@@ -1380,6 +1726,7 @@ def test_move_acc_to_vec_single():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_move_acc_to_vec_dual_m():
     device = ST_DEVICE
     _require_a5(device)
@@ -1392,6 +1739,7 @@ def test_move_acc_to_vec_dual_m():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_move_acc_to_vec_dual_n():
     device = ST_DEVICE
     _require_a5(device)
@@ -1404,6 +1752,7 @@ def test_move_acc_to_vec_dual_n():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_move_acc_to_vec_relu():
     device = ST_DEVICE
     _require_a5(device)
@@ -1416,6 +1765,7 @@ def test_move_acc_to_vec_relu():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_move_acc_to_vec_tail():
     device = ST_DEVICE
     _require_a5(device)
@@ -1428,6 +1778,7 @@ def test_move_acc_to_vec_tail():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_store_order_descending():
     device = ST_DEVICE
     _require_a5(device)
@@ -1438,6 +1789,7 @@ def test_store_order_descending():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_store_tile_order_descending():
     device = ST_DEVICE
     _require_a5(device)

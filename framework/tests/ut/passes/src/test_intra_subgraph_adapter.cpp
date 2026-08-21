@@ -71,7 +71,7 @@ TEST_F(IntraSubgraphAdapterTest, TestBoundaryConvert)
     const int copyOutIdx = 1;
     EXPECT_EQ(function->Operations().DuplicatedOpList()[copyOutIdx]->GetOpcode(), Opcode::OP_COPY_OUT);
     const int viewIdx = 2;
-    EXPECT_EQ(function->Operations().DuplicatedOpList()[viewIdx]->GetOpcode(), Opcode::OP_VIEW);
+    EXPECT_EQ(function->Operations().DuplicatedOpList()[viewIdx]->GetOpcode(), Opcode::OP_SLICE);
     auto copyOpAttr = dynamic_cast<CopyOpAttribute*>(subGraph.GetOp("convert")->GetOpAttribute().get());
     EXPECT_NE(copyOpAttr, nullptr);
 }
@@ -137,8 +137,8 @@ TEST_F(IntraSubgraphAdapterTest, TestInheritScopeInfo)
                                            MemoryType::MEM_DEVICE_DDR};
     EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {128, 128}, tensorMemTypes, tensorNames, 0), true);
 
-    std::vector<Opcode> opCodes{Opcode::OP_VIEW,     Opcode::OP_MULS, Opcode::OP_ADDS,
-                                Opcode::OP_ASSEMBLE, Opcode::OP_ADDS, Opcode::OP_ASSEMBLE};
+    std::vector<Opcode> opCodes{Opcode::OP_SLICE,    Opcode::OP_MULS, Opcode::OP_ADDS,
+                                Opcode::OP_CONTRACT, Opcode::OP_ADDS, Opcode::OP_CONTRACT};
     std::vector<std::vector<std::string>> ioperands{{"t0"}, {"t1"}, {"t2"}, {"t3"}, {"t2"}, {"t5"}};
     std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"t3"}, {"t4"}, {"t5"}, {"t6"}};
     std::vector<std::string> opNames{"view_in", "muls", "adds1", "asm_out1", "adds2", "asm_out2"};
@@ -168,22 +168,22 @@ TEST_F(IntraSubgraphAdapterTest, TestInheritScopeInfo)
     IntraSubgraphAdapter adapter;
     EXPECT_EQ(adapter.RunOnFunction(*function), SUCCESS);
 
-    int asmCnt = 0;
-    int viewCnt = 0;
+    int contractCnt = 0;
+    int sliceCnt = 0;
     for (const auto& op : function->Operations().DuplicatedOpList()) {
-        if (op->GetOpcode() == Opcode::OP_ASSEMBLE || op->GetOpcode() == Opcode::OP_VIEW) {
+        if (op->GetOpcode() == Opcode::OP_CONTRACT || op->GetOpcode() == Opcode::OP_SLICE) {
             EXPECT_EQ(op->GetScopeId(), scopeId);
             EXPECT_EQ(op->GetCvFuseId(), cvFuseId);
         }
-        if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
-            asmCnt++;
+        if (op->GetOpcode() == Opcode::OP_CONTRACT) {
+            contractCnt++;
         }
-        if (op->GetOpcode() == Opcode::OP_VIEW) {
-            viewCnt++;
+        if (op->GetOpcode() == Opcode::OP_SLICE) {
+            sliceCnt++;
         }
     }
-    EXPECT_EQ(asmCnt, 3);
-    EXPECT_EQ(viewCnt, 3);
+    EXPECT_EQ(contractCnt, 3);
+    EXPECT_EQ(sliceCnt, 3);
 }
 
 TEST_F(IntraSubgraphAdapterTest, TestValidShapeInfer)
@@ -217,7 +217,7 @@ TEST_F(IntraSubgraphAdapterTest, TestValidShapeInfer)
 
     bool foundAssembleOrView = false;
     for (const auto& op : function->Operations().DuplicatedOpList()) {
-        if (op->GetOpcode() == Opcode::OP_ASSEMBLE || op->GetOpcode() == Opcode::OP_VIEW) {
+        if (op->GetOpcode() == Opcode::OP_CONTRACT || op->GetOpcode() == Opcode::OP_SLICE) {
             foundAssembleOrView = true;
             auto oOperand = op->GetOOperands().front();
             auto dynValidShape = oOperand->GetDynValidShape();
@@ -226,6 +226,194 @@ TEST_F(IntraSubgraphAdapterTest, TestValidShapeInfer)
         }
     }
     EXPECT_TRUE(foundAssembleOrView);
+}
+
+TEST_F(IntraSubgraphAdapterTest, BoundaryViewShouldChangeToSlice)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L1,
+                                           MemoryType::MEM_L1};
+    std::vector<Opcode> opCodes{Opcode::OP_ADDS, Opcode::OP_VIEW, Opcode::OP_EXP};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2"}, {"t3"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"adds", "view", "exp"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {32, 32}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(subGraph.SetInCast({"t1"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"t4"}), true);
+
+    subGraph.GetOp("adds")->UpdateSubgraphID(0);
+    subGraph.GetOp("view")->UpdateSubgraphID(1);
+    subGraph.GetOp("exp")->UpdateSubgraphID(1);
+    subGraph.GetOp("view")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{32, 32}, MemoryType::MEM_L1));
+    Function* function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(2);
+    Operation* viewOp = subGraph.GetOp("view");
+
+    IntraSubgraphAdapter adapter;
+    EXPECT_EQ(adapter.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(adapter.PostCheck(*function), SUCCESS);
+
+    int sliceNum = 0;
+    int viewNum = 0;
+    Operation* sliceOp = nullptr;
+    for (const auto& op : function->Operations(false).DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_SLICE) {
+            ++sliceNum;
+            sliceOp = op;
+        }
+        if (op->GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+        }
+    }
+    EXPECT_EQ(sliceNum, 1);
+    EXPECT_EQ(viewNum, 0);
+    ASSERT_NE(sliceOp, nullptr);
+    EXPECT_EQ(function->Operations(false).DuplicatedOpList().size(), 4);
+    EXPECT_EQ(sliceOp, viewOp);
+    EXPECT_EQ(sliceOp->GetIOperands().front(), subGraph.GetTensor("t2"));
+    EXPECT_EQ(sliceOp->GetOOperands().front(), subGraph.GetTensor("t3"));
+}
+
+TEST_F(IntraSubgraphAdapterTest, BoundaryAssembleShouldChangeToContract)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L1};
+    std::vector<Opcode> opCodes{Opcode::OP_ASSEMBLE, Opcode::OP_EXP};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}};
+    std::vector<std::string> opNames{"assemble", "exp"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {32, 32}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(subGraph.SetInCast({"t1"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"t3"}), true);
+
+    Operation* assembleOp = subGraph.GetOp("assemble");
+    assembleOp->UpdateSubgraphID(0);
+    assembleOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{0, 0}));
+    subGraph.GetOp("exp")->UpdateSubgraphID(1);
+    Function* function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(2);
+
+    IntraSubgraphAdapter adapter;
+    EXPECT_EQ(adapter.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(adapter.PostCheck(*function), SUCCESS);
+
+    EXPECT_EQ(function->Operations(false).DuplicatedOpList().size(), 3);
+    EXPECT_EQ(assembleOp->GetOpcode(), Opcode::OP_CONTRACT);
+    EXPECT_EQ(assembleOp->GetIOperands().front(), subGraph.GetTensor("t1"));
+    EXPECT_EQ(assembleOp->GetOOperands().front(), subGraph.GetTensor("t2"));
+    EXPECT_EQ(subGraph.GetTensor("t2")->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+}
+
+TEST_F(IntraSubgraphAdapterTest, BoundaryViewShouldKeepViewWhenDisableSlice)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L1,
+                                           MemoryType::MEM_L1};
+    std::vector<Opcode> opCodes{Opcode::OP_ADDS, Opcode::OP_VIEW, Opcode::OP_EXP};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2"}, {"t3"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"adds", "view", "exp"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {32, 32}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(subGraph.SetInCast({"t1"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"t4"}), true);
+
+    subGraph.GetOp("adds")->UpdateSubgraphID(0);
+    subGraph.GetOp("view")->UpdateSubgraphID(1);
+    subGraph.GetOp("exp")->UpdateSubgraphID(1);
+    subGraph.GetOp("view")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{32, 32}, MemoryType::MEM_L1));
+    Function* function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(2);
+    Operation* viewOp = subGraph.GetOp("view");
+
+    IntraSubgraphAdapter adapter;
+    EXPECT_EQ(adapter.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(adapter.PostCheck(*function), SUCCESS);
+
+    int sliceNum = 0;
+    int contractNum = 0;
+    int viewNum = 0;
+    int assembleNum = 0;
+    for (const auto& op : function->Operations(false).DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_SLICE) {
+            ++sliceNum;
+        }
+        if (op->GetOpcode() == Opcode::OP_CONTRACT) {
+            ++contractNum;
+        }
+        if (op->GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+        }
+        if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+    }
+    EXPECT_EQ(sliceNum, 0);
+    EXPECT_EQ(contractNum, 0);
+    EXPECT_GT(viewNum, 0);
+    EXPECT_GT(assembleNum, 0);
+    EXPECT_EQ(viewOp->GetOpcode(), Opcode::OP_VIEW);
+    EXPECT_EQ(subGraph.GetTensor("t2")->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+}
+
+TEST_F(IntraSubgraphAdapterTest, BoundaryAssembleShouldKeepAssembleWhenDisableSlice)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L1};
+    std::vector<Opcode> opCodes{Opcode::OP_ASSEMBLE, Opcode::OP_EXP};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}};
+    std::vector<std::string> opNames{"assemble", "exp"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {32, 32}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(subGraph.SetInCast({"t1"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"t3"}), true);
+
+    Operation* assembleOp = subGraph.GetOp("assemble");
+    assembleOp->UpdateSubgraphID(0);
+    assembleOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_L1, std::vector<int64_t>{0, 0}));
+    subGraph.GetOp("exp")->UpdateSubgraphID(1);
+    Function* function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(2);
+
+    IntraSubgraphAdapter adapter;
+    EXPECT_EQ(adapter.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(adapter.PostCheck(*function), SUCCESS);
+
+    int sliceNum = 0;
+    int contractNum = 0;
+    int viewNum = 0;
+    for (const auto& op : function->Operations(false).DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_SLICE) {
+            ++sliceNum;
+        }
+        if (op->GetOpcode() == Opcode::OP_CONTRACT) {
+            ++contractNum;
+        }
+        if (op->GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+        }
+    }
+    EXPECT_EQ(sliceNum, 0);
+    EXPECT_EQ(contractNum, 0);
+    EXPECT_GT(viewNum, 0);
+    EXPECT_EQ(assembleOp->GetOpcode(), Opcode::OP_ASSEMBLE);
+    EXPECT_EQ(assembleOp->GetOOperands().front(), subGraph.GetTensor("t2"));
+    EXPECT_EQ(subGraph.GetTensor("t2")->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
 }
 
 } // namespace npu::tile_fwk

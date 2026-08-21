@@ -95,6 +95,7 @@ def loop_basic_kernel(
         out1[bs_idx * s:(bs_idx + new_step) * s, :] = pypto.add(t0s, t1s)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_loop_basic(device_id: int = None, dynamic: bool = False) -> None:
     """Test basic loop usage."""
     print("=" * 60)
@@ -128,9 +129,7 @@ def test_loop_basic(device_id: int = None, dynamic: bool = False) -> None:
 # ============================================================================
 
 
-@pypto.frontend.jit(
-    runtime_options={"run_mode": global_run_mode}
-)
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def loop_compile_phase_print_kernel(
     in_t0: pypto.Tensor(), in_t1: pypto.Tensor(), out_t0: pypto.Tensor(), out_t1: pypto.Tensor()
 ):
@@ -168,6 +167,7 @@ def loop_compile_phase_print_kernel(
     print(separator)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_loop_compile_phase_print(device_id: int = None, dynamic: bool = False) -> None:
     """Test loop compile phase print"""
     print("=" * 60)
@@ -222,6 +222,7 @@ def add_kernel(
         pypto.assemble(t3_sub, [b_offset, 0, 0, 0], output)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_add_scalar_loop(device_id=None, dynamic: bool = True) -> None:
     """Test loop-based scalar addition."""
     print("=" * 60)
@@ -279,6 +280,7 @@ def add_scalar_loop_dynamic_axis_kernel(
         pypto.assemble(t3_sub, [b_offset, 0, 0, 0], output)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_add_scalar_loop_dyn_axis(device_id: int = None) -> None:
     """Test loop with dynamic axis."""
     print("=" * 60)

@@ -24,6 +24,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -71,6 +73,7 @@ def _ref(tdt, fn, x, y):
 # return_early: for-loop add with return at mid-iteration
 #               Returns after first row, skipping redundant ops and rest
 # ===================================================================
+
 
 # =============================================================================
 # Test 1: 提前空 return - FP16
@@ -257,6 +260,7 @@ RETURN_EARLY_KERNELS = {
 #               Returns after second row first tile
 # ===================================================================
 
+
 # =============================================================================
 # Test 5: if 分支内空 return - FP16
 #         bare return inside if branch - FP16
@@ -296,6 +300,7 @@ RETURN_IN_IF_KERNELS = {
 # plain_def_return_helpers: @pl.jit kernel calls ordinary def helpers
 #                           with scalar, tuple, and list return values
 # ===================================================================
+
 
 def plain_def_return_scalar(value):
     return value + 1
@@ -339,6 +344,7 @@ def make_plain_def_return_helpers_kernel(dtype):
                     pl.load_tile(tile_b, y, offsets)
                     pl.add(tile_c, tile_a, tile_b)
                     pl.store_tile(z, tile_c, offsets)
+
     return kernel
 
 
@@ -354,7 +360,9 @@ PLAIN_DEF_RETURN_HELPERS_KERNELS = {
 # Test functions
 # ===================================================================
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_return_early():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -373,6 +381,7 @@ def test_return_early():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_return_in_if():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -392,9 +401,8 @@ def test_return_in_if():
             logging.info("test_return_in_if [%s] passed! shape=%s", label, shape)
 
 
-
-
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_plain_def_return_helpers():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -414,6 +422,7 @@ def test_plain_def_return_helpers():
 # ===================================================================
 # while_return: while-loop add with return  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 7: while 循环内空 return
@@ -453,6 +462,7 @@ def while_return_kernel(
 # while_if_return: while + if return  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 8: while + if 分支空 return
 #         bare return inside while + if branch
@@ -491,6 +501,7 @@ def while_if_return_kernel(
 # for_while_return: for outer + while inner + return  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 9: for + while 嵌套空 return
 #         bare return inside nested for + while
@@ -525,6 +536,7 @@ def for_while_return_kernel(
 # ===================================================================
 # for_4layer_if_return: 4-layer for + if + return  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 10: for 4 层 + if 空 return
@@ -563,6 +575,7 @@ def for_4layer_if_return_kernel(
 # ===================================================================
 # for_while_if_return_else: for+while+if/else+return mid-loop  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 11: for/while/if/else 空 return
@@ -603,7 +616,9 @@ def for_while_if_return_else_kernel(
 # Test functions
 # ===================================================================
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_return():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -623,6 +638,7 @@ def test_while_return():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_if_return():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -642,6 +658,7 @@ def test_while_if_return():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_while_return():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -661,6 +678,7 @@ def test_for_while_return():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_4layer_if_return():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -680,6 +698,7 @@ def test_for_4layer_if_return():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_while_if_return_else():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -694,12 +713,12 @@ def test_for_while_if_return_else():
     x_f = x.float()
     y_f = y.float()
     z_ref[:TILE_M, :TILE_N] = (x_f[:TILE_M, :TILE_N] + y_f[:TILE_M, :TILE_N]).to(torch.float16)
-    z_ref[:TILE_M, TILE_N:2 * TILE_N] = (
-        x_f[:TILE_M, TILE_N:2 * TILE_N] + y_f[:TILE_M, TILE_N:2 * TILE_N]
-    ).to(torch.float16)
-    z_ref[TILE_M:2 * TILE_M, :TILE_N] = (
-        x_f[TILE_M:2 * TILE_M, :TILE_N] + y_f[TILE_M:2 * TILE_M, :TILE_N]
-    ).to(torch.float16)
+    z_ref[:TILE_M, TILE_N:2 * TILE_N] = (x_f[:TILE_M, TILE_N:2 * TILE_N] + y_f[:TILE_M, TILE_N:2 * TILE_N]).to(
+        torch.float16
+    )
+    z_ref[TILE_M:2 * TILE_M, :TILE_N] = (x_f[TILE_M:2 * TILE_M, :TILE_N] + y_f[TILE_M:2 * TILE_M, :TILE_N]).to(
+        torch.float16
+    )
     z_ref[TILE_M:2 * TILE_M, TILE_N:2 * TILE_N] = (
         x_f[TILE_M:2 * TILE_M, TILE_N:2 * TILE_N] - y_f[TILE_M:2 * TILE_M, TILE_N:2 * TILE_N]
     ).to(torch.float16)
@@ -710,6 +729,7 @@ def test_for_while_if_return_else():
 # ===================================================================
 # direct_return: for/while with direct return (no if guard)
 # ===================================================================
+
 
 # =============================================================================
 # Test 12: for 循环直接 return
@@ -772,6 +792,7 @@ def for_3layer_direct_return_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_direct_return():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -791,6 +812,7 @@ def test_for_direct_return():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_3layer_direct_return():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -850,6 +872,7 @@ def for_while_8layer_return_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_while_8layer_return():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -880,9 +903,9 @@ def return_unaligned_fp16_kernel(
 ):
     m = x.shape[0]
     n = x.shape[1]
-    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
-                            target_memory=pl.MemorySpace.Vec,
-                            valid_shape=[-1, -1])
+    tile_type = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
     a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
     b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
     c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
@@ -906,6 +929,7 @@ def return_unaligned_fp16_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_return_unaligned_shape():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -921,9 +945,9 @@ def test_return_unaligned_shape():
         if shape[1] > TILE_N:
             valid_r = min(shape[0], TILE_M)
             valid_c = min(shape[1], TILE_N)
-            z_ref[:valid_r, :valid_c] = (
-                x[:valid_r, :valid_c].float() + y[:valid_r, :valid_c].float()
-            ).to(torch.float16)
+            z_ref[:valid_r, :valid_c] = (x[:valid_r, :valid_c].float() + y[:valid_r, :valid_c].float()).to(
+                torch.float16
+            )
         else:
             z_ref = (x.float() + y.float()).to(torch.float16)
         torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
@@ -933,19 +957,29 @@ def test_return_unaligned_shape():
 def alloc_tile():
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0])
+        addrs=0x00000,
+        mutex_ids=[0],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[1])
+        addrs=0x10000,
+        mutex_ids=[1],
+    )
     a_l0a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[2])
+        addrs=0x0000,
+        mutex_ids=[2],
+    )
     b_l0b = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[3])
+        addrs=0x0000,
+        mutex_ids=[3],
+    )
     c_l0c = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     return a_l1, b_l1, a_l0a, b_l0b, c_l0c
 
 
@@ -972,6 +1006,7 @@ def return_tile_group_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_return_tile_group_kernel():
     """LOAD-N01: Basic load to L1 (FP16), verify via matmul-with-identity."""
     device = ST_DEVICE

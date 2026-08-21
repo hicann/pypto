@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -49,6 +51,7 @@ def dcci_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dcci():
     device = ST_DEVICE
     _require_a5(device)
@@ -72,8 +75,7 @@ def validshape_kernel(
     cols: pl.DT_INT64,
     out: pl.Tensor[[64, 128], pl.DT_FP32],
 ):
-    tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec,
-                            valid_shape=[-1, -1])
+    tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
     tile_group = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0])
     with pl.section_vector():
         tile = tile_group.current()
@@ -83,6 +85,7 @@ def validshape_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_set_validshape():
     device = ST_DEVICE
     _require_a5(device)

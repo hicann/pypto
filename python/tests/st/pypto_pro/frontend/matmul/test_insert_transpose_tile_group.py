@@ -26,6 +26,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -53,16 +55,21 @@ def insert_group_transpose_left(
 ):
     p_mat_db = pl.make_tile_group(
         type=pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x20000, mutex_ids=[10, 11])
+        addrs=0x20000,
+        mutex_ids=[10, 11],
+    )
 
     with pl.section_vector():
         sub_id = pl.get_subblock_idx()
         off = sub_id * SUB
-        tile_d = pl.make_tile(pl.TileType(shape=[K, M // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-                              addr=0x0000, size=16384)
+        tile_d = pl.make_tile(
+            pl.TileType(shape=[K, M // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=16384
+        )
         tile_nz = pl.make_tile(
             pl.TileType(shape=[K, M // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
-            addr=0x6000, size=16384)
+            addr=0x6000,
+            size=16384,
+        )
         p_mat = p_mat_db.current()
         pl.load(tile_d, d, [0, off])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -76,23 +83,31 @@ def insert_group_transpose_left(
     with pl.section_cube():
         v_mat = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-            addr=0x0000, size=16384)
+            addr=0x0000,
+            size=16384,
+        )
         p_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         v_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-            addr=0x0000, size=16384)
+            addr=0x0000,
+            size=16384,
+        )
         c_l0c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         p_mat = p_mat_db.current()
         pl.load(v_mat, v, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
         pl.move(v_right, v_mat)
         pl.system.wait_cross_core(pipe=pl.PipeType.MTE1, event_id=2, sync_mode=pl.CrossCoreSyncMode.INTRA_BLOCK)
-        pl.move(p_left, p_mat)                        # Mat[K,M] group -> Left[M,K]: reversed -> swap all slots
+        pl.move(p_left, p_mat)  # Mat[K,M] group -> Left[M,K]: reversed -> swap all slots
         pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
         pl.matmul(c_l0c, p_left, v_right)
@@ -108,16 +123,21 @@ def insert_group_transpose_right(
 ):
     rhs_mat_db = pl.make_tile_group(
         type=pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
-        addrs=0x20000, mutex_ids=[10, 11])
+        addrs=0x20000,
+        mutex_ids=[10, 11],
+    )
 
     with pl.section_vector():
         sub_id = pl.get_subblock_idx()
         off = sub_id * SUB_N
-        tile_d = pl.make_tile(pl.TileType(shape=[SUB_N, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-                              addr=0x0000, size=16384)
+        tile_d = pl.make_tile(
+            pl.TileType(shape=[SUB_N, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=16384
+        )
         tile_nz = pl.make_tile(
             pl.TileType(shape=[SUB_N, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
-            addr=0x6000, size=16896)
+            addr=0x6000,
+            size=16896,
+        )
         rhs_mat = rhs_mat_db.current()
         pl.load(tile_d, d, [off, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -131,23 +151,31 @@ def insert_group_transpose_right(
     with pl.section_cube():
         lhs_mat = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         lhs_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         rhs_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         c_l0c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         rhs_mat = rhs_mat_db.current()
         pl.load(lhs_mat, lhs, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
         pl.move(lhs_left, lhs_mat)
         pl.system.wait_cross_core(pipe=pl.PipeType.MTE1, event_id=2, sync_mode=pl.CrossCoreSyncMode.INTRA_BLOCK)
-        pl.move(rhs_right, rhs_mat)                    # Mat[N,K] group -> Right[K,N]: reversed -> swap all slots
+        pl.move(rhs_right, rhs_mat)  # Mat[N,K] group -> Right[K,N]: reversed -> swap all slots
         pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
         pl.matmul(c_l0c, lhs_left, rhs_right)
@@ -164,16 +192,21 @@ def insert_group_left(
 ):
     p_mat_db = pl.make_tile_group(
         type=pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x20000, mutex_ids=[10, 11])
+        addrs=0x20000,
+        mutex_ids=[10, 11],
+    )
 
     with pl.section_vector():
         sub_id = pl.get_subblock_idx()
         off = sub_id * SUB
-        tile_d = pl.make_tile(pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-                              addr=0x0000, size=16384)
+        tile_d = pl.make_tile(
+            pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=16384
+        )
         tile_nz = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
-            addr=0x6000, size=16896)
+            addr=0x6000,
+            size=16896,
+        )
         p_mat = p_mat_db.current()
         pl.load(tile_d, d, [0, off])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -187,23 +220,31 @@ def insert_group_left(
     with pl.section_cube():
         v_mat = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-            addr=0x0000, size=16384)
+            addr=0x0000,
+            size=16384,
+        )
         p_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         v_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-            addr=0x0000, size=16384)
+            addr=0x0000,
+            size=16384,
+        )
         c_l0c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         p_mat = p_mat_db.current()
         pl.load(v_mat, v, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
         pl.move(v_right, v_mat)
         pl.system.wait_cross_core(pipe=pl.PipeType.MTE1, event_id=2, sync_mode=pl.CrossCoreSyncMode.INTRA_BLOCK)
-        pl.move(p_left, p_mat)                        # Mat[M,K] group -> Left[M,K]: same-shape, not swapped
+        pl.move(p_left, p_mat)  # Mat[M,K] group -> Left[M,K]: same-shape, not swapped
         pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
         pl.matmul(c_l0c, p_left, v_right)
@@ -220,16 +261,21 @@ def insert_group_right(
 ):
     rhs_mat_db = pl.make_tile_group(
         type=pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addrs=0x20000, mutex_ids=[10, 11])
+        addrs=0x20000,
+        mutex_ids=[10, 11],
+    )
 
     with pl.section_vector():
         sub_id = pl.get_subblock_idx()
         off = sub_id * SUB_N
-        tile_d = pl.make_tile(pl.TileType(shape=[K, SUB_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-                              addr=0x0000, size=16384)
+        tile_d = pl.make_tile(
+            pl.TileType(shape=[K, SUB_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=16384
+        )
         tile_nz = pl.make_tile(
             pl.TileType(shape=[K, SUB_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
-            addr=0x6000, size=16896)
+            addr=0x6000,
+            size=16896,
+        )
         rhs_mat = rhs_mat_db.current()
         pl.load(tile_d, d, [0, off])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -243,23 +289,31 @@ def insert_group_right(
     with pl.section_cube():
         lhs_mat = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         lhs_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         rhs_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         c_l0c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
-            addr=0x0000, size=32768)
+            addr=0x0000,
+            size=32768,
+        )
         rhs_mat = rhs_mat_db.current()
         pl.load(lhs_mat, lhs, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
         pl.move(lhs_left, lhs_mat)
         pl.system.wait_cross_core(pipe=pl.PipeType.MTE1, event_id=2, sync_mode=pl.CrossCoreSyncMode.INTRA_BLOCK)
-        pl.move(rhs_right, rhs_mat)                    # Mat[K,N] group -> Right[K,N]: same-shape, not swapped
+        pl.move(rhs_right, rhs_mat)  # Mat[K,N] group -> Right[K,N]: same-shape, not swapped
         pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
         pl.matmul(c_l0c, lhs_left, rhs_right)
@@ -269,6 +323,7 @@ def insert_group_right(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_insert_group_left():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -283,6 +338,7 @@ def test_insert_group_left():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_insert_group_right():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -297,6 +353,7 @@ def test_insert_group_right():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_insert_group_transpose_left():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -311,6 +368,7 @@ def test_insert_group_transpose_left():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_insert_group_transpose_right():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)

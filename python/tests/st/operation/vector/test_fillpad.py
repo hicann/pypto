@@ -113,6 +113,7 @@ def test():
     st()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_partial_valid():
     """
     测试部分有效数据的场景
@@ -124,6 +125,7 @@ def test_partial_valid():
     st()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_small_valid():
     """
     测试有效数据较小的场景

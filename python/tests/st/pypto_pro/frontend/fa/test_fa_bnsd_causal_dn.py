@@ -17,6 +17,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -100,7 +102,6 @@ EVENT_IDS_23 = (2, 3)
 QK_READY_IDS = (0,)
 P_READY_IDS = (1,)
 PV_READY_IDS = (2,)
-
 
 
 def alloc_cube_buffer():
@@ -357,8 +358,18 @@ def compute_p(
 ) -> None:
     pl.system.wait_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_IDS[0])
     softmax_body(
-        task_id, ki, qi, q_count, skv_tiles, sub_id, b_idx, n_idx,
-        sq_dim, skv_dim, stiles, attn_mask,
+        task_id,
+        ki,
+        qi,
+        q_count,
+        skv_tiles,
+        sub_id,
+        b_idx,
+        n_idx,
+        sq_dim,
+        skv_dim,
+        stiles,
+        attn_mask,
     )
     # Both vector subblocks contribute one half of the shared P MAT tile. Make
     # sure both halves have finished TINSERT before cube starts PV.
@@ -582,15 +593,32 @@ def fa_causal_bnsd_dn_kernel_v6(
                     if ki <= qi:
                         if task_id > 0:
                             compute_pv(
-                                prev_task_id, prev_ki, prev_q_count, prev_skv_tiles,
-                                prev_b_idx, prev_n_idx,
-                                l0ab_idx, l0c_idx, v, cube_tiles,
+                                prev_task_id,
+                                prev_ki,
+                                prev_q_count,
+                                prev_skv_tiles,
+                                prev_b_idx,
+                                prev_n_idx,
+                                l0ab_idx,
+                                l0c_idx,
+                                v,
+                                cube_tiles,
                             )
                             l0ab_idx = 1 - l0ab_idx
                             l0c_idx = 1 - l0c_idx
                         compute_qk(
-                            task_id, ki, qi, q_count, skv_tiles, b_idx, n_idx,
-                            l0ab_idx, l0c_idx, q, k, cube_tiles,
+                            task_id,
+                            ki,
+                            qi,
+                            q_count,
+                            skv_tiles,
+                            b_idx,
+                            n_idx,
+                            l0ab_idx,
+                            l0c_idx,
+                            q,
+                            k,
+                            cube_tiles,
                         )
                         l0ab_idx = 1 - l0ab_idx
                         l0c_idx = 1 - l0c_idx
@@ -604,9 +632,16 @@ def fa_causal_bnsd_dn_kernel_v6(
                 q_count = q_count + 1
             if task_id > 0:
                 compute_pv(
-                    prev_task_id, prev_ki, prev_q_count, prev_skv_tiles,
-                    prev_b_idx, prev_n_idx,
-                    l0ab_idx, l0c_idx, v, cube_tiles,
+                    prev_task_id,
+                    prev_ki,
+                    prev_q_count,
+                    prev_skv_tiles,
+                    prev_b_idx,
+                    prev_n_idx,
+                    l0ab_idx,
+                    l0c_idx,
+                    v,
+                    cube_tiles,
                 )
                 l0ab_idx = 1 - l0ab_idx
                 l0c_idx = 1 - l0c_idx
@@ -665,15 +700,31 @@ def fa_causal_bnsd_dn_kernel_v6(
                     if ki <= qi:
                         if task_id > 1:
                             compute_gu(
-                                prev2_task_id, prev2_ki, prev2_qi, prev2_q_count,
-                                prev2_skv_tiles, prev2_sub_id, prev2_b_idx, prev2_n_idx,
-                                o, gu_tiles,
+                                prev2_task_id,
+                                prev2_ki,
+                                prev2_qi,
+                                prev2_q_count,
+                                prev2_skv_tiles,
+                                prev2_sub_id,
+                                prev2_b_idx,
+                                prev2_n_idx,
+                                o,
+                                gu_tiles,
                             )
                         if task_id > 0:
                             compute_p(
-                                prev_task_id, prev_ki, prev_qi, prev_q_count,
-                                prev_skv_tiles, prev_sub_id, prev_b_idx, prev_n_idx,
-                                sq_dim, skv_dim, softmax_tiles, attn_mask,
+                                prev_task_id,
+                                prev_ki,
+                                prev_qi,
+                                prev_q_count,
+                                prev_skv_tiles,
+                                prev_sub_id,
+                                prev_b_idx,
+                                prev_n_idx,
+                                sq_dim,
+                                skv_dim,
+                                softmax_tiles,
+                                attn_mask,
                             )
                         # Shift: prev2 <- prev, prev <- current
                         prev2_task_id = prev_task_id
@@ -697,19 +748,42 @@ def fa_causal_bnsd_dn_kernel_v6(
             if task_id > 0:
                 if task_id > 1:
                     compute_gu(
-                        prev2_task_id, prev2_ki, prev2_qi, prev2_q_count,
-                        prev2_skv_tiles, prev2_sub_id, prev2_b_idx, prev2_n_idx,
-                        o, gu_tiles,
+                        prev2_task_id,
+                        prev2_ki,
+                        prev2_qi,
+                        prev2_q_count,
+                        prev2_skv_tiles,
+                        prev2_sub_id,
+                        prev2_b_idx,
+                        prev2_n_idx,
+                        o,
+                        gu_tiles,
                     )
                 compute_p(
-                    prev_task_id, prev_ki, prev_qi, prev_q_count,
-                    prev_skv_tiles, prev_sub_id, prev_b_idx, prev_n_idx,
-                    sq_dim, skv_dim, softmax_tiles, attn_mask,
+                    prev_task_id,
+                    prev_ki,
+                    prev_qi,
+                    prev_q_count,
+                    prev_skv_tiles,
+                    prev_sub_id,
+                    prev_b_idx,
+                    prev_n_idx,
+                    sq_dim,
+                    skv_dim,
+                    softmax_tiles,
+                    attn_mask,
                 )
                 compute_gu(
-                    prev_task_id, prev_ki, prev_qi, prev_q_count,
-                    prev_skv_tiles, prev_sub_id, prev_b_idx, prev_n_idx,
-                    o, gu_tiles,
+                    prev_task_id,
+                    prev_ki,
+                    prev_qi,
+                    prev_q_count,
+                    prev_skv_tiles,
+                    prev_sub_id,
+                    prev_b_idx,
+                    prev_n_idx,
+                    o,
+                    gu_tiles,
                 )
 
 
@@ -733,6 +807,7 @@ def make_causal_mask_dn_fixed_2048_u8(device):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_causal_bn_a5():
     device = ST_DEVICE
     torch.npu.set_device(device)

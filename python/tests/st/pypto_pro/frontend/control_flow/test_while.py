@@ -24,6 +24,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -60,6 +62,7 @@ def _ref(tdt, fn, x, y):
 # ===================================================================
 # while_add: 2D while-loop elementwise add  (FP16 / BF16 / FP32 / INT32)
 # ===================================================================
+
 
 # =============================================================================
 # Test 1: while 循环二维加法 - FP16
@@ -201,6 +204,7 @@ WHILE_ADD_KERNELS = {
 # while_sub: 2D while-loop elementwise sub  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 5: while 循环减法 - FP16
 #         while-loop subtraction - FP16
@@ -242,6 +246,7 @@ WHILE_SUB_KERNELS = {
 # while_mul: 2D while-loop elementwise mul  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 6: while 循环乘法 - FP16
 #         while-loop multiply - FP16
@@ -282,6 +287,7 @@ WHILE_MUL_KERNELS = {
 # ===================================================================
 # while_mul_add: 2D while-loop fused mul+add (z = x*y + x)  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 7: while 循环乘加融合 - FP16
@@ -325,6 +331,7 @@ WHILE_MUL_ADD_KERNELS = {
 # while_tail: 2D while-loop with tail block (set_validshape, compact=1)
 # ===================================================================
 
+
 # =============================================================================
 # Test 8: while 循环尾块处理 - FP16
 #         while-loop tail block handling - FP16
@@ -337,9 +344,9 @@ def while_tail_fp16_kernel(
 ):
     m = x.shape[0]
     n = x.shape[1]
-    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
-                            target_memory=pl.MemorySpace.Vec,
-                            valid_shape=[-1, -1])
+    tile_type = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
     a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
     b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
     c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
@@ -367,6 +374,7 @@ def while_tail_fp16_kernel(
 # ===================================================================
 # while_4d_add: 4D while-loop elementwise add  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 9: 4D while 嵌套加法 - FP16
@@ -416,6 +424,7 @@ WHILE_4D_ADD_KERNELS = {
 # ===================================================================
 # while_4d_layout_add: 4D while-loop with M/N at different tensor axes (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 10: 4D while shape M=2/3N 加法 - FP16
@@ -495,6 +504,7 @@ WHILE_4D_LAYOUT_ADD_KERNELS = [
 # while_high_dim_add: 8D while-loop elementwise add  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 12: 8D while 嵌套加法 - FP16
 #         8D nested while add - FP16
@@ -542,7 +552,9 @@ WHILE_HIGH_DIM_ADD_KERNELS = [
 # Test functions
 # ===================================================================
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_add():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -560,6 +572,7 @@ def test_while_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_shape_generalization():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -577,6 +590,7 @@ def test_while_shape_generalization():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_sub():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -594,6 +608,7 @@ def test_while_sub():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_mul():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -611,6 +626,7 @@ def test_while_mul():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_mul_add():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -628,6 +644,7 @@ def test_while_mul_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_tail():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -645,6 +662,7 @@ def test_while_tail():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_4d_add():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -669,6 +687,7 @@ def test_while_4d_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_high_dim_add():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -683,6 +702,7 @@ def test_while_high_dim_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_large_shape():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -702,6 +722,7 @@ def test_while_large_shape():
 # ===================================================================
 # while_and / while_or / while_and_three: compound boolean in while condition
 # ===================================================================
+
 
 # =============================================================================
 # Test 13: while 布尔 and 条件
@@ -775,6 +796,7 @@ def while_ternary_expr_kernel(
 # while_truthiness: non-bool scalar in while condition
 # ===================================================================
 
+
 # =============================================================================
 # Test 15: while 整数真值条件
 #         while integer truthiness condition
@@ -810,6 +832,7 @@ def while_truthiness_int_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_and():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -827,6 +850,7 @@ def test_while_and():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_ternary_expr():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -845,6 +869,7 @@ def test_while_ternary_expr():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_truthiness_int():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -861,6 +886,7 @@ def test_while_truthiness_int():
 # ===================================================================
 # while_not: while condition with not  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 16: while not >= 条件
@@ -895,6 +921,7 @@ def while_not_ge_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_not_ge():
     device = ST_DEVICE
     torch.npu.set_device(device)

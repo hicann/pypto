@@ -49,11 +49,13 @@ from pypto_pro.runtime.tilingkey import TilingKeyField
 import pytest
 import torch
 
+import pypto
+
 logging.basicConfig(level=logging.INFO)
 # ================================================================
 #  Configuration — change QK_PRELOAD to tune pre-compute depth
 # ================================================================
-QK_PRELOAD = 2          # How many KV tiles to pre-compute QK ahead
+QK_PRELOAD = 2  # How many KV tiles to pre-compute QK ahead
 
 # ================================================================
 #  Tile dimensions and constants
@@ -139,17 +141,26 @@ class OpTiling:
     d: int
     layout: int
 
+
 # ================================================================
 #  TilingKey — compile-time template specialization (matches ops-transformer)
 # ================================================================
 # Dict for JIT launch (concrete key)
 _FA_TILING_KEY_LAUNCH = {
-    "KernelTypeKey": 0, "ImplMode": 0, "Layout": 1,
-    "S1TemplateType": 128, "S2TemplateType": 128,
-    "DTemplateType": 128, "DvTemplateType": 128,
-    "PseMode": 9, "HasAtten": 0,
-    "HasDrop": 0, "HasRope": 0,
-    "OutDtype": 0, "Regbase": 1, "OptionalDn": 0,
+    "KernelTypeKey": 0,
+    "ImplMode": 0,
+    "Layout": 1,
+    "S1TemplateType": 128,
+    "S2TemplateType": 128,
+    "DTemplateType": 128,
+    "DvTemplateType": 128,
+    "PseMode": 9,
+    "HasAtten": 0,
+    "HasDrop": 0,
+    "HasRope": 0,
+    "OutDtype": 0,
+    "Regbase": 1,
+    "OptionalDn": 0,
 }
 
 
@@ -171,9 +182,22 @@ class FaTilingKey:
 
     @classmethod
     def is_valid(cls, key):
-        (kernel_type_key, impl_mode, layout, s1_template_type, s2_template_type,
-         d_template_type, dv_template_type, pse_mode, has_atten, has_drop,
-         has_rope, out_dtype, regbase, optional_dn) = key
+        (
+            kernel_type_key,
+            impl_mode,
+            layout,
+            s1_template_type,
+            s2_template_type,
+            d_template_type,
+            dv_template_type,
+            pse_mode,
+            has_atten,
+            has_drop,
+            has_rope,
+            out_dtype,
+            regbase,
+            optional_dn,
+        ) = key
         if kernel_type_key != 0:
             return False
         if impl_mode != 0:
@@ -202,14 +226,14 @@ class FaTilingKey:
             return False
         return True
 
+
 # ================================================================
 #  VF softmax functions (merged no-update / update with is_update flag)
 # ================================================================
 
 
 @pl.vector_function
-def process_vec1_dn_vf(input_tile, x_exp_tile, max_tile, exp_max_tile, sum_tile, is_update,
-                       mask_tile, need_mask):
+def process_vec1_dn_vf(input_tile, x_exp_tile, max_tile, exp_max_tile, sum_tile, is_update, mask_tile, need_mask):
     """Softmax DN VF kernel — merged no-update / update / causal-mask versions."""
     preg_108 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     preg_136 = vf.update_mask(128, dtype=io_dtype)
@@ -286,15 +310,28 @@ def process_vec1_dn_vf(input_tile, x_exp_tile, max_tile, exp_max_tile, sum_tile,
         vreg_x_exp_even_dtype_1 = vf.astype(vreg_x_exp_1, preg_108, layout=pl.CastLayout.ZERO, dtype=io_dtype)
         vreg_x_exp_odd_dtype_1 = vf.astype(vreg_x_exp_3, preg_108, layout=pl.CastLayout.ZERO, dtype=io_dtype)
         vreg_x_exp_dtype_1_pack, vreg_x_exp_dtype_1_packa = vf.de_interleave(
-            vreg_x_exp_even_dtype_1, vreg_x_exp_odd_dtype_1)
-        vf.store_align(x_exp_tile, vreg_x_exp_dtype_pack, preg_136,
-                      block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-                      data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+            vreg_x_exp_even_dtype_1, vreg_x_exp_odd_dtype_1
+        )
+        vf.store_align(
+            x_exp_tile,
+            vreg_x_exp_dtype_pack,
+            preg_136,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
         vreg_x_sum_0 = vf.add(vreg_x_exp_0, vreg_x_sum_0, preg_108)
         vreg_x_sum_2 = vf.add(vreg_x_exp_2, vreg_x_sum_2, preg_108)
-        vf.store_align(x_exp_1, vreg_x_exp_dtype_1_pack, preg_136,
-                      block_stride=block_stride_dn, repeat_stride=REPEAT_STRIDE_DN,
-                      data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            x_exp_1,
+            vreg_x_exp_dtype_1_pack,
+            preg_136,
+            block_stride=block_stride_dn,
+            repeat_stride=REPEAT_STRIDE_DN,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
         vreg_x_sum_1 = vf.add(vreg_x_exp_1, vreg_x_sum_1, preg_108)
         vreg_x_sum_3 = vf.add(vreg_x_exp_3, vreg_x_sum_3, preg_108)
     vreg_x_sum0 = vf.add(vreg_x_sum_2, vreg_x_sum_0, preg_108)
@@ -397,8 +434,21 @@ def compute_pv(b_idx, n_idx, ctx, v_l1_db, p_mat_db, left_db, right_db, acc_db, 
     )
 
 
-def compute_p(p_ctx, global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo, qk_vec_db, p_dtype_db, p_dtype_main_db,
-    p_dtype_back_db, p_mat_db, sub_id, attn_mask, mask_db, need_mask):
+def compute_p(
+    p_ctx,
+    global_max_rm_buf,
+    global_sum_rm_buf,
+    exp_corr_rm_fifo,
+    qk_vec_db,
+    p_dtype_db,
+    p_dtype_main_db,
+    p_dtype_back_db,
+    p_mat_db,
+    sub_id,
+    attn_mask,
+    mask_db,
+    need_mask,
+):
     pl.system.wait_cross_core(
         pipe=pl.PipeType.V,
         event_id=QK_READY_FORWARD_IDS[p_ctx.task_id_mod2],
@@ -416,25 +466,31 @@ def compute_p(p_ctx, global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo, qk_
             mask_slot = mask_db.next()
             pl.load(mask_slot, attn_mask, [0, sub_id * TS_HALF])
             if p_ctx.ki == 0:
-                process_vec1_dn_vf(qk_slot, p_dtype_slot, global_max_rm_cur,
-                                   exp_corr_rm_cur, global_sum_rm_cur, 0, mask_slot, 1)
+                process_vec1_dn_vf(
+                    qk_slot, p_dtype_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 0, mask_slot, 1
+                )
             else:
-                process_vec1_dn_vf(qk_slot, p_dtype_slot, global_max_rm_cur,
-                                   exp_corr_rm_cur, global_sum_rm_cur, 1, mask_slot, 1)
+                process_vec1_dn_vf(
+                    qk_slot, p_dtype_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 1, mask_slot, 1
+                )
         else:
             if p_ctx.ki == 0:
-                process_vec1_dn_vf(qk_slot, p_dtype_slot, global_max_rm_cur,
-                                   exp_corr_rm_cur, global_sum_rm_cur, 0, qk_slot, 0)
+                process_vec1_dn_vf(
+                    qk_slot, p_dtype_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 0, qk_slot, 0
+                )
             else:
-                process_vec1_dn_vf(qk_slot, p_dtype_slot, global_max_rm_cur,
-                                   exp_corr_rm_cur, global_sum_rm_cur, 1, qk_slot, 0)
+                process_vec1_dn_vf(
+                    qk_slot, p_dtype_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 1, qk_slot, 0
+                )
     else:
         if p_ctx.ki == 0:
-            process_vec1_dn_vf(qk_slot, p_dtype_slot, global_max_rm_cur,
-                               exp_corr_rm_cur, global_sum_rm_cur, 0, qk_slot, 0)
+            process_vec1_dn_vf(
+                qk_slot, p_dtype_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 0, qk_slot, 0
+            )
         else:
-            process_vec1_dn_vf(qk_slot, p_dtype_slot, global_max_rm_cur,
-                               exp_corr_rm_cur, global_sum_rm_cur, 1, qk_slot, 0)
+            process_vec1_dn_vf(
+                qk_slot, p_dtype_slot, global_max_rm_cur, exp_corr_rm_cur, global_sum_rm_cur, 1, qk_slot, 0
+            )
     pl.system.set_cross_core(
         pipe=pl.PipeType.V,
         event_id=QK_READY_BARKWARD_IDS[p_ctx.task_id_mod2],
@@ -447,8 +503,9 @@ def compute_p(p_ctx, global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo, qk_
     )
 
 
-def compute_gu(b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_corr_rm_fifo,
-    running_o_buf, o_dtype_buf, o):
+def compute_gu(
+    b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_corr_rm_fifo, running_o_buf, o_dtype_buf, o
+):
     pv_slot = pv_vec_db.next()
     gsum_gu = global_sum_rm_buf[g_ctx.q_count_mod3]
     exp_corr_gu = exp_corr_rm_fifo[g_ctx.task_id_mod3]
@@ -489,6 +546,7 @@ def compute_gu(b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_co
             )
             pl.store_tile(o, o_dtype_buf, [b_idx, g_ctx.qi * 2 + sub_id, n_idx, 0], order=[1, 3])
 
+
 # ================================================================
 #  Kernel — dynamic rank: inputs are raw pointers, shapes come from tiling
 # ================================================================
@@ -505,8 +563,6 @@ def compute_gu(b_idx, n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf, exp_co
     },
     compile_timeout=300,
 )
-
-
 def flash_attention_score(
     query: pl.Ptr[pl.DT_UINT8],
     key: pl.Ptr[pl.DT_UINT8],
@@ -574,37 +630,57 @@ def flash_attention_score(
     # ===== Cross-core shared buffers =====
     qk_vec_db = pl.make_tile_group(
         type=pl.TileType(shape=[TKV, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=VA0, mutex_ids=[14, 15])
+        addrs=VA0,
+        mutex_ids=[14, 15],
+    )
     pv_vec_db = pl.make_tile_group(
         type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=VA8, mutex_ids=[16, 17])
+        addrs=VA8,
+        mutex_ids=[16, 17],
+    )
     p_mat_db = pl.make_tile_group(
-        type=pl.TileType(shape=[TS, TKV], dtype=io_dtype, target_memory=pl.MemorySpace.Mat,
-                         layout=pl.ZN),
-        addrs=MA2, mutex_ids=[18, 19, 20])
+        type=pl.TileType(shape=[TS, TKV], dtype=io_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
+        addrs=MA2,
+        mutex_ids=[18, 19, 20],
+    )
 
     # =================== CUBE SECTION ===================
     with pl.section_cube():
         q_l1_db = pl.make_tile_group(
             type=pl.TileType(
-                shape=[TD, TS], dtype=io_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.ZN,
+                shape=[TD, TS],
+                dtype=io_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.ZN,
             ),
-            addrs=MA0, mutex_ids=[0, 1])
+            addrs=MA0,
+            mutex_ids=[0, 1],
+        )
         k_l1_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TD], dtype=io_dtype, target_memory=pl.MemorySpace.Mat),
-            addrs=MA1, mutex_ids=[2, 3])
+            addrs=MA1,
+            mutex_ids=[2, 3],
+        )
         v_l1_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TD], dtype=io_dtype, target_memory=pl.MemorySpace.Mat),
-            addrs=MA3, mutex_ids=[4, 5])
+            addrs=MA3,
+            mutex_ids=[4, 5],
+        )
         left_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TD], dtype=io_dtype, target_memory=pl.MemorySpace.Left),
-            addrs=LA0, mutex_ids=[6, 7])
+            addrs=LA0,
+            mutex_ids=[6, 7],
+        )
         right_db = pl.make_tile_group(
             type=pl.TileType(shape=[TD, TS], dtype=io_dtype, target_memory=pl.MemorySpace.Right),
-            addrs=RA0, mutex_ids=[8, 9])
+            addrs=RA0,
+            mutex_ids=[8, 9],
+        )
         acc_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-            addrs=CA0, mutex_ids=[10, 11, 12, 13])
+            addrs=CA0,
+            mutex_ids=[10, 11, 12, 13],
+        )
 
         task_id = 0
         qkv_tile_dims = [1, 3]
@@ -631,32 +707,67 @@ def flash_attention_score(
                         ctx_curr.task_id_mod2 = task_id % 2
                         ctx_curr.task_id_mod3 = task_id % 3
                         sk_off = [b_idx, ki, n_idx, 0]
-                        compute_qk(qkv_tile_dims, sq_off, sk_off, ki, cur_q_slot,
-                                   tensor_q, tensor_k, k_l1_db, left_db, right_db,
-                                   acc_db, qk_vec_db, task_id)
+                        compute_qk(
+                            qkv_tile_dims,
+                            sq_off,
+                            sk_off,
+                            ki,
+                            cur_q_slot,
+                            tensor_q,
+                            tensor_k,
+                            k_l1_db,
+                            left_db,
+                            right_db,
+                            acc_db,
+                            qk_vec_db,
+                            task_id,
+                        )
 
                     if task_id > 1:
                         prev = ctx_arr[(task_id + 2) % 4]
-                        compute_pv(prev.b_idx, prev.n_idx, prev, v_l1_db, p_mat_db, left_db, right_db, acc_db,
-                                   pv_vec_db, tensor_v)
+                        compute_pv(
+                            prev.b_idx,
+                            prev.n_idx,
+                            prev,
+                            v_l1_db,
+                            p_mat_db,
+                            left_db,
+                            right_db,
+                            acc_db,
+                            pv_vec_db,
+                            tensor_v,
+                        )
                     task_id = task_id + 1
 
     # =================== VECTOR SECTION ===================
     with pl.section_vector():
         p_dtype_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF * 2], dtype=io_dtype,
-                             target_memory=pl.MemorySpace.Vec),
-            addrs=[VA2, VA2B], mutex_ids=[0, 1])
+            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF * 2], dtype=io_dtype, target_memory=pl.MemorySpace.Vec),
+            addrs=[VA2, VA2B],
+            mutex_ids=[0, 1],
+        )
         p_dtype_main_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF], dtype=io_dtype,
-                             target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[TKV // 2, TS_HALF], layout=pl.NZ),
-            addrs=[VA2, VA2B], mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TKV // 2 + 1, TS_HALF],
+                dtype=io_dtype,
+                target_memory=pl.MemorySpace.Vec,
+                valid_shape=[TKV // 2, TS_HALF],
+                layout=pl.NZ,
+            ),
+            addrs=[VA2, VA2B],
+            mutex_ids=[0, 1],
+        )
         p_dtype_back_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV // 2 + 1, TS_HALF], dtype=io_dtype,
-                             target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[TKV // 2, TS_HALF], layout=pl.NZ),
-            addrs=[VA2_DN, VA2B_DN], mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TKV // 2 + 1, TS_HALF],
+                dtype=io_dtype,
+                target_memory=pl.MemorySpace.Vec,
+                valid_shape=[TKV // 2, TS_HALF],
+                layout=pl.NZ,
+            ),
+            addrs=[VA2_DN, VA2B_DN],
+            mutex_ids=[0, 1],
+        )
         red_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         gmax_rm_0 = pl.make_tile(red_rm_type, addr=VA_GMAX0, size=VB_RED)
         gmax_rm_1 = pl.make_tile(red_rm_type, addr=VA_GMAX1, size=VB_RED)
@@ -672,15 +783,21 @@ def flash_attention_score(
         exp_corr_rm_fifo = (ec_rm_0, ec_rm_1, ec_rm_2)
         o_dtype_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=io_dtype, target_memory=pl.MemorySpace.Vec),
-            addrs=VA9, mutex_ids=[11])
+            addrs=VA9,
+            mutex_ids=[11],
+        )
         o_dtype_buf = o_dtype_g.next()
         running_o_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=VA7, mutex_ids=[12])
+            addrs=VA7,
+            mutex_ids=[12],
+        )
         running_o_buf = running_o_g.next()
         mask_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TS_HALF], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec),
-            addrs=VA_MASK, mutex_ids=[8, 9])
+            addrs=VA_MASK,
+            mutex_ids=[8, 9],
+        )
 
         pl.system.set_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_BARKWARD_IDS[0])
         pl.system.set_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_BARKWARD_IDS[1])
@@ -690,8 +807,9 @@ def flash_attention_score(
         sub_id = pl.get_subblock_idx()
         task_id = 0
         q_count = 0
-        ctx_arr = pl.struct_array(4, "VecCtx", b_idx=0, n_idx=0, qi=0, ki=0, skv_tiles=0,
-                                  task_id_mod2=0, task_id_mod3=0, q_count_mod3=0)
+        ctx_arr = pl.struct_array(
+            4, "VecCtx", b_idx=0, n_idx=0, qi=0, ki=0, skv_tiles=0, task_id_mod2=0, task_id_mod3=0, q_count_mod3=0
+        )
         for work_id in pl.range(work_start, work_end):
             b_idx = work_id // n_dim
             n_idx = work_id % n_dim
@@ -717,15 +835,38 @@ def flash_attention_score(
                     if task_id > 0:
                         if ki < causal_skv + 1:
                             p_ctx = ctx_arr[(task_id + 3) % 4]
-                            compute_p(p_ctx, global_max_rm_buf, global_sum_rm_buf, exp_corr_rm_fifo,
-                                qk_vec_db, p_dtype_db, p_dtype_main_db,
-                                p_dtype_back_db, p_mat_db, sub_id, tensor_attn_mask, mask_db, HasAtten)  # noqa: F821
+                            compute_p(
+                                p_ctx,
+                                global_max_rm_buf,
+                                global_sum_rm_buf,
+                                exp_corr_rm_fifo,
+                                qk_vec_db,
+                                p_dtype_db,
+                                p_dtype_main_db,
+                                p_dtype_back_db,
+                                p_mat_db,
+                                sub_id,
+                                tensor_attn_mask,
+                                mask_db,
+                                HasAtten,
+                            )  # noqa: F821
                     if task_id > 2:
                         g_ctx = ctx_arr[(task_id + 1) % 4]
-                        compute_gu(g_ctx.b_idx, g_ctx.n_idx, g_ctx, sub_id, pv_vec_db, global_sum_rm_buf,
-                                   exp_corr_rm_fifo, running_o_buf, o_dtype_buf, tensor_o)
+                        compute_gu(
+                            g_ctx.b_idx,
+                            g_ctx.n_idx,
+                            g_ctx,
+                            sub_id,
+                            pv_vec_db,
+                            global_sum_rm_buf,
+                            exp_corr_rm_fifo,
+                            running_o_buf,
+                            o_dtype_buf,
+                            tensor_o,
+                        )
                     task_id = task_id + 1
                 q_count = q_count + 1
+
 
 # ================================================================
 #  Reference + Tests
@@ -760,8 +901,7 @@ def flash_attention_full_ref_bs(q, k, v, d):
 
 
 def make_causal_mask_dn_fixed_u8(device):
-    return torch.tril(
-        torch.ones((FIXED_MASK_S, FIXED_MASK_S), dtype=torch.uint8, device=device), diagonal=-1)
+    return torch.tril(torch.ones((FIXED_MASK_S, FIXED_MASK_S), dtype=torch.uint8, device=device), diagonal=-1)
 
 
 @pytest.mark.soc("950")
@@ -772,8 +912,7 @@ def make_causal_mask_dn_fixed_u8(device):
         (torch.bfloat16, pl.DT_BF16, 1e-2, 1e-2),
     ],
 )
-
-
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_perf(torch_dtype, pl_dtype, rtol, atol):
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
@@ -806,41 +945,67 @@ def test_fa_perf(torch_dtype, pl_dtype, rtol, atol):
     o_causal = torch.zeros((b, sq, n, d), device=device, dtype=torch_dtype)
     tk_causal = {**_FA_TILING_KEY_LAUNCH, "HasAtten": 1}
     flash_attention_score[None, actual_num_cores, tk_causal, datatype](
-        q_t, k_t, v_t,
-        None, None, None,           # real_shift, drop_mask, padding_mask
-        attn_mask,                   # atten_mask
-        None, None, None,            # prefix, actual_seq_qlen, actual_seq_kvlen
-        None, None,                  # q_start_idx, kv_start_idx
-        None, None, None,            # d_scale_q, d_scale_k, d_scale_v
-        None, None,                  # query_rope, key_rope
-        None, None,                  # sink, p_scale
-        softmax_max, softmax_sum, softmax_out,  # softmax outputs
-        o_causal,                    # attention_out
-        None,                        # workspace
-        tiling)
+        q_t,
+        k_t,
+        v_t,
+        None,
+        None,
+        None,  # real_shift, drop_mask, padding_mask
+        attn_mask,  # atten_mask
+        None,
+        None,
+        None,  # prefix, actual_seq_qlen, actual_seq_kvlen
+        None,
+        None,  # q_start_idx, kv_start_idx
+        None,
+        None,
+        None,  # d_scale_q, d_scale_k, d_scale_v
+        None,
+        None,  # query_rope, key_rope
+        None,
+        None,  # sink, p_scale
+        softmax_max,
+        softmax_sum,
+        softmax_out,  # softmax outputs
+        o_causal,  # attention_out
+        None,  # workspace
+        tiling,
+    )
     torch.npu.synchronize()
     o_causal_ref = flash_attention_causal_ref_bs(q_t, k_t, v_t, d)
     torch.testing.assert_close(o_causal, o_causal_ref, rtol=rtol, atol=atol)
-    logging.info("HasAtten=1 (causal+mask) PASS: max|diff|=%.6f",
-                 (o_causal - o_causal_ref).abs().max().item())
+    logging.info("HasAtten=1 (causal+mask) PASS: max|diff|=%.6f", (o_causal - o_causal_ref).abs().max().item())
 
     o_full = torch.zeros((b, sq, n, d), device=device, dtype=torch_dtype)
     tk_full = {**_FA_TILING_KEY_LAUNCH, "HasAtten": 0}
     flash_attention_score[None, actual_num_cores, tk_full, datatype](
-        q_t, k_t, v_t,
-        None, None, None,
+        q_t,
+        k_t,
+        v_t,
+        None,
+        None,
+        None,
         attn_mask,
-        None, None, None,
-        None, None,
-        None, None, None,
-        None, None,
-        None, None,
-        softmax_max, softmax_sum, softmax_out,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        softmax_max,
+        softmax_sum,
+        softmax_out,
         o_full,
-        None,                        # workspace
-        tiling)
+        None,  # workspace
+        tiling,
+    )
     torch.npu.synchronize()
     o_full_ref = flash_attention_full_ref_bs(q_t, k_t, v_t, d)
     torch.testing.assert_close(o_full, o_full_ref, rtol=rtol, atol=atol)
-    logging.info("HasAtten=0 (full) PASS: max|diff|=%.6f",
-                 (o_full - o_full_ref).abs().max().item())
+    logging.info("HasAtten=0 (full) PASS: max|diff|=%.6f", (o_full - o_full_ref).abs().max().item())

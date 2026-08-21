@@ -19,6 +19,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -56,6 +58,7 @@ def pto_assert_doc_examples_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_pto_assert_doc_examples():
     """Verify all pto_assert.md documentation examples with True conditions.
 
@@ -86,6 +89,7 @@ def pto_assert_fail_example_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_pto_assert_fail_example():
     """Trigger assertion failure to capture device log output format.
 

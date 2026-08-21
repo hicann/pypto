@@ -30,6 +30,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 # ================================================================
 #  Tile dimensions and constants
 # ================================================================
@@ -108,6 +110,7 @@ PV_READY_IDS = (4, 5)
 # ================================================================
 #  Compute functions -same logic as BSND, but indexing into [T, N, D]
 # ================================================================
+
 
 def compute_qk(
     q_offset: pl.DT_INT64,
@@ -424,7 +427,8 @@ def fa_tnd_dn_kernel(
     )
     tile_nz = pl.make_tile(
         pl.TileType(shape=[TKV, TS_HALF], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
-        addr=VA10, size=VB6_DN,
+        addr=VA10,
+        size=VB6_DN,
     )
     qk_vec1 = pl.make_tile(
         pl.TileType(shape=[TKV, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA11, size=VB4_KV
@@ -437,28 +441,24 @@ def fa_tnd_dn_kernel(
     p_mat_buf2 = pl.make_tile(p_mat_type, addr=MA2_PONG, size=P_F16)
 
     with pl.section_cube():
-        q_mat_type = pl.TileType(
-            shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN
-        )
+        q_mat_type = pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN)
         q_mat_0 = pl.make_tile(q_mat_type, addr=MA0, size=Q_F16)
         q_mat_1 = pl.make_tile(q_mat_type, addr=MA0_PONG, size=Q_F16)
-        k_mat_type = pl.TileType(
-            shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ
-        )
+        k_mat_type = pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
         k_mat_0 = pl.make_tile(k_mat_type, addr=MA1, size=KT_F16)
         k_mat_1 = pl.make_tile(k_mat_type, addr=MA1_PONG, size=KT_F16)
-        v_mat_type = pl.TileType(
-            shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ
-        )
+        v_mat_type = pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
         v_mat_0 = pl.make_tile(v_mat_type, addr=MA3, size=V_F16)
         v_mat_1 = pl.make_tile(v_mat_type, addr=MA3_PONG, size=V_F16)
         left_0 = pl.make_tile(
             pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addr=LA0, size=KT_F16,
+            addr=LA0,
+            size=KT_F16,
         )
         left_1 = pl.make_tile(
             pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addr=LA1, size=KT_F16,
+            addr=LA1,
+            size=KT_F16,
         )
         right_0 = pl.make_tile(
             pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right), addr=RA0, size=Q_F16
@@ -516,9 +516,18 @@ def fa_tnd_dn_kernel(
                 kv_offset = kv_offset + actual_seq_kv[bi]
             q_offset_tiles = q_offset // TS
             kv_offset_tiles = kv_offset // TKV
-            ctx_arr = pl.struct_array(3, "CubeCtx", n_idx=0, qi=0, ki=0,
-                                     skv_tiles=0, q_count=0, task_id=0,
-                                     q_offset_tiles=0, kv_offset_tiles=0)
+            ctx_arr = pl.struct_array(
+                3,
+                "CubeCtx",
+                n_idx=0,
+                qi=0,
+                ki=0,
+                skv_tiles=0,
+                q_count=0,
+                task_id=0,
+                q_offset_tiles=0,
+                kv_offset_tiles=0,
+            )
             # Not needed in cube section, just for context pipeline
             for qi in pl.range(0, sq_tiles):
                 for ki in pl.range(0, skv_tiles):
@@ -532,19 +541,35 @@ def fa_tnd_dn_kernel(
                     ctx_curr.q_offset_tiles = q_offset_tiles
                     ctx_curr.kv_offset_tiles = kv_offset_tiles
                     compute_qk(
-                        q_offset_tiles, kv_offset_tiles, n_idx,
-                        qi, ki, skv_tiles, q_count, task_id,
-                        l0ab_idx, l0c_idx, q, k, cube_tiles,
+                        q_offset_tiles,
+                        kv_offset_tiles,
+                        n_idx,
+                        qi,
+                        ki,
+                        skv_tiles,
+                        q_count,
+                        task_id,
+                        l0ab_idx,
+                        l0c_idx,
+                        q,
+                        k,
+                        cube_tiles,
                     )
                     l0ab_idx = 1 - l0ab_idx
                     l0c_idx = 1 - l0c_idx
                     if task_id > 0:
                         ctx_pre = ctx_arr[(task_id + 2) % 3]
                         compute_pv(
-                            ctx_pre.kv_offset_tiles, ctx_pre.n_idx,
-                            ctx_pre.ki, ctx_pre.skv_tiles,
-                            ctx_pre.q_count, ctx_pre.task_id,
-                            l0ab_idx, l0c_idx, v, cube_tiles,
+                            ctx_pre.kv_offset_tiles,
+                            ctx_pre.n_idx,
+                            ctx_pre.ki,
+                            ctx_pre.skv_tiles,
+                            ctx_pre.q_count,
+                            ctx_pre.task_id,
+                            l0ab_idx,
+                            l0c_idx,
+                            v,
+                            cube_tiles,
                         )
                         l0ab_idx = 1 - l0ab_idx
                         l0c_idx = 1 - l0c_idx
@@ -553,10 +578,16 @@ def fa_tnd_dn_kernel(
             if task_id > 0:
                 ctx_pre = ctx_arr[(task_id + 2) % 3]
                 compute_pv(
-                    ctx_pre.kv_offset_tiles, ctx_pre.n_idx,
-                    ctx_pre.ki, ctx_pre.skv_tiles,
-                    ctx_pre.q_count, ctx_pre.task_id,
-                    l0ab_idx, l0c_idx, v, cube_tiles,
+                    ctx_pre.kv_offset_tiles,
+                    ctx_pre.n_idx,
+                    ctx_pre.ki,
+                    ctx_pre.skv_tiles,
+                    ctx_pre.q_count,
+                    ctx_pre.task_id,
+                    l0ab_idx,
+                    l0c_idx,
+                    v,
+                    cube_tiles,
                 )
                 l0ab_idx = 1 - l0ab_idx
                 l0c_idx = 1 - l0c_idx
@@ -604,9 +635,9 @@ def fa_tnd_dn_kernel(
                 q_offset = q_offset + actual_seq_q[bi]
                 kv_offset = kv_offset + actual_seq_kv[bi]
             q_offset_half = q_offset // TS_HALF
-            ctx_arr = pl.struct_array(3, "VecCtx", n_idx=0, qi=0, ki=0,
-                                     skv_tiles=0, q_count=0, sub_id=0, task_id=0,
-                                     q_offset_half=0)
+            ctx_arr = pl.struct_array(
+                3, "VecCtx", n_idx=0, qi=0, ki=0, skv_tiles=0, q_count=0, sub_id=0, task_id=0, q_offset_half=0
+            )
             for qi in pl.range(0, sq_tiles):
                 for ki in pl.range(0, skv_tiles):
                     ctx_curr = ctx_arr[task_id % 3]
@@ -621,48 +652,75 @@ def fa_tnd_dn_kernel(
                     if task_id > 0:
                         ctx_p = ctx_arr[(task_id + 2) % 3]
                         compute_p(
-                            ctx_p.qi, ctx_p.ki, ctx_p.skv_tiles,
-                            ctx_p.q_count, sub_id, ctx_p.task_id,
+                            ctx_p.qi,
+                            ctx_p.ki,
+                            ctx_p.skv_tiles,
+                            ctx_p.q_count,
+                            sub_id,
+                            ctx_p.task_id,
                             softmax_tiles,
                         )
                     if task_id > 1:
                         ctx_g = ctx_arr[(task_id + 1) % 3]
                         compute_gu(
-                            ctx_g.q_offset_half, ctx_g.n_idx,
-                            ctx_g.qi, ctx_g.ki, ctx_g.skv_tiles,
-                            ctx_g.q_count, sub_id, ctx_g.task_id,
-                            o, gu_tiles,
+                            ctx_g.q_offset_half,
+                            ctx_g.n_idx,
+                            ctx_g.qi,
+                            ctx_g.ki,
+                            ctx_g.skv_tiles,
+                            ctx_g.q_count,
+                            sub_id,
+                            ctx_g.task_id,
+                            o,
+                            gu_tiles,
                         )
                     task_id = task_id + 1
                 q_count = q_count + 1
             if task_id > 0:
                 ctx_p = ctx_arr[(task_id + 2) % 3]
                 compute_p(
-                    ctx_p.qi, ctx_p.ki, ctx_p.skv_tiles,
-                    ctx_p.q_count, sub_id, ctx_p.task_id,
+                    ctx_p.qi,
+                    ctx_p.ki,
+                    ctx_p.skv_tiles,
+                    ctx_p.q_count,
+                    sub_id,
+                    ctx_p.task_id,
                     softmax_tiles,
                 )
                 if task_id > 1:
                     ctx_g = ctx_arr[(task_id + 1) % 3]
                     compute_gu(
-                        ctx_g.q_offset_half, ctx_g.n_idx,
-                        ctx_g.qi, ctx_g.ki, ctx_g.skv_tiles,
-                        ctx_g.q_count, sub_id, ctx_g.task_id,
-                        o, gu_tiles,
+                        ctx_g.q_offset_half,
+                        ctx_g.n_idx,
+                        ctx_g.qi,
+                        ctx_g.ki,
+                        ctx_g.skv_tiles,
+                        ctx_g.q_count,
+                        sub_id,
+                        ctx_g.task_id,
+                        o,
+                        gu_tiles,
                     )
                 task_id = task_id + 1
                 ctx_g2 = ctx_arr[(task_id + 1) % 3]
                 compute_gu(
-                    ctx_g2.q_offset_half, ctx_g2.n_idx,
-                    ctx_g2.qi, ctx_g2.ki, ctx_g2.skv_tiles,
-                    ctx_g2.q_count, sub_id, ctx_g2.task_id,
-                    o, gu_tiles,
+                    ctx_g2.q_offset_half,
+                    ctx_g2.n_idx,
+                    ctx_g2.qi,
+                    ctx_g2.ki,
+                    ctx_g2.skv_tiles,
+                    ctx_g2.q_count,
+                    sub_id,
+                    ctx_g2.task_id,
+                    o,
+                    gu_tiles,
                 )
 
 
 # ================================================================
 #  Golden reference
 # ================================================================
+
 
 def flash_attention_ref_tnd(q_tnd, k_tnd, v_tnd, seq_q_list, seq_kv_list, d):
     """Reference attention operating on TND tensors, per-batch."""
@@ -688,7 +746,9 @@ def flash_attention_ref_tnd(q_tnd, k_tnd, v_tnd, seq_q_list, seq_kv_list, d):
 #  Test
 # ================================================================
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_tnd_a5():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
@@ -714,7 +774,12 @@ def test_fa_tnd_a5():
         tkv = sum(seq_kv_list)
         logging.info(
             "\nFA-TND-DN-A5 (b=%s, seq_q=%s, seq_kv=%s, n=%s, d=%s) cores=%s",
-            b, seq_q_list, seq_kv_list, n, d, num_cores,
+            b,
+            seq_q_list,
+            seq_kv_list,
+            n,
+            d,
+            num_cores,
         )
 
         q = torch.rand((tq, n, d), device=device, dtype=torch.float16)
@@ -733,8 +798,7 @@ def test_fa_tnd_a5():
             work_ranges[core, 1] = min((core + 1) * work_per_core, total_work)
 
         actual_num_cores = min(num_cores, total_work)
-        fa_tnd_dn_kernel[None, actual_num_cores](q, k, v, o,
-                  actual_seq_q, actual_seq_kv, work_ranges)
+        fa_tnd_dn_kernel[None, actual_num_cores](q, k, v, o, actual_seq_q, actual_seq_kv, work_ranges)
         torch.npu.synchronize()
 
         o_ref = flash_attention_ref_tnd(q, k, v, seq_q_list, seq_kv_list, d)

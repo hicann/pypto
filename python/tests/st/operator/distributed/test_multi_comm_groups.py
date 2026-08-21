@@ -253,6 +253,7 @@ def allreduce_cascading_worker(worker_params, error_queue: mp.Queue):
 
 
 @pytest.mark.world_size(4)
+@pypto.options(pass_options={"enable_slice": True})
 def test_allreduce_cascading():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

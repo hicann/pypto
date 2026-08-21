@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -61,6 +63,7 @@ def add_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_add_kernel():
     device = ST_DEVICE
     _require_a5(device)
@@ -84,7 +87,7 @@ def test_add_kernel():
 # ===========================================================================
 @pl.jit(auto_mutex=True)
 def load_tile_kernel(
-    x: pl.Tensor[[256, 64], pl.DT_FP16],   # 4 个 64x64 的块
+    x: pl.Tensor[[256, 64], pl.DT_FP16],  # 4 个 64x64 的块
     out: pl.Tensor[[256, 64], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -96,11 +99,12 @@ def load_tile_kernel(
             cur_x = x_db.next()
             cur_out = out_db.next()
             pl.load_tile(cur_x, x, [ti, 0])
-            pl.add(cur_out, cur_x, cur_x)   # 翻倍，验证 load_tile 取到了正确的块
+            pl.add(cur_out, cur_x, cur_x)  # 翻倍，验证 load_tile 取到了正确的块
             pl.store_tile(out, cur_out, [ti, 0])
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_load_tile_kernel():
     device = ST_DEVICE
     _require_a5(device)
@@ -122,7 +126,7 @@ def test_load_tile_kernel():
 @pl.jit(auto_mutex=True)
 def store_tile_kernel(
     x: pl.Tensor[[64, 64], pl.DT_FP16],
-    out: pl.Tensor[[256, 64], pl.DT_FP16],   # 4 个 64x64 的块
+    out: pl.Tensor[[256, 64], pl.DT_FP16],  # 4 个 64x64 的块
 ):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tile_x = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
@@ -135,6 +139,7 @@ def store_tile_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_store_tile_kernel():
     device = ST_DEVICE
     _require_a5(device)
@@ -177,15 +182,16 @@ def matmul_move_kernel(
         cur_a_l0a = a_l0a.current()
         cur_b_l0b = b_l0b.current()
         cur_c_l0c = c_l0c.current()
-        pl.load(cur_a_l1, a, [0, 0])     # GM -> L1
+        pl.load(cur_a_l1, a, [0, 0])  # GM -> L1
         pl.load(cur_b_l1, b, [0, 0])
-        pl.move(cur_a_l0a, cur_a_l1)            # L1 -> L0A
-        pl.move(cur_b_l0b, cur_b_l1)            # L1 -> L0B
+        pl.move(cur_a_l0a, cur_a_l1)  # L1 -> L0A
+        pl.move(cur_b_l0b, cur_b_l1)  # L1 -> L0B
         pl.matmul(cur_c_l0c, cur_a_l0a, cur_b_l0b)
-        pl.store(out, cur_c_l0c, [0, 0])     # L0C -> GM（源在 Acc，走 FIX 流水）
+        pl.store(out, cur_c_l0c, [0, 0])  # L0C -> GM（源在 Acc，走 FIX 流水）
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_move_kernel():
     device = ST_DEVICE
     _require_a5(device)
@@ -216,9 +222,10 @@ def insert_matmul_kernel(
     out: pl.Tensor[[64, 64], pl.DT_FP32],
 ):
     v1_mat_group = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
-                         layout=pl.NZ),
-        addrs=0x10000, mutex_ids=[0])
+        type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
+        addrs=0x10000,
+        mutex_ids=[0],
+    )
 
     with pl.section_vector():
         sub_index = pl.get_subblock_idx()
@@ -226,17 +233,24 @@ def insert_matmul_kernel(
 
         tile_x_group = pl.make_tile_group(
             type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=0x0000, mutex_ids=[1])
+            addrs=0x0000,
+            mutex_ids=[1],
+        )
         tile_y_group = pl.make_tile_group(
             type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=0x2000, mutex_ids=[2])
+            addrs=0x2000,
+            mutex_ids=[2],
+        )
         tile_sum_group = pl.make_tile_group(
             type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=0x4000, mutex_ids=[3])
+            addrs=0x4000,
+            mutex_ids=[3],
+        )
         tile_nz_group = pl.make_tile_group(
-            type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec,
-                             layout=pl.NZ),
-            addrs=0x6000, mutex_ids=[4])
+            type=pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
+            addrs=0x6000,
+            mutex_ids=[4],
+        )
         v1_mat = v1_mat_group.current()
         tile_x = tile_x_group.current()
         tile_y = tile_y_group.current()
@@ -247,28 +261,34 @@ def insert_matmul_kernel(
         pl.load(tile_y, y, [off, 0])
 
         pl.add(tile_sum, tile_x, tile_y)
-        pl.move(tile_nz, tile_sum)   # ND -> NZ
+        pl.move(tile_nz, tile_sum)  # ND -> NZ
 
-        pl.insert(v1_mat, tile_nz, [off, 0])   # UB -> L1 NZ2NZ
+        pl.insert(v1_mat, tile_nz, [off, 0])  # UB -> L1 NZ2NZ
         pl.system.set_cross_core(pipe=pl.PipeType.MTE3, event_id=2)
 
     with pl.section_cube():
         rhs_mat_group = pl.make_tile_group(
-            type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
-                             layout=pl.NZ),
-            addrs=0x0000, mutex_ids=[5])
+            type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
+            addrs=0x0000,
+            mutex_ids=[5],
+        )
         v1_left_group = pl.make_tile_group(
-            type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
-                             layout=pl.NZ),
-            addrs=0x0000, mutex_ids=[6])
+            type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
+            addrs=0x0000,
+            mutex_ids=[6],
+        )
         rhs_right_group = pl.make_tile_group(
-            type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right,
-                             layout=pl.ZN),
-            addrs=0x0000, mutex_ids=[7])
+            type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
+            addrs=0x0000,
+            mutex_ids=[7],
+        )
         c_l0c_group = pl.make_tile_group(
-            type=pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                             layout=pl.NZ, fractal=1024),
-            addrs=0x0000, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+            ),
+            addrs=0x0000,
+            mutex_ids=[8],
+        )
         v1_mat = v1_mat_group.current()
         rhs_mat = rhs_mat_group.current()
         v1_left = v1_left_group.current()
@@ -287,6 +307,7 @@ def insert_matmul_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_insert_matmul_kernel():
     device = ST_DEVICE
     _require_a5(device)
@@ -323,11 +344,11 @@ def ssbuf_copy_kernel(x: pl.Tensor[[1], pl.DT_INT32]):
     with pl.section_cube():
         pl.system.wait_cross_core(pipe=pl.PipeType.S, event_id=15, sync_mode=pl.CrossCoreSyncMode.UNICAST_BLOCK)
         pl.ssbuf_load(message, 0)
-        pl.printf("Get ssbuf message: batch=%d, block=%d, offset=%d",
-                  message.batch, message.block, message.offset)
+        pl.printf("Get ssbuf message: batch=%d, block=%d, offset=%d", message.batch, message.block, message.offset)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ssbuf_copy_kernel():
     device = ST_DEVICE
     _require_a5(device)

@@ -19,6 +19,7 @@ import torch
 import pypto
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_add():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -72,6 +73,7 @@ def test_vector_operation_add():
     assert_allclose(c_tensor.flatten(), expected.flatten(), rtol=1e-3, atol=1e-3)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_div():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -126,6 +128,7 @@ def test_vector_operation_div():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_mul():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -180,6 +183,7 @@ def test_vector_operation_mul():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_sub():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -234,6 +238,7 @@ def test_vector_operation_sub():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_abs():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -275,6 +280,7 @@ def test_vector_operation_abs():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_sqrt():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -316,6 +322,7 @@ def test_vector_operation_sqrt():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_ceil():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -359,6 +366,7 @@ def test_vector_operation_ceil():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_floor():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -402,6 +410,7 @@ def test_vector_operation_floor():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_trunc():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -445,6 +454,7 @@ def test_vector_operation_trunc():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_exp():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -486,6 +496,7 @@ def test_vector_operation_exp():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_neg():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -527,6 +538,7 @@ def test_vector_operation_neg():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_full():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -572,6 +584,7 @@ def test_vector_operation_full():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_logical_not():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -613,6 +626,7 @@ def test_vector_operation_logical_not():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_expand():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -668,6 +682,7 @@ def test_vector_operation_expand():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_concat():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -723,6 +738,7 @@ def test_vector_operation_concat():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_rowmaxsingle():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -766,6 +782,7 @@ def test_vector_operation_rowmaxsingle():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_rowsumsingle():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -809,6 +826,7 @@ def test_vector_operation_rowsumsingle():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_rowminsingle():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -852,6 +870,7 @@ def test_vector_operation_rowminsingle():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_rowargmaxsingle():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -895,6 +914,7 @@ def test_vector_operation_rowargmaxsingle():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_vector_operation_rowargminsingle():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -938,6 +958,7 @@ def test_vector_operation_rowargminsingle():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_tensor_operation_expand():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

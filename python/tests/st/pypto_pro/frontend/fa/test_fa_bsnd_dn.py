@@ -17,6 +17,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -97,7 +99,6 @@ EVENT_IDS_23 = (2, 3)
 QK_READY_IDS = (0, 1)
 P_READY_IDS = (2, 3)
 PV_READY_IDS = (4, 5)
-
 
 
 def alloc_cube_buffer():
@@ -370,9 +371,18 @@ def compute_p(
     p_slot = task_id % FIFO_SIZE
     pl.system.wait_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_IDS[p_slot])
     softmax_body(
-        b_idx, n_idx, qi, ki, skv_tiles, q_count, sub_id, task_id,
-        sq_dim, skv_dim,
-        stiles, p_buf,
+        b_idx,
+        n_idx,
+        qi,
+        ki,
+        skv_tiles,
+        q_count,
+        sub_id,
+        task_id,
+        sq_dim,
+        skv_dim,
+        stiles,
+        p_buf,
     )
     # Both vector subblocks contribute one half of the shared P MAT tile. Make
     # sure both halves have finished TINSERT before cube starts PV.
@@ -495,28 +505,24 @@ def fa_bsnd_dn_kernel(
     p_mat_buf2 = pl.make_tile(p_mat_type, addr=MA2_PONG, size=P_F16)
 
     with pl.section_cube():
-        q_mat_type = pl.TileType(
-            shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN
-        )
+        q_mat_type = pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN)
         q_mat_0 = pl.make_tile(q_mat_type, addr=MA0, size=Q_F16)
         q_mat_1 = pl.make_tile(q_mat_type, addr=MA0_PONG, size=Q_F16)
-        k_mat_type = pl.TileType(
-            shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ
-        )
+        k_mat_type = pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
         k_mat_0 = pl.make_tile(k_mat_type, addr=MA1, size=KT_F16)
         k_mat_1 = pl.make_tile(k_mat_type, addr=MA1_PONG, size=KT_F16)
-        v_mat_type = pl.TileType(
-            shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ
-        )
+        v_mat_type = pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
         v_mat_0 = pl.make_tile(v_mat_type, addr=MA3, size=V_F16)
         v_mat_1 = pl.make_tile(v_mat_type, addr=MA3_PONG, size=V_F16)
         left_0 = pl.make_tile(
             pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addr=LA0, size=KT_F16,
+            addr=LA0,
+            size=KT_F16,
         )
         left_1 = pl.make_tile(
             pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addr=LA1, size=KT_F16,
+            addr=LA1,
+            size=KT_F16,
         )
         right_0 = pl.make_tile(
             pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right), addr=RA0, size=Q_F16
@@ -563,8 +569,7 @@ def fa_bsnd_dn_kernel(
             l0c_idx = 0
             b_idx = work_id // n_dim
             n_idx = work_id % n_dim
-            ctx_arr = pl.struct_array(3, "CubeCtx", b_idx=0, n_idx=0, qi=0, ki=0,
-                                     skv_tiles=0, q_count=0, task_id=0)
+            ctx_arr = pl.struct_array(3, "CubeCtx", b_idx=0, n_idx=0, qi=0, ki=0, skv_tiles=0, q_count=0, task_id=0)
             for qi in pl.range(0, sq_tiles):
                 for ki in pl.range(0, skv_tiles):
                     ctx_curr = ctx_arr[task_id % 3]
@@ -576,17 +581,34 @@ def fa_bsnd_dn_kernel(
                     ctx_curr.q_count = q_count
                     ctx_curr.task_id = task_id
                     compute_qk(
-                        b_idx, n_idx, qi, ki, skv_tiles, q_count, task_id,
-                        l0ab_idx, l0c_idx, q, k, cube_tiles,
+                        b_idx,
+                        n_idx,
+                        qi,
+                        ki,
+                        skv_tiles,
+                        q_count,
+                        task_id,
+                        l0ab_idx,
+                        l0c_idx,
+                        q,
+                        k,
+                        cube_tiles,
                     )
                     l0ab_idx = 1 - l0ab_idx
                     l0c_idx = 1 - l0c_idx
                     if task_id > 0:
                         ctx_pre = ctx_arr[(task_id + 2) % 3]
                         compute_pv(
-                            b_idx, n_idx, ctx_pre.ki, ctx_pre.skv_tiles,
-                            ctx_pre.q_count, ctx_pre.task_id,
-                            l0ab_idx, l0c_idx, v, cube_tiles,
+                            b_idx,
+                            n_idx,
+                            ctx_pre.ki,
+                            ctx_pre.skv_tiles,
+                            ctx_pre.q_count,
+                            ctx_pre.task_id,
+                            l0ab_idx,
+                            l0c_idx,
+                            v,
+                            cube_tiles,
                         )
                         l0ab_idx = 1 - l0ab_idx
                         l0c_idx = 1 - l0c_idx
@@ -595,9 +617,16 @@ def fa_bsnd_dn_kernel(
             if task_id > 0:
                 ctx_pre = ctx_arr[(task_id + 2) % 3]
                 compute_pv(
-                    b_idx, n_idx, ctx_pre.ki, ctx_pre.skv_tiles,
-                    ctx_pre.q_count, ctx_pre.task_id,
-                    l0ab_idx, l0c_idx, v, cube_tiles,
+                    b_idx,
+                    n_idx,
+                    ctx_pre.ki,
+                    ctx_pre.skv_tiles,
+                    ctx_pre.q_count,
+                    ctx_pre.task_id,
+                    l0ab_idx,
+                    l0c_idx,
+                    v,
+                    cube_tiles,
                 )
                 l0ab_idx = 1 - l0ab_idx
                 l0c_idx = 1 - l0c_idx
@@ -635,8 +664,9 @@ def fa_bsnd_dn_kernel(
             q_count = 0
             b_idx = work_id // n_dim
             n_idx = work_id % n_dim
-            ctx_arr = pl.struct_array(3, "VecCtx", b_idx=0, n_idx=0, qi=0, ki=0,
-                                     skv_tiles=0, q_count=0, sub_id=0, task_id=0)
+            ctx_arr = pl.struct_array(
+                3, "VecCtx", b_idx=0, n_idx=0, qi=0, ki=0, skv_tiles=0, q_count=0, sub_id=0, task_id=0
+            )
             for qi in pl.range(0, sq_tiles):
                 for ki in pl.range(0, skv_tiles):
                     ctx_curr = ctx_arr[task_id % 3]
@@ -651,39 +681,78 @@ def fa_bsnd_dn_kernel(
                     if task_id > 0:
                         ctx_p = ctx_arr[(task_id + 2) % 3]
                         compute_p(
-                            b_idx, n_idx, ctx_p.qi, ctx_p.ki, ctx_p.skv_tiles,
-                            ctx_p.q_count, sub_id, ctx_p.task_id,
-                            sq_dim, skv_dim, softmax_tiles, p_buf,
+                            b_idx,
+                            n_idx,
+                            ctx_p.qi,
+                            ctx_p.ki,
+                            ctx_p.skv_tiles,
+                            ctx_p.q_count,
+                            sub_id,
+                            ctx_p.task_id,
+                            sq_dim,
+                            skv_dim,
+                            softmax_tiles,
+                            p_buf,
                         )
                     if task_id > 1:
                         ctx_g = ctx_arr[(task_id + 1) % 3]
                         compute_gu(
-                            b_idx, n_idx, ctx_g.qi, ctx_g.ki, ctx_g.skv_tiles,
-                            ctx_g.q_count, sub_id, ctx_g.task_id,
-                            o, gu_tiles,
+                            b_idx,
+                            n_idx,
+                            ctx_g.qi,
+                            ctx_g.ki,
+                            ctx_g.skv_tiles,
+                            ctx_g.q_count,
+                            sub_id,
+                            ctx_g.task_id,
+                            o,
+                            gu_tiles,
                         )
                     task_id = task_id + 1
                 q_count = q_count + 1
             if task_id > 0:
                 ctx_p = ctx_arr[(task_id + 2) % 3]
                 compute_p(
-                    b_idx, n_idx, ctx_p.qi, ctx_p.ki, ctx_p.skv_tiles,
-                    ctx_p.q_count, sub_id, ctx_p.task_id,
-                    sq_dim, skv_dim, softmax_tiles, p_buf,
+                    b_idx,
+                    n_idx,
+                    ctx_p.qi,
+                    ctx_p.ki,
+                    ctx_p.skv_tiles,
+                    ctx_p.q_count,
+                    sub_id,
+                    ctx_p.task_id,
+                    sq_dim,
+                    skv_dim,
+                    softmax_tiles,
+                    p_buf,
                 )
                 if task_id > 1:
                     ctx_g = ctx_arr[(task_id + 1) % 3]
                     compute_gu(
-                        b_idx, n_idx, ctx_g.qi, ctx_g.ki, ctx_g.skv_tiles,
-                        ctx_g.q_count, sub_id, ctx_g.task_id,
-                        o, gu_tiles,
+                        b_idx,
+                        n_idx,
+                        ctx_g.qi,
+                        ctx_g.ki,
+                        ctx_g.skv_tiles,
+                        ctx_g.q_count,
+                        sub_id,
+                        ctx_g.task_id,
+                        o,
+                        gu_tiles,
                     )
                 task_id = task_id + 1
                 ctx_g2 = ctx_arr[(task_id + 1) % 3]
                 compute_gu(
-                    b_idx, n_idx, ctx_g2.qi, ctx_g2.ki, ctx_g2.skv_tiles,
-                    ctx_g2.q_count, sub_id, ctx_g2.task_id,
-                    o, gu_tiles,
+                    b_idx,
+                    n_idx,
+                    ctx_g2.qi,
+                    ctx_g2.ki,
+                    ctx_g2.skv_tiles,
+                    ctx_g2.q_count,
+                    sub_id,
+                    ctx_g2.task_id,
+                    o,
+                    gu_tiles,
                 )
 
 
@@ -701,6 +770,7 @@ def flash_attention_ref_bs(q, k, v, d):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_bs_a5():
     device = ST_DEVICE
     torch.npu.set_device(device)

@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -60,6 +62,7 @@ def sync_all_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sync_all():
     device = ST_DEVICE
     _require_a5(device)
@@ -112,6 +115,7 @@ def mutex_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_mutex_lock_unlock():
     device = ST_DEVICE
     _require_a5(device)
@@ -150,6 +154,7 @@ def atomic_add_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_store_atomic():
     device = ST_DEVICE
     _require_a5(device)

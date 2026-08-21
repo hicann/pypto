@@ -26,6 +26,8 @@ from pypto_pro.language.parser.diagnostics._exceptions import ParserSyntaxError
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -139,6 +141,7 @@ def scale_phase_final_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_phase_partial():
     """Test scale + Partial phase fusion."""
     device = ST_DEVICE
@@ -168,6 +171,7 @@ def test_phase_partial():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_phase_final():
     """Test scale + Final phase fusion."""
     device = ST_DEVICE
@@ -244,6 +248,7 @@ def scale_atomic_add_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_atomic_add():
     """Test scale + AtomicAdd fusion."""
     device = ST_DEVICE
@@ -274,9 +279,9 @@ def test_atomic_add():
     torch.npu.synchronize()
 
     # Expected: first + second (with saturation)
-    expected_second = torch.clamp(
-        expected_first.to(torch.int32) + expected_first.to(torch.int32), -128, 127
-    ).to(torch.int8)
+    expected_second = torch.clamp(expected_first.to(torch.int32) + expected_first.to(torch.int32), -128, 127).to(
+        torch.int8
+    )
 
     torch.testing.assert_close(quant_out.to(torch.int32), expected_second.to(torch.int32), rtol=0, atol=1)
     logging.info("test_atomic_add passed.")
@@ -288,12 +293,14 @@ def test_atomic_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_order_descending_rejected():
     """store 的 order 仅支持升序；降序 order=[1, 0] 应在解析期被拒绝。
 
     原 review 版本假设 order=[1,0] 支持转置写出，但前端 _ir_store 明确校验
     ``order must be ascending``，故改为验证该拒绝行为。
     """
+
     @pl.jit()
     def kernel(
         q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
@@ -303,8 +310,8 @@ def test_order_descending_rejected():
     ):
         with pl.section_cube():
             acc_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
-        )
+                shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+            )
             acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
             pl.store(quant_out, acc, [0, 0], scale=scale_value, order=[1, 0])
 

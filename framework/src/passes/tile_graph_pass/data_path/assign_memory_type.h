@@ -16,7 +16,7 @@
 #ifndef TILE_FWK_ASSIGN_MEMORY_TYPE_H
 #define TILE_FWK_ASSIGN_MEMORY_TYPE_H
 
-#include <queue>
+#include <set>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -32,7 +32,6 @@ namespace npu::tile_fwk {
 class AssignMemoryType : public Pass {
 public:
     AssignMemoryType() : Pass("AssignMemoryType") {}
-    void SpecialCallInterfaceToBeDeleted(Function& function) { RunOnFunction(function); }
 
 private:
     Status PreCheck(Function& function) override;
@@ -50,6 +49,8 @@ private:
 
     Status AssignViewAttrMemoryType(Operation& operation);
 
+    Status AssignSliceInputRequirement(Operation& operation);
+
     Status AssignAssembleAttrMemoryType(Operation& operation);
 
     Status AssignInOutCastMemoryTypes(Function& function);
@@ -63,16 +64,19 @@ private:
 
     Status InferViewMemoryType(Operation& operation);
 
-    Status InferViewOutputFromRequirement(const LogicalTensorPtr& output, MemoryType& outputOriginal);
+    Status InferSliceMemoryType(Operation& operation);
 
-    Status InferViewKnownInputOutput(Operation& operation, const LogicalTensorPtr& input, MemoryType inputOriginal,
-                                     MemoryType outputOriginal);
+    Status InferContractMemoryType(Operation& operation);
 
-    Status InferViewKnownInputUnknownOutput(Operation& operation, const LogicalTensorPtr& input,
-                                            const LogicalTensorPtr& output, MemoryType inputOriginal);
+    MemoryType InferOriginalFromOutputRequirements(const LogicalTensorPtr& tensor) const;
 
-    bool TryHandleUnalignedView(Operation& operation, const LogicalTensorPtr& input, MemoryType inputOriginal,
-                                MemoryType outputOriginal);
+    MemoryType InferOriginalFromOutputRequirements(const LogicalTensorPtr& tensor,
+                                                   std::unordered_set<const LogicalTensor*>& visitedTensors) const;
+
+    MemoryType InferRequirementFromInputOriginals(const LogicalTensorPtr& tensor) const;
+
+    MemoryType InferRequirementFromInputOriginals(const LogicalTensorPtr& tensor,
+                                                  std::unordered_set<const LogicalTensor*>& visitedTensors) const;
 
     bool CanUseDirectViewPath(Operation& operation, MemoryType from, MemoryType to);
 
@@ -82,50 +86,20 @@ private:
 
     bool HasParallelDifferentConsumerRequirement(const LogicalTensorPtr& tensor, MemoryType targetType) const;
 
-    bool IsViewFromOffsetAligned(Operation& operation) const;
+    bool HasDifferentConsumerRequirement(const LogicalTensorPtr& tensor, MemoryType targetType) const;
 
-    bool HasDynOffsetViewAndReshape(Operation& operation, const LogicalTensorPtr& output) const;
-
-    bool HasTransDataConsumer(const LogicalTensorPtr& tensor) const;
-
-    bool HasPermuteProducerAndTransDataDownstream(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
-
-    Status InferAssembleMemoryType(Function& function, Operation& operation,
-                                   std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs);
+    Status InferAssembleMemoryType(Operation& operation, std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs);
 
     Status InferAssembleMemoryType(Operation& operation);
 
-    Status AssignAssembleToOutCastRequirement(Operation& operation);
+    MemoryType InferParallelAssembleInputRequirement(const LogicalTensorPtr& output) const;
 
-    Status InferAssembleOutputMemoryType(const LogicalTensorPtr& output);
-
-    bool HasAssembleInputOutputElementCountMismatch(const LogicalTensorPtr& output) const;
-
-    Status TryInferAssembleOutputByTempOriginal(const LogicalTensorPtr& output, MemoryType tempOriginal, bool& handled);
-
-    bool AreAssembleDirectPathsSupported(const LogicalTensorPtr& output, MemoryType targetOriginal);
+    Status SetParallelAssembleInputRequirements(const LogicalTensorPtr& output, MemoryType memoryType,
+                                                const std::string& reason);
 
     bool IsAssembleProducer(Operation* operation) const;
 
     MemoryType GetAssembleInputType(Operation& operation) const;
-
-    Status ApplyAssembleDirectOutputOriginal(const LogicalTensorPtr& output, MemoryType targetOriginal);
-
-    Status SyncAssembleInputRequirementAndAttr(Operation& operation, MemoryType fallbackType,
-                                               const std::string& reason);
-
-    Status ApplyAssembleDdrOutputWithInputOriginals(const LogicalTensorPtr& output, const std::string& originalReason,
-                                                    const std::string& inputReason);
-
-    Status FillAssembleInputRequirementsFromOriginal(const LogicalTensorPtr& output, const std::string& reason);
-
-    Status TryInferAssembleOutputByProducerCandidate(const LogicalTensorPtr& output, bool& handled);
-
-    MemoryType InferAssembleProducerCandidate(const LogicalTensorPtr& output, bool& hasConflict) const;
-
-    Status ApplyAssembleProducerCandidate(const LogicalTensorPtr& output, MemoryType producerCandidate);
-
-    MemoryType InferAssembleTempOriginal(const LogicalTensorPtr& output) const;
 
     bool CanUseDirectAssemblePath(Operation& operation, MemoryType from, MemoryType to);
 
@@ -170,8 +144,8 @@ private:
 
     Status InferViewTypeMemoryType(Operation& operation);
 
-    Status TryInferViewTypeFromProducerView(Operation& operation, const LogicalTensorPtr& input,
-                                            const LogicalTensorPtr& output, MemoryType targetType, bool& handled);
+    Status TryInferViewTypeFromProducerSlice(Operation& operation, const LogicalTensorPtr& input,
+                                             const LogicalTensorPtr& output, MemoryType targetType, bool& handled);
 
     Status InferViewTypeInput(Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
                               MemoryType targetType);
@@ -181,6 +155,14 @@ private:
 
     MemoryType InferTargetTypeThroughForwardViews(const LogicalTensorPtr& tensor,
                                                   std::unordered_set<LogicalTensorPtr>& visitedTensors) const;
+
+    bool CanKeepContractProducersInUb(const LogicalTensorPtr& tensor);
+
+    bool IsSliceFromOffsetAligned(Operation& sliceOp, const LogicalTensorPtr& input);
+
+    bool CanKeepSliceConsumersInUb(const LogicalTensorPtr& tensor);
+
+    bool HasNonZeroSliceFromOffset(const LogicalTensorPtr& tensor);
 
     bool KeepSplitReshapeUb(Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output);
 
@@ -196,14 +178,14 @@ private:
 
     Status ApplyOversizedLocalBufferFallback(Operation& operation);
 
-    bool IsOversizedLocalBuffer(const LogicalTensorPtr& tensor, MemoryType memoryType, bool useAssembleUbLimit,
+    bool IsOversizedLocalBuffer(const LogicalTensorPtr& tensor, MemoryType memoryType, bool useStrictUbLimit,
                                 bool allowL1Fallback) const;
 
-    Status DowngradeOversizedViewInputRequirement(Operation& operation);
+    Status DowngradeOversizedSliceInputRequirement(Operation& operation);
 
     bool ExceedsMemoryLimit(const LogicalTensorPtr& tensor, size_t threshold) const;
 
-    Status ApplyPlatformPathFallbackRules(Function& function);
+    Status ApplyPlatformPathUpgradeRules(Function& function);
 
     Status ResolveMemoryUnknowns(Function& function);
 
@@ -219,6 +201,8 @@ private:
 
     Status SyncTensorToBe(Function& function);
 
+    Status FallbackSameMemoryMoveOps(Function& function);
+
     Status SetOriginalChecked(const LogicalTensorPtr& tensor, MemoryType memoryType,
                               const std::string& reason = "unknown", bool allowOverride = false);
 
@@ -231,21 +215,39 @@ private:
                              const std::string& reason = "unknown");
 
     void FillUnknownRequirementsWith(const LogicalTensorPtr& tensor, MemoryType memoryType, const char* reason);
-    bool AreAllConsumerRequirements(const LogicalTensorPtr& tensor, MemoryType memoryType) const;
-    void DowngradeConsumerRequirements(const LogicalTensorPtr& tensor, MemoryType fromType);
-    void ProcessL0C2L1SmallToLarge(Function& function);
-    void ProcessL0C2L1LargeToSmall(Function& function);
+    Status ProcessL0C2L1SmallToLarge(Function& function);
+    Status ProcessL0C2L1LargeToSmall(Function& function);
     bool CheckUBTileShape(const LogicalTensorPtr& output);
-    bool CheckConsumerViewShapeMultiple(const LogicalTensorPtr& output, const LogicalTensorPtr& input);
-    void ProcessL0C2UBSmallToLarge(Function& function);
-    void ProcessL0C2UBLargeToSmall(Function& function);
-    void ProcessUB2L1SmallToLarge(Function& function);
-    void ProcessUB2L1LargeToSmall(Function& function);
+    bool CheckConsumerSliceShapeMultiple(const LogicalTensorPtr& output, const LogicalTensorPtr& input);
+    Status ProcessL0C2UBSmallToLarge(Function& function);
+    Status ProcessL0C2UBLargeToSmall(Function& function);
+    Status ProcessUB2UBContractSlice(Function& function);
+    Status ProcessUB2L1SmallToLarge(Function& function);
+    Status ProcessUB2L1LargeToSmall(Function& function);
+    Status ProcessL1DdrL1(Function& function);
+    Status ProcessDdrMultiReshape(Function& function);
     bool ShouldSkipUB2L1SmallToLarge(const LogicalTensorPtr& iOperand, const LogicalTensorPtr& oOperand) const;
+    Status TryUpgradeSingleSliceContractPath(Operation& sliceOp, MemoryType sourceType, MemoryType targetType,
+                                             const std::string& reason, bool requireMatrixShape, bool checkUbTileShape,
+                                             bool checkUb2L1Constraints);
+    Status TryUpgradeSingleContractSlicePath(Operation& contractOp, MemoryType sourceType, MemoryType targetType,
+                                             const std::string& reason, bool requireMatrixShape, bool checkUbTileShape,
+                                             bool checkUb2L1Constraints);
+    bool CanUseMiddleTensorForUpgrade(const LogicalTensorPtr& middle, MemoryType targetType) const;
+    bool HasOnlyContractProducers(const LogicalTensorPtr& tensor) const;
+    bool HasOnlySliceConsumers(const LogicalTensorPtr& tensor) const;
+    bool IsSliceOutputTarget(Operation& sliceOp, MemoryType targetType) const;
+    Status EnsureSliceOutputTarget(Operation& sliceOp, MemoryType targetType, const std::string& reason);
+    Status ApplySingleSliceContractUpgrade(Operation& sliceOp, MemoryType sourceType, MemoryType targetType,
+                                           const std::string& reason);
+    Status ApplySingleContractSliceUpgrade(Operation& contractOp, MemoryType sourceType, MemoryType targetType,
+                                           const std::string& reason);
+    bool CanUseL0C2L1UpgradePath(Operation& operation);
     bool IsDimMultiple(const Shape& shape1, const Shape& shape2);
     bool CheckInnerAxisC0Size(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
     size_t CalcNZTensorSize(const LogicalTensorPtr& tensor) const;
-    int64_t CalcLineOffset(const Shape& shape, const Offset& offset) const;
+    int64_t CalcLineOffset(const Shape& shape, const Offset& offset);
+    Status RunOnFunctionLegacy(Function& function);
     ConvertInserter inserter;
     AssignMemoryTypeChecker checker;
 };

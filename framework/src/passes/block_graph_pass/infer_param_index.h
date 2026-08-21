@@ -45,11 +45,14 @@ private:
     Status ResetAssembleDynValidShape(const Operation& op);
     Status ResetDynValidShape(Function& function);
     Status InsertAddr2ValidShapeSpecified(Operation& op, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-                                          std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);
+                                          std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified,
+                                          std::map<int, int>& magic2Coa);
     Status UpdateValidShape(Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-                            std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);
+                            std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified,
+                            std::map<int, int>& magic2Coa);
     Status SetSubValidShape(Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-                            std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);
+                            std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified,
+                            const std::map<int, int>& magic2Coa);
     Status UpdateParamIndex(Function& function);
     Status InferShape(Function& function);
 };

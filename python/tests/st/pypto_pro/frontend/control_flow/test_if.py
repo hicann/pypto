@@ -24,6 +24,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -61,6 +63,7 @@ def _ref(tdt, fn, x, y):
 # if_else: if/else with add/sub  (FP16 / BF16 / FP32 / INT32)
 # ===================================================================
 
+
 # =============================================================================
 # Test 1: if/else 加减分支 - FP16
 #         if/else add-sub branch - FP16
@@ -97,6 +100,7 @@ def if_else_fp16_kernel(
 #         if/else add-sub branch - BF16
 # =============================================================================
 
+
 @pl.jit(auto_mutex=True)
 def if_else_bf16_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
@@ -128,6 +132,7 @@ def if_else_bf16_kernel(
 # Test 3: if/else 加减分支 - FP32
 #         if/else add-sub branch - FP32
 # =============================================================================
+
 
 @pl.jit(auto_mutex=True)
 def if_else_fp32_kernel(
@@ -161,6 +166,7 @@ def if_else_fp32_kernel(
 #         if/else add-sub branch - INT32
 # =============================================================================
 
+
 @pl.jit(auto_mutex=True)
 def if_else_int32_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
@@ -187,6 +193,7 @@ def if_else_int32_kernel(
                     pl.sub(tile_c, tile_a, tile_b)
                 pl.store_tile(z, tile_c, [i, j])
 
+
 IF_ELSE_KERNELS = {
     "fp16": if_else_fp16_kernel,
     "bf16": if_else_bf16_kernel,
@@ -198,6 +205,7 @@ IF_ELSE_KERNELS = {
 # ===================================================================
 # if_constexpr: constexpr(True) if/else with add/sub  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 5: if + constexpr 编译期条件 - FP16
@@ -238,6 +246,7 @@ IF_CONSTEXPR_KERNELS = {
 # ===================================================================
 # if_elif_else: if/elif/else with add/sub/mul  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 6: if/elif/else 多分支 - FP16
@@ -280,6 +289,7 @@ IF_ELIF_ELSE_KERNELS = {
 # ===================================================================
 # nested_if: nested if/else with add/sub/mul  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 7: 嵌套 if 分支 - FP16
@@ -324,6 +334,7 @@ NESTED_IF_KERNELS = {
 # if_relu: if/else with relu/add  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 8: if 分支 ReLU - FP16
 #         if branch ReLU - FP16
@@ -363,6 +374,7 @@ IF_RELU_KERNELS = {
 # ===================================================================
 # constexpr: constexpr(True) if/else with add/sub  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 9: constexpr 分支 - FP16
@@ -404,6 +416,7 @@ CONSTEXPR_KERNELS = {
 # if_always_false: if(i<0) never true with add/sub  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 10: 恒 False if 分支 - FP16
 #         always-false if branch - FP16
@@ -443,6 +456,7 @@ IF_ALWAYS_FALSE_KERNELS = {
 # ===================================================================
 # deeply_nested_if: deeply nested if/else with relu/mul/sub/neg  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 11: 深层嵌套 if 分支 - FP16
@@ -491,7 +505,9 @@ DEEPLY_NESTED_IF_KERNELS = {
 # Test functions
 # ===================================================================
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_else():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -510,6 +526,7 @@ def test_if_else():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_constexpr():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -526,6 +543,7 @@ def test_if_constexpr():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_elif_else():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -545,6 +563,7 @@ def test_if_elif_else():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_nested_if():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -564,6 +583,7 @@ def test_nested_if():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_relu():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -582,6 +602,7 @@ def test_if_relu():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_constexpr():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -600,6 +621,7 @@ def test_constexpr():
 # ===================================================================
 # if_lt_const: if(i < threshold) add/sub with numeric threshold
 # ===================================================================
+
 
 # =============================================================================
 # Test 12: if < 常量比较 - FP16
@@ -641,6 +663,7 @@ IF_LT_CONST_KERNELS = {
 # if_ge_const_mul: if(i >= threshold) add/mul with numeric threshold
 # ===================================================================
 
+
 # =============================================================================
 # Test 13: if >= 常量后乘法 - FP16
 #         if greater-or-equal constant then multiply - FP16
@@ -680,6 +703,7 @@ IF_GE_CONST_MUL_KERNELS = {
 # ===================================================================
 # if_jt_const: if(j < threshold) add/sub with j numeric threshold
 # ===================================================================
+
 
 # =============================================================================
 # Test 14: if j/t 索引常量比较 - FP16
@@ -721,6 +745,7 @@ IF_JT_CONST_KERNELS = {
 # if_ij_cmp: if(i < j) add/sub comparing two loop vars
 # ===================================================================
 
+
 # =============================================================================
 # Test 15: if i/j 索引比较 - FP16
 #         if i/j index comparison - FP16
@@ -761,6 +786,7 @@ IF_IJ_CMP_KERNELS = {
 # if_elif_const: if/elif/else with numeric thresholds on i
 # ===================================================================
 
+
 # =============================================================================
 # Test 16: if/elif 常量分支 - FP16
 #         if/elif constant branch - FP16
@@ -800,6 +826,7 @@ IF_ELIF_CONST_KERNELS = {
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_always_false():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -816,6 +843,7 @@ def test_if_always_false():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_deeply_nested_if():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -836,6 +864,7 @@ def test_deeply_nested_if():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_lt_const():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -854,6 +883,7 @@ def test_if_lt_const():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_ge_const_mul():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -872,6 +902,7 @@ def test_if_ge_const_mul():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_jt_const():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -890,6 +921,7 @@ def test_if_jt_const():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_ij_cmp():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -905,17 +937,16 @@ def test_if_ij_cmp():
             for tj in range(shape[1] // TILE_N):
                 if ti < tj:
                     sl = (slice(ti * TILE_M, (ti + 1) * TILE_M), slice(tj * TILE_N, (tj + 1) * TILE_N))
-                    z_ref[sl] = \
-                        _ref(tdt, lambda a, b: a + b, x[sl], y[sl])
+                    z_ref[sl] = _ref(tdt, lambda a, b: a + b, x[sl], y[sl])
                 else:
                     sl = (slice(ti * TILE_M, (ti + 1) * TILE_M), slice(tj * TILE_N, (tj + 1) * TILE_N))
-                    z_ref[sl] = \
-                        _ref(tdt, lambda a, b: a - b, x[sl], y[sl])
+                    z_ref[sl] = _ref(tdt, lambda a, b: a - b, x[sl], y[sl])
         torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
         logging.info("test_if_ij_cmp [%s] passed! shape=%s", label, shape)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_elif_const():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -939,6 +970,7 @@ def test_if_elif_const():
 # ===================================================================
 # if_and / if_or / if_and_three: compound boolean expressions
 # ===================================================================
+
 
 # =============================================================================
 # Test 17: if 布尔 and 条件
@@ -972,6 +1004,7 @@ def if_and_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_and():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1025,6 +1058,7 @@ def ternary_expr_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ternary_expr():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1066,8 +1100,19 @@ def if_compound_12_kernel(
                 tile_c = c_db.next()
                 pl.load_tile(tile_a, x, [i, j])
                 pl.load_tile(tile_b, y, [i, j])
-                if (i < 1 and j < 1 or i < 2 and j < 1 or not i >= 2 and j >= 0
-                        or i < 3 and j >= 0 or not j >= 1 and i >= 0 or i >= 0):
+                if (
+                    i < 1
+                    and j < 1
+                    or i < 2
+                    and j < 1
+                    or not i >= 2
+                    and j >= 0
+                    or i < 3
+                    and j >= 0
+                    or not j >= 1
+                    and i >= 0
+                    or i >= 0
+                ):
                     pl.add(tile_c, tile_a, tile_b)
                 else:
                     pl.sub(tile_c, tile_a, tile_b)
@@ -1079,8 +1124,19 @@ def _compound_bool_ref(x_f, y_f, i_tiles, j_tiles):
     for ti in range(i_tiles):
         for tj in range(j_tiles):
             i, j = ti, tj
-            cond = (i < 1 and j < 1 or i < 2 and j < 1 or not i >= 2 and j >= 0
-                    or i < 3 and j >= 0 or not j >= 1 and i >= 0 or i >= 0)
+            cond = (
+                i < 1
+                and j < 1
+                or i < 2
+                and j < 1
+                or not i >= 2
+                and j >= 0
+                or i < 3
+                and j >= 0
+                or not j >= 1
+                and i >= 0
+                or i >= 0
+            )
             sl = (slice(ti * TILE_M, (ti + 1) * TILE_M), slice(tj * TILE_N, (tj + 1) * TILE_N))
             if cond:
                 z_ref[sl] = (x_f[sl] + y_f[sl]).to(torch.float16)
@@ -1090,6 +1146,7 @@ def _compound_bool_ref(x_f, y_f, i_tiles, j_tiles):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_compound_12():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1127,11 +1184,29 @@ def ternary_12_kernel(
                 tile_c = c_db.next()
                 pl.load_tile(tile_a, x, [i, j])
                 pl.load_tile(tile_b, y, [i, j])
-                sel = (0 if i < 1 and j < 1 else (1 if i < 2 and j < 1
-                      else (2 if not i >= 2 else (3 if j < 1
-                      else (4 if i < 3 else (5 if not j >= 1
-                      else (6 if i >= 0 else (7 if j >= 0 else 8)))))))) \
-                      if i >= 0 and j >= 0 else 9
+                sel = (
+                    (
+                        0
+                        if i < 1 and j < 1
+                        else (
+                            1
+                            if i < 2 and j < 1
+                            else (
+                                2
+                                if not i >= 2
+                                else (
+                                    3
+                                    if j < 1
+                                    else (
+                                        4 if i < 3 else (5 if not j >= 1 else (6 if i >= 0 else (7 if j >= 0 else 8)))
+                                    )
+                                )
+                            )
+                        )
+                    )
+                    if i >= 0 and j >= 0
+                    else 9
+                )
                 if sel == 0:
                     pl.add(tile_c, tile_a, tile_b)
                 elif sel == 1:
@@ -1148,11 +1223,27 @@ def _ternary_deep_ref(x_f, y_f, i_tiles, j_tiles):
     for ti in range(i_tiles):
         for tj in range(j_tiles):
             i, j = ti, tj
-            sel = (0 if i < 1 and j < 1 else (1 if i < 2 and j < 1
-                  else (2 if not i >= 2 else (3 if j < 1
-                  else (4 if i < 3 else (5 if not j >= 1
-                  else (6 if i >= 0 else (7 if j >= 0 else 8)))))))) \
-                  if i >= 0 and j >= 0 else 9
+            sel = (
+                (
+                    0
+                    if i < 1 and j < 1
+                    else (
+                        1
+                        if i < 2 and j < 1
+                        else (
+                            2
+                            if not i >= 2
+                            else (
+                                3
+                                if j < 1
+                                else (4 if i < 3 else (5 if not j >= 1 else (6 if i >= 0 else (7 if j >= 0 else 8))))
+                            )
+                        )
+                    )
+                )
+                if i >= 0 and j >= 0
+                else 9
+            )
             sl = (slice(ti * TILE_M, (ti + 1) * TILE_M), slice(tj * TILE_N, (tj + 1) * TILE_N))
             if sel == 0:
                 z_ref[sl] = (x_f[sl] + y_f[sl]).to(torch.float16)
@@ -1166,6 +1257,7 @@ def _ternary_deep_ref(x_f, y_f, i_tiles, j_tiles):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ternary_12():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1182,6 +1274,7 @@ def test_ternary_12():
 # ===================================================================
 # if_while_compound_mixed: if/elif/else inside bounded while  (FP16)
 # ===================================================================
+
 
 @pl.jit(auto_mutex=True)
 def if_while_compound_mixed_kernel(
@@ -1215,6 +1308,7 @@ def if_while_compound_mixed_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_while_compound_mixed():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1229,13 +1323,13 @@ def test_if_while_compound_mixed():
     x_f = x.float()
     y_f = y.float()
     z_ref[:TILE_M, :TILE_N] = (x_f[:TILE_M, :TILE_N] + y_f[:TILE_M, :TILE_N]).to(torch.float16)
-    z_ref[:TILE_M, TILE_N:2 * TILE_N] = (
-        x_f[:TILE_M, TILE_N:2 * TILE_N] - y_f[:TILE_M, TILE_N:2 * TILE_N]
-    ).to(torch.float16)
+    z_ref[:TILE_M, TILE_N:2 * TILE_N] = (x_f[:TILE_M, TILE_N:2 * TILE_N] - y_f[:TILE_M, TILE_N:2 * TILE_N]).to(
+        torch.float16
+    )
     z_ref[TILE_M:, :TILE_N] = (x_f[TILE_M:, :TILE_N] - y_f[TILE_M:, :TILE_N]).to(torch.float16)
-    z_ref[TILE_M:, TILE_N:2 * TILE_N] = (
-        x_f[TILE_M:, TILE_N:2 * TILE_N] * y_f[TILE_M:, TILE_N:2 * TILE_N]
-    ).to(torch.float16)
+    z_ref[TILE_M:, TILE_N:2 * TILE_N] = (x_f[TILE_M:, TILE_N:2 * TILE_N] * y_f[TILE_M:, TILE_N:2 * TILE_N]).to(
+        torch.float16
+    )
     torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
     logging.info("test_if_while_compound_mixed passed! shape=%s", shape)
 
@@ -1243,6 +1337,7 @@ def test_if_while_compound_mixed():
 # ===================================================================
 # truthiness: if with non-bool scalar conditions (INT truthiness)
 # ===================================================================
+
 
 # =============================================================================
 # Test 21: if 整数真值条件
@@ -1276,6 +1371,7 @@ def if_truthiness_int_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_truthiness_int():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1338,6 +1434,7 @@ def if_in_operator_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_in_operator():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1406,6 +1503,7 @@ def if_not_in_operator_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_if_not_in_operator():
     device = ST_DEVICE
     torch.npu.set_device(device)

@@ -36,6 +36,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -163,41 +165,58 @@ def fa_perf_tkv_preload_nbuf_kernel(
     # P MAT - Vector insert, Cube PV read
     p_mat_db = pl.make_tile_group(
         type=pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=MA2_P, mutex_ids=P_MUTEX_IDS)
+        addrs=MA2_P,
+        mutex_ids=P_MUTEX_IDS,
+    )
 
     # qk_vec UB - Cube store from ACC, Vector softmax (double-buffer for FIFO)
     qk_vec_db = pl.make_tile_group(
         type=pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=VA0, mutex_ids=QK_VEC_BUF_IDS)
+        addrs=VA0,
+        mutex_ids=QK_VEC_BUF_IDS,
+    )
 
     # pv_vec UB - Cube store from ACC, Vector GU (double-buffer for FIFO)
     pv_vec_db = pl.make_tile_group(
         type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=VA8, mutex_ids=PV_VEC_BUF_IDS)
+        addrs=VA8,
+        mutex_ids=PV_VEC_BUF_IDS,
+    )
 
     # =================== CUBE SECTION ===================
     with pl.section_cube():
         # Cube-only buffers (independent buf_id space: 0-11)
         q_l1_db = pl.make_tile_group(
             type=pl.TileType(shape=[TS, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-            addrs=MA0_Q, mutex_ids=[0, 1])
+            addrs=MA0_Q,
+            mutex_ids=[0, 1],
+        )
         k_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TD, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             layout=pl.ZN),
-            addrs=MA1_K, mutex_ids=[2, 3])
+            type=pl.TileType(shape=[TD, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
+            addrs=MA1_K,
+            mutex_ids=[2, 3],
+        )
         v_l1_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-            addrs=MA3_V, mutex_ids=[4, 5])
+            addrs=MA3_V,
+            mutex_ids=[4, 5],
+        )
 
         left_db = pl.make_tile_group(
             type=pl.TileType(shape=[TS, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-            addrs=LA0, mutex_ids=[6, 7])
+            addrs=LA0,
+            mutex_ids=[6, 7],
+        )
         right_db = pl.make_tile_group(
             type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-            addrs=RA0, mutex_ids=[8, 9])
+            addrs=RA0,
+            mutex_ids=[8, 9],
+        )
         acc_db = pl.make_tile_group(
             type=pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-            addrs=CA0, mutex_ids=[10, 11])
+            addrs=CA0,
+            mutex_ids=[10, 11],
+        )
 
         task_id = 0
         ctx_arr = pl.struct_array(3, "CubeCtx", task_id=0, ki=0)
@@ -239,9 +258,7 @@ def fa_perf_tkv_preload_nbuf_kernel(
                     pv_eid = ctx_pre.task_id % FIFO_SIZE
                     sv_off = ctx_pre.ki * TKV
 
-                    pl.system.wait_cross_core(
-                        pipe=pl.PipeType.MTE1, event_id=P_READY_IDS[pv_eid]
-                    )
+                    pl.system.wait_cross_core(pipe=pl.PipeType.MTE1, event_id=P_READY_IDS[pv_eid])
 
                     cur_v = v_l1_db.next()
                     # next() advances p_mat_db cursor to stay in sync with Vec.
@@ -291,44 +308,48 @@ def fa_perf_tkv_preload_nbuf_kernel(
         # Vector-only buffers (independent buf_id space: 0-11). Scratch tiles with
         # no mutex are plain make_tile; mutex'd buffers are single-tile groups.
         tmp_vec = pl.make_tile(
-            pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addr=VA1, size=VB4_KV)
+            pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA1, size=VB4_KV
+        )
         p_f16_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-            addrs=VA2, mutex_ids=[1])
+            addrs=VA2,
+            mutex_ids=[1],
+        )
         p_f16 = p_f16_g.next()
         reduce_dst = pl.make_tile(
             pl.TileType(shape=[TS_HALF, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN),
-            addr=VA3, size=VB_RED)
+            addr=VA3,
+            size=VB_RED,
+        )
         reduce_dst_rm = pl.make_tile(
-            pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addr=VA3, size=VB_RED)
+            pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA3, size=VB_RED
+        )
 
         running_o = pl.make_tile(
-            pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addr=VA7, size=VB4)
+            pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA7, size=VB4
+        )
         o_f16_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-            addrs=VA9, mutex_ids=[10])
+            addrs=VA9,
+            mutex_ids=[10],
+        )
         o_f16 = o_f16_g.next()
         tile_nz_g = pl.make_tile_group(
-            type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec,
-                             layout=pl.NZ),
-            addrs=VA10, mutex_ids=[11])
+            type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
+            addrs=VA10,
+            mutex_ids=[11],
+        )
         tile_nz = tile_nz_g.next()
 
         # Double-buffered global state (per Q tile) -use tile tuples for dynamic
         # indexing by q_count % 2, since StructArray ctx references need runtime index.
-        gmax_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32,
-                                    target_memory=pl.MemorySpace.Vec)
+        gmax_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         gmax_rm_0 = pl.make_tile(gmax_rm_type, addr=VA_GMAX0, size=VB_RED)
         gmax_rm_1 = pl.make_tile(gmax_rm_type, addr=VA_GMAX1, size=VB_RED)
         global_max_rm_buf = (gmax_rm_0, gmax_rm_1)
 
-        gsum_type = pl.TileType(shape=[TS_HALF, 1], dtype=pl.DT_FP32,
-                                 target_memory=pl.MemorySpace.Vec, layout=pl.DN)
-        gsum_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32,
-                                    target_memory=pl.MemorySpace.Vec)
+        gsum_type = pl.TileType(shape=[TS_HALF, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN)
+        gsum_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         gsum_0 = pl.make_tile(gsum_type, addr=VA_GSUM0, size=VB_RED)
         gsum_1 = pl.make_tile(gsum_type, addr=VA_GSUM1, size=VB_RED)
         gsum_rm_0 = pl.make_tile(gsum_rm_type, addr=VA_GSUM0, size=VB_RED)
@@ -339,10 +360,14 @@ def fa_perf_tkv_preload_nbuf_kernel(
         # FIFO exp_corr -tile group with next() rotation (mutex ids 7,8)
         exp_corr_db = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN),
-            addrs=VA_EXP_BASE, mutex_ids=[7, 8])
+            addrs=VA_EXP_BASE,
+            mutex_ids=[7, 8],
+        )
         exp_corr_rm_db = pl.make_tile_group(
             type=pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addrs=VA_EXP_BASE, mutex_ids=[7, 8])
+            addrs=VA_EXP_BASE,
+            mutex_ids=[7, 8],
+        )
 
         sub_id = pl.get_subblock_idx()
         row_off = sub_id * TS_HALF
@@ -405,16 +430,13 @@ def fa_perf_tkv_preload_nbuf_kernel(
                     pl.move(tile_nz, p_f16)
                     cur_p = p_mat_db.next()
                     pl.insert(cur_p, tile_nz, [64 * sub_id, 0])
-                    pl.system.set_cross_core(pipe=pl.PipeType.MTE3,
-                        event_id=P_READY_IDS[p_eid])
+                    pl.system.set_cross_core(pipe=pl.PipeType.MTE3, event_id=P_READY_IDS[p_eid])
 
                 # --- compute_gu (delayed 2 steps: uses ctx from task_id-2) ---
                 if task_id > 1:
                     ctx_gu = ctx_arr[(task_id + 1) % 3]
                     gu_eid = ctx_gu.task_id % FIFO_SIZE
-                    pl.system.wait_cross_core(
-                        pipe=pl.PipeType.V, event_id=PV_READY_IDS[gu_eid]
-                    )
+                    pl.system.wait_cross_core(pipe=pl.PipeType.V, event_id=PV_READY_IDS[gu_eid])
 
                     pv_t = pv_vec_db.next()
                     if ctx_gu.ki == 0:
@@ -471,8 +493,7 @@ def fa_perf_tkv_preload_nbuf_kernel(
         pl.move(tile_nz, p_f16)
         cur_p = p_mat_db.next()
         pl.insert(cur_p, tile_nz, [64 * sub_id, 0])
-        pl.system.set_cross_core(pipe=pl.PipeType.MTE3,
-            event_id=P_READY_IDS[p_eid])
+        pl.system.set_cross_core(pipe=pl.PipeType.MTE3, event_id=P_READY_IDS[p_eid])
 
         # compute_gu for task_id-2
         if task_id > 1:
@@ -527,6 +548,7 @@ def flash_attention_ref(q, k, v, d):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_perf_nbuf():
     device = ST_DEVICE
     torch.npu.set_device(device)

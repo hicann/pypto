@@ -19,6 +19,8 @@ import pypto_pro.language as pl
 from pypto_pro.runtime.tilingkey import TilingKeyField
 import pytest
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -26,6 +28,8 @@ ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 # ---- 单字段 TilingKey ---------------------------------------------------
 class TkSingle:
     OpType = TilingKeyField(bits=2, values=[0, 1, 2])
+
+
 # ---- 多字段 TilingKey ---------------------------------------------------
 # ---- 带有 is_valid 的 TilingKey -----------------------------------------
 # ---- 公共 kernel 模板 ----------------------------------------------------
@@ -66,6 +70,8 @@ def _make_kernel(tiling_key_cls):
                     pl.store(z, tile_c, [i, j])
 
     return _kernel
+
+
 kernel_single = _make_kernel(TkSingle)
 # ---- 正例 ----------------------------------------------------------------
 # ---- 反例: 值不在候选集内 -------------------------------------------------
@@ -77,9 +83,11 @@ kernel_single = _make_kernel(TkSingle)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_direct_call_no_brackets():
     with pytest.raises(ValueError):
         import torch
+
         device = ST_DEVICE
         torch.npu.set_device(device)
         dummy = torch.zeros((128, 256), device=device, dtype=torch.float16)

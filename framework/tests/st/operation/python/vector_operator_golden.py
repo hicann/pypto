@@ -3894,8 +3894,13 @@ def _quantmx_build_exp(x_shape: tuple, rows: int, scale_group_cols: int, group_c
 
 
 def _quantmx_axis_last_golden(
-    x: np.ndarray, src_dtype_name: str, is_fp4_e2m1: bool, is_nv: bool, use_plain_fp8_max_abs: bool, dp: dict,
-    impl: dict
+    x: np.ndarray,
+    src_dtype_name: str,
+    is_fp4_e2m1: bool,
+    is_nv: bool,
+    use_plain_fp8_max_abs: bool,
+    dp: dict,
+    impl: dict,
 ):
     group_size = 32
     grouped = _quantmx_group_input(x, group_size)
@@ -3914,8 +3919,13 @@ def _quantmx_axis_last_golden(
 
 
 def _quantmx_axis_dn_golden(
-    x: np.ndarray, src_dtype_name: str, is_fp4_e2m1: bool, is_nv: bool, use_plain_fp8_max_abs: bool, dp: dict,
-    impl: dict
+    x: np.ndarray,
+    src_dtype_name: str,
+    is_fp4_e2m1: bool,
+    is_nv: bool,
+    use_plain_fp8_max_abs: bool,
+    dp: dict,
+    impl: dict,
 ):
     group_size = 32
     m_dim = x.shape[-2]
@@ -3931,9 +3941,7 @@ def _quantmx_axis_dn_golden(
     x_grouped = x_3d.reshape(prefix_rows, group_rows, group_size, n_dim)
     x_grouped = x_grouped.transpose(0, 3, 1, 2).reshape(prefix_rows * n_dim, group_rows, group_size)
 
-    max_source = _quantmx_golden_max_source(
-        x_grouped, src_dtype_name, is_fp4_e2m1, is_nv, use_plain_fp8_max_abs
-    )
+    max_source = _quantmx_golden_max_source(x_grouped, src_dtype_name, is_fp4_e2m1, is_nv, use_plain_fp8_max_abs)
     max_abs = np.max(max_source, axis=2).astype(np.float32)
     e8m0, group_scaling = _quantmx_compute_exp_scaling(max_abs, dp, is_fp4_e2m1, is_nv)
     scaled = _quantmx_scale_grouped(x_grouped, group_scaling, src_dtype_name, is_fp4_e2m1, is_nv)
@@ -3969,9 +3977,7 @@ def gen_quantmx_op_golden(case_name: str, output: Path, case_index: int = None) 
 
         normalized_axis = _quantmx_normalize_axis(axis, x.ndim)
         if normalized_axis == x.ndim - 2:
-            return _quantmx_axis_dn_golden(
-                x, src_dtype_name, is_fp4_e2m1, is_nv, use_plain_fp8_max_abs, dp, impl
-            )
+            return _quantmx_axis_dn_golden(x, src_dtype_name, is_fp4_e2m1, is_nv, use_plain_fp8_max_abs, dp, impl)
         return _quantmx_axis_last_golden(x, src_dtype_name, is_fp4_e2m1, is_nv, use_plain_fp8_max_abs, dp, impl)
 
     logging.debug("Case(%s), Golden creating...", case_name)

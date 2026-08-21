@@ -20,6 +20,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -55,6 +57,7 @@ def struct_array_basic_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_struct_array_basic():
     _check_npu()
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
@@ -83,6 +86,7 @@ def struct_array_for_loop_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_struct_array_for_loop():
     _check_npu()
     out = torch.zeros(4, device=ST_DEVICE, dtype=torch.int32)
@@ -118,6 +122,7 @@ def struct_array_conditional_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_struct_array_conditional():
     _check_npu()
     out = torch.zeros(3, device=ST_DEVICE, dtype=torch.int32)
@@ -149,6 +154,7 @@ def struct_array_break_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_struct_array_break():
     _check_npu()
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
@@ -182,6 +188,7 @@ def struct_array_cross_assign_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_struct_array_cross_assign():
     _check_npu()
     out = torch.zeros(4, device=ST_DEVICE, dtype=torch.int32)
@@ -212,6 +219,7 @@ def struct_and_array_aggregate_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_struct_and_array_aggregate():
     _check_npu()
     out = torch.zeros(2, device=ST_DEVICE, dtype=torch.int32)
@@ -241,6 +249,7 @@ def struct_array_alias_for_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_struct_array_alias_for():
     _check_npu()
     out = torch.zeros(4, device=ST_DEVICE, dtype=torch.int32)
@@ -295,6 +304,7 @@ def struct_array_triple_ring_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_struct_array_triple_ring():
     _check_npu()
     out = torch.zeros(4, device=ST_DEVICE, dtype=torch.int32)
@@ -356,6 +366,7 @@ def struct_array_while_alias_nested_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_struct_array_while_alias_nested():
     _check_npu()
     out = torch.zeros(6, device=ST_DEVICE, dtype=torch.int32)
@@ -394,6 +405,7 @@ def struct_array_chain_alias_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_struct_array_chain_alias():
     _check_npu()
     out = torch.zeros(4, device=ST_DEVICE, dtype=torch.int32)
@@ -401,6 +413,8 @@ def test_struct_array_chain_alias():
     torch.npu.synchronize()
     expected = torch.tensor([6, 16, 42, 62], device=ST_DEVICE, dtype=torch.int32)
     assert torch.equal(out, expected), f"got {out.tolist()}, expected {expected.tolist()}"
+
+
 # =============================================================================
 # Test 11: 函数入参传引用
 #   真实函数 arr_fill(arr,idx,base,step) 和 arr_accum(arr_a,arr_b,idx,factor)
@@ -440,6 +454,7 @@ def struct_array_pass_by_ref_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_struct_array_pass_by_ref():
     _check_npu()
     out = torch.zeros(4, device=ST_DEVICE, dtype=torch.int32)

@@ -52,6 +52,7 @@ void ExecuteOpAssemble(ExecuteOperationContext* ctx)
     }
 }
 REGISTER_CALC_OP(OP_ASSEMBLE, Opcode::OP_ASSEMBLE, ExecuteOpAssemble);
+REGISTER_CALC_OP(OP_CONTRACT, Opcode::OP_CONTRACT, ExecuteOpAssemble);
 REGISTER_CALC_OP(OP_ASSEMBLE_SSA, Opcode::OP_ASSEMBLE_SSA, ExecuteOpAssemble);
 
 void ExecuteOpAtomicRMW(ExecuteOperationContext* ctx)
@@ -213,6 +214,7 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
     }
 }
 REGISTER_CALC_OP(OP_VIEW, Opcode::OP_VIEW, ExecuteOpView);
+REGISTER_CALC_OP(OP_SLICE, Opcode::OP_SLICE, ExecuteOpView);
 
 void ExecuteOpCopyOut(ExecuteOperationContext* ctx)
 {

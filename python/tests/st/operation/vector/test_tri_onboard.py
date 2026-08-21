@@ -81,6 +81,7 @@ def run_tri(inputs: List[torch.Tensor], outputs: List[torch.Tensor], args: TriAr
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_triu_onboard():
     diagonal = 1
     shape = (12, 12)
@@ -95,6 +96,7 @@ def test_triu_onboard():
     assert torch.allclose(pypto_out.flatten(), golden.flatten(), rtol=1e-4, atol=1e-5)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_tril_onboard():
     diagonal = -1
     shape = (12, 13)

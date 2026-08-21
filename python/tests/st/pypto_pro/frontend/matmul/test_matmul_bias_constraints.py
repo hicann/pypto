@@ -24,6 +24,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 
 class _PhaseViolationTimeoutError(Exception):
     """Raised when a phase violation test hangs (aicore deadlock)."""
@@ -198,6 +200,7 @@ def kernel_bias_dtype_bf16(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_bias_dtype_fp16():
     torch.npu.set_device(DEVICE_ID)
     a = torch.randn(TILE, TILE, device=DEVICE, dtype=torch.float16)
@@ -208,6 +211,7 @@ def test_err_bias_dtype_fp16():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_bias_dtype_bf16():
     torch.npu.set_device(DEVICE_ID)
     a = torch.randn(TILE, TILE, device=DEVICE, dtype=torch.bfloat16)
@@ -403,6 +407,7 @@ def kernel_bias_mem_mat(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_bias_mem_right():
     torch.npu.set_device(DEVICE_ID)
     a = torch.randn(TILE, TILE, device=DEVICE, dtype=torch.float16)
@@ -413,6 +418,7 @@ def test_err_bias_mem_right():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_bias_mem_vec():
     torch.npu.set_device(DEVICE_ID)
     a = torch.randn(TILE, TILE, device=DEVICE, dtype=torch.float16)
@@ -423,6 +429,7 @@ def test_err_bias_mem_vec():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_bias_mem_mat():
     torch.npu.set_device(DEVICE_ID)
     a = torch.randn(TILE, TILE, device=DEVICE, dtype=torch.float16)
@@ -490,6 +497,7 @@ def kernel_bias_load_direct(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_bias_load_direct():
     torch.npu.set_device(DEVICE_ID)
     a = torch.randn(TILE, TILE, device=DEVICE, dtype=torch.float16)
@@ -565,6 +573,7 @@ def kernel_bias_shape_full_2d(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_bias_shape_full_2d():
     torch.npu.set_device(DEVICE_ID)
     a = torch.randn(TILE, TILE, device=DEVICE, dtype=torch.float16)
@@ -716,6 +725,7 @@ def kernel_bias_last_block(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_matmul_bias_middle_block():
     torch.npu.set_device(DEVICE_ID)
     torch.manual_seed(42)
@@ -731,6 +741,7 @@ def test_err_matmul_bias_middle_block():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_matmul_bias_last_block():
     torch.npu.set_device(DEVICE_ID)
     torch.manual_seed(42)
@@ -879,6 +890,7 @@ def kernel_all_partial_no_final(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_phase_no_store_phase():
     """matmul(bias, Final) + store without STPhase: phase mismatch causes device error."""
     torch.npu.set_device(DEVICE_ID)
@@ -891,6 +903,7 @@ def test_err_phase_no_store_phase():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_all_partial_no_final():
     """K-split all Partial, no Final + store(Final): unit_flag deadlock, device timeout."""
     torch.npu.set_device(DEVICE_ID)
@@ -1093,6 +1106,7 @@ def kernel_move_vec_to_bias(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_move_left_to_bias():
     torch.npu.set_device(DEVICE_ID)
     a = torch.randn(TILE, TILE, device=DEVICE, dtype=torch.float16)
@@ -1103,6 +1117,7 @@ def test_err_move_left_to_bias():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_move_acc_to_bias():
     torch.npu.set_device(DEVICE_ID)
     a = torch.randn(TILE, TILE, device=DEVICE, dtype=torch.float16)
@@ -1113,6 +1128,7 @@ def test_err_move_acc_to_bias():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_move_vec_to_bias():
     torch.npu.set_device(DEVICE_ID)
     a = torch.randn(TILE, TILE, device=DEVICE, dtype=torch.float16)

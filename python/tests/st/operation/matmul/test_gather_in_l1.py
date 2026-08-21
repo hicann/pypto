@@ -103,6 +103,7 @@ def run_gather_in_l1_test(case: dict):
 @pytest.mark.parametrize(
     "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in GATHER_IN_L1_TESTS]
 )
+@pypto.options(pass_options={"enable_slice": True})
 def test_gather_in_l1_basic(case: dict):
     run_gather_in_l1_test(case)
 
@@ -148,8 +149,9 @@ def run_gather_in_l1_demo(run_mode):
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
     @pypto.frontend.jit(
-        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1}, runtime_options={"run_mode": mode},
-)
+        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1},
+        runtime_options={"run_mode": mode},
+    )
     def gather_demo_kernel(
         src: pypto.Tensor([], pypto.DT_FP16),
         indices: pypto.Tensor([], pypto.DT_INT32),

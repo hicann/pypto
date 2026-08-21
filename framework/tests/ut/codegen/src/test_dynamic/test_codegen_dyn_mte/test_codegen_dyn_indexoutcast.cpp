@@ -33,9 +33,12 @@
 namespace npu::tile_fwk {
 class TestCodegenDynIndexOutCast : public CodegenTestBase {
 public:
-    TestCodegenDynIndexOutCast() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setIdGen = true}) {}
+    TestCodegenDynIndexOutCast()
+        : CodegenTestBase(
+              {.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true, .tileTensorValue = false, .setIdGen = true})
+    {}
 
-    static void SetUpTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false); }
+    static void SetUpTestCase() {}
 
     static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
 };

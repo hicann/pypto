@@ -27,6 +27,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -38,6 +40,7 @@ N = 128
 # row_reduce
 # ============================================================================
 
+
 @pl.jit(auto_mutex=True)
 def row_reduce_sum_kernel(
     x: pl.Tensor[[M, N], pl.DT_FP16],
@@ -45,13 +48,17 @@ def row_reduce_sum_kernel(
 ):
     tile_a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_tmp = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     tile_out = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[2])
+        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addrs=0x8000, mutex_ids=[2]
+    )
     with pl.section_vector():
         cur_a = tile_a.current()
         cur_tmp = tile_tmp.current()
@@ -68,13 +75,17 @@ def row_reduce_max_kernel(
 ):
     tile_a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_tmp = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     tile_out = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[2])
+        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addrs=0x8000, mutex_ids=[2]
+    )
     with pl.section_vector():
         cur_a = tile_a.current()
         cur_tmp = tile_tmp.current()
@@ -88,6 +99,7 @@ def row_reduce_max_kernel(
 # row_argmax / row_argmin
 # ============================================================================
 
+
 @pl.jit(auto_mutex=True)
 def row_argmax_kernel(
     x: pl.Tensor[[M, N], pl.DT_FP16],
@@ -95,13 +107,19 @@ def row_argmax_kernel(
 ):
     tile_a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_tmp = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     tile_out = pl.make_tile_group(
         type=pl.TileType(shape=[64, 1], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[2])
+        addrs=0x8000,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         cur_a = tile_a.current()
         cur_tmp = tile_tmp.current()
@@ -118,13 +136,19 @@ def row_argmin_kernel(
 ):
     tile_a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_tmp = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     tile_out = pl.make_tile_group(
         type=pl.TileType(shape=[64, 1], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[2])
+        addrs=0x8000,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         cur_a = tile_a.current()
         cur_tmp = tile_tmp.current()
@@ -138,6 +162,7 @@ def row_argmin_kernel(
 # row_expand_max / row_expand_min
 # ============================================================================
 
+
 @pl.jit(auto_mutex=True)
 def row_expand_max_kernel(
     x: pl.Tensor[[M, N], pl.DT_FP16],
@@ -146,13 +171,17 @@ def row_expand_max_kernel(
 ):
     tile_a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_row = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addrs=0x4000, mutex_ids=[1]
+    )
     tile_out = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[2])
+        addrs=0x8000,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         cur_a = tile_a.current()
         cur_row = tile_row.current()
@@ -171,13 +200,17 @@ def row_expand_min_kernel(
 ):
     tile_a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_row = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addrs=0x4000, mutex_ids=[1]
+    )
     tile_out = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[2])
+        addrs=0x8000,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         cur_a = tile_a.current()
         cur_row = tile_row.current()
@@ -192,6 +225,7 @@ def row_expand_min_kernel(
 # col_reduce
 # ============================================================================
 
+
 @pl.jit(auto_mutex=True)
 def col_reduce_sum_kernel(
     x: pl.Tensor[[M, N], pl.DT_FP16],
@@ -199,13 +233,19 @@ def col_reduce_sum_kernel(
 ):
     tile_a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_tmp = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     tile_out = pl.make_tile_group(
         type=pl.TileType(shape=[1, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[2])
+        addrs=0x8000,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         cur_a = tile_a.current()
         cur_tmp = tile_tmp.current()
@@ -219,6 +259,7 @@ def col_reduce_sum_kernel(
 # col_argmax / col_argmin
 # ============================================================================
 
+
 @pl.jit(auto_mutex=True)
 def col_argmax_kernel(
     x: pl.Tensor[[M, N], pl.DT_FP16],
@@ -226,13 +267,19 @@ def col_argmax_kernel(
 ):
     tile_a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_tmp = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     tile_out = pl.make_tile_group(
         type=pl.TileType(shape=[1, 128], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[2])
+        addrs=0x8000,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         cur_a = tile_a.current()
         cur_tmp = tile_tmp.current()
@@ -249,13 +296,19 @@ def col_argmin_kernel(
 ):
     tile_a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_tmp = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     tile_out = pl.make_tile_group(
         type=pl.TileType(shape=[1, 128], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[2])
+        addrs=0x8000,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         cur_a = tile_a.current()
         cur_tmp = tile_tmp.current()
@@ -269,6 +322,7 @@ def col_argmin_kernel(
 # col_expand_max / col_expand_min
 # ============================================================================
 
+
 @pl.jit(auto_mutex=True)
 def col_expand_max_kernel(
     x: pl.Tensor[[M, N], pl.DT_FP16],
@@ -277,13 +331,19 @@ def col_expand_max_kernel(
 ):
     tile_a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_col = pl.make_tile_group(
         type=pl.TileType(shape=[1, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     tile_out = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[2])
+        addrs=0x8000,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         cur_a = tile_a.current()
         cur_col = tile_col.current()
@@ -302,13 +362,19 @@ def col_expand_min_kernel(
 ):
     tile_a = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_col = pl.make_tile_group(
         type=pl.TileType(shape=[1, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x4000, mutex_ids=[1])
+        addrs=0x4000,
+        mutex_ids=[1],
+    )
     tile_out = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[2])
+        addrs=0x8000,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         cur_a = tile_a.current()
         cur_col = tile_col.current()
@@ -323,7 +389,9 @@ def col_expand_min_kernel(
 # Test functions
 # ============================================================================
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_row_reduce_sum():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -336,6 +404,7 @@ def test_row_reduce_sum():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_row_reduce_max():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -348,6 +417,7 @@ def test_row_reduce_max():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_row_argmax():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -360,6 +430,7 @@ def test_row_argmax():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_row_argmin():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -372,6 +443,7 @@ def test_row_argmin():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_row_expand_max():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -385,6 +457,7 @@ def test_row_expand_max():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_row_expand_min():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -398,6 +471,7 @@ def test_row_expand_min():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_col_reduce_sum():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -410,6 +484,7 @@ def test_col_reduce_sum():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_col_argmax():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -422,6 +497,7 @@ def test_col_argmax():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_col_argmin():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -434,6 +510,7 @@ def test_col_argmin():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_col_expand_max():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -447,6 +524,7 @@ def test_col_expand_max():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_col_expand_min():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -466,6 +544,7 @@ def _doc_reduce(title, out_shape, output_dtype):
         kernel(a, z)
         ctx.synchronize()
         return ctx.snippet(title, {"a": a}, {"z": z})
+
     return collect
 
 
@@ -477,6 +556,7 @@ def _doc_expand(title, v_shape):
         kernel(a, v, z)
         ctx.synchronize()
         return ctx.snippet(title, {"a": a, "v": v}, {"z": z})
+
     return collect
 
 
@@ -496,12 +576,17 @@ DOC_OUTPUT_CASES = {
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     cases = [
-        test_row_reduce_sum, test_row_reduce_max,
-        test_row_argmax, test_row_argmin,
-        test_row_expand_max, test_row_expand_min,
+        test_row_reduce_sum,
+        test_row_reduce_max,
+        test_row_argmax,
+        test_row_argmin,
+        test_row_expand_max,
+        test_row_expand_min,
         test_col_reduce_sum,
-        test_col_argmax, test_col_argmin,
-        test_col_expand_max, test_col_expand_min,
+        test_col_argmax,
+        test_col_argmin,
+        test_col_expand_max,
+        test_col_expand_min,
     ]
     for case in cases:
         case()

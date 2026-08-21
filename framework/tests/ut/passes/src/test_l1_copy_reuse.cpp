@@ -75,7 +75,7 @@ TEST_F(L1CopyInReuseTest, TwoCopyIn)
     tensor3->tensor->rawmagic = 3;
     auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& copy_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast1}, {tensor1});
+    auto& copy_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SLICE, {incast1}, {tensor1});
     copy_op1.UpdateSubgraphID(subGraphID0);
     copy_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{0, 0}, MEM_L1, std::vector<SymbolicScalar>(), std::vector<SymbolicScalar>()));
@@ -87,7 +87,7 @@ TEST_F(L1CopyInReuseTest, TwoCopyIn)
     view_op1.UpdateSubgraphID(subGraphID1);
     auto& alloc_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_L1_ALLOC, {}, {tensor3});
     alloc_op1.UpdateSubgraphID(subGraphID1);
-    auto& copy_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast2}, {tensor3});
+    auto& copy_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SLICE, {incast2}, {tensor3});
     copy_op2.UpdateSubgraphID(subGraphID1);
     incast2->AddConsumer(copy_op2);
     copy_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(
@@ -117,14 +117,14 @@ void InitGraphBuilder(ComputationalGraphBuilder& G, std::vector<int64_t> tileSha
     for (int i = 1; i < subGraphNum; i++) {
         std::string strID = std::to_string(i);
         EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, {"tensor" + strID}), true);
-        std::vector<Opcode> opLists{Opcode::OP_VIEW, Opcode::OP_EXP};
+        std::vector<Opcode> opLists{Opcode::OP_SLICE, Opcode::OP_EXP};
         std::vector<std::vector<std::string>> iOperands{{"incast1"}, {"tensor" + strID}};
         std::vector<std::vector<std::string>> oOperands{{"tensor" + strID}, {"outcast"}};
-        std::vector<std::string> opNames{"VIEW_" + strID, "EXP_" + strID};
+        std::vector<std::string> opNames{"SLICE_" + strID, "EXP_" + strID};
         EXPECT_EQ(G.AddOps(opLists, iOperands, oOperands, opNames, true), true);
-        G.GetOp("VIEW_" + strID)->UpdateSubgraphID(i);
+        G.GetOp("SLICE_" + strID)->UpdateSubgraphID(i);
         G.GetOp("EXP_" + strID)->UpdateSubgraphID(i);
-        G.GetOp("VIEW_" + strID)
+        G.GetOp("SLICE_" + strID)
             ->SetOpAttribute(std::make_shared<ViewOpAttribute>(
                 std::vector<int64_t>{0, 0}, MEM_L1, std::vector<SymbolicScalar>(), std::vector<SymbolicScalar>()));
         G.GetTensor("tensor" + strID)->SetMemoryTypeOriginal(MEM_L1);
@@ -197,8 +197,8 @@ void BuildParallelMatmulBranch(ComputationalGraphBuilder& G, const std::vector<s
     EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_L0C, l0C), true);
     EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_DEVICE_DDR, out), true);
 
-    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {gmTensorsA[branchIndex]}, {l1A}, viewA), true);
-    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {gmTensorsB[branchIndex]}, {l1B}, viewB), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_SLICE, {gmTensorsA[branchIndex]}, {l1A}, viewA), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_SLICE, {gmTensorsB[branchIndex]}, {l1B}, viewB), true);
     EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {l1A}, {l0A}, "toA" + branchId), true);
     EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {l1B}, {l0B}, "toB" + branchId), true);
     EXPECT_EQ(G.AddOp(Opcode::OP_A_MUL_B, {l0A, l0B}, {l0C}, matmul), true);
@@ -442,9 +442,9 @@ TEST_F(L1CopyInReuseTest, TestIsLeftRightMatrixCopy)
     EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_UB, "ubC"), true);
 
     // GM -> L1 copy-ins
-    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"gmA"}, {"l1A"}, "viewA"), true);
-    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"gmB"}, {"l1B"}, "viewB"), true);
-    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"gmC"}, {"l1C"}, "viewC"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_SLICE, {"gmA"}, {"l1A"}, "viewA"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_SLICE, {"gmB"}, {"l1B"}, "viewB"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_SLICE, {"gmC"}, {"l1C"}, "viewC"), true);
     // L1 -> L0A / L0B / UB consumers
     EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {"l1A"}, {"l0A"}, "toL0A"), true);
     EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {"l1B"}, {"l0B"}, "toL0B"), true);

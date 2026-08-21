@@ -17,6 +17,8 @@ import sys
 import pytest
 import torch
 
+import pypto  # noqa: E402
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _ops.bsa import bsa_fwd_impl as _bsa_impl  # noqa: E402
 from _ops.bsa.bsa_common import DEFAULT_CONFIG  # noqa: E402
@@ -39,6 +41,7 @@ def _generate_block_sparse_mask(batch, head_num_q, num_q_blocks, num_kv_blocks, 
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bsa_fwd_minimal(monkeypatch):
     """S256 Sparse50; pass_verify vs BSA O golden (l/m skipped — host LSE form differs)."""
     b, hq, hkv, sq, skv, sparsity = 1, 4, 2, 256, 256, 0.5
@@ -52,12 +55,20 @@ def test_bsa_fwd_minimal(monkeypatch):
     asq = torch.full([b], sq, dtype=torch.int64)
     askv = torch.full([b], skv, dtype=torch.int64)
 
-    golden = bsa_forward_golden(BSAForwardInputs(
-        query=q, key=k, value=v, block_sparse_mask=mask,
-        block_shape_x=_CFG.block_shape_x, block_shape_y=_CFG.block_shape_y,
-        actual_seq_lengths=asq, actual_seq_lengths_kv=askv,
-        scale_value=_CFG.softmax_scale, cfg=_CFG,
-    ))
+    golden = bsa_forward_golden(
+        BSAForwardInputs(
+            query=q,
+            key=k,
+            value=v,
+            block_sparse_mask=mask,
+            block_shape_x=_CFG.block_shape_x,
+            block_shape_y=_CFG.block_shape_y,
+            actual_seq_lengths=asq,
+            actual_seq_lengths_kv=askv,
+            scale_value=_CFG.softmax_scale,
+            cfg=_CFG,
+        )
+    )
     bx = _CFG.block_shape_x
     sq_pad = math.ceil(sq / bx) * bx
     d = _CFG.head_dim
@@ -74,9 +85,16 @@ def test_bsa_fwd_minimal(monkeypatch):
 
     monkeypatch.setattr(_bsa_impl, "_dispatch_fwd_kernel", _dispatch_with_golden)
 
-    block_sparse_attention_forward(BSAForwardCallInputs(
-        query=q, key=k, value=v, block_sparse_mask=mask,
-        actual_seq_lengths=asq, actual_seq_lengths_kv=askv,
-        block_shape=None, cfg=_CFG,
-    ))
+    block_sparse_attention_forward(
+        BSAForwardCallInputs(
+            query=q,
+            key=k,
+            value=v,
+            block_sparse_mask=mask,
+            actual_seq_lengths=asq,
+            actual_seq_lengths_kv=askv,
+            block_shape=None,
+            cfg=_CFG,
+        )
+    )
     assert_pass_verify_ok()

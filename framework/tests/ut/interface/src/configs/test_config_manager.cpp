@@ -18,6 +18,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
 #include "interface/configs/config_manager_ng.cpp"
+#include "tilefwk/error_manager.h"
 
 using namespace npu::tile_fwk;
 
@@ -26,7 +27,7 @@ public:
     static void SetUpTestCase() {}
     static void TearDownTestCase() {}
     void SetUp() override {}
-    void TearDown() override {}
+    void TearDown() override { ErrorManager::Instance().OutputErrorMessage(true); }
 };
 
 TEST_F(TestConfigManager, PassGloablConfig)

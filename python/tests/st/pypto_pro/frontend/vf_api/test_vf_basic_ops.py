@@ -17,6 +17,8 @@ from pypto_pro.language import Vf as vf  # noqa: N813
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -3102,8 +3104,7 @@ def kernel_85_membar_modes(
 @pl.vector_function
 def _vf_kernel_86_datablock_copy_0(in_a, t_f0):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    reg = vf.load_align(in_a, preg, data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
-                        block_stride=32)
+    reg = vf.load_align(in_a, preg, data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, block_stride=32)
     vf.store_align(t_f0, reg, preg)
 
 
@@ -3454,7 +3455,6 @@ def kernel_92_mask_addrreg(
 
 
 _KERNELS = [
-
     kernel_0_min_exp,
     kernel_1_abs_sqrt,
     kernel_2_bitwise,
@@ -3530,12 +3530,12 @@ _KERNELS = [
     kernel_90_nested_vf_4level,
     kernel_91_new_feats,
     kernel_92_mask_addrreg,
-
 ]
 
 
 def float_to_uint32_bits(t):
     return t.view(torch.int32).to(torch.int64) & 0xFFFFFFFF
+
 
 _KERNEL_MAP = {}
 for _k in _KERNELS:
@@ -3557,6 +3557,7 @@ def _run_kernel(kernel_num, a_fp32, b_fp32, device, idx_u0=None):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_vf_basic_ops():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -3901,8 +3902,7 @@ def test_vf_basic_ops():
     logging.info("Kernel 89 (Cast CAST_ODD) PASSED")
     # Kernel 90: 4-level nested VF — result = exp(sqrt(abs(a)) + 1.0)
     f0, *_ = _run_kernel(90, a_fp32, b_fp32, device)
-    torch.testing.assert_close(
-        f0, torch.exp(torch.sqrt(torch.abs(a_fp32)) + 1.0), rtol=1e-3, atol=1e-3)
+    torch.testing.assert_close(f0, torch.exp(torch.sqrt(torch.abs(a_fp32)) + 1.0), rtol=1e-3, atol=1e-3)
     logging.info("Kernel 90 (4-level nested VF) PASSED")
     f0, f1, u0, *_ = _run_kernel(91, a_fp32, b_fp32, device)
     assert f0.dtype == torch.float32 and f1.dtype == torch.float32 and u0.dtype == torch.int32
@@ -3912,6 +3912,7 @@ def test_vf_basic_ops():
     assert u0.dtype == torch.int32
     logging.info("Kernel 92 (load_align pld + store_align pst) PASSED")
     logging.info("All VF basic ops tests PASSED!")
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")

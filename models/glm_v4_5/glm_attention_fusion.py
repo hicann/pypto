@@ -653,6 +653,7 @@ def get_qwen_common_config(device="cpu"):
 
 
 @pytest.mark.soc("910", "950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_attention():
     # 使用 torch 生成数据
     torch_npu.npu.config.allow_internal_format = True

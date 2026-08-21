@@ -15,6 +15,7 @@
 （C++ 侧 IsPtoDataDumpEnabled 的 static const 缓存，进程内只读一次）不影响批跑时
 其它测试用例；子进程退出即彻底清理。
 """
+
 import os
 import subprocess
 import sys
@@ -22,6 +23,8 @@ import tempfile
 import textwrap
 
 import pytest
+
+import pypto
 
 _SUBPROCESS_SCRIPT = textwrap.dedent(
     """\
@@ -92,6 +95,7 @@ _SUBPROCESS_SCRIPT = textwrap.dedent(
 )
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_onboard_dump():
     env = os.environ.copy()
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
@@ -113,13 +117,13 @@ def test_onboard_dump():
             with open(err_path) as ef:
                 err_tail = ef.read()[-8000:]
             raise AssertionError(
-                f"subprocess failed (rc={result.returncode}):\n"
-                f"stdout:\n{result.stdout}\nstderr(tail):\n{err_tail}"
+                f"subprocess failed (rc={result.returncode}):\nstdout:\n{result.stdout}\nstderr(tail):\n{err_tail}"
             )
     finally:
         os.unlink(script_path)
         os.unlink(err_path)
     assert "SUBPROCESS_OK" in result.stdout, f"unexpected output:\n{result.stdout}"
+
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v", "-s", "-p", "no:cacheprovider"]))

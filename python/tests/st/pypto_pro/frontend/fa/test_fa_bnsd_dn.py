@@ -17,6 +17,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -97,7 +99,6 @@ EVENT_IDS_23 = (2, 3)
 QK_READY_IDS = (0, 1)
 P_READY_IDS = (2, 3)
 PV_READY_IDS = (4, 5)
-
 
 
 def alloc_cube_buffer():
@@ -365,9 +366,18 @@ def compute_p(
     p_slot = task_id % FIFO_SIZE
     pl.system.wait_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_IDS[p_slot])
     softmax_body(
-        task_id, ki, qi, q_count, skv_tiles, sub_id, b_idx, n_idx,
-        sq_dim, skv_dim,
-        stiles, p_buf,
+        task_id,
+        ki,
+        qi,
+        q_count,
+        skv_tiles,
+        sub_id,
+        b_idx,
+        n_idx,
+        sq_dim,
+        skv_dim,
+        stiles,
+        p_buf,
     )
     # Both vector subblocks contribute one half of the shared P MAT tile. Make
     # sure both halves have finished TINSERT before cube starts PV.
@@ -441,16 +451,33 @@ def _cube_inner_loop(
     cube,
 ) -> None:
     compute_qk(
-        task_id, ki, qi, q_count, skv_tiles, b_idx, n_idx,
-        l0ab_idx, l0c_idx, q, k, cube,
+        task_id,
+        ki,
+        qi,
+        q_count,
+        skv_tiles,
+        b_idx,
+        n_idx,
+        l0ab_idx,
+        l0c_idx,
+        q,
+        k,
+        cube,
     )
     l0ab_idx = 1 - l0ab_idx
     l0c_idx = 1 - l0c_idx
     if task_id > 0:
         compute_pv(
-            prev_task_id, prev_ki, prev_q_count, prev_skv_tiles,
-            prev_b_idx, prev_n_idx,
-            l0ab_idx, l0c_idx, v, cube,
+            prev_task_id,
+            prev_ki,
+            prev_q_count,
+            prev_skv_tiles,
+            prev_b_idx,
+            prev_n_idx,
+            l0ab_idx,
+            l0c_idx,
+            v,
+            cube,
         )
         l0ab_idx = 1 - l0ab_idx
         l0c_idx = 1 - l0c_idx
@@ -493,15 +520,31 @@ def _vec_inner_loop(
 ) -> None:
     if task_id > 0:
         compute_p(
-            prev_task_id, prev_ki, prev_qi, prev_q_count,
-            prev_skv_tiles, prev_sub_id, prev_b_idx, prev_n_idx,
-            sq_dim, skv_dim, stiles, p_buf,
+            prev_task_id,
+            prev_ki,
+            prev_qi,
+            prev_q_count,
+            prev_skv_tiles,
+            prev_sub_id,
+            prev_b_idx,
+            prev_n_idx,
+            sq_dim,
+            skv_dim,
+            stiles,
+            p_buf,
         )
     if task_id > 1:
         compute_gu(
-            prev2_task_id, prev2_ki, prev2_qi, prev2_q_count,
-            prev2_skv_tiles, prev2_sub_id, prev2_b_idx, prev2_n_idx,
-            o, gtiles,
+            prev2_task_id,
+            prev2_ki,
+            prev2_qi,
+            prev2_q_count,
+            prev2_skv_tiles,
+            prev2_sub_id,
+            prev2_b_idx,
+            prev2_n_idx,
+            o,
+            gtiles,
         )
 
 
@@ -577,28 +620,24 @@ def fa_bnsd_dn_kernel(
     p_mat_buf2 = pl.make_tile(p_mat_type, addr=MA2_PONG, size=P_F16)
 
     with pl.section_cube():
-        q_mat_type = pl.TileType(
-            shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN
-        )
+        q_mat_type = pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN)
         q_mat_0 = pl.make_tile(q_mat_type, addr=MA0, size=Q_F16)
         q_mat_1 = pl.make_tile(q_mat_type, addr=MA0_PONG, size=Q_F16)
-        k_mat_type = pl.TileType(
-            shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ
-        )
+        k_mat_type = pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
         k_mat_0 = pl.make_tile(k_mat_type, addr=MA1, size=KT_F16)
         k_mat_1 = pl.make_tile(k_mat_type, addr=MA1_PONG, size=KT_F16)
-        v_mat_type = pl.TileType(
-            shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ
-        )
+        v_mat_type = pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
         v_mat_0 = pl.make_tile(v_mat_type, addr=MA3, size=V_F16)
         v_mat_1 = pl.make_tile(v_mat_type, addr=MA3_PONG, size=V_F16)
         left_0 = pl.make_tile(
             pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addr=LA0, size=KT_F16,
+            addr=LA0,
+            size=KT_F16,
         )
         left_1 = pl.make_tile(
             pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addr=LA1, size=KT_F16,
+            addr=LA1,
+            size=KT_F16,
         )
         right_0 = pl.make_tile(
             pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right), addr=RA0, size=Q_F16
@@ -655,11 +694,25 @@ def fa_bnsd_dn_kernel(
             for qi in pl.range(0, sq_tiles):
                 for ki in pl.range(0, skv_tiles):
                     _cube_inner_loop(
-                        task_id, ki, qi, q_count, skv_tiles, b_idx, n_idx,
-                        l0ab_idx, l0c_idx,
-                        prev_task_id, prev_ki, prev_q_count, prev_skv_tiles,
-                        prev_b_idx, prev_n_idx,
-                        q, k, v, cube_tiles,
+                        task_id,
+                        ki,
+                        qi,
+                        q_count,
+                        skv_tiles,
+                        b_idx,
+                        n_idx,
+                        l0ab_idx,
+                        l0c_idx,
+                        prev_task_id,
+                        prev_ki,
+                        prev_q_count,
+                        prev_skv_tiles,
+                        prev_b_idx,
+                        prev_n_idx,
+                        q,
+                        k,
+                        v,
+                        cube_tiles,
                     )
                     prev_task_id = task_id
                     prev_ki = ki
@@ -671,9 +724,16 @@ def fa_bnsd_dn_kernel(
                 q_count = q_count + 1
             if task_id > 0:
                 compute_pv(
-                    prev_task_id, prev_ki, prev_q_count, prev_skv_tiles,
-                    prev_b_idx, prev_n_idx,
-                    l0ab_idx, l0c_idx, v, cube_tiles,
+                    prev_task_id,
+                    prev_ki,
+                    prev_q_count,
+                    prev_skv_tiles,
+                    prev_b_idx,
+                    prev_n_idx,
+                    l0ab_idx,
+                    l0c_idx,
+                    v,
+                    cube_tiles,
                 )
                 l0ab_idx = 1 - l0ab_idx
                 l0c_idx = 1 - l0c_idx
@@ -731,12 +791,36 @@ def fa_bnsd_dn_kernel(
             for qi in pl.range(0, sq_tiles):
                 for ki in pl.range(0, skv_tiles):
                     _vec_inner_loop(
-                        task_id, ki, qi, q_count, skv_tiles, sub_id, b_idx, n_idx,
-                        prev_task_id, prev_ki, prev_qi, prev_q_count,
-                        prev_skv_tiles, prev_sub_id, prev_b_idx, prev_n_idx,
-                        prev2_task_id, prev2_ki, prev2_qi, prev2_q_count,
-                        prev2_skv_tiles, prev2_sub_id, prev2_b_idx, prev2_n_idx,
-                        sq_dim, skv_dim, o, p_buf, softmax_tiles, gu_tiles,
+                        task_id,
+                        ki,
+                        qi,
+                        q_count,
+                        skv_tiles,
+                        sub_id,
+                        b_idx,
+                        n_idx,
+                        prev_task_id,
+                        prev_ki,
+                        prev_qi,
+                        prev_q_count,
+                        prev_skv_tiles,
+                        prev_sub_id,
+                        prev_b_idx,
+                        prev_n_idx,
+                        prev2_task_id,
+                        prev2_ki,
+                        prev2_qi,
+                        prev2_q_count,
+                        prev2_skv_tiles,
+                        prev2_sub_id,
+                        prev2_b_idx,
+                        prev2_n_idx,
+                        sq_dim,
+                        skv_dim,
+                        o,
+                        p_buf,
+                        softmax_tiles,
+                        gu_tiles,
                     )
                     # Shift: prev2 <- prev, prev <- current
                     prev2_task_id = prev_task_id
@@ -759,20 +843,43 @@ def fa_bnsd_dn_kernel(
                 q_count = q_count + 1
             if task_id > 0:
                 compute_p(
-                    prev_task_id, prev_ki, prev_qi, prev_q_count,
-                    prev_skv_tiles, prev_sub_id, prev_b_idx, prev_n_idx,
-                    sq_dim, skv_dim, softmax_tiles, p_buf,
+                    prev_task_id,
+                    prev_ki,
+                    prev_qi,
+                    prev_q_count,
+                    prev_skv_tiles,
+                    prev_sub_id,
+                    prev_b_idx,
+                    prev_n_idx,
+                    sq_dim,
+                    skv_dim,
+                    softmax_tiles,
+                    p_buf,
                 )
                 if task_id > 1:
                     compute_gu(
-                        prev2_task_id, prev2_ki, prev2_qi, prev2_q_count,
-                        prev2_skv_tiles, prev2_sub_id, prev2_b_idx, prev2_n_idx,
-                        o, gu_tiles,
+                        prev2_task_id,
+                        prev2_ki,
+                        prev2_qi,
+                        prev2_q_count,
+                        prev2_skv_tiles,
+                        prev2_sub_id,
+                        prev2_b_idx,
+                        prev2_n_idx,
+                        o,
+                        gu_tiles,
                     )
                 compute_gu(
-                    prev_task_id, prev_ki, prev_qi, prev_q_count,
-                    prev_skv_tiles, prev_sub_id, prev_b_idx, prev_n_idx,
-                    o, gu_tiles,
+                    prev_task_id,
+                    prev_ki,
+                    prev_qi,
+                    prev_q_count,
+                    prev_skv_tiles,
+                    prev_sub_id,
+                    prev_b_idx,
+                    prev_n_idx,
+                    o,
+                    gu_tiles,
                 )
 
 
@@ -790,6 +897,7 @@ def flash_attention_ref_bn(q, k, v, d):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_bn_a5():
     device = ST_DEVICE
     torch.npu.set_device(device)

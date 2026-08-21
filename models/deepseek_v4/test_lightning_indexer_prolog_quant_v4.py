@@ -286,6 +286,7 @@ def do_indexer_prolog_quant_entry(case_name: str, is_torch_graph: bool = False):
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_indexer_prolog_quant_b64_s1():
     """
     lightning_indexer_prolog quant decode mtp=0 case
@@ -294,6 +295,7 @@ def test_indexer_prolog_quant_b64_s1():
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_indexer_prolog_quant_b64_s2():
     """
     lightning_indexer_prolog quant decode mtp=1 case
@@ -302,6 +304,7 @@ def test_indexer_prolog_quant_b64_s2():
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_indexer_prolog_quant_b64_s4():
     """
     lightning_indexer_prolog quant decode mtp=3 case
@@ -310,6 +313,7 @@ def test_indexer_prolog_quant_b64_s4():
 
 
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_indexer_prolog_quant_graph():
     """
     lightning_indexer_prolog quant graph typical case

@@ -44,6 +44,7 @@ public:
         std::any kIndex;          // copy_in_l1_k_index属性值（K维度在dynValidShape中的索引，0或1）
         ir::Span span;            // 链路最早操作的span
         Operation::ScopeInfo scopeInfo;
+        Opcode opcode = Opcode::OP_VIEW;
     };
     struct AssembleOp {
         std::shared_ptr<LogicalTensor> input;
@@ -53,6 +54,7 @@ public:
         ir::Span span; // 链路最早操作的span
         Operation::ScopeInfo scopeInfo;
         std::string rmwModeAttr;
+        Opcode opcode = Opcode::OP_ASSEMBLE;
     };
     struct ConsumerCacheEntry {
         std::vector<Operation*> viewConsumers;
@@ -121,7 +123,7 @@ public:
                                    const std::vector<int64_t>& newOffset,
                                    const std::vector<SymbolicScalar>& newDynOffset,
                                    const std::vector<SymbolicScalar>& newDynValidShape, const ir::Span& span,
-                                   const Operation::ScopeInfo& scopeInfo);
+                                   const Operation::ScopeInfo& scopeInfo, Opcode opcode);
 
     // Assemble chain processing methods
     /**
@@ -157,7 +159,7 @@ public:
     void RecordAssembleOperation(const std::shared_ptr<LogicalTensor>& input,
                                  const std::shared_ptr<LogicalTensor>& output, const std::vector<int64_t>& offset,
                                  const std::vector<SymbolicScalar>& dynOffset, const ir::Span& span,
-                                 const Operation::ScopeInfo& scopeInfo, const std::string& rmwModeAttr);
+                                 const Operation::ScopeInfo& scopeInfo, const std::string& rmwModeAttr, Opcode opcode);
 
     // Common methods
     Status Initialize();

@@ -199,6 +199,7 @@ def run_clip(inputs: List[torch.Tensor], outputs: List[torch.Tensor], args: Clip
     return outputs
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_clip_1():
     inputs = [torch.rand(128, 128), torch.rand(128, 1), torch.rand(1, 128)]
     outputs = [torch.rand(128, 128)]

@@ -102,6 +102,7 @@ def select_experts_mm_kernel(
 
 
 @pytest.mark.soc("950", "910")
+@pypto.options(pass_options={"enable_slice": False})
 def test_select_experts_mm():
     # 1. 设置参数
     bs = 64

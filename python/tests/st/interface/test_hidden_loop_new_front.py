@@ -44,6 +44,7 @@ def cust_hidden_loop_func(
             out = t0 + out
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_hidden_loop_with_if_jit_function():
     """
     使用jit装饰器测试
@@ -68,6 +69,7 @@ def test_hidden_loop_with_if_jit_function():
     assert torch.allclose(golden, res.cpu(), atol=1e-5)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_hidden_loop_with_if_multiple_shapes():
     """
     测试不同形状
@@ -131,6 +133,7 @@ def op_hidden_loop_mix_loops(
     out[:] = pypto.add(out, t0_temp)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_hidden_loop_mix_loops_jit_function():
     """
     使用jit装饰器测试

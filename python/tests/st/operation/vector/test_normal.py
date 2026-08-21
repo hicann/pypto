@@ -144,6 +144,7 @@ def normal_numpy_golden(shape, key, counter, alg, dtype):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_normal_fp32():
     """Test whether the output of FP32 is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
@@ -180,6 +181,7 @@ def test_normal_fp32():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_normal_fp16():
     """Test whether the output of FP16 is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))

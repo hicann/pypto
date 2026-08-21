@@ -25,6 +25,10 @@
 #define MODULE_NAME "DuplicateOp"
 
 namespace npu::tile_fwk {
+namespace {
+bool IsViewLikeOpcode(Opcode opcode) { return opcode == Opcode::OP_VIEW || opcode == Opcode::OP_SLICE; }
+} // namespace
+
 Status DuplicateOp::PreCheck(Function& function)
 {
     DuplicateOpChecker checker;
@@ -110,7 +114,7 @@ Status DuplicateOp::ProcessGatherIn(Function& function, Operation& operation, st
     return SUCCESS;
 }
 
-Status DuplicateOp::ProcessView(Function& function, Operation& operation, std::vector<Operation*>& newOps) const
+Status DuplicateOp::ProcessViewLike(Function& function, Operation& operation, std::vector<Operation*>& newOps) const
 {
     auto viewAttr = dynamic_cast<ViewOpAttribute*>(operation.GetOpAttribute().get());
     if (viewAttr != nullptr &&
@@ -138,7 +142,7 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation, std::v
                     oOperand->magic);
                 return FAILED;
             }
-            if (consumer->GetOpcode() == Opcode::OP_VIEW) {
+            if (IsViewLikeOpcode(consumer->GetOpcode())) {
                 continue;
             }
             auto dst = oOperand->Clone(function, true);
@@ -148,15 +152,11 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation, std::v
             }
             consumer->ReplaceInput(dst, oOperand);
             IRBuilder builder;
-            auto& newOp = builder.CreateTensorOpStmt(function, Opcode::OP_VIEW, {iOperand}, {dst}, operation.GetSpan());
+            auto& newOp = builder.CreateTensorOpStmt(function, operation.GetOpcode(), {iOperand}, {dst},
+                                                     operation.GetSpan());
             newOp.SetScopeInfo(operation.GetScopeInfo());
-            auto oriViewAttr = dynamic_cast<ViewOpAttribute*>(operation.GetOpAttribute().get());
-            if (oriViewAttr != nullptr) {
-                auto newOffset = oriViewAttr->GetFromOffset();
-                auto newDynOffset = oriViewAttr->GetFromDynOffset();
-                auto newDynValidShape = oriViewAttr->GetToDynValidShape();
-                auto newViewAttr = std::make_shared<ViewOpAttribute>(newOffset, newDynOffset, newDynValidShape);
-                newOp.SetOpAttribute(newViewAttr);
+            if (operation.GetOpAttribute() != nullptr) {
+                newOp.SetOpAttribute(operation.GetOpAttribute()->Clone());
             }
             newOps.push_back(&newOp);
         }
@@ -167,7 +167,7 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation, std::v
 Status DuplicateOp::ProcessOp(Function& function, Operation& operation, std::vector<Operation*>& newOps) const
 {
     auto opcode = operation.GetOpcode();
-    if (opcode != Opcode::OP_GATHER_IN_L1 && opcode != Opcode::OP_VIEW) {
+    if (opcode != Opcode::OP_GATHER_IN_L1 && !IsViewLikeOpcode(opcode)) {
         return SUCCESS;
     }
     if (opcode == Opcode::OP_GATHER_IN_L1) {
@@ -176,9 +176,9 @@ Status DuplicateOp::ProcessOp(Function& function, Operation& operation, std::vec
             return FAILED;
         }
     }
-    if (opcode == Opcode::OP_VIEW) {
-        if (ProcessView(function, operation, newOps) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "ProcessView failed.%s", GetFormatBacktrace(operation).c_str());
+    if (IsViewLikeOpcode(opcode)) {
+        if (ProcessViewLike(function, operation, newOps) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "ProcessViewLike failed.%s", GetFormatBacktrace(operation).c_str());
             return FAILED;
         }
     }

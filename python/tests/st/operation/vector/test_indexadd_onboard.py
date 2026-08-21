@@ -78,6 +78,7 @@ def run_indexadd(inputs: List[torch.Tensor], args: IndexAddArgs) -> None:
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": False})
 def test_indexadd__onboard():
     axis = 0
     alpha = 1.3

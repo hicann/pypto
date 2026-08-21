@@ -82,6 +82,7 @@ def assemble_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], py
     pypto.assemble(x, offsets, out)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_assemble_basic(device_id: int = None):
     """Test basic usage of assemble function"""
     print("=" * 60)
@@ -107,6 +108,7 @@ def test_assemble_basic(device_id: int = None):
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_assemble_different_offsets_shapes(device_id: int = None):
     """Test basic usage of assemble function"""
     print("=" * 60)
@@ -172,6 +174,7 @@ def gather_kernel(
     out[:] = pypto.gather(input_tensor, dim, index_tensor)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_gather_basic(device_id: int = None):
     """Test basic usage of gather function"""
     print("=" * 60)
@@ -198,6 +201,7 @@ def test_gather_basic(device_id: int = None):
     print("✓ Basic usage of gather function completed successfully")
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_gather_different_dimensions(device_id: int = None):
     """Test gathering tensors along different dimensions"""
     print("=" * 60)
@@ -232,6 +236,7 @@ def test_gather_different_dimensions(device_id: int = None):
     print("✓ Test gatherenating tensors along different dimensions completed successfully")
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_gather_negative_indexing(device_id: int = None):
     """Test handling negative indexing"""
     print("=" * 60)
@@ -276,6 +281,7 @@ def scatter_kernel(
     out[:] = pypto.scatter(x, dim, y, src)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_scatter(device_id: int = None):
     """Test basic usage of scatter function"""
     print("=" * 60)
@@ -319,6 +325,7 @@ def scatter_update_kernel(
     out[:] = pypto.scatter(x, dim, y, src)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_scatter_update(device_id: int = None) -> None:
     """Test basic usage of scatter_update function"""
     print("=" * 60)
@@ -385,6 +392,7 @@ def concat_multiple_op(a_shape: tuple, b_shape: tuple, c_shape: tuple, dim: int)
     return concat_multiple_kernel
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_concat_basic(device_id: int = None):
     """Test basic usage of concat function"""
     print("=" * 60)
@@ -410,6 +418,7 @@ def test_concat_basic(device_id: int = None):
     print("✓ Basic usage of concat function completed successfully")
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_concat_different_dimensions(device_id: int = None):
     """Test concatenating tensors along different dimensions"""
     print("=" * 60)
@@ -436,6 +445,7 @@ def test_concat_different_dimensions(device_id: int = None):
     print("✓ Test concatenating tensors along different dimensions completed successfully")
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_concat_multiple_tensors(device_id: int = None):
     """Test concatenating multiple tensors"""
     print("=" * 60)
@@ -463,6 +473,7 @@ def test_concat_multiple_tensors(device_id: int = None):
     print("✓ Test concatenating multiple tensors completed successfully")
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_concat_different_shapes(device_id: int = None):
     """Test concatenating tensors of different shapes"""
     print("=" * 60)
@@ -500,6 +511,7 @@ def view_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.
     out[:] = pypto.view(x, shape, offsets)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_view_basic(device_id: int = None):
     """Test basic usage of view function"""
     print("=" * 60)
@@ -543,6 +555,7 @@ def view_with_valid_shape_kernel(
     out[:] = pypto.view(x, shape, offsets, valid_shape=valid_shape)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_view_with_valid_shape(device_id: int = None):
     """Test using the valid_shape parameter"""
     print("=" * 60)
@@ -586,6 +599,7 @@ def transpose_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], p
     out[:] = pypto.transpose(x, dim0, dim1)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_transpose(device_id: int = None):
     """Test basic usage of transpose function"""
     print("=" * 60)
@@ -639,6 +653,7 @@ def cast_kernel(x: pypto.Tensor([], pypto.DT_FP32), out: pypto.Tensor([], pypto.
     out[:] = pypto.cast(x, pypto.DT_FP16)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_cast(device_id: int = None):
     """Test basic usage of cast function"""
     print("=" * 60)

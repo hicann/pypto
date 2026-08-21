@@ -17,6 +17,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -47,15 +49,23 @@ def per_tensor_scale_relu_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
-            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
         left_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
-            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
@@ -110,6 +120,7 @@ def per_tensor_scale_relu_kernel(
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("m,n", [(64, 64), (48, 96), (96, 96)], ids=["full", "row_tail", "dual_tail"])
+@pypto.options(pass_options={"enable_slice": False})
 def test_per_tensor_scale_relu_fusion(m, n):
     """Test per-tensor scale + relu fusion, covering tail blocks."""
     device = ST_DEVICE
@@ -163,15 +174,23 @@ def dynamic_scale_relu_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
-            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Mat,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
         k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
 
         left_type = pl.TileType(
-            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
-            layout=pl.NZ, valid_shape=[-1, -1], compact=1,
+            shape=[64, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ,
+            valid_shape=[-1, -1],
+            compact=1,
         )
         q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
 
@@ -225,6 +244,7 @@ def dynamic_scale_relu_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dynamic_scale_relu_fusion():
     """Test dynamic scale + relu fusion."""
     device = ST_DEVICE
@@ -268,6 +288,7 @@ def test_dynamic_scale_relu_fusion():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_multiple_scale_values_with_relu():
     """Test different scale values with relu fusion."""
     device = ST_DEVICE

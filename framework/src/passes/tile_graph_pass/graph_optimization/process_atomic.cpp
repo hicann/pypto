@@ -14,6 +14,7 @@
  */
 
 #include "process_atomic.h"
+#include "interface/configs/config_manager_ng.h"
 #include "passes/pass_check/process_atomic_checker.h"
 #include "interface/operation/attribute.h"
 #include "tilefwk/tilefwk_op.h"
@@ -39,6 +40,10 @@ std::vector<SymbolicScalar> GetSymbolicShapeOrStatic(const std::shared_ptr<Logic
     return dynShape.size() == tensor->GetShape().size() ? dynShape : SymbolicScalar::FromConcrete(tensor->GetShape());
 }
 
+bool IsContractOpcode(Opcode opcode)
+{
+    return opcode == config::GetContractOpcode() || (!config::EnableSlice() && opcode == Opcode::OP_ASSEMBLE_SSA);
+}
 } // namespace
 
 Status ProcessAtomic::PreCheck(Function& function)
@@ -176,15 +181,15 @@ Status ProcessAtomic::ProcessSingleAtomicRMW(Operation& op)
     APASS_LOG_INFO_F(Elements::Operation, "ATOMIC_RMW, opmagic: %d", op.GetOpMagic());
 
     auto rmwOut = op.GetOOperands().front();
-    auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
-    if (assembleAttr == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Operation, "Op[%d] missing AssembleOpAttribute; Cannot eliminate.",
+    auto contractAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
+    if (contractAttr == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Op[%d] missing contract op attribute; Cannot eliminate.",
                           op.GetOpMagic());
         return FAILED;
     }
 
-    auto& rmwOffset = assembleAttr->GetToOffset();
-    auto& rmwDynOffset = assembleAttr->GetToDynOffset();
+    auto& rmwOffset = contractAttr->GetToOffset();
+    auto& rmwDynOffset = contractAttr->GetToDynOffset();
 
     int rmwModeValue = op.GetIntAttribute(OpAttributeKey::rmwMode);
     AtomicRMWMode rmwMode = static_cast<AtomicRMWMode>(rmwModeValue);
@@ -207,34 +212,34 @@ Status ProcessAtomic::ProcessAtomicInput(Operation& atomicOp, const std::shared_
                                          const std::vector<int64_t>& rmwOffset,
                                          const std::vector<SymbolicScalar>& rmwDynOffset)
 {
-    bool hasAssembleProducer = false;
+    bool hasContractProducer = false;
     auto producersBackup = input->GetProducers();
     for (auto* producerOp : producersBackup) {
-        if (producerOp->GetOpcode() != Opcode::OP_ASSEMBLE && producerOp->GetOpcode() != Opcode::OP_ASSEMBLE_SSA) {
+        if (!IsContractOpcode(producerOp->GetOpcode())) {
             continue;
         }
-        if (ProcessAtomicAssembleProducer(atomicOp, *producerOp, output, rmwMode, rmwOffset, rmwDynOffset) != SUCCESS) {
+        if (ProcessAtomicContractProducer(atomicOp, *producerOp, output, rmwMode, rmwOffset, rmwDynOffset) != SUCCESS) {
             return FAILED;
         }
-        hasAssembleProducer = true;
+        hasContractProducer = true;
     }
-    if (hasAssembleProducer || !HasReshapeProducer(input)) {
+    if (hasContractProducer || !HasReshapeProducer(input)) {
         return SUCCESS;
     }
     return ProcessAtomicThroughReshape(atomicOp, input, output, rmwMode, rmwOffset, rmwDynOffset);
 }
 
-Status ProcessAtomic::ProcessAtomicAssembleProducer(Operation& atomicOp, Operation& producerOp,
+Status ProcessAtomic::ProcessAtomicContractProducer(Operation& atomicOp, Operation& producerOp,
                                                     const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
                                                     const std::vector<int64_t>& rmwOffset,
                                                     const std::vector<SymbolicScalar>& rmwDynOffset)
 {
     if (producerOp.GetIOperands().size() != 1 || !HasReshapeProducer(producerOp.GetInputOperand(0))) {
-        return ProcessAssembleProducer(producerOp, output, rmwMode, rmwOffset, rmwDynOffset);
+        return ProcessContractProducer(producerOp, output, rmwMode, rmwOffset, rmwDynOffset);
     }
     std::vector<int64_t> combinedOffset;
     std::vector<SymbolicScalar> combinedDynOffset;
-    if (CombineAssembleOffset(producerOp, rmwOffset, rmwDynOffset, combinedOffset, combinedDynOffset) != SUCCESS) {
+    if (CombineContractOffset(producerOp, rmwOffset, rmwDynOffset, combinedOffset, combinedDynOffset) != SUCCESS) {
         return FAILED;
     }
     return ProcessAtomicThroughReshape(atomicOp, producerOp.GetInputOperand(0), output, rmwMode, combinedOffset,
@@ -253,8 +258,8 @@ Status ProcessAtomic::ProcessAtomicThroughReshape(Operation& atomicOp, const std
                           atomicOp.GetOpMagic());
         return FAILED;
     }
-    for (auto* assemble : remapResult.assembles) {
-        if (MarkAssembleProducerAtomic(*assemble, rmwMode, remapResult.mappedOffset, remapResult.mappedDynOffset) !=
+    for (auto* contract : remapResult.assembles) {
+        if (MarkContractProducerAtomic(*contract, rmwMode, remapResult.mappedOffset, remapResult.mappedDynOffset) !=
             SUCCESS) {
             return FAILED;
         }
@@ -325,8 +330,7 @@ Status ProcessAtomic::CollectTerminalAssembles(const std::shared_ptr<LogicalTens
         return FAILED;
     }
     bool allAssemble = std::all_of(producers.begin(), producers.end(), [](const Operation* producer) {
-        return producer != nullptr &&
-               (producer->GetOpcode() == Opcode::OP_ASSEMBLE || producer->GetOpcode() == Opcode::OP_ASSEMBLE_SSA);
+        return producer != nullptr && IsContractOpcode(producer->GetOpcode());
     });
     if (!allAssemble) {
         return SUCCESS;
@@ -412,12 +416,12 @@ Status ProcessAtomic::RetargetReshapeChain(Operation& atomicOp, const std::share
     return SUCCESS;
 }
 
-Status ProcessAtomic::CombineAssembleOffset(const Operation& assemble, const std::vector<int64_t>& offset,
+Status ProcessAtomic::CombineContractOffset(const Operation& contract, const std::vector<int64_t>& offset,
                                             const std::vector<SymbolicScalar>& dynOffset,
                                             std::vector<int64_t>& combinedOffset,
                                             std::vector<SymbolicScalar>& combinedDynOffset) const
 {
-    auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(assemble.GetOpAttribute());
+    auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(contract.GetOpAttribute());
     if (attr == nullptr || attr->GetToOffset().size() != offset.size()) {
         return FAILED;
     }
@@ -438,7 +442,7 @@ Status ProcessAtomic::CombineAssembleOffset(const Operation& assemble, const std
     return SUCCESS;
 }
 
-bool ProcessAtomic::HasAssembleProducer(const std::shared_ptr<LogicalTensor>& input) const
+bool ProcessAtomic::HasContractProducer(const std::shared_ptr<LogicalTensor>& input) const
 {
     if (input == nullptr) {
         return false;
@@ -447,7 +451,7 @@ bool ProcessAtomic::HasAssembleProducer(const std::shared_ptr<LogicalTensor>& in
         if (producerOp == nullptr) {
             continue;
         }
-        if (producerOp->GetOpcode() == Opcode::OP_ASSEMBLE || producerOp->GetOpcode() == Opcode::OP_ASSEMBLE_SSA) {
+        if (IsContractOpcode(producerOp->GetOpcode())) {
             return true;
         }
     }
@@ -489,7 +493,7 @@ Status ProcessAtomic::PrepareAtomicRMWSharedInputs(Function& function,
 std::shared_ptr<LogicalTensor> ProcessAtomic::PrepareExclusiveAtomicInput(
     Function& function, Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input) const
 {
-    if (input == nullptr || !HasConsumerExcept(input, atomicOp) || !HasAssembleProducer(input)) {
+    if (input == nullptr || !HasConsumerExcept(input, atomicOp) || !HasContractProducer(input)) {
         return input;
     }
 
@@ -507,7 +511,7 @@ std::shared_ptr<LogicalTensor> ProcessAtomic::PrepareExclusiveAtomicInput(
                               input->GetMagic());
             return nullptr;
         }
-        if (producerOp->GetOpcode() != Opcode::OP_ASSEMBLE && producerOp->GetOpcode() != Opcode::OP_ASSEMBLE_SSA) {
+        if (!IsContractOpcode(producerOp->GetOpcode())) {
             continue;
         }
         auto& clonedProducer = producerOp->CloneOperation(function, producerOp->GetIOperands(),
@@ -538,7 +542,7 @@ std::string ProcessAtomic::GetRmwAttrKey(AtomicRMWMode mode)
     }
 }
 
-Status ProcessAtomic::ProcessAssembleProducer(Operation& producerOp, std::shared_ptr<LogicalTensor> rmwOut,
+Status ProcessAtomic::ProcessContractProducer(Operation& producerOp, std::shared_ptr<LogicalTensor> rmwOut,
                                               AtomicRMWMode rmwMode, const std::vector<int64_t>& rmwOffset,
                                               const std::vector<SymbolicScalar>& rmwDynOffset)
 {
@@ -549,15 +553,15 @@ Status ProcessAtomic::ProcessAssembleProducer(Operation& producerOp, std::shared
 
     producerOp.ReplaceOOperand(0, rmwOut);
 
-    auto producerAssembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producerOp.GetOpAttribute());
-    if (producerAssembleAttr != nullptr &&
-        AccumulateAssembleOffset(producerAssembleAttr, rmwOffset, rmwDynOffset) != SUCCESS) {
+    auto producerContractAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producerOp.GetOpAttribute());
+    if (producerContractAttr != nullptr &&
+        AccumulateContractOffset(producerContractAttr, rmwOffset, rmwDynOffset) != SUCCESS) {
         return FAILED;
     }
     return SUCCESS;
 }
 
-Status ProcessAtomic::MarkAssembleProducerAtomic(Operation& producerOp, AtomicRMWMode rmwMode,
+Status ProcessAtomic::MarkContractProducerAtomic(Operation& producerOp, AtomicRMWMode rmwMode,
                                                  const std::vector<int64_t>& rmwOffset,
                                                  const std::vector<SymbolicScalar>& rmwDynOffset)
 {
@@ -566,7 +570,7 @@ Status ProcessAtomic::MarkAssembleProducerAtomic(Operation& producerOp, AtomicRM
         return FAILED;
     }
     auto producerAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producerOp.GetOpAttribute());
-    if (producerAttr != nullptr && AccumulateAssembleOffset(producerAttr, rmwOffset, rmwDynOffset) != SUCCESS) {
+    if (producerAttr != nullptr && AccumulateContractOffset(producerAttr, rmwOffset, rmwDynOffset) != SUCCESS) {
         return FAILED;
     }
     return SUCCESS;
@@ -595,15 +599,15 @@ Status ProcessAtomic::CheckAndSetRmwAttr(Operation& producerOp, AtomicRMWMode rm
             existingAttrType = "atomic_min";
 
         APASS_LOG_ERROR_F(Elements::Operation,
-                          "Op[%d] rmwMode conflict: producer assemble op already has '%s' attribute, "
-                          "but current wants to set '%s'. Cannot set different rmwMode to the same assemble op.",
+                          "Op[%d] rmwMode conflict: producer contract op already has '%s' attribute, "
+                          "but current wants to set '%s'. Cannot set different rmwMode to the same contract op.",
                           producerOp.GetOpMagic(), existingAttrType.c_str(), rmwAttrKey.c_str());
         return FAILED;
     }
     return SUCCESS;
 }
 
-Status ProcessAtomic::AccumulateAssembleOffset(std::shared_ptr<AssembleOpAttribute> producerAttr,
+Status ProcessAtomic::AccumulateContractOffset(std::shared_ptr<AssembleOpAttribute> producerAttr,
                                                const std::vector<int64_t>& rmwOffset,
                                                const std::vector<SymbolicScalar>& rmwDynOffset)
 {
@@ -697,8 +701,7 @@ Status ProcessAtomic::RemoveVecDupBranchFromCubeOp(Operation& cubeOp, bool& anyR
             if (producer == nullptr || producer->IsDeleted()) {
                 continue;
             }
-            if ((producer->GetOpcode() == Opcode::OP_ASSEMBLE || producer->GetOpcode() == Opcode::OP_ASSEMBLE_SSA) &&
-                IsVecDupAssembleInput(*producer)) {
+            if (IsContractOpcode(producer->GetOpcode()) && IsVecDupContractInput(*producer)) {
                 input->RemoveConsumer(&cubeOp);
                 cubeOp.EraseInput(input);
                 anyRemoved = true;
@@ -709,9 +712,9 @@ Status ProcessAtomic::RemoveVecDupBranchFromCubeOp(Operation& cubeOp, bool& anyR
     return SUCCESS;
 }
 
-bool ProcessAtomic::IsVecDupAssembleInput(const Operation& assembleOp) const
+bool ProcessAtomic::IsVecDupContractInput(const Operation& contractOp) const
 {
-    for (const auto& input : assembleOp.GetIOperands()) {
+    for (const auto& input : contractOp.GetIOperands()) {
         for (auto* producer : input->GetProducers()) {
             if (producer != nullptr && producer->GetOpcode() == Opcode::OP_VEC_DUP) {
                 return true;
@@ -746,8 +749,8 @@ Status ProcessAtomic::EliminateVecDupBranch(Function& function, bool& hasReduceA
     if (!anyRemoved) {
         return SUCCESS;
     }
-    APASS_LOG_INFO_F(Elements::Function, "EliminateVecDupBranch removed VecDup assemble input branch.");
-    function.EraseOperations(true, true, SortOperationsMode::LIGHTWEIGHT);
+    APASS_LOG_INFO_F(Elements::Function, "EliminateVecDupBranch removed VecDup contract input branch.");
+    function.EraseOperations(true);
     if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Eliminate dead operation failed for VecDup branch.");
         return FAILED;

@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -46,16 +48,19 @@ def getval_setval_kernel(
 ):
     tile_a_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     with pl.section_vector():
         tile_a = tile_a_group.current()
         pl.load(tile_a, a, [0, 0])
-        value = tile_a[0, 0]      # 读 tile 第 0 个元素
-        tile_a[0, 1] = value       # 写到第 1 个位置
+        value = tile_a[0, 0]  # 读 tile 第 0 个元素
+        tile_a[0, 1] = value  # 写到第 1 个位置
         pl.store(a, tile_a, [0, 0])
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_getval_setval():
     device = ST_DEVICE
     _require_a5(device)
@@ -65,8 +70,7 @@ def test_getval_setval():
     getval_setval_kernel(a)
     torch.npu.synchronize()
     # a[0,1] 应被写成原 a[0,0]
-    assert abs(a[0, 1].item() - a_orig_00) < 1e-3, \
-        f"getval/setval failed: a[0,1]={a[0, 1].item()}, expect {a_orig_00}"
+    assert abs(a[0, 1].item() - a_orig_00) < 1e-3, f"getval/setval failed: a[0,1]={a[0, 1].item()}, expect {a_orig_00}"
     logging.info("tile getval/setval result equal!")
 
 
@@ -90,6 +94,7 @@ def transpose_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_transpose():
     device = ST_DEVICE
     _require_a5(device)
@@ -129,6 +134,7 @@ def tensor_getval_setval_5d_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tensor_getval_setval():
     device = ST_DEVICE
     _require_a5(device)
@@ -139,8 +145,9 @@ def test_tensor_getval_setval():
     tensor_getval_setval_kernel(scale_tensor)
     torch.npu.synchronize()
 
-    assert abs(scale_tensor[1].item() - scale_val) < 1e-6, \
+    assert abs(scale_tensor[1].item() - scale_val) < 1e-6, (
         f"tensor setval failed: scale_tensor[1]={scale_tensor[1].item()}, expect {scale_val}"
+    )
     logging.info("tensor getval/setval result equal!")
 
     # 5D tensor getval/setval
@@ -151,8 +158,9 @@ def test_tensor_getval_setval():
     tensor_getval_setval_5d_kernel(tensor5d)
     torch.npu.synchronize()
 
-    assert abs(tensor5d[1, 1, 1, 1, 1].item() - val_5d) < 1e-6, \
+    assert abs(tensor5d[1, 1, 1, 1, 1].item() - val_5d) < 1e-6, (
         f"5D tensor setval failed: tensor5d[1,1,1,1,1]={tensor5d[1, 1, 1, 1, 1].item()}, expect {val_5d}"
+    )
     logging.info("5D tensor getval/setval result equal!")
 
 
@@ -171,6 +179,7 @@ def ptr_make_tensor_getval_setval_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ptr_make_tensor_getval_setval():
     device = ST_DEVICE
     _require_a5(device)
@@ -181,8 +190,9 @@ def test_ptr_make_tensor_getval_setval():
     ptr_make_tensor_getval_setval_kernel(data)
     torch.npu.synchronize()
 
-    assert abs(data[1].item() - scale_val) < 1e-6, \
+    assert abs(data[1].item() - scale_val) < 1e-6, (
         f"ptr make_tensor getval/setval failed: data[1]={data[1].item()}, expect {scale_val}"
+    )
     logging.info("ptr make_tensor getval/setval result equal!")
 
 

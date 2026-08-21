@@ -97,7 +97,7 @@ void ReduceCopyMerge::CombineForkSubgraph(Function& function, MergeInput& mergeI
     std::unordered_map<int, std::unordered_set<int>> forkSubgraphsMap;
     for (auto& op : function.Operations()) {
         std::unordered_set<int> forkSubgraphIds;
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+        if (IsAssembleLike(op.GetOpcode())) {
             for (auto& prod : op.ProducerOps()) {
                 forkSubgraphIds.insert(prod->GetSubgraphID());
             }

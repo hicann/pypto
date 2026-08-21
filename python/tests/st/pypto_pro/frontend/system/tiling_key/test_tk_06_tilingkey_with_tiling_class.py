@@ -23,6 +23,8 @@ from pypto_pro.runtime.tilingkey import TilingKeyField
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -97,6 +99,7 @@ def _make_tiling(opkind_val):
 
 # ---- 简单用例 -----------------------------------------------------------
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_key_change_tiling_fixed():
     """key 变化 + tiling 固定"""
     device = ST_DEVICE
@@ -116,6 +119,7 @@ def test_key_change_tiling_fixed():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_key_fixed_tiling_change():
     """key 固定 + tiling 变化"""
     device = ST_DEVICE
@@ -143,6 +147,7 @@ def test_key_fixed_tiling_change():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_both_change():
     """key 和 tiling 都变化"""
     device = ST_DEVICE
@@ -169,6 +174,7 @@ def test_both_change():
 
 # ---- 复杂用例 -----------------------------------------------------------
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_multi_block_key_tiling():
     """多核 blocks=4 + key + tiling 组合"""
     device = ST_DEVICE
@@ -188,6 +194,7 @@ def test_multi_block_key_tiling():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_key_op_select_tiling_data_2():
     """不同 key 值穿越所有合法组合"""
     device = ST_DEVICE
@@ -210,6 +217,7 @@ def test_key_op_select_tiling_data_2():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_larger_tensor_key_tiling():
     """更大 tensor 尺寸 key + tiling 组合"""
     device = ST_DEVICE

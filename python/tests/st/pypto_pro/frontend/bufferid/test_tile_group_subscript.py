@@ -25,6 +25,8 @@ from pypto_pro.language import Vf as vf  # noqa: N813
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -470,19 +472,29 @@ def matmul_subscript_kernel(
     """The documented double-buffered matmul with L1 slots addressed by subscript."""
     a_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[MM_TILE, MM_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[0, 1])
+        addrs=0x00000,
+        mutex_ids=[0, 1],
+    )
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[MM_K, MM_TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x10000, mutex_ids=[2, 3])
+        addrs=0x10000,
+        mutex_ids=[2, 3],
+    )
     a_left = pl.make_tile_group(
         type=pl.TileType(shape=[MM_TILE, MM_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     b_right = pl.make_tile_group(
         type=pl.TileType(shape=[MM_K, MM_TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     acc = pl.make_tile_group(
         type=pl.TileType(shape=[MM_TILE, MM_TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[6])
+        addrs=0x0000,
+        mutex_ids=[6],
+    )
 
     with pl.section_cube():
         step = 0
@@ -647,6 +659,7 @@ def cube_vector_four_mutex_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_const_index():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -668,6 +681,7 @@ def test_subscript_const_index():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_dynamic_index():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -687,6 +701,7 @@ def test_subscript_dynamic_index():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_depth_without_mutex_ids():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -703,6 +718,7 @@ def test_subscript_depth_without_mutex_ids():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_next_depth_with_empty_mutex_ids():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -719,6 +735,7 @@ def test_next_depth_with_empty_mutex_ids():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_pipeline_stage_mixed_subscripts():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -735,6 +752,7 @@ def test_pipeline_stage_mixed_subscripts():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_repeated_mutex_ids_round_robin():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -751,6 +769,7 @@ def test_subscript_repeated_mutex_ids_round_robin():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_matches_next():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -773,6 +792,7 @@ def test_subscript_matches_next():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_prefetch_two_slots_live():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -789,6 +809,7 @@ def test_subscript_prefetch_two_slots_live():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_two_slots_in_one_op():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -805,6 +826,7 @@ def test_subscript_two_slots_in_one_op():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_four_slots_loop_carried_add():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -822,6 +844,7 @@ def test_subscript_four_slots_loop_carried_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_ifelse_overlapping_mutex_ids():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -838,6 +861,7 @@ def test_subscript_ifelse_overlapping_mutex_ids():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_single_slot_group():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -854,6 +878,7 @@ def test_subscript_single_slot_group():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_bounded_constant_indices():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -873,6 +898,7 @@ def test_subscript_bounded_constant_indices():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_getval_setval():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -891,6 +917,7 @@ def test_subscript_getval_setval():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_mixed_with_next():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -907,6 +934,7 @@ def test_subscript_mixed_with_next():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subscript_matmul_double_buffer():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -924,6 +952,7 @@ def test_subscript_matmul_double_buffer():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tile_group_alias_subview_vf():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -942,6 +971,7 @@ def test_tile_group_alias_subview_vf():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tile_group_shifted_addr_vf():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -960,6 +990,7 @@ def test_tile_group_shifted_addr_vf():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_cube_vector_four_mutex():
     device = ST_DEVICE
     torch.npu.set_device(device)

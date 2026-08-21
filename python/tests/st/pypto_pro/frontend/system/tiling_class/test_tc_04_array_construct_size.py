@@ -23,6 +23,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -63,8 +65,8 @@ def kernel_add_size4(
 class TestArrayConstructValid:
     """Positive cases: correctly-sized Array construction and NPU kernel."""
 
-
     @pytest.mark.soc("950")
+    @pypto.options(pass_options={"enable_slice": False})
     def test_valid_kernel_npu(self):
         """Construct valid int[4], run add kernel, verify accuracy."""
         device = ST_DEVICE

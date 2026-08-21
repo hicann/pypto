@@ -14,6 +14,7 @@
  */
 
 #include "gtest/gtest.h"
+#include <fstream>
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
@@ -24,6 +25,30 @@
 #include "test_codegen_utils.h"
 
 namespace npu::tile_fwk {
+
+namespace {
+std::string GenAllCodeByFunction(Function& function)
+{
+    CodeGenCtx ctx;
+    CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(function);
+
+    std::string results;
+    for (const auto& subFunc : function.rootFunc_->programs_) {
+        auto leafFuncAttr = subFunc.second->GetLeafFuncAttribute();
+        ASSERT(FwkErr::INVALID_FUNCTION, leafFuncAttr != nullptr) << "can not find leaf func attribute";
+        const auto& binPath = leafFuncAttr->binPath;
+        if (binPath.empty()) {
+            continue;
+        }
+        std::string cppFile = binPath.substr(0, binPath.rfind('.')) + ".cpp";
+        std::ifstream ifs(cppFile);
+        results.append(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+        results.push_back('\n');
+    }
+    return results;
+}
+} // namespace
 
 class TestCodegenDynTransData : public CodegenTestBase {
 public:
@@ -40,6 +65,7 @@ public:
         int tileOpFormat;
         std::vector<SymbolicScalar> validShape;
         std::string expect;
+        bool checkAllSubKernels = false;
     };
 
     void RunTransDataTest(const TransDataTestCase& tc)
@@ -59,7 +85,7 @@ public:
         }
         auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + tc.caseName + SUB_FUNC_SUFFIX +
                                                                     HIDDEN_FUNC_SUFFIX);
-        std::string res = GenCodeByFunction(*function);
+        std::string res = tc.checkAllSubKernels ? GenAllCodeByFunction(*function) : GenCodeByFunction(*function);
         CheckStringExist(tc.expect, res);
     }
 };
@@ -75,7 +101,7 @@ TEST_F(TestCodegenDynTransData, TestTransData2)
          .tileOpFormat = 2,
          .validShape = {1, 1, 1, 8, 8},
          .expect =
-             R"!!!(TTransDataNCHW2NC1HWC0<(int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_3, Coord5Dim((RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 4))), ubTensor_4, ubTensor_5, (int)(0), (int)(0), (int)(0), (int)(0));)!!!"});
+             R"!!!(TTransDataNCHW2NC1HWC0<(int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_9, Coord5Dim((RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 4))), ubTensor_10, ubTensor_7, (int)(0), (int)(0), (int)(0), (int)(0));)!!!"});
 }
 
 TEST_F(TestCodegenDynTransData, TestTransData4)
@@ -89,8 +115,8 @@ TEST_F(TestCodegenDynTransData, TestTransData4)
          .tileOpFormat = 4,
          .validShape = {32, 1, 16, 16},
          .expect =
-             R"!!!(TTransDataNCHW2Fractal_Z<(int)(16), (int)(16), (int)(2), (int)(16)>(gmTensor_4, Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 3))), ubTensor_5, ubTensor_6, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1));
-)!!!"});
+             R"!!!(TTransDataNCHW2Fractal_Z<(int)(16), (int)(16), (int)(2), (int)(16)>(gmTensor_6, Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(4, 52, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 52, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 52, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 52, 3))), ubTensor_7, ubTensor_4, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1));)!!!",
+         .checkAllSubKernels = true});
 }
 
 TEST_F(TestCodegenDynTransData, TestTransData3)
@@ -104,7 +130,7 @@ TEST_F(TestCodegenDynTransData, TestTransData3)
          .tileOpFormat = 3,
          .validShape = {1, 1, 1, 1, 8, 8},
          .expect =
-             R"!!!(TTransDataNCDHW2NDC1HWC0<(int)(1), (int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_7, Coord6Dim((RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 4)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 5))), ubTensor_8, ubTensor_9, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0));
+             R"!!!(TTransDataNCDHW2NDC1HWC0<(int)(1), (int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_9, Coord6Dim((RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 4)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 5))), ubTensor_10, ubTensor_7, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0));
 )!!!"});
 }
 
@@ -119,8 +145,8 @@ TEST_F(TestCodegenDynTransData, TestTransData5)
          .tileOpFormat = 5,
          .validShape = {8, 1, 16, 8},
          .expect =
-             R"!!!(TTransDataNCDHW2FRACTAL_Z_3D<(int)(16), (int)(8), (int)(1), (int)(1), (int)(8)>(gmTensor_4, Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 3))), ubTensor_5, ubTensor_6, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1));
-)!!!"});
+             R"!!!(TTransDataNCDHW2FRACTAL_Z_3D<(int)(16), (int)(8), (int)(1), (int)(1), (int)(8)>(gmTensor_6, Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(4, 64, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 64, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 64, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 64, 3))), ubTensor_7, ubTensor_4, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1));)!!!",
+         .checkAllSubKernels = true});
 }
 
 TEST_F(TestCodegenDynTransData, TestTransData0_3)
@@ -148,7 +174,7 @@ TEST_F(TestCodegenDynTransData, TestTransData0_6)
          .tileOpFormat = 0,
          .validShape = {1, 7, 1, 1, 8},
          .expect =
-             R"!!!(TTransDataNDC1HWC02NCDHW<(int)(1), (int)(1), (int)(7), (int)(1), (int)(8)>(gmTensor_2, Coord5Dim((RUNTIME_COA_GET_PARAM_OFFSET(5, 47, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 47, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 47, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 47, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 47, 4))), ubTensor_3, ubTensor_0, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1), (int)(1));
+             R"!!!(TTransDataNDC1HWC02NCDHW<(int)(1), (int)(1), (int)(7), (int)(1), (int)(8)>(gmTensor_2, Coord5Dim((RUNTIME_COA_GET_PARAM_OFFSET(5, 26, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 26, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 26, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 26, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 26, 4))), ubTensor_3, ubTensor_4, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1), (int)(1));
 )!!!"});
 }
 } // namespace npu::tile_fwk

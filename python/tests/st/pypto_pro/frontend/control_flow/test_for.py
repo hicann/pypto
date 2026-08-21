@@ -24,6 +24,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -60,6 +62,7 @@ def _ref(tdt, fn, x, y):
 # ===================================================================
 # for_add: 2D for-loop elementwise add  (FP16 / BF16 / FP32 / INT32)
 # ===================================================================
+
 
 # =============================================================================
 # Test 1: for 循环二维加法 - FP16
@@ -186,6 +189,7 @@ FOR_ADD_KERNELS = {
 #   step >= stop - start, so only the start tile row executes.
 # ===================================================================
 
+
 # =============================================================================
 # Test 5: pl.range step 等于跨度 - FP16
 #         pl.range step equals span - FP16
@@ -258,6 +262,7 @@ FOR_RANGE_STEP_GE_SPAN_KERNELS = [
 # for_4d_add: 4D nested for-loop elementwise add  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 7: 4D for 嵌套加法 - FP16
 #         4D nested for add - FP16
@@ -298,6 +303,7 @@ FOR_4D_ADD_KERNELS = {
 # ===================================================================
 # for_4d_layout_add: 4D for-loop with M/N at different tensor axes (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 8: 4D for shape M=2/3N 加法 - FP16
@@ -369,6 +375,7 @@ FOR_4D_LAYOUT_ADD_KERNELS = [
 # for_high_dim_add: 8D for-loop elementwise add  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 10: 8D for 嵌套加法 - FP16
 #         8D nested for add - FP16
@@ -412,6 +419,7 @@ FOR_HIGH_DIM_ADD_KERNELS = [
 # sub: 2D for-loop elementwise sub  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 11: for 循环减法 - FP16
 #         for-loop subtraction - FP16
@@ -448,6 +456,7 @@ SUB_KERNELS = {
 # ===================================================================
 # mul_add: 2D for-loop fused mul+add (z = x*y + x)  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 12: for 循环乘加融合 - FP16
@@ -487,7 +496,9 @@ MUL_ADD_KERNELS = {
 # Test functions
 # ===================================================================
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_add():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -505,6 +516,7 @@ def test_for_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_range_step_ge_span():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -516,14 +528,15 @@ def test_for_range_step_ge_span():
             kernel(x, y, z)
             torch.npu.synchronize()
             z_ref = torch.zeros(shape, device=device, dtype=torch.float16)
-            z_ref[TILE_M:2 * TILE_M, :] = (
-                x[TILE_M:2 * TILE_M, :].float() + y[TILE_M:2 * TILE_M, :].float()
-            ).to(torch.float16)
+            z_ref[TILE_M:2 * TILE_M, :] = (x[TILE_M:2 * TILE_M, :].float() + y[TILE_M:2 * TILE_M, :].float()).to(
+                torch.float16
+            )
             torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
             logging.info("test_for_range_step_ge_span [%s] passed! shape=%s", case_name, shape)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_4d_add():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -548,6 +561,7 @@ def test_for_4d_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_high_dim_add():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -562,6 +576,7 @@ def test_for_high_dim_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_sub():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -579,6 +594,7 @@ def test_sub():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_mul_add():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -596,6 +612,7 @@ def test_mul_add():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_single_tile():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -613,6 +630,7 @@ def test_single_tile():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_large_shape():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -632,6 +650,7 @@ def test_large_shape():
 # ===================================================================
 # residual_relu: residual connection with ReLU (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 13: 残差加法 + ReLU - FP16
@@ -671,6 +690,7 @@ RESIDUAL_RELU_KERNELS = {
 # ===================================================================
 # leaky_relu: LeakyReLU activation (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 14: LeakyReLU 条件分支 - FP16
@@ -712,6 +732,7 @@ LEAKY_RELU_KERNELS = {
 # fused_mul_add_relu: fused multiply-add with ReLU (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 15: 乘加 + ReLU 融合 - FP16
 #         fused multiply-add + ReLU - FP16
@@ -750,6 +771,7 @@ FUSED_MUL_ADD_RELU_KERNELS = {
 # ===================================================================
 # three_way: three-way conditional branch (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 16: 三路条件分支 - FP16
@@ -792,9 +814,8 @@ THREE_WAY_KERNELS = {
 }
 
 
-
-
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_residual_relu():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -812,6 +833,7 @@ def test_residual_relu():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_leaky_relu():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -828,6 +850,7 @@ def test_leaky_relu():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fused_mul_add_relu():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -844,6 +867,7 @@ def test_fused_mul_add_relu():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_three_way():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -860,6 +884,7 @@ def test_three_way():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_unaligned_shape():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -878,9 +903,9 @@ def test_unaligned_shape():
     ):
         m = x.shape[0]
         n = x.shape[1]
-        tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
-                                target_memory=pl.MemorySpace.Vec,
-                                valid_shape=[-1, -1])
+        tile_type = pl.TileType(
+            shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+        )
         a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
         b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
         c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
@@ -912,9 +937,9 @@ def test_unaligned_shape():
     ):
         m = x.shape[0]
         n = x.shape[1]
-        tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32,
-                                target_memory=pl.MemorySpace.Vec,
-                                valid_shape=[-1, -1])
+        tile_type = pl.TileType(
+            shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+        )
         a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
         b_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[2, 3])
         c_db = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[30, 31])
@@ -946,9 +971,9 @@ def test_unaligned_shape():
     ):
         m = x.shape[0]
         n = x.shape[1]
-        tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_BF16,
-                                target_memory=pl.MemorySpace.Vec,
-                                valid_shape=[-1, -1])
+        tile_type = pl.TileType(
+            shape=[TILE_M, TILE_N], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+        )
         a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
         b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
         c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
@@ -980,9 +1005,9 @@ def test_unaligned_shape():
     ):
         m = x.shape[0]
         n = x.shape[1]
-        tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32,
-                                target_memory=pl.MemorySpace.Vec,
-                                valid_shape=[-1, -1])
+        tile_type = pl.TileType(
+            shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+        )
         a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
         b_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[2, 3])
         c_db = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[30, 31])
@@ -1028,6 +1053,7 @@ def test_unaligned_shape():
 # for_range_one_arg: 2D for-loop with pl.range(stop) single-arg form (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 21: for 循环 pl.range 单参数 - FP16
 #         for-loop pl.range single argument - FP16
@@ -1040,9 +1066,9 @@ def for_range_one_arg_fp16_kernel(
 ):
     m = x.shape[0]
     n = x.shape[1]
-    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
-                            target_memory=pl.MemorySpace.Vec,
-                            valid_shape=[-1, -1])
+    tile_type = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
     a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
     b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
     c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
@@ -1071,6 +1097,7 @@ def for_range_one_arg_fp16_kernel(
 # for_range_two_arg: 2D for-loop with pl.range(start, stop) two-arg form (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 22: for 循环 pl.range 双参数 - FP16
 #         for-loop pl.range two arguments - FP16
@@ -1083,9 +1110,9 @@ def for_range_two_arg_fp16_kernel(
 ):
     m = x.shape[0]
     n = x.shape[1]
-    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
-                            target_memory=pl.MemorySpace.Vec,
-                            valid_shape=[-1, -1])
+    tile_type = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
     a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
     b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
     c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
@@ -1111,6 +1138,7 @@ def for_range_two_arg_fp16_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_range_one_arg():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1125,6 +1153,7 @@ def test_for_range_one_arg():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_range_two_arg():
     device = ST_DEVICE
     torch.npu.set_device(device)

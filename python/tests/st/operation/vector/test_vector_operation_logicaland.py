@@ -12,7 +12,10 @@
 
 from test_case_class_vector_operations import LogicalAndTestCase
 
+import pypto
 
+
+@pypto.options(pass_options={"enable_slice": True})
 def test_tensor_add():
     original_shape = (32, 32)
     input_tensors = [

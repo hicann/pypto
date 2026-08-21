@@ -33,6 +33,7 @@ public:
     void HanldeForMultiAssemble(Function& function, std::unordered_set<Operation*>& concurrentAssembles) const;
     Status HanldeForSingleAssemble(Function& function, LogicalTensorPtr input, LogicalTensorPtr output,
                                    Operation& op) const;
+    Status ProcessViewToCopyIn(Function& function) const;
     Status ProcessView(Function& function) const;
 
 private:

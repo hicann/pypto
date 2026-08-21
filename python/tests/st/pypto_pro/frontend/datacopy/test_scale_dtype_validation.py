@@ -27,6 +27,8 @@ import pytest
 import torch
 import torch_npu
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -94,6 +96,7 @@ def fp32_scale_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_tile_fp32():
     """Validate that FP32 Scaling tile raises clear error with conversion guidance."""
     device = ST_DEVICE
@@ -164,6 +167,7 @@ def fp16_scale_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_tile_fp16():
     """Validate that FP16 Scaling tile raises appropriate error."""
     device = ST_DEVICE
@@ -234,6 +238,7 @@ def int32_scale_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_err_scale_tile_int32():
     """Validate that INT32 Scaling tile raises appropriate error."""
     device = ST_DEVICE
@@ -314,6 +319,7 @@ def int64_scale_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_per_channel_fp32_manual_conversion():
     """Validate that a manually converted FP32→INT64 scale tile works correctly."""
     device = ST_DEVICE

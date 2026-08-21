@@ -21,6 +21,7 @@ import torch
 import pypto
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_exp_tensor_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -62,6 +63,7 @@ def test_exp_tensor_onboard():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_scatterupdate_tensor_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -244,6 +246,7 @@ def scatter_2dim_proc(scatter_para, is_inplace):
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_scatter__onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -256,6 +259,7 @@ def test_scatter__onboard():
     scatter_2dim_proc(scatter_para, True)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_scatter_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -268,6 +272,7 @@ def test_scatter_onboard():
     scatter_2dim_proc(scatter_para, False)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_scatter_add_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -438,6 +443,7 @@ def scatter_2dim_tensor_proc(scatter_para, is_inplace):
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_scatter__tensor_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -450,6 +456,7 @@ def test_scatter__tensor_onboard():
     scatter_2dim_tensor_proc(scatter_para, True)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_scatter_tensor_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -462,6 +469,7 @@ def test_scatter_tensor_onboard():
     scatter_2dim_tensor_proc(scatter_para, False)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_scatter_tensor_add_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

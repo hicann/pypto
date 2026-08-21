@@ -24,6 +24,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -67,6 +69,7 @@ def gather_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_gather():
     device = ST_DEVICE
     _require_a5(device)
@@ -99,9 +102,9 @@ def multicore_add_kernel(
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
     tile_c = pl.make_tile_group(type=tt, addrs=0x8000, mutex_ids=[2])
     with pl.section_vector():
-        vidx = pl.get_block_idx()              # 当前核号
-        _bnum = pl.get_block_num()             # 核总数（此处读出验证可调用）
-        offset = vidx * 64                     # 第 vidx 核处理第 [vidx*64, +64) 行
+        vidx = pl.get_block_idx()  # 当前核号
+        _bnum = pl.get_block_num()  # 核总数（此处读出验证可调用）
+        offset = vidx * 64  # 第 vidx 核处理第 [vidx*64, +64) 行
         cur_a = tile_a.current()
         cur_b = tile_b.current()
         cur_c = tile_c.current()
@@ -112,6 +115,7 @@ def multicore_add_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_multicore_block_vars():
     device = ST_DEVICE
     _require_a5(device)
@@ -155,6 +159,7 @@ def subblock_add_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subblock_idx():
     device = ST_DEVICE
     _require_a5(device)

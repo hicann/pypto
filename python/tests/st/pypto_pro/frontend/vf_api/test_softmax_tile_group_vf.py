@@ -42,18 +42,20 @@ from pypto_pro.language import Vf as vf  # noqa: N813
 import pytest
 import torch
 
+import pypto
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 # ================================================================
 # Constants
 # ================================================================
-LANES = 64                # fp32 VF register width (lanes)
-MAX_N = 512               # max supported columns == compile-time UB tile width (mult. of LANES)
-TILE_ROWS = 16            # rows processed per tile-group slot (row count is dynamic)
-NEG_INF = -1e30           # reduce_max identity
+LANES = 64  # fp32 VF register width (lanes)
+MAX_N = 512  # max supported columns == compile-time UB tile width (mult. of LANES)
+TILE_ROWS = 16  # rows processed per tile-group slot (row count is dynamic)
+NEG_INF = -1e30  # reduce_max identity
 
-SLOT_BYTES = TILE_ROWS * MAX_N * 4      # fp32 [TILE_ROWS, MAX_N]
+SLOT_BYTES = TILE_ROWS * MAX_N * 4  # fp32 [TILE_ROWS, MAX_N]
 
 # UB addresses: double-buffered input group + double-buffered output group
 VA_IN0 = 0
@@ -80,12 +82,12 @@ def softmax_rows_vf(in_tile, out_tile, n_rows: pl.DT_INT64, n_cols: pl.DT_INT64)
         # ---- pass 1: row max across all registers ----
         row_max = vf.full(NEG_INF, preg, dtype=pl.DT_FP32)
         for r in pl.range(0, n_regs):
-            valid = pl.min(LANES, n_cols - r * LANES)     # live lanes in this register
+            valid = pl.min(LANES, n_cols - r * LANES)  # live lanes in this register
             mreg = vf.update_mask(valid, dtype=pl.DT_FP32)
             reg = vf.load_align(in_tile, base + r * LANES)
-            part = vf.reduce_max(reg, mreg)               # per-reg max -> lane0
-            row_max = vf.max(row_max, part, preg)         # combine into lane0 accumulator
-        row_max_b = vf.full(row_max, preg)                # broadcast lane0 -> all lanes
+            part = vf.reduce_max(reg, mreg)  # per-reg max -> lane0
+            row_max = vf.max(row_max, part, preg)  # combine into lane0 accumulator
+        row_max_b = vf.full(row_max, preg)  # broadcast lane0 -> all lanes
 
         # ---- pass 2: sum of exp(x - max) across all registers ----
         row_sum = vf.full(0.0, preg, dtype=pl.DT_FP32)
@@ -93,10 +95,10 @@ def softmax_rows_vf(in_tile, out_tile, n_rows: pl.DT_INT64, n_cols: pl.DT_INT64)
             valid = pl.min(LANES, n_cols - r * LANES)
             mreg = vf.update_mask(valid, dtype=pl.DT_FP32)
             reg = vf.load_align(in_tile, base + r * LANES)
-            e = vf.exp_sub(reg, row_max_b, mreg)          # exp(x - max), padding lanes masked
-            part = vf.reduce_sum(e, mreg)                 # per-reg sum -> lane0
-            row_sum = vf.add(row_sum, part, preg)         # combine into lane0 accumulator
-        row_sum_b = vf.full(row_sum, preg)                # broadcast lane0 -> all lanes
+            e = vf.exp_sub(reg, row_max_b, mreg)  # exp(x - max), padding lanes masked
+            part = vf.reduce_sum(e, mreg)  # per-reg sum -> lane0
+            row_sum = vf.add(row_sum, part, preg)  # combine into lane0 accumulator
+        row_sum_b = vf.full(row_sum, preg)  # broadcast lane0 -> all lanes
 
         # ---- pass 3: y = exp(x - max) / sum, store valid lanes only ----
         for r in pl.range(0, n_regs):
@@ -115,8 +117,9 @@ def softmax_tile_group_kernel(
 ):
     # valid_shape=[-1, -1] makes the per-tile valid window dynamic (set at runtime via
     # set_validshape): the tail row-tile carries fewer rows and N narrows the columns.
-    tile_type = pl.TileType(shape=[TILE_ROWS, MAX_N], dtype=pl.DT_FP32,
-                            target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    tile_type = pl.TileType(
+        shape=[TILE_ROWS, MAX_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
     in_group = pl.make_tile_group(type=tile_type, addrs=[VA_IN0, VA_IN1], mutex_ids=[0, 1])
     out_group = pl.make_tile_group(type=tile_type, addrs=[VA_OUT0, VA_OUT1], mutex_ids=[2, 3])
 
@@ -172,16 +175,17 @@ def _run_case(rows, cols):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_softmax_tile_group_vf():
     # (rows, cols): both dynamic. Cover single-register N, multi-register N,
     # register-unaligned N (partial tail lane), partial row-tiles, and multicore.
     cases = [
-        (2048, 64),     # single register per row, 128 tiles -> 32 cores
-        (4096, 128),    # 2 registers per row
-        (1000, 200),    # N unaligned (3 regs, tail 8 lanes) + partial row-tile
-        (777, 300),     # N unaligned (5 regs, tail 44 lanes) + partial row-tile
-        (100, 512),     # full MAX_N (8 registers per row)
-        (2049, 100),    # odd rows + N unaligned (2 regs, tail 36 lanes)
+        (2048, 64),  # single register per row, 128 tiles -> 32 cores
+        (4096, 128),  # 2 registers per row
+        (1000, 200),  # N unaligned (3 regs, tail 8 lanes) + partial row-tile
+        (777, 300),  # N unaligned (5 regs, tail 44 lanes) + partial row-tile
+        (100, 512),  # full MAX_N (8 registers per row)
+        (2049, 100),  # odd rows + N unaligned (2 regs, tail 36 lanes)
     ]
     for rows, cols in cases:
         _run_case(rows, cols)

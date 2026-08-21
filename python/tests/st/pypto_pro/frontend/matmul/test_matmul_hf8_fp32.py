@@ -19,14 +19,16 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 logging.basicConfig(level=logging.INFO)
 
-M_TOTAL = 128   # 2 M rounds
-K_TOTAL = 192   # 3 K rounds -> first / middle / last
-N_TOTAL = 128   # 2 N rounds
+M_TOTAL = 128  # 2 M rounds
+K_TOTAL = 192  # 3 K rounds -> first / middle / last
+N_TOTAL = 128  # 2 N rounds
 TILE = 64
 
 M_TAIL_TOTAL = 200
@@ -48,6 +50,7 @@ def _ceil_blocks(total, tile):
     """
     return -(-total // tile)
 
+
 # Identity store scale (fp32 bit-pattern of 1.0): cast FP32 acc -> HF8 without rescale.
 # Unit scale: the quantized store path converts the accumulator dtype without
 # rescaling. Passed as a plain float -- the framework reinterprets an FP32 scale as
@@ -68,6 +71,7 @@ def _require_a5(device):
 # Kernel factories — M/N/K loop bodies, dtype per memory space taken as arguments
 # #####################################################################################
 
+
 def _kernel_name(tag, in_dtype, acc, out):
     """Unique name per dtype combo.
 
@@ -78,17 +82,15 @@ def _kernel_name(tag, in_dtype, acc, out):
     return f"{tag}_in{in_dtype}_acc{acc}_out{out}"
 
 
-def make_matmul_mnk_if(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
-                       m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
+def make_matmul_mnk_if(in_dtype, out_dtype, acc_dtype=pl.DT_FP32, m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
     """M/N/K multi-round loops with if/elif/else control flow, tail blocks supported."""
     # One dtype from GM through L1 and L0A/L0B: pl.load and pl.move never cast, so the
     # whole operand path carries in_dtype. Only the accumulator (FP32) and the output
     # differ.
     acc = acc_dtype
-    quantized_out = (out_dtype != acc)
+    quantized_out = out_dtype != acc
     mt, kt, nt = m_total, k_total, n_total
-    _kname = (_kernel_name("t01_mnkif", in_dtype, acc, out_dtype)
-              + f"_{mt}x{kt}x{nt}")
+    _kname = _kernel_name("t01_mnkif", in_dtype, acc, out_dtype) + f"_{mt}x{kt}x{nt}"
 
     @pl.jit(auto_mutex=True, name=_kname)
     def t01_mnk_loop_if(
@@ -97,25 +99,66 @@ def make_matmul_mnk_if(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
         out: pl.Tensor[[mt, nt], out_dtype],
     ):
         a_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[0, 1],
+        )
         b_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x40000, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         a_l0a = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024, valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=acc,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
         with pl.section_cube():
             for mi in pl.range(0, mt, TILE):
                 m_valid = pl.min(TILE, mt - mi)
@@ -150,25 +193,22 @@ def make_matmul_mnk_if(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
                         else:
                             pl.matmul_acc(ac, ac, al, br, phase=pl.AccPhase.Final)
                     if quantized_out:
-                        pl.store(out, ac, [mi, ni], scale=_SCALE_ONE,
-                                 phase=pl.STPhase.Final)
+                        pl.store(out, ac, [mi, ni], scale=_SCALE_ONE, phase=pl.STPhase.Final)
                     else:
                         pl.store(out, ac, [mi, ni], phase=pl.STPhase.Final)
 
     return t01_mnk_loop_if
 
 
-def make_matmul_no_phase(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
-                       m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
+def make_matmul_no_phase(in_dtype, out_dtype, acc_dtype=pl.DT_FP32, m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
     """t02: M/N/K multi-round loops, matmul/matmul_acc without ``phase``."""
     # One dtype from GM through L1 and L0A/L0B: pl.load and pl.move never cast, so the
     # whole operand path carries in_dtype. Only the accumulator (FP32) and the output
     # differ.
     acc = acc_dtype
-    quantized_out = (out_dtype != acc)
+    quantized_out = out_dtype != acc
     mt, kt, nt = m_total, k_total, n_total
-    _kname = (_kernel_name("t02_nophase", in_dtype, acc, out_dtype)
-              + f"_{mt}x{kt}x{nt}")
+    _kname = _kernel_name("t02_nophase", in_dtype, acc, out_dtype) + f"_{mt}x{kt}x{nt}"
 
     @pl.jit(auto_mutex=True, name=_kname)
     def t02_mnk_no_phase(
@@ -177,25 +217,66 @@ def make_matmul_no_phase(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
         out: pl.Tensor[[mt, nt], out_dtype],
     ):
         a_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[0, 1],
+        )
         b_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x40000, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         a_l0a = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024, valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=acc,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
         with pl.section_cube():
             for mi in pl.range(0, mt, TILE):
                 m_valid = pl.min(TILE, mt - mi)
@@ -218,27 +299,25 @@ def make_matmul_no_phase(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
                         pl.move(al, cur_a)
                         pl.move(br, cur_b)
                         if ki == 0:
-                            pl.matmul(ac, al, br)              # no phase
+                            pl.matmul(ac, al, br)  # no phase
                         else:
-                            pl.matmul_acc(ac, ac, al, br)      # no phase
+                            pl.matmul_acc(ac, ac, al, br)  # no phase
                     if quantized_out:
                         pl.store(out, ac, [mi, ni], scale=_SCALE_ONE)
                     else:
-                        pl.store(out, ac, [mi, ni])            # no STPhase
+                        pl.store(out, ac, [mi, ni])  # no STPhase
 
     return t02_mnk_no_phase
 
 
-def make_matmul_atomic(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
-                       m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
+def make_matmul_atomic(in_dtype, out_dtype, acc_dtype=pl.DT_FP32, m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
     """t03: M/N/K multi-round loops, K accumulated by an atomic store."""
     # One dtype from GM through L1 and L0A/L0B: pl.load and pl.move never cast, so the
     # whole operand path carries in_dtype. Only the accumulator (FP32) and the output
     # differ.
     acc = acc_dtype
     mt, kt, nt = m_total, k_total, n_total
-    _kname = (_kernel_name("t03_atomic", in_dtype, acc, out_dtype)
-              + f"_{mt}x{kt}x{nt}")
+    _kname = _kernel_name("t03_atomic", in_dtype, acc, out_dtype) + f"_{mt}x{kt}x{nt}"
 
     @pl.jit(auto_mutex=True, name=_kname)
     def t03_mnk_atomic(
@@ -247,25 +326,66 @@ def make_matmul_atomic(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
         out: pl.Tensor[[mt, nt], out_dtype],
     ):
         a_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[0, 1],
+        )
         b_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x40000, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         a_l0a = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024, valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=acc,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
         with pl.section_cube():
             for mi in pl.range(0, mt, TILE):
                 m_valid = pl.min(TILE, mt - mi)
@@ -293,14 +413,13 @@ def make_matmul_atomic(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
     return t03_mnk_atomic
 
 
-def make_matmul_katomic_multicore(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
-                                  m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL,
-                                  k_cores=K_CORES):
+def make_matmul_katomic_multicore(
+    in_dtype, out_dtype, acc_dtype=pl.DT_FP32, m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL, k_cores=K_CORES
+):
     """t12: K axis split across cores, the partial sums joined by an atomic store."""
     acc = acc_dtype
     mt, kt, nt = m_total, k_total, n_total
-    _kname = (_kernel_name("t12_katomic_mc", in_dtype, acc, out_dtype)
-              + f"_{mt}x{kt}x{nt}_c{k_cores}")
+    _kname = _kernel_name("t12_katomic_mc", in_dtype, acc, out_dtype) + f"_{mt}x{kt}x{nt}_c{k_cores}"
 
     @pl.jit(auto_mutex=True, name=_kname)
     def t12_k_atomic_multicore(
@@ -309,25 +428,66 @@ def make_matmul_katomic_multicore(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
         out: pl.Tensor[[mt, nt], out_dtype],
     ):
         a_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[0, 1],
+        )
         b_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x40000, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         a_l0a = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024, valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=acc,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
         with pl.section_cube():
             core_id = pl.get_block_idx()
             for mi in pl.range(0, mt, TILE):
@@ -356,10 +516,9 @@ def make_matmul_katomic_multicore(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
     return t12_k_atomic_multicore
 
 
-def make_matmul_insert(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
-                       m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
+def make_matmul_insert(in_dtype, out_dtype, acc_dtype=pl.DT_FP32, m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
     acc = acc_dtype
-    quantized_out = (out_dtype != acc)
+    quantized_out = out_dtype != acc
     _kname = _kernel_name("t13_insert", in_dtype, acc, out_dtype)
 
     @pl.jit(auto_mutex=True, name=_kname)
@@ -370,26 +529,41 @@ def make_matmul_insert(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
     ):
         a_l1 = pl.make_tile_group(
             type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-            addrs=0x0, mutex_ids=[0])
+            addrs=0x0,
+            mutex_ids=[0],
+        )
         a_ub_nd = pl.make_tile_group(
             type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Vec),
-            addrs=0x0, mutex_ids=[9, 10])
+            addrs=0x0,
+            mutex_ids=[9, 10],
+        )
         a_ub_nz = pl.make_tile_group(
             type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
-            addrs=0x10000, mutex_ids=[11, 12])
+            addrs=0x10000,
+            mutex_ids=[11, 12],
+        )
         b_l1 = pl.make_tile_group(
             type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-            addrs=0x40000, mutex_ids=[2, 3])
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         a_l0a = pl.make_tile_group(
             type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addrs=0x0, mutex_ids=[4, 5])
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
             type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-            addrs=0x0, mutex_ids=[6, 7])
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
 
         with pl.section_vector():
             ub_nd = a_ub_nd.next()
@@ -419,45 +593,84 @@ def make_matmul_insert(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
     return t13_insert
 
 
-def make_matmul_transpose(in_dtype, out_dtype, m_total, k_total, n_total,
-                          acc_dtype=pl.DT_FP32):
+def make_matmul_transpose(in_dtype, out_dtype, m_total, k_total, n_total, acc_dtype=pl.DT_FP32):
     """t04/t05: M/N/K multi-round loops, both operands transposed (TT)."""
     # One dtype from GM through L1 and L0A/L0B: pl.load and pl.move never cast, so the
     # whole operand path carries in_dtype. Only the accumulator (FP32) and the output
     # differ.
     acc = acc_dtype
-    quantized_out = (out_dtype != acc)
+    quantized_out = out_dtype != acc
     mt, kt, nt = m_total, k_total, n_total
-    _kname = (_kernel_name("t04_tt", in_dtype, acc, out_dtype)
-              + f"_{mt}x{kt}x{nt}")
+    _kname = _kernel_name("t04_tt", in_dtype, acc, out_dtype) + f"_{mt}x{kt}x{nt}"
 
     @pl.jit(auto_mutex=True, name=_kname)
     def t04_mnk_transpose(
-        a_t: pl.Tensor[[kt, mt], in_dtype],      # A^T in GM
-        b_t: pl.Tensor[[nt, kt], in_dtype],      # B^T in GM
+        a_t: pl.Tensor[[kt, mt], in_dtype],  # A^T in GM
+        b_t: pl.Tensor[[nt, kt], in_dtype],  # B^T in GM
         out: pl.Tensor[[mt, nt], out_dtype],
     ):
         # Tile shapes stay logical; only the L1 layout flips to ZN.
         a_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[0, 1],
+        )
         b_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x40000, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         a_l0a = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024, valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=acc,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
         with pl.section_cube():
             for mi in pl.range(0, mt, TILE):
                 m_valid = pl.min(TILE, mt - mi)
@@ -486,21 +699,20 @@ def make_matmul_transpose(in_dtype, out_dtype, m_total, k_total, n_total,
                         else:
                             pl.matmul_acc(ac, ac, al, br, phase=pl.AccPhase.Final)
                     if quantized_out:
-                        pl.store(out, ac, [mi, ni], scale=_SCALE_ONE,
-                                 phase=pl.STPhase.Final)
+                        pl.store(out, ac, [mi, ni], scale=_SCALE_ONE, phase=pl.STPhase.Final)
                     else:
                         pl.store(out, ac, [mi, ni], phase=pl.STPhase.Final)
 
     return t04_mnk_transpose
 
 
-def make_matmul_quant_scalar(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
-                       m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
+def make_matmul_quant_scalar(
+    in_dtype, out_dtype, acc_dtype=pl.DT_FP32, m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL
+):
     """t06: M/N/K multi-round loops, store with a scalar ``scale``, out HF8/FP32."""
     acc = acc_dtype
     mt, kt, nt = m_total, k_total, n_total
-    _kname = (_kernel_name("t06_qscalar", in_dtype, acc, out_dtype)
-              + f"_{mt}x{kt}x{nt}")
+    _kname = _kernel_name("t06_qscalar", in_dtype, acc, out_dtype) + f"_{mt}x{kt}x{nt}"
 
     @pl.jit(auto_mutex=True, name=_kname)
     def t06_mnk_quant_scalar(
@@ -509,25 +721,66 @@ def make_matmul_quant_scalar(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
         out: pl.Tensor[[mt, nt], out_dtype],
     ):
         a_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[0, 1],
+        )
         b_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x40000, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         a_l0a = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024, valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=acc,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
         with pl.section_cube():
             for mi in pl.range(0, mt, TILE):
                 m_valid = pl.min(TILE, mt - mi)
@@ -556,19 +809,16 @@ def make_matmul_quant_scalar(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
                         else:
                             pl.matmul_acc(ac, ac, al, br, phase=pl.AccPhase.Final)
                     # Scalar pre-quant on every output dtype, scale = 1.0.
-                    pl.store(out, ac, [mi, ni], scale=_SCALE_ONE,
-                             phase=pl.STPhase.Final)
+                    pl.store(out, ac, [mi, ni], scale=_SCALE_ONE, phase=pl.STPhase.Final)
 
     return t06_mnk_quant_scalar
 
 
-def make_matmul_fp_tile(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
-                       m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
+def make_matmul_fp_tile(in_dtype, out_dtype, acc_dtype=pl.DT_FP32, m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
     """t07: M/N/K multi-round loops, store with a per-column scale, out HF8/FP32."""
     acc = acc_dtype
     mt, kt, nt = m_total, k_total, n_total
-    _kname = (_kernel_name("t07_fptile", in_dtype, acc, out_dtype)
-              + f"_{mt}x{kt}x{nt}")
+    _kname = _kernel_name("t07_fptile", in_dtype, acc, out_dtype) + f"_{mt}x{kt}x{nt}"
 
     @pl.jit(auto_mutex=True, name=_kname)
     def t07_mnk_fp_tile(
@@ -578,33 +828,89 @@ def make_matmul_fp_tile(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
         out: pl.Tensor[[mt, nt], out_dtype],
     ):
         a_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[0, 1],
+        )
         b_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x40000, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         fp_mat = pl.make_tile_group(
-            type=pl.TileType(shape=[1, TILE], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Mat, layout=pl.ND,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x60000, mutex_ids=[9])
+            type=pl.TileType(
+                shape=[1, TILE],
+                dtype=pl.DT_INT64,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.ND,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x60000,
+            mutex_ids=[9],
+        )
         a_l0a = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         fp_scaling = pl.make_tile_group(
-            type=pl.TileType(shape=[1, TILE], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[10])
+            type=pl.TileType(
+                shape=[1, TILE],
+                dtype=pl.DT_INT64,
+                target_memory=pl.MemorySpace.Scaling,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[10],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024, valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=acc,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
         with pl.section_cube():
             for mi in pl.range(0, mt, TILE):
                 m_valid = pl.min(TILE, mt - mi)
@@ -641,16 +947,15 @@ def make_matmul_fp_tile(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
     return t07_mnk_fp_tile
 
 
-def make_matmul_tile_offsets(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
-                             m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
+def make_matmul_tile_offsets(
+    in_dtype, out_dtype, acc_dtype=pl.DT_FP32, m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL
+):
     """t08: M/N/K multi-round loops, using load_tile / store_tile."""
     acc = acc_dtype
-    quantized_out = (out_dtype != acc)
+    quantized_out = out_dtype != acc
     mt, kt, nt = m_total, k_total, n_total
-    m_blocks, k_blocks, n_blocks = (_ceil_blocks(mt, TILE), _ceil_blocks(kt, TILE),
-                                     _ceil_blocks(nt, TILE))
-    _kname = (_kernel_name("t08_tileoff", in_dtype, acc, out_dtype)
-              + f"_{mt}x{kt}x{nt}")
+    m_blocks, k_blocks, n_blocks = (_ceil_blocks(mt, TILE), _ceil_blocks(kt, TILE), _ceil_blocks(nt, TILE))
+    _kname = _kernel_name("t08_tileoff", in_dtype, acc, out_dtype) + f"_{mt}x{kt}x{nt}"
 
     @pl.jit(auto_mutex=True, name=_kname)
     def t08_mnk_tile_offsets(
@@ -659,25 +964,66 @@ def make_matmul_tile_offsets(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
         out: pl.Tensor[[mt, nt], out_dtype],
     ):
         a_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[0, 1],
+        )
         b_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x40000, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         a_l0a = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024, valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=acc,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
         with pl.section_cube():
             for mi in pl.range(0, m_blocks, 1):
                 m_valid = pl.min(TILE, mt - mi * TILE)
@@ -707,51 +1053,90 @@ def make_matmul_tile_offsets(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
                         else:
                             pl.matmul_acc(ac, ac, al, br, phase=pl.AccPhase.Final)
                     if quantized_out:
-                        pl.store_tile(out, ac, [mi, ni], scale=_SCALE_ONE,
-                                      phase=pl.STPhase.Final)
+                        pl.store_tile(out, ac, [mi, ni], scale=_SCALE_ONE, phase=pl.STPhase.Final)
                     else:
                         pl.store_tile(out, ac, [mi, ni], phase=pl.STPhase.Final)
 
     return t08_mnk_tile_offsets
 
 
-def make_matmul_tile_transpose(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
-                             m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
+def make_matmul_tile_transpose(
+    in_dtype, out_dtype, acc_dtype=pl.DT_FP32, m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL
+):
     """t09: M/N/K multi-round loops, transposing ``load_tile`` (descending ``order``)."""
     acc = acc_dtype
-    quantized_out = (out_dtype != acc)
+    quantized_out = out_dtype != acc
     mt, kt, nt = m_total, k_total, n_total
-    m_blocks, k_blocks, n_blocks = (_ceil_blocks(mt, TILE), _ceil_blocks(kt, TILE),
-                                     _ceil_blocks(nt, TILE))
-    _kname = (_kernel_name("t09_tiletrans", in_dtype, acc, out_dtype)
-              + f"_{mt}x{kt}x{nt}")
+    m_blocks, k_blocks, n_blocks = (_ceil_blocks(mt, TILE), _ceil_blocks(kt, TILE), _ceil_blocks(nt, TILE))
+    _kname = _kernel_name("t09_tiletrans", in_dtype, acc, out_dtype) + f"_{mt}x{kt}x{nt}"
 
     @pl.jit(auto_mutex=True, name=_kname)
     def t09_mnk_tile_transpose(
-        a_t: pl.Tensor[[kt, mt], in_dtype],   # A^T in GM
+        a_t: pl.Tensor[[kt, mt], in_dtype],  # A^T in GM
         b: pl.Tensor[[kt, nt], in_dtype],
         out: pl.Tensor[[mt, nt], out_dtype],
     ):
         a_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[0, 1],
+        )
         b_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x40000, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         a_l0a = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024, valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=acc,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
         with pl.section_cube():
             for mi in pl.range(0, m_blocks, 1):
                 m_valid = pl.min(TILE, mt - mi * TILE)
@@ -780,27 +1165,25 @@ def make_matmul_tile_transpose(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
                         else:
                             pl.matmul_acc(ac, ac, al, br, phase=pl.AccPhase.Final)
                     if quantized_out:
-                        pl.store_tile(out, ac, [mi, ni], scale=_SCALE_ONE,
-                                      phase=pl.STPhase.Final)
+                        pl.store_tile(out, ac, [mi, ni], scale=_SCALE_ONE, phase=pl.STPhase.Final)
                     else:
                         pl.store_tile(out, ac, [mi, ni], phase=pl.STPhase.Final)
 
     return t09_mnk_tile_transpose
 
 
-def make_matmul_tile_mixed(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
-                           m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
+def make_matmul_tile_mixed(
+    in_dtype, out_dtype, acc_dtype=pl.DT_FP32, m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL
+):
     """t10: M/N/K multi-round loops mixing tile-indexed and element-indexed addressing."""
     # One dtype from GM through L1 and L0A/L0B: pl.load and pl.move never cast, so the
     # whole operand path carries in_dtype. Only the accumulator (FP32) and the output
     # differ.
     acc = acc_dtype
-    quantized_out = (out_dtype != acc)
+    quantized_out = out_dtype != acc
     mt, kt, nt = m_total, k_total, n_total
-    m_blocks, k_blocks, n_blocks = (_ceil_blocks(mt, TILE), _ceil_blocks(kt, TILE),
-                                     _ceil_blocks(nt, TILE))
-    _kname = (_kernel_name("t10_tilemixed", in_dtype, acc, out_dtype)
-              + f"_{mt}x{kt}x{nt}")
+    m_blocks, k_blocks, n_blocks = (_ceil_blocks(mt, TILE), _ceil_blocks(kt, TILE), _ceil_blocks(nt, TILE))
+    _kname = _kernel_name("t10_tilemixed", in_dtype, acc, out_dtype) + f"_{mt}x{kt}x{nt}"
 
     @pl.jit(auto_mutex=True, name=_kname)
     def t10_mnk_tile_mixed(
@@ -809,25 +1192,66 @@ def make_matmul_tile_mixed(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
         out: pl.Tensor[[mt, nt], out_dtype],
     ):
         a_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[0, 1],
+        )
         b_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x40000, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         a_l0a = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024, valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=acc,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
         with pl.section_cube():
             for mb in pl.range(0, m_blocks, 1):
                 m_valid = pl.min(TILE, mt - mb * TILE)
@@ -856,24 +1280,22 @@ def make_matmul_tile_mixed(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
                         else:
                             pl.matmul_acc(ac, ac, al, br, phase=pl.AccPhase.Final)
                     if quantized_out:
-                        pl.store(out, ac, [mb * TILE, nb * TILE],
-                                 scale=_SCALE_ONE, phase=pl.STPhase.Final)
+                        pl.store(out, ac, [mb * TILE, nb * TILE], scale=_SCALE_ONE, phase=pl.STPhase.Final)
                     else:
                         pl.store(out, ac, [mb * TILE, nb * TILE], phase=pl.STPhase.Final)
 
     return t10_mnk_tile_mixed
 
 
-def make_matmul_tile_order(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
-                           m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL):
+def make_matmul_tile_order(
+    in_dtype, out_dtype, acc_dtype=pl.DT_FP32, m_total=M_TOTAL, k_total=K_TOTAL, n_total=N_TOTAL
+):
     """t11: batched (4-D) operands addressed by load_tile / store_tile with ``order``."""
     acc = acc_dtype
-    quantized_out = (out_dtype != acc)
+    quantized_out = out_dtype != acc
     mt, kt, nt = m_total, k_total, n_total
-    m_blocks, k_blocks, n_blocks = (_ceil_blocks(mt, TILE), _ceil_blocks(kt, TILE),
-                                     _ceil_blocks(nt, TILE))
-    _kname = (_kernel_name("t11_tileorder", in_dtype, acc, out_dtype)
-              + f"_{mt}x{kt}x{nt}")
+    m_blocks, k_blocks, n_blocks = (_ceil_blocks(mt, TILE), _ceil_blocks(kt, TILE), _ceil_blocks(nt, TILE))
+    _kname = _kernel_name("t11_tileorder", in_dtype, acc, out_dtype) + f"_{mt}x{kt}x{nt}"
 
     @pl.jit(auto_mutex=True, name=_kname)
     def t11_batched_tile_order(
@@ -882,25 +1304,66 @@ def make_matmul_tile_order(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
         out: pl.Tensor[[BATCH, HEADS, mt, nt], out_dtype],
     ):
         a_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[0, 1],
+        )
         b_l1 = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Mat, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x40000, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x40000,
+            mutex_ids=[2, 3],
+        )
         a_l0a = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Left, layout=pl.NZ,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Left,
+                layout=pl.NZ,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[4, 5],
+        )
         b_l0b = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=in_dtype, target_memory=pl.MemorySpace.Right, layout=pl.ZN,
-                             valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=in_dtype,
+                target_memory=pl.MemorySpace.Right,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[6, 7],
+        )
         c_l0c = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE, TILE], dtype=acc, target_memory=pl.MemorySpace.Acc, layout=pl.NZ,
-                             fractal=1024, valid_shape=[-1, -1], compact=1),
-            addrs=0x0, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE, TILE],
+                dtype=acc,
+                target_memory=pl.MemorySpace.Acc,
+                layout=pl.NZ,
+                fractal=1024,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=0x0,
+            mutex_ids=[8],
+        )
         with pl.section_cube():
             for bi in pl.range(0, BATCH, 1):
                 for hi in pl.range(0, HEADS, 1):
@@ -932,12 +1395,11 @@ def make_matmul_tile_order(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
                                 else:
                                     pl.matmul_acc(ac, ac, al, br, phase=pl.AccPhase.Final)
                             if quantized_out:
-                                pl.store_tile(out, ac, [bi, hi, mb, nb], order=[2, 3],
-                                              scale=_SCALE_ONE,
-                                              phase=pl.STPhase.Final)
+                                pl.store_tile(
+                                    out, ac, [bi, hi, mb, nb], order=[2, 3], scale=_SCALE_ONE, phase=pl.STPhase.Final
+                                )
                             else:
-                                pl.store_tile(out, ac, [bi, hi, mb, nb], order=[2, 3],
-                                              phase=pl.STPhase.Final)
+                                pl.store_tile(out, ac, [bi, hi, mb, nb], order=[2, 3], phase=pl.STPhase.Final)
 
     return t11_batched_tile_order
 
@@ -958,6 +1420,7 @@ def make_matmul_tile_order(in_dtype, out_dtype, acc_dtype=pl.DT_FP32,
 # split (tapered precision), with no per-group scale -- a plain elementwise fp32 -> hif8
 # cast using ROUND_A (round away from zero on ties) as the A5 hardware requires.
 # #####################################################################################
+
 
 def _hif8_decode_bitstring(bstr: str) -> float:
     """Decode an 8-char '0'/'1' string (MSB first) to a python float / nan / inf.
@@ -983,10 +1446,10 @@ def _hif8_decode_bitstring(bstr: str) -> float:
             return float("nan") if s == "1" else 0.0
         return 2.0 ** (m1 * 4 + m2 * 2 + m3 - 23) * f1
     if d == "0001":
-        return (1 + (m1 * 4 + m2 * 2 + m3) / 8) * (2.0 ** 0) * f1
+        return (1 + (m1 * 4 + m2 * 2 + m3) / 8) * (2.0**0) * f1
     if d == "001":
         f2 = -1 if e == "1" else 1
-        return (1 + (m1 * 4 + m2 * 2 + m3) / 8) * (2.0 ** f2) * f1
+        return (1 + (m1 * 4 + m2 * 2 + m3) / 8) * (2.0**f2) * f1
     if d == "01":
         e1, e2 = int(bstr[3]), int(bstr[4])
         f2 = -1 if e1 == 1 else 1
@@ -1079,6 +1542,7 @@ def dequant_hif8(codes) -> np.ndarray:
 # Per-dtype operand builders + golden helpers
 # #####################################################################################
 
+
 def _make_operand(dtype_label, shape, seed, device):
     """Return (device tensor for the kernel, exact FP32 values for the golden).
 
@@ -1104,7 +1568,7 @@ def _make_operand(dtype_label, shape, seed, device):
 _IN_DTYPE = {"hf8": pl.DT_HF8, "fp32": pl.DT_FP32}
 _OUT_DTYPE = {
     "fp32": (pl.DT_FP32, torch.float32),
-    "hf8": (pl.DT_HF8, torch.uint8),      # HF8 has no torch dtype; carried as raw bytes
+    "hf8": (pl.DT_HF8, torch.uint8),  # HF8 has no torch dtype; carried as raw bytes
 }
 _IN_TOL = {"hf8": dict(rtol=1e-3, atol=1e-3), "fp32": dict(rtol=1e-3, atol=1e-3)}
 
@@ -1156,8 +1620,7 @@ def _assert_hif8_codes_close(out_codes, golden_codes, label, max_steps=1):
         steps = np.abs(np.searchsorted(_HIF8_GRID, got_v) - np.searchsorted(_HIF8_GRID, exp_v))
         worst = int(steps.max())
         logging.info("%s: worst mismatch = %d grid step(s)", label, worst)
-        assert worst <= max_steps, (
-            f"{label}: HF8 code differs by {worst} grid steps (max {max_steps})")
+        assert worst <= max_steps, f"{label}: HF8 code differs by {worst} grid steps (max {max_steps})"
     assert frac >= 0.98, f"{label}: only {frac:.3f} of HF8 codes bit-exact"
 
 
@@ -1171,15 +1634,32 @@ def _check_output(out, ref, in_dtype, out_dtype, label):
     expect = ref
     tol = _IN_TOL[in_dtype]
     diff = (got - expect).abs()
-    logging.info("%s: max|out-golden|=%.6g  max_rel=%.6g", label,
-                 float(diff.max()), float((diff / expect.abs().clamp_min(1e-6)).max()))
+    logging.info(
+        "%s: max|out-golden|=%.6g  max_rel=%.6g",
+        label,
+        float(diff.max()),
+        float((diff / expect.abs().clamp_min(1e-6)).max()),
+    )
     torch.testing.assert_close(got, expect, **tol)
 
 
-def _run(factory, in_dtype, out_dtype, device, mkn=None,
-         a_shape=None, b_shape=None, out_shape=None,
-         a_trans=False, b_trans=False,
-         scales=None, factory_args=(), label=None, block_dim=None, **kwargs):
+def _run(
+    factory,
+    in_dtype,
+    out_dtype,
+    device,
+    mkn=None,
+    a_shape=None,
+    b_shape=None,
+    out_shape=None,
+    a_trans=False,
+    b_trans=False,
+    scales=None,
+    factory_args=(),
+    label=None,
+    block_dim=None,
+    **kwargs,
+):
     """Build the kernel for one dtype combo, run it, and check against the golden.
 
     All cases share this one path; the variants differ only in how the operands are shaped
@@ -1227,8 +1707,7 @@ def _run(factory, in_dtype, out_dtype, device, mkn=None,
     out = torch.zeros(out_shape, device=device, dtype=out_torch)
 
     # fp32 golden over the values the Cube actually saw.
-    ref = torch.matmul(a_gold.t() if a_trans else a_gold,
-                       b_gold.t() if b_trans else b_gold)
+    ref = torch.matmul(a_gold.t() if a_trans else a_gold, b_gold.t() if b_trans else b_gold)
     launch = kernel if block_dim is None else kernel[None, block_dim]
     if scales is None:
         launch(a_dev, b_dev, out)
@@ -1240,8 +1719,7 @@ def _run(factory, in_dtype, out_dtype, device, mkn=None,
 
     label = label or factory.__name__
     tail = "tail" if (m % TILE or k % TILE or n % TILE) else "exact"
-    _check_output(out, ref, in_dtype, out_dtype,
-                  f"{label}[in={in_dtype},out={out_dtype},{m}x{k}x{n},{tail}]")
+    _check_output(out, ref, in_dtype, out_dtype, f"{label}[in={in_dtype},out={out_dtype},{m}x{k}x{n},{tail}]")
 
 
 # #####################################################################################
@@ -1278,6 +1756,7 @@ _TT_SHAPES = [
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("mkn", [v[1] for v in _MKN_VARIANTS], ids=[v[0] for v in _MKN_VARIANTS])
 @pytest.mark.parametrize("in_dtype,out_dtype", _COMBOS)
+@pypto.options(pass_options={"enable_slice": False})
 def test_t01(in_dtype, out_dtype, mkn, _device):
     """M/N/K multi-round loops with if/elif/else control flow, tail shape."""
     _run(make_matmul_mnk_if, in_dtype, out_dtype, _device, mkn=mkn)
@@ -1286,6 +1765,7 @@ def test_t01(in_dtype, out_dtype, mkn, _device):
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("mkn", [v[1] for v in _MKN_VARIANTS], ids=[v[0] for v in _MKN_VARIANTS])
 @pytest.mark.parametrize("in_dtype,out_dtype", _COMBOS)
+@pypto.options(pass_options={"enable_slice": False})
 def test_t02_no_phase(in_dtype, out_dtype, mkn, _device):
     """matmul/matmul_acc without a phase argument (L0C accumulation)."""
     _run(make_matmul_no_phase, in_dtype, out_dtype, _device, mkn=mkn)
@@ -1294,6 +1774,7 @@ def test_t02_no_phase(in_dtype, out_dtype, mkn, _device):
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("mkn", [v[1] for v in _MKN_VARIANTS], ids=[v[0] for v in _MKN_VARIANTS])
 @pytest.mark.parametrize("in_dtype", ["hf8", "fp32"])
+@pypto.options(pass_options={"enable_slice": False})
 def test_t03_atomic(in_dtype, mkn, _device):
     """K accumulated through an atomic-add store into GM.
 
@@ -1305,19 +1786,29 @@ def test_t03_atomic(in_dtype, mkn, _device):
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("shape_id,m,k,n", _TT_SHAPES, ids=[s[0] for s in _TT_SHAPES])
 @pytest.mark.parametrize("in_dtype", ["hf8", "fp32"])
+@pypto.options(pass_options={"enable_slice": False})
 def test_t04_transpose(in_dtype, shape_id, m, k, n, _device):
     """M/N/K multi-round loops with both operands transposed, square and non-square."""
-    _run(make_matmul_transpose, in_dtype, "fp32", _device,
-         factory_args=(m, k, n),
-         a_shape=[k, m], b_shape=[n, k], out_shape=[m, n],
-         a_trans=True, b_trans=True,
-         label=f"t04_transpose_{m}x{k}x{n}")
+    _run(
+        make_matmul_transpose,
+        in_dtype,
+        "fp32",
+        _device,
+        factory_args=(m, k, n),
+        a_shape=[k, m],
+        b_shape=[n, k],
+        out_shape=[m, n],
+        a_trans=True,
+        b_trans=True,
+        label=f"t04_transpose_{m}x{k}x{n}",
+    )
 
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("out_dtype", _QUANT_OUTS)
 @pytest.mark.parametrize("mkn", [v[1] for v in _MKN_VARIANTS], ids=[v[0] for v in _MKN_VARIANTS])
 @pytest.mark.parametrize("in_dtype", ["hf8", "fp32"])
+@pypto.options(pass_options={"enable_slice": False})
 def test_t06_quant_scalar(in_dtype, out_dtype, mkn, _device):
     """store with a scalar scale, out HF8/FP32."""
     _run(make_matmul_quant_scalar, in_dtype, out_dtype, _device, mkn=mkn)
@@ -1327,6 +1818,7 @@ def test_t06_quant_scalar(in_dtype, out_dtype, mkn, _device):
 @pytest.mark.parametrize("out_dtype", _QUANT_OUTS)
 @pytest.mark.parametrize("mkn", [v[1] for v in _MKN_VARIANTS], ids=[v[0] for v in _MKN_VARIANTS])
 @pytest.mark.parametrize("in_dtype", ["hf8", "fp32"])
+@pypto.options(pass_options={"enable_slice": False})
 def test_t07_fp_tile(in_dtype, out_dtype, mkn, _device):
     """store with a per-column scale (Tile form), out HF8/FP32."""
     # One scale per output column, so the vector length follows N (not a fixed constant).
@@ -1338,6 +1830,7 @@ def test_t07_fp_tile(in_dtype, out_dtype, mkn, _device):
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("mkn", [v[1] for v in _MKN_VARIANTS], ids=[v[0] for v in _MKN_VARIANTS])
 @pytest.mark.parametrize("in_dtype,out_dtype", _COMBOS)
+@pypto.options(pass_options={"enable_slice": False})
 def test_t08_tile_offsets(in_dtype, out_dtype, mkn, _device):
     """load_tile / store_tile block indices (ceil bounds cover the tail)."""
     _run(make_matmul_tile_offsets, in_dtype, out_dtype, _device, mkn=mkn)
@@ -1346,17 +1839,26 @@ def test_t08_tile_offsets(in_dtype, out_dtype, mkn, _device):
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("mkn", [v[1] for v in _MKN_VARIANTS], ids=[v[0] for v in _MKN_VARIANTS])
 @pytest.mark.parametrize("in_dtype,out_dtype", _COMBOS)
+@pypto.options(pass_options={"enable_slice": False})
 def test_t09_tile_transpose(in_dtype, out_dtype, mkn, _device):
     """Transposing load_tile (descending order), store_tile ascending."""
     _m, _k, _n = mkn
-    _run(make_matmul_tile_transpose, in_dtype, out_dtype, _device, mkn=mkn,
-         a_shape=[_k, _m], a_trans=True,
-         label="t09_tile_transpose")
+    _run(
+        make_matmul_tile_transpose,
+        in_dtype,
+        out_dtype,
+        _device,
+        mkn=mkn,
+        a_shape=[_k, _m],
+        a_trans=True,
+        label="t09_tile_transpose",
+    )
 
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("mkn", [v[1] for v in _MKN_VARIANTS], ids=[v[0] for v in _MKN_VARIANTS])
 @pytest.mark.parametrize("in_dtype,out_dtype", _COMBOS)
+@pypto.options(pass_options={"enable_slice": False})
 def test_t10_tile_mixed(in_dtype, out_dtype, mkn, _device):
     """Tile-indexed and element-indexed addressing mixed in one kernel."""
     _run(make_matmul_tile_mixed, in_dtype, out_dtype, _device, mkn=mkn)
@@ -1365,19 +1867,27 @@ def test_t10_tile_mixed(in_dtype, out_dtype, mkn, _device):
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("mkn", [v[1] for v in _MKN_VARIANTS], ids=[v[0] for v in _MKN_VARIANTS])
 @pytest.mark.parametrize("in_dtype,out_dtype", _COMBOS)
+@pypto.options(pass_options={"enable_slice": False})
 def test_t11_batched_tile_order(in_dtype, out_dtype, mkn, _device):
     """Batched 4-D operands via load_tile / store_tile with order=[2, 3]."""
     _m, _k, _n = mkn
-    _run(make_matmul_tile_order, in_dtype, out_dtype, _device, mkn=mkn,
-         a_shape=[BATCH, HEADS, _m, _k],
-         b_shape=[BATCH, HEADS, _k, _n],
-         out_shape=[BATCH, HEADS, _m, _n],
-         label="t11_batched_tile_order")
+    _run(
+        make_matmul_tile_order,
+        in_dtype,
+        out_dtype,
+        _device,
+        mkn=mkn,
+        a_shape=[BATCH, HEADS, _m, _k],
+        b_shape=[BATCH, HEADS, _k, _n],
+        out_shape=[BATCH, HEADS, _m, _n],
+        label="t11_batched_tile_order",
+    )
 
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("mkn", [v[1] for v in _MKN_VARIANTS], ids=[v[0] for v in _MKN_VARIANTS])
 @pytest.mark.parametrize("in_dtype", ["hf8", "fp32"])
+@pypto.options(pass_options={"enable_slice": False})
 def test_t12_katomic_multicore(in_dtype, mkn, _device):
     """K axis split across K_CORES cores, partial sums joined by atomic-add.
 
@@ -1385,20 +1895,27 @@ def test_t12_katomic_multicore(in_dtype, mkn, _device):
     accumulator. Unlike t03 the adds come from different cores with no ordering between
     them, so this also covers that the sum is order-independent.
     """
-    _run(make_matmul_katomic_multicore, in_dtype, "fp32", _device, mkn=mkn,
-         block_dim=K_CORES, label="t12_katomic_multicore")
+    _run(
+        make_matmul_katomic_multicore,
+        in_dtype,
+        "fp32",
+        _device,
+        mkn=mkn,
+        block_dim=K_CORES,
+        label="t12_katomic_multicore",
+    )
 
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("in_dtype,out_dtype", _COMBOS)
+@pypto.options(pass_options={"enable_slice": False})
 def test_t13_insert(in_dtype, out_dtype, _device):
     """A staged GM -> UB -> L1 by pl.insert, i.e. whether UB -> L1 carries the input dtype.
 
     Single [TILE, TILE] block, no shape parametrization: the factory fixes the shapes
     because the question is whether insert moves the bytes intact, not how tiling behaves.
     """
-    _run(make_matmul_insert, in_dtype, out_dtype, _device, mkn=(TILE, TILE, TILE),
-         label="t13_insert")
+    _run(make_matmul_insert, in_dtype, out_dtype, _device, mkn=(TILE, TILE, TILE), label="t13_insert")
 
 
 # #####################################################################################
@@ -1413,38 +1930,40 @@ if __name__ == "__main__":
     all_tests = []
     for _mid, _mkn in _MKN_VARIANTS:
         for _in, _out in _COMBOS:
-            for _tag, _fn in (("t01_mnk_if", test_t01),
-                              ("t02_no_phase", test_t02_no_phase),
-                              ("t08_tile_offsets", test_t08_tile_offsets),
-                              ("t09_tile_transpose", test_t09_tile_transpose),
-                              ("t10_tile_mixed", test_t10_tile_mixed),
-                              ("t11_batched_tile_order", test_t11_batched_tile_order)):
-                all_tests.append((f"{_tag}[in={_in},out={_out},{_mid}]", _fn,
-                                  (_in, _out, _mkn, dev)))
+            for _tag, _fn in (
+                ("t01_mnk_if", test_t01),
+                ("t02_no_phase", test_t02_no_phase),
+                ("t08_tile_offsets", test_t08_tile_offsets),
+                ("t09_tile_transpose", test_t09_tile_transpose),
+                ("t10_tile_mixed", test_t10_tile_mixed),
+                ("t11_batched_tile_order", test_t11_batched_tile_order),
+            ):
+                all_tests.append((f"{_tag}[in={_in},out={_out},{_mid}]", _fn, (_in, _out, _mkn, dev)))
         for _in in ("hf8", "fp32"):
-            all_tests.append((f"t03_atomic[in={_in},{_mid}]", test_t03_atomic,
-                              (_in, _mkn, dev)))
-            all_tests.append((f"t12_katomic_multicore[in={_in},{_mid}]",
-                              test_t12_katomic_multicore, (_in, _mkn, dev)))
+            all_tests.append((f"t03_atomic[in={_in},{_mid}]", test_t03_atomic, (_in, _mkn, dev)))
+            all_tests.append((f"t12_katomic_multicore[in={_in},{_mid}]", test_t12_katomic_multicore, (_in, _mkn, dev)))
             for _out in _QUANT_OUTS:
-                all_tests.append((f"t06_quant_scalar[in={_in},out={_out},{_mid}]",
-                                  test_t06_quant_scalar, (_in, _out, _mkn, dev)))
-                all_tests.append((f"t07_fp_tile[in={_in},out={_out},{_mid}]",
-                                  test_t07_fp_tile, (_in, _out, _mkn, dev)))
+                all_tests.append(
+                    (f"t06_quant_scalar[in={_in},out={_out},{_mid}]", test_t06_quant_scalar, (_in, _out, _mkn, dev))
+                )
+                all_tests.append((f"t07_fp_tile[in={_in},out={_out},{_mid}]", test_t07_fp_tile, (_in, _out, _mkn, dev)))
     # t04 carries its own shape list (square / non-square, both tail-block shapes).
     for _in in ("hf8", "fp32"):
         for _sid, _m, _k, _n in _TT_SHAPES:
-            all_tests.append((f"t04_transpose[in={_in},{_sid}]", test_t04_transpose,
-                              (_in, _sid, _m, _k, _n, dev)))
+            all_tests.append((f"t04_transpose[in={_in},{_sid}]", test_t04_transpose, (_in, _sid, _m, _k, _n, dev)))
     # t13 is a single TILE-sized block, so it takes no shape argument.
     for _in, _out in _COMBOS:
-        all_tests.append((f"t13_insert[in={_in},out={_out}]", test_t13_insert,
-                          (_in, _out, dev)))
+        all_tests.append((f"t13_insert[in={_in},out={_out}]", test_t13_insert, (_in, _out, dev)))
 
     logging.info("=" * 80)
     logging.info("Datatype-parametrized matmul, M/N/K multi-round, TILE=%d", TILE)
-    logging.info("  tail shapes: M=%d K=%d N=%d (tails %d/%d/%d, none 16-aligned)",
-                 *_TAIL_MKN, _TAIL_MKN[0] % TILE, _TAIL_MKN[1] % TILE, _TAIL_MKN[2] % TILE)
+    logging.info(
+        "  tail shapes: M=%d K=%d N=%d (tails %d/%d/%d, none 16-aligned)",
+        *_TAIL_MKN,
+        _TAIL_MKN[0] % TILE,
+        _TAIL_MKN[1] % TILE,
+        _TAIL_MKN[2] % TILE,
+    )
     logging.info("  full blocks run first on every axis, so the exact-multiple path is covered")
     logging.info("  combos (in,out) = %s", _COMBOS)
     logging.info("  total cases = %d", len(all_tests))

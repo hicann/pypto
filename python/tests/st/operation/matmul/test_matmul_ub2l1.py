@@ -141,6 +141,7 @@ ALL_CAST_MATMUL_TESTS = CAST_RIGHT_MATMUL_TESTS + CAST_LEFT_MATMUL_TESTS + CAST_
 @pytest.mark.parametrize(
     "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in ALL_CAST_MATMUL_TESTS]
 )
+@pypto.options(pass_options={"enable_slice": True})
 def test_cast_matmul(case: dict):
     run_cast_matmul_test(case)
 

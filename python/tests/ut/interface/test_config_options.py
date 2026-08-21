@@ -28,7 +28,7 @@ def test_pass_option():
     assert set(pass_option.keys()) == set_params, (
         f"get_pass_options keys {set(pass_option.keys())} != set_pass_options params {set_params}"
     )
-    assert pass_option["enable_slice"] is False
+    assert pass_option["enable_slice"] is True
     # tuple
     pypto.set_pass_options(sg_set_scope=48)
     pass_option = pypto.get_pass_options()

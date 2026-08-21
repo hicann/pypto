@@ -36,6 +36,86 @@ std::string InferParamIndex::DumpParamIndex(const std::map<std::string, DynParam
     }
     return ss.str();
 }
+// 从 "sym_<magic>_dim_<idx>" 格式的符号名中解析出 tensor magic 与维度下标。
+// 该格式由 ResetOutputDynValidShape 创建，用于给 CopyIn/CopyOut 的输出 valid shape 命名符号。
+static bool ParseSymDimSymbolName(const std::string& name, int& magic, int& dimIdx)
+{
+    static const std::string kPrefix = "sym_";
+    static const std::string kMid = "_dim_";
+    if (name.rfind(kPrefix, 0) != 0) {
+        return false;
+    }
+    size_t midPos = name.find(kMid, kPrefix.size());
+    if (midPos == std::string::npos || midPos <= kPrefix.size() || midPos + kMid.size() >= name.size()) {
+        return false;
+    }
+    try {
+        magic = std::stoi(name.substr(kPrefix.size(), midPos - kPrefix.size()));
+        dimIdx = std::stoi(name.substr(midPos + kMid.size()));
+    } catch (...) {
+        return false;
+    }
+    return true;
+}
+
+// 递归收集 valid shape 表达式中引用的 sym_ 符号并注册到 DynParamTable。
+// CopyIn/CopyOut 输出的 valid shape 可能被后续 InferShape（如 AssembleInferFunc 的 max 组合）
+// 覆盖为复合表达式，此时其自身符号不再以顶层符号形式出现，若不同样注册，
+// codegen 生成的表达式会引用未声明符号导致内核编译失败。
+static void CollectNestedDynParamSymbols(const SymbolicScalar& scalar, const std::map<int, int>& magic2Coa,
+                                         const std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
+                                         const std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified,
+                                         const std::map<int, int>& coa2TensorIndex,
+                                         std::set<std::string>& visitedSymbol, Function& subFunc)
+{
+    auto raw = scalar.Raw();
+    if (raw == nullptr) {
+        return;
+    }
+    if (raw->IsSymbol()) {
+        std::string name = raw->GetSymbolName();
+        if (visitedSymbol.count(name) > 0) {
+            return;
+        }
+        int magic = 0;
+        int dimIdx = 0;
+        if (!ParseSymDimSymbolName(name, magic, dimIdx)) {
+            return;
+        }
+        auto magicIter = magic2Coa.find(magic);
+        if (magicIter == magic2Coa.end()) {
+            return;
+        }
+        int coa = magicIter->second;
+        auto shapeIter = addr2ValidShape.find(coa);
+        auto tensorIndexIter = coa2TensorIndex.find(coa);
+        if (shapeIter == addr2ValidShape.end() || tensorIndexIter == coa2TensorIndex.end()) {
+            return;
+        }
+        int dimSize = static_cast<int>(shapeIter->second.size());
+        if (dimIdx < 0 || dimIdx >= dimSize) {
+            return;
+        }
+        SymbolicScalar dynDim;
+        auto specifiedIter = addr2ValidShapeSpecified.find(coa);
+        if (specifiedIter != addr2ValidShapeSpecified.end() &&
+            dimIdx < static_cast<int>(specifiedIter->second.size())) {
+            dynDim = specifiedIter->second[dimIdx];
+        }
+        auto paramInfo = DynParamInfo{
+            dimSize, tensorIndexIter->second, coa, DynParamInfoType::VALID_SHAPE, dimIdx, dynDim, false, ""};
+        subFunc.InsertDynParam(name, paramInfo);
+        visitedSymbol.insert(name);
+        return;
+    }
+    if (raw->IsExpression()) {
+        for (const auto& operand : raw->GetExpressionOperandList()) {
+            CollectNestedDynParamSymbols(SymbolicScalar(operand), magic2Coa, addr2ValidShape, addr2ValidShapeSpecified,
+                                         coa2TensorIndex, visitedSymbol, subFunc);
+        }
+    }
+}
+
 static bool IsInGMSpill(Operation& op)
 {
     if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode())) {
@@ -198,7 +278,7 @@ Status InferParamIndex::InferShape(Function& function)
 
 Status InferParamIndex::InsertAddr2ValidShapeSpecified(
     Operation& op, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-    std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified)
+    std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified, std::map<int, int>& magic2Coa)
 {
     bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
     // 暂不处理输入个数小于输出个数的copyIn，原因是coaIndex不够分
@@ -217,6 +297,9 @@ Status InferParamIndex::InsertAddr2ValidShapeSpecified(
         tensorBaseAddrCoaIndex = (distCopyType && !*distCopyType) ? op.GetIOpAttrOffset(0) : tensorBaseAddrCoaIndex;
         if (tensorBaseAddrCoaIndex == -1) {
             continue;
+        }
+        if (OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) || setSymDimOps.count(op.GetOpcode())) {
+            magic2Coa[op.GetOOperands()[i]->GetMagic()] = tensorBaseAddrCoaIndex;
         }
         if (addr2ValidShape.find(tensorBaseAddrCoaIndex) == addr2ValidShape.end()) {
             addr2ValidShape[tensorBaseAddrCoaIndex] = op.GetOOperands()[i]->GetDynValidShape();
@@ -240,10 +323,11 @@ Status InferParamIndex::InsertAddr2ValidShapeSpecified(
 }
 
 Status InferParamIndex::UpdateValidShape(Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-                                         std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified)
+                                         std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified,
+                                         std::map<int, int>& magic2Coa)
 {
     for (auto& op : subFunc.Operations(false)) {
-        if (InsertAddr2ValidShapeSpecified(op, addr2ValidShape, addr2ValidShapeSpecified) != SUCCESS) {
+        if (InsertAddr2ValidShapeSpecified(op, addr2ValidShape, addr2ValidShapeSpecified, magic2Coa) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Function, "InsertAddr2ValidShapeSpecified failed");
             return FAILED;
         }
@@ -252,11 +336,14 @@ Status InferParamIndex::UpdateValidShape(Function& subFunc, std::map<int, std::v
 }
 
 Status InferParamIndex::SetSubValidShape(Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-                                         std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified)
+                                         std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified,
+                                         const std::map<int, int>& magic2Coa)
 {
     std::set<std::string> visitedSymbol;
+    std::map<int, int> coa2TensorIndex;
     int tensorIndex{0};
     for (auto validShape : addr2ValidShape) {
+        coa2TensorIndex[validShape.first] = tensorIndex;
         int dimIdx{0};
         for (auto dim : validShape.second) {
             if (!dim.IsSymbol()) {
@@ -283,6 +370,15 @@ Status InferParamIndex::SetSubValidShape(Function& subFunc, std::map<int, std::v
         }
         tensorIndex++;
     }
+    for (const auto& validShape : addr2ValidShape) {
+        for (const auto& dim : validShape.second) {
+            if (dim.IsSymbol()) {
+                continue;
+            }
+            CollectNestedDynParamSymbols(dim, magic2Coa, addr2ValidShape, addr2ValidShapeSpecified, coa2TensorIndex,
+                                         visitedSymbol, subFunc);
+        }
+    }
     return SUCCESS;
 }
 
@@ -302,13 +398,14 @@ Status InferParamIndex::UpdateParamIndex(Function& function)
         APASS_LOG_DEBUG_F(Elements::Function, "Print function before update: %s\n", subFunc.Dump().c_str());
         std::map<int, std::vector<SymbolicScalar>> addr2ValidShape;
         std::map<int, std::vector<SymbolicScalar>> addr2ValidShapeSpecified;
-        if (UpdateValidShape(subFunc, addr2ValidShape, addr2ValidShapeSpecified) != SUCCESS) {
+        std::map<int, int> magic2Coa;
+        if (UpdateValidShape(subFunc, addr2ValidShape, addr2ValidShapeSpecified, magic2Coa) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Function,
                               "Update valid shape for the function %s failed. Please check above for more information.",
                               function.GetRawName().c_str());
             return FAILED;
         }
-        if (SetSubValidShape(subFunc, addr2ValidShape, addr2ValidShapeSpecified) != SUCCESS) {
+        if (SetSubValidShape(subFunc, addr2ValidShape, addr2ValidShapeSpecified, magic2Coa) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Function,
                               "Update valid shape for the function %s failed. Please check above for more information.",
                               function.GetRawName().c_str());

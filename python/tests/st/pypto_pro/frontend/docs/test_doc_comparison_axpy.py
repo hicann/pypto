@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -56,7 +58,9 @@ def gt_select_kernel(
     tmp_vec_group = pl.make_tile_group(type=tt, addrs=0xC000, mutex_ids=[3])
     mask_vec_group = pl.make_tile_group(
         type=pl.TileType(shape=[64, 64], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec),
-        addrs=0x10000, mutex_ids=[4])
+        addrs=0x10000,
+        mutex_ids=[4],
+    )
     with pl.section_vector():
         tile_a = tile_a_group.current()
         tile_b = tile_b_group.current()
@@ -72,6 +76,7 @@ def gt_select_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_gt_select():
     device = ST_DEVICE
     _require_a5(device)
@@ -107,6 +112,7 @@ def axpy_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_axpy():
     device = ST_DEVICE
     _require_a5(device)

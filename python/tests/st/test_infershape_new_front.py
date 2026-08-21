@@ -64,6 +64,7 @@ def kernel(
         result[t_idx * tile_t:, :] = pypto.cast(pre, pypto.DT_BF16)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_main(t=16):
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch.npu.set_device(int(device_id))

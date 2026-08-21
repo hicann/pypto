@@ -277,6 +277,7 @@ def moe_fusion_kernel(
         pypto.assemble(out, hidden_states_offset, ffn_res)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_moe_fusion():
     # 1. 设置参数
     enable_graph = False

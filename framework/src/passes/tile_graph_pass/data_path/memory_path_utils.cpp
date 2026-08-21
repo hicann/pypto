@@ -46,7 +46,8 @@ MemoryType MemoryPathUtils::ResolveEffectiveConsumerRequirement(
         return directRequirement;
     }
     auto opcode = consumerOp->GetOpcode();
-    if (opcode != Opcode::OP_VIEW && opcode != Opcode::OP_ASSEMBLE) {
+    if (opcode != Opcode::OP_VIEW && opcode != Opcode::OP_SLICE && opcode != Opcode::OP_ASSEMBLE &&
+        opcode != Opcode::OP_CONTRACT) {
         return directRequirement;
     }
     std::set<MemoryType> branchRequirements;
@@ -55,13 +56,13 @@ MemoryType MemoryPathUtils::ResolveEffectiveConsumerRequirement(
             branchRequirements.insert(requirement);
         }
     };
-    if (opcode == Opcode::OP_VIEW) {
+    if (opcode == Opcode::OP_VIEW || opcode == Opcode::OP_SLICE) {
         auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
         if (viewOpAttribute != nullptr) {
             addRequirement(viewOpAttribute->GetTo());
         }
     }
-    if (opcode == Opcode::OP_ASSEMBLE) {
+    if (opcode == Opcode::OP_ASSEMBLE || opcode == Opcode::OP_CONTRACT) {
         auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(consumerOp->GetOpAttribute());
         if (assembleOpAttribute != nullptr) {
             MemoryType fromType = assembleOpAttribute->GetFrom();

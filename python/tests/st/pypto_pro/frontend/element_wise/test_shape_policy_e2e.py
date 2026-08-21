@@ -34,6 +34,8 @@ import pytest
 import torch
 import torch_npu  # noqa: F401 — registers npu backend
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -122,14 +124,13 @@ def add_dynamic(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dynamic_one_variant_for_all_shapes():
     """DYNAMIC-only kernel: 3 distinct shapes must compile exactly once."""
     _check_npu()
     shapes = [(256, 256), (512, 256), (256, 512)]
     n_variants = _run_add(add_dynamic, shapes)
-    assert n_variants == 1, (
-        f"DYNAMIC-only kernel compiled {n_variants} variants for 3 shapes; expected 1"
-    )
+    assert n_variants == 1, f"DYNAMIC-only kernel compiled {n_variants} variants for 3 shapes; expected 1"
 
 
 # =============================================================================
@@ -164,14 +165,13 @@ def add_static(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_static_one_variant_per_distinct_shape():
     """Fully-STATIC kernel: 3 distinct shapes must compile 3 variants; a repeat reuses."""
     _check_npu()
     shapes = [(256, 256), (512, 256), (256, 512), (256, 256)]
     n_variants = _run_add(add_static, shapes)
-    assert n_variants == 3, (
-        f"STATIC kernel compiled {n_variants} variants for 3 distinct + 1 repeat shape; expected 3"
-    )
+    assert n_variants == 3, f"STATIC kernel compiled {n_variants} variants for 3 distinct + 1 repeat shape; expected 3"
 
 
 # =============================================================================
@@ -206,6 +206,7 @@ def add_mixed(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_mixed_dynamic_axis_change_reuses_static_axis_change_recompiles():
     """[DYNAMIC, STATIC]: N changes reuse; M changes (STATIC) recompile.
 
@@ -253,6 +254,7 @@ def add_ellipsis(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ellipsis_tail_expands_to_static_dims():
     """[DYNAMIC, ...]: first axis is DYNAMIC (reused), tail axes are STATIC (recompile).
 
@@ -299,6 +301,7 @@ def add_ellipsis_3d(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ellipsis_accepts_higher_rank():
     """[DYNAMIC, ...] must accept a 3-D tensor whose tail expands to two STATIC dims."""
     _check_npu()

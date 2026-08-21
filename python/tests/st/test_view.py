@@ -17,6 +17,7 @@ import torch
 import pypto
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_view_basic_shape():
     """Test whether the output shape is correct"""
 
@@ -32,6 +33,7 @@ def test_view_basic_shape():
     assert res.shape == view_shape
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_view_content_equal():
     """Test whether the output content has changed"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
@@ -60,6 +62,7 @@ def test_view_content_equal():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_view_content_equal_validshape():
     """Test whether the output content has changed with validshape"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
@@ -90,6 +93,7 @@ def test_view_content_equal_validshape():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_tensor_view_content_equal():
     """Test whether the output content has changed"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
@@ -119,6 +123,7 @@ def test_tensor_view_content_equal():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_tensor_view_content_validshape_equal():
     """Test whether the output content has changed"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
@@ -149,6 +154,7 @@ def test_tensor_view_content_validshape_equal():
     pypto.runtime._device_fini()
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_syntactic_sugar_view_content_equal():
     """Test whether the output content has changed"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))

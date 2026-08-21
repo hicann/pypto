@@ -28,6 +28,8 @@ from pypto_pro.language import Vf as vf  # noqa: N813
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -98,6 +100,7 @@ def mixed_width_groups_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_mixed_single_and_multi_id_tile_groups():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -153,22 +156,34 @@ def cube_vector_multi_id_kernel(
 ):
     b_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[CUBE_M, CUBE_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x0000, mutex_ids=[[0, 1]])
+        addrs=0x0000,
+        mutex_ids=[[0, 1]],
+    )
     c_l1 = pl.make_tile_group(
         type=pl.TileType(shape=[CUBE_K, CUBE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=0x2000, mutex_ids=[[2, 3]])
+        addrs=0x2000,
+        mutex_ids=[[2, 3]],
+    )
     b_left = pl.make_tile_group(
         type=pl.TileType(shape=[CUBE_M, CUBE_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-        addrs=0x0000, mutex_ids=[4])
+        addrs=0x0000,
+        mutex_ids=[4],
+    )
     c_right = pl.make_tile_group(
         type=pl.TileType(shape=[CUBE_K, CUBE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-        addrs=0x0000, mutex_ids=[5])
+        addrs=0x0000,
+        mutex_ids=[5],
+    )
     tile_acc = pl.make_tile(
         pl.TileType(shape=[CUBE_M, CUBE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-        addr=0x0000, size=CUBE_M * CUBE_N * 4)
+        addr=0x0000,
+        size=CUBE_M * CUBE_N * 4,
+    )
     vec_group = pl.make_tile_group(
         type=pl.TileType(shape=[CUBE_VEC_ROWS, CUBE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[[6, 7], [8, 9], [10, 11], [12, 13]])
+        addrs=0x0000,
+        mutex_ids=[[6, 7], [8, 9], [10, 11], [12, 13]],
+    )
 
     with pl.section_cube():
         pl.load(b_l1[0], b, [0, 0])
@@ -197,8 +212,7 @@ def overlap_groups_add_kernel(
     b: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
     out: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(
-        shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     group_a = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [1, 2]])
     group_b = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[[3, 4, 5], [0, 1, 2]])
 
@@ -219,12 +233,9 @@ def dynamic_offset_subscript_kernel(
     b: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
     out: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(
-        shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    group_a = pl.make_tile_group(
-        type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7]])
-    group_b = pl.make_tile_group(
-        type=tile_type, addrs=0x8000, mutex_ids=[[6, 7], [0, 1], [2, 3], [4, 5]])
+    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    group_a = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7]])
+    group_b = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[[6, 7], [0, 1], [2, 3], [4, 5]])
 
     with pl.section_vector():
         for i in pl.range(0, DYN_NUM_TILES):
@@ -242,10 +253,8 @@ def pure_iterative_subscript_kernel(
     a: pl.Tensor[[PURE_FULL_ROWS, TILE_COLS], pl.DT_FP16],
     out: pl.Tensor[[PURE_FULL_ROWS, TILE_COLS], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(
-        shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    g = pl.make_tile_group(
-        type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7]])
+    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    g = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7]])
 
     with pl.section_vector():
         for i in pl.range(0, PURE_DEPTH):
@@ -262,11 +271,8 @@ def pure_constant_subscript_kernel(
     b: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
     out: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(
-        shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    g = pl.make_tile_group(
-        type=tile_type, addrs=0x0000,
-        mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]])
+    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    g = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]])
 
     with pl.section_vector():
         tile_a = g[1]
@@ -283,10 +289,8 @@ def same_group_overlapping_slots_kernel(
     b: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
     out: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(
-        shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    group = pl.make_tile_group(
-        type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [1, 2]])
+    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    group = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [1, 2]])
 
     with pl.section_vector():
         tile_a = group[0]
@@ -302,12 +306,9 @@ def control_flow_multi_id_groups_kernel(
     a: pl.Tensor[[FULL_ROWS, TILE_COLS], pl.DT_FP16],
     out: pl.Tensor[[FULL_ROWS, TILE_COLS], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(
-        shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    group_a = pl.make_tile_group(
-        type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3]])
-    group_b = pl.make_tile_group(
-        type=tile_type, addrs=0x8000, mutex_ids=[[1, 4], [3, 5]])
+    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    group_a = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3]])
+    group_b = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[[1, 4], [3, 5]])
 
     with pl.section_vector():
         for i in pl.range(0, NUM_TILES):
@@ -327,14 +328,10 @@ def subfunction_tile_if_else_kernel(
     false_source: pl.Tensor[[FULL_ROWS, TILE_COLS], pl.DT_FP16],
     out: pl.Tensor[[FULL_ROWS, TILE_COLS], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(
-        shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    true_group = pl.make_tile_group(
-        type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3]])
-    false_group = pl.make_tile_group(
-        type=tile_type, addrs=0x4000, mutex_ids=[[1, 4], [3, 5]])
-    output_group = pl.make_tile_group(
-        type=tile_type, addrs=0x8000, mutex_ids=[[0, 6], [2, 7]])
+    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    true_group = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3]])
+    false_group = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[[1, 4], [3, 5]])
+    output_group = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[[0, 6], [2, 7]])
 
     with pl.section_vector():
         for index in pl.range(0, NUM_TILES):
@@ -345,8 +342,7 @@ def subfunction_tile_if_else_kernel(
             row = index * TILE_ROWS
             pl.load(true_tile, true_source, [row, 0])
             pl.load(false_tile, false_source, [row, 0])
-            selected_tile = _select_tile_with_if_else(
-                true_tile, false_tile, index % 2 == 0)
+            selected_tile = _select_tile_with_if_else(true_tile, false_tile, index % 2 == 0)
             pl.add(output_tile, selected_tile, selected_tile)
             pl.store(out, output_tile, [row, 0])
 
@@ -357,10 +353,8 @@ def tuple_mutex_ids_kernel(
     b: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
     out: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(
-        shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    group = pl.make_tile_group(
-        type=tile_type, addrs=0x0000, mutex_ids=((6, 7), (8, 9)))
+    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    group = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=((6, 7), (8, 9)))
 
     with pl.section_vector():
         tile_a = group[0]
@@ -376,8 +370,7 @@ def explicit_depth_discrete_addrs_kernel(
     a: pl.Tensor[[EXPLICIT_FULL_ROWS, TILE_COLS], pl.DT_FP16],
     out: pl.Tensor[[EXPLICIT_FULL_ROWS, TILE_COLS], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(
-        shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     group = pl.make_tile_group(
         type=tile_type,
         addrs=[0x0000, 0x4000, 0x8000],
@@ -399,10 +392,8 @@ def next_and_subscript_mixed_kernel(
     a: pl.Tensor[[FULL_ROWS, TILE_COLS], pl.DT_FP16],
     out: pl.Tensor[[FULL_ROWS, TILE_COLS], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(
-        shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    g = pl.make_tile_group(
-        type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7]])
+    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    g = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7]])
 
     with pl.section_vector():
         for k in pl.range(0, NUM_TILES):
@@ -418,6 +409,7 @@ def next_and_subscript_mixed_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_cube_vector_multi_mutex_id():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -432,6 +424,7 @@ def test_cube_vector_multi_mutex_id():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_overlapping_groups_dynamic_subscript():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -445,6 +438,7 @@ def test_overlapping_groups_dynamic_subscript():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dynamic_offset_subscript():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -458,6 +452,7 @@ def test_dynamic_offset_subscript():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_pure_iterative_subscript():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -470,6 +465,7 @@ def test_pure_iterative_subscript():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_pure_constant_subscript():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -483,6 +479,7 @@ def test_pure_constant_subscript():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_same_group_overlapping_slots_in_one_op():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -496,6 +493,7 @@ def test_same_group_overlapping_slots_in_one_op():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_control_flow_merges_different_multi_id_groups():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -508,13 +506,12 @@ def test_control_flow_merges_different_multi_id_groups():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_subfunction_tile_if_else():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
-    true_source = torch.rand(
-        [FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    false_source = torch.rand(
-        [FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 + 2.0
+    true_source = torch.rand([FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
+    false_source = torch.rand([FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 + 2.0
     out = torch.zeros([FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16)
 
     subfunction_tile_if_else_kernel(true_source, false_source, out)
@@ -529,6 +526,7 @@ def test_subfunction_tile_if_else():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_tuple_mutex_ids():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -542,6 +540,7 @@ def test_tuple_mutex_ids():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_explicit_depth_with_discrete_addrs():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -554,6 +553,7 @@ def test_explicit_depth_with_discrete_addrs():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_next_and_subscript_mixed():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
@@ -572,35 +572,42 @@ def l0a_l0b_overlap_multi_id_kernel(
     out: pl.Tensor[[L0A_M, L0B_N], pl.DT_FP32],
 ):
     l0a_g1 = pl.make_tile_group(
-        type=pl.TileType(shape=[L0A_M, L0A_K_TILE], dtype=pl.DT_FP16,
-                         target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0000, mutex_ids=[0, 1])
+        type=pl.TileType(shape=[L0A_M, L0A_K_TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
+        addrs=0x0000,
+        mutex_ids=[0, 1],
+    )
     l0a_g2 = pl.make_tile_group(
-        type=pl.TileType(shape=[L0A_M, L0A_K_WIDE], dtype=pl.DT_FP16,
-                         target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addrs=0x0000, mutex_ids=[[0, 1]])
+        type=pl.TileType(shape=[L0A_M, L0A_K_WIDE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
+        addrs=0x0000,
+        mutex_ids=[[0, 1]],
+    )
 
     l0b_g1 = pl.make_tile_group(
-        type=pl.TileType(shape=[L0B_K, L0B_N], dtype=pl.DT_FP16,
-                         target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0000, mutex_ids=[2, 3])
+        type=pl.TileType(shape=[L0B_K, L0B_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
+        addrs=0x0000,
+        mutex_ids=[2, 3],
+    )
     l0b_g2 = pl.make_tile_group(
-        type=pl.TileType(shape=[L0B_K_WIDE, L0B_N], dtype=pl.DT_FP16,
-                         target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-        addrs=0x0000, mutex_ids=[[2, 3]])
+        type=pl.TileType(shape=[L0B_K_WIDE, L0B_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
+        addrs=0x0000,
+        mutex_ids=[[2, 3]],
+    )
 
     a_l1_g1 = pl.make_tile_group(
-        type=pl.TileType(shape=[L0A_M, L0A_K_TILE], dtype=pl.DT_FP16,
-                         target_memory=pl.MemorySpace.Mat),
-        addrs=0x00000, mutex_ids=[4, 5])
+        type=pl.TileType(shape=[L0A_M, L0A_K_TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
+        addrs=0x00000,
+        mutex_ids=[4, 5],
+    )
     b_l1_g1 = pl.make_tile_group(
-        type=pl.TileType(shape=[L0B_K, L0B_N], dtype=pl.DT_FP16,
-                         target_memory=pl.MemorySpace.Mat),
-        addrs=0x20000, mutex_ids=[6, 7])
+        type=pl.TileType(shape=[L0B_K, L0B_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
+        addrs=0x20000,
+        mutex_ids=[6, 7],
+    )
     acc = pl.make_tile_group(
-        type=pl.TileType(shape=[L0A_M, L0B_N], dtype=pl.DT_FP32,
-                         target_memory=pl.MemorySpace.Acc),
-        addrs=0x0000, mutex_ids=[8])
+        type=pl.TileType(shape=[L0A_M, L0B_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
+        addrs=0x0000,
+        mutex_ids=[8],
+    )
 
     with pl.section_cube():
         for i in pl.range(0, 4):
@@ -615,6 +622,7 @@ def l0a_l0b_overlap_multi_id_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_l0a_l0b_overlap_multi_id():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)

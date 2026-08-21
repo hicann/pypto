@@ -16,8 +16,11 @@
 #include "graph_utils.h"
 #include "pass_utils.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_attr_defs.h"
 #include "passes/pass_utils/pass_operation_utils.h"
+
+#define MODULE_NAME "GraphUtils"
 
 namespace npu {
 namespace tile_fwk {
@@ -47,7 +50,12 @@ Operation& GraphUtils::AddAssembleOperation(Function& function, const AssembleOp
                                             const std::vector<std::vector<SymbolicScalar>>& outDynShape)
 {
     IRBuilder builder;
-    auto& newOp = builder.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {assemble.input}, {assemble.output});
+    if (!IsAssembleLike(assemble.opcode)) {
+        APASS_LOG_WARN_F(Elements::Operation,
+                         "Invalid assemble-family opcode for AddAssembleOperation, fallback to OP_ASSEMBLE.");
+    }
+    const auto opcode = IsAssembleLike(assemble.opcode) ? assemble.opcode : Opcode::OP_ASSEMBLE;
+    auto& newOp = builder.CreateTensorOpStmt(function, opcode, {assemble.input}, {assemble.output});
     if (assemble.originOp != nullptr) {
         newOp.SetScopeInfo(assemble.originOp->GetScopeInfo());
         newOp.CopyAttrFrom(*assemble.originOp, "");

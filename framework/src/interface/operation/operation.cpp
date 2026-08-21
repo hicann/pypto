@@ -267,8 +267,10 @@ void Operation::InitTensorGraphMetadata()
 
 void Operation::InitLatency(Opcode opcode)
 {
-    const auto& latencyOperands = (opcode == Opcode::OP_COPY_IN || opcode == Opcode::OP_VIEW) ? GetOOperands() :
-                                                                                                GetIOperands();
+    const auto& latencyOperands = (opcode == Opcode::OP_COPY_IN || opcode == Opcode::OP_VIEW ||
+                                   opcode == Opcode::OP_SLICE) ?
+                                      GetOOperands() :
+                                      GetIOperands();
     if (!latencyOperands.empty()) {
         // Get operation latency
         latency_ = GetLatencyByOperands(latencyOperands, GetOpcodeStr());
@@ -619,9 +621,11 @@ void Operation::LoadOpAttributeFromJson(const Json& opDump, Opcode opcode)
         std::shared_ptr<OpAttribute> opAttribute;
         switch (opcode) {
             case Opcode::OP_VIEW:
+            case Opcode::OP_SLICE:
                 opAttribute = DeserializeFrom<ViewOpAttribute>(attrJson);
                 break;
             case Opcode::OP_ASSEMBLE:
+            case Opcode::OP_CONTRACT:
                 opAttribute = DeserializeFrom<AssembleOpAttribute>(attrJson);
                 break;
             case Opcode::OP_CALL:
@@ -1189,31 +1193,12 @@ bool Operation::IsNeedStackGM() const
            (OpcodeManager::Inst().IsCopyOut(opcode_) && std::any_of(oOperand.cbegin(), oOperand.cend(), isStack));
 }
 
-static void AppendFromDynValidShapeRefs(CopyOpAttribute& copyAttr,
-                                        std::vector<std::reference_wrapper<SymbolicScalar>>& dynamicAttributeList)
-{
-    for (auto& shape : copyAttr.GetFromDynValidShape()) {
-        if (shape.IsSpecified()) {
-            dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
-        }
-    }
-}
-
-static void AppendToDynValidShapeRefs(CopyOpAttribute& copyAttr,
-                                      std::vector<std::reference_wrapper<SymbolicScalar>>& dynamicAttributeList)
-{
-    for (auto& shape : copyAttr.GetToDynValidShape()) {
-        if (shape.IsSpecified()) {
-            dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
-        }
-    }
-}
-
 std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttributeList()
 {
     std::vector<std::reference_wrapper<SymbolicScalar>> dynamicAttributeList;
     switch (GetOpcode()) {
-        case Opcode::OP_VIEW: {
+        case Opcode::OP_VIEW:
+        case Opcode::OP_SLICE: {
             auto viewAttr = std::static_pointer_cast<ViewOpAttribute>(GetOpAttribute());
             if (viewAttr != nullptr) {
                 std::vector<SymbolicScalar>& viewFromDynOffset = viewAttr->GetFromDynOffset();
@@ -1230,6 +1215,7 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
             }
         } break;
         case Opcode::OP_ASSEMBLE:
+        case Opcode::OP_CONTRACT:
             [[fallthrough]];
         case Opcode::OP_ATOMIC_RMW: {
             auto assembleAttr = std::static_pointer_cast<AssembleOpAttribute>(GetOpAttribute());
@@ -1258,7 +1244,12 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
                             std::reference_wrapper<SymbolicScalar>(offset.GetSpecifiedValue()));
                     }
                 }
-                AppendToDynValidShapeRefs(*copyAttr, dynamicAttributeList);
+                for (auto& shape : copyAttr->GetToDynValidShape()) {
+                    if (shape.IsSpecified()) {
+                        dynamicAttributeList.push_back(
+                            std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+                    }
+                }
             }
         } break;
         case Opcode::OP_COPY_OUT:
@@ -1272,7 +1263,12 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
                             std::reference_wrapper<SymbolicScalar>(offset.GetSpecifiedValue()));
                     }
                 }
-                AppendFromDynValidShapeRefs(*copyAttr, dynamicAttributeList);
+                for (auto& shape : copyAttr->GetFromDynValidShape()) {
+                    if (shape.IsSpecified()) {
+                        dynamicAttributeList.push_back(
+                            std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+                    }
+                }
             }
         } break;
         case Opcode::OP_VEC_DUP: {
@@ -1351,8 +1347,18 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
         case Opcode::OP_RESHAPE_COPY_IN: {
             auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());
             if (copyAttr) {
-                AppendFromDynValidShapeRefs(*copyAttr, dynamicAttributeList);
-                AppendToDynValidShapeRefs(*copyAttr, dynamicAttributeList);
+                for (auto& shape : copyAttr->GetFromDynValidShape()) {
+                    if (shape.IsSpecified()) {
+                        dynamicAttributeList.push_back(
+                            std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+                    }
+                }
+                for (auto& shape : copyAttr->GetToDynValidShape()) {
+                    if (shape.IsSpecified()) {
+                        dynamicAttributeList.push_back(
+                            std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+                    }
+                }
             }
         } break;
         default:

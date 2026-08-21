@@ -15,6 +15,8 @@
 
 #include "gtest/gtest.h"
 
+#include <regex>
+
 #include "tilefwk/tilefwk.h"
 #include "interface/configs/config_manager.h"
 #include "interface/inner/tilefwk.h"
@@ -329,6 +331,9 @@ TStoreVec<TStoreConfigVec<pto::AtomicType::AtomicNone>>(gmTensor_8, ubTensor_1, 
 }
 )!!!";
 #endif
+    const std::regex dynamicSymbolPattern(R"(sym_[0-9]+_dim_)");
+    res = std::regex_replace(res, dynamicSymbolPattern, "sym_dynamic_dim_");
+    expect = std::regex_replace(expect, dynamicSymbolPattern, "sym_dynamic_dim_");
     CheckStringExist(expect, res);
 }
 

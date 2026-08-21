@@ -43,6 +43,7 @@ def floor_div_2d(
             del tile_x, tile_y
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_floor_div():
     view_shape = [32, 128]
     tile_shape = [32, 32]

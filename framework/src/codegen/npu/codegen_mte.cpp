@@ -543,9 +543,15 @@ std::string CodeGenOpNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyWithL0
     return oss.str();
 }
 
-std::vector<std::string> CodeGenOpNPU::GenTileOpParamForNormalCopyTileTensor(unsigned gmIdx) const
+std::vector<std::string> CodeGenOpNPU::GenTileOpParamForNormalCopyTileTensor(unsigned gmIdx,
+                                                                             bool useOffsetFromAttr) const
 {
-    std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(gmIdx);
+    std::vector<std::string> gmOffsetExpr;
+    if (useOffsetFromAttr || functionType == FunctionType::STATIC) {
+        gmOffsetExpr = GetGmOffsetForTileTensor(gmIdx);
+    } else {
+        gmOffsetExpr = GenGetParamMacroPacked(gmIdx, static_cast<int>(rawShape[gmIdx].size()), PREFIX_STR_OFFSET);
+    }
     // e.g. ((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
     std::string coordCp = WrapParamByParentheses(gmOffsetExpr);
     // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))

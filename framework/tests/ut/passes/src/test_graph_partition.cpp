@@ -1640,12 +1640,12 @@ static void VerifyViewNotEndNode(const std::unordered_map<std::string, Operation
         Operation* op = opPair.second;
         EXPECT_NE(op, nullptr);
         EXPECT_GE(op->GetSubgraphID(), 0);
-        if (op->GetOpcode() != Opcode::OP_VIEW) {
+        if (!IsViewLike(op->GetOpcode())) {
             continue;
         }
         for (auto oTensor : op->GetOOperands()) {
             EXPECT_TRUE(HasConsumerInSameSubgraph(op, oTensor))
-                << "VIEW op " << opPair.first << " (opmagic: " << op->GetOpMagic() << ") is end node in subgraph "
+                << "View-like op " << opPair.first << " (opmagic: " << op->GetOpMagic() << ") is end node in subgraph "
                 << op->GetSubgraphID();
         }
     }
@@ -1714,6 +1714,18 @@ TEST_F(GraphPartitionTest, TestSumUpdatePathMerge)
     // PAIRSUMs merge with their EXP predecessors into the same subgraph
     EXPECT_EQ(G.GetOp("PS01")->GetSubgraphID(), G.GetOp("EXP0")->GetSubgraphID());
     EXPECT_EQ(G.GetOp("PS23")->GetSubgraphID(), G.GetOp("EXP3")->GetSubgraphID());
+}
+
+TEST_F(GraphPartitionTest, TestIsViewLikeAndIsAssembleLikeCompatibility)
+{
+    EXPECT_TRUE(IsViewLike(Opcode::OP_VIEW));
+    EXPECT_TRUE(IsViewLike(Opcode::OP_SLICE));
+    EXPECT_FALSE(IsViewLike(Opcode::OP_ASSEMBLE));
+    EXPECT_FALSE(IsViewLike(Opcode::OP_CONTRACT));
+    EXPECT_TRUE(IsAssembleLike(Opcode::OP_ASSEMBLE));
+    EXPECT_TRUE(IsAssembleLike(Opcode::OP_CONTRACT));
+    EXPECT_FALSE(IsAssembleLike(Opcode::OP_VIEW));
+    EXPECT_FALSE(IsAssembleLike(Opcode::OP_SLICE));
 }
 
 } // namespace tile_fwk

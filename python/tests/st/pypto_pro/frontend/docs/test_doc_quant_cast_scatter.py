@@ -22,6 +22,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -45,12 +47,19 @@ def quant_kernel(
     scale: pl.Tensor[[64, 1], pl.DT_FP32],
     out: pl.Tensor[[64, 128], pl.DT_INT8],
 ):
-    tile_src = pl.make_tile_group(type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-                                  addrs=0x0000, mutex_ids=[0])
-    tile_scale = pl.make_tile_group(type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-                                    addrs=0x8000, mutex_ids=[1])
-    tile_out = pl.make_tile_group(type=pl.TileType(shape=[64, 128], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec),
-                                  addrs=0xA000, mutex_ids=[2])
+    tile_src = pl.make_tile_group(
+        type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
+    tile_scale = pl.make_tile_group(
+        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addrs=0x8000, mutex_ids=[1]
+    )
+    tile_out = pl.make_tile_group(
+        type=pl.TileType(shape=[64, 128], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec),
+        addrs=0xA000,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         cur_src = tile_src.current()
         cur_scale = tile_scale.current()
@@ -62,6 +71,7 @@ def quant_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_quant():
     device = ST_DEVICE
     _require_a5(device)
@@ -86,15 +96,22 @@ def dequant_kernel(
     offset: pl.Tensor[[64, 1], pl.DT_FP32],
     out: pl.Tensor[[64, 128], pl.DT_FP32],
 ):
-    tile_src = pl.make_tile_group(type=pl.TileType(shape=[64, 128], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec),
-                                  addrs=0x0000, mutex_ids=[0])
-    tile_scale = pl.make_tile_group(type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-                                    addrs=0x4000, mutex_ids=[1])
+    tile_src = pl.make_tile_group(
+        type=pl.TileType(shape=[64, 128], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
+    tile_scale = pl.make_tile_group(
+        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addrs=0x4000, mutex_ids=[1]
+    )
     tile_offset = pl.make_tile_group(
-        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x5000, mutex_ids=[2])
-    tile_out = pl.make_tile_group(type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-                                  addrs=0x6000, mutex_ids=[3])
+        type=pl.TileType(shape=[64, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addrs=0x5000, mutex_ids=[2]
+    )
+    tile_out = pl.make_tile_group(
+        type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x6000,
+        mutex_ids=[3],
+    )
     with pl.section_vector():
         cur_src = tile_src.current()
         cur_scale = tile_scale.current()
@@ -108,6 +125,7 @@ def dequant_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_dequant():
     device = ST_DEVICE
     _require_a5(device)
@@ -144,6 +162,7 @@ def cast_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_cast():
     device = ST_DEVICE
     _require_a5(device)
@@ -167,13 +186,19 @@ def scatter_kernel(
 ):
     tile_src = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x0000, mutex_ids=[0])
+        addrs=0x0000,
+        mutex_ids=[0],
+    )
     tile_idx = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x8000, mutex_ids=[1])
+        addrs=0x8000,
+        mutex_ids=[1],
+    )
     tile_dst = pl.make_tile_group(
         type=pl.TileType(shape=[64, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=0x10000, mutex_ids=[2])
+        addrs=0x10000,
+        mutex_ids=[2],
+    )
     with pl.section_vector():
         cur_src = tile_src.current()
         cur_idx = tile_idx.current()
@@ -185,6 +210,7 @@ def scatter_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_scatter():
     device = ST_DEVICE
     _require_a5(device)

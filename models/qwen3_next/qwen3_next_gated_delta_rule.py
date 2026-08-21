@@ -34,6 +34,8 @@ import pytest
 import torch
 import torch.nn.functional as functional
 
+import pypto
+
 
 def gen_dims(params):
     """Generate dimension parameters from input params."""
@@ -575,59 +577,69 @@ def segs_chunk_gated_delta_rule_sub(**kwargs):
 # Test case: B:2, Nqk:2, Nv:4, S:4K
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_b2_nqk2_nv4_s1k():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s1k")
 
 
 # Test case: B:2, Nqk:4, Nv:8, S:4K
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_b2_nqk4_nv8_s4k():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b2_nqk4_nv8_s4k")
 
 
 # Test case: B:2, Nqk:2, Nv:4, S:8K
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_b2_nqk2_nv4_s8k():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s8k")
 
 
 # Test case: B:2, Nqk:4, Nv:8, S:8K
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_b2_nqk4_nv8_s8k():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b2_nqk4_nv8_s8k")
 
 
 # Test case: B:1, Nqk:16, Nv:32, S:32K
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_b1_nqk16_nv32_s32k():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b1_nqk16_nv32_s32k")
 
 
 # Test case: B:1, Nqk:2, Nv:4, S:256K
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_b1_nqk2_nv4_s256k():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s256k")
 
 
 # Test case: B:1, Nqk:2, Nv:4, S:512K
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_b1_nqk2_nv4_s512k():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s512k")
 
 
 # Test case: B:1, Nqk:2, Nv:4, S:1M
 @pytest.mark.skip(reason="large test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_b1_nqk2_nv4_s1m():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s1m")
 
 
 # Test case: B:1, Nqk:2, Nv:4, S:1026
+@pypto.options(pass_options={"enable_slice": True})
 def test_b1_nqk2_nv4_s1026():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s1026")
 
 
 # Test case: B:1, Nqk:2, Nv:4, S:4108
 @pytest.mark.skip(reason="non-divisible test case")
+@pypto.options(pass_options={"enable_slice": True})
 def test_b1_nqk2_nv4_s2059():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s2059")
 

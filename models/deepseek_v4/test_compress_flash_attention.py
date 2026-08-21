@@ -491,6 +491,7 @@ def c128(enable_flash: bool, enable_high_perf: bool, enable_graph: bool, device:
     compare.compare(output_flash, attention_out, "golden vs npu", rtol=0.0078125, atol=0.0001)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_c128_decode(
     enable_flash: bool = False, enable_high_perf: bool = False, enable_graph: bool = False, device_id: int = 0
 ):

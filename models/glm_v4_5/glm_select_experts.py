@@ -240,6 +240,7 @@ def gen_row_idx_gloden(hidden_states, top_k):
     return row_idx
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_select_experts():
     # 1. 设置参数
 

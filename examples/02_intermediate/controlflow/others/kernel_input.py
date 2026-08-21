@@ -142,6 +142,7 @@ def scaled_dot_product_attention_kernel(
         pypto.assemble(res, [b_offset, 0, 0, 0], output_tensor)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_unordered_input_attention(device_id: int = None, dynamic: bool = True) -> None:
     """Test attention with kenel_unordered_input."""
     print("=" * 60)
@@ -190,6 +191,7 @@ def op_unordered_input_kernel(
     out2.move(a * b)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_unordered_input_op(device_id: int = None, dynamic: bool = False) -> None:
     """Test op with kenel_unordered_input"""
     print("=" * 60)

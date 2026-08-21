@@ -58,16 +58,16 @@ private:
     Status CheckAtomicRMWUnsupportedMode(Function& function);
     std::string GetRmwAttrKey(AtomicRMWMode mode);
     Status CheckAndSetRmwAttr(Operation& producerOp, AtomicRMWMode rmwMode, const std::string& rmwAttrKey);
-    Status AccumulateAssembleOffset(std::shared_ptr<AssembleOpAttribute> producerAttr,
+    Status AccumulateContractOffset(std::shared_ptr<AssembleOpAttribute> producerAttr,
                                     const std::vector<int64_t>& rmwOffset,
                                     const std::vector<SymbolicScalar>& rmwDynOffset);
-    Status ProcessAssembleProducer(Operation& producerOp, std::shared_ptr<LogicalTensor> rmwOut, AtomicRMWMode rmwMode,
+    Status ProcessContractProducer(Operation& producerOp, std::shared_ptr<LogicalTensor> rmwOut, AtomicRMWMode rmwMode,
                                    const std::vector<int64_t>& rmwOffset,
                                    const std::vector<SymbolicScalar>& rmwDynOffset);
-    Status MarkAssembleProducerAtomic(Operation& producerOp, AtomicRMWMode rmwMode,
+    Status MarkContractProducerAtomic(Operation& producerOp, AtomicRMWMode rmwMode,
                                       const std::vector<int64_t>& rmwOffset,
                                       const std::vector<SymbolicScalar>& rmwDynOffset);
-    bool HasAssembleProducer(const std::shared_ptr<LogicalTensor>& input) const;
+    bool HasContractProducer(const std::shared_ptr<LogicalTensor>& input) const;
     bool HasConsumerExcept(const std::shared_ptr<LogicalTensor>& input, const Operation& op) const;
     Status PrepareAtomicRMWSharedInputs(Function& function, const std::vector<Operation*>& atomicRmwOps) const;
     std::shared_ptr<LogicalTensor> PrepareExclusiveAtomicInput(Function& function, Operation& atomicOp,
@@ -76,7 +76,7 @@ private:
     Status ProcessAtomicInput(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input,
                               const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
                               const std::vector<int64_t>& rmwOffset, const std::vector<SymbolicScalar>& rmwDynOffset);
-    Status ProcessAtomicAssembleProducer(Operation& atomicOp, Operation& producerOp,
+    Status ProcessAtomicContractProducer(Operation& atomicOp, Operation& producerOp,
                                          const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
                                          const std::vector<int64_t>& rmwOffset,
                                          const std::vector<SymbolicScalar>& rmwDynOffset);
@@ -97,13 +97,13 @@ private:
                                ReshapeRemapResult& result) const;
     Status RetargetReshapeChain(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& output,
                                 const ReshapeRemapResult& remapResult);
-    Status CombineAssembleOffset(const Operation& assemble, const std::vector<int64_t>& offset,
+    Status CombineContractOffset(const Operation& contract, const std::vector<int64_t>& offset,
                                  const std::vector<SymbolicScalar>& dynOffset, std::vector<int64_t>& combinedOffset,
                                  std::vector<SymbolicScalar>& combinedDynOffset) const;
     void CollectReduceAccUpstream(Operation& op, std::set<int>& visited, std::vector<Operation*>& result) const;
     Status TraceBackAndRemoveVecDup(Function& function, Operation& op, std::set<int>& visited, bool& anyRemoved);
     Status RemoveVecDupBranchFromCubeOp(Operation& cubeOp, bool& anyRemoved);
-    bool IsVecDupAssembleInput(const Operation& assembleOp) const;
+    bool IsVecDupContractInput(const Operation& contractOp) const;
 
     IRBuilder irBuilder_;
 };

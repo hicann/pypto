@@ -24,8 +24,8 @@
 
 namespace npu {
 namespace tile_fwk {
-std::unordered_set<Opcode> inplaceNodes{Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE,
-                                        Opcode::OP_INDEX_OUTCAST};
+std::unordered_set<Opcode> inplaceNodes{Opcode::OP_VIEW,     Opcode::OP_SLICE,   Opcode::OP_ASSEMBLE,
+                                        Opcode::OP_CONTRACT, Opcode::OP_RESHAPE, Opcode::OP_INDEX_OUTCAST};
 
 Status checkAssemble(const std::unordered_map<LogicalTensorPtr, int64_t>& tensorMap,
                      const std::unordered_map<LogicalTensorPtr, std::pair<Offset, Offset>>& offsetMap,
@@ -65,7 +65,7 @@ Status checkView(Operation* op)
 {
     for (const auto& logicTensor : op->GetIOperands()) {
         auto producers = logicTensor->GetProducers();
-        if (producers.size() != 1 || (*producers.begin())->GetOpcode() != Opcode::OP_VIEW) {
+        if (producers.size() != 1 || (*producers.begin())->GetOpcode() != Opcode::OP_SLICE) {
             continue;
         }
         auto shape = logicTensor->GetShape();
@@ -75,7 +75,7 @@ Status checkView(Operation* op)
         if (logicTensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
             APASS_LOG_ERROR_C(
                 TensorErr::TENSOR_INVALID_MEMORY_TYPE, Elements::Tensor,
-                "Tensor(%d) memory type is MEM_DEVICE_DDR, which is not supported for VIEW->ASSEMBLE case.",
+                "Tensor(%d) memory type is MEM_DEVICE_DDR, which is not supported for view-like->assemble-like case.",
                 logicTensor->GetMagic());
             return FAILED;
         }
@@ -93,7 +93,7 @@ Status checkTensor(const LogicalTensorPtr& tensor)
         if (inplaceNodes.find(producer->GetOpcode()) == inplaceNodes.end()) {
             continue;
         }
-        if (producer->GetOpcode() != Opcode::OP_ASSEMBLE) {
+        if (!IsAssembleLike(producer->GetOpcode())) {
             allAssemble = false;
             continue;
         }

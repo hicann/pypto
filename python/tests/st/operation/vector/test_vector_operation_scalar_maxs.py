@@ -13,8 +13,11 @@
 import pytest
 from test_case_class_vector_operations import ScalarMaxSTestCase
 
+import pypto
+
 
 @pytest.mark.skip(reason="There is a probability of failure")
+@pypto.options(pass_options={"enable_slice": True})
 def test_tensor_scalar_maxs():
     original_shape = (64, 64)
     input_tensors = [

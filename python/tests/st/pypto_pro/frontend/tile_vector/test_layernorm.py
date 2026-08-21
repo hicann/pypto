@@ -42,19 +42,21 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 # ================================================================
 # Constants
 # ================================================================
-MAX_N = 512               # max supported columns == compile-time UB tile width
-TILE_ROWS = 16            # rows processed per tile-group slot (row count is dynamic)
+MAX_N = 512  # max supported columns == compile-time UB tile width
+TILE_ROWS = 16  # rows processed per tile-group slot (row count is dynamic)
 EPS = 1e-5
 
-SLOT_BYTES = TILE_ROWS * MAX_N * 4      # fp32 [TILE_ROWS, MAX_N]
-VEC_BYTES = MAX_N * 4                   # fp32 [1, MAX_N]
-RED_BYTES = 512                         # fp32 [TILE_ROWS, 1] reduction result (padded/aligned)
+SLOT_BYTES = TILE_ROWS * MAX_N * 4  # fp32 [TILE_ROWS, MAX_N]
+VEC_BYTES = MAX_N * 4  # fp32 [1, MAX_N]
+RED_BYTES = 512  # fp32 [TILE_ROWS, 1] reduction result (padded/aligned)
 
 # UB addresses: double-buffered in/out groups, single-slot workspace/scratch,
 # reduction results, and single-slot gamma/beta/(-beta) groups.
@@ -62,11 +64,11 @@ VA_IN0 = 0
 VA_IN1 = VA_IN0 + SLOT_BYTES
 VA_OUT0 = VA_IN1 + SLOT_BYTES
 VA_OUT1 = VA_OUT0 + SLOT_BYTES
-VA_TMP = VA_OUT1 + SLOT_BYTES           # row-reduce workspace / xc^2 scratch
-VA_XC = VA_TMP + SLOT_BYTES             # holds (x - mean), then the normalized result
-VA_WS = VA_XC + SLOT_BYTES              # dedicated row-reduce workspace (2nd reduction)
-VA_RED0 = VA_WS + SLOT_BYTES            # mean
-VA_RED1 = VA_RED0 + RED_BYTES           # var + eps -> 1/std (dual-viewed)
+VA_TMP = VA_OUT1 + SLOT_BYTES  # row-reduce workspace / xc^2 scratch
+VA_XC = VA_TMP + SLOT_BYTES  # holds (x - mean), then the normalized result
+VA_WS = VA_XC + SLOT_BYTES  # dedicated row-reduce workspace (2nd reduction)
+VA_RED0 = VA_WS + SLOT_BYTES  # mean
+VA_RED1 = VA_RED0 + RED_BYTES  # var + eps -> 1/std (dual-viewed)
 VA_GAMMA = VA_RED1 + RED_BYTES
 VA_BETA = VA_GAMMA + VEC_BYTES
 VA_NEGBETA = VA_BETA + VEC_BYTES
@@ -81,19 +83,21 @@ def layernorm_tile_group_kernel(
 ):
     # valid_shape=[-1, -1] makes the per-tile valid window dynamic (set at runtime via
     # set_validshape): the tail row-tile carries fewer rows and N narrows the columns.
-    tile_type = pl.TileType(shape=[TILE_ROWS, MAX_N], dtype=pl.DT_FP32,
-                            target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
-    vec_type = pl.TileType(shape=[1, MAX_N], dtype=pl.DT_FP32,
-                           target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    tile_type = pl.TileType(
+        shape=[TILE_ROWS, MAX_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
+    vec_type = pl.TileType(shape=[1, MAX_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
     # Row reductions write a [TILE_ROWS, 1] column vector (layout=pl.DN), which is the
     # layout the row-broadcast ops (row_expand_*) consume.
-    red_type = pl.TileType(shape=[TILE_ROWS, 1], dtype=pl.DT_FP32,
-                           target_memory=pl.MemorySpace.Vec, layout=pl.DN, valid_shape=[-1, -1])
+    red_type = pl.TileType(
+        shape=[TILE_ROWS, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN, valid_shape=[-1, -1]
+    )
     # Row-major dual view of the same [TILE_ROWS] scalars: scalar elementwise ops (div/add/
     # rsqrt) require a row-major layout, so we view the reduction memory as [1, TILE_ROWS].
     # (Running those ops on the DN view faults the device at runtime.)
-    red_rm_type = pl.TileType(shape=[1, TILE_ROWS], dtype=pl.DT_FP32,
-                              target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    red_rm_type = pl.TileType(
+        shape=[1, TILE_ROWS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
 
     in_group = pl.make_tile_group(type=tile_type, addrs=[VA_IN0, VA_IN1], mutex_ids=[0, 1])
     out_group = pl.make_tile_group(type=tile_type, addrs=[VA_OUT0, VA_OUT1], mutex_ids=[2, 3])
@@ -155,20 +159,20 @@ def layernorm_tile_group_kernel(
             pl.set_validshape(red0_slot, [valid_rows, 1])
             pl.set_validshape(red1_slot, [valid_rows, 1])
 
-            pl.row_sum(red0_slot, in_slot, tmp_slot)         # red0 = sum(x); tmp is workspace
+            pl.row_sum(red0_slot, in_slot, tmp_slot)  # red0 = sum(x); tmp is workspace
             pl.set_validshape(red0_rm_slot, [1, valid_rows])
-            pl.div(red0_rm_slot, red0_rm_slot, cols)         # red0 = mean (scalar op on row-major view)
+            pl.div(red0_rm_slot, red0_rm_slot, cols)  # red0 = mean (scalar op on row-major view)
 
-            pl.row_expand_sub(xc_slot, in_slot, red0_slot)   # xc = x - mean (row broadcast, DN view)
+            pl.row_expand_sub(xc_slot, in_slot, red0_slot)  # xc = x - mean (row broadcast, DN view)
 
-            pl.mul(tmp_slot, xc_slot, xc_slot)               # tmp = xc^2
-            pl.row_sum(red1_slot, tmp_slot, ws_slot)         # red1 = sum(xc^2); ws is workspace
+            pl.mul(tmp_slot, xc_slot, xc_slot)  # tmp = xc^2
+            pl.row_sum(red1_slot, tmp_slot, ws_slot)  # red1 = sum(xc^2); ws is workspace
             pl.set_validshape(red1_rm_slot, [1, valid_rows])
-            pl.div(red1_rm_slot, red1_rm_slot, cols)         # red1 = var (row-major view)
-            pl.add(red1_rm_slot, red1_rm_slot, EPS)          # red1 = var + eps (row-major view)
-            pl.rsqrt(red1_rm_slot, red1_rm_slot)             # 1 / sqrt(var + eps) (row-major view)
+            pl.div(red1_rm_slot, red1_rm_slot, cols)  # red1 = var (row-major view)
+            pl.add(red1_rm_slot, red1_rm_slot, EPS)  # red1 = var + eps (row-major view)
+            pl.rsqrt(red1_rm_slot, red1_rm_slot)  # 1 / sqrt(var + eps) (row-major view)
 
-            pl.row_expand_mul(xc_slot, xc_slot, red1_slot)   # normalize: xc / std (row broadcast)
+            pl.row_expand_mul(xc_slot, xc_slot, red1_slot)  # normalize: xc / std (row broadcast)
             pl.col_expand_mul(xc_slot, xc_slot, gamma_slot)  # * gamma (per-column, col broadcast)
             pl.col_expand_sub(out_slot, xc_slot, negbeta_slot)  # - (-beta) == + beta
 
@@ -183,12 +187,10 @@ def _run_case(rows, cols):
     torch.npu.set_device(device)
     torch.manual_seed(0)
 
-    logging.info(
-        "\n=== Test LayerNorm dynamic rows=%s cols=%s (make_tile_group + tile ops, multicore) ===", rows, cols
-    )
+    logging.info("\n=== Test LayerNorm dynamic rows=%s cols=%s (make_tile_group + tile ops, multicore) ===", rows, cols)
     x = torch.rand([rows, cols], device=device, dtype=torch.float32) * 8.0 - 4.0
-    gamma = (torch.rand([1, cols], device=device, dtype=torch.float32) + 0.5)
-    beta = (torch.rand([1, cols], device=device, dtype=torch.float32) - 0.5)
+    gamma = torch.rand([1, cols], device=device, dtype=torch.float32) + 0.5
+    beta = torch.rand([1, cols], device=device, dtype=torch.float32) - 0.5
     y = torch.empty([rows, cols], device=device, dtype=torch.float32)
 
     num_tiles = (rows + TILE_ROWS - 1) // TILE_ROWS
@@ -209,15 +211,16 @@ def _run_case(rows, cols):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_layernorm_tile_group_vf():
     # partial row-tiles, and multicore.
     cases = [
-        (2048, 64),     # 128 tiles -> 32 cores
+        (2048, 64),  # 128 tiles -> 32 cores
         (4096, 128),
-        (1000, 200),    # N unaligned + partial row-tile
-        (777, 300),     # N unaligned + partial row-tile
-        (100, 512),     # full MAX_N
-        (2049, 100),    # odd rows + N unaligned
+        (1000, 200),  # N unaligned + partial row-tile
+        (777, 300),  # N unaligned + partial row-tile
+        (100, 512),  # full MAX_N
+        (2049, 100),  # odd rows + N unaligned
     ]
     for rows, cols in cases:
         _run_case(rows, cols)

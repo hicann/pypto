@@ -38,6 +38,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -137,8 +139,9 @@ PV_READY_BARKWARD_IDS = (9, 10)
 
 
 @pl.vector_function
-def process_vec1_nd_no_update_vf_unalign64(input_tile, dst_tile, max_tile, max_tile_st, sum_tile, mask_tile,
-                                           s1_size, s2_size):
+def process_vec1_nd_no_update_vf_unalign64(
+    input_tile, dst_tile, max_tile, max_tile_st, sum_tile, mask_tile, s1_size, s2_size
+):
     preg_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     ureg_max = vf.unalign_reg_for_store()
     ureg_exp_sum = vf.unalign_reg_for_store()
@@ -171,15 +174,22 @@ def process_vec1_nd_no_update_vf_unalign64(input_tile, dst_tile, max_tile, max_t
 
         vreg_exp_even_f16 = vf.astype(vreg_exp_even, preg_all_f16, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_dst_even_f16, vreg_dst_odd_f16 = vf.de_interleave(vreg_exp_even_f16, vreg_exp_even_f16)
-        vf.store_align(dst_tile, vreg_dst_even_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_dst_even_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(sum_tile, ureg_exp_sum, 0, post_update=True)
 
 
 @pl.vector_function
-def process_vec1_nd_no_update_vf_unalign(input_tile, dst_tile, max_tile, max_tile_st, sum_tile, mask_tile,
-                                         s1_size, s2_size):
+def process_vec1_nd_no_update_vf_unalign(
+    input_tile, dst_tile, max_tile, max_tile_st, sum_tile, mask_tile, s1_size, s2_size
+):
     preg_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     preg_mask_unroll = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     ureg_max = vf.unalign_reg_for_store()
@@ -224,9 +234,15 @@ def process_vec1_nd_no_update_vf_unalign(input_tile, dst_tile, max_tile, max_til
         vreg_exp_even_f16 = vf.astype(vreg_exp_even, preg_all, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_exp_odd_f16 = vf.astype(vreg_exp_odd, preg_all, layout=pl.CastLayout.ONE, dtype=pl.DT_FP16)
         vreg_exp_f16 = vf.or_(vreg_exp_even_f16, vreg_exp_odd_f16, preg_all_f16)
-        vf.store_align(dst_tile, vreg_exp_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_exp_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(sum_tile, ureg_exp_sum, 0, post_update=True)
 
 
@@ -274,15 +290,22 @@ def process_vec1_nd_no_update_vf(input_tile, dst_tile, max_tile, max_tile_st, su
         vreg_exp_even_f16 = vf.astype(vreg_exp_even, preg_all, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_exp_odd_f16 = vf.astype(vreg_exp_odd, preg_all, layout=pl.CastLayout.ONE, dtype=pl.DT_FP16)
         vreg_exp_f16 = vf.or_(vreg_exp_even_f16, vreg_exp_odd_f16, preg_all_f16)
-        vf.store_align(dst_tile, vreg_exp_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_exp_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(sum_tile, ureg_exp_sum, 0, post_update=True)
 
 
 @pl.vector_function
-def process_vec1_nd_update_vf_unalign64(input_tile, dst_tile, max_tile, mask_tile,
-                                        tmp_max, tmp_max_st, tmp_exp_sum, s1_size, s2_size):
+def process_vec1_nd_update_vf_unalign64(
+    input_tile, dst_tile, max_tile, mask_tile, tmp_max, tmp_max_st, tmp_exp_sum, s1_size, s2_size
+):
     preg_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     ureg_max = vf.unalign_reg_for_store()
     ureg_exp_sum = vf.unalign_reg_for_store()
@@ -320,15 +343,22 @@ def process_vec1_nd_update_vf_unalign64(input_tile, dst_tile, max_tile, mask_til
 
         vreg_exp_even_f16 = vf.astype(vreg_exp, preg_all, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_dst_even_f16, vreg_dst_odd_f16 = vf.de_interleave(vreg_exp_even_f16, vreg_exp_even_f16)
-        vf.store_align(dst_tile, vreg_dst_even_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_dst_even_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(tmp_exp_sum, ureg_exp_sum, 0, post_update=True)
 
 
 @pl.vector_function
-def process_vec1_nd_update_vf_unalign(input_tile, dst_tile, max_tile, mask_tile,
-                                      tmp_max, tmp_max_st, tmp_exp_sum, s1_size, s2_size):
+def process_vec1_nd_update_vf_unalign(
+    input_tile, dst_tile, max_tile, mask_tile, tmp_max, tmp_max_st, tmp_exp_sum, s1_size, s2_size
+):
     preg_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     preg_mask_unroll = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     ureg_max = vf.unalign_reg_for_store()
@@ -378,15 +408,20 @@ def process_vec1_nd_update_vf_unalign(input_tile, dst_tile, max_tile, mask_tile,
         vreg_exp_even_f16 = vf.astype(vreg_exp_even, preg_all, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_exp_odd_f16 = vf.astype(vreg_exp_odd, preg_all, layout=pl.CastLayout.ONE, dtype=pl.DT_FP16)
         vreg_exp_f16 = vf.or_(vreg_exp_even_f16, vreg_exp_odd_f16, preg_all_f16)
-        vf.store_align(dst_tile, vreg_exp_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_exp_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(tmp_exp_sum, ureg_exp_sum, 0, post_update=True)
 
 
 @pl.vector_function
-def process_vec1_nd_update_vf(input_tile, dst_tile, max_tile, mask_tile,
-                              tmp_max, tmp_max_st, tmp_exp_sum, s1_size):
+def process_vec1_nd_update_vf(input_tile, dst_tile, max_tile, mask_tile, tmp_max, tmp_max_st, tmp_exp_sum, s1_size):
     preg_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     preg_mask_unroll = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     ureg_max = vf.unalign_reg_for_store()
@@ -434,9 +469,15 @@ def process_vec1_nd_update_vf(input_tile, dst_tile, max_tile, mask_tile,
         vreg_exp_even_f16 = vf.astype(vreg_exp_even, preg_all, layout=pl.CastLayout.ZERO, dtype=pl.DT_FP16)
         vreg_exp_odd_f16 = vf.astype(vreg_exp_odd, preg_all, layout=pl.CastLayout.ONE, dtype=pl.DT_FP16)
         vreg_exp_f16 = vf.or_(vreg_exp_even_f16, vreg_exp_odd_f16, preg_all_f16)
-        vf.store_align(dst_tile, vreg_exp_f16, preg_all_f16,
-                       block_stride=BLOCK_STRIDE_ND, repeat_stride=REPEAT_STRIDE_ND,
-                       data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY, post_update=True)
+        vf.store_align(
+            dst_tile,
+            vreg_exp_f16,
+            preg_all_f16,
+            block_stride=BLOCK_STRIDE_ND,
+            repeat_stride=REPEAT_STRIDE_ND,
+            data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY,
+            post_update=True,
+        )
     vf.store_unalign_post(tmp_exp_sum, ureg_exp_sum, 0, post_update=True)
 
 
@@ -553,8 +594,9 @@ def decode_mask(mask, maskr, holel, holes, col, s1_size, hole_num):
         vf.store_align(mask + (m * TKV), mask_b16, preg_all_b16, dist=pl.StoreDist.PACK)
 
 
-def compute_qk(ctx, ki, sq_off, q, k, cur_q_slot, k_l1_db, left_db, right_db, acc_db, qk_vec_db, task_id,
-               left2, right2, acc2):
+def compute_qk(
+    ctx, ki, sq_off, q, k, cur_q_slot, k_l1_db, left_db, right_db, acc_db, qk_vec_db, task_id, left2, right2, acc2
+):
     # --- compute_qk inlined ---
     skv_off = ctx.s2_size_acc + ctx.ki * TKV
     cur_k_slot = k_l1_db.next()
@@ -617,9 +659,26 @@ def compute_pv(ctx, v_l1_db, p_mat_db, left_db, right_db, acc_db, pv_vec_db, v, 
     pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=PV_READY_FORWARD_IDS[ctx.task_id % 2])
 
 
-def compute_p(ctx_p, sub_id, qk_vec_db, tile_nz_db, tmp_max, tmp_sum,
-              global_max, global_sum, exp_corr_db, p_mat_db, mask_db,
-              maskr_db, holel_db, holes_db, maskr_gm, holel_gm, holes_gm, zero_mask_gm):
+def compute_p(
+    ctx_p,
+    sub_id,
+    qk_vec_db,
+    tile_nz_db,
+    tmp_max,
+    tmp_sum,
+    global_max,
+    global_sum,
+    exp_corr_db,
+    p_mat_db,
+    mask_db,
+    maskr_db,
+    holel_db,
+    holes_db,
+    maskr_gm,
+    holel_gm,
+    holes_gm,
+    zero_mask_gm,
+):
     """Softmax on KQ tile -> P. Includes cross-core sync."""
     p_eid = ctx_p.task_id % 2
     q_idx_p = ctx_p.q_count % 3
@@ -661,20 +720,24 @@ def compute_p(ctx_p, sub_id, qk_vec_db, tile_nz_db, tmp_max, tmp_sum,
         if ctx_p.s2_size == 128:
             process_vec1_nd_no_update_vf(qk_slot, tile_nz, gmax_p, gmax_p, gsum_p, mask_buf, ctx_p.half_s1)
         elif ctx_p.s2_size <= 64:
-            process_vec1_nd_no_update_vf_unalign64(qk_slot, tile_nz, gmax_p, gmax_p, gsum_p, mask_buf,
-                                                   ctx_p.half_s1, ctx_p.s2_size)
+            process_vec1_nd_no_update_vf_unalign64(
+                qk_slot, tile_nz, gmax_p, gmax_p, gsum_p, mask_buf, ctx_p.half_s1, ctx_p.s2_size
+            )
         else:
-            process_vec1_nd_no_update_vf_unalign(qk_slot, tile_nz, gmax_p, gmax_p, gsum_p, mask_buf,
-                                         ctx_p.half_s1, ctx_p.s2_size)
+            process_vec1_nd_no_update_vf_unalign(
+                qk_slot, tile_nz, gmax_p, gmax_p, gsum_p, mask_buf, ctx_p.half_s1, ctx_p.s2_size
+            )
     else:
         if ctx_p.s2_size == 128:
             process_vec1_nd_update_vf(qk_slot, tile_nz, gmax_p, mask_buf, tmp_max, tmp_max, tmp_sum, ctx_p.half_s1)
         elif ctx_p.s2_size <= 64:
-            process_vec1_nd_update_vf_unalign64(qk_slot, tile_nz, gmax_p, mask_buf, tmp_max, tmp_max, tmp_sum,
-                                                ctx_p.half_s1, ctx_p.s2_size)
+            process_vec1_nd_update_vf_unalign64(
+                qk_slot, tile_nz, gmax_p, mask_buf, tmp_max, tmp_max, tmp_sum, ctx_p.half_s1, ctx_p.s2_size
+            )
         else:
-            process_vec1_nd_update_vf_unalign(qk_slot, tile_nz, gmax_p, mask_buf, tmp_max, tmp_max, tmp_sum,
-                                              ctx_p.half_s1, ctx_p.s2_size)
+            process_vec1_nd_update_vf_unalign(
+                qk_slot, tile_nz, gmax_p, mask_buf, tmp_max, tmp_max, tmp_sum, ctx_p.half_s1, ctx_p.s2_size
+            )
         update_exp_sum(exp_diff, gmax_p, tmp_max, gsum_p, tmp_sum)
     pl.system.set_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_BARKWARD_IDS[p_eid])
 
@@ -748,60 +811,103 @@ def flex_attention(
     # P MAT - Vector insert, Cube PV read
     p_mat_db = pl.make_tile_group(
         type=pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-        addrs=MA2_P, mutex_ids=[14, 15, 16])
+        addrs=MA2_P,
+        mutex_ids=[14, 15, 16],
+    )
 
     # qk_vec UB - Cube store from ACC, Vector softmax (double-buffer for FIFO)
     qk_vec_db = pl.make_tile_group(
-        type=pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_FP32,
-                         target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1],
-                         compact=1, pad=pl.TilePad.min),
-        addrs=VA0, mutex_ids=[17, 18])
+        type=pl.TileType(
+            shape=[TS_HALF, TKV],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Vec,
+            valid_shape=[-1, -1],
+            compact=1,
+            pad=pl.TilePad.min,
+        ),
+        addrs=VA0,
+        mutex_ids=[17, 18],
+    )
 
     # pv_vec UB - Cube store from ACC, Vector GU (double-buffer for FIFO)
     pv_vec_db = pl.make_tile_group(
         type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addrs=VA8, mutex_ids=[19, 20])
+        addrs=VA8,
+        mutex_ids=[19, 20],
+    )
 
     # =================== CUBE SECTION ===================
     with pl.section_cube():
         # Cube-only buffers (independent buf_id space: 0-11)
         q_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TS, TD], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1], compact=1),
-            addrs=MA0_Q, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[TS, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1], compact=1
+            ),
+            addrs=MA0_Q,
+            mutex_ids=[0, 1],
+        )
         k_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TD, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat,
-                             layout=pl.ZN, valid_shape=[-1, -1], compact=1),
-            addrs=MA1_K, mutex_ids=[2, 3])
+            type=pl.TileType(
+                shape=[TD, TKV],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Mat,
+                layout=pl.ZN,
+                valid_shape=[-1, -1],
+                compact=1,
+            ),
+            addrs=MA1_K,
+            mutex_ids=[2, 3],
+        )
         v_l1_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1], compact=1),
-            addrs=MA3_V, mutex_ids=[4, 5])
+            type=pl.TileType(
+                shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1], compact=1
+            ),
+            addrs=MA3_V,
+            mutex_ids=[4, 5],
+        )
 
         left_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TS, TD], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Left, valid_shape=[-1, -1], compact=1),
-            addrs=[0, 32768], mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TS, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, valid_shape=[-1, -1], compact=1
+            ),
+            addrs=[0, 32768],
+            mutex_ids=[6, 7],
+        )
         right_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TD, TKV], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Right, valid_shape=[-1, -1], compact=1),
-            addrs=[0, 32768], mutex_ids=[8, 9])
+            type=pl.TileType(
+                shape=[TD, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, valid_shape=[-1, -1], compact=1
+            ),
+            addrs=[0, 32768],
+            mutex_ids=[8, 9],
+        )
         acc_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP32,
-                             target_memory=pl.MemorySpace.Acc, valid_shape=[-1, -1], compact=1),
-            addrs=[0, 65536, 131072, 196608], mutex_ids=[10, 11, 12, 13])
+            type=pl.TileType(
+                shape=[TS, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, valid_shape=[-1, -1], compact=1
+            ),
+            addrs=[0, 65536, 131072, 196608],
+            mutex_ids=[10, 11, 12, 13],
+        )
         left_db2 = pl.make_tile_group(
-            type=pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Left, valid_shape=[-1, -1], compact=1),
-            addrs=[0, 32768], mutex_ids=[6, 7])
+            type=pl.TileType(
+                shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, valid_shape=[-1, -1], compact=1
+            ),
+            addrs=[0, 32768],
+            mutex_ids=[6, 7],
+        )
         right_db2 = pl.make_tile_group(
-            type=pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16,
-                             target_memory=pl.MemorySpace.Right, valid_shape=[-1, -1], compact=1),
-            addrs=[0, 32768], mutex_ids=[8, 9])
+            type=pl.TileType(
+                shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, valid_shape=[-1, -1], compact=1
+            ),
+            addrs=[0, 32768],
+            mutex_ids=[8, 9],
+        )
         acc_db2 = pl.make_tile_group(
-            type=pl.TileType(shape=[TS, TD], dtype=pl.DT_FP32,
-                             target_memory=pl.MemorySpace.Acc, valid_shape=[-1, -1], compact=1),
-            addrs=[0, 65536, 131072, 196608], mutex_ids=[10, 11, 12, 13])
+            type=pl.TileType(
+                shape=[TS, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, valid_shape=[-1, -1], compact=1
+            ),
+            addrs=[0, 65536, 131072, 196608],
+            mutex_ids=[10, 11, 12, 13],
+        )
 
         work_start = pl.getval(work_ranges, core_id * 2)
         work_end = pl.getval(work_ranges, core_id * 2 + 1)
@@ -812,9 +918,20 @@ def flex_attention(
         actual_s1 = 0
         actual_s2 = 0
         s1o_acc = 0
-        ctx_arr = pl.struct_array(4, "CubeCtx", n_idx=0, qi=0, ki=0,
-                                  task_id=0, s1_size_acc=0, s2_size_acc=0, s1_size=0, s2_size=0, loop_count=0)
-        s1o_size = 0 # tmp-val
+        ctx_arr = pl.struct_array(
+            4,
+            "CubeCtx",
+            n_idx=0,
+            qi=0,
+            ki=0,
+            task_id=0,
+            s1_size_acc=0,
+            s2_size_acc=0,
+            s1_size=0,
+            s2_size=0,
+            loop_count=0,
+        )
+        s1o_size = 0  # tmp-val
         for idx in pl.range(batch):
             if idx == 0:
                 actual_s1 = pl.getval(actual_seq_q, idx)
@@ -823,7 +940,7 @@ def flex_attention(
                 actual_s1 = pl.getval(actual_seq_q, idx) - pl.getval(actual_seq_q, idx - 1)
                 actual_s2 = pl.getval(actual_seq_kv, idx) - pl.getval(actual_seq_kv, idx - 1)
             s1o_size = s1o_size + (actual_s1 + TS - 1) // TS * n_dim
-            if (work_start >= s1o_size):
+            if work_start >= s1o_size:
                 s1o_acc = s1o_size
                 s1_size_acc = s1_size_acc + actual_s1
                 s2_size_acc = s2_size_acc + actual_s2
@@ -839,7 +956,7 @@ def flex_attention(
                     actual_s1 = pl.getval(actual_seq_q, b_idx) - pl.getval(actual_seq_q, b_idx - 1)
                     actual_s2 = pl.getval(actual_seq_kv, b_idx) - pl.getval(actual_seq_kv, b_idx - 1)
                 s1o_size = s1o_acc + (actual_s1 + TS - 1) // TS * n_dim
-                if (work_id >= s1o_size):
+                if work_id >= s1o_size:
                     s1o_acc = s1o_size
                     s1_size_acc = s1_size_acc + actual_s1
                     s2_size_acc = s2_size_acc + actual_s2
@@ -882,48 +999,86 @@ def flex_attention(
                     q_loop_count = q_loop_count + 1
 
                     # ========== compute_qk (current step) ==========
-                    compute_qk(ctx_curr, ki, sq_off, q, k, cur_q_slot, k_l1_db,
-                               left_db, right_db, acc_db, qk_vec_db, task_id,
-                               left_db2, right_db2, acc_db2)
+                    compute_qk(
+                        ctx_curr,
+                        ki,
+                        sq_off,
+                        q,
+                        k,
+                        cur_q_slot,
+                        k_l1_db,
+                        left_db,
+                        right_db,
+                        acc_db,
+                        qk_vec_db,
+                        task_id,
+                        left_db2,
+                        right_db2,
+                        acc_db2,
+                    )
 
                 # ========== compute_pv (delayed 1 step: uses ctx from task_id-1) ==========
                 if task_id > 1:
                     ctx_pre2 = ctx_arr[(task_id + 2) % 4]
-                    compute_pv(ctx_pre2, v_l1_db, p_mat_db, left_db2, right_db2, acc_db2, pv_vec_db, v,
-                               left_db, right_db, acc_db)
+                    compute_pv(
+                        ctx_pre2,
+                        v_l1_db,
+                        p_mat_db,
+                        left_db2,
+                        right_db2,
+                        acc_db2,
+                        pv_vec_db,
+                        v,
+                        left_db,
+                        right_db,
+                        acc_db,
+                    )
                 task_id = task_id + 1
 
     # =================== VECTOR SECTION ===================
     with pl.section_vector():
         tile_nz_g = pl.make_tile_group(
-            type=pl.TileType(shape=[65, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec,
-                             valid_shape=[-1, -1], layout=pl.NZ),
-            addrs=VA1, mutex_ids=[0, 1])
+            type=pl.TileType(
+                shape=[65, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1], layout=pl.NZ
+            ),
+            addrs=VA1,
+            mutex_ids=[0, 1],
+        )
 
         running_o = pl.make_tile(
-            pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addr=VA7, size=VB4)
+            pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA7, size=VB4
+        )
 
         o_f16_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-            addrs=VA9, mutex_ids=[2])
+            addrs=VA9,
+            mutex_ids=[2],
+        )
         o_f16 = o_f16_g.next()
 
         mask_db = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec),
-            addrs=VA10, mutex_ids=[3, 4])
+            addrs=VA10,
+            mutex_ids=[3, 4],
+        )
 
         maskr_db = pl.make_tile_group(
             type=pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-            addrs=VA13, mutex_ids=[5, 6])
+            addrs=VA13,
+            mutex_ids=[5, 6],
+        )
 
         holel_db = pl.make_tile_group(
             type=pl.TileType(shape=[MAX_HOLES, TS_HALF], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-            addrs=VA14, mutex_ids=[7, 8])
+            addrs=VA14,
+            mutex_ids=[7, 8],
+        )
 
         holes_db = pl.make_tile_group(
             type=pl.TileType(shape=[MAX_HOLES, TS_HALF], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-            addrs=VA15, mutex_ids=[9, 10])
+            addrs=VA15,
+            mutex_ids=[9, 10],
+        )
 
         # Double-buffered global state (per Q tile) -use tile tuples for dynamic
         # indexing by q_count % 2, since StructArray ctx references need runtime index.
@@ -966,12 +1121,30 @@ def flex_attention(
         s1o_acc = 0
 
         # StructArray(3) for pipeline context tracking (same as original)
-        ctx_arr = pl.struct_array(4, "VecCtx", b_idx=0, n_idx=0, s1_idx=0, q_off=0, ki=0,
-                                  q_count=0, sub_id=0, task_id=0, kv_loop=0, half_s1=0, first_s1=0,
-                                  s1_size=0, s2_size=0, compute_bit=0, mask_bit=0, loop_count=0, hole_num=0)
+        ctx_arr = pl.struct_array(
+            4,
+            "VecCtx",
+            b_idx=0,
+            n_idx=0,
+            s1_idx=0,
+            q_off=0,
+            ki=0,
+            q_count=0,
+            sub_id=0,
+            task_id=0,
+            kv_loop=0,
+            half_s1=0,
+            first_s1=0,
+            s1_size=0,
+            s2_size=0,
+            compute_bit=0,
+            mask_bit=0,
+            loop_count=0,
+            hole_num=0,
+        )
 
         # calc start
-        s1o_size = 0 # tmp-val
+        s1o_size = 0  # tmp-val
         for idx in pl.range(batch):
             if idx == 0:
                 actual_s1 = pl.getval(actual_seq_q, idx)
@@ -980,7 +1153,7 @@ def flex_attention(
                 actual_s1 = pl.getval(actual_seq_q, idx) - pl.getval(actual_seq_q, idx - 1)
                 actual_s2 = pl.getval(actual_seq_kv, idx) - pl.getval(actual_seq_kv, idx - 1)
             s1o_size = s1o_size + (actual_s1 + TS - 1) // TS * n_dim
-            if (work_start >= s1o_size):
+            if work_start >= s1o_size:
                 s1o_acc = s1o_size
                 s1_size_acc = s1_size_acc + actual_s1
                 s2_size_acc = s2_size_acc + actual_s2
@@ -996,7 +1169,7 @@ def flex_attention(
                     actual_s1 = pl.getval(actual_seq_q, b_idx) - pl.getval(actual_seq_q, b_idx - 1)
                     actual_s2 = pl.getval(actual_seq_kv, b_idx) - pl.getval(actual_seq_kv, b_idx - 1)
                 s1o_size = s1o_acc + (actual_s1 + TS - 1) // TS * n_dim
-                if (work_id >= s1o_size):
+                if work_id >= s1o_size:
                     s1o_acc = s1o_size
                     s1_size_acc = s1_size_acc + actual_s1
                     s2_size_acc = s2_size_acc + actual_s2
@@ -1059,9 +1232,26 @@ def flex_attention(
                 if task_id > 0:
                     if ki <= kv_loop:
                         ctx_p = ctx_arr[(task_id + 3) % 4]
-                        compute_p(ctx_p, sub_id, qk_vec_db, tile_nz_g, tmp_max, tmp_sum,
-                            global_max, global_sum, exp_corr_db, p_mat_db, mask_db, maskr_db,
-                            holel_db, holes_db, maskr, holel, holes, zero_mask)
+                        compute_p(
+                            ctx_p,
+                            sub_id,
+                            qk_vec_db,
+                            tile_nz_g,
+                            tmp_max,
+                            tmp_sum,
+                            global_max,
+                            global_sum,
+                            exp_corr_db,
+                            p_mat_db,
+                            mask_db,
+                            maskr_db,
+                            holel_db,
+                            holes_db,
+                            maskr,
+                            holel,
+                            holes,
+                            zero_mask,
+                        )
 
                 # ===== compute_gu (consumer, lag 3: every step incl. all drains) =====
                 if task_id > 2:
@@ -1108,21 +1298,21 @@ def flash_attention_ref_tnd(q_tnd, k_tnd, v_tnd, seq_q_list, seq_kv_list, d, mas
         skv = int(seq_kv_list[bi])
         mask = masks[bi].cpu()
         for ni in range(n):
-            qi = q_tnd[q_off:q_off + sq, ni, :].float()      # [sq, d]
-            ki = k_tnd[kv_off:kv_off + skv, ni, :].float()   # [skv, d]
-            vi = v_tnd[kv_off:kv_off + skv, ni, :].float()   # [skv, d]
+            qi = q_tnd[q_off:q_off + sq, ni, :].float()  # [sq, d]
+            ki = k_tnd[kv_off:kv_off + skv, ni, :].float()  # [skv, d]
+            vi = v_tnd[kv_off:kv_off + skv, ni, :].float()  # [skv, d]
             running_m = torch.full((sq, 1), float(NEG_INF))
             running_l = torch.zeros((sq, 1))
             acc = torch.zeros((sq, d))
             for c0 in range(0, skv, TKV):
                 c1 = min(c0 + TKV, skv)
-                qk = torch.matmul(qi, ki[c0:c1].T) * scale_val          # [sq, blk] fp32
+                qk = torch.matmul(qi, ki[c0:c1].T) * scale_val  # [sq, blk] fp32
                 qk = qk.masked_fill(mask[:, c0:c1], NEG_INF)
-                blk_max = qk.max(dim=1, keepdim=True).values            # [sq, 1]
+                blk_max = qk.max(dim=1, keepdim=True).values  # [sq, 1]
                 new_m = torch.maximum(running_m, blk_max)
-                corr = torch.exp(running_m - new_m)                     # [sq, 1]
-                p = torch.exp(qk - new_m)                               # [sq, blk] fp32
-                p16 = p.half().float()                                  # fp16 P (FA flow)
+                corr = torch.exp(running_m - new_m)  # [sq, 1]
+                p = torch.exp(qk - new_m)  # [sq, blk] fp32
+                p16 = p.half().float()  # fp16 P (FA flow)
                 acc = acc * corr + torch.matmul(p16, vi[c0:c1])
                 running_l = running_l * corr + p.sum(dim=1, keepdim=True)
                 running_m = new_m
@@ -1147,6 +1337,7 @@ def build_causal_window_mask_inputs(seq_q_list, seq_kv_list, window):
     (True == masked) that is the shared source of truth for the reference.
     """
     import numpy as np
+
     b = len(seq_q_list)
     block_num = max((sq + TS - 1) // TS for sq in seq_q_list)
     col_block_num = max((skv + TKV - 1) // TKV for skv in seq_kv_list)
@@ -1193,10 +1384,15 @@ def build_causal_window_mask_inputs(seq_q_list, seq_kv_list, window):
             tile_range[bi, mi] = max_blk
         dense_masks.append(~vis)
 
-    return (tile_range,
-            torch.from_numpy(sparse_compute),
-            torch.from_numpy(sparse_mask),
-            maskr, holel, holes, dense_masks)
+    return (
+        tile_range,
+        torch.from_numpy(sparse_compute),
+        torch.from_numpy(sparse_mask),
+        maskr,
+        holel,
+        holes,
+        dense_masks,
+    )
 
 
 def build_work_ranges(seq_q_list, sparse_compute, n, num_cores):
@@ -1287,6 +1483,7 @@ def build_work_ranges(seq_q_list, sparse_compute, n, num_cores):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fa_perf_nbuf():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1307,8 +1504,8 @@ def test_fa_perf_nbuf():
     failures = []
     test_cfgs = [
         ([512], [512], 1, TD, 100000, 28, 1e-3),  # baseline: aligned, full causal, s2=128 aligned path
-        ([512], [512], 1, TD, 128, 28, 1e-3),     # sliding window=128 -> leading-block skip (loop_count0@ki>0)
-        ([512], [512], 1, TD, 256, 28, 1e-3),     # sliding window=256 -> multi-block window + skip
+        ([512], [512], 1, TD, 128, 28, 1e-3),  # sliding window=128 -> leading-block skip (loop_count0@ki>0)
+        ([512], [512], 1, TD, 256, 28, 1e-3),  # sliding window=256 -> multi-block window + skip
         ([200], [200], 1, TD, 100000, 28, 1e-3),  # q-tail(72) + kv tail s2=72 -> unalign path
         ([160], [160], 1, TD, 100000, 28, 1e-3),  # kv tail s2=32 -> unalign64 path
         ([100], [100], 1, TD, 100000, 28, 1e-3),  # single sub-128 block, s2=100 -> unalign path
@@ -1322,8 +1519,16 @@ def test_fa_perf_nbuf():
         b = len(seq_q_list)
         tq = sum(seq_q_list)
         tkv = sum(seq_kv_list)
-        logging.info("\nFA-TND-DN-A5 (b=%s, seq_q=%s, seq_kv=%s, n=%s, d=%s) window=%s cores=%s",
-            b, seq_q_list, seq_kv_list, n, d, window, num_cores,)
+        logging.info(
+            "\nFA-TND-DN-A5 (b=%s, seq_q=%s, seq_kv=%s, n=%s, d=%s) window=%s cores=%s",
+            b,
+            seq_q_list,
+            seq_kv_list,
+            n,
+            d,
+            window,
+            num_cores,
+        )
 
         q = torch.rand((tq, n, d), device="cpu", dtype=torch.float16)
         k = torch.rand((tkv, n, d), device="cpu", dtype=torch.float16)
@@ -1332,8 +1537,9 @@ def test_fa_perf_nbuf():
 
         # Build the causal + sliding-window mask inputs; `masks` is the shared
         # source of truth also fed to the reference.
-        (tile_range, sparse_compute, sparse_mask,
-         maskr, holel, holes, masks) = build_causal_window_mask_inputs(seq_q_list, seq_kv_list, window)
+        (tile_range, sparse_compute, sparse_mask, maskr, holel, holes, masks) = build_causal_window_mask_inputs(
+            seq_q_list, seq_kv_list, window
+        )
 
         actual_q_len = list(itertools.accumulate(seq_q_list))
         actual_kv_len = list(itertools.accumulate(seq_kv_list))
@@ -1357,8 +1563,22 @@ def test_fa_perf_nbuf():
         zero_mask = torch.zeros((TS_HALF, TKV), device=device, dtype=torch.uint8)
         work_ranges = work_ranges.to(device)
         actual_num_cores = min(num_cores, total_work)
-        flex_attention[None, actual_num_cores](q, k, v, o, tile_range, sparse_compute, sparse_mask,
-            maskr, holel, holes, zero_mask, actual_seq_q, actual_seq_kv, work_ranges)
+        flex_attention[None, actual_num_cores](
+            q,
+            k,
+            v,
+            o,
+            tile_range,
+            sparse_compute,
+            sparse_mask,
+            maskr,
+            holel,
+            holes,
+            zero_mask,
+            actual_seq_q,
+            actual_seq_kv,
+            work_ranges,
+        )
         torch.npu.synchronize()
 
         o_ref = flash_attention_ref_tnd(q, k, v, seq_q_list, seq_kv_list, d, masks)
@@ -1373,8 +1593,17 @@ def test_fa_perf_nbuf():
         except AssertionError as e:
             status = "FAIL"
             failures.append((test_cfg, diff, str(e).splitlines()[0]))
-        logging.info("  [%s] b=%d seq_q=%s seq_kv=%s n=%d window=%s atol=%.0e max|diff|=%.5f",
-                     status, b, seq_q_list, seq_kv_list, n, window, atol, diff)
+        logging.info(
+            "  [%s] b=%d seq_q=%s seq_kv=%s n=%d window=%s atol=%.0e max|diff|=%.5f",
+            status,
+            b,
+            seq_q_list,
+            seq_kv_list,
+            n,
+            window,
+            atol,
+            diff,
+        )
 
     if failures:
         msg = "\n".join("  cfg=%s max|diff|=%.5f : %s" % (c, d, m) for c, d, m in failures)

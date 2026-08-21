@@ -8,8 +8,8 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
+
 import math
 import os
 
@@ -18,6 +18,7 @@ import torch
 import pypto
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_unpack_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -35,14 +36,17 @@ def test_unpack_onboard():
     loop_num = math.ceil(input_shape[0] / view_shape[0])
     with pypto.function("MAIN", input1, output):
         for idx in pypto.loop(loop_num, name="b0", idx_name="bidx"):
-            view_tensor = pypto.view(input1, view_shape,
-                                     [idx * view_shape[0]],
-                                     valid_shape=[
-                                         pypto.min(pypto.symbolic_scalar(input_shape[0]) -
-                                                   idx * view_shape[0],
-                                                   pypto.symbolic_scalar(view_shape[0])),
-                                     ],
-                                     )
+            view_tensor = pypto.view(
+                input1,
+                view_shape,
+                [idx * view_shape[0]],
+                valid_shape=[
+                    pypto.min(
+                        pypto.symbolic_scalar(input_shape[0]) - idx * view_shape[0],
+                        pypto.symbolic_scalar(view_shape[0]),
+                    ),
+                ],
+            )
             pypto.set_vec_tile_shapes(tile_shape[0])
             view_tensor = pypto.unpack(view_tensor, dst_dtype)
             pypto.assemble(view_tensor, [idx * view_shape[0] // dst_byte], output)

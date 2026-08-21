@@ -330,6 +330,7 @@ def moe_fusion_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_moe_fusion():
     # 1. 设置参数
     enable_graph = False

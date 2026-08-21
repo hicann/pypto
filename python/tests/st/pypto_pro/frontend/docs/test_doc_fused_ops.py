@@ -24,6 +24,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -34,6 +36,7 @@ N = 128
 # ============================================================================
 # mul_add_dst
 # ============================================================================
+
 
 @pl.jit(auto_mutex=True)
 def mul_add_dst_kernel(
@@ -60,6 +63,7 @@ def mul_add_dst_kernel(
 # fused_mul_add_relu
 # ============================================================================
 
+
 @pl.jit(auto_mutex=True)
 def fused_mul_add_relu_kernel(
     x: pl.Tensor[[M, N], pl.DT_FP16],
@@ -85,15 +89,14 @@ def fused_mul_add_relu_kernel(
 # partadd
 # ============================================================================
 
+
 @pl.jit(auto_mutex=True)
 def partadd_kernel(
     x: pl.Tensor[[M, N], pl.DT_FP16],
     y: pl.Tensor[[M, N], pl.DT_FP16],
     z: pl.Tensor[[M, N], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(
-        shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec,
-        valid_shape=[-1, -1])
+    tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
     tile_a = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0])
     tile_b = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[1])
     tile_c = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[2])
@@ -114,7 +117,9 @@ def partadd_kernel(
 # Test functions
 # ============================================================================
 
+
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_mul_add_dst():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -129,6 +134,7 @@ def test_mul_add_dst():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_fused_mul_add_relu():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)
@@ -143,6 +149,7 @@ def test_fused_mul_add_relu():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_partadd():
     torch.npu.set_device(ST_DEVICE)
     x = torch.randn(M, N, device=ST_DEVICE, dtype=torch.float16)

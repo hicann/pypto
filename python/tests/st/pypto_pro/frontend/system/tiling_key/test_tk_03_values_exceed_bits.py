@@ -21,6 +21,8 @@ from pypto_pro.runtime.tilingkey import TilingKeyField
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -66,6 +68,8 @@ def _make_kernel(tiling_key_cls):
                     pl.store(z, tile_c, [i, j])
 
     return _kernel
+
+
 kernel_bits1 = _make_kernel(TkBits1)
 kernel_bits2 = _make_kernel(TkBits2)
 # ---- 辅助函数 --------------------------------------------------------------
@@ -83,26 +87,32 @@ def _run_npu_test(kernel, key, ref_fn, shape=(128, 256)):
     torch.npu.synchronize()
     z_ref = ref_fn(x.float(), y.float()).half()
     torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
+
+
 # ---- 反例: 候选数量超出 bits 容量 ------------------------------------------
 # ---- 正例: 候选值可超出 bits 范围 ------------------------------------------
 # ---- 简单用例 (NPU 全流程验证正例) -----------------------------------------
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bits_1_add():
     _run_npu_test(kernel_bits1, {"OpType": 0}, lambda a, b: a + b)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bits_1_sub():
     _run_npu_test(kernel_bits1, {"OpType": 1}, lambda a, b: a - b)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bits_2_add():
     _run_npu_test(kernel_bits2, {"OpType": 0}, lambda a, b: a + b)
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_bits_2_sub():
     _run_npu_test(kernel_bits2, {"OpType": 3}, lambda a, b: a - b)

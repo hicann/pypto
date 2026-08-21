@@ -26,6 +26,8 @@ import pytest
 import torch
 import torch_npu  # noqa: F401 — registers npu backend
 
+import pypto
+
 vf = Vf
 
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -53,6 +55,7 @@ def hello_world_kernel(out: pl.Tensor[[1], pl.DT_INT32]):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_hello_world():
     _require_a5()
     device = ST_DEVICE
@@ -66,8 +69,9 @@ def test_hello_world():
 # Add 算子快速入门 — make_tile_group + auto_mutex（无需手写同步）
 # =============================================================================
 @pl.jit(auto_mutex=True)
-def add_kernel(a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 64], pl.DT_FP16],
-               out: pl.Tensor[[64, 64], pl.DT_FP16]):
+def add_kernel(
+    a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 64], pl.DT_FP16], out: pl.Tensor[[64, 64], pl.DT_FP16]
+):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
@@ -84,6 +88,7 @@ def add_kernel(a: pl.Tensor[[64, 64], pl.DT_FP16], b: pl.Tensor[[64, 64], pl.DT_
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_add_kernel():
     _require_a5()
     device = ST_DEVICE
@@ -115,19 +120,29 @@ def matmul_example(
     with pl.section_cube():
         a_mat_4_buffer = pl.make_tile_group(
             type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-            addrs=0, mutex_ids=[0, 1, 10, 11])
+            addrs=0,
+            mutex_ids=[0, 1, 10, 11],
+        )
         b_mat_4_buffer = pl.make_tile_group(
             type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-            addrs=0x20000, mutex_ids=[2, 3, 12, 13])
+            addrs=0x20000,
+            mutex_ids=[2, 3, 12, 13],
+        )
         a_left_db = pl.make_tile_group(
             type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
-            addrs=0, mutex_ids=[4, 5])
+            addrs=0,
+            mutex_ids=[4, 5],
+        )
         b_right_db = pl.make_tile_group(
             type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-            addrs=0, mutex_ids=[6, 7])
+            addrs=0,
+            mutex_ids=[6, 7],
+        )
         acc_db = pl.make_tile_group(
             type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
-            addrs=0, mutex_ids=[8, 9])
+            addrs=0,
+            mutex_ids=[8, 9],
+        )
 
         for i in pl.range(core_id, m // 128, num_cores):
             for j in pl.range(0, n // 128, 1):
@@ -148,6 +163,7 @@ def matmul_example(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_kernel():
     _require_a5()
     device = ST_DEVICE
@@ -179,31 +195,33 @@ NEG_INF = -1e30
 #   Cube 保存 QK，Vector 段按 [M半块, N块] 视图跨全部 N 块完成 Softmax
 # =============================================================================
 @pl.jit(auto_mutex=True)
-def matmul_softmax_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
-                          b: pl.Tensor[[K_SIZE, pl.DYNAMIC], pl.DT_FP16],
-                          out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-                          workspace: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32]):
+def matmul_softmax_kernel(
+    a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
+    b: pl.Tensor[[K_SIZE, pl.DYNAMIC], pl.DT_FP16],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    workspace: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+):
     m = a.shape[0]
     n = b.shape[1]
     n_tiles = (n + TILE_N - 1) // TILE_N
     valid_m = pl.min(TILE_M, m)
 
     # ---- Cube Tile：直接计算 QK = A @ B ----
-    tt_a_mat = pl.TileType(shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16,
-                           target_memory=pl.MemorySpace.Mat,
-                           valid_shape=[-1, -1])
-    tt_b_mat = pl.TileType(shape=[K_SIZE, TILE_N], dtype=pl.DT_FP16,
-                           target_memory=pl.MemorySpace.Mat,
-                           valid_shape=[-1, -1])
-    tt_left = pl.TileType(shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16,
-                          target_memory=pl.MemorySpace.Left,
-                          valid_shape=[-1, -1], compact=1)
-    tt_right = pl.TileType(shape=[K_SIZE, TILE_N], dtype=pl.DT_FP16,
-                           target_memory=pl.MemorySpace.Right,
-                           valid_shape=[-1, -1], compact=1)
-    tt_acc = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32,
-                         target_memory=pl.MemorySpace.Acc,
-                         valid_shape=[-1, -1], compact=1)
+    tt_a_mat = pl.TileType(
+        shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1]
+    )
+    tt_b_mat = pl.TileType(
+        shape=[K_SIZE, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1]
+    )
+    tt_left = pl.TileType(
+        shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, valid_shape=[-1, -1], compact=1
+    )
+    tt_right = pl.TileType(
+        shape=[K_SIZE, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, valid_shape=[-1, -1], compact=1
+    )
+    tt_acc = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, valid_shape=[-1, -1], compact=1
+    )
 
     a_l1 = pl.make_tile_group(type=tt_a_mat, addrs=0x0000, mutex_ids=[0])
     b_l1 = pl.make_tile_group(type=tt_b_mat, addrs=0x4000, mutex_ids=[1])
@@ -212,14 +230,16 @@ def matmul_softmax_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
     qk_l0c = pl.make_tile_group(type=tt_acc, addrs=0x0000, mutex_ids=[4])
 
     # ---- Vector Tile：每个 AIV 处理最多 32 个 M 行，沿 N 块分三遍完成 Softmax ----
-    tt_vec = pl.TileType(shape=[VEC_ROWS, TILE_N], dtype=pl.DT_FP32,
-                         target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
-    tt_red = pl.TileType(shape=[VEC_ROWS, 1], dtype=pl.DT_FP32,
-                         target_memory=pl.MemorySpace.Vec, layout=pl.DN,
-                         valid_shape=[-1, -1])
+    tt_vec = pl.TileType(
+        shape=[VEC_ROWS, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
+    tt_red = pl.TileType(
+        shape=[VEC_ROWS, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN, valid_shape=[-1, -1]
+    )
     # 行归约使用 [M半块, 1] 的 DN 视图，逐元素合并使用同一内存的行主序视图。
-    tt_red_rm = pl.TileType(shape=[1, VEC_ROWS], dtype=pl.DT_FP32,
-                            target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    tt_red_rm = pl.TileType(
+        shape=[1, VEC_ROWS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
 
     qk_vec = pl.make_tile_group(type=tt_vec, addrs=0x0000, mutex_ids=[5])
     tmp_vec = pl.make_tile_group(type=tt_vec, addrs=0x2000, mutex_ids=[6])
@@ -322,16 +342,17 @@ def matmul_softmax_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
 @pytest.mark.parametrize(
     "m,n",
     [
-        (32, 64),    # 仅 subblock 0，完整 N 块
-        (33, 64),    # subblock 1 仅处理一行
-        (64, 64),    # 完整 m/n 块
-        (48, 48),    # m/n 均为尾块
+        (32, 64),  # 仅 subblock 0，完整 N 块
+        (33, 64),  # subblock 1 仅处理一行
+        (64, 64),  # 完整 m/n 块
+        (48, 48),  # m/n 均为尾块
         (48, 1000),  # 多个 n 块，末块不对齐
         (48, 1024),  # 文档调用示例
         (16, 4096),  # 4K n 轴
     ],
 )
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_softmax_kernel(m, n):
     _require_a5()
     device = ST_DEVICE
@@ -365,8 +386,7 @@ def softmax_vf_init(global_max, global_sum, valid_rows: pl.DT_INT64):
 
 
 @pl.vector_function
-def softmax_vf_update_max(src_dn, global_max,
-                          valid_rows: pl.DT_INT64, valid_n: pl.DT_INT64):
+def softmax_vf_update_max(src_dn, global_max, valid_rows: pl.DT_INT64, valid_n: pl.DT_INT64):
     """把当前 N 块合并到逐行全局最大值。"""
     preg = vf.update_mask(valid_rows, dtype=pl.DT_FP32)
     vf.mem_bar(mode=pl.MemBarMode.VST_VLD)
@@ -378,8 +398,7 @@ def softmax_vf_update_max(src_dn, global_max,
 
 
 @pl.vector_function
-def softmax_vf_update_sum(src_dn, global_max, global_sum,
-                          valid_rows: pl.DT_INT64, valid_n: pl.DT_INT64):
+def softmax_vf_update_sum(src_dn, global_max, global_sum, valid_rows: pl.DT_INT64, valid_n: pl.DT_INT64):
     """基于全局最大值累加当前 N 块的指数和。"""
     preg = vf.update_mask(valid_rows, dtype=pl.DT_FP32)
     vf.mem_bar(mode=pl.MemBarMode.VST_VLD)
@@ -393,8 +412,7 @@ def softmax_vf_update_sum(src_dn, global_max, global_sum,
 
 
 @pl.vector_function
-def softmax_vf_normalize(src_dn, dst_dn, global_max, global_sum,
-                         valid_rows: pl.DT_INT64, valid_n: pl.DT_INT64):
+def softmax_vf_normalize(src_dn, dst_dn, global_max, global_sum, valid_rows: pl.DT_INT64, valid_n: pl.DT_INT64):
     """使用完整 N 轴的最大值与指数和归一化当前 N 块。"""
     preg = vf.update_mask(valid_rows, dtype=pl.DT_FP32)
     vf.mem_bar(mode=pl.MemBarMode.VST_VLD)
@@ -409,31 +427,33 @@ def softmax_vf_normalize(src_dn, dst_dn, global_max, global_sum,
 
 
 @pl.jit(auto_mutex=True)
-def matmul_softmax_vf_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
-                             b: pl.Tensor[[K_SIZE, pl.DYNAMIC], pl.DT_FP16],
-                             out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-                             workspace: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32]):
+def matmul_softmax_vf_kernel(
+    a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
+    b: pl.Tensor[[K_SIZE, pl.DYNAMIC], pl.DT_FP16],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    workspace: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+):
     m = a.shape[0]
     n = b.shape[1]
     n_tiles = (n + TILE_N - 1) // TILE_N
     valid_m = pl.min(TILE_M, m)
 
     # ---- Cube Tile：直接计算 QK = A @ B ----
-    tt_a_mat = pl.TileType(shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16,
-                           target_memory=pl.MemorySpace.Mat,
-                           valid_shape=[-1, -1])
-    tt_b_mat = pl.TileType(shape=[K_SIZE, TILE_N], dtype=pl.DT_FP16,
-                           target_memory=pl.MemorySpace.Mat,
-                           valid_shape=[-1, -1])
-    tt_left = pl.TileType(shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16,
-                          target_memory=pl.MemorySpace.Left,
-                          valid_shape=[-1, -1], compact=1)
-    tt_right = pl.TileType(shape=[K_SIZE, TILE_N], dtype=pl.DT_FP16,
-                           target_memory=pl.MemorySpace.Right,
-                           valid_shape=[-1, -1], compact=1)
-    tt_acc = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32,
-                         target_memory=pl.MemorySpace.Acc,
-                         valid_shape=[-1, -1], compact=1)
+    tt_a_mat = pl.TileType(
+        shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1]
+    )
+    tt_b_mat = pl.TileType(
+        shape=[K_SIZE, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, valid_shape=[-1, -1]
+    )
+    tt_left = pl.TileType(
+        shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, valid_shape=[-1, -1], compact=1
+    )
+    tt_right = pl.TileType(
+        shape=[K_SIZE, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, valid_shape=[-1, -1], compact=1
+    )
+    tt_acc = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, valid_shape=[-1, -1], compact=1
+    )
 
     a_l1 = pl.make_tile_group(type=tt_a_mat, addrs=0x0000, mutex_ids=[0])
     b_l1 = pl.make_tile_group(type=tt_b_mat, addrs=0x4000, mutex_ids=[1])
@@ -442,12 +462,12 @@ def matmul_softmax_vf_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
     qk_l0c = pl.make_tile_group(type=tt_acc, addrs=0x0000, mutex_ids=[4])
 
     # ---- Vector Tile：TTRANS 前后都使用 64x64 物理 Tile，VF 用 mask 收窄 M 尾块 ----
-    tt_vf_block = pl.TileType(shape=[VF_LANES, TILE_N], dtype=pl.DT_FP32,
-                              target_memory=pl.MemorySpace.Vec,
-                              valid_shape=[-1, -1])
-    tt_vf_state = pl.TileType(shape=[1, VF_LANES], dtype=pl.DT_FP32,
-                              target_memory=pl.MemorySpace.Vec,
-                              valid_shape=[-1, -1])
+    tt_vf_block = pl.TileType(
+        shape=[VF_LANES, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
+    tt_vf_state = pl.TileType(
+        shape=[1, VF_LANES], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
 
     qk_nd = pl.make_tile_group(type=tt_vf_block, addrs=0x0000, mutex_ids=[5])
     qk_dn = pl.make_tile_group(type=tt_vf_block, addrs=0x4000, mutex_ids=[6])
@@ -514,8 +534,7 @@ def matmul_softmax_vf_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
                 pl.set_validshape(cur_qk_dn, [valid_n, valid_rows])
                 pl.load(cur_qk_nd, workspace, [m_off, n_off])
                 pl.transpose(cur_qk_dn, cur_qk_nd)
-                softmax_vf_update_sum(cur_qk_dn, cur_global_max, cur_global_sum,
-                                      valid_rows, valid_n)
+                softmax_vf_update_sum(cur_qk_dn, cur_global_max, cur_global_sum, valid_rows, valid_n)
 
             # 第三遍：VF 归一化后转回 [M半块,N块] 并写回 GM。
             for nj in pl.range(0, n_tiles, 1):
@@ -527,8 +546,7 @@ def matmul_softmax_vf_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
                 pl.set_validshape(cur_out_nd, [valid_rows, valid_n])
                 pl.load(cur_qk_nd, workspace, [m_off, n_off])
                 pl.transpose(cur_qk_dn, cur_qk_nd)
-                softmax_vf_normalize(cur_qk_dn, cur_out_dn, cur_global_max,
-                                     cur_global_sum, valid_rows, valid_n)
+                softmax_vf_normalize(cur_qk_dn, cur_out_dn, cur_global_max, cur_global_sum, valid_rows, valid_n)
                 pl.transpose(cur_out_nd, cur_out_dn)
                 pl.store(out, cur_out_nd, [m_off, n_off])
 
@@ -536,16 +554,17 @@ def matmul_softmax_vf_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
 @pytest.mark.parametrize(
     "m,n",
     [
-        (32, 64),    # 仅 subblock 0，完整 N 块
-        (33, 64),    # subblock 1 仅处理一行
-        (64, 64),    # 完整 M/N 块
-        (48, 48),    # M/N 均为尾块
+        (32, 64),  # 仅 subblock 0，完整 N 块
+        (33, 64),  # subblock 1 仅处理一行
+        (64, 64),  # 完整 M/N 块
+        (48, 48),  # M/N 均为尾块
         (48, 1000),  # 多个 N 块，末块不对齐
         (48, 1024),  # 文档调用示例
         (16, 4096),  # 4K N 轴
     ],
 )
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_softmax_vf_kernel(m, n):
     _require_a5()
     device = ST_DEVICE

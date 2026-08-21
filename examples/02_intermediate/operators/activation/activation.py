@@ -119,6 +119,7 @@ def silu_activation_kernel(x: pypto.Tensor(), out: pypto.Tensor()):
     out[:] = x * pypto.sigmoid(x)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_silu(device_id: int = None, dynamic: bool = False) -> None:
     """Test SiLU activation."""
     print("=" * 60)
@@ -161,6 +162,7 @@ def gelu_activation_kernel(x: pypto.Tensor(), out: pypto.Tensor()):
     out[:] = x * pypto.sigmoid(x_scaled)
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_gelu(device_id: int = None, dynamic: bool = False) -> None:
     """Test GELU activation."""
     print("=" * 60)
@@ -205,6 +207,7 @@ def swiglu_activation_kernel(gate: pypto.Tensor(), up: pypto.Tensor(), out: pypt
     out[:] = swish * up
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_swiglu(device_id: int = None, dynamic: bool = False) -> None:
     """Test SwiGLU activation."""
     print("=" * 60)
@@ -251,6 +254,7 @@ def geglu_activation_kernel(gate: pypto.Tensor(), up: pypto.Tensor(), out: pypto
     out[:] = gelu_gate * up
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_geglu(device_id: int = None, dynamic: bool = False) -> None:
     """Test GeGLU activation."""
     print("=" * 60)

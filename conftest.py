@@ -64,6 +64,21 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
 
+def pytest_configure(config):
+    """pytest 启动时在 root scope 上设置 enable_slice=true。
+
+    覆盖 tile_fwk_config.json 的 false 默认值。root scope 不受 config::Reset() / reset_options()
+    影响，所以 UT SetUp 中的 Clear() 不会清除该设置。
+    单个测试用例仍可通过 @pypto.options(pass_options={"enable_slice": False}) 覆盖此设置。
+    """
+    try:
+        import pypto.pypto_impl
+
+        pypto.pypto_impl.SetGlobalConfig({"pass.enable_slice": True})
+    except Exception:
+        pass
+
+
 def _is_case_match_cards(item, target_cards) -> bool:
     """
     判断测试用例是否匹配目标卡数

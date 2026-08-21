@@ -14,6 +14,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -39,6 +41,7 @@ def ssbuf_copy_kernel(x: pl.Tensor[[1], pl.DT_INT32]):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_ssbuf_kernel():
     device = ST_DEVICE
     try:
@@ -53,5 +56,6 @@ def test_ssbuf_kernel():
 
     x = torch.tensor([3], dtype=torch.int32).to(device)
     ssbuf_copy_kernel(x)
+
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")

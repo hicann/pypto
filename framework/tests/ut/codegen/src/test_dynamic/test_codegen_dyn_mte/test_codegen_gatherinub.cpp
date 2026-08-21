@@ -98,7 +98,7 @@ TEST_F(TestCodegenGatherInUB, gather_in_a_)
     auto function = GatherInUBUT(cfg);
     std::string res = GetResultFromCpp(*function);
     std::string expect =
-        R"!!!(TileOp::GatherInUB<half, int32_t, int32_t, 8, 16, 4>((__ubuf__ half*)UB_S0_E256, (__gm__ half*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 2, 1)), (__gm__ int32_t*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 2, 10)), (__gm__ int32_t*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 2, 19)), sym_58_dim_1, GET_PARAM_RAWSHAPE_BY_IDX(param, 2, 1, 2, 1), GET_PARAM_OFFSET_BY_IDX(param, 2, 1, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 2, 1, 2, 1), sym_58_dim_0, GET_PARAM_RAWSHAPE_BY_IDX(param, 2, 10, 2, 1), GET_PARAM_OFFSET_BY_IDX(param, 2, 10, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 2, 10, 2, 1), GET_PARAM_RAWSHAPE_BY_IDX(param, 2, 19, 2, 1), GET_PARAM_OFFSET_BY_IDX(param, 2, 19, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 2, 19, 2, 1));)!!!";
+        R"!!!(TileOp::GatherInUB<half, int32_t, int32_t, 8, 16, 4>((__ubuf__ half*)UB_S0_E256, (__gm__ half*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 2, 1)), (__gm__ int32_t*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 2, 10)), (__gm__ int32_t*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 2, 19)), sym_60_dim_1, GET_PARAM_RAWSHAPE_BY_IDX(param, 2, 1, 2, 1), GET_PARAM_OFFSET_BY_IDX(param, 2, 1, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 2, 1, 2, 1), sym_60_dim_0, GET_PARAM_RAWSHAPE_BY_IDX(param, 2, 10, 2, 1), GET_PARAM_OFFSET_BY_IDX(param, 2, 10, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 2, 10, 2, 1), GET_PARAM_RAWSHAPE_BY_IDX(param, 2, 19, 2, 1), GET_PARAM_OFFSET_BY_IDX(param, 2, 19, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 2, 19, 2, 1));)!!!";
     CheckStringExist(expect, res);
 }
 

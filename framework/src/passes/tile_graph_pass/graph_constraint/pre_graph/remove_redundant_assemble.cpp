@@ -19,12 +19,17 @@
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "passes/pass_utils/remove_redundant_op_utils.h"
+#include "interface/configs/config_manager.h"
 
 #include <sstream>
 
 #define MODULE_NAME "PreGraphProcess"
 
 namespace npu::tile_fwk {
+namespace {
+constexpr const char* KEY_ENABLE_TRUE = "enable_true";
+}
 
 std::string OpImmediateVecToStr(const std::vector<OpImmediate>& values)
 {
@@ -47,6 +52,94 @@ std::vector<OpImmediate> SumOffset(const std::vector<OpImmediate> offset1, const
         res.push_back(offset1[i] + offset2[i]);
     }
     return res;
+}
+
+bool GetViewOffset(const ViewOpAttribute& viewAttr, std::vector<OpImmediate>& viewOffset)
+{
+    if (!viewAttr.GetFromDynOffset().empty()) {
+        viewOffset = OpImmediate::Specified(viewAttr.GetFromDynOffset());
+    } else {
+        viewOffset = OpImmediate::Specified(viewAttr.GetFromOffset());
+    }
+    return !viewOffset.empty();
+}
+
+bool CanMergeViewToCopyIn(const Operation& viewOp, std::vector<Operation*>& copyIns,
+                          std::vector<std::vector<OpImmediate>>& mergedOffsets)
+{
+    if (viewOp.GetIOperands().size() != 1 || viewOp.GetOOperands().size() != 1) {
+        return false;
+    }
+    const auto& viewInput = viewOp.GetIOperands().front();
+    const auto& viewOutput = viewOp.GetOOperands().front();
+    if (viewInput == nullptr || viewOutput == nullptr || viewInput->GetRawTensor() == nullptr ||
+        viewInput->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR ||
+        viewInput->GetShape().size() != viewOutput->GetShape().size() || viewOutput->GetConsumers().empty()) {
+        return false;
+    }
+    auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(viewOp.GetOpAttribute());
+    std::vector<OpImmediate> viewOffset;
+    if (viewAttr == nullptr || !GetViewOffset(*viewAttr, viewOffset) ||
+        viewOffset.size() != viewInput->GetShape().size()) {
+        return false;
+    }
+    for (auto* consumer : viewOutput->GetConsumers()) {
+        if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_COPY_IN ||
+            consumer->GetIOperands().size() != 1 || consumer->GetOOperands().size() != 1) {
+            return false;
+        }
+        auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(consumer->GetOpAttribute());
+        if (copyAttr == nullptr) {
+            mergedOffsets.push_back(viewOffset);
+        } else {
+            const auto& copyOffset = copyAttr->GetFromOffset();
+            if (copyAttr->IsCopyOut() || copyOffset.size() != viewOffset.size() ||
+                (!copyAttr->GetRawShape().empty() && copyAttr->GetRawShape().size() != viewOffset.size())) {
+                return false;
+            }
+            mergedOffsets.push_back(SumOffset(viewOffset, copyOffset));
+        }
+        copyIns.push_back(consumer);
+    }
+    return true;
+}
+
+Status RemoveRedundantAssemble::ProcessViewToCopyIn(Function& function) const
+{
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() != Opcode::OP_VIEW || op.IsDeleted()) {
+            continue;
+        }
+        std::vector<Operation*> copyIns;
+        std::vector<std::vector<OpImmediate>> mergedOffsets;
+        if (!CanMergeViewToCopyIn(op, copyIns, mergedOffsets)) {
+            continue;
+        }
+        auto viewInput = op.GetIOperands().front();
+        for (size_t idx = 0; idx < copyIns.size(); ++idx) {
+            auto& copyIn = *copyIns[idx];
+            auto copyOutput = copyIn.GetOOperands().front();
+            auto copyShape = OpImmediate::Specified(copyOutput->GetShape());
+            auto rawShape = OpImmediate::Specified(viewInput->tensor->GetDynRawShape());
+            auto toDynValidShape = OpImmediate::Specified(copyOutput->GetDynValidShape());
+            auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyIn.GetOpAttribute());
+            if (copyAttr == nullptr) {
+                copyAttr = std::make_shared<CopyOpAttribute>(mergedOffsets[idx], copyOutput->GetMemoryTypeOriginal(),
+                                                             copyShape, rawShape, toDynValidShape);
+                copyIn.SetOpAttribute(copyAttr);
+            } else {
+                copyAttr->SetFromOffset(mergedOffsets[idx]);
+                copyAttr->SetShape(copyShape);
+                copyAttr->SetRawShape(rawShape);
+                copyAttr->SetToDynValidShape(toDynValidShape);
+            }
+            copyIn.ReplaceIOperand(0, viewInput);
+        }
+        APASS_LOG_DEBUG_F(Elements::Operation, "Remove View op:%s[%d] before CopyIn.", op.GetOpcodeStr().c_str(),
+                          op.GetOpMagic());
+        op.SetAsDeleted();
+    }
+    return SUCCESS;
 }
 
 // 当前op为Copy Out时，需要将后继Assemble上的offset累加到当前op的CopyOpAttr上
@@ -950,6 +1043,20 @@ Status RemoveRedundantAssemble::HanldeForSingleAssemble(Function& function, Logi
 */
 Status RemoveRedundantAssemble::DeleteRedundantAssemble(Function& function) const
 {
+    bool operationUpdated = false;
+    if (config::GetPassGlobalConfig(KEY_ENABLE_TRUE, false)) {
+        if (RemoveRedundantOpUtils::ProcessViewCopyout(function, operationUpdated) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "ProcessViewCopyout failed.");
+            return FAILED;
+        }
+        if (RemoveRedundantOpUtils::ProcessCopyinAssemble(function, operationUpdated) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "ProcessCopyinAssemble failed.");
+            return FAILED;
+        }
+        if (operationUpdated) {
+            function.EraseOperations(true, false);
+        }
+    }
     for (auto& op : function.Operations()) {
         if (!IsCandidateAssembleOp(function, op)) {
             continue;

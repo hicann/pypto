@@ -43,19 +43,21 @@ from pypto_pro.language import Vf as vf  # noqa: N813
 import pytest
 import torch
 
+import pypto
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 # ================================================================
 # Constants
 # ================================================================
-LANES = 64                # fp32 VF register width (lanes)
-MAX_N = 512               # max supported columns == compile-time UB tile width (mult. of LANES)
-TILE_ROWS = 16            # rows processed per tile-group slot (row count is dynamic)
+LANES = 64  # fp32 VF register width (lanes)
+MAX_N = 512  # max supported columns == compile-time UB tile width (mult. of LANES)
+TILE_ROWS = 16  # rows processed per tile-group slot (row count is dynamic)
 EPS = 1e-5
 
-SLOT_BYTES = TILE_ROWS * MAX_N * 4      # fp32 [TILE_ROWS, MAX_N]
-VEC_BYTES = MAX_N * 4                   # fp32 [1, MAX_N]
+SLOT_BYTES = TILE_ROWS * MAX_N * 4  # fp32 [TILE_ROWS, MAX_N]
+VEC_BYTES = MAX_N * 4  # fp32 [1, MAX_N]
 
 # UB addresses: double-buffered in/out groups + single-slot gamma/beta groups
 VA_IN0 = 0
@@ -78,7 +80,7 @@ def layernorm_rows_vf(in_tile, out_tile, gamma_tile, beta_tile, n_rows: pl.DT_IN
     """
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     n_regs = (n_cols + LANES - 1) // LANES
-    n_reg_f = vf.full(n_cols, preg, dtype=pl.DT_FP32)     # broadcast (float)N for the /N divides
+    n_reg_f = vf.full(n_cols, preg, dtype=pl.DT_FP32)  # broadcast (float)N for the /N divides
 
     for m in pl.range(0, n_rows):
         base = m * MAX_N
@@ -86,13 +88,13 @@ def layernorm_rows_vf(in_tile, out_tile, gamma_tile, beta_tile, n_rows: pl.DT_IN
         # ---- pass 1: mean = sum(x) / N ----
         row_sum = vf.full(0.0, preg, dtype=pl.DT_FP32)
         for r in pl.range(0, n_regs):
-            valid = pl.min(LANES, n_cols - r * LANES)     # live lanes in this register
+            valid = pl.min(LANES, n_cols - r * LANES)  # live lanes in this register
             mreg = vf.update_mask(valid, dtype=pl.DT_FP32)
             reg = vf.load_align(in_tile, base + r * LANES)
-            part = vf.reduce_sum(reg, mreg)               # per-reg sum -> lane0
-            row_sum = vf.add(row_sum, part, preg)         # combine into lane0 accumulator
-        mean_b = vf.full(row_sum, preg)                   # broadcast lane0 -> all lanes
-        mean_b = vf.div(mean_b, n_reg_f, preg)            # sum / N
+            part = vf.reduce_sum(reg, mreg)  # per-reg sum -> lane0
+            row_sum = vf.add(row_sum, part, preg)  # combine into lane0 accumulator
+        mean_b = vf.full(row_sum, preg)  # broadcast lane0 -> all lanes
+        mean_b = vf.div(mean_b, n_reg_f, preg)  # sum / N
 
         # ---- pass 2: var = sum((x - mean)^2) / N ----
         var_sum = vf.full(0.0, preg, dtype=pl.DT_FP32)
@@ -100,14 +102,14 @@ def layernorm_rows_vf(in_tile, out_tile, gamma_tile, beta_tile, n_rows: pl.DT_IN
             valid = pl.min(LANES, n_cols - r * LANES)
             mreg = vf.update_mask(valid, dtype=pl.DT_FP32)
             reg = vf.load_align(in_tile, base + r * LANES)
-            xc = vf.sub(reg, mean_b, mreg)                # x - mean (padding lanes masked)
+            xc = vf.sub(reg, mean_b, mreg)  # x - mean (padding lanes masked)
             sq = vf.mul(xc, xc, mreg)
-            part = vf.reduce_sum(sq, mreg)                # per-reg sum -> lane0
-            var_sum = vf.add(var_sum, part, preg)         # combine into lane0 accumulator
-        var_b = vf.full(var_sum, preg)                    # broadcast lane0 -> all lanes
-        var_b = vf.div(var_b, n_reg_f, preg)              # sum(xc^2) / N
-        var_b = vf.adds(var_b, EPS, preg)                 # var + eps
-        std_b = vf.sqrt(var_b, preg)                      # sqrt(var + eps)
+            part = vf.reduce_sum(sq, mreg)  # per-reg sum -> lane0
+            var_sum = vf.add(var_sum, part, preg)  # combine into lane0 accumulator
+        var_b = vf.full(var_sum, preg)  # broadcast lane0 -> all lanes
+        var_b = vf.div(var_b, n_reg_f, preg)  # sum(xc^2) / N
+        var_b = vf.adds(var_b, EPS, preg)  # var + eps
+        std_b = vf.sqrt(var_b, preg)  # sqrt(var + eps)
 
         # ---- pass 3: y = (x - mean) / std * gamma + beta ----
         for r in pl.range(0, n_regs):
@@ -115,11 +117,11 @@ def layernorm_rows_vf(in_tile, out_tile, gamma_tile, beta_tile, n_rows: pl.DT_IN
             mreg = vf.update_mask(valid, dtype=pl.DT_FP32)
             reg = vf.load_align(in_tile, base + r * LANES)
             gamma = vf.load_align(gamma_tile, r * LANES)  # per-column scale for this register
-            beta = vf.load_align(beta_tile, r * LANES)    # per-column shift for this register
-            xc = vf.sub(reg, mean_b, mreg)                # x - mean
-            norm = vf.div(xc, std_b, mreg)                # (x - mean) / sqrt(var + eps)
+            beta = vf.load_align(beta_tile, r * LANES)  # per-column shift for this register
+            xc = vf.sub(reg, mean_b, mreg)  # x - mean
+            norm = vf.div(xc, std_b, mreg)  # (x - mean) / sqrt(var + eps)
             out = vf.mul(norm, gamma, mreg)
-            out = vf.add(out, beta, mreg)                 # * gamma + beta
+            out = vf.add(out, beta, mreg)  # * gamma + beta
             vf.store_align(out_tile + (base + r * LANES), out, mreg)
 
 
@@ -132,10 +134,10 @@ def layernorm_tile_group_kernel(
 ):
     # valid_shape=[-1, -1] makes the per-tile valid window dynamic (set at runtime via
     # set_validshape): the tail row-tile carries fewer rows and N narrows the columns.
-    tile_type = pl.TileType(shape=[TILE_ROWS, MAX_N], dtype=pl.DT_FP32,
-                            target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
-    vec_type = pl.TileType(shape=[1, MAX_N], dtype=pl.DT_FP32,
-                           target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    tile_type = pl.TileType(
+        shape=[TILE_ROWS, MAX_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
+    vec_type = pl.TileType(shape=[1, MAX_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
     in_group = pl.make_tile_group(type=tile_type, addrs=[VA_IN0, VA_IN1], mutex_ids=[0, 1])
     out_group = pl.make_tile_group(type=tile_type, addrs=[VA_OUT0, VA_OUT1], mutex_ids=[2, 3])
     gamma_group = pl.make_tile_group(type=vec_type, addrs=[VA_GAMMA], mutex_ids=[4])
@@ -184,8 +186,8 @@ def _run_case(rows, cols):
 
     logging.info(f"\n=== Test LayerNorm dynamic rows={rows} cols={cols} (make_tile_group + VF, multicore) ===")
     x = torch.rand([rows, cols], device=device, dtype=torch.float32) * 8.0 - 4.0
-    gamma = (torch.rand([1, cols], device=device, dtype=torch.float32) + 0.5)
-    beta = (torch.rand([1, cols], device=device, dtype=torch.float32) - 0.5)
+    gamma = torch.rand([1, cols], device=device, dtype=torch.float32) + 0.5
+    beta = torch.rand([1, cols], device=device, dtype=torch.float32) - 0.5
     y = torch.empty([rows, cols], device=device, dtype=torch.float32)
 
     num_tiles = (rows + TILE_ROWS - 1) // TILE_ROWS
@@ -206,16 +208,17 @@ def _run_case(rows, cols):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_layernorm_tile_group_vf():
     # (rows, cols): both dynamic. Cover single-register N, multi-register N,
     # register-unaligned N (partial tail lane), partial row-tiles, and multicore.
     cases = [
-        (2048, 64),     # single register per row, 128 tiles -> 32 cores
-        (4096, 128),    # 2 registers per row
-        (1000, 200),    # N unaligned (3 regs, tail 8 lanes) + partial row-tile
-        (777, 300),     # N unaligned (5 regs, tail 44 lanes) + partial row-tile
-        (100, 512),     # full MAX_N (8 registers per row)
-        (2049, 100),    # odd rows + N unaligned (2 regs, tail 36 lanes)
+        (2048, 64),  # single register per row, 128 tiles -> 32 cores
+        (4096, 128),  # 2 registers per row
+        (1000, 200),  # N unaligned (3 regs, tail 8 lanes) + partial row-tile
+        (777, 300),  # N unaligned (5 regs, tail 44 lanes) + partial row-tile
+        (100, 512),  # full MAX_N (8 registers per row)
+        (2049, 100),  # odd rows + N unaligned (2 regs, tail 36 lanes)
     ]
     for rows, cols in cases:
         _run_case(rows, cols)

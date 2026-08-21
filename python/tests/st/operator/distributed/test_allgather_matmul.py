@@ -228,6 +228,7 @@ def allgather_matmul(
 
 
 @pytest.mark.world_size(2)
+@pypto.options(pass_options={"enable_slice": True})
 def test_allgather_matmul():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

@@ -24,6 +24,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -60,6 +62,7 @@ def _ref(tdt, fn, x, y):
 # ===================================================================
 # for_break: for-loop add with break (only first tile col)  (FP16/BF16/FP32/INT32)
 # ===================================================================
+
 
 # =============================================================================
 # Test 1: for 循环 break 中断 - FP16
@@ -189,6 +192,7 @@ FOR_BREAK_KERNELS = {
 # while_break: while-loop add with break (only first tile col)  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 5: while 循环 break 中断 - FP16
 #         while-loop break - FP16
@@ -230,6 +234,7 @@ WHILE_BREAK_KERNELS = {
 # for_if_break: nested for-loop with if(i >= threshold) break  (FP16)
 # ===================================================================
 
+
 # =============================================================================
 # Test 6: for + if 内层 break
 #         for + if inner break
@@ -263,6 +268,7 @@ def for_if_break_inner_kernel(
 # ===================================================================
 # while_if_break: nested while-loop with if(i >= threshold) break  (FP16)
 # ===================================================================
+
 
 # =============================================================================
 # Test 7: while + if 内层 break
@@ -299,6 +305,7 @@ def while_if_break_inner_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_break():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -317,6 +324,7 @@ def test_for_break():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_break():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -335,6 +343,7 @@ def test_while_break():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_if_break_inner():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -353,6 +362,7 @@ def test_for_if_break_inner():
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_while_if_break_inner():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -381,6 +391,7 @@ def test_while_if_break_inner():
 #   L7:            for i6 in range(0, 1) — break if i6 >= 0 (always)
 #   L8:              while i7 < 1      — break if i7 >= 0 (always)
 # ===================================================================
+
 
 # =============================================================================
 # Test 8: for/while 8 层嵌套 break
@@ -441,6 +452,7 @@ def for_while_8layer_break_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_while_8layer_break():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -465,6 +477,7 @@ def test_for_while_8layer_break():
 #   outer pre-op: store x to z[i, 0] (executes every outer iter)
 #   inner: break immediately, add/store never execute
 # ===================================================================
+
 
 # =============================================================================
 # Test 9: for 首轮 break
@@ -501,6 +514,7 @@ def for_break_first_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_break_first():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -521,6 +535,7 @@ def test_for_break_first():
 # ===================================================================
 # for_while_if_not_break_continue: break/continue with not conditions
 # ===================================================================
+
 
 @pl.jit(auto_mutex=True)
 def for_while_if_not_break_continue_kernel(
@@ -557,6 +572,7 @@ def for_while_if_not_break_continue_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_for_while_if_not_break_continue():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -571,9 +587,7 @@ def test_for_while_if_not_break_continue():
     x_f = x.float()
     y_f = y.float()
     z_ref[:TILE_M, :TILE_N] = (x_f[:TILE_M, :TILE_N] + y_f[:TILE_M, :TILE_N]).to(torch.float16)
-    z_ref[TILE_M:, :2 * TILE_N] = (
-        x_f[TILE_M:, :2 * TILE_N] - y_f[TILE_M:, :2 * TILE_N]
-    ).to(torch.float16)
+    z_ref[TILE_M:, :2 * TILE_N] = (x_f[TILE_M:, :2 * TILE_N] - y_f[TILE_M:, :2 * TILE_N]).to(torch.float16)
     torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
     logging.info("test_for_while_if_not_break_continue passed! shape=%s", shape)
 
@@ -590,9 +604,9 @@ def break_unaligned_fp16_kernel(
 ):
     m = x.shape[0]
     n = x.shape[1]
-    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
-                            target_memory=pl.MemorySpace.Vec,
-                            valid_shape=[-1, -1])
+    tile_type = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
     a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
     b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
     c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
@@ -615,6 +629,7 @@ def break_unaligned_fp16_kernel(
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_break_unaligned_shape():
     device = ST_DEVICE
     torch.npu.set_device(device)

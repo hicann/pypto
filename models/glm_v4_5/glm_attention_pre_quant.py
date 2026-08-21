@@ -504,6 +504,7 @@ def quant_attention_pre_kernel(
 
 
 @pytest.mark.skip("Failed for Precision")
+@pypto.options(pass_options={"enable_slice": True})
 def test_quant_attention_pre():
     # 1. 设置参数
     bs = 8

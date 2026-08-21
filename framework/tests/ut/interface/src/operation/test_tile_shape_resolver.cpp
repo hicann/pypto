@@ -240,6 +240,19 @@ TEST_F(TileShapeResolverTest, GatherElements_Axis0)
     ExpectResolverMatchesExpansion(Program::GetInstance().GetCurrentFunction(), {out});
 }
 
+// ---- OP_INDEX_PUT: in-place GM write; every tile op shares the same full {result} output. ----
+TEST_F(TileShapeResolverTest, IndexPut_3D)
+{
+    TileShape::Current().SetVecTile(8, 8, 8);
+    Tensor self(DT_FP32, {128, 8, 8}, "self");
+    Tensor values(DT_FP32, {128, 8}, "values");
+    Tensor indices0(DT_INT32, {128}, "indices0");
+    Tensor indices1(DT_INT32, {128}, "indices1");
+    std::vector<Tensor> indices{indices0, indices1};
+    FUNCTION("IndexPutCase") { IndexPut_(self, indices, values, false); }
+    ExpectResolverMatchesExpansion(Program::GetInstance().GetCurrentFunction(), {self});
+}
+
 // ---- OP_INDEX_ADD: [self, src, indices]; self axis full, src elementwise, indices full ----
 TEST_F(TileShapeResolverTest, IndexAdd_Axis0)
 {

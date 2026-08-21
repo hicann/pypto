@@ -14,6 +14,7 @@
  */
 
 #include "passes/pass_utils/infer_discontinuous_input_utils.h"
+#include "interface/configs/config_manager_ng.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/infer_shape_utils.h"
 #include "passes/pass_utils/pass_utils.h"
@@ -105,7 +106,7 @@ inline bool NoViewConflict(Function& function,
     for (size_t i = 0; i < inplaceTensors.size(); i++) {
         auto tensor = inplaceTensors[i].first;
         for (auto& producer : tensor->GetProducers()) {
-            if (producer->GetOpcode() == Opcode::OP_VIEW) {
+            if (IsViewLike(producer->GetOpcode())) {
                 viewOps[i] = producer;
             }
         }
@@ -131,8 +132,9 @@ inline bool NoViewConflict(Function& function,
 std::vector<std::pair<LogicalTensorPtr, Operation*>> InferDiscontinuousInputUtils::GetInplacedTileTensors(
     LogicalTensorPtr targetTensor)
 {
-    static const std::unordered_set<Opcode> inplaceNodes{Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE,
-                                                         Opcode::OP_INDEX_OUTCAST};
+    static const std::unordered_set<Opcode> inplaceNodes{Opcode::OP_VIEW,     Opcode::OP_SLICE,
+                                                         Opcode::OP_ASSEMBLE, Opcode::OP_CONTRACT,
+                                                         Opcode::OP_RESHAPE,  Opcode::OP_INDEX_OUTCAST};
     std::vector<std::pair<LogicalTensorPtr, Operation*>> inplacedTensor;
     for (auto& producer : targetTensor->GetProducers()) {
         if (inplaceNodes.count(producer->GetOpcode()) == 0) {
@@ -145,7 +147,7 @@ std::vector<std::pair<LogicalTensorPtr, Operation*>> InferDiscontinuousInputUtil
                 continue;
             }
             auto consumerOp = *consumers.begin();
-            if (consumerOp == nullptr || consumerOp->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            if (consumerOp == nullptr || IsAssembleLike(consumerOp->GetOpcode())) {
                 continue;
             }
             constexpr int kIndexOutcastInplaceInputIdx = 2;
@@ -212,7 +214,7 @@ void InferDiscontinuousInputUtils::DDRTensorAssignUB(
     insertedNodes.reserve(opList.size());
     for (size_t i = 0; i < opList.size(); ++i) {
         Operation* currOp = opList[i];
-        if (currOp->GetOpcode() != Opcode::OP_ASSEMBLE) {
+        if (!IsAssembleLike(currOp->GetOpcode())) {
             continue;
         }
         for (LogicalTensorPtr ioperand : currOp->GetIOperands()) {
@@ -220,7 +222,7 @@ void InferDiscontinuousInputUtils::DDRTensorAssignUB(
                 continue;
             }
             auto& producers = ioperand->GetProducers();
-            if (producers.size() != 1 || (*producers.begin())->GetOpcode() != Opcode::OP_VIEW) {
+            if (producers.size() != 1 || !IsViewLike((*producers.begin())->GetOpcode())) {
                 continue;
             }
             auto& inOp = *producers.begin();
@@ -321,23 +323,26 @@ Status InferDiscontinuousInputUtils::InferFromIncast(Function& function, bool ch
 void InferDiscontinuousInputUtils::InsertViewOp(Function& function, LogicalTensorPtr iOperand,
                                                 LogicalTensorPtr oOperand)
 {
-    auto& insertViewOp = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_VIEW, {iOperand}, {oOperand});
+    auto& insertViewOp = irBuilder_.CreateTensorOpStmt(function, config::GetSliceOpcode(), {iOperand}, {oOperand});
     newOps_.push_back(&insertViewOp);
     insertViewOp.SetOpAttribute(
         std::make_shared<ViewOpAttribute>(iOperand->GetOffset(), oOperand->GetMemoryTypeOriginal(),
                                           iOperand->GetDynOffset(), iOperand->GetDynValidShape()));
-    APASS_LOG_DEBUG_F(Elements::Operation, "Insert view op [%d].", insertViewOp.GetOpMagic());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Insert %s op [%d].", insertViewOp.GetOpcodeStr().c_str(),
+                      insertViewOp.GetOpMagic());
 }
 
 void InferDiscontinuousInputUtils::InsertAssembleOp(Function& function, LogicalTensorPtr iOperand,
                                                     LogicalTensorPtr oOperand)
 {
-    auto& insertAssembleOp = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {iOperand}, {oOperand});
+    auto& insertAssembleOp = irBuilder_.CreateTensorOpStmt(function, config::GetContractOpcode(), {iOperand},
+                                                           {oOperand});
     newOps_.push_back(&insertAssembleOp);
     insertAssembleOp.SetOpAttribute(
         std::make_shared<AssembleOpAttribute>(iOperand->GetMemoryTypeOriginal(), oOperand->GetOffset(),
                                               oOperand->GetDynOffset(), oOperand->GetDynValidShape()));
-    APASS_LOG_DEBUG_F(Elements::Operation, "Insert assemble op [%d].", insertAssembleOp.GetOpMagic());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Insert %s op [%d].", insertAssembleOp.GetOpcodeStr().c_str(),
+                      insertAssembleOp.GetOpMagic());
 }
 
 void InferDiscontinuousInputUtils::InsertCopyOp(Function& function, LogicalTensorPtr iOperand,

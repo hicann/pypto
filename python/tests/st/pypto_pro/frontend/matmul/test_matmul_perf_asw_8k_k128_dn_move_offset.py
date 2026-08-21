@@ -23,6 +23,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 L0C_FRACTAL = int(os.environ.get("L0C_FRACTAL", "1024"))
@@ -34,18 +36,18 @@ TILE_M = 256
 TILE_N = 256
 KL0 = 64
 KL1 = 128
-STEP_KA = KL1 // KL0                     # 2
+STEP_KA = KL1 // KL0  # 2
 NUM_CORES = 32
 
-M_TILES = M_SIZE // TILE_M               # 32
-N_TILES = N_SIZE // TILE_N               # 32
-K_OUTER = K_SIZE // KL1                  # 1
-K_INNER = STEP_KA                        # 2
-K_TOTAL = K_OUTER * K_INNER              # 2
-TOTAL_CNT = M_TILES * N_TILES            # 1024
+M_TILES = M_SIZE // TILE_M  # 32
+N_TILES = N_SIZE // TILE_N  # 32
+K_OUTER = K_SIZE // KL1  # 1
+K_INNER = STEP_KA  # 2
+K_TOTAL = K_OUTER * K_INNER  # 2
+TOTAL_CNT = M_TILES * N_TILES  # 1024
 
 MAIN_WINDOW = 4
-MAIN_ROW = M_TILES // MAIN_WINDOW - 1    # 7
+MAIN_ROW = M_TILES // MAIN_WINDOW - 1  # 7
 TAIL_WINDOW = M_TILES - MAIN_ROW * MAIN_WINDOW
 assert TAIL_WINDOW == MAIN_WINDOW
 
@@ -71,23 +73,33 @@ def matmul_perf_asw_8k_k128_dn_move_offset_kernel(
     with pl.section_cube():
         a_l1_wide = pl.make_tile_group(
             type=pl.TileType(shape=[TILE_M, KL1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-            addrs=A_L1_ADDR_0, mutex_ids=[0, 1, 10, 11])
+            addrs=A_L1_ADDR_0,
+            mutex_ids=[0, 1, 10, 11],
+        )
 
         b_l1_wide = pl.make_tile_group(
             type=pl.TileType(shape=[KL1, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-            addrs=B_L1_BASE, mutex_ids=[2, 3, 12, 13])
+            addrs=B_L1_BASE,
+            mutex_ids=[2, 3, 12, 13],
+        )
 
         a_left_db = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE_M, KL0], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                             layout=pl.NZ),
-            addrs=L0A_BASE, mutex_ids=[4, 5])
+            type=pl.TileType(shape=[TILE_M, KL0], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
+            addrs=L0A_BASE,
+            mutex_ids=[4, 5],
+        )
         b_right_db = pl.make_tile_group(
             type=pl.TileType(shape=[KL0, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
-            addrs=L0B_BASE, mutex_ids=[6, 7])
+            addrs=L0B_BASE,
+            mutex_ids=[6, 7],
+        )
         acc = pl.make_tile_group(
-            type=pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
-                             fractal=L0C_FRACTAL),
-            addrs=L0C_BASE, mutex_ids=[8])
+            type=pl.TileType(
+                shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, fractal=L0C_FRACTAL
+            ),
+            addrs=L0C_BASE,
+            mutex_ids=[8],
+        )
 
         pl.system.set_mm_layout_transform(enabled=True)
 
@@ -130,11 +142,9 @@ def matmul_perf_asw_8k_k128_dn_move_offset_kernel(
                     pl.move(cur_b_right, b_wide_slot, offset=[0, 0])
 
                     if ko == 0:
-                        pl.matmul(acc.current(), cur_a_left, cur_b_right,
-                                   phase=pl.AccPhase.Partial)
+                        pl.matmul(acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Partial)
                     else:
-                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right,
-                                       phase=pl.AccPhase.Partial)
+                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Partial)
 
                     # --- ki=1: A offset [0, KL0]; B offset [KL0, 0] ---
                     cur_a_left = a_left_db.next()
@@ -143,16 +153,13 @@ def matmul_perf_asw_8k_k128_dn_move_offset_kernel(
                     pl.move(cur_b_right, b_wide_slot, offset=[KL0, 0])
 
                     if ko == K_OUTER - 1:
-                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right,
-                                       phase=pl.AccPhase.Final)
+                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Final)
                     else:
-                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right,
-                                       phase=pl.AccPhase.Partial)
+                        pl.matmul_acc(acc.current(), acc.current(), cur_a_left, cur_b_right, phase=pl.AccPhase.Partial)
 
                 pl.store(out, acc.current(), [i, j], phase=pl.STPhase.Final)
 
         pl.system.set_mm_layout_transform(enabled=False)
-
 
 
 def run_perf_test(num_iters: int = 20, warmup: int = 3):
@@ -160,10 +167,8 @@ def run_perf_test(num_iters: int = 20, warmup: int = 3):
     logging.info("ASW Matmul 8K-K128 — two-layer K (2D move offset + L0 DB)")
     logging.info("=" * 60)
     logging.info("Shape: M=%d, N=%d, K=%d", M_SIZE, N_SIZE, K_SIZE)
-    logging.info("Tile:  TILE_M=%d, TILE_N=%d, KL0=%d, KL1=%d",
-                 TILE_M, TILE_N, KL0, KL1)
-    logging.info("K loop: %d outer x %d inner = %d total mmad",
-                 K_OUTER, K_INNER, K_TOTAL)
+    logging.info("Tile:  TILE_M=%d, TILE_N=%d, KL0=%d, KL1=%d", TILE_M, TILE_N, KL0, KL1)
+    logging.info("K loop: %d outer x %d inner = %d total mmad", K_OUTER, K_INNER, K_TOTAL)
     logging.info("Tiles: %d x %d = %d", M_TILES, N_TILES, TOTAL_CNT)
     logging.info("Cores: %d, rounds: %d", NUM_CORES, ROUND)
     logging.info("Iters: warmup=%d, measure=%d", warmup, num_iters)
@@ -230,6 +235,7 @@ def run_perf_test(num_iters: int = 20, warmup: int = 3):
 
 
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_perf_asw_8k_k128_dn_move_offset():
     run_perf_test()
 

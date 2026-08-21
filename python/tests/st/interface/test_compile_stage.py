@@ -19,7 +19,7 @@ def test_comipile_stage(host_options=None):
     @pypto.frontend.jit(
         host_options=host_options,
         runtime_options={"run_mode": 0},
-)
+    )
     def test_func(
         a: pypto.Tensor((4, 4), pypto.DT_FP32),
         b: pypto.Tensor((4, 4), pypto.DT_FP32),
@@ -31,6 +31,7 @@ def test_comipile_stage(host_options=None):
     return test_func
 
 
+@pypto.options(pass_options={"enable_slice": True})
 def test_all_compile_stages():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)

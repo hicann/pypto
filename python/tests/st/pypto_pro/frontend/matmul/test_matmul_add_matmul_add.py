@@ -18,6 +18,8 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
+import pypto
+
 
 @pl.jit()
 def matmul_add_matmul_add(
@@ -155,8 +157,8 @@ def matmul_add_matmul_add(
         pl.store(out, tile_out, [off, 0])
 
 
-
 @pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_add_matmul_add():
 
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
