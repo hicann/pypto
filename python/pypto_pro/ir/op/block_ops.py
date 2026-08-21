@@ -1151,6 +1151,10 @@ def _is_fractal_transpose(a: TensorLayout, b: TensorLayout) -> bool:
     return _FRACTAL_TRANSPOSE.get(a) == b
 
 
+# A5 cube buffers (L0A/L0B/L0C) do not support these layouts.
+_REJECTED_LAYOUTS_ON_A5 = (TensorLayout.ZZ, TensorLayout.NN)
+
+
 def _tile_layout(tile_type: "_IRTileType") -> "TensorLayout | None":
     """Return the TensorLayout of a TileType derived from its hardware_info blayout/slayout."""
     hw = tile_type.hardware_info
@@ -1212,6 +1216,16 @@ def _apply_default_layout(tt: "TileType") -> None:
         allowed_layouts.add(TensorLayout.ZN)
         if tt.dtype in (DataType.UINT64, DataType.INT64):
             allowed_layouts.add(TensorLayout.ND)
+
+    if (
+        arch == "a5"
+        and tt.target_memory in (MemorySpace.Left, MemorySpace.Right, MemorySpace.Acc)
+        and tt.layout in _REJECTED_LAYOUTS_ON_A5
+    ):
+        raise ValueError(
+            f"{tt.target_memory.name} tiles do not support {tt.layout.name} layout on '{arch}'; "
+            f"use the default {default_layout.name} layout instead."
+        )
 
     if tt.layout not in allowed_layouts:
         space_name = tt.target_memory.name

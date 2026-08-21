@@ -16,6 +16,8 @@ import pypto_pro.language as pl
 from pypto_pro.language.parser.diagnostics import ParserTypeError
 import pytest
 
+from pypto.pypto_impl import ir as _ir
+
 
 def _program_ir(program) -> str:
     return str(program)
@@ -757,3 +759,38 @@ def test_make_tile_addr_from_constant_expression():
             return pl.store(output, tile_a, [0, 0])
 
     assert 'memref_addr=4128' in _program_ir(Program)
+
+
+@pytest.mark.parametrize("memory", [pl.MemorySpace.Left, pl.MemorySpace.Right, pl.MemorySpace.Acc])
+@pytest.mark.parametrize("layout", [pl.ZZ, pl.NN])
+def test_a5_rejects_zz_nn_for_cube_buffers(monkeypatch, memory, layout):
+    monkeypatch.setenv("PYPTOPRO_JIT_ARCH", "a5")
+
+    with pytest.raises(pl.parser.ParserError, match="do not support"):
+
+        @pl.function
+        def create_tile():
+            tt = pl.TileType(
+                shape=[128, 128],
+                dtype=pl.DT_FP16,
+                target_memory=memory,
+                layout=layout,
+            )
+            tile = pl.make_tile(tt, addr=0x00000, size=32768)  # noqa: F841
+
+
+def test_a5_allows_regular_cube_buffer_layouts(monkeypatch):
+    monkeypatch.setenv("PYPTOPRO_JIT_ARCH", "a5")
+
+    @pl.function
+    def create_tile():
+        tt = pl.TileType(
+            shape=[128, 128],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Left,
+            layout=pl.NZ,
+        )
+        tile = pl.make_tile(tt, addr=0x00000, size=32768)  # noqa: F841
+
+    stmt = create_tile.body.stmts[0] if hasattr(create_tile.body, "stmts") else create_tile.body
+    assert isinstance(stmt.var.type.hardware_info, _ir.HardwareInfo)

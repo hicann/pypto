@@ -84,7 +84,7 @@ def test_compact_propagated_by_parser(compact, expected):
                 shape=[128, 128],
                 dtype=pl.DT_FP16,
                 target_memory=pl.MemorySpace.Left,
-                layout=pl.ZZ,
+                layout=pl.NZ,
             )
             tile_a = pl.make_tile(tile_type, addr=0x00000, size=32768)  # noqa: F841
     else:
@@ -94,7 +94,7 @@ def test_compact_propagated_by_parser(compact, expected):
                 shape=[128, 128],
                 dtype=pl.DT_FP16,
                 target_memory=pl.MemorySpace.Left,
-                layout=pl.ZZ,
+                layout=pl.NZ,
                 compact=compact,
             )
             tile_a = pl.make_tile(tile_type, addr=0x00000, size=32768)  # noqa: F841
