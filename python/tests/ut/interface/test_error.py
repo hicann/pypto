@@ -20,7 +20,7 @@ import pytest
 import torch
 
 import pypto
-from pypto.error import ParserError, PyptoError, PyptoGeneralError, _catch_and_wrap_error
+from pypto.error import FeError, ParserError, PyptoError, PyptoGeneralError, _catch_and_wrap_error
 
 
 def test_python_error_codes_are_bound_from_cpp():
@@ -147,6 +147,29 @@ def test_error_on_input_tensor_reassign():
 
     with pytest.raises(ParserError, match="Input tensor 'c' cannot be reassigned"):
         error_assign_input(a, b, c)
+
+
+def test_error_on_non_contiguous_input_tensor():
+    """Test that passing a non-contiguous input tensor triggers FeError."""
+
+    @pypto.frontend.jit(
+        new_ir=False,
+        runtime_options={"run_mode": pypto.RunMode.SIM}, host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
+    )
+    def add(
+        a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
+        b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
+        c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
+    ):
+        pypto.set_vec_tile_shapes(32, 32)
+        c = a + b  # noqa: F841
+
+    a = torch.rand((32, 32), dtype=torch.float16)
+    b = torch.rand((32, 32), dtype=torch.float16).transpose(0, 1)
+    c = torch.zeros((32, 32), dtype=torch.float16)
+
+    with pytest.raises(FeError, match="not all tensors are contiguous"):
+        add(a, b, c)
 
 
 def test_error_on_first_input_tensor_reassign():

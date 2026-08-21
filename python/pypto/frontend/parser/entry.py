@@ -361,6 +361,8 @@ class JitCallableWrapper:
                 raise FeError(
                     RuntimeError(f"Input {idx + 1} (index {idx}) must not be a DTensor, got {tensor.__class__}")
                 )
+            if not tensor.is_contiguous():
+                raise FeError(RuntimeError("not all tensors are contiguous"))
 
     @staticmethod
     def _get_func_nonlocals(func: Callable) -> dict[str, Any]:
