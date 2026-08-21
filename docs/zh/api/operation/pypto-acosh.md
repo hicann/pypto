@@ -38,7 +38,7 @@ acosh(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1. 考虑输入、输出及临时空间占用，TileShape大小有额外约束。假设TileShape为\[a,b,c,d\]，记$d_{align}=CeilAlign(d, 8)$，则总的UB空间占用为：
+1. 在综合考虑输入、输出及临时存储空间占用的前提下，TileShape大小需满足额外约束条件。假设TileShape为\[a,b,c,d\]，记$d_{align}=CeilAlign(d, 8)$，则总的UB空间占用为：
 
    $$
    5*a*b*c*d_{align}*sizeof(DT\_FP32) <= UB

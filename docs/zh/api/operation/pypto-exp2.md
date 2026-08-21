@@ -36,6 +36,16 @@ exp2(input: Tensor) -> Tensor
 
 1. input中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为float32。
 2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+3. 临时空间使用说明：若TileShape为\[a,b,c,d\]则需要的临时空间大小为
+   <!-- npu="950" id4 -->
+   - Ascend 950PR/Ascend 950DT：a\*b\*c\*d\*sizeof\(DT_FP32\)
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：a\*b\*c\*\(2\*d+3\*d/8\)\*sizeof\(DT_FP32\)
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：a\*b\*c\*\(2\*d+3\*d/8\)\*sizeof\(DT_FP32\)
+   <!-- end id6 -->
 
 ## 调用示例
 
