@@ -20,6 +20,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -452,27 +453,167 @@ private:
 
 void CCECodegen::PreScanKernel(const ir::FunctionPtr& kernel_func)
 {
-    var_read_names_.clear();
     CollectVarReadNames(kernel_func->body_, var_read_names_);
-
-    mutex_pipes_.clear();
     CollectMutexPipeInfo(kernel_func->body_);
 }
 
-void CCECodegen::PrepareBodyGeneration()
+void CCECodegen::ResetFunctionGenerationState()
 {
+    context_.Clear();
+    tensor_to_pointer_.clear();
+    tensor_defs_.clear();
+    tile_addresses_.clear();
+    emitted_tile_types_.clear();
+    emitted_tile_aliases_.clear();
+
+    var_read_names_.clear();
+    var_read_counts_.clear();
+    mutex_pipes_.clear();
+
+    current_target_var_.clear();
+    current_expr_value_.clear();
+    current_tuple_.reset();
+    current_stmt_span_ = ir::Span::Unknown();
+    current_expr_span_ = ir::Span::Unknown();
+
     tuple_var_to_make_tuple_.clear();
     tuple_backing_arr_.clear();
     loop_target_stack_.clear();
     yield_buffer_.clear();
+
+    vf_tile_ptrs_.clear();
+    section_hoisted_decls_.clear();
+    vf_reg_hoisted_decls_.clear();
+    reg_tensor_vars_.clear();
+    mask_reg_vars_.clear();
+    addr_reg_vars_.clear();
+    tile_offset_counter_ = 0;
+    vf_tile_ptr_counter_ = 0;
+    in_vf_section_ = false;
+    current_function_type_ = ir::FunctionType::OPAQUE;
 }
+
+std::string CCECodegen::BuildSimtFunctionSignature(const ir::FunctionPtr& func)
+{
+    std::ostringstream sig;
+    if (func->funcType_ == ir::FunctionType::SIMT_VF) {
+        CHECK(func->HasAttr(ir::kMaxThreadsAttr)) << "SIMT function '" << func->name_ << "' has no max_threads";
+        sig << "__simt_vf__ __launch_bounds__(" << func->GetAttr<int>(ir::kMaxThreadsAttr) << ") inline void ";
+    } else {
+        CHECK(func->returnTypes_.size() <= 1) << "SIMT callee '" << func->name_ << "' has multiple return values";
+        if (func->returnTypes_.empty()) {
+            sig << "__simt_callee__ inline void ";
+        } else {
+            auto return_type = ir::As<ir::ScalarType>(func->returnTypes_[0]);
+            CHECK(return_type != nullptr) << "SIMT callee '" << func->name_ << "' must return a scalar or void";
+            sig << "__simt_callee__ inline " << return_type->dtype_.ToCTypeString() << " ";
+        }
+    }
+    sig << func->name_ << "(";
+    bool first = true;
+    for (const auto& param : func->params_) {
+        if (!first) {
+            sig << ", ";
+        }
+        first = false;
+        std::string param_name = context_.SanitizeName(param);
+        if (auto scalar_type = ir::As<ir::ScalarType>(param->GetType())) {
+            sig << scalar_type->dtype_.ToCTypeString() << " " << param_name;
+        } else if (auto tensor_type = ir::As<ir::TensorType>(param->GetType())) {
+            sig << "__gm__ " << tensor_type->dtype_.ToCTypeString() << "* " << param_name;
+            RegisterPointer(param_name, param_name);
+        } else if (auto tile_type = ir::As<ir::TileType>(param->GetType())) {
+            sig << "__ubuf__ " << tile_type->dtype_.ToCTypeString() << "* " << param_name;
+            sig << ", uint32_t " << param_name << "__valid_row";
+            sig << ", uint32_t " << param_name << "__valid_col";
+        } else {
+            CHECK(false) << "SIMT function '" << func->name_
+                         << "' supports only TensorType, TileType, and ScalarType parameters";
+        }
+        context_.RegisterVar(param, param_name);
+    }
+    sig << ")";
+    return sig.str();
+}
+
+void CCECodegen::GenerateSimtFunction(const ir::FunctionPtr& func)
+{
+    CHECK(func != nullptr &&
+          (func->funcType_ == ir::FunctionType::SIMT_VF || func->funcType_ == ir::FunctionType::SIMT_CALLEE))
+        << "GenerateSimtFunction expects a SIMT_VF or SIMT_CALLEE function";
+
+    ResetFunctionGenerationState();
+    PreScanKernel(func);
+    current_function_type_ = func->funcType_;
+
+    emitter_.EmitLine(BuildSimtFunctionSignature(func));
+    emitter_.EmitLine("{");
+    emitter_.IncreaseIndent();
+
+    try {
+        GenerateBody(func);
+    } catch (...) {
+        current_function_type_ = ir::FunctionType::OPAQUE;
+        throw;
+    }
+    current_function_type_ = ir::FunctionType::OPAQUE;
+    emitter_.EmitLine("");
+}
+
+namespace {
+
+class SimtCalleeCallCollector : public ir::IRVisitor {
+public:
+    using ir::IRVisitor::VisitExpr_;
+
+    std::vector<std::string> calls_;
+
+    void VisitExpr_(const ir::CallPtr& op) override
+    {
+        calls_.push_back(op->name_);
+        ir::IRVisitor::VisitExpr_(op);
+    }
+};
+
+std::vector<ir::FunctionPtr> OrderSimtCallees(const std::map<std::string, ir::FunctionPtr>& callees)
+{
+    std::unordered_set<std::string> active;
+    std::unordered_set<std::string> ordered_names;
+    std::vector<ir::FunctionPtr> ordered;
+
+    std::function<void(const ir::FunctionPtr&)> visit = [&](const ir::FunctionPtr& func) {
+        if (ordered_names.find(func->name_) != ordered_names.end()) {
+            return;
+        }
+        CHECK(active.insert(func->name_).second)
+            << "Recursive SIMT callee call involving '" << func->name_ << "' is not supported";
+        SimtCalleeCallCollector collector;
+        collector.VisitStmt(func->body_);
+        for (const auto& name : collector.calls_) {
+            auto it = callees.find(name);
+            if (it != callees.end()) {
+                visit(it->second);
+            }
+        }
+        active.erase(func->name_);
+        ordered_names.insert(func->name_);
+        ordered.push_back(func);
+    };
+
+    for (const auto& entry : callees) {
+        visit(entry.second);
+    }
+    return ordered;
+}
+
+} // namespace
 
 std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std::string& arch)
 {
     CHECK(program != nullptr) << "Cannot generate code for null program";
 
+    ResetFunctionGenerationState();
     arch_ = arch;
-    in_vf_section_ = false;
 
     // Capture the tuple/struct field-name side table from the entry program (may be null).
     // Passes below rebuild the Program (dropping this annotation), but the TupleType pointers
@@ -485,8 +626,18 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
     ir::ProgramPtr ssa_program = ir::pass::ConvertToSSA()(program);
 
     ir::FunctionPtr kernel_func;
+    std::vector<ir::FunctionPtr> simt_funcs;
+    simt_callees_.clear();
     for (const auto& func_entry : ssa_program->functions_) {
         const auto& func = func_entry.second;
+        if (func->funcType_ == ir::FunctionType::SIMT_VF) {
+            simt_funcs.push_back(func);
+            continue;
+        }
+        if (func->funcType_ == ir::FunctionType::SIMT_CALLEE) {
+            simt_callees_[func->name_] = func;
+            continue;
+        }
         if (func->funcType_ == ir::FunctionType::ORCHESTRATION) {
             continue;
         }
@@ -495,22 +646,30 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
         }
     }
     CHECK(kernel_func != nullptr) << "No kernel function found in program";
+    if (!simt_funcs.empty() || !simt_callees_.empty()) {
+        CHECK(target_ == ir::SectionKind::Vector) << "SIMT functions can only be generated for the Vector target";
+        CHECK(arch_ == "a5") << "SIMT direct CCE generation currently requires arch='a5'";
+    }
 
     emitter_.Clear();
-    context_.Clear();
-    tensor_to_pointer_.clear();
     tiling_headers_.clear();
     struct_definitions_.clear();
-
-    PreScanKernel(kernel_func);
 
     // Detect cross-core sync (a5 uses hardware sync, not ffts)
     bool has_cross_sync = DetectCrossCoreSyncOps(kernel_func->body_);
     bool needs_ffts = has_cross_sync && (arch_ != "a5");
 
+    for (const auto& simt_callee : OrderSimtCallees(simt_callees_)) {
+        GenerateSimtFunction(simt_callee);
+    }
+    for (const auto& simt_func : simt_funcs) {
+        GenerateSimtFunction(simt_func);
+    }
+
+    ResetFunctionGenerationState();
+    PreScanKernel(kernel_func);
     RegisterTilingStructTypes(kernel_func);
     GenerateSinglePrologue(kernel_func, needs_ffts);
-    PrepareBodyGeneration();
     try {
         GenerateBody(kernel_func);
     } catch (const npu::tile_fwk::Error& e) {
@@ -1066,21 +1225,31 @@ void CCECodegen::VisitStmt_(const ir::EvalStmtPtr& op)
     INTERNAL_CHECK(op != nullptr) << "Internal error: null EvalStmt";
     INTERNAL_CHECK(op->expr_ != nullptr) << "Internal error: EvalStmt has null expression";
 
-    // EvalStmt: evaluate expression for side effects (e.g., sync operations)
-    // Sync ops (set_flag, wait_flag, pipe_barrier) are registered with f_codegen_cce
-    // and will be invoked via VisitExpr_(Call). Cross-core sync redundancy is
-    // checked inside the per-op codegen handler (Make{Set,Wait}CrossCoreCodegenCCE).
+    // Backend side-effect ops emit their statements while visiting the expression. A direct
+    // SimtCallee call instead returns its call text, which must be emitted here. Results from
+    // all other evaluation expressions are intentionally discarded.
+    auto call = ir::As<ir::Call>(op->expr_);
+    bool is_simt_callee_call = IsInSimtContext() && call != nullptr &&
+                               simt_callees_.find(call->name_) != simt_callees_.end();
+    current_expr_value_ = "";
     VisitExpr(op->expr_);
+    if (is_simt_callee_call && !current_expr_value_.empty()) {
+        emitter_.EmitLine(current_expr_value_ + ";");
+    }
+    current_expr_value_ = "";
 }
 
 void CCECodegen::VisitStmt_(const ir::ReturnStmtPtr& op)
 {
     INTERNAL_CHECK(op != nullptr) << "Internal error: null ReturnStmt";
-    // A ReturnStmt reaching codegen is a kernel-level return. Emit a native C++ return so the
-    // function exits immediately, matching Python's return semantics.
-    // Kernel functions are void, so return values are discarded.
-    emitter_.EmitLine("return;");
-    current_expr_value_ = "";
+    CHECK(op->value_.size() <= 1) << "ReturnStmt must contain at most one value";
+    if (op->value_.empty()) {
+        emitter_.EmitLine("return;");
+    } else {
+        CHECK(ir::As<ir::ScalarType>(op->value_[0]->GetType()) != nullptr) << "ReturnStmt value must be a scalar";
+        emitter_.EmitLine("return " + GetExprAsCode(op->value_[0]) + ";");
+    }
+    current_expr_value_.clear();
 }
 
 void CCECodegen::VisitStmt_(const ir::YieldStmtPtr& op)
@@ -1882,9 +2051,49 @@ std::string CCECodegen::ComputeIRBasedOffset(const ir::TensorTypePtr& tensor_typ
 // Call Expression Visitor (uses operator registry codegen functions)
 // ========================================================================
 
+std::string CCECodegen::GenerateSimtCalleeCall(const ir::CallPtr& op, const ir::FunctionPtr& callee)
+{
+    CHECK(op->args_.size() == callee->params_.size())
+        << "SIMT callee '" << callee->name_ << "' expects " << callee->params_.size() << " arguments, got "
+        << op->args_.size();
+
+    std::ostringstream call;
+    call << callee->name_ << "(";
+    bool first = true;
+    auto append = [&](const std::string& value) {
+        if (!first) {
+            call << ", ";
+        }
+        first = false;
+        call << value;
+    };
+
+    for (size_t i = 0; i < op->args_.size(); ++i) {
+        const auto& actual = op->args_[i];
+        append(GetExprAsCode(actual));
+        if (ir::As<ir::TileType>(callee->params_[i]->GetType())) {
+            auto actual_var = ir::As<ir::Var>(actual);
+            CHECK(actual_var != nullptr) << "SIMT Tile callee arguments must be named Tile variables";
+            std::string actual_name = context_.SanitizeName(actual_var);
+            append(actual_name + "__valid_row");
+            append(actual_name + "__valid_col");
+        }
+    }
+    call << ")";
+    return call.str();
+}
+
 void CCECodegen::VisitExpr_(const ir::CallPtr& op)
 {
     INTERNAL_CHECK(op != nullptr) << "Internal error: null Call";
+
+    if (IsInSimtContext()) {
+        auto simt_callee = simt_callees_.find(op->name_);
+        if (simt_callee != simt_callees_.end()) {
+            current_expr_value_ = GenerateSimtCalleeCall(op, simt_callee->second);
+            return;
+        }
+    }
 
     CHECK(backend_ != nullptr) << "CCE backend must not be null";
     const auto* op_info = backend_->GetOpInfo(op->name_);

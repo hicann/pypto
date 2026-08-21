@@ -458,6 +458,33 @@ TEST_F(IRPrinterTest, TestPrintProgram)
     EXPECT_NE(progStr.find("f2"), std::string::npos);
 }
 
+TEST_F(IRPrinterTest, TestPrintSimtFunctionDecorators)
+{
+    auto body = std::make_shared<ReturnStmt>(Sp());
+    auto simt_function = std::make_shared<Function>(
+        "entry", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp(), FunctionType::SIMT_VF, false,
+        std::vector<std::pair<std::string, std::any>>{{kMaxThreadsAttr, 256}});
+    auto unbounded_simt_function = std::make_shared<Function>(
+        "unbounded", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp(), FunctionType::SIMT_VF);
+    auto simt_callee = std::make_shared<Function>("helper", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp(),
+                                                  FunctionType::SIMT_CALLEE);
+
+    auto function_str = Print(simt_function);
+    auto unbounded_function_str = Print(unbounded_simt_function);
+    auto callee_str = Print(simt_callee);
+
+    EXPECT_NE(function_str.find("@ir.simt.function"), std::string::npos);
+    EXPECT_NE(function_str.find("ir.FunctionType.SimtVF"), std::string::npos);
+    EXPECT_EQ(function_str.find("max_threads"), std::string::npos);
+    EXPECT_NE(function_str.find("def entry()"), std::string::npos);
+    EXPECT_NE(unbounded_function_str.find("@ir.simt.function"), std::string::npos);
+    EXPECT_NE(unbounded_function_str.find("ir.FunctionType.SimtVF"), std::string::npos);
+    EXPECT_EQ(unbounded_function_str.find("max_threads"), std::string::npos);
+    EXPECT_NE(callee_str.find("@ir.simt.function"), std::string::npos);
+    EXPECT_NE(callee_str.find("ir.FunctionType.SimtCallee"), std::string::npos);
+    EXPECT_NE(callee_str.find("def helper()"), std::string::npos);
+}
+
 // ============================================================================
 // Control flow with SeqStmts body
 // ============================================================================

@@ -129,7 +129,7 @@ def test_dynamic_tensor_shape_value():
     @pl.function
     def func(
         x: pl.Tensor[[pl.DYNAMIC], pl.DT_FP32],
-    ) -> pl.Tensor[[pl.DYNAMIC], pl.DT_FP32]:
+    ):
         result = pl.tensor.mul(x, x.shape[0])
         return result
 

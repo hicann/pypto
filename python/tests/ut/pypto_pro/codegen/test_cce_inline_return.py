@@ -60,7 +60,7 @@ def _consume_pair(bundle, index):
 
 
 @pl.kernel
-def _inline_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) -> None:
+def _inline_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     extent = _choose_extent(_choose_in_loop(a.shape[0]))
     start, stop = _pair(0, extent)
     bundle = _bundle(start, stop)
@@ -252,7 +252,7 @@ def _ret_void_twice(value):
 
 
 @pl.kernel
-def _named_tuple_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) -> None:
+def _named_tuple_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     bounds = _ret_named_tuple(a.shape[0])
     total = bounds.lo + bounds.hi
     for _i in pl.range(bounds.lo, total, 1):
@@ -260,7 +260,7 @@ def _named_tuple_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16
 
 
 @pl.kernel
-def _struct_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) -> None:
+def _struct_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     bounds = _ret_struct(a.shape[0])
     total = bounds.v + bounds.w
     for _i in pl.range(bounds.v, total, 1):
@@ -268,7 +268,7 @@ def _struct_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) ->
 
 
 @pl.kernel
-def _struct_in_tuple_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) -> None:
+def _struct_in_tuple_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     bundle = _ret_struct_in_tuple(a.shape[0])
     bounds = bundle[0]
     total = bounds.v + bounds.w
@@ -277,7 +277,7 @@ def _struct_in_tuple_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_
 
 
 @pl.kernel
-def _struct_array_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) -> None:
+def _struct_array_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     first, second = _ret_struct_array(a.shape[0])
     total = first.v + second.w
     for _i in pl.range(first.w, total, 1):
@@ -285,7 +285,7 @@ def _struct_array_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP1
 
 
 @pl.kernel
-def _tile_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) -> None:
+def _tile_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
     tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
@@ -295,7 +295,7 @@ def _tile_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) -> N
 
 
 @pl.kernel
-def _void_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) -> None:
+def _void_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     _ret_void_twice(a.shape[0])
     for _i in pl.range(0, a.shape[0], 1):
         pl.system.bar_all()
@@ -441,7 +441,7 @@ def _both_branches_return(value):
 
 def _make_shape_kernel(helper):
     @pl.kernel
-    def kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) -> None:
+    def kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
         limit = helper(a.shape[0])
         doubled = limit + limit
         for _i in pl.range(limit, doubled, 1):
@@ -451,7 +451,7 @@ def _make_shape_kernel(helper):
 
 
 @pl.kernel
-def _for_if_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) -> None:
+def _for_if_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     limit = _for_if_return(a.shape[0])
     doubled = limit + limit
     for _i in pl.range(limit, doubled, 1):
@@ -459,7 +459,7 @@ def _for_if_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) ->
 
 
 @pl.kernel
-def _if_for_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]) -> None:
+def _if_for_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     limit = _if_for_return(a.shape[0], a.shape[1])
     doubled = limit + limit
     for _i in pl.range(limit, doubled, 1):

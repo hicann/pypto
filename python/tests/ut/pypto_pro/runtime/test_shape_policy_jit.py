@@ -33,21 +33,21 @@ def _static_signature_suffix(signature):
 @pl.jit(arch="a5")
 def mixed_policy_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.STATIC, 4], pl.DT_FP32],
-) -> None:
+):
     return
 
 
 @pl.jit(arch="a5")
 def ellipsis_policy_kernel(
     x: pl.Tensor[[pl.DYNAMIC, ...], pl.DT_FP32],
-) -> None:
+):
     return
 
 
 @pl.jit(arch="a5")
 def call_style_policy_kernel(
     x: pl.Tensor([pl.DYNAMIC, pl.STATIC, 4], pl.DT_FP32),
-) -> None:
+):
     return
 
 

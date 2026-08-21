@@ -313,6 +313,26 @@ TEST_F(IRStructHashTest, TestHashFunction)
     EXPECT_EQ(structural_hash(Node(f1)), structural_hash(Node(f2)));
 }
 
+TEST_F(IRStructHashTest, TestHashFunctionMaxThreads)
+{
+    auto body = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
+    auto f128a = std::make_shared<Function>("f", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp(),
+                                            FunctionType::SIMT_VF, false,
+                                            std::vector<std::pair<std::string, std::any>>{{kMaxThreadsAttr, 128}});
+    auto f128b = std::make_shared<Function>("f", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp(),
+                                            FunctionType::SIMT_VF, false,
+                                            std::vector<std::pair<std::string, std::any>>{{kMaxThreadsAttr, 128}});
+    auto f256 = std::make_shared<Function>("f", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp(),
+                                           FunctionType::SIMT_VF, false,
+                                           std::vector<std::pair<std::string, std::any>>{{kMaxThreadsAttr, 256}});
+    auto unbounded = std::make_shared<Function>("f", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp(),
+                                                FunctionType::SIMT_VF);
+
+    EXPECT_EQ(structural_hash(Node(f128a)), structural_hash(Node(f128b)));
+    EXPECT_NE(structural_hash(Node(f128a)), structural_hash(Node(f256)));
+    EXPECT_NE(structural_hash(Node(f128a)), structural_hash(Node(unbounded)));
+}
+
 TEST_F(IRStructHashTest, TestHashProgram)
 {
     auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());

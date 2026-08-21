@@ -160,7 +160,7 @@ FunctionPtr IRMutator::VisitFunction(const FunctionPtr& func)
         return func;
     }
     return std::make_shared<const Function>(func->name_, func->params_, func->returnTypes_, std::move(new_body),
-                                            func->span_, func->funcType_, func->entry_);
+                                            func->span_, func->funcType_, func->entry_, func->attrs_);
 }
 
 ExprPtr IRMutator::VisitExpr(const ExprPtr& expr) { return ExprFunctor<ExprPtr>::VisitExpr(expr); }

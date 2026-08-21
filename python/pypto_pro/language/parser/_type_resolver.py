@@ -294,69 +294,6 @@ class TypeResolver:
             return contains_policy(annotation)
         return False
 
-    def validate_policy_return_types(
-        self,
-        type_node: ast.expr,
-        actual_types: list[ir.Type],
-    ) -> None:
-        """Validate policy-bearing return annotations against concrete returned types."""
-        success, annotation = self.expr_evaluator.try_eval_expr(type_node)
-        if not success:
-            raise ParserTypeError(
-                f"Cannot evaluate return annotation: {ast.unparse(type_node)}",
-                span=self._get_span(type_node),
-            )
-
-        origin = typing.get_origin(annotation)
-        expected_items = list(typing.get_args(annotation)) if origin is tuple else [annotation]
-        actual_items = actual_types
-        if origin is tuple and len(actual_types) == 1 and isinstance(actual_types[0], ir.TupleType):
-            actual_items = list(actual_types[0].types)
-        if len(expected_items) != len(actual_items):
-            raise ParserTypeError(
-                f"Return annotation expects {len(expected_items)} value(s), got {len(actual_items)}",
-                span=self._get_span(type_node),
-            )
-
-        from pypto_pro.language.typing.tensor import Tensor
-        from pypto_pro.runtime.shape_policy import FixedDim
-
-        for return_index, (expected, actual) in enumerate(zip(expected_items, actual_items)):
-            if not isinstance(expected, Tensor):
-                continue
-            if not isinstance(actual, ir.TensorType):
-                raise ParserTypeError(
-                    f"Return value {return_index} must be a Tensor, got {type(actual).__name__}",
-                    span=self._get_span(type_node),
-                )
-            if expected.dtype != actual.dtype:
-                raise ParserTypeError(
-                    f"Return value {return_index} dtype mismatch: expected {expected.dtype}, got {actual.dtype}",
-                    span=self._get_span(type_node),
-                )
-            shape_spec, rank_matches, explicit_rank = self._resolve_shape_spec_and_rank(
-                f"return[{return_index}]",
-                return_index,
-                expected.shape,
-                actual,
-                self._get_span(type_node),
-            )
-            if not rank_matches:
-                raise ParserTypeError(
-                    f"Return value {return_index} rank mismatch for annotation {expected.shape}",
-                    span=self._get_span(type_node),
-                )
-            explicit_rank = len(shape_spec.dimensions) - (1 if shape_spec.has_ellipsis else 0)
-            for axis, dimension in enumerate(shape_spec.dimensions[:explicit_rank]):
-                if not isinstance(dimension, FixedDim):
-                    continue
-                actual_dim = actual.shape[axis]
-                if not isinstance(actual_dim, ir.ConstInt) or actual_dim.value != dimension.value:
-                    raise ParserTypeError(
-                        f"Return value {return_index} axis {axis} must be fixed at {dimension.value}, got {actual_dim}",
-                        span=self._get_span(type_node),
-                    )
-
     def validate_policy_parameter_type(
         self,
         type_node: ast.expr,

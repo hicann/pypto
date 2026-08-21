@@ -1383,6 +1383,8 @@ void BindProgram(py::module_& ir)
         .value("Orchestration", FunctionType::ORCHESTRATION, "Host/AICPU control and coordination")
         .value("InCore", FunctionType::IN_CORE, "AICore sub-graph execution")
         .value("Helper", FunctionType::HELPER, "Scalar helper callable from kernels (generates func.call)")
+        .value("SimtVF", FunctionType::SIMT_VF, "A5 SIMT vector function launched from an AIV kernel")
+        .value("SimtCallee", FunctionType::SIMT_CALLEE, "A5 helper callable from SIMT functions")
         .export_values();
 
     // Function - const shared_ptr
@@ -1390,19 +1392,30 @@ void BindProgram(py::module_& ir)
         ir, "Function", py::dynamic_attr(), "Function definition with name, parameters, return types, and body");
     function_class.def(
         py::init([](const std::string& name, const py::list& params, const std::vector<TypePtr>& return_types,
-                    const StmtPtr& body, const Span& span, FunctionType type, bool entry) -> std::shared_ptr<Function> {
+                    const StmtPtr& body, const Span& span, FunctionType type, bool entry,
+                    const py::object& attrs) -> std::shared_ptr<Function> {
             std::vector<VarPtr> param_vars;
             param_vars.reserve(py::len(params));
             for (auto item : params) {
                 param_vars.push_back(py::cast<VarPtr>(item));
             }
-            return std::make_shared<Function>(name, std::move(param_vars), return_types, body, span, type, entry);
+            py::dict attr_dict;
+            if (!attrs.is_none()) {
+                attr_dict = attrs.cast<py::dict>();
+            }
+            auto attr_list = ConvertAttrDict(attr_dict);
+            return std::make_shared<Function>(name, std::move(param_vars), return_types, body, span, type, entry,
+                                              std::move(attr_list));
         }),
         py::arg("name"), py::arg("params"), py::arg("return_types"), py::arg("body"), py::arg("span"),
-        py::arg("type") = FunctionType::OPAQUE, py::arg("entry") = false, "Create a function definition");
+        py::arg("type") = FunctionType::OPAQUE, py::arg("entry") = false, py::arg("attrs") = py::none(),
+        "Create a function definition");
     BindFields<Function>(function_class);
     function_class.def(
         "__str__", [](const std::shared_ptr<Function>& self) { return TextDump(self); }, "IR text representation");
+    function_class.def("has_attr", &Function::HasAttr, py::arg("key"), "Check whether a function attribute exists");
+    function_class.def("get_attr", &Function::GetAttr<int>, py::arg("key"), py::arg("default_value") = 0,
+                       "Get an integer function attribute");
 
     // IRDebugInfo - compilation-session side table for tuple/struct field names.
     auto debug_info_class = py::class_<IRDebugInfo, std::shared_ptr<IRDebugInfo>>(

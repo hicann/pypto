@@ -50,14 +50,14 @@ def _static_signature_suffix(signature):
 @pl.jit(arch="a5")
 def static_dynamic_kernel(
     x: pl.Tensor[[pl.STATIC, pl.DYNAMIC], pl.DT_FP16],
-) -> None:
+):
     return
 
 
 @pl.jit(arch="a5")
 def dynamic_dynamic_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-) -> None:
+):
     return
 
 

@@ -350,13 +350,16 @@ def _pl_dtype_to_torch(dtype: DataType):
 
 
 def _get_kernel_ir_function(prog):
-    """Return the entry-like IR function used to emit the CCE kernel body."""
+    """Return the Opaque IR function that serves as the kernel entry."""
     from pypto.pypto_impl.ir import FunctionType
 
     for f in prog.functions.values():
-        if f.func_type not in (FunctionType.Helper, FunctionType.Orchestration):
+        if f.func_type == FunctionType.Opaque:
             return f
-    return next(iter(prog.functions.values()))
+    raise RuntimeError(
+        f"No Opaque kernel entry function found in program '{prog.name}' "
+        f"(functions: {list(prog.functions)})"
+    )
 
 
 def _extract_param_specs(prog) -> list[ParamSpec]:

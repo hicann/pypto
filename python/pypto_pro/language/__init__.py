@@ -26,6 +26,7 @@ __all__ = [
     "DYNAMIC",
     "STATIC",
     "system",
+    "simt",
     "mutex",
     "TileType",
     "make_tile",
@@ -364,6 +365,7 @@ from ._api import (
     trap,
     xor,
 )
+from ._simt_api import Simt as simt  # noqa: N813
 from ._vf_api import Vf
 from .parser.decorator import function, inline, program, vector_function
 from .parser.text_parser import loads, loads_program, parse, parse_program

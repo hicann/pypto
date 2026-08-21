@@ -11,7 +11,7 @@
 
 from pypto_pro import ir
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError
+from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 import pytest
 
 
@@ -169,6 +169,31 @@ def test_inline_helper_value_return_can_fall_through():
         return choose(value)
 
     assert any(isinstance(stmt, ir.WhileStmt) for stmt in caller.body.stmts)
+
+
+def test_kernel_uses_runtime_tile_valid_shape_ir():
+    @pl.function(type=pl.FunctionType.InCore)
+    def caller():
+        tile_type = pl.TileType(shape=[16, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+        tile = pl.make_tile(tile_type, addr=0, size=1024)
+        _kernel_rows = tile.valid_shape[0]
+        _kernel_cols = tile.valid_shape[1]
+
+    function_ir = str(caller)
+    assert function_ir.count("block.tile_valid_shape") == 2
+
+
+@pytest.mark.parametrize("index", ["True", "0.0", "2", "-3"])
+def test_tile_valid_shape_rejects_invalid_index(index):
+    code = f"""
+@pl.function(type=pl.FunctionType.InCore)
+def invalid_valid_shape():
+    tile_type = pl.TileType(shape=[16, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    tile = pl.make_tile(tile_type, addr=0, size=1024)
+    value = tile.valid_shape[{index}]
+"""
+    with pytest.raises((ParserSyntaxError, ParserTypeError)):
+        pl.parse(code)
 
 
 def test_vector_function_rejects_explicit_return():

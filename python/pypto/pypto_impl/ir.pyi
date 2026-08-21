@@ -853,12 +853,16 @@ class FunctionType(enum.IntEnum):
     - Orchestration: Host/AICPU control and coordination
     - InCore: AICore sub-graph execution
     - Helper: Scalar helper function callable from kernels
+    - SimtVF: A5 SIMT vector function launched from an AIV kernel
+    - SimtCallee: A5 helper callable from SIMT functions
     """
 
     Opaque = ...
     Orchestration = ...
     InCore = ...
     Helper = ...
+    SimtVF = ...
+    SimtCallee = ...
 
 
 class PtrType(Type):
@@ -1574,7 +1578,13 @@ class Function(IRNode):
     """Function name."""
 
     func_type: Final[FunctionType]
-    """Function type (Opaque, Orchestration, InCore, AIC, AIV, or Group)."""
+    """Function type (Opaque, Orchestration, InCore, Helper, SimtVF, or SimtCallee)."""
+
+    entry: Final[bool]
+    """Whether this is the program entry function."""
+
+    attrs: Final[dict[str, object]]
+    """Function attributes (key-value metadata)."""
 
     params: Final[list[Var]]
     """Parameter variables."""
@@ -1585,6 +1595,14 @@ class Function(IRNode):
     body: Final[SeqStmts]
     """Function body statement (use SeqStmts for multiple statements)."""
 
+    def has_attr(self, key: str) -> bool:
+        """Check whether a function attribute exists."""
+        ...
+
+    def get_attr(self, key: str, default_value: int = 0) -> int:
+        """Get an integer function attribute."""
+        ...
+
     def __init__(
         self,
         name: str,
@@ -1593,6 +1611,8 @@ class Function(IRNode):
         body: Stmt,
         span: Span,
         type: FunctionType = FunctionType.Opaque,
+        entry: bool = False,
+        attrs: dict[str, object] | None = None,
     ) -> None:
         """Create a function definition.
 
@@ -1603,6 +1623,8 @@ class Function(IRNode):
             body: Function body statement (use SeqStmts for multiple statements)
             span: Source location
             type: Function type (default: Opaque)
+            entry: Whether this is the program entry function
+            attrs: Function attributes (key-value metadata)
         """
 
     def __str__(self) -> str:

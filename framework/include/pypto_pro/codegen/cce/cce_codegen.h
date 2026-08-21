@@ -118,6 +118,12 @@ public:
     [[nodiscard]] std::string GetTypeString(const ir::DataType& dtype) const override;
     /// True when currently generating code inside a VF section (CCE __VEC_SCOPE__).
     [[nodiscard]] bool IsInVFSection() const { return in_vf_section_; }
+    /// True when emitting an A5 `__simt_vf__` or `__simt_callee__` body.
+    [[nodiscard]] bool IsInSimtContext() const
+    {
+        return current_function_type_ == ir::FunctionType::SIMT_VF ||
+               current_function_type_ == ir::FunctionType::SIMT_CALLEE;
+    }
     int GetTileOffsetCounter() { return tile_offset_counter_++; }
     /// Resolve a VF tile expr (plain tile or `tile[offset]`) to its `__ubuf__` pointer, typed as the
     /// tile element and hoisted before `__VEC_SCOPE__`. A `tile[offset]` load reuses the rvalue
@@ -416,8 +422,11 @@ private:
      * scalars and target-specific declarations.
      */
     void GenerateSinglePrologue(const ir::FunctionPtr& func, bool has_cross_sync);
+    std::string BuildSimtFunctionSignature(const ir::FunctionPtr& func);
+    void GenerateSimtFunction(const ir::FunctionPtr& func);
+    std::string GenerateSimtCalleeCall(const ir::CallPtr& op, const ir::FunctionPtr& callee);
     void PreScanKernel(const ir::FunctionPtr& kernel_func);
-    void PrepareBodyGeneration();
+    void ResetFunctionGenerationState();
 
     bool DetectCrossCoreSyncOps(const ir::StmtPtr& stmt);
 
@@ -553,13 +562,15 @@ private:
     std::map<std::string, std::string> tiling_headers_;          ///< Tiling struct headers (filename -> content)
     std::map<std::string, StructDefinition> struct_definitions_; ///< Struct type name ->definition
 
-    CodeEmitter emitter_;                                            ///< Code emitter for structured output
-    CodeContext context_;                                            ///< Context for variable tracking
-    TypeConverter type_converter_;                                   ///< Type converter
-    const backend::Backend* backend_;                                ///< CCE backend instance (for op info, core type)
-    std::string arch_ = "a3";                                        ///< Target architecture ("a2", "a3", "a5")
-    const ir::SectionKind target_;                                   ///< Fixed Cube/Vector target for this generator
-    bool in_vf_section_ = false;                                     ///< True only while emitting a nested VF section
+    CodeEmitter emitter_;             ///< Code emitter for structured output
+    CodeContext context_;             ///< Context for variable tracking
+    TypeConverter type_converter_;    ///< Type converter
+    const backend::Backend* backend_; ///< CCE backend instance (for op info, core type)
+    std::string arch_ = "a3";         ///< Target architecture ("a2", "a3", "a5")
+    const ir::SectionKind target_;    ///< Fixed Cube/Vector target for this generator
+    bool in_vf_section_ = false;      ///< True only while emitting a nested VF section
+    ir::FunctionType current_function_type_ = ir::FunctionType::OPAQUE;
+    std::map<std::string, ir::FunctionPtr> simt_callees_;
     std::unordered_map<std::string, std::string> tensor_to_pointer_; ///< Tensor var name ->raw pointer expression
     std::map<std::string, TensorDef> tensor_defs_;      ///< Prescan: cce var name ->TensorDef (for make_tensor views)
     std::map<std::string, std::string> tile_addresses_; ///< tile_name ->TASSIGN address expression

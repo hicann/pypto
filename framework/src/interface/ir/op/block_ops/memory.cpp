@@ -159,6 +159,15 @@ TypePtr DeduceGetValType([[maybe_unused]] const std::vector<ExprPtr>& args,
     return std::make_shared<ScalarType>(tensor_type->dtype_);
 }
 
+TypePtr DeduceTileValidShapeType(const std::vector<ExprPtr>& args,
+                                 const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    CHECK(args.size() == 1 && As<TileType>(args[0]->GetType())) << "block.tile_valid_shape requires one Tile argument";
+    int axis = GetOpKwarg<int>(kwargs, "axis", 0);
+    CHECK(axis >= 0 && axis <= 1) << "block.tile_valid_shape axis must be in [0, 1]";
+    return std::make_shared<ScalarType>(DataType(DataType::UINT32));
+}
+
 TypePtr DeduceSetValType([[maybe_unused]] const std::vector<ExprPtr>& args,
                          [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
@@ -261,6 +270,13 @@ REGISTER_OP("block.getval")
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceGetValType(args, kwargs);
     });
+
+REGISTER_OP("block.tile_valid_shape")
+    .set_op_category("BlockOp")
+    .set_description("Read one runtime valid-shape dimension of a Tile")
+    .add_argument("tile", "Input tile")
+    .set_attr<int>("axis")
+    .f_deduce_type(DeduceTileValidShapeType);
 
 REGISTER_OP("block.setval")
     .set_op_category("BlockOp")

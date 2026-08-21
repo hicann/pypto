@@ -789,7 +789,7 @@ class ExpressionParserMixin:
         return expr
 
     def lower_attr_access(self, base: ir.Expr, field_name: str, span: ir.Span):
-        """Lower attribute read ``base.field`` to ``GetItemExpr(base, index)``.
+        """Lower attribute read ``base.field`` to its named tuple element.
 
         Resolves the field index from the base's named TupleType and records the
         type's field names in ``IRDebugInfo``. When *base* is a parse-time
@@ -893,6 +893,11 @@ class ExpressionParserMixin:
 
     def parse_subscript(self, subscript: ast.Subscript) -> ir.Expr:
         span = self.span_tracker.get_span(subscript)
+
+        if isinstance(subscript.value, ast.Attribute) and subscript.value.attr == "valid_shape":
+            base_expr = self.parse_expression(subscript.value.value)
+            if isinstance(base_expr, ir.Expr) and isinstance(base_expr.type, ir.TileType):
+                return self._parse_tile_valid_shape_subscript(base_expr, subscript.slice, span)
 
         if isinstance(subscript.value, ast.Attribute) and subscript.value.attr == "shape":
             base_expr = self.parse_expression(subscript.value.value)
@@ -1196,6 +1201,33 @@ class ExpressionParserMixin:
             )
         return tensor_type.shape[axis]
 
+    def _parse_tile_valid_shape_subscript(
+        self,
+        base_expr: ir.Expr,
+        index_node: ast.expr,
+        span: ir.Span,
+    ) -> ir.Expr:
+        """Parse a runtime ``tile.valid_shape[axis]`` query."""
+        success, axis = self.expr_evaluator.try_eval_expr(index_node)
+        if not success or type(axis) is not int:
+            raise ParserSyntaxError(
+                "tile.valid_shape index must be a compile-time integer",
+                span=span,
+                hint="Use tile.valid_shape[0] or tile.valid_shape[1].",
+            )
+
+        rank = len(base_expr.type.shape)
+        original_axis = axis
+        if axis < 0:
+            axis += rank
+        if axis < 0 or axis >= rank:
+            raise ParserTypeError(
+                f"valid_shape index {original_axis} out of range for Tile rank {rank}",
+                span=span,
+            )
+
+        return ir.create_op_call("block.tile_valid_shape", [base_expr], {"axis": axis}, span)
+
     def _parse_scalar_subscript_index(
         self,
         container_expr: ir.Expr,
@@ -1279,6 +1311,13 @@ class ExpressionParserMixin:
                 "Tensor slice sub-view is not supported",
                 span=span,
                 hint="Use pl.load/pl.store with offset lists for tensor access",
+            )
+
+        if self._current_func_type in (ir.FunctionType.SimtVF, ir.FunctionType.SimtCallee):
+            raise UnsupportedFeatureError(
+                "Tile subview is not supported inside a SIMT function",
+                span=span,
+                hint="Access the Tile directly with tile[row, col].",
             )
 
         # VF section: tile slice 'tile[a:b, c:d]' is not supported.

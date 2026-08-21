@@ -264,7 +264,7 @@ def test_function_with_var_shape():
     @pl.function
     def func(
         x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32],
-    ) -> pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32]:
+    ):
         return x
 
     param_type = func.params[0].type
@@ -282,7 +282,7 @@ def test_function_with_multiple_vars():
     def func(
         a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
         b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    ) -> pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32]:
+    ):
         return a
 
     a_type = func.params[0].type
@@ -299,20 +299,6 @@ def test_function_with_multiple_vars():
     assert b_type.shape[1].name == "__pypto_dyn_b_1"
 
 
-def test_function_var_return_type():
-    """Return type also supports dynamic shapes."""
-    @pl.function
-    def func(
-        x: pl.Tensor[[pl.DYNAMIC, 64], pl.DT_FP32],
-    ) -> pl.Tensor[[pl.DYNAMIC, 64], pl.DT_FP32]:
-        return x
-
-    ret_type = func.return_types[0]
-    assert isinstance(ret_type, ir.TensorType)
-    assert isinstance(ret_type.shape[0], ir.Var)
-    assert ret_type.shape[0].name == "__pypto_dyn_x_0"
-
-
 def test_program_with_var_shape():
     """@pl.program supports DYNAMIC parameter policies."""
     @pl.program
@@ -321,7 +307,7 @@ def test_program_with_var_shape():
         def process(
             self,
             x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-        ) -> pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32]:
+        ):
             return x
 
     func = list(MyProgram.functions.values())[0]
@@ -502,7 +488,7 @@ def test_different_dtypes_per_param():
     def func(
         x: pl.Tensor[[128, 64], dtype_in],
     ) -> pl.Tensor[[128, 64], dtype_out]:
-        return x
+        return pl.tensor.cast(x, target_type=dtype_out)
 
     in_type = func.params[0].type
     out_type = func.return_types[0]
@@ -646,7 +632,7 @@ def test_var_with_variable_shape():
     shape = [pl.DYNAMIC, pl.DYNAMIC]
 
     @pl.function
-    def func(x: pl.Tensor[shape, pl.DT_FP32]) -> pl.Tensor[shape, pl.DT_FP32]:
+    def func(x: pl.Tensor[shape, pl.DT_FP32]):
         return x
 
     param_type = func.params[0].type
@@ -662,7 +648,7 @@ def test_var_mixed_with_int_in_variable_shape():
     shape = [pl.DYNAMIC, 128]
 
     @pl.function
-    def func(x: pl.Tensor[shape, pl.DT_FP32]) -> pl.Tensor[shape, pl.DT_FP32]:
+    def func(x: pl.Tensor[shape, pl.DT_FP32]):
         return x
 
     param_type = func.params[0].type
@@ -680,7 +666,7 @@ def test_var_mixed_with_computed_dim():
     @pl.function
     def func(
         x: pl.Tensor[[pl.DYNAMIC, base * 2], pl.DT_FP32],
-    ) -> pl.Tensor[[pl.DYNAMIC, base * 2], pl.DT_FP32]:
+    ):
         return x
 
     param_type = func.params[0].type

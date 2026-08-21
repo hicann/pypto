@@ -25,7 +25,7 @@ from ..typing._tiling import ArrayFieldInfo, get_tiling_fields, is_tiling_class
 from ..typing.shape import _ShapePolicy
 from ._assignment_parser import AssignmentParserMixin
 from ._buffer_parser import BufferParserMixin
-from ._call_parser import CallParserMixin, _infer_return_types_from_body
+from ._call_parser import CallParserMixin, _check_type_compatible
 from ._control_flow_parser import ControlFlowParserMixin, validate_single_tail_return
 from ._expr_evaluator import ExprEvaluator
 from ._expression_parser import ExpressionParserMixin
@@ -48,6 +48,32 @@ def _snake_visit_name(node: ast.AST) -> str:
             chars.append("_")
         chars.append(char.lower())
     return f"visit_{''.join(chars)}"
+
+
+def _infer_return_types_from_body(body: ir.Stmt) -> list[ir.Type] | None:
+    """Extract return types from the first value-returning ReturnStmt in a function body.
+
+    Recurses into control-flow bodies so a helper that returns a value from a branch,
+    while an earlier branch does a void return, still resolves its result type.
+    """
+    if isinstance(body, ir.ReturnStmt):
+        if body.value:
+            return [value.type for value in body.value]
+        return None
+    if isinstance(body, ir.SeqStmts):
+        for stmt in body.stmts:
+            result = _infer_return_types_from_body(stmt)
+            if result is not None:
+                return result
+    if isinstance(body, ir.IfStmt):
+        for branch in (body.then_body, body.else_body):
+            if branch is not None:
+                result = _infer_return_types_from_body(branch)
+                if result is not None:
+                    return result
+    if isinstance(body, (ir.ForStmt, ir.WhileStmt)):
+        return _infer_return_types_from_body(body.body)
+    return None
 
 
 class ASTParser(
@@ -113,6 +139,8 @@ class ASTParser(
         # Python IR wrapper and can be reused by an unrelated expression.
         self._tile_mutex_meta: dict[ir.Expr, tuple] = {}
         self.scope_manager = ScopeManager(strict_ssa=strict_ssa, tile_mutex_meta=self._tile_mutex_meta)
+        self._tilingkey_consts = tilingkey_consts
+        self._datatype_consts = datatype_consts
         # Concrete tilingkey field values (per launch key) are injected as closure constants
         # so the parser folds field references (e.g. NeedAttnMask) to ConstInt — no template
         # params reach the IR. Field values win over any same-named closure var.
@@ -156,6 +184,8 @@ class ASTParser(
         self.inline_func_cache: dict[int, Any] = {}
         self.inline_call_stack: list[int] = []
         self.inline_counter: int = 0
+        self.simt_func_cache: dict[int, ir.Function] = {}
+        self.simt_call_stack: list[int] = []
         # Nested vector helpers share the outermost VF section.
         self.inline_vf_depth: int = 0
 
@@ -175,10 +205,10 @@ class ASTParser(
         # GetItemExpr alias semantics; every other MakeTuple is immutable.
         self._struct_array_tuples: set[ir.MakeTuple] = set()
 
-        # Maps tile expr id -> [row_expr, col_expr] for tiles that had
-        # set_validshape called on them at parse time. Consumed by
-        # _parse_slice_subscript to clamp sub-view valid_shape.
-        self._tile_valid_shape: dict[int, list] = {}
+        # Maps tile expressions to parser-tracked [row, col] valid shapes from
+        # explicit set_validshape calls. This metadata is used to clamp subviews;
+        # public tile.valid_shape reads are represented by block.tile_valid_shape.
+        self._tile_valid_shape: dict[ir.Expr, list] = {}
 
         # MakeTuples that already have an emitted assignment anchor. Keeping the
         # Expr objects themselves alive is required: a Python wrapper's id() can
@@ -236,10 +266,11 @@ class ASTParser(
         return ir.TensorType(param_type.shape, param_type.dtype, param_type.memref, tv)
 
     def record_tile_valid_shape(self, tile_expr: ir.Expr, valid_shape) -> None:
-        self._tile_valid_shape[id(tile_expr)] = list(valid_shape.elements)
+        elements = valid_shape.elements if isinstance(valid_shape, ir.MakeTuple) else valid_shape
+        self._tile_valid_shape[tile_expr] = list(elements)
 
     def get_tile_valid_shape(self, tile_expr: ir.Expr):
-        return self._tile_valid_shape.get(id(tile_expr))
+        return self._tile_valid_shape.get(tile_expr)
 
     def set_void_return_mode(self, context: str, allow_early_return: bool = False) -> None:
         """Configure void-only return mode for this parser.
@@ -275,6 +306,7 @@ class ASTParser(
         func_def: ast.FunctionDef,
         func_type: ir.FunctionType = ir.FunctionType.Opaque,
         is_vector_function: bool = False,
+        callsite_param_types: dict[str, ir.Type] | None = None,
     ) -> ir.Function:
         """Parse function definition and build IR.
 
@@ -285,9 +317,18 @@ class ASTParser(
                 implicit ``ir.SectionKind.VF`` section scope (for
                 ``@pl.vector_function`` decorated functions).
 
+            callsite_param_types: Concrete parameter types supplied while parsing
+                a SIMT function at its call site.
+
         Returns:
             IR Function object
         """
+        if callsite_param_types is not None and func_type not in (
+            ir.FunctionType.SimtVF,
+            ir.FunctionType.SimtCallee,
+        ):
+            raise ValueError("callsite_param_types is only supported for SIMT functions")
+
         func_name = func_def.name
         func_span = self.span_tracker.get_span(func_def)
 
@@ -327,21 +368,11 @@ class ASTParser(
         self._validate_tiling_params(args_to_process, func_def)
 
         self._anchored_make_tuples.clear()
-        has_policy_return = self.type_resolver.annotation_has_shape_policy(func_def.returns)
 
         with self.builder.function(func_name, func_span, func_type=func_type) as f:
             for arg in args_to_process:
-                self._parse_function_param(arg, f)
-
-            # Parse return type (skip `-> None`)
-            if (
-                func_def.returns
-                and not has_policy_return
-                and not (isinstance(func_def.returns, ast.Constant) and func_def.returns.value is None)
-            ):
-                # tuple[...] resolves to a single TupleType, matching a `return a, b`
-                # body (one MakeTuple expr), so a tuple return is one return type.
-                f.return_type(self.type_resolver.resolve_type(func_def.returns))
+                callsite_type = callsite_param_types.get(arg.arg) if callsite_param_types is not None else None
+                self._parse_function_param(arg, f, callsite_type)
 
             # Give closure tuples a function-entry array-materialization anchor.
             self._hoist_closure_tuples()
@@ -367,22 +398,38 @@ class ASTParser(
 
         self.scope_manager.exit_scope()
         result = f.get_result()
-        if has_policy_return and func_def.returns is not None:
-            inferred = _infer_return_types_from_body(result.body) if result.body else None
-            if inferred is None:
+        inferred = (_infer_return_types_from_body(result.body) if result.body else None) or []
+        if func_def.returns is not None:
+            # tuple[...] resolves to a single TupleType, matching a `return a, b`
+            # body (one MakeTuple expr), so a tuple return is one return type.
+            annotated_return_types = [self.type_resolver.resolve_type(func_def.returns)]
+
+            return_span = self.span_tracker.get_span(func_def.returns)
+            if len(annotated_return_types) != len(inferred):
                 raise ParserTypeError(
-                    f"Function '{func_name}' has a shape-policy return annotation but no returned value",
-                    span=func_span,
+                    f"Return annotation for '{func_name}' expects "
+                    f"{len(annotated_return_types)} value(s), got {len(inferred)}",
+                    span=return_span,
                 )
-            self.type_resolver.validate_policy_return_types(func_def.returns, inferred)
-            result = ir.Function(
-                result.name,
-                list(result.params),
-                inferred,
-                result.body,
-                result.span,
-                result.func_type,
-            )
+            for annotated, actual in zip(annotated_return_types, inferred):
+                _check_type_compatible(
+                    annotated,
+                    actual,
+                    what="Return",
+                    name=func_name,
+                    span=return_span,
+                )
+
+        result = ir.Function(
+            result.name,
+            list(result.params),
+            inferred,
+            result.body,
+            result.span,
+            result.func_type,
+            result.entry,
+            dict(result.attrs),
+        )
         return result
 
     def parse_statement(self, stmt: ast.stmt) -> None:
@@ -515,13 +562,13 @@ class ASTParser(
                     hint="Move the tiling parameter to the last position",
                 )
 
-    def _parse_function_param(self, arg: ast.arg, f: Any) -> None:
+    def _parse_function_param(self, arg: ast.arg, f: Any, callsite_type: ir.Type | None = None) -> None:
         """Parse a single function parameter and register it in scope or tiling registry."""
         param_name = arg.arg
         param_span = self.span_tracker.get_span(arg)
 
         # 1) tiling-class annotation: always expand via the tiling path (even if a
-        # call-site-inferred type exists for this name).
+        # call-site type exists for this name).
         tiling_cls = self.resolve_tiling_class(arg.annotation) if arg.annotation else None
         if tiling_cls is not None:
             fields = get_tiling_fields(tiling_cls)
@@ -545,7 +592,21 @@ class ASTParser(
             self.scope_manager.define_var(param_name, tiling_var, allow_redef=True)
             return
 
-        # 2) Annotation only (decorator path: no call site to infer from).
+        # 2) A call-site type is available for delayed SIMT function parsing.
+        if callsite_type is not None:
+            if arg.annotation is not None:
+                annotated_type = self.type_resolver.resolve_param_type(
+                    arg.annotation, parameter_name=param_name
+                )
+                _check_type_compatible(
+                    annotated_type, callsite_type, what="SIMT parameter", name=param_name, span=param_span
+                )
+            param_type = self._attach_ptr_to_tensor_type(param_name, callsite_type, param_span)
+            param_var = f.param(param_name, param_type, param_span)
+            self.scope_manager.define_var(param_name, param_var, allow_redef=True)
+            return
+
+        # 3) Annotation-only path for eagerly parsed functions.
         if arg.annotation is None:
             raise ParserTypeError(
                 f"Parameter '{param_name}' missing type annotation",

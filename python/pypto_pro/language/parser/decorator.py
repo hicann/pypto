@@ -559,6 +559,33 @@ def function(
         return _decorator(fn)
 
 
+_SIMT_FUNCTION_MARKER = "_pypto_simt_function"
+_SIMT_MAX_THREADS_ATTR = "_pypto_simt_max_threads"
+
+
+def simt_function(fn: Callable | None = None, *, max_threads: int | None = None) -> Callable:
+    """Mark a callable for delayed SIMT parsing at its call site."""
+    if fn is None and max_threads is None:
+        raise TypeError("@pl.simt.function requires max_threads or a directly decorated function")
+
+    def decorate(func: Callable) -> Callable:
+        setattr(func, _SIMT_FUNCTION_MARKER, True)
+        setattr(func, _SIMT_MAX_THREADS_ATTR, max_threads)
+        return func
+
+    return decorate(fn) if fn is not None else decorate
+
+
+def is_simt_function(fn: Callable) -> bool:
+    """Return whether *fn* is marked as a SIMT function template."""
+    return bool(getattr(fn, _SIMT_FUNCTION_MARKER, False))
+
+
+def get_simt_max_threads(fn: Callable) -> int | None:
+    """Return the launch bound recorded by @pl.simt.function."""
+    return getattr(fn, _SIMT_MAX_THREADS_ATTR, None)
+
+
 def inline(fn: Callable) -> Callable:
     """Deprecated: @pl.inline has been removed. Use @pl.fn or pass as an annotated callable."""
     import warnings

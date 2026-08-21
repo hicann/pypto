@@ -17,7 +17,7 @@ from typing import Any
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 
-from .diagnostics import ParserSyntaxError, UnsupportedFeatureError
+from .diagnostics import ParserSyntaxError, ParserTypeError, UnsupportedFeatureError
 
 
 def _is_bare_return(stmt: ast.Return) -> bool:
@@ -327,28 +327,29 @@ class ControlFlowParserMixin:
             )
 
         if _is_bare_return(stmt):
-            # `return None` is identical to a bare `return`; treat it as a void
-            # return so a helper can early-exit on a compile-time-dead branch
-            # (e.g. `if constInfo.is_tnd: return None`) that inlining later drops.
             self.builder.return_stmt(None, span)
             return
 
-        if self._void_return_only:
-            raise ParserSyntaxError(
-                f"{self._void_return_context} only supports bare return or return None; "
-                "returning values is not supported.",
-                span=span,
-                hint=(
-                    "Do not write `return <value>`; only use `return` or `return None`. "
-                    "Pass output Tensor/Tile/buffer parameters for data results."
-                ),
-            )
-
-        # A tuple return (`return a, b`) is parsed as a single MakeTuple
-        # expression via parse_tuple_literal, so the ReturnStmt always carries
-        # exactly one value. Downstream inlining lowers it to `target = MakeTuple(...)`
-        # and backend codegen resolves the tuple via tuple_var_to_make_tuple_.
-        return_expr = self.parse_expression(stmt.value)
+        if self._current_func_type == ir.FunctionType.SimtCallee:
+            return_expr = self.parse_expression(stmt.value)
+            if not isinstance(return_expr.type, ir.ScalarType):
+                raise ParserTypeError(
+                    "A helper @pl.simt.function must return None or one scalar value",
+                    span=span,
+                    hint="Return Tile/Tensor data through an input parameter; return scalar results directly.",
+                )
+        else:
+            if self._void_return_only:
+                raise ParserSyntaxError(
+                    f"{self._void_return_context} only supports bare return or return None; "
+                    "returning values is not supported.",
+                    span=span,
+                    hint=(
+                        "Do not write `return <value>`; only use `return` or `return None`. "
+                        "Pass output Tensor/Tile/buffer parameters for data results."
+                    ),
+                )
+            return_expr = self.parse_expression(stmt.value)
         self.builder.return_stmt([return_expr], span)
 
     def parse_break(self, stmt: ast.Break) -> None:

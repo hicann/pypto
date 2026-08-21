@@ -1688,6 +1688,9 @@ static std::string MakeGetValCodegenCCE(const ir::CallPtr& op, codegen::CodegenB
     if (ir::As<ir::TileType>(first_type)) {
         std::string tile = codegen.GetExprAsCode(op->args_[0]);
         std::string offset = codegen.GetExprAsCode(op->args_[1]);
+        if (codegen.IsInSimtContext()) {
+            return tile + "[" + offset + "]";
+        }
         return tile + ".GetValue(" + offset + ")";
     }
 
@@ -1714,6 +1717,10 @@ static std::string MakeSetValCodegenCCE(const ir::CallPtr& op, codegen::CodegenB
         std::string tile = codegen.GetExprAsCode(op->args_[0]);
         std::string offset = codegen.GetExprAsCode(op->args_[1]);
         std::string value = codegen.GetExprAsCode(op->args_[2]);
+        if (codegen.IsInSimtContext()) {
+            codegen.Emit(tile + "[" + offset + "] = " + value + ";");
+            return "";
+        }
         codegen.Emit(tile + ".SetValue(" + offset + ", " + value + ");");
         return "";
     }
@@ -1733,6 +1740,20 @@ static std::string MakeSetValCodegenCCE(const ir::CallPtr& op, codegen::CodegenB
     return "";
 }
 
+static std::string MakeTileValidShapeCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(op->args_.size() == 1 && ir::As<ir::TileType>(op->args_[0]->GetType()))
+        << "block.tile_valid_shape requires one Tile argument";
+    int axis = op->GetKwarg<int>("axis");
+    CHECK(axis >= 0 && axis <= 1) << "block.tile_valid_shape axis must be in [0, 1]";
+
+    if (codegen.IsInSimtContext()) {
+        return codegen.GetExprAsCode(op->args_[0]) + (axis == 0 ? "__valid_row" : "__valid_col");
+    }
+    return codegen.GetExprAsCode(op->args_[0]) + (axis == 0 ? ".GetValidRow()" : ".GetValidCol()");
+}
+
 // getval/setval use the "block." IR namespace like every other explicit-output
 // block op (block.add, block.matmul, ...). This keeps codegen dispatch (keyed on
 // op->name_) and the parser's auto_mutex pipe lookup (get_op_pipe -> "block.<name>")
@@ -1744,6 +1765,10 @@ REGISTER_BACKEND_OP(BackendCCE, "block.getval")
 REGISTER_BACKEND_OP(BackendCCE, "block.setval")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return MakeSetValCodegenCCE(op, codegen); });
+
+REGISTER_BACKEND_OP(BackendCCE, "block.tile_valid_shape")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen(MakeTileValidShapeCodegenCCE);
 
 // ============================================================================
 // block.subview - tile/tensor sub-view with offset and new shape.

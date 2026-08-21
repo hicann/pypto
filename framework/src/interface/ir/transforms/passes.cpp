@@ -229,7 +229,7 @@ Pass Canonicalize()
             if (body == func->body_)
                 return func;
             return std::make_shared<const Function>(func->name_, func->params_, func->returnTypes_, body, func->span_,
-                                                    func->funcType_, func->entry_);
+                                                    func->funcType_, func->entry_, func->attrs_);
         },
         "Canonicalize");
 }
@@ -247,7 +247,7 @@ Pass InferTokenPass()
             if (inferredBody == func->body_)
                 return func;
             return std::make_shared<const Function>(func->name_, func->params_, func->returnTypes_, inferredBody,
-                                                    func->span_, func->funcType_, func->entry_);
+                                                    func->span_, func->funcType_, func->entry_, func->attrs_);
         },
         "InferTokenPass");
 }
@@ -286,7 +286,7 @@ Pass MergeStmtsIntoIf()
             if (mergedBody == func->body_)
                 return func;
             return std::make_shared<const Function>(func->name_, func->params_, func->returnTypes_, mergedBody,
-                                                    func->span_, func->funcType_, func->entry_);
+                                                    func->span_, func->funcType_, func->entry_, func->attrs_);
         },
         "MergeStmtsIntoIf");
 }

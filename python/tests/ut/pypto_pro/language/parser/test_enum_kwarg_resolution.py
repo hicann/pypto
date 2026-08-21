@@ -228,7 +228,7 @@ def test_dtype_positional_int_not_guarded():
     """
 
     @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, 1)
         return result
 
@@ -555,9 +555,9 @@ def test_enum_ternary_condition_is_an_enum_comparison():
 
     def make(in_dtype):
         @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             acc = pl.DT_FP32 if in_dtype == pl.DT_FP16 else pl.DT_INT32
-            result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=acc)
+            result = pl.tensor.cast(x, target_type=acc)
             return result
 
         return func

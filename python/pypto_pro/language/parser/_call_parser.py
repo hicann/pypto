@@ -19,6 +19,7 @@ import logging
 from typing import Any, Callable
 
 from pypto.pypto_impl import ir
+from pypto_pro.ir._utils import _is_int
 from pypto_pro.ir.op._op_registry import _OP_REGISTRY
 from pypto_pro.ir.op.block_ops import block_ir_op
 
@@ -179,32 +180,42 @@ def _check_type_compatible(annotated: ir.Type, actual: ir.Type, *, what: str, na
         )
 
 
-def _infer_return_types_from_body(body: ir.Stmt) -> list[ir.Type] | None:
-    """Extract return types from the first value-returning ReturnStmt in a function body.
-
-    Recurses into control-flow bodies (if/for) so a helper that returns a value from
-    a branch — while an earlier branch does a void `return` (e.g. `return None` on a
-    compile-time-dead path) — still resolves its result type.
-    """
-    if isinstance(body, ir.ReturnStmt):
-        if body.value:
-            return [v.type for v in body.value]
-        return None
-    if isinstance(body, ir.SeqStmts):
-        for s in body.stmts:
-            result = _infer_return_types_from_body(s)
-            if result is not None:
-                return result
-    if isinstance(body, ir.IfStmt):
-        for branch in (body.then_body, body.else_body):
-            if branch is not None:
-                result = _infer_return_types_from_body(branch)
-                if result is not None:
-                    return result
-    if isinstance(body, ir.ForStmt):
-        return _infer_return_types_from_body(body.body)
-    return None
-
+def _validate_simt_parameters(func: ir.Function, role: str) -> None:
+    """Validate the common native CCE ABI accepted by SIMT functions."""
+    for param in func.params:
+        if not isinstance(param.type, (ir.ScalarType, ir.TensorType, ir.TileType)):
+            raise ParserTypeError(
+                f"{role} parameter '{param.name}' must be a scalar, pl.Tensor, or pl.Tile, got {param.type}",
+                span=param.span,
+                hint="Ptr, Tuple, and tiling parameters are not supported.",
+            )
+        if isinstance(param.type, ir.TensorType):
+            if param.type.dtype.get_bit() < 8:
+                raise ParserTypeError(
+                    f"{role} Tensor parameter '{param.name}' uses an unsupported sub-byte dtype",
+                    span=param.span,
+                    hint="Use a byte-addressable Tensor element type such as pl.DT_UINT8 or wider.",
+                )
+            tensor_view = param.type.tensor_view
+            if tensor_view is None or tensor_view.layout != ir.TensorLayout.ND:
+                raise ParserTypeError(
+                    f"{role} Tensor parameter '{param.name}' requires ND layout",
+                    span=param.span,
+                    hint="Use pl.Tensor[[shape], dtype] or specify pl.ND explicitly.",
+                )
+        if isinstance(param.type, ir.TileType):
+            if len(param.type.shape) != 2 or not all(isinstance(dim, ir.ConstInt) for dim in param.type.shape):
+                raise ParserTypeError(
+                    f"{role} Tile parameter '{param.name}' must have a static two-dimensional shape",
+                    span=param.span,
+                    hint="Use an annotation such as pl.Tile[[1, 256], pl.DT_FP32].",
+                )
+            if param.type.dtype.get_bit() < 8:
+                raise ParserTypeError(
+                    f"{role} Tile parameter '{param.name}' uses an unsupported sub-byte dtype",
+                    span=param.span,
+                    hint="Use a byte-addressable Tile element type such as pl.DT_UINT8 or wider.",
+                )
 
 class CallParserMixin:
     """Mixin containing call and operation parsing methods for ``ASTParser``."""
@@ -641,6 +652,8 @@ class CallParserMixin:
         """Determine the pipe for auto_mutex from op_name and tile memory spaces."""
         from ._op_pipeline import get_move_pipe, get_op_pipe, get_store_pipe
 
+        if op_name == "simt.launch":
+            return ir.PipeType.V
         if op_name == "move":
             dst_mem = tilerefs[0].memory if tilerefs[0] else None
             src_mem = tilerefs[1].memory if len(tilerefs) > 1 and tilerefs[1] else None
@@ -710,7 +723,7 @@ class CallParserMixin:
         """Return True if the VF op's dst(s) are MaskReg (not RegTensor)."""
         return op_name in cls._VF_MASK_DST_OPS
 
-    def parse_call(self, call: ast.Call) -> ir.Expr:
+    def parse_call(self, call: ast.Call) -> Any:
         """Parse function call.
 
         Args:
@@ -756,8 +769,6 @@ class CallParserMixin:
                     return op_func(self, call)
 
             resolved = self.expr_evaluator.closure_vars.get(func_name)
-            if isinstance(resolved, ir.Function):
-                return self._parse_external_function_call(func_name, resolved, call)
             if callable(resolved) and not isinstance(resolved, type):
                 return self._implicit_func_call(func_name, resolved, call)
 
@@ -767,7 +778,7 @@ class CallParserMixin:
             hint="Use pl.* operations, self.method() for cross-function calls, or call an inline Python helper by name",
         )
 
-    def parse_op_call(self, call: ast.Call) -> ir.Expr:
+    def parse_op_call(self, call: ast.Call) -> Any:
         """Parse operation call like pl.tensor.create_tensor() or pl.add().
 
         Args:
@@ -776,11 +787,12 @@ class CallParserMixin:
         Returns:
             IR expression from operation
         """
+        op_name = self._extract_op_name(call.func)
+
         result = self._route_ir_node_method(call)
         if result is not None:
             return result
 
-        op_name = self._extract_op_name(call.func)
         span = self.span_tracker.get_span(call)
         if op_name is None:
             raise UnsupportedFeatureError(
@@ -798,6 +810,17 @@ class CallParserMixin:
                 "constexpr is not allowed in for/while/with/break/continue/return or as a standalone statement",
             )
 
+        if self._current_func_type in (ir.FunctionType.SimtVF, ir.FunctionType.SimtCallee) and not op_name.startswith(
+            "simt."
+        ):
+            raise UnsupportedFeatureError(
+                f"Operation '{op_name}' is not supported inside a SIMT function",
+                span=span,
+                hint=(
+                    "The current SIMT slice supports SIMT context queries, scalar expressions, restricted "
+                    "loops, and scalar Tensor/Tile accesses."
+                ),
+            )
         if self._auto_mutex and not op_name.startswith("vf."):
             self._emit_auto_mutex(op_name, call, span)
 
@@ -926,6 +949,162 @@ class CallParserMixin:
         op = ir.Op(func_name)
         return self._make_call_with_return_type(op, args, ext_func.return_types, span)
 
+    def _parse_simt_template_call(self, local_name: str, fn: Callable, call: ast.Call) -> ir.Expr:
+        """Instantiate and call one helper @pl.simt.function template."""
+        span = self.span_tracker.get_span(call)
+        if call.keywords or any(isinstance(arg, ast.Starred) for arg in call.args):
+            raise ParserSyntaxError(
+                "Helper @pl.simt.function calls accept positional arguments only",
+                span=span,
+            )
+        args = [self.parse_expression(arg) for arg in call.args]
+        callee = self._instantiate_simt_function(local_name, fn, args, call.args, span)
+        self._validate_simt_function_arguments(callee, args, call.args, span)
+        return self._make_call_with_return_type(ir.Op(callee.name), args, callee.return_types, span)
+
+    def _instantiate_simt_function(
+        self,
+        local_name: str,
+        fn: Callable,
+        args: list[ir.Expr],
+        arg_nodes: list[ast.expr],
+        span,
+    ) -> ir.Function:
+        """Parse a marked SIMT callable once its actual argument types are known."""
+        from ._ast_parser import ASTParser
+        from .decorator import get_simt_max_threads
+
+        max_threads = get_simt_max_threads(fn)
+        launchable = max_threads is not None
+        if launchable:
+            if not _is_int(max_threads):
+                raise TypeError("max_threads must be an integer")
+            if not 1 <= max_threads <= 2048:
+                raise ValueError("max_threads must be in the range [1, 2048]")
+
+        cached = self.simt_func_cache.get(id(fn))
+        if cached is not None:
+            self._register_simt_external(cached, span)
+            return cached
+        if id(fn) in self.simt_call_stack:
+            raise ParserSyntaxError(
+                f"Recursive helper @pl.simt.function call involving '{fn.__name__}' is not supported",
+                span=span,
+            )
+
+        source_file, source_lines, line_offset, col_offset, func_def = self._retrieve_function_source(
+            local_name,
+            fn,
+            span,
+            "@pl.simt.function",
+        )
+        func_args = func_def.args
+        if (
+            func_args.posonlyargs
+            or func_args.vararg is not None
+            or func_args.kwarg is not None
+            or func_args.kwonlyargs
+            or func_args.defaults
+            or func_args.kw_defaults
+        ):
+            raise ParserSyntaxError(
+                f"SIMT function '{fn.__name__}' only supports required positional parameters",
+                span=span,
+            )
+        params = list(func_args.args)
+        if len(args) != len(params):
+            role = "SIMT function" if launchable else "SIMT callee"
+            raise ParserTypeError(
+                f"{role} '{fn.__name__}' expects {len(params)} argument(s), got {len(args)}",
+                span=span,
+            )
+
+        func_type = ir.FunctionType.SimtVF if launchable else ir.FunctionType.SimtCallee
+        role = "SIMT function" if launchable else "SIMT helper"
+        parser = ASTParser(
+            source_file,
+            source_lines,
+            ir.SectionKind.Vector,
+            line_offset,
+            col_offset,
+            global_vars=self.global_vars,
+            closure_vars=self._build_function_closure(fn),
+            debug_info=self.debug_info,
+            tilingkey_consts=self._tilingkey_consts,
+            datatype_consts=self._datatype_consts,
+            void_return_only=launchable,
+            void_return_context="@pl.simt.function(max_threads=...)",
+            allow_early_return=True,
+        )
+        parser.external_funcs = self.external_funcs
+        parser.simt_func_cache = self.simt_func_cache
+        parser.simt_call_stack = self.simt_call_stack
+
+        self.simt_call_stack.append(id(fn))
+        try:
+            parsed = parser.parse_function(
+                func_def,
+                func_type=func_type,
+                callsite_param_types={param.arg: actual.type for param, actual in zip(params, args)},
+            )
+
+            _validate_simt_parameters(parsed, role)
+            if launchable:
+                result = ir.Function(
+                    parsed.name,
+                    list(parsed.params),
+                    list(parsed.return_types),
+                    parsed.body,
+                    parsed.span,
+                    func_type,
+                    parsed.entry,
+                    {"max_threads": max_threads},
+                )
+            else:
+                result = parsed
+            self._register_simt_external(result, span)
+            self.simt_func_cache[id(fn)] = result
+        finally:
+            self.simt_call_stack.pop()
+
+        return result
+
+    def _validate_simt_function_arguments(
+        self,
+        callee: ir.Function,
+        args: list[ir.Expr],
+        arg_nodes: list[ast.expr],
+        span,
+    ) -> None:
+        """Validate call-site arguments against an instantiated SIMT signature."""
+        if len(args) != len(callee.params):
+            raise ParserTypeError(
+                f"SIMT function '{callee.name}' expects {len(callee.params)} argument(s), got {len(args)}",
+                span=span,
+            )
+        for param, actual, actual_node in zip(callee.params, args, arg_nodes):
+            _check_type_compatible(
+                param.type,
+                actual.type,
+                what="SIMT parameter",
+                name=param.name,
+                span=self.span_tracker.get_span(actual_node),
+            )
+
+    def _register_simt_external(self, func: ir.Function, span) -> None:
+        """Register one instantiated SIMT function in the enclosing Program."""
+        if func.name in self.global_vars:
+            raise ParserSyntaxError(
+                f"SIMT function '{func.name}' conflicts with an internal program function",
+                span=span,
+            )
+        if func.name in self.external_funcs and self.external_funcs[func.name] is not func:
+            raise ParserSyntaxError(
+                f"Conflicting external functions with name '{func.name}'",
+                span=span,
+            )
+        self.external_funcs[func.name] = func
+
     def _inline_template(self, func_name: str, fn: Callable, span) -> _InlineFunctionTemplate:
         template = self.inline_func_cache.get(id(fn))
         if template is not None:
@@ -996,7 +1175,26 @@ class CallParserMixin:
         return bound
 
     def _implicit_func_call(self, func_name: str, fn: Callable, call: ast.Call) -> ir.Expr | None:
-        """Expand a Python helper body directly into the caller's IR builder."""
+        """Expand a Python helper body directly into the caller's IR builder.
+
+        For SIMT functions, routes to ``_parse_simt_template_call`` instead of
+        inlining. For regular callables, expands the body directly.
+        """
+        from .decorator import get_simt_max_threads, is_simt_function
+
+        if is_simt_function(fn):
+            if self._current_func_type in (ir.FunctionType.SimtVF, ir.FunctionType.SimtCallee):
+                if get_simt_max_threads(fn) is not None:
+                    raise ParserTypeError(
+                        f"SIMT helper '{func_name}' must be decorated with @pl.simt.function without max_threads",
+                        span=self.span_tracker.get_span(call),
+                    )
+                return self._parse_simt_template_call(func_name, fn, call)
+            raise ParserSyntaxError(
+                f"@pl.simt.function '{func_name}' must be invoked through pl.simt.launch()",
+                span=self.span_tracker.get_span(call),
+            )
+
         span = self.span_tracker.get_span(call)
         template = self._inline_template(func_name, fn, span)
         if self.inline_vf_depth != 0 and not template.is_vector_function:
@@ -1214,7 +1412,14 @@ class CallParserMixin:
         # 1. Build unique_refs: scan args for slot.tile mutex refs, dedup by slot,
         #    then drop Acc tiles when a phase-aware matmul/store carries the
         #    unit_flag (the hardware handshake replaces the software mutex there).
-        tilerefs = [self._try_resolve_tileref(arg) for arg in call.args]
+        if op_name == "simt.launch":
+            args_node = next((kw.value for kw in call.keywords if kw.arg == "args"), None)
+            if not isinstance(args_node, ast.Tuple):
+                return
+            scan_args = args_node.elts
+        else:
+            scan_args = call.args
+        tilerefs = [self._try_resolve_tileref(arg) for arg in scan_args]
         unique_refs = []
         seen = set()
         for tref in tilerefs:

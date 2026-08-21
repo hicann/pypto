@@ -379,6 +379,26 @@ TEST(CCECodegenTest, ClearsTupleBackingArraysBetweenGenerations)
     EXPECT_NE(second.find("int64_t values"), std::string::npos);
 }
 
+TEST(CCECodegenTest, ClearsTileTypeStateBetweenGenerations)
+{
+    auto tile_type = std::make_shared<const ir::TileType>(std::vector<int64_t>{16, 16}, ir::DataType::FP16,
+                                                          std::optional<ir::MemRefPtr>(std::nullopt),
+                                                          std::optional<ir::TileView>(std::nullopt));
+    auto tile = MakeVar("tile", tile_type);
+    auto make_tile = std::make_shared<const ir::Call>("block.make_tile", std::vector<ir::ExprPtr>{}, tile_type,
+                                                      ir::Span::Unknown());
+    auto body = std::make_shared<const ir::AssignStmt>(tile, make_tile, ir::Span::Unknown());
+    auto program = MakeProgram(body);
+
+    CCECodegen codegen(ir::SectionKind::Vector);
+    auto first = codegen.GenerateSingle(program, "a5");
+    auto second = codegen.GenerateSingle(program, "a5");
+
+    constexpr const char* tile_type_declaration = "using tile_Type = ";
+    EXPECT_NE(first.find(tile_type_declaration), std::string::npos);
+    EXPECT_NE(second.find(tile_type_declaration), std::string::npos);
+}
+
 TEST(CCECodegenTest, MaterializesHomogeneousTileTuple)
 {
     auto index_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
@@ -716,6 +736,33 @@ TEST(CCECodegenTest, HoistsDynamicVFLoopBoundAsUint16)
 
     EXPECT_NE(generated.find("const uint16_t i_0_ub = (uint16_t)(limit_0)"), std::string::npos);
     EXPECT_NE(generated.find("for (uint16_t i_0 = 0; i_0 < i_0_ub; i_0 += 1)"), std::string::npos);
+}
+
+TEST(CCECodegenTest, EmitsKernelTileValidShapeGetters)
+{
+    auto tile_type = std::make_shared<const ir::TileType>(std::vector<int64_t>{16, 32}, ir::DataType::FP16,
+                                                          std::optional<ir::MemRefPtr>(std::nullopt),
+                                                          std::optional<ir::TileView>(std::nullopt));
+    auto u32 = std::make_shared<const ir::ScalarType>(ir::DataType::UINT32);
+    auto tile = MakeVar("tile", tile_type);
+    auto make_tile = std::make_shared<const ir::Call>("block.make_tile", std::vector<ir::ExprPtr>{}, tile_type,
+                                                      ir::Span::Unknown());
+    auto valid_shape = [&](int axis) {
+        return std::make_shared<const ir::Call>("block.tile_valid_shape", std::vector<ir::ExprPtr>{tile},
+                                                std::vector<std::pair<std::string, std::any>>{{"axis", axis}}, u32,
+                                                ir::Span::Unknown());
+    };
+    auto body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{
+            std::make_shared<const ir::AssignStmt>(tile, make_tile, ir::Span::Unknown()),
+            std::make_shared<const ir::AssignStmt>(MakeVar("rows", u32), valid_shape(0), ir::Span::Unknown()),
+            std::make_shared<const ir::AssignStmt>(MakeVar("cols", u32), valid_shape(1), ir::Span::Unknown()),
+        },
+        ir::Span::Unknown());
+    CCECodegen codegen(ir::SectionKind::Vector);
+    std::string generated = codegen.GenerateSingle(MakeProgram(body), "a5");
+    EXPECT_NE(generated.find(".GetValidRow()"), std::string::npos);
+    EXPECT_NE(generated.find(".GetValidCol()"), std::string::npos);
 }
 
 TEST(CCECodegenTest, ComputesIRBasedOffsetAndRejectsRankMismatch)

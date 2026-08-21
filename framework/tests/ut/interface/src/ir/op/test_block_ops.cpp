@@ -166,6 +166,36 @@ TEST_F(BlockOpsMemoryTest, MakeTile_WithLayoutKwargs_ReturnsTileType)
 }
 
 // ============================================================================
+// memory.cpp: block.tile_valid_shape
+// ============================================================================
+TEST_F(BlockOpsMemoryTest, TileValidShape_ReturnsUint32)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto tile = MakeTileVar("tile", {16, 32}, DataType::FP16);
+    auto call = reg.Create("block.tile_valid_shape", {tile}, std::vector<std::pair<std::string, std::any>>{{"axis", 1}},
+                           Sp());
+    auto rt = As<ScalarType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::UINT32);
+}
+
+TEST_F(BlockOpsMemoryTest, TileValidShape_RejectsInvalidAxis)
+{
+    auto& reg = OpRegistry::GetInstance();
+    EXPECT_THROW((void)reg.Create("block.tile_valid_shape", {MakeTileVar("tile", {16, 32}, DataType::FP16)},
+                                  std::vector<std::pair<std::string, std::any>>{{"axis", 2}}, Sp()),
+                 npu::tile_fwk::Error);
+}
+
+TEST_F(BlockOpsMemoryTest, TileValidShape_RejectsNonTile)
+{
+    auto& reg = OpRegistry::GetInstance();
+    EXPECT_THROW((void)reg.Create("block.tile_valid_shape", {MakeScalarVar("value", DataType::INT32)},
+                                  std::vector<std::pair<std::string, std::any>>{{"axis", 0}}, Sp()),
+                 npu::tile_fwk::Error);
+}
+
+// ============================================================================
 // memory.cpp: block.getval, block.setval
 // ============================================================================
 

@@ -685,6 +685,23 @@ TEST_F(IRStructEqExprTest, TestFunctionReturnTypesElementMismatch)
     EXPECT_FALSE(structural_equal(Node(f1), Node(f2)));
 }
 
+TEST_F(IRStructEqExprTest, TestFunctionMaxThreadsMismatch)
+{
+    auto body = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
+    auto f128 = std::make_shared<Function>("f", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp(),
+                                           FunctionType::SIMT_VF, false,
+                                           std::vector<std::pair<std::string, std::any>>{{kMaxThreadsAttr, 128}});
+    auto f256 = std::make_shared<Function>("f", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp(),
+                                           FunctionType::SIMT_VF, false,
+                                           std::vector<std::pair<std::string, std::any>>{{kMaxThreadsAttr, 256}});
+    auto unbounded = std::make_shared<Function>("f", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp(),
+                                                FunctionType::SIMT_VF);
+
+    EXPECT_FALSE(structural_equal(Node(f128), Node(f256)));
+    EXPECT_FALSE(structural_equal(Node(f128), Node(unbounded)));
+    EXPECT_THROW(assert_structural_equal(Node(f128), Node(f256)), npu::tile_fwk::Error);
+}
+
 // ============================================================================
 // IterArg vector size mismatch
 // ============================================================================

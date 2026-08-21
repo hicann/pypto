@@ -185,7 +185,7 @@ FunctionPtr IRBuilder::EndFunction(const Span& end_span)
 
     // Create function
     auto func = std::make_shared<Function>(func_ctx->GetName(), func_ctx->GetParams(), func_ctx->GetReturnTypes(), body,
-                                           combinedSpan, func_ctx->GetFuncType());
+                                           combinedSpan, func_ctx->GetFuncType(), false, func_ctx->GetAttrs());
 
     // Pop context
     context_stack_.pop_back();

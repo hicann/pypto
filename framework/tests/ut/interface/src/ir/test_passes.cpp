@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,12 +39,17 @@ static Span Sp() { return Span("test", 1, 1); }
 
 class PassesTest : public testing::Test {
 protected:
-    FunctionPtr MakeFunction(const std::string& name, int64_t value)
+    FunctionPtr MakeFunction(const std::string& name, int64_t value, FunctionType func_type = FunctionType::OPAQUE,
+                             std::optional<int> max_threads = std::nullopt)
     {
         auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
         auto body = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(value, DataType::INT32, Sp()), Sp());
+        std::vector<std::pair<std::string, std::any>> attrs;
+        if (max_threads.has_value()) {
+            attrs.emplace_back(kMaxThreadsAttr, *max_threads);
+        }
         return std::make_shared<Function>(name, std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
-                                          body, Sp());
+                                          body, Sp(), func_type, false, std::move(attrs));
     }
 
     ProgramPtr MakeSimpleProgram()
@@ -248,10 +254,15 @@ TEST_F(PassesTest, TestPassPipelineRun)
             return prog;
         },
         "Counter2"));
-    auto prog = MakeSimpleProgram();
+    auto function = MakeFunction("f", 1, FunctionType::SIMT_VF, 256);
+    auto prog = std::make_shared<Program>(std::vector<FunctionPtr>{function}, "prog", Sp());
     auto result = pipeline.Run(prog);
-    EXPECT_NE(result, nullptr);
+    ASSERT_NE(result, nullptr);
     EXPECT_EQ(call_count, 2);
+    auto result_function = result->GetFunction("f");
+    ASSERT_NE(result_function, nullptr);
+    ASSERT_TRUE(result_function->HasAttr(kMaxThreadsAttr));
+    EXPECT_EQ(result_function->GetAttr<int>(kMaxThreadsAttr), 256);
 }
 
 } // namespace ir

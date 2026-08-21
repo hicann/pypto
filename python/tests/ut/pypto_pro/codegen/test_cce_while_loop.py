@@ -59,7 +59,7 @@ def _assert_materialized_jump_guard(cpp: str, condition_fragment: str, jump: str
 def _while_basic_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
-) -> None:
+):
     tile_type_a = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile(tile_type_a, addr=0x0000, size=16384)
     tile_type_b = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -78,7 +78,7 @@ def _while_basic_kernel(
 def _while_continue_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
-) -> None:
+):
     tile_type_a = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile(tile_type_a, addr=0x0000, size=16384)
     tile_type_b = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -100,7 +100,7 @@ def _while_continue_kernel(
 def _while_break_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
-) -> None:
+):
     tile_type_a = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile(tile_type_a, addr=0x0000, size=16384)
     tile_type_b = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -121,7 +121,7 @@ def _while_break_kernel(
 def _while_break_carry_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
-) -> None:
+):
     tile_type_a = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile(tile_type_a, addr=0x0000, size=16384)
     tile_type_b = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -141,7 +141,7 @@ def _while_break_carry_kernel(
 def _while_accumulate_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
-) -> None:
+):
     tile_type_a = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile(tile_type_a, addr=0x0000, size=16384)
     tile_type_b = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -161,7 +161,7 @@ def _while_accumulate_kernel(
 @pl.kernel(auto_mutex=True)
 def _while_getval_condition_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
-) -> None:
+):
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tile_group = pl.make_tile_group(type=tile_type, addrs=[0x0000], mutex_ids=[20])
     with pl.section_vector():
@@ -178,7 +178,7 @@ def _while_getval_condition_kernel(
 def _for_continue_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
-) -> None:
+):
     acc = 0
     for i in pl.range(5):
         if i == 2:
@@ -190,7 +190,7 @@ def _for_continue_kernel(
 def _for_break_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
-) -> None:
+):
     acc = 0
     for i in pl.range(5):
         if i == 3:

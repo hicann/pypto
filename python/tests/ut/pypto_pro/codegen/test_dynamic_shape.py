@@ -26,7 +26,7 @@ class AddKernelDynamic:
         a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
         b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
         output: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    ) -> pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32]:
+    ):
         """Adds two tensors element-wise with dynamic shapes: result = a + b"""
         tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         a_tile = pl.make_tile(tile_type, addr=0x0000, size=65536)
@@ -85,7 +85,7 @@ class AddKernelShapeSubscript:
         a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32],
         b: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32],
         output: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32],
-    ) -> pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32]:
+    ):
         """Uses the canonical dynamic dimension stored in a TensorType."""
         m_var = a.shape[0]
         tile_type = pl.TileType(shape=[2, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
@@ -125,7 +125,7 @@ class DynamicShapeTupleUnpack:
     def shape_kernel(
         self,
         a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, 128, 64], pl.DT_FP32],
-    ) -> pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, 128, 64], pl.DT_FP32]:
+    ):
         m, n, _, _ = a.shape
         for _ in pl.range(0, m, 1):
             out = a
