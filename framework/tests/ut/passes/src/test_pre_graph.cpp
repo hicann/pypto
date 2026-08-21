@@ -1312,6 +1312,44 @@ TEST_F(PreGraphTest, TestRemoveRedundantAssembleNormalizesCopyOutRawShape)
     EXPECT_EQ(G.GetTensor("reshape_input")->tensor->GetRawShape(), (std::vector<int64_t>{-1, 128}));
 }
 
+TEST_F(PreGraphTest, TestRemoveRedundantAssembleKeepsReshapeInputOffset)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {8, 32}, MemoryType::MEM_L0C, "copy_src");
+    G.AddTensor(DataType::DT_FP16, {8, 32}, "reshape_input");
+    G.AddTensor(DataType::DT_FP16, {1, 8, 32}, "reshape_output");
+    G.AddTensor(DataType::DT_FP16, {8, 8, 32}, MemoryType::MEM_DEVICE_DDR, "assemble_output");
+
+    auto reshapeInput = G.GetTensor("reshape_input");
+    auto reshapeOutput = G.GetTensor("reshape_output");
+    auto assembleOutput = G.GetTensor("assemble_output");
+    reshapeOutput->tensor = assembleOutput->tensor;
+
+    G.AddOp(Opcode::OP_COPY_OUT, {"copy_src"}, {"reshape_input"}, "COPYOUT");
+    auto copyOut = G.GetOp("COPYOUT");
+    auto copyAttr = std::make_shared<CopyOpAttribute>(
+        MemoryType::MEM_L0C, OpImmediate::Specified(std::vector<int64_t>{0, 0}),
+        OpImmediate::Specified(std::vector<int64_t>{8, 32}), OpImmediate::Specified(std::vector<int64_t>{8, 32}));
+    copyOut->SetOpAttribute(copyAttr);
+
+    G.AddOp(Opcode::OP_RESHAPE, {"reshape_input"}, {"reshape_output"}, "RESHAPE");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reshape_output"}, {"assemble_output"}, "ASSEMBLE");
+    auto assemble = G.GetOp("ASSEMBLE");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(
+        MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{6, 0, 0},
+        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{6, 0, 0})));
+    assemble->SetOpAttribute(assembleAttr);
+    G.SetOutCast({"assemble_output"});
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
+    CompareOpImmediateVector(copyAttr->GetToOffset(), {48, 0});
+    EXPECT_EQ(reshapeInput->GetOffset(), (std::vector<int64_t>{0, 0}));
+    EXPECT_TRUE(reshapeInput->GetDynOffset().empty());
+    EXPECT_EQ(reshapeInput->tensor->GetRawShape(), (std::vector<int64_t>{64, 32}));
+    EXPECT_EQ(reshapeOutput->tensor->GetRawShape(), (std::vector<int64_t>{8, 8, 32}));
+}
+
 TEST_F(PreGraphTest, TestMergeCompleteViewCopyoutFamily)
 {
     ComputationalGraphBuilder G;
@@ -1472,6 +1510,197 @@ TEST_F(PreGraphTest, TestKeepCopyinAssembleWhenRegionsOverlap)
     EXPECT_EQ(G.GetFunction()->Operations().size(), 4);
     EXPECT_EQ(G.GetOp("COPYIN0")->GetOOperands().front(), G.GetTensor("copyin_output0"));
     EXPECT_EQ(G.GetOp("COPYIN1")->GetOOperands().front(), G.GetTensor("copyin_output1"));
+}
+
+TEST_F(PreGraphTest, TestRemoveRedundantAssembleRefreshesCopyInAfterReshapeInput)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {8, 32}, MemoryType::MEM_L0C, "copy_src");
+    G.AddTensor(DataType::DT_FP16, {8, 32}, "reshape_input");
+    G.AddTensor(DataType::DT_FP16, {1, 8, 32}, "reshape_output");
+    G.AddTensor(DataType::DT_FP16, {8, 8, 32}, MemoryType::MEM_DEVICE_DDR, "assemble_output");
+    G.AddTensor(DataType::DT_FP16, {8, 32}, MemoryType::MEM_UB, "copyin_output");
+
+    auto reshapeInput = G.GetTensor("reshape_input");
+    auto reshapeOutput = G.GetTensor("reshape_output");
+    auto assembleOutput = G.GetTensor("assemble_output");
+    reshapeOutput->tensor = assembleOutput->tensor;
+
+    G.AddOp(Opcode::OP_COPY_OUT, {"copy_src"}, {"reshape_input"}, "COPYOUT");
+    auto copyOut = G.GetOp("COPYOUT");
+    auto copyOutAttr = std::make_shared<CopyOpAttribute>(
+        MemoryType::MEM_L0C, OpImmediate::Specified(std::vector<int64_t>{2, 0}),
+        OpImmediate::Specified(std::vector<int64_t>{8, 32}), OpImmediate::Specified(std::vector<int64_t>{16, 32}));
+    copyOut->SetOpAttribute(copyOutAttr);
+
+    G.AddOp(Opcode::OP_RESHAPE, {"reshape_input"}, {"reshape_output"}, "RESHAPE");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reshape_output"}, {"assemble_output"}, "ASSEMBLE");
+    auto assemble = G.GetOp("ASSEMBLE");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(
+        MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{6, 0, 0},
+        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{6, 0, 0})));
+    assemble->SetOpAttribute(assembleAttr);
+
+    G.AddOp(Opcode::OP_COPY_IN, {"reshape_input"}, {"copyin_output"}, "COPYIN");
+    auto copyIn = G.GetOp("COPYIN");
+    auto copyInAttr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(std::vector<int64_t>{3, 0}), MemoryType::MEM_UB,
+        OpImmediate::Specified(std::vector<int64_t>{8, 32}), OpImmediate::Specified(std::vector<int64_t>{16, 32}));
+    copyIn->SetOpAttribute(copyInAttr);
+    G.SetOutCast({"assemble_output"});
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
+    CompareOpImmediateVector(copyOutAttr->GetToOffset(), {50, 0});
+    EXPECT_EQ(reshapeInput->GetOffset(), (std::vector<int64_t>{0, 0}));
+    EXPECT_TRUE(reshapeInput->GetDynOffset().empty());
+    CompareOpImmediateVector(copyInAttr->GetFromOffset(), {51, 0});
+    CompareOpImmediateVector(copyInAttr->GetRawShape(), {64, 32});
+}
+
+TEST_F(PreGraphTest, TestRemoveRedundantAssembleRebuildsCopyInConsumerLink)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {8, 32}, MemoryType::MEM_L0C, "copy_src");
+    G.AddTensor(DataType::DT_FP16, {8, 32}, "reshape_input");
+    G.AddTensor(DataType::DT_FP16, {1, 8, 32}, "reshape_output");
+    G.AddTensor(DataType::DT_FP16, {8, 8, 32}, MemoryType::MEM_DEVICE_DDR, "assemble_output");
+    G.AddTensor(DataType::DT_FP16, {8, 32}, MemoryType::MEM_UB, "copyin_output");
+
+    auto reshapeInput = G.GetTensor("reshape_input");
+    auto reshapeOutput = G.GetTensor("reshape_output");
+    auto assembleOutput = G.GetTensor("assemble_output");
+    reshapeOutput->tensor = assembleOutput->tensor;
+
+    G.AddOp(Opcode::OP_COPY_OUT, {"copy_src"}, {"reshape_input"}, "COPYOUT");
+    auto copyOut = G.GetOp("COPYOUT");
+    auto copyOutAttr = std::make_shared<CopyOpAttribute>(
+        MemoryType::MEM_L0C, OpImmediate::Specified(std::vector<int64_t>{2, 0}),
+        OpImmediate::Specified(std::vector<int64_t>{8, 32}), OpImmediate::Specified(std::vector<int64_t>{16, 32}));
+    copyOut->SetOpAttribute(copyOutAttr);
+
+    G.AddOp(Opcode::OP_RESHAPE, {"reshape_input"}, {"reshape_output"}, "RESHAPE");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reshape_output"}, {"assemble_output"}, "ASSEMBLE");
+    auto assemble = G.GetOp("ASSEMBLE");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(
+        MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{6, 0, 0},
+        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{6, 0, 0})));
+    assemble->SetOpAttribute(assembleAttr);
+
+    G.AddOp(Opcode::OP_COPY_IN, {"reshape_input"}, {"copyin_output"}, "COPYIN");
+    auto copyIn = G.GetOp("COPYIN");
+    auto copyInAttr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(std::vector<int64_t>{3, 0}), MemoryType::MEM_UB,
+        OpImmediate::Specified(std::vector<int64_t>{8, 32}), OpImmediate::Specified(std::vector<int64_t>{16, 32}));
+    copyIn->SetOpAttribute(copyInAttr);
+    reshapeInput->RemoveConsumer(*copyIn);
+    G.SetOutCast({"assemble_output"});
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
+    CompareOpImmediateVector(copyOutAttr->GetToOffset(), {50, 0});
+    EXPECT_EQ(reshapeInput->GetOffset(), (std::vector<int64_t>{0, 0}));
+    EXPECT_TRUE(reshapeInput->GetDynOffset().empty());
+    CompareOpImmediateVector(copyInAttr->GetFromOffset(), {51, 0});
+    CompareOpImmediateVector(copyInAttr->GetRawShape(), {64, 32});
+}
+
+TEST_F(PreGraphTest, TestRemoveRedundantAssembleUpdatesCopyInOnceWithMultipleCopyOut)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {8, 32}, MemoryType::MEM_L0C, "copy_src0");
+    G.AddTensor(DataType::DT_FP16, {8, 32}, MemoryType::MEM_L0C, "copy_src1");
+    G.AddTensor(DataType::DT_FP16, {8, 32}, "reshape_input");
+    G.AddTensor(DataType::DT_FP16, {1, 8, 32}, "reshape_output");
+    G.AddTensor(DataType::DT_FP16, {8, 8, 32}, MemoryType::MEM_DEVICE_DDR, "assemble_output");
+    G.AddTensor(DataType::DT_FP16, {8, 32}, MemoryType::MEM_UB, "copyin_output");
+
+    auto reshapeInput = G.GetTensor("reshape_input");
+    auto reshapeOutput = G.GetTensor("reshape_output");
+    auto assembleOutput = G.GetTensor("assemble_output");
+    reshapeOutput->tensor = assembleOutput->tensor;
+
+    G.AddOp(Opcode::OP_COPY_OUT, {"copy_src0"}, {"reshape_input"}, "COPYOUT0");
+    auto copyOut0 = G.GetOp("COPYOUT0");
+    auto copyOutAttr0 = std::make_shared<CopyOpAttribute>(
+        MemoryType::MEM_L0C, OpImmediate::Specified(std::vector<int64_t>{2, 0}),
+        OpImmediate::Specified(std::vector<int64_t>{8, 32}), OpImmediate::Specified(std::vector<int64_t>{16, 32}));
+    copyOut0->SetOpAttribute(copyOutAttr0);
+
+    G.AddOp(Opcode::OP_COPY_OUT, {"copy_src1"}, {"reshape_input"}, "COPYOUT1");
+    auto copyOut1 = G.GetOp("COPYOUT1");
+    auto copyOutAttr1 = std::make_shared<CopyOpAttribute>(
+        MemoryType::MEM_L0C, OpImmediate::Specified(std::vector<int64_t>{2, 0}),
+        OpImmediate::Specified(std::vector<int64_t>{8, 32}), OpImmediate::Specified(std::vector<int64_t>{16, 32}));
+    copyOut1->SetOpAttribute(copyOutAttr1);
+
+    G.AddOp(Opcode::OP_RESHAPE, {"reshape_input"}, {"reshape_output"}, "RESHAPE");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reshape_output"}, {"assemble_output"}, "ASSEMBLE");
+    auto assemble = G.GetOp("ASSEMBLE");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(
+        MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{6, 0, 0},
+        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{6, 0, 0})));
+    assemble->SetOpAttribute(assembleAttr);
+
+    G.AddOp(Opcode::OP_COPY_IN, {"reshape_input"}, {"copyin_output"}, "COPYIN");
+    auto copyIn = G.GetOp("COPYIN");
+    auto copyInAttr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(std::vector<int64_t>{3, 0}), MemoryType::MEM_UB,
+        OpImmediate::Specified(std::vector<int64_t>{8, 32}), OpImmediate::Specified(std::vector<int64_t>{16, 32}));
+    copyIn->SetOpAttribute(copyInAttr);
+    G.SetOutCast({"assemble_output"});
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
+    CompareOpImmediateVector(copyOutAttr0->GetToOffset(), {50, 0});
+    CompareOpImmediateVector(copyOutAttr1->GetToOffset(), {50, 0});
+    EXPECT_EQ(reshapeInput->GetOffset(), (std::vector<int64_t>{0, 0}));
+    EXPECT_TRUE(reshapeInput->GetDynOffset().empty());
+    CompareOpImmediateVector(copyInAttr->GetFromOffset(), {51, 0});
+    CompareOpImmediateVector(copyInAttr->GetRawShape(), {64, 32});
+}
+
+TEST_F(PreGraphTest, TestRemoveRedundantAssembleSkipsCopyInWithMismatchedFromOffsetRank)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {8, 32}, MemoryType::MEM_L0C, "copy_src");
+    G.AddTensor(DataType::DT_FP16, {8, 32}, "reshape_input");
+    G.AddTensor(DataType::DT_FP16, {1, 8, 32}, "reshape_output");
+    G.AddTensor(DataType::DT_FP16, {8, 8, 32}, MemoryType::MEM_DEVICE_DDR, "assemble_output");
+    G.AddTensor(DataType::DT_FP16, {8, 32}, MemoryType::MEM_UB, "copyin_output");
+
+    auto reshapeOutput = G.GetTensor("reshape_output");
+    auto assembleOutput = G.GetTensor("assemble_output");
+    reshapeOutput->tensor = assembleOutput->tensor;
+
+    G.AddOp(Opcode::OP_COPY_OUT, {"copy_src"}, {"reshape_input"}, "COPYOUT");
+    auto copyOut = G.GetOp("COPYOUT");
+    auto copyOutAttr = std::make_shared<CopyOpAttribute>(
+        MemoryType::MEM_L0C, OpImmediate::Specified(std::vector<int64_t>{2, 0}),
+        OpImmediate::Specified(std::vector<int64_t>{8, 32}), OpImmediate::Specified(std::vector<int64_t>{16, 32}));
+    copyOut->SetOpAttribute(copyOutAttr);
+
+    G.AddOp(Opcode::OP_RESHAPE, {"reshape_input"}, {"reshape_output"}, "RESHAPE");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reshape_output"}, {"assemble_output"}, "ASSEMBLE");
+    auto assemble = G.GetOp("ASSEMBLE");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(
+        MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{6, 0, 0},
+        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{6, 0, 0})));
+    assemble->SetOpAttribute(assembleAttr);
+
+    G.AddOp(Opcode::OP_COPY_IN, {"reshape_input"}, {"copyin_output"}, "COPYIN");
+    auto copyIn = G.GetOp("COPYIN");
+    auto copyInAttr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(std::vector<int64_t>{3}), MemoryType::MEM_UB,
+        OpImmediate::Specified(std::vector<int64_t>{8, 32}), OpImmediate::Specified(std::vector<int64_t>{16, 32}));
+    copyIn->SetOpAttribute(copyInAttr);
+    G.SetOutCast({"assemble_output"});
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
+    CompareOpImmediateVector(copyOutAttr->GetToOffset(), {50, 0});
+    CompareOpImmediateVector(copyInAttr->GetFromOffset(), {3});
+    CompareOpImmediateVector(copyInAttr->GetRawShape(), {16, 32});
 }
 
 // vec_in0 - CopyIn - L1_TO_L0A - A_MUL_B[isCube = true] - CopyOut[no isCube] - vec_out

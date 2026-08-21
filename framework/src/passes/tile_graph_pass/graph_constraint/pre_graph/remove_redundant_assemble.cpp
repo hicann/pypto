@@ -23,13 +23,36 @@
 #include "interface/configs/config_manager.h"
 
 #include <sstream>
+#include <unordered_set>
 
 #define MODULE_NAME "PreGraphProcess"
 
 namespace npu::tile_fwk {
 namespace {
 constexpr const char* KEY_ENABLE_TRUE = "enable_true";
+
+bool HasInputOperand(const Operation& op, const LogicalTensorPtr& tensor)
+{
+    for (const auto& input : op.GetIOperands()) {
+        if (input == tensor) {
+            return true;
+        }
+    }
+    return false;
 }
+
+void AddMissingCopyInConsumers(Function& function, const LogicalTensorPtr& tensor)
+{
+    if (tensor == nullptr) {
+        return;
+    }
+    for (auto& op : function.Operations(false)) {
+        if (!op.IsDeleted() && IsCopyIn(op.GetOpcode()) && HasInputOperand(op, tensor)) {
+            tensor->AddConsumer(op);
+        }
+    }
+}
+} // namespace
 
 std::string OpImmediateVecToStr(const std::vector<OpImmediate>& values)
 {
@@ -385,6 +408,44 @@ void GetDynOffsetBeforeDynReshape(const std::vector<SymbolicScalar>& oriOffset,
     for (size_t i = 0; i < newSize; ++i) {
         newOffset[i] = (linearIndex / newStride[i]).Simplify();
         linearIndex = (linearIndex % newStride[i]).Simplify();
+    }
+}
+
+void UpdateCopyInOffsetAfterReshapeInput(LogicalTensorPtr reshapeInput, const std::vector<int64_t>& newRawShape,
+                                         const std::vector<OpImmediate>& reshapeOffset)
+{
+    auto oriShape = reshapeInput->GetShape();
+    auto oriShapeScalar = CommonUtils::CreateConstIntVector(oriShape);
+    auto newShapeScalar = CommonUtils::CreateConstIntVector(newRawShape);
+    auto reshapeDynOffset = OpImmediate::ToSpecified(reshapeOffset);
+    for (auto& consumer : reshapeInput->GetConsumers()) {
+        if (consumer == nullptr || consumer->IsDeleted() || !IsCopyIn(consumer->GetOpcode()) ||
+            !HasInputOperand(*consumer, reshapeInput)) {
+            continue;
+        }
+        auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(consumer->GetOpAttribute());
+        if (copyAttr == nullptr) {
+            APASS_LOG_INFO_F(Elements::Operation, "CopyIn Op %d Attribute is nullptr, skip updating fromOffset.",
+                             consumer->GetOpMagic());
+            continue;
+        }
+        auto oriFromDynOffset = OpImmediate::ToSpecified(copyAttr->GetFromOffset());
+        if (oriFromDynOffset.empty()) {
+            oriFromDynOffset = CommonUtils::CreateConstIntVector(std::vector<int64_t>(oriShape.size(), 0));
+        }
+        std::vector<SymbolicScalar> newFromDynOffset;
+        GetDynOffsetBeforeDynReshape(oriFromDynOffset, oriShapeScalar, newShapeScalar, newFromDynOffset);
+        if (newFromDynOffset.size() != newShapeScalar.size()) {
+            APASS_LOG_WARN_F(Elements::Operation,
+                             "Skip updating CopyIn op:%s[%d] fromOffset because reshape offset remapping failed.",
+                             consumer->GetOpcodeStr().c_str(), consumer->GetOpMagic());
+            continue;
+        }
+        for (size_t i = 0; i < newFromDynOffset.size() && i < reshapeDynOffset.size(); i++) {
+            newFromDynOffset[i] = (newFromDynOffset[i] + reshapeDynOffset[i]).Simplify();
+        }
+        copyAttr->SetFromOffset(OpImmediate::Specified(newFromDynOffset));
+        copyAttr->SetRawShape(OpImmediate::Specified(newRawShape));
     }
 }
 
@@ -799,23 +860,36 @@ Status RemoveRedundantAssemble::UpdateCopyOutBeforeReshape(LogicalTensorPtr resh
                           "Failed to update CopyOut before Reshape because reshape input is nullptr.");
         return FAILED;
     }
+    // The reshape offset is common to all CopyOut and CopyIn operations using reshapeInput.
+    const std::vector<OpImmediate> reshapeOffset = OpImmediate::Specified(newDynOffset);
+    Function* function = nullptr;
+    bool needUpdateCopyIn = false;
+    auto updateCopyIn = [&]() {
+        if (!needUpdateCopyIn) {
+            return;
+        }
+        if (function != nullptr) {
+            AddMissingCopyInConsumers(*function, reshapeInput);
+        }
+        UpdateCopyInOffsetAfterReshapeInput(reshapeInput, newRawShape, reshapeOffset);
+    };
     for (auto copyOut : reshapeInput->GetProducers()) {
         if (copyOut->IsDeleted()) {
             continue;
         }
         if (!IsCopyOut(copyOut->GetOpcode())) {
+            updateCopyIn();
             return SUCCESS;
         }
-        const std::shared_ptr<OpAttribute>& attr = copyOut->GetOpAttribute();
-        if (attr == nullptr) {
+        auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOut->GetOpAttribute());
+        if (copyAttr == nullptr) {
             APASS_LOG_ERROR_F(Elements::Operation,
                               "Failed to update CopyOut before Reshape because CopyOut op:%s[%d] attr is nullptr.",
                               copyOut->GetOpcodeStr().c_str(), copyOut->GetOpMagic());
             return FAILED;
         }
-        std::shared_ptr<CopyOpAttribute> copyAttr = std::static_pointer_cast<CopyOpAttribute>(attr);
         auto oriCopyOffset = copyAttr->GetToOffset();
-        std::vector<OpImmediate> newOffset = OpImmediate::Specified(newDynOffset);
+        std::vector<OpImmediate> newOffset = reshapeOffset;
         if (newOffset.size() < oriCopyOffset.size()) {
             APASS_LOG_ERROR_F(
                 Elements::Operation,
@@ -830,7 +904,12 @@ Status RemoveRedundantAssemble::UpdateCopyOutBeforeReshape(LogicalTensorPtr resh
         }
         copyAttr->SetRawShape(OpImmediate::Specified(newRawShape));
         copyAttr->SetToOffset(newOffset);
+        if (copyOut->BelongTo() != nullptr) {
+            function = copyOut->BelongTo();
+        }
+        needUpdateCopyIn = true;
     }
+    updateCopyIn();
     return SUCCESS;
 }
 
@@ -867,6 +946,25 @@ Status RemoveRedundantAssemble::HandleReshapeToAssemble(
                       assembleOp.GetOpMagic(), producer->GetIOperands()[0]->GetMagic(),
                       IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynOffset).c_str());
     Shape newShape = GetStaticShapeForDynAxes(newRawShape);
+    if (!assembleOp.IsDeleted()) {
+        // When Assemble is kept, its own offset propagation is still active; pushing the same offset here would
+        // make CopyIn/CopyOut consumers observe the offset twice, so only rawShape is synchronized.
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "Skip pushing Assemble offset to Reshape input because Assemble op:%s[%d] is not deleted.",
+                          assembleOp.GetOpcodeStr().c_str(), assembleOp.GetOpMagic());
+        for (auto copyOut : producer->GetIOperands()[0]->GetProducers()) {
+            if (copyOut == nullptr || copyOut->IsDeleted() || !IsCopyOut(copyOut->GetOpcode())) {
+                continue;
+            }
+            auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOut->GetOpAttribute());
+            if (copyAttr != nullptr) {
+                copyAttr->SetRawShape(OpImmediate::Specified(newShape));
+            }
+        }
+        producer->GetIOperands()[0]->tensor->UpdateRawShape(newShape);
+        producer->GetIOperands()[0]->tensor->UpdateDynRawShape(newDynRawShape);
+        return SUCCESS;
+    }
     if (UpdateCopyOutBeforeReshape(producer->GetIOperands()[0], newShape, newDynOffset) != SUCCESS) {
         return FAILED;
     }
