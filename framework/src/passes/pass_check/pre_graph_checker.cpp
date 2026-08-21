@@ -51,7 +51,7 @@ Status PreGraphProcessChecker::DoPreCheck(Function& function)
         }
         auto tensorIn = op.GetIOperands().front();
         auto tensorOut = op.GetOOperands().front();
-        if ((tensorIn == nullptr) || (tensorIn == nullptr)) {
+        if ((tensorIn == nullptr) || (tensorOut == nullptr)) {
             // 校验输入输出非空
             APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation,
                               "Invalid %s[%d], has nullptr input/output. %s", op.GetOpcodeStr().c_str(), op.opmagic,

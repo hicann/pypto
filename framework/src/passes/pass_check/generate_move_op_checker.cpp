@@ -158,7 +158,13 @@ bool GenerateMoveOpChecker::CheckViewOutTensorMemType(const Operation& op) const
                               childOp->GetOpcodeStr().c_str(), childOp->GetOpMagic());
             return false;
         }
-        auto convertOpAttribute = dynamic_cast<ConvertOpAttribute*>(op.GetOpAttribute().get());
+        auto convertOpAttribute = dynamic_cast<ConvertOpAttribute*>(childOp->GetOpAttribute().get());
+        if (convertOpAttribute == nullptr) {
+            APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation,
+                              "View op [%d] consumer %s[%d] has no valid ConvertOpAttribute.", op.GetOpMagic(),
+                              childOp->GetOpcodeStr().c_str(), childOp->GetOpMagic());
+            return false;
+        }
         auto convertPath = convertOpAttribute->GetConvertPath();
         if (convertPath.first != MemoryType::MEM_DEVICE_DDR) {
             APASS_LOG_ERROR_C(OperationErr::OP_PRODUCER_CONSUMER, Elements::Operation,

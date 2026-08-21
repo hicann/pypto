@@ -254,6 +254,101 @@ TEST_F(TestGenerateMoveOpChecker, ViewOp_ConvertPathInvalid)
     EXPECT_EQ(preCheckStatus, FAILED);
 }
 
+/*
+ViewOp_ConvertConsumerValidAttr
+t1{16,16} -> VIEW -> t2{16,16}(DDR) -> CONVERT(DDR->UB) -> t3{16,16}(UB)
+OP_CONVERT is registered with empty inputsMemType, so CheckViewOutTensorMemType
+skips it before reaching the dynamic_cast. Temporarily set inputsMemType to
+{MEM_UB} so the dynamic_cast line is reached. With the fix, dynamic_cast uses
+childOp (CONVERT) attribute instead of op (VIEW) attribute, so the cast succeeds
+and PreCheck passes. Before the fix, dynamic_cast on VIEW's ViewOpAttribute would
+return nullptr and dereferencing it would crash.
+*/
+TEST_F(TestGenerateMoveOpChecker, ViewOp_ConvertConsumerValidAttr)
+{
+    auto& convertInputsMemType = const_cast<std::vector<MemoryType>&>(
+        OpcodeManager::Inst().GetInputsMemType(Opcode::OP_CONVERT));
+    convertInputsMemType = {MemoryType::MEM_UB};
+
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestViewConvertConsumerValidAttr",
+                                                      "TestViewConvertConsumerValidAttr", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    std::vector<int64_t> shape = {16, 16};
+
+    auto t1Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto t2Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto t3Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    t2Tensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
+    t3Tensor->SetMemoryTypeOriginal(MemoryType::MEM_UB);
+
+    auto viewAttr = std::make_shared<ViewOpAttribute>(shape);
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {t1Tensor}, {t2Tensor},
+                                     [&viewAttr](Operation& op) { op.SetOpAttribute(viewAttr); });
+
+    auto convertAttr = std::make_shared<ConvertOpAttribute>(MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB);
+    auto& convertOp = PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_CONVERT, {t2Tensor}, {t3Tensor},
+        [&convertAttr](Operation& op) { op.SetOpAttribute(convertAttr); });
+
+    using ConsumerSetType = std::set<Operation*, LogicalTensor::CompareOp>;
+    auto& consumers = const_cast<ConsumerSetType&>(t2Tensor->GetConsumers());
+    consumers.clear();
+    consumers.insert(&convertOp);
+    currFunctionPtr->inCasts_.push_back(t1Tensor);
+    currFunctionPtr->outCasts_.push_back(t3Tensor);
+
+    GenerateMoveOp generateMoveOp;
+    Status preCheckStatus = generateMoveOp.PreCheck(*currFunctionPtr);
+    EXPECT_EQ(preCheckStatus, SUCCESS);
+
+    convertInputsMemType.clear();
+}
+
+/*
+ViewOp_ConvertConsumerNullAttr
+t1{16,16} -> VIEW -> t2{16,16}(DDR) -> CONVERT(no attr) -> t3{16,16}(UB)
+Temporarily set OP_CONVERT inputsMemType to {MEM_UB} so CheckViewOutTensorMemType
+reaches the dynamic_cast line. The CONVERT has no attribute, so dynamic_cast
+returns nullptr. The null check added by the fix catches this and returns false.
+*/
+TEST_F(TestGenerateMoveOpChecker, ViewOp_ConvertConsumerNullAttr)
+{
+    auto& convertInputsMemType = const_cast<std::vector<MemoryType>&>(
+        OpcodeManager::Inst().GetInputsMemType(Opcode::OP_CONVERT));
+    convertInputsMemType = {MemoryType::MEM_UB};
+
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestViewConvertConsumerNullAttr",
+                                                      "TestViewConvertConsumerNullAttr", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    std::vector<int64_t> shape = {16, 16};
+
+    auto t1Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto t2Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto t3Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    t2Tensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
+    t3Tensor->SetMemoryTypeOriginal(MemoryType::MEM_UB);
+
+    auto viewAttr = std::make_shared<ViewOpAttribute>(shape);
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {t1Tensor}, {t2Tensor},
+                                     [&viewAttr](Operation& op) { op.SetOpAttribute(viewAttr); });
+
+    auto& convertOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_CONVERT, {t2Tensor}, {t3Tensor});
+
+    using ConsumerSetType = std::set<Operation*, LogicalTensor::CompareOp>;
+    auto& consumers = const_cast<ConsumerSetType&>(t2Tensor->GetConsumers());
+    consumers.clear();
+    consumers.insert(&convertOp);
+    currFunctionPtr->inCasts_.push_back(t1Tensor);
+    currFunctionPtr->outCasts_.push_back(t3Tensor);
+
+    GenerateMoveOp generateMoveOp;
+    Status preCheckStatus = generateMoveOp.PreCheck(*currFunctionPtr);
+    EXPECT_EQ(preCheckStatus, FAILED);
+    EXPECT_EQ(convertOp.GetOpAttribute().get(), nullptr);
+
+    convertInputsMemType.clear();
+}
+
 TEST_F(TestGenerateMoveOpChecker, PreCheck_AssembleOp_AttrNull)
 {
     auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestAssembleOpAttrNull",
