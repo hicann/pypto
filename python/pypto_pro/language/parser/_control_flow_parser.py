@@ -209,6 +209,18 @@ class ControlFlowParserMixin:
             self.current_loop_builder = prev_loop_builder
             self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
 
+    def _record_if_const(self, test_node: ast.expr, is_const: bool, value) -> None:
+        """Probe hook for the pipeline constant-branch collapse (design §3.0).
+
+        When ``collect_if_const`` is enabled, record each ``if`` condition's
+        compile-time constness under its normalized source text
+        ``ast.unparse(test_node)``. Disabled by default, so a normal parse is
+        unaffected. Identical condition texts always fold to the same value, so a
+        key collision is harmless (later write agrees with the earlier one)."""
+        if not getattr(self, "collect_if_const", False):
+            return
+        self.if_const_map[ast.unparse(test_node)] = (is_const, value)
+
     def parse_if_statement(self, stmt: ast.If) -> None:
         """Parse if statement.
 
@@ -226,9 +238,12 @@ class ControlFlowParserMixin:
 
         if isinstance(condition, (ir.ConstBool, ir.ConstInt)):
             is_true = condition.value if isinstance(condition, ir.ConstBool) else condition.value != 0
+            self._record_if_const(stmt.test, True, bool(is_true))
             for branch_stmt in stmt.body if is_true else stmt.orelse:
                 self.parse_statement(branch_stmt)
             return
+
+        self._record_if_const(stmt.test, False, None)
 
         entry_env = dict(self.const_env)
         writes = _assignment_writes([*stmt.body, *stmt.orelse])

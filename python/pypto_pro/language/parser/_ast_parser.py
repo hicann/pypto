@@ -204,6 +204,12 @@ class ASTParser(
 
         self._current_node: ast.AST | None = None
 
+        # Pipeline constant-branch probe (design §3.0): when enabled, parse_if_statement
+        # records {ast.unparse(test): (is_const, value)} for every if. Off by default so
+        # a normal parse is unaffected; the pipeline transform turns it on for a probe run.
+        self.collect_if_const: bool = False
+        self.if_const_map: dict[str, tuple[bool, object]] = {}
+
     @property
     def auto_mutex_enabled(self) -> bool:
         """Return whether automatic mutex emission is enabled."""

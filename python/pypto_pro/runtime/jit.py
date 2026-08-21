@@ -722,14 +722,23 @@ def _prepare_codegen_inputs(
     artifact_prefix = _artifact_prefix_from_filename(
         getattr(kernel_def, "_source_file", None)
     )
+    generated_source = None
     if kernel_def._pipeline is not None:
         from pypto_pro.runtime.pipeline import transform_pipeline
+        from pypto_pro.runtime.pipeline._analyzer import probe_kernel_facts
         from pypto_pro.runtime.pipeline._dump import build_generated_file_source
 
+        # Probe parse to learn which if-conditions are compile-time constants
+        # (reuses the parser's own constant folding); drives dead-branch pruning.
+        if_const_map, var_types = probe_kernel_facts(kernel_def, bound_signature)
         kernel_def._func_def = transform_pipeline(
             kernel_def._func_def,
             kernel_def._closure_vars,
             kernel_def._pipeline,
+            if_const_map=if_const_map,
+            var_types=var_types,
+            tilingkey_consts=kernel_def._tilingkey_consts,
+            datatype_consts=kernel_def._datatype_consts,
         )
         generated_source = build_generated_file_source(
             kernel_def._func_def,
@@ -740,9 +749,6 @@ def _prepare_codegen_inputs(
             kernel_def._closure_vars,
         )
         kernel_def._pipeline = None
-        _dump_pipeline_generated_source(
-            kernel_def, generated_source, arch, static_signature
-        )
 
     if out_dir is None:
         build_dir = _make_artifact_build_dir(
@@ -753,6 +759,9 @@ def _prepare_codegen_inputs(
             write_datatype_metadata(build_dir, datatype_metadata)
         out_dir = _make_tilingkey_dir(build_dir, tilingkey_packed)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
+    # Dumped after out_dir exists so the transformed source lands next to the
+    # kernel.cpp it produced, instead of in a cwd-relative ./build tree of its own.
+    _dump_pipeline_generated_source(kernel_def, generated_source, out_dir)
     return kernel_def, out_dir
 
 
@@ -969,24 +978,17 @@ def _add_kernel_header(result: CodegenResult) -> CodegenResult:
 def _dump_pipeline_generated_source(
     kernel_def,
     source: str | None,
-    arch: str,
-    static_signature,
+    out_dir: str,
 ) -> None:
-    """Preserve the existing transformed-pipeline debug artifact."""
+    """Preserve the transformed-pipeline debug artifact next to this key's kernel.cpp.
+
+    ``out_dir`` is already unique per tilingkey/dtype (``tk_<packed>`` for JIT, a
+    caller-supplied per-key dir for binary compile), so the dump lands beside the
+    kernel.cpp it produced and needs no variant suffix to stay distinct.
+    """
     if not source:
         return
-    artifact_prefix = _artifact_prefix_from_filename(getattr(kernel_def, "_source_file", None))
-    safe_name = _sanitize_artifact_component(kernel_def.func_name)
-    readable = (
-        f"{artifact_prefix}__{safe_name}"
-        if artifact_prefix and artifact_prefix != safe_name
-        else safe_name
-    )
-    dump_dir = os.path.join(
-        ".", "build", f"{readable}__{arch}{_static_signature_suffix(static_signature)}"
-    )
-    Path(dump_dir).mkdir(parents=True, exist_ok=True)
-    Path(dump_dir, "pipeline_generated.py").write_text(source, encoding="utf-8")
+    Path(out_dir, "pipeline_generated.py").write_text(source, encoding="utf-8")
 
 
 def _runtime_include_flags(ascend_home_path: str) -> list[str]:

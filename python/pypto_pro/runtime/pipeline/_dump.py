@@ -28,10 +28,8 @@ def build_generated_file_source(
     """Build a complete, runnable .py source for the transformed kernel.
 
     Reads the original source file and replaces the kernel function definition
-    (incl. decorators) with the transformed version. Mix stages are flattened
-    (inlined) into the transformed kernel body, so no separate function
-    replacement is needed. The ``pipeline=`` decorator kwarg is stripped so the
-    generated file does not re-trigger the transform if run directly.
+    (incl. decorators) with the transformed version. The ``pipeline=`` decorator kwarg
+    is stripped so the generated file does not re-trigger the transform if run directly.
     """
     fd = copy.deepcopy(transformed_func_def)
     for dec in fd.decorator_list:
