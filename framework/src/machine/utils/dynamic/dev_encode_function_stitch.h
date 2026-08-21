@@ -143,9 +143,10 @@ constexpr StitchCtrlBitMask STITCH_CTRL_WAW = 1u << 0; // 写后写
 constexpr StitchCtrlBitMask STITCH_CTRL_WAR = 1u << 1; // 写后读
 constexpr StitchCtrlBitMask STITCH_CTRL_RAW = 1u << 2; // 读后写
 
-struct DevAscendProgramPartialUpdate {
+struct DevAscendProgramUpdate {
     int slotIndex{-1};
     StitchCtrlBitMask stitchCtrlBitMask{STITCH_CTRL_NONE};
+    bool isPartial{false};
 
     DevCellMatchTableDesc cellMatchTableDesc;
     DevRelocVector<uint64_t> cellMatchRuntimePartialUpdateTable;
@@ -264,17 +265,19 @@ static uint32_t CellMatchHandle(const uint64_t offset[DEV_SHAPE_DIM_MAX], const 
     uint64_t rangeEnd[DEV_SHAPE_DIM_MAX];
     for (int i = 0; i < dims; ++i) {
         auto cellMatchShapeDim = cellMatchTableDesc.GetCellShape(i);
-        if (cellMatchShapeDim != 0) {
-            rangeBegin[i] = offset[i] / cellMatchShapeDim;
-            if (shape[i] == 0) {
-                return 0;
+        DEV_IF_NONDEVICE
+        {
+            if (cellMatchShapeDim == 0) {
+                DEV_ERROR(ProgEncodeErr::CELL_MATCH_DIM_ZERO,
+                          "#ctrl.encode.cell_match: cellMatchShapeDim is zero for dimension=%d", i);
+                DEV_ASSERT(ProgEncodeErr::CELL_MATCH_DIM_ZERO, 0);
             }
-            rangeEnd[i] = (offset[i] + shape[i] - 1) / cellMatchShapeDim;
-        } else {
-            DEV_ERROR(ProgEncodeErr::CELL_MATCH_DIM_ZERO,
-                      "#ctrl.encode.cell_match: cellMatchShapeDim is zero for dimension=%d", i);
-            DEV_ASSERT(ProgEncodeErr::CELL_MATCH_DIM_ZERO, 0);
         }
+        rangeBegin[i] = offset[i] / cellMatchShapeDim;
+        if (shape[i] == 0) {
+            return 0;
+        }
+        rangeEnd[i] = (offset[i] + shape[i] - 1) / cellMatchShapeDim;
     }
     return CellMatchProcessByDim<HandleType>(dims, cellMatchTableDesc, rangeBegin, rangeEnd, args...);
 }

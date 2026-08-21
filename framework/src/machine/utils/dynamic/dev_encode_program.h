@@ -139,7 +139,7 @@ struct DevAscendProgram {
     DevRelocVector<uint64_t> startArgsInputSymbolIndexList;
     DevRelocVector<uint64_t> assembleSlotIndexList;
     DevRelocVector<uint64_t> outputInplaceSlotList;
-    DevRelocVector<DevAscendProgramPartialUpdate> partialUpdateList;
+    DevRelocVector<DevAscendProgramUpdate> updateList;
     DevRelocVector<uint64_t> cellMatchRuntimePartialUpdateTableList;
     DevRelocVector<PrefetchInfo> prefetchInfoList;
     DevRelocVector<uint8_t> disableL2List;
@@ -165,7 +165,7 @@ struct DevAscendProgram {
      *      uint64_t startArgsInputSymbolIndexListData[]
      *      uint64_t assembleSlotIndexList[]
      *      uint64_t outputInplaceSlotList[];
-     *      DevAscendProgramPartialUpdate partialUpdateList[]
+     *      DevAscendProgramUpdate updateList[]
      *      DevAscendProgramSlot slotList[]
      */
 
@@ -210,7 +210,7 @@ struct DevAscendProgram {
 
     void DumpAssembleAndInplaceSlots(const int indent, std::ostringstream& oss) const;
 
-    void DumpPartialUpdate(const int indent, std::ostringstream& oss) const;
+    void DumpUpdate(const int indent, std::ostringstream& oss) const;
 
     void DumpInputSymbols(const int indent, std::ostringstream& oss) const;
 
@@ -341,9 +341,9 @@ struct DevAscendProgram {
         RelocOffset(shift, offset, startArgsInputSymbolIndexList);
         RelocOffset(shift, offset, assembleSlotIndexList);
         RelocOffset(shift, offset, outputInplaceSlotList);
-        auto partialUpdateListPtr = RelocOffset(shift, offset, partialUpdateList);
-        for (size_t i = 0; i < partialUpdateList.size(); i++) {
-            partialUpdateListPtr[i].cellMatchRuntimePartialUpdateTable.DeviceRelocDataMaybeNull(shift);
+        auto updateListPtr = RelocOffset(shift, offset, updateList);
+        for (size_t i = 0; i < updateList.size(); i++) {
+            updateListPtr[i].cellMatchRuntimePartialUpdateTable.DeviceRelocDataMaybeNull(shift);
         }
         RelocOffset(shift, offset, cellMatchRuntimePartialUpdateTableList);
 
@@ -454,10 +454,13 @@ struct DevAscendProgram {
 
 private:
     friend struct EncodeDevAscendProgramInfo;
-    friend void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base);
-    friend void EncodeDevAscendProgramSizeOnly(uint64_t& offset, EncodeDevAscendProgramInfo& encodeInfo);
+    friend void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base,
+                                       const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap);
+    friend void EncodeDevAscendProgramSizeOnly(uint64_t& offset, EncodeDevAscendProgramInfo& encodeInfo,
+                                               const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap);
     friend void EncodeDevAscendProgramFull(Function* func, DevAscendProgram* base, uint64_t& offset,
-                                           EncodeDevAscendProgramInfo& encodeInfo);
+                                           EncodeDevAscendProgramInfo& encodeInfo,
+                                           const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap);
 
     void InitSymbolTable(uintdevptr_t& initOffset, SymbolicSymbolTable* symbolTableInput, bool fillContent);
     void InitExpressionTableBinary(uintdevptr_t& initOffset,
@@ -475,13 +478,11 @@ private:
                                    const std::vector<int>& tStartArgsInputSymbolIndexList,
                                    const std::vector<int>& tAsembleSlotIndexList,
                                    const std::vector<int>& tInplaceSlotIndexList, bool fillContent);
-    void InitPartialUpdateSlot(uintdevptr_t& initOffset, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
-                               const std::unordered_map<Function*, int>& rootFuncKeyDict,
-                               const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
-                               const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
-                               const std::vector<int>& tInputSlotIndexList,
-                               const std::vector<int>& tAssembleSlotIndexList,
-                               const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent);
+    void InitUpdateSlot(uintdevptr_t& initOffset, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
+                        const std::unordered_map<Function*, int>& rootFuncKeyDict,
+                        const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
+                        const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent,
+                        const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap);
     void InitControlFlowCache(uintdevptr_t& initOffset, const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr,
                               bool fillContent, uint32_t outcastCacheDepthFallback = 0);
 };

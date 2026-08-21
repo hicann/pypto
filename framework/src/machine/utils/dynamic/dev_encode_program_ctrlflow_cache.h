@@ -156,9 +156,10 @@ struct DeviceExecuteSlot {
     bool isPartialUpdateStitch{false};
     uint32_t stitchDupIdx{INVALID_STITCH_IDX};
     uint32_t stitchOutcastIdx;
-    uint32_t slotAllocIterId{0}; // when alloc new tensor memory ,change it for cell match tag check
+    uint32_t slotAllocIterId{0};
+    StitchCtrlBitMask stitchCtrlBitMask{STITCH_CTRL_NONE};
 
-    DevAscendProgramPartialUpdate* partialUpdate{nullptr};
+    DevAscendProgramUpdate* partialUpdate{nullptr};
 
     bool IsOutputAddress() const { return isOutputSlot; }
     bool IsAssembleAddress() const { return isAssembleSlot; }

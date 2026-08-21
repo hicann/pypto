@@ -21,5 +21,9 @@ namespace npu::tile_fwk::dynamic {
 void EncodeDevAscendFunction(Function* dyndev, const EncodeDevAscendFunctionParam& param, uint64_t& offset,
                              DevAscendFunction* base);
 
-void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base);
+void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base,
+                            const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap = nullptr);
+
+std::unordered_map<int, SlotMaskEntry> BuildStitchUpdateSlotMaskMap(
+    const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr);
 } // namespace npu::tile_fwk::dynamic

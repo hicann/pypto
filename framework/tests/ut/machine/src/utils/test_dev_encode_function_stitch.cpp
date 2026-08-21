@@ -272,9 +272,9 @@ TEST_F(DevEncodeFunctionStitchTest, CellMatchProcessByDim_ErrorOnNonZeroReturn)
     EXPECT_EQ(ret, 42u);
 }
 
-TEST_F(DevEncodeFunctionStitchTest, DevAscendProgramPartialUpdate_Empty)
+TEST_F(DevEncodeFunctionStitchTest, DevAscendProgramUpdate_Empty)
 {
-    DevAscendProgramPartialUpdate update;
+    DevAscendProgramUpdate update;
     EXPECT_TRUE(update.Empty());
 }
 

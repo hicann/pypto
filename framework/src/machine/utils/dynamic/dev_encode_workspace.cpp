@@ -510,7 +510,7 @@ static std::pair<uint64_t, SymbolicScalar> ComputeAssembleOutcastMem(const std::
     return {maxStaticAssembleOutcastMem, maxDynamicAssembleOutcastMem};
 }
 
-static SymbolicScalar ComputeDynamicCellMatchTableBytesForOutcast(const DevAscendProgramPartialUpdate& partial,
+static SymbolicScalar ComputeDynamicCellMatchTableBytesForOutcast(const DevAscendProgramUpdate& partial,
                                                                   const std::shared_ptr<RawTensor>& rawTensor)
 {
     SymbolicScalar cellCount(1);
@@ -534,7 +534,7 @@ static SymbolicScalar ComputeDynamicCellMatchTableBytesForOutcast(const DevAscen
            SymbolicScalar(static_cast<int64_t>(sizeof(uint64_t)));
 }
 
-static bool IsRuntimeDynamicPartialWithSlotRoot(const DevAscendProgramPartialUpdate& partial,
+static bool IsRuntimeDynamicPartialWithSlotRoot(const DevAscendProgramUpdate& partial,
                                                 const std::shared_ptr<DyndevFunctionAttribute>& dynAttr)
 {
     return partial.cellMatchRuntimePartialUpdateTable.size() == 0 &&
@@ -542,7 +542,7 @@ static bool IsRuntimeDynamicPartialWithSlotRoot(const DevAscendProgramPartialUpd
            dynAttr->slotRootOutcastDict.count(partial.slotIndex) != 0;
 }
 
-static bool IsRuntimeDynamicPartialNeedAlloc(const DevAscendProgramPartialUpdate& partial,
+static bool IsRuntimeDynamicPartialNeedAlloc(const DevAscendProgramUpdate& partial,
                                              const std::shared_ptr<DyndevFunctionAttribute>& dynAttr,
                                              const std::unordered_set<int>& constructAssembleNeedAllocSlots)
 {
@@ -555,8 +555,8 @@ static SymbolicScalar ComputeMaxDynamicCellMatchTableMemPerSlot(
 {
     auto dynAttr = func->GetDyndevAttribute();
     SymbolicScalar maxDynamicTableMem(0);
-    for (size_t i = 0; i < devProg.partialUpdateList.size(); ++i) {
-        auto& partial = devProg.At(devProg.partialUpdateList, i);
+    for (size_t i = 0; i < devProg.updateList.size(); ++i) {
+        auto& partial = devProg.At(devProg.updateList, i);
         if (!IsRuntimeDynamicPartialNeedAlloc(partial, dynAttr, constructAssembleNeedAllocSlots)) {
             continue;
         }
@@ -581,8 +581,8 @@ void BuildDynamicCellMatchLaunchMeta(Function* func, DevAscendProgram& devProg)
     auto dynAttr = func->GetDyndevAttribute();
     dynAttr->dynamicCellMatchLaunchMetaList.clear();
     const auto* devProgBase = reinterpret_cast<const uint8_t*>(&devProg);
-    for (size_t i = 0; i < devProg.partialUpdateList.size(); ++i) {
-        auto& partial = devProg.At(devProg.partialUpdateList, i);
+    for (size_t i = 0; i < devProg.updateList.size(); ++i) {
+        auto& partial = devProg.At(devProg.updateList, i);
         if (partial.stitchCtrlBitMask == STITCH_CTRL_NONE || !IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr)) {
             continue;
         }
@@ -669,8 +669,8 @@ WorkspaceDesc CollectWorkspaceDesc(Function* func, DevAscendProgram& devProg,
     FinalizeWorkspaceDescSlotBudgets(desc, slots, maxPerCoreSpilledMem, maxRootMaxExclusiveOutcastMem);
 
     uint64_t dynamicCellMatchSlotNum = 0;
-    for (size_t i = 0; i < devProg.partialUpdateList.size(); ++i) {
-        auto& partial = devProg.At(devProg.partialUpdateList, i);
+    for (size_t i = 0; i < devProg.updateList.size(); ++i) {
+        auto& partial = devProg.At(devProg.updateList, i);
         if (IsRuntimeDynamicPartialNeedAlloc(partial, dynAttr, constructAssembleNeedAllocSlots)) {
             dynamicCellMatchSlotNum++;
         }

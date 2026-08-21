@@ -495,18 +495,19 @@ static void FillL2PrefetchInfo(std::shared_ptr<DyndevFunctionAttribute> attr)
     }
 }
 
-static void SetDyndevProgBinary(Function* function, bool disableCtrlFlowCache)
+static void SetDyndevProgBinary(Function* function, bool disableCtrlFlowCache,
+                                const std::unordered_map<int, dynamic::SlotMaskEntry>* stitchUpdateSlotMaskMap)
 {
     if (function == nullptr || function->GetDyndevAttribute() == nullptr) {
         return;
     }
     std::shared_ptr<DyndevFunctionAttribute> dynAttrPtr = function->GetDyndevAttribute();
     uint64_t size = 0;
-    dynamic::EncodeDevAscendProgram(function, size, nullptr);
+    dynamic::EncodeDevAscendProgram(function, size, nullptr, stitchUpdateSlotMaskMap);
     dynAttrPtr->devProgBinary.resize(size);
 
     dynamic::DevAscendProgram* devProg = reinterpret_cast<dynamic::DevAscendProgram*>(&dynAttrPtr->devProgBinary[0]);
-    dynamic::EncodeDevAscendProgram(function, size, devProg);
+    dynamic::EncodeDevAscendProgram(function, size, devProg, stitchUpdateSlotMaskMap);
     devProg->disableCtrlFlowCache = disableCtrlFlowCache ? 1 : 0;
 
     if (config::GetPassDefaultConfig(npu::tile_fwk::KEY_PRINT_PROGRAM, false)) {
@@ -935,7 +936,13 @@ static void RunEncodeStage(Function* function, const std::shared_ptr<DyndevFunct
             OverCallOpMaxNum(devRoot, funcBin);
         }
     }
-    SetDyndevProgBinary(function, disableCtrlFlowCache);
+    auto stitchUpdateSlotMaskMap = dynamic::BuildStitchUpdateSlotMaskMap(attr);
+    for (auto& devRoot : attr->funcGroup.devRootList) {
+        int devRootKey = attr->funcGroup.devRootList.GetIndex(devRoot);
+        DevAscendFunction* funcBin = reinterpret_cast<DevAscendFunction*>(&attr->devEncodeList[devRootKey][0]);
+        funcBin->RefilterStitchUpdateSlotLists(stitchUpdateSlotMaskMap);
+    }
+    SetDyndevProgBinary(function, disableCtrlFlowCache, &stitchUpdateSlotMaskMap);
 }
 
 static void RunCodeGenStage(const std::shared_ptr<DyndevFunctionAttribute>& attr,

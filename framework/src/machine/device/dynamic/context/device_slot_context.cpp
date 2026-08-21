@@ -21,7 +21,7 @@
 namespace npu::tile_fwk::dynamic {
 
 static void PrepareRuntimeDynamicPartialUpdateTable(DeviceWorkspaceAllocator* workspace,
-                                                    DevAscendProgramPartialUpdate* partialUpdate)
+                                                    DevAscendProgramUpdate* partialUpdate)
 {
     auto& desc = partialUpdate->cellMatchTableDesc;
     const int dim = desc.GetDimensionSize();
@@ -64,12 +64,12 @@ void DeviceSlotContext::FillInputOutputSlot(DevAscendProgram* devProg, DevStartA
 {
     const uint64_t progBegin = reinterpret_cast<uint64_t>(devProg);
     const uint64_t progEnd = progBegin + devProg->GetSize();
-    auto* partials = devProg->partialUpdateList.Data();
-    const size_t ie = devProg->partialUpdateList.size();
+    const size_t ie = devProg->updateList.size();
     for (size_t i = 0; i < ie; ++i) {
-        uint64_t tablePtr = reinterpret_cast<uint64_t>(partials[i].cellMatchRuntimePartialUpdateTable.Data());
+        auto& partialUpdate = devProg->At(devProg->updateList, i);
+        uint64_t tablePtr = reinterpret_cast<uint64_t>(partialUpdate.cellMatchRuntimePartialUpdateTable.Data());
         if (tablePtr != 0 && (tablePtr < progBegin || tablePtr >= progEnd)) {
-            partials[i].cellMatchRuntimePartialUpdateTable.HostAssignDataSize(0, 0);
+            partialUpdate.cellMatchRuntimePartialUpdateTable.HostAssignDataSize(0, 0);
         }
     }
     FillInputOutputSlot(slotList_.data(), slotList_.size(), devProg, args);
@@ -178,114 +178,67 @@ static uint32_t UpdateSlotsForIncastStitch(int slotIdx, DeviceExecuteSlot& slot,
     return errCode;
 }
 
-static void PrepareRuntimeDynamicPartialUpdateTables(DeviceWorkspaceAllocator* workspace, DeviceExecuteSlot* slotList,
-                                                     DevAscendFunctionDupped& devRootDup)
-{
-    DevAscendFunction* devRootSrc = devRootDup.GetSource();
-    size_t outcastSize = devRootSrc->GetOutcastSize();
-    for (size_t i = 0; i < outcastSize; ++i) {
-        auto& outcast = devRootSrc->GetOutcast(i);
-        const size_t toCnt = outcast.toSlotList.size();
-        if (toCnt == 0) {
-            continue;
-        }
-        const int* toSlots = &devRootSrc->At(outcast.toSlotList, 0);
-        for (size_t j = 0; j < toCnt; ++j) {
-            int slotIdx = toSlots[j];
-            auto& slot = slotList[slotIdx];
-            if (!slot.isPartialUpdateStitch || slot.partialUpdate->stitchCtrlBitMask == STITCH_CTRL_NONE) {
-                continue;
-            }
-            auto* partialUpdate = slot.partialUpdate;
-            if (partialUpdate->cellMatchRuntimePartialUpdateTable.size() != 0 ||
-                partialUpdate->cellMatchTableDesc.GetDimensionSize() <= 0) {
-                continue;
-            }
-            if (partialUpdate->cellMatchRuntimePartialUpdateTable.Data() == nullptr) {
-                continue;
-            }
-            PrepareRuntimeDynamicPartialUpdateTable(workspace, partialUpdate);
-        }
-    }
-}
-
 static uint32_t UpdateSlotsImpl(DeviceWorkspaceAllocator* workspace, DeviceExecuteSlot* slotList,
                                 DevAscendFunctionDupped& devRootDup, uint32_t devTaskId, uint32_t devNextIdx,
                                 uint32_t cellMatchTagSeq)
 {
     AutoScopedPerf asp(PERF_EVT_UPDATE_SLOT);
     DevAscendFunction* devRootSrc = devRootDup.GetSource();
-    size_t outcastSize = devRootSrc->GetOutcastSize();
     uint32_t retCode = 0;
 
-    // Update slot address
     uint64_t* expressionList = &devRootDup.GetExpression(0);
-    PrepareRuntimeDynamicPartialUpdateTables(workspace, slotList, devRootDup);
-    for (size_t i = 0; i < outcastSize; ++i) {
-        const auto& outcastDesc = devRootDup.GetOutcastAddress(i);
-        auto& outcast = devRootSrc->GetOutcast(i);
-        const size_t toCnt = outcast.toSlotList.size();
-        if (toCnt == 0) {
-            continue;
+    size_t updateOutCastListSize = devRootSrc->GetUpdateOutCastSlotListSize();
+    for (size_t i = 0; i < updateOutCastListSize; ++i) {
+        auto& entry = devRootSrc->GetUpdateOutCastSlot(i);
+        auto& outcast = devRootSrc->GetOutcast(entry.outcastIdx);
+        const auto& outcastDesc = devRootDup.GetOutcastAddress(entry.outcastIdx);
+        auto& slot = slotList[entry.slotIdx];
+        slot.stitchDupIdx = devNextIdx;
+        slot.stitchOutcastIdx = static_cast<uint32_t>(entry.outcastIdx);
+        DEV_IF_NONDEVICE
+        {
+            topo_dump::DumpProducerCellAccess(devTaskId, entry.slotIdx, devNextIdx, *devRootSrc, outcast, slot,
+                                              expressionList);
         }
-        const int* toSlots = &devRootSrc->At(outcast.toSlotList, 0);
-        for (size_t j = 0; j < toCnt; ++j) {
-            int slotIdx = toSlots[j];
-            auto& slot = slotList[slotIdx];
-            slot.stitchDupIdx = devNextIdx;
-            slot.stitchOutcastIdx = static_cast<uint32_t>(i);
-            DEV_IF_NONDEVICE
-            {
-                topo_dump::DumpProducerCellAccess(devTaskId, slotIdx, devNextIdx, *devRootSrc, outcast, slot,
-                                                  expressionList);
-            }
-            uint32_t cellMatchTagId = CellMatchBuildTagId(slot.slotAllocIterId, cellMatchTagSeq);
-            uint32_t errCode = 0;
+        uint32_t cellMatchTagId = CellMatchBuildTagId(slot.slotAllocIterId, cellMatchTagSeq);
+        uint32_t errCode = 0;
+        if (slot.stitchCtrlBitMask & (STITCH_CTRL_WAR | STITCH_CTRL_WAW)) {
             if (slot.isPartialUpdateStitch) {
-                if (slot.partialUpdate->stitchCtrlBitMask & (STITCH_CTRL_WAR | STITCH_CTRL_WAW)) {
-                    auto producerList = &devRootSrc->At(outcast.producerConsumerList, 0);
-                    errCode = UpdateSlotsForOutCastPartialStitch(slotIdx, slot, devRootSrc, outcast, producerList,
-                                                                 cellMatchTagId, devNextIdx, expressionList);
+                if (slot.partialUpdate->cellMatchRuntimePartialUpdateTable.size() == 0 &&
+                    slot.partialUpdate->cellMatchRuntimePartialUpdateTable.Data() != nullptr) {
+                    PrepareRuntimeDynamicPartialUpdateTable(workspace, slot.partialUpdate);
                 }
+                auto producerList = &devRootSrc->At(outcast.producerConsumerList, 0);
+                errCode = UpdateSlotsForOutCastPartialStitch(entry.slotIdx, slot, devRootSrc, outcast, producerList,
+                                                             cellMatchTagId, devNextIdx, expressionList);
             } else {
-                errCode = UpdateSlotsForOutCastFullCoverStitch(slotIdx, devRootSrc, outcast, cellMatchTagId,
+                errCode = UpdateSlotsForOutCastFullCoverStitch(entry.slotIdx, devRootSrc, outcast, cellMatchTagId,
                                                                expressionList);
             }
-            workspace->RuntimeOutcastTensorAssign(slot.rtOutcastIter, outcastDesc.GetRtOutcastIter());
-            DEV_VERBOSE_DEBUG("[UpdateSlots]   Outcast [%3zu] to slot [%3d], address %s, ret = 0x%x.", i, slotIdx,
-                              outcastDesc.Dump().c_str(), errCode);
-            if (errCode != 0) {
-                retCode = errCode;
-            }
+        }
+        workspace->RuntimeOutcastTensorAssign(slot.rtOutcastIter, outcastDesc.GetRtOutcastIter());
+        DEV_VERBOSE_DEBUG("[UpdateSlots]   Outcast [%zu] to slot [%d], address %s, ret = 0x%x.", i, entry.slotIdx,
+                          outcastDesc.Dump().c_str(), errCode);
+        if (errCode != 0) {
+            retCode = errCode;
         }
     }
     if (retCode != 0) {
         return retCode;
     }
 
-    // Iterate incasts and update consumer read operations
-    const size_t incastSize = devRootSrc->GetIncastSize();
-    for (size_t incastIdx = 0; incastIdx < incastSize; ++incastIdx) {
-        auto& incast = devRootSrc->GetIncast(incastIdx);
-        const size_t fromCnt = incast.fromSlotList.size();
-        if (fromCnt == 0) {
-            continue;
-        }
-        const int* fromSlots = &devRootSrc->At(incast.fromSlotList, 0);
-        for (size_t j = 0; j < fromCnt; ++j) {
-            int slotIdx = fromSlots[j];
-            auto& slot = slotList[slotIdx];
-            if (!slot.isPartialUpdateStitch || (slot.partialUpdate->stitchCtrlBitMask & STITCH_CTRL_RAW) == 0) {
-                continue;
-            }
-            DEV_VERBOSE_DEBUG("[UpdateSlots]   Begin update Incast [%3zu] from slot [%3d].", incastIdx, slotIdx);
-            uint32_t errCode = UpdateSlotsForIncastStitch(slotIdx, slot, devRootSrc, incast, devTaskId, devNextIdx,
-                                                          expressionList, cellMatchTagSeq);
-            DEV_VERBOSE_DEBUG("[UpdateSlots]   Incast [%3zu] from slot [%3d], ret = 0x%x.", incastIdx, slotIdx,
-                              errCode);
-            if (errCode != 0) {
-                return errCode;
-            }
+    size_t updateIncastListSize = devRootSrc->GetUpdateIncastSlotListSize();
+    for (size_t i = 0; i < updateIncastListSize; ++i) {
+        auto& entry = devRootSrc->GetUpdateIncastSlot(i);
+        auto& incast = devRootSrc->GetIncast(entry.incastIdx);
+        auto& slot = slotList[entry.slotIdx];
+        DEV_VERBOSE_DEBUG("[UpdateSlots]   Begin update Incast [%d] from slot [%3d].", entry.incastIdx, entry.slotIdx);
+        uint32_t errCode = UpdateSlotsForIncastStitch(entry.slotIdx, slot, devRootSrc, incast, devTaskId, devNextIdx,
+                                                      expressionList, cellMatchTagSeq);
+        DEV_VERBOSE_DEBUG("[UpdateSlots]   Incast [%d] from slot [%3d], ret = 0x%x.", entry.incastIdx, entry.slotIdx,
+                          errCode);
+        if (errCode != 0) {
+            return errCode;
         }
     }
     return 0;
@@ -299,19 +252,24 @@ uint32_t DeviceSlotContext::UpdateSlots(DevAscendFunctionDupped& devRootDup, uin
 
 static void MarkPartialUpdateSlots(DeviceExecuteSlot* slotList, size_t slotSize, DevAscendProgram* devProg)
 {
-    auto* partials = devProg->partialUpdateList.Data();
-    const size_t ie = devProg->partialUpdateList.size();
-    for (size_t index = 0; index < ie; index++) {
-        int slotIndex = partials[index].slotIndex;
+    for (size_t index = 0, ie = devProg->updateList.size(); index < ie; index++) {
+        auto& update = devProg->At(devProg->updateList, index);
+        int slotIndex = update.slotIndex;
         if (slotIndex < 0) {
             continue;
         }
         DEV_ASSERT_MSG(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, slotIndex < static_cast<int>(slotSize),
                        "Invalid slot index %d", slotIndex);
-        slotList[slotIndex].isPartialUpdateStitch = true;
-        slotList[slotIndex].partialUpdate = &partials[index];
-        DEV_VERBOSE_DEBUG("Partial Update Slot %d mask=0x%x.\n", slotIndex,
-                          static_cast<unsigned>(partials[index].stitchCtrlBitMask));
+        slotList[slotIndex].stitchCtrlBitMask = update.stitchCtrlBitMask;
+        if (update.isPartial) {
+            slotList[slotIndex].isPartialUpdateStitch = true;
+            slotList[slotIndex].partialUpdate = &update;
+            DEV_VERBOSE_DEBUG("Partial Update Slot %d mask=0x%x.\n", slotIndex,
+                              static_cast<unsigned>(update.stitchCtrlBitMask));
+        } else {
+            DEV_VERBOSE_DEBUG("FullCover Update Slot %d mask=0x%x.\n", slotIndex,
+                              static_cast<unsigned>(update.stitchCtrlBitMask));
+        }
     }
 }
 

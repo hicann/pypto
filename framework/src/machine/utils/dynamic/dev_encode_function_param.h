@@ -15,6 +15,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace npu::tile_fwk {
 struct CceCodeInfo;
 class Function;

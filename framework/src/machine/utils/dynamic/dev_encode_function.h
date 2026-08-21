@@ -35,6 +35,13 @@ class SymbolicExpressionTable;
 namespace npu::tile_fwk::dynamic {
 constexpr int INVALID_INDEX = -1;
 
+struct SlotMaskEntry {
+    uint8_t mask{0};
+    bool isPartial{false};
+    uint32_t maxReadCount{0};
+    bool hasAtomicWrite{false};
+};
+
 struct DevAscendFunctionDuppedData;
 struct DevAscendFunction {
     uint64_t rootHash;
@@ -108,6 +115,20 @@ private:
     DevLocalVector<uint32_t> stitchPolicyFullCoverOpList_;
 
     DevLocalVector<uint32_t> cellMatchRuntimeFullUpdateTableList;
+
+    struct OutCastSlotEntry {
+        int slotIdx;
+        int outcastIdx;
+    };
+    struct IncastSlotEntry {
+        int slotIdx;
+        int incastIdx;
+    };
+    DevLocalVector<OutCastSlotEntry> updateOutCastSlotList;
+    DevLocalVector<IncastSlotEntry> updateIncastSlotList;
+    DevLocalVector<IncastSlotEntry> stitchIncastSlotList;
+    DevLocalVector<OutCastSlotEntry> stitchOutCastSlotList;
+
     DevLocalVector<uint64_t> deadEndHubBitmap_;
     DevLocalVector<uint64_t> tailTaskBitmap_;
     DevLocalVector<char> rawName_;
@@ -462,6 +483,15 @@ public:
         return GetRawTensor(GetTensor(tensorIndex));
     }
 
+    inline size_t GetUpdateOutCastSlotListSize() const { return updateOutCastSlotList.size(); }
+    inline const OutCastSlotEntry& GetUpdateOutCastSlot(int index) const { return At(updateOutCastSlotList, index); }
+    inline size_t GetStitchIncastSlotListSize() const { return stitchIncastSlotList.size(); }
+    inline const IncastSlotEntry& GetStitchIncastSlot(int index) const { return At(stitchIncastSlotList, index); }
+    inline size_t GetUpdateIncastSlotListSize() const { return updateIncastSlotList.size(); }
+    inline const IncastSlotEntry& GetUpdateIncastSlot(int index) const { return At(updateIncastSlotList, index); }
+    inline size_t GetStitchOutCastSlotListSize() const { return stitchOutCastSlotList.size(); }
+    inline const OutCastSlotEntry& GetStitchOutCastSlot(int index) const { return At(stitchOutCastSlotList, index); }
+
     inline size_t GetOutcastSize() const { return outcastList.size(); }
     inline const struct DevAscendFunctionOutcast& GetOutcast(int index) const { return At(outcastList, index); }
     inline struct DevAscendFunctionOutcast& GetOutcast(int index) { return At(outcastList, index); }
@@ -511,6 +541,8 @@ public:
     }
 
     inline const char* GetRawName() const { return &At(rawName_, 0); }
+
+    void RefilterStitchUpdateSlotLists(const std::unordered_map<int, SlotMaskEntry>& stitchUpdateSlotMaskMap);
 
 private:
     friend struct EncodeDevAscendFunctionInfo;
@@ -610,5 +642,10 @@ private:
                             const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
                             const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict,
                             bool fillContent, const std::unordered_map<int, int>& opIdxToHubOpIdx);
+
+    void InitStitchUpdateSlotPrefilterLists(uintdevptr_t& initOffset, const IncastOutcastSlot* slot, int totalSlot,
+                                            const std::vector<std::shared_ptr<LogicalTensor>>& incastTensorList,
+                                            const std::vector<std::shared_ptr<LogicalTensor>>& outcastTensorList,
+                                            bool fillContent);
 };
 } // namespace npu::tile_fwk::dynamic

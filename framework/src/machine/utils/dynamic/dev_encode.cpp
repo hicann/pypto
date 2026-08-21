@@ -923,6 +923,50 @@ void DevAscendFunction::FillOutcastUseList(
     }
 }
 
+void DevAscendFunction::InitStitchUpdateSlotPrefilterLists(
+    uintdevptr_t& initOffset, const IncastOutcastSlot* slot, int totalSlot,
+    const std::vector<std::shared_ptr<LogicalTensor>>& incastTensorList,
+    const std::vector<std::shared_ptr<LogicalTensor>>& outcastTensorList, bool fillContent)
+{
+    uint64_t updateOutCnt = 0, stitchInCnt = 0, updateInCnt = 0, stitchOutCnt = 0;
+    for (size_t index = 0; index < outcastTensorList.size(); index++) {
+        updateOutCnt += slot->outcastSlot[index].size();
+        stitchOutCnt += slot->outcastSlot[index].size();
+    }
+    for (size_t index = 0; index < incastTensorList.size(); index++) {
+        stitchInCnt += slot->incastSlot[index].size();
+        updateInCnt += slot->incastSlot[index].size();
+    }
+
+    updateOutCastSlotList.HostInitDataSizeOffset(initOffset, updateOutCnt);
+    updateIncastSlotList.HostInitDataSizeOffset(initOffset, updateInCnt);
+    stitchIncastSlotList.HostInitDataSizeOffset(initOffset, stitchInCnt);
+    stitchOutCastSlotList.HostInitDataSizeOffset(initOffset, stitchOutCnt);
+
+    ONFILLCONTENT
+    {
+        uint64_t uo = 0, ui = 0, si = 0, so = 0;
+        for (size_t index = 0; index < outcastTensorList.size(); index++) {
+            for (size_t j = 0; j < slot->outcastSlot[index].size(); j++) {
+                int slotIdx = slot->outcastSlot[index][j];
+                ASSERT(DevCommonErr::PARAM_CHECK_FAILED, slotIdx >= 0 && slotIdx < totalSlot)
+                    << "invalid slotIdx " << slotIdx << " in outcastSlot, totalSlot=" << totalSlot;
+                At(updateOutCastSlotList, uo++) = {slotIdx, static_cast<int>(index)};
+                At(stitchOutCastSlotList, so++) = {slotIdx, static_cast<int>(index)};
+            }
+        }
+        for (size_t index = 0; index < incastTensorList.size(); index++) {
+            for (size_t j = 0; j < slot->incastSlot[index].size(); j++) {
+                int slotIdx = slot->incastSlot[index][j];
+                ASSERT(DevCommonErr::PARAM_CHECK_FAILED, slotIdx >= 0 && slotIdx < totalSlot)
+                    << "invalid slotIdx " << slotIdx << " in incastSlot, totalSlot=" << totalSlot;
+                At(updateIncastSlotList, ui++) = {slotIdx, static_cast<int>(index)};
+                At(stitchIncastSlotList, si++) = {slotIdx, static_cast<int>(index)};
+            }
+        }
+    }
+}
+
 void DevAscendFunction::InitIncastOutcast(
     uintdevptr_t& initOffset, const std::vector<std::shared_ptr<LogicalTensor>>& incastTensorList,
     const std::vector<std::shared_ptr<LogicalTensor>>& outcastTensorList,
@@ -1093,6 +1137,9 @@ void DevAscendFunction::InitIncastOutcast(
         }
         stitchPolicyFullCoverOpList_.HostInitDataSizeOffset(initOffset, fullCoverOpTotal);
     }
+
+    InitStitchUpdateSlotPrefilterLists(initOffset, param.slot, param.inoutLink->totalSlot, incastTensorList,
+                                       outcastTensorList, fillContent);
 
     rawName_.HostInitDataSizeOffset(initOffset, (initRawName.size() / 8 + 1) * 8); // 8 byte align
     ONFILLCONTENT
@@ -2614,9 +2661,10 @@ static void FillPartialUpdateSlotContent(DevAscendProgram* prog, int slotIndex,
                                          int totalCellMatchSize, size_t tableSize, bool hasDynamicShape,
                                          StitchCtrlBitMask stitchCtrlBitMask)
 {
-    auto& partialUpdate = prog->At(prog->partialUpdateList, slotIndex);
+    auto& partialUpdate = prog->At(prog->updateList, slotIndex);
     partialUpdate.slotIndex = slotIndex;
     partialUpdate.stitchCtrlBitMask = stitchCtrlBitMask;
+    partialUpdate.isPartial = true;
     partialUpdate.cellMatchTableDesc = partialUpdateCellMatchTableDesc;
 
     if (hasDynamicShape) {
@@ -2691,9 +2739,10 @@ static bool HasAtomicWriteInOutcast(DevAscendFunction* devFunc, const DevAscendF
 
 static void FillEmptyPartialUpdateStub(DevAscendProgram* prog, int slotIndex)
 {
-    auto& partialUpdate = prog->At(prog->partialUpdateList, slotIndex);
+    auto& partialUpdate = prog->At(prog->updateList, slotIndex);
     partialUpdate.slotIndex = slotIndex;
     partialUpdate.stitchCtrlBitMask = STITCH_CTRL_NONE;
+    partialUpdate.isPartial = true;
     partialUpdate.cellMatchTableDesc.SetCacheOpMaxCount({CELL_MATCH_MAX_NORMAL_WRITE_COUNT, 0, 0});
     partialUpdate.cellMatchRuntimePartialUpdateTable.HostAssignDataSize(0, 0);
 }
@@ -2722,18 +2771,151 @@ static size_t CountSlotRootFuncNum(
     return funcKeys.size();
 }
 
-static int InitSinglePartialUpdateSlot(
-    DevAscendProgram* prog, int slotIndex, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
+static uint8_t CalculateStitchCtrlBitMaskForSlot(
+    int slotIndex, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
     const std::unordered_map<Function*, int>& rootFuncKeyDict,
     const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
     const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
-    const std::unordered_set<int>& kernelInputAssembleSlots, int totalCellMatchSize, bool fillContent,
+    const std::unordered_set<int>& kernelInputAssembleSlots, uint32_t* outMaxReadCount = nullptr,
+    bool* outHasAtomicWrite = nullptr)
+{
+    bool hasNormalAttr = false;
+    bool hasAtomicWrite = false;
+
+    auto outcastIt = slotRootOutcastDict.find(slotIndex);
+    if (outcastIt == slotRootOutcastDict.end()) {
+        return STITCH_CTRL_NONE;
+    }
+    for (auto& [root, outcastIndex] : outcastIt->second) {
+        auto rootIt = rootFuncKeyDict.find(root);
+        if (rootIt == rootFuncKeyDict.end()) {
+            continue;
+        }
+        if (!hasNormalAttr && root->GetOutcast()[outcastIndex]->HasAttr("NORMAL")) {
+            hasNormalAttr = true;
+        }
+        if (!hasAtomicWrite) {
+            int funcKey = rootIt->second;
+            DevAscendFunction* devFunc = reinterpret_cast<DevAscendFunction*>(
+                const_cast<uint8_t*>(devEncodeListInput[funcKey].data()));
+            auto& outcast = devFunc->GetOutcast(outcastIndex);
+            hasAtomicWrite = HasAtomicWriteInOutcast(devFunc, outcast);
+        }
+    }
+    if (outHasAtomicWrite != nullptr) {
+        *outHasAtomicWrite = hasAtomicWrite;
+    }
+
+    const uint32_t maxReadCount = CalculateSlotMaxReadCount(slotIndex, slotRootIncastDict, slotRootOutcastDict,
+                                                            rootFuncKeyDict, devEncodeListInput);
+    if (outMaxReadCount != nullptr) {
+        *outMaxReadCount = maxReadCount;
+    }
+
+    uint8_t stitchCtrlBitMask = STITCH_CTRL_NONE;
+    const bool gateByRootFuncNum = kernelInputAssembleSlots.count(slotIndex) != 0;
+    const bool rootFuncOk = !gateByRootFuncNum || CountSlotRootFuncNum(slotIndex, rootFuncKeyDict, slotRootIncastDict,
+                                                                       slotRootOutcastDict) >= 2;
+    if (rootFuncOk) {
+        if (hasNormalAttr) {
+            stitchCtrlBitMask |= STITCH_CTRL_WAW;
+        }
+        if (maxReadCount > 0) {
+            stitchCtrlBitMask |= static_cast<StitchCtrlBitMask>(STITCH_CTRL_WAR | STITCH_CTRL_RAW);
+        }
+    }
+    return stitchCtrlBitMask;
+}
+
+std::unordered_map<int, SlotMaskEntry> BuildStitchUpdateSlotMaskMap(
+    const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr)
+{
+    std::unordered_map<int, SlotMaskEntry> stitchUpdateSlotMaskMap;
+    const auto& inoutLink = dyndevAttr->inoutLink;
+    std::unordered_set<int> assembleSlots(inoutLink.assembleSlotIndexList.begin(),
+                                          inoutLink.assembleSlotIndexList.end());
+    std::unordered_set<int> kernelInputAssembleSlots;
+    for (int slotIndex : inoutLink.inputSlotIndexList) {
+        if (assembleSlots.count(slotIndex) != 0) {
+            kernelInputAssembleSlots.insert(slotIndex);
+        }
+    }
+    std::unordered_set<int> partialSlotSet(inoutLink.partialUpdateSlotIdexList.begin(),
+                                           inoutLink.partialUpdateSlotIdexList.end());
+    for (int slotIndex = 0; slotIndex < inoutLink.totalSlot; slotIndex++) {
+        uint32_t maxReadCount = 0;
+        bool hasAtomicWrite = false;
+        uint8_t mask = CalculateStitchCtrlBitMaskForSlot(
+            slotIndex, dyndevAttr->devEncodeList, dyndevAttr->rootFuncKeyDict, dyndevAttr->slotRootIncastDict,
+            dyndevAttr->slotRootOutcastDict, kernelInputAssembleSlots, &maxReadCount, &hasAtomicWrite);
+        if (mask == STITCH_CTRL_NONE) {
+            continue;
+        }
+        stitchUpdateSlotMaskMap[slotIndex] = {mask, partialSlotSet.count(slotIndex) != 0, maxReadCount, hasAtomicWrite};
+    }
+    return stitchUpdateSlotMaskMap;
+}
+void DevAscendFunction::RefilterStitchUpdateSlotLists(
+    const std::unordered_map<int, SlotMaskEntry>& stitchUpdateSlotMaskMap)
+{
+    auto filterWar = [&](int slotIdx) -> bool {
+        auto it = stitchUpdateSlotMaskMap.find(slotIdx);
+        return it != stitchUpdateSlotMaskMap.end() && (it->second.mask & STITCH_CTRL_WAR);
+    };
+    auto filterRawPartial = [&](int slotIdx) -> bool {
+        auto it = stitchUpdateSlotMaskMap.find(slotIdx);
+        return it != stitchUpdateSlotMaskMap.end() && it->second.isPartial && (it->second.mask & STITCH_CTRL_RAW);
+    };
+    auto filterRawWawPartial = [&](int slotIdx) -> bool {
+        auto it = stitchUpdateSlotMaskMap.find(slotIdx);
+        return it != stitchUpdateSlotMaskMap.end() && it->second.isPartial &&
+               (it->second.mask & (STITCH_CTRL_RAW | STITCH_CTRL_WAW));
+    };
+
+    auto filterFillContent = [&](auto& list, auto&& filter) {
+        size_t writeIdx = 0;
+        for (size_t readIdx = 0; readIdx < list.size(); readIdx++) {
+            auto& entry = At(list, static_cast<int>(readIdx));
+            if (filter(entry.slotIdx)) {
+                At(list, static_cast<int>(writeIdx)) = entry;
+                writeIdx++;
+            }
+        }
+        list.AssignOffsetSize(list.Offset(0), writeIdx);
+    };
+
+    filterFillContent(stitchIncastSlotList, filterWar);
+    filterFillContent(updateIncastSlotList, filterRawPartial);
+    filterFillContent(stitchOutCastSlotList, filterRawWawPartial);
+}
+
+static void InitSingleFullCoverSlot(DevAscendProgram* prog, int slotIndex,
+                                    const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap,
+                                    bool fillContent)
+{
+    auto it = stitchUpdateSlotMaskMap->find(slotIndex);
+    uint8_t stitchCtrlBitMask = (it != stitchUpdateSlotMaskMap->end()) ? it->second.mask : STITCH_CTRL_NONE;
+    if (stitchCtrlBitMask == STITCH_CTRL_NONE) {
+        return;
+    }
+
+    if (fillContent) {
+        auto& update = prog->At(prog->updateList, slotIndex);
+        update.slotIndex = slotIndex;
+        update.stitchCtrlBitMask = stitchCtrlBitMask;
+        update.cellMatchRuntimePartialUpdateTable.HostAssignDataSize(0, 0);
+    }
+}
+
+static int InitSinglePartialUpdateSlot(
+    DevAscendProgram* prog, int slotIndex, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
+    const std::unordered_map<Function*, int>& rootFuncKeyDict,
+    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
+    const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap, int totalCellMatchSize, bool fillContent,
     topo_dump::SlotCellTableCsvWriter* slotCellTable)
 {
     std::vector<const DevAscendFunctionOutcast*> outcastList;
     std::vector<Opcode> outcastOpcodeList;
-    bool hasAtomicWrite = false;
-    bool hasNormalAttr = false;
 
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, slotRootOutcastDict.count(slotIndex))
         << "slotIndex: " << slotIndex << " not found in slotRootOutcastDict";
@@ -2747,39 +2929,18 @@ static int InitSinglePartialUpdateSlot(
         auto& outcast = devFunc->GetOutcast(outcastIndex);
         outcastList.push_back(&outcast);
         outcastOpcodeList.push_back(GetFullCoverProducerOpcodeForOutcast(*devFunc, outcast));
-
-        if (!hasAtomicWrite) {
-            hasAtomicWrite = HasAtomicWriteInOutcast(devFunc, outcast);
-        }
-        if (!hasNormalAttr && root->GetOutcast()[outcastIndex]->HasAttr("NORMAL")) {
-            hasNormalAttr = true;
-        }
     }
 
-    const uint32_t maxReadCount = CalculateSlotMaxReadCount(slotIndex, slotRootIncastDict, slotRootOutcastDict,
-                                                            rootFuncKeyDict, devEncodeListInput);
-
-    // stitchCtrlBitMask: NORMAL→WAW; maxReadCount>0→WAR|RAW (independent).
-    // rootFuncNum≥2 gate ONLY for kernel input∩assemble (old Mark scope).
-    // constructAssemble locals / pure outputs: no rootFuncNum gate.
-    StitchCtrlBitMask stitchCtrlBitMask = STITCH_CTRL_NONE;
-    const bool gateByRootFuncNum = kernelInputAssembleSlots.count(slotIndex) != 0;
-    const bool rootFuncOk = !gateByRootFuncNum || CountSlotRootFuncNum(slotIndex, rootFuncKeyDict, slotRootIncastDict,
-                                                                       slotRootOutcastDict) >= 2;
-    if (rootFuncOk) {
-        if (hasNormalAttr) {
-            stitchCtrlBitMask |= STITCH_CTRL_WAW;
-        }
-        if (maxReadCount > 0) {
-            stitchCtrlBitMask |= static_cast<StitchCtrlBitMask>(STITCH_CTRL_WAR | STITCH_CTRL_RAW);
-        }
-    }
+    auto maskIt = stitchUpdateSlotMaskMap->find(slotIndex);
+    uint8_t stitchCtrlBitMask = (maskIt != stitchUpdateSlotMaskMap->end()) ? maskIt->second.mask : STITCH_CTRL_NONE;
     if (stitchCtrlBitMask == STITCH_CTRL_NONE) {
         if (fillContent) {
             FillEmptyPartialUpdateStub(prog, slotIndex);
         }
         return 0;
     }
+    uint32_t maxReadCount = maskIt->second.maxReadCount;
+    bool hasAtomicWrite = maskIt->second.hasAtomicWrite;
 
     DevCellMatchTableDesc partialUpdateCellMatchTableDesc;
     InitPartialUpdateCellMatch(outcastList, outcastOpcodeList, &partialUpdateCellMatchTableDesc);
@@ -2802,19 +2963,17 @@ static int InitSinglePartialUpdateSlot(
     return static_cast<int>(actualTableSize);
 }
 
-void DevAscendProgram::InitPartialUpdateSlot(
+void DevAscendProgram::InitUpdateSlot(
     uintdevptr_t& initOffset, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
     const std::unordered_map<Function*, int>& rootFuncKeyDict,
-    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
     const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
-    const std::vector<int>& tInputSlotIndexList, const std::vector<int>& tAssembleSlotIndexList,
-    const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent)
+    const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent,
+    const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap)
 {
-    this->partialUpdateList.HostInitDataSizeOffset(initOffset, slotSize);
-    // HostInit zero-fills; mark holes invalid so Mark can skip them (slot 0 stubs still get slotIndex=0 after Fill).
+    this->updateList.HostInitDataSizeOffset(initOffset, slotSize);
     if (fillContent) {
         for (size_t i = 0; i < static_cast<size_t>(slotSize); ++i) {
-            this->At(this->partialUpdateList, i).slotIndex = -1;
+            this->At(this->updateList, i).slotIndex = -1;
         }
     }
 
@@ -2822,22 +2981,20 @@ void DevAscendProgram::InitPartialUpdateSlot(
     int totalCellMatchSize = 0;
     topo_dump::SlotCellTableCsvWriter slotCellTable(fillContent);
 
-    // Old Mark scope: kernel input ∩ assemble. constructAssemble locals are never inputs → ungated.
-    std::unordered_set<int> assembleSlots(tAssembleSlotIndexList.begin(), tAssembleSlotIndexList.end());
-    std::unordered_set<int> kernelInputAssembleSlots;
-    for (int slotIndex : tInputSlotIndexList) {
-        if (assembleSlots.count(slotIndex) != 0) {
-            kernelInputAssembleSlots.insert(slotIndex);
-        }
-    }
-
     std::unordered_set<int> partialSlotSet(tPartialUpdateSlotIndexList.begin(), tPartialUpdateSlotIndexList.end());
 
-    for (size_t index = 0; index < tPartialUpdateSlotIndexList.size(); index++) {
-        auto slotIndex = tPartialUpdateSlotIndexList[index];
-        totalCellMatchSize += InitSinglePartialUpdateSlot(
-            this, slotIndex, devEncodeListInput, rootFuncKeyDict, slotRootIncastDict, slotRootOutcastDict,
-            kernelInputAssembleSlots, totalCellMatchSize, fillContent, &slotCellTable);
+    if (stitchUpdateSlotMaskMap == nullptr) {
+        return;
+    }
+
+    for (uint32_t slotIndex = 0; slotIndex < slotSize; slotIndex++) {
+        if (partialSlotSet.count(static_cast<int>(slotIndex))) {
+            totalCellMatchSize += InitSinglePartialUpdateSlot(
+                this, static_cast<int>(slotIndex), devEncodeListInput, rootFuncKeyDict, slotRootOutcastDict,
+                stitchUpdateSlotMaskMap, totalCellMatchSize, fillContent, &slotCellTable);
+        } else {
+            InitSingleFullCoverSlot(this, static_cast<int>(slotIndex), stitchUpdateSlotMaskMap, fillContent);
+        }
     }
 
     DumpFullCoverCellTableForNonPartialSlots(devEncodeListInput, rootFuncKeyDict, slotRootOutcastDict, partialSlotSet,
@@ -2888,7 +3045,8 @@ struct EncodeDevAscendProgramInfo {
         return false;
     }
 
-    void Init(DevAscendProgram* devProg, bool fillContent)
+    void Init(DevAscendProgram* devProg, bool fillContent,
+              const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap)
     {
         uintdevptr_t initOffset = reinterpret_cast<uintdevptr_t>(devProg->data);
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
@@ -2915,10 +3073,9 @@ struct EncodeDevAscendProgramInfo {
             initOffset, dyndevAttr->inoutLink.inputSlotIndexList, dyndevAttr->inoutLink.outputSlotIndexList,
             dyndevAttr->startArgsInputSymbolIndexList, dyndevAttr->inoutLink.assembleSlotIndexList,
             dyndevAttr->inoutLink.inplaceSlotIndexList, fillContent);
-        devProg->InitPartialUpdateSlot(
-            initOffset, dyndevAttr->devEncodeList, dyndevAttr->rootFuncKeyDict, dyndevAttr->slotRootIncastDict,
-            dyndevAttr->slotRootOutcastDict, dyndevAttr->inoutLink.inputSlotIndexList,
-            dyndevAttr->inoutLink.assembleSlotIndexList, dyndevAttr->inoutLink.partialUpdateSlotIdexList, fillContent);
+        devProg->InitUpdateSlot(initOffset, dyndevAttr->devEncodeList, dyndevAttr->rootFuncKeyDict,
+                                dyndevAttr->slotRootOutcastDict, dyndevAttr->inoutLink.partialUpdateSlotIdexList,
+                                fillContent, stitchUpdateSlotMaskMap);
         devProg->InitPrefetchInfoList(initOffset, dyndevAttr->l2InfoList, fillContent);
         devProg->InitDisableL2List(initOffset, dyndevAttr->disableL2List, fillContent);
         devProg->dataSize = initOffset - reinterpret_cast<uintdevptr_t>(devProg->data);
@@ -2931,11 +3088,12 @@ static WorkspaceDesc CollectWorkspaceDescForSizeOnlyEncode(Function* func, Encod
                                                   encodeInfo.dyndevAttr->constructAssembleNeedAllocRuntimeSlots);
 }
 
-void EncodeDevAscendProgramSizeOnly(uint64_t& offset, EncodeDevAscendProgramInfo& encodeInfo)
+void EncodeDevAscendProgramSizeOnly(uint64_t& offset, EncodeDevAscendProgramInfo& encodeInfo,
+                                    const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap)
 {
     DevAscendProgram devfunc;
     devfunc.SetParallelism(config::GetRuntimeOption<uint32_t>(DEVICE_SCHED_PARALLELISM));
-    encodeInfo.Init(&devfunc, false);
+    encodeInfo.Init(&devfunc, false, stitchUpdateSlotMaskMap);
 
     WorkspaceDesc wsDesc = CollectWorkspaceDescForSizeOnlyEncode(encodeInfo.func, encodeInfo);
     RuntimeWorkspaceConfig runtimeCfg = LoadRuntimeWorkspaceConfig(wsDesc.maxUnrollTimes);
@@ -3019,11 +3177,12 @@ static void FinalizeEncodedDevAscendProgram(Function* func, DevAscendProgram* ba
 }
 
 void EncodeDevAscendProgramFull(Function* func, DevAscendProgram* base, uint64_t& offset,
-                                EncodeDevAscendProgramInfo& encodeInfo)
+                                EncodeDevAscendProgramInfo& encodeInfo,
+                                const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap)
 {
     base->SetParallelism(config::GetRuntimeOption<uint32_t>(DEVICE_SCHED_PARALLELISM));
     MACHINE_LOGD("device sched parallelism is %u.", base->GetParallelism());
-    encodeInfo.Init(base, true);
+    encodeInfo.Init(base, true, stitchUpdateSlotMaskMap);
 
     base->memBudget.debug.dumpTensor = DumpTensorWorkspace();
     base->memBudget.debug.leafDump = LeafDumpWorkspace();
@@ -3054,14 +3213,15 @@ void EncodeDevAscendProgramFull(Function* func, DevAscendProgram* base, uint64_t
     FinalizeEncodedDevAscendProgram(func, base, offset, wsDesc, runtimeCfg, depthConfig);
 }
 
-void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base)
+void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base,
+                            const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap)
 {
     EncodeDevAscendProgramInfo encodeInfo(func);
     if (base == nullptr) {
-        EncodeDevAscendProgramSizeOnly(offset, encodeInfo);
+        EncodeDevAscendProgramSizeOnly(offset, encodeInfo, stitchUpdateSlotMaskMap);
         return;
     }
-    EncodeDevAscendProgramFull(func, base, offset, encodeInfo);
+    EncodeDevAscendProgramFull(func, base, offset, encodeInfo, stitchUpdateSlotMaskMap);
 }
 
 void DevControlFlowCache::Init(void* dyndevAttrPtr, uint64_t cacheSize, uint64_t runtimeOutcastPoolSize,

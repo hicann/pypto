@@ -169,20 +169,22 @@ void DevAscendProgram::DumpAssembleAndInplaceSlots(const int indent, std::ostrin
     }
 }
 
-void DevAscendProgram::DumpPartialUpdate(const int indent, std::ostringstream& oss) const
+void DevAscendProgram::DumpUpdate(const int indent, std::ostringstream& oss) const
 {
     std::string INDENTINNER(indent + IDENT_SIZE, ' ');
-    for (size_t i = 0; i < partialUpdateList.size(); i++) {
-        auto& partialUpdate = At(partialUpdateList, i);
-        oss << INDENTINNER << "#slot-partial-update-" << i << ":" << !partialUpdate.Empty();
-        oss << " | slotindex:" << partialUpdate.slotIndex;
-        if (partialUpdate.stitchCtrlBitMask != STITCH_CTRL_NONE) {
-            oss << " | stitchCtrlBitMask:0x" << std::hex << static_cast<unsigned>(partialUpdate.stitchCtrlBitMask)
-                << std::dec;
+    for (size_t i = 0; i < updateList.size(); i++) {
+        auto& update = At(updateList, i);
+        oss << INDENTINNER << "#slot-update-" << i << ":" << !update.Empty();
+        oss << " | slotindex:" << update.slotIndex;
+        if (update.stitchCtrlBitMask != STITCH_CTRL_NONE) {
+            oss << " | stitchCtrlBitMask:0x" << std::hex << static_cast<unsigned>(update.stitchCtrlBitMask) << std::dec;
         }
-        if (!partialUpdate.Empty()) {
-            oss << " | #cellMatchTableDesc:" << DumpCellMatchTableDesc(partialUpdate.cellMatchTableDesc)
-                << " | #cellMatchStaticTable:" << partialUpdate.cellMatchRuntimePartialUpdateTable.size();
+        if (update.isPartial) {
+            oss << " | isPartial:true";
+        }
+        if (!update.Empty()) {
+            oss << " | #cellMatchTableDesc:" << DumpCellMatchTableDesc(update.cellMatchTableDesc)
+                << " | #cellMatchStaticTable:" << update.cellMatchRuntimePartialUpdateTable.size();
         }
         oss << "\n";
     }
@@ -205,7 +207,7 @@ std::string DevAscendProgram::Dump(const int indent, const bool dumpAddr) const
     DumpSymbolTable(indent, oss);
     DumpInputOutputSlots(indent, oss);
     DumpAssembleAndInplaceSlots(indent, oss);
-    DumpPartialUpdate(indent, oss);
+    DumpUpdate(indent, oss);
     DumpInputSymbols(indent, oss);
 
     DumpExpressionTable(indent, dumpAddr, oss);
@@ -244,7 +246,7 @@ std::vector<RelocRange> CollectProgramRelocRanges(const DevAscendProgram& prog)
         prog.startArgsOutputTensorSlotIndexList,
         prog.assembleSlotIndexList,
         prog.outputInplaceSlotList,
-        prog.partialUpdateList,
+        prog.updateList,
         prog.cellMatchRuntimePartialUpdateTableList, // 15
         prog.prefetchInfoList,
         prog.disableL2List,

@@ -153,14 +153,14 @@ public:
 
     void ReuseStitch(DevAscendFunctionDupped& nextDup, size_t devNextIdx, size_t devTaskId);
 
-    uint64_t FastStitchConsumer(DeviceExecuteSlot* slotList, size_t slotSize, DevAscendFunctionDupped& nextDup,
-                                size_t devTaskId, size_t devNextIdx, uint32_t cellMatchTagSeq);
+    uint64_t FastStitchConsumer(DeviceExecuteSlot* slotList, DevAscendFunctionDupped& nextDup, size_t devTaskId,
+                                size_t devNextIdx, uint32_t cellMatchTagSeq);
 
-    uint64_t FastStitchProducer(DeviceExecuteSlot* slotList, size_t slotSize, DevAscendFunctionDupped& nextDup,
-                                size_t devTaskId, size_t devNextIdx, uint32_t cellMatchTagSeq);
+    uint64_t FastStitchProducer(DeviceExecuteSlot* slotList, DevAscendFunctionDupped& nextDup, size_t devTaskId,
+                                size_t devNextIdx, uint32_t cellMatchTagSeq);
 
-    uint64_t FastStitch(DeviceExecuteSlot* slotList, size_t slotSize, DevAscendFunctionDupped& nextDup,
-                        size_t devTaskId, size_t devNextIdx, uint32_t cellMatchTagSeq);
+    uint64_t FastStitch(DeviceExecuteSlot* slotList, DevAscendFunctionDupped& nextDup, size_t devTaskId,
+                        size_t devNextIdx, uint32_t cellMatchTagSeq);
 
     static void DumpStitchInfo(DevAscendFunctionDupped* stitchedList, int stitchedSize);
 

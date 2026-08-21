@@ -188,8 +188,7 @@ void DeviceStitchContext::CheckStitch(DynDeviceTask* dyntask)
 uint64_t DeviceStitchContext::Stitch(DeviceSlotContext& slotContext, DevAscendFunctionDupped& nextDup, size_t devTaskId,
                                      size_t devNextIdx, uint32_t cellMatchTagSeq)
 {
-    uint64_t count = FastStitch(slotContext.GetSlotList(), slotContext.GetSlotSize(), nextDup, devTaskId, devNextIdx,
-                                cellMatchTagSeq);
+    uint64_t count = FastStitch(slotContext.GetSlotList(), nextDup, devTaskId, devNextIdx, cellMatchTagSeq);
     if (stitchedList_.capacity() == 0) {
         /* This stitchedList_ vector can only allocate sufficient space once,
             during a single device task construction process.*/
@@ -228,7 +227,9 @@ void DeviceStitchContext::DumpSlotInfo(const char* label, DeviceExecuteSlot* slo
                 continue;
             }
             [[maybe_unused]] auto& outcastDesc = workspace_->GetRuntimeOutcastTensor(slotList[slotIdx].rtOutcastIter);
-            DEV_DEBUG("[DecideSlotAddress]   Slot [%3lu]: %s%s", slotIdx, outcastDesc.Dump().c_str(), extraAttr);
+            DEV_DEBUG("[DecideSlotAddress]   Slot [%3lu]: %s%s | mask=0x%x partial=%d stitchDupIdx=%u", slotIdx,
+                      outcastDesc.Dump().c_str(), extraAttr, static_cast<unsigned>(slotList[slotIdx].stitchCtrlBitMask),
+                      slotList[slotIdx].isPartialUpdateStitch, slotList[slotIdx].stitchDupIdx);
         }
     }
 }
@@ -628,10 +629,12 @@ void DeviceStitchContext::ReuseStitch(DevAscendFunctionDupped& nextDup, size_t d
     };
 
     auto skipBefore = [](int result) { return result == NO_DEP || result == SKIP_EMPTY; };
-    for (; skipBefore(needsDependency(stitchReuseContext_.firstDupIdx)); stitchReuseContext_.firstDupIdx++) {
+    int firstResult;
+    for (; skipBefore(firstResult = needsDependency(stitchReuseContext_.firstDupIdx));
+         stitchReuseContext_.firstDupIdx++) {
     }
 
-    if (needsDependency(stitchReuseContext_.firstDupIdx) == NEEDS_DEP) {
+    if (firstResult == NEEDS_DEP) {
         for (uint32_t prevIdx = stitchReuseContext_.firstDupIdx;; prevIdx++) {
             int res = needsDependency(prevIdx);
             if (res == NO_DEP || res == INVALID_TOO_AHEAD) {
@@ -655,86 +658,58 @@ void DeviceStitchContext::ReuseStitch(DevAscendFunctionDupped& nextDup, size_t d
     }
 }
 
-uint64_t DeviceStitchContext::FastStitchConsumer(DeviceExecuteSlot* slotList, size_t slotSize,
-                                                 DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx,
-                                                 uint32_t cellMatchTagSeq)
+uint64_t DeviceStitchContext::FastStitchConsumer(DeviceExecuteSlot* slotList, DevAscendFunctionDupped& nextDup,
+                                                 size_t devTaskId, size_t devNextIdx, uint32_t cellMatchTagSeq)
 {
     auto* nextSrc = nextDup.GetSource();
     uint64_t matchCount = 0;
-    const size_t incastSize = nextSrc->GetIncastSize();
-    for (size_t incastIdx = 0; incastIdx < incastSize; ++incastIdx) {
-        auto& incast = nextSrc->GetIncast(incastIdx);
-        const size_t fromCnt = incast.fromSlotList.size();
-        if (fromCnt == 0) {
+    size_t listSize = nextSrc->GetStitchIncastSlotListSize();
+    for (size_t i = 0; i < listSize; ++i) {
+        auto& entry = nextSrc->GetStitchIncastSlot(i);
+        auto slotIdx = entry.slotIdx;
+        auto& slot = slotList[slotIdx];
+        if (slot.stitchDupIdx == INVALID_STITCH_IDX) {
             continue;
         }
-        const int* fromSlots = &nextSrc->At(incast.fromSlotList, 0);
-        for (size_t j = 0; j < fromCnt; ++j) {
-            auto slotIdx = fromSlots[j];
-            if (slotIdx >= (int)slotSize) {
-                DEV_ERROR(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-                          "#ctrl.stitch.invalid_slot: slotIdx %d is larger than slotSize %zu!.", slotIdx, slotSize);
-                continue;
-            }
-            auto& slot = slotList[slotIdx];
-            DEV_VERBOSE_DEBUG("FastStitch slot %d, incastindex %zu, ispartial %d, stitchDupIdx %u", slotIdx, incastIdx,
-                              slot.isPartialUpdateStitch, slot.stitchDupIdx);
-            if (slot.stitchDupIdx == INVALID_STITCH_IDX) {
-                continue;
-            }
-            if (slot.isPartialUpdateStitch) {
-                if (slot.partialUpdate->stitchCtrlBitMask & STITCH_CTRL_WAR) {
-                    matchCount += PartialUpdateStitchConsumer(nextDup, devTaskId, devNextIdx, slot, slotIdx, incast,
-                                                              cellMatchTagSeq);
-                }
-                continue;
-            }
-            if (slot.rtOutcastIter == ITEM_POOL_INVALID_INDEX) {
-                continue;
-            }
-            matchCount += FullCoverUpdateStitch(nextDup, devTaskId, devNextIdx, slot, slotIdx, incast);
+        auto& incast = nextSrc->GetIncast(entry.incastIdx);
+        DEV_VERBOSE_DEBUG("FastStitch slot %d, incastindex %d, ispartial %d, stitchDupIdx %u", slotIdx, entry.incastIdx,
+                          slot.isPartialUpdateStitch, slot.stitchDupIdx);
+        if (slot.isPartialUpdateStitch) {
+            matchCount = PartialUpdateStitchConsumer(nextDup, devTaskId, devNextIdx, slot, slotIdx, incast,
+                                                     cellMatchTagSeq);
+            continue;
         }
+        if (slot.rtOutcastIter == ITEM_POOL_INVALID_INDEX) {
+            continue;
+        }
+        matchCount = FullCoverUpdateStitch(nextDup, devTaskId, devNextIdx, slot, slotIdx, incast);
     }
     return matchCount;
 }
 
-uint64_t DeviceStitchContext::FastStitchProducer(DeviceExecuteSlot* slotList, size_t slotSize,
-                                                 DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx,
-                                                 uint32_t cellMatchTagSeq)
+uint64_t DeviceStitchContext::FastStitchProducer(DeviceExecuteSlot* slotList, DevAscendFunctionDupped& nextDup,
+                                                 size_t devTaskId, size_t devNextIdx, uint32_t cellMatchTagSeq)
 {
     auto* nextSrc = nextDup.GetSource();
     uint64_t matchCount = 0;
-    const size_t outcastSize = nextSrc->GetOutcastSize();
-    for (size_t outcastIdx = 0; outcastIdx < outcastSize; ++outcastIdx) {
-        auto& outcast = nextSrc->GetOutcast(outcastIdx);
-        const size_t toCnt = outcast.toSlotList.size();
-        if (toCnt == 0) {
+    size_t listSize = nextSrc->GetStitchOutCastSlotListSize();
+    for (size_t i = 0; i < listSize; ++i) {
+        auto& entry = nextSrc->GetStitchOutCastSlot(i);
+        auto slotIdx = entry.slotIdx;
+        auto& slot = slotList[slotIdx];
+        if (slot.stitchDupIdx == INVALID_STITCH_IDX) {
             continue;
         }
-        const int* toSlots = &nextSrc->At(outcast.toSlotList, 0);
-        for (size_t j = 0; j < toCnt; ++j) {
-            auto slotIdx = toSlots[j];
-            if (slotIdx >= (int)slotSize) {
-                DEV_ERROR(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-                          "#ctrl.stitch.invalid_slot: slotIdx %d is larger than slotSize %zu!.", slotIdx, slotSize);
-                continue;
-            }
-            auto& slot = slotList[slotIdx];
-            // isPartialUpdateStitch ⇒ partialUpdate set by Mark.
-            if (slot.stitchDupIdx == INVALID_STITCH_IDX || !slot.isPartialUpdateStitch ||
-                (slot.partialUpdate->stitchCtrlBitMask & (STITCH_CTRL_RAW | STITCH_CTRL_WAW)) == 0) {
-                continue;
-            }
-            DEV_VERBOSE_DEBUG("FastStitch slot %d, outcastindex %zu, ispartial %d, stitchDupIdx %u", slotIdx,
-                              outcastIdx, slot.isPartialUpdateStitch, slot.stitchDupIdx);
-            matchCount += PartialUpdateStitchProducer(nextDup, devTaskId, devNextIdx, slot, slotIdx, outcast,
-                                                      cellMatchTagSeq);
-        }
+        auto& outcast = nextSrc->GetOutcast(entry.outcastIdx);
+        DEV_VERBOSE_DEBUG("FastStitch slot %d, outcastindex %d, ispartial %d, stitchDupIdx %u", slotIdx,
+                          entry.outcastIdx, slot.isPartialUpdateStitch, slot.stitchDupIdx);
+        matchCount += PartialUpdateStitchProducer(nextDup, devTaskId, devNextIdx, slot, slotIdx, outcast,
+                                                  cellMatchTagSeq);
     }
     return matchCount;
 }
 
-uint64_t DeviceStitchContext::FastStitch(DeviceExecuteSlot* slotList, size_t slotSize, DevAscendFunctionDupped& nextDup,
+uint64_t DeviceStitchContext::FastStitch(DeviceExecuteSlot* slotList, DevAscendFunctionDupped& nextDup,
                                          size_t devTaskId, size_t devNextIdx, uint32_t cellMatchTagSeq)
 {
     AutoScopedPerf asp(PERF_EVT_FAST_STITCH);
@@ -746,8 +721,8 @@ uint64_t DeviceStitchContext::FastStitch(DeviceExecuteSlot* slotList, size_t slo
     if (devNextIdx == 0) {
         return 0;
     }
-    uint64_t matchCount = FastStitchConsumer(slotList, slotSize, nextDup, devTaskId, devNextIdx, cellMatchTagSeq);
-    matchCount += FastStitchProducer(slotList, slotSize, nextDup, devTaskId, devNextIdx, cellMatchTagSeq);
+    uint64_t matchCount = FastStitchConsumer(slotList, nextDup, devTaskId, devNextIdx, cellMatchTagSeq);
+    matchCount += FastStitchProducer(slotList, nextDup, devTaskId, devNextIdx, cellMatchTagSeq);
 #if !DEBUG_INFINITE_LIFETIME
     ReuseStitch(nextDup, devNextIdx, devTaskId);
 #endif

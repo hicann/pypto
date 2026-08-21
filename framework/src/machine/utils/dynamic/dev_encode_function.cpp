@@ -249,6 +249,30 @@ std::string DevAscendFunction::Dump(int indent) const
             oss << INDENTINNER << "#assembleSlot_" << j << "{" << GetRedaccAssembleSlotList(j) << "}\n";
         }
     }
+    {
+        oss << INDENTINNER << "#updateOutCastSlotList{" << updateOutCastSlotList.size() << "}\n";
+        for (size_t j = 0; j < updateOutCastSlotList.size(); j++) {
+            auto& e = At(updateOutCastSlotList, j);
+            oss << INDENTINNER << "#updateOutCast_" << j << "{slot=" << e.slotIdx << ",outcast=" << e.outcastIdx
+                << "}\n";
+        }
+        oss << INDENTINNER << "#stitchIncastSlotList{" << stitchIncastSlotList.size() << "}\n";
+        for (size_t j = 0; j < stitchIncastSlotList.size(); j++) {
+            auto& e = At(stitchIncastSlotList, j);
+            oss << INDENTINNER << "#stitchIncast_" << j << "{slot=" << e.slotIdx << ",incast=" << e.incastIdx << "}\n";
+        }
+        oss << INDENTINNER << "#updateIncastSlotList{" << updateIncastSlotList.size() << "}\n";
+        for (size_t j = 0; j < updateIncastSlotList.size(); j++) {
+            auto& e = At(updateIncastSlotList, j);
+            oss << INDENTINNER << "#updateIncast_" << j << "{slot=" << e.slotIdx << ",incast=" << e.incastIdx << "}\n";
+        }
+        oss << INDENTINNER << "#stitchOutCastSlotList{" << stitchOutCastSlotList.size() << "}\n";
+        for (size_t j = 0; j < stitchOutCastSlotList.size(); j++) {
+            auto& e = At(stitchOutCastSlotList, j);
+            oss << INDENTINNER << "#stitchOutCast_" << j << "{slot=" << e.slotIdx << ",outcast=" << e.outcastIdx
+                << "}\n";
+        }
+    }
     oss << INDENTINNER << "#hubOpCount:" << hubOpCount_ << "\n";
     oss << INDENTINNER << "#zeropred:" << predInfo_.totalZeroPred << "\n";
     oss << INDENTINNER << "#zeropred-aiv:" << predInfo_.totalZeroPredAIV << "\n";

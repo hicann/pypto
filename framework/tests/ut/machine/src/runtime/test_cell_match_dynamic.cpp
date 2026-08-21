@@ -264,7 +264,7 @@ TEST(UpdateSlotsIncastFillTest, DualConsumerLists)
     ic->stitchPolicyFullCoverConsumerList.AssignOffsetSize(reinterpret_cast<uint8_t*>(full) - root.funcBuf.get(), 1);
     ic->stitchPolicyFullCoverConsumerAllOpIdxList.AssignOffsetSize(0, 0);
 
-    DevAscendProgramPartialUpdate partial{};
+    DevAscendProgramUpdate partial{};
     partial.slotIndex = 0;
     partial.cellMatchTableDesc.SetCacheOpMaxCount({1, 0, 1});
     uint64_t table[4] = {0};
@@ -330,15 +330,15 @@ DevAscendProgram* EncodeAndGetDevProg()
     return devProg;
 }
 
-const DevAscendProgramPartialUpdate* FindPartialUpdateBySlot(DevAscendProgram* devProg, int slotIndex)
+const DevAscendProgramUpdate* FindPartialUpdateBySlot(DevAscendProgram* devProg, int slotIndex)
 {
     if (devProg == nullptr || slotIndex < 0) {
         return nullptr;
     }
-    if (static_cast<size_t>(slotIndex) >= devProg->partialUpdateList.size()) {
+    if (static_cast<size_t>(slotIndex) >= devProg->updateList.size()) {
         return nullptr;
     }
-    const auto& partial = devProg->At(devProg->partialUpdateList, slotIndex);
+    const auto& partial = devProg->At(devProg->updateList, slotIndex);
     if (partial.slotIndex < 0) {
         return nullptr;
     }
@@ -447,8 +447,8 @@ TEST(StitchCtrlBitMaskEncodeTest, War_ParallelFalse_HasWarRaw)
 
     bool sawWarRaw = false;
     StitchCtrlBitMask midMask = STITCH_CTRL_NONE;
-    for (size_t i = 0; i < devProg->partialUpdateList.size(); ++i) {
-        const auto& partial = devProg->At(devProg->partialUpdateList, i);
+    for (size_t i = 0; i < devProg->updateList.size(); ++i) {
+        const auto& partial = devProg->At(devProg->updateList, i);
         if (partial.slotIndex < 0) {
             continue;
         }
@@ -480,8 +480,9 @@ TEST(PrepareRuntimeDynamicPartialUpdateTableTest, ZeroStrideAndZeroCapacityCover
     root.func->outcastList.AssignOffsetSize(root.cursor, 1);
 
     uint64_t table[4] = {0};
-    DevAscendProgramPartialUpdate partial{};
+    DevAscendProgramUpdate partial{};
     partial.slotIndex = 0;
+    partial.isPartial = true;
     partial.cellMatchTableDesc.SetCellShape({4});
     partial.cellMatchTableDesc.SetStrideShape({0});
     partial.cellMatchTableDesc.cellUint64Size = 2;
@@ -490,6 +491,7 @@ TEST(PrepareRuntimeDynamicPartialUpdateTableTest, ZeroStrideAndZeroCapacityCover
 
     DeviceExecuteSlot slots[1]{};
     slots[0].isPartialUpdateStitch = true;
+    slots[0].stitchCtrlBitMask = STITCH_CTRL_WAW;
     slots[0].partialUpdate = &partial;
     slots[0].stitchDupIdx = 0;
     slots[0].stitchOutcastIdx = 0;
