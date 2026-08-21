@@ -409,7 +409,11 @@ TEST_P(MatmulOperationTest, TestMatmul)
     if (args.param_.enable_l0c2l1) {
         Tensor l0c2L1Tensor = GetParamTensor(test_data, "l0c2l1_tensor");
         testCase.inputTensors.push_back(l0c2L1Tensor);
-        testCase.inputPaths.push_back(GetGoldenDir() + "/" + l0c2L1Tensor.GetStorage()->Symbol() + ".bin");
+        if (l0c2L1Tensor.GetStorage() != nullptr) {
+            testCase.inputPaths.push_back(GetGoldenDir() + "/" + l0c2L1Tensor.GetStorage()->Symbol() + ".bin");
+        } else {
+            testCase.inputPaths.push_back("");
+        }
     }
     testCase.goldenPaths = {GetGoldenDir() + "/" + testCase.outputTensors[0].GetStorage()->Symbol() + ".bin"};
     CheckBTransNZUnaligned(args.param_.transB, args.param_.isCMatrixNz, testCase.inputTensors[1],
@@ -456,8 +460,12 @@ TEST_P(MatmulVerifyOperationTest, TestMatmulVerify)
     testCase.goldenPaths = {GetGoldenDir() + "/" + testCase.outputTensors[0].GetStorage()->Symbol() + ".bin"};
     if (args.param_.enable_l0c2l1) {
         Tensor l0c2L1Tensor = GetParamTensor(test_data, "l0c2l1_tensor");
-        testCase.inputPaths.push_back(GetGoldenDir() + "/" + l0c2L1Tensor.GetStorage()->Symbol() + ".bin");
         testCase.inputTensors.push_back(l0c2L1Tensor);
+        if (l0c2L1Tensor.GetStorage() != nullptr) {
+            testCase.inputPaths.push_back(GetGoldenDir() + "/" + l0c2L1Tensor.GetStorage()->Symbol() + ".bin");
+        } else {
+            testCase.inputPaths.push_back("");
+        }
     }
     TestFlowVerifier::runTest(testCase);
 }
