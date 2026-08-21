@@ -621,6 +621,35 @@ TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeInfersInputDynRawSha
     EXPECT_EQ(afterDynRawShape[1].Concrete(), 64);
 }
 
+TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeUpdatesOutputDynRawShape)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestUpdateOutputDynRawShape",
+                                           "TestUpdateOutputDynRawShape", nullptr);
+
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 2, 128},
+                                             CreateTestConstIntVector({-1, 2, 128}));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 256},
+                                              CreateTestConstIntVector({-1, 256}));
+    auto runtimeLength = CreateTestScalarVar("runtime_length_for_reshape_output");
+    std::vector<SymbolicScalar> dynShape = {runtimeLength, SymbolicScalar(256)};
+
+    auto dummyIn = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{1}, CreateTestConstIntVector({1}));
+    auto dummyOut = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{1}, CreateTestConstIntVector({1}));
+    auto& srcOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_RESHAPE, {dummyIn}, {dummyOut});
+
+    ASSERT_EQ(output->GetRawTensor()->GetDynRawShape().size(), 2U);
+    ASSERT_TRUE(output->GetRawTensor()->GetDynRawShape()[0].ConcreteValid());
+    EXPECT_EQ(output->GetRawTensor()->GetDynRawShape()[0].Concrete(), -1);
+
+    ViewReshapeAssembleReorderUtils utils;
+    utils.CreateMetadataReshape(*func, input, output, dynShape, ir::Span::Unknown(), Operation::ScopeInfo(), srcOp);
+
+    const auto& updatedDynRawShape = output->GetRawTensor()->GetDynRawShape();
+    ASSERT_EQ(updatedDynRawShape.size(), dynShape.size());
+    EXPECT_EQ(updatedDynRawShape[0].Dump(), dynShape[0].Dump());
+    EXPECT_EQ(updatedDynRawShape[1].Concrete(), 256);
+}
+
 /*
  * CreateMetadataReshape: when inference fails (incompatible shapes), the
  * input's original DynRawShape is preserved unchanged.

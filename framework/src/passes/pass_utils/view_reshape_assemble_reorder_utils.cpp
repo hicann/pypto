@@ -853,6 +853,11 @@ void ViewReshapeAssembleReorderUtils::CreateMetadataReshape(Function& function, 
                                                             const ir::Span& span, const Operation::ScopeInfo& scopeInfo,
                                                             Operation& srcOp)
 {
+    if (output != nullptr && output->GetRawTensor() != nullptr &&
+        output->GetRawTensor()->GetDynRawShape().size() == dynShape.size() &&
+        HasNegativeDynDim(output->GetRawTensor()->GetDynRawShape())) {
+        output->GetRawTensor()->UpdateDynRawShape(dynShape);
+    }
     if (input != nullptr && input->GetRawTensor() != nullptr &&
         HasNegativeDynDim(input->GetRawTensor()->GetDynRawShape())) {
         std::vector<SymbolicScalar> inferredInputDynRawShape;
@@ -962,6 +967,11 @@ void ViewReshapeAssembleReorderUtils::AppendReshapeAssembleRecords(Function& fun
         }
         if (!assembleOutputDynShape.empty()) {
             record.assembleOutput->UpdateDynValidShape(assembleOutputDynShape);
+            if (record.assembleOutput->GetRawTensor() != nullptr &&
+                record.assembleOutput->GetRawTensor()->GetDynRawShape().size() == assembleOutputDynShape.size() &&
+                HasNegativeDynDim(record.assembleOutput->GetRawTensor()->GetDynRawShape())) {
+                record.assembleOutput->GetRawTensor()->UpdateDynRawShape(assembleOutputDynShape);
+            }
         }
         if (finalOutputDynShape.empty()) {
             finalOutputDynShape = record.outputDynShape;
