@@ -465,29 +465,32 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
         if not is_opaque_value(scope.locals.get(name))
     ]
 
-    try:
-        ctx.checkpoint()
-        then_body = ir.SeqStmts(then_block.span)
-        with InsertPoint(then_body), ctx.change_span(then_block.span):
-            dispatch_block(then_block, False)
-            then_yield_vars = [ctx.unwrap(scope[name]) for name in yield_var_names]
-            _add_jump_stmt(ctx, then_block.jump, list(then_yield_vars))
-    finally:
-        ctx.restore()
-        scope.locals = saved
-        _restore_tensor_lts(tensor_snap)
+    def _trace_branch(branch: Block, branch_name: str, yield_vars_out: list):
+        # Isolate the C++ config scope (vec/cube tile shapes, pass options, ...) so
+        # that config mutations inside one branch do not leak into the sibling
+        # branch trace or the code traced afterwards. Each branch only sees the
+        # config state before the `if` statement plus its own mutations, matching
+        # the per-path replay semantics of the legacy frontend.
+        try:
+            ctx.checkpoint()
+            pypto_impl.BeginScope(branch_name, {}, branch.span.filename, branch.span.begin_line)
+            branch_body = ir.SeqStmts(branch.span)
+            with InsertPoint(branch_body), ctx.change_span(branch.span):
+                dispatch_block(branch, False)
+                yield_vars_out.extend(ctx.unwrap(scope[name]) for name in yield_var_names)
+                _add_jump_stmt(ctx, branch.jump, list(yield_vars_out))
+            return branch_body
+        finally:
+            pypto_impl.EndScope()
+            ctx.restore()
+            scope.locals = saved
+            _restore_tensor_lts(tensor_snap)
 
-    try:
-        ctx.checkpoint()
-        else_body = ir.SeqStmts(else_block.span)
-        with InsertPoint(else_body), ctx.change_span(else_block.span):
-            dispatch_block(else_block, False)
-            else_yield_vars = [ctx.unwrap(scope[name]) for name in yield_var_names]
-            _add_jump_stmt(ctx, else_block.jump, list(else_yield_vars))
-    finally:
-        ctx.restore()
-        scope.locals = saved
-        _restore_tensor_lts(tensor_snap)
+    then_yield_vars = []
+    then_body = _trace_branch(then_block, "pil.if_else_then", then_yield_vars)
+
+    else_yield_vars = []
+    else_body = _trace_branch(else_block, "pil.if_else_else", else_yield_vars)
 
     yield_vars = []
     for i, name in enumerate(yield_var_names):
