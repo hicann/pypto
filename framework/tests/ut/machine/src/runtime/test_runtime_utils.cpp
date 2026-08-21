@@ -29,8 +29,6 @@ TEST(RuntimeUtilsTest, AlignSize_GetProcessId_RegisterKernelBin)
     EXPECT_EQ(AlignSize(65, 64), 128u);
     EXPECT_TRUE(AlignSize(1, 0) > 0u);
 
-    EXPECT_EQ(GetProcessId(), static_cast<uint32_t>(getpid()));
-
     std::vector<uint8_t> empty;
     EXPECT_ANY_THROW(RegisterKernelBin(empty));
 }

@@ -121,6 +121,10 @@ class CompiledKernel:
     # True when the generated kernel uses only vector (AIV) cores (no cube code),
     # so block_dim should be clamped against the vector core count.
     is_aiv_only: bool = False
+    kernel_name: str = ""
+    build_dir: str = ""
+    has_cube: bool = False
+    has_vector: bool = True
 
 
 @dataclasses.dataclass
@@ -1176,7 +1180,8 @@ def _setup_arch_env(arch: str | None) -> str:
     return arch
 
 
-def _load_lib(lib_path: str, param_specs: list[ParamSpec], clean_up: bool = False):
+def _load_lib(lib_path: str, param_specs: list[ParamSpec], clean_up: bool = False, kernel_name: str = "",
+              build_dir: str = "", has_cube: bool = False, has_vector: bool = True):
     lib = ctypes.CDLL(lib_path)
 
     default_block_dim = 1  # Future: extend kernel to multi-core
@@ -1201,6 +1206,9 @@ def _load_lib(lib_path: str, param_specs: list[ParamSpec], clean_up: bool = Fals
         except (ImportError, AttributeError):
             pass
 
+        from pypto_pro.runtime.exception_dump import set_dump_info as _set_dump_info
+
+        _set_dump_info(kernel_name, args, param_specs, build_dir, has_cube=has_cube, has_vector=has_vector)
         ctypes_args = _args_to_ctypes(args, param_specs)
         lib.call_kernel(block_dim, getattr(stream, "_as_parameter_"), *ctypes_args)
 
@@ -1216,12 +1224,21 @@ def _launch(stream=None, block_dim=1, compiled_result: "CompiledKernel | str" = 
             raise RuntimeError("compiled_result is empty")
         lib_path: str = compiled_result
         param_specs: list[ParamSpec] = []
+        kernel_name: str = ""
+        build_dir: str = ""
+        has_cube: bool = False
+        has_vector: bool = True
     else:
         lib_path = compiled_result.lib_path
         param_specs = compiled_result.param_specs
+        kernel_name = compiled_result.kernel_name
+        build_dir = compiled_result.build_dir
+        has_cube = compiled_result.has_cube
+        has_vector = compiled_result.has_vector
     if stream is None:
         stream = torch.npu.current_stream()
-    compiled_func = _load_lib(lib_path, param_specs)
+    compiled_func = _load_lib(lib_path, param_specs, kernel_name=kernel_name, build_dir=build_dir,
+                              has_cube=has_cube, has_vector=has_vector)
     compiled_func(*args, block_dim=block_dim, stream=stream)
 
 
@@ -1616,7 +1633,9 @@ class _TileJitKernel:
         # is bounded by the vector core count rather than the total core count.
         is_aiv_only = cg.has_vector and not cg.has_cube
         compiled = CompiledKernel(
-            lib_path=lib_path, param_specs=cg.param_specs, is_aiv_only=is_aiv_only
+            lib_path=lib_path, param_specs=cg.param_specs, is_aiv_only=is_aiv_only,
+            kernel_name=cg.kernel_name, build_dir=cg.build_dir,
+            has_cube=cg.has_cube, has_vector=cg.has_vector,
         )
         self._compiled_by_signature[cache_key] = compiled
         return compiled
