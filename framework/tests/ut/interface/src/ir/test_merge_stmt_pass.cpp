@@ -88,3 +88,45 @@ TEST(MergeStmtPass, TestMergeStmtsIntoIf)
     auto out = pypto::ir::pass::MergeStmtsIntoIf()(prog);
     ASSERT_NE(out, nullptr);
 }
+
+TEST(MergeStmtPass, TestDynValidShapeCloneThenElse)
+{
+    ProgramBuilder p;
+
+    auto x = Tensor(DT_FP32, {32, 32}, "x");
+    auto y = Tensor(DT_FP32, {32, 32}, "y");
+    auto z = Tensor(DT_FP32, {32, 32}, "z");
+
+    p.BeginFunction("TestDynValidShapeClone", {x, y, z});
+
+    auto n = SymbolicScalar("n");
+    auto m = SymbolicScalar("m");
+    p.For(0, 2, 1, {}, [&](SymbolicScalar i, const std::vector<ir::VarPtr>&) {
+        auto xv = View(x, {16, 16}, {SymbolicScalar(0), SymbolicScalar(0)});
+        auto yv = View(y, {16, 16}, {SymbolicScalar(0), SymbolicScalar(0)});
+
+        auto rets = p.If(
+            i == 0,
+            [&] {
+                auto t = Add(xv, yv);
+                p.Yield(t, n.Min(m));
+            },
+            [&] {
+                auto t = Add(xv, yv);
+                p.Yield(t, n.Min(16));
+            });
+
+        auto t = p.AsTensor(rets[0]);
+        auto vs = p.AsSymbol(rets[1]);
+
+        auto outView = View(t, {16, 16}, {vs, SymbolicScalar(16)}, {SymbolicScalar(0), SymbolicScalar(0)});
+        auto outView2 = View(outView, {16, 16}, {SymbolicScalar(16), SymbolicScalar(16)}, {vs, SymbolicScalar(0)});
+        Assemble(outView2, {0, 0}, z);
+        p.Continue();
+    });
+
+    auto prog = p.EndFunction();
+
+    auto out = pypto::ir::pass::MergeStmtsIntoIf()(prog);
+    ASSERT_NE(out, nullptr);
+}

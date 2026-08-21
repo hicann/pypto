@@ -36,7 +36,10 @@ namespace pypto::ir {
 /// Var handling: hoisting/sinking one stmt into both branches makes its result a def in both, so
 /// ResolveDuplicateVars gives the else copy a distinct identity. Cloned/spliced vars are tracked in
 /// cloneMap/subst so later references and the trailing terminator are rewritten to the if's return
-/// vars. Names in `extVarNames` denote parameter/external storage and are never cloned.
+/// vars. Names in `extVarNames` denote parameter/external storage and are never cloned. Vars that
+/// remain live after the merged if (read after it, loop-carried, or used in enclosing scopes) are
+/// treated like external storage: they keep the same identity in both branches, because such
+/// in-place buffers are not carried back out through the if's return vars.
 SeqStmtsPtr MergeStmtsIntoIfStmt(SeqStmtsPtr seq, const std::vector<std::string>& extVarNames = {});
 
 } // namespace pypto::ir

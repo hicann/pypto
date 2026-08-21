@@ -1,0 +1,22 @@
+function foo_then_else incast(logical_tensor %x, logical_tensor %y, logical_tensor %z) outcast() #type(Opaque) #entry(false) {
+    logical_tensor %z_3 = for %loop_idx_20 inrange 0, 2, 1 iter {logical_tensor %z_1 = %z;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        logical_tensor %z_5 = if scalar_expr then {
+            logical_tensor %View_x = VIEW(%x) token();
+            logical_tensor %View_y = VIEW(%y) token();
+            logical_tensor %$0 = ADD(%View_x, %View_y) token();
+            logical_tensor %View__4 = VIEW(%$0) token();
+            logical_tensor %z_1 = ASSEMBLE(%View__4) token();
+            yield %z_1;
+        }
+        else {
+            logical_tensor %View_x_4 = VIEW(%x) token();
+            logical_tensor %View_y_4 = VIEW(%y) token();
+            logical_tensor %$1 = SUB(%View_x_4, %View_y_4) token();
+            logical_tensor %View__6 = VIEW(%$1) token();
+            logical_tensor %z_7 = ASSEMBLE(%View__6) token();
+            yield %z_7;
+        }
+        continue %z_5;
+    }
+    return %x, %y, %z_3;
+}
