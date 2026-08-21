@@ -37,7 +37,7 @@ void ResetRuntimeDynamicCellMatchPoolHost(uint64_t addr, uint64_t capacityBytes,
     }
     // Byte 0xFF memset yields 0xFFFFFFFFFFFFFFFF per uint64, which is NOT AICORE_TASK_INIT
     // (0x00000000FFFFFFFF). Stitch compares full uint64 opId against AICORE_TASK_INIT.
-    ASSERT((capacityBytes % sizeof(uint64_t)) == 0)
+    ASSERT(ProgEncodeErr::CELL_MATCH_PARAM_INVALID, (capacityBytes % sizeof(uint64_t)) == 0)
         << "ResetRuntimeDynamicCellMatchPoolHost: capacity not uint64 aligned, addr=" << addr
         << " capacityBytes=" << capacityBytes;
     const size_t numWords = static_cast<size_t>(capacityBytes / sizeof(uint64_t));
@@ -65,8 +65,9 @@ void ResetRuntimeDynamicCellMatchPoolHost(uint64_t addr, uint64_t capacityBytes,
         const uint64_t bytes = static_cast<uint64_t>(n * sizeof(uint64_t));
         auto ret = NormalizedRtMemcpy(dst + byteOffset, bytes, chunk, bytes, RtMemcpyKind::HOST_TO_DEVICE);
         if (ret != RT_SUCCESS) {
-            ASSERT(false) << "ResetRuntimeDynamicCellMatchPoolHost device memcpy failed, addr=" << addr
-                          << " capacityBytes=" << capacityBytes << " offsetBytes=" << byteOffset << " ret=" << ret;
+            ASSERT(DevCommonErr::MEMCPY_FAILED, false)
+                << "ResetRuntimeDynamicCellMatchPoolHost device memcpy failed, addr=" << addr
+                << " capacityBytes=" << capacityBytes << " offsetBytes=" << byteOffset << " ret=" << ret;
             return;
         }
         remaining -= n;
@@ -94,8 +95,9 @@ bool TryBuildDynamicCellMatchDesc(const DyndevFunctionAttribute::DynamicCellMatc
             int64_t tensorDim = eval.Evaluate(expr);
             int64_t cellDim = std::max<int64_t>(patchedDesc.GetCellShape(d), 1);
             int64_t tile = (tensorDim + cellDim - 1) / cellDim;
-            ASSERT(tile > 0) << "Invalid tile for dynamic cell match slot=" << launchMeta.slotIndex << ", dim=" << d
-                             << ", tile=" << tile << ", expected > 0";
+            ASSERT(ProgEncodeErr::CELL_MATCH_PARAM_INVALID, tile > 0)
+                << "Invalid tile for dynamic cell match slot=" << launchMeta.slotIndex << ", dim=" << d
+                << ", tile=" << tile << ", expected > 0";
             currentStride[d] = tile;
         }
         if (c == 0) {
@@ -147,8 +149,9 @@ std::vector<DevDynamicCellMatchStridePatch> PrepareDynamicCellMatchDescPatches(
         DevCellMatchTableDesc patchedDesc;
         bool ready = TryBuildDynamicCellMatchDesc(launchMeta, eval, patchedDesc);
         if (!ready) {
-            ASSERT(false) << "Dynamic cell match launch prepare failed, slot=" << launchMeta.slotIndex
-                          << ", stride inconsistent across candidates or candidateRawDims invalid";
+            ASSERT(ProgEncodeErr::CELL_MATCH_LAUNCH_PREPARE_FAILED, false)
+                << "Dynamic cell match launch prepare failed, slot=" << launchMeta.slotIndex
+                << ", stride inconsistent across candidates or candidateRawDims invalid";
         }
         DevDynamicCellMatchStridePatch patch;
         patch.descOffset = launchMeta.descOffset;

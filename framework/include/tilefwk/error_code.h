@@ -319,6 +319,7 @@ enum class ProgEncodeErr : uint32_t {
     CELL_MATCH_DIM_ZERO,
     ASSEMBLE_STITCH_MEMORY_EXCESS,
     LEAF_CALLEE_ATTR_NULL,
+    CELL_MATCH_LAUNCH_PREPARE_FAILED,
 };
 
 enum class TensorMetaErr : uint32_t {

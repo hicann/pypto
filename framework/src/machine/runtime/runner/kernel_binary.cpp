@@ -405,13 +405,14 @@ void KernelBinary::RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes)
     DeviceMemoryUtils deviceMemoryUtils;
     auto* newPtr = deviceMemoryUtils.AllocDev(needBytes, nullptr);
     if (newPtr == nullptr) {
-        ASSERT(false) << "alloc dynamic cell match meta failed, needBytes=" << needBytes;
+        ASSERT(DevCommonErr::ALLOC_FAILED, false) << "alloc dynamic cell match meta failed, needBytes=" << needBytes;
         return;
     }
     auto* newHostPtr = static_cast<uint8_t*>(std::malloc(static_cast<size_t>(needBytes)));
     if (newHostPtr == nullptr) {
         DevMemoryPool::Instance().FreeDevAddr(newPtr);
-        ASSERT(false) << "alloc host dynamic cell match meta failed, needBytes=" << needBytes;
+        ASSERT(DevCommonErr::MALLOC_FAILED, false)
+            << "alloc host dynamic cell match meta failed, needBytes=" << needBytes;
         return;
     }
     runtimeDynamicCellMatchAddr_ = reinterpret_cast<uint64_t>(newPtr);
