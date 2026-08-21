@@ -41,7 +41,7 @@ pypto_pro.language.make_tile(tile_type, *, addr, size=None) -> tile
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `tile_type` | 输入 | 须为[`pypto_pro.language.TileType`](../../basic_data_structures/TileType.md)，其内存空间决定该tile能用于哪些接口（如Left/Right用于matmul输入，Acc用于matmul输出） |
-| `addr` | 输入 | 内存空间内的字节偏移，必选，且须为编译期常量<br>须以关键字传入（`addr=`）：与`size`同为两个裸整数时顺序无法自证，写反会把Tile放到错误地址<br>对齐要求：`Vec`（UB）和`Mat`（L1）为32字节，`Left`（L0A）和`Right`（L0B）为512字节，`Acc`（L0C）为64字节 |
+| `addr` | 输入 | 内存空间内的字节偏移，必选，且须为编译期常量<br>须以关键字传入（`addr=`）：与`size`同为两个裸整数时顺序无法自证，写反会把Tile放到错误地址<br>对齐要求：`Vec`（UB）和`Mat`（L1）为32字节，`Left`（L0A）和`Right`（L0B）为512字节，`Acc`（L0C）为64字节，`ScaleLeft`/`ScaleRight`为32字节<br>创建MX scale Tile时不能独立规划地址：`ScaleLeft` Tile地址必须等于配对`Left` Tile地址右移4位，`ScaleRight`与`Right`同理 |
 | `size` | 输入 | 与`addr`对应的地址范围大小，单位为字节，须为编译期正整数<br>缺省时按“元素数 × dtype字节数”从`TileType`的shape和dtype推导，例如`[64, 128]`的FP16 Tile为16384字节，与[`make_tile_group`](make_tile_group.md)的每槽大小一致<br>仅当实际占用大于该值时才需显式指定，例如NZ/ZN排布按分形向上对齐后需要预留更多空间 |
 
 ## 调用示例

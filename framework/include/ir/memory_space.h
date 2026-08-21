@@ -26,16 +26,20 @@ namespace ir {
  * - Scaling: Scaling/FBuffer tile buffer
  * - Acc: Accumulator buffer
  * - Bias: Bias buffer
+ * - ScaleLeft: MX scale-specific address domain paired with L0A
+ * - ScaleRight: MX scale-specific address domain paired with L0B
  */
 enum class MemorySpace {
-    DDR,     ///< DDR memory (off-chip)
-    Vec,     ///< Vector/unified buffer (on-chip)
-    Mat,     ///< Matrix/L1 buffer
-    Left,    ///< Left matrix operand buffer
-    Right,   ///< Right matrix operand buffer
-    Scaling, ///< Scaling/FBuffer buffer
-    Acc,     ///< Accumulator buffer
-    Bias     ///< Bias buffer
+    DDR,       ///< DDR memory (off-chip)
+    Vec,       ///< Vector/unified buffer (on-chip)
+    Mat,       ///< Matrix/L1 buffer
+    Left,      ///< Left matrix operand buffer
+    Right,     ///< Right matrix operand buffer
+    Scaling,   ///< Scaling/FBuffer buffer
+    Acc,       ///< Accumulator buffer
+    Bias,      ///< Bias buffer
+    ScaleLeft, ///< MX scale-specific address domain paired with L0A
+    ScaleRight ///< MX scale-specific address domain paired with L0B
 };
 
 /**

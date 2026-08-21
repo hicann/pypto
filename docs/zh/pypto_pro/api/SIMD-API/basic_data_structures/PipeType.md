@@ -22,7 +22,7 @@
 
 | 取值 | 说明 | 硬件角色 |
 |---|---|---|
-| `pypto_pro.language.PipeType.MTE1` | 搬运流水1 | L1 → L0A/L0B/Scaling（矩阵操作数与量化参数搬运） |
+| `pypto_pro.language.PipeType.MTE1` | 搬运流水1 | L1 → L0A/L0B/Scaling/ScaleLeft/ScaleRight（矩阵操作数与scale搬运） |
 | `pypto_pro.language.PipeType.MTE2` | 搬运流水2 | GM → L1/UB（load搬入） |
 | `pypto_pro.language.PipeType.MTE3` | 搬运流水3 | UB → GM（store搬出）、UB → L1（move搬运） |
 | `pypto_pro.language.PipeType.M` | 矩阵计算流水 | Cube/MAD（matmul计算） |
@@ -42,6 +42,7 @@
 | `store` | Acc(L0C) → GM | FIX |
 | `move` | Mat(L1) → Left/Right(L0A/L0B) | MTE1 |
 | `move` | Mat(L1) → Scaling | MTE1 |
+| `move` | Mat(L1) → ScaleLeft/ScaleRight | MTE1 |
 | `move` | Mat(L1) → Vec(UB) | FIX |
 | `move` | Mat(L1) → Acc(L0C) | FIX |
 | `move` | Acc(L0C) → Vec(UB) | FIX |

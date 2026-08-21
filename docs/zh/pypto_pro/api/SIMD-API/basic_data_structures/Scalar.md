@@ -45,7 +45,7 @@
 
 以下低精度类型为存储和张量计算专用类型，**不支持**用于标量表达式：
 
-`DT_FP4`、`DT_FP8E4M3FN`、`DT_FP8E5M2`、`DT_INT4`、`DT_UINT4`、`DT_HF4`、`DT_HF8`
+`DT_FP4`、`DT_FP8E4M3FN`、`DT_FP8E5M2`、`DT_FP8E8M0`、`DT_FP4E2M1`、`DT_FP4E1M2`、`DT_INT4`、`DT_UINT4`、`DT_HF4`、`DT_HF8`
 
 ## 调用示例
 

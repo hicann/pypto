@@ -69,6 +69,9 @@ x: pl.Tensor[[64, 128], pl.DT_FP16]
 # 带布局的 tensor
 y: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]
 
+# A矩阵的E8M0分组缩放因子：逻辑shape为[M,G]=[64,4]，GM物理shape为[M,G/2,2]=[64,2,2]
+scale_a: pl.Tensor[[64, 2, 2], pl.DT_FP8E8M0]
+
 # 动态维度声明（仅用于类型标注）
 dynamic_tensor: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32]
 ```

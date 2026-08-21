@@ -138,6 +138,8 @@ __all__ = [
     # Matrix
     "matmul",
     "matmul_acc",
+    "matmul_mx",
+    "matmul_mx_acc",
     "transpose",
     # Reductions
     "sum",
@@ -315,6 +317,8 @@ from ._api import (
     make_tile_group,
     matmul,
     matmul_acc,
+    matmul_mx,
+    matmul_mx_acc,
     max,
     maximum,
     min,

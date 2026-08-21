@@ -41,6 +41,8 @@ _MEMORY_NAMES = {
     "Left": MemorySpace.Left,
     "Right": MemorySpace.Right,
     "Acc": MemorySpace.Acc,
+    "ScaleLeft": MemorySpace.ScaleLeft,
+    "ScaleRight": MemorySpace.ScaleRight,
 }
 
 

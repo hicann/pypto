@@ -201,6 +201,10 @@ std::string TypeConverter::ConvertMemorySpaceToTileType(ir::MemorySpace space) c
             return "TileType::Scaling";
         case ir::MemorySpace::Bias:
             return "TileType::Bias";
+        case ir::MemorySpace::ScaleLeft:
+            return "TileType::ScaleLeft";
+        case ir::MemorySpace::ScaleRight:
+            return "TileType::ScaleRight";
         case ir::MemorySpace::DDR:
             // DDR is for GlobalTensor, not Tile - should not reach here
             throw pypto::ir::ValueError("DDR is for GlobalTensor, not Tile");

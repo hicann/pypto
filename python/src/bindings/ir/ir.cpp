@@ -485,6 +485,8 @@ void BindTypeClass(py::module_& ir)
         .value("Scaling", MemorySpace::Scaling, "Scaling/FBuffer buffer")
         .value("Acc", MemorySpace::Acc, "Accumulator buffer")
         .value("Bias", MemorySpace::Bias, "Bias buffer")
+        .value("ScaleLeft", MemorySpace::ScaleLeft, "MX scale buffer in L0A")
+        .value("ScaleRight", MemorySpace::ScaleRight, "MX scale buffer in L0B")
         .export_values();
 
     ir.attr("Mem") = ir.attr("MemorySpace");

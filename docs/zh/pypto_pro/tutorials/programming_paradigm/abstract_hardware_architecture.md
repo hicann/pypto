@@ -33,7 +33,7 @@ AI Core中的计算单元主要包括Scalar、Vector和Cube三类。
 |:---|:---|:---|
 | Scalar | 执行地址计算、循环控制等标量工作，并把向量计算、矩阵计算、数据搬运和同步任务发射给对应单元。 | 核函数中的Python控制流、标量表达式和`pl.system.*`同步接口 |
 | Vector | 负责执行向量运算。 | `pl.section_vector()`中的Tile向量API，以及`@pl.vector_function`中的`vf.*` API |
-| Cube | 负责执行矩阵运算。 | `pl.section_cube()`中的`pl.matmul`、`pl.matmul_acc`等矩阵API |
+| Cube | 负责执行矩阵运算。 | `pl.section_cube()`中的`pl.matmul`、`pl.matmul_acc`、`pl.matmul_mx`、`pl.matmul_mx_acc`等矩阵API |
 
 ## 存储单元和搬运单元
 
@@ -56,6 +56,8 @@ PyPTO Pro使用[`TileType.target_memory`](../../api/SIMD-API/basic_data_structur
 | `Right` | L0B Buffer | `matmul`右操作数 |
 | `Acc` | L0C Buffer | `matmul`累加结果（通常为FP32/INT32） |
 | `Scaling` | Scaling/FBuffer | 量化、反量化参数 |
+| `ScaleLeft` | L0A Buffer（scale专用地址域） | A矩阵的E8M0 scale（分组缩放因子） |
+| `ScaleRight` | L0B Buffer（scale专用地址域） | B矩阵的E8M0 scale（分组缩放因子） |
 
 完整枚举说明参见[`pl.MemorySpace`](../../api/SIMD-API/basic_data_structures/MemorySpace.md)。
 
@@ -65,7 +67,9 @@ DMA（Direct Memory Access）搬运单元负责Global Memory与Local Memory之�
 |:---|:---|:---|
 | GM → L1/UB | MTE2 | `pl.load` / `pl.load_tile` |
 | L1 → L0A/L0B | MTE1 | `pl.move` |
+| L1 → ScaleLeft/ScaleRight | MTE1 | `pl.move` |
 | L0A × L0B → L0C | M | `pl.matmul` / `pl.matmul_acc` |
+| MX L0A × L0B → L0C | M | `pl.matmul_mx` / `pl.matmul_mx_acc` |
 | UB → GM | MTE3 | `pl.store` / `pl.store_tile` |
 | L0C → GM | FIX | `pl.store` / `pl.store_tile` |
 | UB ↔ VF Register File | VF load/store | `vf.load*` / `vf.store*` |

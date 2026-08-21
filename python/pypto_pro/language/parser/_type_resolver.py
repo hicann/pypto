@@ -93,6 +93,8 @@ class TypeResolver:
         "Scaling": ir.MemorySpace.Scaling,
         "Acc": ir.MemorySpace.Acc,
         "Bias": ir.MemorySpace.Bias,
+        "ScaleLeft": ir.MemorySpace.ScaleLeft,
+        "ScaleRight": ir.MemorySpace.ScaleRight,
     }
 
     def __init__(

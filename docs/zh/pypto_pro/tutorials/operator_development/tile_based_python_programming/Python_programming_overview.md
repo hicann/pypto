@@ -9,7 +9,7 @@ PyPTO Pro中有三种核心数据抽象：
 | 抽象 | 所在位置 | 创建方式 | 用途 |
 |:---|:---|:---|:---|
 | **Tensor** | 全局内存（GM） | [`pl.Tensor[...]`](../../../api/SIMD-API/basic_data_structures/Tensor.md) / [`pl.make_tensor`](../../../api/SIMD-API/operation/resource_management/make_tensor.md) | 带shape和stride的GM Tensor视图 |
-| **Tile** | 片上缓冲区 | [`pl.make_tile`](../../../api/SIMD-API/operation/resource_management/make_tile.md) | 固定的片上缓冲区（Vec / Mat / Left / Right / Acc / Scaling） |
+| **Tile** | 片上缓冲区 | [`pl.make_tile`](../../../api/SIMD-API/operation/resource_management/make_tile.md) | 固定的片上缓冲区（Vec / Mat / Left / Right / Acc / Scaling / ScaleLeft / ScaleRight） |
 | **TileGroup** | 片上缓冲区 | [`pl.make_tile_group`](../../../api/SIMD-API/operation/resource_management/make_tile_group.md) | 一组轮转的Tile，用于双缓冲 / N缓冲 |
 
 ### Tensor
@@ -82,6 +82,8 @@ class TileType:
 | `Right` | L0B —— matmul右操作数 |
 | `Acc` | L0C —— matmul累加器（fp32/int32） |
 | `Scaling` | 缩放/量化参数缓冲区 |
+| `ScaleLeft` | L0A配套的MX左操作数E8M0 scale缓冲区 |
+| `ScaleRight` | L0B配套的MX右操作数E8M0 scale缓冲区 |
 
 > [!NOTE]说明
 > 在同一款硬件上，**除了UB之外**，如果target_memory确定了，layout和fractal是确定的，可以不填。
@@ -151,8 +153,8 @@ PyPTO Pro的流水类型（`pl.PipeType`）与硬件指令流水对应关系：
 | PipeType | 含义 | 典型操作 |
 |:---|:---|:---|
 | `MTE2` | GM→L1/UB搬运 | `pl.load`/`pl.load_tile` |
-| `MTE1` | L1→L0A/L0B搬运 | `pl.move` |
-| `M` | 矩阵计算 | `pl.matmul` |
+| `MTE1` | L1→L0A/L0B/ScaleLeft/ScaleRight搬运 | `pl.move` |
+| `M` | 矩阵计算 | `pl.matmul` / `pl.matmul_mx` |
 | `V` | 向量计算 | `pl.add`/`pl.sub`/... |
 | `MTE3` | UB→GM搬运 | `pl.store`/`pl.store_tile` |
 | `FIX` | L0C→GM搬运 | `pl.store`（Acc→GM） |

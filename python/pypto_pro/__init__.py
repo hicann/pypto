@@ -33,6 +33,9 @@ __all__ = [
     "DT_FP4",
     "DT_FP8E4M3FN",
     "DT_FP8E5M2",
+    "DT_FP8E8M0",
+    "DT_FP4E2M1",
+    "DT_FP4E1M2",
     "DT_FP16",
     "DT_FP32",
     "DT_BF16",
@@ -49,6 +52,9 @@ DT_BOOL = DataType.BOOL
 DT_FP4 = DataType.FP4
 DT_FP8E4M3FN = DataType.FP8E4M3FN
 DT_FP8E5M2 = DataType.FP8E5M2
+DT_FP8E8M0 = DataType.FP8E8M0
+DT_FP4E2M1 = DataType.FP4E2M1
+DT_FP4E1M2 = DataType.FP4E1M2
 DT_FP16 = DataType.FP16
 DT_FP32 = DataType.FP32
 DT_HF4 = DataType.HF4

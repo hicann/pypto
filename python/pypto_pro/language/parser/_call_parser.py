@@ -1225,7 +1225,7 @@ class CallParserMixin:
             seen.add(tref.slot_id)
             unique_refs.append(tref)
 
-        if op_name in ("matmul", "matmul_acc", "store", "store_tile"):
+        if op_name in ("matmul", "matmul_acc", "matmul_mx", "matmul_mx_acc", "store", "store_tile"):
             phase = None
             for kw in call.keywords:
                 if kw.arg == "phase":

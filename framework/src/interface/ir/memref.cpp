@@ -45,6 +45,10 @@ std::string MemorySpaceToString(MemorySpace space)
             return "Acc";
         case MemorySpace::Bias:
             return "Bias";
+        case MemorySpace::ScaleLeft:
+            return "ScaleLeft";
+        case MemorySpace::ScaleRight:
+            return "ScaleRight";
         default:
             return "Unknown";
     }
@@ -68,6 +72,10 @@ MemorySpace StringToMemorySpace(const std::string& str)
         return MemorySpace::Acc;
     if (str == "Bias")
         return MemorySpace::Bias;
+    if (str == "ScaleLeft")
+        return MemorySpace::ScaleLeft;
+    if (str == "ScaleRight")
+        return MemorySpace::ScaleRight;
     throw ValueError("Unknown MemorySpace: " + str);
 }
 

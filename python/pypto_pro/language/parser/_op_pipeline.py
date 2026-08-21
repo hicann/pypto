@@ -77,7 +77,8 @@ def get_move_pipe(
     if src_memory == MemorySpace.Acc and target_memory == MemorySpace.Vec:
         return PipeType.FIX
     if src_memory == MemorySpace.Mat:
-        if target_memory in (MemorySpace.Left, MemorySpace.Right, MemorySpace.Bias):
+        if target_memory in (MemorySpace.Left, MemorySpace.Right, MemorySpace.Bias, MemorySpace.ScaleLeft,
+                             MemorySpace.ScaleRight):
             return PipeType.MTE1
         if target_memory == MemorySpace.Vec:
             return PipeType.V
@@ -124,6 +125,8 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "matmul": ["W", "R", "R"],  # matmul(out, lhs, rhs)
     "matmul_acc": ["W", "RW", "R", "R"],  # matmul_acc(out, acc, lhs, rhs)
     "matmul_bias": ["W", "R", "R", "R"],  # matmul_bias(out, lhs, rhs, bias)
+    "matmul_mx": ["W", "R", "R", "R", "R"],  # matmul_mx(out, lhs, rhs, scale_a, scale_b)
+    "matmul_mx_acc": ["W", "RW", "R", "R", "R", "R"],  # matmul_mx_acc(out, acc, lhs, rhs, scale_a, scale_b)
     "gemv": ["W", "R", "R"],
     "gemv_acc": ["W", "RW", "R", "R"],
     "gemv_bias": ["W", "R", "R", "R"],

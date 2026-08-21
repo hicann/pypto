@@ -110,6 +110,9 @@ _ORIG_DTYPE_TO_PYPTO = {
     "dt_bf16": DataType.BF16,
     "dt_float8_e4m3fn": DataType.FP8E4M3FN,
     "dt_float8_e5m2": DataType.FP8E5M2,
+    "dt_float8_e8m0": DataType.FP8E8M0,
+    "dt_fp4_e2m1": DataType.FP4E2M1,
+    "dt_fp4_e1m2": DataType.FP4E1M2,
     "dt_hifloat8": DataType.HF8,
 }
 

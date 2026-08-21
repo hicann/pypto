@@ -16,6 +16,8 @@
  *   block.matmul       (out, lhs, rhs)
  *   block.matmul_acc   (out, acc, lhs, rhs)
  *   block.matmul_bias  (out, lhs, rhs, bias)
+ *   block.matmul_mx       (out, lhs, rhs, scale_a, scale_b)
+ *   block.matmul_mx_acc   (out, acc, lhs, rhs, scale_a, scale_b)
  *   block.gemv         (out, lhs, rhs)
  *   block.gemv_acc     (out, acc, lhs, rhs)
  *   block.gemv_bias    (out, lhs, rhs, bias)
@@ -79,6 +81,37 @@ REGISTER_OP("block.matmul_bias")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.matmul_bias", 4);
+    });
+
+// block.matmul_mx: (out, lhs, rhs, scale_a, scale_b) -> out's type
+REGISTER_OP("block.matmul_mx")
+    .set_op_category("BlockOp")
+    .set_description("Block MX matmul: out = lhs @ rhs (with per-group E8M0 scale)")
+    .add_argument("out", "Pre-allocated output tile [M,N] in Acc (TileType)")
+    .add_argument("lhs", "Left matrix tile [M,K] (TileType, FP8/FP4)")
+    .add_argument("rhs", "Right matrix tile [K,N] (TileType, FP8/FP4)")
+    .add_argument("scale_a", "Left scale tile in ScaleLeft (TileType, E8M0)")
+    .add_argument("scale_b", "Right scale tile in ScaleRight (TileType, E8M0)")
+    .set_attr<int>("phase")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceBlockOutTileType(args, kwargs, "block.matmul_mx", 5);
+    });
+
+// block.matmul_mx_acc: (out, acc, lhs, rhs, scale_a, scale_b) -> out's type
+REGISTER_OP("block.matmul_mx_acc")
+    .set_op_category("BlockOp")
+    .set_description("Block MX matmul with accumulation: out = acc + lhs @ rhs")
+    .add_argument("out", "Pre-allocated output tile [M,N] in Acc (TileType)")
+    .add_argument("acc", "Accumulator tile [M,N] (TileType)")
+    .add_argument("lhs", "Left matrix tile [M,K] (TileType, FP8/FP4)")
+    .add_argument("rhs", "Right matrix tile [K,N] (TileType, FP8/FP4)")
+    .add_argument("scale_a", "Left scale tile in ScaleLeft (TileType, E8M0)")
+    .add_argument("scale_b", "Right scale tile in ScaleRight (TileType, E8M0)")
+    .set_attr<int>("phase")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceBlockOutTileType(args, kwargs, "block.matmul_mx_acc", 6);
     });
 
 // block.gemv: (out, lhs, rhs) -> out's type

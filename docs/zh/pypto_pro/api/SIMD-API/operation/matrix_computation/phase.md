@@ -14,11 +14,11 @@
 
 ## 功能说明
 
-`matmul` / `matmul_acc`的`phase`参数（`pl.AccPhase`）与`store` / `store_tile`的`phase`参数（`pl.STPhase`）共同控制Cube（矩阵乘）与FixPipe（L0C→GM搬运）之间的**unit_flag硬件握手**。正确使用phase可以省去软件同步、提升流水并行度；使用不当则会导致精度问题或设备卡死。
+`matmul` / `matmul_acc` / `matmul_mx` / `matmul_mx_acc`的`phase`参数（`pl.AccPhase`）与`store` / `store_tile`的`phase`参数（`pl.STPhase`）共同控制Cube（矩阵乘）与FixPipe（L0C→GM搬运）之间的**unit_flag硬件握手**。正确使用phase可以省去软件同步、提升流水并行度；使用不当则会导致精度问题或设备卡死。
 
 ## 硬件unit_flag机制
 
-### matmul / matmul_acc（AccPhase）
+### matmul系列接口（AccPhase）
 
 `phase=pl.AccPhase.Partial`或`phase=pl.AccPhase.Final`均会使能硬件的unitFlag功能：
 
@@ -57,8 +57,8 @@
 
 如果phase使用不当，可能会导致精度问题或者卡死现象。使用时必须保证：
 
-1. **配对使用**：如果`matmul`或`matmul_acc`使用了phase，对应的`store`或`store_tile`也需要使用phase。
-2. **Final收尾**：对于同一块L0C，`matmul`或`matmul_acc`的最后一轮写操作，以及`store`或`store_tile`的最后一轮读操作，必须使用`Final`模式。
+1. **配对使用**：如果任一`matmul`系列接口使用了phase，对应的`store`或`store_tile`也需要使用phase。
+2. **Final收尾**：对于同一块L0C，`matmul`系列接口的最后一轮写操作，以及`store`或`store_tile`的最后一轮读操作，必须使用`Final`模式。
 
 ## 错误案例
 

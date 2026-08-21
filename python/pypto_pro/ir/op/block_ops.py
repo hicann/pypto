@@ -158,8 +158,9 @@ def _ir_load(
     kwargs: dict[str, Any] = {}
     if is_transpose:
         kwargs["is_transpose"] = is_transpose
-    default_tile_dims = list(range(tensor_ndim - tile_ndim, tensor_ndim))
-    if tile_dims != default_tile_dims:
+    # Specialized lowerings may use a different fallback, so preserve every
+    # explicitly supplied order, including the ordinary last-two-axes order.
+    if order is not None:
         kwargs["tile_dims"] = tile_dims
     if isinstance(offsets, _ir_core.MakeTuple):
         _validate_offset_bounds("load", tensor.type.shape, offsets.elements)
@@ -199,8 +200,7 @@ def _ir_load_tile(
     kwargs: dict[str, Any] = {}
     if is_transpose:
         kwargs["is_transpose"] = is_transpose
-    default_tile_dims = list(range(tensor_ndim - tile_ndim, tensor_ndim))
-    if tile_dims != default_tile_dims:
+    if order is not None:
         kwargs["tile_dims"] = tile_dims
     return _ir_core.create_op_call(block_ir_op("load"), [out, tensor, abs_offsets], kwargs, actual_span)
 
@@ -585,11 +585,14 @@ def _ir_move(
         (MemorySpace.Mat, MemorySpace.Scaling),
         (MemorySpace.Vec, MemorySpace.Mat),
         (MemorySpace.Mat, MemorySpace.Bias),
+        (MemorySpace.Mat, MemorySpace.ScaleLeft),
+        (MemorySpace.Mat, MemorySpace.ScaleRight),
     }
     if _src_mem is not None and _dst_mem is not None and (_src_mem, _dst_mem) not in _supported_move_paths:
         raise ValueError(
             f"move: unsupported data path src({_src_mem.name})->dst({_dst_mem.name}), "
-            f"supported paths: Mat->Left, Mat->Right, Mat->Scaling, Mat->Bias, Acc->Vec, Vec->Vec, Vec->Mat"
+            f"supported paths: Mat->Left, Mat->Right, Mat->Scaling, Mat->Bias, Mat->ScaleLeft, "
+            f"Mat->ScaleRight, Acc->Vec, Vec->Vec, Vec->Mat"
         )
 
     _check_move_shape_compat(out, src, offset, acc_to_vec_mode, actual_span)
@@ -739,6 +742,9 @@ _SCALAR_UNSUPPORTED_DTYPES: tuple[DataType, ...] = (
     DataType.FP4,
     DataType.FP8E4M3FN,
     DataType.FP8E5M2,
+    DataType.FP8E8M0,
+    DataType.FP4E2M1,
+    DataType.FP4E1M2,
     DataType.INT4,
     DataType.UINT4,
     DataType.HF4,
@@ -748,6 +754,9 @@ _SCALAR_UNSUPPORTED_DTYPES: tuple[DataType, ...] = (
 _SUPPORTED_DTYPES: tuple[DataType, ...] = (
     DataType.FP8E4M3FN,
     DataType.FP8E5M2,
+    DataType.FP8E8M0,
+    DataType.FP4E2M1,
+    DataType.FP4E1M2,
     DataType.HF8,
     DataType.INT8,
     DataType.FP16,
@@ -896,6 +905,13 @@ def _validate_tile_dims(
 ) -> list[int]:
     if tile_dims is None:
         tile_dims = list(range(tensor_ndim - tile_ndim, tensor_ndim))
+    if len(tile_dims) != tile_ndim:
+        raise ValueError(f"{op_name}: order must contain exactly {tile_ndim} axes, got {tile_dims}")
+    if len(set(tile_dims)) != len(tile_dims):
+        raise ValueError(f"{op_name}: order axes must be unique, got {tile_dims}")
+    for dim in tile_dims:
+        if dim < 0 or dim >= tensor_ndim:
+            raise ValueError(f"{op_name}: order axis {dim} is out of range for Tensor rank {tensor_ndim}")
     return tile_dims
 
 
@@ -1175,6 +1191,8 @@ _DEFAULT_LAYOUTS_A5: dict[MemorySpace, TensorLayout] = {
     MemorySpace.Right: TensorLayout.ZN,
     MemorySpace.Scaling: TensorLayout.ND,
     MemorySpace.Acc: TensorLayout.NZ,
+    MemorySpace.ScaleLeft: TensorLayout.ZZ,
+    MemorySpace.ScaleRight: TensorLayout.NN,
 }
 
 mem_id: int = 0
@@ -1203,6 +1221,13 @@ def _apply_default_layout(tt: "TileType") -> None:
     arch = _get_current_arch()
     layout_dict = _DEFAULT_LAYOUTS_A5 if arch == "a5" else _DEFAULT_LAYOUTS_A3
     default_layout = layout_dict.get(tt.target_memory)
+
+    if tt.target_memory in (MemorySpace.ScaleLeft, MemorySpace.ScaleRight):
+        if default_layout is None:
+            raise ValueError(f"{tt.target_memory.name} is only supported on A5, got architecture '{arch}'")
+        if tt.fractal is None:
+            tt.fractal = 32
+
     if default_layout is None:
         return
 
@@ -1216,6 +1241,8 @@ def _apply_default_layout(tt: "TileType") -> None:
         allowed_layouts.add(TensorLayout.ZN)
         if tt.dtype in (DataType.UINT64, DataType.INT64):
             allowed_layouts.add(TensorLayout.ND)
+        if tt.dtype == DataType.FP8E8M0:
+            allowed_layouts.update({TensorLayout.ZZ, TensorLayout.NN})
 
     if (
         arch == "a5"
@@ -1240,6 +1267,13 @@ def _apply_default_layout(tt: "TileType") -> None:
         if tt.dtype in (DataType.FP32, DataType.INT32):
             tt.fractal = 1024
 
+    if (
+        tt.target_memory == MemorySpace.Mat
+        and tt.dtype == DataType.FP8E8M0
+        and tt.layout in (TensorLayout.ZZ, TensorLayout.NN)
+        and tt.fractal is None
+    ):
+        tt.fractal = 32
 
 @dataclass
 class TileType:
@@ -1273,6 +1307,8 @@ _MEMORY_ALIGNMENT: dict[MemorySpace, int] = {
     MemorySpace.Left: 512,
     MemorySpace.Right: 512,
     MemorySpace.Acc: 64,
+    MemorySpace.ScaleLeft: 32,
+    MemorySpace.ScaleRight: 32,
 }
 
 
@@ -1896,3 +1932,170 @@ def _parse_matmul_acc(self, call: ast.Call) -> Expr:
     args = [self.parse_expression(arg) for arg in call.args]
     kwargs = self.parse_op_kwargs(call)
     return _ir_matmul_acc(*args, **kwargs, span=span)
+
+
+_MX_FP8_DTYPES = (DataType.FP8E4M3FN, DataType.FP8E5M2)
+_MX_FP4_DTYPES = (DataType.FP4E2M1, DataType.FP4E1M2)
+
+
+def _check_mx_scale_tile(
+    op_name: str,
+    scale: Expr | None,
+    data: Expr,
+    *,
+    is_left: bool,
+) -> None:
+    """Validate an MX scale tile and its shape/address relationship to the paired data tile."""
+    if is_left:
+        scale_name, data_name, group_axis = "scale_a", "lhs_tile", 1
+        expected_space, expected_desc = MemorySpace.ScaleLeft, "L0A (ScaleLeft)"
+    else:
+        scale_name, data_name, group_axis = "scale_b", "rhs_tile", 0
+        expected_space, expected_desc = MemorySpace.ScaleRight, "L0B (ScaleRight)"
+
+    if scale is None:
+        raise ValueError(f"{op_name}: {scale_name} is required")
+    scale_type = getattr(scale, "type", None)
+    if not isinstance(scale_type, _IRTileType):
+        raise ValueError(f"{op_name}: {scale_name} must be a Tile")
+    if scale_type.dtype != DataType.FP8E8M0:
+        raise ValueError(f"{op_name}: {scale_name} must use FP8E8M0 dtype, got {scale_type.dtype}")
+    _check_tile_memory_space(op_name, scale_name, scale, expected_space, expected_desc)
+
+    data_type = data.type
+    data_shape = _tile_shape_ints(data_type)
+    scale_shape = _tile_shape_ints(scale_type)
+    if data_shape is not None and scale_shape is not None:
+        expected_shape = data_shape.copy()
+        expected_shape[group_axis] //= 32
+        if scale_shape != expected_shape:
+            raise ValueError(
+                f"{op_name}: {scale_name} shape must match {data_name} MX groups, "
+                f"expected {expected_shape} for {data_name} shape {data_shape}, got {scale_shape}."
+            )
+
+    # A5 mad_mx receives only the L0A/L0B data pointers and derives the
+    # corresponding L0AMX/L0BMX address by shifting right four bits.  Skip
+    # auto-allocated tiles or non-constant addresses, which cannot be proven here.
+    data_memref = data_type.memref
+    scale_memref = scale_type.memref
+    if data_memref is None or scale_memref is None:
+        return
+
+    data_addr = data_memref.addr
+    scale_addr = scale_memref.addr
+    if not isinstance(data_addr, ConstInt) or not isinstance(scale_addr, ConstInt):
+        return
+
+    expected_scale_addr = data_addr.value >> 4
+    if scale_addr.value != expected_scale_addr:
+        raise ValueError(
+            f"{op_name}: {scale_name} address must equal {data_name} address >> 4, "
+            f"got {data_name}=0x{data_addr.value:X}, expected {scale_name}=0x{expected_scale_addr:X}, "
+            f"actual {scale_name}=0x{scale_addr.value:X}."
+        )
+
+
+def _check_mx_operands(
+    op_name: str,
+    dst: Expr,
+    lhs: Expr,
+    rhs: Expr,
+    scale_a: Expr,
+    scale_b: Expr,
+    acc: Expr | None = None,
+) -> None:
+    """Run the common declared-type and shape checks for MX matmul variants."""
+    _check_tile_memory_space(op_name, "dst_tile", dst, MemorySpace.Acc, "L0C (Acc)")
+    _check_tile_memory_space(op_name, "lhs_tile", lhs, MemorySpace.Left, "L0A (Left)")
+    _check_tile_memory_space(op_name, "rhs_tile", rhs, MemorySpace.Right, "L0B (Right)")
+    if acc is not None:
+        _check_tile_memory_space(op_name, "acc_tile", acc, MemorySpace.Acc, "L0C (Acc)")
+
+    dst_shape = _tile_shape_ints(dst.type)
+    lhs_shape = _tile_shape_ints(lhs.type)
+    rhs_shape = _tile_shape_ints(rhs.type)
+    lhs_k = lhs_shape[1] if lhs_shape is not None else None
+    rhs_k = rhs_shape[0] if rhs_shape is not None else None
+
+    if lhs_k is not None and rhs_k is not None and lhs_k != rhs_k:
+        raise ValueError(f"{op_name}: lhs and rhs K dimensions must match, got lhs K={lhs_k}, rhs K={rhs_k}.")
+    for name, k_value in (("lhs", lhs_k), ("rhs", rhs_k)):
+        if k_value is not None and k_value % 64 != 0:
+            raise ValueError(
+                f"{op_name}: K dimension must be a multiple of 64 for MX matmul, got {name} K={k_value}."
+            )
+
+    if dst_shape is not None and lhs_shape is not None and rhs_shape is not None:
+        expected_shape = [lhs_shape[0], rhs_shape[1]]
+        if dst_shape != expected_shape:
+            raise ValueError(
+                f"{op_name}: dst_tile shape must be [lhs M, rhs N], "
+                f"expected {expected_shape}, got {dst_shape}."
+            )
+    if acc is not None:
+        acc_shape = _tile_shape_ints(acc.type)
+        if dst_shape is not None and acc_shape is not None and acc_shape != dst_shape:
+            raise ValueError(
+                f"{op_name}: acc_tile shape must match dst_tile shape, "
+                f"got acc_tile={acc_shape}, dst_tile={dst_shape}."
+            )
+        if acc.type.dtype != DataType.FP32:
+            raise ValueError(f"{op_name}: acc_tile must use FP32 dtype, got {acc.type.dtype}.")
+
+    _check_mx_scale_tile(op_name, scale_a, lhs, is_left=True)
+    _check_mx_scale_tile(op_name, scale_b, rhs, is_left=False)
+
+    a_dtype, b_dtype, dst_dtype = lhs.type.dtype, rhs.type.dtype, dst.type.dtype
+    valid_input_dtypes = (a_dtype in _MX_FP8_DTYPES and b_dtype in _MX_FP8_DTYPES) or (
+        a_dtype in _MX_FP4_DTYPES and b_dtype in _MX_FP4_DTYPES
+    )
+    if not valid_input_dtypes or dst_dtype != DataType.FP32:
+        raise ValueError(
+            f"{op_name}: (lhs,rhs) must be FP8/FP4 combo and dst FP32, "
+            f"got ({a_dtype},{b_dtype},{dst_dtype})."
+        )
+
+
+def _ir_matmul_mx(
+    dst: Expr, lhs: Expr, rhs: Expr, scale_a: Expr, scale_b: Expr,
+    *, span: Span | None = None, phase: AccPhase | None = None
+) -> Expr:
+    actual_span = span or _span()
+    _check_mx_operands("matmul_mx", dst, lhs, rhs, scale_a, scale_b)
+    kwargs: dict[str, Any] = {}
+    if phase is not None:
+        kwargs["phase"] = phase
+    return _ir_core.create_op_call(
+        block_ir_op("matmul_mx"), [dst, lhs, rhs, scale_a, scale_b], kwargs, actual_span
+    )
+
+
+def _ir_matmul_mx_acc(
+    dst: Expr, acc: Expr, lhs: Expr, rhs: Expr, scale_a: Expr, scale_b: Expr,
+    *, span: Span | None = None, phase: AccPhase | None = None
+) -> Expr:
+    actual_span = span or _span()
+    _check_mx_operands("matmul_mx_acc", dst, lhs, rhs, scale_a, scale_b, acc)
+    kwargs: dict[str, Any] = {}
+    if phase is not None:
+        kwargs["phase"] = phase
+    return _ir_core.create_op_call(
+        block_ir_op("matmul_mx_acc"), [dst, acc, lhs, rhs, scale_a, scale_b], kwargs, actual_span
+    )
+
+
+@op_impl("matmul_mx")
+def _parse_matmul_mx(self, call: ast.Call) -> Expr:
+    span = self.span_tracker.get_span(call)
+    args = [self.parse_expression(arg) for arg in call.args]
+    kwargs = self.parse_op_kwargs(call)
+    return _ir_matmul_mx(*args, **kwargs, span=span)
+
+
+@op_impl("matmul_mx_acc")
+def _parse_matmul_mx_acc(self, call: ast.Call) -> Expr:
+    span = self.span_tracker.get_span(call)
+    args = [self.parse_expression(arg) for arg in call.args]
+    kwargs = self.parse_op_kwargs(call)
+    return _ir_matmul_mx_acc(*args, **kwargs, span=span)

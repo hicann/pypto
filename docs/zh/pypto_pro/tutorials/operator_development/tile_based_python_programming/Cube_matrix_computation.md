@@ -341,6 +341,10 @@ def kernel(...,
     pl.matmul(acc_tile, a_left, b_right)    # C = A × B
 ```
 
+### MXFP8/MXFP4矩阵乘
+
+MX矩阵乘使用`pl.matmul_mx`/`pl.matmul_mx_acc`，除Left/Right尾数Tile外，还需要分别位于L0A配套ScaleLeft缓冲区和L0B配套ScaleRight缓冲区的E8M0 scale Tile。每个scale对应K方向连续32个尾数元素，K必须为64的倍数。MXFP8支持E4M3/E5M2，MXFP4支持E2M1/E1M2；完整参数约束、scale Tensor布局和调用示例参见[`matmul_mx`](../../../api/SIMD-API/operation/matrix_computation/matmul_mx.md)和[`matmul_mx_acc`](../../../api/SIMD-API/operation/matrix_computation/matmul_mx_acc.md)。
+
 ### K维分块累加
 
 当K维度较大，无法一次装入L1/L0时，需要将K轴切分为多个分块，逐块累加。首块用`pl.matmul`写入累加器，其余块用[`pl.matmul_acc`](../../../api/SIMD-API/operation/matrix_computation/matmul_acc.md)累加到同一个L0C。

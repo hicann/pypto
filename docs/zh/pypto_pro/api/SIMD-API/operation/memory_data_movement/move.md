@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-在L1、L0A/L0B、L0C、UB等各级内存之间搬运tile（如L1→L0A/L0B、L0C(Acc)→UB(Vec)、UB→L1等）。具体走哪条硬件搬运通路、用哪条流水，由**源与目的tile的内存空间**决定。
+在L1、L0A/L0B、L0C、UB等各级内存之间搬运tile（如L1→L0A/L0B、L1→ScaleLeft/ScaleRight、L0C(Acc)→UB(Vec)、UB→L1等）。具体走哪条硬件搬运通路、用哪条流水，由**源与目的tile的内存空间**决定。
 
 可在搬运的同时融合ReLU、预量化，或经fixpipe做量化（`scale`）；也可通过`offset`从一块较宽的源tile中提取子块（对应后端`pto::TEXTRACT`）。
 
@@ -61,10 +61,14 @@ pypto_pro.language.move(dst_tile, src_tile, offset=None, *, acc_to_vec_mode=None
 |---|---|
 | Acc(L0C) → Vec(UB) | FIX（fixpipe） |
 | Mat(L1) → Left/Right(L0A/L0B) | MTE1 |
+| Mat(L1) → ScaleLeft/ScaleRight | MTE1 |
 | Mat(L1) → Vec(UB) | V |
 | Mat(L1) → 其他 | FIX |
 | Vec(UB) → Mat(L1) | MTE3 |
 | 其余 | V |
+
+> [!NOTE]说明
+> `Mat` → `ScaleLeft`/`ScaleRight`的`move`仅按目的Tile地址执行搬运，不会根据配对的Left/Right Tile自动修正地址。目的scale Tile必须预先满足`addr(ScaleLeft) = addr(Left) >> 4`或`addr(ScaleRight) = addr(Right) >> 4`；否则MX矩阵指令会读取错误的scale。
 
 ## 调用示例
 

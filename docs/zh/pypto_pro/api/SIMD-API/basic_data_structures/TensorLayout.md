@@ -27,8 +27,8 @@
 | `pl.DN` | 非分形列主序 | Tile | UB上`[ROWS, 1]`列向量（归约结果、histogram索引） |
 | `pl.NZ` | NZ分形排列 | Tensor / Tile | NZ GM Tensor（输出）；L1 Mat（默认）；A5的L0A（默认）；L0C Acc（默认） |
 | `pl.ZN` | ZN分形排列 | Tile | L0B Right（默认）；转置搬入时的L1 Mat |
-| `pl.ZZ` | ZZ分形排列 | Tile | A3的L0A（默认） |
-| `pl.NN` | NN分形排列 | — | 当前版本已定义但无公开API场景实际使用 |
+| `pl.ZZ` | ZZ分形排列 | Tile | A3的L0A（默认）；MX矩阵计算中，A矩阵的E8M0分组缩放因子在L1和ScaleLeft中的布局 |
+| `pl.NN` | NN分形排列 | Tile | MX矩阵计算中，B矩阵的E8M0分组缩放因子在L1和ScaleRight中的布局 |
 
 以上短名称分别等价于`pypto_pro.language.TensorLayout.ND`、`DN`、`NZ`、`ZN`、`NN`、`ZZ`。
 
@@ -45,6 +45,8 @@ x: pl.Tensor[[64, 128], pl.DT_FP16]                   # 默认 ND
 x_nz: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]         # NZ 分形布局（用于输出）
 ```
 
+MX矩阵计算使用的E8M0分组缩放因子在GM中仍声明为普通`ND` Tensor；物理shape和搬运约束见[`matmul_mx`](../operation/matrix_computation/matmul_mx.md)和[`load`](../operation/memory_data_movement/load.md)。
+
 > [!IMPORTANT]重要
 > 转置搬运由[`load`](../operation/memory_data_movement/load.md)/[`load_tile`](../operation/memory_data_movement/load_tile.md)的`order`参数决定（`order=[1,0]`即`is_transpose=True`），需与L1 Tile布局`ZN`配合。详见下文[转置搬入](#转置搬入)。
 
@@ -55,11 +57,13 @@ Tile通过[`pl.TileType`](TileType.md)的`layout`参数指定。不指定时，�
 | 内存空间 | A3默认 | A5默认 | 额外允许 |
 |---|---|---|---|
 | `Vec`（UB） | 无默认值 | 无默认值 | `ND`；`DN`（仅特定API要求的列主序场景） |
-| `Mat`（L1） | `NZ` | `NZ` | `ZN`（转置搬入）；`UINT64`/`INT64`还允许`ND` |
+| `Mat`（L1） | `NZ` | `NZ` | `ZN`（转置搬入）；`DT_FP8E8M0`还允许`ZZ`、`NN`；`UINT64`/`INT64`还允许`ND` |
 | `Left`（L0A） | `ZZ` | `NZ` | `ZZ`、`NZ` |
 | `Right`（L0B） | `ZN` | `ZN` | — |
 | `Acc`（L0C） | `NZ` | `NZ` | — |
 | `Scaling` | `ND` | `ND` | — |
+| `ScaleLeft` | — | `ZZ` | — |
+| `ScaleRight` | — | `NN` | — |
 
 ---
 
@@ -192,6 +196,37 @@ def store_nz_cce_kernel(
     pl.store(nz_out, acc, [0, 0])    # 按 NZ 分形写入 GM
 ```
 
-### NN布局
+### MX scale的ZZ与NN布局
 
-`NN`分形在当前版本中已定义（`TensorLayout.NN`），但尚无公开API场景实际使用。开发者无需显式指定该布局。
+`ZZ`和`NN`分别用于存放MX矩阵计算中A矩阵和B矩阵的E8M0 scale。L1 Mat Tile默认使用`NZ`，因此A矩阵的scale需要显式指定`ZZ`，B矩阵的scale需要显式指定`NN`；ScaleLeft和ScaleRight Tile则分别默认使用`ZZ`和`NN`。
+
+```python
+# A/B矩阵的E8M0 scale逻辑shape分别为[M,G]和[G,N]，其中G=K/32。
+M, G, N = 64, 4, 64
+
+# L1 Mat的默认布局是NZ，因此需要显式指定ZZ或NN。
+scale_a_l1_type = pl.TileType(
+    shape=[M, G],
+    dtype=pl.DT_FP8E8M0,
+    target_memory=pl.MemorySpace.Mat,
+    layout=pl.ZZ,
+)
+scale_b_l1_type = pl.TileType(
+    shape=[G, N],
+    dtype=pl.DT_FP8E8M0,
+    target_memory=pl.MemorySpace.Mat,
+    layout=pl.NN,
+)
+
+# ScaleLeft/ScaleRight分别默认使用ZZ/NN，无需再次指定layout。
+scale_a_type = pl.TileType(
+    shape=[M, G],
+    dtype=pl.DT_FP8E8M0,
+    target_memory=pl.MemorySpace.ScaleLeft,
+)
+scale_b_type = pl.TileType(
+    shape=[G, N],
+    dtype=pl.DT_FP8E8M0,
+    target_memory=pl.MemorySpace.ScaleRight,
+)
+```

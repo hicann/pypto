@@ -805,6 +805,12 @@ class MemorySpace(enum.IntEnum):
     Bias = ...
     """Bias buffer."""
 
+    ScaleLeft = ...
+    """MX scale buffer in L0A."""
+
+    ScaleRight = ...
+    """MX scale buffer in L0B."""
+
 
 class TensorLayout(enum.IntEnum):
     """Tensor layout type enumeration."""

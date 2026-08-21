@@ -55,6 +55,15 @@ pypto_pro.language.make_tile_group(type=, addrs=, mutex_ids=None, depth=None) ->
 
 ## 补充说明
 
+为MX多缓冲创建`ScaleLeft`/`ScaleRight` group时，scale地址列表必须与配对数据地址列表逐项绑定：
+
+```text
+scale_left_addrs[i]  = left_addrs[i]  >> 4
+scale_right_addrs[i] = right_addrs[i] >> 4
+```
+
+例如，`Left` group的`addrs=[0x0000, 0x8000]`时，配对`ScaleLeft` group必须使用`addrs=[0x0000, 0x0800]`。不满足该关系时，scale会被搬到MX矩阵指令不会为该数据Tile读取的地址，导致计算结果错误。
+
 返回一个group句柄，提供三个方法和下标形式取出裸Tile。配置非空`mutex_ids`时，Tile与mutex的映射会随返回值保留，供`auto_mutex`使用：
 
 | 方法 | 说明 |

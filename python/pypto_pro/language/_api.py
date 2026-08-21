@@ -632,6 +632,44 @@ def matmul_acc(
 
 
 @_api_decl
+def matmul_mx(
+    dst_tile: Tile, lhs_tile: Tile, rhs_tile: Tile, scale_a: Tile, scale_b: Tile,
+    *, phase: Optional[AccPhase] = None
+) -> None:
+    """MX matmul with per-group E8M0 scale: ``dst = lhs @ rhs``
+
+    Left/Right tiles use FP8/FP4 dtype; scale tiles use E8M0 in ScaleLeft/ScaleRight.
+    Hardware mad_mx reads scale implicitly via SFractal layout.
+
+    Args:
+        dst_tile: Accumulator Tile (L0C, output, FP32)
+        lhs_tile: Left matrix Tile (L0A, FP8/FP4)
+        rhs_tile: Right matrix Tile (L0B, FP8/FP4)
+        scale_a: Left scale Tile (ScaleLeft, E8M0)
+        scale_b: Right scale Tile (ScaleRight, E8M0)
+        phase: Optional — ``pl.AccPhase.Partial`` or ``pl.AccPhase.Final``
+    """
+
+
+@_api_decl
+def matmul_mx_acc(
+    dst_tile: Tile, acc_tile: Tile, lhs_tile: Tile, rhs_tile: Tile, scale_a: Tile, scale_b: Tile,
+    *, phase: Optional[AccPhase] = None
+) -> None:
+    """MX matmul with accumulation: ``dst = acc + lhs @ rhs``
+
+    Args:
+        dst_tile: Destination Tile (L0C, output, FP32)
+        acc_tile: Accumulator Tile (existing value to add to)
+        lhs_tile: Left matrix Tile (L0A, FP8/FP4)
+        rhs_tile: Right matrix Tile (L0B, FP8/FP4)
+        scale_a: Left scale Tile (ScaleLeft, E8M0)
+        scale_b: Right scale Tile (ScaleRight, E8M0)
+        phase: Optional — ``pl.AccPhase.Partial`` or ``pl.AccPhase.Final``
+    """
+
+
+@_api_decl
 def transpose(out: Tile, src: Tile) -> None:
     """Transpose Tile by swapping the last two dimensions.
 

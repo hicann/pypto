@@ -17,7 +17,7 @@
 `section_vector`创建Vector区域，`section_cube`创建Cube区域。区域中的操作分别下沉到向量核或矩阵核执行。
 
 - **`section_vector`**：用于UB（`MemorySpace.Vec`）tile上的向量计算，包括GM↔UB搬运（`load`/`store`）、逐元素运算、归约、转置等。
-- **`section_cube`**：用于L1/L0A/L0B/L0C tile上的矩阵计算，包括GM→L1搬运（`load`）、L1→L0A/L0B搬运（`move`）、矩阵乘（`matmul`）、L0C→GM回写（`store`）。
+- **`section_cube`**：用于涉及L1/L0A/L0B/L0C以及E8M0分组缩放因子Tile的矩阵计算，包括GM→L1搬运（`load`）、L1→L0A/L0B/ScaleLeft/ScaleRight搬运（`move`）、矩阵乘（`matmul`/`matmul_mx`）、L0C→GM回写（`store`）。
 
 同一kernel中可先后使用多个`section_vector` / `section_cube`，例如先在Cube区域完成matmul，再在Vector区域对结果做逐元素激活。
 

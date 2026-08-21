@@ -29,6 +29,8 @@
 | `pypto_pro.language.MemorySpace.Right` | 片上L0B | 右操作数缓冲区 | matmul右矩阵输入 |
 | `pypto_pro.language.MemorySpace.Acc` | 片上L0C | 累加器缓冲区 | matmul累加器输出 |
 | `pypto_pro.language.MemorySpace.Scaling` | 片上 | 缩放/量化参数缓冲区 | quantization/反量化参数 |
+| `pypto_pro.language.MemorySpace.ScaleLeft` | 片上L0A（scale专用地址域） | A矩阵的E8M0 scale（分组缩放因子）缓冲区 | `matmul_mx`的`scale_a` |
+| `pypto_pro.language.MemorySpace.ScaleRight` | 片上L0B（scale专用地址域） | B矩阵的E8M0 scale（分组缩放因子）缓冲区 | `matmul_mx`的`scale_b` |
 | `pypto_pro.language.MemorySpace.Bias` | Bias Buffer | 底层偏置缓冲区标识 | 当前CCE Tile codegen未实现该内存空间映射，不能用于`make_tile`或`make_tile_group`创建Tile |
 
 ## 补充说明
@@ -43,6 +45,24 @@
 | `Right` | `pl.ZN` | `pl.ZN` | — |
 | `Acc` | `pl.NZ` | `pl.NZ` | FP32/INT32自动`fractal=1024` |
 | `Scaling` | `pl.ND` | `pl.ND` | — |
+| `ScaleLeft` | — | `pl.ZZ` | 仅用于A矩阵的`DT_FP8E8M0`分组缩放因子，32字节地址对齐 |
+| `ScaleRight` | — | `pl.NN` | 仅用于B矩阵的`DT_FP8E8M0`分组缩放因子，32字节地址对齐 |
+
+### MX scale（MX矩阵计算的E8M0分组缩放因子）配套缓冲区
+
+`ScaleLeft`和`ScaleRight`分别是与L0A和L0B配套的MX scale缓冲区，在PTO-ISA中分别使用`__ca__`和`__cb__`地址空间。它们具有独立于Left/Right数据地址域的4KB逻辑容量，并非从普通L0A/L0B的64KB数据空间中划出；scale Tile的起始地址由配对数据Tile的起始地址推导：
+
+```text
+ScaleLeftAddr  = LeftAddr  >> 4
+ScaleRightAddr = RightAddr >> 4
+```
+
+因此，64KB的L0A/L0B数据地址范围对应4KB的ScaleLeft/ScaleRight地址范围。例如，Left起始地址为`0x8000`时，配对的ScaleLeft起始地址为`0x0800`。该映射是MX矩阵指令的强制寻址约束。对于显式指定且编译期可知的Tile地址，框架会校验ScaleLeft/ScaleRight与Left/Right的地址映射；自动分配或动态地址无法在该阶段校验。映射不一致时，指令会从由Left/Right地址推导的位置读取scale，而不是从错误配置的scale Tile地址读取，导致计算结果错误。
+
+> [!NOTE]说明
+> 4KB的ScaleLeft/ScaleRight不是从64KB的L0A/L0B数据容量中划出的预留空间。使用ScaleLeft/ScaleRight时，Left/Right的数据地址域仍可使用完整64KB，不需要缩减为60KB。
+
+这里的`/16`来自硬件地址右移4位，与“一个E8M0 scale对应K方向连续32个尾数元素”的数据分组规则不是同一概念。MX矩阵乘法的完整参数约束见[`matmul_mx`](../operation/matrix_computation/matmul_mx.md)。
 
 ## 调用示例
 

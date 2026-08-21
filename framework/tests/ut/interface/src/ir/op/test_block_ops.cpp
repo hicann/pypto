@@ -941,6 +941,34 @@ TEST_F(BlockOpsOutMatmulTest, BlockMatmulAcc_ReturnsOutType)
     EXPECT_NE(As<TileType>(call->GetType()), nullptr);
 }
 
+TEST_F(BlockOpsOutMatmulTest, BlockMatmulMx_ReturnsOutType)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto call = reg.Create(
+        "block.matmul_mx",
+        {MakeTileVar("o", {64, 64}, DataType::FP32), MakeTileVar("l", {64, 64}, DataType::FP8E4M3FN),
+         MakeTileVar("r", {64, 64}, DataType::FP8E5M2), MakeTileVar("sa", {64, 2}, DataType::FP8E8M0),
+         MakeTileVar("sb", {2, 64}, DataType::FP8E8M0)},
+        Sp());
+    auto rt = As<TileType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::FP32);
+}
+
+TEST_F(BlockOpsOutMatmulTest, BlockMatmulMxAcc_ReturnsOutType)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto call = reg.Create(
+        "block.matmul_mx_acc",
+        {MakeTileVar("o", {64, 64}, DataType::FP32), MakeTileVar("acc", {64, 64}, DataType::FP32),
+         MakeTileVar("l", {64, 64}, DataType::FP4E2M1), MakeTileVar("r", {64, 64}, DataType::FP4E1M2),
+         MakeTileVar("sa", {64, 2}, DataType::FP8E8M0), MakeTileVar("sb", {2, 64}, DataType::FP8E8M0)},
+        Sp());
+    auto rt = As<TileType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::FP32);
+}
+
 TEST_F(BlockOpsOutMatmulTest, BlockGemv_ReturnsOutType)
 {
     auto& reg = OpRegistry::GetInstance();

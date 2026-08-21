@@ -44,9 +44,9 @@ pypto_pro.language.TileType(shape, dtype, target_memory=pypto_pro.language.Memor
 |---|---|---|
 | `shape` | 输入 | 长度为2的编译期常量整数列表，各维大小须为正整数；仅支持二维Tile<br>对齐及分形布局约束由使用该TileType的具体API检查 |
 | `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md)枚举值<br>常用：`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_INT8`、`pypto_pro.language.DT_INT32` |
-| `target_memory` | 输入 | [`pypto_pro.language.MemorySpace`](MemorySpace.md)枚举值<br>默认`pypto_pro.language.MemorySpace.Vec`（UB）<br>可选：`Vec`(UB)、`Mat`(L1)、`Left`(L0A)、`Right`(L0B)、`Acc`(L0C)、`Scaling` |
+| `target_memory` | 输入 | [`pypto_pro.language.MemorySpace`](MemorySpace.md)枚举值<br>默认`pypto_pro.language.MemorySpace.Vec`（UB）<br>可选：`Vec`(UB)、`Mat`(L1)、`Left`(L0A)、`Right`(L0B)、`Acc`(L0C)、`Scaling`、`ScaleLeft`、`ScaleRight` |
 | `valid_shape` | 输入 | 编译期常量整数列表或`None`（默认）<br>具体整数（如`[32, 64]`）：编译期确定有效形状<br>`None`：后端缺省行为等同于`[-1, -1]`（动态模式）<br>`[-1, -1]`：运行时动态设置有效形状，配合[`pypto_pro.language.set_validshape`](../operation/memory_vector_computation/transpose_and_element_access/set_validshape.md)使用 |
-| `layout` | 输入 | [`pypto_pro.language.TensorLayout`](TensorLayout.md)枚举值或`None`（默认）<br>不指定时按“内存空间 + 架构”自动取默认值（见下表）<br>`Mat`、`Left`、`Right`、`Acc`、`Scaling`的非法组合在构造时即报`ValueError`；`Vec`的可用布局由具体Tile API约束 |
+| `layout` | 输入 | [`pypto_pro.language.TensorLayout`](TensorLayout.md)枚举值或`None`（默认）<br>不指定时按“内存空间 + 架构”自动取默认值（见下表）<br>`Mat`、`Left`、`Right`、`Acc`、`Scaling`、`ScaleLeft`、`ScaleRight`的非法组合在构造时即报`ValueError`；`Vec`的可用布局由具体Tile API约束 |
 | `fractal` | 输入 | 整数或`None`（默认）<br>`Acc`的FP32/INT32在未指定时自动设为1024<br>显式值会写入Tile硬件信息，取值要求和适用场景由具体Tile API决定 |
 | `pad` | 输入 | [`pypto_pro.language.TilePad`](TilePad.md)枚举值或整数0-3<br>`null`(0)不填充 / `zero`(1)补零 / `max`(2)补最大值 / `min`(3)补最小值<br>非法值报`ValueError`，非法类型报`TypeError` |
 | `compact` | 输入 | `None`（默认）或整数`0`、`1`、`2`<br>`None`/`0`：null；`1`：normal；`2`：row_plus_one<br>是否需要设置以及支持哪种模式，由使用该TileType的具体API和硬件路径决定。详见[`CompactMode`](CompactMode.md) |
@@ -63,11 +63,15 @@ pypto_pro.language.TileType(shape, dtype, target_memory=pypto_pro.language.Memor
 | `Right` | `pl.ZN` | `pl.ZN` |
 | `Acc` | `pl.NZ` | `pl.NZ` |
 | `Scaling` | `pl.ND` | `pl.ND` |
+| `ScaleLeft` | — | `pl.ZZ` |
+| `ScaleRight` | — | `pl.NN` |
 
 补充规则：
 
 - `Mat`除默认`pl.NZ`外，还允许`pl.ZN`；当`dtype`为`UINT64`或`INT64`时，额外允许`pl.ND`
 - `Left`跨架构兼容，同时允许`pl.ZZ`（A3默认）和`pl.NZ`（A5默认）
+- `Mat`中的E8M0 scale允许`pl.ZZ`和`pl.NN`，未指定`fractal`时自动取32
+- `ScaleLeft`和`ScaleRight`仅A5支持，分别用于A矩阵和B矩阵的E8M0 scale；未指定`fractal`时自动取32，Tile地址须按32字节对齐
 
 ## 调用示例
 

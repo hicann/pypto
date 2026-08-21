@@ -34,6 +34,9 @@
 | `pypto_pro.language.DT_FP4` | 4 | 否 | 是 | — | IEEE浮点 | 低精度推理 |
 | `pypto_pro.language.DT_FP8E4M3FN` | 8 | 否 | 是 | `float8_e4m3_t` | IEEE浮点 | FP8推理（E4M3格式） |
 | `pypto_pro.language.DT_FP8E5M2` | 8 | 否 | 是 | `float8_e5m2_t` | IEEE浮点 | FP8推理（E5M2格式） |
+| `pypto_pro.language.DT_FP8E8M0` | 8 | 否 | 是 | `float8_e8m0_t` | IEEE浮点 | MXFP8/MXFP4每组32个元素共享的scale |
+| `pypto_pro.language.DT_FP4E2M1` | 4 | 否 | 是 | `float4_e2m1x2_t` | IEEE浮点 | E2M1格式的4位浮点数据，GM中两个元素打包为1字节 |
+| `pypto_pro.language.DT_FP4E1M2` | 4 | 否 | 是 | `float4_e1m2x2_t` | IEEE浮点 | E1M2格式的4位浮点数据，GM中两个元素打包为1字节 |
 | `pypto_pro.language.DT_FP16` | 16 | 否 | 是 | `half` | IEEE浮点 | 矩阵输入、向量计算（最常用） |
 | `pypto_pro.language.DT_FP32` | 32 | 否 | 是 | `float` | IEEE浮点 | 累加器、高精度计算 |
 | `pypto_pro.language.DT_BF16` | 16 | 否 | 是 | `bfloat16_t` | Brain浮点 | 矩阵输入（动态范围优于FP16） |
@@ -55,6 +58,8 @@
 | `dtype.to_c_type_string()` | C类型字符串（如`"half"`） |
 
 **默认类型常量**：裸整数常量（如`42`）默认为`pypto_pro.language.DT_INT64`，裸浮点常量（如`3.14`）默认为`pypto_pro.language.DT_FP32`。
+
+**MX浮点类型**：MXFP8的数据元素使用`DT_FP8E4M3FN`或`DT_FP8E5M2`，MXFP4的数据元素可使用`DT_FP4E2M1`或`DT_FP4E1M2`；两者均使用`DT_FP8E8M0`保存分组缩放因子。E8M0编码值`e`对应缩放因子`2^(e-127)`。类型组合和分组规则见[`matmul_mx`](../operation/matrix_computation/matmul_mx.md)和[`matmul_mx_acc`](../operation/matrix_computation/matmul_mx_acc.md)。
 
 ## 调用示例
 
