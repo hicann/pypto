@@ -1255,7 +1255,8 @@ TEST(BackendCceOpsTest, DebugDumpTileFullAndWindow)
     EXPECT_NE(generated.find("[TPRINT Tile Window]"), std::string::npos);
     EXPECT_NE(generated.find("tile.GetValidRow() - (2)"), std::string::npos);
     EXPECT_NE(generated.find("pto::GetTileOffset<std::remove_reference_t<decltype(tile)>>"), std::string::npos);
-    EXPECT_NE(generated.find("pto::PrintValue<pto::PrintFormat::Width8_Precision4>"), std::string::npos);
+    EXPECT_NE(generated.find("__pypto_dtype_name"), std::string::npos);
+    EXPECT_NE(generated.find("__pypto_print_val"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, DebugDumpAccTileUsesWorkspace)
@@ -1275,7 +1276,8 @@ TEST(BackendCceOpsTest, DebugDumpAccTileUsesWorkspace)
     EXPECT_NE(generated.find("reinterpret_cast<__gm__"), std::string::npos);
     EXPECT_NE(generated.find("workspace_ptr"), std::string::npos);
     EXPECT_NE(generated.find("[TPRINT Acc Tile Window]"), std::string::npos);
-    EXPECT_NE(generated.find("pto::PrintValue<pto::PrintFormat::Width8_Precision4>"), std::string::npos);
+    EXPECT_NE(generated.find("__pypto_dtype_name"), std::string::npos);
+    EXPECT_NE(generated.find("__pypto_print_val"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, DebugPrintfExpandsUnsigned64BitValues)

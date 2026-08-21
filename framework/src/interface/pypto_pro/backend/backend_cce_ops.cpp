@@ -645,6 +645,15 @@ static std::string MakeDebugDumpTensorNZDynamicCodegenCCE(codegen::CCECodegen& c
     return "";
 }
 
+static void EmitDumpFlagHeaderCCE(codegen::CCECodegen& codegen, const ir::CallPtr& op)
+{
+    std::string dump_flag = op->HasKwarg("dump_flag") ? op->GetKwarg<std::string>("dump_flag") : "";
+    if (dump_flag.empty()) {
+        return;
+    }
+    codegen.Emit("cce::printf(\"=== [flag] %s ===\\n\", \"" + debug_printf::EscapeStringLiteral(dump_flag) + "\");");
+}
+
 static std::string MakeDebugDumpTensorCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
@@ -652,6 +661,7 @@ static std::string MakeDebugDumpTensorCodegenCCE(const ir::CallPtr& op, codegen:
     if (op->GetKwarg<bool>("show_location", false)) {
         EmitDebugLocationHeaderCCE(codegen, op->span_, "dump_tensor");
     }
+    EmitDumpFlagHeaderCCE(codegen, op);
 
     auto tensor_var = ir::As<ir::Var>(op->args_[0]);
     CHECK(tensor_var) << "debug.dump_tensor first argument must be a Var";
@@ -773,6 +783,7 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
     if (op->GetKwarg<bool>("show_location", false)) {
         EmitDebugLocationHeaderCCE(codegen, op->span_, "dump_tile");
     }
+    EmitDumpFlagHeaderCCE(codegen, op);
 
     std::string src = codegen.GetExprAsCode(op->args_[0]);
 
@@ -846,7 +857,7 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
         codegen.Emit("if (" + valid_col + " < 0) " + valid_col + " = 0;");
 
         codegen.Emit("cce::printf(\"=== [TPRINT Acc Tile Window] Data Type: %s, Layout: NZ, TileType: Acc ===\\n\", "
-                     "pto::GetDTypeName<" +
+                     "__pypto_dtype_name<" +
                      dtype_str + ">());");
         codegen.Emit("cce::printf(\"  Source Shape: [%d, %d], Window Offsets: [%d, %d], Requested Shape: [%d, %d], "
                      "Valid Shape: [%d, %d]\\n\", " +
@@ -861,7 +872,7 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
         codegen.Emit("    for (int " + col_idx + " = 0; " + col_idx + " < " + valid_col + "; ++" + col_idx + ") {");
         codegen.Emit("      " + dtype_str + " " + debug_val + " = *(__ws + (" + row_idx + " + (" + row_off + ")) * " +
                      std::to_string(tile_cols->value_) + " + (" + col_idx + " + (" + col_off + ")));");
-        codegen.Emit("      pto::PrintValue<pto::PrintFormat::Width8_Precision4>(" + debug_val + ", " + col_idx + ");");
+        codegen.Emit("      __pypto_print_val(" + debug_val + ");");
         codegen.Emit("    }");
         codegen.Emit("    cce::printf(\"\\n\");");
         codegen.Emit("  }");
@@ -921,7 +932,7 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
     codegen.Emit("if (" + valid_col + " > " + std::to_string(tile_cols->value_) + ") " + valid_col + " = " +
                  std::to_string(tile_cols->value_) + ";");
     codegen.Emit("cce::printf(\"=== [TPRINT Tile Window] Data Type: %s, Layout: %s, TileType: %s ===\\n\", "
-                 "pto::GetDTypeName<" +
+                 "__pypto_dtype_name<" +
                  codegen.GetTypeString(tile_type->dtype_) +
                  ">(), pto::GetLayoutName(std::remove_reference_t<decltype(" + src +
                  ")>::BFractal, std::remove_reference_t<decltype(" + src + ")>::SFractal), \"Vec\");");
@@ -935,7 +946,7 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
     codegen.Emit("    auto __debug_src_offset = pto::GetTileOffset<std::remove_reference_t<decltype(" + src + ")>>(" +
                  row_idx + " + (" + row_off + "), " + col_idx + " + (" + col_off + "));");
     codegen.Emit("    auto " + debug_val + " = " + src + ".data()[__debug_src_offset];");
-    codegen.Emit("    pto::PrintValue<pto::PrintFormat::Width8_Precision4>(" + debug_val + ", " + col_idx + ");");
+    codegen.Emit("    __pypto_print_val(" + debug_val + ");");
     codegen.Emit("  }");
     codegen.Emit("  cce::printf(\"\\n\");");
     codegen.Emit("}");

@@ -357,6 +357,7 @@ REGISTER_OP("debug.dump_tensor")
     .add_argument("offsets", "Offsets per dimension (MakeTuple of integer scalars)")
     .add_argument("shapes", "Shape per dimension (MakeTuple of integer scalars)")
     .set_attr<bool>("show_location")
+    .set_attr<std::string>("dump_flag")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceDebugDumpTensorType(args, kwargs);
@@ -373,6 +374,7 @@ REGISTER_OP("debug.dump_tile")
     .add_argument("shapes", "Optional shape per dimension (MakeTuple of integer scalars; dynamic only on CCE)")
     .add_argument("workspace", "Optional GM Tensor for Acc tile temporary space (required for Acc tiles)")
     .set_attr<bool>("show_location")
+    .set_attr<std::string>("dump_flag")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceDebugDumpTileType(args, kwargs);

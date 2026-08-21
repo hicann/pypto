@@ -196,6 +196,45 @@ def _signature_parts(entry_params):
     return ", ".join(decls), names
 
 
+def _write_ascendc_tprint_header(kernel_meta_dir: str) -> None:
+    """Write a no-prefix AscendC dump copy of pypto_tprint.h next to the impl source.
+
+    The shared header (included by default from codegen) prints via cce::printf
+    (jit-mode compatible), but the OPC toolchain swallows cce::printf output and
+    AscendC::printf prepends a "[AIV Block x/y]" dumphead. The local copy remaps
+    __PYPTO_PRINTF to a wrapper around __asc_aicore::scalar_printf_impl with an
+    empty dumphead; it is included by a quoted name so the impl resolves it ahead
+    of the packaged header.
+    """
+    jit_macro_def = (
+        "#ifndef __PYPTO_PRINTF\n"
+        "#if defined(PTOAS_ENABLE_CCE_PRINT) && PTOAS_ENABLE_CCE_PRINT\n"
+        "#define __PYPTO_PRINTF(...) cce::printf(__VA_ARGS__)\n"
+        "#else\n"
+        "#define __PYPTO_PRINTF(...) ((void)0)\n"
+        "#endif\n"
+        "#endif\n"
+    )
+    opc_macro_def = (
+        "#ifndef __PYPTO_PRINTF\n"
+        "template <class... Args>\n"
+        "__aicore__ inline void __pypto_aicore_printf(const __gm__ char* fmt, Args&&... args)\n"
+        "{\n"
+        "    __asc_aicore::enable_asc_diagnostics();\n"
+        "    __asc_aicore::scalar_printf_impl(__asc_aicore::DumpType::DUMP_SCALAR, fmt, \"\", args...);\n"
+        "}\n"
+        "#define __PYPTO_PRINTF(...) __pypto_aicore_printf(__VA_ARGS__)\n"
+        "#endif\n"
+    )
+    src_header = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "include", "pypto_tprint.h")
+    tprint_content = open(src_header, "r", encoding="utf-8").read()
+    tprint_content = tprint_content.replace(jit_macro_def, opc_macro_def)
+    dst_header = os.path.join(kernel_meta_dir, "pypto_tprint.h")
+    if not os.path.exists(dst_header) or open(dst_header, "r", encoding="utf-8").read() != tprint_content:
+        with open(dst_header, "w", encoding="utf-8") as f:
+            f.write(tprint_content)
+
+
 def _gen_infer_cpp(cg, tilingkey_header: str, kernel_cpp: str) -> str:
     sig, names = _signature_parts(cg.entry_params)
     ws_idx = len(names) - 2 if len(names) >= 2 else None
@@ -207,10 +246,24 @@ def _gen_infer_cpp(cg, tilingkey_header: str, kernel_cpp: str) -> str:
             f"    AscendC::SetSysWorkspaceForce({ws});\n    GM_ADDR usrWorkspace = AscendC::GetUserWorkspace({ws});\n"
         )
         inner[ws_idx] = "usrWorkspace"
+    # The infer source is only compiled to extract tiling metadata, so the dump
+    # helpers are replaced with no-op stubs and the header include is dropped.
+    # This keeps the infer source self-contained (no pypto_tprint.h dependency).
+    infer_kernel_cpp = kernel_cpp.replace(
+        "#include <pypto_tprint.h>\n", ""
+    )
+    tprint_stubs = (
+        "#define TPRINT(x)\n"
+        "template <typename T>\n"
+        "__aicore__ inline const __gm__ char* __pypto_dtype_name() { return \"\"; }\n"
+        "template <typename V>\n"
+        "__aicore__ inline void __pypto_print_val(V) {}\n"
+    )
     return (
         '#include "kernel_operator.h"\n'
         f'#include "{tilingkey_header}"\n'
-        f"{kernel_cpp}\n"
+        f"{tprint_stubs}"
+        f"{infer_kernel_cpp}\n"
         f'extern "C" __global__ AICORE void {cg.kernel_name}({sig})\n'
         "{\n"
         f"    KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_MIX_AIC_1_2);\n"
@@ -622,14 +675,19 @@ def pypto_compile_op(
         impl_src = os.path.join(cg.build_dir, "kernel.cpp")
         impl_dst = os.path.join(kernel_meta_dir, impl_cpp_name)
         impl_content = open(impl_src, "r", encoding="utf-8").read()
-        impl_content = impl_content.replace("cce::printf", "AscendC::printf")
-        if "TPRINT(" in impl_content:
-            # Copy custom TPRINT implementation header to kernel_meta_dir
-            tprint_dst = os.path.join(kernel_meta_dir, "_pypto_tprint.h")
-            if not os.path.exists(tprint_dst):
-                shutil.copyfile(os.path.join(os.path.dirname(__file__), "_pypto_tprint.h"), tprint_dst)
+        impl_content = impl_content.replace("cce::printf", "__pypto_aicore_printf")
+        if (
+            "TPRINT(" in impl_content
+            or "__pypto_dtype_name" in impl_content
+            or "__pypto_print_val" in impl_content
+        ):
+            # Binary-mode TPRINT helpers live in the shared pypto_tprint.h header, which uses
+            # cce::printf for jit-mode compatibility. The OPC toolchain has no working
+            # cce::printf output, so drop a no-prefix AscendC dump copy next to the impl and
+            # resolve it by a quoted local name (the include itself is emitted by codegen).
+            _write_ascendc_tprint_header(kernel_meta_dir)
             impl_content = impl_content.replace(
-                '#include <pto/pto-inst.hpp>\n', '#include <pto/pto-inst.hpp>\n#include "_pypto_tprint.h"\n'
+                '#include <pypto_tprint.h>\n', '#include "pypto_tprint.h"\n'
             )
         with open(impl_dst, "w", encoding="utf-8") as f:
             f.write(impl_content)
@@ -646,6 +704,7 @@ def pypto_compile_op(
             dst_o = os.path.join(kernel_meta_dir, f"{kernel_name}_{channel}_{packed}.o")
             sub_arch = _core_arch(core_type)
             cmd = gen_compile_cmd_v220(src_path, dst_o, opt, sub_arch, "")  # kernel.cpp self-includes its tiling.h
+            cmd += [f"-I{os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'include')}"]
             cmd += [f"-D{TILING_KEY_MACRO}={packed}UL"]
             cmd += [f"-D{MIX_CORE_MACRO}=1"]
             if CommonUtility.is_c310():

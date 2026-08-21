@@ -35,6 +35,7 @@ recursive-include framework/src/platform *
 recursive-include python/pypto *.py
 recursive-include python/pypto *.pyi
 recursive-include python/pypto *.md
+recursive-include python/pypto_pro *.h
 recursive-include python/src *.cpp
 recursive-include python/src *.h
 include python/CMakeLists.txt

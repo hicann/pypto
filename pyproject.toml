@@ -95,7 +95,7 @@ packages.find.include = [
 
 # 保留 package-data，确保目录下的 .so/.h 等文件被包含
 include-package-data = true
-package-data = { "pypto" = ["lib/**/*", "include/**/*"] }
+package-data = { "pypto" = ["lib/**/*", "include/**/*"], "pypto_pro" = ["include/*"] }
 zip-safe = false
 
 [tool.ruff]

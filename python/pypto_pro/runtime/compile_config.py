@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+import os
 
 CCE_BACKEND = "cce"
 
@@ -77,7 +78,12 @@ class JitCompileConfig:
 
     def runtime_include_flags(self, ascend_home_path: str) -> list[str]:
         variables = {"ascend_home": ascend_home_path}
-        return [f"-I{include_dir}" for include_dir in self._format_values(self.runtime_include_dirs, variables)]
+        flags = [f"-I{include_dir}" for include_dir in self._format_values(self.runtime_include_dirs, variables)]
+        import pypto_pro
+
+        pypto_include = os.path.join(os.path.dirname(pypto_pro.__file__), "include")
+        flags.append(f"-I{pypto_include}")
+        return flags
 
     def runtime_link_args(self, ascend_home_path: str) -> list[str]:
         variables = {"ascend_home": ascend_home_path}

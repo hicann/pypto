@@ -530,6 +530,7 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
         emitter_.EmitLine("#if defined(__DAV_VEC__)");
     }
     EmitStructTypes();
+    emitter_.EmitLine("#include <pypto_tprint.h>");
     emitter_.EmitRaw(function_code);
     emitter_.EmitLine("#endif");
 

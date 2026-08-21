@@ -980,6 +980,7 @@ def dump_data(
     *,
     workspace: Optional[Tensor] = None,
     loc: bool = False,
+    flag: Optional[str] = None,
 ) -> None:
     """Print Tensor or Tile contents for debugging.
 
@@ -994,6 +995,8 @@ def dump_data(
         workspace: GM Tensor used as temporary space (only valid for Acc Tile inputs,
                    size >= tile_numel * sizeof(element_type))
         loc: Show source location
+        flag: Optional compile-time string label printed as a standalone marker line
+              before the dump output, to distinguish multiple dump sites
     """
 
 

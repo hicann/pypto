@@ -192,6 +192,7 @@ def dump_tensor(
     shapes: Sequence[int | Expr] | _ir_core.MakeTuple | None = None,
     loc: bool = False,
     span: Span | None = None,
+    flag: str | None = None,
 ) -> Call:
     """Print a tensor or tensor window for debugging.
 
@@ -209,6 +210,8 @@ def dump_tensor(
     """
     actual_span = _get_span_or_capture(span)
     show_location = _normalize_location_flag(loc, "dump_tensor")
+    if flag is not None and not isinstance(flag, str):
+        raise TypeError(f"debug.dump_tensor requires str flag, but got {type(flag).__name__}")
     tensor_type = tensor.type
     if not isinstance(tensor_type, TensorType):
         raise TypeError(f"debug.dump_tensor requires TensorType input, but got {type(tensor_type).__name__}")
@@ -244,10 +247,13 @@ def dump_tensor(
         if isinstance(shape_expr, ConstInt) and shape_expr.value <= 0:
             raise ValueError(f"debug.dump_tensor shape at axis {idx} must be positive, got {shape_expr.value}")
 
+    dump_kwargs: dict[str, Any] = {"show_location": show_location}
+    if flag:
+        dump_kwargs["dump_flag"] = flag
     return _ir_core.create_op_call(
         "debug.dump_tensor",
         [tensor, offsets_tuple, shapes_tuple],
-        {"show_location": show_location},
+        dump_kwargs,
         actual_span,
     )
 
@@ -275,6 +281,8 @@ def dump_tile(
     workspace: Expr | None = None,
     loc: bool = False,
     span: Span | None = None,
+    section: _ir_core.SectionKind | None = None,
+    flag: str | None = None,
 ) -> Call:
     """Print a tile or tile window for debugging.
 
@@ -297,9 +305,13 @@ def dump_tile(
     """
     actual_span = _get_span_or_capture(span)
     show_location = _normalize_location_flag(loc, "dump_tile")
+    if flag is not None and not isinstance(flag, str):
+        raise TypeError(f"debug.dump_tile requires str flag, but got {type(flag).__name__}")
     tile_type = tile.type
     if not isinstance(tile_type, TileType):
         raise TypeError(f"debug.dump_tile requires TileType input, but got {type(tile_type).__name__}")
+    if section is not None:
+        _validate_dump_memory_section(tile_type, section, actual_span)
     if (offsets is None) != (shapes is None):
         raise ValueError("debug.dump_tile offsets and shapes must be provided together")
 
@@ -309,6 +321,9 @@ def dump_tile(
             raise TypeError(f"debug.dump_tile workspace must be TensorType, but got {type(ws_type).__name__}")
 
     rank = len(tile_type.shape)
+    dump_kwargs: dict[str, Any] = {"show_location": show_location}
+    if flag:
+        dump_kwargs["dump_flag"] = flag
     if workspace is not None:
         if offsets is None and shapes is None:
             offsets_tuple = _to_make_tuple([0] * rank, actual_span)
@@ -320,12 +335,12 @@ def dump_tile(
         return _ir_core.create_op_call(
             "debug.dump_tile",
             [tile, offsets_tuple, shapes_tuple, workspace],
-            {"show_location": show_location},
+            dump_kwargs,
             actual_span,
         )
 
     if offsets is None and shapes is None:
-        return _ir_core.create_op_call("debug.dump_tile", [tile], {"show_location": show_location}, actual_span)
+        return _ir_core.create_op_call("debug.dump_tile", [tile], dict(dump_kwargs), actual_span)
 
     offsets_tuple = _to_make_tuple(offsets, actual_span)
     shapes_tuple = _to_make_tuple(shapes, actual_span)
@@ -334,9 +349,48 @@ def dump_tile(
     return _ir_core.create_op_call(
         "debug.dump_tile",
         [tile, offsets_tuple, shapes_tuple],
-        {"show_location": show_location},
+        dict(dump_kwargs),
         actual_span,
     )
+
+
+def _validate_dump_memory_section(data_type, section, span: Span | None = None) -> None:
+    """Validate that dumping ``data_type`` is legal in ``section``.
+
+    GM tensors may be dumped from either section; on-chip tiles must live in
+    Vec (UB) inside a Vector section and Acc (L0C) inside a Cube section.
+    """
+    if isinstance(data_type, TensorType):
+        return
+    if not isinstance(data_type, TileType):
+        return
+    mem = getattr(data_type, "target_memory", None)
+    if mem is None and data_type.memref is not None:
+        mem = data_type.memref.memory_space_
+    if mem is None:
+        return
+    if section == _ir_core.SectionKind.Vector:
+        if mem == _ir_core.MemorySpace.Vec:
+            return
+        from pypto_pro.language.parser.diagnostics import ParserSyntaxError
+
+        raise ParserSyntaxError(
+            f"pl.dump_data of a {mem.name} tile is not allowed in a Vector section; "
+            "only Vec (UB) tiles (and GM tensors) can be dumped there",
+            span=span,
+            hint="Move pl.dump_data into a 'with pl.section_cube():' block, or dump a Vec/UB tile.",
+        )
+    if section == _ir_core.SectionKind.Cube:
+        if mem == _ir_core.MemorySpace.Acc:
+            return
+        from pypto_pro.language.parser.diagnostics import ParserSyntaxError
+
+        raise ParserSyntaxError(
+            f"pl.dump_data of a {mem.name} tile is not allowed in a Cube section; "
+            "only Acc (L0C) tiles (and GM tensors) can be dumped there",
+            span=span,
+            hint="Move pl.dump_data into a 'with pl.section_vector():' block, or dump an Acc/L0C tile.",
+        )
 
 
 def dump_data(
@@ -346,6 +400,8 @@ def dump_data(
     workspace: Expr | None = None,
     loc: bool = False,
     span: Span | None = None,
+    section: _ir_core.SectionKind | None = None,
+    flag: str | None = None,
 ) -> Call:
     """Unified debug dump entry — dispatches to dump_tensor or dump_tile based on input type.
 
@@ -355,12 +411,14 @@ def dump_data(
     All parameters are forwarded to the underlying function unchanged.
     """
     data_type = data.type
+    if flag is not None and not isinstance(flag, str):
+        raise TypeError(f"debug.dump_data requires str flag, but got {type(flag).__name__}")
     if isinstance(data_type, TensorType):
         if workspace is not None:
             raise ValueError("debug.dump_data: workspace is only valid for Tile inputs, not Tensor")
-        return dump_tensor(data, offsets, shapes, loc=loc, span=span)
+        return dump_tensor(data, offsets, shapes, loc=loc, span=span, flag=flag)
     elif isinstance(data_type, TileType):
-        return dump_tile(data, offsets, shapes, workspace=workspace, loc=loc, span=span)
+        return dump_tile(data, offsets, shapes, workspace=workspace, loc=loc, span=span, section=section, flag=flag)
     else:
         raise TypeError(f"debug.dump_data requires Tensor or Tile input, but got {type(data_type).__name__}")
 
@@ -442,10 +500,17 @@ def trap(*, span: Span | None = None) -> Call:
 register_table(
     {
         "printf": OpSpec(builder=printf),
-        "dump_data": OpSpec(builder=dump_data),
         "trap": OpSpec(builder=trap),
     }
 )
+
+
+@op_impl("dump_data")
+def _parse_dump_data(self, call: ast.Call):
+    span = self.span_tracker.get_span(call)
+    args = [self.parse_expression(a) for a in call.args]
+    kwargs = self.parse_op_kwargs(call)
+    return dump_data(*args, section=self.target, **kwargs, span=span)
 
 
 @op_impl("pto_assert")
