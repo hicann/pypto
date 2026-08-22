@@ -21,6 +21,7 @@
 #include "interface/operation/opcode.h"
 #include "interface/tensor/irbuilder.h"
 #include "tilefwk/data_type.h"
+#include "tilefwk/platform.h"
 #include "passes/pass_interface/pass.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"

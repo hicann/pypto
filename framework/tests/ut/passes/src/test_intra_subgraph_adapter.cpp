@@ -37,6 +37,7 @@ public:
         Program::GetInstance().Reset();
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
+        Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
     }
 
     void TearDown() override {}
@@ -93,12 +94,14 @@ TEST_F(IntraSubgraphAdapterTest, TestBoundaryConvertFailed)
     subGraph.GetOp("convert")->SetOpAttribute(
         std::make_shared<ConvertOpAttribute>(MemoryType::MEM_UB, MemoryType::MEM_L1));
     subGraph.GetOp("L1ToL0B")->UpdateSubgraphID(1);
+    Platform::Instance().GetDie().SetMemoryPath({{MemoryType::MEM_L1, MemoryType::MEM_DEVICE_DDR}});
     Function* function = subGraph.GetFunction();
     EXPECT_NE(function, nullptr);
     IntraSubgraphAdapter adapter;
     function->SetTotalSubGraphCount(2);
     EXPECT_EQ(adapter.RunOnFunction(*function), FAILED);
     EXPECT_EQ(adapter.PostCheck(*function), FAILED);
+    Platform::Instance().ReloadMemoryPaths("3510");
 }
 
 TEST_F(IntraSubgraphAdapterTest, TestInnerConvert)
@@ -414,6 +417,79 @@ TEST_F(IntraSubgraphAdapterTest, BoundaryAssembleShouldKeepAssembleWhenDisableSl
     EXPECT_EQ(assembleOp->GetOpcode(), Opcode::OP_ASSEMBLE);
     EXPECT_EQ(assembleOp->GetOOperands().front(), subGraph.GetTensor("t2"));
     EXPECT_EQ(subGraph.GetTensor("t2")->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+}
+
+TEST_F(IntraSubgraphAdapterTest, TestL1BoundaryNoDirectPathToDDR)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t0", "t1", "t2", "t3", "t4"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_L1, MemoryType::MEM_L0A,
+                                           MemoryType::MEM_L0A, MemoryType::MEM_DEVICE_DDR};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {128, 128}, tensorMemTypes, tensorNames, 0), true);
+
+    std::vector<Opcode> opCodes{Opcode::OP_CONTRACT, Opcode::OP_L1_TO_L0A, Opcode::OP_L1_TO_L0A, Opcode::OP_COPY_OUT};
+    std::vector<std::vector<std::string>> ioperands{{"t0"}, {"t1"}, {"t1"}, {"t3"}};
+    std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"asm", "L1ToL0A_inner", "L1ToL0A_outer", "copyOut"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+
+    std::vector<int64_t> offset{0, 0};
+    subGraph.GetOp("asm")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset));
+
+    subGraph.GetOp("asm")->UpdateSubgraphID(0);
+    subGraph.GetOp("L1ToL0A_inner")->UpdateSubgraphID(0);
+    subGraph.GetOp("L1ToL0A_outer")->UpdateSubgraphID(1);
+    subGraph.GetOp("copyOut")->UpdateSubgraphID(1);
+
+    Platform::Instance().ReloadMemoryPaths("");
+    Function* function = subGraph.GetFunction();
+    function->SetTotalSubGraphCount(2);
+
+    IntraSubgraphAdapter adapter;
+    EXPECT_EQ(adapter.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_EQ(subGraph.GetTensor("t1")->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+
+    int sliceCnt = 0;
+    for (const auto& op : function->Operations().DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_SLICE) {
+            sliceCnt++;
+        }
+    }
+    EXPECT_GE(sliceCnt, 1);
+
+    Platform::Instance().ReloadMemoryPaths("3510");
+}
+
+TEST_F(IntraSubgraphAdapterTest, TestL1BoundaryNoDirectPathToDDRFailed)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t0", "t1", "t2", "t3"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_L1, MemoryType::MEM_L0A,
+                                           MemoryType::MEM_UB};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {128, 128}, tensorMemTypes, tensorNames, 0), true);
+
+    std::vector<Opcode> opCodes{Opcode::OP_CONVERT, Opcode::OP_L1_TO_L0A, Opcode::OP_CONVERT};
+    std::vector<std::vector<std::string>> ioperands{{"t0"}, {"t1"}, {"t1"}};
+    std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"t3"}};
+    std::vector<std::string> opNames{"convert_in", "L1ToL0A_inner", "convert_out"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    subGraph.GetOp("convert_in")->UpdateSubgraphID(0);
+    subGraph.GetOp("convert_in")
+        ->SetOpAttribute(std::make_shared<ConvertOpAttribute>(MemoryType::MEM_UB, MemoryType::MEM_L1));
+    subGraph.GetOp("L1ToL0A_inner")->UpdateSubgraphID(0);
+    subGraph.GetOp("convert_out")->UpdateSubgraphID(1);
+    subGraph.GetOp("convert_out")
+        ->SetOpAttribute(std::make_shared<ConvertOpAttribute>(MemoryType::MEM_L1, MemoryType::MEM_UB));
+
+    Platform::Instance().ReloadMemoryPaths("");
+    Function* function = subGraph.GetFunction();
+    function->SetTotalSubGraphCount(2);
+
+    IntraSubgraphAdapter adapter;
+    EXPECT_EQ(adapter.RunOnFunction(*function), FAILED);
+
+    Platform::Instance().ReloadMemoryPaths("3510");
 }
 
 } // namespace npu::tile_fwk

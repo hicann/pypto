@@ -113,6 +113,20 @@ Status IntraSubgraphAdapter::RunOnFunction(Function& function)
             return FAILED;
         }
         if (commonColors.size() == 1) {
+            if (!Platform::Instance().GetDie().HasDirectPath(tensor->GetMemoryTypeOriginal(), MEM_DEVICE_DDR)) {
+                APASS_LOG_INFO_F(
+                    Elements::Tensor,
+                    "No direct path from %s to DDR for boundary tensor %s, process as DDR boundary directly.",
+                    MemoryTypeToString(tensor->GetMemoryTypeOriginal()).c_str(), tensor->Dump().c_str());
+                if (ProcessBoundaryTensor(function, tensor) == FAILED) {
+                    APASS_LOG_ERROR_F(
+                        Elements::Tensor,
+                        "Process boundary tensor failed, tensor magic : %d; Please check ProcessBoundaryTensor.",
+                        tensor->GetMagic());
+                    return FAILED;
+                }
+                continue;
+            }
             // For boundary tensor that have both producer and consumer in a single subgraph,
             // we split it to multiple boundary tensors, whose producers and consumers do not share same subgraph.
             int mainSubgraphID = *(commonColors.begin()); // the only subgraph id that has both producers and consumers.
