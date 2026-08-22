@@ -905,8 +905,6 @@ def _validate_tile_dims(
 ) -> list[int]:
     if tile_dims is None:
         tile_dims = list(range(tensor_ndim - tile_ndim, tensor_ndim))
-    if len(tile_dims) != tile_ndim:
-        raise ValueError(f"{op_name}: order must contain exactly {tile_ndim} axes, got {tile_dims}")
     if len(set(tile_dims)) != len(tile_dims):
         raise ValueError(f"{op_name}: order axes must be unique, got {tile_dims}")
     for dim in tile_dims:

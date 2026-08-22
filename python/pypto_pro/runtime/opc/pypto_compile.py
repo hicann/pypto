@@ -199,6 +199,16 @@ def _signature_parts(entry_params):
     return ", ".join(decls), names
 
 
+# Markers of device-side print usage in the generated kernel source. Any hit means the impl
+# needs the no-prefix AscendC wrapper: TPRINT/dump helpers live in pypto_tprint.h, and pl.printf
+# lowers to plain cce::printf calls that are rewritten to the same wrapper.
+_TPRINT_MARKERS = ("TPRINT(", "cce::printf(", "__pypto_dtype_name", "__pypto_print_val")
+
+
+def _needs_tprint_support(content: str) -> bool:
+    return any(marker in content for marker in _TPRINT_MARKERS)
+
+
 def _write_ascendc_tprint_header(kernel_meta_dir: str) -> None:
     """Write a no-prefix AscendC dump copy of pypto_tprint.h next to the impl source.
 
@@ -678,12 +688,9 @@ def pypto_compile_op(
         impl_src = os.path.join(cg.build_dir, "kernel.cpp")
         impl_dst = os.path.join(kernel_meta_dir, impl_cpp_name)
         impl_content = open(impl_src, "r", encoding="utf-8").read()
+        needs_tprint_support = _needs_tprint_support(impl_content)
         impl_content = impl_content.replace("cce::printf", "__pypto_aicore_printf")
-        if (
-            "TPRINT(" in impl_content
-            or "__pypto_dtype_name" in impl_content
-            or "__pypto_print_val" in impl_content
-        ):
+        if needs_tprint_support:
             # Binary-mode TPRINT helpers live in the shared pypto_tprint.h header, which uses
             # cce::printf for jit-mode compatibility. The OPC toolchain has no working
             # cce::printf output, so drop a no-prefix AscendC dump copy next to the impl and
