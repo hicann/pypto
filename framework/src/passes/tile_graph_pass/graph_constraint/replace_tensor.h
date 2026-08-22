@@ -170,6 +170,9 @@ private:
 
     Status ForUpdateView(Operation* op);
     Status BackUpdateAssemble(Operation* op);
+    // L0C2UB 直写折叠：将刷新到 assemble 输入 tensor 上的目的偏移落入其唯一 producer（L0C2UB copy）
+    // 的 toOffset，并将 copy 模式改为 INSERT
+    Status FoldL0C2UBCopyOffset(Operation* op);
     std::vector<OpImmediate> SumOffsetForCopyIn(const std::vector<OpImmediate> offset1,
                                                 const std::vector<OpImmediate> offset2);
     Status UpdateCopyInAttr(Operation* copyInOp);

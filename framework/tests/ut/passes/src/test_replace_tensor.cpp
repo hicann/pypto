@@ -691,6 +691,197 @@ TEST_F(ReplaceTensorTest, TestShmemWaitUntilWithDiffAssembleOut)
     EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
 }
 
+// 场景：L0C2UB copy 携带非零 fromOffset，下游 assemble 又携带 toOffset，
+// 源与目的同时携带偏移无法折叠，pass 应报错返回 FAILED
+TEST_F(ReplaceTensorTest, FoldL0C2UBCopyOffsetSrcDstConflictFail)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "FoldL0C2UBOffsetConflict",
+                                                      "FoldL0C2UBOffsetConflict", nullptr);
+    ASSERT_TRUE(currFunctionPtr != nullptr);
+    const std::vector<int64_t> l0cShape = {64, 128};
+    const std::vector<int64_t> bigShape = {128, 128};
+    const std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    const std::vector<int64_t> srcOffset = {kNumZero, 32};
+    const std::vector<int64_t> dstOffset = {kNumZero, 64};
+
+    auto l0a = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    auto l0b = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    auto l0cRaw = std::make_shared<RawTensor>(DT_FP32, l0cShape);
+    auto l0c = npu::tile_fwk::IRBuilder().CreateTensorVar(l0cRaw, offset0, l0cShape,
+                                                          CreateTestConstIntVector(l0cShape));
+    l0c->SetMemoryTypeBoth(MemoryType::MEM_L0C);
+    auto ub = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    ub->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    auto ubBigRaw = std::make_shared<RawTensor>(DT_FP32, bigShape);
+    auto ubBig = npu::tile_fwk::IRBuilder().CreateTensorVar(ubBigRaw, offset0, bigShape,
+                                                            CreateTestConstIntVector(bigShape));
+    ubBig->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    auto mulIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, bigShape, CreateTestConstIntVector(bigShape));
+    auto mulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, bigShape, CreateTestConstIntVector(bigShape));
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {l0a, l0b}, {l0c});
+    auto& copyOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_L0C_COPY_UB, {l0c}, {ub});
+    auto& assOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ub}, {ubBig});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_MUL, {ubBig, mulIn}, {mulOut});
+
+    // copy 携带非零 fromOffset [0,32]（其余属性与 GenerateMoveOp 产物对齐）
+    auto copyAttr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(srcOffset), MemoryType::MEM_UB, OpImmediate::Specified(l0cShape),
+        OpImmediate::Specified(l0cShape), OpImmediate::Specified(CreateTestConstIntVector(l0cShape)));
+    copyAttr->SetToOffset(OpImmediate::Specified(offset0));
+    copyOp.SetOpAttribute(copyAttr);
+    copyOp.SetAttribute(OpAttributeKey::localCopyLocalMode, static_cast<int64_t>(Matrix::CopyMode::EXTRACT));
+    // assemble 携带非零 toOffset [0,64]
+    assOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, dstOffset));
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), FAILED);
+}
+
+// 场景：两个 matmul 结果经 L0C_COPY_UB(EXTRACT) 搬到 UB，各自 ASSEMBLE 到同一个大 tensor 供 MUL 使用。
+// ASSEMBLE toOffset 非零([0,64])且 copy fromOffset 全零 → 折叠为 INSERT 并携带 toOffset；
+// ASSEMBLE toOffset 全零([0,0]) → 维持 EXTRACT 不动作（参考 chunk_kda tensor 520 计算路径）
+TEST_F(ReplaceTensorTest, FoldL0C2UBCopyOffsetForDualAssemble)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "FoldL0C2UBCopyOffset",
+                                                      "FoldL0C2UBCopyOffset", nullptr);
+    ASSERT_TRUE(currFunctionPtr != nullptr);
+    const std::vector<int64_t> l0cShape = {64, 128};
+    const std::vector<int64_t> bigShape = {128, 128};
+    const std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    const std::vector<int64_t> offset1 = {kNumZero, 64};
+
+    // l0a/l0b 输入与两路 matmul 的 L0C 输出
+    auto l0a1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    auto l0b1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    auto l0a2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    auto l0b2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    auto l0cRaw1 = std::make_shared<RawTensor>(DT_FP32, l0cShape);
+    auto l0cRaw2 = std::make_shared<RawTensor>(DT_FP32, l0cShape);
+    auto l0c1 = npu::tile_fwk::IRBuilder().CreateTensorVar(l0cRaw1, offset0, l0cShape,
+                                                           CreateTestConstIntVector(l0cShape));
+    auto l0c2 = npu::tile_fwk::IRBuilder().CreateTensorVar(l0cRaw2, offset0, l0cShape,
+                                                           CreateTestConstIntVector(l0cShape));
+    l0c1->SetMemoryTypeBoth(MemoryType::MEM_L0C);
+    l0c2->SetMemoryTypeBoth(MemoryType::MEM_L0C);
+    // L0C2UB copy 输出的 UB 小 tensor
+    auto ub1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    auto ub2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    ub1->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    ub2->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    // assemble 汇聚的大 UB tensor 与 MUL 侧
+    auto ubBigRaw = std::make_shared<RawTensor>(DT_FP32, bigShape);
+    auto ubBig = npu::tile_fwk::IRBuilder().CreateTensorVar(ubBigRaw, offset0, bigShape,
+                                                            CreateTestConstIntVector(bigShape));
+    ubBig->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    auto mulIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, bigShape, CreateTestConstIntVector(bigShape));
+    auto mulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, bigShape, CreateTestConstIntVector(bigShape));
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {l0a1, l0b1}, {l0c1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {l0a2, l0b2}, {l0c2});
+    auto& copyOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_L0C_COPY_UB, {l0c1}, {ub1});
+    auto& copyOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_L0C_COPY_UB, {l0c2}, {ub2});
+    auto& assOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ub1}, {ubBig});
+    auto& assOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ub2}, {ubBig});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_MUL, {ubBig, mulIn}, {mulOut});
+
+    // copy 属性对齐 GenerateMoveOp::SetL0C2UBCopyAttr 产物：EXTRACT + 零 toOffset
+    auto makeCopyAttr = [&l0cShape, &offset0](Operation& op) {
+        auto attr = std::make_shared<CopyOpAttribute>(
+            OpImmediate::Specified(offset0), MemoryType::MEM_UB, OpImmediate::Specified(l0cShape),
+            OpImmediate::Specified(l0cShape), OpImmediate::Specified(CreateTestConstIntVector(l0cShape)));
+        attr->SetToOffset(OpImmediate::Specified(offset0));
+        op.SetOpAttribute(attr);
+        op.SetAttr(OpAttributeKey::localCopyLocalMode, static_cast<int64_t>(Matrix::CopyMode::EXTRACT));
+    };
+    makeCopyAttr(copyOp1);
+    makeCopyAttr(copyOp2);
+    // assemble1 写大 tensor 偏移 [0,64]，assemble2 写 [0,0]
+    assOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset1));
+    assOp2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset0));
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // toOffset 非零分支：折叠为 INSERT，copy toOffset 携带 assemble 偏移
+    EXPECT_EQ(copyOp1.GetIntAttribute(OpAttributeKey::localCopyLocalMode),
+              static_cast<int64_t>(Matrix::CopyMode::INSERT));
+    auto foldedAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOp1.GetOpAttribute());
+    ASSERT_NE(foldedAttr, nullptr);
+    const auto& foldedToOffset = foldedAttr->GetToOffset();
+    ASSERT_EQ(foldedToOffset.size(), offset1.size());
+    for (size_t i = 0; i < offset1.size(); i++) {
+        EXPECT_EQ(foldedToOffset[i].GetSpecifiedValue().Raw()->GetImmediateValue(), offset1[i]);
+    }
+    // toOffset 全零分支：维持 EXTRACT，toOffset 不变
+    EXPECT_EQ(copyOp2.GetIntAttribute(OpAttributeKey::localCopyLocalMode),
+              static_cast<int64_t>(Matrix::CopyMode::EXTRACT));
+    auto unfoldAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOp2.GetOpAttribute());
+    ASSERT_NE(unfoldAttr, nullptr);
+    const auto& unfoldToOffset = unfoldAttr->GetToOffset();
+    for (size_t i = 0; i < offset0.size(); i++) {
+        EXPECT_EQ(unfoldToOffset[i].GetSpecifiedValue().Raw()->GetImmediateValue(), offset0[i]);
+    }
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
+// 场景：copy 输出同时被 ASSEMBLE 和普通算子（MUL）消费，consumers 非唯一触发跳过守卫
+TEST_F(ReplaceTensorTest, FoldL0C2UBCopyOffsetSkipForMultiConsumer)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "FoldL0C2UBSkipMultiCons",
+                                                      "FoldL0C2UBSkipMultiCons", nullptr);
+    ASSERT_TRUE(currFunctionPtr != nullptr);
+    const std::vector<int64_t> l0cShape = {64, 128};
+    const std::vector<int64_t> bigShape = {128, 128};
+    const std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+
+    auto l0a = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    auto l0b = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    auto l0cRaw = std::make_shared<RawTensor>(DT_FP32, l0cShape);
+    auto l0c = npu::tile_fwk::IRBuilder().CreateTensorVar(l0cRaw, offset0, l0cShape,
+                                                          CreateTestConstIntVector(l0cShape));
+    l0c->SetMemoryTypeBoth(MemoryType::MEM_L0C);
+    auto ub = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    ub->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    auto ubBigRaw = std::make_shared<RawTensor>(DT_FP32, bigShape);
+    auto ubBig = npu::tile_fwk::IRBuilder().CreateTensorVar(ubBigRaw, offset0, bigShape,
+                                                            CreateTestConstIntVector(bigShape));
+    ubBig->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    auto mulIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, bigShape, CreateTestConstIntVector(bigShape));
+    auto mulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, bigShape, CreateTestConstIntVector(bigShape));
+    auto mulIn2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+    auto mulOut2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, l0cShape, CreateTestConstIntVector(l0cShape));
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {l0a, l0b}, {l0c});
+    auto& copyOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_L0C_COPY_UB, {l0c}, {ub});
+    auto& assOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ub}, {ubBig});
+    // copy 输出同时被普通算子直接消费：fold 改写 toOffset 会使其读错位
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_MUL, {ub, mulIn2}, {mulOut2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_MUL, {ubBig, mulIn}, {mulOut});
+
+    auto copyAttr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(offset0), MemoryType::MEM_UB, OpImmediate::Specified(l0cShape),
+        OpImmediate::Specified(l0cShape), OpImmediate::Specified(CreateTestConstIntVector(l0cShape)));
+    copyAttr->SetToOffset(OpImmediate::Specified(offset0));
+    copyOp.SetOpAttribute(copyAttr);
+    copyOp.SetAttribute(OpAttributeKey::localCopyLocalMode, static_cast<int64_t>(Matrix::CopyMode::EXTRACT));
+    assOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset0));
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // consumers 非唯一跳过折叠：copy 维持 EXTRACT，toOffset 保持全零不被覆盖
+    EXPECT_EQ(copyOp.GetIntAttribute(OpAttributeKey::localCopyLocalMode),
+              static_cast<int64_t>(Matrix::CopyMode::EXTRACT));
+    auto skipAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOp.GetOpAttribute());
+    ASSERT_NE(skipAttr, nullptr);
+    const auto& skipToOffset = skipAttr->GetToOffset();
+    for (size_t i = 0; i < offset0.size(); i++) {
+        EXPECT_EQ(skipToOffset[i].GetSpecifiedValue().Raw()->GetImmediateValue(), offset0[i]);
+    }
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
 /*
  * A5(DAV_3510)场景下A_MULACC_B支持最多5个输入
  */

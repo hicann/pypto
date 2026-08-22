@@ -576,6 +576,9 @@ Status ReplaceTensor::BackwardAssemble(Operation* op, LogicalTensorPtr& rootTens
         return FAILED;
     }
     op->GetIOperands()[0]->tensor = rootTensor->tensor;
+    if (FoldL0C2UBCopyOffset(op) == FAILED) {
+        return FAILED;
+    }
     backwardOps.insert(op->GetOpMagic());
     if (op->GetIOperands()[0]->GetConsumers().size() > 1) {
         forRoots.push(op->GetIOperands()[0]);
@@ -829,7 +832,12 @@ void ReplaceTensor::ProcessHubAssembleOp(Function& function, Operation& hubOp, O
         return;
     }
     hubInput->tensor = assembleOutput->tensor;
-    auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute*>(assembleOp.GetOpAttribute().get());
+    auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(assembleOp.GetOpAttribute());
+    if (assembleOpAttribute == nullptr) {
+        APASS_LOG_WARN_F(Elements::Operation, "HUB assemble op %d attribute is nullptr, skip HUB memory reuse.",
+                         assembleOp.GetOpMagic());
+        return;
+    }
     hubInput->UpdateOffset(assembleOpAttribute->GetToTensorOffset());
     hubOutput->tensor = assembleOutput->tensor;
     hubOutput->UpdateOffset(assembleOpAttribute->GetToTensorOffset());
@@ -854,7 +862,7 @@ Status ReplaceTensor::ProcessHubOp(Function& function)
             if (!OpcodeManager::Inst().IsCopyOut(producerOp->GetOpcode())) {
                 continue;
             }
-            auto copyAttr = dynamic_cast<CopyOpAttribute*>(producerOp->GetOpAttribute().get());
+            auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(producerOp->GetOpAttribute());
             if (copyAttr == nullptr) {
                 APASS_LOG_INFO_F(Elements::Operation, "Copy Op %d Attribute is nullptr.", producerOp->GetOpMagic());
                 continue;
@@ -1196,7 +1204,7 @@ Status ReplaceTensor::AdjustOffsetAndRawShape(LogicalTensorPtr& fromView, Logica
 
 Status ReplaceTensor::ForUpdateView(Operation* op)
 {
-    auto viewAttr = dynamic_cast<ViewOpAttribute*>(op->GetOpAttribute().get());
+    auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op->GetOpAttribute());
     auto viewIn = op->GetIOperands()[0];
     auto viewOut = op->GetOOperands()[0];
     std::vector<int64_t> inputOffset = viewIn->GetOffset();
@@ -1261,7 +1269,7 @@ Status ReplaceTensor::BackUpdateAssemble(Operation* op)
 {
     auto assembleIn = op->GetIOperands()[0];
     auto assembleOut = op->GetOOperands()[0];
-    auto assAttr = dynamic_cast<AssembleOpAttribute*>(op->GetOpAttribute().get());
+    auto assAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op->GetOpAttribute());
     if (assAttr == nullptr) {
         APASS_LOG_ERROR_F(Elements::Operation,
                           "ReplaceTensor::BackUpdateAssemble: Assemble op %d Attribute is nullptr.", op->GetOpMagic());
@@ -1284,6 +1292,64 @@ Status ReplaceTensor::BackUpdateAssemble(Operation* op)
     assAttr->SetToOffset(assOffset, assAttr->GetToDynOffset());
     TensorOffset newOffset(assOffset, assDynOffset);
     assembleIn->UpdateOffset(newOffset);
+    return SUCCESS;
+}
+
+// L0C2UB 直写折叠：BackUpdateAssemble 已把 assemble 目的偏移刷新到输入 tensor 上，
+// 若该输入唯一 producer 是 L0C2UB copy：目的偏移携带非零值且 copy 源偏移可证明为立即零时，
+// 把目的偏移落入 copy 的 toOffset 并改为 INSERT；源与目的同时携带偏移时报错
+Status ReplaceTensor::FoldL0C2UBCopyOffset(Operation* op)
+{
+    auto assembleIn = op->GetIOperands()[0];
+    const auto& producers = assembleIn->GetProducers();
+    if (producers.size() != 1) {
+        return SUCCESS;
+    }
+    auto copyOp = *producers.begin();
+    if (copyOp->GetOpcode() != Opcode::OP_L0C_COPY_UB) {
+        return SUCCESS;
+    }
+    // copy 输出被多个 consumer 使用时不折叠，避免不同 assemble 的 toOffset 互相覆盖
+    if (assembleIn->GetConsumers().size() != 1) {
+        return SUCCESS;
+    }
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOp->GetOpAttribute());
+    if (copyAttr == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ReplaceTensor::FoldL0C2UBCopyOffset: copy op %d attr is nullptr.",
+                          copyOp->GetOpMagic());
+        return FAILED;
+    }
+    bool dstHasOffset = false;
+    const auto& statOffset = assembleIn->GetOffset();
+    const auto& dynOffset = assembleIn->GetDynOffset();
+    if (!dynOffset.empty()) {
+        dstHasOffset = std::any_of(dynOffset.begin(), dynOffset.end(), [](const SymbolicScalar& scalar) {
+            return !scalar.ConcreteValid() || scalar.Concrete() != 0;
+        });
+    } else {
+        dstHasOffset = std::any_of(statOffset.begin(), statOffset.end(), [](int64_t value) { return value != 0; });
+    }
+    if (!dstHasOffset) {
+        return SUCCESS;
+    }
+    // 源偏移携带判定：非立即零（参数、符号或非零立即数）均视为携带
+    bool srcHasOffset = false;
+    for (const auto& offset : copyAttr->GetFromOffset()) {
+        if (!offset.IsSpecified() || !offset.GetSpecifiedValue().IsImmediate() ||
+            offset.GetSpecifiedValue().Raw()->GetImmediateValue() != 0) {
+            srcHasOffset = true;
+            break;
+        }
+    }
+    if (srcHasOffset) {
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "ReplaceTensor::FoldL0C2UBCopyOffset: copy op %d carries non-zero fromOffset while its "
+                          "assemble consumer op %d carries toOffset, cannot fold offsets.",
+                          copyOp->GetOpMagic(), op->GetOpMagic());
+        return FAILED;
+    }
+    copyAttr->SetToOffset(OpImmediate::Specified(TensorOffset(assembleIn->GetOffset(), assembleIn->GetDynOffset())));
+    copyOp->SetAttribute(OpAttributeKey::localCopyLocalMode, static_cast<int64_t>(Matrix::CopyMode::INSERT));
     return SUCCESS;
 }
 
