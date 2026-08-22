@@ -34,9 +34,9 @@ pypto_pro.language.axpy(out, src, alpha)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 数据类型：b16、b32<br>shape须与`src`一致<br>该Tile在运算前须已载入有效数据（作为累加器初值），运算后被覆盖为结果 |
-| `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `alpha` | 输入 | 整型或浮点型常量，或运行时整型或浮点型标量表达式<br>类型须与`src`元素类型兼容 |
+| `out` | 输入/输出 | Vec Tile，dtype支持FP16或FP32；shape和`valid_shape`须与`src`一致。通常dtype与`src`相同；另支持`src`为FP16、`out`为FP32的拓宽计算。运算前须已载入累加器初值，运算后被结果覆盖 |
+| `src` | 输入 | Vec Tile，dtype支持FP16或FP32；shape和`valid_shape`须与`out`一致 |
+| `alpha` | 输入 | 编译期常量或运行时浮点标量表达式；标量dtype必须与`src`元素dtype完全一致 |
 
 ## 流水类型
 

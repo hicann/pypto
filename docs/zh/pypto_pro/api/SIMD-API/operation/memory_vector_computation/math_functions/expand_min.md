@@ -36,7 +36,7 @@ pypto_pro.language.expand_min(out, src, scalar, *, dim=0)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `out` | 输出 | 数据类型：与`src`一致<br>shape：与`src`一致 |
-| `src` | 输入 | 数据类型：b16、b32<br>shape：任意二维 |
+| `src` | 输入 | 数据类型：8/16/32位整型、FP16、BF16和FP32<br>shape：二维Vec Tile |
 | `scalar` | 输入 | 数据类型：与`src`一致<br>`dim=0`时shape为`[行数, 1]`；`dim=1`时shape为`[1, 列数]` |
 | `dim` | 输入 | `0`：广播`[行数, 1]` tile；`1`：广播`[1, 列数]` tile。默认值为`0` |
 

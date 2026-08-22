@@ -64,7 +64,7 @@ pypto_pro.language.fillpad(out, src, *, mode=pypto_pro.language.FillPadMode.NORM
 
 ## 补充说明
 
-`fillpad`当前仅支持`target_memory=pypto_pro.language.MemorySpace.Vec`的Tile。
+`fillpad`支持Vec和Mat Tile，源、目标必须位于相同内存空间。Mat上的`NORMAL`模式要求源、目标具有完全相同的Tile类型（包括shape、valid_shape和pad）；Mat上的异构`EXPAND`跨层接口尚未定型，不应使用。`INPLACE`还要求源、目标共享同一内存地址。
 
 ## 流水类型
 

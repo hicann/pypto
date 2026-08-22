@@ -16,5 +16,7 @@ neg
 relu
 sqrt
 sub
+shl
+shr
 xor
 ```

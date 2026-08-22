@@ -34,7 +34,7 @@ pypto_pro.language.add_relu(out, lhs, rhs)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`lhs`、`rhs`一致<br>支持与`lhs`或`rhs`为同一tile，实现in-place |
+| `out` | 输出 | 数据类型：FP16、FP32或INT32；该接口依次发射`TADD`与`TRELU`，类型必须同时满足两者约束<br>shape须与`lhs`、`rhs`一致；支持与`lhs`或`rhs`为同一tile，实现in-place加法+ReLU；实现会将`lhs`用作中间结果，因此`lhs`会被覆盖 |
 | `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 | `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 

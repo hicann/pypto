@@ -31,18 +31,18 @@ pypto_pro.language.select(out, mask, lhs, rhs, tmp)
 | `out` | 输出 | 选择结果tile |
 | `mask` | 输入 | 掩码tile（由`eq`/`ne`/`lt`/`le`/`gt`/`ge`产生的bit-packed UINT8） |
 | `lhs` | 输入 | mask为真时取的源tile |
-| `rhs` | 输入 | mask为假时取的源tile |
-| `tmp` | 输入 | 临时tile（中间计算用） |
+| `rhs` | 输入 | mask为假时取的源tile或标量 |
+| `tmp` | 输入 | 兼容性临时tile |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`lhs`、`rhs`一致 |
+| `out` | 输出 | tile-tile模式支持8/16/32/64位整型、FP16、BF16和FP32；tile-scalar模式支持8/16/32/64位整型、FP16和FP32<br>shape须与输入数据Tile一致 |
 | `mask` | 输入 | 数据类型：UINT8（bit-packed掩码）<br>shape：与`lhs`一致<br>须由`pypto_pro.language.eq/ne/lt/le/gt/ge`产生，不能手动构造 |
 | `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `tmp` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致<br>硬件中间计算用，不可与`out`/`lhs`/`rhs`重叠 |
+| `rhs` | 输入 | Tile：数据类型和shape与`out`一致；标量：须与`out`元素类型兼容 |
+| `tmp` | 输入 | API必传的Vec Tile兼容性参数；当前实现不读写该参数，不要求与`out`同类型或同shape |
 
 ## 流水类型
 
@@ -50,7 +50,7 @@ V（向量计算流水）。
 
 ## 调用示例
 
-下面是一个完整kernel：用`pypto_pro.language.gt`生成bit-packed谓词后，`pypto_pro.language.select`按谓词选择两个FP32 tile中的一个写回GM。掩码为真取`lhs`，为假取`rhs`。纯vector kernel使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成流水同步；`gt`与`select`之间仍使用`bar_v()`完成AIV subcore间同步。
+下面是一个完整kernel：用`pypto_pro.language.gt`生成bit-packed谓词后，`pypto_pro.language.select`按谓词选择两个FP32 tile中的一个写回GM。掩码为真取`lhs`，为假取`rhs`。纯vector kernel使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成Tile访问间的同步。
 
 ```python
 import pypto_pro.language as pl
@@ -86,7 +86,6 @@ def scalar_gt_select_kernel(
         pl.load(mask_fp16, mask_in, [0, 0])
         # mask_fp16 > 0 -> bit-packed 谓词 mask_vec（cmp_mode=4 为 gt）
         pl.gt(mask_vec, mask_fp16, 0.0)
-        pl.system.bar_v()
         # 谓词为真取 lhs(=a)，否则取 rhs(=b)
         pl.select(tile_out, mask_vec, tile_a, tile_b, tmp_vec)
         pl.store(out, tile_out, [0, 0])

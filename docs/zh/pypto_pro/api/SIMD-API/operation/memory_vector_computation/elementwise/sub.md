@@ -37,7 +37,7 @@ pypto_pro.language.sub(out, lhs, rhs)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`lhs`一致<br>支持与`lhs`或`rhs`为同一tile，实现in-place减法 |
+| `out` | 输出 | 支持8/16/32/64位整型、FP16、BF16和FP32<br>shape须与`lhs`一致；支持与`lhs`或`rhs`为同一tile，实现in-place减法 |
 | `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 | `rhs` | 输入 | tile-tile模式：数据类型与`out`一致，shape与`out`一致<br>tile-scalar模式：scalar值（int/float/Scalar） |
 

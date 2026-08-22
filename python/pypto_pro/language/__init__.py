@@ -99,8 +99,10 @@ __all__ = [
     "div",
     "maximum",
     "minimum",
-    # Bitwise element-wise (unified: tile-tile + tile-scalar)
+    # Bitwise element-wise
     "and_",
+    "shl",
+    "shr",
     "xor",
     "expands",
     # Unary element-wise
@@ -136,6 +138,9 @@ __all__ = [
     "fused_mul_add_relu",
     "axpy",
     "partadd",
+    "partmax",
+    "partmin",
+    "partmul",
     # Matrix
     "matmul",
     "matmul_acc",
@@ -215,7 +220,8 @@ __all__ = [
     "LoadDist",
     "StoreDist",
     "DataCopyMode",
-    "MemBarMode", "IndexOrder", "fillpad_expand", "fillpad_inplace",
+    "MemBarMode",
+    "IndexOrder",
 ]
 
 from types import SimpleNamespace
@@ -333,6 +339,9 @@ from ._api import (
     ne,
     neg,
     partadd,
+    partmax,
+    partmin,
+    partmul,
     printf,
     pto_assert,
     quant,
@@ -351,6 +360,8 @@ from ._api import (
     set_validshape,
     set_vec_mask,
     setval,
+    shl,
+    shr,
     sort32,
     sqrt,
     ssbuf_load,

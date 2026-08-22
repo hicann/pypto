@@ -228,7 +228,6 @@ def _function_type_from_ast_value(value: ast.AST) -> ir.FunctionType:
     if not isinstance(value, ast.Attribute):
         return ir.FunctionType.Opaque
     mapping = {
-        "Orchestration": ir.FunctionType.Orchestration,
         "InCore": ir.FunctionType.InCore,
         "Opaque": ir.FunctionType.Opaque,
     }
@@ -471,7 +470,7 @@ def function(
 
     Args:
         fn: Python function decorated with @pl.function
-        type: Function type (Opaque, Orchestration, or InCore)
+        type: Function type (Opaque, InCore, or Helper)
         strict_ssa: If True, enforce SSA (single assignment per variable).
                    If False (default), allow variable reassignment (non-SSA mode).
 
@@ -483,9 +482,6 @@ def function(
         ... def my_func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
         ...     result = pl.tensor.create_tensor([64, 128], dtype=pl.DT_FP32)
         ...     return result
-        >>> @pl.function(type=pl.FunctionType.Orchestration)
-        ... def orchestrator():
-        ...     pass
     """
     # Capture the caller's scope for variable resolution in type annotations
     caller_frame = inspect.currentframe().f_back

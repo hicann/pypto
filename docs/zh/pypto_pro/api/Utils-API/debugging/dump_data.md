@@ -19,7 +19,11 @@
 - 输入为`Tensor`（GM全局内存张量）时，打印GM上的Tensor数据
 - 输入为`Tile`（通过`make_tile`/`make_tile_group`分配）时，打印Tile数据
 
-Tile通过[`pypto_pro.language.make_tile`](../../SIMD-API/operation/resource_management/make_tile.md)或[`pypto_pro.language.make_tile_group`](../../SIMD-API/operation/resource_management/make_tile_group.md)创建，可使用UB/Vec、L0A/Left、L0B/Right、L0C/Acc、L1/Mat等内存空间。
+Tile通过[`pypto_pro.language.make_tile`](../../SIMD-API/operation/resource_management/make_tile.md)或[`pypto_pro.language.make_tile_group`](../../SIMD-API/operation/resource_management/make_tile_group.md)创建。不同内存空间的Tile打印能力不同：
+
+- `Vec`(UB) Tile：由后端直接通过`TPRINT`打印，无需`workspace`
+- `Acc`(L0C) Tile：须通过`workspace`参数中转打印（先将Tile数据写回GM，再打印）
+- `Mat`(L1)/`Left`(L0A)/`Right`(L0B) Tile：无法直接打印
 
 打印结果直接输出到终端。
 
@@ -36,7 +40,7 @@ pypto_pro.language.dump_data(data, offsets=None, shapes=None, *, workspace=None,
 | `data` | 输入 | 要打印的数据，可以是Tensor或Tile |
 | `offsets` | 输入 | 可选，窗口起始偏移（各维） |
 | `shapes` | 输入 | 可选，窗口大小（各维） |
-| `workspace` | 输入 | 可选，GM上的临时Tensor，仅Acc Tile需要 |
+| `workspace` | 输入 | 可选，GM上的临时Tensor，仅用于Acc Tile的中转打印 |
 | `loc` | 输入 | 可选，是否在输出前打印源文件/行号 |
 
 ## 参数范围
@@ -44,9 +48,9 @@ pypto_pro.language.dump_data(data, offsets=None, shapes=None, *, workspace=None,
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `data` | 输入 | 必须是Tensor（TensorType）或Tile（TileType），其他类型报`TypeError` |
-| `offsets` | 输入 | 由整型常量或运行时整型标量表达式组成的列表，长度须等于数据的维度数<br>须与`shapes`同时提供或同时为`None`<br>“动态”指编译时无法确定的值，包括：循环变量（`pl.range`的迭代变量）、`pl.get_block_idx()`返回值、Kernel运行时标量参数、动态`tensor.shape[index]`返回值等。静态值则是编译时常量如`[8, 0]` |
-| `shapes` | 输入 | 由整型常量或运行时整型标量表达式组成的列表，长度须等于数据的维度数<br>须与`offsets`同时提供或同时为`None`<br>静态值须为正整数<br>Tensor窗口模式下最内维stride须为静态1 |
-| `workspace` | 输入 | 仅当`data`为Tile时有效；若`data`为Tensor时传入`workspace`会报`ValueError`<br>必须是`TensorType`，可以是核函数参数中的`pl.Tensor`，也可以通过`pl.make_tensor`从`pl.Ptr`构造，非TensorType输入报`TypeError`<br>dtype须与Tile的dtype一致<br>全量dump时shape须 ≥ Tile shape；窗口dump时shape须 ≥ `shapes`指定的窗口大小<br>仅Acc（L0C）Tile需要此参数；Vec / Left / Right Tile不需要 |
+| `offsets` | 输入 | 由整型常量或运行时整型标量表达式组成的序列，长度须等于数据的维数；须与`shapes`同时提供或同时为`None`。Tile窗口当前仅支持二维Tile |
+| `shapes` | 输入 | 由整型常量或运行时整型标量表达式组成的序列，长度须等于数据的维数；须与`offsets`同时提供或同时为`None`。其中编译期常量必须大于0；Tensor窗口模式还要求最内维stride为编译期常量1。Tile窗口要求二维且Tile物理shape为编译期常量 |
+| `workspace` | 输入 | 仅当`data`为Acc Tile时有效；Tensor传入该参数会报`ValueError`，其他内存空间的Tile会在IR校验时报错。必须是与Tile dtype相同的GM `TensorType`。后端会先将完整Acc Tile写入workspace，即使只打印窗口，workspace也必须至少容纳完整物理Tile；当前仅支持二维、静态物理shape的Acc Tile |
 | `loc` | 输入 | `True`或`False`（默认） |
 
 当`offsets`和`shapes`均为`None`（默认）时，打印整个数据的全部数据。
@@ -59,8 +63,8 @@ Acc（L0C）Tile无法像Vec Tile那样直接通过`TPRINT`打印。`dump_data`�
 
 - `workspace`必须是`TensorType`，可以是核函数参数中的`pl.Tensor`，也可以通过`pl.make_tensor`从`pl.Ptr`构造，不能是Tile
 - `workspace`的dtype必须与待dump的Tile dtype一致
-- 全量dump（不提供`offsets`/`shapes`）时，`workspace`的shape须 ≥ Tile shape
-- 窗口dump（提供`offsets`/`shapes`）时，`workspace`的shape须 ≥ 窗口`shapes`
+- 无论全量dump还是窗口dump，后端都会先将完整Acc Tile写入`workspace`，因此其容量须至少覆盖完整物理Tile
+- Acc Tile必须为二维，且物理shape必须是编译期常量
 
 ## 流水类型
 
@@ -108,7 +112,7 @@ pl.dump_data(out, offsets=[vidx * 4], shapes=[4])
 
 ### Tile Vec输入
 
-Vec / Left / Right Tile可直接打印，无需`workspace`。
+`Vec`(UB) Tile可直接打印，无需`workspace`。`Mat`(L1)/`Left`(L0A)/`Right`(L0B) Tile无法直接打印。
 
 ```python
 import pypto_pro.language as pl

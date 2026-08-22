@@ -57,14 +57,12 @@ def test_multiple_system_ops_print_style():
         @pl.function
         def main(self, x: pl.Tensor[[64], pl.DT_FP32]) -> pl.Tensor[[64], pl.DT_FP32]:
             pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-            pl.system.bar_v()
             pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
             pl.system.bar_all()
             return x
 
     printed = pypto_pro.ir.python_print(Before)
     assert "ir.call @system.sync_src(" in printed
-    assert "ir.call @system.bar_v()" in printed
     assert "ir.call @system.sync_dst(" in printed
     assert "ir.call @system.bar_all()" in printed
 

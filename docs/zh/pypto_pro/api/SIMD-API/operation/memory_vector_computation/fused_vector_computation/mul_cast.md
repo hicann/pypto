@@ -37,7 +37,7 @@ pypto_pro.language.mul_cast(out, lhs, rhs, *, target_type, mode=pl.RoundMode.CAS
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `out` | 输出 | 数据类型：由`target_type`指定<br>shape须与`lhs`、`rhs`一致 |
-| `lhs` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：与`out`一致 |
+| `lhs` | 输入 | 乘法输入支持16/32/64位整型、FP16、BF16或FP32；实现会用`lhs`保存乘法中间结果，因此调用后其内容被覆盖<br>shape：与`out`一致 |
 | `rhs` | 输入 | 数据类型：与`lhs`一致<br>shape：与`out`一致 |
 | `target_type` | 输入 | 支持`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_FP32`等<br>可与输入类型相同（仅做乘法）或不同（融合类型转换） |
 | `mode` | 输入 | 舍入模式：`pl.RoundMode.CAST_NONE` / `pl.RoundMode.CAST_RINT` / `pl.RoundMode.CAST_ROUND` / `pl.RoundMode.CAST_FLOOR` / `pl.RoundMode.CAST_CEIL` / `pl.RoundMode.CAST_TRUNC` / `pl.RoundMode.CAST_ODD`<br>缩窄转换（如FP32→FP16）时生效，扩展转换时忽略 |

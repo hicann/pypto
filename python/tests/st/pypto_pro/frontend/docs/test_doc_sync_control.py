@@ -11,7 +11,7 @@
 
 Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/同步控制/
 
-Verifies pipeline sync, barriers (bar_all/bar_v/bar_m), global sync,
+Verifies pipeline sync, barriers (bar_all/bar_m), global sync,
 manual mutex, cross-core communication, and matmul layout transform.
 """
 
@@ -115,64 +115,8 @@ def test_bar_all():
     torch.testing.assert_close(out, x + x, rtol=1e-2, atol=1e-2)
     logging.info("bar_all result equal!")
 
-
-# ===========================================================================
-# bar_v —— vector 流水线 barrier
-#   gt 与 select 之间用 bar_v 同步（与 scalar_gt_select_kernel 范式一致）。
-# ===========================================================================
-@pl.jit()
-def bar_v_kernel(
-    a: pl.Tensor[[64, 128], pl.DT_FP32],
-    b: pl.Tensor[[64, 128], pl.DT_FP32],
-    mask_in: pl.Tensor[[64, 128], pl.DT_FP16],
-    out: pl.Tensor[[64, 128], pl.DT_FP32],
-):
-    tt32 = pl.TileType(shape=[64, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tt32, addr=0x0000, size=32768)
-    tile_b = pl.make_tile(tt32, addr=0x8000, size=32768)
-    tile_out = pl.make_tile(tt32, addr=0x10000, size=32768)
-    tmp_vec = pl.make_tile(tt32, addr=0x18000, size=32768)
-    mask_fp16 = pl.make_tile(
-        pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x20000, size=16384
-    )
-    mask_vec = pl.make_tile(
-        pl.TileType(shape=[64, 128], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec), addr=0x24000, size=8192
-    )
-    with pl.section_vector():
-        pl.load(tile_a, a, [0, 0])
-        pl.load(tile_b, b, [0, 0])
-        pl.load(mask_fp16, mask_in, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.gt(mask_vec, mask_fp16, 0.0)
-        pl.system.bar_v()
-        pl.select(tile_out, mask_vec, tile_a, tile_b, tmp_vec)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.store(out, tile_out, [0, 0])
-
-
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
-def test_bar_v():
-    device = ST_DEVICE
-    _require_a5(device)
-    torch.manual_seed(0)
-    a = torch.randn(64, 128, device=device, dtype=torch.float32)
-    b = torch.randn(64, 128, device=device, dtype=torch.float32)
-    mask_in = torch.randn(64, 128, device=device, dtype=torch.float16)
-    out = torch.zeros(64, 128, device=device, dtype=torch.float32)
-    bar_v_kernel(a, b, mask_in, out)
-    torch.npu.synchronize()
-    cond = mask_in.float() > 0
-    out_ref = torch.where(cond, a, b)
-    torch.testing.assert_close(out, out_ref, rtol=1e-2, atol=1e-2)
-    logging.info("bar_v result equal!")
-
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_sync_src_dst()
     test_bar_all()
-    test_bar_v()
     logging.info("\nAll sync-control examples passed!")

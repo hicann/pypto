@@ -1,4 +1,4 @@
-# pypto_pro.language.system.bar_v / pypto_pro.language.system.bar_m / pypto_pro.language.system.bar_mte1 / pypto_pro.language.system.bar_mte2 / pypto_pro.language.system.bar_mte3 / pypto_pro.language.system.bar_fix / pypto_pro.language.system.bar_all
+# pypto_pro.language.system.bar_m / pypto_pro.language.system.bar_mte1 / pypto_pro.language.system.bar_mte2 / pypto_pro.language.system.bar_mte3 / pypto_pro.language.system.bar_fix / pypto_pro.language.system.bar_all
 
 ## 产品支持情况
 
@@ -14,12 +14,11 @@
 
 ## 功能说明
 
-Barrier同步：对V、M、MTE1、MTE2、MTE3、FIX或全部流水线做屏障，等待前序操作完成。
+Barrier同步：对M、MTE1、MTE2、MTE3、FIX或全部流水线做屏障，等待前序操作完成。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.system.bar_v()
 pypto_pro.language.system.bar_m()
 pypto_pro.language.system.bar_mte1()
 pypto_pro.language.system.bar_mte2()
@@ -34,7 +33,6 @@ pypto_pro.language.system.bar_all()
 
 | API | 同步范围 | 调用位置 |
 |---|---|---|
-| `bar_v()` | 向量（V）流水线内barrier，等待前序所有向量操作完成 | Vector section |
 | `bar_m()` | 矩阵（M）流水线内barrier，等待前序所有矩阵操作完成 | Cube section |
 | `bar_mte1()` | MTE1流水线内barrier，等待前序所有MTE1操作完成 | Cube section |
 | `bar_mte2()` | MTE2流水线内barrier，等待前序所有MTE2操作完成 | Cube或Vector section |
@@ -120,40 +118,6 @@ def bar_m_kernel(
         pl.store(out, ac, [0, 0])
 ```
 
-### bar_v —— Vector流水线内barrier
+`bar_m`只约束Matmul流水内部的先后关系；跨流水依赖仍应使用对应的同步接口或`auto_mutex`。
 
-`gt`与`select`之间用`bar_v()`同步，确保掩码生成完成后再选择。
-
-```python
-import pypto_pro.language as pl
-
-
-@pl.jit()
-def bar_v_kernel(
-    a: pl.Tensor[[64, 128], pl.DT_FP32],
-    b: pl.Tensor[[64, 128], pl.DT_FP32],
-    mask_in: pl.Tensor[[64, 128], pl.DT_FP16],
-    out: pl.Tensor[[64, 128], pl.DT_FP32],
-):
-    tt32 = pl.TileType(shape=[64, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tt32, addr=0x0000, size=32768)
-    tile_b = pl.make_tile(tt32, addr=0x8000, size=32768)
-    tile_out = pl.make_tile(tt32, addr=0x10000, size=32768)
-    tmp_vec = pl.make_tile(tt32, addr=0x18000, size=32768)
-    mask_fp16 = pl.make_tile(pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-                             addr=0x20000, size=16384)
-    mask_vec = pl.make_tile(pl.TileType(shape=[64, 128], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec),
-                            addr=0x24000, size=8192)
-    with pl.section_vector():
-        pl.load(tile_a, a, [0, 0])
-        pl.load(tile_b, b, [0, 0])
-        pl.load(mask_fp16, mask_in, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.gt(mask_vec, mask_fp16, 0.0)
-        pl.system.bar_v()
-        pl.select(tile_out, mask_vec, tile_a, tile_b, tmp_vec)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.store(out, tile_out, [0, 0])
-```
+该接口不替代跨核同步。

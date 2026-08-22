@@ -21,16 +21,6 @@ def test_ir_builder_with_function_type():
     span = ir.Span.unknown()
     dtype = DataType.INT64
 
-    # Build function with Orchestration type
-    with ib.function("orchestrator", span=span, func_type=ir.FunctionType.Orchestration) as f:
-        x = f.param("x", ir.ScalarType(dtype), span=span)
-        f.return_type(ir.ScalarType(dtype))
-        ib.return_stmt(x, span=span)
-
-    func = f.get_result()
-    assert func.name == "orchestrator"
-    assert func.func_type == ir.FunctionType.Orchestration
-
     # Build function with InCore type
     with ib.function("aicore_kernel", span=span, func_type=ir.FunctionType.InCore) as f:
         y = f.param("y", ir.ScalarType(dtype), span=span)
@@ -59,16 +49,6 @@ def test_function_type_python_print():
     assert "@pl.function\n" in printed
     assert "type=" not in printed  # Opaque should not print type parameter
 
-    # Orchestration function should print type parameter
-    with ib.function("orchestrator", span=span, func_type=ir.FunctionType.Orchestration) as f:
-        x = f.param("x", ir.ScalarType(dtype), span=span)
-        f.return_type(ir.ScalarType(dtype))
-        ib.return_stmt(x, span=span)
-
-    func_orch = f.get_result()
-    printed_orch = ir.python_print(func_orch, "pl")
-    assert "@pl.function(type=pl.FunctionType.Orchestration)" in printed_orch
-
     # InCore function should print type parameter
     with ib.function("kernel", span=span, func_type=ir.FunctionType.InCore) as f:
         x = f.param("x", ir.ScalarType(dtype), span=span)
@@ -91,14 +71,6 @@ def test_function_type_decorator_parsing():
     assert default_func.name == "default_func"
     assert default_func.func_type == ir.FunctionType.Opaque
 
-    # Test Orchestration
-    @pl.function(type=pl.FunctionType.Orchestration)
-    def orchestrator(x: pl.Tensor[[4], pl.DT_INT64]) -> pl.Tensor[[4], pl.DT_INT64]:
-        return x
-
-    assert orchestrator.name == "orchestrator"
-    assert orchestrator.func_type == ir.FunctionType.Orchestration
-
     # Test InCore
     @pl.function(type=pl.FunctionType.InCore)
     def kernel(x: pl.Tensor[[4], pl.DT_INT64]) -> pl.Tensor[[4], pl.DT_INT64]:
@@ -113,5 +85,4 @@ def test_function_type_language_export():
 
     assert hasattr(pl, "FunctionType")
     assert pl.FunctionType.Opaque
-    assert pl.FunctionType.Orchestration
     assert pl.FunctionType.InCore

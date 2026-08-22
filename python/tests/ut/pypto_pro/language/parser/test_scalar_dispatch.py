@@ -22,7 +22,7 @@ from pypto.pypto_impl import ir
 def test_scalar_min():
     """Test pl.min(scalar, scalar) dispatches to ir.min_."""
 
-    @pl.function(type=pl.FunctionType.Orchestration)
+    @pl.function(type=pl.FunctionType.Opaque)
     def test_min(
         config: pl.Tensor[[2], pl.DT_INT64],
         out: pl.Tensor[[2, 16, 128], pl.DT_FP32],
@@ -41,7 +41,7 @@ def test_scalar_min():
 def test_scalar_max():
     """Test pl.max(scalar, scalar) dispatches to ir.max_."""
 
-    @pl.function(type=pl.FunctionType.Orchestration)
+    @pl.function(type=pl.FunctionType.Opaque)
     def test_max(
         config: pl.Tensor[[2], pl.DT_INT64],
         out: pl.Tensor[[2, 16, 128], pl.DT_FP32],
@@ -60,7 +60,7 @@ def test_scalar_max():
 def test_scalar_min_with_literal():
     """Test pl.min(scalar, int_literal) -the paged_attention use case."""
 
-    @pl.function(type=pl.FunctionType.Orchestration)
+    @pl.function(type=pl.FunctionType.Opaque)
     def test_min_lit(
         config: pl.Tensor[[2], pl.DT_INT64],
         out: pl.Tensor[[2, 16, 128], pl.DT_FP32],

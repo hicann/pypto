@@ -70,7 +70,6 @@ def gt_select_kernel(
         pl.load(tile_a, a, [0, 0])
         pl.load(tile_b, b, [0, 0])
         pl.gt(mask_vec, tile_a, tile_b)
-        pl.system.bar_v()
         pl.select(tile_out, mask_vec, tile_a, tile_b, tmp_vec)
         pl.store(out, tile_out, [0, 0])
 

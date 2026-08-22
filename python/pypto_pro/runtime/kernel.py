@@ -99,7 +99,7 @@ class KernelDef:
         func_def: AST FunctionDef node.
         closure_vars: Captured caller scope for name resolution.
         name: Optional program name.
-        func_type: IR function type (Opaque, Orchestration, InCore).
+        func_type: IR function type (Opaque, InCore, Helper).
         strict_ssa: Whether to enforce SSA.
         meta_data: Optional metadata.
         auto_mutex: Whether to enable automatic mutex lock/unlock insertion.
@@ -262,7 +262,7 @@ def kernel(
     Args:
         func: Python function to capture.
         name: Optional program name (defaults to function name).
-        func_type: Function type (Opaque, Orchestration, or InCore).
+        func_type: Function type (Opaque, InCore, or Helper).
         strict_ssa: If True, enforce SSA (single assignment per variable).
 
     Returns:

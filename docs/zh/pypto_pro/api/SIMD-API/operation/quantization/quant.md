@@ -38,7 +38,7 @@ pypto_pro.language.quant(out, src, scale, *, mode=pl.QuantMode.SYM, offset=None)
 |---|---|---|
 | `out` | 输出 | 数据类型：`pypto_pro.language.DT_INT8`（对称模式，范围[-128, 127]）或`pypto_pro.language.DT_UINT8`（非对称模式，范围[0, 255]）<br>shape须与`src`一致 |
 | `src` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：与`out`一致 |
-| `scale` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：per-row `[src行数, 1]` |
+| `scale` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>按行提供量化系数，典型shape为`[src行数, 1]` |
 | `mode` | 输入 | `pl.QuantMode.SYM`（对称，默认）或`pl.QuantMode.ASYM`（非对称）<br>非对称模式时`offset`必填 |
 | `offset` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：与`scale`一致<br>仅`pl.QuantMode.ASYM`模式需要，`pl.QuantMode.SYM`模式忽略 |
 

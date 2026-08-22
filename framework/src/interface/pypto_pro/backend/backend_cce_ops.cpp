@@ -1275,17 +1275,6 @@ REGISTER_BACKEND_OP(BackendCCE, "system.sync_dst")
         return MakeSyncCodegenCCE("wait_flag", op, codegen);
     });
 
-REGISTER_BACKEND_OP(BackendCCE, "system.bar_v")
-    .set_pipe(ir::PipeType::S)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
-        (void)op;
-        auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-        if (codegen.GetArch() == "a3") {
-            dynamic_cast<codegen::CCECodegen&>(codegen_base).Emit("pipe_barrier(PIPE_V);");
-        }
-        return "";
-    });
-
 REGISTER_BACKEND_OP(BackendCCE, "system.bar_m")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {

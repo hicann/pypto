@@ -41,7 +41,7 @@ def _assert_constant(expr, expected, dtype):
 
 
 def test_all_binary_and_comparison_operators_fold():
-    @pl.function(type=pl.FunctionType.Orchestration)
+    @pl.function(type=pl.FunctionType.Opaque)
     def folded_ops():
         add = 7 + 3
         sub = 7 - 3
@@ -82,7 +82,7 @@ def test_all_binary_and_comparison_operators_fold():
 
 
 def test_mixed_numeric_constants_fold_to_fp32():
-    @pl.function(type=pl.FunctionType.Orchestration)
+    @pl.function(type=pl.FunctionType.Opaque)
     def folded_numeric():
         float_add = 1.25 + 2.5
         mixed_add = pl.const(2, pl.DT_INT32) + 0.5
@@ -101,7 +101,7 @@ def test_mixed_numeric_constants_fold_to_fp32():
 
 
 def test_bool_numeric_and_unary_result_dtypes():
-    @pl.function(type=pl.FunctionType.Orchestration)
+    @pl.function(type=pl.FunctionType.Opaque)
     def folded_bool_numeric():
         add = True + True
         mixed_add = True + 0.5
@@ -142,7 +142,7 @@ def test_bool_numeric_and_unary_result_dtypes():
 
 
 def test_bool_ops_accept_bool_int_and_float_truthiness_but_return_bool():
-    @pl.function(type=pl.FunctionType.Orchestration)
+    @pl.function(type=pl.FunctionType.Opaque)
     def folded_truth():
         int_and = 2 and 0
         int_or = 0 or 3
@@ -161,7 +161,7 @@ def test_bool_ops_accept_bool_int_and_float_truthiness_but_return_bool():
 
 
 def test_pl_and_builtin_min_max_fold_with_numeric_promotion():
-    @pl.function(type=pl.FunctionType.Orchestration)
+    @pl.function(type=pl.FunctionType.Opaque)
     def folded_min_max():
         pl_min = pl.min(3, 2)
         pl_max = pl.max(1.5, 2)
@@ -176,7 +176,7 @@ def test_pl_and_builtin_min_max_fold_with_numeric_promotion():
 
 
 def test_unsafe_folds_keep_validated_ir_nodes():
-    @pl.function(type=pl.FunctionType.Orchestration)
+    @pl.function(type=pl.FunctionType.Opaque)
     def unsafe_constants():
         zero_div = 1 / 0
         zero_floordiv = 1 // 0
@@ -193,7 +193,7 @@ def test_unsafe_folds_keep_validated_ir_nodes():
 
 
 def test_nonconstant_operands_keep_runtime_ir():
-    @pl.function(type=pl.FunctionType.Orchestration)
+    @pl.function(type=pl.FunctionType.Opaque)
     def runtime_ops(value: pl.DT_INT32, flag: pl.DT_BOOL):
         add = value + 1
         minimum = pl.min(value, 2)
@@ -213,7 +213,7 @@ def test_nonconstant_operands_keep_runtime_ir():
 
 
 def test_unary_plus_is_identity_for_non_scalar_operand():
-    @pl.function(type=pl.FunctionType.Orchestration)
+    @pl.function(type=pl.FunctionType.Opaque)
     def identity_pos(value: pl.Tensor[[1], pl.DT_FP32]):
         result = +value
 
@@ -225,12 +225,12 @@ def test_unary_plus_is_identity_for_non_scalar_operand():
 def test_invalid_constant_operand_types_raise_from_ir_builders():
     with pytest.raises(pl.parser.ParserError, match="bit_not.*integer dtype"):
 
-        @pl.function(type=pl.FunctionType.Orchestration)
+        @pl.function(type=pl.FunctionType.Opaque)
         def invalid_invert():
             value = ~1.5
 
     with pytest.raises(pl.parser.ParserError, match="bit_and.*integer dtype"):
 
-        @pl.function(type=pl.FunctionType.Orchestration)
+        @pl.function(type=pl.FunctionType.Opaque)
         def invalid_bit_and():
             value = 1.5 & 1

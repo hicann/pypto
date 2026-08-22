@@ -222,26 +222,6 @@ TEST(BackendCceOpsTest, DebugTrap)
 // Barrier ops (tested via EvalStmt)
 // ============================================================================
 
-TEST(BackendCceOpsTest, BarVOnA3)
-{
-    auto call = std::make_shared<const ir::Call>("system.bar_v", std::vector<ir::ExprPtr>{}, ir::Span::Unknown());
-    auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
-
-    codegen::CCECodegen codegen(ir::SectionKind::Vector);
-    auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
-    EXPECT_NE(generated.find("pipe_barrier(PIPE_V);"), std::string::npos);
-}
-
-TEST(BackendCceOpsTest, BarVOnA5EmitsNothing)
-{
-    auto call = std::make_shared<const ir::Call>("system.bar_v", std::vector<ir::ExprPtr>{}, ir::Span::Unknown());
-    auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
-
-    codegen::CCECodegen codegen(ir::SectionKind::Vector);
-    auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
-    EXPECT_EQ(generated.find("pipe_barrier(PIPE_V);"), std::string::npos);
-}
-
 TEST(BackendCceOpsTest, BarM)
 {
     auto call = std::make_shared<const ir::Call>("system.bar_m", std::vector<ir::ExprPtr>{}, ir::Span::Unknown());

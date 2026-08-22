@@ -97,10 +97,8 @@ def gather_cmp_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
 
         pl.gather(indices_gt_tile, src_tile, k_value_tile, cdst_gt_tile, tmp_tile, cmp_mode=4, offset=0)
-        pl.system.bar_v()
 
         pl.gather(indices_eq_tile, src_tile, k_value_tile, cdst_eq_tile, tmp_tile, cmp_mode=0, offset=0)
-        pl.system.bar_v()
 
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)

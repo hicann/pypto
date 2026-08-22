@@ -97,7 +97,7 @@ public:
      * \brief Get the data pointer expression for a tensor variable
      *
      * Returns the C++ expression to access a tensor's raw data pointer.
-     * Orchestration codegen returns "arg_<name>_ptr" for external tensors or "<name>.data" for local tensors.
+     * For external tensors returns "arg_<name>_ptr" or "<name>.data" for local tensors.
      *
      * \param tensor_name Tensor variable name
      * \return C++ expression for the data pointer (e.g., "arg_x_ptr", "x.data")

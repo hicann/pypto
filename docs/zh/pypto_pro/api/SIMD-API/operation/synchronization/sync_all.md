@@ -26,7 +26,7 @@ pypto_pro.language.system.sync_all(workspaces=None, *, core_type=pl.SyncCoreType
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `workspaces` | 输入 | 仅soft模式需要的workspace列表 |
+| `workspaces` | 输入 | soft模式使用的workspace列表；hard模式不接受非空列表 |
 | `core_type` | 输入 | 同步涉及的核类型 |
 | `mode` | 输入 | 同步模式 |
 
@@ -34,9 +34,19 @@ pypto_pro.language.system.sync_all(workspaces=None, *, core_type=pl.SyncCoreType
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `workspaces` | 输入 | hard模式时传`None`（默认），无需workspace<br>soft模式时传workspace列表，可包含GM tensor、UB tile、L1 tile等<br>列表长度不限，每个元素须为合法的tensor或tile |
+| `workspaces` | 输入 | hard模式时传`None`（默认）或空列表。soft模式时必须传非空列表，列表中的元素按类型解释：GM `Tensor`为`gm_workspace`，Vec空间的`Tile`为`ub_workspace`，Mat空间的`Tile`为`l1_workspace`，整数常量或整数标量表达式为可选的`used_cores`（省略或取0表示使用全部核）。每种元素最多出现一次，其他类型或其他本地存储空间不支持。不同`core_type`要求的组合见下表。 |
 | `core_type` | 输入 | `pl.SyncCoreType.MIX`（默认，AIV + AIC全部核）/ `pl.SyncCoreType.AIV_ONLY`（仅AIV核）/ `pl.SyncCoreType.AIC_ONLY`（仅AIC核） |
 | `mode` | 输入 | `pl.SyncAllMode.HARD`（默认，用FFTS硬件信号，无需workspace）/ `pl.SyncAllMode.SOFT`（用GM轮询，需要workspace）<br>hard模式性能更优，推荐优先使用 |
+
+soft模式的workspace组合如下：
+
+| `core_type` | 必需workspace | 禁止的workspace |
+|---|---|---|
+| `pl.SyncCoreType.AIV_ONLY` | 1个GM `Tensor` + 1个Vec `Tile` | Mat `Tile` |
+| `pl.SyncCoreType.AIC_ONLY` | 1个GM `Tensor` + 1个Mat `Tile` | Vec `Tile` |
+| `pl.SyncCoreType.MIX` | 1个GM `Tensor` + 1个Vec `Tile` + 1个Mat `Tile` | 无 |
+
+以上各组合均可再加入至多1个整数`used_cores`。
 
 ## 调用示例
 

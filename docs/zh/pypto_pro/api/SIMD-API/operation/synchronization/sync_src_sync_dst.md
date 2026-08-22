@@ -37,7 +37,7 @@ pypto_pro.language.system.sync_dst(*, set_pipe, wait_pipe, event_id)
 |---|---|---|
 | `set_pipe` | 输入 | `pypto_pro.language.PipeType.MTE2`（GM→UB搬入）/ `pypto_pro.language.PipeType.V`（向量计算）/ `pypto_pro.language.PipeType.MTE3`（UB→GM搬出）/ `pypto_pro.language.PipeType.S`（标量流水）/ `pypto_pro.language.PipeType.MTE1`（L1→L0搬运）/ `pypto_pro.language.PipeType.M`（矩阵计算）/ `pypto_pro.language.PipeType.FIX`（fixpipe） |
 | `wait_pipe` | 输入 | 取值同`set_pipe`<br>须与`set_pipe`不同，否则无意义 |
-| `event_id` | 输入 | 整型常量（静态）或运行时整型标量表达式（动态）<br>同一对pipe之间不同event_id互不干扰，可用于区分多步同步 |
+| `event_id` | 输入 | 整型常量（静态）或运行时整型标量表达式（动态），有效取值为0～15；动态表达式由调用方保证运行时不越界<br>同一对pipe之间不同event_id互不干扰，可用于区分多步同步 |
 
 ## 典型同步模式
 

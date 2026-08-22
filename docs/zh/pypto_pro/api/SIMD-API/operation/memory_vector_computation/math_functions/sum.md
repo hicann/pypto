@@ -28,7 +28,7 @@ pypto_pro.language.sum(out, src, tmp, *, dim=0)
 |---|---|---|
 | `out` | 输出 | 规约结果tile |
 | `src` | 输入 | 源tile |
-| `tmp` | 输入 | 临时tile（中间计算用） |
+| `tmp` | 输入 | 兼容性临时tile |
 | `dim` | 输入 | 归约方向 |
 
 ## 参数范围
@@ -36,8 +36,8 @@ pypto_pro.language.sum(out, src, tmp, *, dim=0)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `out` | 输出 | 数据类型：与`src`一致<br>`dim=0`时shape为`[行数, 1]`，须设`layout=pl.DN`；`dim=1`时shape为`[1, 列数]` |
-| `src` | 输入 | 数据类型：b16、b32<br>shape：`[行数, 列数]` |
-| `tmp` | 输入 | 数据类型：与`src`一致<br>shape：与`src`一致<br>硬件中间计算用，不可与`out`/`src`重叠 |
+| `src` | 输入 | `dim=0`支持INT16、INT32、INT64、UINT64、FP16和FP32；`dim=1`支持INT8、UINT8、INT16、UINT16、INT32、UINT32、INT64、UINT64、FP16、BF16和FP32<br>shape：二维Vec ND Tile |
+| `tmp` | 输入 | API必传的Vec Tile兼容性参数；当前`dim=0`降低到`TROWSUM`时不读写该参数。`dim=1`降低到`TCOLSUM`，默认非binary路径不使用该参数 |
 | `dim` | 输入 | `0`：沿最后一维做行向归约；`1`：沿第一维做列向归约。默认值为`0` |
 
 ## 流水类型

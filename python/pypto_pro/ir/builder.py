@@ -122,9 +122,6 @@ class IRBuilder:
             >>> with ib.function("add") as f:
             ...     x = f.param("x", ir.ScalarType(ir.DataType.INT64))
             ...     f.return_type(ir.ScalarType(ir.DataType.INT64))
-            >>> # With function type:
-            >>> with ib.function("orchestrator", func_type=ir.FunctionType.Orchestration) as f:
-            ...     pass
         """
         begin_span = span if span is not None else self.capture_call_span()
         ctx_id = self._ctx_counter

@@ -35,7 +35,7 @@ pypto_pro.language.addptr(ptr, offset) -> Ptr
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `ptr` | 输入 | 须为`pypto_pro.language.Ptr[dtype]`标注的裸指针；返回的新指针与入参dtype相同 |
+| `ptr` | 输入 | 须为`pypto_pro.language.Ptr[dtype]`标注的裸指针；返回的新指针与入参dtype相同。元素位宽必须不少于8 bit；`DT_INT4`、`DT_UINT4`、`DT_FP4`、`DT_HF4`等亚字节类型不支持指针算术，可先通过`make_ptr`重解释为`DT_UINT8`等字节可寻址类型。 |
 | `offset` | 输入 | 整型常量或运行时整型标量表达式，单位为**元素**（实际字节偏移 = `offset × dtype字节数`，由编译器换算）；偏移后须仍落在原workspace范围内 |
 
 ## 调用示例

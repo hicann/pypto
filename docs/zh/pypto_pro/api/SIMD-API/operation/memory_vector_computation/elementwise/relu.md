@@ -33,7 +33,7 @@ pypto_pro.language.relu(out, src)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`src`一致<br>支持与`src`为同一tile，实现in-place ReLU |
+| `out` | 输出 | 数据类型：FP16、FP32或INT32<br>shape和valid_shape须与`src`一致；支持与`src`为同一tile，实现in-place ReLU |
 | `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 
 ## 流水类型

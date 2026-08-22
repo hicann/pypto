@@ -16,12 +16,12 @@
 
 多路归并排序：将2到4个已排序的源tile归并为一个有序输出。每个源tile内部已按降序排列（val-idx对格式），`mrgsort2`从中选取最大值依次写入dst。
 
-`exhausted`参数标记某个源是否已耗尽，用于多步归并中处理长度不一致的源。
+`exhausted`控制硬件在某个输入列表耗尽时是否暂停归并，用于多步归并中处理长度不一致的源；它是整次调用的控制位，不用于指定某一个源。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.mrgsort2(src0, src1, dst, tmp, *args, exhausted=False)
+pypto_pro.language.mrgsort2(src0, src1, dst, tmp, *extra_srcs, exhausted=False)
 ```
 
 ## 参数类型
@@ -39,11 +39,11 @@ pypto_pro.language.mrgsort2(src0, src1, dst, tmp, *args, exhausted=False)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0`, `src1` | 输入 | 数据类型：b32（FP32 val-idx对）<br>shape：行数为1<br>内部已按降序排列 |
-| `dst` | 输出 | 数据类型：与源一致<br>shape：与源一致 |
-| `tmp` | 输入 | 数据类型：与源一致<br>shape：与源一致 |
-| `*extra_srcs` | 输入 | 可选的第3、4个源tile，格式同上 |
-| `exhausted` | 输入 | `True`或`False`（默认） |
+| `src0`, `src1` | 输入 | Vec、行主序、单行Tile；dtype为FP16或FP32，且所有源、`dst`和`tmp`必须一致；内部已按降序排列的8字节val-idx记录 |
+| `dst` | 输出 | Vec、行主序、单行Tile；dtype与所有源一致。输出长度由`dst.valid_shape`控制，不要求物理shape与每个源完全相同 |
+| `tmp` | 输入 | Vec、行主序、单行临时Tile；dtype与源一致，列数不得小于`dst`列数，并须满足所有输入列表合并所需的临时空间 |
+| `*extra_srcs` | 输入 | 可选的第3、4个源Tile，格式同上；源总数只能为2～4个 |
+| `exhausted` | 输入 | 编译期`bool`，默认`False`；`True`表示启用“任一输入列表耗尽时暂停”的硬件模式 |
 
 ## 流水类型
 

@@ -31,7 +31,7 @@
 ## 函数原型
 
 ```python
-pypto_pro.language.make_tile_group(type=, addrs=, mutex_ids=None, depth=None) -> group
+pypto_pro.language.make_tile_group(type=, addrs=, mutex_ids=None, depth=None, fwd_ids=None, bwd_ids=None) -> group
 ```
 
 
@@ -43,6 +43,8 @@ pypto_pro.language.make_tile_group(type=, addrs=, mutex_ids=None, depth=None) ->
 | `addrs` | 输入 | 单个基地址（组内tile连续排布），或地址列表（逐块指定） |
 | `mutex_ids` | 输入 | 可选的mutex id列表, 为每块Tile分配mutex id，可配置为空列表或者使用非空整数列表/元组。配置非空时，框架为每块Tile记录一个或多个mutex id，建立Tile与`mutex_id`的一一映射，例如[1, 2, 3, 4]为4个tile各分配一个ID, [[1, 2], [3, 4]]为两块Tile各分配两个ID；配置为`None`或空列表时，group只管理Tile、地址和轮转游标，不插入自动mutex id，需手动插入同步 |
 | `depth` | 输入 | 可选的Tile数量；`mutex_ids`为`None`或空列表时必填 |
+| `fwd_ids` | 输入 | 可选的跨核前向event_id列表，用于自动Pipeline变换中生产者→消费者的跨核同步。启用`pipeline=pl.pipeline.PipelineConfig(...)`后，框架在写入该缓冲的stage末尾自动插入`set_cross_core(event_id=fwd_ids[i])`，在读取该缓冲的stage开头自动插入`wait_cross_core(event_id=fwd_ids[i])` |
+| `bwd_ids` | 输入 | 可选的跨核后向event_id列表，用于自动Pipeline变换中消费者→生产者的反向同步（通知生产者缓冲已释放）。框架在读取stage末尾插入`set_cross_core(event_id=bwd_ids[i])`，在写入stage开头插入`wait_cross_core(event_id=bwd_ids[i])` |
 
 ## 参数范围
 
@@ -52,6 +54,8 @@ pypto_pro.language.make_tile_group(type=, addrs=, mutex_ids=None, depth=None) ->
 | `addrs` | 输入 | 给单个基址时，第i块地址自动取`base + i × slot_size`（`slot_size`为单块字节数）；给列表时，长度必须等于`mutex_ids`长度或者确定的`depth`，逐块指定（用于非连续布局） |
 | `mutex_ids` | 输入 | 可为`None`、空列表或整数列表。整数取值范围`[0, 31]`；每块Tile的ID数量必须一致，且同一Tile内多个ID时ID不得重复，不同Tile间ID可重复 |
 | `depth` | 输入 | 正的编译期整数。非空`mutex_ids`未指定时由其长度推导；两者同时指定时必须相等 |
+| `fwd_ids` | 输入 | 可选的非空整数列表或元组，元素为`set_cross_core`/`wait_cross_core`的event_id（取值0～15）。列表长度须与缓冲深度（`depth`或`mutex_ids`长度）一致，用于按轮转索引`i % N`选择event_id。仅在启用`pipeline`变换时生效；未启用时忽略 |
+| `bwd_ids` | 输入 | 同`fwd_ids`，用于反向同步。可单独使用（单方向通知）或与`fwd_ids`成对使用（双向握手） |
 
 ## 补充说明
 
@@ -76,6 +80,13 @@ scale_right_addrs[i] = right_addrs[i] >> 4
 使用`group[i]`进行下标索引时，`i`的取值范围为`[0, num_tile)`。`mutex_ids`非空时，`num_tile`为`len(mutex_ids)`；否则为确定的`depth`。
 
 group句柄可直接传给[`pypto_pro.language.set_validshape`](../memory_vector_computation/transpose_and_element_access/set_validshape.md)，对group中所有tile批量设置valid_shape，适用于全局只需设置一次、后续直接`next()`的场景。
+
+配置`fwd_ids`/`bwd_ids`后，该group成为跨核共享缓冲，用于Cube与Vector之间的自动Pipeline同步。框架根据stage对该缓冲的读写角色自动插入`set_cross_core`/`wait_cross_core`：
+
+- **生产者stage（写）**：开头`wait_cross_core(bwd_ids)`等待消费者释放，末尾`set_cross_core(fwd_ids)`通知消费者数据就绪
+- **消费者stage（读）**：开头`wait_cross_core(fwd_ids)`等待生产者数据就绪，末尾`set_cross_core(bwd_ids)`通知生产者缓冲已释放
+
+`fwd_ids`和`bwd_ids`的列表长度应与缓冲深度一致，框架按轮转索引`i % N`选择当次迭代使用的event_id。仅在`@pl.jit(pipeline=pl.pipeline.PipelineConfig(...))`启用自动Pipeline变换时生效。
 
 ## 调用示例
 

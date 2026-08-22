@@ -39,8 +39,8 @@ pypto_pro.language.minimum(out, lhs, rhs, *, dim=None)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 逐元素模式：数据类型支持b8、b16、b32、b64，shape与`lhs`一致，支持与`lhs`或`rhs`为同一tile<br>归约模式：数据类型与`lhs`一致；`dim=0`时shape为`[行数, 1]`，`dim=1`时shape为`[1, 列数]` |
-| `lhs` | 输入 | 逐元素模式：数据类型和shape均与`out`一致<br>归约模式：数据类型支持b16、b32，shape为任意二维 |
+| `out` | 输出 | 逐元素模式支持8/16/32/64位整型、FP16、BF16和FP32，shape与`lhs`一致<br>归约模式：数据类型与`lhs`一致；`dim=0`时shape为`[行数, 1]`，`dim=1`时shape为`[1, 列数]` |
+| `lhs` | 输入 | 逐元素模式：数据类型和shape均与`out`一致<br>归约模式：`dim=0`支持8/16/32位整型、FP16和FP32；`dim=1`还支持64位整型和BF16，shape为二维Tile |
 | `rhs` | 输入 | tile-tile模式：数据类型与`out`一致，shape与`out`一致<br>tile-scalar模式：scalar值（int/float/Scalar）<br>归约模式：数据类型和shape均与`lhs`一致的临时tile |
 | `dim` | 输入 | `None`：逐元素取较小值；`0`：沿最后一维取每行最小值；`1`：沿第一维取每列最小值。默认值为`None` |
 

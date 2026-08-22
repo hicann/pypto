@@ -34,7 +34,7 @@ pypto_pro.language.transpose(out, src)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `out` | 输出 | 数据类型：与`src`一致<br>shape：为`src`转置后的结果（如`src`为`[64, 128]`时`out`为`[128, 64]`）<br>不可与`src`为同一tile |
-| `src` | 输入 | 数据类型：b8、b16、b32、b64<br>shape：二维tile |
+| `src` | 输入 | 数据类型：8/16/32位整型、FP16、BF16或FP32，不支持64位元素<br>shape：二维Vec Tile；源、目标主维长度乘元素字节数须32字节对齐 |
 
 ## 流水类型
 

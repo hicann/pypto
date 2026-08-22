@@ -11,6 +11,9 @@ fused_mul_add_relu
 mul_add_dst
 mul_cast
 partadd
+partmax
+partmin
+partmul
 sub_relu
 sub_relu_cast
 ```

@@ -39,7 +39,7 @@ pypto_pro.language.pto_assert(condition, format_str=None, *args, *, loc=False)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `condition` | 输入 | 标量布尔值（dtype为BOOL）<br>非布尔标量（如INT32）报`TypeError`<br>接受Python `True`/`False`布尔值<br>条件表达式的源码文本由编译器自动提取，用于默认输出 |
-| `format_str` | 输入 | 编译时常量字符串，不能是运行时变量<br>不提供时不允许传`*args`<br>不提供时，输出固定为`Assertion failed: <条件表达式源码>`<br>提供时，先输出`Assertion failed: <条件表达式源码>`，再追加一行格式化消息<br>格式说明符规则同[`pypto_pro.language.printf`](printf.md) |
+| `format_str` | 输入 | 编译时常量字符串，不能是运行时变量<br>不提供时使用空消息；此时额外的`*args`不会写入IR，也不会参与输出<br>不提供时，输出固定为`Assertion failed: <条件表达式源码>`<br>提供时，先输出`Assertion failed: <条件表达式源码>`，再追加一行格式化消息<br>格式说明符规则同[`pypto_pro.language.printf`](printf.md) |
 | `*args` | 输入 | 支持Python `int`、Python `float`、Python `bool`以及Kernel标量表达式；使用`%p`时还支持Ptr指针<br>数量和类型须与`format_str`中的格式说明符匹配 |
 | `loc` | 输入 | `True`或`False`（默认） |
 

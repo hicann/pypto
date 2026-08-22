@@ -22,13 +22,13 @@
 
 | 取值 | 说明 | 硬件角色 |
 |---|---|---|
-| `pypto_pro.language.PipeType.MTE1` | 搬运流水1 | L1 → L0A/L0B/Scaling/ScaleLeft/ScaleRight（矩阵操作数与scale搬运） |
+| `pypto_pro.language.PipeType.MTE1` | 搬运流水1 | L1 → L0A/L0B/Bias/ScaleLeft/ScaleRight（矩阵操作数与scale搬运） |
 | `pypto_pro.language.PipeType.MTE2` | 搬运流水2 | GM → L1/UB（load搬入） |
 | `pypto_pro.language.PipeType.MTE3` | 搬运流水3 | UB → GM（store搬出）、UB → L1（move搬运） |
 | `pypto_pro.language.PipeType.M` | 矩阵计算流水 | Cube/MAD（matmul计算） |
 | `pypto_pro.language.PipeType.V` | 向量计算流水 | element-wise、reduce、cast等向量操作 |
 | `pypto_pro.language.PipeType.S` | 标量流水 | getval/setval等标量操作 |
-| `pypto_pro.language.PipeType.FIX` | fixpipe流水 | 累加器结果读出（L0C → UB/GM/L1）、L1 → UB/L0C搬运、quantization/反量化等 |
+| `pypto_pro.language.PipeType.FIX` | fixpipe流水 | 累加器结果读出（L0C → UB/GM）、quantization/反量化等 |
 | `pypto_pro.language.PipeType.ALL` | 全部流水 | 用于全局同步（bar_all） |
 
 ## 补充说明
@@ -40,13 +40,11 @@
 | `load` | GM → L1/UB | MTE2 |
 | `store` | Vec(UB) → GM | MTE3 |
 | `store` | Acc(L0C) → GM | FIX |
-| `move` | Mat(L1) → Left/Right(L0A/L0B) | MTE1 |
-| `move` | Mat(L1) → Scaling | MTE1 |
-| `move` | Mat(L1) → ScaleLeft/ScaleRight | MTE1 |
-| `move` | Mat(L1) → Vec(UB) | FIX |
-| `move` | Mat(L1) → Acc(L0C) | FIX |
+| `move` | Mat(L1) → Left/Right(L0A/L0B)/Bias/ScaleLeft/ScaleRight | MTE1 |
+| `move` | Mat(L1) → Scaling | FIX |
+| `move` | Mat(L1) → Vec(UB) | V |
 | `move` | Acc(L0C) → Vec(UB) | FIX |
-| `move` | Acc(L0C) → Mat(L1) | FIX |
+| `move` | Vec(UB) → Vec(UB) | V |
 | `move` | Vec(UB) → Mat(L1) | MTE3 |
 | `move` | 其余 | V |
 

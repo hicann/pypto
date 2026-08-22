@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-把L1/UB Tile的结果按**绝对元素坐标**写回GM，是[`pypto_pro.language.load`](load.md)的反向操作。写出过程中可顺带融合ReLU、预量化，或对目的地址做原子累加。
+把UB或L0C Tile的结果按**绝对元素坐标**写回GM，是与[`pypto_pro.language.load`](load.md)对应的写回接口。写出过程中可顺带融合ReLU、预量化，或对目的地址做原子累加。
 
-源tile可以来自不同内存空间（如`Vec`(UB)、`Acc`(L0C)）：源在`Acc`时由FIX（fixpipe）流水写回GM，其余情况走MTE3流水。
+源tile支持`Vec`(UB)和`Acc`(L0C)：源在`Acc`时由FIX（fixpipe）流水写回GM，源在`Vec`时走MTE3流水；不支持从`Mat`(L1)直接写回GM。
 
 如果希望按"第几块tile"定位写出位置，需要使用[`pypto_pro.language.store_tile`](store_tile.md)。
 
@@ -45,17 +45,17 @@ pypto_pro.language.store(dst_tensor, src_tile, offsets, *, relu_pre_mode=None, s
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `dst_tensor` | 输出 | 数据类型：b8、b16、b32、b64<br>layout：支持`ND`、`DN`、`NZ`<br>offsets换算后的写入范围不得越过对应维度shape<br>原子累加时须预先初始化为零（或已知初值），累加在其上叠加 |
-| `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>内存空间：源在`Acc`(L0C)时由FIX流水写回GM，其余（如`Vec`/UB）走MTE3流水<br>首地址必须32字节对齐 |
+| `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>内存空间：支持`Vec`(UB)或`Acc`(L0C)，不支持`Mat`(L1)；源在`Acc`时由FIX流水写回GM，源在`Vec`时走MTE3流水<br>首地址必须32字节对齐 |
 | `offsets` | 输入 | 单位元素个数，大小不超过对应维度的shape，不支持负数索引 |
 | `relu_pre_mode` | 输入 | 默认`None`（不融合ReLU）；可取`pl.ReluPreMode.NormalRelu`；与`scale`为`Tile`（per-channel）时互斥 |
-| `scale` | 输入 | 可选，随路量化比例：`float`（编译期标量）→ per-tensor量化；运行时`FP32`标量→自动重解释为IEEE-754位模式；运行时`INT`标量→须传预编码的float32位模式（`struct.pack("!f", v)`）；`Tile`（INT64、`MemorySpace.Scaling`、shape `[1, N]`）→ per-channel量化（`store_fp`路径），用户预制deqTensor tile，框架直接复用（不自动分配/同步，用户负责load→move→sync(MTE1→FIX)），与`relu_pre_mode`、`phase`互斥；`Tensor`不支持（per-channel须以`Tile`传入）；`[N, 1]`逐行量化不支持 |
+| `scale` | 输入 | 可选，随路量化比例：`float`（编译期标量）→ per-tensor量化；运行时`FP32`标量→自动重解释为IEEE-754位模式；运行时`INT`标量→须传预编码的float32位模式（`struct.pack("!f", v)`）；`Tile`（INT64、`MemorySpace.Scaling`、shape `[1, N]`，`N % 16 == 0`且`N <= 512`）→ per-channel量化（`store_fp`路径），用户预制deqTensor tile，框架直接复用（不自动分配/同步，用户负责load→move→sync(MTE1→FIX)），与`relu_pre_mode`、`phase`互斥；`Tensor`不支持（per-channel须以`Tile`传入）；`[N, 1]`逐行量化不支持 |
 | `order` | 输入 | 只支持配置tensor维度范围内的dim，只支持二维数组配置，其余配置报错<br>只支持升序排列（如 [0, 2]），不支持降序（如 [1, 0]）配置 |
 | `atomic` | 输入 | `pl.AtomicType.AtomicNone`（默认，覆盖写）或`pl.AtomicType.AtomicAdd`（原子累加，硬件对每个目的地址做元素级加法） |
 | `phase` | 输入 | `pl.STPhase.Unspecified`/`pl.STPhase.Partial`（中间累加步）/`pl.STPhase.Final`（最终步）；用硬件unit_flag接管cube/fixp间的握手，仅在matmul多步累加写回GM时使用；与`scale`为`Tile`（per-channel）时互斥 |
 
 ## 流水类型
 
-MTE3（L1/UB → GM的搬出流水）；当`src_tile`位于`Acc`(L0C)时为FIX（fixpipe）。
+MTE3（UB → GM的搬出流水）；当`src_tile`位于`Acc`(L0C)时为FIX（fixpipe）。
 
 ## 调用示例
 

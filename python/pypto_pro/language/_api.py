@@ -357,6 +357,16 @@ def and_(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 
 @_api_decl
+def shl(out: Tile, lhs: Tile, rhs: Tile) -> None:
+    """Element-wise left shift with a Tile shift operand."""
+
+
+@_api_decl
+def shr(out: Tile, lhs: Tile, rhs: Tile) -> None:
+    """Element-wise right shift with a Tile shift operand."""
+
+
+@_api_decl
 def xor(out: Tile, lhs: Tile, rhs: Tile, tmp: Tile) -> None:
     """Element-wise bitwise XOR: ``out = lhs ^ rhs``
 
@@ -593,6 +603,21 @@ def axpy(out: Tile, src: Tile, alpha: Scalar) -> None:
 @_api_decl
 def partadd(out: Tile, src0: Tile, src1: Tile) -> None:
     """Partial addition: ``out = src0 + src1`` (only src1's valid region)."""
+
+
+@_api_decl
+def partmax(out: Tile, src0: Tile, src1: Tile) -> None:
+    """Partial maximum over the valid regions of two Tiles."""
+
+
+@_api_decl
+def partmin(out: Tile, src0: Tile, src1: Tile) -> None:
+    """Partial minimum over the valid regions of two Tiles."""
+
+
+@_api_decl
+def partmul(out: Tile, src0: Tile, src1: Tile) -> None:
+    """Partial multiplication over the valid regions of two Tiles."""
 
 
 # --- B7. Matrix ops ---

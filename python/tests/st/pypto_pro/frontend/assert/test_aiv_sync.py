@@ -71,7 +71,6 @@ def aiv_sync_kernel(
             pl.system.sync_src(set_pipe=pl.PipeType.S, wait_pipe=pl.PipeType.MTE3, event_id=2)
             pl.system.sync_dst(set_pipe=pl.PipeType.S, wait_pipe=pl.PipeType.MTE3, event_id=2)
             pl.store(buf, tile_buf, [0, 0])
-            pl.system.bar_v()
 
         if enable_sync:
             pl.system.set_cross_core(

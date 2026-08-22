@@ -27,7 +27,14 @@ Tile的完整规格（形状、数据类型、内存空间、排布方式等）�
 ## 函数原型
 
 ```python
-pypto_pro.language.Tile[[shape], dtype]
+pypto_pro.language.Tile.__init__(
+    self,
+    shape: Sequence[int] | None = None,
+    dtype: DataType | None = None,
+    expr: Expr | None = None,
+    memref: MemRef | None = None,
+    _annotation_only: bool = False,
+)
 ```
 
 ## 参数类型
@@ -36,6 +43,7 @@ pypto_pro.language.Tile[[shape], dtype]
 |---|---|---|
 | `shape` | 输入 | 各维大小列表，如`[64, 128]` |
 | `dtype` | 输入 | 元素数据类型，如`pypto_pro.language.DT_FP16` |
+| `memref` | 输入 | 可选的`pypto_pro.language.MemRef`实例，用于显式描述内存空间、地址与大小 |
 
 ## 参数范围
 
@@ -43,6 +51,7 @@ pypto_pro.language.Tile[[shape], dtype]
 |---|---|---|
 | `shape` | 输入 | 长度为2的整数列表，各维大小须为正整数；仅支持二维Tile<br>须与`make_tile`时使用的`TileType.shape`一致 |
 | `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md)枚举值<br>须与`make_tile`时使用的`TileType.dtype`一致 |
+| `memref` | 输入 | 必须是`MemRef`实例；其他类型在构造类型标注时抛出`TypeError` |
 
 ## 调用示例
 

@@ -48,10 +48,10 @@ pypto_pro.language.move(dst_tile, src_tile, offset=None, *, acc_to_vec_mode=None
 |---|---|---|
 | `dst_tile` | 输出 | 数据类型：b8、b16、b32、b64<br>内存空间与源共同决定流水（见"流水类型"）；首地址必须32字节对齐 |
 | `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>提取子块（TEXTRACT）时源tile须不小于目的tile；自动转为嵌入（TINSERT）时源tile须为目的tile的子块 |
-| `offset` | 输入 | 二维`[offset_m, offset_k]`，单位为元素个数<br>**TEXTRACT（源≥目的）**：以源tile声明的物理`shape`为坐标系；`valid_shape`不改变offset的坐标原点和计量单位，每一维须满足`0 <= offset < src_tile.shape`<br>实际提取范围为`[offset, offset + dst_tile.valid_shape)`。使用尾块时，完整的`dst_tile.shape`可以超出offset后的剩余范围，但实际提取范围不得超出`src_tile.shape`；若源tile设置了更小的`valid_shape`，实际提取范围还须位于该有效区域内<br>**TINSERT（源<目的，自动转insert）**：改以目的tile为坐标系，须满足`offset[0] + src行数≤ dst行数`、`offset[1] + src列数≤ dst列数`，否则越界 |
+| `offset` | 输入 | 二维`[offset_m, offset_k]`，单位为元素个数<br>**TEXTRACT（源≥目的）**：以源tile声明的物理`shape`为坐标系；`valid_shape`不改变offset的坐标原点和计量单位，每一维须满足`0 <= offset < src_tile.shape`<br>实际提取范围为`[offset, offset + dst_tile.valid_shape)`。使用尾块时，完整的`dst_tile.shape`可以超出offset后的剩余范围，但实际提取范围不得超出`src_tile.shape`；若源tile设置了更小的`valid_shape`，实际提取范围还须位于该有效区域内<br>**TINSERT（源<目的，自动转insert）**：改以目的tile为坐标系，须满足`offset[0] + src行数 ≤ dst行数`、`offset[1] + src列数 ≤ dst列数`，否则越界 |
 | `acc_to_vec_mode` | 输入 | 取`pl.AccToVecMode.SingleModeVec0`/`pl.AccToVecMode.SingleModeVec1`/`pl.AccToVecMode.DualModeSplitM`/`pl.AccToVecMode.DualModeSplitN`；仅在源为`Acc`、目的为`Vec`时有意义。`scale`为`Tile`（per-channel）时只支持单vec模式（`DualModeSplitM`/`DualModeSplitN`报错） |
 | `relu_pre_mode` | 输入 | 默认`None`（不融合ReLU）；可取`pl.ReluPreMode.NormalRelu` |
-| `scale` | 输入 | 可选，随路量化比例：`float`（编译期标量）→ per-tensor量化；运行时`FP32`标量→自动重解释为IEEE-754位模式；运行时`INT`标量→须传预编码的float32位模式（`struct.pack("!f", v)`）；`Tile`（INT64、`MemorySpace.Scaling`、shape `[1, N]`）→ per-channel量化（`move_fp`路径），用户预制deqTensor tile，框架直接复用（不自动分配/同步，用户负责load→move→sync(MTE1→FIX)），只支持单vec模式；`Tensor`不支持（per-channel须以`Tile`传入） |
+| `scale` | 输入 | 可选，随路量化比例：`float`（编译期标量）→ per-tensor量化；运行时`FP32`标量→自动重解释为IEEE-754位模式；运行时`INT`标量→须传预编码的float32位模式（`struct.pack("!f", v)`）；`Tile`（INT64、`MemorySpace.Scaling`、shape `[1, N]`，`N % 16 == 0`且`N <= 512`）→ per-channel量化（`move_fp`路径），用户预制deqTensor tile，框架直接复用（不自动分配/同步，用户负责load→move→sync(MTE1→FIX)），只支持单vec模式；`Tensor`不支持（per-channel须以`Tile`传入）；`[N, 1]`逐行量化不支持 |
 
 ## 流水类型
 
@@ -60,10 +60,10 @@ pypto_pro.language.move(dst_tile, src_tile, offset=None, *, acc_to_vec_mode=None
 | 源 → 目的 | 流水 |
 |---|---|
 | Acc(L0C) → Vec(UB) | FIX（fixpipe） |
-| Mat(L1) → Left/Right(L0A/L0B) | MTE1 |
-| Mat(L1) → ScaleLeft/ScaleRight | MTE1 |
+| Mat(L1) → Left/Right(L0A/L0B)/Bias/ScaleLeft/ScaleRight | MTE1 |
+| Mat(L1) → Scaling | FIX |
 | Mat(L1) → Vec(UB) | V |
-| Mat(L1) → 其他 | FIX |
+| Vec(UB) → Vec(UB) | V |
 | Vec(UB) → Mat(L1) | MTE3 |
 | 其余 | V |
 

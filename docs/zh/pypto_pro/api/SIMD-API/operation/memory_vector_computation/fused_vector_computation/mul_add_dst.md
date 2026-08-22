@@ -34,7 +34,7 @@ pypto_pro.language.mul_add_dst(out, lhs, rhs)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 数据类型：b16、b32<br>shape：与`lhs`、`rhs`一致 |
+| `out` | 输入/输出 | 数据类型：INT16、UINT16、INT32、UINT32、INT64、UINT64、FP16、BF16或FP32；该接口依次发射`TMUL`与`TADD`，类型必须同时满足两者约束<br>shape：与`lhs`、`rhs`一致 |
 | `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 | `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 

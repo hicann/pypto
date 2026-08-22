@@ -76,8 +76,9 @@ def validshape_kernel(
 # matmul 尾块处理
 pl.set_validshape(q_mat_buf[q_count % 2], [TD, actual_sq])
 
-# 宽 Tile 提取子块
-pl.set_validshape(a_wide_slot.tile, [256, 64])
+# TileGroup访问器和下标都直接返回Tile
+pl.set_validshape(a_wide_group.current(), [256, 64])
+pl.set_validshape(a_wide_group[0], [256, 64])
 ```
 
 ### tile_group批量设置

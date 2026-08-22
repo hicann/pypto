@@ -35,9 +35,9 @@ pypto_pro.language.argmin(out, src, tmp, *, dim=0)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：`pypto_pro.language.DT_INT32`<br>`dim=0`时shape为`[行数, 1]`；`dim=1`时shape为`[1, 列数]` |
-| `src` | 输入 | 数据类型：b16、b32<br>shape：任意二维 |
-| `tmp` | 输入 | 数据类型：与`src`一致<br>shape：与`src`一致 |
+| `out` | 输出 | 数据类型：`DT_INT32`或`DT_UINT32`<br>`dim=0`时shape为`[行数, 1]`；`dim=1`时shape为`[1, 列数]` |
+| `src` | 输入 | `dim=0`支持FP16和FP32；`dim=1`支持8/16/32位整型或FP16/FP32/BF16<br>shape：二维Vec Tile |
+| `tmp` | 输入 | 公共接口必传；数据类型、shape和valid_shape与`src`一致。`dim=0`后端不消费该临时Tile，但仍须按函数原型提供 |
 | `dim` | 输入 | `0`：返回每行最小元素的列索引；`1`：返回每列最小元素的行索引。默认值为`0` |
 
 ## 流水类型

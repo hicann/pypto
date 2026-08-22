@@ -115,7 +115,7 @@ def test_program_with_cross_function_calls():
         p.add_function(f.get_result())
 
         # Build sum_of_squares function that calls square
-        with ib.function("sum_of_squares", func_type=ir.FunctionType.Orchestration) as f:
+        with ib.function("sum_of_squares", func_type=ir.FunctionType.Opaque) as f:
             a = f.param("a", ir.ScalarType(DataType.INT64))
             b = f.param("b", ir.ScalarType(DataType.INT64))
             f.return_type(ir.ScalarType(DataType.INT64))

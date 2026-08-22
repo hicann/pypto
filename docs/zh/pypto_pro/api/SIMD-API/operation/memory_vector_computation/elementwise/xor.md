@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-逐元素按位异或：`out = lhs ^ rhs`。需要临时tile用于中间计算。
+逐元素按位异或：`out = lhs ^ rhs`。`rhs`须为与`lhs`同类型的Tile，计算需要临时Tile。
 
 ## 函数原型
 
@@ -28,16 +28,16 @@ pypto_pro.language.xor(out, lhs, rhs, tmp)
 |---|---|---|
 | `out` | 输出 | 目标tile，存放按位异或结果 |
 | `lhs` | 输入 | 左操作数tile |
-| `rhs` | 输入 | 右操作数tile |
+| `rhs` | 输入 | 右操作数Tile |
 | `tmp` | 输入 | 临时tile（中间计算用） |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`lhs`、`rhs`一致 |
+| `out` | 输出 | 数据类型：8/16/32位整型<br>shape须与`lhs`、`rhs`一致 |
 | `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+| `rhs` | 输入 | 数据类型、row-major布局和有效shape与`out`一致 |
 | `tmp` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致<br>硬件中间计算用，不可与`out`/`lhs`/`rhs`重叠 |
 
 ## 流水类型

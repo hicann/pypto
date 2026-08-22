@@ -76,7 +76,6 @@ def scalar_gt_select_kernel(
         pl.load(mask_fp16, mask_in, [0, 0])
         # mask_fp16 > 0 -> bit-packed 谓词 mask_vec（cmp_mode=4 为 gt）
         pl.gt(mask_vec, mask_fp16, 0.0)
-        pl.system.bar_v()
         # 谓词为真取 lhs(=a)，否则取 rhs(=b)
         pl.select(tile_out, mask_vec, tile_a, tile_b, tmp_vec)
         pl.store(out, tile_out, [0, 0])

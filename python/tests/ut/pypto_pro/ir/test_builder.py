@@ -100,16 +100,16 @@ def test_nested_function_error():
 
 
 def test_function_type_default():
-    """Test that function_type defaults to ORCHESTRATION."""
+    """Test that function_type defaults to Opaque."""
     ib = IRBuilder()
 
-    with ib.function("test_func", func_type=ir.FunctionType.Orchestration) as f:
+    with ib.function("test_func", func_type=ir.FunctionType.Opaque) as f:
         f.return_type(ir.ScalarType(DataType.INT64))
 
     func = f.get_result()
 
     assert func is not None
-    assert func.func_type == ir.FunctionType.Orchestration
+    assert func.func_type == ir.FunctionType.Opaque
 
 
 def test_function_type_explicit_incore():

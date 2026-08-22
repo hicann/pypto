@@ -66,7 +66,7 @@ def _create_barrier_op(op_name: str, *, span: Span | None) -> Call:
     """Create a barrier synchronization operation.
 
     Args:
-        op_name: Operation name (e.g., "system.bar_v")
+        op_name: Operation name (e.g., "system.bar_m")
         span: Optional source span for debugging
     """
     actual_span = _get_span_or_capture(span, frame_offset=2)
@@ -113,11 +113,6 @@ def sync_dst(
         Call expression for system.sync_dst
     """
     return _create_sync_op("system.sync_dst", set_pipe=set_pipe, wait_pipe=wait_pipe, event_id=event_id, span=span)
-
-
-def bar_v(*, span: Span | None = None) -> Call:
-    """Vector unit barrier."""
-    return _create_barrier_op("system.bar_v", span=span)
 
 
 def bar_m(*, span: Span | None = None) -> Call:
@@ -503,7 +498,6 @@ register_table(
         "system.mutex_lock": OpSpec(builder=mutex_lock, parse_args=False),
         "system.mutex_unlock": OpSpec(builder=mutex_unlock, parse_args=False),
         # no args, no kwargs
-        "system.bar_v": OpSpec(builder=bar_v, parse_args=False, parse_kwargs=False),
         "system.bar_m": OpSpec(builder=bar_m, parse_args=False, parse_kwargs=False),
         "system.bar_mte1": OpSpec(builder=bar_mte1, parse_args=False, parse_kwargs=False),
         "system.bar_mte2": OpSpec(builder=bar_mte2, parse_args=False, parse_kwargs=False),

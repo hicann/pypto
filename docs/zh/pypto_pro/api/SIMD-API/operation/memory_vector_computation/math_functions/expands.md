@@ -33,7 +33,7 @@ pypto_pro.language.expands(out, scalar)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape：任意二维Tile |
+| `out` | 输出 | 支持8/16/32/64位整型、FP16、BF16和FP32；位于Vec或Mat空间，Vec Tile使用行主序布局<br>shape：二维Tile |
 | `scalar` | 输入 | 整型或浮点型常量，或运行时整型或浮点型标量表达式<br>类型须与`out`元素类型兼容 |
 
 ## 流水类型

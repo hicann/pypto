@@ -34,19 +34,20 @@ pypto_pro.language.scatter(out, src, idx)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`src`、`idx`一致 |
+| `out` | 输出 | 数据类型：b8、b16、b32、b64，须位于Vec空间；dtype与`src`一致 |
 | `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `idx` | 输入 | 数据类型：`pypto_pro.language.DT_INT16`或`pypto_pro.language.DT_INT32`（见类型约束表）<br>shape：与`out`一致<br>值须为合法的扁平元素偏移（0 ≤ idx < 总元素数），越界行为不确定<br>索引值须不重复（无写冲突），否则结果不确定 |
+| `idx` | 输入 | Vec空间的有符号或无符号整数Tile，类型组合见下表；有效shape须与被分散的源数据匹配。索引越界或发生写冲突时行为未定义。 |
 
 ## 类型约束
 
-A5硬件`TSCATTER`指令仅支持以下数据类型与索引类型的组合：
+硬件`TSCATTER`指令仅支持以下数据类型与索引类型的组合：
 
 | 数据类型 | 索引类型 | 说明 |
 |---|---|---|
-| FP32 | INT32 | 推荐，走标量回退路径，行为可预期 |
-| FP16 | INT16 | A5走硬件vscatter路径，索引重复时不保证计算时序 |
-| INT8 | INT16 | A5走硬件vscatter路径 |
+| b64（INT64/UINT64） | INT32或UINT32 | 64 bit数据使用32 bit索引 |
+| b32（FP32/INT32/UINT32） | INT32或UINT32 | 32 bit数据使用32 bit索引 |
+| b16（FP16/BF16/INT16/UINT16） | INT16或UINT16 | 16 bit数据使用16 bit索引 |
+| b8（INT8/UINT8） | INT16或UINT16 | 8 bit数据使用16 bit索引 |
 
 ## 流水类型
 

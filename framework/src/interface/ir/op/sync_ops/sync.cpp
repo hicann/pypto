@@ -177,14 +177,6 @@ REGISTER_OP("system.sync_dst_dyn")
     .set_attr<int>("wait_pipe")
     .f_deduce_type(DeduceUnknownType);
 
-// Register system.bar_v (Vector Barrier)
-// Attributes: None
-REGISTER_OP("system.bar_v")
-    .set_description("Vector unit barrier")
-    .set_op_category("SyncOp")
-    .no_argument()
-    .f_deduce_type(DeduceUnknownType);
-
 // Register system.bar_m (Matrix Barrier)
 // Attributes: None
 REGISTER_OP("system.bar_m")

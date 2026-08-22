@@ -33,7 +33,7 @@ pypto_pro.language.abs(out, src)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`src`一致<br>支持与`src`为同一tile，实现in-place取绝对值 |
+| `out` | 输出 | 数据类型：FP16、FP32或8/16/32位有符号整型<br>shape和valid_shape须与`src`一致；支持与`src`为同一tile，实现in-place取绝对值 |
 | `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
 
 ## 流水类型

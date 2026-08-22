@@ -143,6 +143,11 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "xor": ["W", "R", "R", None],
     "shl": ["W", "R", "R"],
     "shr": ["W", "R", "R"],
+    # ===== Part ops =====
+    "partadd": ["W", "R", "R"],
+    "partmax": ["W", "R", "R"],
+    "partmin": ["W", "R", "R"],
+    "partmul": ["W", "R", "R"],
     "lrelu": ["W", "R", "R"],
     "prelu": ["W", "R", "R", None],
     # ===== Tile-scalar (rhs is scalar, not tile) =====

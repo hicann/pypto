@@ -38,7 +38,7 @@ pypto_pro.language.mrgsort(dst, src, *, block_len)
 |---|---|---|
 | `dst` | 输出 | 数据类型：与`src`一致<br>shape：与`src`一致 |
 | `src` | 输入 | 数据类型：b16、b32<br>shape：行数为1<br>数据格式：val-idx对（每个元素含值和原始索引） |
-| `block_len` | 输入 | 正整数，指定每个归并块的元素数 |
+| `block_len` | 输入 | 编译期正整数，单位为Tile存储元素，并同时包含value和index。例如32个FP32 value-index记录对应64个FP32存储元素 |
 
 ## 流水类型
 

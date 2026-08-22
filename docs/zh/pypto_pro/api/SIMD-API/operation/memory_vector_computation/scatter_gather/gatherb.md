@@ -34,9 +34,9 @@ pypto_pro.language.gatherb(out, src, offsets)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32、b64<br>shape须与`src`一致 |
+| `out` | 输出 | 数据类型：b8、b16、b32；dtype须与`src`一致，shape/valid shape须与期望输出匹配 |
 | `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `offsets` | 输入 | 数据类型：`pypto_pro.language.DT_UINT32`<br>shape：`[行数, 列数 / BLOCK_ELEMS]`，其中`BLOCK_ELEMS = 32 / dtype_size`<br>值须为合法的字节偏移（0 ≤ offset < 源tile总字节数），越界行为不确定<br>每次取32字节（如FP16时为16个元素） |
+| `offsets` | 输入 | 数据类型：`pypto_pro.language.DT_UINT32`，每个值解释为相对源Tile基址的字节偏移<br>shape：`[行数, 列数 / BLOCK_ELEMS]`，其中`BLOCK_ELEPS = 32 / dtype_size`（如FP16时为16个元素）<br>值须为合法的字节偏移（0 ≤ offset < 源tile总字节数），越界行为未定义<br>每次取32字节 |
 
 ## 流水类型
 
