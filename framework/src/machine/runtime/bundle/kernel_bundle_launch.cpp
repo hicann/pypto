@@ -60,6 +60,9 @@ int BundleLaunchAicpu(RtAicpuArgsEx& rtArgs, DevAscendProgram* devProg)
     if (ret != RT_SUCCESS) {
         return ret;
     }
+    if (devProg->devArgs.enableAicoreResolve) {
+        return ret;
+    }
     args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_SCHE;
     startTime = MspfSysCycleTime();
     const int scheCpuNum = static_cast<int>(devProg->devArgs.scheCpuNum);

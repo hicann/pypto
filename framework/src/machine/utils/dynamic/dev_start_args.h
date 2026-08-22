@@ -71,6 +71,12 @@ struct DevStartArgs : DevStartArgsBase {
             base + devProg->GetDeviceRuntimeOffset().taskCtrlPoolOffset);
         deviceRuntimeDataDesc.taskQueueList = reinterpret_cast<DeviceTaskCtrlQueue*>(
             base + devProg->GetDeviceRuntimeOffset().taskQueueOffset);
+        if (devProg->devArgs.enableAicoreResolve) {
+            drcoDeviceTaskReadyQueue = reinterpret_cast<npu::tile_fwk::DrcoDeviceTaskReadyQueue*>(
+                base + devProg->GetDeviceRuntimeOffset().deviceTaskReadyQueueOffset);
+        } else {
+            drcoDeviceTaskReadyQueue = nullptr;
+        }
         deviceRuntimeDataDesc.generalAddr = base + devProg->GetDeviceRuntimeOffset().generalOffset;
         deviceRuntimeDataDesc.dynamicCellMatchAddr = devProg->devArgs.dynamicCellMatchAddr;
         deviceRuntimeDataDesc.stitchPoolAddr = base + devProg->GetDeviceRuntimeOffset().stitchPoolOffset;
@@ -155,26 +161,26 @@ static inline void RuntimeYield(uint64_t microseconds = 0)
 }
 
 #define DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT 4
-struct RuntimeDataRingBufferHead {
+struct RuntimeDataRingBufferHead : RuntimeDataRingBufferHeadData {
 public:
-    void Initialize(uint64_t runtimeDataSize, uint64_t runtimeDataCount, ArchInfo arch = ArchInfo::DAV_2201)
+    void Initialize(uint64_t runtimeDataSizeArg, uint64_t runtimeDataCountArg, ArchInfo arch = ArchInfo::DAV_2201)
     {
-        runtimeDataSize_ = GetAlignedSize(runtimeDataSize);
-        runtimeDataCount_ = runtimeDataCount;
-        archInfo_ = arch;
+        runtimeDataSize = GetAlignedSize(runtimeDataSizeArg);
+        runtimeDataCount = runtimeDataCountArg;
+        archInfo = arch;
 
         /* finish starts from round 0 */
-        indexFinished_ = 0;
-        indexPending_ = 0;
+        indexFinished = 0;
+        indexPending = 0;
     }
 
-    bool Full() const { return indexFinished_ + runtimeDataCount_ <= indexPending_; }
+    bool Full() const { return indexFinished + runtimeDataCount <= indexPending; }
 
-    bool Empty() const { return indexFinished_ == indexPending_; }
+    bool Empty() const { return indexFinished == indexPending; }
 
     void AllocateWait()
     {
-        TIMEOUT_CHECK_INIT_WARN_ONLY(archInfo_);
+        TIMEOUT_CHECK_INIT_WARN_ONLY(archInfo);
 
         while (Full()) {
             RuntimeYield();
@@ -188,35 +194,35 @@ public:
         AllocateWait();
 
         /* allocate next element from the ring buffer */
-        uint64_t index = ++indexPending_;
+        uint64_t index = ++indexPending;
         return GetRuntimeData(index);
     }
 
     uint8_t* AllocatePrepare()
     {
         AllocateWait();
-        return GetRuntimeData(indexPending_ + 1);
+        return GetRuntimeData(indexPending + 1);
     }
 
-    void AllocateSubmit() { ++indexPending_; }
+    void AllocateSubmit() { ++indexPending; }
 
     void Deallocate(uint8_t* ptr)
     {
-        uint8_t* nextFree = GetRuntimeData(indexFinished_ + 1);
+        uint8_t* nextFree = GetRuntimeData(indexFinished + 1);
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, nextFree == ptr);
         /* deallocate from the ring buffer */
-        indexFinished_ += 1;
+        indexFinished += 1;
     }
 
-    uint64_t GetRuntimeDataSize() { return runtimeDataSize_; }
-    uint64_t GetRuntimeDataCount() { return runtimeDataCount_; }
-    uint64_t GetIndexFinished() { return indexFinished_; }
-    uint64_t GetIndexPending() { return indexPending_; }
-    uint64_t GetIndexCurrent() { return indexFinished_ + 1; }
+    uint64_t GetRuntimeDataSize() { return runtimeDataSize; }
+    uint64_t GetRuntimeDataCount() { return runtimeDataCount; }
+    uint64_t GetIndexFinished() { return indexFinished; }
+    uint64_t GetIndexPending() { return indexPending; }
+    uint64_t GetIndexCurrent() { return indexFinished + 1; }
 
     uint64_t GetIndexPendingIndex() { return GetIndexPending() % GetRuntimeDataCount(); }
 
-    uint8_t* GetRuntimeData(uint64_t index) { return &data_[runtimeDataSize_ * (index % runtimeDataCount_)]; }
+    uint8_t* GetRuntimeData(uint64_t index) { return &data_[runtimeDataSize * (index % runtimeDataCount)]; }
     uint8_t* GetRuntimeData() { return &data_[0]; }
     uint8_t* GetRuntimeDataCurrent() { return GetRuntimeData(GetIndexCurrent()); }
     uint8_t* GetRuntimeDataPending() { return GetRuntimeData(GetIndexPending()); }
@@ -230,14 +236,7 @@ public:
         return sizeof(RuntimeDataRingBufferHead) + GetAlignedSize(runtimeDataSize) * runtimeDataCount;
     }
 
-private:
-    uint64_t runtimeDataSize_;
-    uint64_t runtimeDataCount_;
-    ArchInfo archInfo_{ArchInfo::DAV_2201};
-
-    /* ringbuffer's end and begin */
-    std::atomic<uint64_t> indexFinished_;
-    std::atomic<uint64_t> indexPending_;
+public:
     unsigned char data_[0];
 };
 

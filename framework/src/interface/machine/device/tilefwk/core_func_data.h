@@ -33,6 +33,13 @@ namespace npu::tile_fwk {
 
 // VIRTUAL_PURE & VIRTUAL_MIX are special core type ,just used by machine
 enum class MachineType { AIV = 0, AIC = 1, MIX = 2, AICPU = 3, HUB = 4, VIRTUAL_PURE = 5, VIRTUAL_MIX = 6 };
+
+constexpr uint64_t HUB_MIX_DUMMY_HASH = 0xFFFFFFFFFFFFFFFEULL;
+
+inline bool IsHubType(int coreType)
+{
+    return coreType == static_cast<int>(CoreType::HUB) || coreType == static_cast<int>(CoreType::HUB_MIX);
+}
 #pragma pack(1)
 struct CoreFunctionTopo {
     uint64_t coreType;    // aic=0 aiv=1 aicpu=2

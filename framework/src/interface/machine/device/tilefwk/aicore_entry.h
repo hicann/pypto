@@ -342,9 +342,21 @@ INLINE uint32_t WaitWaveSignal(__gm__ KernelArgs* args)
 
 #include "tilefwk/aicore_entry_devtask.h"
 
+#if IS_AICORE
+#if ENABLE_AICORE_RESOLVE
+#include "tilefwk/aicore_entry_drco.h"
+#endif
+#endif
+
 INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs, int64_t outputs, int64_t workspace, int64_t tilingdata,
                         int64_t cfgdata)
 {
+#if IS_AICORE
+#if ENABLE_AICORE_RESOLVE
+    KernelEntryDrco(ffts_addr, inputs, outputs, workspace, tilingdata, cfgdata);
+    return;
+#endif
+#endif
     uint64_t start = get_sys_cnt();
     UNUSED(ffts_addr);
     UNUSED(inputs);

@@ -93,8 +93,18 @@ void DevControlFlowCache::PredCountDataRestore(DynDeviceTaskBase* base)
         DynFuncDataCache* dynDataCache = &dynFuncDataCacheList->At(dupIndex);
         DynFuncDataBackup* dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
         DevAscendFunctionDuppedData* duppedData = dynDataCache->duppedData;
-        size_t backupSize = sizeof(predcount_t) * duppedData->GetOperationSize();
+        uint32_t opSize = duppedData->GetOperationSize();
+        size_t backupSize = sizeof(predcount_t) * opSize;
         DevMemcpyS(&duppedData->GetOperationCurrPredCount(0), backupSize, dynDataBackup->predCountBackup, backupSize);
+
+        DynFuncData* dynData = &dynFuncDataList->At(dupIndex);
+        if (dynData->drcoRootFuncData.predCount != nullptr) {
+            // drco predCount is int32_t on aicore side, while cache backup is uint16_t(predcount_t)
+            int32_t* drcoPredCount = dynData->drcoRootFuncData.predCount;
+            for (uint32_t i = 0; i < opSize; ++i) {
+                drcoPredCount[i] = static_cast<int32_t>(dynDataBackup->predCountBackup[i]);
+            }
+        }
 
         BitmapDataRestore(dynDataCache, dynDataBackup);
     }
@@ -121,15 +131,74 @@ void DevControlFlowCache::ReadyQueueDataBackup(DynDeviceTaskBase* base)
         readyTaskNum += base->readyQueue[i]->UnsafeSize();
     }
     readyQueueBackup->readyTaskNum = readyTaskNum;
+
+    if (base->drcoRootFuncList != nullptr) {
+        for (size_t i = 0; i < npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE; i++) {
+            auto* src = base->drcoRootFuncList->perCorePendingQueueArray[i];
+            if (src == nullptr) {
+                continue;
+            }
+            size_t backupSize = sizeof(npu::tile_fwk::PerCorePendingQueue) +
+                                sizeof(npu::tile_fwk::LeafTaskId) * src->size;
+            auto* dst = reinterpret_cast<npu::tile_fwk::PerCorePendingQueue*>(AllocateCache(backupSize));
+            if (dst == nullptr) {
+                continue;
+            }
+            memcpy_s(dst, backupSize, src, backupSize);
+            readyQueueBackup->perCorePendingQueueList[i] = dst;
+        }
+    }
+
     base->readyQueueBackup = readyQueueBackup;
 }
 
-void DevControlFlowCache::ReadyQueueDataRestore(DynDeviceTaskBase* base)
+void DevControlFlowCache::ReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic)
 {
     ReadyQueueCache* readyQueueBackup = base->readyQueueBackup;
     base->devTask.coreFunctionCnt = readyQueueBackup->coreFunctionCnt;
     for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
         *base->readyQueue[i] = readyQueueBackup->queueList[i];
+    }
+
+    // for aicore-resolve
+    if (base->drcoRootFuncList != nullptr) {
+        for (size_t i = 0; i < npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE; i++) {
+            auto* dst = base->drcoRootFuncList->perCorePendingQueueArray[i];
+            if (dst == nullptr) {
+                continue;
+            }
+            dst->head = 0;
+            dst->tail = 0;
+            dst->size = 0;
+        }
+
+        uint32_t nrAivCores = nrValidAic * 2;
+        ReadyCoreFunctionQueue* aivQueue = base->readyQueue[0];
+        ReadyCoreFunctionQueue* aicQueue = base->readyQueue[1];
+        uint32_t aicIdx = 0;
+        for (const auto* it = aicQueue->begin(); it != aicQueue->end(); ++it) {
+            uint32_t coreIdx = aicIdx % nrValidAic;
+            base->drcoRootFuncList->perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
+            aicIdx++;
+        }
+        uint32_t aivIdx = 0;
+        for (const auto* it = aivQueue->begin(); it != aivQueue->end(); ++it) {
+            uint32_t coreIdx = nrValidAic + (aivIdx % nrAivCores);
+            base->drcoRootFuncList->perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
+            aivIdx++;
+        }
+        __sync_synchronize();
+        for (uint32_t ct = 0; ct < npu::tile_fwk::NUM_CORE_TYPES; ct++) {
+            for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
+                auto* dst = base->drcoRootFuncList->localReadyQueueArray[ct][i];
+                if (dst == nullptr) {
+                    continue;
+                }
+                dst->head = 0;
+                dst->tail = 0;
+            }
+        }
+        *base->drcoRootFuncList->executedTaskCount = 0;
     }
 }
 
@@ -165,7 +234,7 @@ void DevControlFlowCache::DieReadyQueueDataBackup(DynDeviceTaskBase* base)
     base->dieReadyQueueBackup = dieReadyQueueBackup;
 }
 
-void DevControlFlowCache::DieReadyQueueDataRestore(DynDeviceTaskBase* base)
+void DevControlFlowCache::DieReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic)
 {
     DieReadyQueueCache* dieReadyQueueBackup = base->dieReadyQueueBackup;
     if (dieReadyQueueBackup == nullptr) {
@@ -180,6 +249,42 @@ void DevControlFlowCache::DieReadyQueueDataRestore(DynDeviceTaskBase* base)
             continue;
         }
         *dieReadyQueue = dieReadyQueueBackup->queueList[i];
+    }
+
+    if (base->drcoRootFuncList == nullptr) {
+        return;
+    }
+    // for aicore-resolve
+    uint32_t nrAivCores = 2 * nrValidAic;
+    uint32_t halfAic = nrValidAic / 2;
+    uint32_t halfAiv = nrAivCores / 2;
+    // perCorePendingQueue: distribute die tasks, die0 to first-half cores, die1 to second-half cores
+    for (uint32_t dieId = 0; dieId < DIE_NUM; ++dieId) {
+        uint32_t aicCoreBase = dieId * halfAic;
+        uint32_t aicCoreCnt = (dieId == 0) ? halfAic : (nrValidAic - halfAic);
+        ReadyCoreFunctionQueue* dieAicQue = reinterpret_cast<ReadyCoreFunctionQueue*>(
+            base->devTask.dieReadyFunctionQue.readyDieAicCoreFunctionQue[dieId]);
+        if (dieAicQue != nullptr) {
+            uint32_t dieAicIdx = 0;
+            for (const auto* it = dieAicQue->begin(); it != dieAicQue->end(); ++it) {
+                uint32_t coreIdx = aicCoreBase + (dieAicIdx % aicCoreCnt);
+                base->drcoRootFuncList->perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
+                dieAicIdx++;
+            }
+        }
+
+        uint32_t aivCoreBase = nrValidAic + dieId * halfAiv;
+        uint32_t aivCoreCnt = (dieId == 0) ? halfAiv : (nrAivCores - halfAiv);
+        ReadyCoreFunctionQueue* dieAivQue = reinterpret_cast<ReadyCoreFunctionQueue*>(
+            base->devTask.dieReadyFunctionQue.readyDieAivCoreFunctionQue[dieId]);
+        if (dieAivQue != nullptr) {
+            uint32_t dieAivIdx = 0;
+            for (const auto* it = dieAivQue->begin(); it != dieAivQue->end(); ++it) {
+                uint32_t coreIdx = aivCoreBase + (dieAivIdx % aivCoreCnt);
+                base->drcoRootFuncList->perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
+                dieAivIdx++;
+            }
+        }
     }
 }
 
@@ -738,12 +843,20 @@ void DevControlFlowCache::RelocDuppedDataAndDynFuncData(RelocRange& relocProgram
 
     relocProgram.Reloc(dynDataCache->devFunc);
     relocProgram.Reloc(dynDataCache->calleeList);
+    relocProgram.RelocNullable(dynData->cceBinaryIndexList);
 
     relocCtrlCache.Reloc(dynDataCache->predCount);
     relocCtrlCache.RelocNullable(dynDataBackup->predCountBackup);
     relocCtrlCache.RelocNullable(dynDataBackup->rawTensorAddrBackup);
     relocCtrlCache.RelocNullable(dynDataBackup->deadEndHubBitmapBackup);
     relocCtrlCache.RelocNullable(dynDataBackup->tailTaskBitmapBackup);
+
+    if (dynData->drcoRootFuncData.predCount != nullptr) {
+        relocCtrlCache.Reloc(dynData->drcoRootFuncData.predCount);
+        relocProgram.Reloc(dynData->drcoRootFuncData.succStaticList);
+        relocCtrlCache.Reloc(dynData->drcoRootFuncData.succStitchList);
+        relocProgram.Reloc(dynData->drcoRootFuncData.succInfoList);
+    }
 }
 
 /* Host-to-cache: devStartArgs should be nullptr. Cache-to-Device: devStartArgs should be filled */
@@ -774,9 +887,23 @@ void DevControlFlowCache::TaskAddrRelocProgramAndCtrlCache(uint64_t srcProgram, 
             readyQueueBackup->queueList[i].Reloc(relocCtrlCache);
         }
 
+        for (size_t i = 0; i < npu::tile_fwk::DRCO_QUEUE_MAX; i++) {
+            if (readyQueueBackup->globalReadyQueueList[i].ptr != nullptr) {
+                RelocControlFlowCachePointer(readyQueueBackup->globalReadyQueueList[i].ptr, relocCtrlCache);
+            }
+        }
+        for (size_t i = 0; i < npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE; i++) {
+            if (readyQueueBackup->perCorePendingQueueList[i] != nullptr) {
+                RelocControlFlowCachePointer(readyQueueBackup->perCorePendingQueueList[i], relocCtrlCache);
+            }
+        }
+
         DynFuncHeader*& dynFuncDataListRef = dynTaskBase->dynFuncDataList;
         DynFuncHeader* dynFuncDataList = RelocControlFlowCachePointer(dynFuncDataListRef, relocCtrlCache);
         relocProgram.Reloc(dynFuncDataList->cceBinary);
+
+        RelocDrcoRootFuncList(relocCtrlCache, dynTaskBase);
+
         DynFuncDataCache* dynFuncDataCacheList = dynTaskBase->dynFuncDataCacheList;
         DynFuncDataBackup* dynFuncDataBackupList = dynTaskBase->dynFuncDataBackupList;
         MixTaskDataReloc(relocCtrlCache, relocProgram, dynTaskBase, dynFuncDataList);
@@ -803,6 +930,31 @@ void DevControlFlowCache::TaskAddrRelocProgramAndCtrlCache(uint64_t srcProgram, 
             RelocDuppedDataAndDynFuncData(relocProgram, relocCtrlCache, duppedData, dynData, dynDataCache,
                                           dynDataBackup);
         }
+    }
+}
+
+void DevControlFlowCache::RelocDrcoRootFuncList(RelocRange& relocCtrlCache, DynDeviceTaskBase* dynTaskBase)
+{
+    npu::tile_fwk::DrcoRootFuncList*& drcoRootFuncListRef = dynTaskBase->drcoRootFuncList;
+    npu::tile_fwk::DrcoRootFuncList* drcoRootFuncList = nullptr;
+    if (drcoRootFuncListRef != nullptr) {
+        drcoRootFuncList = RelocControlFlowCachePointer(drcoRootFuncListRef, relocCtrlCache);
+    }
+    if (drcoRootFuncList != nullptr) {
+        for (size_t i = 0; i < npu::tile_fwk::DRCO_QUEUE_MAX; i++) {
+            if (drcoRootFuncList->globalReadyQueueList[i].ptr != nullptr) {
+                RelocControlFlowCachePointer(drcoRootFuncList->globalReadyQueueList[i].ptr, relocCtrlCache);
+            }
+        }
+        for (size_t i = 0; i < npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE; i++) {
+            relocCtrlCache.Reloc(drcoRootFuncList->perCorePendingQueueArray[i]);
+        }
+        for (uint32_t ct = 0; ct < npu::tile_fwk::NUM_CORE_TYPES; ct++) {
+            for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
+                relocCtrlCache.Reloc(drcoRootFuncList->localReadyQueueArray[ct][i]);
+            }
+        }
+        relocCtrlCache.Reloc(drcoRootFuncList->executedTaskCount);
     }
 }
 

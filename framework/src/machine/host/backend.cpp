@@ -835,6 +835,14 @@ static void RunCompileControlFlowStage(Function* function, const std::shared_ptr
 #else
     std::string cflags = "-mgeneral-regs-only";
 #endif
+    if (IsAicoreResolveEnabled()) {
+        cflags += " -DENABLE_AICORE_RESOLVE=1";
+    } else {
+        cflags += " -DENABLE_AICORE_RESOLVE=0";
+    }
+    // keep -D__DEVICE__ for the arm64 dev control flow compile, which is otherwise only added when extraCflag is empty
+    std::string devCflags = "-D__DEVICE__ -DENABLE_AICORE_RESOLVE=";
+    devCflags += IsAicoreResolveEnabled() ? "1" : "0";
 
     const std::string funcHash = function->GetFunctionHash().Data();
     const std::string arm64TargetToolPath = Arm64TargetTool("g++");
@@ -859,7 +867,7 @@ static void RunCompileControlFlowStage(Function* function, const std::shared_ptr
                      arm64TargetToolPath.c_str());
         attr->devControlFlowBinary = CompileAndLoadSection(
             controlFlowSource, controlFlowDevFilePath, aicpuDirPath, exprSrcFiles, arm64TargetToolPath, BISHENG_LD_CMD,
-            Arm64TargetTool("objcopy"), ".pypto", IsNeedDumpAicpuKernel(controlFlowDevFilePath));
+            Arm64TargetTool("objcopy"), ".pypto", IsNeedDumpAicpuKernel(controlFlowDevFilePath), devCflags);
     } else {
         // brk #0
         MACHINE_LOGW("Arm64 target tool is not found.");

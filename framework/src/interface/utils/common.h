@@ -30,6 +30,7 @@
 #include "tilefwk/error.h"
 #include "tilefwk/symbolic_scalar.h"
 #include "core/bimap.h"
+#include "tilefwk/core_func_data.h"
 
 namespace npu::tile_fwk {
 
@@ -192,15 +193,6 @@ enum PipeType {
     PIPE_V2 = 9,   // Lower priority vector pipe,
     PIPE_FIX = 10, // {L0C} ->{L1,UB,L1UB}
 };
-
-enum class CoreType { AIV = 0, AIC = 1, MIX = 2, AICPU = 3, HUB = 4, GMATOMIC = 5, HUB_MIX = 6, INVALID = 20 };
-
-constexpr uint64_t HUB_MIX_DUMMY_HASH = 0xFFFFFFFFFFFFFFFEULL;
-
-inline bool IsHubType(int coreType)
-{
-    return coreType == static_cast<int>(CoreType::HUB) || coreType == static_cast<int>(CoreType::HUB_MIX);
-}
 
 template <typename T>
 inline std::string IntVecToStr(const std::vector<T>& shape)
@@ -473,6 +465,17 @@ inline bool IsPtoDataDumpEnabled()
 {
     static const bool result = []() {
         std::string value = GetEnvVar("PYPTO_DATADUMP_ENABLE", true, true);
+        return (value == "true");
+    }();
+
+    return result;
+}
+
+// 判断环境变量 ENABLE_AICORE_RESOLVE 是否为 true
+inline bool IsAicoreResolveEnabled()
+{
+    static const bool result = []() {
+        std::string value = GetEnvVar("ENABLE_AICORE_RESOLVE", true, true);
         return (value == "true");
     }();
 

@@ -33,6 +33,10 @@ enum class WsAicpuSlabMemType : uint8_t {
     READY_QUE,
     DIE_READY_QUE,
     WRAP_QUEUE,
+    PER_CORE_PENDING_QUE,
+    LOCAL_READY_QUE,
+    GLOBAL_READY_QUE,
+    PRED_COUNT,
     DUPPED_STITCH, // stitch pool memory
     SLAB_MEM_TYPE_BUTT
 };
@@ -517,12 +521,14 @@ private:
 
 struct WsSlabStageAllocMem {
     std::atomic_bool canFree{false};
+    std::atomic_bool* ctrlNotFreeFlag{nullptr};
     StageAllocInfo generalMetadataStageMem;
     StageAllocInfo stitchStageMem;
 
     WsSlabStageAllocMem() = default;
     WsSlabStageAllocMem(const WsSlabStageAllocMem& other)
         : canFree(other.canFree.load(std::memory_order_relaxed)),
+          ctrlNotFreeFlag(other.ctrlNotFreeFlag),
           generalMetadataStageMem(other.generalMetadataStageMem),
           stitchStageMem(other.stitchStageMem)
     {}
@@ -531,6 +537,7 @@ struct WsSlabStageAllocMem {
     {
         if (this != &other) {
             canFree.store(other.canFree.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            ctrlNotFreeFlag = other.ctrlNotFreeFlag;
             generalMetadataStageMem = other.generalMetadataStageMem;
             stitchStageMem = other.stitchStageMem;
         }

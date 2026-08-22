@@ -105,6 +105,9 @@ public:
         }
         bool appendLastTaskCtrl = false;
         DeviceTaskCtrl* newTaskCtrl = InitTaskCtrl(idx, &dynTask->devTask, ctx);
+        if (AicoreResolveEnabled()) {
+            dynTask->taskStageAllocMem.ctrlNotFreeFlag = &newTaskCtrl->notFree;
+        }
         if (lastTaskCtrl_ && lastTaskCtrl_->SupportParallel()) {
             if (SameParallelIterTaskCtrl(lastTaskCtrl_, newTaskCtrl)) {
                 lastTaskCtrl_->existNextSameIterTask = true;
@@ -121,8 +124,12 @@ public:
         }
 
         if (!appendLastTaskCtrl && !ctx->devProg->ctrlFlowCacheAnchor->IsRecording()) {
-            for (uint32_t i = 0; i < GetScheAicpuNum(); ++i) {
-                GetTaskQueue(i).Enqueue(newTaskCtrl);
+            if (AicoreResolveEnabled()) {
+                GetDeviceTaskReadyQueue().Append(dynTask->dynFuncDataList, dynTask->drcoRootFuncList);
+            } else {
+                for (uint32_t i = 0; i < GetScheAicpuNum(); ++i) {
+                    GetTaskQueue(i).Enqueue(newTaskCtrl);
+                }
             }
         }
 
@@ -131,8 +138,12 @@ public:
 
     void StopAicoreManager()
     {
-        for (uint32_t i = 0; i < GetScheAicpuNum(); ++i) {
-            GetTaskQueue(i).Enqueue(nullptr);
+        if (AicoreResolveEnabled()) {
+            GetDeviceTaskReadyQueue().Append(nullptr, nullptr);
+        } else {
+            for (uint32_t i = 0; i < GetScheAicpuNum(); ++i) {
+                GetTaskQueue(i).Enqueue(nullptr);
+            }
         }
     }
 
@@ -144,8 +155,12 @@ public:
 
     void InitTaskPipeWithSched(DevAscendProgram* devProg)
     {
-        for (uint32_t i = 0; i < devProg->devArgs.scheCpuNum; ++i) {
-            GetTaskQueue(i).ResetEmpty();
+        if (AicoreResolveEnabled()) {
+            GetDeviceTaskReadyQueue().Reset();
+        } else {
+            for (uint32_t i = 0; i < devProg->devArgs.scheCpuNum; ++i) {
+                GetTaskQueue(i).ResetEmpty();
+            }
         }
     }
 
@@ -453,6 +468,15 @@ private:
 private:
     DeviceTaskCtrl& GetTaskCtrlInPool(int index) { return devStartArgs_->deviceRuntimeDataDesc.taskCtrlPool[index]; }
     DeviceTaskCtrlQueue& GetTaskQueue(int index) { return devStartArgs_->deviceRuntimeDataDesc.taskQueueList[index]; }
+    npu::tile_fwk::DrcoDeviceTaskReadyQueue& GetDeviceTaskReadyQueue()
+    {
+        return *devStartArgs_->drcoDeviceTaskReadyQueue;
+    }
+    bool AicoreResolveEnabled() const
+    {
+        return devStartArgs_ != nullptr && devStartArgs_->devProg != nullptr &&
+               devStartArgs_->devProg->devArgs.enableAicoreResolve;
+    }
     uint32_t GetScheAicpuNum()
     {
         uint64_t arbitratedScehNum = devStartArgs_->devCtrlState.arbitratedScehNum.load();

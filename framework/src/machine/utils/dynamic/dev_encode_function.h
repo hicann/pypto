@@ -103,6 +103,7 @@ private:
     DevLocalVector<int> opAttrOffsetList_;
     DevLocalVector<int> opCalleeList_;
     DevLocalVector<int> operationSuccList_;
+    DevLocalVector<npu::tile_fwk::DevAscendFunctionOperationSuccInfo> operationSuccInfoList_;
     DevLocalVector<int> operationCopyOutResolveSuccIndexList_;
 
     DevLocalVector<DevAscendFunctionIncast> incastList;
@@ -441,6 +442,18 @@ public:
 
     inline void FillOpAttrs(DevCceBinary* cceInfo) { (void)cceInfo; }
 
+    inline int GetOperationSucc(size_t idx) const { return At(operationSuccList_, idx); }
+    inline int& GetOperationSucc(size_t idx) { return At(operationSuccList_, idx); }
+
+    inline npu::tile_fwk::DevAscendFunctionOperationSuccInfo GetOperationSuccInfo(size_t operationIndex) const
+    {
+        return At(operationSuccInfoList_, operationIndex);
+    }
+    inline npu::tile_fwk::DevAscendFunctionOperationSuccInfo& GetOperationSuccInfo(size_t operationIndex)
+    {
+        return At(operationSuccInfoList_, operationIndex);
+    }
+
     inline const uint32_t& GetOperationDepGraphPredCount(int operationIndex) const
     {
         return At(operationList_, operationIndex).depGraphPredCount;
@@ -617,7 +630,7 @@ private:
         size_t index, int& sucSize, int& copyOutResolveSuccIdxSize, const OrderedSet<Operation*>& callList,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
         const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
-        DevAscendFunctionDuppedData* dupData);
+        const std::vector<int32_t>& stitchIndexList, DevAscendFunctionDuppedData* dupData);
     void VerifyOperationEncodedContent(const OrderedSet<Operation*>& callList,
                                        const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
                                        DevAscendFunctionDuppedData* dupData);

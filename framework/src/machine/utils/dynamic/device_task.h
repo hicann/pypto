@@ -41,6 +41,16 @@ struct DynDeviceTask : DynDeviceTaskBase {
         return static_cast<uint32_t>(coreType);
     }
 
+    static uint32_t GetGlobalTaskReadyQueueIndexByCoreType(CoreType coreType)
+    {
+        if (coreType == CoreType::AIC) {
+            return DRCO_QUEUE_AIC;
+        } else if (coreType == CoreType::AIV) {
+            return DRCO_QUEUE_AIV;
+        }
+        return static_cast<uint32_t>(-1);
+    }
+
     DynDeviceTask(DeviceWorkspaceAllocator& allocator)
     {
         InitDevTaskShell(devTask);
@@ -254,16 +264,25 @@ const uint64_t DEVICE_TASK_QUEUE_SIZE = sizeof(DeviceTaskCtrlQueue);
 
 const uint64_t DEVICE_SHM_SIZE = DEV_ARGS_SIZE + DEVICE_TASK_CTRL_POOL_SIZE;
 
+static inline uint64_t FillDeviceRuntimeSize(uint64_t& offset, uint64_t size)
+{
+    uint64_t result = offset;
+    offset += size;
+    return result;
+}
+
 static inline void FillDeviceRuntimeOffset(DevAscendProgram* devProg, uint64_t count)
 {
     DeviceRuntimeOffset& offset = devProg->deviceRuntimeOffset;
 
-    offset.startArgsOffset = 0;
-    offset.taskCtrlPoolOffset = offset.startArgsOffset + DEV_ARGS_SIZE;
-    offset.taskQueueOffset = offset.taskCtrlPoolOffset + DEVICE_TASK_CTRL_POOL_SIZE;
-    offset.generalOffset = offset.taskQueueOffset + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
-    offset.stitchPoolOffset = offset.generalOffset + devProg->memBudget.metadata.general;
-    offset.size = offset.stitchPoolOffset + devProg->memBudget.metadata.stitchPool;
+    uint64_t off = 0;
+    offset.startArgsOffset = FillDeviceRuntimeSize(off, DEV_ARGS_SIZE);
+    offset.taskCtrlPoolOffset = FillDeviceRuntimeSize(off, DEVICE_TASK_CTRL_POOL_SIZE);
+    offset.taskQueueOffset = FillDeviceRuntimeSize(off, DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum);
+    offset.deviceTaskReadyQueueOffset = FillDeviceRuntimeSize(off, sizeof(npu::tile_fwk::DrcoDeviceTaskReadyQueue));
+    offset.generalOffset = FillDeviceRuntimeSize(off, devProg->memBudget.metadata.general);
+    offset.stitchPoolOffset = FillDeviceRuntimeSize(off, devProg->memBudget.metadata.stitchPool);
+    offset.size = off;
     offset.count = count;
 }
 

@@ -47,6 +47,7 @@ private:
     DevAscendProgram* devProg_{nullptr};
     DeviceWorkspaceAllocator* workspace_{nullptr};
     npu::tile_fwk::DevStartArgsBase* startArgs_{nullptr};
+    bool enableAicoreResolve_{false};
 
 private:
     int BuildReadyQueue(DynDeviceTask* dyntask, DevAscendProgram* devProg);
@@ -57,13 +58,17 @@ private:
     void InitReadyCoreFunctionQueue(ReadyCoreFunctionQueue* q, uint32_t capacity);
     int InitReadyQueues(DynDeviceTask* dyntask, DevAscendProgram* devProg,
                         ReadyCoreFunctionQueue* queue[READY_QUEUE_SIZE]);
+    void InitDrcoRootFuncList(DynDeviceTask* dyntask);
     int ProcessZeroPredTask(DynDeviceTask* dyntask, WrapInfoQueue* wrapQueue, bool isNeedWrap);
     void InitDieReadyQueues(DynDeviceTask* dyntask, DevAscendProgram* devProg);
+    void DispatchReadyQueueToCores(DynDeviceTask* dyntask, DevAscendProgram* devProg);
+    void DispatchDieReadyQueueToCores(DynDeviceTask* dyntask, DevAscendProgram* devProg);
     void UpdateDeviceTaskQueueInfo(DynDeviceTask* dyntask, ReadyCoreFunctionQueue* aicpuQueue,
                                    ReadyCoreFunctionQueue* aivQueue, ReadyCoreFunctionQueue* aicQueue,
                                    WrapInfoQueue* wrapQueue);
     int BuildDynFuncData(DynDeviceTask* dyntask, uint32_t taskId, DevAscendFunctionDupped* stitchedList,
                          uint64_t stitchedSize);
+    void BuildDrcoRootFuncData(DynFuncData* dyndata, DevAscendFunctionDupped& stitchedFunc);
 
     // mix subgraph schedule
     WrapInfoQueue* AllocWrapQueue(DynDeviceTask* dyntask);

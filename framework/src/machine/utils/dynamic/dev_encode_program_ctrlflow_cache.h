@@ -41,6 +41,9 @@ struct ReadyQueueCache {
     uint32_t coreFunctionCnt;
     ReadyCoreFunctionQueueUnsafe queueList[READY_QUEUE_SIZE];
     uint32_t readyTaskNum;
+
+    npu::tile_fwk::DrcoGlobalReadyQueuePtr globalReadyQueueList[npu::tile_fwk::DRCO_QUEUE_MAX];
+    npu::tile_fwk::PerCorePendingQueue* perCorePendingQueueList[npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE]{};
 };
 
 struct DieReadyQueueCache {
@@ -100,6 +103,7 @@ struct ParallelInfo {
 struct DynDeviceTaskBase {
     DeviceTask devTask;
     DynFuncHeader* dynFuncDataList{nullptr};
+    npu::tile_fwk::DrcoRootFuncList* drcoRootFuncList{nullptr};
 
     ReadyCoreFunctionQueue* readyQueue[READY_QUEUE_SIZE];
     DynFuncDataCache dynFuncDataCacheList[MAX_STITCH_FUNC_NUM];
@@ -402,11 +406,11 @@ struct DevControlFlowCache {
 
     void ReadyQueueDataBackup(DynDeviceTaskBase* base);
 
-    void ReadyQueueDataRestore(DynDeviceTaskBase* base);
+    void ReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic);
 
     void DieReadyQueueDataBackup(DynDeviceTaskBase* base);
 
-    void DieReadyQueueDataRestore(DynDeviceTaskBase* base);
+    void DieReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic);
 
     void MixTaskDataBackup(DynDeviceTaskBase* base);
 
@@ -460,6 +464,7 @@ struct DevControlFlowCache {
                           DynFuncHeader* dynFuncDataList);
 
     void DieReadyQueueReloc(RelocRange& relocCtrlCache, DynDeviceTaskBase* dynTaskBase);
+    void RelocDrcoRootFuncList(RelocRange& relocCtrlCache, DynDeviceTaskBase* dynTaskBase);
     void RelocDuppedDataAndDynFuncData(RelocRange& relocProgram, RelocRange& relocCtrlCache,
                                        DevAscendFunctionDuppedData* duppedData, DynFuncData* dynData,
                                        DynFuncDataCache* dynDataCache, DynFuncDataBackup* dynDataBackup);

@@ -396,6 +396,27 @@ DynFuncHeader* DeviceWorkspaceAllocator::AllocateDynFuncData(uint64_t size)
     return header;
 }
 
+npu::tile_fwk::DrcoGlobalReadyQueue* DeviceWorkspaceAllocator::AllocateDrcoGlobalReadyQueue(uint64_t size)
+{
+    WsAllocation allocation = ControlFlowAllocateSlab(devProg_, size,
+                                                      SlabAlloc(size, WsAicpuSlabMemType::GLOBAL_READY_QUE));
+    return allocation.As<npu::tile_fwk::DrcoGlobalReadyQueue>();
+}
+
+npu::tile_fwk::PerCorePendingQueue* DeviceWorkspaceAllocator::AllocatePerCorePendingQueue(uint64_t size)
+{
+    WsAllocation allocation = ControlFlowAllocateSlab(devProg_, size,
+                                                      SlabAlloc(size, WsAicpuSlabMemType::PER_CORE_PENDING_QUE));
+    return allocation.As<npu::tile_fwk::PerCorePendingQueue>();
+}
+
+npu::tile_fwk::DrcoLocalReadyQueue* DeviceWorkspaceAllocator::AllocateDrcoLocalReadyQueue(uint64_t size)
+{
+    WsAllocation allocation = ControlFlowAllocateSlab(devProg_, size,
+                                                      SlabAlloc(size, WsAicpuSlabMemType::LOCAL_READY_QUE));
+    return allocation.As<npu::tile_fwk::DrcoLocalReadyQueue>();
+}
+
 void DeviceWorkspaceAllocator::ResetAicpuMemCounter()
 {
 #if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
@@ -814,7 +835,7 @@ uint32_t DeviceWorkspaceAllocator::ShmemWaitUntilCacheSlabMemObjSize()
     return 0;
 }
 
-uint32_t DeviceWorkspaceAllocator::DuppedStitchSlabMemObjSize() { return sizeof(struct DevAscendFunctionDuppedStitch); }
+uint32_t DeviceWorkspaceAllocator::DuppedStitchSlabMemObjSize() { return sizeof(DevAscendFunctionDuppedStitch); }
 
 uint32_t DeviceWorkspaceAllocator::ReadyQueSlabMemObjSize()
 {
@@ -837,6 +858,27 @@ uint32_t DeviceWorkspaceAllocator::WrapQueSlabMemObjSize()
     } else {
         return 0;
     }
+}
+
+uint32_t DeviceWorkspaceAllocator::PerCorePendingQueSlabMemObjSize()
+{
+    return sizeof(npu::tile_fwk::PerCorePendingQueue) + devProg_->stitchFunctionsize * sizeof(uint32_t);
+}
+
+uint32_t DeviceWorkspaceAllocator::LocalReadyQueSlabMemObjSize()
+{
+    return sizeof(npu::tile_fwk::DrcoLocalReadyQueue) + devProg_->stitchFunctionsize * sizeof(uint32_t);
+}
+
+uint32_t DeviceWorkspaceAllocator::GlobalReadyQueSlabMemObjSize()
+{
+    return sizeof(npu::tile_fwk::DrcoGlobalReadyQueue) + devProg_->stitchFunctionsize * sizeof(uint32_t);
+}
+
+uint32_t DeviceWorkspaceAllocator::PredCountSlabMemObjSize()
+{
+    // predCount and executedTaskCount
+    return sizeof(int32_t) + devProg_->stitchFunctionsize * sizeof(int32_t);
 }
 
 /* 根据当前算子的业务模型分析计算出slab 管理内存页大小, 基于当前可评估的所有内存类型的最大值评估 */
@@ -917,7 +959,23 @@ bool DeviceWorkspaceAllocator::DeviceTaskMemTryRecycle()
             return true;
         }
 
+        if (!deviceTask->taskStageAllocMem.canFree.load(std::memory_order_relaxed)) {
+            auto* dynFuncHeader = deviceTask->dynFuncDataList;
+            if (dynFuncHeader != nullptr) {
+                auto* rootFuncList = deviceTask->drcoRootFuncList;
+                if (rootFuncList != nullptr && (rootFuncList->totalTaskCount == 0 ||
+                                                (rootFuncList->executedTaskCount != nullptr &&
+                                                 __atomic_load_n(rootFuncList->executedTaskCount, __ATOMIC_ACQUIRE) >=
+                                                     rootFuncList->totalTaskCount))) {
+                    deviceTask->taskStageAllocMem.canFree.store(true, std::memory_order_release);
+                }
+            }
+        }
+
         if (deviceTask->taskStageAllocMem.canFree.load(std::memory_order_relaxed)) {
+            if (deviceTask->taskStageAllocMem.ctrlNotFreeFlag != nullptr) {
+                deviceTask->taskStageAllocMem.ctrlNotFreeFlag->store(false, std::memory_order_release);
+            }
             // recycle slab alloc memory
             metadataAllocators_.generalSlab.FreeStageAllocMem(deviceTask->taskStageAllocMem.generalMetadataStageMem);
             metadataAllocators_.stitchSlab.FreeStageAllocMem(deviceTask->taskStageAllocMem.stitchStageMem);

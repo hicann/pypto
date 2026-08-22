@@ -86,3 +86,22 @@ static inline void CallSubFuncTask(uint64_t, npu::tile_fwk::CoreFuncParam*, int6
 {
     std::this_thread::sleep_for(std::chrono::microseconds(5)); // fixed 5us modeling
 }
+
+template <typename T, typename V>
+static inline T atomicAdd(__gm__ T* address, V value)
+{
+    return __atomic_fetch_add(address, static_cast<T>(value), __ATOMIC_RELAXED);
+}
+
+template <typename T>
+static inline T atomicCAS(__gm__ T* address, T compare, T value)
+{
+    __atomic_compare_exchange_n(address, &compare, value, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+    return compare;
+}
+
+template <typename T>
+static inline T atomicExch(__gm__ T* address, T value)
+{
+    return __atomic_exchange_n(address, value, __ATOMIC_RELAXED);
+}

@@ -42,8 +42,12 @@ __always_inline uint64_t GetCycles()
 #endif
 }
 
-__always_inline void WaitAicoreStart([[maybe_unused]] npu::tile_fwk::DevStartArgsBase* startArgs)
+__always_inline void WaitAicoreStart(npu::tile_fwk::DevStartArgsBase* startArgs)
 {
+#if ENABLE_AICORE_RESOLVE
+    (void)startArgs;
+    return; // aicore resolve: 依赖由AICore在设备端自己解析，无需等待AICPU的syncFlag
+#endif
 #if defined(__aarch64__) && defined(__DEVICE__)
     uint64_t start = GetCycles();
     while (__atomic_load_n(&startArgs->syncFlag, __ATOMIC_ACQUIRE) != 1) {
@@ -51,6 +55,8 @@ __always_inline void WaitAicoreStart([[maybe_unused]] npu::tile_fwk::DevStartArg
             break;
         }
     }
+#else
+    (void)startArgs;
 #endif
 }
 

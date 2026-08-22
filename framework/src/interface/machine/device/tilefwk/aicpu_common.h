@@ -27,6 +27,9 @@ const uint64_t AICORE_TASK_INIT = 0xFFFFFFFF;
 const uint64_t AICORE_TASK_STOP = 0xF0000001;
 const uint64_t AICORE_FUNC_STOP = 0xF0000002;
 const uint64_t AICORE_TASK_ABNORMAL_STOP = 0xF0000004;
+const uint64_t AICORE_TASK_FETCH_CONFLICT = 0xF0000008;
+const uint64_t AICORE_TASK_NO_INCOME = 0xF0000009;
+const uint64_t AICORE_TASK_ALL_FINISH = 0xF000000a;
 const uint64_t AICORE_FIN_MASK = 0x80000000;
 const uint64_t AICORE_TASK_MAX = 0x70000000;
 
@@ -130,6 +133,7 @@ struct DeviceRuntimeOffset {
     uint64_t startArgsOffset{0};
     uint64_t taskCtrlPoolOffset{0};
     uint64_t taskQueueOffset{0};
+    uint64_t deviceTaskReadyQueueOffset{0};
     uint64_t generalOffset{0};
     uint64_t stitchPoolOffset{0};
     uint64_t size{0};
@@ -172,6 +176,7 @@ struct DeviceArgs {
     bool enableVFFusion = false;
     bool enableEslModel = false;
     bool hasAicpuTask = false;
+    bool enableAicoreResolve = false; // runtime switch, driven by env ENABLE_AICORE_RESOLVE=true
     ArchInfo archInfo{ArchInfo::DAV_2201};
     ToSubMachineConfig toSubMachineConfig;
 };

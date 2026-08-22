@@ -21,42 +21,13 @@
 #include "tilefwk/aicpu_common.h"
 #include "machine/utils/dynamic/dev_callop_attribute.h"
 namespace npu::tile_fwk::dynamic {
+using npu::tile_fwk::DevAscendFunctionDuppedStitchNode;
 using npu::tile_fwk::DUPPED_STITCH_SIZE;
+using DevAscendFunctionDuppedStitch = npu::tile_fwk::DevAscendFunctionDuppedStitchNode;
+static_assert(sizeof(DevAscendFunctionDuppedStitch) == npu::tile_fwk::DUPPED_STITCH_NODE_U32_SIZE * sizeof(uint32_t),
+              "Invalid size");
 // Max cell-match table entry count (desc stride[0]); checked at encode and in host GetWorkspaceSize.
 constexpr int64_t MAX_CELLMATCHSSTRIDE = 20000000;
-struct DevAscendFunctionDuppedStitch {
-    void InitWithNext(DevAscendFunctionDuppedStitch* next)
-    {
-        next_ = next;
-        size_ = 0;
-    }
-
-    void PushBack(uint32_t taskId)
-    {
-        DEV_ASSERT_MSG(ProgEncodeErr::STITCH_LIST_TOO_LARGE, size_ < DUPPED_STITCH_SIZE,
-                       "Exceed maximum stitch size %u.", DUPPED_STITCH_SIZE);
-        taskList_[size_++] = taskId;
-    }
-
-    uint32_t Size() const { return size_; }
-    DevAscendFunctionDuppedStitch* const& Next() const { return next_; }
-    DevAscendFunctionDuppedStitch*& Next() { return next_; }
-
-    // 函数在核心流程，已在Size()内循环，校验会影响性能
-    uint32_t At(uint32_t idx) const { return taskList_[idx]; }
-
-    void ForEach(const std::function<void(uint32_t id)>& callback) const
-    {
-        for (uint32_t i = 0; i < size_; i++) {
-            callback(taskList_[i]);
-        }
-    }
-
-private:
-    DevAscendFunctionDuppedStitch* next_;
-    uint32_t size_;
-    uint32_t taskList_[DUPPED_STITCH_SIZE];
-};
 
 struct DevAscendFunctionDuppedStitchList {
     DevAscendFunctionDuppedStitchList() = default;
@@ -83,7 +54,7 @@ struct DevAscendFunctionDuppedStitchList {
             newNode->InitWithNext(head_);
             head_ = newNode;
         }
-        head_->PushBack(taskId);
+        head_->SafePushBack(taskId);
     }
 
     template <typename T = uint32_t>

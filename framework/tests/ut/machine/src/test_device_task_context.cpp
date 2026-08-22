@@ -40,6 +40,7 @@
 #include "tilefwk/data_type.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/tilefwk.h"
+#include "interface/machine/device/tilefwk/aikernel_device_task.h"
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
@@ -946,4 +947,139 @@ TEST_F(TestDeviceTaskContext, DeviceTaskCtrl_NextSameIterTaskCtrl)
     DeviceTaskCtrl other;
     ctrl.nextSameIterTaskCtrl.store(reinterpret_cast<uint64_t>(&other), std::memory_order_release);
     EXPECT_EQ(ctrl.NextSameIterTaskCtrl(), &other);
+}
+
+TEST_F(TestDeviceTaskContext, InitReadyQueues_EnableAicoreResolve_CreatesDrcoRootFuncList)
+{
+    DeviceTaskContext taskContext;
+    DevStartArgsBase startArgs;
+    constexpr size_t kControlFlowCacheSize = 16 * 1024 * 1024;
+    auto controlFlowCacheBuf = std::make_unique<uint8_t[]>(kControlFlowCacheSize);
+
+    DevAscendProgram devProg;
+    CreateMockDevAscendProgram(&devProg, ArchInfo::DAV_3510);
+    devProg.stitchFunctionsize = 100;
+    devProg.devArgs.enableAicoreResolve = true;
+    devProg.controlFlowCache.cacheData = DevRelocVector<uint8_t>(kControlFlowCacheSize, controlFlowCacheBuf.get());
+    devProg.controlFlowCache.isRecording = true;
+
+    DeviceWorkspaceAllocator workspace(&devProg);
+    taskContext.InitAllocator(&devProg, workspace, &startArgs);
+
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+    CreateMockDynDeviceTask(dyntask.get(), 16);
+
+    ReadyCoreFunctionQueue* queues[READY_QUEUE_SIZE] = {};
+    EXPECT_EQ(taskContext.InitReadyQueues(dyntask.get(), &devProg, queues), DEVICE_MACHINE_OK);
+
+    ASSERT_NE(dyntask->drcoRootFuncList, nullptr);
+    EXPECT_EQ(dyntask->drcoRootFuncList->totalTaskCount, 16U);
+    ASSERT_NE(dyntask->drcoRootFuncList->executedTaskCount, nullptr);
+    EXPECT_EQ(*dyntask->drcoRootFuncList->executedTaskCount, 0U);
+    for (size_t i = 0; i < npu::tile_fwk::DRCO_QUEUE_MAX; ++i) {
+        EXPECT_NE(dyntask->drcoRootFuncList->globalReadyQueueList[i].ptr, nullptr);
+    }
+    for (uint32_t i = 0; i < npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE; ++i) {
+        EXPECT_NE(dyntask->drcoRootFuncList->perCorePendingQueueArray[i], nullptr);
+    }
+    for (uint32_t ct = 0; ct < npu::tile_fwk::NUM_CORE_TYPES; ++ct) {
+        for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; ++i) {
+            EXPECT_NE(dyntask->drcoRootFuncList->localReadyQueueArray[ct][i], nullptr);
+        }
+    }
+    for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
+        EXPECT_NE(dyntask->readyQueue[i], nullptr);
+    }
+}
+
+TEST_F(TestDeviceTaskContext, DispatchReadyQueueToCores_DistributesTasks)
+{
+    DeviceTaskContext taskContext;
+    DevStartArgsBase startArgs;
+    constexpr size_t kControlFlowCacheSize = 16 * 1024 * 1024;
+    auto controlFlowCacheBuf = std::make_unique<uint8_t[]>(kControlFlowCacheSize);
+
+    DevAscendProgram devProg;
+    CreateMockDevAscendProgram(&devProg, ArchInfo::DAV_3510);
+    devProg.stitchFunctionsize = 100;
+    devProg.devArgs.enableAicoreResolve = true;
+    devProg.devArgs.nrValidAic = 4;
+    devProg.controlFlowCache.cacheData = DevRelocVector<uint8_t>(kControlFlowCacheSize, controlFlowCacheBuf.get());
+    devProg.controlFlowCache.isRecording = true;
+
+    DeviceWorkspaceAllocator workspace(&devProg);
+    taskContext.InitAllocator(&devProg, workspace, &startArgs);
+
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+    CreateMockDynDeviceTask(dyntask.get(), 16);
+
+    ReadyCoreFunctionQueue* queues[READY_QUEUE_SIZE] = {};
+    ASSERT_EQ(taskContext.InitReadyQueues(dyntask.get(), &devProg, queues), DEVICE_MACHINE_OK);
+
+    const int aivIdx = DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIV);
+    const int aicIdx = DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIC);
+    dyntask->readyQueue[aivIdx]->UnsafeEnqueue(MakeTaskID(0, 0));
+    dyntask->readyQueue[aivIdx]->UnsafeEnqueue(MakeTaskID(1, 1));
+    dyntask->readyQueue[aicIdx]->UnsafeEnqueue(MakeTaskID(2, 2));
+
+    taskContext.DispatchReadyQueueToCores(dyntask.get(), &devProg);
+
+    auto* root = dyntask->drcoRootFuncList;
+    ASSERT_NE(root, nullptr);
+    bool aicRouted = false;
+    bool aivRouted = false;
+    for (uint32_t i = 0; i < devProg.devArgs.nrValidAic; ++i) {
+        if (root->perCorePendingQueueArray[i]->size > 0) {
+            aicRouted = true;
+        }
+    }
+    for (uint32_t i = devProg.devArgs.nrValidAic; i < devProg.devArgs.nrValidAic * 3; ++i) {
+        if (root->perCorePendingQueueArray[i]->size > 0) {
+            aivRouted = true;
+        }
+    }
+    EXPECT_TRUE(aicRouted);
+    EXPECT_TRUE(aivRouted);
+}
+
+TEST_F(TestDeviceTaskContext, DispatchDieReadyQueueToCores_DistributesDieTasks)
+{
+    DeviceTaskContext taskContext;
+    DevStartArgsBase startArgs;
+    constexpr size_t kControlFlowCacheSize = 16 * 1024 * 1024;
+    auto controlFlowCacheBuf = std::make_unique<uint8_t[]>(kControlFlowCacheSize);
+
+    DevAscendProgram devProg;
+    CreateMockDevAscendProgram(&devProg, ArchInfo::DAV_3510);
+    devProg.stitchFunctionsize = 100;
+    devProg.devArgs.enableAicoreResolve = true;
+    devProg.devArgs.nrValidAic = 4;
+    devProg.controlFlowCache.cacheData = DevRelocVector<uint8_t>(kControlFlowCacheSize, controlFlowCacheBuf.get());
+    devProg.controlFlowCache.isRecording = true;
+
+    DeviceWorkspaceAllocator workspace(&devProg);
+    taskContext.InitAllocator(&devProg, workspace, &startArgs);
+
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+    CreateMockDynDeviceTask(dyntask.get(), 16);
+
+    ReadyCoreFunctionQueue* queues[READY_QUEUE_SIZE] = {};
+    ASSERT_EQ(taskContext.InitReadyQueues(dyntask.get(), &devProg, queues), DEVICE_MACHINE_OK);
+
+    taskContext.InitDieReadyQueues(dyntask.get(), &devProg);
+    auto dieAivQueue = reinterpret_cast<ReadyCoreFunctionQueue*>(
+        dyntask->devTask.dieReadyFunctionQue.readyDieAivCoreFunctionQue[0]);
+    auto dieAicQueue = reinterpret_cast<ReadyCoreFunctionQueue*>(
+        dyntask->devTask.dieReadyFunctionQue.readyDieAicCoreFunctionQue[0]);
+    ASSERT_NE(dieAivQueue, nullptr);
+    ASSERT_NE(dieAicQueue, nullptr);
+    dieAivQueue->UnsafeEnqueue(MakeTaskID(0, 0));
+    dieAicQueue->UnsafeEnqueue(MakeTaskID(1, 1));
+
+    taskContext.DispatchDieReadyQueueToCores(dyntask.get(), &devProg);
+
+    auto* root = dyntask->drcoRootFuncList;
+    ASSERT_NE(root, nullptr);
+    EXPECT_GT(root->perCorePendingQueueArray[0]->size, 0U);
+    EXPECT_GT(root->perCorePendingQueueArray[4]->size, 0U);
 }

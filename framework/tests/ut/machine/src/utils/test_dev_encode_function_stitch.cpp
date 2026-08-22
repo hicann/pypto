@@ -26,10 +26,10 @@ TEST_F(DevEncodeFunctionStitchTest, Stitch_PushBack_IncreasesSize)
 {
     DevAscendFunctionDuppedStitch stitch;
     stitch.InitWithNext(nullptr);
-    stitch.PushBack(100);
+    stitch.SafePushBack(100);
     EXPECT_EQ(stitch.Size(), 1u);
     EXPECT_EQ(stitch.At(0), 100u);
-    stitch.PushBack(200);
+    stitch.SafePushBack(200);
     EXPECT_EQ(stitch.Size(), 2u);
     EXPECT_EQ(stitch.At(1), 200u);
 }
@@ -38,9 +38,9 @@ TEST_F(DevEncodeFunctionStitchTest, Stitch_ForEach_VisitsAll)
 {
     DevAscendFunctionDuppedStitch stitch;
     stitch.InitWithNext(nullptr);
-    stitch.PushBack(10);
-    stitch.PushBack(20);
-    stitch.PushBack(30);
+    stitch.SafePushBack(10);
+    stitch.SafePushBack(20);
+    stitch.SafePushBack(30);
     std::vector<uint32_t> visited;
     stitch.ForEach([&](uint32_t id) { visited.push_back(id); });
     EXPECT_EQ(visited.size(), 3u);

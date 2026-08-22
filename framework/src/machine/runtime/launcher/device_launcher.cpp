@@ -94,7 +94,7 @@ int DeviceLauncher::RunWithProfile(RtStream aicoreStream, RtStream aicpuStream, 
 int DeviceLauncher::DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlStream, RtStream aicoreStream)
 {
     int rcAicore = RuntimeStreamSynchronize(aicoreStream);
-    int rcAicpu = RuntimeStreamSynchronize(schedStream);
+    int rcAicpu = IsAicoreResolveEnabled() ? 0 : RuntimeStreamSynchronize(schedStream);
     int rcCtrl = 0;
     if (ctrlStream != nullptr) {
         rcCtrl = RuntimeStreamSynchronize(ctrlStream);
@@ -376,6 +376,9 @@ void DeviceLauncher::SetDevPerfAddr([[maybe_unused]] const bool debugEnable, [[m
 
 int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode, int launchEarlyMode)
 {
+    if (IsAicoreResolveEnabled()) {
+        return 0;
+    }
     if (launchEarlyMode == 1) { // 1 ： early launch in all modes
         return 0;
     }
@@ -439,6 +442,9 @@ int DeviceLauncher::LaunchAicpuKernel(AicpuLaunchDesc& launchDesc, [[maybe_unuse
     if (ret != RT_SUCCESS) {
         return ret;
     }
+    if (IsAicoreResolveEnabled()) {
+        return ret;
+    }
     args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_SCHE;
     startTime = MspfSysCycleTime();
     const int scheCpuNum = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.scheCpuNum);
@@ -461,8 +467,13 @@ int DeviceLauncher::LaunchAicoreKernel(AclRtStream aicoreStream, void* kernel, R
     auto ret = RuntimeKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &rtTaskCfg);
     HostProf::GetInstance().ReportHostProfInfo(aicoreStream, startTime, blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
     if (debugEnable || !IsCaptureMode() || IsPtoDataDumpEnabled()) {
-        auto scheStream = GetStreamContext().GetScheStream();
-        int rc = DeviceSynchronize(scheStream, aicoreStream);
+        int rc = 0;
+        if (IsAicoreResolveEnabled()) {
+            rc = RuntimeStreamSynchronize(aicoreStream);
+        } else {
+            auto scheStream = GetStreamContext().GetScheStream();
+            rc = DeviceSynchronize(scheStream, aicoreStream);
+        }
         if (rc != 0) {
             MACHINE_LOGE(HostLauncherErr::SYNC_FAILED, "stream sync failed");
             return rc;

@@ -600,6 +600,7 @@ void DevAscendFunction::InitOperationBufferLayouts(
     opAttrOffsetList_.HostInitDataSizeOffset(initOffset, callList.size());
     opCalleeList_.HostInitDataSizeOffset(initOffset, callList.size());
     operationSuccList_.HostInitDataSizeOffset(initOffset, sucSize);
+    operationSuccInfoList_.HostInitDataSizeOffset(initOffset, callList.size());
     operationCopyOutResolveSuccIndexList_.HostInitDataSizeOffset(initOffset, copyOutResolveSuccIdxSize);
 }
 
@@ -645,7 +646,7 @@ void DevAscendFunction::PopulateOperationEncodedContent(
         PopulateOneEncodedOpOperandsAndAttrs(index, operanSize, staticAttributeSize, expressionTable, callList, tlist,
                                              rawList, calleeHashIndexDict, stitchIndexList);
         PopulateOneEncodedOpGraphEdges(index, sucSize, copyOutResolveSuccIdxSize, callList, callOpSuccDict,
-                                       copyOutResolveSuccIndexListDict, dupData);
+                                       copyOutResolveSuccIndexListDict, stitchIndexList, dupData);
     }
 }
 
@@ -724,12 +725,18 @@ void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
     size_t index, int& sucSize, int& copyOutResolveSuccIdxSize, const OrderedSet<Operation*>& callList,
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
     const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
-    DevAscendFunctionDuppedData* dupData)
+    const std::vector<int32_t>& stitchIndexList, DevAscendFunctionDuppedData* dupData)
 {
     Operation* op = callList[index];
     DevAscendOperation& staticField = At(operationList_, index);
 
     int opSuccSize = callOpSuccDict.find(op)->second.size();
+
+    npu::tile_fwk::DevAscendFunctionOperationSuccInfo& succInfo = At(operationSuccInfoList_, index);
+    succInfo.staticIndex = static_cast<uint16_t>(sucSize);
+    succInfo.staticSize = static_cast<uint16_t>(opSuccSize);
+    succInfo.stitchIndex = stitchIndexList[index];
+
     staticField.depGraphSuccList.AssignRangeOffsetSize(operationSuccList_, sucSize, opSuccSize);
     for (int k = 0; k < opSuccSize; k++) {
         int succ = callList.GetIndex(callOpSuccDict.find(op)->second[k]);
@@ -761,13 +768,13 @@ void DevAscendFunction::VerifyOperationEncodedContent(const OrderedSet<Operation
                At(operationList_, idx).depGraphPredCount == callOpPredDict.find(op)->second)
             << "depGraphPredCount mismatch: expected " << callOpPredDict.find(op)->second << ", got "
             << At(operationList_, idx).depGraphPredCount;
-        if (dupData->GetOperationCurrPredCount(idx) != callOpPredDict.find(op)->second) {
+        if (static_cast<uint32_t>(dupData->GetOperationCurrPredCount(idx)) != callOpPredDict.find(op)->second) {
             MACHINE_LOGE(ProgEncodeErr::CALL_OP_COUNT_EXCEEDS_UINT16_MAX,
                          "OperationCurrPredCount: %d Callopsize is %u exceeds the maximum allowed value of 65535.",
                          dupData->GetOperationCurrPredCount(idx), dupData->GetOperationSize());
         }
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED,
-               dupData->GetOperationCurrPredCount(idx) == callOpPredDict.find(op)->second)
+               static_cast<uint32_t>(dupData->GetOperationCurrPredCount(idx)) == callOpPredDict.find(op)->second)
             << "GetOperationCurrPredCount mismatch: expected " << dupData->GetOperationCurrPredCount(idx) << ", got "
             << callOpPredDict.find(op)->second << ", Callopsize is " << dupData->GetOperationSize()
             << " exceeds the maximum allowed value of 65535.";

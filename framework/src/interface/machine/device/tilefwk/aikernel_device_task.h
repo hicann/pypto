@@ -24,6 +24,14 @@
 namespace npu::tile_fwk {
 
 struct DevStartArgsBase;
+
+struct DrcoRootFuncData {
+    __gm__ int32_t* predCount;
+    __gm__ int32_t* succStaticList;
+    __gm__ DevAscendFunctionDuppedStitchNode** succStitchList;
+    __gm__ DevAscendFunctionOperationSuccInfo* succInfoList;
+};
+
 struct DynFuncData {
     uint64_t exprNum;              // static
     __gm__ uint64_t* opAttrs;      // static
@@ -39,6 +47,7 @@ struct DynFuncData {
     uint64_t stackWorkSpaceSize;
     __gm__ DevStartArgsBase* startArgs; // should be removed as it is global data
     __gm__ int* cceBinaryIndexList;
+    DrcoRootFuncData drcoRootFuncData;
 };
 
 struct DynFuncBin {
@@ -63,13 +72,6 @@ struct DynFuncHeader {
     INLINE uint64_t GetIndex() { return seqNo; }
     INLINE uint32_t Size() { return funcNum; }
     INLINE DynFuncData& At(int index) { return (reinterpret_cast<DynFuncData*>(this + 1))[index]; }
-};
-
-struct DrcoRootFuncData {
-    __gm__ int32_t* predCount;
-    __gm__ int32_t* succStaticList;
-    __gm__ DevAscendFunctionDuppedStitchNode** succStitchList;
-    __gm__ DevAscendFunctionOperationSuccInfo* succInfoList;
 };
 
 constexpr uint32_t DRCO_QUEUE_AIV = 0;
@@ -103,9 +105,10 @@ struct DrcoDeviceTaskReadyQueue {
         head = 0;
         size = 0;
     }
-    void Append(DynFuncHeader* dynFuncDataList)
+    void Append(DynFuncHeader* dynFuncDataList, DrcoRootFuncList* rootFuncList)
     {
         dynFuncDataListList[size].dynFuncDataList = dynFuncDataList;
+        dynFuncDataListList[size].drcoRootFuncList = rootFuncList;
         size++;
     }
 #endif

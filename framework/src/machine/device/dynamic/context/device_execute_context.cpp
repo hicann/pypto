@@ -128,8 +128,8 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs* startArgs, PushTaskEn
         DynDeviceTask* dynTask = reinterpret_cast<DynDeviceTask*>(
             devProg->ctrlFlowCacheAnchor->deviceTaskCacheList[index].dynTaskBase);
         devProg->ctrlFlowCacheAnchor->PredCountDataRestore(dynTask);
-        devProg->ctrlFlowCacheAnchor->ReadyQueueDataRestore(dynTask);
-        devProg->ctrlFlowCacheAnchor->DieReadyQueueDataRestore(dynTask);
+        devProg->ctrlFlowCacheAnchor->ReadyQueueDataRestore(dynTask, devProg->devArgs.nrValidAic);
+        devProg->ctrlFlowCacheAnchor->DieReadyQueueDataRestore(dynTask, devProg->devArgs.nrValidAic);
         devProg->ctrlFlowCacheAnchor->MixTaskDataRestore(dynTask);
         taskContext.UpdateReadyTaskNum(dynTask->readyQueueBackup->readyTaskNum);
 

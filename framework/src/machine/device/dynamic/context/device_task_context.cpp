@@ -53,6 +53,7 @@ inline void FillOneDynFuncData(DynFuncData* dyndata, DevAscendFunctionDupped& du
     dyndata->opAttrSize = src->GetOpAttrSize();
     dyndata->rawTensorAddrSize = src->GetIncastSize() + src->GetOutcastSize();
     dyndata->rawTensorDescSize = src->GetRawTensorDescSize();
+    dyndata->drcoRootFuncData = {};
 
     CheckAddrAligned(reinterpret_cast<uint64_t>(dyndata->opAttrs), OP_ATTRS_PRE_NUM,
                      "#ctrl.task.pre.dynfunc.process: opAttrs address is not aligned.");
@@ -78,6 +79,7 @@ void DeviceTaskContext::InitAllocator(DevAscendProgram* devProg, DeviceWorkspace
     devProg_ = devProg;
     workspace_ = &workspace;
     startArgs_ = startArgs;
+    enableAicoreResolve_ = devProg->devArgs.enableAicoreResolve;
 }
 
 DynDeviceTask* DeviceTaskContext::BuildDeviceTaskData(DeviceStitchContext& stitchContext, uint32_t taskId,
@@ -157,6 +159,10 @@ int DeviceTaskContext::InitReadyQueues(DynDeviceTask* dyntask, DevAscendProgram*
         InitReadyCoreFunctionQueue(q, dyntask->devTask.coreFunctionCnt);
         queue[i] = q;
         dyntask->readyQueue[i] = q;
+    }
+
+    if (enableAicoreResolve_) {
+        InitDrcoRootFuncList(dyntask);
     }
     return DEVICE_MACHINE_OK;
 }
@@ -320,6 +326,13 @@ int DeviceTaskContext::BuildDynFuncData(DynDeviceTask* dyntask, uint32_t taskId,
         FillOneDynFuncData(dyndata, stitchedList[funcIdx], startArgs_, workspace_, leafFuncDataSize, leafFuncNum);
         DEV_IF_NONDEVICE { mem_dump::DumpRootMemory(taskId, static_cast<uint32_t>(funcIdx), stitchedList[funcIdx]); }
         dyndata++;
+    }
+    if (enableAicoreResolve_) {
+        auto* drcoDyndata = &funcHeader->At(0);
+        for (size_t funcIdx = 0; funcIdx < stitchedSize; ++funcIdx) {
+            BuildDrcoRootFuncData(drcoDyndata, stitchedList[funcIdx]);
+            drcoDyndata++;
+        }
     }
     dynFuncDataSize += headerSize * sizeof(int64_t);
     return DEVICE_MACHINE_OK;
@@ -552,6 +565,11 @@ int DeviceTaskContext::BuildDeviceTaskDataAndReadyQueue(DynDeviceTask* dyntask, 
     }
     PerfEnd(PERF_EVT_CORE_FUNCDATA);
     DEV_DEBUG("Finish build a new device task");
+
+    if (enableAicoreResolve_) {
+        DispatchReadyQueueToCores(dyntask, devProg);
+        DispatchDieReadyQueueToCores(dyntask, devProg);
+    }
 
 #ifndef __DEVICE__
     DEV_IF_NONDEVICE

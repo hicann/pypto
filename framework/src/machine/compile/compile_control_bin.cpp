@@ -115,6 +115,11 @@ bool TieFwkAicpuPreCompile(std::string& preCompileO, std::string& controlAicpuPa
         std::string compileCmd = DeviceMahineCompiler + " -Wall -O2 -fPIC -c -std=gnu++17 -fno-common " +
                                  controlAicpuPath + file + " -I" + includePath + " -I" + includePath + "/include/" +
                                  " -I" + GetPyptoLibPath() + "/include/" + " -o " + objFile;
+        if (npu::tile_fwk::IsAicoreResolveEnabled()) {
+            compileCmd += " -DENABLE_AICORE_RESOLVE=1";
+        } else {
+            compileCmd += " -DENABLE_AICORE_RESOLVE=0";
+        }
         MACHINE_LOGD("PreCompileCmd is %s, file is %s.\n", compileCmd.c_str(), file.c_str());
         int ret = Checkinject(compileCmd.c_str(), compileCmd.size());
         if (ret != 0) {

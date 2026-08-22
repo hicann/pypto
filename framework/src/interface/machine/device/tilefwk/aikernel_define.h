@@ -47,4 +47,8 @@
 #define UNUSED(n) (void)(n)
 #endif
 
+#ifndef ENABLE_AICORE_RESOLVE
+#define ENABLE_AICORE_RESOLVE 0
+#endif
+
 #endif

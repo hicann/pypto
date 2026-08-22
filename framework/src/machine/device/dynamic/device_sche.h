@@ -335,6 +335,7 @@ struct DynMachineManager {
         DEV_VERBOSE_DEBUG("#trace.round.start: round=%lu", kargs->parameter.globalRound);
         ctrlStartRound_.fetch_add(1, std::memory_order_acq_rel);
         initCtrl_.store(true);
+        ReCalcDevArgsAicoreNum(kargs, PtrToPtr<int64_t, DevAscendProgram>(kargs->cfgdata));
         int ret = RunCtrlInitNoLock(kargs, entry);
         if (ret != 0) {
             initCtrl_.store(false);

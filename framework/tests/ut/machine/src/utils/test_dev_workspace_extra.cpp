@@ -146,7 +146,7 @@ TEST_F(DevWorkspaceTest, DynDevTaskSlabMemObjSize_ReturnsSizeof)
 TEST_F(DevWorkspaceTest, DuppedStitchSlabMemObjSize_ReturnsSizeof)
 {
     DeviceWorkspaceAllocator allocator;
-    EXPECT_EQ(allocator.DuppedStitchSlabMemObjSize(), sizeof(struct DevAscendFunctionDuppedStitch));
+    EXPECT_EQ(allocator.DuppedStitchSlabMemObjSize(), sizeof(DevAscendFunctionDuppedStitch));
 }
 
 TEST_F(DevWorkspaceTest, ShmemWaitUntilCacheSlabMemObjSize_NoAicpuTask)

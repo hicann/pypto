@@ -22,6 +22,7 @@
 #include <vector>
 #include "codegen/utils/parallel_execute.h"
 #include "utils/file_utils.h"
+#include "interface/utils/common.h"
 #include "interface/utils/op_info_manager.h"
 #include "machine/compile/gen_aicore_code.h"
 #include "machine/host/main_block.h"
@@ -53,6 +54,8 @@ static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t 
                                           config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1)) ?
                                             "-D__ENABLE_MAIN_BLOCK" :
                                             "";
+    const std::string enableAicoreResolve = IsAicoreResolveEnabled() ? "-DENABLE_AICORE_RESOLVE=1" :
+                                                                       "-DENABLE_AICORE_RESOLVE=0";
     std::string ccecCmd;
     ccecCmd.resize(CMD_SIZE_2K);
     std::string includePath = GetPyptoLibPath() + "/../include/tile_fwk";
@@ -72,6 +75,7 @@ static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t 
                          "-D__HEAD_FILE__=%s "
                          "%s "
                          "%s "
+                         "%s "
                          "-I%s/tileop/arch32 "
                          "-I%s/ "
                          "-I%s/include/tileop/arch32 "
@@ -79,8 +83,9 @@ static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t 
                          "-o %s %s %s %s",
                          BISHENG_PROGRAM_CMD, cc_opt.c_str(), std::to_string(tilingKey).c_str(), opType.c_str(),
                          funcRawName.c_str(), headFile.c_str(), hasSubFunc.c_str(), coreType.c_str(),
-                         includePath.c_str(), includePath.c_str(), GetPyptoLibPath().c_str(), GetPyptoLibPath().c_str(),
-                         objFile.c_str(), aicoreSrcFile.c_str(), davArch.c_str(), enableMainBlock.c_str());
+                         enableAicoreResolve.c_str(), includePath.c_str(), includePath.c_str(),
+                         GetPyptoLibPath().c_str(), GetPyptoLibPath().c_str(), objFile.c_str(), aicoreSrcFile.c_str(),
+                         davArch.c_str(), enableMainBlock.c_str());
     if (ret < 0) {
         MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile aicore construct cmd failed.");
         return ret;
