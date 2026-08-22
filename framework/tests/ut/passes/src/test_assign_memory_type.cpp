@@ -1046,7 +1046,8 @@ int CountMemoryPath(Function* originFunction, MemoryType from, MemoryType to)
     int pathCount = 0;
     for (auto& op : originFunction->Operations()) {
         if (op.GetOpcode() != Opcode::OP_CONTRACT && op.GetOpcode() != Opcode::OP_CONVERT &&
-            op.GetOpcode() != Opcode::OP_SLICE) {
+            op.GetOpcode() != Opcode::OP_SLICE && op.GetOpcode() != Opcode::OP_VIEW &&
+            op.GetOpcode() != Opcode::OP_ASSEMBLE) {
             continue;
         }
         if (op.GetIOperands().empty() || op.GetOOperands().empty()) {
@@ -2549,6 +2550,342 @@ TEST_F(AssignMemoryTypeTest, FunctionExpAssembleMatmulA5)
                 << "] must not move data from L1 to UB; input=" << input->GetMagic()
                 << ", output=" << output->GetMagic();
         }
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+// Helper: build graph for ProcessShapeTransportFallback testing.
+// matmul1(s1,L0C) → [view0(s2,L0C)] → view1(s2,L0C→L1) → view2(s2,L1→L0A) → matmul2(s2)
+// When withView0=false, view1's input is matmul1Out directly (s1 must equal s2).
+// When withView0=true, view0 creates a shape change from s1 to s2 (穿透 endpoint shapes differ).
+static void ConstructShapeTransportGraph(std::shared_ptr<Function>& func, const std::vector<int64_t>& s1,
+                                         const std::vector<int64_t>& s2, bool withView0)
+{
+    int64_t k1 = s1.size() >= 2 ? s1[1] : 1;
+    std::vector<int64_t> shapeA1 = {s1[0], k1};
+    std::vector<int64_t> shapeB1 = {k1, s1.size() >= 2 ? s1[1] : 1};
+    int64_t m2 = NUM_128;
+    std::vector<int64_t> shapeA2 = {m2, s2[0]};
+    std::vector<int64_t> shapeC2 = {m2, s2.size() >= 2 ? s2[1] : 1};
+
+    auto inputA1 = IRBuilder().CreateTensorVar(DT_FP16, shapeA1, CreateTestConstIntVector(shapeA1));
+    auto inputB1 = IRBuilder().CreateTensorVar(DT_FP16, shapeB1, CreateTestConstIntVector(shapeB1));
+    auto inputA2 = IRBuilder().CreateTensorVar(DT_FP16, shapeA2, CreateTestConstIntVector(shapeA2));
+    auto matmul1Out = IRBuilder().CreateTensorVar(DT_FP16, s1, CreateTestConstIntVector(s1));
+    auto view0Out = IRBuilder().CreateTensorVar(DT_FP16, s2, CreateTestConstIntVector(s2));
+    auto view1Out = IRBuilder().CreateTensorVar(DT_FP16, s2, CreateTestConstIntVector(s2));
+    auto view2Out = IRBuilder().CreateTensorVar(DT_FP16, s2, CreateTestConstIntVector(s2));
+    auto outputC2 = IRBuilder().CreateTensorVar(DT_FP16, shapeC2, CreateTestConstIntVector(shapeC2));
+
+    IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_A_MUL_B, {inputA1, inputB1}, {matmul1Out});
+
+    LogicalTensorPtr view1Input = matmul1Out;
+    if (withView0) {
+        auto& view0Op = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_VIEW, {matmul1Out}, {view0Out});
+        view0Op.SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset(s1.size(), 0), MemoryType::MEM_L0C));
+        view1Input = view0Out;
+    }
+
+    auto& view1Op = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_VIEW, {view1Input}, {view1Out});
+    view1Op.SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset(s2.size(), 0), MemoryType::MEM_L1));
+
+    auto& view2Op = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_VIEW, {view1Out}, {view2Out});
+    view2Op.SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset(s2.size(), 0), MemoryType::MEM_L0A));
+
+    IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_A_MUL_B, {inputA2, view2Out}, {outputC2});
+
+    func->inCasts_.push_back(inputA1);
+    func->inCasts_.push_back(inputB1);
+    func->inCasts_.push_back(inputA2);
+    func->outCasts_.push_back(outputC2);
+}
+
+// 单向整除放行：prodOut=(128,16), consIn=(64,16) → 仅一个方向整除 → 放行
+TEST_F(AssignMemoryTypeTest, ShapeTransportFallbackOneWayDivisibleAllow)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "ShapeTransportOneWayDivisible",
+                                           "ShapeTransportOneWayDivisible", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("ShapeTransportOneWayDivisible", func);
+    ConstructShapeTransportGraph(func, {NUM_128, NUM_16}, {NUM_64, NUM_16}, true);
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_GT(CountMemoryPath(func.get(), MemoryType::MEM_L0C, MemoryType::MEM_L1), 0)
+        << "L0C→L1 path should exist when one direction is divisible";
+}
+
+// 双向都不整除拦截：prodOut=(128,48), consIn=(64,32) → 两方向均不整除 → 拦截回退DDR
+TEST_F(AssignMemoryTypeTest, ShapeTransportFallbackNeitherDivisibleIntercept)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "ShapeTransportNeitherDivisible",
+                                           "ShapeTransportNeitherDivisible", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("ShapeTransportNeitherDivisible", func);
+    ConstructShapeTransportGraph(func, {NUM_128, NUM_48}, {NUM_64, NUM_32}, true);
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(CountMemoryPath(func.get(), MemoryType::MEM_L0C, MemoryType::MEM_L1), 0)
+        << "L0C→L1 path should not exist when neither direction is divisible";
+    EXPECT_GT(CountMemoryPath(func.get(), MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 0)
+        << "L0C→DDR path should exist after intercept";
+}
+
+// 等大放行：prodOut=(32,16), consIn=(32,16) → 形状相同 → 放行
+TEST_F(AssignMemoryTypeTest, ShapeTransportFallbackEqualShapeAllow)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "ShapeTransportEqualShape",
+                                           "ShapeTransportEqualShape", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("ShapeTransportEqualShape", func);
+    ConstructShapeTransportGraph(func, {NUM_32, NUM_16}, {NUM_32, NUM_16}, false);
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_GT(CountMemoryPath(func.get(), MemoryType::MEM_L0C, MemoryType::MEM_L1), 0)
+        << "L0C→L1 path should exist when shapes are equal";
+}
+
+// rank 不一致拦截：prodOut=(128,128) rank2, consIn=(128,128,1) rank3 → rank不匹配 → 拦截回退DDR
+TEST_F(AssignMemoryTypeTest, ShapeTransportFallbackRankMismatchIntercept)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "ShapeTransportRankMismatch",
+                                           "ShapeTransportRankMismatch", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("ShapeTransportRankMismatch", func);
+    ConstructShapeTransportGraph(func, {NUM_128, NUM_128}, {NUM_128, NUM_128, NUM_1}, true);
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(CountMemoryPath(func.get(), MemoryType::MEM_L0C, MemoryType::MEM_L1), 0)
+        << "L0C→L1 path should not exist when rank mismatch";
+    EXPECT_GT(CountMemoryPath(func.get(), MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 0)
+        << "L0C→DDR path should exist after rank mismatch intercept";
+}
+
+// 3510 L0C→UB 整除放行：matmul(32,128,L0C) → VIEW(L0C 透明) → ASSEMBLE(L0C→UB) → ADD(UB)
+// prodOut(32,128) 与 consIn(32,128) 等大（整除特例）→ 放行，L0C→UB 直连保留。
+// 反向断言：若 allow 分支回归（IsAllowedTransport 误返 false / 端点漏收），
+// 该路径会被静默回退 DDR，本用例失败可见。
+TEST_F(AssignMemoryTypeTest, ShapeTransportFallbackL0C2UBDivisibleAllow)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    ComputationalGraphBuilder G;
+    Shape shape{NUM_32, NUM_128};
+    G.AddTensors(DataType::DT_FP16, shape,
+                 {MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C, MemoryType::MEM_L0C,
+                  MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
+                 {"l0a_in", "l0b_in", "matmul_out", "view_l0c_out", "asm_out", "rc_out", "add_in2", "add_out"});
+
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_in", "l0b_in"}, {"matmul_out"}, "matmul");
+    G.AddOp(Opcode::OP_VIEW, {"matmul_out"}, {"view_l0c_out"}, "view_l0c");
+    G.GetOp("view_l0c")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0C));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"view_l0c_out"}, {"asm_out"}, "assemble");
+    G.GetOp("assemble")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 0}));
+    G.AddOp(Opcode::OP_REGISTER_COPY, {"asm_out"}, {"rc_out"}, "reg_copy");
+    G.AddOp(Opcode::OP_ADD, {"rc_out", "add_in2"}, {"add_out"}, "add");
+
+    G.SetInCast({"l0a_in", "l0b_in", "add_in2"});
+    G.SetOutCast({"add_out"});
+    Function* func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_GT(CountMemoryPath(func, MemoryType::MEM_L0C, MemoryType::MEM_UB), 0)
+        << "L0C→UB allowed: prodOut(32,128) vs consIn(32,128) equal shape";
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+// 3510 UB→L1 整除放行：VEC_DUP(UB,64,64) → VIEW(UB→L1) → VIEW(L1→L0A) → matmul
+// prodOut(64,64) 与 consIn(64,64) 等大 → 放行，UB→L1 直连保留。
+// 反向断言：allow 分支回归导致 UB→L1 被静默回退 DDR 时失败可见。
+TEST_F(AssignMemoryTypeTest, ShapeTransportFallbackUB2L1DivisibleAllow)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    ComputationalGraphBuilder G;
+    Shape shape{NUM_64, NUM_64};
+    G.AddTensors(DataType::DT_FP16, shape,
+                 {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0A,
+                  MemoryType::MEM_L0B, MemoryType::MEM_L0C},
+                 {"vec_out", "ub_view_out", "l1_view_out", "l0a_view_out", "l0a_in", "l0b_in", "mm_out"});
+
+    G.AddOp(Opcode::OP_VEC_DUP, {}, {"vec_out"}, "vec_dup");
+    G.AddOp(Opcode::OP_VIEW, {"vec_out"}, {"ub_view_out"}, "ub_view");
+    G.GetOp("ub_view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+    G.AddOp(Opcode::OP_VIEW, {"ub_view_out"}, {"l1_view_out"}, "l1_view");
+    G.GetOp("l1_view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0A));
+    G.AddOp(Opcode::OP_VIEW, {"l1_view_out"}, {"l0a_view_out"}, "l0a_view");
+    G.GetOp("l0a_view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0A));
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_view_out", "l0b_in"}, {"mm_out"}, "matmul");
+
+    G.SetInCast({"l0b_in"});
+    G.SetOutCast({"mm_out"});
+    Function* func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_GT(CountMemoryPath(func, MemoryType::MEM_UB, MemoryType::MEM_L1), 0)
+        << "UB→L1 allowed: prodOut(64,64) vs consIn(64,64) equal shape";
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+// L0C→UB 穿透 REGISTER_COPY 拦截验证（参照真实计算图 10367 链路）：
+// A_MUL_B(L0C,32x128) → VIEW(L0C 透明) → ASSEMBLE(L0C→UB 搬运点)
+//   → REGISTER_COPY(UB 透明) → VIEW(UB reshape 32x128→16x256) → ADD(UB 真实消费者)
+// prodOut=matmul_out(32,128) 与 consIn=view_ub_out(16,256) 双向不整除 → 拦截回退 DDR。
+// REGISTER_COPY 加入跳过集合后 CollectRealConsumerInputs 穿透 REGISTER_COPY+VIEW 抵达真实消费者；
+// 否则止步于 REGISTER_COPY(输出 32x128)，与 prodOut 等大而误放行。
+// 对齐真实计算图 10367 链路 post-pass 形态（matmul→view→assemble(L0C→UB)→register_copy(UB 侧,被穿透跳过)→view→add）。
+// register_copy 位于 consumer 侧 UB 区，验证 CollectRealConsumerInputs 对 REGISTER_COPY 的跳过。
+TEST_F(AssignMemoryTypeTest, ShapeTransportFallbackL0C2UBRegisterCopyIntercept)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_32}, MemoryType::MEM_L0A, "l0a_in");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_128}, MemoryType::MEM_L0B, "l0b_in");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_128}, MemoryType::MEM_L0C, "matmul_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_128}, MemoryType::MEM_L0C, "view_l0c_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_128}, MemoryType::MEM_UB, "asm_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_128}, MemoryType::MEM_UB, "rc_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_256}, MemoryType::MEM_UB, "view_ub_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_256}, MemoryType::MEM_UB, "add_in2");
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_256}, MemoryType::MEM_UB, "add_out");
+
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_in", "l0b_in"}, {"matmul_out"}, "matmul");
+    G.AddOp(Opcode::OP_VIEW, {"matmul_out"}, {"view_l0c_out"}, "view_l0c");
+    G.GetOp("view_l0c")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0C));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"view_l0c_out"}, {"asm_out"}, "assemble");
+    G.GetOp("assemble")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 0}));
+    G.AddOp(Opcode::OP_REGISTER_COPY, {"asm_out"}, {"rc_out"}, "reg_copy");
+    G.AddOp(Opcode::OP_VIEW, {"rc_out"}, {"view_ub_out"}, "view_ub");
+    G.GetOp("view_ub")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_UB));
+    G.AddOp(Opcode::OP_ADD, {"view_ub_out", "add_in2"}, {"add_out"}, "add");
+
+    G.SetInCast({"l0a_in", "l0b_in", "add_in2"});
+    G.SetOutCast({"add_out"});
+    Function* func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(CountMemoryPath(func, MemoryType::MEM_L0C, MemoryType::MEM_UB), 0)
+        << "L0C→UB intercepted: prodOut(32,128) vs consIn(16,256) neither divisible";
+    EXPECT_GT(CountMemoryPath(func, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 0)
+        << "L0C→DDR fallback should exist after intercept";
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+static void AddL0cToUbBranch(ComputationalGraphBuilder& G, const std::string& l0cOut, const std::string& viewOut,
+                             const std::string& rcOut)
+{
+    G.AddOp(Opcode::OP_VIEW, {l0cOut}, {viewOut}, "view_" + viewOut);
+    G.GetOp("view_" + viewOut)->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_UB));
+    G.AddOp(Opcode::OP_REGISTER_COPY, {viewOut}, {rcOut}, "rc_" + rcOut);
+}
+
+static void AddAssembleMerge(ComputationalGraphBuilder& G, const std::string& in1, const std::string& in2,
+                             const std::string& out)
+{
+    G.AddOp(Opcode::OP_ASSEMBLE, {in1}, {out}, "asm_" + in1);
+    G.GetOp("asm_" + in1)->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 0}));
+    G.AddOp(Opcode::OP_ASSEMBLE, {in2}, {out}, "asm_" + in2);
+    G.GetOp("asm_" + in2)->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 0}));
+}
+
+static void AddUbView(ComputationalGraphBuilder& G, const std::string& input, const std::string& output)
+{
+    G.AddOp(Opcode::OP_VIEW, {input}, {output}, "view_" + output);
+    G.GetOp("view_" + output)->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_UB));
+}
+
+TEST_F(AssignMemoryTypeTest, TestL0C2UBViewTransportRegisterCopyAssembleIntercept)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    ComputationalGraphBuilder G;
+    Shape l0a1Shape{NUM_128, NUM_32};
+    Shape l0a2Shape{NUM_32, NUM_32};
+    Shape l0bShape{NUM_32, NUM_128};
+    Shape l0c1Shape{NUM_128, NUM_128};
+    Shape l0c2Shape{NUM_32, NUM_128};
+    Shape ubNarrowShape{NUM_16, NUM_128};
+    Shape ubWideShape{NUM_16, NUM_256};
+    G.AddTensors(DataType::DT_FP16, l0a1Shape, {MemoryType::MEM_L0A}, {"l0a1"});
+    G.AddTensors(DataType::DT_FP16, l0a2Shape, {MemoryType::MEM_L0A}, {"l0a2"});
+    G.AddTensors(DataType::DT_FP16, l0bShape, {MemoryType::MEM_L0B, MemoryType::MEM_L0B}, {"l0b1", "l0b2"});
+    G.AddTensors(DataType::DT_FP16, l0c1Shape, {MemoryType::MEM_L0C}, {"mm1_out"});
+    G.AddTensors(DataType::DT_FP16, l0c2Shape, {MemoryType::MEM_L0C}, {"mm2_out"});
+    G.AddTensors(DataType::DT_FP16, ubNarrowShape,
+                 {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB,
+                  MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
+                 {"v1a", "r1a", "v1b", "r1b", "v2a", "r2a", "v2b", "r2b"});
+    G.AddTensors(DataType::DT_FP16, ubWideShape,
+                 {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
+                 {"mergeX", "mergeY", "vx", "vy", "add_out"});
+
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a1", "l0b1"}, {"mm1_out"}, "mm1");
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a2", "l0b2"}, {"mm2_out"}, "mm2");
+    AddL0cToUbBranch(G, "mm1_out", "v1a", "r1a");
+    AddL0cToUbBranch(G, "mm1_out", "v1b", "r1b");
+    AddL0cToUbBranch(G, "mm2_out", "v2a", "r2a");
+    AddL0cToUbBranch(G, "mm2_out", "v2b", "r2b");
+    AddAssembleMerge(G, "r1a", "r2a", "mergeX");
+    AddAssembleMerge(G, "r1b", "r2b", "mergeY");
+    AddUbView(G, "mergeX", "vx");
+    AddUbView(G, "mergeY", "vy");
+    G.AddOp(Opcode::OP_ADD, {"vx", "vy"}, {"add_out"}, "add");
+
+    G.SetInCast({"l0a1", "l0b1", "l0a2", "l0b2"});
+    G.SetOutCast({"add_out"});
+    Function* func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(CountMemoryPath(func, MemoryType::MEM_L0C, MemoryType::MEM_UB), 0)
+        << "L0C→UB intercepted: (128,128)/(32,128) vs (16,256) neither divisible";
+    EXPECT_GT(CountMemoryPath(func, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 0)
+        << "L0C→DDR fallback should exist after cross-chain intercept";
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+// FUNCTION macro 端到端写法：走完整 pass 流水线（AutoCast/ExpandFunction/SplitReshape 等前置 pass
+// 改图后）验证 ProcessShapeTransportFallback 仍能拦截。matmul(64,64,L0C) → Reshape(16,256)
+// → Add(UB)：前置 pass 为 reshape 插入的 view 构成 L0C→UB 搬运点，
+// prodOut(64,64) 与 consIn(16,256) 双向不整除 → 拦截回退 DDR。
+// 与 ConstructShapeTransportGraph 手动构图用例互补：手动构图直接建 tile 图，
+// 覆盖不了"前端入图经前置 pass 变化后"的链路形态。
+TEST_F(AssignMemoryTypeTest, TestL0C2UBShapeTransportEndToEndByFunctionMacro)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    auto shapes = PrepareA5Platform();
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor inputA(DataType::DT_FP16, shapes.shapeA, "A");
+        Tensor inputB(DataType::DT_FP16, shapes.shapeB, "B");
+        Tensor inputC(DataType::DT_FP32, {NUM_16, NUM_256}, "C");
+        Tensor out(DataType::DT_FP32, {NUM_16, NUM_256}, "output");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+        config::SetBuildStatic(true);
+        FUNCTION("TestL0C2UBShapeTransportEndToEndByFunctionMacro", {inputA, inputB, inputC, out})
+        {
+            TileShape::Current().SetCubeTile({NUM_32, NUM_32}, {NUM_64, NUM_64}, {NUM_64, NUM_64});
+            Tensor ab = Matrix::Matmul(out.GetDataType(), inputA, inputB);
+            TileShape::Current().SetVecTile(NUM_16, NUM_256);
+            Tensor reshaped = Reshape(ab, {NUM_16, NUM_256});
+            out = Add(reshaped, inputC);
+        }
+        originFunction = Program::GetInstance().GetFunctionByRawName(
+            "TENSOR_TestL0C2UBShapeTransportEndToEndByFunctionMacro");
+        ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
+        EXPECT_EQ(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_UB), 0)
+            << "End-to-end L0C→UB should be intercepted: (64,64) vs (16,256) neither divisible";
+        EXPECT_GT(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 0)
+            << "L0C→DDR fallback should exist after end-to-end intercept";
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
     Platform::Instance().ReloadMemoryPaths("2201");

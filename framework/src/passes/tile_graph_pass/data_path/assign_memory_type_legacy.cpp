@@ -21,6 +21,7 @@
 
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/utils/common.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
@@ -41,6 +42,10 @@
     } while (0)
 
 namespace npu::tile_fwk::legacy {
+namespace {
+// 穿透时视为透明的 op 集合（shape 兜底/端点收集跳过它们继续穿透）
+const std::unordered_set<Opcode> TRANSPARENT_OPS = {Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_REGISTER_COPY};
+} // namespace
 Status AssignMemoryType::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "===> Start AssignMemoryType.");
@@ -1651,6 +1656,7 @@ Status AssignMemoryType::ApplyPlatformPathFallbackRules(Function& function)
         ProcessUB2L1SmallToLarge(function);
         ProcessUB2L1LargeToSmall(function);
     }
+    ProcessShapeTransportFallback(function);
     return SUCCESS;
 }
 
@@ -2243,6 +2249,142 @@ void AssignMemoryType::ProcessUB2L1LargeToSmall(Function& function)
     }
 }
 
+// 判定两 tensor 是否满足任意方向的逐维整除关系（含等大放行）
+bool AssignMemoryType::IsAllowedTransport(const LogicalTensorPtr& prodOut, const LogicalTensorPtr& consIn) const
+{
+    if (prodOut == nullptr || consIn == nullptr) {
+        return false;
+    }
+    return IsDimMultiple(prodOut->GetShape(), consIn->GetShape()) ||
+           IsDimMultiple(consIn->GetShape(), prodOut->GetShape());
+}
+
+namespace {
+// 端点收集方向：沿 producer 方向找真实生产者输出 / 沿 consumer 方向找真实消费者输入
+enum class TraverseDirection { PRODUCER, CONSUMER };
+
+// 沿 direction 方向穿透 TRANSPARENT_OPS，限定在 boundType 层级内；
+// 若透明 op 的对侧 tensor 离开 boundType，把当前 t 标记为端点（层级边界，不再继续）
+std::vector<LogicalTensorPtr> CollectRealEndpoints(const LogicalTensorPtr& tensor, MemoryType boundType,
+                                                   TraverseDirection direction)
+{
+    if (tensor == nullptr) {
+        return {};
+    }
+    std::vector<LogicalTensorPtr> endpoints;
+    std::unordered_set<LogicalTensorPtr> visited;
+    std::vector<LogicalTensorPtr> stack = {tensor};
+    while (!stack.empty()) {
+        auto t = stack.back();
+        stack.pop_back();
+        if (t == nullptr || !visited.insert(t).second) {
+            continue;
+        }
+        bool isEndpoint = false;
+        auto& ops = (direction == TraverseDirection::PRODUCER) ? t->GetProducers() : t->GetConsumers();
+        for (auto* op : ops) {
+            if (TRANSPARENT_OPS.count(op->GetOpcode()) == 0) {
+                isEndpoint = true;
+                continue;
+            }
+            auto& nextTensors = (direction == TraverseDirection::PRODUCER) ? op->GetIOperands() : op->GetOOperands();
+            for (auto& nextT : nextTensors) {
+                if (nextT->GetMemoryTypeOriginal() == boundType) {
+                    stack.push_back(nextT);
+                } else {
+                    isEndpoint = true;
+                }
+            }
+        }
+        if (isEndpoint) {
+            endpoints.push_back(t);
+        }
+    }
+    return endpoints;
+}
+} // namespace
+
+// 穿透式 shape 兜底：对仍走 L0C↔L1/L0C↔UB/UB↔L1 片上直连的 view/assemble，
+// 用真实生产者输出×真实消费者输入做双向逐维整除判断，不满足则拦截回退 DDR
+void AssignMemoryType::ProcessShapeTransportFallback(Function& function)
+{
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
+    bool is3510 = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
+    for (auto& op : function.Operations()) {
+        auto opcode = op.GetOpcode();
+        if (op.GetIOperands().empty() || op.GetOOperands().empty()) {
+            continue;
+        }
+        auto iOperand = op.GetIOperands().front();
+        auto oOperand = op.GetOOperands().front();
+        MemoryType fromType = iOperand->GetMemoryTypeOriginal();
+        MemoryType toType = MEM_DEVICE_DDR;
+        bool isTransport = false;
+        if (opcode == Opcode::OP_VIEW) {
+            auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
+            if (viewAttr == nullptr) {
+                continue;
+            }
+            toType = viewAttr->GetTo();
+            // L0C→L1 全平台; L0C→UB / UB→L1 仅 DAV_3510
+            bool pathL0C2L1 = (fromType == MEM_L0C && toType == MEM_L1);
+            bool path3510 = is3510 &&
+                            ((fromType == MEM_L0C && toType == MEM_UB) || (fromType == MEM_UB && toType == MEM_L1));
+            isTransport = (pathL0C2L1 || path3510) && inserter.GetRequirementOrUnknown(iOperand, op) != MEM_DEVICE_DDR;
+        } else if (opcode == Opcode::OP_ASSEMBLE) {
+            toType = oOperand->GetMemoryTypeOriginal();
+            if (toType == MEM_DEVICE_DDR) {
+                continue;
+            }
+            // L0C→L1(iOperand=L0C, oOperand≠UB) 全平台; L0C→UB / UB→L1 仅 DAV_3510
+            bool pathL0C2L1 = (fromType == MEM_L0C && toType != MEM_UB);
+            bool path3510 = is3510 &&
+                            ((fromType == MEM_L0C && toType == MEM_UB) || (fromType == MEM_UB && toType == MEM_L1));
+            isTransport = (pathL0C2L1 || path3510);
+        }
+        if (!isTransport) {
+            continue;
+        }
+        // 收集穿透端点：iOperand 向前找真实生产者输出，oOperand 向后找真实消费者输入；
+        // 穿透限定在各自层级内(fromType/toType)，跨层级边界即停
+        auto prodOutputs = CollectRealEndpoints(iOperand, fromType, TraverseDirection::PRODUCER);
+        auto consInputs = CollectRealEndpoints(oOperand, toType, TraverseDirection::CONSUMER);
+        // 所有端点对 IsAllowedTransport 全成立才放行；端点集为空或任一不成立则拦截。
+        // 空端点集（如函数出口/无 producer 的 tensor）无法证明兼容，保守拦截回退 DDR
+        Shape firstBadProdShape;
+        Shape firstBadConsShape;
+        bool allowed = !prodOutputs.empty() && !consInputs.empty();
+        for (const auto& prodOut : prodOutputs) {
+            for (const auto& consIn : consInputs) {
+                if (!IsAllowedTransport(prodOut, consIn)) {
+                    allowed = false;
+                    firstBadProdShape = prodOut->GetShape();
+                    firstBadConsShape = consIn->GetShape();
+                    break;
+                }
+            }
+            if (!allowed) {
+                break;
+            }
+        }
+        if (allowed) {
+            continue;
+        }
+        // 拦截：view→tobe=DDR; assemble→origin=DDR+DowngradeConsumerRequirements
+        APASS_LOG_DEBUG_F(Elements::Tensor,
+                          "ShapeTransportFallback intercepts %s[%d] on-chip path %s->%s to DDR: prodOut=%s consIn=%s.",
+                          op.GetOpcodeStr().c_str(), op.GetOpMagic(), BriefMemoryTypeToString(fromType).c_str(),
+                          BriefMemoryTypeToString(toType).c_str(), IntVecToStr(firstBadProdShape).c_str(),
+                          IntVecToStr(firstBadConsShape).c_str());
+        if (opcode == Opcode::OP_VIEW) {
+            inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
+        } else {
+            oOperand->SetMemoryTypeOriginal(MEM_DEVICE_DDR, true);
+            DowngradeConsumerRequirements(oOperand, fromType);
+        }
+    }
+}
+
 bool AssignMemoryType::CheckInnerAxisC0Size(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const
 {
     constexpr int64_t kC0AlignBytes = 32;
@@ -2280,7 +2422,7 @@ bool AssignMemoryType::CheckInnerAxisC0Size(const LogicalTensorPtr& input, const
     return true;
 }
 
-bool AssignMemoryType::IsDimMultiple(const Shape& shape1, const Shape& shape2)
+bool AssignMemoryType::IsDimMultiple(const Shape& shape1, const Shape& shape2) const
 {
     if (shape1.size() != shape2.size()) {
         return false;
