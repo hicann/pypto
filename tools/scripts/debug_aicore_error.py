@@ -729,6 +729,8 @@ def _enrich_from_plog(msaicerr_out: str, sections: Dict[str, str],
             sec3_content = sections[sec3_key]
             kernel_file = _extract_kernel_file(sec1_content, msaicerr_out)
             extra = (
+                f"\ncore id            : {core_id}"
+                f"\ncore type          : {core_type}"
                 f"\nfixedStartPC       : {pc_match['fixedStartPC']}"
                 f"\nfixedCurrentPC     : {pc_match['fixedCurrentPC']}"
                 f"\nfixedPCOffset      : {pc_match['fixedPCOffset']}"
@@ -737,6 +739,10 @@ def _enrich_from_plog(msaicerr_out: str, sections: Dict[str, str],
             if symbol_info:
                 extra += f"\n{symbol_info}"
             sections[sec3_key] = sec3_content.rstrip() + extra
+
+    # 7. [MSAICERR-WORKAROUND] 多 extend info 场景修正：第一条 errcode 全 0 时，重新匹配到第一条非全 0 的 extend info
+    #    msaicerr 修复后可移除本调用
+    _fix_multi_extend_info(plog_dir, sections, sec1_content, msaicerr_out)
 
 
 def _find_bundled_kernel(report_dir: str) -> Optional[str]:
@@ -804,8 +810,8 @@ def _parse_core_type_from_earliest_error_info(plog_dir: str) -> Optional[str]:
     """
     参考 msaicerr 逻辑：grep 'error info:' 取时间戳最早的那一条，
     根据异常类型判断 coreType：
-      - "exception of fftsplus aicore error"   → 0
-      - "exception of fftsplus aivector error"  → 1
+      - "aicore error"（A2/A3/A5）     → 0
+      - "aivector error"（A2/A3）/ "aivec error"（A5）  → 1
     """
     try:
         result = subprocess.run(
@@ -841,15 +847,65 @@ def _parse_core_type_from_earliest_error_info(plog_dir: str) -> Optional[str]:
     _print_log("INFO", f"Earliest error info: {earliest_line.strip()[:200]}...")
 
 
-    if "exception of fftsplus aicore error" in earliest_line.lower():
+    if "aicore error" in earliest_line.lower():
         _print_log("INFO", "coreType determined as 0 (aicore error)")
         return "0"
-    elif "exception of fftsplus aivector error" in earliest_line.lower():
-        _print_log("INFO", "coreType determined as 1 (aivector error)")
+    elif "aivector error" in earliest_line.lower() or "aivec error" in earliest_line.lower():
+        _print_log("INFO", "coreType determined as 1 (aivector/aivec error)")
         return "1"
     else:
-        _print_log("WARNING", "fftsplus aicore/aivector error not recognized in earliest error info, coreType unknown")
+        _print_log("WARNING", "aicore/aivector/aivec error not recognized in earliest error info, coreType unknown")
         return None
+
+
+# [MSAICERR-WORKAROUND] 多 extend info 场景修正，msaicerr 修复后可整体移除本函数
+def _parse_extend_info_records(plog_dir: str) -> List[Dict[str, str]]:
+    """grep 'The extend info: errcode:'，解析每条 extend info 的 errcode/core_id/core_type。
+
+    每条记录: {errcode, core_id, core_type}，按 grep 输出顺序（即日志时间顺序）排列。
+    core_type: aicore→"0", aivector/aivec→"1"（与 kernel_symbol_locator.cpp 的 coreType 一致）。
+    兼容 A2/A3（aicore/aivector error）与 A5（aicore/aivec error）。
+    """
+    try:
+        result = subprocess.run(
+            ["grep", "-rnE", "The extend info: errcode:", plog_dir],
+            capture_output=True, text=True, timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        _print_log("WARNING", "grep 'The extend info: errcode:' timed out (30s)")
+        return []
+    except Exception as e:
+        _print_log("WARNING", f"grep 'The extend info: errcode:' failed: {e}")
+        return []
+
+    if result.returncode != 0 or not result.stdout.strip():
+        _print_log("WARNING", "'The extend info: errcode:' not found in plog")
+        return []
+
+    records: List[Dict[str, str]] = []
+    for line in result.stdout.strip().split("\n"):
+        core_id_m = re.search(r"core id is (\d+)", line)
+        # 兼容 A2/A3（aicore/aivector error）与 A5（aicore/aivec error）
+        core_type_m = re.search(r"(aicore|aivec(?:tor)?) error", line)
+        errcode_m = re.search(r"errcode:(\([^)]*\))", line)
+        if not (core_id_m and core_type_m and errcode_m):
+            continue
+        core_type = "0" if core_type_m.group(1) == "aicore" else "1"
+        records.append({
+            "core_id": core_id_m.group(1),
+            "core_type": core_type,
+            "errcode": errcode_m.group(1),
+        })
+    return records
+
+
+# [MSAICERR-WORKAROUND] 多 extend info 场景修正，msaicerr 修复后可整体移除本函数
+def _errcode_is_all_zero(errcode: str) -> bool:
+    """判断 errcode（一元组/三元组，如 "(0)" 或 "(0, 0x800, 0)"）是否所有数值都为 0。"""
+    nums = re.findall(r"0x[0-9a-fA-F]+|\d+", errcode)
+    if not nums:
+        return False
+    return all(int(n, 16) == 0 for n in nums)
 
 
 def _parse_fixed_pc_from_plog(plog_dir: str, core_id: str, core_type: Optional[str]) -> Optional[Dict[str, str]]:
@@ -980,6 +1036,78 @@ def _run_llvm_symbolizer(kernel_file: Optional[str], pc_offset: str) -> Optional
     return symbol_str
 
 
+# [MSAICERR-WORKAROUND] 多 extend info 场景修正，msaicerr 修复后可整体移除本函数
+def _fix_multi_extend_info(plog_dir: str, sections: Dict[str, str],
+                           sec1_content: str, msaicerr_out: str) -> None:
+    """
+    修正 msaicerr section 2/3 在多 extend info 场景下的错误匹配。
+
+    规则：
+    - 只匹配到一条 extend info：保持现有逻辑，不处理
+    - 多条 extend info，但第一条 errcode 不全为 0：保持现有逻辑，不处理
+    - 多条 extend info，且第一条 errcode 全为 0：
+      找到第一条 errcode 不全为 0 的 extend info，
+      在 section 2 后追加重新匹配的 AIC_ERROR，
+      在 section 3 后追加重新匹配的 fixedStartPC/fixedCurrentPC/fixedPCOffset，
+      并用新 core id + core type 重新跑 llvm-symbolizer 追加符号信息。
+    """
+    records = _parse_extend_info_records(plog_dir)
+    if len(records) <= 1:
+        _print_log("INFO", "Only one extend info, no re-match needed")
+        return
+
+    if not _errcode_is_all_zero(records[0]["errcode"]):
+        _print_log("INFO", f"First extend info errcode {records[0]['errcode']} is not all-zero, keep existing logic")
+        return
+
+    # 找第一条 errcode 不全为 0 的 extend info
+    target = None
+    for rec in records:
+        if not _errcode_is_all_zero(rec["errcode"]):
+            target = rec
+            break
+    if target is None:
+        _print_log("WARNING", "All extend info errcodes are all-zero, no re-match target")
+        return
+
+    _print_log("INFO", f"First extend info errcode {records[0]['errcode']} is all-zero, "
+              f"re-match to core id {target['core_id']}, core type {target['core_type']}, "
+              f"errcode {target['errcode']}")
+
+    # 1. section 2 后追加重新匹配的 AIC_ERROR
+    sec2_key = _find_section_key(sections, "2. AI Core DFX Register")
+    if sec2_key is None:
+        _print_log("WARNING", "section 2 (AI Core DFX Register) not found, skip AIC_ERROR re-match")
+    else:
+        sections[sec2_key] = sections[sec2_key].rstrip() + \
+            f"\n(re-matched) AIC_ERROR : {target['errcode']}"
+
+    # 2. 用新 core id + core type 重新匹配 fixedPC
+    pc_match = _parse_fixed_pc_from_plog(plog_dir, target["core_id"], target["core_type"])
+    if pc_match is None:
+        _print_log("WARNING", "re-matched fixedPC not found, skip section 3 append")
+        return
+
+    # 3. section 3 后追加重新匹配的 fixedPC + llvm-symbolizer
+    sec3_key = _find_section_key(sections, "3. Operator Error Line Number")
+    if sec3_key is None:
+        _print_log("WARNING", "section 3 (Operator Error Line Number) not found, skip fixedPC append")
+        return
+
+    kernel_file = _extract_kernel_file(sec1_content, msaicerr_out)
+    extra = (
+        f"\n(re-matched) core id           : {target['core_id']}"
+        f"\n(re-matched) core type         : {target['core_type']}"
+        f"\n(re-matched) fixedStartPC       : {pc_match['fixedStartPC']}"
+        f"\n(re-matched) fixedCurrentPC     : {pc_match['fixedCurrentPC']}"
+        f"\n(re-matched) fixedPCOffset      : {pc_match['fixedPCOffset']}"
+    )
+    symbol_info = _run_llvm_symbolizer(kernel_file, pc_match['fixedPCOffset'])
+    if symbol_info:
+        extra += f"\n{symbol_info}"
+    sections[sec3_key] = sections[sec3_key].rstrip() + extra
+
+
 def _detect_python() -> str:
     """检测可用的 Python 解释器，确保能 import pypto 和 import torch_npu。"""
     candidates = [sys.executable]
@@ -1015,13 +1143,22 @@ def _execute_test_script(
     python_exe: str,
     timeout: int = 600,
     bundle_path: str = "",
+    section: int = 0,
+    out_dir: str = "",
 ) -> Tuple[bool, str]:
     """
     统一执行测试脚本，返回 (passed: bool, output: str)。
     - python_exe: Python 解释器路径
     - bundle_path: 可选，设置 PYPTO_BUNDLE_PATH 环境变量，让脚本用指定 bundle 执行
+    - section: 可选，执行前将 ASCEND_WORK_PATH 修改为 {out_dir}/section{section}
+    - out_dir: 可选，debug_info.txt 同级目录（即 msaicerr 输出目录），与 section 拼接作为 ASCEND_WORK_PATH 基准
     """
     env = os.environ.copy()
+
+    if section:
+        new_work_path = os.path.join(out_dir, f"tmp/section{section}") if out_dir else f"section{section}"
+        env["ASCEND_WORK_PATH"] = new_work_path
+        _print_log("INFO", f"Section {section}: ASCEND_WORK_PATH={new_work_path}")
 
     if bundle_path:
         env["PYPTO_BUNDLE_PATH"] = bundle_path
@@ -1058,9 +1195,11 @@ def run_test_script_and_update_info(script_path: str, device_id: int,
                                     python_exe: str,
                                     sections: Dict[str, str],
                                     timeout: int = 600,
-                                    bundle_path: str = "") -> bool:
+                                    bundle_path: str = "",
+                                    out_dir: str = "") -> bool:
     """执行测试脚本，将结果覆盖 sections dict 中的 section 6。返回 True 表示通过。"""
-    test_passed, output = _execute_test_script(script_path, python_exe, timeout, bundle_path)
+    test_passed, output = _execute_test_script(script_path, python_exe, timeout, bundle_path,
+                                               section=6, out_dir=out_dir)
 
     # Update section 6 in sections dict
     sec6_key = _find_section6_key(sections)
@@ -1143,7 +1282,8 @@ def run_section7_intercore_sync(script_path: str, device_id: int,
                                  sections: Dict[str, str], header_order: List[str],
                                  python_exe: str,
                                  timeout: int = 600,
-                                 bundle_path: str = ""):
+                                 bundle_path: str = "",
+                                 out_dir: str = ""):
     """
     Phase E: msnpureport singlecommit=1 排除核内同步问题。
     """
@@ -1160,7 +1300,8 @@ def run_section7_intercore_sync(script_path: str, device_id: int,
     if not success:
         _print_log("WARNING", f"msnpureport enable singlecommit failed: {msn_output}")
 
-    test_passed, test_output = _execute_test_script(script_path, python_exe, timeout, bundle_path)
+    test_passed, test_output = _execute_test_script(script_path, python_exe, timeout, bundle_path,
+                                                    section=7, out_dir=out_dir)
 
     output_lines.append(f"Re-execute (singlecommit=1):\n{test_output}")
     output_lines.append("")
@@ -1210,7 +1351,8 @@ def run_section8_framework_vs_cce(script_path: str, device_id: int,
                                    sections: Dict[str, str], header_order: List[str],
                                    python_exe: str,
                                    timeout: int = 600,
-                                   bundle_path_undef: str = ""):
+                                   bundle_path_undef: str = "",
+                                   out_dir: str = ""):
     """
     Phase F: 用 *_nosubfunc.pyptokb 重新执行，判断 sub-func 是否为根因。
     """
@@ -1228,7 +1370,8 @@ def run_section8_framework_vs_cce(script_path: str, device_id: int,
     output_lines.append("")
     _print_log("INFO", f"Nosubfunc bundled kernel: {bundle_path_undef}")
 
-    test_passed, test_output = _execute_test_script(script_path, python_exe, timeout, bundle_path_undef)
+    test_passed, test_output = _execute_test_script(script_path, python_exe, timeout, bundle_path_undef,
+                                                    section=8, out_dir=out_dir)
 
     output_lines.append(f"Re-execute (nosubfunc):\n{test_output}")
     output_lines.append("")
@@ -1365,7 +1508,7 @@ def main():
 
     section6_passed = run_test_script_and_update_info(
         output_script, device_id, python_exe, sections,
-        timeout=args.t, bundle_path=bundle_path,
+        timeout=args.t, bundle_path=bundle_path, out_dir=msaicerr_out,
     )
 
     # ============================================================
@@ -1379,7 +1522,7 @@ def main():
             output_script, device_id,
             sections, header_order,
             python_exe, timeout=args.t,
-            bundle_path=bundle_path,
+            bundle_path=bundle_path, out_dir=msaicerr_out,
         )
 
         # ============================================================
@@ -1392,6 +1535,7 @@ def main():
                 sections, header_order,
                 python_exe, timeout=args.t,
                 bundle_path_undef=_BUNDLED_KERNEL_PATH_UNDEF,
+                out_dir=msaicerr_out,
             )
         else:
             _print_log("INFO", "Inter-core sync issue identified, skipping Section 8")
