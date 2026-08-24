@@ -10,9 +10,9 @@ function foo incast(logical_tensor %x, logical_tensor %y, logical_tensor %z) out
             logical_tensor %$1 = SUB(%View_x, %View_y) token();
             yield %$1;
         }
-        for %loop_idx_50 inrange 0, 2, 1 iter {} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        logical_tensor %z_7 = for %loop_idx_50 inrange 0, 2, 1 iter {logical_tensor %z_3 = %z_1;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
             logical_tensor %z_5 = ASSEMBLE(%a_0) token();
-            continue;
+            continue %z_5;
         }
         logical_tensor %z_13 = if scalar_expr then {
             logical_tensor %$3 = ADD(%a_0, %View_y) token();

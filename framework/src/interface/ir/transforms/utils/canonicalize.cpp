@@ -79,11 +79,13 @@ private:
     {
         sites.push_back({std::move(defs), std::move(uses)});
     }
+
     void AddLiveUses(const ExprPtr& expr)
     {
         auto uses = CollectVarUses(expr);
         liveRoots.insert(liveRoots.end(), uses.begin(), uses.end());
     }
+
     void AddTerminator(const std::vector<ExprPtr>& values)
     {
         const auto& returnVars = *rvStack_.back();
@@ -127,7 +129,6 @@ private:
 
     void VisitStmt_(const IfStmtPtr& op) override
     {
-        AddLiveUses(op->condition_);
         rvStack_.push_back(&op->returnVars_);
         VisitStmt(op->thenBody_);
         if (op->elseBody_.has_value()) {
@@ -135,28 +136,24 @@ private:
         }
         rvStack_.pop_back();
     }
-    void VisitStmt_(const ForStmtPtr& op) override
+
+    void VisitStmt_(const std::vector<VarPtr>& returnVars, const std::vector<IterArgPtr>& iterArgs, const StmtPtr& body)
     {
-        AddLiveUses(op->start_);
-        AddLiveUses(op->stop_);
-        AddLiveUses(op->step_);
-        for (const auto& iterArg : op->iterArgs_) {
-            AddLiveUses(iterArg->initValue_);
+        INTERNAL_CHECK(returnVars.size() == iterArgs.size()) << "for stmt must have one return var per iter arg";
+        auto n = iterArgs.size();
+        for (size_t k = 0; k < n; ++k) {
+            if (IsSameRawTensor(iterArgs[k]->iterVar_, returnVars[k])) {
+                AddLiveUses(iterArgs[k]->iterVar_);
+            }
         }
-        rvStack_.push_back(&op->returnVars_);
-        VisitStmt(op->body_);
+        rvStack_.push_back(&returnVars);
+        VisitStmt(body);
         rvStack_.pop_back();
     }
-    void VisitStmt_(const WhileStmtPtr& op) override
-    {
-        AddLiveUses(op->condition_);
-        for (const auto& iterArg : op->iterArgs_) {
-            AddLiveUses(iterArg->initValue_);
-        }
-        rvStack_.push_back(&op->returnVars_);
-        VisitStmt(op->body_);
-        rvStack_.pop_back();
-    }
+
+    void VisitStmt_(const ForStmtPtr& op) override { VisitStmt_(op->returnVars_, op->iterArgs_, op->body_); }
+
+    void VisitStmt_(const WhileStmtPtr& op) override { VisitStmt_(op->returnVars_, op->iterArgs_, op->body_); }
 };
 
 std::unordered_set<const Var*> ComputeLiveVars(const StmtPtr& stmt, const std::unordered_set<const Var*>& afterRefs)

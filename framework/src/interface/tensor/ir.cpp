@@ -84,6 +84,16 @@ void CollectScalarVarRefs(const TensorOpStmtPtr& op, std::unordered_set<const Va
     }
 }
 
+bool IsSameRawTensor(const VarPtr& v0, const VarPtr& v1)
+{
+    if (ir::IsA<LogicalTensorType>(v0->GetType()) && ir::IsA<LogicalTensorType>(v1->GetType())) {
+        auto lt1 = std::dynamic_pointer_cast<const LogicalTensor>(v0);
+        auto lt2 = std::dynamic_pointer_cast<const LogicalTensor>(v1);
+        return lt1->GetRawTensor() == lt2->GetRawTensor();
+    }
+    return false;
+}
+
 Pass pass::AggressiveDCE()
 {
     return pass::CreateFunctionPass(

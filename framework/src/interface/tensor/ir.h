@@ -31,6 +31,9 @@ std::optional<int> GetVarMemoryId(const Var* var);
 // analysis. Skips Vars that have no allocation id.
 std::unordered_set<int> CollectMemoryIds(const std::unordered_set<const Var*>& vars);
 
+// Returns true if two tensor Vars share the same underlying raw tensor.
+bool IsSameRawTensor(const VarPtr& v0, const VarPtr& v1);
+
 // Collects all scalar variables referenced by a tensor operation.
 void CollectScalarVarRefs(const TensorOpStmtPtr& op, std::unordered_set<const Var*>& var_uses);
 } // namespace pypto::ir
