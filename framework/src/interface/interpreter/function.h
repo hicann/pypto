@@ -67,31 +67,43 @@ struct FunctionIODataPair {
     // simultaneously
     static void CopyWithLinkRelationship(FunctionIODataPair& dst, const FunctionIODataPair& src)
     {
-        struct CopyInfo {
-            bool isIncast;
-            int index;
-            CopyInfo(bool isIncast_, int index_) : isIncast(isIncast_), index(index_) {}
-        };
-
-        std::unordered_map<std::shared_ptr<LogicalTensorData>, std::vector<CopyInfo>> copyInfoDict;
-        for (size_t k = 0; k < src.incastDataViewList.size(); k++) {
-            copyInfoDict[src.incastDataViewList[k]].emplace_back(true, k);
-        }
-        for (size_t k = 0; k < src.outcastDataViewList.size(); k++) {
-            copyInfoDict[src.outcastDataViewList[k]].emplace_back(false, k);
-        }
-
+        std::unordered_map<std::shared_ptr<StorageData>, std::shared_ptr<StorageData>> storageDeepCopyDict;
         dst.incastDataViewList.resize(src.incastDataViewList.size());
         dst.outcastDataViewList.resize(src.outcastDataViewList.size());
-        for (auto& [srcDataView, copyInfoList] : copyInfoDict) {
-            auto dstData = srcDataView->DeepCopy();
-            for (auto& [isIncast, index] : copyInfoList) {
-                if (isIncast) {
-                    dst.incastDataViewList[index] = dstData;
-                } else {
-                    dst.outcastDataViewList[index] = dstData;
-                }
+
+        for (size_t k = 0; k < src.incastDataViewList.size(); k++) {
+            auto& srcDataView = src.incastDataViewList[k];
+            auto srcRaw = srcDataView->GetData();
+            auto storage = srcRaw->GetRawData();
+            if (storageDeepCopyDict.count(storage) == 0) {
+                storageDeepCopyDict[storage] = std::make_shared<StorageData>(*storage);
             }
+            auto dstRaw = std::make_shared<RawTensorData>(storageDeepCopyDict[storage], srcRaw->GetDataType(),
+                                                          srcRaw->GetShape());
+            if (srcRaw->IsShmTensor()) {
+                dstRaw->SetShmOffset(srcRaw->GetShmOffset());
+                dstRaw->SetAsShmTensor();
+            }
+            dst.incastDataViewList[k] = std::make_shared<LogicalTensorData>(
+                dstRaw, srcDataView->GetShape(), srcDataView->GetValidShape(), srcDataView->GetOffset());
+            dst.incastDataViewList[k]->SetIsSpilled(srcDataView->GetIsSpilled());
+        }
+        for (size_t k = 0; k < src.outcastDataViewList.size(); k++) {
+            auto& srcDataView = src.outcastDataViewList[k];
+            auto srcRaw = srcDataView->GetData();
+            auto storage = srcRaw->GetRawData();
+            if (storageDeepCopyDict.count(storage) == 0) {
+                storageDeepCopyDict[storage] = std::make_shared<StorageData>(*storage);
+            }
+            auto dstRaw = std::make_shared<RawTensorData>(storageDeepCopyDict[storage], srcRaw->GetDataType(),
+                                                          srcRaw->GetShape());
+            if (srcRaw->IsShmTensor()) {
+                dstRaw->SetShmOffset(srcRaw->GetShmOffset());
+                dstRaw->SetAsShmTensor();
+            }
+            dst.outcastDataViewList[k] = std::make_shared<LogicalTensorData>(
+                dstRaw, srcDataView->GetShape(), srcDataView->GetValidShape(), srcDataView->GetOffset());
+            dst.outcastDataViewList[k]->SetIsSpilled(srcDataView->GetIsSpilled());
         }
         for (size_t k = 0; k < dst.incastDataViewList.size(); k++) {
             ASSERT(ControlFlowScene::FUNC_IO_DATAVIEW_NULL, dst.incastDataViewList[k] != nullptr);
@@ -286,7 +298,8 @@ struct FunctionFrame {
             size_t requiredSize = RawTensorData::CalcRequiredSize(dtype, rawShape);
             ASSERT(ControlFlowScene::FUNC_RAW_TENSOR_SIZE_MISMATCH, existingView->GetData()->size() == requiredSize)
                 << "RawTensor size mismatch when updating: existing size=" << existingView->GetData()->size()
-                << ", required size=" << requiredSize;
+                << ", required size=" << requiredSize << ", rawMagic=" << tensor->tensor->GetRawMagic()
+                << ", tensorMagic=" << tensor->magic;
             auto rawData = std::make_shared<RawTensorData>(existingView->GetData()->GetRawData(), dtype, rawShape);
             if (existingView->GetData()->IsShmTensor()) {
                 rawData->SetShmOffset(existingView->GetData()->GetShmOffset());
@@ -320,7 +333,8 @@ struct FunctionFrame {
             size_t requiredSize = RawTensorData::CalcRequiredSize(dtype, rawShape);
             ASSERT(ControlFlowScene::FUNC_RAW_TENSOR_SIZE_MISMATCH, existingRawData->size() >= requiredSize)
                 << "RawTensor size mismatch when sharing: rawMagic=" << raw->GetRawMagic()
-                << ", existing size=" << existingRawData->size() << ", required size=" << requiredSize;
+                << ", existing size=" << existingRawData->size() << ", required size=" << requiredSize
+                << ", rawMagic=" << tensor->tensor->GetRawMagic() << ", tensorMagic=" << tensor->magic;
             rawData = std::make_shared<RawTensorData>(existingRawData, dtype, rawShape);
         } else {
             ASSERT(ControlFlowScene::FUNC_INPLACE_ALLOC_CONFLICT, inplaceTensor == nullptr);
@@ -614,7 +628,7 @@ struct FunctionInterpreter {
     mutable std::unordered_map<std::thread::id, std::shared_ptr<OperationInterpreter>> perThreadOperationInterpreter_;
     std::vector<std::shared_ptr<LogicalTensorData>> interpreterEntryInputViews_;
     std::unordered_map<std::string, ScalarImmediateType> interpreterBootstrapSymbolDict_;
-    std::unordered_map<int, std::shared_ptr<LogicalTensorData>> slotDataViewDict_;
+    std::unordered_map<int, std::shared_ptr<StorageData>> slotDataViewDict_;
     std::vector<std::shared_ptr<FunctionFrame>>* captureFrameList{nullptr};
     std::unordered_map<std::string, ScalarImmediateType> loopSymbolDict;
     std::unordered_map<std::pair<std::shared_ptr<LogicalTensor>, int32_t>, std::shared_ptr<LogicalTensorData>, PairHash>
@@ -871,7 +885,8 @@ struct FunctionInterpreter {
         auto rawShape = EvaluateValidShape(tensor->GetRawTensor()->GetDynRawShape());
         ASSERT(ControlFlowScene::INVALID_TENSOR_SHAPE,
                std::all_of(rawShape.begin(), rawShape.end(), [](int64_t dim) { return dim >= 0; }))
-            << "ShapeToStride: shape dimension must be non-negative" << rawShape;
+            << "AllocateDataView: shape dimension must be non-negative" << rawShape
+            << ", rawMagic=" << tensor->tensor->GetRawMagic() << ", tensorMagic=" << tensor->magic;
         auto ret = frame.AllocateDataView(tensor, offset, validShape, rawShape, dtype, inplaceTensor);
         return ret;
     }
@@ -1352,36 +1367,6 @@ struct FunctionInterpreter {
         }
     }
 
-    void RefreshInOutDataView(FunctionFrame& frame, Function* func,
-                              const std::shared_ptr<FunctionIODataPair>& inoutDataPair)
-    {
-        if (inoutDataPair == nullptr) {
-            return;
-        }
-        std::vector<SymbolicScalar> linearArgList;
-        if (frame.callopAttr != nullptr) {
-            linearArgList = frame.callopAttr->GetLinearArgList();
-        }
-        ASSERT(ControlFlowScene::FUNC_INCAST_COUNT_MISMATCH,
-               func->GetIncast().size() == inoutDataPair->incastDataViewList.size());
-        for (size_t i = 0; i < inoutDataPair->incastDataViewList.size(); i++) {
-            auto tensor = func->GetIncast()[i];
-            auto newValidShape = EvaluateValidShape(tensor->GetDynValidShape(), linearArgList);
-            if (inoutDataPair->incastDataViewList[i]->GetValidShape() != newValidShape) {
-                inoutDataPair->incastDataViewList[i] = AllocateDataView(frame, tensor);
-            }
-        }
-        ASSERT(ControlFlowScene::FUNC_OUTCAST_COUNT_MISMATCH,
-               func->GetOutcast().size() == inoutDataPair->outcastDataViewList.size());
-        for (size_t i = 0; i < inoutDataPair->outcastDataViewList.size(); i++) {
-            auto tensor = func->GetOutcast()[i];
-            auto newValidShape = EvaluateValidShape(tensor->GetDynValidShape(), linearArgList);
-            if (inoutDataPair->outcastDataViewList[i]->GetValidShape() != newValidShape) {
-                inoutDataPair->outcastDataViewList[i] = AllocateDataView(frame, tensor);
-            }
-        }
-    }
-
     std::shared_ptr<FunctionFrame> ExecuteFunctionFrame(Function* func, Operation* callop,
                                                         std::shared_ptr<FunctionIODataPair>& inoutDataPair)
     {
@@ -1393,7 +1378,6 @@ struct FunctionInterpreter {
         }
         std::shared_ptr<FunctionFrame> frame = std::make_shared<FunctionFrame>(func, callop, callopAttr, inoutDataPair,
                                                                                frameCount.fetch_add(1));
-        RefreshInOutDataView(*frame, func, inoutDataPair);
         if (callop == nullptr) {
             interpreterSyncSimulation_->Reset();
         }
@@ -1702,8 +1686,16 @@ struct FunctionInterpreter {
                 ASSERT(ControlFlowScene::FUNC_SLOT_IO_COUNT_MISMATCH, func->GetIncast().size() == incastSlot.size());
                 for (size_t i = 0; i < func->GetIncast().size(); i++) {
                     int slot = incastSlot[i][0];
-                    ASSERT(ControlFlowScene::FUNC_SLOT_MISSING, slotDataViewDict_.count(slot));
-                    auto incastDataView = slotDataViewDict_[slot];
+                    ASSERT(ControlFlowScene::FUNC_SLOT_MISSING, slotDataViewDict_.count(slot))
+                        << "missing slot=" << slot;
+                    auto tensor = func->GetIncast()[i];
+                    auto offset = EvaluateOffset(tensor->GetOffset(), tensor->GetDynOffset());
+                    auto validShape = EvaluateValidShape(tensor->GetDynValidShape());
+                    auto rawShape = EvaluateValidShape(tensor->GetRawTensor()->GetDynRawShape());
+                    auto rawData = std::make_shared<RawTensorData>(slotDataViewDict_[slot], tensor->Datatype(),
+                                                                   rawShape);
+                    auto incastDataView = std::make_shared<LogicalTensorData>(rawData, tensor->GetShape(), validShape,
+                                                                              offset);
                     inoutDataPair->incastDataViewList.push_back(incastDataView);
                 }
 
@@ -1712,19 +1704,44 @@ struct FunctionInterpreter {
                     int outputSlot = getOutputSlot(outcastSlot[i]);
                     bool isPartialSlot = std::find(partialSlot.begin(), partialSlot.end(), i) != partialSlot.end();
                     std::shared_ptr<LogicalTensorData> outcastView;
+                    auto outcast = func->GetOutcast()[i];
+                    auto offset = EvaluateOffset(outcast->GetOffset(), outcast->GetDynOffset());
+                    auto validShape = EvaluateValidShape(outcast->GetDynValidShape());
+                    auto rawShape = EvaluateValidShape(outcast->GetRawTensor()->GetDynRawShape());
                     if (outputSlot != -1) {
-                        outcastView = slotDataViewDict_[outputSlot];
+                        auto expectedSize = RawTensorData::CalcRequiredSize(outcast->Datatype(), rawShape);
+                        ASSERT(ControlFlowScene::FUNC_RAW_TENSOR_SIZE_MISMATCH,
+                               slotDataViewDict_[outputSlot]->size() == expectedSize)
+                            << "Slot buffer size mismatch: funcMagicName=" << func->GetMagicName()
+                            << ", outcastIndex=" << i << ", slot=" << outputSlot
+                            << ", slotBufferSize=" << slotDataViewDict_[outputSlot]->size()
+                            << ", expectedSize=" << expectedSize
+                            << ", dtype=" << DataType2String(outcast->Datatype(), true) << ", rawShape=" << rawShape
+                            << ", rawMagic=" << outcast->GetRawTensor()->GetRawMagic();
+                        auto rawData = std::make_shared<RawTensorData>(slotDataViewDict_[outputSlot],
+                                                                       outcast->Datatype(), rawShape);
+                        outcastView = std::make_shared<LogicalTensorData>(rawData, outcast->GetShape(), validShape,
+                                                                          offset);
                     } else if (isPartialSlot && slotDataViewDict_[outcastSlot[i][0]]) {
-                        outcastView = slotDataViewDict_[outcastSlot[i][0]];
+                        auto expectedSize = RawTensorData::CalcRequiredSize(outcast->Datatype(), rawShape);
+                        ASSERT(ControlFlowScene::FUNC_RAW_TENSOR_SIZE_MISMATCH,
+                               slotDataViewDict_[outcastSlot[i][0]]->size() == expectedSize)
+                            << "Slot buffer size mismatch: funcMagicName=" << func->GetMagicName()
+                            << ", outcastIndex=" << i << ", slot=" << outcastSlot[i][0]
+                            << ", slotBufferSize=" << slotDataViewDict_[outcastSlot[i][0]]->size()
+                            << ", expectedSize=" << expectedSize
+                            << ", dtype=" << DataType2String(outcast->Datatype(), true) << ", rawShape=" << rawShape
+                            << ", rawMagic=" << outcast->GetRawTensor()->GetRawMagic();
+                        auto rawData = std::make_shared<RawTensorData>(slotDataViewDict_[outcastSlot[i][0]],
+                                                                       outcast->Datatype(), rawShape);
+                        outcastView = std::make_shared<LogicalTensorData>(rawData, outcast->GetShape(), validShape,
+                                                                          offset);
                     } else {
-                        auto outcast = func->GetOutcast()[i];
-                        auto validShape = EvaluateValidShape(outcast->GetDynValidShape());
-                        auto rawShape = EvaluateValidShape(outcast->GetRawTensor()->GetDynRawShape());
                         outcastView = LogicalTensorData::CreateEmpty(outcast->Datatype(), outcast->GetShape(),
                                                                      validShape, rawShape);
                     }
                     for (auto& s : outcastSlot[i]) {
-                        slotDataViewDict_[s] = outcastView;
+                        slotDataViewDict_[s] = outcastView->GetData()->GetRawData();
                     }
                     inoutDataPair->outcastDataViewList.push_back(outcastView);
                 }
@@ -1959,7 +1976,8 @@ public:
 
     std::shared_ptr<FunctionControlFlowExecution> RunForControlFlow(
         const std::string& funcKey, const std::unordered_map<int, TileOpFormat>& slotTileOpFormatDict,
-        const std::unordered_map<int, std::shared_ptr<LogicalTensorData>>& slotDataViewDict,
+        const std::unordered_map<int, std::shared_ptr<StorageData>>& slotDataViewDict,
+        const std::unordered_map<int, std::shared_ptr<LogicalTensorData>>& slotLogicalDataViewDict,
         const std::unordered_set<int>& outputSlotSet,
         const std::unordered_map<std::string, ScalarImmediateType>& controlFlowSymbolDict)
     {
@@ -1977,14 +1995,16 @@ public:
             return -1;
         };
         slotDataViewDict_ = slotDataViewDict;
+        auto slotLogicalDataViewLocal = slotLogicalDataViewDict;
         outputSlotSet_ = outputSlotSet;
         for (auto& [slot, tileOpFormat] : slotTileOpFormatDict) {
             if (tileOpFormat == TileOpFormat::TILEOP_NZ) {
-                ASSERT(ControlFlowScene::FUNC_SLOT_MISSING, slotDataViewDict_.count(slot));
-                auto dataView = slotDataViewDict_[slot];
+                ASSERT(ControlFlowScene::FUNC_SLOT_MISSING, slotLogicalDataViewLocal.count(slot));
+                auto dataView = slotLogicalDataViewLocal[slot];
                 auto inputIndex = findInputIndex(dataView);
                 auto nzInputDataView = FormatNZ2ND(dataView);
-                slotDataViewDict_[slot] = nzInputDataView;
+                slotLogicalDataViewLocal[slot] = nzInputDataView;
+                slotDataViewDict_[slot] = nzInputDataView->GetData()->GetRawData();
                 UpdateInputDataViewList(inputIndex, nzInputDataView);
             }
         }
@@ -1994,8 +2014,8 @@ public:
         ExecuteControlFlow(entry_, *execution);
         for (auto& slot : outputSlotSet_) {
             if (slotTileOpFormatDict.count(slot) && slotTileOpFormatDict.at(slot) == TileOpFormat::TILEOP_NZ) {
-                auto dataView = slotDataViewDict.find(slot)->second;
-                slotDataViewDict_[slot] = FormatND2NZ(dataView);
+                auto dataView = slotLogicalDataViewDict.at(slot);
+                slotDataViewDict_[slot] = FormatND2NZ(dataView)->GetData()->GetRawData();
             }
         }
 

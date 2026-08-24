@@ -970,16 +970,16 @@ TEST_F(DynamicOpsTest, WhereSS)
         Tensor self(DT_FP32, {b, s}, "self");
         Element elem(DT_FP32, 4.0f);
         Element zeroFp32(DT_FP32, 4.0f);
-        Tensor out(DT_BOOL, {b, s}, "out");
+        Tensor out(DT_FP32, {b, s}, "out");
 
         ProgramData::GetInstance().AppendInputs({
             RawTensorData::CreateConstantTensor<float>(self, 4.0f),
         });
         ProgramData::GetInstance().AppendOutputs({
-            RawTensorData::CreateConstantTensor<bool>(out, false),
+            RawTensorData::CreateConstantTensor<float>(out, 0.0f),
         });
         ProgramData::GetInstance().AppendGoldens({
-            RawTensorData::CreateConstantTensor<bool>(out, true),
+            RawTensorData::CreateConstantTensor<float>(out, 4.0f),
         });
         FUNCTION("main", {self}, {out})
         {
@@ -3016,7 +3016,7 @@ TEST_F(DynamicOpsTest, UnaryOpsBasic2)
         Tensor o0(DT_FP32, {m, n}, "o0");
         Tensor o1(DT_FP32, {m, n}, "o1");
         Tensor o2(DT_FP32, {m, n}, "o2");
-        Tensor o3(DT_FP32, {m, n}, "o3");
+        Tensor o3(DT_BOOL, {m, n}, "o3");
         Tensor o4(DT_BOOL, {m, n}, "o4");
         ProgramData::GetInstance().AppendInputs({
             RawTensorData::CreateConstantTensor<float>(t0, a),
@@ -3025,14 +3025,14 @@ TEST_F(DynamicOpsTest, UnaryOpsBasic2)
             RawTensorData::CreateConstantTensor<float>(o0, 0.0f),
             RawTensorData::CreateConstantTensor<float>(o1, 0.0f),
             RawTensorData::CreateConstantTensor<float>(o2, 0.0f),
-            RawTensorData::CreateConstantTensor<float>(o3, 0.0f),
+            RawTensorData::CreateConstantTensor<bool>(o3, false),
             RawTensorData::CreateConstantTensor<bool>(o4, false),
         });
         ProgramData::GetInstance().AppendGoldens({
             RawTensorData::CreateConstantTensor<float>(o0, 1.0f),
             RawTensorData::CreateConstantTensor<float>(o1, std::log(a)),
             RawTensorData::CreateConstantTensor<float>(o2, std::erf(a)),
-            RawTensorData::CreateConstantTensor<float>(o3, 0.0f),
+            RawTensorData::CreateConstantTensor<bool>(o3, false),
             RawTensorData::CreateConstantTensor<bool>(o4, true),
         });
         FUNCTION("main", {t0}, {o0, o1, o2, o3, o4})
@@ -3278,19 +3278,19 @@ TEST_F(DynamicOpsTest, GatherAndOneHot)
         config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
         int64_t m = 8;
         Tensor idx1d(DT_INT32, {m}, "idx1d");
-        Tensor o1(DT_FP32, {m, 4}, "o1");
-        std::vector<float> onehotGolden(m * 4, 0.0f);
+        Tensor o1(DT_INT64, {m, 4}, "o1");
+        std::vector<int64_t> onehotGolden(m * 4, 0);
         for (int64_t i = 0; i < m; ++i) {
-            onehotGolden[i * 4 + 1] = 1.0f;
+            onehotGolden[i * 4 + 1] = 1;
         }
         ProgramData::GetInstance().AppendInputs({
             RawTensorData::CreateConstantTensor<int32_t>(idx1d, 1),
         });
         ProgramData::GetInstance().AppendOutputs({
-            RawTensorData::CreateConstantTensor<float>(o1, 0.0f),
+            RawTensorData::CreateConstantTensor<int64_t>(o1, 0),
         });
         ProgramData::GetInstance().AppendGoldens({
-            RawTensorData::CreateTensor<float>(o1, onehotGolden),
+            RawTensorData::CreateTensor<int64_t>(o1, onehotGolden),
         });
         TileShape::Current().SetVecTile(m, 4);
         FUNCTION("main", {idx1d}, {o1})
@@ -3357,17 +3357,17 @@ TEST_F(DynamicOpsTest, RangeFp32AndInt64)
         config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
         int64_t size = 5;
         Tensor outFp32(DT_FP32, {size}, "outFp32");
-        Tensor outInt64(DT_INT64, {size}, "outInt64");
+        Tensor outInt64(DT_INT32, {size}, "outInt64");
         std::vector<float> goldenFp32 = {1.0f, 3.0f, 5.0f, 7.0f, 9.0f};
-        std::vector<int64_t> goldenInt64 = {1, 3, 5, 7, 9};
+        std::vector<int32_t> goldenInt64 = {1, 3, 5, 7, 9};
         ProgramData::GetInstance().AppendInputs({});
         ProgramData::GetInstance().AppendOutputs({
             RawTensorData::CreateConstantTensor<float>(outFp32, 0.0f),
-            RawTensorData::CreateConstantTensor<int64_t>(outInt64, 0),
+            RawTensorData::CreateConstantTensor<int32_t>(outInt64, 0),
         });
         ProgramData::GetInstance().AppendGoldens({
             RawTensorData::CreateTensor<float>(outFp32, goldenFp32),
-            RawTensorData::CreateTensor<int64_t>(outInt64, goldenInt64),
+            RawTensorData::CreateTensor<int32_t>(outInt64, goldenInt64),
         });
         FUNCTION("main", {}, {outFp32, outInt64})
         {

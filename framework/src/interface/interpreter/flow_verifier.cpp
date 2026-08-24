@@ -440,7 +440,8 @@ void FlowVerifier::VerifyTensorGraph(Function* entry,
     std::vector<int> outputSlotList = slotManager->LookupSlotIndexConst(attr->startArgsOutputTensorList);
 
     std::unordered_map<int, TileOpFormat> slotTileOpFormatDict;
-    std::unordered_map<int, std::shared_ptr<LogicalTensorData>> slotDataViewDict;
+    std::unordered_map<int, std::shared_ptr<StorageData>> slotDataViewDict;
+    std::unordered_map<int, std::shared_ptr<LogicalTensorData>> slotLogicalDataViewDict;
     std::unordered_set<int> outputSlotSet;
 
     ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC, inputSlotList.size() == attr->startArgsInputTensorList.size());
@@ -457,11 +458,13 @@ void FlowVerifier::VerifyTensorGraph(Function* entry,
         if (tileop == TileOpFormat::TILEOP_NZ) {
             slotTileOpFormatDict[inputSlotList[i]] = TileOpFormat::TILEOP_NZ;
         }
-        slotDataViewDict[inputSlotList[i]] = input;
+        slotDataViewDict[inputSlotList[i]] = input->GetData()->GetRawData();
+        slotLogicalDataViewDict[inputSlotList[i]] = input;
     }
     ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC, outputDataViewList.size() == outputSlotList.size());
     for (size_t i = 0; i < outputDataViewList.size(); i++) {
-        slotDataViewDict[outputSlotList[i]] = outputDataViewList[i];
+        slotDataViewDict[outputSlotList[i]] = outputDataViewList[i]->GetData()->GetRawData();
+        slotLogicalDataViewDict[outputSlotList[i]] = outputDataViewList[i];
         auto outputTensor = attr->startArgsOutputTensorList[i].get().GetStorage();
         auto tileop = outputTensor->Format();
         if (tileop == TileOpFormat::TILEOP_NZ) {
@@ -504,8 +507,9 @@ void FlowVerifier::VerifyTensorGraph(Function* entry,
     CreateDir(tensorDir, true);
 
     try {
-        controlFlowExecution_ = functionInterpreter_->RunForControlFlow(
-            "tensor_graph", slotTileOpFormatDict, slotDataViewDict, outputSlotSet, controlFlowSymbolDict);
+        controlFlowExecution_ = functionInterpreter_->RunForControlFlow("tensor_graph", slotTileOpFormatDict,
+                                                                        slotDataViewDict, slotLogicalDataViewDict,
+                                                                        outputSlotSet, controlFlowSymbolDict);
         functionInterpreter_->DumpReset();
         bool res = true;
 
