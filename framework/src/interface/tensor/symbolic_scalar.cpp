@@ -325,6 +325,21 @@ RawSymbolicScalarPtr CloneAlongPathsWithReplacements(
     return std::make_shared<RawSymbolicExpression>(expr->Opcode(), patchedOperands);
 }
 
+// CSE map 只收录 GetInputShapeDim / GetInputData 的展开文本。仅这些 CALL 才整节点展开当 key；
+// And/Min 等深节点若也走全量 key，会把左链 stringify 做成近似 O(n^3)。
+bool IsStructuralCseTargetCall(const RawSymbolicScalarPtr& raw)
+{
+    if (raw == nullptr || !raw->IsExpression() || raw->GetExpressionOpcode() != SymbolicOpcode::T_MOP_CALL) {
+        return false;
+    }
+    const auto& ops = raw->GetExpressionOperandList();
+    if (ops.empty() || !ops[0]->IsSymbol()) {
+        return false;
+    }
+    const auto& callee = ops[0]->GetSymbolName();
+    return CallIsGetInputShapeDim(callee) || CallIsGetInputData(callee);
+}
+
 } // namespace
 
 std::string SymbolicExpressionTable::BuildExpressionWithPlaceholders(
@@ -415,7 +430,7 @@ std::string SymbolicExpressionTable::BuildExpressionByRaw(
         return it->second;
     }
 
-    if (structuralCse != nullptr && raw->IsExpression()) {
+    if (structuralCse != nullptr && IsStructuralCseTargetCall(raw)) {
         // Key is the fully expanded form without structural CSE.
         const std::string key = BuildExpressionByRaw(raw, exprDict, nullptr);
         auto sit = structuralCse->find(key);

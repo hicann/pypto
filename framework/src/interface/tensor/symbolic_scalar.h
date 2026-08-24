@@ -970,8 +970,8 @@ struct SymbolicExpressionTable {
         return exprKey + "_" + std::to_string(index) + "_USE";
     }
 
-    // structuralCse: canonical BuildExpression text -> C identifier (e.g. __cse_0 / CSE_sd_0).
-    // When non-null, matching expression subtrees render as the identifier instead of expanding.
+    // structuralCse: canonical BuildExpression text -> C identifier (e.g. CSE_sd[i]).
+    // Lookup only runs on GetInputShapeDim / GetInputData CALL nodes; other nodes expand as usual.
     static std::string BuildExpressionByRaw(
         const RawSymbolicScalarPtr& raw, const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict,
         const std::unordered_map<std::string, std::string>* structuralCse = nullptr);

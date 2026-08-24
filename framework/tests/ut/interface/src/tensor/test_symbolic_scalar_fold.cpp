@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include "gtest/gtest.h"
 #include "interface/tensor/symbolic_scalar.h"
 
@@ -116,6 +117,43 @@ TEST(TestCompareRaw, OrderingInvariants)
     auto a12 = Add(Sym("a"), Imm(12));
     EXPECT_LT(SymbolicExpressionTable::CompareRaw(a4, a8), 0);
     EXPECT_LT(SymbolicExpressionTable::CompareRaw(a8, a12), 0);
+}
+
+static RawSymbolicScalarPtr CallGetInputShapeDim(const std::string& argName, int64_t dim)
+{
+    return std::make_shared<RawSymbolicExpression>(
+        SymbolicOpcode::T_MOP_CALL,
+        std::vector<RawSymbolicScalarPtr>{Sym("RUNTIME_GetInputShapeDim"), Sym(argName), Imm(dim)});
+}
+
+static RawSymbolicScalarPtr RuntimeAnd(const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs)
+{
+    return std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_MOP_CALL,
+                                                   std::vector<RawSymbolicScalarPtr>{Sym("RUNTIME_And"), lhs, rhs});
+}
+
+// CSE map 命中只发生在 GetInput CALL；外层 Add/And 不得把自己整树展开当 key，叶子仍替换。
+TEST(TestBuildExpressionCse, LookupOnlyGetInputCallNodes)
+{
+    auto shape0 = CallGetInputShapeDim("ARG_x", 0);
+    const std::string key = SymbolicExpressionTable::BuildExpression(shape0);
+    std::unordered_map<std::string, std::string> cse{{key, "CSE_sd[0]"}};
+
+    EXPECT_EQ(SymbolicExpressionTable::BuildExpression(shape0, &cse), "CSE_sd[0]");
+
+    auto wrapped = Add(shape0, Imm(1));
+    const std::string wrappedStr = SymbolicExpressionTable::BuildExpression(wrapped, &cse);
+    EXPECT_NE(wrappedStr.find("CSE_sd[0]"), std::string::npos);
+    EXPECT_EQ(wrappedStr.find("RUNTIME_GetInputShapeDim"), std::string::npos);
+
+    auto chain = shape0;
+    for (int i = 0; i < 32; ++i) {
+        chain = RuntimeAnd(chain, shape0);
+    }
+    const std::string chainStr = SymbolicExpressionTable::BuildExpression(chain, &cse);
+    EXPECT_NE(chainStr.find("CSE_sd[0]"), std::string::npos);
+    EXPECT_EQ(chainStr.find("RUNTIME_GetInputShapeDim"), std::string::npos);
+    EXPECT_NE(chainStr.find("RUNTIME_And"), std::string::npos);
 }
 
 } // namespace test
