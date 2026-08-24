@@ -235,12 +235,14 @@ public:
     const std::string& LogTensorGraphFolder();
     const std::string& LogFile();
     void ResetLog(const std::string& path = "");
+    void SetLogRotationEnabled(bool enabled) { logRotationEnabled_ = enabled; }
 
 private:
     GlobalPassConfigs globalPassConfigs_;
     InternalGlobalConfig globalConfigs_;
     nlohmann::json json_;
     nlohmann::json originJson_;
+    bool logRotationEnabled_ = true;
 
     ConfigManager();
 

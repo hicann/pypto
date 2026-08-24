@@ -72,9 +72,9 @@ Status ConfigManager::Initialize()
         jsonFilePath = RealPath(GetPyptoLibPath() + "/configs/tile_fwk_config.json");
     }
 
-    config::SetRunDataOption(KEY_PTO_CONFIG_FILE, jsonFilePath);
     config::SetRunDataOption(KEY_RUNTYPE, "npu");
-    FE_LOGI("Start to parse op_json_file %s", jsonFilePath.c_str());
+    config::SetRunDataOption(KEY_PTO_CONFIG_FILE, jsonFilePath);
+    FE_LOGI("Start to parse json_file %s", jsonFilePath.c_str());
     std::ifstream ifs(jsonFilePath);
     if (!ifs.is_open()) {
         FE_LOGE(FeError::INVALID_FILE, "Open file %s failed.", jsonFilePath.c_str());
@@ -143,8 +143,8 @@ constexpr const char* ENV_VAR_HOME = "HOME";
 static std::string CreateLogTopFolder()
 {
     auto now = std::chrono::high_resolution_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     auto us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
+    auto time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
     std::stringstream timestamp;
     timestamp << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S");
@@ -189,6 +189,9 @@ const std::string& ConfigManager::LogFile()
 
 void ConfigManager::ResetLog(const std::string& path)
 {
+    if (!logRotationEnabled_) {
+        return;
+    }
     std::string newLogFile;
     if (path.empty()) {
         globalConfigs_.logTopFolder = CreateLogTopFolder();

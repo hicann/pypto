@@ -87,8 +87,15 @@ def compile(pyfunc, *args, **kwargs):
     if has_move:
         pypto.pypto_impl.Reset()
         all_args, tensor_args = _init_arguments(bound.arguments)
-        with pypto.function("__entry__", *tensor_args):
-            collect_store_names(func, all_args)
+        orig_print_graph = pypto.pypto_impl.GetPassDefaultConfig(pypto.pypto_impl.KEY_PRINT_GRAPH, False)
+        try:
+            pypto.pypto_impl.SetLogRotationEnabled(False)
+            pypto.pypto_impl.SetPassDefaultConfig(pypto.pypto_impl.KEY_PRINT_GRAPH, False)
+            with pypto.function("__entry__", *tensor_args):
+                collect_store_names(func, all_args)
+        finally:
+            pypto.pypto_impl.SetLogRotationEnabled(True)
+            pypto.pypto_impl.SetPassDefaultConfig(pypto.pypto_impl.KEY_PRINT_GRAPH, orig_print_graph)
 
     pypto.pypto_impl.Reset()
     # arguments maybe changed during `collect_store_names`, reinit it

@@ -47,6 +47,7 @@ void BindControllerConfig(py::module_& m)
     m.def("IsVerifyEnabled", &calc::IsVerifyEnabled);
     m.def("LogTopFolder", []() { return py::cast(ConfigManager::Instance().LogTopFolder()); });
     m.def("ResetLog", [](const std::string& path) { ConfigManager::Instance().ResetLog(path); });
+    m.def("SetLogRotationEnabled", [](bool enabled) { ConfigManager::Instance().SetLogRotationEnabled(enabled); });
 }
 
 void BindControllerSetTile(py::module_& m)
