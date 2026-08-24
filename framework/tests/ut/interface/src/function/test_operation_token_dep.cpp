@@ -245,3 +245,41 @@ TEST_F(OperationTokenDepTest, ProducerOpsByTokenUnknownToken)
     auto producers = ops[0]->ProducerOpsByToken();
     EXPECT_TRUE(producers.empty());
 }
+
+TEST_F(OperationTokenDepTest, RefreshVarDependency)
+{
+    TileShape::Current().SetVecTile({32, 32});
+    std::vector<int64_t> shape{32, 32};
+    Tensor input(DT_FP32, shape, "input");
+    Tensor output(DT_FP32, shape, "output");
+    FUNCTION("RefreshTokenDep")
+    {
+        Tensor mid = Exp(input);
+        output = Add(mid, Element(DT_FP32, 1.0));
+    }
+    Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_RefreshTokenDep");
+    ASSERT_NE(func, nullptr);
+
+    auto& ops = func->operations_;
+    ASSERT_GE(ops.size(), 2);
+
+    Function* opsFunc = ops[0]->BelongTo();
+    auto token = MakeToken("token");
+    auto staleToken = MakeToken("staleToken");
+    ops[0]->result_token_ = {token};
+    ops[1]->tokens_ = {token};
+
+    auto& dep = opsFunc->GetVarDependency();
+    dep.AddProducer(staleToken, std::static_pointer_cast<const ir::Stmt>(ops[1]));
+    dep.AddConsumer(staleToken, std::static_pointer_cast<const ir::Stmt>(ops[0]));
+
+    opsFunc->RefreshVarDependency();
+
+    auto producerStmt = std::static_pointer_cast<const ir::Stmt>(ops[0]);
+    auto consumerStmt = std::static_pointer_cast<const ir::Stmt>(ops[1]);
+    EXPECT_TRUE(dep.HasProducer(token, producerStmt));
+    EXPECT_TRUE(dep.HasConsumer(token, consumerStmt));
+    EXPECT_FALSE(dep.HasDependency(staleToken));
+    EXPECT_TRUE(ops[0]->ConsumerOpsByToken().count(ops[1].get()) > 0);
+    EXPECT_TRUE(ops[1]->ProducerOpsByToken().count(ops[0].get()) > 0);
+}

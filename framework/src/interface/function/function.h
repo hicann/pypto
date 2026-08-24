@@ -957,6 +957,8 @@ public:
 
     VarDependency& GetVarDependency() { return varDependency_; }
     const VarDependency& GetVarDependency() const { return varDependency_; }
+    // Rebuild the function-local token index from live operations' token lists.
+    void RefreshVarDependency();
 
     void SetOutcastNeedAlloc(const std::shared_ptr<LogicalTensor>& outcast, bool needAlloc)
     {

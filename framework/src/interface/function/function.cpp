@@ -1467,6 +1467,23 @@ void Function::RefreshOpPosition()
     }
 }
 
+void Function::RefreshVarDependency()
+{
+    varDependency_.Clear();
+    for (const auto& operation : operations_) {
+        if (operation->IsDeleted()) {
+            continue;
+        }
+        auto stmt = std::static_pointer_cast<const ir::Stmt>(operation);
+        for (const auto& token : operation->result_token_) {
+            varDependency_.AddProducer(token, stmt);
+        }
+        for (const auto& token : operation->tokens_) {
+            varDependency_.AddConsumer(token, stmt);
+        }
+    }
+}
+
 bool Function::enableMagicLookupRecord_{false};
 std::map<std::pair<int, int>, std::set<Operation*, LogicalTensor::CompareOp>> Function::tensorAndSubgraphToProducer_;
 
