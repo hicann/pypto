@@ -3446,4 +3446,68 @@ TEST_F(ScheduleOoOTest, SortOpsEmptyInput)
     EXPECT_TRUE(sort.GetOperations().empty());
 }
 
+// 图结构：
+//   copy_in1 -> add1 -> add2 -> add3 -> copy_out1   (depth=4, 源点={copy_in1})
+//   copy_in1 -> mul1 -> copy_out2                    (depth=2, 源点={copy_in1})
+//   copy_in2 -> sub1 -> sub2 -> copy_out3            (depth=3, 源点={copy_in2})
+//
+// 三个出口节点：copy_out1(depth=4), copy_out2(depth=2), copy_out3(depth=3)
+// copy_out1 和 copy_out2 同源（源点都是 copy_in1），copy_out3 不同源（源点是 copy_in2）
+// 正确排序：copy_out1(4), copy_out2(2), copy_out3(3)  — 同源排一起，组间按最大深度降序
+// 错误排序：copy_out1(4), copy_out3(3), copy_out2(2)  — 纯深度排序，同源被拆开
+TEST_F(ScheduleOoOTest, PriorDFSSort_SortOutNodeQueue_SameSourceGrouped)
+{
+    ComputationalGraphBuilder b;
+    // t0:DDR(输入)  t1:UB(copy_in1输出)  t2:UB(add1输出)  t3:UB(add2输出)  t4:UB(add3输出/copy_out1输入)
+    // t5:UB(mul1输出/copy_out2输入)  t6:DDR(输入)  t7:UB(copy_in2输出)  t8:UB(sub1输出)  t9:UB(sub2输出/copy_out3输入)
+    // t10:DDR(copy_out输出)
+    std::vector<std::string> tensorNames{"t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10"};
+    std::vector<MemoryType> memTypes{MEM_DEVICE_DDR, MEM_UB, MEM_UB, MEM_UB, MEM_UB,        MEM_UB,
+                                     MEM_DEVICE_DDR, MEM_UB, MEM_UB, MEM_UB, MEM_DEVICE_DDR};
+    EXPECT_TRUE(b.AddTensors(DT_FP32, {64, 64}, memTypes, tensorNames, 0));
+
+    // 每个UB张量都需要一个alloc
+    std::vector<Opcode> opcodes{Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC,
+                                Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN,
+                                Opcode::OP_ADD,      Opcode::OP_ADD,      Opcode::OP_ADD,      Opcode::OP_COPY_OUT,
+                                Opcode::OP_MUL,      Opcode::OP_COPY_OUT, Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN,
+                                Opcode::OP_SUB,      Opcode::OP_SUB,      Opcode::OP_COPY_OUT};
+    // Alloc1->t1, Alloc2->t2, Alloc3->t3, Alloc4->t4, Alloc5->t5, Alloc6->t7, Alloc7->t8
+    // CopyIn1: t0->t1, Add1: t1->t2, Add2: t2->t3, Add3: t3->t4, CopyOut1: t4->t10
+    // Mul1: t1->t5, CopyOut2: t5->t10
+    // Alloc8->t7(已有Alloc6), 这里t9也需要alloc
+    // CopyIn2: t6->t7, Sub1: t7->t8, Sub2: t8->t9, CopyOut3: t9->t10
+    std::vector<std::vector<std::string>> ins{{},     {},     {},     {},     {},     {},     {},
+                                              {"t0"}, {"t1"}, {"t2"}, {"t3"}, {"t4"}, {"t1"}, {"t5"},
+                                              {},     {"t6"}, {"t7"}, {"t8"}, {"t9"}};
+    std::vector<std::vector<std::string>> outs{{"t1"}, {"t2"}, {"t3"}, {"t4"}, {"t5"},  {"t7"}, {"t8"},
+                                               {"t1"}, {"t2"}, {"t3"}, {"t4"}, {"t10"}, {"t5"}, {"t10"},
+                                               {"t9"}, {"t7"}, {"t8"}, {"t9"}, {"t10"}};
+    std::vector<std::string> opNames{"Alloc1",  "Alloc2",  "Alloc3", "Alloc4", "Alloc5",   "Alloc6", "Alloc7",
+                                     "CopyIn1", "Add1",    "Add2",   "Add3",   "CopyOut1", "Mul1",   "CopyOut2",
+                                     "Alloc8",  "CopyIn2", "Sub1",   "Sub2",   "CopyOut3"};
+    EXPECT_TRUE(b.AddOps(opcodes, ins, outs, opNames, true));
+    Function* func = b.GetFunction();
+    ASSERT_NE(func, nullptr);
+
+    auto ops = func->Operations().DuplicatedOpList();
+    PriorDFSSort sorter(ops, *func);
+    sorter.state_.Init(ops);
+
+    std::vector<Operation*> outNodeQueue;
+    sorter.depthCache_.clear();
+    for (auto* op : ops) {
+        if (sorter.state_.depManager.GetSuccessors(op).empty()) {
+            outNodeQueue.emplace_back(op);
+        }
+    }
+    ASSERT_EQ(outNodeQueue.size(), 3U);
+
+    sorter.SortOutNodeQueue(outNodeQueue);
+
+    EXPECT_EQ(outNodeQueue[0], b.GetOp("CopyOut1"));
+    EXPECT_EQ(outNodeQueue[1], b.GetOp("CopyOut2"));
+    EXPECT_EQ(outNodeQueue[2], b.GetOp("CopyOut3"));
+}
+
 } // namespace npu::tile_fwk

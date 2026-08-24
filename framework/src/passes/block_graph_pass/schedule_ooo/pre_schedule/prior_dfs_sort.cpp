@@ -12,7 +12,9 @@
 #include "passes/pass_log/pass_log.h"
 
 #include <algorithm>
+#include <functional>
 #include <queue>
+#include <set>
 #include <unordered_set>
 
 namespace npu::tile_fwk {
@@ -204,51 +206,64 @@ Status PriorDFSSort::PriorDFS(const std::unordered_map<Opcode, int>& preNodePrio
         }
     }
 
-    // 同源分组：每个出口节点反向溯源到入度=0 的源头，用源头指针做 groupId。
-    // 同源的出口节点排在一起（组内深度降序），DFS 走完一组的主干后立即补同源短分支，
-    // 不会跳到别组。反向溯源取最深的那个前驱（与 GetMaxDepthSimple 方向一致）。
-    std::unordered_map<Operation*, int> sourceGroupId;
-    std::unordered_map<Operation*, int> outNodeGroup;
-    int nextGroupId = 0;
-    for (auto* outNode : outNodeQueue) {
-        Operation* cur = outNode;
-        while (!state_.depManager.GetPredecessors(cur).empty()) {
-            Operation* deepest = nullptr;
-            int maxDepth = -1;
-            for (auto* pred : state_.depManager.GetPredecessors(cur)) {
-                int d = GetMaxDepthSimple(pred);
-                if (d > maxDepth) {
-                    maxDepth = d;
-                    deepest = pred;
-                }
-            }
-            cur = deepest;
-        }
-        auto it = sourceGroupId.find(cur);
-        if (it == sourceGroupId.end()) {
-            sourceGroupId[cur] = nextGroupId;
-            outNodeGroup[outNode] = nextGroupId;
-            ++nextGroupId;
-        } else {
-            outNodeGroup[outNode] = it->second;
-        }
-    }
-
-    // 组优先（同源连续），组内深度降序（长链先走）。
-    std::stable_sort(outNodeQueue.begin(), outNodeQueue.end(), [&](Operation* a, Operation* b) {
-        int ga = outNodeGroup[a];
-        int gb = outNodeGroup[b];
-        if (ga != gb) {
-            return ga < gb;
-        }
-        return GetMaxDepthSimple(a) > GetMaxDepthSimple(b);
-    });
+    SortOutNodeQueue(outNodeQueue);
 
     if (DFSFromOutNode(outNodeQueue, preNodePriority, visited) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "DFSFromOutNode failed.");
         return FAILED;
     }
     return SUCCESS;
+}
+
+void PriorDFSSort::SortOutNodeQueue(std::vector<Operation*>& outNodeQueue)
+{
+    // 全量反向回溯每个出口节点到所有入度=0 的源头，用源头集合做 groupId。
+    // 同源的出口节点归为一组，不同源的各自成组；组间按最大深度降序，组内按深度降序。
+    // 递归 DFS 后序 + memoization，每个节点的源点集只算一次，整体 O(V+E)。
+    // ALLOC 类操作不参与同源判断（它们是内存分配，不是数据依赖）。
+    std::unordered_map<Operation*, std::set<Operation*>> sourceSetCache;
+    std::function<std::set<Operation*>(Operation*)> collectSources = [&](Operation* op) -> std::set<Operation*> {
+        auto it = sourceSetCache.find(op);
+        if (it != sourceSetCache.end()) {
+            return it->second;
+        }
+        const auto& preds = state_.depManager.GetPredecessors(op);
+        std::vector<Operation*> dataPreds;
+        for (auto* pred : preds) {
+            if (!IsAllocOpCode(pred->GetOpcode())) {
+                dataPreds.push_back(pred);
+            }
+        }
+        if (dataPreds.empty()) {
+            sourceSetCache[op] = {op};
+            return sourceSetCache[op];
+        }
+        std::set<Operation*> sources;
+        for (auto* pred : dataPreds) {
+            auto predSources = collectSources(pred);
+            sources.insert(predSources.begin(), predSources.end());
+        }
+        sourceSetCache[op] = sources;
+        return sources;
+    };
+
+    std::unordered_map<Operation*, std::set<Operation*>> outNodeSources;
+    std::map<std::set<Operation*>, int> groupMaxDepth;
+    for (auto* outNode : outNodeQueue) {
+        auto sources = collectSources(outNode);
+        outNodeSources[outNode] = sources;
+        groupMaxDepth[sources] = std::max(groupMaxDepth[sources], GetMaxDepthSimple(outNode));
+    }
+
+    // 组间按组内最大深度降序，组内按深度降序（长链先走）
+    std::stable_sort(outNodeQueue.begin(), outNodeQueue.end(), [&](Operation* a, Operation* b) {
+        const auto& sa = outNodeSources[a];
+        const auto& sb = outNodeSources[b];
+        if (sa != sb) {
+            return groupMaxDepth[sa] > groupMaxDepth[sb];
+        }
+        return GetMaxDepthSimple(a) > GetMaxDepthSimple(b);
+    });
 }
 
 Status PriorDFSSort::DoSortOps()

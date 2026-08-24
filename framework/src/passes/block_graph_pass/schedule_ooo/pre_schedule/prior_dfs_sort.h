@@ -32,6 +32,7 @@ private:
     PromotePriority ClassifyPromoteOp(Operation* op) const;
 
     Status PriorDFS(const std::unordered_map<Opcode, int>& preNodePriority);
+    void SortOutNodeQueue(std::vector<Operation*>& outNodeQueue);
     Status DFSFromOutNode(const std::vector<Operation*>& outNodeQueue,
                           const std::unordered_map<Opcode, int>& preNodePriority, std::map<Operation*, bool>& visited);
     void DFSFromSingleNode(Operation* op, std::map<Operation*, bool>& visited, std::vector<Operation*>& newOpList,
