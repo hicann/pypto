@@ -35,12 +35,13 @@ def _require_a5():
 
 
 @pl.simt.function(max_threads=THREADS)
-def write_thread_context(dst: pl.Tile[[1, THREADS], pl.DT_UINT32]):
+def write_thread_context(dst: pl.Tile[[2, THREADS], pl.DT_UINT32]):
     thread = pl.simt.thread_idx()
     block = pl.simt.block_dim()
     block_id = pl.simt.block_idx()
     grid = pl.simt.grid_dim()
     tid = pl.simt.linear_thread_idx()
+    warp = pl.simt.cast(pl.simt.warp_size(), pl.DT_UINT32)
     coordinate_tid = thread.x + thread.y * block.x + thread.z * block.x * block.y
     value = (
         thread.x
@@ -58,12 +59,13 @@ def write_thread_context(dst: pl.Tile[[1, THREADS], pl.DT_UINT32]):
     )
     if tid == coordinate_tid:
         dst[0, tid] = value
+        dst[1, tid] = warp
 
 
 @pl.jit(arch="a5")
-def simt_thread_context(out: pl.Tensor[[1, THREADS], pl.DT_UINT32]):
-    tile_type = pl.TileType(shape=[1, THREADS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    dst = pl.make_tile(tile_type, addr=0x0000, size=THREADS * 4)
+def simt_thread_context(out: pl.Tensor[[2, THREADS], pl.DT_UINT32]):
+    tile_type = pl.TileType(shape=[2, THREADS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
+    dst = pl.make_tile(tile_type, addr=0x0000, size=2 * THREADS * 4)
     with pl.section_vector():
         pl.simt.launch(
             write_thread_context,
@@ -79,7 +81,7 @@ def simt_thread_context(out: pl.Tensor[[1, THREADS], pl.DT_UINT32]):
 def test_thread_context():
     _require_a5()
 
-    out = torch.empty((1, THREADS), dtype=torch.int32).to(torch.uint32).to(ST_DEVICE)
+    out = torch.empty((2, THREADS), dtype=torch.int32).to(torch.uint32).to(ST_DEVICE)
     simt_thread_context(out)
     torch.npu.synchronize()
 
@@ -99,7 +101,8 @@ def test_thread_context():
         + 262144
     )
 
-    torch.testing.assert_close(out.cpu().to(torch.int64), expected.reshape(1, THREADS), rtol=0, atol=0)
+    expected = torch.stack((expected, torch.full_like(expected, 32)))
+    torch.testing.assert_close(out.cpu().to(torch.int64), expected, rtol=0, atol=0)
 
 
 if __name__ == "__main__":

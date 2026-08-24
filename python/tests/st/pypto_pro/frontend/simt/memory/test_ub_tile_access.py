@@ -80,18 +80,22 @@ def simt_ub_tile_access(
 
 
 @pytest.mark.soc("950")
-def test_ub_tile_access():
+@pytest.mark.parametrize(("valid_rows", "valid_cols"), [(1, 1), (VALID_ROWS, VALID_COLS)])
+def test_ub_tile_access(valid_rows, valid_cols):
     _require_a5()
 
     delta = 0.75
+    sentinel = -7.0
     x = torch.arange(VALID_ROWS * VALID_COLS, dtype=torch.float32).reshape(VALID_ROWS, VALID_COLS).to(ST_DEVICE)
-    out = torch.empty_like(x)
+    out = torch.full_like(x, sentinel)
 
-    simt_ub_tile_access(x, out, VALID_ROWS, VALID_COLS, delta)
+    simt_ub_tile_access(x, out, valid_rows, valid_cols, delta)
     torch.npu.synchronize()
 
-    torch.testing.assert_close(out.cpu(), x.cpu() + delta, rtol=0, atol=0)
+    expected = torch.full((VALID_ROWS, VALID_COLS), sentinel, dtype=torch.float32)
+    expected[:valid_rows, :valid_cols] = x.cpu()[:valid_rows, :valid_cols] + delta
+    torch.testing.assert_close(out.cpu(), expected, rtol=0, atol=0)
 
 
 if __name__ == "__main__":
-    test_ub_tile_access()
+    test_ub_tile_access(VALID_ROWS, VALID_COLS)

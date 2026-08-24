@@ -19,6 +19,9 @@ import torch
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 THREADS = 256
+GM_ROWS = 2
+GM_COLS = 64
+GM_DTYPE_THREADS = GM_ROWS * GM_COLS
 
 
 def _require_a5():
@@ -54,6 +57,40 @@ def simt_gm_add(
         pl.simt.launch(gm_add, threads=THREADS, args=(out, x, n, delta))
 
 
+@pl.simt.function(max_threads=GM_DTYPE_THREADS)
+def gm_copy_dtypes(
+    src_int8: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_INT8],
+    src_fp16: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_FP16],
+    src_int64: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_INT64],
+    dst_int8: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_INT8],
+    dst_fp16: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_FP16],
+    dst_int64: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_INT64],
+):
+    tid = pl.simt.linear_thread_idx()
+    row = tid // GM_COLS
+    col = tid % GM_COLS
+    dst_int8[row, col] = src_int8[row, col]
+    dst_fp16[row, col] = src_fp16[row, col]
+    dst_int64[row, col] = src_int64[row, col]
+
+
+@pl.jit(arch="a5")
+def simt_gm_copy_dtypes(
+    src_int8: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_INT8],
+    src_fp16: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_FP16],
+    src_int64: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_INT64],
+    dst_int8: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_INT8],
+    dst_fp16: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_FP16],
+    dst_int64: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_INT64],
+):
+    with pl.section_vector():
+        pl.simt.launch(
+            gm_copy_dtypes,
+            threads=GM_DTYPE_THREADS,
+            args=(src_int8, src_fp16, src_int64, dst_int8, dst_fp16, dst_int64),
+        )
+
+
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("n", [0, 193, THREADS])
 def test_gm_tensor_access(n):
@@ -70,6 +107,27 @@ def test_gm_tensor_access(n):
     expected = torch.full((1, THREADS), sentinel, dtype=torch.float32)
     expected[:, :n] = x.cpu()[:, :n] + delta
     torch.testing.assert_close(out.cpu(), expected, rtol=0, atol=0)
+
+
+@pytest.mark.soc("950")
+def test_gm_two_dimensional_addressing_for_multiple_byte_widths():
+    _require_a5()
+    base = torch.arange(GM_DTYPE_THREADS, dtype=torch.int64).reshape(GM_ROWS, GM_COLS)
+    src_int8 = (base % 127).to(torch.int8)
+    src_fp16 = (base.to(torch.float32) / 8.0).to(torch.float16)
+    src_int64 = base * (2**32) + 17
+    device_inputs = [src_int8.to(ST_DEVICE), src_fp16.to(ST_DEVICE), src_int64.to(ST_DEVICE)]
+    device_outputs = [
+        torch.empty_like(device_inputs[0]),
+        torch.empty_like(device_inputs[1]),
+        torch.empty_like(device_inputs[2]),
+    ]
+
+    simt_gm_copy_dtypes(*device_inputs, *device_outputs)
+    torch.npu.synchronize()
+
+    for actual, expected in zip(device_outputs, (src_int8, src_fp16, src_int64)):
+        torch.testing.assert_close(actual.cpu(), expected, rtol=0, atol=0)
 
 
 if __name__ == "__main__":

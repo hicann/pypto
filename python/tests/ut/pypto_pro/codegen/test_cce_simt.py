@@ -191,6 +191,121 @@ def _simt_valid_shape_codegen_kernel(valid_rows: pl.DT_UINT32, valid_cols: pl.DT
         pl.simt.launch(_tile_valid_shape_access, threads=256, args=(dst, src))
 
 
+@pl.simt.function(max_threads=32)
+def _atomic_add_ub(
+    dst: pl.Tile[[1, 32], pl.DT_INT32],
+    old_values: pl.Tile[[1, 32], pl.DT_INT32],
+    value: pl.DT_INT32,
+):
+    tid = pl.simt.linear_thread_idx()
+    old_values[0, tid] = pl.simt.atomic_add(dst[0, 0], value)
+
+
+@pl.simt.function(max_threads=32)
+def _atomic_add_gm(
+    dst: pl.Tensor[[1, 32], pl.DT_INT64],
+    old_values: pl.Tensor[[1, 32], pl.DT_INT64],
+    value: pl.DT_INT64,
+):
+    tid = pl.simt.linear_thread_idx()
+    old_values[0, tid] = pl.simt.atomic_add(dst[0, 0], value)
+
+
+@pl.simt.function(max_threads=1)
+def _atomic_add_discard(dst: pl.Tile[[1, 1], pl.DT_INT32], value: pl.DT_INT32):
+    pl.simt.atomic_add(dst[0, 0], value)
+
+
+@pl.simt.function(max_threads=1)
+def _atomic_half_discard(
+    ub: pl.Tile[[1, 3], pl.DT_FP16],
+    gm: pl.Tensor[[1, 3], pl.DT_BF16],
+):
+    pl.simt.atomic_add(ub[0, 0], 1.0)
+    pl.simt.atomic_max(ub[0, 1], 2.0)
+    pl.simt.atomic_min(ub[0, 2], 3.0)
+    pl.simt.atomic_add(gm[0, 0], 1.0)
+    pl.simt.atomic_max(gm[0, 1], 2.0)
+    pl.simt.atomic_min(gm[0, 2], 3.0)
+
+
+@pl.simt.function(max_threads=1)
+def _atomic_rmw_discard(
+    numeric: pl.Tile[[1, 1], pl.DT_INT32],
+    bitwise: pl.Tile[[1, 1], pl.DT_UINT32],
+    counter: pl.Tile[[1, 1], pl.DT_UINT32],
+    compare: pl.DT_INT32,
+    replacement: pl.DT_INT32,
+    mask: pl.DT_UINT32,
+    limit: pl.DT_UINT32,
+):
+    pl.simt.atomic_sub(numeric[0, 0], replacement)
+    pl.simt.atomic_exch(numeric[0, 0], replacement)
+    pl.simt.atomic_max(numeric[0, 0], replacement)
+    pl.simt.atomic_min(numeric[0, 0], replacement)
+    pl.simt.atomic_cas(numeric[0, 0], compare, replacement)
+    pl.simt.atomic_and(bitwise[0, 0], mask)
+    pl.simt.atomic_or(bitwise[0, 0], mask)
+    pl.simt.atomic_xor(bitwise[0, 0], mask)
+    pl.simt.atomic_inc(counter[0, 0], limit)
+    pl.simt.atomic_dec(counter[0, 0], limit)
+
+
+@pl.kernel
+def _atomic_add_ub_codegen_kernel(value: pl.DT_INT32):
+    tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
+    dst = pl.make_tile(tile_type, addr=0x0000, size=128)
+    old_values = pl.make_tile(tile_type, addr=0x0080, size=128)
+    with pl.section_vector():
+        pl.simt.launch(_atomic_add_ub, threads=32, args=(dst, old_values, value))
+
+
+@pl.kernel
+def _atomic_add_gm_codegen_kernel(
+    dst: pl.Tensor[[1, 32], pl.DT_INT64],
+    old_values: pl.Tensor[[1, 32], pl.DT_INT64],
+    value: pl.DT_INT64,
+):
+    with pl.section_vector():
+        pl.simt.launch(_atomic_add_gm, threads=32, args=(dst, old_values, value))
+
+
+@pl.kernel
+def _atomic_add_discard_codegen_kernel(value: pl.DT_INT32):
+    tile_type = pl.TileType(shape=[1, 1], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
+    dst = pl.make_tile(tile_type, addr=0x0000, size=4)
+    with pl.section_vector():
+        pl.simt.launch(_atomic_add_discard, threads=1, args=(dst, value))
+
+
+@pl.kernel
+def _atomic_half_discard_codegen_kernel(gm: pl.Tensor[[1, 3], pl.DT_BF16]):
+    tile_type = pl.TileType(shape=[1, 3], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    ub = pl.make_tile(tile_type, addr=0x0000, size=32)
+    with pl.section_vector():
+        pl.simt.launch(_atomic_half_discard, threads=1, args=(ub, gm))
+
+
+@pl.kernel
+def _atomic_rmw_discard_codegen_kernel(
+    compare: pl.DT_INT32,
+    replacement: pl.DT_INT32,
+    mask: pl.DT_UINT32,
+    limit: pl.DT_UINT32,
+):
+    numeric_type = pl.TileType(shape=[1, 1], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
+    unsigned_type = pl.TileType(shape=[1, 1], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
+    numeric = pl.make_tile(numeric_type, addr=0x0000, size=4)
+    bitwise = pl.make_tile(unsigned_type, addr=0x0040, size=4)
+    counter = pl.make_tile(unsigned_type, addr=0x0080, size=4)
+    with pl.section_vector():
+        pl.simt.launch(
+            _atomic_rmw_discard,
+            threads=1,
+            args=(numeric, bitwise, counter, compare, replacement, mask, limit),
+        )
+
+
 def _simt_function_source(cpp: str, name: str) -> str:
     start = cpp.index(f"inline void {name}(")
     end = cpp.index("\n}\n", start)
@@ -261,6 +376,71 @@ def test_simt_launch_passes_runtime_tile_valid_shape_to_native_function():
     assert re.search(r"\bsrc(?:_\d+)*__valid_col\b", function)
     assert launch_line.count(".GetValidRow()") == 2
     assert launch_line.count(".GetValidCol()") == 2
+
+
+def test_atomic_add_gm_int64_codegen_uses_element_pointer_and_returns_old_value():
+    cpp = _compile_to_cce(_atomic_add_gm_codegen_kernel)
+    function = _simt_function_source(cpp, "_atomic_add_gm")
+    atomic_line = next(line for line in function.splitlines() if "atomicAdd(" in line)
+    store_line = next(
+        line for line in function.splitlines() if "old_values" in line and "__simt_atomic_result_" in line
+    )
+    result_match = re.search(r"^\s*auto\s+(__simt_atomic_result_\d+)\s*=", atomic_line)
+
+    assert re.search(r"__gm__\s+int64_t\s*\*\s*dst(?:_\d+)*\b", function)
+    assert result_match is not None
+    assert re.search(r"atomicAdd\(dst(?:_\d+)?\s*\+\s*\(", atomic_line)
+    assert re.search(r",\s*value(?:_\d+)?\);$", atomic_line.strip())
+    assert re.search(r"\*\(\(__gm__ int64_t\*\)old_values(?:_\d+)?\s*\+", store_line)
+    assert result_match.group(1) in store_line
+
+
+def test_atomic_add_codegen_preserves_side_effect_when_return_value_is_discarded():
+    cpp = _compile_to_cce(_atomic_add_discard_codegen_kernel)
+    function = _simt_function_source(cpp, "_atomic_add_discard")
+    atomic_line = next(line for line in function.splitlines() if "atomicAdd(" in line)
+
+    assert re.search(
+        r"^\s*auto\s+__simt_atomic_result_\d+\s*=\s*atomicAdd\(dst(?:_\d+)?\s*\+\s*\(", atomic_line)
+    assert atomic_line.strip().endswith(";")
+
+
+def test_half_precision_atomic_codegen_emits_void_ub_and_gm_calls():
+    cpp = _compile_to_cce(_atomic_half_discard_codegen_kernel)
+    function = _simt_function_source(cpp, "_atomic_half_discard")
+
+    assert re.search(r"__ubuf__\s+half\s*\*\s*ub(?:_\d+)*\b", function)
+    assert re.search(r"__gm__\s+bfloat16_t\s*\*\s*gm(?:_\d+)*\b", function)
+    assert not re.search(r"\bauto\s+ignored(?:_\d+)*\s*=", function)
+    for intrinsic in ("atomicAdd", "atomicMax", "atomicMin"):
+        matching_lines = [line.strip() for line in function.splitlines() if f"{intrinsic}(" in line]
+        assert len(matching_lines) == 2
+        assert all(line.startswith(intrinsic) and line.endswith(";") for line in matching_lines)
+
+
+def test_atomic_rmw_codegen_maps_all_intrinsics_and_preserves_discarded_calls():
+    cpp = _compile_to_cce(_atomic_rmw_discard_codegen_kernel)
+    function = _simt_function_source(cpp, "_atomic_rmw_discard")
+    assert ".data()" not in function
+
+    for intrinsic in (
+        "atomicSub",
+        "atomicExch",
+        "atomicMax",
+        "atomicMin",
+        "atomicCAS",
+        "atomicAnd",
+        "atomicOr",
+        "atomicXOr",
+        "atomicInc",
+        "atomicDec",
+    ):
+        matching_lines = [line.strip() for line in function.splitlines() if f"{intrinsic}(" in line]
+        assert len(matching_lines) == 1
+        assert matching_lines[0].endswith(";")
+
+    cas_line = next(line for line in function.splitlines() if "atomicCAS(" in line)
+    assert re.search(r",\s*compare(?:_\d+)?\s*,\s*replacement(?:_\d+)?\s*\);$", cas_line.strip())
 
 
 def test_simt_callee_codegen_emits_native_nested_calls_and_tile_abi():
