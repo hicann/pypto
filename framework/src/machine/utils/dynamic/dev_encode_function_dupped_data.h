@@ -487,8 +487,7 @@ struct DevAscendFunctionDupped {
             oss << "\n";
         }
 
-        oss << " #funcKey: " << func->funcKey << " #gmStackBase: " << funcData->stackWorkSpaceAddr
-            << " #stackSize: " << funcData->stackWorkSpaceSize << " #workspace: " << funcData->workspaceAddr << "\n";
+        oss << " #funcKey: " << func->funcKey << " #workspace: " << funcData->workspaceAddr << "\n";
 
         DumpFuncData(func, funcIdx, cceBinary, oss);
 

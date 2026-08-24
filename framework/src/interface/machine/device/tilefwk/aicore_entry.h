@@ -249,12 +249,13 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
 {
     uint64_t t1 = get_sys_cnt();
     SetStatus(ctx->args, ((uint64_t)taskId << 32) | STAGE_PRE_EXEC_COREFUNC_KERNEL); // high 32 bits used for taskId
-    auto funcData = &ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].funcDataList[npu::tile_fwk::FuncID(taskId)];
+    auto& cachedTask = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx];
+    auto funcData = &cachedTask.funcDataList[npu::tile_fwk::FuncID(taskId)];
     auto opAttrs = &funcData->opAttrs[funcData->opAtrrOffsets[npu::tile_fwk::TaskID(taskId)]];
 #if ENABLE_AICORE_PRINT
-    CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, ctx->logger.Context()};
+    CoreFuncParam param = {funcData, cachedTask.header, opAttrs, funcData->exprTbl, taskId, ctx->logger.Context()};
 #else
-    CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, nullptr};
+    CoreFuncParam param = {funcData, cachedTask.header, opAttrs, funcData->exprTbl, taskId, nullptr};
 #endif
 
 #ifdef __ENABLE_MAIN_BLOCK
@@ -266,11 +267,11 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
 #ifdef __DAV_V310
     // for mix coretasks, use cube's stackworkspace
     int index = __MAIN_BLOCK ? (opAttrs[0] + 1) / 2 : opAttrs[0];
-    uint8_t mixResourceType = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[index].mixResourceType;
+    uint8_t mixResourceType = cachedTask.cceBinary[index].mixResourceType;
     int64_t blockIndex = (mixResourceType != 0) ? get_block_idx() : ctx->blockIdx;
-    int64_t gmStackAddr = funcData->stackWorkSpaceAddr + blockIndex * funcData->stackWorkSpaceSize;
+    int64_t gmStackAddr = cachedTask.header->stackWorkSpaceAddr + blockIndex * cachedTask.header->stackWorkSpaceSize;
 #else
-    int64_t gmStackAddr = funcData->stackWorkSpaceAddr + ctx->blockIdx * funcData->stackWorkSpaceSize;
+    int64_t gmStackAddr = cachedTask.header->stackWorkSpaceAddr + ctx->blockIdx * cachedTask.header->stackWorkSpaceSize;
 #endif
 
     __gm__ TaskStat* taskStat = nullptr;
@@ -283,7 +284,7 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
     (void)lastMixResourceType;
 #endif
     CallSubFuncTask(opAttrs[0] + funcData->exprTbl[0], &param, gmStackAddr,
-                    (__gm__ int64_t*)funcData->startArgs->commContexts, taskStat);
+                    (__gm__ int64_t*)cachedTask.header->startArgs->commContexts, taskStat);
     SetStatus(ctx->args, STAGE_FINISH_EXEC_COREFUNC_KERNEL);
     PipeSync();
     SetStatus(ctx->args, STAGE_FINISH_PIPE_SYNC);

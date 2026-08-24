@@ -223,9 +223,7 @@ INLINE uint64_t GetLengthPrivate(volatile RingBuffer<T, SIZE>* Q)
 
 INLINE __gm__ npu::tile_fwk::DevStartArgsBase* AiCoreRuntimeGetStartArgs(CoreFuncParam* param)
 {
-    auto func = param->funcData;
-    auto startArgs = func->startArgs;
-    return startArgs;
+    return param->funcHeader->startArgs;
 }
 
 template <int mode, int64_t constval>

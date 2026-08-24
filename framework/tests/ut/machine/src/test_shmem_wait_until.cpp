@@ -219,7 +219,7 @@ auto InitializeTaskData(npu::tile_fwk::dynamic::DynDeviceTask* task)
     auto* startArgs = new (funcData + 1) npu::tile_fwk::DevStartArgsBase();
     auto* commContext = new (startArgs + 1) int64_t;
     startArgs->commContexts = commContext;
-    funcData->startArgs = startArgs;
+    header->startArgs = startArgs;
 
     task->dynFuncDataList = header;
     task->dynFuncDataList[0].seqNo = 1;
@@ -227,10 +227,10 @@ auto InitializeTaskData(npu::tile_fwk::dynamic::DynDeviceTask* task)
     task->dynFuncDataList[0].funcSize = 1u;
     task->dynFuncDataList[0].cceBinary = nullptr;
 
-    return std::make_tuple(std::move(buffer), funcData);
+    return std::make_tuple(std::move(buffer), header, funcData);
 }
 
-auto ConfigureFuncData(npu::tile_fwk::DynFuncData* funcData, uint64_t rawAddr)
+auto ConfigureFuncData(npu::tile_fwk::DynFuncHeader* header, npu::tile_fwk::DynFuncData* funcData, uint64_t rawAddr)
 {
     constexpr size_t exprTblSize = 50;
     auto exprTbl = std::make_unique<uint64_t[]>(exprTblSize);
@@ -246,8 +246,8 @@ auto ConfigureFuncData(npu::tile_fwk::DynFuncData* funcData, uint64_t rawAddr)
     rawTensorDescHolder[0] = {0, 0};
     funcData->rawTensorAddr = rawTensorAddrHolder.get();
     funcData->rawTensorDesc = rawTensorDescHolder.get();
-    funcData->startArgs->commContexts[0] = reinterpret_cast<int64_t>(hcclParam.get());
-    funcData->startArgs->commGroupNum = 1;
+    header->startArgs->commContexts[0] = reinterpret_cast<int64_t>(hcclParam.get());
+    header->startArgs->commGroupNum = 1;
 
     constexpr size_t opAttrsLength = 17;
     auto opAttrs = std::make_unique<uint64_t[]>(opAttrsLength);
@@ -286,17 +286,17 @@ auto InitializeTestEnvironment()
     auto shmemWaitUntil = std::make_unique<npu::tile_fwk::Distributed::ShmemWaitUntilImpl>();
     auto cache = std::make_unique<npu::tile_fwk::Distributed::ShmemWaitUntilCache>();
 
-    auto [buffer, funcData] = InitializeTaskData(task.get());
+    auto [buffer, header, funcData] = InitializeTaskData(task.get());
 
     auto [exprTbl, hcclParam, rawTensorAddrHolder, rawTensorDescHolder, opAttrs, opAtrrOffsets] = ConfigureFuncData(
-        funcData, reinterpret_cast<uint64_t>(rawAddr.data()));
+        header, funcData, reinterpret_cast<uint64_t>(rawAddr.data()));
 
     task->shmemWaitUntilCacheBackup = cache.get();
 
     return std::make_tuple(std::move(rawAddr), std::move(data), std::move(allocator), std::move(task),
                            std::move(shmemWaitUntil), std::move(cache), std::move(buffer), std::move(exprTbl),
                            std::move(hcclParam), std::move(rawTensorAddrHolder), std::move(rawTensorDescHolder),
-                           std::move(opAttrs), std::move(opAtrrOffsets), std::move(aicpuCode), funcData);
+                           std::move(opAttrs), std::move(opAtrrOffsets), std::move(aicpuCode), header, funcData);
 }
 
 void PrepareTasks(uint32_t tileOpCount, npu::tile_fwk::Distributed::ShmemWaitUntilCache* cache,
@@ -324,9 +324,9 @@ void RunTests(uint32_t tileOpCount, npu::tile_fwk::Distributed::ShmemWaitUntilIm
 void TestShmemWaitUntil(const uint32_t tileOpCount)
 {
     auto [rawAddr, data, allocator, task, shmemWaitUntil, cache, buffer, exprTbl, hcclParam, rawTensorAddrHolder,
-          rawTensorDescHolder, opAttrs, opAtrrOffsets, aicpuCode, funcData] = InitializeTestEnvironment();
+          rawTensorDescHolder, opAttrs, opAtrrOffsets, aicpuCode, header, funcData] = InitializeTestEnvironment();
 
-    PrepareTasks(tileOpCount, cache.get(), aicpuCode, funcData, funcData->startArgs->commContexts);
+    PrepareTasks(tileOpCount, cache.get(), aicpuCode, funcData, header->startArgs->commContexts);
 
     constexpr uint32_t parallelIdx = 0;
     shmemWaitUntil->LoadCache(cache.get(), parallelIdx);

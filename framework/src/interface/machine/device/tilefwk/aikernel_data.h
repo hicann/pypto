@@ -30,7 +30,8 @@ constexpr uint32_t HCCL_GROUP_NUM = 2;
 enum class CoreType { AIV = 0, AIC = 1, MIX = 2, AICPU = 3, HUB = 4, GMATOMIC = 5, HUB_MIX = 6, INVALID = 20 };
 
 struct CoreFuncParam {
-    __gm__ DynFuncData* funcData;
+    __gm__ npu::tile_fwk::DynFuncData* funcData;
+    __gm__ npu::tile_fwk::DynFuncHeader* funcHeader;
     __gm__ uint64_t* opAttrs;
     __gm__ uint64_t* exprTbl;
     uint32_t taskId;

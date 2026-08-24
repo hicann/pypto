@@ -450,7 +450,7 @@ void DevControlFlowCache::TaskAddrBackupWorkspace(DynDeviceTaskBase* base)
         dynDataBackup->workspaceAddressBackup.runtimeWorkspace = duppedData->runtimeWorkspace_;
         dynDataBackup->workspaceAddressBackup.runtimeOutcastWorkspace = duppedData->runtimeOutcastWorkspace_;
         dynDataBackup->workspaceAddressBackup.workspaceAddr = dynData->workspaceAddr;
-        dynDataBackup->workspaceAddressBackup.stackWorkspaceAddr = dynData->stackWorkSpaceAddr;
+        dynDataBackup->workspaceAddressBackup.stackWorkspaceAddr = dynFuncDataList->stackWorkSpaceAddr;
     }
 }
 
@@ -468,8 +468,8 @@ void DevControlFlowCache::TaskAddrRestoreWorkspace(DynDeviceTaskBase* base)
         duppedData->runtimeWorkspace_ = dynDataBackup->workspaceAddressBackup.runtimeWorkspace;
         duppedData->runtimeOutcastWorkspace_ = dynDataBackup->workspaceAddressBackup.runtimeOutcastWorkspace;
         dynData->workspaceAddr = dynDataBackup->workspaceAddressBackup.workspaceAddr;
-        dynData->stackWorkSpaceAddr = dynDataBackup->workspaceAddressBackup.stackWorkspaceAddr;
     }
+    dynFuncDataList->stackWorkSpaceAddr = dynFuncDataBackupList[0].workspaceAddressBackup.stackWorkspaceAddr;
 }
 
 void DevControlFlowCache::TaskAddrRestoreWorkspace()
@@ -493,8 +493,8 @@ void DevControlFlowCache::TaskAddrRelocWorkspace(uint64_t srcWorkspace, uint64_t
         for (uint32_t dupIndex = 0; dupIndex < dynFuncDataList->funcNum; dupIndex++) {
             DynFuncData* dynData = &dynFuncDataList->At(dupIndex);
             DynFuncDataCache* dynDataCache = &dynFuncDataCacheList->At(dupIndex);
-            DevAscendFunctionDuppedData* duppedData = dynDataCache->duppedData;
             DynFuncDataBackup* dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
+            DevAscendFunctionDuppedData* duppedData = dynDataCache->duppedData;
 
             if (devStartArgs == nullptr) {
                 // Host: addr uses backup
@@ -505,7 +505,6 @@ void DevControlFlowCache::TaskAddrRelocWorkspace(uint64_t srcWorkspace, uint64_t
 
                 // Reloc DynFuncData
                 relocWorkspace.Reloc(dynDataBackup->workspaceAddressBackup.workspaceAddr);
-                relocWorkspace.Reloc(dynDataBackup->workspaceAddressBackup.stackWorkspaceAddr);
             } else {
                 // Device: addr uses actual
 
@@ -515,8 +514,14 @@ void DevControlFlowCache::TaskAddrRelocWorkspace(uint64_t srcWorkspace, uint64_t
 
                 // Reloc DynFuncData
                 relocWorkspace.Reloc(dynData->workspaceAddr);
-                relocWorkspace.Reloc(dynData->stackWorkSpaceAddr);
             }
+        }
+        // Reloc header-level fields (shared by all funcs)
+        if (devStartArgs == nullptr) {
+            relocWorkspace.Reloc(dynFuncDataBackupList[0].workspaceAddressBackup.stackWorkspaceAddr);
+            dynFuncDataList->stackWorkSpaceAddr = dynFuncDataBackupList[0].workspaceAddressBackup.stackWorkspaceAddr;
+        } else {
+            relocWorkspace.Reloc(dynFuncDataList->stackWorkSpaceAddr);
         }
     }
 }
@@ -537,7 +542,6 @@ void DevControlFlowCache::IncastOutcastAddrReloc(uint64_t srcWorkspace, uint64_t
         DynFuncDataCache* dynFuncDataCacheList = dynTaskBase->dynFuncDataCacheList;
         DynFuncDataBackup* dynFuncDataBackupList = dynTaskBase->dynFuncDataBackupList;
         for (uint32_t dupIndex = 0; dupIndex < dynFuncDataList->funcNum; dupIndex++) {
-            DynFuncData* dynData = &dynFuncDataList->At(dupIndex);
             DynFuncDataCache* dynDataCache = &dynFuncDataCacheList->At(dupIndex);
             DynFuncDataBackup* dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
 
@@ -565,9 +569,8 @@ void DevControlFlowCache::IncastOutcastAddrReloc(uint64_t srcWorkspace, uint64_t
                     RelocDescFromCache(*addr, relocWorkspace, devStartArgs);
                 }
             }
-
-            dynData->startArgs = devStartArgs;
         }
+        dynFuncDataList->startArgs = devStartArgs;
     }
 }
 

@@ -43,9 +43,6 @@ struct DynFuncData {
     uint64_t rawTensorDescSize;
     uint64_t rawTensorAddrSize;
     uint64_t workspaceAddr;
-    uint64_t stackWorkSpaceAddr;
-    uint64_t stackWorkSpaceSize;
-    __gm__ DevStartArgsBase* startArgs; // should be removed as it is global data
     __gm__ int* cceBinaryIndexList;
     DrcoRootFuncData drcoRootFuncData;
 };
@@ -68,6 +65,9 @@ struct DynFuncHeader {
     uint32_t funcNum;
     uint32_t funcSize;
     __gm__ DynFuncBin* cceBinary;
+    uint64_t stackWorkSpaceAddr;
+    uint64_t stackWorkSpaceSize;
+    __gm__ DevStartArgsBase* startArgs;
 
     INLINE uint64_t GetIndex() { return seqNo; }
     INLINE uint32_t Size() { return funcNum; }

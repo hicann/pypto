@@ -127,10 +127,10 @@ struct MultipleCore : ThreadAicoreEmulation {
         dataList->funcNum = rootCount;
         dataList->seqNo = 0;
         dataList->cceBinary = dynFuncBinList.data();
+        dataList->startArgs = &startArgs;
         for (size_t k = 0; k < dataList->funcNum; k++) {
             dataList->At(k).opAttrs = devFuncAttrList.data();
             dataList->At(k).opAtrrOffsets = devFuncAttrOffsetList.data();
-            dataList->At(k).startArgs = &startArgs;
             dataList->At(k).exprTbl = reinterpret_cast<uint64_t*>(devFuncExprTbl.data());
         }
 

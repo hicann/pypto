@@ -329,8 +329,9 @@ void DeviceExecuteContext::CalcControlMaxAicore()
 
 int DeviceExecuteContext::PrepareShmemWaitUntilTasks(DynDeviceTask* dynTask)
 {
-    auto funcDataList = reinterpret_cast<npu::tile_fwk::DynFuncData*>(&dynTask->GetDynFuncDataList()->At(0));
-    auto hcclContextAddr = funcDataList->startArgs->commContexts;
+    auto funcHeader = dynTask->GetDynFuncDataList();
+    auto funcDataList = reinterpret_cast<npu::tile_fwk::DynFuncData*>(funcHeader + 1);
+    auto hcclContextAddr = funcHeader->startArgs->commContexts;
     size_t cacheSize = sizeof(npu::tile_fwk::Distributed::ShmemWaitUntilCache);
     WsAllocation alloc = ControlFlowAllocateSlab(
         devProg, cacheSize, workspace.SlabAlloc(cacheSize, WsAicpuSlabMemType::SHMEM_WAIT_UNTIL_CACHE));

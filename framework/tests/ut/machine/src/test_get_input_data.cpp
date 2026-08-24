@@ -14,17 +14,19 @@
 
 using namespace npu::tile_fwk;
 
-DevStartArgsBase* AiCoreRuntimeGetStartArgs(CoreFuncParam* param) { return param->funcData->startArgs; }
+DevStartArgsBase* AiCoreRuntimeGetStartArgs(CoreFuncParam* param) { return param->funcHeader->startArgs; }
 
 TEST(TestGetInputData, int32)
 {
     DevTensorData devTensorList;
     DevStartArgsBase startArgs;
     DynFuncData funcData;
+    DynFuncHeader funcHeader;
     CoreFuncParam funcParam, *param = &funcParam;
 
     param->funcData = &funcData;
-    funcData.startArgs = &startArgs;
+    param->funcHeader = &funcHeader;
+    funcHeader.startArgs = &startArgs;
     startArgs.devTensorList = &devTensorList;
 
     std::vector<int> data(4 * 4 * 4 * 4);
@@ -60,10 +62,12 @@ TEST(TestGetInputData, int64)
     DevTensorData devTensorList;
     DevStartArgsBase startArgs;
     DynFuncData funcData;
+    DynFuncHeader funcHeader;
     CoreFuncParam funcParam, *param = &funcParam;
 
     param->funcData = &funcData;
-    funcData.startArgs = &startArgs;
+    param->funcHeader = &funcHeader;
+    funcHeader.startArgs = &startArgs;
     startArgs.devTensorList = &devTensorList;
 
     std::vector<int64_t> data(4 * 4 * 4 * 4);

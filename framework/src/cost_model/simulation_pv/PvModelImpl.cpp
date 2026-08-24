@@ -73,8 +73,14 @@ void DynPvModelImpl::RunModel(PvModelCceBin* cce, DynFuncData* funcdata, uint64_
     uint64_t binSize = GetBinSize(cce->binPath);
     binAddr_ += binSize;
 
-    pv_mem_write_(PV_MEM_GM, reinterpret_cast<uint64_t>(funcdata), sizeof(DynFuncData),
-                  reinterpret_cast<uint8_t*>(funcdata), subcoreId_, coreId_);
+    std::vector<uint8_t> headerAndData(sizeof(DynFuncHeader) + sizeof(DynFuncData), 0);
+    auto* header = reinterpret_cast<DynFuncHeader*>(headerAndData.data());
+    header->funcNum = 1;
+    header->funcSize = 1;
+    auto* data = reinterpret_cast<DynFuncData*>(headerAndData.data() + sizeof(DynFuncHeader));
+    *data = *funcdata;
+    uint64_t headerAddr = reinterpret_cast<uint64_t>(headerAndData.data());
+    pv_mem_write_(PV_MEM_GM, headerAddr, headerAndData.size(), headerAndData.data(), subcoreId_, coreId_);
     pv_mem_write_(PV_MEM_GM, reinterpret_cast<uint64_t>(funcdata->opAttrs), funcdata->opAttrSize * sizeof(uint64_t),
                   reinterpret_cast<uint8_t*>(funcdata->opAttrs), subcoreId_, coreId_);
     pv_mem_write_(PV_MEM_GM, reinterpret_cast<uint64_t>(funcdata->exprTbl), funcdata->exprNum * sizeof(uint64_t),
@@ -87,7 +93,7 @@ void DynPvModelImpl::RunModel(PvModelCceBin* cce, DynFuncData* funcdata, uint64_
                   subcoreId_, coreId_);
 
     std::vector<uint64_t> paraArgs;
-    paraArgs.push_back(reinterpret_cast<uint64_t>(funcdata));
+    paraArgs.push_back(headerAddr);
     pv_mem_write_(PV_MEM_GM, reinterpret_cast<uint64_t>(opAttrs), sizeof(uint64_t), reinterpret_cast<uint8_t*>(opAttrs),
                   subcoreId_, coreId_);
     paraArgs.push_back(reinterpret_cast<uint64_t>(opAttrs));
