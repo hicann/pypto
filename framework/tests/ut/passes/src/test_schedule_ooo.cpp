@@ -356,11 +356,13 @@ TEST_F(ScheduleOoOTest, TestSpillClonesSharedReshapeChain)
     EXPECT_EQ(add->GetIOperands()[0]->GetShape(), tailOut->GetShape());
     EXPECT_EQ(add->GetIOperands()[0]->GetRawTensor()->rawshape, tailOut->GetRawTensor()->rawshape);
 
-    // 旁支 mul 还读着 t3, 链首 reshape1 留着; 链尾 reshape2 两个 operand 都改指后没人读, 被摘掉。
+    // add 两个 operand 都改指到克隆链, 原链整条从 add 自己的 skipOps 摘掉;
+    // 链首 reshape1 还有旁支 mul 读着所以不标删, 由 mul 的 skipOps 带走。
     auto& skipOps = ooOScheduler.GetSkipOps(add);
-    EXPECT_EQ(skipOps.size(), 5UL);
-    EXPECT_TRUE(CheckSkipOps(skipOps, reshape1));
+    EXPECT_EQ(skipOps.size(), 4UL);
+    EXPECT_FALSE(CheckSkipOps(skipOps, reshape1));
     EXPECT_FALSE(CheckSkipOps(skipOps, reshape2));
+    EXPECT_TRUE(CheckSkipOps(ooOScheduler.GetSkipOps(mul), reshape1));
     EXPECT_FALSE(reshape1->IsDeleted());
     EXPECT_TRUE(reshape2->IsDeleted());
 

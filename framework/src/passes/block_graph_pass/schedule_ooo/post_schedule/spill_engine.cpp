@@ -496,7 +496,7 @@ Status SpillEngine::UpdateSkipOpInput(Operation* chainTail, Operation* spillOp, 
                                       LogicalTensorPtr reloadTensor, size_t index)
 {
     // 从链尾往上取祖先路径: 链中间的张量允许有旁支消费者, 沿 consumers 走会在分叉处停下, 到不了链尾。
-    std::vector<Operation*> chain = SkipChainPath(chainTail, true);
+    std::vector<Operation*> chain = SkipChainPath(chainTail);
     if (chain.empty()) {
         return SUCCESS;
     }
@@ -516,27 +516,19 @@ Status SpillEngine::UpdateSkipOpInput(Operation* chainTail, Operation* spillOp, 
     return SUCCESS;
 }
 
-// 只标删, 收在定稿: 中途删会撞上上游 UpdateOperationInput 正按引用迭代的 producers_。
+// 从链尾往链首扫: 摘掉尾巴才会让它的上游变成无读者, 一趟连锁清干净。
 void SpillEngine::DetachOrphanedSkipChain(const std::vector<Operation*>& chain, Operation* targetOp)
 {
     auto& skipOps = state_.schedInfoMap[targetOp].skipOps;
-    const auto& targetIns = targetOp->GetIOperands();
-    // 从链尾往链首扫: 摘掉尾巴才会让它的上游变成无读者, 一趟就能连锁清干净。
     for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
         Operation* oldOp = *it;
-        LogicalTensorPtr outTensor = oldOp->GetOutputOperand(0);
-        const auto& consumers = outTensor->GetConsumers();
-        // 标删的链尾此刻还挂在 consumers 上, 算作读者会让级联在倒数第二个就断掉。
-        if (std::any_of(consumers.begin(), consumers.end(), [](Operation* c) { return !c->IsDeleted(); })) {
-            continue;
-        }
-        // consumers 是 set: targetOp 两个 operand 读同一张量只记一份, 改第一个就整个移掉了。
-        if (std::find(targetIns.begin(), targetIns.end(), outTensor) != targetIns.end()) {
-            continue;
-        }
         auto pos = std::find(skipOps.begin(), skipOps.end(), oldOp);
         if (pos != skipOps.end()) {
             skipOps.erase(pos);
+        }
+        const auto& consumers = oldOp->GetOutputOperand(0)->GetConsumers();
+        if (std::any_of(consumers.begin(), consumers.end(), [](Operation* c) { return !c->IsDeleted(); })) {
+            continue;
         }
         EraseSchedulerSideMaps(oldOp);
         oldOp->SetAsDeleted();

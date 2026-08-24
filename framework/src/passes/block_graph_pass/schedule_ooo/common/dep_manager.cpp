@@ -205,26 +205,13 @@ void DependencyManager::HandleScaleOpDependency(Operation* op, MemoryType memTyp
 void DependencyManager::AddProducerDependencies(Operation* op)
 {
     for (auto& producer : op->ProducerOps()) {
-        Operation* farthestSkip = SkipChain(producer, true);
+        Operation* farthestSkip = SkipChain(producer);
         if (farthestSkip == nullptr) {
             AddDependency(producer, op);
             continue;
         }
         for (auto* realProducer : farthestSkip->ProducerOps()) {
             AddDependency(realProducer, op);
-        }
-    }
-}
-
-void DependencyManager::AddConsumerDependencies(Operation* op)
-{
-    for (auto& consumer : op->ConsumerOps()) {
-        Operation* farthestSkip = SkipChain(consumer, false);
-        if (farthestSkip == nullptr) {
-            continue;
-        }
-        for (auto* realConsumer : farthestSkip->ConsumerOps()) {
-            AddDependency(op, realConsumer);
         }
     }
 }
@@ -249,7 +236,6 @@ void DependencyManager::FindDependencies(Operation* op, bool needView)
     }
 
     AddProducerDependencies(op);
-    AddConsumerDependencies(op);
 }
 
 void DependencyManager::InitOpConsumerAndProducer(const std::vector<Operation*>& ops)

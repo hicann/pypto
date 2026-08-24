@@ -32,10 +32,11 @@ inline bool IsSkipOp(const Operation& op)
     return opc == Opcode::OP_VIEW || opc == Opcode::OP_VIEW_TYPE || opc == Opcode::OP_RESHAPE;
 }
 
-// 沿 skip 链走出的路径, from 自身在最前, 最远的 skip op 在最后; from 不是 skip op 时为空。
-// 分叉与跨函数处停止: 前者没有唯一的穿透对象, 后者的 buffer 不在同一作用域内分配。
+// 沿 skip 链上溯的路径, from 自身在最前, 最远的 skip op 在最后; from 不是 skip op 时为空。
+// 只向生产者方向走: SSA 下每个张量的生产者唯一, 往回是单向的; 往消费者方向会分叉, 没有唯一穿透对象。
+// 跨函数处停止: buffer 不在同一作用域内分配。
 // 前置条件: skip op 单进单出 —— 只取 operand 0。新增 skip opcode 须先满足这一条, 否则这里会静默漏掉其余 operand。
-inline std::vector<Operation*> SkipChainPath(Operation* from, bool followProducers)
+inline std::vector<Operation*> SkipChainPath(Operation* from)
 {
     std::vector<Operation*> path;
     if (from == nullptr) {
@@ -43,8 +44,7 @@ inline std::vector<Operation*> SkipChainPath(Operation* from, bool followProduce
     }
     for (Operation* op = from; op != nullptr && IsSkipOp(*op) && op->BelongTo() == from->BelongTo();) {
         path.push_back(op);
-        const auto& nextOps = followProducers ? op->GetInputOperand(0)->GetProducers() :
-                                                op->GetOutputOperand(0)->GetConsumers();
+        const auto& nextOps = op->GetInputOperand(0)->GetProducers();
         if (nextOps.size() != 1) {
             break;
         }
@@ -53,9 +53,9 @@ inline std::vector<Operation*> SkipChainPath(Operation* from, bool followProduce
     return path;
 }
 
-inline Operation* SkipChain(Operation* from, bool followProducers)
+inline Operation* SkipChain(Operation* from)
 {
-    const auto path = SkipChainPath(from, followProducers);
+    const auto path = SkipChainPath(from);
     return path.empty() ? nullptr : path.back();
 }
 
@@ -100,7 +100,6 @@ private:
 
     void HandleScaleOpDependency(Operation* op, MemoryType memType);
     void AddProducerDependencies(Operation* op);
-    void AddConsumerDependencies(Operation* op);
 
     std::unordered_map<Operation*, std::set<Operation*, Operation::OperationComparator>> opConsumers;
     std::unordered_map<Operation*, std::set<Operation*, Operation::OperationComparator>> opProducers;
