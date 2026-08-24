@@ -458,7 +458,7 @@ struct DevControlFlowCache {
     void RuntimeAddrRelocWorkspace(uint64_t srcWorkspace, uint64_t dstWorkspace, DevStartArgsBase* devStartArgs,
                                    DeviceExecuteSlot* runtimeSlotList,
                                    ItemPool<RuntimeOutcastTensor>::ItemBlock* runtimeOutcastTensorPool,
-                                   uint32_t parallelism);
+                                   uint32_t parallelism, TensorAllocator* allocator = nullptr);
 
     void MixTaskDataReloc(RelocRange& relocCtrlCache, RelocRange& relocProgram, DynDeviceTaskBase* dynTaskBase,
                           DynFuncHeader* dynFuncDataList);

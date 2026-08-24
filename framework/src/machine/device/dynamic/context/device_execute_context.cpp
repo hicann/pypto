@@ -697,7 +697,8 @@ void* DeviceExecuteContext::DeviceExecuteRuntimeCallRootStitch(void* ctx_, uint6
                                                 ctx->workspace.GetTensorAllocator(), ctx->devProg->GetParallelism());
         ctrlFlowCacheAnchor->RuntimeAddrRelocWorkspace(
             0, ctx->args->contextWorkspaceAddr, ctx->args, ctx->slotContext.GetSlotList(),
-            ctx->workspace.GetRuntimeOutcastTensorPoolBase(), ctx->devProg->GetParallelism());
+            ctx->workspace.GetRuntimeOutcastTensorPoolBase(), ctx->devProg->GetParallelism(),
+            ctx->workspace.GetTensorAllocator());
     }
     return result;
 }

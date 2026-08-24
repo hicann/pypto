@@ -702,7 +702,7 @@ void DevControlFlowCache::RuntimeAddrRelocProgram(uint64_t srcProgram, uint64_t 
 void DevControlFlowCache::RuntimeAddrRelocWorkspace(uint64_t srcWorkspace, uint64_t dstWorkspace,
                                                     DevStartArgsBase* devStartArgs, DeviceExecuteSlot* runtimeSlotList,
                                                     ItemPool<RuntimeOutcastTensor>::ItemBlock* runtimeOutcastTensorPool,
-                                                    uint32_t parallelism)
+                                                    uint32_t parallelism, TensorAllocator* allocator)
 {
     RelocRange relocWorkspace(srcWorkspace, dstWorkspace);
     /* empty constructor's overhead should be negligible */
@@ -712,18 +712,36 @@ void DevControlFlowCache::RuntimeAddrRelocWorkspace(uint64_t srcWorkspace, uint6
     }
     {
         for (uint32_t i = 0; i < parallelism; i++) {
-            auto& slottedOutcastsBlockList = runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList;
-            WsSlotAllocator::BlockHeader* base = slottedOutcastsBlockList.Data();
-            uint64_t boundaryReady = runtimeBackup.workspace.tensorAllocators[i]
-                                         .devTaskBoundaryOutcasts.initReadyCount_;
-            uint64_t innerReady = runtimeBackup.workspace.tensorAllocators[i]
-                                      .devTaskInnerTemporalOutcasts.initReadyCount_;
-            uint64_t innerOffset = runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.slotNum_;
-            for (uint64_t k = 0; k < boundaryReady; k++) {
-                relocWorkspace.RelocNullable(base[k].ptr);
-            }
-            for (uint64_t k = 0; k < innerReady; k++) {
-                relocWorkspace.RelocNullable(base[innerOffset + k].ptr);
+            if (devStartArgs == nullptr) {
+                // Host: reloc backup only (absolute addr -> workspace offset for CF cache storage).
+                auto& slottedOutcastsBlockList = runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList;
+                WsSlotAllocator::BlockHeader* base = slottedOutcastsBlockList.Data();
+                uint64_t boundaryReady = runtimeBackup.workspace.tensorAllocators[i]
+                                             .devTaskBoundaryOutcasts.initReadyCount_;
+                uint64_t innerReady = runtimeBackup.workspace.tensorAllocators[i]
+                                          .devTaskInnerTemporalOutcasts.initReadyCount_;
+                uint64_t innerOffset = runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.slotNum_;
+                for (uint64_t k = 0; k < boundaryReady; k++) {
+                    relocWorkspace.RelocNullable(base[k].ptr);
+                }
+                for (uint64_t k = 0; k < innerReady; k++) {
+                    relocWorkspace.RelocNullable(base[innerOffset + k].ptr);
+                }
+            } else {
+                // Device: Restore has copied backup offsets into the live freelist; reloc live only
+                // so backup stays in offset form for subsequent cache hits.
+                WsSlotAllocator::BlockHeader* liveBoundaryBase = allocator[i]
+                                                                     .devTaskBoundaryOutcasts.GetBlockHeaderBase();
+                uint64_t liveBoundaryReady = allocator[i].devTaskBoundaryOutcasts.initReadyCount_;
+                for (uint64_t k = 0; k < liveBoundaryReady; k++) {
+                    relocWorkspace.RelocNullable(liveBoundaryBase[k].ptr);
+                }
+                WsSlotAllocator::BlockHeader* liveInnerBase = allocator[i]
+                                                                  .devTaskInnerTemporalOutcasts.GetBlockHeaderBase();
+                uint64_t liveInnerReady = allocator[i].devTaskInnerTemporalOutcasts.initReadyCount_;
+                for (uint64_t k = 0; k < liveInnerReady; k++) {
+                    relocWorkspace.RelocNullable(liveInnerBase[k].ptr);
+                }
             }
         }
     }
