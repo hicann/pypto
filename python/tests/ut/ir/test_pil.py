@@ -1191,3 +1191,24 @@ def test_nested_is_loop_begin():
             bar(i)
 
     pil.compile(foo, has_move=False)
+
+
+def test_config_scope():
+
+    def foo():
+        n = pypto.SymbolicScalar('n')
+        pypto.set_vec_tile_shapes(16, 16)
+        for _ in pypto.loop(10):
+            assert pypto.get_vec_tile_shapes() == [16, 16]
+            pypto.set_vec_tile_shapes(32, 32)
+            assert pypto.get_vec_tile_shapes() == [32, 32]
+        if n == 0:
+            assert pypto.get_vec_tile_shapes() == [16, 16]
+            pypto.set_vec_tile_shapes(8, 8)
+            assert pypto.get_vec_tile_shapes() == [8, 8]
+        else:
+            assert pypto.get_vec_tile_shapes() == [16, 16]
+            pypto.set_vec_tile_shapes(32, 16)
+            assert pypto.get_vec_tile_shapes() == [32, 16]
+
+    pil.compile(foo, has_move=False)
