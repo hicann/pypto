@@ -495,8 +495,11 @@ def test_enum_compare_closure_vars():
 # right branch -- "it parsed" alone would also hold for an implementation that always
 # took the then-branch.
 #
-# A ternary over a runtime condition is a different path (the branches are phi-merged
-# into one runtime value) and enums do not apply there; it is not covered here.
+# A ternary over a runtime condition is a different path: the branches are phi-merged into
+# one runtime value, which an enum has no representation for. The rejection tests at the
+# end of this section cover that side, and specifically that the diagnostic blames the
+# condition -- the branch text is identical to the folded cases above, so the condition is
+# the only thing that makes it illegal.
 
 @pytest.mark.soc("950")
 def test_dtype_kwarg_enum_ternary_const_condition():
@@ -604,6 +607,49 @@ def test_enum_ternary_unselected_branch_not_parsed():
         return result
 
     assert isinstance(func, ir.Function)
+
+
+@pytest.mark.soc("950")
+def test_enum_ternary_runtime_condition_is_rejected():
+    """A runtime condition turns the ternary into a select, which an enum cannot feed.
+
+    The branch text is what the folded cases above accept; only the condition differs, so
+    the message has to name the condition rather than the branch -- otherwise the rule
+    reads as "enums do not work in ternaries", which the tests above disprove.
+    """
+    with pytest.raises(ParserTypeError) as excinfo:
+
+        @pl.function
+        def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
+            tile_type = pl.TileType(
+                shape=[64, 128],
+                dtype=pl.DT_FP16,
+                target_memory=pl.MemorySpace.Vec,
+                pad=pl.TilePad.zero if x.shape[0] else 0,
+            )
+            tile = pl.make_tile(tile_type, addr=0, size=16384)  # noqa: F841
+
+    message = str(excinfo.value)
+    # the value that cannot be selected, quoted from the source
+    assert "'pl.TilePad.zero' has no runtime value" in message
+    # the condition that made it a runtime select, and the way out
+    assert "x.shape[0]" in message
+    assert "tiling_key" in message
+
+
+@pytest.mark.soc("950")
+def test_enum_ternary_runtime_condition_rejected_in_the_else_branch():
+    """The else branch is held to the same contract, with the same diagnostic.
+
+    Worth its own case: the then and else rejections are separate call sites, and only a
+    shared one keeps them from drifting apart again.
+    """
+    with pytest.raises(ParserTypeError, match="'pl.MemorySpace.Acc' has no runtime value"):
+
+        @pl.function
+        def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
+            n = x.shape[0]
+            space = n if n else pl.MemorySpace.Acc  # noqa: F841
 
 
 @pytest.mark.soc("950")
@@ -748,6 +794,8 @@ if __name__ == "__main__":
         test_enum_ternary_condition_is_an_enum_comparison,
         test_non_dtype_enum_ternary,
         test_enum_ternary_unselected_branch_not_parsed,
+        test_enum_ternary_runtime_condition_is_rejected,
+        test_enum_ternary_runtime_condition_rejected_in_the_else_branch,
         test_int_via_ternary_still_rejected_by_enum_kwarg_guard,
         test_mixed_enum_int_branches_follow_the_selected_branch,
         test_dtype_kwarg_from_closure_enum_list,

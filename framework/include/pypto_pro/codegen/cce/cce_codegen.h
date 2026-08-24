@@ -52,10 +52,24 @@ struct TileDef {
 /// source pointer (ptr.make_tensor) or "<name>_ptr" for a plain tensor parameter.
 struct TensorDef {
     ir::VarPtr var;                            ///< tensor variable (parameter or ptr.make_tensor view)
+    std::string cce_name;                      ///< emitted declaration name: the tensor's plain cce name for the
+                                               ///< first layout it is accessed with, "<name>__v<n>" for each later one
     std::vector<ir::ExprPtr> access_shape;     ///< access window shape (tile-derived) from load/store
     std::optional<std::vector<int>> tile_dims; ///< tile_dims kwarg for strided views (if any)
     bool is_transpose = false;                 ///< loaded with is_transpose=true (needs Layout::DN)
+    std::string layout;                        ///< explicit Layout enum (MX loads); else derived from the above
 };
+
+/**
+ * \brief Key identifying the layout variant one load/store access needs.
+ *
+ * Layout::DN and the row/col stride order are baked into the GlobalTensor *type*, so accesses
+ * that walk one tensor differently cannot share a declaration. The key is a pure function of
+ * the access (its is_transpose / tile_dims kwargs and its access shape), so the prescan and
+ * the load/store codegen agree on which declaration an access belongs to. Accesses that share
+ * a key share a declaration.
+ */
+[[nodiscard]] std::string TensorLayoutVariantKey(const ir::CallPtr& op);
 
 /// Definition of one user-visible C++ class materialized from a TupleType.
 struct StructDefinition {
@@ -243,18 +257,31 @@ public:
      * \brief Generate GlobalTensor type declaration and instance for a TensorDef.
      *
      * Emits shape type alias, stride type alias, GlobalTensor type alias, and instance
-     * declaration. var_name, tensor_type and base pointer are derived from def.var; dn /
-     * tile_dims come from def. Public so ptr.make_tensor codegen can emit a view in place.
+     * declaration, all named after def.cce_name -- this layout variant's name, as recorded by
+     * CollectTensorDefs. The tensor type and the base pointer still come from def.var, which
+     * every variant of one tensor shares; dn / tile_dims come from def. Public so ptr.make_tensor
+     * codegen can emit a view in place.
      */
     void GenerateGlobalTensorTypeDeclaration(const TensorDef& def);
 
     /**
-     * \brief Look up a prescanned TensorDef by its cce variable name (ptr.make_tensor views).
+     * \brief Look up every prescanned layout variant of a tensor by its cce variable name.
      *
-     * Returns nullptr when the name was never accessed by a block.load/store (no declaration
-     * needed). Populated by CollectTensorDefs during the prologue.
+     * Empty when the name was never accessed by a block.load/store (no declaration needed);
+     * one def per layout the accesses need. Populated by CollectTensorDefs during the prologue.
      */
-    [[nodiscard]] const TensorDef* GetTensorDef(const std::string& name) const;
+    [[nodiscard]] std::vector<const TensorDef*> GetTensorDefs(const std::string& name) const;
+
+    /**
+     * \brief Bind one access to its declaration and return the instance to read or write through.
+     *
+     * Selects the declaration matching this access's layout -- a tensor also read with a different
+     * order has one per layout, and only the matching one walks it correctly -- then points its
+     * hoisted instance at the access and resizes it in place. Pass an empty *shape_args* when the
+     * declaration carries its dims in the type (NZ).
+     */
+    [[nodiscard]] std::string BindGlobalTensor(const ir::VarPtr& tensor_var, const ir::CallPtr& op,
+                                               const std::string& pointer_expr, const std::string& shape_args);
 
 protected:
     // Override visitor methods for code generation - Statements
@@ -361,9 +388,10 @@ private:
      */
     std::vector<std::pair<ir::VarPtr, ir::TileTypePtr>> CollectTileVariables(const ir::StmtPtr& stmt);
 
-    /// Collect one TensorDef per accessed tensor var from block.load/store access windows into
-    /// tensor_defs_, keyed by cce var name (parameters and ptr.make_tensor views both collected;
-    /// used for prologue param-tensor emission and in-place view emission at the make_tensor op).
+    /// Collect one TensorDef per accessed tensor var *and layout variant* from block.load/store
+    /// access windows into tensor_defs_, keyed by (tensor cce name, layout key) (parameters and
+    /// ptr.make_tensor views both collected; used for prologue param-tensor emission and
+    /// in-place view emission at the make_tensor op).
     void CollectTensorDefs(const ir::FunctionPtr& func);
 
     /**
@@ -525,10 +553,6 @@ private:
     std::string BuildDynamicNZShapeArg(const ir::TensorTypePtr& tensor_type, size_t axis,
                                        const std::optional<std::vector<ir::ExprPtr>>& access_shape);
 
-    void AppendDynamicStrideGlobalTensorArgs(std::ostringstream& global_instance, const std::string& shape_type_name,
-                                             const std::string& stride_type_name, const ir::TensorTypePtr& tensor_type,
-                                             const std::optional<std::vector<int>>& tile_dims, bool is_transpose);
-
     void EmitDynamicNZGlobalTensorDeclaration(const std::string& var_name, const ir::TensorTypePtr& tensor_type,
                                               const std::optional<std::string>& base_pointer,
                                               const std::optional<std::vector<ir::ExprPtr>>& access_shape,
@@ -541,17 +565,23 @@ private:
     void EmitNZGlobalTensorDeclaration(const TensorDef& def, const std::string& var_name,
                                        const ir::TensorTypePtr& tensor_type);
 
-    std::string BuildGlobalTensorLayoutArg(const std::string& stride_type_name, const std::vector<int64_t>& shape_dims,
-                                           bool is_transpose) const;
+    /// Whether an access walks the tensor down columns: transposed, or a single-column window.
+    static bool IsDNAccessLayout(const std::vector<int64_t>& shape_dims, bool is_transpose);
+
+    /// The Stride ctor arguments an access walks the tensor with, row/col exchanged when transposed.
+    std::string BuildAccessStrideArgs(const ir::TensorTypePtr& tensor_type,
+                                      const std::optional<std::vector<int>>& tile_dims, bool is_transpose, bool is_mx);
 
     /**
-     * \brief Emit the GlobalTensor instance declaration and register pointer/struct mappings.
+     * \brief Emit one GlobalTensor instance over a declaration made by GenerateGlobalTensorTypeDeclaration.
+     *
+     * Renders `<decl>Type <instance>(<pointer>, <decl>ShapeDim5(<shape_args>), <decl>StrideDim5(<stride_args>));`,
+     * dropping the shape and stride arguments when both are empty -- a fully static declaration takes the
+     * pointer alone.
      */
-    void EmitGlobalTensorInstance(const std::string& var_name, const std::string& global_type_name,
-                                  const std::string& shape_type_name, const std::string& stride_type_name,
-                                  const ir::TensorTypePtr& tensor_type,
-                                  const std::optional<std::vector<int>>& tile_dims, bool is_transpose,
-                                  const std::string& base_pointer);
+    void EmitGlobalTensorInstance(const std::string& instance_name, const std::string& decl_name,
+                                  const std::string& pointer_expr, const std::string& shape_args,
+                                  const std::string& stride_args);
 
     // Dual-mode context for expression visitor pattern
     std::string current_target_var_;              ///< INPUT: Assignment target variable name (for Call expressions)
@@ -572,7 +602,9 @@ private:
     ir::FunctionType current_function_type_ = ir::FunctionType::OPAQUE;
     std::map<std::string, ir::FunctionPtr> simt_callees_;
     std::unordered_map<std::string, std::string> tensor_to_pointer_; ///< Tensor var name ->raw pointer expression
-    std::map<std::string, TensorDef> tensor_defs_;      ///< Prescan: cce var name ->TensorDef (for make_tensor views)
+    /// Prescan: (tensor cce name, layout key) ->TensorDef. One entry per layout an access needs,
+    /// so every variant of one tensor is a contiguous range (see GetTensorDefs).
+    std::map<std::pair<std::string, std::string>, TensorDef> tensor_defs_;
     std::map<std::string, std::string> tile_addresses_; ///< tile_name ->TASSIGN address expression
 
     std::map<std::pair<bool, std::string>, std::string>

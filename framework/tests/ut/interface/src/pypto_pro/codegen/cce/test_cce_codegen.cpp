@@ -648,10 +648,16 @@ TEST(CCECodegenTest, GeneratesTensorDescriptorAndLoadFromAccessShape)
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(body, {input}), "a5");
 
-    EXPECT_NE(generated.find("using input_0ShapeDim5 = pto::Shape<1, 1, 1, -1, -1>;"), std::string::npos);
+    // The declaration's dims are DYNAMIC and each access resizes them in place, so the access
+    // shape shows up in the load's SetShape rather than in the hoisted type.
+    EXPECT_NE(generated.find("using input_0ShapeDim5 = pto::TileShape2D<half, pto::DYNAMIC, pto::DYNAMIC,"),
+              std::string::npos);
+    EXPECT_NE(generated.find("input_0StrideDim5, Layout::ND>;"), std::string::npos);
     EXPECT_NE(generated.find("using input_0StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;"), std::string::npos);
     EXPECT_NE(generated.find("input_0Type input_0(input_0_ptr"), std::string::npos);
     EXPECT_NE(generated.find("input_0StrideDim5(1, 1, 1, 128, 1)"), std::string::npos);
+    EXPECT_NE(generated.find("input_0.SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>"),
+              std::string::npos);
     EXPECT_NE(generated.find("TLOAD(tile"), std::string::npos);
     EXPECT_NE(generated.find(", input_0);"), std::string::npos);
 }

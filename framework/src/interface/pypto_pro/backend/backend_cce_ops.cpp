@@ -978,8 +978,8 @@ static std::string MakeBlockCreateTileCodegenCCE(const ir::CallPtr& op, codegen:
 // at the make_tensor op: the source pointer (op->args_[0]) is already in C++ scope here
 // (a function parameter or an earlier ptr.addptr local), so we resolve it directly via
 // GetExprAsCode instead of relying on PtrType base/offset annotations (those are ptoas-only).
-// The view's access_shape/is_transpose/tile_dims come from the prescanned TensorDef, looked up by
-// the assignment target name. Returns "" (the view produces no inline value).
+// The view's access_shape/is_transpose/tile_dims come from the prescanned TensorDefs, looked up
+// by the assignment target name -- one per layout its accesses need. Returns "" (no inline value).
 static std::string MakeBlockMakeTensorCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& cg = dynamic_cast<codegen::CCECodegen&>(codegen_base);
@@ -1012,8 +1012,7 @@ static std::string MakeBlockMakeTensorCodegenCCE(const ir::CallPtr& op, codegen:
         ptr_code = "(__gm__ " + tensor_type->dtype_.ToCTypeString() + "*)(" + ptr_code + ")";
     }
     cg.RegisterPointer(name, ptr_code);
-    const codegen::TensorDef* def = cg.GetTensorDef(name);
-    if (def != nullptr) {
+    for (const codegen::TensorDef* def : cg.GetTensorDefs(name)) {
         cg.GenerateGlobalTensorTypeDeclaration(*def);
     }
     return "";

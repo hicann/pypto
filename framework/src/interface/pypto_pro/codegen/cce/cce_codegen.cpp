@@ -946,17 +946,11 @@ void CCECodegen::EmitSingleTensorDeclarations(const ir::FunctionPtr& func)
     // MakeBlockMakeTensorCodegenCCE), where the source pointer's C++ code is already in scope.
     CollectTensorDefs(func);
 
-    std::vector<TensorDef> param_defs;
     for (const auto& param : func->params_) {
-        auto it = tensor_defs_.find(context_.SanitizeName(param));
-        if (it != tensor_defs_.end()) {
-            param_defs.push_back(it->second);
+        for (const TensorDef* def : GetTensorDefs(context_.SanitizeName(param))) {
+            GenerateGlobalTensorTypeDeclaration(*def);
+            emitter_.EmitLine("");
         }
-    }
-
-    for (const auto& def : param_defs) {
-        GenerateGlobalTensorTypeDeclaration(def);
-        emitter_.EmitLine("");
     }
 }
 
@@ -2014,10 +2008,14 @@ bool CCECodegen::HasTileAddress(const std::string& tile_name) const
     return tile_addresses_.find(tile_name) != tile_addresses_.end();
 }
 
-const TensorDef* CCECodegen::GetTensorDef(const std::string& name) const
+std::vector<const TensorDef*> CCECodegen::GetTensorDefs(const std::string& name) const
 {
-    auto it = tensor_defs_.find(name);
-    return it != tensor_defs_.end() ? &it->second : nullptr;
+    // Every variant of one tensor shares the key's first half, so they are one contiguous range.
+    std::vector<const TensorDef*> defs;
+    for (auto it = tensor_defs_.lower_bound({name, ""}); it != tensor_defs_.end() && it->first.first == name; ++it) {
+        defs.push_back(&it->second);
+    }
+    return defs;
 }
 
 std::string CCECodegen::ComputeIRBasedOffset(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets)
@@ -2372,12 +2370,59 @@ public:
     }
 };
 
+struct AccessArgIndices {
+    int tensor_arg_idx = -1;
+    int tile_arg_idx = -1;
+};
+
+AccessArgIndices ResolveAccessArgIndices(const std::string& op_name)
+{
+    AccessArgIndices indices;
+    if (op_name == "block.load") {
+        indices.tensor_arg_idx = 1;
+        indices.tile_arg_idx = 0;
+    } else if (op_name == "block.store" || op_name == "block.store_fp") {
+        indices.tensor_arg_idx = 0;
+        indices.tile_arg_idx = 1;
+    } else if (op_name == "debug.dump_tile") {
+        indices.tensor_arg_idx = 3;
+        indices.tile_arg_idx = 0;
+    }
+    return indices;
+}
+
+// Access window shape: the tile operand's shape, which is what the access transfers.
+std::optional<std::vector<ir::ExprPtr>> ResolveAccessShape(const ir::CallPtr& op, const AccessArgIndices& indices)
+{
+    if (indices.tile_arg_idx >= 0 && indices.tile_arg_idx < static_cast<int>(op->args_.size())) {
+        const auto& tile_arg = op->args_[indices.tile_arg_idx];
+        if (auto tile_type = std::dynamic_pointer_cast<const ir::TileType>(tile_arg->GetType())) {
+            return tile_type->shape_;
+        }
+    }
+    return std::nullopt;
+}
+
+// A single-column access walks the tensor down a column, which takes Layout::DN just as a
+// transposed load does -- but without swapping the strides. The two are therefore distinct
+// variants, not one.
+bool IsColumnAccess(const ir::CallPtr& op)
+{
+    auto shape = ResolveAccessShape(op, ResolveAccessArgIndices(op->name_));
+    if (!shape || shape->empty()) {
+        return false;
+    }
+    auto last = std::dynamic_pointer_cast<const ir::ConstInt>(shape->back());
+    return last != nullptr && last->value_ == 1;
+}
+
 /**
  * \brief Helper visitor for collecting tensor definitions from block.load/store
  *
- * Traverses the IR tree to find block.load/block.store calls and aggregates, for
- * each tensor variable (keyed by its cce variable name), the access window shape,
- * tile_dims and DN flag into a single TensorDef.
+ * Traverses the IR tree to find block.load/block.store calls and records, for each tensor
+ * variable *and layout variant* (keyed by the variant's cce name), the access window shape,
+ * tile_dims and DN flag. A tensor loaded both row-major and transposed needs one declaration
+ * per layout, since Layout::DN is a GlobalTensor template argument.
  */
 class TensorDefCollector : public ir::IRVisitor {
     using ir::IRVisitor::VisitExpr_;
@@ -2386,7 +2431,8 @@ class TensorDefCollector : public ir::IRVisitor {
 public:
     explicit TensorDefCollector(const CodeContext& ctx) : ctx_(ctx) {}
 
-    std::map<std::string, TensorDef> defs_; ///< cce var name -> aggregated TensorDef
+    std::map<std::pair<std::string, std::string>, TensorDef> defs_; ///< (tensor cce name, layout key) -> TensorDef
+    std::map<std::string, int> variant_counts_;                     ///< tensor cce name -> layouts seen so far
 
     void VisitStmt_(const ir::AssignStmtPtr& op) override
     {
@@ -2423,65 +2469,38 @@ private:
         return var;
     }
 
-    struct AccessArgIndices {
-        int tensor_arg_idx = -1;
-        int tile_arg_idx = -1;
-    };
-
-    AccessArgIndices ResolveAccessArgIndices(const std::string& op_name) const
-    {
-        AccessArgIndices indices;
-        if (op_name == "block.load") {
-            indices.tensor_arg_idx = 1;
-            indices.tile_arg_idx = 0;
-        } else if (op_name == "block.store") {
-            indices.tensor_arg_idx = 0;
-            indices.tile_arg_idx = 1;
-        } else if (op_name == "block.store_fp") {
-            indices.tensor_arg_idx = 0;
-            indices.tile_arg_idx = 1;
-        } else if (op_name == "debug.dump_tile") {
-            indices.tensor_arg_idx = 3;
-            indices.tile_arg_idx = 0;
-        }
-        return indices;
-    }
-
-    // Access window shape: explicit shapes tuple if present, otherwise the tile's shape.
-    std::optional<std::vector<ir::ExprPtr>> ResolveAccessShape(const ir::CallPtr& op,
-                                                               const AccessArgIndices& indices) const
-    {
-        if (indices.tile_arg_idx >= 0 && indices.tile_arg_idx < static_cast<int>(op->args_.size())) {
-            auto tile_type = std::dynamic_pointer_cast<const ir::TileType>(op->args_[indices.tile_arg_idx]->GetType());
-            if (tile_type) {
-                return tile_type->shape_;
-            }
-        }
-        return std::nullopt;
-    }
-
+    // One def per (tensor, layout variant): accesses that share a variant agree on every field
+    // the declaration reads, so the first one to arrive fills it and the rest match by
+    // construction. Accesses that disagree land in different variants instead of overwriting
+    // each other -- which is what used to silently give one of them the wrong layout.
     void RecordTensorDef(const ir::CallPtr& op, const std::shared_ptr<const ir::Var>& tensor_var,
                          const AccessArgIndices& indices)
     {
         if (!tensor_var) {
             return;
         }
-        auto var = std::const_pointer_cast<ir::Var>(tensor_var);
-        TensorDef& def = defs_[ctx_.SanitizeName(var)];
-        if (def.var == nullptr) {
-            def.var = var;
+        const std::string base_name = ctx_.SanitizeName(tensor_var);
+        auto [def_it, is_new_variant] = defs_.try_emplace({base_name, TensorLayoutVariantKey(op)});
+        if (!is_new_variant) {
+            return; // an earlier access already declared this layout; every field below matches
         }
-        if (def.access_shape.empty()) {
-            if (auto shape = ResolveAccessShape(op, indices)) {
-                def.access_shape = *shape;
-            }
+        TensorDef& def = def_it->second;
+        // The first layout keeps the tensor's plain name, so a tensor accessed one way
+        // generates exactly what it did before variants existed.
+        const int index = variant_counts_[base_name]++;
+        def.cce_name = index == 0 ? base_name : base_name + "__v" + std::to_string(index);
+        def.var = tensor_var;
+        if (auto shape = ResolveAccessShape(op, indices)) {
+            def.access_shape = *shape;
         }
-        if (!def.tile_dims.has_value() && op->HasKwarg("tile_dims")) {
+        def.layout = backend::cce::MXLoadLayoutName(op);
+        if (!def.layout.empty()) {
+            // An MX load defaults its axes from the tensor rank, so the raw kwarg is not enough.
+            def.tile_dims = backend::cce::MXLoadTileDims(op, ir::As<ir::TensorType>(op->args_[1]->GetType()));
+        } else if (op->HasKwarg("tile_dims")) {
             def.tile_dims = op->GetKwarg<std::vector<int>>("tile_dims");
         }
-        if (op->name_ == "block.load" && op->HasKwarg("is_transpose") && op->GetKwarg<bool>("is_transpose")) {
-            def.is_transpose = true;
-        }
+        def.is_transpose = op->name_ == "block.load" && op->GetKwarg<bool>("is_transpose", false);
     }
 
     const CodeContext& ctx_; ///< for SanitizeName (pure: derives the cce var-name key)
@@ -2489,6 +2508,44 @@ private:
 };
 
 } // namespace
+
+std::string TensorLayoutVariantKey(const ir::CallPtr& op)
+{
+    // Exactly the inputs GenerateGlobalTensorTypeDeclaration reads: two accesses with the same
+    // key produce the same declaration and share it. NZ tensors are always single-variant --
+    // their declaration is driven by the fractal layout, not by these kwargs.
+    const AccessArgIndices indices = ResolveAccessArgIndices(op->name_);
+    if (indices.tensor_arg_idx < 0 || static_cast<int>(op->args_.size()) <= indices.tensor_arg_idx) {
+        return "";
+    }
+    auto tensor_type = ir::As<ir::TensorType>(op->args_[indices.tensor_arg_idx]->GetType());
+    if (tensor_type == nullptr || IsNZTensorType(tensor_type)) {
+        return "";
+    }
+    // An MX load names its layout outright, so it keys on that alone.
+    const std::string mx_layout = backend::cce::MXLoadLayoutName(op);
+    if (!mx_layout.empty()) {
+        return mx_layout;
+    }
+
+    std::string key;
+    // A transposed load swaps the row/col strides; a single-column access takes Layout::DN
+    // without swapping them, so the two are distinct layouts rather than one.
+    if (op->name_ == "block.load" && op->GetKwarg<bool>("is_transpose", false)) {
+        key += "t";
+    }
+
+    if (IsColumnAccess(op)) {
+        key += "c";
+    }
+
+    if (op->HasKwarg("tile_dims")) {
+        for (int dim : op->GetKwarg<std::vector<int>>("tile_dims")) {
+            key += "d" + std::to_string(dim);
+        }
+    }
+    return key;
+}
 
 std::vector<std::pair<ir::VarPtr, ir::TileTypePtr>> CCECodegen::CollectTileVariables(const ir::StmtPtr& stmt)
 {
@@ -2965,9 +3022,9 @@ std::vector<std::string> CCECodegen::BuildTensorStrideExpressions(const ir::Tens
     return stride_exprs;
 }
 
-void CCECodegen::AppendDynamicStrideGlobalTensorArgs(
-    std::ostringstream& global_instance, const std::string& shape_type_name, const std::string& stride_type_name,
-    const ir::TensorTypePtr& tensor_type, const std::optional<std::vector<int>>& tile_dims, bool is_transpose)
+std::string CCECodegen::BuildAccessStrideArgs(const ir::TensorTypePtr& tensor_type,
+                                              const std::optional<std::vector<int>>& tile_dims, bool is_transpose,
+                                              bool is_mx)
 {
     const auto stride_exprs = BuildTensorStrideExpressions(tensor_type);
     const size_t ndim = tensor_type->shape_.size();
@@ -2983,27 +3040,61 @@ void CCECodegen::AppendDynamicStrideGlobalTensorArgs(
         row_stride_expr = stride_exprs[0];
         col_stride_expr = "1";
     }
-    global_instance << ", " << shape_type_name << "(), " << stride_type_name << "(1, 1, 1, ";
-    if (is_transpose) {
-        global_instance << col_stride_expr << ", " << row_stride_expr;
-    } else {
-        global_instance << row_stride_expr << ", " << col_stride_expr;
+    // Same two strides throughout; the layouts differ only in which Stride slots carry them.
+    // An MX shape puts the matrix axes in DIM_2/DIM_3 and pins DIM_4 to the fractal length,
+    // every other layout leaves DIM_2 at 1 and carries them in DIM_3/DIM_4.
+    if (is_mx) {
+        return "1, 1, " + row_stride_expr + ", " + col_stride_expr + ", 1";
     }
-    global_instance << ")";
+    // A transposed access walks the same memory with the row and column strides exchanged.
+    return is_transpose ? "1, 1, 1, " + col_stride_expr + ", " + row_stride_expr :
+                          "1, 1, 1, " + row_stride_expr + ", " + col_stride_expr;
 }
 
-void CCECodegen::EmitGlobalTensorInstance(const std::string& var_name, const std::string& global_type_name,
-                                          const std::string& shape_type_name, const std::string& stride_type_name,
-                                          const ir::TensorTypePtr& tensor_type,
-                                          const std::optional<std::vector<int>>& tile_dims, bool is_transpose,
-                                          const std::string& base_pointer)
+std::string CCECodegen::BindGlobalTensor(const ir::VarPtr& tensor_var, const ir::CallPtr& op,
+                                         const std::string& pointer_expr, const std::string& shape_args)
 {
-    std::ostringstream global_instance;
-    global_instance << global_type_name << " " << var_name << "(" << base_pointer;
-    AppendDynamicStrideGlobalTensorArgs(global_instance, shape_type_name, stride_type_name, tensor_type, tile_dims,
-                                        is_transpose);
-    global_instance << ");";
-    emitter_.EmitLine(global_instance.str());
+    // The declaration for this access's layout. An access the prescan never saw has no
+    // declaration of its own and falls back to the tensor's plain name.
+    auto it = tensor_defs_.find({context_.SanitizeName(tensor_var), TensorLayoutVariantKey(op)});
+    const std::string decl_name = it != tensor_defs_.end() ? it->second.cce_name : GetVarName(tensor_var);
+    // An empty shape means the declaration carries its dims in its type (NZ) and needs no resize.
+    if (!shape_args.empty()) {
+        // Which two Shape slots the access's dims land in: an MX shape carries the matrix axes in
+        // DIM_2/DIM_3 and pins DIM_4 to the fractal length, every other layout leaves DIM_2 at 1
+        // and carries them in DIM_3/DIM_4.
+        const bool is_mx = it != tensor_defs_.end() && !it->second.layout.empty();
+        const std::string outer = is_mx ? "pto::GlobalTensorDim::DIM_2" : "pto::GlobalTensorDim::DIM_3";
+        const std::string inner = is_mx ? "pto::GlobalTensorDim::DIM_3" : "pto::GlobalTensorDim::DIM_4";
+        // Which of (rows, cols) lands in each slot, and whether it is divided by the fractal
+        // length, is TileShape2D's business -- so an MX resize builds one and reads the values
+        // back out rather than restating every layout's mapping here.
+        std::string args = shape_args;
+        if (is_mx) {
+            const std::string shape = decl_name + "_shape_" + std::to_string(GetTileOffsetCounter());
+            emitter_.EmitLine("const " + decl_name + "ShapeDim5 " + shape + "(" + shape_args + ");");
+            args = shape + ".shape[" + outer + "], " + shape + ".shape[" + inner + "]";
+        }
+        emitter_.EmitLine(decl_name + ".SetShape<" + outer + ", " + inner + ">(" + args + ");");
+    }
+    emitter_.EmitLine("TASSIGN(" + decl_name + ", " + pointer_expr + ");");
+    return decl_name;
+}
+
+void CCECodegen::EmitGlobalTensorInstance(const std::string& instance_name, const std::string& decl_name,
+                                          const std::string& pointer_expr, const std::string& shape_args,
+                                          const std::string& stride_args)
+{
+    std::ostringstream instance;
+    instance << decl_name << "Type " << instance_name << "(" << pointer_expr;
+    // A fully static declaration (NZ) carries its shape and stride in the type and takes the
+    // pointer alone; everything else supplies them here.
+    if (!shape_args.empty() || !stride_args.empty()) {
+        instance << ", " << decl_name << "ShapeDim5(" << shape_args << "), " << decl_name << "StrideDim5("
+                 << stride_args << ")";
+    }
+    instance << ");";
+    emitter_.EmitLine(instance.str());
 }
 
 std::string CCECodegen::BuildDynamicNZTensorDimArg(const ir::TensorTypePtr& tensor_type, size_t axis)
@@ -3056,23 +3147,15 @@ void CCECodegen::EmitDynamicNZGlobalTensorDeclaration(
     emitter_.EmitLine("using " + global_type_name + " = GlobalTensor<" + element_type + ", " + shape_type_name + ", " +
                       stride_type_name + ", Layout::NZ>;");
 
-    std::ostringstream nz_instance;
-    nz_instance << global_type_name << " " << var_name << "(";
-    if (base_pointer.has_value()) {
-        nz_instance << base_pointer.value() << ", " << shape_type_name << "(" << row_arg << ", " << col_arg << "), "
-                    << stride_type_name << "(" << full_row_arg << ", " << full_col_arg << ")";
-    }
-    nz_instance << ");";
-    emitter_.EmitLine(nz_instance.str());
+    // Without a pointer there is nothing to bind, so the instance takes no ctor arguments.
+    const bool bound = base_pointer.has_value();
+    EmitGlobalTensorInstance(var_name, var_name, base_pointer.value_or(""), bound ? row_arg + ", " + col_arg : "",
+                             bound ? full_row_arg + ", " + full_col_arg : "");
 }
 
-std::string CCECodegen::BuildGlobalTensorLayoutArg(const std::string& stride_type_name,
-                                                   const std::vector<int64_t>& shape_dims, bool is_transpose) const
+bool CCECodegen::IsDNAccessLayout(const std::vector<int64_t>& shape_dims, bool is_transpose)
 {
-    if (*shape_dims.rbegin() == 1 || is_transpose) {
-        return stride_type_name + ", Layout::DN";
-    }
-    return stride_type_name;
+    return *shape_dims.rbegin() == 1 || is_transpose;
 }
 
 void CCECodegen::EmitNZGlobalTensorDeclaration(const TensorDef& def, const std::string& var_name,
@@ -3116,19 +3199,17 @@ void CCECodegen::EmitNZGlobalTensorDeclaration(const TensorDef& def, const std::
     emitter_.EmitLine("using " + global_type_name + " = GlobalTensor<" + element_type + ", " + shape_type_name + ", " +
                       stride_type_name + ", Layout::NZ>;");
 
-    std::ostringstream nz_instance;
-    nz_instance << global_type_name << " " << var_name << "(";
-    if (base_pointer.has_value()) {
-        nz_instance << base_pointer.value();
-    }
-    nz_instance << ");";
-    emitter_.EmitLine(nz_instance.str());
+    EmitGlobalTensorInstance(var_name, var_name, base_pointer.value_or(""), "", "");
 }
 
 void CCECodegen::GenerateGlobalTensorTypeDeclaration(const TensorDef& def)
 {
     INTERNAL_CHECK(def.var != nullptr) << "Internal error: TensorDef.var is null";
-    std::string var_name = context_.SanitizeName(def.var);
+    const std::string& var_name = def.cce_name;
+    // The base name owns the pointer, which every layout variant of the tensor shares;
+    // var_name carries this variant's declaration, so one tensor read both row-major and
+    // transposed gets one declaration of each.
+    const std::string base_name = context_.SanitizeName(def.var);
     auto tensor_type = ir::As<ir::TensorType>(def.var->GetType());
     INTERNAL_CHECK(tensor_type != nullptr) << "Internal error: TensorDef.var is not a tensor";
 
@@ -3141,15 +3222,15 @@ void CCECodegen::GenerateGlobalTensorTypeDeclaration(const TensorDef& def)
     // Non-NZ invariants: every accessed tensor has a tile-derived access_shape and a base
     // pointer registered before this point (params at signature build, ptr.make_tensor
     // views at their op).
-    INTERNAL_CHECK(HasPointer(var_name)) << "Internal error: tensor '" << var_name << "' has no base pointer";
+    INTERNAL_CHECK(HasPointer(base_name)) << "Internal error: tensor '" << base_name << "' has no base pointer";
     INTERNAL_CHECK(!def.access_shape.empty()) << "Internal error: tensor '" << var_name << "' has no access_shape";
 
     const bool is_transpose = def.is_transpose;
     const std::optional<std::vector<int>>& tile_dims = def.tile_dims;
-    const std::string base_pointer = GetPointer(var_name);
+    const std::string base_pointer = GetPointer(base_name);
 
-    // shape_dims: tile/access shape, used for the last-dim==1 DN detection and as the
-    // row-stride fallback. Must contain integer values (no -1).
+    // shape_dims: tile/access shape, used for the last-dim==1 DN detection. Must contain
+    // integer values (no -1).
     std::vector<int64_t> shape_dims = ExtractShapeDimensions(def.access_shape);
     std::string element_type = tensor_type->dtype_.ToCTypeString();
 
@@ -3157,19 +3238,29 @@ void CCECodegen::GenerateGlobalTensorTypeDeclaration(const TensorDef& def)
     std::string stride_type_name = var_name + "StrideDim5";
     std::string global_type_name = var_name + "Type";
 
-    // Shape and stride are always dynamic: Shape<1,1,1,-1,-1> + Stride<-1,-1,-1,-1,-1>.
-    // DIM_3/DIM_4 are configured per access via SetShape; the stride values are supplied
-    // through the instance ctor below.
-    emitter_.EmitLine("using " + shape_type_name + " = " + type_converter_.GenerateShapeType({-1, -1}) + ";");
-    emitter_.EmitLine("using " + stride_type_name + " = pto::Stride<-1, -1, -1, -1, -1>;");
+    // The layout this declaration walks the tensor with: named outright by an MX load,
+    // otherwise DN when the access is transposed or single-column, else ND.
+    const bool is_mx = !def.layout.empty();
+    const std::string layout_arg = is_mx ? def.layout :
+                                           (IsDNAccessLayout(shape_dims, is_transpose) ? "Layout::DN" : "Layout::ND");
 
-    // Layout: DN if last dim is 1 or if the def is flagged is_transpose.
-    std::string global_layout_arg = BuildGlobalTensorLayoutArg(stride_type_name, shape_dims, is_transpose);
+    // TileShape2D turns the access's (rows, cols) into the 5D Shape that *this* layout wants --
+    // MX divides the columns and pins a fractal dim, ND/DN pass them through -- so the mapping
+    // stays in the header that owns it rather than being restated per layout here. All of it is
+    // compile-time, so every variant's types are hoisted to the function prologue.
+    emitter_.EmitLine("using " + shape_type_name + " = pto::TileShape2D<" + element_type +
+                      ", pto::DYNAMIC, pto::DYNAMIC, " + layout_arg + ">;");
+    emitter_.EmitLine("using " + stride_type_name + " = " +
+                      (is_mx ? "pto::Stride<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, 1>" :
+                               "pto::Stride<-1, -1, -1, -1, -1>") +
+                      ";");
     emitter_.EmitLine("using " + global_type_name + " = GlobalTensor<" + element_type + ", " + shape_type_name + ", " +
-                      global_layout_arg + ">;");
+                      stride_type_name + ", " + layout_arg + ">;");
 
-    EmitGlobalTensorInstance(var_name, global_type_name, shape_type_name, stride_type_name, tensor_type, tile_dims,
-                             is_transpose, base_pointer);
+    // The strides depend only on the tensor and this variant's axes, so the instance is hoisted
+    // here for every layout; each access then rebinds it with SetShape + TASSIGN.
+    EmitGlobalTensorInstance(var_name, var_name, base_pointer, "",
+                             BuildAccessStrideArgs(tensor_type, tile_dims, is_transpose, is_mx));
 }
 
 } // namespace codegen

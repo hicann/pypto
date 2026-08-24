@@ -1212,7 +1212,7 @@ def _normalize_tile_pad(pad: "int | TilePad | None") -> "int | None":
         if pad not in _PAD_VALUES.values():
             raise ValueError("TileType.pad must be one of TilePad.null/zero/max/min")
         return pad
-    raise TypeError("TileType.pad must be a TilePad or integer 0/1/2/3")
+    raise TypeError("TileType.pad must be a enum TilePad or compile-time integer 0/1/2/3")
 
 
 def _apply_default_layout(tt: "TileType") -> None:

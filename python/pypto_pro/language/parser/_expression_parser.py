@@ -626,6 +626,34 @@ class ExpressionParserMixin:
                 result = fold_fn(result, operand, bool_dtype, span)
         return result
 
+    def _reject_ternary_branch(self, value: Any, node: ast.expr, branch: str, test_node: "ast.expr | None"):
+        """The one diagnostic for a ternary branch that has no value to select.
+
+        ``test_node`` is the condition when the ternary became a runtime select, and
+        None when it const-folded. The distinction is the whole message: a
+        compile-time enum is a legal branch once the condition folds (parse_ifexp
+        returns it directly), so it is the condition — not the branch — that makes
+        the same source text illegal here, and the diagnostic has to say so.
+        """
+        written = ast.unparse(node)
+        if test_node is not None and _is_enum_value(value):
+            raise ParserTypeError(
+                f"'{written}' has no runtime value, so a runtime condition cannot select it",
+                span=self.span_tracker.get_span(node),
+                hint=f"'{ast.unparse(test_node)}' is a runtime value, which makes this ternary a "
+                "runtime select rather than a compile-time choice. Give it a compile-time "
+                "condition — a Python constant, or a tiling_key field, which "
+                "@pl.jit(tiling_key=...) bakes to one constant per specialization — or write a "
+                "branch that has a runtime value.",
+            )
+        raise ParserTypeError(
+            f"the {branch} branch of this ternary has no value to select, got '{written}'",
+            span=self.span_tracker.get_span(node),
+            hint="Each branch must be a scalar, tile or tensor expression. A call that performs "
+            "an action rather than producing a value (pl.load(...), pl.store(...)) and a type "
+            "descriptor (pl.TileType(...)) have nothing to select.",
+        )
+
     def parse_ifexp(self, expr: ast.IfExp) -> ir.Expr:
         span = self.span_tracker.get_span(expr)
         test_node, is_constexpr = self._unwrap_constexpr(expr.test)
@@ -640,11 +668,7 @@ class ExpressionParserMixin:
             if _is_enum_value(result):
                 return result
             if not isinstance(result, ir.Expr):
-                raise ParserTypeError(
-                    "Ternary expression branch must return an IR expression",
-                    span=span,
-                    hint="Ensure the chosen branch of the ternary expression is a valid expression",
-                )
+                self._reject_ternary_branch(result, chosen, "chosen", None)
             return result
 
         tmp_name = f"_ifexpr_tmp_{self._ifexpr_tmp_counter}"
@@ -653,11 +677,7 @@ class ExpressionParserMixin:
         with self.builder.if_stmt(condition, span) as if_builder:
             then_value = self.parse_expression(expr.body, nested=False)
             if not isinstance(then_value, ir.Expr):
-                raise ParserTypeError(
-                    "Ternary expression branch must return an IR expression",
-                    span=span,
-                    hint="Ensure the 'then' branch of the ternary expression is a valid expression",
-                )
+                self._reject_ternary_branch(then_value, expr.body, "then", test_node)
             # auto_mutex: for a tile ternary, yield the chosen tile's mutex id alongside the
             # tile so ConvertToSSA phi-merges the id in lockstep with the pointer (arbitrary
             # nesting). Probe each branch's id expr; both must be tiles-with-meta to add it.
@@ -676,11 +696,7 @@ class ExpressionParserMixin:
             if_builder.else_(span)
             else_value = self.parse_expression(expr.orelse, nested=False)
             if not isinstance(else_value, ir.Expr):
-                raise ParserTypeError(
-                    "Ternary expression branch must return an IR expression",
-                    span=span,
-                    hint="Ensure the 'else' branch of the ternary expression is a valid expression",
-                )
+                self._reject_ternary_branch(else_value, expr.orelse, "else", test_node)
             if not ir.structural_equal(
                 then_value.type, else_value.type, enable_auto_mapping=False
             ) and not _scalar_branches_reconcilable(then_value.type, else_value.type):
@@ -689,7 +705,9 @@ class ExpressionParserMixin:
                     f"then-branch has type {then_value.type}, "
                     f"else-branch has type {else_value.type}",
                     span=span,
-                    hint="Ensure both branches of the ternary expression have the same type",
+                    hint="A ternary yields one value, so both branches must land in the same "
+                    "variable: cast the narrower branch, or split the ternary into an if/else "
+                    "that assigns each type separately.",
                 )
             # Same-category scalar branches with differing dtypes (e.g. INT32 vs INDEX)
             # are promoted to a common dtype when the if statement is finalized.

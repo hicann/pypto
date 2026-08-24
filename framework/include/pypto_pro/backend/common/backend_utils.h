@@ -57,6 +57,18 @@ namespace cce {
 std::string ComputeStrideBasedOffset(codegen::CCECodegen& codegen, const ir::MakeTuplePtr& offsets,
                                      const ir::TensorTypePtr& tensor_type);
 bool IsNZTensorType(const ir::TensorTypePtr& tensor_type);
+/// Whether a block.load is an MX scale load. Such a load declares its own GlobalTensor at the
+/// op -- TileShape2D maps rows/cols into layout-specific dims that the shared per-layout
+/// declaration cannot express -- so it never reads the prologue declaration.
+bool IsMXLoad(const ir::TensorTypePtr& tensor_type, const ir::TileTypePtr& tile_type);
+/// Whether *op* is a block.load that lowers through the MX path (see IsMXLoad).
+bool IsMXLoadCall(const ir::CallPtr& op);
+/// The Layout enum an MX load walks its tensor with: the A/B role comes from the destination
+/// tile's block layout, ND vs DN from the access order. Empty when *op* is not an MX load.
+std::string MXLoadLayoutName(const ir::CallPtr& op);
+/// The two tensor axes an MX load walks, defaulted from the rank when no order was given, with
+/// the MX preconditions checked (a trailing physical phase axis of 2, never selected as an axis).
+std::vector<int> MXLoadTileDims(const ir::CallPtr& op, const ir::TensorTypePtr& tensor_type);
 int64_t GetNZInnerCols(const ir::DataType& dtype,
                        const std::string& error_prefix = "CCE NZ tensor lowering does not support dtype ");
 void ValidateStoreNZPreconditions(const std::string& op_name, const ir::ExprPtr& src_expr,

@@ -125,77 +125,6 @@ static std::string GetReluPreModeCCE(int relu)
     return ir::EnumToString(mode);
 }
 
-static std::string BuildContiguousAxisStride(codegen::CCECodegen& codegen, const ir::TensorTypePtr& tensor_type,
-                                             int axis)
-{
-    std::string stride = "1";
-    for (int i = static_cast<int>(tensor_type->shape_.size()) - 1; i > axis; --i) {
-        const std::string dim = codegen.GetExprAsCode(tensor_type->shape_[static_cast<size_t>(i)]);
-        stride = "(" + dim + " * " + stride + ")";
-    }
-    return stride;
-}
-
-static bool IsMXLoad(const ir::TensorTypePtr& tensor_type, const ir::TileTypePtr& tile_type)
-{
-    if (tensor_type->dtype_ != ir::DataType::FP8E8M0 || tile_type->dtype_ != ir::DataType::FP8E8M0 ||
-        !tile_type->memref_.has_value() || tile_type->memref_.value()->memorySpace_ != ir::MemorySpace::Mat ||
-        !tile_type->hardwareInfo_.has_value()) {
-        return false;
-    }
-
-    const auto& hw = tile_type->hardwareInfo_.value();
-    const bool is_zz = hw.blayout == ir::TileLayout::row_major && hw.slayout == ir::TileLayout::row_major;
-    const bool is_nn = hw.blayout == ir::TileLayout::col_major && hw.slayout == ir::TileLayout::col_major;
-    return hw.fractal == 32 && (is_zz || is_nn);
-}
-
-static std::vector<int> ResolveMXLoadTileDims(const ir::CallPtr& op, const ir::TensorTypePtr& tensor_type)
-{
-    const int rank = static_cast<int>(tensor_type->shape_.size());
-    // MX scale tensors carry a trailing physical phase axis of size 2.
-    IRCHECK(rank >= 3) << "MX scale load requires at least two matrix axes and one physical phase axis at "
-                       << op->span_.ToString();
-    const auto phase_dim = ir::As<ir::ConstInt>(tensor_type->shape_.back());
-    IRCHECK(phase_dim != nullptr && phase_dim->value_ == 2)
-        << "MX scale load trailing physical phase axis must be statically equal to 2 at " << op->span_.ToString();
-    const std::vector<int> tile_dims = op->HasKwarg("tile_dims") ? op->GetKwarg<std::vector<int>>("tile_dims") :
-                                                                   std::vector<int>{rank - 3, rank - 2};
-    IRCHECK(tile_dims[0] != rank - 1 && tile_dims[1] != rank - 1)
-        << "MX scale load order cannot select the trailing physical phase axis at " << op->span_.ToString();
-    return tile_dims;
-}
-
-static void EmitMXLoad(codegen::CCECodegen& codegen, const ir::CallPtr& op, const ir::TensorTypePtr& tensor_type,
-                       const ir::TileTypePtr& tile_type, const std::vector<int>& tile_dims, const std::string& offset,
-                       const std::string& src_ptr, const std::string& out_name)
-{
-    const auto& hw = tile_type->hardwareInfo_.value();
-    const bool is_scale_a = hw.blayout == ir::TileLayout::row_major;
-
-    const bool is_dn = op->HasKwarg("is_transpose") && op->GetKwarg<bool>("is_transpose");
-    const char* layout_name = is_scale_a ? (is_dn ? "Layout::MX_A_DN" : "Layout::MX_A_ND") :
-                                           (is_dn ? "Layout::MX_B_DN" : "Layout::MX_B_ND");
-
-    const std::string major_stride = BuildContiguousAxisStride(codegen, tensor_type, tile_dims[0]);
-    const std::string minor_stride = BuildContiguousAxisStride(codegen, tensor_type, tile_dims[1]);
-    const std::string prefix = "mx_load_" + std::to_string(codegen.GetTileOffsetCounter());
-    const std::string shape_type = prefix + "Shape";
-    const std::string stride_type = prefix + "Stride";
-    const std::string global_type = prefix + "Type";
-    const std::string element_type = tensor_type->dtype_.ToCTypeString();
-
-    codegen.Emit("using " + shape_type + " = pto::TileShape2D<" + element_type + ", pto::DYNAMIC, pto::DYNAMIC, " +
-                 layout_name + ">;");
-    codegen.Emit("using " + stride_type + " = pto::Stride<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, 1>;");
-    codegen.Emit("using " + global_type + " = GlobalTensor<" + element_type + ", " + shape_type + ", " + stride_type +
-                 ", " + layout_name + ">;");
-    codegen.Emit(global_type + " " + prefix + "(" + src_ptr + " + " + offset + ", " + shape_type +
-                 "(static_cast<int64_t>(" + out_name + ".GetValidRow()), static_cast<int64_t>(" + out_name +
-                 ".GetValidCol())), " + stride_type + "(1, 1, " + major_stride + ", " + minor_stride + ", 1));");
-    codegen.Emit("TLOAD(" + out_name + ", " + prefix + ");");
-}
-
 static std::string GetSTPhaseCCE(const ir::CallPtr& op)
 {
     if (!op->HasKwarg("phase")) {
@@ -363,7 +292,7 @@ static std::string MakeBlockOutRowExpandCodegenCCE(const std::string& cce_op_nam
 }
 
 // ============================================================================
-// Helper: Emit SetShape<DIM_3, DIM_4> before TASSIGN.
+// Helper: the rows/cols an access transfers, read from its tile.
 // GlobalTensor shapes use Shape<1,1,1,-1,-1>; only DIM_3 and DIM_4 are dynamic.
 // Must NOT be called for NZ-layout tensors (their shape is fully static).
 //
@@ -378,12 +307,11 @@ static std::string MakeBlockOutRowExpandCodegenCCE(const std::string& cce_op_nam
 // (which cached the textually-last set_validshape and could not match the
 // runtime-taken branch).
 // ============================================================================
-static void EmitSetShapeFromTile(codegen::CCECodegen& codegen, const std::string& tensor_var,
-                                 const std::string& tile_cpp_name)
+// The rows/cols an access actually transfers, read from the destination tile's valid region.
+static std::string ValidShapeArgs(const std::string& tile_cpp_name)
 {
-    codegen.Emit(tensor_var + ".SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>(" +
-                 "static_cast<int64_t>(" + tile_cpp_name + ".GetValidRow()), " + "static_cast<int64_t>(" +
-                 tile_cpp_name + ".GetValidCol()));");
+    return "static_cast<int64_t>(" + tile_cpp_name + ".GetValidRow()), static_cast<int64_t>(" + tile_cpp_name +
+           ".GetValidCol())";
 }
 
 // ============================================================================
@@ -414,26 +342,15 @@ static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::Co
     auto src_tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(src_tensor_var_ptr->GetType());
     CHECK(src_tensor_type != nullptr) << "block.load source must be TensorType";
 
-    auto out_tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
-    const bool is_mx_load = IsMXLoad(src_tensor_type, out_tile_type);
-    std::vector<int> mx_tile_dims;
-    if (is_mx_load) {
-        mx_tile_dims = ResolveMXLoadTileDims(op, src_tensor_type);
-    }
-
     std::string offset = cce::ComputeStrideBasedOffset(codegen, offsets_tuple, src_tensor_type);
     std::string src_ptr = codegen.GetPointer(src_tensor_var);
     std::string out_name = codegen.GetExprAsCode(op->args_[0]);
 
-    if (is_mx_load) {
-        EmitMXLoad(codegen, op, src_tensor_type, out_tile_type, mx_tile_dims, offset, src_ptr, out_name);
-        return "";
-    }
-    if (!cce::IsNZTensorType(src_tensor_type)) {
-        EmitSetShapeFromTile(codegen, src_tensor_var, out_name);
-    }
-    codegen.Emit("TASSIGN(" + src_tensor_var + ", " + src_ptr + " + " + offset + ");");
-    codegen.Emit("TLOAD(" + out_name + ", " + src_tensor_var + ");");
+    // An NZ declaration carries its dims in the type and takes no resize.
+    const std::string bound = codegen.BindGlobalTensor(
+        src_tensor_var_ptr, op, src_ptr + " + " + offset,
+        cce::IsNZTensorType(src_tensor_type) ? "" : ValidShapeArgs(out_name));
+    codegen.Emit("TLOAD(" + out_name + ", " + bound + ");");
     return "";
 }
 
@@ -465,10 +382,9 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
     std::string offset = cce::ComputeStrideBasedOffset(codegen, offsets_tuple, dst_tensor_type);
     std::string dst_ptr = codegen.GetPointer(dst_tensor_var);
 
-    if (!cce::IsNZTensorType(dst_tensor_type)) {
-        EmitSetShapeFromTile(codegen, dst_tensor_var, src_tile);
-    }
-    codegen.Emit("TASSIGN(" + dst_tensor_var + ", " + dst_ptr + " + " + offset + ");");
+    const std::string dst_tensor_access = codegen.BindGlobalTensor(
+        dst_tensor_var_ptr, op, dst_ptr + " + " + offset,
+        cce::IsNZTensorType(dst_tensor_type) ? "" : ValidShapeArgs(src_tile));
 
     // Build template parameters: TSTORE<TileData, GlobalData, AtomicType, ReluPreMode>(dst, src, ...)
     // Per pto-isa: template order is <TileData, GlobalData, AtomicType, ReluPreMode>
@@ -489,7 +405,7 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
     std::string phase_template = GetSTPhaseCCE(op);
 
     // Build function arguments
-    std::string args = dst_tensor_var + ", " + src_tile;
+    std::string args = dst_tensor_access + ", " + src_tile;
 
     // pre_quant_scalar is an optional trailing operand (args_[3]), a UINT64 deqScalar matching
     // pto-isa: low 32 bits = float32 bit-pattern of the scale, bit46 = signed-int8 flag.
@@ -533,7 +449,7 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
         if (!phase_template.empty()) {
             tparams = phase_template + ", ";
         }
-        tparams += src_type + ", decltype(" + dst_tensor_var + "), AtomicType::AtomicNone, " + relu_template;
+        tparams += src_type + ", decltype(" + dst_tensor_access + "), AtomicType::AtomicNone, " + relu_template;
         codegen.Emit("TSTORE<" + tparams + ">(" + args + ");");
     } else if (op->args_.size() > 3) {
         // TSTORE<[STPhase,] TileData, GlobalData>(dst, src, preQuant)  -  default AtomicType & ReluPreMode
@@ -543,12 +459,12 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
         if (!phase_template.empty()) {
             tparams = phase_template + ", ";
         }
-        tparams += src_type + ", decltype(" + dst_tensor_var + ")";
+        tparams += src_type + ", decltype(" + dst_tensor_access + ")";
         codegen.Emit("TSTORE<" + tparams + ">(" + args + ");");
     } else if (!phase_template.empty()) {
         // TSTORE<STPhase, TileData, GlobalData>(dst, src) — phase-only path
         std::string src_type = TileTypeStringForTemplate(codegen, src_tile, op->args_[1]);
-        codegen.Emit("TSTORE<" + phase_template + ", " + src_type + ", decltype(" + dst_tensor_var + ")>(" + args +
+        codegen.Emit("TSTORE<" + phase_template + ", " + src_type + ", decltype(" + dst_tensor_access + ")>(" + args +
                      ");");
     } else {
         codegen.Emit("TSTORE(" + args + ");");
@@ -600,11 +516,10 @@ static std::string MakeBlockOutStoreFpCodegenCCE(const ir::CallPtr& op, codegen:
     std::string src_tile = codegen.GetExprAsCode(op->args_[1]);
     std::string fp_tile = codegen.GetExprAsCode(op->args_[2]);
 
-    if (!cce::IsNZTensorType(dst_tensor_type)) {
-        EmitSetShapeFromTile(codegen, dst_tensor_var, src_tile);
-    }
-    codegen.Emit("TASSIGN(" + dst_tensor_var + ", " + dst_ptr + " + " + offset + ");");
-    codegen.Emit("TSTORE_FP(" + dst_tensor_var + ", " + src_tile + ", " + fp_tile + ");");
+    const std::string dst_tensor_access = codegen.BindGlobalTensor(
+        dst_tensor_var_ptr, op, dst_ptr + " + " + offset,
+        cce::IsNZTensorType(dst_tensor_type) ? "" : ValidShapeArgs(src_tile));
+    codegen.Emit("TSTORE_FP(" + dst_tensor_access + ", " + src_tile + ", " + fp_tile + ");");
     return "";
 }
 

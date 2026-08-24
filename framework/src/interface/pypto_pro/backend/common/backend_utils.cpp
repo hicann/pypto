@@ -97,6 +97,56 @@ bool IsNZTensorType(const ir::TensorTypePtr& tensor_type)
            tensor_type->tensor_view_->layout == ir::TensorLayout::NZ;
 }
 
+bool IsMXLoad(const ir::TensorTypePtr& tensor_type, const ir::TileTypePtr& tile_type)
+{
+    if (!tensor_type || !tile_type || tensor_type->dtype_ != ir::DataType::FP8E8M0 ||
+        tile_type->dtype_ != ir::DataType::FP8E8M0 || !tile_type->memref_.has_value() ||
+        tile_type->memref_.value()->memorySpace_ != ir::MemorySpace::Mat || !tile_type->hardwareInfo_.has_value()) {
+        return false;
+    }
+
+    const auto& hw = tile_type->hardwareInfo_.value();
+    const bool is_zz = hw.blayout == ir::TileLayout::row_major && hw.slayout == ir::TileLayout::row_major;
+    const bool is_nn = hw.blayout == ir::TileLayout::col_major && hw.slayout == ir::TileLayout::col_major;
+    return hw.fractal == 32 && (is_zz || is_nn);
+}
+
+bool IsMXLoadCall(const ir::CallPtr& op)
+{
+    if (!op || op->name_ != "block.load" || op->args_.size() < 2) {
+        return false;
+    }
+    return IsMXLoad(ir::As<ir::TensorType>(op->args_[1]->GetType()), ir::As<ir::TileType>(op->args_[0]->GetType()));
+}
+
+std::vector<int> MXLoadTileDims(const ir::CallPtr& op, const ir::TensorTypePtr& tensor_type)
+{
+    const int rank = static_cast<int>(tensor_type->shape_.size());
+    // MX scale tensors carry a trailing physical phase axis of size 2.
+    IRCHECK(rank >= 3) << "MX scale load requires at least two matrix axes and one physical phase axis at "
+                       << op->span_.ToString();
+    const auto phase_dim = ir::As<ir::ConstInt>(tensor_type->shape_.back());
+    IRCHECK(phase_dim != nullptr && phase_dim->value_ == 2)
+        << "MX scale load trailing physical phase axis must be statically equal to 2 at " << op->span_.ToString();
+    const std::vector<int> tile_dims = op->HasKwarg("tile_dims") ? op->GetKwarg<std::vector<int>>("tile_dims") :
+                                                                   std::vector<int>{rank - 3, rank - 2};
+    IRCHECK(tile_dims[0] != rank - 1 && tile_dims[1] != rank - 1)
+        << "MX scale load order cannot select the trailing physical phase axis at " << op->span_.ToString();
+    return tile_dims;
+}
+
+std::string MXLoadLayoutName(const ir::CallPtr& op)
+{
+    if (!IsMXLoadCall(op)) {
+        return "";
+    }
+    const auto& hw = ir::As<ir::TileType>(op->args_[0]->GetType())->hardwareInfo_.value();
+    const bool is_scale_a = hw.blayout == ir::TileLayout::row_major;
+    const bool is_dn = op->GetKwarg<bool>("is_transpose", false);
+    return is_scale_a ? (is_dn ? "Layout::MX_A_DN" : "Layout::MX_A_ND") :
+                        (is_dn ? "Layout::MX_B_DN" : "Layout::MX_B_ND");
+}
+
 int64_t GetNZInnerCols(const ir::DataType& dtype, const std::string& error_prefix)
 {
     if (dtype == ir::DataType::BOOL || dtype == ir::DataType::INT8 || dtype == ir::DataType::UINT8) {

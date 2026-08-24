@@ -157,6 +157,35 @@ std::string RunSsbufCodegen(const std::string& op_name)
     return codegen.GenerateSingle(MakeProgram(body, {}, debug_info), "a5");
 }
 
+// A `tile = block.make_tile()` statement, which is what declares *tile* in the generated code.
+ir::StmtPtr MakeTileAssign(const ir::VarPtr& tile)
+{
+    auto make_tile = std::make_shared<const ir::Call>("block.make_tile", std::vector<ir::ExprPtr>{}, tile->GetType(),
+                                                      ir::Span::Unknown());
+    return std::make_shared<const ir::AssignStmt>(tile, make_tile, ir::Span::Unknown());
+}
+
+// Full codegen over a kernel whose body is *stmts* and whose parameters are *params*.
+std::string GenerateKernel(const std::vector<ir::StmtPtr>& stmts, const std::vector<ir::VarPtr>& params,
+                           ir::SectionKind section)
+{
+    auto body = std::make_shared<const ir::SeqStmts>(stmts, ir::Span::Unknown());
+    codegen::CCECodegen codegen(section);
+    return codegen.GenerateSingle(MakeProgram(body, params), "a5");
+}
+
+// One MX scale load, run through full codegen: declare *tile*, then load it from tensor *scale*.
+// An MX load emits no declaration of its own -- the prologue prescan records one GlobalTensor
+// per (tensor, layout) and the load binds the one matching its own layout -- so the inferred
+// layout is only observable over a whole function.
+std::string GenerateMxLoadKernel(const ir::VarPtr& scale, const ir::VarPtr& tile, const std::vector<int64_t>& offsets,
+                                 std::vector<std::pair<std::string, std::any>> kwargs = {})
+{
+    auto load = MakeCallWithKwargs("block.load", {tile, scale, MakeOffsets(offsets)}, std::move(kwargs));
+    return GenerateKernel({MakeTileAssign(tile), std::make_shared<const ir::EvalStmt>(load, ir::Span::Unknown())},
+                          {scale}, ir::SectionKind::Cube);
+}
+
 #define EXPECT_CONTAINS(haystack, needle)                                                                          \
     do {                                                                                                           \
         const auto& haystack_value = (haystack);                                                                   \
@@ -625,67 +654,47 @@ TEST(BackendCCEBlockOutOps, Load)
 
 TEST(BackendCCEBlockOutOps, InfersHighDimensionalMxScaleLoadFromDestinationAndOrder)
 {
-    auto tensor_type = MakeTensorType({2, 64, 3, 3, 2}, ir::DataType::FP8E8M0);
     auto zz_hw = ir::HardwareInfo(ir::TileLayout::row_major, ir::TileLayout::row_major, 32);
     auto nn_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::col_major, 32);
     auto zz_tile = MakeTileType({64, 6}, ir::DataType::FP8E8M0, MakeMemRef(ir::MemorySpace::Mat), zz_hw);
     auto nn_tile = MakeTileType({6, 64}, ir::DataType::FP8E8M0, MakeMemRef(ir::MemorySpace::Mat), nn_hw);
-    auto* info = BackendCCE::Instance().GetOpInfo("block.load");
-    ASSERT_NE(info, nullptr);
 
-    TestableCCECodegen a_codegen(ir::SectionKind::Cube);
-    a_codegen.RegisterPointer("scale_a", "scale_a_ptr");
-    auto a_load = MakeCallWithKwargs(
-        "block.load", {MakeVar("out_a", zz_tile), MakeVar("scale_a", tensor_type), MakeOffsets({1, 4, 2, 1, 0})},
-        {{"tile_dims", std::vector<int>{1, 3}}});
-    EXPECT_NO_THROW(info->codegen_func(a_load, a_codegen));
-    const auto a_code = a_codegen.GetEmittedCode();
+    const auto a_code = GenerateMxLoadKernel(MakeTensorVar("scale_a", {2, 64, 3, 3, 2}, ir::DataType::FP8E8M0),
+                                             MakeVar("out_a", zz_tile), {1, 4, 2, 1, 0},
+                                             {{"tile_dims", std::vector<int>{1, 3}}});
     EXPECT_CONTAINS(a_code, "pto::TileShape2D<float8_e8m0_t");
     EXPECT_CONTAINS(a_code, "Layout::MX_A_ND");
     EXPECT_CONTAINS(a_code, "pto::Stride<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, 1>");
-    EXPECT_CONTAINS(a_code, "scale_a_ptr +");
-    EXPECT_CONTAINS(a_code, "(1, 1, (3 * (3 * (2 * 1))), (2 * 1), 1)");
-    EXPECT_CONTAINS(a_code, "TLOAD(out_a, mx_load_0);");
-    EXPECT_NOT_CONTAINS(a_code, "TASSIGN(scale_a");
+    EXPECT_CONTAINS(a_code, "scale_a_0StrideDim5(1, 1, 3 * 3 * 2, 2, 1)");
+    EXPECT_CONTAINS(a_code, "TASSIGN(scale_a_0, scale_a_0_ptr + (1 * (64 * 3 * 3 * 2) + 4 * (3 * 3 * 2) + 2 * (3 * 2) "
+                            "+ 1 * (2) + 0));");
+    EXPECT_CONTAINS(a_code, "TLOAD(out_a_0, scale_a_0);");
 
-    TestableCCECodegen b_codegen(ir::SectionKind::Cube);
-    b_codegen.RegisterPointer("scale_b", "scale_b_ptr");
-    auto b_load = MakeCallWithKwargs(
-        "block.load", {MakeVar("out_b", nn_tile), MakeVar("scale_b", tensor_type), MakeOffsets({1, 4, 2, 1, 0})},
-        {{"tile_dims", std::vector<int>{1, 3}}, {"is_transpose", true}});
-    EXPECT_NO_THROW(info->codegen_func(b_load, b_codegen));
-    const auto b_code = b_codegen.GetEmittedCode();
+    const auto b_code = GenerateMxLoadKernel(MakeTensorVar("scale_b", {2, 64, 3, 3, 2}, ir::DataType::FP8E8M0),
+                                             MakeVar("out_b", nn_tile), {1, 4, 2, 1, 0},
+                                             {{"tile_dims", std::vector<int>{1, 3}}, {"is_transpose", true}});
     EXPECT_CONTAINS(b_code, "Layout::MX_B_DN");
-    EXPECT_CONTAINS(b_code, "TLOAD(out_b, mx_load_0);");
+    EXPECT_CONTAINS(b_code, "TLOAD(out_b_0, scale_b_0);");
 }
 
 TEST(BackendCCEBlockOutOps, RejectsMxScaleLoadSelectingPhysicalPhaseAxis)
 {
-    auto tensor_type = MakeTensorType({64, 1, 2}, ir::DataType::FP8E8M0);
     auto zz_hw = ir::HardwareInfo(ir::TileLayout::row_major, ir::TileLayout::row_major, 32);
     auto zz_tile = MakeTileType({64, 2}, ir::DataType::FP8E8M0, MakeMemRef(ir::MemorySpace::Mat), zz_hw);
-    auto load = MakeCallWithKwargs("block.load",
-                                   {MakeVar("out", zz_tile), MakeVar("scale", tensor_type), MakeOffsets({0, 0, 0})},
-                                   {{"tile_dims", std::vector<int>{1, 2}}});
-    auto* info = BackendCCE::Instance().GetOpInfo("block.load");
-    ASSERT_NE(info, nullptr);
+    auto scale = MakeTensorVar("scale", {64, 1, 2}, ir::DataType::FP8E8M0);
 
-    TestableCCECodegen codegen(ir::SectionKind::Cube);
-    EXPECT_THROW(info->codegen_func(load, codegen), ir::ValueError);
+    EXPECT_THROW(
+        GenerateMxLoadKernel(scale, MakeVar("out", zz_tile), {0, 0, 0}, {{"tile_dims", std::vector<int>{1, 2}}}),
+        ir::ValueError);
 }
 
 TEST(BackendCCEBlockOutOps, RejectsMxScaleLoadWithInvalidPhysicalPhaseExtent)
 {
-    auto tensor_type = MakeTensorType({64, 1, 3}, ir::DataType::FP8E8M0);
     auto zz_hw = ir::HardwareInfo(ir::TileLayout::row_major, ir::TileLayout::row_major, 32);
     auto zz_tile = MakeTileType({64, 2}, ir::DataType::FP8E8M0, MakeMemRef(ir::MemorySpace::Mat), zz_hw);
-    auto load = MakeCallWithKwargs(
-        "block.load", {MakeVar("out", zz_tile), MakeVar("scale", tensor_type), MakeOffsets({0, 0, 0})}, {});
-    auto* info = BackendCCE::Instance().GetOpInfo("block.load");
-    ASSERT_NE(info, nullptr);
+    auto scale = MakeTensorVar("scale", {64, 1, 3}, ir::DataType::FP8E8M0);
 
-    TestableCCECodegen codegen(ir::SectionKind::Cube);
-    EXPECT_THROW(info->codegen_func(load, codegen), ir::ValueError);
+    EXPECT_THROW(GenerateMxLoadKernel(scale, MakeVar("out", zz_tile), {0, 0, 0}), ir::ValueError);
 }
 
 TEST(BackendCCEBlockOutOps, InfersAllMxScaleLayouts)
@@ -694,110 +703,92 @@ TEST(BackendCCEBlockOutOps, InfersAllMxScaleLayouts)
     auto nn_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::col_major, 32);
     auto zz_tile = MakeTileType({64, 6}, ir::DataType::FP8E8M0, MakeMemRef(ir::MemorySpace::Mat), zz_hw);
     auto nn_tile = MakeTileType({6, 64}, ir::DataType::FP8E8M0, MakeMemRef(ir::MemorySpace::Mat), nn_hw);
-    auto* info = BackendCCE::Instance().GetOpInfo("block.load");
-    ASSERT_NE(info, nullptr);
 
     auto infer = [&](const std::vector<int64_t>& tensor_shape, const ir::TypePtr& tile,
                      const std::vector<int64_t>& offsets, bool is_transpose) {
-        auto tensor = MakeVar("scale", MakeTensorType(tensor_shape, ir::DataType::FP8E8M0));
         std::vector<std::pair<std::string, std::any>> kwargs;
         if (is_transpose) {
             kwargs.emplace_back("is_transpose", true);
         }
-        auto load = MakeCallWithKwargs("block.load", {MakeVar("out", tile), tensor, MakeOffsets(offsets)}, kwargs);
-        TestableCCECodegen codegen(ir::SectionKind::Cube);
-        codegen.RegisterPointer("scale", "scale_ptr");
-        EXPECT_NO_THROW(info->codegen_func(load, codegen));
-        return codegen.GetEmittedCode();
+        return GenerateMxLoadKernel(MakeTensorVar("scale", tensor_shape, ir::DataType::FP8E8M0), MakeVar("out", tile),
+                                    offsets, kwargs);
     };
 
     const auto a_nd = infer({64, 3, 2}, zz_tile, {4, 1, 0}, false);
     EXPECT_CONTAINS(a_nd, "Layout::MX_A_ND");
-    EXPECT_CONTAINS(a_nd, "(1, 1, (3 * (2 * 1)), (2 * 1), 1)");
+    EXPECT_CONTAINS(a_nd, "scale_0StrideDim5(1, 1, 3 * 2, 2, 1)");
     EXPECT_CONTAINS(a_nd, "4 * (3 * 2) + 1 * (2) + 0");
 
     const auto a_dn = infer({3, 64, 2}, zz_tile, {1, 4, 0}, true);
     EXPECT_CONTAINS(a_dn, "Layout::MX_A_DN");
-    EXPECT_CONTAINS(a_dn, "(1, 1, (64 * (2 * 1)), (2 * 1), 1)");
+    EXPECT_CONTAINS(a_dn, "scale_0StrideDim5(1, 1, 64 * 2, 2, 1)");
     EXPECT_CONTAINS(a_dn, "1 * (64 * 2) + 4 * (2) + 0");
 
     const auto b_nd = infer({3, 64, 2}, nn_tile, {1, 4, 0}, false);
     EXPECT_CONTAINS(b_nd, "Layout::MX_B_ND");
-    EXPECT_CONTAINS(b_nd, "(1, 1, (64 * (2 * 1)), (2 * 1), 1)");
+    EXPECT_CONTAINS(b_nd, "scale_0StrideDim5(1, 1, 64 * 2, 2, 1)");
     EXPECT_CONTAINS(b_nd, "1 * (64 * 2) + 4 * (2) + 0");
 
     const auto b_dn = infer({64, 3, 2}, nn_tile, {4, 1, 0}, true);
     EXPECT_CONTAINS(b_dn, "Layout::MX_B_DN");
-    EXPECT_CONTAINS(b_dn, "(1, 1, (3 * (2 * 1)), (2 * 1), 1)");
+    EXPECT_CONTAINS(b_dn, "scale_0StrideDim5(1, 1, 3 * 2, 2, 1)");
     EXPECT_CONTAINS(b_dn, "4 * (3 * 2) + 1 * (2) + 0");
 }
 
 TEST(BackendCCEBlockOutOps, InfersMxScaleLoadWithMiddleGroupAxis)
 {
-    auto tensor_type = MakeTensorType({2, 3, 3, 64, 2}, ir::DataType::FP8E8M0);
     auto nn_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::col_major, 32);
     auto nn_tile = MakeTileType({6, 64}, ir::DataType::FP8E8M0, MakeMemRef(ir::MemorySpace::Mat), nn_hw);
-    auto* info = BackendCCE::Instance().GetOpInfo("block.load");
-    ASSERT_NE(info, nullptr);
 
-    TestableCCECodegen codegen(ir::SectionKind::Cube);
-    codegen.RegisterPointer("scale", "scale_ptr");
-    auto load = MakeCallWithKwargs(
-        "block.load", {MakeVar("out", nn_tile), MakeVar("scale", tensor_type), MakeOffsets({1, 1, 1, 4, 0})},
-        {{"tile_dims", std::vector<int>{1, 3}}});
-    EXPECT_NO_THROW(info->codegen_func(load, codegen));
-    const auto generated = codegen.GetEmittedCode();
+    const auto generated = GenerateMxLoadKernel(MakeTensorVar("scale", {2, 3, 3, 64, 2}, ir::DataType::FP8E8M0),
+                                                MakeVar("out", nn_tile), {1, 1, 1, 4, 0},
+                                                {{"tile_dims", std::vector<int>{1, 3}}});
     EXPECT_CONTAINS(generated, "Layout::MX_B_ND");
-    EXPECT_CONTAINS(generated, "(1, 1, (3 * (64 * (2 * 1))), (2 * 1), 1)");
+    EXPECT_CONTAINS(generated, "scale_0StrideDim5(1, 1, 3 * 64 * 2, 2, 1)");
     EXPECT_CONTAINS(generated, "1 * (3 * 3 * 64 * 2) + 1 * (3 * 64 * 2) + 1 * (64 * 2) + 4 * (2) + 0");
 }
 
+// One tensor read with two layouts gets one declaration per layout -- the second one named
+// "__v1" -- and each load binds the one matching its own layout.
 TEST(BackendCCEBlockOutOps, InfersMxLayoutPerLoadForSameTensor)
 {
-    auto tensor_type = MakeTensorType({64, 32, 2}, ir::DataType::FP8E8M0);
-    auto tensor = MakeVar("scale", tensor_type);
+    auto tensor = MakeTensorVar("scale", {64, 32, 2}, ir::DataType::FP8E8M0);
     auto zz_hw = ir::HardwareInfo(ir::TileLayout::row_major, ir::TileLayout::row_major, 32);
     auto nn_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::col_major, 32);
     auto zz_tile = MakeTileType({64, 64}, ir::DataType::FP8E8M0, MakeMemRef(ir::MemorySpace::Mat), zz_hw);
     auto nn_tile = MakeTileType({64, 64}, ir::DataType::FP8E8M0, MakeMemRef(ir::MemorySpace::Mat), nn_hw);
-    auto* info = BackendCCE::Instance().GetOpInfo("block.load");
-    ASSERT_NE(info, nullptr);
+    auto out_a = MakeVar("out_a", zz_tile);
+    auto out_b = MakeVar("out_b", nn_tile);
 
-    TestableCCECodegen codegen(ir::SectionKind::Cube);
-    codegen.RegisterPointer("scale", "scale_ptr");
-    auto a_load = MakeCallWithKwargs("block.load", {MakeVar("out_a", zz_tile), tensor, MakeOffsets({0, 0, 0})},
+    auto a_load = MakeCallWithKwargs("block.load", {out_a, tensor, MakeOffsets({0, 0, 0})},
                                      {{"tile_dims", std::vector<int>{0, 1}}});
-    auto b_load = MakeCallWithKwargs("block.load", {MakeVar("out_b", nn_tile), tensor, MakeOffsets({0, 0, 0})},
+    auto b_load = MakeCallWithKwargs("block.load", {out_b, tensor, MakeOffsets({0, 0, 0})},
                                      {{"tile_dims", std::vector<int>{0, 1}}, {"is_transpose", true}});
-    EXPECT_NO_THROW(info->codegen_func(a_load, codegen));
-    EXPECT_NO_THROW(info->codegen_func(b_load, codegen));
-    const auto generated = codegen.GetEmittedCode();
-    EXPECT_CONTAINS(generated, "Layout::MX_A_ND");
-    EXPECT_CONTAINS(generated, "Layout::MX_B_DN");
-    EXPECT_CONTAINS(generated, "TLOAD(out_a, mx_load_0);");
-    EXPECT_CONTAINS(generated, "TLOAD(out_b, mx_load_1);");
+    const auto generated = GenerateKernel({MakeTileAssign(out_a), MakeTileAssign(out_b),
+                                           std::make_shared<const ir::EvalStmt>(a_load, ir::Span::Unknown()),
+                                           std::make_shared<const ir::EvalStmt>(b_load, ir::Span::Unknown())},
+                                          {tensor}, ir::SectionKind::Cube);
+    EXPECT_CONTAINS(generated, "using scale_0Type = GlobalTensor<float8_e8m0_t, scale_0ShapeDim5, scale_0StrideDim5, "
+                               "Layout::MX_A_ND>;");
+    EXPECT_CONTAINS(generated, "using scale_0__v1Type = GlobalTensor<float8_e8m0_t, scale_0__v1ShapeDim5, "
+                               "scale_0__v1StrideDim5, Layout::MX_B_DN>;");
+    EXPECT_CONTAINS(generated, "TLOAD(out_a_0, scale_0);");
+    EXPECT_CONTAINS(generated, "TLOAD(out_b_0, scale_0__v1);");
 }
 
-TEST(BackendCCEBlockOutOps, EmitsInferredMxViewAtEachLoad)
+// The inferred MX view is a GlobalTensor declaration hoisted to the prologue; each load resizes
+// and rebinds that one instance rather than emitting a view of its own.
+TEST(BackendCCEBlockOutOps, HoistsInferredMxViewToPrologue)
 {
-    auto tensor = MakeTensorVar("scale", {64, 1, 2}, ir::DataType::FP8E8M0);
     auto zz_hw = ir::HardwareInfo(ir::TileLayout::row_major, ir::TileLayout::row_major, 32);
     auto tile_type = MakeTileType({64, 2}, ir::DataType::FP8E8M0, MakeMemRef(ir::MemorySpace::Mat), zz_hw);
-    auto tile = MakeVar("tile", tile_type);
-    auto make_tile = std::make_shared<const ir::Call>("block.make_tile", std::vector<ir::ExprPtr>{}, tile_type,
-                                                      ir::Span::Unknown());
-    auto tile_assign = std::make_shared<const ir::AssignStmt>(tile, make_tile, ir::Span::Unknown());
-    auto load = MakeCallWithKwargs("block.load", {tile, tensor, MakeOffsets({0, 0, 0})},
-                                   {{"tile_dims", std::vector<int>{0, 1}}});
-    auto body = std::make_shared<const ir::SeqStmts>(
-        std::vector<ir::StmtPtr>{tile_assign, std::make_shared<const ir::EvalStmt>(load, ir::Span::Unknown())},
-        ir::Span::Unknown());
 
-    codegen::CCECodegen codegen(ir::SectionKind::Cube);
-    const auto generated = codegen.GenerateSingle(MakeProgram(body, {tensor}), "a5");
-    EXPECT_CONTAINS(generated, "using mx_load_0Shape = pto::TileShape2D<float8_e8m0_t");
-    EXPECT_CONTAINS(generated, "TLOAD(tile");
-    EXPECT_CONTAINS(generated, ", mx_load_0);");
+    const auto generated = GenerateMxLoadKernel(MakeTensorVar("scale", {64, 1, 2}, ir::DataType::FP8E8M0),
+                                                MakeVar("tile", tile_type), {0, 0, 0},
+                                                {{"tile_dims", std::vector<int>{0, 1}}});
+    EXPECT_CONTAINS(generated, "using scale_0ShapeDim5 = pto::TileShape2D<float8_e8m0_t");
+    EXPECT_CONTAINS(generated, "scale_0.SetShape<pto::GlobalTensorDim::DIM_2, pto::GlobalTensorDim::DIM_3>");
+    EXPECT_CONTAINS(generated, "TLOAD(tile_0, scale_0);");
 }
 
 TEST(BackendCCEBlockOutOps, Store)

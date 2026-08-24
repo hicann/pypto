@@ -596,6 +596,21 @@ def test_tile_type_shape_rejects_a_bool_element():
         _parse_kernel(k)
 
 
+def test_pad_need_compile_time_value():
+    @pl.kernel
+    def k(x: pl.Tensor[[64], pl.DT_FP16], pad_mode: pl.DT_INT64):
+        tt = pl.TileType(
+            shape=[64],
+            dtype=pl.DT_FP16,
+            target_memory=pl.MemorySpace.Vec,
+            pad=pl.TilePad.zero if pad_mode else 0,
+        )
+        t = pl.make_tile(tt, addr=0, size=None)
+        pl.load(t, x, [0])
+
+    with pytest.raises(ParserTypeError, match="ErrCode: F00001, 'pl.TilePad.zero' has no runtime value"):
+        _parse_kernel(k)
+
 def test_tile_type_valid_shape_rejects_a_runtime_element():
     """set_validshape() is the runtime path; the TileType field is parse-time only."""
 

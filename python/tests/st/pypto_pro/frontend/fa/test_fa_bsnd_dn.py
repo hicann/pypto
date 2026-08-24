@@ -101,49 +101,6 @@ P_READY_IDS = (2, 3)
 PV_READY_IDS = (4, 5)
 
 
-def alloc_cube_buffer():
-    q_mat_type = pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN)
-    q_mat_0 = pl.make_tile(q_mat_type, addr=MA0, size=Q_F16)
-    q_mat_1 = pl.make_tile(q_mat_type, addr=MA0_PONG, size=Q_F16)
-    k_mat_type = pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-    k_mat_0 = pl.make_tile(k_mat_type, addr=MA1, size=KT_F16)
-    k_mat_1 = pl.make_tile(k_mat_type, addr=MA1_PONG, size=KT_F16)
-    v_mat_type = pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-    v_mat_0 = pl.make_tile(v_mat_type, addr=MA3, size=V_F16)
-    v_mat_1 = pl.make_tile(v_mat_type, addr=MA3_PONG, size=V_F16)
-    left_0 = pl.make_tile(
-        pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addr=LA0,
-        size=KT_F16,
-    )
-    left_1 = pl.make_tile(
-        pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-        addr=LA1,
-        size=KT_F16,
-    )
-    right_0 = pl.make_tile(
-        pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right), addr=RA0, size=Q_F16
-    )
-    right_1 = pl.make_tile(
-        pl.TileType(shape=[TD, TS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right), addr=RA1, size=Q_F16
-    )
-    acc_0 = pl.make_tile(
-        pl.TileType(shape=[TKV, TS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc), addr=CA0, size=QK_F32
-    )
-    acc_1 = pl.make_tile(
-        pl.TileType(shape=[TS, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc), addr=CA1, size=PV_F32
-    )
-    return (
-        (q_mat_0, q_mat_1),
-        (k_mat_0, k_mat_1),
-        (v_mat_0, v_mat_1),
-        (left_0, left_1),
-        (right_0, right_1),
-        acc_0,
-        acc_1,
-    )
-
-
 def compute_qk(
     b_idx: pl.DT_INT64,
     n_idx: pl.DT_INT64,

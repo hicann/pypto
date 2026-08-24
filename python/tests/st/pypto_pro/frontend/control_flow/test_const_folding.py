@@ -31,6 +31,7 @@ _FP32_INT32 = (pl.DT_FP32, pl.DT_INT32)
 
 TILE_M = 128
 TILE_N = 128
+PAD_MODE = 1
 mutex_ids23 = [1, 2]
 A = 0x1000
 
@@ -45,7 +46,8 @@ def add_kernel(
     y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec,
+                            pad=pl.TilePad.zero if PAD_MODE else 0)
     a = 0x0000
     addrs = a
     addrs_real = addrs
