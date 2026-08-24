@@ -1,40 +1,40 @@
 function foo incast(logical_tensor %x, logical_tensor %y, logical_tensor %z) outcast() #type(Opaque) #entry(false) {
-    int64_t %i_0, logical_tensor %s0_0, logical_tensor %t0_1, logical_tensor %t1_1, logical_tensor %z_3 = for %loop_idx_20 inrange 0, 2, 1 iter {none %i = %None;none %s0 = %None;none %t0 = %None;none %t1 = %None;logical_tensor %z_1 = %z;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
-        logical_tensor %t0_0, logical_tensor %t1_2, logical_tensor %$6_1, logical_tensor %z_7 = if scalar_expr then {
-            logical_tensor %$0_0, logical_tensor %t1_0, logical_tensor %$6_0, logical_tensor %z_5 = if scalar_expr then {
+    int64_t %i_0, logical_tensor %s0_0, logical_tensor %t0_1, logical_tensor %t1_1, logical_tensor %z_5 = for %loop_idx_20 inrange 0, 2, 1 iter {none %i = %None;none %s0 = %None;none %t0 = %None;none %t1 = %None;logical_tensor %z_1 = %z;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        logical_tensor %t0_0, logical_tensor %t1_2, logical_tensor %$6_1, logical_tensor %z_9 = if scalar_expr then {
+            logical_tensor %$0_0, logical_tensor %t1_0, logical_tensor %$6_0, logical_tensor %z_7 = if scalar_expr then {
                 logical_tensor %$0 = ADD(%x, %y) token();
                 logical_tensor %$3 = ADD(%$0, %y) token();
                 logical_tensor %$6 = ADD(%$3, %x) token();
-                logical_tensor %z_1 = ASSEMBLE(%$6) token();
-                yield %$0, %$3, %$6, %z_1;
+                logical_tensor %z_3 = ASSEMBLE(%$6) token();
+                yield %$0, %$3, %$6, %z_3;
             }
             else {
                 logical_tensor %$0_1 = ADD(%x, %y) token();
                 logical_tensor %$4 = SUB(%$0_1, %y) token();
                 logical_tensor %$6_2 = ADD(%$4, %x) token();
-                logical_tensor %z_9 = ASSEMBLE(%$6_2) token();
-                yield %$0_1, %$4, %$6_2, %z_9;
+                logical_tensor %z_11 = ASSEMBLE(%$6_2) token();
+                yield %$0_1, %$4, %$6_2, %z_11;
             }
-            yield %$0_0, %t1_0, %$6_0, %z_5;
+            yield %$0_0, %t1_0, %$6_0, %z_7;
         }
         else {
-            logical_tensor %$1_0, logical_tensor %t1_3, logical_tensor %$6_5, logical_tensor %z_15 = if scalar_expr then {
+            logical_tensor %$1_0, logical_tensor %t1_3, logical_tensor %$6_5, logical_tensor %z_17 = if scalar_expr then {
                 logical_tensor %$1 = SUB(%x, %y) token();
                 logical_tensor %$3_0 = ADD(%$1, %y) token();
                 logical_tensor %$6_4 = ADD(%$3_0, %x) token();
-                logical_tensor %z_13 = ASSEMBLE(%$6_4) token();
-                yield %$1, %$3_0, %$6_4, %z_13;
+                logical_tensor %z_15 = ASSEMBLE(%$6_4) token();
+                yield %$1, %$3_0, %$6_4, %z_15;
             }
             else {
                 logical_tensor %$1_1 = SUB(%x, %y) token();
                 logical_tensor %$4_0 = SUB(%$1_1, %y) token();
                 logical_tensor %$6_3 = ADD(%$4_0, %x) token();
-                logical_tensor %z_11 = ASSEMBLE(%$6_3) token();
-                yield %$1_1, %$4_0, %$6_3, %z_11;
+                logical_tensor %z_13 = ASSEMBLE(%$6_3) token();
+                yield %$1_1, %$4_0, %$6_3, %z_13;
             }
-            yield %$1_0, %t1_3, %$6_5, %z_15;
+            yield %$1_0, %t1_3, %$6_5, %z_17;
         }
-        continue %loop_idx_20, %$6_1, %t0_0, %t1_2, %z_7;
+        continue %loop_idx_20, %$6_1, %t0_0, %t1_2, %z_9;
     }
-    return %x, %y, %z_3;
+    return %x, %y, %z_5;
 }

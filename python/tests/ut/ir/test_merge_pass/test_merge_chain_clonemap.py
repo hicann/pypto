@@ -43,7 +43,7 @@ def test_merge_chain_clonemap():
     z = pypto.Tensor([32, 32], pypto.DT_FP32, 'z')
 
     b = ir.IRBuilder()
-    func = pil.compile(foo, x, y, z)
+    func = pil.compile(foo, x, y, z, create_new_logical_tensor=True)
     prog = b.create_program([func], "main", ir.Span.unknown())
     merge = ir.Pass.merge_stmts_into_if()
     prog = merge(prog)

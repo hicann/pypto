@@ -1,13 +1,13 @@
 function foo incast(logical_tensor %x, logical_tensor %y, logical_tensor %z) outcast() #type(Opaque) #entry(false) {
-    logical_tensor %z = if scalar_expr then {
+    logical_tensor %z_3 = if scalar_expr then {
         logical_tensor %$0 = ADD(%x, %y) token();
-        logical_tensor %z = ASSEMBLE(%$0) token();
-        yield %z;
+        logical_tensor %z_1 = ASSEMBLE(%$0) token();
+        yield %z_1;
     }
     else {
         logical_tensor %$1 = SUB(%x, %y) token();
-        logical_tensor %z = ASSEMBLE(%$1) token();
-        yield %z;
+        logical_tensor %z_5 = ASSEMBLE(%$1) token();
+        yield %z_5;
     }
-    return %x, %y, %z;
+    return %x, %y, %z_3;
 }

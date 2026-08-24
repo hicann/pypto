@@ -23,7 +23,7 @@ def test_canonicalize_keeps_carry_used_by_nested_loop_init():
 
     src = pypto.Tensor([16, 16], pypto.DT_FP32, name="src")
     out = pypto.Tensor([16, 16], pypto.DT_FP32, name="out")
-    func = pil.compile(kernel, src, out)
+    func = pil.compile(kernel, src, out, create_new_logical_tensor=True)
     builder = ir.IRBuilder()
     program = builder.create_program([func], "main", ir.Span.unknown())
     verifier = ir.IRVerifier.create_default()

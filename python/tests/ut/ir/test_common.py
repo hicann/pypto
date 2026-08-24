@@ -42,11 +42,12 @@ def ssa_verify(func, desc=""):
     _ssa_verify(verifier, prog, desc)
 
 
-def run_merge_pass(func, *args):
+def run_merge_pass(func, *args, create_new_logical_tensor=True):
     """Compile a kernel and run canonicalize + dce + merge_stmts_into_if, stopping before lowering
-    so the resulting if-tree (func.body) is inspectable. Mirrors compile_new_ir's first half."""
+    so the resulting if-tree (func.body) is inspectable. Mirrors compile_new_ir's first half.
+    """
     b = ir.IRBuilder()
-    func = pil.compile(func, *args)
+    func = pil.compile(func, *args, create_new_logical_tensor=create_new_logical_tensor)
     prog = b.create_program([func], "main", ir.Span.unknown())
     dce = ir.Pass.aggressive_dce()
     canonical = ir.Pass.canonicalize()

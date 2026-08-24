@@ -31,6 +31,11 @@ void BindIRBuilder(py::module_& m)
     ir.def(
         "set_assemble_new_logical_tensor", [](bool enabled) { IRContext::Get().SetAssembleNewLogicalTensor(enabled); },
         py::arg("enabled"));
+    ir.def(
+        "assemble_new_logical_tensor", []() { return IRContext::Get().AssembleNewLogicalTensor(); },
+        "Get whether Assemble creates a new LogicalTensor version.\n\n"
+        "Returns:\n"
+        "    bool: True if Assemble creates a new LogicalTensor version");
 
     // IRBuilder class
     py::class_<IRBuilder>(ir, "IRBuilder",

@@ -1691,6 +1691,10 @@ def set_assemble_new_logical_tensor(enabled: bool) -> None:
     """Control whether Assemble creates a new LogicalTensor version."""
 
 
+def assemble_new_logical_tensor() -> bool:
+    """Get whether Assemble creates a new LogicalTensor version."""
+
+
 class IRBuilder:
     """IR Builder for incremental IR construction with context management.
 

@@ -36,7 +36,7 @@ def _store_wrapper(orig, arg_idx):
 @contextmanager
 def apply_patches():
     def assemble(*args, **kwargs) -> None:
-        if not isinstance(args[0], Sequence):
+        if pypto_impl.ir.assemble_new_logical_tensor() and not isinstance(args[0], Sequence):
             Block.mark_store(args[2])
         _orig_assemble(*args, **kwargs)
 

@@ -1,18 +1,18 @@
 function foo_no_cross incast(logical_tensor %x, logical_tensor %z) outcast() #type(Opaque) #entry(false) {
-    logical_tensor %z_3 = for %loop_idx_20 inrange 0, 2, 1 iter {logical_tensor %z_1 = %z;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
-        logical_tensor %z_5 = if scalar_expr then {
+    logical_tensor %z_5 = for %loop_idx_20 inrange 0, 2, 1 iter {logical_tensor %z_1 = %z;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        logical_tensor %z_7 = if scalar_expr then {
             logical_tensor %View_x = VIEW(%x) token();
             logical_tensor %View_View_x_4 = VIEW(%View_x) token();
-            logical_tensor %z_1 = ASSEMBLE(%View_View_x_4) token();
-            yield %z_1;
+            logical_tensor %z_3 = ASSEMBLE(%View_View_x_4) token();
+            yield %z_3;
         }
         else {
             logical_tensor %View_x_4 = VIEW(%x) token();
             logical_tensor %View_View_x_6 = VIEW(%View_x_4) token();
-            logical_tensor %z_7 = ASSEMBLE(%View_View_x_6) token();
-            yield %z_7;
+            logical_tensor %z_9 = ASSEMBLE(%View_View_x_6) token();
+            yield %z_9;
         }
-        continue %z_5;
+        continue %z_7;
     }
-    return %x, %z_3;
+    return %x, %z_5;
 }
