@@ -159,3 +159,123 @@ TEST_F(EmulationLauncherTest, EmulationLaunchDeviceTensorData_WithRealIO)
     EXPECT_EQ(0, EmulationLauncher::EmulationLaunchDeviceTensorData(func, inputDeviceDataList, outputDeviceDataList,
                                                                     MakeConfig(), nullptr));
 }
+
+TEST_F(EmulationLauncherTest, EmulationRunOnce_WithInputCtrlCache)
+{
+    auto* func = GetFunc();
+    ASSERT_NE(func, nullptr);
+
+    auto [inputDeviceDataList, outputDeviceDataList, memUtils] = BuildIO();
+    DevControlFlowCache* outCtrlFlowCache = nullptr;
+    EXPECT_EQ(0,
+              EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
+                  func, inputDeviceDataList, outputDeviceDataList, nullptr, &outCtrlFlowCache, memUtils, MakeConfig()));
+    ASSERT_NE(outCtrlFlowCache, nullptr);
+
+    EXPECT_EQ(0, EmulationLauncher::EmulationRunOnce(func, outCtrlFlowCache, MakeConfig()));
+}
+
+TEST_F(EmulationLauncherTest, EmulationRunOnce_WithoutInputCtrlCache)
+{
+    auto* func = GetFunc();
+    ASSERT_NE(func, nullptr);
+
+    EXPECT_EQ(0, EmulationLauncher::EmulationRunOnce(func, nullptr, MakeConfig()));
+}
+
+TEST_F(EmulationLauncherTest, BuildControlFlowCache_WithOutCtrlFlowCache)
+{
+    auto* func = GetFunc();
+    ASSERT_NE(func, nullptr);
+
+    EmulationMemoryUtils memUtils;
+    DevControlFlowCache* outCtrlFlowCache = nullptr;
+    EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(func, &outCtrlFlowCache, memUtils, MakeConfig()));
+    EXPECT_NE(outCtrlFlowCache, nullptr);
+}
+
+TEST_F(EmulationLauncherTest, BuildControlFlowCache_WithInputOutputList)
+{
+    auto* func = GetFunc();
+    ASSERT_NE(func, nullptr);
+
+    auto [inputDeviceDataList, outputDeviceDataList, memUtils] = BuildIO();
+    DevControlFlowCache* outCtrlFlowCache = nullptr;
+    EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(func, memUtils, inputDeviceDataList, outputDeviceDataList,
+                                                          &outCtrlFlowCache, MakeConfig()));
+    EXPECT_NE(outCtrlFlowCache, nullptr);
+}
+
+TEST_F(EmulationLauncherTest, BuildControlFlowCache_WithEmptyInputOutputList)
+{
+    auto* func = GetFunc();
+    ASSERT_NE(func, nullptr);
+
+    EmulationMemoryUtils memUtils;
+    std::vector<DeviceTensorData> emptyInputList;
+    std::vector<DeviceTensorData> emptyOutputList;
+    DevControlFlowCache* outCtrlFlowCache = nullptr;
+    EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(func, memUtils, emptyInputList, emptyOutputList,
+                                                          &outCtrlFlowCache, MakeConfig()));
+    EXPECT_NE(outCtrlFlowCache, nullptr);
+}
+
+TEST_F(EmulationLauncherTest, BuildControlFlowCacheWithEmulationTensorData_WithDisableCtrlFlowCache)
+{
+    auto* func = GetFunc();
+    ASSERT_NE(func, nullptr);
+
+    auto dynAttr = func->GetDyndevAttribute();
+    auto* devProg = DeviceLauncher::GetDevProg(func);
+    ASSERT_NE(devProg, nullptr);
+
+    devProg->disableCtrlFlowCache = 1;
+
+    auto [inputDeviceDataList, outputDeviceDataList, memUtils] = BuildIO();
+    DevControlFlowCache* outCtrlFlowCache = nullptr;
+    EXPECT_EQ(0,
+              EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
+                  func, inputDeviceDataList, outputDeviceDataList, nullptr, &outCtrlFlowCache, memUtils, MakeConfig()));
+    EXPECT_EQ(outCtrlFlowCache, nullptr);
+
+    devProg->disableCtrlFlowCache = 0;
+}
+
+TEST_F(EmulationLauncherTest, BuildControlFlowCache_WithDisableCtrlFlowCache)
+{
+    auto* func = GetFunc();
+    ASSERT_NE(func, nullptr);
+
+    auto dynAttr = func->GetDyndevAttribute();
+    auto* devProg = DeviceLauncher::GetDevProg(func);
+    ASSERT_NE(devProg, nullptr);
+
+    devProg->disableCtrlFlowCache = 1;
+
+    EmulationMemoryUtils memUtils;
+    DevControlFlowCache* outCtrlFlowCache = nullptr;
+    EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(func, &outCtrlFlowCache, memUtils, MakeConfig()));
+    EXPECT_EQ(outCtrlFlowCache, nullptr);
+
+    devProg->disableCtrlFlowCache = 0;
+}
+
+TEST_F(EmulationLauncherTest, BuildControlFlowCache_WithInputOutputListAndDisableCtrlFlowCache)
+{
+    auto* func = GetFunc();
+    ASSERT_NE(func, nullptr);
+
+    auto dynAttr = func->GetDyndevAttribute();
+    auto* devProg = DeviceLauncher::GetDevProg(func);
+    ASSERT_NE(devProg, nullptr);
+
+    devProg->disableCtrlFlowCache = 1;
+
+    auto [inputDeviceDataList, outputDeviceDataList, memUtils] = BuildIO();
+    DevControlFlowCache* outCtrlFlowCache = nullptr;
+    EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(func, memUtils, inputDeviceDataList, outputDeviceDataList,
+                                                          &outCtrlFlowCache, MakeConfig()));
+    EXPECT_EQ(outCtrlFlowCache, nullptr);
+
+    devProg->disableCtrlFlowCache = 0;
+}

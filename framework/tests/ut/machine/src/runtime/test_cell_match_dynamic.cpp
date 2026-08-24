@@ -68,6 +68,130 @@ TEST(CellMatchDynamicFuncTest, NullAndEmptyInputs_NoCrash)
     EXPECT_TRUE(launchPatches.empty());
 }
 
+TEST(CellMatchDynamicFuncTest, ResetRuntimeDynamicCellMatchPoolHost_HostPath)
+{
+    uint64_t table[4] = {0};
+    ResetRuntimeDynamicCellMatchPoolHost(reinterpret_cast<uint64_t>(table), sizeof(table), false);
+    for (int i = 0; i < 4; ++i) {
+        EXPECT_EQ(table[i], AICORE_TASK_INIT);
+    }
+}
+
+TEST(CellMatchDynamicFuncTest, ResetRuntimeDynamicCellMatchPoolHost_ZeroCapacity)
+{
+    uint64_t table[4] = {0};
+    ResetRuntimeDynamicCellMatchPoolHost(reinterpret_cast<uint64_t>(table), 0, false);
+    for (int i = 0; i < 4; ++i) {
+        EXPECT_EQ(table[i], 0ULL);
+    }
+}
+
+TEST(CellMatchDynamicFuncTest, ValidateDynamicCellMatchTableMemBudget_WithValidProg)
+{
+    uint8_t buf[2048] = {0};
+    auto* prog = reinterpret_cast<DevAscendProgram*>(buf);
+    prog->memBudget.metadata.dynamicCellMatchSlotNum = 1;
+
+    DyndevFunctionAttribute dynAttr;
+    DyndevFunctionAttribute::DynamicCellMatchLaunchMeta launchMeta;
+    launchMeta.slotIndex = 0;
+    launchMeta.descOffset = 1024;
+    dynAttr.dynamicCellMatchLaunchMetaList.push_back(launchMeta);
+
+    auto* desc = reinterpret_cast<DevCellMatchTableDesc*>(buf + 1024);
+    desc->stride.dimStride[0] = 100;
+
+    ValidateDynamicCellMatchTableMemBudget(dynAttr, prog);
+}
+
+TEST(CellMatchDynamicFuncTest, RefillDynamicMemBudgets_WithValidProg)
+{
+    uint8_t buf[2048] = {0};
+    auto* prog = reinterpret_cast<DevAscendProgram*>(buf);
+    prog->memBudget.metadata.dynamicCellMatchSlotNum = 10;
+
+    DyndevFunctionAttribute dynAttr;
+    dynAttr.maxDynamicAssembleOutcastMem = SymbolicScalar(100);
+    dynAttr.maxDynamicCellMatchTableMem = SymbolicScalar(200);
+
+    std::unordered_map<std::string, ScalarImmediateType> symbolDict;
+    std::vector<DeviceTensorData> inputs;
+    std::vector<DeviceTensorData> outputs;
+    Evaluator eval(symbolDict, &inputs, &outputs);
+
+    RefillDynamicMemBudgets(prog, dynAttr, eval);
+
+    EXPECT_EQ(prog->memBudget.tensor.maxDynamicAssembleOutcastMem, 100ULL);
+    EXPECT_EQ(prog->memBudget.metadata.maxDynamicCellMatchTableMem, 200ULL);
+    EXPECT_EQ(prog->memBudget.metadata.dynamicCellMatch, 2000ULL);
+}
+
+TEST(CellMatchDynamicFuncTest, PrepareHostDynamicCellMatchForLaunch_WithValidProg)
+{
+    uint8_t buf[2048] = {0};
+    auto* prog = reinterpret_cast<DevAscendProgram*>(buf);
+    prog->memBudget.metadata.dynamicCellMatchSlotNum = 1;
+
+    DyndevFunctionAttribute dynAttr;
+    dynAttr.maxDynamicCellMatchTableMem = SymbolicScalar(100);
+
+    std::unordered_map<std::string, ScalarImmediateType> symbolDict;
+    std::vector<DeviceTensorData> inputs;
+    std::vector<DeviceTensorData> outputs;
+    Evaluator eval(symbolDict, &inputs, &outputs);
+
+    auto patches = PrepareHostDynamicCellMatchForLaunch(dynAttr, eval, prog);
+    EXPECT_TRUE(patches.empty());
+}
+
+TEST(CellMatchDynamicFuncTest, PrepareDynamicCellMatchDescPatches_WithValidLaunchMeta)
+{
+    DyndevFunctionAttribute dynAttr;
+    DyndevFunctionAttribute::DynamicCellMatchLaunchMeta launchMeta;
+    launchMeta.slotIndex = 0;
+    launchMeta.descOffset = 1024;
+    launchMeta.cellShape = {32, 32};
+
+    std::vector<SymbolicScalar> candidate1 = {SymbolicScalar(64), SymbolicScalar(64)};
+    std::vector<std::vector<SymbolicScalar>> candidates;
+    candidates.push_back(candidate1);
+    launchMeta.candidateRawDims = candidates;
+    dynAttr.dynamicCellMatchLaunchMetaList.push_back(launchMeta);
+
+    std::unordered_map<std::string, ScalarImmediateType> symbolDict;
+    std::vector<DeviceTensorData> inputs;
+    std::vector<DeviceTensorData> outputs;
+    Evaluator eval(symbolDict, &inputs, &outputs);
+
+    auto patches = PrepareDynamicCellMatchDescPatches(dynAttr, eval);
+    EXPECT_EQ(patches.size(), 1u);
+    EXPECT_EQ(patches[0].descOffset, 1024u);
+}
+
+TEST(CellMatchDynamicFuncTest, PrepareDynamicCellMatchDescPatches_WithInconsistentStrides)
+{
+    DyndevFunctionAttribute dynAttr;
+    DyndevFunctionAttribute::DynamicCellMatchLaunchMeta launchMeta;
+    launchMeta.slotIndex = 0;
+    launchMeta.descOffset = 1024;
+    launchMeta.cellShape = {32, 32};
+
+    std::vector<SymbolicScalar> candidate1 = {SymbolicScalar(64), SymbolicScalar(64)};
+    std::vector<SymbolicScalar> candidate2 = {SymbolicScalar(128), SymbolicScalar(64)};
+    std::vector<std::vector<SymbolicScalar>> candidates;
+    candidates.push_back(candidate1);
+    candidates.push_back(candidate2);
+    launchMeta.candidateRawDims = candidates;
+    dynAttr.dynamicCellMatchLaunchMetaList.push_back(launchMeta);
+
+    std::unordered_map<std::string, ScalarImmediateType> symbolDict;
+    std::vector<DeviceTensorData> inputs;
+    std::vector<DeviceTensorData> outputs;
+    Evaluator eval(symbolDict, &inputs, &outputs);
+
+    EXPECT_ANY_THROW(PrepareDynamicCellMatchDescPatches(dynAttr, eval));
+}
+
 TEST(CellMatchDynamicFuncTest, PatchRuntimeDynamicCellMatchMeta_AllBranches)
 {
     AicoreModelMemoryUtils memUtils;

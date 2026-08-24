@@ -170,7 +170,7 @@ bool DevMemoryPool::CheckAllSentinels()
         }
     }
     if (!allGood) {
-        MACHINE_LOGE(HostLauncherErr::MEM_POOL_CHECK_ALL_SENTINELS_FAILED, "CheckAllSentinels failed.");
+        MACHINE_LOGW("CheckAllSentinels failed.");
     }
 
     return allGood;
@@ -207,7 +207,7 @@ bool DevMemoryPool::CheckSentinel(uint8_t* baseAddr, bool remove)
     }
     auto iter = sentinelValMap_.find(baseAddr);
     if (iter == sentinelValMap_.end()) {
-        MACHINE_LOGE(DevCommonErr::PARAM_CHECK_FAILED, "Base addr %p not found in map, need check code.", baseAddr);
+        MACHINE_LOGW("Base addr %p not found in map, need check code.", baseAddr);
         return false;
     }
     std::vector<uint64_t> sentinelVal(SENTINEL_NUM, 0);
@@ -226,7 +226,7 @@ bool DevMemoryPool::CheckSentinel(uint8_t* baseAddr, bool remove)
         }
     }
     if (!allGood) {
-        MACHINE_LOGE(DevCommonErr::PARAM_CHECK_FAILED, "BaseAddr:%p check sentinel failed.", baseAddr);
+        MACHINE_LOGW("BaseAddr:%p check sentinel failed.", baseAddr);
     } else {
         MACHINE_LOGI("BaseAddr:%p check sentinel Ok.", baseAddr);
     }

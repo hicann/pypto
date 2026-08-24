@@ -26,12 +26,12 @@ struct PerfettoMgr {
     static const int MAX_EVT_DEPTH = 64;
 
     struct Record {
-        int type;
-        int tid;
-        uint64_t start;
-        uint64_t end;
-        uint32_t index;
-        uint32_t pIndex;
+        int type = 0;
+        int tid = 0;
+        uint64_t start = 0;
+        uint64_t end = 0;
+        uint32_t index = 0;
+        uint32_t pIndex = 0;
         std::string name = "-";
     };
 
@@ -136,6 +136,13 @@ struct PerfettoMgr {
 
 private:
     PerfettoMgr() = default;
+    ~PerfettoMgr()
+    {
+        for (auto* trunk : trunks_) {
+            delete trunk;
+        }
+        trunks_.clear();
+    }
 
 private:
     EvtStack evtStack[MAX_THEAD_NUM];
