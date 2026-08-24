@@ -23,9 +23,6 @@ stest:
       # - DynamicNSATest.mini
       # - DynamicSATest.slc_attn_mtp_s1_2_fp16
       # - DynamicSATest.slc_attn_bf16_b48_s1_perf
-      # - DynamicKvSATest.kv_slc_attn_b48_s1_fp16_perf
-      # - DynamicKvSATest.kv_slc_attn_b32_s2_bf16_perf
-      # - DynamicKvSATest.kv_slc_attn_b2_s1_fp16
 
   operator_nsa_MlaProlog:
     cases:
@@ -37,13 +34,6 @@ stest:
     cases:
       # - AttentionPostSTest.b32_s1_nz_bf16_quant
       # - AttentionPostSTest.b32_s2_nz_bf16_quant
-
-  operator_DeepSeekV3_MOE:
-    cases:
-      # - MoeInferOnbroadTest.test_deepseekMoEInfer
-      # - MoeInferOnbroadTest.test_deepseekMoEInfer_singleout
-      # - DynamicFFNTest.TestOnbroadDynamicFFN
-      # - MoeInferOnbroadTest.test_deepseekMoEInfer_singleout_singlemlp_withquant
 
   operator_lightning_indexer_prolog:
     cases:

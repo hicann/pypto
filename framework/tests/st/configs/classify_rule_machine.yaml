@@ -45,11 +45,6 @@ stest:
       # KV Compress
       #===========================================================================
       # - DynKVCmp.KVCmpBatch32bf16
-      #===========================================================================
-      # deepseek
-      #===========================================================================
-      # - DynamicSlcTest.dynamic_p_slc_bf16
-      # - DynamicSlcTest.dynamic_p_slc_fp16
 
   machine_vector:
     cases:
@@ -114,7 +109,6 @@ stest:
       - DynamicBasicTest.HiddenLoopConditionMixed
       - DynamicBasicTest.HiddenLoopConditionMixedMulLoops
       - DynamicBinTest.testDynMulsUnalign
-      - DynamicBinTest.testScalarDivsUnalign
       - DynamicBinTest.TestDynamicAddUnalign
       - DynamicBrcTest.TestDynamicMulBrcUnalign
       - DynamicBindingTest.TestDefaultCompute
