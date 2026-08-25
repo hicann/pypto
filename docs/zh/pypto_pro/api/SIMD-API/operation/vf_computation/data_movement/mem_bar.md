@@ -86,8 +86,10 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=256)
-    t_out = pl.make_tile(tf, addr=256, size=256)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x100, mutex_ids=[1])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)

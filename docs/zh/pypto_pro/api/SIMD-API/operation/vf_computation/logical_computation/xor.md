@@ -26,7 +26,7 @@ xor(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] =
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数0，reg_tensor或mask_tensor，源操作数`src0`、`src1`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8。 |
+| `src0` | 输入 | 源操作数0，reg_tensor或mask_tensor，源操作数`src0`、`src1`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0。 |
 | `src1` | 输入 | 源操作数1，reg_tensor或mask_tensor，数据类型与`src0`一致。 |
 | `preg` | 输入 | mask_tensor。 - src0、src1与dst数据类型需一致。<br>- 本接口操作数为寄存器，不涉及地址对齐。<br>- 本接口不修改全局寄存器的值。 |
 | `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
@@ -64,9 +64,12 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT16],
 ):
     tf = pl.TileType(shape=[1, 128], dtype=pl.DT_INT16, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=256)
-    in_b = pl.make_tile(tf, addr=256, size=256)
-    t_out = pl.make_tile(tf, addr=512, size=256)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    in_b_grp = pl.make_tile_group(type=tf, addrs=0x100, mutex_ids=[1])
+    in_b = in_b_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x200, mutex_ids=[2])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_b, b, [0, 0])
@@ -124,8 +127,10 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=256)
-    t_out = pl.make_tile(tf, addr=256, size=256)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x100, mutex_ids=[1])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)

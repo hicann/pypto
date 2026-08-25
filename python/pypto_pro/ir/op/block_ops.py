@@ -654,13 +654,76 @@ def _ir_insert(
 
 
 def _ir_sel(out: Expr, mask: Expr, lhs: Expr, rhs: Expr, tmp: Expr, *, span: Span | None = None) -> Expr:
+    _check_dtype("sel", getattr(out.type, "dtype", None), _SEL_DTYPES)
     return _ir_core.create_op_call(block_ir_op("sel"), [out, mask, lhs, rhs, tmp], {}, span or _span())
 
 
 def _ir_sels(out: Expr, mask: Expr, src: Expr, tmp: Expr, scalar: Expr, *, span: Span | None = None) -> Expr:
+    _check_dtype("sels", getattr(out.type, "dtype", None), _SEL_DTYPES)
     actual_span = span or _span()
     scalar_expr = scalar if isinstance(scalar, Expr) else _normalize_expr(scalar, actual_span)
     return _ir_core.create_op_call(block_ir_op("sels"), [out, mask, src, tmp, scalar_expr], {}, actual_span)
+
+
+def _ir_neg(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("neg", dt, _NEG_DTYPES)
+    _check_dtype_match("neg", dt, getattr(src.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("neg"), [out, src], {}, span or _span())
+
+
+def _ir_abs(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("abs", dt, _ABS_DTYPES)
+    _check_dtype_match("abs", dt, getattr(src.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("abs"), [out, src], {}, span or _span())
+
+
+def _ir_relu(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("relu", dt, _RELU_DTYPES)
+    _check_dtype_match("relu", dt, getattr(src.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("relu"), [out, src], {}, span or _span())
+
+
+def _ir_axpy(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("axpy", dt, _AXPY_DTYPES)
+    _check_dtype_match("axpy", dt, getattr(src.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("axpy"), [out, src, scalar], {}, span or _span())
+
+
+def _ir_add_relu(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("add_relu", dt, _RELU_DTYPES)
+    _check_dtype_match("add_relu", dt, getattr(lhs.type, "dtype", None), getattr(rhs.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("add_relu"), [out, lhs, rhs], {}, span or _span())
+
+
+def _ir_xor(out: Expr, lhs: Expr, rhs: Expr, tmp: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("xor", dt, _BITWISE_DTYPES)
+    _check_dtype_match("xor", dt, getattr(lhs.type, "dtype", None), getattr(rhs.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("xor"), [out, lhs, rhs, tmp], {}, span or _span())
+
+
+def _ir_expands(out: Expr, scalar: Expr, *, span: Span | None = None) -> Expr:
+    _check_dtype("expands", getattr(out.type, "dtype", None), _EXPANDS_DTYPES)
+    return _ir_core.create_op_call(block_ir_op("expands"), [out, scalar], {}, span or _span())
+
+
+def _ir_row_sum(out: Expr, src: Expr, tmp: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("row_sum", dt, _SUM_DTYPES)
+    _check_dtype_match("row_sum", getattr(out.type, "dtype", None), dt)
+    return _ir_core.create_op_call(block_ir_op("row_sum"), [out, src, tmp], {}, span or _span())
+
+
+def _ir_col_sum(out: Expr, src: Expr, tmp: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("col_sum", dt, _SUM_DTYPES)
+    _check_dtype_match("col_sum", getattr(out.type, "dtype", None), dt)
+    return _ir_core.create_op_call(block_ir_op("col_sum"), [out, src, tmp], {}, span or _span())
 
 
 def _validate_validshape_bounds(
@@ -852,6 +915,54 @@ def _validate_dtype(dtype: DataType | None, role: str, op_name: str) -> None:
         raise ValueError(f"{op_name}: unsupported {role} dtype {dtype}, supported: b8/b16/b32/b64")
 
 
+def _check_dtype(op_name: str, dtype: DataType | None, allowed: tuple[DataType, ...]) -> None:
+    if dtype is not None and dtype not in allowed:
+        allowed_names = ", ".join(str(d) for d in allowed)
+        raise ValueError(
+            f"{op_name}: unsupported dtype {dtype}, supported: {allowed_names}"
+        )
+
+
+def _check_dtype_match(op_name: str, dt: DataType | None, *others: DataType | None) -> None:
+    for i, other in enumerate(others):
+        if other is not None and other != dt:
+            raise ValueError(f"{op_name}: dtype mismatch between arg0 ({dt}) and arg{i + 1} ({other})")
+
+
+# Per-op supported dtype sets (aligned with ISA static_assert constraints)
+_BINARY_DTYPES: tuple[DataType, ...] = (
+    DataType.INT8, DataType.UINT8, DataType.INT16, DataType.UINT16,
+    DataType.INT32, DataType.UINT32, DataType.INT64, DataType.UINT64,
+    DataType.FP16, DataType.FP32, DataType.BF16,
+)
+_MUL_DTYPES: tuple[DataType, ...] = tuple(
+    d for d in _BINARY_DTYPES if d not in (DataType.INT8, DataType.UINT8)
+)
+_DIV_DTYPES: tuple[DataType, ...] = tuple(
+    d for d in _MUL_DTYPES if d != DataType.BF16
+)
+_BITWISE_DTYPES: tuple[DataType, ...] = (
+    DataType.INT8, DataType.UINT8, DataType.INT16, DataType.UINT16,
+    DataType.INT32, DataType.UINT32,
+)
+_NEG_DTYPES: tuple[DataType, ...] = (
+    DataType.INT16, DataType.UINT16, DataType.INT32, DataType.UINT32,
+    DataType.INT64, DataType.UINT64, DataType.FP16, DataType.FP32, DataType.BF16,
+)
+_ABS_DTYPES: tuple[DataType, ...] = (
+    DataType.INT8, DataType.INT16, DataType.INT32, DataType.FP16, DataType.FP32,
+)
+_RELU_DTYPES: tuple[DataType, ...] = (DataType.INT32, DataType.FP16, DataType.FP32)
+_AXPY_DTYPES: tuple[DataType, ...] = (DataType.FP16, DataType.FP32)
+_CMP_DTYPES: tuple[DataType, ...] = _BINARY_DTYPES
+_EXPANDS_DTYPES: tuple[DataType, ...] = _BINARY_DTYPES
+_SUM_DTYPES: tuple[DataType, ...] = (
+    DataType.INT16, DataType.INT32, DataType.FP16, DataType.FP32,
+    DataType.INT64, DataType.UINT64,
+)
+_SEL_DTYPES: tuple[DataType, ...] = _BINARY_DTYPES + (DataType.BOOL,)
+
+
 def _check_scale_dst_supported(src_dtype: DataType | None, dst_dtype: DataType | None, is_quant_active: bool,
                                op_name: str) -> None:
     """Reject scale quantization to dtype combinations the hardware fixpipe cannot produce.
@@ -978,6 +1089,12 @@ def _ir_setval(container: Expr, offset: int | Expr, value: int | float | Expr, *
 def _ir_transpose(
     out: Expr, src: Expr, axis1: int | Expr = 0, axis2: int | Expr = 1, *, span: Span | None = None
 ) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    if dt is not None and dt.get_bit() not in (8, 16, 32):
+        raise ValueError(f"transpose: unsupported dtype {dt}, supported: b8/b16/b32")
+    src_dt = getattr(src.type, "dtype", None)
+    if src_dt is not None and dt is not None and src_dt.get_bit() != dt.get_bit():
+        raise ValueError(f"transpose: dtype size mismatch between dst ({dt}) and src ({src_dt})")
     return _ir_core.create_op_call(
         block_ir_op("transpose"),
         [out, src],
@@ -1059,6 +1176,9 @@ def _ir_mul_cast(
 
 
 def _ir_cmp(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, cmp_mode: int | Expr = 0) -> Expr:
+    dt = getattr(lhs.type, "dtype", None)
+    _check_dtype("cmp", dt, _CMP_DTYPES)
+    _check_dtype_match("cmp", dt, getattr(rhs.type, "dtype", None))
     return _ir_core.create_op_call(
         block_ir_op("cmp"),
         [out, lhs, rhs],
@@ -1808,6 +1928,16 @@ register_table(
         "ssbuf_store": OpSpec(builder=_ir_ssbuf_store),
         "ssbuf_load": OpSpec(builder=_ir_ssbuf_load),
         "set_stride": OpSpec(builder=_ir_set_stride),
+        # unary / scalar / fused compute ops
+        "neg": OpSpec(builder=_ir_neg),
+        "abs": OpSpec(builder=_ir_abs),
+        "relu": OpSpec(builder=_ir_relu),
+        "axpy": OpSpec(builder=_ir_axpy),
+        "add_relu": OpSpec(builder=_ir_add_relu),
+        "xor": OpSpec(builder=_ir_xor),
+        "expands": OpSpec(builder=_ir_expands),
+        "row_sum": OpSpec(builder=_ir_row_sum),
+        "col_sum": OpSpec(builder=_ir_col_sum),
         # tile-tile / tile-scalar dispatch
         "select": OpSpec(builder=_ir_select),
         "eq": OpSpec(builder=_ir_eq),

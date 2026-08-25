@@ -37,9 +37,7 @@ arange(start, index_order: Optional[IndexOrder] = None, dtype: Optional[DType] =
 
 - 数据类型约束：
 
-  支持的dst数据类型：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_FP32、DT_INT64、DT_UINT64。
-
-  > 说明：DT_INT64/DT_UINT64由于单条指令不支持8字节元素，底层走两寄存器序列（高32位置0 + 低32位DT_INT32索引 + 整体加起始值合并），生成结果与DT_INT32索引等价但为64位宽。
+  支持的dst数据类型：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_FP32。
 
 ## 返回值说明
 
@@ -66,7 +64,8 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
 ):
     tu = pl.TileType(shape=[1, 64], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    t_out = pl.make_tile(tu, addr=0, size=256)
+    t_out_grp = pl.make_tile_group(type=tu, addrs=0x0, mutex_ids=[0])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -110,7 +109,8 @@ def example_kernel_dec(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
 ):
     tu = pl.TileType(shape=[1, 64], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    t_out = pl.make_tile(tu, addr=0, size=256)
+    t_out_grp = pl.make_tile_group(type=tu, addrs=0x0, mutex_ids=[0])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)

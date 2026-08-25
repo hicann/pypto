@@ -135,8 +135,10 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=256)
-    t_out = pl.make_tile(tf, addr=256, size=256)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x100, mutex_ids=[1])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -186,8 +188,10 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[1, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=512)
-    t_out = pl.make_tile(tf, addr=512, size=512)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x200, mutex_ids=[1])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -234,8 +238,10 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[2, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=512)
-    t_out = pl.make_tile(tf, addr=512, size=512)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x200, mutex_ids=[1])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(t_out, out, [0, 0])
@@ -286,8 +292,10 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[2, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=512)
-    t_out = pl.make_tile(tf, addr=512, size=512)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x200, mutex_ids=[1])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -341,8 +349,10 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[1, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=512)
-    t_out = pl.make_tile(tf, addr=512, size=512)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x200, mutex_ids=[1])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -402,9 +412,12 @@ def example_kernel(
 ):
     tf = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tu = pl.TileType(shape=[1, 64], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=256)
-    t_mask = pl.make_tile(tu, addr=256, size=256)
-    t_out = pl.make_tile(tf, addr=512, size=256)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_mask_grp = pl.make_tile_group(type=tu, addrs=0x100, mutex_ids=[1])
+    t_mask = t_mask_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x200, mutex_ids=[2])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -457,8 +470,10 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[1, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=512)
-    t_out = pl.make_tile(tf, addr=512, size=512)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x200, mutex_ids=[1])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -513,8 +528,10 @@ def example_kernel_fp8(
 ):
     tf_in = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tf_out = pl.TileType(shape=[1, 256], dtype=pl.DT_FP8E4M3FN, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf_in, addr=0, size=256)
-    t_out = pl.make_tile(tf_out, addr=256, size=256)
+    in_a_grp = pl.make_tile_group(type=tf_in, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf_out, addrs=0x100, mutex_ids=[1])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)

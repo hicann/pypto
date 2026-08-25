@@ -12,8 +12,8 @@
  * @file backend_950_cce_vf_ops.cpp
  * \brief CCE backend op registration for VF API operations (A5 target).
  *
- * VF ops directly emit VF instructions (vlds, vmax, vdup, etc.) without
- * going through the PTO-ISA intermediate layer. API naming references AscendC.
+ * VF ops directly emit CCE intrinsics (vlds, vmax, vdup, etc.) without
+ * going through the PTO-ISA intermediate layer.
  */
 
 #include <string>
@@ -150,7 +150,9 @@ static bool NeedsB8Reinterpret(DataType dt)
 // VF load/store intrinsics (vlds/vsts/vld/vst/vsldb/vsstb) accept both
 // signed and unsigned pointer types, so we use the native C type to match
 // the RegTensor element type and avoid type-mismatch errors.
-// B64 types (INT64/UINT64) are stored as pairs of 32-bit halves.
+// B64 types (INT64/UINT64) are stored as pairs of 32-bit halves, so the
+// pointer type is the 32-bit half type for non-B64-overload paths.
+// (B64 vlds/vsts overloads override the pointer type via GetB64PtrType.)
 // Types lacking a direct bisheng overload (FP4/HF4/HF8/INT4/UINT4) are
 // reinterpreted as uint8_t.
 static std::string DtypeToPtrType(DataType dt)
@@ -164,8 +166,31 @@ static std::string DtypeToPtrType(DataType dt)
     return dt.ToCTypeString();
 }
 
+// Return the native 64-bit pointer type for B64 vlds/vsts overloads
+// (__VF_VLDS_B64/__VF_VSTS_B64), which expect __ubuf__ int64_t*/uint64_t*.
+static std::string GetB64PtrType(DataType dt)
+{
+    if (dt == DataType::INT64)
+        return "int64_t";
+    if (dt == DataType::UINT64)
+        return "uint64_t";
+    return dt.ToCTypeString();
+}
+
 // Return the (RegTensor<uint8_t>&) cast prefix for types that need B8 reinterpret.
 static std::string GetB8Cast(DataType dt) { return NeedsB8Reinterpret(dt) ? "(RegTensor<uint8_t>&)" : ""; }
+
+// Return the cast prefix for B64 types (INT64/UINT64).
+// B64 vlds/vsts overloads (__VF_VLDS_B64/__VF_VSTS_B64) expect vector_2xvl_s64/u64,
+// but the register is declared as RegTensor<int64_t>/RegTensor<uint64_t>.
+static std::string GetB64Cast(DataType dt)
+{
+    if (dt == DataType::INT64)
+        return "(vector_2xvl_s64&)";
+    if (dt == DataType::UINT64)
+        return "(vector_2xvl_u64&)";
+    return "";
+}
 
 // Resolve an offset argument to a C++ code string.
 // If the argument is a 2-element MakeTuple [row, col], compute the linear
@@ -285,7 +310,7 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     // args: [dst, src, (optional) mask]
     CHECK(op->args_.size() >= 2 && op->args_.size() <= 3) << "vf.full requires 2-3 args (dst, src[, mask])";
-    // AscendC Duplicate supports b8/b16/b32/b64 element widths (bool, int, float, FP8/FP4/HF8 types)
+    // vdup supports b8/b16/b32/b64 element widths (bool, int, float, FP8/FP4/HF8 types)
     DataType src_dt = GetExprDtype(op->args_[1], DataType::FP32);
     CHECK((IsB8Type(src_dt) || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64))
         << "vf.full src only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
@@ -314,7 +339,7 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
         std::string mode = VFAnyMode(op);
         // FP4/HF8/HF4/INT4/UINT4 lack a vdup overload — reinterpret as uint8_t
         std::string cast = GetB8Cast(src_dt);
-        // Tensor mode always requires a mask (AscendC Duplicate(dstReg, srcReg, mask))
+        // Tensor mode always requires a mask (vdup(dstReg, srcReg, mask))
         if (op->args_.size() >= 3) {
             std::string mask = codegen.GetExprAsCode(op->args_[2]);
             codegen.Emit("vdup(" + cast + dst + ", " + cast + src_str + ", " + mask + ", " + pos + ", " + mode + ");");
@@ -381,7 +406,7 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         DataType dst_dt = GetExprDtype(op->args_[0]);
         // Pointer type follows the register's declared dtype. When it differs
         // from the tile's dtype, adjust the offset by the element-width ratio so
-        // the byte address stays correct (mirrors AscendC uint64→uint32 stride*2).
+        // the byte address stays correct (mirrors b64→b32 stride*2).
         std::string ptr_type = DtypeToPtrType(dst_dt);
         std::string ub_ptr = GetUBufPtr(codegen, op->args_[2], ptr_type);
         DataType tile_dt = GetExprDtype(op->args_[2], dst_dt);
@@ -445,7 +470,14 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
             std::string ptr_type = DtypeToPtrType(dst_dt);
             std::string ub_ptr = GetUBufPtr(codegen, op->args_[1], ptr_type);
             std::string cast = GetB8Cast(dst_dt);
-            codegen.Emit("vlds(" + cast + dst + ", " + ub_ptr + ", 0, NORM);");
+            // B64 types (INT64/UINT64) use __VF_VLDS_B64 which takes 3 args (no NORM mode)
+            if (dst_dt.GetBit() == 64) {
+                std::string b64_cast = GetB64Cast(dst_dt);
+                std::string b64_ptr = GetUBufPtr(codegen, op->args_[1], GetB64PtrType(dst_dt));
+                codegen.Emit("vlds(" + b64_cast + dst + ", " + b64_ptr + ", 0);");
+            } else {
+                codegen.Emit("vlds(" + cast + dst + ", " + ub_ptr + ", 0, NORM);");
+            }
         }
         return "";
     }
@@ -456,7 +488,7 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
     DataType dst_dt = GetExprDtype(op->args_[0]);
     // Pointer type follows the register's declared dtype. When it differs from
     // the tile's dtype, adjust the offset by the element-width ratio so the byte
-    // address stays correct (mirrors AscendC uint64→uint32 stride*2).
+    // address stays correct (mirrors b64→b32 stride*2).
     std::string ptr_type = DtypeToPtrType(dst_dt);
     DataType tile_dt = GetExprDtype(op->args_[1], dst_dt);
     // Is the destination a MaskReg? (routes to pld/plds instead of vld/vlds)
@@ -498,8 +530,8 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         post_update = op->GetKwarg<bool>("post_update");
     }
     // vsldb path (non-contiguous datablock load). Accept both DATA_BLOCK_LOAD
-    // (pypto legacy name) and DATA_BLOCK_COPY (AscendC's name for this mode) so
-    // code written against AscendC semantics does not silently fall back to vlds.
+    // (pypto legacy name) and DATA_BLOCK_COPY so
+    // code written against either naming does not silently fall back to vlds.
     if (data_copy_mode == "DATA_BLOCK_LOAD" || data_copy_mode == "DATA_BLOCK_COPY") {
         // In DataBlock mode, args[2] is a mask register, not an offset.
         // Verify the user didn't pass an integer/AddrReg offset by mistake.
@@ -507,7 +539,7 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         CHECK(mask_var != nullptr)
             << "vf.load_align with data_copy_mode=DATA_BLOCK_COPY requires args[2] to be a "
             << "mask register, but got an offset value (offset is not supported in DataBlock mode)";
-        // AscendC vsldb only supports b8/b16/b32 (not b64)
+        // vsldb only supports b8/b16/b32 (not b64)
         // vsldb path: load_align(dst, ptr, mask, data_copy_mode=..., block_stride=N, ...)
         std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
         std::string block_stride = "0";
@@ -531,7 +563,7 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
     // Route by dst variable type: MaskReg → plds, RegTensor → vlds
     if (dst_is_mask) {
         // plds path: dst is MaskReg, pointer is always uint32_t*
-        // AscendC pld/plds: only supports NORM/US/DS dist
+        // pld/plds: only supports NORM/US/DS dist
         CHECK(mode == "NORM" || mode == "US" || mode == "DS")
             << "vf.load_align (MaskReg) only supports NORM/US/DS dist, got " << mode;
         std::string plds_mode = mode; // pass through NORM/US/DS directly
@@ -595,8 +627,23 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         vlds_mode = mode;
     }
     std::string cast = GetB8Cast(dst_dt);
-    if (post_update) {
-        // B64 register types need stride doubled (AscendC postUpdateStride * 2 for 8-byte elements)
+    // B64 types (INT64/UINT64) use __VF_VLDS_B64 which takes 3 args (no mode)
+    if (dst_dt.GetBit() == 64) {
+        std::string b64_cast = GetB64Cast(dst_dt);
+        std::string b64_ptr;
+        if (post_update) {
+            b64_ptr = codegen.GetOrCreateVFTilePtr(op->args_[1], /*is_post_update=*/true);
+        } else {
+            b64_ptr = GetUBufPtr(codegen, op->args_[1], GetB64PtrType(dst_dt));
+        }
+        if (post_update) {
+            std::string post_offset = "(" + effective_offset + ") * 2";
+            codegen.Emit("vlds(" + b64_cast + dst + ", " + b64_ptr + ", " + post_offset + ", POST_UPDATE);");
+        } else {
+            codegen.Emit("vlds(" + b64_cast + dst + ", " + b64_ptr + ", " + effective_offset + ");");
+        }
+    } else if (post_update) {
+        // B64 register types need stride doubled (postUpdateStride * 2 for 8-byte elements)
         std::string post_offset = effective_offset;
         if (dst_dt.GetBit() == 64) {
             post_offset = "(" + effective_offset + ") * 2";
@@ -634,7 +681,7 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
         std::string dist = "NORM";
         if (op->HasKwarg("dist")) {
             dist = VFEnumValueName(ir::EnumToString(static_cast<ir::StoreDist>(op->GetKwarg<int>("dist"))));
-            // AscendC pst/psts: only supports NORM and PACK dist
+            // pst/psts: only supports NORM and PACK dist
             CHECK(dist == "NORM" || dist == "PACK" || dist == "PK")
                 << "vf.store_align (MaskReg) only supports NORM/PACK dist, got " << dist;
             // psts/pst use PK (not PACK) for packed mode
@@ -690,7 +737,7 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
         dist = VFEnumValueName(ir::EnumToString(static_cast<ir::StoreDist>(op->GetKwarg<int>("dist"))));
     }
     if (dist.empty()) {
-        // Auto-select default dist based on src dtype (AscendC uses NORM_B8/B16/B32 by element width)
+        // Auto-select default dist based on src dtype (uses NORM_B8/B16/B32 by element width)
         DataType src_dtype = DataType::FP32;
         if (auto scalar_type = ir::As<ir::ScalarType>(op->args_[1]->GetType())) {
             src_dtype = scalar_type->dtype_;
@@ -743,7 +790,7 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
     }
     // Pointer type follows the register's declared dtype. When it differs from
     // the tile's dtype, the offset/stride must be adjusted by the element-width
-    // ratio so the byte address stays correct (mirrors AscendC uint64→uint32
+    // ratio so the byte address stays correct (mirrors b64→b32
     // stride*2). No register cast needed — the register is already src_dt.
     std::string ptr_type = DtypeToPtrType(src_dt);
     DataType tile_dt = DataType::FP32;
@@ -782,8 +829,8 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
                      ");");
     } else if (data_copy_mode == "DATA_BLOCK_LOAD" || data_copy_mode == "DATA_BLOCK_COPY") {
         // Accept both DATA_BLOCK_LOAD (pypto legacy name) and DATA_BLOCK_COPY
-        // (AscendC's name for this mode), consistent with load_align behavior.
-        // AscendC vsstb only supports b8/b16/b32 (not b64)
+        //, consistent with load_align behavior.
+        // vsstb only supports b8/b16/b32 (not b64)
         DataType dc_src_dt = GetExprDtype(op->args_[1]);
         CHECK(dc_src_dt.GetBit() == 8 || dc_src_dt.GetBit() == 16 || dc_src_dt.GetBit() == 32)
             << "vf.store_align (DATA_BLOCK_COPY) only supports b8/b16/b32, got " << DTypeStr(dc_src_dt);
@@ -812,7 +859,7 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
     } else if (post_update) {
         std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
         std::string stride = (op->args_.size() >= 4) ? codegen.GetExprAsCode(op->args_[3]) : "0";
-        // B64 register types need stride doubled (AscendC postUpdateStride * 2)
+        // B64 register types need stride doubled (postUpdateStride * 2)
         std::string effective_stride = stride;
         if (src_dt.GetBit() == 64) {
             effective_stride = "(" + stride + ") * 2";
@@ -820,8 +867,15 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
             effective_stride = "(" + stride + ")" + width_op;
         }
         std::string ptr_var = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/true);
-        codegen.Emit("vsts(" + cast + src_reg + ", " + ptr_var + ", " + effective_stride + ", " + dist + ", " +
-                     mask_reg + ", POST_UPDATE);");
+        // B64 types use __VF_VSTS_B64 which takes 4 args (no dist mode)
+        if (src_dt.GetBit() == 64) {
+            std::string b64_cast = GetB64Cast(src_dt);
+            codegen.Emit("vsts(" + b64_cast + src_reg + ", " + ptr_var + ", " + effective_stride + ", " + mask_reg +
+                         ", POST_UPDATE);");
+        } else {
+            codegen.Emit("vsts(" + cast + src_reg + ", " + ptr_var + ", " + effective_stride + ", " + dist + ", " +
+                         mask_reg + ", POST_UPDATE);");
+        }
     } else {
         std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
         std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], ptr_type);
@@ -833,8 +887,16 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
         if (!width_op.empty()) {
             effective_offset = "(" + offset_str + ")" + width_op;
         }
-        codegen.Emit("vsts(" + cast + src_reg + ", " + dst_ptr + ", " + effective_offset + ", " + dist + ", " +
-                     mask_reg + ");");
+        // B64 types (INT64/UINT64) use __VF_VSTS_B64 which takes 4 args (no dist mode)
+        if (src_dt.GetBit() == 64) {
+            std::string b64_cast = GetB64Cast(src_dt);
+            std::string b64_ptr = GetUBufPtr(codegen, op->args_[0], GetB64PtrType(src_dt));
+            codegen.Emit("vsts(" + b64_cast + src_reg + ", " + b64_ptr + ", " + effective_offset + ", " + mask_reg +
+                         ");");
+        } else {
+            codegen.Emit("vsts(" + cast + src_reg + ", " + dst_ptr + ", " + effective_offset + ", " + dist + ", " +
+                         mask_reg + ");");
+        }
     }
     return "";
 }
@@ -1405,9 +1467,7 @@ static std::string EmitVFSqrt(const ir::CallPtr& op, codegen::CodegenBase& codeg
     // The struct is emitted as a static constexpr local so the template
     // can take a pointer to it.
     if (op->HasKwarg("precision") && op->GetKwarg<bool>("precision")) {
-        codegen.HoistRegTensorDecl("static constexpr AscendC::Reg::SqrtSpecificMode __sqrt_high_precision_mode "
-                                   "= {AscendC::Reg::MaskMergeMode::ZEROING, true};");
-        codegen.Emit("vsqrt<float, &__sqrt_high_precision_mode>(" + dst + ", " + src + ", " + mask + ");");
+        codegen.Emit("vsqrt<float, true>(" + dst + ", " + src + ", " + mask + ");");
     } else {
         codegen.Emit("vsqrt(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
     }
@@ -1623,7 +1683,7 @@ static std::string EmitVFInterleave(const ir::CallPtr& op, codegen::CodegenBase&
         if (op->HasKwarg("dtype")) {
             dtype = op->GetKwarg<DataType>("dtype");
         }
-        // AscendC MaskInterleave: only supports b8/b16/b32 (not b64)
+        // MaskInterleave: only supports b8/b16/b32 (not b64)
         CHECK(dtype.GetBit() == 8 || dtype.GetBit() == 16 || dtype.GetBit() == 32)
             << "vf.interleave (MaskReg) only supports b8/b16/b32, got " << DTypeStr(dtype);
         std::string pintlv_op;
@@ -1710,7 +1770,7 @@ static std::string EmitVFAxpy(const ir::CallPtr& op, codegen::CodegenBase& codeg
     CHECK((src_dt == DataType::FP16 || src_dt == DataType::FP32 || src_dt == DataType::INT64 ||
            src_dt == DataType::UINT64))
         << "vf.axpy src only supports FP16/FP32/INT64/UINT64, got " << DTypeStr(src_dt);
-    // AscendC Axpy supports half/float/uint64_t/int64_t
+    // vaxpy supports half/float/uint64_t/int64_t
     DataType scalar_dt = GetExprDtype(op->args_[2]);
     CHECK(scalar_dt == DataType::FP16 || scalar_dt == DataType::FP32 || scalar_dt == DataType::UINT64 ||
           scalar_dt == DataType::INT64)
@@ -1745,7 +1805,7 @@ static std::string EmitVFMulDstAdd(const ir::CallPtr& op, codegen::CodegenBase& 
     CHECK(s0_dt == vf_mul_dst_add_dst_dt && s1_dt == vf_mul_dst_add_dst_dt)
         << "vf.mul_dst_add requires dst, src0, src1 to have the same type, got dst=" << DTypeStr(vf_mul_dst_add_dst_dt)
         << " src0=" << DTypeStr(s0_dt) << " src1=" << DTypeStr(s1_dt);
-    // AscendC MulAddDst (vmadd) supports u16/i16/u32/i32/half/float/bf/i64/u64
+    // vmadd supports u16/i16/u32/i32/half/float/bf/i64/u64
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src0 = codegen.GetExprAsCode(op->args_[1]);
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
@@ -1779,14 +1839,14 @@ static std::string EmitVFPack(const ir::CallPtr& op, codegen::CodegenBase& codeg
     DataType dst_dt = GetExprDtype(op->args_[0]);
     CHECK((IsB8Type(src_dt) || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64))
         << "vf.pack src only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
-    // AscendC Pack: dst bit width must be half of src
+    // vpack: dst bit width must be half of src
     CHECK(dst_dt.GetBit() == src_dt.GetBit() / 2)
         << "vf.pack: dst bit width must be half of src (dst=" << DTypeStr(dst_dt) << " " << dst_dt.GetBit()
         << "-bit, src=" << DTypeStr(src_dt) << " " << src_dt.GetBit() << "-bit)";
 
     if (src_dt.GetBit() == 64) {
         // 64-bit source → 32-bit dst: use DeInterleave with a zero register,
-        // mirroring AscendC PackImpl<..., part>(dst, src) for 8-byte src.
+        // mirroring PackImpl<..., part>(dst, src) for 8-byte src.
         std::string part_check = (part == "LOWER" || part == "LOWEST") ? "LOWEST" : "HIGHEST";
         std::string zero_var = dst + "_pack_zero_";
         std::string dump_var = dst + "_pack_dump_";
@@ -1834,7 +1894,7 @@ static std::string EmitVFUnpack(const ir::CallPtr& op, codegen::CodegenBase& cod
     DataType src_dt = GetExprDtype(op->args_[1]);
     CHECK((IsB8Type(src_dt) || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64))
         << "vf.unpack src only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
-    // AscendC Unpack: dst bit width must be double of src
+    // vunpack: dst bit width must be double of src
     CHECK(dst_dt.GetBit() == src_dt.GetBit() * 2)
         << "vf.unpack: dst bit width must be double of src (dst=" << DTypeStr(dst_dt) << " " << dst_dt.GetBit()
         << "-bit, src=" << DTypeStr(src_dt) << " " << src_dt.GetBit() << "-bit)";
@@ -1933,7 +1993,7 @@ static std::string EmitVFShift(const ir::CallPtr& op, codegen::CodegenBase& code
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, op_name);
     if (ShiftAmountIsRegister(op, codegen)) {
-        // AscendC ShiftLeft/Right (vector): shift reg must be signed int (int8/int16/int32/int64)
+        // vshl/vshr (vector): shift reg must be signed int (int8/int16/int32/int64)
         DataType shift_dt = GetExprDtype(op->args_[2]);
         CHECK(shift_dt == DataType::INT8 || shift_dt == DataType::INT16 || shift_dt == DataType::INT32 ||
               shift_dt == DataType::INT64)
@@ -2049,19 +2109,68 @@ static std::string EmitVFSubc(const ir::CallPtr& op, codegen::CodegenBase& codeg
 // ExpSub — vexpdif
 // ============================================================================
 
+// Helpers for multi-step int→int conversion via float intermediate.
+// Available int→float vcvt overloads (bisheng intrinsics):
+//   b8→f16 (widening), s16→f16 (same-width), s16→f32 (widening), s32→f32 (same-width)
+// NOT available: u16→f16, u16→f32, u32→f32, s32→f16
+
+// Emit int→float vcvt step. Returns the float dtype used (FP16 or FP32).
+// For unavailable src→f16 paths (u16, u32, s32), routes through f32 instead.
+static DataType EmitIntToFloatVcvt(codegen::CCECodegen& codegen, const std::string& dst_reg, const std::string& src_reg,
+                                   const std::string& mask, const std::string& part, const std::string& round,
+                                   const std::string& mode, DataType src_dt)
+{
+    if (src_dt.GetBit() == 8) {
+        // b8→f16: widening → vcvt(dst, src, mask, PART, MODE) — 5 args
+        codegen.Emit("vcvt(" + dst_reg + ", " + src_reg + ", " + mask + ", " + part + ", " + mode + ");");
+        return DataType::FP16;
+    }
+    if (src_dt == DataType::INT16) {
+        // s16→f16: same-width → vcvt(dst, src, mask, ROUND, MODE) — 5 args
+        codegen.Emit("vcvt(" + dst_reg + ", " + src_reg + ", " + mask + ", " + round + ", " + mode + ");");
+        return DataType::FP16;
+    }
+    // b32 (s32/u32): s32→f32 same-width. u32 needs reinterpret as s32 first.
+    std::string effective_src = src_reg;
+    if (src_dt == DataType::UINT32)
+        effective_src = "(RegTensor<int32_t> &)" + src_reg;
+    // s32→f32: same-width → vcvt(dst, src, mask, ROUND, MODE) — 5 args
+    codegen.Emit("vcvt(" + dst_reg + ", " + effective_src + ", " + mask + ", " + round + ", " + mode + ");");
+    return DataType::FP32;
+}
+
+// Emit float→int vcvt step. float_dt is always FP16 (from EmitIntToFloatVcvt).
+static void EmitFloatToIntVcvt(codegen::CCECodegen& codegen, const std::string& dst_reg, const std::string& src_reg,
+                               const std::string& mask, const std::string& part, const std::string& round,
+                               const std::string& sat, const std::string& mode, DataType dst_dt)
+{
+    if (dst_dt.GetBit() == 8) {
+        // float→b8: narrower-int → vcvt(dst, src, mask, ROUND, SAT, PART, MODE) — 7 args
+        codegen.Emit("vcvt(" + dst_reg + ", " + src_reg + ", " + mask + ", " + round + ", " + sat + ", " + part + ", " +
+                     mode + ");");
+    } else if (dst_dt.GetBit() == 16) {
+        // f16→b16: same-width → vcvt(dst, src, mask, ROUND, RS, MODE) — 5 args
+        codegen.Emit("vcvt(" + dst_reg + ", " + src_reg + ", " + mask + ", " + round + ", " + sat + ", " + mode + ");");
+    } else {
+        // f16→b32: wider-int → vcvt(dst, src, mask, ROUND, PART, MODE) — 6 args
+        codegen.Emit("vcvt(" + dst_reg + ", " + src_reg + ", " + mask + ", " + round + ", " + part + ", " + mode +
+                     ");");
+    }
+}
+
 static std::string EmitVFExpSub(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     // Parser args order: [dst, src, max, mask]
     CHECK(op->args_.size() == 4) << "vf.exp_sub requires 4 args (dst, src, max, mask)";
-    // AscendC ExpSub: dst must be FP32, src can be FP32 or FP16
+    // vexpdiff: dst must be FP32, src can be FP32 or FP16
     DataType src_dt = GetExprDtype(op->args_[1]);
     CHECK(src_dt == DataType::FP32 || src_dt == DataType::FP16)
         << "vf.exp_sub only supports FP32/FP16 src, got " << DTypeStr(src_dt);
     DataType dst_dt = GetExprDtype(op->args_[0]);
     CHECK(dst_dt == DataType::FP32) << "vf.exp_sub destination only supports FP32, got " << DTypeStr(dst_dt);
     DataType max_dt = GetExprDtype(op->args_[2]);
-    // AscendC ExpSub: src0 and src1 must be the same type (both float or both half)
+    // vexpdiff: src0 and src1 must be the same type (both float or both half)
     CHECK(src_dt == max_dt) << "vf.exp_sub requires src and max to have the same type, got src=" << DTypeStr(src_dt)
                             << " max=" << DTypeStr(max_dt);
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
@@ -2069,7 +2178,7 @@ static std::string EmitVFExpSub(const ir::CallPtr& op, codegen::CodegenBase& cod
     std::string max_reg = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     // layout kwarg selects the result half: ZERO -> PART_EVEN (default), ONE -> PART_ODD.
-    // AscendC ExpSub: only supports RegLayout ZERO/ONE
+    // vexpdiff: only supports RegLayout ZERO/ONE
     std::string part = "PART_EVEN";
     if (op->HasKwarg("layout")) {
         auto layout = VFEnumValueName(ir::EnumToString(static_cast<ir::CastLayout>(op->GetKwarg<int>("layout"))));
@@ -2090,7 +2199,7 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     // Parser args order: [dst, src, mask]
     CHECK(op->args_.size() == 3) << "vf.astype requires 3 args (dst, src, mask)";
-    // AscendC Cast: src and dst must have different types
+    // vcvt: src and dst must have different types
     DataType src_dtype = GetExprDtype(op->args_[1], DataType::FP32);
     DataType dst_dtype = GetExprDtype(op->args_[0]);
     CHECK(src_dtype != dst_dtype) << "vf.astype: src and dst must have different types (both are "
@@ -2102,7 +2211,7 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string layout = "ZERO";
     if (op->HasKwarg("layout")) {
         layout = VFEnumValueName(ir::EnumToString(static_cast<ir::CastLayout>(op->GetKwarg<int>("layout"))));
-        // AscendC Cast: layout must be ZERO/ONE/TWO/THREE
+        // vcvt: layout must be ZERO/ONE/TWO/THREE
         CHECK(layout == "ZERO" || layout == "ONE" || layout == "TWO" || layout == "THREE")
             << "vf.astype only supports layout ZERO/ONE/TWO/THREE, got " << layout;
     }
@@ -2134,7 +2243,7 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
         part_pp = "PART_P3";
     else
         part_pp = "PART_P0";
-    // Map round_mode to AscendC ::ROUND constants (dav_3510 GetRound mapping):
+    // Map round_mode to ::ROUND constants (dav_3510 GetRound mapping):
     //   CAST_RINT  → ROUND_R (round to nearest even)
     //   CAST_ROUND → ROUND_A (round to nearest, away from zero)
     //   CAST_FLOOR → ROUND_F
@@ -2178,12 +2287,17 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
     // Cross-width INT↔FLOAT (S16→FP32, S32→FP16, FP32→S64, S64→FP32): ROUND + PART + MODE
     bool is_widening = false;
     bool is_int_to_float = false;
-    bool is_float_to_same_int = false;  // FP32→S32, FP16→S16 (same-width float→int)
-    bool is_float_to_wider_int = false; // FP16→S32, BF16→S32 (widening float→int)
-    bool is_int_narrowing = false;      // int→int narrowing (no ROUND, just RS + PART)
-    bool is_cross_width = false;        // cross-width INT↔FLOAT with ROUND + PART + MODE
-    bool is_s4_widening = false;        // INT4→FP16/BF16/INT16 (vcvt_s42f16/bf16/s16)
-    bool is_s4_narrowing = false;       // FP16→INT4 (vcvt_f162s4)
+    bool is_float_to_same_int = false;     // FP32→S32, FP16→S16 (same-width float→int)
+    bool is_float_to_narrower_int = false; // FP16→INT8/UINT8, BF16→INT8/UINT8 (2x narrowing float→int)
+    bool is_float_to_wider_int = false;    // FP16→S32, BF16→S32 (widening float→int)
+    bool is_int_2x_narrowing = false;      // 2x narrowing with RS: b32→b16, b16→u8, b64→b32
+    bool is_int_4x_narrowing = false;      // 4x narrowing with RS: b32→u8
+    bool is_int_4x_widening = false;       // 4x int widening: b8→b32 (PART_P0/P1/P2/P3 only)
+    bool is_cross_width = false;           // cross-width INT↔FLOAT with ROUND + PART + MODE
+    bool is_s4_widening = false;           // INT4→FP16/BF16/INT16 (vcvt_s42f16/bf16/s16)
+    bool is_s4_narrowing = false;          // FP16→INT4 (vcvt_f162s4)
+    bool is_s16_to_s4 = false;             // INT16→INT4 (two-step: s16→f16→s4, mirroring AscendC Cast)
+    bool is_int_int_two_step = false;      // int→int via f16 intermediate (cross-sign widening, int→INT8 narrowing)
     // FP8/FP4 low-precision conversions
     bool is_fp_widen_pp = false;          // 4x widening PP: FP8→FP32, FP4→BF16 → vcvt(dst,src,mask,PART_PP,MODE)
     bool is_fp_narrow_rnd_sat_pp = false; // 4x narrowing RND_SAT_PP: FP32→FP8 → vcvt(dst,src,mask,ROUND,SAT)
@@ -2194,20 +2308,25 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
         is_s4_widening = true;
     } else if (dst_dtype == DataType::INT4 && src_dtype == DataType::FP16) {
         is_s4_narrowing = true;
+    } else if (dst_dtype == DataType::INT4 && src_dtype == DataType::INT16) {
+        is_s16_to_s4 = true;
     }
     // Widening cases: vcvt(dst, src, mask, PART, MODE) — no ROUND/RS
-    // FP16→FP32, BF16→FP32, UINT16→UINT32, INT16→INT32, INT8→INT16, UINT8→UINT16,
-    // INT8/UINT8→FP16, S32→S64, U32→S64, INT16/UINT16→FP32 (__VF_VCVTIF_PART)
+    // FP16→FP32, BF16→FP32, INT16→INT32, UINT16→UINT32, INT8→INT16, UINT8→UINT16,
+    // INT8/UINT8→FP16, S32→S64, INT16/UINT16→FP32 (__VF_VCVTIF_PART)
+    // Cross-sign s→u 2x widening: INT16→UINT32 (AscendC layoutMerge partCondition supports this)
+    // NOTE: Cross-sign u→s widening (u8→s16, u16→s32) and s8→u16 are NOT supported by hardware.
+    // NOTE: u32→s64 is NOT supported (only s32→s64 is).
     else if ((src_dtype == DataType::FP16 && dst_dtype == DataType::FP32) ||
              (src_dtype == DataType::BF16 && dst_dtype == DataType::FP32) ||
              (src_dtype == DataType::UINT16 && dst_dtype == DataType::UINT32) ||
              (src_dtype == DataType::INT16 && dst_dtype == DataType::INT32) ||
+             (src_dtype == DataType::INT16 && dst_dtype == DataType::UINT32) ||
              (src_dtype == DataType::INT8 && dst_dtype == DataType::INT16) ||
              (src_dtype == DataType::UINT8 && dst_dtype == DataType::UINT16) ||
              (src_dtype == DataType::INT8 && dst_dtype == DataType::FP16) ||
              (src_dtype == DataType::UINT8 && dst_dtype == DataType::FP16) ||
              (src_dtype == DataType::INT32 && dst_dtype == DataType::INT64) ||
-             (src_dtype == DataType::UINT32 && dst_dtype == DataType::INT64) ||
              (src_dtype == DataType::INT16 && dst_dtype == DataType::FP32) ||
              (src_dtype == DataType::UINT16 && dst_dtype == DataType::FP32) ||
              (src_dtype == DataType::HF8 && dst_dtype == DataType::FP16)) {
@@ -2227,6 +2346,12 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
              (src_dtype == DataType::FP16 && (dst_dtype == DataType::INT16 || dst_dtype == DataType::UINT16))) {
         is_float_to_same_int = true;
     }
+    // FLOAT→narrower-INT (2x narrowing): vcvt(dst, src, mask, ROUND, RS, PART, MODE_ZEROING)
+    // FP16→INT8/UINT8, BF16→INT8/UINT8 (b16→b8, uses __VF_VCVTFI_SAT_PART with PART_EVEN/ODD)
+    else if ((src_dtype == DataType::FP16 || src_dtype == DataType::BF16) &&
+             (dst_dtype == DataType::INT8 || dst_dtype == DataType::UINT8)) {
+        is_float_to_narrower_int = true;
+    }
     // FLOAT→wider-INT: vcvt(dst, src, mask, ROUND, PART, MODE_ZEROING) — no RS
     // FP16→S32/U32, BF16→S32/U32 (half-width float to full-width int)
     else if ((src_dtype == DataType::FP16 && (dst_dtype == DataType::INT32 || dst_dtype == DataType::UINT32)) ||
@@ -2241,14 +2366,26 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
              (src_dtype == DataType::INT64 && dst_dtype == DataType::FP32)) {
         is_cross_width = true;
     }
-    // INT→INT narrowing: vcvt(dst, src, mask, RS, PART, MODE_ZEROING)
+    // INT→INT 4x narrowing to UINT8 (b32→u8): vcvt(dst, src, mask, RS, PART_PP, MODE) — 6 args
+    // __VF_VCVTII_SAT_PP: uses PART_P0/P1/P2/P3, supports RS parameter
+    else if ((src_dtype == DataType::INT32 || src_dtype == DataType::UINT32) && dst_dtype == DataType::UINT8) {
+        is_int_4x_narrowing = true;
+    }
+    // INT→INT 2x narrowing to UINT8/INT16/UINT16 (b16→u8, b32→b16, b64→b32): vcvt(dst, src, mask, RS, PART, MODE) — 6
+    // args
+    // __VF_VCVTII_SAT_PART: uses PART_EVEN/ODD, supports RS parameter
     else if (((src_dtype == DataType::INT32 || src_dtype == DataType::UINT32) &&
-              (dst_dtype == DataType::INT16 || dst_dtype == DataType::UINT16 || dst_dtype == DataType::INT8 ||
-               dst_dtype == DataType::UINT8)) ||
-             ((src_dtype == DataType::INT16 || src_dtype == DataType::UINT16) &&
-              (dst_dtype == DataType::INT8 || dst_dtype == DataType::UINT8)) ||
+              (dst_dtype == DataType::INT16 || dst_dtype == DataType::UINT16)) ||
+             ((src_dtype == DataType::INT16 || src_dtype == DataType::UINT16) && dst_dtype == DataType::UINT8) ||
              (src_dtype == DataType::INT64 && (dst_dtype == DataType::INT32 || dst_dtype == DataType::UINT32))) {
-        is_int_narrowing = true;
+        is_int_2x_narrowing = true;
+    }
+    // INT→INT 4x widening (b8→b32): vcvt(dst, src, mask, PART_PP, MODE_ZEROING)
+    // __VF_VCVTII_PP: uses PART_P0/P1/P2/P3
+    // NOTE: Cross-sign 4x widening (s8→u32, u8→s32) is NOT supported by hardware.
+    else if ((src_dtype == DataType::INT8 && dst_dtype == DataType::INT32) ||
+             (src_dtype == DataType::UINT8 && dst_dtype == DataType::UINT32)) {
+        is_int_4x_widening = true;
     }
     // FP8/FP4 4x widening (PP mode): FP8→FP32, FP4→BF16
     // __VF_VCVTFF_PP: vcvt(dst, src, mask, PART_PP, MODE_ZEROING) — 5 args
@@ -2268,6 +2405,14 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
     else if (src_dtype == DataType::BF16 && (dst_dtype == DataType::FP4E2M1 || dst_dtype == DataType::FP4E1M2)) {
         is_fp_narrow_rnd_pp = true;
     }
+    // Remaining int→int paths not directly supported by hardware vcvt overloads:
+    // cross-sign widening (u→s, s→u) and int→INT8 narrowing.
+    // Route through f16 intermediate (two-step), mirroring AscendC's s16→f16→s4 approach.
+    if (src_dtype.IsInt() && dst_dtype.IsInt() && !is_s4_widening && !is_s4_narrowing && !is_s16_to_s4 &&
+        !is_widening && !is_int_4x_widening && !is_int_4x_narrowing && !is_int_2x_narrowing) {
+        is_int_int_two_step = true;
+    }
+
     // Validate round_mode against the specific vcvt overload constraints:
     // - Widening (no precision loss): round_mode is ignored (UNKNOWN), warn if set
     // - is_int_to_float / is_float_to_same_int: R/A/F/C/Z only (no O/H)
@@ -2277,14 +2422,16 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
     // - FP16→HF8 (else/fallback path): only ROUND_A/ROUND_H
     // - is_fp_widen_pp (FP8→FP32, FP4→BF16): no round_mode (UNKNOWN)
     // - is_s4_widening (INT4→FP16/BF16/INT16): no round_mode (UNKNOWN)
-    // - is_int_narrowing: no round_mode (UNKNOWN)
-    if (is_widening || is_fp_widen_pp || is_s4_widening || is_int_narrowing) {
+    // - is_int_2x_narrowing / is_int_4x_narrowing / is_int_4x_widening / is_s16_to_s4: no round_mode
+    if (is_widening || is_fp_widen_pp || is_s4_widening || is_s16_to_s4 || is_int_2x_narrowing || is_int_4x_narrowing ||
+        is_int_4x_widening) {
         CHECK(!op->HasKwarg("round_mode") || round_mode == "CAST_RINT")
             << "vf.astype: round_mode is not applicable for this widening/no-precision-loss "
             << "conversion path (src=" << DTypeStr(src_dtype) << ", dst=" << DTypeStr(dst_dtype)
             << "), only default CAST_RINT is accepted";
     }
-    if (is_int_to_float || is_float_to_same_int || is_fp_narrow_rnd_pp || is_float_to_wider_int || is_cross_width) {
+    if (is_int_to_float || is_float_to_same_int || is_float_to_narrower_int || is_fp_narrow_rnd_pp ||
+        is_float_to_wider_int || is_cross_width || is_int_int_two_step) {
         CHECK(round != "ROUND_O" && round != "ROUND_H")
             << "vf.astype: round_mode CAST_ODD/CAST_HYBRID is not supported for this conversion path "
             << "(src=" << DTypeStr(src_dtype) << ", dst=" << DTypeStr(dst_dtype) << "), "
@@ -2326,17 +2473,32 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
             << "supported values are CAST_RINT/CAST_ROUND/CAST_FLOOR/CAST_CEIL/CAST_TRUNC";
     }
     // Validate saturate against conversion path:
-    // - Widening / is_fp_widen_pp / is_s4_widening: saturate not applicable (UNKNOWN)
+    // - Widening / is_fp_widen_pp / is_s4_widening / is_int_4x_widening: saturate not applicable
     // - is_int_to_float (INT→FLOAT): saturate not applicable (default saturated, no choice)
+    // - is_int_4x_narrowing (b32→u8): saturate is mandatory (always RS_ENABLE)
+    // - is_int_2x_narrowing (b32→b16, b16→u8, b64→b32): saturate OFF/ON both supported
+    // - is_s16_to_s4 (INT16→INT4): saturate OFF/ON both supported (like is_s4_narrowing)
+    // - is_float_to_narrower_int (FP16→INT8/UINT8): saturate OFF/ON both supported
+    // - is_float_to_same_int (FP32→S32): saturate OFF/ON both supported
     // - BF16→FP16 (float→float same-width): saturate OFF/ON both supported
     // - is_fp_narrow_rnd_sat_pp: saturate is mandatory (always RS_ENABLE)
     // - is_fp_narrow_rnd_pp (BF16→FP4): saturate not applicable (UNKNOWN)
     // - FP→FP32 (widening float): only OFF (non-saturated)
-    if (is_widening || is_fp_widen_pp || is_s4_widening || is_fp_narrow_rnd_pp ||
+    if (is_widening || is_fp_widen_pp || is_s4_widening || is_int_4x_widening || is_fp_narrow_rnd_pp ||
         (is_int_to_float && !(src_dtype == DataType::BF16 && dst_dtype == DataType::FP16))) {
         CHECK(!op->HasKwarg("saturate") || sat == "RS_DISABLE")
             << "vf.astype: saturate is not applicable for this conversion path "
             << "(src=" << DTypeStr(src_dtype) << ", dst=" << DTypeStr(dst_dtype) << ")";
+    }
+    if (is_int_4x_narrowing) {
+        // b32→b8 (4x narrowing): saturate is always enabled (RS_ENABLE). Default is RS_DISABLE,
+        // so if user didn't specify, silently enable it.
+        if (!op->HasKwarg("saturate")) {
+            sat = "RS_ENABLE";
+        } else {
+            CHECK(sat == "RS_ENABLE") << "vf.astype: 4x int narrowing (b32→b8) requires saturate=ON (RS_ENABLE), "
+                                      << "OFF is not supported for this path";
+        }
     }
     if (is_fp_narrow_rnd_sat_pp) {
         // FP32→FP8: saturate is always enabled (RS_ENABLE). Default is RS_DISABLE,
@@ -2382,12 +2544,25 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
             << "vf.astype: 2x widening conversion only supports layout ZERO/ONE, got " << layout
             << " (src=" << DTypeStr(src_dtype) << ", dst=" << DTypeStr(dst_dtype) << ")";
     }
+    // 4x int widening (b8→b32): layout supports ZERO/ONE/TWO/THREE
+    if (is_int_4x_widening) {
+        CHECK(layout == "ZERO" || layout == "ONE" || layout == "TWO" || layout == "THREE")
+            << "vf.astype: 4x int widening conversion only supports layout ZERO/ONE/TWO/THREE, got " << layout
+            << " (src=" << DTypeStr(src_dtype) << ", dst=" << DTypeStr(dst_dtype) << ")";
+    }
+    // 4x int narrowing (b32→u8) and INT16→INT4: layout supports ZERO/ONE/TWO/THREE
+    if (is_int_4x_narrowing || is_s16_to_s4) {
+        CHECK(layout == "ZERO" || layout == "ONE" || layout == "TWO" || layout == "THREE")
+            << "vf.astype: 4x int narrowing conversion only supports layout ZERO/ONE/TWO/THREE, got " << layout
+            << " (src=" << DTypeStr(src_dtype) << ", dst=" << DTypeStr(dst_dtype) << ")";
+    }
     // Float narrowing with PART (partCondition in AscendC): layout supports ZERO/ONE only.
     // This covers FP32→FP16, FP32→BF16, FP16→HF8, FP16→UINT8, FP16→INT8, BF16→INT32, FP32→INT16,
     // FP32→INT64 (all use vcvt(dst,src,mask,ROUND,SAT,PART,MODE) — 7 args).
     // AscendC: static_assert(SupportEnum<layoutMode, RegLayout::ZERO, RegLayout::ONE>());
-    if (!is_s4_widening && !is_s4_narrowing && !is_widening && !is_fp_widen_pp && !is_int_to_float &&
-        !is_float_to_same_int && !is_float_to_wider_int && !is_cross_width && !is_int_narrowing &&
+    if (!is_s4_widening && !is_s4_narrowing && !is_s16_to_s4 && !is_widening && !is_fp_widen_pp && !is_int_to_float &&
+        !is_float_to_same_int && !is_float_to_narrower_int && !is_float_to_wider_int && !is_cross_width &&
+        !is_int_2x_narrowing && !is_int_int_two_step && !is_int_4x_narrowing && !is_int_4x_widening &&
         !is_fp_narrow_rnd_sat_pp && !is_fp_narrow_rnd_pp &&
         !(src_dtype == DataType::FP16 && dst_dtype == DataType::BF16) &&
         !(src_dtype == DataType::BF16 && dst_dtype == DataType::FP16) &&
@@ -2436,9 +2611,91 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
     } else if (is_float_to_wider_int || is_cross_width) {
         // vcvt(dst, src, mask, ROUND, PART, MODE_ZEROING) — no RS
         codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + round + ", " + part + ", " + mode_value + ");");
-    } else if (is_int_narrowing) {
-        // vcvt(dst, src, mask, RS, PART, MODE_ZEROING)
+    } else if (is_float_to_narrower_int) {
+        // FLOAT→narrower-INT (2x narrowing): FP16→INT8/UINT8, BF16→INT8/UINT8
+        // AscendC CastOperator<T,U,RoundMode,SatMode,RegLayout,MaskMergeMode> emits:
+        //   vcvt(dstReg, srcReg, mask, roundModeValue, satModeValue, partModeValue, modeValue)
+        // satMode is passed through directly (NO_SAT → RS_DISABLE, SAT → RS_ENABLE).
+        codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + round + ", " + sat + ", " + part + ", " +
+                     mode_value + ");");
+    } else if (is_int_4x_widening) {
+        // 4x int widening (b8→b32): vcvt(dst, src, mask, PART_PP, MODE_ZEROING) — 5 args
+        codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + part_pp + ", " + mode_value + ");");
+    } else if (is_int_4x_narrowing) {
+        // 4x int narrowing to UINT8 (b32→u8): vcvt(dst, src, mask, RS, PART_PP, MODE) — 6 args
+        codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + sat + ", " + part_pp + ", " + mode_value + ");");
+    } else if (is_int_2x_narrowing) {
+        // 2x int narrowing with RS (b32→b16, b16→u8, b64→b32): vcvt(dst, src, mask, RS, PART, MODE) — 6 args
         codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + sat + ", " + part + ", " + mode_value + ");");
+    } else if (is_s16_to_s4) {
+        // INT16→INT4: two-step conversion mirroring AscendC CastOperator (s16→f16→s4).
+        // AscendC hardcodes RoundMode::CAST_RINT for both steps (round_mode not in trait).
+        // Step 1: vcvt(tmp_f16, src_s16, mask, ROUND_R, MODE) — s16→f16 (5 args, rndMergeCast)
+        // Step 2: vcvt_f162s4(dst_s4, tmp_f16, mask, ROUND_R, SAT, PART_PP, MODE) — f16→s4 (7 args)
+        std::string tmp = dst + "_f16_tmp";
+        codegen.HoistRegTensorDecl("RegTensor<half> " + tmp + ";");
+        codegen.Emit("vcvt(" + tmp + ", " + src + ", " + mask + ", ROUND_R, " + mode_value + ");");
+        codegen.Emit("vcvt_f162s4(" + dst + ", " + tmp + ", " + mask + ", ROUND_R, " + sat + ", " + part_pp + ", " +
+                     mode_value + ");");
+    } else if (is_int_int_two_step) {
+        // Multi-step int→int for paths not directly supported by hardware vcvt overloads.
+        // Available int→float overloads: b8→f16, s16→f16, s16→f32, s32→f32
+        // NOT available: u16→f16, u16→f32, u32→f32, s32→f16
+        //
+        // Strategy by src/dst type combination:
+        // 1. src→f16 available (b8, s16): two-step src→f16→dst
+        // 2. s32/u32 src + b8 dst: three-step src→f32→f16→dst (f32→f16 narrowing needed)
+        // 3. u16 src + b8 dst: four-step u16→u32→f32→f16→dst (u16→f16 not available)
+        // 4. u16 src + b32 dst: u16→u32 widening + dst cast (zero-extend, semantically correct)
+        // 5. same-width cross-sign (u16→s16, s32→u32, u32→s32): reinterpret cast, no instruction
+        std::string dst_c_type = dst_dtype.ToCTypeString();
+        bool src_to_f16_ok = (src_dtype.GetBit() == 8) || (src_dtype == DataType::INT16);
+        bool src_is_b32 = (src_dtype == DataType::INT32 || src_dtype == DataType::UINT32);
+        bool dst_is_b8 = (dst_dtype.GetBit() == 8);
+        bool dst_is_b32 = (dst_dtype.GetBit() == 32);
+        bool same_width = (src_dtype.GetBit() == dst_dtype.GetBit());
+
+        if (src_to_f16_ok) {
+            // Two-step: src→f16→dst
+            std::string tmp = dst + "_f16_tmp";
+            codegen.HoistRegTensorDecl("RegTensor<half> " + tmp + ";");
+            EmitIntToFloatVcvt(codegen, tmp, src, mask, part, round, mode_value, src_dtype);
+            EmitFloatToIntVcvt(codegen, dst, tmp, mask, part, round, sat, mode_value, dst_dtype);
+        } else if (src_is_b32 && dst_is_b8) {
+            // Three-step: src→f32→f16→dst (s32→f32→f16→s8, u32 reinterpreted as s32 first)
+            std::string tmp_f32 = dst + "_f32_tmp";
+            std::string tmp_f16 = dst + "_f16_tmp";
+            codegen.HoistRegTensorDecl("RegTensor<float> " + tmp_f32 + ";");
+            codegen.HoistRegTensorDecl("RegTensor<half> " + tmp_f16 + ";");
+            EmitIntToFloatVcvt(codegen, tmp_f32, src, mask, part, round, mode_value, src_dtype);
+            // f32→f16: float narrowing → vcvt(tmp_f16, tmp_f32, mask, ROUND, SAT, PART, MODE) — 7 args
+            codegen.Emit("vcvt(" + tmp_f16 + ", " + tmp_f32 + ", " + mask + ", " + round + ", " + sat + ", " + part +
+                         ", " + mode_value + ");");
+            EmitFloatToIntVcvt(codegen, dst, tmp_f16, mask, part, round, sat, mode_value, dst_dtype);
+        } else if (src_dtype == DataType::UINT16 && dst_is_b8) {
+            // Four-step: u16→u32→f32→f16→dst (u16→f16 not available, so widen to u32 first)
+            std::string tmp_u32 = dst + "_u32_tmp";
+            std::string tmp_f32 = dst + "_f32_tmp";
+            std::string tmp_f16 = dst + "_f16_tmp";
+            codegen.HoistRegTensorDecl("RegTensor<uint32_t> " + tmp_u32 + ";");
+            codegen.HoistRegTensorDecl("RegTensor<float> " + tmp_f32 + ";");
+            codegen.HoistRegTensorDecl("RegTensor<half> " + tmp_f16 + ";");
+            // u16→u32: widening → vcvt(tmp_u32, src, mask, PART, MODE) — 5 args
+            codegen.Emit("vcvt(" + tmp_u32 + ", " + src + ", " + mask + ", " + part + ", " + mode_value + ");");
+            EmitIntToFloatVcvt(codegen, tmp_f32, tmp_u32, mask, part, round, mode_value, DataType::UINT32);
+            // f32→f16: float narrowing → vcvt(tmp_f16, tmp_f32, mask, ROUND, SAT, PART, MODE) — 7 args
+            codegen.Emit("vcvt(" + tmp_f16 + ", " + tmp_f32 + ", " + mask + ", " + round + ", " + sat + ", " + part +
+                         ", " + mode_value + ");");
+            EmitFloatToIntVcvt(codegen, dst, tmp_f16, mask, part, round, sat, mode_value, dst_dtype);
+        } else if (src_dtype == DataType::UINT16 && dst_is_b32) {
+            // u16→s32: u16→u32 widening with dst cast (zero-extend preserves value)
+            std::string u32_c_type = DataType::UINT32.ToCTypeString();
+            codegen.Emit("vcvt((RegTensor<" + u32_c_type + "> &)" + dst + ", " + src + ", " + mask + ", " + part +
+                         ", " + mode_value + ");");
+        } else if (same_width && src_dtype != dst_dtype) {
+            // Same-width cross-sign (u16→s16, s32→u32, u32→s32): reinterpret cast
+            codegen.Emit(dst + " = (RegTensor<" + dst_c_type + "> &)" + src + ";");
+        }
     } else if (is_fp_widen_pp) {
         // FP8/FP4 4x widening PP: vcvt(dst, src, mask, PART_PP, MODE_ZEROING)
         codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + part_pp + ", " + mode_value + ");");
@@ -2477,7 +2734,7 @@ static std::string EmitVFDeInterleave(const ir::CallPtr& op, codegen::CodegenBas
         if (op->HasKwarg("dtype")) {
             dtype = op->GetKwarg<DataType>("dtype");
         }
-        // AscendC MaskDeInterleave: only supports b8/b16/b32 (not b64)
+        // MaskDeInterleave: only supports b8/b16/b32 (not b64)
         CHECK(dtype.GetBit() == 8 || dtype.GetBit() == 16 || dtype.GetBit() == 32)
             << "vf.de_interleave (MaskReg) only supports b8/b16/b32, got " << DTypeStr(dtype);
         std::string pdintlv_op;
@@ -2583,9 +2840,9 @@ static std::string EmitVFHistograms(const ir::CallPtr& op, codegen::CodegenBase&
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
-    // AscendC Histograms: dst must be uint16_t
+    // vhist: dst must be uint16_t
     DataType src_dt = GetExprDtype(op->args_[1]);
-    // AscendC Histograms: src must be uint8_t
+    // vhist: src must be uint8_t
     CHECK(src_dt == DataType::UINT8) << "vf.histograms source only supports UINT8, got " << DTypeStr(src_dt);
     // Reinterpret src as RegTensor<uint8_t>& if its dtype isn't u8
     std::string bin_type = VFEnumValueName(ir::EnumToString(static_cast<ir::BinType>(op->GetKwarg<int>("bin_type"))));
@@ -2614,12 +2871,12 @@ static std::string EmitVFCompareImpl(const ir::CallPtr& op, codegen::CodegenBase
     std::string src0 = codegen.GetExprAsCode(op->args_[1]);
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask_src = codegen.GetExprAsCode(op->args_[3]);
-    // AscendC Compare supports: u8,s8,u16,s16,u32,s32,half,float,bf16,u64,s64 (no bool, no FP8)
+    // vcmp supports: u8,s8,u16,s16,u32,s32,half,float,bf16,u64,s64 (no bool, no FP8)
     DataType s0_dt = GetExprDtype(op->args_[1]);
     CHECK((s0_dt.IsInt() || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
         << op->name_ << " source only supports INT/UINT/FP16/FP32/BF16, got " << DTypeStr(s0_dt);
     DataType s1_dt = GetExprDtype(op->args_[2]);
-    // Bit width check: in scalar path, AscendC uses is_convertible (allows int64 scalar -> int32 reg)
+    // Bit width check: in scalar path, uses is_convertible (allows int64 scalar -> int32 reg)
     // so we defer the strict check to the vector-vector path only.
     // Here we just ensure s1 is not a wider type that can't convert (e.g. float vs int).
     bool is_scalar_src = true;
@@ -2639,7 +2896,7 @@ static std::string EmitVFCompareImpl(const ir::CallPtr& op, codegen::CodegenBase
                 << " src1=" << DTypeStr(s1_dt) << ". Pass cmp_dtype to compare different-width regs.";
         }
     } else {
-        // Scalar compare: AscendC is_convertible allows scalar to be wider than reg
+        // Scalar compare: is_convertible allows scalar to be wider than reg
         CHECK(s1_dt.GetBit() >= s0_dt.GetBit())
             << op->name_ << " scalar must be convertible to reg type, got src0=" << DTypeStr(s0_dt)
             << " scalar=" << DTypeStr(s1_dt);
@@ -2714,15 +2971,15 @@ static std::string EmitVFArange(const ir::CallPtr& op, codegen::CodegenBase& cod
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string start = codegen.GetExprAsCode(op->args_[1]);
     DataType dst_dt = GetExprDtype(op->args_[0]);
-    // AscendC Arange: supports INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32
+    // vci: supports INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32
     CHECK(dst_dt == DataType::INT8 || dst_dt == DataType::UINT8 || dst_dt == DataType::INT16 ||
           dst_dt == DataType::UINT16 || dst_dt == DataType::INT32 || dst_dt == DataType::UINT32 ||
           dst_dt == DataType::INT64 || dst_dt == DataType::UINT64 || dst_dt == DataType::FP16 ||
           dst_dt == DataType::FP32)
         << "vf.arange only supports INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32, got "
         << DTypeStr(dst_dt);
-    // AscendC: scalarValue must be convertible to RegTensor data type
-    // AscendC: is_convertible<U, ActualT>() — start must be convertible to dst type.
+    // vci: scalarValue must be convertible to RegTensor data type
+    // is_convertible<U, ActualT>() — start must be convertible to dst type.
     // This allows e.g. int64(index) start with int32 dst (narrowing conversion).
     // Only reject if start is smaller than dst (would lose data).
     // index_order kwarg selects the direction: INCREASE_ORDER (default) ->
@@ -2744,7 +3001,7 @@ static std::string EmitVFArange(const ir::CallPtr& op, codegen::CodegenBase& cod
     else if (dst_dt == DataType::UINT32)
         elem_type = "int32_t";
     // b64 (INT64/UINT64): single vci does not support 8-byte elements.
-    // Replicate AscendC ArangeB64Impl using pure bisheng intrinsics:
+    // Replicate ArangeB64 using pure bisheng intrinsics:
     //   1. vci int32 low-half (0,1,2,...) into a temp RegTensor<int32_t>
     //   2. vneg if DECREASE_ORDER (produces 0,-1,-2,...)
     //   3. vdup int32 high-half = 0
@@ -2794,7 +3051,7 @@ static std::string EmitVFGather(const ir::CallPtr& op, codegen::CodegenBase& cod
         CHECK(!op->HasKwarg("data_copy_mode")) << "vf.gather (reg→reg) does not support data_copy_mode "
                                                << "(only Tile→Reg form supports it)";
         // Supports b8/b16/b32; src and dst must have the same type; index bit width
-        // must match src. No b64 support (AscendC vselr limitation).
+        // must match src. No b64 support (vselr limitation).
         DataType dst_dt = GetExprDtype(op->args_[0]);
         DataType src_dt = GetExprDtype(op->args_[1]);
         DataType idx_dt = GetExprDtype(op->args_[2]);
@@ -2843,10 +3100,10 @@ static std::string EmitVFGather(const ir::CallPtr& op, codegen::CodegenBase& cod
     }
 
     if (is_datablock) {
-        // AscendC DataCopyGatherBImpl: dst b8/b16/b32/b64, index must be uint32_t
+        // DataCopyGatherB: dst b8/b16/b32/b64, index must be uint32_t
         CHECK(idx_dt == DataType::UINT32)
             << "vf.gather (DATA_BLOCK_LOAD) index must be UINT32, got " << DTypeStr(idx_dt);
-        // Block gather: AscendC always casts to signed types (s8/s16/s32/s64)
+        // Block gather: always casts to signed types (s8/s16/s32/s64)
         // and uses int8_t*/int16_t*/int32_t*/int64_t* for the UB pointer.
         std::string signed_c_type;
         if (dst_dt.GetBit() <= 8) {
@@ -2862,7 +3119,7 @@ static std::string EmitVFGather(const ir::CallPtr& op, codegen::CodegenBase& cod
         codegen.Emit("vgatherb((RegTensor<" + signed_c_type + ">&)" + dst + ", " + gb_ub_ptr +
                      ", (RegTensor<uint32_t> &)" + indices + ", " + mask + ");");
     } else {
-        // AscendC DataCopyGatherImpl: specific src-dst-index type combinations
+        // DataCopyGather: specific src-dst-index type combinations
         // src b8 -> dst b16 + idx u16; src b16 -> dst b16 + idx u16/u32;
         // src b32 -> dst b32 + idx u32; src b64 -> dst b64 + idx u32/u64
         bool is_b16_src = (dst_dt == DataType::INT16 || dst_dt == DataType::UINT16 || dst_dt == DataType::FP16 ||
@@ -2918,7 +3175,7 @@ static std::string EmitVFStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBas
     }
     if (src_is_mask) {
         CHECK(op->args_.size() == 3) << "vf.store_unalign mask path requires 3 args (ptr, mask, ureg)";
-        // AscendC DataCopyUnAlignImpl: only supports b16/b32 (SupportBytes<T, 2, 4>)
+        // DataCopyUnAlign: only supports b16/b32 (SupportBytes<T, 2, 4>)
         DataType tile_dt = GetExprDtype(op->args_[0]);
         CHECK(tile_dt.GetBit() == 16 || tile_dt.GetBit() == 32)
             << "vf.store_unalign (mask path) only supports b16/b32 tile types, got " << DTypeStr(tile_dt);
@@ -2927,7 +3184,7 @@ static std::string EmitVFStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBas
         int elem_bytes = static_cast<int>(mask_dt.GetBit() / 8);
         if (elem_bytes <= 0)
             elem_bytes = 4;
-        // pstu only accepts uint16_t* or uint32_t* (AscendC DataCopyUnAlignImpl
+        // pstu only accepts uint16_t* or uint32_t* (DataCopyUnAlignImpl
         // casts to unsigned regardless of template T). b16→uint16_t, b32→uint32_t.
         std::string ptr_type = (elem_bytes <= 2) ? "uint16_t" : "uint32_t";
         // pstu modifies the pointer in-place (*&), so use post-update ref.
@@ -2988,7 +3245,7 @@ static std::string EmitVFStoreUnAlignPost(const ir::CallPtr& op, codegen::Codege
     // Match the paired store's pointer type — A5 only supports signed types.
     CHECK(op->args_.size() >= 2) << "vf.store_unalign_post requires >=2 args (dst, ureg[, stride])";
     DataType tile_dt = GetExprDtype(op->args_[0]);
-    // AscendC DataCopyUnAlignPostImpl: supports b8/b16/b32/b64
+    // DataCopyUnAlignPost: supports b8/b16/b32/b64
     CHECK(IsB8Type(tile_dt) || tile_dt.GetBit() == 16 || tile_dt.GetBit() == 32 || tile_dt.GetBit() == 64)
         << "vf.store_unalign_post only supports b8/b16/b32/b64 types, got " << DTypeStr(tile_dt);
     DataType cast_dt = tile_dt;
@@ -3159,7 +3416,7 @@ static std::string EmitVFUnsqueeze(const ir::CallPtr& op, codegen::CodegenBase& 
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 2) << "vf.unsqueeze requires 2 args (dst, mask)";
-    // AscendC PrefixSum (vusqz): int8/uint8/int16/uint16/int32/uint32 only
+    // PrefixSum (vusqz): int8/uint8/int16/uint16/int32/uint32 only
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string mask = codegen.GetExprAsCode(op->args_[1]);
     DataType dst_dt = GetExprDtype(op->args_[0]);
@@ -3229,7 +3486,7 @@ static std::string EmitVFMaskGenWithRegTensor(const ir::CallPtr& op, codegen::Co
     DataType src_dt = GetExprDtype(op->args_[0]);
     CHECK(src_dt.GetBit() == 16 || src_dt.GetBit() == 32)
         << "vf.mask_gen_with_reg_tensor source only supports b16/b32 types, got " << DTypeStr(src_dt);
-    // AscendC: offset must be 0~15 for b16, 0~31 for b32
+    // offset must be 0~15 for b16, 0~31 for b32
     int offset_val = 0;
     if (op->HasKwarg("offset")) {
         offset_val = op->GetKwarg<int>("offset");
@@ -3261,7 +3518,7 @@ static std::string EmitVFGetMaskSpr(const ir::CallPtr& op, codegen::CodegenBase&
     std::string width = "B32";
     if (op->HasKwarg("width"))
         width = VFEnumValueName(ir::EnumToString(static_cast<ir::MaskWidth>(op->GetKwarg<int>("width"))));
-    // AscendC MoveMask: only supports b16/b32 (SupportBytes<T, 2, 4>)
+    // MoveMask: only supports b16/b32 (SupportBytes<T, 2, 4>)
     CHECK(width == "B16" || width == "B32") << "vf.get_mask_spr only supports B16/B32 width, got " << width;
     if (width == "B16")
         codegen.Emit("MaskReg " + reg_name + " = movp_b16();");
@@ -3643,7 +3900,7 @@ static std::string EmitVFMulsCast(const ir::CallPtr& op, codegen::CodegenBase& c
     CHECK(src_dt == DataType::FP32) << "vf.muls_cast source only supports FP32, got " << DTypeStr(src_dt);
     DataType dst_dt = GetExprDtype(op->args_[0]);
     CHECK(dst_dt == DataType::FP16) << "vf.muls_cast destination only supports FP16, got " << DTypeStr(dst_dt);
-    // AscendC FusedMulsCast: scalar must be float (Tuple<half, float, float>)
+    // FusedMulsCast: scalar must be float (Tuple<half, float, float>)
     DataType scalar_dt = GetExprDtype(op->args_[2]);
     CHECK(scalar_dt == DataType::FP32) << "vf.muls_cast scalar only supports FP32, got " << DTypeStr(scalar_dt);
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
@@ -3651,7 +3908,7 @@ static std::string EmitVFMulsCast(const ir::CallPtr& op, codegen::CodegenBase& c
     std::string scalar_str = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     // layout kwarg selects the result half: ZERO -> PART_EVEN (default), ONE -> PART_ODD.
-    // AscendC FusedMulsCast: only supports RegLayout ZERO/ONE
+    // FusedMulsCast: only supports RegLayout ZERO/ONE
     std::string part = "PART_EVEN";
     if (op->HasKwarg("layout")) {
         auto layout = VFEnumValueName(ir::EnumToString(static_cast<ir::CastLayout>(op->GetKwarg<int>("layout"))));
@@ -3676,7 +3933,7 @@ REGISTER_BACKEND_OP(BackendCCE, "vf.muls_cast")
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMulsCast(op, codegen); });
 
 // ============================================================================
-// Load (unified) — AscendC Load: vldas + vldus all-in-one unaligned load
+// Load (unified) — vldas + vldus all-in-one unaligned load
 // ============================================================================
 
 static std::string EmitVFLoad(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
@@ -3733,7 +3990,7 @@ static std::string EmitVFLoad(const ir::CallPtr& op, codegen::CodegenBase& codeg
 }
 
 // ============================================================================
-// Store (unified) — AscendC Store: vstus + vstas all-in-one unaligned store
+// Store (unified) — vstus + vstas all-in-one unaligned store
 // ============================================================================
 
 static std::string EmitVFStore(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
@@ -3775,7 +4032,7 @@ static std::string EmitVFStore(const ir::CallPtr& op, codegen::CodegenBase& code
 
 // EmitVFMaskLoad/Store/StoreUnalign have been removed — their logic is now
 // unified into EmitVFLoadAlign/EmitVFStoreAlign/EmitVFStoreUnAlign via
-// IsMaskRegVar dispatch, matching AscendC's function-overloading model.
+// IsMaskRegVar dispatch, matching function-overloading model.
 
 REGISTER_BACKEND_OP(BackendCCE, "vf.load")
 
@@ -3829,7 +4086,7 @@ static std::string EmitVFCreateAddrReg(const ir::CallPtr& op, codegen::CodegenBa
     }
     // AddrReg (vector_address) must be declared and initialized in a single
     // statement (bisheng rejects a separate declaration + assignment). Emit the
-    // declaration and vag_* initializer together, matching AscendC's
+    // declaration and vag_* initializer together, matching the
     // `AddrReg x = CreateAddrReg<T>(...)` usage. The vag_* must sit inside the
     // physical loop it is bound to (HardwareLoop).
     codegen.Emit("AddrReg " + reg_name + " = " + vag_fn + "(" + stride_args + ");");

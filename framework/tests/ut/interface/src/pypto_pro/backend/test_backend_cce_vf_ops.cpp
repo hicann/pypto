@@ -312,7 +312,7 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
     expect_unary("vf.abs", {"vabs("});
     expect_unary("vf.not_", {"vnot("});
     expect_unary("vf.sqrt", {"vsqrt("});
-    ExpectInvoke(codegen, "vf.sqrt", {"vsqrt<float, &"}, {dst, src0, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.sqrt", {"vsqrt<float, true>("}, {dst, src0, mask}, {{"precision", true}});
     expect_unary("vf.relu", {"vrelu("});
     expect_unary("vf.neg", {"vneg("});
     expect_unary("vf.log2", {"vln(", "1.4426950408889634f"});
@@ -383,8 +383,10 @@ TEST(BackendCCEVFOpsTest, EmitsPackAndCastIntrinsics)
     auto i64 = MakeVar("i64", ir::DataType::INT64);
     auto i32 = MakeVar("i32", ir::DataType::INT32);
     auto i16 = MakeVar("i16", ir::DataType::INT16);
+    auto i8 = MakeVar("i8", ir::DataType::INT8);
     auto u16 = MakeVar("u16", ir::DataType::UINT16);
     auto u32 = MakeVar("u32", ir::DataType::UINT32);
+    auto u8 = MakeVar("u8", ir::DataType::UINT8);
     auto s4 = MakeVar("s4", ir::DataType::INT4);
     auto f8e4m3 = MakeVar("f8e4m3", ir::DataType::FP8E4M3FN);
     auto f8e5m2 = MakeVar("f8e5m2", ir::DataType::FP8E5M2);
@@ -392,7 +394,8 @@ TEST(BackendCCEVFOpsTest, EmitsPackAndCastIntrinsics)
     auto f4e2m1 = MakeVar("f4e2m1", ir::DataType::FP4E2M1);
     auto f4e1m2 = MakeVar("f4e1m2", ir::DataType::FP4E1M2);
     auto mask = MakeVar("mask", ir::DataType::UINT32);
-    for (const auto& var : {fp32, fp16, bf16, i64, i32, i16, u16, u32, s4, f8e4m3, f8e5m2, hf8, f4e2m1, f4e1m2}) {
+    for (const auto& var :
+         {fp32, fp16, bf16, i64, i32, i16, i8, u16, u32, u8, s4, f8e4m3, f8e5m2, hf8, f4e2m1, f4e1m2}) {
         codegen.RegisterRegTensorVar(var->name_);
     }
 
@@ -441,6 +444,27 @@ TEST(BackendCCEVFOpsTest, EmitsPackAndCastIntrinsics)
                  {{"layout", EnumValue(ir::CastLayout::ONE)}, {"dtype", ir::DataType::FP16}});
     ExpectInvoke(codegen, "vf.astype", {"vcvt_f162s4(s4, fp16, mask, ROUND_F, RS_ENABLE, PART_P1, MODE_ZEROING);"},
                  {s4, fp16, mask}, with_dtype(cast_options, ir::DataType::INT4));
+    // INT16→INT4 (two-step: s16→f16→s4, mirroring AscendC Cast)
+    // Default layout=ZERO → PART_P0, default saturate=OFF → RS_DISABLE
+    ExpectInvoke(codegen, "vf.astype",
+                 {"vcvt(s4_f16_tmp, i16, mask, ROUND_R, MODE_ZEROING);",
+                  "vcvt_f162s4(s4, s4_f16_tmp, mask, ROUND_R, RS_DISABLE, PART_P0, MODE_ZEROING);"},
+                 {s4, i16, mask}, {{"dtype", ir::DataType::INT4}});
+    // int→int two-step through f16 (cross-sign widening, int→INT8 narrowing)
+    // UINT8→INT16: u8→f16 (widening, 5 args) → f16→s16 (same-int, 5 args)
+    ExpectInvoke(codegen, "vf.astype",
+                 {"vcvt(i16_f16_tmp, u8, mask, PART_EVEN, MODE_ZEROING);",
+                  "vcvt(i16, i16_f16_tmp, mask, ROUND_R, RS_DISABLE, MODE_ZEROING);"},
+                 {i16, u8, mask}, {{"dtype", ir::DataType::INT16}});
+    // INT32→INT8: three-step s32→f32→f16→s8
+    ExpectInvoke(codegen, "vf.astype",
+                 {"vcvt(i8_f32_tmp, i32, mask, ROUND_R, MODE_ZEROING);",
+                  "vcvt(i8_f16_tmp, i8_f32_tmp, mask, ROUND_R, RS_DISABLE, PART_EVEN, MODE_ZEROING);",
+                  "vcvt(i8, i8_f16_tmp, mask, ROUND_R, RS_DISABLE, PART_EVEN, MODE_ZEROING);"},
+                 {i8, i32, mask}, {{"dtype", ir::DataType::INT8}});
+    // UINT16→INT32: u16→u32 widening with dst cast (zero-extend, semantically correct)
+    ExpectInvoke(codegen, "vf.astype", {"vcvt((RegTensor<uint32_t> &)i32, u16, mask, PART_EVEN, MODE_ZEROING);"},
+                 {i32, u16, mask}, {{"dtype", ir::DataType::INT32}});
     // FP8/FP4 low-precision conversions
     // 4x widening PP (5-arg): FP8→FP32, FP4→BF16 → vcvt(dst,src,mask,PART_PP,MODE)
     // Widening paths: round_mode and saturate are not applicable
@@ -859,6 +883,165 @@ TEST(BackendCCEVFOpsTest, BitCastEmitInlineReferenceCast)
     // vf.xor with one bit_cast arg and one plain FP32 arg (src2 must match bit_cast's 32-bit width)
     auto src2 = MakeVar("src2", ir::DataType::FP32);
     ExpectInvoke(codegen, "vf.xor", {"vxor(", "(RegTensor<float> &)src", "src2"}, {dst, bit_cast_call, src2, mask});
+}
+
+TEST(BackendCCEVFOpsTest, EmitsB64LoadStoreAndNewCastPaths)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile64 = MakeTile("tile64", ir::DataType::INT64);
+    auto tile64u = MakeTile("tile64u", ir::DataType::UINT64);
+    auto i64 = MakeVar("i64", ir::DataType::INT64);
+    auto u64 = MakeVar("u64", ir::DataType::UINT64);
+    auto i32 = MakeVar("i32", ir::DataType::INT32);
+    auto u32 = MakeVar("u32", ir::DataType::UINT32);
+    auto u16 = MakeVar("u16", ir::DataType::UINT16);
+    auto u8 = MakeVar("u8", ir::DataType::UINT8);
+    auto i16 = MakeVar("i16", ir::DataType::INT16);
+    auto i8 = MakeVar("i8", ir::DataType::INT8);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    auto fp32 = MakeVar("fp32", ir::DataType::FP32);
+    auto bf16 = MakeVar("bf16", ir::DataType::BF16);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    for (const auto& var : {i64, u64, i32, u32, u16, u8, i16, i8, fp16, fp32, bf16}) {
+        codegen.RegisterRegTensorVar(var->name_);
+    }
+
+    // B64 load_align with post_update: __VF_VLDS_B64 POST_UPDATE path
+    ExpectInvoke(codegen, "vf.load_align", {"vector_2xvl_s64", "POST_UPDATE"}, {i64, tile64, Int(2)},
+                 {{"post_update", true}});
+
+    // B64 store_align with post_update: __VF_VSTS_B64 POST_UPDATE path
+    ExpectInvoke(codegen, "vf.store_align", {"vector_2xvl_s64", "POST_UPDATE"}, {tile64, i64, mask, Int(2)},
+                 {{"post_update", true}});
+
+    // INT32→UINT8 (4x int narrowing): vcvt(dst, src, mask, RS, PART_PP, MODE) — 6 args
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(u8, i32, mask, RS_ENABLE, PART_P0, MODE_ZEROING);"}, {u8, i32, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)}, {"dtype", ir::DataType::UINT8}});
+
+    // UINT32→UINT8 (4x int narrowing)
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(u8, u32, mask, RS_ENABLE, PART_P0, MODE_ZEROING);"}, {u8, u32, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)}, {"dtype", ir::DataType::UINT8}});
+
+    // INT8→INT32 (4x int widening): vcvt(dst, src, mask, PART_PP, MODE_ZEROING) — 5 args
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(i32, i8, mask, PART_P0, MODE_ZEROING);"}, {i32, i8, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)}, {"dtype", ir::DataType::INT32}});
+
+    // FP16→INT8 (float_to_narrower_int): vcvt(dst, src, mask, ROUND, SAT, PART, MODE) — 7 args
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(i8, fp16, mask, ROUND_F, RS_ENABLE, PART_EVEN, MODE_ZEROING);"},
+                 {i8, fp16, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)},
+                  {"round_mode", EnumValue(ir::VFRoundMode::CAST_FLOOR)},
+                  {"saturate", EnumValue(ir::SaturateMode::ON)},
+                  {"dtype", ir::DataType::INT8}});
+
+    // BF16→INT8 (float_to_narrower_int)
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(i8, bf16, mask, ROUND_F, RS_ENABLE, PART_EVEN, MODE_ZEROING);"},
+                 {i8, bf16, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)},
+                  {"round_mode", EnumValue(ir::VFRoundMode::CAST_FLOOR)},
+                  {"saturate", EnumValue(ir::SaturateMode::ON)},
+                  {"dtype", ir::DataType::INT8}});
+
+    // INT16→UINT8 (2x int narrowing): vcvt(dst, src, mask, RS, PART, MODE) — 6 args
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(u8, i16, mask, RS_DISABLE, PART_EVEN, MODE_ZEROING);"}, {u8, i16, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)}, {"dtype", ir::DataType::UINT8}});
+
+    // INT32→INT16 (2x int narrowing)
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(i16, i32, mask, RS_DISABLE, PART_EVEN, MODE_ZEROING);"}, {i16, i32, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)}, {"dtype", ir::DataType::INT16}});
+
+    // INT64→INT32 (2x int narrowing)
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(i32, i64, mask, RS_DISABLE, PART_EVEN, MODE_ZEROING);"}, {i32, i64, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)}, {"dtype", ir::DataType::INT32}});
+
+    // INT16→INT4 (s16_to_s4 two-step)
+    auto s4 = MakeVar("s4", ir::DataType::INT4);
+    codegen.RegisterRegTensorVar("s4");
+    ExpectInvoke(codegen, "vf.astype",
+                 {"vcvt(s4_f16_tmp, i16, mask, ROUND_R, MODE_ZEROING);",
+                  "vcvt_f162s4(s4, s4_f16_tmp, mask, ROUND_R, RS_DISABLE, PART_P0, MODE_ZEROING);"},
+                 {s4, i16, mask}, {{"layout", EnumValue(ir::CastLayout::ZERO)}, {"dtype", ir::DataType::INT4}});
+
+    // UINT32→INT8 (int_int_two_step: u32→s32 reinterpret → s32→f32→f16→s8)
+    ExpectInvoke(codegen, "vf.astype",
+                 {"vcvt(i8_f32_tmp, (RegTensor<int32_t> &)u32, mask, ROUND_R, MODE_ZEROING);",
+                  "vcvt(i8_f16_tmp, i8_f32_tmp, mask, ROUND_R, RS_DISABLE, PART_EVEN, MODE_ZEROING);",
+                  "vcvt(i8, i8_f16_tmp, mask, ROUND_R, RS_DISABLE, PART_EVEN, MODE_ZEROING);"},
+                 {i8, u32, mask}, {{"dtype", ir::DataType::INT8}});
+
+    // UINT16→INT8 (int_int_two_step: u16→u32→f32→f16→s8, 4-step)
+    ExpectInvoke(codegen, "vf.astype",
+                 {"vcvt(i8_u32_tmp, u16, mask, PART_EVEN, MODE_ZEROING);",
+                  "vcvt(i8_f32_tmp, (RegTensor<int32_t> &)i8_u32_tmp, mask, ROUND_R, MODE_ZEROING);",
+                  "vcvt(i8_f16_tmp, i8_f32_tmp, mask, ROUND_R, RS_DISABLE, PART_EVEN, MODE_ZEROING);",
+                  "vcvt(i8, i8_f16_tmp, mask, ROUND_R, RS_DISABLE, PART_EVEN, MODE_ZEROING);"},
+                 {i8, u16, mask}, {{"dtype", ir::DataType::INT8}});
+
+    // UINT16→INT16 (int_int_two_step: same-width cross-sign reinterpret cast)
+    ExpectInvoke(codegen, "vf.astype", {"i16 = (RegTensor<int16_t> &)u16;"}, {i16, u16, mask},
+                 {{"dtype", ir::DataType::INT16}});
+
+    // UINT32→INT32 (int_int_two_step: same-width cross-sign reinterpret cast)
+    ExpectInvoke(codegen, "vf.astype", {"i32 = (RegTensor<int32_t> &)u32;"}, {i32, u32, mask},
+                 {{"dtype", ir::DataType::INT32}});
+
+    // FP16→INT8 with saturate=OFF (float_to_narrower_int, no saturation)
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(i8, fp16, mask, ROUND_F, RS_DISABLE, PART_EVEN, MODE_ZEROING);"},
+                 {i8, fp16, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)},
+                  {"round_mode", EnumValue(ir::VFRoundMode::CAST_FLOOR)},
+                  {"saturate", EnumValue(ir::SaturateMode::OFF)},
+                  {"dtype", ir::DataType::INT8}});
+
+    // INT32→UINT8 (4x int narrowing) without explicit saturate → implicit RS_ENABLE
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(u8, i32, mask, RS_ENABLE, PART_P1, MODE_ZEROING);"}, {u8, i32, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ONE)}, {"dtype", ir::DataType::UINT8}});
+
+    // INT8→INT32 (4x int widening) with layout TWO
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(i32, i8, mask, PART_P2, MODE_ZEROING);"}, {i32, i8, mask},
+                 {{"layout", EnumValue(ir::CastLayout::TWO)}, {"dtype", ir::DataType::INT32}});
+
+    // INT8→INT32 (4x int widening) with layout THREE
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(i32, i8, mask, PART_P3, MODE_ZEROING);"}, {i32, i8, mask},
+                 {{"layout", EnumValue(ir::CastLayout::THREE)}, {"dtype", ir::DataType::INT32}});
+
+    // FP32→INT16 (float narrowing): vcvt(dst, src, mask, ROUND, SAT, PART, MODE) — 7 args
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(i16, fp32, mask, ROUND_F, RS_ENABLE, PART_EVEN, MODE_ZEROING);"},
+                 {i16, fp32, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)},
+                  {"round_mode", EnumValue(ir::VFRoundMode::CAST_FLOOR)},
+                  {"saturate", EnumValue(ir::SaturateMode::ON)},
+                  {"dtype", ir::DataType::INT16}});
+
+    // FP32→INT32 (float_to_same_int with saturate=OFF): vcvt(dst, src, mask, ROUND, RS, MODE) — 5 args
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(i32, fp32, mask, ROUND_F, RS_DISABLE, MODE_ZEROING);"}, {i32, fp32, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)},
+                  {"round_mode", EnumValue(ir::VFRoundMode::CAST_FLOOR)},
+                  {"saturate", EnumValue(ir::SaturateMode::OFF)},
+                  {"dtype", ir::DataType::INT32}});
+
+    // INT32→UINT8 (4x int narrowing) with explicit saturate=OFF → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.astype", {u8, i32, mask},
+                            {{"layout", EnumValue(ir::CastLayout::ZERO)},
+                             {"saturate", EnumValue(ir::SaturateMode::OFF)},
+                             {"dtype", ir::DataType::UINT8}}));
+
+    // INT16→INT8 (int_int_two_step src_to_f16_ok: s16→f16→s8)
+    ExpectInvoke(codegen, "vf.astype",
+                 {"vcvt(i8_f16_tmp, i16, mask, ROUND_R, MODE_ZEROING);",
+                  "vcvt(i8, i8_f16_tmp, mask, ROUND_R, RS_DISABLE, PART_EVEN, MODE_ZEROING);"},
+                 {i8, i16, mask}, {{"dtype", ir::DataType::INT8}});
+
+    // INT32→INT8 with saturate=ON (int_int_two_step src_is_b32 && dst_is_b8: s32→f32→f16→s8)
+    ExpectInvoke(codegen, "vf.astype",
+                 {"vcvt(i8_f32_tmp, i32, mask, ROUND_R, MODE_ZEROING);",
+                  "vcvt(i8_f16_tmp, i8_f32_tmp, mask, ROUND_R, RS_ENABLE, PART_EVEN, MODE_ZEROING);",
+                  "vcvt(i8, i8_f16_tmp, mask, ROUND_R, RS_ENABLE, PART_EVEN, MODE_ZEROING);"},
+                 {i8, i32, mask},
+                 {{"layout", EnumValue(ir::CastLayout::ZERO)},
+                  {"round_mode", EnumValue(ir::VFRoundMode::CAST_RINT)},
+                  {"saturate", EnumValue(ir::SaturateMode::ON)},
+                  {"dtype", ir::DataType::INT8}});
 }
 
 } // namespace

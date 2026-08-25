@@ -77,10 +77,14 @@ def example_kernel(
     out_hi: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
 ):
     tf = pl.TileType(shape=[1, 64], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=256)
-    in_b = pl.make_tile(tf, addr=256, size=256)
-    t_lo = pl.make_tile(tf, addr=512, size=256)
-    t_hi = pl.make_tile(tf, addr=768, size=256)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    in_b_grp = pl.make_tile_group(type=tf, addrs=0x100, mutex_ids=[1])
+    in_b = in_b_grp.current()
+    t_lo_grp = pl.make_tile_group(type=tf, addrs=0x200, mutex_ids=[2])
+    t_lo = t_lo_grp.current()
+    t_hi_grp = pl.make_tile_group(type=tf, addrs=0x300, mutex_ids=[3])
+    t_hi = t_hi_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_b, b, [0, 0])

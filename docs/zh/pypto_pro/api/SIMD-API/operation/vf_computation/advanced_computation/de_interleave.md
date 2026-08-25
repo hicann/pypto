@@ -32,16 +32,14 @@ de_interleave(src0, src1, dtype: Optional[DType] = None) -> (dst0, dst1)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数，reg_tensor或者mask_tensor类型。<br>- **reg_tensor输入**：源操作数`src0`、`src1`和目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。<br>- **mask_tensor输入**：支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。 |
+| `src0` | 输入 | 源操作数，reg_tensor或者mask_tensor类型。<br>- **reg_tensor输入**：源操作数`src0`、`src1`和目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。<br>- **mask_tensor输入**：支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。 |
 | `src1` | 输入 | 源操作数，reg_tensor或者mask_tensor类型，支持的数据类型和`src0`一致。 |
 
 ## 约束说明
 
-- src0和scr1可以为同一个reg_tensor；dst0和dst1不能为同一个reg_tensor。
+- src0和scr1可以为同一个reg_tensor；dst0和dst1不能为同一个reg_tensor，配置为同一个reg_tensor会导致功能异常。
 
 - 允许源操作数和目的操作数为同一个reg_tensor。
-
-- 数据类型为64位宽（DT_INT64、DT_UINT64）时，仅支持双寄存器模式。
 
 ## 返回值说明
 
@@ -75,9 +73,12 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
 ):
     tf = pl.TileType(shape=[1, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=256)
-    in_b = pl.make_tile(tf, addr=256, size=256)
-    t_out = pl.make_tile(tf, addr=512, size=256)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    in_b_grp = pl.make_tile_group(type=tf, addrs=0x100, mutex_ids=[1])
+    in_b = in_b_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x200, mutex_ids=[2])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_b, b, [0, 0])
@@ -134,8 +135,10 @@ def example_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=256)
-    t_out = pl.make_tile(tf, addr=256, size=256)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x100, mutex_ids=[1])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
