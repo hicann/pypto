@@ -50,11 +50,8 @@ void DeviceTaskContext::InitDrcoRootFuncList(DynDeviceTask* dyntask)
         }
     }
     rootFuncList->totalTaskCount = dyntask->devTask.coreFunctionCnt;
-    WsAllocation execCountAlloc = ControlFlowAllocateSlab(
-        devProg_, sizeof(uint32_t), workspace_->SlabAlloc(sizeof(uint32_t), WsAicpuSlabMemType::PRED_COUNT));
-    uint32_t* execCount = execCountAlloc.As<uint32_t>();
-    *execCount = 0;
-    rootFuncList->executedTaskCount = execCount;
+    rootFuncList->executedTaskCount = 0;
+    rootFuncList->devTaskFinished = 0;
 }
 
 void DeviceTaskContext::DispatchReadyQueueToCores(DynDeviceTask* dyntask, DevAscendProgram* devProg)

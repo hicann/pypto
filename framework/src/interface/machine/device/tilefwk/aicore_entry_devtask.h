@@ -18,6 +18,9 @@
 INLINE void UpdateCacheDevTask(ExecuteContext* ctx, uint32_t parallelIdx, int64_t devTaskPtr)
 {
     __gm__ DynFuncHeader* header = (__gm__ DynFuncHeader*)devTaskPtr;
+#if ENABLE_AICORE_RESOLVE
+    dcci((__gm__ void*)0, ENTIRE_DATA_CACHE, CACHELINE_OUT);
+#endif
     ctx->cachedDevTasks[parallelIdx].header = header;
     ctx->cachedDevTasks[parallelIdx].seqNo = header->seqNo;
     ctx->cachedDevTasks[parallelIdx].funcDataList = (__gm__ DynFuncData*)(header + 1);

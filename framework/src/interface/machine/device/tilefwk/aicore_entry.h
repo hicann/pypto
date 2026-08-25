@@ -251,6 +251,11 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
     SetStatus(ctx->args, ((uint64_t)taskId << 32) | STAGE_PRE_EXEC_COREFUNC_KERNEL); // high 32 bits used for taskId
     auto& cachedTask = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx];
     auto funcData = &cachedTask.funcDataList[npu::tile_fwk::FuncID(taskId)];
+#if ENABLE_AICORE_RESOLVE
+    dcci((__gm__ uint8_t*)funcData, SINGLE_CACHE_LINE, CACHELINE_OUT);
+    dcci((__gm__ uint8_t*)funcData + 64, SINGLE_CACHE_LINE, CACHELINE_OUT);
+    dcci((__gm__ uint8_t*)funcData + 128, SINGLE_CACHE_LINE, CACHELINE_OUT);
+#endif
     auto opAttrs = &funcData->opAttrs[funcData->opAtrrOffsets[npu::tile_fwk::TaskID(taskId)]];
 #if ENABLE_AICORE_PRINT
     CoreFuncParam param = {funcData, cachedTask.header, opAttrs, funcData->exprTbl, taskId, ctx->logger.Context()};

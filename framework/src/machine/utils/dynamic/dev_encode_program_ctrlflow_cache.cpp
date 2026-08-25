@@ -198,7 +198,8 @@ void DevControlFlowCache::ReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_
                 dst->tail = 0;
             }
         }
-        *base->drcoRootFuncList->executedTaskCount = 0;
+        base->drcoRootFuncList->executedTaskCount = 0;
+        base->drcoRootFuncList->devTaskFinished = 0;
     }
 }
 
@@ -975,7 +976,6 @@ void DevControlFlowCache::RelocDrcoRootFuncList(RelocRange& relocCtrlCache, DynD
                 relocCtrlCache.Reloc(drcoRootFuncList->localReadyQueueArray[ct][i]);
             }
         }
-        relocCtrlCache.Reloc(drcoRootFuncList->executedTaskCount);
     }
 }
 

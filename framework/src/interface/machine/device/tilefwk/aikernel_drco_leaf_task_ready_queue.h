@@ -46,8 +46,8 @@ struct PerCorePendingQueue {
 };
 
 struct DrcoLocalReadyQueue {
-    uint32_t head;
-    uint32_t tail;
+    alignas(64) uint32_t head;
+    alignas(64) uint32_t tail;
     uint32_t size;
     LeafTaskId taskList[0];
 #ifdef __TILE_FWK_HOST__
@@ -59,8 +59,8 @@ struct DrcoLocalReadyQueue {
 #define DRCO_DECODE_TASK(task) ((task) - 1)
 
 struct DrcoGlobalReadyQueue {
-    uint32_t head;
-    uint32_t tail;
+    alignas(64) uint32_t head;
+    alignas(64) uint32_t tail;
     uint32_t size;
     LeafTaskId taskList[0];
 #ifdef __TILE_FWK_HOST__

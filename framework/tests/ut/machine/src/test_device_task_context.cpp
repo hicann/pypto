@@ -974,8 +974,8 @@ TEST_F(TestDeviceTaskContext, InitReadyQueues_EnableAicoreResolve_CreatesDrcoRoo
 
     ASSERT_NE(dyntask->drcoRootFuncList, nullptr);
     EXPECT_EQ(dyntask->drcoRootFuncList->totalTaskCount, 16U);
-    ASSERT_NE(dyntask->drcoRootFuncList->executedTaskCount, nullptr);
-    EXPECT_EQ(*dyntask->drcoRootFuncList->executedTaskCount, 0U);
+    EXPECT_EQ(dyntask->drcoRootFuncList->executedTaskCount, 0U);
+    EXPECT_EQ(dyntask->drcoRootFuncList->devTaskFinished, 0U);
     for (size_t i = 0; i < npu::tile_fwk::DRCO_QUEUE_MAX; ++i) {
         EXPECT_NE(dyntask->drcoRootFuncList->globalReadyQueueList[i].ptr, nullptr);
     }

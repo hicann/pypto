@@ -86,8 +86,10 @@ struct DrcoRootFuncList {
 
     __gm__ PerCorePendingQueue* perCorePendingQueueArray[MAX_AICORE_NUM_FOR_QUEUE];
     __gm__ DrcoLocalReadyQueue* localReadyQueueArray[NUM_CORE_TYPES][NUM_LOCAL_GROUPS];
-    uint32_t totalTaskCount;
-    __gm__ uint32_t* executedTaskCount;
+    alignas(64) uint32_t totalTaskCount;
+    alignas(64) uint32_t devTaskFinished;
+    alignas(64) uint32_t executedTaskCount;
+    alignas(64) uint8_t pad[64];
 };
 
 constexpr int32_t DEVICE_TASK_QUEUE_SIZE = 100;

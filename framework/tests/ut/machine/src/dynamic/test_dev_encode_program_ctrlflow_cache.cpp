@@ -44,14 +44,17 @@ struct DrcoQueueFixture {
     DrcoRootFuncList root{};
     std::vector<uint8_t> perCoreStorage;
     std::vector<uint8_t> localStorage;
-    uint32_t execCount = 0;
 
     void Build(uint32_t coreFunctionCnt = 8)
     {
         const size_t perCoreBytes = sizeof(PerCorePendingQueue) + 16 * sizeof(LeafTaskId);
         const size_t localBytes = sizeof(DrcoLocalReadyQueue);
+        constexpr size_t localAlign = alignof(DrcoLocalReadyQueue);
         perCoreStorage.assign(MAX_AICORE_NUM_FOR_QUEUE * perCoreBytes, 0);
-        localStorage.assign(NUM_CORE_TYPES * NUM_LOCAL_GROUPS * localBytes, 0);
+        localStorage.assign(NUM_CORE_TYPES * NUM_LOCAL_GROUPS * localBytes + localAlign, 0);
+        uintptr_t localBase = reinterpret_cast<uintptr_t>(localStorage.data());
+        uint8_t* localAlignedBase = reinterpret_cast<uint8_t*>((localBase + localAlign - 1) &
+                                                               ~static_cast<uintptr_t>(localAlign - 1));
         for (uint32_t i = 0; i < MAX_AICORE_NUM_FOR_QUEUE; ++i) {
             if (i == MAX_AICORE_NUM_FOR_QUEUE - 1) {
                 root.perCorePendingQueueArray[i] = nullptr;
@@ -67,11 +70,12 @@ struct DrcoQueueFixture {
                     continue;
                 }
                 root.localReadyQueueArray[ct][i] = reinterpret_cast<DrcoLocalReadyQueue*>(
-                    localStorage.data() + (ct * NUM_LOCAL_GROUPS + i) * localBytes);
+                    localAlignedBase + (ct * NUM_LOCAL_GROUPS + i) * localBytes);
             }
         }
         root.totalTaskCount = coreFunctionCnt;
-        root.executedTaskCount = &execCount;
+        root.executedTaskCount = 0;
+        root.devTaskFinished = 0;
     }
 };
 
@@ -187,7 +191,7 @@ TEST(CtrlFlowCacheDrcoUt, ReadyQueueDataBackupRestore_WithDrco)
         aivRouted += drco.root.perCorePendingQueueArray[i]->size;
     }
     EXPECT_EQ(aivRouted, 2U);
-    EXPECT_EQ(*drco.root.executedTaskCount, 0U);
+    EXPECT_EQ(drco.root.executedTaskCount, 0U);
 }
 
 TEST(CtrlFlowCacheDrcoUt, DieReadyQueueDataBackupRestore_WithDrco)

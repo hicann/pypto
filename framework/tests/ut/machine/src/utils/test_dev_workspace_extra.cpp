@@ -4,12 +4,16 @@
 
 #include <gtest/gtest.h>
 #include <cstring>
+#include <memory>
 #include <vector>
+
+#include "interface/machine/device/tilefwk/aikernel_device_task.h"
 
 #define private public
 #include "machine/utils/dynamic/dev_workspace.h"
 #undef private
 
+using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
 
 class DevWorkspaceTest : public testing::Test {};
@@ -135,6 +139,54 @@ TEST_F(DevWorkspaceTest, DeviceTaskMemTryRecycle_EmptyQueue)
     DeviceWorkspaceAllocator allocator;
     bool result = allocator.DeviceTaskMemTryRecycle();
     EXPECT_FALSE(result);
+}
+
+namespace {
+void SetupDrcoTaskForRecycle(DeviceWorkspaceAllocator& allocator, DynDeviceTask& dyntask,
+                             npu::tile_fwk::DrcoRootFuncList& rootFuncList, uint32_t totalTaskCount,
+                             uint32_t devTaskFinished)
+{
+    dyntask.taskStageAllocMem.generalMetadataStageMem = {};
+    dyntask.taskStageAllocMem.stitchStageMem = {};
+    dyntask.dynFuncDataList = reinterpret_cast<npu::tile_fwk::DynFuncHeader*>(0x1);
+    rootFuncList.totalTaskCount = totalTaskCount;
+    rootFuncList.devTaskFinished = devTaskFinished;
+    dyntask.drcoRootFuncList = &rootFuncList;
+    allocator.submmitTaskQueue_.Enqueue(&dyntask);
+}
+} // namespace
+
+TEST_F(DevWorkspaceTest, DeviceTaskMemTryRecycle_DevTaskFinished_SetsCanFree)
+{
+    DeviceWorkspaceAllocator allocator;
+    auto dyntask = std::make_unique<DynDeviceTask>(allocator);
+    npu::tile_fwk::DrcoRootFuncList rootFuncList{};
+    SetupDrcoTaskForRecycle(allocator, *dyntask, rootFuncList, 16, 1);
+
+    EXPECT_TRUE(allocator.DeviceTaskMemTryRecycle());
+    EXPECT_TRUE(dyntask->taskStageAllocMem.canFree.load());
+}
+
+TEST_F(DevWorkspaceTest, DeviceTaskMemTryRecycle_TotalTaskCountZero_SetsCanFree)
+{
+    DeviceWorkspaceAllocator allocator;
+    auto dyntask = std::make_unique<DynDeviceTask>(allocator);
+    npu::tile_fwk::DrcoRootFuncList rootFuncList{};
+    SetupDrcoTaskForRecycle(allocator, *dyntask, rootFuncList, 0, 0);
+
+    EXPECT_TRUE(allocator.DeviceTaskMemTryRecycle());
+    EXPECT_TRUE(dyntask->taskStageAllocMem.canFree.load());
+}
+
+TEST_F(DevWorkspaceTest, DeviceTaskMemTryRecycle_NotFinished_KeepsCanFreeFalse)
+{
+    DeviceWorkspaceAllocator allocator;
+    auto dyntask = std::make_unique<DynDeviceTask>(allocator);
+    npu::tile_fwk::DrcoRootFuncList rootFuncList{};
+    SetupDrcoTaskForRecycle(allocator, *dyntask, rootFuncList, 16, 0);
+
+    EXPECT_FALSE(allocator.DeviceTaskMemTryRecycle());
+    EXPECT_FALSE(dyntask->taskStageAllocMem.canFree.load());
 }
 
 TEST_F(DevWorkspaceTest, DynDevTaskSlabMemObjSize_ReturnsSizeof)
