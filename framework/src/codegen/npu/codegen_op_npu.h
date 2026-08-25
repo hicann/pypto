@@ -328,6 +328,7 @@ protected:
     std::string GenVectorScalarOpByMode(VecScalMode mode) const;
     std::string GenVectorScalarOpScalarMode() const;
     std::string GenCubeOp(bool zeroC) const;
+    virtual void UpdateGemvTileOpName();
     std::string GenRemainderSOp() const;
     std::string GenCmpOp() const;
     std::string GenHypotOp() const;

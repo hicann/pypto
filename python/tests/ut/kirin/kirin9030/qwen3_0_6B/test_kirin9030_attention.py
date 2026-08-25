@@ -27,7 +27,7 @@ KERNELS = create_attention_kernels("Kirin9030")
 
 @pytest.mark.parametrize("op_type,a_shape,b_shape,c_shape,out_shape,vec_tile,cube_tile", TEST_CASES_4INPUT)
 def test_attention_4input(op_type, a_shape, b_shape, c_shape, out_shape, vec_tile, cube_tile):
-    shapes = (a_shape, b_shape, c_shape)
+    shapes = (a_shape, b_shape, c_shape, out_shape)
     run_4input_test(KERNELS, op_type, shapes)
 
 

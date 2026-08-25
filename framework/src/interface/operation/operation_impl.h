@@ -164,6 +164,7 @@ struct MatmulAttrParam {
     bool hasMXScale = false;
     bool gmAccumulationFlag = false;
     bool isCMatrixNZ = false;
+    bool isGemv = false;
 
     MatmulAttrParam() = default;
 

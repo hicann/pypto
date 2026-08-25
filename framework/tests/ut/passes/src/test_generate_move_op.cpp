@@ -1268,5 +1268,58 @@ TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvDynRawShapePropagation)
     EXPECT_EQ(rawShapeScalars[1].Dump(), "C");
 }
 
+// ========== 测试用例5：ProcessUB2L1 GEMV 分支（跳过 ND2NZ 插入） ==========
+TEST_F(GenerateMoveOpPassTest, ProcessUB2L1GemvSkipND2NZ)
+{
+    std::vector<int64_t> ndShape{2, 30, 15}; // inner=30, outer=15（非对齐）
+    PROGRAM("ProcessUB2L1GemvSkipND2NZ")
+    {
+        Tensor a(DT_FP32, ndShape, "a");
+        Tensor b(DT_FP32, ndShape, "b");
+
+        TileShape::Current().SetVecTile(2, 30, 15, 1);
+
+        PassManager& passManager = PassManager::Instance();
+        passManager.RegisterStrategy("ProcessUB2L1GemvStrategy", {{"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                                                  {"GenerateMoveOp", PassName::GENERATE_MOVE_OP}});
+
+        FUNCTION("ProcessUB2L1GemvFunc")
+        {
+            b = View(a, ndShape, {0, 0, 0}); // 构造VIEW OP作为基础
+        }
+    }
+
+    // 导出/导入JSON（模拟真实流程）
+    std::string jsonPath = "./config/pass/json/process_ub2l1_gemv.json";
+    auto programJson = Program::GetInstance().DumpJson();
+    DumpJsonFile(programJson, jsonPath);
+    Json readData = LoadJsonFile(jsonPath);
+    Program::GetInstance().LoadJson(readData);
+
+    // 获取Function并构造OP_UB_COPY_L1操作（带 isGemv 属性）
+    Function* func = Program::GetInstance().GetCurrentFunction();
+    auto inputTensor = CreateTestLogicalTensor(MEM_UB, TileOpFormat::TILEOP_ND, ndShape);
+    auto outputTensor = CreateTestLogicalTensor(MEM_L1, TileOpFormat::TILEOP_NZ, ndShape);
+    auto ubCopyL1Op = CreateTestOperation(Opcode::OP_UB_COPY_L1, *func, {inputTensor}, {outputTensor});
+    ubCopyL1Op->UpdateSubgraphID(0);
+    ubCopyL1Op->SetAttr(OpAttributeKey::isGemv, static_cast<int64_t>(1));
+
+    // 调用ProcessUB2L1
+    GenerateMoveOp generateMoveOp;
+    generateMoveOp.ProcessUB2L1(*func, *ubCopyL1Op);
+
+    // 验证：GEMV 分支跳过 ND2NZ 插入（不产生 OP_UB_COPY_ND2NZ），且保留 isGemv 属性
+    int ub2ubNum = 0;
+    for (const auto& op : func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_UB_COPY_ND2NZ) {
+            ub2ubNum++;
+        }
+    }
+    EXPECT_EQ(ub2ubNum, 0) << "GEMV branch must not insert OP_UB_COPY_ND2NZ";
+    int64_t isGemv = 0;
+    bool hasIsGemv = ubCopyL1Op->GetAttr<int64_t>(OpAttributeKey::isGemv, isGemv);
+    EXPECT_TRUE(hasIsGemv && isGemv != 0);
+}
+
 } // namespace tile_fwk
 } // namespace npu

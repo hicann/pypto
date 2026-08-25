@@ -129,6 +129,10 @@ void SetAMulBAttr(const MatmulGraphNodes& tensorGraphNodes, const MatmulAttrPara
     op.SetAttribute(A_MUL_B_GM_ACC, attrParam.gmAccumulationFlag);
     op.SetAttribute(A_MUL_B_TRANS_MODE_ATTR, static_cast<int64_t>(attrParam.transMode));
 
+    if (attrParam.isGemv) {
+        op.SetAttribute(OpAttributeKey::isGemv, true);
+    }
+
     if (op.GetOpcode() == Opcode::OP_A_MUL_B) {
         op.SetAttribute(A_MUL_B_BIAS_ATTR, tensorGraphNodes.biasTensorPtr != nullptr);
         op.SetAttribute(A_MUL_B_RELU_ATTR, static_cast<int64_t>(attrParam.reluType));
@@ -196,6 +200,7 @@ void SetMatmulAttrParam(const Operation& op, MatmulAttrParam& param)
     param.transB = (op.HasAttr(A_MUL_B_TRANS_B)) ? op.GetBoolAttribute(A_MUL_B_TRANS_B) : false;
     param.gmAccumulationFlag = (op.HasAttr(A_MUL_B_GM_ACC)) ? op.GetBoolAttribute(A_MUL_B_GM_ACC) : false;
     param.transMode = (op.HasAttr(A_MUL_B_TRANS_MODE_ATTR)) ? op.GetIntAttribute(A_MUL_B_TRANS_MODE_ATTR) : 0;
+    param.isGemv = (op.HasAttr(OpAttributeKey::isGemv)) && op.GetBoolAttribute(OpAttributeKey::isGemv);
     if (param.hasMXScale) {
         param.transAScale = op.GetIntAttribute(A_MUL_B_SCALE_A_COPY_IN_MODE) == static_cast<int64_t>(CopyInMode::DN2NZ);
         param.transBScale = op.GetIntAttribute(A_MUL_B_SCALE_B_COPY_IN_MODE) == static_cast<int64_t>(CopyInMode::DN2NZ);
@@ -945,9 +950,13 @@ LogicalTensorPtr LinkTensorA(Function& function, const MatmulGraphNodes& tensorG
         int64_t paddingMode = attrParam.hasMXScale ? static_cast<int64_t>(PaddingMode::MX_PADDING_MODE) : 0;
         // K维度在dynValidShape中的索引：transA时K在第0维，非transA时K在第1维
         int64_t kIndex = attrParam.transA ? 0 : 1;
-        aL1TensorPtr = AddOpView<int64_t, int64_t>(
-            function, tensorGraphNodes.aTensorPtr, aL1TensorInfo,
-            {{COPY_IN_L1_PADDING_MODE, paddingMode}, {COPY_IN_L1_K_INDEX, kIndex}});
+        std::map<std::string, int64_t> l1OpAttr = {{COPY_IN_L1_PADDING_MODE, paddingMode},
+                                                   {COPY_IN_L1_K_INDEX, kIndex}};
+        if (attrParam.isGemv) {
+            l1OpAttr[A_MUL_B_COPY_IN_MODE] = static_cast<int64_t>(CopyInMode::ND2ND);
+            l1OpAttr[OpAttributeKey::isGemv] = static_cast<int64_t>(1);
+        }
+        aL1TensorPtr = AddOpView<int64_t, int64_t>(function, tensorGraphNodes.aTensorPtr, aL1TensorInfo, l1OpAttr);
     }
     std::vector<int64_t> aL0Shape = (attrParam.transA) ? std::vector<int64_t>{iterInfo.kL0Size, iterInfo.mL0Size} :
                                                          std::vector<int64_t>{iterInfo.mL0Size, iterInfo.kL0Size};
@@ -968,6 +977,11 @@ LogicalTensorPtr LinkTensorA(Function& function, const MatmulGraphNodes& tensorG
         function, aL1TensorPtr, aL0TensorInfo,
         {{L1_TO_L0_TRANSPOSE, attrParam.transA}, {A_MUL_B_MX_ATTR, attrParam.hasMXScale}},
         {{L1_TO_L0_OFFSET, l1ToL0Offset}, {L1_TO_L0_TILE, l1ToL0Tile}});
+    // GEMV A 设 isGemv：transA 不支持 GEMV，源头已保证 isGemv 仅非 transA
+    if (attrParam.isGemv) {
+        auto& viewOp = *aL0TensorPtr->GetProducers().begin();
+        viewOp->SetAttribute(OpAttributeKey::isGemv, static_cast<int64_t>(1));
+    }
     return aL0TensorPtr;
 }
 
@@ -1244,6 +1258,13 @@ void AddAMulBNode(const MatmulGraphNodes& tensorGraphNodes, const MatmulAttrPara
     ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, functionPtr != nullptr) << "functionPtr is nullptr.";
     auto& op = functionPtr->AddOperation(Opcode::OP_A_MUL_B, operandVec, {tensorGraphNodes.outTensorPtr});
     SetTensorGraphAttr(op, extendParam, gmAccumulationFlag, attrParam);
+    // GEMV：非 transA 且 M==1；transA 退化普通 matmul
+    if (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch()) && !attrParam.transA) {
+        const auto& aShape = tensorGraphNodes.aTensorPtr->GetShape();
+        if (aShape.size() >= SHAPE_DIM2 && aShape[aShape.size() - SHAPE_DIM2] == 1) {
+            op.SetAttribute(OpAttributeKey::isGemv, true);
+        }
+    }
 }
 
 Tensor ConstructTensorGraph(DataType dataType, MatmulGraphNodes& tensorGraphNodes, const MatmulAttrParam& attrParam,

@@ -217,4 +217,37 @@ std::vector<SymbolicScalar> CodeGenOpLiteNPU::GetOffsetFromAttr(int idx) const
     return GetStaticOffsetFromLinearArgList(dynOffset);
 }
 
+void CodeGenOpLiteNPU::UpdateGemvTileOpName()
+{
+    auto it = opAttrs.find(OpAttributeKey::isGemv);
+    if (it == opAttrs.end()) {
+        return;
+    }
+    bool isGemv = false;
+    if (it->second.type() == typeid(bool)) {
+        isGemv = AnyCast<bool>(it->second);
+    } else if (it->second.type() == typeid(int64_t)) {
+        isGemv = AnyCast<int64_t>(it->second) != 0;
+    } else {
+        return;
+    }
+    if (!isGemv) {
+        return;
+    }
+    switch (opCode) {
+        case Opcode::OP_A_MUL_B:
+        case Opcode::OP_A_MULACC_B:
+            tileOpName = "TGEMV";
+            break;
+        case Opcode::OP_L1_TO_L0A:
+            tileOpName = "TExtractL1ToL0ND2ND";
+            break;
+        case Opcode::OP_UB_COPY_L1:
+            tileOpName = "TCopyUB2L1ND2ND";
+            break;
+        default:
+            break;
+    }
+}
+
 } // namespace npu::tile_fwk

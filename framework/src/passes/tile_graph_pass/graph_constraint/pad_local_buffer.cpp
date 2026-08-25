@@ -215,6 +215,62 @@ void PadLocalBuffer::PadMatmulHighLow(LogicalTensorPtr& in, size_t highIndex, si
     in->tensor->rawshape[lowIndex] = AlignmentUtils::Pad(oriRawshape[lowIndex], padValue);
 }
 
+bool PadLocalBuffer::IsGemvL1ATensor(const LogicalTensorPtr& in) const
+{
+    if (in == nullptr || in->GetMemoryTypeOriginal() != MemoryType::MEM_L1) {
+        return false;
+    }
+    // isGemv 由 LinkTensorA 写入 DDR→L1 VIEW，经 MERGE_VIEW_ASSEMBLE 白名单继承到 COPY_IN，直接读取
+    const auto& producers = in->GetProducers();
+    if (producers.empty() || *producers.begin() == nullptr) {
+        return false;
+    }
+    auto producer = *producers.begin();
+    int64_t isGemv = 0;
+    if (!(producer->GetAttr<int64_t>(OpAttributeKey::isGemv, isGemv) && isGemv != 0)) {
+        return false;
+    }
+    // 排除 transA：其 L1 A 为 {K,1}，由 OP_L1_TO_L0_AT 消费，去 pad/512B 对齐会破坏布局
+    const auto& consumers = in->GetConsumers();
+    if (consumers.empty() || *consumers.begin() == nullptr ||
+        (*consumers.begin())->GetOpcode() != Opcode::OP_L1_TO_L0A) {
+        return false;
+    }
+    return true;
+}
+
+bool PadLocalBuffer::IsGemvL0ATensor(const LogicalTensorPtr& in) const
+{
+    if (in == nullptr || in->GetMemoryTypeOriginal() != MemoryType::MEM_L0A) {
+        return false;
+    }
+    const auto& producers = in->GetProducers();
+    if (producers.empty() || *producers.begin() == nullptr) {
+        return false;
+    }
+    auto producer = *producers.begin();
+    int64_t isGemv = 0;
+    return producer->GetAttr<int64_t>(OpAttributeKey::isGemv, isGemv) && isGemv != 0;
+}
+
+void PadLocalBuffer::PadMatmulGemvKAlign(LogicalTensorPtr& in, size_t highIndex, size_t lowIndex)
+{
+    // GEMV 走 pto-isa TExtractToAVector：L1 源按 32B block 寻址，L0A 目标按 512B fractal block 组织
+    Shape& oriRawshape = GetOriRawshape(in); // 获取已保存的 oriRawshape
+    auto bytes = BytesOf(in->Datatype());
+    if (in->GetMemoryTypeOriginal() == MemoryType::MEM_L0A) {
+        constexpr int64_t kAlignFractalByteSize = 512; // fractal 粒度（CUBE_BLOCK_SIZE）
+        int64_t kAlignFractal = (bytes == 0) ? CUBE_PAD_VALUE : kAlignFractalByteSize / bytes;
+        in->tensor->rawshape[lowIndex] = AlignmentUtils::Pad(oriRawshape[lowIndex], kAlignFractal);
+    } else {
+        constexpr int64_t kAlignBlockByteSize = 32; // TExtractToAVector 的 32B block 粒度
+        int64_t kAlign32 = (bytes == 0) ? CUBE_PAD_VALUE : kAlignBlockByteSize / bytes;
+        in->tensor->rawshape[lowIndex] = AlignmentUtils::Pad(oriRawshape[lowIndex], kAlign32);
+    }
+    // GEMV A 的 M 轴不打 pad：L1/L0A 均保持 1
+    in->tensor->rawshape[highIndex] = oriRawshape[highIndex];
+}
+
 void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
 {
     if (in == nullptr || in->tensor == nullptr) {
@@ -239,6 +295,11 @@ void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
                                    (*consumers.begin())->GetOpcode() == Opcode::OP_L1_TO_FIX_QUANT_PRE);
     const bool isUB2L1Scene = !consumers.empty() && *consumers.begin() != nullptr &&
                               (*consumers.begin())->GetOpcode() == Opcode::OP_UB_COPY_L1;
+    // GEMV A 来自 UB（isGemv 由 ProcessUB2L1 设置）：UB_COPY_L1 输入按 K 对齐、M 不 pad
+    int64_t isGemvUbCopyL1Val = 0;
+    const bool isGemvUbCopyL1 = isUB2L1Scene &&
+                                (*consumers.begin())->GetAttr<int64_t>(OpAttributeKey::isGemv, isGemvUbCopyL1Val) &&
+                                isGemvUbCopyL1Val != 0;
     /*
     首先，可以通过in的数据类型是否为int8来判断是否要做32B对齐。
     再者，存在两种情况
@@ -276,12 +337,19 @@ void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
         */
         PadMatmulL1ConvertScene(op, in, lowIndex);
     } else {
-        PadMatmulHighLow(in, highIndex, lowIndex, GetMatmulPaddingValue(op, in));
+        // GEMV 的 UB_COPY_L1(isGemv) 输入按 K 对齐、M 不 pad，避免改 RESHAPE 输出 rawshape 触发误插 spill。
+        if (IsGemvL1ATensor(in) || IsGemvL0ATensor(in) || isGemvUbCopyL1) {
+            PadMatmulGemvKAlign(in, highIndex, lowIndex);
+        } else {
+            PadMatmulHighLow(in, highIndex, lowIndex, GetMatmulPaddingValue(op, in));
+        }
         TryPadMatmulIsMXScene(op, in);
     }
     if (isUB2L1Scene) {
-        // 针对UB2L1场景下，做vec2vecND2NZ操作时，通过在外轴增加一行，来解决bank冲突，提高搬运性能
-        (in->tensor->rawshape[highIndex]) += 1;
+        // GEMV 跳过 ND2NZ，无 bank 冲突优化需求，跳过 +=1（避免改 RESHAPE 输出 rawshape）。
+        if (!isGemvUbCopyL1) {
+            (in->tensor->rawshape[highIndex]) += 1;
+        }
     }
     APASS_LOG_DEBUG_F(Elements::Tensor, "####### %d %d set rawshape as %s\n", in->tensor->rawmagic, in->magic,
                       IntVecToStr(in->tensor->rawshape).c_str());

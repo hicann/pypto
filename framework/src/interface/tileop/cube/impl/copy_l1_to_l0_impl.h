@@ -18,7 +18,7 @@
 
 #include "cube_utils.h"
 
-template <bool isTrans, bool isMX, typename DstTileData, typename SrcTileData>
+template <bool isTrans, bool isMX, bool isGemv = false, typename DstTileData, typename SrcTileData>
 INLINE void TExtractL1ToL0Impl(DstTileData& dst, SrcTileData& src, const int64_t& offset0, const int64_t& offset1)
 {
     constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
@@ -49,8 +49,9 @@ INLINE void TExtractL1ToL0Impl(DstTileData& dst, SrcTileData& src, const int64_t
     // validShape0, validShape1, 小分型
     using tileL1Tensor = pto::Tile<pto::TileType::Mat, typename SrcTileData::Type, isTrans ? staticL1W : staticL1H,
                                    isTrans ? staticL1H : staticL1W,
-                                   isTrans ? pto::BLayout::RowMajor : pto::BLayout::ColMajor, -1, -1,
-                                   isTrans ? pto::SLayout::ColMajor : pto::SLayout::RowMajor>;
+                                   isGemv ? pto::BLayout::RowMajor :
+                                            (isTrans ? pto::BLayout::RowMajor : pto::BLayout::ColMajor),
+                                   -1, -1, isTrans ? pto::SLayout::ColMajor : pto::SLayout::RowMajor>;
     // L0 TileLeft为L0A的Tile，TileRight为L0B的Tile，传入的值分别为：
     // 矩阵数据类型，tileShape0，tileShape1，validShape0，validShape0（-1表明传递动态值，在声明时传入）
     using tileL0Tensor = std::conditional_t<

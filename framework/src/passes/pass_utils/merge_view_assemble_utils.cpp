@@ -299,6 +299,10 @@ Status MergeViewAssembleUtils::AppendMergedViewOperations(Function& function)
         if (viewOp.hasKIndex) {
             mergedViewOp.SetAttr("op_attr_copy_in_l1_k_index", viewOp.kIndex);
         }
+        // 继承op_attr_is_gemv属性
+        if (viewOp.hasIsGemv) {
+            mergedViewOp.SetAttr(OpAttributeKey::isGemv, viewOp.isGemvValue);
+        }
         viewOp.output->UpdateDynValidShape(viewOp.dynValidShape);
     }
     return SUCCESS;
@@ -547,13 +551,16 @@ void MergeViewAssembleUtils::RecordMergedViewOperation(
     // 获取特定的 op_attr_copy_in_l1_k_index 属性
     int64_t kIndex = 0;
     bool hasKIndex = lastViewOp->GetAttr<int64_t>("op_attr_copy_in_l1_k_index", kIndex);
+    // 获取特定的 op_attr_is_gemv 属性
+    int64_t isGemv = 0;
+    bool hasIsGemv = lastViewOp->GetAttr<int64_t>(OpAttributeKey::isGemv, isGemv);
     // 清理消费者关系
     endTensor->GetProducers().clear();
     // 记录合并op
     viewOpToAppend_.emplace_back(ViewOp{startTensor, endTensor, newOffset, newDynOffset, newDynValidShape,
                                         lastViewAttr->GetTo(), hasCopyInMode, std::move(copyInModeValue),
-                                        hasL1PaddingMode, std::move(l1PaddingMode), hasKIndex, kIndex, span, scopeInfo,
-                                        opcode});
+                                        hasL1PaddingMode, std::move(l1PaddingMode), hasKIndex, kIndex, hasIsGemv,
+                                        std::move(isGemv), span, scopeInfo, opcode});
 }
 
 Status MergeViewAssembleUtils::MergeAssembleChain(Function& function, Operation& operation,

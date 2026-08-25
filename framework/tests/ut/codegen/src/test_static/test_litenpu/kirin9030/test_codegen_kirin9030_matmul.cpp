@@ -58,3 +58,5 @@ TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_s8s8_004)
 {
     TestCodeGenMatmul::Instance().test_matmul_s8s8_004();
 }
+
+TEST_F(TestCodeGenKirin9030Matmul, test_matmul_gemv_001) { TestCodeGenMatmul::Instance().test_matmul_gemv_001(); }

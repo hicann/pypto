@@ -43,6 +43,7 @@ public:
     void test_matmul_s8s8_002();
     void test_matmul_s8s8_003();
     void test_matmul_s8s8_004();
+    void test_matmul_gemv_001();
     static TestCodeGenMatmul& Instance();
 
 private:

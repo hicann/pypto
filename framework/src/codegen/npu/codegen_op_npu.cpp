@@ -691,6 +691,7 @@ void CodeGenOpNPU::UpdateTileTensorInfo()
     }
 
     tileOpName = iter->second; // update tileOpName from SUPPORT_TILETENSOR_OPS
+    UpdateGemvTileOpName();
 
     for (int i = 0; i < operandCnt; ++i) {
         TileTensorUsing tileTensorUsing{functionType == FunctionType::STATIC || isMainBlock,
@@ -708,6 +709,8 @@ void CodeGenOpNPU::UpdateTileTensorInfo()
                      tensorName.c_str());
     }
 }
+
+void CodeGenOpNPU::UpdateGemvTileOpName() {}
 
 bool CodeGenOpNPU::ShouldSkipProcInLoop(int paramIdx)
 {

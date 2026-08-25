@@ -42,6 +42,8 @@ public:
         std::any l1PaddingMode;   // copy_in_l1_padding_mode属性值
         bool hasKIndex;           // 是否有copy_in_l1_k_index属性
         std::any kIndex;          // copy_in_l1_k_index属性值（K维度在dynValidShape中的索引，0或1）
+        bool hasIsGemv;           // 是否有 isGemv 属性
+        std::any isGemvValue;     // isGemv 属性值（0=false，非0=true）
         ir::Span span;            // 链路最早操作的span
         Operation::ScopeInfo scopeInfo;
         Opcode opcode = Opcode::OP_VIEW;

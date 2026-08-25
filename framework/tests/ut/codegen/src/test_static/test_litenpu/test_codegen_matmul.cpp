@@ -315,3 +315,23 @@ void TestCodeGenMatmul::test_matmul_s8s8_004()
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
     codeGen.GenCode(*function);
 }
+
+void TestCodeGenMatmul::test_matmul_gemv_001()
+{
+    PROGRAM("MATMUL_GEMV_001")
+    {
+        Tensor a(DataType::DT_FP16, {1, 256}, "a");
+        Tensor b(DataType::DT_FP16, {256, 32}, "b");
+        auto c = Tensor(DataType::DT_FP16, {1, 32}, "c");
+        FUNCTION("MATMUL_GEMV_001")
+        {
+            TileShape::Current().SetCubeTile({16, 16}, {64, 128}, {16, 16});
+            c = npu::tile_fwk::Matrix::Matmul(DataType::DT_FP16, a, b, false, false, false);
+        }
+    }
+
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_GEMV_001");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function);
+}

@@ -18,7 +18,7 @@
 
 #include "../cube_utils.h"
 
-template <CopyMode mode, typename Coord, typename DstTileData, typename SrcTileData>
+template <CopyMode mode, bool isGemv = false, typename Coord, typename DstTileData, typename SrcTileData>
 INLINE void TCopyUB2L1Impl(DstTileData& dst, SrcTileData& src, const Coord& dstCoord, const Coord& srcCoord)
 {
     static_assert(mode != CopyMode::UNKNOWN,
@@ -40,13 +40,18 @@ INLINE void TCopyUB2L1Impl(DstTileData& dst, SrcTileData& src, const Coord& dstC
     constexpr int64_t
         staticL1H = Std::tuple_element<shapeSize - SHAPE_DIM2, typename DstTileData::TileShape>::type::value;
     constexpr int64_t staticL1W = Std::tuple_element<shapeSize - 1, typename DstTileData::TileShape>::type::value;
-    using tileL1Tensor = pto::Tile<pto::TileType::Mat, typename DstTileData::Type, staticL1H, staticL1W,
-                                   pto::BLayout::ColMajor, staticL1H, staticL1W, pto::SLayout::RowMajor>;
+    // GEMV A 来自 UB 时保持 ND：tile 声明 RowMajor + NoneBox，命中 TExtractVecToMat 的 ND 分支
+    constexpr pto::BLayout ubBLayout = isGemv ? pto::BLayout::RowMajor : pto::BLayout::ColMajor;
+    constexpr pto::SLayout ubSLayout = isGemv ? pto::SLayout::NoneBox : pto::SLayout::RowMajor;
+    constexpr pto::BLayout l1BLayout = isGemv ? pto::BLayout::RowMajor : pto::BLayout::ColMajor;
+    constexpr pto::SLayout l1SLayout = isGemv ? pto::SLayout::NoneBox : pto::SLayout::RowMajor;
+    using tileL1Tensor = pto::Tile<pto::TileType::Mat, typename DstTileData::Type, staticL1H, staticL1W, l1BLayout,
+                                   staticL1H, staticL1W, l1SLayout>;
     tileL1Tensor l1Tile;
     pto::TASSIGN(l1Tile, (uint64_t)dst.GetAddr());
     if constexpr (mode == CopyMode::EXTRACT || mode == CopyMode::MOVE) {
-        using tileUBTensor = pto::Tile<pto::TileType::Vec, typename SrcTileData::Type, staticUBH, staticUBW,
-                                       pto::BLayout::ColMajor, staticUBH, staticUBW, pto::SLayout::RowMajor>;
+        using tileUBTensor = pto::Tile<pto::TileType::Vec, typename SrcTileData::Type, staticUBH, staticUBW, ubBLayout,
+                                       staticUBH, staticUBW, ubSLayout>;
         tileUBTensor UBTile;
         pto::TASSIGN(UBTile, (uint64_t)src.GetAddr());
         pto::TEXTRACT(l1Tile, UBTile, srcOffset0, srcOffset1);

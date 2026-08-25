@@ -1013,6 +1013,43 @@ TEST_F(MergeViewAssembleTest, MergeViewWithAttr)
     EXPECT_EQ(view_count_after_pass, NUM2);
 }
 
+TEST_F(MergeViewAssembleTest, MergeViewInheritIsGemv)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "MergeViewInheritIsGemv",
+                                                      "MergeViewInheritIsGemv", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("MergeViewInheritIsGemv", currFunctionPtr);
+
+    MergeViewWithAttr(currFunctionPtr);
+    // 给链尾 VIEW 设置 isGemv 属性（模拟 GEMV 的 DDR→L1 VIEW 信号）
+    Operation* lastUbView = nullptr;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            lastUbView = &op;
+        }
+    }
+    ASSERT_NE(lastUbView, nullptr);
+    lastUbView->SetAttribute(OpAttributeKey::isGemv, static_cast<int64_t>(1));
+
+    MergeViewAssemble mergeViewAssemble;
+    mergeViewAssemble.PreCheck(*currFunctionPtr);
+    mergeViewAssemble.RunOnFunction(*currFunctionPtr);
+    mergeViewAssemble.PostCheck(*currFunctionPtr);
+
+    // 白名单继承：合并后的 VIEW 中至少一个带 isGemv 属性
+    bool isGemvInherited = false;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            int64_t isGemv = 0;
+            if (op.GetAttr<int64_t>(OpAttributeKey::isGemv, isGemv) && isGemv != 0) {
+                isGemvInherited = true;
+                break;
+            }
+        }
+    }
+    EXPECT_TRUE(isGemvInherited);
+}
+
 TEST_F(MergeViewAssembleTest, TestPreCheck)
 {
     auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMergeViewAssemble",

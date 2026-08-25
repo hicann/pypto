@@ -1345,3 +1345,40 @@ TEST_F(TestPadLocalBuffer, UB2L1_WithAxisCombine)
     auto t2 = graph.GetTensor("t3a");
     EXPECT_EQ(t2->tensor->GetRawShape(), expectShape);
 }
+
+TEST_F(TestPadLocalBuffer, GemvMatmulKAlign)
+{
+    ComputationalGraphBuilder graph;
+    // a: M=1 GEMV，L1 -> L0A，producer(COPYIN) 带 isGemv 属性
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1, 32}, MemoryType::MEM_DEVICE_DDR, "t1a"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1, 32}, MemoryType::MEM_L1, "t2a"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1a"}, {"t2a"}, "COPYA", true), true);
+    graph.GetOp("COPYA")->SetAttribute(OpAttributeKey::isGemv, static_cast<int64_t>(1));
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1, 32}, MemoryType::MEM_L0A, "t3a"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_L1_TO_L0A, {"t2a"}, {"t3a"}, "L1TOL0A", true), true);
+    // GEMV 的 L1→L0A VIEW 也带 isGemv（IsGemvL0ATensor 读 producer 的 isGemv）
+    graph.GetOp("L1TOL0A")->SetAttribute(OpAttributeKey::isGemv, static_cast<int64_t>(1));
+    // b
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {32, 16}, MemoryType::MEM_DEVICE_DDR, "t1b"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {32, 16}, MemoryType::MEM_L1, "t2b"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1b"}, {"t2b"}, "COPYB", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {32, 16}, MemoryType::MEM_L0B, "t3b"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_L1_TO_L0_BT, {"t2b"}, {"t3b"}, "L1TOL0B", true), true);
+    // amulb
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1, 16}, MemoryType::MEM_L0C, "out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_A_MUL_B, {"t3a", "t3b"}, {"out"}, "AMULB", true), true);
+
+    auto* currFunctionPtr = graph.GetFunction();
+    PadLocalBuffer padLocalBufferTest;
+    padLocalBufferTest.RunOnFunction(*currFunctionPtr);
+
+    // GEMV A 的 M 轴不打 pad（保持 1），L0A K 对齐 512B（fp16 256 元素）
+    auto t2a = graph.GetTensor("t2a");
+    auto rawShapeL1 = t2a->tensor->GetRawShape();
+    EXPECT_EQ(rawShapeL1[0], 1);
+    EXPECT_EQ(rawShapeL1[1], 32);
+    auto t3a = graph.GetTensor("t3a");
+    auto rawShapeL0A = t3a->tensor->GetRawShape();
+    EXPECT_EQ(rawShapeL0A[0], 1);
+    EXPECT_EQ(rawShapeL0A[1], 256);
+}

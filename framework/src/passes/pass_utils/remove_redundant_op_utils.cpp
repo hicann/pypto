@@ -928,6 +928,10 @@ void TransferL1CopyAttrs(const Operation& l1Slice, Operation& precedingSlice)
     if (l1Slice.GetAttr<int64_t>(OpAttributeKey::copyInMode, copyInMode)) {
         precedingSlice.SetAttr(OpAttributeKey::copyInMode, copyInMode);
     }
+    int64_t isGemv = 0;
+    if (l1Slice.GetAttr<int64_t>(OpAttributeKey::isGemv, isGemv)) {
+        precedingSlice.SetAttr(OpAttributeKey::isGemv, isGemv);
+    }
 }
 
 bool IsContractInputEqualSliceOutput(const Operation& contractOp, const Operation& sliceOp)

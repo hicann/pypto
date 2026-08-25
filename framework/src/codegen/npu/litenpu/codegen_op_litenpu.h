@@ -31,6 +31,8 @@ private:
 
     std::string GenGmParamVar(unsigned gmParamIdx) const override;
 
+    void UpdateGemvTileOpName() override;
+
     TileTensor BuildTileTensor(int paramIdx, const std::string& usingType,
                                const TileTensorShape& tileTensorShape = {}) override;
 

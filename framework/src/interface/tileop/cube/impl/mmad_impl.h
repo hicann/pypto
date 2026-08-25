@@ -18,8 +18,8 @@
 
 #include "cube_utils.h"
 
-template <bool initMatrixC, TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft,
-          typename TileRight>
+template <bool initMatrixC, TransMode transMode, bool kAlignFlag, bool isGemv = false, typename TileAcc,
+          typename TileLeft, typename TileRight>
 INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b)
 {
     int64_t validM = GetShape<0>(a);
@@ -46,7 +46,11 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b)
     using tileL0ATensor = pto::TileLeft<typename TileLeft::Type, staticL0AH, staticL0AW, -1, -1>;
     using tileL0BTensor = pto::TileRight<typename TileRight::Type, staticL0BH, staticL0BW, -1, -1>;
     using tileL0CTensor = pto::TileAcc<typename TileAcc::Type, staticL0CH, staticL0CW, -1, -1>;
-    validM = (validM + BLOCK_CUBE_M_N - 1) / BLOCK_CUBE_M_N * BLOCK_CUBE_M_N;
+    if constexpr (isGemv) {
+        validM = 1; // GEMV M=1，不打 pad 到 16
+    } else {
+        validM = (validM + BLOCK_CUBE_M_N - 1) / BLOCK_CUBE_M_N * BLOCK_CUBE_M_N;
+    }
     tileL0ATensor l0a(validM, validK);
     tileL0BTensor l0b(validK, validN);
     tileL0CTensor l0c(validM, validN);
@@ -61,17 +65,25 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b)
     pto::TASSIGN(l0b, static_cast<uint64_t>(b.GetAddr()));
     pto::TASSIGN(l0c, static_cast<uint64_t>(c.GetAddr()));
     if constexpr (initMatrixC) {
-        pto::TMATMUL(l0c, l0a, l0b);
+        if constexpr (isGemv) {
+            pto::TGEMV(l0c, l0a, l0b);
+        } else {
+            pto::TMATMUL(l0c, l0a, l0b);
+        }
     } else {
-        pto::TMATMUL_ACC(l0c, l0c, l0a, l0b);
+        if constexpr (isGemv) {
+            pto::TGEMV_ACC(l0c, l0c, l0a, l0b);
+        } else {
+            pto::TMATMUL_ACC(l0c, l0c, l0a, l0b);
+        }
     }
     if constexpr (transMode != TransMode::CAST_NONE) {
         l0a.ResetMadMode();
     }
 }
 
-template <TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight,
-          typename TileBias>
+template <TransMode transMode, bool kAlignFlag, bool isGemv = false, typename TileAcc, typename TileLeft,
+          typename TileRight, typename TileBias>
 INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
 {
     int64_t validM = GetShape<0>(a);
@@ -94,7 +106,11 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
     using tileL0CTensor = pto::TileAcc<typename TileAcc::Type, staticL0CH, staticL0CW, -1, -1>;
     using tileBiasTensor = pto::Tile<pto::TileType::Bias, typename TileBias::Type, 1, staticL0BW,
                                      pto::BLayout::RowMajor, -1, -1>;
-    validM = (validM + BLOCK_CUBE_M_N - 1) / BLOCK_CUBE_M_N * BLOCK_CUBE_M_N;
+    if constexpr (isGemv) {
+        validM = 1; // GEMV M=1，不打 pad 到 16
+    } else {
+        validM = (validM + BLOCK_CUBE_M_N - 1) / BLOCK_CUBE_M_N * BLOCK_CUBE_M_N;
+    }
     tileL0ATensor l0a(validM, validK);
     tileL0BTensor l0b(validK, validN);
     tileL0CTensor l0c(validM, validN);
@@ -110,7 +126,11 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
     pto::TASSIGN(l0b, static_cast<uint64_t>(b.GetAddr()));
     pto::TASSIGN(l0c, static_cast<uint64_t>(c.GetAddr()));
     pto::TASSIGN(biasT, static_cast<uint64_t>(bias.GetAddr()));
-    pto::TMATMUL_BIAS(l0c, l0a, l0b, biasT);
+    if constexpr (isGemv) {
+        pto::TGEMV_BIAS(l0c, l0a, l0b, biasT);
+    } else {
+        pto::TMATMUL_BIAS(l0c, l0a, l0b, biasT);
+    }
     if constexpr (transMode != TransMode::CAST_NONE) {
         l0a.ResetMadMode();
     }

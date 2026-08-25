@@ -43,6 +43,9 @@ private:
     void TryPadMatmulIsMXScene(Operation& op, LogicalTensorPtr& in);
     int64_t GetMatmulPaddingValue(Operation& op, LogicalTensorPtr& in) const;
     void PadMatmulHighLow(LogicalTensorPtr& in, size_t highIndex, size_t lowIndex, int64_t padValue);
+    bool IsGemvL1ATensor(const LogicalTensorPtr& in) const;
+    bool IsGemvL0ATensor(const LogicalTensorPtr& in) const;
+    void PadMatmulGemvKAlign(LogicalTensorPtr& in, size_t highIndex, size_t lowIndex);
     void PadVector(Operation& op, LogicalTensorPtr& in, std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw);
     void PadVector256(Operation& op, LogicalTensorPtr& in, bool needRowPad);
     void ProcessBroadcast(Operation& op, int64_t blockPadding);

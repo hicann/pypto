@@ -59,7 +59,7 @@ TEST_CASES_4INPUT = [
         (1, 1, 1, 128),
         (1, 1, 1, 64),
         ([16, 16], [64, 128], [64, 128]),
-        marks=[pytest.mark.skip()],
+        marks=[],
         id="matmul_mul_with_reshape_001",
     ),
     pytest.param(
@@ -103,7 +103,7 @@ TEST_CASES_4INPUT = [
         (1, 1, 1, 128),
         (1, 1, 1, 64),
         ([16, 16], [64, 128], [64, 128]),
-        marks=[pytest.mark.skip()],
+        marks=[],
         id="mul_matmul_with_reshape_002",
     ),
     pytest.param(
@@ -269,7 +269,7 @@ def run_4input_test(kernels, op_type, shapes):
     a = torch.rand(shapes[0], dtype=torch.float16, device="cpu")
     b = torch.rand(shapes[1], dtype=torch.float16, device="cpu")
     c = torch.rand(shapes[2], dtype=torch.float16, device="cpu")
-    out = torch.rand_like(c)
+    out = torch.rand(shapes[3], dtype=torch.float16, device="cpu")
 
     kernels[op_type](a, b, c, out)
     golden = _compute_golden_4input(op_type, a, b, c)

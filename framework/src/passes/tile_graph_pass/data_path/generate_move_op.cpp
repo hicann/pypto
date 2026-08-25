@@ -384,10 +384,15 @@ Status GenerateMoveOp::CreateMoveOpForConvert(Function& function, Operation& op)
 
 void GenerateMoveOp::ProcessUB2L1(Function& function, Operation& op) const
 {
+    op.SetAttribute(OpAttributeKey::isCube, false);
+    // GEMV A 保持 ND：跳过 ND2NZ 插入，由 codegen 生成 TCopyUB2L1<mode, isGemv> 走 ND 分支
+    int64_t isGemv = 0;
+    if (op.GetAttr<int64_t>(OpAttributeKey::isGemv, isGemv) && isGemv != 0) {
+        return;
+    }
+    auto inputTensor = op.iOperand.front();
     // 插入UB2L1节点（NZ2NZ)，并设置UBcopyL1的NZ属性
     op.SetAttribute(OP_ATTR_PREFIX + "is_nz", 1);
-    op.SetAttribute(OpAttributeKey::isCube, false);
-    auto inputTensor = op.iOperand.front();
     if (inputTensor->Format() == TileOpFormat::TILEOP_ND) {
         // 新建一块logcialtensor
         std::shared_ptr<LogicalTensor> ubNdTensor = inputTensor;

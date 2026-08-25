@@ -36,6 +36,32 @@
 #include "impl/arch35/mmad_mx_impl.h"
 #endif
 
+#ifdef __LITE_NPU
+template <bool initMatrixC, TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft,
+          typename TileRight>
+TILEOP void TGEMV(TileAcc& c, TileLeft& a, TileRight& b)
+{
+    constexpr uint64_t shapeSizeA = Std::tuple_size<typename TileLeft::Shape>::value;
+    constexpr uint64_t shapeSizeB = Std::tuple_size<typename TileRight::Shape>::value;
+    constexpr uint64_t shapeSizeC = Std::tuple_size<typename TileAcc::Shape>::value;
+    static_assert(shapeSizeA == SHAPE_DIM2 && shapeSizeB == SHAPE_DIM2 && shapeSizeC == SHAPE_DIM2,
+                  "[TGEMV ERROR]: Shape dim size should be 2");
+    TMatmulImpl<initMatrixC, transMode, kAlignFlag, true>(c, a, b);
+}
+
+template <TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight,
+          typename TileBias>
+TILEOP void TGEMV(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
+{
+    constexpr uint64_t shapeSizeA = Std::tuple_size<typename TileLeft::Shape>::value;
+    constexpr uint64_t shapeSizeB = Std::tuple_size<typename TileRight::Shape>::value;
+    constexpr uint64_t shapeSizeC = Std::tuple_size<typename TileAcc::Shape>::value;
+    static_assert(shapeSizeA == SHAPE_DIM2 && shapeSizeB == SHAPE_DIM2 && shapeSizeC == SHAPE_DIM2,
+                  "[TGEMV ERROR]: Shape dim size should be 2");
+    TMatmulImpl<transMode, kAlignFlag, true>(c, a, b, bias);
+}
+#endif
+
 // TileOp Definitions for Matrix Multiplication & Data Movement on Ascend 950PR/Ascend 950DT Architectures
 #if defined(PTO_NPU_ARCH_A5) || defined(__LITE_NPU)
 // Copy Scale A data from DDR to L1 for MX matmul
@@ -88,8 +114,23 @@ TILEOP void TCopyUB2L1(DstTileData& dst, SrcTileData& src, const Coord& dstCoord
     constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
     static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
     static_assert(DstTileData::FORMAT == Hardware::L1 && SrcTileData::FORMAT == Hardware::UB);
-    TCopyUB2L1Impl<mode, Coord, DstTileData, SrcTileData>(dst, src, dstCoord, srcCoord);
+    TCopyUB2L1Impl<mode, false, Coord, DstTileData, SrcTileData>(dst, src, dstCoord, srcCoord);
 }
+
+#ifdef __LITE_NPU
+// GEMV A 来自 UB 时走 ND 数据路径（tile 声明为 RowMajor + NoneBox，命中 TExtractVecToMat ND 分支）
+template <CopyMode mode, typename Coord, typename DstTileData, typename SrcTileData>
+TILEOP void TCopyUB2L1ND2ND(DstTileData& dst, SrcTileData& src, const Coord& dstCoord, const Coord& srcCoord)
+{
+    if (!CheckShapeValid(dst, src)) {
+        return;
+    }
+    constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
+    static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
+    static_assert(DstTileData::FORMAT == Hardware::L1 && SrcTileData::FORMAT == Hardware::UB);
+    TCopyUB2L1Impl<mode, true, Coord, DstTileData, SrcTileData>(dst, src, dstCoord, srcCoord);
+}
+#endif
 
 // Copy data from L1 to L0A_MX scale or L0B_MX scale
 template <typename Coord, typename DstTileData, typename SrcTileData>
@@ -246,6 +287,25 @@ TILEOP void TExtractL1ToL0(DstTileData& dst, SrcTileData& src, const Coord& coor
                   (DstTileData::FORMAT == Hardware::L0A || DstTileData::FORMAT == Hardware::L0B));
     TExtractL1ToL0Impl<isTrans, isMX>(dst, src, offset0, offset1);
 }
+
+#ifdef __LITE_NPU
+// GEMV A 的 L1→L0A 走 ND 数据路径（L1 tile 声明 RowMajor，命中 TExtractToAVector ND 分支）
+template <bool isTrans, bool isMX, typename Coord, typename DstTileData, typename SrcTileData>
+TILEOP void TExtractL1ToL0ND2ND(DstTileData& dst, SrcTileData& src, const Coord& coord)
+{
+    if (!CheckBASEMNValid(dst)) {
+        return;
+    }
+    constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
+    static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2,
+                  "[TExtractL1ToL0ND2ND Error]: Shape Size should be 2 Dim");
+    int64_t offset0 = TileOp::GetTupleElement<Coord, DIM_1ST, SHAPE_DIM2, 0>(coord);
+    int64_t offset1 = TileOp::GetTupleElement<Coord, DIM_2ND, SHAPE_DIM2, 0>(coord);
+    static_assert(SrcTileData::FORMAT == Hardware::L1 &&
+                  (DstTileData::FORMAT == Hardware::L0A || DstTileData::FORMAT == Hardware::L0B));
+    TExtractL1ToL0Impl<isTrans, isMX, true>(dst, src, offset0, offset1);
+}
+#endif
 
 // Copy data from L1 to BT
 template <bool isTrans, typename Coord, typename DstTileData, typename SrcTileData>
