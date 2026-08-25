@@ -326,6 +326,8 @@ public:
     void SetAttribute(const std::string& key, int64_t value);
     void SetAttribute(const std::string& key, int value) { SetAttribute(key, static_cast<int64_t>(value)); }
 
+    [[nodiscard]] int GetInplaceIndex(size_t outputIndex) const;
+
     [[nodiscard]] Element GetElementAttribute(const std::string& key) const;
     std::vector<Element> GetVectorElementAttribute(const std::string& key) const;
     void SetAttribute(const std::string& key, Element value);

@@ -21,6 +21,7 @@ _patch_methods = [
     (pypto.Tensor, "move", 0),
     (pypto, "index_put_", 0),
     (pypto, "index_add_", 0),
+    (pypto, "atomic_add", 2),
 ]
 
 _orig_assemble = pypto.assemble

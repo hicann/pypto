@@ -12,17 +12,20 @@
 #include "ir/transforms/base/visitor.h"
 
 #include <cstdint>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "ir/type.h"
 
+#include "interface/operation/operation.h"
 #include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 
 namespace pypto::ir {
 
 using npu::tile_fwk::IRContext;
+using npu::tile_fwk::Operation;
 using npu::tile_fwk::RawTensor;
 
 class InferTokenPass : public IRMutator {
@@ -31,6 +34,7 @@ public:
 
     SeqStmtsPtr Apply(const SeqStmtsPtr& seq)
     {
+        BuildStorageClasses(seq);
         RegisterRaws(seq);
         AnalyzeLiveRaws(seq);
         return SeqStmts::AsMut(VisitStmt(seq));
@@ -48,6 +52,32 @@ private:
         VarPtr token;
     };
 
+    class StorageClasses {
+    public:
+        RawTensor* Find(RawTensor* raw)
+        {
+            auto it = parent_.find(raw);
+            if (it == parent_.end()) {
+                return raw;
+            }
+            RawTensor* root = Find(it->second);
+            parent_[raw] = root;
+            return root;
+        }
+
+        void Union(RawTensor* keep, RawTensor* merge)
+        {
+            keep = Find(keep);
+            merge = Find(merge);
+            if (keep != merge) {
+                parent_[merge] = keep;
+            }
+        }
+
+    private:
+        std::unordered_map<RawTensor*, RawTensor*> parent_;
+    };
+
     using RawTokenStateMap = std::unordered_map<RawTensor*, RawTokenState>;
     using RawNameMap = std::unordered_map<RawTensor*, std::string>;
     using RawSet = std::unordered_set<RawTensor*>;
@@ -56,6 +86,47 @@ private:
     {
         auto tensor = std::dynamic_pointer_cast<const npu::tile_fwk::LogicalTensor>(expr);
         return std::const_pointer_cast<npu::tile_fwk::LogicalTensor>(tensor);
+    }
+
+    static RawTensor* RawOf(const ExprPtr& expr)
+    {
+        auto tensor = AsLogicalTensor(expr);
+        return tensor ? tensor->GetRawTensor().get() : nullptr;
+    }
+
+    class StorageAliasCollector : public IRVisitor {
+    public:
+        explicit StorageAliasCollector(StorageClasses& classes) : classes_(classes) {}
+
+    private:
+        using IRVisitor::VisitStmt_;
+
+        void VisitStmt_(const TensorOpStmtPtr& op) override
+        {
+            auto operation = std::dynamic_pointer_cast<const Operation>(op);
+            if (operation) {
+                for (size_t i = 0; i < op->result_.size(); ++i) {
+                    auto argIndex = operation->GetInplaceIndex(i);
+                    if (argIndex < 0 || static_cast<size_t>(argIndex) >= op->args_.size()) {
+                        continue;
+                    }
+                    auto* argRaw = RawOf(op->args_[static_cast<size_t>(argIndex)]);
+                    auto* resultRaw = RawOf(op->result_[i]);
+                    if (argRaw != nullptr && resultRaw != nullptr) {
+                        classes_.Union(argRaw, resultRaw);
+                    }
+                }
+            }
+            IRVisitor::VisitStmt_(op);
+        }
+
+        StorageClasses& classes_;
+    };
+
+    void BuildStorageClasses(const StmtPtr& stmt)
+    {
+        StorageAliasCollector collector(storage_);
+        collector.VisitStmt(stmt);
     }
 
     class RawTensorCollector : public IRVisitor {
@@ -81,14 +152,22 @@ private:
     {
         RawTensorCollector collector;
         collector.VisitStmt(stmt);
-        registeredRaws_ = collector.TakeRawMap();
+        registeredRaws_.clear();
+        for (const auto& [raw, name] : collector.TakeRawMap()) {
+            auto* root = storage_.Find(raw);
+            if (raw == root) {
+                registeredRaws_[root] = name;
+            } else {
+                registeredRaws_.emplace(root, name);
+            }
+        }
     }
 
     void AddTensorRaw(const ExprPtr& expr)
     {
         auto tensor = AsLogicalTensor(expr);
         if (tensor && tensor->GetRawTensor()) {
-            liveRaws_.insert(tensor->GetRawTensor().get());
+            liveRaws_.insert(storage_.Find(tensor->GetRawTensor().get()));
         }
     }
 
@@ -242,7 +321,7 @@ private:
             auto tensor = AsLogicalTensor(result);
             auto token = CreateTokenVar(tensor, op->span_, TokenKind::WRITE);
             tensor->SetWriteToken(token);
-            auto* raw = tensor->GetRawTensor().get();
+            auto* raw = storage_.Find(tensor->GetRawTensor().get());
             writes.push_back({raw, std::move(token)});
             writtenRaws.insert(raw);
         }
@@ -251,7 +330,7 @@ private:
         std::unordered_map<RawTensor*, VarPtr> opReadTokens;
         for (const auto& arg : op->args_) {
             auto tensor = AsLogicalTensor(arg);
-            auto* raw = tensor->GetRawTensor().get();
+            auto* raw = storage_.Find(tensor->GetRawTensor().get());
             auto it = opReadTokens.find(raw);
             if (it != opReadTokens.end()) {
                 tensor->SetReadToken(it->second);
@@ -295,10 +374,7 @@ private:
         mutableOp->result_token_ = std::move(resultTokens);
 
         for (const auto& write : writes) {
-            auto& state = rawTokenStates_[write.raw];
-            state.latestWrite = write.token;
-            state.latestRead = nullptr;
-            state.readRevision = 0;
+            rawTokenStates_[write.raw] = RawTokenState{write.token, nullptr, 0};
         }
         for (const auto& read : reads) {
             if (!writtenRaws.count(read.raw)) {
@@ -349,7 +425,7 @@ private:
             if (token) {
                 returnTensor->SetWriteToken(token);
                 if (returnTensor->GetRawTensor()) {
-                    returnedTensorWrites[returnTensor->GetRawTensor().get()] = token;
+                    returnedTensorWrites[storage_.Find(returnTensor->GetRawTensor().get())] = token;
                 }
             }
         }
@@ -430,7 +506,7 @@ private:
             if (token) {
                 returnTensor->SetWriteToken(token);
                 if (returnTensor->GetRawTensor()) {
-                    returnedTensorWrites[returnTensor->GetRawTensor().get()] = token;
+                    returnedTensorWrites[storage_.Find(returnTensor->GetRawTensor().get())] = token;
                 }
             }
         }
@@ -475,6 +551,7 @@ private:
                                          std::move(returnVars), op->span_, op->attrs_);
     }
 
+    StorageClasses storage_;
     RawTokenStateMap rawTokenStates_;
     uint64_t readRevision_{0};
     RawNameMap registeredRaws_;

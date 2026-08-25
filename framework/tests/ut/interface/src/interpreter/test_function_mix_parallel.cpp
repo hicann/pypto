@@ -350,10 +350,9 @@ TEST_F(FunctionMixParallelTest, GetInplaceIndexIsInplaceAttr)
     auto out = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
     auto& op = func->AddRawOperation(Opcode::OP_CAST, {in}, {out});
 
-    FunctionInterpreter interpreter;
-    EXPECT_EQ(interpreter.GetInplaceIndex(&op, 0), -1);
+    EXPECT_EQ(op.GetInplaceIndex(0), -1);
     op.SetAttribute(OP_ATTR_PREFIX + "isInplace", true);
-    EXPECT_EQ(interpreter.GetInplaceIndex(&op, 0), 0);
+    EXPECT_EQ(op.GetInplaceIndex(0), 0);
 }
 
 } // namespace

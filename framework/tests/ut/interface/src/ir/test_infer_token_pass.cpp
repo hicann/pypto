@@ -49,6 +49,26 @@ TEST_F(TestInferTokenPass, TensorOps)
     ASSERT_NE(result, nullptr);
 }
 
+TEST_F(TestInferTokenPass, InplaceOp)
+{
+    auto target = Tensor(DT_FP32, {16, 16}, "target");
+    auto source = Tensor(DT_FP32, {16, 16}, "source");
+    auto out = Tensor(DT_FP32, {16, 16}, "out");
+
+    ProgramBuilder p;
+    p.BeginFunction("InplaceOp", {target, source, out});
+
+    auto value = Add(target, Element(DT_FP32, 1));
+    auto updated = Axpy(target, source, 1.0f);
+    Assemble(Add(value, updated), {0, 0}, out);
+
+    auto prog = p.EndFunction();
+
+    auto result = pypto::ir::pass::InferTokenPass()(prog);
+
+    ASSERT_NE(result, nullptr);
+}
+
 TEST_F(TestInferTokenPass, IfStmt)
 {
     auto a = Tensor(DT_FP32, {16, 16}, "a");

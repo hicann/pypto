@@ -975,7 +975,7 @@ struct FunctionInterpreter {
         std::vector<std::shared_ptr<LogicalTensorData>> oOpDataList;
         for (size_t i = 0; i < callop->GetOOperands().size(); i++) {
             auto oop = callop->GetOOperands()[i];
-            if (auto index = GetInplaceIndex(callop, i); index != -1) {
+            if (auto index = callop->GetInplaceIndex(i); index != -1) {
                 ExecuteInplaceOperation(frame, *callop, i, iOpDataList, oOpDataList);
             } else {
                 oOpDataList.push_back(AllocateDataView(frame, oop));
@@ -1015,28 +1015,6 @@ struct FunctionInterpreter {
         }
         pool.NotifyAll();
         pool.WaitForAll();
-    }
-
-    int GetInplaceIndex(Operation* op, int pos)
-    {
-        struct {
-            Opcode opcode;
-            int oPos;
-            int iPos;
-        } inplaceInfo[] = {{Opcode::OP_INDEX_OUTCAST, 0, 2}, {Opcode::OP_VIEW, 0, 0}};
-        for (auto& info : inplaceInfo) {
-            if (info.opcode == op->GetOpcode() && pos == info.oPos) {
-                return info.iPos;
-            }
-        }
-        if (op->HasAttribute(OpAttributeKey::inplaceIdx)) {
-            ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, pos == 0);
-            return op->GetIntAttribute(OpAttributeKey::inplaceIdx);
-        }
-        if (op->GetBoolAttribute(OP_ATTR_PREFIX + "isInplace")) {
-            return 0;
-        }
-        return -1;
     }
 
     std::vector<uint64_t> UnBind(SymbolicScalar attr)
@@ -1092,7 +1070,7 @@ struct FunctionInterpreter {
                                  std::vector<std::shared_ptr<LogicalTensorData>>& oOpDataList)
     {
         auto oop = op.GetOOperands()[oOperandIdx];
-        auto index = GetInplaceIndex(&op, oOperandIdx);
+        auto index = op.GetInplaceIndex(oOperandIdx);
         ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, index != -1);
         auto iop = op.GetInputOperand(index);
         ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, iOpDataList[index] != nullptr);
@@ -1188,7 +1166,7 @@ struct FunctionInterpreter {
             if (op->GetOpcode() == Opcode::OP_INDEX_ADD && i > 0) {
                 continue;
             }
-            if (auto index = GetInplaceIndex(op, i); index != -1) {
+            if (auto index = op->GetInplaceIndex(i); index != -1) {
                 ExecuteInplaceOperation(frame, *op, i, iOpDataList, oOpDataList);
             } else if (op->GetOpcode() == Opcode::OP_BIND_TENSOR) {
                 ExecuteBindTensor(frame, *op, iOpDataList, oOpDataList);

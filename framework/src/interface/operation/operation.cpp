@@ -309,6 +309,37 @@ int64_t Operation::GetIntAttribute(const std::string& key) const
 
 void Operation::SetAttribute(const std::string& key, int64_t value) { SetAttr(key, value); }
 
+int Operation::GetInplaceIndex(size_t outputIndex) const
+{
+    struct {
+        Opcode opcode;
+        size_t outputIndex;
+        int inputIndex;
+    } inplaceInfo[] = {{Opcode::OP_INDEX_OUTCAST, 0, 2}};
+    for (const auto& info : inplaceInfo) {
+        if (info.opcode == GetOpcode() && outputIndex == info.outputIndex) {
+            return info.inputIndex;
+        }
+    }
+    if (HasAttribute(OpAttributeKey::inplaceIdx)) {
+        ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, outputIndex == 0);
+        return static_cast<int>(GetIntAttribute(OpAttributeKey::inplaceIdx));
+    }
+    if (GetBoolAttribute(OP_ATTR_PREFIX + "isInplace")) {
+        return 0;
+    }
+
+    std::map<int, int> attrInplaceInfo;
+    if (GetAttr(OpAttributeKey::inplaceInfo, attrInplaceInfo)) {
+        for (const auto& [inputIndex, attrOutputIndex] : attrInplaceInfo) {
+            if (attrOutputIndex >= 0 && static_cast<size_t>(attrOutputIndex) == outputIndex) {
+                return inputIndex;
+            }
+        }
+    }
+    return -1;
+}
+
 CastMode Operation::GetCastModeAttribute(const std::string& key) const
 {
     FE_ASSERT(FeError::NOT_EXIST, HasAttr(key)) << "Operation doesn't have attribute " << key;
