@@ -35,19 +35,41 @@ void TaskSplitter::BuildSameLayerConnectionWithBack()
         if (ALLOC_OPCODE.count(opList_[i]->GetOpcode()) == 0) {
             continue;
         }
+        ScheduleCoreType srcCoreType = opCoreTypes_[i];
         APASS_LOG_DEBUG_F(Elements::Operation, "Found alloc op %s[%d].", opList_[i]->GetOpcodeStr().c_str(),
                           opList_[i]->GetOpMagic());
+        bool withBack = true;
         for (auto& oop : opList_[i]->GetOOperands()) {
             for (auto& sameLayerOpPtr : oop->GetProducers()) {
                 int dstOpMagic = sameLayerOpPtr->GetOpMagic();
                 if (opMagicToIdx_.count(dstOpMagic) == 0) {
                     continue;
                 }
-                if (opList_[i]->GetOpMagic() == sameLayerOpPtr->GetOpMagic()) {
+                if (opCoreTypes_[opMagicToIdx_[dstOpMagic]] != srcCoreType ||
+                    opList_[i]->GetOpMagic() == sameLayerOpPtr->GetOpMagic()) {
                     continue;
                 }
-                APASS_LOG_DEBUG_F(Elements::Operation,
-                                  "-- add %s[%d] to same layer connection because of the alloc op.",
+                APASS_LOG_DEBUG_F(Elements::Operation, "-- add %s[%d] to same layer connection because of alloc op.",
+                                  sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
+                sameLayerConnection_.push_back({i, opMagicToIdx_[sameLayerOpPtr->GetOpMagic()]});
+                withBack = false;
+            }
+        }
+        if (withBack) {
+            for (auto& oop : opList_[i]->GetOOperands()) {
+                auto& consumers = oop->GetConsumers();
+                if (consumers.empty()) {
+                    continue;
+                }
+                auto& sameLayerOpPtr = *consumers.begin();
+                int dstOpMagic = sameLayerOpPtr->GetOpMagic();
+                if (opMagicToIdx_.count(dstOpMagic) == 0) {
+                    continue;
+                }
+                if (opCoreTypes_[opMagicToIdx_[dstOpMagic]] != srcCoreType) {
+                    continue;
+                }
+                APASS_LOG_DEBUG_F(Elements::Operation, "-- add %s[%d] to same layer connection because of alloc op.",
                                   sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
                 sameLayerConnection_.push_back({i, opMagicToIdx_[sameLayerOpPtr->GetOpMagic()]});
             }

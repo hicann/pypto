@@ -100,6 +100,9 @@ void OoOSchedule::CollectStatistic(OoOScheduleStatistic& oooHealthCheck, Functio
 Status OoOSchedule::ModifyTaskOplist(std::vector<Operation*>& taskList,
                                      const std::unordered_map<int, Operation*>& allocMap)
 {
+    taskList.erase(
+        std::remove_if(taskList.begin(), taskList.end(), [](Operation* op) { return IsAllocOpCode(op->GetOpcode()); }),
+        taskList.end());
     std::unordered_set<int> memIds;
     std::unordered_map<int, Operation*> taskAllocMap;
     for (const auto& op : taskList) {
@@ -266,6 +269,13 @@ Status OoOSchedule::Schedule(std::vector<Operation*>& opList, Function& function
         }
         opList = sort.operations;
     } else {
+        OptimizeSort optimizeSort(opList, *program.second);
+        if (optimizeSort.SortOps() != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Global sortOps failed");
+            return FAILED;
+        }
+        // 全局排序的序列
+        opList = optimizeSort.GetOperations();
         // task划分
         TaskSplitter splitter;
         splitter.SplitGraph(opList);

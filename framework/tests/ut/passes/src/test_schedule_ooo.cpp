@@ -2103,8 +2103,8 @@ TEST_F(ScheduleOoOTest, TestOoO1C2V)
     auto res = oooSchedule.Schedule(opList, *function, functionPair, size);
     EXPECT_EQ(res, SUCCESS);
     EXPECT_EQ(op1->GetInternalSubgraphID(), 1);
-    EXPECT_EQ(op2->GetInternalSubgraphID(), 1);
-    EXPECT_EQ(op3->GetInternalSubgraphID(), 2);
+    EXPECT_EQ(op2->GetInternalSubgraphID(), 2);
+    EXPECT_EQ(op3->GetInternalSubgraphID(), 1);
     EXPECT_EQ(op4->GetInternalSubgraphID(), 0);
 }
 
@@ -2264,10 +2264,11 @@ struct DualDstGraph {
     Operation* allocUb1{nullptr};
     Operation* allocOut0{nullptr};
     Operation* allocOut1{nullptr};
-    Operation* copy0{nullptr}; // L0C -> ub0
-    Operation* copy1{nullptr}; // L0C -> ub1
-    Operation* add0{nullptr};  // ub0 -> out0  (consumer => AIV0)
-    Operation* add1{nullptr};  // ub1 -> out1  (consumer => AIV1)
+    Operation* copyinL0c{nullptr};
+    Operation* copy0{nullptr};
+    Operation* copy1{nullptr};
+    Operation* add0{nullptr};
+    Operation* add1{nullptr};
 };
 
 DualDstGraph BuildDualDstGraph(const std::vector<int64_t>& l0cShape, const std::vector<int64_t>& tileShape,
@@ -2312,6 +2313,7 @@ DualDstGraph BuildDualDstGraph_2(const std::vector<int64_t>& l0cShape, const std
 {
     DualDstGraph g;
     g.builder = std::make_shared<ComputationalGraphBuilder>();
+    EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, l0cShape, MemoryType::MEM_DEVICE_DDR, "t_ddr"), true);
     EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, l0cShape, MemoryType::MEM_L0C, "t_l0c"), true);
     EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, tileShape, MemoryType::MEM_UB, "t_ub0"), true);
     EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, tileShape, MemoryType::MEM_UB, "t_ub1"), true);
@@ -2334,6 +2336,7 @@ DualDstGraph BuildDualDstGraph_2(const std::vector<int64_t>& l0cShape, const std
                       true);
         }
     }
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_COPY_IN, {"t_ddr"}, {"t_l0c"}, "copyin_l0c"), true);
     EXPECT_EQ(g.builder->AddOp(Opcode::OP_L0C_COPY_UB, {"t_l0c"}, {"t_ub0"}, "copy0"), true);
     EXPECT_EQ(g.builder->AddOp(Opcode::OP_L0C_COPY_UB, {"t_l0c"}, {"t_ub1"}, "copy1"), true);
     EXPECT_EQ(g.builder->AddOp(
@@ -2353,6 +2356,7 @@ DualDstGraph BuildDualDstGraph_2(const std::vector<int64_t>& l0cShape, const std
     g.allocUb1 = g.builder->GetOp("alloc_ub1");
     g.allocOut0 = g.builder->GetOp("alloc_softmax0_out0");
     g.allocOut1 = g.builder->GetOp("alloc_softmax1_out0");
+    g.copyinL0c = g.builder->GetOp("copyin_l0c");
     g.copy0 = g.builder->GetOp("copy0");
     g.copy1 = g.builder->GetOp("copy1");
     g.add0 = g.builder->GetOp("softmax0");
@@ -2360,6 +2364,10 @@ DualDstGraph BuildDualDstGraph_2(const std::vector<int64_t>& l0cShape, const std
 
     SetCopyL0cToUbAttr(*g.copy0, fromOff0, tileShape);
     SetCopyL0cToUbAttr(*g.copy1, fromOff1, tileShape);
+    auto copyinOffImme = OpImmediate::Specified(std::vector<int64_t>{0, 0});
+    auto copyinShapeImme = OpImmediate::Specified(l0cShape);
+    g.copyinL0c->SetOpAttribute(
+        std::make_shared<CopyOpAttribute>(copyinOffImme, MemoryType::MEM_L0C, copyinShapeImme, copyinShapeImme));
     return g;
 }
 
@@ -2370,6 +2378,9 @@ void InjectCoreMap(OoOScheduler& s, const DualDstGraph& g, bool sameCoreForAdds 
     s.state_.schedInfoMap[g.add0].coreLocation = CoreLocationType::AIV0;
     s.state_.schedInfoMap[g.add1].coreLocation = sameCoreForAdds ? CoreLocationType::AIV0 : CoreLocationType::AIV1;
     s.state_.schedInfoMap[g.allocL0c].coreLocation = CoreLocationType::AIC;
+    if (g.copyinL0c != nullptr) {
+        s.state_.schedInfoMap[g.copyinL0c].coreLocation = CoreLocationType::AIC;
+    }
     s.state_.schedInfoMap[g.allocUb0].coreLocation = CoreLocationType::AIV0;
     s.state_.schedInfoMap[g.allocUb1].coreLocation = CoreLocationType::AIV1;
     s.state_.schedInfoMap[g.allocOut0].coreLocation = CoreLocationType::AIV0;
