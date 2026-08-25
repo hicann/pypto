@@ -50,11 +50,11 @@ def _assert_target(state, expected):
 
 @pl.simt.function(max_threads=THREADS)
 def atomic_add_ub_all_dtypes(
-    int32_tile: pl.Tile[[1, ELEMENTS], pl.DT_INT32],
-    uint32_tile: pl.Tile[[1, ELEMENTS], pl.DT_UINT32],
-    fp16_tile: pl.Tile[[1, ELEMENTS], pl.DT_FP16],
-    bf16_tile: pl.Tile[[1, ELEMENTS], pl.DT_BF16],
-    fp32_tile: pl.Tile[[1, ELEMENTS], pl.DT_FP32],
+    int32_tile,
+    uint32_tile,
+    fp16_tile,
+    bf16_tile,
+    fp32_tile,
 ):
     pl.simt.atomic_add(int32_tile[0, 0], 1)
     pl.simt.atomic_add(uint32_tile[0, 0], 1)
@@ -193,7 +193,7 @@ def atomic_add_histogram_gm(histogram: pl.Tensor[[1, ATOMIC_BUCKETS], pl.DT_INT3
 
 
 @pl.simt.function(max_threads=SEMANTIC_THREADS)
-def atomic_add_histogram_ub(histogram: pl.Tile[[1, ATOMIC_BUCKETS], pl.DT_INT32]):
+def atomic_add_histogram_ub(histogram):
     tid = pl.simt.linear_thread_idx()
     pl.simt.atomic_add(histogram[0, tid % ATOMIC_BUCKETS], 1)
 

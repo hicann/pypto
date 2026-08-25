@@ -55,7 +55,7 @@ def test_tile_type_with_memref_and_tileview_print():
     tile_type = ir.TileType(shape, DataType.FP16, memref, tv)
     printed = ir.python_print(tile_type)
 
-    assert "ir.Tile" in printed
+    assert "ir.TileType" in printed
     assert "ir.FP16" in printed
     # MemRef prints as positional arg with full constructor syntax (fixes #281)
     assert "memref=" not in printed

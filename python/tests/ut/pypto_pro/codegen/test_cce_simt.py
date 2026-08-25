@@ -26,8 +26,8 @@ def _compile_to_cce(kernel_def, arch: str = "a5") -> str:
 
 @pl.simt.function(max_threads=256)
 def _tile_add(
-    dst: pl.Tile[[1, 256], pl.DT_FP32],
-    src: pl.Tile[[1, 256], pl.DT_FP32],
+    dst,
+    src,
     n: pl.DT_UINT32,
     delta: pl.DT_FP32,
 ):
@@ -60,7 +60,7 @@ def _callee_load(src: pl.Tensor[[1, 32], pl.DT_INT32], index: pl.DT_UINT32) -> p
 
 @pl.simt.function
 def _callee_store(
-    dst: pl.Tile[[1, 32], pl.DT_INT32],
+    dst,
     index: pl.DT_UINT32,
     value: pl.DT_INT32,
 ):
@@ -69,7 +69,7 @@ def _callee_store(
 
 @pl.simt.function
 def _callee_apply(
-    dst: pl.Tile[[1, 32], pl.DT_INT32],
+    dst,
     src: pl.Tensor[[1, 32], pl.DT_INT32],
     index: pl.DT_UINT32,
     delta: pl.DT_INT32,
@@ -80,7 +80,7 @@ def _callee_apply(
 
 @pl.simt.function(max_threads=32)
 def _callee_entry(
-    dst: pl.Tile[[1, 32], pl.DT_INT32],
+    dst,
     src: pl.Tensor[[1, 32], pl.DT_INT32],
     delta: pl.DT_INT32,
 ):
@@ -89,7 +89,7 @@ def _callee_entry(
 
 
 @pl.simt.function(max_threads=256)
-def _context_probe(dst: pl.Tile[[1, 256], pl.DT_UINT32]):
+def _context_probe(dst):
     thread = pl.simt.thread_idx()
     block = pl.simt.block_dim()
     block_id = pl.simt.block_idx()
@@ -115,8 +115,8 @@ def _context_probe(dst: pl.Tile[[1, 256], pl.DT_UINT32]):
 
 @pl.simt.function(max_threads=256)
 def _tile_valid_shape_access(
-    dst: pl.Tile[[8, 64], pl.DT_FP32],
-    src: pl.Tile[[8, 64], pl.DT_FP32],
+    dst,
+    src,
 ):
     tid = pl.simt.linear_thread_idx()
     rows = src.valid_shape[0]
@@ -193,8 +193,8 @@ def _simt_valid_shape_codegen_kernel(valid_rows: pl.DT_UINT32, valid_cols: pl.DT
 
 @pl.simt.function(max_threads=32)
 def _atomic_add_ub(
-    dst: pl.Tile[[1, 32], pl.DT_INT32],
-    old_values: pl.Tile[[1, 32], pl.DT_INT32],
+    dst,
+    old_values,
     value: pl.DT_INT32,
 ):
     tid = pl.simt.linear_thread_idx()
@@ -212,13 +212,13 @@ def _atomic_add_gm(
 
 
 @pl.simt.function(max_threads=1)
-def _atomic_add_discard(dst: pl.Tile[[1, 1], pl.DT_INT32], value: pl.DT_INT32):
+def _atomic_add_discard(dst, value: pl.DT_INT32):
     pl.simt.atomic_add(dst[0, 0], value)
 
 
 @pl.simt.function(max_threads=1)
 def _atomic_half_discard(
-    ub: pl.Tile[[1, 3], pl.DT_FP16],
+    ub,
     gm: pl.Tensor[[1, 3], pl.DT_BF16],
 ):
     pl.simt.atomic_add(ub[0, 0], 1.0)
@@ -231,9 +231,9 @@ def _atomic_half_discard(
 
 @pl.simt.function(max_threads=1)
 def _atomic_rmw_discard(
-    numeric: pl.Tile[[1, 1], pl.DT_INT32],
-    bitwise: pl.Tile[[1, 1], pl.DT_UINT32],
-    counter: pl.Tile[[1, 1], pl.DT_UINT32],
+    numeric,
+    bitwise,
+    counter,
     compare: pl.DT_INT32,
     replacement: pl.DT_INT32,
     mask: pl.DT_UINT32,
@@ -488,7 +488,7 @@ def test_simt_callee_codegen_emits_native_nested_calls_and_tile_abi():
 
 
 @pl.simt.function(max_threads=256)
-def _simt_inplace_add(data: pl.Tile[[1, 256], pl.DT_FP32], delta: pl.DT_FP32):
+def _simt_inplace_add(data, delta: pl.DT_FP32):
     tid = pl.simt.linear_thread_idx()
     data[0, tid] = data[0, tid] + delta
 

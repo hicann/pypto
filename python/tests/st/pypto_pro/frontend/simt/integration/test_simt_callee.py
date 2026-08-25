@@ -39,7 +39,7 @@ def affine(value: pl.DT_FP32, scale: pl.DT_FP32, delta: pl.DT_FP32) -> pl.DT_FP3
 
 @pl.simt.function
 def store_value(
-    dst: pl.Tile[[1, THREADS], pl.DT_FP32],
+    dst,
     index: pl.DT_UINT32,
     value: pl.DT_FP32,
 ):
@@ -48,8 +48,8 @@ def store_value(
 
 @pl.simt.function
 def transform_one(
-    dst: pl.Tile[[1, THREADS], pl.DT_FP32],
-    src: pl.Tile[[1, THREADS], pl.DT_FP32],
+    dst,
+    src,
     index: pl.DT_UINT32,
     scale: pl.DT_FP32,
     delta: pl.DT_FP32,
@@ -60,8 +60,8 @@ def transform_one(
 
 @pl.simt.function(max_threads=THREADS)
 def transform_tile(
-    dst: pl.Tile[[1, THREADS], pl.DT_FP32],
-    src: pl.Tile[[1, THREADS], pl.DT_FP32],
+    dst,
+    src,
     scale: pl.DT_FP32,
     delta: pl.DT_FP32,
 ):

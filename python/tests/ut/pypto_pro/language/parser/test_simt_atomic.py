@@ -11,9 +11,9 @@
 
 """Parser tests for PyPTO Pro SIMT atomic operations.
 
-Operation-level tests use eager SIMT IR parsing so diagnostics and generated IR
-are observable at function definition time. Delayed ``pl.simt.function`` parsing
-is covered by the launch integration cases here and in ``test_simt.py``.
+Scalar and Tensor operation-level tests use eager SIMT IR parsing. Tile tests use
+delayed ``pl.simt.function`` parsing so their types are inferred from launch
+arguments.
 """
 
 import pypto_pro.language as pl
@@ -25,8 +25,8 @@ from pypto.pypto_impl import ir
 
 @pl.simt.function(max_threads=32)
 def _atomic_add_tile(
-    dst: pl.Tile[[1, 32], pl.DT_INT32],
-    old_values: pl.Tile[[1, 32], pl.DT_INT32],
+    dst,
+    old_values,
     value: pl.DT_INT32,
 ):
     tid = pl.simt.linear_thread_idx()
@@ -43,11 +43,11 @@ def _atomic_add_tensor(
     old_values[0, tid] = pl.simt.atomic_add(dst[0, 0], value)
 
 
-@pl.function(type=pl.FunctionType.SimtCallee)
+@pl.simt.function
 def _atomic_rmw_ops(
-    numeric: pl.Tile[[1, 1], pl.DT_INT32],
-    bitwise: pl.Tile[[1, 1], pl.DT_UINT32],
-    counter: pl.Tile[[1, 1], pl.DT_UINT32],
+    numeric,
+    bitwise,
+    counter,
     int_value: pl.DT_INT32,
     uint_value: pl.DT_UINT32,
 ):
@@ -61,6 +61,11 @@ def _atomic_rmw_ops(
     pl.simt.atomic_xor(bitwise[0, 0], uint_value)
     pl.simt.atomic_inc(counter[0, 0], uint_value)
     pl.simt.atomic_dec(counter[0, 0], uint_value)
+
+
+@pl.simt.function(max_threads=1)
+def _atomic_rmw_ops_entry(numeric, bitwise, counter, int_value, uint_value):
+    _atomic_rmw_ops(numeric, bitwise, counter, int_value, uint_value)
 
 
 @pl.kernel
@@ -80,6 +85,110 @@ def _atomic_add_tensor_kernel(
 ):
     with pl.section_vector():
         pl.simt.launch(_atomic_add_tensor, threads=32, args=(dst, old_values, value))
+
+
+@pl.kernel
+def _atomic_rmw_ops_kernel(int_value: pl.DT_INT32, uint_value: pl.DT_UINT32):
+    int_type = pl.TileType(shape=[1, 1], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
+    uint_type = pl.TileType(shape=[1, 1], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
+    numeric = pl.make_tile(int_type, addr=0, size=4)
+    bitwise = pl.make_tile(uint_type, addr=32, size=4)
+    counter = pl.make_tile(uint_type, addr=64, size=4)
+    with pl.section_vector():
+        pl.simt.launch(
+            _atomic_rmw_ops_entry,
+            threads=1,
+            args=(numeric, bitwise, counter, int_value, uint_value),
+        )
+
+
+def _parse_one_tile_function(function, dtype, shape=(1, 1)):
+    @pl.simt.function(max_threads=1)
+    def entry(tile):
+        function(tile)
+
+    @pl.kernel
+    def kernel():
+        tile_type = pl.TileType(shape=shape, dtype=dtype, target_memory=pl.MemorySpace.Vec)
+        tile = pl.make_tile(tile_type, addr=0, size=4096)
+        with pl.section_vector():
+            pl.simt.launch(entry, threads=1, args=(tile,))
+
+    program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
+    return program.get_function(function.__name__)
+
+
+def _parse_two_tile_function(function, first_dtype, second_dtype):
+    @pl.simt.function(max_threads=1)
+    def entry(first, second):
+        function(first, second)
+
+    @pl.kernel
+    def kernel():
+        first_type = pl.TileType(shape=[1, 1], dtype=first_dtype, target_memory=pl.MemorySpace.Vec)
+        second_type = pl.TileType(shape=[1, 1], dtype=second_dtype, target_memory=pl.MemorySpace.Vec)
+        first = pl.make_tile(first_type, addr=0, size=4096)
+        second = pl.make_tile(second_type, addr=4096, size=4096)
+        with pl.section_vector():
+            pl.simt.launch(entry, threads=1, args=(first, second))
+
+    program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
+    return program.get_function(function.__name__)
+
+
+def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
+    @pl.simt.function(max_threads=1)
+    def entry(tile, value):
+        function(tile, value)
+
+    if scalar_dtype == pl.DT_INT32:
+
+        @pl.kernel
+        def kernel(value: pl.DT_INT32):
+            tile_type = pl.TileType(shape=[1, 1], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
+            tile = pl.make_tile(tile_type, addr=0, size=4096)
+            with pl.section_vector():
+                pl.simt.launch(entry, threads=1, args=(tile, value))
+
+    elif scalar_dtype == pl.DT_UINT32:
+
+        @pl.kernel
+        def kernel(value: pl.DT_UINT32):
+            tile_type = pl.TileType(shape=[1, 1], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
+            tile = pl.make_tile(tile_type, addr=0, size=4096)
+            with pl.section_vector():
+                pl.simt.launch(entry, threads=1, args=(tile, value))
+
+    elif scalar_dtype == pl.DT_FP32:
+
+        @pl.kernel
+        def kernel(value: pl.DT_FP32):
+            tile_type = pl.TileType(shape=[1, 1], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
+            tile = pl.make_tile(tile_type, addr=0, size=4096)
+            with pl.section_vector():
+                pl.simt.launch(entry, threads=1, args=(tile, value))
+
+    else:
+        raise ValueError(f"Unsupported scalar dtype: {scalar_dtype}")
+
+    program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
+    return program.get_function(function.__name__)
+
+
+def _parse_tile_compare_function(function, tile_dtype):
+    @pl.simt.function(max_threads=1)
+    def entry(tile, compare, value):
+        function(tile, compare, value)
+
+    @pl.kernel
+    def kernel(compare: pl.DT_UINT32, value: pl.DT_INT32):
+        tile_type = pl.TileType(shape=[1, 1], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
+        tile = pl.make_tile(tile_type, addr=0, size=4096)
+        with pl.section_vector():
+            pl.simt.launch(entry, threads=1, args=(tile, compare, value))
+
+    program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
+    return program.get_function(function.__name__)
 
 
 def test_atomic_add_preserves_tile_lvalue_and_returns_old_value():
@@ -105,47 +214,50 @@ def test_atomic_add_supports_gm_int64_tensor():
 
 
 def test_atomic_add_contextually_types_numeric_literals():
-    @pl.function(type=pl.FunctionType.SimtCallee)
-    def literal_values(unsigned: pl.Tile[[1, 1], pl.DT_UINT32], signed: pl.Tile[[1, 1], pl.DT_INT32]):
+    @pl.simt.function
+    def literal_values(unsigned, signed):
         old = pl.simt.atomic_add(unsigned[0, 0], 1)
         signed[0, 0] = pl.simt.atomic_add(signed[0, 0], -1)
         unsigned[0, 0] = old
 
-    function_ir = str(literal_values)
+    function_ir = str(_parse_two_tile_function(literal_values, pl.DT_UINT32, pl.DT_INT32))
     assert function_ir.count("simt.atomic_add") == 2
 
 
 def test_atomic_add_requires_direct_subscript_target():
-    with pytest.raises(ParserSyntaxError, match="direct Tile or Tensor subscript"):
+    @pl.simt.function
+    def scalar_alias(dst, value: pl.DT_INT32):
+        current = dst[0, 0]
+        pl.simt.atomic_add(current, value)
 
-        @pl.function(type=pl.FunctionType.SimtCallee)
-        def scalar_alias(dst: pl.Tile[[1, 1], pl.DT_INT32], value: pl.DT_INT32):
-            current = dst[0, 0]
-            pl.simt.atomic_add(current, value)
+    with pytest.raises(ParserSyntaxError, match="direct Tile or Tensor subscript"):
+        _parse_tile_scalar_function(scalar_alias, pl.DT_INT32, pl.DT_INT32)
 
 
 def test_atomic_add_rejects_slice_target():
-    with pytest.raises(ParserSyntaxError, match="does not support slices"):
+    @pl.simt.function
+    def slice_target(dst, value: pl.DT_INT32):
+        pl.simt.atomic_add(dst[0:1, 0:1], value)
 
-        @pl.function(type=pl.FunctionType.SimtCallee)
-        def slice_target(dst: pl.Tile[[1, 1], pl.DT_INT32], value: pl.DT_INT32):
-            pl.simt.atomic_add(dst[0:1, 0:1], value)
+    with pytest.raises(ParserSyntaxError, match="does not support slices"):
+        _parse_tile_scalar_function(slice_target, pl.DT_INT32, pl.DT_INT32)
 
 
 @pytest.mark.parametrize("dtype", [pl.DT_FP16, pl.DT_BF16])
 def test_half_precision_atomic_add_max_min_are_void_on_ub_tile(dtype):
-    @pl.function(type=pl.FunctionType.SimtCallee)
-    def supported_tile(dst: pl.Tile[[1, 3], dtype]):
+    @pl.simt.function
+    def supported_tile(dst):
         pl.simt.atomic_add(dst[0, 0], 1.0)
         pl.simt.atomic_max(dst[0, 1], 2.0)
         pl.simt.atomic_min(dst[0, 2], 3.0)
 
-    function_ir = str(supported_tile)
+    function = _parse_one_tile_function(supported_tile, dtype, shape=(1, 3))
+    function_ir = str(function)
     for op_name in ("atomic_add", "atomic_max", "atomic_min"):
         assert function_ir.count(f"simt.{op_name}") == 1
     atomic_calls = [
         stmt.expr
-        for stmt in supported_tile.body.stmts
+        for stmt in function.body.stmts
         if isinstance(stmt, ir.EvalStmt) and isinstance(stmt.expr, ir.Call)
     ]
     assert len(atomic_calls) == 3
@@ -174,31 +286,35 @@ def test_half_precision_atomic_add_max_min_are_void_on_gm_tensor(dtype):
 
 @pytest.mark.parametrize("dtype", [pl.DT_FP16, pl.DT_BF16])
 def test_half_precision_atomic_result_cannot_be_returned(dtype):
-    with pytest.raises(ParserTypeError, match="must return None or one scalar value"):
+    @pl.simt.function
+    def add_result(dst) -> None:
+        return pl.simt.atomic_add(dst[0, 0], 1.0)
 
-        @pl.function(type=pl.FunctionType.SimtCallee)
-        def add_result(dst: pl.Tile[[1, 1], dtype]) -> None:
-            return pl.simt.atomic_add(dst[0, 0], 1.0)
+    with pytest.raises(ParserTypeError, match="must return None or one scalar value"):
+        _parse_one_tile_function(add_result, dtype)
 
 
 def test_atomic_add_requires_exact_value_dtype():
-    with pytest.raises(ParserTypeError, match="operand 0 dtype must match target dtype"):
+    @pl.simt.function
+    def mismatched_value(dst, value: pl.DT_UINT32):
+        pl.simt.atomic_add(dst[0, 0], value)
 
-        @pl.function(type=pl.FunctionType.SimtCallee)
-        def mismatched_value(dst: pl.Tile[[1, 1], pl.DT_INT32], value: pl.DT_UINT32):
-            pl.simt.atomic_add(dst[0, 0], value)
+    with pytest.raises(ParserTypeError, match="operand 0 dtype must match target dtype"):
+        _parse_tile_scalar_function(mismatched_value, pl.DT_INT32, pl.DT_UINT32)
 
 
 def test_atomic_add_rejects_float_literal_for_integer_target():
-    with pytest.raises(ParserTypeError, match="requires an integer value"):
+    @pl.simt.function
+    def float_literal(dst):
+        pl.simt.atomic_add(dst[0, 0], 1.0)
 
-        @pl.function(type=pl.FunctionType.SimtCallee)
-        def float_literal(dst: pl.Tile[[1, 1], pl.DT_INT32]):
-            pl.simt.atomic_add(dst[0, 0], 1.0)
+    with pytest.raises(ParserTypeError, match="requires an integer value"):
+        _parse_one_tile_function(float_literal, pl.DT_INT32)
 
 
 def test_atomic_rmw_interfaces_preserve_lvalue_and_build_distinct_ir_ops():
-    function_ir = str(_atomic_rmw_ops)
+    program, _ = _atomic_rmw_ops_kernel.parse_target_program(ir.SectionKind.Vector)
+    function_ir = str(program.get_function("_atomic_rmw_ops"))
 
     for op_name in (
         "atomic_sub",
@@ -217,40 +333,43 @@ def test_atomic_rmw_interfaces_preserve_lvalue_and_build_distinct_ir_ops():
 
 
 def test_atomic_cas_contextually_types_compare_and_value_literals():
-    @pl.function(type=pl.FunctionType.SimtCallee)
-    def literal_operands(dst: pl.Tile[[1, 1], pl.DT_UINT32]):
+    @pl.simt.function
+    def literal_operands(dst):
         old = pl.simt.atomic_cas(dst[0, 0], 0, 1)
         dst[0, 0] = old
 
-    assert "simt.atomic_cas" in str(literal_operands)
+    assert "simt.atomic_cas" in str(_parse_one_tile_function(literal_operands, pl.DT_UINT32))
 
 
 def test_atomic_cas_requires_exact_compare_dtype():
-    with pytest.raises(ParserTypeError, match="operand 0 dtype must match target dtype"):
+    @pl.simt.function
+    def mismatched_compare(
+        dst,
+        compare: pl.DT_UINT32,
+        value: pl.DT_INT32,
+    ):
+        pl.simt.atomic_cas(dst[0, 0], compare, value)
 
-        @pl.function(type=pl.FunctionType.SimtCallee)
-        def mismatched_compare(
-            dst: pl.Tile[[1, 1], pl.DT_INT32],
-            compare: pl.DT_UINT32,
-            value: pl.DT_INT32,
-        ):
-            pl.simt.atomic_cas(dst[0, 0], compare, value)
+    with pytest.raises(ParserTypeError, match="operand 0 dtype must match target dtype"):
+        _parse_tile_compare_function(mismatched_compare, pl.DT_INT32)
 
 
 def test_atomic_bitwise_rejects_fp32_target():
-    with pytest.raises(ParserTypeError, match="atomic_or.*does not support dtype.*UB Tile"):
+    @pl.simt.function
+    def float_bitwise(dst, value: pl.DT_FP32):
+        pl.simt.atomic_or(dst[0, 0], value)
 
-        @pl.function(type=pl.FunctionType.SimtCallee)
-        def float_bitwise(dst: pl.Tile[[1, 1], pl.DT_FP32], value: pl.DT_FP32):
-            pl.simt.atomic_or(dst[0, 0], value)
+    with pytest.raises(ParserTypeError, match="atomic_or.*does not support dtype.*UB Tile"):
+        _parse_tile_scalar_function(float_bitwise, pl.DT_FP32, pl.DT_FP32)
 
 
 def test_atomic_counter_rejects_signed_target():
-    with pytest.raises(ParserTypeError, match="atomic_inc.*does not support dtype.*UB Tile"):
+    @pl.simt.function
+    def signed_counter(dst, limit: pl.DT_INT32):
+        pl.simt.atomic_inc(dst[0, 0], limit)
 
-        @pl.function(type=pl.FunctionType.SimtCallee)
-        def signed_counter(dst: pl.Tile[[1, 1], pl.DT_INT32], limit: pl.DT_INT32):
-            pl.simt.atomic_inc(dst[0, 0], limit)
+    with pytest.raises(ParserTypeError, match="atomic_inc.*does not support dtype.*UB Tile"):
+        _parse_tile_scalar_function(signed_counter, pl.DT_INT32, pl.DT_INT32)
 
 
 def test_atomic_counter_supports_gm_uint64():

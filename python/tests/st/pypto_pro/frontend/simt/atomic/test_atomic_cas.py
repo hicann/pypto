@@ -47,9 +47,9 @@ def _assert_target(state, expected):
 
 @pl.simt.function(max_threads=THREADS)
 def atomic_cas_ub_all_dtypes(
-    int32_tile: pl.Tile[[1, ELEMENTS], pl.DT_INT32],
-    uint32_tile: pl.Tile[[1, ELEMENTS], pl.DT_UINT32],
-    fp32_tile: pl.Tile[[1, ELEMENTS], pl.DT_FP32],
+    int32_tile,
+    uint32_tile,
+    fp32_tile,
 ):
     pl.simt.atomic_cas(int32_tile[0, 0], 0, 7)
     pl.simt.atomic_cas(uint32_tile[0, 0], 0, 7)

@@ -46,7 +46,7 @@ def _assert_target(state, expected):
 
 
 @pl.simt.function(max_threads=THREADS)
-def atomic_dec_ub(uint32_tile: pl.Tile[[1, ELEMENTS], pl.DT_UINT32]):
+def atomic_dec_ub(uint32_tile):
     pl.simt.atomic_dec(uint32_tile[0, 0], 255)
 
 

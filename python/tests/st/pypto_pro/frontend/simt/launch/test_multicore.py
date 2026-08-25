@@ -34,7 +34,7 @@ def _require_a5():
 
 
 @pl.simt.function(max_threads=THREADS)
-def write_multicore_result(dst: pl.Tile[[1, THREADS], pl.DT_UINT32]):
+def write_multicore_result(dst):
     tid = pl.simt.linear_thread_idx()
     core_id = pl.simt.block_idx().x
     dst[0, tid] = core_id * THREADS + tid

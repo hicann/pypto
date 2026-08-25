@@ -33,13 +33,13 @@ def _require_a5():
 
 
 @pl.simt.function(max_threads=THREADS)
-def add_inplace(data: pl.Tile[[1, THREADS], pl.DT_FP32], delta: pl.DT_FP32):
+def add_inplace(data, delta: pl.DT_FP32):
     tid = pl.simt.linear_thread_idx()
     data[0, tid] = data[0, tid] + delta
 
 
 @pl.simt.function(max_threads=THREADS)
-def mul_inplace(data: pl.Tile[[1, THREADS], pl.DT_FP32], scale: pl.DT_FP32):
+def mul_inplace(data, scale: pl.DT_FP32):
     tid = pl.simt.linear_thread_idx()
     data[0, tid] = data[0, tid] * scale
 

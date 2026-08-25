@@ -108,8 +108,8 @@ def test_builder_round_trip():
     printed = ir.python_print(tile_t)
 
     # Verify output contains all expected elements
-    assert "ir.Tile" in printed
-    assert "ir.Tile[[32, 32], ir.FP32," in printed
+    assert "ir.TileType" in printed
+    assert "ir.TileType([32, 32], ir.FP32," in printed
     assert "ir.FP32" in printed
     # MemRef prints as positional arg with full constructor syntax (no keyword)
     assert "memref=" not in printed

@@ -33,7 +33,7 @@ def test_python_print_block_tensor_and_tile_types():
 
     assert ir.python_print_type(tensor_type) == "ir.Tensor[[64, 128], ir.FP16]"
     printed_tile = ir.python_print_type(tile_type)
-    assert "ir.Tile[[16, 16], ir.FP16" in printed_tile
+    assert "ir.TileType([16, 16], ir.FP16" in printed_tile
     assert "ir.MemRef(ir.MemorySpace.Vec" in printed_tile
 
 

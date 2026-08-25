@@ -47,11 +47,11 @@ def _assert_target(state, expected):
 
 @pl.simt.function(max_threads=THREADS)
 def atomic_min_ub_all_dtypes(
-    int32_tile: pl.Tile[[1, ELEMENTS], pl.DT_INT32],
-    uint32_tile: pl.Tile[[1, ELEMENTS], pl.DT_UINT32],
-    fp16_tile: pl.Tile[[1, ELEMENTS], pl.DT_FP16],
-    bf16_tile: pl.Tile[[1, ELEMENTS], pl.DT_BF16],
-    fp32_tile: pl.Tile[[1, ELEMENTS], pl.DT_FP32],
+    int32_tile,
+    uint32_tile,
+    fp16_tile,
+    bf16_tile,
+    fp32_tile,
 ):
     pl.simt.atomic_min(int32_tile[0, 0], 7)
     pl.simt.atomic_min(uint32_tile[0, 0], 7)

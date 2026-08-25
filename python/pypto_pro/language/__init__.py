@@ -20,7 +20,6 @@ __all__ = [
     "parse_program",
     "loads_program",
     "Tensor",
-    "Tile",
     "Ptr",
     "Scalar",
     "DYNAMIC",
@@ -380,7 +379,7 @@ from ._simt_api import Simt as simt  # noqa: N813
 from ._vf_api import Vf
 from .parser.decorator import function, inline, program, vector_function
 from .parser.text_parser import loads, loads_program, parse, parse_program
-from .typing import DYNAMIC, STATIC, Ptr, Scalar, Tensor, Tile
+from .typing import DYNAMIC, STATIC, Ptr, Scalar, Tensor
 
 mutex = SimpleNamespace(mutex_lock=_mutex_lock, mutex_unlock=_mutex_unlock)
 

@@ -37,7 +37,7 @@ def _require_a5():
 
 
 @pl.simt.function(max_threads=THREADS)
-def auto_mutex_add(data: pl.Tile[[1, THREADS], pl.DT_FP32], delta: pl.DT_FP32):
+def auto_mutex_add(data, delta: pl.DT_FP32):
     tid = pl.simt.linear_thread_idx()
     data[0, tid] = data[0, tid] + delta
 

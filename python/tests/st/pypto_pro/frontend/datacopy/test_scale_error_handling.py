@@ -366,7 +366,7 @@ def test_err_per_channel_1d_tile():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="scale tile must be 2D"):
+    with pytest.raises(ParserSyntaxError, match="TileType only supports rank-2 shape"):
         kernel(q, k, out)
 
 
@@ -389,7 +389,7 @@ def test_err_per_channel_3d_tile():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="scale tile must be 2D"):
+    with pytest.raises(ParserSyntaxError, match="TileType only supports rank-2 shape"):
         kernel(q, k, out)
 
 
@@ -412,7 +412,7 @@ def test_err_per_channel_0d_tile():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="requires non-empty shape|must be 2D"):
+    with pytest.raises(ParserSyntaxError, match="TileType only supports rank-2 shape"):
         kernel(q, k, out)
 
 

@@ -11,16 +11,14 @@
 
 """Type wrappers for PyPTO Language DSL.
 
-This module provides type annotation and runtime wrapper classes for PyPTO's language DSL:
+This module provides type annotation classes for PyPTO's language DSL:
 - Scalar: Scalar values with specific data types
 - Tensor: Multi-dimensional arrays in global memory
-- Tile: Memory blocks in unified buffer memory for block-level programming
 """
 
-__all__ = ["DYNAMIC", "STATIC", "Ptr", "Scalar", "Tensor", "Tile"]
+__all__ = ["DYNAMIC", "STATIC", "Ptr", "Scalar", "Tensor"]
 
 from pypto_pro.language.typing.ptr import Ptr
 from pypto_pro.language.typing.scalar import Scalar
 from pypto_pro.language.typing.shape import DYNAMIC, STATIC
 from pypto_pro.language.typing.tensor import Tensor
-from pypto_pro.language.typing.tile import Tile

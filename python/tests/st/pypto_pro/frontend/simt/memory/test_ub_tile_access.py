@@ -38,8 +38,8 @@ def _require_a5():
 
 @pl.simt.function(max_threads=THREADS)
 def ub_tile_add(
-    dst: pl.Tile[[TILE_ROWS, TILE_COLS], pl.DT_FP32],
-    src: pl.Tile[[TILE_ROWS, TILE_COLS], pl.DT_FP32],
+    dst,
+    src,
     delta: pl.DT_FP32,
 ):
     tid = pl.simt.linear_thread_idx()

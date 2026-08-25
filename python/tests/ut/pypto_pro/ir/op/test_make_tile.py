@@ -190,10 +190,10 @@ def test_builder_leaves_unaligned_spaces_alone():
 
 def test_addr_zero_is_accepted_in_a_kernel():
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     assert "memref_addr=0" in _kernel_ir(k)
 
@@ -202,10 +202,10 @@ def test_addr_none_is_rejected():
     """``addr=None`` parses to IR, not to Python None, so it fails the int check."""
 
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=None)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     with pytest.raises(ParserTypeError, match="'addr' must be a compile-time integer"):
         _parse_kernel(k)
@@ -215,10 +215,10 @@ def test_bool_addr_is_rejected():
     """bool subclasses int, but ``addr=False`` is a mistake, not address 0."""
 
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=False)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     with pytest.raises(ParserTypeError, match="'addr' must be a compile-time integer"):
         _parse_kernel(k)
@@ -226,10 +226,10 @@ def test_bool_addr_is_rejected():
 
 def test_float_addr_is_rejected():
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0.0)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     with pytest.raises(ParserTypeError, match="'addr' must be a compile-time integer"):
         _parse_kernel(k)
@@ -239,11 +239,11 @@ def test_loop_index_addr_is_rejected():
     """A tile's address is fixed while parsing, so it cannot follow a loop."""
 
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         for i in pl.range(2):
             t = pl.make_tile(tt, addr=i * 128)
-            pl.load(t, x, [0])
+            pl.load(t, x, [0, 0])
 
     with pytest.raises(ParserTypeError) as excinfo:
         _parse_kernel(k)
@@ -255,11 +255,11 @@ def test_addr_from_a_kernel_local_constant_is_folded():
     """addr accepts any expression with a parse-time value, not just literals."""
 
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         base = 0x100
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=base + 0x20)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     assert "memref_addr=288" in _kernel_ir(k)  # 0x120
 
@@ -271,10 +271,10 @@ def test_addr_from_a_kernel_local_constant_is_folded():
 
 def test_size_is_derived_when_omitted():
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     assert "memref_size=128" in _kernel_ir(k)
 
@@ -283,10 +283,10 @@ def test_size_none_is_rejected_rather_than_derived():
     """``size=None`` is a value that is not an integer, not an omitted argument."""
 
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=None)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     with pytest.raises(ParserTypeError, match="'size' must be a compile-time integer"):
         _parse_kernel(k)
@@ -294,10 +294,10 @@ def test_size_none_is_rejected_rather_than_derived():
 
 def test_negative_size_is_rejected():
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=-32)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     with pytest.raises(ParserTypeError, match="positive byte count"):
         _parse_kernel(k)
@@ -307,10 +307,10 @@ def test_zero_size_is_rejected():
     """Zero is held to the same contract as a negative byte count."""
 
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=0)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     with pytest.raises(ParserTypeError, match="positive byte count"):
         _parse_kernel(k)
@@ -319,7 +319,7 @@ def test_zero_size_is_rejected():
 def test_runtime_size_is_rejected():
     @pl.kernel
     def k(x: pl.Tensor[[pl.DYNAMIC, 64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=x.shape[0] * 2)
         pl.load(t, x, [0, 0])
 
@@ -351,11 +351,11 @@ def test_tile_type_may_be_built_inline():
     """The leading TileType is recognised by value, not by being a named variable."""
 
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         t = pl.make_tile(
-            pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x40
+            pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x40
         )
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     ir_str = _kernel_ir(k)
     assert "memref_addr=64" in ir_str
@@ -388,10 +388,10 @@ def test_addr_and_size_given_positionally_are_rejected():
     """A bare pair of ints reads the same swapped, so neither position binds."""
 
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, 0, 128)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     with pytest.raises(ParserTypeError) as excinfo:
         _parse_kernel(k)
@@ -403,10 +403,10 @@ def test_a_positional_addr_is_not_silently_shadowed_by_a_keyword_one():
     """Two addrs used to resolve to the positional one, dropping the keyword."""
 
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, 0x100, addr=0x2000)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     # the keyword does not count toward the arity, exactly as Python reports it
     with pytest.raises(ParserTypeError, match=r"takes 1 positional argument .* but 2 were given"):
@@ -559,11 +559,11 @@ def test_a_folded_addr_is_checked_for_alignment():
     """The alignment check sees the folded value, not the source expression."""
 
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         base = 0x40
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=base + 1)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
     with pytest.raises(_WRAPPED, match="not 32-byte aligned"):
         _parse_kernel(k)
@@ -576,13 +576,13 @@ def test_a_folded_addr_is_checked_for_alignment():
 
 def test_tile_type_shape_accepts_a_constant_expression():
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         rows = 8
-        tt = pl.TileType(shape=[rows * 8], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+        tt = pl.TileType(shape=[1, rows * 8], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
 
-    assert "block.make_tile(tuple(64)" in _kernel_ir(k)
+    assert "block.make_tile(tuple(1, 64)" in _kernel_ir(k)
 
 
 def test_tile_type_shape_rejects_a_bool_element():

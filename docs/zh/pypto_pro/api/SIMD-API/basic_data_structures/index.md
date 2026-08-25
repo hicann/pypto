@@ -12,7 +12,6 @@ Ptr
 Scalar
 Tensor
 TensorLayout
-Tile
 TilePad
 TileType
 ```

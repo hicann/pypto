@@ -25,11 +25,11 @@ def _compile_to_cce(kernel_def) -> str:
 
 @pl.simt.function(max_threads=1)
 def _scalar_cast_intrinsics(
-    half_out: pl.Tile[[1, 1], pl.DT_FP16],
-    bfloat_out: pl.Tile[[1, 1], pl.DT_BF16],
-    integer_out: pl.Tile[[1, 1], pl.DT_INT32],
-    float_out: pl.Tile[[1, 1], pl.DT_FP32],
-    plain_out: pl.Tile[[1, 1], pl.DT_INT32],
+    half_out,
+    bfloat_out,
+    integer_out,
+    float_out,
+    plain_out,
     value: pl.DT_FP32,
     integer: pl.DT_INT64,
 ):
@@ -82,13 +82,13 @@ def test_scalar_cast_codegen_maps_round_modes_and_cce_builtins():
 
 @pl.simt.function(max_threads=1)
 def _scalar_cast_all_intrinsics(
-    half_out: pl.Tile[[1, 1], pl.DT_FP16],
-    bfloat_out: pl.Tile[[1, 1], pl.DT_BF16],
-    int32_out: pl.Tile[[1, 1], pl.DT_INT32],
-    uint32_out: pl.Tile[[1, 1], pl.DT_UINT32],
-    int64_out: pl.Tile[[1, 1], pl.DT_INT64],
-    uint64_out: pl.Tile[[1, 1], pl.DT_UINT64],
-    float_out: pl.Tile[[1, 1], pl.DT_FP32],
+    half_out,
+    bfloat_out,
+    int32_out,
+    uint32_out,
+    int64_out,
+    uint64_out,
+    float_out,
     value: pl.DT_FP32,
     int32_value: pl.DT_INT32,
     uint32_value: pl.DT_UINT32,

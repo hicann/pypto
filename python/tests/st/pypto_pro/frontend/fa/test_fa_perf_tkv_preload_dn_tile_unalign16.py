@@ -292,8 +292,8 @@ def compute_qk(
     q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     cube,
-    qk_vec: pl.Tile[[TKV, TS_HALF], pl.DT_FP32],
-    qk_vec1: pl.Tile[[TKV, TS_HALF], pl.DT_FP32],
+    qk_vec,
+    qk_vec1,
 ) -> None:
     """DN: KQ^T = K * Q^T. Both full and tail tiles use dual_mode_split_n.
 
@@ -375,10 +375,10 @@ def compute_pv(
     l0c_idx: pl.DT_INT64,
     v: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     cube,
-    p_mat_buf1: pl.Tile[[TS, TKV], pl.DT_FP16],
-    p_mat_buf2: pl.Tile[[TS, TKV], pl.DT_FP16],
-    pv_vec: pl.Tile[[TS_HALF, TD], pl.DT_FP32],
-    pv_vec1: pl.Tile[[TS_HALF, TD], pl.DT_FP32],
+    p_mat_buf1,
+    p_mat_buf2,
+    pv_vec,
+    pv_vec1,
 ) -> None:
     """DN: PV = P * V. P[TS,TKV] x V[TKV,TD] -> acc[TS,TD].
 
@@ -451,8 +451,8 @@ def softmax_body(
     actual_skv: pl.DT_INT64,
     actual_sq_half: pl.DT_INT64,
     stiles,
-    p_mat_buf1: pl.Tile[[TS, TKV], pl.DT_FP16],
-    p_mat_buf2: pl.Tile[[TS, TKV], pl.DT_FP16],
+    p_mat_buf1,
+    p_mat_buf2,
 ) -> None:
     """DN softmax: column-direction ops. Always dual_mode_split_n -- both sub_ids
     process actual_sq_half columns. fillpad handles the row-padding [actual_skv,
@@ -550,8 +550,8 @@ def compute_p(
     actual_skv: pl.DT_INT64,
     actual_sq_half: pl.DT_INT64,
     stiles,
-    p_mat_buf1: pl.Tile[[TS, TKV], pl.DT_FP16],
-    p_mat_buf2: pl.Tile[[TS, TKV], pl.DT_FP16],
+    p_mat_buf1,
+    p_mat_buf2,
 ) -> None:
     """Softmax on KQ tile -> P. Includes cross-core sync."""
     p_fifo_slot = task_id % FIFO_SIZE

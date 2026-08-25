@@ -263,8 +263,8 @@ def test_manual_ops_with_scalar():
         output: pl.Tensor[[64, 64], pl.DT_FP32],
     ) -> pl.Tensor[[64, 64], pl.DT_FP32]:
         tile_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32)
-        tile: pl.Tile[[64, 64], pl.DT_FP32] = pl.make_tile(tile_type, addr=0x0000, size=16384)
-        result: pl.Tile[[64, 64], pl.DT_FP32] = pl.make_tile(tile_type, addr=0x4000, size=16384)
+        tile = pl.make_tile(tile_type, addr=0x0000, size=16384)
+        result = pl.make_tile(tile_type, addr=0x4000, size=16384)
         pl.load(tile, input_tile, [0, 0])
         pl.add(result, tile, scalar)
         output_new: pl.Tensor[[64, 64], pl.DT_FP32] = pl.store(output, result, [0, 0])

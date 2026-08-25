@@ -37,7 +37,7 @@ from .diagnostics import (
 logger = logging.getLogger(__name__)
 
 
-# Mutex carrier for tile-group tiles (buf_id IR expr tuple, candidate values, memory, dedup id).
+# Tile reference for auto mutex (optional mutex metadata, memory, dedup id).
 _MutexRef = namedtuple("_MutexRef", "buf_ids mutex_ids memory slot_id")
 
 
@@ -185,7 +185,7 @@ def _validate_simt_parameters(func: ir.Function, role: str) -> None:
     for param in func.params:
         if not isinstance(param.type, (ir.ScalarType, ir.TensorType, ir.TileType)):
             raise ParserTypeError(
-                f"{role} parameter '{param.name}' must be a scalar, pl.Tensor, or pl.Tile, got {param.type}",
+                f"{role} parameter '{param.name}' must resolve to a scalar, Tensor, or Tile value, got {param.type}",
                 span=param.span,
                 hint="Ptr, Tuple, and tiling parameters are not supported.",
             )
@@ -208,7 +208,7 @@ def _validate_simt_parameters(func: ir.Function, role: str) -> None:
                 raise ParserTypeError(
                     f"{role} Tile parameter '{param.name}' must have a static two-dimensional shape",
                     span=param.span,
-                    hint="Use an annotation such as pl.Tile[[1, 256], pl.DT_FP32].",
+                    hint="Pass a static two-dimensional Tile created with pl.make_tile().",
                 )
             if param.type.dtype.get_bit() < 8:
                 raise ParserTypeError(
@@ -1362,10 +1362,12 @@ class CallParserMixin:
     # --- auto_mutex helpers ---------------------------------------------------
 
     def _try_resolve_tileref(self, node: ast.expr):
-        """Resolve a tile argument to a mutex ref.
+        """Resolve a tile argument to its memory and optional mutex metadata.
 
-        Returns _MutexRef(buf_ids, mutex_ids, memory, tile_id) when ``node``
-        carries tile-group mutex metadata; otherwise None.
+        Returns _MutexRef(buf_ids, mutex_ids, memory, tile_id) for tile
+        arguments. Ordinary tiles have empty ``buf_ids`` and ``mutex_ids``;
+        their memory is still needed to infer the move pipe when paired with a
+        tile-group tile.
 
         Only positional arguments are scanned by auto-mutex. Subscript
         arguments (``tile[off]``, ``buf[idx]``) alias the base's
@@ -1375,11 +1377,13 @@ class CallParserMixin:
         expr = self.parse_expression(node)
         if not isinstance(expr, ir.Expr):
             return None
+        if not isinstance(expr.type, ir.TileType) or not expr.type.memref:
+            return None
+        mem = expr.type.memref.memory_space_
         meta = self.tile_mutex_lock_meta(expr)
         if meta is None:
-            return None
+            return _MutexRef((), (), mem, id(expr))
         buf_id_irs, mutex_ids = meta
-        mem = expr.type.memref.memory_space_ if isinstance(expr.type, ir.TileType) and expr.type.memref else None
         return _MutexRef(buf_id_irs, mutex_ids, mem, id(expr))
 
     def _emit_auto_mutex(self, op_name: str, call: ast.Call, span: ir.Span):

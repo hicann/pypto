@@ -74,15 +74,6 @@ def test_resolve_tensor_layout_invalid():
         resolver.resolve_type(node)
 
 
-def test_tile_with_layout_raises_error():
-    """Tile does not support layout syntax."""
-    resolver = _make_resolver()
-    node = ast.parse("pl.Tile[[64, 64], pl.DT_FP32, pl.NZ]", mode="eval").body
-
-    with pytest.raises(ParserTypeError, match=r"Tile 3rd argument must be pl\.MemRef"):
-        resolver.resolve_type(node)
-
-
 def test_resolve_layout_bare_name():
     """Layout specified as bare name (NZ) instead of pl.NZ."""
     resolver = _make_resolver()

@@ -35,7 +35,7 @@ def _require_a5():
 
 
 @pl.simt.function(max_threads=THREADS)
-def write_thread_context(dst: pl.Tile[[2, THREADS], pl.DT_UINT32]):
+def write_thread_context(dst):
     thread = pl.simt.thread_idx()
     block = pl.simt.block_dim()
     block_id = pl.simt.block_idx()

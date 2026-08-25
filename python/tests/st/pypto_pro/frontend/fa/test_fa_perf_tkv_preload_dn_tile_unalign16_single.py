@@ -289,8 +289,8 @@ def compute_qk(
     q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     cube,
-    qk_vec: pl.Tile[[TKV, TS_HALF], pl.DT_FP32],
-    qk_vec1: pl.Tile[[TKV, TS_HALF], pl.DT_FP32],
+    qk_vec,
+    qk_vec1,
 ) -> None:
     """DN: KQ^T = K * Q^T. K loaded normally, Q loaded with is_transpose=True (-> L1 as [TD,TS]).
     Left=K, Right=Q^T. acc output shape [TKV, TS].
@@ -401,10 +401,10 @@ def compute_pv(
     l0c_idx: pl.DT_INT64,
     v: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     cube,
-    p_mat_buf1: pl.Tile[[TS, TKV], pl.DT_FP16],
-    p_mat_buf2: pl.Tile[[TS, TKV], pl.DT_FP16],
-    pv_vec: pl.Tile[[TS_HALF, TD], pl.DT_FP32],
-    pv_vec1: pl.Tile[[TS_HALF, TD], pl.DT_FP32],
+    p_mat_buf1,
+    p_mat_buf2,
+    pv_vec,
+    pv_vec1,
 ) -> None:
     """DN: PV = P * V. P[TS,TKV] (layout=pl.ZN) x V[TKV,TD] -> acc[TS,TD].
     P is read from L1 p_mat_buf (filled by TINSERT in softmax_body).
@@ -513,8 +513,8 @@ def softmax_body(
     sub_id: pl.DT_INT64,
     is_tail: pl.DT_INT64,
     stiles,
-    p_mat_buf1: pl.Tile[[TS, TKV], pl.DT_FP16],
-    p_mat_buf2: pl.Tile[[TS, TKV], pl.DT_FP16],
+    p_mat_buf1,
+    p_mat_buf2,
 ) -> None:
     """DN softmax: column-direction ops.
     Full tile (is_tail==0): dual_mode_split_n -- both sub_ids process their TS_HALF columns.
@@ -687,8 +687,8 @@ def compute_p(
     sub_id: pl.DT_INT64,
     is_tail: pl.DT_INT64,
     stiles,
-    p_mat_buf1: pl.Tile[[TS, TKV], pl.DT_FP16],
-    p_mat_buf2: pl.Tile[[TS, TKV], pl.DT_FP16],
+    p_mat_buf1,
+    p_mat_buf2,
 ) -> None:
     """Softmax on KQ tile -> P. Includes cross-core sync."""
     p_fifo_slot = task_id % FIFO_SIZE

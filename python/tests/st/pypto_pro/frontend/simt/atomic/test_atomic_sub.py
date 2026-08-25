@@ -47,9 +47,9 @@ def _assert_target(state, expected):
 
 @pl.simt.function(max_threads=THREADS)
 def atomic_sub_ub_all_dtypes(
-    int32_tile: pl.Tile[[1, ELEMENTS], pl.DT_INT32],
-    uint32_tile: pl.Tile[[1, ELEMENTS], pl.DT_UINT32],
-    fp32_tile: pl.Tile[[1, ELEMENTS], pl.DT_FP32],
+    int32_tile,
+    uint32_tile,
+    fp32_tile,
 ):
     pl.simt.atomic_sub(int32_tile[0, 0], 1)
     pl.simt.atomic_sub(uint32_tile[0, 0], 1)

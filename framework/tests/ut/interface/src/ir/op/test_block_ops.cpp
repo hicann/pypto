@@ -124,9 +124,10 @@ TEST_F(BlockOpsMemoryTest, MakeTile_BasicShape_ReturnsTileType)
 TEST_F(BlockOpsMemoryTest, MakeTile_WithMemRef_ReturnsTileWithMemRef)
 {
     auto& reg = OpRegistry::GetInstance();
-    auto dim = std::make_shared<ConstInt>(8, DataType::INT64, Sp());
-    auto shape_tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{dim}, Sp());
-    auto valid_tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{dim}, Sp());
+    auto dim1 = std::make_shared<ConstInt>(8, DataType::INT64, Sp());
+    auto dim2 = std::make_shared<ConstInt>(8, DataType::INT64, Sp());
+    auto shape_tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{dim1, dim2}, Sp());
+    auto valid_tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{dim1, dim2}, Sp());
 
     std::vector<std::pair<std::string, std::any>> kwargs = {
         {"dtype", DataType::INT32},
@@ -138,6 +139,40 @@ TEST_F(BlockOpsMemoryTest, MakeTile_WithMemRef_ReturnsTileWithMemRef)
     auto rt = As<TileType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_TRUE(rt->memref_.has_value());
+}
+
+TEST_F(BlockOpsMemoryTest, MakeTile_EmptyShape_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto shape_tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{}, Sp());
+    auto valid_tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{}, Sp());
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"dtype", DataType::FP16}};
+
+    EXPECT_THROW((void)reg.Create("block.make_tile", {shape_tuple, valid_tuple}, kwargs, Sp()), npu::tile_fwk::Error);
+}
+
+TEST_F(BlockOpsMemoryTest, MakeTile_RankOneShape_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto dim = std::make_shared<ConstInt>(8, DataType::INT64, Sp());
+    auto shape_tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{dim}, Sp());
+    auto valid_tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{dim}, Sp());
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"dtype", DataType::FP16}};
+
+    EXPECT_THROW((void)reg.Create("block.make_tile", {shape_tuple, valid_tuple}, kwargs, Sp()), npu::tile_fwk::Error);
+}
+
+TEST_F(BlockOpsMemoryTest, MakeTile_RankThreeShape_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto dim1 = std::make_shared<ConstInt>(8, DataType::INT64, Sp());
+    auto dim2 = std::make_shared<ConstInt>(8, DataType::INT64, Sp());
+    auto dim3 = std::make_shared<ConstInt>(8, DataType::INT64, Sp());
+    auto shape_tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{dim1, dim2, dim3}, Sp());
+    auto valid_tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{dim1, dim2, dim3}, Sp());
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"dtype", DataType::FP16}};
+
+    EXPECT_THROW((void)reg.Create("block.make_tile", {shape_tuple, valid_tuple}, kwargs, Sp()), npu::tile_fwk::Error);
 }
 
 TEST_F(BlockOpsMemoryTest, MakeTile_WrongArgCount_Throws)

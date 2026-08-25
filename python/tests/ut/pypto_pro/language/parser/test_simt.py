@@ -20,8 +20,8 @@ from pypto.pypto_impl import ir
 
 @pl.simt.function(max_threads=256)
 def _tile_add(
-    dst: pl.Tile[[1, 256], pl.DT_FP32],
-    src: pl.Tile[[1, 256], pl.DT_FP32],
+    dst,
+    src,
     n: pl.DT_UINT32,
     delta: pl.DT_FP32,
 ):
@@ -49,7 +49,7 @@ def _callee_add(value: pl.DT_INT32, delta: pl.DT_INT32) -> pl.DT_INT32:
 
 @pl.simt.function
 def _callee_store(
-    dst: pl.Tile[[1, 32], pl.DT_INT32],
+    dst,
     index: pl.DT_UINT32,
     value: pl.DT_INT32,
 ):
@@ -58,8 +58,8 @@ def _callee_store(
 
 @pl.simt.function
 def _callee_apply(
-    dst: pl.Tile[[1, 32], pl.DT_INT32],
-    src: pl.Tile[[1, 32], pl.DT_INT32],
+    dst,
+    src,
     index: pl.DT_UINT32,
     delta: pl.DT_INT32,
 ):
@@ -69,8 +69,8 @@ def _callee_apply(
 
 @pl.simt.function(max_threads=32)
 def _callee_entry(
-    dst: pl.Tile[[1, 32], pl.DT_INT32],
-    src: pl.Tile[[1, 32], pl.DT_INT32],
+    dst,
+    src,
     delta: pl.DT_INT32,
 ):
     tid = pl.simt.linear_thread_idx()
@@ -78,7 +78,7 @@ def _callee_entry(
 
 
 @pl.simt.function(max_threads=256)
-def _context_probe(dst: pl.Tile[[1, 256], pl.DT_UINT32]):
+def _context_probe(dst):
     thread = pl.simt.thread_idx()
     block = pl.simt.block_dim()
     block_id = pl.simt.block_idx()
@@ -104,8 +104,8 @@ def _context_probe(dst: pl.Tile[[1, 256], pl.DT_UINT32]):
 
 @pl.simt.function(max_threads=256)
 def _tile_valid_shape_access(
-    dst: pl.Tile[[8, 64], pl.DT_FP32],
-    src: pl.Tile[[8, 64], pl.DT_FP32],
+    dst,
+    src,
 ):
     tid = pl.simt.linear_thread_idx()
     rows = src.valid_shape[0]
@@ -262,7 +262,7 @@ def test_simt_context_exposes_xyz_components_and_three_dimensional_launch():
 
 def test_simt_context_direct_call_uses_named_tuple_field_lowering():
     @pl.simt.function(max_threads=32)
-    def direct_context(dst: pl.Tile[[1, 32], pl.DT_UINT32]):
+    def direct_context(dst):
         value = (
             pl.simt.thread_idx().x
             + pl.simt.block_dim().y
@@ -289,7 +289,7 @@ def test_simt_context_direct_call_uses_named_tuple_field_lowering():
 
 def test_simt_context_rejects_unknown_named_tuple_field():
     @pl.simt.function(max_threads=32)
-    def invalid_context_field(dst: pl.Tile[[1, 32], pl.DT_UINT32]):
+    def invalid_context_field(dst):
         dst[0, 0] = pl.simt.thread_idx().w
 
     @pl.kernel
@@ -334,9 +334,9 @@ def test_simt_launch_requires_compatible_tile(shape, dtype, target_memory, layou
 def test_simt_function_rejects_block_operation_before_default_dispatch():
     @pl.simt.function(max_threads=32)
     def block_add(
-        dst: pl.Tile[[1, 32], pl.DT_FP32],
-        lhs: pl.Tile[[1, 32], pl.DT_FP32],
-        rhs: pl.Tile[[1, 32], pl.DT_FP32],
+        dst,
+        lhs,
+        rhs,
     ):
         pl.add(dst, lhs, rhs)
 
@@ -355,7 +355,7 @@ def test_simt_function_rejects_block_operation_before_default_dispatch():
 
 def test_simt_function_rejects_tile_subview():
     @pl.simt.function(max_threads=32)
-    def tile_subview(src: pl.Tile[[8, 64], pl.DT_FP32]):
+    def tile_subview(src):
         _ = src[0:4, 0:32]
 
     @pl.kernel
@@ -613,7 +613,7 @@ def test_recursive_simt_callee_is_rejected_during_instantiation():
 
 def test_simt_launch_auto_mutex_inserts_pipe_v_lock_unlock():
     @pl.simt.function(max_threads=256)
-    def inplace_add(data: pl.Tile[[1, 256], pl.DT_FP32], delta: pl.DT_FP32):
+    def inplace_add(data, delta: pl.DT_FP32):
         tid = pl.simt.linear_thread_idx()
         data[0, tid] = data[0, tid] + delta
 

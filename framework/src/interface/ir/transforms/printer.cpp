@@ -520,10 +520,13 @@ std::string IRPrinter::Print(const TypePtr& type)
 
     if (auto tile_type = As<TileType>(type)) {
         std::ostringstream oss;
-        // Subscript-style: pl.Tile[[shape], dtype]
-        oss << prefix_ << ".Tile[[";
+        oss << prefix_ << ".TileType([";
         PrintShapeDims(oss, tile_type->shape_);
         oss << "], " << prefix_ << "." << DTypeToString(tile_type->dtype_);
+
+        if (tile_type->memref_.has_value()) {
+            oss << ", " << PrintMemRef(*tile_type->memref_.value());
+        }
 
         if (tile_type->tileView_.has_value()) {
             oss << ", tile_view=" << PrintTileView(tile_type->tileView_.value());
@@ -533,12 +536,7 @@ std::string IRPrinter::Print(const TypePtr& type)
             oss << ", hardware_info=" << PrintHardwareInfo(tile_type->hardwareInfo_.value());
         }
 
-        // Add optional memref as positional arg
-        if (tile_type->memref_.has_value()) {
-            oss << ", " << PrintMemRef(*tile_type->memref_.value());
-        }
-
-        oss << "]";
+        oss << ")";
         return oss.str();
     }
 
@@ -776,7 +774,7 @@ void IRPrinter::VisitStmt_(const AssignStmtPtr& op)
     // Print with type annotation: var: type = value
     // In concise mode, omit the type annotation: var = value
     VisitExpr(op->var_);
-    if (!concise_) {
+    if (!concise_ && !As<TileType>(op->var_->GetType())) {
         stream_ << ": " << Print(op->var_->GetType());
     }
     stream_ << " = ";

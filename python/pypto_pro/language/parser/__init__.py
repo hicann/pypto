@@ -33,12 +33,11 @@ __all__ = [
     "parse_program",
     "loads_program",
     "Tensor",
-    "Tile",
     "Scalar",
 ]
 
 
-from ..typing import Scalar, Tensor, Tile
+from ..typing import Scalar, Tensor
 from .decorator import function, inline, program
 from .diagnostics import ParserError  # noqa: F401
 from .text_parser import loads, loads_program, parse, parse_program

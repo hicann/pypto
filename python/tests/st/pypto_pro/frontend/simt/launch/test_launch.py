@@ -45,20 +45,20 @@ def _require_a5():
 
 
 @pl.simt.function(max_threads=THREADS_1D)
-def add_1d(data: pl.Tile[[1, THREADS_1D], pl.DT_FP32], delta: pl.DT_FP32):
+def add_1d(data, delta: pl.DT_FP32):
     tid = pl.simt.thread_idx().x
     data[0, tid] = data[0, tid] + delta
 
 
 @pl.simt.function(max_threads=THREADS_2D)
-def add_2d(data: pl.Tile[[1, THREADS_2D], pl.DT_FP32], delta: pl.DT_FP32):
+def add_2d(data, delta: pl.DT_FP32):
     thread = pl.simt.thread_idx()
     tid = thread.x + thread.y * THREADS_X_2D
     data[0, tid] = data[0, tid] + delta
 
 
 @pl.simt.function(max_threads=THREADS_3D)
-def add_3d(data: pl.Tile[[1, THREADS_3D], pl.DT_FP32], delta: pl.DT_FP32):
+def add_3d(data, delta: pl.DT_FP32):
     thread = pl.simt.thread_idx()
     tid = thread.x + thread.y * THREADS_X_3D + thread.z * THREADS_X_3D * THREADS_Y_3D
     data[0, tid] = data[0, tid] + delta

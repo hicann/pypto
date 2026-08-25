@@ -23,8 +23,8 @@ def _compile_to_cce(kernel_def) -> str:
 
 @pl.simt.function(max_threads=1)
 def _fp32_math_intrinsics(
-    out: pl.Tile[[1, 19], pl.DT_FP32],
-    flags: pl.Tile[[1, 2], pl.DT_BOOL],
+    out,
+    flags,
     value: pl.DT_FP32,
 ):
     out[0, 0] = pl.simt.abs(value)
@@ -62,9 +62,9 @@ def _fp32_math_codegen_kernel(value: pl.DT_FP32):
 
 @pl.simt.function(max_threads=1)
 def _fp16_math_intrinsics(
-    out: pl.Tile[[1, 18], pl.DT_FP16],
-    flags: pl.Tile[[1, 2], pl.DT_BOOL],
-    source: pl.Tile[[1, 1], pl.DT_FP16],
+    out,
+    flags,
+    source,
 ):
     value = source[0, 0]
     out[0, 0] = pl.simt.abs(value)
@@ -103,9 +103,9 @@ def _fp16_math_codegen_kernel():
 
 @pl.simt.function(max_threads=1)
 def _bf16_math_intrinsics(
-    out: pl.Tile[[1, 18], pl.DT_BF16],
-    flags: pl.Tile[[1, 2], pl.DT_BOOL],
-    source: pl.Tile[[1, 1], pl.DT_BF16],
+    out,
+    flags,
+    source,
 ):
     value = source[0, 0]
     out[0, 0] = pl.simt.abs(value)
@@ -144,8 +144,8 @@ def _bf16_math_codegen_kernel():
 
 @pl.simt.function(max_threads=1)
 def _int64_math_intrinsics(
-    out: pl.Tile[[1, 3], pl.DT_INT64],
-    source: pl.Tile[[1, 2], pl.DT_INT64],
+    out,
+    source,
 ):
     out[0, 0] = pl.simt.abs(source[0, 0])
     out[0, 1] = pl.simt.min(source[0, 0], source[0, 1])

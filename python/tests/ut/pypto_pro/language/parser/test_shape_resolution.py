@@ -141,13 +141,6 @@ def test_resolve_tensor_type_with_dynamic_policy():
     assert result.shape[0].name == "__pypto_dyn_x_0"
 
 
-def test_dynamic_policy_is_not_a_tile_shape_policy():
-    resolver = _make_resolver(closure_vars={"pl": pl})
-    node = ast.parse("pl.Tile[[pl.DYNAMIC, 64], pl.DT_FP32]", mode="eval").body
-    with pytest.raises(ParserTypeError, match="positive integer"):
-        resolver.resolve_type(node)
-
-
 @pytest.mark.parametrize(
     "expr, closure_vars, error",
     [
@@ -203,15 +196,6 @@ def test_resolve_tensor_with_shape_and_dtype_variables():
     assert isinstance(result, ir.TensorType)
     assert len(result.shape) == 2
     assert result.dtype == DataType.FP16
-
-
-def test_resolve_tile_with_shape_variable():
-    """TileType also supports shape list variable."""
-    resolver = _make_resolver(closure_vars={"tile_shape": [64, 64]})
-    node = ast.parse("pl.Tile[tile_shape, pl.DT_FP32]", mode="eval").body
-    result = resolver.resolve_type(node)
-    assert isinstance(result, ir.TileType)
-    assert len(result.shape) == 2
 
 
 def test_resolve_tensor_with_expression_dims():

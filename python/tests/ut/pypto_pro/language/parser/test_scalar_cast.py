@@ -20,6 +20,8 @@ import pypto_pro.language as pl
 from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 import pytest
 
+from pypto.pypto_impl import ir
+
 
 def test_simt_cast_is_not_exported_as_shared_language_api():
     assert not hasattr(pl, "scalar_cast")
@@ -59,11 +61,23 @@ def test_simt_cast_rejects_odd_rounding_for_bfloat16():
 
 
 def test_simt_cast_rejects_tile_operand():
-    with pytest.raises(ParserTypeError, match="value must be a scalar expression"):
+    @pl.simt.function
+    def tile_operand(value):
+        _ = pl.simt.cast(value, pl.DT_FP16)
 
-        @pl.function(type=pl.FunctionType.SimtCallee)
-        def tile_operand(value: pl.Tile[[1, 1], pl.DT_FP32]):
-            _ = pl.simt.cast(value, pl.DT_FP16)
+    @pl.simt.function(max_threads=1)
+    def entry(value):
+        tile_operand(value)
+
+    @pl.kernel
+    def kernel():
+        tile_type = pl.TileType(shape=[1, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+        value = pl.make_tile(tile_type, addr=0, size=4)
+        with pl.section_vector():
+            pl.simt.launch(entry, threads=1, args=(value,))
+
+    with pytest.raises(ParserTypeError, match="value must be a scalar expression"):
+        kernel.parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_cast_rejects_plain_integer_round_mode():

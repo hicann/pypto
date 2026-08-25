@@ -37,11 +37,11 @@ def _parse_kernel(kernel_def) -> ir.Program:
 
 def test_static_mutex_lock_unlock():
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=128)
         pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=0)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
         pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=0)
 
     ir_str = _ir_to_str(_parse_kernel(k))
@@ -51,11 +51,11 @@ def test_static_mutex_lock_unlock():
 
 def test_keyword_form():
     @pl.kernel
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=128)
         pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=1)
-        pl.load(t, x, [0])
+        pl.load(t, x, [0, 0])
         pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=1)
 
     ir_str = _ir_to_str(_parse_kernel(k))
@@ -192,12 +192,12 @@ def test_tile_type_with_a_runtime_shape_rejected():
 
 def test_auto_mutex_single_tile():
     @pl.kernel(auto_mutex=True)
-    def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[3])
         buf = g.next()
-        pl.load(buf, x, [0])
-        pl.store(x, buf, [0])
+        pl.load(buf, x, [0, 0])
+        pl.store(x, buf, [0, 0])
 
     ir_str = _ir_to_str(_parse_kernel(k))
     assert ir_str.count("mutex_lock") >= 2, ir_str
@@ -749,8 +749,8 @@ def test_ternary_rejects_different_mutex_id_counts():
 
 def test_make_tile_group_rejects_different_mutex_id_counts():
     @pl.kernel(auto_mutex=True)
-    def k(gm_q: pl.Tensor[[64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(gm_q: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, [1, 2]])
 
     with pytest.raises(
@@ -762,8 +762,8 @@ def test_make_tile_group_rejects_different_mutex_id_counts():
 
 def test_make_tile_group_rejects_duplicate_id_for_one_tile():
     @pl.kernel(auto_mutex=True)
-    def k(gm_q: pl.Tensor[[32], pl.DT_FP16]):
-        tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    def k(gm_q: pl.Tensor[[1, 32], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[2, 2]])
 
     with pytest.raises(ParserTypeError, match="must not contain duplicates"):

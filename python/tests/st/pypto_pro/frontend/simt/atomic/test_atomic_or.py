@@ -47,8 +47,8 @@ def _assert_target(state, expected):
 
 @pl.simt.function(max_threads=THREADS)
 def atomic_or_ub_all_dtypes(
-    int32_tile: pl.Tile[[1, ELEMENTS], pl.DT_INT32],
-    uint32_tile: pl.Tile[[1, ELEMENTS], pl.DT_UINT32],
+    int32_tile,
+    uint32_tile,
 ):
     pl.simt.atomic_or(int32_tile[0, 0], 0xF)
     pl.simt.atomic_or(uint32_tile[0, 0], 0xF)
