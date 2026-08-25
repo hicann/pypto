@@ -19,6 +19,7 @@
 #include <vector>
 #include <queue>
 #include "interface/operation/op_infer_shape_impl.h"
+#include "interface/operation/attribute.h"
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "pass_common_defs.h"
@@ -184,6 +185,10 @@ public:
      * @return a TensorSet containing all LogicalTensorPtrs in the graph.
      */
     static TensorSet GetAllTensors(Function& function);
+
+    // 判断 op 是否为跨核 move(CONVERT/COPY 输入输出跨 AIC/AIV), IntraSubgraphAdapter 会将其
+    // 改写为 OP_COPY_OUT 复用原 op 承担 DDR 搬运. ReduceCopyMerge 预判 DDR 化时复用此逻辑.
+    static bool IsCrossCoreMoveOp(Operation* op);
 };
 } // namespace tile_fwk
 } // namespace npu

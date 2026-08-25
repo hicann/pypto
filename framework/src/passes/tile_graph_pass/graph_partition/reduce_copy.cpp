@@ -19,7 +19,6 @@
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "interface/utils/common.h"
-#include <iostream>
 #include <vector>
 #include <numeric>
 #include <algorithm>
@@ -287,13 +286,38 @@ void ReduceCopyMerge::UpdateBoundaryTensorSize(LogicalTensorPtr& tensor, int ten
     }
 }
 
+// 预判非 DDR boundary tensor 是否会被 IntraSubgraphAdapter 在 producer 侧不插新搬运 op 而
+// 直接 DDR 化(写路径无 ASSEMBLE 隔离). consumer 侧插不插 VIEW 都不改变 tensor 本体被无条件
+// DDR 化的事实, 故判定只看 producer.
+static bool WillBeDdrWithoutNewCopyOp(LogicalTensorPtr tensor)
+{
+    const auto& producers = tensor->GetProducers();
+    if (producers.size() > 1) {
+        for (const auto& producer : producers) {
+            OpCalcType calcType = OpcodeManager::Inst().GetOpCalcType(producer->GetOpcode());
+            if (calcType != OpCalcType::MOVE_OUT && calcType != OpCalcType::MOVE_LOCAL) {
+                return false;
+            }
+        }
+    } else if (producers.size() == 1) {
+        Operation* producer = *(producers.begin());
+        if (!IsAssembleLike(producer->GetOpcode()) && producer->GetOpcode() != Opcode::OP_COPY_OUT &&
+            !GraphUtils::IsCrossCoreMoveOp(producer)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void ReduceCopyMerge::RecordBoundaryTensorInfo(LogicalTensorPtr& tensor, MergeInput& mergeInput,
                                                const std::set<int>& connectGraphs)
 {
     BoundaryTensorInfo tensorInfo;
     tensorInfo.tensorMagic = tensor->GetMagic();
+    // 目的: 除当前已是 DDR 的 tensor 外, 预判 IntraSubgraphAdapter 中"不插新搬运 op 直接 DDR 化"的
+    // boundary tensor 也须参与 inner-external-use 检查(其后必落地 DDR, 且无新 op 隔离)
     tensorInfo.isDDR = tensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR ||
-                       tensor->GetMemoryTypeToBe() == MemoryType::MEM_DEVICE_DDR;
+                       tensor->GetMemoryTypeToBe() == MemoryType::MEM_DEVICE_DDR || WillBeDdrWithoutNewCopyOp(tensor);
     std::set<int> producerSubgraphs;
     std::set<int> consumerSubgraphs;
     for (auto& op : tensor->GetProducers()) {

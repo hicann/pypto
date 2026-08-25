@@ -492,5 +492,201 @@ TEST_F(ReduceCopyTest, MixGraphMerger_CacheConsistentWithFullRebuild)
     }
 }
 
+// 正向: sg0 同时是 T 的 producer(ASSEMBLE) 和 consumer(CAST), sg1 是外部 ASSEMBLE producer.
+// 复刻 gdr_fwd tensor 522 结构: producer 和 consumer 在同一子图, 外部 producer 在另一子图.
+// T(UB) 多 ASSEMBLE producer(全 MOVE_LOCAL) -> WillBeDdrWithoutNewCopyOp 命中 -> isDDR=true ->
+// 合并 sg0+sg2 时 T 满足三条件(producer in sg0 + consumer in sg0 + external sg1) -> 拒绝.
+TEST_F(ReduceCopyTest, DdrPredictRejectsMultiAssembleProducerOnUbTensor)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    std::vector<int64_t> sh{16, 16};
+    // sg0: cube matmul(AIC) -> ASSEMBLE 写 T(UB); CAST 读 T -> ASSEMBLE 写 out (AIV)
+    std::string c0 = AddCubeMatmulSG(G, 0, incasts);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, sh, MemoryType::MEM_UB, "T"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {c0}, {"T"}, "asm0", true), true);
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, sh, {"tCast0", "out0"}), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_CAST, {"T"}, {"tCast0"}, "cast0", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {"tCast0"}, {"out0"}, "asmOut0", true), true);
+    // sg1: 外部 ASSEMBLE producer of T (多 producer, MOVE_LOCAL -> WillBeDdr 命中)
+    AddIncast(G, "in1", incasts);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {"in1"}, {"T"}, "asm1", true), true);
+    // sg2: 独立 vec 子图消费 out0 (与 sg0 构成合并候选)
+    AddVecSG(G, 2, "out0", "v2");
+    outcasts.push_back("v2");
+    const int Num50 = 50;
+    G.GetOp("asm0")->UpdateSubgraphID(0);
+    G.GetOp("asm0")->UpdateLatency(Num50);
+    G.GetOp("asm0")->SetAttr(OpAttributeKey::isCube, true);
+    for (auto& n : std::vector<std::string>{"cast0", "asmOut0"}) {
+        G.GetOp(n)->UpdateSubgraphID(0);
+        G.GetOp(n)->UpdateLatency(Num50);
+        G.GetOp(n)->SetAttr(OpAttributeKey::isCube, false);
+    }
+    const int largeNum = 2e7;
+    G.GetOp("asm1")->UpdateSubgraphID(1);
+    G.GetOp("asm1")->UpdateLatency(largeNum);
+    G.GetOp("asm1")->SetAttr(OpAttributeKey::isCube, false);
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(3);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    // T(UB) 多 ASSEMBLE producer -> WillBeDdr 命中 -> isDDR=true ->
+    // inner-external-use 拒绝 sg0+sg2 合并(sg1 为外部 producer 端点) -> 子图数 == 3.
+    const int Num3 = 3;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num3);
+}
+
+// 反向: 同上结构, 但外部 producer 换成 ADD(calcType=BROADCAST, 非 MOVE) ->
+// WillBeDdrWithoutNewCopyOp 返回 false -> isDDR=false -> 跳过 inner-external-use -> 合并放行.
+TEST_F(ReduceCopyTest, DdrPredictNotTriggeredWhenProducerMixNonMoveOp)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    std::vector<int64_t> sh{16, 16};
+    std::string c0 = AddCubeMatmulSG(G, 0, incasts);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, sh, MemoryType::MEM_UB, "T"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {c0}, {"T"}, "asm0", true), true);
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, sh, {"tCast0", "out0"}), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_CAST, {"T"}, {"tCast0"}, "cast0", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {"tCast0"}, {"out0"}, "asmOut0", true), true);
+    // sg1: 外部 ADD producer of T (BROADCAST -> WillBeDdr 返回 false)
+    AddIncast(G, "in1", incasts);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ADD, {"in1", "in1"}, {"T"}, "add1", true), true);
+    AddVecSG(G, 2, "out0", "v2");
+    outcasts.push_back("v2");
+    const int Num50 = 50;
+    G.GetOp("asm0")->UpdateSubgraphID(0);
+    G.GetOp("asm0")->UpdateLatency(Num50);
+    G.GetOp("asm0")->SetAttr(OpAttributeKey::isCube, true);
+    for (auto& n : std::vector<std::string>{"cast0", "asmOut0"}) {
+        G.GetOp(n)->UpdateSubgraphID(0);
+        G.GetOp(n)->UpdateLatency(Num50);
+        G.GetOp(n)->SetAttr(OpAttributeKey::isCube, false);
+    }
+    const int largeNum = 2e7;
+    G.GetOp("add1")->UpdateSubgraphID(1);
+    G.GetOp("add1")->UpdateLatency(largeNum);
+    G.GetOp("add1")->SetAttr(OpAttributeKey::isCube, false);
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(3);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    // T(UB) 多 producer 混入 ADD(BROADCAST) -> WillBeDdr 返回 false -> isDDR=false ->
+    // 跳过 inner-external-use -> sg0+sg2 合并放行(sg1 高 latency 不参与) -> 子图数 == 2.
+    const int Num2 = 2;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
+}
+
+// 单 producer 跨核 COPY_OUT(L1->UB): sg0 cube matmul 产 L1 tensor, COPY_OUT(L1->UB) 写 T(UB).
+TEST_F(ReduceCopyTest, DdrPredictRejectsCrossCoreCopyOutProducerOnUbTensor)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    std::vector<int64_t> sh{16, 16};
+    // sg0: cube matmul(AIC) -> L1 tensor -> 跨核 COPY_OUT(L1->UB) 写 T(UB), 单 producer
+    std::string c0 = AddCubeMatmulSG(G, 0, incasts);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, sh, MemoryType::MEM_L1, "tL1"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_COPY_OUT, {c0}, {"tL1"}, "cpOut0", true), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, sh, MemoryType::MEM_UB, "T"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_COPY_OUT, {"tL1"}, {"T"}, "crossCoreCopy", true), true);
+    // sg0: CAST 读 T -> ASSEMBLE 写 out (AIV, 与 cube 构成混合子图)
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, sh, {"tCast0", "out0"}), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_CAST, {"T"}, {"tCast0"}, "cast0", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {"tCast0"}, {"out0"}, "asmOut0", true), true);
+    // sg1: 外部 CAST consumer of T (外部端点, 高 latency 阻止合并)
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, sh, {"tCast1", "out1"}), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_CAST, {"T"}, {"tCast1"}, "cast1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {"tCast1"}, {"out1"}, "asmOut1", true), true);
+    // sg2: 独立 vec 子图消费 out0 (与 sg0 构成合并候选)
+    AddVecSG(G, 2, "out0", "v2");
+    outcasts.push_back("v2");
+    const int Num50 = 50;
+    for (auto& n : std::vector<std::string>{"cpOut0", "crossCoreCopy"}) {
+        G.GetOp(n)->UpdateSubgraphID(0);
+        G.GetOp(n)->UpdateLatency(Num50);
+        G.GetOp(n)->SetAttr(OpAttributeKey::isCube, true);
+    }
+    for (auto& n : std::vector<std::string>{"cast0", "asmOut0"}) {
+        G.GetOp(n)->UpdateSubgraphID(0);
+        G.GetOp(n)->UpdateLatency(Num50);
+        G.GetOp(n)->SetAttr(OpAttributeKey::isCube, false);
+    }
+    const int largeNum = 2e7;
+    for (auto& n : std::vector<std::string>{"cast1", "asmOut1"}) {
+        G.GetOp(n)->UpdateSubgraphID(1);
+        G.GetOp(n)->UpdateLatency(largeNum);
+        G.GetOp(n)->SetAttr(OpAttributeKey::isCube, false);
+    }
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(3);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    // T(UB) 单 producer 跨核 COPY_OUT(L1->UB) -> isDDR=true -> 拒绝 sg0+sg2 合并 -> 子图数 == 3.
+    const int Num3 = 3;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num3);
+}
+
+// 单 producer OP_ASSEMBLE 写 UB tensor T: WillBeDdrWithoutNewCopyOp 单 producer 分支命中 -> isDDR=true -> 拒绝合并.
+TEST_F(ReduceCopyTest, DdrPredictRejectsSingleAssembleProducerOnUbTensor)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    std::vector<int64_t> sh{16, 16};
+    // sg0: cube matmul(AIC) -> ASSEMBLE 写 T(UB), 单 producer
+    std::string c0 = AddCubeMatmulSG(G, 0, incasts);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, sh, MemoryType::MEM_UB, "T"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {c0}, {"T"}, "asm0", true), true);
+    // sg0: CAST 读 T -> ASSEMBLE 写 out (AIV, 与 cube 构成混合子图)
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, sh, {"tCast0", "out0"}), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_CAST, {"T"}, {"tCast0"}, "cast0", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {"tCast0"}, {"out0"}, "asmOut0", true), true);
+    // sg1: 外部 CAST consumer of T (外部端点, 高 latency 阻止合并)
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, sh, {"tCast1", "out1"}), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_CAST, {"T"}, {"tCast1"}, "cast1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {"tCast1"}, {"out1"}, "asmOut1", true), true);
+    // sg2: 独立 vec 子图消费 out0 (与 sg0 构成合并候选)
+    AddVecSG(G, 2, "out0", "v2");
+    outcasts.push_back("v2");
+    const int Num50 = 50;
+    G.GetOp("asm0")->UpdateSubgraphID(0);
+    G.GetOp("asm0")->UpdateLatency(Num50);
+    G.GetOp("asm0")->SetAttr(OpAttributeKey::isCube, true);
+    for (auto& n : std::vector<std::string>{"cast0", "asmOut0"}) {
+        G.GetOp(n)->UpdateSubgraphID(0);
+        G.GetOp(n)->UpdateLatency(Num50);
+        G.GetOp(n)->SetAttr(OpAttributeKey::isCube, false);
+    }
+    const int largeNum = 2e7;
+    for (auto& n : std::vector<std::string>{"cast1", "asmOut1"}) {
+        G.GetOp(n)->UpdateSubgraphID(1);
+        G.GetOp(n)->UpdateLatency(largeNum);
+        G.GetOp(n)->SetAttr(OpAttributeKey::isCube, false);
+    }
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(3);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    // T(UB) 单 ASSEMBLE producer -> WillBeDdr 命中 -> isDDR=true -> 拒绝 sg0+sg2 合并 -> 子图数 == 3.
+    const int Num3 = 3;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num3);
+}
+
 } // namespace tile_fwk
 } // namespace npu

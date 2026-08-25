@@ -51,7 +51,6 @@ private:
     void CollectProducerColors(LogicalTensorPtr tensor, std::set<int>& colors);
     void CollectConsumerColors(LogicalTensorPtr tensor, std::set<int>& colors);
     std::set<int> SetIntersection(std::set<int>& a, std::set<int>& b);
-    bool IsCrossCoreMoveOps(Operation* op);
     std::vector<Operation*> newOps;
     IRBuilder irBuilder_;
 };

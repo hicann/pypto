@@ -299,5 +299,33 @@ TensorSet GraphUtils::GetAllTensors(Function& function)
     }
     return result;
 }
+
+bool GraphUtils::IsCrossCoreMoveOp(Operation* op)
+{
+    auto convertOpAttr = dynamic_cast<ConvertOpAttribute*>(op->GetOpAttribute().get());
+    auto copyOpAttr = dynamic_cast<CopyOpAttribute*>(op->GetOpAttribute().get());
+    if (convertOpAttr == nullptr && copyOpAttr == nullptr) {
+        return false;
+    }
+    const std::unordered_set<MemoryType> aicMem{MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0B,
+                                                MemoryType::MEM_L0C};
+    const std::unordered_set<MemoryType> aivMem{MemoryType::MEM_UB};
+    bool fromAIC = false;
+    bool fromAIV = false;
+    for (auto& iop : op->GetIOperands()) {
+        if (aicMem.count(iop->GetMemoryTypeToBe()) > 0) {
+            fromAIC = true;
+        } else if (aivMem.count(iop->GetMemoryTypeToBe()) > 0) {
+            fromAIV = true;
+        }
+    }
+    for (auto& oop : op->GetOOperands()) {
+        if ((fromAIV && aicMem.count(oop->GetMemoryTypeToBe()) > 0) ||
+            (fromAIC && aivMem.count(oop->GetMemoryTypeToBe()) > 0)) {
+            return true;
+        }
+    }
+    return false;
+}
 } // namespace tile_fwk
 } // namespace npu
