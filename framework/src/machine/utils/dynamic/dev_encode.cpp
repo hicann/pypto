@@ -1378,10 +1378,28 @@ struct EncodeDevAscendFunctionInfo {
         return producerOp != nullptr ? producerOp->GetOpcode() : Opcode::OP_UNKNOWN;
     }
 
+    void RebuildOutcastUseListByLastReadPos(std::vector<DevAscendFunctionCallOperandUse>& useList,
+                                            const std::unordered_map<int, size_t>& lastReadPos)
+    {
+        std::vector<DevAscendFunctionCallOperandUse> next;
+        next.reserve(useList.size());
+        for (size_t i = 0; i < useList.size(); ++i) {
+            if (useList[i].opType == CellMatchOpType::READ) {
+                auto it = lastReadPos.find(useList[i].operationIdx);
+                if (it == lastReadPos.end() || it->second != i) {
+                    continue;
+                }
+            }
+            next.push_back(useList[i]);
+        }
+        useList.swap(next);
+    }
+
     void EncodeAnalysisOutCastConsumerByProducer(const std::shared_ptr<LogicalTensor>& o,
                                                  std::vector<DevAscendFunctionCallOperandUse>& useList,
                                                  InoutOperationAttr& outcastOpAttr, std::set<uint32_t>& outcastUseOpSet,
-                                                 int producerIdx)
+                                                 int producerIdx, std::unordered_map<int, size_t>& lastReadPos,
+                                                 bool& hasDupRead)
     {
         MACHINE_LOGD("Enter EncodeAnalysisOutCastConsumerByProducer: outcast magic=%d rawmagic=%d producerIdx=%d.",
                      o->magic, o->GetRawMagic(), producerIdx);
@@ -1404,10 +1422,7 @@ struct EncodeDevAscendFunctionInfo {
                     hubWorklist.push_back(succOpIdx);
                     continue;
                 }
-                if (!outcastUseOpSet.insert(succOpIdx).second) {
-                    MACHINE_LOGD("succOpIdx %d duplicate, ignore.", succOpIdx);
-                    continue;
-                }
+                outcastUseOpSet.insert(succOpIdx);
                 auto callAttrSucc = dynamic_cast<CallOpAttribute*>(succOp->GetOpAttribute().get());
                 for (size_t k = 0; k < succOp->GetIOperands().size(); ++k) {
                     auto& iOperand = succOp->GetIOperands()[k];
@@ -1415,7 +1430,11 @@ struct EncodeDevAscendFunctionInfo {
                         continue;
                     }
                     auto coaIndex = succOp->GetIOpAttrOffset(k) + COA_INDEX_DIM_BASE;
+                    if (lastReadPos.count(succOpIdx) > 0) {
+                        hasDupRead = true;
+                    }
                     useList.emplace_back(succOpIdx, coaIndex, CellMatchOpType::READ);
+                    lastReadPos[succOpIdx] = useList.size() - 1;
                     MACHINE_LOGD("MATCH! consumerList.emplace_back succOpIdx=%d coaIndex=%d dim=%d iOprandIdx=%zu.",
                                  succOpIdx, coaIndex, outcastOpAttr.dim, k);
 
@@ -1462,6 +1481,10 @@ struct EncodeDevAscendFunctionInfo {
                                      InoutOperationAttr& outcastOpAttr)
     {
         std::set<uint32_t> outcastUseOpSet;
+        std::unordered_map<int, size_t> useListLastReadPos;
+        std::unordered_map<int, size_t> fullCoverLastReadPos;
+        bool useListHasDupRead = false;
+        bool fullCoverHasDupRead = false;
         int dimSize = outcastOpAttr.dim;
         for (size_t i = 0; i < callList.size(); i++) {
             auto& op = *callList[i];
@@ -1481,7 +1504,8 @@ struct EncodeDevAscendFunctionInfo {
             if (stitchPolicyFullCoverProducer.operationIdx != -1) {
                 outcastOpAttr.stitchPolicyFullCoverProducerList.push_back(stitchPolicyFullCoverProducer);
                 EncodeAnalysisOutCastConsumerByProducer(o, outcastOpAttr.stitchPolicyFullCoverProducerList,
-                                                        outcastOpAttr, outcastUseOpSet, i);
+                                                        outcastOpAttr, outcastUseOpSet, i, fullCoverLastReadPos,
+                                                        fullCoverHasDupRead);
             } else if (useList.size() > 0) {
                 outcastOpAttr.useList.insert(outcastOpAttr.useList.end(), useList.begin(), useList.end());
                 for (auto& use : useList) {
@@ -1494,8 +1518,15 @@ struct EncodeDevAscendFunctionInfo {
                                  o->GetRawMagic(), i, op.GetOpMagic(),
                                  IntVecToStr(ShapeToVector(outcastOpAttr.cellMatchTableDesc.cellShape)).c_str());
                 }
-                EncodeAnalysisOutCastConsumerByProducer(o, outcastOpAttr.useList, outcastOpAttr, outcastUseOpSet, i);
+                EncodeAnalysisOutCastConsumerByProducer(o, outcastOpAttr.useList, outcastOpAttr, outcastUseOpSet, i,
+                                                        useListLastReadPos, useListHasDupRead);
             }
+        }
+        if (useListHasDupRead) {
+            RebuildOutcastUseListByLastReadPos(outcastOpAttr.useList, useListLastReadPos);
+        }
+        if (fullCoverHasDupRead) {
+            RebuildOutcastUseListByLastReadPos(outcastOpAttr.stitchPolicyFullCoverProducerList, fullCoverLastReadPos);
         }
         outcastOpAttr.useOpList.insert(outcastOpAttr.useOpList.end(), outcastUseOpSet.begin(), outcastUseOpSet.end());
         allOutcastUseOpSet.insert(outcastUseOpSet.begin(), outcastUseOpSet.end());
