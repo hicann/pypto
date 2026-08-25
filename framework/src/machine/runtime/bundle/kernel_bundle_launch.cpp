@@ -197,7 +197,7 @@ int LaunchBundleKernelOnce(const std::vector<uint8_t>& devProgBinary, void* binH
     if (rc != RT_SUCCESS) {
         return rc;
     }
-    DeviceLauncher::SetDevPerfAddr(false, isCaptureMode);
+    DeviceLauncher::SetDevPerfAddr(false, isCaptureMode, devProg->devArgs.toSubMachineConfig);
 
     rc = BundleLaunchAicpu(rtAicpuArgs, devProg);
     if (rc != RT_SUCCESS) {

@@ -57,8 +57,10 @@ static int EmulationLaunchOnce(DeviceKernelArgs& kArgs)
 
     aicpuThreadList[0] = std::thread(threadFun, 0, RUN_SPLITTED_STREAM_CTRL);
 
-    for (int i = 1; i < launchAiCpuNum; i++) {
-        aicpuThreadList[i] = std::thread(threadFun, i, RUN_SPLITTED_STREAM_SCHE);
+    if (!devProg->devArgs.enableAicoreResolve) {
+        for (int i = 1; i < launchAiCpuNum; i++) {
+            aicpuThreadList[i] = std::thread(threadFun, i, RUN_SPLITTED_STREAM_SCHE);
+        }
     }
 
     for (int i = 0; i < threadNum; i++) {

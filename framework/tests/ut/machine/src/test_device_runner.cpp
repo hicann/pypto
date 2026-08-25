@@ -181,7 +181,13 @@ TEST_F(TestDeviceRunner, HostProf_GetHostProfType_Default) { EXPECT_EQ(HostProf:
 
 TEST_F(TestDeviceRunner, HostProf_SetProfFunction_Null) { HostProf::GetInstance().SetProfFunction(nullptr); }
 
-TEST_F(TestDeviceRunner, DevicePerf_SetDebugEnable) { DevicePerf::GetInstance().SetDebugEnable(); }
+TEST_F(TestDeviceRunner, DevicePerf_SetDebugEnable)
+{
+    setenv("ENABLE_AICORE_RESOLVE", "true", 1);
+    ToSubMachineConfig machinConfig;
+    DevicePerf::GetInstance().SetDebugEnable(machinConfig);
+    unsetenv("ENABLE_AICORE_RESOLVE");
+}
 
 TEST_F(TestDeviceRunner, HostProf_ReportHostProfInfo_NoProf)
 {

@@ -30,7 +30,7 @@ public:
     bool RunPrepare() const;
     void ResetPerData() const;
     void SyncProfData(bool debugEnable);
-    void SetDebugEnable();
+    void SetDebugEnable(const ToSubMachineConfig& profLevelConfig);
 
 private:
     uint32_t GetPerfDataSize() const;

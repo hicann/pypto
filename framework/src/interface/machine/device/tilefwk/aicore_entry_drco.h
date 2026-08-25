@@ -350,6 +350,7 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
     ctx.blockIdx = blockIdx;
     __gm__ DevDfxArgs* devDfxAddr = (__gm__ DevDfxArgs*)devArgs->devDfxArgAddr;
     ctx.aicoreDevTaskMetric.devTaskMetricEnable = devDfxAddr->isOpenPerfTrace != 0;
+    ctx.profLevel = devDfxAddr->profLevel;
     uint8_t aicoreLogLevel = static_cast<uint8_t>(AicoreLogLevel::NONE);
 #if ENABLE_AICORE_PRINT
     if (devDfxAddr->logLevel >= 0) {
@@ -371,7 +372,6 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
     PerfTraceRecord(INVALID_DEV_TASK_ID, ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_INIT);
 
     InitCtx(&ctx, metric, nullptr, aicoreLogLevel);
-
     __gm__ npu::tile_fwk::RuntimeDataRingBufferHeadData*
         runtimeDataRingBufferHeadData = (__gm__ npu::tile_fwk::RuntimeDataRingBufferHeadData*)
                                             devArgs->runtimeDataRingBufferAddr;
@@ -419,18 +419,24 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
         __gm__ npu::tile_fwk::PerCorePendingQueue* myPerCoreQueue = rootFuncList->perCorePendingQueueArray[blockIdx];
         DRCO_DCCI_SINGLE_CACHE_LINE(myPerCoreQueue);
         DRCO_DCCI_SINGLE_CACHE_LINE(&myPerCoreQueue->size);
-        ctx.profLevel = 0;
 
         if (rootFuncList->totalTaskCount == 0) {
             uint32_t oldHead = deviceTaskReadyQueue->head;
             DrcoAtomicCasTo(&deviceTaskReadyQueue->head, oldHead, oldHead + 1);
             continue;
         }
+        bool isFirstTask = true;
+        ctx.lastTaskFinishCycle = 0;
 
         while (myPerCoreQueue->size > myPerCoreQueue->head) {
             uint32_t taskId = DrcoPerCorePendingQueueGetFirstTask(myPerCoreQueue);
             if (taskId == static_cast<uint32_t>(AICORE_TASK_NO_INCOME)) {
                 break;
+            }
+            if (isFirstTask) {
+                PerfTraceRecord(ctx.SeqNo(), ctx.aicoreDevTaskMetric.devTaskMetric,
+                                PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
+                isFirstTask = false;
             }
             ExecCoreFunctionKernel(&ctx, taskId, lastMixResourceType);
 #ifdef __HAS_SUB_FUNC__
@@ -463,6 +469,7 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
         while (*rootFuncList->executedTaskCount < rootFuncList->totalTaskCount) {
             DRCO_DCCI_SINGLE_CACHE_LINE(rootFuncList->executedTaskCount);
         }
+        DfxProcWhenDevTaskStop(&ctx, args, metric);
     }
     if (blockIdx == 0) {
         DRCO_DCCI_SINGLE_CACHE_LINE(runtimeDataRingBufferHeadData);
@@ -470,8 +477,8 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
         runtimeDataRingBufferHeadData->indexFinished.value = finished;
         DRCO_DCCI_SINGLE_CACHE_LINE(runtimeDataRingBufferHeadData);
     }
-
-    FlushMetricStatistic(args);
+    args->taskEntry.reserved[0] = ctx.profLevel;
+    DfxProcWhenCoreExit(&ctx, args, metric);
     return;
 }
 

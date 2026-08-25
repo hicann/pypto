@@ -361,13 +361,14 @@ void DeviceLauncher::GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel)
 
 bool DeviceLauncher::IsCaptureMode() { return DeviceLauncherContext::Get().IsCaptureMode(); }
 
-void DeviceLauncher::SetDevPerfAddr([[maybe_unused]] const bool debugEnable, [[maybe_unused]] const bool isCaptureMode)
+void DeviceLauncher::SetDevPerfAddr(const bool debugEnable, const bool isCaptureMode,
+                                    const ToSubMachineConfig& profLevelConfig)
 {
     if (debugEnable || KernelBinary::GetEnableDumpDevPref() || HostProf::GetInstance().GetHostProfType() == 1) {
         if (isCaptureMode) {
             ExchangeCaptureModeRelax();
         }
-        DevicePerf::GetInstance().SetDebugEnable();
+        DevicePerf::GetInstance().SetDebugEnable(profLevelConfig);
         if (isCaptureMode) {
             ExchangeCaptureModeGlobal();
         }
@@ -468,12 +469,8 @@ int DeviceLauncher::LaunchAicoreKernel(AclRtStream aicoreStream, void* kernel, R
     HostProf::GetInstance().ReportHostProfInfo(aicoreStream, startTime, blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
     if (debugEnable || !IsCaptureMode() || IsPtoDataDumpEnabled()) {
         int rc = 0;
-        if (IsAicoreResolveEnabled()) {
-            rc = RuntimeStreamSynchronize(aicoreStream);
-        } else {
-            auto scheStream = GetStreamContext().GetScheStream();
-            rc = DeviceSynchronize(scheStream, aicoreStream);
-        }
+        auto scheStream = GetStreamContext().GetScheStream();
+        rc = DeviceSynchronize(scheStream, aicoreStream);
         if (rc != 0) {
             MACHINE_LOGE(HostLauncherErr::SYNC_FAILED, "stream sync failed");
             return rc;
@@ -521,7 +518,7 @@ int DeviceLauncher::LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCach
     int ret = LaunchSyncTask(aicoreStream, isCaptureMode, launchEarlyMode);
     MACHINE_ASSERT(ret == RT_SUCCESS) << "launch pre sync failed: " << ret;
 
-    DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode);
+    DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode, kernel->GetMachineConfig());
     if (!isCaptureMode) {
         args->kArgs.toSubMachineConfig = kernel->GetMachineConfig();
     }

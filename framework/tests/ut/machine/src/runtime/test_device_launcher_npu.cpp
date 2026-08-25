@@ -269,14 +269,16 @@ TEST_F(DeviceLauncherNpuTest, RunPreSync_NullStreams)
 
 TEST_F(DeviceLauncherNpuTest, SetDevPerfAddr_DebugEnable)
 {
-    DeviceLauncher::SetDevPerfAddr(true, false);
+    ToSubMachineConfig machinConfig;
+    DeviceLauncher::SetDevPerfAddr(true, false, machinConfig);
     // 不应该崩溃
     SUCCEED();
 }
 
 TEST_F(DeviceLauncherNpuTest, SetDevPerfAddr_CaptureMode)
 {
-    DeviceLauncher::SetDevPerfAddr(false, true);
+    ToSubMachineConfig machinConfig;
+    DeviceLauncher::SetDevPerfAddr(false, true, machinConfig);
     SUCCEED();
 }
 

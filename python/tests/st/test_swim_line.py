@@ -17,6 +17,7 @@ import multiprocessing as mp
 import os
 from typing import Dict, List
 
+import pytest
 import torch
 import torch_npu
 
@@ -45,6 +46,8 @@ def device_run_data_from_device_mix_nodep(queue):
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     os.environ["DUMP_DEVICE_PERF"] = "true"
+    if "Ascend950" in torch.npu.get_device_name():
+        os.environ["ENABLE_AICORE_RESOLVE"] = "true"
 
     tiling = 32
     n, k, m = tiling * 8, tiling * 8, tiling * 8
@@ -77,6 +80,7 @@ def device_run_data_from_device_mix_nodep(queue):
 
 
 @pypto.options(pass_options={"enable_slice": True})
+@pytest.mark.soc("910", "950")
 def test_swim():
     mp.set_start_method('spawn', force=True)
     result_queue = mp.Queue()
@@ -95,6 +99,8 @@ def test_swim():
         core_list: List[Dict] = json.load(f)
         for core in core_list:
             tasks = core.get("tasks", [])
+            if "Ascend950" in torch.npu.get_device_name() and core.get("coreType") == "AICPU-SCHED":
+                continue
             block_idx = core.get("block_idx", -1)
             core_count = sum(1 for task in tasks if task["name"].startswith("BEGIN"))
             if core["coreType"].startswith("AICPU"):
@@ -108,7 +114,8 @@ def test_swim():
 
     tilefwk_l1_prof_data_path = pref_path + "/tilefwk_L1_prof_data.json"
     assert os.path.exists(tilefwk_l1_prof_data_path), "Could not Get tilefwk_L1_prof_data"
-
+    topo_path = pref_path + "/dyn_topo.txt"
+    assert os.path.exists(topo_path), "Could not Get topo"
     # can not be empty list, need to have data
     with open(tilefwk_l1_prof_data_path, 'r', encoding='utf-8') as f:
         tilefwk_11_prof_data: List[Dict] = json.load(f)

@@ -281,7 +281,8 @@ TEST_F(DeviceLauncherHostTest, RunWithProfile_AllModes_ReturnZero)
 // Covers: SetDevPerfAddr, DumpIOTensorsWithCann, CheckAscendDriverVersionOnboard
 TEST_F(DeviceLauncherHostTest, MiscNoOpFunctions_NoCrash)
 {
-    DeviceLauncher::SetDevPerfAddr(false, false);
+    ToSubMachineConfig machinConfig;
+    DeviceLauncher::SetDevPerfAddr(false, false, machinConfig);
     std::vector<DeviceTensorData> tensors;
     DeviceLauncher::DumpIOTensorsWithCann(nullptr, tensors, "test_func");
     DeviceLauncher::CheckAscendDriverVersionOnboard();

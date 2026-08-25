@@ -56,7 +56,7 @@ struct DynFuncBin {
 };
 
 constexpr uint32_t MAX_AICORE_NUM_FOR_QUEUE = 108;
-constexpr uint32_t LOCAL_GROUP_SIZE = 8;
+constexpr uint32_t LOCAL_GROUP_SIZE = 6;
 constexpr uint32_t NUM_LOCAL_GROUPS = (MAX_AICORE_NUM_FOR_QUEUE + LOCAL_GROUP_SIZE - 1) / LOCAL_GROUP_SIZE;
 constexpr uint32_t NUM_CORE_TYPES = 2;
 

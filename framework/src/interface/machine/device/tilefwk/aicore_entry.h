@@ -291,7 +291,7 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
     if (unlikely(ctx->profLevel == PRO_LEVEL2 || ctx->profLevel == PRO_LEVEL1)) {
         AddMetricStatistic(ctx, ctx->SeqNo(), taskId, opAttrs[0], t1);
     }
-    if (unlikely(ctx->aicoreDevTaskMetric.devTaskMetricEnable)) {
+    if (unlikely(ctx->aicoreDevTaskMetric.devTaskMetricEnable) && ctx->lastTaskFinishCycle == 0) {
         ctx->lastTaskFinishCycle = get_sys_cnt();
     }
 }
@@ -302,7 +302,6 @@ INLINE void InitCtx(ExecuteContext* ctx, __gm__ Metrics* metric, volatile __gm__
 {
     ctx->curLeafTaskParallelIdx = 0; // default init first devtask
     PerfTraceRecord(ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL);
-    ctx->lastTaskFinishCycle = 0;
     ctx->parallelDevTask = prallelDevTask;
 #if ENABLE_AICORE_PRINT
     auto buffer = reinterpret_cast<__gm__ uint8_t*>(ctx->args->dfxBuffer[SHAK_BUF_PRINT_BUFFER_INDEX]);
@@ -447,6 +446,7 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs, int64_t outputs, int6
                             PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
             isFirstTask = false;
             ctx.profLevel = args->taskEntry.reserved[0];
+            ctx.lastTaskFinishCycle = 0;
         }
 
         SendRegAck(curTaskIdx);

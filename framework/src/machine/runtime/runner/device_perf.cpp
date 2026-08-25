@@ -104,7 +104,7 @@ void DevicePerf::SyncProfData(bool debugEnable)
     }
 }
 
-void DevicePerf::SetDebugEnable()
+void DevicePerf::SetDebugEnable(const ToSubMachineConfig& profLevelConfig)
 {
     for (uint32_t i = 0; i < GetPerfDataSize(); i++) {
         ResetMetrics(i);
@@ -113,6 +113,14 @@ void DevicePerf::SetDebugEnable()
                 i * SHARED_BUFFER_SIZE,
             sizeof(uint64_t), reinterpret_cast<uint8_t*>(&perfData_[i]), sizeof(uint64_t),
             RtMemcpyKind::HOST_TO_DEVICE);
+    }
+    if (IsAicoreResolveEnabled()) {
+        DevDfxArgs devDfxarg;
+        RuntimeMemcpyDirect(&devDfxarg, sizeof(DevDfxArgs), reinterpret_cast<uint8_t*>(args_.devDfxArgAddr),
+                            sizeof(DevDfxArgs), RtMemcpyKind::DEVICE_TO_HOST);
+        devDfxarg.profLevel = profLevelConfig.profConfig.Contains(ProfConfig::AICORE_TIME) ? 2 : 0;
+        RuntimeMemcpyDirect(reinterpret_cast<uint8_t*>(args_.devDfxArgAddr), sizeof(DevDfxArgs), &devDfxarg,
+                            sizeof(DevDfxArgs), RtMemcpyKind::HOST_TO_DEVICE);
     }
     MACHINE_LOGD("Set debug enable aicore 0 devPtr: %p", perfData_[0]);
 }
