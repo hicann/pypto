@@ -10,7 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """ """
 
-from typing import List, Optional, Sequence, Tuple, Union, overload
+from typing import Dict, List, Optional, Sequence, Tuple, Union, overload
 
 from . import pypto_impl
 from ._op_wrapper import op_wrapper
@@ -19,6 +19,11 @@ from .enum import AtomicRMWMode, DataType
 from .error import FeError
 from .symbolic_scalar import SymbolicScalar
 from .tensor import Tensor
+
+_view_original_shapes: Dict[int, list] = {}
+_view_input_ids: Dict[int, int] = {}
+_view_input_names: Dict[int, str] = {}
+_gathermask_checks: list = []
 
 
 @overload
@@ -375,6 +380,27 @@ def view(
     if dtype is not None:
         return pypto_impl.View(input, dtype)
     elif valid_shape is None:
-        return pypto_impl.View(input, shape, offsets)
+        result = pypto_impl.View(input, shape, offsets)
     else:
-        return pypto_impl.View(input, shape, to_syms(valid_shape), to_syms(offsets))
+        result = pypto_impl.View(input, shape, to_syms(valid_shape), to_syms(offsets))
+
+    def _get_tensor_id(t):
+        if hasattr(t, '_base'):
+            return t._base.Id()
+        if hasattr(t, 'Id'):
+            return t.Id()
+        return t.id()
+
+    def _get_tensor_name(t):
+        if hasattr(t, '_base'):
+            base = t._base
+        else:
+            base = t
+        if hasattr(base, 'GetName'):
+            return base.GetName()
+        return ''
+
+    _view_original_shapes[result.Id()] = list(shape)
+    _view_input_ids[result.Id()] = _get_tensor_id(input)
+    _view_input_names[result.Id()] = _get_tensor_name(input)
+    return result

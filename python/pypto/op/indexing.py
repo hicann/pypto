@@ -579,4 +579,19 @@ def gathermask(self: Tensor, pattern_mode: int) -> Tensor:
 
     """
 
+    if 1 <= pattern_mode <= 6:
+        from ..operation import _gathermask_checks, _view_input_ids, _view_input_names, _view_original_shapes
+        self_id = self.Id() if hasattr(self, 'Id') else self._base.Id()
+        orig_view_shape = _view_original_shapes.get(self_id)
+        orig_input_id = _view_input_ids.get(self_id)
+        orig_input_name = _view_input_names.get(self_id)
+        if orig_view_shape is not None:
+            _gathermask_checks.append({
+                'view_tensor_id': self_id,
+                'input_tensor_id': orig_input_id,
+                'input_tensor_name': orig_input_name,
+                'viewshape_last': orig_view_shape[-1] if orig_view_shape else None,
+                'pattern_mode': pattern_mode,
+            })
+
     return pypto_impl.GatherMask(self, pattern_mode)

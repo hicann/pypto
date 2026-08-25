@@ -1865,6 +1865,16 @@ void GatherMaskBuildInOperationTileFunc(Function& function, const TileShape& til
                                         const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
 {
     uint8_t patternMode = op.GetIntAttribute(OP_ATTR_PREFIX + "patternMode");
+    if (patternMode >= 1 && patternMode <= 6) {
+        const auto& viewShape = iOperand[0]->GetShape();
+        std::vector<int64_t> originalShape;
+        if (iOperand[0]->GetAttr("ORIGINAL_SHAPE", originalShape) && !originalShape.empty() &&
+            originalShape.size() == viewShape.size() && originalShape.back() > 0 && viewShape.back() > 0) {
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, viewShape.back() >= originalShape.back())
+                << "GatherMask requires the last axis of self.shape not to be split by view. "
+                << "self.shape last axis: " << originalShape.back() << ", viewshape last axis: " << viewShape.back();
+        }
+    }
     TiledGatherMaskBuildIn(function, tileShape, iOperand[0], oOperand[0], patternMode);
 }
 

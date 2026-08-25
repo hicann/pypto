@@ -1294,8 +1294,14 @@ Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes, const std
     result.GetStorage()->UpdateDynValidShape(validShape);
     auto newOffsets = SymbolicScalar::FromConcrete(offsets);
     op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offsets, newOffsets, validShape));
+    result.GetStorage()->SetAttr("ORIGINAL_SHAPE", operand.GetShape());
+    const auto& operandDynVS = operand.GetStorage()->GetDynValidShape();
+    if (!operandDynVS.empty()) {
+        result.GetStorage()->SetAttr("ORIGINAL_DYN_VALID_SHAPE", operandDynVS);
+    }
     return result;
 }
+
 bool isInteger(float num)
 {
     const float epsilon = 1e-6f;
@@ -1399,6 +1405,11 @@ Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes, const std
     result.GetStorage()->UpdateDynValidShape(validShape);
     std::vector<int64_t> newOffsetsConcrete = SymbolicScalar::Concrete(newOffsets, 0);
     op.SetOpAttribute(std::make_shared<ViewOpAttribute>(newOffsetsConcrete, newOffsets, validShape));
+    result.GetStorage()->SetAttr("ORIGINAL_SHAPE", operand.GetShape());
+    const auto& operandDynVS2 = operand.GetStorage()->GetDynValidShape();
+    if (!operandDynVS2.empty()) {
+        result.GetStorage()->SetAttr("ORIGINAL_DYN_VALID_SHAPE", operandDynVS2);
+    }
     return result;
 }
 
@@ -1429,6 +1440,11 @@ Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes,
     std::vector<int64_t> newOffsetsConcrete = SymbolicScalar::Concrete(newOffsets, 0);
     op.SetOpAttribute(std::make_shared<ViewOpAttribute>(newOffsetsConcrete, newOffsets, newValidShapes));
     result.GetStorage()->UpdateDynValidShape(newValidShapes);
+    result.GetStorage()->SetAttr("ORIGINAL_SHAPE", operand.GetShape());
+    const auto& operandDynVS3 = operand.GetStorage()->GetDynValidShape();
+    if (!operandDynVS3.empty()) {
+        result.GetStorage()->SetAttr("ORIGINAL_DYN_VALID_SHAPE", operandDynVS3);
+    }
     return result;
 }
 

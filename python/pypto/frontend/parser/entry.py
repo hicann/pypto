@@ -448,6 +448,12 @@ class JitCallableWrapper:
         tensors,
         tensor_defs=None,
     ) -> None:
+        from pypto.operation import _gathermask_checks, _view_input_ids, _view_input_names, _view_original_shapes
+        _view_original_shapes.clear()
+        _view_input_ids.clear()
+        _view_input_names.clear()
+        _gathermask_checks.clear()
+
         if tensor_defs is not None:
             self._check_input_defs_match_tensors(tensors, tensor_defs)
             pto_tensor = self._convert_tensors_with_metadata(tensors, tensor_defs)
@@ -462,6 +468,10 @@ class JitCallableWrapper:
             create_new_logical_tensor=self._create_new_logical_tensor,
             **(self.kwargs or {}),
         )
+
+        # Check GatherMask viewshape constraint with actual tensor shapes
+        if tensor_defs is not None:
+            self._check_gathermask_view_constraint(tensors, tensor_defs)
 
         # Reset golden data after compilation
         _pto_verify_datas.reset()
@@ -634,6 +644,40 @@ class JitCallableWrapper:
             self.kmodule = pypto_impl.KernelModule(self)
             if key is not None:
                 JitCallableWrapper._kernel_module_cache[key] = self.kmodule
+
+    def _check_gathermask_view_constraint(
+        self,
+        torch_tensors: list,
+        tensor_defs: list,
+    ) -> None:
+        """Check GatherMask viewshape constraint with actual tensor shapes."""
+        from pypto.operation import _gathermask_checks
+        if not _gathermask_checks:
+            return
+
+        name_to_shape = {}
+        for tensor_def, torch_tensor in zip(tensor_defs, torch_tensors):
+            try:
+                base = tensor_def._base if hasattr(tensor_def, '_base') else tensor_def
+                name = base.GetName() if hasattr(base, 'GetName') else ''
+                if name:
+                    name_to_shape[name] = list(torch_tensor.shape)
+            except (AttributeError, RuntimeError):
+                pass
+
+        for check in _gathermask_checks:
+            input_name = check.get('input_tensor_name', '')
+            viewshape_last = check['viewshape_last']
+            if input_name and input_name in name_to_shape and viewshape_last is not None:
+                actual_shape = name_to_shape[input_name]
+                actual_last = actual_shape[-1]
+                if isinstance(actual_last, int) and isinstance(viewshape_last, int) and viewshape_last < actual_last:
+                    raise FeError(
+                        RuntimeError(
+                            f"GatherMask requires the last axis of self.shape not to be split by view. "
+                            f"self.shape last axis: {actual_last}, viewshape last axis: {viewshape_last}"
+                        )
+                    )
 
     def _execute_kernel(
         self,
