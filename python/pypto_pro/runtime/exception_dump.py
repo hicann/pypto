@@ -121,7 +121,7 @@ def register_callback() -> bool:
     ret = lib.pro_register_exception_dump_callback()
     if ret == 0:
         _registered = True
-        logging.info("Exception dump callback registered successfully")
+        logging.debug("Exception dump callback registered successfully")
     else:
         logging.warning("Failed to register exception dump callback (ret=%d)", ret)
     return _registered
