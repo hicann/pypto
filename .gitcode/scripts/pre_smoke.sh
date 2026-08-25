@@ -64,12 +64,49 @@ bash "${RUN_PACKAGE_NAME}" --full -q --pylocal --install-path=/usr/local/Ascend
 source /usr/local/Ascend/cann/set_env.sh
 
 # ===== 测试阶段 =====
-python3 examples/validate_examples.py -t examples -d 0,1,2,3
+timeout --signal=INT 600 python3 examples/validate_examples.py -t examples -d 0,1,2,3
 ret=$?
 if [ $ret -ne 0 ]; then
     echo "[ERROR] Python Examples failed"
     exit $ret
 fi
 echo "[INFO] Python Examples succeeded"
+
+# ===== gym 测试阶段 =====
+# PYTEST_AVAILABLE_DEVICES 用于 conftest 按 worker 分卡
+GYM_DEVICES=(0 1 2 3)
+GYM_DEVICES_STR=$(IFS=,; echo "${GYM_DEVICES[*]}")
+GYM_N_WORKERS=${#GYM_DEVICES[@]}
+GYM_TEST_TIMEOUT=${GYM_TEST_TIMEOUT:-600}
+
+echo "[BGN] Clone pypto-gym & run tests (${GYM_N_WORKERS} cards)"
+rm -rf "$BASE_DIR/pypto-gym"
+git clone --depth 1 https://gitcode.com/cann/pypto-gym.git "$BASE_DIR/pypto-gym"
+if [ $? -ne 0 ]; then
+    echo "[ERROR] Clone pypto-gym failed"
+    exit 1
+fi
+
+pushd "$BASE_DIR/pypto-gym" > /dev/null || exit 1
+if PYTEST_AVAILABLE_DEVICES="$GYM_DEVICES_STR" ASCEND_VISIBLE_DEVICES="$GYM_DEVICES_STR" \
+    timeout --signal=INT "$GYM_TEST_TIMEOUT" \
+    python3 -m pytest \
+    tests/ops/deepseek_v32_exp/test_sparse_attention_antiquant.py::test_sfa_bf16_b4_s2_seq64k_per_int8_d \
+    tests/ops/deepseek_v32_exp/test_mla_prolog_quant.py::test_b64_s64k2_pa_nd_bf16_quantb_d \
+    tests/ops/experimental/ops_transformer/flash_attention_mha/test_flash_attention_mha.py::test_00_910_1b \
+    tests/ops/experimental/ops_transformer/flash_attention_mha_grad/test_flash_attention_mha_grad_a3.py::test_02 \
+    -v -n "$GYM_N_WORKERS" --dist=loadscope -p no:skipping --durations=0; then
+    gym_ret=0
+else
+    gym_ret=$?
+fi
+popd > /dev/null || true
+
+if [ $gym_ret -ne 0 ]; then
+    echo "[ERROR] pypto-gym tests failed, keep repo for debug"
+    exit $gym_ret
+fi
+rm -rf "$BASE_DIR/pypto-gym"
+echo "[INFO] pypto-gym tests succeeded"
 
 source /opt/conda/bin/deactivate
