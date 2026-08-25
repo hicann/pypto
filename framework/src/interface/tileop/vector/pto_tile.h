@@ -176,19 +176,14 @@ __aicore__ inline constexpr bool IsElementwiseDstLayoutCoveredByOperand()
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<Dst, DIM_5TH, MAX_DIMS>();
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<Src, DIM_4TH, MAX_DIMS>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<Src, DIM_5TH, MAX_DIMS>();
-    constexpr bool outerTileShapeCovered = TileOp::GetTensorTileShapeDim<Dst, DIM_1ST, MAX_DIMS>() <=
-                                               TileOp::GetTensorTileShapeDim<Src, DIM_1ST, MAX_DIMS>() &&
-                                           TileOp::GetTensorTileShapeDim<Dst, DIM_2ND, MAX_DIMS>() <=
-                                               TileOp::GetTensorTileShapeDim<Src, DIM_2ND, MAX_DIMS>() &&
-                                           TileOp::GetTensorTileShapeDim<Dst, DIM_3RD, MAX_DIMS>() <=
-                                               TileOp::GetTensorTileShapeDim<Src, DIM_3RD, MAX_DIMS>();
     constexpr bool rowContinuous = (dstTileH == 1 ||
                                     TileOp::GetTensorStrideDim<Dst, DIM_4TH, MAX_DIMS>() == dstTileW) &&
                                    (srcTileH == 1 ||
                                     TileOp::GetTensorStrideDim<Src, DIM_4TH, MAX_DIMS>() == srcTileW) &&
                                    TileOp::GetTensorStrideDim<Dst, DIM_5TH, MAX_DIMS>() == 1 &&
                                    TileOp::GetTensorStrideDim<Src, DIM_5TH, MAX_DIMS>() == 1;
-    constexpr bool tileLayoutCompatible = outerTileShapeCovered && rowContinuous;
+    // Outer tile dimensions describe local buffer capacity. They may differ even when the runtime execution shapes
+    // are identical, so only static tensor shapes can be used for an outer-dimension coverage check.
     if constexpr (Dst::IsStaticLayout() && Src::IsStaticLayout()) {
         constexpr bool validShapeCovered = TileOp::GetTensorShapeDim<Dst, DIM_1ST, MAX_DIMS>() <=
                                                TileOp::GetTensorShapeDim<Src, DIM_1ST, MAX_DIMS>() &&
@@ -200,9 +195,9 @@ __aicore__ inline constexpr bool IsElementwiseDstLayoutCoveredByOperand()
                                                TileOp::GetTensorShapeDim<Src, DIM_4TH, MAX_DIMS>() &&
                                            TileOp::GetTensorShapeDim<Dst, DIM_5TH, MAX_DIMS>() <=
                                                TileOp::GetTensorShapeDim<Src, DIM_5TH, MAX_DIMS>();
-        return tileLayoutCompatible && validShapeCovered;
+        return rowContinuous && validShapeCovered;
     }
-    return tileLayoutCompatible;
+    return rowContinuous;
 }
 
 template <typename T>
