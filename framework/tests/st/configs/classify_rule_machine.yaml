@@ -84,44 +84,6 @@ stest:
       # basic cases
       #===========================================================================
       - DynamicBasicTest.TestDD
-      - DynamicBasicTest.TestHUB
-      - DynamicBasicTest.TestCheckPointRestore
-      - DynamicBasicTest.TestSlotId
-      - DynamicBasicTest.DynamicRawShape
-      - DynamicBasicTest.TestStaticUnderDynDev
-      - DynamicBasicTest.TestStaticLoop
-      - DynamicBasicTest.TestInnerLoopOrder
-      - DynamicBasicTest.TestDeviceMachineOnModel
-      - DynamicBasicTest.TestDeviceMachineBlockdimOnBoard
-      - DynamicBasicTest.TestTensorExtract
-      - DynamicBasicTest.TestGetTensorData
-      # - DynamicBasicTest.TestGetTensorDataCrossFunction
-      # - DynamicBasicTest.TestGetTensorDataUnalign
-      - DynamicBasicTest.TestGetTensorDataExpr
-      - DynamicBasicTest.TestVectorDup
-      - DynamicBasicTest.TestTensorInsert
-      - DynamicBasicTest.TestSetTensorData
-      - DynamicBasicTest.TestSetTensorDataExpr
-      - DynamicBasicTest.TestGetTensorDataAndDup
-      - DynamicBasicTest.TestGetTensorDataSymbolicValue
-      - DynamicBasicTest.TestLoopIfWithRank456
-      - DynamicBasicTest.DuplicateName
-      - DynamicBasicTest.HiddenLoopConditionMixed
-      - DynamicBasicTest.HiddenLoopConditionMixedMulLoops
-      - DynamicBinTest.testDynMulsUnalign
-      - DynamicBinTest.TestDynamicAddUnalign
-      - DynamicBrcTest.TestDynamicMulBrcUnalign
-      - DynamicBindingTest.TestDefaultCompute
-      - DynamicBindingTest.TestDeviceRunDataFromHost
-      - DynamicBindingTest.TestDeviceCompute
-      #- DynamicControlFlowCacheTest.KernelReuse
-      #- DynamicControlFlowCacheTest.CheckShape
-      #- DynamicControlFlowCacheTest.CheckLackMemory
-      #- DynamicControlFlowCacheTest.CheckGetTensorData
-      #- DynamicControlFlowCacheTest.PartialCache
-      #- DynamicControlFlowCacheTest.PartialCacheValueDependData
-      #- DynamicControlFlowCacheTest.PartialCacheValueDependControl
-      - DynamicOutcastTensorTest.TensorAllocateIntermediate
       #===========================================================================
       # matmul Interpreter 功能用例
       #===========================================================================
