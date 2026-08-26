@@ -799,6 +799,8 @@ TEST_F(ReplaceTensorTest, FoldL0C2UBCopyOffsetForDualAssemble)
     // assemble1 写大 tensor 偏移 [0,64]，assemble2 写 [0,0]
     assOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset1));
     assOp2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset0));
+    const auto assOp1Magic = assOp1.GetOpMagic();
+    const auto assOp2Magic = assOp2.GetOpMagic();
 
     ReplaceTensor pass;
     EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
@@ -813,15 +815,24 @@ TEST_F(ReplaceTensorTest, FoldL0C2UBCopyOffsetForDualAssemble)
     for (size_t i = 0; i < offset1.size(); i++) {
         EXPECT_EQ(foldedToOffset[i].GetSpecifiedValue().Raw()->GetImmediateValue(), offset1[i]);
     }
-    // toOffset 全零分支：维持 EXTRACT，toOffset 不变
+    // toOffset 全零分支：也折叠为 INSERT，直接写入原 Assemble 输出
     EXPECT_EQ(copyOp2.GetIntAttribute(OpAttributeKey::localCopyLocalMode),
-              static_cast<int64_t>(Matrix::CopyMode::EXTRACT));
-    auto unfoldAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOp2.GetOpAttribute());
-    ASSERT_NE(unfoldAttr, nullptr);
-    const auto& unfoldToOffset = unfoldAttr->GetToOffset();
+              static_cast<int64_t>(Matrix::CopyMode::INSERT));
+    auto foldedAttr2 = std::dynamic_pointer_cast<CopyOpAttribute>(copyOp2.GetOpAttribute());
+    ASSERT_NE(foldedAttr2, nullptr);
+    const auto& foldedToOffset2 = foldedAttr2->GetToOffset();
     for (size_t i = 0; i < offset0.size(); i++) {
-        EXPECT_EQ(unfoldToOffset[i].GetSpecifiedValue().Raw()->GetImmediateValue(), offset0[i]);
+        EXPECT_EQ(foldedToOffset2[i].GetSpecifiedValue().Raw()->GetImmediateValue(), offset0[i]);
     }
+
+    bool assemble1Present = false;
+    bool assemble2Present = false;
+    for (const auto& op : currFunctionPtr->Operations()) {
+        assemble1Present = assemble1Present || op.GetOpMagic() == assOp1Magic;
+        assemble2Present = assemble2Present || op.GetOpMagic() == assOp2Magic;
+    }
+    EXPECT_FALSE(assemble1Present);
+    EXPECT_FALSE(assemble2Present);
     EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
 }
 

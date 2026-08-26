@@ -2544,6 +2544,134 @@ TEST_F(LegacyAssignMemoryTypeTest, PermuteViewRegisterCopyAssembleTransDataForce
     EXPECT_EQ(G.GetTensor("view_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
 }
 
+// DAV_3510 L0C -> UB 直连穿透 REGISTER_COPY 时，REGISTER_COPY 后的真实消费者 shape
+// 不满足端点逐维整除关系，必须回退 DDR。
+TEST_F(LegacyAssignMemoryTypeTest, ShapeTransportRegisterCopyShapeMismatchFallbackDdr)
+{
+    config::SetPassOption(ENABLE_SLICE, false);
+    ComputationalGraphBuilder G;
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_32}, MemoryType::MEM_L0A, "l0a_in");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_128}, MemoryType::MEM_L0B, "l0b_in");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_128}, MemoryType::MEM_L0C, "matmul_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_128}, MemoryType::MEM_L0C, "view_l0c_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_128}, MemoryType::MEM_UB, "asm_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_128}, MemoryType::MEM_UB, "rc_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_256}, MemoryType::MEM_UB, "view_ub_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_256}, MemoryType::MEM_UB, "add_in2");
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_256}, MemoryType::MEM_UB, "add_out");
+
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_in", "l0b_in"}, {"matmul_out"}, "matmul");
+    G.AddOp(Opcode::OP_VIEW, {"matmul_out"}, {"view_l0c_out"}, "view_l0c");
+    G.GetOp("view_l0c")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0C));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"view_l0c_out"}, {"asm_out"}, "assemble");
+    G.GetOp("assemble")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 0}));
+    G.AddOp(Opcode::OP_REGISTER_COPY, {"asm_out"}, {"rc_out"}, "register_copy");
+    G.AddOp(Opcode::OP_VIEW, {"rc_out"}, {"view_ub_out"}, "view_ub");
+    G.GetOp("view_ub")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_UB));
+    G.AddOp(Opcode::OP_ADD, {"view_ub_out", "add_in2"}, {"add_out"}, "add");
+    G.SetInCast({"l0a_in", "l0b_in", "add_in2"});
+    G.SetOutCast({"add_out"});
+
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*G.GetFunction()), SUCCESS);
+    EXPECT_EQ(CountMemoryPath(G.GetFunction(), MemoryType::MEM_L0C, MemoryType::MEM_UB), 0);
+    EXPECT_GT(CountMemoryPath(G.GetFunction(), MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 0);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+// 与上例对应的正向场景：REGISTER_COPY 输入 shape 与端点较小 shape 相同，保留 L0C -> L1 直连。
+TEST_F(LegacyAssignMemoryTypeTest, ShapeTransportRegisterCopyShapeMultipleKeepsDirectPath)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensors(DataType::DT_FP16, {NUM_64, NUM_64},
+                 {MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C, MemoryType::MEM_L1},
+                 {"l0a_in", "l0b_in", "matmul_out", "l1_transport_out"});
+    G.AddTensors(
+        DataType::DT_FP16, {NUM_32, NUM_64},
+        {MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C},
+        {"l1_view_out", "rc_out", "l0a_view_out", "l0b_in_2", "out"});
+
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_in", "l0b_in"}, {"matmul_out"}, "matmul_1");
+    G.AddOp(Opcode::OP_VIEW, {"matmul_out"}, {"l1_transport_out"}, "l0c_to_l1");
+    G.GetOp("l0c_to_l1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+    G.AddOp(Opcode::OP_VIEW, {"l1_transport_out"}, {"l1_view_out"}, "l1_view");
+    G.GetOp("l1_view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+    G.AddOp(Opcode::OP_REGISTER_COPY, {"l1_view_out"}, {"rc_out"}, "register_copy");
+    G.AddOp(Opcode::OP_VIEW, {"rc_out"}, {"l0a_view_out"}, "l1_to_l0a");
+    G.GetOp("l1_to_l0a")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0A));
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_view_out", "l0b_in_2"}, {"out"}, "matmul_2");
+    G.SetInCast({"l0a_in", "l0b_in", "l0b_in_2"});
+    G.SetOutCast({"out"});
+
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*G.GetFunction()), SUCCESS);
+    EXPECT_GT(CountMemoryPath(G.GetFunction(), MemoryType::MEM_L0C, MemoryType::MEM_L1), 0);
+    EXPECT_EQ(CountMemoryPath(G.GetFunction(), MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 0);
+}
+
+// REGISTER_COPY 的输入维数与端点 shape 不一致时，即使端点之间可整除，也必须回退 DDR。
+TEST_F(LegacyAssignMemoryTypeTest, ShapeTransportRegisterCopyRankMismatchFallbackDdr)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensors(DataType::DT_FP16, {NUM_64, NUM_64}, {MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C},
+                 {"l0a_in", "l0b_in", "matmul_out"});
+    G.AddTensor(DataType::DT_FP16, {NUM_1024}, MemoryType::MEM_L0C, "l0c_view_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_64}, MemoryType::MEM_L0C, "rc_out");
+    G.AddTensors(DataType::DT_FP16, {NUM_32, NUM_64},
+                 {MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C},
+                 {"l1_transport_out", "l0a_view_out", "l0b_in_2", "out"});
+
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_in", "l0b_in"}, {"matmul_out"}, "matmul_1");
+    G.AddOp(Opcode::OP_VIEW, {"matmul_out"}, {"l0c_view_out"}, "l0c_view");
+    G.GetOp("l0c_view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0C));
+    G.AddOp(Opcode::OP_REGISTER_COPY, {"l0c_view_out"}, {"rc_out"}, "register_copy");
+    G.AddOp(Opcode::OP_VIEW, {"rc_out"}, {"l1_transport_out"}, "l0c_to_l1");
+    G.GetOp("l0c_to_l1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+    G.AddOp(Opcode::OP_VIEW, {"l1_transport_out"}, {"l0a_view_out"}, "l1_to_l0a");
+    G.GetOp("l1_to_l0a")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0A));
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_view_out", "l0b_in_2"}, {"out"}, "matmul_2");
+    G.SetInCast({"l0a_in", "l0b_in", "l0b_in_2"});
+    G.SetOutCast({"out"});
+
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*G.GetFunction()), SUCCESS);
+    EXPECT_EQ(CountMemoryPath(G.GetFunction(), MemoryType::MEM_L0C, MemoryType::MEM_L1), 0);
+    EXPECT_GT(CountMemoryPath(G.GetFunction(), MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 0);
+}
+
+// REGISTER_COPY 的输入维数相同但不是端点较小 shape 的整数倍时，必须回退 DDR。
+TEST_F(LegacyAssignMemoryTypeTest, ShapeTransportRegisterCopyNonMultipleFallbackDdr)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensors(DataType::DT_FP16, {NUM_64, NUM_64}, {MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C},
+                 {"l0a_in", "l0b_in", "matmul_out"});
+    G.AddTensor(DataType::DT_FP16, {NUM_48, NUM_64}, MemoryType::MEM_L0C, "l0c_view_out");
+    G.AddTensor(DataType::DT_FP16, {NUM_32, NUM_64}, MemoryType::MEM_L0C, "rc_out");
+    G.AddTensors(DataType::DT_FP16, {NUM_32, NUM_64},
+                 {MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C},
+                 {"l1_transport_out", "l0a_view_out", "l0b_in_2", "out"});
+
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_in", "l0b_in"}, {"matmul_out"}, "matmul_1");
+    G.AddOp(Opcode::OP_VIEW, {"matmul_out"}, {"l0c_view_out"}, "l0c_view");
+    G.GetOp("l0c_view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0C));
+    G.AddOp(Opcode::OP_REGISTER_COPY, {"l0c_view_out"}, {"rc_out"}, "register_copy");
+    G.AddOp(Opcode::OP_VIEW, {"rc_out"}, {"l1_transport_out"}, "l0c_to_l1");
+    G.GetOp("l0c_to_l1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+    G.AddOp(Opcode::OP_VIEW, {"l1_transport_out"}, {"l0a_view_out"}, "l1_to_l0a");
+    G.GetOp("l1_to_l0a")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0A));
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_view_out", "l0b_in_2"}, {"out"}, "matmul_2");
+    G.SetInCast({"l0a_in", "l0b_in", "l0b_in_2"});
+    G.SetOutCast({"out"});
+
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*G.GetFunction()), SUCCESS);
+    EXPECT_EQ(CountMemoryPath(G.GetFunction(), MemoryType::MEM_L0C, MemoryType::MEM_L1), 0);
+    EXPECT_GT(CountMemoryPath(G.GetFunction(), MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 0);
+}
+
 // 场景：view 的 fromOffset 在外层维度有偏移 [1,0]，线性偏移 = 1*8+0 = 8 元素
 // FP16: 2*8=16 bytes，16 % 32 != 0 -> 不对齐，view 输入回退 DDR
 // 修复前仅检查 fromOffset.back()=0，会错误判定为对齐

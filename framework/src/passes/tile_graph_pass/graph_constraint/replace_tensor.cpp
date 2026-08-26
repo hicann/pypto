@@ -1147,6 +1147,17 @@ Status ReplaceTensor::RunOnFunction(Function& function)
             }
         }
     }
+
+    // Some tensor replacements (for example L0C2UB offset folding) bypass an
+    // obsolete Assemble operation by marking it deleted.  The replacement
+    // traversal above must not erase operations in-place, because it is still
+    // walking producer/consumer relationships.  Once all backward/forward
+    // processing is complete, remove those tombstones before the remaining
+    // ReplaceTensor stages inspect the graph; otherwise later stages may still
+    // see a deleted Assemble and retain stale graph edges.
+    function.EraseOperations(true, false);
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
+
     if (RefactorViewConnectForReplace(function) == FAILED) {
         return FAILED;
     }
@@ -1319,20 +1330,7 @@ Status ReplaceTensor::FoldL0C2UBCopyOffset(Operation* op)
                           copyOp->GetOpMagic());
         return FAILED;
     }
-    bool dstHasOffset = false;
-    const auto& statOffset = assembleIn->GetOffset();
-    const auto& dynOffset = assembleIn->GetDynOffset();
-    if (!dynOffset.empty()) {
-        dstHasOffset = std::any_of(dynOffset.begin(), dynOffset.end(), [](const SymbolicScalar& scalar) {
-            return !scalar.ConcreteValid() || scalar.Concrete() != 0;
-        });
-    } else {
-        dstHasOffset = std::any_of(statOffset.begin(), statOffset.end(), [](int64_t value) { return value != 0; });
-    }
-    if (!dstHasOffset) {
-        return SUCCESS;
-    }
-    // 源偏移携带判定：非立即零（参数、符号或非零立即数）均视为携带
+    // 源偏移携带判定：非立即零（参数、符号或非零立即数）均视为携带；该组合无法安全折叠，终止本次 Pass。
     bool srcHasOffset = false;
     for (const auto& offset : copyAttr->GetFromOffset()) {
         if (!offset.IsSpecified() || !offset.GetSpecifiedValue().IsImmediate() ||
@@ -1344,12 +1342,36 @@ Status ReplaceTensor::FoldL0C2UBCopyOffset(Operation* op)
     if (srcHasOffset) {
         APASS_LOG_ERROR_F(Elements::Operation,
                           "ReplaceTensor::FoldL0C2UBCopyOffset: copy op %d carries non-zero fromOffset while its "
-                          "assemble consumer op %d carries toOffset, cannot fold offsets.",
+                          "assemble consumer op %d carries toOffset, cannot fold offsets; aborting pass.",
                           copyOp->GetOpMagic(), op->GetOpMagic());
         return FAILED;
     }
+    // Even a zero Assemble offset must be materialized as an INSERT before
+    // removing the Assemble; otherwise the original EXTRACT copy would not
+    // have the same destination semantics.
     copyAttr->SetToOffset(OpImmediate::Specified(TensorOffset(assembleIn->GetOffset(), assembleIn->GetDynOffset())));
     copyOp->SetAttribute(OpAttributeKey::localCopyLocalMode, static_cast<int64_t>(Matrix::CopyMode::INSERT));
+
+    // The copy now writes directly into the Assemble destination.  Bypass the
+    // obsolete Assemble node so its consumers use the copy result directly.
+    // Do not erase from the operation list while ReplaceTensor is traversing
+    // it; mark the op deleted and let RunOnFunction perform the cleanup.
+    auto* function = op->BelongTo();
+    if (function == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "ReplaceTensor::FoldL0C2UBCopyOffset: assemble op %d has no owner function.",
+                          op->GetOpMagic());
+        return FAILED;
+    }
+    // Keep the Assemble output tensor (which may be an outcast/shared raw
+    // tensor).  Replacing consumers with the input view would lose that raw
+    // tensor identity and can make the direct copy write to the wrong view.
+    function->UpdateOperandBeforeRemoveOp(*op, true);
+    op->SetAsDeleted();
+    APASS_LOG_INFO_F(Elements::Operation,
+                     "ReplaceTensor::FoldL0C2UBCopyOffset: remove folded assemble op %d, copy op %d writes "
+                     "directly to destination.",
+                     op->GetOpMagic(), copyOp->GetOpMagic());
     return SUCCESS;
 }
 

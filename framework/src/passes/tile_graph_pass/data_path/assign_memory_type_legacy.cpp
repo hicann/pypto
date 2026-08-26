@@ -2035,8 +2035,12 @@ bool AssignMemoryType::CheckUBTileShape(const LogicalTensorPtr& output)
 bool AssignMemoryType::CheckConsumerViewShapeMultiple(const LogicalTensorPtr& output, const LogicalTensorPtr& input)
 {
     for (auto& consumerOp : output->GetConsumers()) {
-        if (consumerOp->GetOpcode() == Opcode::OP_VIEW &&
-            !IsDimMultiple(consumerOp->GetOOperands().front()->GetShape(), input->GetShape())) {
+        if (consumerOp->GetOpcode() != Opcode::OP_VIEW) {
+            continue;
+        }
+        // VIEW is defined as a single-input/single-output operation.
+        ASSERT(consumerOp->GetOOperands().size() == 1) << "VIEW should have 1 output";
+        if (!IsDimMultiple(consumerOp->GetOOperands().front()->GetShape(), input->GetShape())) {
             return false;
         }
     }
@@ -2265,8 +2269,10 @@ enum class TraverseDirection { PRODUCER, CONSUMER };
 
 // 沿 direction 方向穿透 TRANSPARENT_OPS，限定在 boundType 层级内；
 // 若透明 op 的对侧 tensor 离开 boundType，把当前 t 标记为端点（层级边界，不再继续）
+// registerCopyOps 出参收集穿透路径上遇到的 OP_REGISTER_COPY（两侧都收集），调用方传 nullptr 可跳过
 std::vector<LogicalTensorPtr> CollectRealEndpoints(const LogicalTensorPtr& tensor, MemoryType boundType,
-                                                   TraverseDirection direction)
+                                                   TraverseDirection direction,
+                                                   std::vector<Operation*>* registerCopyOps = nullptr)
 {
     if (tensor == nullptr) {
         return {};
@@ -2286,6 +2292,11 @@ std::vector<LogicalTensorPtr> CollectRealEndpoints(const LogicalTensorPtr& tenso
             if (TRANSPARENT_OPS.count(op->GetOpcode()) == 0) {
                 isEndpoint = true;
                 continue;
+            }
+            if (registerCopyOps != nullptr && op->GetOpcode() == Opcode::OP_REGISTER_COPY) {
+                if (std::find(registerCopyOps->begin(), registerCopyOps->end(), op) == registerCopyOps->end()) {
+                    registerCopyOps->push_back(op);
+                }
             }
             auto& nextTensors = (direction == TraverseDirection::PRODUCER) ? op->GetIOperands() : op->GetOOperands();
             for (auto& nextT : nextTensors) {
@@ -2347,8 +2358,11 @@ void AssignMemoryType::ProcessShapeTransportFallback(Function& function)
         }
         // 收集穿透端点：iOperand 向前找真实生产者输出，oOperand 向后找真实消费者输入；
         // 穿透限定在各自层级内(fromType/toType)，跨层级边界即停
-        auto prodOutputs = CollectRealEndpoints(iOperand, fromType, TraverseDirection::PRODUCER);
-        auto consInputs = CollectRealEndpoints(oOperand, toType, TraverseDirection::CONSUMER);
+        // 同时收集穿透路径上的 REGISTER_COPY（两侧都收集），用于后续 tileshape 整数倍校验
+        std::vector<Operation*> prodRegisterCopies;
+        std::vector<Operation*> consRegisterCopies;
+        auto prodOutputs = CollectRealEndpoints(iOperand, fromType, TraverseDirection::PRODUCER, &prodRegisterCopies);
+        auto consInputs = CollectRealEndpoints(oOperand, toType, TraverseDirection::CONSUMER, &consRegisterCopies);
         // 所有端点对 IsAllowedTransport 全成立才放行；端点集为空或任一不成立则拦截。
         // 空端点集（如函数出口/无 producer 的 tensor）无法证明兼容，保守拦截回退 DDR
         Shape firstBadProdShape;
@@ -2367,15 +2381,61 @@ void AssignMemoryType::ProcessShapeTransportFallback(Function& function)
                 break;
             }
         }
+        // 额外条件：穿透路径上有 REGISTER_COPY 时，其输入输出 tensor shape 必须是端点对中
+        // 逐维较小 shape 的整数倍，否则拦截回退 DDR（避免搬运粒度不匹配导致数据错位）
+        Shape firstBadRcShape;
+        if (allowed && (!prodRegisterCopies.empty() || !consRegisterCopies.empty())) {
+            for (const auto& prodOut : prodOutputs) {
+                for (const auto& consIn : consInputs) {
+                    const auto& prodShape = prodOut->GetShape();
+                    const auto& consShape = consIn->GetShape();
+                    Shape smallerShape;
+                    smallerShape.reserve(prodShape.size());
+                    for (size_t i = 0; i < prodShape.size(); i++) {
+                        smallerShape.push_back(std::min(prodShape[i], consShape[i]));
+                    }
+                    auto checkRegisterCopies = [&](std::vector<Operation*>& rcOps) -> bool {
+                        std::sort(rcOps.begin(), rcOps.end(), [](const auto* lhs, const auto* rhs) {
+                            return lhs->GetOpMagic() < rhs->GetOpMagic();
+                        });
+                        for (auto* rcOp : rcOps) {
+                            // REGISTER_COPY is defined as a single-input/single-output copy operation.
+                            ASSERT(rcOp->GetIOperands().size() == 1) << "REGISTER_COPY should have 1 input";
+                            ASSERT(rcOp->GetOOperands().size() == 1) << "REGISTER_COPY should have 1 output";
+                            const auto& rcShape = rcOp->GetIOperands().front()->GetShape();
+                            if (rcShape.size() != smallerShape.size()) {
+                                firstBadRcShape = rcShape;
+                                return false;
+                            }
+                            if (!IsDimMultiple(rcShape, smallerShape)) {
+                                firstBadRcShape = rcShape;
+                                return false;
+                            }
+                        }
+                        return true;
+                    };
+                    if (!checkRegisterCopies(prodRegisterCopies) || !checkRegisterCopies(consRegisterCopies)) {
+                        allowed = false;
+                        firstBadProdShape = prodShape;
+                        firstBadConsShape = consShape;
+                        break;
+                    }
+                }
+                if (!allowed) {
+                    break;
+                }
+            }
+        }
         if (allowed) {
             continue;
         }
         // 拦截：view→tobe=DDR; assemble→origin=DDR+DowngradeConsumerRequirements
         APASS_LOG_DEBUG_F(Elements::Tensor,
-                          "ShapeTransportFallback intercepts %s[%d] on-chip path %s->%s to DDR: prodOut=%s consIn=%s.",
+                          "ShapeTransportFallback intercepts %s[%d] on-chip path %s->%s to DDR: prodOut=%s consIn=%s "
+                          "rcShape=%s.",
                           op.GetOpcodeStr().c_str(), op.GetOpMagic(), BriefMemoryTypeToString(fromType).c_str(),
                           BriefMemoryTypeToString(toType).c_str(), IntVecToStr(firstBadProdShape).c_str(),
-                          IntVecToStr(firstBadConsShape).c_str());
+                          IntVecToStr(firstBadConsShape).c_str(), IntVecToStr(firstBadRcShape).c_str());
         if (opcode == Opcode::OP_VIEW) {
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
         } else {
