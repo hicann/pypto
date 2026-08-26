@@ -139,16 +139,18 @@ class VerifyRes:
     @staticmethod
     def match_loop_info(tensor_loop_dict, verify_loop_dict):
         """
-        match loop info dict
+        只比较原始 loop_idx_*。
+        interpreter LOOP_INFO 常带 s_idx/b_idx；dump 可能带 CF 余数循环名。
         """
         if not tensor_loop_dict or not verify_loop_dict:
             return False
 
-        if set(tensor_loop_dict.keys()) != set(verify_loop_dict.keys()):
+        verify_loops = {name: value for name, value in verify_loop_dict.items() if "loop_idx_" in name}
+        if not verify_loops:
             return False
 
-        for name, value in tensor_loop_dict.items():
-            if verify_loop_dict.get(name) != value:
+        for name, value in verify_loops.items():
+            if tensor_loop_dict.get(name) != value:
                 return False
 
         return True

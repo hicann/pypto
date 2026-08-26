@@ -389,32 +389,64 @@ public:
     }
 
 private:
+    // CF unroll 会生成 loop_idx_s2_idx_0/1/2；verify LOOP_INFO 只记录原始循环名。
+    static bool IsRemainderUnrollLoopName(const std::string& name, const DevAscendProgram* devProg)
+    {
+        const auto pos = name.find_last_of('_');
+        if (pos == std::string::npos || pos + 1 >= name.size()) {
+            return false;
+        }
+        for (size_t i = pos + 1; i < name.size(); ++i) {
+            if (name[i] < '0' || name[i] > '9') {
+                return false;
+            }
+        }
+        const std::string prefix = name.substr(0, pos);
+        for (const auto& symbol : devProg->symbolTable) {
+            std::string other(symbol.name.begin(), symbol.name.end());
+            other = other.c_str();
+            if (other == prefix) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     void FillLoopVarInfo(DumpTensorInfo& dumpTensorInfo, DevAscendFunctionDuppedData* dupData)
     {
         dumpTensorInfo.loopVarCount = 0;
-        if (devProg_ == nullptr) {
+        if (devProg_ == nullptr || dupData == nullptr) {
             return;
         }
-        auto exprList = dupData->GetExpressionAddr();
-        const auto& symbolTable = devProg_->symbolTable;
+        const uint64_t* exprList = dupData->GetExpressionAddr();
+        const uint64_t exprSize = dupData->GetExpressionSize();
+        if (exprList == nullptr || exprSize <= 1) {
+            return;
+        }
 
-        for (const auto& symbol : symbolTable) {
+        for (const auto& symbol : devProg_->symbolTable) {
             if (dumpTensorInfo.loopVarCount >= 8) {
                 break;
             }
 
             std::string name(symbol.name.begin(), symbol.name.end());
-            // 检测循环变量：包含loop_idx前缀
-            if (name.find("loop_idx_") != std::string::npos) {
-                uint64_t exprListIdx = symbol.index + 1;
-                auto& loopVarInfo = dumpTensorInfo.loopVarInfos[dumpTensorInfo.loopVarCount];
-                memset_s(loopVarInfo.name, sizeof(loopVarInfo.name), 0, sizeof(loopVarInfo.name));
-                strncpy_s(loopVarInfo.name, sizeof(loopVarInfo.name), name.c_str(), sizeof(loopVarInfo.name) - 1);
-                loopVarInfo.exprIdx = static_cast<int32_t>(exprListIdx);
-                loopVarInfo.value = static_cast<int32_t>(exprList[exprListIdx]);
-
-                dumpTensorInfo.loopVarCount++;
+            name = name.c_str();
+            if (name.find("loop_idx_") == std::string::npos) {
+                continue;
             }
+            if (IsRemainderUnrollLoopName(name, devProg_)) {
+                continue;
+            }
+            const uint64_t exprListIdx = symbol.index + 1;
+            if (exprListIdx >= exprSize) {
+                continue;
+            }
+            auto& loopVarInfo = dumpTensorInfo.loopVarInfos[dumpTensorInfo.loopVarCount];
+            memset_s(loopVarInfo.name, sizeof(loopVarInfo.name), 0, sizeof(loopVarInfo.name));
+            strncpy_s(loopVarInfo.name, sizeof(loopVarInfo.name), name.c_str(), sizeof(loopVarInfo.name) - 1);
+            loopVarInfo.exprIdx = static_cast<int32_t>(exprListIdx);
+            loopVarInfo.value = static_cast<int32_t>(exprList[exprListIdx]);
+            dumpTensorInfo.loopVarCount++;
         }
     }
 
