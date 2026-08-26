@@ -165,7 +165,8 @@ uint64_t CalcGeneralMetadataSlotWorkspace(DevAscendProgram* devProg)
     uint64_t itemPoolMemSize = DeviceWorkspaceAllocator::CalcMetadataItemPoolMemSize(devProg);
     uint64_t vectorMemSize = DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(devProg);
     uint64_t slotAllocatorMemSize = DeviceWorkspaceAllocator::CalcMetadataSlotAllocatorMemSize(devProg);
-    MACHINE_LOGI("[workspaceSize] ItemPoolMemSize is: %lu, vectorMemSize is: %lu, slotAllocatorMemSize is %lu.,",
+    MACHINE_LOGI("[workspaceSize] ItemPoolMemSize is: %lu bytes, vectorMemSize is: %lu bytes, slotAllocatorMemSize is "
+                 "%lu bytes.,",
                  itemPoolMemSize, vectorMemSize, slotAllocatorMemSize);
     static constexpr uint64_t AICPU_SLOT_STATIC_MEMSIZE = 2 * MEBI;
     generalMetadataSlotSize = itemPoolMemSize + vectorMemSize + slotAllocatorMemSize + AICPU_SLOT_STATIC_MEMSIZE;
@@ -201,7 +202,7 @@ uint64_t CalcGeneralMetadataSlabWorkspace(DevAscendProgram* devProg)
         MACHINE_LOGI("[workspaceSize] RequiredSlabNum[%d] is %u.", i, requiredSlabNum);
         generalMetadataSlabSize += static_cast<uint64_t>(requiredSlabNum) * slabSize;
     }
-    MACHINE_LOGI("[workspaceSize] General->MetadataSlabSize is %lu.",
+    MACHINE_LOGI("[workspaceSize] General->MetadataSlabSize is %lu bytes.",
                  static_cast<unsigned long>(generalMetadataSlabSize));
     generalMetadataSlabSize = (generalMetadataSlabSize < GENERAL_METADATA_SIZE_MIN) ? GENERAL_METADATA_SIZE_MIN :
                                                                                       generalMetadataSlabSize;
@@ -495,9 +496,9 @@ static void ProcessDevFunctionOutcasts(WorkspaceDesc::WorkspacePerRootFunctionDe
     rootMem.rootTotalExclusiveOutcastRawMem = devFunc->exclusiveOutcastWsMemoryRequirement;
     rootMem.leafPerCoreSpilledMem = static_cast<uint64_t>(devFunc->stackWorkSpaceSize);
     maxExclusiveOutcastMem = std::max(maxExclusiveOutcastMem, maxStaticMemReq);
-    MACHINE_LOGD(
-        "[workspaceSize] RootInnerTensorWsMemoryRequirement is %lu, exclusiveOutcastWsMemoryRequirement is %lu.",
-        devFunc->rootInnerTensorWsMemoryRequirement, devFunc->exclusiveOutcastWsMemoryRequirement);
+    MACHINE_LOGD("[workspaceSize] RootInnerTensorWsMemoryRequirement is %lu bytes, exclusiveOutcastWsMemoryRequirement "
+                 "is %lu bytes.",
+                 devFunc->rootInnerTensorWsMemoryRequirement, devFunc->exclusiveOutcastWsMemoryRequirement);
 }
 
 static std::pair<uint64_t, SymbolicScalar> ComputeAssembleOutcastMem(const std::vector<FlexSlotInfo>& slots)

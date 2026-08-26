@@ -58,12 +58,16 @@ inline bool CheckOffsetAndValidShapeInRawShape(uint64_t offset[DEV_SHAPE_DIM_MAX
             return clamped;
         }
         if (offset[i] > rawShape[i]) {
-            DEV_WARN("#ctrl.stitch.bound: action=offset_out_of_range, offset > rawShape");
+            DEV_WARN("#ctrl.stitch.bound: action=offset_out_of_range, offset[%d]=%lu > rawShape[%d]=%lu", i,
+                     static_cast<unsigned long>(offset[i]), i, static_cast<unsigned long>(rawShape[i]));
             offset[i] = rawShape[i];
             validShape[i] = 0;
             clamped = true;
         } else if (validShape[i] > rawShape[i] - offset[i]) {
-            DEV_WARN("#ctrl.stitch.bound: action=validShape_out_of_range, offset + validShape > rawShape");
+            DEV_WARN("#ctrl.stitch.bound: action=validShape_out_of_range, offset[%d]=%lu + validShape[%d]=%lu > "
+                     "rawShape[%d]=%lu",
+                     i, static_cast<unsigned long>(offset[i]), i, static_cast<unsigned long>(validShape[i]), i,
+                     static_cast<unsigned long>(rawShape[i]));
             validShape[i] = rawShape[i] - offset[i];
             clamped = true;
         }

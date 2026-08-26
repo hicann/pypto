@@ -263,7 +263,7 @@ void LogManager::ConstructMessage(const LogLevel logLevel, const char* fmt, va_l
     ConstructMsgHeader(logLevel, logMsg);
     int ret = vsnprintf_truncated_s(logMsg.msg + logMsg.length, MAX_MSG_LENGTH - logMsg.length, fmt, list);
     if (ret < 0) {
-        std::cerr << "Constrcut message failed: " << ret << std::endl;
+        std::cerr << "Construct message failed: " << ret << std::endl;
         return;
     }
     logMsg.length += static_cast<size_t>(ret);
@@ -276,7 +276,7 @@ void LogManager::ConstructMsgHeader(const LogLevel logLevel, LogMsg& logMsg)
     int ret = snprintf_s(logMsg.msg, MAX_MSG_LENGTH, MAX_MSG_LENGTH - 1, "%s %s(%lu):%s ",
                          GetLogLevelStr(logLevel).c_str(), kModuleName, GetTid(), GetCurrentTime().c_str());
     if (ret < 0) {
-        std::cerr << "Construct log msg hader failed: " << ret << std::endl;
+        std::cerr << "Construct log msg header failed: " << ret << std::endl;
         return;
     }
     logMsg.length = static_cast<size_t>(ret);

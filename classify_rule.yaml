@@ -20,6 +20,7 @@ pypto@pypto:
       - framework/src/cost_model/simulation_pv/
       - framework/src/cann_host_runtime/
       - framework/src/adapter/
+      - framework/src/utils/host_log/
   llt:
     ut_check: true
     st_check: false

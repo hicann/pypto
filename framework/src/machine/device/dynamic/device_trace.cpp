@@ -328,7 +328,7 @@ void DeviceTrace::SubmitTraceMsg(const std::string& traceMsg)
 {
     auto pyptoHandle = CreateTraceHandle();
     if (pyptoHandle < 0 || traceMsg.empty()) {
-        DEV_WARN("pypto Handle is null or traceMsg is empty, cann't to submit");
+        DEV_WARN("pypto Handle is null or traceMsg is empty, cannot submit");
         return;
     }
     uint32_t msgSize = static_cast<uint32_t>(traceMsg.size());

@@ -314,7 +314,7 @@ void EmitDynloopCondTree(ControlFlowEmitCtx& ctx, const std::shared_ptr<DynloopF
         EmitDynloopCondTree(ctx, node->branchNodeList[0], condIndent);
         return;
     }
-    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, false) << "Both conds is nullptr!";
+    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, false) << "Both conds are nullptr!";
 }
 
 void EmitDynamicLoopOpen(ControlFlowEmitCtx& ctx, Function* func, const std::shared_ptr<DynloopFunctionAttribute>& attr,

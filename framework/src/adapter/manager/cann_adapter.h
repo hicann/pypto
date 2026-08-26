@@ -41,7 +41,7 @@ public:
         if (!libHandler_.OpenHandler(libName)) {
             return false;
         }
-        ADAPTER_LOGD("Library[%s] has been load.", libName.c_str());
+        ADAPTER_LOGD("Library[%s] has been loaded.", libName.c_str());
         InitFunctions(funcNameMap);
         isInit_ = true;
         return true;
@@ -61,10 +61,10 @@ private:
         for (const std::pair<const EnumType, std::string>& item : funcNameMap) {
             void* func = libHandler_.GetFunction(item.second);
             if (func == nullptr) {
-                ADAPTER_LOGI("Fail to load function[%s]", item.second.c_str());
+                ADAPTER_LOGI("Failed to load function[%s]", item.second.c_str());
                 continue;
             }
-            ADAPTER_LOGD("Function[%s] has been load successfully.", item.second.c_str());
+            ADAPTER_LOGD("Function[%s] has been loaded successfully.", item.second.c_str());
             functions_[static_cast<size_t>(item.first)] = func;
         }
     }

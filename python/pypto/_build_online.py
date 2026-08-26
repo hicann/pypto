@@ -312,7 +312,7 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
         if not src_dir.exists():
             # 当需要在线编译 pypto_impl 但是 whl 包内没有相关源码时, 不做在线编译.
             # 靠外部 import pypto_impl 的报错来暴露原始问题. 此处不截取该异常, 避免对原始问题的掩盖.
-            _log.warning("Can't get pypto_impl, but it's src empty.")
+            _log.warning("Can't get pypto_impl, but its src is empty.")
             return
 
         # 跨用户协同: 检查是否有人正在往 pkg_dir 编译, 若有则等待共享结果

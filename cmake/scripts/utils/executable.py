@@ -129,7 +129,7 @@ class Exec:
             else:
                 break  # 排序后, 有耗时预估的会排在前面
         normal_cnt = len(case_name_list) - ordered_cnt
-        logging.info("Determine TestCase Order, OrderdCase(%s), NormalCase(%s)", ordered_cnt, normal_cnt)
+        logging.info("Determine TestCase Order, OrderedCase(%s), NormalCase(%s)", ordered_cnt, normal_cnt)
         return ordered_cnt, desc_list, desc_dict
 
     def run(

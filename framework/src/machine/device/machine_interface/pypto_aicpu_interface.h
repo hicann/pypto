@@ -33,7 +33,7 @@ public:
     {
         std::lock_guard<std::mutex> lock(funcLock_);
         if (len < minSoLen || firstCreatSo_) {
-            DEV_WARN("Aicpu so len less than 1, don't to copy");
+            DEV_WARN("Aicpu so len less than 1, no need to copy");
             return true;
         }
         if (pyptoServerSoName_.empty()) {
@@ -43,7 +43,7 @@ public:
         std::ofstream file(pyptoServerSoName_, std::ios::out | std::ios::binary);
         DEV_DEBUG("Begin to create server.so");
         if (!file) {
-            DEV_ERROR(DevCommonErr::FILE_ERROR, "#sche.task.pre.init.resource: Coundn't create file [%s]",
+            DEV_ERROR(DevCommonErr::FILE_ERROR, "#sche.task.pre.init.resource: Couldn't create file [%s]",
                       pyptoServerSoName_.c_str());
             return false;
         }

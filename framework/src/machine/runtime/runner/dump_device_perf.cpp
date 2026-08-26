@@ -146,7 +146,7 @@ void DumpAicoreTaskExectInfo(const DeviceArgs& args, const std::vector<void*>& p
     }
     std::string jsonFilePath = npu::tile_fwk::config::LogTopFolder() + "/tilefwk_L1_prof_data.json";
     if (!SaveFile(jsonFilePath, rootTaskStatus.dump(DUMP_LEVEL_FOUR))) {
-        MACHINE_LOGW("Contrust custom op json failed");
+        MACHINE_LOGW("Construct custom op json failed");
         return;
     }
     MACHINE_LOGD("tilefwk_L1_prof_data have saved in: %s", jsonFilePath.c_str());
@@ -349,7 +349,7 @@ void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uin
     std::string aicpuPerfilePath = config::LogTopFolder() + "/machine_trace_perf_data_" +
                                    std::to_string(g_last_round_num) + ".json";
     if (!SaveFile(aicpuPerfilePath, aicpuPrefArray.dump(DUMP_LEVEL_FOUR))) {
-        MACHINE_LOGW("Contrust custom op json failed");
+        MACHINE_LOGW("Construct custom op json failed");
         return;
     }
 

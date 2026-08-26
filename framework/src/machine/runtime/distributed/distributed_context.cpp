@@ -65,7 +65,7 @@ void DistributedContext::FillCommCtxAttr<npu::tile_fwk::HcclCombinOpParamA5>(
     ctxHost->statusIndex = hcclParamhost->rankNum;
     ctxHost->debugIndex = hcclParamhost->rankNum * 2;
     ASSERT(DistributedErrorCode::CONTEXT_CONFIGURE_FAILED, hcclParamhost->winSize > WIN_EXP_SIZE)
-        << "winSize: " << hcclParamhost->winSize << " need greater than WIN_EXP_SIZE: " << WIN_EXP_SIZE;
+        << "winSize: " << hcclParamhost->winSize << " needs to be greater than WIN_EXP_SIZE: " << WIN_EXP_SIZE;
     ctxHost->winDataSize = hcclParamhost->winSize - WIN_EXP_SIZE;
     ctxHost->winStatusSize = WIN_EXP_SIZE;
     ctxHost->winDebugSize = hcclParamhost->winSize;

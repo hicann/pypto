@@ -47,7 +47,7 @@ int BundleLaunchAicpu(RtAicpuArgsEx& rtArgs, DevAscendProgram* devProg)
     const int nrAicpu = static_cast<int>(devProg->devArgs.nrAicpu);
     const bool launchSchedSameCluster = static_cast<int>(devProg->devArgs.launchSchedSameCluster);
     if (launchSchedSameCluster) {
-        MACHINE_LOGW("When available AICPUs are insufficient, execute export PYPTO_LAUNCH_SCHED_SAME_CLUSTER=false"
+        MACHINE_LOGW("When available AICPUs are insufficient, execute export PYPTO_LAUNCH_SCHED_SAME_CLUSTER=false "
                      "to disable the constraint that forces scheduling threads onto the same cluster.");
     }
     args->kArgs.parameter.ctrlBlockNum = static_cast<int>(devProg->ctrlBlockDim);

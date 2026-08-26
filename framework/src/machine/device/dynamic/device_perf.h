@@ -199,7 +199,7 @@ struct PerfEvtMgr {
             buf[i] = c;
         }
         buf[count] = '\0';
-        DEV_ERROR(0, "%s.", buf);
+        DEV_ERROR(MachineError::UNKNOWN, "%s", buf);
     }
 
     void Dump()

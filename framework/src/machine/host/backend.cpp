@@ -523,7 +523,7 @@ static void SetDyndevProgBinary(Function* function, bool disableCtrlFlowCache,
     if (config::GetPassDefaultConfig(npu::tile_fwk::KEY_PRINT_PROGRAM, false)) {
         SaveFile(config::LogTopFolder() + "/program.tifwkbin", dynAttrPtr->devProgBinary);
     }
-    MACHINE_LOGI("Dev prog binary size is:%zu\n", dynAttrPtr->devProgBinary.size());
+    MACHINE_LOGI("Dev prog binary size is:%zu bytes\n", dynAttrPtr->devProgBinary.size());
 }
 
 std::vector<SymbolicExpressionTable*> GetAllExpressionTable(
@@ -664,7 +664,7 @@ static void OverCallOpMaxNum(Function* devRoot, DevAscendFunction* funcBin)
     uint32_t CallOpmaxSize = MAX_STITCH_LEAFFUNC_NUM;
     auto funcMagicName = devRoot->GetRawName() + "_" + std::to_string(devRoot->GetFuncMagic());
     MACHINE_LOGE(DevCommonErr::PARAM_CHECK_FAILED,
-                 "the loop function operation: %s size is %u hitting the maxinum single-loop-operation limit:%u.\n",
+                 "the loop function operation: %s size is %u hitting the maximum single-loop-operation limit:%u.\n",
                  funcMagicName.c_str(), CallOpSize, CallOpmaxSize);
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, CallOpSize <= CallOpmaxSize)
         << " loopFunction: " << funcMagicName << " CallOpSize: " << CallOpSize << " CallOpmaxSize: " << CallOpmaxSize;
@@ -677,7 +677,7 @@ static void CompileControlFlow(const std::string& aicpuDirPath, const std::strin
         return;
     }
     std::string controlFlowCompilepath = aicpuDirPath + "/" + funcName + "/aicpu";
-    MACHINE_LOGD("Dumpath is %s, functionName %s, path is %s", aicpuDirPath.c_str(), funcName.c_str(),
+    MACHINE_LOGD("Dump path is %s, functionName %s, path is %s", aicpuDirPath.c_str(), funcName.c_str(),
                  controlFlowCompilepath.c_str());
     if (!CreateDir(controlFlowCompilepath, true)) {
         MACHINE_LOGE(DevCommonErr::FILE_ERROR, "Creat AicpuCompile dir not success\n");
@@ -1057,7 +1057,7 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
 #endif
 
     attr->kernelBinary = ReadFile(kernelPath);
-    MACHINE_LOGD("KernelBinary size[%zu].", attr->kernelBinary.size());
+    MACHINE_LOGD("KernelBinary size[%zu] bytes.", attr->kernelBinary.size());
 
     RunEncodeStage(function, attr, linker, encodeDevAscendFunctionParam, valDependTensorMeta.disableCtrlFlowCache);
 }

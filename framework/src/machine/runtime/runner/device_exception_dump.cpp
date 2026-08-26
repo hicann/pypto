@@ -137,7 +137,7 @@ void GetTensorInfo(uint32_t inputSize, DevTensorData* tensorData, AdxExceptionDu
     auto l2Offset = GetRuntimeL2Offset();
     if (inputSize > MAX_TENSOR_NUM) {
         inputSize = MAX_TENSOR_NUM;
-        MACHINE_LOGW("Current funciton input is larger than %d", MAX_TENSOR_NUM);
+        MACHINE_LOGW("Current function input is larger than %d", MAX_TENSOR_NUM);
     }
     for (uint32_t i = 0; i < inputSize; i++) {
         if (tensorData[i].address == 0) {
@@ -186,7 +186,7 @@ int32_t GetDeviceExceptionDumpInfo(RtAicoreExDetailInfo& aicoreExceptionInfo, Ad
     auto aicoreArgsize = sizeof(void*) * MAX_AICPU_ARG_NUM;
     // Check it maybe pto
     if (argsSize != aicoreArgsize) {
-        MACHINE_LOGI("GetDeviceExceptionDumpInfo failed: argsize not from pto info");
+        MACHINE_LOGW("GetDeviceExceptionDumpInfo failed: argsize not from pto info");
         return 0;
     }
 

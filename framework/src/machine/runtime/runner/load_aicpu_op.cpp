@@ -130,7 +130,7 @@ int LoadAicpuOp::LaunchAicpuServerInit(int64_t* devArgsAddr)
     launchDesc.blockDim = 1U;
     auto ret = LaunchBuiltInOpWithHostArgs(launchDesc, "PyptoInit");
     if (ret != 0) {
-        MACHINE_LOGE(0, "kernel_launch init is failed");
+        MACHINE_LOGE(DevCommonErr::INIT_FAILED, "kernel_launch init is failed");
         return ret;
     }
     return RuntimeStreamSynchronize(aicpuStream);

@@ -55,7 +55,7 @@ TypePtr DeduceBlockCreateTileType([[maybe_unused]] const std::vector<ExprPtr>& a
 {
     // make_tile signature: (shape)
     // TileType requires static compile-time constant shapes
-    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 argument, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     // Extract dtype attribute
     DataType dtype = GetOpKwarg<DataType>(kwargs, "dtype");

@@ -257,7 +257,7 @@ public:
         }
 
         AfterAllocSuccess(cache, obj, objSize);
-        DEV_VERBOSE_DEBUG("[SlabWsAllocator]Alloc sucess obj = %p cacheType = %u size = %u .\n", obj, cacheType,
+        DEV_VERBOSE_DEBUG("[SlabWsAllocator]Alloc success obj = %p cacheType = %u size = %u .\n", obj, cacheType,
                           objSize);
         return static_cast<uint8_t*>(obj) + SLAB_OBJ_META_SIZE;
     }
@@ -333,7 +333,7 @@ public:
             {
                 void* temp = info.heads[i];
                 while (temp) {
-                    DEV_VERBOSE_DEBUG("[SlabWsAllocator]recycle sucess obj = %p cacheType = %d size = %u .\n", temp, i,
+                    DEV_VERBOSE_DEBUG("[SlabWsAllocator]recycle success obj = %p cacheType = %d size = %u .\n", temp, i,
                                       cache.objSize);
                     temp = *static_cast<void**>(temp);
                 }

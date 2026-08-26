@@ -564,7 +564,7 @@ class BuildParam(CMakeParam):
             _p = Path(self.clang_install_path, _b)
             if _p.exists():
                 return True, self._cfg_require(opt=_opt, tv=str(_p))
-            logging.error("Clang Toolchain %s not exist.", _p)
+            logging.error("Clang Toolchain %s does not exist.", _p)
             return False, ""
 
         def _gen_clang_cmd() -> Tuple[bool, str]:
@@ -1550,7 +1550,7 @@ class BuildCtrl(CMakeParam):
             try:
                 _, duration = self.run_build_cmd(cmd=c, update_env=update_env)
             except subprocess.CalledProcessError as e:
-                logging.info("CMake Build(%s/%s) failed, ERROR CODE: %s", i, len(cmd_list), e.returncode)
+                logging.error("CMake Build(%s/%s) failed, ERROR CODE: %s", i, len(cmd_list), e.returncode)
                 raise e
             logging.info("CMake Build(%s/%s) success, %s", i, len(cmd_list), duration)
 
@@ -1898,7 +1898,7 @@ class BuildCtrl(CMakeParam):
         whl_files = [Path(f) for f in whl_glob]
         whl_file = whl_files[0] if whl_files else None
         if whl_file:
-            logging.info("Success find match %s from %s", whl_file, path)
+            logging.info("Successfully found match %s from %s", whl_file, path)
         else:
             logging.error("Failed to find match %s whl from %s, pattern=%s", name, path, pattern)
         return whl_file

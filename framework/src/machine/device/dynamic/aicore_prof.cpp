@@ -70,12 +70,12 @@ int32_t AiCoreProf::DevProfInit(uint32_t type, void* data, uint32_t len)
 void AiCoreProf::RegDevProf()
 {
     if (MsprofRegisterCallback == nullptr) {
-        DEV_DEBUG("MsprofRegister is not supproted");
+        DEV_DEBUG("MsprofRegister is not supported");
         return;
     }
     int ret = MsprofRegisterCallback(AICPU, DevProfInit);
     if (ret != 0) {
-        DEV_WARN("Pypto Msporf reg not success");
+        DEV_WARN("Pypto Msprof reg not success");
     }
 }
 

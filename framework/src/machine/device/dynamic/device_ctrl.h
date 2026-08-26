@@ -202,7 +202,7 @@ public:
             if (!firstInit) {
                 devProg->ResetRerun(); // Clean the dirty data of cell match table from the last launch
             }
-            DEV_INFO("ControlFlowCache: cache have no devtask , ignore it");
+            DEV_INFO("ControlFlowCache: cache has no devtask, ignore it");
             return;
         }
 
@@ -283,7 +283,7 @@ public:
 
         RuntimeDataRingBufferHead* ringBufferHead = devProg->GetRuntimeDataList();
 
-        DEV_INFO("AllocatePrepare begin runtimedata: %lu, %lu %lu", ringBufferHead->GetIndexFinished(),
+        DEV_INFO("AllocatePrepare begin runtime data: %lu, %lu %lu", ringBufferHead->GetIndexFinished(),
                  ringBufferHead->GetIndexPending(), ringBufferHead->GetRuntimeDataCount());
         DevStartArgs* devStartArgs = reinterpret_cast<DevStartArgs*>(ringBufferHead->AllocatePrepare());
         DEV_INFO("AllocatePrepare end");

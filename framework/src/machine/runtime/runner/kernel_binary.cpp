@@ -446,7 +446,7 @@ void KernelBinary::InitAiCpuSoBin(DeviceArgs& devArgs)
     }
     if (buffer.empty()) {
         MACHINE_LOGE(DevCommonErr::FILE_ERROR,
-                     "Read bin form tilefwk_backend_server.so failed, please check the so[%s]", source.c_str());
+                     "Read bin from tilefwk_backend_server.so failed, please check the so[%s]", source.c_str());
         return;
     }
     void* devBufferPtr = CopyDataToDevice(buffer.data(), buffer.size());

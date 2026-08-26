@@ -100,7 +100,7 @@ void PmuCommon::InitPmuEventType(const ArchInfo& archInfo, std::vector<int64_t>&
     // 获取pmu事件类型环境变量获取方式
     std::string eventTypeStr = GetEnvVar("PYPTO_PROF_PMU_EVENT_TYPE");
     if (eventTypeStr.empty()) {
-        MACHINE_LOGW("Dont support PYPTO_PROF_PMU_EVENT_TYPE env, use default pmu event type PIPE_UTILIZATION.\n");
+        MACHINE_LOGW("Don't support PYPTO_PROF_PMU_EVENT_TYPE env, use default pmu event type PIPE_UTILIZATION.\n");
         eventTypeStr = "2";
     }
     int32_t profPmuType = PIPE_UTILIZATION;

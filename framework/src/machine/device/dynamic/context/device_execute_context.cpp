@@ -70,7 +70,7 @@ int DeviceExecuteContext::RunInit(DevStartArgs* startArgs, PushTaskEntry tPushTa
     workspace.InitMetadataSlabAllocator();
 
     PerfEnd(PERF_EVT_CONTROL_FLOW_INIT);
-    DEV_INFO("Image size is %lu.", devProg->GetSize());
+    DEV_INFO("Image size is %lu bytes.", devProg->GetSize());
     return DEVICE_MACHINE_OK;
 }
 
@@ -485,7 +485,7 @@ void* DeviceExecuteContext::CallRootFunctionAlloc(uint64_t rootKey)
 {
     int ret = DEVICE_MACHINE_OK;
     DevAscendFunction* devRoot = devProg->GetFunction(rootKey);
-    DEV_DEBUG("Slloc one func %lu %p %s.", rootKey, devRoot, devRoot->GetRawName());
+    DEV_DEBUG("Alloc one func %lu %p %s.", rootKey, devRoot, devRoot->GetRawName());
     const bool stitchByMemoryOnly = devProg->memBudget.tensor.memoryDrivenWorkspace != 0;
     const uint16_t realStitchNumThreshold = parallelCtx.isInParallelForScope ? MAX_STITCH_FUNC_NUM :
                                                                                stitchTaskLoopNumThreshold;

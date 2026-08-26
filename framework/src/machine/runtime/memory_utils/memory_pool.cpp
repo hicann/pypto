@@ -314,7 +314,7 @@ void* DevAlloc(const uint64_t size)
     uint8_t* devPtr = nullptr;
     DevMemoryPool::Instance().AllocDevAddr(&devPtr, size);
     if (devPtr == nullptr) {
-        MACHINE_LOGE(RtErr::RT_MALLOC_FAILED, "Failed to alloc dev addr of size[%lu].", size);
+        MACHINE_LOGE(RtErr::RT_MALLOC_FAILED, "Failed to alloc dev addr of size[%lu] bytes.", size);
         return nullptr;
     }
     if (RuntimeMemset(devPtr, size, 0, size) != RT_SUCCESS) {

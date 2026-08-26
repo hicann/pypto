@@ -498,16 +498,16 @@ uint64_t DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(const DevAscendProg
     // 1. symbolTable
     uint64_t symbolTableCapacity = CalculateVectorCapacity(devProg->symbolTable.size());
     uint64_t symbolTableMemory = symbolTableCapacity * sizeof(int64_t);
-    DEV_DEBUG("symbolTableMemory=%lu.", symbolTableMemory);
+    DEV_DEBUG("symbolTableMemory=%lu bytes.", symbolTableMemory);
     // 2. slotList_
     uint64_t slotListCapacity = CalculateVectorCapacity(devProg->slotSize);
     uint64_t slotListMemory = slotListCapacity * sizeof(DeviceExecuteSlot);
-    DEV_DEBUG("slotListMemory=%lu.", slotListMemory);
+    DEV_DEBUG("slotListMemory=%lu bytes.", slotListMemory);
     // 3. rtBoundaryOutcastToBeFree_
     uint64_t boundaryOutcastToFreeListSize = CalculateVectorCapacity(
         devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum());
     uint64_t boundaryOutcastToFreeMemory = boundaryOutcastToFreeListSize * sizeof(RuntimeOutcastTensor);
-    DEV_DEBUG("boundaryOutcastToFreeMemory=%lu.", boundaryOutcastToFreeMemory);
+    DEV_DEBUG("boundaryOutcastToFreeMemory=%lu bytes.", boundaryOutcastToFreeMemory);
     // total
     uint64_t totalSetupVectorMemory = symbolTableMemory + slotListMemory + boundaryOutcastToFreeMemory;
     return totalSetupVectorMemory;
@@ -547,7 +547,7 @@ uint32_t DeviceWorkspaceAllocator::CalcStitchSlabMemObjmaxSize(uint32_t* slabCap
     slabMemObjmaxSize = SlabWsAllocator::CalcSlotStride(slabMemObjmaxSize);
     slabMemObjmaxSize = AlignUpSlab(slabMemObjmaxSize * ALLOC_NUM_ONE_SLAB + SlabWsAllocator::FirstObjBaseOffset());
     slabMemObjmaxSize = std::max(slabMemObjmaxSize, (uint32_t)MEBI);
-    DEV_INFO("Stitch slab size=%u", slabMemObjmaxSize);
+    DEV_INFO("Stitch slab size=%u bytes", slabMemObjmaxSize);
     devProg_->memBudget.metadata.stitchSlabSize = slabMemObjmaxSize;
     size_t j = 0;
     for (size_t i = start; i < end; ++i) {
@@ -665,7 +665,7 @@ void DeviceWorkspaceAllocator::SlabStageAllocMemSubmmit(DynDeviceTask* devTask)
     while (!submmitTaskQueue_.TryEnqueue(devTask)) {
         DeviceTaskMemTryRecycle();
 
-        __PYPTO_TIMEOUT_CHECK(WsErr::SLAB_ADD_CACHE_FAILED, return, "#workspace.submit: SlabStageAllocMemSubmmit.");
+        __PYPTO_TIMEOUT_CHECK(WsErr::SLAB_ADD_CACHE_FAILED, return, "#workspace.submit: SlabStageAllocMemSubmit.");
     }
     return;
 }

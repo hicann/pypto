@@ -60,7 +60,7 @@ public:
     void SetDevSchedSyncMode(uint8_t devScheSyncMode)
     {
         devScheSyncMode_ = devScheSyncMode;
-        DEV_INFO("Current front setted devSchedSynMode is %s", devScheSyncMode == 1 ? "SynMode" : "AsyncMode");
+        DEV_INFO("Current front set devSchedSynMode is %s", devScheSyncMode == 1 ? "SynMode" : "AsyncMode");
     }
 
     int RunThread(int threadIdx, DevStartArgs* devStartArgs, DeviceArgs* args, int schedIdx, int arbitratedScheNum)
@@ -324,7 +324,7 @@ struct DynMachineManager {
     {
         RuntimeDataRingBufferHead* runtimeDataList = devProg->GetRuntimeDataList();
         runtimeDataList->Deallocate(runtimeDataList->GetRuntimeDataCurrent());
-        DEV_INFO("Runtimedata: %lu, %lu", runtimeDataList->GetIndexFinished(), runtimeDataList->GetIndexPending());
+        DEV_INFO("Runtime data: %lu, %lu", runtimeDataList->GetIndexFinished(), runtimeDataList->GetIndexPending());
     }
 
     int EntrySplittedStreamCtrl(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)

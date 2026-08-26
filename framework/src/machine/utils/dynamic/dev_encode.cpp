@@ -301,7 +301,7 @@ static void EncodeRawShape(const SymbolicExpressionTable* expressionTable, DevAs
     encoded->maxStaticMemReq = AlignUp(DataSizeOf(nelm, rawTensor->GetDataType()), TENSOR_ADDR_ALIGNMENT);
     if (nelm > MAX_SHAPE_WARN_THRESHOLE) {
         MACHINE_LOGW(
-            "[workspaceSize] Root=[%s], symbol=[%s],rawmagic=[%d]: staticMemReq=[%lu] is too larger, which might "
+            "[workspaceSize] Root=[%s], symbol=[%s],rawmagic=[%d]: staticMemReq=[%lu] is too large, which might "
             "indicate an error",
             rootName.c_str(), rawTensor->symbol.c_str(), rawTensor->GetRawMagic(), encoded->maxStaticMemReq);
     }
@@ -1468,7 +1468,7 @@ struct EncodeDevAscendFunctionInfo {
         } else {
             useList.emplace_back(opIdx, coaIndex, producerOpType, opCode);
         }
-        MACHINE_LOGD("Outcast oOperandIdx for outcast %d rawtensor maigic %d is %zu.", o->magic, o->GetRawMagic(),
+        MACHINE_LOGD("Outcast oOperandIdx for outcast %d rawtensor magic %d is %zu.", o->magic, o->GetRawMagic(),
                      oOperandIdx);
         auto expr = callAttr->GetOutcastSymbolicExpr(oOperandIdx);
         outcastOpAttr.bindTensorExprIndex = -1;
@@ -3207,7 +3207,7 @@ static void FinalizeEncodedDevAscendProgram(Function* func, DevAscendProgram* ba
     offset = base->GetSize();
     LogWorkspaceEncodeSummary(1, runtimeCfg.stitchNumMax, *base, depthConfig, runtimeCfg.maxWorkspaceBytes,
                               runtimeCfg.workspaceStitchMin);
-    MACHINE_LOGD("StitchPool:%lu, aicoreSpilled:%lu.", base->memBudget.metadata.stitchPool,
+    MACHINE_LOGD("StitchPool:%lu bytes, aicoreSpilled:%lu bytes.", base->memBudget.metadata.stitchPool,
                  base->memBudget.aicoreSpilled.Total());
     func->GetDyndevAttribute()->maxDynamicAssembleOutcastMem = wsDesc.maxDynamicAssembleOutcastMem;
     func->GetDyndevAttribute()->maxDynamicCellMatchTableMem = wsDesc.cellMatch.maxDynamicCellMatchTableMem;

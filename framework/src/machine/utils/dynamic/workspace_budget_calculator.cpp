@@ -121,7 +121,8 @@ static uint64_t WorkspaceTotalFromDesc(const WorkspaceDesc& desc, uint32_t paral
 static uint64_t TensorWorkspaceBytesAtStitchDepth(const WorkspaceDesc& desc, uint32_t stitchDepthK,
                                                   uint32_t parallelism, uint64_t aicoreSpilled, uint64_t debugTotal)
 {
-    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, stitchDepthK > 0) << "Invalid stitchDepthK";
+    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, stitchDepthK > 0)
+        << "Invalid stitchDepthK: " << stitchDepthK << ", must be greater than 0";
     WorkspaceDesc scratch = desc;
     BuildTensorWorkspaceFromDescriptor(scratch, stitchDepthK);
     return WorkspaceTotalFromDesc(scratch, parallelism, aicoreSpilled, debugTotal);

@@ -165,7 +165,7 @@ class TestCaseCreator:
                 with open(json_file, "w", encoding="utf-8") as outfile:
                     json.dump(row_data, outfile, ensure_ascii=False, indent=4)
             except Exception as e:
-                logging.error("Exception occur when writing %s, exception is %s.", json_file, e)
+                logging.error("Exception occurred when writing %s, exception is %s.", json_file, e)
             test_case["json_file"] = json_file
         return test_case
 

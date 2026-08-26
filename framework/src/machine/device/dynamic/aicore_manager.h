@@ -121,7 +121,7 @@ public:
         }
         aicoreHal_.SetParallelDevTaskSize(kernelParallDevTask, parallelCtx->front, parallelCtx->rear);
         aicoreHal_.SetParallelDevTaskCtxVersion(coreIdx, parallelCtx->Version());
-        DEV_VERBOSE_DEBUG("Fill prallel dev task for core %d, ver:%u", coreIdx, parallelCtx->Version());
+        DEV_VERBOSE_DEBUG("Fill parallel dev task for core %d, ver:%u", coreIdx, parallelCtx->Version());
     }
 
     inline void SetSchduleContext(SchduleContext* context) { this->context_ = context; }
@@ -753,7 +753,7 @@ private:
             if (!devTaskCtx->coreTaskFinished[i]) {
                 DEV_ERROR(
                     SchedErr::TASK_WAIT_TIMEOUT,
-                    "#sche.task.end.sync.timeout: left aic core %d not stop, pending:%x, rungning:%x, regfinishid: %lx,"
+                    "#sche.task.end.sync.timeout: left aic core %d not stop, pending:%x, running:%x, regfinishid: %lx,"
                     "core last status:%lu, warning status:%lu, lastword status:%lu",
                     i, pendingIds_[i], runningIds_[i], aicoreHal_.GetFinishedTask(i), aicoreHal_.GetAicoreStatus(i),
                     aicoreHal_.GetAicoreWarningStatus(i), aicoreHal_.GetAicoreStatusLastWord(i));
@@ -764,7 +764,7 @@ private:
             if (!devTaskCtx->coreTaskFinished[i]) {
                 DEV_ERROR(
                     SchedErr::TASK_WAIT_TIMEOUT,
-                    "#sche.task.end.sync.timeout: left aiv core %d not stop, pending:%x, rungning:%x, regfinishid: %lx,"
+                    "#sche.task.end.sync.timeout: left aiv core %d not stop, pending:%x, running:%x, regfinishid: %lx,"
                     "core last status:%lu, warning status:%lu, lastword status:%lu",
                     i, pendingIds_[i], runningIds_[i], aicoreHal_.GetFinishedTask(i), aicoreHal_.GetAicoreStatus(i),
                     aicoreHal_.GetAicoreWarningStatus(i), aicoreHal_.GetAicoreStatusLastWord(i));
@@ -1351,7 +1351,7 @@ private:
         [[maybe_unused]] uint32_t aicpuCallCode = finTaskRegVal >> 32;
         uint32_t finTaskId = REG_LOW_TASK_ID(finTaskRegVal);
         uint32_t finTaskState = REG_LOW_TASK_STATE(finTaskRegVal);
-        DEV_VERBOSE_DEBUG("reslove task core index: %d, finishtaskid:%x, finishstate: %u.", coreIdx, finTaskId,
+        DEV_VERBOSE_DEBUG("resolve task core index: %d, finishtaskid:%x, finishstate: %u.", coreIdx, finTaskId,
                           finTaskState);
 
         return (this->*releaseCoreByRegValFn_)(type, coreIdx, ctx, finishCnt, resloveParallelIdx, finTaskRegVal,
