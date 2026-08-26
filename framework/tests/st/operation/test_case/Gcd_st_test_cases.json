@@ -216,8 +216,8 @@
                 13
             ],
             "tile_shape": [
-                256,
-                64
+                32,
+                32
             ],
             "params": {
                 "on_board": true,
@@ -277,7 +277,7 @@
             ],
             "tile_shape": [
                 32,
-                512
+                32
             ],
             "params": {
                 "on_board": true,

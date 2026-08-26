@@ -160,6 +160,23 @@ void TiledBinaryOperation(Function& function, const TileShape& tileShape, size_t
                                                               std::vector<int64_t>{intermediateBytes});
             op = &function.AddOperation(GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2},
                                         {resultTile, tempTensor});
+        } else if (opName == "GCD") {
+            // 与 TGcd tileop 的 temp 布局保持一致：
+            // 5 个计算槽（a/b/r/q/暂存）+ 2 个 f32 槽（近似商/refine）+ 冻结掩码 + 修正掩码 +
+            // TSEL tmp（256B）+ 保护带（64B）
+            // 计算位宽按类型：int8/uint8 输入用 int16（中间值 <= 510 不溢出），其余用 int32
+            auto vecTile = tileShape.GetVecTile().tile;
+            int64_t tileW = vecTile.empty() ? 1 : vecTile.back();
+            int64_t tileH = vecTile.size() > 1 ? vecTile[vecTile.size() - 2] : 1;
+            int64_t tileFootprint = tileH * tileW;
+            int64_t maskCols = ((tileW + 7) / 8 + 31) / 32 * 32;
+            // 6 计算槽 int32 + 2 f32 槽 + 4 掩码 + TSEL tmp（256B）+ 保护带（64B）
+            int64_t intermediateBytes = (6 * tileFootprint * BytesOf(DT_INT32)) +
+                                        (2 * tileFootprint * BytesOf(DT_FP32)) + 4 * tileH * maskCols + 320;
+            auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8,
+                                                              std::vector<int64_t>{intermediateBytes});
+            op = &function.AddOperation(GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2},
+                                        {resultTile, tempTensor});
         } else {
             op = &function.AddOperation(GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile});
         }
@@ -573,7 +590,7 @@ Tensor Gcd(const Tensor& self, const Tensor& other)
     CheckTensorDimRange(self.GetStorage(), 1, 4, "GCD");
     std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_INT16, DT_INT32, DT_UINT8};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "GCD");
-    RETURN_CALL(BinaryOperation<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(), self, other);
+    return TensorBinaryOperation<BinaryOpType::GCD>(*Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
 static std::pair<int64_t, int64_t> GetIntegerScalarRange(DataType dtype)
@@ -606,8 +623,8 @@ Tensor Gcd(const Tensor& self, const Element& other)
             << "The value range for the element is incorrect! expected [" << elemMin << ", " << elemMax << "], got "
             << other.GetSignedData();
     }
-    RETURN_CALL(BinaryOperationScalar<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(),
-                self.GetStorage(), other);
+    return TensorBinaryOperationScalar<BinaryOpType::GCD>(*Program::GetInstance().GetCurrentFunction(),
+                                                          self.GetStorage(), other);
 }
 
 DataType GetPowRealResultDataType(DataType selfType, DataType otherType)
@@ -828,6 +845,25 @@ void TiledBinaryOperationScalar(Function& function, const TileShape& tileShape, 
             int64_t intermediateBytes = std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL,
                                                         std::multiplies<int64_t>()) *
                                         BytesOf(DT_FP32);
+            auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8,
+                                                              std::vector<int64_t>{intermediateBytes});
+            auto& tmpOp = function.AddOperation(opNameCode, {inputTile1}, {resultTile, tempTensor});
+            tmpOp.SetAttribute(OpAttributeKey::scalar, value);
+            tmpOp.SetAttribute(OP_ATTR_PREFIX + "reverseOperand", reverseOperand);
+            return;
+        } else if (opNameCode == Opcode::OP_GCDS) {
+            // 与 TGcdS tileop 的 temp 布局保持一致：
+            // 5 个计算槽（a/b/r/q/暂存）+ 2 个 f32 槽（近似商/refine）+ 冻结掩码 + 修正掩码 +
+            // TSEL tmp（256B）+ 保护带（64B）
+            // 计算位宽按类型：int8/uint8 输入用 int16（中间值 <= 510 不溢出），其余用 int32
+            auto vecTile = tileShape.GetVecTile().tile;
+            int64_t tileW = vecTile.empty() ? 1 : vecTile.back();
+            int64_t tileH = vecTile.size() > 1 ? vecTile[vecTile.size() - 2] : 1;
+            int64_t tileFootprint = tileH * tileW;
+            int64_t maskCols = ((tileW + 7) / 8 + 31) / 32 * 32;
+            // 6 计算槽 int32 + 2 f32 槽 + 4 掩码 + TSEL tmp（256B）+ 保护带（64B）
+            int64_t intermediateBytes = (6 * tileFootprint * BytesOf(DT_INT32)) +
+                                        (2 * tileFootprint * BytesOf(DT_FP32)) + 4 * tileH * maskCols + 320;
             auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8,
                                                               std::vector<int64_t>{intermediateBytes});
             auto& tmpOp = function.AddOperation(opNameCode, {inputTile1}, {resultTile, tempTensor});

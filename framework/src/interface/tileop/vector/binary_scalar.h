@@ -168,9 +168,21 @@ TILEOP void TBitwiseOrS(T0 dst, T1 src0, Scalar src1)
 }
 
 #define OP_TILE_OP_GCDS TGcdS
-template <typename Scalar, typename T0, typename T1>
-TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1)
+template <typename Scalar, typename T0, typename T1, typename T2>
+TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1, T2 temp)
 {
+    // 统一 int32 计算：q*b 可达 a+b（int16 输入时 65534 超 int16），且仿真器上 int16 指令不可靠
+    using CalcType = int32_t;
+    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    using CalcTile = pto::Tile<pto::TileType::Vec, CalcType, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using TTile = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using FTile = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using F16Tile = pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    // TCMPS/TCMP/TSEL 的掩码按位打包存放：每行 ceil(tileW/32)*4 字节，按 32B 对齐
+    constexpr auto maskCols = ((tileW + 7) / 8 + 31) / 32 * 32;
+    using MaskTile = pto::Tile<pto::TileType::Vec, uint8_t, tileH, maskCols, pto::BLayout::RowMajor, -1, -1>;
+
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src0.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
@@ -178,52 +190,263 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
-    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
-    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
-    auto srcStride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
-    auto src0Addr = (__ubuf__ typename T1::Type*)((uint64_t)(src0.GetAddr()));
-    auto dstAddr = (__ubuf__ typename T0::Type*)((uint64_t)(dst.GetAddr()));
-    using inputType = typename T1::Type;
+    if (shape0 == 0 || shape1 == 0 || shape2 == 0) {
+        return;
+    }
 
-    set_flag(PIPE_V, PIPE_S, EVENT_ID0);
-    wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
-    for (LoopVar n = 0; n < shape0; n++) {
-        for (LoopVar j = 0; j < shape1; j++) {
-            for (LoopVar k = 0; k < shape2; k++) {
-                for (LoopVar m = 0; m < shape3; m++) {
-                    for (LoopVar i = 0; i < shape4; i++) {
-                        int dstOffset = n * dstStride0 + j * dstStride1 + k * dstStride2 + m * dstStride3 + i;
-                        int srcOffset = n * srcStride0 + j * srcStride1 + k * srcStride2 + m * srcStride3 + i;
-                        inputType a = src0Addr[srcOffset];
-                        inputType b = src1;
-                        if (a < 0) {
-                            a = 0 - a;
-                        }
-                        if (b < 0) {
-                            b = 0 - b;
-                        }
-                        if (b == 0) {
-                            dstAddr[dstOffset] = a;
-                            continue;
-                        }
-                        while (a % b != 0) {
-                            inputType c = a % b;
-                            a = b;
-                            b = c;
-                        }
-                        dstAddr[dstOffset] = b;
-                    }
+    // temp 布局（与 BinaryOperationScalarTileFunc 中 GCDS 的临时空间分配保持一致）：
+    //   slot0: a = |src0|  slot1: b = |src1|  slot2: r = a % b  slot3: q
+    //   slot4: 暂存，顺序复用为 q*b / q修正 / r修正（生命周期互不重叠）
+    //   f/fb: 两个 f32 槽（近似商与 refine 除法）
+    //   之后依次为：冻结掩码、修正掩码、TSEL tmp（256B+64B 保护带）
+    // 计算槽按 CalcType 位宽（int8/uint8 输入为 int16），f32 槽与掩码固定大小
+    constexpr auto calcStride = tileH * tileW * sizeof(CalcType);
+    constexpr auto floatBytes = tileH * tileW * sizeof(float);
+    constexpr auto maskBytes = tileH * maskCols;
+    constexpr auto fBase = 6 * calcStride;
+    constexpr auto fbBase = fBase + floatBytes;
+    constexpr auto maskBase = fbBase + floatBytes;
+    constexpr auto bNegBase = maskBase + maskBytes;
+    constexpr auto oppBase = bNegBase + maskBytes;
+    constexpr auto fixMaskBase = oppBase + maskBytes;
+    constexpr auto selTmpBase = fixMaskBase + maskBytes;
+
+    CalcTile aTile(shape3, shape4);
+    CalcTile bTile(shape3, shape4);
+    CalcTile rTile(shape3, shape4);
+    CalcTile qTile(shape3, shape4);
+    CalcTile scratchTile(shape3, shape4);
+    CalcTile auxTile(shape3, shape4);
+    FTile fTile(shape3, shape4);
+    FTile fbTile(shape3, shape4);
+    MaskTile maskTile(shape3, shape4);
+    MaskTile bNegTile(shape3, shape4);
+    MaskTile oppTile(shape3, shape4);
+    MaskTile fixMaskTile(shape3, shape4);
+    CalcTile selTmpTile(shape3, shape4);
+    TTile src0Tile(shape3, shape4);
+    TTile dstTile(shape3, shape4);
+
+    TASSIGN(aTile, temp.GetAddr());
+    TASSIGN(bTile, temp.GetAddr() + calcStride);
+    TASSIGN(rTile, temp.GetAddr() + 2 * calcStride);
+    TASSIGN(qTile, temp.GetAddr() + 3 * calcStride);
+    TASSIGN(scratchTile, temp.GetAddr() + 4 * calcStride);
+    TASSIGN(auxTile, temp.GetAddr() + 5 * calcStride);
+    TASSIGN(fTile, temp.GetAddr() + fBase);
+    TASSIGN(fbTile, temp.GetAddr() + fbBase);
+    TASSIGN(maskTile, temp.GetAddr() + maskBase);
+    TASSIGN(bNegTile, temp.GetAddr() + bNegBase);
+    TASSIGN(oppTile, temp.GetAddr() + oppBase);
+    TASSIGN(fixMaskTile, temp.GetAddr() + fixMaskBase);
+    TASSIGN(selTmpTile, temp.GetAddr() + selTmpBase);
+
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                auto dstOffset = GenTileOffset(dst, tileOffsets);
+                auto src0Offset = GenTileOffset(src0, tileOffsets);
+                TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * sizeof(typename T0::Type)));
+                TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + src0Offset * sizeof(typename T1::Type)));
+
+                // 统一转换到计算位宽。a2/a3 的 TCVT 没有 int8/uint8/int16 到 int32 的
+                // 直接转换，int16 经 f32、int8/uint8 经 f16 中转（小整数转换无精度损失）
+                // b = |scalar| 广播到整 tile；a 按输入类型转换到计算位宽
+                pto::TEXPANDS(bTile, static_cast<CalcType>(src1));
+                if constexpr (Std::is_same_v<typename T0::Type, int32_t>) {
+                    pto::TMOV(aTile, src0Tile);
+                } else if constexpr (Std::is_same_v<typename T0::Type, int16_t>) {
+                    pto::TCVT(fTile, src0Tile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCVT(aTile, fTile, pto::RoundMode::CAST_RINT);
+                } else {
+                    // int8/uint8: s8/u8 -> f16 -> s16（f16 中转视图复用 fbTile 的地址）
+                    F16Tile f16Tile(shape3, shape4);
+                    TASSIGN(f16Tile, temp.GetAddr() + fbBase);
+                    pto::TCVT(f16Tile, src0Tile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCVT(aTile, f16Tile, pto::RoundMode::CAST_RINT);
                 }
+                SyncV();
+
+                // |x| = x * clamp(x, -1, 1)
+                pto::TMINS(rTile, aTile, 1);
+                SyncV();
+                pto::TMAXS(rTile, rTile, -1);
+                SyncV();
+                pto::TMUL(aTile, aTile, rTile);
+                SyncV();
+                pto::TMINS(rTile, bTile, 1);
+                SyncV();
+                pto::TMAXS(rTile, rTile, -1);
+                SyncV();
+                pto::TMUL(bTile, bTile, rTile);
+                SyncV();
+                if constexpr (Std::is_same_v<typename T0::Type, int16_t>) {
+                    // int16 回绕: -32768 的绝对值 32768 回绕为 -32768（与 torch.gcd 一致）
+                    pto::TCVT(fTile, aTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCMPS(maskTile, fTile, 32768.0f, pto::CmpMode::GE);
+                    SyncV();
+                    pto::TADDS(scratchTile, aTile, -65536);
+                    SyncV();
+                    pto::TSEL(aTile, maskTile, scratchTile, aTile, selTmpTile);
+                    SyncV();
+                    pto::TCVT(fTile, bTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCMPS(maskTile, fTile, 32768.0f, pto::CmpMode::GE);
+                    SyncV();
+                    pto::TADDS(scratchTile, bTile, -65536);
+                    SyncV();
+                    pto::TSEL(bTile, maskTile, scratchTile, bTile, selTmpTile);
+                    SyncV();
+                } else if constexpr (Std::is_same_v<typename T0::Type, int8_t>) {
+                    // int8 回绕: -128 的绝对值 128 回绕为 -128（与 torch.gcd 一致）
+                    pto::TCVT(fTile, aTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCMPS(maskTile, fTile, 128.0f, pto::CmpMode::GE);
+                    SyncV();
+                    pto::TADDS(scratchTile, aTile, -256);
+                    SyncV();
+                    pto::TSEL(aTile, maskTile, scratchTile, aTile, selTmpTile);
+                    SyncV();
+                    pto::TCVT(fTile, bTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCMPS(maskTile, fTile, 128.0f, pto::CmpMode::GE);
+                    SyncV();
+                    pto::TADDS(scratchTile, bTile, -256);
+                    SyncV();
+                    pto::TSEL(bTile, maskTile, scratchTile, bTile, selTmpTile);
+                    SyncV();
+                }
+
+                // Euclid 迭代：固定迭代次数，避免仿真器上 while + GetValue 的标量同步竞态（卡死）。
+                // b == 0 的 lane 用掩码冻结，收敛后保持 (gcd, 0) 不变；除零时 vdiv 结果
+                // 为 inf/0，商饱和后与 0 相乘仍得 0，余数保持 a，冻结逻辑不受影响。
+                // 最大迭代次数：int32 <= 1e8 时 Euclid 步数 <= 40（Fibonacci 界），64 封顶；
+                // int16 <= 32767 时 <= 23，32 封顶；int8/uint8 <= 255 时 <= 13，16 封顶。
+                constexpr int kMaxIter = Std::is_same_v<typename T0::Type, int32_t> ?
+                                             64 :
+                                             (Std::is_same_v<typename T0::Type, int16_t> ? 32 : 16);
+                for (LoopVar k = 0; k < kMaxIter; ++k) {
+                    // 冻结 b == 0 的 lane，避免除零
+                    pto::TCMPS(maskTile, bTile, 0, pto::CmpMode::EQ);
+                    SyncV();
+                    // 符号归一化副本（a/b 原值不动，链更新用原始符号值）：
+                    // aDiv = bNeg ? -a : a（aux）；bDiv = bNeg ? -b : b（rTile，bDiv > 0）
+                    pto::TCVT(fbTile, bTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCMPS(bNegTile, fbTile, 0.0f, pto::CmpMode::LT);
+                    SyncV();
+                    pto::TMULS(auxTile, aTile, -1);
+                    SyncV();
+                    pto::TSEL(auxTile, bNegTile, auxTile, aTile, selTmpTile);
+                    SyncV();
+                    pto::TMULS(rTile, bTile, -1);
+                    SyncV();
+                    pto::TSEL(rTile, bNegTile, rTile, bTile, selTmpTile);
+                    SyncV();
+                    // floored 精确余数（bDiv > 0，aDiv 任意符号，结果 r_f = aux ∈ [0, bDiv)）
+                    pto::TCVT(fbTile, rTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCVT(fTile, auxTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(fTile, fTile, fbTile);
+                    SyncV();
+                    pto::TCVT(qTile, fTile, pto::RoundMode::CAST_FLOOR);
+                    SyncV();
+                    pto::TMUL(scratchTile, qTile, rTile);
+                    SyncV();
+                    pto::TSUB(auxTile, auxTile, scratchTile); // aux = r = aDiv - q*bDiv
+                    SyncV();
+                    pto::TCVT(fTile, auxTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(fTile, fTile, fbTile);
+                    SyncV();
+                    pto::TCVT(scratchTile, fTile, pto::RoundMode::CAST_FLOOR); // scratch = qc
+                    SyncV();
+                    // r_new = r_old - qc * bDiv（aux 已是 r_old，不能从 aDiv 重算）
+                    pto::TMUL(scratchTile, scratchTile, rTile);
+                    SyncV();
+                    pto::TSUB(auxTile, auxTile, scratchTile);
+                    SyncV();
+                    // floored +/-1 修正（f32 符号桥接，bDiv > 0）
+                    pto::TSUB(scratchTile, auxTile, rTile);
+                    SyncV();
+                    pto::TCVT(fTile, scratchTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCMPS(fixMaskTile, fTile, 0.0f, pto::CmpMode::GE);
+                    SyncV();
+                    pto::TSEL(auxTile, fixMaskTile, scratchTile, auxTile, selTmpTile);
+                    SyncV();
+                    pto::TADD(scratchTile, auxTile, rTile);
+                    SyncV();
+                    pto::TCVT(fTile, auxTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCMPS(fixMaskTile, fTile, 0.0f, pto::CmpMode::LT);
+                    SyncV();
+                    pto::TSEL(auxTile, fixMaskTile, scratchTile, auxTile, selTmpTile);
+                    SyncV();
+                    // r_f == 0 标记（守卫用）
+                    pto::TCVT(fTile, auxTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCMPS(fixMaskTile, fTile, 0.0f, pto::CmpMode::EQ);
+                    SyncV();
+                    // 转换为 C 截断余数（用原始 a/b 的符号）：
+                    //   opp = (f32(a) * f32(b) < 0)（原始异号，乘积符号精确）
+                    //   r_trunc = opp ? (bDiv - r_f) : (bNeg ? -r_f : r_f)
+                    pto::TCVT(fTile, aTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCVT(fbTile, bTile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TMUL(fTile, fTile, fbTile);
+                    SyncV();
+                    pto::TCMPS(oppTile, fTile, 0.0f, pto::CmpMode::LT);
+                    SyncV();
+                    pto::TMULS(qTile, auxTile, -1); // qTile = -r_f（q 已死）
+                    SyncV();
+                    pto::TSUB(scratchTile, rTile, auxTile); // bDiv - r_f（bNeg 分支）
+                    SyncV();
+                    pto::TSUB(rTile, auxTile, rTile); // r_f - bDiv（非 bNeg 分支, bDiv 已死）
+                    SyncV();
+                    pto::TSEL(scratchTile, bNegTile, scratchTile, rTile, selTmpTile); // rOpp
+                    SyncV();
+                    pto::TSEL(qTile, bNegTile, qTile, auxTile, selTmpTile); // rBase
+                    SyncV();
+                    pto::TSEL(auxTile, oppTile, scratchTile, qTile, selTmpTile); // r = opp ? rOpp : rBase
+                    SyncV();
+                    // r_f == 0 时保持 0（±b 毛刺会翻转最终符号; 零 tile 用自减生成）
+                    pto::TSUB(scratchTile, auxTile, auxTile); // 0
+                    SyncV();
+                    pto::TSEL(scratchTile, fixMaskTile, scratchTile, auxTile, selTmpTile);
+                    SyncV();
+                    pto::TMOV(auxTile, scratchTile);
+                    SyncV();
+                    // 冻结 lane：a, b 保持不变（原始符号值），其余 a = b, b = a % b
+                    pto::TSEL(aTile, maskTile, aTile, bTile, selTmpTile);
+                    SyncV();
+                    pto::TSEL(bTile, maskTile, bTile, auxTile, selTmpTile);
+                    SyncV();
+                } // 结果取非负 gcd（与 torch.gcd 语义一致）
+                if constexpr (Std::is_same_v<typename T0::Type, int32_t>) {
+                    pto::TMOV(dstTile, aTile);
+                } else if constexpr (Std::is_same_v<typename T0::Type, int16_t>) {
+                    pto::TCVT(dstTile, aTile, pto::RoundMode::CAST_RINT);
+                } else {
+                    // int8/uint8: s16 -> f32 -> f16 -> s8/u8（a2/a3 无直接转换）
+                    F16Tile f16Tile(shape3, shape4);
+                    TASSIGN(f16Tile, temp.GetAddr() + fbBase);
+                    pto::TCVT(fTile, aTile, pto::RoundMode::CAST_RINT);
+                    SyncV();
+                    pto::TCVT(f16Tile, fTile, pto::RoundMode::CAST_RINT);
+                    SyncV();
+                    pto::TCVT(dstTile, f16Tile, pto::RoundMode::CAST_RINT);
+                }
+                SyncV();
             }
         }
     }
-    set_flag(PIPE_S, PIPE_V, EVENT_ID0);
-    wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
 }
 
 #define OP_TILE_OP_MODS TModS

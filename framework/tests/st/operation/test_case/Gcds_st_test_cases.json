@@ -85,8 +85,8 @@
                 13
             ],
             "tile_shape": [
-                256,
-                64
+                32,
+                32
             ],
             "params": {
                 "scalar": 7,
@@ -134,7 +134,7 @@
             ],
             "tile_shape": [
                 32,
-                512
+                32
             ],
             "params": {
                 "scalar": 6,

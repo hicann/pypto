@@ -28,7 +28,8 @@ void ExecuteOpBinary(ExecuteOperationContext* ctx)
         opcode == Opcode::OP_DIV_BRC) {
         ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == SIZE_TWO);
     } else if (opcode == Opcode::OP_BITWISEXOR || opcode == Opcode::OP_COPYSIGN || opcode == Opcode::OP_POW ||
-               opcode == Opcode::OP_FLOORDIV || opcode == Opcode::OP_REM) {
+               opcode == Opcode::OP_FLOORDIV || opcode == Opcode::OP_REM || opcode == Opcode::OP_GCD ||
+               opcode == Opcode::OP_GCD_BRC) {
         ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
     } else {
         ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);
@@ -1252,7 +1253,7 @@ template <Opcode opcode>
 void ExecuteOpBinaryScalar(ExecuteOperationContext* ctx)
 {
     if (opcode == Opcode::OP_BITWISEXOR || opcode == Opcode::OP_REMRS || opcode == Opcode::OP_FLOORDIVS ||
-        opcode == Opcode::OP_REMS || opcode == Opcode::OP_POWS) {
+        opcode == Opcode::OP_REMS || opcode == Opcode::OP_POWS || opcode == Opcode::OP_GCDS) {
         ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
     } else {
         ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);
