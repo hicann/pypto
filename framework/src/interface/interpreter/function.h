@@ -40,6 +40,8 @@
 
 namespace npu::tile_fwk {
 
+enum class VerifyType { INVALID, TENSOR_GRAPH, PASS, EXECUTE_GRAPH };
+
 struct PairHash {
     template <class T1, class T2>
     std::size_t operator()(const std::pair<T1, T2>& p) const
@@ -138,6 +140,7 @@ struct FunctionFrame {
     std::string rootFuncType;
     std::string rootFuncGraphType;
     int passIndex{-1};
+    VerifyType verifyType{VerifyType::INVALID};
 
     Operation* currentOperation;
 
@@ -512,7 +515,6 @@ constexpr int EXEC_DUMP_LEVEL_OPERATION = 1;
 constexpr int EXEC_DUMP_LEVEL_TENSOR = 2;
 const std::unordered_set<Opcode> MIX_PATH_OPS = {Opcode::OP_UB_COPY_L1, Opcode::OP_L0C_COPY_UB, Opcode::OP_COPY_OUT};
 
-enum class VerifyType { INVALID, TENSOR_GRAPH, PASS, EXECUTE_GRAPH };
 enum class OpInfoCsvHeader {
     num = 0,
     passName,
@@ -1368,6 +1370,7 @@ struct FunctionInterpreter {
         frame->funcType = func->GetFunctionTypeStr();
         frame->funcGraphType = GetGraphTypeNameDict().Find(func->GetGraphType());
         frame->passIndex = passIndex;
+        frame->verifyType = verifyType;
         if (func->HasParent()) {
             frame->rootFuncIndex = func->Parent().GetFuncMagic();
             frame->rootFuncHash = func->Parent().GetFunctionHash().GetHash();

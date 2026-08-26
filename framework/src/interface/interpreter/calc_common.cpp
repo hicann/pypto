@@ -153,6 +153,20 @@ void ExecuteOpViewType(ExecuteOperationContext* ctx)
 }
 REGISTER_CALC_OP(OP_VIEW_TYPE, Opcode::OP_VIEW_TYPE, ExecuteOpViewType);
 
+static void CheckViewToDynValidShapeNotExceedInput(const std::vector<int64_t>& toDynValidShape,
+                                                   const std::vector<int64_t>& inputValidShape)
+{
+    if (toDynValidShape.empty()) {
+        return;
+    }
+    const size_t dimCount = std::min(toDynValidShape.size(), inputValidShape.size());
+    for (size_t i = 0; i < dimCount; ++i) {
+        ASSERT(ExecuteOperationScene::VIEW_VALIDSHAPE_EXCEEDS_INPUT, toDynValidShape[i] <= inputValidShape[i])
+            << "View is illegal: toDynValidShape " << IntVecToStr(toDynValidShape) << " exceeds input validShape "
+            << IntVecToStr(inputValidShape);
+    }
+}
+
 void ExecuteOpView(ExecuteOperationContext* ctx)
 {
     ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);
@@ -162,8 +176,11 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
     auto& oop = ctx->ooperandInplaceDataViewList->at(0);
     auto& iop = ctx->ioperandDataViewList->at(0);
     ASSERT(ExecuteOperationScene::CTX_NULL, oop != nullptr);
+    ASSERT(ExecuteOperationScene::CTX_INPUT_VIEW_NULL, iop != nullptr);
 
-    // 若输入输出 dtype 不同，则按 ViewType 语义处理（保持底层字节不变，仅视图变换）
+    // 若输入输出 dtype 不同，则按 ViewType 语义处理（保持底层字节不变，仅视图变换）。
+    // ViewType 会按字节比缩放最后一维，toDynValidShape 与输入 validShape 不可直接比较，且该路径可能没有
+    // ViewOpAttribute。
     auto iopDataType = ctx->op->GetIOperands()[0]->GetRawTensor()->GetDataType();
     auto oopDataType = ctx->op->GetOOperands()[0]->GetRawTensor()->GetDataType();
     if (iopDataType != oopDataType) {
@@ -172,6 +189,7 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
     }
 
     auto opAttr = std::static_pointer_cast<ViewOpAttribute>(ctx->op->GetOpAttribute());
+    ASSERT(ExecuteOperationScene::CTX_OP_NULL, opAttr != nullptr);
     auto offset = ctx->opInter->EvaluateOffset(opAttr->GetFromOffset(), opAttr->GetFromDynOffset());
     std::vector<int64_t> validShape;
     if (ctx->frame->callopAttr != nullptr) {
@@ -180,6 +198,10 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
     } else {
         validShape = ctx->opInter->EvaluateValidShape(opAttr->GetToDynValidShape());
     }
+    if (ctx->frame->verifyType == VerifyType::TENSOR_GRAPH) {
+        CheckViewToDynValidShapeNotExceedInput(validShape, iop->GetValidShape());
+    }
+
     if (oop->GetData() == iop->GetData()) {
         return;
     }

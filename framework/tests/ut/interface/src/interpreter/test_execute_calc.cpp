@@ -17,6 +17,8 @@
 #include <limits>
 #include <filesystem>
 #include <cstdlib>
+#include <stdexcept>
+#include <string>
 
 #include "interface/interpreter/raw_tensor_data.h"
 #include "interface/tensor/float.h"
@@ -1280,5 +1282,58 @@ TEST_F(CalcCommonTest, ExecuteOpErfcBasic)
         float expected = std::erfc(inputVals[i]);
         ASSERT_FLOAT_EQ(value, expected);
     }
+}
+
+namespace {
+void RunExecuteOpView(const std::vector<int64_t>& inShape, const std::vector<int64_t>& inValidShape,
+                      const std::vector<int64_t>& toDynValidShape, VerifyType verifyType = VerifyType::TENSOR_GRAPH,
+                      bool shareRawData = false)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestViewValidShape", "TestViewValidShape", nullptr);
+    auto inputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, inShape);
+    auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, toDynValidShape);
+    auto& viewOp = func->AddOperation(Opcode::OP_VIEW, {inputTensor}, {outputTensor});
+    auto fromOffset = std::vector<int64_t>(inShape.size(), 0);
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(fromOffset, SymbolicScalar::FromConcrete(fromOffset),
+                                                            SymbolicScalar::FromConcrete(toDynValidShape)));
+
+    Tensor inputTensorData(DT_FP32, inShape);
+    Tensor outputTensorData(DT_FP32, toDynValidShape);
+    auto inputData = RawTensorData::CreateConstantTensor<float>(inputTensorData, 1.0f);
+    auto outputData = shareRawData ? inputData : RawTensorData::CreateConstantTensor<float>(outputTensorData, 0.0f);
+    auto inputView = std::make_shared<LogicalTensorData>(inputData, inShape, inValidShape, fromOffset);
+    auto outputView = std::make_shared<LogicalTensorData>(outputData);
+
+    auto inoutDataPair = std::make_shared<FunctionIODataPair>();
+    FunctionFrame frame(func.get(), nullptr, nullptr, inoutDataPair, 0);
+    frame.verifyType = verifyType;
+    OperationInterpreter opInter;
+    std::vector<LogicalTensorDataPtr> ioperandDataViewList = {inputView};
+    std::vector<LogicalTensorDataPtr> ooperandInplaceDataViewList = {outputView};
+    ExecuteOperationContext ctx = {
+        &frame, &opInter, &viewOp, &ioperandDataViewList, nullptr, &ooperandInplaceDataViewList};
+    opInter.ExecuteOperation(&ctx);
+}
+} // namespace
+
+TEST_F(CalcCommonTest, ExecuteOpViewToDynValidShapeExceedsInputValidShape)
+{
+    try {
+        RunExecuteOpView({4, 8}, {2, 8}, {4, 8});
+        FAIL() << "Expected view with toDynValidShape larger than input validShape to throw";
+    } catch (const std::runtime_error& e) {
+        EXPECT_NE(std::string(e.what()).find("View is illegal"), std::string::npos) << e.what();
+        EXPECT_NE(std::string(e.what()).find("toDynValidShape"), std::string::npos) << e.what();
+    }
+}
+
+TEST_F(CalcCommonTest, ExecuteOpViewToDynValidShapeNotExceedInputValidShape)
+{
+    EXPECT_NO_THROW(RunExecuteOpView({4, 8}, {4, 8}, {2, 8}));
+}
+
+TEST_F(CalcCommonTest, ExecuteOpViewSkipToDynValidShapeCheckOnPassVerify)
+{
+    EXPECT_NO_THROW(RunExecuteOpView({4, 8}, {2, 8}, {4, 8}, VerifyType::PASS, true));
 }
 } // namespace npu::tile_fwk

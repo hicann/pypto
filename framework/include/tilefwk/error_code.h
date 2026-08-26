@@ -449,6 +449,7 @@ enum class ExecuteOperationScene : uint32_t {
     AMULACC_ACC_DTYPE_UNSUPPORTED = 0xB200DU,
     L0C_TO_L1_SHAPE_NOT_2D = 0xB200EU,
     RUNTIME_EXCEPTION = 0xB200FU,
+    VIEW_VALIDSHAPE_EXCEEDS_INPUT = 0xB2010U, // view toDynValidShape 大于输入 validShape，场景不合法
 };
 
 enum class OpDumpScene : uint32_t {
