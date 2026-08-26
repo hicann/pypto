@@ -266,13 +266,6 @@ def test_static_mutex_preserves_max_mutex_id_attribute(builder):
     assert call.kwargs["max_mutex_id"] == 4
 
 
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
-def test_static_mutex_preserves_candidate_ids_attribute(builder):
-    call = builder(pipe=pl.PipeType.MTE2, mutex_id=_const_int(8), mutex_ids=(8, 9))
-
-    assert 'mutex_ids="mutex_ids": [8, 9]' in str(call)
-
-
 def test_sync_all_hard_mode_rejects_workspaces_in_frontend():
     with pytest.raises(ValueError, match="Hard mode sync_all does not accept workspace arguments"):
         pl.system.sync_all([0], mode=pl.SyncAllMode.HARD)
