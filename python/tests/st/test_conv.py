@@ -32,7 +32,7 @@ def create_conv_kernel(
     dilations,
     groups=1,
 ):
-    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+    @pypto.frontend.jit(pass_options={"enable_slice": False})
     def conv_kernel(
         fmap: pypto.Tensor(fmap_shape, dtype),
         weight: pypto.Tensor(weight_shape, dtype),
@@ -71,7 +71,7 @@ def test_conv1d_fp16_basic_with_bias():
     c = torch.rand(bias_shape, dtype=dtype_torch, device='npu')
     d = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
 
-    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+    @pypto.frontend.jit(pass_options={"enable_slice": False})
     def conv_kernel(
         fmap: pypto.Tensor(fmap_shape, dtype),
         weight: pypto.Tensor(weight_shape, dtype),
@@ -79,7 +79,6 @@ def test_conv1d_fp16_basic_with_bias():
         out: pypto.Tensor(out_shape, dtype),
     ):
         pypto.set_conv_tile_shapes(tile_l1_info, tile_l0_info)
-        pypto.set_vec_tile_shapes(16, 16, 16)
         extend_params = {'bias_tensor': bias}
         output = pypto.conv(fmap, weight, dtype, strides, pads, dilations, extend_params=extend_params, groups=groups)
         out.move(output)
@@ -142,7 +141,7 @@ def test_conv2d_dynamic_batch_stride():
     b = torch.rand(weight_shape, dtype=dtype_torch, device='npu')
     c_out = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
 
-    @pypto.frontend.jit()
+    @pypto.frontend.jit(pass_options={"enable_slice": False})
     def conv2d_dynamic_batch_stride_kernel(
         input_a: pypto.Tensor([pypto.DYNAMIC, 16, 32, 32]),
         input_b: pypto.Tensor([64, 16, 3, 3]),
@@ -159,7 +158,6 @@ def test_conv2d_dynamic_batch_stride():
             ),
             pypto.pypto_impl.TileL0Info(tileH=1, tileW=16, tileK=144, tileN=64),
         )
-        pypto.set_vec_tile_shapes(1, 64, 15, 15)
 
         for batch_idx in pypto.loop(0, batch_loop, 1, name="LOOP_batch"):
             batch_offset = batch_idx * tile_batch
@@ -201,7 +199,7 @@ def test_conv2d_dynamic_hout_relu():
     b = torch.rand(weight_shape, dtype=dtype_torch, device='npu')
     c_out = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
 
-    @pypto.frontend.jit()
+    @pypto.frontend.jit(pass_options={"enable_slice": False})
     def conv2d_dynamic_hout_kernel(
         input_a: pypto.Tensor([1, 16, pypto.DYNAMIC, 34]),
         input_b: pypto.Tensor([64, 16, 3, 3]),
@@ -219,7 +217,6 @@ def test_conv2d_dynamic_hout_relu():
             ),
             pypto.pypto_impl.TileL0Info(tileH=8, tileW=32, tileK=48, tileN=64),
         )
-        pypto.set_vec_tile_shapes(1, 64, 8, 32)
 
         for hout_idx in pypto.loop(0, hout_loop, 1, name="LOOP_hout"):
             hout_offset = hout_idx * tile_hout
@@ -265,7 +262,7 @@ def test_conv1d_dynamic_cout():
     b = torch.rand(weight_shape, dtype=dtype_torch, device='npu')
     c_out = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
 
-    @pypto.frontend.jit()
+    @pypto.frontend.jit(pass_options={"enable_slice": False})
     def conv1d_dynamic_cout_kernel(
         input_a: pypto.Tensor([1, 16, 64]),
         input_b: pypto.Tensor([pypto.DYNAMIC, 16, 3]),
@@ -289,7 +286,6 @@ def test_conv1d_dynamic_cout():
             ),
             pypto.pypto_impl.TileL0Info(tileH=1, tileW=64, tileK=48, tileN=tile_cout),
         )
-        pypto.set_vec_tile_shapes(1, tile_cout, 64)
 
         for cout_idx in pypto.loop(0, cout_loop, 1, name="LOOP_cout"):
             cout_offset = cout_idx * tile_cout

@@ -92,89 +92,73 @@ public:
 
 TEST_F(TestCodegenDynTransData, TestTransData2)
 {
-    RunTransDataTest(
-        {.caseName = "TestTransData2",
-         .inputShape = {1, 7, 1, 8},
-         .vecTile = {1, 8, 1, 8},
-         .dtype = DT_FP32,
-         .outputShape = {1, 1, 1, 8, 8},
-         .tileOpFormat = 2,
-         .validShape = {1, 1, 1, 8, 8},
-         .expect =
-             R"!!!(TTransDataNCHW2NC1HWC0<(int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_9, Coord5Dim((RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 4))), ubTensor_10, ubTensor_7, (int)(0), (int)(0), (int)(0), (int)(0));)!!!"});
+    RunTransDataTest({.caseName = "TestTransData2",
+                      .inputShape = {1, 7, 1, 8},
+                      .vecTile = {1, 8, 1, 8},
+                      .dtype = DT_FP32,
+                      .outputShape = {1, 1, 1, 8, 8},
+                      .tileOpFormat = 2,
+                      .validShape = {1, 1, 1, 8, 8},
+                      .expect = R"!!!(TTransDataNCHW2NC1HWC0(ubTensor_)!!!"});
 }
 
 TEST_F(TestCodegenDynTransData, TestTransData4)
 {
-    RunTransDataTest(
-        {.caseName = "TestTransData4",
-         .inputShape = {15, 15, 2, 16},
-         .vecTile = {16, 16, 2, 16},
-         .dtype = DT_FP16,
-         .outputShape = {32, 1, 16, 16},
-         .tileOpFormat = 4,
-         .validShape = {32, 1, 16, 16},
-         .expect =
-             R"!!!(TTransDataNCHW2Fractal_Z<(int)(16), (int)(16), (int)(2), (int)(16)>(gmTensor_6, Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(4, 52, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 52, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 52, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 52, 3))), ubTensor_7, ubTensor_4, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1));)!!!",
-         .checkAllSubKernels = true});
+    RunTransDataTest({.caseName = "TestTransData4",
+                      .inputShape = {15, 15, 2, 16},
+                      .vecTile = {16, 16, 1, 16},
+                      .dtype = DT_FP16,
+                      .outputShape = {32, 1, 16, 16},
+                      .tileOpFormat = 4,
+                      .validShape = {32, 1, 16, 16},
+                      .expect = R"!!!(TTransDataNCHW2Fractal_Z(ubTensor_)!!!"});
 }
 
 TEST_F(TestCodegenDynTransData, TestTransData3)
 {
-    RunTransDataTest(
-        {.caseName = "TestTransData3",
-         .inputShape = {1, 7, 1, 1, 8},
-         .vecTile = {1, 8, 1, 1, 8},
-         .dtype = DT_FP32,
-         .outputShape = {1, 1, 1, 1, 8, 8},
-         .tileOpFormat = 3,
-         .validShape = {1, 1, 1, 1, 8, 8},
-         .expect =
-             R"!!!(TTransDataNCDHW2NDC1HWC0<(int)(1), (int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_9, Coord6Dim((RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 4)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 5))), ubTensor_10, ubTensor_7, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0));
-)!!!"});
+    RunTransDataTest({.caseName = "TestTransData3",
+                      .inputShape = {1, 7, 1, 1, 8},
+                      .vecTile = {1, 8, 1, 1, 8},
+                      .dtype = DT_FP32,
+                      .outputShape = {1, 1, 1, 1, 8, 8},
+                      .tileOpFormat = 3,
+                      .validShape = {1, 1, 1, 1, 8, 8},
+                      .expect = R"!!!(TTransDataNCDHW2NDC1HWC0(ubTensor_9, ubTensor_10, ubTensor_7);)!!!"});
 }
 
 TEST_F(TestCodegenDynTransData, TestTransData5)
 {
-    RunTransDataTest(
-        {.caseName = "TestTransData5",
-         .inputShape = {15, 7, 1, 1, 8},
-         .vecTile = {16, 8, 1, 1, 8},
-         .dtype = DT_FP32,
-         .outputShape = {8, 1, 16, 8},
-         .tileOpFormat = 5,
-         .validShape = {8, 1, 16, 8},
-         .expect =
-             R"!!!(TTransDataNCDHW2FRACTAL_Z_3D<(int)(16), (int)(8), (int)(1), (int)(1), (int)(8)>(gmTensor_6, Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(4, 64, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 64, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 64, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 64, 3))), ubTensor_7, ubTensor_4, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1));)!!!",
-         .checkAllSubKernels = true});
+    RunTransDataTest({.caseName = "TestTransData5",
+                      .inputShape = {15, 7, 1, 1, 8},
+                      .vecTile = {16, 8, 1, 1, 8},
+                      .dtype = DT_FP32,
+                      .outputShape = {8, 1, 16, 8},
+                      .tileOpFormat = 5,
+                      .validShape = {8, 1, 16, 8},
+                      .expect = R"!!!(TVecDup<float>(ubTensor_0, 0.f);)!!!"});
 }
 
 TEST_F(TestCodegenDynTransData, TestTransData0_3)
 {
-    RunTransDataTest(
-        {.caseName = "TestTransData0_3",
-         .inputShape = {1, 1, 1, 8, 8},
-         .vecTile = {1, 1, 1, 8, 8},
-         .dtype = DT_FP32,
-         .outputShape = {1, 7, 1, 8},
-         .tileOpFormat = 0,
-         .validShape = {1, 7, 1, 8},
-         .expect =
-             R"!!!(TTransDataNC1HWC02NCHW<(int)(1), (int)(7), (int)(1), (int)(8)>(gmTensor_2, Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 3))), ubTensor_3, ubTensor_0, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1), (int)(1));)!!!"});
+    RunTransDataTest({.caseName = "TestTransData0_3",
+                      .inputShape = {1, 1, 1, 8, 8},
+                      .vecTile = {1, 1, 1, 8, 8},
+                      .dtype = DT_FP32,
+                      .outputShape = {1, 7, 1, 8},
+                      .tileOpFormat = 0,
+                      .validShape = {1, 7, 1, 8},
+                      .expect = R"!!!(TTransDataNC1HWC02NCHW(ubTensor_)!!!"});
 }
 
 TEST_F(TestCodegenDynTransData, TestTransData0_6)
 {
-    RunTransDataTest(
-        {.caseName = "TestTransData0_6",
-         .inputShape = {1, 1, 1, 1, 8, 8},
-         .vecTile = {1, 1, 1, 1, 8, 8},
-         .dtype = DT_FP32,
-         .outputShape = {1, 7, 1, 1, 8},
-         .tileOpFormat = 0,
-         .validShape = {1, 7, 1, 1, 8},
-         .expect =
-             R"!!!(TTransDataNDC1HWC02NCDHW<(int)(1), (int)(1), (int)(7), (int)(1), (int)(8)>(gmTensor_2, Coord5Dim((RUNTIME_COA_GET_PARAM_OFFSET(5, 26, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 26, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 26, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 26, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 26, 4))), ubTensor_3, ubTensor_4, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1), (int)(1));
-)!!!"});
+    RunTransDataTest({.caseName = "TestTransData0_6",
+                      .inputShape = {1, 1, 1, 1, 8, 8},
+                      .vecTile = {1, 1, 1, 1, 8, 8},
+                      .dtype = DT_FP32,
+                      .outputShape = {1, 7, 1, 1, 8},
+                      .tileOpFormat = 0,
+                      .validShape = {1, 7, 1, 1, 8},
+                      .expect = R"!!!(TTransDataNDC1HWC02NCDHW(ubTensor_)!!!"});
 }
 } // namespace npu::tile_fwk

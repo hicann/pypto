@@ -70,6 +70,11 @@ bool EqualInOut(const Operation& op)
 
 bool RemoveRedundantOp::ProcessRedundantOpWithDynShape(Operation& op) const
 {
+    if (op.GetBoolAttribute(OpAttributeKey::dontTouch)) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "dontTouch_CHECK: op[%d] has dontTouch, skip removing.",
+                          op.GetOpMagic());
+        return false;
+    }
     if (!EqualInOut(op)) {
         APASS_LOG_DEBUG_F(Elements::Operation,
                           "op[%d]'s input and output has unequal shape and dynshape, skip removing.", op.GetOpMagic());

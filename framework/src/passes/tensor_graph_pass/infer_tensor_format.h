@@ -56,6 +56,8 @@ private:
     // ---- 图操作 ----
     static bool IsFunctionOutcast(const Function& function, const std::shared_ptr<LogicalTensor>& tensor);
     static int FindInputPosition(const Operation& op, const std::shared_ptr<LogicalTensor>& tensor);
+    static Operation* FindRelatedConvOp(const std::shared_ptr<LogicalTensor>& srcTensor,
+                                        const std::shared_ptr<LogicalTensor>& fakeDstTensor, TileOpFormat targetFormat);
     static std::shared_ptr<LogicalTensor> InsertTransDataOp(Function& function,
                                                             const std::shared_ptr<LogicalTensor>& srcTensor,
                                                             const std::shared_ptr<LogicalTensor>& fakeDstTensor,

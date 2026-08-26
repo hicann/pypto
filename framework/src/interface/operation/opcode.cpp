@@ -672,30 +672,30 @@ void OpcodeManager::RegisterVector()
                  {MemoryType::MEM_UB, MemoryType::MEM_UB},
                  {"TileOp::Ttranspose_vnchwconv", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::MOVE_LOCAL,
                  {OP_ATTR_PREFIX + "shape", OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
-    RegisterInfo(Opcode::OP_NCHW2NC1HWC0, OpCoreType::ANY, "NCHW2NC1HWC0", {MemoryType::MEM_UB},
-                 {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-                 {"TileOp::TtransData_nvhw2nc1hwc0", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_OUT,
-                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group"});
-    RegisterInfo(Opcode::OP_NCHW2Fractal_Z, OpCoreType::ANY, "NCHW2Fractal_Z", {MemoryType::MEM_UB},
-                 {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-                 {"TileOp::TtransData_nchw2fractal_z", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_OUT,
-                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group"});
-    RegisterInfo(Opcode::OP_NC1HWC02NCHW, OpCoreType::ANY, "NC1HWC02NCHW", {MemoryType::MEM_UB},
-                 {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-                 {"TileOp::TtransData_nc1hwc02nchw", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_OUT,
-                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group"});
-    RegisterInfo(Opcode::OP_NCDHW2NDC1HWC0, OpCoreType::ANY, "NCDHW2NDC1HWC0", {MemoryType::MEM_UB},
-                 {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-                 {"TileOp::TtransData_ncdhw2ndc1hwc0", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_OUT,
-                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group"});
-    RegisterInfo(Opcode::OP_NCDHW2FRACTAL_Z_3D, OpCoreType::ANY, "NCDHW2FRACTAL_Z_3D", {MemoryType::MEM_UB},
-                 {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-                 {"TileOp::TtransData_ncdhw2fractal_z_3d", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_OUT,
-                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group"});
-    RegisterInfo(Opcode::OP_NDC1HWC02NCDHW, OpCoreType::ANY, "NDC1HWC02NCDHW", {MemoryType::MEM_UB},
-                 {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-                 {"TileOp::TtransData_ndc1hwc02ncdhw", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_OUT,
-                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group"});
+    RegisterInfo(Opcode::OP_NCHW2NC1HWC0, OpCoreType::AIV, "NCHW2NC1HWC0", {MemoryType::MEM_UB},
+                 {MemoryType::MEM_UB, MemoryType::MEM_UB},
+                 {"TileOp::TtransData_nvhw2nc1hwc0", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group", OpAttributeKey::excludeBufferReuse});
+    RegisterInfo(Opcode::OP_NCHW2Fractal_Z, OpCoreType::AIV, "NCHW2Fractal_Z", {MemoryType::MEM_UB},
+                 {MemoryType::MEM_UB, MemoryType::MEM_UB},
+                 {"TileOp::TtransData_nchw2fractal_z", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group", OpAttributeKey::excludeBufferReuse});
+    RegisterInfo(Opcode::OP_NC1HWC02NCHW, OpCoreType::AIV, "NC1HWC02NCHW", {MemoryType::MEM_UB},
+                 {MemoryType::MEM_UB, MemoryType::MEM_UB},
+                 {"TileOp::TtransData_nc1hwc02nchw", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group", OpAttributeKey::excludeBufferReuse});
+    RegisterInfo(Opcode::OP_NCDHW2NDC1HWC0, OpCoreType::AIV, "NCDHW2NDC1HWC0", {MemoryType::MEM_UB},
+                 {MemoryType::MEM_UB, MemoryType::MEM_UB},
+                 {"TileOp::TtransData_ncdhw2ndc1hwc0", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group", OpAttributeKey::excludeBufferReuse});
+    RegisterInfo(Opcode::OP_NCDHW2FRACTAL_Z_3D, OpCoreType::AIV, "NCDHW2FRACTAL_Z_3D", {MemoryType::MEM_UB},
+                 {MemoryType::MEM_UB, MemoryType::MEM_UB},
+                 {"TileOp::TtransData_ncdhw2fractal_z_3d", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group", OpAttributeKey::excludeBufferReuse});
+    RegisterInfo(Opcode::OP_NDC1HWC02NCDHW, OpCoreType::AIV, "NDC1HWC02NCDHW", {MemoryType::MEM_UB},
+                 {MemoryType::MEM_UB, MemoryType::MEM_UB},
+                 {"TileOp::TtransData_ndc1hwc02ncdhw", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+                 {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group", OpAttributeKey::excludeBufferReuse});
     RegisterInfo(Opcode::OP_PERMUTE, OpCoreType::AIV, "PERMUTE", {MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_UB},
                  {"TileOp::TPermute", PIPE_S, PIPE_MTE2, CoreType::AIV}, OpCalcType::OTHER, {OpAttributeKey::perm},
                  TileShapeVerifier::Verify);
@@ -939,6 +939,12 @@ void OpcodeManager::RegisterCube()
     RegisterInfo(Opcode::OP_L0C_COPY_OUT_CONV, OpCoreType::AIC, "L0C_COPY_OUT_CONV", {MemoryType::MEM_L0C},
                  {MemoryType::MEM_DEVICE_DDR}, {"TileOp::L0CCopyOutConv", PIPE_FIX, PIPE_FIX, CoreType::AIC},
                  OpCalcType::MOVE_OUT, {OpAttributeKey::excludeBufferReuse, OpAttributeKey::l0cValidMN});
+    RegisterInfo(Opcode::OP_TRANS_FORMAT_L0C, OpCoreType::AIC, "TRANS_FORMAT_L0C", {MemoryType::MEM_L0C},
+                 {MemoryType::MEM_L0C}, {"TileOp::TransFormatL0C", PIPE_FIX, PIPE_FIX, CoreType::AIC},
+                 OpCalcType::CAST);
+    RegisterInfo(Opcode::OP_TRANS_FORMAT_L1, OpCoreType::AIC, "TRANS_FORMAT_L1", {MemoryType::MEM_L1},
+                 {MemoryType::MEM_L1}, {"TileOp::TransFormatL1", PIPE_MTE1, PIPE_MTE1, CoreType::AIC},
+                 OpCalcType::CAST);
 
     RegisterInfo(Opcode::OP_L1_ALLOC, OpCoreType::AIC, "L1_ALLOC", {}, {MemoryType::MEM_L1},
                  {"L1_ALLOC", PIPE_S, PIPE_S, CoreType::AIC}, OpCalcType::SYS);
@@ -1404,9 +1410,23 @@ std::unordered_set<Opcode> SUPPORT_VF_FUSE_OPS{
 };
 
 std::unordered_set<Opcode> SKIP_OPCODE_FOR_CODEGEN = {
-    Opcode::OP_VIEW,      Opcode::OP_SLICE,    Opcode::OP_ASSEMBLE,    Opcode::OP_CONTRACT,  Opcode::OP_RESHAPE,
-    Opcode::OP_UB_ALLOC,  Opcode::OP_L1_ALLOC, Opcode::OP_L0A_ALLOC,   Opcode::OP_L0B_ALLOC, Opcode::OP_L0C_ALLOC,
-    Opcode::OP_FIX_ALLOC, Opcode::OP_BT_ALLOC, Opcode::OP_BIND_TENSOR, Opcode::OP_NOP,       Opcode::OP_HUB,
+    Opcode::OP_VIEW,
+    Opcode::OP_SLICE,
+    Opcode::OP_ASSEMBLE,
+    Opcode::OP_CONTRACT,
+    Opcode::OP_RESHAPE,
+    Opcode::OP_UB_ALLOC,
+    Opcode::OP_L1_ALLOC,
+    Opcode::OP_L0A_ALLOC,
+    Opcode::OP_L0B_ALLOC,
+    Opcode::OP_L0C_ALLOC,
+    Opcode::OP_FIX_ALLOC,
+    Opcode::OP_BT_ALLOC,
+    Opcode::OP_BIND_TENSOR,
+    Opcode::OP_TRANS_FORMAT_L0C,
+    Opcode::OP_NOP,
+    Opcode::OP_HUB,
+    Opcode::OP_TRANS_FORMAT_L1,
 };
 
 std::unordered_set<Opcode> SUPPORT_BRC_INLINE{

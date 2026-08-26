@@ -607,6 +607,29 @@ inline bool IsL0cToL1MoveOp(Operation* op)
            op->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1;
 }
 
+inline bool HasL0CDataEdge(Operation* producer, Operation* consumer)
+{
+    if (producer == nullptr || consumer == nullptr) {
+        return false;
+    }
+    for (const auto& consumerOperand : consumer->GetOOperands()) {
+        if (consumerOperand != nullptr && consumerOperand->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) {
+            return false;
+        }
+    }
+    for (const auto& output : producer->GetOOperands()) {
+        if (output == nullptr || output->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) {
+            continue;
+        }
+        for (const auto& input : consumer->GetIOperands()) {
+            if (input == output) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool IsCubeLocalLoad(Operation* op)
 {
     if (op == nullptr || op->GetOOperands().empty()) {
@@ -785,12 +808,22 @@ bool SuperNodeGraphBuilder::MulAccCombine(const std::shared_ptr<OperationGraphIn
                                   opList[i]->GetOpMagic(), opList[inOp]->GetOpMagic());
             }
         }
-        for (auto outOp : operationInfo->outGraph_[i]) {
-            if (IsViewLike(opList[outOp]->GetOpcode()) && !opList[outOp]->GetOOperands().empty() &&
-                opList[outOp]->GetOOperands().front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0C) {
+        // 沿 L0C 数据边递归合并非 MatMul 后继；MatMul 累加依赖已由上面的 MulAcc 逻辑处理。
+        std::vector<std::pair<int32_t, int32_t>> pending;
+        for (int32_t outOp : operationInfo->outGraph_[i]) {
+            pending.emplace_back(i, outOp);
+        }
+        while (!pending.empty()) {
+            auto [inOp, outOp] = pending.back();
+            pending.pop_back();
+            if (HasL0CDataEdge(opList[inOp], opList[outOp]) &&
+                OpcodeManager::Inst().GetOpCalcType(opList[outOp]->GetOpcode()) != OpCalcType::MATMUL) {
                 mergePair.emplace_back(i, outOp);
-                APASS_LOG_DEBUG_F(Elements::Operation, "Combine MatMul %d and View %d in building SuperNode.",
+                APASS_LOG_DEBUG_F(Elements::Operation, "Combine MatMul %d and L0C successor %d in building SuperNode.",
                                   opList[i]->GetOpMagic(), opList[outOp]->GetOpMagic());
+                for (int32_t nextOp : operationInfo->outGraph_[outOp]) {
+                    pending.emplace_back(outOp, nextOp);
+                }
             }
         }
         return true;

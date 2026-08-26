@@ -435,6 +435,7 @@ protected:
     std::string PrintTransposeDataMoveDynamic(const PrintTransposeDataMoveParam& param) const;
     std::string PrintTransposeDataMoveDynamicUnaligned(const PrintTransposeDataMoveParam& param) const;
 
+    std::string PrintTransDataLayoutTmp() const;
     std::string PrintTransDataLayout(const std::vector<std::string>& param) const;
 
     std::string PrintGatherElementDynamicUnaligned(const PrintGatherEleParam& param) const;

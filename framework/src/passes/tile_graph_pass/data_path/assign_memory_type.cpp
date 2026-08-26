@@ -52,6 +52,7 @@ Status AssignMemoryType::RunOnFunction(Function& function)
     RETURN_IF_NOT_SUCCESS(InferUncertainMemoryTypes(function));
     RETURN_IF_NOT_SUCCESS(ResolveMemoryUnknowns(function));
     RETURN_IF_NOT_SUCCESS(SyncViewAssembleMemoryAttrs(function));
+    RETURN_IF_NOT_SUCCESS(FixViewAssembleSemanticMismatch(function));
     RETURN_IF_NOT_SUCCESS(InsertConvertOpsAndInferShape(function));
     RETURN_IF_NOT_SUCCESS(FallbackSameMemoryMoveOps(function));
     RETURN_IF_NOT_SUCCESS(SyncTensorToBe(function));
@@ -1039,19 +1040,56 @@ bool AssignMemoryType::CanUseDirectAssemblePath(Operation& operation, MemoryType
     return !hasDdr;
 }
 
-bool AssignMemoryType::IsAssembleToOffsetAligned(Operation& operation, const LogicalTensorPtr& output)
+Status AssignMemoryType::IsAssembleToOffsetAligned(Operation& operation, const LogicalTensorPtr& output, bool& aligned)
 {
+    aligned = false;
     auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(operation.GetOpAttribute());
-    if (assembleOpAttribute == nullptr || output == nullptr) {
-        return false;
+    if (assembleOpAttribute == nullptr || output == nullptr || output->GetRawTensor() == nullptr) {
+        return FAILED;
     }
-    int64_t lineOffset = CalcLineOffset(output->GetRawTensor()->rawshape, assembleOpAttribute->GetToOffset());
-    if (lineOffset == -1) {
-        return true;
-    }
+    const auto& rawShape = output->GetRawTensor()->rawshape;
+    const auto& toOffset = assembleOpAttribute->GetToOffset();
     static constexpr int ASSEMBLE_ALIGN_BYTES = 32;
     int64_t tensorBytes = static_cast<int64_t>(BytesOf(output->Datatype()));
-    return (tensorBytes * lineOffset) % ASSEMBLE_ALIGN_BYTES == 0;
+    if (tensorBytes <= 0 || ASSEMBLE_ALIGN_BYTES % tensorBytes != 0 || rawShape.empty()) {
+        aligned = true;
+        return SUCCESS;
+    }
+    // Dynamic shape (-1) cannot be padded or aligned at compile time.
+    if (std::find(rawShape.begin(), rawShape.end(), -1) != rawShape.end()) {
+        return SUCCESS;
+    }
+    int64_t alignElements = ASSEMBLE_ALIGN_BYTES / tensorBytes;
+    size_t lastIdx = rawShape.size() - 1;
+    auto padUp = [](int64_t dim, int64_t base) { return (dim + base - 1) / base * base; };
+    auto isAlignedAfterPad = [&](size_t padIdx, bool& padAligned) -> Status {
+        padAligned = false;
+        if (rawShape[padIdx] <= 0) {
+            return SUCCESS;
+        }
+        Shape paddedShape = rawShape;
+        paddedShape[padIdx] = padUp(rawShape[padIdx], alignElements);
+        int64_t paddedOffset = 0;
+        RETURN_IF_NOT_SUCCESS(CalcLineOffset(paddedShape, toOffset, paddedOffset));
+        padAligned = (tensorBytes * paddedOffset) % ASSEMBLE_ALIGN_BYTES == 0;
+        return SUCCESS;
+    };
+    // PadLocalBuffer always pads the tail axis to 32B (non axis-combine mode, or axis-combine
+    // mode where tensor is not eligible). This check is mandatory.
+    bool tailPadAligned = false;
+    RETURN_IF_NOT_SUCCESS(isAlignedAfterPad(lastIdx, tailPadAligned));
+    // When tail axis == 1 and there is a second-to-last axis, AxisCombine may pad the
+    // second-to-last axis instead (ASSEMBLE is a shapeTransformOp). Since AssignMemoryType
+    // cannot determine which padding will apply, both must be aligned to safely avoid DDR
+    // fallback.
+    if (rawShape[lastIdx] == 1 && rawShape.size() >= 2) {
+        bool secondLastPadAligned = false;
+        RETURN_IF_NOT_SUCCESS(isAlignedAfterPad(lastIdx - 1, secondLastPadAligned));
+        aligned = tailPadAligned && secondLastPadAligned;
+        return SUCCESS;
+    }
+    aligned = tailPadAligned;
+    return SUCCESS;
 }
 
 bool AssignMemoryType::FitsAssembleOutputMemoryLimit(const LogicalTensorPtr& output, MemoryType memoryType) const
@@ -1086,7 +1124,9 @@ Status AssignMemoryType::InferReshapeMemoryType(Operation& operation)
     MemoryType inputRequirement = GetReshapeInputRequirement(operation, input, inputOriginal);
     MemoryType outputOriginal = output->GetMemoryTypeOriginal();
     RETURN_IF_NOT_SUCCESS(InferReshapeOutputFromRequirement(output, outputOriginal));
-    if (KeepSplitReshapeUb(operation, input, output)) {
+    bool kept = false;
+    RETURN_IF_NOT_SUCCESS(KeepSplitReshapeUb(operation, input, output, kept));
+    if (kept) {
         return SUCCESS;
     }
     bool isDynamic = IsDynamicReshape(operation, output);
@@ -1342,16 +1382,17 @@ MemoryType AssignMemoryType::InferTargetTypeThroughForwardViews(
     return InferTargetTypeThroughForwardViews(viewOutput, visitedTensors);
 }
 
-bool AssignMemoryType::KeepSplitReshapeUb(Operation& operation, const LogicalTensorPtr& input,
-                                          const LogicalTensorPtr& output)
+Status AssignMemoryType::KeepSplitReshapeUb(Operation& operation, const LogicalTensorPtr& input,
+                                            const LogicalTensorPtr& output, bool& kept)
 {
+    kept = false;
     if (input == nullptr || output == nullptr) {
-        return false;
+        return SUCCESS;
     }
     auto& producers = input->GetProducers();
     auto& consumers = output->GetConsumers();
     if (producers.empty() || consumers.empty()) {
-        return false;
+        return SUCCESS;
     }
     bool allProducersContract = std::all_of(producers.begin(), producers.end(), [](const auto& producer) {
         return producer != nullptr && producer->GetOpcode() == Opcode::OP_CONTRACT;
@@ -1363,76 +1404,90 @@ bool AssignMemoryType::KeepSplitReshapeUb(Operation& operation, const LogicalTen
                                                    UB_THRESHOLD_ASSEMBLE);
     int64_t inputDataSize = input->GetDataSize();
     if (allProducersContract && allConsumersSlice && inputDataSize >= 0 &&
-        static_cast<size_t>(inputDataSize) <= ubThreshold && CanKeepContractProducersInUb(input)) {
-        ForceSetOriginal(input, MemoryType::MEM_UB, "InferSplitReshapeUb");
-        ForceSetRequirement(input, operation, MemoryType::MEM_UB, "InferSplitReshapeUb");
-        ForceSetOriginal(output, MemoryType::MEM_UB, "InferSplitReshapeUb");
-        for (const auto& consumerOp : output->GetConsumers()) {
-            if (consumerOp != nullptr) {
-                ForceSetRequirement(output, *consumerOp, MemoryType::MEM_UB, "InferSplitReshapeUb");
+        static_cast<size_t>(inputDataSize) <= ubThreshold) {
+        bool canKeepProducers = false;
+        RETURN_IF_NOT_SUCCESS(CanKeepContractProducersInUb(input, canKeepProducers));
+        if (canKeepProducers) {
+            ForceSetOriginal(input, MemoryType::MEM_UB, "InferSplitReshapeUb");
+            ForceSetRequirement(input, operation, MemoryType::MEM_UB, "InferSplitReshapeUb");
+            ForceSetOriginal(output, MemoryType::MEM_UB, "InferSplitReshapeUb");
+            for (const auto& consumerOp : output->GetConsumers()) {
+                if (consumerOp != nullptr) {
+                    ForceSetRequirement(output, *consumerOp, MemoryType::MEM_UB, "InferSplitReshapeUb");
+                }
             }
+            kept = true;
+            return SUCCESS;
         }
-        return true;
     }
-    return false;
+    return SUCCESS;
 }
 
-bool AssignMemoryType::CanKeepContractProducersInUb(const LogicalTensorPtr& tensor)
+Status AssignMemoryType::CanKeepContractProducersInUb(const LogicalTensorPtr& tensor, bool& canKeep)
 {
+    canKeep = false;
     if (tensor == nullptr) {
-        return false;
+        return SUCCESS;
     }
     for (auto* producerOp : tensor->GetProducers()) {
         if (producerOp == nullptr || producerOp->GetOpcode() != Opcode::OP_CONTRACT || producerOp->iOperand.empty()) {
-            return false;
+            return SUCCESS;
         }
         MemoryType fromType = GetAssembleInputType(*producerOp);
         constexpr MemoryType targetType = MemoryType::MEM_UB;
         bool checkOffsetAlignment = !IsAdvancedMemoryPath(fromType, targetType);
-        if ((checkOffsetAlignment && !IsAssembleToOffsetAligned(*producerOp, tensor)) ||
-            !CanUseDirectAssemblePath(*producerOp, fromType, targetType)) {
-            return false;
+        bool aligned = false;
+        RETURN_IF_NOT_SUCCESS(IsAssembleToOffsetAligned(*producerOp, tensor, aligned));
+        if ((checkOffsetAlignment && !aligned) || !CanUseDirectAssemblePath(*producerOp, fromType, targetType)) {
+            return SUCCESS;
         }
     }
-    return true;
+    canKeep = true;
+    return SUCCESS;
 }
 
-bool AssignMemoryType::IsSliceFromOffsetAligned(Operation& sliceOp, const LogicalTensorPtr& input)
+Status AssignMemoryType::IsSliceFromOffsetAligned(Operation& sliceOp, const LogicalTensorPtr& input, bool& aligned)
 {
+    aligned = false;
     auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(sliceOp.GetOpAttribute());
     if (viewOpAttribute == nullptr || input == nullptr) {
-        return false;
+        return SUCCESS;
     }
-    int64_t lineOffset = CalcLineOffset(input->GetRawTensor()->rawshape, viewOpAttribute->GetFromOffset());
-    if (lineOffset == -1) {
-        return true;
-    }
+    int64_t lineOffset = 0;
+    RETURN_IF_NOT_SUCCESS(
+        CalcLineOffset(input->GetRawTensor()->rawshape, viewOpAttribute->GetFromOffset(), lineOffset));
     static constexpr int ASSEMBLE_ALIGN_BYTES = 32;
     int64_t tensorBytes = static_cast<int64_t>(BytesOf(input->Datatype()));
-    return (tensorBytes * lineOffset) % ASSEMBLE_ALIGN_BYTES == 0;
+    aligned = (tensorBytes * lineOffset) % ASSEMBLE_ALIGN_BYTES == 0;
+    return SUCCESS;
 }
 
-bool AssignMemoryType::CanKeepSliceConsumersInUb(const LogicalTensorPtr& tensor)
+Status AssignMemoryType::CanKeepSliceConsumersInUb(const LogicalTensorPtr& tensor, bool& canKeep)
 {
+    canKeep = false;
     if (tensor == nullptr) {
-        return false;
+        return SUCCESS;
     }
     for (auto* consumerOp : tensor->GetConsumers()) {
         if (consumerOp == nullptr || consumerOp->GetOpcode() != Opcode::OP_SLICE || consumerOp->oOperand.empty() ||
             consumerOp->oOperand.front() == nullptr) {
-            return false;
+            return SUCCESS;
         }
-        if (!IsSliceFromOffsetAligned(*consumerOp, tensor)) {
-            return false;
+        bool aligned = false;
+        RETURN_IF_NOT_SUCCESS(IsSliceFromOffsetAligned(*consumerOp, tensor, aligned));
+        if (!aligned) {
+            return SUCCESS;
         }
     }
-    return true;
+    canKeep = true;
+    return SUCCESS;
 }
 
-bool AssignMemoryType::HasNonZeroSliceFromOffset(const LogicalTensorPtr& tensor)
+Status AssignMemoryType::HasNonZeroSliceFromOffset(const LogicalTensorPtr& tensor, bool& hasNonZero)
 {
+    hasNonZero = false;
     if (tensor == nullptr) {
-        return false;
+        return SUCCESS;
     }
     for (auto* consumerOp : tensor->GetConsumers()) {
         if (consumerOp == nullptr || consumerOp->GetOpcode() != Opcode::OP_SLICE) {
@@ -1442,12 +1497,14 @@ bool AssignMemoryType::HasNonZeroSliceFromOffset(const LogicalTensorPtr& tensor)
         if (viewAttr == nullptr) {
             continue;
         }
-        int64_t lineOffset = CalcLineOffset(tensor->GetRawTensor()->rawshape, viewAttr->GetFromOffset());
+        int64_t lineOffset = 0;
+        RETURN_IF_NOT_SUCCESS(CalcLineOffset(tensor->GetRawTensor()->rawshape, viewAttr->GetFromOffset(), lineOffset));
         if (lineOffset > 0) {
-            return true;
+            hasNonZero = true;
+            return SUCCESS;
         }
     }
-    return false;
+    return SUCCESS;
 }
 
 bool AssignMemoryType::IsDynamicReshape(Operation& operation, const LogicalTensorPtr& output) const
@@ -1659,7 +1716,9 @@ Status AssignMemoryType::ProcessDdrMultiReshape(Function& function)
             contractOutput->GetConsumers().size() != 1) {
             continue;
         }
-        if (!IsAssembleToOffsetAligned(contract, contractOutput)) {
+        bool aligned = false;
+        RETURN_IF_NOT_SUCCESS(IsAssembleToOffsetAligned(contract, contractOutput, aligned));
+        if (!aligned) {
             continue;
         }
         auto* firstReshape = *contractOutput->GetConsumers().begin();
@@ -2140,21 +2199,21 @@ Status AssignMemoryType::PreCheck(Function& function) { return checker.DoPreChec
 
 Status AssignMemoryType::PostCheck(Function& function) { return checker.DoPostCheck(function); }
 
-int64_t AssignMemoryType::CalcLineOffset(const Shape& shape, const Offset& offset)
+Status AssignMemoryType::CalcLineOffset(const Shape& shape, const Offset& offset, int64_t& lineOffset) const
 {
-    if (shape.size() != offset.size()) {
-        return -1;
+    if (shape.size() != offset.size() || shape.empty()) {
+        APASS_LOG_ERROR_F(Elements::Tensor,
+                          "CalcLineOffset failed because shape size %zu != offset size %zu or shape is empty.",
+                          shape.size(), offset.size());
+        return FAILED;
     }
-    if (shape.size() == 0) {
-        return 0;
-    }
-    int64_t lineOffset = 0;
+    lineOffset = 0;
     int64_t stride = 1;
     for (size_t i = shape.size(); i > 0; --i) {
         lineOffset += offset[i - 1] * stride;
         stride *= shape[i - 1];
     }
-    return lineOffset;
+    return SUCCESS;
 }
 
 Status AssignMemoryType::ProcessL0C2L1SmallToLarge(Function& function)
@@ -2176,8 +2235,22 @@ Status AssignMemoryType::ProcessUB2UBContractSlice(Function& function)
             continue;
         }
         auto middle = op.oOperand.front();
-        if (!FitsAssembleOutputMemoryLimit(middle, MemoryType::MEM_UB) || !CanKeepContractProducersInUb(middle) ||
-            !CanKeepSliceConsumersInUb(middle) || HasNonZeroSliceFromOffset(middle)) {
+        if (!FitsAssembleOutputMemoryLimit(middle, MemoryType::MEM_UB)) {
+            continue;
+        }
+        bool canKeepProducers = false;
+        RETURN_IF_NOT_SUCCESS(CanKeepContractProducersInUb(middle, canKeepProducers));
+        if (!canKeepProducers) {
+            continue;
+        }
+        bool canKeepConsumers = false;
+        RETURN_IF_NOT_SUCCESS(CanKeepSliceConsumersInUb(middle, canKeepConsumers));
+        if (!canKeepConsumers) {
+            continue;
+        }
+        bool hasNonZero = false;
+        RETURN_IF_NOT_SUCCESS(HasNonZeroSliceFromOffset(middle, hasNonZero));
+        if (hasNonZero) {
             continue;
         }
         RETURN_IF_NOT_SUCCESS(TryUpgradeSingleContractSlicePath(op, MemoryType::MEM_UB, MemoryType::MEM_UB,
@@ -2663,6 +2736,50 @@ Status AssignMemoryType::RunOnFunctionLegacy(Function& function)
 {
     legacy::AssignMemoryType legacyAssignMemoryType;
     return legacyAssignMemoryType.RunLegacy(function);
+}
+
+Status AssignMemoryType::FixViewAssembleSemanticMismatch(Function& function)
+{
+    for (auto& op : function.Operations(false)) {
+        if (op.iOperand.empty() || op.oOperand.empty()) {
+            continue;
+        }
+        auto input = op.iOperand.front();
+        auto output = op.oOperand.front();
+        if (input == nullptr || output == nullptr) {
+            continue;
+        }
+        MemoryType inputOriginal = input->GetMemoryTypeOriginal();
+        MemoryType outputOriginal = output->GetMemoryTypeOriginal();
+        if (inputOriginal == MemoryType::MEM_UNKNOWN || outputOriginal == MemoryType::MEM_UNKNOWN) {
+            continue;
+        }
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            // VIEW 表达搬入语义；当 output==DDR 且 input!=DDR 时语义违反，
+            // 需要在 VIEW 之前插入 ASSEMBLE(local→DDR)。
+            // 给 input 增加 DDR requirement（指向 VIEW 自身），制造 local vs DDR 冲突。
+            if (outputOriginal == MemoryType::MEM_DEVICE_DDR && inputOriginal != MemoryType::MEM_DEVICE_DDR) {
+                inserter.UpdateTensorTobeMap(input, op, MemoryType::MEM_DEVICE_DDR, "FixViewSemanticMismatch");
+                APASS_LOG_INFO_F(
+                    Elements::Operation,
+                    "VIEW[%d] output=DDR input=%s, add DDR requirement on input[%d] to trigger ASSEMBLE insertion.",
+                    op.GetOpMagic(), BriefMemoryTypeToString(inputOriginal).c_str(), input->GetMagic());
+            }
+        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            // ASSEMBLE 表达搬出语义；当 input==DDR 且 output!=DDR 时语义违反，
+            // 需要在 ASSEMBLE 之前插入 VIEW(DDR→local)。
+            // 给 input 增加 output memType requirement（指向 ASSEMBLE 自身），制造 DDR vs local 冲突。
+            if (inputOriginal == MemoryType::MEM_DEVICE_DDR && outputOriginal != MemoryType::MEM_DEVICE_DDR) {
+                inserter.UpdateTensorTobeMap(input, op, outputOriginal, "FixAssembleSemanticMismatch");
+                APASS_LOG_INFO_F(
+                    Elements::Operation,
+                    "ASSEMBLE[%d] input=DDR output=%s, add %s requirement on input[%d] to trigger VIEW insertion.",
+                    op.GetOpMagic(), BriefMemoryTypeToString(outputOriginal).c_str(),
+                    BriefMemoryTypeToString(outputOriginal).c_str(), input->GetMagic());
+            }
+        }
+    }
+    return SUCCESS;
 }
 
 } // namespace npu::tile_fwk

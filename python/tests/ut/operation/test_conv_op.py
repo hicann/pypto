@@ -36,7 +36,6 @@ def test_conv1d_op():
             ),
             pypto.pypto_impl.TileL0Info(tileH=1, tileW=64, tileK=24, tileN=32),
         )
-        pypto.set_vec_tile_shapes(16, 16, 16)
         c = pypto.conv(a, b, dtype, [1], [1, 1], [1], extend_params={}, groups=1)
 
     assert isinstance(c, pypto.tensor)
@@ -56,7 +55,6 @@ def test_conv2d_op():
             ),
             pypto.pypto_impl.TileL0Info(tileH=3, tileW=16, tileK=48, tileN=64),
         )
-        pypto.set_vec_tile_shapes(16, 16, 4, 16)
         c = pypto.conv(a, b, dtype, [1, 1], [1, 1, 1, 1], [1, 1], extend_params={}, groups=1)
 
     assert isinstance(c, pypto.tensor)
@@ -75,7 +73,6 @@ def test_conv3d_op():
             ),
             pypto.pypto_impl.TileL0Info(tileH=1, tileW=32, tileK=48, tileN=64),
         )
-        pypto.set_vec_tile_shapes(16, 16, 2, 4, 16)
         c = pypto.conv(a, b, dtype, [1, 1, 1], [0, 0, 1, 1, 1, 1], [1, 1, 1], extend_params={}, groups=1)
 
     assert isinstance(c, pypto.tensor)
@@ -95,7 +92,6 @@ def test_conv2d_bias_op():
             ),
             pypto.pypto_impl.TileL0Info(tileH=2, tileW=64, tileK=48, tileN=32),
         )
-        pypto.set_vec_tile_shapes(16, 16, 4, 16)
         c = pypto.conv(a, b, dtype, [1, 1], [1, 1, 1, 1], [1, 1], extend_params={"bias_tensor": c}, groups=1)
 
     assert isinstance(c, pypto.tensor)
@@ -114,7 +110,6 @@ def test_conv1d_group_op():
             ),
             pypto.pypto_impl.TileL0Info(tileH=1, tileW=64, tileK=8, tileN=16),
         )
-        pypto.set_vec_tile_shapes(16, 16, 16)
         c = pypto.conv(a, b, dtype, [1], [1, 1], [1], extend_params={}, groups=8)
 
     assert isinstance(c, pypto.tensor)

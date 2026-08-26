@@ -83,6 +83,7 @@ operation_conv@pypto:
   src:
     release:
       - framework/src/interface/operation/conv_operation_impl.cpp
+      - framework/src/interface/operation/conv/
       - framework/src/interface/tileop/conv/
     unrelease: null
 

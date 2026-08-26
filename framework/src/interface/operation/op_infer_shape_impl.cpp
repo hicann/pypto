@@ -1013,43 +1013,134 @@ REGISTER_INFER_SHAPE_FUNC(OP_L1_TO_L0A_SCALE, Opcode::OP_L1_TO_L0A_SCALE, LoadL0
 REGISTER_INFER_SHAPE_FUNC(OP_L1_TO_L0B_SCALE, Opcode::OP_L1_TO_L0B_SCALE, LoadL0MXInferFunc);
 
 // conv infer
+namespace {
+std::vector<SymbolicScalar> InferSrcGmValidShapeForFmap3D(const std::vector<SymbolicScalar>& l1TileShape,
+                                                          const std::vector<SymbolicScalar>& gmInputValidShape,
+                                                          const std::vector<SymbolicScalar>& fromOffset, int64_t c0)
+{
+    SymbolicScalar alignedCin = l1TileShape[2] * SymbolicScalar(c0);
+    SymbolicScalar srcGmCin = alignedCin;
+    if (gmInputValidShape.size() >= SHAPE_DIM4 && fromOffset.size() >= SHAPE_DIM4) {
+        srcGmCin = (gmInputValidShape[1] - fromOffset[1]).Min(alignedCin);
+    }
+    return {l1TileShape[0], srcGmCin, l1TileShape[1], l1TileShape[3], l1TileShape[4]};
+}
+
+std::vector<SymbolicScalar> InferSrcGmValidShapeForFmap2D(const std::vector<SymbolicScalar>& l1TileShape,
+                                                          const std::vector<SymbolicScalar>& gmInputValidShape,
+                                                          const std::vector<SymbolicScalar>& fromOffset, int64_t c0)
+{
+    SymbolicScalar alignedCin = l1TileShape[1] * SymbolicScalar(c0);
+    SymbolicScalar srcGmCin = alignedCin;
+    if (gmInputValidShape.size() >= SHAPE_DIM4 && fromOffset.size() >= SHAPE_DIM4) {
+        srcGmCin = (gmInputValidShape[1] - fromOffset[1]).Min(alignedCin);
+    }
+    return {l1TileShape[0], srcGmCin, l1TileShape[2], l1TileShape[3]};
+}
+
+std::vector<SymbolicScalar> InferSrcGmValidShapeForWeight(Operation* op, const std::vector<SymbolicScalar>& l1TileShape,
+                                                          const std::vector<SymbolicScalar>& gmInputValidShape,
+                                                          const std::vector<SymbolicScalar>& fromOffset, int64_t c0,
+                                                          bool isConv3D)
+{
+    int64_t kh = 1;
+    int64_t kw = 1;
+    op->GetAttr(OpAttributeKey::filterH, kh);
+    op->GetAttr(OpAttributeKey::filterW, kw);
+    int64_t khxkw = (kh * kw == 0) ? 1 : kh * kw;
+    int64_t dkL1Size = 1;
+    if (isConv3D) {
+        op->GetAttr("CONV_DK_L1_SIZE", dkL1Size);
+    }
+    int64_t dkxkhxkw = (dkL1Size * khxkw == 0) ? 1 : dkL1Size * khxkw;
+    SymbolicScalar cin1 = l1TileShape[0] / SymbolicScalar(dkxkhxkw);
+    SymbolicScalar alignedCin = cin1 * SymbolicScalar(c0);
+    SymbolicScalar srcGmCin = alignedCin;
+    if (gmInputValidShape.size() >= SHAPE_DIM4 && fromOffset.size() >= SHAPE_DIM4) {
+        srcGmCin = (gmInputValidShape[1] - fromOffset[1]).Min(alignedCin);
+    }
+    if (isConv3D) {
+        return {l1TileShape[1] * l1TileShape[2], srcGmCin, SymbolicScalar(dkL1Size), SymbolicScalar(kh),
+                SymbolicScalar(kw)};
+    }
+    return {l1TileShape[1] * l1TileShape[2], srcGmCin, SymbolicScalar(kh), SymbolicScalar(kw)};
+}
+
+std::vector<SymbolicScalar> InferSrcGmValidShapeDN2NZ(Operation* op, const std::vector<SymbolicScalar>& l1TileShape,
+                                                      const std::shared_ptr<CopyOpAttribute>& copyAttr, int64_t c0,
+                                                      bool isFmap, bool isConv3D)
+{
+    auto gmInputValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    auto fromOffset = OpImmediate::ToSpecified(copyAttr->GetFromOffset());
+    if (isConv3D && isFmap && l1TileShape.size() == SHAPE_DIM6) {
+        return InferSrcGmValidShapeForFmap3D(l1TileShape, gmInputValidShape, fromOffset, c0);
+    }
+    if (isFmap && l1TileShape.size() == SHAPE_DIM5) {
+        return InferSrcGmValidShapeForFmap2D(l1TileShape, gmInputValidShape, fromOffset, c0);
+    }
+    if (!isFmap && l1TileShape.size() == SHAPE_DIM4) {
+        return InferSrcGmValidShapeForWeight(op, l1TileShape, gmInputValidShape, fromOffset, c0, isConv3D);
+    }
+    return {};
+}
+} // namespace
+
 void L1CopyInConvInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
-    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, op != nullptr) << "op should not be nullptr";
-    const std::string L1_TILE_SHAPE = "l1_tile_shape";
+    ASSERT(ConvExpandFuncError::EXPANDFUNC_TENSOR_OP_NULLPTR, op != nullptr) << "op should not be nullptr";
     const std::string IS_FMAP_FLAG = "IS_FMAP";
-    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, op->HasAttr(L1_TILE_SHAPE)) << "op should have L1_TILE_SHAPE attr";
-    std::vector<SymbolicScalar> tile;
-    op->GetAttr(L1_TILE_SHAPE, tile);
-    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, op->HasAttr(IS_FMAP_FLAG)) << "op should have IS_FMAP_FLAG attr";
+    const std::string COPY_IN_MODE_KEY = "COPY_IN_MODE";
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+    ASSERT(ConvExpandFuncError::EXPANDFUNC_TENSOR_ATTR_GET_FAILED, copyAttr != nullptr)
+        << "L1CopyInConv op should have CopyOpAttribute";
+    auto l1TileShape = OpImmediate::ToSpecified(copyAttr->GetToDynValidShape());
+    ASSERT(ConvExpandFuncError::EXPANDFUNC_TENSOR_ATTR_GET_FAILED, op->HasAttr(IS_FMAP_FLAG))
+        << "op should have IS_FMAP_FLAG attr";
+
     bool isFmap = false;
     op->GetAttr(IS_FMAP_FLAG, isFmap);
+    int64_t copyInMode = 0;
+    op->GetAttr(COPY_IN_MODE_KEY, copyInMode);
+    bool isConv3D = false;
+    op->GetAttr("IS_CONV3D", isConv3D);
+
     if (isFmap) {
-        ASSERT(MatmulErrorCode::ERR_CONFIG_TILE, tile.size() == SHAPE_DIM5 || tile.size() == SHAPE_DIM6)
+        ASSERT(ConvExpandFuncError::EXPANDFUNC_PARAMS_INVALID,
+               l1TileShape.size() == SHAPE_DIM5 || l1TileShape.size() == SHAPE_DIM6)
             << "tile.size() should be SHAPE_DIM5 or SHAPE_DIM6";
     } else {
-        ASSERT(MatmulErrorCode::ERR_CONFIG_TILE, tile.size() == SHAPE_DIM4) << "tile.size() should be SHAPE_DIM4";
+        ASSERT(ConvExpandFuncError::EXPANDFUNC_PARAMS_INVALID, l1TileShape.size() == SHAPE_DIM4)
+            << "tile.size() should be SHAPE_DIM4";
     }
-    std::vector<SymbolicScalar> outShape;
-    for (size_t i = 0; i < tile.size(); i++) {
-        outShape.push_back(tile[i]);
-    }
+
+    std::vector<SymbolicScalar> outShape(l1TileShape.begin(), l1TileShape.end());
     for (auto output : op->GetOOperands()) {
         outValidShapes.push_back(outShape);
+    }
+
+    int64_t c0 = l1TileShape.empty() ? 16 : l1TileShape.back().Concrete();
+    const int64_t COPY_MOD_NZ2NZ = 2;
+    const int64_t COPY_MOD_DN2NZ = 3;
+    std::vector<SymbolicScalar> srcGmValidShape;
+    if (copyInMode == COPY_MOD_NZ2NZ) {
+        srcGmValidShape = l1TileShape;
+    } else if (copyInMode == COPY_MOD_DN2NZ) {
+        srcGmValidShape = InferSrcGmValidShapeDN2NZ(op, l1TileShape, copyAttr, c0, isFmap, isConv3D);
+    }
+    if (!srcGmValidShape.empty()) {
+        op->SetAttribute(OpAttributeKey::srcGmConvValidShape, srcGmValidShape);
     }
 }
 
 void L1ToL0ConvInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
-    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, op != nullptr) << "op should not be nullptr";
+    ASSERT(ConvExpandFuncError::EXPANDFUNC_TENSOR_OP_NULLPTR, op != nullptr) << "op should not be nullptr";
     const std::string L0_TILE_SHAPE = "l0_tile_shape";
-    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, op->HasAttr(L0_TILE_SHAPE)) << "op should have L0_TILE_SHAPE attr";
+    ASSERT(ConvExpandFuncError::EXPANDFUNC_TENSOR_ATTR_GET_FAILED, op->HasAttr(L0_TILE_SHAPE))
+        << "op should have L0_TILE_SHAPE attr";
     std::vector<SymbolicScalar> tile;
     op->GetAttr(L0_TILE_SHAPE, tile);
-    std::vector<SymbolicScalar> outShape;
-    for (size_t i = 0; i < tile.size(); i++) {
-        outShape.push_back(tile[i]);
-    }
+    std::vector<SymbolicScalar> outShape(tile.begin(), tile.end());
     for (auto output : op->GetOOperands()) {
         outValidShapes.push_back(outShape);
     }
@@ -1057,8 +1148,7 @@ void L1ToL0ConvInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>
 
 void L0CCopyOutConvInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
-    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, op != nullptr) << "op should not be nullptr";
-
+    ASSERT(ConvExpandFuncError::EXPANDFUNC_TENSOR_OP_NULLPTR, op != nullptr) << "op should not be nullptr";
     if (!(op->GetOOperands()[0]->GetDynValidShape().empty())) {
         outValidShapes.push_back(op->GetOOperands()[0]->GetDynValidShape());
     }
@@ -1071,47 +1161,7 @@ REGISTER_INFER_SHAPE_FUNC(OP_L0C_COPY_OUT_CONV, Opcode::OP_L0C_COPY_OUT_CONV, L0
 
 void TransDataDefaultInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
-    std::vector<SymbolicScalar> inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    SymbolicScalar validShapeN = inputValidShape[0];
-    SymbolicScalar validShapeC = inputValidShape[1];
-    SymbolicScalar validShapeH = inputValidShape[2];
-    SymbolicScalar validShapeW = inputValidShape[3];
-    SymbolicScalar validShapeN0 = 16;
-    SymbolicScalar validShapeC0 = SymbolicScalar(BLOCK_SIZE / BytesOf(op->GetIOperands()[0]->Datatype()));
-    SymbolicScalar validShapeN1 = validShapeN / validShapeN0;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, validShapeC0 > 0) << "The validShapeC0 is not valid !";
-    SymbolicScalar validShapeC1 = validShapeC / validShapeC0;
-
-    if (op->GetOpcode() == Opcode::OP_NCHW2NC1HWC0) {
-        std::vector<SymbolicScalar> outputValidShape = {validShapeN, validShapeC1, validShapeH, validShapeW,
-                                                        validShapeC0};
-        outValidShapes.push_back(outputValidShape);
-    } else if (op->GetOpcode() == Opcode::OP_NCHW2Fractal_Z) {
-        std::vector<SymbolicScalar> outputValidShape = {validShapeC1 * validShapeH * validShapeW, validShapeN1,
-                                                        validShapeN0, validShapeC0};
-        outValidShapes.push_back(outputValidShape);
-    }
-
-    std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
-    outValidShapes.push_back(SymbolicScalar::FromConcrete(tmpValidShape));
-}
-
-void TransDataNCDHW2NDC1HWC0InferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
-{
-    std::vector<SymbolicScalar> inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    SymbolicScalar validShapeN = inputValidShape[0];
-    SymbolicScalar validShapeD = inputValidShape[1];
-    SymbolicScalar validShapeC = inputValidShape[2];
-    SymbolicScalar validShapeH = inputValidShape[3];
-    SymbolicScalar validShapeW = inputValidShape[4];
-    SymbolicScalar validShapeC0 = SymbolicScalar(BLOCK_SIZE / BytesOf(op->GetIOperands()[0]->Datatype()));
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, validShapeC0 > 0) << "The validShapeC0 is not valid !";
-    SymbolicScalar validShapeC1 = validShapeC / validShapeC0;
-
-    std::vector<SymbolicScalar> outputValidShape = {validShapeN, validShapeD, validShapeC1,
-                                                    validShapeH, validShapeW, validShapeC0};
-    outValidShapes.push_back(outputValidShape);
-
+    outValidShapes.push_back(op->GetOOperands()[0]->GetDynValidShape());
     std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
     outValidShapes.push_back(SymbolicScalar::FromConcrete(tmpValidShape));
 }
@@ -1120,37 +1170,6 @@ void TransDataNC1HWC02NCHWInferFunc(Operation* op, std::vector<std::vector<Symbo
 {
     std::vector<SymbolicScalar> validShape = op->GetOOperands()[0]->GetDynValidShape();
     outValidShapes.push_back(validShape);
-    std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
-    outValidShapes.push_back(SymbolicScalar::FromConcrete(tmpValidShape));
-}
-
-void TransDataNDC1HWC02NCDHWInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
-{
-    std::vector<SymbolicScalar> validShape = op->GetOOperands()[0]->GetDynValidShape();
-    validShape.insert(validShape.begin(), SymbolicScalar(1));
-    outValidShapes.push_back(validShape);
-    std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
-    outValidShapes.push_back(SymbolicScalar::FromConcrete(tmpValidShape));
-}
-
-void TransDataNCDHW2Fractal_Z_3DInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
-{
-    std::vector<SymbolicScalar> inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    SymbolicScalar validShapeN = inputValidShape[0];
-    SymbolicScalar validShapeC = inputValidShape[1];
-    SymbolicScalar validShapeD = inputValidShape[2];
-    SymbolicScalar validShapeH = inputValidShape[3];
-    SymbolicScalar validShapeW = inputValidShape[4];
-    SymbolicScalar validShapeC0 = SymbolicScalar(BLOCK_SIZE / BytesOf(op->GetIOperands()[0]->Datatype()));
-    SymbolicScalar validShapeN0 = SymbolicScalar(16);
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, validShapeC0 > 0) << "The validShapeC0 is not valid !";
-    SymbolicScalar validShapeC1 = validShapeC / validShapeC0;
-    SymbolicScalar validShapeN1 = validShapeN / validShapeN0;
-
-    std::vector<SymbolicScalar> outputValidShape = {validShapeD * validShapeC1 * validShapeH * validShapeW,
-                                                    validShapeN1, validShapeN0, validShapeC0};
-    outValidShapes.push_back(outputValidShape);
-
     std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
     outValidShapes.push_back(SymbolicScalar::FromConcrete(tmpValidShape));
 }
@@ -1168,13 +1187,13 @@ void TransDataInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>&
             TransDataNC1HWC02NCHWInferFunc(op, outValidShapes);
             return;
         case Opcode::OP_NCDHW2FRACTAL_Z_3D:
-            TransDataNCDHW2Fractal_Z_3DInferFunc(op, outValidShapes);
+            TransDataDefaultInferFunc(op, outValidShapes);
             return;
         case Opcode::OP_NCDHW2NDC1HWC0:
-            TransDataNCDHW2NDC1HWC0InferFunc(op, outValidShapes);
+            TransDataDefaultInferFunc(op, outValidShapes);
             return;
         case Opcode::OP_NDC1HWC02NCDHW:
-            TransDataNDC1HWC02NCDHWInferFunc(op, outValidShapes);
+            TransDataDefaultInferFunc(op, outValidShapes);
             return;
         default:
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";

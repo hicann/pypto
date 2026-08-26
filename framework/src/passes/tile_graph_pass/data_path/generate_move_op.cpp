@@ -41,6 +41,39 @@ int64_t GenerateMoveOp::PadUB(int64_t dim, int64_t padValue)
     return (dim + padValue - 1) / padValue * padValue;
 }
 
+bool GenerateMoveOp::IsTransFormatOp(Opcode opcode)
+{
+    return opcode == Opcode::OP_TRANS_FORMAT_L1 || opcode == Opcode::OP_TRANS_FORMAT_L0C;
+}
+
+bool GenerateMoveOp::HasConvConsumer(const Operation& op)
+{
+    if (op.GetOOperands().empty() || op.GetOOperands().front() == nullptr) {
+        return false;
+    }
+    for (auto* consumer : op.GetOOperands().front()->GetConsumers()) {
+        if (consumer != nullptr && consumer->HasAttr(OpAttributeKey::isConv) &&
+            consumer->GetBoolAttribute(OpAttributeKey::isConv)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool GenerateMoveOp::HasConvProducer(const Operation& op)
+{
+    if (op.GetIOperands().empty() || op.GetIOperands().front() == nullptr) {
+        return false;
+    }
+    for (auto* producer : op.GetIOperands().front()->GetProducers()) {
+        if (producer != nullptr && producer->HasAttr(OpAttributeKey::isConv) &&
+            producer->GetBoolAttribute(OpAttributeKey::isConv)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 Status GenerateMoveOp::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Operation, "===> Start GenerateMoveOp");
@@ -104,9 +137,51 @@ Status GenerateMoveOp::ProcessGmInput(bool& isGmOutput, Operation& op, ViewOpAtt
         return SUCCESS;
     }
     if ((!isGmOutput)) {
-        op.SetOpCode(Opcode::OP_COPY_IN);
+        const auto outputTensor = op.GetOOperands().empty() ? nullptr : op.GetOOperands().front();
+        const bool isConv = outputTensor != nullptr && outputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L1 &&
+                            HasConvConsumer(op);
+        op.SetOpCode(isConv ? Opcode::OP_L1_COPY_IN_CONV : Opcode::OP_COPY_IN);
+        // A5 conv 输入: 合并 consumer OP_TRANS_FORMAT_L1，删除冗余操作
+        if (isConv) {
+            Status status = CollapseTransFormatL1Consumer(op, viewOpAttribute);
+            if (status != SUCCESS) {
+                return status;
+            }
+        }
         SetCopyAttr(op, viewOpAttribute);
     }
+    return SUCCESS;
+}
+
+Status GenerateMoveOp::CollapseTransFormatL1Consumer(Operation& op, ViewOpAttribute* viewOpAttribute) const
+{
+    // OP_TRANS_FORMAT_L1 仅在 A5 上存在，A2A3 无此 op，直接跳过
+    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
+        return SUCCESS;
+    }
+    // 此处向 consumer 方向合并：将 copy_in 的 output 替换为 TRANS_FORMAT_L1 的 output，
+    // 迁移 TRANS_FORMAT_L1 的属性，并标记删除 TRANS_FORMAT_L1。
+    auto viewOutput = op.GetOOperands().front();
+    const auto& consumers = viewOutput->GetConsumers();
+    if (consumers.size() != 1) {
+        return SUCCESS;
+    }
+    auto transFormatOp = *consumers.begin();
+    if (transFormatOp == nullptr || transFormatOp->GetOpcode() != Opcode::OP_TRANS_FORMAT_L1 ||
+        transFormatOp->GetIOperands().size() != 1 || transFormatOp->GetOOperands().size() != 1 ||
+        transFormatOp->GetIOperands().front() != viewOutput || transFormatOp->GetOOperands().front() == nullptr) {
+        return SUCCESS;
+    }
+    auto transFormatOutput = transFormatOp->GetOOperands().front();
+    auto transFormatAttrs = transFormatOp->GetAllAttr();
+    op.ReplaceOOperand(0, transFormatOutput);
+    op.GetAllAttr() = std::move(transFormatAttrs);
+    op.SetAttribute(OpAttributeKey::isConv, true);
+    if (viewOpAttribute != nullptr) {
+        viewOpAttribute->SetToDynValidShape(transFormatOutput->GetDynValidShape());
+        viewOpAttribute->SetToType(transFormatOutput->GetMemoryTypeToBe());
+    }
+    transFormatOp->SetAsDeleted();
     return SUCCESS;
 }
 
@@ -227,7 +302,7 @@ void GenerateMoveOp::SetCopyAttr(Operation& op, ViewOpAttribute* viewOpAttribute
 {
     auto copyAttr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()), viewOpAttribute->GetTo(),
-        OpImmediate::Specified(op.oOperand.front()->shape),
+        OpImmediate::Specified(op.iOperand.front()->shape),
         OpImmediate::Specified(op.iOperand.front()->tensor->GetDynRawShape()),
         OpImmediate::Specified(viewOpAttribute->GetToDynValidShape()));
     op.GetOOperands()[0]->UpdateDynValidShape(viewOpAttribute->GetToDynValidShape());
@@ -310,49 +385,118 @@ Status GenerateMoveOp::SetOpcodeByMemPath(Operation& op, MemoryType from, Memory
     return SUCCESS;
 }
 
-void GenerateMoveOp::CreateMoveOpForAssemble(Function& function, Operation& op) const
+Status GenerateMoveOp::ProcessConvAssemble(Operation& op, AssembleOpAttribute* assembleOpAttribute) const
 {
-    auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute*>(op.GetOpAttribute().get());
-    auto ASSEMBLE_in = op.iOperand.front();
-    auto parentOp = *ASSEMBLE_in->GetProducers().begin();
-    auto inputMemtype = ASSEMBLE_in->GetMemoryTypeOriginal();
-    auto outputMemtype = op.oOperand.front()->GetMemoryTypeOriginal();
+    // 调用方已校验 attr / input / output 非空，此处仅校验 input/output 数量为 1
+    if (op.GetIOperands().size() != 1 || op.GetOOperands().size() != 1) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Conv ASSEMBLE[%d] must have exactly one input/output.",
+                          op.GetOpMagic());
+        return FAILED;
+    }
+    auto assembleInput = op.iOperand.front();
+    const auto& producers = assembleInput->GetProducers();
+    if (producers.size() != 1) {
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Conv ASSEMBLE[%d] input must have exactly one TRANS_FORMAT producer, got %zu.",
+                          op.GetOpMagic(), producers.size());
+        return FAILED;
+    }
+    auto transFormatOp = *producers.begin();
+    if (transFormatOp == nullptr || !IsTransFormatOp(transFormatOp->GetOpcode()) ||
+        transFormatOp->GetIOperands().size() != 1 || transFormatOp->GetOOperands().size() != 1 ||
+        transFormatOp->GetIOperands().front() == nullptr || transFormatOp->GetOOperands().front() != assembleInput) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Conv ASSEMBLE[%d] input producer must be a single-input TRANS_FORMAT.",
+                          op.GetOpMagic());
+        return FAILED;
+    }
+
+    auto transFormatInput = transFormatOp->GetIOperands().front();
+    auto assembleOutput = op.GetOOperands().front();
+    if (assembleOutput->GetRawTensor() == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Conv ASSEMBLE[%d] output tensor has no raw tensor.", op.GetOpMagic());
+        return FAILED;
+    }
+    auto transFormatAttrs = transFormatOp->GetAllAttr();
+    auto copyAttr = std::make_shared<CopyOpAttribute>(
+        transFormatInput->GetMemoryTypeOriginal(), OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()),
+        OpImmediate::Specified(assembleOutput->GetShape()),
+        OpImmediate::Specified(assembleOutput->GetRawTensor()->GetDynRawShape()),
+        OpImmediate::Specified(transFormatInput->GetDynValidShape()));
+
+    op.SetOpCode(Opcode::OP_L0C_COPY_OUT_CONV);
+    op.GetAllAttr() = std::move(transFormatAttrs);
+    op.SetAttribute(OpAttributeKey::isConv, true);
+    op.SetOpAttribute(copyAttr);
+    op.ReplaceIOperand(0, transFormatInput);
+    transFormatOp->SetAsDeleted();
+    return SUCCESS;
+}
+
+bool GenerateMoveOp::TryInsertModeDispatch(Function& function, Operation& op, AssembleOpAttribute* assembleOpAttribute,
+                                           MemoryType inputMemtype, MemoryType outputMemtype) const
+{
     if (inputMemtype == MemoryType::MEM_L0C && outputMemtype == MemoryType::MEM_L1) {
         SetOpcodeByMemPath(op, inputMemtype, outputMemtype);
         SetL0C2L1CopyAttr(op, op.GetIOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET),
                           OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()), Matrix::CopyMode::INSERT);
-        return;
+        return true;
     }
     if (inputMemtype == MemoryType::MEM_L0C && outputMemtype == MemoryType::MEM_UB) {
         SetOpcodeByMemPath(op, inputMemtype, outputMemtype);
         SetL0C2UBCopyAttr(op, op.GetIOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET),
                           OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()), Matrix::CopyMode::INSERT);
-        return;
+        return true;
     }
     if (inputMemtype == MemoryType::MEM_UB && outputMemtype == MemoryType::MEM_L1) {
         SetOpcodeByMemPath(op, inputMemtype, outputMemtype);
-        // 先进行 ND2NZ 转换
-        ProcessUB2L1(function, op);
-        // 再设置属性
+        ProcessUB2L1(function, op); // 先进行 ND2NZ 转换
         SetUB2L1CopyAttr(op, op.GetIOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET),
                          OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()), Matrix::CopyMode::INSERT);
-        return;
+        return true;
     }
+    return false;
+}
+
+Status GenerateMoveOp::CreateMoveOpForAssemble(Function& function, Operation& op) const
+{
+    auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute*>(op.GetOpAttribute().get());
+    if (op.GetIOperands().empty() || op.GetOOperands().empty()) {
+        return SUCCESS;
+    }
+    auto assembleInput = op.iOperand.front();
+    if (assembleOpAttribute == nullptr || assembleInput == nullptr || op.oOperand.front() == nullptr) {
+        return SUCCESS;
+    }
+    auto inputMemtype = assembleInput->GetMemoryTypeOriginal();
+    auto outputMemtype = op.oOperand.front()->GetMemoryTypeOriginal();
+    auto parentOp = assembleInput->GetProducers().empty() ? nullptr : *assembleInput->GetProducers().begin();
+
+    // INSERT 模式：L0C→L1 / L0C→UB / UB→L1
+    if (TryInsertModeDispatch(function, op, assembleOpAttribute, inputMemtype, outputMemtype)) {
+        return SUCCESS;
+    }
+    // 跳过：DDR 输入 / 非 DDR 输出 / 特殊父 op
     if (inputMemtype == MemoryType::MEM_DEVICE_DDR || outputMemtype != MemoryType::MEM_DEVICE_DDR ||
-        parentOp->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT || parentOp->GetOpcode() == Opcode::OP_INDEX_OUTCAST) {
-        return;
+        (parentOp != nullptr && (parentOp->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT ||
+                                 parentOp->GetOpcode() == Opcode::OP_INDEX_OUTCAST))) {
+        return SUCCESS;
+    }
+    // DDR 输出路径：Conv 变体（L0C→DDR + Conv producer）或标准 COPY_OUT
+    if (inputMemtype == MemoryType::MEM_L0C && HasConvProducer(op)) {
+        return ProcessConvAssemble(op, assembleOpAttribute);
     }
     op.SetOpCode(Opcode::OP_COPY_OUT);
-    if (assembleOpAttribute->GetFrom() != ASSEMBLE_in->GetMemoryTypeOriginal()) {
+    if (assembleOpAttribute->GetFrom() != assembleInput->GetMemoryTypeOriginal()) {
         APASS_LOG_WARN_F(Elements::Operation,
                          "Assemble op from Attr is different from iOperand, opmagic: %d, do force setting.",
                          op.opmagic);
     }
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        ASSEMBLE_in->GetMemoryTypeOriginal(), OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()),
+        assembleInput->GetMemoryTypeOriginal(), OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()),
         OpImmediate::Specified(op.iOperand.front()->shape),
         OpImmediate::Specified(op.oOperand.front()->tensor->GetDynRawShape()),
         OpImmediate::Specified(op.iOperand.front()->GetDynValidShape())));
+    return SUCCESS;
 }
 
 Status GenerateMoveOp::CreateMoveOpForConvert(Function& function, Operation& op) const

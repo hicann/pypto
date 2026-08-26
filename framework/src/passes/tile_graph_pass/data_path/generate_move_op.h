@@ -51,6 +51,9 @@ public:
     ~GenerateMoveOp() override = default;
 
 private:
+    static bool IsTransFormatOp(Opcode opcode);
+    static bool HasConvConsumer(const Operation& op);
+    static bool HasConvProducer(const Operation& op);
     Status PreCheck(Function& function) override;
     Status PostCheck(Function& function) override;
     Status RunOnFunction(Function& function) override;
@@ -71,12 +74,16 @@ private:
     Status A23CreateMoveOpForView(Function& function, Operation& op) const;
     Status A5CreateMoveOpForView(Function& function, Operation& op) const;
     Status ProcessGmInput(bool& isGmOutput, Operation& op, ViewOpAttribute* viewOpAttribute) const;
+    Status CollapseTransFormatL1Consumer(Operation& op, ViewOpAttribute* viewOpAttribute) const;
     Status ProcessL0A(Operation& op, ViewOpAttribute* viewOpAttribute) const;
     Status ProcessL0B(Operation& op, ViewOpAttribute* viewOpAttribute) const;
     Status ProcessL0AMX(Operation& op, ViewOpAttribute* viewOpAttribute) const;
     Status ProcessL0BMX(Operation& op, ViewOpAttribute* viewOpAttribute) const;
     Status ProcessDefault(Function& function, Operation& op, ViewOpAttribute* viewOpAttribute) const;
-    void CreateMoveOpForAssemble(Function& function, Operation& op) const;
+    Status ProcessConvAssemble(Operation& op, AssembleOpAttribute* assembleOpAttribute) const;
+    bool TryInsertModeDispatch(Function& function, Operation& op, AssembleOpAttribute* assembleOpAttribute,
+                               MemoryType inputMemtype, MemoryType outputMemtype) const;
+    Status CreateMoveOpForAssemble(Function& function, Operation& op) const;
     Status CreateMoveOpForConvert(Function& function, Operation& op) const;
     void ProcessUB2L1(Function& function, Operation& op) const;
     static int64_t PadUB(int64_t dim, int64_t padValue);

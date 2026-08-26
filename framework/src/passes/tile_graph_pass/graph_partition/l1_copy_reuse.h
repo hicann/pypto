@@ -179,6 +179,10 @@ private:
         if (L1CopyInReuse(function) == FAILED) {
             return FAILED;
         }
+        if (CommonOperationEliminateUtils::EliminateCommonOperation(function) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Common operation eliminate failed!");
+            return FAILED;
+        }
         DeadOperationEliminator eliminator;
         eliminator.EliminateDeadOperationBackward(function);
         APASS_LOG_INFO_F(Elements::Operation, "===> Finish L1CopyInReuseMerge.");

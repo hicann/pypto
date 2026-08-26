@@ -15,6 +15,7 @@
 
 #include "infer_tensor_format.h"
 
+#include "interface/operation/conv/conv_vec_tile_inference.h"
 #include "interface/operation/operation.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_utils.h"
@@ -147,6 +148,34 @@ int InferTensorFormat::FindInputPosition(const Operation& op, const std::shared_
     return -1;
 }
 
+Operation* InferTensorFormat::FindRelatedConvOp(const std::shared_ptr<LogicalTensor>& srcTensor,
+                                                const std::shared_ptr<LogicalTensor>& fakeDstTensor,
+                                                TileOpFormat targetFormat)
+{
+    if (targetFormat == TileOpFormat::TILEOP_ND) {
+        if (srcTensor == nullptr) {
+            return nullptr;
+        }
+        for (auto* producer : srcTensor->GetProducers()) {
+            if (producer != nullptr &&
+                (producer->GetOpcode() == Opcode::OP_CONV2D || producer->GetOpcode() == Opcode::OP_CONV3D)) {
+                return producer;
+            }
+        }
+    } else {
+        if (fakeDstTensor == nullptr) {
+            return nullptr;
+        }
+        for (auto* consumer : fakeDstTensor->GetConsumers()) {
+            if (consumer != nullptr &&
+                (consumer->GetOpcode() == Opcode::OP_CONV2D || consumer->GetOpcode() == Opcode::OP_CONV3D)) {
+                return consumer;
+            }
+        }
+    }
+    return nullptr;
+}
+
 void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTensor>& srcTensor,
                                               TileOpFormat targetFormat, Operation* relatedOp)
 {
@@ -178,6 +207,27 @@ void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTenso
         tmpVectile.tile[1] *= NUM4;
         tmpVectile.tile[3] *= NUM4;
         TileShape::Current().SetVecTile(tmpVectile);
+    } else if (srcFormat == TileOpFormat::TILEOP_ND && targetFormat == TileOpFormat::TILEOP_FRACTAL_Z) {
+        VecTile tmpVectile = relatedOp->GetTileShape().GetVecTile();
+        tmpVectile.tile[0] = NUM16;
+        tmpVectile.tile[1] = c0;
+        tmpVectile.tile[3] *= tmpVectile.tile[2];
+        tmpVectile.tile[2] = 1;
+        TileShape::Current().SetVecTile(tmpVectile);
+    } else if (srcFormat == TileOpFormat::TILEOP_ND && targetFormat == TileOpFormat::TILEOP_FRACTAL_Z_3D) {
+        VecTile tmpVectile = relatedOp->GetTileShape().GetVecTile();
+        tmpVectile.tile[0] = NUM16;
+        tmpVectile.tile[1] = c0;
+        tmpVectile.tile[4] *= tmpVectile.tile[3];
+        tmpVectile.tile[3] = 1;
+        TileShape::Current().SetVecTile(tmpVectile);
+    } else if (srcFormat == TileOpFormat::TILEOP_ND && targetFormat == TileOpFormat::TILEOP_NDC1HWC0) {
+        VecTile tmpVectile = relatedOp->GetTileShape().GetVecTile();
+        tmpVectile.tile[0] = 1;
+        tmpVectile.tile[1] *= NUM4;
+        tmpVectile.tile[2] *= NUM2;
+        tmpVectile.tile[3] *= NUM2;
+        TileShape::Current().SetVecTile(tmpVectile);
     } else {
         TileShape::Current().SetVecTile(oriVectile);
     }
@@ -189,9 +239,27 @@ std::shared_ptr<LogicalTensor> InferTensorFormat::InsertTransDataOp(Function& fu
                                                                     Operation* relatedOp, TileOpFormat targetFormat)
 {
     int group_value = GetTransDataGroupValue(srcTensor, fakeDstTensor, relatedOp);
-    ApplyTransDataVecTile(srcTensor, targetFormat, relatedOp);
+
+    Operation* convOp = FindRelatedConvOp(srcTensor, fakeDstTensor, targetFormat);
+    VecTile savedVecTile = TileShape::Current().GetVecTile();
+    bool vecTileInferred = false;
+    if (convOp != nullptr) {
+        auto vecTiles = Conv::InferConvVecTileShapes(*convOp, srcTensor->Datatype());
+        VecTile inferredVecTile = Conv::SelectConvVecTile(vecTiles, targetFormat);
+        if (!inferredVecTile.tile.empty()) {
+            TileShape::Current().SetVecTile(inferredVecTile);
+            vecTileInferred = true;
+        }
+    } else if (relatedOp != nullptr) {
+        ApplyTransDataVecTile(srcTensor, targetFormat, relatedOp);
+    }
+
     auto result = TransData(function, srcTensor, fakeDstTensor, targetFormat, group_value);
     result->GetRawTensor()->format = targetFormat;
+
+    if (vecTileInferred) {
+        TileShape::Current().SetVecTile(savedVecTile);
+    }
     return result;
 }
 

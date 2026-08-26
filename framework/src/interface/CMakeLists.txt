@@ -32,6 +32,7 @@ file(GLOB _Interface_Srcs
 
         # Operation
         operation/*.cpp
+        operation/conv/*.cpp
         operation/vector/*.cpp
         operation/distributed/*.cpp
 

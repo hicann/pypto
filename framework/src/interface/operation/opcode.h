@@ -364,6 +364,8 @@ enum class Opcode {
     OP_COMPARE_SWAP,
     OP_MERGE,
     // End: parallel sort
+    OP_TRANS_FORMAT_L0C,
+    OP_TRANS_FORMAT_L1,
     OP_UNKNOWN
 };
 

@@ -103,7 +103,7 @@ private:
 
     bool CanUseDirectAssemblePath(Operation& operation, MemoryType from, MemoryType to);
 
-    bool IsAssembleToOffsetAligned(Operation& operation, const LogicalTensorPtr& output);
+    Status IsAssembleToOffsetAligned(Operation& operation, const LogicalTensorPtr& output, bool& aligned);
 
     bool FitsAssembleOutputMemoryLimit(const LogicalTensorPtr& output, MemoryType memoryType) const;
 
@@ -156,15 +156,16 @@ private:
     MemoryType InferTargetTypeThroughForwardViews(const LogicalTensorPtr& tensor,
                                                   std::unordered_set<LogicalTensorPtr>& visitedTensors) const;
 
-    bool CanKeepContractProducersInUb(const LogicalTensorPtr& tensor);
+    Status CanKeepContractProducersInUb(const LogicalTensorPtr& tensor, bool& canKeep);
 
-    bool IsSliceFromOffsetAligned(Operation& sliceOp, const LogicalTensorPtr& input);
+    Status IsSliceFromOffsetAligned(Operation& sliceOp, const LogicalTensorPtr& input, bool& aligned);
 
-    bool CanKeepSliceConsumersInUb(const LogicalTensorPtr& tensor);
+    Status CanKeepSliceConsumersInUb(const LogicalTensorPtr& tensor, bool& canKeep);
 
-    bool HasNonZeroSliceFromOffset(const LogicalTensorPtr& tensor);
+    Status HasNonZeroSliceFromOffset(const LogicalTensorPtr& tensor, bool& hasNonZero);
 
-    bool KeepSplitReshapeUb(Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output);
+    Status KeepSplitReshapeUb(Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
+                              bool& kept);
 
     bool IsDynamicReshape(Operation& operation, const LogicalTensorPtr& output) const;
 
@@ -192,6 +193,8 @@ private:
     Status ResolveTensorMemoryUnknowns(const LogicalTensorPtr& tensor);
 
     Status SyncViewAssembleMemoryAttrs(Function& function);
+
+    Status FixViewAssembleSemanticMismatch(Function& function);
 
     Status SyncViewMemoryAttr(Operation& operation);
 
@@ -246,7 +249,7 @@ private:
     bool IsDimMultiple(const Shape& shape1, const Shape& shape2);
     bool CheckInnerAxisC0Size(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
     size_t CalcNZTensorSize(const LogicalTensorPtr& tensor) const;
-    int64_t CalcLineOffset(const Shape& shape, const Offset& offset);
+    Status CalcLineOffset(const Shape& shape, const Offset& offset, int64_t& lineOffset) const;
     Status RunOnFunctionLegacy(Function& function);
     ConvertInserter inserter;
     AssignMemoryTypeChecker checker;

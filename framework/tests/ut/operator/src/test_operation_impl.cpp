@@ -1632,8 +1632,9 @@ TEST_F(OperationImplTest, Test_CopySign_int)
     FUNCTION("TestBitwiseRightShift") { result = CopySign(self, other); }
 }
 
-TEST_F(OperationImplTest, Test_Conv2d_FP16)
+TEST_F(OperationImplTest, Test_Conv2d_FP16_A2A3)
 {
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
     Conv::TileL1Info l1TileShape(2, 2, 64, 64, 16, 16, 16, 1);
     Conv::TileL0Info l0TileShape(2, 64, 16, 16);
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
@@ -1642,14 +1643,16 @@ TEST_F(OperationImplTest, Test_Conv2d_FP16)
     Tensor weight(DT_FP16, {32, 16, 3, 3}, "weight");
     Tensor result;
     Conv::ConvExtendParam convExtendParam;
-    FUNCTION("TestConv")
+    FUNCTION("TestConvA2A3")
     {
         result = npu::tile_fwk::Conv::Conv(DT_FP16, fmap, weight, {1, 1}, {1, 1, 1, 1}, {1, 1}, convExtendParam, 1);
     }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
-TEST_F(OperationImplTest, Test_Conv2d_FP32)
+TEST_F(OperationImplTest, Test_Conv2d_FP32_A2A3)
 {
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
     Conv::TileL1Info l1TileShape(2, 2, 64, 64, 8, 8, 16, 1);
     Conv::TileL0Info l0TileShape(2, 64, 8, 16);
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
@@ -1658,14 +1661,16 @@ TEST_F(OperationImplTest, Test_Conv2d_FP32)
     Tensor weight(DT_FP32, {32, 8, 3, 3}, "weight");
     Tensor result;
     Conv::ConvExtendParam convExtendParam;
-    FUNCTION("TestConv")
+    FUNCTION("TestConvA2A3")
     {
         result = npu::tile_fwk::Conv::Conv(DT_FP32, fmap, weight, {1, 1}, {1, 1, 1, 1}, {1, 1}, convExtendParam, 1);
     }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
-TEST_F(OperationImplTest, Test_Conv2d_BF16_Groups)
+TEST_F(OperationImplTest, Test_Conv2d_BF16_Groups_A2A3)
 {
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
     Conv::TileL1Info l1TileShape(2, 2, 64, 64, 16, 16, 16, 1);
     Conv::TileL0Info l0TileShape(2, 64, 16, 16);
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
@@ -1674,14 +1679,16 @@ TEST_F(OperationImplTest, Test_Conv2d_BF16_Groups)
     Tensor weight(DT_BF16, {32, 16, 3, 3}, "weight");
     Tensor result;
     Conv::ConvExtendParam convExtendParam;
-    FUNCTION("TestConv")
+    FUNCTION("TestConvA2A3")
     {
         result = npu::tile_fwk::Conv::Conv(DT_BF16, fmap, weight, {1, 1}, {1, 1, 1, 1}, {1, 1}, convExtendParam, 2);
     }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
-TEST_F(OperationImplTest, Test_Conv1d_FP16_Bias)
+TEST_F(OperationImplTest, Test_Conv1d_FP16_Bias_A2A3)
 {
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
     Conv::TileL1Info l1TileShape(1, 1, 64, 64, 16, 16, 16, 1);
     Conv::TileL0Info l0TileShape(1, 64, 16, 16);
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
@@ -1696,20 +1703,76 @@ TEST_F(OperationImplTest, Test_Conv1d_FP16_Bias)
     Tensor result;
     Conv::ConvExtendParam convExtendParam;
     convExtendParam.biasTensor = bias;
-    FUNCTION("TestConv")
+    FUNCTION("TestConvA2A3")
     {
         result = npu::tile_fwk::Conv::Conv(DT_FP16, fmap, weight, {1}, {1, 1}, {1}, convExtendParam, 1);
     }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
-TEST_F(OperationImplTest, Test_Conv3d_FP16_Bias)
+TEST_F(OperationImplTest, Test_Conv2d_FP16_A5)
 {
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
     Conv::TileL1Info l1TileShape(2, 2, 64, 64, 16, 16, 16, 1);
     Conv::TileL0Info l0TileShape(2, 64, 16, 16);
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
-    TileShape::Current().SetVecTile({16, 16, 2, 4, 16});
-    Tensor fmap(DT_FP16, {1, 32, 2, 2, 64}, "fmap");
-    Tensor weight(DT_FP16, {32, 32, 2, 3, 3}, "weight");
+    TileShape::Current().SetVecTile({16, 16, 2, 16});
+    Tensor fmap(DT_FP16, {1, 16, 2, 64}, "fmap");
+    Tensor weight(DT_FP16, {32, 16, 3, 3}, "weight");
+    Tensor result;
+    Conv::ConvExtendParam convExtendParam;
+    FUNCTION("TestConvA5")
+    {
+        result = npu::tile_fwk::Conv::Conv(DT_FP16, fmap, weight, {1, 1}, {1, 1, 1, 1}, {1, 1}, convExtendParam, 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationImplTest, Test_Conv2d_FP32_A5)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Conv::TileL1Info l1TileShape(2, 2, 64, 64, 8, 8, 16, 1);
+    Conv::TileL0Info l0TileShape(2, 64, 8, 16);
+    TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 2, 16});
+    Tensor fmap(DT_FP32, {1, 8, 2, 64}, "fmap");
+    Tensor weight(DT_FP32, {32, 8, 3, 3}, "weight");
+    Tensor result;
+    Conv::ConvExtendParam convExtendParam;
+    FUNCTION("TestConvA5")
+    {
+        result = npu::tile_fwk::Conv::Conv(DT_FP32, fmap, weight, {1, 1}, {1, 1, 1, 1}, {1, 1}, convExtendParam, 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationImplTest, Test_Conv2d_BF16_Groups_A5)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Conv::TileL1Info l1TileShape(2, 2, 64, 64, 16, 16, 16, 1);
+    Conv::TileL0Info l0TileShape(2, 64, 16, 16);
+    TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 2, 16});
+    Tensor fmap(DT_BF16, {1, 32, 2, 64}, "fmap");
+    Tensor weight(DT_BF16, {32, 16, 3, 3}, "weight");
+    Tensor result;
+    Conv::ConvExtendParam convExtendParam;
+    FUNCTION("TestConvA5")
+    {
+        result = npu::tile_fwk::Conv::Conv(DT_BF16, fmap, weight, {1, 1}, {1, 1, 1, 1}, {1, 1}, convExtendParam, 2);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationImplTest, Test_Conv1d_FP16_Bias_A5)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Conv::TileL1Info l1TileShape(1, 1, 64, 64, 16, 16, 16, 1);
+    Conv::TileL0Info l0TileShape(1, 64, 16, 16);
+    TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 16});
+    Tensor fmap(DT_FP16, {1, 32, 64}, "fmap");
+    Tensor weight(DT_FP16, {32, 32, 3}, "weight");
     Tensor bias(DT_FP16,
                 {
                     32,
@@ -1718,11 +1781,157 @@ TEST_F(OperationImplTest, Test_Conv3d_FP16_Bias)
     Tensor result;
     Conv::ConvExtendParam convExtendParam;
     convExtendParam.biasTensor = bias;
-    FUNCTION("TestConv")
+    FUNCTION("TestConvA5")
+    {
+        result = npu::tile_fwk::Conv::Conv(DT_FP16, fmap, weight, {1}, {1, 1}, {1}, convExtendParam, 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationImplTest, Test_Conv2d_FP16_SmallTile_A2A3)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
+    Conv::TileL1Info l1TileShape(1, 1, 16, 16, 16, 16, 16, 1);
+    Conv::TileL0Info l0TileShape(1, 16, 16, 16);
+    TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 1, 16});
+    Tensor fmap(DT_FP16, {1, 16, 16, 16}, "fmap");
+    Tensor weight(DT_FP16, {16, 16, 3, 3}, "weight");
+    Tensor result;
+    Conv::ConvExtendParam convExtendParam;
+    FUNCTION("TestConvA2A3")
+    {
+        result = npu::tile_fwk::Conv::Conv(DT_FP16, fmap, weight, {2, 2}, {0, 0, 0, 0}, {1, 1}, convExtendParam, 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationImplTest, Test_Conv2d_BF16_Stride2_A2A3)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
+    Conv::TileL1Info l1TileShape(1, 1, 16, 16, 16, 16, 32, 1);
+    Conv::TileL0Info l0TileShape(1, 16, 16, 32);
+    TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 1, 16});
+    Tensor fmap(DT_BF16, {1, 16, 16, 16}, "fmap");
+    Tensor weight(DT_BF16, {32, 16, 3, 3}, "weight");
+    Tensor result;
+    Conv::ConvExtendParam convExtendParam;
+    FUNCTION("TestConvA2A3")
+    {
+        result = npu::tile_fwk::Conv::Conv(DT_BF16, fmap, weight, {2, 2}, {1, 1, 1, 1}, {1, 1}, convExtendParam, 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationImplTest, Test_Conv1d_FP32_A2A3)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
+    Conv::TileL1Info l1TileShape(1, 1, 16, 16, 8, 8, 16, 1);
+    Conv::TileL0Info l0TileShape(1, 16, 8, 16);
+    TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 16});
+    Tensor fmap(DT_FP32, {1, 8, 32}, "fmap");
+    Tensor weight(DT_FP32, {16, 8, 3}, "weight");
+    Tensor result;
+    Conv::ConvExtendParam convExtendParam;
+    FUNCTION("TestConvA2A3")
+    {
+        result = npu::tile_fwk::Conv::Conv(DT_FP32, fmap, weight, {2}, {1, 1}, {1}, convExtendParam, 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationImplTest, Test_Conv3d_FP16_A2A3)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
+    Conv::TileL1Info l1TileShape(1, 1, 16, 16, 16, 16, 16, 1);
+    Conv::TileL0Info l0TileShape(1, 16, 16, 16);
+    TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 1, 4, 16});
+    Tensor fmap(DT_FP16, {1, 16, 2, 2, 16}, "fmap");
+    Tensor weight(DT_FP16, {16, 16, 2, 3, 3}, "weight");
+    Tensor result;
+    Conv::ConvExtendParam convExtendParam;
+    FUNCTION("TestConvA2A3")
     {
         result = npu::tile_fwk::Conv::Conv(DT_FP16, fmap, weight, {1, 1, 1}, {0, 0, 1, 1, 1, 1}, {1, 1, 1},
                                            convExtendParam, 1);
     }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationImplTest, Test_Conv2d_FP16_SmallTile_A5)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Conv::TileL1Info l1TileShape(1, 1, 16, 16, 16, 16, 16, 1);
+    Conv::TileL0Info l0TileShape(1, 16, 16, 16);
+    TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 1, 16});
+    Tensor fmap(DT_FP16, {1, 16, 16, 16}, "fmap");
+    Tensor weight(DT_FP16, {16, 16, 3, 3}, "weight");
+    Tensor result;
+    Conv::ConvExtendParam convExtendParam;
+    FUNCTION("TestConvA5")
+    {
+        result = npu::tile_fwk::Conv::Conv(DT_FP16, fmap, weight, {2, 2}, {0, 0, 0, 0}, {1, 1}, convExtendParam, 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationImplTest, Test_Conv2d_BF16_Stride2_A5)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Conv::TileL1Info l1TileShape(1, 1, 16, 16, 16, 16, 32, 1);
+    Conv::TileL0Info l0TileShape(1, 16, 16, 32);
+    TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 1, 16});
+    Tensor fmap(DT_BF16, {1, 16, 16, 16}, "fmap");
+    Tensor weight(DT_BF16, {32, 16, 3, 3}, "weight");
+    Tensor result;
+    Conv::ConvExtendParam convExtendParam;
+    FUNCTION("TestConvA5")
+    {
+        result = npu::tile_fwk::Conv::Conv(DT_BF16, fmap, weight, {2, 2}, {1, 1, 1, 1}, {1, 1}, convExtendParam, 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationImplTest, Test_Conv1d_FP32_A5)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Conv::TileL1Info l1TileShape(1, 1, 16, 16, 8, 8, 16, 1);
+    Conv::TileL0Info l0TileShape(1, 16, 8, 16);
+    TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 16});
+    Tensor fmap(DT_FP32, {1, 8, 32}, "fmap");
+    Tensor weight(DT_FP32, {16, 8, 3}, "weight");
+    Tensor result;
+    Conv::ConvExtendParam convExtendParam;
+    FUNCTION("TestConvA5")
+    {
+        result = npu::tile_fwk::Conv::Conv(DT_FP32, fmap, weight, {2}, {1, 1}, {1}, convExtendParam, 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationImplTest, Test_Conv3d_FP16_A5)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Conv::TileL1Info l1TileShape(1, 1, 16, 16, 16, 16, 16, 1);
+    Conv::TileL0Info l0TileShape(1, 16, 16, 16);
+    TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 1, 4, 16});
+    Tensor fmap(DT_FP16, {1, 16, 2, 2, 16}, "fmap");
+    Tensor weight(DT_FP16, {16, 16, 2, 3, 3}, "weight");
+    Tensor result;
+    Conv::ConvExtendParam convExtendParam;
+    FUNCTION("TestConvA5")
+    {
+        result = npu::tile_fwk::Conv::Conv(DT_FP16, fmap, weight, {1, 1, 1}, {0, 0, 1, 1, 1, 1}, {1, 1, 1},
+                                           convExtendParam, 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
 TEST_F(OperationImplTest, test_Pad_1D)

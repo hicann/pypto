@@ -221,7 +221,24 @@ std::string CodeGenOpNPU::GenTransData() const
         tileParamsStr.emplace_back("(int)(" + SymbolicExpressionTable::BuildExpression(tileParam) + ")");
     }
 
+    if (opCode == Opcode::OP_NCHW2NC1HWC0 || opCode == Opcode::OP_NC1HWC02NCHW || opCode == Opcode::OP_NCHW2Fractal_Z ||
+        opCode == Opcode::OP_NCDHW2NDC1HWC0 || opCode == Opcode::OP_NCDHW2FRACTAL_Z_3D ||
+        opCode == Opcode::OP_NDC1HWC02NCDHW) {
+        return PrintTransDataLayoutTmp();
+    }
+
     return PrintTransDataLayout(tileParamsStr);
+}
+
+std::string CodeGenOpNPU::PrintTransDataLayoutTmp() const
+{
+    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
+    std::string tmpTensor = QueryTileTensorNameByIdx(ID1);
+    std::string inputTensor = QueryTileTensorNameByIdx(ID2);
+    std::vector<std::string> paramList = {dstTensor, tmpTensor, inputTensor};
+    std::ostringstream oss;
+    oss << tileOpName << WrapParamByParentheses(paramList) << STMT_END;
+    return oss.str();
 }
 
 std::string CodeGenOpNPU::PrintTransDataLayout(const std::vector<std::string>& param) const

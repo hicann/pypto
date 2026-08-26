@@ -144,7 +144,7 @@ TEST_F(InferTensorFormatTest, Conv2DWithTransDataInsertion)
                              "a1_out", "v2_out", "a2_out", "conv_out", "conv_nd"});
 
     G.GetOp("conv")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
-    G.GetOp("conv_to_nd")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
+    G.GetOp("conv_to_nd")->GetTileShapeForSetting().SetVecTile({16, 16, 1, 1, 16});
     Function* func = G.GetFunction();
     ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
 
@@ -203,7 +203,7 @@ TEST_F(InferTensorFormatTest, SharedInputsConv2DAndMatmul)
     UpdateDynValidShapes(G, {"incast0", "incast1", "incast2", "t0", "t1", "t2", "conv_out", "conv_nd", "mm_out"});
 
     G.GetOp("conv")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
-    G.GetOp("conv_to_nd")->GetTileShapeForSetting().SetVecTile({16, 16, 2, 16});
+    G.GetOp("conv_to_nd")->GetTileShapeForSetting().SetVecTile({16, 16, 1, 1, 16});
     Function* func = G.GetFunction();
     ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
 
