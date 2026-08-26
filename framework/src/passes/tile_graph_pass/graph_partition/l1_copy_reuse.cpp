@@ -1184,7 +1184,9 @@ Status L1CopyInReuseMerge::CheckOpListValid(Function& func) const
             opOriList[i].GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
             if (opOriList[i].GetOpcode() == config::GetSliceOpcode() ||
                 opOriList[i].GetOpcode() == Opcode::OP_CONVERT ||
-                opOriList[i].GetOpcode() == Opcode::OP_L1_COPY_IN_CONV) {
+                opOriList[i].GetOpcode() == Opcode::OP_L1_COPY_IN_CONV ||
+                opOriList[i].GetOpcode() == Opcode::OP_L1_COPY_IN_CONV_BP_DX_DY ||
+                opOriList[i].GetOpcode() == Opcode::OP_L1_COPY_IN_CONV_BP) {
                 // 符合预期且合法
                 continue;
             } else if (opOriList[i].GetOpcode() == Opcode::OP_GATHER_IN_L1) {

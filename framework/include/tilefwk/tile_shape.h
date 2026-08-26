@@ -72,6 +72,19 @@ struct ConvTile {
 };
 
 /**
+ * @brief ConvBpTile tile for conv backward input operation
+ *
+ */
+struct ConvBpTile {
+    npu::tile_fwk::ConvBp::ConvBpTileL1Info tileL1Info;
+    npu::tile_fwk::ConvBp::ConvBpTileL0Info tileL0Info;
+
+    bool valid() const;
+
+    std::string ToString() const;
+};
+
+/**
  * \brief DistTile tile for distributed operation
  *
  */
@@ -90,6 +103,7 @@ enum class TileType {
     VEC,
     CUBE,
     CONV,
+    CONV_BP,
     DIST,
     MAX,
 };
@@ -101,8 +115,8 @@ enum class TileType {
 struct TileShape {
     TileShape();
 
-    TileShape(const std::vector<int64_t>& vTile, const CubeTile& cTile, const ConvTile& cvTile, const DistTile& dTile,
-              const std::vector<int64_t>& mSize);
+    TileShape(const std::vector<int64_t>& vTile, const CubeTile& cTile, const ConvTile& cvTile,
+              const ConvBpTile& cvBpTile, const DistTile& dTile, const std::vector<int64_t>& mSize);
 
     /**
      * \brief Set the Vec Tile
@@ -157,6 +171,21 @@ struct TileShape {
      */
     const ConvTile& GetConvTile() const { return convTile; }
     ConvTile& GetConvTile() { return convTile; }
+
+    /**
+     * \brief Set the ConvBp Tile
+     *
+     * \param tileL1Info
+     * \param tileL0Info
+     */
+    void SetConvBpTile(const npu::tile_fwk::ConvBp::ConvBpTileL1Info& tileL1Info,
+                       const npu::tile_fwk::ConvBp::ConvBpTileL0Info& tileL0Info);
+
+    /**
+     * \brief Get the ConvBp Tile
+     */
+    const ConvBpTile& GetConvBpTile() const { return convBpTile; }
+    ConvBpTile& GetConvBpTile() { return convBpTile; }
 
     /**
      * \brief Set the Dist Tile
@@ -261,6 +290,7 @@ private:
     VecTile vecTile;
     CubeTile cubeTile;
     ConvTile convTile;
+    ConvBpTile convBpTile;
     DistTile distTile;
     std::vector<int64_t> matrixSize;
 };

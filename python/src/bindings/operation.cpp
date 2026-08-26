@@ -580,6 +580,9 @@ void BindOperation(py::module_& m)
         .def(py::init<>())
         .def(py::init<Tensor, Tensor, float, Conv::ReLuType>(), py::arg("bias_tensor"), py::arg("scale_tensor"),
              py::arg("scale"), py::arg("relu_type"), "Conv extend params.");
+    py::class_<ConvBp::ConvBpExtendParam>(m, "ConvBpExtendParam")
+        .def(py::init<>())
+        .def(py::init<Tensor>(), py::arg("bias_tensor"), "ConvBp extend params.");
     m.def(
         "MatmulMX",
         [](DataType out_type, const Tensor& tensor_a, const Tensor& tensor_a_scale, const Tensor& tensor_b,
@@ -614,6 +617,17 @@ void BindOperation(py::module_& m)
         py::arg("out_type"), py::arg("tensor_input"), py::arg("tensor_weight"), py::arg("strides"), py::arg("paddings"),
         py::arg("dilations"), py::arg("extend_params"), py::arg("groups") = 1,
         "Convolution forward with extend param.");
+    m.def(
+        "ConvBackwardInput",
+        [](DataType out_type, const Tensor& grad_output, const std::vector<int64_t>& input_size,
+           const Tensor& tensor_weight, const std::vector<int64_t>& strides, const std::vector<int64_t>& paddings,
+           const std::vector<int64_t>& dilations, const ConvBp::ConvBpExtendParam& extendParam, const int64_t groups) {
+            return ConvBp::ConvBackwardInput(out_type, grad_output, input_size, tensor_weight, strides, paddings,
+                                             dilations, extendParam, groups);
+        },
+        py::arg("out_type"), py::arg("grad_output"), py::arg("input_size"), py::arg("tensor_weight"),
+        py::arg("strides"), py::arg("paddings"), py::arg("dilations"), py::arg("extend_params"), py::arg("groups") = 1,
+        "Convolution backward input with extend param.");
     m.def(
         "BatchMatmul",
         [](DataType out_type, const Tensor& tensor_a, const Tensor& tensor_b, bool a_trans, bool b_trans,

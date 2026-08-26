@@ -139,6 +139,8 @@ public:
     static const std::string filterW;
     static const std::string strideH;
     static const std::string strideW;
+    static const std::string skipH;
+    static const std::string skipW;
     static const std::string dilationH;
     static const std::string dilationW;
     static const std::string paddingLeft;
@@ -154,6 +156,12 @@ public:
     static const std::string rmwMode;
     static const std::string transDataOffset;
     static const std::string isConv;
+    static const std::string hwk;
+    static const std::string kL0Size;
+    static const std::string nL0Size;
+    static const std::string k0Idx;
+    static const std::string n0Idx;
+    static const std::string kL0TileSize;
     static const std::string writeConflict;
     static const std::string parallel;
 };
@@ -552,6 +560,8 @@ public:
                                                             Opcode::OP_L1_TO_L0A_SCALE,
                                                             Opcode::OP_L1_TO_L0B_SCALE,
                                                             Opcode::OP_L1_COPY_IN_CONV,
+                                                            Opcode::OP_L1_COPY_IN_CONV_BP_DX_DY,
+                                                            Opcode::OP_L1_COPY_IN_CONV_BP,
                                                             Opcode::OP_L0C_COPY_OUT,
                                                             Opcode::OP_L0C_COPY_OUT_CONV,
                                                             Opcode::OP_L1_RESHAPE_COPY_IN,

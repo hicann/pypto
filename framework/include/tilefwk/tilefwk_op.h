@@ -569,6 +569,43 @@ Tensor Conv(DataType outType, const Tensor& inputTensor, const Tensor& weightTen
 
 } // namespace Conv
 
+namespace ConvBp {
+
+struct ConvBpTileL1Info {
+    int64_t tileML1{0};
+    int64_t tileKL1{0};
+    int64_t tileNL1{0};
+
+    ConvBpTileL1Info(int64_t mL1, int64_t kL1, int64_t nL1) : tileML1(mL1), tileKL1(kL1), tileNL1(nL1) {}
+
+    ConvBpTileL1Info() = default;
+};
+
+struct ConvBpTileL0Info {
+    int64_t tileML0{0};
+    int64_t tileKL0{0};
+    int64_t tileNL0{0};
+
+    ConvBpTileL0Info(int64_t mL0, int64_t kL0, int64_t nL0) : tileML0(mL0), tileKL0(kL0), tileNL0(nL0) {}
+
+    ConvBpTileL0Info() = default;
+};
+
+struct ConvBpExtendParam {
+    Tensor biasTensor{Tensor()};
+
+    ConvBpExtendParam(Tensor bias) : biasTensor(std::move(bias)) {}
+
+    ConvBpExtendParam() = default;
+};
+
+Tensor ConvBackwardInput(DataType outType, const Tensor& gradOutput, const std::vector<int64_t>& inputSize,
+                         const Tensor& weightTensor, const std::vector<int64_t>& strides,
+                         const std::vector<int64_t>& paddings, const std::vector<int64_t>& dilations,
+                         const ConvBpExtendParam& extendParam, const int64_t groups = 1);
+
+} // namespace ConvBp
+
 namespace Distributed {
 enum class DistReduceType {
     DIST_REDUCE_ADD,

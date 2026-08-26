@@ -127,6 +127,28 @@ void BindControllerSetTile(py::module_& m)
         auto convTile = TileShape::Current().GetConvTile();
         return std::tuple(convTile.tileL1Info, convTile.tileL0Info, convTile.setL0Tile);
     });
+    py::class_<ConvBp::ConvBpTileL1Info>(m, "ConvBpTileL1Info")
+        .def(py::init<>())
+        .def(py::init<int64_t, int64_t, int64_t>(), py::arg("tileML1"), py::arg("tileKL1"), py::arg("tileNL1"))
+        .def_readwrite("tileML1", &ConvBp::ConvBpTileL1Info::tileML1)
+        .def_readwrite("tileKL1", &ConvBp::ConvBpTileL1Info::tileKL1)
+        .def_readwrite("tileNL1", &ConvBp::ConvBpTileL1Info::tileNL1);
+    py::class_<ConvBp::ConvBpTileL0Info>(m, "ConvBpTileL0Info")
+        .def(py::init<>())
+        .def(py::init<int64_t, int64_t, int64_t>(), py::arg("tileML0"), py::arg("tileKL0"), py::arg("tileNL0"))
+        .def_readwrite("tileML0", &ConvBp::ConvBpTileL0Info::tileML0)
+        .def_readwrite("tileKL0", &ConvBp::ConvBpTileL0Info::tileKL0)
+        .def_readwrite("tileNL0", &ConvBp::ConvBpTileL0Info::tileNL0);
+    m.def(
+        "SetConvBpTile",
+        [](const ConvBp::ConvBpTileL1Info& tileL1Info, const ConvBp::ConvBpTileL0Info& tileL0Info) {
+            TileShape::Current().SetConvBpTile(tileL1Info, tileL0Info);
+        },
+        py::arg("tileL1Info"), py::arg("tileL0Info"), "Set convBp tile shapes");
+    m.def("GetConvBpTile", []() {
+        auto convBpTile = TileShape::Current().GetConvBpTile();
+        return std::tuple(convBpTile.tileL1Info, convBpTile.tileL0Info);
+    });
 }
 
 void BindControllerFunction(py::module_& m)
@@ -395,6 +417,8 @@ std::any ConvertPyValue(const std::string& key, const py::object& value)
         return value.cast<CubeTile>();
     } else if (py::isinstance<ConvTile>(value)) {
         return value.cast<ConvTile>();
+    } else if (py::isinstance<ConvBpTile>(value)) {
+        return value.cast<ConvBpTile>();
     } else if (py::isinstance<py::list>(value) || py::isinstance<py::tuple>(value)) {
         return ConvertPyList(key, py::cast<py::list>(value));
     } else if (py::isinstance<py::dict>(value)) {
@@ -491,6 +515,7 @@ py::object AnyToPyObject(const std::any& val)
          [](const std::any& a) { return py::cast(AnyCast<std::map<std::string, int64_t>>(a)); }},
         {typeid(CubeTile), [](const std::any& a) { return py::cast(AnyCast<CubeTile>(a)); }},
         {typeid(ConvTile), [](const std::any& a) { return py::cast(AnyCast<ConvTile>(a)); }},
+        {typeid(ConvBpTile), [](const std::any& a) { return py::cast(AnyCast<ConvBpTile>(a)); }},
         {typeid(DistTile), [](const std::any& a) { return py::str(AnyCast<DistTile>(a).ToString()); }},
     };
 
@@ -556,6 +581,17 @@ void BindControllerScopeClasses(py::module_& m)
         .def("ToString", &ConvTile::ToString)
         .def("__repr__", [](const ConvTile& t) { return t.ToString(); })
         .def("__str__", [](const ConvTile& t) { return t.ToString(); });
+
+    py::class_<ConvBpTile>(m, "ConvBpTile")
+        .def(py::init<>())
+        .def(py::init<const ConvBp::ConvBpTileL1Info&, const ConvBp::ConvBpTileL0Info&>(), py::arg("tileL1Info"),
+             py::arg("tileL0Info"))
+        .def_readwrite("tileL1Info", &ConvBpTile::tileL1Info)
+        .def_readwrite("tileL0Info", &ConvBpTile::tileL0Info)
+        .def("valid", &ConvBpTile::valid)
+        .def("ToString", &ConvBpTile::ToString)
+        .def("__repr__", [](const ConvBpTile& t) { return t.ToString(); })
+        .def("__str__", [](const ConvBpTile& t) { return t.ToString(); });
 }
 
 void BindController(py::module_& m)

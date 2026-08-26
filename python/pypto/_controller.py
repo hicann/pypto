@@ -18,7 +18,7 @@ from typing import Iterator, List, Optional, Tuple, Union, overload
 
 from . import pypto_impl
 from ._utils import clear_source_location, set_source_location, to_sym
-from .config import ConvTile, CubeTile, get_current_scope
+from .config import ConvBpTile, ConvTile, CubeTile, get_current_scope
 from .enum import *  # noqa: F403
 from .error import FeError, PyptoError
 from .symbolic_scalar import SymbolicScalar, SymInt
@@ -31,6 +31,8 @@ __all__ = [
     "get_cube_tile_shapes",
     "set_conv_tile_shapes",
     "get_conv_tile_shapes",
+    "set_convbp_input_tile_shapes",
+    "get_convbp_input_tile_shapes",
     "set_matrix_size",
     "function",
     "loop",
@@ -278,6 +280,65 @@ def get_conv_tile_shapes() -> Tuple[pypto_impl.TileL1Info, pypto_impl.TileL0Info
     scope = get_current_scope()
     conv_tile = scope.get_conv_tile_shapes()
     return tuple([conv_tile.tileL1Info, conv_tile.tileL0Info, conv_tile.setL0Tile])
+
+
+def set_convbp_input_tile_shapes(tile_l1_info: pypto_impl.ConvBpTileL1Info, tile_l0_info: pypto_impl.ConvBpTileL0Info):
+    """ set the tile shapes in conv backward computation
+
+    This operation sets the value of the tile shapes in each dimension in conv backward computation,
+    covering both L1 and L0 cache levels.
+
+    Parameters
+    ----------
+    tile_l1_info: pypto_impl.ConvBpTileL1Info
+        the tile shape information for L1 cache level in conv backward computation.
+        Includes M/K/N dimensions for L1 cache level.
+    tile_l0_info: pypto_impl.ConvBpTileL0Info
+        the tile shape information for L0 cache level in conv backward computation.
+        Includes M/K/N dimensions for L0 cache level.
+
+    Returns
+    -------
+    None
+
+    Examples
+    --------
+    >>> l1_tile = pypto_impl.ConvBpTileL1Info(
+            tileML1=128,
+            tileKL1=64,
+            tileNL1=64)
+    >>> l0_tile = pypto_impl.ConvBpTileL0Info(
+            tileML0=128,
+            tileKL0=64,
+            tileNL0=64)
+    >>> pypto.set_convbp_input_tile_shapes(tile_l1_info, tile_l0_info)
+    """
+    convbp_tile = ConvBpTile(tile_l1_info, tile_l0_info)
+    pypto_impl.SetScope({"convbp_tile_shapes": convbp_tile.impl()})
+
+
+def get_convbp_input_tile_shapes() -> Tuple[pypto_impl.ConvBpTileL1Info, pypto_impl.ConvBpTileL0Info]:
+    """ get the tile shapes in conv backward computation
+
+    This operation gets the value of the tile shapes in each dimension in conv backward computation.
+
+    Returns
+    -------
+    Tuple[pypto_impl.ConvBpTileL1Info, pypto_impl.ConvBpTileL0Info]
+        The tile shape information for conv backward computation.
+
+    Examples
+    --------
+    >>> l1_tile = pypto_impl.ConvBpTileL1Info(
+            tileML1=128, tileKL1=64, tileNL1=64)
+    >>> l0_tile = pypto_impl.ConvBpTileL0Info(
+            tileML0=128, tileKL0=64, tileNL0=64)
+    >>> pypto.set_convbp_input_tile_shapes(l1_tile, l0_tile)
+    >>> convbp_tile = pypto.get_convbp_input_tile_shapes()
+    """
+    scope = get_current_scope()
+    convbp_tile = scope.get_convbp_input_tile_shapes()
+    return tuple([convbp_tile.tileL1Info, convbp_tile.tileL0Info])
 
 
 def set_matrix_size(size: List[int]):

@@ -54,6 +54,7 @@ std::string GetReadableTypeName(const std::type_info& type)
         {typeid(std::map<int64_t, int64_t>), "dict[int64, int64]"},
         {typeid(CubeTile), "CubeTile"},
         {typeid(ConvTile), "ConvTile"},
+        {typeid(ConvBpTile), "ConvBpTile"},
         {typeid(DistTile), "DistTile"},
     };
 
@@ -164,7 +165,8 @@ const std::any& ConfigScope::GetAnyConfig(const std::string& key) const
 
 bool ConfigScope::HasConfig(const std::string& key) const
 {
-    if (key == "matrix_size" || key == "vec_tile_shapes" || key == "conv_tile_shapes" || key == "cube_tile_shapes") {
+    if (key == "matrix_size" || key == "vec_tile_shapes" || key == "conv_tile_shapes" || key == "convbp_tile_shapes" ||
+        key == "cube_tile_shapes") {
         return true;
     }
 
@@ -194,9 +196,10 @@ TileShape ConfigScope::GenerateTileShape() const
     std::vector<int64_t> vecTile = GetConfig<std::vector<int64_t>>("vec_tile_shapes");
     CubeTile cubeTile = GetConfig<CubeTile>("cube_tile_shapes");
     ConvTile convTile = GetConfig<ConvTile>("conv_tile_shapes");
+    ConvBpTile convBpTile = GetConfig<ConvBpTile>("convbp_tile_shapes");
     DistTile distTile = GetConfig<DistTile>("dist_tile_shapes");
     std::vector<int64_t> matrixSize = GetConfig<std::vector<int64_t>>("matrix_size");
-    TileShape tileShape(vecTile, cubeTile, convTile, distTile, matrixSize);
+    TileShape tileShape(vecTile, cubeTile, convTile, convBpTile, distTile, matrixSize);
     return tileShape;
 }
 
@@ -539,6 +542,7 @@ private:
         root->AddValue("cube_tile_shapes", tileShape.GetCubeTile());
         root->AddValue("vec_tile_shapes", tileShape.GetVecTile().tile);
         root->AddValue("conv_tile_shapes", tileShape.GetConvTile());
+        root->AddValue("convbp_tile_shapes", tileShape.GetConvBpTile());
         root->AddValue("matrix_size", tileShape.GetMatrixSize());
         root->AddValue("dist_tile_shapes", tileShape.GetDistTile());
     }

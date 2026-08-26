@@ -918,6 +918,16 @@ void OpcodeManager::RegisterCube()
                  {{"DAV_2201",
                    {{TileOpFormat::TILEOP_NDC1HWC0, TileOpFormat::TILEOP_FRACTAL_Z_3D, TileOpFormat::TILEOP_ND},
                     {TileOpFormat::TILEOP_NDC1HWC0}}}});
+    RegisterInfo(Opcode::OP_CONV_BP_INPUT_2D, OpCoreType::AIC, "CONV_BP_INPUT_2D", {}, {},
+                 {"CUBE_CONV_BP_INPUT_2D", PIPE_M, PIPE_M, CoreType::AIC}, OpCalcType::CONV, convAttrStrList, nullptr,
+                 {{"DAV_2201",
+                   {{TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_FRACTAL_Z, TileOpFormat::TILEOP_ND},
+                    {TileOpFormat::TILEOP_NC1HWC0}}}});
+    RegisterInfo(Opcode::OP_CONV_BP_INPUT_3D, OpCoreType::AIC, "CONV_BP_INPUT_3D", {}, {},
+                 {"CUBE_CONV_BP_INPUT_3D", PIPE_M, PIPE_M, CoreType::AIC}, OpCalcType::CONV, convAttrStrList, nullptr,
+                 {{"DAV_2201",
+                   {{TileOpFormat::TILEOP_NDC1HWC0, TileOpFormat::TILEOP_FRACTAL_Z_3D, TileOpFormat::TILEOP_ND},
+                    {TileOpFormat::TILEOP_NDC1HWC0}}}});
     RegisterInfo(Opcode::OP_CONV_ADD, OpCoreType::AIC, "CONV_ADD", {}, {},
                  {"CUBE_CONV_ADD", PIPE_M, PIPE_M, CoreType::AIC}, OpCalcType::CONV, convAttrStrList);
     RegisterInfo(Opcode::OP_CUBE_CONV_D2S, OpCoreType::AIC, "CONV_D2S", {}, {},
@@ -926,6 +936,14 @@ void OpcodeManager::RegisterCube()
                  {"CUBE_CONCAT_C", PIPE_MTE1, PIPE_FIX, CoreType::AIC}, OpCalcType::CONV);
     RegisterInfo(Opcode::OP_L1_COPY_IN_CONV, OpCoreType::AIC, "L1_COPY_IN_CONV", {MemoryType::MEM_DEVICE_DDR},
                  {MemoryType::MEM_L1}, {"TileOp::L1CopyInConv", PIPE_MTE2, PIPE_MTE2, CoreType::AIC},
+                 OpCalcType::MOVE_IN, {OpAttributeKey::srcGmConvValidShape});
+    RegisterInfo(Opcode::OP_L1_COPY_IN_CONV_BP_DX_DY, OpCoreType::AIC, "L1_COPY_IN_CONV_BP_DX_DY",
+                 {MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_L1},
+                 {"TileOp::TLoadConvBpDxDedy", PIPE_MTE2, PIPE_MTE2, CoreType::AIC}, OpCalcType::MOVE_IN,
+                 {OpAttributeKey::srcGmConvValidShape, OpAttributeKey::strideH, OpAttributeKey::strideW,
+                  OpAttributeKey::skipH, OpAttributeKey::skipW});
+    RegisterInfo(Opcode::OP_L1_COPY_IN_CONV_BP, OpCoreType::AIC, "L1_COPY_IN_CONV_BP", {MemoryType::MEM_DEVICE_DDR},
+                 {MemoryType::MEM_L1}, {"TileOp::L1CopyInConvBpNZ", PIPE_MTE2, PIPE_MTE2, CoreType::AIC},
                  OpCalcType::MOVE_IN, {OpAttributeKey::srcGmConvValidShape});
     RegisterInfo(Opcode::OP_LOAD3D_CONV, OpCoreType::AIC, "IMG2COL", {MemoryType::MEM_L1}, {MemoryType::MEM_L0A},
                  {"TileOp::TLoad3D", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL,
@@ -937,6 +955,10 @@ void OpcodeManager::RegisterCube()
     RegisterInfo(Opcode::OP_LOAD2D_CONV, OpCoreType::AIC, "LOAD2D", {MemoryType::MEM_L1}, {MemoryType::MEM_L0B},
                  {"TileOp::TLoad2D", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL,
                  {OpAttributeKey::postK, OpAttributeKey::postN});
+    RegisterInfo(Opcode::OP_LOAD2DDX_CONV, OpCoreType::AIC, "LOAD2DDX", {MemoryType::MEM_L1}, {MemoryType::MEM_L0B},
+                 {"TileOp::TLoad2DDX", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL,
+                 {OpAttributeKey::postK, OpAttributeKey::postN, OpAttributeKey::hwk, OpAttributeKey::kL0Size,
+                  OpAttributeKey::nL0Size, OpAttributeKey::k0Idx, OpAttributeKey::n0Idx});
     RegisterInfo(Opcode::OP_L0C_COPY_OUT_CONV, OpCoreType::AIC, "L0C_COPY_OUT_CONV", {MemoryType::MEM_L0C},
                  {MemoryType::MEM_DEVICE_DDR}, {"TileOp::L0CCopyOutConv", PIPE_FIX, PIPE_FIX, CoreType::AIC},
                  OpCalcType::MOVE_OUT, {OpAttributeKey::excludeBufferReuse, OpAttributeKey::l0cValidMN});
@@ -1369,6 +1391,9 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_L1_COPY_IN_CONV, "TLoadConv"},
     {Opcode::OP_LOAD3D_CONV, "TLoad3D"},
     {Opcode::OP_LOAD2D_CONV, "TLoad2D"},
+    {Opcode::OP_L1_COPY_IN_CONV_BP_DX_DY, "TLoadConvBpDxDedy"},
+    {Opcode::OP_L1_COPY_IN_CONV_BP, "TLoadConvBPNZ"},
+    {Opcode::OP_LOAD2DDX_CONV, "TLoad2DDX"},
     {Opcode::OP_L0C_COPY_OUT_CONV, "TStoreConv"},
     {Opcode::OP_SHMEM_PUT, "TileOp::Distributed::ShmemPut"},
     {Opcode::OP_SHMEM_GET, "TileOp::Distributed::ShmemGet"},

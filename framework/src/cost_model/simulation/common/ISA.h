@@ -199,6 +199,8 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE{// Unary Vector
                                                                {"CONV_ADD", CorePipeType::PIPE_CUBE},
                                                                {"CUBE_CONV2D", CorePipeType::PIPE_CUBE},
                                                                {"CUBE_CONV3D", CorePipeType::PIPE_CUBE},
+                                                               {"CUBE_CONV_BP_INPUT_2D", CorePipeType::PIPE_CUBE},
+                                                               {"CUBE_CONV_BP_INPUT_3D", CorePipeType::PIPE_CUBE},
                                                                {"FAKE_TRANS", CorePipeType::PIPE_MTE_OUT},
                                                                {"CONV_D2S", CorePipeType::PIPE_FIX},
                                                                {"CONCAT_C", CorePipeType::PIPE_CUBE},
@@ -208,6 +210,7 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE{// Unary Vector
                                                                {"L1_TO_L0A_SCALE", CorePipeType::PIPE_MTE1},
                                                                {"L1_TO_L0B_SCALE", CorePipeType::PIPE_MTE1},
                                                                {"LOAD2D", CorePipeType::PIPE_MTE1},
+                                                               {"LOAD2DDX", CorePipeType::PIPE_MTE1},
                                                                {"IMG2COL", CorePipeType::PIPE_MTE1},
                                                                // ANY
                                                                {"DUPLICATE", CorePipeType::PIPE_VECTOR_ALU},
@@ -259,6 +262,8 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE{// Unary Vector
                                                                // MTE
                                                                {"L1_COPY_IN", CorePipeType::PIPE_MTE_IN},
                                                                {"L1_COPY_IN_CONV", CorePipeType::PIPE_MTE_IN},
+                                                               {"L1_COPY_IN_CONV_BP", CorePipeType::PIPE_MTE_IN},
+                                                               {"L1_COPY_IN_CONV_BP_DX_DY", CorePipeType::PIPE_MTE_IN},
                                                                {"L1_COPY_IN_A_SCALE", CorePipeType::PIPE_MTE_IN},
                                                                {"L1_COPY_IN_B_SCALE", CorePipeType::PIPE_MTE_IN},
                                                                {"L1_COPY_IN_FractalZ", CorePipeType::PIPE_MTE_IN},

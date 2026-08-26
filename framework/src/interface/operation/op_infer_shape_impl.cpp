@@ -1085,6 +1085,32 @@ std::vector<SymbolicScalar> InferSrcGmValidShapeDN2NZ(Operation* op, const std::
 }
 } // namespace
 
+void L1CopyInConvBpInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, op != nullptr) << "op should not be nullptr";
+    const std::string L1_TILE_SHAPE = "l1_tile_shape";
+    const std::string IS_FMAP_FLAG = "IS_FMAP";
+    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, op->HasAttr(L1_TILE_SHAPE)) << "op should have L1_TILE_SHAPE attr";
+    std::vector<SymbolicScalar> tile;
+    op->GetAttr(L1_TILE_SHAPE, tile);
+    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, op->HasAttr(IS_FMAP_FLAG)) << "op should have IS_FMAP_FLAG attr";
+    bool isFmap = false;
+    op->GetAttr(IS_FMAP_FLAG, isFmap);
+    if (isFmap) {
+        ASSERT(MatmulErrorCode::ERR_CONFIG_TILE, tile.size() == SHAPE_DIM5 || tile.size() == SHAPE_DIM6)
+            << "tile.size() should be SHAPE_DIM5 or SHAPE_DIM6";
+    } else {
+        ASSERT(MatmulErrorCode::ERR_CONFIG_TILE, tile.size() == SHAPE_DIM4) << "tile.size() should be SHAPE_DIM4";
+    }
+    std::vector<SymbolicScalar> outShape;
+    for (size_t i = 0; i < tile.size(); i++) {
+        outShape.push_back(tile[i]);
+    }
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.push_back(outShape);
+    }
+}
+
 void L1CopyInConvInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     ASSERT(ConvExpandFuncError::EXPANDFUNC_TENSOR_OP_NULLPTR, op != nullptr) << "op should not be nullptr";
@@ -1155,8 +1181,11 @@ void L0CCopyOutConvInferFunc(Operation* op, std::vector<std::vector<SymbolicScal
 }
 
 REGISTER_INFER_SHAPE_FUNC(OP_L1_COPY_IN_CONV, Opcode::OP_L1_COPY_IN_CONV, L1CopyInConvInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_L1_COPY_IN_CONV_BP_DX_DY, Opcode::OP_L1_COPY_IN_CONV_BP_DX_DY, L1CopyInConvBpInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_L1_COPY_IN_CONV_BP, Opcode::OP_L1_COPY_IN_CONV_BP, L1CopyInConvBpInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_LOAD3D_CONV, Opcode::OP_LOAD3D_CONV, L1ToL0ConvInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_LOAD2D_CONV, Opcode::OP_LOAD2D_CONV, L1ToL0ConvInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_LOAD2DDX_CONV, Opcode::OP_LOAD2DDX_CONV, L1ToL0ConvInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_L0C_COPY_OUT_CONV, Opcode::OP_L0C_COPY_OUT_CONV, L0CCopyOutConvInferFunc);
 
 void TransDataDefaultInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)

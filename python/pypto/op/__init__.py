@@ -17,6 +17,7 @@ from .joining import *  # noqa: F403
 from .math import *  # noqa: F403
 from .matmul import *  # noqa: F403
 from .conv import *  # noqa: F403
+from .convbp import *  # noqa: F403
 from .mutating import *  # noqa: F403
 from .other import *  # noqa: F403
 from .quantization import *  # noqa: F403

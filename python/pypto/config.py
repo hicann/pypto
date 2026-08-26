@@ -609,6 +609,7 @@ class _Options:
         "vec_tile_shapes",
         "cube_tile_shapes",
         "conv_tile_shapes",
+        "convbp_tile_shapes",
         "matrix_size",
         "operation_options",
     ]
@@ -650,6 +651,12 @@ class _Options:
                 opts["conv_tile_shapes"] = self.conv_tile_shapes._impl
             else:
                 opts["conv_tile_shapes"] = ConvTile(*self.conv_tile_shapes)._impl
+
+        if self.convbp_tile_shapes is not None:
+            if isinstance(self.convbp_tile_shapes, ConvBpTile):
+                opts["convbp_tile_shapes"] = self.convbp_tile_shapes._impl
+            else:
+                opts["convbp_tile_shapes"] = ConvBpTile(*self.convbp_tile_shapes)._impl
 
         if self.matrix_size is not None:
             opts["matrix_size"] = self.matrix_size
@@ -708,6 +715,7 @@ def options(
     vec_tile_shapes=None,
     cube_tile_shapes=None,
     conv_tile_shapes=None,
+    convbp_tile_shapes=None,
     matrix_size=None,
 ):
     """
@@ -775,6 +783,7 @@ def set_options(
     vec_tile_shapes=None,
     cube_tile_shapes=None,
     conv_tile_shapes=None,
+    convbp_tile_shapes=None,
     matrix_size=None,
 ):
     """
@@ -913,7 +922,48 @@ class ConvTile:
         return self._impl
 
 
+class ConvBpTile:
+    """ConvBpTile"""
+    def __init__(self, tile_l1_info: pypto_impl.ConvBpTileL1Info, tile_l0_info: pypto_impl.ConvBpTileL0Info):
+        """
+        ConvBpTile tile for convolution backward input operation, tile_l1_info for L1 Cache, tile_l0_info for L0 Cache
+
+        Parameters
+        ---------
+        tile_l1_info: pypto_impl.ConvBpTileL1Info
+            Tile configuration for L1 Cache (conv backward dimensions):
+            - tileML1: M dimension tile size for L1 Cache
+            - tileKL1: K dimension tile size for L1 Cache
+            - tileNL1: N dimension tile size for L1 Cache
+        tile_l0_info: pypto_impl.ConvBpTileL0Info
+            Tile configuration for L0 Cache (M/K/N dimensions):
+            - tileML0: M dimension tile size for L0 Cache
+            - tileKL0: K dimension tile size for L0 Cache
+            - tileNL0: N dimension tile size for L0 Cache
+        """
+
+        self._impl = pypto_impl.ConvBpTile(tile_l1_info, tile_l0_info)
+
+    def __getattr__(self, name):
+        attr_map = {
+            'tile_l1_info': 'tileL1Info',
+            'tile_l0_info': 'tileL0Info',
+        }
+        impl_name = attr_map.get(name, name)
+        return getattr(self._impl, impl_name)
+
+    def __repr__(self):
+        return repr(self._impl)
+
+    def __str__(self):
+        return str(self._impl)
+
+    def impl(self) -> pypto_impl.ConvBpTile:
+        return self._impl
+
+
 class ConfigScope:
+
     def __init__(self, cpp_config_scope=None):
         self._options = {}
 
@@ -961,6 +1011,9 @@ class ConfigScope:
 
     def get_conv_tile_shapes(self):
         return self._options.get("conv_tile_shapes")
+
+    def get_convbp_input_tile_shapes(self):
+        return self._options.get("convbp_tile_shapes")
 
     def get_matrix_size(self):
         return self._options.get("matrix_size")

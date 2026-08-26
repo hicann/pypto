@@ -2077,6 +2077,11 @@ void ExpandOperationInto(Function& function, const TileShape& tileShape, Opcode 
             Conv::ConstructTileGraph(function, tileShape, iOperand, oOperand[0], op);
             break;
         }
+        case Opcode::OP_CONV_BP_INPUT_2D:
+        case Opcode::OP_CONV_BP_INPUT_3D: {
+            ConvBp::ConstructTileGraph(function, tileShape, iOperand, oOperand[0], op);
+            break;
+        }
         case Opcode::OP_FAKE_TRANS: {
             function.AddOperation(Opcode::OP_FAKE_TRANS, iOperand, oOperand);
             break;

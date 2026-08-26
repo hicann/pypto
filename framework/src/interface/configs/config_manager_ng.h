@@ -205,6 +205,11 @@ public:
     ConvTile GetConvTile() const { return pypto::AnyCast<ConvTile>(GetAnyConfig("conv_tile_shapes")); }
 
     /**
+     * \brief Retrieves the ConvBpTile configuration.
+     */
+    ConvBpTile GetConvBpTile() const { return pypto::AnyCast<ConvBpTile>(GetAnyConfig("convbp_tile_shapes")); }
+
+    /**
      * \brief Retrieves the VecTile configuration as a VecTile structure.
      */
     VecTile GetVecTile() const

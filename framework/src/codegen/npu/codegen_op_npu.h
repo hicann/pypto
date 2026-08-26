@@ -61,6 +61,8 @@ public:
     std::string GenMemL1CopyIn() const;
     std::string GenMemL1CopyOut() const;
     std::string GenMemL1CopyInConv() const;
+    std::string GenMemL1CopyInConvBp() const;
+    std::string GenMemL1CopyInConvBpNZ() const;
     std::string GenMemL0CCopyOutConv() const;
     std::string GenMemL1ToFB() const;
     std::string GenMemL0CCopyOut() const;
@@ -68,6 +70,8 @@ public:
     std::string GenMemL1ToL0Load3D() const;
     std::string GenMemL1ToL0Load2D() const;
     std::string GenAxpyOp() const;
+
+    std::string GenMemL1ToL0Load2DConvBpDx() const;
 
     std::string GenMemL1ToL0() const;
 

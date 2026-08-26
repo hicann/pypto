@@ -85,6 +85,7 @@
 #include "vector/permute.h"
 #include "cube/cube_pto.h"
 #include "conv/conv_pto.h"
+#include "conv/conv_bp_pto.h"
 #endif
 
 #endif

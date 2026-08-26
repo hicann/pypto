@@ -72,7 +72,8 @@ Status CubeProcess::AddL1CopyInAttr(const std::shared_ptr<LogicalTensor> input, 
         APASS_LOG_DEBUG_F(Elements::Operation, "OP_L1_TO_L0A: Outer: %d, Inner: %d.", mValue, kValue);
         return SUCCESS;
     }
-    if (copyInOp->GetOpcode() == Opcode::OP_L1_TO_L0B || copyInOp->GetOpcode() == Opcode::OP_LOAD2D_CONV) {
+    if (copyInOp->GetOpcode() == Opcode::OP_L1_TO_L0B || copyInOp->GetOpcode() == Opcode::OP_LOAD2D_CONV ||
+        copyInOp->GetOpcode() == Opcode::OP_LOAD2DDX_CONV) {
         L1CopyInOp->SetAttribute(L1_COPY_IN_OUTER, kValue);
         L1CopyInOp->SetAttribute(L1_COPY_IN_INNER, nValue);
         APASS_LOG_DEBUG_F(Elements::Operation, "OP_L1_TO_L0B: Outer: %d, Inner: %d.", kValue, nValue);

@@ -212,6 +212,8 @@ enum class Opcode {
     OP_CONV2D,
     OP_CONV3D,
     OP_CONV_ADD,
+    OP_CONV_BP_INPUT_3D,
+    OP_CONV_BP_INPUT_2D,
     OP_FAKE_TRANS,
     OP_CUBE_CONV_D2S,
     OP_CUBE_CONCAT_C,
@@ -221,6 +223,9 @@ enum class Opcode {
     OP_L1_COPY_IN_CONV,
     OP_LOAD3D_CONV,
     OP_LOAD2D_CONV,
+    OP_L1_COPY_IN_CONV_BP_DX_DY,
+    OP_L1_COPY_IN_CONV_BP,
+    OP_LOAD2DDX_CONV,
     OP_L0C_COPY_OUT_CONV,
     // ANY
     OP_DUPLICATE,
@@ -546,6 +551,7 @@ public:
                opCode == Opcode::OP_L1_TO_FIX_QUANT_PRE || opCode == Opcode::OP_L1_TO_BT ||
                opCode == Opcode::OP_SHMEM_LOAD || opCode == Opcode::OP_L1_COPY_IN_A_SCALE ||
                opCode == Opcode::OP_L1_COPY_IN_B_SCALE || opCode == Opcode::OP_L1_COPY_IN_CONV ||
+               opCode == Opcode::OP_L1_COPY_IN_CONV_BP_DX_DY || opCode == Opcode::OP_L1_COPY_IN_CONV_BP ||
                opCode == Opcode::OP_L1_RESHAPE_COPY_IN;
     }
 
@@ -1076,6 +1082,7 @@ inline bool IsCopyIn(const Opcode opCode)
            opCode == Opcode::OP_TRANSPOSE_MOVEIN || opCode == Opcode::OP_RESHAPE_COPY_IN ||
            opCode == Opcode::OP_SHMEM_LOAD || opCode == Opcode::OP_L1_COPY_IN_A_SCALE ||
            opCode == Opcode::OP_L1_COPY_IN_B_SCALE || opCode == Opcode::OP_L1_COPY_IN_CONV ||
+           opCode == Opcode::OP_L1_COPY_IN_CONV_BP_DX_DY || opCode == Opcode::OP_L1_COPY_IN_CONV_BP ||
            opCode == Opcode::OP_L1_RESHAPE_COPY_IN;
 }
 
