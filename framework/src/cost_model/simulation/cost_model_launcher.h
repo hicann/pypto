@@ -211,15 +211,15 @@ private:
         auto* functionDevProg = reinterpret_cast<DevAscendProgram*>(dynAttr->devProgBinary.data());
         kArgs.maxDynamicAssembleOutcastMem = functionDevProg->memBudget.tensor.maxDynamicAssembleOutcastMem;
         kArgs.maxDynamicCellMatchTableMem = functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem;
+        SIMULATION_LOGI("Run PvModel");
+#ifdef BUILD_WITH_CANN
+        RunPvModel(kArgs, inputs, outputs);
+#endif
         RunCostModel(&kArgs);
         SIMULATION_LOGI("Run TestModel");
         RunTestMode(&kArgs);
         SIMULATION_LOGI("Run DynCostModel");
         RunDynCostModel();
-        SIMULATION_LOGI("Run PvModel");
-#ifdef BUILD_WITH_CANN
-        RunPvModel(kArgs, inputs, outputs);
-#endif
     }
 
     void RunCostModel(DeviceKernelArgs* kArgs)
