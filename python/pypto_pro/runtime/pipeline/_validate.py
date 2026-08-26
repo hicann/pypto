@@ -230,15 +230,124 @@ def _check_delay_order(info) -> None:
                 )
 
 
-def validate_structure(info) -> None:
+def validate_structure(info, func_def=None, stage_func_names: set | None = None) -> None:
     """Checks that need only the parsed structure — no sync or schedule information.
 
     Called from analyze_pipeline once stages, sections, loop info and ctx fields exist.
+
+    ``func_def`` and ``stage_func_names`` enable the two checks that have to look at the
+    whole kernel rather than at the stage list: both catch a shape the transform would
+    otherwise SKIP silently, which is worse than refusing it.
     """
     _check_stage_returns(info)
     _check_stage_sections(info)
     _check_alternating_sections(info)
     _check_loop_step(info)
+    if func_def is not None and stage_func_names:
+        _check_single_pipeline_loop(func_def, stage_func_names)
+        _check_no_nested_stage(func_def, info, stage_func_names)
+
+
+def _loops_holding_stages(func_def, stage_func_names: set) -> list:
+    """Every for-loop whose OWN body calls a stage — i.e. every candidate pipeline loop.
+
+    Matches how the stage list is collected (_extract_stages_from_loop looks at a loop's
+    direct body only), so an enclosing loop of a pipelined one is not counted: its stages
+    sit in the inner loop's body, not its own.
+    """
+    found = []
+    for node in ast.walk(func_def):
+        if not isinstance(node, ast.For):
+            continue
+        for stmt in node.body:
+            calls = []
+            if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+                calls.append(stmt.value)
+            elif isinstance(stmt, ast.With):
+                calls.extend(
+                    s.value for s in stmt.body if isinstance(s, ast.Expr) and isinstance(s.value, ast.Call)
+                )
+            if any(_call_name(c) in stage_func_names for c in calls):
+                found.append(node)
+                break
+    return found
+
+
+def _check_single_pipeline_loop(func_def, stage_func_names: set) -> None:
+    """Only one loop may drive the pipeline.
+
+    The transform builds one ctx ring, one task counter and one drain for the whole kernel,
+    so a second loop calling stages of its own would need a second set of all three. Today
+    the search stops at the first such loop and the rest are left untouched — no ctx, no
+    sync, no drain — which looks like it worked. Refuse instead.
+
+    Nesting is fine and unaffected: an enclosing loop holds the pipelined loop in its body,
+    not stage calls, so it is not one of these.
+    """
+    loops = _loops_holding_stages(func_def, stage_func_names)
+    if len(loops) > 1:
+        where = ", ".join(f"line {loop.lineno}" for loop in loops)
+        raise ValueError(
+            f"pipeline: {len(loops)} separate loops call pipeline stages ({where}), but the "
+            f"transform pipelines exactly one loop — the others would be left without ctx, "
+            f"sync or drain.\n"
+            f"Put the stages of one pipeline in a single loop, or split the kernel so each "
+            f"loop is its own @pl.jit function."
+        )
+
+
+def _check_no_nested_stage(func_def, info, stage_func_names: set) -> None:
+    """A stage must not call another stage.
+
+    Sub-stages need their accesses attributed to the sub-stage rather than the caller, and
+    sync placed around the inner call — support for that was removed and is pending a
+    redesign. Without it the inner stage reads as an ordinary helper call: its buffer
+    accesses never reach the dependency graph, so its handovers go unsynchronised.
+    """
+    stage_defs = {
+        node.name: node
+        for node in ast.walk(func_def)
+        if isinstance(node, ast.FunctionDef) and node.name in stage_func_names
+    }
+    # A stage's body usually lives outside the kernel (module level), so also consult the
+    # definitions the analyzer already resolved through closure_vars.
+    for name in stage_func_names:
+        if name in stage_defs:
+            continue
+        resolved = _try_get_funcdef_for(info, name)
+        if resolved is not None:
+            stage_defs[name] = resolved
+
+    for outer_name, outer_def in stage_defs.items():
+        for node in ast.walk(outer_def):
+            if not isinstance(node, ast.Call):
+                continue
+            inner = _call_name(node)
+            if inner in stage_func_names and inner != outer_name:
+                raise ValueError(
+                    f"pipeline: stage '{outer_name}' calls stage '{inner}' (line "
+                    f"{node.lineno}). A stage may not contain another stage — the inner "
+                    f"one's buffer accesses would be attributed to the caller and its "
+                    f"handovers left unsynchronised.\n"
+                    f"Inline '{inner}' into '{outer_name}', or make it a plain helper "
+                    f"function (drop @pl.pipeline.stage) if it needs no sync of its own."
+                )
+
+
+def _try_get_funcdef_for(info, name: str):
+    """The AST of a stage defined outside the kernel, via the analyzer's closure_vars."""
+    from ._analyzer import _try_get_funcdef
+
+    return _try_get_funcdef(info.closure_vars.get(name))
+
+
+def _call_name(call: ast.Call) -> str:
+    """Callee name for `f(...)` and `obj.f(...)`; "" when neither."""
+    if isinstance(call.func, ast.Name):
+        return call.func.id
+    if isinstance(call.func, ast.Attribute):
+        return call.func.attr
+    return ""
 
 
 def _check_stage_returns(info) -> None:

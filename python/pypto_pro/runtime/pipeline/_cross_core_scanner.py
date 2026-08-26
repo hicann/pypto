@@ -459,17 +459,20 @@ def _get_slot_accessor_assignment(node: ast.AST, param_names: set[str]) -> tuple
     return node.targets[0].id, group_name
 
 
-def scan_kernel_slot_to_buffer(func_def: ast.FunctionDef, cross_buffers: dict) -> dict[str, str]:
-    """Scan the kernel body for `slot = buf.next()` (or .current()/.previous())
-    where buf is a cross-core buffer, mapping slot variable -> buffer name.
+def scan_kernel_slot_to_buffer(func_def: ast.FunctionDef, buffer_names: set[str]) -> dict[str, str]:
+    """Scan the kernel body for `slot = buf.next()` (or .current()/.previous()),
+    mapping slot variable -> buffer name.
 
     This handles the case where the user takes a slot OUTSIDE the stage function
     (in the pipeline loop) and passes the slot tile as a stage argument.
+
+    Covers EVERY declared buffer, not just the cross-core ones: a local buffer's slot has to
+    be traceable too, because an op's pipe is decided by the memory spaces of all its tiles
+    — the local side of a `pl.move` included.
     """
-    buf_names = set(cross_buffers.keys())
     slot_to_buffer: dict[str, str] = {}
     for node in ast.walk(func_def):
-        acc = _get_slot_accessor_assignment(node, buf_names)
+        acc = _get_slot_accessor_assignment(node, buffer_names)
         if acc is not None:
             slot_name, buffer_name = acc
             slot_to_buffer[slot_name] = buffer_name
@@ -480,15 +483,15 @@ def build_binding_map(
     func_def: ast.FunctionDef,
     call_args: list | None,
     kernel_slot_map: dict,
-    cross_buffers: dict,
+    group_names: set[str],
     tuple_fields: dict | None = None,
 ) -> dict[str, tuple[str, bool]]:
     """Build the name -> (buffer, is_group) binding map for a stage function body.
 
     Resolves all names that reference a cross-core buffer (directly or indirectly)
     within this function scope. Handles:
-      (a) Formal params bound via call-site positional args (the actual is either a
-          cross_buffer group or a kernel_slot).
+      (a) Formal params bound via call-site positional args (the actual is a declared tile
+          group — cross-core or local — or a slot taken from one in the kernel body).
       (b) .next()/.current()/.previous() calls in the body: slot = group.next().
       (c) Pure Name-to-Name alias assignments: tmp = some_known_name.
       (d) Member reads off an aggregate param: grp = agg.field, where the call site passed a
@@ -501,7 +504,8 @@ def build_binding_map(
         call_args: list of AST args from the call site. If None, returns empty
             (no name-collision guessing).
         kernel_slot_map: kernel-body slot -> buffer map (from scan_kernel_slot_to_buffer).
-        cross_buffers: declared cross-core buffers dict.
+        group_names: every declared tile group's name (from scan_all_tile_group_names).
+            Cross-core groups are a subset, so one set covers both kinds.
         tuple_fields: {tuple variable: {field: source variable}} (from scan_tuple_fields).
 
     Returns: {name: (buffer_declared_name, is_group)}
@@ -520,7 +524,13 @@ def build_binding_map(
         if pos >= len(param_names) or not isinstance(arg, ast.Name):
             continue
         actual = arg.id
-        if actual in cross_buffers:
+        # A local group is bound under its real name just like a cross-core one. Only
+        # cross-core buffers get sync of their own, but a local buffer still has to be
+        # traceable: an op's pipe follows the memory spaces of ALL its tiles, so the local
+        # side of a `pl.move` needs a name that resolves. Leaving it out here is what made
+        # the scan fall back to the FORMAL parameter name, which only ever matched by the
+        # convention that call sites name their arguments after the parameters.
+        if actual in group_names:
             result[param_names[pos]] = (actual, True)
         elif actual in kernel_slot_map:
             result[param_names[pos]] = (kernel_slot_map[actual], False)
@@ -544,7 +554,7 @@ def build_binding_map(
             # (d) grp = agg.field -> the variable the call site put in that field. Recorded
             # even when that variable is a LOCAL tile group: an op's pipe is decided by the
             # memory spaces of ALL its tiles, so the local side of a `move` has to resolve
-            # too. Being absent from cross_buffers keeps it out of the access records.
+            # too. Not being a cross-core buffer keeps it out of the access records.
             if isinstance(node.value, ast.Attribute) and isinstance(node.value.value, ast.Name):
                 fields = aggregates.get(node.value.value.id)
                 if fields is not None:
@@ -697,6 +707,7 @@ def scan_stage_accesses(
     call_args: list | None = None,
     kernel_slot_map: dict | None = None,
     tuple_fields: dict | None = None,
+    group_names: set[str] | None = None,
 ) -> None:
     """Scan a stage function body for its buffer accesses, one entry per op.
 
@@ -712,9 +723,10 @@ def scan_stage_accesses(
         call_args: list of AST args from the call site (None for fallback).
         kernel_slot_map: kernel-body slot -> buffer (from scan_kernel_slot_to_buffer).
         tuple_fields: tuple variable -> {field: source} (from scan_tuple_fields).
+        group_names: every declared tile group's name (from scan_all_tile_group_names).
     """
     bindings = build_binding_map(
-        stage_func_def, call_args, kernel_slot_map or {}, cross_buffers, tuple_fields or {}
+        stage_func_def, call_args, kernel_slot_map or {}, group_names or set(), tuple_fields or {}
     )
     if not bindings:
         return

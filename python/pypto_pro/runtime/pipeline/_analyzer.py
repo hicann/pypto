@@ -156,7 +156,7 @@ def analyze_pipeline(func_def: ast.FunctionDef, closure_vars: dict, var_types: d
     _derive_ctx_fields(info, closure_vars)
 
     # One gate for every check that needs only the parsed structure (see _validate).
-    validate_structure(info)
+    validate_structure(info, func_def, stage_func_names)
 
     # Scan cross-core buffer accesses for auto-sync
     _scan_cross_core(info, func_def, closure_vars, decls)
@@ -177,6 +177,7 @@ def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef, closure_vars
     from ._cross_core_scanner import (
         detect_addr_overlaps,
         scan_all_buffer_memory,
+        scan_all_tile_group_names,
         scan_buffer_addr_ranges,
         scan_buffer_mutex_ids,
         scan_cross_core_buffers,
@@ -203,7 +204,10 @@ def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef, closure_vars
 
     # Slots taken from cross-core buffers in the kernel body (pipeline loop), for
     # stages that receive a pre-taken slot instead of the buffer group itself.
-    kernel_slot_to_buffer = scan_kernel_slot_to_buffer(func_def, cross_buffers)
+    # Every declared group, cross-core or not: a local buffer's slot must resolve too, or the
+    # pipe of an op that touches both kinds cannot be determined (see build_binding_map).
+    group_names = scan_all_tile_group_names(decls)
+    kernel_slot_to_buffer = scan_kernel_slot_to_buffer(func_def, group_names)
     # Members of an aggregate passed to a stage: the one hop that rejoins a tile to its
     # declared group when the kernel bundles groups with pl.make_tuple.
     tuple_fields = scan_tuple_fields(func_def)
@@ -233,6 +237,7 @@ def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef, closure_vars
             call_args=stage.args,
             kernel_slot_map=kernel_slot_to_buffer,
             tuple_fields=tuple_fields,
+            group_names=group_names,
         )
 
     # Address-reuse sync is not built here. Which edges need it, and which ids they get,
@@ -342,15 +347,23 @@ def _collect_vf_func_defs(info: PipelineInfo, closure_vars: dict) -> dict[str, a
 
 
 def _try_get_funcdef(fn) -> ast.FunctionDef | None:
-    """Get the ast.FunctionDef for a Python function object, or None."""
+    """Get the ast.FunctionDef for a Python function object, or None.
+
+    Line numbers are shifted to the ones in the real file. Re-parsing a source snippet
+    numbers it from 1, and every diagnostic that names a node inside a stage body reports
+    whatever this returns — so without the shift those messages point at a line the user
+    cannot find.
+    """
     import inspect
     import textwrap
 
     if fn is None:
         return None
     try:
-        src = textwrap.dedent(inspect.getsource(fn))
-        mod = ast.parse(src)
+        lines, start_lineno = inspect.getsourcelines(fn)
+        mod = ast.parse(textwrap.dedent("".join(lines)))
+        # getsourcelines is 1-based and so is the fresh parse, hence the -1.
+        ast.increment_lineno(mod, start_lineno - 1)
         for node in mod.body:
             if isinstance(node, ast.FunctionDef):
                 return node
