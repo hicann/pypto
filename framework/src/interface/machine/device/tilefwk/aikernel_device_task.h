@@ -76,16 +76,15 @@ struct DynFuncHeader {
 
 constexpr uint32_t DRCO_QUEUE_AIV = 0;
 constexpr uint32_t DRCO_QUEUE_AIC = 1;
-constexpr uint32_t DRCO_QUEUE_M1V = 2;
-constexpr uint32_t DRCO_QUEUE_M2V = 3;
-constexpr uint32_t DRCO_QUEUE_MAX = 4;
+constexpr uint32_t DRCO_QUEUE_MIX = 2;
+constexpr uint32_t DRCO_QUEUE_MAX = 3;
 
 struct DrcoRootFuncList {
     DrcoGlobalReadyQueuePtr globalReadyQueueList[DRCO_QUEUE_MAX];
     uint32_t globalQueueInitTail[DRCO_QUEUE_MAX];
 
     __gm__ PerCorePendingQueue* perCorePendingQueueArray[MAX_AICORE_NUM_FOR_QUEUE];
-    __gm__ DrcoLocalReadyQueue* localReadyQueueArray[NUM_CORE_TYPES][NUM_LOCAL_GROUPS];
+    __gm__ DrcoLocalReadyQueue* localReadyQueueArray[DRCO_QUEUE_MAX][NUM_LOCAL_GROUPS];
     alignas(64) uint32_t totalTaskCount;
     alignas(64) uint32_t devTaskFinished;
     alignas(64) uint32_t executedTaskCount;

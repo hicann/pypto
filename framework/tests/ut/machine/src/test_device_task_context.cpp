@@ -26,6 +26,7 @@
 #include "machine/device/dynamic/context/device_task_context.h"
 #include "machine/utils/dynamic/dev_workspace.h"
 #include "machine/utils/dynamic/dev_encode_function_dupped_data.h"
+#include "machine/utils/machine_ws_intf.h"
 
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
@@ -1040,6 +1041,80 @@ TEST_F(TestDeviceTaskContext, DispatchReadyQueueToCores_DistributesTasks)
     }
     EXPECT_TRUE(aicRouted);
     EXPECT_TRUE(aivRouted);
+}
+
+TEST_F(TestDeviceTaskContext, DispatchReadyQueueToCores_DistributesMixWraps)
+{
+    DeviceTaskContext taskContext;
+    DevStartArgsBase startArgs;
+    constexpr size_t kControlFlowCacheSize = 16 * 1024 * 1024;
+    auto controlFlowCacheBuf = std::make_unique<uint8_t[]>(kControlFlowCacheSize);
+
+    DevAscendProgram devProg;
+    CreateMockDevAscendProgram(&devProg, ArchInfo::DAV_3510);
+    devProg.stitchFunctionsize = 100;
+    devProg.devArgs.enableAicoreResolve = true;
+    devProg.devArgs.nrValidAic = 4;
+    devProg.controlFlowCache.cacheData = DevRelocVector<uint8_t>(kControlFlowCacheSize, controlFlowCacheBuf.get());
+    devProg.controlFlowCache.isRecording = true;
+
+    DeviceWorkspaceAllocator workspace(&devProg);
+    taskContext.InitAllocator(&devProg, workspace, &startArgs);
+
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+    CreateMockDynDeviceTask(dyntask.get(), 16);
+
+    ReadyCoreFunctionQueue* queues[READY_QUEUE_SIZE] = {};
+    ASSERT_EQ(taskContext.InitReadyQueues(dyntask.get(), &devProg, queues), DEVICE_MACHINE_OK);
+
+    // wrap 队列：1 个 1C2V + 1 个 1C1V，tasklist 顺序为 AIC / AIV0 / AIV1
+    constexpr uint8_t MIX_TYPE_1C2V = 2;
+    constexpr uint8_t MIX_TYPE_1C1V = 1;
+    WrapInfo wrapInfo[2]{};
+    wrapInfo[0].wrapId = 0;
+    wrapInfo[0].mixResourceType = MIX_TYPE_1C2V;
+    wrapInfo[0].tasklist[WRAP_IDX_AIC] = MakeTaskID(0, 100);
+    wrapInfo[0].tasklist[WRAP_IDX_AIV0] = MakeTaskID(0, 200);
+    wrapInfo[0].tasklist[WRAP_IDX_AIV1] = MakeTaskID(0, 201);
+    wrapInfo[1].wrapId = 1;
+    wrapInfo[1].mixResourceType = MIX_TYPE_1C1V;
+    wrapInfo[1].tasklist[WRAP_IDX_AIC] = MakeTaskID(1, 101);
+    wrapInfo[1].tasklist[WRAP_IDX_AIV0] = MakeTaskID(1, 202);
+    wrapInfo[1].tasklist[WRAP_IDX_AIV1] = 0; // 1C1V 不使用第二个 AIV
+    WrapInfoQueue wrapQueue{0, 2, 2, wrapInfo, 0};
+    dyntask->devTask.mixTaskData.readyWrapCoreFunctionQue = reinterpret_cast<uint64_t>(&wrapQueue);
+
+    // 普通 aic/aiv 任务：验证 wrap 分发后的游标续接
+    const int aivIdx = DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIV);
+    const int aicIdx = DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIC);
+    dyntask->readyQueue[aivIdx]->UnsafeEnqueue(MakeTaskID(2, 302));
+    dyntask->readyQueue[aicIdx]->UnsafeEnqueue(MakeTaskID(2, 301));
+
+    taskContext.DispatchReadyQueueToCores(dyntask.get(), &devProg);
+
+    auto* root = dyntask->drcoRootFuncList;
+    ASSERT_NE(root, nullptr);
+
+    // wrap0 (1C2V): aicCore=0, AIV cores = 4 + 0*2 = {4, 5}
+    EXPECT_EQ(root->perCorePendingQueueArray[0]->size, 1U);
+    EXPECT_EQ(root->perCorePendingQueueArray[0]->taskList[0], MakeTaskID(0, 100));
+    EXPECT_EQ(root->perCorePendingQueueArray[4]->size, 1U);
+    EXPECT_EQ(root->perCorePendingQueueArray[4]->taskList[0], MakeTaskID(0, 200));
+    EXPECT_EQ(root->perCorePendingQueueArray[5]->size, 1U);
+    EXPECT_EQ(root->perCorePendingQueueArray[5]->taskList[0], MakeTaskID(0, 201));
+
+    // wrap1 (1C1V): aicCore=1, AIV core = 4 + 1*2 = {6}，不占 7
+    EXPECT_EQ(root->perCorePendingQueueArray[1]->size, 1U);
+    EXPECT_EQ(root->perCorePendingQueueArray[1]->taskList[0], MakeTaskID(1, 101));
+    EXPECT_EQ(root->perCorePendingQueueArray[6]->size, 1U);
+    EXPECT_EQ(root->perCorePendingQueueArray[6]->taskList[0], MakeTaskID(1, 202));
+    EXPECT_EQ(root->perCorePendingQueueArray[7]->size, 0U);
+
+    // 普通任务从 wrap 游标续接：AIC 起始 core=2，AIV 起始 core=4+(4 % 8)=8
+    EXPECT_EQ(root->perCorePendingQueueArray[2]->size, 1U);
+    EXPECT_EQ(root->perCorePendingQueueArray[2]->taskList[0], MakeTaskID(2, 301));
+    EXPECT_EQ(root->perCorePendingQueueArray[8]->size, 1U);
+    EXPECT_EQ(root->perCorePendingQueueArray[8]->taskList[0], MakeTaskID(2, 302));
 }
 
 TEST_F(TestDeviceTaskContext, DispatchDieReadyQueueToCores_DistributesDieTasks)

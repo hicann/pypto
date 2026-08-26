@@ -217,7 +217,7 @@ uint64_t CalcStitchWorkspace(DevAscendProgram& devProg)
                                             DIE_READY_QUEUE_SIZE * DIE_NUM,
                                             1,
                                             MAX_AICORE_NUM_FOR_QUEUE,
-                                            NUM_CORE_TYPES * NUM_LOCAL_GROUPS,
+                                            DRCO_QUEUE_MAX * NUM_LOCAL_GROUPS,
                                             DRCO_QUEUE_MAX,
                                             1};
     uint32_t slabSize = workspace.CalcStitchSlabMemObjmaxSize(slabCapacity);

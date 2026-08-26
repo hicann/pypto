@@ -143,6 +143,7 @@ INLINE uint32_t GetRegHighValue(__gm__ KernelArgs* args, uint32_t lastHighRegVal
     return highRegVal;
 }
 
+constexpr uint8_t EVENT_ID14 = 14;
 constexpr uint8_t EVENT_ID15 = 15;
 constexpr uint8_t EVENT_NUMS_PER_AIV = 16;
 enum class MixResourceType { MIX_UNKNOWN = 0, MIX_1C1V = 1, MIX_1C2V = 2 };

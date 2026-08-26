@@ -188,7 +188,7 @@ void DevControlFlowCache::ReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_
             aivIdx++;
         }
         __sync_synchronize();
-        for (uint32_t ct = 0; ct < npu::tile_fwk::NUM_CORE_TYPES; ct++) {
+        for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
             for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
                 auto* dst = base->drcoRootFuncList->localReadyQueueArray[ct][i];
                 if (dst == nullptr) {
@@ -971,7 +971,7 @@ void DevControlFlowCache::RelocDrcoRootFuncList(RelocRange& relocCtrlCache, DynD
         for (size_t i = 0; i < npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE; i++) {
             relocCtrlCache.Reloc(drcoRootFuncList->perCorePendingQueueArray[i]);
         }
-        for (uint32_t ct = 0; ct < npu::tile_fwk::NUM_CORE_TYPES; ct++) {
+        for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
             for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
                 relocCtrlCache.Reloc(drcoRootFuncList->localReadyQueueArray[ct][i]);
             }

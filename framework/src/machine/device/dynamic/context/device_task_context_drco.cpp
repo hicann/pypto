@@ -42,7 +42,7 @@ void DeviceTaskContext::InitDrcoRootFuncList(DynDeviceTask* dyntask)
     }
     uint32_t localSize = sizeof(npu::tile_fwk::DrcoLocalReadyQueue);
     localSize += queueCapacity * sizeof(npu::tile_fwk::LeafTaskId);
-    for (uint32_t ct = 0; ct < npu::tile_fwk::NUM_CORE_TYPES; ct++) {
+    for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
         for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
             auto* localQueue = workspace_->AllocateDrcoLocalReadyQueue(localSize);
             new (localQueue) npu::tile_fwk::DrcoLocalReadyQueue(queueCapacity);
@@ -62,19 +62,43 @@ void DeviceTaskContext::DispatchReadyQueueToCores(DynDeviceTask* dyntask, DevAsc
     uint32_t nrValidAic = devProg->devArgs.nrValidAic;
     uint32_t nrAivCores = 2 * nrValidAic;
 
-    // perCorePendingQueue: distribute aic tasks to aicore cores (0..nrValidAic-1)
-    uint32_t aicIdx = 0;
+    // perCorePendingQueue: distribute wrap (mix) tasks, AIC task to core w, AIV tasks to paired vector cores
+    WrapInfoQueue* wrapQueue = reinterpret_cast<WrapInfoQueue*>(dyntask->devTask.mixTaskData.readyWrapCoreFunctionQue);
+    auto* perCorePendingQueueArray = dyntask->drcoRootFuncList->perCorePendingQueueArray;
+    uint32_t wrapCoreIdx = 0;
+    if (wrapQueue != nullptr && nrValidAic > 0) {
+        constexpr uint8_t MIX_TYPE_1C2V = 2;
+        constexpr uint8_t MIX_TYPE_1C1V = 1;
+        for (uint8_t targetType : {MIX_TYPE_1C2V, MIX_TYPE_1C1V}) {
+            for (uint32_t idx = wrapQueue->head; idx < wrapQueue->tail; idx++) {
+                WrapInfo& info = wrapQueue->elem[idx];
+                if (info.mixResourceType != targetType) {
+                    continue;
+                }
+                uint32_t aicCore = wrapCoreIdx++ % nrValidAic;
+                uint32_t aiv0Core = nrValidAic + aicCore * 2;
+                perCorePendingQueueArray[aicCore]->UnsafeEnqueue(info.tasklist[WRAP_IDX_AIC]);
+                perCorePendingQueueArray[aiv0Core]->UnsafeEnqueue(info.tasklist[WRAP_IDX_AIV0]);
+                if (targetType == MIX_TYPE_1C2V) {
+                    perCorePendingQueueArray[aiv0Core + 1]->UnsafeEnqueue(info.tasklist[WRAP_IDX_AIV1]);
+                }
+            }
+        }
+    }
+
+    // perCorePendingQueue: distribute aic tasks to aicore cores (0..nrValidAic-1), continue from wrap dispatch
+    uint32_t aicIdx = wrapCoreIdx;
     for (const auto* it = aicQueue->begin(); it != aicQueue->end(); ++it) {
         uint32_t coreIdx = aicIdx % nrValidAic;
-        dyntask->drcoRootFuncList->perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
+        perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
         aicIdx++;
     }
 
     // perCorePendingQueue: distribute aiv tasks to aiv cores (nrValidAic..3*nrValidAic-1)
-    uint32_t aivIdx = 0;
+    uint32_t aivIdx = wrapCoreIdx * 2;
     for (const auto* it = aivQueue->begin(); it != aivQueue->end(); ++it) {
         uint32_t coreIdx = nrValidAic + (aivIdx % nrAivCores);
-        dyntask->drcoRootFuncList->perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
+        perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
         aivIdx++;
     }
 }
