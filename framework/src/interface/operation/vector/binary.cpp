@@ -883,7 +883,7 @@ void TiledRemainderSOperation(Function& function, const TileShape& tileShape, si
         std::vector<int64_t> tmpShape{2, 1};
         tmpShape[1] = AlignUp(resultTileInfo.shape[shapeSize - 1], alignSize);
         if (opNameCode == Opcode::OP_REMRS) {
-            tmpShape[0] = shapeSize > 1 ? resultTileInfo.shape[shapeSize - 2] + 2 : 3;
+            tmpShape[0] = shapeSize > 1 ? resultTileInfo.shape[shapeSize - 2] + 3 : 3;
         }
         auto tmpTensor = std::make_shared<LogicalTensor>(function, input1.tensor->Datatype(), tmpShape);
         auto& tmpOp = function.AddOperation(opNameCode, {inputTile1}, {resultTile, tmpTensor});
