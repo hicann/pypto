@@ -93,8 +93,8 @@ enum class SymbolicOpcode {
     T_BOP_GT,
     T_BOP_GE,
 
-    T_BOP_MIN, // deprecated
-    T_BOP_MAX, // deprecated
+    T_BOP_MIN_DEPRECATED,
+    T_BOP_MAX_DEPRECATED,
 
     T_MOP_CALL,
     T_MOP_MIN,
@@ -106,7 +106,7 @@ enum class SymbolicOpcode {
     T_UOP_BEGIN = T_UOP_POS,
     T_UOP_END = T_UOP_NOT + 1,
     T_BOP_BEGIN = T_BOP_ADD,
-    T_BOP_END = T_BOP_MAX + 1
+    T_BOP_END = T_BOP_MAX_DEPRECATED + 1
 };
 
 class RawSymbolicScalar {
@@ -385,7 +385,7 @@ public:
             "+",       "-",       "!",                        // T_UOP_POS / T_UOP_NEG / T_UOP_NOT
             "+",       "-",       "*",       "/",  "%",       // T_BOP_ADD .. T_BOP_MOD
             "==",      "!=",      "<",       "<=", ">", ">=", // T_BOP_EQ .. T_BOP_GE
-            "<:min:>", "<:max:>",                             // deprecated T_BOP_MIN / T_BOP_MAX
+            "<:min:>", "<:max:>",                             // deprecated T_BOP_MIN_DEPRECATED / T_BOP_MAX_DEPRECATED
             "",        "<:min:>", "<:max:>",                  // T_MOP_CALL / T_MOP_MIN / T_MOP_MAX (not rendered here)
             "&&",      "||",                                  // T_MOP_AND / T_MOP_OR
         };

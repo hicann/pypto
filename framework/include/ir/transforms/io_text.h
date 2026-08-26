@@ -10,8 +10,8 @@
  * \file io_text.h
  * \brief IR text I/O — dumper and loader following the declared IR Syntax grammar.
  *
- * IRDumperText produces the canonical text representation declared in the
- * Doxygen "IR Syntax" blocks of each IR node header.  IRLoaderText parses that
+ * IRTextDumper produces the canonical text representation declared in the
+ * Doxygen "IR Syntax" blocks of each IR node header.  IRTextLoader parses that
  * text back into IR nodes.  Together they provide full round-trip serialisation.
  */
 #ifndef PYPTO_IR_TRANSFORMS_IO_TEXT_H_
@@ -29,10 +29,17 @@
 #include "ir/transforms/base/visitor.h"
 #include "ir/type.h"
 
-// ===========================================================================
-// IR text grammar keywords and punctuation
-// ===========================================================================
-// ---- Word keywords ----
+#include "interface/tensor/symbolic_scalar.h"
+#include "tilefwk/data_type.h"
+
+/* ===========================================================================
+ * IR Text Grammar (EBNF) — see io_text.md in framework/src/interface/ir/transforms/
+ * =========================================================================== */
+
+/* ===========================================================================
+ * IR text grammar keywords and punctuation
+ * =========================================================================== */
+/* ---- Word keywords ---- */
 #define IR_KW_PROGRAM "program"
 #define IR_KW_FUNCTION "function"
 #define IR_KW_INCAST "incast"
@@ -64,7 +71,7 @@
 #define IR_KW_TILE_VIEW "tile_view"
 #define IR_KW_MEMREF "memref"
 #define IR_KW_MEMREF_TYPE "memref_type"
-#define IR_KW_LOGICAL_TENSOR "logical_tensor"
+#define IR_KWV0_LOGICAL_TENSOR "v0_logical_tensor"
 #define IR_KW_HW_INFO "hw_info"
 #define IR_KW_TRUE "true"
 #define IR_KW_FALSE "false"
@@ -104,8 +111,32 @@
 #define IR_KW_SCALAR_UOP_INV "inv"
 #define IR_KW_SCALAR_UOP_CAST "cast"
 
+// ---- Symbolic scalar (scalarv0) opcode keywords ----
+#define IR_KWV0_SCALAR_UOP_POS "v0pos"
+#define IR_KWV0_SCALAR_UOP_NEG "v0neg"
+#define IR_KWV0_SCALAR_UOP_NOT "v0not"
+
+#define IR_KWV0_SCALAR_BOP_ADD "v0add"
+#define IR_KWV0_SCALAR_BOP_SUB "v0sub"
+#define IR_KWV0_SCALAR_BOP_MUL "v0mul"
+#define IR_KWV0_SCALAR_BOP_DIV "v0div"
+#define IR_KWV0_SCALAR_BOP_MOD "v0mod"
+#define IR_KWV0_SCALAR_BOP_EQ "v0eq"
+#define IR_KWV0_SCALAR_BOP_NE "v0ne"
+#define IR_KWV0_SCALAR_BOP_LT "v0lt"
+#define IR_KWV0_SCALAR_BOP_LE "v0le"
+#define IR_KWV0_SCALAR_BOP_GT "v0gt"
+#define IR_KWV0_SCALAR_BOP_GE "v0ge"
+
+#define IR_KWV0_SCALAR_MOP_CALL "v0call"
+#define IR_KWV0_SCALAR_MOP_MIN "v0min"
+#define IR_KWV0_SCALAR_MOP_MAX "v0max"
+#define IR_KWV0_SCALAR_MOP_AND "v0and"
+#define IR_KWV0_SCALAR_MOP_OR "v0or"
+
 // ---- Punctuation ----
 #define IR_PUN_VARNAME "%"
+#define IR_PUN_MEMREF "@"
 #define IR_PUN_LBRACE "{"
 #define IR_PUN_RBRACE "}"
 #define IR_PUN_LPAREN "("
@@ -118,11 +149,12 @@
 #define IR_PUN_ATTRNAME "#"
 #define IR_PUN_LBRACKET "["
 #define IR_PUN_RBRACKET "]"
+#define IR_PUN_OPMAGIC "!"
 
 namespace pypto {
 namespace ir {
 
-enum class LexerTokenKind {
+enum class IRTextLexerTokenKind {
     // Word keywords
     KwProgram,
     KwFunction,
@@ -154,7 +186,7 @@ enum class LexerTokenKind {
     KwTileView,
     KwMemref,
     KwMemrefType,
-    KwLogicalTensor,
+    KwV0LogicalTensor,
     KwHwInfo,
     KwTrue,
     KwFalse,
@@ -192,6 +224,28 @@ enum class LexerTokenKind {
     KwUOpNot,
     KwUOpInv,
     KwUOpCast,
+    // Symbolic scalar (scalarv0) op keywords
+    KwV0ScalarUOpPos,
+    KwV0ScalarUOpNeg,
+    KwV0ScalarUOpNot,
+    KwV0ScalarBOpAdd,
+    KwV0ScalarBOpSub,
+    KwV0ScalarBOpMul,
+    KwV0ScalarBOpDiv,
+    KwV0ScalarBOpMod,
+    KwV0ScalarBOpEq,
+    KwV0ScalarBOpNe,
+    KwV0ScalarBOpLt,
+    KwV0ScalarBOpLe,
+    KwV0ScalarBOpGt,
+    KwV0ScalarBOpGe,
+    KwV0ScalarMOpCall,
+    KwV0ScalarMOpMin,
+    KwV0ScalarMOpMax,
+    KwV0ScalarMOpAnd,
+    KwV0ScalarMOpOr,
+    KwV0ScalarBegin = KwV0ScalarUOpPos,
+    KwV0ScalarEnd = KwV0ScalarMOpOr,
     // Punctuation
     PunVarName,
     PunAttrName,
@@ -230,117 +284,147 @@ enum class LexerTokenKind {
     KwTypeEnd = KwTypeUnknown,
 
     // Valuable
-    Ident,
-    Int,
-    Float,
-    VarName,
-    AttrName,
+    TokIdent,
+    TokV0OpMagic,
+    TokInt,
+    TokFloat,
+    TokVarName,
+    TokAttrName,
     Invalid,
 };
 
-static inline const npu::tile_fwk::BiMap<LexerTokenKind>& GetLexerTokenDict()
+static inline const npu::tile_fwk::BiMap<IRTextLexerTokenKind>& IRTextGetLexerTokenDict()
 {
-    static npu::tile_fwk::BiMap<LexerTokenKind> dict{{
+    static npu::tile_fwk::BiMap<IRTextLexerTokenKind> dict{{
         // Keywords
-        {LexerTokenKind::KwProgram, IR_KW_PROGRAM},
-        {LexerTokenKind::KwFunction, IR_KW_FUNCTION},
-        {LexerTokenKind::KwIncast, IR_KW_INCAST},
-        {LexerTokenKind::KwOutcast, IR_KW_OUTCAST},
-        {LexerTokenKind::KwIf, IR_KW_IF},
-        {LexerTokenKind::KwThen, IR_KW_THEN},
-        {LexerTokenKind::KwElse, IR_KW_ELSE},
-        {LexerTokenKind::KwFor, IR_KW_FOR},
-        {LexerTokenKind::KwInrange, IR_KW_INRANGE},
-        {LexerTokenKind::KwIter, IR_KW_ITER},
-        {LexerTokenKind::KwWhile, IR_KW_WHILE},
-        {LexerTokenKind::KwYield, IR_KW_YIELD},
-        {LexerTokenKind::KwReturn, IR_KW_RETURN},
-        {LexerTokenKind::KwSection, IR_KW_SECTION},
-        {LexerTokenKind::KwEval, IR_KW_EVAL},
-        {LexerTokenKind::KwBreak, IR_KW_BREAK},
-        {LexerTokenKind::KwContinue, IR_KW_CONTINUE},
-        {LexerTokenKind::KwTuple, IR_KW_TUPLE},
-        {LexerTokenKind::KwGetItem, IR_KW_GETITEM},
-        {LexerTokenKind::KwScalarExpr, IR_KW_SCALAR_EXPR},
-        {LexerTokenKind::KwUnknown, IR_KW_UNKNOWN},
-        {LexerTokenKind::KwTensor, IR_KW_TENSOR},
-        {LexerTokenKind::KwTile, IR_KW_TILE},
-        {LexerTokenKind::KwPtr, IR_KW_PTR},
-        {LexerTokenKind::KwToken, IR_KW_TOKEN},
-        {LexerTokenKind::KwNone, IR_KW_NONE},
-        {LexerTokenKind::KwTensorView, IR_KW_TENSOR_VIEW},
-        {LexerTokenKind::KwTileView, IR_KW_TILE_VIEW},
-        {LexerTokenKind::KwMemref, IR_KW_MEMREF},
-        {LexerTokenKind::KwMemrefType, IR_KW_MEMREF_TYPE},
-        {LexerTokenKind::KwLogicalTensor, IR_KW_LOGICAL_TENSOR},
-        {LexerTokenKind::KwHwInfo, IR_KW_HW_INFO},
-        {LexerTokenKind::KwTrue, IR_KW_TRUE},
-        {LexerTokenKind::KwFalse, IR_KW_FALSE},
-        {LexerTokenKind::KwEntry, IR_KW_ENTRY},
-        {LexerTokenKind::KwType, IR_KW_TYPE},
-        {LexerTokenKind::KwDim, IR_KW_DIM},
-        {LexerTokenKind::KwNull, IR_KW_NULL},
+        {IRTextLexerTokenKind::KwProgram, IR_KW_PROGRAM},
+        {IRTextLexerTokenKind::KwFunction, IR_KW_FUNCTION},
+        {IRTextLexerTokenKind::KwIncast, IR_KW_INCAST},
+        {IRTextLexerTokenKind::KwOutcast, IR_KW_OUTCAST},
+        {IRTextLexerTokenKind::KwIf, IR_KW_IF},
+        {IRTextLexerTokenKind::KwThen, IR_KW_THEN},
+        {IRTextLexerTokenKind::KwElse, IR_KW_ELSE},
+        {IRTextLexerTokenKind::KwFor, IR_KW_FOR},
+        {IRTextLexerTokenKind::KwInrange, IR_KW_INRANGE},
+        {IRTextLexerTokenKind::KwIter, IR_KW_ITER},
+        {IRTextLexerTokenKind::KwWhile, IR_KW_WHILE},
+        {IRTextLexerTokenKind::KwYield, IR_KW_YIELD},
+        {IRTextLexerTokenKind::KwReturn, IR_KW_RETURN},
+        {IRTextLexerTokenKind::KwSection, IR_KW_SECTION},
+        {IRTextLexerTokenKind::KwEval, IR_KW_EVAL},
+        {IRTextLexerTokenKind::KwBreak, IR_KW_BREAK},
+        {IRTextLexerTokenKind::KwContinue, IR_KW_CONTINUE},
+        {IRTextLexerTokenKind::KwTuple, IR_KW_TUPLE},
+        {IRTextLexerTokenKind::KwGetItem, IR_KW_GETITEM},
+        {IRTextLexerTokenKind::KwScalarExpr, IR_KW_SCALAR_EXPR},
+        {IRTextLexerTokenKind::KwUnknown, IR_KW_UNKNOWN},
+        {IRTextLexerTokenKind::KwTensor, IR_KW_TENSOR},
+        {IRTextLexerTokenKind::KwTile, IR_KW_TILE},
+        {IRTextLexerTokenKind::KwPtr, IR_KW_PTR},
+        {IRTextLexerTokenKind::KwToken, IR_KW_TOKEN},
+        {IRTextLexerTokenKind::KwNone, IR_KW_NONE},
+        {IRTextLexerTokenKind::KwTensorView, IR_KW_TENSOR_VIEW},
+        {IRTextLexerTokenKind::KwTileView, IR_KW_TILE_VIEW},
+        {IRTextLexerTokenKind::KwMemref, IR_KW_MEMREF},
+        {IRTextLexerTokenKind::KwMemrefType, IR_KW_MEMREF_TYPE},
+        {IRTextLexerTokenKind::KwV0LogicalTensor, IR_KWV0_LOGICAL_TENSOR},
+        {IRTextLexerTokenKind::KwHwInfo, IR_KW_HW_INFO},
+        {IRTextLexerTokenKind::KwTrue, IR_KW_TRUE},
+        {IRTextLexerTokenKind::KwFalse, IR_KW_FALSE},
+        {IRTextLexerTokenKind::KwEntry, IR_KW_ENTRY},
+        {IRTextLexerTokenKind::KwType, IR_KW_TYPE},
+        {IRTextLexerTokenKind::KwDim, IR_KW_DIM},
+        {IRTextLexerTokenKind::KwNull, IR_KW_NULL},
         // Scalar binary ops
-        {LexerTokenKind::KwBOpAdd, IR_KW_SCALAR_BOP_ADD},
-        {LexerTokenKind::KwBOpSub, IR_KW_SCALAR_BOP_SUB},
-        {LexerTokenKind::KwBOpMul, IR_KW_SCALAR_BOP_MUL},
-        {LexerTokenKind::KwBOpDiv, IR_KW_SCALAR_BOP_DIV},
-        {LexerTokenKind::KwBOpMod, IR_KW_SCALAR_BOP_MOD},
-        {LexerTokenKind::KwBOpFdiv, IR_KW_SCALAR_BOP_FDIV},
-        {LexerTokenKind::KwBOpMin, IR_KW_SCALAR_BOP_MIN},
-        {LexerTokenKind::KwBOpMax, IR_KW_SCALAR_BOP_MAX},
-        {LexerTokenKind::KwBOpPow, IR_KW_SCALAR_BOP_POW},
-        {LexerTokenKind::KwBOpEq, IR_KW_SCALAR_BOP_EQ},
-        {LexerTokenKind::KwBOpNe, IR_KW_SCALAR_BOP_NE},
-        {LexerTokenKind::KwBOpLt, IR_KW_SCALAR_BOP_LT},
-        {LexerTokenKind::KwBOpLe, IR_KW_SCALAR_BOP_LE},
-        {LexerTokenKind::KwBOpGt, IR_KW_SCALAR_BOP_GT},
-        {LexerTokenKind::KwBOpGe, IR_KW_SCALAR_BOP_GE},
-        {LexerTokenKind::KwBOpLand, IR_KW_SCALAR_BOP_LAND},
-        {LexerTokenKind::KwBOpLor, IR_KW_SCALAR_BOP_LOR},
-        {LexerTokenKind::KwBOpLxor, IR_KW_SCALAR_BOP_LXOR},
-        {LexerTokenKind::KwBOpAnd, IR_KW_SCALAR_BOP_AND},
-        {LexerTokenKind::KwBOpOr, IR_KW_SCALAR_BOP_OR},
-        {LexerTokenKind::KwBOpXor, IR_KW_SCALAR_BOP_XOR},
-        {LexerTokenKind::KwBOpShl, IR_KW_SCALAR_BOP_SHL},
-        {LexerTokenKind::KwBOpShr, IR_KW_SCALAR_BOP_SHR},
+        {IRTextLexerTokenKind::KwBOpAdd, IR_KW_SCALAR_BOP_ADD},
+        {IRTextLexerTokenKind::KwBOpSub, IR_KW_SCALAR_BOP_SUB},
+        {IRTextLexerTokenKind::KwBOpMul, IR_KW_SCALAR_BOP_MUL},
+        {IRTextLexerTokenKind::KwBOpDiv, IR_KW_SCALAR_BOP_DIV},
+        {IRTextLexerTokenKind::KwBOpMod, IR_KW_SCALAR_BOP_MOD},
+        {IRTextLexerTokenKind::KwBOpFdiv, IR_KW_SCALAR_BOP_FDIV},
+        {IRTextLexerTokenKind::KwBOpMin, IR_KW_SCALAR_BOP_MIN},
+        {IRTextLexerTokenKind::KwBOpMax, IR_KW_SCALAR_BOP_MAX},
+        {IRTextLexerTokenKind::KwBOpPow, IR_KW_SCALAR_BOP_POW},
+        {IRTextLexerTokenKind::KwBOpEq, IR_KW_SCALAR_BOP_EQ},
+        {IRTextLexerTokenKind::KwBOpNe, IR_KW_SCALAR_BOP_NE},
+        {IRTextLexerTokenKind::KwBOpLt, IR_KW_SCALAR_BOP_LT},
+        {IRTextLexerTokenKind::KwBOpLe, IR_KW_SCALAR_BOP_LE},
+        {IRTextLexerTokenKind::KwBOpGt, IR_KW_SCALAR_BOP_GT},
+        {IRTextLexerTokenKind::KwBOpGe, IR_KW_SCALAR_BOP_GE},
+        {IRTextLexerTokenKind::KwBOpLand, IR_KW_SCALAR_BOP_LAND},
+        {IRTextLexerTokenKind::KwBOpLor, IR_KW_SCALAR_BOP_LOR},
+        {IRTextLexerTokenKind::KwBOpLxor, IR_KW_SCALAR_BOP_LXOR},
+        {IRTextLexerTokenKind::KwBOpAnd, IR_KW_SCALAR_BOP_AND},
+        {IRTextLexerTokenKind::KwBOpOr, IR_KW_SCALAR_BOP_OR},
+        {IRTextLexerTokenKind::KwBOpXor, IR_KW_SCALAR_BOP_XOR},
+        {IRTextLexerTokenKind::KwBOpShl, IR_KW_SCALAR_BOP_SHL},
+        {IRTextLexerTokenKind::KwBOpShr, IR_KW_SCALAR_BOP_SHR},
         // Scalar unary ops
-        {LexerTokenKind::KwUOpAbs, IR_KW_SCALAR_UOP_ABS},
-        {LexerTokenKind::KwUOpNeg, IR_KW_SCALAR_UOP_NEG},
-        {LexerTokenKind::KwUOpNot, IR_KW_SCALAR_UOP_NOT},
-        {LexerTokenKind::KwUOpInv, IR_KW_SCALAR_UOP_INV},
-        {LexerTokenKind::KwUOpCast, IR_KW_SCALAR_UOP_CAST},
+        {IRTextLexerTokenKind::KwUOpAbs, IR_KW_SCALAR_UOP_ABS},
+        {IRTextLexerTokenKind::KwUOpNeg, IR_KW_SCALAR_UOP_NEG},
+        {IRTextLexerTokenKind::KwUOpNot, IR_KW_SCALAR_UOP_NOT},
+        {IRTextLexerTokenKind::KwUOpInv, IR_KW_SCALAR_UOP_INV},
+        {IRTextLexerTokenKind::KwUOpCast, IR_KW_SCALAR_UOP_CAST},
+        // Symbolic scalar (scalarv0) op keywords
+        {IRTextLexerTokenKind::KwV0ScalarUOpPos, IR_KWV0_SCALAR_UOP_POS},
+        {IRTextLexerTokenKind::KwV0ScalarUOpNeg, IR_KWV0_SCALAR_UOP_NEG},
+        {IRTextLexerTokenKind::KwV0ScalarUOpNot, IR_KWV0_SCALAR_UOP_NOT},
+        {IRTextLexerTokenKind::KwV0ScalarBOpAdd, IR_KWV0_SCALAR_BOP_ADD},
+        {IRTextLexerTokenKind::KwV0ScalarBOpSub, IR_KWV0_SCALAR_BOP_SUB},
+        {IRTextLexerTokenKind::KwV0ScalarBOpMul, IR_KWV0_SCALAR_BOP_MUL},
+        {IRTextLexerTokenKind::KwV0ScalarBOpDiv, IR_KWV0_SCALAR_BOP_DIV},
+        {IRTextLexerTokenKind::KwV0ScalarBOpMod, IR_KWV0_SCALAR_BOP_MOD},
+        {IRTextLexerTokenKind::KwV0ScalarBOpEq, IR_KWV0_SCALAR_BOP_EQ},
+        {IRTextLexerTokenKind::KwV0ScalarBOpNe, IR_KWV0_SCALAR_BOP_NE},
+        {IRTextLexerTokenKind::KwV0ScalarBOpLt, IR_KWV0_SCALAR_BOP_LT},
+        {IRTextLexerTokenKind::KwV0ScalarBOpLe, IR_KWV0_SCALAR_BOP_LE},
+        {IRTextLexerTokenKind::KwV0ScalarBOpGt, IR_KWV0_SCALAR_BOP_GT},
+        {IRTextLexerTokenKind::KwV0ScalarBOpGe, IR_KWV0_SCALAR_BOP_GE},
+        {IRTextLexerTokenKind::KwV0ScalarMOpCall, IR_KWV0_SCALAR_MOP_CALL},
+        {IRTextLexerTokenKind::KwV0ScalarMOpMin, IR_KWV0_SCALAR_MOP_MIN},
+        {IRTextLexerTokenKind::KwV0ScalarMOpMax, IR_KWV0_SCALAR_MOP_MAX},
+        {IRTextLexerTokenKind::KwV0ScalarMOpAnd, IR_KWV0_SCALAR_MOP_AND},
+        {IRTextLexerTokenKind::KwV0ScalarMOpOr, IR_KWV0_SCALAR_MOP_OR},
         // Punctuation (VarName/AttrName handled as whole tokens, not here)
-        {LexerTokenKind::PunLBrace, IR_PUN_LBRACE},
-        {LexerTokenKind::PunRBrace, IR_PUN_RBRACE},
-        {LexerTokenKind::PunLParen, IR_PUN_LPAREN},
-        {LexerTokenKind::PunRParen, IR_PUN_RPAREN},
-        {LexerTokenKind::PunLt, IR_PUN_LT},
-        {LexerTokenKind::PunGt, IR_PUN_GT},
-        {LexerTokenKind::PunComma, IR_PUN_COMMA},
-        {LexerTokenKind::PunEq, IR_PUN_EQ},
-        {LexerTokenKind::PunSemi, IR_PUN_SEMI},
-        {LexerTokenKind::PunLBracket, IR_PUN_LBRACKET},
-        {LexerTokenKind::PunRBracket, IR_PUN_RBRACKET},
+        {IRTextLexerTokenKind::PunLBrace, IR_PUN_LBRACE},
+        {IRTextLexerTokenKind::PunRBrace, IR_PUN_RBRACE},
+        {IRTextLexerTokenKind::PunLParen, IR_PUN_LPAREN},
+        {IRTextLexerTokenKind::PunRParen, IR_PUN_RPAREN},
+        {IRTextLexerTokenKind::PunLt, IR_PUN_LT},
+        {IRTextLexerTokenKind::PunGt, IR_PUN_GT},
+        {IRTextLexerTokenKind::PunComma, IR_PUN_COMMA},
+        {IRTextLexerTokenKind::PunEq, IR_PUN_EQ},
+        {IRTextLexerTokenKind::PunSemi, IR_PUN_SEMI},
+        {IRTextLexerTokenKind::PunLBracket, IR_PUN_LBRACKET},
+        {IRTextLexerTokenKind::PunRBracket, IR_PUN_RBRACKET},
 
-        {LexerTokenKind::KwTypeBool, IR_KW_TYPE_BOOL},
-        {LexerTokenKind::KwTypeInt8, IR_KW_TYPE_INT8},
-        {LexerTokenKind::KwTypeInt16, IR_KW_TYPE_INT16},
-        {LexerTokenKind::KwTypeInt32, IR_KW_TYPE_INT32},
-        {LexerTokenKind::KwTypeInt64, IR_KW_TYPE_INT64},
-        {LexerTokenKind::KwTypeUint8, IR_KW_TYPE_UINT8},
-        {LexerTokenKind::KwTypeUint16, IR_KW_TYPE_UINT16},
-        {LexerTokenKind::KwTypeUint32, IR_KW_TYPE_UINT32},
-        {LexerTokenKind::KwTypeUint64, IR_KW_TYPE_UINT64},
-        {LexerTokenKind::KwTypeFp16, IR_KW_TYPE_FP16},
-        {LexerTokenKind::KwTypeFp32, IR_KW_TYPE_FP32},
-        {LexerTokenKind::KwTypeFp64, IR_KW_TYPE_FP64},
-        {LexerTokenKind::KwTypeBf16, IR_KW_TYPE_BF16},
-        {LexerTokenKind::KwTypeFp8e4m3fn, IR_KW_TYPE_FP8E4M3FN},
-        {LexerTokenKind::KwTypeFp8e5m2, IR_KW_TYPE_FP8E5M2},
-        {LexerTokenKind::KwTypeHf4, IR_KW_TYPE_HF4},
-        {LexerTokenKind::KwTypeHf8, IR_KW_TYPE_HF8},
-        {LexerTokenKind::KwTypeUnknown, IR_KW_TYPE_UNKNOWN},
+        {IRTextLexerTokenKind::KwTypeBool, IR_KW_TYPE_BOOL},
+        {IRTextLexerTokenKind::KwTypeInt8, IR_KW_TYPE_INT8},
+        {IRTextLexerTokenKind::KwTypeInt16, IR_KW_TYPE_INT16},
+        {IRTextLexerTokenKind::KwTypeInt32, IR_KW_TYPE_INT32},
+        {IRTextLexerTokenKind::KwTypeInt64, IR_KW_TYPE_INT64},
+        {IRTextLexerTokenKind::KwTypeUint8, IR_KW_TYPE_UINT8},
+        {IRTextLexerTokenKind::KwTypeUint16, IR_KW_TYPE_UINT16},
+        {IRTextLexerTokenKind::KwTypeUint32, IR_KW_TYPE_UINT32},
+        {IRTextLexerTokenKind::KwTypeUint64, IR_KW_TYPE_UINT64},
+        {IRTextLexerTokenKind::KwTypeFp16, IR_KW_TYPE_FP16},
+        {IRTextLexerTokenKind::KwTypeFp32, IR_KW_TYPE_FP32},
+        {IRTextLexerTokenKind::KwTypeFp64, IR_KW_TYPE_FP64},
+        {IRTextLexerTokenKind::KwTypeBf16, IR_KW_TYPE_BF16},
+        {IRTextLexerTokenKind::KwTypeFp8e4m3fn, IR_KW_TYPE_FP8E4M3FN},
+        {IRTextLexerTokenKind::KwTypeFp8e5m2, IR_KW_TYPE_FP8E5M2},
+        {IRTextLexerTokenKind::KwTypeHf4, IR_KW_TYPE_HF4},
+        {IRTextLexerTokenKind::KwTypeHf8, IR_KW_TYPE_HF8},
+        {IRTextLexerTokenKind::KwTypeUnknown, IR_KW_TYPE_UNKNOWN},
+
+        // Valuable tokens (angle-bracketed to distinguish from keywords/punctuation)
+        {IRTextLexerTokenKind::TokIdent, "<identifier>"},
+        {IRTextLexerTokenKind::TokV0OpMagic, "<op_magic>"},
+        {IRTextLexerTokenKind::TokInt, "<integer>"},
+        {IRTextLexerTokenKind::TokFloat, "<float>"},
+        {IRTextLexerTokenKind::TokVarName, "<var_name>"},
+        {IRTextLexerTokenKind::TokAttrName, "<attr_name>"},
+        {IRTextLexerTokenKind::Invalid, "<invalid>"},
     }};
     return dict;
 }
@@ -348,13 +432,14 @@ static inline const npu::tile_fwk::BiMap<LexerTokenKind>& GetLexerTokenDict()
 // ===========================================================================
 // Dumper
 // ===========================================================================
-class IRDumperText : public IRVisitor {
+class IRTextDumper : public IRVisitor {
     using IRVisitor::VisitExpr_;
     using IRVisitor::VisitStmt_;
+    using IRVisitor::VisitType_;
 
 public:
-    IRDumperText() = default;
-    ~IRDumperText() override = default;
+    IRTextDumper() = default;
+    ~IRTextDumper() override = default;
 
     static std::string Dump(const IRNodePtr& node);
     static std::string DumpType(const TypePtr& type);
@@ -413,12 +498,16 @@ private:
     void PrintVarDefList(const std::vector<VarPtr>& varList, const std::vector<VarPtr>& tokenList = {});
     void PrintIterArgs(const std::vector<IterArgPtr>& iterArgs);
 
+    void PrintIntListAttr(const std::string& key, const std::vector<int64_t>& vals);
+    void PrintSymbolicScalarListAttr(const std::string& key, const std::vector<npu::tile_fwk::SymbolicScalar>& vals);
+
     void PrintType(const TypePtr& type);
     void PrintShape(const std::vector<ExprPtr>& shape);
     void PrintExprList(const std::vector<ExprPtr>& exprs);
     void PrintTokenList(const std::vector<VarPtr>& tokenList);
     void PrintAttrValue(const std::string& key, const std::any& value);
     void PrintAttr(const std::string& key, const std::any& value);
+    void PrintDataArray(const std::vector<int64_t>& vals);
     template <typename T>
     void PrintAttr(const std::string& key, const T& value)
     {
@@ -434,15 +523,15 @@ private:
 // ===========================================================================
 // Loader
 // ===========================================================================
-class IRLoaderText {
+class IRTextLoader {
 public:
-    IRLoaderText() = default;
+    IRTextLoader() = default;
 
-    static ProgramPtr LoadProgram(const std::string& text);
-    static FunctionPtr LoadFunction(const std::string& text);
-    static StmtPtr LoadStmt(const std::string& text);
-    static ExprPtr LoadExpr(const std::string& text);
-    static TypePtr LoadType(const std::string& text);
+    ProgramPtr LoadProgram(const std::string& text, std::string& error);
+    FunctionPtr LoadFunction(const std::string& text, std::string& error);
+    StmtPtr LoadStmt(const std::string& text, std::string& error);
+    ExprPtr LoadExpr(const std::string& text, std::string& error);
+    TypePtr LoadType(const std::string& text, std::string& error);
 };
 
 // ===========================================================================
@@ -451,11 +540,11 @@ public:
 std::string TextDump(const IRNodePtr& node);
 std::string TextDumpType(const TypePtr& type);
 
-ProgramPtr TextLoadProgram(const std::string& text);
-FunctionPtr TextLoadFunction(const std::string& text);
-StmtPtr TextLoadStmt(const std::string& text);
-ExprPtr TextLoadExpr(const std::string& text);
-TypePtr TextLoadType(const std::string& text);
+ProgramPtr TextLoadProgram(const std::string& text, std::string& error);
+FunctionPtr TextLoadFunction(const std::string& text, std::string& error);
+StmtPtr TextLoadStmt(const std::string& text, std::string& error);
+ExprPtr TextLoadExpr(const std::string& text, std::string& error);
+TypePtr TextLoadType(const std::string& text, std::string& error);
 
 // ===========================================================================
 // Operator BiMap dictionaries
@@ -498,6 +587,66 @@ static inline const npu::tile_fwk::BiMap<ObjectKind>& GetUnaryOpDict()
         {ObjectKind::Not, IR_KW_SCALAR_UOP_NOT},
         {ObjectKind::BitNot, IR_KW_SCALAR_UOP_INV},
         {ObjectKind::Cast, IR_KW_SCALAR_UOP_CAST},
+    }};
+    return dict;
+}
+
+// Bidirectional map between tile_fwk::DataType (LogicalTensor dtype) and the IR
+// type keyword text (IR_KW_TYPE_*). Types without a distinct IR keyword text are
+// omitted: DT_INT4, DT_FP8, DT_HF4, DT_FP4_E2M1, DT_FP4_E1M2.
+static inline const npu::tile_fwk::BiMap<npu::tile_fwk::DataType>& GetTileFwkDataTypeDict()
+{
+    using npu::tile_fwk::DataType;
+    static npu::tile_fwk::BiMap<DataType> dict{{
+        {DataType::DT_BOOL, IR_KW_TYPE_BOOL},
+        {DataType::DT_INT8, IR_KW_TYPE_INT8},
+        {DataType::DT_INT16, IR_KW_TYPE_INT16},
+        {DataType::DT_INT32, IR_KW_TYPE_INT32},
+        {DataType::DT_INT64, IR_KW_TYPE_INT64},
+        {DataType::DT_UINT8, IR_KW_TYPE_UINT8},
+        {DataType::DT_UINT16, IR_KW_TYPE_UINT16},
+        {DataType::DT_UINT32, IR_KW_TYPE_UINT32},
+        {DataType::DT_UINT64, IR_KW_TYPE_UINT64},
+        {DataType::DT_FP16, IR_KW_TYPE_FP16},
+        {DataType::DT_FP32, IR_KW_TYPE_FP32},
+        {DataType::DT_DOUBLE, IR_KW_TYPE_FP64},
+        {DataType::DT_BF16, IR_KW_TYPE_BF16},
+        {DataType::DT_FP8E4M3, IR_KW_TYPE_FP8E4M3FN},
+        {DataType::DT_FP8E5M2, IR_KW_TYPE_FP8E5M2},
+        {DataType::DT_FP8E8M0, IR_KW_TYPE_FP8E8M0},
+        {DataType::DT_FP4_E2M1X2, IR_KW_TYPE_FP4E2M1},
+        {DataType::DT_FP4_E1M2X2, IR_KW_TYPE_FP4E1M2},
+        {DataType::DT_HF8, IR_KW_TYPE_HF8},
+    }};
+    return dict;
+}
+
+static inline const npu::tile_fwk::BiMap<npu::tile_fwk::SymbolicOpcode>& GetSymbolicOpcodeDict()
+{
+    using npu::tile_fwk::SymbolicOpcode;
+    static npu::tile_fwk::BiMap<SymbolicOpcode> dict{{
+        // Unary ops
+        {SymbolicOpcode::T_UOP_POS, IR_KWV0_SCALAR_UOP_POS},
+        {SymbolicOpcode::T_UOP_NEG, IR_KWV0_SCALAR_UOP_NEG},
+        {SymbolicOpcode::T_UOP_NOT, IR_KWV0_SCALAR_UOP_NOT},
+        // Binary ops
+        {SymbolicOpcode::T_BOP_ADD, IR_KWV0_SCALAR_BOP_ADD},
+        {SymbolicOpcode::T_BOP_SUB, IR_KWV0_SCALAR_BOP_SUB},
+        {SymbolicOpcode::T_BOP_MUL, IR_KWV0_SCALAR_BOP_MUL},
+        {SymbolicOpcode::T_BOP_DIV, IR_KWV0_SCALAR_BOP_DIV},
+        {SymbolicOpcode::T_BOP_MOD, IR_KWV0_SCALAR_BOP_MOD},
+        {SymbolicOpcode::T_BOP_EQ, IR_KWV0_SCALAR_BOP_EQ},
+        {SymbolicOpcode::T_BOP_NE, IR_KWV0_SCALAR_BOP_NE},
+        {SymbolicOpcode::T_BOP_LT, IR_KWV0_SCALAR_BOP_LT},
+        {SymbolicOpcode::T_BOP_LE, IR_KWV0_SCALAR_BOP_LE},
+        {SymbolicOpcode::T_BOP_GT, IR_KWV0_SCALAR_BOP_GT},
+        {SymbolicOpcode::T_BOP_GE, IR_KWV0_SCALAR_BOP_GE},
+        // Multiple ops
+        {SymbolicOpcode::T_MOP_CALL, IR_KWV0_SCALAR_MOP_CALL},
+        {SymbolicOpcode::T_MOP_MIN, IR_KWV0_SCALAR_MOP_MIN},
+        {SymbolicOpcode::T_MOP_MAX, IR_KWV0_SCALAR_MOP_MAX},
+        {SymbolicOpcode::T_MOP_AND, IR_KWV0_SCALAR_MOP_AND},
+        {SymbolicOpcode::T_MOP_OR, IR_KWV0_SCALAR_MOP_OR},
     }};
     return dict;
 }

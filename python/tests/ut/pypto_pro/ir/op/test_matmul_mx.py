@@ -63,7 +63,7 @@ def test_load_preserves_explicit_default_order_in_ir():
 
     call = _ir_load(dst, src, [0, 0, 0], order=[1, 2])
 
-    assert '"tile_dims": [1, 2]' in str(call)
+    assert 'tile_dims=[1, 2]' in str(call)
 
 
 def test_matmul_mx_builds_registered_call():

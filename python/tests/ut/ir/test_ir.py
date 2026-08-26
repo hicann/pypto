@@ -160,19 +160,19 @@ def test_check():
 def test_basic_types():
     # UnknownType
     ut = ir.UnknownType()
-    assert str(ut) == "ir.Unknown"
+    assert str(ut) == "unknown"
 
     # ScalarType
     st = ir.ScalarType(ir.INT32)
     assert st.dtype == ir.INT32
-    assert str(st) == "ir.Scalar[ir.INT32]"
+    assert str(st) == "int32_t"
 
     # TensorType with int64_t shape
     tt = ir.TensorType([16, 32], ir.FP32)
     assert tt.dtype == ir.FP32
     assert len(tt.shape) == 2
     assert tt.memref is None
-    assert str(tt) == "ir.Tensor[[16, 32], ir.FP32]"
+    assert str(tt) == "tensor<16 x 32, float, tensor_view<>>"
 
     # TensorType with memref
     offset = ir.ConstInt(0, ir.INT64, ir.Span("test", 1, 1))
@@ -180,27 +180,27 @@ def test_basic_types():
     tt2 = ir.TensorType([16, 32], ir.FP16, memref)
     assert tt2.memref is not None
     assert tt2.memref.size == 1024
-    assert str(tt2) == "ir.Tensor[[16, 32], ir.FP16, ir.MemRef(ir.MemorySpace.DDR, 0, 1024)]"
+    assert str(tt2) == "tensor<16 x 32, half, tensor_view<>>"
 
     # TupleType
     tup = ir.TupleType([ir.ScalarType(ir.INT32), ir.ScalarType(ir.FP32)])
     assert len(tup.types) == 2
-    assert str(tup) == "ir.Tuple[ir.Scalar[ir.INT32], ir.Scalar[ir.FP32]]"
+    assert str(tup) == "tuple<int32_t, float>"
 
     pt = ir.PtrType()
-    assert str(pt) == "ir.Ptr"
+    assert str(pt) == "ptr<int8_t>"
 
     # TokenType
     tt3 = ir.TokenType()
-    assert str(tt3) == "ir.Token"
+    assert str(tt3) == "token"
 
     # NoneType
     nt = ir.NoneType()
-    assert str(nt) == "ir.None"
+    assert str(nt) == "none"
 
     # LogicalTensorType
     lt = ir.LogicalTensorType()
-    assert str(lt) == "ir.Tensor"
+    assert str(lt) == "v0_logical_tensor"
 
     # Struct debug info
     from pypto import pypto_impl
@@ -234,11 +234,11 @@ def test_basic_expr():
 
     # ConstBool
     cb = ir.ConstBool(True, span)
-    assert str(cb) == "True"
+    assert str(cb) == "true"
 
     # Var
     var = ir.Var("x", st, span)
-    assert str(var) == "x"
+    assert str(var) == "%x"
     assert var.name == "x"
 
     # IterArg
@@ -250,76 +250,62 @@ def test_basic_expr():
     assert iter_arg.initValue.value == 0
 
     # Binary expressions
-    for bop in [
-        (ir.Add, '+'),
-        (ir.Sub, '-'),
-        (ir.Mul, '*'),
-        (ir.FloorDiv, '//'),
-        (ir.FloatDiv, '/'),
-        (ir.FloorMod, '%'),
-        (ir.Pow, '**'),
-        (ir.Eq, '=='),
-        (ir.Ne, '!='),
-        (ir.Lt, '<'),
-        (ir.Le, '<='),
-        (ir.Gt, '>'),
-        (ir.Ge, '>='),
-        (ir.And, 'and'),
-        (ir.Or, 'or'),
-        (ir.Xor, 'xor'),
-        (ir.BitAnd, '&'),
-        (ir.BitOr, '|'),
-        (ir.BitXor, '^'),
-        (ir.BitShiftLeft, '<<'),
-        (ir.BitShiftRight, '>>'),
-    ]:
+    bop_names = {
+        ir.Add: "add", ir.Sub: "sub", ir.Mul: "mul", ir.FloorDiv: "div",
+        ir.FloatDiv: "fdiv", ir.FloorMod: "mod", ir.Pow: "pow",
+        ir.Eq: "eq", ir.Ne: "ne", ir.Lt: "lt", ir.Le: "le",
+        ir.Gt: "gt", ir.Ge: "ge", ir.And: "land", ir.Or: "lor",
+        ir.Xor: "lxor", ir.BitAnd: "and", ir.BitOr: "or",
+        ir.BitXor: "xor", ir.BitShiftLeft: "shl", ir.BitShiftRight: "shr",
+    }
+    for bop_cls, op_name in bop_names.items():
         a = ir.ConstInt(1, ir.INT32, span)
         b = ir.ConstInt(2, ir.INT32, span)
-        expr = bop[0](a, b, ir.INT32, span)
-        assert str(expr) == f"1 {bop[1]} 2"
+        expr = bop_cls(a, b, ir.INT32, span)
+        assert str(expr) == f"(1 {op_name} 2)"
 
     a = ir.ConstInt(1, ir.INT32, span)
     b = ir.ConstInt(2, ir.INT32, span)
     expr = ir.Min(a, b, ir.INT32, span)
-    assert str(expr) == "ir.min(1, 2)"
+    assert str(expr) == "(1 min 2)"
 
     a = ir.ConstInt(1, ir.INT32, span)
     b = ir.ConstInt(2, ir.INT32, span)
     expr = ir.Max(a, b, ir.INT32, span)
-    assert str(expr) == "ir.max(1, 2)"
+    assert str(expr) == "(1 max 2)"
 
     # Unary expressions
     neg = ir.Neg(a, ir.INT32, span)
-    assert str(neg) == "-1"
+    assert str(neg) == "(neg 1)"
 
     not_expr = ir.Not(cb, ir.BOOL, span)
-    assert str(not_expr) == "not True"
+    assert str(not_expr) == "(not true)"
 
     bit_not = ir.BitNot(a, ir.INT32, span)
-    assert str(bit_not) == "~1"
+    assert str(bit_not) == "(inv 1)"
 
     abs_expr = ir.Abs(a, ir.INT32, span)
-    assert str(abs_expr) == "ir.abs(1)"
+    assert str(abs_expr) == "(abs 1)"
 
     cast = ir.Cast(a, ir.FP32, span)
-    assert str(cast) == "ir.cast(1, ir.FP32)"
+    assert str(cast) == "(cast float 1)"
 
     # MakeTuple and TupleGetItemExpr
     mt = ir.MakeTuple([a, b], span)
-    assert str(mt) == "[1, 2]"
+    assert str(mt) == "tuple(1, 2)"
     tgi = ir.TupleGetItem(mt, 0, span)
-    assert str(tgi) == "[1, 2][0]"
+    assert str(tgi) == "getitem(tuple(1, 2), 0)"
     get_item = ir.GetItemExpr(mt, ir.ConstInt(1, ir.INDEX, span), span)
-    assert str(get_item) == "[1, 2][1]"
+    assert str(get_item) == "getitem(tuple(1, 2), 1)"
 
     # Call with Op
     call = ir.Call("my_op", [a, b], span)
-    assert str(call) == "ir.call @my_op(1, 2)"
+    assert str(call) == "my_op(1, 2)"
 
     # MemRef
     offset = ir.ConstInt(0, ir.INT64, span)
     memref = ir.MemRef(ir.MemorySpace.Vec, offset, 2048, span)
-    assert str(memref) == "ir.MemRef(ir.MemorySpace.Vec, 0, 2048)"
+    assert str(memref) == "memref(Vec, 0, 2048)"
 
 
 def test_basic_stmt():
@@ -338,22 +324,22 @@ def test_basic_stmt():
 
     # AssignStmt
     assign = ir.AssignStmt(x, val42, span)
-    assert str(assign) == "x: ir.Scalar[ir.INT32] = 42"
+    assert str(assign) == "int32_t %x = 42;"
 
     # SeqStmts
     assign_x = ir.AssignStmt(x, val42, span)
     assign_y = ir.AssignStmt(y, val0, span)
     seq = ir.SeqStmts([assign_x, assign_y], span)
-    assert str(seq) == "\n".join(["x: ir.Scalar[ir.INT32] = 42", "y: ir.Scalar[ir.INT32] = 0"])
+    assert str(seq) == "\n".join(["{", "    int32_t %x = 42;", "    int32_t %y = 0;", "}"])
 
     # IfStmt
     cond = ir.ConstBool(True, span)
     if_stmt = ir.IfStmt(cond, assign_x, None, [], span)
-    assert str(if_stmt) == "\n".join(["if True:", "    x: ir.Scalar[ir.INT32] = 42"])
+    assert str(if_stmt) == "\n".join(["if true then {", "    int32_t %x = 42;", "} else {}"])
 
     if_else = ir.IfStmt(cond, assign_x, assign_y, [], span)
     assert str(if_else) == "\n".join(
-        ["if True:", "    x: ir.Scalar[ir.INT32] = 42", "else:", "    y: ir.Scalar[ir.INT32] = 0"]
+        ["if true then {", "    int32_t %x = 42;", "} else {", "    int32_t %y = 0;", "}"]
     )
 
     # ForStmt
@@ -366,61 +352,56 @@ def test_basic_stmt():
     for_stmt = ir.ForStmt(i, val0, val10, val1, [iter_arg], body, [ret_var], span, attrs)
     assert str(for_stmt) == "\n".join(
         [
-            "for i, (sum,) in ir.range(0, 10, 1, init_values=(0,), attrs={\"a\": True, \"parallel\": True}):",
-            "    sum_out = ir.yield_(1)",
+            "int32_t %sum_out = for %i inrange 0, 10, 1 iter { int32_t %sum = 0; } #a(true) #parallel(true) {",
+            "    yield 1;",
+            "}",
         ]
     )
 
     # WhileStmt
     while_stmt = ir.WhileStmt(cond, [], assign_x, [], span)
-    assert str(while_stmt) == "\n".join(["while True:", "    x: ir.Scalar[ir.INT32] = 42"])
-
+    assert str(while_stmt) == "\n".join(["while true iter { } {", "    int32_t %x = 42;", "}"])
     # SectionStmt
     for section_kind, section_name in [
-        (pypto_impl.ir.SectionKind.Vector, "section_vector"),
-        (pypto_impl.ir.SectionKind.Cube, "section_cube"),
-        (pypto_impl.ir.SectionKind.VF, "section_vf"),
+        (pypto_impl.ir.SectionKind.Vector, "Vector"),
+        (pypto_impl.ir.SectionKind.Cube, "Cube"),
+        (pypto_impl.ir.SectionKind.VF, "VF"),
     ]:
         section = pypto_impl.ir.SectionStmt(section_kind, assign_x, span)
-        assert str(section) == "\n".join(
-            [
-                f"with ir.{section_name}():",
-                "    x: ir.Scalar[ir.INT32] = 42",
-            ]
-        )
+        assert str(section) == "\n".join([f"section {section_name} {{", "    int32_t %x = 42;", "}"])
 
     # YieldStmt and ReturnStmt
     yield_stmt = ir.YieldStmt([val42], span)
-    assert str(yield_stmt) == "ir.yield_(42)"
+    assert str(yield_stmt) == "yield 42;"
     empty_yield = ir.YieldStmt(span)
-    assert str(empty_yield) == "ir.yield_()"
+    assert str(empty_yield) == "yield;"
 
     return_stmt = ir.ReturnStmt([val42], span)
-    assert str(return_stmt) == "return 42"
+    assert str(return_stmt) == "return 42;"
     empty_return = ir.ReturnStmt(span)
-    assert str(empty_return) == "return"
+    assert str(empty_return) == "return;"
 
     # BreakStmt and ContinueStmt
     break_stmt = ir.BreakStmt(span)
-    assert str(break_stmt) == "break"
+    assert str(break_stmt) == "break;"
     break_with_value = ir.BreakStmt([val1], span)
-    assert str(break_with_value) == "break 1"
+    assert str(break_with_value) == "break 1;"
     continue_stmt = ir.ContinueStmt(span)
-    assert str(continue_stmt) == "continue"
+    assert str(continue_stmt) == "continue;"
     continue_with_value = ir.ContinueStmt([val1], span)
-    assert str(continue_with_value) == "continue 1"
+    assert str(continue_with_value) == "continue 1;"
 
     # EvalStmt
     call = ir.Call("some_op", [val42], span)
     eval_stmt = ir.EvalStmt(call, span)
-    assert str(eval_stmt) == "ir.eval(ir.call @some_op(42))"
+    assert str(eval_stmt) == "some_op(42);"
 
     # ScalarOpStmt and TensorOpStmt
-    token = ir.Var("tok", st, span)
+    token = ir.Var("tok", ir.TokenType(), span)
     scalar_op = pypto_impl.ir.ScalarOpStmt(x, token, "add", [val1], span)
-    assert str(scalar_op) == "x, tok = add(1)"
+    assert str(scalar_op) == "int32_t %x, token %tok = add(1);"
     tensor_op = ir.TensorOpStmt([x], [token], "matmul", [val1], [], {}, span)
-    assert str(tensor_op) == "x, tok = matmul(1)"
+    assert str(tensor_op) == "int32_t %x, token %tok = matmul(1) token();"
 
     # Function
     func = ir.Function("test_func", [x], [st], assign_x, span)

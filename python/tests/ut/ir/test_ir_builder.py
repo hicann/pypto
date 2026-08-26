@@ -90,8 +90,8 @@ def test_builder_function_with_params_and_returns():
 
     assert func.name == "add_func"
     assert len(func.params) == 2
-    assert str(func.params[0]) == "x"
-    assert str(func.params[1]) == "y"
+    assert str(func.params[0]) == "%x"
+    assert str(func.params[1]) == "%y"
     assert len(func.return_types) == 1
 
 
@@ -138,7 +138,7 @@ def test_builder_assign():
     b.end_function(sp)
 
     assert isinstance(stmt, ir.AssignStmt)
-    assert str(stmt) == "x: ir.Scalar[ir.INT32] = 42"
+    assert str(stmt) == "int32_t %x = 42;"
 
 
 def test_builder_return():
@@ -268,7 +268,7 @@ def test_builder_for_loop():
     for_stmt = b.end_for_loop(sp)
 
     assert isinstance(for_stmt, ir.ForStmt)
-    assert str(for_stmt.loop_var) == "i"
+    assert str(for_stmt.loop_var) == "%i"
     b.end_function(sp)
 
 
@@ -546,12 +546,7 @@ def test_builder_section():
 
     assert isinstance(section, pypto_impl.ir.SectionStmt)
     assert str(func.body[0]) == str(section)
-    assert str(section) == "\n".join(
-        [
-            "with ir.section_vector():",
-            "    x: ir.Scalar[ir.INT32] = 1",
-        ]
-    )
+    assert str(section) == "\n".join(["section Vector {", "    int32_t %x = 1;", "}"])
 
 
 # ---------- Program building ----------
@@ -670,8 +665,8 @@ def test_builder_nested_for_loops():
 
     assert isinstance(inner, ir.ForStmt)
     assert isinstance(outer, ir.ForStmt)
-    assert str(outer.loop_var) == "i"
-    assert str(inner.loop_var) == "j"
+    assert str(outer.loop_var) == "%i"
+    assert str(inner.loop_var) == "%j"
 
     func = b.end_function(sp)
     assert isinstance(func.body, ir.SeqStmts)

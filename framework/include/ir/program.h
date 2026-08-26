@@ -35,13 +35,6 @@ namespace ir {
  * ordering for structural equality and hashing.
  *
  * \note The function name must be unique within the program.
- *
- * IR Syntax:
- *      `program` `{`
- *          `#entry` `(` name `)`
- *          `#` attr0 `(` attr0_value `)` ... `#` attrN `(` attrN_value `)`
- *          function1 ... functionN
- *      `}`
  */
 class Program : public IRNode {
 public:

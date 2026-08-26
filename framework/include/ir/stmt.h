@@ -95,9 +95,6 @@ using StmtPtr = std::shared_ptr<const Stmt>;
  *
  * Represents an assignment operation: var = value
  * where var is a variable and value is an expression.
- *
- * IR Syntax:
- *      var `=` value `;`
  */
 class AssignStmt : public Stmt {
 public:
@@ -138,9 +135,6 @@ using AssignStmtPtr = std::shared_ptr<const AssignStmt>;
  *
  * Represents a sequence of statements: stmt1; stmt2; ... stmtN
  * where stmts is a list of statements.
- *
- * IR Syntax:
- *      `{` stmt1 stmt2 ... stmtN `}`
  */
 class SeqStmts : public Stmt {
 public:
@@ -243,11 +237,6 @@ using SeqStmtsPtr = std::shared_ptr<SeqStmts>;
  *
  * Represents an if-else statement: if condition then then_body else else_body
  * where condition is an expression and then_body/else_body is statement.
- *
- * IR Syntax:
- *      returnVars `=` `if` condition
- *          `then` thenBody
- *          `else` elseBody
  */
 class IfStmt : public Stmt {
 public:
@@ -300,9 +289,6 @@ using IfStmtPtr = std::shared_ptr<const IfStmt>;
  *
  * Represents a yield operation: yield value
  * where value is a list of variables to yield.
- *
- * IR Syntax:
- *      `yield` value_;
  */
 class YieldStmt : public Stmt {
 public:
@@ -346,9 +332,6 @@ using YieldStmtPtr = std::shared_ptr<const YieldStmt>;
  *
  * Represents a return operation: return value
  * where value is a list of expressions to return.
- *
- * IR Syntax:
- *      `return` value `;`
  */
 class ReturnStmt : public Stmt {
 public:
@@ -406,10 +389,6 @@ using ReturnStmtPtr = std::shared_ptr<const ReturnStmt>;
  * - Number of iter_args must equal number of return_vars
  * - Number of yielded values must equal number of iter_args
  * - IterArgs cannot be directly accessed outside the loop; use return_vars instead
- *
- * IR Syntax:
- *      returnVars = `for` loop_var `inrange` start `,` stop `,` step `iter` iterArgs
- *          body
  */
 class ForStmt : public Stmt {
 public:
@@ -507,10 +486,6 @@ using ForStmtPtr = std::shared_ptr<const ForStmt>;
  * - return_vars: Var variables that capture final iteration values, accessible after loop
  * - Number of iter_args must equal number of return_vars
  * - Number of yielded values must equal number of iter_args
- *
- * IR Syntax:
- *      returnVars `=` `while` condition `iter` iterArgs
- *          body
  */
 class WhileStmt : public Stmt {
 public:
@@ -560,9 +535,7 @@ public:
 using WhileStmtPtr = std::shared_ptr<const WhileStmt>;
 
 /**
- * IR Syntax:
- *      `section` sectionKind_
- *          body
+ * \brief Section statement for hardware-specific execution regions
  */
 class SectionStmt : public Stmt {
 public:
@@ -594,9 +567,6 @@ using SectionStmtPtr = std::shared_ptr<const SectionStmt>;
  * where expr is an expression (typically a Call).
  * This is used for expressions that have side effects but no return value
  * (or return value is ignored).
- *
- * IR Syntax:
- *      expr
  */
 class EvalStmt : public Stmt {
 public:
@@ -632,9 +602,6 @@ using EvalStmtPtr = std::shared_ptr<const EvalStmt>;
  * \brief Break statement
  *
  * Represents a break statement used to exit a loop.
- *
- * IR Syntax:
- *      `break` `;`
  */
 class BreakStmt : public Stmt {
 public:
@@ -659,9 +626,6 @@ using BreakStmtPtr = std::shared_ptr<const BreakStmt>;
  * \brief Continue statement
  *
  * Represents a continue statement used to skip to the next loop iteration.
- *
- * IR Syntax:
- *      `continue` `;`
  */
 class ContinueStmt : public Stmt {
 public:
@@ -683,8 +647,7 @@ public:
 using ContinueStmtPtr = std::shared_ptr<const ContinueStmt>;
 
 /**
- * IR Syntax:
- *      result `,` result_token `=` opcode `(` arg1 `,` arg2 `,` ... `)` `;`
+ * \brief Scalar operation statement
  */
 class ScalarOpStmt : public Stmt {
 public:
@@ -722,10 +685,7 @@ public:
 using ScalarOpStmtPtr = std::shared_ptr<const ScalarOpStmt>;
 
 /**
- * IR Syntax:
- *      result0 `,` result1 `,` ... `,` result_token `=`
- *          opcode `(` arg1 `,` arg2 `,` ... `)` `token` `(` tok0 `,` ... tokN `)`
- *          `#` attr0 `(` attr0_value `)` ... `#` attrN `(` attrN_value `)` `;`
+ * \brief Tensor operation statement
  */
 class TensorOpStmt : public Stmt {
 public:

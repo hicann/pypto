@@ -47,7 +47,49 @@ void IRVisitor::VisitExpr(const ExprPtr& expr) { ExprFunctor<void>::VisitExpr(ex
 
 void IRVisitor::VisitStmt(const StmtPtr& stmt) { StmtFunctor<void>::VisitStmt(stmt); }
 
-void IRVisitor::VisitType(const TypePtr& type) { TypeFunctor<void>::VisitType(type); }
+void IRVisitor::VisitType(const TypePtr& type)
+{
+    if (auto op = As<TensorType>(type)) {
+        VisitType_(op);
+        return;
+    }
+    if (auto op = As<TileType>(type)) {
+        VisitType_(op);
+        return;
+    }
+    if (auto op = As<ScalarType>(type)) {
+        VisitType_(op);
+        return;
+    }
+    if (auto op = As<TupleType>(type)) {
+        VisitType_(op);
+        return;
+    }
+    if (auto op = As<PtrType>(type)) {
+        VisitType_(op);
+        return;
+    }
+    if (auto op = As<TokenType>(type)) {
+        VisitType_(op);
+        return;
+    }
+    if (auto op = As<NoneType>(type)) {
+        VisitType_(op);
+        return;
+    }
+    if (auto op = As<LogicalTensorType>(type)) {
+        VisitType_(op);
+        return;
+    }
+    if (auto op = As<MemRefType>(type)) {
+        VisitType_(op);
+        return;
+    }
+    if (auto op = As<UnknownType>(type)) {
+        VisitType_(op);
+        return;
+    }
+}
 
 void IRVisitor::VisitVarLike_(const VarPtr& op)
 {

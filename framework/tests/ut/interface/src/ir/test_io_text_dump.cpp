@@ -23,6 +23,7 @@
 #include "gtest/gtest.h"
 
 #include "ir/transforms/io_text.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace pypto {
 namespace ir {
@@ -61,20 +62,23 @@ static std::vector<fs::path> CollectDataFiles()
     return files;
 }
 
-TEST_F(IoTextDumpTest, DISABLED_LoadDumpMatch)
+TEST_F(IoTextDumpTest, LoadDumpMatch)
 {
     std::vector<fs::path> dataFilePathList = CollectDataFiles();
     ASSERT_FALSE(dataFilePathList.empty()) << "No .pypto data files found in: " << kDataDir;
     for (auto dataFilePath : dataFilePathList) {
+        npu::tile_fwk::IRContext::Get().Reset();
         std::string original = ReadFile(dataFilePath);
         ASSERT_FALSE(original.empty()) << "Empty or missing file: " << dataFilePath;
 
         // Load -> Dump -> Compare
-        auto prog = TextLoadProgram(original);
-        ASSERT_NE(prog, nullptr) << "Load failed for: " << dataFilePath.filename();
+        std::string error;
+        auto prog = TextLoadProgram(original, error);
+        ASSERT_NE(prog, nullptr) << "Load failed for: " << dataFilePath.filename() << ": " << error;
+        EXPECT_TRUE(error.empty()) << "Unexpected parse error in: " << dataFilePath.filename() << ": " << error;
 
         std::string dumped = TextDump(prog);
-        EXPECT_EQ(dumped, original) << "Round-trip mismatch in: " << dataFilePath.filename();
+        EXPECT_EQ(original, dumped) << "Round-trip mismatch in: " << dataFilePath.filename();
     }
 }
 

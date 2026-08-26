@@ -195,14 +195,6 @@ using OpPtr = std::shared_ptr<const Op>;
  *
  * Represents a reference to a named variable.
  * Can represent both scalar and tensor variables based on its type.
- *
- * IR Syntax:
- *      RHS:
- *          `%` name
- *      LHS:
- *          type `%` name
- *      INCAST/OUTCAST:
- *          type `%` name
  */
 class Var : public Expr {
 public:
@@ -279,9 +271,6 @@ inline ExprPtr NoneValue()
  *     std::vector{sum_final}, // return_vars (accessible after loop)
  *     span
  * );
- *
- * IR Syntax:
- *      iterVar `=` initValue `;`
  */
 class IterArg {
 public:
@@ -331,9 +320,6 @@ using IterArgPtr = std::shared_ptr<const IterArg>;
  * Represents a function call with an operation and arguments.
  * Can accept any Expr as arguments, not just scalar expressions.
  * Supports keyword arguments (kwargs) for operator metadata.
- *
- * IR Syntax
- *      name `(` arg1 `,` arg2 `,` ...  kwn1 `=` kwv1 `,` kwn2 `=` kwv2 `,` ... `)`
  */
 class Call : public Expr {
 public:
@@ -435,9 +421,6 @@ using CallPtr = std::shared_ptr<const Call>;
  *
  * Takes a list of expressions and creates a tuple value.
  * The result type is TupleType containing the types of all input expressions.
- *
- * IR Syntax
- *      `tuple` `(` elt1 `,` elt2 `,` ... `)`
  */
 class MakeTuple : public Expr {
 public:
@@ -478,9 +461,6 @@ using MakeTuplePtr = std::shared_ptr<const MakeTuple>;
  *   - `value_` is `TileType`: tile element offset. `slice_` is an integer expression
  *     (static or dynamic). Result type is the same TileType as the base tile,
  *     with physical address shifted by `slice * sizeof(dtype)` bytes.
- *
- * IR Syntax
- *      `getitem` `(` value `,` slice`)`
  */
 class GetItemExpr : public Expr {
 public:

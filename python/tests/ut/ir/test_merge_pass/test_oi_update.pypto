@@ -1,72 +1,66 @@
-function foo incast(logical_tensor %a, logical_tensor %b) outcast() #type(Opaque) #entry(false) {
-    logical_tensor %b_24 = for %loop_idx_10 inrange 0, 10, 1 iter {logical_tensor %b_1 = %b;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
-        logical_tensor %b_22 = for %loop_idx_16 inrange 0, 10, 1 iter {logical_tensor %b_3 = %b_1;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
-            logical_tensor %oi_update_1 = TENSOR_ALLOC() token();
-            logical_tensor %b_13, logical_tensor %oi_update_13 = for %loop_idx_34 inrange 0, scalar_expr, 2 iter {logical_tensor %b_5 = %b_3;logical_tensor %oi_update_3 = %oi_update_1;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(2) {
-                logical_tensor %oi_update_27, logical_tensor %b_26 = if scalar_expr then {
-                    logical_tensor %oi_update_31, logical_tensor %b_11 = if scalar_expr then {
-                        logical_tensor %oi_update_4 = ADDS(%a) token();
-                        logical_tensor %oi_update_9 = SUBS(%oi_update_4) token();
-                        logical_tensor %$6 = DIVS(%oi_update_9) token();
-                        logical_tensor %b_9 = FLOOR(%$6) token();
-                        yield %oi_update_9, %b_9;
+function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]), v0_logical_tensor %b@1 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32])) outcast() #type(Opaque) #entry(false) {
+    v0_logical_tensor %b_24@14 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = for %loop_idx_10 inrange 0, 10, 1 iter { v0_logical_tensor %b_1@1 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = %b@1; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        v0_logical_tensor %b_22@14 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = for %loop_idx_16 inrange 0, 10, 1 iter { v0_logical_tensor %b_3@1 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = %b_1@1; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+            v0_logical_tensor %oi_update_1@2 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = TENSOR_ALLOC() token();
+            v0_logical_tensor %b_13@10 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]), v0_logical_tensor %oi_update_13@7 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = for %loop_idx_34 inrange 0, v0mul(v0div(v0sub(n, 0), 2), 2), 2 iter { v0_logical_tensor %b_5@1 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = %b_3@1; v0_logical_tensor %oi_update_3@2 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = %oi_update_1@2; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(2) {
+                v0_logical_tensor %oi_update_27@8 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]), v0_logical_tensor %b_26@10 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = if v0eq(loop_idx_34, 0) then {
+                    v0_logical_tensor %oi_update_31@8 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]), v0_logical_tensor %b_11@10 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = if v0le(n, v0add(loop_idx_34, 2)) then {
+                        v0_logical_tensor %oi_update_4@3 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10000 ADDS(%a@0) token();
+                        v0_logical_tensor %oi_update_9@8 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10013 SUBS(%oi_update_4@3) token();
+                        v0_logical_tensor %$6@9 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10012 DIVS(%oi_update_9@8) token();
+                        v0_logical_tensor %b_9@10 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10007 FLOOR(%$6@9) token();
+                        yield %oi_update_9@8, %b_9@10;
+                    } else {
+                        v0_logical_tensor %oi_update_33@3 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10015 ADDS(%a@0) token();
+                        v0_logical_tensor %oi_update_35@8 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10016 SUBS(%oi_update_33@3) token();
+                        yield %oi_update_35@8, %b_5@1;
                     }
-                    else {
-                        logical_tensor %oi_update_33 = ADDS(%a) token();
-                        logical_tensor %oi_update_35 = SUBS(%oi_update_33) token();
-                        yield %oi_update_35, %b_5;
+                    yield %oi_update_31@8, %b_11@10;
+                } else {
+                    v0_logical_tensor %oi_update_39@8 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]), v0_logical_tensor %b_28@10 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = if v0le(n, v0add(loop_idx_34, 2)) then {
+                        v0_logical_tensor %oi_update_5@4 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10001 SUBS(%oi_update_3@2) token();
+                        v0_logical_tensor %oi_update_45@8 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10019 SUBS(%oi_update_5@4) token();
+                        v0_logical_tensor %$6_0@9 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10020 DIVS(%oi_update_45@8) token();
+                        v0_logical_tensor %b_30@10 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10021 FLOOR(%$6_0@9) token();
+                        yield %oi_update_45@8, %b_30@10;
+                    } else {
+                        v0_logical_tensor %oi_update_41@4 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10017 SUBS(%oi_update_3@2) token();
+                        v0_logical_tensor %oi_update_43@8 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10018 SUBS(%oi_update_41@4) token();
+                        yield %oi_update_43@8, %b_5@1;
                     }
-                    yield %oi_update_31, %b_11;
+                    yield %oi_update_39@8, %b_28@10;
                 }
-                else {
-                    logical_tensor %oi_update_39, logical_tensor %b_28 = if scalar_expr then {
-                        logical_tensor %oi_update_5 = SUBS(%oi_update_3) token();
-                        logical_tensor %oi_update_45 = SUBS(%oi_update_5) token();
-                        logical_tensor %$6_0 = DIVS(%oi_update_45) token();
-                        logical_tensor %b_30 = FLOOR(%$6_0) token();
-                        yield %oi_update_45, %b_30;
-                    }
-                    else {
-                        logical_tensor %oi_update_41 = SUBS(%oi_update_3) token();
-                        logical_tensor %oi_update_43 = SUBS(%oi_update_41) token();
-                        yield %oi_update_43, %b_5;
-                    }
-                    yield %oi_update_39, %b_28;
-                }
-                continue %b_26, %oi_update_27;
+                continue %b_26@10, %oi_update_27@8;
             }
-            logical_tensor %b_20, logical_tensor %oi_update_21 = for %loop_idx_34_0 inrange scalar_expr, %n, 1 iter {logical_tensor %b_15 = %b_13;logical_tensor %oi_update_15 = %oi_update_13;} #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
-                logical_tensor %oi_update_19, logical_tensor %b_32 = if scalar_expr then {
-                    logical_tensor %oi_update_47, logical_tensor %b_18 = if scalar_expr then {
-                        logical_tensor %oi_update_16 = ADDS(%a) token();
-                        logical_tensor %$10 = DIVS(%oi_update_16) token();
-                        logical_tensor %b_16 = FLOOR(%$10) token();
-                        yield %oi_update_16, %b_16;
+            v0_logical_tensor %b_20@14 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]), v0_logical_tensor %oi_update_21@11 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = for %loop_idx_34_0 inrange v0mul(v0div(v0sub(n, 0), 2), 2), %n, 1 iter { v0_logical_tensor %b_15@10 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = %b_13@10; v0_logical_tensor %oi_update_15@7 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = %oi_update_13@7; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+                v0_logical_tensor %oi_update_19@11 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]), v0_logical_tensor %b_32@14 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = if v0eq(loop_idx_34_0, 0) then {
+                    v0_logical_tensor %oi_update_47@11 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]), v0_logical_tensor %b_18@14 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = if v0le(n, v0add(loop_idx_34_0, 1)) then {
+                        v0_logical_tensor %oi_update_16@11 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10008 ADDS(%a@0) token();
+                        v0_logical_tensor %$10@13 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10022 DIVS(%oi_update_16@11) token();
+                        v0_logical_tensor %b_16@14 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10011 FLOOR(%$10@13) token();
+                        yield %oi_update_16@11, %b_16@14;
+                    } else {
+                        v0_logical_tensor %oi_update_49@11 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10024 ADDS(%a@0) token();
+                        yield %oi_update_49@11, %b_15@10;
                     }
-                    else {
-                        logical_tensor %oi_update_49 = ADDS(%a) token();
-                        yield %oi_update_49, %b_15;
+                    yield %oi_update_47@11, %b_18@14;
+                } else {
+                    v0_logical_tensor %oi_update_51@12 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]), v0_logical_tensor %b_36@14 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = if v0le(n, v0add(loop_idx_34_0, 1)) then {
+                        v0_logical_tensor %oi_update_17@12 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10009 SUBS(%oi_update_15@7) token();
+                        v0_logical_tensor %$10_0@13 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10026 DIVS(%oi_update_17@12) token();
+                        v0_logical_tensor %b_34@14 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10027 FLOOR(%$10_0@13) token();
+                        yield %oi_update_17@12, %b_34@14;
+                    } else {
+                        v0_logical_tensor %oi_update_53@12 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10025 SUBS(%oi_update_15@7) token();
+                        yield %oi_update_53@12, %b_15@10;
                     }
-                    yield %oi_update_47, %b_18;
+                    yield %oi_update_51@12, %b_36@14;
                 }
-                else {
-                    logical_tensor %oi_update_51, logical_tensor %b_36 = if scalar_expr then {
-                        logical_tensor %oi_update_17 = SUBS(%oi_update_15) token();
-                        logical_tensor %$10_0 = DIVS(%oi_update_17) token();
-                        logical_tensor %b_34 = FLOOR(%$10_0) token();
-                        yield %oi_update_17, %b_34;
-                    }
-                    else {
-                        logical_tensor %oi_update_53 = SUBS(%oi_update_15) token();
-                        yield %oi_update_53, %b_15;
-                    }
-                    yield %oi_update_51, %b_36;
-                }
-                continue %b_32, %oi_update_19;
+                continue %b_32@14, %oi_update_19@11;
             }
-            continue %b_20;
+            continue %b_20@14;
         }
-        continue %b_22;
+        continue %b_22@14;
     }
-    return %a, %b_24;
+    return %a@0, %b_24@14;
 }

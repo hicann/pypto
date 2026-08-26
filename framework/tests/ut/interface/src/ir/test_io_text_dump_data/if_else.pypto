@@ -2,8 +2,7 @@ program #entry(cond) {
     function cond incast() outcast(int32_t) #type(Opaque) #entry(true) {
         if true then {
             return 1;
-        }
-        else {
+        } else {
             return 0;
         }
     }

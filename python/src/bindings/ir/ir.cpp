@@ -330,7 +330,7 @@ void BindTypeClass(py::module_& ir)
     // Type - abstract base, const shared_ptr
     auto type_class = py::class_<Type, std::shared_ptr<Type>>(ir, "Type", "Base class for type representations");
     BindFields<Type>(type_class);
-    type_class.def("__str__", [](const TypePtr& self) { return PythonPrint(self, "ir"); }, "IR string representation");
+    type_class.def("__str__", [](const TypePtr& self) { return TextDumpType(self); }, "IR text representation");
     type_class.def(
         "__eq__", [](const TypePtr& self, const TypePtr& other) { return structural_equal(self, other); },
         "Equality comparison");
@@ -365,7 +365,7 @@ void BindTypeClass(py::module_& ir)
             "same_as", [](const IRNodePtr& self, const IRNodePtr& other) { return self == other; }, py::arg("other"),
             "Check if this IR node is the same as another IR node.")
         .def(
-            "__str__", [](const IRNodePtr& self) { return PythonPrint(self, "ir"); }, "IR string representation")
+            "__str__", [](const IRNodePtr& self) { return TextDump(self); }, "IR text representation")
         .def(
             "as_python", [](const IRNodePtr& self, const std::string& prefix) { return PythonPrint(self, prefix); },
             py::arg("prefix") = "ir",

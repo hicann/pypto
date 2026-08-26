@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 #include <iomanip>
 #include <typeindex>
 
@@ -33,59 +34,94 @@
 #include "ir/span.h"
 #include "ir/stmt.h"
 
+#include "interface/tensor/ir.h"
+#include "interface/operation/operation.h"
+
+#include "../../tensor/symbolic_scalar.h"
+#include "../../tensor/logical_tensor.h"
+
+using npu::tile_fwk::LogicalTensor;
+using npu::tile_fwk::Operation;
+using npu::tile_fwk::RawSymbolicExpression;
+using RawSymbolicScalarPtr = std::shared_ptr<const npu::tile_fwk::RawSymbolicScalar>;
+
 namespace pypto {
 namespace ir {
 
 // ---------------------------------------------------------------------------
 // Operator name lookup
 // ---------------------------------------------------------------------------
-const char* IRDumperText::BinaryOpName(const BinaryExprPtr& op)
+const char* IRTextDumper::BinaryOpName(const BinaryExprPtr& op)
 {
     return GetBinaryOpDict().Find(op->GetKind(), "UnknownBinOp").c_str();
 }
 
-const char* IRDumperText::UnaryOpName(const UnaryExprPtr& op)
+const char* IRTextDumper::UnaryOpName(const UnaryExprPtr& op)
 {
     return GetUnaryOpDict().Find(op->GetKind(), "UnknownUnOp").c_str();
 }
 
+struct VisitScalarExpr {
+    static void Visit(std::ostringstream& stream, const RawSymbolicScalarPtr& ptr)
+    {
+        if (ptr->IsImmediate()) {
+            stream << ptr->GetImmediateValue();
+        } else if (ptr->IsSymbol()) {
+            stream << ptr->GetSymbolName();
+        } else {
+            auto opcode = ptr->GetExpressionOpcode();
+            stream << GetSymbolicOpcodeDict().Find(opcode) << IR_PUN_LPAREN;
+            const auto& operandList = ptr->GetExpressionOperandList();
+            for (size_t k = 0; k < operandList.size(); k++) {
+                if (k != 0) {
+                    stream << IR_PUN_COMMA << " ";
+                }
+                Visit(stream, operandList[k]);
+            }
+            stream << IR_PUN_RPAREN;
+        }
+    }
+};
+
 // ---------------------------------------------------------------------------
 // Attr value printing
 // ---------------------------------------------------------------------------
-void IRDumperText::PrintAttrValue(const std::string& key, const std::any& value)
+void IRTextDumper::PrintAttrValue(const std::string& key, const std::any& value)
 {
     if (value.type() == typeid(int)) {
         stream_ << AnyCast<int>(value, key);
     } else if (value.type() == typeid(uint64_t)) {
         stream_ << AnyCast<uint64_t>(value);
+    } else if (value.type() == typeid(int64_t)) {
+        stream_ << AnyCast<int64_t>(value);
     } else if (value.type() == typeid(double)) {
         stream_ << AnyCast<double>(value, key);
     } else if (value.type() == typeid(float)) {
         stream_ << static_cast<double>(AnyCast<float>(value, key));
     } else if (value.type() == typeid(bool)) {
         stream_ << (AnyCast<bool>(value, key) ? IR_KW_TRUE : IR_KW_FALSE);
+    } else if (value.type() == typeid(std::string)) {
+        stream_ << AnyCast<std::string>(value);
     } else if (value.type() == typeid(DataType)) {
         stream_ << AnyCast<DataType>(value, key).ToCTypeString();
     } else if (value.type() == typeid(MemorySpace)) {
         stream_ << MemorySpaceToString(AnyCast<MemorySpace>(value, key));
     } else if (value.type() == typeid(std::vector<int>)) {
         const auto& vals = AnyCast<std::vector<int>>(value, key);
-        stream_ << IR_PUN_LBRACKET;
-        for (size_t i = 0; i < vals.size(); ++i) {
-            if (i > 0) {
-                stream_ << IR_PUN_COMMA << " ";
-            }
-            stream_ << vals[i];
-        }
-        stream_ << IR_PUN_RBRACKET;
+        PrintDataArray(std::vector<int64_t>(vals.begin(), vals.end()));
     } else if (value.type() == typeid(std::vector<int64_t>)) {
         const auto& vals = AnyCast<std::vector<int64_t>>(value, key);
+        PrintDataArray(vals);
+    } else if (value.type() == typeid(ExprPtr)) {
+        VisitExpr(AnyCast<ExprPtr>(value, key));
+    } else if (value.type() == typeid(std::vector<std::any>)) {
+        const auto& vals = AnyCast<std::vector<std::any>>(value, key);
         stream_ << IR_PUN_LBRACKET;
         for (size_t i = 0; i < vals.size(); ++i) {
             if (i > 0) {
                 stream_ << IR_PUN_COMMA << " ";
             }
-            stream_ << vals[i];
+            PrintAttrValue(key, vals[i]);
         }
         stream_ << IR_PUN_RBRACKET;
     } else {
@@ -93,17 +129,29 @@ void IRDumperText::PrintAttrValue(const std::string& key, const std::any& value)
     }
 }
 
-void IRDumperText::PrintAttr(const std::string& key, const std::any& value)
+void IRTextDumper::PrintAttr(const std::string& key, const std::any& value)
 {
     stream_ << " " << IR_PUN_ATTRNAME << key << IR_PUN_LPAREN;
     PrintAttrValue(key, value);
     stream_ << IR_PUN_RPAREN;
 }
 
+void IRTextDumper::PrintDataArray(const std::vector<int64_t>& vals)
+{
+    stream_ << IR_PUN_LBRACKET;
+    for (size_t i = 0; i < vals.size(); ++i) {
+        if (i > 0) {
+            stream_ << IR_PUN_COMMA << " ";
+        }
+        stream_ << vals[i];
+    }
+    stream_ << IR_PUN_RBRACKET;
+}
+
 // ---------------------------------------------------------------------------
 // Type printing via VisitType_
 // ---------------------------------------------------------------------------
-void IRDumperText::PrintType(const TypePtr& type)
+void IRTextDumper::PrintType(const TypePtr& type)
 {
     if (!type) {
         stream_ << IR_KW_UNKNOWN;
@@ -112,11 +160,11 @@ void IRDumperText::PrintType(const TypePtr& type)
     VisitType(type);
 }
 
-void IRDumperText::VisitType_(const UnknownTypePtr&) { stream_ << IR_KW_UNKNOWN; }
+void IRTextDumper::VisitType_(const UnknownTypePtr&) { stream_ << IR_KW_UNKNOWN; }
 
-void IRDumperText::VisitType_(const ScalarTypePtr& op) { stream_ << op->dtype_.ToCTypeString(); }
+void IRTextDumper::VisitType_(const ScalarTypePtr& op) { stream_ << op->dtype_.ToCTypeString(); }
 
-void IRDumperText::VisitType_(const TensorTypePtr& op)
+void IRTextDumper::VisitType_(const TensorTypePtr& op)
 {
     stream_ << IR_KW_TENSOR << IR_PUN_LT;
     PrintShape(op->shape_);
@@ -137,7 +185,7 @@ void IRDumperText::VisitType_(const TensorTypePtr& op)
     stream_ << IR_PUN_GT;
 }
 
-void IRDumperText::VisitType_(const TileTypePtr& op)
+void IRTextDumper::VisitType_(const TileTypePtr& op)
 {
     stream_ << IR_KW_TILE << IR_PUN_LT;
     PrintShape(op->shape_);
@@ -169,7 +217,7 @@ void IRDumperText::VisitType_(const TileTypePtr& op)
     stream_ << IR_PUN_GT;
 }
 
-void IRDumperText::VisitType_(const TupleTypePtr& op)
+void IRTextDumper::VisitType_(const TupleTypePtr& op)
 {
     stream_ << IR_KW_TUPLE << IR_PUN_LT;
     for (size_t i = 0; i < op->types_.size(); ++i) {
@@ -181,20 +229,20 @@ void IRDumperText::VisitType_(const TupleTypePtr& op)
     stream_ << IR_PUN_GT;
 }
 
-void IRDumperText::VisitType_(const MemRefTypePtr&) { stream_ << IR_KW_MEMREF_TYPE; }
+void IRTextDumper::VisitType_(const MemRefTypePtr&) { stream_ << IR_KW_MEMREF_TYPE; }
 
-void IRDumperText::VisitType_(const PtrTypePtr& op)
+void IRTextDumper::VisitType_(const PtrTypePtr& op)
 {
     stream_ << IR_KW_PTR << IR_PUN_LT << op->dtype_.ToCTypeString() << IR_PUN_GT;
 }
 
-void IRDumperText::VisitType_(const TokenTypePtr&) { stream_ << IR_KW_TOKEN; }
+void IRTextDumper::VisitType_(const TokenTypePtr&) { stream_ << IR_KW_TOKEN; }
 
-void IRDumperText::VisitType_(const NoneTypePtr&) { stream_ << IR_KW_NONE; }
+void IRTextDumper::VisitType_(const NoneTypePtr&) { stream_ << IR_KW_NONE; }
 
-void IRDumperText::VisitType_(const LogicalTensorTypePtr&) { stream_ << IR_KW_LOGICAL_TENSOR; }
+void IRTextDumper::VisitType_(const LogicalTensorTypePtr&) { stream_ << IR_KWV0_LOGICAL_TENSOR; }
 
-void IRDumperText::PrintShape(const std::vector<ExprPtr>& shape)
+void IRTextDumper::PrintShape(const std::vector<ExprPtr>& shape)
 {
     for (size_t i = 0; i < shape.size(); ++i) {
         if (i > 0) {
@@ -204,7 +252,7 @@ void IRDumperText::PrintShape(const std::vector<ExprPtr>& shape)
     }
 }
 
-void IRDumperText::PrintExprList(const std::vector<ExprPtr>& exprs)
+void IRTextDumper::PrintExprList(const std::vector<ExprPtr>& exprs)
 {
     bool first = true;
     for (size_t i = 0; i < exprs.size(); ++i) {
@@ -216,7 +264,7 @@ void IRDumperText::PrintExprList(const std::vector<ExprPtr>& exprs)
     }
 }
 
-void IRDumperText::PrintTokenList(const std::vector<VarPtr>& tokenList)
+void IRTextDumper::PrintTokenList(const std::vector<VarPtr>& tokenList)
 {
     bool first = true;
     for (const auto& t : tokenList) {
@@ -231,15 +279,61 @@ void IRDumperText::PrintTokenList(const std::vector<VarPtr>& tokenList)
 // ---------------------------------------------------------------------------
 // Var printing
 // ---------------------------------------------------------------------------
-void IRDumperText::PrintVarDef(const VarPtr& var)
+void IRTextDumper::PrintIntListAttr(const std::string& key, const std::vector<int64_t>& vals)
 {
-    PrintType(var->GetType());
-    stream_ << " " << IR_PUN_VARNAME << var->name_;
+    stream_ << " " << IR_PUN_ATTRNAME << key << IR_PUN_LPAREN << IR_PUN_LBRACKET;
+    for (size_t i = 0; i < vals.size(); ++i) {
+        if (i > 0) {
+            stream_ << IR_PUN_COMMA << " ";
+        }
+        stream_ << vals[i];
+    }
+    stream_ << IR_PUN_RBRACKET << IR_PUN_RPAREN;
 }
 
-void IRDumperText::PrintVarRef(const VarPtr& var) { stream_ << IR_PUN_VARNAME << var->name_; }
+void IRTextDumper::PrintSymbolicScalarListAttr(const std::string& key,
+                                               const std::vector<npu::tile_fwk::SymbolicScalar>& vals)
+{
+    stream_ << " " << IR_PUN_ATTRNAME << key << IR_PUN_LPAREN << IR_PUN_LBRACKET;
+    for (size_t i = 0; i < vals.size(); ++i) {
+        if (i > 0) {
+            stream_ << IR_PUN_COMMA << " ";
+        }
+        VisitScalarExpr::Visit(stream_, vals[i].Raw());
+    }
+    stream_ << IR_PUN_RBRACKET << IR_PUN_RPAREN;
+}
 
-void IRDumperText::PrintVarDefList(const std::vector<VarPtr>& varList, const std::vector<VarPtr>& tokenList)
+void IRTextDumper::PrintVarDef(const VarPtr& var)
+{
+    PrintType(var->GetType());
+    stream_ << " ";
+    PrintVarRef(var);
+    if (As<LogicalTensorType>(var->GetType())) {
+        if (auto t = std::dynamic_pointer_cast<const LogicalTensor>(var); t != nullptr) {
+            PrintAttr("dtype", GetTileFwkDataTypeDict().Find(t->Datatype()));
+            PrintIntListAttr("shape", t->shape);
+            PrintIntListAttr("offset", t->offset);
+            if (!t->dynValidShape_.empty()) {
+                PrintSymbolicScalarListAttr("dynvalidshape", t->dynValidShape_);
+            }
+            if (!t->dynOffset_.empty()) {
+                PrintSymbolicScalarListAttr("dynvalidoffset", t->dynOffset_);
+            }
+        }
+    }
+}
+
+void IRTextDumper::PrintVarRef(const VarPtr& var)
+{
+    stream_ << IR_PUN_VARNAME << var->name_;
+    if (As<LogicalTensorType>(var->GetType())) {
+        auto t = std::dynamic_pointer_cast<const LogicalTensor>(var);
+        stream_ << IR_PUN_MEMREF << std::to_string(t->tensor->memoryId);
+    }
+}
+
+void IRTextDumper::PrintVarDefList(const std::vector<VarPtr>& varList, const std::vector<VarPtr>& tokenList)
 {
     bool first = true;
     for (const auto& v : varList) {
@@ -263,36 +357,45 @@ void IRDumperText::PrintVarDefList(const std::vector<VarPtr>& varList, const std
     }
 }
 
-void IRDumperText::PrintIterArgs(const std::vector<IterArgPtr>& iterArgs)
+void IRTextDumper::PrintIterArgs(const std::vector<IterArgPtr>& iterArgs)
 {
     stream_ << " " << IR_KW_ITER << " " << IR_PUN_LBRACE;
     for (const auto& ia : iterArgs) {
+        stream_ << " ";
         PrintVarDefList({ia->iterVar_});
         VisitExpr(ia->initValue_);
         stream_ << IR_PUN_SEMI;
     }
-    stream_ << IR_PUN_RBRACE;
+    stream_ << " " << IR_PUN_RBRACE;
 }
 
 // ---------------------------------------------------------------------------
 // Expression visitors
 // ---------------------------------------------------------------------------
-void IRDumperText::VisitExpr_(const VarPtr& op) { PrintVarRef(op); }
+void IRTextDumper::VisitExpr_(const VarPtr& op) { PrintVarRef(op); }
 
-void IRDumperText::VisitExpr_(const MemRefPtr& op)
+void IRTextDumper::VisitExpr_(const MemRefPtr& op)
 {
-    stream_ << IR_KW_MEMREF << IR_PUN_LT << MemorySpaceToString(op->memorySpace_) << ", ";
+    stream_ << IR_KW_MEMREF << IR_PUN_LPAREN << MemorySpaceToString(op->memorySpace_) << ", ";
     VisitExpr(op->addr_);
-    stream_ << IR_PUN_COMMA << " " << op->size_ << IR_PUN_GT;
+    stream_ << IR_PUN_COMMA << " " << op->size_ << IR_PUN_RPAREN;
 }
 
-void IRDumperText::VisitExpr_(const ConstIntPtr& op) { stream_ << op->value_; }
+void IRTextDumper::VisitExpr_(const ConstIntPtr& op) { stream_ << op->value_; }
 
-void IRDumperText::VisitExpr_(const ConstFloatPtr& op) { stream_ << std::setprecision(17) << op->value_; }
+void IRTextDumper::VisitExpr_(const ConstFloatPtr& op)
+{
+    double value = op->value_;
+    if (std::fabs(value) - std::floor(value) < 1e-10) {
+        stream_ << std::fixed << std::setprecision(1) << value;
+    } else {
+        stream_ << value;
+    }
+}
 
-void IRDumperText::VisitExpr_(const ConstBoolPtr& op) { stream_ << (op->value_ ? IR_KW_TRUE : IR_KW_FALSE); }
+void IRTextDumper::VisitExpr_(const ConstBoolPtr& op) { stream_ << (op->value_ ? IR_KW_TRUE : IR_KW_FALSE); }
 
-void IRDumperText::VisitExpr_(const CallPtr& op)
+void IRTextDumper::VisitExpr_(const CallPtr& op)
 {
     stream_ << op->name_ << IR_PUN_LPAREN;
     for (size_t i = 0; i < op->args_.size(); ++i) {
@@ -311,14 +414,14 @@ void IRDumperText::VisitExpr_(const CallPtr& op)
     stream_ << IR_PUN_RPAREN;
 }
 
-void IRDumperText::VisitExpr_(const MakeTuplePtr& op)
+void IRTextDumper::VisitExpr_(const MakeTuplePtr& op)
 {
     stream_ << IR_KW_TUPLE << IR_PUN_LPAREN;
     PrintExprList(op->elements_);
     stream_ << IR_PUN_RPAREN;
 }
 
-void IRDumperText::VisitExpr_(const GetItemExprPtr& op)
+void IRTextDumper::VisitExpr_(const GetItemExprPtr& op)
 {
     stream_ << IR_KW_GETITEM << IR_PUN_LPAREN;
     VisitExpr(op->value_);
@@ -327,9 +430,13 @@ void IRDumperText::VisitExpr_(const GetItemExprPtr& op)
     stream_ << IR_PUN_RPAREN;
 }
 
-void IRDumperText::VisitExpr_(const ScalarExprPtr& /*op*/) { stream_ << IR_KW_SCALAR_EXPR; }
+void IRTextDumper::VisitExpr_(const ScalarExprPtr& op)
+{
+    auto p = std::dynamic_pointer_cast<const RawSymbolicExpression>(op);
+    VisitScalarExpr::Visit(stream_, std::static_pointer_cast<const npu::tile_fwk::RawSymbolicScalar>(p));
+}
 
-void IRDumperText::VisitBinaryExpr_(const BinaryExprPtr& op)
+void IRTextDumper::VisitBinaryExpr_(const BinaryExprPtr& op)
 {
     stream_ << IR_PUN_LPAREN;
     VisitExpr(op->left_);
@@ -338,7 +445,7 @@ void IRDumperText::VisitBinaryExpr_(const BinaryExprPtr& op)
     stream_ << IR_PUN_RPAREN;
 }
 
-void IRDumperText::VisitUnaryExpr_(const UnaryExprPtr& op)
+void IRTextDumper::VisitUnaryExpr_(const UnaryExprPtr& op)
 {
     stream_ << IR_PUN_LPAREN << UnaryOpName(op);
     if (op->GetKind() == ObjectKind::Cast) {
@@ -355,7 +462,7 @@ void IRDumperText::VisitUnaryExpr_(const UnaryExprPtr& op)
 // ---------------------------------------------------------------------------
 // Statement visitors
 // ---------------------------------------------------------------------------
-void IRDumperText::PrintBody(const StmtPtr& body)
+void IRTextDumper::PrintBody(const StmtPtr& body)
 {
     stream_ << " ";
     if (std::dynamic_pointer_cast<const SeqStmts>(body)) {
@@ -367,14 +474,14 @@ void IRDumperText::PrintBody(const StmtPtr& body)
     }
 }
 
-void IRDumperText::VisitStmt_(const AssignStmtPtr& op)
+void IRTextDumper::VisitStmt_(const AssignStmtPtr& op)
 {
     PrintVarDefList({op->var_});
     VisitExpr(op->value_);
     stream_ << IR_PUN_SEMI;
 }
 
-void IRDumperText::VisitStmt_(const SeqStmtsPtr& op)
+void IRTextDumper::VisitStmt_(const SeqStmtsPtr& op)
 {
     stream_ << IR_PUN_LBRACE;
     indent_++;
@@ -389,14 +496,14 @@ void IRDumperText::VisitStmt_(const SeqStmtsPtr& op)
     stream_ << IR_PUN_RBRACE;
 }
 
-void IRDumperText::VisitStmt_(const IfStmtPtr& op)
+void IRTextDumper::VisitStmt_(const IfStmtPtr& op)
 {
     PrintVarDefList(op->returnVars_);
     stream_ << IR_KW_IF << " ";
     VisitExpr(op->condition_);
     stream_ << " " << IR_KW_THEN;
     PrintBody(op->thenBody_);
-    stream_ << "\n" << GetIndent() << IR_KW_ELSE;
+    stream_ << " " << IR_KW_ELSE;
     if (op->elseBody_.has_value()) {
         PrintBody(op->elseBody_.value());
     } else {
@@ -404,7 +511,7 @@ void IRDumperText::VisitStmt_(const IfStmtPtr& op)
     }
 }
 
-void IRDumperText::VisitStmt_(const YieldStmtPtr& op)
+void IRTextDumper::VisitStmt_(const YieldStmtPtr& op)
 {
     stream_ << IR_KW_YIELD;
     if (!op->value_.empty()) {
@@ -414,7 +521,7 @@ void IRDumperText::VisitStmt_(const YieldStmtPtr& op)
     stream_ << IR_PUN_SEMI;
 }
 
-void IRDumperText::VisitStmt_(const ReturnStmtPtr& op)
+void IRTextDumper::VisitStmt_(const ReturnStmtPtr& op)
 {
     stream_ << IR_KW_RETURN;
     if (!op->value_.empty()) {
@@ -424,7 +531,7 @@ void IRDumperText::VisitStmt_(const ReturnStmtPtr& op)
     stream_ << IR_PUN_SEMI;
 }
 
-void IRDumperText::VisitStmt_(const ForStmtPtr& op)
+void IRTextDumper::VisitStmt_(const ForStmtPtr& op)
 {
     PrintVarDefList(op->returnVars_);
     stream_ << IR_KW_FOR << " ";
@@ -444,7 +551,7 @@ void IRDumperText::VisitStmt_(const ForStmtPtr& op)
     PrintBody(op->body_);
 }
 
-void IRDumperText::VisitStmt_(const WhileStmtPtr& op)
+void IRTextDumper::VisitStmt_(const WhileStmtPtr& op)
 {
     PrintVarDefList(op->returnVars_);
     stream_ << IR_KW_WHILE << " ";
@@ -453,19 +560,19 @@ void IRDumperText::VisitStmt_(const WhileStmtPtr& op)
     PrintBody(op->body_);
 }
 
-void IRDumperText::VisitStmt_(const SectionStmtPtr& op)
+void IRTextDumper::VisitStmt_(const SectionStmtPtr& op)
 {
     stream_ << IR_KW_SECTION << " " << SectionKindToString(op->sectionKind_);
     PrintBody(op->body_);
 }
 
-void IRDumperText::VisitStmt_(const EvalStmtPtr& op)
+void IRTextDumper::VisitStmt_(const EvalStmtPtr& op)
 {
     VisitExpr(op->expr_);
     stream_ << IR_PUN_SEMI;
 }
 
-void IRDumperText::VisitStmt_(const BreakStmtPtr& op)
+void IRTextDumper::VisitStmt_(const BreakStmtPtr& op)
 {
     stream_ << IR_KW_BREAK;
     if (!op->value_.empty()) {
@@ -475,7 +582,7 @@ void IRDumperText::VisitStmt_(const BreakStmtPtr& op)
     stream_ << IR_PUN_SEMI;
 }
 
-void IRDumperText::VisitStmt_(const ContinueStmtPtr& op)
+void IRTextDumper::VisitStmt_(const ContinueStmtPtr& op)
 {
     stream_ << IR_KW_CONTINUE;
     if (!op->value_.empty()) {
@@ -485,7 +592,7 @@ void IRDumperText::VisitStmt_(const ContinueStmtPtr& op)
     stream_ << IR_PUN_SEMI;
 }
 
-void IRDumperText::VisitStmt_(const ScalarOpStmtPtr& op)
+void IRTextDumper::VisitStmt_(const ScalarOpStmtPtr& op)
 {
     PrintVarDefList({op->result_}, std::vector<VarPtr>{op->result_token_});
     stream_ << op->opcode_ << IR_PUN_LPAREN;
@@ -493,9 +600,13 @@ void IRDumperText::VisitStmt_(const ScalarOpStmtPtr& op)
     stream_ << IR_PUN_RPAREN << IR_PUN_SEMI;
 }
 
-void IRDumperText::VisitStmt_(const TensorOpStmtPtr& op)
+void IRTextDumper::VisitStmt_(const TensorOpStmtPtr& op)
 {
     PrintVarDefList(op->result_, std::vector<VarPtr>{op->result_token_});
+    auto operation = std::dynamic_pointer_cast<const Operation>(op);
+    if (operation) {
+        stream_ << IR_PUN_OPMAGIC << operation->GetOpMagic() << " ";
+    }
     stream_ << op->opcode_ << IR_PUN_LPAREN;
     PrintExprList(op->args_);
     stream_ << IR_PUN_RPAREN;
@@ -504,13 +615,20 @@ void IRDumperText::VisitStmt_(const TensorOpStmtPtr& op)
     PrintTokenList(op->tokens_);
     stream_ << IR_PUN_RPAREN;
 
-    for (const auto& [key, value] : op->attrs_) {
-        PrintAttr(key, value);
+    if (operation) {
+        auto collected = CollectTensorOpAttrs(op);
+        for (const auto& [key, value] : collected) {
+            PrintAttr(key, value);
+        }
+    } else {
+        for (const auto& [key, value] : op->attrs_) {
+            PrintAttr(key, value);
+        }
     }
     stream_ << IR_PUN_SEMI;
 }
 
-void IRDumperText::VisitStmt_(const StmtPtr& op)
+void IRTextDumper::VisitStmt_(const StmtPtr& op)
 {
     stream_ << IR_PUN_LT << "unknown stmt: " << op->TypeName() << IR_PUN_GT;
 }
@@ -518,7 +636,7 @@ void IRDumperText::VisitStmt_(const StmtPtr& op)
 // ---------------------------------------------------------------------------
 // Function / Program
 // ---------------------------------------------------------------------------
-void IRDumperText::VisitFunction(const FunctionPtr& func)
+void IRTextDumper::VisitFunction(const FunctionPtr& func)
 {
     stream_ << GetIndent() << IR_KW_FUNCTION << " " << func->name_;
     stream_ << " " << IR_KW_INCAST << IR_PUN_LPAREN;
@@ -542,7 +660,7 @@ void IRDumperText::VisitFunction(const FunctionPtr& func)
     PrintBody(func->body_);
 }
 
-void IRDumperText::VisitProgram(const ProgramPtr& program)
+void IRTextDumper::VisitProgram(const ProgramPtr& program)
 {
     std::string entryName;
     for (const auto& [name, func] : program->functions_) {
@@ -571,9 +689,9 @@ void IRDumperText::VisitProgram(const ProgramPtr& program)
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-std::string IRDumperText::Dump(const IRNodePtr& node)
+std::string IRTextDumper::Dump(const IRNodePtr& node)
 {
-    IRDumperText dumper;
+    IRTextDumper dumper;
     if (auto program = As<Program>(node)) {
         dumper.VisitProgram(program);
     } else if (auto func = As<Function>(node)) {
@@ -588,15 +706,15 @@ std::string IRDumperText::Dump(const IRNodePtr& node)
     return dumper.stream_.str();
 }
 
-std::string IRDumperText::DumpType(const TypePtr& type)
+std::string IRTextDumper::DumpType(const TypePtr& type)
 {
-    IRDumperText dumper;
+    IRTextDumper dumper;
     dumper.PrintType(type);
     return dumper.stream_.str();
 }
 
-std::string TextDump(const IRNodePtr& node) { return IRDumperText::Dump(node); }
-std::string TextDumpType(const TypePtr& type) { return IRDumperText::DumpType(type); }
+std::string TextDump(const IRNodePtr& node) { return IRTextDumper::Dump(node); }
+std::string TextDumpType(const TypePtr& type) { return IRTextDumper::DumpType(type); }
 
 } // namespace ir
 } // namespace pypto

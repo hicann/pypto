@@ -106,13 +106,6 @@ inline FunctionType StringToFunctionType(const std::string& str)
  *
  * Represents a complete function definition with name, parameters, return types, and body.
  * Functions are immutable IR nodes.
- *
- * IR Syntax:
- *      `function` name
- *          `incast` `(` incast1 `,` ... `,` incastN `)`
- *          `outcast` `(` outcast1 `,` ... `,` outcastN `)`
- *          `#` attr0 `(` attr0_value `)` ... `#` attrN `(` attrN_value `)`
- *           `{` body `}`
  */
 class Function : public IRNode {
 public:
