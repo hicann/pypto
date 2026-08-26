@@ -17,8 +17,6 @@ import sys
 import pytest
 import torch
 
-import pypto  # noqa: E402
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _ops.bsa import bsa_fwd_impl as _bsa_impl  # noqa: E402
 from _ops.bsa.bsa_common import DEFAULT_CONFIG  # noqa: E402
@@ -41,7 +39,6 @@ def _generate_block_sparse_mask(batch, head_num_q, num_q_blocks, num_kv_blocks, 
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_bsa_fwd_minimal(monkeypatch):
     """S256 Sparse50; pass_verify vs BSA O golden (l/m skipped — host LSE form differs)."""
     b, hq, hkv, sq, skv, sparsity = 1, 4, 2, 256, 256, 0.5
