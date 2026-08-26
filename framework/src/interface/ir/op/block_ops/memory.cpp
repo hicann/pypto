@@ -241,6 +241,62 @@ REGISTER_OP("get_spr")
         return std::make_shared<ScalarType>(DataType::INT64);
     });
 
+REGISTER_OP("set_saturation_flag")
+    .set_op_category("LanguageOp")
+    .set_description("Set saturation flag in CTRL special purpose register.")
+    .no_argument()
+    .set_attr<int>("mode")
+    .set_attr<bool>("enable")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return GetUnknownType();
+    });
+
+REGISTER_OP("get_saturation_flag")
+    .set_op_category("LanguageOp")
+    .set_description("Read saturation flag from CTRL special purpose register.")
+    .no_argument()
+    .set_attr<int>("mode")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return std::make_shared<ScalarType>(DataType::BOOL);
+    });
+
+REGISTER_OP("set_ctrl_spr")
+    .set_op_category("LanguageOp")
+    .set_description("Set a bit range in the CTRL special purpose register.")
+    .add_argument("start_bit", "Start bit index (0-63)")
+    .add_argument("end_bit", "End bit index (0-63)")
+    .add_argument("value", "Value to write into the bit range")
+    .f_deduce_type([](const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        CHECK(args.size() == 3) << "set_ctrl_spr requires 3 arguments (start_bit, end_bit, value), but got "
+                                << args.size();
+        return GetUnknownType();
+    });
+
+REGISTER_OP("get_ctrl_spr")
+    .set_op_category("LanguageOp")
+    .set_description("Read a bit range from the CTRL special purpose register.")
+    .add_argument("start_bit", "Start bit index (0-63)")
+    .add_argument("end_bit", "End bit index (0-63)")
+    .f_deduce_type([](const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        CHECK(args.size() == 2) << "get_ctrl_spr requires 2 arguments (start_bit, end_bit), but got " << args.size();
+        return std::make_shared<ScalarType>(DataType::INT64);
+    });
+
+REGISTER_OP("reset_ctrl_spr")
+    .set_op_category("LanguageOp")
+    .set_description("Reset a bit range in the CTRL register to default values.")
+    .add_argument("start_bit", "Start bit index (0-63)")
+    .add_argument("end_bit", "End bit index (0-63)")
+    .f_deduce_type([](const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        CHECK(args.size() == 2) << "reset_ctrl_spr requires 2 arguments (start_bit, end_bit), but got " << args.size();
+        return GetUnknownType();
+    });
+
 REGISTER_OP("block.make_tile")
     .set_op_category("BlockOp")
     .set_description("Create a tile")

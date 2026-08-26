@@ -36,9 +36,9 @@ add(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数0，reg_tensor，源操作数`src0`、`src1`和目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_BF16、DT_FP32。 |
-| `src1` | 输入 | 源操作数1，reg_tensor，支持的数据类型和`src0`中的说明一致。 |
-| `preg` | 输入 | mask_tensor。 |
+| `src0` | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，源操作数`src0`、`src1`和目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_BF16、DT_FP32。 |
+| `src1` | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src0`中的说明一致。 |
+| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
 | `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`，`preg`未筛选的元素在`dst`中保留原值。 |
 
 ## 约束说明
@@ -47,7 +47,7 @@ add(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目的操作数，reg_tensor，支持的数据类型和`src0`中的说明一致。
+返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src0`中的说明一致。
 
 ## 调用示例
 

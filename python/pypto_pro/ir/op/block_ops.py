@@ -2227,3 +2227,83 @@ def _parse_matmul_mx_acc(self, call: ast.Call) -> Expr:
     args = [self.parse_expression(arg) for arg in call.args]
     kwargs = self.parse_op_kwargs(call)
     return _ir_matmul_mx_acc(*args, **kwargs, span=span)
+
+
+def _to_const_int(val: Any, span: Span | None = None) -> Expr:
+    if isinstance(val, Expr):
+        return val
+    if isinstance(val, enum.Enum):
+        return _ir_core.ConstInt(int(val), _ir_core.DataType.INT64, span or _span())
+    return _ir_core.ConstInt(int(val), _ir_core.DataType.INT64, span or _span())
+
+
+def _to_const_bool(val: Any, span: Span | None = None) -> Expr:
+    if isinstance(val, Expr):
+        return val
+    return _ir_core.ConstBool(bool(val), span or _span())
+
+
+def _ir_set_saturation_flag(mode: Any, enable: Any, *, span: Span | None = None) -> Expr:
+    actual_span = span or _span()
+    kwargs = {"mode": int(mode), "enable": bool(enable)}
+    return _ir_core.create_op_call("set_saturation_flag", [], kwargs, actual_span)
+
+
+def _ir_get_saturation_flag(mode: Any, *, span: Span | None = None) -> Expr:
+    actual_span = span or _span()
+    kwargs = {"mode": int(mode)}
+    return _ir_core.create_op_call("get_saturation_flag", [], kwargs, actual_span)
+
+
+def _ir_set_ctrl_spr(start_bit: Any, end_bit: Any, value: Any, *, span: Span | None = None) -> Expr:
+    actual_span = span or _span()
+    args = [_to_const_int(start_bit, actual_span), _to_const_int(end_bit, actual_span),
+            _to_const_int(value, actual_span)]
+    return _ir_core.create_op_call("set_ctrl_spr", args, {}, actual_span)
+
+
+def _ir_get_ctrl_spr(start_bit: Any, end_bit: Any, *, span: Span | None = None) -> Expr:
+    actual_span = span or _span()
+    args = [_to_const_int(start_bit, actual_span), _to_const_int(end_bit, actual_span)]
+    return _ir_core.create_op_call("get_ctrl_spr", args, {}, actual_span)
+
+
+def _ir_reset_ctrl_spr(start_bit: Any, end_bit: Any, *, span: Span | None = None) -> Expr:
+    actual_span = span or _span()
+    args = [_to_const_int(start_bit, actual_span), _to_const_int(end_bit, actual_span)]
+    return _ir_core.create_op_call("reset_ctrl_spr", args, {}, actual_span)
+
+
+@op_impl("set_saturation_flag")
+def _parse_set_saturation_flag(self, call: ast.Call) -> Expr:
+    span = self.span_tracker.get_span(call)
+    kwargs = self.parse_op_kwargs(call)
+    return _ir_set_saturation_flag(kwargs["mode"], kwargs["enable"], span=span)
+
+
+@op_impl("get_saturation_flag")
+def _parse_get_saturation_flag(self, call: ast.Call) -> Expr:
+    span = self.span_tracker.get_span(call)
+    kwargs = self.parse_op_kwargs(call)
+    return _ir_get_saturation_flag(kwargs["mode"], span=span)
+
+
+@op_impl("set_ctrl_spr")
+def _parse_set_ctrl_spr(self, call: ast.Call) -> Expr:
+    span = self.span_tracker.get_span(call)
+    args = [self.parse_expression(arg) for arg in call.args]
+    return _ir_set_ctrl_spr(*args, span=span)
+
+
+@op_impl("get_ctrl_spr")
+def _parse_get_ctrl_spr(self, call: ast.Call) -> Expr:
+    span = self.span_tracker.get_span(call)
+    args = [self.parse_expression(arg) for arg in call.args]
+    return _ir_get_ctrl_spr(*args, span=span)
+
+
+@op_impl("reset_ctrl_spr")
+def _parse_reset_ctrl_spr(self, call: ast.Call) -> Expr:
+    span = self.span_tracker.get_span(call)
+    args = [self.parse_expression(arg) for arg in call.args]
+    return _ir_reset_ctrl_spr(*args, span=span)

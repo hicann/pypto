@@ -1338,5 +1338,198 @@ TEST(BackendCceOpsTest, DebugAssertWithFormatAndArgs)
     EXPECT_NE(generated.find("cce::printf"), std::string::npos);
 }
 
+// ============================================================================
+// Saturation flag codegen tests
+// ============================================================================
+
+TEST(BackendCceOpsTest, SetSaturationFlag_Cast_EnableTrue)
+{
+    Kwargs kwargs = {{"mode", static_cast<int>(ir::SaturationFlagMode::CAST)}, {"enable", true}};
+    auto call = std::make_shared<const ir::Call>("set_saturation_flag", std::vector<ir::ExprPtr>{}, kwargs,
+                                                 ir::Span::Unknown());
+    auto code = RunCodegen("set_saturation_flag", call);
+    EXPECT_NE(code.find("sbitset0(get_ctrl(), 59)"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, SetSaturationFlag_Cast_EnableFalse)
+{
+    Kwargs kwargs = {{"mode", static_cast<int>(ir::SaturationFlagMode::CAST)}, {"enable", false}};
+    auto call = std::make_shared<const ir::Call>("set_saturation_flag", std::vector<ir::ExprPtr>{}, kwargs,
+                                                 ir::Span::Unknown());
+    auto code = RunCodegen("set_saturation_flag", call);
+    EXPECT_NE(code.find("sbitset1(get_ctrl(), 59)"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, SetSaturationFlag_Float_EnableTrue)
+{
+    Kwargs kwargs = {{"mode", static_cast<int>(ir::SaturationFlagMode::FLOAT)}, {"enable", true}};
+    auto call = std::make_shared<const ir::Call>("set_saturation_flag", std::vector<ir::ExprPtr>{}, kwargs,
+                                                 ir::Span::Unknown());
+    auto code = RunCodegen("set_saturation_flag", call);
+    EXPECT_NE(code.find("sbitset0(get_ctrl(), 48)"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, SetSaturationFlag_Float8_EnableFalse)
+{
+    Kwargs kwargs = {{"mode", static_cast<int>(ir::SaturationFlagMode::FLOAT8)}, {"enable", false}};
+    auto call = std::make_shared<const ir::Call>("set_saturation_flag", std::vector<ir::ExprPtr>{}, kwargs,
+                                                 ir::Span::Unknown());
+    auto code = RunCodegen("set_saturation_flag", call);
+    EXPECT_NE(code.find("sbitset1(get_ctrl(), 50)"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, SetSaturationFlag_Int_EnableTrue)
+{
+    Kwargs kwargs = {{"mode", static_cast<int>(ir::SaturationFlagMode::INT)}, {"enable", true}};
+    auto call = std::make_shared<const ir::Call>("set_saturation_flag", std::vector<ir::ExprPtr>{}, kwargs,
+                                                 ir::Span::Unknown());
+    auto code = RunCodegen("set_saturation_flag", call);
+    EXPECT_NE(code.find("sbitset1(get_ctrl(), 53)"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, SetSaturationFlag_Int_EnableFalse)
+{
+    Kwargs kwargs = {{"mode", static_cast<int>(ir::SaturationFlagMode::INT)}, {"enable", false}};
+    auto call = std::make_shared<const ir::Call>("set_saturation_flag", std::vector<ir::ExprPtr>{}, kwargs,
+                                                 ir::Span::Unknown());
+    auto code = RunCodegen("set_saturation_flag", call);
+    EXPECT_NE(code.find("sbitset0(get_ctrl(), 53)"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, GetSaturationFlag_Cast)
+{
+    Kwargs kwargs = {{"mode", static_cast<int>(ir::SaturationFlagMode::CAST)}};
+    auto call = std::make_shared<const ir::Call>("get_saturation_flag", std::vector<ir::ExprPtr>{}, kwargs,
+                                                 ir::Span::Unknown());
+    const auto* info = BackendCCE::Instance().GetOpInfo("get_saturation_flag");
+    ASSERT_NE(info, nullptr);
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    auto result = info->codegen_func(call, codegen);
+    EXPECT_NE(result.find("get_ctrl()"), std::string::npos);
+    EXPECT_NE(result.find("59"), std::string::npos);
+    EXPECT_NE(result.find("== 0"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, GetSaturationFlag_Int)
+{
+    Kwargs kwargs = {{"mode", static_cast<int>(ir::SaturationFlagMode::INT)}};
+    auto call = std::make_shared<const ir::Call>("get_saturation_flag", std::vector<ir::ExprPtr>{}, kwargs,
+                                                 ir::Span::Unknown());
+    const auto* info = BackendCCE::Instance().GetOpInfo("get_saturation_flag");
+    ASSERT_NE(info, nullptr);
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    auto result = info->codegen_func(call, codegen);
+    EXPECT_NE(result.find("get_ctrl()"), std::string::npos);
+    EXPECT_NE(result.find("53"), std::string::npos);
+    EXPECT_NE(result.find("!= 0"), std::string::npos);
+}
+
+// ============================================================================
+// CTRL SPR direct access codegen tests
+// ============================================================================
+
+TEST(BackendCceOpsTest, SetCtrlSpr_SingleBit)
+{
+    auto startBit = MakeConstInt(59);
+    auto endBit = MakeConstInt(59);
+    auto value = MakeConstInt(0);
+    auto call = std::make_shared<const ir::Call>("set_ctrl_spr", std::vector<ir::ExprPtr>{startBit, endBit, value},
+                                                 Kwargs{}, ir::Span::Unknown());
+    auto code = RunCodegen("set_ctrl_spr", call);
+    EXPECT_NE(code.find("set_ctrl("), std::string::npos);
+    EXPECT_NE(code.find("get_ctrl()"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, SetCtrlSpr_BitRange_6_10)
+{
+    auto startBit = MakeConstInt(6);
+    auto endBit = MakeConstInt(10);
+    auto value = MakeConstInt(3);
+    auto call = std::make_shared<const ir::Call>("set_ctrl_spr", std::vector<ir::ExprPtr>{startBit, endBit, value},
+                                                 Kwargs{}, ir::Span::Unknown());
+    auto code = RunCodegen("set_ctrl_spr", call);
+    EXPECT_NE(code.find("set_ctrl("), std::string::npos);
+    EXPECT_NE(code.find("get_ctrl()"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, SetCtrlSpr_InvalidBitRange_Throws)
+{
+    auto startBit = MakeConstInt(11);
+    auto endBit = MakeConstInt(20);
+    auto value = MakeConstInt(0);
+    auto call = std::make_shared<const ir::Call>("set_ctrl_spr", std::vector<ir::ExprPtr>{startBit, endBit, value},
+                                                 Kwargs{}, ir::Span::Unknown());
+    EXPECT_THROW((void)RunCodegen("set_ctrl_spr", call), npu::tile_fwk::Error);
+}
+
+TEST(BackendCceOpsTest, SetCtrlSpr_NonConstArgs_Throws)
+{
+    auto startBit = MakeVar("x", std::make_shared<const ir::ScalarType>(ir::DataType::INT64));
+    auto endBit = MakeConstInt(59);
+    auto value = MakeConstInt(0);
+    auto call = std::make_shared<const ir::Call>("set_ctrl_spr", std::vector<ir::ExprPtr>{startBit, endBit, value},
+                                                 Kwargs{}, ir::Span::Unknown());
+    EXPECT_THROW((void)RunCodegen("set_ctrl_spr", call), npu::tile_fwk::Error);
+}
+
+TEST(BackendCceOpsTest, GetCtrlSpr_SingleBit)
+{
+    auto startBit = MakeConstInt(48);
+    auto endBit = MakeConstInt(48);
+    auto call = std::make_shared<const ir::Call>("get_ctrl_spr", std::vector<ir::ExprPtr>{startBit, endBit}, Kwargs{},
+                                                 ir::Span::Unknown());
+    const auto* info = BackendCCE::Instance().GetOpInfo("get_ctrl_spr");
+    ASSERT_NE(info, nullptr);
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    auto result = info->codegen_func(call, codegen);
+    EXPECT_NE(result.find("get_ctrl()"), std::string::npos);
+    EXPECT_NE(result.find("48"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, GetCtrlSpr_FullRange)
+{
+    auto startBit = MakeConstInt(0);
+    auto endBit = MakeConstInt(63);
+    auto call = std::make_shared<const ir::Call>("get_ctrl_spr", std::vector<ir::ExprPtr>{startBit, endBit}, Kwargs{},
+                                                 ir::Span::Unknown());
+    const auto* info = BackendCCE::Instance().GetOpInfo("get_ctrl_spr");
+    ASSERT_NE(info, nullptr);
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    auto result = info->codegen_func(call, codegen);
+    EXPECT_NE(result.find("get_ctrl()"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, GetCtrlSpr_InvalidRange_Throws)
+{
+    auto startBit = MakeConstInt(5);
+    auto endBit = MakeConstInt(3);
+    auto call = std::make_shared<const ir::Call>("get_ctrl_spr", std::vector<ir::ExprPtr>{startBit, endBit}, Kwargs{},
+                                                 ir::Span::Unknown());
+    const auto* info = BackendCCE::Instance().GetOpInfo("get_ctrl_spr");
+    ASSERT_NE(info, nullptr);
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    EXPECT_THROW((void)info->codegen_func(call, codegen), npu::tile_fwk::Error);
+}
+
+TEST(BackendCceOpsTest, ResetCtrlSpr_SingleBit)
+{
+    auto startBit = MakeConstInt(59);
+    auto endBit = MakeConstInt(59);
+    auto call = std::make_shared<const ir::Call>("reset_ctrl_spr", std::vector<ir::ExprPtr>{startBit, endBit}, Kwargs{},
+                                                 ir::Span::Unknown());
+    auto code = RunCodegen("reset_ctrl_spr", call);
+    EXPECT_NE(code.find("set_ctrl("), std::string::npos);
+    EXPECT_NE(code.find("get_ctrl()"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, ResetCtrlSpr_InvalidBitRange_Throws)
+{
+    auto startBit = MakeConstInt(11);
+    auto endBit = MakeConstInt(20);
+    auto call = std::make_shared<const ir::Call>("reset_ctrl_spr", std::vector<ir::ExprPtr>{startBit, endBit}, Kwargs{},
+                                                 ir::Span::Unknown());
+    EXPECT_THROW((void)RunCodegen("reset_ctrl_spr", call), npu::tile_fwk::Error);
+}
+
 } // namespace backend
 } // namespace pypto

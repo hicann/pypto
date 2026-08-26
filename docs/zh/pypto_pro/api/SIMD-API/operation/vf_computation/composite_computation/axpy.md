@@ -30,9 +30,9 @@ axpy(src, scalar, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，reg_tensor，源操作数`src`、`scalar`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_FP16、DT_FP32。 |
+| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，源操作数`src`、`scalar`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_FP16、DT_FP32。 |
 | `scalar` | 输入 | 标量源操作数。 |
-| `preg` | 输入 | mask_tensor。 - 本接口支持寄存器重叠。 |
+| `preg` | 输入 | [mask_reg](../mask_reg.md)。 - 本接口支持寄存器重叠。 |
 | `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
@@ -41,7 +41,7 @@ axpy(src, scalar, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目标/累加操作数，reg_tensor，支持的数据类型和`src`中的说明一致。计算前作为被加数参与运算，计算后存储结果，调用前需预初始化。
+返回`dst`目标/累加操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src`中的说明一致。计算前作为被加数参与运算，计算后存储结果，调用前需预初始化。
 
 ## 调用示例
 

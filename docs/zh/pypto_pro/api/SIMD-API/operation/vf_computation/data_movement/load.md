@@ -38,7 +38,7 @@ load(tile, stride=None, post_update: bool = False, repeat_stride=None, count=Non
 
 ## 返回值说明
 
-返回`dst`目的操作数，reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。不支持双寄存器模式。
+返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。不支持双寄存器模式。
 
 ## 调用示例
 

@@ -29,7 +29,7 @@ class StoreDist(enum.Enum):
      # reg_tensor双搬出模式
      INTLV = ...  # 交错存储，将src0、src1中的元素交错存储（根据dtype自动选择B8/B16/B32）
      INTLV_B32 = ...  # 按B32粒度交错存储
-     # mask_tensor模式
+     # mask_reg模式
      # NORM 同上，搬运VL/8数据
      # PACK 同上，每间隔1bit舍弃数据，将VL/8的数据压缩为VL/16搬出
 ```
@@ -40,7 +40,7 @@ StoreDist的取值根据目标模式不同，支持的模式有所区别：
 
 - **reg_tensor单搬出模式**：支持 `NORM`、`NORM_B16`、`FIRST_ELEMENT`、`PACK`、`PACK4`
 - **reg_tensor双搬出模式**：支持 `INTLV`、`INTLV_B32`（需要两个源寄存器）
-- **mask_tensor模式**：支持 `NORM`、`PACK`
+- **mask_reg模式**：支持 `NORM`、`PACK`
 
 ## 调用示例
 

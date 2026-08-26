@@ -22,11 +22,11 @@
 
 ![reg_tensor输入unpack示意图](../../../../figures/unpack_diagram.jpg)
 
-**mask_tensor输入**：根据`part`选取的模式，将源操作数`src`的低半部分或者高半部分，展开到目的操作数`dst`。示意图如下图所示：
+**mask_reg输入**：根据`part`选取的模式，将源操作数`src`的低半部分或者高半部分，展开到目的操作数`dst`。示意图如下图所示：
 
-**图1** mask_tensor输入unpack示意图
+**图1** mask_reg输入unpack示意图
 
-![mask_tensor输入unpack示意图](../../../../figures/mask_unpack_diagram.jpg)
+![mask_reg输入unpack示意图](../../../../figures/mask_unpack_diagram.jpg)
 
 ## 函数原型
 
@@ -38,9 +38,9 @@ unpack(src, dtype: Optional[DType] = None, part: Optional[PackPart] = None) -> d
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，reg_tensor或者mask_tensor类型。reg_tensor时数据类型为展开前的窄类型，mask_tensor时数据类型不变。 |
+| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型请参见[约束说明](#约束说明)。reg_tensor时数据类型为展开前的窄类型，mask_reg时数据类型不变。 |
 | `part` | 输入 | 用于控制读取src的低半部分还是高半部分，对应[PackPart](../types/PackPart.md)类型。<br>- `pl.PackPart.LOWER`：低位模式，读取src的低半部分。<br>- `pl.PackPart.UPPER`：高位模式，读取src的高半部分。<br>默认`pl.PackPart.LOWER`。双寄存器模式只支持`pl.PackPart.LOWER`模式。 |
-| `dtype` | 输入 | 数据类型。<br>- reg_tensor模式必选，指定目标reg_tensor的数据类型（如`pl.DT_UINT16`、`pl.DT_UINT32`等）。需要必须的原因在于将窄类型展开为宽类型（如DT_UINT8→DT_UINT16），目标reg_tensor的数据类型与源reg_tensor不同，无法从源操作数推断，因此必须通过`dtype`参数显式指定目标数据类型。<br>- mask_tensor模式保持寄存器类型，可省略。 |
+| `dtype` | 输入 | 数据类型。<br>- reg_tensor模式必选，指定目标reg_tensor的数据类型（如`pl.DT_UINT16`、`pl.DT_UINT32`等）。需要必须的原因在于将窄类型展开为宽类型（如DT_UINT8→DT_UINT16），目标reg_tensor的数据类型与源reg_tensor不同，无法从源操作数推断，因此必须通过`dtype`参数显式指定目标数据类型。<br>- mask_reg模式保持寄存器类型，可省略。 |
 
 ## 约束说明
 
@@ -59,13 +59,13 @@ unpack(src, dtype: Optional[DType] = None, part: Optional[PackPart] = None) -> d
     | DT_INT64 | DT_INT32 |
     | DT_UINT64 | DT_UINT32 |
 
-  - **mask_tensor输入**
+  - **mask_reg输入**
 
     无约束
 
 ## 返回值说明
 
-返回`dst`目的操作数，reg_tensor或者mask_tensor类型。reg_tensor时数据类型为展开后的宽类型，mask_tensor时数据类型不变，支持的数据类型请参见[约束说明](#约束说明)。
+返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型。reg_tensor时数据类型为展开后的宽类型，mask_reg时数据类型不变，支持的数据类型请参见[约束说明](#约束说明)。
 
 ## 调用示例
 
@@ -120,9 +120,9 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-### mask_tensor调用示例
+### mask_reg调用示例
 
-当源操作数为mask_tensor时，`vf.unpack`将掩码的低半部分或高半部分展开（每bit展开为2bit，高位置零）。mask_tensor变体与reg_tensor变体共用`part=`参数指定模式。
+当源操作数为mask_reg时，`vf.unpack`将掩码的低半部分或高半部分展开（每bit展开为2bit，高位置零）。mask_reg变体与reg_tensor变体共用`part=`参数指定模式。
 
 ```python
 import os

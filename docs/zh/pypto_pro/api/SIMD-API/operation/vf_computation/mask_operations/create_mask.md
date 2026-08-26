@@ -14,16 +14,16 @@
 
 ## 功能说明
 
-创建mask_tensor，指定参与后续VF运算的元素范围。
+创建mask_reg，指定参与后续VF运算的元素范围。
 
-### mask_tensor工作原理
+### mask_reg工作原理
 
-mask_tensor是VF运算中控制元素级有效性的专用寄存器。VF算子（如`vf.add`、`vf.mul`等）在执行时，会根据mask_tensor中每个元素的对应比特位决定该元素是否参与运算：
+mask_reg是VF运算中控制元素级有效性的专用寄存器。VF算子（如`vf.add`、`vf.mul`等）在执行时，会根据mask_reg中每个元素的对应比特位决定该元素是否参与运算：
 
 - **比特位为1（有效）**：该元素参与运算，结果写入目的寄存器对应位置。
 - **比特位为0（无效）**：该元素不参与运算，目的寄存器对应位置置零（`vf.add`、`vf.max`、`vf.min`、`vf.full`等少数算子支持通过`mode`参数选择保留原值）。
 
-mask_tensor的总位宽为256 bit，其粒度由`dtype`参数决定；每个数据元素对应的掩码位数随元素位宽变化。例如：
+mask_reg的总位宽为256 bit，其粒度由`dtype`参数决定；每个数据元素对应的掩码位数随元素位宽变化。例如：
 
 | dtype | 元素位宽 | 元素个数 | 每元素掩码位数 | 总掩码位数 |
 |---|---|---|---|---|
@@ -33,9 +33,9 @@ mask_tensor的总位宽为256 bit，其粒度由`dtype`参数决定；每个数�
 | `DT_INT64` / `DT_UINT64` | 64 bit | 32 | 8 bit（64位宽粒度） | 256 bit |
 
 > [!CAUTION]注意
-> `dtype`参数决定的是掩码粒度（即mask_tensor中每多少个bit对应一个数据元素），而非mask_tensor本身的类型。mask_tensor类型始终不变。
+> `dtype`参数决定的是掩码粒度（即mask_reg中每多少个bit对应一个数据元素），而非mask_reg本身的类型。mask_reg类型始终不变。
 
-### mask_tensor的典型使用场景
+### mask_reg的典型使用场景
 
 1. **全量运算**：`pattern=ALL`，所有元素参与运算（最常用）。
 2. **尾块处理**：当数据长度不是寄存器宽度的整数倍时，用`VL1`~`VL128`限制最后一块的参与元素数。
@@ -48,19 +48,19 @@ mask_tensor的总位宽为256 bit，其粒度由`dtype`参数决定；每个数�
 
 ![b8数据类型下CreateMask接口不同MaskPattern模式下元素选取](../../../../figures/create_mask_b8_pattern_selection.jpg)
 
-### astype精度转换中的mask_tensor
+### astype精度转换中的mask_reg
 
-不同数据类型下元素对应的mask位宽不一致，在astype进行类型转换时，mask_tensor根据输入的源操作数进行有效元素筛选。
+不同数据类型下元素对应的mask位宽不一致，在astype进行类型转换时，mask_reg根据输入的源操作数进行有效元素筛选。
 
-下图展示了mask_tensor和RegLayout同时作用时16位宽和32位宽进行类型转换的过程：
+下图展示了mask_reg和RegLayout同时作用时16位宽和32位宽进行类型转换的过程：
 
 **图2**astype 16位宽到32位宽类型转换过程
 
-![mask_tensor 16位宽到32位宽类型转换过程](../../../../figures/mask_reg_b16_to_b32_conversion.jpg)
+![[mask_reg](../mask_reg.md) 16位宽到32位宽类型转换过程](../../../../figures/mask_reg_b16_to_b32_conversion.jpg)
 
 **图3**astype 32位宽到16位宽类型转换过程
 
-![mask_tensor 32位宽到16位宽类型转换过程](../../../../figures/mask_reg_b32_to_b16_conversion.jpg)
+![mask_reg 32位宽到16位宽类型转换过程](../../../../figures/mask_reg_b32_to_b16_conversion.jpg)
 
 ## 函数原型
 
@@ -72,7 +72,7 @@ create_mask(pattern: Optional[MaskPattern] = None, dtype: Optional[DType] = None
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `pattern` | 输入 | 掩码模式，`pattern`参数决定mask_tensor中哪些元素被设置为有效（1），哪些被设置为无效（0），对应[MaskPattern](../types/MaskPattern.md)类型。支持的模式见[约束说明](#约束说明)，默认`pl.MaskPattern.ALL`。 |
+| `pattern` | 输入 | 掩码模式，`pattern`参数决定mask_reg中哪些元素被设置为有效（1），哪些被设置为无效（0），对应[MaskPattern](../types/MaskPattern.md)类型。支持的模式见[约束说明](#约束说明)，默认`pl.MaskPattern.ALL`。 |
 | `dtype` | 输入 | 掩码对应的数据类型，决定掩码粒度（即每多少bit对应一个数据元素）。如`pl.DT_FP32`对应32位宽粒度（64元素 × 4 bit），全部对应关系请见[约束说明](#约束说明)。掩码寄存器总位宽固定为256 bit，默认`pl.DT_FP32`。 |
 
 ## 约束说明
@@ -89,7 +89,6 @@ create_mask(pattern: Optional[MaskPattern] = None, dtype: Optional[DType] = None
   | `DT_INT64` / `DT_UINT64` | 64 bit | 32 | 8 bit（b64粒度） | 256 bit |
 
 - `pattern`参数说明：
-
 
   **表2** MaskPattern模式说明
 
@@ -112,7 +111,7 @@ create_mask(pattern: Optional[MaskPattern] = None, dtype: Optional[DType] = None
 
 ## 返回值说明
 
-返回`preg`目标reg_tensor。
+返回`preg`目标[mask_reg](../mask_reg.md)。
 
 ## 调用示例
 
@@ -124,7 +123,7 @@ import torch_npu
 
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # create_mask创建mask_tensor，供后续算子做掩码控制
+    # create_mask创建mask_reg，供后续算子做掩码控制
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
     vf.store_align(dst_tile, reg, preg)

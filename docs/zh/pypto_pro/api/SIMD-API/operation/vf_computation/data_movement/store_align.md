@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-将reg_tensor或mask_tensor数据对齐存储到Tile。支持reg_tensor和mask_tensor两种寄存器类型：
+将reg_tensor或mask_reg数据对齐存储到Tile。支持reg_tensor和mask_reg两种寄存器类型：
 
 ### reg_tensor模式
 
@@ -29,7 +29,7 @@ reg_tensor模式支持**连续搬运模式**和**非连续搬运模式**。连�
 
 ![](../../../../figures/contiguous_aligned_store.jpg)
 
-**非连续搬运模式**下，通过`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`启用DataBlock搬运模式，实现数据从reg_tensor非连续搬运至Tile。单条指令一次搬运8个DataBlock，`block_stride`参数表示相邻DataBlock间的间隔。该模式下`preg`参数位置改为传入控制有效元素的mask_tensor，mask控制规则如下：
+**非连续搬运模式**下，通过`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`启用DataBlock搬运模式，实现数据从reg_tensor非连续搬运至Tile。单条指令一次搬运8个DataBlock，`block_stride`参数表示相邻DataBlock间的间隔。该模式下`preg`参数位置改为传入控制有效元素的mask_reg，mask控制规则如下：
 
 - 某个DataBlock在mask中对应的32bit有任意一位为1时，该DataBlock对应的数据会被搬出到Tile。
 - 某个DataBlock在mask中对应的32bit全为0时，该DataBlock对应的数据不会被写出，Tile对应位置不更新，即使Tile越界也不会报错。
@@ -39,16 +39,16 @@ reg_tensor模式支持**连续搬运模式**和**非连续搬运模式**。连�
 - `post_update=False`时，实际搬运Tile起始地址为`dstAddr`，搬运后地址不更新。
 - `post_update=True`时，实际搬运Tile起始地址为`dstAddr`，搬运后执行地址更新`dstAddr += repeat_stride * 32B`（单位为DataBlock，32字节），`repeat_stride`需要32字节对齐。
 
-### mask_tensor模式
+### mask_reg模式
 
-当源操作数已通过`vf.create_mask`预声明为mask_tensor时，后端自动分派mask_tensor存储路径，将mask_tensor中的数据搬出到Tile。
+当源操作数已通过`vf.create_mask`预声明为mask_reg时，后端自动分派mask_reg存储路径，将mask_reg中的数据搬出到Tile。
 
-mask_tensor源支持两种分布模式，通过`dist`关键字参数配置：
+mask_reg源支持两种分布模式，通过`dist`关键字参数配置：
 
 - `pl.StoreDist.NORM`（正常模式，搬运VL/8数据量）
 - `pl.StoreDist.PACK`（压缩模式，每间隔1bit舍弃数据，将VL/8的数据压缩为VL/16搬出）
 
-mask_tensor模式同样支持三类搬运接口（普通搬运/PostUpdate/AddrReg）。
+mask_reg模式同样支持三类搬运接口（普通搬运/PostUpdate/AddrReg）。
 
 ## 函数原型
 
@@ -61,13 +61,13 @@ store_align(tile, src, *args, dist: Optional[StoreDist] = None, data_copy_mode: 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `tile` | 输出 | 目的操作数，Tile地址。地址需要32字节对齐。 |
-| `src` | 输入 | 源操作数，reg_tensor或mask_tensor。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。<br>- 当源为reg_tensor时，为**reg_tensor单搬出模式**。<br>- 当源已通过`vf.create_mask`预声明为mask_tensor时，自动分派mask_tensor存储路径，将mask_tensor中的数据搬出到Tile。 |
-| `src_even` / `src_odd` | 输入 | **reg_tensor双搬出模式**的偶数/奇数源操作数，reg_tensor，数据类型与`src`一致。 |
-| `preg` | 输入 | mask_tensor，指定写入的元素范围。**mask_tensor模式**时无需传入。<br>- **连续搬运模式**下，mask中对应的bit为1时，该元素被写入Tile；为0时，该元素不被写入，Tile对应位置保持原值不变。**非连续搬运模式**（DataBlock模式下`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`），该位置改为传入控制有效元素的mask_tensor，mask控制规则如下：某个DataBlock在mask中对应的32bit有任意一位为1时搬出，全为0时不写入且Tile对应位置不更新，即使Tile越界也不会报错。 |
-| `offset` | 输入 | 可选，末尾位置参数（第4个），根据模式和`post_update`取值自动分派语义，单位为元素个数。在**非连续搬运模式**（`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`）下该参数位置为`block_stride`（见下）。<br>- **连续搬运模式 + `post_update=False`**：作为地址偏移量。<br>&nbsp;&nbsp;- **整数或`[row, col]`列表**：整数偏移在代码生成时转换为指针算术`tile + offset`。传入`[row, col]`列表或元组，此时线性偏移为`row * shape[1] + col`，`row`单位为tile的列数（即`set_validshape[m, n]`的`n`），`col`单位为元素个数，两者均支持表达式。<br>&nbsp;&nbsp;- **AddrReg**（由`vf.create_addr_reg`创建）：实际搬运Tile地址为`tile + AddrReg中存储的偏移量`。每次迭代需先调用`vf.create_addr_reg`设定偏移量再调用搬运指令。<br>- **连续搬运模式 + `post_update=True`**：作为PostUpdate地址累进步长（元素数），搬运后目标地址自动更新为`dstAddr += stride`。默认0。64位宽数据类型（DT_INT64、DT_UINT64）自动翻倍。<br>- **mask_tensor模式**（源为mask_tensor时）：<br>&nbsp;&nbsp;- **整数**：仅在`post_update=True`时生效，作为地址更新步长；`post_update=False`时不支持整数offset。<br>&nbsp;&nbsp;- **AddrReg**（由`vf.create_addr_reg`创建）：实际搬运Tile地址为`dstAddr + AddrReg中存储的偏移量`。 |
-| `dist` | 输入 | 可选，数据存储分布模式，对应[StoreDist](../types/StoreDist.md)类型，具体模式根据是**reg_tensor单搬出模式**、**reg_tensor双搬出模式**还是**mask_tensor模式**请分别参见[约束说明](#约束说明)中各表。 |
+| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。<br>- 当源为reg_tensor时，为**reg_tensor单搬出模式**。<br>- 当源已通过`vf.create_mask`预声明为mask_reg时，自动分派mask_reg存储路径，将mask_reg中的数据搬出到Tile。 |
+| `src_even` / `src_odd` | 输入 | **reg_tensor双搬出模式**的偶数/奇数源操作数，[reg_tensor](../reg_tensor.md)，数据类型与`src`一致。 |
+| `preg` | 输入 | [mask_reg](../mask_reg.md)，指定写入的元素范围。**mask_reg模式**时无需传入。<br>- **连续搬运模式**下，mask中对应的bit为1时，该元素被写入Tile；为0时，该元素不被写入，Tile对应位置保持原值不变。**非连续搬运模式**（DataBlock模式下`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`），该位置改为传入控制有效元素的mask_reg，mask控制规则如下：某个DataBlock在mask中对应的32bit有任意一位为1时搬出，全为0时不写入且Tile对应位置不更新，即使Tile越界也不会报错。 |
+| `offset` | 输入 | 可选，末尾位置参数（第4个），根据模式和`post_update`取值自动分派语义，单位为元素个数。在**非连续搬运模式**（`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`）下该参数位置为`block_stride`（见下）。<br>- **连续搬运模式 + `post_update=False`**：作为地址偏移量。<br>&nbsp;&nbsp;- **整数或`[row, col]`列表**：整数偏移在代码生成时转换为指针算术`tile + offset`。传入`[row, col]`列表或元组，此时线性偏移为`row * shape[1] + col`，`row`单位为tile的列数（即`set_validshape[m, n]`的`n`），`col`单位为元素个数，两者均支持表达式。<br>&nbsp;&nbsp;- **AddrReg**（由`vf.create_addr_reg`创建）：实际搬运Tile地址为`tile + AddrReg中存储的偏移量`。每次迭代需先调用`vf.create_addr_reg`设定偏移量再调用搬运指令。<br>- **连续搬运模式 + `post_update=True`**：作为PostUpdate地址累进步长（元素数），搬运后目标地址自动更新为`dstAddr += stride`。默认0。64位宽数据类型（DT_INT64、DT_UINT64）自动翻倍。<br>- **mask_reg模式**（源为mask_reg时）：<br>&nbsp;&nbsp;- **整数**：仅在`post_update=True`时生效，作为地址更新步长；`post_update=False`时不支持整数offset。<br>&nbsp;&nbsp;- **AddrReg**（由`vf.create_addr_reg`创建）：实际搬运Tile地址为`dstAddr + AddrReg中存储的偏移量`。 |
+| `dist` | 输入 | 可选，数据存储分布模式，对应[StoreDist](../types/StoreDist.md)类型，具体模式根据是**reg_tensor单搬出模式**、**reg_tensor双搬出模式**还是**mask_reg模式**请分别参见[约束说明](#约束说明)中各表。 |
 | `post_update` | 输入 | 可选，`True`时搬运后目标地址自动累进，默认`False`。适用于循环内连续存储。 |
-| `data_copy_mode` | 输入 | 可选，数据拷贝模式，对应[DataCopyMode](../types/DataCopyMode.md)类型。仅在`src`为reg_tensor下有效，mask_tensor源不支持此参数。取值：`pl.DataCopyMode.NORM`（默认，普通连续搬运）或`pl.DataCopyMode.DATA_BLOCK_COPY`（非连续以DataBlock（32B）为单位进行搬运）。 |
+| `data_copy_mode` | 输入 | 可选，数据拷贝模式，对应[DataCopyMode](../types/DataCopyMode.md)类型。仅在`src`为reg_tensor下有效，mask_reg源不支持此参数。取值：`pl.DataCopyMode.NORM`（默认，普通连续搬运）或`pl.DataCopyMode.DATA_BLOCK_COPY`（非连续以DataBlock（32B）为单位进行搬运）。 |
 | `block_stride` | 输入 | 可选，仅在`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`模式下有效，其他模式下传入会被忽略。表示相邻DataBlock间的间隔，单位：DataBlock（32字节）。可作位置参数（第4个）或关键字参数传入。 |
 | `repeat_stride` | 输入 | 可选，仅在`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`模式且`post_update=True`时有效。表示重复搬运时的地址更新步长，单位：DataBlock（32字节），需要32字节对齐。`post_update=True`时，搬运后目标地址自动更新为`dstAddr += repeat_stride * 32B`。可作位置参数（第5个）或关键字参数传入。 |
 
@@ -91,7 +91,7 @@ store_align(tile, src, *args, dist: Optional[StoreDist] = None, data_copy_mode: 
   | `pl.StoreDist.INTLV` | 交错存储，将src0、src1中的元素交错存储于dst中。 | 32 |
   | `pl.StoreDist.INTLV_B32` | 32位宽粒度交错存储。 | 32 |
 
-  **表3** mask_tensor模式dist参数说明
+  **表3** mask_reg模式dist参数说明
 
   | dist取值 | 含义 | 对齐约束（Byte） |
   |---|---|---|
@@ -378,9 +378,9 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-### mask_tensor存储示例
+### mask_reg存储示例
 
-当`src`为mask_tensor时，`vf.store_align`自动分派mask_tensor存储路径，无需传入谓词mask参数：
+当`src`为mask_reg时，`vf.store_align`自动分派mask_reg存储路径，无需传入谓词mask参数：
 
 ```python
 import os
@@ -394,11 +394,11 @@ def example_vf(src_tile, mask_buf_tile, dst_tile):
     reg_a = vf.load_align(src_tile, 0)
     # 比较生成掩码
     cmp_mask = vf.ge(reg_a, 0.0, preg)
-    # 将mask_tensor存储到Tile（psts指令，PK压缩模式：32B → 16B），无需谓词mask
+    # 将mask_reg存储到Tile（psts指令，PK压缩模式：32B → 16B），无需谓词mask
     vf.store_align(mask_buf_tile, cmp_mask, dist=pl.StoreDist.PACK)
     vf.mem_bar(mode=pl.MemBarMode.VST_VLD)
-    # 从Tile加载掩码回mask_tensor（plds指令，US上采样与PK互补：16B → 32B）
-    # 需先用create_mask预声明mask_tensor的dtype，避免从DT_UINT32 tile推断出错误dtype
+    # 从Tile加载掩码回mask_reg（plds指令，US上采样与PK互补：16B → 32B）
+    # 需先用create_mask预声明mask_reg的dtype，避免从DT_UINT32 tile推断出错误dtype
     loaded_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     loaded_mask = vf.load_align(mask_buf_tile, dist=pl.LoadDist.US)
     # mask=1处取abs，mask=0处置零

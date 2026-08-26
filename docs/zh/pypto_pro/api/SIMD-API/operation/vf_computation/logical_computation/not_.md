@@ -28,8 +28,8 @@ not_(src, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，reg_tensor或mask_tensor，支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_FP32。 |
-| `preg` | 输入 | mask_tensor。 |
+| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_FP32。 |
+| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
 | `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
@@ -38,7 +38,7 @@ not_(src, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目的操作数，reg_tensor或mask_tensor，支持的数据类型和`src`中的说明一致。
+返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型和`src`中的说明一致。
 
 ## 调用示例
 
@@ -92,9 +92,9 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-### mask_tensor调用示例
+### mask_reg调用示例
 
-当源操作数为mask_tensor时，`vf.not_`对掩码按位取反。
+当源操作数为mask_reg时，`vf.not_`对掩码按位取反。
 
 ```python
 import os

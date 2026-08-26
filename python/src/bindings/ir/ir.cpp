@@ -714,6 +714,19 @@ Members:
         .value("OFF", ir::SaturateMode::OFF)
         .value("ON", ir::SaturateMode::ON);
 
+    py::enum_<ir::SaturationFlagMode>(ir, "SaturationFlagMode", R"pbdoc(
+Saturation flag mode for CTRL register bit control.
+
+Members:
+    FLOAT         float compute/convert saturation (CTRL bit 48)
+    FLOAT8        float8 compute saturation (CTRL bit 50)
+    INT           int compute saturation (CTRL bit 53)
+    CAST          float->int / int->int convert saturation (CTRL bit 59))pbdoc")
+        .value("FLOAT", ir::SaturationFlagMode::FLOAT)
+        .value("FLOAT8", ir::SaturationFlagMode::FLOAT8)
+        .value("INT", ir::SaturationFlagMode::INT)
+        .value("CAST", ir::SaturationFlagMode::CAST);
+
     py::enum_<ir::BinType>(ir, "BinType", R"pbdoc(
 Histogram bin range for vf.histograms.
 

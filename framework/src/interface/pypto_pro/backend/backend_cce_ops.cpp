@@ -1112,6 +1112,185 @@ REGISTER_BACKEND_OP(BackendCCE, "get_spr")
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return MakeGetSprCodegenCCE(op, codegen); });
 
 // ============================================================================
+// Saturation flag (CTRL register bit manipulation)
+// ============================================================================
+
+static int8_t GetSaturationModeBit(ir::SaturationFlagMode mode)
+{
+    switch (mode) {
+        case ir::SaturationFlagMode::FLOAT:
+            return 48;
+        case ir::SaturationFlagMode::FLOAT8:
+            return 50;
+        case ir::SaturationFlagMode::INT:
+            return 53;
+        case ir::SaturationFlagMode::CAST:
+            return 59;
+        default:
+            CHECK(false) << "set_saturation_flag: unsupported mode";
+            return -1;
+    }
+}
+
+// FLOAT/FLOAT8/CAST: polarity inverted (bit=0 means saturation ON, bit=1 means OFF)
+// INT: polarity normal (bit=1 means saturation ON, bit=0 means OFF)
+static bool IsInvertedPolarity(ir::SaturationFlagMode mode)
+{
+    return mode == ir::SaturationFlagMode::FLOAT || mode == ir::SaturationFlagMode::FLOAT8 ||
+           mode == ir::SaturationFlagMode::CAST;
+}
+
+static std::string MakeSetSaturationFlagCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(op->HasKwarg("mode")) << "set_saturation_flag requires 'mode' kwarg";
+    CHECK(op->HasKwarg("enable")) << "set_saturation_flag requires 'enable' kwarg";
+    auto mode = static_cast<ir::SaturationFlagMode>(op->GetKwarg<int>("mode"));
+    int8_t bit = GetSaturationModeBit(mode);
+    bool inverted = IsInvertedPolarity(mode);
+
+    bool enable = op->GetKwarg<bool>("enable");
+
+    // For inverted polarity: enable=true → set bit to 0 (sbitset0), enable=false → set bit to 1 (sbitset1)
+    // For normal polarity (INT): enable=true → set bit to 1 (sbitset1), enable=false → set bit to 0 (sbitset0)
+    std::string set_fn;
+    if (inverted) {
+        set_fn = enable ? "sbitset0" : "sbitset1";
+    } else {
+        set_fn = enable ? "sbitset1" : "sbitset0";
+    }
+    codegen.Emit("set_ctrl(" + set_fn + "(get_ctrl(), " + std::to_string(bit) + "));");
+    return "";
+}
+
+REGISTER_BACKEND_OP(BackendCCE, "set_saturation_flag")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
+        return MakeSetSaturationFlagCodegenCCE(op, codegen);
+    });
+
+static std::string MakeGetSaturationFlagCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    (void)codegen_base;
+    CHECK(op->HasKwarg("mode")) << "get_saturation_flag requires 'mode' kwarg";
+    auto mode = static_cast<ir::SaturationFlagMode>(op->GetKwarg<int>("mode"));
+    int8_t bit = GetSaturationModeBit(mode);
+    bool inverted = IsInvertedPolarity(mode);
+
+    // Read CTRL bit, invert for FLOAT/FLOAT8/CAST modes
+    if (inverted) {
+        return "((get_ctrl() >> " + std::to_string(bit) + ") & 1) == 0";
+    } else {
+        return "((get_ctrl() >> " + std::to_string(bit) + ") & 1) != 0";
+    }
+}
+
+REGISTER_BACKEND_OP(BackendCCE, "get_saturation_flag")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
+        return MakeGetSaturationFlagCodegenCCE(op, codegen);
+    });
+
+// ============================================================================
+// CTRL SPR direct access (SetCtrlSpr / GetCtrlSpr / ResetCtrlSpr)
+// ============================================================================
+
+// A5 writable CTRL bits: 6-10 (range), 45, 48, 50, 53, 59, 60 (single bits)
+static void CheckCtrlBitRange(int8_t startBit, int8_t endBit)
+{
+    CHECK(startBit >= 0 && endBit < 64 && startBit <= endBit)
+        << "set_ctrl_spr: invalid bit range [" << static_cast<int>(startBit) << ", " << static_cast<int>(endBit)
+        << "], must be 0 <= startBit <= endBit < 64";
+    bool valid = (6 <= startBit && startBit <= 10 && 6 <= endBit && endBit <= 10) ||
+                 (startBit == endBit && (startBit == 45 || startBit == 48 || startBit == 50 || startBit == 53 ||
+                                         startBit == 59 || startBit == 60));
+    CHECK(valid) << "set_ctrl_spr: bits [" << static_cast<int>(startBit) << ", " << static_cast<int>(endBit)
+                 << "] are not writable on current device. Writable: bits 6-10, 45, 48, 50, 53, 59, 60";
+}
+
+static std::string MakeSetCtrlSprCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(op->args_.size() == 3) << "set_ctrl_spr requires 3 args (start_bit, end_bit, value)";
+    auto start_val = ir::As<ir::ConstInt>(op->args_[0]);
+    auto end_val = ir::As<ir::ConstInt>(op->args_[1]);
+    CHECK(start_val != nullptr && end_val != nullptr)
+        << "set_ctrl_spr: start_bit and end_bit must be compile-time constants";
+    int8_t startBit = static_cast<int8_t>(start_val->value_);
+    int8_t endBit = static_cast<int8_t>(end_val->value_);
+    CheckCtrlBitRange(startBit, endBit);
+    std::string value = codegen.GetExprAsCode(op->args_[2]);
+    if (endBit - startBit == 63) {
+        codegen.Emit("set_ctrl(" + value + ");");
+    } else {
+        codegen.Emit("set_ctrl((get_ctrl() & ~(((uint64_t(1) << " + std::to_string(endBit - startBit + 1) +
+                     ") - 1) << " + std::to_string(startBit) + ")) | ((" + value + " & ((uint64_t(1) << " +
+                     std::to_string(endBit - startBit + 1) + ") - 1)) << " + std::to_string(startBit) + "));");
+    }
+    return "";
+}
+
+REGISTER_BACKEND_OP(BackendCCE, "set_ctrl_spr")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
+        return MakeSetCtrlSprCodegenCCE(op, codegen);
+    });
+
+static std::string MakeGetCtrlSprCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    (void)codegen_base;
+    CHECK(op->args_.size() == 2) << "get_ctrl_spr requires 2 args (start_bit, end_bit)";
+    auto start_val = ir::As<ir::ConstInt>(op->args_[0]);
+    auto end_val = ir::As<ir::ConstInt>(op->args_[1]);
+    CHECK(start_val != nullptr && end_val != nullptr)
+        << "get_ctrl_spr: start_bit and end_bit must be compile-time constants";
+    int8_t startBit = static_cast<int8_t>(start_val->value_);
+    int8_t endBit = static_cast<int8_t>(end_val->value_);
+    CHECK(startBit >= 0 && endBit < 64 && startBit <= endBit)
+        << "get_ctrl_spr: invalid bit range [" << static_cast<int>(startBit) << ", " << static_cast<int>(endBit) << "]";
+    if (endBit - startBit == 63) {
+        return "get_ctrl()";
+    }
+    return "(get_ctrl() >> " + std::to_string(startBit) + ") & ((uint64_t(1) << " +
+           std::to_string(endBit - startBit + 1) + ") - 1)";
+}
+
+REGISTER_BACKEND_OP(BackendCCE, "get_ctrl_spr")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
+        return MakeGetCtrlSprCodegenCCE(op, codegen);
+    });
+
+static std::string MakeResetCtrlSprCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(op->args_.size() == 2) << "reset_ctrl_spr requires 2 args (start_bit, end_bit)";
+    auto start_val = ir::As<ir::ConstInt>(op->args_[0]);
+    auto end_val = ir::As<ir::ConstInt>(op->args_[1]);
+    CHECK(start_val != nullptr && end_val != nullptr)
+        << "reset_ctrl_spr: start_bit and end_bit must be compile-time constants";
+    int8_t startBit = static_cast<int8_t>(start_val->value_);
+    int8_t endBit = static_cast<int8_t>(end_val->value_);
+    CheckCtrlBitRange(startBit, endBit);
+    constexpr int64_t defaultCtrl = 0x1000000000000008LL;
+    if (endBit - startBit == 63) {
+        codegen.Emit("set_ctrl(" + std::to_string(defaultCtrl) + "LL);");
+    } else {
+        uint64_t mask = ((uint64_t(1) << (endBit - startBit + 1)) - 1) << startBit;
+        int64_t defaultBits = defaultCtrl & static_cast<int64_t>(mask);
+        codegen.Emit("set_ctrl((get_ctrl() & ~(((uint64_t(1) << " + std::to_string(endBit - startBit + 1) +
+                     ") - 1) << " + std::to_string(startBit) + ")) | " + std::to_string(defaultBits) + "LL);");
+    }
+    return "";
+}
+
+REGISTER_BACKEND_OP(BackendCCE, "reset_ctrl_spr")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
+        return MakeResetCtrlSprCodegenCCE(op, codegen);
+    });
+
+// ============================================================================
 // Reduction Operations
 // ============================================================================
 

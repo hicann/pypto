@@ -36,9 +36,9 @@ mull(src0, src1, preg, mode: Optional[MergeMode] = None) -> (dst_lo, dst_hi)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数0，reg_tensor，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT32、DT_UINT32。 |
-| `src1` | 输入 | 源操作数1，reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。 |
-| `preg` | 输入 | mask_tensor。 |
+| `src0` | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT32、DT_UINT32。 |
+| `src1` | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
+| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
 
 ## 约束说明
 
@@ -48,8 +48,8 @@ mull(src0, src1, preg, mode: Optional[MergeMode] = None) -> (dst_lo, dst_hi)
 
 返回一个二元组 `(dst_lo, dst_hi)`。
 
-- `dst_lo` 目的操作数（乘法结果低位），reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。
-- `dst_hi` 目的操作数（乘法结果高位），reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。
+- `dst_lo` 目的操作数（乘法结果低位），[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。
+- `dst_hi` 目的操作数（乘法结果高位），[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。
 
 ## 调用示例
 

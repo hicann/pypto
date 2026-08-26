@@ -1910,5 +1910,96 @@ TEST_F(OpRegistryQueryTest, GetOp_UnregisteredOp_Throws)
     EXPECT_THROW((void)reg.GetOp("nonexistent_op_abc"), npu::tile_fwk::Error);
 }
 
+// ============================================================================
+// memory.cpp: set_saturation_flag, get_saturation_flag
+// ============================================================================
+
+class BlockOpsSaturationFlagTest : public testing::Test {};
+
+TEST_F(BlockOpsSaturationFlagTest, SetSaturationFlag_ReturnsUnknownType)
+{
+    auto& reg = OpRegistry::GetInstance();
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"mode", static_cast<int>(ir::SaturationFlagMode::CAST)},
+                                                            {"enable", true}};
+    auto call = reg.Create("set_saturation_flag", {}, kwargs, Sp());
+    ASSERT_NE(call, nullptr);
+    auto rt = call->GetType();
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->TypeName(), "UnknownType");
+}
+
+TEST_F(BlockOpsSaturationFlagTest, GetSaturationFlag_ReturnsBoolType)
+{
+    auto& reg = OpRegistry::GetInstance();
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"mode", static_cast<int>(ir::SaturationFlagMode::CAST)}};
+    auto call = reg.Create("get_saturation_flag", {}, kwargs, Sp());
+    ASSERT_NE(call, nullptr);
+    auto rt = As<ScalarType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::BOOL);
+}
+
+// ============================================================================
+// memory.cpp: set_ctrl_spr, get_ctrl_spr, reset_ctrl_spr
+// ============================================================================
+
+class BlockOpsCtrlSprTest : public testing::Test {};
+
+TEST_F(BlockOpsCtrlSprTest, SetCtrlSpr_ReturnsUnknownType)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto startBit = std::make_shared<ConstInt>(59, DataType::INT64, Sp());
+    auto endBit = std::make_shared<ConstInt>(59, DataType::INT64, Sp());
+    auto value = std::make_shared<ConstInt>(0, DataType::INT64, Sp());
+    auto call = reg.Create("set_ctrl_spr", {startBit, endBit, value}, Sp());
+    ASSERT_NE(call, nullptr);
+    auto rt = call->GetType();
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->TypeName(), "UnknownType");
+}
+
+TEST_F(BlockOpsCtrlSprTest, SetCtrlSpr_WrongArgCount_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto startBit = std::make_shared<ConstInt>(59, DataType::INT64, Sp());
+    EXPECT_THROW((void)reg.Create("set_ctrl_spr", {startBit}, Sp()), npu::tile_fwk::Error);
+}
+
+TEST_F(BlockOpsCtrlSprTest, GetCtrlSpr_ReturnsInt64Type)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto startBit = std::make_shared<ConstInt>(48, DataType::INT64, Sp());
+    auto endBit = std::make_shared<ConstInt>(48, DataType::INT64, Sp());
+    auto call = reg.Create("get_ctrl_spr", {startBit, endBit}, Sp());
+    ASSERT_NE(call, nullptr);
+    auto rt = As<ScalarType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::INT64);
+}
+
+TEST_F(BlockOpsCtrlSprTest, GetCtrlSpr_WrongArgCount_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    EXPECT_THROW((void)reg.Create("get_ctrl_spr", {}, Sp()), npu::tile_fwk::Error);
+}
+
+TEST_F(BlockOpsCtrlSprTest, ResetCtrlSpr_ReturnsUnknownType)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto startBit = std::make_shared<ConstInt>(59, DataType::INT64, Sp());
+    auto endBit = std::make_shared<ConstInt>(59, DataType::INT64, Sp());
+    auto call = reg.Create("reset_ctrl_spr", {startBit, endBit}, Sp());
+    ASSERT_NE(call, nullptr);
+    auto rt = call->GetType();
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->TypeName(), "UnknownType");
+}
+
+TEST_F(BlockOpsCtrlSprTest, ResetCtrlSpr_WrongArgCount_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    EXPECT_THROW((void)reg.Create("reset_ctrl_spr", {}, Sp()), npu::tile_fwk::Error);
+}
+
 } // namespace ir
 } // namespace pypto

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-将mask_tensor的每个bit扩展到目标reg_tensor的对应lane：mask bit为1时对应lane填1，mask bit为0时对应lane填0。
+将mask_reg的每个bit扩展到目标reg_tensor的对应lane：mask bit为1时对应lane填1，mask bit为0时对应lane填0。
 
 具体算法如下图所示，`dst`的首位为0，后续mask[i]对应mask值为1时，dst[i]的值为dst[i-1] + 1；mask[i]对应mask值为0时，dst[i]的值为dst[i-1]。mask最高位被忽略不参与统计。
 
@@ -24,7 +24,7 @@ $$dstReg_i = \begin{cases} 1 & \text{if } mask_i = 1 \\ 0 & \text{if } mask_i = 
 
 ![Unsqueeze示意图](../../../../figures/unsqueeze_diagram.jpg)
 
-mask_tensor由`vf.create_mask`或`vf.update_mask`产生，作为mask_tensor类型的参数直接传递给矢量计算API，控制哪些元素参与运算。
+mask_reg由`vf.create_mask`或`vf.update_mask`产生，作为mask_reg类型的参数直接传递给矢量计算API，控制哪些元素参与运算。
 
 ## 函数原型
 
@@ -36,7 +36,7 @@ unsqueeze(mask, dtype: Optional[DType] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `preg` | 输入 | mask_tensor（由`vf.create_mask`或`vf.update_mask`产生）。 |
+| `preg` | 输入 | [mask_reg](../mask_reg.md)（由`vf.create_mask`或`vf.update_mask`产生）。 |
 
 ## 约束说明
 
@@ -44,7 +44,7 @@ unsqueeze(mask, dtype: Optional[DType] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目标操作数，reg_tensor，存放扩展结果，支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32。
+返回`dst`目标操作数，[reg_tensor](../reg_tensor.md)，存放扩展结果，支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32。
 
 ## 调用示例
 

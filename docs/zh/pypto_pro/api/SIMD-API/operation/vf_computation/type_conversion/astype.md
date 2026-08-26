@@ -23,9 +23,9 @@
 - **mode**（`pl.MergeMode`）：用于指定写入寄存器数据模式，`preg`未选择的元素在dst中置零（`pl.MergeMode.ZEROING`）或保留dst原值（`pl.MergeMode.MERGING`）。当前设备仅支持`pl.MergeMode.ZEROING`模式。
 - **round_mode**（`pl.VFRoundMode`）：用于设置舍入模式。仅在可能导致精度损失且支持该舍入模式的转换中生效。
 
-不同数据类型下元素对应的`preg`位宽不一致，在类型转换时，mask_tensor根据输入的源操作数进行有效元素筛选。当源操作数和目的操作数位宽不同时，单条指令计算量以位宽更大的数据类型为准，layout用于控制位宽小的元素在寄存器中的排布方式。
+不同数据类型下元素对应的`preg`位宽不一致，在类型转换时，mask_reg根据输入的源操作数进行有效元素筛选。当源操作数和目的操作数位宽不同时，单条指令计算量以位宽更大的数据类型为准，layout用于控制位宽小的元素在寄存器中的排布方式。
 
-下图展示了mask_tensor和layout同时作用时16位宽和32位宽进行类型转换的过程：
+下图展示了mask_reg和layout同时作用时16位宽和32位宽进行类型转换的过程：
 
 **图1** 16位宽类型到32位宽类型转换过程
 
@@ -35,7 +35,7 @@
 
 ![](../../../../figures/astype_b32_to_b16_conversion.jpg)
 
-特别地，DT_FP4E2M1、DT_FP4E1M2与DT_BF16之间的转换，指令会以每2个元素为一对进行读写，大转小时`preg`有效位以偶数位为准。下图展示了mask_tensor和layout同时作用时DT_FP4E2M1和DT_BF16之间的转换过程：
+特别地，DT_FP4E2M1、DT_FP4E1M2与DT_BF16之间的转换，指令会以每2个元素为一对进行读写，大转小时`preg`有效位以偶数位为准。下图展示了mask_reg和layout同时作用时DT_FP4E2M1和DT_BF16之间的转换过程：
 
 **图3** DT_FP4E2M1到DT_BF16类型转换过程
 
@@ -55,8 +55,8 @@ astype(src, preg, dtype: Optional[DType] = None, layout: Optional[CastLayout] = 
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。 |
-| `preg` | 输入 | mask_tensor。`preg`会按照输入的源操作数来筛选有效元素。 |
+| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
+| `preg` | 输入 | [mask_reg](../mask_reg.md)。`preg`会按照输入的源操作数来筛选有效元素。 |
 | `dtype` | 输入 | 必选，指定目标寄存器的数据类型（如`pl.DT_FP16`、`pl.DT_INT32`等）。由于类型转换后目标类型与源类型不同，必须显式指定。 |
 | `layout` | 输入 | 可选，[CastLayout](../types/CastLayout.md)枚举类型。`pl.CastLayout.ZERO`（偶数半区，默认）或`pl.CastLayout.ONE`（奇数半区）。当源操作数和目的操作数位宽不同时，控制位宽小的元素在寄存器中的排布方式。FP4类型还支持`pl.CastLayout.TWO`/`pl.CastLayout.THREE`模式。具体支持的值因转换路径而异，详见[约束说明](#约束说明)各表。 |
 | `round_mode` | 输入 | 可选，[VFRoundMode](../types/VFRoundMode.md)枚举类型，浮点舍入模式。默认`pl.VFRoundMode.CAST_RINT`。不同转换路径支持的舍入模式不同，详见[约束说明](#约束说明)各表。不涉及精度损失的转换路径round_mode标记为`UNKNOWN`（可省略）。 |
@@ -193,7 +193,7 @@ astype(src, preg, dtype: Optional[DType] = None, layout: Optional[CastLayout] = 
 
 ## 返回值说明
 
-返回`dst`目的操作数，reg_tensor，支持的数据类型请参见[约束说明](#约束说明)。当目的操作数位宽比源操作数小时，在`preg`和`layout`作用下，目的操作数中的无效元素均为0
+返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。当目的操作数位宽比源操作数小时，在`preg`和`layout`作用下，目的操作数中的无效元素均为0
 
 ## 调用示例
 

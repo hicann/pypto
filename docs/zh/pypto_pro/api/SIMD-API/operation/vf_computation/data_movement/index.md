@@ -9,7 +9,6 @@ create_addr_reg
 full
 gather
 get_mask_spr
-get_spr
 load
 load_align
 load_unalign

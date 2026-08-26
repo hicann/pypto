@@ -5,6 +5,5 @@
 :titlesonly:
 
 create_mask
-mask_reg
 update_mask
 ```

@@ -38,6 +38,7 @@ from pypto.ir import (
     QuantMode,
     ReluPreMode,
     RoundMode,
+    SaturationFlagMode,
     STPhase,
 )
 from pypto_pro.ir.op.block_ops import FillPadMode
@@ -1241,6 +1242,94 @@ def get_spr() -> int:
 
     Returns:
         int64_t scalar value from the SPR
+    """
+
+
+@_api_decl
+def set_saturation_flag(mode: SaturationFlagMode, enable: bool) -> None:
+    """Set the saturation flag in the CTRL special purpose register.
+
+    Controls the global saturation mode for Cast (vcvt) and other
+    vector compute instructions. Must be called outside
+    ``@pl.vector_function`` (in the ``@pl.jit`` kernel body),
+    before the ``pl.section_vector()`` block that uses ``vf.astype``
+    with the corresponding saturation mode.
+
+    Args:
+        mode: Saturation mode category, one of:
+
+            - ``pl.SaturationFlagMode.FLOAT`` — float compute/convert (CTRL bit 48)
+            - ``pl.SaturationFlagMode.FLOAT8`` — float8 compute (CTRL bit 50)
+            - ``pl.SaturationFlagMode.INT`` — int compute (CTRL bit 53)
+            - ``pl.SaturationFlagMode.CAST`` — float→int / int→int convert (CTRL bit 59)
+
+        enable: ``True`` to enable saturation (clamp to target type's
+            min/max), ``False`` to disable (truncate).
+    """
+
+
+@_api_decl
+def get_saturation_flag(mode: SaturationFlagMode) -> bool:
+    """Read the saturation flag from the CTRL special purpose register.
+
+    Returns the current saturation state for the given mode category.
+    Must be called outside ``@pl.vector_function``.
+
+    Args:
+        mode: Saturation mode category (same as ``set_saturation_flag``).
+
+    Returns:
+        ``True`` if saturation is enabled, ``False`` otherwise.
+    """
+
+
+@_api_decl
+def set_ctrl_spr(start_bit: int, end_bit: int, value: int) -> None:
+    """Set a bit range in the CTRL special purpose register.
+
+    Writes ``value`` into the CTRL register bits ``[start_bit, end_bit]``,
+    preserving all other bits. This is the low-level counterpart to
+    ``set_saturation_flag`` — use it when direct CTRL bit manipulation
+    is needed (e.g., setting the global override bit CTRL[60]).
+
+    Must be called outside ``@pl.vector_function``.
+
+    Args:
+        start_bit: Start bit index (0-63), compile-time constant.
+        end_bit: End bit index (0-63), compile-time constant.
+            Writable bits on A5: 6-10, 45, 48, 50, 53, 59, 60.
+        value: Value to write into the bit range.
+    """
+
+
+@_api_decl
+def get_ctrl_spr(start_bit: int, end_bit: int) -> int:
+    """Read a bit range from the CTRL special purpose register.
+
+    Returns the value of CTRL register bits ``[start_bit, end_bit]``.
+    Must be called outside ``@pl.vector_function``.
+
+    Args:
+        start_bit: Start bit index (0-63), compile-time constant.
+        end_bit: End bit index (0-63), compile-time constant.
+
+    Returns:
+        int64_t value of the extracted bit range.
+    """
+
+
+@_api_decl
+def reset_ctrl_spr(start_bit: int, end_bit: int) -> None:
+    """Reset a bit range in the CTRL register to default values.
+
+    Restores CTRL register bits ``[start_bit, end_bit]`` to their
+    hardware default (CTRL default = 0x1000000000000008).
+    Must be called outside ``@pl.vector_function``.
+
+    Args:
+        start_bit: Start bit index (0-63), compile-time constant.
+        end_bit: End bit index (0-63), compile-time constant.
+            Writable bits on A5: 6-10, 45, 48, 50, 53, 59, 60.
     """
 
 

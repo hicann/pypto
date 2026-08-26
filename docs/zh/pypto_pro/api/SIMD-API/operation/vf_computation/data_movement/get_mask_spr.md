@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-从`pl.set_vec_mask`设置的掩码寄存器 {MASK1, MASK0} 中读取mask值，并按数据类型对应的格式转换后写入返回值`mask_reg`。
+从`pl.set_vec_mask`设置的掩码寄存器 {MASK1, MASK0} 中读取mask值，并按数据类型对应的格式转换后写入返回值`[mask_reg](../mask_reg.md)`。
 
 本接口对应AscendC `MoveMask<T>`接口。具体转换方式：
 
@@ -39,20 +39,20 @@ get_mask_spr(width: MaskWidth = MaskWidth.B32) -> mask_reg
 
   | width | 返回值 |
   |---|---|
-  | pl.MaskWidth.B32 | mask_tensor（对应32位宽：DT_INT32、DT_UINT32、DT_FP32） |
-  | pl.MaskWidth.B16 | mask_tensor（对应16位宽：DT_INT16、DT_UINT16、DT_FP16、DT_BF16） |
+  | pl.MaskWidth.B32 | mask_reg（对应32位宽：DT_INT32、DT_UINT32、DT_FP32） |
+  | pl.MaskWidth.B16 | mask_reg（对应16位宽：DT_INT16、DT_UINT16、DT_FP16、DT_BF16） |
 
-- 本接口为兼容性接口，建议优先采用`vf.create_mask`和`vf.update_mask`进行mask_tensor计算。
+- 本接口为兼容性接口，建议优先采用`vf.create_mask`和`vf.update_mask`进行mask_reg计算。
 
 - 本接口使用前需选择与掩码含义一致的模式，并通过`pl.set_vec_mask`或产生掩码的VF指令设置SPR {MASK1, MASK0}。按位掩码使用norm模式；元素计数使用count模式。
 
 ## 返回值说明
 
-返回`mask_reg`返回的mask_tensor，从SPR {MASK1, MASK0} 读取并转换。
+返回`mask_reg`返回的mask_reg，从SPR {MASK1, MASK0} 读取并转换。
 
 ## 调用示例
 
-先用`pl.set_vec_mask`设置SPR {MASK1, MASK0}，再用`vf.get_mask_spr`读取到mask_tensor，最后用该mask_tensor控制计算：
+先用`pl.set_vec_mask`设置SPR {MASK1, MASK0}，再用`vf.get_mask_spr`读取到mask_reg，最后用该mask_reg控制计算：
 
 ```python
 import os
@@ -64,7 +64,7 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # 从SPR读取掩码到mask_tensor（movp_b32指令）
+    # 从SPR读取掩码到mask_reg（movp_b32指令）
     spr_mask = vf.get_mask_spr(width=pl.MaskWidth.B32)
     # 使用读取的掩码做abs：前32个元素取abs，其余置零
     reg_dst = vf.abs(reg, spr_mask)

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-从Tile对齐加载数据到寄存器，支持reg_tensor和mask_tensor两种寄存器类型：
+从Tile对齐加载数据到寄存器，支持reg_tensor和mask_reg两种寄存器类型：
 
 ### reg_tensor模式
 
@@ -29,16 +29,16 @@ reg_tensor模式支持**连续搬运模式**和**非连续搬运模式**。**连
 
 ![](../../../../figures/contiguous_aligned_load.jpg)
 
-**非连续搬运模式**下，通过`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`启用DataBlock搬运模式，实现数据从Tile非连续搬运至reg_tensor。单条指令一次搬运8个DataBlock，`block_stride`参数表示相邻DataBlock间的间隔。该模式下`offset`参数改为传入控制有效元素的mask_tensor，控制规则如下：
+**非连续搬运模式**下，通过`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`启用DataBlock搬运模式，实现数据从Tile非连续搬运至reg_tensor。单条指令一次搬运8个DataBlock，`block_stride`参数表示相邻DataBlock间的间隔。该模式下`offset`参数改为传入控制有效元素的mask_reg，控制规则如下：
 
 - 某个DataBlock在mask中对应的32bit有任意一位为1时，该DataBlock对应的数据会被搬入dst。
 - 某个DataBlock在mask中对应的32bit全为0时，该DataBlock对应的数据不会被读取，dst对应位置置0，即使Tile越界也不会报错。
 
-### mask_tensor模式
+### mask_reg模式
 
-当目标变量已通过`vf.create_mask`预声明为mask_tensor时，后端自动分派mask_tensor加载路径，实现数据从Tile搬运至mask_tensor。
+当目标变量已通过`vf.create_mask`预声明为mask_reg时，后端自动分派mask_reg加载路径，实现数据从Tile搬运至mask_reg。
 
-mask_tensor目标支持三种分布模式，通过`dist`关键字参数配置，能够实现上采样、下采样等功能：
+mask_reg目标支持三种分布模式，通过`dist`关键字参数配置，能够实现上采样、下采样等功能：
 
 - `pl.LoadDist.NORM`（正常模式，搬运数据量为VL/8）
 - `pl.LoadDist.US`（上采样模式，每bit数据重复搬运两次，将VL/16数据扩充为VL/8搬入）
@@ -69,13 +69,13 @@ load_align(tile, offset=None, dist: Optional[LoadDist] = None, dtype: Optional[D
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `tile` | 输入 | 源操作数，Tile地址。地址需要32字节对齐。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
-| `offset` | 输入 | 可选，地址偏移参数，根据传入类型自动分派搬运接口。在**连续搬运模式**和**mask_tensor模式**下单位为元素个数，在**非连续搬运模式**时为mask。<br>- **连续搬运模式**：<br>&nbsp;&nbsp;- **整数或`[row, col]`列表**：整数偏移在代码生成时转换为指针算术`tile + offset`。<br>&nbsp;&nbsp;&nbsp;&nbsp;`[row, col]`列表的线性偏移为`row * shape[1] + col`，`row`单位为Tile的列数（即`set_validshape[m, n]`的`n`），`col`单位为元素个数，两者均支持表达式。<br>&nbsp;&nbsp;- **AddrReg**（由`vf.create_addr_reg`创建）：实际搬运Tile地址为`tile + AddrReg中存储的偏移量`。<br>&nbsp;&nbsp;&nbsp;&nbsp;每次迭代需先调用`vf.create_addr_reg`设定偏移量再调用搬运指令。<br>- **非连续搬运模式**（DataBlock加载模式，`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`时）：该模式下offset位置改为传入控制有效元素的mask_tensor，<br>&nbsp;&nbsp;某个DataBlock在mask中对应的32bit有任意一位为1时搬入，全为0时不读取且dst对应位置置0。<br>&nbsp;&nbsp;- 当`post_update=True`时，搬运后源地址自动累进`repeat_stride`步长，每次迭代无需手动更新地址。<br>&nbsp;&nbsp;- 当`post_update=False`时，搬运后地址不更新。<br>- **mask_tensor模式**（需先用`vf.create_mask`预声明）：<br>&nbsp;&nbsp;- **整数**：仅在`post_update=True`时生效；`post_update=False`时不支持整数offset。<br>&nbsp;&nbsp;- **AddrReg**（由`vf.create_addr_reg`创建）：实际搬运Tile地址为`srcAddr + AddrReg中存储的偏移量`。 |
-| `dist` | 输入 | 可选，数据分布模式，对应[LoadDist](../types/LoadDist.md)类型，具体模式根据是**reg_tensor单搬入模式**、**reg_tensor双搬入模式**还是**mask_tensor模式**请分别参见[约束说明](#约束说明)中各表。 |
-| `dtype` | 输入 | 可选，指定目标reg_tensor的数据类型。当源tile的数据类型与期望的寄存器数据类型不一致时需要指定（例如源tile为DT_FP32但需要按DT_UINT32位重解释加载到寄存器）。默认从源tile的数据类型推断。 |
+| `offset` | 输入 | 可选，地址偏移参数，根据传入类型自动分派搬运接口。在**连续搬运模式**和**mask_reg模式**下单位为元素个数，在**非连续搬运模式**时为mask。<br>- **连续搬运模式**：<br>&nbsp;&nbsp;- **整数或`[row, col]`列表**：整数偏移在代码生成时转换为指针算术`tile + offset`。<br>&nbsp;&nbsp;&nbsp;&nbsp;`[row, col]`列表的线性偏移为`row * shape[1] + col`，`row`单位为Tile的列数（即`set_validshape[m, n]`的`n`），`col`单位为元素个数，两者均支持表达式。<br>&nbsp;&nbsp;- **AddrReg**（由`vf.create_addr_reg`创建）：实际搬运Tile地址为`tile + AddrReg中存储的偏移量`。<br>&nbsp;&nbsp;&nbsp;&nbsp;每次迭代需先调用`vf.create_addr_reg`设定偏移量再调用搬运指令。<br>- **非连续搬运模式**（DataBlock加载模式，`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`时）：该模式下offset位置改为传入控制有效元素的mask_reg，<br>&nbsp;&nbsp;某个DataBlock在mask中对应的32bit有任意一位为1时搬入，全为0时不读取且dst对应位置置0。<br>&nbsp;&nbsp;- 当`post_update=True`时，搬运后源地址自动累进`repeat_stride`步长，每次迭代无需手动更新地址。<br>&nbsp;&nbsp;- 当`post_update=False`时，搬运后地址不更新。<br>- **mask_reg模式**（需先用`vf.create_mask`预声明）：<br>&nbsp;&nbsp;- **整数**：仅在`post_update=True`时生效；`post_update=False`时不支持整数offset。<br>&nbsp;&nbsp;- **AddrReg**（由`vf.create_addr_reg`创建）：实际搬运Tile地址为`srcAddr + AddrReg中存储的偏移量`。 |
+| `dist` | 输入 | 可选，数据分布模式，对应[LoadDist](../types/LoadDist.md)类型，具体模式根据是**reg_tensor单搬入模式**、**reg_tensor双搬入模式**还是**mask_reg模式**请分别参见[约束说明](#约束说明)中各表。 |
+| `dtype` | 输入 | 可选，指定目标[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)的数据类型。当源tile的数据类型与期望的寄存器数据类型不一致时需要指定（例如源tile为DT_FP32但需要按DT_UINT32位重解释加载到寄存器）。默认从源tile的数据类型推断。 |
 | `post_update` | 输入 | 可选，`True`时搬运后源地址自动累进，默认`False`。适用于循环内连续加载，避免手动更新offset。 |
 | `block_stride` | 输入 | 可选，仅在`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`模式下有效，其他模式下传入会被忽略。表示相邻DataBlock间的间隔，单位：DataBlock（32字节）。当`block_stride=0`时，表示重复搬入第一个DataBlock。 |
 | `repeat_stride` | 输入 | 可选，仅在`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`模式且`post_update=True`时有效。表示重复搬运时的地址更新步长，单位：DataBlock（32字节），需要32字节对齐。`post_update=True`时，搬运后源地址自动更新为`srcAddr += repeat_stride * 32B`。 |
-| `data_copy_mode` | 输入 | 可选，数据拷贝模式，对应[DataCopyMode](../types/DataCopyMode.md)类型。仅在**reg_tensor模式**下有效，mask_tensor目标不支持此参数。取值：`pl.DataCopyMode.NORM`（默认，普通连续搬运）或`pl.DataCopyMode.DATA_BLOCK_COPY`（非连续以DataBlock（32B）为单位进行搬运）。 |
+| `data_copy_mode` | 输入 | 可选，数据拷贝模式，对应[DataCopyMode](../types/DataCopyMode.md)类型。仅在**reg_tensor模式**下有效，mask_reg目标不支持此参数。取值：`pl.DataCopyMode.NORM`（默认，普通连续搬运）或`pl.DataCopyMode.DATA_BLOCK_COPY`（非连续以DataBlock（32B）为单位进行搬运）。 |
 
 ## 约束说明
 
@@ -116,7 +116,7 @@ load_align(tile, offset=None, dist: Optional[LoadDist] = None, dtype: Optional[D
   | `pl.LoadDist.DINTLV_B16` | 双搬入模式，基于元素的交错搬运，将偶数索引的元素存入dst0，奇数索引的元素存入dst1，数据类型为16位宽类型。 | 32 |
   | `pl.LoadDist.DINTLV_B32` | 双搬入模式，基于元素的交错搬运，将偶数索引的元素存入dst0，奇数索引的元素存入dst1，数据类型为32位宽类型。 | 32 |
 
-  **表3** mask_tensor模式dist参数说明
+  **表3** mask_reg模式dist参数说明
 
   | dist取值 | 含义 | 搬运对齐约束（Byte） |
   |---|---|---|
@@ -126,13 +126,13 @@ load_align(tile, offset=None, dist: Optional[LoadDist] = None, dtype: Optional[D
 
 ## 返回值说明
 
-返回`dst`目的操作数，reg_tensor或mask_tensor。
+返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型。
 
 - 当目标为reg_tensor时，为**reg_tensor单搬入模式**，支持的数据类型和`tile`中的说明一致。
 
-- `dst_even` / `dst_odd` **reg_tensor双搬入模式**的偶数/奇数目的操作数，reg_tensor，支持的数据类型和`tile`中的说明一致。
+- `dst_even` / `dst_odd` **reg_tensor双搬入模式**的偶数/奇数目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和`tile`中的说明一致。
 
-- 当目标已通过`vf.create_mask`预声明为mask_tensor时，自动分派mask_tensor加载路径，将Tile中的数据搬入mask_tensor。
+- 当目标已通过`vf.create_mask`预声明为mask_reg时，自动分派mask_reg加载路径，将Tile中的数据搬入mask_reg。
 
 ## 调用示例
 
@@ -399,7 +399,7 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-### mask_tensor加载示例
+### mask_reg加载示例
 
 ```python
 import os
@@ -411,13 +411,13 @@ import torch_npu
 def example_vf(src_tile, mask_buf_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_tile, 0)
-    # 比较生成掩码，存储到Tile（PK压缩模式：32B mask_tensor → 16B Tile）
+    # 比较生成掩码，存储到Tile（PK压缩模式：32B [mask_reg](../mask_reg.md) → 16B Tile）
     cmp_mask = vf.ge(reg_a, 0.0, preg)
     vf.store_align(mask_buf_tile, cmp_mask, dist=pl.StoreDist.PACK)
     vf.mem_bar(mode=pl.MemBarMode.VST_VLD)
-    # 从Tile加载掩码到mask_tensor（plds指令），US上采样模式与PK互补（16B → 32B）
+    # 从Tile加载掩码到mask_reg（plds指令），US上采样模式与PK互补（16B → 32B）
     # dist为可选参数（默认NORM）；此处用US是为了与上面的PK存储互补
-    # 需先用create_mask预声明mask_tensor的dtype，避免从DT_UINT32 tile推断出错误dtype
+    # 需先用create_mask预声明mask_reg的dtype，避免从DT_UINT32 tile推断出错误dtype
     loaded_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     loaded_mask = vf.load_align(mask_buf_tile, dist=pl.LoadDist.US)
     # 使用加载的掩码控制运算：mask=1处取abs，mask=0处置零

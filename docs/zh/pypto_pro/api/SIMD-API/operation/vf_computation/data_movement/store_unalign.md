@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-非对齐存储，将变长向量数据或mask_tensor数据写入Tile。配合`vf.unalign_reg_for_store()`和`vf.store_unalign_post()`使用。当`src`为mask_tensor时，后端自动分派mask_tensor非对齐存储路径。
+非对齐存储，将变长向量数据或mask_reg数据写入Tile。配合`vf.unalign_reg_for_store()`和`vf.store_unalign_post()`使用。当`src`为mask_reg时，后端自动分派mask_reg非对齐存储路径。
 
 ### 非对齐搬出原理
 
@@ -65,7 +65,7 @@ store_unalign(tile, src, align_reg, stride=None, post_update: bool = False)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `tile` | 输出 | 目的操作数，Tile地址。 |
-| `src` | 输入 | 源操作数，reg_tensor或mask_tensor，目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 | `align_reg` | 输入 | alignment tracker寄存器（由`vf.unalign_reg_for_store()`创建）。 |
 | `stride` | 输入 | 可选，存储元素个数，`post_update = True`时同时作为地址更新步长（整型标量），仅`post_update = True`时有效。 |
 | `post_update` | 输入 | 可选，`True`时tracker自动累进到下一段，默认`False`。 |
@@ -136,9 +136,9 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-### mask_tensor非对齐存储示例
+### mask_reg非对齐存储示例
 
-当`src`为mask_tensor时，`vf.store_unalign`自动分派mask_tensor非对齐存储路径。mask_tensor 32字节数据按16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）打包为16字节或按32位宽（DT_INT32、DT_UINT32、DT_FP32）打包为8字节写入Tile。硬件从每2bit（16位宽）/4bit（32位宽）中提取最低有效位(LSB)。
+当`src`为mask_reg时，`vf.store_unalign`自动分派mask_reg非对齐存储路径。[mask_reg](../mask_reg.md) 32字节数据按16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）打包为16字节或按32位宽（DT_INT32、DT_UINT32、DT_FP32）打包为8字节写入Tile。硬件从每2bit（16位宽）/4bit（32位宽）中提取最低有效位(LSB)。
 
 ```python
 import os
@@ -151,7 +151,7 @@ def example_vf(src_tile, mask_buf_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_tile, 0)
     cmp_mask = vf.ge(reg_a, 0.0, preg)
-    # mask_tensor非对齐存储（pstu指令），32位宽模式将32B mask_tensor打包为8B写入Tile
+    # mask_reg非对齐存储（pstu指令），32位宽模式将32B mask_reg打包为8B写入Tile
     ureg = vf.unalign_reg_for_store()
     vf.store_unalign(mask_buf_tile, cmp_mask, ureg)
     # 必须flush alignment tracker中剩余的未对齐字节，否则数据滞留不到达Tile
@@ -183,7 +183,7 @@ def test_example_2():
     device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
-    # pstu 32位宽: 32B mask_tensor → 8B (2 DT_UINT32)，bit i = (a[i] >= 0)
+    # pstu 32位宽: 32B mask_reg → 8B (2 DT_UINT32)，bit i = (a[i] >= 0)
     # 全正输入 → 全部掩码位为1 → 打包结果非零
     a = torch.ones([1, 64], device=device, dtype=torch.float32)
     out = torch.zeros([1, 64], device=device, dtype=torch.int32)

@@ -36,12 +36,12 @@ bit_cast(src, dtype=pl.DT_FP32) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，reg_tensor。 |
+| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。 |
 | `dtype` | 输入 | 必选，目标数据类型。指定`src`被重解释为的数据类型。 |
 
 ## 返回值说明
 
-返回`dst`目标操作数，reg_tensor。数据类型由`dtype`参数决定。
+返回`dst`目标操作数，[reg_tensor](../reg_tensor.md)。数据类型由`dtype`参数决定。
 
 ## 约束说明
 

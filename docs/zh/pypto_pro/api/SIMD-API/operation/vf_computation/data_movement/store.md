@@ -27,7 +27,7 @@ store(tile, src, count=None, post_update=False, repeat_stride=0)
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `tile` | 输出 | 目的操作数，Tile地址，起始地址不需要32字节对齐。 |
-| `src` | 输入 | 源操作数，reg_tensor，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
+| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
 | `count` | 输入 | 可选，搬运数据量（元素个数）。默认为256B / sizeof(dtype)。 |
 | `post_update` | 输入 | 可选，`True`时搬运后地址自动累进，默认`False`。 |
 | `repeat_stride` | 输入 | 可选，重复存储时的步长，默认`0`。 - `count`不能大于一个reg_tensor能存储的数据个数，即count <= 256B / sizeof(dtype)。<br>- 接口内部定义了一个UnalignRegForStore，该寄存器数量上限为4。<br>- `post_update=True`时，目标地址会在每次搬运后自动累进，无需用户手动更新地址。<br>- `count`不能大于一个reg_tensor能存储的数据个数，即count <= 256B / sizeof(dtype)。<br>- 接口内部定义了一个UnalignRegForStore，该寄存器数量上限为4。<br>- `post_update=True`时，目标地址会在每次搬运后自动累进，无需用户手动更新地址。 |
