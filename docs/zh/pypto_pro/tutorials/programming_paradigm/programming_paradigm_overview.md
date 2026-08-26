@@ -56,7 +56,7 @@ SIMD主要适用于数据密集、操作规整、无分支或分支较少的计�
 
 - **矢量类算子**：主要使用Vector计算单元完成元素级、逻辑类和数据重组类计算，在PyPTO Pro中通过`pl.section_vector()`标记执行域。
 - **矩阵类算子**：主要使用Cube计算单元完成矩阵乘、张量卷积等计算，在PyPTO Pro中通过`pl.section_cube()`标记执行域。
-- **融合类算子**：联动Cube与Vector计算单元协同计算。开发者可以手工插入核间同步并编排流水；在支持自动Pipeline变换的场景中，也可以使用`@pl.pipeline.stage`标记计算阶段，由框架自动插入核间同步并完成Preload核间流水编排。
+- **融合类算子**：联动Cube与Vector计算单元协同计算。开发者可以手动插入核间同步并编排流水；在支持自动Pipeline变换的场景中，也可以使用`@pl.pipeline.stage`标记计算阶段，由框架自动插入核间同步并完成Preload核间流水编排。
 
 AI Core中Scalar、Vector、Cube、存储和搬运单元的详细说明，请参考[抽象硬件架构](abstract_hardware_architecture.md)。
 
@@ -120,7 +120,7 @@ def fused_kernel(cube_input, intermediate, output):
             vector_stage(intermediate, output)
 ```
 
-`@pl.pipeline.stage`本身只为函数添加stage标记，不改变函数行为。设置`pipeline=pl.pipeline.PipelineConfig(...)`后，编译器识别循环中的stage调用，分析各阶段对Tile的读写依赖，自动插入Cube与Vector之间的核间同步，并将串行阶段转换为Preload流水，使不同迭代的Cube和Vector阶段可以重叠执行。`preload`用于配置稳态流水开始前首个阶段的预执行次数。未启用Pipeline变换的融合Kernel仍可直接使用`pl.system.set_cross_core`和`pl.system.wait_cross_core`手工管理核间同步。
+`@pl.pipeline.stage`本身只为函数添加stage标记，不改变函数行为。设置`pipeline=pl.pipeline.PipelineConfig(...)`后，编译器识别循环中的stage调用，分析各阶段对Tile的读写依赖，自动插入Cube与Vector之间的核间同步，并将串行阶段转换为Preload流水，使不同迭代的Cube和Vector阶段可以重叠执行。`preload`用于配置稳态流水开始前首个阶段的预执行次数。未启用Pipeline变换的融合Kernel仍可直接使用`pl.system.set_cross_core`和`pl.system.wait_cross_core`手动管理核间同步。
 
 关于Tile和TileGroup的详细使用方法，请参考[基于Tile的Python编程](../operator_development/tile_based_python_programming/Python_programming_overview.md)。
 

@@ -31,10 +31,64 @@ from pypto.pypto_impl.ir import (
     SyncCoreType,
 )
 
-from .._utils import _get_span_or_capture, _normalize_expr, _to_make_tuple
+from .._utils import _get_span_or_capture, _is_int, _normalize_expr, _to_make_tuple
 from ._op_registry import OpSpec, op_impl, register_table
 
 _MAX_EVENT_ID = 16
+_MAX_FLAG_EVENT_ID = 8
+_MAX_MUTEX_ID = 32
+
+
+def _is_integer_scalar_expr(value: Expr) -> bool:
+    value_type = getattr(value, "type", None)
+    return isinstance(value_type, _ir_core.ScalarType) and value_type.dtype.is_int()
+
+
+def _normalize_integer_id_expr(value: int | Expr, span: Span, *, name: str, upper_bound: int) -> Expr:
+    """Normalize an integer ID to an IR operand and validate statically known values."""
+    if not isinstance(value, Expr) and not _is_int(value):
+        raise TypeError(f"{name} must be a Python int or an integer scalar expression")
+    expr = _normalize_expr(value, span)
+    if not _is_integer_scalar_expr(expr):
+        raise TypeError(f"{name} must be an integer scalar expression")
+    _validate_const_id(expr, upper_bound, name)
+    return expr
+
+
+def _normalize_mutex_ids(mutex_ids: tuple | list | None) -> list[int] | None:
+    """Validate candidate IDs before they are converted to vector<int>."""
+    if mutex_ids is None:
+        return None
+    if not isinstance(mutex_ids, (list, tuple)):
+        raise TypeError("mutex_ids must be a list, tuple, or None")
+    normalized_mutex_ids = list(mutex_ids)
+    if not normalized_mutex_ids:
+        raise ValueError("mutex_ids must not be empty")
+    for index, mutex_id in enumerate(normalized_mutex_ids):
+        if not _is_int(mutex_id):
+            raise TypeError(f"mutex_ids[{index}] must be a Python int")
+        if not 0 <= mutex_id < _MAX_MUTEX_ID:
+            raise ValueError(f"mutex_ids element must be in [0, {_MAX_MUTEX_ID}), got {mutex_id}")
+    return normalized_mutex_ids
+
+
+def _validate_max_mutex_id(max_mutex_id: int) -> None:
+    if not _is_int(max_mutex_id):
+        raise TypeError("max_mutex_id must be a Python int")
+    if not 1 <= max_mutex_id <= _MAX_MUTEX_ID:
+        raise ValueError(f"max_mutex_id must be in [1, {_MAX_MUTEX_ID}], got {max_mutex_id}")
+
+
+def _validate_concrete_pipe(pipe: PipeType, name: str) -> None:
+    if not isinstance(pipe, PipeType):
+        raise TypeError(f"{name} must be a PipeType, got {type(pipe).__name__}")
+    if pipe == PipeType.ALL:
+        raise ValueError(f"{name} must identify one concrete pipe, got PipeType.ALL")
+
+
+def _validate_const_id(expr: Expr, upper_bound: int, name: str) -> None:
+    if isinstance(expr, _ir_core.ConstInt) and not 0 <= expr.value < upper_bound:
+        raise ValueError(f"{name} must be in [0, {upper_bound}), got {expr.value}")
 
 
 def _create_sync_op(
@@ -51,15 +105,19 @@ def _create_sync_op(
         op_name: Operation name (e.g., "system.sync_src")
         set_pipe: Pipe that sets the flag
         wait_pipe: Pipe that waits on the flag
-        event_id: Event identifier (int for static, Expr for dynamic)
+        event_id: Event identifier
         span: Optional source span for debugging
     """
     actual_span = _get_span_or_capture(span, frame_offset=2)
-    if isinstance(event_id, Expr):
-        kwargs = {"set_pipe": set_pipe, "wait_pipe": wait_pipe}
-        return _ir_core.create_op_call(op_name + "_dyn", [event_id], kwargs, actual_span)
-    kwargs = {"set_pipe": set_pipe, "wait_pipe": wait_pipe, "event_id": event_id}
-    return _ir_core.create_op_call(op_name, [], kwargs, actual_span)
+    _validate_concrete_pipe(set_pipe, "set_pipe")
+    _validate_concrete_pipe(wait_pipe, "wait_pipe")
+    if set_pipe == wait_pipe:
+        raise ValueError(f"set_pipe and wait_pipe must differ, got {set_pipe}")
+    kwargs = {"set_pipe": set_pipe, "wait_pipe": wait_pipe}
+    event_id_expr = _normalize_integer_id_expr(
+        event_id, actual_span, name="event_id", upper_bound=_MAX_FLAG_EVENT_ID
+    )
+    return _ir_core.create_op_call(op_name + "_dyn", [event_id_expr], kwargs, actual_span)
 
 
 def _create_barrier_op(op_name: str, *, span: Span | None) -> Call:
@@ -89,7 +147,7 @@ def sync_src(
         span: Optional source span for debugging (auto-captured if not provided)
 
     Returns:
-        Call expression for system.sync_src
+        Call expression for system.sync_src_dyn.
     """
     return _create_sync_op("system.sync_src", set_pipe=set_pipe, wait_pipe=wait_pipe, event_id=event_id, span=span)
 
@@ -110,7 +168,7 @@ def sync_dst(
         span: Optional source span for debugging (auto-captured if not provided)
 
     Returns:
-        Call expression for system.sync_dst
+        Call expression for system.sync_dst_dyn.
     """
     return _create_sync_op("system.sync_dst", set_pipe=set_pipe, wait_pipe=wait_pipe, event_id=event_id, span=span)
 
@@ -248,7 +306,6 @@ def sync_all(
     if mode == SyncAllMode.HARD:
         if workspaces:
             raise ValueError("Hard mode sync_all does not accept workspace arguments")
-
     elif mode == SyncAllMode.SOFT:
         if not workspaces:
             raise ValueError("Soft mode sync_all requires workspaces list (e.g. [gm, ub])")
@@ -307,22 +364,25 @@ def dcci(
 
 def _create_mutex_op(
     op_name: str,
+    mutex_id: int | Expr,
     *,
     pipe: PipeType,
-    mutex_id: int | Expr,
-    mode: int,
     max_mutex_id: int,
     mutex_ids: tuple | list | None,
     actual_span: Span,
 ) -> Call:
-    """Create a mutex lock/unlock operation for static or dynamic mutex ids."""
-    if isinstance(mutex_id, Expr):
-        kwargs: dict = {"pipe": pipe, "mode": mode, "max_mutex_id": max_mutex_id}
-        if mutex_ids is not None:
-            kwargs["mutex_ids"] = list(mutex_ids)
-        return _ir_core.create_op_call(f"{op_name}_dyn", [mutex_id], kwargs, actual_span)
-    kwargs = {"pipe": pipe, "mutex_id": mutex_id, "mode": mode}
-    return _ir_core.create_op_call(op_name, [], kwargs, actual_span)
+    """Create a mutex lock/unlock operation with the ID represented as an IR expression."""
+    _validate_concrete_pipe(pipe, "pipe")
+    _validate_max_mutex_id(max_mutex_id)
+    normalized_mutex_ids = _normalize_mutex_ids(mutex_ids)
+    mutex_id_expr = _normalize_integer_id_expr(
+        mutex_id, actual_span, name="mutex_id", upper_bound=_MAX_MUTEX_ID
+    )
+
+    kwargs: dict = {"pipe": pipe, "max_mutex_id": max_mutex_id}
+    if normalized_mutex_ids is not None:
+        kwargs["mutex_ids"] = normalized_mutex_ids
+    return _ir_core.create_op_call(f"{op_name}_dyn", [mutex_id_expr], kwargs, actual_span)
 
 
 def _create_mutex_dedup_op(
@@ -331,7 +391,6 @@ def _create_mutex_dedup_op(
     pipe: PipeType,
     mutex_id_exprs: list[Expr],
     mutex_id_owner_indices: list[int] | None = None,
-    mode: int = 0,
     mutex_ids_union: list | None = None,
     span: Span | None = None,
 ) -> Call:
@@ -349,19 +408,27 @@ def _create_mutex_dedup_op(
         mutex_id_exprs: List of N mutex_id IR expressions (already normalized to Expr).
         mutex_id_owner_indices: Owner index for every expression. Expressions with
             the same index come from one Tile and are guaranteed distinct.
-        mode: Mutex mode (default 0).
         mutex_ids_union: Union of all candidate mutex_id values (for ShouldSkipVPipeMutex).
         span: Source span.
     """
     actual_span = span if span is not None else _get_span_or_capture(span, frame_offset=3)
-    kwargs: dict = {"pipe": pipe, "mode": mode, "max_mutex_id": len(mutex_id_exprs)}
+    _validate_concrete_pipe(pipe, "pipe")
+    if not mutex_id_exprs:
+        raise ValueError("mutex_id requires at least one expression")
+    normalized_mutex_id_exprs = [
+        _normalize_integer_id_expr(mutex_id, actual_span, name="mutex_id", upper_bound=_MAX_MUTEX_ID)
+        for mutex_id in mutex_id_exprs
+    ]
+    _validate_max_mutex_id(len(mutex_id_exprs))
+    kwargs: dict = {"pipe": pipe, "max_mutex_id": len(mutex_id_exprs)}
     if mutex_id_owner_indices is not None:
         if len(mutex_id_owner_indices) != len(mutex_id_exprs):
             raise ValueError("mutex_id_owner_indices length must match mutex_id_exprs length")
         kwargs["mutex_id_owner_indices"] = list(mutex_id_owner_indices)
-    if mutex_ids_union is not None:
-        kwargs["mutex_ids"] = list(mutex_ids_union)
-    return _ir_core.create_op_call(f"{op_name}_dyn", mutex_id_exprs, kwargs, actual_span)
+    normalized_mutex_ids = _normalize_mutex_ids(mutex_ids_union)
+    if normalized_mutex_ids is not None:
+        kwargs["mutex_ids"] = normalized_mutex_ids
+    return _ir_core.create_op_call(f"{op_name}_dyn", normalized_mutex_id_exprs, kwargs, actual_span)
 
 
 def _mutex_op(
@@ -369,7 +436,6 @@ def _mutex_op(
     *,
     pipe: PipeType,
     mutex_id: int | Expr,
-    mode: int = 0,
     max_mutex_id: int = 2,
     mutex_ids: tuple | list | None = None,
     span: Span | None = None,
@@ -378,9 +444,8 @@ def _mutex_op(
     actual_span = _get_span_or_capture(span, frame_offset=2)
     return _create_mutex_op(
         op_name,
+        mutex_id,
         pipe=pipe,
-        mutex_id=mutex_id,
-        mode=mode,
         max_mutex_id=max_mutex_id,
         mutex_ids=mutex_ids,
         actual_span=actual_span,
@@ -391,7 +456,6 @@ def mutex_lock(
     *,
     pipe: PipeType,
     mutex_id: int | Expr,
-    mode: int = 0,
     max_mutex_id: int = 2,
     mutex_ids: tuple | list | None = None,
     span: Span | None = None,
@@ -403,25 +467,20 @@ def mutex_lock(
 
     Args:
         pipe: PipeType for which to acquire the lock (e.g. PipeType.MTE2).
-        mutex_id: MutexID (0-31, per Ascend C Mutex ISASI spec).
-            May be a static int/ConstInt or a dynamic IR Expr; when dynamic, the
-            codegen emits an if-chain of static `pto.get_buf` using
-            ``mutex_ids`` as the comparison targets.
-        mode: Optional mode attribute (default 0).
-        max_mutex_id: Upper bound of the unrolled range when ``mutex_id``
-            is dynamic. Defaults to 2 (ping-pong double buffering).
-        mutex_ids: Actual mutex id integer values for if-chain
-            (e.g. (2, 3)). When None, defaults to (0, 1, ..., max_mutex_id-1).
+        mutex_id: MutexID 0-31 as a Python int or integer scalar IR expression.
+        max_mutex_id: Candidate-count metadata used by compile-time mutex
+            analysis. Defaults to 2.
+        mutex_ids: Optional list or tuple of candidate MutexID values used by
+            compile-time mutex analysis.
         span: Optional source span (auto-captured when omitted).
 
     Returns:
-        Call expression for system.mutex_lock / system.mutex_lock_dyn.
+        Call expression for system.mutex_lock_dyn.
     """
     return _mutex_op(
         "system.mutex_lock",
         pipe=pipe,
         mutex_id=mutex_id,
-        mode=mode,
         max_mutex_id=max_mutex_id,
         mutex_ids=mutex_ids,
         span=span,
@@ -432,7 +491,6 @@ def mutex_unlock(
     *,
     pipe: PipeType,
     mutex_id: int | Expr,
-    mode: int = 0,
     max_mutex_id: int = 2,
     mutex_ids: tuple | list | None = None,
     span: Span | None = None,
@@ -445,19 +503,19 @@ def mutex_unlock(
     Args:
         pipe: PipeType for which to release the lock.
         mutex_id: MutexID passed to the paired :func:`mutex_lock`.
-        mode: Optional mode attribute (default 0).
-        max_mutex_id: Upper bound of the unrolled range when dynamic.
-        mutex_ids: Actual mutex id integer values for if-chain.
+        max_mutex_id: Candidate-count metadata used by compile-time mutex
+            analysis. Defaults to 2.
+        mutex_ids: Optional list or tuple of candidate MutexID values used by
+            compile-time mutex analysis.
         span: Optional source span (auto-captured when omitted).
 
     Returns:
-        Call expression for system.mutex_unlock / system.mutex_unlock_dyn.
+        Call expression for system.mutex_unlock_dyn.
     """
     return _mutex_op(
         "system.mutex_unlock",
         pipe=pipe,
         mutex_id=mutex_id,
-        mode=mode,
         max_mutex_id=max_mutex_id,
         mutex_ids=mutex_ids,
         span=span,

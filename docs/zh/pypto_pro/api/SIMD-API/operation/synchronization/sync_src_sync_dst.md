@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-flag式流水同步：置位/等待flag，必须成对使用，约束pipe之间的执行顺序。
+AI Core内部的flag式流水同步。`sync_src`在`set_pipe`上置位flag，`sync_dst`使`wait_pipe`等待同一flag，用于约束两条具体pipe之间的执行顺序。两个接口必须成对使用。
 
 ## 函数原型
 
@@ -27,17 +27,24 @@ pypto_pro.language.system.sync_dst(*, set_pipe, wait_pipe, event_id)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `set_pipe` | 输入 | 置位flag的pipe |
-| `wait_pipe` | 输入 | 等待flag的pipe |
-| `event_id` | 输入 | 事件id |
+| `set_pipe` | 输入 | `pypto_pro.language.PipeType`，置位flag的pipe |
+| `wait_pipe` | 输入 | `pypto_pro.language.PipeType`，等待flag的pipe |
+| `event_id` | 输入 | Python整数常量，或整数类型的运行时标量表达式 |
 
 ## 参数范围
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `set_pipe` | 输入 | `pypto_pro.language.PipeType.MTE2`（GM→UB搬入）/ `pypto_pro.language.PipeType.V`（向量计算）/ `pypto_pro.language.PipeType.MTE3`（UB→GM搬出）/ `pypto_pro.language.PipeType.S`（标量流水）/ `pypto_pro.language.PipeType.MTE1`（L1→L0搬运）/ `pypto_pro.language.PipeType.M`（矩阵计算）/ `pypto_pro.language.PipeType.FIX`（fixpipe） |
-| `wait_pipe` | 输入 | 取值同`set_pipe`<br>须与`set_pipe`不同，否则无意义 |
-| `event_id` | 输入 | 整型常量（静态）或运行时整型标量表达式（动态），有效取值为0～15；动态表达式由调用方保证运行时不越界<br>同一对pipe之间不同event_id互不干扰，可用于区分多步同步 |
+| `set_pipe` | 输入 | `pypto_pro.language.PipeType.MTE2`（GM→UB/L1搬入）/ `V`（向量计算）/ `MTE3`（UB→GM搬出）/ `S`（标量流水）/ `MTE1`（L1→L0搬运）/ `M`（矩阵计算）/ `FIX`（fixpipe）<br>必须是一条具体pipe，不允许`PipeType.ALL` |
+| `wait_pipe` | 输入 | 取值同`set_pipe`；必须与`set_pipe`不同，否则前端报错 |
+| `event_id` | 输入 | 静态ID必须是Python `int`（不接受`bool`），取值范围为`[0, 7]`<br>动态ID必须是整数类型的Scalar表达式；前端无法在编译期判定其运行时数值，用户必须保证其始终在`[0, 7]`内 |
+
+## 配对与复用规则
+
+- 一对`sync_src`/`sync_dst`的`set_pipe`、`wait_pipe`和`event_id`必须完全一致，且必须先置位、后等待。
+- 同一event ID只能在前一次flag已被对应的`sync_dst`消费后复用。过早复用、漏写任一侧或两侧所在控制流路径不一致，都可能造成数据竞争或死锁。
+- 前端只校验每次调用的参数，不会在分支、循环或函数边界上自动证明两个调用已正确配对。
+- 与`auto_mutex=True`并用时，显式flag同步仍会保留；应确保它与自动mutex分别负责明确的依赖，不要为同一依赖重复同步。
 
 ## 典型同步模式
 

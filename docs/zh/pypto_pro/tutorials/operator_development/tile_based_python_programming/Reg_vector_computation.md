@@ -106,7 +106,7 @@ def add_kernel(
 
 ## 同步与依赖
 
-- GM↔UB搬运与Vector/VF计算之间的跨Pipe依赖，由TileGroup + `auto_mutex=True`自动管理，或使用`pl.system.sync_src` / `pl.system.sync_dst`手工管理。
+- GM↔UB搬运与Vector/VF计算之间的跨Pipe依赖，由TileGroup + `auto_mutex=True`自动管理，或使用`pl.system.sync_src` / `pl.system.sync_dst`手动管理。
 - VF函数内存在UB写后读、写后写等局部依赖时，按接口要求使用`vf.mem_bar`指定对应模式。
 - Register File中存在直接数据依赖的`vf.*`表达式应保持清晰的数据流关系，避免在未初始化寄存器上执行计算。
 

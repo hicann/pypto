@@ -123,7 +123,7 @@ PyPTO Pro提供两种Tile分配方式，对应不同的内存管理与同步复�
 | 策略 | 分配方式 | 同步管理 | 适用场景 |
 |:---|:---|:---|:---|
 | **自动同步（推荐）** | `pl.make_tile_group` + `auto_mutex=True` | 框架自动插入`mutex_lock`/`mutex_unlock` | 大多数Kernel；流水化/重叠的循环 |
-| **手动同步** | `pl.make_tile` | 显式插入`sync_src`/`sync_dst`，精确控制同步时序 | 需要精确放置同步事件的紧凑流水线 |
+| **手动同步** | `pl.make_tile` | 显式插入`sync_src`/`sync_dst`、barrier或`mutex_lock`/`mutex_unlock` | 需要精确放置同步操作的流水线 |
 
 常规单缓冲、双缓冲及N缓冲场景使用`make_tile_group`并启用`auto_mutex=True`；需要精确控制同步事件及插入位置的场景使用`make_tile`和显式同步。两种方式可在同一Kernel中使用。
 
@@ -141,12 +141,14 @@ AI Core内部存在多条异步并行流水，当一条流水生产的数据被�
 
 通过`@pl.jit(auto_mutex=True)`启用。框架根据TileGroup中每个Tile的`mutex_id`，在每次使用轮转Tile前后自动插入`mutex_lock`/`mutex_unlock`。该方式适用于常规单缓冲、双缓冲及N缓冲场景。
 
-### 手动同步（sync_src / sync_dst）
+### 手动同步
 
-使用`make_tile`创建缓冲区时，跨Pipe依赖通过显式的`pl.system.sync_src`/`pl.system.sync_dst`对进行同步：
+跨Pipe生产者/消费者依赖可通过显式的`pl.system.sync_src`/`pl.system.sync_dst`对进行同步：
 
 - `sync_src(set_pipe, wait_pipe, event_id)` —— 生产方SET flag
 - `sync_dst(set_pipe, wait_pipe, event_id)` —— 消费方WAIT flag
+
+需要显式控制缓冲区互斥时可使用[`mutex_lock`/`mutex_unlock`](../../../api/SIMD-API/operation/synchronization/mutex_lock_mutex_unlock.md)；需要等待指定pipe或本AI Core全部pipe上的前序操作完成时可使用[`bar_*`](../../../api/SIMD-API/operation/synchronization/barrier.md)。
 
 PyPTO Pro的流水类型（`pl.PipeType`）与硬件指令流水对应关系：
 
@@ -162,7 +164,7 @@ PyPTO Pro的流水类型（`pl.PipeType`）与硬件指令流水对应关系：
 手动同步的典型模式为：搬入后插入`MTE2→V`同步确保数据就绪再计算，计算后插入`V→MTE3`同步确保计算完成再搬出。在循环场景下还需考虑反向同步（循环间依赖），防止当前迭代覆盖上一迭代未完成的数据。
 
 > [!NOTE]说明
-> 手动同步中`event_id`取值范围`[0, 15]`，仅在上一次使用已被消费后才可复用同一id。手动同步属于ISASI类别的高级用法，不保证跨硬件版本兼容。
+> `sync_src`/`sync_dst`的参数范围、配对及event ID复用要求参见[`sync_src`/`sync_dst`](../../../api/SIMD-API/operation/synchronization/sync_src_sync_dst.md)。手动同步属于ISASI类别的高级用法，不保证跨硬件版本兼容。
 
 ## TilingData
 

@@ -317,26 +317,26 @@ TEST(BackendCceOpsTest, SetVecMask)
 
 TEST(BackendCceOpsTest, SyncSrc)
 {
-    Kwargs kwargs = {{"set_pipe", 4}, {"wait_pipe", 5}, {"event_id", 3}};
-    auto call = std::make_shared<const ir::Call>("system.sync_src", std::vector<ir::ExprPtr>{}, kwargs,
-                                                 ir::Span::Unknown());
+    Kwargs kwargs = {{"set_pipe", 4}, {"wait_pipe", 5}};
+    auto call = std::make_shared<const ir::Call>("system.sync_src_dyn", std::vector<ir::ExprPtr>{MakeConstInt(3)},
+                                                 kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
-    EXPECT_NE(generated.find("set_flag(PIPE_V, PIPE_S, EVENT_ID3);"), std::string::npos);
+    EXPECT_NE(generated.find("set_flag(PIPE_V, PIPE_S, (event_t)3);"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, SyncDst)
 {
-    Kwargs kwargs = {{"set_pipe", 4}, {"wait_pipe", 5}, {"event_id", 3}};
-    auto call = std::make_shared<const ir::Call>("system.sync_dst", std::vector<ir::ExprPtr>{}, kwargs,
-                                                 ir::Span::Unknown());
+    Kwargs kwargs = {{"set_pipe", 4}, {"wait_pipe", 5}};
+    auto call = std::make_shared<const ir::Call>("system.sync_dst_dyn", std::vector<ir::ExprPtr>{MakeConstInt(3)},
+                                                 kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
-    EXPECT_NE(generated.find("wait_flag(PIPE_V, PIPE_S, EVENT_ID3);"), std::string::npos);
+    EXPECT_NE(generated.find("wait_flag(PIPE_V, PIPE_S, (event_t)3);"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, SyncSupportsEveryPipeKind)
@@ -348,11 +348,10 @@ TEST(BackendCceOpsTest, SyncSupportsEveryPipeKind)
                                                                      {ir::PipeType::ALL, "PIPE_ALL"}};
 
     for (const auto& [pipe, pipe_name] : pipes) {
-        Kwargs kwargs = {
-            {"set_pipe", static_cast<int>(pipe)}, {"wait_pipe", static_cast<int>(ir::PipeType::S)}, {"event_id", 1}};
-        auto call = std::make_shared<const ir::Call>("system.sync_src", std::vector<ir::ExprPtr>{}, kwargs,
-                                                     ir::Span::Unknown());
-        EXPECT_NE(RunCodegen("system.sync_src", call).find("set_flag(" + pipe_name + ", PIPE_S, EVENT_ID1);"),
+        Kwargs kwargs = {{"set_pipe", static_cast<int>(pipe)}, {"wait_pipe", static_cast<int>(ir::PipeType::S)}};
+        auto call = std::make_shared<const ir::Call>("system.sync_src_dyn", std::vector<ir::ExprPtr>{MakeConstInt(1)},
+                                                     kwargs, ir::Span::Unknown());
+        EXPECT_NE(RunCodegen("system.sync_src_dyn", call).find("set_flag(" + pipe_name + ", PIPE_S, (event_t)1);"),
                   std::string::npos);
     }
 }
@@ -364,25 +363,27 @@ TEST(BackendCceOpsTest, SyncSupportsEveryPipeKind)
 TEST(BackendCceOpsTest, SyncSrcDyn)
 {
     Kwargs kwargs = {{"set_pipe", 3}, {"wait_pipe", 4}};
-    auto call = std::make_shared<const ir::Call>("system.sync_src_dyn", std::vector<ir::ExprPtr>{MakeConstInt(5)},
-                                                 kwargs, ir::Span::Unknown());
+    auto event_id = MakeVar("event_id", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
+    auto call = std::make_shared<const ir::Call>("system.sync_src_dyn", std::vector<ir::ExprPtr>{event_id}, kwargs,
+                                                 ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
-    auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
-    EXPECT_NE(generated.find("set_flag(PIPE_M, PIPE_V, (event_t)5);"), std::string::npos);
+    auto generated = codegen.GenerateSingle(MakeProgram(body, {event_id}), "a3");
+    EXPECT_NE(generated.find("set_flag(PIPE_M, PIPE_V, (event_t)event_id_0);"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, SyncDstDyn)
 {
     Kwargs kwargs = {{"set_pipe", 3}, {"wait_pipe", 4}};
-    auto call = std::make_shared<const ir::Call>("system.sync_dst_dyn", std::vector<ir::ExprPtr>{MakeConstInt(5)},
-                                                 kwargs, ir::Span::Unknown());
+    auto event_id = MakeVar("event_id", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
+    auto call = std::make_shared<const ir::Call>("system.sync_dst_dyn", std::vector<ir::ExprPtr>{event_id}, kwargs,
+                                                 ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
-    auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
-    EXPECT_NE(generated.find("wait_flag(PIPE_M, PIPE_V, (event_t)5);"), std::string::npos);
+    auto generated = codegen.GenerateSingle(MakeProgram(body, {event_id}), "a3");
+    EXPECT_NE(generated.find("wait_flag(PIPE_M, PIPE_V, (event_t)event_id_0);"), std::string::npos);
 }
 
 // ============================================================================
@@ -564,9 +565,9 @@ TEST(BackendCceOpsTest, CubeCrossCoreDynamicA5IntraBlockSignalsBothVectorSubcore
 
 TEST(BackendCceOpsTest, MutexLock)
 {
-    Kwargs kwargs = {{"pipe", 5}, {"mutex_id", 1}, {"mode", 0}};
-    auto call = std::make_shared<const ir::Call>("system.mutex_lock", std::vector<ir::ExprPtr>{}, kwargs,
-                                                 ir::Span::Unknown());
+    Kwargs kwargs = {{"pipe", 5}};
+    auto call = std::make_shared<const ir::Call>("system.mutex_lock_dyn", std::vector<ir::ExprPtr>{MakeConstInt(1)},
+                                                 kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
@@ -576,9 +577,9 @@ TEST(BackendCceOpsTest, MutexLock)
 
 TEST(BackendCceOpsTest, MutexUnlock)
 {
-    Kwargs kwargs = {{"pipe", 5}, {"mutex_id", 1}, {"mode", 0}};
-    auto call = std::make_shared<const ir::Call>("system.mutex_unlock", std::vector<ir::ExprPtr>{}, kwargs,
-                                                 ir::Span::Unknown());
+    Kwargs kwargs = {{"pipe", 5}};
+    auto call = std::make_shared<const ir::Call>("system.mutex_unlock_dyn", std::vector<ir::ExprPtr>{MakeConstInt(1)},
+                                                 kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
@@ -588,7 +589,7 @@ TEST(BackendCceOpsTest, MutexUnlock)
 
 TEST(BackendCceOpsTest, MutexLockDyn)
 {
-    Kwargs kwargs = {{"pipe", 5}, {"mode", 0}};
+    Kwargs kwargs = {{"pipe", 5}};
     auto call = std::make_shared<const ir::Call>("system.mutex_lock_dyn", std::vector<ir::ExprPtr>{MakeConstInt(2)},
                                                  kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
@@ -600,7 +601,7 @@ TEST(BackendCceOpsTest, MutexLockDyn)
 
 TEST(BackendCceOpsTest, MutexUnlockDyn)
 {
-    Kwargs kwargs = {{"pipe", 5}, {"mode", 0}};
+    Kwargs kwargs = {{"pipe", 5}};
     auto call = std::make_shared<const ir::Call>("system.mutex_unlock_dyn", std::vector<ir::ExprPtr>{MakeConstInt(2)},
                                                  kwargs, ir::Span::Unknown());
     auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
@@ -612,7 +613,7 @@ TEST(BackendCceOpsTest, MutexUnlockDyn)
 
 TEST(BackendCceOpsTest, MutexDynDedupUnlocksFirstOccurrencesInInputOrder)
 {
-    Kwargs kwargs = {{"pipe", 5}, {"mode", 0}};
+    Kwargs kwargs = {{"pipe", 5}};
     auto id0 = MakeVar("id0", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
     auto id1 = MakeVar("id1", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
     std::vector<ir::ExprPtr> ids = {id0, id1, id0};
@@ -640,7 +641,7 @@ TEST(BackendCceOpsTest, MutexDynDedupUnlocksFirstOccurrencesInInputOrder)
 
 TEST(BackendCceOpsTest, MutexDynSkipsDedupWithinOneTile)
 {
-    Kwargs kwargs = {{"pipe", 5}, {"mode", 0}, {"mutex_id_owner_indices", std::vector<int>{0, 0, 1}}};
+    Kwargs kwargs = {{"pipe", 5}, {"mutex_id_owner_indices", std::vector<int>{0, 0, 1}}};
     auto output0 = MakeVar("output0", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
     auto output1 = MakeVar("output1", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));
     auto source = MakeVar("source", std::make_shared<const ir::ScalarType>(ir::DataType::INT32));

@@ -86,7 +86,7 @@ Tile是PyPTO Pro对片上缓冲区的编程抽象。[`TileType`](../../api/SIMD-
 - **计算数据流**：Vector/Cube访问Local Memory中的数据完成计算，DMA负责Local Memory与Global Memory之间以及各级Local Memory之间的数据流转。
 - **同步信号流**：当不同Pipe的异步任务存在数据依赖或顺序依赖时，通过同步信号约束执行先后；同步信号不是数据本身的流向。
 
-PyPTO Pro推荐使用`pl.make_tile_group`配合`@pl.jit(auto_mutex=True)`，由编译器根据Tile的mutex元数据自动插入跨Pipe同步。使用单个`pl.make_tile`并需要手工控制依赖时，可调用`pl.system.sync_src` / `pl.system.sync_dst`。详细说明参见[Tile矢量计算](../operator_development/tile_based_python_programming/Tile_vector_computation.md)和[`sync_src` / `sync_dst`](../../api/SIMD-API/operation/synchronization/sync_src_sync_dst.md)。
+PyPTO Pro推荐使用`pl.make_tile_group`配合`@pl.jit(auto_mutex=True)`，由编译器根据Tile的mutex元数据自动插入跨Pipe同步。使用单个`pl.make_tile`并需要手动控制依赖时，可调用`pl.system.sync_src` / `pl.system.sync_dst`。详细说明参见[Tile矢量计算](../operator_development/tile_based_python_programming/Tile_vector_computation.md)和[`sync_src` / `sync_dst`](../../api/SIMD-API/operation/synchronization/sync_src_sync_dst.md)。
 
 ## 多核架构
 

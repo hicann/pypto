@@ -110,7 +110,7 @@ def matmul_kernel(a: pl.Tensor[[pl.DYNAMIC, TILE_K], pl.DT_FP16],
 |:---|:---|:---|
 | 缓冲区组织 | 单块固定缓冲区，使用`addr`和`size` | 一组轮转缓冲区，使用`addrs`和`mutex_ids` |
 | 缓冲区选择 | 直接使用Tile变量 | 通过`next()`、`current()`、`previous()`选择 |
-| 跨Pipe同步 | 手工插入`sync_src`/`sync_dst` | 配合`auto_mutex=True`自动插入 |
+| 跨Pipe同步 | 手动插入`sync_src`/`sync_dst` | 带mutex元数据且配合`auto_mutex=True`时自动插入 |
 | 适用场景 | 需要精确控制同步时序 | 单缓冲、双缓冲及N缓冲等常规场景 |
 
 常规单缓冲、双缓冲及N缓冲场景使用`make_tile_group`并启用`auto_mutex=True`；需要精确控制同步事件及插入位置的场景使用`make_tile`和显式同步。
@@ -206,7 +206,7 @@ with pl.section_cube():
     pl.store(out, acc, [0, 0])
 ```
 
-`sync_src`由生产流水线SET flag，`sync_dst`由消费流水线WAIT flag；两者的`set_pipe`、`wait_pipe`和`event_id`必须一致。同一个event id只能在上一次同步已经消费后复用。循环复用Tile时还需处理消费完成后才能覆盖缓冲区的反向依赖；常规流水化场景使用`make_tile_group`和自动同步。
+`sync_src`由生产流水线SET flag，`sync_dst`由消费流水线WAIT flag；两者的`set_pipe`、`wait_pipe`和`event_id`必须一致。静态`event_id`取值范围为`[0, 7]`；动态整数Scalar的运行时数值也必须在该范围内。同一ID只能在上一次同步已经消费后复用。循环复用Tile时还需处理消费完成后才能覆盖缓冲区的反向依赖；常规流水化场景使用`make_tile_group`和自动同步。
 
 > [!NOTE]说明
 > 当`matmul`/`matmul_acc`使用了`phase`参数时，M流水与FIX流水之间的同步由硬件unit_flag完成，框架不会自动插入该段同步。

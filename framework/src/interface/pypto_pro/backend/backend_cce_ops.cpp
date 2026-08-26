@@ -1172,20 +1172,6 @@ static std::string PipeTypeToCCEString(ir::PipeType pipe)
     }
 }
 
-static std::string MakeSyncCodegenCCE(const std::string& isa_name, const ir::CallPtr& op,
-                                      codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    auto set_pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("set_pipe"));
-    auto wait_pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("wait_pipe"));
-    int event_id = op->GetKwarg<int>("event_id");
-    std::string set_pipe_str = PipeTypeToCCEString(set_pipe);
-    std::string wait_pipe_str = PipeTypeToCCEString(wait_pipe);
-    std::string event_id_str = "EVENT_ID" + std::to_string(event_id);
-    codegen.Emit(isa_name + "(" + set_pipe_str + ", " + wait_pipe_str + ", " + event_id_str + ");");
-    return "";
-}
-
 static std::string EnumValueName(const char* full_name)
 {
     const char* sep = std::strrchr(full_name, ':');
@@ -1261,18 +1247,6 @@ static std::string MakeDcciCodegenCCE(const ir::CallPtr& op, codegen::CodegenBas
                  dst_attr + ");");
     return "";
 }
-
-REGISTER_BACKEND_OP(BackendCCE, "system.sync_src")
-    .set_pipe(ir::PipeType::S)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeSyncCodegenCCE("set_flag", op, codegen);
-    });
-
-REGISTER_BACKEND_OP(BackendCCE, "system.sync_dst")
-    .set_pipe(ir::PipeType::S)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeSyncCodegenCCE("wait_flag", op, codegen);
-    });
 
 REGISTER_BACKEND_OP(BackendCCE, "system.bar_m")
     .set_pipe(ir::PipeType::S)
@@ -1499,53 +1473,32 @@ REGISTER_BACKEND_OP(BackendCCE, "system.wait_cross_core_dyn")
     });
 
 // ============================================================================
-// Dynamic event_id sync operations
+// Flag synchronization operations
 // ============================================================================
 
-static std::string MakeSyncSrcDynCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+static std::string MakeSyncCodegenCCE(const std::string& intrinsic, const ir::CallPtr& op,
+                                      codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     auto set_pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("set_pipe"));
     auto wait_pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("wait_pipe"));
-    std::string event_id = codegen.GetExprAsCode(op->args_[0]);
     std::string set_pipe_str = PipeTypeToCCEString(set_pipe);
     std::string wait_pipe_str = PipeTypeToCCEString(wait_pipe);
-    // EventId array access (contains '[') already returns event_t —no cast needed
-    if (event_id.find('[') != std::string::npos) {
-        codegen.Emit("set_flag(" + set_pipe_str + ", " + wait_pipe_str + ", " + event_id + ");");
-    } else {
-        codegen.Emit("set_flag(" + set_pipe_str + ", " + wait_pipe_str + ", (event_t)" + event_id + ");");
-    }
+    std::string event_id = codegen.GetExprAsCode(op->args_[0]);
+    codegen.Emit(intrinsic + "(" + set_pipe_str + ", " + wait_pipe_str + ", (event_t)" + event_id + ");");
     return "";
 }
 
 REGISTER_BACKEND_OP(BackendCCE, "system.sync_src_dyn")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeSyncSrcDynCodegenCCE(op, codegen);
+        return MakeSyncCodegenCCE("set_flag", op, codegen);
     });
-
-static std::string MakeSyncDstDynCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    auto set_pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("set_pipe"));
-    auto wait_pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("wait_pipe"));
-    std::string event_id = codegen.GetExprAsCode(op->args_[0]);
-    std::string set_pipe_str = PipeTypeToCCEString(set_pipe);
-    std::string wait_pipe_str = PipeTypeToCCEString(wait_pipe);
-    // EventId array access (contains '[') already returns event_t —no cast needed
-    if (event_id.find('[') != std::string::npos) {
-        codegen.Emit("wait_flag(" + set_pipe_str + ", " + wait_pipe_str + ", " + event_id + ");");
-    } else {
-        codegen.Emit("wait_flag(" + set_pipe_str + ", " + wait_pipe_str + ", (event_t)" + event_id + ");");
-    }
-    return "";
-}
 
 REGISTER_BACKEND_OP(BackendCCE, "system.sync_dst_dyn")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeSyncDstDynCodegenCCE(op, codegen);
+        return MakeSyncCodegenCCE("wait_flag", op, codegen);
     });
 
 REGISTER_BACKEND_OP(BackendCCE, "debug.dump_tensor")
@@ -1869,41 +1822,22 @@ REGISTER_BACKEND_OP(BackendCCE, "block.subview")
 // API: get_buf(PIPE_MTE2, mutexId, 0);  rls_buf(PIPE_MTE2, mutexId, 0);
 // ============================================================================
 
-static int GetMutexModeCCE(const ir::CallPtr& op)
-{
-    int mode = 0;
-    for (const auto& [key, value] : op->kwargs_) {
-        if (key == "mode")
-            mode = std::any_cast<int>(value);
-    }
-    return mode;
-}
-
 static std::string MakeMutexBufCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base,
-                                          const std::string& intrinsic, bool is_dynamic)
+                                          const std::string& intrinsic)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     auto pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("pipe"));
 
-    std::string static_mutex_id_expr;
-    std::vector<int> mutex_ids;
-    if (is_dynamic) {
-        mutex_ids = mutex_id::GetMutexIdsFromKwargs(op);
-    } else {
-        auto mutex_id = op->GetKwarg<int>("mutex_id");
-        mutex_ids = {mutex_id};
-        static_mutex_id_expr = std::to_string(mutex_id);
-    }
+    std::vector<int> mutex_ids = mutex_id::GetMutexIds(op);
     if (codegen.ShouldSkipVPipeMutex(pipe, mutex_ids))
         return "";
 
-    int mode = GetMutexModeCCE(op);
     std::string pipe_str = PipeTypeToCCEString(pipe);
 
     // N-way cross-Tile dedup: mutex IDs owned by one Tile are already known distinct.
     // Compare only across Tiles so each unique mutex_id is acquired and released once.
     // Without cross-Tile dedup, two get_buf(pipe, same_id) on the same pipe hang the hardware.
-    if (is_dynamic && op->args_.size() >= 2) {
+    if (op->args_.size() >= 2) {
         std::vector<std::string> id_exprs;
         id_exprs.reserve(op->args_.size());
         for (const auto& arg : op->args_) {
@@ -1935,11 +1869,11 @@ static std::string MakeMutexBufCodegenCCE(const ir::CallPtr& op, codegen::Codege
                 condition += "(" + id_exprs[i] + " != " + id_exprs[j] + ")";
             }
             if (condition.empty()) {
-                codegen.Emit(intrinsic + "(" + pipe_str + ", " + id_exprs[i] + ", " + std::to_string(mode) + ");");
+                codegen.Emit(intrinsic + "(" + pipe_str + ", " + id_exprs[i] + ", 0);");
                 return;
             }
             codegen.Emit("if (" + condition + ") {");
-            codegen.Emit("  " + intrinsic + "(" + pipe_str + ", " + id_exprs[i] + ", " + std::to_string(mode) + ");");
+            codegen.Emit("  " + intrinsic + "(" + pipe_str + ", " + id_exprs[i] + ", 0);");
             codegen.Emit("}");
         };
         for (size_t i = 0; i < id_exprs.size(); ++i)
@@ -1947,41 +1881,19 @@ static std::string MakeMutexBufCodegenCCE(const ir::CallPtr& op, codegen::Codege
         return "";
     }
 
-    std::string mutex_id_expr = is_dynamic ? codegen.GetExprAsCode(op->args_[0]) : static_mutex_id_expr;
-    codegen.Emit(intrinsic + "(" + pipe_str + ", " + mutex_id_expr + ", " + std::to_string(mode) + ");");
+    std::string mutex_id_expr = codegen.GetExprAsCode(op->args_[0]);
+    codegen.Emit(intrinsic + "(" + pipe_str + ", " + mutex_id_expr + ", 0);");
     return "";
 }
 
-static std::string MakeMutexLockCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    return MakeMutexBufCodegenCCE(op, codegen_base, "get_buf", false);
-}
-
-static std::string MakeMutexUnlockCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    return MakeMutexBufCodegenCCE(op, codegen_base, "rls_buf", false);
-}
-
-REGISTER_BACKEND_OP(BackendCCE, "system.mutex_lock")
-    .set_pipe(ir::PipeType::S)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeMutexLockCodegenCCE(op, codegen);
-    });
-
-REGISTER_BACKEND_OP(BackendCCE, "system.mutex_unlock")
-    .set_pipe(ir::PipeType::S)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeMutexUnlockCodegenCCE(op, codegen);
-    });
-
 static std::string MakeMutexLockDynCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
-    return MakeMutexBufCodegenCCE(op, codegen_base, "get_buf", true);
+    return MakeMutexBufCodegenCCE(op, codegen_base, "get_buf");
 }
 
 static std::string MakeMutexUnlockDynCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
-    return MakeMutexBufCodegenCCE(op, codegen_base, "rls_buf", true);
+    return MakeMutexBufCodegenCCE(op, codegen_base, "rls_buf");
 }
 
 REGISTER_BACKEND_OP(BackendCCE, "system.mutex_lock_dyn")

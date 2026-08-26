@@ -633,12 +633,12 @@ def test_simt_launch_auto_mutex_inserts_pipe_v_lock_unlock():
     program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
     ir_str = str(program)
 
-    assert "system.mutex_lock" in ir_str
-    assert "system.mutex_unlock" in ir_str
+    assert "system.mutex_lock_dyn" in ir_str
+    assert "system.mutex_unlock_dyn" in ir_str
     assert "simt.launch" in ir_str
 
     kernel_ir = str(program.get_function("kernel"))
-    lock_pos = kernel_ir.index("system.mutex_lock")
+    lock_pos = kernel_ir.index("system.mutex_lock_dyn")
     launch_pos = kernel_ir.index("simt.launch")
-    unlock_pos = kernel_ir.index("system.mutex_unlock", launch_pos)
+    unlock_pos = kernel_ir.index("system.mutex_unlock_dyn", launch_pos)
     assert lock_pos < launch_pos < unlock_pos

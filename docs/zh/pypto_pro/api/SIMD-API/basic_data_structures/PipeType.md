@@ -28,8 +28,8 @@
 | `pypto_pro.language.PipeType.M` | 矩阵计算流水 | Cube/MAD（matmul计算） |
 | `pypto_pro.language.PipeType.V` | 向量计算流水 | element-wise、reduce、cast等向量操作 |
 | `pypto_pro.language.PipeType.S` | 标量流水 | getval/setval等标量操作 |
-| `pypto_pro.language.PipeType.FIX` | fixpipe流水 | 累加器结果读出（L0C → UB/GM）、quantization/反量化等 |
-| `pypto_pro.language.PipeType.ALL` | 全部流水 | 用于全局同步（bar_all） |
+| `pypto_pro.language.PipeType.FIX` | fixpipe流水 | 累加器结果读出（L0C → UB/GM/L1）、quantization/反量化等 |
+| `pypto_pro.language.PipeType.ALL` | 本AI Core的全部流水 | V/M/MTE1/MTE2/MTE3/FIX等流水 |
 
 ## 补充说明
 

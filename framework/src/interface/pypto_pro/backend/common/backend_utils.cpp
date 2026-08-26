@@ -19,6 +19,7 @@
 #include "core/logging.h"
 #include "ir/kind_traits.h"
 #include "ir/memref.h"
+#include "ir/scalar_expr.h"
 #include "tilefwk/error.h"
 
 namespace pypto {
@@ -42,7 +43,7 @@ int FindIndex(const std::string& mode, const std::string& op_name)
 
 namespace mutex_id {
 
-std::vector<int> GetMutexIdsFromKwargs(const ir::CallPtr& op)
+std::vector<int> GetMutexIds(const ir::CallPtr& op)
 {
     std::vector<int> values;
     for (const auto& [key, value] : op->kwargs_) {
@@ -51,6 +52,19 @@ std::vector<int> GetMutexIdsFromKwargs(const ir::CallPtr& op)
             return values;
         }
     }
+    bool all_ids_are_constant = !op->args_.empty();
+    for (const auto& arg : op->args_) {
+        if (auto id = ir::As<ir::ConstInt>(arg)) {
+            values.push_back(static_cast<int>(id->value_));
+        } else {
+            all_ids_are_constant = false;
+            break;
+        }
+    }
+    if (all_ids_are_constant) {
+        return values;
+    }
+    values.clear();
     int max_id = 2;
     for (const auto& [key, value] : op->kwargs_) {
         if (key == "max_mutex_id") {

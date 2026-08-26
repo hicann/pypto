@@ -35,7 +35,7 @@ def _parse_kernel(kernel_def) -> ir.Program:
     return kernel_def.parse_target_program(ir.SectionKind.Vector)[0]
 
 
-def test_static_mutex_lock_unlock():
+def test_constant_mutex_lock_unlock_uses_dynamic_ir():
     @pl.kernel
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -45,8 +45,8 @@ def test_static_mutex_lock_unlock():
         pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=0)
 
     ir_str = _ir_to_str(_parse_kernel(k))
-    assert "system.mutex_lock" in ir_str
-    assert "system.mutex_unlock" in ir_str
+    assert "system.mutex_lock_dyn" in ir_str
+    assert "system.mutex_unlock_dyn" in ir_str
 
 
 def test_keyword_form():
@@ -59,8 +59,8 @@ def test_keyword_form():
         pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=1)
 
     ir_str = _ir_to_str(_parse_kernel(k))
-    assert "system.mutex_lock" in ir_str
-    assert "system.mutex_unlock" in ir_str
+    assert "system.mutex_lock_dyn" in ir_str
+    assert "system.mutex_unlock_dyn" in ir_str
 
 
 def test_contiguous_addr_auto_offset():
@@ -767,4 +767,26 @@ def test_make_tile_group_rejects_duplicate_id_for_one_tile():
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[2, 2]])
 
     with pytest.raises(ParserTypeError, match="must not contain duplicates"):
+        _parse_kernel(k)
+
+
+@pytest.mark.parametrize("mutex_ids", [[True], [[0, False]]])
+def test_make_tile_group_rejects_bool_mutex_id(mutex_ids):
+    @pl.kernel(auto_mutex=True)
+    def k(gm_q: pl.Tensor[[32], pl.DT_FP16]):
+        tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+        pl.make_tile_group(type=tt, addrs=0, mutex_ids=mutex_ids)
+
+    with pytest.raises(ParserTypeError, match=r"mutex_ids must be ints in \[0,31\]"):
+        _parse_kernel(k)
+
+
+@pytest.mark.parametrize("mutex_ids", [1, {0, 1}], ids=["integer", "set"])
+def test_make_tile_group_rejects_wrong_mutex_ids_container_type(mutex_ids):
+    @pl.kernel(auto_mutex=True)
+    def k(gm_q: pl.Tensor[[32], pl.DT_FP16]):
+        tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+        pl.make_tile_group(type=tt, addrs=0, mutex_ids=mutex_ids)
+
+    with pytest.raises(ParserTypeError, match="mutex_ids must be a list, tuple, or None"):
         _parse_kernel(k)

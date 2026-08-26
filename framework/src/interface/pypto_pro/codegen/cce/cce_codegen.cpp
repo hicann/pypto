@@ -2657,36 +2657,18 @@ public:
     void CollectMutexInfo(const ir::CallPtr& op)
     {
         const std::string& name = op->name_;
-        bool is_mutex = (name == "system.mutex_lock" || name == "system.mutex_unlock" ||
-                         name == "system.mutex_lock_dyn" || name == "system.mutex_unlock_dyn");
+        bool is_mutex = (name == "system.mutex_lock_dyn" || name == "system.mutex_unlock_dyn");
         if (!is_mutex) {
             return;
         }
         ir::PipeType pipe = ir::PipeType::S;
-        int static_bid = -1;
-        std::vector<int> dyn_bids;
         for (const auto& [key, value] : op->kwargs_) {
             if (key == "pipe")
                 pipe = static_cast<ir::PipeType>(std::any_cast<int>(value));
-            if (key == "mutex_id")
-                static_bid = std::any_cast<int>(value);
-            if (key == "mutex_ids")
-                dyn_bids = std::any_cast<std::vector<int>>(value);
         }
         auto record = [&](int bid) { mutex_pipes[bid].insert(pipe); };
-        if (static_bid >= 0)
-            record(static_bid);
-        for (int bid : dyn_bids)
+        for (int bid : backend::mutex_id::GetMutexIds(op))
             record(bid);
-        if (static_bid < 0 && dyn_bids.empty()) {
-            int max_id = 2;
-            for (const auto& [key, value] : op->kwargs_) {
-                if (key == "max_mutex_id")
-                    max_id = std::any_cast<int>(value);
-            }
-            for (int i = 0; i < max_id; ++i)
-                record(i);
-        }
     }
 };
 

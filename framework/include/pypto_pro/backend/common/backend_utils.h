@@ -36,7 +36,7 @@ int FindIndex(const std::string& mode, const std::string& op_name);
 
 namespace mutex_id {
 
-std::vector<int> GetMutexIdsFromKwargs(const ir::CallPtr& op);
+std::vector<int> GetMutexIds(const ir::CallPtr& op);
 
 } // namespace mutex_id
 

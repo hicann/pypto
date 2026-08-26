@@ -137,42 +137,20 @@ TypePtr DeduceSyncAllType(const std::vector<ExprPtr>& args, const std::vector<st
 // Registration Function for Sync Operations
 // ============================================================================
 
-// Register system.sync_src (Set Flag)
-// Attributes: set_pipe, wait_pipe, event_id
-REGISTER_OP("system.sync_src")
-    .set_description("Send a synchronization signal (Set Flag)")
-    .set_op_category("SyncOp")
-    .no_argument()
-    .set_attr<int>("set_pipe")
-    .set_attr<int>("wait_pipe")
-    .set_attr<int>("event_id")
-    .f_deduce_type(DeduceUnknownType);
-
-// Register system.sync_dst (Wait Flag)
-// Attributes: set_pipe, wait_pipe, event_id
-REGISTER_OP("system.sync_dst")
-    .set_description("Wait for a synchronization signal (Wait Flag)")
-    .set_op_category("SyncOp")
-    .no_argument()
-    .set_attr<int>("set_pipe")
-    .set_attr<int>("wait_pipe")
-    .set_attr<int>("event_id")
-    .f_deduce_type(DeduceUnknownType);
-
-// Register system.sync_src_dyn (Set Flag, dynamic event_id)
+// Register system.sync_src_dyn (Set Flag)
 REGISTER_OP("system.sync_src_dyn")
-    .set_description("Send a synchronization signal with dynamic event_id (Set Flag)")
+    .set_description("Send a synchronization signal with an event_id expression (Set Flag)")
     .set_op_category("SyncOp")
-    .add_argument("event_id", "Dynamic event ID (ScalarType INDEX)")
+    .add_argument("event_id", "Event ID expression (integer ScalarType)")
     .set_attr<int>("set_pipe")
     .set_attr<int>("wait_pipe")
     .f_deduce_type(DeduceUnknownType);
 
-// Register system.sync_dst_dyn (Wait Flag, dynamic event_id)
+// Register system.sync_dst_dyn (Wait Flag)
 REGISTER_OP("system.sync_dst_dyn")
-    .set_description("Wait for a synchronization signal with dynamic event_id (Wait Flag)")
+    .set_description("Wait for a synchronization signal with an event_id expression (Wait Flag)")
     .set_op_category("SyncOp")
-    .add_argument("event_id", "Dynamic event ID (ScalarType INDEX)")
+    .add_argument("event_id", "Event ID expression (integer ScalarType)")
     .set_attr<int>("set_pipe")
     .set_attr<int>("wait_pipe")
     .f_deduce_type(DeduceUnknownType);
@@ -327,47 +305,23 @@ REGISTER_OP("system.dcci")
 // Valid mutex_id range: 0-31 (per Ascend C Mutex ISASI spec).
 // ============================================================================
 
-// Register system.mutex_lock (Mutex::Lock, A5)
-// Attributes: pipe, mutex_id, mode
-REGISTER_OP("system.mutex_lock")
-    .set_description("Acquire Mutex buffer-id token (A5)")
-    .set_op_category("SyncOp")
-    .no_argument()
-    .set_attr<int>("pipe")
-    .set_attr<int>("mutex_id")
-    .set_attr<int>("mode")
-    .f_deduce_type(DeduceUnknownType);
-
-// Register system.mutex_unlock (Mutex::Unlock, A5)
-// Attributes: pipe, mutex_id, mode
-REGISTER_OP("system.mutex_unlock")
-    .set_description("Release Mutex buffer-id token (A5)")
-    .set_op_category("SyncOp")
-    .no_argument()
-    .set_attr<int>("pipe")
-    .set_attr<int>("mutex_id")
-    .set_attr<int>("mode")
-    .f_deduce_type(DeduceUnknownType);
-
-// Register system.mutex_lock_dyn (Mutex::Lock with dynamic mutex_id, A5)
+// Register system.mutex_lock_dyn (Mutex::Lock, A5)
 REGISTER_OP("system.mutex_lock_dyn")
-    .set_description("Acquire Mutex buffer-id token with dynamic ID (A5)")
+    .set_description("Acquire Mutex buffer-id token with a mutex_id expression (A5)")
     .set_op_category("SyncOp")
-    .add_argument("mutex_id", "Dynamic Mutex ID (ScalarType INDEX)")
+    .add_argument("mutex_id", "Mutex ID expression (integer ScalarType)")
     .set_attr<int>("pipe")
-    .set_attr<int>("mode")
     .set_attr<int>("max_mutex_id")
     .set_attr<std::vector<int>>("mutex_ids")
     .set_attr<std::vector<int>>("mutex_id_owner_indices")
     .f_deduce_type(DeduceUnknownType);
 
-// Register system.mutex_unlock_dyn (Mutex::Unlock with dynamic mutex_id, A5)
+// Register system.mutex_unlock_dyn (Mutex::Unlock, A5)
 REGISTER_OP("system.mutex_unlock_dyn")
-    .set_description("Release Mutex buffer-id token with dynamic ID (A5)")
+    .set_description("Release Mutex buffer-id token with a mutex_id expression (A5)")
     .set_op_category("SyncOp")
-    .add_argument("mutex_id", "Dynamic Mutex ID (ScalarType INDEX)")
+    .add_argument("mutex_id", "Mutex ID expression (integer ScalarType)")
     .set_attr<int>("pipe")
-    .set_attr<int>("mode")
     .set_attr<int>("max_mutex_id")
     .set_attr<std::vector<int>>("mutex_ids")
     .set_attr<std::vector<int>>("mutex_id_owner_indices")

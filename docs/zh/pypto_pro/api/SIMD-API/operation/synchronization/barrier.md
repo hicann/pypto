@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-Barrier同步：对M、MTE1、MTE2、MTE3、FIX或全部流水线做屏障，等待前序操作完成。
+Barrier同步：对M、MTE1、MTE2、MTE3、FIX中的指定pipe，或本AI Core的全部pipe做屏障，等待对应pipe上的前序操作完成。Barrier是单点同步操作。
 
 ## 函数原型
 
@@ -38,11 +38,13 @@ pypto_pro.language.system.bar_all()
 | `bar_mte2()` | MTE2流水线内barrier，等待前序所有MTE2操作完成 | Cube或Vector section |
 | `bar_mte3()` | MTE3流水线内barrier，等待前序所有MTE3操作完成 | Cube或Vector section |
 | `bar_fix()` | FIX流水线内barrier，等待前序所有FIX操作完成 | Cube section |
-| `bar_all()` | 全局barrier，等待所有流水线（V/M/MTE1/MTE2/MTE3/FIX）前序操作完成 | Cube或Vector section |
+| `bar_all()` | 本AI Core内的全pipe barrier，等待V/M/MTE1/MTE2/MTE3/FIX等pipe的前序操作完成 | Cube或Vector section |
+
+`bar_all()`仅同步当前AI Core内的全部pipe，不是多个AI Core之间的全局屏障；多核同步请使用[`sync_all`](sync_all.md)。
 
 ## 调用示例
 
-### bar_all —— 循环体顶部全局barrier
+### bar_all —— 循环体顶部全pipe barrier
 
 在循环内load前插入`bar_all()`，确保上一轮store完成后再搬运新数据。
 

@@ -64,7 +64,7 @@ class BufferParserMixin:
                 tile_mutex_ids = (mutex_id,)
 
             for value in tile_mutex_ids:
-                if not isinstance(value, int) or value < 0 or value > 31:
+                if not _is_int(value) or value < 0 or value > 31:
                     raise ParserTypeError(f"mutex_ids must be ints in [0,31], got {value!r}", span=span)
             if len(set(tile_mutex_ids)) != len(tile_mutex_ids):
                 raise ParserTypeError(

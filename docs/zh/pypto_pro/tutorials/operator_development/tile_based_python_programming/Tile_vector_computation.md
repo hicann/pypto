@@ -35,7 +35,9 @@ with pl.section_vector():
 
 - `sync_src(set_pipe, wait_pipe, event_id)` —— SET flag（生产方）
 - `sync_dst(set_pipe, wait_pipe, event_id)` —— WAIT flag（消费方）
-- `event_id` —— flag id；仅在上一次使用已被消费后才可复用同一id
+- `event_id` —— flag ID；静态取值范围为`[0, 7]`，动态整数Scalar的运行时数值也必须在该范围内；仅在上一次flag已被对应的`sync_dst`消费后才可复用同一ID
+
+`sync_src`/`sync_dst`的pipe组合和ID必须完全一致。前端只校验单次调用的参数，不会跨分支或循环证明两个接口已正确成对。
 
 Pipe类型（`pl.PipeType`）：`MTE2`（GM→L1/UB加载）、`MTE1`（L1→L0搬运）、`M`（矩阵计算）、`FIX`（L0C结果搬运）、`V`（向量计算）、`MTE3`（UB→GM存储）等。
 
@@ -57,8 +59,8 @@ a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
 b_db = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[2, 3])
 c_db = pl.make_tile_group(type=tile_type, addrs=0x20000, mutex_ids=[30, 31])
 
-# 两块Tile，仅使用轮转/下标能力，不启用自动mutex
-manual_sync_db = pl.make_tile_group(
+# 两块Tile，仅使用轮转/下标能力，不配置mutex元数据
+rotation_group = pl.make_tile_group(
     type=tile_type, addrs=0x30000, mutex_ids=None, depth=2)
 ```
 
@@ -172,7 +174,7 @@ def test_add():
 
 要点：
 
-- `@pl.jit(auto_mutex=True)` —— `auto_mutex`是省去`sync_src`/`sync_dst`的关键
+- `@pl.jit(auto_mutex=True)` —— 对带mutex元数据的TileGroup访问自动插入mutex同步；其他数据依赖仍需显式处理
 - `kernel[None, num_cores](...)`：方括号启动参数为`[stream, block_dim]`；`None`表示默认Stream
 
 ## 多核切分与Tiling
@@ -207,9 +209,9 @@ for t in pl.range(0, num_tiles, 1):
 |:---|:---|:---|
 | 分配 | 一块固定缓冲区（`addr`+`size`） | N块轮转缓冲区（`addrs`+`mutex_ids`） |
 | 缓冲区选择 | 通过Tile变量直接指定 | `next()/current()/previous()`游标 |
-| 跨pipe同步 |**手动**`sync_src`/`sync_dst`对 | 配合`auto_mutex=True`**自动** |
-| 双/N缓冲 | 手工（多个Tile + 乒乓同步） | 内建（`mutex_ids`的长度） |
-| 适用场景 | 紧凑、手工调优的单趟流水线 | 大多数Kernel；流水化/重叠的循环 |
+| 跨pipe同步 | **手动**`sync_src`/`sync_dst`对 | 带mutex元数据且配合`auto_mutex=True`时**自动** |
+| 双/N缓冲 | 手动（多个Tile + 乒乓同步） | 内建（`mutex_ids`的长度） |
+| 适用场景 | 紧凑、手动调优的单趟流水线 | 大多数Kernel；流水化/重叠的循环 |
 
 > [!NOTE]说明
 > 常规单缓冲、双缓冲及N缓冲场景使用`make_tile_group`并启用`auto_mutex=True`；需要精确控制同步事件及插入位置的场景使用`make_tile`和显式同步。两种方式可在同一Kernel中使用。

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-一次性创建一组**同规格、可轮转复用**的Tile，为每块Tile绑定独立地址，并建立Tile与`mutex_id`的一一映射。解析器会将group展开成多个[`make_tile`](make_tile.md)；配合`auto_mutex`，框架根据该映射为后续Tile操作自动插入同步，是实现多缓冲（N-buffer）流水并行的核心接口。
+一次性创建一组**同规格、可轮转复用**的Tile，为每块Tile绑定独立地址，并可选建立Tile与一个或多个`mutex_id`的对应关系。解析器会将group展开成多个[`make_tile`](make_tile.md)；配合`auto_mutex`，框架根据该元数据为涉及这些Tile的后续操作自动插入mutex同步，是实现多缓冲（N-buffer）流水并行的核心接口。
 
 缓冲深度由`depth`或非空`mutex_ids`的长度确定：
 
@@ -41,7 +41,7 @@ pypto_pro.language.make_tile_group(type=, addrs=, mutex_ids=None, depth=None, fw
 |---|---|---|
 | `type` | 输入 | `pypto_pro.language.TileType`，组内每块tile的统一规格 |
 | `addrs` | 输入 | 单个基地址（组内tile连续排布），或地址列表（逐块指定） |
-| `mutex_ids` | 输入 | 可选的mutex id列表, 为每块Tile分配mutex id，可配置为空列表或者使用非空整数列表/元组。配置非空时，框架为每块Tile记录一个或多个mutex id，建立Tile与`mutex_id`的一一映射，例如[1, 2, 3, 4]为4个tile各分配一个ID, [[1, 2], [3, 4]]为两块Tile各分配两个ID；配置为`None`或空列表时，group只管理Tile、地址和轮转游标，不插入自动mutex id，需手动插入同步 |
+| `mutex_ids` | 输入 | 可选的mutex ID配置，可为`None`、空列表，或非空整数列表/元组。配置非空时，框架为每块Tile记录一个或多个ID：例如`[1, 2, 3, 4]`为4块Tile各分配一个ID，`[[1, 2], [3, 4]]`为2块Tile各分配两个ID。配置为`None`或空列表时，group只管理Tile、地址和轮转游标，不参与`auto_mutex`，跨pipe依赖需由用户保证 |
 | `depth` | 输入 | 可选的Tile数量；`mutex_ids`为`None`或空列表时必填 |
 | `fwd_ids` | 输入 | 可选的跨核前向event_id列表，用于自动Pipeline变换中生产者→消费者的跨核同步。启用`pipeline=pl.pipeline.PipelineConfig(...)`后，框架在写入该缓冲的stage末尾自动插入`set_cross_core(event_id=fwd_ids[i])`，在读取该缓冲的stage开头自动插入`wait_cross_core(event_id=fwd_ids[i])` |
 | `bwd_ids` | 输入 | 可选的跨核后向event_id列表，用于自动Pipeline变换中消费者→生产者的反向同步（通知生产者缓冲已释放）。框架在读取stage末尾插入`set_cross_core(event_id=bwd_ids[i])`，在写入stage开头插入`wait_cross_core(event_id=bwd_ids[i])` |
@@ -92,7 +92,7 @@ group句柄可直接传给[`pypto_pro.language.set_validshape`](../memory_vector
 
 ### 2-buffer（double-buffer / ping-pong）
 
-`make_tile_group` + `auto_mutex`的典型场景是matmul：L1暂存用`next()`轮转开双缓冲，L0A/L0B/L0C用单mutex_id的group配`current()`。开启`auto_mutex=True`后，相邻搬运与计算间的同步由框架按tile的mutex自动插入，无需手写`sync_src`/`sync_dst`。
+`make_tile_group` + `auto_mutex`的典型场景是matmul：L1暂存用`next()`轮转开双缓冲，L0A/L0B/L0C用单mutex ID的group配`current()`。开启`auto_mutex=True`后，框架按Tile的mutex元数据为涉及这些Tile的搬运和计算自动插入互斥操作。对于不带mutex元数据的其他Tile或额外数据依赖，仍需要用户显式同步。
 
 ```python
 import pypto_pro.language as pl
