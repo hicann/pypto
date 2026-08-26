@@ -1728,5 +1728,54 @@ TEST_F(GraphPartitionTest, TestIsViewLikeAndIsAssembleLikeCompatibility)
     EXPECT_FALSE(IsAssembleLike(Opcode::OP_SLICE));
 }
 
+void GetUbToUbTransposeCubeGraph(ComputationalGraphBuilder& G)
+{
+    std::vector<int64_t> tileShape{16, 16};
+    std::vector<std::string> tensorNames{"t_in",   "t_ub1", "t_ub2", "t_l1_a", "t_l0a",
+                                         "t_l1_b", "t_l0b", "t_l0c", "t_out"};
+    std::vector<MemoryType> tensorMemType{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB,  MemoryType::MEM_UB,
+                                          MemoryType::MEM_L1,         MemoryType::MEM_L0A, MemoryType::MEM_L1,
+                                          MemoryType::MEM_L0B,        MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, tensorMemType, tensorNames), true);
+
+    std::vector<Opcode> opCodes{
+        Opcode::OP_COPY_IN, Opcode::OP_TRANSPOSE_VNCHWCONV, Opcode::OP_VIEW,    Opcode::OP_L1_TO_L0A,
+        Opcode::OP_VIEW,    Opcode::OP_L1_TO_L0B,           Opcode::OP_A_MUL_B, Opcode::OP_COPY_OUT};
+    std::vector<std::vector<std::string>> ioperands{{"t_in"},  {"t_ub1"},  {"t_ub2"},          {"t_l1_a"},
+                                                    {"t_ub2"}, {"t_l1_b"}, {"t_l0a", "t_l0b"}, {"t_l0c"}};
+    std::vector<std::vector<std::string>> ooperands{{"t_ub1"},  {"t_ub2"}, {"t_l1_a"}, {"t_l0a"},
+                                                    {"t_l1_b"}, {"t_l0b"}, {"t_l0c"},  {"t_out"}};
+    std::vector<std::string> opNames{"COPY_IN",         "TRANSPOSE_UB", "VIEW_UB_TO_L1_A", "L1_TO_L0A",
+                                     "VIEW_UB_TO_L1_B", "L1_TO_L0B",    "MATMUL",          "COPY_OUT"};
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetInCast({"t_in"}), true);
+    EXPECT_EQ(G.SetOutCast({"t_out"}), true);
+}
+
+TEST_F(GraphPartitionTest, TestUbToUbTransposeNotMergeWithCube)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+
+    ComputationalGraphBuilder G;
+    GetUbToUbTransposeCubeGraph(G);
+    Function* function = G.GetFunction();
+
+    IsoPartitioner partitioner;
+    EXPECT_EQ(partitioner.SetParameter(1, 100000, false), SUCCESS);
+    EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
+
+    Operation* transposeOp = G.GetOp("TRANSPOSE_UB");
+    EXPECT_NE(transposeOp, nullptr);
+    EXPECT_EQ(transposeOp->HasAttr(OpAttributeKey::isCube), true);
+    EXPECT_EQ(transposeOp->GetBoolAttribute(OpAttributeKey::isCube), false);
+
+    Operation* matmulOp = G.GetOp("MATMUL");
+    EXPECT_NE(matmulOp, nullptr);
+    EXPECT_EQ(matmulOp->HasAttr(OpAttributeKey::isCube), true);
+    EXPECT_EQ(matmulOp->GetBoolAttribute(OpAttributeKey::isCube), true);
+
+    EXPECT_NE(transposeOp->GetSubgraphID(), matmulOp->GetSubgraphID());
+}
+
 } // namespace tile_fwk
 } // namespace npu

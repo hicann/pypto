@@ -749,9 +749,12 @@ bool SuperNodeGraphBuilder::CopyInCombine(const std::shared_ptr<OperationGraphIn
         return false;
     }
     // 所有的copyin操作与其输出绑定
+    // OP_TRANSPOSE_VNCHWCONV 虽然归类为 MOVE_LOCAL，但其输入输出均在 UB，
+    // 将其与下游 VIEW 合并会拉入含 matmul 的混合 supernode，导致 isCube 污染，
+    // 进而使后续 AddAlloc 插入的 UB_ALLOC 与该 V 算子 core type 不一致而报错。
     if ((OpcodeManager::Inst().GetOpCalcType(opList[i]->GetOpcode()) == OpCalcType::MOVE_IN ||
          OpcodeManager::Inst().GetOpCalcType(opList[i]->GetOpcode()) == OpCalcType::MOVE_LOCAL) &&
-        operationInfo->outGraph_[i].size() > 0) {
+        opList[i]->GetOpcode() != Opcode::OP_TRANSPOSE_VNCHWCONV && operationInfo->outGraph_[i].size() > 0) {
         int32_t outNode = *(operationInfo->outGraph_[i].begin());
         mergePair.emplace_back(i, outNode);
         APASS_LOG_DEBUG_F(Elements::Operation, "Combine %d and %d for CopyIn in building SuperNode.",
