@@ -751,6 +751,85 @@ void SplitLargeFanoutTensor::CollectLargeTensorFromInfo(const LogicalTensorPtr& 
     }
 }
 
+bool SplitLargeFanoutTensor::IsUbConfirmed(const LogicalTensorPtr& largeTensor)
+{
+    if (largeTensor == nullptr) {
+        return false;
+    }
+    for (const auto& assembleOp : largeTensor->GetProducers()) {
+        if (assembleOp == nullptr || !IsAssembleLike(assembleOp->GetOpcode()) || assembleOp->GetIOperands().empty()) {
+            return false;
+        }
+        auto inputTensor = assembleOp->GetIOperands().front();
+        if (inputTensor == nullptr || inputTensor->GetProducers().empty()) {
+            return false;
+        }
+        for (const auto& upstreamProducer : inputTensor->GetProducers()) {
+            if (upstreamProducer == nullptr) {
+                return false;
+            }
+            if (!IsOperandUbConfirmed(*upstreamProducer, inputTensor, true)) {
+                return false;
+            }
+        }
+    }
+    for (const auto& consumer : largeTensor->GetConsumers()) {
+        if (consumer == nullptr || !IsViewLike(consumer->GetOpcode())) {
+            continue;
+        }
+        if (consumer->GetOOperands().empty()) {
+            return false;
+        }
+        auto outputTensor = consumer->GetOOperands().front();
+        if (outputTensor == nullptr || outputTensor->GetConsumers().empty()) {
+            return false;
+        }
+        for (const auto& downstreamConsumer : outputTensor->GetConsumers()) {
+            if (downstreamConsumer == nullptr) {
+                return false;
+            }
+            if (!IsOperandUbConfirmed(*downstreamConsumer, outputTensor, false)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool SplitLargeFanoutTensor::IsOperandUbConfirmed(const Operation& op, const LogicalTensorPtr& tensor, bool isOutput)
+{
+    const auto& operands = isOutput ? op.GetOOperands() : op.GetIOperands();
+    const auto& memoryTypes = isOutput ? OpcodeManager::Inst().GetOutputsMemType(op.GetOpcode()) :
+                                         OpcodeManager::Inst().GetInputsMemType(op.GetOpcode());
+    bool found = false;
+    for (size_t index = 0; index < operands.size(); ++index) {
+        if (operands[index] != tensor) {
+            continue;
+        }
+        found = true;
+        // Memory type definitions are positional: check the type of the operand connected to this tensor.
+        if (index >= memoryTypes.size() || memoryTypes[index] != MemoryType::MEM_UB) {
+            return false;
+        }
+    }
+    return found;
+}
+
+// Mixed-consumer splitting is allowed only when the connected producer/consumer paths stay in UB,
+// so the split can reuse the local-buffer data path without introducing additional data movement.
+bool SplitLargeFanoutTensor::RegisterMixedConsumerTensorIfNeeded(const LogicalTensorPtr& logicalTensor,
+                                                                 bool allConsumersView)
+{
+    if (allConsumersView) {
+        return true;
+    }
+    if (!IsUbConfirmed(logicalTensor)) {
+        return false;
+    }
+    mixedConsumerTensors_.insert(logicalTensor->tensor->rawmagic);
+    return true;
+}
+
 // 遍历所有的tensor, 对前序为Assemble后序为View的大Tensor进行拆分
 void SplitLargeFanoutTensor::CollectLargeTensor(Function& function)
 {
@@ -785,8 +864,8 @@ void SplitLargeFanoutTensor::CollectLargeTensor(Function& function)
             if (!allProducersAssemble || !hasAnyViewConsumer) {
                 continue;
             }
-            if (!allConsumersView) {
-                mixedConsumerTensors_.insert(logicalTensor->tensor->rawmagic);
+            if (!RegisterMixedConsumerTensorIfNeeded(logicalTensor, allConsumersView)) {
+                continue;
             }
             largeTensors_.push_back(logicalTensor);
             CollectLargeTensorToInfo(logicalTensor);

@@ -104,8 +104,8 @@ __aicore__ inline void __pypto_tprint(T& src)
         auto* dataPtr = src.data();
         if constexpr (T::layout == pto::Layout::ND || T::layout == pto::Layout::DN) {
             __PYPTO_PRINTF("=== [dump_tensor] dtype: %s, Layout: %s, shape=[%d,%d,%d,%d,%d] ===\n",
-                            __pypto_dtype_name<ElemType>(), T::layout == pto::Layout::ND ? "ND" : "DN", n[0], n[1],
-                            n[2], n[3], n[4]);
+                           __pypto_dtype_name<ElemType>(), T::layout == pto::Layout::ND ? "ND" : "DN", n[0], n[1], n[2],
+                           n[3], n[4]);
             for (int i0 = 0; i0 < n[0]; ++i0)
                 for (int i1 = 0; i1 < n[1]; ++i1)
                     for (int i2 = 0; i2 < n[2]; ++i2) {
@@ -122,7 +122,7 @@ __aicore__ inline void __pypto_tprint(T& src)
             int logical_rows = n[2] * n[3];
             int logical_cols = n[1] * n[4];
             __PYPTO_PRINTF("=== [dump_tensor] dtype: %s, Layout: NZ, logical shape=[%d,%d] ===\n",
-                            __pypto_dtype_name<ElemType>(), logical_rows, logical_cols);
+                           __pypto_dtype_name<ElemType>(), logical_rows, logical_cols);
             for (int r = 0; r < logical_rows; ++r) {
                 for (int c = 0; c < logical_cols; ++c) {
                     int br = r / n[3], ir = r % n[3];
@@ -138,8 +138,8 @@ __aicore__ inline void __pypto_tprint(T& src)
         int validRows = src.GetValidRow();
         int validCols = src.GetValidCol();
         __PYPTO_PRINTF("=== [dump_tile] dtype: %s, shape=[%d,%d], valid=[%d,%d], Layout: %s ===\n",
-                        __pypto_dtype_name<DType>(), T::Rows, T::Cols, validRows, validCols,
-                        pto::GetLayoutName(T::BFractal, T::SFractal));
+                       __pypto_dtype_name<DType>(), T::Rows, T::Cols, validRows, validCols,
+                       pto::GetLayoutName(T::BFractal, T::SFractal));
         for (int r = 0; r < T::Rows; ++r) {
             for (int c = 0; c < T::Cols; ++c) {
                 int off = (T::BFractal == pto::BLayout::RowMajor) ? r * T::Cols + c : c * T::Rows + r;

@@ -2362,12 +2362,12 @@ void AddViewFromLarge(ComputationalGraphBuilder& G, const std::string& output, c
     G.GetOp(opName)->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, MemoryType::MEM_DEVICE_DDR));
 }
 
-// 混合消费者 1to1 场景构图: 2个Assemble生产者, 1个View + 1个Exp消费者
+// 混合消费者 1to1 场景构图: 2个Assemble生产者, 1个View + 1个Exp消费者, 上下游均为 UB op(Abs/Exp)
 void BuildMixedConsumer1to1(ComputationalGraphBuilder& G)
 {
     std::map<std::string, std::vector<int64_t>> tensors = {
-        {"input1", {16, 16}},      {"input2", {16, 16}}, {"in1", {16, 16}},   {"in2", {16, 16}},
-        {"largeTensor", {32, 16}}, {"out1", {16, 16}},   {"expOut", {32, 16}}};
+        {"input1", {16, 16}},      {"input2", {16, 16}}, {"in1", {16, 16}},      {"in2", {16, 16}},
+        {"largeTensor", {32, 16}}, {"out1", {16, 16}},   {"viewOut1", {16, 16}}, {"expOut", {32, 16}}};
     AddTensorsWithDDR(G, tensors);
     G.AddOp(Opcode::OP_ABS, {"input1"}, {"in1"}, "Abs_1");
     G.AddOp(Opcode::OP_ABS, {"input2"}, {"in2"}, "Abs_2");
@@ -2375,17 +2375,19 @@ void BuildMixedConsumer1to1(ComputationalGraphBuilder& G)
         {"in1", "Assemble_1", {0, 0}}, {"in2", "Assemble_2", {16, 0}}};
     AddAssembleOpsToLarge(G, assembleOps);
     AddViewFromLarge(G, "out1", "View_1", {0, 0});
+    G.AddOp(Opcode::OP_EXP, {"out1"}, {"viewOut1"}, "Exp_View1");
     G.AddOp(Opcode::OP_EXP, {"largeTensor"}, {"expOut"}, "Exp_1");
     G.SetInCast({"input1", "input2"});
-    G.SetOutCast({"out1", "expOut"});
+    G.SetOutCast({"viewOut1", "expOut"});
 }
 
-// 混合消费者 1toM 场景构图: 2个Assemble生产者, 2个View + 1个Exp消费者
+// 混合消费者 1toM 场景构图: 2个Assemble生产者, 2个View + 1个Exp消费者，上下游均加 UB op(Abs/Exp)
 void BuildMixedConsumer1toM(ComputationalGraphBuilder& G)
 {
     std::map<std::string, std::vector<int64_t>> tensors = {
         {"input1", {16, 32}},      {"input2", {16, 32}}, {"in1", {16, 32}},  {"in2", {16, 32}},
-        {"largeTensor", {32, 32}}, {"out1", {16, 16}},   {"out2", {16, 16}}, {"expOut", {32, 32}}};
+        {"largeTensor", {32, 32}}, {"out1", {16, 16}},   {"out2", {16, 16}}, {"viewOut1", {16, 16}},
+        {"viewOut2", {16, 16}},    {"expOut", {32, 32}}};
     AddTensorsWithDDR(G, tensors);
     G.AddOp(Opcode::OP_ABS, {"input1"}, {"in1"}, "Abs_1");
     G.AddOp(Opcode::OP_ABS, {"input2"}, {"in2"}, "Abs_2");
@@ -2394,18 +2396,20 @@ void BuildMixedConsumer1toM(ComputationalGraphBuilder& G)
     AddAssembleOpsToLarge(G, assembleOps);
     AddViewFromLarge(G, "out1", "View_1", {0, 0});
     AddViewFromLarge(G, "out2", "View_2", {0, 16});
+    G.AddOp(Opcode::OP_EXP, {"out1"}, {"viewOut1"}, "Exp_View1");
+    G.AddOp(Opcode::OP_EXP, {"out2"}, {"viewOut2"}, "Exp_View2");
     G.AddOp(Opcode::OP_EXP, {"largeTensor"}, {"expOut"}, "Exp_1");
     G.SetInCast({"input1", "input2"});
-    G.SetOutCast({"out1", "out2", "expOut"});
+    G.SetOutCast({"viewOut1", "viewOut2", "expOut"});
 }
 
-// 混合消费者 MtoM 场景构图: 4个Assemble生产者, 1个View + 1个Exp消费者
+// 混合消费者 MtoM 场景构图: 4个Assemble生产者, 1个View + 1个Exp消费者， 上下游均加 UB op(Abs/Exp)
 void BuildMixedConsumerMtoM(ComputationalGraphBuilder& G)
 {
     std::map<std::string, std::vector<int64_t>> tensors = {
-        {"input1", {16, 16}},      {"input2", {16, 16}}, {"input3", {16, 16}}, {"input4", {16, 16}},
-        {"in1", {16, 16}},         {"in2", {16, 16}},    {"in3", {16, 16}},    {"in4", {16, 16}},
-        {"largeTensor", {32, 32}}, {"out1", {32, 16}},   {"expOut", {32, 32}}};
+        {"input1", {16, 16}},      {"input2", {16, 16}}, {"input3", {16, 16}},   {"input4", {16, 16}},
+        {"in1", {16, 16}},         {"in2", {16, 16}},    {"in3", {16, 16}},      {"in4", {16, 16}},
+        {"largeTensor", {32, 32}}, {"out1", {32, 16}},   {"viewOut1", {32, 16}}, {"expOut", {32, 32}}};
     AddTensorsWithDDR(G, tensors);
     G.AddOp(Opcode::OP_ABS, {"input1"}, {"in1"}, "Abs_1");
     G.AddOp(Opcode::OP_ABS, {"input2"}, {"in2"}, "Abs_2");
@@ -2418,9 +2422,90 @@ void BuildMixedConsumerMtoM(ComputationalGraphBuilder& G)
         {"in4", "Assemble_4", {16, 16}}};
     AddAssembleOpsToLarge(G, assembleOps);
     AddViewFromLarge(G, "out1", "View_1", {0, 0});
+    G.AddOp(Opcode::OP_EXP, {"out1"}, {"viewOut1"}, "Exp_View1");
     G.AddOp(Opcode::OP_EXP, {"largeTensor"}, {"expOut"}, "Exp_1");
     G.SetInCast({"input1", "input2", "input3", "input4"});
-    G.SetOutCast({"out1", "expOut"});
+    G.SetOutCast({"viewOut1", "expOut"});
+}
+
+// Build a mixed-consumer graph with the Slice/Contract family. The selected
+// operands exercise the positional memory-type definitions of SHMEM_SET and
+// SHMEM_STORE: SHMEM_SET output 1 is UB while output 0 is DDR, and SHMEM_STORE
+// input 0 is UB while inputs 1 and 2 are DDR.
+void BuildMixedConsumerSliceContract(ComputationalGraphBuilder& G, size_t contractInputIndex, size_t storeInputIndex)
+{
+    std::map<std::string, std::vector<int64_t>> tensors = {
+        {"src0", {16, 16}},        {"src1", {16, 16}},     {"shmemOut0", {16, 16}},   {"shmemOut1", {16, 16}},
+        {"largeTensor", {16, 16}}, {"sliceOut", {16, 16}}, {"storeDummy0", {16, 16}}, {"storeDummy1", {16, 16}},
+        {"storeDummy2", {16, 16}}, {"storeOut", {16, 16}}, {"directOut", {16, 16}}};
+    AddTensorsWithDDR(G, tensors);
+    ASSERT_LT(contractInputIndex, 2U);
+    ASSERT_LT(storeInputIndex, 3U);
+
+    const std::string& contractInput = contractInputIndex == 0 ? "shmemOut0" : "shmemOut1";
+    std::vector<std::string> storeInputs = {"storeDummy0", "storeDummy1", "storeDummy2"};
+    storeInputs[storeInputIndex] = "sliceOut";
+    ASSERT_TRUE(
+        G.AddOps({Opcode::OP_SHMEM_SET, Opcode::OP_CONTRACT, Opcode::OP_SLICE, Opcode::OP_SHMEM_STORE, Opcode::OP_EXP},
+                 {{"src0", "src1"}, {contractInput}, {"largeTensor"}, storeInputs, {"largeTensor"}},
+                 {{"shmemOut0", "shmemOut1"}, {"largeTensor"}, {"sliceOut"}, {"storeOut"}, {"directOut"}},
+                 {"ShmemSet", "Contract", "Slice", "ShmemStore", "DirectConsumer"}));
+    G.GetOp("Contract")
+        ->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{0, 0}));
+    G.GetOp("Slice")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_DEVICE_DDR));
+}
+
+// Mixed consumers with non-UB MatMul -> Contract inputs and Reshape after each
+// Slice. The large tensor must not enter the mixed-consumer split flow.
+void BuildMixedConsumerNonUbSliceContract(ComputationalGraphBuilder& G)
+{
+    std::map<std::string, std::vector<int64_t>> tensors = {
+        {"a0", {16, 16}},         {"b0", {16, 16}},          {"a1", {16, 16}},          {"b1", {16, 16}},
+        {"matmulOut0", {16, 16}}, {"matmulOut1", {16, 16}},  {"largeTensor", {32, 16}}, {"sliceOut0", {16, 16}},
+        {"sliceOut1", {16, 16}},  {"reshapeOut0", {16, 16}}, {"reshapeOut1", {16, 16}}, {"directReshape", {32, 16}},
+        {"expOut0", {16, 16}},    {"expOut1", {16, 16}},     {"directExpOut", {32, 16}}};
+    AddTensorsWithDDR(G, tensors);
+    ASSERT_TRUE(G.AddOps({Opcode::OP_A_MUL_B, Opcode::OP_A_MUL_B, Opcode::OP_CONTRACT, Opcode::OP_CONTRACT,
+                          Opcode::OP_SLICE, Opcode::OP_SLICE, Opcode::OP_RESHAPE, Opcode::OP_RESHAPE,
+                          Opcode::OP_RESHAPE, Opcode::OP_EXP, Opcode::OP_EXP, Opcode::OP_EXP},
+                         {{"a0", "b0"},
+                          {"a1", "b1"},
+                          {"matmulOut0"},
+                          {"matmulOut1"},
+                          {"largeTensor"},
+                          {"largeTensor"},
+                          {"sliceOut0"},
+                          {"sliceOut1"},
+                          {"largeTensor"},
+                          {"reshapeOut0"},
+                          {"reshapeOut1"},
+                          {"directReshape"}},
+                         {{"matmulOut0"},
+                          {"matmulOut1"},
+                          {"largeTensor"},
+                          {"largeTensor"},
+                          {"sliceOut0"},
+                          {"sliceOut1"},
+                          {"reshapeOut0"},
+                          {"reshapeOut1"},
+                          {"directReshape"},
+                          {"expOut0"},
+                          {"expOut1"},
+                          {"directExpOut"}},
+                         {"MatMul0", "MatMul1", "Contract0", "Contract1", "Slice0", "Slice1", "Reshape0", "Reshape1",
+                          "DirectReshape", "Exp0", "Exp1", "DirectExp"}));
+    G.GetOp("Contract0")
+        ->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{0, 0}));
+    G.GetOp("Contract1")
+        ->SetOpAttribute(
+            std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{16, 0}));
+    G.GetOp("Slice0")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_DEVICE_DDR));
+    G.GetOp("Slice1")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{16, 0}, MemoryType::MEM_DEVICE_DDR));
+    G.SetInCast({"a0", "b0", "a1", "b1"});
+    G.SetOutCast({"expOut0", "expOut1", "directExpOut"});
 }
 
 // 运行 SplitLargeFanoutTensor pass 的公共流程, 返回 function 和 largeTensor magic
@@ -2468,6 +2553,54 @@ TEST_F(SplitLargeFanoutTensorTest, MixedConsumer_MtoM_Skipped)
     auto [function, ltMagic] = RunMixedConsumerPass(G, BuildMixedConsumerMtoM);
     EXPECT_EQ(CountOpsWithInputMagic(*function, Opcode::OP_EXP, ltMagic), 1);
     EXPECT_EQ(CountOpsWithInputMagic(*function, Opcode::OP_VIEW, ltMagic), 1);
+}
+
+TEST_F(SplitLargeFanoutTensorTest, SliceContractUbCheckUsesConnectedOutputIndex)
+{
+    ComputationalGraphBuilder G;
+    BuildMixedConsumerSliceContract(G, 1, 0);
+    auto largeTensor = G.GetTensor("largeTensor");
+    ASSERT_NE(largeTensor, nullptr);
+
+    npu::tile_fwk::SplitLargeFanoutTensor pass;
+    EXPECT_TRUE(pass.IsUbConfirmed(largeTensor));
+}
+
+TEST_F(SplitLargeFanoutTensorTest, SliceContractUbCheckRejectsNonUbConnectedOutput)
+{
+    ComputationalGraphBuilder G;
+    BuildMixedConsumerSliceContract(G, 0, 0);
+    auto largeTensor = G.GetTensor("largeTensor");
+    ASSERT_NE(largeTensor, nullptr);
+
+    npu::tile_fwk::SplitLargeFanoutTensor pass;
+    EXPECT_FALSE(pass.IsUbConfirmed(largeTensor));
+}
+
+TEST_F(SplitLargeFanoutTensorTest, SliceContractUbCheckUsesConnectedInputIndex)
+{
+    ComputationalGraphBuilder G;
+    BuildMixedConsumerSliceContract(G, 1, 1);
+    auto largeTensor = G.GetTensor("largeTensor");
+    ASSERT_NE(largeTensor, nullptr);
+
+    npu::tile_fwk::SplitLargeFanoutTensor pass;
+    EXPECT_FALSE(pass.IsUbConfirmed(largeTensor));
+}
+
+TEST_F(SplitLargeFanoutTensorTest, MixedConsumerNonUbSliceContract_ShouldSkip)
+{
+    ComputationalGraphBuilder G;
+    BuildMixedConsumerNonUbSliceContract(G);
+    auto* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+    const int largeTensorMagic = G.GetTensor("largeTensor")->GetMagic();
+
+    npu::tile_fwk::SplitLargeFanoutTensor pass;
+    EXPECT_EQ(SUCCESS, pass.PreCheck(*function));
+    EXPECT_EQ(SUCCESS, pass.RunOnFunction(*function));
+    EXPECT_EQ(SUCCESS, pass.PostCheck(*function));
+    EXPECT_EQ(CountOpsWithInputMagic(*function, Opcode::OP_SLICE, largeTensorMagic), 2);
 }
 
 TEST_F(SplitLargeFanoutTensorTest, BuilderLargeLinearFanoutPerfGuard)
