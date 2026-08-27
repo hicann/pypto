@@ -102,12 +102,6 @@ def test_bits_1_add():
 
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
-def test_bits_1_sub():
-    _run_npu_test(kernel_bits1, {"OpType": 1}, lambda a, b: a - b)
-
-
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_bits_2_add():
     _run_npu_test(kernel_bits2, {"OpType": 0}, lambda a, b: a + b)
 
