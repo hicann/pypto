@@ -33,12 +33,10 @@ def _ssa_verify(verifier, prog, name):
         print(ir.IRVerifier.generate_report(diagnostic))
         raise SyntaxError(f"IR verification failed after {name}")
 
-
-def ssa_verify(func, desc=""):
-    """Verify that the function is in SSA form."""
+def ssa_verify(func, desc: str = ""):
+    verifier = ir.IRVerifier.create_default()
     b = ir.IRBuilder()
     prog = b.create_program([func], "main", ir.Span.unknown())
-    verifier = ir.IRVerifier.create_default()
     _ssa_verify(verifier, prog, desc)
 
 

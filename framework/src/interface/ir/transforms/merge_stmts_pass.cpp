@@ -88,7 +88,7 @@ StmtPtr SubstituteStmt(StmtPtr stmt, VarExprMap& varMap, std::unordered_set<VarP
             }
         }
         if (needsClone) {
-            auto resultClone = lt->Clone(true);
+            auto resultClone = lt->Clone();
             varMap[var] = resultClone;
             clonedVars.insert(var);
             newResults.push_back(resultClone);
@@ -394,7 +394,7 @@ private:
         std::sort(varList.begin(), varList.end(), [](auto& a, auto& b) { return a->name_ < b->name_; });
         for (auto& v : varList) {
             if (auto lt = std::dynamic_pointer_cast<const LogicalTensor>(v)) {
-                cloneMap[v] = lt->Clone(true); // shared raw tensor, distinct LogicalTensor identity
+                cloneMap[v] = lt->Clone();
             } else {
                 cloneMap[v] = v->Clone();
             }

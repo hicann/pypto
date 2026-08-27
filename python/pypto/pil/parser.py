@@ -102,7 +102,6 @@ class _Context:
             self._current_block = old
             if old is not None:
                 old.store_names.update(new_block.store_names)
-                old.load_names.update(new_block.load_names)
 
     def store(self, name: str, value: Union[Value, Any]):
         self.current_block.store_names.add(name)
@@ -112,7 +111,6 @@ class _Context:
         self.current_block.store_names.add(name)
 
     def load(self, name: str):
-        self.current_block.load_names.add(name)
         return self.call("pil.load", (name,))
 
     def call(self, callee, args, kwargs=None):
@@ -513,8 +511,6 @@ class Parser:
             span=blk.span,
             signature=inspect.Signature(),
             body=blk,
-            load_vars=tuple(sorted(blk.load_names)),
-            store_vars=tuple(sorted(blk.store_names)),
             global_vars=(),
             global_values=(),
             params=params,
@@ -546,8 +542,6 @@ class Parser:
             span=blk.span,
             signature=inspect.Signature(),
             body=blk,
-            load_vars=tuple(sorted(blk.load_names)),
-            store_vars=tuple(sorted(blk.store_names)),
             global_vars=(),
             global_values=(),
             params=params,
@@ -580,8 +574,6 @@ class Parser:
             span=blk.span,
             signature=inspect.Signature(),
             body=blk,
-            load_vars=tuple(sorted(blk.load_names)),
-            store_vars=tuple(sorted(blk.store_names)),
             global_vars=(),
             global_values=(),
         )
@@ -722,8 +714,6 @@ def ast2pil(pyfunc, entry_point: bool = True):
         span=blk.span,
         signature=inspect.signature(pyfunc),
         body=blk,
-        load_vars=tuple(sorted(blk.load_names)),
-        store_vars=tuple(sorted(blk.store_names)),
         global_vars=tuple(global_vars),
         global_values=tuple(global_values),
         params=params,

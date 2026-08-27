@@ -189,7 +189,7 @@ def flash_attention_score_kernel_npu(
                                 mi_update[:] = mi_new
 
 
-def test_flash_attention_score():
+def test_fa_score():
     B, N, Sq, D = pypto.SymbolicScalar('B'), 1, pypto.SymbolicScalar('Sq'), 128
     N_kv = 1
     Skv = pypto.SymbolicScalar('Skv')

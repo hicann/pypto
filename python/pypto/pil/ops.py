@@ -15,7 +15,21 @@ from pypto import SatStatus, SymbolicScalar, ir, pypto_impl
 
 from .dispatcher import dispatch_block
 from .op_registry import impl
-from .pir import Block, BreakSignal, BuildContext, ContinueSignal, DoubleStarred, InsertPoint, Jump, LoopRange, Scope
+from .pir import (
+    Block,
+    BreakSignal,
+    BuildContext,
+    ContinueSignal,
+    DoubleStarred,
+    InsertPoint,
+    Journal,
+    Jump,
+    LoopRange,
+    Scope,
+    slot_read,
+    slot_write,
+    slot_write_inplace,
+)
 
 _patch_methods = [
     (pypto.Tensor, "move", 0),
@@ -29,7 +43,7 @@ _orig_assemble = pypto.assemble
 def _store_wrapper(orig, arg_idx):
     @functools.wraps(orig)
     def wrapper(*args, **kwargs):
-        Block.mark_store(args[arg_idx])
+        slot_write_inplace(args[arg_idx])
         return orig(*args, **kwargs)
     return wrapper
 
@@ -38,7 +52,7 @@ def _store_wrapper(orig, arg_idx):
 def apply_patches():
     def assemble(*args, **kwargs) -> None:
         if pypto_impl.ir.assemble_new_logical_tensor() and not isinstance(args[0], Sequence):
-            Block.mark_store(args[2])
+            slot_write_inplace(args[2])
         _orig_assemble(*args, **kwargs)
 
     try:
@@ -64,6 +78,18 @@ def has_scalar(values: list) -> bool:
 # them from the IR loop-carried / branch-carried yield state
 def is_opaque_value(val) -> bool:
     return not (val is None or isinstance(val, (bool, int, float, pypto.SymbolicScalar, pypto.Tensor, list, tuple)))
+
+
+def carriable_names(scope: Scope, names) -> list:
+    result = []
+    for name in sorted(names):
+        val = scope.resolve_local(name)
+        if "." in name and val is None:
+            continue
+        if is_opaque_value(val):
+            continue
+        result.append(name)
+    return result
 
 
 # ---- Compile-time ops ----
@@ -128,14 +154,23 @@ def compare_impl(ctx, op, x, y):
 # ---- Attribute / index ----
 
 
-@impl(getattr, partial=True)
-def getattr_impl(ctx, op, obj, attr, *args):
-    return op(obj, attr, *args)
+@impl(getattr)
+def getattr_impl(ctx, obj, attr, *args):
+    value = getattr(obj, attr, *args)
+    if not args:  # plain read: track the slot; getattr-with-default never creates one
+        slot_read(obj, attr, value)
+    return value
 
 
-@impl(delattr, partial=True)
-def delattr_impl(ctx, op, obj, attr):
-    return op(obj, attr)
+@impl(setattr)
+def setattr_impl(ctx, obj, attr, val):
+    slot_write(obj, attr, val)
+    setattr(obj, attr, val)
+
+
+@impl(delattr)
+def delattr_impl(ctx, obj, attr):
+    return delattr(obj, attr)
 
 
 # ---- Tensor construction ----
@@ -332,10 +367,8 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, nstart, nstop, ctx: Build
     scope.varmap[loop_val.id] = loop_var
 
     iter_args, return_var_names = [], []
-    for name in sorted(body.store_names):
-        val = scope.locals.get(name)
-        if is_opaque_value(val):
-            continue
+    for name in carriable_names(scope, body.store_names):
+        val = scope.resolve_local(name)
         var = ctx.create_var_like(name, ctx.unwrap(val))
         iter_arg = ctx.create_iter_arg(var, initValue=ctx.unwrap(val))
         scope.store(name, ctx.wrap(var))
@@ -368,7 +401,7 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, nstart, nstop, ctx: Build
 
     return_vars = []
     for name in return_var_names:
-        var = ctx.create_var_like(name, ctx.unwrap(scope[name]))
+        var = ctx.create_var_like(name, ctx.unwrap(scope.resolve_local(name)))
         return_vars.append(var)
         scope.store(name, ctx.wrap(var))
 
@@ -424,47 +457,16 @@ def loop_impl(ctx: BuildContext, body: Block, loop):
         _static_while(body)
 
 
-def _snapshot_tensor_lts(scope: Scope, names: set) -> list:
-    """Capture storage for tensors this if may MOVE in-place.
-
-    Python rebinding (``t = xv + yv``) is already rolled back by restoring
-    ``scope.locals``. In-place MOVE is not: it mutates the Tensor object.
-    Only snapshot pre-existing Tensors among ``store_names``, and skip objects
-    that still hold the snapshotted logical tensor on restore. Calling
-    ``Tensor.Move`` / ``set_logical_tensor`` uniquifies IR names via
-    ``AssignStorage`` even when storage did not change.
-    """
-    snap = []
-    seen = set()
-    for name in names:
-        val = scope.locals.get(name)
-        if not isinstance(val, pypto.Tensor) or val.is_empty():
-            continue
-        tid = id(val)
-        if tid in seen:
-            continue
-        seen.add(tid)
-        snap.append((val, val.logical_tensor()))
-    return snap
-
-
-def _restore_tensor_lts(snap: list) -> None:
-    for val, lt in snap:
-        if not val.is_empty() and val.logical_tensor() is not lt:
-            val.set_logical_tensor(lt)
-
-
 def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext):
     scope = Scope.current()
 
     saved = dict(scope.locals)
     store_names = then_block.store_names | else_block.store_names
-    tensor_snap = _snapshot_tensor_lts(scope, store_names)
-    yield_var_names = [
-        name
-        for name in sorted(store_names)
-        if not is_opaque_value(scope.locals.get(name))
-    ]
+    yield_var_names = carriable_names(scope, store_names)
+    # Attribute-slot stores (`d.a = x`) are not marked by the parser — they only
+    # surface in branch.store_names during dispatch. Collect them as they are
+    # discovered so they are branch-carried like plain names.
+    discovered: list[str] = []
 
     def _trace_branch(branch: Block, branch_name: str, yield_vars_out: list):
         # Isolate the C++ config scope (vec/cube tile shapes, pass options, ...) so
@@ -476,16 +478,23 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
             ctx.checkpoint()
             pypto_impl.BeginScope(branch_name, {}, branch.span.filename, branch.span.begin_line)
             branch_body = ir.SeqStmts(branch.span)
-            with InsertPoint(branch_body), ctx.change_span(branch.span):
+            with Journal(), InsertPoint(branch_body), ctx.change_span(branch.span):
                 dispatch_block(branch, False)
-                yield_vars_out.extend(ctx.unwrap(scope[name]) for name in yield_var_names)
+                for name in sorted(branch.store_names):
+                    if name in discovered or name in yield_var_names:
+                        continue
+                    val = scope.resolve_local(name)
+                    if val is None or is_opaque_value(val):
+                        continue
+                    discovered.append(name)
+                branch_names = yield_var_names + discovered
+                yield_vars_out.extend(ctx.unwrap(scope.resolve_local(n)) for n in branch_names)
                 _add_jump_stmt(ctx, branch.jump, list(yield_vars_out))
             return branch_body
         finally:
             pypto_impl.EndScope()
             ctx.restore()
             scope.locals = saved
-            _restore_tensor_lts(tensor_snap)
 
     then_yield_vars = []
     then_body = _trace_branch(then_block, "pil.if_else_then", then_yield_vars)
@@ -493,8 +502,15 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
     else_yield_vars = []
     else_body = _trace_branch(else_block, "pil.if_else_else", else_yield_vars)
 
+    # A slot only written by one branch: the other branch never yielded it —
+    # its pre-if value (restored by the Journal rollback) is the correct yield.
+    all_names = yield_var_names + discovered
+    for yield_vars in (then_yield_vars, else_yield_vars):
+        missing = discovered[len(yield_vars) - len(yield_var_names):]
+        yield_vars.extend(ctx.unwrap(scope.resolve_local(n)) for n in missing)
+
     yield_vars = []
-    for i, name in enumerate(yield_var_names):
+    for i, name in enumerate(all_names):
         if ir.type_equal(then_yield_vars[i], else_yield_vars[i]):
             var = ctx.create_var_like(name, then_yield_vars[i])
         elif isinstance(then_yield_vars[i].type, ir.NoneType):

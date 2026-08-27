@@ -935,7 +935,6 @@ def test_tensor_move2():
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
-    print(func)
     assert isinstance(func.body[0], ir.ForStmt)
 
 
@@ -957,24 +956,6 @@ def test_ir_loop_helper_move_carry():
     iter_names = _iter_arg_names(for_stmt)
     assert any(name.startswith('cank') for name in iter_names), iter_names
     assert any(name == 'tmp' for name in iter_names), iter_names
-
-
-def test_restore_tensor_lts_after_move():
-    """Snapshot/restore must roll back in-place MOVE handles for if branch replay."""
-    from pypto.pil.ops import _restore_tensor_lts, _snapshot_tensor_lts
-    from pypto.pil.pir import Scope
-
-    dst = pypto.Tensor((4, 4), pypto.DT_FP32, 'dst')
-    src = pypto.Tensor((4, 4), pypto.DT_FP32, 'src')
-    scope = Scope(['dst', 'src'])
-    scope['dst'] = dst
-    scope['src'] = src
-    snap = _snapshot_tensor_lts(scope, {'dst'})
-    before = dst.logical_tensor()
-    dst.move(src)
-    assert dst.logical_tensor() is not before
-    _restore_tensor_lts(snap)
-    assert dst.logical_tensor() is before
 
 
 def test_printer():

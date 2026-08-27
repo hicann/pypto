@@ -34,4 +34,9 @@ def test_canonicalize_keeps_carry_used_by_nested_loop_init():
 
     main_func = program.functions[func.name]
     outer_loop = next(stmt for stmt in main_func.body.stmts if isinstance(stmt, ir.ForStmt))
-    assert "out_alias" in [arg.iterVar.name for arg in outer_loop.iter_args]
+    # the object is carried once under its canonical name: `out` is bound
+    # (as the param) before the `out_alias = out` rebind, so `out` wins —
+    # a `_N` suffix may appear if the uniquifier already used the base name
+    import re
+    carried = {re.sub(r"_\d+$", "", arg.iterVar.name) for arg in outer_loop.iter_args}
+    assert "out" in carried

@@ -18,10 +18,10 @@ from .pir import BuildContext, CollectContext, Function, InsertPoint, ReturnSign
 
 
 def _init_scope(func):
-    root = Scope(list(func.global_vars))
+    root = Scope()
     for name, val in zip(func.global_vars, func.global_values):
         root[name] = val
-    return Scope(list(func.load_vars), parent=root)
+    return Scope(parent=root)
 
 
 def _init_arguments(args):

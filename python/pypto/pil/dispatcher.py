@@ -12,7 +12,7 @@ import os
 import sys
 import sysconfig
 import traceback
-import typing
+from typing import Optional
 
 from .. import pypto_impl
 from .op_registry import dispatch
@@ -29,7 +29,6 @@ from .pir import (
     Jump,
     ReturnSignal,
     Scope,
-    _collector_stack,
     _current,
 )
 
@@ -119,7 +118,7 @@ def call_function(func: Function, args: tuple, kwargs: dict, ctx: BuildContext):
     caller = Scope.current()
     if func.global_vars:
         # Standalone function (built by ast2pil from a real Python function
-        root = Scope(list(func.global_vars))
+        root = Scope()
         for name, val in zip(func.global_vars, func.global_values):
             root[name] = val
     else:
@@ -127,16 +126,20 @@ def call_function(func: Function, args: tuple, kwargs: dict, ctx: BuildContext):
         # its free names resolve lexically through the caller's scope chain.
         root = caller
 
-    local_names = sorted(set(func.load_vars) | set(func.store_vars))
-    scope = Scope(local_names, parent=root)
+    scope = Scope(parent=root)
+    namemap = {}
+
     with scope.make_current():
         supplied = set()
         for name, val in zip(func.params, args):
             scope[name] = val
+            namemap[name] = caller.get_canonical_name(val)
             supplied.add(name)
         for name, val in kwargs.items():
             scope[name] = val
+            namemap[name] = caller.get_canonical_name(val)
             supplied.add(name)
+
         # apply default values for any params not supplied by the call
         for name, defval in zip(func.params, func.param_defaults):
             if name not in supplied and defval is not None:
@@ -145,7 +148,7 @@ def call_function(func: Function, args: tuple, kwargs: dict, ctx: BuildContext):
 
         try:
             if isinstance(ctx, CollectContext):
-                collect(func.body)
+                collect(func.body, rewriter=frame_rewrite(namemap))
             else:
                 dispatch_block(func.body, True)
         except ReturnSignal as sig:
@@ -178,38 +181,40 @@ def block_jump(scope, ctx, block: Block):
         return scope.resolve(block.result)
 
 
-def _collect_block_access(ctx, block, call):
-    if isinstance(ctx, CollectContext):
-        if call.callee == "pil.store":
-            name = typing.cast(str, call.args[0])
-            block.store_names.add(name)
-        elif call.callee == "pil.load":
-            name = typing.cast(str, call.args[0])
-            block.load_names.add(name)
+def frame_rewrite(namemap: dict):
+    def rewrite(name: str) -> Optional[str]:
+        parts = name.split(".", 1)
+        if parts[0] in namemap:
+            # An arg with no canonical caller name (atomic value, unbound
+            # temporary) has nothing to rewrite to — drop, don't emit "".
+            if not namemap[parts[0]]:
+                return None
+            parts[0] = namemap[parts[0]]
+            return ".".join(parts)
+        return None
+
+    return rewrite
 
 
-def _propagate_block_access(ctx, prev_block, block):
-    if prev_block and isinstance(ctx, CollectContext):
-        prev_block.store_names.update(block.store_names)
-        prev_block.load_names.update(block.load_names)
-
-
-def dispatch_block(block: Block, is_static: bool):
+def dispatch_block(block: Block, is_static: bool, rewriter=None):
     scope = Scope.current()
     ctx = BuildContext.current()
 
     prev_block = _current.collector_block
     _current.collector_block = block
-    stack = _collector_stack()
-    stack.append((scope, block))
     try:
         for call in block.calls:
             with ctx.change_span(call.span):
                 dispatch_call(call, scope, ctx)
-                _collect_block_access(ctx, block, call)
     finally:
-        stack.pop()
-        _propagate_block_access(ctx, prev_block, block)
+        if prev_block is not None and isinstance(ctx, CollectContext):
+            if rewriter is None:
+                prev_block.store_names.update(block.store_names)
+            else:
+                for name in block.store_names:
+                    rewritten = rewriter(name)
+                    if rewritten is not None:
+                        prev_block.store_names.add(rewritten)
         _current.collector_block = prev_block
 
     if is_static:
@@ -218,14 +223,5 @@ def dispatch_block(block: Block, is_static: bool):
     return None
 
 
-def collect(block: Block):
-    # A function invocation starts a fresh collection tree. Reset the
-    # enclosing collector block so the callee's Python name stores/loads don't
-    # propagate into the caller's block. MOVE aliases are recovered separately
-    # via collector_stack in Block.mark_store (caller names that share identity).
-    prev_block = _current.collector_block
-    _current.collector_block = None
-    try:
-        dispatch_block(block, True)
-    finally:
-        _current.collector_block = prev_block
+def collect(block: Block, rewriter=None):
+    dispatch_block(block, True, rewriter=rewriter)

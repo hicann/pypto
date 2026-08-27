@@ -5,6 +5,7 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
+from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 import enum
@@ -12,6 +13,7 @@ import inspect
 import textwrap
 import threading
 from typing import Any, Optional, Union, cast
+import weakref
 
 import pypto
 from pypto import ir
@@ -128,7 +130,6 @@ class Block:
     jump: Optional[Jump] = None
     jump_loc: ir.Span = ir.Span.unknown()
     store_names: set[str] = field(default_factory=set)
-    load_names: set[str] = field(default_factory=set)
     span: ir.Span = ir.Span.unknown()
 
     def __str__(self):
@@ -138,33 +139,6 @@ class Block:
             stmt_str += f"\n{self.jump.name}  # Line {self.jump_loc.begin_line}"
         stmt_str = textwrap.indent(stmt_str, "    ")
         return f"^{self.id}({arg_str}):{stmt_str}"
-
-    @classmethod
-    def mark_store(cls, tensor):
-        """Record Python names that alias ``tensor`` as stored.
-
-        ``x[:] = y`` / ``Tensor.move`` is not a Python name store, so loop-carry
-        collection has to recover the binding by object identity. Walk the
-        collector stack rather than only ``Scope.current()``: MOVE inside a
-        helper must mark the caller's alias (e.g. ``cank``) on the enclosing
-        loop/if block, matching old-IR mutable-handle semantics.
-        """
-        stack = _collector_stack()
-        if stack:
-            for scope, block in stack:
-                if block is None:
-                    continue
-                for name, val in scope.locals.items():
-                    if val is tensor:
-                        block.store_names.add(name)
-            return
-        block = _current.collector_block
-        if block is None:
-            return
-        s = Scope.current()
-        for name, val in s.locals.items():
-            if val is tensor:
-                block.store_names.add(name)
 
 
 @dataclass
@@ -180,12 +154,6 @@ class Function:
 
     # Function body
     body: Block
-
-    # Load variables
-    load_vars: tuple[str, ...]
-
-    # Store variables
-    store_vars: tuple[str, ...]
 
     # Global variables
     global_vars: tuple[str, ...]
@@ -347,7 +315,6 @@ class BuildContext(ir.IRBuilder):
         return val
 
 
-
 class CollectContext(BuildContext):
     pass
 
@@ -367,15 +334,53 @@ class InsertPoint:
         self.ctx.clear_insert_point()
 
 
+_ATOMIC_TYPES = (
+    type(None),
+    bool,
+    int,
+    float,
+    complex,
+    str,
+    bytes,
+    pypto.SymbolicScalar,
+)
+
+def _is_atomic(value) -> bool:
+    return isinstance(value, _ATOMIC_TYPES) or value is pypto
+
+
+def _id_guard(value: Any):
+    """Callable proving an id key is still owned by its original object:
+    a weakref when possible, else a strong pin (a pinned object never dies,
+    so its id can never be recycled). Calling it returns None once dead."""
+    try:
+        return weakref.ref(value)
+    except TypeError:
+        return lambda: value
+
+
 class Scope:
-    def __init__(self, local_vars: list[str], parent: Optional["Scope"] = None):
-        self.locals: dict[str, Union[ir.Var, Any]] = {name: None for name in local_vars}
+    def __init__(self, parent: Optional["Scope"] = None):
+        self.locals: dict[str, Union[ir.Var, Any]] = {}
         self.parent = parent
         self.varmap = {}
         self.eval = True
+        self.name_aliases: dict[int, set[str]] = defaultdict(set)
+        self.canonical_name: dict[int, str] = {}
+        # id(value) keys outlive their objects: a dead object's address can be
+        # recycled by a new allocation, whose names must not merge with the
+        # stale entry. The guard lets us detect and drop recycled ids.
+        self._id_guards: dict[int, Any] = {}
+
+    def _drop_if_dead(self, key: int) -> None:
+        guard = self._id_guards.get(key)
+        if guard is not None and guard() is None:
+            self._id_guards.pop(key, None)
+            self.name_aliases.pop(key, None)
+            self.canonical_name.pop(key, None)
 
     def __getitem__(self, name: str) -> Union[ir.Var, Any]:
-        var = self.locals.get(name, None)
+        var = self.get_local(name)
         if var is None:
             if self.parent:
                 return self.parent[name]
@@ -383,7 +388,33 @@ class Scope:
         return var
 
     def __setitem__(self, key: str, value: Union[ir.Var, Any]):
-        self.locals[key] = value
+        self.bind_name(key, value)
+        self.set_local(key, value)
+
+    def bind_name(self, name: str, value: Any):
+        if self.is_global_scope():
+            return
+        if not _is_atomic(value):
+            key = id(value)
+            self._drop_if_dead(key)
+            self.name_aliases[key].add(name)
+            if key not in self.canonical_name:
+                self.canonical_name[key] = name
+                self._id_guards[key] = _id_guard(value)
+
+    def get_canonical_name(self, value: Any) -> str:
+        key = id(value)
+        self._drop_if_dead(key)
+        return self.canonical_name.get(key, "")
+
+    def aliases(self, value: Any) -> set[str]:
+        """Name set bound to this object; a recycled id yields an empty set."""
+        key = id(value)
+        self._drop_if_dead(key)
+        return self.name_aliases.get(key, set())
+
+    def is_global_scope(self) -> bool:
+        return self.parent is None
 
     @staticmethod
     def store(name: str, value: Union[ir.Var, Any]):
@@ -419,20 +450,140 @@ class Scope:
             return result
         return val
 
+    def _resolve_slot(self, parts: list[str]):
+        """Resolve a dotted name's container: (object holding the last part, last part).
+        """
+        obj = self.locals.get(parts[0], None)
+        for part in parts[1:-1]:
+            if obj is None:
+                return None, None
+            obj = getattr(obj, part, None)
+        return obj, parts[-1]
+
+    def get_local(self, name: str):
+        if "." not in name:
+            return self.locals.get(name)
+        obj, key = self._resolve_slot(name.split("."))
+        if obj is not None and key is not None:
+            return getattr(obj, key, None)
+        return None
+
+    def resolve_local(self, name: str):
+        """Resolve a name against THIS scope only (locals + dotted slots).
+
+        Unlike __getitem__, a miss does not fall through to parent scopes or
+        globals: carry collection must not pick up a same-named global/builtin
+        just because a local currently holds None.
+        """
+        return self.get_local(name)
+
+    def set_local(self, name: str, value: Union[ir.Var, Any]):
+        if "." not in name:
+            self.locals[name] = value
+            return
+        obj, key = self._resolve_slot(name.split("."))
+        if obj is not None and key is not None:
+            Journal.record(obj, key)  # dotted slot: journal for branch isolation
+            setattr(obj, key, value)
+
+
+class _Missing:
+    """Sentinel: attribute slot did not exist before the recorded write."""
+
+    def __repr__(self):
+        return "<missing>"
+
+
+_MISSING = _Missing()
+
+
+class Journal:
+    """Undo log for attribute-slot writes (``d.a = x``).
+    """
+
+    _state = threading.local()
+
+    @classmethod
+    def _active(cls) -> list["Journal"]:
+        stack = getattr(cls._state, "stack", None)
+        if stack is None:
+            stack = cls._state.stack = []
+        return stack
+
+    def __init__(self):
+        self._entries = []  # (obj, key, old value) in write order
+
+    @classmethod
+    def record(cls, obj, key = ""):
+        """Record an attribute-slot write before it happens; no-op unless a
+        Journal is active."""
+        stack = cls._active()
+        if stack:
+            entries = stack[-1]._entries
+            if isinstance(obj, pypto.Tensor):
+                entries.append((obj, key, obj.logical_tensor()))
+            else:
+                entries.append((obj, key, getattr(obj, key, _MISSING)))
+
+    def __enter__(self):
+        Journal._active().append(self)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        Journal._active().pop()
+        for obj, key, old in reversed(self._entries):
+            if isinstance(obj, pypto.Tensor):
+                obj.set_logical_tensor(old)
+            elif old is _MISSING:
+                # Slot was created inside the branch: roll the creation back.
+                if key and getattr(obj, key, _MISSING) is not _MISSING:
+                    delattr(obj, key)
+            else:
+                setattr(obj, key, old)
+
+
+def slot_read(obj, key, value) -> None:
+    scope = _current.scope
+    assert scope is not None
+
+    name = scope.get_canonical_name(obj)
+    if name:
+        scope.bind_name(f"{name}.{key}", value)
+
+
+def slot_write(obj, key, value) -> None:
+    scope = _current.scope
+    assert scope is not None
+
+    name = scope.get_canonical_name(obj)
+    scope.bind_name(f"{name}.{key}", value)
+
+    block = _current.collector_block
+    if block is None:
+        return
+    block.store_names.add(f"{name}.{key}")
+
+    Journal.record(obj, key)
+
+
+def slot_write_inplace(obj) -> None:
+    block = _current.collector_block
+    if block is None:
+        return
+
+    scope = _current.scope
+    assert scope is not None
+
+    name = scope.get_canonical_name(obj)
+    block.store_names.add(name)
+    block.store_names.update(scope.aliases(obj))
+
+    Journal.record(obj)
 
 class _Current(threading.local):
     scope: Optional[Scope] = None
     build_context: Optional[BuildContext] = None
-    collector_block: Optional["Block"] = None
-    collector_stack: Optional[list] = None
+    collector_block: Optional[Block] = None
 
 
 _current = _Current()
-
-
-def _collector_stack() -> list:
-    stack = getattr(_current, "collector_stack", None)
-    if stack is None:
-        stack = []
-        _current.collector_stack = stack
-    return stack

@@ -1,0 +1,9 @@
+function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]), v0_logical_tensor %b@1 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32])) outcast() #type(Opaque) #entry(false) {
+    v0_logical_tensor %$0@2 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10000 VEC_DUP() token();
+    int64_t %i_0, v0_logical_tensor %inner.c_0@3 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = for %loop_idx_18 inrange 0, 32, 1 iter { none %i = %None; v0_logical_tensor %inner.c@2 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = %$0@2; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        v0_logical_tensor %$2@3 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10001 ADDS(%inner.c@2) token();
+        continue %loop_idx_18, %$2@3;
+    }
+    v0_logical_tensor %a_0@4 #dtype(float) #shape([32, 32]) #offset([0, 0]) #dynvalidshape([32, 32]) = !10002 ADD(%inner.c_0@3, %b@1) token();
+    return %a_0@4, %b@1;
+}
