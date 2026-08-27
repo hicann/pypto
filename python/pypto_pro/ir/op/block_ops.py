@@ -790,17 +790,6 @@ def _ir_set_validshape(
     return _ir_core.create_op_call(block_ir_op("set_validshape"), [tile, shape_0, shape_1], {}, actual_span)
 
 
-def _ir_set_stride(
-    tensor: Expr,
-    stride: Sequence[int | Expr] | _ir_core.MakeTuple,
-    *,
-    span: Span | None = None,
-) -> Expr:
-    actual_span = span or _span()
-    stride_0, stride_1 = _normalize_2d_sequence(stride, "stride", actual_span)
-    return _ir_core.create_op_call(block_ir_op("set_stride"), [tensor, stride_0, stride_1], {}, actual_span)
-
-
 _SCALAR_UNSUPPORTED_DTYPES: tuple[DataType, ...] = (
     DataType.FP4,
     DataType.FP8E4M3FN,
@@ -1335,6 +1324,47 @@ def _normalize_tile_pad(pad: "int | TilePad | None") -> "int | None":
     raise TypeError("TileType.pad must be a enum TilePad or compile-time integer 0/1/2/3")
 
 
+def _static_last_axis(shape: "Sequence[int] | _ir_core.MakeTuple") -> "int | None":
+    """The tile's innermost dimension when it is a compile-time integer, else None."""
+    dims = shape.elements if isinstance(shape, _ir_core.MakeTuple) else shape
+    if not dims:
+        return None
+    last = dims[-1]
+    if isinstance(last, ConstInt):
+        return int(last.value)
+    return last if isinstance(last, int) and not isinstance(last, bool) else None
+
+
+def _validate_subbyte_tile_shape(tt: "TileType") -> None:
+    """A sub-byte tile must span whole storage units along the axis its elements pack into.
+
+    Several sub-byte elements share a byte, and only the innermost axis can carry that packing,
+    so a tile that ends mid-byte has no address for its own edge. Tensors are exempt: their
+    innermost extent may be dynamic, and it is the tile that decides what a transfer touches.
+    """
+    pack = 8 // tt.dtype.get_bit()
+    if pack <= 1:
+        return
+    last = _static_last_axis(tt.shape)
+    if last is not None and last % pack != 0:
+        raise ValueError(
+            f"a {tt.dtype.to_string()} tile's last dimension must be a multiple of {pack} "
+            f"({pack} elements share a storage unit), got {last}. Pad the tile to the next "
+            f"multiple of {pack}."
+        )
+
+
+def _has_unit_last_axis(shape: "Sequence[int] | _ir_core.MakeTuple") -> bool:
+    """Whether the tile's innermost dimension is statically 1 (dynamic dims answer False)."""
+    dims = shape.elements if isinstance(shape, _ir_core.MakeTuple) else shape
+    if not dims:
+        return False
+    last = dims[-1]
+    if isinstance(last, ConstInt):
+        return int(last.value) == 1
+    return isinstance(last, int) and not isinstance(last, bool) and last == 1
+
+
 def _apply_default_layout(tt: "TileType") -> None:
     arch = _get_current_arch()
     layout_dict = _DEFAULT_LAYOUTS_A5 if arch == "a5" else _DEFAULT_LAYOUTS_A3
@@ -1345,6 +1375,23 @@ def _apply_default_layout(tt: "TileType") -> None:
             raise ValueError(f"{tt.target_memory.name} is only supported on A5, got architecture '{arch}'")
         if tt.fractal is None:
             tt.fractal = 32
+
+    # A tile whose last axis is 1 has only its rows left to align, so the ISA accepts it in one
+    # encoding only: BLayout::RowMajor needs Cols * sizeof(dtype) % 32 == 0, which a 1-wide tile
+    # cannot satisfy, and codegen therefore emits ColMajor (DN). A fractal layout would have its
+    # block layout silently rewritten to something the user did not ask for -- ZN on a [N, 1] Mat
+    # tile would come out NN. Checked before the early return below, because the memory space
+    # where column tiles actually live (Vec) has no default layout and would skip it otherwise.
+    if tt.layout is not None and _has_unit_last_axis(tt.shape) and tt.layout not in (
+        TensorLayout.ND,
+        TensorLayout.DN,
+    ):
+        raise ValueError(
+            f"a tile whose last axis is 1 requires layout ND or DN, got {tt.layout.name}: a "
+            f"1-wide tile cannot meet the 32-byte column alignment a fractal layout needs, so "
+            f"it is always emitted column-major. Drop the layout argument (DN is inferred), or "
+            f"widen the tile if you need {tt.layout.name}."
+        )
 
     if default_layout is None:
         return
@@ -1408,6 +1455,7 @@ class TileType:
 
     def __post_init__(self):
         self.pad = _normalize_tile_pad(self.pad)
+        _validate_subbyte_tile_shape(self)
         _apply_default_layout(self)
 
 
@@ -1927,7 +1975,6 @@ register_table(
         "dequant": OpSpec(builder=_ir_dequant),
         "ssbuf_store": OpSpec(builder=_ir_ssbuf_store),
         "ssbuf_load": OpSpec(builder=_ir_ssbuf_load),
-        "set_stride": OpSpec(builder=_ir_set_stride),
         # unary / scalar / fused compute ops
         "neg": OpSpec(builder=_ir_neg),
         "abs": OpSpec(builder=_ir_abs),

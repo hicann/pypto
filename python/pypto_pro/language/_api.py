@@ -968,19 +968,6 @@ def set_validshape(tile: "Tile | TileGroup", shape: List[int]) -> None:
 
 
 @_api_decl
-def set_stride(tensor: "Tensor", stride: List[int]) -> None:
-    """Override the per-dimension stride of a global (GM) tensor in place.
-
-    Rewrites the tensor's stride descriptor so that subsequent ``pl.load`` /
-    ``pl.store`` accesses walk the tensor with the given ``stride`` (in elements)
-    instead of the default row-major stride. ``stride`` is a 2-element list
-    ``[row_stride, col_stride]``; entries may be constants or runtime scalars
-    (e.g. read from an input via ``pl.getval``). This lets a single load gather
-    rows that are non-contiguous in GM (positive stride).
-    """
-
-
-@_api_decl
 def set_mask_count() -> None:
     """Switch mask to counting mode."""
 

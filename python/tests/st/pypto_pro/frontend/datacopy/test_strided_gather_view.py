@@ -7,11 +7,19 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-"""Frontend runtime example for pl.set_stride(tensor, stride) on A5 CCE.
+"""Frontend runtime example for gathering non-contiguous GM lines on A5 CCE.
 
-pl.set_stride overrides the row/col stride of a global (GM) tensor descriptor in
-place, so a single pl.load can gather rows that are non-contiguous in GM. The
-stride is supplied at runtime (here read from an input tensor via pl.getval).
+``pl.make_tensor(source, shape, stride)`` builds a tensor view with its own stride, so a single
+``pl.load`` can gather rows that are far apart in GM. The stride is supplied at runtime (here
+read from an input tensor), and because the view is a tensor in its own right it gets its own
+GlobalTensor declaration -- its stride applies to that view alone and to every access through
+it, offsets included.
+
+This replaces the former ``pl.set_stride``, which rewrote one tensor's descriptor in place: it
+left the offset arithmetic on the *original* stride, leaked its effect to every later access of
+that tensor, and wrote to the tensor's plain declaration even when the access needed a
+different layout variant. Positioning a view by pointer (``pl.addptr``) expresses the same
+gather without any of that.
 """
 
 import logging
@@ -47,10 +55,10 @@ def _is_a5() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Test 1: basic two-line gather using a single pl.load + pl.set_stride.
+# Test 1: basic two-line gather using a single pl.load through a strided view.
 # ---------------------------------------------------------------------------
 @pl.jit(auto_mutex=True)
-def set_stride_basic_kernel(
+def strided_view_basic_kernel(
     x: pl.Tensor[[N_LINES, LINE], pl.DT_FP16],
     strides: pl.Tensor[[1, 1], pl.DT_INT32],
     out: pl.Tensor[[2, LINE], pl.DT_FP16],
@@ -61,14 +69,14 @@ def set_stride_basic_kernel(
     with pl.section_vector():
         s = strides[0, 0]  # element (row) stride, read from GM input
         tile = ub_db.next()
-        pl.set_stride(x, [s, 1])  # override the GM row stride
-        pl.load(tile, x, [0, 0])  # row0 = line 0, row1 = line 0 + s/LINE
+        view = pl.make_tensor(x, [N_LINES, LINE], [s, 1])  # same data, custom row stride
+        pl.load(tile, view, [0, 0])  # row0 = line 0, row1 = line 0 + s/LINE
         pl.store(out, tile, [0, 0])
 
 
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
-def test_set_stride_basic():
+def test_strided_view_basic():
     if not _is_a5():
         return
     device = ST_DEVICE
@@ -79,23 +87,28 @@ def test_set_stride_basic():
     strides = torch.tensor([[stride_lines * LINE]], device=device, dtype=torch.int32)
     out = torch.zeros(2, LINE, device=device, dtype=torch.float16)
 
-    set_stride_basic_kernel(x, strides, out)
+    strided_view_basic_kernel(x, strides, out)
     torch.npu.synchronize()
 
     expected = torch.stack([x[0], x[stride_lines]], dim=0)
 
-    logging.info("basic set_stride: line strides = %d", stride_lines)
+    logging.info("basic strided view: line strides = %d", stride_lines)
     torch.testing.assert_close(out, expected, rtol=0, atol=0)
-    logging.info("test_set_stride_basic passed.")
+    logging.info("test_strided_view_basic passed.")
 
 
 # ---------------------------------------------------------------------------
 # Test 2: gather 64 separate lines from a [512, 128] GM tensor into UB using
 # 32 pl.load operations. Each load fetches a [2, 128] tile whose two lines are
-# spaced by a random, positive stride read from an input via pl.getval.
+# spaced by a random, positive stride read from an input.
+#
+# The view is positioned by pointer rather than by a load offset: its stride is
+# the *pair* spacing, so an offset through the view would step by s, not by one
+# line. pl.addptr moves the base to line i, and the view then supplies the
+# spacing between the pair's two rows.
 # ---------------------------------------------------------------------------
 @pl.jit(auto_mutex=True)
-def gather_stride_kernel(
+def gather_view_kernel(
     x: pl.Tensor[[N_LINES, LINE], pl.DT_FP16],
     strides: pl.Tensor[[1, N_PAIRS], pl.DT_INT32],
     out: pl.Tensor[[OUT_LINES, LINE], pl.DT_FP16],
@@ -107,14 +120,14 @@ def gather_stride_kernel(
         for i in pl.range(0, N_PAIRS, 1):
             s = strides[0, i]  # per-pair element (row) stride from GM input
             tile = ub_db.next()
-            pl.set_stride(x, [s, 1])  # positive stride between the two loaded lines
-            pl.load(tile, x, [i, 0])  # row0 = line i, row1 = line i + s/LINE
+            view = pl.make_tensor(pl.addptr(pl.make_ptr(x), i * LINE), [2, LINE], [s, 1])
+            pl.load(tile, view, [0, 0])  # row0 = line i, row1 = line i + s/LINE
             pl.store(out, tile, [2 * i, 0])
 
 
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
-def test_gather_64_lines_with_set_stride():
+def test_gather_64_lines_with_strided_views():
     if not _is_a5():
         return
     device = ST_DEVICE
@@ -131,7 +144,7 @@ def test_gather_64_lines_with_set_stride():
 
     out = torch.zeros(OUT_LINES, LINE, device=device, dtype=torch.float16)
 
-    gather_stride_kernel(x, stride_elems, out)
+    gather_view_kernel(x, stride_elems, out)
     torch.npu.synchronize()
 
     expected = torch.zeros(OUT_LINES, LINE, device=device, dtype=torch.float16)
@@ -142,11 +155,11 @@ def test_gather_64_lines_with_set_stride():
 
     logging.info("gather line strides: %s", stride_lines.tolist())
     torch.testing.assert_close(out, expected, rtol=0, atol=0)
-    logging.info("test_gather_64_lines_with_set_stride passed.")
+    logging.info("test_gather_64_lines_with_strided_views passed.")
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    test_set_stride_basic()
-    test_gather_64_lines_with_set_stride()
-    logging.info("\nAll set_stride tests passed!")
+    test_strided_view_basic()
+    test_gather_64_lines_with_strided_views()
+    logging.info("\nAll strided-view tests passed!")

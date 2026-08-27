@@ -344,6 +344,20 @@ def write_datatype_metadata(output_dir: str, metadata: dict | None) -> None:
     )
 
 
+def _logical_shape(arg, dtype: DataType) -> tuple[int, ...]:
+    """The argument's shape in *elements* of ``dtype``.
+
+    A sub-byte dtype has no torch dtype of its own, so callers pass the packed storage buffer
+    (uint8, two fp4 per byte) and torch reports its shape in those storage units. pypto counts
+    elements everywhere, so the packed axis -- the innermost one, the only axis a sub-byte
+    element can be packed along -- is scaled back up. Whole-byte dtypes are already 1:1.
+    """
+    pack = 8 // dtype.get_bit()
+    if pack <= 1 or not arg.shape:
+        return tuple(arg.shape)
+    return tuple(arg.shape[:-1]) + (arg.shape[-1] * pack,)
+
+
 def _pl_dtype_to_torch(dtype: DataType):
     """Return the torch.dtype an argument for this pl DataType must have, or None if unknown."""
     return _PL_DTYPE_TO_TORCH.get(str(dtype))
@@ -441,7 +455,7 @@ def _validate_tensor_arg(i: int, arg, spec: ParamSpec, dyn_var_values: dict[str,
         raise TypeError(f"arg[{i}] '{spec.name}': dtype mismatch — expected {expected_dtype}, got {arg.dtype}")
     if len(arg.shape) != len(spec.shape):
         raise TypeError(f"arg[{i}] '{spec.name}': rank mismatch — expected {len(spec.shape)}D, got {len(arg.shape)}D")
-    for d, (actual, expected) in enumerate(zip(arg.shape, spec.shape)):
+    for d, (actual, expected) in enumerate(zip(_logical_shape(arg, spec.dtype), spec.shape)):
         if isinstance(expected, int) and expected not in (-1, actual):
             raise TypeError(f"arg[{i}] '{spec.name}': dim[{d}] mismatch — expected {expected}, got {actual}")
         if isinstance(expected, str):
@@ -534,9 +548,10 @@ def _append_tensor_ctype_arg(result: list, dyn_var_values: dict[str, int], arg, 
     result.append(ctypes.c_void_p(arg.data_ptr()))
     if spec.kind != ParamKind.TENSOR or spec.shape is None:
         return
+    logical = _logical_shape(arg, spec.dtype)
     for d, dim in enumerate(spec.shape):
         if isinstance(dim, str):
-            dyn_var_values.setdefault(dim, arg.shape[d])
+            dyn_var_values.setdefault(dim, logical[d])
 
 
 def _append_scalar_ctype_arg(result: list, arg, spec: ParamSpec) -> None:

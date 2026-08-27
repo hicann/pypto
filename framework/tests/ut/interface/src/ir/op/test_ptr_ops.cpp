@@ -193,5 +193,91 @@ TEST_F(PtrOpsTest, MakeTensor_ShapeStrideMismatch_Throws)
     EXPECT_THROW((void)reg.Create("ptr.make_tensor", {ptr, shape, stride}, Sp()), npu::tile_fwk::Error);
 }
 
+// ----------------------------------------------------------------------------
+// Sub-byte views: the axis two elements are packed along must be contiguous.
+//
+// A 4-bit element has no address of its own, so a stride other than 1 on the innermost axis
+// cannot be turned into the element stride the GlobalTensor descriptor needs, nor added to a
+// pointer whose element type is a packed pair. The view op rejects it while the span still
+// points at the caller. Which dtype decides this is the *result* dtype, so an explicit dtype
+// kwarg both imposes and lifts the rule.
+// ----------------------------------------------------------------------------
+
+TEST_F(PtrOpsTest, MakeTensor_SubByteContiguousInnermost_Ok)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto ptr = MakePtrVar("p", DataType::FP4E2M1);
+    auto call = reg.Create("ptr.make_tensor", {ptr, MakeIntTuple({128, 64}), MakeIntTuple({64, 1})}, Sp());
+    auto rt = As<TensorType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::FP4E2M1);
+    EXPECT_EQ(rt->shape_.size(), 2u);
+}
+
+TEST_F(PtrOpsTest, MakeTensor_SubByteStridedInnermost_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto ptr = MakePtrVar("p", DataType::FP4E2M1);
+    EXPECT_THROW((void)reg.Create("ptr.make_tensor", {ptr, MakeIntTuple({128, 32}), MakeIntTuple({64, 2})}, Sp()),
+                 npu::tile_fwk::Error);
+}
+
+TEST_F(PtrOpsTest, MakeTensor_SubByteRuntimeInnermostStride_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto ptr = MakePtrVar("p", DataType::FP4E1M2);
+    // Not a ConstInt at all: it cannot be proven contiguous, so it is refused too.
+    std::vector<ExprPtr> elems = {std::make_shared<ConstInt>(64, DataType::INT64, Sp()),
+                                  MakeScalarVar("runtime_stride", DataType::INT64)};
+    auto stride = std::make_shared<MakeTuple>(elems, Sp());
+    EXPECT_THROW((void)reg.Create("ptr.make_tensor", {ptr, MakeIntTuple({128, 32}), stride}, Sp()),
+                 npu::tile_fwk::Error);
+}
+
+TEST_F(PtrOpsTest, MakeTensor_SubByteEmptyStride_Ok)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto ptr = MakePtrVar("p", DataType::FP4E2M1);
+    // An empty stride tuple means "contiguous row-major", so there is nothing to reject.
+    auto call = reg.Create("ptr.make_tensor", {ptr, MakeIntTuple({128, 64}), MakeIntTuple({})}, Sp());
+    auto rt = As<TensorType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::FP4E2M1);
+}
+
+TEST_F(PtrOpsTest, MakeTensor_WholeByteStridedInnermost_Ok)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto ptr = MakePtrVar("p", DataType::FP16);
+    // Whole-byte elements are individually addressable, so a strided innermost axis is fine.
+    auto call = reg.Create("ptr.make_tensor", {ptr, MakeIntTuple({128, 32}), MakeIntTuple({64, 2})}, Sp());
+    auto rt = As<TensorType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::FP16);
+}
+
+TEST_F(PtrOpsTest, MakeTensor_DtypeKwargImposesTheSubByteRule)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto ptr = MakePtrVar("p", DataType::UINT8); // whole-byte *source*
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"dtype", DataType::FP4E2M1}};
+    // Reinterpreted as fp4, so the rule applies even though the source dtype would not trip it.
+    EXPECT_THROW(
+        (void)reg.Create("ptr.make_tensor", {ptr, MakeIntTuple({128, 32}), MakeIntTuple({64, 2})}, kwargs, Sp()),
+        npu::tile_fwk::Error);
+}
+
+TEST_F(PtrOpsTest, MakeTensor_DtypeKwargLiftsTheSubByteRule)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto ptr = MakePtrVar("p", DataType::FP4E2M1); // sub-byte *source*
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"dtype", DataType::UINT8}};
+    // Reinterpreted as bytes, which are addressable, so the strided innermost axis is allowed.
+    auto call = reg.Create("ptr.make_tensor", {ptr, MakeIntTuple({128, 32}), MakeIntTuple({64, 2})}, kwargs, Sp());
+    auto rt = As<TensorType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::UINT8);
+}
+
 } // namespace ir
 } // namespace pypto

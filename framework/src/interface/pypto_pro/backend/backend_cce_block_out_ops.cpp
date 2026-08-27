@@ -701,28 +701,6 @@ static std::string MakeBlockOutSetValidShapeCodegenCCE(const ir::CallPtr& op, co
 }
 
 // ============================================================================
-// block.set_stride  -  args = [tensor, row_stride, col_stride]
-// Emits: tensor.SetStride<DIM_3, DIM_4>(row, col);
-// The global tensor descriptor is declared once with a fully-dynamic 5D stride
-// (pto::Stride<-1,...>), where rows map to DIM_3 and cols to DIM_4. This op
-// overrides those two runtime strides so subsequent block.load/store accesses
-// through the same descriptor walk the tensor with the supplied element strides.
-// ============================================================================
-static std::string MakeBlockOutSetStrideCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "block.set_stride: expected 3 args (tensor, row, col), got " << op->args_.size();
-    auto tensor_var = std::dynamic_pointer_cast<const ir::Var>(op->args_[0]);
-    CHECK(tensor_var != nullptr) << "block.set_stride: tensor must be a Var";
-    std::string tensor = codegen.GetVarName(tensor_var);
-    std::string row = codegen.GetExprAsCode(op->args_[1]);
-    std::string col = codegen.GetExprAsCode(op->args_[2]);
-    codegen.Emit(tensor + ".SetStride<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>(" +
-                 "static_cast<int64_t>(" + row + "), static_cast<int64_t>(" + col + "));");
-    return "";
-}
-
-// ============================================================================
 // block.matmul  - args = [dst, left, right]
 // Emits: TMATMUL[<AccPhase::Phase>](dst, left, right);
 // ============================================================================
@@ -1392,12 +1370,6 @@ REGISTER_BACKEND_OP(BackendCCE, "block.set_validshape")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutSetValidShapeCodegenCCE(op, codegen);
-    });
-
-REGISTER_BACKEND_OP(BackendCCE, "block.set_stride")
-    .set_pipe(ir::PipeType::S)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutSetStrideCodegenCCE(op, codegen);
     });
 
 REGISTER_BACKEND_OP(BackendCCE, "block.move")

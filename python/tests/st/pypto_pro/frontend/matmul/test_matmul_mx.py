@@ -191,7 +191,6 @@ def _make_mx_kernel(a_dtype_label, b_dtype_label, m, k, n, *, use_phase,
     a_dtype, _, a_is_fp4 = _MX_DTYPES[a_dtype_label]
     b_dtype, _, b_is_fp4 = _MX_DTYPES[b_dtype_label]
     assert a_is_fp4 == b_is_fp4
-    is_fp4 = a_is_fp4
     out_dtype, _ = _OUT_DTYPES[out_dtype_label]
     use_offset_addressing = addressing == "offset"
     use_tile_addressing = addressing == "tile"
@@ -271,16 +270,6 @@ def _make_mx_kernel(a_dtype_label, b_dtype_label, m, k, n, *, use_phase,
             kt = scale_a.shape[1] * 2 * GROUP_SIZE
             if transpose_scale_a:
                 kt = scale_a.shape[0] * 2 * GROUP_SIZE
-            if is_fp4:
-                # FP4 tensor annotations expose packed bytes; PTO strides use logical FP4 elements.
-                if transpose_a:
-                    pl.set_stride(a, [1, mt])
-                else:
-                    pl.set_stride(a, [kt, 1])
-                if transpose_b_load:
-                    pl.set_stride(b, [1, kt])
-                else:
-                    pl.set_stride(b, [nt, 1])
             for mi in pl.range(0, mt, TILE):
                 m_valid = pl.min(TILE, mt - mi)
                 for ni in pl.range(0, nt, TILE):
@@ -307,20 +296,12 @@ def _make_mx_kernel(a_dtype_label, b_dtype_label, m, k, n, *, use_phase,
                         pl.set_validshape(sbl, [SCALE_K, n_valid])
 
                         if use_offset_addressing:
-                            if transpose_a and is_fp4:
-                                pl.load(cur_a, a, [ki, mi // 2], order=[1, 0])
-                            elif transpose_a:
+                            if transpose_a:
                                 pl.load(cur_a, a, [ki, mi], order=[1, 0])
-                            elif is_fp4:
-                                pl.load(cur_a, a, [mi, ki // 2])
                             else:
                                 pl.load(cur_a, a, [mi, ki])
-                            if transpose_b_load and is_fp4:
-                                pl.load(cur_b, b, [ni, ki // 2], order=[1, 0])
-                            elif transpose_b_load:
+                            if transpose_b_load:
                                 pl.load(cur_b, b, [ni, ki], order=[1, 0])
-                            elif is_fp4:
-                                pl.load(cur_b, b, [ki, ni // 2])
                             else:
                                 pl.load(cur_b, b, [ki, ni])
                             if transpose_scale_a:
@@ -332,23 +313,12 @@ def _make_mx_kernel(a_dtype_label, b_dtype_label, m, k, n, *, use_phase,
                             else:
                                 pl.load(cur_sb, scale_b, [ki // (GROUP_SIZE * 2), ni, 0])
                         elif use_tile_addressing:
-                            if transpose_a and is_fp4:
-                                # FP4 tensor annotations use packed-byte columns. load_tile
-                                # scales by the logical tile width, so use an explicit packed
-                                # offset for the mantissa while retaining tile loads elsewhere.
-                                pl.load(cur_a, a, [ki, mi // 2], order=[1, 0])
-                            elif transpose_a:
+                            if transpose_a:
                                 pl.load_tile(cur_a, a, [ki // TILE, mi // TILE], order=[1, 0])
-                            elif is_fp4:
-                                pl.load(cur_a, a, [mi, ki // 2])
                             else:
                                 pl.load_tile(cur_a, a, [mi // TILE, ki // TILE])
-                            if transpose_b_load and is_fp4:
-                                pl.load(cur_b, b, [ni, ki // 2], order=[1, 0])
-                            elif transpose_b_load:
+                            if transpose_b_load:
                                 pl.load_tile(cur_b, b, [ni // TILE, ki // TILE], order=[1, 0])
-                            elif is_fp4:
-                                pl.load(cur_b, b, [ki, ni // 2])
                             else:
                                 pl.load_tile(cur_b, b, [ki // TILE, ni // TILE])
                             pl.load(cur_sa, scale_a, [mi, ki // (GROUP_SIZE * 2), 0])
@@ -357,18 +327,11 @@ def _make_mx_kernel(a_dtype_label, b_dtype_label, m, k, n, *, use_phase,
                             else:
                                 pl.load(cur_sb, scale_b, [ki // (GROUP_SIZE * 2), ni, 0])
                         else:
-                            if is_fp4:
-                                pl.load(cur_a, a, [mi, ki // 2])
-                                if transpose_b_load:
-                                    pl.load(cur_b, b, [ni, ki // 2], order=[1, 0])
-                                else:
-                                    pl.load(cur_b, b, [ki, ni // 2])
+                            pl.load_tile(cur_a, a, [mi // TILE, ki // TILE])
+                            if transpose_b_load:
+                                pl.load(cur_b, b, [ni, ki], order=[1, 0])
                             else:
-                                pl.load_tile(cur_a, a, [mi // TILE, ki // TILE])
-                                if transpose_b_load:
-                                    pl.load(cur_b, b, [ni, ki], order=[1, 0])
-                                else:
-                                    pl.load(cur_b, b, [ki, ni])
+                                pl.load(cur_b, b, [ki, ni])
                             pl.load(cur_sa, scale_a, [mi, ki // (GROUP_SIZE * 2), 0])
                             if transpose_b_load:
                                 pl.load(cur_sb, scale_b, [ni, ki // (GROUP_SIZE * 2), 0], order=[1, 0])
@@ -421,7 +384,6 @@ def _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label, m,
     a_dtype, _, a_is_fp4 = _MX_DTYPES[a_dtype_label]
     b_dtype, _, b_is_fp4 = _MX_DTYPES[b_dtype_label]
     assert a_is_fp4 == b_is_fp4
-    is_fp4 = a_is_fp4
     out_dtype, _ = _OUT_DTYPES[out_dtype_label]
     name = _kernel_name(f"mx_scale_tile_{out_dtype_label}", a_dtype_label, b_dtype_label, m, k, n)
 
@@ -490,9 +452,6 @@ def _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label, m,
             mt = out.shape[0]
             nt = out.shape[1]
             kt = scale_a.shape[1] * 2 * GROUP_SIZE
-            if is_fp4:
-                pl.set_stride(a, [kt, 1])
-                pl.set_stride(b, [1, kt])
             for mi in pl.range(0, mt, TILE):
                 m_valid = pl.min(TILE, mt - mi)
                 for ni in pl.range(0, nt, TILE):
@@ -516,12 +475,8 @@ def _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label, m,
                         pl.set_validshape(br, [TILE, n_valid])
                         pl.set_validshape(sal, [m_valid, SCALE_K])
                         pl.set_validshape(sbl, [SCALE_K, n_valid])
-                        if is_fp4:
-                            pl.load(cur_a, a, [mi, ki // 2])
-                            pl.load(cur_b, b, [ni, ki // 2], order=[1, 0])
-                        else:
-                            pl.load(cur_a, a, [mi, ki])
-                            pl.load(cur_b, b, [ni, ki], order=[1, 0])
+                        pl.load(cur_a, a, [mi, ki])
+                        pl.load(cur_b, b, [ni, ki], order=[1, 0])
                         pl.load(cur_sa, scale_a, [mi, ki // (GROUP_SIZE * 2), 0])
                         pl.load(cur_sb, scale_b, [ni, ki // (GROUP_SIZE * 2), 0], order=[1, 0])
                         pl.move(al, cur_a)
@@ -550,7 +505,6 @@ def _make_mx_batched_kernel(a_dtype_label, b_dtype_label, m, k, n):
     a_dtype, _, a_is_fp4 = _MX_DTYPES[a_dtype_label]
     b_dtype, _, b_is_fp4 = _MX_DTYPES[b_dtype_label]
     assert a_is_fp4 == b_is_fp4
-    is_fp4 = a_is_fp4
     name = _kernel_name("mx_batched_tile_order", a_dtype_label, b_dtype_label, m, k, n)
 
     @pl.jit(auto_mutex=True, name=name)
@@ -613,9 +567,6 @@ def _make_mx_batched_kernel(a_dtype_label, b_dtype_label, m, k, n):
             m_blocks = (mt + TILE - 1) // TILE
             k_blocks = kt // TILE
             n_blocks = (nt + TILE - 1) // TILE
-            if is_fp4:
-                pl.set_stride(a, [heads * kt, 1])
-                pl.set_stride(b, [1, heads * kt])
             for bi in pl.range(0, batch, 1):
                 for hi in pl.range(0, heads, 1):
                     for mb in pl.range(0, m_blocks, 1):
@@ -641,18 +592,8 @@ def _make_mx_batched_kernel(a_dtype_label, b_dtype_label, m, k, n):
                                 pl.set_validshape(br, [TILE, n_valid])
                                 pl.set_validshape(sal, [m_valid, SCALE_K])
                                 pl.set_validshape(sbl, [SCALE_K, n_valid])
-                                if is_fp4:
-                                    pl.load(
-                                        cur_a, a,
-                                        [bi, mb * TILE, hi, kb * TILE // 2], order=[1, 3]
-                                    )
-                                    pl.load(
-                                        cur_b, b,
-                                        [bi, nb * TILE, hi, kb * TILE // 2], order=[3, 1]
-                                    )
-                                else:
-                                    pl.load_tile(cur_a, a, [bi, mb, hi, kb], order=[1, 3])
-                                    pl.load_tile(cur_b, b, [bi, nb, hi, kb], order=[3, 1])
+                                pl.load_tile(cur_a, a, [bi, mb, hi, kb], order=[1, 3])
+                                pl.load_tile(cur_b, b, [bi, nb, hi, kb], order=[3, 1])
                                 pl.load(
                                     cur_sa, scale_a,
                                     [bi, mb * TILE, hi, kb * (SCALE_K // 2), 0], order=[1, 3]
@@ -802,9 +743,6 @@ def _make_mx_insert_kernel(dtype_label, m, k, n):
             pl.set_validshape(sbl, [SCALE_K, nt])
             pl.set_validshape(ac, [mt, nt])
 
-            if is_fp4:
-                pl.set_stride(a, [TILE, 1])
-                pl.set_stride(b, [nt, 1])
             pl.load(a_l1_tile, a, [0, 0])
             pl.load(b_l1, b, [0, 0])
             pl.load(sa_l1, scale_a, [0, 0, 0])

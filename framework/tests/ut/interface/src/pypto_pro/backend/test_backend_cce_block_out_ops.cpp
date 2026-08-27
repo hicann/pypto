@@ -624,16 +624,6 @@ TEST(BackendCCEBlockOutOps, SetValidShape)
     EXPECT_CONTAINS(code, "tile.SetValidShape(16, 8);");
 }
 
-TEST(BackendCCEBlockOutOps, SetStride)
-{
-    auto tensor_type = MakeTensorType();
-    auto call = MakeCall("block.set_stride", {MakeVar("tensor", tensor_type), MakeConstInt(128), MakeConstInt(64)});
-    auto code = RunCodegen("block.set_stride", call);
-    EXPECT_CONTAINS(code, "tensor.SetStride<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>");
-    EXPECT_CONTAINS(code, "static_cast<int64_t>(128)");
-    EXPECT_CONTAINS(code, "static_cast<int64_t>(64)");
-}
-
 TEST(BackendCCEBlockOutOps, Load)
 {
     TestableCCECodegen codegen(ir::SectionKind::Vector);

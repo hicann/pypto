@@ -175,6 +175,21 @@ TypePtr DeduceMakeTensorType([[maybe_unused]] const std::vector<ExprPtr>& args,
     // (e.g. uint8) as a typed view (e.g. fp16) without baking the dtype into the pointer parameter.
     DataType result_dtype = GetOpKwarg<DataType>(kwargs, "dtype", std::optional<DataType>(source_dtype));
 
+    // A sub-byte element has no address of its own: two FP4 values share a byte, so the axis they
+    // are packed along -- the innermost one -- has to be contiguous. Any other stride there cannot
+    // be turned into the element stride the GlobalTensor descriptor needs, and the offset it feeds
+    // is added to a pointer whose element type is a packed pair. Reject it here, while the op's
+    // span still points at the user's make_tensor call.
+    constexpr size_t kBitsPerByte = 8;
+    if (!stride.empty() && result_dtype.GetBit() < kBitsPerByte) {
+        auto innermost = As<ConstInt>(stride.back());
+        CHECK(innermost != nullptr && innermost->value_ == 1)
+            << "ptr.make_tensor: a " << result_dtype.ToString()
+            << " view must be contiguous along its innermost axis (stride 1), because two elements "
+            << "share a byte there and a half-byte cannot be addressed; got "
+            << (innermost != nullptr ? std::to_string(innermost->value_) : std::string("a runtime stride"));
+    }
+
     TensorView tv(stride, TensorLayout::ND, args[0]);
     return std::make_shared<TensorType>(shape_tuple->elements_, result_dtype, std::nullopt, tv);
 }

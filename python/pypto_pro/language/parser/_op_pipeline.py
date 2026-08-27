@@ -55,7 +55,6 @@ def get_op_pipe(op_name: str) -> PipeType | None:
 _DESCRIPTOR_ONLY_OPS: frozenset[str] = frozenset(
     {
         "set_validshape",
-        "set_stride",
     }
 )
 

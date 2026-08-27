@@ -331,22 +331,5 @@ REGISTER_OP("block.set_validshape")
         return DeduceBlockOutTileType(args, kwargs, "block.set_validshape", 3);
     });
 
-// block.set_stride: (tensor, row_stride, col_stride) -> TensorType (tensor's type)
-REGISTER_OP("block.set_stride")
-    .set_op_category("BlockOp")
-    .set_description("Override the per-dimension stride of a global tensor descriptor in place. "
-                     "Emits a GlobalTensor::SetStride call so subsequent loads/stores walk the "
-                     "tensor with the supplied (row, col) element strides.")
-    .add_argument("tensor", "Global tensor whose stride descriptor is rewritten (TensorType)")
-    .add_argument("row", "Runtime row stride in elements (ScalarType or constant)")
-    .add_argument("col", "Runtime column stride in elements (ScalarType or constant)")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 3) << "block.set_stride requires 3 arguments (tensor, row, col), got " << args.size();
-        auto tensor_type = As<TensorType>(args[0]->GetType());
-        CHECK(tensor_type) << "block.set_stride: arg 0 must be a TensorType";
-        return args[0]->GetType();
-    });
-
 } // namespace ir
 } // namespace pypto

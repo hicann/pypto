@@ -2042,6 +2042,15 @@ std::string CCECodegen::ComputeIRBasedOffset(const ir::TensorTypePtr& tensor_typ
         }
     }
     result << ")";
+    // Shapes, strides and offsets all count elements. The pointer this is added to does not: a
+    // sub-byte element type packs several elements per storage unit, so the element offset has
+    // to be converted. Tile shapes are checked to be whole storage units, which is what keeps a
+    // tile-aligned access landing on one.
+    const size_t bits = tensor_type->dtype_.GetBit();
+    constexpr size_t kBitsPerByte = 8;
+    if (bits < kBitsPerByte) {
+        return "(" + result.str() + " / " + std::to_string(kBitsPerByte / bits) + ")";
+    }
     return result.str();
 }
 

@@ -111,9 +111,6 @@ std::string TypeConverter::ConvertTileType(const ir::TileTypePtr& tile_type, int
         std::string SLayout = "NoneBox";
         std::string fractal = "512";
         std::string pad_value;
-        if (cols == 1) {
-            BLayout = "ColMajor";
-        }
         // Default valid_shape template params to -1 (dynamic); overridden when user provides explicit values.
         std::string type_rows = "-1";
         std::string type_cols = "-1";
@@ -132,6 +129,12 @@ std::string TypeConverter::ConvertTileType(const ir::TileTypePtr& tile_type, int
                 tile_type_str = "TileType::Left";
             else if (hw.blayout == TL::row_major && hw.slayout == TL::col_major)
                 tile_type_str = "TileType::Right";
+        }
+        // A single-column tile has only its rows left to align, so ColMajor is the one encoding
+        // the ISA accepts (BLayout::RowMajor requires Cols * sizeof(DType) % 32 == 0). It settles
+        // the block layout alone -- every other hardware field above still applies.
+        if (cols == 1) {
+            BLayout = "ColMajor";
         }
         ApplyTileViewValidShape(tile_type, rows, cols, type_rows, type_cols);
         type_alias << "Tile<" << tile_type_str << ", " << tile_type->dtype_.ToCTypeString() << ", " << rows << ", "
@@ -159,15 +162,18 @@ std::string TypeConverter::ConvertTileType(const ir::TileTypePtr& tile_type, int
     std::string type_rows = "-1";
     std::string type_cols = "-1";
 
-    if (cols == 1) {
-        BLayout = "ColMajor";
-    } else if (tile_type->hardwareInfo_.has_value()) {
+    if (tile_type->hardwareInfo_.has_value()) {
         const auto& hw = tile_type->hardwareInfo_.value();
         BLayout = ConvertTileLayout(hw.blayout);
         SLayout = ConvertTileLayout(hw.slayout);
         fractal = std::to_string(hw.fractal);
         pad_value = ConvertTilePadToPTOValue(hw.pad);
         compact_value = ConvertCompactModeToPTOValue(hw.compact);
+    }
+    // See the no-memref path above: a single-column tile settles its block layout by shape,
+    // and only its block layout.
+    if (cols == 1) {
+        BLayout = "ColMajor";
     }
     ApplyTileViewValidShape(tile_type, rows, cols, type_rows, type_cols);
     type_alias << "Tile<" << tile_type_str << ", " << tile_type->dtype_.ToCTypeString() << ", " << rows << ", " << cols
