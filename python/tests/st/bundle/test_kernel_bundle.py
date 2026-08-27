@@ -30,8 +30,6 @@ Scenario coverage:
                                                         in-memory ABI variants; CtrlFlowCache non-empty
   dyn_cellmatch  not value-dep     dynamic (symbolic)   SymbolMeta symbol trees + dynamic cell-match
                                                         metas: workspace re-evaluated per launch shape
-  value_depend   value-dependent   dynamic              CtrlFlowCache segment EMPTY; the same bundle
-                                                        launched twice with different tensor VALUES
   standalone     not value-dep     static, 0 B          the self-contained delivery form: one .so + one
                                                         .pyptokb + configs/, no pypto in the process.
                                                         SKIPPED unless the artifact was built
@@ -62,7 +60,6 @@ from st.bundle.bundle_abi import (  # noqa: E402
     TLV_AICPU_SO,
     TLV_CTRL_FLOW_CACHE,
     TLV_DEV_PROGRAM,
-    TLV_SYMBOL_META,
     read_bundle_tlvs,
     read_symbol_meta,
 )
@@ -185,31 +182,6 @@ def test_bundle_dynamic_cellmatch(bundle_path):
     )
 
     _consume("dyn_cellmatch", bundle_path)
-
-
-@duration_estimate(34)
-@pypto.options(pass_options={"enable_slice": True})
-def test_bundle_value_depend_page_attention(bundle_path):
-    """Value-dependent control flow: loop bounds come from tensor VALUES, so there is no cache to bake.
-
-    Such ops set devProg->disableCtrlFlowCache, skip the emulation pack hook entirely and are packed from
-    the launch path instead; the bundle must therefore carry an EMPTY CtrlFlowCache segment. The consume
-    step launches the one bundle twice with identical shapes but different act_seqs values -- that only
-    works if the on-device interpreter resolves the trip counts at launch.
-    """
-    _pack("value_depend_pa", bundle_path)
-
-    tlvs = _assert_common_segments(bundle_path)
-    cache = tlvs.get(TLV_CTRL_FLOW_CACHE)
-    assert cache is not None, "expected a present-but-empty CtrlFlowCache segment, not an absent one"
-    assert cache.length == 0, (
-        f"a value-dependent op must not carry a control-flow cache snapshot (got {cache.length} B); "
-        f"either the op stopped being value-dependent or the value-depend pack hook regressed"
-    )
-    assert TLV_SYMBOL_META in tlvs, "expected a SymbolMeta segment"
-
-    out = _consume("value_depend_pa", bundle_path)
-    assert "page-attention packed" in out and "page-attention alt" in out
 
 
 @duration_estimate(28)

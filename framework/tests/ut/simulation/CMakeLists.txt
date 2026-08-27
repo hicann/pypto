@@ -16,7 +16,7 @@ PTO_Fwk_UTest_AddCaseLib(
         TARGET ${_Target}
         SOURCES ${_Sources}
         PRIVATE_INCLUDE_DIRECTORIES ${PTO_FWK_SRC_ROOT}/framework/src/cost_model
-        LINK_LIBRARIES tile_fwk_operator tile_fwk_simulation dl
+        LINK_LIBRARIES tile_fwk_simulation dl
 )
 add_dependencies(${_Target} tile_fwk_simulation_pv)
 

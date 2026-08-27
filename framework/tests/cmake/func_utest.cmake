@@ -135,6 +135,7 @@ function(PTO_Fwk_UTest_AddExe_RunExe)
     )
     set(_Sources ${CMAKE_CURRENT_BINARY_DIR}/${PTO_Fwk_UTestNamePrefix}_main_stub.cpp)
     execute_process(COMMAND touch ${_Sources})
+    list(APPEND _Sources ${CMAKE_CURRENT_SOURCE_DIR}/utils/operator_stubs.cpp)
 
     # 默认全部执行
     set(GTestFilterList "*")

@@ -15,7 +15,7 @@ file(GLOB_RECURSE _Sources src/*.cpp)
 PTO_Fwk_UTest_AddCaseLib(
         TARGET ${_Target}
         SOURCES ${_Sources}
-        LINK_LIBRARIES tile_fwk_operator
+        LINK_LIBRARIES
 )
 add_custom_command(
         TARGET ${_Target} PRE_BUILD

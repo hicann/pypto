@@ -20,7 +20,7 @@ PTO_Fwk_UTest_AddCaseLib(
         TARGET ${_Target}
         SOURCES ${_Sources}
         PRIVATE_INCLUDE_DIRECTORIES ${_Include}
-        LINK_LIBRARIES tile_fwk_runtime tile_fwk_operator dl
+        LINK_LIBRARIES tile_fwk_runtime dl
 )
 target_compile_definitions(${_Target}
         PRIVATE

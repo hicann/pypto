@@ -20,12 +20,10 @@ has ``libtile_fwk_bundle.so`` + a ``.pyptokb`` -- no compiler front end, no reco
 Cases:
   static_add       non-value-dependent, static workspace (0 B); packed through the emulation hook, so the
                    bundle carries a NON-EMPTY CtrlFlowCache snapshot.
-  dyn_cellmatch    non-value-dependent but dynamically shaped: SymbolMeta carries real symbolic trees plus
+   dyn_cellmatch    non-value-dependent but dynamically shaped: SymbolMeta carries real symbolic trees plus
                    the dynamic cell-match launch metas, so workspace is re-evaluated per launch shape.
-  value_depend_pa  value-dependent control flow (loop bounds read from act_seqs tensor VALUES). Packed
-                   through the value-depend hook, so the CtrlFlowCache segment is EMPTY and the on-device
-                   interpreter resolves the trip counts at launch.
 """
+
 import argparse
 import ctypes
 import os
@@ -42,12 +40,6 @@ import torch_npu  # noqa: E402, F401  -- registers the npu backend
 
 import pypto  # noqa: E402
 from st.bundle.bundle_abi import BundleClient, make_desc_array  # noqa: E402
-from st.operator.test_page_attention import (  # noqa: E402
-    TileConfig,
-    op_page_attention,
-    op_page_attention_golden,
-)
-from st.pypto_test import TestBuilder  # noqa: E402
 from st.test_cellmatch_case import B_STATIC, D_STATIC, H_STATIC, k_tmp_to_d_emb  # noqa: E402
 
 
@@ -201,149 +193,11 @@ def consume_dyn_cellmatch(bundle_path: str, api: str):
 
 
 # ---------------------------------------------------------------------------------------------------
-# case: value_depend_pa -- value-dependent control flow (page attention)
-# ---------------------------------------------------------------------------------------------------
-# Loop trip counts come from act_seqs tensor VALUES (`cur_seq = act_seqs[b_idx]` -> GetTensorData ->
-# bn_per_batch), which sets devProg->disableCtrlFlowCache. Every shape below is held constant across the
-# two value sets -- the cache size is pinned by PA_MAX_BLOCKS, not by max(act_seqs) -- so the only thing
-# that differs between the two consume launches is the tensor CONTENT.
-PA_BLOCK_SIZE = 128
-PA_MAX_BLOCKS = 4  # blocks reserved per batch; pins block_table / kv-cache shapes
-PA_BATCH = 4
-PA_N_TILE = 32
-
-PA_ACT_SEQS_PACKED = [512, 512, 512, 512]  # bn_per_batch = [4, 4, 4, 4]
-PA_ACT_SEQS_ALT = [128, 512, 256, 384]     # bn_per_batch = [1, 4, 2, 3] -- same shapes, different values
-
-PA_TOL = 5e-4
-
-
-def _pa_params():
-    return {
-        "block_size": PA_BLOCK_SIZE,
-        "tile_config": TileConfig(
-            head_num_q_tile=PA_N_TILE,
-            c1_tile_shape=(32, 32, 64, 64, 128, 128),
-            v1_tile_shape=(32, 64),
-            c2_tile_shape=(32, 32, 64, 64, 128, 128),
-            v2_tile_shape=(32, 64),
-        ),
-        "max_unroll_times": 1,
-        "is_nz_format": False,
-        "b": PA_BATCH,
-        "n_q": 32,
-        "block_num": PA_BATCH * PA_MAX_BLOCKS,
-        "dtype": torch.float32,
-        "s_q": 1,
-        "n_kv": 1,
-        "kv_lora_rank": 512,
-        "qk_rope_dim": 64,
-        "n_tile": PA_N_TILE,
-    }
-
-
-def _pa_make_inputs(params, act_seqs, device: str, seed: int = 11):
-    """Build the 7-operand input list on CPU or device. Shapes depend only on params, never on act_seqs."""
-    b = params["b"]
-    n_q = params["n_q"]
-    s_q = params["s_q"]
-    n_kv = params["n_kv"]
-    kv_lora_rank = params["kv_lora_rank"]
-    qk_rope_dim = params["qk_rope_dim"]
-    block_size = params["block_size"]
-    block_num = params["block_num"]
-    dtype = params["dtype"]
-    d_q = kv_lora_rank + qk_rope_dim
-
-    max_seq = max(act_seqs)
-    assert max_seq <= PA_MAX_BLOCKS * block_size, (
-        f"act_seqs {act_seqs} exceeds the {PA_MAX_BLOCKS * block_size}-token reservation")
-
-    torch.manual_seed(seed)
-    q_bnsd = (torch.rand([b * n_q * s_q, d_q], dtype=dtype) * 2 - 1).to(device)
-    k_cache = (torch.rand([block_num, block_size, n_kv * d_q], dtype=dtype) * 2 - 1).to(device)
-    v_cache = (torch.rand([block_num, block_size, n_kv * kv_lora_rank], dtype=dtype) * 2 - 1).to(device)
-
-    # Identity block mapping: batch bi owns physical blocks [bi*PA_MAX_BLOCKS, (bi+1)*PA_MAX_BLOCKS).
-    block_table = torch.arange(0, block_num, dtype=torch.int32).reshape(b, PA_MAX_BLOCKS).to(device)
-    act = torch.tensor(act_seqs, dtype=torch.int32).to(device)
-
-    nope_h = n_kv * kv_lora_rank
-    q_nope = q_bnsd[:, :kv_lora_rank].contiguous()
-    q_rope = q_bnsd[:, kv_lora_rank:].contiguous()
-    k_cache_nope = k_cache[:, :, :nope_h].reshape(block_num * block_size, nope_h).contiguous()
-    k_cache_rope = k_cache[:, :, nope_h:].reshape(block_num * block_size, n_kv * qk_rope_dim).contiguous()
-    v_cache_2d = v_cache.reshape(block_num * block_size, nope_h).contiguous()
-    return [q_nope, k_cache_nope, v_cache_2d, q_rope, k_cache_rope, block_table, act]
-
-
-def _pa_golden(params, inputs):
-    cpu_inputs = [t.cpu() for t in inputs]
-    out, = op_page_attention_golden(params, *cpu_inputs, None)
-    return out
-
-
-def pack_value_depend_pa():
-    class _PABundlePack(TestBuilder):
-        def get_input_from_param(self):
-            # TestBuilder feeds the host-side run-once path, which wants CPU tensors.
-            inputs = _pa_make_inputs(self.params, self.params["act_seqs"], "cpu")
-            self.setup_inputs(*inputs)
-            self.set_tol(rtol=PA_TOL, atol=PA_TOL)
-            # Mirrors PATest: the golden's trailing attention_out slot is unused, params rides along.
-            return inputs + [self.params]
-
-    params = _pa_params()
-    params["act_seqs"] = PA_ACT_SEQS_PACKED
-    _PABundlePack(params, op_page_attention, op_page_attention_golden, tiling=PA_N_TILE)()
-
-
-def consume_value_depend_pa(bundle_path: str, api: str):
-    _, device = _device()
-    client = BundleClient(bundle_path, api)
-    params = _pa_params()
-
-    # Both launches reuse the one loaded bundle. Identical shapes, different act_seqs VALUES: if the device
-    # were replaying a host-baked control-flow cache instead of resolving trip counts from the tensor, the
-    # second case would read the wrong number of KV blocks and miss the golden.
-    goldens = {}
-    for label, act_seqs in (("packed", PA_ACT_SEQS_PACKED), ("alt", PA_ACT_SEQS_ALT)):
-        inputs = _pa_make_inputs(params, act_seqs, device)
-        out = torch.zeros(
-            params["b"] * params["n_q"] * params["s_q"], params["kv_lora_rank"],
-            dtype=params["dtype"], device=device)
-        descs = make_desc_array(inputs + [out])
-
-        ws_size = client.workspace(descs)
-        print(f"[ST] {label} act_seqs={act_seqs}: workspace = {ws_size}")
-        ws_keep, ws_ptr = _alloc_workspace(ws_size, device)
-        rc = client.launch(descs, ws_ptr, None, 1)
-        assert rc == 0, f"{label}: PyptoLaunch rc={rc}"
-        torch.npu.synchronize()
-        del ws_keep
-
-        golden = _pa_golden(params, inputs)
-        goldens[label] = golden
-        _check(f"page-attention {label} ({api} API)", out.reshape(golden.shape), golden, PA_TOL)
-
-    # Guard the guard: the two value sets share a seed, so they differ only through act_seqs. If they no
-    # longer drive the output apart, the pair of launches above would pass even on a device that ignored
-    # the tensor values entirely, and this case would stop testing value dependency at all.
-    spread = _max_diff(goldens["packed"], goldens["alt"])
-    print(f"[ST] golden spread between the two act_seqs value sets = {spread:.6f}")
-    assert spread > PA_TOL * 10, (
-        f"act_seqs {PA_ACT_SEQS_PACKED} vs {PA_ACT_SEQS_ALT} barely move the result (spread={spread}); "
-        f"pick value sets whose per-batch block counts differ more"
-    )
-
-
-# ---------------------------------------------------------------------------------------------------
 # registry + CLI
 # ---------------------------------------------------------------------------------------------------
 CASES = {
     "static_add": (pack_static_add, consume_static_add),
     "dyn_cellmatch": (pack_dyn_cellmatch, consume_dyn_cellmatch),
-    "value_depend_pa": (pack_value_depend_pa, consume_value_depend_pa),
 }
 
 
@@ -359,8 +213,9 @@ def main():
     if args.phase == "pack":
         # Packing is gated by these two env vars; the driver sets them, assert rather than silently no-op.
         assert os.environ.get("PYPTO_ENABLE_KERNEL_BUNDLE") == "1", "PYPTO_ENABLE_KERNEL_BUNDLE must be 1"
-        assert os.environ.get("PYPTO_KERNEL_BUNDLE_PATH") == args.bundle_path, \
+        assert os.environ.get("PYPTO_KERNEL_BUNDLE_PATH") == args.bundle_path, (
             "PYPTO_KERNEL_BUNDLE_PATH must match the requested bundle path"
+        )
         pack_fn()
         assert os.path.exists(args.bundle_path), f"no bundle produced at {args.bundle_path}"
         print(f"[ST] packed {args.case} -> {args.bundle_path} ({os.path.getsize(args.bundle_path)} B)")

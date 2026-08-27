@@ -8,10 +8,6 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-if (NOT ENABLE_FEATURE_PYTHON_FRONT_END)
-    add_subdirectory(operator)
-endif ()
-
 add_subdirectory(utils)
 add_subdirectory(adapter)
 add_subdirectory(interface)

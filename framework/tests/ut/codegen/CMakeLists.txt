@@ -17,5 +17,5 @@ PTO_Fwk_UTest_AddCaseLib(
         TARGET ${_Target}
         SOURCES ${_Sources}
         PRIVATE_INCLUDE_DIRECTORIES ${_Include}
-        LINK_LIBRARIES tile_fwk_operator
+        LINK_LIBRARIES
 )

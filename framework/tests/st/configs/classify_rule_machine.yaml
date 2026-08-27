@@ -72,11 +72,6 @@ stest:
       - DynamicReshapeUnalignImplaceTest.test_exchange_dim
       - DynamicReshapeUnalignImplaceTest.test_reshape_special
       - DynamicReshapeUnalignImplaceTest.test_src_op_dst_op
-      #===========================================================================
-      # ViewType功能用例
-      #===========================================================================
-      - ViewType.quant_test_bf16_2_int8
-      - ViewType.dequant_test_bf16_2_int8
 
   machine_host:
     cases:

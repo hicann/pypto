@@ -17,7 +17,7 @@
 #include <dlfcn.h>
 
 #include "cost_model/simulation/backend.h"
-#include "operator/models/llama/llama_def.h"
+
 #include "cost_model/simulation/common/CommonType.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -51,30 +51,6 @@ public:
 
     void TearDown() override {}
 };
-
-void RunLLamaLayerCostModel(const AttentionDims& dimsCfg, float threadhold = 0.001f)
-{
-    (void)threadhold;
-    int b = dimsCfg.b;
-    int n = dimsCfg.n;
-    int s = dimsCfg.s;
-    int d = dimsCfg.d;
-
-    PROGRAM("LLAMALAYER")
-    {
-        Tensor H(DataType::DT_FP32, {b * s, n * d}, "H");
-        Tensor AW(DataType::DT_FP16, {n * d, n * d * 3}, "AW");
-        Tensor DW(DataType::DT_FP16, {n * d, n * d}, "DW");
-        Tensor FW(DataType::DT_FP16, {n * d, n * d * 3}, "FW");
-        Tensor Res(DT_FP32, {b * s, n * d}, "Res");
-        config::SetBuildStatic(true);
-        FUNCTION("LLAMA", {H, AW, DW, FW, Res})
-        {
-            Res = LlamaLayer(H, AW, DW, FW, dimsCfg, SMALL_DFS_VEC_CFG, DFS_CUBE_CFG);
-        }
-        config::SetPassStrategy("OOO");
-    }
-}
 
 void RunMatrixCostModel()
 {
