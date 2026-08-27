@@ -67,8 +67,8 @@ def _make_kernel(tiling_key_cls):
     return _kernel
 
 
-def _ensure_compiled(kernel, *args, **kwargs):
-    return getattr(kernel, "_ensure_compiled")(*args, **kwargs)
+def _compile_for_key(kernel, *args, **kwargs):
+    return getattr(kernel, "_compile_for_key")(*args, **kwargs)
 
 
 kernel_bits8 = _make_kernel(TkBits8)
@@ -78,12 +78,12 @@ kernel_bits16 = _make_kernel(TkBits16)
 
 
 def test_bits_8_compile():
-    compiled = _ensure_compiled(kernel_bits8, {"OpType": 0})
+    compiled = _compile_for_key(kernel_bits8, {"OpType": 0})
     binary_dir = str(Path(compiled.lib_path).parent)
     assert Path(binary_dir).exists()
 
 
 def test_bits_16_compile():
-    compiled = _ensure_compiled(kernel_bits16, {"OpType": 0})
+    compiled = _compile_for_key(kernel_bits16, {"OpType": 0})
     binary_dir = str(Path(compiled.lib_path).parent)
     assert Path(binary_dir).exists()

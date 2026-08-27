@@ -45,7 +45,6 @@ TILE_N = 128
 
 def _reset_kernel_cache(kernel):
     getattr(kernel, "_compiled_by_signature").clear()
-    getattr(kernel, "_kernel_def_by_static_signature").clear()
 
 
 def _compiled_variant_count(kernel):

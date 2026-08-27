@@ -77,48 +77,83 @@ def pytest_runtestloop(session):
 
     items = session.items
 
-    # ---- Phase 1: discovery -- record (kernel, tilingkey, datatype) combos, launches stubbed.
-    records = []  # ordered, de-duplicated list of (kernel, concrete_key, dtype_key)
+    # ---- Phase 1: discovery -- record every variant that misses the cache, launches stubbed.
+    #
+    # The seam is _compile_variant, the single funnel every cache miss goes through, rather
+    # than _ensure_compiled. _compile_variant receives exactly what compiling needs and
+    # nothing else -- no runtime argument tuple to replay, no keys to re-resolve -- and its
+    # arguments are the cache key itself, so the dedup below is the real variant identity
+    # instead of an approximation of it. It is still a private method, so the mismatch risk
+    # has not vanished; what has changed is that phase 1 now reports when it goes wrong.
+    records = []  # ordered, de-duplicated (kernel, concrete_key, spec, bound_sig, static_sig)
     seen = set()
     placeholder = jit.CompiledKernel(lib_path="", param_specs=[])
     tile_jit_kernel_cls = getattr(jit, "_TileJitKernel")
-    orig_ensure_compiled = getattr(tile_jit_kernel_cls, "_ensure_compiled")
+    orig_compile_variant = getattr(tile_jit_kernel_cls, "_compile_variant")
     orig_launch = getattr(jit, "_launch")
 
-    def key_id(key):
-        if key is None:
-            return None
-        return tuple(sorted((name, str(value)) for name, value in key.items()))
-
-    def discover_ensure_compiled(self, args=None, concrete_key=None, dtype_key=None):
-        # Record the specialization reached by this test without compiling during discovery.
-        # Signature mirrors the real _ensure_compiled(args, concrete_key, dtype_key): `args`
-        # (the runtime call tuple) carries the static-shape signature for non-tilingkey kernels,
-        # so it must be captured and replayed at compile time.
-        dedup = (id(self), key_id(concrete_key), key_id(dtype_key))
+    def discover_compile_variant(self, concrete_key, spec, bound_signature, static_signature):
+        # Record and hand back a placeholder without compiling and without touching the
+        # cache, so the next launch of the same variant misses again and the dedup set --
+        # not the cache -- decides what is new.
+        tilingkey_packed, _, _, dtype_hash = spec
+        dedup = (id(self), static_signature, dtype_hash, tilingkey_packed)
         if dedup not in seen:
             seen.add(dedup)
-            records.append((self, args, concrete_key, dtype_key))
+            records.append((self, concrete_key, spec, bound_signature, static_signature))
         return placeholder
 
     def noop_launch(*_args, **_kwargs):
         return None
 
     info(f"phase 1/3: discovering kernels across {len(items)} tests...")
+    # Only the first failure is ever reported, so only the first is looked at, and even then
+    # through reprcrash -- the one-line message pytest already built. Stringifying the whole
+    # longrepr instead formats the entire traceback with source context, about 90 ms per test,
+    # and phase 1 stubs the launch so every test that asserts on kernel output fails by
+    # construction: doing it for all of them cost 19 s of the 25 s this phase took on a
+    # 210-test directory. `any()` below short-circuits without touching the repr at all.
+    first_failure = None
+
+    def _crash_message(report) -> str:
+        longrepr = getattr(report, "longrepr", None)
+        crash = getattr(longrepr, "reprcrash", None)
+        return getattr(crash, "message", None) or str(longrepr)[-200:]
     try:
-        setattr(tile_jit_kernel_cls, "_ensure_compiled", discover_ensure_compiled)
+        setattr(tile_jit_kernel_cls, "_compile_variant", discover_compile_variant)
         setattr(jit, "_launch", noop_launch)
         for i, item in enumerate(items):
             nextitem = items[i + 1] if i + 1 < len(items) else None
             try:
                 # log=False: run setup/call/teardown for fixture/param handling without emitting
                 # reports, so this phase does not affect the pass/fail tally.
-                runtestprotocol(item, nextitem=nextitem, log=False)
-            except Exception:
-                pass  # partial discovery is fine; missed kernels compile lazily in phase 3
+                reports = runtestprotocol(item, nextitem=nextitem, log=False)
+            except Exception as exc:  # noqa: BLE001 - discovery is best effort
+                if first_failure is None:
+                    first_failure = (item.nodeid, repr(exc))
+                continue
+            if first_failure is None and any(report.failed for report in reports):
+                failed = next(report for report in reports if report.failed)
+                first_failure = (item.nodeid, _crash_message(failed))
     finally:
-        setattr(tile_jit_kernel_cls, "_ensure_compiled", orig_ensure_compiled)
+        setattr(tile_jit_kernel_cls, "_compile_variant", orig_compile_variant)
         setattr(jit, "_launch", orig_launch)
+
+    # Most tests "fail" in this phase by construction: the launch is stubbed, so anything
+    # that asserts on kernel output sees an untouched tensor. That makes the per-test result
+    # useless as a health signal. What is not normal is finishing discovery with nothing
+    # recorded while tests were doing work -- that is precisely what a stub that no longer
+    # matches the real method looks like (96b03fb84 added a keyword the stub did not accept;
+    # every discovery call raised, every exception was swallowed as a test failure, and the
+    # suite quietly fell back to serial lazy compilation for months). Report that case, and
+    # carry a failure along so there is something to diagnose from.
+    if not records and items:
+        detail = f" First failure: {first_failure[0]} -> {first_failure[1]}" if first_failure else ""
+        info(
+            f"phase 1/3: WARNING -- discovered no kernels across {len(items)} test(s). "
+            f"Parallel pre-compilation is doing nothing; check that the _compile_variant stub "
+            f"still matches the real signature.{detail}"
+        )
 
     # ---- Phase 2: compile every recorded kernel in parallel.
     if records:
@@ -128,11 +163,11 @@ def pytest_runtestloop(session):
         info(f"phase 2/3: compiling {len(records)} kernel(s) with {jobs} worker(s)...")
 
         def build(record):
-            kernel, args, key, dtype_key = record
+            kernel, concrete_key, spec, bound_signature, static_signature = record
             try:
-                # Real _ensure_compiled performs codegen + compile once and populates the
-                # kernel cache for the serial launch phase.
-                orig_ensure_compiled(kernel, args, concrete_key=key, dtype_key=dtype_key)
+                # Codegen + compile once; _compile_variant installs the result in the
+                # kernel's cache itself, which is what phase 3 then hits.
+                orig_compile_variant(kernel, concrete_key, spec, bound_signature, static_signature)
             except Exception:  # noqa: BLE001 - phase 3 owns test error reporting
                 # Pre-compilation is best-effort. The normal test phase retries the kernel
                 # and either handles an expected error or reports an unexpected one.

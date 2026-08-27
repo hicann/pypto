@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 from collections import ChainMap
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 import ctypes
 import dataclasses
 from enum import Enum
@@ -121,10 +121,15 @@ class CompiledKernel:
     # True when the generated kernel uses only vector (AIV) cores (no cube code),
     # so block_dim should be clamped against the vector core count.
     is_aiv_only: bool = False
+    # Identity and artifacts of the generated kernel, forwarded to the exception-dump
+    # bookkeeping on every launch.
     kernel_name: str = ""
     build_dir: str = ""
     has_cube: bool = False
     has_vector: bool = True
+    # Lazily bound launch closure (see _build_launch_entry). It depends only on the
+    # fields above, so it is built once instead of on every launch.
+    entry: "Callable | None" = dataclasses.field(default=None, compare=False, repr=False)
 
 
 @dataclasses.dataclass
@@ -344,18 +349,22 @@ def write_datatype_metadata(output_dir: str, metadata: dict | None) -> None:
     )
 
 
-def _logical_shape(arg, dtype: DataType) -> tuple[int, ...]:
-    """The argument's shape in *elements* of ``dtype``.
+def _pack_factor(dtype: DataType | None) -> int:
+    """How many elements of ``dtype`` torch reports as one storage unit along the packed axis.
 
     A sub-byte dtype has no torch dtype of its own, so callers pass the packed storage buffer
     (uint8, two fp4 per byte) and torch reports its shape in those storage units. pypto counts
     elements everywhere, so the packed axis -- the innermost one, the only axis a sub-byte
-    element can be packed along -- is scaled back up. Whole-byte dtypes are already 1:1.
+    element can be packed along -- has to be scaled back up before a tensor argument is
+    compared against its ParamSpec or fed to the dynamic ABI tail. Whole-byte dtypes are
+    already 1:1, and note that ``8 // 32`` is 0, not 1, so a wide dtype needs the clamp too.
+
+    This depends only on the dtype, so the launch plan resolves it once per compiled kernel
+    and the launch path just multiplies (see :class:`_LaunchPlan`).
     """
-    pack = 8 // dtype.get_bit()
-    if pack <= 1 or not arg.shape:
-        return tuple(arg.shape)
-    return tuple(arg.shape[:-1]) + (arg.shape[-1] * pack,)
+    if dtype is None:
+        return 1
+    return max(8 // dtype.get_bit(), 1)
 
 
 def _pl_dtype_to_torch(dtype: DataType):
@@ -441,33 +450,6 @@ def _collect_dyn_vars(param_specs: list[ParamSpec]) -> list[str]:
     return result
 
 
-def _validate_tensor_arg(i: int, arg, spec: ParamSpec, dyn_var_values: dict[str, int]) -> None:
-    """Validate one tensor/ptr arg; update dyn_var_values in-place for dynamic dims."""
-    if arg is None:
-        return  # Allow None for optional ptr/tensor params (passed as null pointer)
-    if not isinstance(arg, torch.Tensor):
-        raise TypeError(f"arg[{i}] '{spec.name}': expected torch.Tensor, got {type(arg).__name__}")
-    if spec.kind == ParamKind.PTR or spec.shape is None:
-        return
-
-    expected_dtype = _pl_dtype_to_torch(spec.dtype)
-    if expected_dtype is not None and arg.dtype != expected_dtype:
-        raise TypeError(f"arg[{i}] '{spec.name}': dtype mismatch — expected {expected_dtype}, got {arg.dtype}")
-    if len(arg.shape) != len(spec.shape):
-        raise TypeError(f"arg[{i}] '{spec.name}': rank mismatch — expected {len(spec.shape)}D, got {len(arg.shape)}D")
-    for d, (actual, expected) in enumerate(zip(_logical_shape(arg, spec.dtype), spec.shape)):
-        if isinstance(expected, int) and expected not in (-1, actual):
-            raise TypeError(f"arg[{i}] '{spec.name}': dim[{d}] mismatch — expected {expected}, got {actual}")
-        if isinstance(expected, str):
-            if expected in dyn_var_values and dyn_var_values[expected] != actual:
-                raise TypeError(
-                    f"arg[{i}] '{spec.name}': dynamic shape variable '{expected}' "
-                    f"mismatch — previously {dyn_var_values[expected]}, "
-                    f"got {actual} at dim[{d}]"
-                )
-            dyn_var_values.setdefault(expected, actual)
-
-
 def _validate_scalar_arg(i: int, arg, spec: ParamSpec) -> None:
     """Validate one scalar arg against its ParamSpec."""
     if not isinstance(arg, (int, float, bool)):
@@ -520,69 +502,249 @@ def _pack_tiling_arg(args: tuple) -> tuple:
     return args[:-1] + (tiling_t,)
 
 
-def _validate_args(args: tuple, param_specs: list[ParamSpec]) -> None:
-    """Validate runtime args against the kernel's IR parameter descriptions.
+class _LaunchPlan:
+    """Everything about a launch that depends only on the kernel's ParamSpecs.
 
-    Raises:
-        TypeError: On count mismatch, wrong arg type, dtype mismatch, or shape mismatch.
+    Which parameter is a tensor, what torch dtype it must carry, which dimensions are
+    compile-time constants, which are dynamic ABI variables, and the order those variables
+    are appended in: none of that can change once the kernel is compiled, so it is resolved
+    here exactly once and the hot path just walks flat tuples.
+
+    Attributes:
+        n_params: Expected argument count.
+        has_tiling: Whether any parameter is a tiling struct (skips _pack_tiling_arg).
+        slots: Per-parameter descriptors in ABI order. Tensor slots are
+            ``(True, index, name, torch_dtype | None, rank, const_dims, dyn_dims, pack)``
+            where ``rank`` is -1 for parameters whose shape is not checked (PTR, or no
+            declared shape), ``dyn_dims`` lists the dimensions this parameter contributes
+            to the dynamic ABI tail, and ``pack`` is the sub-byte packing factor from
+            :func:`_pack_factor` (1 for every whole-byte dtype). Scalar slots are
+            ``(False, index, spec, ctype)``.
+        dyn_checks: ``(name, ((param_index, dim_index, pack_mult), ...))`` for dynamic
+            variables that appear more than once and therefore must agree across
+            arguments. ``pack_mult`` is the slot's ``pack`` on the packed axis and 1
+            everywhere else, so the comparison is made in elements.
+        dyn_count: Total length of the dynamic ABI tail.
+
+    Walking the slots in order and emitting each slot's ``dyn_dims`` reproduces the
+    first-occurrence ordering the ABI expects, which lets the launch path read each
+    tensor's ``.shape`` once instead of rebuilding the torch.Size per dynamic dimension.
     """
-    if len(args) != len(param_specs):
-        raise TypeError(f"Expected {len(param_specs)} args, got {len(args)}")
-    dyn_var_values: dict[str, int] = {}
-    for i, (arg, spec) in enumerate(zip(args, param_specs)):
-        if spec.kind in (ParamKind.TENSOR, ParamKind.PTR, ParamKind.TILING):
-            _validate_tensor_arg(i, arg, spec, dyn_var_values)
-        else:
-            _validate_scalar_arg(i, arg, spec)
 
+    __slots__ = ("n_params", "has_tiling", "slots", "dyn_checks", "dyn_count")
 
-def _append_tensor_ctype_arg(result: list, dyn_var_values: dict[str, int], arg, spec: ParamSpec) -> None:
-    """Append a tensor/ptr ABI argument and record dynamic dimensions."""
-    if arg is None:
-        result.append(ctypes.c_void_p(0))
-        if spec.kind == ParamKind.TENSOR and spec.shape is not None:
-            for dim in spec.shape:
-                if isinstance(dim, str):
-                    dyn_var_values.setdefault(dim, 0)
-        return
-    result.append(ctypes.c_void_p(arg.data_ptr()))
-    if spec.kind != ParamKind.TENSOR or spec.shape is None:
-        return
-    logical = _logical_shape(arg, spec.dtype)
-    for d, dim in enumerate(spec.shape):
-        if isinstance(dim, str):
-            dyn_var_values.setdefault(dim, logical[d])
-
-
-def _append_scalar_ctype_arg(result: list, arg, spec: ParamSpec) -> None:
-    """Append a scalar ABI argument using the dtype's ctypes mapping."""
-    ctype = _PL_DTYPE_TO_CTYPE.get(str(spec.dtype))
-    if ctype is None:
-        raise TypeError(
-            f"No ctypes mapping for scalar dtype {spec.dtype} "
-            f"(param '{spec.name}'). FP16/BF16 scalars are not supported."
+    def __init__(self, param_specs: list[ParamSpec]) -> None:
+        self.n_params = len(param_specs)
+        self.has_tiling = any(spec.kind == ParamKind.TILING for spec in param_specs)
+        slots: list[tuple] = []
+        occurrences: dict[str, list[tuple[int, int, int]]] = {}
+        sources: dict[str, tuple[int, int]] = {}
+        for index, spec in enumerate(param_specs):
+            if spec.kind not in (ParamKind.TENSOR, ParamKind.PTR, ParamKind.TILING):
+                ctype = _PL_DTYPE_TO_CTYPE.get(str(spec.dtype))
+                if ctype is None:
+                    # A property of the dtype, not of any argument: reject it once here
+                    # rather than on every launch.
+                    raise TypeError(
+                        f"No ctypes mapping for scalar dtype {spec.dtype} "
+                        f"(param '{spec.name}'). FP16/BF16 scalars are not supported."
+                    )
+                slots.append((False, index, spec, ctype))
+                continue
+            # PTR params and shapeless specs stay unchecked.
+            checked = spec.kind != ParamKind.PTR and spec.shape is not None
+            rank = -1
+            consts: tuple = ()
+            # A sub-byte dtype arrives packed into uint8 storage; spec.shape counts
+            # elements, so the innermost axis is scaled by `pack` before any comparison.
+            pack = _pack_factor(spec.dtype) if checked else 1
+            if checked:
+                rank = len(spec.shape)
+                consts = tuple(
+                    (d, v) for d, v in enumerate(spec.shape) if isinstance(v, int) and v != -1
+                )
+                for dim, value in enumerate(spec.shape):
+                    if isinstance(value, str):
+                        occurrences.setdefault(value, []).append(
+                            (index, dim, pack if dim == rank - 1 else 1)
+                        )
+            # Only TENSOR params feed the dynamic ABI tail.
+            own_dyn: list[int] = []
+            if spec.kind == ParamKind.TENSOR and spec.shape is not None:
+                for dim, value in enumerate(spec.shape):
+                    if isinstance(value, str) and value not in sources:
+                        sources[value] = (index, dim)
+                        own_dyn.append(dim)
+            dtype = _pl_dtype_to_torch(spec.dtype) if checked else None
+            slots.append((True, index, spec.name, dtype, rank, consts, tuple(own_dyn), pack))
+        self.slots = tuple(slots)
+        # A name seen once can never disagree with itself; only repeats need checking.
+        self.dyn_checks = tuple(
+            (name, tuple(where)) for name, where in occurrences.items() if len(where) > 1
         )
-    result.append(ctype(arg))
+        self.dyn_count = len(sources)
+        # The generated call_kernel signature declares its dynamic dimensions in the order
+        # _collect_dyn_vars produces (via _entry_params_from_param_specs); `sources` above
+        # rederives that order to build the matching argument tail. Two independent
+        # derivations of one ABI ordering do not fail loudly when they drift -- the
+        # arguments simply land in the wrong slots and the kernel reads the wrong extents
+        # off device memory. Tie them together here: once per compiled kernel, never on the
+        # launch path.
+        codegen_order = tuple(_collect_dyn_vars(param_specs))
+        if tuple(sources) != codegen_order:
+            raise RuntimeError(
+                "dynamic ABI tail disagrees with the generated kernel signature: "
+                f"launch order {tuple(sources)}, codegen order {codegen_order}"
+            )
 
 
-def _args_to_ctypes(args: tuple, param_specs: list[ParamSpec]) -> list:
-    """Convert runtime args to ctypes values for the call_kernel ABI.
+def _build_launch_entry(compiled: "CompiledKernel"):
+    """Bind one compiled kernel to a closure that launches it with no per-call setup.
 
-    - tensor / ptr -> ctypes.c_void_p (raw data pointer)
-    - scalar       -> ctypes type matching the DataType (e.g. c_float, c_int32)
-    - dynamic dims -> ctypes.c_int64, appended in first-occurrence order
+    The shared library, its ``call_kernel`` entry point and the static launch plan are
+    resolved once here; the returned closure only touches the arguments themselves.
+
+    ``call_kernel.argtypes`` is declared from the plan so the hot path can hand ctypes
+    plain Python ints and let it convert them at the call boundary in C, instead of
+    allocating one ctypes object per argument on every launch. The types mirror the
+    generated ``extern "C"`` signature exactly (see :func:`_generate_caller_cpp` and
+    :func:`_entry_params_from_param_specs`): ``uint32_t blockDim``, ``void* stream``,
+    one ``uint8_t*`` per tensor/ptr/tiling parameter, the scalar's own C type, then one
+    ``int32_t`` per dynamic dimension. Each compiled kernel owns its CDLL handle, so the
+    declaration cannot leak between kernels.
     """
-    result = []
-    dyn_var_values: dict[str, int] = {}  # insertion order = first-occurrence order (Python 3.7+)
+    plan = _LaunchPlan(compiled.param_specs)
+    lib = ctypes.CDLL(compiled.lib_path)
+    call_kernel = lib.call_kernel
+    n_params = plan.n_params
+    has_tiling = plan.has_tiling
+    slots = plan.slots
+    dyn_checks = plan.dyn_checks
+    # Scalars carry their own ctype; everything else crosses as an opaque pointer. The
+    # dynamic tail is int32_t on the C side and was being passed as c_int64, which worked
+    # only because the callee reads the low half of the register -- declaring it correctly
+    # here passes the same bits with the same wraparound and no longer relies on that.
+    call_kernel.argtypes = (
+        [ctypes.c_uint32, ctypes.c_void_p]
+        + [ctypes.c_void_p if slot[0] else slot[3] for slot in slots]
+        + [ctypes.c_int32] * plan.dyn_count
+    )
+    call_kernel.restype = None
+    logger = logging.getLogger()
+    # Exception-dump bookkeeping. The addresses and shapes it caches are per-launch, so
+    # the call itself has to stay on the hot path -- but the import and the kernel's own
+    # identity do not, and _load_lib used to redo both on every launch.
+    from pypto_pro.runtime.exception_dump import set_dump_info as _set_dump_info
 
-    for arg, spec in zip(args, param_specs):
-        if spec.kind in (ParamKind.TENSOR, ParamKind.PTR, ParamKind.TILING):
-            _append_tensor_ctype_arg(result, dyn_var_values, arg, spec)
-        else:
-            _append_scalar_ctype_arg(result, arg, spec)
+    param_specs = compiled.param_specs
+    dump_name = compiled.kernel_name
+    dump_dir = compiled.build_dir
+    dump_has_cube = compiled.has_cube
+    dump_has_vector = compiled.has_vector
 
-    result.extend(ctypes.c_int64(v) for v in dyn_var_values.values())
-    return result
+    def entry(args: tuple, block_dim: int, stream):
+        if has_tiling:
+            args = _pack_tiling_arg(args)
+        if len(args) != n_params:
+            raise TypeError(f"Expected {n_params} args, got {len(args)}")
+
+        # Plain Python values in ABI order; argtypes converts them at the call.
+        abi_args = []
+        append = abi_args.append
+        dyn_values: list = []
+        for slot in slots:
+            index = slot[1]
+            arg = args[index]
+            if not slot[0]:
+                _validate_scalar_arg(index, arg, slot[2])
+                append(arg)
+                continue
+            _, _, name, expected_dtype, rank, consts, dyn_dims, pack = slot
+            if arg is None:
+                append(None)  # ctypes maps None to a null void*
+                if dyn_dims:
+                    dyn_values.extend([0] * len(dyn_dims))
+                continue
+            if not isinstance(arg, torch.Tensor):
+                raise TypeError(f"arg[{index}] '{name}': expected torch.Tensor, got {type(arg).__name__}")
+            if rank >= 0:
+                # torch.dtype values are singletons, so identity is enough and cheaper.
+                if expected_dtype is not None and arg.dtype is not expected_dtype:
+                    raise TypeError(
+                        f"arg[{index}] '{name}': dtype mismatch — expected {expected_dtype}, got {arg.dtype}"
+                    )
+                # One .shape per tensor: reused for the positivity check, the rank check,
+                # the constant-dimension checks and this parameter's slice of the dynamic
+                # ABI tail.
+                shape = arg.shape
+                if len(shape) != rank:
+                    raise TypeError(
+                        f"arg[{index}] '{name}': rank mismatch — expected {rank}D, got {len(shape)}D"
+                    )
+                # Sub-byte dtype: torch reported the packed uint8 storage, so scale the
+                # innermost axis back to elements (see _pack_factor). Packing does not
+                # change the rank, so the check above reads either shape the same way.
+                if pack != 1 and rank:
+                    shape = tuple(shape[:-1]) + (shape[-1] * pack,)
+                # The compile path rejects a non-positive runtime dimension inside the
+                # shape-policy bind (_validate_positive_int). A cache hit skips that bind
+                # entirely, so without this a zero-sized tensor would raise on the launch
+                # that compiled the kernel and be accepted by every launch after it. One
+                # C-level pass over the torch.Size already in hand; `rank` guards the
+                # 0-d case, where min() would see an empty sequence.
+                if rank and min(shape) <= 0:
+                    raise ValueError(
+                        f"arg[{index}] '{name}': runtime dimensions must be positive, got {tuple(shape)}"
+                    )
+                for dim, expected in consts:
+                    if shape[dim] != expected:
+                        raise TypeError(
+                            f"arg[{index}] '{name}': dim[{dim}] mismatch — "
+                            f"expected {expected}, got {shape[dim]}"
+                        )
+                for dim in dyn_dims:
+                    dyn_values.append(shape[dim])
+            append(arg.data_ptr())
+
+        for var_name, where in dyn_checks:
+            first = -1
+            for param_index, dim, pack_mult in where:
+                other = args[param_index]
+                if other is None:
+                    continue
+                # pack_mult is 1 unless this is a sub-byte parameter's packed axis.
+                actual = other.shape[dim] * pack_mult
+                if first < 0:
+                    first = actual
+                elif actual != first:
+                    raise TypeError(
+                        f"arg[{param_index}] '{slots[param_index][2]}': dynamic shape variable "
+                        f"'{var_name}' mismatch — previously {first}, got {actual} at dim[{dim}]"
+                    )
+        abi_args.extend(dyn_values)
+
+        if stream is None:
+            stream = torch.npu.current_stream()
+        # The capture probe only feeds these two log lines; skip it when neither can emit.
+        if logger.isEnabledFor(logging.INFO):
+            try:
+                import torch_npu
+
+                if torch_npu.npu.is_current_stream_capturing():
+                    logging.info(
+                        "Capture status [1], kernel launching in graph capture mode (block_dim=%d)", block_dim
+                    )
+                else:
+                    logging.debug("Capture status [0], kernel launching in eager mode (block_dim=%d)", block_dim)
+            except (ImportError, AttributeError):
+                pass
+
+        _set_dump_info(dump_name, args, param_specs, dump_dir,
+                       has_cube=dump_has_cube, has_vector=dump_has_vector)
+        call_kernel(block_dim, stream._as_parameter_, *abi_args)
+
+    entry.lib = lib  # keep the library alive for as long as the closure is reachable
+    return entry
 
 
 def _get_mlir_code(result):
@@ -1198,66 +1360,18 @@ def _setup_arch_env(arch: str | None) -> str:
     return arch
 
 
-def _load_lib(lib_path: str, param_specs: list[ParamSpec], clean_up: bool = False, kernel_name: str = "",
-              build_dir: str = "", has_cube: bool = False, has_vector: bool = True):
-    lib = ctypes.CDLL(lib_path)
+def _launch(compiled: "CompiledKernel", args: tuple, block_dim: int, stream):
+    """Launch one compiled kernel, binding its entry closure on first use.
 
-    default_block_dim = 1  # Future: extend kernel to multi-core
-
-    def func_wrapper(*args, block_dim=default_block_dim, stream=None):
-        # The packed tiling device buffer rides as the last element of `args`, which stays
-        # referenced through call_kernel below, so it is not GC'd before the launch enqueues.
-        args = _pack_tiling_arg(args)
-        _validate_args(args, param_specs)
-        if stream is None:
-            stream = torch.npu.current_stream()
-
-        # Check and log stream capture status (equivalent to C++ GetStreamCaptureInfo)
-        try:
-            import torch_npu
-
-            is_capturing = torch_npu.npu.is_current_stream_capturing()
-            if is_capturing:
-                logging.info("Capture status [1], kernel launching in graph capture mode (block_dim=%d)", block_dim)
-            else:
-                logging.debug("Capture status [0], kernel launching in eager mode (block_dim=%d)", block_dim)
-        except (ImportError, AttributeError):
-            pass
-
-        from pypto_pro.runtime.exception_dump import set_dump_info as _set_dump_info
-
-        _set_dump_info(kernel_name, args, param_specs, build_dir, has_cube=has_cube, has_vector=has_vector)
-        ctypes_args = _args_to_ctypes(args, param_specs)
-        lib.call_kernel(block_dim, getattr(stream, "_as_parameter_"), *ctypes_args)
-
-    if clean_up:
-        os.remove(lib_path)
-
-    return func_wrapper
-
-
-def _launch(stream=None, block_dim=1, compiled_result: "CompiledKernel | str" = "", *args):
-    if isinstance(compiled_result, str):
-        if compiled_result == "":
-            raise RuntimeError("compiled_result is empty")
-        lib_path: str = compiled_result
-        param_specs: list[ParamSpec] = []
-        kernel_name: str = ""
-        build_dir: str = ""
-        has_cube: bool = False
-        has_vector: bool = True
-    else:
-        lib_path = compiled_result.lib_path
-        param_specs = compiled_result.param_specs
-        kernel_name = compiled_result.kernel_name
-        build_dir = compiled_result.build_dir
-        has_cube = compiled_result.has_cube
-        has_vector = compiled_result.has_vector
-    if stream is None:
-        stream = torch.npu.current_stream()
-    compiled_func = _load_lib(lib_path, param_specs, kernel_name=kernel_name, build_dir=build_dir,
-                              has_cube=has_cube, has_vector=has_vector)
-    compiled_func(*args, block_dim=block_dim, stream=stream)
+    Kept as a module-level function rather than inlined into the launcher so test
+    infrastructure has a single seam to stub out (see the PARALLEL_COMPILE conftest,
+    which replaces this to discover kernels without touching the device). ``args`` is
+    passed as a tuple, not ``*args``, so the hot path does not rebuild it.
+    """
+    entry = compiled.entry
+    if entry is None:
+        entry = compiled.entry = _build_launch_entry(compiled)
+    entry(args, block_dim, stream)
 
 
 def _validate_block_dim(block_dim):
@@ -1432,6 +1546,11 @@ def _is_tile_kernel(func) -> bool:
     return False
 
 
+# Specialization identity for a kernel launched without tilingkey/datatype keys.
+# (tilingkey_packed, dtype_consts, dtype_metadata, dtype_hash)
+_NO_SPEC = (None, None, None, None)
+
+
 class _TileJitKernel:
     """A JIT-compiled Tile kernel that supports bracket-launch syntax.
 
@@ -1466,8 +1585,27 @@ class _TileJitKernel:
         from pypto_pro.runtime.shape_policy import KernelSignatureSpec
 
         self._shape_signature_spec = KernelSignatureSpec.from_callable(func, closure_vars)
-        self._kernel_def_by_static_signature = {}
         self._compiled_by_signature: dict[tuple[tuple, str | None, int | None], "CompiledKernel"] = {}
+        self._static_dim_slots_cache: tuple | None = None
+        # Resolved bracket keys: sorted (tilingkey, datatype) items -> (tk snapshot,
+        # dtype snapshot, specialization identity). Every call site in the tree writes
+        # ``kernel[...](args)`` inline, so __getitem__ runs per launch and everything it
+        # derives would otherwise be rederived per launch. Bounded by the number of
+        # distinct specializations, which is the number of compiled variants; block_dim is
+        # deliberately not part of the key, since nothing here depends on it and including
+        # it would let a core-count sweep grow the memo without bound.
+        self._bracket_memo: dict[tuple, tuple] = {}
+        # Argument count for which _normalize_launch_args is a no-op: every parameter can
+        # be filled positionally, so a full positional call already is the normalized
+        # tuple. -1 when the signature rules that out (keyword-only, *args, **kwargs),
+        # which never equals len(args) and therefore always takes the general path.
+        signature = self._shape_signature_spec.python_signature
+        positional = (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        self._positional_arity = (
+            len(signature.parameters)
+            if signature is not None and all(p.kind in positional for p in signature.parameters.values())
+            else -1
+        )
         self.__name__ = func.__name__
         self.__doc__ = func.__doc__
 
@@ -1481,12 +1619,48 @@ class _TileJitKernel:
             kernel[stream, block_dim, {"NeedAttnMask": 1}](...)
         """
         stream, block_dim, tk_key, dtype_key = self._parse_launch_key(key)
+        # block_dim is fixed by the bracket key, so validate it here instead of
+        # re-checking the same value on every launch. It is kept out of the memo key
+        # because nothing the memo holds depends on it.
+        _validate_block_dim(block_dim)
+        try:
+            memo_key = (
+                None if tk_key is None else tuple(sorted(tk_key.items())),
+                None if dtype_key is None else tuple(sorted(dtype_key.items())),
+            )
+            resolved = self._bracket_memo.get(memo_key)
+        except (AttributeError, TypeError):
+            # Not a dict at all, or a dict holding unhashable values. Fall through to the
+            # validating branch, which rejects it with the schema's own message; a key that
+            # cannot be looked up is also never stored.
+            memo_key = None
+            resolved = None
+        if resolved is None:
+            if self._tilingkey_schema is not None:
+                self._tilingkey_schema.validate_concrete(tk_key)
+            # Snapshot the specialization dicts. The identity below is resolved once from
+            # them while codegen reads them again on a cache miss, so holding the caller's
+            # objects would let a later mutation compile one variant under another's key --
+            # poisoning the entry for every subsequent launch. Memoizing makes that sharper:
+            # a poisoned entry would now outlive the bracket that created it. The memo key
+            # is built from the dict's contents, so a mutated dict simply misses and
+            # resolves afresh.
+            tk_snapshot = None if tk_key is None else dict(tk_key)
+            dtype_snapshot = None if dtype_key is None else dict(dtype_key)
+            resolved = (tk_snapshot, dtype_snapshot, self._resolve_spec_identity(tk_snapshot, dtype_snapshot))
+            if memo_key is not None:
+                self._bracket_memo[memo_key] = resolved
+        tk_snapshot, dtype_snapshot, spec = resolved
+        arity = self._positional_arity
 
         def launcher(*args, **kwargs):
-            args = self._normalize_launch_args(args, kwargs)
-            _validate_block_dim(block_dim)
-            compiled = self._ensure_compiled(args, concrete_key=tk_key, dtype_key=dtype_key)
-            _launch(stream, block_dim, compiled, *args)
+            # A complete positional call is already normalized; skip the bind entirely.
+            if kwargs or len(args) != arity:
+                args = self._normalize_launch_args(args, kwargs)
+            compiled = self._ensure_compiled(
+                args, concrete_key=tk_snapshot, dtype_key=dtype_snapshot, spec=spec
+            )
+            _launch(compiled, args, block_dim, stream)
 
         return launcher
 
@@ -1497,9 +1671,10 @@ class _TileJitKernel:
                 f"Kernel '{self.__name__}' has compile-time specialization and cannot be called directly; "
                 "use bracket-launch syntax"
             )
-        args = self._normalize_launch_args(args, kwargs_)
-        compiled = self._ensure_compiled(args)
-        _launch(None, 1, compiled, *args)
+        if kwargs_ or len(args) != self._positional_arity:
+            args = self._normalize_launch_args(args, kwargs_)
+        compiled = self._ensure_compiled(args, spec=_NO_SPEC)
+        _launch(compiled, args, 1, None)
 
     @property
     def arch(self):
@@ -1513,26 +1688,15 @@ class _TileJitKernel:
     def datatype_schema(self):
         return self._datatype_schema
 
-    def to_kernel_def(
-        self, concrete_key: dict | None = None, datatype_consts: dict | None = None, *, bound_signature=None
-    ):
-        """Create the KernelDef for one shape specialization and concrete tiling key.
+    def to_kernel_def(self, concrete_key: dict | None = None, datatype_consts: dict | None = None):
+        """Create the KernelDef for one concrete tiling key and datatype specialization.
 
-        ``concrete_key`` remains the first positional argument for OPC compatibility.
-        Shape binding is keyword-only so the two independent concepts cannot be confused.
+        ``concrete_key`` is the first positional argument for OPC compatibility.
+
+        Shape binding is deliberately absent: the KernelDef carries the unbound function,
+        and the bound signature reaches codegen through ``parse_target_program`` and
+        ``probe_kernel_facts`` instead (see :func:`_codegen`).
         """
-        if bound_signature is None:
-            bound_signature = self._bind_static_shapes(None)
-        static_signature = bound_signature.static_signature
-        tilingkey_identity = None if concrete_key is None else tuple(sorted(concrete_key.items()))
-        datatype_identity = (
-            None if datatype_consts is None else tuple(sorted((k, str(v)) for k, v in datatype_consts.items()))
-        )
-        cache_key = (static_signature, tilingkey_identity, datatype_identity)
-        cached = self._kernel_def_by_static_signature.get(cache_key)
-        if cached is not None:
-            return cached
-
         # Create KernelDef directly with the captured closure_vars
         # (cannot call @kernel decorator here because inspect.currentframe().f_back
         # would point to this method instead of the user's module scope)
@@ -1541,8 +1705,7 @@ class _TileJitKernel:
         f = self._func
         (source_file, source_lines, source_lines_raw, line_offset, col_offset, func_def) = extract_func_source_info(f)
 
-        closure_vars = self._closure_vars or {}
-        kernel_def = KernelDef(
+        return KernelDef(
             func=f,
             source_file=source_file,
             source_lines=source_lines,
@@ -1550,7 +1713,7 @@ class _TileJitKernel:
             line_offset=line_offset,
             col_offset=col_offset,
             func_def=func_def,
-            closure_vars=closure_vars,
+            closure_vars=self._closure_vars or {},
             name=self._name,
             func_type=ir.FunctionType.Opaque,
             strict_ssa=False,
@@ -1560,8 +1723,6 @@ class _TileJitKernel:
             tilingkey_consts=concrete_key,
             datatype_consts=datatype_consts,
         )
-        self._kernel_def_by_static_signature[cache_key] = kernel_def
-        return kernel_def
 
     def _bind_runtime_args(self, args: tuple):
         """Validate tensor arguments and derive the static specialization signature."""
@@ -1587,42 +1748,104 @@ class _TileJitKernel:
         """Bind explicit binary-compilation shapes through the shared policy model."""
         return self._shape_signature_spec.bind_static_shapes(static_shapes)
 
-    def _ensure_compiled(
-        self, args: tuple | None = None, concrete_key: dict | None = None, dtype_key: dict | None = None
-    ):
-        """Lazily compile the kernel on first use, cached within this run.
+    def _static_dim_slots(self):
+        """Parameters carrying a StaticDim/StaticTail, i.e. the only ones whose runtime
+        shape can contribute to ``static_signature``. Computed once; empty for a kernel
+        declared entirely with ``pl.DYNAMIC`` and fixed dims, which lets _ensure_compiled
+        skip binding the signature altogether."""
+        slots = self._static_dim_slots_cache
+        if slots is None:
+            slots = self._static_dim_slots_cache = tuple(
+                t.parameter_index for t in self._shape_signature_spec.tensors if t.requires_binding
+            )
+        return slots
 
-        For tilingkey kernels, ``concrete_key`` selects the concrete field values baked into
-        the IR; the packed 64-bit value keys the in-process cache and the per-key output subdir
-        ``<build_dir>/tk_<packed>``. Codegen and compile are both per-key (the constants differ).
+    def _resolve_spec_identity(self, concrete_key, dtype_key):
+        """Pack the specialization half of the cache key.
+
+        Depends only on the bracket-launch key, never on the arguments, so callers that
+        know it is fixed (``__getitem__``) resolve it once and pass it down.
         """
-        # Preserve the pre-shape-policy internal API used by the optional parallel compiler:
-        # _ensure_compiled(concrete_key).
-        if isinstance(args, dict) and concrete_key is None:
-            concrete_key = args
-            args = None
-        bound_signature = self._bind_runtime_args(args) if args is not None else self._bind_static_shapes(None)
         tilingkey_packed = None
         if concrete_key is not None and self._tilingkey_schema is not None:
             tilingkey_packed = self._tilingkey_schema.pack(concrete_key)
         dtype_consts = _validate_datatype_key(self._datatype_schema, dtype_key)
         dtype_metadata = _datatype_metadata(self._datatype_schema, dtype_key, dtype_consts)
-        dtype_hash = _datatype_hash(dtype_metadata)
-        cache_key = (bound_signature.static_signature, dtype_hash, tilingkey_packed)
+        return tilingkey_packed, dtype_consts, dtype_metadata, _datatype_hash(dtype_metadata)
 
-        cached = self._compiled_by_signature.get(cache_key)
+    def _ensure_compiled(
+        self, args: tuple, concrete_key: dict | None = None, dtype_key: dict | None = None,
+        spec: tuple | None = None,
+    ):
+        """Return the compiled variant for one launch, compiling it on first use.
+
+        This is the launch hot path: ``args`` is the runtime argument tuple in Python
+        signature order. ``spec`` is the precomputed specialization identity from
+        :meth:`_resolve_spec_identity`; ``__getitem__`` passes it because the bracket key
+        pins it, so it is resolved here only when a caller did not.
+
+        Ahead-of-time compilation without runtime arguments goes through
+        :meth:`_compile_for_key` instead.
+        """
+        if spec is None:
+            spec = self._resolve_spec_identity(concrete_key, dtype_key)
+        tilingkey_packed, _, _, dtype_hash = spec
+
+        # A cache hit needs only the key, so binding the full signature -- two
+        # inspect.Signature.bind calls plus a BoundDimension per declared dimension -- is
+        # deferred to the miss path, where codegen actually consumes it.
+        if not self._static_dim_slots():
+            # No parameter carries a StaticDim/StaticTail, so no dimension can ever be
+            # marked static and the signature is provably empty for every launch.
+            bound_signature = None
+            static_signature = ()
+        else:
+            bound_signature = self._bind_runtime_args(args)
+            static_signature = bound_signature.static_signature
+
+        cached = self._compiled_by_signature.get((static_signature, dtype_hash, tilingkey_packed))
         if cached is not None:
+            # No validation here: every caller launches immediately afterwards and the
+            # launch path checks type, dtype, rank and every dimension. Doing it twice
+            # per launch only duplicates the same TypeError.
             return cached
 
-        arch = _setup_arch_env(self._arch)
+        if bound_signature is None:
+            bound_signature = self._bind_runtime_args(args)
+        return self._compile_variant(concrete_key, spec, bound_signature, static_signature)
+
+    def _compile_for_key(self, concrete_key: dict | None = None, dtype_key: dict | None = None):
+        """Compile one specialization ahead of any launch, without runtime arguments.
+
+        Used by the PARALLEL_COMPILE conftest to warm the cache from a worker thread and by
+        the tilingkey unit tests. Shapes come from the declared static policy
+        (``_bind_static_shapes(None)``) since there are no tensors to read them from.
+        """
+        spec = self._resolve_spec_identity(concrete_key, dtype_key)
+        tilingkey_packed, _, _, dtype_hash = spec
+        bound_signature = self._bind_static_shapes(None)
         static_signature = bound_signature.static_signature
+        cached = self._compiled_by_signature.get((static_signature, dtype_hash, tilingkey_packed))
+        if cached is not None:
+            return cached
+        return self._compile_variant(concrete_key, spec, bound_signature, static_signature)
+
+    def _compile_variant(self, concrete_key, spec, bound_signature, static_signature):
+        """Codegen + build one variant and install it in the cache. Cache-miss path only.
+
+        For tilingkey kernels, ``concrete_key`` selects the concrete field values baked into
+        the IR; the packed 64-bit value keys the in-process cache and the per-key output subdir
+        ``<build_dir>/tk_<packed>``. Codegen and compile are both per-key (the constants differ).
+        """
+        tilingkey_packed, dtype_consts, dtype_metadata, dtype_hash = spec
+        arch = _setup_arch_env(self._arch)
         logging.info(
             "Generating kernel '%s' for static shape signature %s",
             self.__name__,
             static_signature or "<dynamic-only>",
         )
         cg = _codegen(
-            self.to_kernel_def(concrete_key, datatype_consts=dtype_consts, bound_signature=bound_signature),
+            self.to_kernel_def(concrete_key, datatype_consts=dtype_consts),
             arch,
             clean_up=False,
             tilingkey_packed=tilingkey_packed,
@@ -1655,7 +1878,7 @@ class _TileJitKernel:
             kernel_name=cg.kernel_name, build_dir=cg.build_dir,
             has_cube=cg.has_cube, has_vector=cg.has_vector,
         )
-        self._compiled_by_signature[cache_key] = compiled
+        self._compiled_by_signature[(static_signature, dtype_hash, tilingkey_packed)] = compiled
         return compiled
 
     def _launch_key_error(self) -> str:
@@ -1674,7 +1897,14 @@ class _TileJitKernel:
         return tuple(bound.arguments[name] for name in self._shape_signature_spec.python_signature.parameters)
 
     def _parse_launch_key(self, key):
-        """Split the bracket key into (stream, block_dim, tilingkey_dict|None, dtype_dict|None)."""
+        """Split the bracket key into (stream, block_dim, tilingkey_dict|None, dtype_dict|None).
+
+        Checks the *shape* of the bracket -- which dicts must be present for this kernel's
+        schemas -- but not the tilingkey field values. ``validate_concrete`` walks the
+        schema and is left to ``__getitem__``'s memo-miss branch, since a key that has
+        already been resolved once was already validated then, and an invalid key never
+        reaches the memo.
+        """
         tk_key = None
         dtype_key = None
         if isinstance(key, tuple):
@@ -1699,7 +1929,6 @@ class _TileJitKernel:
         if self._tilingkey_schema is not None:
             if tk_key is None:
                 raise ValueError(self._launch_key_error())
-            self._tilingkey_schema.validate_concrete(tk_key)
         elif tk_key is not None:
             raise ValueError(self._launch_key_error())
         if self._datatype_schema is not None and dtype_key is None:

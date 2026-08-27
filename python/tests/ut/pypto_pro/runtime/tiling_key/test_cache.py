@@ -29,8 +29,8 @@ class TkPermutation:
     Flag = TilingKeyField(bits=1, values=[0, 1])
 
 
-def _ensure_compiled(kernel, *args, **kwargs):
-    return getattr(kernel, "_ensure_compiled")(*args, **kwargs)
+def _compile_for_key(kernel, *args, **kwargs):
+    return getattr(kernel, "_compile_for_key")(*args, **kwargs)
 
 
 def _compiled_cache(kernel):
@@ -99,7 +99,7 @@ def test_tilingkey_cache_subdirs():
 
     compiled_variants = []
     for key in combos:
-        compiled_variants.append(_ensure_compiled(kernel_permutation, key))
+        compiled_variants.append(_compile_for_key(kernel_permutation, key))
 
     cached = _compiled_cache(kernel_permutation)
     assert len(cached) >= 8, (
@@ -121,7 +121,7 @@ def test_tilingkey_cache_subdirs():
 
 def test_compile_produces_valid_binary_dir():
     """Compiled artifacts include a binary directory and kernel.cpp."""
-    compiled = _ensure_compiled(kernel_permutation, {"ModeA": 0, "ModeB": 0, "Flag": 0})
+    compiled = _compile_for_key(kernel_permutation, {"ModeA": 0, "ModeB": 0, "Flag": 0})
     binary_dir = str(Path(compiled.lib_path).parent)
     bin_path = Path(binary_dir)
     assert bin_path.is_dir()

@@ -64,10 +64,9 @@ def test_call_style_annotation_uses_same_shape_policy_model():
 
 
 def test_to_kernel_def_preserves_concrete_tilingkey_positional_api():
-    bound = _bind_static_shapes(mixed_policy_kernel, {"x": [2, 7, 4]})
     concrete_key = {"Mode": 1}
 
-    kernel_def = mixed_policy_kernel.to_kernel_def(concrete_key, bound_signature=bound)
+    kernel_def = mixed_policy_kernel.to_kernel_def(concrete_key)
 
     assert getattr(kernel_def, "_tilingkey_consts") == concrete_key
 
@@ -93,7 +92,7 @@ def test_bound_signature_is_consumed_by_ast_parameter_lowering():
     from pypto.pypto_impl import ir
 
     bound = _bind_static_shapes(mixed_policy_kernel, {"x": [2, 7, 4]})
-    program = mixed_policy_kernel.to_kernel_def(bound_signature=bound).parse_target_program(
+    program = mixed_policy_kernel.to_kernel_def().parse_target_program(
         ir.SectionKind.Vector, bound_signature=bound
     )[0]
     func = program.functions["mixed_policy_kernel"]
@@ -109,7 +108,7 @@ def test_ellipsis_expands_to_static_tail_before_parsing():
     from pypto.pypto_impl import ir
 
     bound = _bind_static_shapes(ellipsis_policy_kernel, {"x": [2, 7, 9]})
-    program = ellipsis_policy_kernel.to_kernel_def(bound_signature=bound).parse_target_program(
+    program = ellipsis_policy_kernel.to_kernel_def().parse_target_program(
         ir.SectionKind.Vector, bound_signature=bound
     )[0]
     shape = program.functions["ellipsis_policy_kernel"].params[0].type.shape

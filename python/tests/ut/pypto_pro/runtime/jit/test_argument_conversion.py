@@ -8,9 +8,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""Pure-Python unit tests for _validate_args() and _args_to_ctypes().
+"""Pure-Python unit tests for the launch argument ABI.
 
-No hardware or external tools are required.
+These drive the real launch closure built by ``_build_launch_entry`` -- the only path a
+kernel launch takes -- with the shared library faked out, and assert on the ctypes values
+handed to ``call_kernel``. No hardware or external tools are required.
 """
 
 import ctypes
@@ -23,7 +25,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Mock torch before any pypto_pro imports so jit.py's top-level 'import torch'
 # resolves to our MagicMock.  torch.Tensor is replaced with a concrete class
-# so that isinstance() checks inside _validate_args() work correctly.
+# so that isinstance() checks inside the launch closure work correctly.
 # ---------------------------------------------------------------------------
 _torch_mock = MagicMock()
 
@@ -47,9 +49,10 @@ DataType = importlib.import_module("pypto_pro").DataType
 _jit = importlib.import_module("pypto_pro.runtime.jit")
 ParamSpec = _jit.ParamSpec
 ParamKind = _jit.ParamKind
-_args_to_ctypes = getattr(_jit, "_args_to_ctypes")
+CompiledKernel = _jit.CompiledKernel
+_build_launch_entry = getattr(_jit, "_build_launch_entry")
 _collect_dyn_vars = getattr(_jit, "_collect_dyn_vars")
-_validate_args = getattr(_jit, "_validate_args")
+_pack_factor = getattr(_jit, "_pack_factor")
 torch = importlib.import_module("torch")
 
 
@@ -77,8 +80,76 @@ def _mock_torch():
 
 
 # ---------------------------------------------------------------------------
-# _validate_args
+# Harness: build the real launch closure against a fake .so
 # ---------------------------------------------------------------------------
+
+
+class _FakeCallKernel:
+    """Stands in for the CDLL's call_kernel: records calls, accepts argtypes/restype."""
+
+    def __init__(self):
+        self.calls = []
+        self.argtypes = None
+        self.restype = "unset"
+
+    def __call__(self, *args):
+        self.calls.append(args)
+
+
+class _FakeLib:
+    """Stands in for the CDLL handle."""
+
+    def __init__(self):
+        self.call_kernel = _FakeCallKernel()
+
+
+class _CtypesProxy:
+    """Real ctypes except that CDLL() hands back the fake library."""
+
+    def __init__(self, lib):
+        self._lib = lib
+
+    def CDLL(self, _path):  # noqa: N802 - mirrors the ctypes API name
+        return self._lib
+
+    def __getattr__(self, name):
+        return getattr(ctypes, name)
+
+
+_FAKE_STREAM = MagicMock()
+_FAKE_STREAM._as_parameter_ = 0
+_BLOCK_DIM = 8
+
+
+@pytest.fixture
+def launch(monkeypatch):
+    """Return ``launch(specs, args) -> [(declared ctype, value passed), ...]``.
+
+    The launch path hands ctypes plain Python values and lets the declared ``argtypes``
+    convert them, so a test has to check both halves: the type call_kernel was declared
+    with and the value handed to it. The returned list is the ABI argument vector -- one
+    entry per parameter followed by the dynamic-dimension tail -- with ``block_dim`` and
+    the stream handle stripped off.
+    """
+
+    def _launch(specs, args):
+        lib = _FakeLib()
+        monkeypatch.setattr(_jit, "ctypes", _CtypesProxy(lib))
+        entry = _build_launch_entry(CompiledKernel(lib_path="<fake>", param_specs=list(specs)))
+        entry(tuple(args), _BLOCK_DIM, _FAKE_STREAM)
+        fn = lib.call_kernel
+        block_dim, _stream, *values = fn.calls[-1]
+        assert block_dim == _BLOCK_DIM
+        assert fn.restype is None, "restype must be declared so ctypes skips the int conversion"
+        # blockDim and stream lead the C signature; the rest lines up with `values`.
+        assert fn.argtypes[:2] == [ctypes.c_uint32, ctypes.c_void_p]
+        declared = fn.argtypes[2:]
+        assert len(declared) == len(values), (
+            f"argtypes declares {len(declared)} parameters but {len(values)} were passed"
+        )
+        return list(zip(declared, values))
+
+    return _launch
 
 
 def _tensor_spec(name, dtype, shape) -> ParamSpec:
@@ -93,13 +164,16 @@ def _scalar_spec(name, dtype) -> ParamSpec:
     return ParamSpec(name, ParamKind.SCALAR, dtype, None)
 
 
-def test_validate_args_count_mismatch():
+# ---------------------------------------------------------------------------
+# Argument validation
+# ---------------------------------------------------------------------------
+
+
+def test_validate_args_count_mismatch(launch):
     """Wrong number of args raises TypeError."""
     specs = [_tensor_spec("x", DataType.FP32, [64])]
     with pytest.raises(TypeError, match="Expected 1 args, got 2"):
-        _validate_args(
-            (_MockTensor([64], torch.float32), _MockTensor([64], torch.float32)), specs
-        )
+        launch(specs, (_MockTensor([64], torch.float32), _MockTensor([64], torch.float32)))
 
 
 @pytest.mark.parametrize(
@@ -115,9 +189,9 @@ def test_validate_args_count_mismatch():
         ([_tensor_spec("x", DataType.FP32, [-1, 64])], (_MockTensor([999, 64], torch.float32),)),
     ],
 )
-def test_validate_args_accepts_supported_args(specs, args):
+def test_validate_args_accepts_supported_args(launch, specs, args):
     """Supported tensor, ptr, scalar, bool and dynamic-dim args pass validation."""
-    _validate_args(args, specs)
+    launch(specs, args)
 
 
 @pytest.mark.parametrize(
@@ -141,13 +215,13 @@ def test_validate_args_accepts_supported_args(specs, args):
         ),
     ],
 )
-def test_validate_args_rejects_invalid_args(specs, args, error):
+def test_validate_args_rejects_invalid_args(launch, specs, args, error):
     """Invalid tensor and scalar args fail with the expected validation family."""
     with pytest.raises(TypeError, match=error):
-        _validate_args(args, specs)
+        launch(specs, args)
 
 
-def test_validate_args_mixed_params():
+def test_validate_args_mixed_params(launch):
     """Mixed tensor + scalar params all validated correctly."""
     specs = [
         _tensor_spec("input", DataType.FP32, [64]),
@@ -159,24 +233,102 @@ def test_validate_args_mixed_params():
         _MockTensor([64], torch.float32),
         128,
     )
-    _validate_args(args, specs)  # must not raise
+    launch(specs, args)  # must not raise
+
+
+def test_unmappable_scalar_dtype_rejected_at_bind_time():
+    """A scalar dtype with no ctypes mapping fails when the plan is built, not per launch."""
+    with pytest.raises(TypeError, match="No ctypes mapping for scalar dtype"):
+        _jit._LaunchPlan([_scalar_spec("h", DataType.FP16)])
+
+
+@pytest.mark.parametrize(
+    "specs, args",
+    [
+        # Zero in a dynamic dimension.
+        ([_tensor_spec("a", DataType.FP32, ["M", 64])], (_MockTensor([0, 64], torch.float32),)),
+        # Zero in a dimension the ParamSpec does not constrain at all.
+        ([_tensor_spec("a", DataType.FP32, [-1, 64])], (_MockTensor([0, 64], torch.float32),)),
+        # Zero contributed by a parameter that does not introduce the dynamic name.
+        (
+            [
+                _tensor_spec("a", DataType.FP32, ["M", 128]),
+                _tensor_spec("b", DataType.FP32, ["M", 64]),
+            ],
+            (_MockTensor([0, 128], torch.float32), _MockTensor([0, 64], torch.float32)),
+        ),
+    ],
+)
+def test_non_positive_dimension_rejected(launch, specs, args):
+    """A zero-sized dimension is rejected on every launch, not only the one that compiled.
+
+    The shape-policy bind enforces this on the compile path; a cache hit skips the bind, so
+    the launch closure has to carry the same rule or the two disagree after the first call.
+    """
+    with pytest.raises(ValueError, match="runtime dimensions must be positive"):
+        launch(specs, args)
+
+
+def test_dyn_tail_order_must_match_codegen(monkeypatch):
+    """_LaunchPlan refuses to bind if its ABI tail order disagrees with the C++ signature.
+
+    Both orders are derived from the same ParamSpecs by separate code, so they can only
+    drift through an edit. Simulating that drift is the only way to reach the guard.
+    """
+    specs = [
+        _tensor_spec("a", DataType.FP32, ["M", "N"]),
+        _tensor_spec("b", DataType.FP32, ["N", "K"]),
+    ]
+    _jit._LaunchPlan(specs)  # agrees today
+
+    monkeypatch.setattr(_jit, "_collect_dyn_vars", lambda _specs: ["N", "M", "K"])
+    with pytest.raises(RuntimeError, match="disagrees with the generated kernel signature"):
+        _jit._LaunchPlan(specs)
 
 
 # ---------------------------------------------------------------------------
-# _args_to_ctypes
+# ABI conversion
 # ---------------------------------------------------------------------------
 
 
-def test_args_to_ctypes_tensor():
-    """torch.Tensor → c_void_p wrapping data_ptr()."""
+def test_argtypes_match_the_generated_c_signature(launch):
+    """What ctypes is told must match what the .so was compiled with.
+
+    ``_entry_params_from_param_specs`` builds the extern "C" parameter list the caller
+    wrapper is generated from, so it is the authority on the callee's signature. Passing
+    plain Python values only works while the declaration agrees with it -- and the tail is
+    declared ``int32_t`` there, which is what the launch path now says too, instead of the
+    c_int64 that happened to work because the callee reads the low half of the register.
+    """
+    specs = [
+        _tensor_spec("a", DataType.FP32, ["M", 64]),
+        _scalar_spec("n", DataType.INT32),
+        _ptr_spec("p", DataType.FP32),
+        _tensor_spec("b", DataType.FP32, ["M", "N"]),
+    ]
+    args = (
+        _MockTensor([8, 64], torch.float32),
+        3,
+        _MockTensor([1], torch.float32),
+        _MockTensor([8, 16], torch.float32),
+    )
+    result = launch(specs, args)
+    c_params = _jit._entry_params_from_param_specs(specs)
+
+    assert len(result) == len(c_params)
+    for (declared, _value), (_c_type, _name, is_ptr) in zip(result, c_params):
+        assert (declared is ctypes.c_void_p) == is_ptr
+    # The two dynamic names, M and N, close the vector as int32_t.
+    assert [c_type for c_type, _name, _is_ptr in c_params[-2:]] == ["int32_t", "int32_t"]
+    assert [declared for declared, _value in result[-2:]] == [ctypes.c_int32, ctypes.c_int32]
+
+
+def test_args_to_ctypes_tensor(launch):
+    """torch.Tensor → data_ptr() passed under a declared c_void_p."""
     specs = [_tensor_spec("x", DataType.FP32, [64])]
     tensor = _MockTensor([64], torch.float32)
-    result = _args_to_ctypes((tensor,), specs)
-    assert len(result) == 1
-    assert isinstance(result[0], ctypes.c_void_p)
-    assert (
-        result[0].value == tensor.data_ptr() or result[0].value is None
-    )  # 0 maps to None
+    result = launch(specs, (tensor,))
+    assert result == [(ctypes.c_void_p, tensor.data_ptr())]
 
 
 @pytest.mark.parametrize(
@@ -187,26 +339,38 @@ def test_args_to_ctypes_tensor():
         (_scalar_spec("n", DataType.INT32), 42, ctypes.c_int32, 42),
     ],
 )
-def test_args_to_ctypes_single_arg(spec, arg, ctype, expected):
-    """ptr and scalar params are converted to the expected ctypes wrappers."""
-    result = _args_to_ctypes((arg,), [spec])
+def test_args_to_ctypes_single_arg(launch, spec, arg, ctype, expected):
+    """ptr and scalar params are declared with the expected C type."""
+    result = launch([spec], (arg,))
     assert len(result) == 1
-    assert isinstance(result[0], ctype)
+    declared, value = result[0]
+    assert declared is ctype
     if expected is not None:
-        assert result[0].value == pytest.approx(expected)
+        assert value == pytest.approx(expected)
 
 
-def test_args_to_ctypes_mixed():
+def test_args_to_ctypes_mixed(launch):
     """Mixed tensor + scalar → correct ctypes sequence."""
     specs = [
         _tensor_spec("input", DataType.FP32, [64]),
         _scalar_spec("n", DataType.INT32),
     ]
     tensor = _MockTensor([64], torch.float32)
-    result = _args_to_ctypes((tensor, 7), specs)
-    assert isinstance(result[0], ctypes.c_void_p)
-    assert isinstance(result[1], ctypes.c_int32)
-    assert result[1].value == 7
+    result = launch(specs, (tensor, 7))
+    assert result[0][0] is ctypes.c_void_p
+    assert result[1] == (ctypes.c_int32, 7)
+
+
+def test_none_tensor_arg_is_null_pointer(launch):
+    """An omitted optional tensor becomes a null pointer and contributes zeros to the tail.
+
+    Also pins that the positivity rule does not fire here: those zeros are legitimate.
+    """
+    specs = [_tensor_spec("a", DataType.FP32, ["M", "N"])]
+    result = launch(specs, (None,))
+    assert len(result) == 3
+    assert result[0] == (ctypes.c_void_p, None)
+    assert result[1:] == [(ctypes.c_int32, 0), (ctypes.c_int32, 0)]
 
 
 # ---------------------------------------------------------------------------
@@ -246,11 +410,11 @@ def test_collect_dyn_vars(specs, expected):
 
 
 # ---------------------------------------------------------------------------
-# _validate_args — dynamic variable tests
+# Dynamic shape variables
 # ---------------------------------------------------------------------------
 
 
-def test_validate_args_dyn_consistent():
+def test_validate_args_dyn_consistent(launch):
     """M=64 in both tensors — consistent, must not raise."""
     specs = [
         _tensor_spec("a", DataType.FP32, ["M", 128]),
@@ -260,10 +424,10 @@ def test_validate_args_dyn_consistent():
         _MockTensor([64, 128], torch.float32),
         _MockTensor([64, 64], torch.float32),
     )
-    _validate_args(args, specs)  # must not raise
+    launch(specs, args)  # must not raise
 
 
-def test_validate_args_dyn_inconsistent():
+def test_validate_args_dyn_inconsistent(launch):
     """M=64 in tensor a but M=128 in tensor b — must raise TypeError mentioning 'M'."""
     specs = [
         _tensor_spec("a", DataType.FP32, ["M", 128]),
@@ -274,27 +438,21 @@ def test_validate_args_dyn_inconsistent():
         _MockTensor([128, 64], torch.float32),
     )
     with pytest.raises(TypeError, match="M"):
-        _validate_args(args, specs)
+        launch(specs, args)
 
 
-# ---------------------------------------------------------------------------
-# _args_to_ctypes — dynamic variable appending tests
-# ---------------------------------------------------------------------------
-
-
-def test_args_to_ctypes_dyn_appended():
+def test_args_to_ctypes_dyn_appended(launch):
     """Tensor with shape ["M", 64]: result should have c_void_p then c_int64(M_value)."""
     m_var = 32
     specs = [_tensor_spec("a", DataType.FP32, ["M", 64])]
     tensor = _MockTensor([m_var, 64], torch.float32)
-    result = _args_to_ctypes((tensor,), specs)
+    result = launch(specs, (tensor,))
     assert len(result) == 2
-    assert isinstance(result[0], ctypes.c_void_p)
-    assert isinstance(result[1], ctypes.c_int64)
-    assert result[1].value == m_var
+    assert result[0][0] is ctypes.c_void_p
+    assert result[1] == (ctypes.c_int32, m_var)
 
 
-def test_args_to_ctypes_dyn_order():
+def test_args_to_ctypes_dyn_order(launch):
     """Tensor a(M,N) and tensor b(N,K): appended order must be M, N, K."""
     specs = [
         _tensor_spec("a", DataType.FP32, ["M", "N"]),
@@ -304,14 +462,12 @@ def test_args_to_ctypes_dyn_order():
         _MockTensor([10, 20], torch.float32),
         _MockTensor([20, 30], torch.float32),
     )
-    result = _args_to_ctypes(args, specs)
+    result = launch(specs, args)
     assert len(result) == 5
-    assert isinstance(result[2], ctypes.c_int64) and result[2].value == 10  # M
-    assert isinstance(result[3], ctypes.c_int64) and result[3].value == 20  # N
-    assert isinstance(result[4], ctypes.c_int64) and result[4].value == 30  # K
+    assert result[2:] == [(ctypes.c_int32, 10), (ctypes.c_int32, 20), (ctypes.c_int32, 30)]  # M, N, K
 
 
-def test_args_to_ctypes_dyn_dedup():
+def test_args_to_ctypes_dyn_dedup(launch):
     """Two tensors sharing M,N: each var appended exactly once."""
     specs = [
         _tensor_spec("a", DataType.FP32, ["M", "N"]),
@@ -321,13 +477,12 @@ def test_args_to_ctypes_dyn_dedup():
         _MockTensor([8, 16], torch.float32),
         _MockTensor([8, 16], torch.float32),
     )
-    result = _args_to_ctypes(args, specs)
+    result = launch(specs, args)
     assert len(result) == 4
-    assert result[2].value == 8  # M
-    assert result[3].value == 16  # N
+    assert result[2:] == [(ctypes.c_int32, 8), (ctypes.c_int32, 16)]  # M, N
 
 
-def test_args_to_ctypes_no_dyn():
+def test_args_to_ctypes_no_dyn(launch):
     """No dynamic dims: result length equals number of args."""
     specs = [
         _tensor_spec("a", DataType.FP32, [64, 128]),
@@ -337,5 +492,89 @@ def test_args_to_ctypes_no_dyn():
         _MockTensor([64, 128], torch.float32),
         _MockTensor([128], torch.float32),
     )
-    result = _args_to_ctypes(args, specs)
+    result = launch(specs, args)
     assert len(result) == len(args)
+
+
+# ---------------------------------------------------------------------------
+# Sub-byte dtypes (packed storage)
+# ---------------------------------------------------------------------------
+#
+# A sub-byte dtype has no torch dtype of its own, so the caller hands over a uint8
+# buffer holding two fp4 per byte and torch reports the innermost axis in those
+# storage units. ParamSpec and the kernel ABI count elements, so the launch plan
+# resolves a packing factor per parameter and the launch path scales that one axis.
+
+
+@pytest.mark.parametrize(
+    "dtype, expected",
+    [
+        (DataType.FP4E2M1, 2),
+        (DataType.FP4, 2),
+        (DataType.UINT8, 1),
+        (DataType.HF8, 1),
+        # 8 // 32 is 0, not 1: without the clamp a wide dtype would scale its innermost
+        # dimension to zero on every launch.
+        (DataType.FP32, 1),
+        (DataType.INT64, 1),
+        (None, 1),
+    ],
+)
+def test_pack_factor(dtype, expected):
+    """Only sub-byte dtypes pack; everything else, including a missing dtype, is 1:1."""
+    assert _pack_factor(dtype) == expected
+
+
+def test_packed_const_dim_compared_in_elements(launch):
+    """A [64, 64] fp4 param is satisfied by a [64, 32] uint8 buffer."""
+    specs = [_tensor_spec("x", DataType.FP4E2M1, [64, 64])]
+    launch(specs, (_MockTensor([64, 32], torch.uint8),))  # must not raise
+
+
+def test_packed_const_dim_mismatch_reports_elements(launch):
+    """Passing the logical extent as the storage extent is a mismatch, reported in elements."""
+    specs = [_tensor_spec("x", DataType.FP4E2M1, [64, 64])]
+    with pytest.raises(TypeError, match=r"dim\[1\] mismatch — expected 64, got 128"):
+        launch(specs, (_MockTensor([64, 64], torch.uint8),))
+
+
+def test_packed_dyn_dim_scaled_in_abi_tail(launch):
+    """The dynamic tail carries the element count, not the packed storage count."""
+    specs = [_tensor_spec("x", DataType.FP4E2M1, [64, "K"])]
+    result = launch(specs, (_MockTensor([64, 32], torch.uint8),))
+    assert result[-1] == (ctypes.c_int32, 64)
+
+
+def test_packed_outer_dims_are_not_scaled(launch):
+    """Only the innermost axis is packed; an outer dynamic dim passes through unchanged."""
+    specs = [_tensor_spec("x", DataType.FP4E2M1, ["M", 64])]
+    result = launch(specs, (_MockTensor([7, 32], torch.uint8),))
+    assert result[-1] == (ctypes.c_int32, 7)
+
+
+def test_packed_dyn_dim_agrees_with_unpacked_param(launch):
+    """K is 64 elements in both the fp4 buffer and the fp32 one."""
+    specs = [
+        _tensor_spec("a", DataType.FP4E2M1, ["M", "K"]),
+        _tensor_spec("b", DataType.FP32, ["K", 8]),
+    ]
+    args = (
+        _MockTensor([4, 32], torch.uint8),   # logical [4, 64]
+        _MockTensor([64, 8], torch.float32),
+    )
+    result = launch(specs, args)
+    assert result[2:] == [(ctypes.c_int32, 4), (ctypes.c_int32, 64)]  # M, K
+
+
+def test_packed_dyn_dim_mismatch_with_unpacked_param(launch):
+    """The cross-parameter check compares elements: 64 fp4 against 32 fp32 must raise."""
+    specs = [
+        _tensor_spec("a", DataType.FP4E2M1, ["M", "K"]),
+        _tensor_spec("b", DataType.FP32, ["K", 8]),
+    ]
+    args = (
+        _MockTensor([4, 32], torch.uint8),   # logical [4, 64]
+        _MockTensor([32, 8], torch.float32),
+    )
+    with pytest.raises(TypeError, match="K"):
+        launch(specs, args)

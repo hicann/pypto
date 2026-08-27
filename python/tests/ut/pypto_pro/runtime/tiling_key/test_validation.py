@@ -95,3 +95,52 @@ def test_valid_key_accepted(kernel, key):
 def test_invalid_key_rejected(kernel, key):
     with pytest.raises(ValueError):
         kernel[None, 1, key]
+
+
+# ---------------------------------------------------------------------------
+# Bracket memo
+# ---------------------------------------------------------------------------
+
+
+def _memo(kernel):
+    return getattr(kernel, "_bracket_memo")
+
+
+def test_repeated_bracket_resolves_once():
+    """Every call site writes kernel[...](args) inline, so __getitem__ runs per launch."""
+    kernel = _make_kernel(TkSingle)
+    kernel[None, 1, {"OpType": 0}]
+    kernel[None, 1, {"OpType": 0}]
+    kernel[None, 8, {"OpType": 0}]  # block_dim is not part of the memo key
+    assert len(_memo(kernel)) == 1
+
+    kernel[None, 1, {"OpType": 1}]
+    assert len(_memo(kernel)) == 2
+
+
+def test_memo_follows_dict_contents_not_identity():
+    """A mutated bracket dict must resolve afresh, not reuse the entry it was memoized under.
+
+    The memo makes the snapshot invariant sharper: a variant resolved under the wrong key
+    would now outlive the bracket that created it, so the key has to be the dict's contents.
+    """
+    kernel = _make_kernel(TkSingle)
+    key = {"OpType": 0}
+    kernel[None, 1, key]
+    key["OpType"] = 2
+    kernel[None, 1, key]
+
+    memo = _memo(kernel)
+    assert len(memo) == 2
+    packed = sorted(spec[0] for _snapshot, _dtype, spec in memo.values())
+    assert packed == [0, 2]
+    # The stored snapshots are copies, so mutating the caller's dict cannot reach them.
+    assert sorted(snapshot["OpType"] for snapshot, _dtype, _spec in memo.values()) == [0, 2]
+
+
+def test_invalid_key_is_never_memoized():
+    kernel = _make_kernel(TkSingle)
+    for bad in ({}, {"OpType": 99}, [0]):
+        with pytest.raises(ValueError):
+            kernel[None, 1, bad]
+    assert _memo(kernel) == {}

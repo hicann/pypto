@@ -39,10 +39,6 @@ def _compiled_cache(kernel):
     return _private(kernel, "_compiled_by_signature")
 
 
-def _kernel_def_cache(kernel):
-    return _private(kernel, "_kernel_def_by_static_signature")
-
-
 def _static_signature_suffix(signature):
     return _private(jit_runtime, "_static_signature_suffix")(signature)
 
@@ -63,7 +59,6 @@ def dynamic_dynamic_kernel(
 
 def _reset_caches(kernel):
     _compiled_cache(kernel).clear()
-    _kernel_def_cache(kernel).clear()
 
 
 def _install_fake_build(monkeypatch, kernel):
@@ -85,10 +80,10 @@ def test_static_specialization_produces_different_artifacts():
 
     bound_m8 = _bind_static_shapes(static_dynamic_kernel, {"x": [8, 64]})
     bound_m16 = _bind_static_shapes(static_dynamic_kernel, {"x": [16, 64]})
-    prog_m8 = static_dynamic_kernel.to_kernel_def(bound_signature=bound_m8).parse_target_program(
+    prog_m8 = static_dynamic_kernel.to_kernel_def().parse_target_program(
         ir.SectionKind.Vector, bound_signature=bound_m8
     )[0]
-    prog_m16 = static_dynamic_kernel.to_kernel_def(bound_signature=bound_m16).parse_target_program(
+    prog_m16 = static_dynamic_kernel.to_kernel_def().parse_target_program(
         ir.SectionKind.Vector, bound_signature=bound_m16
     )[0]
     shape_m8 = prog_m8.functions["static_dynamic_kernel"].params[0].type.shape
