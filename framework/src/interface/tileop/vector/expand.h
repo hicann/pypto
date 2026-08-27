@@ -115,10 +115,25 @@ TILEOP void TExpand(T0 dst, T1 src)
                 auto srcOffset = GenTileOffset(
                     src, TileOffset(((Axes == DIM_1ST) || ...) ? 0 : n0Index, ((Axes == DIM_2ND) || ...) ? 0 : n1Index,
                                     ((Axes == DIM_3RD) || ...) ? 0 : n2Index));
-                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
-                pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
-                pto::TASSIGN(tmpTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
-                ExpandImpl<LastUse, expandTile>(dstTile, srcTile, tmpTile);
+                if constexpr (expandTile == ExpandTile::NONE &&
+                              (std::is_same_v<DstDtype, int64_t> || std::is_same_v<DstDtype, uint64_t>)) {
+                    constexpr auto dstTileW32 = dstTileW * 2;
+                    constexpr auto srcTileW32 = srcTileW * 2;
+                    using dstTileDefine32 = pto::Tile<pto::TileType::Vec, int32_t, dstTileH, dstTileW32,
+                                                      pto::BLayout::RowMajor, -1, -1>;
+                    using srcTileDefine32 = pto::Tile<pto::TileType::Vec, int32_t, srcTileH, srcTileW32,
+                                                      pto::BLayout::RowMajor, -1, -1>;
+                    dstTileDefine32 dstTile32(dstShape3, dstShape4 * 2);
+                    srcTileDefine32 srcTile32(srcShape3, srcShape4 * 2);
+                    pto::TASSIGN(dstTile32, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
+                    pto::TASSIGN(srcTile32, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
+                    pto::TMOV(dstTile32, srcTile32);
+                } else {
+                    pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
+                    pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
+                    pto::TASSIGN(tmpTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
+                    ExpandImpl<LastUse, expandTile>(dstTile, srcTile, tmpTile);
+                }
             }
         }
     }

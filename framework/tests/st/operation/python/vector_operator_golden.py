@@ -1316,14 +1316,12 @@ def gen_bitwise_not_op_golden(case_name: str, output: Path, case_index: int = No
     # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
     def golden_func(inputs: list, _config: dict):
         assert len(inputs) > 0, "inputs must contain at least one element"
-        x = torch.tensor(inputs[0])
-        if x.dtype in [torch.uint16, torch.uint32]:
-            x_np = x.numpy()
-            y = np.bitwise_not(x_np)
-            return [y]
-        else:
-            y = torch.bitwise_not(x)
-            return [y.numpy()]
+
+        x = from_numpy(inputs[0]).npu()
+        result = torch.bitwise_not(x)
+        result = result.cpu()
+        result_np = to_numpy(result)
+        return [result_np]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("BitwiseNot", golden_func, output, case_index)

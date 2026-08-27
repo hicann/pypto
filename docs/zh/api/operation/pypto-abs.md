@@ -36,7 +36,7 @@ abs(input: Tensor) -> Tensor
 
 1. Tensor支持的数据类型如下：
    <!-- npu="950" id4 -->
-   - Ascend 950PR/Ascend 950DT：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_INT16，DT_INT32。
+   - Ascend 950PR/Ascend 950DT：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_INT16，DT_INT32，DT_INT64。
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16，DT_BF16，DT_FP32。

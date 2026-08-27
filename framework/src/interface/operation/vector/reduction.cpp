@@ -167,7 +167,11 @@ void TileReduceNew(Function& function, const TileShape& tileShape, const std::st
             if (op == "SUM" || (static_cast<size_t>(axis) == (in->shape.size() - 1))) {
                 if (static_cast<size_t>(axis) == (in->shape.size() - 1)) {
                     tmpShape[0] = sourceReg->shape[std::max(0, axis - 1)];
-                    if (static_cast<size_t>(sourceReg->shape[axis]) <= REPEAT_BYTE / BytesOf(in->Datatype())) {
+                    if (op == "PROD") {
+                        tmpShape[0] = 1;
+                        tmpShape[1] = AlignUp((sourceReg->shape[axis] + NUM1) / NUM2,
+                                              REPEAT_BYTE / BytesOf(in->Datatype()));
+                    } else if (static_cast<size_t>(sourceReg->shape[axis]) <= REPEAT_BYTE / BytesOf(in->Datatype())) {
                         tmpShape[0] = 1;
                     } else if (static_cast<size_t>(sourceReg->shape[axis]) <=
                                NUM2 * REPEAT_BYTE / BytesOf(in->Datatype())) {

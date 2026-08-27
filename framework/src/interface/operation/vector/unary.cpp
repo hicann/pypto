@@ -285,9 +285,12 @@ Tensor BitwiseNot(const Tensor& self)
     if (self.GetDataType() == DT_BOOL) {
         return LogicalNot(self);
     }
-    static const std::unordered_set<DataType> BITWISE_NOT_TYPES = {DT_INT8,   DT_UINT8, DT_INT16,
-                                                                   DT_UINT16, DT_INT32, DT_UINT32};
-    CheckTensorDataType(self.GetStorage(), BITWISE_NOT_TYPES, "BitwiseNot");
+    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8,
+                                                                    DT_UINT8, DT_INT32,  DT_UINT32};
+    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8,  DT_UINT8,
+                                                                  DT_INT32, DT_UINT32, DT_INT64, DT_UINT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseNot");
     RETURN_CALL(UnaryOperation<UnaryOpType::BITWISENOT>, *Program::GetInstance().GetCurrentFunction(),
                 self.GetStorage());
 }
@@ -312,7 +315,8 @@ Tensor Abs(const Tensor& self)
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Abs");
 
     static const std::unordered_set<DataType> ABS_A2A3_TYPES = {DT_FP16, DT_BF16, DT_FP32};
-    static const std::unordered_set<DataType> ABS_A5_TYPES = {DT_FP16, DT_BF16, DT_FP32, DT_INT8, DT_INT16, DT_INT32};
+    static const std::unordered_set<DataType> ABS_A5_TYPES = {DT_FP16,  DT_BF16,  DT_FP32, DT_INT8,
+                                                              DT_INT16, DT_INT32, DT_INT64};
     const auto& supportedTypes = GetSupportedDataTypesByArch(ABS_A2A3_TYPES, ABS_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "Abs");
     RETURN_CALL(UnaryOperation<UnaryOpType::ABS>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
