@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-def get_conv_tile_shapes() -> Tuple[pypto_impl.TileL1Info, pypto_impl.TileL0Info, bool]
+get_conv_tile_shapes() -> Tuple[pypto_impl.TileL1Info, pypto_impl.TileL0Info, bool]
 ```
 
 ## 参数说明

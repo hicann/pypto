@@ -18,7 +18,7 @@
 
 - input_conv、weight、bias为源操作数；input_conv为输入矩阵，weight为权重矩阵，bias为输入的偏置。
 - out为目的操作数，存放卷积处理结果的矩阵。
-- 当前暂不支持量化场景。
+- 当前暂不支持fixpipe量化场景。
 
 ## 函数原型
 
@@ -73,7 +73,7 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
   - groups取值范围 [1, 65535]。
 - 卷积核约束：
   - Kh ≤ 255、Kw ≤ 255；
-  - Kh × Kw × 32bytes/dtype ≤ 65535；dtype为input_conv的数据类型所占bit数，如FP16是16，FP32是32等。
+  - Kh × Kw × (32 / sizeof(dtype)) ≤ 65535；dtype为input_conv的数据类型所占字节数，如FP16是2，FP32是4等。
 - 通道数约束：
   - Cin（输入通道数）必须能被groups整除；
   - Cout（输出通道数）必须能被groups整除；

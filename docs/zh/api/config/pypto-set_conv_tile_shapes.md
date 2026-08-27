@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-def set_conv_tile_shapes(tile_l1_info: pypto_impl.TileL1Info, tile_l0_info: pypto_impl.TileL0Info = None) -> None
+set_conv_tile_shapes(tile_l1_info: pypto_impl.TileL1Info, tile_l0_info: pypto_impl.TileL0Info = None) -> None
 ```
 
 ## 参数说明
@@ -73,9 +73,9 @@ TileShape需要满足以下约束条件：
 
         - tileK需满足：`tileK % C0 == 0`
 
-        - tileK `kAL1 % tilek == 0`
+        - tileK需满足： `kAL1 % tilek == 0`
 
-        - tilek `kBL1 % tilek == 0`
+        - tilek需满足： `kBL1 % tilek == 0`
 
         - tileW需满足16元素对齐，即`tileW % 16 == 0`
 
@@ -121,11 +121,11 @@ TileShape需要满足以下约束条件：
 
         - `C0 = ALIGN_SIZE_32 / sizeof(dtype)`
 
-        - `L0A_size = 65536 bytes`
+        - `L0A_size = 65536 Byte`
 
-        - `L0B_size = 65536 bytes`
+        - `L0B_size = 65536 Byte`
 
-        - `L0C_size = 131072 bytes`
+        - `L0C_size = 131072 Byte`
 
         - `ALIGN_SIZE_32 = 32`
 
@@ -180,7 +180,7 @@ l1_tile = pypto_impl.TileL1Info(
 l0_tile = pypto_impl.TileL0Info(
     tileH=2,   # 需满足tileH <= tileL1Info.tileHout且tileL1Info.tileHout % tileH == 0
     tileW=8,   # 需满足tileW <= tileL1Info.tileWout且tileL1Info.tileWout % tileW == 0
-    tileK=32,  # 需满足tileK * sizeof(dtype) % 32 == 0（假设dtype为FP16，sizeof=2，则32*2=64，64%32=0）
+    tileK=32,  # 需满足tileK % C0 == 0（C0为对齐基数，由数据类型决定）
     tileN=16   # 需满足tileN % 16 == 0
 )
 
