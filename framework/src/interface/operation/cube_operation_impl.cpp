@@ -615,7 +615,7 @@ void CheckFixpipeParam(const Tensor& operand2, DataType outDtype, bool transB, c
         const Shape bShape = operand2.GetShape();
         int n = transB ? bShape[bShape.size() - SHAPE_DIM2] : bShape[bShape.size() - 1];
         CHECK(ExternalError::INVALID_SHAPE, scaleShape[scaleShape.size() - 1] == n)
-            << "Scale tensor shape of the last fimension mismatch. "
+            << "Scale tensor shape of the last dimension mismatch. "
             << "Expected shape of the last dimension to be n, which is " << n << ", got "
             << scaleShape[scaleShape.size() - 1];
     }
@@ -1540,7 +1540,7 @@ void CheckABatchMulB(const Tensor& operand1, const Tensor& operand2, const Matmu
         const int64_t batchSizeA = operand1.GetShape()[bIdx];
         const int64_t batchSizeB = operand2.GetShape()[bIdx];
         CHECK(ExternalError::INVALID_SHAPE, batchSizeA == batchSizeB || batchSizeB == 1 || batchSizeA == 1)
-            << "batchSize invalid: A" << bIdx << "= B" << bIdx << "or 1 allowed. A" << bIdx << ": " << batchSizeA
+            << "batchSize invalid: A" << bIdx << " = B" << bIdx << " or 1 allowed. A" << bIdx << ": " << batchSizeA
             << ", B" << bIdx << ": " << batchSizeB;
     }
     if (param.biasTensor.GetStorage() != nullptr && param.biasTensor.GetShape().size() != 2) {
@@ -1592,7 +1592,7 @@ void SingleBatch3D(int64_t bIdx, int64_t batchSizeA, int64_t batchSizeB, int64_t
                    std::vector<SymbolicScalar>& bValidShape3D)
 {
     ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, result.GetStorage() != nullptr)
-        << "bacth matmul 3D's result must not be null";
+        << "batch matmul 3D's result must not be null";
     auto [aTensor, aTensorSingleBatch] = GetBatchTensor3D(batchSizeA, bIdx, operand1, aValidShape3D);
     auto [bTensor, bTensorSingleBatch] = GetBatchTensor3D(batchSizeB, bIdx, operand2, bValidShape3D);
 
@@ -1720,7 +1720,7 @@ void SingleBatch4D(int64_t bIdx1, int64_t bIdx2, int64_t batchSizeA1, int64_t ba
                    std::vector<SymbolicScalar>& bValidShape4D)
 {
     ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, result.GetStorage() != nullptr)
-        << "bacth matmul 4D's result must not be null";
+        << "batch matmul 4D's result must not be null";
     auto [aTensor, aTensorSingleBatch] = GetBatchTensor4D(batchSizeA1, batchSizeA2, bIdx1, bIdx2, operand1,
                                                           aValidShape4D);
     auto [bTensor, bTensorSingleBatch] = GetBatchTensor4D(batchSizeB1, batchSizeB2, bIdx1, bIdx2, operand2,
@@ -1876,7 +1876,7 @@ static Tensor ConstructBatchGmAccumulationTensorGraph3D(DataType outType, const 
         << "Matrix K dimension mismatch";
     Tensor result = Tensor(outType, {batchSize, mView, nView});
     ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, result.GetStorage() != nullptr)
-        << "bacth matmul 3D's result must not be null when using KSplit.";
+        << "batch matmul 3D's result must not be null when using KSplit.";
     auto oriVecTile = TileShape::Current().GetVecTile();
     TileShape::Current().SetVecTile({1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
     auto aValidShape3D = aMatrix.GetStorage()->GetDynValidShape();
@@ -1920,7 +1920,7 @@ static Tensor ConstructBatchGmAccumulationTensorGraph4D(DataType outType, const 
         << "Matrix K dimension mismatch";
     Tensor result = Tensor(outType, {batchSize1, batchSize2, mView, nView});
     ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, result.GetStorage() != nullptr)
-        << "bacth matmul 4D's result must not be null using KSplit.";
+        << "batch matmul 4D's result must not be null using KSplit.";
     auto oriVecTile = TileShape::Current().GetVecTile();
     TileShape::Current().SetVecTile({1, 1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
     auto aValidShape4D = aMatrix.GetStorage()->GetDynValidShape();
