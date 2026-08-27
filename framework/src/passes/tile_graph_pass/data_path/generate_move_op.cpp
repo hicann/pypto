@@ -142,11 +142,8 @@ Status GenerateMoveOp::ProcessGmInput(bool& isGmOutput, Operation& op, ViewOpAtt
                             HasConvConsumer(op);
         op.SetOpCode(isConv ? Opcode::OP_L1_COPY_IN_CONV : Opcode::OP_COPY_IN);
         // A5 conv 输入: 合并 consumer OP_TRANS_FORMAT_L1，删除冗余操作
-        if (isConv) {
-            Status status = CollapseTransFormatL1Consumer(op, viewOpAttribute);
-            if (status != SUCCESS) {
-                return status;
-            }
+        if (isConv && Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+            return CollapseTransFormatL1Consumer(op, viewOpAttribute);
         }
         SetCopyAttr(op, viewOpAttribute);
     }
@@ -155,10 +152,6 @@ Status GenerateMoveOp::ProcessGmInput(bool& isGmOutput, Operation& op, ViewOpAtt
 
 Status GenerateMoveOp::CollapseTransFormatL1Consumer(Operation& op, ViewOpAttribute* viewOpAttribute) const
 {
-    // OP_TRANS_FORMAT_L1 仅在 A5 上存在，A2A3 无此 op，直接跳过
-    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
-        return SUCCESS;
-    }
     // 此处向 consumer 方向合并：将 copy_in 的 output 替换为 TRANS_FORMAT_L1 的 output，
     // 迁移 TRANS_FORMAT_L1 的属性，并标记删除 TRANS_FORMAT_L1。
     auto viewOutput = op.GetOOperands().front();
@@ -182,6 +175,14 @@ Status GenerateMoveOp::CollapseTransFormatL1Consumer(Operation& op, ViewOpAttrib
         viewOpAttribute->SetToType(transFormatOutput->GetMemoryTypeToBe());
     }
     transFormatOp->SetAsDeleted();
+
+    auto copyAttr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()), viewOpAttribute->GetTo(),
+        OpImmediate::Specified(op.iOperand.front()->shape),
+        OpImmediate::Specified(op.iOperand.front()->tensor->GetDynRawShape()),
+        OpImmediate::Specified(viewOpAttribute->GetToDynValidShape()));
+    op.GetOOperands()[0]->UpdateDynValidShape(viewOpAttribute->GetToDynValidShape());
+    op.SetOpAttribute(copyAttr);
     return SUCCESS;
 }
 
@@ -302,7 +303,7 @@ void GenerateMoveOp::SetCopyAttr(Operation& op, ViewOpAttribute* viewOpAttribute
 {
     auto copyAttr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()), viewOpAttribute->GetTo(),
-        OpImmediate::Specified(op.iOperand.front()->shape),
+        OpImmediate::Specified(op.oOperand.front()->shape),
         OpImmediate::Specified(op.iOperand.front()->tensor->GetDynRawShape()),
         OpImmediate::Specified(viewOpAttribute->GetToDynValidShape()));
     op.GetOOperands()[0]->UpdateDynValidShape(viewOpAttribute->GetToDynValidShape());
