@@ -862,39 +862,84 @@ bool SuperNodeGraphBuilder::AssembleToCopyoutScene(Operation* op)
     return true;
 }
 
-inline bool FindScopeFromProducers(Operation* op, Operation::ScopeInfo& foundScope)
+enum class ScopeLookupResult { NOT_FOUND, FOUND, CONFLICT };
+
+struct ScopedNeighbors {
+    std::vector<Operation*> producers;
+    std::vector<Operation*> consumers;
+};
+
+inline ScopedNeighbors CollectScopedNeighbors(Operation* op)
 {
+    ScopedNeighbors neighbors;
     for (auto& input : op->GetIOperands()) {
         for (auto* producer : input->GetProducers()) {
-            if (producer->BelongTo() != op->BelongTo()) {
-                continue;
-            }
-            if (producer->GetScopeId() != -1) {
-                foundScope = producer->GetScopeInfo();
-                return true;
+            if (producer->BelongTo() == op->BelongTo() && producer->GetScopeId() != -1) {
+                neighbors.producers.push_back(producer);
             }
         }
     }
-    return false;
-}
-
-inline bool FindScopeFromConsumers(Operation* op, Operation::ScopeInfo& foundScope)
-{
     for (auto& output : op->GetOOperands()) {
         for (auto* consumer : output->GetConsumers()) {
-            if (consumer->BelongTo() != op->BelongTo()) {
-                continue;
-            }
-            if (consumer->GetScopeId() != -1) {
-                foundScope = consumer->GetScopeInfo();
-                return true;
+            if (consumer->BelongTo() == op->BelongTo() && consumer->GetScopeId() != -1) {
+                neighbors.consumers.push_back(consumer);
             }
         }
     }
-    return false;
+    return neighbors;
 }
 
-inline void PropagateScopeInfo(std::vector<Operation*>& opList)
+inline ScopeLookupResult ResolveScopeFromNeighbors(Operation* op, const std::vector<Operation*>& primaryOps,
+                                                   const std::vector<Operation*>& secondaryOps, const char* opType,
+                                                   Operation::ScopeInfo& foundScope)
+{
+    if (primaryOps.empty()) {
+        return ScopeLookupResult::NOT_FOUND;
+    }
+
+    // 无交集时保持原逻辑：继承主方向列表中第一个 op 的 scope。
+    foundScope = primaryOps.front()->GetScopeInfo();
+    std::unordered_set<int32_t> secondaryScopeIds;
+    for (auto* secondary : secondaryOps) {
+        secondaryScopeIds.insert(secondary->GetScopeId());
+    }
+    std::unordered_set<int32_t> commonScopeIds;
+    for (auto* primary : primaryOps) {
+        if (secondaryScopeIds.count(primary->GetScopeId()) > 0) {
+            commonScopeIds.insert(primary->GetScopeId());
+        }
+    }
+    if (commonScopeIds.size() > 1) {
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Multiple common scope IDs found around %s op %d (opcode=%s); possible dependency cycle.",
+                          opType, op->GetOpMagic(), op->GetOpcodeStr().c_str());
+        return ScopeLookupResult::CONFLICT;
+    }
+    if (commonScopeIds.size() == 1) {
+        int32_t commonScopeId = *commonScopeIds.begin();
+        for (auto* primary : primaryOps) {
+            if (primary->GetScopeId() == commonScopeId) {
+                foundScope = primary->GetScopeInfo();
+                break;
+            }
+        }
+    }
+    return ScopeLookupResult::FOUND;
+}
+
+inline ScopeLookupResult FindScopeFromProducers(Operation* op, Operation::ScopeInfo& foundScope)
+{
+    auto neighbors = CollectScopedNeighbors(op);
+    return ResolveScopeFromNeighbors(op, neighbors.producers, neighbors.consumers, "ASSEMBLE", foundScope);
+}
+
+inline ScopeLookupResult FindScopeFromConsumers(Operation* op, Operation::ScopeInfo& foundScope)
+{
+    auto neighbors = CollectScopedNeighbors(op);
+    return ResolveScopeFromNeighbors(op, neighbors.consumers, neighbors.producers, "VIEW", foundScope);
+}
+
+inline Status PropagateScopeInfo(std::vector<Operation*>& opList)
 {
     // Assemble-like ops inherit scope from producers, view-like ops from consumers.
     // Pending list is in topological order; reversing deferred before retry
@@ -909,9 +954,12 @@ inline void PropagateScopeInfo(std::vector<Operation*>& opList)
             continue;
         }
         Operation::ScopeInfo neighbourScope{};
-        bool found = IsAssembleLike(op->GetOpcode()) ? FindScopeFromProducers(op, neighbourScope) :
-                                                       FindScopeFromConsumers(op, neighbourScope);
-        if (found && neighbourScope.scopeId != op->GetScopeId()) {
+        ScopeLookupResult result = IsAssembleLike(op->GetOpcode()) ? FindScopeFromProducers(op, neighbourScope) :
+                                                                     FindScopeFromConsumers(op, neighbourScope);
+        if (result == ScopeLookupResult::CONFLICT) {
+            return FAILED;
+        }
+        if (result == ScopeLookupResult::FOUND && neighbourScope.scopeId != op->GetScopeId()) {
             pending.push_back(op);
         }
     }
@@ -920,11 +968,14 @@ inline void PropagateScopeInfo(std::vector<Operation*>& opList)
         std::vector<Operation*> deferred;
         for (Operation* op : pending) {
             Operation::ScopeInfo foundScope{};
-            bool found = IsAssembleLike(op->GetOpcode()) ? FindScopeFromProducers(op, foundScope) :
-                                                           FindScopeFromConsumers(op, foundScope);
-            if (found && foundScope.scopeId != op->GetScopeId()) {
+            ScopeLookupResult result = IsAssembleLike(op->GetOpcode()) ? FindScopeFromProducers(op, foundScope) :
+                                                                         FindScopeFromConsumers(op, foundScope);
+            if (result == ScopeLookupResult::CONFLICT) {
+                return FAILED;
+            }
+            if (result == ScopeLookupResult::FOUND && foundScope.scopeId != op->GetScopeId()) {
                 op->SetScopeInfo(foundScope);
-            } else if (!found) {
+            } else if (result == ScopeLookupResult::NOT_FOUND) {
                 deferred.push_back(op);
             }
         }
@@ -934,6 +985,7 @@ inline void PropagateScopeInfo(std::vector<Operation*>& opList)
         std::reverse(deferred.begin(), deferred.end());
         pending = std::move(deferred);
     }
+    return SUCCESS;
 }
 
 Status SuperNodeGraphBuilder::BuildSuperNodeGraph()
@@ -944,7 +996,10 @@ Status SuperNodeGraphBuilder::BuildSuperNodeGraph()
         return FAILED;
     }
     std::vector<std::pair<int32_t, int32_t>> mergePair;
-    PropagateScopeInfo(opList);
+    if (PropagateScopeInfo(opList) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Failed to propagate scope information.");
+        return FAILED;
+    }
     for (size_t i = 0; i < opList.size(); i++) {
         if (ConvertCombine(operationInfo_, opList, i, mergePair)) {
             continue;

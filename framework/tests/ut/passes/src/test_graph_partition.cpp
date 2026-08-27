@@ -1299,6 +1299,114 @@ TEST_F(GraphPartitionTest, TestViewAssembleScopeId)
     EXPECT_EQ(G.GetOp("v2")->GetScopeId(), 1);
 }
 
+TEST_F(GraphPartitionTest, TestViewWithUniqueCommonScopeUsesCommonScope)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    std::vector<std::string> tensorNames{"t_in", "t_view_in", "t_view", "t_out1", "t_out2"};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, tensorNames), true);
+
+    std::vector<Opcode> opCodes{Opcode::OP_MULS, Opcode::OP_VIEW, Opcode::OP_MULS, Opcode::OP_ADDS};
+    std::vector<std::vector<std::string>> ioperands{{"t_in"}, {"t_view_in"}, {"t_view"}, {"t_view"}};
+    std::vector<std::vector<std::string>> ooperands{{"t_view_in"}, {"t_view"}, {"t_out1"}, {"t_out2"}};
+    std::vector<std::string> opNames{"producer", "view", "consumer1", "consumer2"};
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetInCast({"t_in"}), true);
+    EXPECT_EQ(G.SetOutCast({"t_out1", "t_out2"}), true);
+
+    // The producer and one consumer share scope 1. The other consumer is in
+    // scope 2, so the unique common scope must be selected.
+    G.GetOp("producer")->SetScopeId(1);
+    G.GetOp("view")->SetScopeId(9);
+    G.GetOp("consumer1")->SetScopeId(1);
+    G.GetOp("consumer2")->SetScopeId(2);
+
+    Function* function = G.GetFunction();
+    GraphPartition gpp;
+    EXPECT_EQ(gpp.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(G.GetOp("view")->GetScopeId(), 1);
+}
+
+TEST_F(GraphPartitionTest, TestAssembleWithUniqueCommonScopeUsesCommonScope)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    std::vector<std::string> tensorNames{"t_in1", "t_in2", "t_assemble_in", "t_out", "t_consume_out"};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, tensorNames), true);
+
+    std::vector<Opcode> opCodes{Opcode::OP_MULS, Opcode::OP_ADDS, Opcode::OP_ASSEMBLE, Opcode::OP_MULS};
+    std::vector<std::vector<std::string>> ioperands{{"t_in1"}, {"t_in2"}, {"t_assemble_in"}, {"t_out"}};
+    std::vector<std::vector<std::string>> ooperands{{"t_assemble_in"}, {"t_assemble_in"}, {"t_out"}, {"t_consume_out"}};
+    std::vector<std::string> opNames{"producer1", "producer2", "assemble", "consumer"};
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetInCast({"t_in1", "t_in2"}), true);
+    EXPECT_EQ(G.SetOutCast({"t_consume_out"}), true);
+
+    G.GetOp("producer1")->SetScopeId(1);
+    G.GetOp("producer2")->SetScopeId(2);
+    G.GetOp("assemble")->SetScopeId(9);
+    G.GetOp("consumer")->SetScopeId(1);
+
+    Function* function = G.GetFunction();
+    GraphPartition gpp;
+    EXPECT_EQ(gpp.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(G.GetOp("assemble")->GetScopeId(), 1);
+}
+
+TEST_F(GraphPartitionTest, TestViewWithMultipleCommonScopesFails)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    std::vector<std::string> tensorNames{"t_in1", "t_in2", "t_view_in", "t_view", "t_out1", "t_out2"};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, tensorNames), true);
+
+    std::vector<Opcode> opCodes{Opcode::OP_MULS, Opcode::OP_ADDS, Opcode::OP_VIEW, Opcode::OP_MULS, Opcode::OP_ADDS};
+    std::vector<std::vector<std::string>> ioperands{{"t_in1"}, {"t_in2"}, {"t_view_in"}, {"t_view"}, {"t_view"}};
+    std::vector<std::vector<std::string>> ooperands{{"t_view_in"}, {"t_view_in"}, {"t_view"}, {"t_out1"}, {"t_out2"}};
+    std::vector<std::string> opNames{"producer1", "producer2", "view", "consumer1", "consumer2"};
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetInCast({"t_in1", "t_in2"}), true);
+    EXPECT_EQ(G.SetOutCast({"t_out1", "t_out2"}), true);
+
+    G.GetOp("producer1")->SetScopeId(1);
+    G.GetOp("producer2")->SetScopeId(2);
+    G.GetOp("view")->SetScopeId(9);
+    G.GetOp("consumer1")->SetScopeId(1);
+    G.GetOp("consumer2")->SetScopeId(2);
+
+    Function* function = G.GetFunction();
+    GraphPartition gpp;
+    EXPECT_EQ(gpp.RunOnFunction(*function), FAILED);
+}
+
+TEST_F(GraphPartitionTest, TestAssembleWithMultipleCommonScopesFails)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    std::vector<std::string> tensorNames{"t_in1", "t_in2", "t_assemble_in", "t_out", "t_consume1", "t_consume2"};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, tensorNames), true);
+
+    std::vector<Opcode> opCodes{Opcode::OP_MULS, Opcode::OP_ADDS, Opcode::OP_ASSEMBLE, Opcode::OP_MULS,
+                                Opcode::OP_ADDS};
+    std::vector<std::vector<std::string>> ioperands{{"t_in1"}, {"t_in2"}, {"t_assemble_in"}, {"t_out"}, {"t_out"}};
+    std::vector<std::vector<std::string>> ooperands{
+        {"t_assemble_in"}, {"t_assemble_in"}, {"t_out"}, {"t_consume1"}, {"t_consume2"}};
+    std::vector<std::string> opNames{"producer1", "producer2", "assemble", "consumer1", "consumer2"};
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetInCast({"t_in1", "t_in2"}), true);
+    EXPECT_EQ(G.SetOutCast({"t_consume1", "t_consume2"}), true);
+
+    G.GetOp("producer1")->SetScopeId(1);
+    G.GetOp("producer2")->SetScopeId(2);
+    G.GetOp("assemble")->SetScopeId(9);
+    G.GetOp("consumer1")->SetScopeId(1);
+    G.GetOp("consumer2")->SetScopeId(2);
+
+    Function* function = G.GetFunction();
+    GraphPartition gpp;
+    EXPECT_EQ(gpp.RunOnFunction(*function), FAILED);
+}
+
 /**
  * Test UB-to-UB VIEW with dynamic offset should not be mergeable
  *
