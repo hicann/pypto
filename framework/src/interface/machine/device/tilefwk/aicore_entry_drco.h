@@ -713,7 +713,7 @@ INLINE void ExecDrcoPerCoreTasks(ExecuteContext* ctx, __gm__ npu::tile_fwk::PerC
 template <typename GlobalReadyQueueHandler>
 INLINE void ExecDrcoReadyQueueTasks(ExecuteContext* ctx, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
                                     [[maybe_unused]] __gm__ npu::tile_fwk::PerCorePendingQueue* myPerCoreQueue,
-                                    int32_t blockIdx, uint8_t& lastMixResourceType)
+                                    int32_t blockIdx, uint8_t& lastMixResourceType, bool& devTaskReadyQueFirstTask)
 {
     uint32_t outCoreType = 0;
     uint32_t taskId = DrcoDynFuncDataListGetFirstTask(rootFuncList, blockIdx, outCoreType);
@@ -729,6 +729,11 @@ INLINE void ExecDrcoReadyQueueTasks(ExecuteContext* ctx, __gm__ npu::tile_fwk::D
 #endif
         if ((taskId & AICORE_FIN_MASK) == 0) {
             DRCO_LOGD(ctx, "gq exec=%u", taskId);
+            if (devTaskReadyQueFirstTask) {
+                PerfTraceRecord(ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric,
+                                PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
+                devTaskReadyQueFirstTask = false;
+            }
             ExecCoreFunctionKernel(ctx, taskId, lastMixResourceType);
 #ifdef __HAS_SUB_FUNC__
             ExecDrcoResolve<GlobalReadyQueueHandler>(ctx, rootFuncList, taskId);
@@ -789,13 +794,13 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
         ExecDrcoPerCoreTasks<DrcoDynFuncDataListPush>(&entry.ctx, myPerCoreQueue, rootFuncList,
                                                       entry.lastMixResourceType, devTaskFirstTask);
         ExecDrcoReadyQueueTasks<DrcoDynFuncDataListPush>(&entry.ctx, rootFuncList, myPerCoreQueue, entry.blockIdx,
-                                                         entry.lastMixResourceType);
+                                                         entry.lastMixResourceType, devTaskFirstTask);
 
         SyncAllMix();
         if (entry.blockIdx == 0) {
             DrcoGmStore(&rootFuncList->devTaskFinished, (uint32_t)1);
         }
-        DfxProcWhenDevTaskStop(&entry.ctx, entry.args, entry.metric);
+        DfxProcWhenDevTaskStop(&entry.ctx, entry.args, entry.metric, !devTaskFirstTask);
     }
     if (entry.blockIdx == 0) {
         uint64_t finished = DrcoGmLoad(&entry.runtimeDataRingBufferHeadData->indexFinished.value) + 1;

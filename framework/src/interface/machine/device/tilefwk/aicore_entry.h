@@ -297,9 +297,6 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
     if (unlikely(ctx->profLevel == PRO_LEVEL2 || ctx->profLevel == PRO_LEVEL1)) {
         AddMetricStatistic(ctx, ctx->SeqNo(), taskId, opAttrs[0], t1);
     }
-    if (unlikely(ctx->aicoreDevTaskMetric.devTaskMetricEnable) && ctx->lastTaskFinishCycle == 0) {
-        ctx->lastTaskFinishCycle = get_sys_cnt();
-    }
 }
 #endif
 
@@ -418,7 +415,7 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs, int64_t outputs, int6
 
         curTaskIdx = GetNextLeafTask(lastTaskIdx, args);
         if (curTaskIdx == AICORE_TASK_STOP) {
-            DfxProcWhenDevTaskStop(&ctx, args, metric);
+            DfxProcWhenDevTaskStop(&ctx, args, metric, !isFirstTask);
             SetStatus(args, STAGE_CORE_EXIT);
             WaitWaveSignal(args); // no data exit
             DfxProcWhenCoreExit(&ctx, args, metric);
@@ -431,7 +428,7 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs, int64_t outputs, int6
         }
 
         if (npu::tile_fwk::DevTaskDcciFlag(curTaskIdx) == 1) {
-            DfxProcWhenDevTaskStop(&ctx, args, metric); // perf trace stop last devtask
+            DfxProcWhenDevTaskStop(&ctx, args, metric, !isFirstTask); // perf trace stop last devtask
 
             ctx.curLeafTaskParallelIdx = npu::tile_fwk::ParallelIndex(curTaskIdx);
 

@@ -147,12 +147,14 @@ INLINE void DfxProcWhenCoreExit(ExecuteContext* ctx, __gm__ KernelArgs* args, __
     }
 }
 
-INLINE void DfxProcWhenDevTaskStop(ExecuteContext* ctx, __gm__ KernelArgs* args, __gm__ Metrics* metric)
+INLINE void DfxProcWhenDevTaskStop(ExecuteContext* ctx, __gm__ KernelArgs* args, __gm__ Metrics* metric,
+                                   bool isExectedTask = false)
 {
-    if (ctx->lastTaskFinishCycle > 0) {
+    if (isExectedTask) {
         PerfTraceRecord(ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_LEAF_TASK_EXEC,
                         ctx->lastTaskFinishCycle);
     }
+
     (void)metric;
     (void)args;
 }
