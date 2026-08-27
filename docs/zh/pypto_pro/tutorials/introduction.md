@@ -6,7 +6,7 @@ PyPTO Pro是一种面向Ascend 950PR/Ascend 950DT、以Python为前端的DSL（D
 
 ## PyPTO Pro总体架构
 
-PyPTO Pro提供Tile API、Reg API和Utils API，并通过JIT编译与执行链将Python Kernel编译为可在AI Core上运行的二进制。
+PyPTO Pro提供Tile API、Reg API、SIMT API和Utils API，并通过JIT编译与执行链将Python Kernel编译为可在AI Core上运行的二进制。
 
 **图1 PyPTO Pro总体架构**
 
@@ -82,7 +82,7 @@ PyPTO Pro当前支持以下产品型号：
 建议按照以下路径学习PyPTO Pro：
 
 1. **环境准备**：参考[环境准备](../../install/prepare_environment.md)完成基础环境搭建。
-2. **快速入门**：从[HelloWorld](quick_start/HelloWorld.md)开始，了解Kernel函数定义、JIT编译和运行的基本流程；再通过[Add算子快速入门](quick_start/Add_operator_quick_start.md)学习Tile配置、数据搬运和计算。
+2. **快速入门**：从[HelloWorld](quick_start/SIMD/HelloWorld.md)开始，了解Kernel函数定义、JIT编译和运行的基本流程；再通过[Add算子（SIMD）快速入门](quick_start/SIMD/Add_operator.md)学习主要的Tile配置、数据搬运和向量计算方式。需要逐线程编程时，可进一步参考[Add算子（SIMT）快速入门](quick_start/SIMT/Add_operator.md)。
 3. **编程范式**：阅读[编程范式概述](programming_paradigm/programming_paradigm_overview.md)，理解SPMD编程、Tile抽象和流水机制。
 4. **算子开发**：深入学习[基于Tile的Python编程](operator_development/tile_based_python_programming/Python_programming_overview.md)，掌握Tensor、Tile、TileGroup等核心数据结构的使用。
-5. **API参考**：查阅[SIMD API](../api/SIMD-API/index.md)和[Utils API](../api/Utils-API/index.md)，了解各接口的详细用法。
+5. **API参考**：查阅[SIMD API](../api/SIMD-API/index.md)、[SIMT API](../api/SIMT-API/index.md)和[Utils API](../api/Utils-API/index.md)，了解各接口的详细用法。

@@ -31,9 +31,9 @@
 
 - 使用的主要接口
 
-  基础搬运接口：[`load_tile`](../../api/SIMD-API/operation/memory_data_movement/load_tile.md)、[`store_tile`](../../api/SIMD-API/operation/memory_data_movement/store_tile.md)、[`move`](../../api/SIMD-API/operation/memory_data_movement/move.md)
+  基础搬运接口：[`load_tile`](../../../api/SIMD-API/operation/memory_data_movement/load_tile.md)、[`store_tile`](../../../api/SIMD-API/operation/memory_data_movement/store_tile.md)、[`move`](../../../api/SIMD-API/operation/memory_data_movement/move.md)
 
-  基础计算接口：[`matmul`](../../api/SIMD-API/operation/matrix_computation/matmul.md)
+  基础计算接口：[`matmul`](../../../api/SIMD-API/operation/matrix_computation/matmul.md)
 
 ## 导入PyPTO Pro模块
 

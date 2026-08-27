@@ -1,0 +1,64 @@
+# pypto_pro.language.simt.exp2
+
+## 产品支持情况
+
+<!-- npu="950" id1 -->
+- Ascend 950PR/Ascend 950DT：支持
+<!-- end id1 -->
+<!-- npu="A3" id2 -->
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+<!-- end id2 -->
+<!-- npu="910b" id3 -->
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+<!-- end id3 -->
+
+## 功能说明
+
+计算源操作数以2为底的指数，计算公式如下：
+
+$$result = 2^{value}$$
+
+## 函数原型
+
+```python
+pypto_pro.language.simt.exp2(
+    value: Scalar,
+) -> Scalar
+```
+
+## 参数说明
+
+| 参数 | 输入/输出 | 说明 |
+|---|---|---|
+| value | 输入 | 源操作数，Scalar类型，支持DT_FP16、DT_BF16和DT_FP32。Tensor或Tile元素需通过下标访问后传入。 |
+
+## 约束说明
+
+只能在由@pl.simt.function定义的SIMT入口函数或辅助函数中调用。
+
+## 返回值说明
+
+返回以2为底、源操作数为指数的幂，数据类型与输入一致。
+
+## 调用示例
+
+```python
+import pypto_pro.language as pl
+
+@pl.simt.function(max_threads=256)
+def binary_scale(
+    exponent: pl.Tensor[[1, 256], pl.DT_FP32],
+    output: pl.Tensor[[1, 256], pl.DT_FP32],
+):
+    tid = pl.simt.linear_thread_idx()
+    output[0, tid] = pl.simt.exp2(exponent[0, tid])
+
+
+@pl.jit()
+def simt_exp2_kernel(
+    exponent: pl.Tensor[[1, 256], pl.DT_FP32],
+    output: pl.Tensor[[1, 256], pl.DT_FP32],
+):
+    with pl.section_vector():
+        pl.simt.launch(binary_scale, threads=256, args=(exponent, output))
+```

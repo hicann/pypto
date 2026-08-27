@@ -2,6 +2,8 @@
 
 PyPTO Pro面向昇腾NPU的AI Core算子开发，采用外层多核SPMD并行与内层单核SIMD并行结合的编程范式，并以Tile作为核内计算和数据搬运的主要载体。开发者通过Python接口显式描述多核数据切分、片上数据搬运和计算逻辑，框架负责Kernel编译、加载与任务下发。
 
+对于适合显式线程索引、条件分支、原子操作和不规则访存的AIV计算场景，PyPTO Pro还提供补充的[SIMT编程模型](simt_programming.md)。
+
 ## Host与Device协作
 
 一个基于昇腾处理器的异构系统通常包含CPU与昇腾NPU。其中，CPU及其内存称为Host与Host Memory；NPU及其内存称为Device与Device Memory。
@@ -137,14 +139,15 @@ Reg矢量计算的详细说明，请参考[Reg矢量计算编程](../operator_de
 
 传统裸指针编程需要开发者手工完成内存偏移计算、维度拆分和边界校验。Tensor抽象使用Shape、Stride、数据类型和内存布局等信息描述高维数据；Tile则作为核内计算、存储和数据搬运的物理载体，衔接全局Tensor和底层硬件。
 
-PyPTO Pro基于Tile抽象提供两类核心编程接口：
+PyPTO Pro以Tile API和Reg API两类SIMD接口为主，同时提供补充的SIMT接口：
 
 | API层级 | 编程模式 | 特点 | 主要用途 |
 |----------|----------|------|----------|
 | **Tile API** | 基于Tile编程 | 通过`make_tile`/`make_tile_group`分配片上缓冲区，使用`auto_mutex=True`自动管理核内同步与N缓冲流水 | 适配大多数算子开发场景，兼顾硬件控制能力和开发效率 |
 | **Reg API（VF计算）** | 基于寄存器编程 | 通过`@pl.vector_function`定义VF函数，使用`vf.*`接口直接操作向量寄存器 | 自主管理寄存器数据加载和存储，用于精细化调优与高性能实现 |
+| **SIMT API** | 基于线程编程 | 通过`@pl.simt.function`定义逐线程函数，使用`pl.simt.launch`启动线程块 | 适合显式线程索引、条件分支、原子操作和不规则访存 |
 
-此外，PyPTO Pro提供Utils API，包括Python语法糖以及`printf`、`pto_assert`、`dump_data`和`trap`等调试接口。详细接口说明请参考[SIMD API](../../api/SIMD-API/index.md)和[Utils API](../../api/Utils-API/index.md)。
+此外，PyPTO Pro提供Utils API，包括Python语法糖以及`printf`、`pto_assert`、`dump_data`和`trap`等调试接口。详细接口说明请参考[SIMD API](../../api/SIMD-API/index.md)、[SIMT API](../../api/SIMT-API/index.md)和[Utils API](../../api/Utils-API/index.md)。
 
 ## 控制流
 
@@ -187,6 +190,7 @@ else:
 
 - [Tile核函数](../operator_development/kernel_function.md)
 - [基于Tile的Python编程](../operator_development/tile_based_python_programming/Python_programming_overview.md)
+- [SIMT编程模型](simt_programming.md)
 
 ## 小结
 

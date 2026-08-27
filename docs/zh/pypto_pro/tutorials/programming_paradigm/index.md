@@ -7,5 +7,6 @@
 :titlesonly:
 
 programming_paradigm_overview
+simt_programming
 abstract_hardware_architecture
 ```

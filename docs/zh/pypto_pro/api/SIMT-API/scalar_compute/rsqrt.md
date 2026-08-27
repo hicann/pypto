@@ -1,0 +1,67 @@
+# pypto_pro.language.simt.rsqrt
+
+## 产品支持情况
+
+<!-- npu="950" id1 -->
+- Ascend 950PR/Ascend 950DT：支持
+<!-- end id1 -->
+<!-- npu="A3" id2 -->
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+<!-- end id2 -->
+<!-- npu="910b" id3 -->
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+<!-- end id3 -->
+
+## 功能说明
+
+计算源操作数平方根的倒数，计算公式如下：
+
+$$result = \frac{1}{\sqrt{value}}$$
+
+## 函数原型
+
+```python
+pypto_pro.language.simt.rsqrt(
+    value: Scalar,
+) -> Scalar
+```
+
+## 参数说明
+
+| 参数 | 输入/输出 | 说明 |
+|---|---|---|
+| value | 输入 | 源操作数，Scalar类型，支持DT_FP16、DT_BF16和DT_FP32，实数定义域为value > 0。Tensor或Tile元素需通过下标访问后传入。 |
+
+## 约束说明
+
+只能在由@pl.simt.function定义的SIMT入口函数或辅助函数中调用。
+
+## 返回值说明
+
+返回源操作数平方根的倒数，数据类型与输入一致。
+
+## 调用示例
+
+```python
+import pypto_pro.language as pl
+
+@pl.simt.function(max_threads=256)
+def normalize_scale(
+    sum_of_squares: pl.Tensor[[1, 256], pl.DT_FP32],
+    output: pl.Tensor[[1, 256], pl.DT_FP32],
+    epsilon: pl.DT_FP32,
+):
+    tid = pl.simt.linear_thread_idx()
+    safe_value = pl.simt.max(sum_of_squares[0, tid], epsilon)
+    output[0, tid] = pl.simt.rsqrt(safe_value)
+
+
+@pl.jit()
+def simt_rsqrt_kernel(
+    sum_of_squares: pl.Tensor[[1, 256], pl.DT_FP32],
+    output: pl.Tensor[[1, 256], pl.DT_FP32],
+    epsilon: pl.DT_FP32,
+):
+    with pl.section_vector():
+        pl.simt.launch(normalize_scale, threads=256, args=(sum_of_squares, output, epsilon))
+```

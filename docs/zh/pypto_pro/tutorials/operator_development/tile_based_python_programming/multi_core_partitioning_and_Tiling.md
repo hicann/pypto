@@ -490,7 +490,7 @@ with pl.section_cube():
             ...
 ```
 
-完整、可执行的`K=128`示例参见[Matmul算子快速入门](../../quick_start/Matmul_operator_quick_start.md)。`K`大于单个K Tile时，需要沿K轴循环并使用累加语义。
+完整、可执行的`K=128`示例参见[Matmul算子（SIMD）快速入门](../../quick_start/SIMD/Matmul_operator.md)。`K`大于单个K Tile时，需要沿K轴循环并使用累加语义。
 
 多核、TilingData与尾块处理的组合用法参见[TilingData](TilingData.md)和
 [尾块处理](tail_block_handling.md)。

@@ -1,6 +1,6 @@
 # Add算子快速入门
 
-本示例是一个入门实践，基于PyPTO Pro SIMD实现Add算子，帮助您快速上手。它完整呈现了Kernel函数定义、Tile配置、数据搬运、计算及运行的全流程，助您建立整体认知。开始前，请先参考[环境准备](../../../install/prepare_environment.md)完成基础环境搭建。
+本示例是一个入门实践，基于PyPTO Pro SIMD实现Add算子，帮助您快速上手。它完整呈现了Kernel函数定义、Tile配置、数据搬运、计算及运行的全流程，助您建立整体认知。开始前，请先参考[环境准备](../../../../install/prepare_environment.md)完成基础环境搭建。
 
 ## Add算子
 
@@ -11,11 +11,11 @@
 | 模块 | 说明 |
 |:---|:---|
 | Kernel函数定义 | 通过`@pl.jit(auto_mutex=True)`声明JIT编译目标，开启自动同步 |
-| Tile定义 | 使用[`pl.TileType`](../../api/SIMD-API/basic_data_structures/TileType.md)定义片上Tile的形状、数据类型和目标内存空间 |
-| Tile分配 | 使用[`pl.make_tile_group`](../../api/SIMD-API/operation/resource_management/make_tile_group.md)分配片上内存，通过`mutex_ids`指定互斥缓冲，框架自动插入同步 |
-| 数据搬入 | 通过[`pl.load`](../../api/SIMD-API/operation/memory_data_movement/load.md)将GM数据搬入UB Tile |
-| 数据计算 | 通过[`pl.add`](../../api/SIMD-API/operation/memory_vector_computation/elementwise/add.md)完成逐元素加法 |
-| 数据搬出 | 通过[`pl.store`](../../api/SIMD-API/operation/memory_data_movement/store.md)将UB Tile结果写回GM |
+| Tile定义 | 使用[`pl.TileType`](../../../api/SIMD-API/basic_data_structures/TileType.md)定义片上Tile的形状、数据类型和目标内存空间 |
+| Tile分配 | 使用[`pl.make_tile_group`](../../../api/SIMD-API/operation/resource_management/make_tile_group.md)分配片上内存，通过`mutex_ids`指定互斥缓冲，框架自动插入同步 |
+| 数据搬入 | 通过[`pl.load`](../../../api/SIMD-API/operation/memory_data_movement/load.md)将GM数据搬入UB Tile |
+| 数据计算 | 通过[`pl.add`](../../../api/SIMD-API/operation/memory_vector_computation/elementwise/add.md)完成逐元素加法 |
+| 数据搬出 | 通过[`pl.store`](../../../api/SIMD-API/operation/memory_data_movement/store.md)将UB Tile结果写回GM |
 
 ## 算子代码实现
 
@@ -67,4 +67,4 @@ print("Add kernel passed!")
 > - `tile_group.current()`获取当前可用缓冲。
 > - `pl.section_vector()`标记后续代码在Vector流水单元上执行。
 > - 昇腾NPU对FP16和BF16有原生硬件加速，建议在算子开发中优先考虑这些数据类型。
-> - 如需进一步了解PyPTO Pro的SIMD编程模型，请参阅[编程范式概述](../programming_paradigm/programming_paradigm_overview.md)。
+> - 如需进一步了解PyPTO Pro的SIMD编程模型，请参阅[编程范式概述](../../programming_paradigm/programming_paradigm_overview.md)。

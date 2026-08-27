@@ -5,5 +5,6 @@
 :titlesonly:
 
 SIMD-API/index
+SIMT-API/index
 Utils-API/index
 ```

@@ -1,10 +1,10 @@
 # CV融合算子快速入门
 
-本示例是一个入门实践，基于PyPTO Pro SIMD实现Matmul+Softmax融合算子，帮助您快速上手Cube与Vector流水线协同的融合算子开发。它完整呈现了矩阵乘（Cube流水）与行向Softmax（Vector流水）在同一Kernel中的协作流程，助您建立多流水融合的整体认知。开始前，请先参考[环境准备](../../../install/prepare_environment.md)完成基础环境搭建。
+本示例是一个入门实践，基于PyPTO Pro SIMD实现Matmul+Softmax融合算子，帮助您快速上手Cube与Vector流水线协同的融合算子开发。它完整呈现了矩阵乘（Cube流水）与行向Softmax（Vector流水）在同一Kernel中的协作流程，助您建立多流水融合的整体认知。开始前，请先参考[环境准备](../../../../install/prepare_environment.md)完成基础环境搭建。
 
 ## Matmul+Softmax融合算子
 
-**功能介绍**：该融合算子将矩阵乘法与Softmax激活融合到一个Kernel中，数学表达式为 $out = \text{Softmax}(A \times B)$。其中矩阵乘法 $S = A \times B$ 在Cube流水线上执行，Softmax按行归一化在Vector流水线上执行，中间结果通过Global Memory的workspace中转，Cube与Vector之间通过[`set_cross_core`/`wait_cross_core`](../../api/SIMD-API/operation/synchronization/set_cross_core_wait_cross_core.md)进行流水线同步。
+**功能介绍**：该融合算子将矩阵乘法与Softmax激活融合到一个Kernel中，数学表达式为 $out = \text{Softmax}(A \times B)$。其中矩阵乘法 $S = A \times B$ 在Cube流水线上执行，Softmax按行归一化在Vector流水线上执行，中间结果通过Global Memory的workspace中转，Cube与Vector之间通过[`set_cross_core`/`wait_cross_core`](../../../api/SIMD-API/operation/synchronization/set_cross_core_wait_cross_core.md)进行流水线同步。
 
 - Softmax按行归一化的数学表达式为：
 
@@ -214,15 +214,15 @@ print("Matmul-Softmax kernel passed!")
 > - Vector不把完整N轴放入一个Tile，而是按64列读取S。第一遍得到完整N轴最大值，第二遍得到基于该最大值的完整N轴分母，第三遍逐块归一化并直接写回。`[M半块, N块]`视图沿`dim=0`归约后得到`[M半块, 1]`的DN结果，供`expand_sub`和`expand_div`按行广播；跨N块的最大值与分母通过同一UB地址上的`[1, M半块]`行主序别名执行`maximum`和`add`，不需要额外搬运。
 > - 调用示例将标准正态随机输入缩小到0.1倍，避免未缩放点积使Softmax进入高度饱和区，从而放大NPU计算结果与PyTorch参考结果之间的浮点舍入差异；该缩放仅用于测试数据，不属于Kernel计算。
 > - `auto_mutex=True`自动管理各Tile的mutex锁，开发者无需手写`mutex_lock`/`mutex_unlock`。
-> - 如需进一步了解PyPTO Pro的SIMD编程模型，请参阅[编程范式概述](../programming_paradigm/programming_paradigm_overview.md)。
+> - 如需进一步了解PyPTO Pro的SIMD编程模型，请参阅[编程范式概述](../../programming_paradigm/programming_paradigm_overview.md)。
 
 ### 基于VF（Vector Function）的寄存器级实现
 
-VF（Vector Function，向量函数）是PyPTO Pro中用于描述寄存器级向量计算的函数。VF函数使用`@pl.vector_function`定义，并通过[`vf.*`接口](../../api/SIMD-API/operation/vf_computation/index.md)将UB中的数据加载到向量寄存器，完成计算后再写回UB。外层Kernel仍使用Tile API负责Cube计算、GM与UB之间的数据搬运、UB转置和流水同步。
+VF（Vector Function，向量函数）是PyPTO Pro中用于描述寄存器级向量计算的函数。VF函数使用`@pl.vector_function`定义，并通过[`vf.*`接口](../../../api/SIMD-API/operation/vf_computation/index.md)将UB中的数据加载到向量寄存器，完成计算后再写回UB。外层Kernel仍使用Tile API负责Cube计算、GM与UB之间的数据搬运、UB转置和流水同步。
 
 本节保持输入、输出以及三遍Softmax算法不变，仅将Vector段的Softmax计算改为VF实现。当前`[M半块,N块]`先通过`pl.transpose`转换为UB中的`[N块,64]`物理块，使VF寄存器的每个FP32 lane对应一个M行；随后遍历N轴数据，逐lane更新该行的最大值、指数和及归一化结果。
 
-首次接触VF编程时，建议先阅读[Reg矢量计算编程](../operator_development/tile_based_python_programming/Reg_vector_computation.md)。
+首次接触VF编程时，建议先阅读[Reg矢量计算编程](../../operator_development/tile_based_python_programming/Reg_vector_computation.md)。
 
 | 模块 | 说明 |
 |:---|:---|
