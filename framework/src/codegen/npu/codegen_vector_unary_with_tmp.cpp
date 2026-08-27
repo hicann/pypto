@@ -385,7 +385,7 @@ std::string CodeGenOpNPU::PrintRowSumlineTileTensor() const
         reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(OperErr::ATTRIBUTE_INVALID, ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1))))
-        << "unsupported reduce axis";
+        << "unsupported reduce axis: " << reduceAxis;
     reduceAxis += SHAPE_DIM5 - rawShape[0].size();
     std::ostringstream oss;
     oss << tileOpName;

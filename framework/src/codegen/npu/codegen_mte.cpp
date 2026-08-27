@@ -493,7 +493,7 @@ std::string CodeGenOpNPU::GenMemCopyVar(bool isCopyLocalToGM, bool isSpillToGm, 
     }
 
     ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, false)
-        << "GenMemCopyVar: cannot support current localType!!!" << localType;
+        << "GenMemCopyVar: cannot support current localType!!! localType=" << localType;
     return {};
 }
 

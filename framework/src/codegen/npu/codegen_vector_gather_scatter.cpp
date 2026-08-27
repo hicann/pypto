@@ -139,7 +139,7 @@ std::string CodeGenOpNPU::GenGatherFromUBOp() const
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
 
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.find("op_attr_axis") != opAttrs.end())
-        << "GenGatherOp: There is nop axis attribute here";
+        << "GenGatherOp: There is no axis attribute here";
     const int64_t axis = AnyCast<int64_t>(opAttrs.at("op_attr_axis"));
     // shape: dst, src0, src1
     int dim = rawShape[ID1].size();
@@ -412,8 +412,8 @@ std::string CodeGenOpNPU::GenScatterElementSOp() const
     std::string dstDtypeStr = DataType2CCEStr(dstDtype);
     std::string src0DtypeStr = DataType2CCEStr(src0Dtype);
     std::string src1DtypeStr = DataType2CCEStr(src1Dtype);
-    CODEGEN_LOGI("GenScatterElementSOp, dstDtypeStr%s", dstDtypeStr.c_str());
-    CODEGEN_LOGI("GenScatterElementSOp, src1DtypeStr%s", src1DtypeStr.c_str());
+    CODEGEN_LOGI("GenScatterElementSOp, dstDtypeStr: %s", dstDtypeStr.c_str());
+    CODEGEN_LOGI("GenScatterElementSOp, src1DtypeStr: %s", src1DtypeStr.c_str());
 
     AppendLocalBufVarOffsetInOrder(dstVar, src0Var, src1Var);
 

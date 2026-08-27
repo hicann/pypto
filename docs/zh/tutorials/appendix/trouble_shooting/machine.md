@@ -58,18 +58,25 @@ encode阶段`InitRawTensorAndMemoryRequirement`断言：`Shape size mismatch`或
 
 Host侧映射寄存器地址失败：`Map reg addr fail, maybe others are using current device`。
 
+> **定性**：多数为设备寄存器映射的**瞬态争用**，不是硬件故障。同设备短间隔重试常可恢复；勿在未诊断前扫卡换设备。
+
 **可能原因**
 
-- 当前设备（DEVICE_ID）被其他进程占用，寄存器映射冲突。
-- 同一设备上有残留进程未释放资源。
-- 多进程/多容器同时映射同一设备寄存器。
+- 多进程/多worker/多容器/多agent并发映射同一`DEVICE_ID`，映射窗口冲突（最常见）。
+- 同一设备上有残留进程未释放`/dev/davinci*`上下文。
 
 **处理方式**
 
-1. 执行`npu-smi info`查看设备占用情况，确认目标DEVICE_ID是否被其他进程占用。
-2. 清理占用设备的残留进程：`fuser -v /dev/davinci<DEVICE_ID>`定位并`kill`。
-3. 在容器/多进程场景下，确保`ASCEND_DEVICE_ID`或`DEVICE_ID`环境变量设置正确且不冲突。
-4. 若问题持续，尝试重启NPU驱动或切换空闲设备。
+1. **先原地重试（优先）**
+   保持`TILE_FWK_DEVICE_ID`（或`ASCEND_DEVICE_ID`）不变，短间隔重跑同一用例（建议2–3次）。多数F71008会在重试后消失。
+2. **全量表诊断（仍失败再做）**
+   - 执行`npu-smi info`查看整体占用。
+   - `fuser -v /dev/davinci<CHIP_ID>`定位占用进程；timeout kill后需确认残留进程已清理干净。
+   - HBM占用约3–9GB往往表示仍有存活NPU上下文。
+   - 容器/多进程场景下，确认各进程设备号设置正确且不冲突。
+3. **受设备约束时：等待+同设备重试**
+   **禁止**多agent/进程互相扫空闲卡换设备——并发扫卡会制造连环F71008（历史可致整机多卡挂死）。
+4. **仅当确认长期独占或硬件异常时**，再切换空闲设备或重启NPU驱动。
 
 ## F7100B SYNC_FAILED
 

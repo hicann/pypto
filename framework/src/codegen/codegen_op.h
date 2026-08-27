@@ -63,9 +63,8 @@ public:
           isMainBlock(ctx.isMainBlock),
           isDynamicAligned(ctx.isDynamicAligned)
     {
-        operandWithMagic.reserve(MAX_OPERANDS);
+        operandWithMagic.resize(MAX_OPERANDS, INVALID_TENSOR_MAGIC);
         for (size_t i = 0; i < MAX_OPERANDS; i++) {
-            operandWithMagic[i] = INVALID_TENSOR_MAGIC;
             operandType[i] = BUF_UNKNOWN;
             operandDtype[i] = DataType::DT_BOTTOM;
             // In COA(Call Operation Attribute), 0-index is the callee's cce info. So the tensor list starts from 1.

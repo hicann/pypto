@@ -923,7 +923,7 @@ std::string CodeGenOpNPU::GenOpCode() const
     ret += InsertOpComment(tileOpSourceCode);
 
     if (forBlkMgr_ == nullptr || !forBlkMgr_->IsInLoop()) {
-        CODEGEN_LOGI_FULL("op codegen result: \n, %s", ret.c_str());
+        CODEGEN_LOGI_FULL("op codegen result: \n%s", ret.c_str());
         return ret;
     }
 
@@ -941,7 +941,7 @@ std::string CodeGenOpNPU::GenOpCode() const
 
     ret = forBlkMgr_->Print();
     forBlkMgr_->OutLoop();
-    CODEGEN_LOGI_FULL("op codegen result: \n, %s", ret.c_str());
+    CODEGEN_LOGI_FULL("op codegen result: \n%s", ret.c_str());
     return ret;
 }
 
@@ -953,7 +953,7 @@ std::string CodeGenOpNPU::GetLastUse() const
     std::vector<int64_t> val;
     GetOpAttr(OpAttributeKey::lastUse, val);
     int valSize = val.size();
-    ASSERT(OperErr::ATTRIBUTE_INVALID, valSize != 0) << "GetLastUse error!!!";
+    ASSERT(OperErr::ATTRIBUTE_INVALID, valSize != 0) << "GetLastUse error, valSize is " << valSize;
     std::ostringstream oss;
     oss << "LastUse" << valSize << "Dim";
     oss << WrapParamByAngleBrackets(val);

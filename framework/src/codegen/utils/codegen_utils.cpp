@@ -31,7 +31,7 @@ std::vector<int64_t> NormalizeShape(const std::vector<int64_t>& shapeVec, unsign
 {
     std::vector<int64_t> normalizedVec(dim, 1);
     for (size_t i = 0; i < shapeVec.size(); i++) {
-        ASSERT(OperErr::TENSOR_DIM_EXCEEDED, i < dim) << "exceed dimension limit!";
+        ASSERT(OperErr::TENSOR_DIM_EXCEEDED, i < dim) << "exceed dimension limit! index=" << i << ", dim=" << dim;
         normalizedVec[i] = shapeVec[shapeVec.size() - 1 - i];
     }
     std::reverse(normalizedVec.begin(), normalizedVec.end());

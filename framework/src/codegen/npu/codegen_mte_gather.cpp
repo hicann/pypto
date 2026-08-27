@@ -92,7 +92,7 @@ std::string CodeGenOpNPU::GenGatherInL1() const
     ASSERT(GenCodeErr::DATA_TYPE_UNSUPPORTED, offsetsDtypeStr == "int64_t" || offsetsDtypeStr == "int32_t")
         << "offsetsDtypeStr must be int64_t or int32_t!";
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.find("op_attr_blocksize") != opAttrs.end())
-        << "GenGatherOp: There is nop blocksize attribute here";
+        << "GenGatherOp: There is no blocksize attribute here";
     const int64_t blockSize = AnyCast<int64_t>(opAttrs.at("op_attr_blocksize"));
 
     auto startOffset = opAttrs.at(OpAttributeKey::startOffset);
@@ -312,7 +312,7 @@ std::string CodeGenOpNPU::PrintGatherInUBLayout() const
     std::string coord4BlockTable = PrintCoord(blockTableDim, coordCpblockTableOffset);
     std::vector<std::string> paramList;
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.find(OpAttributeKey::blockSize) != opAttrs.end())
-        << "GenGatherOp: There is nop blockSize attribute here";
+        << "GenGatherOp: There is no blockSize attribute here";
     const int64_t blockSize = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::blockSize));
     paramList.emplace_back(std::to_string(blockSize));
     std::string templateParam = JoinString(paramList, CONN_COMMA);
@@ -335,7 +335,7 @@ std::string CodeGenOpNPU::PrintGatherInUBDynamicUnaligned() const
     ASSERT(GenCodeErr::DATA_TYPE_MISMATCHED, resultDtypeStr == paramDtypeStr)
         << "resultDtypeStr and paramDtypeStr must be same!";
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.find(OpAttributeKey::blockSize) != opAttrs.end())
-        << "GenGatherOp: There is nop blockSize attribute here";
+        << "GenGatherOp: There is no blockSize attribute here";
     const int64_t blockSize = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::blockSize));
     auto outputRawShapes = rawShape[ID0];
     auto paramRawShapes = rawShape[ID1];
