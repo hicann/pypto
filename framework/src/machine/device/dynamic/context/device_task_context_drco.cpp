@@ -31,6 +31,8 @@ void DeviceTaskContext::InitDrcoRootFuncList(DynDeviceTask* dyntask)
     for (size_t i = 0; i < npu::tile_fwk::DRCO_QUEUE_MAX; i++) {
         auto* q = workspace_->AllocateDrcoGlobalReadyQueue(globalReadyQueueSize);
         new (q) npu::tile_fwk::DrcoGlobalReadyQueue();
+        (void)memset_s(reinterpret_cast<uint8_t*>(q) + sizeof(DrcoGlobalReadyQueue), queueCapacity * sizeof(LeafTaskId),
+                       0, queueCapacity * sizeof(LeafTaskId));
         rootFuncList->globalReadyQueueList[i].ptr = q;
     }
     uint32_t perCoreSize = sizeof(npu::tile_fwk::PerCorePendingQueue) +
@@ -46,6 +48,8 @@ void DeviceTaskContext::InitDrcoRootFuncList(DynDeviceTask* dyntask)
         for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
             auto* localQueue = workspace_->AllocateDrcoLocalReadyQueue(localSize);
             new (localQueue) npu::tile_fwk::DrcoLocalReadyQueue(queueCapacity);
+            (void)memset_s(reinterpret_cast<uint8_t*>(localQueue) + sizeof(DrcoLocalReadyQueue),
+                           queueCapacity * sizeof(LeafTaskId), 0, queueCapacity * sizeof(LeafTaskId));
             rootFuncList->localReadyQueueArray[ct][i] = localQueue;
         }
     }

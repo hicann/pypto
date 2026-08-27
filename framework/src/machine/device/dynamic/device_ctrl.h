@@ -126,6 +126,8 @@ public:
         if (!appendLastTaskCtrl && !ctx->devProg->ctrlFlowCacheAnchor->IsRecording()) {
             if (AicoreResolveEnabled()) {
                 GetDeviceTaskReadyQueue().Append(dynTask->dynFuncDataList, dynTask->drcoRootFuncList);
+                DEV_DEBUG("DRCO append task=%p root=%p qsize=%u", dynTask->dynFuncDataList, dynTask->drcoRootFuncList,
+                          GetDeviceTaskReadyQueue().size);
             } else {
                 for (uint32_t i = 0; i < GetScheAicpuNum(); ++i) {
                     GetTaskQueue(i).Enqueue(newTaskCtrl);

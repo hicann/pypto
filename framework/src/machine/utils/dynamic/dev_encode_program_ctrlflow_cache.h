@@ -408,6 +408,8 @@ struct DevControlFlowCache {
 
     void ReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic);
 
+    void DrcoReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic);
+
     void DieReadyQueueDataBackup(DynDeviceTaskBase* base);
 
     void DieReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic);

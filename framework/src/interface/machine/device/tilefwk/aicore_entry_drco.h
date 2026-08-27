@@ -803,6 +803,8 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
         DfxProcWhenDevTaskStop(&entry.ctx, entry.args, entry.metric, !devTaskFirstTask);
     }
     if (entry.blockIdx == 0) {
+        entry.deviceTaskReadyQueue->head = 0;
+        entry.deviceTaskReadyQueue->size = 0;
         uint64_t finished = DrcoGmLoad(&entry.runtimeDataRingBufferHeadData->indexFinished.value) + 1;
         DrcoGmStore(&entry.runtimeDataRingBufferHeadData->indexFinished.value, finished);
     }

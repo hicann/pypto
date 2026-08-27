@@ -152,6 +152,61 @@ void DevControlFlowCache::ReadyQueueDataBackup(DynDeviceTaskBase* base)
     base->readyQueueBackup = readyQueueBackup;
 }
 
+void DevControlFlowCache::DrcoReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic)
+{
+    for (size_t i = 0; i < npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE; i++) {
+        auto* dst = base->drcoRootFuncList->perCorePendingQueueArray[i];
+        if (dst == nullptr) {
+            continue;
+        }
+        dst->head = 0;
+        dst->tail = 0;
+        dst->size = 0;
+    }
+
+    uint32_t nrAivCores = nrValidAic * 2;
+    ReadyCoreFunctionQueue* aivQueue = base->readyQueue[0];
+    ReadyCoreFunctionQueue* aicQueue = base->readyQueue[1];
+    uint32_t aicIdx = 0;
+    for (const auto* it = aicQueue->begin(); it != aicQueue->end(); ++it) {
+        uint32_t coreIdx = aicIdx % nrValidAic;
+        base->drcoRootFuncList->perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
+        aicIdx++;
+    }
+    uint32_t aivIdx = 0;
+    for (const auto* it = aivQueue->begin(); it != aivQueue->end(); ++it) {
+        uint32_t coreIdx = nrValidAic + (aivIdx % nrAivCores);
+        base->drcoRootFuncList->perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
+        aivIdx++;
+    }
+    __sync_synchronize();
+    uint32_t queueTaskListSize = base->devTask.coreFunctionCnt * sizeof(npu::tile_fwk::LeafTaskId);
+    for (size_t i = 0; i < npu::tile_fwk::DRCO_QUEUE_MAX; i++) {
+        auto* gq = base->drcoRootFuncList->globalReadyQueueList[i].ptr;
+        if (gq == nullptr) {
+            continue;
+        }
+        gq->head = 0;
+        gq->tail = 0;
+        (void)memset_s(reinterpret_cast<uint8_t*>(gq) + sizeof(DrcoGlobalReadyQueue), queueTaskListSize, 0,
+                       queueTaskListSize);
+    }
+    for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
+        for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
+            auto* dst = base->drcoRootFuncList->localReadyQueueArray[ct][i];
+            if (dst == nullptr) {
+                continue;
+            }
+            dst->head = 0;
+            dst->tail = 0;
+            (void)memset_s(reinterpret_cast<uint8_t*>(dst) + sizeof(DrcoLocalReadyQueue), queueTaskListSize, 0,
+                           queueTaskListSize);
+        }
+    }
+    base->drcoRootFuncList->executedTaskCount = 0;
+    base->drcoRootFuncList->devTaskFinished = 0;
+}
+
 void DevControlFlowCache::ReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic)
 {
     ReadyQueueCache* readyQueueBackup = base->readyQueueBackup;
@@ -162,44 +217,7 @@ void DevControlFlowCache::ReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_
 
     // for aicore-resolve
     if (base->drcoRootFuncList != nullptr) {
-        for (size_t i = 0; i < npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE; i++) {
-            auto* dst = base->drcoRootFuncList->perCorePendingQueueArray[i];
-            if (dst == nullptr) {
-                continue;
-            }
-            dst->head = 0;
-            dst->tail = 0;
-            dst->size = 0;
-        }
-
-        uint32_t nrAivCores = nrValidAic * 2;
-        ReadyCoreFunctionQueue* aivQueue = base->readyQueue[0];
-        ReadyCoreFunctionQueue* aicQueue = base->readyQueue[1];
-        uint32_t aicIdx = 0;
-        for (const auto* it = aicQueue->begin(); it != aicQueue->end(); ++it) {
-            uint32_t coreIdx = aicIdx % nrValidAic;
-            base->drcoRootFuncList->perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
-            aicIdx++;
-        }
-        uint32_t aivIdx = 0;
-        for (const auto* it = aivQueue->begin(); it != aivQueue->end(); ++it) {
-            uint32_t coreIdx = nrValidAic + (aivIdx % nrAivCores);
-            base->drcoRootFuncList->perCorePendingQueueArray[coreIdx]->UnsafeEnqueue(*it);
-            aivIdx++;
-        }
-        __sync_synchronize();
-        for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
-            for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
-                auto* dst = base->drcoRootFuncList->localReadyQueueArray[ct][i];
-                if (dst == nullptr) {
-                    continue;
-                }
-                dst->head = 0;
-                dst->tail = 0;
-            }
-        }
-        base->drcoRootFuncList->executedTaskCount = 0;
-        base->drcoRootFuncList->devTaskFinished = 0;
+        DrcoReadyQueueDataRestore(base, nrValidAic);
     }
 }
 

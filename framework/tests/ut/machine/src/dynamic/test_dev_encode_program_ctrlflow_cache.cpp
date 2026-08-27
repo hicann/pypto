@@ -48,10 +48,10 @@ struct DrcoQueueFixture {
     void Build(uint32_t coreFunctionCnt = 8)
     {
         const size_t perCoreBytes = sizeof(PerCorePendingQueue) + 16 * sizeof(LeafTaskId);
-        const size_t localBytes = sizeof(DrcoLocalReadyQueue);
+        const size_t localBytes = sizeof(DrcoLocalReadyQueue) + 16 * sizeof(LeafTaskId);
         constexpr size_t localAlign = alignof(DrcoLocalReadyQueue);
         perCoreStorage.assign(MAX_AICORE_NUM_FOR_QUEUE * perCoreBytes, 0);
-        localStorage.assign(NUM_CORE_TYPES * NUM_LOCAL_GROUPS * localBytes + localAlign, 0);
+        localStorage.assign(DRCO_QUEUE_MAX * NUM_LOCAL_GROUPS * localBytes + localAlign, 0);
         uintptr_t localBase = reinterpret_cast<uintptr_t>(localStorage.data());
         uint8_t* localAlignedBase = reinterpret_cast<uint8_t*>((localBase + localAlign - 1) &
                                                                ~static_cast<uintptr_t>(localAlign - 1));
@@ -63,9 +63,9 @@ struct DrcoQueueFixture {
             root.perCorePendingQueueArray[i] = reinterpret_cast<PerCorePendingQueue*>(perCoreStorage.data() +
                                                                                       i * perCoreBytes);
         }
-        for (uint32_t ct = 0; ct < NUM_CORE_TYPES; ++ct) {
+        for (uint32_t ct = 0; ct < DRCO_QUEUE_MAX; ++ct) {
             for (uint32_t i = 0; i < NUM_LOCAL_GROUPS; ++i) {
-                if (ct == NUM_CORE_TYPES - 1 && i == NUM_LOCAL_GROUPS - 1) {
+                if (ct == DRCO_QUEUE_MAX - 1 && i == NUM_LOCAL_GROUPS - 1) {
                     root.localReadyQueueArray[ct][i] = nullptr;
                     continue;
                 }
