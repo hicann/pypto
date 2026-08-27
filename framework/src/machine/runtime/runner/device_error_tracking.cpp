@@ -18,6 +18,8 @@
 #include <iostream>
 #include "adapter/api/acl_api.h"
 #include "tilefwk/device_error_code.h"
+#include "tilefwk/error_code.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 
@@ -178,6 +180,11 @@ void PyPTOExceptionInfoCallBack(AclRtExceptionInfo* exceptionInfo)
     if (exceptionInfo->expandInfo.type == RtExceptionExpandType::AICORE) {
         kernelName = exceptionInfo->expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName;
     }
+
+    PYPTO_HOST_LOGE_WITH_ERRCODE(AICORE, InternalError::COMMON_INNER_ERROR,
+                                 "%s, device_id: %u, stream_id: %u, task_id: %u, retcode: %u, kernelName: %s", errMsg,
+                                 exceptionInfo->deviceid, exceptionInfo->streamid, exceptionInfo->taskid,
+                                 exceptionInfo->retcode, kernelName);
     printf("[Error]: %s, device_id: %u, stream_id: %u, task_id: %u, retcode: %u, kernelName: %s\n", errMsg,
            exceptionInfo->deviceid, exceptionInfo->streamid, exceptionInfo->taskid, exceptionInfo->retcode, kernelName);
     printf("        Rectify the fault based on the error information in the ascend log.\n");
