@@ -98,6 +98,8 @@ void Program::Reset()
     IdGen<IdType::RAW_TENSOR>::Inst().Reset();
     IdGen<IdType::LOGICAL_TENSOR>::Inst().Reset();
     IdGen<IdType::FUNCTION>::Inst().SetId(1);
+    // FUNCTION_MAGIC_NAME is process-lifetime so consecutive DYNAMIC compiles
+    // do not reuse magic names (they participate in root functionHash).
     aliveTensors_.clear();
     functionCache_.Reset();
     functionSequence_.clear();
@@ -361,7 +363,7 @@ bool Program::BeginFunction(const std::string& funcName, const FunctionType func
     // Push the current function index to the stack
     functionMagicNameStack_.push_back(currentFunctionMagicName_);
 
-    auto funcMagicName = funcName + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().CurId());
+    auto funcMagicName = funcName + "_" + std::to_string(Function::NextMagicNameSuffix(funcType));
     if (functionmap_.find(funcMagicName) == functionmap_.end()) { // new function
         FE_LOGD("Create a new function[%s].", funcMagicName.c_str());
         auto newFunc = std::make_unique<Function>(*this, funcMagicName, funcName, currentFunctionPtr_);
@@ -408,10 +410,15 @@ Operation& Program::ConnectCallerGusket(Function& caller, FunctionCallArgs& args
 Operation* Program::FinishCurrentFunction(const std::shared_ptr<TensorSlotScope>& scope, bool generateCall)
 {
     FE_ASSERT(functionMagicNameStack_.size() != 0) << "The stack of functionMagicName is null.";
-    auto funcMagicName = currentFunctionPtr_->GetRawName() + "_" + std::to_string(currentFunctionPtr_->GetFuncMagic());
-    FE_ASSERT(FeError::NOT_EXIST, currentFunctionPtr_->GetMagicName() == funcMagicName)
-        << "currentFunc magicName: " << currentFunctionPtr_->GetMagicName()
-        << ", rawName: " << currentFunctionPtr_->GetRawName() << "funcMagic: " << currentFunctionPtr_->GetFuncMagic();
+    auto funcMagicName = currentFunctionPtr_->GetMagicName();
+    // DYNAMIC names use FUNCTION_MAGIC_NAME suffix, which need not equal functionMagic_.
+    if (currentFunctionPtr_->GetFunctionType() != FunctionType::DYNAMIC) {
+        auto expectedName = currentFunctionPtr_->GetRawName() + "_" +
+                            std::to_string(currentFunctionPtr_->GetFuncMagic());
+        FE_ASSERT(FeError::NOT_EXIST, funcMagicName == expectedName)
+            << "currentFunc magicName: " << funcMagicName << ", rawName: " << currentFunctionPtr_->GetRawName()
+            << "funcMagic: " << currentFunctionPtr_->GetFuncMagic();
+    }
 
     FE_LOGD("func.end.finish: name=%s", funcMagicName.c_str());
 

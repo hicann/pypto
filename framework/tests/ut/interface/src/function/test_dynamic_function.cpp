@@ -632,7 +632,7 @@ TEST_F(DynamicFunctionTest, TestLoopWithRank)
 #if ENABLE_HIDDENLOOP
     auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_TENSOR_main_loop_Unroll1_PATH0_4");
 #else
-    auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_main_2");
+    auto mainFunc = Program::GetInstance().GetFunctionByRawName("TENSOR_main");
 #endif
     EXPECT_NE(mainFunc, nullptr);
     EXPECT_EQ(mainFunc->GetCallopAttrList().size(), 6);
@@ -677,7 +677,7 @@ TEST_F(DynamicFunctionTest, TestLoopIfWithRank)
 #if ENABLE_HIDDENLOOP
     auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_TENSOR_main_loop_Unroll1_PATH0_4");
 #else
-    auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_main_2");
+    auto mainFunc = Program::GetInstance().GetFunctionByRawName("TENSOR_main");
 #endif
     EXPECT_NE(mainFunc, nullptr);
     EXPECT_EQ(mainFunc->GetCallopAttrList().size(), 6);
@@ -726,7 +726,7 @@ TEST_F(DynamicFunctionTest, TestLoopWithManualRank)
 #if ENABLE_HIDDENLOOP
     auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_TENSOR_main_loop_Unroll1_PATH0_4");
 #else
-    auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_main_2");
+    auto mainFunc = Program::GetInstance().GetFunctionByRawName("TENSOR_main");
 #endif
     EXPECT_NE(mainFunc, nullptr);
     EXPECT_EQ(mainFunc->GetCallopAttrList().size(), 7);
@@ -787,7 +787,7 @@ TEST_F(DynamicFunctionTest, HiddenLoop)
         // }
     }
 
-    auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_Main_2"); // outest function
+    auto mainFunc = Program::GetInstance().GetFunctionByRawName("TENSOR_Main"); // outest function
     EXPECT_NE(mainFunc, nullptr);
     EXPECT_EQ(mainFunc->GetCalleeFunctionList().size(), 1); // one hidden loop
 
@@ -856,7 +856,7 @@ TEST_F(DynamicFunctionTest, HiddenLoopWithIf)
 
     HiddenLoopWithIf(t0, t1, out);
 
-    auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_Main_2");
+    auto mainFunc = Program::GetInstance().GetFunctionByRawName("TENSOR_Main");
     EXPECT_NE(mainFunc, nullptr);
     EXPECT_EQ(mainFunc->GetCalleeFunctionList().size(), 1); // one hidden loop
 
@@ -942,7 +942,7 @@ TEST_F(DynamicFunctionTest, HiddenLoopNestedWithIf)
         //  }
     }
 
-    auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_Main_2");
+    auto mainFunc = Program::GetInstance().GetFunctionByRawName("TENSOR_Main");
     EXPECT_NE(mainFunc, nullptr);
     EXPECT_EQ(mainFunc->GetCalleeFunctionList().size(), 1); // one hidden loop
 
@@ -1008,7 +1008,7 @@ TEST_F(DynamicFunctionTest, HiddenLoopNestedWithIfComplex)
         //  }
     }
 
-    auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_Main_2"); // outest function
+    auto mainFunc = Program::GetInstance().GetFunctionByRawName("TENSOR_Main"); // outest function
     EXPECT_NE(mainFunc, nullptr);
     EXPECT_EQ(mainFunc->GetCalleeFunctionList().size(), 1); // one hidden loop
 

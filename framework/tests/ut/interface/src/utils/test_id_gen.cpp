@@ -71,15 +71,29 @@ TEST_F(TestIdGen, MultipleIdTypesIndependent)
 {
     auto& raw = IdGen<IdType::RAW_TENSOR>::Inst();
     auto& func = IdGen<IdType::FUNCTION>::Inst();
+    auto& nameSuffix = IdGen<IdType::FUNCTION_MAGIC_NAME>::Inst();
     raw.Reset();
     func.Reset();
+    int nameBefore = nameSuffix.CurId();
     raw.NewId();
     func.NewId();
     func.NewId();
     EXPECT_EQ(raw.CurId(), 1);
     EXPECT_EQ(func.CurId(), 2);
+    EXPECT_EQ(nameSuffix.CurId(), nameBefore);
     raw.Reset();
     func.Reset();
+    EXPECT_EQ(nameSuffix.CurId(), nameBefore);
+}
+
+TEST_F(TestIdGen, FunctionMagicNameNotResetWithFunction)
+{
+    auto& func = IdGen<IdType::FUNCTION>::Inst();
+    auto& nameSuffix = IdGen<IdType::FUNCTION_MAGIC_NAME>::Inst();
+    int nameId = nameSuffix.NewId();
+    func.Reset();
+    EXPECT_EQ(func.CurId(), 0);
+    EXPECT_EQ(nameSuffix.CurId(), nameId + 1);
 }
 
 TEST_F(TestIdGen, NewIdAfterReset)

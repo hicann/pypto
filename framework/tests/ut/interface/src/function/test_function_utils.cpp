@@ -18,6 +18,7 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
+#include "interface/function/function.h"
 
 using namespace npu::tile_fwk;
 
@@ -72,4 +73,37 @@ TEST_F(FunctionUtilsTest, TestCloneOperation)
             break;
         }
     }
+}
+
+TEST_F(FunctionUtilsTest, DynamicFunctionMagicNameSurvivesProgramReset)
+{
+    auto allocDyn = []() {
+        auto magicName = std::string("dyn_root_") +
+                         std::to_string(Function::NextMagicNameSuffix(FunctionType::DYNAMIC));
+        auto dyn = std::make_unique<Function>(Program::GetInstance(), magicName, "dyn_root", nullptr);
+        dyn->SetFunctionType(FunctionType::DYNAMIC);
+        dyn->SetGraphType(GraphType::TENSOR_GRAPH);
+        return dyn;
+    };
+
+    auto dyn1 = allocDyn();
+    int magic1 = dyn1->GetFuncMagic();
+    std::string name1 = dyn1->GetMagicName();
+    auto hash1 = dyn1->ComputeHash();
+
+    Program::GetInstance().Reset();
+
+    auto dyn2 = allocDyn();
+    EXPECT_EQ(dyn2->GetFuncMagic(), magic1);
+    EXPECT_NE(dyn2->GetMagicName(), name1);
+    EXPECT_NE(dyn2->ComputeHash().GetHash(), hash1.GetHash());
+
+    Program::GetInstance().Reset();
+    int staticSuffix = Function::NextMagicNameSuffix(FunctionType::STATIC);
+    Function staticFunc(Program::GetInstance(), "static_a", "static_a", nullptr);
+    int staticMagic = staticFunc.GetFuncMagic();
+    Program::GetInstance().Reset();
+    EXPECT_EQ(Function::NextMagicNameSuffix(FunctionType::STATIC), staticSuffix);
+    Function staticFunc2(Program::GetInstance(), "static_a", "static_a", nullptr);
+    EXPECT_EQ(staticFunc2.GetFuncMagic(), staticMagic);
 }

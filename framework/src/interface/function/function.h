@@ -589,6 +589,10 @@ public:
     Function(const Program& belongTo, const std::string& funcMagicName, const std::string& funcRawName,
              Function* parentFunc);
 
+    // DYNAMIC magic names use a process-lifetime suffix (not reset by Program::Reset).
+    // Other types still use FUNCTION CurId so the suffix matches functionMagic_.
+    static int NextMagicNameSuffix(FunctionType funcType);
+
     Function(const Function& other) = delete;
     Function(Function&& other) = delete;
     Function& operator=(const Function& other) = delete;

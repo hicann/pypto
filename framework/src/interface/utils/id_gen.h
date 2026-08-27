@@ -21,6 +21,7 @@ namespace npu::tile_fwk {
 enum class IdType {
     RAW_TENSOR,
     FUNCTION,
+    FUNCTION_MAGIC_NAME, // FunctionType::DYNAMIC name suffix; not reset by Program::Reset()
     LOGICAL_TENSOR,
     TENSOR_INDEX,
 };

@@ -157,7 +157,7 @@ std::shared_ptr<Function> RootFunctionBuilder::Build(const ir::FunctionPtr& irFu
 
 void RootFunctionBuilder::InitDynFunc(const ir::FunctionPtr& irFunc)
 {
-    auto funcMagicName = irFunc->name_ + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().NewId());
+    auto funcMagicName = irFunc->name_ + "_" + std::to_string(Function::NextMagicNameSuffix(FunctionType::DYNAMIC));
     dynFunc_ = std::make_shared<Function>(program_, funcMagicName, irFunc->name_, parentFunc_);
     dynFunc_->SetFunctionType(FunctionType::DYNAMIC);
     dynFunc_->SetGraphType(GraphType::TENSOR_GRAPH);

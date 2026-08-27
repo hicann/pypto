@@ -135,7 +135,7 @@ TEST_F(SubgraphToFunctionCheckTest, TestPrePostCheck)
         c2 = Sub(temp2, b);
     }
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-    auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_SimpleTest_2");
+    auto mainFunc = Program::GetInstance().GetFunctionByRawName("TENSOR_SimpleTest");
     EXPECT_NE(mainFunc, nullptr);
 }
 

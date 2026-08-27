@@ -443,6 +443,14 @@ void DynloopFunctionAttribute::CreateCurrCond()
     currIndex = 0;
 }
 
+int Function::NextMagicNameSuffix(FunctionType funcType)
+{
+    if (funcType == FunctionType::DYNAMIC) {
+        return IdGen<IdType::FUNCTION_MAGIC_NAME>::Inst().NewId();
+    }
+    return IdGen<IdType::FUNCTION>::Inst().CurId();
+}
+
 Function::Function(const Program& belongTo, const std::string& funcMagicName, const std::string& funcRawName,
                    Function* parentFunc)
     : ir::Function(ir::Span::Unknown()),
