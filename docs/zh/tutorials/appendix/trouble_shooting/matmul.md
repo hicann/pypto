@@ -38,7 +38,7 @@ Matmul内部入参不支持：框架内部使用了不支持的参数组合。
 
 **可能原因**
 
-- 不满足scale_tensor数据类型约束：scale_tensor非DT_UINT64/DT_INT64；或量化/反量化场景输入输出数据类型不满足（DT_INT8输入输出DT_FP16，或任意输入输出DT_INT8）。
+- 不满足scale_tensor数据类型约束：scale_tensor非DT_UINT64/DT_INT64；或量化/反量化场景输入、输出数据类型不满足（DT_INT8输入、输出DT_FP16，或任意输入、输出DT_INT8）。
 
 **处理方式**
 

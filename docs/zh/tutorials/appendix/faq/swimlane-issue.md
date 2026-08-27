@@ -27,7 +27,7 @@
 | 文件 | 用途 |
 |---|---|
 | `machine_trace_perf_data*.json` | Machine组件原始Profiling数据 |
-| `tilefwk_L1_prof_data_*.json` | Machine组件原始Profiling数据 |
+| `tilefwk_L1_prof_data_*.json` | Machine组件L1层级Profiling数据 |
 | `merged_swimlane.json` | IDE可视化综合泳道图 |
 | `machine_runtime_operator_trace*.json` | AI CPU / AI Core泳道图（联合时序） |
 

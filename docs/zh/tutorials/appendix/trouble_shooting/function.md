@@ -154,6 +154,7 @@
 
   ```python
   # 正确示例 - 先写后读，且不再写回
+  tile = pypto.view(buf, ...)  # 先切分出tile
   for i in pypto.loop(M, name="i_loop", idx_name="i"):
       pypto.assemble(tile, [i, 0], buf) # 只写buf
   out = pypto.mul(buf, scale)           # 只读buf，写入新张量

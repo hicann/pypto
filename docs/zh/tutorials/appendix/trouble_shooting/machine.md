@@ -10,7 +10,7 @@ AICore kernel编译阶段失败。
 
 - CCE源码生成失败（`GEN_AICORE_FILE_FAILED`）。
 - CCE编译命令执行失败（`COMPILE_CCEC_FAILED`）。
-- 链接失败（`LINK_FAILED`），常见于并行编译符号未处理。
+- 连接失败（`LINK_FAILED`），常见于并行编译符号未处理。
 
 **处理方式**
 
@@ -179,9 +179,9 @@ Ctrl AICPU运行超时或整网环境中AICPU执行超时。
 
 **处理方式**
 
-1. **定位异常大类**：开启INFO日志后，搜索`[workspaceSize]`，对比`Metadata / tensor / aicoreSpillen / debug`各项。
+1. **定位异常大类**：开启INFO日志后，搜索`[workspaceSize]`，对比`Metadata / tensor / aicoreSpilled / debug`各项。
 2. **缩小到Root Function**：每个Root有独立日志`MaxRootInnerMem is xxx`，最大者即为问题来源。
-3. **定位问题Tensor**：搜索`staticMemReq=[xxx] is too larger`警告，根据rawmagic在pass计算图中定位。
+3. **定位问题Tensor**：搜索`staticMemReq=[xxx] is too large`警告，根据rawmagic在pass计算图中定位。
 4. **调整配置**：
    - `max_workspace_kb` → **推荐优先配置**，使能内存驱动 stitch 模式；尤其在使用 `unroll_list` 时，按 encode 日志推荐值设置。
    - `stitch_function_max_num` → 未使能内存驱动模式时控制 stitch 深度（按 root function 个数）。

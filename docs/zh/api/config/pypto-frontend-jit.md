@@ -31,7 +31,9 @@
     host_options=None,
     runtime_options=None,
     codegen_options=None,
-    pass_options=None
+    pass_options=None,
+    verify_options=None,
+    debug_options=None
 )
 def kernel_function(...):
     ...
@@ -56,7 +58,7 @@ def kernel_function(...):
 | device_sched_mode               | 含义：设置计算子图的调度模式 <br> 说明：0：代表默认调度模式，ready子图放入共享队列，各个调度线程抢占子图进行发送，子图获取发送遵循先入先出； <br> 1：代表L2cache亲和调度模式，选择最新依赖ready的子图优先下发，达到复用L2cache的效果； <br> 2：公平调度模式，aicpu上多线程调度管理多个aicore的时候，下发子图会尽量控制在多线程间的公平性，此模式会带来额外的调度管理开销； <br> 3：代表同时开启L2cache亲和调度模式以及公平调度模式； <br> 类型：int <br> 取值范围：0或1或2或3 <br> 默认值：0 <br> 影响pass范围：NA |
 | stitch_function_max_num        | 含义：machine运行时ctrlflow aicpu里控制每次提交给schedule aicpu处理的最大device task的计算任务量 <br> 说明：设置的值代表每一个stitch task里处理的最大 **root function 个数**（与 unroll_list 无关）。未使能内存驱动模式（`max_workspace_kb=0`）时，encode 与 runtime submit 均按此配置约束 stitch 深度；使能内存驱动模式后，tensor workspace 的 stitch 深度由 `max_workspace_kb` 反推，runtime submit 不再受此配置限制。 <br> 类型：int <br> 取值范围:1 ~ 1024 <br> 默认值：128 <br> 影响pass范围：NA |
 | max_workspace_kb               | 含义：DeviceTask **workspace** 内存上限（KB），用于使能内存驱动 stitch 模式。 <br> 说明：**推荐配置项**，尤其在使用 `unroll_list` 的算子中建议按 encode 日志提示设置。`0` 表示关闭（默认），此时 stitch 深度由 `stitch_function_max_num` 决定。当取值 **严格大于** 当前算子最小可运行 workspace 时进入内存驱动模式，此时 runtime submit 不再受 `stitch_function_max_num` 限制，通常可获得更高 stitch 并行度。若已配置但取值小于或等于该 minimum，会打屏提示配置值必须大于 minimum。注意：配置过大可能增加 NPU workspace 占用甚至 OOM。与 `device_sched_parallelism` 同时增大时，内存按并行度倍增。 <br> 类型：int <br> 取值范围：0 ~ 2147483647 <br> 默认值：0 <br> 影响pass范围：NA |
-| run_mode                       | 含义：设置计算子图的执行设备 <br> 说明：<br> 0：表示在NPU上执行 <br> 1：表示在模拟器上执行 <br> 类型：int <br> 取值范围：0或者1 <br> 默认值：根据是否设置cann的环境变量来决定。如果设置了环境变量，则在NPU上执行；否则在模拟器上执行 <br> 影响pass范围：NA |
+| run_mode                       | 含义：设置计算子图的执行设备 <br> 说明：<br> 0：表示在NPU上执行 <br> 1：表示在模拟器上执行 <br> 类型：int或`pypto.RunMode`枚举 <br> 取值范围：0或者1 <br> 默认值：根据是否设置CANN的环境变量来决定。如果设置了环境变量，则在NPU上执行；否则在模拟器上执行 <br> 影响pass范围：NA |
 | valid_shape_optimize            | 含义：动态shape场景，validshape编译优化选项，打开该选项后，动态轴的Loop循环中，主块（shape与validshape相等）采用静态shape编译，尾块采用动态shape编译 <br> 说明：<br> 0：默认值，表示关闭validshape编译优化选项，所有Loop循环均采用动态shape进行编译 <br> 1：表示打开validshape编译优化选项 <br> 类型：int <br> 取值范围：0或者1 <br> 默认值：0 <br> 影响pass范围：NA |
 | ready_on_host_tensors           | 含义：标记在Host端准备好的Kernel入口函数的输入tensor名称列表，格式为["tensor1", "tensor2", ...]。<br> 说明：如果算子的计算逻辑对某输入tensor有值依赖(即获取了tensor的值)，且此tensor的device数据在Host端已提前准备好，那么cpu的控制流可以提前发射以提升性能。<br> 类型：list of string <br> 默认值：空列表 <br> 影响pass范围：NA |
 | device_sched_parallelism        | 含义：当算子中pypto.loop设置了可并行标记(parallel=True)时,此配置项用于指定pypto.loop在调度执行时的并行度 <br> 说明：使用此配置项前，请确保标记为可并行的pypto.loop的各个迭代之间不存在任何依赖关系，满足并行调度的条件。当并行度大于1时，该pypto.loop的多个迭代任务将被并发调度执行。需要注意的是，并行度数值越大，所需的workspace内存使用量也越大，通常与设置的并行度成倍数关系。<br> 类型：int <br> 取值范围:1 ~ 8 <br> 默认值： 1 <br> 影响pass范围：NA |
@@ -98,7 +100,7 @@ def kernel_function(...):
 
 **pypto.Tensor[...]说明**：
 
-- kernel函数里申明推荐使用`pypto.Tensor[[shape], dtype]`方括号语法，符合Python类型注解规范
+- kernel函数里声明推荐使用`pypto.Tensor[[shape], dtype]`方括号语法，符合Python类型注解规范
 - 也兼容旧的小括号语法`pypto.Tensor([shape], dtype)`
 - 方括号内不支持`key=value`形式的关键字参数（Python语法限制），只能按位置传递或使用字典
 - `pypto.Tensor[]`（空参数）不支持

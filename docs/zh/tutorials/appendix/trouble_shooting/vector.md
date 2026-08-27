@@ -157,7 +157,7 @@ Vector切分（Tile）配置非法。
 
    ```python
    # 错误示例-amax的TileShape超过64KB
-   pypto.set_vec_tile_shapes(1024, 1024)  # FP16下1024*1024*2B=2MB，超过64KB
+    pypto.set_vec_tile_shapes(1024, 1024)  # FP16下1024*1024*2Byte=2MB，超过64KB
    x = pypto.tensor([1024, 1024], pypto.DT_FP16)
    out = pypto.amax(x, -1, True)
    ```
@@ -207,7 +207,7 @@ Vector对齐约束不满足：地址或shape未按硬件要求对齐。
 
    ```python
    # 错误示例-amax尾轴未32字节对齐
-   pypto.set_vec_tile_shapes(4, 10)  # FP16下10*2B=20B，非32字节对齐
+    pypto.set_vec_tile_shapes(4, 10)  # FP16下10*2Byte=20Byte，非32字节对齐
    x = pypto.tensor([4, 10], pypto.DT_FP16)
    out = pypto.amax(x, -1, True)
    ```

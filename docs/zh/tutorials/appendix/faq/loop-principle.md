@@ -24,26 +24,26 @@ def loop_unroll(start, end, step=1, name=None, idx_name=None,
 
    - 对于`unroll_list=2`，`loop`大概会产生如下代码：
 
-     ```python
-     new_start = start
-     for k in unroll_list:
-         left = (stop - start) % k
-         for idx in loop(new_start, stop - left, k):
-             for i in range(k):
-                 body(idx)  # 需要用户一次处理step=1的步长
-         new_start = stop - left
-     ```
+      ```python
+      new_start = start
+      for k in unroll_list:
+          left = (end - start) % k
+          for idx in loop(new_start, end - left, k):
+              for i in range(k):
+                  body(idx)  # 需要用户一次处理step=1的步长
+          new_start = end - left
+      ```
 
    - `loop_unroll`大概会产生如下代码：
 
-     ```python
-     new_start = start
-     for k in unroll_list:
-         left = (stop - start) % k
-         for idx in loop(new_start, stop - left, k):
-             body(idx, k)  # 需要用户一次处理k的步长
-         new_start = stop - left
-     ```
+      ```python
+      new_start = start
+      for k in unroll_list:
+          left = (end - start) % k
+          for idx in loop(new_start, end - left, k):
+              body(idx, k)  # 需要用户一次处理k的步长
+          new_start = end - left
+      ```
 
    原则上如果可以一次处理多个`i`，使用`loop_unroll`会更高效；如果一次只能处理1个`i`，则需要使用`loop`。
 
@@ -75,7 +75,6 @@ def loop_unroll(start, end, step=1, name=None, idx_name=None,
    def foo(a, b, c):
        for i in pypto.loop(1):
            t = a + 1
-       for i in pypto.loop(1):
            c[:] = t + b
    ```
 

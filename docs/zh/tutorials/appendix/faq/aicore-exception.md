@@ -70,7 +70,7 @@ AiCore Print用于在AICore kernel中打印tensor数据和调试信息，支持G
 
 | 接口名称 | 功能 | 适用场景 |
 |---------|------|---------|
-| **AICORE_LOGD** | 格式化日志打印 | 打印地址、标量、提示维测信息【DEBUG级别】 |
+| **AICORE_LOGD** | 格式化日志打印 | 打印地址、标量、提示维度信息【DEBUG级别】 |
 | **AICORE_LOGI** | 格式化日志打印 | 打印地址、标量、提示关键的信息【INFO级别】 |
 | **AICORE_LOGW** | 格式化日志打印 | 打印地址、标量、提示不符合预期的信息【WARN级别】 |
 | **AICORE_LOGE** | 格式化日志打印 | 打印地址、标量、记录异常的信息【ERROR级别】 |
@@ -205,7 +205,7 @@ __gm__ T* l0c_staging = (__gm__ T*)(param->funcData->workspaceAddr);
 **重要**：以下命令必须**一次性完整执行**（使用`&&`连接），不要拆分为多个命令：
 
 ```bash
-export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=1 && rm -rf output/ wk/ && python xxx.py &&
+export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=1 && rm -rf output/ wk/ && python xxx.py
 grep -rn "\[AICORE\]\[Core" ./wk
 ```
 
@@ -313,7 +313,7 @@ AICORE_LOGD(param->ctx, "INT8 input loaded");
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
    <!-- end id3 -->
 
-4. **AIC (Cube核)中不能使用AiCorePrintUbTensor**：AIC (Cube核)的标量处理器(SP)没有到UB地址空间的物理通路，无法从UB标量读取数据。编译期已通过`static_assert`拦截，在AIC kernel中调用`AiCorePrintUbTensor`会触发编译报错：
+4. **AIC (Cube核)中不能使用AiCorePrintUbTensor**：AIC (Cube核)的标量处理器(SP)没有到UB地址空间的物理通路，无法从UB标量读取数据。编译期已通过`static_assert`拦截，在AIC kernel中调用`AiCorePrintUbTensor`会触发编译报错:
 
    ```text
    error: static assertion failed: [AIC UB Print Error] AiCorePrintUbTensor is not supported on AIC (Cube) kernel.
@@ -368,7 +368,7 @@ AICORE_LOGD(param->ctx, "INT8 input loaded");
 
 ### 7. AIC kernel中调用AiCorePrintUbTensor编译报错
 
-AIC (Cube核) kernel中使用`AiCorePrintUbTensor`时，编译器会触发`static_assert`：
+AIC (Cube核) kernel中使用`AiCorePrintUbTensor`时，编译器会触发`static_assert`:
 
 ```text
 error: static assertion failed due to requirement '!std::is_same_v<float, float>':
@@ -382,7 +382,7 @@ error: static assertion failed due to requirement '!std::is_same_v<float, float>
 
 **解决方案**：将`AiCorePrintUbTensor`调用移到AIV (Vector核) kernel中，或使用`AiCorePrintGmTensor`打印已搬到GM的数据。
 
-### 8. AIC kernel中使用AiCoreLogF打印UB数据值触发error 271
+### 8. AIC kernel中使用AICORE_LOGD打印UB数据值触发error 271
 
 在AIC kernel的CCE文件中使用如下代码：
 

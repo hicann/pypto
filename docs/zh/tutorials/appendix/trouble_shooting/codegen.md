@@ -19,7 +19,7 @@ Kernel代码生成阶段变量未定义，日志上下文含`UNDEFINED_VAR`关�
    export ASCEND_GLOBAL_LOG_LEVEL=1  # 0:DEBUG, 1:INFO, 2:WARN, 3:ERROR
    ```
 
-2. **并行编译改为串行**：修改`tile_fwk_config.json`中`"parallel_compile"`选项，将值改为1使codegen串行编译生效，然后重新编译并部署。
+2. **并行编译改为串行**：修改`tile_fwk_config.json`中`"parallel_compile"`选项，将值改为1（表示编译线程数为1，即串行编译），然后重新编译并部署。
 
 3. **执行用例，获取日志及kernel代码**：
    - 日志：`{日志路径}/debug/plog/pypto-log*.log`
@@ -89,7 +89,7 @@ Compiler Monitor 默认开启（Watchdog 机制）。编译开始时在 INFO 日
 
 1. **Prepare**：前端准备（import 至开始 stash 编译任务）
 2. **Pass**：图编译 Pass
-3. **HostMachine**：动态场景下的控制流构建/编译、AICore 链接与 Encode 等
+3. **HostMachine**：动态场景下的控制流构建/编译、AICore 连接与 Encode 等
 4. **CodeGen**：CCE 代码生成及二进制编译（含 FuncToBin 子阶段，不单独展示）
 
 瓶颈阶段判定：将 `compile_timeout` 均分到上述四个阶段，耗时超过该平均阈值的阶段记入 `DetectedStage`。

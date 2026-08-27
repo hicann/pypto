@@ -206,7 +206,7 @@ Codegen代码生成阶段，Conv TileOp的CopyInMode/CopyOutMode属性值不在�
 
 **可能原因**
 
-- CopyInMode值不在`[ND2NZ, DN2NZ]`范围内。
+- CopyInMode值不在`[ND2NZ, NZ2NZ, DN2NZ]`范围内。
 
    ```txt
    # 错误示例-CopyInMode/CopyOutMode属性值非法或cutW为0
