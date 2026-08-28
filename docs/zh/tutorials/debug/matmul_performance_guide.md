@@ -8,7 +8,7 @@ PyPTO为用户提供了一套高效便捷的算子开发框架，在性能优化
 
 分析理论性能上限是开展算子性能优化的第一步。我们知道，对于任意算子或算法，完成某种运算的过程一般涉及数据的搬运和数据的运算两大部分，业界常采用算数强度来衡量这两大部分的比例关系，这也是我们理解算子理论性能上限的重要依据。
 
-算数强度（Arithmetic Intensity）反应了一个算子或算法在客观理论层面的计算量与数据访问量的比例关系，定义为总浮点运算次数（FLOPs）除以总内存访问字节数，单位`FLOPs/Byte`。对于指定的硬件平台，定义其峰值算力与峰值带宽的比为算力带宽比（显然其单位与算数强度相同），则当算数强度大于算力带宽比时，可以认为当前算法在该硬件平台上的性能受限于计算能力（也就是Compute Bound），反之则是受限于内存带宽（也就是Memory Bound）。
+算数强度（Arithmetic Intensity）反映了一个算子或算法在客观理论层面的计算量与数据访问量的比例关系，定义为总浮点运算次数（FLOPs）除以总内存访问字节数，单位`FLOPs/Byte`。对于指定的硬件平台，定义其峰值算力与峰值带宽的比为算力带宽比（显然其单位与算数强度相同），则当算数强度大于算力带宽比时，可以认为当前算法在该硬件平台上的性能受限于计算能力（也就是Compute Bound），反之则是受限于内存带宽（也就是Memory Bound）。
 
 下面进一步分析Matmul算子在指定硬件平台上的性能上限。
 
@@ -105,7 +105,7 @@ pypto.set_cube_tile_shapes([96, 96], [64, 1536, 256], [128, 128], enable_split_k
 pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kAL1, kBL1], [nL0, nL1], enable_split_k=False)
 ```
 
-此处kAL1核kBL1分别表示A矩阵和B矩阵的K轴在L1上的切分大小。当K轴只设置两个切分值时，表示kAL1 = kBL1 = kL1。
+此处kAL1和kBL1分别表示A矩阵和B矩阵的K轴在L1上的切分大小。当K轴只设置两个切分值时，表示kAL1 = kBL1 = kL1。
 
 #### K轴分核
 
@@ -131,6 +131,9 @@ def matmul_demo_kernel(
     pypto.set_vec_tile_shapes(32, 256) # 配置add切分大小
 
     partial_sum = []
+    # 使用前需提前定义k_size（一般是a矩阵的k维度值）和k_view_size（k轴view shape大小）的大小
+    k_size = a.shape[1] # 假设a 矩阵不转置
+    k_view_size = 32
     k_loop = (k_size + k_view_size - 1) // k_view_size # 配置单核累加长度
     for k_idx in range(k_loop):
         a_view = a[:, k_idx * k_view_size: k_idx * k_view_size + k_view_size]

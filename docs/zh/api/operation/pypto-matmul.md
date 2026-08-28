@@ -22,7 +22,6 @@
 ## 注意事项
 
 - **左右矩阵数据类型必须一致**：matmul的左右矩阵数据类型必须相同（如BF16+BF16、FP16+FP16），不支持混合输入（如BF16+FP32），FP8数据类型除外。
-- **推荐使用低精度输入**：BF16/FP16输入直接matmul输出FP32，比先cast到FP32再matmul性能更好，且精度相当。
 - **避免不必要的cast**：将BF16升级到FP32再进行matmul计算不会有精度提升，反而会产生额外的数据搬移开销。
 - **利用随路transpose**：matmul支持`a_trans`和`b_trans`参数，可以在矩阵乘时随路完成转置，避免额外调用transpose操作。
 - **必须先设置TileShape**：调用matmul接口前需要通过`set_cube_tile_shapes`设置M、K、N轴上的切分大小。
@@ -108,21 +107,25 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 ```python
 # 基本矩阵乘
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 a1 = pypto.tensor([16, 32], pypto.DT_BF16, "tensor_a")
 b1 = pypto.tensor([32, 64], pypto.DT_BF16, "tensor_b")
 out1 = pypto.matmul(a1, b1, pypto.DT_BF16)
 
 # 批量矩阵乘
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 a2 = pypto.tensor((2, 16, 32), pypto.DT_FP16, "tensor_a")
 b2 = pypto.tensor((2, 32, 16), pypto.DT_FP16, "tensor_b")
 out2 = pypto.matmul(a2, b2, pypto.DT_FP16)
 
 # 批次广播
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 a3 = pypto.tensor((1, 32, 64), pypto.DT_FP32, "tensor_a")
 b3 = pypto.tensor((3, 64, 16), pypto.DT_FP32, "tensor_b")
 out3 = pypto.matmul(a3, b3, pypto.DT_FP32)
 
 # 叠加Bias
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 a = pypto.tensor((16, 32), pypto.DT_FP16, "tensor_a")
 b = pypto.tensor((32, 64), pypto.DT_FP16, "tensor_b")
 bias = pypto.tensor((1, 64), pypto.DT_FP16, "tensor_bias")
@@ -130,31 +133,36 @@ extend_params = {'bias_tensor': bias}
 pypto.matmul(a, b, pypto.DT_FP32, extend_params=extend_params)
 
 # 反量化
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 a = pypto.tensor((16, 32), pypto.DT_INT8, "tensor_a")
 b = pypto.tensor((32, 64), pypto.DT_INT8, "tensor_b")
 extend_params = {'scale': 0.2}
-pypto.matmul(a, b, pypto.DT_BF16, extend_params=extend_params)
+pypto.matmul(a, b, pypto.DT_FP16, extend_params=extend_params)
 
 # 反量化叠加RELU
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 a = pypto.tensor((16, 32), pypto.DT_INT8, "tensor_a")
 b = pypto.tensor((32, 64), pypto.DT_INT8, "tensor_b")
 extend_params = {'scale': 0.2, 'relu_type': pypto.ReLuType.RELU}
-pypto.matmul(a, b, pypto.DT_BF16, extend_params=extend_params)
+pypto.matmul(a, b, pypto.DT_FP16, extend_params=extend_params)
 
 # 反量化叠加RELU
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 a = pypto.tensor((16, 32), pypto.DT_INT8, "tensor_a")
 b = pypto.tensor((32, 64), pypto.DT_INT8, "tensor_b")
 scale_tensor = pypto.tensor((1, 64), pypto.DT_UINT64, "tensor_scale")
 extend_params = {'scale_tensor': scale_tensor, 'relu_type': pypto.ReLuType.RELU}
-pypto.matmul(a, b, pypto.DT_BF16, extend_params=extend_params)
+pypto.matmul(a, b, pypto.DT_FP16, extend_params=extend_params)
 
 # 量化
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 a = pypto.tensor((16, 32), pypto.DT_FP16, "tensor_a")
 b = pypto.tensor((32, 64), pypto.DT_FP16, "tensor_b")
 extend_params = {'scale': 0.2}
 pypto.matmul(a, b, pypto.DT_INT8, extend_params=extend_params)
 
 # 量化叠加RELU
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 scale_cpu = pypto.tensor((1, 64), pypto.DT_UINT64, "tensor_scale")
 scale_tensor = torch_npu.npu_trans_quant_param(scale_cpu.npu()) # 生成scale_tensor
 a = pypto.tensor((16, 32), pypto.DT_FP32, "tensor_a")
@@ -166,6 +174,7 @@ pypto.matmul(a, b, pypto.DT_INT8, extend_params=extend_params)
 <!-- npu="950" id6 -->
 ```python
 # TF32计算模式（Ascend 950PR/Ascend 950DT）
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 a = pypto.tensor((16, 32), pypto.DT_FP32, "tensor_a")
 b = pypto.tensor((32, 64), pypto.DT_FP32, "tensor_b")
 extend_params = {'trans_mode': pypto.TransMode.CAST_ROUND}
