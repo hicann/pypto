@@ -1181,7 +1181,7 @@ struct FunctionInterpreter {
                     }
                     oOpDataList.push_back(AllocateDataView(frame, oop, dtype));
                 } else if (frame.callop != nullptr && IsMixSplitCallOp(frame.callop) &&
-                           MIX_PATH_OPS.count(op->GetOpcode()) > 0 && !isOutCast(frame.func->GetOutcast(), oop)) {
+                           MIX_PATH_OPS.count(op->GetOpcode()) > 0) {
                     auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
                     oOpDataList.push_back(AllocateOrReuseMixGlobalOutputDataView(frame, oop, callopAttr->wrapId));
                 } else {
