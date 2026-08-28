@@ -461,7 +461,7 @@ void SetImg2ColAttr(Operation& load3dOpAl0, const ConvAttrParam& convAttrParam, 
     }
     // cal postm postk
     int64_t mStartPt = iterInfo.hL0Offset * iterInfo.woutL1Size + iterInfo.wL0Offset;
-    int64_t kStartPt = iterInfo.kL0Offset % convTileInfo.kAL1;
+    int64_t kStartPt = iterInfo.kL0Offset - iterInfo.kAL1BaseOffset;
     load3dOpAl0.SetAttribute(OpAttributeKey::postM, mStartPt);
     load3dOpAl0.SetAttribute(OpAttributeKey::postK, kStartPt);
     // set pad value
@@ -600,12 +600,14 @@ LogicalTensorPtr ConstructFmapTile(Function& function, const ConvGraphNodes& ten
                                    const ConvTileInfo& convTileInfo, ConvIterInfo& iterInfo,
                                    LogicalTensorPtr& dstAL1TensorPtr, const ConvAttrParam& convAttrParam)
 {
-    if (iterInfo.kL0Offset % convTileInfo.kAL1 == 0) {
-        iterInfo.aL1UpadateFlag = true;
-    }
+    iterInfo.aL1UpadateFlag = (iterInfo.kL0Offset % convTileInfo.kAL1 == 0) ||
+                              (convAttrParam.isConv3D && iterInfo.kL0Offset > 0 &&
+                               iterInfo.kL0Offset % convTileInfo.kPerGroup == 0 &&
+                               iterInfo.kL0Offset % convTileInfo.kAL1 != 0);
 
     // L1层级 Fmap 展开
     if (iterInfo.aL1UpadateFlag) {
+        iterInfo.kAL1BaseOffset = iterInfo.kL0Offset;
         ConstructFmapL1Tile(function, tensorGraphNodes, convTileInfo, iterInfo, dstAL1TensorPtr, convAttrParam);
     }
 
@@ -754,11 +756,13 @@ LogicalTensorPtr ConstructWeightTile(Function& function, const ConvGraphNodes& t
                                      const ConvTileInfo& convTileInfo, ConvIterInfo& iterInfo,
                                      LogicalTensorPtr& dstBL1TensorPtr, const ConvAttrParam& convAttrParam)
 {
-    if (iterInfo.kL0Offset % convTileInfo.kBL1 == 0) {
-        iterInfo.bL1UpadateFlag = true;
-    }
+    iterInfo.bL1UpadateFlag = (iterInfo.kL0Offset % convTileInfo.kBL1 == 0) ||
+                              (convAttrParam.isConv3D && iterInfo.kL0Offset > 0 &&
+                               iterInfo.kL0Offset % convTileInfo.kPerGroup == 0 &&
+                               iterInfo.kL0Offset % convTileInfo.kBL1 != 0);
     // L1层级 Weight 展开
     if (iterInfo.bL1UpadateFlag) {
+        iterInfo.kBL1BaseOffset = iterInfo.kL0Offset;
         ConstructWeightL1Tile(function, tensorGraphNodes, convTileInfo, iterInfo, dstBL1TensorPtr, convAttrParam);
     }
     // load2d()
@@ -770,7 +774,7 @@ LogicalTensorPtr ConstructWeightTile(Function& function, const ConvGraphNodes& t
         "bL0Tensor");
     dstBL0TensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete(dstBL0Shape));
     auto& load2dOpBl0 = function.AddOperation(Opcode::OP_LOAD2D_CONV, {dstBL1TensorPtr}, {dstBL0TensorPtr});
-    load2dOpBl0.SetAttribute(OpAttributeKey::postK, iterInfo.kL0Offset % convTileInfo.kBL1);
+    load2dOpBl0.SetAttribute(OpAttributeKey::postK, iterInfo.kL0Offset - iterInfo.kBL1BaseOffset);
     load2dOpBl0.SetAttribute(OpAttributeKey::postN, iterInfo.nL0Offset);
     load2dOpBl0.SetAttribute("l0_tile_shape", SymbolicScalar::FromConcrete(dstBL0Shape));
     load2dOpBl0.SetAttribute(OpAttributeKey::isConv, true);

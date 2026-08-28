@@ -375,6 +375,8 @@ struct ConvIterInfo {
     int64_t nL0Offset = 0;
     int64_t kAL1Offset = 0;
     int64_t kBL1Offset = 0;
+    int64_t kAL1BaseOffset = 0;
+    int64_t kBL1BaseOffset = 0;
     int64_t kL0Offset = 0;
     int64_t hinL1Size = 0;
     int64_t winL1Size = 0;

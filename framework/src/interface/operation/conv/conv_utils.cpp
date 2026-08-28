@@ -294,7 +294,7 @@ void CheckDimensionRange(const std::vector<int64_t>& vec, const std::string& nam
     for (size_t i = 0; i < vec.size(); ++i) {
         CHECK(ExternalError::OUT_OF_RANGE, vec[i] >= minVal && vec[i] <= maxVal)
             << "The value of the " << i << "-th dimension of " << name << " must be in the range [" << minVal << ","
-            << maxVal << "].Current value:" << vec[i] << ".";
+            << maxVal << "]. Current value:" << vec[i] << ".";
     }
 }
 
@@ -352,8 +352,8 @@ void CheckAttrShape(DataType outType, const Tensor& inputTensor, const Tensor& w
         int paddingRight = paddings[i * NUM2 + 1];
         CHECK(ExternalError::INVALID_VAL, paddingLeft < weightVal && paddingRight < weightVal)
             << "The value of the " << dimNames[i]
-            << " dimension of weight must be > padding.Current weight value:" << weightVal
-            << ",padding value:" << paddingLeft << " and " << paddingRight << ".";
+            << " dimension of weight must be > padding. Current weight value:" << weightVal
+            << ", padding value:" << paddingLeft << " and " << paddingRight << ".";
     }
     CheckGroupsShape(cinFmap, cinWeight, cOut, groups);
     CheckLoad3dShape(outType, weightTensor, attrParam);
