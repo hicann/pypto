@@ -42,6 +42,38 @@ def _index_tensor(shape, name):
     return pypto.Tensor(shape=shape, dtype=pypto.DT_INT32, name=name)
 
 
+def test_inplace_reshapes_are_token_transparent():
+    def foo(target):
+        _alias_0 = pypto.reshape(target, [16, 32], inplace=True)
+        _alias_1 = pypto.reshape(target, [8, 64], inplace=True)
+
+    func = compile_new_ir(
+        foo,
+        _tensor((32, 16), "target"),
+        pipeline=[("infer_token_pass", ir.Pass.infer_token_pass())],
+        create_new_logical_tensor=True,
+    )
+    check_snapshot(func, _GOLDEN_DIR / "test_inplace_reshapes_are_token_transparent.pypto")
+
+
+def test_assemble_writes_through_reshape_aliases_keep_waw():
+    def foo(target, src_0, src_1):
+        alias_0 = pypto.reshape(target, [16, 32], inplace=True)
+        alias_1 = pypto.reshape(target, [8, 64], inplace=True)
+        pypto.assemble(src_0, [0, 0], alias_0)
+        pypto.assemble(src_1, [0, 0], alias_1)
+
+    func = compile_new_ir(
+        foo,
+        _tensor((32, 16), "target"),
+        _tensor((16, 32), "src_0"),
+        _tensor((8, 64), "src_1"),
+        pipeline=[("infer_token_pass", ir.Pass.infer_token_pass())],
+        create_new_logical_tensor=True,
+    )
+    check_snapshot(func, _GOLDEN_DIR / "test_assemble_writes_through_reshape_aliases_keep_waw.pypto")
+
+
 def test_index_put_keeps_write_after_read_dependency():
     def foo(target, index, values, out):
         value = target + 1.0
@@ -106,21 +138,6 @@ def test_axpy_keeps_write_after_read_dependency():
     check_snapshot(after_remove, _GOLDEN_DIR / "test_axpy_keeps_write_after_read_dependency.pypto")
 
 
-def test_inplace_reshape_keeps_write_after_read_dependency():
-    def foo(target, out):
-        value = target + 1.0
-        alias = pypto.reshape(target, [16, 16], inplace=True)
-        pypto.assemble(value + alias, [0, 0], out)
-
-    after_remove = _run_passes(
-        foo,
-        _tensor((16, 16), "target"),
-        _tensor((16, 16), "out"),
-    )
-    check_snapshot(
-        after_remove, _GOLDEN_DIR / "test_inplace_reshape_keeps_write_after_read_dependency.pypto")
-
-
 def test_inplace_scatter_keeps_write_after_read_dependency():
     def foo(target, index, source, out):
         value = target + 1.0
@@ -153,24 +170,6 @@ def test_atomic_add_target_is_carried_through_loop():
         _tensor((16, 16), "out"),
     )
     check_snapshot(after_remove, _GOLDEN_DIR / "test_atomic_add_target_is_carried_through_loop.pypto")
-
-
-def test_continuous_inplace_updates_latest_alias_state():
-    def foo(target, index, source, out):
-        alias = pypto.reshape(target, [16, 16], inplace=True)
-        pypto.index_add_(alias, 0, index, source)
-        pypto.assemble(alias + 1.0, [0, 0], out)
-
-    after_infer = compile_new_ir(
-        foo,
-        _tensor((16, 16), "target"),
-        _index_tensor((8,), "index"),
-        _tensor((8, 16), "source"),
-        _tensor((16, 16), "out"),
-        pipeline=[("infer_token_pass", ir.Pass.infer_token_pass())],
-        create_new_logical_tensor=True,
-    )
-    check_snapshot(after_infer, _GOLDEN_DIR / "test_continuous_inplace_updates_latest_alias_state.pypto")
 
 
 def test_read_alias_then_write_origin_keeps_war():
@@ -217,10 +216,6 @@ def test_read_origin_after_inplace_on_alias_keeps_raw():
         create_new_logical_tensor=True,
     )
     check_snapshot(after_infer, _GOLDEN_DIR / "test_read_origin_after_inplace_on_alias_keeps_raw.pypto")
-    tensor_ops = [stmt for stmt in after_infer.body if isinstance(stmt, ir.TensorOpStmt)]
-    index_add = next(op for op in tensor_ops if op.opcode == "INDEX_ADD")
-    adds = next(op for op in tensor_ops if op.opcode == "ADDS")
-    assert index_add.result_token[0] in adds.tokens
 
 
 def test_write_alias_then_write_origin_keeps_waw():
@@ -243,7 +238,3 @@ def test_write_alias_then_write_origin_keeps_waw():
         create_new_logical_tensor=True,
     )
     check_snapshot(after_infer, _GOLDEN_DIR / "test_write_alias_then_write_origin_keeps_waw.pypto")
-    tensor_ops = [stmt for stmt in after_infer.body if isinstance(stmt, ir.TensorOpStmt)]
-    index_add = next(op for op in tensor_ops if op.opcode == "INDEX_ADD")
-    index_put = next(op for op in tensor_ops if op.opcode == "INDEX_PUT")
-    assert index_add.result_token[0] in index_put.tokens

@@ -69,6 +69,20 @@ TEST_F(TestInferTokenPass, InplaceOp)
     ASSERT_NE(result, nullptr);
 }
 
+TEST_F(TestInferTokenPass, InplaceReshapeIsTokenTransparent)
+{
+    auto target = Tensor(DT_FP32, {16, 16}, "target");
+
+    ProgramBuilder p;
+    p.BeginFunction("InplaceReshapeIsTokenTransparent", {target});
+    auto alias = Reshape(target, {8, 32}, true);
+    (void)alias;
+
+    auto prog = p.EndFunction();
+    auto result = pypto::ir::pass::InferTokenPass()(prog);
+    ASSERT_NE(result, nullptr);
+}
+
 TEST_F(TestInferTokenPass, IfStmt)
 {
     auto a = Tensor(DT_FP32, {16, 16}, "a");

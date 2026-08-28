@@ -352,7 +352,7 @@ BEFORE_IR_14 = _GOLDEN_DIR / "BEFORE_IR_14.pypto"
 IR_14 = _GOLDEN_DIR / "IR_14.pypto"
 
 
-def test_keep_dependency_when_result_is_read_in_loop():
+def test_remove_disjoint_dependency_before_loop_first_stage():
     def foo(src, aux, out):
         pypto.assemble(src, [0, 0], aux)
         pypto.assemble(src, [16, 0], aux)
@@ -376,7 +376,7 @@ BEFORE_IR_15 = _GOLDEN_DIR / "BEFORE_IR_15.pypto"
 IR_15 = _GOLDEN_DIR / "IR_15.pypto"
 
 
-def test_keep_dependency_when_loop_writes_are_read_after_loop():
+def test_remove_disjoint_dependency_inside_loop_first_stage():
     def foo(src, aux, out):
         for _ in pypto.loop(2):
             pypto.assemble(src, [0, 0], aux)

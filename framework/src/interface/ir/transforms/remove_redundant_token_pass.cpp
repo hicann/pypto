@@ -323,32 +323,7 @@ private:
         return reachable[to];
     }
 
-    static bool HasExternalUse(const Node& node, const std::vector<StmtPtr>& statements)
-    {
-        std::unordered_set<const Var*> defs;
-        for (const auto& result : node.op->result_) {
-            defs.insert(result.get());
-        }
-        for (const auto& token : node.op->result_token_) {
-            defs.insert(token.get());
-        }
-
-        for (const auto& stmt : statements) {
-            if (As<TensorOpStmt>(stmt) || As<ReturnStmt>(stmt)) {
-                continue;
-            }
-            auto uses = utils::CollectStmtVarRefs(stmt);
-            for (const auto* def : defs) {
-                if (uses.count(def)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    bool TryRemoveOneToken(std::vector<Node>& nodes, const ProducerMap& producers,
-                           const std::vector<StmtPtr>& statements, size_t consumerIndex)
+    bool TryRemoveOneToken(std::vector<Node>& nodes, const ProducerMap& producers, size_t consumerIndex)
     {
         auto& consumer = nodes[consumerIndex];
         for (size_t tokenIndex = 0; tokenIndex < consumer.tokens.size(); ++tokenIndex) {
@@ -368,8 +343,10 @@ private:
                 return true;
             }
 
-            if (!AccessesAreDisjoint(nodes[*producer], consumer, token, *kind) ||
-                HasExternalUse(consumer, statements)) {
+            // The first-stage token optimization is intentionally local to the
+            // current SCF block.  Control-flow users (continue/yield/break) do
+            // not prevent removing a proven-disjoint dependency inside it.
+            if (!AccessesAreDisjoint(nodes[*producer], consumer, token, *kind)) {
                 continue;
             }
 
@@ -409,7 +386,7 @@ private:
         auto producers = BuildProducerMap(nodes);
 
         for (size_t consumerIndex = 0; consumerIndex < nodes.size(); ++consumerIndex) {
-            while (TryRemoveOneToken(nodes, producers, statements, consumerIndex)) {
+            while (TryRemoveOneToken(nodes, producers, consumerIndex)) {
             }
         }
 
