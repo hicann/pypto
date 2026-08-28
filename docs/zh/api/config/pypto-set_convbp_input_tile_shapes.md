@@ -16,7 +16,7 @@
 
 设置卷积反向（conv backward input）计算中L1/L0缓存层级下各维度的TileShape（切片形状）大小。
 
-卷积反向Dx算子可视为矩阵乘法 `(HiWi, CoutHkWk) × (CoutHkWk, Cin)`，其中M/N/K三轴分别对应 `HiWi` / `Cin` / `Cout×Kh×Kw`。
+卷积反向Dx算子可视为矩阵乘法 `(HinWin, CoutKhKw) × (CoutKhKw, Cin)`，其中M/N/K三轴分别对应 `HinWin` / `Cin` / `Cout×Kh×Kw`。
 
 ## 函数原型
 
@@ -43,11 +43,11 @@ TileShape需要满足以下约束条件：
 
     - ConvBpTileL1Info各维度值需满足范围约束：
 
-        - tileML1：需小于Wi或者为Wi的整数倍，即 `tileML1 <= Wi` 或 `tileML1 % Wi == 0`（HiWi合轴切分，M方向保证不跨Wi行）
+        - tileML1：需小于Win或者为Win的整数倍，即 `tileML1 <= Win` 或 `tileML1 % Win == 0`（HinWin合轴切分，M方向保证不跨Win行）
 
         - tileNL1：需为Cin0的倍数，即 `tileNL1 % 16 == 0`，且 `tileNL1 <= Cin`（Cin维度切分）
 
-        - tileKL1：需为 `Cout0 × Kh × Kw` 的倍数，即 `tileKL1 % (16 * Kh * Kw) == 0`，且 `tileKL1 <= CeilAlign(Cout, Cout0) * Kh * Kw`（Cout×Kh×Kw维度切分，L1上HkWk全载，Cout按Cout0切分）
+        - tileKL1：需为 `Cout0 × Kh × Kw` 的倍数，即 `tileKL1 % (16 * Kh * Kw) == 0`，且 `tileKL1 <= CeilAlign(Cout, Cout0) * Kh * Kw`（Cout×Kh×Kw维度切分，L1上KhKw全载，Cout按Cout0切分）
 
     - ConvBpTileL0Info各维度值需满足对齐约束：
 
@@ -89,8 +89,8 @@ TileShape需要满足以下约束条件：
         其中：
 
         - `L1Weight = tileKL1 * tileNL1`
-        - `houtL1 = min(CeilDiv(tileML1, Wi) + (Kh - 1) * dilationH, (Hout - 1) * strideH + 1)`
-        - `woutL1 = min(min(tileML1, Wi) + (Kw - 1) * dilationW, (Wout - 1) * strideW + 1)`
+        - `houtL1 = min(CeilDiv(tileML1, Win) + (Kh - 1) * dilationH, (Hout - 1) * strideH + 1)`
+        - `woutL1 = min(min(tileML1, Win) + (Kw - 1) * dilationW, (Wout - 1) * strideW + 1)`
         - `coutL1 = tileKL1 / (Kh * Kw)`
         - `L1_size = 524288 bytes`（512KB）
         - `dtype为输入矩阵的数据类型`
@@ -101,7 +101,7 @@ TileShape需要满足以下约束条件：
 ```python
 # 构造L1 Tile配置（确保各值在合法范围）
 l1_tile_info = pypto.pypto_impl.ConvBpTileL1Info(
-    tileML1=16,    # HiWi切分，需满足 <= Wi 或 % Wi == 0
+    tileML1=16,    # HinWin切分，需满足 <= Win 或 % Win == 0
     tileNL1=16,    # Cin切分，需为16的倍数
     tileKL1=144    # Cout*Kh*Kw切分，需为16*Kh*Kw的倍数（如Kh=3,Kw=3时16*9=144）
 )

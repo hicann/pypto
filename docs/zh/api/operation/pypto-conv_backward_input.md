@@ -54,9 +54,11 @@ WinMax = WinMin + stride_w - 1
 
 ## 约束说明
 
-- 调用conv_backward_input接口前，必须通过pypto.set_convbp_input_tile_shapes接口设置L1/L0层级的卷积反向TileShape切分大小。
+- 调用conv_backward_input接口前，必须通过pypto.set_convbp_input_tile_shapes接口设置L1/L0层级的卷积反向TileShape切分大小;调用pypto.set_vec_tile_shapes接口设置输入shape每个维度TileShape切分大小。
 
 - 不支持bias。
+
+- 不支持动态shape。
 
 ## 调用示例
 
@@ -69,7 +71,14 @@ weight = pypto.tensor((16, 16, 3, 3), pypto.DT_FP16, "weight")
 hin = 5
 win = 32
 input_size = (1, 16, hin, win)
-
+tile_l1_info = pypto_impl.ConvBpTileL1Info(
+        tileML1=16, tileKL1=144, tileNL1=16
+    )
+tile_l0_info = pypto_impl.ConvBpTileL0Info(
+    tileML0=16, tileKL0=16, tileNL0=16
+)
+pypto.set_convbp_input_tile_shapes(tile_l1_info, tile_l0_info)
+pypto.set_vec_tile_shapes(16, 16, 16, 16)
 out = pypto.conv_backward_input(
     grad_output,
     input_size,
