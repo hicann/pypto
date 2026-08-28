@@ -122,6 +122,7 @@ _ORIG_DTYPE_MACRO_PREFIX = "-DORIG_DTYPE_"
 def _load_kernel(op_path: str, main_func: str | None):
     """Import the PyPTO kernel module and locate the target ``_TileJitKernel``."""
     import importlib.util
+    import sys
 
     from pypto_pro.runtime.jit import _TileJitKernel
 
@@ -129,6 +130,7 @@ def _load_kernel(op_path: str, main_func: str | None):
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load kernel module from {op_path}")
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
 
     if main_func:
@@ -393,7 +395,6 @@ def _setup_options(op_info, compile_options, op_compile_option, extend_options):
     opt.compile_options = compile_pre_process(op_info, opt.compile_options)
     _update_compile_option(_op_info_get(op_info, "kernel_name"), opt.compile_options, extend_options)
     opt.compile_options.append("-DASCENDC_TPL_KERNEL")
-    opt.compile_options.append("--cce-enable-print")
     return opt
 
 

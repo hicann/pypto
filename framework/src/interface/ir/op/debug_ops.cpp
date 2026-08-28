@@ -113,6 +113,9 @@ TypePtr DeduceDebugDumpTensorType([[maybe_unused]] const std::vector<ExprPtr>& a
     auto tensor_type = As<TensorType>(args[0]->GetType());
     CHECK(tensor_type) << "debug.dump_tensor requires first argument to be a TensorType, but got "
                        << args[0]->GetType()->TypeName();
+    CHECK(tensor_type->dtype_ != DataType::FP4 && tensor_type->dtype_ != DataType::FP4E2M1 &&
+          tensor_type->dtype_ != DataType::FP4E1M2)
+        << "debug.dump_tensor does not support FP4 dtype " << tensor_type->dtype_.ToString();
 
     auto offsets = As<MakeTuple>(args[1]);
     CHECK(offsets) << "debug.dump_tensor requires offsets to be a MakeTuple";

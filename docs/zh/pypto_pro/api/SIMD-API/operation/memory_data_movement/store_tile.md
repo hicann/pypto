@@ -45,14 +45,20 @@ pypto_pro.language.store_tile(dst_tensor, src_tile, tile_offsets, *, relu_pre_mo
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_tensor` | 输出 | 数据类型：b8、b16、b32、b64<br>layout：支持`ND`、`DN`、`NZ`<br>换算后的写入范围不得越过对应维度shape |
-| `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>内存空间：只支持`Vec`(UB)和`Acc`(L0C)；UB源通过MTE3写回，L0C源通过FIX写回<br>地址对齐：UB为32字节，L0C为64字节 |
+| `dst_tensor` | 输出 | 数据类型：b4、b8、b16、b32、b64<br>layout：支持`ND`、`DN`、`NZ`<br>换算后的写入范围不得越过对应维度shape |
+| `src_tile` | 输入 | 数据类型：b4、b8、b16、b32、b64<br>内存空间：只支持`Vec`(UB)和`Acc`(L0C)；UB源通过MTE3写回，L0C源通过FIX写回<br>地址对齐：UB为32字节，L0C为64字节 |
 | `tile_offsets` | 输入 | 单位为tile块索引，支持运行时`Expr`，换算后的绝对偏移不超过对应维度的shape，不支持负数索引<br>被切分的维度（由`order`指定）按`块索引× tile该维大小`换算；其余维度的取值按绝对偏移直接使用 |
 | `relu_pre_mode` | 输入 | 可选，支持`pl.ReluPreMode.NormalRelu`；与`scale`为`Tile`（per-channel）时互斥 |
 | `scale` | 输入 | 可选，随路量化比例：`float`（编译期标量）→ per-tensor量化；运行时`FP32`标量→自动重解释为IEEE-754位模式；运行时`INT`标量→须传预编码的float32位模式（`struct.pack("!f", v)`）；`Tile`（INT64、`MemorySpace.Scaling`、shape `[1, N]`，`N % 16 == 0`且`N <= 512`）→ per-channel量化（`store_fp`路径），用户预制deqTensor tile，框架直接复用（不自动分配/同步，用户负责load→move→sync(MTE1→FIX)），与`relu_pre_mode`、`phase`互斥；`Tensor`不支持（per-channel须以`Tile`传入）；`[N, 1]`逐行量化不支持 |
 | `order` | 输入 | 只支持配置tensor维度范围内的dim，只支持二维数组配置，其余配置报错<br>只支持升序排列（如 [0, 2]），不支持降序（如 [1, 0]）配置<br>用于高维tensor中指定tile对应哪几个维度；不配置时默认取tensor的最后两维 |
 | `atomic` | 输入 | 支持`pl.AtomicType.AtomicNone`（覆盖写）或`pl.AtomicType.AtomicAdd`（原子累加） |
 | `phase` | 输入 | 可选，支持`pl.STPhase.Partial`或`pl.STPhase.Final`；与`scale`为`Tile`（per-channel）时互斥 |
+
+## 约束说明
+
+当`dst_tensor`声明为`pypto_pro.language.NZ`时，其物理排布和完整Tensor shape约束见[`TensorLayout`](../../basic_data_structures/TensorLayout.md#tensor布局)，同布局搬运、源Tile、`order`和L0C直接写回约束与[`store`](store.md#约束说明)一致。`store_tile`还需满足以下NZ搬运约束：
+
+- `tile_offsets`按Tile块索引寻址：最后两项分别乘以Tile的M、N shape，前导项选择batch；换算后的M、N offset需分别按16和目标Tensor dtype对应的`C0`对齐。
 
 ## 流水类型
 

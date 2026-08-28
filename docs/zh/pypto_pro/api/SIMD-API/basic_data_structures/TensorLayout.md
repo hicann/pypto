@@ -25,7 +25,7 @@
 |---|---|---|---|
 | `pl.ND` | 非分形行主序，最后一维连续 | Tensor / Tile | 普通GM Tensor（默认）；UB Tile（默认）；Scaling buffer |
 | `pl.DN` | 非分形列主序 | Tile | UB上`[ROWS, 1]`列向量（归约结果、histogram索引） |
-| `pl.NZ` | NZ分形排列 | Tensor / Tile | NZ GM Tensor（输出）；L1 Mat（默认）；A5的L0A（默认）；L0C Acc（默认） |
+| `pl.NZ` | NZ分形排列 | Tensor / Tile | GM Tensor；L1 Mat（默认）；A5的L0A（默认）；L0C Acc（默认） |
 | `pl.ZN` | ZN分形排列 | Tile | L0B Right（默认）；转置搬入时的L1 Mat |
 | `pl.ZZ` | ZZ分形排列 | Tile | A3的L0A（默认）；MX矩阵计算中，A矩阵的E8M0分组缩放因子在L1和ScaleLeft中的布局 |
 | `pl.NN` | NN分形排列 | Tile | MX矩阵计算中，B矩阵的E8M0分组缩放因子在L1和ScaleRight中的布局 |
@@ -38,17 +38,21 @@
 
 ### Tensor布局
 
-GM Tensor统一使用`ND`（行主序），`layout`可省略（默认`ND`）：
+GM Tensor支持`ND`（行主序，默认）和`NZ`（分形布局）：
 
 ```python
 x: pl.Tensor[[64, 128], pl.DT_FP16]                   # 默认 ND
-x_nz: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]         # NZ 分形布局（用于输出）
+x_nz: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]         # NZ 分形布局
 ```
+
+`pl.NZ`只声明GM内存的布局，不会把普通ND buffer自动转换成NZ。调用kernel前，输入buffer必须已经按NZ物理顺序完成packing；NZ输出也必须使用按NZ格式分配的buffer。高维NZ Tensor的最后两轴固定解释为`[M, N]`，所有前导轴均作为batch轴，不支持在layout中指定任意分形轴。
+
+NZ将逻辑`[..., M, N]`存储为`[..., ceil(N/C0), ceil(M/16), 16, C0]`。`M/N`无需分形对齐，但底层storage必须按`align(M, 16) * align(N, C0)`的容量分配并使用上述NZ物理排布；仅分配`M * N`元素的紧凑buffer不受支持。补齐区不属于逻辑Tensor内容，框架不会为传入的buffer自动扩容或完成packing。INT8、FP8E4M3FN、FP8E5M2、FP8E8M0和HF8的`C0`为32，FP4E2M1和FP4E1M2为64，FP16和BF16为16，FP32和INT32为8。FP4的`M/N`同样按逻辑元素计数，不使用packed字节数作为Tensor shape。
 
 MX矩阵计算使用的E8M0分组缩放因子在GM中仍声明为普通`ND` Tensor；物理shape和搬运约束见[`matmul_mx`](../operation/matrix_computation/matmul_mx.md)和[`load`](../operation/memory_data_movement/load.md)。
 
 > [!IMPORTANT]重要
-> 转置搬运由[`load`](../operation/memory_data_movement/load.md)/[`load_tile`](../operation/memory_data_movement/load_tile.md)的`order`参数决定（`order=[1,0]`即`is_transpose=True`），需与L1 Tile布局`ZN`配合。详见下文[转置搬入](#转置搬入)。
+> 普通ND GM Tensor的转置搬运由[`load`](../operation/memory_data_movement/load.md)/[`load_tile`](../operation/memory_data_movement/load_tile.md)的`order`参数决定（`order=[1,0]`即`is_transpose=True`），需与L1 Tile布局`ZN`配合。GM NZ只支持与NZ Tile同布局正序搬运，不支持通过`order`转置。详见下文[转置搬入](#转置搬入)。
 
 ### Tile布局
 
@@ -56,7 +60,7 @@ Tile通过[`pl.TileType`](TileType.md)的`layout`参数指定。不指定时，�
 
 | 内存空间 | A3默认 | A5默认 | 额外允许 |
 |---|---|---|---|
-| `Vec`（UB） | 无默认值 | 无默认值 | `ND`；`DN`（仅特定API要求的列主序场景） |
+| `Vec`（UB） | 无默认值 | 无默认值 | `ND`；`DN`（仅特定API要求的列主序场景）；`NZ` |
 | `Mat`（L1） | `NZ` | `NZ` | `ZN`（转置搬入）；`DT_FP8E8M0`还允许`ZZ`、`NN`；`UINT64`/`INT64`还允许`ND` |
 | `Left`（L0A） | `ZZ` | `NZ` | `ZZ`、`NZ` |
 | `Right`（L0B） | `ZN` | `ZN` | — |
@@ -71,7 +75,7 @@ Tile通过[`pl.TileType`](TileType.md)的`layout`参数指定。不指定时，�
 
 ### 转置搬入
 
-GM Tensor统一使用`ND`布局。Cube场景下，是否需要转置搬入由Tensor的shape决定：当传入的shape与L1 Tile的shape轴序一致时不需要转置；当轴序相反时需要转置，此时`load`设置`order=[1, 0]`（`is_transpose=True`），L1 Tile布局配`ZN`。`order`参数由框架内部解析为`is_transpose`标志（`order[0] > order[1]`即为转置），供codegen生成对应的TLOAD指令。
+GM ND Tensor搬入L1 Mat Tile时，两轴顺序一致可省略`order`；需要交换两轴时，`load`设置`order=[1, 0]`，目标Tile布局使用`ZN`。框架根据`order`生成对应的TLOAD指令。
 
 以`C[M, N] = A[M, K] @ B[K, N]`为例：
 
@@ -181,20 +185,27 @@ tile_type = pl.TileType(
 )
 ```
 
-### NZ Tensor输出
+### NZ Tensor输入输出
 
-输出Tensor标注为`NZ`时，`pl.store`会将Acc的计算结果按NZ分形直接写入GM Tensor，无需额外格式转换：
+Tensor标注为`NZ`时，`pl.load`/`pl.store`按NZ物理布局访问GM，目标/源Tile也必须使用`pl.NZ`。以下示例展示二维GM NZ在UB中的原始搬入和写回：
 
 ```python
 @pl.jit()
-def store_nz_cce_kernel(
-    ...
-    nz_out: pl.Tensor[[64, 64], pl.DT_FP32, pl.NZ],   # NZ 输出 Tensor
-    ...
+def copy_nz_kernel(
+    nz_in: pl.Tensor[[64, 64], pl.DT_FP16, pl.NZ],
+    nz_out: pl.Tensor[[64, 64], pl.DT_FP16, pl.NZ],
 ):
-    ...
-    pl.store(nz_out, acc, [0, 0])    # 按 NZ 分形写入 GM
+    tile_type = pl.TileType(
+        shape=[64, 64], dtype=pl.DT_FP16,
+        target_memory=pl.MemorySpace.Vec, layout=pl.NZ,
+    )
+    tile = pl.make_tile(tile_type, addr=0x0000)
+    with pl.section_vector():
+        pl.load(tile, nz_in, [0, 0])
+        pl.store(nz_out, tile, [0, 0])
 ```
+
+高维NZ沿用相同写法，例如`pl.Tensor[[B, H, M, N], dtype, pl.NZ]`固定以最后两轴`M/N`作为分形轴，`B/H`为batch轴。GM NZ不支持通过`order=[1, 0]`转置，也不支持直接搬入ND/ZN Tile。完整分形、offset以及L0C直接写回限制见[`load`](../operation/memory_data_movement/load.md)和[`store`](../operation/memory_data_movement/store.md)。
 
 ### MX scale的ZZ与NN布局
 

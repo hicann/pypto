@@ -190,13 +190,11 @@ public:
     /** \brief Check if a C++ variable name was declared as a VF AddrReg. */
     bool IsAddrRegVar(const std::string& cpp_name) const { return addr_reg_vars_.count(cpp_name) > 0; }
 
-    /**
-     * \brief Compute an element offset from the tensor's logical stride
-     *
-     * Uses TensorView stride when present; otherwise derives a contiguous row-major
-     * stride from the tensor shape.
-     */
-    std::string ComputeIRBasedOffset(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets);
+    /** \brief Map logical tensor coordinates to a layout-aware physical element offset. */
+    std::string ComputeTensorOffset(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets);
+
+    /** \brief Render a shape dimension rounded up to an alignment, folding constants when possible. */
+    std::string ComputeAlignedShapeDimension(const ir::ExprPtr& dimension, int64_t alignment);
 
     const ir::Span& GetCurrentStmtSpan() const { return current_stmt_span_; }
     const ir::Span& GetCurrentExprSpan() const { return current_expr_span_; }
@@ -277,11 +275,12 @@ public:
      *
      * Selects the declaration matching this access's layout -- a tensor also read with a different
      * order has one per layout, and only the matching one walks it correctly -- then points its
-     * hoisted instance at the access and resizes it in place. Pass an empty *shape_args* when the
-     * declaration carries its dims in the type (NZ).
+     * hoisted instance at the access and resizes it in place. valid_rows/valid_cols are the logical
+     * transfer shape; layout-specific physical dimensions are derived while binding.
      */
     [[nodiscard]] std::string BindGlobalTensor(const ir::VarPtr& tensor_var, const ir::CallPtr& op,
-                                               const std::string& pointer_expr, const std::string& shape_args);
+                                               const std::string& pointer_expr, const std::string& valid_rows,
+                                               const std::string& valid_cols);
 
 protected:
     // Override visitor methods for code generation - Statements
@@ -537,33 +536,13 @@ private:
                               const std::vector<std::pair<ir::VarPtr, ir::VarPtr>>& deduped_aliases);
     void EmitDedupedTileAliases(const std::vector<std::pair<ir::VarPtr, ir::VarPtr>>& deduped_aliases);
 
+    // --- Offset computation helpers ---
+    std::string ComputeStrideOffset(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets);
+    std::string ComputeNZStrideOffset(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets);
+
     // --- Phase 7: GenerateGlobalTensorTypeDeclaration helpers ---
 
-    /**
-     * \brief Generate a fully static ND (row-major) pto::Stride<> string from physical dims.
-     *
-     * Pads to five slots with leading 1s. Used for the NZ physical fractal shape.
-     */
-    std::string GenerateSingleFileStrideType(const std::vector<int64_t>& dims) const;
-
     std::vector<std::string> BuildTensorStrideExpressions(const ir::TensorTypePtr& tensor_type);
-
-    std::string BuildDynamicNZTensorDimArg(const ir::TensorTypePtr& tensor_type, size_t axis);
-
-    std::string BuildDynamicNZShapeArg(const ir::TensorTypePtr& tensor_type, size_t axis,
-                                       const std::optional<std::vector<ir::ExprPtr>>& access_shape);
-
-    void EmitDynamicNZGlobalTensorDeclaration(const std::string& var_name, const ir::TensorTypePtr& tensor_type,
-                                              const std::optional<std::string>& base_pointer,
-                                              const std::optional<std::vector<ir::ExprPtr>>& access_shape,
-                                              const std::string& element_type, const std::string& shape_type_name,
-                                              const std::string& stride_type_name, const std::string& global_type_name);
-
-    /**
-     * \brief Emit the full GlobalTensor declaration for an NZ-layout tensor (static or dynamic).
-     */
-    void EmitNZGlobalTensorDeclaration(const TensorDef& def, const std::string& var_name,
-                                       const ir::TensorTypePtr& tensor_type);
 
     /// Whether an access walks the tensor down columns: transposed, or a single-column window.
     static bool IsDNAccessLayout(const std::vector<int64_t>& shape_dims, bool is_transpose);
@@ -575,9 +554,8 @@ private:
     /**
      * \brief Emit one GlobalTensor instance over a declaration made by GenerateGlobalTensorTypeDeclaration.
      *
-     * Renders `<decl>Type <instance>(<pointer>, <decl>ShapeDim5(<shape_args>), <decl>StrideDim5(<stride_args>));`,
-     * dropping the shape and stride arguments when both are empty -- a fully static declaration takes the
-     * pointer alone.
+     * Renders `<decl>Type <instance>(<pointer>, <decl>ShapeDim5(<shape_args>), <decl>StrideDim5(<stride_args>));`.
+     * When both metadata argument strings are empty, only the pointer is emitted.
      */
     void EmitGlobalTensorInstance(const std::string& instance_name, const std::string& decl_name,
                                   const std::string& pointer_expr, const std::string& shape_args,

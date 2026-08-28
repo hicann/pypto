@@ -771,7 +771,7 @@ TEST(CCECodegenTest, EmitsKernelTileValidShapeGetters)
     EXPECT_NE(generated.find(".GetValidCol()"), std::string::npos);
 }
 
-TEST(CCECodegenTest, ComputesIRBasedOffsetAndRejectsRankMismatch)
+TEST(CCECodegenTest, ComputesTensorOffsetAndRejectsRankMismatch)
 {
     auto tensor_type = std::make_shared<const ir::TensorType>(std::vector<int64_t>{2, 3, 4}, ir::DataType::FP16,
                                                               std::optional<ir::MemRefPtr>(std::nullopt));
@@ -782,8 +782,39 @@ TEST(CCECodegenTest, ComputesIRBasedOffsetAndRejectsRankMismatch)
 
     CCECodegen codegen(ir::SectionKind::Vector);
 
-    EXPECT_EQ(codegen.ComputeIRBasedOffset(tensor_type, offsets), "(1 * (3 * 4) + 2 * (4) + 3)");
-    EXPECT_THROW((void)codegen.ComputeIRBasedOffset(tensor_type, short_offsets), std::exception);
+    EXPECT_EQ(codegen.ComputeTensorOffset(tensor_type, offsets), "(1 * (3 * 4) + 2 * (4) + 3)");
+    EXPECT_THROW((void)codegen.ComputeTensorOffset(tensor_type, short_offsets), std::exception);
+}
+
+TEST(CCECodegenTest, ComputesNzTensorOffsetsFor2DAndHighDimensionalShapes)
+{
+    auto make_nz_type = [](const std::vector<int64_t>& shape, ir::DataType dtype = ir::DataType::FP16) {
+        auto ptr = MakeVar("nz_base", std::make_shared<const ir::PtrType>(dtype));
+        ir::TensorView view({}, ir::TensorLayout::NZ, ptr);
+        return std::make_shared<const ir::TensorType>(shape, dtype, std::optional<ir::MemRefPtr>(std::nullopt),
+                                                      std::optional<ir::TensorView>(view));
+    };
+
+    auto offsets_2d = std::make_shared<const ir::MakeTuple>(
+        std::vector<ir::ExprPtr>{MakeConstInt(16), MakeConstInt(32)}, ir::Span::Unknown());
+    auto offsets_4d = std::make_shared<const ir::MakeTuple>(
+        std::vector<ir::ExprPtr>{MakeConstInt(1), MakeConstInt(2), MakeConstInt(16), MakeConstInt(32)},
+        ir::Span::Unknown());
+    auto offsets_4d_fp4 = std::make_shared<const ir::MakeTuple>(
+        std::vector<ir::ExprPtr>{MakeConstInt(1), MakeConstInt(2), MakeConstInt(16), MakeConstInt(64)},
+        ir::Span::Unknown());
+
+    CCECodegen codegen(ir::SectionKind::Vector);
+
+    EXPECT_EQ(codegen.ComputeTensorOffset(make_nz_type({64, 64}), offsets_2d), "(32 * 64 + 16 * 16)");
+    EXPECT_EQ(codegen.ComputeTensorOffset(make_nz_type({2, 3, 64, 64}), offsets_4d),
+              "(1 * 3 * 64 * 64 + 2 * 64 * 64 + 32 * 64 + 16 * 16)");
+    EXPECT_EQ(codegen.ComputeTensorOffset(make_nz_type({64, 64}, ir::DataType::FP8E4M3FN), offsets_2d),
+              "(32 * 64 + 16 * 32)");
+    EXPECT_EQ(codegen.ComputeTensorOffset(make_nz_type({64, 128}, ir::DataType::FP4E2M1), offsets_2d),
+              "((32 * 64 + 16 * 64) / 2)");
+    EXPECT_EQ(codegen.ComputeTensorOffset(make_nz_type({2, 3, 64, 128}, ir::DataType::FP4E2M1), offsets_4d_fp4),
+              "((1 * 3 * 64 * 128 + 2 * 64 * 128 + 64 * 64 + 16 * 64) / 2)");
 }
 
 TEST(CCECodegenTest, AddsExpressionSpanToCodegenErrors)

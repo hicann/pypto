@@ -142,7 +142,7 @@ __aicore__ inline void __pypto_tprint(T& src)
                        pto::GetLayoutName(T::BFractal, T::SFractal));
         for (int r = 0; r < T::Rows; ++r) {
             for (int c = 0; c < T::Cols; ++c) {
-                int off = (T::BFractal == pto::BLayout::RowMajor) ? r * T::Cols + c : c * T::Rows + r;
+                auto off = pto::GetTileOffset<T>(r, c);
                 __pypto_print_val(src.GetValue(off));
                 if (c == validCols - 1 && validCols < T::Cols)
                     __PYPTO_PRINTF("| ");

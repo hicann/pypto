@@ -54,12 +54,12 @@ GM workspace必须是专用于同步的INT32共享计数器空间，不能与其
 ## 使用约束
 
 > [!CAUTION]注意
-> `sync_all`不得放在运行时循环或运行时分支内。应将它放在对应Cube/Vector段的循环外，并保证只有实际参与同一屏障的核执行，且每个参与者以相同顺序和相同次数到达。错误的`core_type`/`used_cores`或两侧不对称的位置可能导致死锁；前端不会跨控制流证明这些条件。
+> 所有参与同步的核必须以相同顺序执行相同次数的`sync_all`。若循环次数或分支条件不一致，导致部分核少执行或多执行`sync_all`，可能发生死锁。`MIX`模式下，AIC侧与AIV侧的调用必须一一对应。
 
 纯Vector Kernel应使用`AIV_ONLY`，纯Cube Kernel应使用`AIC_ONLY`。只有在AIV和AIC都会到达同一屏障时才使用`MIX`；默认值`MIX`不代表它适用于任意Kernel。
 
 > [!IMPORTANT]重要
-> Cube、Vector共存的Kernel使用`MIX`时，Cube侧AIC和Vector侧AIV必须都执行对应的`sync_all`；仅在Cube侧调用会因等待未到达的AIV而超时。与`set_cross_core`/`wait_cross_core`并用时，两侧的MIX屏障必须位于该SET/WAIT对的同一侧；禁止Cube侧先执行`sync_all`再SET、Vector侧先WAIT再执行`sync_all`，否则会形成环形等待。
+> 与`set_cross_core`/`wait_cross_core`并用时，两侧的`MIX`屏障必须位于该SET/WAIT对的同一侧；禁止Cube侧先执行`sync_all`再SET、Vector侧先WAIT再执行`sync_all`，否则会形成环形等待。
 
 ## 调用示例
 
@@ -94,14 +94,14 @@ def sync_all_kernel(
         )
 ```
 
-该完整示例用于展示参与AIV一致到达屏障及屏障位于运行时循环外的正确写法，并验证多核执行不会因参与者不一致而卡住；它不用于说明跨核GM数据可见性。
+该完整示例展示AIV核间同步的基本用法，并验证多核执行能够正常完成；它不用于说明跨核GM数据可见性。
 
-HARD模式不需要workspace。三种`core_type`的调用方式如下；以下片段分别用于对应类型的Kernel，不应合并为一个调用序列。示例中的实际计算应位于屏障之前或之后，不能把屏障放入运行时循环或运行时分支。
+HARD模式不需要workspace。三种`core_type`的调用方式如下；以下片段分别用于对应类型的Kernel，不应合并为一个调用序列。调用方必须保证所有参与同步的核以相同顺序执行相同次数的`sync_all`。
 
 ```python
 # 纯Vector Kernel：所有参与AIV都执行
 with pl.section_vector():
-    # ... Vector阶段计算，运行时循环应在sync_all之前结束
+    # ... Vector阶段计算
     pl.system.sync_all(
         mode=pl.SyncAllMode.HARD,
         core_type=pl.SyncCoreType.AIV_ONLY,
@@ -109,7 +109,7 @@ with pl.section_vector():
 
 # 纯Cube Kernel：所有参与AIC都执行
 with pl.section_cube():
-    # ... Cube阶段计算，运行时循环应在sync_all之前结束
+    # ... Cube阶段计算
     pl.system.sync_all(
         mode=pl.SyncAllMode.HARD,
         core_type=pl.SyncCoreType.AIC_ONLY,

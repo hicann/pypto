@@ -119,6 +119,22 @@ def _validate_offset_bounds(
                 raise ValueError(f"{op_name}: offset[{i}] ({off_val}) exceeds source shape[{i}] ({src_val})")
 
 
+def _validate_nz_transfer_axes(
+    tensor_type: _ir_core.TensorType,
+    tile_dims: list[int],
+    op_name: str,
+) -> None:
+    """Require a GM NZ transfer's 2D Tile to map to the Tensor's final M/N axes."""
+    tensor_view = getattr(tensor_type, "tensor_view", None)
+    if tensor_view is None or tensor_view.layout != TensorLayout.NZ:
+        return
+
+    tensor_ndim = len(tensor_type.shape)
+    expected_dims = list(range(tensor_ndim - 2, tensor_ndim))
+    if tile_dims != expected_dims:
+        raise ValueError(f"{op_name}: NZ transfer only supports the last two tensor axes")
+
+
 def _ir_binary_cast(
     op_name: str,
     out: Expr,
@@ -154,6 +170,7 @@ def _ir_load(
     tile_dims, is_transpose = _resolve_order(order, tensor_ndim, tile_ndim, op_name)
 
     tensor_ndim, tile_shape, tile_dims = _validate_load_operands(out, tensor, offsets_tuple, tile_dims, op_name)
+    _validate_nz_transfer_axes(tensor.type, tile_dims, op_name)
 
     kwargs: dict[str, Any] = {}
     if is_transpose:
@@ -193,6 +210,7 @@ def _ir_load_tile(
         op_name,
         use_tile_absolute=True,
     )
+    _validate_nz_transfer_axes(tensor.type, tile_dims, op_name)
 
     abs_offsets = _compute_absolute_offsets(offsets_tuple, tile_shape, tile_dims, actual_span)
     # Validate offset bounds at Python frontend level
@@ -287,6 +305,7 @@ def _ir_store(
     tile_dims = _validate_tile_dims(order, tensor_ndim, tile_ndim, op_name)
     if order is not None and order != sorted(order):
         raise ValueError(f"{op_name}: order must be ascending, got {order}")
+    _validate_nz_transfer_axes(out.type, tile_dims, op_name)
     _validate_offsets(offsets_tuple, tile_dims, tile_shape, out.type.shape, op_name)
 
     _validate_offset_bounds("store", out.type.shape, offsets_tuple.elements)
@@ -378,6 +397,7 @@ def _ir_store_tile(
     tile_dims = _validate_tile_dims(order, tensor_ndim, tile_ndim, op_name)
     if order is not None and order != sorted(order):
         raise ValueError(f"{op_name}: order must be ascending, got {order}")
+    _validate_nz_transfer_axes(out.type, tile_dims, op_name)
     _validate_offsets(offsets_tuple, tile_dims, tile_shape, out.type.shape, op_name, use_tile_absolute=True)
 
     abs_offsets = _compute_absolute_offsets(offsets_tuple, tile_shape, tile_dims, actual_span)

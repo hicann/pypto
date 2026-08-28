@@ -73,6 +73,14 @@ def test_resolve_tensor_layout_invalid():
         resolver.resolve_type(node)
 
 
+def test_resolve_nz_tensor_rejects_rank_less_than_two():
+    resolver = _make_resolver()
+    node = ast.parse("pl.Tensor[[64], pl.DT_FP16, pl.NZ]", mode="eval").body
+
+    with pytest.raises(ParserTypeError, match="NZ Tensor requires rank >= 2"):
+        resolver.resolve_type(node)
+
+
 def test_resolve_layout_bare_name():
     """Layout specified as bare name (NZ) instead of pl.NZ."""
     resolver = _make_resolver()

@@ -65,10 +65,11 @@ ir::TypePtr MakeTensorType(std::vector<int64_t> shape = {32, 32}, ir::DataType d
     return std::make_shared<const ir::TensorType>(shape, dtype, std::nullopt);
 }
 
-ir::VarPtr MakeTensorVar(const std::string& name, const std::vector<int64_t>& shape, ir::DataType dtype)
+ir::VarPtr MakeTensorVar(const std::string& name, const std::vector<int64_t>& shape, ir::DataType dtype,
+                         ir::TensorLayout layout = ir::TensorLayout::ND)
 {
     auto ptr = MakeVar(name + "_base", std::make_shared<const ir::PtrType>(dtype));
-    ir::TensorView view({}, ir::TensorLayout::ND, ptr);
+    ir::TensorView view({}, layout, ptr);
     auto tensor_type = std::make_shared<const ir::TensorType>(shape, dtype, std::optional<ir::MemRefPtr>(std::nullopt),
                                                               std::optional<ir::TensorView>(view));
     return MakeVar(name, tensor_type);
@@ -640,6 +641,162 @@ TEST(BackendCCEBlockOutOps, Load)
     EXPECT_CONTAINS(code, "TASSIGN(tensor, raw_ptr + ");
     EXPECT_CONTAINS(code, "TLOAD(out, tensor);");
     EXPECT_CONTAINS(code, "SetShape");
+}
+
+TEST(BackendCCEBlockOutOps, GeneratesHighDimensionalNzLoadAndStore)
+{
+    auto nz_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);
+    auto tile_type = MakeTileType({32, 32}, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Vec), nz_hw);
+    auto tile = MakeVar("tile", tile_type);
+    auto tensor = MakeTensorVar("tensor", {2, 3, 64, 64}, ir::DataType::FP16, ir::TensorLayout::NZ);
+    auto offsets = MakeOffsets({1, 2, 16, 16});
+    auto load = MakeCall("block.load", {tile, tensor, offsets});
+    auto store = MakeCall("block.store", {tensor, tile, offsets});
+
+    const auto generated = GenerateKernel(
+        {MakeTileAssign(tile), std::make_shared<const ir::EvalStmt>(load, ir::Span::Unknown()),
+         std::make_shared<const ir::EvalStmt>(store, ir::Span::Unknown())},
+        {tensor}, ir::SectionKind::Vector);
+
+    EXPECT_CONTAINS(generated, "pto::TileShape2D<half, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
+    EXPECT_CONTAINS(generated, "pto::BaseShape2D<half, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
+    EXPECT_CONTAINS(generated, "tensor_0StrideDim5(64, 64)");
+    EXPECT_CONTAINS(generated, "tensor_0.SetShape<pto::GlobalTensorDim::DIM_1, pto::GlobalTensorDim::DIM_2>");
+    EXPECT_CONTAINS(generated, "1 * 3 * 64 * 64 + 2 * 64 * 64 + 16 * 64 + 16 * 16");
+    EXPECT_CONTAINS(generated, "TLOAD(tile_0, tensor_0);");
+    EXPECT_CONTAINS(generated, "TSTORE(tensor_0, tile_0);");
+}
+
+TEST(BackendCCEBlockOutOps, GeneratesFp8NzLoadAndStore)
+{
+    auto nz_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);
+    auto tile = MakeVar("tile",
+                        MakeTileType({16, 32}, ir::DataType::FP8E4M3FN, MakeMemRef(ir::MemorySpace::Vec), nz_hw));
+    auto tensor = MakeTensorVar("tensor", {64, 64}, ir::DataType::FP8E4M3FN, ir::TensorLayout::NZ);
+    auto offsets = MakeOffsets(16, 32);
+    auto load = MakeCall("block.load", {tile, tensor, offsets});
+    auto store = MakeCall("block.store", {tensor, tile, offsets});
+
+    const auto generated = GenerateKernel(
+        {MakeTileAssign(tile), std::make_shared<const ir::EvalStmt>(load, ir::Span::Unknown()),
+         std::make_shared<const ir::EvalStmt>(store, ir::Span::Unknown())},
+        {tensor}, ir::SectionKind::Vector);
+
+    EXPECT_CONTAINS(generated, "pto::TileShape2D<float8_e4m3_t, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
+    EXPECT_CONTAINS(generated, "32 * 64 + 16 * 32");
+    EXPECT_CONTAINS(generated, "TLOAD(tile_0, tensor_0);");
+    EXPECT_CONTAINS(generated, "TSTORE(tensor_0, tile_0);");
+}
+
+TEST(BackendCCEBlockOutOps, GeneratesPackedFp4NzLoadAndStore)
+{
+    auto nz_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);
+    auto tile = MakeVar("tile", MakeTileType({16, 64}, ir::DataType::FP4E2M1, MakeMemRef(ir::MemorySpace::Vec), nz_hw));
+    auto tensor = MakeTensorVar("tensor", {70, 130}, ir::DataType::FP4E2M1, ir::TensorLayout::NZ);
+    auto offsets = MakeOffsets(48, 64);
+    auto load = MakeCall("block.load", {tile, tensor, offsets});
+    auto store = MakeCall("block.store", {tensor, tile, offsets});
+
+    const auto generated = GenerateKernel(
+        {MakeTileAssign(tile), std::make_shared<const ir::EvalStmt>(load, ir::Span::Unknown()),
+         std::make_shared<const ir::EvalStmt>(store, ir::Span::Unknown())},
+        {tensor}, ir::SectionKind::Vector);
+
+    EXPECT_CONTAINS(generated, "pto::TileShape2D<float4_e2m1x2_t, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
+    EXPECT_CONTAINS(generated, "pto::BaseShape2D<float4_e2m1x2_t, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
+    EXPECT_CONTAINS(generated, "tensor_0StrideDim5(80, 192)");
+    EXPECT_CONTAINS(generated, "tensor_0ShapeDim5 tensor_0_shape_");
+    EXPECT_CONTAINS(generated, "tensor_0.SetShape<pto::GlobalTensorDim::DIM_1, pto::GlobalTensorDim::DIM_2>");
+    EXPECT_CONTAINS(generated, "(64 * 80 + 48 * 64) / 2");
+    EXPECT_CONTAINS(generated, "TLOAD(tile_0, tensor_0);");
+    EXPECT_CONTAINS(generated, "TSTORE(tensor_0, tile_0);");
+}
+
+TEST(BackendCCEBlockOutOps, RejectsUnsupportedNzTileLayoutAndTranspose)
+{
+    auto tensor = MakeTensorVar("tensor", {64, 64}, ir::DataType::FP16, ir::TensorLayout::NZ);
+    auto nd_hw = ir::HardwareInfo(ir::TileLayout::row_major, ir::TileLayout::none_box, 0);
+    auto nd_tile = MakeVar("nd_tile",
+                           MakeTileType({32, 32}, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Vec), nd_hw));
+    auto nd_load = MakeCall("block.load", {nd_tile, tensor, MakeOffsets(0, 0)});
+    EXPECT_THROW(RunCodegen("block.load", nd_load), npu::tile_fwk::Error);
+
+    auto nz_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);
+    auto nz_tile = MakeVar("nz_tile",
+                           MakeTileType({32, 32}, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Vec), nz_hw));
+    auto transpose_load = MakeCallWithKwargs("block.load", {nz_tile, tensor, MakeOffsets(0, 0)},
+                                             {{"is_transpose", true}});
+    EXPECT_THROW(RunCodegen("block.load", transpose_load), npu::tile_fwk::Error);
+}
+
+TEST(BackendCCEBlockOutOps, RejectsMisalignedNzTransferWindow)
+{
+    auto tensor = MakeTensorVar("tensor", {64, 64}, ir::DataType::FP16, ir::TensorLayout::NZ);
+    auto nz_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);
+    auto make_load = [&](const std::vector<int64_t>& tile_shape, int64_t col_offset) {
+        auto tile = MakeVar("tile",
+                            MakeTileType(tile_shape, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Vec), nz_hw));
+        return MakeCall("block.load", {tile, tensor, MakeOffsets(0, col_offset)});
+    };
+
+    EXPECT_THROW(RunCodegen("block.load", make_load({24, 32}, 0)), npu::tile_fwk::Error);
+    EXPECT_THROW(RunCodegen("block.load", make_load({32, 24}, 0)), npu::tile_fwk::Error);
+    EXPECT_THROW(RunCodegen("block.load", make_load({32, 32}, 8)), npu::tile_fwk::Error);
+}
+
+TEST(BackendCCEBlockOutOps, PadsNonAlignedNzTensorShapeAndRejectsInvalidOffsetRank)
+{
+    auto nz_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);
+    auto tile = MakeVar("tile", MakeTileType({16, 16}, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Vec), nz_hw));
+
+    auto generate_load = [&](const std::vector<int64_t>& tensor_shape, const std::vector<int64_t>& offsets) {
+        auto tensor = MakeTensorVar("tensor", tensor_shape, ir::DataType::FP16, ir::TensorLayout::NZ);
+        auto load = MakeCall("block.load", {tile, tensor, MakeOffsets(offsets)});
+        return GenerateKernel({MakeTileAssign(tile), std::make_shared<const ir::EvalStmt>(load, ir::Span::Unknown())},
+                              {tensor}, ir::SectionKind::Vector);
+    };
+
+    const auto generated = generate_load({2, 3, 70, 50}, {1, 2, 64, 48});
+    EXPECT_CONTAINS(generated, "pto::TileShape2D<half, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
+    EXPECT_CONTAINS(generated, "pto::BaseShape2D<half, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
+    EXPECT_CONTAINS(generated, "tensor_0StrideDim5(80, 64)");
+    EXPECT_CONTAINS(generated, "1 * 3 * 80 * 64 + 2 * 80 * 64 + 48 * 80 + 64 * 16");
+
+    auto tensor = MakeTensorVar("high_dim_tensor", {2, 3, 64, 64}, ir::DataType::FP16, ir::TensorLayout::NZ);
+    auto load = MakeCall("block.load", {tile, tensor, MakeOffsets(0, 0)});
+    EXPECT_THROW(RunCodegen("block.load", load), npu::tile_fwk::Error);
+}
+
+TEST(BackendCCEBlockOutOps, RejectsUnsafeAccNzDirectStoreWindow)
+{
+    auto tensor = MakeTensorVar("tensor", {64, 64}, ir::DataType::FP32, ir::TensorLayout::NZ);
+    auto nz_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 1024);
+    auto unsafe_tile = MakeVar("unsafe",
+                               MakeTileType({32, 16}, ir::DataType::FP32, MakeMemRef(ir::MemorySpace::Acc), nz_hw));
+    auto unsafe_store = MakeCall("block.store", {tensor, unsafe_tile, MakeOffsets(0, 0)});
+    EXPECT_THROW(RunCodegen("block.store", unsafe_store), npu::tile_fwk::Error);
+
+    auto safe_tile = MakeVar("safe",
+                             MakeTileType({32, 8}, ir::DataType::FP32, MakeMemRef(ir::MemorySpace::Acc), nz_hw));
+    auto safe_store = MakeCall("block.store", {tensor, safe_tile, MakeOffsets(0, 0)});
+    auto offsets = std::dynamic_pointer_cast<const ir::MakeTuple>(safe_store->args_[2]);
+    auto tensor_type = ir::As<ir::TensorType>(tensor->GetType());
+    EXPECT_NO_THROW(cce::ValidateNZTransfer("block.store", safe_store, safe_tile, offsets, tensor_type));
+}
+
+TEST(BackendCCEBlockOutOps, ComputesNzInnerColsFromDtype)
+{
+    EXPECT_EQ(cce::GetNZInnerCols(ir::DataType::INT8), 32);
+    EXPECT_EQ(cce::GetNZInnerCols(ir::DataType::FP8E4M3FN), 32);
+    EXPECT_EQ(cce::GetNZInnerCols(ir::DataType::FP8E5M2), 32);
+    EXPECT_EQ(cce::GetNZInnerCols(ir::DataType::FP8E8M0), 32);
+    EXPECT_EQ(cce::GetNZInnerCols(ir::DataType::HF8), 32);
+    EXPECT_EQ(cce::GetNZInnerCols(ir::DataType::FP4E2M1), 64);
+    EXPECT_EQ(cce::GetNZInnerCols(ir::DataType::FP4E1M2), 64);
+    EXPECT_EQ(cce::GetNZInnerCols(ir::DataType::FP16), 16);
+    EXPECT_EQ(cce::GetNZInnerCols(ir::DataType::FP32), 8);
+    EXPECT_EQ(cce::GetNZInnerCols(ir::DataType::INT64), 4);
+    EXPECT_EQ(cce::GetNZInnerCols(ir::DataType::HF4), 64);
 }
 
 TEST(BackendCCEBlockOutOps, InfersHighDimensionalMxScaleLoadFromDestinationAndOrder)

@@ -292,9 +292,8 @@ static std::string MakeBlockOutRowExpandCodegenCCE(const std::string& cce_op_nam
 }
 
 // ============================================================================
-// Helper: the rows/cols an access transfers, read from its tile.
-// GlobalTensor shapes use Shape<1,1,1,-1,-1>; only DIM_3 and DIM_4 are dynamic.
-// Must NOT be called for NZ-layout tensors (their shape is fully static).
+// The logical rows/cols an access transfers are read from its tile. BindGlobalTensor
+// maps them to the selected layout's physical GlobalTensor dimensions.
 //
 // The GM transfer shape is always derived from the tile's RUNTIME valid region
 // via GetValidRow()/GetValidCol(). Every generated tile carries DYNAMIC (-1)
@@ -307,18 +306,20 @@ static std::string MakeBlockOutRowExpandCodegenCCE(const std::string& cce_op_nam
 // (which cached the textually-last set_validshape and could not match the
 // runtime-taken branch).
 // ============================================================================
-// The rows/cols an access actually transfers, read from the destination tile's valid region.
-static std::string ValidShapeArgs(const std::string& tile_cpp_name)
+static std::string ValidRows(const std::string& tile_cpp_name)
 {
-    return "static_cast<int64_t>(" + tile_cpp_name + ".GetValidRow()), static_cast<int64_t>(" + tile_cpp_name +
-           ".GetValidCol())";
+    return "static_cast<int64_t>(" + tile_cpp_name + ".GetValidRow())";
+}
+
+static std::string ValidCols(const std::string& tile_cpp_name)
+{
+    return "static_cast<int64_t>(" + tile_cpp_name + ".GetValidCol())";
 }
 
 // ============================================================================
 // block.load  -  args = [out_tile, tensor, offsets]
-// Emits: [SetShape<DIM_3,DIM_4>(...);] TASSIGN(tensor_global, ptr + offset); TLOAD(out_tile, tensor_global);
-// SetShape is emitted when the tensor has dynamic dims; the transfer shape is
-// always read from the tile's runtime valid region (GetValidRow/Col).
+// Emits: SetShape(...); TASSIGN(tensor_global, ptr + offset); TLOAD(out_tile, tensor_global);
+// The transfer shape is always read from the tile's runtime valid region.
 // ============================================================================
 static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
@@ -342,23 +343,21 @@ static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::Co
     auto src_tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(src_tensor_var_ptr->GetType());
     CHECK(src_tensor_type != nullptr) << "block.load source must be TensorType";
 
-    std::string offset = cce::ComputeStrideBasedOffset(codegen, offsets_tuple, src_tensor_type);
+    cce::ValidateNZTransfer("block.load", op, op->args_[0], offsets_tuple, src_tensor_type);
+    std::string offset = codegen.ComputeTensorOffset(src_tensor_type, offsets_tuple);
     std::string src_ptr = codegen.GetPointer(src_tensor_var);
     std::string out_name = codegen.GetExprAsCode(op->args_[0]);
 
-    // An NZ declaration carries its dims in the type and takes no resize.
-    const std::string bound = codegen.BindGlobalTensor(
-        src_tensor_var_ptr, op, src_ptr + " + " + offset,
-        cce::IsNZTensorType(src_tensor_type) ? "" : ValidShapeArgs(out_name));
+    const std::string bound = codegen.BindGlobalTensor(src_tensor_var_ptr, op, src_ptr + " + " + offset,
+                                                       ValidRows(out_name), ValidCols(out_name));
     codegen.Emit("TLOAD(" + out_name + ", " + bound + ");");
     return "";
 }
 
 // ============================================================================
 // block.store  -  args = [output_tensor, tile, offsets]
-// Emits: [SetShape<DIM_3,DIM_4>(...);] TASSIGN(tensor_global, ptr + offset); TSTORE(tensor_global, tile);
-// SetShape is emitted when the tensor has dynamic dims; the transfer shape is
-// always read from the tile's runtime valid region (GetValidRow/Col).
+// Emits: SetShape(...); TASSIGN(tensor_global, ptr + offset); TSTORE(tensor_global, tile);
+// The transfer shape is always read from the tile's runtime valid region.
 // ============================================================================
 static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
@@ -377,14 +376,13 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
     std::string dst_tensor_var = codegen.GetVarName(dst_tensor_var_ptr);
     auto dst_tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(dst_tensor_var_ptr->GetType());
     CHECK(dst_tensor_type != nullptr) << "block.store destination must be TensorType";
-    cce::ValidateStoreNZPreconditions("block.store", op->args_[1], offsets_tuple, dst_tensor_type);
+    cce::ValidateNZTransfer("block.store", op, op->args_[1], offsets_tuple, dst_tensor_type);
 
-    std::string offset = cce::ComputeStrideBasedOffset(codegen, offsets_tuple, dst_tensor_type);
+    std::string offset = codegen.ComputeTensorOffset(dst_tensor_type, offsets_tuple);
     std::string dst_ptr = codegen.GetPointer(dst_tensor_var);
 
-    const std::string dst_tensor_access = codegen.BindGlobalTensor(
-        dst_tensor_var_ptr, op, dst_ptr + " + " + offset,
-        cce::IsNZTensorType(dst_tensor_type) ? "" : ValidShapeArgs(src_tile));
+    const std::string dst_tensor_access = codegen.BindGlobalTensor(dst_tensor_var_ptr, op, dst_ptr + " + " + offset,
+                                                                   ValidRows(src_tile), ValidCols(src_tile));
 
     // Build template parameters: TSTORE<TileData, GlobalData, AtomicType, ReluPreMode>(dst, src, ...)
     // Per pto-isa: template order is <TileData, GlobalData, AtomicType, ReluPreMode>
@@ -479,7 +477,7 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
 
 // ============================================================================
 // block.store_fp  -  args = [output_tensor, tile, fp_tile, offsets]
-// Emits: [SetShape<DIM_3,DIM_4>(...);] TASSIGN(tensor_global, ptr + offset); TSTORE_FP(tensor_global, tile, fp_tile);
+// Emits: SetShape(...); TASSIGN(tensor_global, ptr + offset); TSTORE_FP(tensor_global, tile, fp_tile);
 // ============================================================================
 static std::string MakeBlockOutStoreFpCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
@@ -509,16 +507,15 @@ static std::string MakeBlockOutStoreFpCodegenCCE(const ir::CallPtr& op, codegen:
     std::string dst_tensor_var = codegen.GetVarName(dst_tensor_var_ptr);
     auto dst_tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(dst_tensor_var_ptr->GetType());
     CHECK(dst_tensor_type != nullptr) << "block.store_fp destination must be TensorType";
-    cce::ValidateStoreNZPreconditions("block.store_fp", op->args_[1], offsets_tuple, dst_tensor_type);
+    cce::ValidateNZTransfer("block.store_fp", op, op->args_[1], offsets_tuple, dst_tensor_type);
 
-    std::string offset = cce::ComputeStrideBasedOffset(codegen, offsets_tuple, dst_tensor_type);
+    std::string offset = codegen.ComputeTensorOffset(dst_tensor_type, offsets_tuple);
     std::string dst_ptr = codegen.GetPointer(dst_tensor_var);
     std::string src_tile = codegen.GetExprAsCode(op->args_[1]);
     std::string fp_tile = codegen.GetExprAsCode(op->args_[2]);
 
-    const std::string dst_tensor_access = codegen.BindGlobalTensor(
-        dst_tensor_var_ptr, op, dst_ptr + " + " + offset,
-        cce::IsNZTensorType(dst_tensor_type) ? "" : ValidShapeArgs(src_tile));
+    const std::string dst_tensor_access = codegen.BindGlobalTensor(dst_tensor_var_ptr, op, dst_ptr + " + " + offset,
+                                                                   ValidRows(src_tile), ValidCols(src_tile));
     codegen.Emit("TSTORE_FP(" + dst_tensor_access + ", " + src_tile + ", " + fp_tile + ");");
     return "";
 }

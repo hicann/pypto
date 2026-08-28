@@ -19,7 +19,7 @@
 `pypto_pro.language.Tensor`主要用于：
 
 1. kernel函数签名中声明GM张量参数
-2. 配合[`pypto_pro.language.load`](../operation/memory_data_movement/load.md)/[`pypto_pro.language.store`](../operation/memory_data_movement/store.md)做GM↔UB搬运
+2. 配合[`pypto_pro.language.load`](../operation/memory_data_movement/load.md)/[`pypto_pro.language.store`](../operation/memory_data_movement/store.md)完成GM与L1/UB/L0C Tile之间的数据搬运
 3. 通过`=`赋值创建别名，与原变量共享同一段GM内存；支持链式别名，创建别名后重新绑定原变量不会改变已有别名的指向
 
 ## 函数原型
@@ -51,7 +51,7 @@ pypto_pro.language.Tensor.__init__(
 |---|---|---|
 | `shape` | 输入 | 维度列表<br>固定维度：正整数，如`[64, 128]`<br>动态维度：`pypto_pro.language.DYNAMIC`<br>编译期特化维度：`pypto_pro.language.STATIC`<br>末尾`...`：其余维度均按`STATIC`处理<br>不同策略可混用，如`[64, pl.DYNAMIC, pl.STATIC]` |
 | `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md)枚举值<br>常用：`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_INT8`、`pypto_pro.language.DT_INT32`、`pypto_pro.language.DT_HF8` |
-| `layout` | 输入 | [`pypto_pro.language.TensorLayout`](TensorLayout.md)枚举值或`None`（默认）<br>`pypto_pro.language.ND`（非分形行主序）/ `pypto_pro.language.DN`（非分形DN布局标记）/ `pypto_pro.language.NZ`（NZ分形布局）<br>不指定时为`None`（后端按`pypto_pro.language.ND`处理） |
+| `layout` | 输入 | [`pypto_pro.language.TensorLayout`](TensorLayout.md)枚举值或`None`（默认）<br>GM Tensor支持`pypto_pro.language.ND`（非分形行主序）和`pypto_pro.language.NZ`（NZ分形布局）；不指定时按`pypto_pro.language.ND`处理<br>`pypto_pro.language.NZ`只声明布局，不执行ND→NZ转换；物理排布和shape约束见[`TensorLayout`](TensorLayout.md#tensor布局)，搬运限制见[`load`](../operation/memory_data_movement/load.md)和[`store`](../operation/memory_data_movement/store.md) |
 | `memref` | 输入 | `pypto_pro.language.MemRef`实例；需要同时指定`layout`和`memref`时使用四参数形式 |
 
 ## shape维度策略
@@ -77,6 +77,9 @@ x: pl.Tensor[[64, 128], pl.DT_FP16]
 
 # 带布局的 tensor
 y: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]
+
+# 高维 NZ：最后两轴 64/128 为 M/N，前两轴为 batch
+y_4d: pl.Tensor[[2, 4, 64, 128], pl.DT_FP16, pl.NZ]
 
 # A矩阵的E8M0分组缩放因子：逻辑shape为[M,G]=[64,4]，GM物理shape为[M,G/2,2]=[64,2,2]
 scale_a: pl.Tensor[[64, 2, 2], pl.DT_FP8E8M0]

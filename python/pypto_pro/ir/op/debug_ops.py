@@ -206,7 +206,11 @@ def dump_tensor(
     - full dump and window dump support dynamic ``offsets``/``shapes``
 
     Current limitation:
+    - FP4 tensor dtypes are not supported
     - Windowed dumps still require the innermost tensor stride to be statically 1
+    - An NZ window applies the fractal layout to its last two dimensions: rows
+      must be divisible by 16 and columns/column offset by C0; leading dimensions
+      are printed batch by batch and dynamic values must satisfy the same constraints at runtime
     """
     actual_span = _get_span_or_capture(span)
     show_location = _normalize_location_flag(loc, "dump_tensor")
@@ -215,6 +219,8 @@ def dump_tensor(
     tensor_type = tensor.type
     if not isinstance(tensor_type, TensorType):
         raise TypeError(f"debug.dump_tensor requires TensorType input, but got {type(tensor_type).__name__}")
+    if tensor_type.dtype in (DataType.FP4, DataType.FP4E2M1, DataType.FP4E1M2):
+        raise ValueError(f"debug.dump_tensor does not support FP4 dtype {tensor_type.dtype}")
 
     if (offsets is None) != (shapes is None):
         raise ValueError("debug.dump_tensor offsets and shapes must be provided together")

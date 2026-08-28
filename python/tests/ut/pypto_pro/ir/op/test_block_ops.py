@@ -792,3 +792,55 @@ def test_a5_allows_regular_cube_buffer_layouts(monkeypatch):
 
     stmt = create_tile.body.stmts[0] if hasattr(create_tile.body, "stmts") else create_tile.body
     assert isinstance(stmt.var.type.hardware_info, _ir.HardwareInfo)
+
+
+def test_high_dimensional_nz_load_store_use_last_two_axes_by_default():
+    @pl.jit(auto_mutex=False)
+    def main(
+        inp: pl.Tensor[[2, 3, 64, 64], pl.DT_FP16, pl.NZ],
+        out: pl.Tensor[[2, 3, 64, 64], pl.DT_FP16, pl.NZ],
+    ):
+        tile_type = pl.TileType(
+            shape=[16, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ
+        )
+        tile = pl.make_tile(tile_type, addr=0x1000, size=512)
+        pl.load(tile, inp, [1, 2, 16, 16])
+        pl.store(out, tile, [1, 2, 16, 16])
+
+    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    main = main_program.get_function(main.__name__)
+    ir_text = _program_ir(main)
+    assert "block.load" in ir_text
+    assert "block.store" in ir_text
+
+
+def test_high_dimensional_nz_load_rejects_non_final_transfer_axes():
+    with pytest.raises(ParserSyntaxError, match="NZ transfer only supports the last two tensor axes"):
+
+        @pl.jit(auto_mutex=False)
+        def main(
+            inp: pl.Tensor[[2, 64, 64, 64], pl.DT_FP16, pl.NZ],
+        ):
+            tile_type = pl.TileType(
+                shape=[16, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ
+            )
+            tile = pl.make_tile(tile_type, addr=0x1000, size=512)
+            pl.load(tile, inp, [0, 0, 0, 0], order=[1, 3])
+
+        main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_high_dimensional_nz_store_rejects_non_final_transfer_axes():
+    with pytest.raises(ParserSyntaxError, match="NZ transfer only supports the last two tensor axes"):
+
+        @pl.jit(auto_mutex=False)
+        def main(
+            out: pl.Tensor[[2, 64, 64, 64], pl.DT_FP16, pl.NZ],
+        ):
+            tile_type = pl.TileType(
+                shape=[16, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ
+            )
+            tile = pl.make_tile(tile_type, addr=0x1000, size=512)
+            pl.store(out, tile, [0, 0, 0, 0], order=[1, 3])
+
+        main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

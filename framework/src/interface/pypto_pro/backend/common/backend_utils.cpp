@@ -14,12 +14,12 @@
 #include <cctype>
 #include <sstream>
 
-#include "codegen/cce/cce_codegen.h"
 #include "core/error.h"
 #include "core/logging.h"
 #include "ir/kind_traits.h"
 #include "ir/memref.h"
 #include "ir/scalar_expr.h"
+#include "ir/type_inference.h"
 #include "tilefwk/error.h"
 
 namespace pypto {
@@ -99,12 +99,6 @@ CompareAttrs GetCompareAttrs(const ir::CallPtr& op)
 
 namespace cce {
 
-std::string ComputeStrideBasedOffset(codegen::CCECodegen& codegen, const ir::MakeTuplePtr& offsets,
-                                     const ir::TensorTypePtr& tensor_type)
-{
-    return codegen.ComputeIRBasedOffset(tensor_type, offsets);
-}
-
 bool IsNZTensorType(const ir::TensorTypePtr& tensor_type)
 {
     return tensor_type && tensor_type->tensor_view_.has_value() &&
@@ -161,70 +155,52 @@ std::string MXLoadLayoutName(const ir::CallPtr& op)
                         (is_dn ? "Layout::MX_B_DN" : "Layout::MX_B_ND");
 }
 
-int64_t GetNZInnerCols(const ir::DataType& dtype, const std::string& error_prefix)
+int64_t GetNZInnerCols(const ir::DataType& dtype)
 {
-    if (dtype == ir::DataType::BOOL || dtype == ir::DataType::INT8 || dtype == ir::DataType::UINT8) {
-        return 32;
-    }
-    if (dtype == ir::DataType::FP16 || dtype == ir::DataType::BF16 || dtype == ir::DataType::INT16 ||
-        dtype == ir::DataType::UINT16) {
-        return 16;
-    }
-    if (dtype == ir::DataType::FP32 || dtype == ir::DataType::INT32 || dtype == ir::DataType::UINT32) {
-        return 8;
-    }
-    if (dtype == ir::DataType::INT64 || dtype == ir::DataType::UINT64) {
-        return 4;
-    }
-    throw pypto::ir::ValueError(error_prefix + dtype.ToString());
+    constexpr int64_t nz_inner_block_bits = 256;
+    return nz_inner_block_bits / static_cast<int64_t>(dtype.GetBit());
 }
 
-static int64_t GetStaticConstIntOrThrow(const ir::ExprPtr& expr, const std::string& message)
+void ValidateNZTransfer(const std::string& op_name, const ir::CallPtr& op, const ir::ExprPtr& tile_expr,
+                        const ir::MakeTuplePtr& offsets, const ir::TensorTypePtr& tensor_type)
 {
-    auto value = ir::As<ir::ConstInt>(expr);
-    if (!value) {
-        throw pypto::ir::ValueError(message);
-    }
-    return value->value_;
-}
-
-static bool IsConstZero(const ir::ExprPtr& expr)
-{
-    auto value = ir::As<ir::ConstInt>(expr);
-    return value && value->value_ == 0;
-}
-
-void ValidateStoreNZPreconditions(const std::string& op_name, const ir::ExprPtr& src_expr,
-                                  const ir::MakeTuplePtr& offsets, const ir::TensorTypePtr& dst_tensor_type)
-{
-    if (!IsNZTensorType(dst_tensor_type)) {
+    if (!IsNZTensorType(tensor_type)) {
         return;
     }
 
-    auto src_tile_type = ir::As<ir::TileType>(src_expr->GetType());
-    CHECK(src_tile_type != nullptr) << op_name << ": source must be TileType";
-    CHECK(src_tile_type->memref_.has_value()) << op_name << ": source tile must have an allocated memory space";
-    if (src_tile_type->memref_.value()->memorySpace_ != ir::MemorySpace::Acc) {
-        throw pypto::ir::ValueError(op_name + ": CCE NZ output currently only supports Acc source tiles");
+    auto tile_type = ir::As<ir::TileType>(tile_expr->GetType());
+    const auto& hw = tile_type->hardwareInfo_.value();
+    const bool is_nz_tile = hw.blayout == ir::TileLayout::col_major && hw.slayout == ir::TileLayout::row_major;
+    CHECK(is_nz_tile) << op_name << ": GM NZ transfer requires an NZ Tile layout";
+
+    const size_t ndim = tensor_type->shape_.size();
+    CHECK(offsets->elements_.size() == ndim) << op_name << ": offset rank must match GM NZ tensor rank";
+    const bool is_transpose = op->HasKwarg("is_transpose") && op->GetKwarg<bool>("is_transpose");
+    CHECK(!is_transpose) << op_name << ": CCE NZ transfer does not support order transpose";
+
+    const int64_t c0 = GetNZInnerCols(tensor_type->dtype_);
+    const auto tile_rows = ir::GetConstantDimension(tile_type->shape_[0]);
+    const auto tile_cols = ir::GetConstantDimension(tile_type->shape_[1]);
+    const auto col_offset = ir::GetConstantDimension(offsets->elements_[ndim - 1]);
+
+    CHECK(!tile_rows.has_value() || tile_rows.value() % 16 == 0) << op_name << ": NZ tile rows must be divisible by 16";
+    CHECK(!tile_cols.has_value() || tile_cols.value() % c0 == 0)
+        << op_name << ": NZ tile columns must be divisible by C0";
+    CHECK(!col_offset.has_value() || col_offset.value() % c0 == 0)
+        << op_name << ": NZ column offset must be divisible by C0";
+
+    // In a GM transfer, an Acc tile can only appear as the source of store/store_fp.
+    // Enforce the extra direct-store window restriction for that path.
+    if (!tile_type->memref_.has_value() || tile_type->memref_.value()->memorySpace_ != ir::MemorySpace::Acc) {
+        return;
     }
 
-    if (dst_tensor_type->shape_.size() != 2) {
-        throw pypto::ir::ValueError(op_name + ": CCE NZ output currently requires a 2D destination tensor");
-    }
-    if (offsets->elements_.size() != 2 || !IsConstZero(offsets->elements_[0]) || !IsConstZero(offsets->elements_[1])) {
-        throw pypto::ir::ValueError(op_name + ": CCE NZ output currently requires offsets=[0, 0]");
-    }
-
-    const int64_t rows = GetStaticConstIntOrThrow(
-        dst_tensor_type->shape_[0], op_name + ": CCE NZ output currently requires a static destination row shape");
-    const int64_t cols = GetStaticConstIntOrThrow(
-        dst_tensor_type->shape_[1], op_name + ": CCE NZ output currently requires a static destination column shape");
-    const int64_t c0 = GetNZInnerCols(dst_tensor_type->dtype_, "CCE NZ store does not support destination dtype ");
-    CHECK(c0 > 0) << op_name << ": NZ C0 size must be positive";
-    if (rows % 16 != 0 || cols % c0 != 0) {
-        throw pypto::ir::ValueError(
-            op_name + ": CCE NZ output requires rows divisible by 16 and cols divisible by the destination C0 size");
-    }
+    const auto full_rows = ir::GetConstantDimension(tensor_type->shape_[ndim - 2]);
+    const auto padded_full_rows = full_rows.has_value() ? std::optional<int64_t>((full_rows.value() + 15) / 16 * 16) :
+                                                          std::nullopt;
+    CHECK(!padded_full_rows.has_value() || !tile_rows.has_value() || !tile_cols.has_value() ||
+          tile_rows.value() == padded_full_rows.value() || tile_cols.value() <= c0)
+        << op_name << ": Acc NZ partial-M store spanning multiple N fractals is not supported by direct TSTORE";
 }
 
 } // namespace cce

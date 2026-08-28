@@ -37,6 +37,7 @@
 #include "ir/memref.h"
 #include "ir/pipe.h"
 #include "ir/type.h"
+#include "ir/type_inference.h"
 #include "tilefwk/error.h"
 
 namespace pypto {
@@ -46,84 +47,6 @@ using ir::DataType;
 // ============================================================================
 // Helper Functions for CCE Code Generation
 // ============================================================================
-
-static std::string BuildStaticNZShapeType(const DataType& dtype, int64_t rows, int64_t cols)
-{
-    const int64_t c0 = cce::GetNZInnerCols(dtype);
-    CHECK(c0 > 0) << "NZ C0 size must be positive";
-    return "pto::Shape<1, " + std::to_string(cols / c0) + ", " + std::to_string(rows / 16) + ", 16, " +
-           std::to_string(c0) + ">";
-}
-
-static std::string BuildStaticNZStrideType(const DataType& dtype, int64_t full_rows, int64_t full_cols)
-{
-    const int64_t c0 = cce::GetNZInnerCols(dtype);
-    return "pto::Stride<" + std::to_string(full_rows * full_cols) + ", " + std::to_string(full_rows * c0) + ", " +
-           std::to_string(16 * c0) + ", " + std::to_string(c0) + ", 1>";
-}
-
-static int64_t ComputeStaticNZPhysicalOffset(const DataType& dtype, int64_t full_rows, int64_t row_offset,
-                                             int64_t col_offset)
-{
-    const int64_t c0 = cce::GetNZInnerCols(dtype);
-    return col_offset * full_rows + row_offset * c0;
-}
-
-static void ValidateDebugDumpNZWindowStructure(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets,
-                                               const ir::MakeTuplePtr& shapes)
-{
-    CHECK(tensor_type != nullptr) << "debug.dump_tensor NZ lowering requires TensorType";
-    CHECK(offsets != nullptr) << "debug.dump_tensor NZ lowering requires offsets tuple";
-    CHECK(shapes != nullptr) << "debug.dump_tensor NZ lowering requires shapes tuple";
-
-    if (tensor_type->shape_.size() != 2 || offsets->elements_.size() != 2 || shapes->elements_.size() != 2) {
-        throw pypto::ir::ValueError(
-            "debug.dump_tensor: CCE NZ dump currently requires a 2D tensor and 2D offsets/shapes");
-    }
-}
-
-static bool IsStaticDebugDumpNZWindow(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets,
-                                      const ir::MakeTuplePtr& shapes)
-{
-    return tensor_type && offsets && shapes && ir::As<ir::ConstInt>(tensor_type->shape_[0]) &&
-           ir::As<ir::ConstInt>(tensor_type->shape_[1]) && ir::As<ir::ConstInt>(offsets->elements_[0]) &&
-           ir::As<ir::ConstInt>(offsets->elements_[1]) && ir::As<ir::ConstInt>(shapes->elements_[0]) &&
-           ir::As<ir::ConstInt>(shapes->elements_[1]);
-}
-
-static bool CanUseStaticDebugDumpNZFastPath(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets,
-                                            const ir::MakeTuplePtr& shapes)
-{
-    if (!IsStaticDebugDumpNZWindow(tensor_type, offsets, shapes)) {
-        return false;
-    }
-    const int64_t full_rows = ir::As<ir::ConstInt>(tensor_type->shape_[0])->value_;
-    const int64_t full_cols = ir::As<ir::ConstInt>(tensor_type->shape_[1])->value_;
-    const int64_t row_offset = ir::As<ir::ConstInt>(offsets->elements_[0])->value_;
-    const int64_t col_offset = ir::As<ir::ConstInt>(offsets->elements_[1])->value_;
-    const int64_t rows = ir::As<ir::ConstInt>(shapes->elements_[0])->value_;
-    const int64_t cols = ir::As<ir::ConstInt>(shapes->elements_[1])->value_;
-    const int64_t c0 = cce::GetNZInnerCols(tensor_type->dtype_);
-    CHECK(c0 > 0) << "NZ C0 size must be positive";
-    if (full_rows % 16 != 0 || full_cols % c0 != 0) {
-        return false;
-    }
-    if (row_offset < 0 || col_offset < 0 || rows <= 0 || cols <= 0) {
-        return false;
-    }
-    if (row_offset % 16 != 0 || rows % 16 != 0 || col_offset % c0 != 0 || cols % c0 != 0) {
-        return false;
-    }
-    return row_offset + rows <= full_rows && col_offset + cols <= full_cols;
-}
-
-static std::string AddStartOffsetIfNeeded(const std::string& start_offset, const std::string& physical_offset)
-{
-    if (start_offset.empty()) {
-        return physical_offset;
-    }
-    return "(" + start_offset + " + " + physical_offset + ")";
-}
 
 static int NextDebugDumpId()
 {
@@ -506,131 +429,45 @@ static std::string ComputeRuntimeStrideBasedOffset(codegen::CCECodegen& codegen,
     return offset_computation.str();
 }
 
-static std::string GetTensorLogicalDimForNZDump(codegen::CCECodegen& codegen, const ir::TensorTypePtr& tensor_type,
-                                                size_t axis)
+static std::string MakeDebugDumpTensorNZCodegenCCE(codegen::CCECodegen& codegen, const ir::VarPtr& tensor_var,
+                                                   const ir::TensorTypePtr& tensor_type,
+                                                   const ir::MakeTuplePtr& offsets_tuple,
+                                                   const ir::MakeTuplePtr& shapes_tuple)
 {
-    CHECK(tensor_type) << "debug.dump_tensor NZ lowering requires TensorType";
-    CHECK(axis < tensor_type->shape_.size()) << "debug.dump_tensor NZ axis out of range";
-    if (auto dim = ir::As<ir::ConstInt>(tensor_type->shape_[axis])) {
-        return std::to_string(dim->value_);
-    }
-    return codegen.GetExprAsCode(tensor_type->shape_[axis]);
-}
+    const size_t ndim = tensor_type->shape_.size();
+    INTERNAL_CHECK(ndim >= 2) << "debug.dump_tensor NZ lowering requires a tensor rank of at least 2";
+    const size_t row_axis = ndim - 2;
+    const size_t col_axis = ndim - 1;
 
-static std::string GetExprForNZDump(codegen::CCECodegen& codegen, const ir::ExprPtr& expr)
-{
-    if (auto value = ir::As<ir::ConstInt>(expr)) {
-        return std::to_string(value->value_);
-    }
-    return codegen.GetExprAsCode(expr);
-}
-
-static std::string ComputeNZDumpPhysicalOffsetExpr(codegen::CCECodegen& codegen, const ir::TensorTypePtr& tensor_type,
-                                                   const ir::MakeTuplePtr& offsets, const std::string& full_rows)
-{
-    CHECK(tensor_type) << "debug.dump_tensor NZ lowering requires TensorType";
-    CHECK(offsets && offsets->elements_.size() == 2) << "debug.dump_tensor NZ lowering requires 2D offsets";
     const int64_t c0 = cce::GetNZInnerCols(tensor_type->dtype_);
-    const std::string row_offset = GetExprForNZDump(codegen, offsets->elements_[0]);
-    const std::string col_offset = GetExprForNZDump(codegen, offsets->elements_[1]);
-    return "(" + col_offset + " * " + full_rows + " + " + row_offset + " * " + std::to_string(c0) + ")";
-}
+    const auto known_col_offset = ir::GetConstantDimension(offsets_tuple->elements_[col_axis]);
+    const auto known_window_rows = ir::GetConstantDimension(shapes_tuple->elements_[row_axis]);
+    const auto known_window_cols = ir::GetConstantDimension(shapes_tuple->elements_[col_axis]);
+    CHECK(!known_window_rows.has_value() || known_window_rows.value() % 16 == 0)
+        << "debug.dump_tensor: NZ window rows must be divisible by 16";
+    CHECK(!known_window_cols.has_value() || known_window_cols.value() % c0 == 0)
+        << "debug.dump_tensor: NZ window columns must be divisible by C0";
+    CHECK(!known_col_offset.has_value() || known_col_offset.value() % c0 == 0)
+        << "debug.dump_tensor: NZ column offset must be divisible by C0";
 
-struct DebugDumpTensorNZContext {
-    int debug_id = 0;
-    std::string tensor_name;
-    std::string base_ptr;
-    std::string start_offset;
-};
-
-static DebugDumpTensorNZContext PrepareDebugDumpTensorNZContext(codegen::CCECodegen& codegen,
-                                                                const ir::VarPtr& tensor_var,
-                                                                const ir::TensorTypePtr& tensor_type,
-                                                                const ir::MakeTuplePtr& offsets_tuple,
-                                                                const ir::MakeTuplePtr& shapes_tuple)
-{
-    ValidateDebugDumpNZWindowStructure(tensor_type, offsets_tuple, shapes_tuple);
-
-    DebugDumpTensorNZContext context;
-    context.debug_id = NextDebugDumpId();
-    context.tensor_name = codegen.GetVarName(tensor_var);
-    context.base_ptr = codegen.GetPointer(context.tensor_name);
-    if (context.base_ptr.empty()) {
-        context.base_ptr = context.tensor_name + ".data()";
+    const int debug_id = NextDebugDumpId();
+    const std::string tensor_name = codegen.GetVarName(tensor_var);
+    std::string base_ptr = codegen.GetPointer(tensor_name);
+    if (base_ptr.empty()) {
+        base_ptr = tensor_name + ".data()";
     }
-    return context;
-}
 
-static std::string MakeDebugDumpTensorNZStaticCodegenCCE(codegen::CCECodegen& codegen, const ir::VarPtr& tensor_var,
-                                                         const ir::TensorTypePtr& tensor_type,
-                                                         const ir::MakeTuplePtr& offsets_tuple,
-                                                         const ir::MakeTuplePtr& shapes_tuple)
-{
-    DebugDumpTensorNZContext context = PrepareDebugDumpTensorNZContext(codegen, tensor_var, tensor_type, offsets_tuple,
-                                                                       shapes_tuple);
-
-    auto get_static_const_int_or_throw = [](const ir::ExprPtr& expr, const std::string& message) -> int64_t {
-        auto value = ir::As<ir::ConstInt>(expr);
-        if (!value) {
-            throw pypto::ir::ValueError(message);
-        }
-        return value->value_;
-    };
-
-    const int64_t full_rows = get_static_const_int_or_throw(
-        tensor_type->shape_[0], "debug.dump_tensor: CCE NZ dump static path requires a static destination row shape");
-    const int64_t full_cols = get_static_const_int_or_throw(
-        tensor_type->shape_[1],
-        "debug.dump_tensor: CCE NZ dump static path requires a static destination column shape");
-    const int64_t row_offset = get_static_const_int_or_throw(
-        offsets_tuple->elements_[0], "debug.dump_tensor: CCE NZ dump static path requires a static row offset");
-    const int64_t col_offset = get_static_const_int_or_throw(
-        offsets_tuple->elements_[1], "debug.dump_tensor: CCE NZ dump static path requires a static column offset");
-    const int64_t rows = get_static_const_int_or_throw(
-        shapes_tuple->elements_[0], "debug.dump_tensor: CCE NZ dump static path requires a static row shape");
-    const int64_t cols = get_static_const_int_or_throw(
-        shapes_tuple->elements_[1], "debug.dump_tensor: CCE NZ dump static path requires a static column shape");
-
-    const int64_t physical_offset = ComputeStaticNZPhysicalOffset(tensor_type->dtype_, full_rows, row_offset,
-                                                                  col_offset);
-
-    const std::string effective_offset = AddStartOffsetIfNeeded(context.start_offset, std::to_string(physical_offset));
-    const std::string shape_alias = "__debug_dump_tensor_shape_" + std::to_string(context.debug_id);
-    const std::string stride_alias = "__debug_dump_tensor_stride_" + std::to_string(context.debug_id);
-    const std::string global_alias = "__debug_dump_tensor_type_" + std::to_string(context.debug_id);
-    const std::string view_name = "__debug_dump_tensor_view_" + std::to_string(context.debug_id);
-
-    codegen.Emit("using " + shape_alias + " = " + BuildStaticNZShapeType(tensor_type->dtype_, rows, cols) + ";");
-    codegen.Emit("using " + stride_alias + " = " + BuildStaticNZStrideType(tensor_type->dtype_, full_rows, full_cols) +
-                 ";");
-    codegen.Emit("using " + global_alias + " = GlobalTensor<" + codegen.GetTypeString(tensor_type->dtype_) + ", " +
-                 shape_alias + ", " + stride_alias + ", Layout::NZ>;");
-    codegen.Emit(global_alias + " " + view_name + "(" + context.base_ptr + " + " + effective_offset + ");");
-    codegen.Emit("TPRINT(" + view_name + ");");
-    return "";
-}
-
-static std::string MakeDebugDumpTensorNZDynamicCodegenCCE(codegen::CCECodegen& codegen, const ir::VarPtr& tensor_var,
-                                                          const ir::TensorTypePtr& tensor_type,
-                                                          const ir::MakeTuplePtr& offsets_tuple,
-                                                          const ir::MakeTuplePtr& shapes_tuple)
-{
-    DebugDumpTensorNZContext context = PrepareDebugDumpTensorNZContext(codegen, tensor_var, tensor_type, offsets_tuple,
-                                                                       shapes_tuple);
-
-    const std::string full_rows = GetTensorLogicalDimForNZDump(codegen, tensor_type, 0);
-    const std::string full_cols = GetTensorLogicalDimForNZDump(codegen, tensor_type, 1);
-    const bool is_full_tensor_window = IsFullTensorWindow(tensor_type, offsets_tuple, shapes_tuple);
-    const std::string rows = is_full_tensor_window ? full_rows : GetExprForNZDump(codegen, shapes_tuple->elements_[0]);
-    const std::string cols = is_full_tensor_window ? full_cols : GetExprForNZDump(codegen, shapes_tuple->elements_[1]);
-    const std::string physical_offset = AddStartOffsetIfNeeded(
-        context.start_offset, ComputeNZDumpPhysicalOffsetExpr(codegen, tensor_type, offsets_tuple, full_rows));
+    const std::string padded_rows = codegen.ComputeAlignedShapeDimension(tensor_type->shape_[row_axis], 16);
+    const std::string padded_cols = codegen.ComputeAlignedShapeDimension(tensor_type->shape_[col_axis], c0);
+    const std::string rows = codegen.GetExprAsCode(shapes_tuple->elements_[row_axis]);
+    const std::string cols = codegen.GetExprAsCode(shapes_tuple->elements_[col_axis]);
+    const std::string offset = codegen.ComputeTensorOffset(tensor_type, offsets_tuple);
 
     const std::string dtype = codegen.GetTypeString(tensor_type->dtype_);
-    const std::string shape_alias = "__debug_dump_tensor_shape_" + std::to_string(context.debug_id);
-    const std::string stride_alias = "__debug_dump_tensor_stride_" + std::to_string(context.debug_id);
-    const std::string global_alias = "__debug_dump_tensor_type_" + std::to_string(context.debug_id);
-    const std::string view_name = "__debug_dump_tensor_view_" + std::to_string(context.debug_id);
+    const std::string shape_alias = "__debug_dump_tensor_shape_" + std::to_string(debug_id);
+    const std::string stride_alias = "__debug_dump_tensor_stride_" + std::to_string(debug_id);
+    const std::string global_alias = "__debug_dump_tensor_type_" + std::to_string(debug_id);
+    const std::string view_name = "__debug_dump_tensor_view_" + std::to_string(debug_id);
 
     codegen.Emit("using " + shape_alias + " = pto::TileShape2D<" + dtype +
                  ", pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>;");
@@ -638,10 +475,53 @@ static std::string MakeDebugDumpTensorNZDynamicCodegenCCE(codegen::CCECodegen& c
                  ", pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>;");
     codegen.Emit("using " + global_alias + " = GlobalTensor<" + dtype + ", " + shape_alias + ", " + stride_alias +
                  ", Layout::NZ>;");
-    codegen.Emit(global_alias + " " + view_name + "(" + context.base_ptr + " + " + physical_offset + ", " +
-                 shape_alias + "(" + rows + ", " + cols + "), " + stride_alias + "(" + full_rows + ", " + full_cols +
-                 "));");
+    std::vector<std::string> batch_indices;
+    for (size_t axis = 0; axis < row_axis; ++axis) {
+        const std::string index = "__debug_dump_tensor_batch_" + std::to_string(debug_id) + "_" + std::to_string(axis);
+        batch_indices.push_back(index);
+        codegen.Emit("for (int " + index + " = 0; " + index + " < " +
+                     codegen.GetExprAsCode(shapes_tuple->elements_[axis]) + "; ++" + index + ") {");
+    }
+
+    std::string view_offset = offset;
+    if (!batch_indices.empty()) {
+        std::ostringstream batch_delta;
+        for (size_t axis = 0; axis < row_axis; ++axis) {
+            if (axis != 0) {
+                batch_delta << " + ";
+            }
+            batch_delta << batch_indices[axis];
+            for (size_t inner = axis + 1; inner < row_axis; ++inner) {
+                batch_delta << " * " << codegen.GetExprAsCode(tensor_type->shape_[inner]);
+            }
+            batch_delta << " * " << padded_rows << " * " << padded_cols;
+        }
+        const std::string delta = "(" + batch_delta.str() + ")";
+        view_offset = "(" + offset + " + " + delta + ")";
+
+        std::ostringstream batch_header;
+        batch_header << "cce::printf(\"=== [dump_tensor] Batch [";
+        for (size_t axis = 0; axis < row_axis; ++axis) {
+            if (axis != 0) {
+                batch_header << ", ";
+            }
+            batch_header << "%d";
+        }
+        batch_header << "] ===\\n\"";
+        for (size_t axis = 0; axis < row_axis; ++axis) {
+            batch_header << ", static_cast<int>(" << codegen.GetExprAsCode(offsets_tuple->elements_[axis]) << " + "
+                         << batch_indices[axis] << ")";
+        }
+        batch_header << ");";
+        codegen.Emit(batch_header.str());
+    }
+
+    codegen.Emit(global_alias + " " + view_name + "(" + base_ptr + " + " + view_offset + ", " + shape_alias + "(" +
+                 rows + ", " + cols + "), " + stride_alias + "(" + padded_rows + ", " + padded_cols + "));");
     codegen.Emit("TPRINT(" + view_name + ");");
+    for (size_t axis = 0; axis < row_axis; ++axis) {
+        codegen.Emit("}");
+    }
     return "";
 }
 
@@ -673,11 +553,7 @@ static std::string MakeDebugDumpTensorCodegenCCE(const ir::CallPtr& op, codegen:
     CHECK(shapes_tuple) << "debug.dump_tensor third argument must be a tuple (shapes)";
 
     if (cce::IsNZTensorType(tensor_type)) {
-        ValidateDebugDumpNZWindowStructure(tensor_type, offsets_tuple, shapes_tuple);
-        if (CanUseStaticDebugDumpNZFastPath(tensor_type, offsets_tuple, shapes_tuple)) {
-            return MakeDebugDumpTensorNZStaticCodegenCCE(codegen, tensor_var, tensor_type, offsets_tuple, shapes_tuple);
-        }
-        return MakeDebugDumpTensorNZDynamicCodegenCCE(codegen, tensor_var, tensor_type, offsets_tuple, shapes_tuple);
+        return MakeDebugDumpTensorNZCodegenCCE(codegen, tensor_var, tensor_type, offsets_tuple, shapes_tuple);
     }
 
     const int debug_id = NextDebugDumpId();
@@ -698,7 +574,7 @@ static std::string MakeDebugDumpTensorCodegenCCE(const ir::CallPtr& op, codegen:
     const std::string offset_expr = use_runtime_tensor_view ?
                                         ComputeRuntimeStrideBasedOffset(codegen, tensor_name, tensor_type,
                                                                         offsets_tuple, start_offset) :
-                                        cce::ComputeStrideBasedOffset(codegen, offsets_tuple, tensor_type);
+                                        codegen.ComputeTensorOffset(tensor_type, offsets_tuple);
 
     std::vector<std::string> shape_ctor_args;
     std::vector<std::string> stride_ctor_args;
@@ -1392,7 +1268,7 @@ static std::string MakeDcciCodegenCCE(const ir::CallPtr& op, codegen::CodegenBas
         if (op->args_.size() == 2) {
             auto offsets_tuple = std::dynamic_pointer_cast<const ir::MakeTuple>(op->args_[1]);
             if (offsets_tuple != nullptr) {
-                offset = cce::ComputeStrideBasedOffset(codegen, offsets_tuple, tensor_type);
+                offset = codegen.ComputeTensorOffset(tensor_type, offsets_tuple);
             } else {
                 CHECK(ir::As<ir::ScalarType>(op->args_[1]->GetType()) != nullptr)
                     << "system.dcci: tensor target offset must be a tuple or scalar expression";

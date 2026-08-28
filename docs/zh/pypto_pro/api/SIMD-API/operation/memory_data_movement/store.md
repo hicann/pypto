@@ -44,14 +44,24 @@ pypto_pro.language.store(dst_tensor, src_tile, offsets, *, relu_pre_mode=None, s
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_tensor` | 输出 | 数据类型：b8、b16、b32、b64<br>layout：支持`ND`、`DN`、`NZ`<br>offsets换算后的写入范围不得越过对应维度shape<br>原子累加时须预先初始化为零（或已知初值），累加在其上叠加 |
-| `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>内存空间：支持`Vec`(UB)或`Acc`(L0C)，不支持`Mat`(L1)；源在`Acc`时由FIX流水写回GM，源在`Vec`时走MTE3流水<br>首地址必须32字节对齐 |
+| `dst_tensor` | 输出 | 数据类型：b4、b8、b16、b32、b64<br>layout：支持`ND`、`DN`、`NZ`<br>offsets换算后的写入范围不得越过对应维度shape<br>原子累加时须预先初始化为零（或已知初值），累加在其上叠加 |
+| `src_tile` | 输入 | 数据类型：b4、b8、b16、b32、b64<br>内存空间：支持`Vec`(UB)或`Acc`(L0C)，不支持`Mat`(L1)；源在`Acc`时由FIX流水写回GM，源在`Vec`时走MTE3流水<br>首地址必须32字节对齐 |
 | `offsets` | 输入 | 单位元素个数，大小不超过对应维度的shape，不支持负数索引 |
 | `relu_pre_mode` | 输入 | 默认`None`（不融合ReLU）；可取`pl.ReluPreMode.NormalRelu`；与`scale`为`Tile`（per-channel）时互斥 |
 | `scale` | 输入 | 可选，随路量化比例：`float`（编译期标量）→ per-tensor量化；运行时`FP32`标量→自动重解释为IEEE-754位模式；运行时`INT`标量→须传预编码的float32位模式（`struct.pack("!f", v)`）；`Tile`（INT64、`MemorySpace.Scaling`、shape `[1, N]`，`N % 16 == 0`且`N <= 512`）→ per-channel量化（`store_fp`路径），用户预制deqTensor tile，框架直接复用（不自动分配/同步，用户负责load→move→sync(MTE1→FIX)），与`relu_pre_mode`、`phase`互斥；`Tensor`不支持（per-channel须以`Tile`传入）；`[N, 1]`逐行量化不支持 |
 | `order` | 输入 | 只支持配置tensor维度范围内的dim，只支持二维数组配置，其余配置报错<br>只支持升序排列（如 [0, 2]），不支持降序（如 [1, 0]）配置 |
 | `atomic` | 输入 | `pl.AtomicType.AtomicNone`（默认，覆盖写）或`pl.AtomicType.AtomicAdd`（原子累加，硬件对每个目的地址做元素级加法） |
 | `phase` | 输入 | `pl.STPhase.Unspecified`/`pl.STPhase.Partial`（中间累加步）/`pl.STPhase.Final`（最终步）；用硬件unit_flag接管cube/fixp间的握手，仅在matmul多步累加写回GM时使用；与`scale`为`Tile`（per-channel）时互斥 |
+
+## 约束说明
+
+当`dst_tensor`声明为`pypto_pro.language.NZ`时，其物理排布、分形轴和完整Tensor shape约束见[`TensorLayout`](../../basic_data_structures/TensorLayout.md#tensor布局)。`store`还需满足以下NZ搬运约束：
+
+- 仅支持NZ Tile到GM NZ的同布局搬运，源Tile位于`Vec`（UB）或`Acc`（L0C）；`order`省略或指定Tensor最后两轴的正序。
+- Tile shape和valid M/N须满足M按16、N按目标Tensor dtype对应的`C0`对齐，N方向offset也须按`C0`对齐。
+- 高维offset的前导项选择batch，最后两项为M、N方向的逻辑元素坐标。
+
+L0C Acc NZ直接写回GM NZ仅支持`validM == Mp`或`validN <= C0`，其中`Mp=ceil(fullM/16)*16`；不满足时，需显式执行L0C Acc NZ→UB Vec NZ→GM NZ。
 
 ## 流水类型
 

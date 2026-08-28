@@ -691,6 +691,20 @@ class TypeResolver:
         except (TypeError, ValueError) as exc:
             raise ParserTypeError(str(exc), span=span) from exc
 
+    def _validate_tensor_layout(
+        self,
+        shape: list[int] | list[ir.Expr],
+        layout: "ir.TensorLayout",
+        node: ast.expr,
+    ) -> None:
+        """Validate layout constraints known when a Tensor annotation is parsed."""
+        if layout != ir.TensorLayout.NZ:
+            return
+
+        span = self._get_span(node)
+        if len(shape) < 2:
+            raise ParserTypeError("NZ Tensor requires rank >= 2", span=span)
+
     def _resolve_subscript_type(self, subscript_node: ast.Subscript) -> ir.Type:
         """Resolve subscript type annotation.
 
@@ -766,11 +780,13 @@ class TypeResolver:
                 memref = self.resolve_memref(third)
                 return ir.TensorType(shape, dtype, memref)
             layout = self.resolve_layout(third)
+            self._validate_tensor_layout(shape, layout, third)
             tensor_view = ir.TensorView([], layout)
             return ir.TensorType(shape, dtype, None, tensor_view)
 
         # 4 args: [shape, dtype, layout, memref] -> Tensor only
         layout = self.resolve_layout(slice_value.elts[2])
+        self._validate_tensor_layout(shape, layout, slice_value.elts[2])
         tensor_view = ir.TensorView([], layout)
         memref_node = slice_value.elts[3]
         if not self._is_memref_node(memref_node):

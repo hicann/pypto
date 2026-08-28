@@ -1188,7 +1188,7 @@ TEST(BackendCceOpsTest, DebugDumpTensorSelectsDnLayout)
     EXPECT_NE(generated.find("Layout::DN"), std::string::npos);
 }
 
-TEST(BackendCceOpsTest, DebugDumpTensorNzStaticAlignedWindow)
+TEST(BackendCceOpsTest, DebugDumpTensorNzStaticWindowUsesCommonView)
 {
     auto tensor = MakeTensorVar("nz_data", {32, 64}, ir::DataType::FP16, ir::TensorLayout::NZ);
     auto call = std::make_shared<const ir::Call>(
@@ -1198,13 +1198,16 @@ TEST(BackendCceOpsTest, DebugDumpTensorNzStaticAlignedWindow)
         ir::Span::Unknown());
 
     auto generated = RunCodegen("debug.dump_tensor", call);
-    EXPECT_NE(generated.find("pto::Shape<1, 2, 1, 16, 16>"), std::string::npos);
-    EXPECT_NE(generated.find("pto::Stride<2048, 512, 256, 16, 1>"), std::string::npos);
+    EXPECT_NE(generated.find("pto::TileShape2D<"), std::string::npos);
+    EXPECT_NE(generated.find("pto::BaseShape2D<"), std::string::npos);
+    EXPECT_NE(generated.find("pto::DYNAMIC, pto::DYNAMIC, Layout::NZ"), std::string::npos);
     EXPECT_NE(generated.find("Layout::NZ"), std::string::npos);
-    EXPECT_NE(generated.find("nz_data.data() + 768"), std::string::npos);
+    EXPECT_NE(generated.find("nz_data.data() + (16 * 32 + 16 * 16)"), std::string::npos);
+    EXPECT_NE(generated.find("(16, 32)"), std::string::npos);
+    EXPECT_NE(generated.find("(32, 64)"), std::string::npos);
 }
 
-TEST(BackendCceOpsTest, DebugDumpTensorNzMisalignedWindowUsesDynamicView)
+TEST(BackendCceOpsTest, DebugDumpTensorNzUnalignedRowOffsetUsesCommonView)
 {
     auto tensor = MakeTensorVar("nz_data", {32, 64}, ir::DataType::FP16, ir::TensorLayout::NZ);
     auto call = std::make_shared<const ir::Call>(
@@ -1217,6 +1220,101 @@ TEST(BackendCceOpsTest, DebugDumpTensorNzMisalignedWindowUsesDynamicView)
     EXPECT_NE(generated.find("pto::TileShape2D<"), std::string::npos);
     EXPECT_NE(generated.find("pto::DYNAMIC, pto::DYNAMIC, Layout::NZ"), std::string::npos);
     EXPECT_NE(generated.find("(0 * 32 + 1 * 16)"), std::string::npos);
+    EXPECT_NE(generated.find("TPRINT(__debug_dump_tensor_view_"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, DebugDumpTensorNzPadsTensorAndRejectsMisalignedWindow)
+{
+    auto make_call = [](const std::vector<int64_t>& tensor_shape, int64_t col_offset,
+                        const std::vector<int64_t>& window_shape) {
+        auto tensor = MakeTensorVar("nz_data", tensor_shape, ir::DataType::FP16, ir::TensorLayout::NZ);
+        return std::make_shared<const ir::Call>(
+            "debug.dump_tensor",
+            std::vector<ir::ExprPtr>{tensor, MakeTuple({MakeConstInt(0), MakeConstInt(col_offset)}),
+                                     MakeTuple({MakeConstInt(window_shape[0]), MakeConstInt(window_shape[1])})},
+            ir::Span::Unknown());
+    };
+
+    const auto non_aligned_tensor = RunCodegen("debug.dump_tensor", make_call({31, 63}, 0, {16, 16}));
+    EXPECT_NE(non_aligned_tensor.find("(32, 64)"), std::string::npos);
+    EXPECT_THROW(RunCodegen("debug.dump_tensor", make_call({32, 64}, 0, {15, 16})), npu::tile_fwk::Error);
+    EXPECT_THROW(RunCodegen("debug.dump_tensor", make_call({32, 64}, 0, {16, 8})), npu::tile_fwk::Error);
+    EXPECT_THROW(RunCodegen("debug.dump_tensor", make_call({32, 64}, 8, {16, 16})), npu::tile_fwk::Error);
+}
+
+TEST(BackendCceOpsTest, DebugDumpTensorNzDynamicShapeUsesCommonView)
+{
+    auto index_type = std::make_shared<const ir::ScalarType>(ir::DataType::INDEX);
+    auto rows = MakeVar("rows", index_type);
+    auto cols = MakeVar("cols", index_type);
+    auto tensor = MakeDynamicTensorVar("nz_data", std::vector<ir::ExprPtr>{rows, cols}, ir::DataType::FP16,
+                                       ir::TensorLayout::NZ);
+    auto call = std::make_shared<const ir::Call>(
+        "debug.dump_tensor",
+        std::vector<ir::ExprPtr>{tensor, MakeTuple({MakeConstInt(0), MakeConstInt(0)}), MakeTuple({rows, cols})},
+        ir::Span::Unknown());
+
+    auto generated = RunCodegen("debug.dump_tensor", call);
+    EXPECT_NE(generated.find("pto::TileShape2D<"), std::string::npos);
+    EXPECT_NE(generated.find("pto::BaseShape2D<"), std::string::npos);
+    EXPECT_NE(generated.find("(rows, cols)"), std::string::npos);
+    EXPECT_NE(generated.find("((rows + 15) / 16 * 16)"), std::string::npos);
+    EXPECT_NE(generated.find("((cols + 15) / 16 * 16)"), std::string::npos);
+    EXPECT_NE(generated.find("TPRINT(__debug_dump_tensor_view_"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, DebugDumpTensorHighDimensionalNzUsesBatchViews)
+{
+    auto tensor = MakeTensorVar("nz_data", {2, 3, 32, 64}, ir::DataType::FP16, ir::TensorLayout::NZ);
+    auto call = std::make_shared<const ir::Call>(
+        "debug.dump_tensor",
+        std::vector<ir::ExprPtr>{tensor,
+                                 MakeTuple({MakeConstInt(1), MakeConstInt(0), MakeConstInt(1), MakeConstInt(16)}),
+                                 MakeTuple({MakeConstInt(1), MakeConstInt(2), MakeConstInt(16), MakeConstInt(32)})},
+        ir::Span::Unknown());
+
+    auto generated = RunCodegen("debug.dump_tensor", call);
+    EXPECT_NE(generated.find("for (int __debug_dump_tensor_batch_"), std::string::npos);
+    EXPECT_NE(generated.find("=== [dump_tensor] Batch [%d, %d]"), std::string::npos);
+    EXPECT_NE(generated.find("1 * 3 * 32 * 64 + 0 * 32 * 64 + 16 * 32 + 1 * 16"), std::string::npos);
+    EXPECT_NE(generated.find(" * 3 * 32 * 64"), std::string::npos);
+    EXPECT_NE(generated.find(" * 32 * 64"), std::string::npos);
+    EXPECT_NE(generated.find("(16, 32)"), std::string::npos);
+    EXPECT_NE(generated.find("(32, 64)"), std::string::npos);
+    EXPECT_NE(generated.find("TPRINT(__debug_dump_tensor_view_"), std::string::npos);
+
+    auto invalid_call = std::make_shared<const ir::Call>(
+        "debug.dump_tensor",
+        std::vector<ir::ExprPtr>{tensor,
+                                 MakeTuple({MakeConstInt(0), MakeConstInt(0), MakeConstInt(0), MakeConstInt(0)}),
+                                 MakeTuple({MakeConstInt(1), MakeConstInt(1), MakeConstInt(16), MakeConstInt(8)})},
+        ir::Span::Unknown());
+    EXPECT_THROW(RunCodegen("debug.dump_tensor", invalid_call), npu::tile_fwk::Error);
+}
+
+TEST(BackendCceOpsTest, DebugDumpTensorHighDimensionalDynamicNzUsesBatchViews)
+{
+    auto index_type = std::make_shared<const ir::ScalarType>(ir::DataType::INDEX);
+    auto batch = MakeVar("batch", index_type);
+    auto heads = MakeVar("heads", index_type);
+    auto rows = MakeVar("rows", index_type);
+    auto cols = MakeVar("cols", index_type);
+    auto tensor = MakeDynamicTensorVar("nz_data", std::vector<ir::ExprPtr>{batch, heads, rows, cols},
+                                       ir::DataType::FP16, ir::TensorLayout::NZ);
+    auto call = std::make_shared<const ir::Call>(
+        "debug.dump_tensor",
+        std::vector<ir::ExprPtr>{tensor,
+                                 MakeTuple({MakeConstInt(0), MakeConstInt(0), MakeConstInt(0), MakeConstInt(0)}),
+                                 MakeTuple({batch, heads, rows, cols})},
+        ir::Span::Unknown());
+
+    auto generated = RunCodegen("debug.dump_tensor", call);
+    EXPECT_NE(generated.find("< batch;"), std::string::npos);
+    EXPECT_NE(generated.find("< heads;"), std::string::npos);
+    EXPECT_NE(generated.find(" * heads * ((rows + 15) / 16 * 16) * ((cols + 15) / 16 * 16)"), std::string::npos);
+    EXPECT_NE(generated.find(" * ((rows + 15) / 16 * 16) * ((cols + 15) / 16 * 16)"), std::string::npos);
+    EXPECT_NE(generated.find("(rows, cols)"), std::string::npos);
+    EXPECT_NE(generated.find("=== [dump_tensor] Batch [%d, %d]"), std::string::npos);
     EXPECT_NE(generated.find("TPRINT(__debug_dump_tensor_view_"), std::string::npos);
 }
 

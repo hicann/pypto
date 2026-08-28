@@ -47,9 +47,9 @@ pypto_pro.language.dump_data(data, offsets=None, shapes=None, *, workspace=None,
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `data` | 输入 | 必须是Tensor（TensorType）或Tile（TileType），其他类型报`TypeError` |
+| `data` | 输入 | 必须是Tensor（TensorType）或Tile（TileType），其他类型报`TypeError`。Tensor暂不支持`pypto_pro.language.DT_FP4`、`pypto_pro.language.DT_FP4E2M1`和`pypto_pro.language.DT_FP4E1M2`类型 |
 | `offsets` | 输入 | 由整型常量或运行时整型标量表达式组成的序列，长度须等于数据的维数；须与`shapes`同时提供或同时为`None`。Tile窗口当前仅支持二维Tile |
-| `shapes` | 输入 | 由整型常量或运行时整型标量表达式组成的序列，长度须等于数据的维数；须与`offsets`同时提供或同时为`None`。其中编译期常量必须大于0；Tensor窗口模式还要求最内维stride为编译期常量1。Tile窗口要求二维且Tile物理shape为编译期常量 |
+| `shapes` | 输入 | 由整型常量或运行时整型标量表达式组成的序列，长度须等于数据的维数；须与`offsets`同时提供或同时为`None`。其中编译期常量必须大于0；Tensor窗口模式还要求最内维stride为编译期常量1。NZ Tensor窗口须保持完整分形：M shape按16对齐，N shape和offset按C0对齐；前导维按batch逐个打印。Tile窗口要求二维且Tile物理shape为编译期常量 |
 | `workspace` | 输入 | 仅当`data`为Acc Tile时有效；Tensor传入该参数会报`ValueError`，其他内存空间的Tile会在IR校验时报错。必须是与Tile dtype相同的GM `TensorType`。后端会先将完整Acc Tile写入workspace，即使只打印窗口，workspace也必须至少容纳完整物理Tile；当前仅支持二维、静态物理shape的Acc Tile |
 | `loc` | 输入 | `True`或`False`（默认） |
 

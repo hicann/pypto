@@ -39,8 +39,8 @@ pypto_pro.language.load_tile(dst_tile, src_tensor, tile_offsets, *, order=None)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_tile` | 输出 | 数据类型：b8、b16、b32、b64<br>尾块处理：<br>• 可通过set_validshape设置尾块大小，Tile shape需要32字节对齐，不对齐报错<br>• valid_shape可以不对齐<br>• Vec ND尾块不需要配置compact；涉及紧凑排列、分形转换或Cube计算时，按对应数据路径配置compact = 1，详见[`CompactMode`](../../basic_data_structures/CompactMode.md)和[尾块处理](../../../../tutorials/operator_development/tile_based_python_programming/tail_block_handling.md)<br>• 支持设定padding值<br>地址配置：<br>• 作为`load_tile`目的Tile时，只支持`Mat`（L1）和`Vec`（UB）；`Left`（L0A）、`Right`（L0B）、`Acc`（L0C）、`Scaling`、`ScaleLeft`、`ScaleRight`等其他Tile内存空间由`move`、`matmul`或`store`等对应接口使用<br>• Cube侧目的Tile必须为`Mat`（L1），Vector侧目的Tile必须为`Vec`（UB）；MX scale的E8M0 Tile先load到`Mat`（L1）的ZZ/NN layout Tile，再通过`move`搬入`ScaleLeft`/`ScaleRight`<br>• L1、UB缓冲区首地址必须32字节对齐，不对齐编译报错 |
-| `src_tensor` | 输入 | 数据类型：b8、b16、b32、b64<br>layout：支持`ND`、`DN`、`NZ`<br>stride：支持配置stride，stride维度需要等于Tensor维度数，默认不配置时是尾轴stride = 1的连续场景 |
+| `dst_tile` | 输出 | 数据类型：b4、b8、b16、b32、b64<br>尾块处理：<br>• 可通过set_validshape设置尾块大小，Tile shape需要32字节对齐，不对齐报错<br>• valid_shape可以不对齐<br>• Vec ND尾块不需要配置compact；涉及紧凑排列、分形转换或Cube计算时，按对应数据路径配置compact = 1，详见[`CompactMode`](../../basic_data_structures/CompactMode.md)和[尾块处理](../../../../tutorials/operator_development/tile_based_python_programming/tail_block_handling.md)<br>• 支持设定padding值<br>地址配置：<br>• 作为`load_tile`目的Tile时，只支持`Mat`（L1）和`Vec`（UB）；`Left`（L0A）、`Right`（L0B）、`Acc`（L0C）、`Scaling`、`ScaleLeft`、`ScaleRight`等其他Tile内存空间由`move`、`matmul`或`store`等对应接口使用<br>• Cube侧目的Tile必须为`Mat`（L1），Vector侧目的Tile必须为`Vec`（UB）；MX scale的E8M0 Tile先load到`Mat`（L1）的ZZ/NN layout Tile，再通过`move`搬入`ScaleLeft`/`ScaleRight`<br>• L1、UB缓冲区首地址必须32字节对齐，不对齐编译报错 |
+| `src_tensor` | 输入 | 数据类型：b4、b8、b16、b32、b64<br>layout：支持`ND`、`DN`、`NZ` |
 | `tile_offsets` | 输入 | 单位为Tile块索引，换算后的绝对偏移不超过对应维度的shape，不支持负数索引<br>被切分的维度（由`order`指定）按`块索引 × tile该维大小`换算；其余维度的取值按绝对偏移直接使用 |
 | `order` | 输入 | 只支持配置Tensor维度范围内两个互不重复的dim<br>每个元素按顺序表示对应Tile轴在Tensor中的绝对轴索引；升序为ND，反序为DN<br>E8M0搬入fractal-32 ZZ/NN Tile时，最后一轴固定作为物理phase轴，不能在`order`中选择；MX scale应显式指定两个矩阵轴<br>省略时默认取Tensor的最后两维`[ndim-2, ndim-1]`（不转置） |
 
@@ -49,6 +49,10 @@ pypto_pro.language.load_tile(dst_tile, src_tensor, tile_offsets, *, order=None)
 MTE2（GM → L1/UB的搬入流水）。
 
 ## 约束说明
+
+当`src_tensor`声明为`pypto_pro.language.NZ`时，其物理排布和完整Tensor shape约束见[`TensorLayout`](../../basic_data_structures/TensorLayout.md#tensor布局)，同布局搬运、目标Tile和`order`约束与[`load`](load.md#约束说明)一致。`load_tile`还需满足以下NZ搬运约束：
+
+- `tile_offsets`按Tile块索引寻址：最后两项分别乘以Tile的M、N shape，前导项选择batch；换算后的M、N offset需分别按16和Tensor dtype对应的`C0`对齐。
 
 当前`DT_FP8E8M0` Tensor搬入`fractal=32`的`ZZ`/`NN` Mat（L1）Tile，仅支持作为`matmul_mx`/`matmul_mx_acc`的scale搬运。普通E8M0数据不支持使用该目标组合；满足该组合的`load_tile`会按MX scale解释，并要求源Tensor的最后一轴是长度为2的物理phase轴。
 
