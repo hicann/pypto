@@ -43,6 +43,7 @@ static const uint16_t kNumOne = 1u;
 static const uint16_t kNumTwo = 2u;
 static const uint16_t kNumThree = 3u;
 static const uint16_t kNumFour = 4u;
+static const uint16_t kNumFive = 5u;
 static const uint16_t kNumEight = 8u;
 static const uint16_t kNumForteen = 14u;
 static const uint16_t kNumExpFour = 16u;
@@ -371,17 +372,19 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest3)
 
     uint32_t slice_num = kNumZero;
     uint32_t contract_num = kNumZero;
+    uint32_t assemble_num = kNumZero;
     for (auto& op : currFunctionPtr->Operations()) {
         if (op.GetOpcode() == Opcode::OP_SLICE) {
-            EXPECT_NE(assemble_op->GetOpMagic(), op.GetOpMagic());
             ++slice_num;
         } else if (op.GetOpcode() == Opcode::OP_CONTRACT) {
-            EXPECT_NE(assemble_op->GetOpMagic(), op.GetOpMagic());
             ++contract_num;
+        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assemble_num;
         }
     }
-    EXPECT_EQ(slice_num, kNumOne);
-    EXPECT_EQ(contract_num, kNumOne);
+    EXPECT_EQ(slice_num, kNumZero);
+    EXPECT_EQ(contract_num, kNumZero);
+    EXPECT_EQ(assemble_num, kNumOne);
 }
 
 /*
@@ -411,6 +414,7 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest4)
     uint32_t div_num = kNumZero;
     uint32_t slice_num = kNumZero;
     uint32_t contract_num = kNumZero;
+    uint32_t assemble_num = kNumZero;
     for (auto& op : currFunctionPtr->Operations()) {
         if (op.GetOpcode() == Opcode::OP_DIV) {
             EXPECT_EQ(op.GetInputOperand(kSizeZero)->shape, tile_shape);
@@ -421,13 +425,14 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest4)
             ++slice_num;
         } else if (op.GetOpcode() == Opcode::OP_CONTRACT) {
             ++contract_num;
+        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assemble_num;
         }
     }
     EXPECT_EQ(div_num, kNumFour);
-    // div: 8 input slices + 4 assemble input slices
-    EXPECT_EQ(slice_num, kNumEight + kNumFour);
-    // div: 4 output contracts + 4 assemble output contracts
-    EXPECT_EQ(contract_num, kNumFour + kNumFour);
+    EXPECT_EQ(slice_num, kNumEight);
+    EXPECT_EQ(contract_num, kNumFour);
+    EXPECT_EQ(assemble_num, kNumOne);
 }
 
 /*
@@ -556,7 +561,7 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionSTest1)
         }
     }
     EXPECT_EQ(view_num, kNumOne);
-    EXPECT_EQ(assemble_num, kNumZero);
+    EXPECT_EQ(assemble_num, kNumOne);
     EXPECT_EQ(exp_num, kNumTwo);
     EXPECT_GT(slice_num, kNumZero);
     EXPECT_EQ(slice_num, contract_num);
@@ -648,7 +653,7 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionSTest2)
         }
     }
     EXPECT_EQ(view_num, kNumOne);
-    EXPECT_EQ(assemble_num, kNumOne);
+    EXPECT_EQ(assemble_num, kNumFive);
     EXPECT_GT(slice_num, kNumZero);
     EXPECT_EQ(slice_num, contract_num);
     EXPECT_EQ(exp_num, kNumFour);

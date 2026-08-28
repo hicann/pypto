@@ -194,6 +194,36 @@ std::unordered_set<Operation*> CollectAssembleSsaDstViewSkipExpandOps(const std:
     return skipExpandOps;
 }
 
+// ASSEMBLE 的输出是函数的 outcast（即直接作为函数输出张量）时，暂不展开为SLICE + CONTRACT。
+// 理论上，由于assemble前的实际运算op会展开并在末尾插入contract，此时assemble可以单纯表示视图语义，表达本次结果再整个tensor中的位置
+// 流程中，当assemble前存在多个不同tile的op汇聚时，会导致assemble的tile无法与前面的展开一一匹配，无法完美处理，导致冗余搬运。
+// 但若assemble携带token依赖（WAW/WAR），仍需展开以将semantic token传播并转换为contract上的NORMAL
+// token，保证下游同步正确。
+std::unordered_set<Operation*> CollectAssembleOutcastSkipExpandOps(Function& function,
+                                                                   const std::vector<OperationPtr>& tensorOperations)
+{
+    std::unordered_set<Operation*> skipExpandOps;
+    const auto& outcasts = function.GetOutcast();
+    for (const auto& opPtr : tensorOperations) {
+        if (opPtr == nullptr || opPtr->GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        const auto& oOperands = opPtr->GetOOperands();
+        if (oOperands.empty()) {
+            continue;
+        }
+        for (const auto& outcast : outcasts) {
+            if (SameLogicalTensor(outcast, oOperands[0])) {
+                if (opPtr->result_token_.empty() && opPtr->tokens_.empty()) {
+                    skipExpandOps.insert(opPtr.get());
+                }
+                break;
+            }
+        }
+    }
+    return skipExpandOps;
+}
+
 bool IsMatmulOpcode(Opcode opcode)
 {
     static const std::unordered_set<Opcode> kMatmulOps = {Opcode::OP_A_MUL_B,  Opcode::OP_A_MULACC_B,
@@ -610,6 +640,8 @@ Status ExpandFunction::Expandfunction(Function& function) const
         }
     }
     if (expandViewAssemble) {
+        auto outcastSkipOps = CollectAssembleOutcastSkipExpandOps(function, tensorOperations);
+        skipExpandOps.insert(outcastSkipOps.begin(), outcastSkipOps.end());
         RefreshViewAssembleTileShapes(tensorOperations, skipExpandOps);
     }
     if (ClearIOOperand(tensorOperations) != SUCCESS) {

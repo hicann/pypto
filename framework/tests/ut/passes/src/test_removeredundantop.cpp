@@ -500,7 +500,9 @@ view->exp(end assemble)->view(end assemble)->expand(end assemble)->exp(end assem
                                                                  ->exp(end assemble)
 
 exp(end contract*3) ->exp(end contract)
-                    ->exp(end contract)
+                     ->exp(end contract)
+outcast assemble is no longer split in ExpandFunction (kept as view semantic);
+RemoveRedundantOp later converts it, yielding one extra slice+contract pair.
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest1)
 {
@@ -554,7 +556,7 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest1)
             expand_num++;
         }
     }
-    EXPECT_EQ(slice_num, kNumOne);
+    EXPECT_EQ(slice_num, kNumTwo);
     EXPECT_EQ(expand_num, kNumZero);
 }
 
