@@ -1438,7 +1438,7 @@ static void CheckIndexPutParamsInvalid(const Tensor& self, const std::vector<Ten
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, self.GetShape().size() + 1 == indices.size() + values.GetShape().size())
         << "unsupport the inputs shape combination: dimSelf + 1 != indicesSize + dimValues";
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, values.GetShape()[0] == indicesShape)
-        << "valuesFirstDim should equal to indicesShape";
+        << "valuesFirstDim should be equal to indicesShape";
     for (size_t i = 1; i < values.GetShape().size(); i++) {
         CHECK(VectorErrorCode::ERR_PARAM_INVALID,
               self.GetShape()[self.GetShape().size() - i] == values.GetShape()[values.GetShape().size() - i])

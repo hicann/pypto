@@ -699,7 +699,7 @@ void CoreMachine::AnalysisDeadlock(std::set<int>& unissuedTileMagics)
     std::set<int> deadLockSrcOpMagic;
     for (auto& opmagic : unissuedTileMagics) {
         auto& op = tileOps[opmagic];
-        SIMULATION_LOGW("[AnalysisDeadlock] Uissued Tileop: %s", op->Dump().c_str());
+        SIMULATION_LOGW("[AnalysisDeadlock] Unissued Tileop: %s", op->Dump().c_str());
         bool srcReady = true;
         for (auto& src : op->iOperand) {
             for (auto& ptr : src->producers) {

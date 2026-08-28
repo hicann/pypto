@@ -915,7 +915,7 @@ std::tuple<Tensor, Tensor> sort(const Tensor& self, int axis = -1, bool descendi
     if (checkIsExceedUB(vecTileShape.tile, self.GetShape(), axis, 32)) {
         int64_t tileNum = (self.GetShape()[axis] + vecTileShape[axis] - 1) / vecTileShape[axis];
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, tileNum < 128)
-            << "For Large Shape in GM, the number of tile on sort axis must less than 128.";
+            << "For Large Shape in GM, the number of tile on sort axis must be less than 128.";
     }
 
     auto transposeSelf = Transpose(self, {axis, len - 1});

@@ -185,3 +185,21 @@ TEST_F(OperationOpsTest, Axpy_UnsupportedOtherDim)
 
     FUNCTION("AxpyUnsupportedOtherDim", {self, other}) { EXPECT_THROW(Axpy(self, other, 1.0f), std::exception); }
 }
+
+TEST_F(OperationOpsTest, Squeeze_DimensionExceedsMax)
+{
+    std::vector<int64_t> shape5d = {1, 2, 3, 4, 5};
+    Tensor input(DT_FP32, shape5d);
+    std::vector<int> dim = {0};
+
+    FUNCTION("SqueezeDimExceedsMax", {input}) { EXPECT_THROW(Squeeze(input, dim), std::exception); }
+}
+
+TEST_F(OperationOpsTest, Squeeze_DuplicateDimensions)
+{
+    std::vector<int64_t> shape4d = {1, 2, 1, 4};
+    Tensor input(DT_FP32, shape4d);
+    std::vector<int> dim = {0, 0};
+
+    FUNCTION("SqueezeDuplicateDims", {input}) { EXPECT_THROW(Squeeze(input, dim), std::exception); }
+}

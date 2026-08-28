@@ -88,7 +88,8 @@ private:
         auto data_type = tensor->Datatype();
         if (tail_axis * BytesOf(data_type) % BLOCK_SIZE != 0) {
             auto opName = OpcodeManager::Inst().GetOpcodeStr(op.GetOpcode());
-            oss << "Operation: " << opName << ". The last axis of Tile shape " << tail_axis << " is not align 32B.";
+            oss << "Operation: " << opName << ". The last axis of Tile shape " << tail_axis
+                << " is not aligned to 32B.";
             return false;
         }
         return true;

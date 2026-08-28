@@ -726,7 +726,7 @@ static void SqueezeParamsValidCheck(const Tensor& input, std::vector<int>& dim)
 {
     Shape oriShape = input.GetShape();
     size_t shapeSize = oriShape.size();
-    CHECK_OP(shapeSize <= SHAPE_DIM4) << "The input dimension only support 1~4. Cur dimension is " << shapeSize;
+    CHECK_OP(shapeSize <= SHAPE_DIM4) << "The input dimension only supports 1~4. Cur dimension is " << shapeSize;
 
     if (dim.empty()) {
         for (size_t i = 0; i < shapeSize; i++) {
@@ -736,7 +736,7 @@ static void SqueezeParamsValidCheck(const Tensor& input, std::vector<int>& dim)
     CHECK_OP(dim.size() <= shapeSize) << "The dim.size <= input.dim is not matched. dim.size is " << dim.size()
                                       << ", input.dim is " << shapeSize;
     std::set<int> dupDimSet(dim.begin(), dim.end());
-    CHECK_OP(dupDimSet.size() == dim.size()) << "There is duplicates elements in dim";
+    CHECK_OP(dupDimSet.size() == dim.size()) << "There are duplicate elements in dim";
     for (size_t i = 0; i < dim.size(); i++) {
         CHECK_OP(dim[i] < static_cast<int>(shapeSize) && dim[i] >= -(static_cast<int>(shapeSize)))
             << "dim " << i << " in dim is out of range";

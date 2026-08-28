@@ -135,7 +135,7 @@ void CheckTensorShapeSize(const LogicalTensorPtr& tensor, const std::string& opN
     for (const auto& value : shape) {
         if (value > INT32_MAX) {
             CHECK(VectorErrorCode::ERR_PARAM_INVALID, false)
-                << "The dim value of tensor must less than or equal to INT32_MAX(2,147,483,647), "
+                << "The dim value of tensor must be less than or equal to INT32_MAX(2,147,483,647), "
                 << "actual dim value: " << value << " for op: " << opName;
         }
         if (value > 0) {
@@ -143,7 +143,7 @@ void CheckTensorShapeSize(const LogicalTensorPtr& tensor, const std::string& opN
         }
         if (shapeSize > INT32_MAX) {
             CHECK(VectorErrorCode::ERR_PARAM_INVALID, false)
-                << "The shape size of tensor must less than or equal to INT32_MAX(2,147,483,647), "
+                << "The shape size of tensor must be less than or equal to INT32_MAX(2,147,483,647), "
                 << "actual shape size: " << shapeSize << " for op: " << opName;
         }
     }
@@ -165,7 +165,7 @@ void CheckDstShapeSize(const std::vector<int64_t>& shape, const std::string& opN
     for (const auto& value : shape) {
         if (value > INT32_MAX) {
             CHECK(VectorErrorCode::ERR_PARAM_INVALID, false)
-                << "The dim value of dst shape must less than or equal to INT32_MAX(2,147,483,647), "
+                << "The dim value of dst shape must be less than or equal to INT32_MAX(2,147,483,647), "
                 << "actual dim value: " << value << " for op: " << opName;
         }
         if (value > 0) {
@@ -173,7 +173,7 @@ void CheckDstShapeSize(const std::vector<int64_t>& shape, const std::string& opN
         }
         if (shapeSize > INT32_MAX) {
             CHECK(VectorErrorCode::ERR_PARAM_INVALID, false)
-                << "The shape size of dst must less than or equal to INT32_MAX(2,147,483,647), "
+                << "The shape size of dst must be less than or equal to INT32_MAX(2,147,483,647), "
                 << "actual shape size: " << shapeSize << " for op: " << opName;
         }
     }

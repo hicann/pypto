@@ -209,7 +209,7 @@ public:
         }
 
         if (devCtrlFlowCache->IsActivatedPartialCache(devStartArgs)) {
-            DEV_INFO("ControlFlowCache: 1");
+            DEV_INFO("ControlFlowCache: activated");
             // Actual run
             if (!devCtrlFlowCache->isRelocDataDev) {
                 devCtrlFlowCache->isRelocDataDev = true;

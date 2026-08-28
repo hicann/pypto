@@ -96,3 +96,12 @@ TEST_F(TestTensor, InvalidShapeValue)
     std::vector<int64_t> shape = {-2, 16};
     EXPECT_THROW(Tensor(DT_FP32, shape, "A"), std::exception);
 }
+
+TEST_F(TestTensor, GetRawDataSizeWithNegativeDimension)
+{
+    std::vector<int64_t> shape = {-1, 16};
+    Tensor a(DT_FP32, shape, "A");
+    auto storage = a.GetStorage(false);
+    auto rawTensor = storage->GetRawTensor();
+    EXPECT_EQ(rawTensor->GetRawDataSize(), INT64_MAX);
+}

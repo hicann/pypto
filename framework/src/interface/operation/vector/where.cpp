@@ -172,7 +172,7 @@ void TiledWhereOperation(Function& function, const TileShape& tileShape, const L
     if (condition->Datatype() == DT_UINT8) {
         int bitsNumOfByte = 8;
         CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, tileShape.GetVecTile().tile.back() % bitsNumOfByte == 0)
-            << "The tileShape of last axis need to 8 align!";
+            << "The tileShape of last axis must be aligned to 8 bytes!";
         conditionValidShape.back() = conditionValidShape.back() / bitsNumOfByte;
         conditionExpandShape.back() = conditionExpandShape.back() / bitsNumOfByte;
     }
@@ -321,10 +321,10 @@ LogicalTensorPtr TensorWhereOperation(Function& function, const Tensor& conditio
         int broadcastFlag = 1;
         CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, input.GetStorage()->shape.back() % bitsNumOfByte == 0 ||
                                                          input.GetStorage()->shape.back() == broadcastFlag)
-            << "The input shape of last axis need to 8 align or equal to 1";
+            << "The input shape of last axis must be 8-byte aligned or equal to 1";
         CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, other.GetStorage()->shape.back() % bitsNumOfByte == 0 ||
                                                          other.GetStorage()->shape.back() == broadcastFlag)
-            << "The other shape of last axis need to 8 align or equal to 1";
+            << "The other shape of last axis must be 8-byte aligned or equal to 1";
     }
     auto conditionT0 = condition.GetStorage();
     auto inputT1 = input.GetStorage();
@@ -365,7 +365,7 @@ LogicalTensorPtr TensorWhereOperation(Function& function, const Tensor& conditio
         int broadcastFlag = 1;
         CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, input.GetStorage()->shape.back() % bitsNumOfByte == 0 ||
                                                          input.GetStorage()->shape.back() == broadcastFlag)
-            << "The input shape of last axis need to 8 align or equal to 1";
+            << "The input shape of last axis must be 8-byte aligned or equal to 1";
     }
     auto conditionT0 = condition.GetStorage();
     auto inputT1 = input.GetStorage();
@@ -403,7 +403,7 @@ LogicalTensorPtr TensorWhereOperation(Function& function, const Tensor& conditio
         int broadcastFlag = 1;
         CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, other.GetStorage()->shape.back() % bitsNumOfByte == 0 ||
                                                          other.GetStorage()->shape.back() == broadcastFlag)
-            << "The other shape of last axis need to 8 align or equal to 1";
+            << "The other shape of last axis must be 8-byte aligned or equal to 1";
     }
     auto conditionT0 = condition.GetStorage();
     auto otherT1 = other.GetStorage();

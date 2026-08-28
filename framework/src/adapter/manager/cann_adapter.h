@@ -61,7 +61,7 @@ private:
         for (const std::pair<const EnumType, std::string>& item : funcNameMap) {
             void* func = libHandler_.GetFunction(item.second);
             if (func == nullptr) {
-                ADAPTER_LOGI("Failed to load function[%s]", item.second.c_str());
+                ADAPTER_LOGE(InternalError::COMMON_INNER_ERROR, "Failed to load function[%s]", item.second.c_str());
                 continue;
             }
             ADAPTER_LOGD("Function[%s] has been loaded successfully.", item.second.c_str());

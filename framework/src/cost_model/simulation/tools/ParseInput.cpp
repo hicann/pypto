@@ -489,7 +489,7 @@ void ParseInput::ParseFunction(std::shared_ptr<CostModel::SimSys> sim,
     if (topoFromRootFunc) {
         sim->enableExpectValue = true;
         ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, inputFuncs.size() == 1)
-            << "[SIMULATION]: inputFuncs.size is not equals to 1."
+            << "[SIMULATION]: inputFuncs.size is not equal to 1."
             << "inputFuncs.size=" << inputFuncs.size();
         for (const auto& rootFunction : inputFuncs) {
             FunctionPtr func = std::make_shared<Function>();

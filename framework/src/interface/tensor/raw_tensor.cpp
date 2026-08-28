@@ -120,7 +120,7 @@ void RawTensor::AddRefCount(int value)
 int64_t RawTensor::GetRawDataSize() const
 {
     if (HasNegativeNum<int64_t>(rawshape)) {
-        FE_LOGD("Raw tensor shape has negative. It has dynamic axis.");
+        FE_LOGD("Raw tensor shape has negative dimension(s), which indicates a dynamic axis.");
         return INT64_MAX;
     }
     return DataSizeOf(GetRawShapeSize(), datatype);

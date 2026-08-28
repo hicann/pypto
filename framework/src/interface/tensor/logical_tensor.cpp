@@ -500,7 +500,7 @@ bool LogicalTensor::Overlap(const std::shared_ptr<LogicalTensor>& other) const
 int64_t LogicalTensor::GetDataSize() const
 {
     if (HasNegativeNum<int64_t>(shape)) {
-        FE_LOGD("Logical tensor shape has negative. It has dynamic axis.");
+        FE_LOGD("Logical tensor shape has negative dimension(s), which indicates a dynamic axis.");
         return INT64_MAX;
     }
     int64_t shapeSize = std::accumulate(shape.begin(), shape.end(), 1LL, std::multiplies<>());
@@ -550,7 +550,7 @@ std::vector<SymbolicScalar> npu::tile_fwk::GetViewValidShape(const std::vector<S
         return {};
     }
     FE_ASSERT(FeError::INVALID_VAL, validShape.size() == viewShape.size())
-        << "Their size actually are " << validShape.size() << " and " << viewShape.size();
+        << "Their sizes actually are " << validShape.size() << " and " << viewShape.size();
 
     std::vector<SymbolicScalar> result;
     for (size_t i = 0; i < validShape.size(); i++) {

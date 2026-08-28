@@ -144,7 +144,7 @@ void RecordFunc::EndFunction()
     }
 
     if (IsVerifyEnable()) {
-        FE_LOGI("FlowVerify has been enable.");
+        FE_LOGI("FlowVerify has been enabled.");
         config::SetRunDataOption(KEY_VERIFY_PATH, config::GetAbsoluteTopFolder() + "/verify");
     }
 
@@ -317,7 +317,7 @@ void RecordLoopFunc::EndLoopFunction()
 
 bool RecordLoopFunc::MatchUnrollTimes(int unrollTimes)
 {
-    CHECK(FeError::INVALID_VAL, unrollTimes > 0) << "unrollTimes[" << unrollTimes << "] must larger than zero!";
+    CHECK(FeError::INVALID_VAL, unrollTimes > 0) << "unrollTimes[" << unrollTimes << "] must be larger than zero!";
     auto& curRlf = Program::GetInstance().GetLoopStack().back().get();
     curRlf.customUnrollTimes_.emplace(unrollTimes);
     if (!curRlf.hasManualUnroll_) {

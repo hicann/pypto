@@ -166,7 +166,7 @@ uint64_t CalcGeneralMetadataSlotWorkspace(DevAscendProgram* devProg)
     uint64_t vectorMemSize = DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(devProg);
     uint64_t slotAllocatorMemSize = DeviceWorkspaceAllocator::CalcMetadataSlotAllocatorMemSize(devProg);
     MACHINE_LOGI("[workspaceSize] ItemPoolMemSize is: %lu bytes, vectorMemSize is: %lu bytes, slotAllocatorMemSize is "
-                 "%lu bytes.,",
+                 "%lu bytes.",
                  itemPoolMemSize, vectorMemSize, slotAllocatorMemSize);
     static constexpr uint64_t AICPU_SLOT_STATIC_MEMSIZE = 2 * MEBI;
     generalMetadataSlotSize = itemPoolMemSize + vectorMemSize + slotAllocatorMemSize + AICPU_SLOT_STATIC_MEMSIZE;

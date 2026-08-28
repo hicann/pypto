@@ -498,13 +498,13 @@ Tensor Transpose(const Tensor& self, std::vector<int> perm)
 
     auto oldVecTileShapes = TileShape::Current().GetVecTile();
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, (int)oldVecTileShapes.size() == shapeSize)
-        << "TileShape dim num should same to input.";
+        << "TileShape dim num should be the same as input.";
     auto oldValidShapes = self.GetStorage()->GetDynValidShape();
     if (oldValidShapes.empty()) {
         oldValidShapes = SymbolicScalar::FromConcrete(self.GetShape());
     }
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, (int)oldValidShapes.size() == shapeSize)
-        << "ValidShape dim num should same to input.";
+        << "ValidShape dim num should be the same as input.";
 
     std::vector<int64_t> newInputShape;
     std::vector<int64_t> newVecTileShape;

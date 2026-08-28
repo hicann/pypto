@@ -48,7 +48,7 @@ public:
             regex_match(c, sm, r);
             ASSERT(CostModel::ExternalErrorScene::INVALID_CONFIG, sm.size() == parameterNum)
                 << "[SIMULATION]: "
-                << "the config regex size is 3. the format is error: " << c;
+                << "the config regex size is 3. the format is invalid: " << c;
             std::string cfgName{sm.str(1)};
             std::string cfgValue{sm.str(2)};
             ParseConfig(cfgName, cfgValue);

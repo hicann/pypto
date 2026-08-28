@@ -845,7 +845,7 @@ void SimSys::OutputCalendarScheduleCpp(std::string prefix)
     }
     std::string outPath = GetFileName(outdir, jsonPath, prefix, ".calendar.cpp");
     calendarGenerator->GenCalendarCpp(outPath);
-    SIMULATION_LOGW("Genearte Calendar File: %s", outPath.c_str());
+    SIMULATION_LOGW("Generate Calendar File: %s", outPath.c_str());
 }
 
 std::map<uint64_t, std::vector<uint64_t>> SimSys::ComputeTaskAmounts(const TaskMap& taskMap)
@@ -1142,7 +1142,7 @@ void SimSys::UpdateNextCycles(uint64_t nextCycle)
 {
     ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, nextCycle > globalCycles)
         << "[SIMULATION]: "
-        << "nextCycle is less than or equels to globalCycles. nextCycles=" << nextCycle
+        << "nextCycle is less than or equal to globalCycles. nextCycles=" << nextCycle
         << ", globalCycles=" << globalCycles;
     nextSimulationCycles = std::min(nextSimulationCycles, nextCycle);
 }
