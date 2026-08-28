@@ -377,9 +377,6 @@ void DeviceLauncher::SetDevPerfAddr(const bool debugEnable, const bool isCapture
 
 int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode, int launchEarlyMode)
 {
-    if (IsAicoreResolveEnabled()) {
-        return 0;
-    }
     if (launchEarlyMode == 1) { // 1 ： early launch in all modes
         return 0;
     }
@@ -390,7 +387,7 @@ int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode,
     //  close early launch
     auto schedStream = GetStreamContext().GetScheStream();
     auto ctrlStream = GetStreamContext().GetCtrlStream();
-    return RunPreSync(schedStream, ctrlStream, aicoreStream);
+    return RunPreSync(IsAicoreResolveEnabled() ? nullptr : schedStream, ctrlStream, aicoreStream);
 }
 
 int DeviceLauncher::RunPreSync(RtStream scheStream, RtStream ctrlStream, RtStream aicoreStream)
@@ -405,11 +402,15 @@ int DeviceLauncher::RunPreSync(RtStream scheStream, RtStream ctrlStream, RtStrea
         MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "AclRtRecordEvent failed %d\n", rc);
         return rc;
     }
-    rc = AclRtStreamWaitEvent(scheStream, event);
-    if (rc < 0) {
-        MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "AclRtStreamWaitEvent failed %d\n", rc);
-        return rc;
+
+    if (scheStream) {
+        rc = AclRtStreamWaitEvent(scheStream, event);
+        if (rc < 0) {
+            MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "AclRtStreamWaitEvent failed %d\n", rc);
+            return rc;
+        }
     }
+
     rc = AclRtStreamWaitEvent(ctrlStream, event);
     if (rc < 0) {
         MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "AclRtStreamWaitEvent failed %d\n", rc);
